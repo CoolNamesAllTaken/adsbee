@@ -1,0 +1,12 @@
+{
+    "cortex-debug.gdbPath": "/usr/bin/arm-none-eabi-gdb",
+    "cortex-debug.JLinkGDBServerPath": "/opt/SEGGER/JLink/JLinkGDBServer",
+    "cmake.configureEnvironment": {
+        "PICO_SDK_PATH": "/usr/local/pico-sdk"
+    },
+    "files.associations": {
+        "gpio.h": "c",
+        "binary_info.h": "c",
+        "cmath": "cpp"
+    }
+}
