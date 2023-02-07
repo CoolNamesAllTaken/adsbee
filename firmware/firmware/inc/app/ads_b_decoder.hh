@@ -16,6 +16,7 @@ public:
 
     ADSBDecoder(); // constructor
 
+    // Rx queue functions.
     void ClearRxQueue();
     bool PushWord(uint32_t word); // Pushes a full word onto the rx queue. Returns True if the queue had space.
     uint16_t PopBits(uint16_t num_bits, uint32_t &buffer);

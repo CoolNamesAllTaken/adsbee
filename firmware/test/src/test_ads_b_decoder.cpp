@@ -132,15 +132,42 @@ TEST(ADSBDecoder, RxQueueSimple) {
     ASSERT_EQ(buffer, 0xBEu);
 }
 
-// TEST(ADSBDecoder, RXQueueOverflow) {
-//     ADSBDecoder decoder = ADSBDecoder();
-//     for (uint16_t i = 0; i < decoder.kRxQueueMaxLen; i++) {
-//         ASSERT_TRUE(decoder.PushWord(0xDEADBEEF));
-//     }
-//     ASSERT_EQ(decoder.GetNumBits(), decoder.kRxQueueMaxLen); 
-//     ASSERT_FALSE(decoder.PushWord(0xCCCCCCCC)); // RX queue should reject overflow.
-//     for (uint16_t i = 0; i < decoder.kRxQueueMaxLen; i++) {
-//         ASSERT_EQ(decoder.PopBits(32), 0xDEADBEEF);
-//         ASSERT_EQ(decoder.GetNumBits(), decoder.kRxQueueMaxLen - 32*(i+1));
-//     }
-// }
+TEST(ADSBDecoder, RXQueueOverflow) {
+    ADSBDecoder decoder = ADSBDecoder();
+    uint32_t buffer;
+
+    // aligned overflow
+    for (uint16_t i = 0; i < decoder.kRxQueueMaxLenWords; i++) {
+        ASSERT_TRUE(decoder.PushWord(0xDEADBEEF));
+    }
+    ASSERT_EQ(decoder.GetRxQueueLenBits(), decoder.kRxQueueMaxLenWords * 32); 
+    ASSERT_FALSE(decoder.PushWord(0xCCCCCCCC)); // RX queue should reject overflow.
+    for (uint16_t i = 0; i < decoder.kRxQueueMaxLenWords; i++) {
+        ASSERT_EQ(decoder.PopBits(32, buffer), 32);
+        ASSERT_EQ(buffer, 0xDEADBEEF);
+        ASSERT_EQ(decoder.GetRxQueueLenBits(), (decoder.kRxQueueMaxLenWords - (i+1))*32);
+    }
+
+    // scooch down the circular buffer a little bit so that unaligned overflow test wraps
+    ASSERT_TRUE(decoder.PushWord(0xDEEDBEED));
+    ASSERT_EQ(decoder.PopBits(32, buffer), 32);
+    ASSERT_EQ(buffer, 0xDEEDBEED);
+    ASSERT_EQ(decoder.GetRxQueueFront(), 1);
+
+    // unaligned overflow
+    for (uint16_t i = 0; i < decoder.kRxQueueMaxLenWords; i++) {
+        ASSERT_TRUE(decoder.PushWord(0xDEADBEEF));
+    }
+    ASSERT_EQ(decoder.GetRxQueueLenBits(), decoder.kRxQueueMaxLenWords * 32); 
+    ASSERT_FALSE(decoder.PushWord(0xCCCCCCCC)); // RX queue should reject overflow.
+    ASSERT_EQ(decoder.PopBits(8, buffer), 8);
+    ASSERT_EQ(buffer, 0xEFu);
+    for (uint16_t i = 0; i < decoder.kRxQueueMaxLenWords-1; i++) {
+        ASSERT_EQ(decoder.PopBits(32, buffer), 32);
+        ASSERT_EQ(buffer, 0xEFDEADBE);
+        ASSERT_EQ(decoder.GetRxQueueLenBits(), (decoder.kRxQueueMaxLenWords - (i+1))*32 - 8);
+    }
+    ASSERT_EQ(decoder.PopBits(24, buffer), 24);
+    ASSERT_EQ(buffer, 0xDEADBEu);
+    ASSERT_EQ(decoder.GetRxQueueLenBits(), 0);
+}
