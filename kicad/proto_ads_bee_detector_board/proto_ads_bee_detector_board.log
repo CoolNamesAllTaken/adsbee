@@ -1,0 +1,3 @@
+Circuit: (export (version "E")
+
+Fatal Error: Unknown SPICE device type "(" in "(design"

@@ -1,5 +1,7 @@
 % Stolen from https://github.com/analogdevicesinc/MathWorks_tools/blob/master/hil_models/legacy/ADSB_transmitter/adsbTxGen.m
 
+
+
 function [originalData, txData] = ads_b_tx_gen(msg)
 % Generate ADSB messages to transmit
 % Input msg: ADSB messages characters
@@ -41,10 +43,10 @@ end
 ##ppm = single(adsbWF.');
 ##originalData=[ppm(:,1);txZeros];
 originalData = adsbWF;
-originalData = repelem(originalData, 5);
+originalData = repelem(originalData, 5); % each sample is 100ns
 
 % Resample the waveform
-txData = resample(double(originalData),25,20);
+txData = resample(double(originalData),4,10);
 
 % Add noise and scale
 txData = awgn(txData,80)*1e-4;

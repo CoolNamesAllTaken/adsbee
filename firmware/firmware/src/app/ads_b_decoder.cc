@@ -1,10 +1,14 @@
 #include "ads_b_decoder.hh"
 #include "string.h"
+#include <stdio.h> // for printing and popcount
+// #include <bit> // bit operations for popcount
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 #define BITS_PER_WORD 32
 #define BYTES_PER_WORD 4
+// #define FALLING_EDGE 0b01
+// #define RISING_EDGE 0b10
 
 // TODO: change all operations to 32-bit? https://stackoverflow.com/a/71231277
 
@@ -87,4 +91,49 @@ uint16_t ADSBDecoder::PeekBits(uint16_t num_bits, uint32_t &buffer) {
 */
 uint16_t ADSBDecoder::GetRxQueueLenBits() {
     return rx_queue_len_bits_;
+}
+
+/**
+ * @brief Classifies an edge at a given position in a bit buffer.
+ * @param[in] sample 32-bit bit sample to check for an edge.
+ * @param[in] bit_position bit position of oldest bit (LSb) in edge.
+*/
+ADSBDecoder::EdgeType_t ADSBDecoder::ClassifyEdge(uint32_t sample, uint16_t bit_position) {
+    switch ((sample >> bit_position) & 0b11) {
+        case 0b01: return FALLING_EDGE;
+        case 0b10: return RISING_EDGE;
+        default: return NO_EDGE;
+    }
+}
+
+
+
+bool ADSBDecoder::FindPreamble() {
+    while (rx_queue_len_bits_ > mf_template_preamble_len_bits) {
+        uint32_t sample;
+        if (PeekBits(mf_template_preamble_len_bits, sample) != mf_template_preamble_len_bits) {
+            printf("ADSBDecoder::FindPreamble: Error while attempting to peek %d bits.\r\n", mf_template_preamble_len_bits);
+        }
+        int mf_correlation =    mf_coeff_11 * __builtin_popcount(sample & mf_template_preamble)
+                            +   mf_coeff_10 * __builtin_popcount(sample & ~mf_template_preamble)
+                            +   mf_coeff_01 * __builtin_popcount(~sample & mf_template_preamble)
+                            +   mf_coeff_00 * __builtin_popcount(~sample & ~mf_template_preamble);
+        if (mf_correlation >= mf_ok_threshold) {
+            // Found preamble! Now verify.
+            if (// TODO: finish this
+                ClassifyEdge(sample, 1) == FALLING_EDGE
+                && ClassifyEdge(sample, 3) == RISING_EDGE
+                && ClassifyEdge(sample, 5) == FALLING_EDGE
+            ) {
+
+            }
+
+            return true;
+        }
+        // Did not find preamble. Pop a bit and look again.
+        if(PopBits(1, sample) != 1) {
+            printf("ADSBDecoder::FindPreamble: Error while popping bit.\r\n");
+        }
+    }
+    return false;
 }
