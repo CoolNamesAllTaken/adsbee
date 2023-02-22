@@ -20,11 +20,15 @@
                 "file ${command:cmake.launchTargetPath}",
                 "load",
                 "monitor reset"
-            ]/*,
-            "postRestartCommands": [
-                "break main",
-                "run"
-            ]*/
+            ],
+            // "runToMain": true,
+            // Workaround for starting at main on restart.
+            // "postRestartCommands": [
+            //     "break main",
+            //     "continue"
+            // ],
+            // More stuff
+            "device": "RP2040"
         }
     ]
 }

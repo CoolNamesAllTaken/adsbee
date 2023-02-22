@@ -1285,7 +1285,6 @@
     )
   )
 
-
   (junction (at 50.8 26.67) (diameter 0) (color 0 0 0 0)
     (uuid 0751411d-21f8-43fd-845a-7e4a30cfa513)
   )
@@ -3130,6 +3129,12 @@
       (effects (font (size 1.27 1.27)) hide)
     )
     (property "Datasheet" "https://ww1.microchip.com/downloads/en/DeviceDoc/MCP6541%20Output%20SubMicroamp%20Comparators%2020001696K.pdf" (at 217.17 77.47 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (property "MPN" "" (at 210.82 81.28 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (property "Standard Cost" "" (at 210.82 81.28 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (pin "1" (uuid e6e4221f-572c-488b-8ca7-655df30fcb44))

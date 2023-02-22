@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.13)
 # Pull in SDK (must be before project)
 include(pico_sdk_import.cmake)
 
-project(ads_bee_project C CXX ASM)
+project(ads_bee C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
@@ -22,26 +22,34 @@ add_compile_options(
 )
 
 # Source files are added with target_sources in subdirectories
-add_executable(ads_bee "")
+add_executable(${PROJECT_NAME} "")
 
 add_subdirectory(src)
 add_subdirectory(inc)
 
 # In case there are files directly in src and inc
-target_include_directories(ads_bee PRIVATE 
+target_include_directories(${PROJECT_NAME} PRIVATE 
     src
     inc
 )
 
-# Firmware: Create map/bin/hex file etc
-pico_add_extra_outputs(ads_bee)
-pico_enable_stdio_usb(ads_bee 1) # use USB for standard printing
-pico_enable_stdio_uart(ads_bee 0) # disable STDIO UART
+# Create C header file with the name <pio program>.pio.h
+pico_generate_pio_header(${PROJECT_NAME}  
+        ${CMAKE_CURRENT_LIST_DIR}/pio/blink.pio
+)
 
 # Firmware: Pull in Pico library
-target_link_libraries(ads_bee 
+target_link_libraries(${PROJECT_NAME} 
     pico_stdlib
     pico_float # for math functions
+    hardware_pio
     hardware_pwm
     hardware_adc
 )
+
+# Firmware: Create map/bin/hex file etc
+pico_add_extra_outputs(${PROJECT_NAME})
+
+# Set up debug USB
+pico_enable_stdio_usb(${PROJECT_NAME} 1) # use USB for standard printing
+pico_enable_stdio_uart(${PROJECT_NAME} 0) # disable STDIO UART

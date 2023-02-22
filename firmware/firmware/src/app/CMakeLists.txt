@@ -8,6 +8,6 @@ else()
 # Build for embedded target
 target_sources(ads_bee PRIVATE
     ads_b_decoder.cc
-    ads_bee.cc
+    # ads_bee.cc
 )
 endif()
