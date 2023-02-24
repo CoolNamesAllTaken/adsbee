@@ -9,7 +9,8 @@
             "type": "cortex-debug",
             "cwd": "${workspaceRoot}",
             "executable": "${command:cmake.launchTargetPath}",
-            "request": "launch",
+            // "request": "launch",
+            "request": "attach",
             "servertype": "external",
             "gdbPath": "arm-none-eabi-gdb",
             "gdbTarget": "host.docker.internal:2331",
@@ -21,14 +22,14 @@
                 "load",
                 "monitor reset"
             ],
-            "runToMain": true,
+            // "runToMain": true,
             // Workaround for starting at main on restart.
-            "postRestartCommands": [
-                "break main",
-                "continue"
-            ],
+            // "postRestartCommands": [
+            //     "break main",
+            //     "continue"
+            // ],
             // More stuff
-            "device": "RP2040"
+            "device": "RP2040",
         }
     ]
 }

@@ -1,15 +1,26 @@
 .program capture
 
-; Turn on LED for 100 cycles and off for 100 cycles.
-; At 2 kHz, this will toggle pin at 10 Hz (200 cycles / 2000 Hz = 0.1 sec)
+; This program runs at 16MHz. Each clock cycle is 1/16us.
 
 .wrap_target
-    wait 1 pin, 0 ; wait for in_pin to go HI
+waiting_for_first_edge:
+    set x, 1
+    wait 1 pin, 0 [3] ; wait for in_pin to go HI, delay to middle of the eye
+check_pulse_1_hi:
+    jmp pin check_pulse_1_lo [7] ; if first pulse HI is ok, look for first pulse LO
+    jmp waiting_for_first_edge ; first pulse did not go HI, abort
+check_pulse_1_lo:
+    jmp pin waiting_for_first_edge [7] ; if first pulse did not go LO, abort
+    jmp pin check_pulse_2_lo [7]; if second pulse HI is ok, look for second pulse LO
+    jmp waiting_for_first_edge ; second pulse did not go HI, abort
+check_pulse_2_lo:
+    jmp pin waiting_for_first_edge [7] ; if second pulse does not go LO, abort
+    jmp pin waiting_for_first_edge [7]
+    jmp pin waiting_for_first_edge [7]
+    jmp pin waiting_for_first_edge [7]
+    jmp x-- check_pulse_1_hi
+preamble_matched:
     set pins, 1 [19] ; set debug pin HI for 200 cycles
-    nop         [19]    ; Wait 20 cycles
-    nop         [19]    ; Wait 20 cycles
-    nop         [19]    ; Wait 20 cycles
-    nop         [19]    ; Wait 20 cycles
     set pins, 0 [19] ; set debug pin LO and wait 200 cycles
     ; set pins, 1 [19]    ; Turn LED on and wait another 19 cycles
     nop         [19]    ; Wait 20 cycles
