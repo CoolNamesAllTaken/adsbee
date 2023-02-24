@@ -21,12 +21,12 @@
                 "load",
                 "monitor reset"
             ],
-            // "runToMain": true,
+            "runToMain": true,
             // Workaround for starting at main on restart.
-            // "postRestartCommands": [
-            //     "break main",
-            //     "continue"
-            // ],
+            "postRestartCommands": [
+                "break main",
+                "continue"
+            ],
             // More stuff
             "device": "RP2040"
         }

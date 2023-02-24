@@ -1,0 +1,61 @@
+.program capture
+
+; Turn on LED for 100 cycles and off for 100 cycles.
+; At 2 kHz, this will toggle pin at 10 Hz (200 cycles / 2000 Hz = 0.1 sec)
+
+.wrap_target
+    wait 1 pin, 0 ; wait for in_pin to go HI
+    set pins, 1 [19] ; set debug pin HI for 200 cycles
+    nop         [19]    ; Wait 20 cycles
+    nop         [19]    ; Wait 20 cycles
+    nop         [19]    ; Wait 20 cycles
+    nop         [19]    ; Wait 20 cycles
+    set pins, 0 [19] ; set debug pin LO and wait 200 cycles
+    ; set pins, 1 [19]    ; Turn LED on and wait another 19 cycles
+    nop         [19]    ; Wait 20 cycles
+    nop         [19]    ; Wait 20 cycles
+    nop         [19]    ; Wait 20 cycles
+    nop         [19]    ; Wait 20 cycles
+    ; set pins, 0 [19]    ; Turn LED off and wait another 19 cycles
+    ; nop         [19]    ; Wait 20 cycles
+    ; nop         [19]    ; Wait 20 cycles
+    ; nop         [19]    ; Wait 20 cycles
+    ; nop         [19]    ; Wait 20 cycles
+.wrap
+
+% c-sdk {
+
+// Helper function (for use in C program) to initialize this PIO program
+void capture_program_init(PIO pio, uint sm, uint offset, uint in_pin, uint out_pin, float div) {
+
+    // Sets up state machine and wrap target. This function is automatically
+    // generated in capture.pio.h.
+    pio_sm_config c = capture_program_get_default_config(offset);
+
+    // Allow PIO to control GPIO in_pin (as input)
+    pio_gpio_init(pio, in_pin);
+    pio_sm_set_consecutive_pindirs(pio, sm, in_pin, 1, false); // set one pin starting at in_pin to IN
+
+    // Allow PIO to control GPIO out_pin (as output for debugging)
+    pio_gpio_init(pio, out_pin);
+    pio_sm_set_consecutive_pindirs(pio, sm, out_pin, 1, true); // set one pin starting at out_pin to OUT
+
+    // Connect in_pin to IN pin (control with 'in' instruction)
+    sm_config_set_in_pins(&c, in_pin); // for WAIT
+    sm_config_set_jmp_pin(&c, in_pin); // for JMP
+
+    // Connect out_pin to SET and SIDESET
+    sm_config_set_set_pins(&c, out_pin, 1); // set one pin as SET output
+    ; sm_config_set_sideset_pins(&c, out_pin); 
+
+    // Join RX and TX FIFOs together to allow 8x 32-bit words to be stored in the RX FIFO.
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+    
+    // Set the clock divider for the state machine
+    sm_config_set_clkdiv(&c, div);
+
+    // Load configuration and jump to start of the program
+    pio_sm_init(pio, sm, offset, &c);
+}
+
+%}
