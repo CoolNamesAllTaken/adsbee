@@ -1,4 +1,8 @@
-.program capture
+.program preamble_detector
+.side_set 1 opt
+; 1 side-set pin to be used, side-set is optional.
+; For more info regarding opt see this post:
+; https://forums.raspberrypi.com/viewtopic.php?t=299621#p1818168
 
 ; This program runs at 16MHz. Each clock cycle is 1/16us.
 
@@ -17,31 +21,31 @@ check_pulse_2_lo:
     jmp pin waiting_for_first_edge [7] ; if second pulse does not go LO, abort
     jmp pin waiting_for_first_edge [7]
     jmp pin waiting_for_first_edge [7]
-    jmp pin waiting_for_first_edge [7]
+    jmp pin waiting_for_first_edge [6]
     jmp x-- check_pulse_1_hi
+    ; jmp pin waiting_for_first_edge [7]
+    ; jmp pin waiting_for_first_edge [7]
 preamble_matched:
-    set pins, 1 [19] ; set debug pin HI for 200 cycles
-    set pins, 0 [19] ; set debug pin LO and wait 200 cycles
-    ; set pins, 1 [19]    ; Turn LED on and wait another 19 cycles
-    nop         [19]    ; Wait 20 cycles
-    nop         [19]    ; Wait 20 cycles
-    nop         [19]    ; Wait 20 cycles
-    nop         [19]    ; Wait 20 cycles
-    ; set pins, 0 [19]    ; Turn LED off and wait another 19 cycles
-    ; nop         [19]    ; Wait 20 cycles
-    ; nop         [19]    ; Wait 20 cycles
-    ; nop         [19]    ; Wait 20 cycles
-    ; nop         [19]    ; Wait 20 cycles
+    ; set pins, 1; set debug pin HI
+    irq set 0 side 1 ; set the DECODE IRQ to begin decoding message body
+    wait 1 pin, 0 [3] ; wait till middle of message eye to look for end
+waiting_for_end_of_message:
+    set x, 20 ; [2.5us] number of sequential idle samples required to mark end of packet
+idle_countdown:
+    jmp pin waiting_for_end_of_message [1] ; start over the idle countdown if received a non idle bit
+    jmp x-- idle_countdown ; still idle, keep counting down if the timer isn't up
+    set pins, 0 ; set debug pin LO and wait 200 cycles
+    irq clear 0 side 0 ; clear the DECODE IRQ to indicate the message body is finished
 .wrap
 
 % c-sdk {
 
 // Helper function (for use in C program) to initialize this PIO program
-void capture_program_init(PIO pio, uint sm, uint offset, uint in_pin, uint out_pin, float div) {
+void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint in_pin, uint out_pin, float div) {
 
     // Sets up state machine and wrap target. This function is automatically
-    // generated in capture.pio.h.
-    pio_sm_config c = capture_program_get_default_config(offset);
+    // generated in preamble_detector.pio.h.
+    pio_sm_config c = preamble_detector_program_get_default_config(offset);
 
     // Allow PIO to control GPIO in_pin (as input)
     pio_gpio_init(pio, in_pin);
@@ -57,7 +61,7 @@ void capture_program_init(PIO pio, uint sm, uint offset, uint in_pin, uint out_p
 
     // Connect out_pin to SET and SIDESET
     sm_config_set_set_pins(&c, out_pin, 1); // set one pin as SET output
-    ; sm_config_set_sideset_pins(&c, out_pin); 
+    sm_config_set_sideset_pins(&c, out_pin); 
 
     // Join RX and TX FIFOs together to allow 8x 32-bit words to be stored in the RX FIFO.
     sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
@@ -69,4 +73,66 @@ void capture_program_init(PIO pio, uint sm, uint offset, uint in_pin, uint out_p
     pio_sm_init(pio, sm, offset, &c);
 }
 
+%}
+
+.program message_decoder
+
+; Assumes line is idle low, first bit is 0
+; One bit is 12 cycles
+; a '0' is encoded as 10
+; a '1' is encoded as 01
+;
+; Both the IN base and the JMP pin mapping must be pointed at the GPIO used for RX.
+; Autopush must be enabled.
+; Before enabling the SM, it should be placed in a 'wait 1, pin` state, so that
+; it will not start sampling until the initial line idle state ends.
+
+; wait_for_decode:
+;     wait 1 irq 0        ; Wait to enter DECODE interval.
+;     wait 1 pin 0        ; Wait for a 0->1 transition to exit idle state
+
+start_of_0:            ; We are 0.25 bits into a 0 - signal is high
+    ; wait 1 irq 0       ; Wait to enter DECODE interval.
+    wait 0 pin 0       ; Wait for the 1->0 transition - at this point we are 0.5 into the bit
+    in null, 1 [8]        ; Emit a 0, sleep 3/4 of a bit
+    ; wait 1 irq 0       ; Wait to enter DECODE interval.
+    jmp pin start_of_0 ; If signal is 1 again, it's another 0 bit, otherwise it's a 1
+
+.wrap_target
+start_of_1:            ; We are 0.25 bits into a 1 - signal is 1
+    ; wait 1 irq 0       ; Wait to enter DECODE interval.
+    wait 1 pin 0       ; Wait for the 0->1 transition - at this point we are 0.5 into the bit
+    in x, 1 [8]        ; Emit a 1, sleep 3/4 of a bit
+    
+    ; wait 1 irq 0       ; Wait to enter DECODE interval.
+
+    jmp pin start_of_0 ; If signal is 0 again, it's another 1 bit otherwise it's a 0
+.wrap
+
+% c-sdk {
+static inline void message_decoder_program_init(PIO pio, uint sm, uint offset, uint pin_base, float div) {
+    uint decode_in_pin = pin_base+1;
+    uint pulses_pin = pin_base;
+
+    pio_sm_set_consecutive_pindirs(pio, sm, pin_base, 2, false); // pin_base is DECODE input, pin_base + 1 is pulses
+    pio_gpio_init(pio, pulses_pin);
+    pio_gpio_init(pio, decode_in_pin);
+
+    pio_sm_config c = message_decoder_program_get_default_config(offset);
+    sm_config_set_in_pins(&c, pin_base); // WAIT pins
+    sm_config_set_jmp_pin(&c, pulses_pin); // JMP based on the comparator output
+    sm_config_set_in_shift(&c, true, true, 32);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+    sm_config_set_clkdiv(&c, div);
+    pio_sm_init(pio, sm, offset, &c);
+
+    // X and Y are set to 0 and 1, to conveniently emit these to ISR/FIFO.
+    pio_sm_exec(pio, sm, pio_encode_set(pio_x, 1));
+    pio_sm_exec(pio, sm, pio_encode_set(pio_y, 0));
+    // Assume line is idle low, and first transmitted bit is 0. Put SM in a
+    // wait state before enabling. RX will begin once the first 0 symbol is
+    // detected.
+    pio_sm_exec(pio, sm, pio_encode_wait_pin(1, 0) | pio_encode_delay(2));
+    pio_sm_set_enabled(pio, sm, true);
+}
 %}

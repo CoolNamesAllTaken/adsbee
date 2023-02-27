@@ -36,28 +36,42 @@ int main() {
     pio_sm_set_enabled(pio, sm, true);
 
     // Capture PIO
-    static const uint capture_pio_in_pin = 28; // Reading ADS-B on GPIO28.
-    static const uint capture_pio_out_pin = 22; // Use GPIO22 as a debug output from the PIO.
-    static const float capture_pio_freq = 16e6; // Running at 16MHz (8 clock cycles per half bit).
     PIO capture_pio = pio1;
+    static const uint pulses_pin = 19; // Reading ADS-B on GPIO22. Will look for DECODE signal on GPIO22-1 = GPIO21.
+    static const uint decode_in_pin = pulses_pin+1;
+    static const uint decode_out_pin = 21; // Use GPIO20 as DECODE signal output, will be wired to GPIO21 as input.
+
+    static const float preamble_detector_freq = 16e6; // Running at 16MHz (8 clock cycles per half bit).
+    // Calculate the PIO clock divider.
+    float preamble_detector_div = (float)clock_get_hz(clk_sys) / preamble_detector_freq;
+
     // Get first free state machine in capture_pio.
-    uint capture_pio_sm = pio_claim_unused_sm(capture_pio, true);
+    uint preamble_detector_sm = pio_claim_unused_sm(capture_pio, true);
     // Add PIO program to PIO instruction memory. SDK will find location and return
     // with the memory offset of the program.
-    uint capture_pio_offset = pio_add_program(capture_pio, &capture_program);
-    // Calculate the PIO clock divider.
-    float capture_pio_div = (float)clock_get_hz(clk_sys) / capture_pio_freq;
-    // Initialize the program using the .pio file helper function
-    capture_program_init(
-        capture_pio, capture_pio_sm, capture_pio_offset, capture_pio_in_pin,
-        capture_pio_out_pin, capture_pio_div
-    );
-    pio_sm_set_enabled(capture_pio, capture_pio_sm, true);
+    uint preamble_detector_offset = pio_add_program(capture_pio, &preamble_detector_program);
 
+    // Initialize the program using the .pio file helper function
+    preamble_detector_program_init(
+        capture_pio, preamble_detector_sm, preamble_detector_offset, pulses_pin,
+        decode_out_pin, preamble_detector_div
+    );
+    pio_sm_set_enabled(capture_pio, preamble_detector_sm, true);
+
+    uint message_decoder_sm = pio_claim_unused_sm(capture_pio, true);
+    uint message_decoder_offset = pio_add_program(capture_pio, &message_decoder_program);
+    float message_decoder_freq = 12e6; // Run at 12 MHz to decode bits at 1Mbps.
+    float message_decoder_div = (float)clock_get_hz(clk_sys) / message_decoder_freq;
+    message_decoder_program_init(
+        capture_pio, message_decoder_sm, message_decoder_offset,
+        pulses_pin, message_decoder_div
+    );
+
+    printf("main.cpp: PIOs initialized.\r\n");
 
     // Do nothing
     while (true) {
-        sleep_ms(1000);
+        printf("%08x\r\n", pio_sm_get_blocking(capture_pio, message_decoder_sm));
     }
 
     
