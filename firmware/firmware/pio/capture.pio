@@ -54,7 +54,7 @@ void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint in_pin, 
     pio_sm_config c = preamble_detector_program_get_default_config(offset);
 
     // Allow PIO to control GPIO in_pin (as input)
-    pio_gpio_init(pio, in_pin);
+    //pio_gpio_init(pio, in_pin);
     pio_sm_set_consecutive_pindirs(pio, sm, in_pin, 1, false); // set one pin starting at in_pin to IN
 
     // Allow PIO to control GPIO out_pin (as output for debugging)
@@ -84,6 +84,7 @@ void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint in_pin, 
 .program message_decoder
 .define decode_in_pin_index 1
 .define pulses_pin_index 0
+.side_set 1 opt
 ; Assumes line is idle low, first bit is 0
 ; One bit is 12 cycles
 ; a '0' is encoded as 10
@@ -98,14 +99,14 @@ wait_for_decode:
     push block          ; empty the ISR into the FIFO in preparation for next decode
     ; irq set 0   ; set IRQ 0 to indicate waiting for RX FIFO to be cleared before accepting a new message
 initial_entry:
-    wait 1 pin decode_in_pin_index        ; Wait to enter DECODE interval.
+    wait 1 pin decode_in_pin_index side 0       ; Wait to enter DECODE interval.
     wait 1 pin pulses_pin_index    ; Wait for a 0->1 transition to exit idle state
     ; fall through into start_of_0
 
 start_of_0:            ; We are 0.25 bits into a 0 - signal is high
     ; wait 1 irq 0       ; Wait to enter DECODE interval.
-    wait 0 pin pulses_pin_index       ; Wait for the 1->0 transition - at this point we are 0.5 into the bit
-    in null, 1       ; Emit a 0, sleep 3/4 of a bit (need 8 delay clocks before jump to start_of_0).
+    wait 0 pin pulses_pin_index      ; Wait for the 1->0 transition - at this point we are 0.5 into the bit
+    in null, 1 side 1    ; Emit a 0, sleep 3/4 of a bit (need 8 delay clocks before jump to start_of_0).
 
     ; This whole mess is equivalent to "jump to wait_for_decode if the decode pin is 0".
     mov osr, pins ; read pulses and decode bit into OSR
@@ -117,14 +118,14 @@ start_of_0:            ; We are 0.25 bits into a 0 - signal is high
 
     ; wait 1 irq 0       ; Wait to enter DECODE interval.
     
-    jmp pin start_of_0 ; If signal is 1 again, it's another 0 bit, otherwise it's a 1
+    jmp pin start_of_0 side 0; If signal is 1 again, it's another 0 bit, otherwise it's a 1
     ; wait 1 irq 0       ; Wait to enter DECODE interval.
 
 .wrap_target
 start_of_1:            ; We are 0.25 bits into a 1 - signal is 1
     ; wait 1 irq 0       ; Wait to enter DECODE interval.
-    wait 1 pin pulses_pin_index       ; Wait for the 0->1 transition - at this point we are 0.5 into the bit
-    in x, 1       ; Emit a 1, sleep 3/4 of a bit
+    wait 1 pin pulses_pin_index     ; Wait for the 0->1 transition - at this point we are 0.5 into the bit
+    in x, 1 side 1    ; Emit a 1, sleep 3/4 of a bit
 
     ; This whole mess is equivalent to "jump to wait_for_decode if the decode pin is 0".
     mov osr, pins ; read pulses and decode bit into OSR
@@ -132,11 +133,11 @@ start_of_1:            ; We are 0.25 bits into a 1 - signal is 1
     out y, 1 ; move decode bit to scratch y
     out null, 30 ; dump the rest of the bits
     jmp !y wait_for_decode ; bail into idle state if decode bit is 0
-    nop [2]
+    nop [3] ; wait slightly longer for a down-going slope to account for RF detector behavior
     
     ; wait 1 irq 0       ; Wait to enter DECODE interval.
 
-    jmp pin start_of_0 ; If signal is 0 again, it's another 1 bit otherwise it's a 0
+    jmp pin start_of_0 side 0; If signal is 0 again, it's another 1 bit otherwise it's a 0
 .wrap
 
 % c-sdk {
@@ -145,8 +146,13 @@ static inline void message_decoder_program_init(PIO pio, uint sm, uint offset, u
     uint pulses_pin = pin_base;
 
     pio_sm_set_consecutive_pindirs(pio, sm, pin_base, 2, false); // pin_base is DECODE input, pin_base + 1 is pulses
-    pio_gpio_init(pio, pulses_pin);
-    pio_gpio_init(pio, decode_in_pin);
+    //pio_gpio_init(pio, pulses_pin);
+    //pio_gpio_init(pio, decode_in_pin);
+
+    const uint debug_pin = 28;
+    // Allow PIO to control GPIO 28 (as output for debugging)
+    pio_gpio_init(pio, debug_pin);
+    pio_sm_set_consecutive_pindirs(pio, sm, debug_pin, 1, true); // set one pin starting at out_pin to OUT
 
     pio_sm_config c = message_decoder_program_get_default_config(offset);
     sm_config_set_in_pins(&c, pin_base); // WAIT pins
@@ -155,6 +161,11 @@ static inline void message_decoder_program_init(PIO pio, uint sm, uint offset, u
     sm_config_set_in_shift(&c, true, true, 32);
     ; sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
     sm_config_set_clkdiv(&c, div);
+
+    // Connect out_pin to SET and SIDESET
+    sm_config_set_set_pins(&c, debug_pin, 1); // set one pin as SET output
+    sm_config_set_sideset_pins(&c, debug_pin); 
+
     pio_sm_init(pio, sm, offset, &c);
 
     // X and Y are set to 0 and 1, to conveniently emit these to ISR/FIFO.

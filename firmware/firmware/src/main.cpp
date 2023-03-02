@@ -40,6 +40,7 @@ int main() {
     static const uint pulses_pin = 19; // Reading ADS-B on GPIO22. Will look for DECODE signal on GPIO22-1 = GPIO21.
     static const uint decode_in_pin = pulses_pin+1;
     static const uint decode_out_pin = 21; // Use GPIO20 as DECODE signal output, will be wired to GPIO21 as input.
+
     static const float preamble_detector_freq = 16e6; // Running at 16MHz (8 clock cycles per half bit).
     // Calculate the PIO clock divider.
     float preamble_detector_div = (float)clock_get_hz(clk_sys) / preamble_detector_freq;
@@ -56,7 +57,7 @@ int main() {
     pio_set_irq0_source_enabled(preamble_detector_pio, pis_interrupt0, true); // state machine 0 IRQ 0
 
     /** MESSAGE DECODER PIO **/
-    float message_decoder_freq = 12e6; // Run at 12 MHz to decode bits at 1Mbps.
+    float message_decoder_freq = 16e6; // Run at 32 MHz to decode bits at 1Mbps.
     float message_decoder_div = (float)clock_get_hz(clk_sys) / message_decoder_freq;
     message_decoder_program_init(
         message_decoder_pio, message_decoder_sm, message_decoder_offset,
