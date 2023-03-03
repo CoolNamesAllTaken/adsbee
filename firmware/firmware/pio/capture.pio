@@ -158,7 +158,7 @@ static inline void message_decoder_program_init(PIO pio, uint sm, uint offset, u
     sm_config_set_in_pins(&c, pin_base); // WAIT pins
     sm_config_set_jmp_pin(&c, pulses_pin); // JMP based on the comparator output
     sm_config_set_out_shift(&c, true, false, 0); // OSR shifts right, autopull turned off (using OSR for scratch)
-    sm_config_set_in_shift(&c, true, true, 32);
+    sm_config_set_in_shift(&c, true, true, 32); // ISR shifts right, autopush turned on
     ; sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
     sm_config_set_clkdiv(&c, div);
 
