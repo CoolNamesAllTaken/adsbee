@@ -27,6 +27,7 @@ void on_decode_complete() {
     printf("New message:\r\n");
     while (!pio_sm_is_rx_fifo_empty(message_decoder_pio, message_decoder_sm)) {
         printf("\t%08x\r\n", pio_sm_get(message_decoder_pio, message_decoder_sm));
+        // pio_sm_get(message_decoder_pio, message_decoder_sm);
     }
     pio_interrupt_clear(preamble_detector_pio, 0);
 }
