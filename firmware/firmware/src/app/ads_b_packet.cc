@@ -21,6 +21,7 @@ const uint16_t kExtendedSquitterPacketNumWords32 = 4; // 112 bits = 3.5 words, r
 const uint16_t kExtendedSquitterPacketNumBits = 112;
 
 const uint32_t kCRC24Generator = 0x1FFF409;
+const uint32_t kCRC24WordNumBits = 25;
 
 ADSBPacket::ADSBPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32)
 {
@@ -100,16 +101,27 @@ uint16_t ADSBPacket::DumpPacketBuffer(uint32_t to_buffer[kMaxPacketLenWords32]) 
 
 // should be static
 uint32_t ADSBPacket::Get24BitWordFromBuffer(uint16_t first_bit_index, uint32_t buffer[]) {
+    return GetNBitWordFromBuffer(24, first_bit_index, buffer);
+}
+
+uint32_t ADSBPacket::GetNBitWordFromBuffer(uint16_t n, uint16_t first_bit_index, uint32_t buffer[]) {
+    // NOTE: Bit 0 is the MSb in this format, since the input shift register shifts left (oldest bit is MSb).
+    if (n > 32) {
+        printf("ADSBPacket::GetNBitWordFromBuffer: Tried to get %d bit word from buffer, but max word bitlength is 32.\r\n", n);
+        return 0;
+    }
     uint16_t first_word_index_32 = first_bit_index / 32;
     uint16_t bit_offset_32 = first_bit_index % 32;
-    // Grab the first portion of the word.
-    uint32_t word_24 = ((buffer[first_word_index_32] << bit_offset_32) >> 8);
-    if (bit_offset_32 > 8) {
-        // 24-bit word wasn't entirely contained within the 32-bit word.
-        // Grab the top (24-(32-bit_offset_32)) = (bit_offset_32-8) bits of the next word.
-        word_24 |= (buffer[first_word_index_32+1] >> (32-(bit_offset_32-8))); 
+    // Get a 32-bit word, then mask it down to n bits.
+    // Grab the lower portion of the word.
+    uint32_t word_n = ((buffer[first_word_index_32] << bit_offset_32));
+    if (32-bit_offset_32 < n) {
+        // Grab the upper portion of the word from the next 32-bit word in the buffer.
+        word_n |= (buffer[first_word_index_32+1] >> (32-bit_offset_32));
     }
-    return word_24;
+    word_n &= 0xFFFFFFFF << (32-n); // mask to the upper n bits
+    word_n >>= (32-n); // LSB-align
+    return word_n;
 }
 
 // TODO: rewrite Get24BitWordFromBuffer into GetNBitWordFromBuffer and then rewrite CRC function to operate on 25-bit words!
@@ -119,16 +131,24 @@ uint32_t ADSBPacket::CalculateCRC24() {
     // Must be called on buffer that does not have extra bit ingested at end and has all words left-aligned.
     // uint32_t crc_buffer[kMaxPacketLenWords32];
     // DumpPacketBuffer(crc_buffer); // copy to new buffer to calculate CRC-24
-    uint32_t remainder = Get24BitWordFromBuffer(0, packet_buffer_);
-    uint32_t next_word24;
+    uint32_t remainder = GetNBitWordFromBuffer(24, 0, packet_buffer_); // Calculate CRC with 
     for (uint16_t i = 0; i < kExtendedSquitterPacketNumBits-BITS_PER_WORD_24; i++) {
+        printf("i = %d, remainder = 0x%x\r\n", i, remainder);
         if (remainder & MASK_MSBIT_WORD24) {
+            printf("\tXOR!\r\n");
             // Most significant bit is a 1. XOR with generator!
             remainder ^= kCRC24Generator;
         }
         // Emulate shifting along the packet by removing the MSb and importing the next LSb.
-        remainder = ((remainder << 1) & MASK_WORD24) | (Get24BitWordFromBuffer(i+1, packet_buffer_) & ~MASK_MSBIT_WORD24);
+        remainder = ((remainder << 1) & MASK_WORD24) | GetNBitWordFromBuffer(1, i+BITS_PER_WORD_24, packet_buffer_);
 
+    }
+    // Do this one last time, since supposed to XOR 24-bit words starting from bit 0 to bit 88,
+    // but want to avoid the shifting fakery on the last word.
+    if (remainder & MASK_MSBIT_WORD24) {
+        printf("\tXOR!\r\n");
+        // Most significant bit is a 1. XOR with generator!
+        remainder ^= kCRC24Generator;
     }
     return remainder;
 }

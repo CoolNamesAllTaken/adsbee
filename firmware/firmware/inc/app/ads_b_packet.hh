@@ -50,6 +50,7 @@ public:
 
     // Exposed for testing only.
     uint32_t Get24BitWordFromBuffer(uint16_t first_bit_index, uint32_t buffer[]);
+    uint32_t GetNBitWordFromBuffer(uint16_t n, uint16_t first_bit_index, uint32_t buffer[]);
     uint32_t Get24BitWordFromPacketBuffer(uint16_t first_bit_index) {return Get24BitWordFromBuffer(first_bit_index, packet_buffer_);};
     uint32_t CalculateCRC24();
 
