@@ -99,48 +99,29 @@ uint16_t ADSBPacket::DumpPacketBuffer(uint32_t to_buffer[kMaxPacketLenWords32]) 
 
 }
 
-// should be static
-uint32_t ADSBPacket::Get24BitWordFromBuffer(uint16_t first_bit_index, uint32_t buffer[]) {
-    return GetNBitWordFromBuffer(24, first_bit_index, buffer);
-}
-
-uint32_t ADSBPacket::GetNBitWordFromBuffer(uint16_t n, uint16_t first_bit_index, uint32_t buffer[]) {
-    // NOTE: Bit 0 is the MSb in this format, since the input shift register shifts left (oldest bit is MSb).
-    if (n > 32) {
-        printf("ADSBPacket::GetNBitWordFromBuffer: Tried to get %d bit word from buffer, but max word bitlength is 32.\r\n", n);
-        return 0;
-    }
-    uint16_t first_word_index_32 = first_bit_index / 32;
-    uint16_t bit_offset_32 = first_bit_index % 32;
-    // Get a 32-bit word, then mask it down to n bits.
-    // Grab the lower portion of the word.
-    uint32_t word_n = ((buffer[first_word_index_32] << bit_offset_32));
-    if (32-bit_offset_32 < n) {
-        // Grab the upper portion of the word from the next 32-bit word in the buffer.
-        word_n |= (buffer[first_word_index_32+1] >> (32-bit_offset_32));
-    }
-    word_n &= 0xFFFFFFFF << (32-n); // mask to the upper n bits
-    word_n >>= (32-n); // LSB-align
-    return word_n;
-}
-
-// TODO: rewrite Get24BitWordFromBuffer into GetNBitWordFromBuffer and then rewrite CRC function to operate on 25-bit words!
-
 uint32_t ADSBPacket::CalculateCRC24() {
     // CRC calculation algorithm from https://mode-s.org/decode/book-the_1090mhz_riddle-junzi_sun.pdf pg. 93.
     // Must be called on buffer that does not have extra bit ingested at end and has all words left-aligned.
-    // uint32_t crc_buffer[kMaxPacketLenWords32];
+    // Buffer used for CRC will be 1 bit longer than the regular message (parity bits are removed, then original
+    // message is padded by length of CRC generator, which is 25 bits). 1 extra word is overkill but why not.
+    uint32_t crc_buffer[kMaxPacketLenWords32+1];
+    for (uint16_t i = 0; i < kMaxPacketLenWords32; i++) {
+        crc_buffer[i] = packet_buffer_[i];
+    }
     // DumpPacketBuffer(crc_buffer); // copy to new buffer to calculate CRC-24
-    uint32_t remainder = GetNBitWordFromBuffer(24, 0, packet_buffer_); // Calculate CRC with 
+    uint32_t remainder = get_n_bit_word_from_buffer(24, 0, packet_buffer_); // Calculate CRC with 
     for (uint16_t i = 0; i < kExtendedSquitterPacketNumBits-BITS_PER_WORD_24; i++) {
         printf("i = %d, remainder = 0x%x\r\n", i, remainder);
+        print_binary_32(remainder);
         if (remainder & MASK_MSBIT_WORD24) {
-            printf("\tXOR!\r\n");
+            print_binary_32(kCRC24Generator);
+            // printf("\tXOR!\r\n");
             // Most significant bit is a 1. XOR with generator!
             remainder ^= kCRC24Generator;
+            print_binary_32(remainder);
         }
         // Emulate shifting along the packet by removing the MSb and importing the next LSb.
-        remainder = ((remainder << 1) & MASK_WORD24) | GetNBitWordFromBuffer(1, i+BITS_PER_WORD_24, packet_buffer_);
+        remainder = ((remainder << 1) & MASK_WORD24) | get_n_bit_word_from_buffer(1, i+BITS_PER_WORD_24, packet_buffer_);
 
     }
     // Do this one last time, since supposed to XOR 24-bit words starting from bit 0 to bit 88,

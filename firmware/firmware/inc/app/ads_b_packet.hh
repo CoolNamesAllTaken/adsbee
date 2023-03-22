@@ -2,6 +2,7 @@
 #define _ADS_B_PACKET_HH_
 
 #include <cstdint>
+#include "buffer_utils.hh"
 
 // Useful resource: https://mode-s.org/decode/content/ads-b/1-basics.html
 
@@ -49,9 +50,8 @@ public:
     uint16_t DumpPacketBuffer(uint32_t to_buffer[kMaxPacketLenWords32]);
 
     // Exposed for testing only.
-    uint32_t Get24BitWordFromBuffer(uint16_t first_bit_index, uint32_t buffer[]);
-    uint32_t GetNBitWordFromBuffer(uint16_t n, uint16_t first_bit_index, uint32_t buffer[]);
-    uint32_t Get24BitWordFromPacketBuffer(uint16_t first_bit_index) {return Get24BitWordFromBuffer(first_bit_index, packet_buffer_);};
+
+    uint32_t Get24BitWordFromPacketBuffer(uint16_t first_bit_index) {return get_n_bit_word_from_buffer(24, first_bit_index, packet_buffer_);};
     uint32_t CalculateCRC24();
 
 private:

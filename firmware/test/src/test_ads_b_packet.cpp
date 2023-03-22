@@ -1,43 +1,91 @@
 #include "gtest/gtest.h"
 #include "ads_b_packet.hh"
+#include "stdio.h"
 
-TEST(ADSBPacket, GetNBitWordFromBuffer) {
+TEST(ADSBPacket, get_n_bit_word_from_buffer) {
     uint32_t packet_buffer[ADSBPacket::kMaxPacketLenWords32];
     packet_buffer[0] = 0x8D76CE88;
     packet_buffer[1] = 0x204C9072;
     packet_buffer[2] = 0xCB48209A;
     packet_buffer[3] = 0x0000504D;
 
-    ADSBPacket packet = ADSBPacket(packet_buffer, 4);
+    EXPECT_EQ(get_n_bit_word_from_buffer(1, 0, packet_buffer), 0b1);
+    EXPECT_EQ(get_n_bit_word_from_buffer(1, 1, packet_buffer), 0b0);
 
-    EXPECT_EQ(packet.GetNBitWordFromBuffer(1, 0, packet_buffer), 0b1);
-    EXPECT_EQ(packet.GetNBitWordFromBuffer(1, 1, packet_buffer), 0b0);
-
-    EXPECT_EQ(packet.GetNBitWordFromBuffer(8, 0, packet_buffer), 0x8D);
-    EXPECT_EQ(packet.GetNBitWordFromBuffer(16, 0, packet_buffer), 0x8D76);
-    EXPECT_EQ(packet.GetNBitWordFromBuffer(24, 0, packet_buffer), 0x8D76CE);
-    EXPECT_EQ(packet.GetNBitWordFromBuffer(32, 0, packet_buffer), 0x8D76CE88);
+    EXPECT_EQ(get_n_bit_word_from_buffer(8, 0, packet_buffer), 0x8D);
+    EXPECT_EQ(get_n_bit_word_from_buffer(16, 0, packet_buffer), 0x8D76);
+    EXPECT_EQ(get_n_bit_word_from_buffer(24, 0, packet_buffer), 0x8D76CE);
+    EXPECT_EQ(get_n_bit_word_from_buffer(32, 0, packet_buffer), 0x8D76CE88);
 
     // first bit index = 4
-    EXPECT_EQ(packet.GetNBitWordFromBuffer(32, 4, packet_buffer), 0xD76CE882);
-    EXPECT_EQ(packet.GetNBitWordFromBuffer(24, 4, packet_buffer), 0xD76CE8);
-    EXPECT_EQ(packet.GetNBitWordFromBuffer(16, 4, packet_buffer), 0xD76C);
-    EXPECT_EQ(packet.GetNBitWordFromBuffer(8, 4, packet_buffer), 0xD7);
+    EXPECT_EQ(get_n_bit_word_from_buffer(32, 4, packet_buffer), 0xD76CE882);
+    EXPECT_EQ(get_n_bit_word_from_buffer(24, 4, packet_buffer), 0xD76CE8);
+    EXPECT_EQ(get_n_bit_word_from_buffer(16, 4, packet_buffer), 0xD76C);
+    EXPECT_EQ(get_n_bit_word_from_buffer(8, 4, packet_buffer), 0xD7);
 
     // first bit index = 8
-    EXPECT_EQ(packet.GetNBitWordFromBuffer(32, 8, packet_buffer), 0x76CE8820);
-    EXPECT_EQ(packet.GetNBitWordFromBuffer(24, 8, packet_buffer), 0x76CE88);
-    EXPECT_EQ(packet.GetNBitWordFromBuffer(16, 8, packet_buffer), 0x76CE);
-    EXPECT_EQ(packet.GetNBitWordFromBuffer(8, 8, packet_buffer), 0x76);
+    EXPECT_EQ(get_n_bit_word_from_buffer(32, 8, packet_buffer), 0x76CE8820);
+    EXPECT_EQ(get_n_bit_word_from_buffer(24, 8, packet_buffer), 0x76CE88);
+    EXPECT_EQ(get_n_bit_word_from_buffer(16, 8, packet_buffer), 0x76CE);
+    EXPECT_EQ(get_n_bit_word_from_buffer(8, 8, packet_buffer), 0x76);
 
     // first bit index = 12
-    EXPECT_EQ(packet.GetNBitWordFromBuffer(32, 12, packet_buffer), 0x6CE88204);
+    EXPECT_EQ(get_n_bit_word_from_buffer(32, 12, packet_buffer), 0x6CE88204);
 
     // first bit index = 16
-    EXPECT_EQ(packet.GetNBitWordFromBuffer(32, 16, packet_buffer), 0xCE88204C);
+    EXPECT_EQ(get_n_bit_word_from_buffer(32, 16, packet_buffer), 0xCE88204C);
 
     // make sure it doesn't fall off the end; can use some printfs to double check this
-    EXPECT_EQ(packet.GetNBitWordFromBuffer(16, 32*3+16, packet_buffer), 0x504D);
+    EXPECT_EQ(get_n_bit_word_from_buffer(16, 32*3+16, packet_buffer), 0x504D);
+}
+
+TEST(ADSBPacket, set_n_bit_word_in_buffer) {
+    uint32_t packet_buffer[ADSBPacket::kMaxPacketLenWords32];
+    packet_buffer[0] = 0x8D76CE88;
+    packet_buffer[1] = 0x204C9072;
+    packet_buffer[2] = 0xCB48209A;
+    packet_buffer[3] = 0x0000504D;
+
+    set_n_bit_word_in_buffer(8, 0xDE, 0, packet_buffer);
+    EXPECT_EQ(packet_buffer[0], 0xDE76CE88);
+    
+    // zero a byte
+    set_n_bit_word_in_buffer(8, 0x00, 0, packet_buffer);
+    EXPECT_EQ(packet_buffer[0], 0x0076CE88);
+    // set single bit
+    set_n_bit_word_in_buffer(1, 0b1, 0, packet_buffer);
+    EXPECT_EQ(packet_buffer[0], 0x8076CE88);
+
+    // test clipping
+    packet_buffer[0] = 0x00000000;
+    set_n_bit_word_in_buffer(24, 0xFFFFFFFF, 0, packet_buffer);
+    EXPECT_EQ(packet_buffer[0], 0xFFFFFF00);
+
+    // basic wraparound
+    packet_buffer[0] = 0x8D76CE88; // reset from last test
+    set_n_bit_word_in_buffer(16, 0xBEEF, 24, packet_buffer);
+    EXPECT_EQ(packet_buffer[0], 0x8D76CEBE);
+    EXPECT_EQ(packet_buffer[1], 0xEF4C9072);
+
+    // wraparound with full word
+    packet_buffer[1] = 0x204C9072;
+    packet_buffer[2] = 0xCB48209A;
+    set_n_bit_word_in_buffer(32, 0x0000FEEF, 32+24, packet_buffer);
+    EXPECT_EQ(packet_buffer[1], 0x204C9000);
+    EXPECT_EQ(packet_buffer[2], 0x00FEEF9A);
+
+    // make sure it doesn't fall off the end; can use some printfs to double check this
+    printf("ENTER SUS\r\n");
+    packet_buffer[0] = 0x8D76CE88;
+    packet_buffer[1] = 0x204C9072;
+    packet_buffer[2] = 0xCB48209A;
+    packet_buffer[3] = 0x0000504D;
+    set_n_bit_word_in_buffer(24, 0xFFBEBE, 32*3+8, packet_buffer);
+    EXPECT_EQ(packet_buffer[0], 0x8D76CE88); // untouched
+    EXPECT_EQ(packet_buffer[1], 0x204C9072); // untouched
+    EXPECT_EQ(packet_buffer[2], 0xCB48209A); // untouched
+    EXPECT_EQ(packet_buffer[3], 0x00FFBEBE);
+
 }
 
 // Example packets taken from http://jasonplayne.com:8080/. Thanks, Jason!
