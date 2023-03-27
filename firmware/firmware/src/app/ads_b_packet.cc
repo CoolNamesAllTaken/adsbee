@@ -11,9 +11,11 @@
 #define BITS_PER_WORD_32 32
 #define BYTES_PER_WORD_24 3
 #define BITS_PER_WORD_24 24
+#define BITS_PER_WORD_25 25
 #define BITS_PER_BYTE 8
 
 #define MASK_MSBIT_WORD24 (0b1<<(BITS_PER_WORD_24-1))
+#define MASK_MSBIT_WORD25 (0b1<<BITS_PER_WORD_24)
 #define MASK_WORD24 0xFFFFFF
 
 const uint32_t kLastWordExtraBitIngestionMask = 0xFFFF0000;
@@ -21,7 +23,7 @@ const uint16_t kExtendedSquitterPacketNumWords32 = 4; // 112 bits = 3.5 words, r
 const uint16_t kExtendedSquitterPacketNumBits = 112;
 
 const uint32_t kCRC24Generator = 0x1FFF409;
-const uint32_t kCRC24WordNumBits = 25;
+const uint16_t kCRC24GeneratorNumBits = 25;
 
 ADSBPacket::ADSBPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32)
 {
@@ -33,15 +35,11 @@ ADSBPacket::ADSBPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buf
     }
     for (uint16_t i = 0; i < rx_buffer_len_words32 && i < kMaxPacketLenWords32; i++) {
         if (i == kMaxPacketLenWords32-1) {
-            // Last word in packet. Check for extra bit ingestion!
-            if (rx_buffer[i] & kLastWordExtraBitIngestionMask) {
-                packet_buffer_[i] = rx_buffer[i]>>1; // get rid of extra last bit
-            } else {
-                packet_buffer_[i] = rx_buffer[i];
-            }
+            // Last word in packet.
+            // Last word may have accidentally ingested a subsequent preamble as a bit (takes a while to know message is over).
+            packet_buffer_[i] = rx_buffer[i] & ~kLastWordExtraBitIngestionMask; // trim any crap off of last word
             packet_buffer_[i] <<= 16; // left-align last word
             packet_buffer_len_bits_ += 16;
-            printf("made it to last word: 0x%x -> 0x%x\r\n", rx_buffer[i], packet_buffer_[i]);
         } else {
             packet_buffer_[i] = rx_buffer[i];
             packet_buffer_len_bits_ += BITS_PER_WORD_32;
@@ -62,7 +60,17 @@ ADSBPacket::ADSBPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buf
     typecode_ = packet_buffer_[1] >> 27;
     parity_interrogator_id = packet_buffer_[1] & 0xFFFFFF;
 
-    is_valid_ = true;
+    uint16_t calculated_checksum = CalculateCRC24();
+    uint16_t parity_value = get_24_bit_word_from_buffer(kExtendedSquitterPacketNumBits - BITS_PER_WORD_24, packet_buffer_);
+    if (calculated_checksum == parity_value) {
+        is_valid_ = true; // mark packet as valid if CRC matches the parity bits
+    } else {
+        // is_valid_ is set to false by default
+        #ifdef VERBOSE
+        printf("ADSBPacket::ADSBPacket: Invalid checksum, expected %x but calculated %x.\r\n", parity_value, calculated_checksum);
+        #endif
+    }
+    
 }
 
 bool ADSBPacket::IsValid() {
@@ -100,36 +108,24 @@ uint16_t ADSBPacket::DumpPacketBuffer(uint32_t to_buffer[kMaxPacketLenWords32]) 
 }
 
 uint32_t ADSBPacket::CalculateCRC24() {
-    // CRC calculation algorithm from https://mode-s.org/decode/book-the_1090mhz_riddle-junzi_sun.pdf pg. 93.
+    // CRC calculation algorithm from https://mode-s.org/decode/book-the_1090mhz_riddle-junzi_sun.pdf pg. 91.
     // Must be called on buffer that does not have extra bit ingested at end and has all words left-aligned.
-    // Buffer used for CRC will be 1 bit longer than the regular message (parity bits are removed, then original
-    // message is padded by length of CRC generator, which is 25 bits). 1 extra word is overkill but why not.
-    uint32_t crc_buffer[kMaxPacketLenWords32+1];
+    uint32_t crc_buffer[kMaxPacketLenWords32];
     for (uint16_t i = 0; i < kMaxPacketLenWords32; i++) {
         crc_buffer[i] = packet_buffer_[i];
     }
-    // DumpPacketBuffer(crc_buffer); // copy to new buffer to calculate CRC-24
-    uint32_t remainder = get_n_bit_word_from_buffer(24, 0, packet_buffer_); // Calculate CRC with 
-    for (uint16_t i = 0; i < kExtendedSquitterPacketNumBits-BITS_PER_WORD_24; i++) {
-        printf("i = %d, remainder = 0x%x\r\n", i, remainder);
-        print_binary_32(remainder);
-        if (remainder & MASK_MSBIT_WORD24) {
-            print_binary_32(kCRC24Generator);
-            // printf("\tXOR!\r\n");
-            // Most significant bit is a 1. XOR with generator!
-            remainder ^= kCRC24Generator;
-            print_binary_32(remainder);
-        }
-        // Emulate shifting along the packet by removing the MSb and importing the next LSb.
-        remainder = ((remainder << 1) & MASK_WORD24) | get_n_bit_word_from_buffer(1, i+BITS_PER_WORD_24, packet_buffer_);
 
+    // Overwrite 24-bit parity word with zeros.
+    set_n_bit_word_in_buffer(BITS_PER_WORD_24, 0x0, kExtendedSquitterPacketNumBits-BITS_PER_WORD_24, crc_buffer);
+
+    // CRC is a conditional convolve operation using the 25-bit generator word.
+    for (uint16_t i = 0; i < kExtendedSquitterPacketNumBits-BITS_PER_WORD_24; i++) {
+        uint32_t word = get_n_bit_word_from_buffer(BITS_PER_WORD_25, i, crc_buffer);
+        if (word & MASK_MSBIT_WORD25) {
+            // Most significant bit is a 1. XOR with generator!
+            set_n_bit_word_in_buffer(BITS_PER_WORD_25, word ^ kCRC24Generator, i, crc_buffer);
+        }
     }
-    // Do this one last time, since supposed to XOR 24-bit words starting from bit 0 to bit 88,
-    // but want to avoid the shifting fakery on the last word.
-    if (remainder & MASK_MSBIT_WORD24) {
-        printf("\tXOR!\r\n");
-        // Most significant bit is a 1. XOR with generator!
-        remainder ^= kCRC24Generator;
-    }
-    return remainder;
+
+    return get_n_bit_word_from_buffer(BITS_PER_WORD_24, kExtendedSquitterPacketNumBits-BITS_PER_WORD_24, crc_buffer);
 }

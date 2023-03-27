@@ -48,6 +48,10 @@ TEST(ADSBPacket, set_n_bit_word_in_buffer) {
 
     set_n_bit_word_in_buffer(8, 0xDE, 0, packet_buffer);
     EXPECT_EQ(packet_buffer[0], 0xDE76CE88);
+
+    // set with word that is too long
+    set_n_bit_word_in_buffer(8, 0x1DE, 0, packet_buffer);
+    EXPECT_EQ(packet_buffer[0], 0xDE76CE88);
     
     // zero a byte
     set_n_bit_word_in_buffer(8, 0x00, 0, packet_buffer);
@@ -75,7 +79,6 @@ TEST(ADSBPacket, set_n_bit_word_in_buffer) {
     EXPECT_EQ(packet_buffer[2], 0x00FEEF9A);
 
     // make sure it doesn't fall off the end; can use some printfs to double check this
-    printf("ENTER SUS\r\n");
     packet_buffer[0] = 0x8D76CE88;
     packet_buffer[1] = 0x204C9072;
     packet_buffer[2] = 0xCB48209A;
@@ -124,7 +127,8 @@ TEST(ADSBPacket, PacketBuffer) {
 }
 
 TEST(ADSBPacket, CRC24Checksum) {
-    uint32_t packet_buffer[ADSBPacket::kMaxPacketLenWords32];
+    uint32_t packet_buffer[ADSBPacket::kMaxPacketLenWords32]; // note: may contain garbage
+    const uint16_t packet_buffer_used_len = 4; // number of 32 bit words populated in the packet buffer
 
     // Test packet from https://mode-s.org/decode/book-the_1090mhz_riddle-junzi_sun.pdf pg. 91.
     // 0x8D406B902015A678D4D220[000000] (stripped off parity and replaced with 0's for testing)
@@ -133,19 +137,32 @@ TEST(ADSBPacket, CRC24Checksum) {
     packet_buffer[2] = 0xD4D22000;
     packet_buffer[3] = 0x00000000;
 
-    ADSBPacket packet = ADSBPacket(packet_buffer, 4);
+    ADSBPacket packet = ADSBPacket(packet_buffer, packet_buffer_used_len);
 
     EXPECT_EQ(packet.CalculateCRC24(), 0xAA4BDA);
-
-    // EXPECT_TRUE(packet.IsValid());
-    // EXPECT_EQ(packet.GetDownlinkFormat(), 17);
-    // EXPECT_EQ(packet.GetCapability(), 5);
-    // EXPECT_EQ(packet.GetICAOAddress(), 0x76CE88);
-    // EXPECT_EQ(packet.GetTypeCode(), 4);
-
     
-
-
+    // Test Packet: 8D76CE88 204C9072 CB48209A 504D
+    packet_buffer[0] = 0x8D76CE88;
+    packet_buffer[1] = 0x204C9072;
+    packet_buffer[2] = 0xCB48209A;
+    packet_buffer[3] = 0x0000504D;
+    packet = ADSBPacket(packet_buffer, packet_buffer_used_len);
+    EXPECT_TRUE(packet.IsValid());
 
     // Check CRC performance with error injection.
+    packet_buffer[0] = 0x7D76CE880; // error at beginning
+    packet = ADSBPacket(packet_buffer, packet_buffer_used_len);
+    EXPECT_FALSE(packet.IsValid());
+    packet_buffer[0] = 0x8D76CE88; // reset first word
+
+    packet_buffer[3] = 0x0000504E; // error near end
+    packet = ADSBPacket(packet_buffer, packet_buffer_used_len);
+    EXPECT_FALSE(packet.IsValid());
+    packet_buffer[3] = 0x0000504D; // reset last word
+
+    // Extra bit ingestion (last word eats preamble from subsequent packet).
+    packet_buffer[3] = 0x1000504D; // error where it should be ignored
+    packet = ADSBPacket(packet_buffer, packet_buffer_used_len);
+    EXPECT_TRUE(packet.IsValid());
+    packet_buffer[3] = 0x0000504D; // reset last word
 }

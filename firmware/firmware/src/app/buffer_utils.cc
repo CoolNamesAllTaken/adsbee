@@ -7,6 +7,10 @@
 
 // NOTE: Buffer operations are done big-endian (oldest bits are stored in the MSB), since input buffer shifts left.
 
+uint32_t get_24_bit_word_from_buffer(uint32_t first_bit_index, uint32_t buffer[]) {
+    return get_n_bit_word_from_buffer(24, first_bit_index, buffer);
+}
+
 /**
  * @brief Extract an n-bit word from a big-endian buffer of 32-bit words. Does NOT guard against falling off the end of
  * the buffer, so be careful!
