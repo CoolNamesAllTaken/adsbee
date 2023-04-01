@@ -25,6 +25,13 @@ const uint16_t kExtendedSquitterPacketNumBits = 112;
 const uint32_t kCRC24Generator = 0x1FFF409;
 const uint16_t kCRC24GeneratorNumBits = 25;
 
+/**
+ * @brief ADSBPacket constructor.
+ * @param[in] rx_buffer Buffer to read from. Must be packed such that all 32 bits of each word are filled, with the last
+ * word being right-aligned such that the total number of bits is 112. Words must be big-endian, with the MSb of the first
+ * word being the oldest bit.
+ * @param[in] rx_buffer_len_words32 Number of 32-bit words to read from the rx_buffer.
+*/
 ADSBPacket::ADSBPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32)
 {
     if (rx_buffer_len_words32 < 4) {
@@ -73,32 +80,99 @@ ADSBPacket::ADSBPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buf
     
 }
 
-bool ADSBPacket::IsValid() {
+bool ADSBPacket::IsValid() const {
     return is_valid_;
 }
 
-uint16_t ADSBPacket::GetDownlinkFormat() {
+uint16_t ADSBPacket::GetDownlinkFormat() const {
     return downlink_format_;
 }
 
-uint16_t ADSBPacket::GetCapability() {
+uint16_t ADSBPacket::GetCapability() const {
     return capability_;
 }
 
-uint32_t ADSBPacket::GetICAOAddress() {
+uint32_t ADSBPacket::GetICAOAddress() const {
     return icao_address_;
 }
 
-uint16_t ADSBPacket::GetTypeCode() {
+/**
+ * @brief Returns the typecode of the aircraft that sent the packet.
+ * @retval Aircraft typecode as a uint16_t.
+*/
+uint16_t ADSBPacket::GetTypeCode() const {
     return typecode_;
 }
+
+/**
+ * @brief Returns the typecode of the aircraft that sent the ADS-B packet as an enum.
+ * @retval Aircraft typecode as TypeCode_t.
+*/
+ADSBPacket::TypeCode_t ADSBPacket::GetTypeCodeEnum() const {
+    // Table 3.3 from The 1090Mhz Riddle (Junzi Sun), pg. 37.
+    switch(typecode_) {
+        case 1:
+        case 2:
+        case 3:
+        case 4:
+            return TC_AIRCRAFT_ID;
+            break;
+        case 5:
+        case 6:
+        case 7:
+        case 8:
+            return TC_SURFACE_POSITION;
+            break;
+        case 9:
+        case 10:
+        case 11:
+        case 12:
+        case 13:
+        case 14:
+        case 15:
+        case 16:
+        case 17:
+        case 18:
+            return TC_AIRBORNE_POSITION_BARO_ALT;
+            break;
+        case 19:
+            return TC_AIRBORNE_VELOCITIES;
+            break;
+        case 20:
+        case 21:
+        case 22:
+            return TC_AIRBORNE_POSITION_GNSS_ALT;
+            break;
+        case 23:
+        case 24:
+        case 25:
+        case 26:
+        case 27:
+            return TC_RESERVED;
+            break;
+        case 28:
+            return TC_AIRCRAFT_STATUS;
+            break;
+        case 29:
+            return TC_TARGET_STATE_AND_STATUS_INFO;
+            break;
+        case 31:
+            return TC_AIRCRAFT_OPERATION_STATUS;
+            break;
+        default:
+            return TC_INVALID;
+        
+    }
+}
+
+
 
 /**
  * @brief Dumps the internal packet buffer to a destination and returns the number of bytes written.
  * @param[in] to_buffer Destination buffer, must be of length kMaxPacketLenWords32 or larger.
  * @retval Number of bytes written to destination buffer.
 */
-uint16_t ADSBPacket::DumpPacketBuffer(uint32_t to_buffer[kMaxPacketLenWords32]) {
+uint16_t ADSBPacket::DumpPacketBuffer(uint32_t to_buffer[kMaxPacketLenWords32]) const {
     uint16_t bytes_written = packet_buffer_len_bits_ / BITS_PER_BYTE;
     for (uint16_t i = 0; i < kMaxPacketLenWords32; i++) {
         to_buffer[i] = packet_buffer_[i];
@@ -107,7 +181,12 @@ uint16_t ADSBPacket::DumpPacketBuffer(uint32_t to_buffer[kMaxPacketLenWords32]) 
 
 }
 
-uint32_t ADSBPacket::CalculateCRC24() {
+/**
+ * @brief Calculates the 24-bit CRC checksum of the ADS-B packet and returns the checksum value. The returned
+ * value should match the last 24-bits in the 112-bit ADS-B packet if the packet is valid.
+ * @retval CRC checksum.
+*/
+uint32_t ADSBPacket::CalculateCRC24() const {
     // CRC calculation algorithm from https://mode-s.org/decode/book-the_1090mhz_riddle-junzi_sun.pdf pg. 91.
     // Must be called on buffer that does not have extra bit ingested at end and has all words left-aligned.
     uint32_t crc_buffer[kMaxPacketLenWords32];

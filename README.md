@@ -9,3 +9,4 @@ A filtered PWM output from the RP2040 can be used to adjust the DC bias of the R
 
 ## Known Flaws
 * Current receive pipeline relies on a new packet arriving to push out the old packet, since the PIO peripheral's message_decoder state machine gets stuck waiting for another edge before it can make a decision about whether to flush the previous packet and jump back into the beginning wait_for_decode state. This results in the ADS-Bee always being one packet "behind" what it last received. Theoretically if an aircraft transmitted just one packet and no other aircraft ever transmitted a packet afterwards, you would never receive a decoded packet.
+* CRC implementation is probably hella slow and may reduce maximum packet consumption rate.

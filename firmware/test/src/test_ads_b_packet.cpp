@@ -166,3 +166,22 @@ TEST(ADSBPacket, CRC24Checksum) {
     EXPECT_TRUE(packet.IsValid());
     packet_buffer[3] = 0x0000504D; // reset last word
 }
+
+TEST(ADSBPacket, PacketFields) {
+    uint32_t packet_buffer[ADSBPacket::kMaxPacketLenWords32]; // note: may contain garbage
+    const uint16_t packet_buffer_used_len = 4; // number of 32 bit words populated in the packet buffer
+
+    // Test Packet: 8D76CE88 204C9072 CB48209A 504D
+    packet_buffer[0] = 0x8D76CE88;
+    packet_buffer[1] = 0x204C9072;
+    packet_buffer[2] = 0xCB48209A;
+    packet_buffer[3] = 0x0000504D;
+    ADSBPacket packet = ADSBPacket(packet_buffer, packet_buffer_used_len);
+    EXPECT_TRUE(packet.IsValid());
+
+    EXPECT_EQ(packet.GetDownlinkFormat(), static_cast<uint16_t>(ADSBPacket::DF_EXTENDED_SQUITTER));
+    EXPECT_EQ(packet.GetCapability(), 5);
+    EXPECT_EQ(packet.GetICAOAddress(), 0x76CE88);
+    EXPECT_EQ(packet.GetTypeCode(), 4);
+    EXPECT_EQ(packet.GetNBitWordFromMessage(3, 5), 0); // CAT = 0
+}

@@ -7,7 +7,7 @@
 
 // NOTE: Buffer operations are done big-endian (oldest bits are stored in the MSB), since input buffer shifts left.
 
-uint32_t get_24_bit_word_from_buffer(uint32_t first_bit_index, uint32_t buffer[]) {
+uint32_t get_24_bit_word_from_buffer(uint32_t first_bit_index, const uint32_t buffer[]) {
     return get_n_bit_word_from_buffer(24, first_bit_index, buffer);
 }
 
@@ -19,7 +19,7 @@ uint32_t get_24_bit_word_from_buffer(uint32_t first_bit_index, uint32_t buffer[]
  * @param[in] buffer Buffer to read from.
  * @retval Right-aligned n-bit word that was read from the buffer.
 */
-uint32_t get_n_bit_word_from_buffer(uint16_t n, uint32_t first_bit_index, uint32_t buffer[]) {
+uint32_t get_n_bit_word_from_buffer(uint16_t n, uint32_t first_bit_index, const uint32_t buffer[]) {
     // NOTE: Bit 0 is the MSb in this format, since the input shift register shifts left (oldest bit is MSb).
     if (n > WORD_32_NUM_BITS || n < 1) {
         printf("get_n_bit_word_from_buffer: Tried to get %d bit word from buffer, but word bitlength must be between 1 and 32.\r\n", n);
