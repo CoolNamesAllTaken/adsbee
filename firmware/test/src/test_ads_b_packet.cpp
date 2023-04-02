@@ -126,6 +126,17 @@ TEST(ADSBPacket, PacketBuffer) {
     // TODO: make this test!
 }
 
+TEST(ADSBPacket, RxStringConstructor) {
+    ADSBPacket packet = ADSBPacket("8D4840D6202CC371C32CE0576098");
+    uint32_t packet_buffer[ADSBPacket::kMaxPacketLenWords32];
+    packet.DumpPacketBuffer(packet_buffer);
+
+    EXPECT_EQ(packet_buffer[0], 0x8D4840D6);
+    EXPECT_EQ(packet_buffer[1], 0x202CC371);
+    EXPECT_EQ(packet_buffer[2], 0xC32CE057);
+    EXPECT_EQ(packet_buffer[3], 0x60980000);
+}
+
 TEST(ADSBPacket, CRC24Checksum) {
     uint32_t packet_buffer[ADSBPacket::kMaxPacketLenWords32]; // note: may contain garbage
     const uint16_t packet_buffer_used_len = 4; // number of 32 bit words populated in the packet buffer

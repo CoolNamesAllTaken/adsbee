@@ -32,10 +32,12 @@ public:
         WV_ROTORCRAFT
     } WakeVortex_t;
 
+    uint16_t transponder_capability = 0;
     uint32_t icao_address = 0;
-    char callsign[kCallSignMaxNumChars];
+    char callsign[kCallSignMaxNumChars+1]; // put extra EOS character at end
     WakeVortex_t wake_vortex = WV_INVALID;
 
+    Aircraft(uint32_t icao_address_in);
     Aircraft();
 };
 
@@ -50,10 +52,11 @@ public:
 
     void Update(uint32_t timestamp_us);
 
-    bool InsertAircraft(Aircraft aircraft);
+    bool InsertAircraft(const Aircraft aircraft);
     bool RemoveAircraft(uint32_t icao_address);
-    bool GetAircraft(uint32_t icao_address, Aircraft &aircraft_out);
-    bool ContainsAircraft(uint32_t icao_address);
+    bool GetAircraft(uint32_t icao_address, Aircraft &aircraft_out) const;
+    bool ContainsAircraft(uint32_t icao_address) const;
+    Aircraft * GetAircraftPtr(uint32_t icao_address);
 
 private:
     std::unordered_map<uint32_t, Aircraft> aircraft_dictionary_; // index Aircraft objects by their ICAO identifier

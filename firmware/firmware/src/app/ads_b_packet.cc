@@ -13,10 +13,14 @@
 #define BITS_PER_WORD_24 24
 #define BITS_PER_WORD_25 25
 #define BITS_PER_BYTE 8
+#define NIBBLES_PER_BYTE 2
+#define BITS_PER_NIBBLE 4
 
 #define MASK_MSBIT_WORD24 (0b1<<(BITS_PER_WORD_24-1))
 #define MASK_MSBIT_WORD25 (0b1<<BITS_PER_WORD_24)
 #define MASK_WORD24 0xFFFFFF
+
+#define CHAR_TO_HEX(c) ((c >= 'A') ? (c >= 'a') ? (c - 'a' + 10) : (c - 'A' + 10) : (c - '0'))
 
 const uint32_t kLastWordExtraBitIngestionMask = 0xFFFF0000;
 const uint16_t kExtendedSquitterPacketNumWords32 = 4; // 112 bits = 3.5 words, round up to 4.
@@ -32,14 +36,8 @@ const uint16_t kCRC24GeneratorNumBits = 25;
  * word being the oldest bit.
  * @param[in] rx_buffer_len_words32 Number of 32-bit words to read from the rx_buffer.
 */
-ADSBPacket::ADSBPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32)
-{
-    if (rx_buffer_len_words32 < 4) {
-        #ifdef VERBOSE
-        printf("ADSBPacket::ADSBPacket: Received non-ES packet!\r\n");
-        #endif 
-        return; // leave is_valid_ as false.
-    }
+ADSBPacket::ADSBPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32) {
+    // Pack the packet buffer.
     for (uint16_t i = 0; i < rx_buffer_len_words32 && i < kMaxPacketLenWords32; i++) {
         if (i == kMaxPacketLenWords32-1) {
             // Last word in packet.
@@ -52,13 +50,37 @@ ADSBPacket::ADSBPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buf
             packet_buffer_len_bits_ += BITS_PER_WORD_32;
         }
     }
+
+    ConstructADSBPacket();
+}
+
+ADSBPacket::ADSBPacket(char * rx_string) {
+    uint16_t rx_num_bytes = strlen(rx_string) / NIBBLES_PER_BYTE;
+    for (uint16_t i = 0; i < rx_num_bytes && i < kMaxPacketLenWords32*BYTES_PER_WORD_32; i++) {
+        uint8_t byte = (CHAR_TO_HEX(rx_string[i*NIBBLES_PER_BYTE]) << BITS_PER_NIBBLE) | CHAR_TO_HEX(rx_string[i*NIBBLES_PER_BYTE+1]);
+        uint16_t bit_offset = i % BYTES_PER_WORD_32; // number of Bytes to shift right from MSB of current word
+        if (bit_offset == 0) {
+            packet_buffer_[i / BYTES_PER_WORD_32] = byte << (3*BITS_PER_BYTE); // need to clear out the word
+        } else {
+            packet_buffer_[i / BYTES_PER_WORD_32] |= byte << ((3-bit_offset)*BITS_PER_BYTE);
+        }
+        packet_buffer_len_bits_ += BITS_PER_BYTE;
+    }
+
+    ConstructADSBPacket();
+}
+
+/**
+ * @brief Helper function used by constructors.
+*/
+void ADSBPacket::ConstructADSBPacket() {
     if (packet_buffer_len_bits_ != kExtendedSquitterPacketNumBits) {
         #ifdef VERBOSE
         printf("ADSBPacket::ADSBPacket: Bit number mismatch while decoding packet. Expected %d but got %d!\r\n",
             kExtendedSquitterPacketNumBits,
             packet_buffer_len_bits_);
         #endif
-        return; // leave is_valid_ as false.
+        return; // leave is_valid_ as false
     }
 
     downlink_format_ = packet_buffer_[0] >> 27;
@@ -77,7 +99,6 @@ ADSBPacket::ADSBPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buf
         printf("ADSBPacket::ADSBPacket: Invalid checksum, expected %x but calculated %x.\r\n", parity_value, calculated_checksum);
         #endif
     }
-    
 }
 
 bool ADSBPacket::IsValid() const {

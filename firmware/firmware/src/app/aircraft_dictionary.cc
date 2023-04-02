@@ -1,7 +1,14 @@
 #include "aircraft_dictionary.hh"
+#include "stdio.h"
+
+Aircraft::Aircraft(uint32_t icao_address_in)
+    : icao_address(icao_address_in) 
+{
+    memset(callsign, '\0', kCallSignMaxNumChars+1); // clear out callsign string, including extra EOS character
+}
 
 Aircraft::Aircraft() {
-    memset(callsign, '\0', kCallSignMaxNumChars); // clear out callsign string
+    memset(callsign, '\0', kCallSignMaxNumChars+1); // clear out callsign string, including extra EOS character
 }
 
 AircraftDictionary::AircraftDictionary() {
@@ -56,7 +63,7 @@ uint16_t AircraftDictionary::GetNumAircraft() {
  * @param[in] aircraft Aircraft to insert.
  * @retval True if insertaion succeeded, false if failed.
 */
-bool AircraftDictionary::InsertAircraft(Aircraft aircraft) {
+bool AircraftDictionary::InsertAircraft(const Aircraft aircraft) {
     auto itr = aircraft_dictionary_.find(aircraft.icao_address);
     if (itr != aircraft_dictionary_.end()) {
         // Overwriting an existing aircraft
@@ -91,7 +98,7 @@ bool AircraftDictionary::RemoveAircraft(uint32_t icao_address) {
  * @param[out] aircraft_out Aircraft reference to put the retrieved aircraft into if successful.
  * @retval True if aircraft was found and retrieved, false if aircraft was not in the dictionary.
 */
-bool AircraftDictionary::GetAircraft(uint32_t icao_address, Aircraft &aircraft_out) {
+bool AircraftDictionary::GetAircraft(uint32_t icao_address, Aircraft &aircraft_out) const {
     auto itr = aircraft_dictionary_.find(icao_address);
     if (itr != aircraft_dictionary_.end()) {
         aircraft_out = itr->second;
@@ -105,12 +112,29 @@ bool AircraftDictionary::GetAircraft(uint32_t icao_address, Aircraft &aircraft_o
  * @param[in] icao_address Address to use for looking up the aircraft.
  * @retval True if aircraft is in the dictionary, false if not.
 */
-bool AircraftDictionary::ContainsAircraft(uint32_t icao_address) {
+bool AircraftDictionary::ContainsAircraft(uint32_t icao_address) const {
     auto itr = aircraft_dictionary_.find(icao_address);
     if (itr != aircraft_dictionary_.end()) {
         return true;
     }
     return false;
+}
+
+/**
+ * @brief Return a pointer to an aircraft if it's in the aircraft dictionary.
+ * @param[in] icao_address ICAO address of the aircraft to find.
+ * @retval Pointer to the aircraft if it exists, or NULL if it wasn't in the dictionary.
+*/
+Aircraft * AircraftDictionary::GetAircraftPtr(uint32_t icao_address) {
+    auto itr = aircraft_dictionary_.find(icao_address);
+    if (itr != aircraft_dictionary_.end()) {
+        return &(itr->second); // return address of existing aircraft
+    } else if (aircraft_dictionary_.size() < kMaxNumAircraft) {
+        Aircraft new_aircraft = Aircraft(icao_address);
+        aircraft_dictionary_[icao_address] = new_aircraft;
+        return &(aircraft_dictionary_[icao_address]); // insert new aircraft and return its address
+    }
+    return NULL; // can't find the aircraft or insert a new one
 }
 
 /**
@@ -218,12 +242,20 @@ Aircraft::WakeVortex_t ExtractWakeVortex(const ADSBPacket &packet) {
 }
 
 bool AircraftDictionary::IngestAircraftIDMessage(ADSBPacket packet) {
-    Aircraft aircraft;
-    aircraft.wake_vortex = ExtractWakeVortex(packet);
-    for (uint16_t i = 0; i < Aircraft::kCallSignMaxNumChars; i++) {
-        aircraft.callsign[i] = packet.GetNBitWordFromMessage(6, 8+(6*i));
+    uint32_t icao_address = packet.GetICAOAddress();
+
+    Aircraft * aircraft = GetAircraftPtr(icao_address);
+    if (aircraft == NULL) {
+        printf("AircraftDictionary::IngestAircraftIDMessage: Unable to find or create new aircraft in dictionay.\r\n");
+        return false; // unable to find or create new aircraft in dictionary
     }
-    return false; // TODO: fix
+
+    aircraft->wake_vortex = ExtractWakeVortex(packet);
+    for (uint16_t i = 0; i < Aircraft::kCallSignMaxNumChars; i++) {
+        aircraft->callsign[i] = packet.GetNBitWordFromMessage(6, 8+(6*i));
+    }
+
+    return true;
 }
 
 bool AircraftDictionary::IngestSurfacePositionMessage(ADSBPacket packet) {

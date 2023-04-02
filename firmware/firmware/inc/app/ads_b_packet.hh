@@ -23,6 +23,8 @@ public:
     static const uint16_t kMEFirstBitIndex = kDFNUmBits + kCANumBits + kICAONumBits;
 
     ADSBPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len);
+    ADSBPacket(char * rx_string);
+
     // copy constructor is implicitly generated
 
     // Bits 1-5: Downlink Format (DF)
@@ -97,6 +99,8 @@ private:
 
     uint16_t typecode_ = static_cast<uint16_t>(TC_INVALID);
     uint32_t parity_interrogator_id = 0;
+
+    void ConstructADSBPacket();
 
 };
 
