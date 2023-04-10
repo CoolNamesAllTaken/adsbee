@@ -71,8 +71,6 @@ void set_n_bit_word_in_buffer(uint16_t n, uint32_t word, uint32_t first_bit_inde
     }
 }
 
-// TODO: rewrite Get24BitWordFromBuffer into get_n_bit_word_from_buffer and then rewrite CRC function to operate on 25-bit words!
-
 void print_binary_32(uint32_t value) {
     printf("\t0b");
     for (int j = 31; j >= 0; j--) {

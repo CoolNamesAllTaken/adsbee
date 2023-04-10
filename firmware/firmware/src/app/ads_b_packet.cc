@@ -54,6 +54,10 @@ ADSBPacket::ADSBPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buf
     ConstructADSBPacket();
 }
 
+/**
+ * @brief ADSBPacket constructor from string.
+ * @param[in] rx_string String of nibbles as hex characters. Big-endian, MSB (oldest byte) first.
+*/
 ADSBPacket::ADSBPacket(char * rx_string) {
     uint16_t rx_num_bytes = strlen(rx_string) / NIBBLES_PER_BYTE;
     for (uint16_t i = 0; i < rx_num_bytes && i < kMaxPacketLenWords32*BYTES_PER_WORD_32; i++) {

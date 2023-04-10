@@ -6,6 +6,7 @@ target_sources(ads_bee_test PRIVATE
     aircraft_dictionary.hh
     ads_b_packet.hh
     # ads_bee.hh
+    decode_utils.hh
 )
 else()
 # Build for embedded target
@@ -15,5 +16,6 @@ target_sources(ads_bee PRIVATE
     aircraft_dictionary.hh
     ads_b_packet.hh
     # ads_bee.hh
+    decode_utils.hh
 )
 endif()

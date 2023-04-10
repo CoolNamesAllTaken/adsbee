@@ -1,6 +1,14 @@
 #include "aircraft_dictionary.hh"
 #include "stdio.h"
 
+#include "decode_utils.hh"
+#include "hal/hal.hh"
+#include <cmath>
+
+/**
+ * Aircraft
+*/
+
 Aircraft::Aircraft(uint32_t icao_address_in)
     : icao_address(icao_address_in) 
 {
@@ -11,14 +19,70 @@ Aircraft::Aircraft() {
     memset(callsign, '\0', kCallSignMaxNumChars+1); // clear out callsign string, including extra EOS character
 }
 
+void Aircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd) {
+    /** Calculate Latitude **/
+    if (odd) {
+        // cpr_odd_timestamp_us = time_since_boot_us();
+
+        // Equation 5.5
+        lat_cpr_odd = n_lat_cpr / kCPRMaxCount;
+        lon_cpr_odd = n_lon_cpr / kCPRMaxCount;
+
+        // Equation 5.6
+        int32_t lat_zone_index = floorf(59.0f * lat_cpr_even - 60.0f * lat_cpr_odd + 0.5f);
+
+        // Equation 5.7
+        lat_odd = kCPRdLatOdd * ((lat_zone_index % 59) + lat_cpr_odd);
+        // Equation 5.8
+        lat_odd = lat_odd >= 270 ? lat_odd : lat_odd - 360.0f;
+        nl_lat_cpr_odd = calc_nl_cpr_from_lat(lat_odd);
+    } else {
+        // cpr_even_timestamp_us = time_since_boot_us();
+
+        // Equation 5.5
+        lat_cpr_even = n_lat_cpr / kCPRMaxCount;
+        lon_cpr_even = n_lon_cpr / kCPRMaxCount;
+
+        // Equation 5.6
+        int32_t lat_zone_index = floorf(59.0f * lat_cpr_even - 60.0f * lat_cpr_odd + 0.5f);
+
+        // Equation 5.7
+        lat_even = kCPRdLatEven * ((lat_zone_index % 60) + lat_cpr_even);
+        // Equation 5.8
+        lat_even = lat_even >= 270 ? lat_even : lat_even - 360.0f;
+        nl_lat_cpr_even = calc_nl_cpr_from_lat(lat_even);
+    }
+
+
+    // Equation 5.9
+    latitude = odd ? lat_odd : lat_even; // Set latitude to the most recent of the two
+
+    /** Calculate Longitude **/
+    // TODO: do this part
+
+    // Invalidate position if position pair is split across different longitude or latitude zones.
+    if (nl_lat_cpr_odd != nl_lat_cpr_even || nl_lon_cpr_odd != nl_lon_cpr_even) {
+        position_valid = false;
+    } else {
+        position_valid = true;
+    }
+
+    
+}
+
+/**
+ * Aircraft Dictionary
+*/
+
 AircraftDictionary::AircraftDictionary() {
 
 }
 
 bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
-    if (packet.GetDownlinkFormat() != ADSBPacket::DF_EXTENDED_SQUITTER) {
-        return false; // Only DF 17 supported for now.
+    if (!packet.IsValid() || packet.GetDownlinkFormat() != ADSBPacket::DF_EXTENDED_SQUITTER) {
+        return false; // Only allow valid DF17 packets.
     }
+
     switch(packet.GetTypeCodeEnum()) {
         case ADSBPacket::TC_AIRCRAFT_ID:
             return IngestAircraftIDMessage(packet);
@@ -27,13 +91,11 @@ bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
             return IngestSurfacePositionMessage(packet);
             break;
         case ADSBPacket::TC_AIRBORNE_POSITION_BARO_ALT:
-            return IngestAirbornePositionBaroAltMessage(packet);
+        case ADSBPacket::TC_AIRBORNE_POSITION_GNSS_ALT:
+            return IngestAirbornePositionMessage(packet);
             break;
         case ADSBPacket::TC_AIRBORNE_VELOCITIES:
             return IngestAirborneVelocitiesMessage(packet);
-            break;
-        case ADSBPacket::TC_AIRBORNE_POSITION_GNSS_ALT:
-            return IngestAirbornePositionGNSSAltMessage(packet);
             break;
         case ADSBPacket::TC_RESERVED:
             return false;
@@ -241,6 +303,11 @@ Aircraft::WakeVortex_t ExtractWakeVortex(const ADSBPacket &packet) {
     }
 }
 
+/**
+ * @brief Ingests an Aircraft Identification ADS-B message. Called by IngestADSBPacket, which makes sure that the packet
+ * is valid and has the correct Downlink Format.
+ * @retval True if message was ingested successfully, false otherwise.
+*/
 bool AircraftDictionary::IngestAircraftIDMessage(ADSBPacket packet) {
     uint32_t icao_address = packet.GetICAOAddress();
 
@@ -251,26 +318,66 @@ bool AircraftDictionary::IngestAircraftIDMessage(ADSBPacket packet) {
     }
 
     aircraft->wake_vortex = ExtractWakeVortex(packet);
+    aircraft->transponder_capability = packet.GetCapability();
     for (uint16_t i = 0; i < Aircraft::kCallSignMaxNumChars; i++) {
-        aircraft->callsign[i] = packet.GetNBitWordFromMessage(6, 8+(6*i));
+        char callsign_char = lookup_callsign_char(packet.GetNBitWordFromMessage(6, 8+(6*i)));
+        if (callsign_char == ' ') break; // ignore trailing spaces
+        aircraft->callsign[i] = callsign_char;
     }
 
     return true;
 }
 
 bool AircraftDictionary::IngestSurfacePositionMessage(ADSBPacket packet) {
+    uint32_t icao_address = packet.GetICAOAddress();
+
+    Aircraft * aircraft = GetAircraftPtr(icao_address);
+    if (aircraft == NULL) {
+        printf("AircraftDictionary::IngestSurfacePositionMessage: Unable to find or create new aircraft in dictionay.\r\n");
+        return false; // unable to find or create new aircraft in dictionary
+    }
+
     return false;
 }
 
-bool AircraftDictionary::IngestAirbornePositionBaroAltMessage(ADSBPacket packet) {
+bool AircraftDictionary::IngestAirbornePositionMessage(ADSBPacket packet) {
+    uint32_t icao_address = packet.GetICAOAddress();
+
+    Aircraft * aircraft = GetAircraftPtr(icao_address);
+    if (aircraft == NULL) {
+        printf("AircraftDictionary::IngestAirbornePositionBaroAltMessage: Unable to find or create new aircraft in dictionay.\r\n");
+        return false; // unable to find or create new aircraft in dictionary
+    }
+    
+    // ME[6-7] - Surveillance Status
+    aircraft->surveillance_status = static_cast<Aircraft::SurveillanceStatus_t>(packet.GetNBitWordFromMessage(2, 6));
+    
+    // ME[8] - Single Antenna Flag
+    aircraft->single_antenna_flag = packet.GetNBitWordFromMessage(1, 8) ? true : false;
+
+    // ME[9-20] - Encoded Altitude
+    uint16_t encoded_altitude = packet.GetNBitWordFromMessage(12, 9);
+    if (packet.GetTypeCodeEnum() == ADSBPacket::TC_AIRBORNE_POSITION_BARO_ALT) {
+        aircraft->barometric_altitude = encoded_altitude;
+    } else {
+        aircraft->gnss_altitude = encoded_altitude;
+    }
+
+ 
+
+    // ME[21] - Time
+    // TODO: figure out if we need this
+
+    // ME[22] - CPR Format
+    bool odd = packet.GetNBitWordFromMessage(1, 22);
+
+    // ME[32-?]
+    aircraft->SetCPRLatLon(packet.GetNBitWordFromMessage(17, 23), packet.GetNBitWordFromMessage(17, 40), odd);
+    
     return false;
 }
 
 bool AircraftDictionary::IngestAirborneVelocitiesMessage(ADSBPacket packet) {
-    return false;
-}
-
-bool AircraftDictionary::IngestAirbornePositionGNSSAltMessage(ADSBPacket packet) {
     return false;
 }
 

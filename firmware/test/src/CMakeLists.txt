@@ -1,8 +1,9 @@
 target_sources(ads_bee_test
 PRIVATE
-    main.cpp
-    test_platform.cpp
-    # test_ads_b_decoder.cpp
-    test_ads_b_packet.cpp
-    test_aircraft_dictionary.cpp
+    hal.cc
+    main.cc
+    test_platform.cc
+    # test_ads_b_decoder.cc
+    test_ads_b_packet.cc
+    test_aircraft_dictionary.cc
 )
