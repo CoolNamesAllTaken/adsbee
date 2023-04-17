@@ -151,12 +151,20 @@ TEST(Aircraft, SetCPRLatLon) {
     Aircraft aircraft;
     EXPECT_FALSE(aircraft.position_valid);
 
-    /** Test Latitude **/
+    // Send n_lat_cpr out of bounds (bigger than 2^17 bits max value).
+    EXPECT_FALSE(aircraft.SetCPRLatLon(0xFFFFFF, 53663, true));
+    EXPECT_FALSE(aircraft.SetCPRLatLon(0xFFFFFF, 53663, false));
+    // Send n_lon_cpr out of bounds (bigger than 2^17 bits max value).
+    EXPECT_FALSE(aircraft.SetCPRLatLon(52455, 0xFFFFFF, false));
+    EXPECT_FALSE(aircraft.SetCPRLatLon(52455, 0xFFFFFF, true));
+
     // Send two even packets at startup, no odd packets.
+    aircraft = Aircraft(); // clear everything
     inc_time_since_boot_us();
     EXPECT_TRUE(aircraft.SetCPRLatLon(578, 13425, false));
     inc_time_since_boot_us();
     EXPECT_TRUE(aircraft.SetCPRLatLon(578, 4651, false));
+    EXPECT_FALSE(aircraft.DecodePosition());
     EXPECT_FALSE(aircraft.position_valid);
 
     // Send two odd packets at startup, no even packets.
@@ -165,19 +173,8 @@ TEST(Aircraft, SetCPRLatLon) {
     EXPECT_TRUE(aircraft.SetCPRLatLon(236, 13425, true));
     inc_time_since_boot_us();
     EXPECT_TRUE(aircraft.SetCPRLatLon(236, 857, true));
+    EXPECT_FALSE(aircraft.DecodePosition());
     EXPECT_FALSE(aircraft.position_valid);
-
-    // Send one even packet and one odd packet at startup.
-    aircraft = Aircraft(); // clear everything
-    inc_time_since_boot_us();
-    EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
-    inc_time_since_boot_us();
-    EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true));
-    EXPECT_TRUE(aircraft.position_valid);
-    // EXPECT_FLOAT_EQ(aircraft.latitude, 52.25720f);
-    // EXPECT_FLOAT_EQ(aircraft.longitude, 3.91937f);
-    EXPECT_NEAR(aircraft.latitude, 52.25720f, 1e-4);
-    EXPECT_NEAR(aircraft.longitude, 3.91937f, 1e-4);
 
     // Send one odd packet and one even packet at startup.
     aircraft = Aircraft(); // clear everything
@@ -185,15 +182,44 @@ TEST(Aircraft, SetCPRLatLon) {
     EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true));
     inc_time_since_boot_us();
     EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
+    EXPECT_TRUE(aircraft.DecodePosition());
     EXPECT_TRUE(aircraft.position_valid);
+    EXPECT_NEAR(aircraft.latitude, 52.25720f, 1e-4); // even latitude
+    EXPECT_NEAR(aircraft.longitude, 3.91937f, 1e-4); // longitude calculated from even latitude
+
+    // Send one even packet and one odd packet at startup.
+    aircraft = Aircraft(); // clear everything
+    inc_time_since_boot_us();
+    EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
+    inc_time_since_boot_us();
+    EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true));
+    EXPECT_TRUE(aircraft.DecodePosition());
+    EXPECT_TRUE(aircraft.position_valid);
+    EXPECT_NEAR(aircraft.latitude, 52.26578f, 1e-4); // odd latitude
+    // don't have a test value available for the longitude calculated from odd latitude
+
+    // Straddle two position packets between different latitude
+    aircraft = Aircraft(); // clear everything
+    inc_time_since_boot_us();
+    EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
+    inc_time_since_boot_us();
+    EXPECT_TRUE(aircraft.SetCPRLatLon(93000-50000, 50194, true));
+    EXPECT_FALSE(aircraft.DecodePosition());
+
+    // EXPECT_NEAR(aircraft.latitude, 52.25720f, 1e-4);
+    // EXPECT_NEAR(aircraft.longitude, 3.91937f, 1e-4);
+
+    // Another test message.
+    // aircraft = Aircraft(); // clear everything
+    // inc_time_since_boot_us();
+    // EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true));
+    // inc_time_since_boot_us();
+    // EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
+    // EXPECT_TRUE(aircraft.position_valid);
     // EXPECT_FLOAT_EQ(aircraft.latitude, 52.25720f);
     // EXPECT_FLOAT_EQ(aircraft.longitude, 3.91937f);
-    EXPECT_NEAR(aircraft.latitude, 52.25720f, 1e-4);
-    EXPECT_NEAR(aircraft.longitude, 3.91937f, 1e-4);
 
-    // Send n_lat_cpr out of bounds (bigger than 2^17 bits max value).
 
-    // Send n_lon_cpr out of bounds (bigger than 2^17 bits max value).
 
     // Send even / odd latitude pair
 

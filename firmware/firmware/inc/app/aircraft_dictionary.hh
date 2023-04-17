@@ -57,28 +57,62 @@ public:
     Aircraft();
 
     bool SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, bool redigesting=false);
+    bool DecodePosition();
 
 private:
 
-    uint32_t n_lat_cpr_even_ = 0; // 17-bit count.
-    uint32_t n_lon_cpr_even_ = 0; // 17-bit count.
-    float lat_cpr_even_ = 0.0f;
-    float lon_cpr_even_ = 0.0f;
-    uint64_t cpr_even_timestamp_us_ = 0;
-    float lat_even_ = 0.0f;
-    float lon_even_ = 0.0f;
-    // number of longitude zones in last even packet latitude band
-    uint16_t nl_lat_cpr_even_ = 0; // Initial value of 0 is assumed in SetCPRLatLon for determining which packet came first (odd or even).
+    // TODO: probably change this to some kind of state machine with a state like "NL_LATS_DISAGREE" or something so we know when position needs to be re-validated?
+    typedef enum {
+        CPR_DS_NO_PACKETS = 0, // clean start, no previous packets received
+        CPR_DS_RECEIVED_ODD_ONLY, // still need an even packet to decode position
+        CPR_DS_RECEIVED_EVEN_ONLY, // still need an odd packet to decode position
+        CPR_DS_RECEIVED_BOTH // normal operational state, previously received both an odd and an even, can decode any fresh packet
+    } CPRDecodeState_t;
 
-    uint32_t n_lat_cpr_odd_ = 0; // 17-bit count.
-    uint32_t n_lon_cpr_odd_ = 0; // 17-bit count.
-    float lat_cpr_odd_ = 0.0f;
-    float lon_cpr_odd_ = 0.0f;
-    uint64_t cpr_odd_timestamp_us_ = 0;
-    float lat_odd_ = 0.0f;
-    float lon_odd_ = 0.0f;
-    // number of longitude zones in last odd packet latitude band
-    uint16_t nl_lat_cpr_odd = 0; // Initial value of 0 is assumed in SetCPRLatLon for determining which packet came first (odd or even).
+    // typedef enum {
+    //     CPR_PT_EVEN = 0,
+    //     CPR_PT_ODD = 1
+    // } CPRPacketType_t;
+
+    struct CPRPacket {
+        // CPRPacketType_t type;
+        bool is_valid = false;
+        float timestamp_us = 0;
+
+        uint32_t n_lat = 0; // 17-bit latitude count
+        uint32_t n_lon = 0; // 17-bit longitude count
+
+
+        float lat_cpr = 0.0f;
+        float lon_cpr = 0.0f;
+        uint16_t nl_cpr = 0; // number of longitude cells in latitude band
+        float lat = 0.0f; // latitude
+        float lon = 0.0f; // longitude
+    };
+
+    CPRPacket last_odd_packet_;
+    CPRPacket last_even_packet_;
+    CPRDecodeState_t airborne_decode_state_ = CPR_DS_NO_PACKETS;
+
+    // uint32_t n_lat_cpr_even_ = 0; // 17-bit count.
+    // uint32_t n_lon_cpr_even_ = 0; // 17-bit count.
+    // float lat_cpr_even_ = 0.0f;
+    // float lon_cpr_even_ = 0.0f;
+    // uint64_t cpr_even_timestamp_us_ = 0;
+    // float lat_even_ = 0.0f;
+    // float lon_even_ = 0.0f;
+    // // number of longitude zones in last even packet latitude band
+    // uint16_t nl_lat_cpr_even_ = 0; // Initial value of 0 is assumed in SetCPRLatLon for determining which packet came first (odd or even).
+
+    // uint32_t n_lat_cpr_odd_ = 0; // 17-bit count.
+    // uint32_t n_lon_cpr_odd_ = 0; // 17-bit count.
+    // float lat_cpr_odd_ = 0.0f;
+    // float lon_cpr_odd_ = 0.0f;
+    // uint64_t cpr_odd_timestamp_us_ = 0;
+    // float lat_odd_ = 0.0f;
+    // float lon_odd_ = 0.0f;
+    // // number of longitude zones in last odd packet latitude band
+    // uint16_t nl_lat_cpr_odd = 0; // Initial value of 0 is assumed in SetCPRLatLon for determining which packet came first (odd or even).
     
      
 
