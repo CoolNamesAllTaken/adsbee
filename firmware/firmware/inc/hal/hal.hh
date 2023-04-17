@@ -3,6 +3,6 @@
 
 #include "stdint.h"
 
-uint64_t time_since_boot_us();
+uint64_t get_time_since_boot_us();
 
 #endif /* _HAL_HH_ */

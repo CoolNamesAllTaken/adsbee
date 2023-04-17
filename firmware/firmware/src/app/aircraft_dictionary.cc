@@ -2,8 +2,10 @@
 #include "stdio.h"
 
 #include "decode_utils.hh"
-#include "hal/hal.hh"
+#include "hal.hh"
 #include <cmath>
+
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 /**
  * Aircraft
@@ -19,55 +21,111 @@ Aircraft::Aircraft() {
     memset(callsign, '\0', kCallSignMaxNumChars+1); // clear out callsign string, including extra EOS character
 }
 
-void Aircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd) {
-    /** Calculate Latitude **/
-    if (odd) {
-        // cpr_odd_timestamp_us = time_since_boot_us();
-
-        // Equation 5.5
-        lat_cpr_odd = n_lat_cpr / kCPRMaxCount;
-        lon_cpr_odd = n_lon_cpr / kCPRMaxCount;
-
-        // Equation 5.6
-        int32_t lat_zone_index = floorf(59.0f * lat_cpr_even - 60.0f * lat_cpr_odd + 0.5f);
-
-        // Equation 5.7
-        lat_odd = kCPRdLatOdd * ((lat_zone_index % 59) + lat_cpr_odd);
-        // Equation 5.8
-        lat_odd = lat_odd >= 270 ? lat_odd : lat_odd - 360.0f;
-        nl_lat_cpr_odd = calc_nl_cpr_from_lat(lat_odd);
-    } else {
-        // cpr_even_timestamp_us = time_since_boot_us();
-
-        // Equation 5.5
-        lat_cpr_even = n_lat_cpr / kCPRMaxCount;
-        lon_cpr_even = n_lon_cpr / kCPRMaxCount;
-
-        // Equation 5.6
-        int32_t lat_zone_index = floorf(59.0f * lat_cpr_even - 60.0f * lat_cpr_odd + 0.5f);
-
-        // Equation 5.7
-        lat_even = kCPRdLatEven * ((lat_zone_index % 60) + lat_cpr_even);
-        // Equation 5.8
-        lat_even = lat_even >= 270 ? lat_even : lat_even - 360.0f;
-        nl_lat_cpr_even = calc_nl_cpr_from_lat(lat_even);
+/**
+ * @brief Set an aircraft's position in Compact Position Reporting (CPR) format. Takes either an even or odd set of lat/lon
+ * coordinates and uses them to set the aircraft's position.
+ * @param[in] n_lat_cpr 17-bit latitude count.
+ * @param[in] n_lon_cpr 17-bit longitude count.
+ * @param[in] odd Boolean indicating that the position update is relative to an odd grid reference (if true) or an even grid reference.
+ * @param[in] redigesting Boolean flag used if SetCPRLatLon is being used to re-digest a packet. Assures that it won't call itself again if set.
+ * @retval True if coordinates were parsed successfully, false if not. NOTE: invalid positions can still be considered a successful parse.
+*/
+bool Aircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, bool redigesting) {
+    if (n_lat_cpr > kCPRLatLonMaxCount || n_lon_cpr > kCPRLatLonMaxCount) {
+        return false; // counts out of bounds, don't parse
     }
 
+    // Ingest Lat / Lon CPR values.
+    if (odd) {
+        cpr_odd_timestamp_us_ = get_time_since_boot_us();
 
-    // Equation 5.9
-    latitude = odd ? lat_odd : lat_even; // Set latitude to the most recent of the two
+        // Store counts in case they need to be used for re-digestion later.
+        n_lat_cpr_odd_ = n_lat_cpr;
+        n_lon_cpr_odd_ = n_lon_cpr;
+
+        // Equation 5.5
+        lat_cpr_odd_ = static_cast<float>(n_lat_cpr) / kCPRLatLonMaxCount;
+        lon_cpr_odd_ = static_cast<float>(n_lon_cpr) / kCPRLatLonMaxCount;
+    } else {
+        cpr_even_timestamp_us_ = get_time_since_boot_us();
+
+        // Store counts in case they need to be used for re-digestion later.
+        n_lat_cpr_even_ = n_lat_cpr;
+        n_lon_cpr_even_ = n_lon_cpr;
+
+        // Equation 5.5
+        lat_cpr_even_ = static_cast<float>(n_lat_cpr) / kCPRLatLonMaxCount;
+        lon_cpr_even_ = static_cast<float>(n_lon_cpr) / kCPRLatLonMaxCount;
+    }
+
+    /** Calculate Latitude **/
+    // Equation 5.6
+    int32_t lat_zone_index = floorf(59.0f * lat_cpr_even_ - 60.0f * lat_cpr_odd_ + 0.5f);
+
+    if (odd) {
+        // Equation 5.7
+        lat_odd_ = kCPRdLatOdd * ((lat_zone_index % 59) + lat_cpr_odd_);
+        // Equation 5.8
+        lat_odd_ = lat_odd_ >= 270.0f ? lat_odd_ - 360.0f: lat_odd_; // wrap latitude to between -90 and +90 degrees.
+        nl_lat_cpr_odd = calc_nl_cpr_from_lat(lat_odd_);
+    } else {
+        // Equation 5.7
+        lat_even_ = kCPRdLatEven * ((lat_zone_index % 60) + lat_cpr_even_);
+        // Equation 5.8
+        lat_even_ = lat_even_ >= 270.0f ?lat_even_ - 360.0f : lat_even_; // wrap latitude to between -90 and +90 degrees.
+        nl_lat_cpr_even_ = calc_nl_cpr_from_lat(lat_even_);
+    }
+
+    uint16_t nl_lat_cpr = odd ? nl_lat_cpr_odd : nl_lat_cpr_even_; // number of longitude zones (sorta)
+    // Equation 5.10
+    int32_t lon_zone_index = floorf(lon_cpr_even_ * (nl_lat_cpr - 1) - lon_cpr_odd_ * nl_lat_cpr + 0.5f);
 
     /** Calculate Longitude **/
-    // TODO: do this part
+    // Equation 5.11: Use nl_lat_cpr to calculate actual number of longitude zones
+    uint16_t num_lon_zones = odd ? MAX(nl_lat_cpr-1, 1) : MAX(nl_lat_cpr, 1);
+    // Equation 5.12: longitude zone size
+    float d_lon = 360.0f / num_lon_zones;
+    printf("num_lon_zones=%d lon_zone_index=%d\r\n", num_lon_zones, lon_zone_index);
 
-    // Invalidate position if position pair is split across different longitude or latitude zones.
-    if (nl_lat_cpr_odd != nl_lat_cpr_even || nl_lon_cpr_odd != nl_lon_cpr_even) {
+    if (odd) {
+        // Equation 5.13
+        lon_odd_ = d_lon * ((lon_zone_index % num_lon_zones) + lon_cpr_odd_);
+        // Equation 5.15
+        lon_odd_ = lon_odd_ >= 180.0f ? lon_odd_ - 360.0f : lon_odd_; // wrap longitude to between -180 and +180 degrees
+    } else {
+        // Equation 5.13
+        lon_even_ = d_lon * ((lon_zone_index % num_lon_zones) + lon_cpr_even_);
+        // Equation 5.15
+        lon_even_ = lon_even_ >= 180.0f ? lon_even_ - 360.0f : lon_even_; // wrap longitude to between -180 and +180 degrees
+    }
+
+    // Invalidate position if position pair is split across different latitude bands. Do this check at the end
+    // so that the last packet of a split pair can still be used to pair with the next incoming packet.
+    if (nl_lat_cpr_odd != nl_lat_cpr_even_) {
+        // Latitude bands don't match between even and odd packets, so position fix isn't valid.
+        if (!redigesting) {
+            // Try re-digesting the last packet in case it digested improperly because it didn't have a buddy. Only allow one
+            // level of recursion by setting redigesting=true. SetCPRLatLon will take care of position_valid and other public
+            // variables for us!
+            if (odd && cpr_even_timestamp_us_) {
+                // Invalid odd packet: try re-digesting previously received even packet
+                return SetCPRLatLon(n_lat_cpr_even_, n_lon_cpr_even_, false, true); 
+            } else if (!odd && cpr_odd_timestamp_us_) {
+                // Invalid even packet: try re-digesting previously received odd packet
+                return SetCPRLatLon(n_lat_cpr_odd_, n_lon_cpr_odd_, true, true);
+            }
+        }
+        // Can't redigest, aircraft position is invalid, keep reporting last known good coordinates.
         position_valid = false;
     } else {
+        // Aircraft position is valid, update accessible coordinates.
+        latitude = odd ? lat_odd_ : lat_even_; // Equation 5.9: expose most recent latitude for public consumption
+        longitude = odd ? lon_odd_ : lon_even_; // Equation 5.14
+        printf("setting latitude=%f, longitude=%f\r\n", latitude, longitude);
         position_valid = true;
     }
 
-    
+    return true;
 }
 
 /**

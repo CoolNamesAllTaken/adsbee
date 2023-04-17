@@ -11,6 +11,8 @@
         "tuple": "cpp",
         "type_traits": "cpp",
         "utility": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "unordered_map": "cpp",
+        "cstdint": "cpp"
     }
 }

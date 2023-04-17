@@ -8,7 +8,6 @@
 class Aircraft {
 public:
     static const uint16_t kCallSignMaxNumChars = 8;
-    
 
     typedef enum {
         WV_INVALID = 0,
@@ -57,27 +56,29 @@ public:
     Aircraft(uint32_t icao_address_in);
     Aircraft();
 
-    void SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd);
+    bool SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, bool redigesting=false);
 
 private:
 
-    // uint32_t n_lat_cpr_even = 0; // 17-bit count.
-    // uint32_t n_lon_cpr_even = 0; // 17-bit count.
-    float lat_cpr_even = 0.0f;
-    float lon_cpr_even = 0.0f;
-    // uint64_t cpr_even_timestamp_us = 0;
-    float lat_even = 0.0f;
-    uint16_t nl_lat_cpr_even = 0;
-    uint16_t nl_lon_cpr_even = 0;
+    uint32_t n_lat_cpr_even_ = 0; // 17-bit count.
+    uint32_t n_lon_cpr_even_ = 0; // 17-bit count.
+    float lat_cpr_even_ = 0.0f;
+    float lon_cpr_even_ = 0.0f;
+    uint64_t cpr_even_timestamp_us_ = 0;
+    float lat_even_ = 0.0f;
+    float lon_even_ = 0.0f;
+    // number of longitude zones in last even packet latitude band
+    uint16_t nl_lat_cpr_even_ = 0; // Initial value of 0 is assumed in SetCPRLatLon for determining which packet came first (odd or even).
 
-    // uint32_t n_lat_cpr_odd = 0; // 17-bit count.
-    // uint32_t n_lon_cpr_odd = 0; // 17-bit count.
-    float lat_cpr_odd = 0.0f;
-    float lon_cpr_odd = 0.0f;
-    // uint64_t cpr_odd_timestamp_us = 0;
-    float lat_odd = 0.0f;
-    uint16_t nl_lat_cpr_odd = 0;
-    uint16_t nl_lon_cpr_odd = 0;
+    uint32_t n_lat_cpr_odd_ = 0; // 17-bit count.
+    uint32_t n_lon_cpr_odd_ = 0; // 17-bit count.
+    float lat_cpr_odd_ = 0.0f;
+    float lon_cpr_odd_ = 0.0f;
+    uint64_t cpr_odd_timestamp_us_ = 0;
+    float lat_odd_ = 0.0f;
+    float lon_odd_ = 0.0f;
+    // number of longitude zones in last odd packet latitude band
+    uint16_t nl_lat_cpr_odd = 0; // Initial value of 0 is assumed in SetCPRLatLon for determining which packet came first (odd or even).
     
      
 

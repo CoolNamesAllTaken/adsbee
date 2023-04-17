@@ -2,6 +2,7 @@
 #include "aircraft_dictionary.hh"
 #include "ads_b_packet.hh"
 #include "decode_utils.hh"
+#include "hal_god_powers.hh"
 
 TEST(AircraftDictionary, BasicInsertRemove) {
     AircraftDictionary dictionary = AircraftDictionary();
@@ -152,9 +153,43 @@ TEST(Aircraft, SetCPRLatLon) {
 
     /** Test Latitude **/
     // Send two even packets at startup, no odd packets.
-    aircraft.SetCPRLatLon(578, 13425, false);
+    inc_time_since_boot_us();
+    EXPECT_TRUE(aircraft.SetCPRLatLon(578, 13425, false));
+    inc_time_since_boot_us();
+    EXPECT_TRUE(aircraft.SetCPRLatLon(578, 4651, false));
+    EXPECT_FALSE(aircraft.position_valid);
 
     // Send two odd packets at startup, no even packets.
+    aircraft = Aircraft(); // clear everything
+    inc_time_since_boot_us();
+    EXPECT_TRUE(aircraft.SetCPRLatLon(236, 13425, true));
+    inc_time_since_boot_us();
+    EXPECT_TRUE(aircraft.SetCPRLatLon(236, 857, true));
+    EXPECT_FALSE(aircraft.position_valid);
+
+    // Send one even packet and one odd packet at startup.
+    aircraft = Aircraft(); // clear everything
+    inc_time_since_boot_us();
+    EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
+    inc_time_since_boot_us();
+    EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true));
+    EXPECT_TRUE(aircraft.position_valid);
+    // EXPECT_FLOAT_EQ(aircraft.latitude, 52.25720f);
+    // EXPECT_FLOAT_EQ(aircraft.longitude, 3.91937f);
+    EXPECT_NEAR(aircraft.latitude, 52.25720f, 1e-4);
+    EXPECT_NEAR(aircraft.longitude, 3.91937f, 1e-4);
+
+    // Send one odd packet and one even packet at startup.
+    aircraft = Aircraft(); // clear everything
+    inc_time_since_boot_us();
+    EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true));
+    inc_time_since_boot_us();
+    EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
+    EXPECT_TRUE(aircraft.position_valid);
+    // EXPECT_FLOAT_EQ(aircraft.latitude, 52.25720f);
+    // EXPECT_FLOAT_EQ(aircraft.longitude, 3.91937f);
+    EXPECT_NEAR(aircraft.latitude, 52.25720f, 1e-4);
+    EXPECT_NEAR(aircraft.longitude, 3.91937f, 1e-4);
 
     // Send n_lat_cpr out of bounds (bigger than 2^17 bits max value).
 

@@ -127,7 +127,7 @@ TEST(ADSBPacket, PacketBuffer) {
 }
 
 TEST(ADSBPacket, RxStringConstructor) {
-    ADSBPacket packet = ADSBPacket("8D4840D6202CC371C32CE0576098");
+    ADSBPacket packet = ADSBPacket((char *)"8D4840D6202CC371C32CE0576098");
     uint32_t packet_buffer[ADSBPacket::kMaxPacketLenWords32];
     packet.DumpPacketBuffer(packet_buffer);
 
