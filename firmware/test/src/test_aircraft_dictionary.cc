@@ -160,27 +160,27 @@ TEST(Aircraft, SetCPRLatLon) {
 
     // Send two even packets at startup, no odd packets.
     aircraft = Aircraft(); // clear everything
-    inc_time_since_boot_us();
+    inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(578, 13425, false));
-    inc_time_since_boot_us();
+    inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(578, 4651, false));
     EXPECT_FALSE(aircraft.DecodePosition());
     EXPECT_FALSE(aircraft.position_valid);
 
     // Send two odd packets at startup, no even packets.
     aircraft = Aircraft(); // clear everything
-    inc_time_since_boot_us();
+    inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(236, 13425, true));
-    inc_time_since_boot_us();
+    inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(236, 857, true));
     EXPECT_FALSE(aircraft.DecodePosition());
     EXPECT_FALSE(aircraft.position_valid);
 
     // Send one odd packet and one even packet at startup.
     aircraft = Aircraft(); // clear everything
-    inc_time_since_boot_us();
+    inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true));
-    inc_time_since_boot_us();
+    inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
     EXPECT_TRUE(aircraft.DecodePosition());
     EXPECT_TRUE(aircraft.position_valid);
@@ -189,9 +189,9 @@ TEST(Aircraft, SetCPRLatLon) {
 
     // Send one even packet and one odd packet at startup.
     aircraft = Aircraft(); // clear everything
-    inc_time_since_boot_us();
+    inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
-    inc_time_since_boot_us();
+    inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true));
     EXPECT_TRUE(aircraft.DecodePosition());
     EXPECT_TRUE(aircraft.position_valid);
@@ -200,10 +200,15 @@ TEST(Aircraft, SetCPRLatLon) {
 
     // Straddle two position packets between different latitude
     aircraft = Aircraft(); // clear everything
-    inc_time_since_boot_us();
+    EXPECT_TRUE(aircraft.SetCPRLatLon(93006, 50194, true));
+    inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
-    inc_time_since_boot_us();
-    EXPECT_TRUE(aircraft.SetCPRLatLon(93000-50000, 50194, true));
+    inc_time_since_boot_ms();
+    EXPECT_TRUE(aircraft.DecodePosition());
+    inc_time_since_boot_ms();
+    // Position established, now send the curveball.
+    EXPECT_TRUE(aircraft.SetCPRLatLon(93000-5000, 50194, true));
+    inc_time_since_boot_ms();
     EXPECT_FALSE(aircraft.DecodePosition());
 
     // EXPECT_NEAR(aircraft.latitude, 52.25720f, 1e-4);
@@ -211,9 +216,9 @@ TEST(Aircraft, SetCPRLatLon) {
 
     // Another test message.
     // aircraft = Aircraft(); // clear everything
-    // inc_time_since_boot_us();
+    // inc_time_since_boot_ms();
     // EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true));
-    // inc_time_since_boot_us();
+    // inc_time_since_boot_ms();
     // EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
     // EXPECT_TRUE(aircraft.position_valid);
     // EXPECT_FLOAT_EQ(aircraft.latitude, 52.25720f);

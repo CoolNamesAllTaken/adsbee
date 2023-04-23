@@ -21,41 +21,57 @@ Aircraft::Aircraft() {
     memset(callsign, '\0', kCallSignMaxNumChars+1); // clear out callsign string, including extra EOS character
 }
 
+/**
+ * @brief Decodes the aircraft position using last_od_packet_ and last_even_packet_.
+ * @retval True if position was decoded successfully, false otherwise.
+*/
 bool Aircraft::DecodePosition() {
-    if (!(last_odd_packet_.is_valid && last_even_packet_.is_valid)/*airborne_decode_state_ != CPR_DS_RECEIVED_BOTH*/) {
-        printf("Aircraft::DecodePosition: Unable to decode position without valid odd and even packet pair.\r\n");
+    if (!(last_odd_packet_.received_timestamp_ms > 0 && last_even_packet_.received_timestamp_ms > 0)) {
+        printf("Aircraft::DecodePosition: Unable to decode position without receiving an odd and even packet pair.\r\n");
         return false; // need both an even and an odd packet to be able to decode position
     }
 
     // Equation 5.6
     int32_t lat_zone_index = floorf(59.0f * last_even_packet_.lat_cpr - 60.0f * last_odd_packet_.lat_cpr + 0.5f);
 
-    // bool received_odd_last = last_odd_packet_.timestamp_us > last_even_packet_.timestamp_us;
-    // CPRPacket &last_packet = received_odd_last ? last_odd_packet_ : last_even_packet_;
+    bool calculate_odd = last_odd_packet_.calculated_timestamp_ms > last_odd_packet_.received_timestamp_ms ? false : true;
+    bool calculate_even = last_even_packet_.calculated_timestamp_ms > last_even_packet_.received_timestamp_ms ? false : true;
 
-    // TODO: Modify this structure! Right now I'm recalculating everything every time, but really I need to recalculate
-    // lat for the complementary packet ONLY if it's never been done before. Otherwise, leave it and see if the new lat
-    // that we come up with disagrees. Really need to calculate both on the CPR_DS_RECEIVED_XX_ONLY -> CPR_DS_RECEIVED_BOTH
-    // transition. HOWEVER this makes a pretty big assumption so the position might still not be valid! Probably need at
-    // least one more packet without a disagreeing nl_cpr to make sure that the position is actually valid.
+    if (calculate_odd) {
+        // Equation 5.7
+        last_odd_packet_.lat = kCPRdLatOdd * ((lat_zone_index % 59) + last_odd_packet_.lat_cpr);
+        // Equation 5.8: wrap latitude to between -90 and +90 degrees.
+        last_odd_packet_.lat = wrap_latitude(last_odd_packet_.lat);
+        // Calculate NL, which will be used later to calculate the number of longitude zones in this latitude band.
+        last_odd_packet_.nl_cpr = calc_nl_cpr_from_lat(last_odd_packet_.lat);
+        last_odd_packet_.calculated_timestamp_ms = get_time_since_boot_ms();
+    }
 
-    // Equation 5.7
-    last_odd_packet_.lat = kCPRdLatOdd * ((lat_zone_index % 59) + last_odd_packet_.lat_cpr);
-    // Equation 5.7
-    last_even_packet_.lat = kCPRdLatEven * ((lat_zone_index % 60) + last_even_packet_.lat_cpr);
-
-    // Equation 5.8: wrap latitude to between -90 and +90 degrees.
-    last_odd_packet_.lat = last_odd_packet_.lat >= 270.0f ? last_odd_packet_.lat - 360.0f: last_odd_packet_.lat;
-    last_even_packet_.lat = last_even_packet_.lat >= 270.0f ? last_even_packet_.lat - 360.0f: last_even_packet_.lat;
+    if (calculate_even) {
+        // Equation 5.7
+        last_even_packet_.lat = kCPRdLatEven * ((lat_zone_index % 60) + last_even_packet_.lat_cpr);
+        // Equation 5.8: wrap latitude to between -90 and +90 degrees.
+        last_even_packet_.lat = wrap_latitude(last_even_packet_.lat);
+        // Calculate NL, which will be used later to calculate the number of longitude zones in this latitude band.
+        last_even_packet_.nl_cpr = calc_nl_cpr_from_lat(last_even_packet_.lat);
+        last_even_packet_.calculated_timestamp_ms = get_time_since_boot_ms();
+    }
     
-    // Calculate NL, which will be used later to calculate the number of longitude zones in this latitude band.
-    last_odd_packet_.nl_cpr = calc_nl_cpr_from_lat(last_odd_packet_.lat);
-    last_even_packet_.nl_cpr = calc_nl_cpr_from_lat(last_even_packet_.lat);
+    /**
+     * Unhandled edge case:
+     * 
+     * Even and odd packets are both received, everything up to this point gets calculated. The calculated position
+     * ends up being invalid because the number of longitude bands disagrees at the last step. Then, a new odd packet
+     * arrives with a lat_cpr that would change the lat_zone_index. This should change the lat of the previously
+     * calculated even packet, but this won't be refreshed until the next even packet is received. Could result in
+     * some delay in getting a valid position when crossing over between latitude zones.
+     * 
+     * Solution would be to trigger a re-ingestion of the old even packet as soon as it's known that it was calculated
+     * incorrectly.
+    */
 
     if (last_odd_packet_.nl_cpr != last_even_packet_.nl_cpr) {
         // Invalidate position if position pair is split across different latitude bands.
-        // TODO: I'm not sure this is ever possible? Would require the packets to have different .lat values, but those are calculated collaboratively
-        // between the packets so I'm not sure how they could ever disagree. Maybe a tight edge case?
         position_valid = false; // keep last known good coordinates, but mark as invalid
         printf("Aircraft::DecodePosition: NL_cpr disagrees between odd (%d) and even (%d) packets. Can't decode position.\r\n", 
             last_odd_packet_.nl_cpr, last_even_packet_.nl_cpr);
@@ -63,8 +79,9 @@ bool Aircraft::DecodePosition() {
     }
 
     // From here on out, can just focus on the most recent packet since that's what we're using for our position.
-    bool received_odd_last = last_odd_packet_.timestamp_us > last_even_packet_.timestamp_us;
+    bool received_odd_last = last_odd_packet_.received_timestamp_ms > last_even_packet_.received_timestamp_ms;
     CPRPacket &last_packet = received_odd_last ? last_odd_packet_ : last_even_packet_;
+    latitude = last_packet.lat; // Publish latitude.
 
     // Equation 5.10
     int32_t lon_zone_index = floorf(last_even_packet_.lon_cpr * (last_packet.nl_cpr - 1) - last_odd_packet_.lon_cpr * last_packet.nl_cpr + 0.5f);
@@ -74,15 +91,9 @@ bool Aircraft::DecodePosition() {
     // Equation 5.12: longitude zone size
     float d_lon = 360.0f / num_lon_zones;
     
-    // Equation 5.13
-    last_packet.lon = d_lon * ((lon_zone_index % num_lon_zones) + last_packet.lon_cpr);
-    // Equation 5.15: wrap longitude to between -180 and +180 degrees
-    last_packet.lon = last_packet.lon >= 180.0f ? last_packet.lon - 360.0f : last_packet.lon;
-
-    // Update public variables and mark position as valid.
-    latitude = last_packet.lat;
-    longitude = last_packet.lon;
-    position_valid = true;
+    // Equation 5.13 (calc longitude), 5.15 (wrap longitude to between -180 and +180 degrees)
+    longitude = wrap_longitude(d_lon * ((lon_zone_index % num_lon_zones) + last_packet.lon_cpr));
+    position_valid = true; // TODO: add "reasonable validation" that position is valid
     return true;
 }
 
@@ -101,20 +112,12 @@ bool Aircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, bo
     }
 
     CPRPacket &packet = odd ? last_odd_packet_ : last_even_packet_;
-    packet.timestamp_us = get_time_since_boot_us();
+    packet.received_timestamp_ms = get_time_since_boot_ms();
     packet.n_lat = n_lat_cpr;
     packet.n_lon = n_lon_cpr;
     // Equation 5.5
     packet.lat_cpr = static_cast<float>(n_lat_cpr) / kCPRLatLonMaxCount;
     packet.lon_cpr = static_cast<float>(n_lon_cpr) / kCPRLatLonMaxCount;
-    packet.is_valid = true;
-
-    CPRPacket &other_packet = odd ? last_even_packet_ : last_odd_packet_;
-    if (other_packet.is_valid) {
-        airborne_decode_state_ = CPR_DS_RECEIVED_BOTH;
-    } else {
-        airborne_decode_state_ = odd ? CPR_DS_RECEIVED_ODD_ONLY : CPR_DS_RECEIVED_EVEN_ONLY;
-    }
 
     return true;
 }

@@ -47,6 +47,14 @@ uint16_t calc_nl_cpr_from_lat(float lat) {
     );
 }
 
+float wrap_latitude(float latitude) {
+    return latitude >= 270.0f ? latitude - 360.0f: latitude;
+}
+
+float wrap_longitude(float longitude) {
+    return longitude >= 180.0f ? longitude - 360.0f : longitude;
+}
+
 
 
 // bool calc_lat_from_cpr(uint32_t n_lat_cpr_even, uint32_t n_lat_cpr_odd, float &lat, uint16_t &nl) {
