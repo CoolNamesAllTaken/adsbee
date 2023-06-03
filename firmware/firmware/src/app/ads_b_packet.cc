@@ -31,8 +31,8 @@ const uint16_t kCRC24GeneratorNumBits = 25;
 
 /**
  * @brief ADSBPacket constructor.
- * @param[in] rx_buffer Buffer to read from. Must be packed such that all 32 bits of each word are filled, with the last
- * word being right-aligned such that the total number of bits is 112. Words must be big-endian, with the MSb of the first
+ * @param[in] rx_buffer Buffer to read from. Must be packed such that all 32 bits of each word are filled, with each word
+ * left (MSb) aligned such that the total number of bits is 112. Words must be big-endian, with the MSb of the first
  * word being the oldest bit.
  * @param[in] rx_buffer_len_words32 Number of 32-bit words to read from the rx_buffer.
 */
@@ -42,8 +42,7 @@ ADSBPacket::ADSBPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buf
         if (i == kMaxPacketLenWords32-1) {
             // Last word in packet.
             // Last word may have accidentally ingested a subsequent preamble as a bit (takes a while to know message is over).
-            packet_buffer_[i] = rx_buffer[i] & ~kLastWordExtraBitIngestionMask; // trim any crap off of last word
-            packet_buffer_[i] <<= 16; // left-align last word
+            packet_buffer_[i] = rx_buffer[i] & kLastWordExtraBitIngestionMask; // trim any crap off of last word
             packet_buffer_len_bits_ += 16;
         } else {
             packet_buffer_[i] = rx_buffer[i];
@@ -93,14 +92,14 @@ void ADSBPacket::ConstructADSBPacket() {
     typecode_ = packet_buffer_[1] >> 27;
     parity_interrogator_id = packet_buffer_[1] & 0xFFFFFF;
 
-    uint16_t calculated_checksum = CalculateCRC24();
-    uint16_t parity_value = get_24_bit_word_from_buffer(kExtendedSquitterPacketNumBits - BITS_PER_WORD_24, packet_buffer_);
+    uint32_t calculated_checksum = CalculateCRC24();
+    uint32_t parity_value = get_24_bit_word_from_buffer(kExtendedSquitterPacketNumBits - BITS_PER_WORD_24, packet_buffer_);
     if (calculated_checksum == parity_value) {
         is_valid_ = true; // mark packet as valid if CRC matches the parity bits
     } else {
         // is_valid_ is set to false by default
         #ifdef VERBOSE
-        printf("ADSBPacket::ADSBPacket: Invalid checksum, expected %x but calculated %x.\r\n", parity_value, calculated_checksum);
+        printf("ADSBPacket::ADSBPacket: Invalid checksum, expected %06x but calculated %06x.\r\n", parity_value, calculated_checksum);
         #endif
     }
 }

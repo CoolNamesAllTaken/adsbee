@@ -38,6 +38,8 @@ public:
         SS_SPI_CONDITION = 3
     } SurveillanceStatus_t;
 
+    uint32_t last_seen_timestamp_ms = 0;
+
     uint16_t transponder_capability = 0;
     uint32_t icao_address = 0;
     char callsign[kCallSignMaxNumChars+1]; // put extra EOS character at end
@@ -61,19 +63,6 @@ public:
 
 private:
 
-    // TODO: probably change this to some kind of state machine with a state like "NL_LATS_DISAGREE" or something so we know when position needs to be re-validated?
-    typedef enum {
-        CPR_DS_NO_PACKETS = 0, // clean start, no previous packets received
-        CPR_DS_RECEIVED_ODD_ONLY, // still need an even packet to decode position
-        CPR_DS_RECEIVED_EVEN_ONLY, // still need an odd packet to decode position
-        CPR_DS_RECEIVED_BOTH // normal operational state, previously received both an odd and an even, can decode any fresh packet
-    } CPRDecodeState_t;
-
-    // typedef enum {
-    //     CPR_PT_EVEN = 0,
-    //     CPR_PT_ODD = 1
-    // } CPRPacketType_t;
-
     struct CPRPacket {
         // SetCPRLatLon values.
         uint32_t received_timestamp_ms = 0; // [ms] time since boot when packet was recorded
@@ -91,29 +80,6 @@ private:
 
     CPRPacket last_odd_packet_;
     CPRPacket last_even_packet_;
-    CPRDecodeState_t airborne_decode_state_ = CPR_DS_NO_PACKETS;
-
-    // uint32_t n_lat_cpr_even_ = 0; // 17-bit count.
-    // uint32_t n_lon_cpr_even_ = 0; // 17-bit count.
-    // float lat_cpr_even_ = 0.0f;
-    // float lon_cpr_even_ = 0.0f;
-    // uint64_t cpr_even_timestamp_us_ = 0;
-    // float lat_even_ = 0.0f;
-    // float lon_even_ = 0.0f;
-    // // number of longitude zones in last even packet latitude band
-    // uint16_t nl_lat_cpr_even_ = 0; // Initial value of 0 is assumed in SetCPRLatLon for determining which packet came first (odd or even).
-
-    // uint32_t n_lat_cpr_odd_ = 0; // 17-bit count.
-    // uint32_t n_lon_cpr_odd_ = 0; // 17-bit count.
-    // float lat_cpr_odd_ = 0.0f;
-    // float lon_cpr_odd_ = 0.0f;
-    // uint64_t cpr_odd_timestamp_us_ = 0;
-    // float lat_odd_ = 0.0f;
-    // float lon_odd_ = 0.0f;
-    // // number of longitude zones in last odd packet latitude band
-    // uint16_t nl_lat_cpr_odd = 0; // Initial value of 0 is assumed in SetCPRLatLon for determining which packet came first (odd or even).
-    
-     
 
 };
 
@@ -138,15 +104,15 @@ private:
     std::unordered_map<uint32_t, Aircraft> aircraft_dictionary_; // index Aircraft objects by their ICAO identifier
 
     // Helper functions for ingesting specific ADS-B packet types, called by IngestADSBPacket.
-    bool IngestAircraftIDMessage(ADSBPacket packet);
-    bool IngestSurfacePositionMessage(ADSBPacket packet);
+    bool IngestAircraftIDMessage(Aircraft * aircraft, ADSBPacket packet);
+    bool IngestSurfacePositionMessage(Aircraft * aircraft, ADSBPacket packet);
     // bool IngestAirbornePositionBaroAltMessage(ADSBPacket packet);
     // bool IngestAirbornePositionGNSSAltMessage(ADSBPacket packet);
-    bool IngestAirbornePositionMessage(ADSBPacket packet);
-    bool IngestAirborneVelocitiesMessage(ADSBPacket packet);
-    bool IngestAircraftStatusMessage(ADSBPacket packet);
-    bool IngestTargetStateAndStatusInfoMessage(ADSBPacket packet);
-    bool IngestAircraftOperationStatusMessage(ADSBPacket packet);
+    bool IngestAirbornePositionMessage(Aircraft * aircraft, ADSBPacket packet);
+    bool IngestAirborneVelocitiesMessage(Aircraft * aircraft, ADSBPacket packet);
+    bool IngestAircraftStatusMessage(Aircraft * aircraft, ADSBPacket packet);
+    bool IngestTargetStateAndStatusInfoMessage(Aircraft * aircraft, ADSBPacket packet);
+    bool IngestAircraftOperationStatusMessage(Aircraft * aircraft, ADSBPacket packet);
 
 };
 

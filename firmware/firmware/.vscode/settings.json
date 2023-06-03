@@ -8,5 +8,6 @@
         "gpio.h": "c",
         "binary_info.h": "c",
         "cmath": "cpp"
-    }
+    },
+    "cortex-debug.variableUseNaturalFormat": false
 }

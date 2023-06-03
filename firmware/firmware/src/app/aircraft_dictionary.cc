@@ -135,31 +135,42 @@ bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
         return false; // Only allow valid DF17 packets.
     }
 
+    uint32_t icao_address = packet.GetICAOAddress();
+    Aircraft * aircraft = GetAircraftPtr(icao_address);
+    if (aircraft == NULL) {
+        printf(
+            "AircraftDictionary::IngestADSBPacket: Unable to find or create new aircraft with ICAO address 0x%x in dictionay.\r\n",
+            icao_address
+        );
+        return false; // unable to find or create new aircraft in dictionary
+    }
+    aircraft->last_seen_timestamp_ms = get_time_since_boot_ms();
+
     switch(packet.GetTypeCodeEnum()) {
         case ADSBPacket::TC_AIRCRAFT_ID:
-            return IngestAircraftIDMessage(packet);
+            return IngestAircraftIDMessage(aircraft, packet);
             break;
         case ADSBPacket::TC_SURFACE_POSITION:
-            return IngestSurfacePositionMessage(packet);
+            return IngestSurfacePositionMessage(aircraft, packet);
             break;
         case ADSBPacket::TC_AIRBORNE_POSITION_BARO_ALT:
         case ADSBPacket::TC_AIRBORNE_POSITION_GNSS_ALT:
-            return IngestAirbornePositionMessage(packet);
+            return IngestAirbornePositionMessage(aircraft, packet);
             break;
         case ADSBPacket::TC_AIRBORNE_VELOCITIES:
-            return IngestAirborneVelocitiesMessage(packet);
+            return IngestAirborneVelocitiesMessage(aircraft, packet);
             break;
         case ADSBPacket::TC_RESERVED:
             return false;
             break;
         case ADSBPacket::TC_AIRCRAFT_STATUS:
-            return IngestAircraftStatusMessage(packet);
+            return IngestAircraftStatusMessage(aircraft, packet);
             break;
         case ADSBPacket::TC_TARGET_STATE_AND_STATUS_INFO:
-            return IngestTargetStateAndStatusInfoMessage(packet);
+            return IngestTargetStateAndStatusInfoMessage(aircraft, packet);
             break;
         case ADSBPacket::TC_AIRCRAFT_OPERATION_STATUS:
-            return IngestAircraftOperationStatusMessage(packet);
+            return IngestAircraftOperationStatusMessage(aircraft, packet);
             break;
         default:
             return false; // TC_INVALID, etc.
@@ -360,15 +371,7 @@ Aircraft::WakeVortex_t ExtractWakeVortex(const ADSBPacket &packet) {
  * is valid and has the correct Downlink Format.
  * @retval True if message was ingested successfully, false otherwise.
 */
-bool AircraftDictionary::IngestAircraftIDMessage(ADSBPacket packet) {
-    uint32_t icao_address = packet.GetICAOAddress();
-
-    Aircraft * aircraft = GetAircraftPtr(icao_address);
-    if (aircraft == NULL) {
-        printf("AircraftDictionary::IngestAircraftIDMessage: Unable to find or create new aircraft in dictionay.\r\n");
-        return false; // unable to find or create new aircraft in dictionary
-    }
-
+bool AircraftDictionary::IngestAircraftIDMessage(Aircraft * aircraft, ADSBPacket packet) {
     aircraft->wake_vortex = ExtractWakeVortex(packet);
     aircraft->transponder_capability = packet.GetCapability();
     for (uint16_t i = 0; i < Aircraft::kCallSignMaxNumChars; i++) {
@@ -380,27 +383,12 @@ bool AircraftDictionary::IngestAircraftIDMessage(ADSBPacket packet) {
     return true;
 }
 
-bool AircraftDictionary::IngestSurfacePositionMessage(ADSBPacket packet) {
-    uint32_t icao_address = packet.GetICAOAddress();
-
-    Aircraft * aircraft = GetAircraftPtr(icao_address);
-    if (aircraft == NULL) {
-        printf("AircraftDictionary::IngestSurfacePositionMessage: Unable to find or create new aircraft in dictionay.\r\n");
-        return false; // unable to find or create new aircraft in dictionary
-    }
+bool AircraftDictionary::IngestSurfacePositionMessage(Aircraft * aircraft, ADSBPacket packet) {
 
     return false;
 }
 
-bool AircraftDictionary::IngestAirbornePositionMessage(ADSBPacket packet) {
-    uint32_t icao_address = packet.GetICAOAddress();
-
-    Aircraft * aircraft = GetAircraftPtr(icao_address);
-    if (aircraft == NULL) {
-        printf("AircraftDictionary::IngestAirbornePositionBaroAltMessage: Unable to find or create new aircraft in dictionay.\r\n");
-        return false; // unable to find or create new aircraft in dictionary
-    }
-    
+bool AircraftDictionary::IngestAirbornePositionMessage(Aircraft * aircraft, ADSBPacket packet) {
     // ME[6-7] - Surveillance Status
     aircraft->surveillance_status = static_cast<Aircraft::SurveillanceStatus_t>(packet.GetNBitWordFromMessage(2, 6));
     
@@ -415,8 +403,6 @@ bool AircraftDictionary::IngestAirbornePositionMessage(ADSBPacket packet) {
         aircraft->gnss_altitude = encoded_altitude;
     }
 
- 
-
     // ME[21] - Time
     // TODO: figure out if we need this
 
@@ -429,18 +415,18 @@ bool AircraftDictionary::IngestAirbornePositionMessage(ADSBPacket packet) {
     return false;
 }
 
-bool AircraftDictionary::IngestAirborneVelocitiesMessage(ADSBPacket packet) {
+bool AircraftDictionary::IngestAirborneVelocitiesMessage(Aircraft * aircraft, ADSBPacket packet) {
     return false;
 }
 
-bool AircraftDictionary::IngestAircraftStatusMessage(ADSBPacket packet) {
+bool AircraftDictionary::IngestAircraftStatusMessage(Aircraft * aircraft, ADSBPacket packet) {
     return false;
 }
 
-bool AircraftDictionary::IngestTargetStateAndStatusInfoMessage(ADSBPacket packet) {
+bool AircraftDictionary::IngestTargetStateAndStatusInfoMessage(Aircraft * aircraft, ADSBPacket packet) {
     return false;
 }
 
-bool AircraftDictionary::IngestAircraftOperationStatusMessage(ADSBPacket packet) {
+bool AircraftDictionary::IngestAircraftOperationStatusMessage(Aircraft * aircraft, ADSBPacket packet) {
     return false;
 }

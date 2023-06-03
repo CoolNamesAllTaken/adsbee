@@ -100,7 +100,7 @@ TEST(ADSBPacket, PacketBuffer) {
     packet_buffer[0] = 0x8D76CE88;
     packet_buffer[1] = 0x204C9072;
     packet_buffer[2] = 0xCB48209A;
-    packet_buffer[3] = 0x0000504D;
+    packet_buffer[3] = 0x504D0000;
 
     ADSBPacket packet = ADSBPacket(packet_buffer, 4);
 
@@ -122,7 +122,7 @@ TEST(ADSBPacket, PacketBuffer) {
     packet_buffer[0] = 0x8D76CE88;
     packet_buffer[1] = 0x204C9072;
     packet_buffer[2] = 0xCB48209A;
-    packet_buffer[3] = (0x0000504D << 1) | 0b1;
+    packet_buffer[3] = 0x504D0000 | 0b1; // not realistic anymore since last word is left aligned now
     // TODO: make this test!
 }
 
@@ -156,7 +156,7 @@ TEST(ADSBPacket, CRC24Checksum) {
     packet_buffer[0] = 0x8D76CE88;
     packet_buffer[1] = 0x204C9072;
     packet_buffer[2] = 0xCB48209A;
-    packet_buffer[3] = 0x0000504D;
+    packet_buffer[3] = 0x504D0000;
     packet = ADSBPacket(packet_buffer, packet_buffer_used_len);
     EXPECT_TRUE(packet.IsValid());
 
@@ -166,16 +166,16 @@ TEST(ADSBPacket, CRC24Checksum) {
     EXPECT_FALSE(packet.IsValid());
     packet_buffer[0] = 0x8D76CE88; // reset first word
 
-    packet_buffer[3] = 0x0000504E; // error near end
+    packet_buffer[3] = 0x504E0000; // error near end
     packet = ADSBPacket(packet_buffer, packet_buffer_used_len);
     EXPECT_FALSE(packet.IsValid());
-    packet_buffer[3] = 0x0000504D; // reset last word
+    packet_buffer[3] = 0x504D0000; // reset last word
 
     // Extra bit ingestion (last word eats preamble from subsequent packet).
-    packet_buffer[3] = 0x1000504D; // error where it should be ignored
+    packet_buffer[3] = 0x504D0001; // error where it should be ignored
     packet = ADSBPacket(packet_buffer, packet_buffer_used_len);
     EXPECT_TRUE(packet.IsValid());
-    packet_buffer[3] = 0x0000504D; // reset last word
+    packet_buffer[3] = 0x504D0000; // reset last word
 }
 
 TEST(ADSBPacket, PacketFields) {
@@ -186,7 +186,7 @@ TEST(ADSBPacket, PacketFields) {
     packet_buffer[0] = 0x8D76CE88;
     packet_buffer[1] = 0x204C9072;
     packet_buffer[2] = 0xCB48209A;
-    packet_buffer[3] = 0x0000504D;
+    packet_buffer[3] = 0x504D0000;
     ADSBPacket packet = ADSBPacket(packet_buffer, packet_buffer_used_len);
     EXPECT_TRUE(packet.IsValid());
 
