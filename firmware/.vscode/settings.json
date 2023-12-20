@@ -14,5 +14,6 @@
         "variant": "cpp",
         "unordered_map": "cpp",
         "cstdint": "cpp"
-    }
+    },
+    "cmake.sourceDirectory": "C:/git-checkouts/ads-bee/firmware/firmware"
 }

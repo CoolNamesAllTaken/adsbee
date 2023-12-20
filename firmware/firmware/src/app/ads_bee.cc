@@ -5,14 +5,17 @@
 #include "hardware/gpio.h"
 #include "hardware/pio.h"
 #include "hardware/clocks.h"
+#include "hardware/pwm.h"
+#include "hardware/adc.h"
 // #include "hardware/dma.h"
 #include "hardware/irq.h"
 #include "capture.pio.h"
 #include "pico/binary_info.h"
 #include "hal.hh"
 
+
 const uint16_t kDecodeLEDBootupNumBlinks = 4;
-const uint16_t kDecodeLEDBootupBlinkPeriodMs = 1000;
+const uint16_t kDecodeLEDBootupBlinkPeriodMs = 200;
 const uint32_t kDecodeLEDOnMs = 100;
 const float kPreambleDetectorFreq = 16e6; // Running at 16MHz (8 clock cycles per half bit).
 
@@ -53,9 +56,23 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
     // Put IRQ parameters into the global scope for the on_decode_complete ISR.
     isr_access = this;
 
+    // Figure out slice and channel values that will be used for setting PWM duty cycle.
+    mtl_bias_pwm_slice_ = pwm_gpio_to_slice_num(config_.mtl_bias_pwm_pin);
+    mtl_bias_pwm_chan_ = pwm_gpio_to_channel(config_.mtl_bias_pwm_pin);
+
 }
 
 void ADSBee::Init() {
+    // Initialize the MTL bias PWM output.
+    gpio_set_function(config_.mtl_bias_pwm_pin, GPIO_FUNC_PWM);
+    pwm_set_wrap(mtl_bias_pwm_slice_, kMTLMaxPWMCount);
+    SetMTLMilliVolts(kMTLBiasDefaultMV);
+    pwm_set_enabled(mtl_bias_pwm_slice_, true);
+
+    // Initialize the ML bias ADC input.
+    adc_init();
+    adc_gpio_init(config_.mtl_bias_adc_pin);
+
     // Calculate the PIO clock divider.
     float preamble_detector_div = (float)clock_get_hz(clk_sys) / kPreambleDetectorFreq;
 
@@ -65,7 +82,6 @@ void ADSBee::Init() {
         config_.decode_out_pin, preamble_detector_div
     );
     
-
     // enable the DECODE interrupt on PIO0_IRQ_0
     uint preamble_detector_decode_irq = PIO0_IRQ_0;
     pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt0, true); // state machine 0 IRQ 0
@@ -80,8 +96,8 @@ void ADSBee::Init() {
 
     printf("ADSBee::Init: PIOs initialized.\r\n");
 
-    gpio_init(config_.led_pin);
-    gpio_set_dir(config_.led_pin, GPIO_OUT);
+    gpio_init(config_.status_led_pin);
+    gpio_set_dir(config_.status_led_pin, GPIO_OUT);
 
     irq_set_exclusive_handler(preamble_detector_decode_irq, on_decode_complete);
     irq_set_enabled(preamble_detector_decode_irq, true);
@@ -92,9 +108,9 @@ void ADSBee::Init() {
 
     // Blink the LED a few times to indicate a successful startup.
     for (uint16_t i = 0; i < kDecodeLEDBootupNumBlinks; i++) {
-        gpio_put(config_.led_pin, 1);
+        gpio_put(config_.status_led_pin, 1);
         sleep_ms(kDecodeLEDBootupBlinkPeriodMs/2);
-        gpio_put(config_.led_pin, 0);
+        gpio_put(config_.status_led_pin, 0);
         sleep_ms(kDecodeLEDBootupBlinkPeriodMs/2);
     }
 
@@ -103,13 +119,17 @@ void ADSBee::Init() {
 void ADSBee::Update() {
     // Turn off the decode LED if it's been on for long enough.
     if (get_time_since_boot_ms() > led_off_timestamp_ms_) {
-        gpio_put(config_.led_pin, 0);
+        gpio_put(config_.status_led_pin, 0);
     }
+
+    // Read back the MTL bias output voltage.
+    adc_select_input(config_.mtl_bias_adc_input);
+    mtl_bias_adc_counts_ = adc_read();
 
 }
 
 void ADSBee::OnDecodeComplete() {
-    gpio_put(config_.led_pin, 1);
+    gpio_put(config_.status_led_pin, 1);
     led_off_timestamp_ms_ = get_time_since_boot_ms() + kDecodeLEDOnMs;
 
     
@@ -148,4 +168,47 @@ void ADSBee::OnDecodeComplete() {
         word_index++;
     }
     pio_interrupt_clear(config_.preamble_detector_pio, 0);
+}
+
+/**
+ * @brief Set the Minimum Trigger Level (MTL) at the AD8314 output in milliVolts.
+ * @param[in] mtl_threshold_mv Voltage level for a "high" trigger on the V_DN AD8314 output. The AD8314 has a nominal output
+ * voltage of 2.25V on V_DN, with a logarithmic slope of around -42.6mV/dB and a minimum output voltage of 0.05V. Thus, power
+ * levels received at the input of the AD8314 correspond to the following voltages.
+ *      2250mV = -49dBm
+ *      50mV = -2.6dBm
+ * Note that there is a +30dB LNA gain stage in front of the AD8314, so for the overall receiver, the MTL values are
+ * more like:
+ *      2250mV = -79dBm
+ *      50mV = -32.6dBm
+ * @retval True if succeeded, False if MTL value was out of range.
+*/
+bool ADSBee::SetMTLMilliVolts(int mtl_threshold_mv) {
+    if (mtl_threshold_mv > kMTLBiasMaxMV || mtl_threshold_mv < kMTLBiasMinMV) {
+        return false;
+    }
+
+    mtl_bias_pwm_count_ = mtl_threshold_mv * kMTLMaxPWMCount / kVDDMV;
+    pwm_set_chan_level(mtl_bias_pwm_slice_, mtl_bias_pwm_chan_, mtl_bias_pwm_count_);
+
+    return true;
+}
+
+/**
+ * @brief Return the value of the Minimum Trigger Level threshold in milliVolts.
+ * @retval MTL in milliVolts.
+*/
+int ADSBee::GetMTLMilliVolts() {
+    return mtl_bias_mv_;
+}
+
+/**
+ * @brief Set the Minimum Trigger Level (MTL) at the AD8314 output in dBm.
+ * @param[in] mtl_threshold_dBm Power trigger level for a "high" trigger on the AD8314 output, in dBm.
+ * @retval True if succeeded, False if MTL value was out of range.
+*/
+bool ADSBee::SetMTLdBm(int mtl_threshold_dBm) {
+
+    // BGA2818 is +30dBm
+
 }

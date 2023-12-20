@@ -161,7 +161,7 @@ TEST(ADSBPacket, CRC24Checksum) {
     EXPECT_TRUE(packet.IsValid());
 
     // Check CRC performance with error injection.
-    packet_buffer[0] = 0x7D76CE880; // error at beginning
+    packet_buffer[0] = 0x7D76CE88; // error at beginning
     packet = ADSBPacket(packet_buffer, packet_buffer_used_len);
     EXPECT_FALSE(packet.IsValid());
     packet_buffer[0] = 0x8D76CE88; // reset first word

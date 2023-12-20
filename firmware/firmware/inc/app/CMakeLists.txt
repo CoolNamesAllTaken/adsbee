@@ -4,7 +4,7 @@ target_sources(ads_bee_test PRIVATE
     buffer_utils.hh
     aircraft_dictionary.hh
     ads_b_packet.hh
-    # ads_bee.hh
+    # ads_bee.hh # left out since it requires a lot of mocking
     decode_utils.hh
 )
 else()
