@@ -9,6 +9,7 @@
 .define pulses_pin_index 0
 .define decode_pin_index 1
 .wrap_target
+; BEGIN DOUBLE PULSE MATCH
 waiting_for_first_edge:
     set x, 1 ; pulse match section runs twice
     wait 1 pin, pulses_pin_index [3] ; wait for in_pin to go HI, delay to middle of the eye
@@ -24,10 +25,17 @@ check_pulse_2_lo:
     jmp pin waiting_for_first_edge [7]
     jmp pin waiting_for_first_edge [7]
     jmp pin waiting_for_first_edge [6]
-    jmp x-- check_pulse_1_hi
-    ; Extra two pattern match segments ignored to provide more time for decoder to kick
+    jmp x-- check_pulse_1_hi ; loop to beginning of double pulse loop at end of first double pulse
+; END DOUBLE PULSE MATCH
+; BEGIN EXTRA DELAY AFTER SECOND DOUBLE PULSE
+preamble_tail:
+    ; enforce preamble tail LO till just before the rising edge if first message bit is a 1
+    jmp pin waiting_for_first_edge [7] 
+    nop [5] ; delay 6 clock cycles so that decode signal activates at 0.25 bit time on first bit
+; END EXTRA DELAY AFTER SECOND DOUBLE PULSE
+    
+    ; Extra pattern match segments ignored to provide more time for decoder to kick
     ; on before start of actual data.
-    ; jmp pin waiting_for_first_edge [7]
     ; jmp pin waiting_for_first_edge [7]
 preamble_matched:
     ; Note: IRQ number could be changed with some jumps on scratch y for a dual-band receiver version.
@@ -90,8 +98,8 @@ void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint in_pin, 
 .side_set 1 opt
 ; Assumes line is idle low, first bit is 0
 ; One bit is 12 cycles
-; a '0' is encoded as 10
-; a '1' is encoded as 01
+; a '0' is encoded as 01
+; a '1' is encoded as 10
 ;
 ; Both the IN base and the JMP pin mapping must be pointed at the GPIO used for RX.
 ; Autopush must be enabled.
@@ -103,10 +111,12 @@ wait_for_decode:
     ; irq set 0   ; set IRQ 0 to indicate waiting for RX FIFO to be cleared before accepting a new message
 initial_entry:
     wait 1 pin decode_in_pin_index side 0       ; Wait to enter DECODE interval.
-    wait 1 pin pulses_pin_index    ; Wait for a 0->1 transition to exit idle state
+    jmp pin start_of_1 side 0
+    jmp start_of_0 side 0
+    ; wait 1 pin pulses_pin_index    ; Wait for a 0->1 transition to exit idle state
     ; fall through into start_of_0
 
-start_of_1:            ; We are 0.25 bits into a 1 - signal is high
+start_of_1:            ; We are 0.25 bits into a 1 - signal is HI
     wait 0 pin pulses_pin_index      ; Wait for the 1->0 transition - at this point we are 0.5 into the bit
     in x, 1 side 1    ; Emit a 1, sleep 3/4 of a bit (need 8 delay clocks before jump to start_of_1).
 
@@ -122,7 +132,7 @@ start_of_1:            ; We are 0.25 bits into a 1 - signal is high
     jmp pin start_of_1 side 0; If signal is 1 again, it's another 1 bit, otherwise it's a 0
 
 .wrap_target
-start_of_0:            ; We are 0.25 bits into a 0 - signal is 1
+start_of_0:            ; We are 0.25 bits into a 0 - signal is LO
     wait 1 pin pulses_pin_index     ; Wait for the 0->1 transition - at this point we are 0.5 into the bit
     in null, 1 side 1    ; Emit a 0, sleep 3/4 of a bit
 

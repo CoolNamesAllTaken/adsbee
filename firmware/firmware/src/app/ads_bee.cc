@@ -139,36 +139,66 @@ void ADSBee::OnDecodeComplete() {
     uint16_t word_index = 0;
     while (!pio_sm_is_rx_fifo_empty(config_.message_decoder_pio, message_decoder_sm_)) {
         uint32_t word = pio_sm_get(config_.message_decoder_pio, message_decoder_sm_);
-        printf("\t%08x\r\n", word);
+        printf("\t%d: %08x\r\n", word_index, word);
+
         switch(word_index) {
             case 0: {
-                // First word is the last word of the previously captured packet.
-                rx_buffer_[3] = word<<16;
+                // Flush the previous word into a packet before beginning to store the new one.
                 printf("New message: 0x%08x%08x%08x%04x\r\n",
                     rx_buffer_[0],
                     rx_buffer_[1],
                     rx_buffer_[2],
-                    rx_buffer_[3]>>16);
+                    static_cast<uint16_t>((rx_buffer_[3]>>16) & 0xFFFF));
                 ADSBPacket packet = ADSBPacket(rx_buffer_, ADSBPacket::kMaxPacketLenWords32);
                 // printf(packet.IsValid() ? "\tVALID\r\n": "\tINVALID\r\n");
-                break;
-            }
+            } // intentional cascade
             case 1:
-                // printf("New message:\r\n");
-                // printf("\t0x%08x", word);
-                // rx_buffer_[word_index-1] = word;
-                // break; // TODO: make this just a cascade if prints are removed
             case 2:
+                rx_buffer_[word_index] = word;
+                break;
             case 3:
-                // printf("%08x", word);
-                rx_buffer_[word_index-1] = word;
+                // Last word ingests an extra bit by accident, pinch it off here.
+                // Left-align last word.
+                rx_buffer_[word_index] = (word>>1)<<16;
+
                 break;
             default:
+                // Received too many bits for this to be a valid packet. Throw away extra bits!
                 printf("tossing");
                 pio_sm_get(config_.message_decoder_pio, message_decoder_sm_); // throw away extra bits
-
         }
         word_index++;
+        
+        
+        // switch(word_index) {
+        //     case 0: {
+        //         // First word is the last word of the previously captured packet.
+        //         // Flush the previous word into a packet before beginning to store the new one.
+        //         printf("New message: 0x%08x%08x%08x%04x\r\n",
+        //             rx_buffer_[0],
+        //             rx_buffer_[1],
+        //             rx_buffer_[2],
+        //             rx_buffer_[3]>>16);
+        //         ADSBPacket packet = ADSBPacket(rx_buffer_, ADSBPacket::kMaxPacketLenWords32);
+        //         // printf(packet.IsValid() ? "\tVALID\r\n": "\tINVALID\r\n");
+        //         break;
+        //     }
+        //     case 1:
+        //         // printf("New message:\r\n");
+        //         // printf("\t0x%08x", word);
+        //         // rx_buffer_[word_index-1] = word;
+        //         // break; // TODO: make this just a cascade if prints are removed
+        //     case 2:
+        //     case 3:
+        //         // printf("%08x", word);
+        //         rx_buffer_[word_index] = word;
+        //         break;
+        //     default:
+        //         printf("tossing");
+        //         pio_sm_get(config_.message_decoder_pio, message_decoder_sm_); // throw away extra bits
+
+        // }
+        // word_index++;
     }
     pio_interrupt_clear(config_.preamble_detector_pio, 0);
 }
