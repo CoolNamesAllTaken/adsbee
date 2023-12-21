@@ -65,7 +65,7 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
 void ADSBee::Init() {
     // Initialize the MTL bias PWM output.
     gpio_set_function(config_.mtl_bias_pwm_pin, GPIO_FUNC_PWM);
-    pwm_set_wrap(mtl_bias_pwm_slice_, kMTLMaxPWMCount);
+    pwm_set_wrap(mtl_bias_pwm_slice_, kMTLBiasMaxPWMCount);
     SetMTLMilliVolts(kMTLBiasDefaultMV);
     pwm_set_enabled(mtl_bias_pwm_slice_, true);
 
@@ -125,6 +125,9 @@ void ADSBee::Update() {
     // Read back the MTL bias output voltage.
     adc_select_input(config_.mtl_bias_adc_input);
     mtl_bias_adc_counts_ = adc_read();
+
+    // Update PWM output duty cycl.
+    pwm_set_chan_level(mtl_bias_pwm_slice_, mtl_bias_pwm_chan_, mtl_bias_pwm_count_);
 
 }
 
@@ -188,8 +191,20 @@ bool ADSBee::SetMTLMilliVolts(int mtl_threshold_mv) {
         return false;
     }
 
-    mtl_bias_pwm_count_ = mtl_threshold_mv * kMTLMaxPWMCount / kVDDMV;
-    pwm_set_chan_level(mtl_bias_pwm_slice_, mtl_bias_pwm_chan_, mtl_bias_pwm_count_);
+    // float mtl_mv_f = static_cast<float>(mtl_threshold_mv);
+    // float mtl_bias_pwm_count_f = kMTLBiasPWMCompCoeffX3*mtl_mv_f*mtl_mv_f*mtl_mv_f
+    //     + kMTLBiasPWMCompCoeffX2*mtl_mv_f*mtl_mv_f
+    //     + kMTLBiasPWMCompCoeffX*mtl_mv_f
+    //     + kMTLBiasPWMCompCoeffConst;
+    // if (mtl_bias_pwm_count_f < 0) {
+    //     mtl_bias_pwm_count_ = 0;
+    // } else if (mtl_bias_pwm_count_f > kMTLBiasMaxPWMCount) {
+    //     mtl_bias_pwm_count_ = kMTLBiasMaxPWMCount;
+    // } else {
+    //     mtl_bias_pwm_count_ = static_cast<uint16_t>(mtl_bias_pwm_count_f);
+    // }
+
+    mtl_bias_pwm_count_ = mtl_threshold_mv * kMTLBiasMaxPWMCount / kVDDMV;
 
     return true;
 }
@@ -210,5 +225,5 @@ int ADSBee::GetMTLMilliVolts() {
 bool ADSBee::SetMTLdBm(int mtl_threshold_dBm) {
 
     // BGA2818 is +30dBm
-
+    return true;
 }

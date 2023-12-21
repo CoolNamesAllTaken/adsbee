@@ -82,8 +82,11 @@ void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint in_pin, 
 %}
 
 .program message_decoder
+; Decode pin for knowing when a valid message decode interval has begun.
 .define decode_in_pin_index 1
+; Pulses input pin for reading current power level.
 .define pulses_pin_index 0
+; Allow side-setting the out_pin for debugging. 1x output pin can be optionally side-set.
 .side_set 1 opt
 ; Assumes line is idle low, first bit is 0
 ; One bit is 12 cycles
@@ -104,7 +107,6 @@ initial_entry:
     ; fall through into start_of_0
 
 start_of_1:            ; We are 0.25 bits into a 1 - signal is high
-    ; wait 1 irq 0       ; Wait to enter DECODE interval.
     wait 0 pin pulses_pin_index      ; Wait for the 1->0 transition - at this point we are 0.5 into the bit
     in x, 1 side 1    ; Emit a 1, sleep 3/4 of a bit (need 8 delay clocks before jump to start_of_1).
 
@@ -116,14 +118,11 @@ start_of_1:            ; We are 0.25 bits into a 1 - signal is high
     jmp !y wait_for_decode ; bail into idle state if decode bit is 0
     nop [2]
 
-    ; wait 1 irq 0       ; Wait to enter DECODE interval.
     
     jmp pin start_of_1 side 0; If signal is 1 again, it's another 1 bit, otherwise it's a 0
-    ; wait 1 irq 0       ; Wait to enter DECODE interval.
 
 .wrap_target
 start_of_0:            ; We are 0.25 bits into a 0 - signal is 1
-    ; wait 1 irq 0       ; Wait to enter DECODE interval.
     wait 1 pin pulses_pin_index     ; Wait for the 0->1 transition - at this point we are 0.5 into the bit
     in null, 1 side 1    ; Emit a 0, sleep 3/4 of a bit
 
@@ -133,9 +132,7 @@ start_of_0:            ; We are 0.25 bits into a 0 - signal is 1
     out y, 1 ; move decode bit to scratch y
     out null, 30 ; dump the rest of the bits
     jmp !y wait_for_decode ; bail into idle state if decode bit is 0
-    nop [3] ; wait slightly longer for a down-going slope to account for RF detector behavior
-    
-    ; wait 1 irq 0       ; Wait to enter DECODE interval.
+    nop [2] ; wait slightly for down-going slope
 
     jmp pin start_of_1 side 0; If signal is 0 again, it's another 0 bit otherwise it's a 1
 .wrap
@@ -149,8 +146,8 @@ static inline void message_decoder_program_init(PIO pio, uint sm, uint offset, u
     //pio_gpio_init(pio, pulses_pin);
     //pio_gpio_init(pio, decode_in_pin);
 
-    const uint debug_pin = 28;
-    // Allow PIO to control GPIO 28 (as output for debugging)
+    const uint debug_pin = 27;
+    // Allow PIO to control GPIO 27 (as output for debugging)
     pio_gpio_init(pio, debug_pin);
     pio_sm_set_consecutive_pindirs(pio, sm, debug_pin, 1, true); // set one pin starting at out_pin to OUT
 

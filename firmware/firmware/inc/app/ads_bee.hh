@@ -32,11 +32,17 @@ public:
     int GetMTLMilliVolts();
     bool SetMTLdBm(int mtl_threshold_dbm);
 
-    const uint16_t kMTLMaxPWMCount = 5000; // Clock is 125MHz, shoot for 25kHz PWM.
+    const uint16_t kMTLBiasMaxPWMCount = 5000; // Clock is 125MHz, shoot for 25kHz PWM.
     const int kVDDMV = 3300; // [mV] Voltage of positive supply rail.
     const int kMTLBiasMaxMV = 2250; // [mV]
     const int kMTLBiasMinMV = 0; // [mV]
     const int kMTLBiasDefaultMV = 2000; // [mV]
+
+    // Coefficients for calibrated polynomial equation to go from target MTL bias voltage to MTL bias PWM count.
+    const float kMTLBiasPWMCompCoeffX3 = 4.87299E-08;
+    const float kMTLBiasPWMCompCoeffX2 = -0.000376253;
+    const float kMTLBiasPWMCompCoeffX = 2.496361699;
+    const float kMTLBiasPWMCompCoeffConst = -16.0676799;
 
 private:
     ADSBeeConfig config_;
