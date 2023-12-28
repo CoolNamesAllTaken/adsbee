@@ -132,10 +132,6 @@ void ADSBee::Update() {
 }
 
 void ADSBee::OnDecodeComplete() {
-    gpio_put(config_.status_led_pin, 1);
-    led_off_timestamp_ms_ = get_time_since_boot_ms() + kDecodeLEDOnMs;
-
-    
     uint16_t word_index = 0;
     while (!pio_sm_is_rx_fifo_empty(config_.message_decoder_pio, message_decoder_sm_)) {
         uint32_t word = pio_sm_get(config_.message_decoder_pio, message_decoder_sm_);
@@ -150,6 +146,10 @@ void ADSBee::OnDecodeComplete() {
                     rx_buffer_[2],
                     static_cast<uint16_t>((rx_buffer_[3]>>16) & 0xFFFF));
                 ADSBPacket packet = ADSBPacket(rx_buffer_, ADSBPacket::kMaxPacketLenWords32);
+                if (packet.IsValid()) {
+                    gpio_put(config_.status_led_pin, 1);
+                    led_off_timestamp_ms_ = get_time_since_boot_ms() + kDecodeLEDOnMs;
+                }
                 // printf(packet.IsValid() ? "\tVALID\r\n": "\tINVALID\r\n");
             } // intentional cascade
             case 1:
@@ -234,7 +234,7 @@ bool ADSBee::SetMTLMilliVolts(int mtl_threshold_mv) {
     //     mtl_bias_pwm_count_ = static_cast<uint16_t>(mtl_bias_pwm_count_f);
     // }
 
-    mtl_bias_pwm_count_ = mtl_threshold_mv * kMTLBiasMaxPWMCount / kVDDMV;
+    mtl_bias_pwm_count_ = mtl_threshold_mv * 3 * kMTLBiasMaxPWMCount / 2 / kVDDMV; // 200k/300k ratio for resistive divider
 
     return true;
 }
