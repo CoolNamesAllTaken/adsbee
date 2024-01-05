@@ -5,13 +5,13 @@
       "Application": "Pcbnew",
       "Version": "7.0.7"
     },
-    "CreationDate": "2023-11-25T23:15:18-08:00"
+    "CreationDate": "2024-01-05T02:17:43-08:00"
   },
   "GeneralSpecs": {
     "ProjectId": {
       "Name": "adsbee_1090",
       "GUID": "61647362-6565-45f3-9130-39302e6b6963",
-      "Revision": "A"
+      "Revision": "B"
     },
     "Size": {
       "X": 33.6,
