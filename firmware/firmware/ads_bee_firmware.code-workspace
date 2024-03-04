@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../test"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"gpio.h": "c",
+			"binary_info.h": "c",
+			"cmath": "cpp",
+			"*.tcc": "cpp",
+			"string": "cpp",
+			"string_view": "cpp"
+		}
+	}
+}

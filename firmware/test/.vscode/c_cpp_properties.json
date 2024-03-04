@@ -4,7 +4,7 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/root/ads_bee/firmware/inc"
+                "/ads_bee/firmware/inc"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
