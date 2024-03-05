@@ -9,6 +9,8 @@
 class ATCommandParser {
 public:
     static const uint16_t kATCommandMaxLen = 16;
+    static const std::string kATPrefix; // Initialized in .cc file.
+    static const size_t kATPrefixLen; // Initialized in .cc file.
 
     typedef struct {
         std::string command = ""; // Letters that come after the "AT+" prefix.

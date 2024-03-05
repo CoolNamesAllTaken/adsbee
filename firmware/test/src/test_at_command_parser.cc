@@ -18,42 +18,43 @@ bool Callback2(std::vector<std::string>) {
 TEST(ATCommandParser, SingleATCommand) {
     std::vector<ATCommandParser::ATCommandDef_t> at_command_list;
     ATCommandParser::ATCommandDef_t def = {
-        .command = "TEST",
+        .command = "+TEST",
         .min_args = 1,
         .max_args = 1,
         .help_string = "This is a test.",
         .callback = Callback1
     };
-    assert(at_command_list.size() == 0);
+    ASSERT_TRUE(at_command_list.size() == 0);
     at_command_list.push_back(def);
-    assert(at_command_list.size() == 1);
+    ASSERT_TRUE(at_command_list.size() == 1);
     ATCommandParser parser = ATCommandParser(at_command_list);
-    assert(parser.GetNumATCommands() == 1);
+    ASSERT_TRUE(parser.GetNumATCommands() == 1);
     
     // Looking up a fake command should fail.
-    assert(parser.LookupATCommand("Blah") == nullptr);
+    ASSERT_TRUE(parser.LookupATCommand("+Blah") == nullptr);
 
     // Looking up a real command should work.
-    ATCommandParser::ATCommandDef_t * returned_command = parser.LookupATCommand("TEST");
-    assert(returned_command->command.compare("TEST") == 0);
+    ATCommandParser::ATCommandDef_t * returned_command = parser.LookupATCommand("+TEST");
+    ASSERT_NE(returned_command, nullptr);
+    ASSERT_TRUE(returned_command->command.compare("+TEST") == 0);
     callback1_was_called = false;
     std::vector<std::string> args = {"arg1", "arg2"};
     returned_command->callback(args);
-    assert(callback1_was_called);
-    assert(returned_command->help_string.compare("This is a test.") == 0);
+    ASSERT_TRUE(callback1_was_called);
+    ASSERT_TRUE(returned_command->help_string.compare("This is a test.") == 0);
 }
 
 ATCommandParser BuildExampleParser1() {
     std::vector<ATCommandParser::ATCommandDef_t> at_command_list;
     ATCommandParser::ATCommandDef_t def = {
-        .command = "TEST",
+        .command = "+TEST",
         .min_args = 1,
         .max_args = 1,
         .help_string = "This is a test.",
         .callback = Callback1
     };
     at_command_list.push_back(def);
-    def.command = "CFG";
+    def.command = "+CFG";
     def.min_args = 1;
     def.max_args = 3;
     def.help_string = "Configuration. Takes between 1 and 3 arguments.";
@@ -62,28 +63,100 @@ ATCommandParser BuildExampleParser1() {
     return ATCommandParser(at_command_list);
 }
 
-TEST (ATCommandParser, TwoATCommands) {
+TEST(ATCommandParser, TwoATCommands) {
     ATCommandParser parser = BuildExampleParser1();
-    assert(parser.GetNumATCommands() == 2);
+    ASSERT_TRUE(parser.GetNumATCommands() == 2);
 
     // Looking up a fake command should fail.
-    assert(parser.LookupATCommand("Potatoes") == nullptr);
+    ASSERT_TRUE(parser.LookupATCommand("+Potatoes") == nullptr);
 
     // Looking up real command 1 should work.
-    ATCommandParser::ATCommandDef_t * returned_command = parser.LookupATCommand("TEST");
-    assert(returned_command->command.compare("TEST") == 0);
+    ATCommandParser::ATCommandDef_t * returned_command = parser.LookupATCommand("+TEST");
+    ASSERT_NE(returned_command, nullptr);
+    ASSERT_TRUE(returned_command->command.compare("+TEST") == 0);
     callback1_was_called = false;
     std::vector<std::string> args1 = {"arg1", "arg2"};
     returned_command->callback(args1);
-    assert(callback1_was_called);
-    assert(returned_command->help_string.compare("This is a test.") == 0);
+    ASSERT_TRUE(callback1_was_called);
+    ASSERT_TRUE(returned_command->help_string.compare("This is a test.") == 0);
 
     // Looking up real command 2 should work.
-    returned_command = parser.LookupATCommand("CFG");
-    assert(returned_command->command.compare("CFG") == 0);
+    returned_command = parser.LookupATCommand("+CFG");
+    ASSERT_NE(returned_command, nullptr);
+    ASSERT_TRUE(returned_command->command.compare("+CFG") == 0);
     callback2_was_called = false;
     std::vector<std::string> args2 = {"arg1", "arg2"};
     returned_command->callback(args2);
-    assert(callback2_was_called);
-    assert(returned_command->help_string.compare("Configuration. Takes between 1 and 3 arguments.") == 0);
+    ASSERT_TRUE(callback2_was_called);
+    ASSERT_TRUE(returned_command->help_string.compare("Configuration. Takes between 1 and 3 arguments.") == 0);
+}
+
+TEST(ATCommandParser, RejectMessageWithNoAT) {
+    ATCommandParser parser = BuildExampleParser1();
+
+    ASSERT_FALSE(parser.ParseMessage("Potatoes potatoes potatoes I love potatoes."));
+    ASSERT_FALSE(parser.ParseMessage("A T just kidding."));
+}
+
+TEST(ATCommandParser, RejectMessageWithZeroLengthCommand) {
+    ATCommandParser parser = BuildExampleParser1();
+
+    ASSERT_FALSE(parser.ParseMessage("AT+ other words"));
+    ASSERT_FALSE(parser.ParseMessage("AT+,other words"));
+    ASSERT_FALSE(parser.ParseMessage("AT+=CFG"));
+    ASSERT_FALSE(parser.ParseMessage("AT+\n"));
+}
+
+TEST(ATCommandParser, RejectMessageWithCommandTooLong) {
+    // Build a parser that contains a command that is too long.
+    std::vector<ATCommandParser::ATCommandDef_t> at_command_list;
+    ATCommandParser::ATCommandDef_t def = {
+        .command = "+HIHIHIHIHIHIHIHIHIHITOOLONG"
+    };
+    at_command_list.push_back(def);
+    ATCommandParser parser = ATCommandParser(at_command_list);
+
+    ASSERT_FALSE(parser.ParseMessage("AT+HIHIHIHIHIHIHIHIHIHITOOLONG"));
+}
+
+TEST(ATCommandParser, RejectMessageWithNoMatchingATCommand) {
+    ATCommandParser parser = BuildExampleParser1();
+
+    ASSERT_FALSE(parser.ParseMessage("AT+WRONG"));
+    ASSERT_FALSE(parser.ParseMessage("AT+\r\n"));
+}
+
+/**
+ * @brief Callback function that returns true if the args are "potato" or "potato,bacon"
+*/
+bool MustBePotatoBacon(std::vector<std::string> args) {
+    if (args[0].compare("potato") == 0) {
+        if (args.size() == 1) {
+            return true;
+        } else {
+            return args[1].compare("bacon") == 0;
+        }
+    }
+    return false;
+}
+
+ATCommandParser BuildPotatoBaconParser() {
+    std::vector<ATCommandParser::ATCommandDef_t> at_command_list;
+    ATCommandParser::ATCommandDef_t def = {
+        .command = "+POTATOBACON",
+        .min_args = 1,
+        .max_args = 2,
+        .help_string = "Acceptable args are \"potato\" or \" potato,bacon\".\r\n",
+        .callback = MustBePotatoBacon
+    };
+    at_command_list.push_back(def);
+    return ATCommandParser(at_command_list);
+}
+
+TEST(ATCommandParser, TwoArgsPotatoBacon) {
+    ATCommandParser parser = BuildPotatoBaconParser();
+    ASSERT_TRUE(parser.ParseMessage("AT+POTATOBACON=potato"));
+    ASSERT_FALSE(parser.ParseMessage("AT+POTATOBACON=bacon"));
+    ASSERT_TRUE(parser.ParseMessage("AT+POTATOBACON=potato,bacon"));
+    ASSERT_FALSE(parser.ParseMessage("AT+POTATOBACON=potato,potato"));
 }
