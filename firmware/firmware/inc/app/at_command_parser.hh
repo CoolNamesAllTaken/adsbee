@@ -28,7 +28,7 @@ public:
     bool ParseMessage(std::string message);
 
 private:
-    std::vector<ATCommandDef_t> at_command_list;
+    std::vector<ATCommandDef_t> at_command_list_;
 
     
 

@@ -4,6 +4,7 @@
 #include "hardware/pio.h"
 #include "stdint.h"
 #include "ads_b_packet.hh"
+#include "at_command_parser.hh"
 
 class ADSBee {
 public:
@@ -32,6 +33,8 @@ public:
     int GetMTLMilliVolts();
     bool SetMTLdBm(int mtl_threshold_dbm);
 
+    bool ATCFGCallback(std::vector<std::string> args);
+
     const uint16_t kMTLBiasMaxPWMCount = 5000; // Clock is 125MHz, shoot for 25kHz PWM.
     const int kVDDMV = 3300; // [mV] Voltage of positive supply rail.
     const int kMTLBiasMaxMV = 2250; // [mV]
@@ -46,6 +49,7 @@ public:
 
 private:
     ADSBeeConfig config_;
+    ATCommandParser parser_;
 
     uint32_t preamble_detector_sm_ = 0;
     uint32_t preamble_detector_offset_ = 0;

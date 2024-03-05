@@ -19,7 +19,7 @@ const size_t ATCommandParser::kATPrefixLen = kATPrefix.length();
  * as well as their corresponding callback functions.
 */
 ATCommandParser::ATCommandParser(std::vector<ATCommandDef_t> at_command_list_in)
-    : at_command_list(at_command_list_in)
+    : at_command_list_(at_command_list_in)
 {
 
 }
@@ -28,27 +28,27 @@ ATCommandParser::ATCommandParser(std::vector<ATCommandDef_t> at_command_list_in)
  * @brief Destructor. Deallocates dynamically allocated memory.
 */
 ATCommandParser::~ATCommandParser() {
-    at_command_list.clear(); // Note: this works as long as elements are objects and not pointers.
+    at_command_list_.clear(); // Note: this works as long as elements are objects and not pointers.
 }
 
 /**
  * @brief Returns the number of supported AT commands.
- * @retval Size of at_command_list.
+ * @retval Size of at_command_list_.
 */
 uint16_t ATCommandParser::GetNumATCommands() {
-    return at_command_list.size();
+    return at_command_list_.size();
 }
 
 /**
  * @brief Returns a pointer to the first ATCommandDef_t object that matches the text command provided.
  * @param[in] command String containing command text to look for.
- * @retval Pointer to corresponding ATCommandDef_t within the at_command_list, or nullptr if not found.
+ * @retval Pointer to corresponding ATCommandDef_t within the at_command_list_, or nullptr if not found.
 */
 ATCommandParser::ATCommandDef_t * ATCommandParser::LookupATCommand(std::string command) {
     if (command.length() > kATCommandMaxLen) {
         return nullptr; // Command is too long, not supported.
     }
-    for (ATCommandDef_t& def: at_command_list) {
+    for (ATCommandDef_t& def: at_command_list_) {
         if (command.compare(0, kATCommandMaxLen, def.command) == 0) {
             return &def;
         }
@@ -94,6 +94,11 @@ bool ATCommandParser::ParseMessage(std::string message) {
         std::vector<std::string> args_list;
         while(std::getline(args_string, arg, ',')) {
             args_list.push_back(arg);
+        }
+        size_t num_args = args_list.size();
+        if ((num_args < def->min_args) || (num_args > def->max_args)) {
+            printf("ATCommandParser::ParseMessage: Received incorrect number of args for command %s: got %d, expected minimum %d, maximum %d.\r\n",
+                command.c_str(), def->min_args, def->max_args);
         }
         if (def->callback) {
             bool result = def->callback(args_list);

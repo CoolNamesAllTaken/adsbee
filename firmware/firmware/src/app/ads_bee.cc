@@ -257,3 +257,7 @@ bool ADSBee::SetMTLdBm(int mtl_threshold_dBm) {
     // BGA2818 is +30dBm
     return true;
 }
+
+bool ADSBee::ATCFGCallback(std::vector<std::string> args) {
+    return true;
+}
