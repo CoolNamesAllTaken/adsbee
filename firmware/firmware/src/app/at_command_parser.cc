@@ -8,6 +8,7 @@
 */
 const std::string ATCommandParser::kATPrefix = "AT";
 const size_t ATCommandParser::kATPrefixLen = kATPrefix.length();
+const std::string ATCommandParser::kATAllowedOpChars = "? ="; // NOTE: these delimit the end of a command!
 
 /**
  * Public Functions
@@ -71,8 +72,8 @@ bool ATCommandParser::ParseMessage(std::string message) {
     while (start != std::string::npos) {
         start += kATPrefixLen; // Start after the AT prefix.
 
-        // Command is everything between AT prefix and the first comma, space, equal sign, or newline.
-        size_t command_end = message.find_first_of(", =\n", start);
+        // Command is everything between AT prefix and the first punctuation or newline.
+        size_t command_end = message.find_first_of(kATAllowedOpChars, start);
         std::string command = message.substr(start, command_end == std::string::npos ? std::string::npos : command_end - start);
         if (command.length() == 0) {
             printf("ATCommandParser::ParseMessage: Can't parse 0 length command in string %s.\r\n", message.c_str());
@@ -84,10 +85,17 @@ bool ATCommandParser::ParseMessage(std::string message) {
             printf("ATCommandParser::ParseMessage: Unable to match AT command %s.\r\n", command.c_str());
             return false;
         }
-        
 
         // Parse out the arguments
-        start+=command.length()+1; // Shift start to beginning of args (end of command+delimiter).
+        start+=command.length(); // Shift start to end of command.
+        // Look for operator (non-alphanumeric char at end of command).
+        char op = '\0';
+        if (start < message.length()) {
+            if (!isalnum(message[start])) {
+                op = message[start];
+                start += 1;
+            }
+        }
         // Args are everything between command and newline.
         std::stringstream args_string(message.substr(start, message.find_first_of("\n", start)));
         std::string arg;
@@ -98,12 +106,13 @@ bool ATCommandParser::ParseMessage(std::string message) {
         size_t num_args = args_list.size();
         if ((num_args < def->min_args) || (num_args > def->max_args)) {
             printf("ATCommandParser::ParseMessage: Received incorrect number of args for command %s: got %d, expected minimum %d, maximum %d.\r\n",
-                command.c_str(), def->min_args, def->max_args);
+                command.c_str(), num_args, def->min_args, def->max_args);
+            return false;
         }
         if (def->callback) {
-            bool result = def->callback(args_list);
+            bool result = def->callback(op, args_list);
             if (!result) {
-                printf("ATCommandParser::ParseMessage: Call to AT Command %s with args %s failed.\r\n", command.c_str(), args_string.str().c_str());
+                printf("ATCommandParser::ParseMessage: Call to AT Command %s with op '%c' and args %s failed.\r\n", command.c_str(), op, args_string.str().c_str());
                 return false;
             }
         } else {
