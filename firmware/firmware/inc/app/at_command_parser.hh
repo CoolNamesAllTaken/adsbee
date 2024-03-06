@@ -32,9 +32,7 @@ public:
 private:
     std::vector<ATCommandDef_t> at_command_list_;
 
-    
-
-
+    bool ATHelpCallback(char op, std::vector<std::string> args);
 };
 
 

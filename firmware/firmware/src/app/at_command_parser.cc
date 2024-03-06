@@ -22,7 +22,19 @@ const std::string ATCommandParser::kATAllowedOpChars = "? ="; // NOTE: these del
 ATCommandParser::ATCommandParser(std::vector<ATCommandDef_t> at_command_list_in)
     : at_command_list_(at_command_list_in)
 {
-
+    ATCommandDef_t help_def = {
+        .command = "+HELP",
+        .min_args = 0,
+        .max_args = 100,
+        .help_string = "Display this text.\r\n",
+        .callback = std::bind(
+            &ATCommandParser::ATHelpCallback, 
+            this, 
+            std::placeholders::_1, 
+            std::placeholders::_2
+        )
+    };
+    at_command_list_.push_back(help_def);
 }
 
 /**
@@ -33,11 +45,11 @@ ATCommandParser::~ATCommandParser() {
 }
 
 /**
- * @brief Returns the number of supported AT commands.
+ * @brief Returns the number of supported AT commands, not counting the auto-generated AT+HELP command.
  * @retval Size of at_command_list_.
 */
 uint16_t ATCommandParser::GetNumATCommands() {
-    return at_command_list_.size();
+    return at_command_list_.size()-1; // Remove auto-generated help command from count.
 }
 
 /**
@@ -129,3 +141,12 @@ bool ATCommandParser::ParseMessage(std::string message) {
 /**
  * Private Functions
 */
+
+bool ATCommandParser::ATHelpCallback(char op, std::vector<std::string> args) {
+    printf("AT Command Help Menu:\r\n");
+    for (ATCommandDef_t at_command: at_command_list_) {
+        printf("%s: \r\n", at_command.command.c_str());
+        printf("\t%s", at_command.help_string.c_str());
+    }
+    return true;
+}

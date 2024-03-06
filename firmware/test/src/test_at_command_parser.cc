@@ -63,6 +63,11 @@ ATCommandParser BuildExampleParser1() {
     return ATCommandParser(at_command_list);
 }
 
+TEST(ATCommandParser, HelpString) {
+    ATCommandParser parser = BuildExampleParser1();
+    ASSERT_TRUE(parser.ParseMessage("AT+HELP\r\n"));
+}
+
 TEST(ATCommandParser, TwoATCommands) {
     ATCommandParser parser = BuildExampleParser1();
     ASSERT_TRUE(parser.GetNumATCommands() == 2);
