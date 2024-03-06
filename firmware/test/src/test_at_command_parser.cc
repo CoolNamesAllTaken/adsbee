@@ -198,3 +198,59 @@ TEST(ATCommandParser, PickyOpCallback) {
     ASSERT_TRUE(parser.ParseMessage("AT+PICKYOP?\r\n"));
     ASSERT_FALSE(parser.ParseMessage("AT+PICKYOP\r\n"));
 }
+
+std::vector<std::string> stored_args;
+char stored_op;
+bool StoreArgsCallback(char op, std::vector<std::string> args) {
+    stored_args.clear();
+    stored_op = op;
+    for (std::string arg: args) {
+        stored_args.push_back(arg);
+    }
+    return true;
+}
+
+ATCommandParser BuildStoreArgParser() {
+    std::vector<ATCommandParser::ATCommandDef_t> at_command_list;
+    ATCommandParser::ATCommandDef_t def = {
+        .command = "+STORE",
+        .min_args = 0,
+        .max_args = 50,
+        .help_string = "Stores all arguments it receives.\r\n",
+        .callback = StoreArgsCallback
+    };
+    at_command_list.push_back(def);
+    return ATCommandParser(at_command_list);
+}
+
+TEST(ATCommandParser, StoreArgsWithoutReturns) {
+    ATCommandParser parser = BuildStoreArgParser();
+    
+    // No Args
+    parser.ParseMessage("AT+STORE\r\n");
+    ASSERT_EQ(stored_args.size(), 0u);
+    ASSERT_EQ(stored_op, '\0');
+    
+    // Question mark without newline.
+    parser.ParseMessage("AT+STORE?");
+    ASSERT_EQ(stored_args.size(), 0u);
+    ASSERT_EQ(stored_op, '?');
+
+    // Question mark with newline.
+    parser.ParseMessage("AT+STORE?\r\n");
+    ASSERT_EQ(stored_args.size(), 0u);
+    ASSERT_EQ(stored_op, '?');
+
+    // Question with space in an arg.
+    parser.ParseMessage("AT+STORE?hello, potato");
+    ASSERT_EQ(stored_args.size(), 2u);
+    ASSERT_EQ(stored_op, '?');
+    ASSERT_EQ(stored_args[0].compare("hello"), 0);
+    ASSERT_EQ(stored_args[1].compare(" potato"), 0);
+
+    // QUestion with ignored arg.
+    parser.ParseMessage("AT+STORE=hello\r\n, bacon");
+    ASSERT_EQ(stored_args.size(), 1u);
+    ASSERT_EQ(stored_op, '=');
+    ASSERT_EQ(stored_args[0].compare("hello"), 0);
+}

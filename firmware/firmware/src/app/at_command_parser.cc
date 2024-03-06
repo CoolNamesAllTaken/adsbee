@@ -8,7 +8,7 @@
 */
 const std::string ATCommandParser::kATPrefix = "AT";
 const size_t ATCommandParser::kATPrefixLen = kATPrefix.length();
-const std::string ATCommandParser::kATAllowedOpChars = "? ="; // NOTE: these delimit the end of a command!
+const std::string ATCommandParser::kATAllowedOpChars = "? =\r\n"; // NOTE: these delimit the end of a command!
 
 /**
  * Public Functions
@@ -103,13 +103,19 @@ bool ATCommandParser::ParseMessage(std::string message) {
         // Look for operator (non-alphanumeric char at end of command).
         char op = '\0';
         if (start < message.length()) {
-            if (!isalnum(message[start])) {
+            if (message[start] != '\r' && message[start] != '\n') {
+                // Don't record line returns as op to make downstream stuff simpler.
                 op = message[start];
+            }
+            // Ignore all non alphanumeric characters after the op character. This skips the trailing
+            // \n if the op is something like "\r\n".
+            while (start < message.length() && !isalnum(message[start])) {
                 start += 1;
             }
         }
-        // Args are everything between command and newline.
-        std::stringstream args_string(message.substr(start, message.find_first_of("\n", start)));
+        // Args are everything between command and carriage return or newline.
+        std::stringstream args_string(message.substr(start, message.find_first_of("\r\n", start)-start));
+
         std::string arg;
         std::vector<std::string> args_list;
         while(std::getline(args_string, arg, ',')) {
