@@ -12,6 +12,7 @@
 #include "capture.pio.h"
 #include "pico/binary_info.h"
 #include "hal.hh"
+#include <iostream> // for AT command ingestion
 
 
 const uint16_t kDecodeLEDBootupNumBlinks = 4;
@@ -60,6 +61,23 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
     mtl_bias_pwm_slice_ = pwm_gpio_to_slice_num(config_.mtl_bias_pwm_pin);
     mtl_bias_pwm_chan_ = pwm_gpio_to_channel(config_.mtl_bias_pwm_pin);
 
+    // Initialize AT command parser.
+    std::vector<ATCommandParser::ATCommandDef_t> at_command_list;
+    ATCommandParser::ATCommandDef_t at_config_def = {
+        .command = "+CONFIG",
+        .min_args = 0,
+        .max_args = 1,
+        .help_string = "Set whether the module is in CONFIG or RUN mode. RUN=0, CONFIG=1.",
+        .callback = std::bind(
+            &ADSBee::ATCONFIGCallback,
+            this,
+            std::placeholders::_1, 
+            std::placeholders::_2
+        )
+    };
+    at_command_list.push_back(at_config_def);
+
+    parser_.SetATCommandList(at_command_list);
 }
 
 void ADSBee::Init() {
@@ -126,9 +144,13 @@ void ADSBee::Update() {
     adc_select_input(config_.mtl_bias_adc_input);
     mtl_bias_adc_counts_ = adc_read();
 
-    // Update PWM output duty cycl.
+    // Update PWM output duty cycle.
     pwm_set_chan_level(mtl_bias_pwm_slice_, mtl_bias_pwm_chan_, mtl_bias_pwm_count_);
 
+    // Check for new AT commands.
+    for (std::string line; std::getline(std::cin, line); ) {
+        parser_.ParseMessage(line);
+    }
 }
 
 void ADSBee::OnDecodeComplete() {
@@ -258,6 +280,10 @@ bool ADSBee::SetMTLdBm(int mtl_threshold_dBm) {
     return true;
 }
 
-bool ADSBee::ATCFGCallback(std::vector<std::string> args) {
+bool ADSBee::ATCONFIGCallback(char op, std::vector<std::string> args) {
+    if (op == '?') {
+        // AT+CONFIG mode query.
+        printf("AT+CONFIG=%d", at_config_mode_);
+    }
     return true;
 }

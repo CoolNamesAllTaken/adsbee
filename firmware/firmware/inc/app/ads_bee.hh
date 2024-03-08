@@ -33,7 +33,14 @@ public:
     int GetMTLMilliVolts();
     bool SetMTLdBm(int mtl_threshold_dbm);
 
-    bool ATCFGCallback(std::vector<std::string> args);
+    bool ATCONFIGCallback(char op, std::vector<std::string> args);
+    bool ATMTLLOCallback(char op, std::vector<std::string> args);
+    bool ATMTLHICallback(char op, std::vector<std::string> args);
+
+    typedef enum {
+        RUN = 0,
+        CONFIG = 1
+    } ATConfigMode_t;
 
     const uint16_t kMTLBiasMaxPWMCount = 5000; // Clock is 125MHz, shoot for 25kHz PWM.
     const int kVDDMV = 3300; // [mV] Voltage of positive supply rail.
@@ -67,6 +74,7 @@ private:
 
     uint32_t rx_buffer_[ADSBPacket::kMaxPacketLenWords32];
     
+    ATConfigMode_t at_config_mode_ = ATConfigMode_t::RUN;
 };
 
 #endif /* _ADS_BEE_HH_ */

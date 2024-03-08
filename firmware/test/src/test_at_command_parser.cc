@@ -160,7 +160,7 @@ ATCommandParser BuildPotatoBaconParser() {
         .command = "+POTATOBACON",
         .min_args = 1,
         .max_args = 2,
-        .help_string = "Acceptable args are \"potato\" or \" potato,bacon\".\r\n",
+        .help_string = "Acceptable args are \"potato\" or \" potato,bacon\".",
         .callback = MustBePotatoBacon
     };
     at_command_list.push_back(def);
@@ -188,7 +188,7 @@ TEST(ATCommandParser, PickyOpCallback) {
         .command = "+PICKYOP",
         .min_args = 0,
         .max_args = 100,
-        .help_string = "Doot doot whatever but make the op ' ' or '?'.\r\n",
+        .help_string = "Doot doot whatever but make the op ' ' or '?'.",
         .callback = PickyOpCallback
     };
     at_command_list.push_back(def);
@@ -216,7 +216,7 @@ ATCommandParser BuildStoreArgParser() {
         .command = "+STORE",
         .min_args = 0,
         .max_args = 50,
-        .help_string = "Stores all arguments it receives.\r\n",
+        .help_string = "Stores all arguments it receives.",
         .callback = StoreArgsCallback
     };
     at_command_list.push_back(def);

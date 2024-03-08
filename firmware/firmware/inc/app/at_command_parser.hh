@@ -22,9 +22,11 @@ public:
         std::function<bool(char,std::vector<std::string>)> callback = nullptr; // FUnction to call with list of arguments.
     } ATCommandDef_t;
 
+    ATCommandParser(); // default constructor
     ATCommandParser(std::vector<ATCommandDef_t> at_command_list_in); // Constructor.
     ~ATCommandParser(); // Destructor.
 
+    void SetATCommandList(std::vector<ATCommandDef_t> at_command_list_in);
     uint16_t GetNumATCommands();
     ATCommandDef_t * LookupATCommand(std::string command);
     bool ParseMessage(std::string message);

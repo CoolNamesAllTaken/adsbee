@@ -14,14 +14,29 @@ const std::string ATCommandParser::kATAllowedOpChars = "? =\r\n"; // NOTE: these
  * Public Functions
 */
 
+ATCommandParser::ATCommandParser() {}
+
 /**
  * @brief Constructor.
  * @param[in] at_command_list_in std::vector of ATCommandDef_t's that define what AT commands are supported
  * as well as their corresponding callback functions.
 */
 ATCommandParser::ATCommandParser(std::vector<ATCommandDef_t> at_command_list_in)
-    : at_command_list_(at_command_list_in)
 {
+    SetATCommandList(at_command_list_in);
+}
+
+/**
+ * @brief Helper function that clears existing AT commands and populates with a new list of AT Command
+ * definitions. Adds a definition for AT+HELP.
+ * @param[in] at_command_list_in std::vector of ATCommandDef_t's that define what AT commands are supported
+ * as well as their corresponding callback functions.
+*/
+void ATCommandParser::SetATCommandList(std::vector<ATCommandDef_t> at_command_list_in) {
+    at_command_list_.clear();
+    for (ATCommandDef_t& def: at_command_list_in) {
+        at_command_list_.push_back(def);
+    }
     ATCommandDef_t help_def = {
         .command = "+HELP",
         .min_args = 0,
@@ -152,7 +167,7 @@ bool ATCommandParser::ATHelpCallback(char op, std::vector<std::string> args) {
     printf("AT Command Help Menu:\r\n");
     for (ATCommandDef_t at_command: at_command_list_) {
         printf("%s: \r\n", at_command.command.c_str());
-        printf("\t%s", at_command.help_string.c_str());
+        printf("\t%s\r\n", at_command.help_string.c_str());
     }
     return true;
 }
