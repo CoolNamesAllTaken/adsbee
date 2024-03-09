@@ -72,11 +72,12 @@ void ADSBee::Init() {
     gpio_set_function(config_.mtl_lo_pwm_pin, GPIO_FUNC_PWM);
     gpio_set_function(config_.mtl_hi_pwm_pin, GPIO_FUNC_PWM);
     pwm_set_wrap(mtl_lo_pwm_slice_, kMTLMaxPWMCount);
+    pwm_set_wrap(mtl_hi_pwm_slice_, kMTLMaxPWMCount); // redundant since it's the same slice
 
     SetMTLLoMilliVolts(kMTLLoDefaultMV);
     SetMTLHiMilliVolts(kMTLHiDefaultMV);
     pwm_set_enabled(mtl_lo_pwm_slice_, true);
-    pwm_set_enabled(mtl_hi_pwm_slice_, true);
+    pwm_set_enabled(mtl_hi_pwm_slice_, true); // redundant since it's the same slice
 
     // Initialize the ML bias ADC input.
     adc_init();
@@ -145,10 +146,20 @@ void ADSBee::Update() {
     pwm_set_chan_level(mtl_lo_pwm_slice_, mtl_lo_pwm_chan_, mtl_lo_pwm_count_);
     pwm_set_chan_level(mtl_hi_pwm_slice_, mtl_hi_pwm_chan_, mtl_hi_pwm_count_);
 
-    // Check for new AT commands.
-    for (std::string line; std::getline(std::cin, line); ) {
-        parser_.ParseMessage(line);
+    // Check for new AT commands. Process up to one line per loop.
+    int c = getchar_timeout_us(0);
+    while (c != PICO_ERROR_TIMEOUT) {
+        at_command_buf_ += static_cast<char>(c);
+        if (c == '\n') {
+            parser_.ParseMessage(at_command_buf_);
+            at_command_buf_ = "";
+        }
+        c = getchar_timeout_us(0);
     }
+
+    // for (std::string line; std::getline(std::cin, line); ) {
+    //     parser_.ParseMessage(line);
+    // }
 }
 
 void ADSBee::OnDecodeComplete() {
@@ -238,9 +249,12 @@ void ADSBee::OnDecodeComplete() {
 */
 bool ADSBee::SetMTLHiMilliVolts(int mtl_hi_mv) {
     if (mtl_hi_mv > kMTLMaxMV || mtl_hi_mv < kMTLMinMV) {
+        printf("ADSBee::SetMTLHiMilliVolts: Unable to set mtl_hi_mv to %d, outside of permissible range %d-%d.\r\n", 
+            mtl_hi_mv, kMTLMinMV, kMTLMaxMV
+        );
         return false;
     }
-
+    mtl_hi_mv_ = mtl_hi_mv;
     mtl_hi_pwm_count_ = mtl_hi_mv * kMTLMaxPWMCount / kVDDMV;
 
     return true;
@@ -261,9 +275,12 @@ bool ADSBee::SetMTLHiMilliVolts(int mtl_hi_mv) {
 */
 bool ADSBee::SetMTLLoMilliVolts(int mtl_lo_mv) {
     if (mtl_lo_mv > kMTLMaxMV || mtl_lo_mv < kMTLMinMV) {
+        printf("ADSBee::SetMTLLoMilliVolts: Unable to set mtl_lo_mv to %d, outside of permissible range %d-%d.\r\n", 
+            mtl_lo_mv, kMTLMinMV, kMTLMaxMV
+        );
         return false;
     }
-
+    mtl_lo_mv_ = mtl_lo_mv;
     mtl_lo_pwm_count_ = mtl_lo_mv * kMTLMaxPWMCount / kVDDMV;
 
     return true;
@@ -331,6 +348,20 @@ void ADSBee::InitATCommandParser() {
         )
     };
     at_command_list.push_back(at_mtl_set_def);
+    ATCommandParser::ATCommandDef_t at_mtl_read_def = {
+        .command = "+MTLREAD",
+        .min_args = 0,
+        .max_args = 0,
+        .help_string = "Read ADC conts for high and low MTL thresholds. Call with no ops nor arguments, AT+MTLREAD.\r\n",
+        .callback = std::bind(
+            &ADSBee::ATMTLReadCallback,
+            this,
+            std::placeholders::_1, 
+            std::placeholders::_2
+        )
+    };
+    at_command_list.push_back(at_mtl_read_def);
+
     parser_.SetATCommandList(at_command_list);
 }
 
@@ -377,7 +408,7 @@ bool ADSBee::ATMTLSetCallback(char op, std::vector<std::string> args) {
                     printf("ERROR: Failed to convert mtl_lo_mv_ value to integer.\r\n");
                     return false;
                 } else {
-                    SetMTLLoMilliVolts(new_mtl_lo_mv);
+                    if (!SetMTLLoMilliVolts(new_mtl_lo_mv)) return false;
                     printf("SET mtl_lo_mv_ to %d\r\n", mtl_lo_mv_);
                 }
             }
@@ -391,7 +422,7 @@ bool ADSBee::ATMTLSetCallback(char op, std::vector<std::string> args) {
                     printf("ERROR: Failed to convert mtl_hi_mv_ value to integer.\r\n");
                     return false;
                 } else {
-                    SetMTLLoMilliVolts(new_mtl_hi_mv);
+                    if (!SetMTLHiMilliVolts(new_mtl_hi_mv)) return false;
                     printf("SET mtl_hi_mv_ to %d\r\n", mtl_hi_mv_);
                 }
             }
@@ -401,9 +432,6 @@ bool ADSBee::ATMTLSetCallback(char op, std::vector<std::string> args) {
 }
 
 bool ADSBee::ATMTLReadCallback(char op, std::vector<std::string> args) {
-    if (op == '?') {
-        // AT+MTLREAD
-        printf("READ mtl_lo_adc_counts_ = %d mtl_hi_adc_counts = %d\r\n", mtl_lo_adc_counts_, mtl_hi_adc_counts_);
-    }
+    printf("READ mtl_lo_adc_counts_ = %d mtl_hi_adc_counts = %d\r\n", mtl_lo_adc_counts_, mtl_hi_adc_counts_);
     return true;
 }

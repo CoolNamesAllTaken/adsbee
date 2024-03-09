@@ -93,6 +93,7 @@ private:
     uint32_t rx_buffer_[ADSBPacket::kMaxPacketLenWords32];
     
     ATConfigMode_t at_config_mode_ = ATConfigMode_t::RUN;
+    std::string at_command_buf_ = "";
 
     void InitATCommandParser();
 };
