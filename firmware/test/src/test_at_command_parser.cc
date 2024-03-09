@@ -66,6 +66,7 @@ ATCommandParser BuildExampleParser1() {
 TEST(ATCommandParser, HelpString) {
     ATCommandParser parser = BuildExampleParser1();
     ASSERT_TRUE(parser.ParseMessage("AT+HELP\r\n"));
+    // This test doesn't do anything other than make sure it doesn't crash when calling the callbacks in AT+HELP.
 }
 
 TEST(ATCommandParser, TwoATCommands) {
@@ -253,4 +254,15 @@ TEST(ATCommandParser, StoreArgsWithoutReturns) {
     ASSERT_EQ(stored_args.size(), 1u);
     ASSERT_EQ(stored_op, '=');
     ASSERT_EQ(stored_args[0].compare("hello"), 0);
+}
+
+TEST(ATCommandParser, AllowBlankArgs) {
+    ATCommandParser parser = BuildStoreArgParser();
+
+    parser.ParseMessage("AT+STORE=,,5,");
+    ASSERT_EQ(stored_args.size(), 4);
+    ASSERT_STREQ(stored_args[0].c_str(), "");
+    ASSERT_STREQ(stored_args[1].c_str(), "");
+    ASSERT_STREQ(stored_args[2].c_str(), "5");
+    ASSERT_STREQ(stored_args[3].c_str(), "");
 }

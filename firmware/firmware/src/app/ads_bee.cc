@@ -58,38 +58,31 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
     isr_access = this;
 
     // Figure out slice and channel values that will be used for setting PWM duty cycle.
-    mtl_bias_pwm_slice_ = pwm_gpio_to_slice_num(config_.mtl_bias_pwm_pin);
-    mtl_bias_pwm_chan_ = pwm_gpio_to_channel(config_.mtl_bias_pwm_pin);
+    mtl_lo_pwm_slice_ = pwm_gpio_to_slice_num(config_.mtl_lo_pwm_pin);
+    mtl_hi_pwm_slice_ = pwm_gpio_to_slice_num(config_.mtl_hi_pwm_pin);
+    mtl_lo_pwm_chan_ = pwm_gpio_to_channel(config_.mtl_lo_pwm_pin);
+    mtl_hi_pwm_chan_ = pwm_gpio_to_channel(config_.mtl_hi_pwm_pin);
 
     // Initialize AT command parser.
-    std::vector<ATCommandParser::ATCommandDef_t> at_command_list;
-    ATCommandParser::ATCommandDef_t at_config_def = {
-        .command = "+CONFIG",
-        .min_args = 0,
-        .max_args = 1,
-        .help_string = "Set whether the module is in CONFIG or RUN mode. RUN=0, CONFIG=1.",
-        .callback = std::bind(
-            &ADSBee::ATCONFIGCallback,
-            this,
-            std::placeholders::_1, 
-            std::placeholders::_2
-        )
-    };
-    at_command_list.push_back(at_config_def);
-
-    parser_.SetATCommandList(at_command_list);
+    InitATCommandParser();
 }
 
 void ADSBee::Init() {
     // Initialize the MTL bias PWM output.
-    gpio_set_function(config_.mtl_bias_pwm_pin, GPIO_FUNC_PWM);
-    pwm_set_wrap(mtl_bias_pwm_slice_, kMTLBiasMaxPWMCount);
-    SetMTLMilliVolts(kMTLBiasDefaultMV);
-    pwm_set_enabled(mtl_bias_pwm_slice_, true);
+    gpio_set_function(config_.mtl_lo_pwm_pin, GPIO_FUNC_PWM);
+    gpio_set_function(config_.mtl_hi_pwm_pin, GPIO_FUNC_PWM);
+    pwm_set_wrap(mtl_lo_pwm_slice_, kMTLMaxPWMCount);
+
+    SetMTLLoMilliVolts(kMTLLoDefaultMV);
+    SetMTLHiMilliVolts(kMTLHiDefaultMV);
+    pwm_set_enabled(mtl_lo_pwm_slice_, true);
+    pwm_set_enabled(mtl_hi_pwm_slice_, true);
 
     // Initialize the ML bias ADC input.
     adc_init();
-    adc_gpio_init(config_.mtl_bias_adc_pin);
+    adc_gpio_init(config_.mtl_lo_adc_pin);
+    adc_gpio_init(config_.mtl_hi_adc_pin);
+    adc_gpio_init(config_.rssi_hold_adc_pin);
 
     // Calculate the PIO clock divider.
     float preamble_detector_div = (float)clock_get_hz(clk_sys) / kPreambleDetectorFreq;
@@ -141,11 +134,16 @@ void ADSBee::Update() {
     }
 
     // Read back the MTL bias output voltage.
-    adc_select_input(config_.mtl_bias_adc_input);
-    mtl_bias_adc_counts_ = adc_read();
+    adc_select_input(config_.mtl_lo_adc_input);
+    mtl_lo_adc_counts_ = adc_read();
+    adc_select_input(config_.mtl_hi_adc_input);
+    mtl_hi_adc_counts_ = adc_read();
+    adc_select_input(config_.rssi_hold_adc_input);
+    rssi_adc_counts_ = adc_read();
 
     // Update PWM output duty cycle.
-    pwm_set_chan_level(mtl_bias_pwm_slice_, mtl_bias_pwm_chan_, mtl_bias_pwm_count_);
+    pwm_set_chan_level(mtl_lo_pwm_slice_, mtl_lo_pwm_chan_, mtl_lo_pwm_count_);
+    pwm_set_chan_level(mtl_hi_pwm_slice_, mtl_hi_pwm_chan_, mtl_hi_pwm_count_);
 
     // Check for new AT commands.
     for (std::string line; std::getline(std::cin, line); ) {
@@ -226,8 +224,8 @@ void ADSBee::OnDecodeComplete() {
 }
 
 /**
- * @brief Set the Minimum Trigger Level (MTL) at the AD8314 output in milliVolts.
- * @param[in] mtl_threshold_mv Voltage level for a "high" trigger on the V_DN AD8314 output. The AD8314 has a nominal output
+ * @brief Set the high Minimum Trigger Level (MTL) at the AD8314 output in milliVolts.
+ * @param[in] mtl_hi_mv Voltage level for a "high" trigger on the V_DN AD8314 output. The AD8314 has a nominal output
  * voltage of 2.25V on V_DN, with a logarithmic slope of around -42.6mV/dB and a minimum output voltage of 0.05V. Thus, power
  * levels received at the input of the AD8314 correspond to the following voltages.
  *      2250mV = -49dBm
@@ -238,35 +236,53 @@ void ADSBee::OnDecodeComplete() {
  *      50mV = -32.6dBm
  * @retval True if succeeded, False if MTL value was out of range.
 */
-bool ADSBee::SetMTLMilliVolts(int mtl_threshold_mv) {
-    if (mtl_threshold_mv > kMTLBiasMaxMV || mtl_threshold_mv < kMTLBiasMinMV) {
+bool ADSBee::SetMTLHiMilliVolts(int mtl_hi_mv) {
+    if (mtl_hi_mv > kMTLMaxMV || mtl_hi_mv < kMTLMinMV) {
         return false;
     }
 
-    // float mtl_mv_f = static_cast<float>(mtl_threshold_mv);
-    // float mtl_bias_pwm_count_f = kMTLBiasPWMCompCoeffX3*mtl_mv_f*mtl_mv_f*mtl_mv_f
-    //     + kMTLBiasPWMCompCoeffX2*mtl_mv_f*mtl_mv_f
-    //     + kMTLBiasPWMCompCoeffX*mtl_mv_f
-    //     + kMTLBiasPWMCompCoeffConst;
-    // if (mtl_bias_pwm_count_f < 0) {
-    //     mtl_bias_pwm_count_ = 0;
-    // } else if (mtl_bias_pwm_count_f > kMTLBiasMaxPWMCount) {
-    //     mtl_bias_pwm_count_ = kMTLBiasMaxPWMCount;
-    // } else {
-    //     mtl_bias_pwm_count_ = static_cast<uint16_t>(mtl_bias_pwm_count_f);
-    // }
-
-    mtl_bias_pwm_count_ = mtl_threshold_mv * 3 * kMTLBiasMaxPWMCount / 2 / kVDDMV; // 200k/300k ratio for resistive divider
+    mtl_hi_pwm_count_ = mtl_hi_mv * kMTLMaxPWMCount / kVDDMV;
 
     return true;
 }
 
 /**
- * @brief Return the value of the Minimum Trigger Level threshold in milliVolts.
+ * @brief Set the low Minimum Trigger Level (MTL) at the AD8314 output in milliVolts.
+ * @param[in] mtl_hi_mv Voltage level for a "low" trigger on the V_DN AD8314 output. The AD8314 has a nominal output
+ * voltage of 2.25V on V_DN, with a logarithmic slope of around -42.6mV/dB and a minimum output voltage of 0.05V. Thus, power
+ * levels received at the input of the AD8314 correspond to the following voltages.
+ *      2250mV = -49dBm
+ *      50mV = -2.6dBm
+ * Note that there is a +30dB LNA gain stage in front of the AD8314, so for the overall receiver, the MTL values are
+ * more like:
+ *      2250mV = -79dBm
+ *      50mV = -32.6dBm
+ * @retval True if succeeded, False if MTL value was out of range.
+*/
+bool ADSBee::SetMTLLoMilliVolts(int mtl_lo_mv) {
+    if (mtl_lo_mv > kMTLMaxMV || mtl_lo_mv < kMTLMinMV) {
+        return false;
+    }
+
+    mtl_lo_pwm_count_ = mtl_lo_mv * kMTLMaxPWMCount / kVDDMV;
+
+    return true;
+}
+
+/**
+ * @brief Return the value of the high Minimum Trigger Level threshold in milliVolts.
  * @retval MTL in milliVolts.
 */
-int ADSBee::GetMTLMilliVolts() {
-    return mtl_bias_mv_;
+int ADSBee::GetMTLHiMilliVolts() {
+    return mtl_hi_mv_;
+}
+
+/**
+ * @brief Return the value of the low Minimum Trigger Level threshold in milliVolts.
+ * @retval MTL in milliVolts.
+*/
+int ADSBee::GetMTLLoMilliVolts() {
+    return mtl_lo_mv_;
 }
 
 /**
@@ -280,10 +296,114 @@ bool ADSBee::SetMTLdBm(int mtl_threshold_dBm) {
     return true;
 }
 
-bool ADSBee::ATCONFIGCallback(char op, std::vector<std::string> args) {
+/**
+ * AT Commands
+*/
+
+/**
+ * @brief Helper function that sets up the AT command parser's internal dictionary of supported commands.
+*/
+void ADSBee::InitATCommandParser() {
+    std::vector<ATCommandParser::ATCommandDef_t> at_command_list;
+    ATCommandParser::ATCommandDef_t at_config_def = {
+        .command = "+CONFIG",
+        .min_args = 0,
+        .max_args = 1,
+        .help_string = "Set whether the module is in CONFIG or RUN mode. RUN=0, CONFIG=1.",
+        .callback = std::bind(
+            &ADSBee::ATConfigCallback,
+            this,
+            std::placeholders::_1, 
+            std::placeholders::_2
+        )
+    };
+    at_command_list.push_back(at_config_def);
+    ATCommandParser::ATCommandDef_t at_mtl_set_def = {
+        .command = "+MTLSET",
+        .min_args = 0,
+        .max_args = 2,
+        .help_string = "Query or set both HI and LO Minimum Trigger Level (MTL) thresholds for RF power detector.\r\n\tQuery is AT+MTLSET?, Set is AT+MTLSet=<mtl_lo_mv>,<mtl_hi_mv>.",
+        .callback = std::bind(
+            &ADSBee::ATMTLSetCallback,
+            this,
+            std::placeholders::_1, 
+            std::placeholders::_2
+        )
+    };
+    at_command_list.push_back(at_mtl_set_def);
+    parser_.SetATCommandList(at_command_list);
+}
+
+bool ADSBee::ATConfigCallback(char op, std::vector<std::string> args) {
     if (op == '?') {
         // AT+CONFIG mode query.
         printf("AT+CONFIG=%d", at_config_mode_);
+    } else if (op == '=') {
+        // AT+CONFIG set command.
+        if (args.size() != 1) {
+            printf("ERROR: Incorrect number of args.\r\n");
+            return false;
+        }
+        const char * mode_str = args[0].c_str();
+        char * mode_str_end;
+        ATConfigMode_t new_mode = static_cast<ATConfigMode_t>(strtoul(mode_str, &mode_str_end, 10)); // Convert first arg to base 10 integer.
+        if (mode_str_end != mode_str + args[0].length()) {
+            printf("ERROR: Failed to convert config value to integer.\r\n");
+            return false;
+        }
+        at_config_mode_ = new_mode;
+        printf("OK\r\n");    
+    }
+    return true;
+}
+
+bool ADSBee::ATMTLSetCallback(char op, std::vector<std::string> args) {
+    if (op == '?') {
+        // AT+MTLSET value query.
+        printf("mtl_lo_mv_ = %d mtl_lo_pwm_count_ = %d\r\n", mtl_lo_mv_, mtl_lo_pwm_count_);
+        printf("mtl_hi_mv_ = %d mtl_hi_pwm_count_ = %d\r\n", mtl_hi_mv_, mtl_hi_pwm_count_);
+
+    } else if (op == '=') {
+        if (args.size() != 2) {
+            printf("ERROR: Incorrect number of args, got %d but expected 2.\r\n", args.size());
+            return false;
+        } else {
+            // Attempt setting LO MTL value, in milliVolts, if first argument is not blank.
+            if (!args[0].empty()) {
+                const char * mtl_lo_mv_str = args[0].c_str();
+                char * mtl_lo_mv_str_end;
+                uint16_t new_mtl_lo_mv = strtoul(mtl_lo_mv_str, &mtl_lo_mv_str_end, 10);
+                if (mtl_lo_mv_str_end != mtl_lo_mv_str + args[0].length()) {
+                    printf("ERROR: Failed to convert mtl_lo_mv_ value to integer.\r\n");
+                    return false;
+                } else {
+                    SetMTLLoMilliVolts(new_mtl_lo_mv);
+                    printf("SET mtl_lo_mv_ to %d\r\n", mtl_lo_mv_);
+                }
+            }
+            // Attempt setting HI MTL value, in milliVolts, if second argument is not blank.
+            if (!args[1].empty()) {
+                // Set HI MTL value, in milliVolts.
+                const char * mtl_hi_mv_str = args[1].c_str();
+                char * mtl_hi_mv_str_end;
+                uint16_t new_mtl_hi_mv = strtoul(mtl_hi_mv_str, &mtl_hi_mv_str_end, 10);
+                if (mtl_hi_mv_str_end != mtl_hi_mv_str + args[1].length()) {
+                    printf("ERROR: Failed to convert mtl_hi_mv_ value to integer.\r\n");
+                    return false;
+                } else {
+                    SetMTLLoMilliVolts(new_mtl_hi_mv);
+                    printf("SET mtl_hi_mv_ to %d\r\n", mtl_hi_mv_);
+                }
+            }
+        }
+    }
+    return true;
+}
+
+bool ADSBee::ATMTLReadCallback(char op, std::vector<std::string> args) {
+    if (op == '?') {
+        // AT+MTLREAD
+        printf("READ mtl_lo_adc_counts_ = %d mtl_hi_adc_counts = %d\r\n", mtl_lo_adc_counts_, mtl_hi_adc_counts_);
     }
     return true;
 }

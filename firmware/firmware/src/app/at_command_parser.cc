@@ -123,19 +123,25 @@ bool ATCommandParser::ParseMessage(std::string message) {
                 op = message[start];
             }
             // Ignore all non alphanumeric characters after the op character. This skips the trailing
-            // \n if the op is something like "\r\n".
-            while (start < message.length() && !isalnum(message[start])) {
+            // \n if the op is something like "\r\n". Don't ignore commas which might delimit blank args.
+            while (start < message.length() && !isalnum(message[start]) && message[start] != ',') {
                 start += 1;
             }
         }
         // Args are everything between command and carriage return or newline.
-        std::stringstream args_string(message.substr(start, message.find_first_of("\r\n", start)-start));
+        std::string args_string = message.substr(start, message.find_first_of("\r\n", start)-start);
+        std::stringstream args_string_stream(args_string);
 
         std::string arg;
         std::vector<std::string> args_list;
-        while(std::getline(args_string, arg, ',')) {
+        while(std::getline(args_string_stream, arg, ',')) {
             args_list.push_back(arg);
         }
+        // Cover the trailing empty argument special case.
+        if (args_string[args_string.length()-1] == ',') {
+            args_list.push_back("");
+        }
+        
         size_t num_args = args_list.size();
         if ((num_args < def->min_args) || (num_args > def->max_args)) {
             printf("ATCommandParser::ParseMessage: Received incorrect number of args for command %s: got %d, expected minimum %d, maximum %d.\r\n",
@@ -145,7 +151,7 @@ bool ATCommandParser::ParseMessage(std::string message) {
         if (def->callback) {
             bool result = def->callback(op, args_list);
             if (!result) {
-                printf("ATCommandParser::ParseMessage: Call to AT Command %s with op '%c' and args %s failed.\r\n", command.c_str(), op, args_string.str().c_str());
+                printf("ATCommandParser::ParseMessage: Call to AT Command %s with op '%c' and args %s failed.\r\n", command.c_str(), op, args_string.c_str());
                 return false;
             }
         } else {
