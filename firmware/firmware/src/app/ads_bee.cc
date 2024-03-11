@@ -85,6 +85,11 @@ void ADSBee::Init() {
     adc_gpio_init(config_.mtl_hi_adc_pin);
     adc_gpio_init(config_.rssi_hold_adc_pin);
 
+    // Initialize RSSI peak detector clear pin.
+    gpio_init(config_.rssi_clear_pin);
+    gpio_set_dir(config_.rssi_clear_pin, GPIO_OUT);
+    gpio_put(config_.rssi_clear_pin, 1); // RSSI clear is active LO.
+
     // Calculate the PIO clock divider.
     float preamble_detector_div = (float)clock_get_hz(clk_sys) / kPreambleDetectorFreq;
 
@@ -103,7 +108,7 @@ void ADSBee::Init() {
     float message_decoder_div = (float)clock_get_hz(clk_sys) / message_decoder_freq;
     message_decoder_program_init(
         config_.message_decoder_pio, message_decoder_sm_, message_decoder_offset_,
-        config_.pulses_pin, message_decoder_div
+        config_.pulses_pin, config_.recovered_clk_pin, message_decoder_div
     );
 
     printf("ADSBee::Init: PIOs initialized.\r\n");
@@ -139,8 +144,6 @@ void ADSBee::Update() {
     mtl_lo_adc_counts_ = adc_read();
     adc_select_input(config_.mtl_hi_adc_input);
     mtl_hi_adc_counts_ = adc_read();
-    adc_select_input(config_.rssi_hold_adc_input);
-    rssi_adc_counts_ = adc_read();
 
     // Update PWM output duty cycle.
     pwm_set_chan_level(mtl_lo_pwm_slice_, mtl_lo_pwm_chan_, mtl_lo_pwm_count_);
@@ -163,6 +166,17 @@ void ADSBee::Update() {
 }
 
 void ADSBee::OnDecodeComplete() {
+    if (at_config_mode_ != ATConfigMode_t::RUN) {
+        pio_interrupt_clear(config_.preamble_detector_pio, 0);
+        return; // don't ingest packets when in configuration mode.
+    }
+
+    // Read the RSSI level of the last packet.
+    adc_select_input(config_.rssi_hold_adc_input);
+    rssi_adc_counts_ = adc_read();
+    gpio_put(config_.rssi_clear_pin, 0); // Clear RSSI peak detector.
+    // Put RSSI clear HI later, to give peak detector some time to drain.
+
     uint16_t word_index = 0;
     while (!pio_sm_is_rx_fifo_empty(config_.message_decoder_pio, message_decoder_sm_)) {
         uint32_t word = pio_sm_get(config_.message_decoder_pio, message_decoder_sm_);
@@ -171,26 +185,38 @@ void ADSBee::OnDecodeComplete() {
         switch(word_index) {
             case 0: {
                 // Flush the previous word into a packet before beginning to store the new one.
-                printf("New message: 0x%08x%08x%08x%04x\r\n",
-                    rx_buffer_[0],
-                    rx_buffer_[1],
-                    rx_buffer_[2],
-                    static_cast<uint16_t>((rx_buffer_[3]>>16) & 0xFFFF));
-                ADSBPacket packet = ADSBPacket(rx_buffer_, ADSBPacket::kMaxPacketLenWords32);
+
+                // First word out of the FIFO is actually the last word of the previously decoded message.
+                // Assemble a packet buffer using the items in rx_buffer_.
+                uint32_t packet_buffer[ADSBPacket::kMaxPacketLenWords32];
+                packet_buffer[0] = rx_buffer_[0];
+                packet_buffer[1] = rx_buffer_[1];
+                packet_buffer[2] = rx_buffer_[2];
+                // Trim extra ingested bit off of last word, then left-align.
+                packet_buffer[3] = (static_cast<uint16_t>(word >> 1)) << 16;
+
+                printf("New message: 0x%08x%08x%08x%04x RSSI=%d\r\n",
+                    packet_buffer[0],
+                    packet_buffer[1],
+                    packet_buffer[2],
+                    packet_buffer[3],
+                    rssi_adc_counts_);
+                ADSBPacket packet = ADSBPacket(packet_buffer, ADSBPacket::kMaxPacketLenWords32);
                 if (packet.IsValid()) {
                     gpio_put(config_.status_led_pin, 1);
                     led_off_timestamp_ms_ = get_time_since_boot_ms() + kDecodeLEDOnMs;
                 }
                 // printf(packet.IsValid() ? "\tVALID\r\n": "\tINVALID\r\n");
-            } // intentional cascade
+                break;
+            }
             case 1:
             case 2:
-                rx_buffer_[word_index] = word;
-                break;
             case 3:
-                // Last word ingests an extra bit by accident, pinch it off here.
-                // Left-align last word.
-                rx_buffer_[word_index] = (word>>1)<<16;
+                rx_buffer_[word_index-1] = word;
+                break;
+            // case 3:
+            //     // Last word ingests an extra bit by accident, pinch it off here.
+            //     rx_buffer_[word_index-1] = word>>1;
 
                 break;
             default:
@@ -199,38 +225,9 @@ void ADSBee::OnDecodeComplete() {
                 pio_sm_get(config_.message_decoder_pio, message_decoder_sm_); // throw away extra bits
         }
         word_index++;
-        
-        
-        // switch(word_index) {
-        //     case 0: {
-        //         // First word is the last word of the previously captured packet.
-        //         // Flush the previous word into a packet before beginning to store the new one.
-        //         printf("New message: 0x%08x%08x%08x%04x\r\n",
-        //             rx_buffer_[0],
-        //             rx_buffer_[1],
-        //             rx_buffer_[2],
-        //             rx_buffer_[3]>>16);
-        //         ADSBPacket packet = ADSBPacket(rx_buffer_, ADSBPacket::kMaxPacketLenWords32);
-        //         // printf(packet.IsValid() ? "\tVALID\r\n": "\tINVALID\r\n");
-        //         break;
-        //     }
-        //     case 1:
-        //         // printf("New message:\r\n");
-        //         // printf("\t0x%08x", word);
-        //         // rx_buffer_[word_index-1] = word;
-        //         // break; // TODO: make this just a cascade if prints are removed
-        //     case 2:
-        //     case 3:
-        //         // printf("%08x", word);
-        //         rx_buffer_[word_index] = word;
-        //         break;
-        //     default:
-        //         printf("tossing");
-        //         pio_sm_get(config_.message_decoder_pio, message_decoder_sm_); // throw away extra bits
-
-        // }
-        // word_index++;
     }
+
+    gpio_put(config_.rssi_clear_pin, 1); // restore RSSI peak detector to working order.
     pio_interrupt_clear(config_.preamble_detector_pio, 0);
 }
 

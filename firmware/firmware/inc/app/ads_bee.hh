@@ -17,6 +17,7 @@ public:
         uint16_t pulses_pin = 19; // Reading ADS-B on GPIO22. Will look for DECODE signal on GPIO22-1 = GPIO21.
         uint16_t decode_in_pin = pulses_pin+1;
         uint16_t decode_out_pin = 21; // Use GPIO20 as DECODE signal output, will be wired to GPIO21 as input.
+        uint16_t recovered_clk_pin = 22; // Use GPIO22 for the decode PIO program to output its recovered clock (for debugging only).
         // GPIO 24-25 used as PWM outputs for setting analog comparator threshold voltages.
         uint16_t mtl_lo_pwm_pin = 24;
         uint16_t mtl_hi_pwm_pin = 25;
@@ -28,6 +29,8 @@ public:
         // GPIO 28 used as ADC input for the power level of the last decoded packet.
         uint16_t rssi_hold_adc_pin = 28;
         uint16_t rssi_hold_adc_input = 2;
+        // GPIO 8 is used for clearing the RSSI peak detector.
+        uint16_t rssi_clear_pin = 8;
 
         uint16_t uart_tx_pin = 4;
         uint16_t uart_rx_pin = 5;
@@ -56,8 +59,8 @@ public:
     const int kVDDMV = 3300; // [mV] Voltage of positive supply rail.
     const int kMTLMaxMV = 2250; // [mV]
     const int kMTLMinMV = 0; // [mV]
-    const int kMTLHiDefaultMV = 1500; // [mV]
-    const int kMTLLoDefaultMV = 500; // [mV]
+    const int kMTLHiDefaultMV = 2000; // [mV]
+    const int kMTLLoDefaultMV = 1500; // [mV]
 
     // Coefficients for calibrated polynomial equation to go from target MTL bias voltage to MTL bias PWM count.
     // const float kMTLBiasPWMCompCoeffX3 = 4.87299E-08;
@@ -90,7 +93,8 @@ private:
     uint16_t mtl_hi_adc_counts_ = 0;
     uint16_t rssi_adc_counts_ = 0;
 
-    uint32_t rx_buffer_[ADSBPacket::kMaxPacketLenWords32];
+    // Due to a quirk, rx_buffer_ is used to store every word except for the first one.
+    uint32_t rx_buffer_[ADSBPacket::kMaxPacketLenWords32-1];
     
     ATConfigMode_t at_config_mode_ = ATConfigMode_t::RUN;
     std::string at_command_buf_ = "";

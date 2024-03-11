@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "mode-s-decoder"
+version = "0.1.0"
+description = ""
+authors = ["John McNelly <jkailimcnelly@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pymodes = "^2.17"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
