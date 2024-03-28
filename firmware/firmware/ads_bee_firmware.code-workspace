@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../test"
+		},
+		{
+			"path": "../scripts"
 		}
 	],
 	"settings": {

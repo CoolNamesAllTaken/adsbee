@@ -205,6 +205,12 @@ void ADSBee::OnDecodeComplete() {
                 if (packet.IsValid()) {
                     gpio_put(config_.status_led_pin, 1);
                     led_off_timestamp_ms_ = get_time_since_boot_ms() + kDecodeLEDOnMs;
+                    printf("df=%d ca=%d tc=%d icao_address=0x%06x\r\n", 
+                        packet.GetDownlinkFormat(),
+                        packet.GetCapability(),
+                        packet.GetTypeCode(),
+                        packet.GetICAOAddress()
+                    );
                 }
                 // printf(packet.IsValid() ? "\tVALID\r\n": "\tINVALID\r\n");
                 break;
