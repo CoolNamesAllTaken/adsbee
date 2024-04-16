@@ -306,15 +306,15 @@ int ADSBee::GetMTLLoMilliVolts() {
 }
 
 /**
- * @brief Set the Minimum Trigger Level (MTL) at the AD8314 output in dBm.
- * @param[in] mtl_threshold_dBm Power trigger level for a "high" trigger on the AD8314 output, in dBm.
- * @retval True if succeeded, False if MTL value was out of range.
-*/
-bool ADSBee::SetMTLdBm(int mtl_threshold_dBm) {
+//  * @brief Set the Minimum Trigger Level (MTL) at the AD8314 output in dBm.
+//  * @param[in] mtl_threshold_dBm Power trigger level for a "high" trigger on the AD8314 output, in dBm.
+//  * @retval True if succeeded, False if MTL value was out of range.
+// */
+// bool ADSBee::SetMTLdBm(int mtl_threshold_dBm) {
 
-    // BGA2818 is +30dBm
-    return true;
-}
+//     // BGA2818 is +30dBm
+//     return true;
+// }
 
 /**
  * AT Commands
@@ -355,7 +355,7 @@ void ADSBee::InitATCommandParser() {
         .command = "+MTLREAD",
         .min_args = 0,
         .max_args = 0,
-        .help_string = "Read ADC conts for high and low MTL thresholds. Call with no ops nor arguments, AT+MTLREAD.\r\n",
+        .help_string = "Read ADC counts and mV values for high and low MTL thresholds. Call with no ops nor arguments, AT+MTLREAD.\r\n",
         .callback = std::bind(
             &ADSBee::ATMTLReadCallback,
             this,
@@ -434,7 +434,12 @@ bool ADSBee::ATMTLSetCallback(char op, std::vector<std::string> args) {
     return true;
 }
 
+inline float adc_counts_to_mv(uint16_t adc_counts) {
+    return 3300.0f * adc_counts / 0xFFF;
+}
+
 bool ADSBee::ATMTLReadCallback(char op, std::vector<std::string> args) {
-    printf("READ mtl_lo_adc_counts_ = %d mtl_hi_adc_counts = %d\r\n", mtl_lo_adc_counts_, mtl_hi_adc_counts_);
+    printf("READ mtl_lo_adc_counts_ = %d mtl_hi_adc_counts_ = %d", mtl_lo_adc_counts_, mtl_hi_adc_counts_);
+    printf(" mtl_lo_mv = %.2f mtl_hi_mv = %.2f\r\n", adc_counts_to_mv(mtl_lo_adc_counts_), adc_counts_to_mv(mtl_hi_adc_counts_));
     return true;
 }

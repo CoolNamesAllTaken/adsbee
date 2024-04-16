@@ -44,7 +44,8 @@ public:
     bool SetMTLLoMilliVolts(int mtl_lo_mv);
     int GetMTLHiMilliVolts();
     int GetMTLLoMilliVolts();
-    bool SetMTLdBm(int mtl_threshold_dbm);
+    int ReadMTLHiMilliVolts();
+    int ReadMTLLoMilliVolts();
 
     bool ATConfigCallback(char op, std::vector<std::string> args);
     bool ATMTLSetCallback(char op, std::vector<std::string> args);
@@ -59,8 +60,8 @@ public:
     const int kVDDMV = 3300; // [mV] Voltage of positive supply rail.
     const int kMTLMaxMV = 2250; // [mV]
     const int kMTLMinMV = 0; // [mV]
-    const int kMTLHiDefaultMV = 2000; // [mV]
-    const int kMTLLoDefaultMV = 1500; // [mV]
+    const int kMTLHiDefaultMV = 800; // [mV]
+    const int kMTLLoDefaultMV = 700; // [mV]
 
     // Coefficients for calibrated polynomial equation to go from target MTL bias voltage to MTL bias PWM count.
     // const float kMTLBiasPWMCompCoeffX3 = 4.87299E-08;
