@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "mtl-calibrator"
+version = "0.1.0"
+description = ""
+authors = ["John McNelly <jkailimcnelly@gmail.com>"]
+readme = "README.md"
+packages = [{include = "mtl_calibrator"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pyserial = "^3.5"
+numpy = "^1.26.4"
+matplotlib = "^3.8.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

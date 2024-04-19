@@ -148,21 +148,20 @@ start_of_0:            ; We are 0.25 bits into a 0 - signal is LO
 .wrap
 
 % c-sdk {
-static inline void message_decoder_program_init(PIO pio, uint sm, uint offset, uint pin_base, float div) {
-    uint decode_in_pin = pin_base+1;
-    uint pulses_pin = pin_base;
+static inline void message_decoder_program_init(PIO pio, uint sm, uint offset, uint in_pin_base, uint recovered_clk_pin, float div) {
+    uint decode_in_pin = in_pin_base+1;
+    uint pulses_pin = in_pin_base;
 
-    pio_sm_set_consecutive_pindirs(pio, sm, pin_base, 2, false); // pin_base is DECODE input, pin_base + 1 is pulses
+    pio_sm_set_consecutive_pindirs(pio, sm, in_pin_base, 2, false); // in_pin_base is DECODE input, in_pin_base + 1 is pulses
     //pio_gpio_init(pio, pulses_pin);
     //pio_gpio_init(pio, decode_in_pin);
 
-    const uint debug_pin = 27;
-    // Allow PIO to control GPIO 27 (as output for debugging)
-    pio_gpio_init(pio, debug_pin);
-    pio_sm_set_consecutive_pindirs(pio, sm, debug_pin, 1, true); // set one pin starting at out_pin to OUT
+    // Allow PIO to control GPIO 22 (as output for debugging)
+    pio_gpio_init(pio, recovered_clk_pin);
+    pio_sm_set_consecutive_pindirs(pio, sm, recovered_clk_pin, 1, true); // set one pin starting at out_pin to OUT
 
     pio_sm_config c = message_decoder_program_get_default_config(offset);
-    sm_config_set_in_pins(&c, pin_base); // WAIT pins
+    sm_config_set_in_pins(&c, in_pin_base); // WAIT pins
     sm_config_set_jmp_pin(&c, pulses_pin); // JMP based on the comparator output
     sm_config_set_out_shift(&c, true, false, 0); // OSR shifts right, autopull turned off (using OSR for scratch)
     sm_config_set_in_shift(&c, false, true, 32); // ISR shifts left, autopush turned on
@@ -170,8 +169,8 @@ static inline void message_decoder_program_init(PIO pio, uint sm, uint offset, u
     sm_config_set_clkdiv(&c, div);
 
     // Connect out_pin to SET and SIDESET
-    sm_config_set_set_pins(&c, debug_pin, 1); // set one pin as SET output
-    sm_config_set_sideset_pins(&c, debug_pin); 
+    sm_config_set_set_pins(&c, recovered_clk_pin, 1); // set one pin as SET output
+    sm_config_set_sideset_pins(&c, recovered_clk_pin); 
 
     pio_sm_init(pio, sm, offset, &c);
 

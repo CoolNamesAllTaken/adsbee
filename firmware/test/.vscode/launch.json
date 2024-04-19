@@ -8,7 +8,7 @@
             "name": "(gdb) Launch",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/geeps_test",
+            "program": "${workspaceFolder}/build/ads_bee_test",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",

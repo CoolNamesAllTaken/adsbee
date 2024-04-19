@@ -6,6 +6,7 @@ target_sources(ads_bee_test PRIVATE
     ads_b_packet.cc
     # ads_bee.cc # left out since it requires a lot of mocking
     decode_utils.cc
+    at_command_parser.cc
 )
 else()
 # Build for embedded target
@@ -15,5 +16,6 @@ target_sources(ads_bee PRIVATE
     ads_b_packet.cc
     ads_bee.cc
     decode_utils.cc
+    at_command_parser.cc
 )
 endif()

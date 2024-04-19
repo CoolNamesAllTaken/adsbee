@@ -4,7 +4,7 @@
 1. Make sure the CMake Build Kit is set to Linux GCC (from the docker container).
 2. Run the following commands:
     ```bash
-    cd /root/ads_bee/test/build
+    cd /ads_bee/test/build
     cmake ..
     make
     ./ads_bee_test

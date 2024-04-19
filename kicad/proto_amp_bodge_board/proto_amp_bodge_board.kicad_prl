@@ -1,8 +1,8 @@
 {
   "board": {
-    "active_layer": 36,
+    "active_layer": 0,
     "active_layer_preset": "All Layers",
-    "auto_track_width": false,
+    "auto_track_width": true,
     "hidden_netclasses": [],
     "hidden_nets": [],
     "high_contrast_mode": 0,
@@ -74,7 +74,7 @@
     "ssh_key": ""
   },
   "meta": {
-    "filename": "adsbee_1090.kicad_prl",
+    "filename": "proto_amp_bodge_board.kicad_prl",
     "version": 3
   },
   "project": {
