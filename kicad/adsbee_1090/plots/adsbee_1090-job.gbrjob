@@ -3,23 +3,23 @@
     "GenerationSoftware": {
       "Vendor": "KiCad",
       "Application": "Pcbnew",
-      "Version": "7.0.7"
+      "Version": "8.0.1"
     },
-    "CreationDate": "2024-01-05T02:17:43-08:00"
+    "CreationDate": "2024-04-23T11:39:21-07:00"
   },
   "GeneralSpecs": {
     "ProjectId": {
       "Name": "adsbee_1090",
       "GUID": "61647362-6565-45f3-9130-39302e6b6963",
-      "Revision": "B"
+      "Revision": "C"
     },
     "Size": {
-      "X": 33.6,
+      "X": 45.1,
       "Y": 30.1
     },
-    "LayerNumber": 4,
-    "BoardThickness": 1.596,
-    "Finish": "None"
+    "LayerNumber": 6,
+    "BoardThickness": 1.5844,
+    "Finish": "ENIG"
   },
   "DesignRules": [
     {
@@ -36,6 +36,7 @@
       "PadToPad": 0.0,
       "PadToTrack": 0.0,
       "TrackToTrack": 0.15,
+      "MinLineWidth": 0.15,
       "TrackToRegion": 0.15,
       "RegionToRegion": 0.15
     }
@@ -57,8 +58,18 @@
       "FilePolarity": "Positive"
     },
     {
+      "Path": "adsbee_1090-In3_Cu.gbr",
+      "FileFunction": "Copper,L4,Inr",
+      "FilePolarity": "Positive"
+    },
+    {
+      "Path": "adsbee_1090-In4_Cu.gbr",
+      "FileFunction": "Copper,L5,Inr",
+      "FilePolarity": "Positive"
+    },
+    {
       "Path": "adsbee_1090-B_Cu.gbr",
-      "FileFunction": "Copper,L4,Bot",
+      "FileFunction": "Copper,L6,Bot",
       "FilePolarity": "Positive"
     },
     {
@@ -105,7 +116,7 @@
   "MaterialStackup": [
     {
       "Type": "Legend",
-      "Color": "Black",
+      "Color": "White",
       "Material": "Liquid Photo",
       "Name": "Top Silk Screen"
     },
@@ -115,7 +126,7 @@
     },
     {
       "Type": "SolderMask",
-      "Color": "Yellow",
+      "Color": "Black",
       "Thickness": 0.015,
       "Material": "Epoxy (JLC)",
       "Name": "Top Solder Mask"
@@ -128,36 +139,62 @@
     {
       "Type": "Dielectric",
       "Color": "R109G116B75",
-      "Thickness": 0.203,
+      "Thickness": 0.2104,
       "Material": "FR4 (JLC 7628)",
       "Name": "F.Cu/In1.Cu",
       "Notes": "Type: dielectric layer 1 (from F.Cu to In1.Cu)"
     },
     {
       "Type": "Copper",
-      "Thickness": 0.03,
+      "Thickness": 0.0152,
       "Name": "In1.Cu"
     },
     {
       "Type": "Dielectric",
       "Color": "R109G116B75",
-      "Thickness": 1.03,
+      "Thickness": 0.4,
       "Material": "FR4 (JLC Core)",
       "Name": "In1.Cu/In2.Cu",
       "Notes": "Type: dielectric layer 2 (from In1.Cu to In2.Cu)"
     },
     {
       "Type": "Copper",
-      "Thickness": 0.03,
+      "Thickness": 0.0152,
       "Name": "In2.Cu"
     },
     {
       "Type": "Dielectric",
       "Color": "R109G116B75",
-      "Thickness": 0.203,
+      "Thickness": 0.2028,
       "Material": "FR4 (JLC 7628)",
-      "Name": "In2.Cu/B.Cu",
-      "Notes": "Type: dielectric layer 3 (from In2.Cu to B.Cu)"
+      "Name": "In2.Cu/In3.Cu",
+      "Notes": "Type: dielectric layer 3 (from In2.Cu to In3.Cu)"
+    },
+    {
+      "Type": "Copper",
+      "Thickness": 0.0152,
+      "Name": "In3.Cu"
+    },
+    {
+      "Type": "Dielectric",
+      "Color": "R109G116B75",
+      "Thickness": 0.4,
+      "Material": "FR4 (JLC Core)",
+      "Name": "In3.Cu/In4.Cu",
+      "Notes": "Type: dielectric layer 4 (from In3.Cu to In4.Cu)"
+    },
+    {
+      "Type": "Copper",
+      "Thickness": 0.0152,
+      "Name": "In4.Cu"
+    },
+    {
+      "Type": "Dielectric",
+      "Color": "R109G116B75",
+      "Thickness": 0.2104,
+      "Material": "FR4 (JLC 7628)",
+      "Name": "In4.Cu/B.Cu",
+      "Notes": "Type: dielectric layer 5 (from In4.Cu to B.Cu)"
     },
     {
       "Type": "Copper",
@@ -166,7 +203,7 @@
     },
     {
       "Type": "SolderMask",
-      "Color": "Yellow",
+      "Color": "Black",
       "Thickness": 0.015,
       "Material": "Epoxy (JLC)",
       "Name": "Bottom Solder Mask"
@@ -177,7 +214,7 @@
     },
     {
       "Type": "Legend",
-      "Color": "Black",
+      "Color": "White",
       "Material": "Liquid Photo",
       "Name": "Bottom Silk Screen"
     }
