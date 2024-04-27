@@ -6,9 +6,9 @@
 /**
  * Initialize static const member variables.
 */
-const std::string ATCommandParser::kATPrefix = "AT";
-const size_t ATCommandParser::kATPrefixLen = kATPrefix.length();
-const std::string ATCommandParser::kATAllowedOpChars = "? =\r\n"; // NOTE: these delimit the end of a command!
+const char ATCommandParser::kATPrefix[] = "AT";
+const uint16_t ATCommandParser::kATPrefixLen = sizeof(ATCommandParser::kATPrefix)-1; // Remove EOS character.
+const char ATCommandParser::kATAllowedOpChars[] = "? =\r\n"; // NOTE: these delimit the end of a command!
 
 /**
  * Public Functions
@@ -21,7 +21,7 @@ ATCommandParser::ATCommandParser() {}
  * @param[in] at_command_list_in std::vector of ATCommandDef_t's that define what AT commands are supported
  * as well as their corresponding callback functions.
 */
-ATCommandParser::ATCommandParser(std::vector<ATCommandDef_t> at_command_list_in)
+ATCommandParser::ATCommandParser(const ATCommandDef_t * at_command_list_in)
 {
     SetATCommandList(at_command_list_in);
 }
@@ -29,15 +29,20 @@ ATCommandParser::ATCommandParser(std::vector<ATCommandDef_t> at_command_list_in)
 /**
  * @brief Helper function that clears existing AT commands and populates with a new list of AT Command
  * definitions. Adds a definition for AT+HELP.
- * @param[in] at_command_list_in std::vector of ATCommandDef_t's that define what AT commands are supported
+ * @param[in] at_command_list_in Array of ATCommandDef_t's that define what AT commands are supported
  * as well as their corresponding callback functions.
 */
-void ATCommandParser::SetATCommandList(std::vector<ATCommandDef_t> at_command_list_in) {
-    at_command_list_.clear();
-    for (ATCommandDef_t& def: at_command_list_in) {
-        at_command_list_.push_back(def);
+void ATCommandParser::SetATCommandList(const ATCommandDef_t * at_command_list_in) {
+    if (at_command_list_ != nullptr) {
+        free(at_command_list_);
     }
-    ATCommandDef_t help_def = {
+    // Allocate space for the AT commands, with an extra slot for HELP at the end.
+    uint16_t at_command_list_len_bytes = sizeof(at_command_list_in) + sizeof(ATCommandDef_t);
+    at_command_list_ = (ATCommandDef_t *)malloc(at_command_list_len_bytes);
+    // Copy in AT commands provided to SetATCommandList.
+    memcpy(at_command_list_, at_command_list_in, at_command_list_len_bytes-sizeof(ATCommandDef_t));
+    // Add in +HELP command.
+    at_command_list_[sizeof(at_command_list_)/sizeof(ATCommandDef_t)] = {
         .command = "+HELP",
         .min_args = 0,
         .max_args = 100,
@@ -49,14 +54,14 @@ void ATCommandParser::SetATCommandList(std::vector<ATCommandDef_t> at_command_li
             std::placeholders::_2
         )
     };
-    at_command_list_.push_back(help_def);
 }
 
 /**
  * @brief Destructor. Deallocates dynamically allocated memory.
 */
 ATCommandParser::~ATCommandParser() {
-    at_command_list_.clear(); // Note: this works as long as elements are objects and not pointers.
+    free(at_command_list_);
+    // at_command_list_.clear(); // Note: this works as long as elements are objects and not pointers.
 }
 
 /**
@@ -64,7 +69,7 @@ ATCommandParser::~ATCommandParser() {
  * @retval Size of at_command_list_.
 */
 uint16_t ATCommandParser::GetNumATCommands() {
-    return at_command_list_.size()-1; // Remove auto-generated help command from count.
+    return sizeof(at_command_list_)/sizeof(ATCommandDef_t); // Remove auto-generated help command from count.
 }
 
 /**

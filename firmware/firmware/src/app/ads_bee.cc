@@ -64,7 +64,45 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
     mtl_hi_pwm_chan_ = pwm_gpio_to_channel(config_.mtl_hi_pwm_pin);
 
     // Initialize AT command parser.
-    InitATCommandParser();
+    ATCommandParser::ATCommandDef_t at_command_list[] = {
+        {
+            .command = "+CONFIG",
+            .min_args = 0,
+            .max_args = 1,
+            .help_string = "Set whether the module is in CONFIG or RUN mode. RUN=0, CONFIG=1.",
+            .callback = std::bind(
+                &ADSBee::ATConfigCallback,
+                this,
+                std::placeholders::_1, 
+                std::placeholders::_2
+            )
+        },
+        {
+            .command = "+MTLSET",
+            .min_args = 0,
+            .max_args = 2,
+            .help_string = "Query or set both HI and LO Minimum Trigger Level (MTL) thresholds for RF power detector.\r\n\tQuery is AT+MTLSET?, Set is AT+MTLSet=<mtl_lo_mv>,<mtl_hi_mv>.",
+            .callback = std::bind(
+                &ADSBee::ATMTLSetCallback,
+                this,
+                std::placeholders::_1, 
+                std::placeholders::_2
+            )
+        },
+        {
+            .command = "+MTLREAD",
+            .min_args = 0,
+            .max_args = 0,
+            .help_string = "Read ADC counts and mV values for high and low MTL thresholds. Call with no ops nor arguments, AT+MTLREAD.\r\n",
+            .callback = std::bind(
+                &ADSBee::ATMTLReadCallback,
+                this,
+                std::placeholders::_1, 
+                std::placeholders::_2
+            )
+        }
+    };
+    parser_ = ATCommandParser(at_command_list);
 }
 
 void ADSBee::Init() {
@@ -324,46 +362,7 @@ int ADSBee::GetMTLLoMilliVolts() {
  * @brief Helper function that sets up the AT command parser's internal dictionary of supported commands.
 */
 void ADSBee::InitATCommandParser() {
-    std::vector<ATCommandParser::ATCommandDef_t> at_command_list;
-    ATCommandParser::ATCommandDef_t at_config_def = {
-        .command = "+CONFIG",
-        .min_args = 0,
-        .max_args = 1,
-        .help_string = "Set whether the module is in CONFIG or RUN mode. RUN=0, CONFIG=1.",
-        .callback = std::bind(
-            &ADSBee::ATConfigCallback,
-            this,
-            std::placeholders::_1, 
-            std::placeholders::_2
-        )
-    };
-    at_command_list.push_back(at_config_def);
-    ATCommandParser::ATCommandDef_t at_mtl_set_def = {
-        .command = "+MTLSET",
-        .min_args = 0,
-        .max_args = 2,
-        .help_string = "Query or set both HI and LO Minimum Trigger Level (MTL) thresholds for RF power detector.\r\n\tQuery is AT+MTLSET?, Set is AT+MTLSet=<mtl_lo_mv>,<mtl_hi_mv>.",
-        .callback = std::bind(
-            &ADSBee::ATMTLSetCallback,
-            this,
-            std::placeholders::_1, 
-            std::placeholders::_2
-        )
-    };
-    at_command_list.push_back(at_mtl_set_def);
-    ATCommandParser::ATCommandDef_t at_mtl_read_def = {
-        .command = "+MTLREAD",
-        .min_args = 0,
-        .max_args = 0,
-        .help_string = "Read ADC counts and mV values for high and low MTL thresholds. Call with no ops nor arguments, AT+MTLREAD.\r\n",
-        .callback = std::bind(
-            &ADSBee::ATMTLReadCallback,
-            this,
-            std::placeholders::_1, 
-            std::placeholders::_2
-        )
-    };
-    at_command_list.push_back(at_mtl_read_def);
+    
 
     parser_.SetATCommandList(at_command_list);
 }
