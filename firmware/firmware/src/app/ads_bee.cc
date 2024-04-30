@@ -13,6 +13,8 @@
 #include "pico/binary_info.h"
 #include "hal.hh"
 #include <iostream> // for AT command ingestion
+// #include <charconv> 
+#include <string.h> // for strcat
 
 
 const uint16_t kDecodeLEDBootupNumBlinks = 4;
@@ -190,10 +192,11 @@ void ADSBee::Update() {
     // Check for new AT commands. Process up to one line per loop.
     int c = getchar_timeout_us(0);
     while (c != PICO_ERROR_TIMEOUT) {
-        at_command_buf_ += static_cast<char>(c);
+        char buf[2] = {c, '\0'};
+        strcat(at_command_buf_, buf);
         if (c == '\n') {
-            parser_.ParseMessage(at_command_buf_);
-            at_command_buf_ = "";
+            parser_.ParseMessage(std::string_view(at_command_buf_));
+            at_command_buf_[0] = '\0'; // clear command buffer
         }
         c = getchar_timeout_us(0);
     }
@@ -358,16 +361,7 @@ int ADSBee::GetMTLLoMilliVolts() {
  * AT Commands
 */
 
-/**
- * @brief Helper function that sets up the AT command parser's internal dictionary of supported commands.
-*/
-void ADSBee::InitATCommandParser() {
-    
-
-    parser_.SetATCommandList(at_command_list);
-}
-
-bool ADSBee::ATConfigCallback(char op, std::vector<std::string> args) {
+bool ADSBee::ATConfigCallback(char op, std::vector<std::string_view> args) {
     if (op == '?') {
         // AT+CONFIG mode query.
         printf("AT+CONFIG=%d", at_config_mode_);
@@ -377,20 +371,19 @@ bool ADSBee::ATConfigCallback(char op, std::vector<std::string> args) {
             printf("ERROR: Incorrect number of args.\r\n");
             return false;
         }
-        const char * mode_str = args[0].c_str();
-        char * mode_str_end;
-        ATConfigMode_t new_mode = static_cast<ATConfigMode_t>(strtoul(mode_str, &mode_str_end, 10)); // Convert first arg to base 10 integer.
-        if (mode_str_end != mode_str + args[0].length()) {
+        ATConfigMode_t new_mode;
+        if (!ATCommandParser::ArgToNum(args[0], (uint16_t&)new_mode)) {
             printf("ERROR: Failed to convert config value to integer.\r\n");
             return false;
         }
+        
         at_config_mode_ = new_mode;
         printf("OK\r\n");    
     }
     return true;
 }
 
-bool ADSBee::ATMTLSetCallback(char op, std::vector<std::string> args) {
+bool ADSBee::ATMTLSetCallback(char op, std::vector<std::string_view> args) {
     if (op == '?') {
         // AT+MTLSET value query.
         printf("mtl_lo_mv_ = %d mtl_lo_pwm_count_ = %d\r\n", mtl_lo_mv_, mtl_lo_pwm_count_);
@@ -403,10 +396,8 @@ bool ADSBee::ATMTLSetCallback(char op, std::vector<std::string> args) {
         } else {
             // Attempt setting LO MTL value, in milliVolts, if first argument is not blank.
             if (!args[0].empty()) {
-                const char * mtl_lo_mv_str = args[0].c_str();
-                char * mtl_lo_mv_str_end;
-                uint16_t new_mtl_lo_mv = strtoul(mtl_lo_mv_str, &mtl_lo_mv_str_end, 10);
-                if (mtl_lo_mv_str_end != mtl_lo_mv_str + args[0].length()) {
+                uint16_t new_mtl_lo_mv;
+                if (!ATCommandParser::ArgToNum(args[0], new_mtl_lo_mv)) {
                     printf("ERROR: Failed to convert mtl_lo_mv_ value to integer.\r\n");
                     return false;
                 } else {
@@ -417,10 +408,8 @@ bool ADSBee::ATMTLSetCallback(char op, std::vector<std::string> args) {
             // Attempt setting HI MTL value, in milliVolts, if second argument is not blank.
             if (!args[1].empty()) {
                 // Set HI MTL value, in milliVolts.
-                const char * mtl_hi_mv_str = args[1].c_str();
-                char * mtl_hi_mv_str_end;
-                uint16_t new_mtl_hi_mv = strtoul(mtl_hi_mv_str, &mtl_hi_mv_str_end, 10);
-                if (mtl_hi_mv_str_end != mtl_hi_mv_str + args[1].length()) {
+                uint16_t new_mtl_hi_mv;
+                if (!ATCommandParser::ArgToNum(args[1], new_mtl_hi_mv)) {
                     printf("ERROR: Failed to convert mtl_hi_mv_ value to integer.\r\n");
                     return false;
                 } else {
@@ -437,7 +426,7 @@ inline float adc_counts_to_mv(uint16_t adc_counts) {
     return 3300.0f * adc_counts / 0xFFF;
 }
 
-bool ADSBee::ATMTLReadCallback(char op, std::vector<std::string> args) {
+bool ADSBee::ATMTLReadCallback(char op, std::vector<std::string_view> args) {
     printf("READ mtl_lo_adc_counts_ = %d mtl_hi_adc_counts_ = %d", mtl_lo_adc_counts_, mtl_hi_adc_counts_);
     printf(" mtl_lo_mv = %.2f mtl_hi_mv = %.2f\r\n", adc_counts_to_mv(mtl_lo_adc_counts_), adc_counts_to_mv(mtl_hi_adc_counts_));
     return true;

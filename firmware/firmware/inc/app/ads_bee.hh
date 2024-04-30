@@ -47,14 +47,16 @@ public:
     int ReadMTLHiMilliVolts();
     int ReadMTLLoMilliVolts();
 
-    bool ATConfigCallback(char op, std::vector<std::string> args);
-    bool ATMTLSetCallback(char op, std::vector<std::string> args);
-    bool ATMTLReadCallback(char op, std::vector<std::string> args);
+    bool ATConfigCallback(char op, std::vector<std::string_view> args);
+    bool ATMTLSetCallback(char op, std::vector<std::string_view> args);
+    bool ATMTLReadCallback(char op, std::vector<std::string_view> args);
 
     typedef enum {
         RUN = 0,
         CONFIG = 1
     } ATConfigMode_t;
+
+    static const uint16_t kATCommandBufMaxLen = 1000;
 
     const uint16_t kMTLMaxPWMCount = 5000; // Clock is 125MHz, shoot for 25kHz PWM.
     const int kVDDMV = 3300; // [mV] Voltage of positive supply rail.
@@ -98,7 +100,7 @@ private:
     uint32_t rx_buffer_[ADSBPacket::kMaxPacketLenWords32-1];
     
     ATConfigMode_t at_config_mode_ = ATConfigMode_t::RUN;
-    std::string at_command_buf_ = "";
+    char at_command_buf_[kATCommandBufMaxLen];
 
     void InitATCommandParser();
 };
