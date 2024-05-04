@@ -66,6 +66,7 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
     mtl_hi_pwm_chan_ = pwm_gpio_to_channel(config_.mtl_hi_pwm_pin);
 
     // Initialize AT command parser.
+    uint16_t num_at_commands = 3;
     ATCommandParser::ATCommandDef_t at_command_list[] = {
         {
             .command = "+CONFIG",
@@ -76,7 +77,8 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
                 &ADSBee::ATConfigCallback,
                 this,
                 std::placeholders::_1, 
-                std::placeholders::_2
+                std::placeholders::_2,
+                std::placeholders::_3
             )
         },
         {
@@ -88,7 +90,8 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
                 &ADSBee::ATMTLSetCallback,
                 this,
                 std::placeholders::_1, 
-                std::placeholders::_2
+                std::placeholders::_2,
+                std::placeholders::_3
             )
         },
         {
@@ -100,11 +103,12 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
                 &ADSBee::ATMTLReadCallback,
                 this,
                 std::placeholders::_1, 
-                std::placeholders::_2
+                std::placeholders::_2,
+                std::placeholders::_3
             )
         }
     };
-    parser_ = ATCommandParser(at_command_list);
+    parser_ = ATCommandParser(at_command_list, num_at_commands);
 }
 
 void ADSBee::Init() {
@@ -192,7 +196,7 @@ void ADSBee::Update() {
     // Check for new AT commands. Process up to one line per loop.
     int c = getchar_timeout_us(0);
     while (c != PICO_ERROR_TIMEOUT) {
-        char buf[2] = {c, '\0'};
+        char buf[2] = {static_cast<char>(c), '\0'};
         strcat(at_command_buf_, buf);
         if (c == '\n') {
             parser_.ParseMessage(std::string_view(at_command_buf_));
@@ -361,13 +365,13 @@ int ADSBee::GetMTLLoMilliVolts() {
  * AT Commands
 */
 
-bool ADSBee::ATConfigCallback(char op, std::vector<std::string_view> args) {
+bool ADSBee::ATConfigCallback(char op, const std::string_view args[], uint16_t num_args) {
     if (op == '?') {
         // AT+CONFIG mode query.
         printf("AT+CONFIG=%d", at_config_mode_);
     } else if (op == '=') {
         // AT+CONFIG set command.
-        if (args.size() != 1) {
+        if (num_args != 1) {
             printf("ERROR: Incorrect number of args.\r\n");
             return false;
         }
@@ -383,15 +387,15 @@ bool ADSBee::ATConfigCallback(char op, std::vector<std::string_view> args) {
     return true;
 }
 
-bool ADSBee::ATMTLSetCallback(char op, std::vector<std::string_view> args) {
+bool ADSBee::ATMTLSetCallback(char op, const std::string_view args[], uint16_t num_args) {
     if (op == '?') {
         // AT+MTLSET value query.
         printf("mtl_lo_mv_ = %d mtl_lo_pwm_count_ = %d\r\n", mtl_lo_mv_, mtl_lo_pwm_count_);
         printf("mtl_hi_mv_ = %d mtl_hi_pwm_count_ = %d\r\n", mtl_hi_mv_, mtl_hi_pwm_count_);
 
     } else if (op == '=') {
-        if (args.size() != 2) {
-            printf("ERROR: Incorrect number of args, got %d but expected 2.\r\n", args.size());
+        if (num_args != 2) {
+            printf("ERROR: Incorrect number of args, got %d but expected 2.\r\n", num_args);
             return false;
         } else {
             // Attempt setting LO MTL value, in milliVolts, if first argument is not blank.
@@ -426,7 +430,7 @@ inline float adc_counts_to_mv(uint16_t adc_counts) {
     return 3300.0f * adc_counts / 0xFFF;
 }
 
-bool ADSBee::ATMTLReadCallback(char op, std::vector<std::string_view> args) {
+bool ADSBee::ATMTLReadCallback(char op, const std::string_view args[], uint16_t num_args) {
     printf("READ mtl_lo_adc_counts_ = %d mtl_hi_adc_counts_ = %d", mtl_lo_adc_counts_, mtl_hi_adc_counts_);
     printf(" mtl_lo_mv = %.2f mtl_hi_mv = %.2f\r\n", adc_counts_to_mv(mtl_lo_adc_counts_), adc_counts_to_mv(mtl_hi_adc_counts_));
     return true;

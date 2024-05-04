@@ -47,9 +47,9 @@ public:
     int ReadMTLHiMilliVolts();
     int ReadMTLLoMilliVolts();
 
-    bool ATConfigCallback(char op, std::vector<std::string_view> args);
-    bool ATMTLSetCallback(char op, std::vector<std::string_view> args);
-    bool ATMTLReadCallback(char op, std::vector<std::string_view> args);
+    bool ATConfigCallback(char op, const std::string_view args[], uint16_t num_args);
+    bool ATMTLSetCallback(char op, const std::string_view args[], uint16_t num_args);
+    bool ATMTLReadCallback(char op, const std::string_view args[], uint16_t num_args);
 
     typedef enum {
         RUN = 0,
