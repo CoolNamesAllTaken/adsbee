@@ -5,7 +5,7 @@ include(pico_sdk_import.cmake)
 
 project(ads_bee C CXX ASM)
 set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 # Force -00 optimization during debug to try fixing JLink issues.
 # SET(CMAKE_CXX_FLAGS_DEBUG "-O0")

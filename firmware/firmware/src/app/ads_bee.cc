@@ -13,6 +13,8 @@
 #include "pico/binary_info.h"
 #include "hal.hh"
 #include <iostream> // for AT command ingestion
+// #include <charconv> 
+#include <string.h> // for strcat
 
 
 const uint16_t kDecodeLEDBootupNumBlinks = 4;
@@ -64,7 +66,49 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
     mtl_hi_pwm_chan_ = pwm_gpio_to_channel(config_.mtl_hi_pwm_pin);
 
     // Initialize AT command parser.
-    InitATCommandParser();
+    uint16_t num_at_commands = 3;
+    ATCommandParser::ATCommandDef_t at_command_list[] = {
+        {
+            .command = "+CONFIG",
+            .min_args = 0,
+            .max_args = 1,
+            .help_string = "Set whether the module is in CONFIG or RUN mode. RUN=0, CONFIG=1.",
+            .callback = std::bind(
+                &ADSBee::ATConfigCallback,
+                this,
+                std::placeholders::_1, 
+                std::placeholders::_2,
+                std::placeholders::_3
+            )
+        },
+        {
+            .command = "+MTLSET",
+            .min_args = 0,
+            .max_args = 2,
+            .help_string = "Query or set both HI and LO Minimum Trigger Level (MTL) thresholds for RF power detector.\r\n\tQuery is AT+MTLSET?, Set is AT+MTLSet=<mtl_lo_mv>,<mtl_hi_mv>.",
+            .callback = std::bind(
+                &ADSBee::ATMTLSetCallback,
+                this,
+                std::placeholders::_1, 
+                std::placeholders::_2,
+                std::placeholders::_3
+            )
+        },
+        {
+            .command = "+MTLREAD",
+            .min_args = 0,
+            .max_args = 0,
+            .help_string = "Read ADC counts and mV values for high and low MTL thresholds. Call with no ops nor arguments, AT+MTLREAD.\r\n",
+            .callback = std::bind(
+                &ADSBee::ATMTLReadCallback,
+                this,
+                std::placeholders::_1, 
+                std::placeholders::_2,
+                std::placeholders::_3
+            )
+        }
+    };
+    parser_ = ATCommandParser(at_command_list, num_at_commands);
 }
 
 void ADSBee::Init() {
@@ -152,10 +196,11 @@ void ADSBee::Update() {
     // Check for new AT commands. Process up to one line per loop.
     int c = getchar_timeout_us(0);
     while (c != PICO_ERROR_TIMEOUT) {
-        at_command_buf_ += static_cast<char>(c);
+        char buf[2] = {static_cast<char>(c), '\0'};
+        strcat(at_command_buf_, buf);
         if (c == '\n') {
-            parser_.ParseMessage(at_command_buf_);
-            at_command_buf_ = "";
+            parser_.ParseMessage(std::string_view(at_command_buf_));
+            at_command_buf_[0] = '\0'; // clear command buffer
         }
         c = getchar_timeout_us(0);
     }
@@ -320,94 +365,43 @@ int ADSBee::GetMTLLoMilliVolts() {
  * AT Commands
 */
 
-/**
- * @brief Helper function that sets up the AT command parser's internal dictionary of supported commands.
-*/
-void ADSBee::InitATCommandParser() {
-    std::vector<ATCommandParser::ATCommandDef_t> at_command_list;
-    ATCommandParser::ATCommandDef_t at_config_def = {
-        .command = "+CONFIG",
-        .min_args = 0,
-        .max_args = 1,
-        .help_string = "Set whether the module is in CONFIG or RUN mode. RUN=0, CONFIG=1.",
-        .callback = std::bind(
-            &ADSBee::ATConfigCallback,
-            this,
-            std::placeholders::_1, 
-            std::placeholders::_2
-        )
-    };
-    at_command_list.push_back(at_config_def);
-    ATCommandParser::ATCommandDef_t at_mtl_set_def = {
-        .command = "+MTLSET",
-        .min_args = 0,
-        .max_args = 2,
-        .help_string = "Query or set both HI and LO Minimum Trigger Level (MTL) thresholds for RF power detector.\r\n\tQuery is AT+MTLSET?, Set is AT+MTLSet=<mtl_lo_mv>,<mtl_hi_mv>.",
-        .callback = std::bind(
-            &ADSBee::ATMTLSetCallback,
-            this,
-            std::placeholders::_1, 
-            std::placeholders::_2
-        )
-    };
-    at_command_list.push_back(at_mtl_set_def);
-    ATCommandParser::ATCommandDef_t at_mtl_read_def = {
-        .command = "+MTLREAD",
-        .min_args = 0,
-        .max_args = 0,
-        .help_string = "Read ADC counts and mV values for high and low MTL thresholds. Call with no ops nor arguments, AT+MTLREAD.\r\n",
-        .callback = std::bind(
-            &ADSBee::ATMTLReadCallback,
-            this,
-            std::placeholders::_1, 
-            std::placeholders::_2
-        )
-    };
-    at_command_list.push_back(at_mtl_read_def);
-
-    parser_.SetATCommandList(at_command_list);
-}
-
-bool ADSBee::ATConfigCallback(char op, std::vector<std::string> args) {
+bool ADSBee::ATConfigCallback(char op, const std::string_view args[], uint16_t num_args) {
     if (op == '?') {
         // AT+CONFIG mode query.
         printf("AT+CONFIG=%d", at_config_mode_);
     } else if (op == '=') {
         // AT+CONFIG set command.
-        if (args.size() != 1) {
+        if (num_args != 1) {
             printf("ERROR: Incorrect number of args.\r\n");
             return false;
         }
-        const char * mode_str = args[0].c_str();
-        char * mode_str_end;
-        ATConfigMode_t new_mode = static_cast<ATConfigMode_t>(strtoul(mode_str, &mode_str_end, 10)); // Convert first arg to base 10 integer.
-        if (mode_str_end != mode_str + args[0].length()) {
+        ATConfigMode_t new_mode;
+        if (!ATCommandParser::ArgToNum(args[0], (uint16_t&)new_mode)) {
             printf("ERROR: Failed to convert config value to integer.\r\n");
             return false;
         }
+        
         at_config_mode_ = new_mode;
         printf("OK\r\n");    
     }
     return true;
 }
 
-bool ADSBee::ATMTLSetCallback(char op, std::vector<std::string> args) {
+bool ADSBee::ATMTLSetCallback(char op, const std::string_view args[], uint16_t num_args) {
     if (op == '?') {
         // AT+MTLSET value query.
         printf("mtl_lo_mv_ = %d mtl_lo_pwm_count_ = %d\r\n", mtl_lo_mv_, mtl_lo_pwm_count_);
         printf("mtl_hi_mv_ = %d mtl_hi_pwm_count_ = %d\r\n", mtl_hi_mv_, mtl_hi_pwm_count_);
 
     } else if (op == '=') {
-        if (args.size() != 2) {
-            printf("ERROR: Incorrect number of args, got %d but expected 2.\r\n", args.size());
+        if (num_args != 2) {
+            printf("ERROR: Incorrect number of args, got %d but expected 2.\r\n", num_args);
             return false;
         } else {
             // Attempt setting LO MTL value, in milliVolts, if first argument is not blank.
             if (!args[0].empty()) {
-                const char * mtl_lo_mv_str = args[0].c_str();
-                char * mtl_lo_mv_str_end;
-                uint16_t new_mtl_lo_mv = strtoul(mtl_lo_mv_str, &mtl_lo_mv_str_end, 10);
-                if (mtl_lo_mv_str_end != mtl_lo_mv_str + args[0].length()) {
+                uint16_t new_mtl_lo_mv;
+                if (!ATCommandParser::ArgToNum(args[0], new_mtl_lo_mv)) {
                     printf("ERROR: Failed to convert mtl_lo_mv_ value to integer.\r\n");
                     return false;
                 } else {
@@ -418,10 +412,8 @@ bool ADSBee::ATMTLSetCallback(char op, std::vector<std::string> args) {
             // Attempt setting HI MTL value, in milliVolts, if second argument is not blank.
             if (!args[1].empty()) {
                 // Set HI MTL value, in milliVolts.
-                const char * mtl_hi_mv_str = args[1].c_str();
-                char * mtl_hi_mv_str_end;
-                uint16_t new_mtl_hi_mv = strtoul(mtl_hi_mv_str, &mtl_hi_mv_str_end, 10);
-                if (mtl_hi_mv_str_end != mtl_hi_mv_str + args[1].length()) {
+                uint16_t new_mtl_hi_mv;
+                if (!ATCommandParser::ArgToNum(args[1], new_mtl_hi_mv)) {
                     printf("ERROR: Failed to convert mtl_hi_mv_ value to integer.\r\n");
                     return false;
                 } else {
@@ -438,7 +430,7 @@ inline float adc_counts_to_mv(uint16_t adc_counts) {
     return 3300.0f * adc_counts / 0xFFF;
 }
 
-bool ADSBee::ATMTLReadCallback(char op, std::vector<std::string> args) {
+bool ADSBee::ATMTLReadCallback(char op, const std::string_view args[], uint16_t num_args) {
     printf("READ mtl_lo_adc_counts_ = %d mtl_hi_adc_counts_ = %d", mtl_lo_adc_counts_, mtl_hi_adc_counts_);
     printf(" mtl_lo_mv = %.2f mtl_hi_mv = %.2f\r\n", adc_counts_to_mv(mtl_lo_adc_counts_), adc_counts_to_mv(mtl_hi_adc_counts_));
     return true;
