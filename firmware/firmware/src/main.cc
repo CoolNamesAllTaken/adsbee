@@ -9,7 +9,12 @@
 // #include "capture.pio.h"
 #include "pico/binary_info.h"
 #include "hal.hh"
-#include "ads_bee.hh"
+#include "main.hh"
+#include "comms.hh"
+
+ADSBee::ADSBeeConfig ads_bee_config;
+// Override default config params here.
+ADSBee ads_bee = ADSBee(ads_bee_config);
 
 // #define LED_PIN 25
 
@@ -39,13 +44,12 @@ int main() {
 
     stdio_init_all();
 
-    ADSBee::ADSBeeConfig config;
-    // Override default config params here.
-    ADSBee ads_bee = ADSBee(config);
     ads_bee.Init();
+    InitCommsAT();
     
     while(true) {
         // Loop forever.
+        UpdateCommsAT();
         ads_bee.Update();
     }
 

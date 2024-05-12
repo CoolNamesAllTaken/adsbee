@@ -4,8 +4,8 @@ cmake_minimum_required(VERSION 3.13)
 set(CROSS_COMPILED 1)
 
 project(ads_bee_project C CXX ASM)
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_C_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 set(CMAKE_BUILD_TYPE Debug) # add debug symbols (use RelWithDebInfo instead to add optimization)
 
@@ -21,14 +21,19 @@ add_executable(ads_bee_test "")
 
 # Add subdirectories after creating the target so that CMake doesn't get upset.
 add_subdirectory(/ads_bee/firmware/src firmware/src) # maps firmware src folder to local firmware/src
-add_subdirectory(/ads_bee/firmware/inc firmware/inc) # maps firmware inc folder to local firmware/inc
 add_subdirectory(src)
-add_subdirectory(inc)
 
 # In case there are files directly in src and inc
 target_include_directories(ads_bee_test PRIVATE 
     src
-    inc
+    /ads_bee/modules/googletest
+    /ads_bee/modules/cppAT/src
+)
+
+target_sources(ads_bee_test
+PRIVATE
+    /ads_bee/modules/cppAT/src/cpp_at.cc
+    /ads_bee/modules/cppAT/test/test_cpp_at.cc
 )
 
 # Test: Pull in google test library

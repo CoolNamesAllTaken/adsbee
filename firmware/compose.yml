@@ -1,4 +1,3 @@
-version: "3.2"
 services:
   pico-docker:
     image: coolnamesalltaken/pico-docker:latest

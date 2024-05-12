@@ -1,0 +1,3 @@
+[submodule "firmware/modules/cppAT"]
+	path = firmware/modules/cppAT
+	url = git@github.com:CoolNamesAllTaken/cppAT.git

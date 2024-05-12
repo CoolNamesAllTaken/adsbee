@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.13)
 include(pico_sdk_import.cmake)
 
 project(ads_bee C CXX ASM)
-set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 20)
 
 # Force -00 optimization during debug to try fixing JLink issues.
@@ -29,12 +29,16 @@ add_compile_options(
 add_executable(${PROJECT_NAME} "")
 
 add_subdirectory(src)
-add_subdirectory(inc)
 
 # In case there are files directly in src and inc
 target_include_directories(${PROJECT_NAME} PRIVATE 
     src
-    inc
+    /ads_bee/modules/cppAT/src
+)
+
+target_sources(${PROJECT_NAME} PRIVATE
+    /ads_bee/modules/cppAT/src/cpp_at.cc
+    # /ads_bee/modules/cppAT/src/cpp_at.hh
 )
 
 # Create C header file with the name <pio program>.pio.h

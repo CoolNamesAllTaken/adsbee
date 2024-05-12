@@ -7,5 +7,4 @@ PRIVATE
     test_ads_b_packet.cc
     test_aircraft_dictionary.cc
     # test_ads_bee.cc
-    test_at_command_parser.cc
 )

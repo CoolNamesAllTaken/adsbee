@@ -4,7 +4,7 @@
 #include "hardware/pio.h"
 #include "stdint.h"
 #include "ads_b_packet.hh"
-#include "at_command_parser.hh"
+#include "cpp_at.hh"
 
 class ADSBee {
 public:
@@ -40,23 +40,12 @@ public:
     void Init();
     void Update();
     void OnDecodeComplete();
-    bool SetMTLHiMilliVolts(int mtl_hi_mv);
-    bool SetMTLLoMilliVolts(int mtl_lo_mv);
+    bool SetMTLHiMilliVolts(int mtl_hi_mv_);
+    bool SetMTLLoMilliVolts(int mtl_lo_mv_);
     int GetMTLHiMilliVolts();
     int GetMTLLoMilliVolts();
     int ReadMTLHiMilliVolts();
     int ReadMTLLoMilliVolts();
-
-    bool ATConfigCallback(char op, const std::string_view args[], uint16_t num_args);
-    bool ATMTLSetCallback(char op, const std::string_view args[], uint16_t num_args);
-    bool ATMTLReadCallback(char op, const std::string_view args[], uint16_t num_args);
-
-    typedef enum {
-        RUN = 0,
-        CONFIG = 1
-    } ATConfigMode_t;
-
-    static const uint16_t kATCommandBufMaxLen = 1000;
 
     const uint16_t kMTLMaxPWMCount = 5000; // Clock is 125MHz, shoot for 25kHz PWM.
     const int kVDDMV = 3300; // [mV] Voltage of positive supply rail.
@@ -71,9 +60,10 @@ public:
     // const float kMTLBiasPWMCompCoeffX = 2.496361699;
     // const float kMTLBiasPWMCompCoeffConst = -16.0676799;
 
+
 private:
     ADSBeeConfig config_;
-    ATCommandParser parser_;
+    CppAT parser_;
 
     uint32_t preamble_detector_sm_ = 0;
     uint32_t preamble_detector_offset_ = 0;
@@ -87,9 +77,10 @@ private:
     uint16_t mtl_hi_pwm_slice_ = 0;
     uint16_t mtl_hi_pwm_chan_ = 0;
     uint16_t mtl_lo_pwm_chan_ = 0;
+    
     uint16_t mtl_hi_mv_ = kMTLHiDefaultMV;
-    uint16_t mtl_hi_pwm_count_ = 0; // out of kMTLMaxPWMCount
     uint16_t mtl_lo_mv_ = kMTLLoDefaultMV;
+    uint16_t mtl_hi_pwm_count_ = 0; // out of kMTLMaxPWMCount
     uint16_t mtl_lo_pwm_count_ = 0; // out of kMTLMaxPWMCount
 
     uint16_t mtl_lo_adc_counts_ = 0;
@@ -98,11 +89,8 @@ private:
 
     // Due to a quirk, rx_buffer_ is used to store every word except for the first one.
     uint32_t rx_buffer_[ADSBPacket::kMaxPacketLenWords32-1];
-    
-    ATConfigMode_t at_config_mode_ = ATConfigMode_t::RUN;
-    char at_command_buf_[kATCommandBufMaxLen];
 
-    void InitATCommandParser();
+    void InitCppAT();
 };
 
 #endif /* _ADS_BEE_HH_ */
