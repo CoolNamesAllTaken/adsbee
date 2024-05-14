@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "pico-sdk/src/common/boot_picoboot",
+		"source" : "/usr/local/pico-sdk/src/common/boot_picoboot"
+	}
+}

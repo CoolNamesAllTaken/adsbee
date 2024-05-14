@@ -8,10 +8,11 @@
             "name": "Remote Debug",
             "type": "cortex-debug",
             "cwd": "${workspaceRoot}",
+            // "executable": "/ads_bee/firmware/build/ads_bee.elf",
             "executable": "${command:cmake.launchTargetPath}",
             "request": "attach",
             "servertype": "external",
-            "gdbPath": "arm-none-eabi-gdb",
+            // "gdbPath": "arm-none-eabi-gdb",
             "gdbTarget": "host.docker.internal:2331",
             "showDevDebugOutput": "raw",
             "svdFile": "/usr/local/pico-sdk/src/rp2040/hardware_regs/rp2040.svd",
@@ -20,13 +21,19 @@
                 "load",
                 "monitor reset"
             ],
-            // "runToMain": true,
-            // Workaround for starting at main on restart.
-            // "postRestartCommands": [
-            //     "break main",
-            //     "continue"
+            "armToolchainPath": "/usr/bin",
+            // "overrideLaunchCommands": [
+            //     "monitor halt",
+            //     "monitor reset",
+            //     "-target-download",
+            //     "monitor reset"
             // ],
-            // More stuff
+            // "overrideResetCommands": [
+            //     "monitor reset",
+            // ],
+            // "overrideRestartCommands": [
+            //     "monitor reset",
+            // ],
             "device": "RP2040",
         }
     ]

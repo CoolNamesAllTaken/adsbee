@@ -1,4 +1,5 @@
 #include <stdio.h>
+
 #include "pico/stdlib.h"
 // #include "hardware/gpio.h"
 // #include "hardware/pio.h"
@@ -7,14 +8,15 @@
 // #include "hardware/irq.h"
 // #include "blink.pio.h"
 // #include "capture.pio.h"
-#include "pico/binary_info.h"
+#include "comms.hh"
 #include "hal.hh"
 #include "main.hh"
-#include "comms.hh"
+#include "pico/binary_info.h"
 
 ADSBee::ADSBeeConfig ads_bee_config;
 // Override default config params here.
 ADSBee ads_bee = ADSBee(ads_bee_config);
+CommsManager comms_manager = CommsManager({.ads_bee = ads_bee});
 
 // #define LED_PIN 25
 
@@ -45,14 +47,13 @@ int main() {
     stdio_init_all();
 
     ads_bee.Init();
-    InitCommsAT();
-    
-    while(true) {
+    comms_manager.Init();
+
+    while (true) {
         // Loop forever.
-        UpdateCommsAT();
+        comms_manager.Update();
         ads_bee.Update();
     }
-
 
     // /** PREAMBLE DETECTOR PIO **/
     // static const uint pulses_pin = 19; // Reading ADS-B on GPIO22. Will look for DECODE signal on GPIO22-1 = GPIO21.
@@ -68,7 +69,6 @@ int main() {
     //     preamble_detector_pio, preamble_detector_sm, preamble_detector_offset, pulses_pin,
     //     decode_out_pin, preamble_detector_div
     // );
-    
 
     // // enable the DECODE interrupt on PIO0_IRQ_0
     // uint preamble_detector_decode_irq = PIO0_IRQ_0;

@@ -1,14 +1,9 @@
-BasedOnStyle: Google
-IndentWidth: 4
-TabWidth: 4
-UseTab: Never
-AlignConsecutiveMacros: AcrossEmptyLinesAndComments
-AlignConsecutiveBitFields: AcrossEmptyLinesAndComments
-ColumnLimit: 120
-<!-- AllowShortFunctionsOnASingleLine: Empty
-UseTab: (VS Code current setting)
-IndentWidth: (VS Code current setting)
-BreakBeforeBraces: Allman
-AllowShortIfStatementsOnASingleLine: false
-IndentCaseLabels: false
-ColumnLimit: 120 -->
+{
+    BasedOnStyle: Google,
+    IndentWidth: 4,
+    TabWidth: 4,
+    UseTab: Never,
+    AlignConsecutiveMacros: AcrossEmptyLinesAndComments,
+    AlignConsecutiveBitFields: AcrossEmptyLinesAndComments,
+    ColumnLimit: 120
+}

@@ -1,31 +1,83 @@
 #include "ads_bee.hh"
 
-#include <stdio.h> // for printing
-#include "pico/stdlib.h"
+#include <stdio.h>  // for printing
+
+#include "hardware/adc.h"
+#include "hardware/clocks.h"
 #include "hardware/gpio.h"
 #include "hardware/pio.h"
-#include "hardware/clocks.h"
 #include "hardware/pwm.h"
-#include "hardware/adc.h"
+#include "pico/stdlib.h"
 // #include "hardware/dma.h"
-#include "hardware/irq.h"
 #include "capture.pio.h"
-#include "pico/binary_info.h"
 #include "hal.hh"
+#include "hardware/irq.h"
+#include "pico/binary_info.h"
 
-// #include <charconv> 
-#include <string.h> // for strcat
-
+// #include <charconv>
+#include <string.h>  // for strcat
 
 const uint16_t kDecodeLEDBootupNumBlinks = 4;
 const uint16_t kDecodeLEDBootupBlinkPeriodMs = 200;
 const uint32_t kDecodeLEDOnMs = 100;
-const float kPreambleDetectorFreq = 16e6; // Running at 16MHz (8 clock cycles per half bit).
+const float kPreambleDetectorFreq = 16e6;  // Running at 16MHz (8 clock cycles per half bit).
 
-ADSBee * isr_access = NULL;
+const uint8_t kRxGainDigipotI2CAddr = 0b0101111;  // MCP4017-104e
+const uint32_t kRxgainDigipotOhmsPerCount = 100e3 / 127;
+const uint8_t kEEPROMI2CAddr = 0b1010001;  // M24C02, TSSOP-8, E3=0 E2=0 E1=1
 
-void on_decode_complete() {
-    isr_access->OnDecodeComplete();
+ADSBee *isr_access = NULL;
+
+void on_decode_complete() { isr_access->OnDecodeComplete(); }
+
+/** I2C helper function that writes 1 byte to the specified register.
+ * @param[in] i2c Pico SDK i2c_inst_t to use.
+ * @param[in] addr I2C address (device) to write to.
+ * @param[in] reg Register address (on the device) to write to.
+ * @param[in] buf Byte buffer to write to the given address.
+ * @param[in] nbytes Number of bytes to write to the given address on the device.
+ */
+inline int i2c_reg_write(i2c_inst_t *i2c, const uint addr, const uint8_t reg, uint8_t *buf, const uint8_t nbytes) {
+    int num_bytes_read = 0;
+    uint8_t msg[nbytes + 1];
+
+    // Check to make sure caller is sending 1 or more bytes
+    if (nbytes < 1) {
+        return 0;
+    }
+
+    // Append register address to front of data packet
+    msg[0] = reg;
+    for (int i = 0; i < nbytes; i++) {
+        msg[i + 1] = buf[i];
+    }
+
+    // Write data to register(s) over I2C
+    i2c_write_blocking(i2c, addr, msg, (nbytes + 1), false);
+
+    return num_bytes_read;
+}
+
+/** Read byte(s) from the specified register. If nbytes > 1, read from consecutive registers.
+ * @param[in] i2c Pico SDK i2c_inst_t to use.
+ * @param[in] addr I2C address (device) to read from.
+ * @param[in] reg Register address (on the device) to read from.
+ * @param[in] buf Byte buffer to read into from the given address.
+ * @param[in] nbytes Number of bytes to read from the device.
+ */
+inline int i2c_reg_read(i2c_inst_t *i2c, const uint addr, const uint8_t reg, uint8_t *buf, const uint8_t nbytes) {
+    int num_bytes_read = 0;
+
+    // Check to make sure caller is asking for 1 or more bytes
+    if (nbytes < 1) {
+        return 0;
+    }
+
+    // Read data from register(s) over I2C
+    i2c_write_blocking(i2c, addr, &reg, 1, true);
+    num_bytes_read = i2c_read_blocking(i2c, addr, buf, nbytes, false);
+
+    return num_bytes_read;
 }
 
 ADSBee::ADSBee(ADSBeeConfig config_in) {
@@ -47,17 +99,17 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
     mtl_hi_pwm_chan_ = pwm_gpio_to_channel(config_.mtl_hi_pwm_pin);
 }
 
-void ADSBee::Init() {
+bool ADSBee::Init() {
     // Initialize the MTL bias PWM output.
     gpio_set_function(config_.mtl_lo_pwm_pin, GPIO_FUNC_PWM);
     gpio_set_function(config_.mtl_hi_pwm_pin, GPIO_FUNC_PWM);
     pwm_set_wrap(mtl_lo_pwm_slice_, kMTLMaxPWMCount);
-    pwm_set_wrap(mtl_hi_pwm_slice_, kMTLMaxPWMCount); // redundant since it's the same slice
+    pwm_set_wrap(mtl_hi_pwm_slice_, kMTLMaxPWMCount);  // redundant since it's the same slice
 
     SetMTLLoMilliVolts(kMTLLoDefaultMV);
     SetMTLHiMilliVolts(kMTLHiDefaultMV);
     pwm_set_enabled(mtl_lo_pwm_slice_, true);
-    pwm_set_enabled(mtl_hi_pwm_slice_, true); // redundant since it's the same slice
+    pwm_set_enabled(mtl_hi_pwm_slice_, true);  // redundant since it's the same slice
 
     // Initialize the ML bias ADC input.
     adc_init();
@@ -68,28 +120,40 @@ void ADSBee::Init() {
     // Initialize RSSI peak detector clear pin.
     gpio_init(config_.rssi_clear_pin);
     gpio_set_dir(config_.rssi_clear_pin, GPIO_OUT);
-    gpio_put(config_.rssi_clear_pin, 1); // RSSI clear is active LO.
+    gpio_put(config_.rssi_clear_pin, 1);  // RSSI clear is active LO.
+
+    // Initialize I2C for talking to the EEPROM and rx gain digipot.
+    i2c_init(config_.onboard_i2c, config_.onboard_i2c_clk_freq_hz);
+    gpio_set_function(config_.onboard_i2c_sda_pin, GPIO_FUNC_I2C);
+    gpio_set_function(config_.onboard_i2c_scl_pin, GPIO_FUNC_I2C);
+    uint8_t wiper_value_counts;
+    if (i2c_read_blocking(config_.onboard_i2c, kRxGainDigipotI2CAddr, &wiper_value_counts, 1, false) != 1) {
+        printf("ADSBee::Init: Failed to read wiper position from Rx Gain Digipot at I2C address 0x%x.\r\n",
+               kRxGainDigipotI2CAddr);
+        return false;
+    }
+    uint8_t eeprom_random_address_data;
+    if (i2c_read_blocking(config_.onboard_i2c, kEEPROMI2CAddr, &eeprom_random_address_data, 1, false) != 1) {
+        printf("ADSBee::Init: Failed to read current address from EEPROM at I2C address 0x%x.\r\n", kEEPROMI2CAddr);
+        return false;
+    }
 
     // Calculate the PIO clock divider.
     float preamble_detector_div = (float)clock_get_hz(clk_sys) / kPreambleDetectorFreq;
 
     // Initialize the program using the .pio file helper function
-    preamble_detector_program_init(
-        config_.preamble_detector_pio, preamble_detector_sm_, preamble_detector_offset_, config_.pulses_pin,
-        config_.decode_out_pin, preamble_detector_div
-    );
-    
+    preamble_detector_program_init(config_.preamble_detector_pio, preamble_detector_sm_, preamble_detector_offset_,
+                                   config_.pulses_pin, config_.decode_out_pin, preamble_detector_div);
+
     // enable the DECODE interrupt on PIO0_IRQ_0
     uint preamble_detector_decode_irq = PIO0_IRQ_0;
-    pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt0, true); // state machine 0 IRQ 0
+    pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt0, true);  // state machine 0 IRQ 0
 
     /** MESSAGE DECODER PIO **/
-    float message_decoder_freq = 16e6; // Run at 32 MHz to decode bits at 1Mbps.
+    float message_decoder_freq = 16e6;  // Run at 32 MHz to decode bits at 1Mbps.
     float message_decoder_div = (float)clock_get_hz(clk_sys) / message_decoder_freq;
-    message_decoder_program_init(
-        config_.message_decoder_pio, message_decoder_sm_, message_decoder_offset_,
-        config_.pulses_pin, config_.recovered_clk_pin, message_decoder_div
-    );
+    message_decoder_program_init(config_.message_decoder_pio, message_decoder_sm_, message_decoder_offset_,
+                                 config_.pulses_pin, config_.recovered_clk_pin, message_decoder_div);
 
     printf("ADSBee::Init: PIOs initialized.\r\n");
 
@@ -98,9 +162,9 @@ void ADSBee::Init() {
 
     // FIXME: this doesn't work yet. Can an std::function be used as a (void *)?
     // irq_set_exclusive_handler(
-    //     preamble_detector_decode_irq, 
+    //     preamble_detector_decode_irq,
     //     std::bind(
-    //         &ADSBee::OnDecodeComplete, 
+    //         &ADSBee::OnDecodeComplete,
     //         this
     //     )
     // );
@@ -114,14 +178,14 @@ void ADSBee::Init() {
     // Blink the LED a few times to indicate a successful startup.
     for (uint16_t i = 0; i < kDecodeLEDBootupNumBlinks; i++) {
         gpio_put(config_.status_led_pin, 1);
-        sleep_ms(kDecodeLEDBootupBlinkPeriodMs/2);
+        sleep_ms(kDecodeLEDBootupBlinkPeriodMs / 2);
         gpio_put(config_.status_led_pin, 0);
-        sleep_ms(kDecodeLEDBootupBlinkPeriodMs/2);
+        sleep_ms(kDecodeLEDBootupBlinkPeriodMs / 2);
     }
-
+    return true;
 }
 
-void ADSBee::Update() {
+bool ADSBee::Update() {
     // Turn off the decode LED if it's been on for long enough.
     if (get_time_since_boot_ms() > led_off_timestamp_ms_) {
         gpio_put(config_.status_led_pin, 0);
@@ -130,18 +194,16 @@ void ADSBee::Update() {
     // Update PWM output duty cycle.
     pwm_set_chan_level(mtl_lo_pwm_slice_, mtl_lo_pwm_chan_, mtl_lo_pwm_count_);
     pwm_set_chan_level(mtl_hi_pwm_slice_, mtl_hi_pwm_chan_, mtl_hi_pwm_count_);
+    return true;
 }
 
 void ADSBee::OnDecodeComplete() {
-    if (at_config_mode_ != ATConfigMode_t::RUN) {
-        pio_interrupt_clear(config_.preamble_detector_pio, 0);
-        return; // don't ingest packets when in configuration mode.
-    }
+    pio_interrupt_clear(config_.preamble_detector_pio, 0);
 
     // Read the RSSI level of the last packet.
     adc_select_input(config_.rssi_hold_adc_input);
     rssi_adc_counts_ = adc_read();
-    gpio_put(config_.rssi_clear_pin, 0); // Clear RSSI peak detector.
+    gpio_put(config_.rssi_clear_pin, 0);  // Clear RSSI peak detector.
     // Put RSSI clear HI later, to give peak detector some time to drain.
 
     uint16_t word_index = 0;
@@ -149,7 +211,7 @@ void ADSBee::OnDecodeComplete() {
         uint32_t word = pio_sm_get(config_.message_decoder_pio, message_decoder_sm_);
         printf("\t%d: %08x\r\n", word_index, word);
 
-        switch(word_index) {
+        switch (word_index) {
             case 0: {
                 // Flush the previous word into a packet before beginning to store the new one.
 
@@ -162,22 +224,14 @@ void ADSBee::OnDecodeComplete() {
                 // Trim extra ingested bit off of last word, then left-align.
                 packet_buffer[3] = (static_cast<uint16_t>(word >> 1)) << 16;
 
-                printf("New message: 0x%08x%08x%08x%04x RSSI=%d\r\n",
-                    packet_buffer[0],
-                    packet_buffer[1],
-                    packet_buffer[2],
-                    packet_buffer[3],
-                    rssi_adc_counts_);
+                printf("New message: 0x%08x%08x%08x%04x RSSI=%d\r\n", packet_buffer[0], packet_buffer[1],
+                       packet_buffer[2], packet_buffer[3], rssi_adc_counts_);
                 ADSBPacket packet = ADSBPacket(packet_buffer, ADSBPacket::kMaxPacketLenWords32);
                 if (packet.IsValid()) {
                     gpio_put(config_.status_led_pin, 1);
                     led_off_timestamp_ms_ = get_time_since_boot_ms() + kDecodeLEDOnMs;
-                    printf("df=%d ca=%d tc=%d icao_address=0x%06x\r\n", 
-                        packet.GetDownlinkFormat(),
-                        packet.GetCapability(),
-                        packet.GetTypeCode(),
-                        packet.GetICAOAddress()
-                    );
+                    printf("df=%d ca=%d tc=%d icao_address=0x%06x\r\n", packet.GetDownlinkFormat(),
+                           packet.GetCapability(), packet.GetTypeCode(), packet.GetICAOAddress());
                 }
                 // printf(packet.IsValid() ? "\tVALID\r\n": "\tINVALID\r\n");
                 break;
@@ -185,43 +239,29 @@ void ADSBee::OnDecodeComplete() {
             case 1:
             case 2:
             case 3:
-                rx_buffer_[word_index-1] = word;
+                rx_buffer_[word_index - 1] = word;
                 break;
-            // case 3:
-            //     // Last word ingests an extra bit by accident, pinch it off here.
-            //     rx_buffer_[word_index-1] = word>>1;
+                // case 3:
+                //     // Last word ingests an extra bit by accident, pinch it off here.
+                //     rx_buffer_[word_index-1] = word>>1;
 
                 break;
             default:
                 // Received too many bits for this to be a valid packet. Throw away extra bits!
                 printf("tossing");
-                pio_sm_get(config_.message_decoder_pio, message_decoder_sm_); // throw away extra bits
+                pio_sm_get(config_.message_decoder_pio, message_decoder_sm_);  // throw away extra bits
         }
         word_index++;
     }
 
-    gpio_put(config_.rssi_clear_pin, 1); // restore RSSI peak detector to working order.
+    gpio_put(config_.rssi_clear_pin, 1);  // restore RSSI peak detector to working order.
     pio_interrupt_clear(config_.preamble_detector_pio, 0);
 }
 
-/**
- * @brief Set the high Minimum Trigger Level (MTL) at the AD8314 output in milliVolts.
- * @param[in] mtl_hi_mv_ Voltage level for a "high" trigger on the V_DN AD8314 output. The AD8314 has a nominal output
- * voltage of 2.25V on V_DN, with a logarithmic slope of around -42.6mV/dB and a minimum output voltage of 0.05V. Thus, power
- * levels received at the input of the AD8314 correspond to the following voltages.
- *      2250mV = -49dBm
- *      50mV = -2.6dBm
- * Note that there is a +30dB LNA gain stage in front of the AD8314, so for the overall receiver, the MTL values are
- * more like:
- *      2250mV = -79dBm
- *      50mV = -32.6dBm
- * @retval True if succeeded, False if MTL value was out of range.
-*/
 bool ADSBee::SetMTLHiMilliVolts(int mtl_hi_mv_) {
     if (mtl_hi_mv_ > kMTLMaxMV || mtl_hi_mv_ < kMTLMinMV) {
-        printf("ADSBee::SetMTLHiMilliVolts: Unable to set mtl_hi_mv_ to %d, outside of permissible range %d-%d.\r\n", 
-            mtl_hi_mv_, kMTLMinMV, kMTLMaxMV
-        );
+        printf("ADSBee::SetMTLHiMilliVolts: Unable to set mtl_hi_mv_ to %d, outside of permissible range %d-%d.\r\n",
+               mtl_hi_mv_, kMTLMinMV, kMTLMaxMV);
         return false;
     }
     mtl_hi_mv_ = mtl_hi_mv_;
@@ -230,24 +270,10 @@ bool ADSBee::SetMTLHiMilliVolts(int mtl_hi_mv_) {
     return true;
 }
 
-/**
- * @brief Set the low Minimum Trigger Level (MTL) at the AD8314 output in milliVolts.
- * @param[in] mtl_hi_mv_ Voltage level for a "low" trigger on the V_DN AD8314 output. The AD8314 has a nominal output
- * voltage of 2.25V on V_DN, with a logarithmic slope of around -42.6mV/dB and a minimum output voltage of 0.05V. Thus, power
- * levels received at the input of the AD8314 correspond to the following voltages.
- *      2250mV = -49dBm
- *      50mV = -2.6dBm
- * Note that there is a +30dB LNA gain stage in front of the AD8314, so for the overall receiver, the MTL values are
- * more like:
- *      2250mV = -79dBm
- *      50mV = -32.6dBm
- * @retval True if succeeded, False if MTL value was out of range.
-*/
 bool ADSBee::SetMTLLoMilliVolts(int mtl_lo_mv_) {
     if (mtl_lo_mv_ > kMTLMaxMV || mtl_lo_mv_ < kMTLMinMV) {
-        printf("ADSBee::SetMTLLoMilliVolts: Unable to set mtl_lo_mv_ to %d, outside of permissible range %d-%d.\r\n", 
-            mtl_lo_mv_, kMTLMinMV, kMTLMaxMV
-        );
+        printf("ADSBee::SetMTLLoMilliVolts: Unable to set mtl_lo_mv_ to %d, outside of permissible range %d-%d.\r\n",
+               mtl_lo_mv_, kMTLMinMV, kMTLMaxMV);
         return false;
     }
     mtl_lo_mv_ = mtl_lo_mv_;
@@ -256,28 +282,10 @@ bool ADSBee::SetMTLLoMilliVolts(int mtl_lo_mv_) {
     return true;
 }
 
-/**
- * @brief Return the value of the high Minimum Trigger Level threshold in milliVolts.
- * @retval MTL in milliVolts.
-*/
-int ADSBee::GetMTLHiMilliVolts() {
-    return mtl_hi_mv_;
-}
-
-/**
- * @brief Return the value of the low Minimum Trigger Level threshold in milliVolts.
- * @retval MTL in milliVolts.
-*/
-int ADSBee::GetMTLLoMilliVolts() {
-    return mtl_lo_mv_;
-}
-
-inline int adc_counts_to_mv(uint16_t adc_counts) {
-    return 3300 * adc_counts / 0xFFF;
-}
+inline int adc_counts_to_mv(uint16_t adc_counts) { return 3300 * adc_counts / 0xFFF; }
 
 int ADSBee::ReadMTLHiMilliVolts() {
-   // Read back the high level MTL bias output voltage.
+    // Read back the high level MTL bias output voltage.
     adc_select_input(config_.mtl_hi_adc_input);
     mtl_hi_adc_counts_ = adc_read();
     return adc_counts_to_mv(mtl_hi_adc_counts_);
@@ -290,18 +298,14 @@ int ADSBee::ReadMTLLoMilliVolts() {
     return adc_counts_to_mv(mtl_lo_adc_counts_);
 }
 
-/**
-//  * @brief Set the Minimum Trigger Level (MTL) at the AD8314 output in dBm.
-//  * @param[in] mtl_threshold_dBm Power trigger level for a "high" trigger on the AD8314 output, in dBm.
-//  * @retval True if succeeded, False if MTL value was out of range.
-// */
-// bool ADSBee::SetMTLdBm(int mtl_threshold_dBm) {
+bool ADSBee::SetRxGain(int rx_gain) {
+    rx_gain_digipot_resistance_ohms_ = (rx_gain - 1) * 1e3;  // Non-inverting amp with R1 = 1kOhms.
+    uint8_t wiper_value_counts = (rx_gain_digipot_resistance_ohms_ / kRxgainDigipotOhmsPerCount);
+    return i2c_write_blocking(config_.onboard_i2c, kRxGainDigipotI2CAddr, &wiper_value_counts, 1, false) == 1;
+}
 
-//     // BGA2818 is +30dBm
-//     return true;
-// }
-
-/**
- * AT Commands
-*/
-
+int ADSBee::ReadRxGain() {
+    uint8_t wiper_value_counts;
+    i2c_read_blocking(config_.onboard_i2c, kRxGainDigipotI2CAddr, &wiper_value_counts, 1, false);
+    return wiper_value_counts * kRxgainDigipotOhmsPerCount / 1e3 + 1;  // Non-inverting amp with R1 = 1kOhms.
+}

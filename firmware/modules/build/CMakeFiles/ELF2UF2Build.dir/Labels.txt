@@ -1,0 +1,13 @@
+# Target labels
+ ELF2UF2Build
+# Source files and their labels
+/ads_bee/modules/build/CMakeFiles/ELF2UF2Build
+/ads_bee/modules/build/CMakeFiles/ELF2UF2Build.rule
+/ads_bee/modules/build/CMakeFiles/ELF2UF2Build-complete.rule
+/ads_bee/modules/build/elf2uf2/src/ELF2UF2Build-stamp/ELF2UF2Build-build.rule
+/ads_bee/modules/build/elf2uf2/src/ELF2UF2Build-stamp/ELF2UF2Build-configure.rule
+/ads_bee/modules/build/elf2uf2/src/ELF2UF2Build-stamp/ELF2UF2Build-download.rule
+/ads_bee/modules/build/elf2uf2/src/ELF2UF2Build-stamp/ELF2UF2Build-install.rule
+/ads_bee/modules/build/elf2uf2/src/ELF2UF2Build-stamp/ELF2UF2Build-mkdir.rule
+/ads_bee/modules/build/elf2uf2/src/ELF2UF2Build-stamp/ELF2UF2Build-patch.rule
+/ads_bee/modules/build/elf2uf2/src/ELF2UF2Build-stamp/ELF2UF2Build-update.rule

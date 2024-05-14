@@ -56,6 +56,8 @@ target_link_libraries(${PROJECT_NAME}
     hardware_pio
     hardware_pwm
     hardware_adc
+    hardware_i2c
+    hardware_spi
 )
 
 # Firmware: Create map/bin/hex file etc
