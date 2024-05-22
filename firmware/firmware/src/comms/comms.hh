@@ -23,6 +23,8 @@ class CommsManager {
     CPP_AT_CALLBACK(ATMTLReadCallback);
     CPP_AT_CALLBACK(ATRxGainCallback);
 
+    int debug_printf(const char *format, ...);
+
    private:
     CommsManagerConfig config_;
     CppAT at_parser_;

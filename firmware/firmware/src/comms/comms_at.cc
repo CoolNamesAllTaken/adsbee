@@ -31,7 +31,7 @@ int CppAT::cpp_at_printf(const char *format, ...) {
 CPP_AT_CALLBACK(CommsManager::ATConfigCallback) {
     if (op == '?') {
         // AT+CONFIG mode query.
-        CPP_AT_PRINTF("=%d", at_config_mode_);
+        CPP_AT_PRINTF("=%d", comms_manager.at_config_mode_);
         CPP_AT_SILENT_SUCCESS();
     } else if (op == '=') {
         // AT+CONFIG set command.
@@ -44,7 +44,7 @@ CPP_AT_CALLBACK(CommsManager::ATConfigCallback) {
             CPP_AT_ERROR("%d is not a valid config mode.", (uint16_t)new_mode);
         }
 
-        at_config_mode_ = new_mode;
+        comms_manager.at_config_mode_ = new_mode;
         CPP_AT_SUCCESS()
     }
     CPP_AT_ERROR();

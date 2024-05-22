@@ -38,6 +38,9 @@ class ADSBee {
         uint16_t onboard_i2c_scl_pin = 3;
         uint32_t onboard_i2c_clk_freq_hz = 400e3;  // 400kHz
 
+        uint16_t esp32_enable_pin = 14;
+        uint16_t esp32_gpio0_boot_pin = 11;
+
         uint16_t uart_tx_pin = 4;
         uint16_t uart_rx_pin = 5;
     };
@@ -118,10 +121,10 @@ class ADSBee {
 
     const uint16_t kMTLMaxPWMCount = 5000;  // Clock is 125MHz, shoot for 25kHz PWM.
     const int kVDDMV = 3300;                // [mV] Voltage of positive supply rail.
-    const int kMTLMaxMV = 2250;             // [mV]
+    const int kMTLMaxMV = 3300;             // [mV]
     const int kMTLMinMV = 0;                // [mV]
-    const int kMTLHiDefaultMV = 800;        // [mV]
-    const int kMTLLoDefaultMV = 700;        // [mV]
+    const int kMTLHiDefaultMV = 2000;       // [mV]
+    const int kMTLLoDefaultMV = 3000;       // [mV]
 
     // Coefficients for calibrated polynomial equation to go from target MTL bias voltage to MTL bias PWM count.
     // const float kMTLBiasPWMCompCoeffX3 = 4.87299E-08;
@@ -155,7 +158,7 @@ class ADSBee {
     uint16_t mtl_hi_adc_counts_ = 0;
     uint16_t rssi_adc_counts_ = 0;
 
-    uint32_t rx_gain_digipot_resistance_ohms_ = 1;
+    uint32_t rx_gain_digipot_resistance_ohms_ = 100e3;
 
     // Due to a quirk, rx_buffer_ is used to store every word except for the first one.
     uint32_t rx_buffer_[ADSBPacket::kMaxPacketLenWords32 - 1];
