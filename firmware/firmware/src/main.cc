@@ -16,7 +16,7 @@
 ADSBee::ADSBeeConfig ads_bee_config;
 // Override default config params here.
 ADSBee ads_bee = ADSBee(ads_bee_config);
-CommsManager comms_manager = CommsManager({.ads_bee = ads_bee});
+CommsManager comms_manager = CommsManager({});
 
 int main() {
     bi_decl(bi_program_description("ADS-Bee ADSB Receiver"));

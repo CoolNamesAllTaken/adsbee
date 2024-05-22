@@ -156,8 +156,7 @@ static const CppAT::ATCommandDef_t at_command_list[] = {
 
 CommsManager::CommsManager(CommsManagerConfig config_in)
     : config_(config_in),
-      at_parser_(CppAT(at_command_list, sizeof(at_command_list) / sizeof(at_command_list[0]), true)),
-      ads_bee_(config_in.ads_bee) {}
+      at_parser_(CppAT(at_command_list, sizeof(at_command_list) / sizeof(at_command_list[0]), true)) {}
 
 bool CommsManager::InitAT() {
     // Initialize AT command parser with statically allocated list of AT commands.

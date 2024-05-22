@@ -78,7 +78,7 @@ ADSBPacket::ADSBPacket(char* rx_string) {
  */
 void ADSBPacket::ConstructADSBPacket() {
     if (packet_buffer_len_bits_ != kExtendedSquitterPacketNumBits) {
-        comms_manager.debug_printf(
+        DEBUG_PRINTF(
             "ADSBPacket::ADSBPacket: Bit number mismatch while decoding packet. Expected %d but got %d!\r\n",
             kExtendedSquitterPacketNumBits, packet_buffer_len_bits_);
         return;  // leave is_valid_ as false
@@ -97,7 +97,7 @@ void ADSBPacket::ConstructADSBPacket() {
         is_valid_ = true;  // mark packet as valid if CRC matches the parity bits
     } else {
         // is_valid_ is set to false by default
-        comms_manager.debug_printf("ADSBPacket::ADSBPacket: Invalid checksum, expected %06x but calculated %06x.\r\n",
+        DEBUG_PRINTF("ADSBPacket::ADSBPacket: Invalid checksum, expected %06x but calculated %06x.\r\n",
                                    parity_value, calculated_checksum);
     }
 }

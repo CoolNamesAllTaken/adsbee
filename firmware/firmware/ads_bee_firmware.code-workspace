@@ -11,6 +11,9 @@
 		},
 		{
 			"path": "../modules"
+		},
+		{
+			"path": ".vscode"
 		}
 	],
 	"settings": {
@@ -92,7 +95,8 @@
 			"unordered_set": "cpp",
 			"fstream": "cpp",
 			"future": "cpp",
-			"shared_mutex": "cpp"
+			"shared_mutex": "cpp",
+			"format": "cpp"
 		}
 	}
 }

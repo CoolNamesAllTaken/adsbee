@@ -1,5 +1,5 @@
-#ifndef _COMMS_HH_
-#define _COMMS_HH_
+#ifndef COMMS_HH_
+#define COMMS_HH_
 
 #include "ads_bee.hh"
 #include "cpp_at.hh"
@@ -10,9 +10,7 @@ class CommsManager {
 
     enum ATConfigMode : uint16_t { kRun = 0, kConfig = 1, kInvalid = 2 };
 
-    struct CommsManagerConfig {
-        ADSBee &ads_bee;
-    };
+    struct CommsManagerConfig {};
 
     CommsManager(CommsManagerConfig config_in);
     bool Init();
@@ -28,7 +26,6 @@ class CommsManager {
    private:
     CommsManagerConfig config_;
     CppAT at_parser_;
-    ADSBee &ads_bee_;
 
     ATConfigMode at_config_mode_ = ATConfigMode::kRun;
 
@@ -38,4 +35,6 @@ class CommsManager {
 
 extern CommsManager comms_manager;
 
-#endif /* _COMMS_HH_ */
+#define DEBUG_PRINTF(format, ...) comms_manager.debug_printf(format __VA_OPT__(, ) __VA_ARGS__);
+
+#endif /* COMMS_HH_ */

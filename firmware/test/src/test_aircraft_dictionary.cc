@@ -1,14 +1,15 @@
 #include "gtest/gtest.h"
 #include "aircraft_dictionary.hh"
 #include "ads_b_packet.hh"
-#include "decode_utils.hh"
-#include "hal_god_powers.hh"
+#include "decode_utils.hh"   // for location calculation utility functions
+#include "hal_god_powers.hh" // for changing timestamp
 
-TEST(AircraftDictionary, BasicInsertRemove) {
+TEST(AircraftDictionary, BasicInsertRemove)
+{
     AircraftDictionary dictionary = AircraftDictionary();
     EXPECT_EQ(dictionary.GetNumAircraft(), 0);
     EXPECT_FALSE(dictionary.RemoveAircraft(12345));
-    
+
     Aircraft test_aircraft = Aircraft(12345);
     test_aircraft.wake_vortex = Aircraft::WV_ROTORCRAFT;
     dictionary.InsertAircraft(test_aircraft);
@@ -26,7 +27,8 @@ TEST(AircraftDictionary, BasicInsertRemove) {
     EXPECT_EQ(dictionary.GetNumAircraft(), 0);
 }
 
-TEST(AircraftDictionary, InsertThenRemoveTooMany) {
+TEST(AircraftDictionary, InsertThenRemoveTooMany)
+{
     AircraftDictionary dictionary = AircraftDictionary();
     EXPECT_EQ(dictionary.GetNumAircraft(), 0);
 
@@ -34,10 +36,11 @@ TEST(AircraftDictionary, InsertThenRemoveTooMany) {
     test_aircraft.wake_vortex = Aircraft::WV_GLIDER_SAILPLANE;
 
     // Insert maximum number of aircraft.
-    for (uint16_t i = 0; i < AircraftDictionary::kMaxNumAircraft; i++) {
-        test_aircraft.icao_address = i*599;
+    for (uint16_t i = 0; i < AircraftDictionary::kMaxNumAircraft; i++)
+    {
+        test_aircraft.icao_address = i * 599;
         EXPECT_TRUE(dictionary.InsertAircraft(test_aircraft));
-        EXPECT_EQ(dictionary.GetNumAircraft(), i+1);
+        EXPECT_EQ(dictionary.GetNumAircraft(), i + 1);
     }
 
     // Changing an existing aircraft should be fine.
@@ -51,10 +54,11 @@ TEST(AircraftDictionary, InsertThenRemoveTooMany) {
     EXPECT_FALSE(dictionary.GetAircraftPtr(test_aircraft.icao_address));
 
     // Remove all aircraft.
-    for (uint16_t i = 0; i < AircraftDictionary::kMaxNumAircraft; i++) {
-        test_aircraft.icao_address = (AircraftDictionary::kMaxNumAircraft-1-i)*599;
+    for (uint16_t i = 0; i < AircraftDictionary::kMaxNumAircraft; i++)
+    {
+        test_aircraft.icao_address = (AircraftDictionary::kMaxNumAircraft - 1 - i) * 599;
         EXPECT_TRUE(dictionary.RemoveAircraft(test_aircraft.icao_address));
-        EXPECT_EQ(dictionary.GetNumAircraft(), AircraftDictionary::kMaxNumAircraft-i-1);
+        EXPECT_EQ(dictionary.GetNumAircraft(), AircraftDictionary::kMaxNumAircraft - i - 1);
     }
 
     // Removing a nonexistent aircraft with a previously valid ICAO address should fail.
@@ -62,9 +66,10 @@ TEST(AircraftDictionary, InsertThenRemoveTooMany) {
     EXPECT_FALSE(dictionary.RemoveAircraft(0));
 }
 
-TEST(AircraftDictionary, UseAircraftPtr) {
+TEST(AircraftDictionary, UseAircraftPtr)
+{
     AircraftDictionary dictionary = AircraftDictionary();
-    Aircraft * aircraft = dictionary.GetAircraftPtr(12345);
+    Aircraft *aircraft = dictionary.GetAircraftPtr(12345);
     EXPECT_TRUE(aircraft); // aircraft should have been automatically inserted just fine
     aircraft->wake_vortex = Aircraft::WV_GROUND_OBSTRUCTION;
     Aircraft aircraft_out;
@@ -75,7 +80,8 @@ TEST(AircraftDictionary, UseAircraftPtr) {
     ASSERT_EQ(aircraft_out.wake_vortex, Aircraft::WV_HEAVY);
 }
 
-TEST(AircraftDictionary, AccessFakeAircraft) {
+TEST(AircraftDictionary, AccessFakeAircraft)
+{
     AircraftDictionary dictionary = AircraftDictionary();
     EXPECT_EQ(dictionary.GetNumAircraft(), 0);
 
@@ -83,7 +89,8 @@ TEST(AircraftDictionary, AccessFakeAircraft) {
     EXPECT_FALSE(dictionary.GetAircraft(0, test_aircraft));
 }
 
-TEST(AircraftDictionary, IngestAircraftIDMessage) {
+TEST(AircraftDictionary, IngestAircraftIDMessage)
+{
     AircraftDictionary dictionary = AircraftDictionary();
     ADSBPacket packet = ADSBPacket((char *)"8D76CE88204C9072CB48209A504D");
     EXPECT_TRUE(dictionary.IngestADSBPacket(packet));
@@ -132,14 +139,16 @@ TEST(AircraftDictionary, IngestAircraftIDMessage) {
     EXPECT_STREQ(aircraft.callsign, "QFA475");
 }
 
-TEST(AircraftDictionary, IngestInvalidAircrfaftIDMessage) {
+TEST(AircraftDictionary, IngestInvalidAircrfaftIDMessage)
+{
     AircraftDictionary dictionary = AircraftDictionary();
     ADSBPacket packet = ADSBPacket((char *)"7D76CE88204C9072CB48209A504D");
     EXPECT_FALSE(dictionary.IngestADSBPacket(packet));
     EXPECT_EQ(dictionary.GetNumAircraft(), 0);
 }
 
-TEST(decode_utils,calc_nl_cpr_from_lat) {
+TEST(decode_utils, calc_nl_cpr_from_lat)
+{
     EXPECT_EQ(calc_nl_cpr_from_lat(0), 59);
     EXPECT_EQ(calc_nl_cpr_from_lat(87), 2);
     EXPECT_EQ(calc_nl_cpr_from_lat(-87), 2);
@@ -147,7 +156,8 @@ TEST(decode_utils,calc_nl_cpr_from_lat) {
     EXPECT_EQ(calc_nl_cpr_from_lat(-88), 1);
 }
 
-TEST(Aircraft, SetCPRLatLon) {
+TEST(Aircraft, SetCPRLatLon)
+{
     Aircraft aircraft;
     EXPECT_FALSE(aircraft.position_valid);
 
@@ -207,7 +217,7 @@ TEST(Aircraft, SetCPRLatLon) {
     EXPECT_TRUE(aircraft.DecodePosition());
     inc_time_since_boot_ms();
     // Position established, now send the curveball.
-    EXPECT_TRUE(aircraft.SetCPRLatLon(93000-5000, 50194, true));
+    EXPECT_TRUE(aircraft.SetCPRLatLon(93000 - 5000, 50194, true));
     inc_time_since_boot_ms();
     EXPECT_FALSE(aircraft.DecodePosition());
 
@@ -223,8 +233,6 @@ TEST(Aircraft, SetCPRLatLon) {
     // EXPECT_TRUE(aircraft.position_valid);
     // EXPECT_FLOAT_EQ(aircraft.latitude, 52.25720f);
     // EXPECT_FLOAT_EQ(aircraft.longitude, 3.91937f);
-
-
 
     // Send even / odd latitude pair
 
