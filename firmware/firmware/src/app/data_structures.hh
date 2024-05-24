@@ -36,7 +36,6 @@ class PFBQueue {
      * Destructor. Frees the buffer buffer if it was dynamically allocated.
      */
     ~PFBQueue() {
-        DEBUG_PRINTF("Destructo.")
         if (buffer_was_dynamically_allocated_ && config_.buffer != nullptr) {
             free(config_.buffer);
             config_.buffer = nullptr;  // Prevent double free in case of shallow copy.

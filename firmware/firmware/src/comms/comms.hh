@@ -1,7 +1,6 @@
 #ifndef COMMS_HH_
 #define COMMS_HH_
 
-#include "ads_bee.hh"
 #include "cpp_at.hh"
 
 class CommsManager {

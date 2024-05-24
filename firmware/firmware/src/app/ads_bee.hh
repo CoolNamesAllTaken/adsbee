@@ -3,12 +3,22 @@
 
 #include "ads_b_packet.hh"
 #include "cpp_at.hh"
+#include "data_structures.hh"  // For PFBQueue.
 #include "hardware/i2c.h"
 #include "hardware/pio.h"
 #include "stdint.h"
 
 class ADSBee {
    public:
+    static constexpr uint16_t kMTLMaxPWMCount = 5000;    // Clock is 125MHz, shoot for 25kHz PWM.
+    static constexpr int kVDDMV = 3300;                  // [mV] Voltage of positive supply rail.
+    static constexpr int kMTLMaxMV = 3300;               // [mV]
+    static constexpr int kMTLMinMV = 0;                  // [mV]
+    static constexpr int kMTLHiDefaultMV = 2000;         // [mV]
+    static constexpr int kMTLLoDefaultMV = 3000;         // [mV]
+    static constexpr uint16_t kMaxNumADSBPackets = 100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
+    static const uint32_t kStatusLEDOnMs = 10;
+
     struct ADSBeeConfig {
         PIO preamble_detector_pio = pio0;
         PIO message_decoder_pio = pio1;
@@ -119,18 +129,15 @@ class ADSBee {
      */
     int ReadRxGain();
 
-    const uint16_t kMTLMaxPWMCount = 5000;  // Clock is 125MHz, shoot for 25kHz PWM.
-    const int kVDDMV = 3300;                // [mV] Voltage of positive supply rail.
-    const int kMTLMaxMV = 3300;             // [mV]
-    const int kMTLMinMV = 0;                // [mV]
-    const int kMTLHiDefaultMV = 2000;       // [mV]
-    const int kMTLLoDefaultMV = 3000;       // [mV]
+    /**
+     * Blinks the status LED for a given number of milliseconds. Non-blocking.
+     * @param[in] led_on_ms Optional parameter specifying number of milliseconds to turn on for. Defaults to
+     * kStatusLEDOnMs.
+     */
+    void FlashStatusLED(uint32_t led_on_ms = kStatusLEDOnMs);
 
-    // Coefficients for calibrated polynomial equation to go from target MTL bias voltage to MTL bias PWM count.
-    // const float kMTLBiasPWMCompCoeffX3 = 4.87299E-08;
-    // const float kMTLBiasPWMCompCoeffX2 = -0.000376253;
-    // const float kMTLBiasPWMCompCoeffX = 2.496361699;
-    // const float kMTLBiasPWMCompCoeffConst = -16.0676799;
+    PFBQueue<ADSBPacket> adsb_packet_queue =
+        PFBQueue<ADSBPacket>({.max_length = kMaxNumADSBPackets, .buffer = adsb_packet_queue_buffer_});
 
    private:
     ADSBeeConfig config_;
@@ -162,6 +169,10 @@ class ADSBee {
 
     // Due to a quirk, rx_buffer_ is used to store every word except for the first one.
     uint32_t rx_buffer_[ADSBPacket::kMaxPacketLenWords32 - 1];
+
+    ADSBPacket adsb_packet_queue_buffer_[kMaxNumADSBPackets];
 };
+
+extern ADSBee ads_bee;
 
 #endif /* _ADS_BEE_HH_ */

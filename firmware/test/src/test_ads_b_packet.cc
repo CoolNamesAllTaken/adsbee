@@ -200,3 +200,11 @@ TEST(ADSBPacket, PacketFields)
     EXPECT_EQ(packet.GetTypeCode(), 4u);
     EXPECT_EQ(packet.GetNBitWordFromMessage(3, 5), 0u); // CAT = 0
 }
+
+TEST(ADSBPacket, ConstructShortFrame)
+{
+    ADSBPacket packet = ADSBPacket((char *)"00050319AB8C22");
+    EXPECT_TRUE(packet.IsValid());
+
+    EXPECT_EQ(packet.GetDownlinkFormat(), static_cast<uint16_t>(ADSBPacket::DF_SHORT_RANGE_AIR_SURVEILLANCE));
+}

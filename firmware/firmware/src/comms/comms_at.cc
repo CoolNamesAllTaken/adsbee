@@ -3,6 +3,7 @@
 #include <cstring>   // for strcat
 #include <iostream>  // for AT command ingestion
 
+#include "ads_bee.hh"
 #include "comms.hh"
 #include "main.hh"
 #include "pico/stdlib.h"  // for getchar etc

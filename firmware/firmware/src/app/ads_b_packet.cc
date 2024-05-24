@@ -1,9 +1,10 @@
 #include "ads_b_packet.hh"
 
 #include <cstdint>
+#include <cstdio>   // for snprintf
+#include <cstring>  // for strlen
 
 #include "comms.hh"  // For debug prints.
-#include "string.h"
 
 #define BYTES_PER_WORD_32 4
 #define BITS_PER_WORD_32  32
@@ -27,14 +28,7 @@ const uint16_t kExtendedSquitterPacketNumBits = 112;
 const uint32_t kCRC24Generator = 0x1FFF409;
 const uint16_t kCRC24GeneratorNumBits = 25;
 
-/**
- * @brief ADSBPacket constructor.
- * @param[in] rx_buffer Buffer to read from. Must be packed such that all 32 bits of each word are filled, with each
- * word left (MSb) aligned such that the total number of bits is 112. Words must be big-endian, with the MSb of the
- * first word being the oldest bit.
- * @param[in] rx_buffer_len_words32 Number of 32-bit words to read from the rx_buffer.
- */
-ADSBPacket::ADSBPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32) {
+ADSBPacket::ADSBPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32, int rssi_dbm) {
     // Pack the packet buffer.
     for (uint16_t i = 0; i < rx_buffer_len_words32 && i < kMaxPacketLenWords32; i++) {
         if (i == kMaxPacketLenWords32 - 1) {
@@ -48,15 +42,11 @@ ADSBPacket::ADSBPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buf
             packet_buffer_len_bits_ += BITS_PER_WORD_32;
         }
     }
-
+    rssi_dbm_ = rssi_dbm;
     ConstructADSBPacket();
 }
 
-/**
- * @brief ADSBPacket constructor from string.
- * @param[in] rx_string String of nibbles as hex characters. Big-endian, MSB (oldest byte) first.
- */
-ADSBPacket::ADSBPacket(char* rx_string) {
+ADSBPacket::ADSBPacket(char* rx_string, int rssi_dbm) {
     uint16_t rx_num_bytes = strlen(rx_string) / NIBBLES_PER_BYTE;
     for (uint16_t i = 0; i < rx_num_bytes && i < kMaxPacketLenWords32 * BYTES_PER_WORD_32; i++) {
         uint8_t byte = (CHAR_TO_HEX(rx_string[i * NIBBLES_PER_BYTE]) << BITS_PER_NIBBLE) |
@@ -69,7 +59,7 @@ ADSBPacket::ADSBPacket(char* rx_string) {
         }
         packet_buffer_len_bits_ += BITS_PER_BYTE;
     }
-
+    rssi_dbm_ = rssi_dbm;
     ConstructADSBPacket();
 }
 
@@ -78,9 +68,9 @@ ADSBPacket::ADSBPacket(char* rx_string) {
  */
 void ADSBPacket::ConstructADSBPacket() {
     if (packet_buffer_len_bits_ != kExtendedSquitterPacketNumBits) {
-        DEBUG_PRINTF(
-            "ADSBPacket::ADSBPacket: Bit number mismatch while decoding packet. Expected %d but got %d!\r\n",
-            kExtendedSquitterPacketNumBits, packet_buffer_len_bits_);
+        snprintf(debug_string, kDebugStrLen, "Bit number mismatch while decoding packet. Expected %d but got %d!\r\n",
+                 kExtendedSquitterPacketNumBits, packet_buffer_len_bits_);
+
         return;  // leave is_valid_ as false
     }
 
@@ -97,30 +87,12 @@ void ADSBPacket::ConstructADSBPacket() {
         is_valid_ = true;  // mark packet as valid if CRC matches the parity bits
     } else {
         // is_valid_ is set to false by default
-        DEBUG_PRINTF("ADSBPacket::ADSBPacket: Invalid checksum, expected %06x but calculated %06x.\r\n",
-                                   parity_value, calculated_checksum);
+        snprintf(debug_string, kDebugStrLen, "Invalid checksum, expected %06x but calculated %06x.\r\n", parity_value,
+                 calculated_checksum);
     }
 }
 
-bool ADSBPacket::IsValid() const { return is_valid_; }
-
-uint16_t ADSBPacket::GetDownlinkFormat() const { return downlink_format_; }
-
-uint16_t ADSBPacket::GetCapability() const { return capability_; }
-
-uint32_t ADSBPacket::GetICAOAddress() const { return icao_address_; }
-
-/**
- * @brief Returns the typecode of the aircraft that sent the packet.
- * @retval Aircraft typecode as a uint16_t.
- */
-uint16_t ADSBPacket::GetTypeCode() const { return typecode_; }
-
-/**
- * @brief Returns the typecode of the aircraft that sent the ADS-B packet as an enum.
- * @retval Aircraft typecode as TypeCode_t.
- */
-ADSBPacket::TypeCode_t ADSBPacket::GetTypeCodeEnum() const {
+ADSBPacket::TypeCode ADSBPacket::GetTypeCodeEnum() const {
     // Table 3.3 from The 1090Mhz Riddle (Junzi Sun), pg. 37.
     switch (typecode_) {
         case 1:
