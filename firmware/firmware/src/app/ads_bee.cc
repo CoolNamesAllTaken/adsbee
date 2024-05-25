@@ -228,14 +228,15 @@ void ADSBee::OnDecodeComplete() {
 
                 // First word out of the FIFO is actually the last word of the previously decoded message.
                 // Assemble a packet buffer using the items in rx_buffer_.
-                uint32_t packet_buffer[ADSBPacket::kMaxPacketLenWords32];
+                uint32_t packet_buffer[TransponderPacket::kMaxPacketLenWords32];
                 packet_buffer[0] = rx_buffer_[0];
                 packet_buffer[1] = rx_buffer_[1];
                 packet_buffer[2] = rx_buffer_[2];
                 // Trim extra ingested bit off of last word, then left-align.
                 packet_buffer[3] = (static_cast<uint16_t>(word >> 1)) << 16;
-                ADSBPacket packet = ADSBPacket(packet_buffer, ADSBPacket::kMaxPacketLenWords32, rssi_adc_counts_);
-                adsb_packet_queue.Push(packet);
+                TransponderPacket packet =
+                    TransponderPacket(packet_buffer, TransponderPacket::kMaxPacketLenWords32, rssi_adc_counts_);
+                transponder_packet_queue.Push(packet);
                 // DEBUG_PRINTF(packet.IsValid() ? "\tVALID\r\n": "\tINVALID\r\n");
                 break;
             }

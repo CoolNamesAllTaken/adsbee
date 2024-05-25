@@ -92,7 +92,8 @@ TEST(AircraftDictionary, AccessFakeAircraft)
 TEST(AircraftDictionary, IngestAircraftIDMessage)
 {
     AircraftDictionary dictionary = AircraftDictionary();
-    ADSBPacket packet = ADSBPacket((char *)"8D76CE88204C9072CB48209A504D");
+    TransponderPacket tpacket = TransponderPacket((char *)"8D76CE88204C9072CB48209A504D");
+    ADSBPacket packet = ADSBPacket(tpacket);
     EXPECT_TRUE(dictionary.IngestADSBPacket(packet));
     EXPECT_EQ(dictionary.GetNumAircraft(), 1);
     Aircraft aircraft;
@@ -102,7 +103,8 @@ TEST(AircraftDictionary, IngestAircraftIDMessage)
     EXPECT_EQ(aircraft.wake_vortex, Aircraft::WV_NO_CATEGORY_INFO);
     EXPECT_STREQ(aircraft.callsign, "SIA224");
 
-    packet = ADSBPacket((char *)"8D7C7181215D01A08208204D8BF1");
+    tpacket = TransponderPacket((char *)"8D7C7181215D01A08208204D8BF1");
+    packet = ADSBPacket(tpacket);
     EXPECT_TRUE(dictionary.IngestADSBPacket(packet));
     EXPECT_EQ(dictionary.GetNumAircraft(), 2);
     EXPECT_TRUE(dictionary.GetAircraft(0x7C7181, aircraft));
@@ -111,7 +113,8 @@ TEST(AircraftDictionary, IngestAircraftIDMessage)
     EXPECT_EQ(aircraft.wake_vortex, Aircraft::WV_LIGHT);
     EXPECT_STREQ(aircraft.callsign, "WPF");
 
-    packet = ADSBPacket((char *)"8D7C7745226151A08208205CE9C2");
+    tpacket = TransponderPacket((char *)"8D7C7745226151A08208205CE9C2");
+    packet = ADSBPacket(tpacket);
     EXPECT_TRUE(dictionary.IngestADSBPacket(packet));
     EXPECT_EQ(dictionary.GetNumAircraft(), 3);
     EXPECT_TRUE(dictionary.GetAircraft(0x7C7745, aircraft));
@@ -120,7 +123,8 @@ TEST(AircraftDictionary, IngestAircraftIDMessage)
     EXPECT_EQ(aircraft.wake_vortex, Aircraft::WV_MEDIUM_1);
     EXPECT_STREQ(aircraft.callsign, "XUF");
 
-    packet = ADSBPacket((char *)"8D7C80AD2358F6B1E35C60FF1925");
+    tpacket = TransponderPacket((char *)"8D7C80AD2358F6B1E35C60FF1925");
+    packet = ADSBPacket(tpacket);
     EXPECT_TRUE(dictionary.IngestADSBPacket(packet));
     EXPECT_EQ(dictionary.GetNumAircraft(), 4);
     EXPECT_TRUE(dictionary.GetAircraft(0x7C80AD, aircraft));
@@ -129,7 +133,8 @@ TEST(AircraftDictionary, IngestAircraftIDMessage)
     EXPECT_EQ(aircraft.wake_vortex, Aircraft::WV_MEDIUM_2);
     EXPECT_STREQ(aircraft.callsign, "VOZ1851");
 
-    packet = ADSBPacket((char *)"8D7C146525446074DF5820738E90");
+    tpacket = TransponderPacket((char *)"8D7C146525446074DF5820738E90");
+    packet = ADSBPacket(tpacket);
     EXPECT_TRUE(dictionary.IngestADSBPacket(packet));
     EXPECT_EQ(dictionary.GetNumAircraft(), 5);
     EXPECT_TRUE(dictionary.GetAircraft(0x7C1465, aircraft));
@@ -142,7 +147,8 @@ TEST(AircraftDictionary, IngestAircraftIDMessage)
 TEST(AircraftDictionary, IngestInvalidAircrfaftIDMessage)
 {
     AircraftDictionary dictionary = AircraftDictionary();
-    ADSBPacket packet = ADSBPacket((char *)"7D76CE88204C9072CB48209A504D");
+    TransponderPacket tpacket = TransponderPacket((char *)"7D76CE88204C9072CB48209A504D");
+    ADSBPacket packet = ADSBPacket(tpacket);
     EXPECT_FALSE(dictionary.IngestADSBPacket(packet));
     EXPECT_EQ(dictionary.GetNumAircraft(), 0);
 }

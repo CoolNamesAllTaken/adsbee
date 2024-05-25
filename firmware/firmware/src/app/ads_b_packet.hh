@@ -38,8 +38,26 @@ class TransponderPacket {
     };
 
     // Constructors
+    /**
+     * TransponderPacket constructor.
+     * @param[in] rx_buffer Buffer to read from. Must be packed such that all 32 bits of each word are filled, with each
+     * word left (MSb) aligned such that the total number of bits is 112. Words must be big-endian, with the MSb of the
+     * first word being the oldest bit.
+     * @param[in] rx_buffer_len_words32 Number of 32-bit words to read from the rx_buffer.
+     * @param[in] rssi_dbm RSSI of the packet that was received, in dBm. Defaults to INT32_MIN if not set.
+     */
     TransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len, int rssi_dbm = INT32_MIN);
+
+    /**
+     * TransponderPacket constructor from string.
+     * @param[in] rx_string String of nibbles as hex characters. Big-endian, MSB (oldest byte) first.
+     * @param[in] rssi_dbm RSSI of the packet that was received, in dBm. Defaults to INT32_MIN if not set.
+     */
     TransponderPacket(char* rx_string, int rssi_dbm = INT32_MIN);
+
+    /**
+     * Default constructor.
+     */
     TransponderPacket() { debug_string[0] = '\0'; };
 
     bool IsValid() const { return is_valid_; };
@@ -47,6 +65,9 @@ class TransponderPacket {
     int GetRSSIDBm() { return rssi_dbm_; }
     uint16_t GetDownlinkFormat() const { return downlink_format_; };
     uint16_t GetDownlinkFormatString(char str_buf[kMaxDFStrLen]) const;
+    DownlinkFormat GetDownlinkFormatEnum();
+    uint32_t GetICAOAddress() const { return icao_address_; };
+    uint16_t GetPacketBufferLenBits() const { return packet_buffer_len_bits_; };
 
     /**
      * Dumps the internal packet buffer to a destination and returns the number of bytes written.
@@ -74,6 +95,7 @@ class TransponderPacket {
     uint32_t packet_buffer_[kMaxPacketLenWords32];
     uint16_t packet_buffer_len_bits_ = 0;
 
+    uint32_t icao_address_ = 0;
     uint16_t downlink_format_ = static_cast<uint16_t>(DF_INVALID);
     int rssi_dbm_ = INT32_MIN;
 
@@ -97,28 +119,11 @@ class ADSBPacket : public TransponderPacket {
     static const uint16_t kMEFirstBitIndex = kDFNUmBits + kCANumBits + kICAONumBits;
 
     /**
-     * ADSBPacket constructor.
-     * @param[in] rx_buffer Buffer to read from. Must be packed such that all 32 bits of each word are filled, with each
-     * word left (MSb) aligned such that the total number of bits is 112. Words must be big-endian, with the MSb of the
-     * first word being the oldest bit.
-     * @param[in] rx_buffer_len_words32 Number of 32-bit words to read from the rx_buffer.
-     * @param[in] rssi_dbm RSSI of the packet that was received, in dBm. Defaults to INT32_MIN if not set.
+     * Constructor. Can only create an ADSBPacket from an existing TransponderPacket, which is is referenced as the
+     * parent of the ADSBPacket. Think of this as a way to use the ADSBPacket as a "window" into the contents of the
+     * parent TransponderPacket. The ADSBPacket cannot exist without the parent TransponderPacket!
      */
-    ADSBPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len, int rssi_dbm = INT32_MIN);
-
-    /**
-     * ADSBPacket constructor from string.
-     * @param[in] rx_string String of nibbles as hex characters. Big-endian, MSB (oldest byte) first.
-     * @param[in] rssi_dbm RSSI of the packet that was received, in dBm. Defaults to INT32_MIN if not set.
-     */
-    ADSBPacket(char* rx_string, int rssi_dbm = INT32_MIN);
-
-    /**
-     * Default constructor.
-     */
-    ADSBPacket() : TransponderPacket(){};
-
-    // copy constructor is implicitly generated
+    ADSBPacket(const TransponderPacket& packet) : TransponderPacket(packet) { ConstructADSBPacket(); };
 
     // Bits 6-8 [3]: Capability (CA)
     // Bits 9-32 [24]: ICAO Aircraft Address (ICAO)
@@ -139,7 +144,6 @@ class ADSBPacket : public TransponderPacket {
     // Bits 89-112 [24]: Parity / Interrogator ID (PI)
 
     uint16_t GetCapability() const { return capability_; };
-    uint32_t GetICAOAddress() const { return icao_address_; };
     uint16_t GetTypeCode() const { return typecode_; };
     TypeCode GetTypeCodeEnum() const;
 
@@ -150,34 +154,10 @@ class ADSBPacket : public TransponderPacket {
 
    private:
     uint16_t capability_ = 0;
-    uint32_t icao_address_ = 0;
 
     uint16_t typecode_ = static_cast<uint16_t>(TC_INVALID);
 
     void ConstructADSBPacket();
 };
-
-// For table of ADS-B message types, see Table 3.3 in The 1090MHz Riddle (Junzi Sun), pg. 37.
-// Extended Squitter Typecode 1-4
-class AircraftIdentificationPacket : public ADSBPacket {
-   public:
-    AircraftIdentificationPacket(ADSBPacket const& packet) : ADSBPacket(packet){};
-
-   private:
-};
-
-// Extended Squitter Typecode 5-8
-class SurfacePositionPacket : public ADSBPacket {};
-
-// Extended Squitter Typecode 9-18, 20-22
-class AirbornePositionPacket : public ADSBPacket {};
-
-// Extended Squitter Typecode 19
-class AirborneVelocityPacket : public ADSBPacket {};
-
-// Extended Squitter Typecode 28
-class AircraftStatusPacket : public ADSBPacket {};
-
-// Extended Squitter Typecode 29 Typecode 31
 
 #endif /* _ADS_B_PACKET_HH_ */

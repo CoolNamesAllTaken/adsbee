@@ -32,17 +32,21 @@ int main() {
         comms_manager.Update();
         ads_bee.Update();
 
-        ADSBPacket packet;
-        while (ads_bee.adsb_packet_queue.Pop(packet)) {
-            uint32_t packet_buffer[ADSBPacket::kMaxPacketLenWords32];
+        TransponderPacket packet;
+        while (ads_bee.transponder_packet_queue.Pop(packet)) {
+            uint32_t packet_buffer[TransponderPacket::kMaxPacketLenWords32];
             packet.DumpPacketBuffer(packet_buffer);
+            if (packet.GetPacketBufferLenBits() == TransponderPacket::kExtendedSquitterPacketLenBits) {
+                DEBUG_PRINTF("New message: 0x%08x%08x%08x%04x RSSI=%d\r\n", packet_buffer[0], packet_buffer[1],
+                             packet_buffer[2], packet_buffer[3], packet.GetRSSIDBm());
+            } else {
+                DEBUG_PRINTF("New message: 0x%08x%06x RSSI=%d\r\n", packet_buffer[0], packet_buffer[1],
+                             packet_buffer[2], packet_buffer[3], packet.GetRSSIDBm());
+            }
 
-            DEBUG_PRINTF("New message: 0x%08x%08x%08x%04x RSSI=%d\r\n", packet_buffer[0], packet_buffer[1],
-                         packet_buffer[2], packet_buffer[3], packet.GetRSSIDBm());
             if (packet.IsValid()) {
                 ads_bee.FlashStatusLED();
-                DEBUG_PRINTF("df=%d ca=%d tc=%d icao_address=0x%06x\r\n", packet.GetDownlinkFormat(),
-                             packet.GetCapability(), packet.GetTypeCode(), packet.GetICAOAddress());
+                DEBUG_PRINTF("df=%d icao_address=0x%06x\r\n", packet.GetDownlinkFormat(), packet.GetICAOAddress());
             } else {
                 DEBUG_PRINTF("INVALID %s", packet.debug_string);
             }

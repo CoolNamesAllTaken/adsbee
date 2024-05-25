@@ -10,13 +10,14 @@
 
 class ADSBee {
    public:
-    static constexpr uint16_t kMTLMaxPWMCount = 5000;    // Clock is 125MHz, shoot for 25kHz PWM.
-    static constexpr int kVDDMV = 3300;                  // [mV] Voltage of positive supply rail.
-    static constexpr int kMTLMaxMV = 3300;               // [mV]
-    static constexpr int kMTLMinMV = 0;                  // [mV]
-    static constexpr int kMTLHiDefaultMV = 2000;         // [mV]
-    static constexpr int kMTLLoDefaultMV = 3000;         // [mV]
-    static constexpr uint16_t kMaxNumADSBPackets = 100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
+    static constexpr uint16_t kMTLMaxPWMCount = 5000;  // Clock is 125MHz, shoot for 25kHz PWM.
+    static constexpr int kVDDMV = 3300;                // [mV] Voltage of positive supply rail.
+    static constexpr int kMTLMaxMV = 3300;             // [mV]
+    static constexpr int kMTLMinMV = 0;                // [mV]
+    static constexpr int kMTLHiDefaultMV = 2000;       // [mV]
+    static constexpr int kMTLLoDefaultMV = 3000;       // [mV]
+    static constexpr uint16_t kMaxNumTransponderPackets =
+        100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
     static const uint32_t kStatusLEDOnMs = 10;
 
     struct ADSBeeConfig {
@@ -136,8 +137,8 @@ class ADSBee {
      */
     void FlashStatusLED(uint32_t led_on_ms = kStatusLEDOnMs);
 
-    PFBQueue<ADSBPacket> adsb_packet_queue =
-        PFBQueue<ADSBPacket>({.max_num_elements = kMaxNumADSBPackets, .buffer = adsb_packet_queue_buffer_});
+    PFBQueue<TransponderPacket> transponder_packet_queue = PFBQueue<TransponderPacket>(
+        {.max_num_elements = kMaxNumTransponderPackets, .buffer = transponder_packet_queue_buffer_});
 
    private:
     ADSBeeConfig config_;
@@ -170,7 +171,7 @@ class ADSBee {
     // Due to a quirk, rx_buffer_ is used to store every word except for the first one.
     uint32_t rx_buffer_[ADSBPacket::kMaxPacketLenWords32 - 1];
 
-    ADSBPacket adsb_packet_queue_buffer_[kMaxNumADSBPackets];
+    TransponderPacket transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
 };
 
 extern ADSBee ads_bee;
