@@ -137,7 +137,7 @@ class ADSBee {
     void FlashStatusLED(uint32_t led_on_ms = kStatusLEDOnMs);
 
     PFBQueue<ADSBPacket> adsb_packet_queue =
-        PFBQueue<ADSBPacket>({.max_length = kMaxNumADSBPackets, .buffer = adsb_packet_queue_buffer_});
+        PFBQueue<ADSBPacket>({.max_num_elements = kMaxNumADSBPackets, .buffer = adsb_packet_queue_buffer_});
 
    private:
     ADSBeeConfig config_;

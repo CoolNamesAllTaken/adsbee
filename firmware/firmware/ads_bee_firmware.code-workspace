@@ -11,9 +11,6 @@
 		},
 		{
 			"path": "../modules"
-		},
-		{
-			"path": ".vscode"
 		}
 	],
 	"settings": {

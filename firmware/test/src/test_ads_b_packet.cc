@@ -201,10 +201,16 @@ TEST(ADSBPacket, PacketFields)
     EXPECT_EQ(packet.GetNBitWordFromMessage(3, 5), 0u); // CAT = 0
 }
 
-TEST(ADSBPacket, ConstructShortFrame)
+TEST(ADSBPacket, ConstructValidShortFrame)
 {
-    ADSBPacket packet = ADSBPacket((char *)"00050319AB8C22");
+    TransponderPacket packet = TransponderPacket((char *)"00050319AB8C22");
     EXPECT_TRUE(packet.IsValid());
 
-    EXPECT_EQ(packet.GetDownlinkFormat(), static_cast<uint16_t>(ADSBPacket::DF_SHORT_RANGE_AIR_SURVEILLANCE));
+    EXPECT_EQ(packet.GetDownlinkFormat(), static_cast<uint16_t>(TransponderPacket::DF_SHORT_RANGE_AIR_SURVEILLANCE));
+}
+
+TEST(ADSBPacket, ConstructInvalidShortFrame)
+{
+    TransponderPacket packet = TransponderPacket((char *)"00050219AB8C22");
+    EXPECT_FALSE(packet.IsValid());
 }
