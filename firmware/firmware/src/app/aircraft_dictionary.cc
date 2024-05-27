@@ -20,10 +20,6 @@ Aircraft::Aircraft() {
     memset(callsign, '\0', kCallSignMaxNumChars + 1);  // clear out callsign string, including extra EOS character
 }
 
-/**
- * @briefDecodes the aircraft position using last_od_packet_ and last_even_packet_.
- * @retval True if position was decoded successfully, false otherwise.
- */
 bool Aircraft::DecodePosition() {
     if (!(last_odd_packet_.received_timestamp_ms > 0 && last_even_packet_.received_timestamp_ms > 0)) {
         printf(
@@ -102,18 +98,6 @@ bool Aircraft::DecodePosition() {
     return true;
 }
 
-/**
- * Set an aircraft's position in Compact Position Reporting (CPR) format. Takes either an even or odd set of lat/lon
- * coordinates and uses them to set the aircraft's position.
- * @param[in] n_lat_cpr 17-bit latitude count.
- * @param[in] n_lon_cpr 17-bit longitude count.
- * @param[in] odd Boolean indicating that the position update is relative to an odd grid reference (if true) or an even
- * grid reference.
- * @param[in] redigesting Boolean flag used if SetCPRLatLon is being used to re-digest a packet. Assures that it won't
- * call itself again if set.
- * @retval True if coordinates were parsed successfully, false if not. NOTE: invalid positions can still be considered a
- * successful parse.
- */
 bool Aircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, bool redigesting) {
     if (n_lat_cpr > kCPRLatLonMaxCount || n_lon_cpr > kCPRLatLonMaxCount) {
         return false;  // counts out of bounds, don't parse
@@ -134,7 +118,20 @@ bool Aircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, bo
  * Aircraft Dictionary
  */
 
-AircraftDictionary::AircraftDictionary() {}
+void AircraftDictionary::Init() {
+    aircraft_dictionary_.clear();  // Remove all aircraft from the unordered map.
+}
+
+void AircraftDictionary::Update(uint32_t timestamp_ms) {
+    // Iterate over each key-value pair in the unordered_map
+    for (auto it = aircraft_dictionary_.begin(); it != aircraft_dictionary_.end(); /* No increment here */) {
+        if (timestamp_ms - it->second.last_seen_timestamp_ms > config_.aircraft_prune_interval_ms) {
+            it = aircraft_dictionary_.erase(it);  // Remove stale aircraft entry.
+        } else {
+            it++;  // Move to the next aircraft entry.
+        }
+    }
+}
 
 bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
     if (!packet.IsValid() || packet.GetDownlinkFormat() != ADSBPacket::DF_EXTENDED_SQUITTER) {

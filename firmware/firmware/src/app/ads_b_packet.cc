@@ -161,7 +161,7 @@ void TransponderPacket::ConstructTransponderPacket() {
         case DF_IDENTITY_REPLY:
         case DF_ALL_CALL_REPLY: {
             // Process a 56-bit message.
-            is_valid_ = true;  // Calculated checksum is XORed with the ICAO address. See ADS-B Decoding Guide pg. 22.
+            is_valid_ = false;  // Calculated checksum is XORed with the ICAO address. See ADS-B Decoding Guide pg. 22.
             // ICAO address is a best guess, needs to be confirmed from the aircraft dictionary.
             icao_address_ = parity_value ^ calculated_checksum;
             break;

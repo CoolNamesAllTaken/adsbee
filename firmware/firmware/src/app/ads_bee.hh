@@ -2,6 +2,7 @@
 #define _ADS_BEE_HH_
 
 #include "ads_b_packet.hh"
+#include "aircraft_dictionary.hh"
 #include "cpp_at.hh"
 #include "data_structures.hh"  // For PFBQueue.
 #include "hardware/i2c.h"
@@ -54,12 +55,22 @@ class ADSBee {
 
         uint16_t uart_tx_pin = 4;
         uint16_t uart_rx_pin = 5;
+
+        uint32_t aircraft_dictionary_update_interval_ms = 1000;
     };
 
     ADSBee(ADSBeeConfig config_in);
     bool Init();
 
     bool Update();
+    /**
+     * ISR for GPIO interrupts.
+     */
+    void GPIOIRQISR(uint gpio, uint32_t event_mask);
+
+    /**
+     * ISR triggered by DECODE completing, via PIO0 IRQ0.
+     */
     void OnDecodeComplete();
 
     /**
@@ -140,6 +151,8 @@ class ADSBee {
     PFBQueue<TransponderPacket> transponder_packet_queue = PFBQueue<TransponderPacket>(
         {.max_num_elements = kMaxNumTransponderPackets, .buffer = transponder_packet_queue_buffer_});
 
+    AircraftDictionary aircraft_dictionary;
+
    private:
     ADSBeeConfig config_;
     CppAT parser_;
@@ -172,6 +185,9 @@ class ADSBee {
     uint32_t rx_buffer_[ADSBPacket::kMaxPacketLenWords32 - 1];
 
     TransponderPacket transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
+
+    uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
+    uint16_t last_decode_num_words_ingested_ = 0;
 };
 
 extern ADSBee ads_bee;

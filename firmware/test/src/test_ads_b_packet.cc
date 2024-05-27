@@ -214,7 +214,7 @@ TEST(ADSBPacket, ConstructFromTransponderPacket)
 TEST(TransponderPacket, ConstructValidShortFrame)
 {
     TransponderPacket packet = TransponderPacket((char *)"00050319AB8C22");
-    EXPECT_TRUE(packet.IsValid());
+    EXPECT_FALSE(packet.IsValid()); // Automatically marked as invalid since not confirmable with CRC.
     EXPECT_EQ(packet.GetICAOAddress(), 0x7C7B5A);
     EXPECT_EQ(packet.GetDownlinkFormat(), static_cast<uint16_t>(TransponderPacket::DF_SHORT_RANGE_AIR_SURVEILLANCE));
 }
@@ -222,5 +222,5 @@ TEST(TransponderPacket, ConstructValidShortFrame)
 TEST(TransponderPacket, ConstructInvalidShortFrame)
 {
     TransponderPacket packet = TransponderPacket((char *)"00050219AB8C22");
-    EXPECT_TRUE(packet.IsValid()); // Automatically marking all 56-bit packets with unknown ICAO as valid for now.
+    EXPECT_FALSE(packet.IsValid()); // Automatically marking all 56-bit packets with unknown ICAO as invalid for now.
 }
