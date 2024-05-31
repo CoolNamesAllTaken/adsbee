@@ -551,7 +551,7 @@
       "plot": "plots/",
       "pos_files": "",
       "specctra_dsn": "",
-      "step": "",
+      "step": "fab/adsbee_1090.step",
       "svg": "",
       "vrml": ""
     },

@@ -14,6 +14,9 @@
 #include "hal.hh"
 #include "pico/binary_info.h"
 
+static const uint16_t kBitsPerNibble = 4;
+static const uint16_t kBitsPerByte = 8;
+
 ADSBee::ADSBeeConfig ads_bee_config;
 // Override default config params here.
 ADSBee ads_bee = ADSBee(ads_bee_config);
@@ -38,10 +41,10 @@ int main() {
             packet.DumpPacketBuffer(packet_buffer);
             if (packet.GetPacketBufferLenBits() == TransponderPacket::kExtendedSquitterPacketLenBits) {
                 DEBUG_PRINTF("New message: 0x%08x|%08x|%08x|%04x RSSI=%d\r\n", packet_buffer[0], packet_buffer[1],
-                             packet_buffer[2], packet_buffer[3], packet.GetRSSIDBm());
+                             packet_buffer[2], (packet_buffer[3]) >> (4 * kBitsPerNibble), packet.GetRSSIDBm());
             } else {
-                DEBUG_PRINTF("New message: 0x%08x|%06x RSSI=%d\r\n", packet_buffer[0], packet_buffer[1],
-                             packet.GetRSSIDBm());
+                DEBUG_PRINTF("New message: 0x%08x|%06x RSSI=%d\r\n", packet_buffer[0],
+                             (packet_buffer[1]) >> (2 * kBitsPerNibble), packet.GetRSSIDBm());
             }
 
             if (packet.IsValid()) {

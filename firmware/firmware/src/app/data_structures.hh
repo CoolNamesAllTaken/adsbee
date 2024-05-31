@@ -11,7 +11,7 @@ template <class T>
 class PFBQueue {
    public:
     struct PFBQueueConfig {
-        uint16_t max_num_elements = 0;
+        uint16_t buf_len_num_elements = 0;
         T* buffer = nullptr;
     };
 
@@ -20,12 +20,12 @@ class PFBQueue {
      * NOTE: Copy and move constructors are not implemented! Pass by reference only to avoid creating a "double free"
      * error, which is caused by two PFBQueues sharing the same buffer, and both trying to free it when they are
      * destroyed.
-     * @param[in] config_in Defines length of the buffer, and points to the buffer of size max_num_elements+1 if
+     * @param[in] config_in Defines length of the buffer, and points to the buffer of size buf_len_num_elements+1 if
      * PFBQueue should work with a pre-allocated buffer. If config_in.buffer is left as nullptr, a buffer will be
-     * dynamically allocated of size max_num_elements * sizeof(T).
+     * dynamically allocated of size buf_len_num_elements * sizeof(T).
      * @retval PFBQueue object.
      */
-    PFBQueue(PFBQueueConfig config_in) : config_(config_in), buffer_length_(config_in.max_num_elements + 1) {
+    PFBQueue(PFBQueueConfig config_in) : config_(config_in), buffer_length_(config_in.buf_len_num_elements) {
         if (config_.buffer == nullptr) {
             config_.buffer = (T*)malloc(sizeof(T) * buffer_length_);
             buffer_was_dynamically_allocated_ = true;
@@ -101,7 +101,7 @@ class PFBQueue {
 
    private:
     /**
-     * Increments and wraps a buffer index. Index must be < 2*(config_.max_num_elements+1)!
+     * Increments and wraps a buffer index. Index must be < 2*(config_.buf_len_num_elements+1)!
      * @param[in] index Value to increment and wrap.
      * @param[in] increment Value to increment the index by. Defaults to 1.
      * @retval Incremented and wrapped value.

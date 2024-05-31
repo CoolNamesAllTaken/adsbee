@@ -149,7 +149,7 @@ class ADSBee {
     void FlashStatusLED(uint32_t led_on_ms = kStatusLEDOnMs);
 
     PFBQueue<TransponderPacket> transponder_packet_queue = PFBQueue<TransponderPacket>(
-        {.max_num_elements = kMaxNumTransponderPackets, .buffer = transponder_packet_queue_buffer_});
+        {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = transponder_packet_queue_buffer_});
 
     AircraftDictionary aircraft_dictionary;
 

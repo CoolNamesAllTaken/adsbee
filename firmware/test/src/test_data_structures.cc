@@ -37,20 +37,20 @@ void FillAndEmptyQueue(PFBQueue<T> &queue, uint16_t queue_max_length)
 TEST(PFBQueue, BasicConstruction)
 {
     // Dynamically allocate buffer.
-    uint16_t queue_max_length = 5;
-    PFBQueue<uint32_t> queue = PFBQueue<uint32_t>({.max_num_elements = queue_max_length, .buffer = nullptr});
-    FillAndEmptyQueue(queue, queue_max_length);
+    uint16_t buf_len_num_elements = 5;
+    PFBQueue<uint32_t> queue = PFBQueue<uint32_t>({.buf_len_num_elements = buf_len_num_elements, .buffer = nullptr});
+    FillAndEmptyQueue(queue, buf_len_num_elements - 1);
 
     // Statically allocate buffer.
-    uint32_t buffer[queue_max_length + 1];
-    PFBQueue<uint32_t> static_queue = PFBQueue<uint32_t>({.max_num_elements = queue_max_length, .buffer = buffer});
-    FillAndEmptyQueue(static_queue, queue_max_length);
+    uint32_t buffer[buf_len_num_elements];
+    PFBQueue<uint32_t> static_queue = PFBQueue<uint32_t>({.buf_len_num_elements = buf_len_num_elements, .buffer = buffer});
+    FillAndEmptyQueue(static_queue, buf_len_num_elements - 1);
 }
 
 TEST(PFBQueue, Peek)
 {
-    uint16_t queue_max_length = 30;
-    PFBQueue<uint32_t> queue = PFBQueue<uint32_t>({.max_num_elements = queue_max_length, .buffer = nullptr});
+    uint16_t buf_len_num_elements = 30;
+    PFBQueue<uint32_t> queue = PFBQueue<uint32_t>({.buf_len_num_elements = buf_len_num_elements, .buffer = nullptr});
     uint32_t peek_buffer;
     ASSERT_FALSE(queue.Peek(peek_buffer));
 
@@ -58,7 +58,7 @@ TEST(PFBQueue, Peek)
     queue.Push(0);
     queue.Pop(peek_buffer);
 
-    for (uint16_t i = 0; i < queue_max_length; i++)
+    for (uint16_t i = 0; i < buf_len_num_elements - 1; i++)
     {
         queue.Push(i);
         ASSERT_TRUE(queue.Peek(peek_buffer));
