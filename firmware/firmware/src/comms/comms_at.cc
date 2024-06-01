@@ -37,7 +37,7 @@ CPP_AT_CALLBACK(CommsManager::ATConfigCallback) {
     } else if (op == '=') {
         // AT+CONFIG set command.
         if (!CPP_AT_HAS_ARG(0)) {
-            CPP_AT_ERROR("Need to specify a config mode to run.")
+            CPP_AT_ERROR("Need to specify a config mode to run.");
         }
         ATConfigMode new_mode;
         CPP_AT_TRY_ARG2NUM(0, (uint16_t &)new_mode);
@@ -46,7 +46,7 @@ CPP_AT_CALLBACK(CommsManager::ATConfigCallback) {
         }
 
         comms_manager.at_config_mode_ = new_mode;
-        CPP_AT_SUCCESS()
+        CPP_AT_SUCCESS();
     }
     CPP_AT_ERROR();
 }
