@@ -25,63 +25,12 @@ const float kPreambleDetectorFreq = 16e6;  // Running at 16MHz (8 clock cycles p
 
 const uint8_t kRxGainDigipotI2CAddr = 0b0101111;  // MCP4017-104e
 const uint32_t kRxgainDigipotOhmsPerCount = 100e3 / 127;
-const uint8_t kEEPROMI2CAddr = 0b1010001;  // M24C02, TSSOP-8, E3=0 E2=0 E1=1
 
 ADSBee *isr_access = nullptr;
 
 void on_decode_complete() { isr_access->OnDecodeComplete(); }
 
 void gpio_irq_isr(uint gpio, uint32_t event_mask) { isr_access->GPIOIRQISR(gpio, event_mask); }
-
-/** I2C helper function that writes 1 byte to the specified register.
- * @param[in] i2c Pico SDK i2c_inst_t to use.
- * @param[in] addr I2C address (device) to write to.
- * @param[in] reg Register address (on the device) to write to.
- * @param[in] buf Byte buffer to write to the given address.
- * @param[in] nbytes Number of bytes to write to the given address on the device.
- */
-inline int i2c_reg_write(i2c_inst_t *i2c, const uint addr, const uint8_t reg, uint8_t *buf, const uint8_t nbytes) {
-    int num_bytes_read = 0;
-    uint8_t msg[nbytes + 1];
-
-    // Check to make sure caller is sending 1 or more bytes
-    if (nbytes < 1) {
-        return 0;
-    }
-
-    // Append register address to front of data packet
-    msg[0] = reg;
-    for (int i = 0; i < nbytes; i++) {
-        msg[i + 1] = buf[i];
-    }
-
-    // Write data to register(s) over I2C
-    i2c_write_blocking(i2c, addr, msg, (nbytes + 1), false);
-
-    return num_bytes_read;
-}
-
-/** Read byte(s) from the specified register. If nbytes > 1, read from consecutive registers.
- * @param[in] i2c Pico SDK i2c_inst_t to use.
- * @param[in] addr I2C address (device) to read from.
- * @param[in] reg Register address (on the device) to read from.
- * @param[in] buf Byte buffer to read into from the given address.
- * @param[in] nbytes Number of bytes to read from the device.
- */
-inline int i2c_reg_read(i2c_inst_t *i2c, const uint addr, const uint8_t reg, uint8_t *buf, const uint8_t nbytes) {
-    int num_bytes_read = 0;
-
-    // Check to make sure caller is asking for 1 or more bytes
-    if (nbytes < 1) {
-        return 0;
-    }
-
-    // Read data from register(s) over I2C
-    i2c_write_blocking(i2c, addr, &reg, 1, true);
-    num_bytes_read = i2c_read_blocking(i2c, addr, buf, nbytes, false);
-
-    return num_bytes_read;
-}
 
 ADSBee::ADSBee(ADSBeeConfig config_in) {
     config_ = config_in;
@@ -133,12 +82,6 @@ bool ADSBee::Init() {
     if (i2c_read_blocking(config_.onboard_i2c, kRxGainDigipotI2CAddr, &wiper_value_counts, 1, false) != 1) {
         DEBUG_PRINTF("ADSBee::Init: Failed to read wiper position from Rx Gain Digipot at I2C address 0x%x.\r\n",
                      kRxGainDigipotI2CAddr);
-        return false;
-    }
-    uint8_t eeprom_random_address_data;
-    if (i2c_read_blocking(config_.onboard_i2c, kEEPROMI2CAddr, &eeprom_random_address_data, 1, false) != 1) {
-        DEBUG_PRINTF("ADSBee::Init: Failed to read current address from EEPROM at I2C address 0x%x.\r\n",
-                     kEEPROMI2CAddr);
         return false;
     }
 

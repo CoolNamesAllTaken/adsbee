@@ -142,16 +142,23 @@ static const CppAT::ATCommandDef_t at_command_list[] = {
      .max_args = 0,
      .help_string_buf =
          "Read ADC counts and mV values for high and low MTL thresholds. Call with no ops nor arguments, "
-         "AT+MTLREAD.\r\n",
+         "AT+MTLREAD.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATMTLReadCallback, comms_manager)},
     {.command_buf = "+RXGAIN",
      .min_args = 0,
      .max_args = 1,
      .help_string_buf = "Set value of Rx Gain Digipot.\r\n\t"
-                        "AT+RXGAIN=<rx_gain>\r\n\tAT+RXGAIN?\r\n\t+RXGAIN=<rx_gain>.\r\n",
+                        "AT+RXGAIN=<rx_gain>\r\n\tAT+RXGAIN?\r\n\t+RXGAIN=<rx_gain>.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxGainCallback, comms_manager)
 
-    }
+    },
+#ifdef HARDWARE_UNIT_TEST
+    {.command_buf = "+EEPROMTEST",
+     .min_args = 0,
+     .max_args = 0,
+     .help_string_buf = "Test the EEPROM.",
+     .callback - CPP_AT_BIND_MEMBER_CALLBACK(EEPROM::EEPROMTestCallback, eeprom)}
+#endif
 
 };
 

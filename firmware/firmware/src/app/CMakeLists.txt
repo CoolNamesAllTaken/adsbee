@@ -17,5 +17,6 @@ target_sources(ads_bee PRIVATE
     ads_bee.cc
     decode_utils.cc
     data_structures.cc
+    eeprom.cc
 )
 endif()

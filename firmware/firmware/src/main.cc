@@ -11,6 +11,7 @@
 #include "ads_b_packet.hh"
 #include "ads_bee.hh"
 #include "comms.hh"
+#include "eeprom.hh"
 #include "hal.hh"
 #include "pico/binary_info.h"
 
@@ -21,6 +22,7 @@ ADSBee::ADSBeeConfig ads_bee_config;
 // Override default config params here.
 ADSBee ads_bee = ADSBee(ads_bee_config);
 CommsManager comms_manager = CommsManager({});
+EEPROM eeprom = EEPROM({});
 
 int main() {
     bi_decl(bi_program_description("ADS-Bee ADSB Receiver"));
