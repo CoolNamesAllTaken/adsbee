@@ -2,18 +2,34 @@
 
 #include <cstring>
 
+#include "hal.hh"           // For timing.
 #include "hardware/gpio.h"  // For optional I2C initialization.
 #include "hardware/i2c.h"
+
+void EEPROM::WaitForSafeWriteTime() {
+    WaitForSafeReadTime();
+    last_write_timestamp_us_ = get_time_since_boot_us();
+}
+
+void EEPROM::WaitForSafeReadTime() {
+    while ((uint32_t)(get_time_since_boot_us() - last_write_timestamp_us_) < config_.i2c_write_time_us) {
+        // Block until write has completed.
+    }
+}
 
 int EEPROM::WriteByte(const uint8_t reg, const uint8_t byte) {
     uint8_t msg[2];
     msg[0] = reg;
     msg[1] = byte;
-    return i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, 2, false, config_.i2c_timeout_us);
+    WaitForSafeWriteTime();
+    int ret = i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, 2, false, config_.i2c_timeout_us);
+    if (ret < 0) DEBUG_PRINTF("EEPROM::WriteByte: Write to register 0x%d failed with code %d.\r\n", reg, ret);
+    return ret;
 }
 
 int EEPROM::ReadByte(const uint8_t reg, uint8_t &byte) {
     // Write address to read from.
+    WaitForSafeReadTime();
     int status = i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, &reg, 1, true, config_.i2c_timeout_us);
     if (status < 0) return status;
     // Read reply and put it into byte.
@@ -37,6 +53,7 @@ int EEPROM::WriteBuf(const uint8_t reg, uint8_t *buf, uint16_t num_bytes) {
             msg[i + 1] = buf[num_bytes_written + i];
         }
         bool is_last_write = (num_bytes_written + write_num_bytes) == num_bytes;
+        WaitForSafeWriteTime();
         // Don't give up control of the bus until done writing the payload.
         int status = i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, write_num_bytes + 1,
                                           !is_last_write, config_.i2c_timeout_us);
@@ -60,6 +77,7 @@ int EEPROM::ReadBuf(const uint8_t reg, uint8_t *buf, const uint16_t num_bytes) {
     }
 
     // Read data from register(s) over I2C
+    WaitForSafeReadTime();
     i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, &reg, 1, true, config_.i2c_timeout_us);
     num_bytes_read =
         i2c_read_timeout_us(config_.i2c_handle, config_.i2c_addr, buf, num_bytes, false, config_.i2c_timeout_us);

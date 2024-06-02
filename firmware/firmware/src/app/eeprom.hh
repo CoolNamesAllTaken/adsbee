@@ -12,6 +12,7 @@ class EEPROM {
         uint16_t size_bytes = 2e3;     // M24C02 = 2kB
         uint16_t page_size_bytes = 16;
         uint32_t i2c_timeout_us = 1e6;
+        uint32_t i2c_write_time_us = 5e3;  // 5ms write time for Bytes and pages.
 
         bool requires_init = false;
         // These parameters only used if initialization is required.
@@ -71,6 +72,18 @@ class EEPROM {
 
    private:
     EEPROMConfig config_;
+    uint32_t last_write_timestamp_us_ = 0;
+
+    /**
+     * The EEPROM takes up to 5ms to write a Byte or page. This function gets called before a write operation to ensure
+     * that we don't encounter errors by sending more data when the EEPROM isn't ready yet.
+     */
+    void WaitForSafeWriteTime();
+
+    /**
+     * Same as WaitForSafeWriteTime, but doesn't record the timestamp as last_write_timeestamp_us_.
+     */
+    void WaitForSafeReadTime();
 };
 
 extern EEPROM eeprom;
