@@ -36,33 +36,36 @@ int EEPROM::ReadByte(const uint8_t reg, uint8_t &byte) {
     return i2c_read_timeout_us(config_.i2c_handle, config_.i2c_addr, &byte, 1, false, config_.i2c_timeout_us);
 }
 
-int EEPROM::WriteBuf(const uint8_t reg, uint8_t *buf, uint16_t num_bytes) {
+int EEPROM::WriteBuf(const uint8_t reg, uint8_t *buf, const uint16_t num_bytes) {
     // Check to make sure caller is sending 1 or more bytes
     if (num_bytes < 1) {
         return 0;
     }
+    // Check to make sure registers are in bounds.
+    if (reg + num_bytes > config_.size_bytes) {
+        DEBUG_PRINTF("EEPROM::WriteBuf: Write of %d bytes at 0x%x overruns end of EEPROM.\r\n");
+        return PICO_ERROR_INVALID_ARG;
+    }
 
     uint8_t write_reg = reg;
-    uint16_t num_bytes_written = 0;
-    while (num_bytes_written < num_bytes) {
-        uint8_t page_bytes_remaining = config_.page_size_bytes - (reg % config_.page_size_bytes);
+    while (write_reg < reg + num_bytes) {
+        uint8_t num_bytes_written = write_reg - reg;
+        uint8_t page_bytes_remaining = config_.page_size_bytes - (write_reg % config_.page_size_bytes);
         uint8_t write_num_bytes = MIN(page_bytes_remaining, num_bytes - num_bytes_written);
         uint8_t msg[write_num_bytes + 1];  // Add a spot for the address.
         msg[0] = write_reg;
         for (uint16_t i = 0; i < write_num_bytes; i++) {
             msg[i + 1] = buf[num_bytes_written + i];
         }
-        bool is_last_write = (num_bytes_written + write_num_bytes) == num_bytes;
         WaitForSafeWriteTime();
-        // Don't give up control of the bus until done writing the payload.
-        int status = i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, write_num_bytes + 1,
-                                          !is_last_write, config_.i2c_timeout_us);
+        int status = i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, write_num_bytes + 1, false,
+                                          config_.i2c_timeout_us);
         if (status < 0) {
             DEBUG_PRINTF("EEPROM::I2CRegWrite: Write failed at register 0x%x while trying to write %d bytes.\r\n",
                          write_reg, write_num_bytes);
             return status;
         }
-        num_bytes_written += write_num_bytes;
+        write_reg += write_num_bytes;
     }
 
     return num_bytes;
@@ -74,6 +77,11 @@ int EEPROM::ReadBuf(const uint8_t reg, uint8_t *buf, const uint16_t num_bytes) {
     // Check to make sure caller is asking for 1 or more bytes
     if (num_bytes < 1) {
         return 0;
+    }
+    // Check to make sure registers are in bounds.
+    if (reg + num_bytes > config_.size_bytes) {
+        DEBUG_PRINTF("EEPROM::ReadBuf: Read of %d bytes at 0x%x overruns end of EEPROM.\r\n");
+        return PICO_ERROR_INVALID_ARG;
     }
 
     // Read data from register(s) over I2C
@@ -103,36 +111,27 @@ bool EEPROM::Init() {
     return true;
 }
 
-template <typename T>
-bool EEPROM::Save(const T &data_to_save, uint8_t start_reg) {
-    // Check size of data and available space on the EEPROM.
-    uint16_t data_size_bytes = sizeof(data_to_save);
-    uint16_t remaining_capacity_bytes = config_.size_bytes - start_reg;
-    if (remaining_capacity_bytes < data_size_bytes) {
-        DEBUG_PRINTF(
-            "EEPROM::Save: Failed to save data of size %d Bytes to EEPROM register 0x%x: only %d Bytes remaining.\r\n",
-            data_size_bytes, start_reg, remaining_capacity_bytes);
-        return false;
+void EEPROM::Dump() {
+    DEBUG_PRINTF("EEPROM::Dump:\r\n");
+    // Print header row.
+    DEBUG_PRINTF("\tPG ");
+    for (uint16_t i = 0; i < config_.page_size_bytes; i++) {
+        DEBUG_PRINTF("  %02x", i);
     }
-    int num_bytes_written = WriteBuf(start_reg, (uint8_t *)(&data_to_save), data_size_bytes);
-    int expected_bytes_written = data_size_bytes + 1;
-    if (num_bytes_written != expected_bytes_written) {
-        // num_bytes_written is usually the number of bytes written, but could be a negative error code value.
-        DEBUG_PRINTF("EEPROM::Save: I2C write failed, written byte counter returned %d but expected %d.\r\n");
-        return false;
-    }
-    return true;
-}
-
-template <typename T>
-bool EEPROM::Load(T &data_to_load, uint8_t start_reg) {
-    uint16_t data_size_bytes = sizeof(data_to_load);
-    uint16_t remaining_capacity_bytes = config_.size_bytes - start_reg;
-    if (remaining_capacity_bytes < data_size_bytes) {
-        DEBUG_PRINTF(
-            "EEPROM::Load: Failed to load data of size %d Bytes from EEPROM register 0x%x: only %d Bytes "
-            "remaining.\r\n",
-            data_size_bytes, start_reg, remaining_capacity_bytes);
-        return false;
+    DEBUG_PRINTF("\r\n\r\n");
+    // Print EEPROM contents.
+    for (uint16_t page = 0; page < config_.size_bytes / config_.page_size_bytes; page++) {
+        uint8_t page_start = page * config_.page_size_bytes;
+        DEBUG_PRINTF("\t%02x:", page_start);
+        for (uint16_t i = 0; i < config_.page_size_bytes; i++) {
+            uint8_t byte_addr = page_start + i;
+            uint8_t byte;
+            int status = ReadByte(byte_addr, byte);
+            if (status < 0) {
+                DEBUG_PRINTF("  ??");  // Indicate read failure with question marks.
+            }
+            DEBUG_PRINTF("  %02x", byte);
+        }
+        DEBUG_PRINTF("\r\n");  // End of page.
     }
 }
