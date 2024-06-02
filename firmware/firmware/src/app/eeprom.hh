@@ -11,6 +11,7 @@ class EEPROM {
         uint8_t i2c_addr = 0b1010001;  // M24C02, TSSOP-8, E3=0 E2=0 E1=1
         uint16_t size_bytes = 2e3;     // M24C02 = 2kB
         uint16_t page_size_bytes = 16;
+        uint32_t i2c_timeout_us = 1e6;
 
         bool requires_init = false;
         // These parameters only used if initialization is required.
@@ -49,15 +50,8 @@ class EEPROM {
     template <typename T>
     bool Load(T &data_to_load, uint8_t start_reg = 0x0);
 
-#ifdef HARDWARE_UNIT_TESTS
-    CPP_AT_CALLBACK(EEPROMTestCallback);
-#endif
-
-   private:
-    EEPROMConfig config_;
-
-    inline int EEPROM::WriteByte(const uint8_t reg, const uint8_t byte);
-    inline int EEPROM::ReadByte(const uint8_t reg, uint8_t &byte);
+    int WriteByte(const uint8_t reg, const uint8_t byte);
+    int ReadByte(const uint8_t reg, uint8_t &byte);
 
     /** I2C helper function that writes 1 byte to the specified register.
      * @param[in] reg Register address (on the device) to write to.
@@ -66,14 +60,17 @@ class EEPROM {
      * @retval Number of bytes that were written, or an error code. Should be equal to num_bytes+1 (includes 1-Byte
      * Address).
      */
-    inline int EEPROM::WriteBuf(const uint8_t reg, uint8_t *buf, const uint16_t nbytes);
+    inline int WriteBuf(const uint8_t reg, uint8_t *buf, const uint16_t nbytes);
 
     /** Read byte(s) from the specified register. If num_bytes > 1, read from consecutive registers.
      * @param[in] reg Register address (on the device) to read from.
      * @param[in] buf Byte buffer to read into from the given address.
      * @param[in] num_bytes Number of bytes to read from the device.
      */
-    inline int EEPROM::ReadBuf(const uint8_t reg, uint8_t *buf, const uint16_t nbytes)
+    inline int ReadBuf(const uint8_t reg, uint8_t *buf, const uint16_t nbytes);
+
+   private:
+    EEPROMConfig config_;
 };
 
 extern EEPROM eeprom;

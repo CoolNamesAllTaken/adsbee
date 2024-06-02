@@ -1,19 +1,14 @@
 #include <stdio.h>
 
-#include "pico/stdlib.h"
-// #include "hardware/gpio.h"
-// #include "hardware/pio.h"
-// #include "hardware/clocks.h"
-// // #include "hardware/dma.h"
-// #include "hardware/irq.h"
-// #include "blink.pio.h"
-// #include "capture.pio.h"
 #include "ads_b_packet.hh"
 #include "ads_bee.hh"
 #include "comms.hh"
 #include "eeprom.hh"
 #include "hal.hh"
 #include "pico/binary_info.h"
+#include "pico/stdlib.h"
+
+const char* kSoftwareVersionStr = "0.0.1";
 
 static const uint16_t kBitsPerNibble = 4;
 static const uint16_t kBitsPerByte = 8;
@@ -31,6 +26,8 @@ int main() {
 
     ads_bee.Init();
     comms_manager.Init();
+    DEBUG_PRINTF("ADSBee 1090\r\nSoftware Version %s\r\n", kSoftwareVersionStr);
+    eeprom.Init();
 
     while (true) {
         // Loop forever.

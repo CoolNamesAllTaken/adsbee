@@ -5,8 +5,13 @@
 
 #include "ads_bee.hh"
 #include "comms.hh"
+#include "eeprom.hh"
 #include "main.hh"
 #include "pico/stdlib.h"  // for getchar etc
+
+#ifdef HARDWARE_UNIT_TESTS
+#include "hardware_unit_tests.hh"
+#endif
 
 // For mapping cpp_at_printf
 #include <cstdarg>
@@ -152,12 +157,12 @@ static const CppAT::ATCommandDef_t at_command_list[] = {
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxGainCallback, comms_manager)
 
     },
-#ifdef HARDWARE_UNIT_TEST
-    {.command_buf = "+EEPROMTEST",
+#ifdef HARDWARE_UNIT_TESTS
+    {.command_buf = "+TEST",
      .min_args = 0,
      .max_args = 0,
-     .help_string_buf = "Test the EEPROM.",
-     .callback - CPP_AT_BIND_MEMBER_CALLBACK(EEPROM::EEPROMTestCallback, eeprom)}
+     .help_string_buf = "Run hardware self-tests.",
+     .callback = ATTestCallback}
 #endif
 
 };

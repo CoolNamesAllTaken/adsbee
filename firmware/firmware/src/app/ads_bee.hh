@@ -48,7 +48,7 @@ class ADSBee {
         i2c_inst_t *onboard_i2c = i2c1;
         uint16_t onboard_i2c_sda_pin = 2;
         uint16_t onboard_i2c_scl_pin = 3;
-        uint32_t onboard_i2c_clk_freq_hz = 400e3;  // 400kHz
+        uint32_t onboard_i2c_clk_freq_hz = 100e3;  // 100kHz
 
         uint16_t esp32_enable_pin = 14;
         uint16_t esp32_gpio0_boot_pin = 11;
