@@ -233,27 +233,27 @@ void ADSBee::OnDecodeComplete() {
     pio_interrupt_clear(config_.preamble_detector_pio, 0);
 }
 
-bool ADSBee::SetMTLHiMilliVolts(int mtl_hi_mv_) {
-    if (mtl_hi_mv_ > kMTLMaxMV || mtl_hi_mv_ < kMTLMinMV) {
+bool ADSBee::SetMTLHiMilliVolts(int mtl_hi_mv) {
+    if (mtl_hi_mv > kMTLMaxMV || mtl_hi_mv < kMTLMinMV) {
         DEBUG_PRINTF(
             "ADSBee::SetMTLHiMilliVolts: Unable to set mtl_hi_mv_ to %d, outside of permissible range %d-%d.\r\n",
-            mtl_hi_mv_, kMTLMinMV, kMTLMaxMV);
+            mtl_hi_mv, kMTLMinMV, kMTLMaxMV);
         return false;
     }
-    mtl_hi_mv_ = mtl_hi_mv_;
+    mtl_hi_mv_ = mtl_hi_mv;
     mtl_hi_pwm_count_ = mtl_hi_mv_ * kMTLMaxPWMCount / kVDDMV;
 
     return true;
 }
 
-bool ADSBee::SetMTLLoMilliVolts(int mtl_lo_mv_) {
-    if (mtl_lo_mv_ > kMTLMaxMV || mtl_lo_mv_ < kMTLMinMV) {
+bool ADSBee::SetMTLLoMilliVolts(int mtl_lo_mv) {
+    if (mtl_lo_mv > kMTLMaxMV || mtl_lo_mv < kMTLMinMV) {
         DEBUG_PRINTF(
             "ADSBee::SetMTLLoMilliVolts: Unable to set mtl_lo_mv_ to %d, outside of permissible range %d-%d.\r\n",
-            mtl_lo_mv_, kMTLMinMV, kMTLMaxMV);
+            mtl_lo_mv, kMTLMinMV, kMTLMaxMV);
         return false;
     }
-    mtl_lo_mv_ = mtl_lo_mv_;
+    mtl_lo_mv_ = mtl_lo_mv;
     mtl_lo_pwm_count_ = mtl_lo_mv_ * kMTLMaxPWMCount / kVDDMV;
 
     return true;

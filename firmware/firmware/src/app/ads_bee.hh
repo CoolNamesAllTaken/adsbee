@@ -75,25 +75,25 @@ class ADSBee {
 
     /**
      * Set the high Minimum Trigger Level (MTL) at the AD8314 output in milliVolts.
-     * @param[in] mtl_hi_mv_ Voltage level for a "high" trigger on the V_DN AD8314 output. The AD8314 has a nominal
+     * @param[in] mtl_hi_mv Voltage level for a "high" trigger on the V_DN AD8314 output. The AD8314 has a nominal
      * output voltage of 2.25V on V_DN, with a logarithmic slope of around -42.6mV/dB and a minimum output voltage of
      * 0.05V. Thus, power levels received at the input of the AD8314 correspond to the following voltages. 2250mV =
      * -49dBm 50mV = -2.6dBm Note that there is a +30dB LNA gain stage in front of the AD8314, so for the overall
      * receiver, the MTL values are more like: 2250mV = -79dBm 50mV = -32.6dBm
      * @retval True if succeeded, False if MTL value was out of range.
      */
-    bool SetMTLHiMilliVolts(int mtl_hi_mv_);
+    bool SetMTLHiMilliVolts(int mtl_hi_mv);
 
     /**
      * Set the low Minimum Trigger Level (MTL) at the AD8314 output in milliVolts.
-     * @param[in] mtl_hi_mv_ Voltage level for a "low" trigger on the V_DN AD8314 output. The AD8314 has a nominal
+     * @param[in] mtl_lo_mv Voltage level for a "low" trigger on the V_DN AD8314 output. The AD8314 has a nominal
      * output voltage of 2.25V on V_DN, with a logarithmic slope of around -42.6mV/dB and a minimum output voltage of
      * 0.05V. Thus, power levels received at the input of the AD8314 correspond to the following voltages. 2250mV =
      * -49dBm 50mV = -2.6dBm Note that there is a +30dB LNA gain stage in front of the AD8314, so for the overall
      * receiver, the MTL values are more like: 2250mV = -79dBm 50mV = -32.6dBm
      * @retval True if succeeded, False if MTL value was out of range.
      */
-    bool SetMTLLoMilliVolts(int mtl_lo_mv_);
+    bool SetMTLLoMilliVolts(int mtl_lo_mv);
 
     /**
      * Return the value of the high Minimum Trigger Level threshold in milliVolts.
