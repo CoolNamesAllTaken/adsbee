@@ -8,6 +8,7 @@
 #include "eeprom.hh"
 #include "main.hh"
 #include "pico/stdlib.h"  // for getchar etc
+#include "settings.hh"
 
 #ifdef HARDWARE_UNIT_TESTS
 #include "hardware_unit_tests.hh"
@@ -57,46 +58,51 @@ CPP_AT_CALLBACK(CommsManager::ATConfigCallback) {
 }
 
 /**
- * AT+MTLSET Callback
- * AT+MTLSET=<mtl_lo_mv>,<mtl_hi_mv>
+ * AT+TLSET Callback
+ * AT+TLSET=<mtl_lo_mv>,<mtl_hi_mv>
  *  mtl_lo_mv = Low trigger value, mV.
  *  mtl_hi_mv = High trigger value, mV.
- * AT+MTLSET?
- * +MTLSET=
+ * AT+TLSET?
+ * +TLSET=
  */
-CPP_AT_CALLBACK(CommsManager::ATMTLSetCallback) {
-    if (op == '?') {
-        // AT+MTLSET value query.
-        CPP_AT_PRINTF("=%d,%d\r\n", ads_bee.GetMTLLoMilliVolts(), ads_bee.GetMTLHiMilliVolts());
-        CPP_AT_SILENT_SUCCESS();
-    } else if (op == '=') {
-        // Attempt setting LO MTL value, in milliVolts, if first argument is not blank.
-        if (CPP_AT_HAS_ARG(0)) {
-            uint16_t new_mtl_lo_mv;
-            CPP_AT_TRY_ARG2NUM(0, new_mtl_lo_mv);
-            if (!ads_bee.SetMTLLoMilliVolts(new_mtl_lo_mv)) {
-                CPP_AT_ERROR("Failed to set mtl_lo_mv.");
+CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
+    switch (op) {
+        case '?':
+            // AT+TLSET value query.
+            CPP_AT_PRINTF("=%d,%d\r\n", ads_bee.GetTLLoMilliVolts(), ads_bee.GetTLHiMilliVolts());
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            // Attempt setting LO TL value, in milliVolts, if first argument is not blank.
+            if (CPP_AT_HAS_ARG(0)) {
+                uint16_t new_mtl_lo_mv;
+                CPP_AT_TRY_ARG2NUM(0, new_mtl_lo_mv);
+                if (!ads_bee.SetTLLoMilliVolts(new_mtl_lo_mv)) {
+                    CPP_AT_ERROR("Failed to set mtl_lo_mv.");
+                }
             }
-        }
-        // Attempt setting HI MTL value, in milliVolts, if second argument is not blank.
-        if (CPP_AT_HAS_ARG(1)) {
-            // Set HI MTL value, in milliVolts.
-            uint16_t new_mtl_hi_mv;
-            CPP_AT_TRY_ARG2NUM(1, new_mtl_hi_mv);
-            if (!ads_bee.SetMTLHiMilliVolts(new_mtl_hi_mv)) {
-                CPP_AT_ERROR("Failed to set mtl_hi_mv.");
+            // Attempt setting HI TL value, in milliVolts, if second argument is not blank.
+            if (CPP_AT_HAS_ARG(1)) {
+                // Set HI TL value, in milliVolts.
+                uint16_t new_mtl_hi_mv;
+                CPP_AT_TRY_ARG2NUM(1, new_mtl_hi_mv);
+                if (!ads_bee.SetTLHiMilliVolts(new_mtl_hi_mv)) {
+                    CPP_AT_ERROR("Failed to set mtl_hi_mv.");
+                }
             }
-        }
-        CPP_AT_SUCCESS();
+            CPP_AT_SUCCESS();
+            break;
+        default:
+            CPP_AT_ERROR("Operation '%c' not supported.", op);
     }
     CPP_AT_ERROR();
 }
 
-CPP_AT_CALLBACK(CommsManager::ATMTLReadCallback) {
+CPP_AT_CALLBACK(CommsManager::ATTLReadCallback) {
     switch (op) {
         case '?':
             // Read command.
-            CPP_AT_PRINTF("=%d,%d\r\n", ads_bee.ReadMTLLoMilliVolts(), ads_bee.ReadMTLHiMilliVolts());
+            CPP_AT_PRINTF("=%d,%d\r\n", ads_bee.ReadTLLoMilliVolts(), ads_bee.ReadTLHiMilliVolts());
             CPP_AT_SILENT_SUCCESS();
             break;
         default:
@@ -119,13 +125,43 @@ CPP_AT_CALLBACK(CommsManager::ATRxGainCallback) {
             CPP_AT_ERROR("Received operator '%c' but no args.", op);
             break;
         case '?':
-            CPP_AT_PRINTF("=%d", ads_bee.ReadRxGain());
+            CPP_AT_PRINTF("=%d(%d)", ads_bee.GetRxGain(), ads_bee.ReadRxGain());
             CPP_AT_SILENT_SUCCESS();
             break;
         default:
             CPP_AT_ERROR("Operator '%c' not supported.", op);
     }
     CPP_AT_ERROR();
+}
+
+CPP_AT_CALLBACK(CommsManager::ATSettingsCallback) {
+    switch (op) {
+        case '=':
+            // Note: Don't allow settings modification from here, do it directly through other commands.
+            if (CPP_AT_HAS_ARG(0)) {
+                if (args[0].compare("SAVE") == 0) {
+                    if (!settings_manager.Save()) {
+                        CPP_AT_ERROR("Error while writing to EEPROM.");
+                    }
+                } else if (args[0].compare("LOAD") == 0) {
+                    if (!settings_manager.Load()) {
+                        CPP_AT_ERROR("Error while reading from EEPROM.");
+                    }
+                } else if (args[0].compare("RESET") == 0) {
+                    settings_manager.ResetToDefaults();
+                }
+                CPP_AT_SUCCESS();
+            }
+            CPP_AT_ERROR("No arguments provided.");
+            break;
+        case '?':
+            CPP_AT_PRINTF("=%d(tl_lo_mv),%d(tl_hi_mv),%d(rx_gain)\r\n", settings_manager.settings.tl_lo_mv,
+                          settings_manager.settings.tl_hi_mv, settings_manager.settings.rx_gain);
+            CPP_AT_SUCCESS();
+            break;
+        default:
+            CPP_AT_ERROR("Operator '%c' not supported.", op);
+    }
 }
 
 static const CppAT::ATCommandDef_t at_command_list[] = {
@@ -135,20 +171,19 @@ static const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string_buf =
          "AT+CONFIG=<config_mode>\r\n\tSet whether the module is in CONFIG or RUN mode. RUN=0, CONFIG=1.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATConfigCallback, comms_manager)},
-    {.command_buf = "+MTLSET",
+    {.command_buf = "+TLSET",
      .min_args = 0,
      .max_args = 2,
-     .help_string_buf = "AT+MTLSet=<mtl_lo_mv_>,<mtl_hi_mv_>\r\n\tQuery or set both HI and LO Minimum Trigger Level "
-                        "(MTL) thresholds for RF power detector.\r\n"
-                        "\tQuery is AT+MTLSET?, Set is AT+MTLSet=<mtl_lo_mv_>,<mtl_hi_mv_>.",
-     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATMTLSetCallback, comms_manager)},
-    {.command_buf = "+MTLREAD",
+     .help_string_buf = "AT+TLSet=<mtl_lo_mv_>,<mtl_hi_mv_>\r\n\tQuery or set both HI and LO Trigger Level "
+                        "(TL) thresholds for RF power detector.\r\n"
+                        "\tQuery is AT+TLSET?, Set is AT+TLSet=<mtl_lo_mv_>,<mtl_hi_mv_>.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLSetCallback, comms_manager)},
+    {.command_buf = "+TLREAD",
      .min_args = 0,
      .max_args = 0,
-     .help_string_buf =
-         "Read ADC counts and mV values for high and low MTL thresholds. Call with no ops nor arguments, "
-         "AT+MTLREAD.",
-     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATMTLReadCallback, comms_manager)},
+     .help_string_buf = "Read ADC counts and mV values for high and low TL thresholds. Call with no ops nor arguments, "
+                        "AT+TLREAD.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLReadCallback, comms_manager)},
     {.command_buf = "+RXGAIN",
      .min_args = 0,
      .max_args = 1,
@@ -157,6 +192,11 @@ static const CppAT::ATCommandDef_t at_command_list[] = {
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxGainCallback, comms_manager)
 
     },
+    {.command_buf = "+SETTINGS",
+     .min_args = 0,
+     .max_args = 3,
+     .help_string_buf = "Display, load, or save nonvolatile settings.\r\n\tAT+SETTINGS?\r\n\t+SETTINGS=...\r\n\t",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSettingsCallback, comms_manager)},
 #ifdef HARDWARE_UNIT_TESTS
     {.command_buf = "+TEST",
      .min_args = 0,

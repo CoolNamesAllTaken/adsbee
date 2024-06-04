@@ -11,12 +11,13 @@
 
 class ADSBee {
    public:
-    static constexpr uint16_t kMTLMaxPWMCount = 5000;  // Clock is 125MHz, shoot for 25kHz PWM.
-    static constexpr int kVDDMV = 3300;                // [mV] Voltage of positive supply rail.
-    static constexpr int kMTLMaxMV = 3300;             // [mV]
-    static constexpr int kMTLMinMV = 0;                // [mV]
-    static constexpr int kMTLHiDefaultMV = 2000;       // [mV]
-    static constexpr int kMTLLoDefaultMV = 3000;       // [mV]
+    static constexpr uint16_t kTLMaxPWMCount = 5000;  // Clock is 125MHz, shoot for 25kHz PWM.
+    static constexpr int kVDDMV = 3300;               // [mV] Voltage of positive supply rail.
+    static constexpr int kTLMaxMV = 3300;             // [mV]
+    static constexpr int kTLMinMV = 0;                // [mV]
+    static constexpr int kTLHiDefaultMV = 3000;       // [mV]
+    static constexpr int kTLLoDefaultMV = 2000;       // [mV]
+    static constexpr int kRxGainDefault = 50;         // [unitless]
     static constexpr uint16_t kMaxNumTransponderPackets =
         100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
     static const uint32_t kStatusLEDOnMs = 10;
@@ -32,13 +33,13 @@ class ADSBee {
         uint16_t recovered_clk_pin =
             22;  // Use GPIO22 for the decode PIO program to output its recovered clock (for debugging only).
         // GPIO 24-25 used as PWM outputs for setting analog comparator threshold voltages.
-        uint16_t mtl_lo_pwm_pin = 24;
-        uint16_t mtl_hi_pwm_pin = 25;
+        uint16_t tl_lo_pwm_pin = 25;
+        uint16_t tl_hi_pwm_pin = 24;
         // GPIO 26-27 used as ADC inputs for reading analog comparator threshold voltages after RF filer.
-        uint16_t mtl_lo_adc_pin = 26;
-        uint16_t mtl_lo_adc_input = 0;
-        uint16_t mtl_hi_adc_pin = 27;
-        uint16_t mtl_hi_adc_input = 1;
+        uint16_t tl_lo_adc_pin = 27;
+        uint16_t tl_lo_adc_input = 1;
+        uint16_t tl_hi_adc_pin = 26;
+        uint16_t tl_hi_adc_input = 0;
         // GPIO 28 used as ADC input for the power level of the last decoded packet.
         uint16_t rssi_hold_adc_pin = 28;
         uint16_t rssi_hold_adc_input = 2;
@@ -74,50 +75,50 @@ class ADSBee {
     void OnDecodeComplete();
 
     /**
-     * Set the high Minimum Trigger Level (MTL) at the AD8314 output in milliVolts.
-     * @param[in] mtl_hi_mv Voltage level for a "high" trigger on the V_DN AD8314 output. The AD8314 has a nominal
+     * Set the high Minimum Trigger Level (TL) at the AD8314 output in milliVolts.
+     * @param[in] tl_hi_mv Voltage level for a "high" trigger on the V_DN AD8314 output. The AD8314 has a nominal
      * output voltage of 2.25V on V_DN, with a logarithmic slope of around -42.6mV/dB and a minimum output voltage of
      * 0.05V. Thus, power levels received at the input of the AD8314 correspond to the following voltages. 2250mV =
      * -49dBm 50mV = -2.6dBm Note that there is a +30dB LNA gain stage in front of the AD8314, so for the overall
-     * receiver, the MTL values are more like: 2250mV = -79dBm 50mV = -32.6dBm
-     * @retval True if succeeded, False if MTL value was out of range.
+     * receiver, the TL values are more like: 2250mV = -79dBm 50mV = -32.6dBm
+     * @retval True if succeeded, False if TL value was out of range.
      */
-    bool SetMTLHiMilliVolts(int mtl_hi_mv);
+    bool SetTLHiMilliVolts(int tl_hi_mv);
 
     /**
-     * Set the low Minimum Trigger Level (MTL) at the AD8314 output in milliVolts.
-     * @param[in] mtl_lo_mv Voltage level for a "low" trigger on the V_DN AD8314 output. The AD8314 has a nominal
+     * Set the low Minimum Trigger Level (TL) at the AD8314 output in milliVolts.
+     * @param[in] tl_lo_mv Voltage level for a "low" trigger on the V_DN AD8314 output. The AD8314 has a nominal
      * output voltage of 2.25V on V_DN, with a logarithmic slope of around -42.6mV/dB and a minimum output voltage of
      * 0.05V. Thus, power levels received at the input of the AD8314 correspond to the following voltages. 2250mV =
      * -49dBm 50mV = -2.6dBm Note that there is a +30dB LNA gain stage in front of the AD8314, so for the overall
-     * receiver, the MTL values are more like: 2250mV = -79dBm 50mV = -32.6dBm
-     * @retval True if succeeded, False if MTL value was out of range.
+     * receiver, the TL values are more like: 2250mV = -79dBm 50mV = -32.6dBm
+     * @retval True if succeeded, False if TL value was out of range.
      */
-    bool SetMTLLoMilliVolts(int mtl_lo_mv);
+    bool SetTLLoMilliVolts(int tl_lo_mv);
 
     /**
      * Return the value of the high Minimum Trigger Level threshold in milliVolts.
-     * @retval MTL in milliVolts.
+     * @retval TL in milliVolts.
      */
-    int GetMTLHiMilliVolts() { return mtl_hi_mv_; }
+    int GetTLHiMilliVolts() { return tl_hi_mv_; }
 
     /**
      * Return the value of the low Minimum Trigger Level threshold in milliVolts.
-     * @retval MTL in milliVolts.
+     * @retval TL in milliVolts.
      */
-    int GetMTLLoMilliVolts() { return mtl_lo_mv_; }
+    int GetTLLoMilliVolts() { return tl_lo_mv_; }
 
     /**
      * Read the high Minimum Trigger Level threshold via ADC.
-     * @retval MTL in milliVolts.
+     * @retval TL in milliVolts.
      */
-    int ReadMTLHiMilliVolts();
+    int ReadTLHiMilliVolts();
 
     /**
      * Read the low Minimum Trigger Level threshold via ADC.
-     * @retval MTL in milliVolts.
+     * @retval TL in milliVolts.
      */
-    int ReadMTLLoMilliVolts();
+    int ReadTLLoMilliVolts();
 
     /**
      * Set the value of the receive signal path gain digipot over I2C and store the value for reference.
@@ -130,9 +131,7 @@ class ADSBee {
      * Returns the last written value of rx_gain.
      * @retval Gain (integer ratio between 1-101).
      */
-    int GetRxGain(int rx_gain) {
-        return 1 + (rx_gain_digipot_resistance_ohms_ / 1e3);  // Non-inverting amp with R1 = 1kOhms.
-    }
+    int GetRxGain() { return rx_gain_; }
 
     /**
      * Reads the wiper value from the receive signal path gain digipot over I2C and calculates then returns the
@@ -165,21 +164,21 @@ class ADSBee {
 
     uint32_t led_off_timestamp_ms_ = 0;
 
-    uint16_t mtl_lo_pwm_slice_ = 0;
-    uint16_t mtl_hi_pwm_slice_ = 0;
-    uint16_t mtl_hi_pwm_chan_ = 0;
-    uint16_t mtl_lo_pwm_chan_ = 0;
+    uint16_t tl_lo_pwm_slice_ = 0;
+    uint16_t tl_hi_pwm_slice_ = 0;
+    uint16_t tl_hi_pwm_chan_ = 0;
+    uint16_t tl_lo_pwm_chan_ = 0;
 
-    uint16_t mtl_hi_mv_ = kMTLHiDefaultMV;
-    uint16_t mtl_lo_mv_ = kMTLLoDefaultMV;
-    uint16_t mtl_hi_pwm_count_ = 0;  // out of kMTLMaxPWMCount
-    uint16_t mtl_lo_pwm_count_ = 0;  // out of kMTLMaxPWMCount
+    uint16_t tl_hi_mv_ = kTLHiDefaultMV;
+    uint16_t tl_lo_mv_ = kTLLoDefaultMV;
+    uint16_t tl_hi_pwm_count_ = 0;  // out of kTLMaxPWMCount
+    uint16_t tl_lo_pwm_count_ = 0;  // out of kTLMaxPWMCount
 
-    uint16_t mtl_lo_adc_counts_ = 0;
-    uint16_t mtl_hi_adc_counts_ = 0;
+    uint16_t tl_lo_adc_counts_ = 0;
+    uint16_t tl_hi_adc_counts_ = 0;
     uint16_t rssi_adc_counts_ = 0;
 
-    uint32_t rx_gain_digipot_resistance_ohms_ = 100e3;
+    uint32_t rx_gain_ = kRxGainDefault;
 
     // Due to a quirk, rx_buffer_ is used to store every word except for the first one.
     uint32_t rx_buffer_[ADSBPacket::kMaxPacketLenWords32 - 1];

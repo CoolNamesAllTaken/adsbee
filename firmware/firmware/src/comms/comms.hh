@@ -16,9 +16,10 @@ class CommsManager {
     bool Update();
 
     CPP_AT_CALLBACK(ATConfigCallback);
-    CPP_AT_CALLBACK(ATMTLSetCallback);
-    CPP_AT_CALLBACK(ATMTLReadCallback);
+    CPP_AT_CALLBACK(ATTLSetCallback);
+    CPP_AT_CALLBACK(ATTLReadCallback);
     CPP_AT_CALLBACK(ATRxGainCallback);
+    CPP_AT_CALLBACK(ATSettingsCallback);
 
     int debug_printf(const char *format, ...);
 

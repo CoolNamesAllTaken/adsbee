@@ -7,6 +7,7 @@
 #include "hal.hh"
 #include "pico/binary_info.h"
 #include "pico/stdlib.h"
+#include "settings.hh"
 
 const char* kSoftwareVersionStr = "0.0.1";
 
@@ -18,6 +19,7 @@ ADSBee::ADSBeeConfig ads_bee_config;
 ADSBee ads_bee = ADSBee(ads_bee_config);
 CommsManager comms_manager = CommsManager({});
 EEPROM eeprom = EEPROM({});
+SettingsManager settings_manager;
 
 int main() {
     bi_decl(bi_program_description("ADS-Bee ADSB Receiver"));

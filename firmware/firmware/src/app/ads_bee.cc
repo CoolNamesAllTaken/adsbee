@@ -45,28 +45,28 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
     isr_access = this;
 
     // Figure out slice and channel values that will be used for setting PWM duty cycle.
-    mtl_lo_pwm_slice_ = pwm_gpio_to_slice_num(config_.mtl_lo_pwm_pin);
-    mtl_hi_pwm_slice_ = pwm_gpio_to_slice_num(config_.mtl_hi_pwm_pin);
-    mtl_lo_pwm_chan_ = pwm_gpio_to_channel(config_.mtl_lo_pwm_pin);
-    mtl_hi_pwm_chan_ = pwm_gpio_to_channel(config_.mtl_hi_pwm_pin);
+    tl_lo_pwm_slice_ = pwm_gpio_to_slice_num(config_.tl_lo_pwm_pin);
+    tl_hi_pwm_slice_ = pwm_gpio_to_slice_num(config_.tl_hi_pwm_pin);
+    tl_lo_pwm_chan_ = pwm_gpio_to_channel(config_.tl_lo_pwm_pin);
+    tl_hi_pwm_chan_ = pwm_gpio_to_channel(config_.tl_hi_pwm_pin);
 }
 
 bool ADSBee::Init() {
-    // Initialize the MTL bias PWM output.
-    gpio_set_function(config_.mtl_lo_pwm_pin, GPIO_FUNC_PWM);
-    gpio_set_function(config_.mtl_hi_pwm_pin, GPIO_FUNC_PWM);
-    pwm_set_wrap(mtl_lo_pwm_slice_, kMTLMaxPWMCount);
-    pwm_set_wrap(mtl_hi_pwm_slice_, kMTLMaxPWMCount);  // redundant since it's the same slice
+    // Initialize the TL bias PWM output.
+    gpio_set_function(config_.tl_lo_pwm_pin, GPIO_FUNC_PWM);
+    gpio_set_function(config_.tl_hi_pwm_pin, GPIO_FUNC_PWM);
+    pwm_set_wrap(tl_lo_pwm_slice_, kTLMaxPWMCount);
+    pwm_set_wrap(tl_hi_pwm_slice_, kTLMaxPWMCount);  // redundant since it's the same slice
 
-    SetMTLLoMilliVolts(kMTLLoDefaultMV);
-    SetMTLHiMilliVolts(kMTLHiDefaultMV);
-    pwm_set_enabled(mtl_lo_pwm_slice_, true);
-    pwm_set_enabled(mtl_hi_pwm_slice_, true);  // redundant since it's the same slice
+    SetTLLoMilliVolts(kTLLoDefaultMV);
+    SetTLHiMilliVolts(kTLHiDefaultMV);
+    pwm_set_enabled(tl_lo_pwm_slice_, true);
+    pwm_set_enabled(tl_hi_pwm_slice_, true);  // redundant since it's the same slice
 
     // Initialize the ML bias ADC input.
     adc_init();
-    adc_gpio_init(config_.mtl_lo_adc_pin);
-    adc_gpio_init(config_.mtl_hi_adc_pin);
+    adc_gpio_init(config_.tl_lo_adc_pin);
+    adc_gpio_init(config_.tl_hi_adc_pin);
     adc_gpio_init(config_.rssi_hold_adc_pin);
 
     // Initialize RSSI peak detector clear pin.
@@ -154,8 +154,8 @@ bool ADSBee::Update() {
     }
 
     // Update PWM output duty cycle.
-    pwm_set_chan_level(mtl_lo_pwm_slice_, mtl_lo_pwm_chan_, mtl_lo_pwm_count_);
-    pwm_set_chan_level(mtl_hi_pwm_slice_, mtl_hi_pwm_chan_, mtl_hi_pwm_count_);
+    pwm_set_chan_level(tl_lo_pwm_slice_, tl_lo_pwm_chan_, tl_lo_pwm_count_);
+    pwm_set_chan_level(tl_hi_pwm_slice_, tl_hi_pwm_chan_, tl_hi_pwm_count_);
 
     // Prune aircraft dictionary.
     if (last_aircraft_dictionary_update_timestamp_ms_ - timestamp_ms > config_.aircraft_dictionary_update_interval_ms) {
@@ -233,54 +233,53 @@ void ADSBee::OnDecodeComplete() {
     pio_interrupt_clear(config_.preamble_detector_pio, 0);
 }
 
-bool ADSBee::SetMTLHiMilliVolts(int mtl_hi_mv) {
-    if (mtl_hi_mv > kMTLMaxMV || mtl_hi_mv < kMTLMinMV) {
+bool ADSBee::SetTLHiMilliVolts(int tl_hi_mv) {
+    if (tl_hi_mv > kTLMaxMV || tl_hi_mv < kTLMinMV) {
         DEBUG_PRINTF(
-            "ADSBee::SetMTLHiMilliVolts: Unable to set mtl_hi_mv_ to %d, outside of permissible range %d-%d.\r\n",
-            mtl_hi_mv, kMTLMinMV, kMTLMaxMV);
+            "ADSBee::SetTLHiMilliVolts: Unable to set tl_hi_mv_ to %d, outside of permissible range %d-%d.\r\n",
+            tl_hi_mv, kTLMinMV, kTLMaxMV);
         return false;
     }
-    mtl_hi_mv_ = mtl_hi_mv;
-    mtl_hi_pwm_count_ = mtl_hi_mv_ * kMTLMaxPWMCount / kVDDMV;
+    tl_hi_mv_ = tl_hi_mv;
+    tl_hi_pwm_count_ = tl_hi_mv_ * kTLMaxPWMCount / kVDDMV;
 
     return true;
 }
 
-bool ADSBee::SetMTLLoMilliVolts(int mtl_lo_mv) {
-    if (mtl_lo_mv > kMTLMaxMV || mtl_lo_mv < kMTLMinMV) {
+bool ADSBee::SetTLLoMilliVolts(int tl_lo_mv) {
+    if (tl_lo_mv > kTLMaxMV || tl_lo_mv < kTLMinMV) {
         DEBUG_PRINTF(
-            "ADSBee::SetMTLLoMilliVolts: Unable to set mtl_lo_mv_ to %d, outside of permissible range %d-%d.\r\n",
-            mtl_lo_mv, kMTLMinMV, kMTLMaxMV);
+            "ADSBee::SetTLLoMilliVolts: Unable to set tl_lo_mv_ to %d, outside of permissible range %d-%d.\r\n",
+            tl_lo_mv, kTLMinMV, kTLMaxMV);
         return false;
     }
-    mtl_lo_mv_ = mtl_lo_mv;
-    mtl_lo_pwm_count_ = mtl_lo_mv_ * kMTLMaxPWMCount / kVDDMV;
+    tl_lo_mv_ = tl_lo_mv;
+    tl_lo_pwm_count_ = tl_lo_mv_ * kTLMaxPWMCount / kVDDMV;
 
     return true;
 }
 
 inline int adc_counts_to_mv(uint16_t adc_counts) { return 3300 * adc_counts / 0xFFF; }
 
-int ADSBee::ReadMTLHiMilliVolts() {
-    // Read back the high level MTL bias output voltage.
-    adc_select_input(config_.mtl_hi_adc_input);
-    mtl_hi_adc_counts_ = adc_read();
-    return adc_counts_to_mv(mtl_hi_adc_counts_);
+int ADSBee::ReadTLHiMilliVolts() {
+    // Read back the high level TL bias output voltage.
+    adc_select_input(config_.tl_hi_adc_input);
+    tl_hi_adc_counts_ = adc_read();
+    return adc_counts_to_mv(tl_hi_adc_counts_);
 }
 
-int ADSBee::ReadMTLLoMilliVolts() {
-    // Read back the low level MTL bias output voltage.
-    adc_select_input(config_.mtl_lo_adc_input);
-    mtl_lo_adc_counts_ = adc_read();
-    return adc_counts_to_mv(mtl_lo_adc_counts_);
+int ADSBee::ReadTLLoMilliVolts() {
+    // Read back the low level TL bias output voltage.
+    adc_select_input(config_.tl_lo_adc_input);
+    tl_lo_adc_counts_ = adc_read();
+    return adc_counts_to_mv(tl_lo_adc_counts_);
 }
 
 bool ADSBee::SetRxGain(int rx_gain) {
-    rx_gain_digipot_resistance_ohms_ = (rx_gain - 1) * 1e3;  // Non-inverting amp with R1 = 1kOhms.
-    uint8_t wiper_value_counts = (rx_gain_digipot_resistance_ohms_ / kRxgainDigipotOhmsPerCount);
+    rx_gain_ = rx_gain;
+    uint32_t rx_gain_digipot_resistance_ohms = (rx_gain_ - 1) * 1e3;  // Non-inverting amp with R1 = 1kOhms.
+    uint8_t wiper_value_counts = (rx_gain_digipot_resistance_ohms / kRxgainDigipotOhmsPerCount);
     return i2c_write_blocking(config_.onboard_i2c, kRxGainDigipotI2CAddr, &wiper_value_counts, 1, false) == 1;
-    // uint8_t buf = (uint8_t)rx_gain;
-    // return i2c_write_blocking(config_.onboard_i2c, kRxGainDigipotI2CAddr, &buf, 1, false) == 1;
 }
 
 int ADSBee::ReadRxGain() {
