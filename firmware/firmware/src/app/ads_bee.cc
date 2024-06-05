@@ -80,8 +80,8 @@ bool ADSBee::Init() {
     gpio_set_function(config_.onboard_i2c_scl_pin, GPIO_FUNC_I2C);
     uint8_t wiper_value_counts;
     if (i2c_read_blocking(config_.onboard_i2c, kRxGainDigipotI2CAddr, &wiper_value_counts, 1, false) != 1) {
-        DEBUG_PRINTF("ADSBee::Init: Failed to read wiper position from Rx Gain Digipot at I2C address 0x%x.\r\n",
-                     kRxGainDigipotI2CAddr);
+        CONSOLE_PRINTF("ADSBee::Init: Failed to read wiper position from Rx Gain Digipot at I2C address 0x%x.\r\n",
+                       kRxGainDigipotI2CAddr);
         return false;
     }
 
@@ -124,7 +124,7 @@ bool ADSBee::Init() {
     message_decoder_program_init(config_.message_decoder_pio, message_decoder_sm_, message_decoder_offset_,
                                  config_.pulses_pin, config_.recovered_clk_pin, message_decoder_div);
 
-    DEBUG_PRINTF("ADSBee::Init: PIOs initialized.\r\n");
+    CONSOLE_PRINTF("ADSBee::Init: PIOs initialized.\r\n");
 
     gpio_init(config_.status_led_pin);
     gpio_set_dir(config_.status_led_pin, GPIO_OUT);
@@ -181,7 +181,7 @@ void ADSBee::OnDecodeComplete() {
     uint16_t word_index = 0;
     while (!pio_sm_is_rx_fifo_empty(config_.message_decoder_pio, message_decoder_sm_)) {
         uint32_t word = pio_sm_get(config_.message_decoder_pio, message_decoder_sm_);
-        // DEBUG_PRINTF("\t%d: %08x\r\n", word_index, word);
+        // CONSOLE_PRINTF("\t%d: %08x\r\n", word_index, word);
 
         switch (word_index) {
             case 0: {
@@ -222,7 +222,7 @@ void ADSBee::OnDecodeComplete() {
                 break;
             default:
                 // Received too many bits for this to be a valid packet. Throw away extra bits!
-                // DEBUG_PRINTF("tossing\r\n");
+                // CONSOLE_PRINTF("tossing\r\n");
                 // Throw away extra bits.
                 break;
         }
@@ -235,7 +235,7 @@ void ADSBee::OnDecodeComplete() {
 
 bool ADSBee::SetTLHiMilliVolts(int tl_hi_mv) {
     if (tl_hi_mv > kTLMaxMV || tl_hi_mv < kTLMinMV) {
-        DEBUG_PRINTF(
+        CONSOLE_PRINTF(
             "ADSBee::SetTLHiMilliVolts: Unable to set tl_hi_mv_ to %d, outside of permissible range %d-%d.\r\n",
             tl_hi_mv, kTLMinMV, kTLMaxMV);
         return false;
@@ -248,7 +248,7 @@ bool ADSBee::SetTLHiMilliVolts(int tl_hi_mv) {
 
 bool ADSBee::SetTLLoMilliVolts(int tl_lo_mv) {
     if (tl_lo_mv > kTLMaxMV || tl_lo_mv < kTLMinMV) {
-        DEBUG_PRINTF(
+        CONSOLE_PRINTF(
             "ADSBee::SetTLLoMilliVolts: Unable to set tl_lo_mv_ to %d, outside of permissible range %d-%d.\r\n",
             tl_lo_mv, kTLMinMV, kTLMaxMV);
         return false;

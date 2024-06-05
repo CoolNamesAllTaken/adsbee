@@ -45,7 +45,7 @@ class EEPROM {
         uint16_t data_size_bytes = sizeof(data_to_save);
         uint16_t remaining_capacity_bytes = config_.size_bytes - start_reg;
         if (remaining_capacity_bytes < data_size_bytes) {
-            DEBUG_PRINTF(
+            CONSOLE_PRINTF(
                 "EEPROM::Save: Failed to save data of size %d Bytes to EEPROM register 0x%x: only %d Bytes "
                 "remaining.\r\n",
                 data_size_bytes, start_reg, remaining_capacity_bytes);
@@ -54,8 +54,8 @@ class EEPROM {
         int num_bytes_written = WriteBuf(start_reg, (uint8_t *)(&data_to_save), data_size_bytes);
         if (num_bytes_written != data_size_bytes) {
             // num_bytes_written is usually the number of bytes written, but could be a negative error code value.
-            DEBUG_PRINTF("EEPROM::Save: I2C write failed, written byte counter returned %d but expected %d.\r\n",
-                         num_bytes_written, data_size_bytes);
+            CONSOLE_PRINTF("EEPROM::Save: I2C write failed, written byte counter returned %d but expected %d.\r\n",
+                           num_bytes_written, data_size_bytes);
             return false;
         }
         return true;
@@ -72,7 +72,7 @@ class EEPROM {
         uint16_t data_size_bytes = sizeof(data_to_load);
         uint16_t remaining_capacity_bytes = config_.size_bytes - start_reg;
         if (remaining_capacity_bytes < data_size_bytes) {
-            DEBUG_PRINTF(
+            CONSOLE_PRINTF(
                 "EEPROM::Load: Failed to load data of size %d Bytes from EEPROM register 0x%x: only %d Bytes "
                 "remaining.\r\n",
                 data_size_bytes, start_reg, remaining_capacity_bytes);
@@ -81,8 +81,8 @@ class EEPROM {
         int num_bytes_read = ReadBuf(start_reg, (uint8_t *)(&data_to_load), sizeof(data_to_load));
         if (num_bytes_read != data_size_bytes) {
             // num_bytes_written is usually the number of bytes written, but could be a negative error code value.
-            DEBUG_PRINTF("EEPROM::Save: I2C read failed, read byte counter returned %d but expected %d.\r\n",
-                         num_bytes_read, data_size_bytes);
+            CONSOLE_PRINTF("EEPROM::Save: I2C read failed, read byte counter returned %d but expected %d.\r\n",
+                           num_bytes_read, data_size_bytes);
             return false;
         }
         return true;

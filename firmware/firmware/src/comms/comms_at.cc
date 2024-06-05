@@ -36,39 +36,42 @@ int CppAT::cpp_at_printf(const char *format, ...) {
  *  config_mode = 0 (print as normal), 1 (suppress non-configuration print messages)
  */
 CPP_AT_CALLBACK(CommsManager::ATConfigCallback) {
-    if (op == '?') {
-        // AT+CONFIG mode query.
-        CPP_AT_PRINTF("=%d", comms_manager.at_config_mode_);
-        CPP_AT_SILENT_SUCCESS();
-    } else if (op == '=') {
-        // AT+CONFIG set command.
-        if (!CPP_AT_HAS_ARG(0)) {
-            CPP_AT_ERROR("Need to specify a config mode to run.");
-        }
-        ATConfigMode new_mode;
-        CPP_AT_TRY_ARG2NUM(0, (uint16_t &)new_mode);
-        if (new_mode >= ATConfigMode::kInvalid) {
-            CPP_AT_ERROR("%d is not a valid config mode.", (uint16_t)new_mode);
-        }
+    switch (op) {
+        case '?':
+            // AT+CONFIG mode query.
+            CPP_AT_PRINTF("=%d", at_config_mode_);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            // AT+CONFIG set command.
+            if (!CPP_AT_HAS_ARG(0)) {
+                CPP_AT_ERROR("Need to specify a config mode to run.");
+            }
+            ATConfigMode new_mode;
+            CPP_AT_TRY_ARG2NUM(0, (uint16_t &)new_mode);
+            if (new_mode >= ATConfigMode::kInvalid) {
+                CPP_AT_ERROR("%d is not a valid config mode.", (uint16_t)new_mode);
+            }
 
-        comms_manager.at_config_mode_ = new_mode;
-        CPP_AT_SUCCESS();
+            at_config_mode_ = new_mode;
+            CPP_AT_SUCCESS();
+            break;
     }
-    CPP_AT_ERROR();
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
 /**
- * AT+TLSET Callback
- * AT+TLSET=<mtl_lo_mv>,<mtl_hi_mv>
+ * AT+TL_SET Callback
+ * AT+TL_SET=<mtl_lo_mv>,<mtl_hi_mv>
  *  mtl_lo_mv = Low trigger value, mV.
  *  mtl_hi_mv = High trigger value, mV.
- * AT+TLSET?
- * +TLSET=
+ * AT+TL_SET?
+ * +TL_SET=
  */
 CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
     switch (op) {
         case '?':
-            // AT+TLSET value query.
+            // AT+TL_SET value query.
             CPP_AT_PRINTF("=%d,%d\r\n", ads_bee.GetTLLoMilliVolts(), ads_bee.GetTLHiMilliVolts());
             CPP_AT_SILENT_SUCCESS();
             break;
@@ -92,10 +95,8 @@ CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
             }
             CPP_AT_SUCCESS();
             break;
-        default:
-            CPP_AT_ERROR("Operation '%c' not supported.", op);
     }
-    CPP_AT_ERROR();
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
 CPP_AT_CALLBACK(CommsManager::ATTLReadCallback) {
@@ -105,10 +106,8 @@ CPP_AT_CALLBACK(CommsManager::ATTLReadCallback) {
             CPP_AT_PRINTF("=%d,%d\r\n", ads_bee.ReadTLLoMilliVolts(), ads_bee.ReadTLHiMilliVolts());
             CPP_AT_SILENT_SUCCESS();
             break;
-        default:
-            CPP_AT_ERROR("Operator not supported.");
     }
-    CPP_AT_ERROR();
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
 CPP_AT_CALLBACK(CommsManager::ATRxGainCallback) {
@@ -128,10 +127,8 @@ CPP_AT_CALLBACK(CommsManager::ATRxGainCallback) {
             CPP_AT_PRINTF("=%d(%d)", ads_bee.GetRxGain(), ads_bee.ReadRxGain());
             CPP_AT_SILENT_SUCCESS();
             break;
-        default:
-            CPP_AT_ERROR("Operator '%c' not supported.", op);
     }
-    CPP_AT_ERROR();
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
 CPP_AT_CALLBACK(CommsManager::ATSettingsCallback) {
@@ -159,36 +156,59 @@ CPP_AT_CALLBACK(CommsManager::ATSettingsCallback) {
                           settings_manager.settings.tl_hi_mv, settings_manager.settings.rx_gain);
             CPP_AT_SUCCESS();
             break;
-        default:
-            CPP_AT_ERROR("Operator '%c' not supported.", op);
     }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATBaudrateCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_PRINTF("=%d(COMMS),%d(GNSS)", comms_uart_baudrate_, gnss_uart_baudrate_);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (!(CPP_AT_HAS_ARG(0) && CPP_AT_HAS_ARG(1))) {
+                CPP_AT_ERROR(
+                    "Requires two arguments: AT+BAUDRATE=<iface>,<baudrate> where <iface> can be one of [COMMS, "
+                    "GNSS].");
+            }
+            SerialInterface iface;
+            if (args[0].compare("COMMS") == 0) {
+                iface = kCommsUART;
+            } else if (args[0].compare("GNSS") == 0) {
+                iface = kGNSSUART;
+            } else {
+                CPP_AT_ERROR("Invalid interface. Must be one of [COMMS, GNSS].");
+            }
+            uint32_t baudrate;
+            CPP_AT_TRY_ARG2NUM(1, baudrate);
+            if (!SetBaudrate(iface, baudrate)) {
+                CPP_AT_ERROR("Unable to set baudrate %d on interface %d.", baudrate, iface);
+            }
+            CPP_AT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR();  // Should never get here.
 }
 
 static const CppAT::ATCommandDef_t at_command_list[] = {
+    {.command_buf = "+BAUDRATE",
+     .min_args = 0,
+     .max_args = 2,
+     .help_string_buf = "AT+BAUDRATE=<iface>,<baudrate>\r\n\tSet the baud rate of a serial "
+                        "interface.\r\n\tAT+BAUDRATE=COMMS,115200\r\n\tAT+BAUDRATE=GNSS,9600\r\n\tAT_BAUDRATE?",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBaudrateCallback, comms_manager)},
     {.command_buf = "+CONFIG",
      .min_args = 0,
      .max_args = 1,
      .help_string_buf =
          "AT+CONFIG=<config_mode>\r\n\tSet whether the module is in CONFIG or RUN mode. RUN=0, CONFIG=1.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATConfigCallback, comms_manager)},
-    {.command_buf = "+TLSET",
-     .min_args = 0,
-     .max_args = 2,
-     .help_string_buf = "AT+TLSet=<mtl_lo_mv_>,<mtl_hi_mv_>\r\n\tQuery or set both HI and LO Trigger Level "
-                        "(TL) thresholds for RF power detector.\r\n"
-                        "\tQuery is AT+TLSET?, Set is AT+TLSet=<mtl_lo_mv_>,<mtl_hi_mv_>.",
-     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLSetCallback, comms_manager)},
-    {.command_buf = "+TLREAD",
-     .min_args = 0,
-     .max_args = 0,
-     .help_string_buf = "Read ADC counts and mV values for high and low TL thresholds. Call with no ops nor arguments, "
-                        "AT+TLREAD.",
-     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLReadCallback, comms_manager)},
-    {.command_buf = "+RXGAIN",
+    {.command_buf = "+RX_GAIN",
      .min_args = 0,
      .max_args = 1,
      .help_string_buf = "Set value of Rx Gain Digipot.\r\n\t"
-                        "AT+RXGAIN=<rx_gain>\r\n\tAT+RXGAIN?\r\n\t+RXGAIN=<rx_gain>.",
+                        "AT+RX_GAIN=<rx_gain>\r\n\tAT+RX_GAIN?\r\n\t+RX_GAIN=<rx_gain>.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxGainCallback, comms_manager)
 
     },
@@ -202,9 +222,21 @@ static const CppAT::ATCommandDef_t at_command_list[] = {
      .min_args = 0,
      .max_args = 0,
      .help_string_buf = "Run hardware self-tests.",
-     .callback = ATTestCallback}
+     .callback = ATTestCallback},
 #endif
-
+    {.command_buf = "+TL_SET",
+     .min_args = 0,
+     .max_args = 2,
+     .help_string_buf = "AT+TLSet=<mtl_lo_mv_>,<mtl_hi_mv_>\r\n\tQuery or set both HI and LO Trigger Level "
+                        "(TL) thresholds for RF power detector.\r\n"
+                        "\tQuery is AT+TL_SET?, Set is AT+TLSet=<mtl_lo_mv_>,<mtl_hi_mv_>.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLSetCallback, comms_manager)},
+    {.command_buf = "+TL_READ",
+     .min_args = 0,
+     .max_args = 0,
+     .help_string_buf = "Read ADC counts and mV values for high and low TL thresholds. Call with no ops nor arguments, "
+                        "AT+TL_READ.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLReadCallback, comms_manager)},
 };
 
 CommsManager::CommsManager(CommsManagerConfig config_in)

@@ -1,12 +1,9 @@
-#include <stdio.h>
-
 #include "ads_b_packet.hh"
 #include "ads_bee.hh"
 #include "comms.hh"
 #include "eeprom.hh"
 #include "hal.hh"
 #include "pico/binary_info.h"
-#include "pico/stdlib.h"
 #include "settings.hh"
 
 const char* kSoftwareVersionStr = "0.0.1";
@@ -24,12 +21,15 @@ SettingsManager settings_manager;
 int main() {
     bi_decl(bi_program_description("ADS-Bee ADSB Receiver"));
 
-    stdio_init_all();
-
     ads_bee.Init();
-    comms_manager.Init();
-    DEBUG_PRINTF("ADSBee 1090\r\nSoftware Version %s\r\n", kSoftwareVersionStr);
     eeprom.Init();
+    comms_manager.Init();
+    comms_manager.iface_printf(CommsManager::SerialInterface::kConsole, "ADSBee 1090\r\nSoftware Version %s\r\n",
+                               kSoftwareVersionStr);
+    comms_manager.iface_printf(CommsManager::SerialInterface::kCommsUART, "ADSBee 1090\r\nSoftware Version %s\r\n",
+                               kSoftwareVersionStr);
+    comms_manager.iface_printf(CommsManager::SerialInterface::kGNSSUART, "ADSBee 1090\r\nSoftware Version %s\r\n",
+                               kSoftwareVersionStr);
 
     while (true) {
         // Loop forever.
@@ -41,25 +41,25 @@ int main() {
             uint32_t packet_buffer[TransponderPacket::kMaxPacketLenWords32];
             packet.DumpPacketBuffer(packet_buffer);
             if (packet.GetPacketBufferLenBits() == TransponderPacket::kExtendedSquitterPacketLenBits) {
-                DEBUG_PRINTF("New message: 0x%08x|%08x|%08x|%04x RSSI=%d\r\n", packet_buffer[0], packet_buffer[1],
-                             packet_buffer[2], (packet_buffer[3]) >> (4 * kBitsPerNibble), packet.GetRSSIDBm());
+                CONSOLE_PRINTF("New message: 0x%08x|%08x|%08x|%04x RSSI=%d\r\n", packet_buffer[0], packet_buffer[1],
+                               packet_buffer[2], (packet_buffer[3]) >> (4 * kBitsPerNibble), packet.GetRSSIDBm());
             } else {
-                DEBUG_PRINTF("New message: 0x%08x|%06x RSSI=%d\r\n", packet_buffer[0],
-                             (packet_buffer[1]) >> (2 * kBitsPerNibble), packet.GetRSSIDBm());
+                CONSOLE_PRINTF("New message: 0x%08x|%06x RSSI=%d\r\n", packet_buffer[0],
+                               (packet_buffer[1]) >> (2 * kBitsPerNibble), packet.GetRSSIDBm());
             }
 
             if (packet.IsValid()) {
                 ads_bee.FlashStatusLED();
-                DEBUG_PRINTF("\tdf=%d icao_address=0x%06x\r\n", packet.GetDownlinkFormat(), packet.GetICAOAddress());
+                CONSOLE_PRINTF("\tdf=%d icao_address=0x%06x\r\n", packet.GetDownlinkFormat(), packet.GetICAOAddress());
                 ads_bee.aircraft_dictionary.IngestADSBPacket(ADSBPacket(packet));
-                DEBUG_PRINTF("\taircraft_dictionary: %d aircraft\r\n", ads_bee.aircraft_dictionary.GetNumAircraft());
+                CONSOLE_PRINTF("\taircraft_dictionary: %d aircraft\r\n", ads_bee.aircraft_dictionary.GetNumAircraft());
             } else if (packet.GetPacketBufferLenBits() == TransponderPacket::kSquitterPacketNumBits) {
                 // Marked invalid because CRC could not be confirmed. See if it's in the ICAO dictionary!
                 if (ads_bee.aircraft_dictionary.ContainsAircraft(packet.GetICAOAddress())) {
                     ads_bee.FlashStatusLED();
-                    DEBUG_PRINTF("\tMLAT OK\r\n");
+                    CONSOLE_PRINTF("\tMLAT OK\r\n");
                 }
-                DEBUG_PRINTF("INVALID %s", packet.debug_string);
+                CONSOLE_PRINTF("INVALID %s", packet.debug_string);
             }
         }
     }
