@@ -139,41 +139,41 @@ bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
     }
 
     uint32_t icao_address = packet.GetICAOAddress();
-    Aircraft *aircraft = GetAircraftPtr(icao_address);
-    if (aircraft == NULL) {
+    Aircraft *aircraft_ptr = GetAircraftPtr(icao_address);
+    if (aircraft_ptr == nullptr) {
         printf(
             "AircraftDictionary::IngestADSBPacket: Unable to find or create new aircraft with ICAO address 0x%x in "
             "dictionay.\r\n",
             icao_address);
         return false;  // unable to find or create new aircraft in dictionary
     }
-    aircraft->last_seen_timestamp_ms = get_time_since_boot_ms();
+    aircraft_ptr->last_seen_timestamp_ms = get_time_since_boot_ms();
 
     switch (packet.GetTypeCodeEnum()) {
         case ADSBPacket::TC_AIRCRAFT_ID:
-            return IngestAircraftIDMessage(aircraft, packet);
+            return IngestAircraftIDMessage(*aircraft_ptr, packet);
             break;
         case ADSBPacket::TC_SURFACE_POSITION:
-            return IngestSurfacePositionMessage(aircraft, packet);
+            return IngestSurfacePositionMessage(*aircraft_ptr, packet);
             break;
         case ADSBPacket::TC_AIRBORNE_POSITION_BARO_ALT:
         case ADSBPacket::TC_AIRBORNE_POSITION_GNSS_ALT:
-            return IngestAirbornePositionMessage(aircraft, packet);
+            return IngestAirbornePositionMessage(*aircraft_ptr, packet);
             break;
         case ADSBPacket::TC_AIRBORNE_VELOCITIES:
-            return IngestAirborneVelocitiesMessage(aircraft, packet);
+            return IngestAirborneVelocitiesMessage(*aircraft_ptr, packet);
             break;
         case ADSBPacket::TC_RESERVED:
             return false;
             break;
         case ADSBPacket::TC_AIRCRAFT_STATUS:
-            return IngestAircraftStatusMessage(aircraft, packet);
+            return IngestAircraftStatusMessage(*aircraft_ptr, packet);
             break;
         case ADSBPacket::TC_TARGET_STATE_AND_STATUS_INFO:
-            return IngestTargetStateAndStatusInfoMessage(aircraft, packet);
+            return IngestTargetStateAndStatusInfoMessage(*aircraft_ptr, packet);
             break;
         case ADSBPacket::TC_AIRCRAFT_OPERATION_STATUS:
-            return IngestAircraftOperationStatusMessage(aircraft, packet);
+            return IngestAircraftOperationStatusMessage(*aircraft_ptr, packet);
             break;
         default:
             return false;  // TC_INVALID, etc.
@@ -189,7 +189,7 @@ uint16_t AircraftDictionary::GetNumAircraft() { return aircraft_dictionary_.size
  * @param[in] aircraft Aircraft to insert.
  * @retval True if insertaion succeeded, false if failed.
  */
-bool AircraftDictionary::InsertAircraft(const Aircraft aircraft) {
+bool AircraftDictionary::InsertAircraft(const Aircraft &aircraft) {
     auto itr = aircraft_dictionary_.find(aircraft.icao_address);
     if (itr != aircraft_dictionary_.end()) {
         // Overwriting an existing aircraft
@@ -260,7 +260,7 @@ Aircraft *AircraftDictionary::GetAircraftPtr(uint32_t icao_address) {
         aircraft_dictionary_[icao_address] = new_aircraft;
         return &(aircraft_dictionary_[icao_address]);  // insert new aircraft and return its address
     }
-    return NULL;  // can't find the aircraft or insert a new one
+    return nullptr;  // can't find the aircraft or insert a new one
 }
 
 /**
@@ -370,35 +370,37 @@ Aircraft::WakeVortex_t ExtractWakeVortex(const ADSBPacket &packet) {
 /**
  * Ingests an Aircraft Identification ADS-B message. Called by IngestADSBPacket, which makes sure that the packet
  * is valid and has the correct Downlink Format.
+ * @param[out] aircraft Reference to the Aircraft to populate with info pulled from packet.
+ * @param[in] packet ADSBPacket to ingest.
  * @retval True if message was ingested successfully, false otherwise.
  */
-bool AircraftDictionary::IngestAircraftIDMessage(Aircraft *aircraft, ADSBPacket packet) {
-    aircraft->wake_vortex = ExtractWakeVortex(packet);
-    aircraft->transponder_capability = packet.GetCapability();
+bool AircraftDictionary::IngestAircraftIDMessage(Aircraft &aircraft, ADSBPacket packet) {
+    aircraft.wake_vortex = ExtractWakeVortex(packet);
+    aircraft.transponder_capability = packet.GetCapability();
     for (uint16_t i = 0; i < Aircraft::kCallSignMaxNumChars; i++) {
         char callsign_char = lookup_callsign_char(packet.GetNBitWordFromMessage(6, 8 + (6 * i)));
         if (callsign_char == ' ') break;  // ignore trailing spaces
-        aircraft->callsign[i] = callsign_char;
+        aircraft.callsign[i] = callsign_char;
     }
 
     return true;
 }
 
-bool AircraftDictionary::IngestSurfacePositionMessage(Aircraft *aircraft, ADSBPacket packet) { return false; }
+bool AircraftDictionary::IngestSurfacePositionMessage(Aircraft &aircraft, ADSBPacket packet) { return false; }
 
-bool AircraftDictionary::IngestAirbornePositionMessage(Aircraft *aircraft, ADSBPacket packet) {
+bool AircraftDictionary::IngestAirbornePositionMessage(Aircraft &aircraft, ADSBPacket packet) {
     // ME[6-7] - Surveillance Status
-    aircraft->surveillance_status = static_cast<Aircraft::SurveillanceStatus_t>(packet.GetNBitWordFromMessage(2, 6));
+    aircraft.surveillance_status = static_cast<Aircraft::SurveillanceStatus_t>(packet.GetNBitWordFromMessage(2, 6));
 
     // ME[8] - Single Antenna Flag
-    aircraft->single_antenna_flag = packet.GetNBitWordFromMessage(1, 8) ? true : false;
+    aircraft.single_antenna_flag = packet.GetNBitWordFromMessage(1, 8) ? true : false;
 
     // ME[9-20] - Encoded Altitude
     uint16_t encoded_altitude = packet.GetNBitWordFromMessage(12, 9);
     if (packet.GetTypeCodeEnum() == ADSBPacket::TC_AIRBORNE_POSITION_BARO_ALT) {
-        aircraft->barometric_altitude = encoded_altitude;
+        aircraft.barometric_altitude = encoded_altitude;
     } else {
-        aircraft->gnss_altitude = encoded_altitude;
+        aircraft.gnss_altitude = encoded_altitude;
     }
 
     // ME[21] - Time
@@ -408,15 +410,15 @@ bool AircraftDictionary::IngestAirbornePositionMessage(Aircraft *aircraft, ADSBP
     bool odd = packet.GetNBitWordFromMessage(1, 22);
 
     // ME[32-?]
-    aircraft->SetCPRLatLon(packet.GetNBitWordFromMessage(17, 23), packet.GetNBitWordFromMessage(17, 40), odd);
+    aircraft.SetCPRLatLon(packet.GetNBitWordFromMessage(17, 23), packet.GetNBitWordFromMessage(17, 40), odd);
 
     return false;
 }
 
-bool AircraftDictionary::IngestAirborneVelocitiesMessage(Aircraft *aircraft, ADSBPacket packet) { return false; }
+bool AircraftDictionary::IngestAirborneVelocitiesMessage(Aircraft &aircraft, ADSBPacket packet) { return false; }
 
-bool AircraftDictionary::IngestAircraftStatusMessage(Aircraft *aircraft, ADSBPacket packet) { return false; }
+bool AircraftDictionary::IngestAircraftStatusMessage(Aircraft &aircraft, ADSBPacket packet) { return false; }
 
-bool AircraftDictionary::IngestTargetStateAndStatusInfoMessage(Aircraft *aircraft, ADSBPacket packet) { return false; }
+bool AircraftDictionary::IngestTargetStateAndStatusInfoMessage(Aircraft &aircraft, ADSBPacket packet) { return false; }
 
-bool AircraftDictionary::IngestAircraftOperationStatusMessage(Aircraft *aircraft, ADSBPacket packet) { return false; }
+bool AircraftDictionary::IngestAircraftOperationStatusMessage(Aircraft &aircraft, ADSBPacket packet) { return false; }

@@ -8,5 +8,6 @@ else()
 target_sources(ads_bee PRIVATE
     comms_at.cc
     comms.cc
+    comms_reporting.cc
 )
 endif()

@@ -124,7 +124,7 @@ class AircraftDictionary {
     bool IngestADSBPacket(ADSBPacket packet);
     uint16_t GetNumAircraft();
 
-    bool InsertAircraft(const Aircraft aircraft);
+    bool InsertAircraft(const Aircraft &aircraft);
     bool RemoveAircraft(uint32_t icao_address);
     bool GetAircraft(uint32_t icao_address, Aircraft &aircraft_out) const;
     bool ContainsAircraft(uint32_t icao_address) const;
@@ -134,15 +134,15 @@ class AircraftDictionary {
     std::unordered_map<uint32_t, Aircraft> aircraft_dictionary_;  // index Aircraft objects by their ICAO identifier
 
     // Helper functions for ingesting specific ADS-B packet types, called by IngestADSBPacket.
-    bool IngestAircraftIDMessage(Aircraft *aircraft, ADSBPacket packet);
-    bool IngestSurfacePositionMessage(Aircraft *aircraft, ADSBPacket packet);
+    bool IngestAircraftIDMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool IngestSurfacePositionMessage(Aircraft &aircraft, ADSBPacket packet);
     // bool IngestAirbornePositionBaroAltMessage(ADSBPacket packet);
     // bool IngestAirbornePositionGNSSAltMessage(ADSBPacket packet);
-    bool IngestAirbornePositionMessage(Aircraft *aircraft, ADSBPacket packet);
-    bool IngestAirborneVelocitiesMessage(Aircraft *aircraft, ADSBPacket packet);
-    bool IngestAircraftStatusMessage(Aircraft *aircraft, ADSBPacket packet);
-    bool IngestTargetStateAndStatusInfoMessage(Aircraft *aircraft, ADSBPacket packet);
-    bool IngestAircraftOperationStatusMessage(Aircraft *aircraft, ADSBPacket packet);
+    bool IngestAirbornePositionMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool IngestAirborneVelocitiesMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool IngestAircraftStatusMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool IngestTargetStateAndStatusInfoMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool IngestAircraftOperationStatusMessage(Aircraft &aircraft, ADSBPacket packet);
 
     AircraftDictionaryConfig_t config_;
 };

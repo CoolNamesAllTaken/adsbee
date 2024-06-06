@@ -11,9 +11,17 @@ class CommsManager {
     static const uint32_t kDefaultGNSSUARTBaudrate = 9600;
     static const uint16_t kPrintfBufferMaxSize = 500;
 
-    enum SerialInterface : uint16_t { kConsole = 0, kCommsUART, kGNSSUART };
+    // Serial Interface enum and string conversion array.
+    enum SerialInterface : uint16_t { kConsole = 0, kCommsUART, kGNSSUART, kNumSerialInterfaces };
+    static const uint16_t kSerialInterfaceStrMaxLen = 30;
+    static const char SerialInterfaceStrs[SerialInterface::kNumSerialInterfaces][kSerialInterfaceStrMaxLen];
 
     enum ATConfigMode : uint16_t { kRun = 0, kConfig = 1, kInvalid = 2 };
+
+    // Reporting Protocol enum and string conversion array.
+    enum ReportingProtocol : uint16_t { kNone = 0, kRaw, kRawValidated, kMAVLINK, kGDL90, kNumProtocols };
+    static const uint16_t kReportingProtocolStrMaxLen = 30;
+    static const char ReportingProtocolStrs[ReportingProtocol::kNumProtocols][kReportingProtocolStrMaxLen];
 
     struct CommsManagerConfig {
         uart_inst_t *comms_uart_handle = uart1;
@@ -29,12 +37,13 @@ class CommsManager {
     bool Init();
     bool Update();
 
+    CPP_AT_CALLBACK(ATBaudrateCallback);
     CPP_AT_CALLBACK(ATConfigCallback);
-    CPP_AT_CALLBACK(ATTLSetCallback);
-    CPP_AT_CALLBACK(ATTLReadCallback);
+    CPP_AT_CALLBACK(ATProtocolCallback);
     CPP_AT_CALLBACK(ATRxGainCallback);
     CPP_AT_CALLBACK(ATSettingsCallback);
-    CPP_AT_CALLBACK(ATBaudrateCallback);
+    CPP_AT_CALLBACK(ATTLReadCallback);
+    CPP_AT_CALLBACK(ATTLSetCallback);
 
     int console_printf(const char *format, ...);
     int iface_printf(SerialInterface iface, const char *format, ...);
@@ -91,16 +100,26 @@ class CommsManager {
     }
 
    private:
+    // AT Functions
     bool InitAT();
     bool UpdateAT();
 
-    CommsManagerConfig config_;
-    CppAT at_parser_;
+    // Reporting Functions
+    bool InitReporting();
+    bool UpdateReporting();
+    bool ReportMAVLINK(SerialInterface iface);
 
+    CommsManagerConfig config_;
+
+    // AT Settings
+    CppAT at_parser_;
     ATConfigMode at_config_mode_ = ATConfigMode::kRun;
 
+    // Reporting Settings
     uint32_t comms_uart_baudrate_ = kDefaultCommsUARTBaudrate;
     uint32_t gnss_uart_baudrate_ = kDefaultGNSSUARTBaudrate;
+    ReportingProtocol reporting_protocols_[SerialInterface::kNumSerialInterfaces - 1] = {
+        ReportingProtocol::kNone, ReportingProtocol::kMAVLINK};  // GNSS_UART not included.
 };
 
 extern CommsManager comms_manager;

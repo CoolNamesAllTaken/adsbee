@@ -5,6 +5,13 @@
 
 #include "pico/stdlib.h"
 
+const char CommsManager::SerialInterfaceStrs[CommsManager::SerialInterface::kNumSerialInterfaces]
+                                            [CommsManager::kSerialInterfaceStrMaxLen] = {"CONSOLE", "COMMS_UART",
+                                                                                         "GNSS_UART"};
+const char CommsManager::ReportingProtocolStrs[CommsManager::ReportingProtocol::kNumProtocols]
+                                              [CommsManager::kReportingProtocolStrMaxLen] = {
+                                                  "NONE", "RAW", "RAW_VALIDATED", "MAVLINK", "GDL90"};
+
 bool CommsManager::Init() {
     InitAT();
 
@@ -67,9 +74,12 @@ bool CommsManager::iface_putc(SerialInterface iface, char c) {
         case kConsole:
             return putchar(c) >= 0;
             break;
+        case kNumSerialInterfaces:
+        default:
+            CONSOLE_PRINTF("CommsManager::iface_putc: Unrecognized iface %d.\r\n", iface);
+            return false;
     }
-    CONSOLE_PRINTF("CommsManager::iface_putc: Unrecognized iface %d.\r\n", iface);
-    return false;
+    return false;  // Should never get here.
 }
 
 bool CommsManager::iface_getc(SerialInterface iface, char &c) {
@@ -88,7 +98,7 @@ bool CommsManager::iface_getc(SerialInterface iface, char &c) {
             }
             return false;  // No chars to read.
             break;
-        case kConsole:
+        case kConsole: {
             int ret = getchar_timeout_us(config_.uart_timeout_us);
             if (ret >= 0) {
                 c = (char)ret;
@@ -96,9 +106,14 @@ bool CommsManager::iface_getc(SerialInterface iface, char &c) {
             }
             return false;  // Failed to read character.
             break;
+        }
+        case kNumSerialInterfaces:
+        default:
+            CONSOLE_PRINTF("CommsManager::iface_getc: Unrecognized iface %d.\r\n", iface);
+            return false;  // Didn't match an interface.
+            break;
     }
-    CONSOLE_PRINTF("CommsManager::iface_getc: Unrecognized iface %d.\r\n", iface);
-    return false;  // Didn't match an interface.
+    return false;  // Should never get here.
 }
 
 bool CommsManager::iface_puts(SerialInterface iface, const char *buf) {
@@ -114,7 +129,11 @@ bool CommsManager::iface_puts(SerialInterface iface, const char *buf) {
         case kConsole:
             return puts(buf) >= 0;
             break;
+        case kNumSerialInterfaces:
+        default:
+            CONSOLE_PRINTF("CommsManager::iface_puts: Unrecognized iface %d.\r\n", iface);
+            return false;  // Didn't match an interface.
+            break;
     }
-    CONSOLE_PRINTF("CommsManager::iface_puts: Unrecognized iface %d.\r\n", iface);
-    return false;  // Didn't match an interface.
+    return false;  // Should never get here.
 }
