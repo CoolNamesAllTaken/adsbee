@@ -1,11 +1,19 @@
 #pragma once
 // MESSAGE ADSB_VEHICLE PACKING
 
-// Includes added by John McNelly 2024-06-04.
+// Begin added by John McNelly 2024-06-04.
 #include <cstdint>
 #include <cstring>
 
 #include "protocol.h"
+
+#ifndef MAVLINK_MESSAGE_CRCS
+#define MAVLINK_MESSAGE_CRCS                                  \
+    {                                                         \
+        {0, 50, 9, 9, 0, 0, 0}, { 300, 217, 22, 22, 0, 0, 0 } \
+    }
+#endif
+// End added by John McNelly.
 
 #define MAVLINK_MSG_ID_ADSB_VEHICLE 246
 

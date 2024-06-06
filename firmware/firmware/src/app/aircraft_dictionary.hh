@@ -48,11 +48,11 @@ class Aircraft {
 
     SurveillanceStatus_t surveillance_status = SS_NO_CONDITION;
     bool single_antenna_flag = false;
-    uint16_t barometric_altitude = 0;
-    uint16_t gnss_altitude = 0;
+    uint16_t barometric_altitude_m = 0;
+    uint16_t gnss_altitude_m = 0;
 
-    float latitude = 0.0f;
-    float longitude = 0.0f;
+    float latitude_deg = 0.0f;
+    float longitude_deg = 0.0f;
     bool position_valid = false;
     bool is_airborne =
         true;  // assume that most aircraft encountered will be airborne, so put them there until proven otherwise
@@ -130,9 +130,9 @@ class AircraftDictionary {
     bool ContainsAircraft(uint32_t icao_address) const;
     Aircraft *GetAircraftPtr(uint32_t icao_address);
 
-   private:
-    std::unordered_map<uint32_t, Aircraft> aircraft_dictionary_;  // index Aircraft objects by their ICAO identifier
+    std::unordered_map<uint32_t, Aircraft> dict;  // index Aircraft objects by their ICAO identifier
 
+   private:
     // Helper functions for ingesting specific ADS-B packet types, called by IngestADSBPacket.
     bool IngestAircraftIDMessage(Aircraft &aircraft, ADSBPacket packet);
     bool IngestSurfacePositionMessage(Aircraft &aircraft, ADSBPacket packet);

@@ -200,8 +200,8 @@ TEST(Aircraft, SetCPRLatLon)
     EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
     EXPECT_TRUE(aircraft.DecodePosition());
     EXPECT_TRUE(aircraft.position_valid);
-    EXPECT_NEAR(aircraft.latitude, 52.25720f, 1e-4); // even latitude
-    EXPECT_NEAR(aircraft.longitude, 3.91937f, 1e-4); // longitude calculated from even latitude
+    EXPECT_NEAR(aircraft.latitude_deg, 52.25720f, 1e-4); // even latitude
+    EXPECT_NEAR(aircraft.longitude_deg, 3.91937f, 1e-4); // longitude calculated from even latitude
 
     // Send one even packet and one odd packet at startup.
     aircraft = Aircraft(); // clear everything
@@ -211,7 +211,7 @@ TEST(Aircraft, SetCPRLatLon)
     EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true));
     EXPECT_TRUE(aircraft.DecodePosition());
     EXPECT_TRUE(aircraft.position_valid);
-    EXPECT_NEAR(aircraft.latitude, 52.26578f, 1e-4); // odd latitude
+    EXPECT_NEAR(aircraft.latitude_deg, 52.26578f, 1e-4); // odd latitude
     // don't have a test value available for the longitude calculated from odd latitude
 
     // Straddle two position packets between different latitude

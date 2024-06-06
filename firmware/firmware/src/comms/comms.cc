@@ -45,6 +45,15 @@ int CommsManager::console_printf(const char *format, ...) {
     return res;
 }
 
+int CommsManager::console_level_printf(ConsoleVerbosity level, const char *format, ...) {
+    if (console_verbosity < level) return 0;
+    va_list args;
+    va_start(args, format);
+    int res = vprintf(format, args);
+    va_end(args);
+    return res;
+}
+
 int CommsManager::iface_printf(SerialInterface iface, const char *format, ...) {
     char buf[kPrintfBufferMaxSize];
     va_list args;

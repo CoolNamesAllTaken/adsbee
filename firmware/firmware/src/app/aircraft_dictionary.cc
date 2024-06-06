@@ -2,9 +2,9 @@
 
 #include <cmath>
 
+#include "comms.hh"  // For debug logging.
 #include "decode_utils.hh"
 #include "hal.hh"
-#include "stdio.h"
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
@@ -22,7 +22,7 @@ Aircraft::Aircraft() {
 
 bool Aircraft::DecodePosition() {
     if (!(last_odd_packet_.received_timestamp_ms > 0 && last_even_packet_.received_timestamp_ms > 0)) {
-        printf(
+        CONSOLE_WARNING(
             "Aircraft::DecodePosition: Unable to decode position without receiving an odd and even packet pair.\r\n");
         return false;  // need both an even and an odd packet to be able to decode position
     }
@@ -71,7 +71,7 @@ bool Aircraft::DecodePosition() {
     if (last_odd_packet_.nl_cpr != last_even_packet_.nl_cpr) {
         // Invalidate position if position pair is split across different latitude bands.
         position_valid = false;  // keep last known good coordinates, but mark as invalid
-        printf(
+        CONSOLE_WARNING(
             "Aircraft::DecodePosition: NL_cpr disagrees between odd (%d) and even (%d) packets. Can't decode "
             "position.\r\n",
             last_odd_packet_.nl_cpr, last_even_packet_.nl_cpr);
@@ -81,7 +81,7 @@ bool Aircraft::DecodePosition() {
     // From here on out, can just focus on the most recent packet since that's what we're using for our position.
     bool received_odd_last = last_odd_packet_.received_timestamp_ms > last_even_packet_.received_timestamp_ms;
     CPRPacket &last_packet = received_odd_last ? last_odd_packet_ : last_even_packet_;
-    latitude = last_packet.lat;  // Publish latitude.
+    latitude_deg = last_packet.lat;  // Publish latitude.
 
     // Equation 5.10
     int32_t lon_zone_index = floorf(last_even_packet_.lon_cpr * (last_packet.nl_cpr - 1) -
@@ -93,7 +93,7 @@ bool Aircraft::DecodePosition() {
     float d_lon = 360.0f / num_lon_zones;
 
     // Equation 5.13 (calc longitude), 5.15 (wrap longitude to between -180 and +180 degrees)
-    longitude = wrap_longitude(d_lon * ((lon_zone_index % num_lon_zones) + last_packet.lon_cpr));
+    longitude_deg = wrap_longitude(d_lon * ((lon_zone_index % num_lon_zones) + last_packet.lon_cpr));
     position_valid = true;  // TODO: add "reasonable validation" that position is valid
     return true;
 }
@@ -119,14 +119,14 @@ bool Aircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, bo
  */
 
 void AircraftDictionary::Init() {
-    aircraft_dictionary_.clear();  // Remove all aircraft from the unordered map.
+    dict.clear();  // Remove all aircraft from the unordered map.
 }
 
 void AircraftDictionary::Update(uint32_t timestamp_ms) {
     // Iterate over each key-value pair in the unordered_map
-    for (auto it = aircraft_dictionary_.begin(); it != aircraft_dictionary_.end(); /* No increment here */) {
+    for (auto it = dict.begin(); it != dict.end(); /* No increment here */) {
         if (timestamp_ms - it->second.last_seen_timestamp_ms > config_.aircraft_prune_interval_ms) {
-            it = aircraft_dictionary_.erase(it);  // Remove stale aircraft entry.
+            it = dict.erase(it);  // Remove stale aircraft entry.
         } else {
             it++;  // Move to the next aircraft entry.
         }
@@ -141,9 +141,9 @@ bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
     uint32_t icao_address = packet.GetICAOAddress();
     Aircraft *aircraft_ptr = GetAircraftPtr(icao_address);
     if (aircraft_ptr == nullptr) {
-        printf(
+        CONSOLE_WARNING(
             "AircraftDictionary::IngestADSBPacket: Unable to find or create new aircraft with ICAO address 0x%x in "
-            "dictionay.\r\n",
+            "dictionary.\r\n",
             icao_address);
         return false;  // unable to find or create new aircraft in dictionary
     }
@@ -182,7 +182,7 @@ bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
     return false;
 }
 
-uint16_t AircraftDictionary::GetNumAircraft() { return aircraft_dictionary_.size(); }
+uint16_t AircraftDictionary::GetNumAircraft() { return dict.size(); }
 
 /**
  * Adds an Aircraft object to the aircraft dictionary, hashed by ICAO address.
@@ -190,18 +190,21 @@ uint16_t AircraftDictionary::GetNumAircraft() { return aircraft_dictionary_.size
  * @retval True if insertaion succeeded, false if failed.
  */
 bool AircraftDictionary::InsertAircraft(const Aircraft &aircraft) {
-    auto itr = aircraft_dictionary_.find(aircraft.icao_address);
-    if (itr != aircraft_dictionary_.end()) {
+    auto itr = dict.find(aircraft.icao_address);
+    if (itr != dict.end()) {
         // Overwriting an existing aircraft
         itr->second = aircraft;
         return true;
     }
 
-    if (aircraft_dictionary_.size() >= kMaxNumAircraft) {
+    if (dict.size() >= kMaxNumAircraft) {
+        CONSOLE_LOG(
+            "AIrcraftDictionary::InsertAircraft: Failed to add aircraft to dictionary, max number of aircraft is %d.",
+            kMaxNumAircraft);
         return false;  // not enough room to add this aircraft
     }
 
-    aircraft_dictionary_[aircraft.icao_address] = aircraft;  // add the new aircraft to the dictionary
+    dict[aircraft.icao_address] = aircraft;  // add the new aircraft to the dictionary
     return true;
 }
 
@@ -210,9 +213,9 @@ bool AircraftDictionary::InsertAircraft(const Aircraft &aircraft) {
  * @retval True if removal succeeded, false if aircraft was not found.
  */
 bool AircraftDictionary::RemoveAircraft(uint32_t icao_address) {
-    auto itr = aircraft_dictionary_.find(icao_address);
-    if (itr != aircraft_dictionary_.end()) {
-        aircraft_dictionary_.erase(itr);
+    auto itr = dict.find(icao_address);
+    if (itr != dict.end()) {
+        dict.erase(itr);
         return true;
     }
     return false;  // aircraft was not found in the dictionary
@@ -225,8 +228,8 @@ bool AircraftDictionary::RemoveAircraft(uint32_t icao_address) {
  * @retval True if aircraft was found and retrieved, false if aircraft was not in the dictionary.
  */
 bool AircraftDictionary::GetAircraft(uint32_t icao_address, Aircraft &aircraft_out) const {
-    auto itr = aircraft_dictionary_.find(icao_address);
-    if (itr != aircraft_dictionary_.end()) {
+    auto itr = dict.find(icao_address);
+    if (itr != dict.end()) {
         aircraft_out = itr->second;
         return true;
     }
@@ -239,8 +242,8 @@ bool AircraftDictionary::GetAircraft(uint32_t icao_address, Aircraft &aircraft_o
  * @retval True if aircraft is in the dictionary, false if not.
  */
 bool AircraftDictionary::ContainsAircraft(uint32_t icao_address) const {
-    auto itr = aircraft_dictionary_.find(icao_address);
-    if (itr != aircraft_dictionary_.end()) {
+    auto itr = dict.find(icao_address);
+    if (itr != dict.end()) {
         return true;
     }
     return false;
@@ -252,13 +255,13 @@ bool AircraftDictionary::ContainsAircraft(uint32_t icao_address) const {
  * @retval Pointer to the aircraft if it exists, or NULL if it wasn't in the dictionary.
  */
 Aircraft *AircraftDictionary::GetAircraftPtr(uint32_t icao_address) {
-    auto itr = aircraft_dictionary_.find(icao_address);
-    if (itr != aircraft_dictionary_.end()) {
+    auto itr = dict.find(icao_address);
+    if (itr != dict.end()) {
         return &(itr->second);  // return address of existing aircraft
-    } else if (aircraft_dictionary_.size() < kMaxNumAircraft) {
+    } else if (dict.size() < kMaxNumAircraft) {
         Aircraft new_aircraft = Aircraft(icao_address);
-        aircraft_dictionary_[icao_address] = new_aircraft;
-        return &(aircraft_dictionary_[icao_address]);  // insert new aircraft and return its address
+        dict[icao_address] = new_aircraft;
+        return &(dict[icao_address]);  // insert new aircraft and return its address
     }
     return nullptr;  // can't find the aircraft or insert a new one
 }
@@ -398,9 +401,9 @@ bool AircraftDictionary::IngestAirbornePositionMessage(Aircraft &aircraft, ADSBP
     // ME[9-20] - Encoded Altitude
     uint16_t encoded_altitude = packet.GetNBitWordFromMessage(12, 9);
     if (packet.GetTypeCodeEnum() == ADSBPacket::TC_AIRBORNE_POSITION_BARO_ALT) {
-        aircraft.barometric_altitude = encoded_altitude;
+        aircraft.barometric_altitude_m = encoded_altitude;
     } else {
-        aircraft.gnss_altitude = encoded_altitude;
+        aircraft.gnss_altitude_m = encoded_altitude;
     }
 
     // ME[21] - Time
@@ -412,7 +415,7 @@ bool AircraftDictionary::IngestAirbornePositionMessage(Aircraft &aircraft, ADSBP
     // ME[32-?]
     aircraft.SetCPRLatLon(packet.GetNBitWordFromMessage(17, 23), packet.GetNBitWordFromMessage(17, 40), odd);
 
-    return false;
+    return true;
 }
 
 bool AircraftDictionary::IngestAirborneVelocitiesMessage(Aircraft &aircraft, ADSBPacket packet) { return false; }

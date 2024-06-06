@@ -17,9 +17,10 @@ class CommsManager {
     static const char SerialInterfaceStrs[SerialInterface::kNumSerialInterfaces][kSerialInterfaceStrMaxLen];
 
     enum ATConfigMode : uint16_t { kRun = 0, kConfig = 1, kInvalid = 2 };
+    enum ConsoleVerbosity : uint16_t { kNoLogs = 0, kError, kWarning, kLog };
 
     // Reporting Protocol enum and string conversion array.
-    enum ReportingProtocol : uint16_t { kNone = 0, kRaw, kRawValidated, kMAVLINK, kGDL90, kNumProtocols };
+    enum ReportingProtocol : uint16_t { kNoReports = 0, kRaw, kRawValidated, kMAVLINK, kGDL90, kNumProtocols };
     static const uint16_t kReportingProtocolStrMaxLen = 30;
     static const char ReportingProtocolStrs[ReportingProtocol::kNumProtocols][kReportingProtocolStrMaxLen];
 
@@ -46,6 +47,7 @@ class CommsManager {
     CPP_AT_CALLBACK(ATTLSetCallback);
 
     int console_printf(const char *format, ...);
+    int console_level_printf(ConsoleVerbosity level, const char *format, ...);
     int iface_printf(SerialInterface iface, const char *format, ...);
     bool iface_putc(SerialInterface iface, char c);
     bool iface_getc(SerialInterface iface, char &c);
@@ -99,6 +101,9 @@ class CommsManager {
         return false;  // Should never get here.
     }
 
+    // Public console settings.
+    ConsoleVerbosity console_verbosity = ConsoleVerbosity::kLog;  // Start with highest verbosity by default.
+
    private:
     // AT Functions
     bool InitAT();
@@ -111,7 +116,7 @@ class CommsManager {
 
     CommsManagerConfig config_;
 
-    // AT Settings
+    // Console Settings
     CppAT at_parser_;
     ATConfigMode at_config_mode_ = ATConfigMode::kRun;
 
@@ -119,11 +124,17 @@ class CommsManager {
     uint32_t comms_uart_baudrate_ = kDefaultCommsUARTBaudrate;
     uint32_t gnss_uart_baudrate_ = kDefaultGNSSUARTBaudrate;
     ReportingProtocol reporting_protocols_[SerialInterface::kNumSerialInterfaces - 1] = {
-        ReportingProtocol::kNone, ReportingProtocol::kMAVLINK};  // GNSS_UART not included.
+        ReportingProtocol::kNoReports, ReportingProtocol::kMAVLINK};  // GNSS_UART not included.
 };
 
 extern CommsManager comms_manager;
 
 #define CONSOLE_PRINTF(format, ...) comms_manager.console_printf(format __VA_OPT__(, ) __VA_ARGS__);
+#define CONSOLE_LOG(format, ...) \
+    comms_manager.console_level_printf(CommsManager::ConsoleVerbosity::kLog, format __VA_OPT__(, ) __VA_ARGS__);
+#define CONSOLE_WARNING(format, ...) \
+    comms_manager.console_level_printf(CommsManager::ConsoleVerbosity::kWarning, format __VA_OPT__(, ) __VA_ARGS__);
+#define CONSOLE_ERROR(format, ...) \
+    comms_manager.console_level_printf(CommsManager::ConsoleVerbosity::kError, format __VA_OPT__(, ) __VA_ARGS__);
 
 #endif /* COMMS_HH_ */
