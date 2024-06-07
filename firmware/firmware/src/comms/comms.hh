@@ -41,6 +41,7 @@ class CommsManager {
     CPP_AT_CALLBACK(ATBaudrateCallback);
     CPP_AT_CALLBACK(ATConfigCallback);
     CPP_AT_CALLBACK(ATProtocolCallback);
+    CPP_AT_HELP_CALLBACK(ATProtocolHelpCallback);
     CPP_AT_CALLBACK(ATRxGainCallback);
     CPP_AT_CALLBACK(ATSettingsCallback);
     CPP_AT_CALLBACK(ATTLReadCallback);

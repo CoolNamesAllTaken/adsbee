@@ -6,7 +6,10 @@
 #include "decode_utils.hh"
 #include "hal.hh"
 
+// Conditionally define the MAX macro because the pico platform includes it by default in pico/platform.h.
+#ifndef MAX
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
+#endif
 
 /**
  * Aircraft

@@ -38,10 +38,11 @@ bool CommsManager::ReportMAVLINK(SerialInterface iface) {
         // Initialize the message
         mavlink_adsb_vehicle_t adsb_vehicle_msg = {
             .ICAO_address = aircraft.icao_address,
-            .lat = aircraft.latitude_deg,
-            .lon = aircraft.longitude_deg,
+            .lat = static_cast<int32_t>(aircraft.latitude_deg * 1e7f),
+            .lon = static_cast<int32_t>(aircraft.longitude_deg * 1e7f),
             .altitude = aircraft.barometric_altitude_m,
 
         };
     }
+    return true;
 }

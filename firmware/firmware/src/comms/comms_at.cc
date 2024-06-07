@@ -33,7 +33,7 @@ int CppAT::cpp_at_printf(const char *format, ...) {
 CPP_AT_CALLBACK(CommsManager::ATBaudrateCallback) {
     switch (op) {
         case '?':
-            CPP_AT_PRINTF("=%d(COMMS),%d(GNSS)", comms_uart_baudrate_, gnss_uart_baudrate_);
+            CPP_AT_CMD_PRINTF("=%d(COMMS),%d(GNSS)", comms_uart_baudrate_, gnss_uart_baudrate_);
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
@@ -70,7 +70,7 @@ CPP_AT_CALLBACK(CommsManager::ATConfigCallback) {
     switch (op) {
         case '?':
             // AT+CONFIG mode query.
-            CPP_AT_PRINTF("=%d", at_config_mode_);
+            CPP_AT_CMD_PRINTF("=%d", at_config_mode_);
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
@@ -96,7 +96,8 @@ CPP_AT_CALLBACK(CommsManager::ATProtocolCallback) {
         case '?':
             // Print out reporting protocols for CONSOLE and COMMS_UART.
             for (uint16_t iface = 0; iface < SerialInterface::kGNSSUART; iface++) {
-                CPP_AT_PRINTF("=%s,%s", SerialInterfaceStrs[iface], ReportingProtocolStrs[reporting_protocols_[iface]]);
+                CPP_AT_CMD_PRINTF("=%s,%s", SerialInterfaceStrs[iface],
+                                  ReportingProtocolStrs[reporting_protocols_[iface]]);
             }
             CPP_AT_SILENT_SUCCESS();
             break;
@@ -139,6 +140,20 @@ CPP_AT_CALLBACK(CommsManager::ATProtocolCallback) {
     CPP_AT_ERROR();  // Should never get here.
 }
 
+CPP_AT_HELP_CALLBACK(CommsManager::ATProtocolHelpCallback) {
+    CPP_AT_PRINTF("\tSet the reporting protocol used on a given serial interface:\r\n");
+    CPP_AT_PRINTF("\tAT+PROTOCOL=<iface>,<protocol>\r\n\t<iface> = ");
+    for (uint16_t iface = 0; iface < kGNSSUART; iface++) {
+        CPP_AT_PRINTF("%s ", SerialInterfaceStrs[iface]);
+    }
+    CPP_AT_PRINTF("\r\n\t<protocol> = ");
+    for (uint16_t protocol = 0; protocol < kNumProtocols; protocol++) {
+        CPP_AT_PRINTF("%s ", ReportingProtocolStrs[protocol]);
+    }
+    CPP_AT_PRINTF("\r\n\tQuery the reporting protocol used on all interfaces:\r\n");
+    CPP_AT_PRINTF("\tAT+PROTOCOL?\r\n\t+PROTOCOL=<iface>,<protocol>\r\n\t...\r\n");
+}
+
 CPP_AT_CALLBACK(CommsManager::ATRxGainCallback) {
     switch (op) {
         case '=':
@@ -153,7 +168,7 @@ CPP_AT_CALLBACK(CommsManager::ATRxGainCallback) {
             CPP_AT_ERROR("Received operator '%c' but no args.", op);
             break;
         case '?':
-            CPP_AT_PRINTF("=%d(%d)", ads_bee.GetRxGain(), ads_bee.ReadRxGain());
+            CPP_AT_CMD_PRINTF("=%d(%d)", ads_bee.GetRxGain(), ads_bee.ReadRxGain());
             CPP_AT_SILENT_SUCCESS();
             break;
     }
@@ -181,8 +196,8 @@ CPP_AT_CALLBACK(CommsManager::ATSettingsCallback) {
             CPP_AT_ERROR("No arguments provided.");
             break;
         case '?':
-            CPP_AT_PRINTF("=%d(tl_lo_mv),%d(tl_hi_mv),%d(rx_gain)\r\n", settings_manager.settings.tl_lo_mv,
-                          settings_manager.settings.tl_hi_mv, settings_manager.settings.rx_gain);
+            CPP_AT_CMD_PRINTF("=%d(tl_lo_mv),%d(tl_hi_mv),%d(rx_gain)\r\n", settings_manager.settings.tl_lo_mv,
+                              settings_manager.settings.tl_hi_mv, settings_manager.settings.rx_gain);
             CPP_AT_SUCCESS();
             break;
     }
@@ -193,7 +208,7 @@ CPP_AT_CALLBACK(CommsManager::ATTLReadCallback) {
     switch (op) {
         case '?':
             // Read command.
-            CPP_AT_PRINTF("=%d,%d\r\n", ads_bee.ReadTLLoMilliVolts(), ads_bee.ReadTLHiMilliVolts());
+            CPP_AT_CMD_PRINTF("=%d,%d\r\n", ads_bee.ReadTLLoMilliVolts(), ads_bee.ReadTLHiMilliVolts());
             CPP_AT_SILENT_SUCCESS();
             break;
     }
@@ -212,7 +227,7 @@ CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
     switch (op) {
         case '?':
             // AT+TL_SET value query.
-            CPP_AT_PRINTF("=%d,%d\r\n", ads_bee.GetTLLoMilliVolts(), ads_bee.GetTLHiMilliVolts());
+            CPP_AT_CMD_PRINTF("=%d,%d\r\n", ads_bee.GetTLLoMilliVolts(), ads_bee.GetTLHiMilliVolts());
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
@@ -255,9 +270,7 @@ static const CppAT::ATCommandDef_t at_command_list[] = {
     {.command_buf = "+PROTOCOL",
      .min_args = 0,
      .max_args = 2,
-     .help_string_buf = "AT+PROTOCOL=<iface>,<protocol>\r\n\tSet the format that received packets are "
-                        "reported in over a given interface.\r\n\t<iface> in [COMMS,CONSOLE], protocol in "
-                        "[NONE, RAW, RAW_VALIDATED, MAVLINK].",
+     .help_callback = CPP_AT_BIND_MEMBER_HELP_CALLBACK(CommsManager::ATProtocolHelpCallback, comms_manager),
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATProtocolCallback, comms_manager)},
     {.command_buf = "+RX_GAIN",
      .min_args = 0,
@@ -270,7 +283,8 @@ static const CppAT::ATCommandDef_t at_command_list[] = {
     {.command_buf = "+SETTINGS",
      .min_args = 0,
      .max_args = 3,
-     .help_string_buf = "Display, load, or save nonvolatile settings.\r\n\tAT+SETTINGS?\r\n\t+SETTINGS=...\r\n\t",
+     .help_string_buf = "Load or save nonvolatile settings.\r\n\tAT+SETTINGS=<op>\r\n\t<op> = LOAD SAVE\r\n"
+                        "\tDisplay nonvolatile settings.\r\n\tAT+SETTINGS?\r\n\t+SETTINGS=...\r\n\t",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSettingsCallback, comms_manager)},
 #ifdef HARDWARE_UNIT_TESTS
     {.command_buf = "+TEST",
@@ -288,9 +302,9 @@ static const CppAT::ATCommandDef_t at_command_list[] = {
     {.command_buf = "+TL_SET",
      .min_args = 0,
      .max_args = 2,
-     .help_string_buf = "AT+TLSet=<mtl_lo_mv_>,<mtl_hi_mv_>\r\n\tQuery or set both HI and LO Trigger Level "
-                        "(TL) thresholds for RF power detector.\r\n"
-                        "\tQuery is AT+TL_SET?, Set is AT+TLSet=<mtl_lo_mv_>,<mtl_hi_mv_>.",
+     .help_string_buf =
+         "Set HI and LO trigger level thresholds for RF power detector.\r\n\tAT+TLSet=<tl_lo_mv_>,<tl_hi_mv_>"
+         "\tQuery trigger level.\r\n\tAT+TL_SET?\r\n\t+TLSet=<tl_lo_mv_>,<tl_hi_mv_>.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLSetCallback, comms_manager)},
 };
 
