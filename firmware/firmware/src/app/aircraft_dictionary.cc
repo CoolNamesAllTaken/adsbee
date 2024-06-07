@@ -137,7 +137,7 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
 }
 
 bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
-    if (!packet.IsValid() || packet.GetDownlinkFormat() != ADSBPacket::DF_EXTENDED_SQUITTER) {
+    if (!packet.IsValid() || packet.GetDownlinkFormat() != ADSBPacket::kDownlinkFormatExtendedSquitter) {
         return false;  // Only allow valid DF17 packets.
     }
 
@@ -153,33 +153,33 @@ bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
     aircraft_ptr->last_seen_timestamp_ms = get_time_since_boot_ms();
 
     switch (packet.GetTypeCodeEnum()) {
-        case ADSBPacket::TC_AIRCRAFT_ID:
+        case ADSBPacket::kTypeCodeAircraftID:
             return IngestAircraftIDMessage(*aircraft_ptr, packet);
             break;
-        case ADSBPacket::TC_SURFACE_POSITION:
+        case ADSBPacket::kTypeCodeSurfacePosition:
             return IngestSurfacePositionMessage(*aircraft_ptr, packet);
             break;
-        case ADSBPacket::TC_AIRBORNE_POSITION_BARO_ALT:
-        case ADSBPacket::TC_AIRBORNE_POSITION_GNSS_ALT:
+        case ADSBPacket::kTypeCodeAirbornePositionBaroAlt:
+        case ADSBPacket::kTypeCodeAirbornePositionGNSSAlt:
             return IngestAirbornePositionMessage(*aircraft_ptr, packet);
             break;
-        case ADSBPacket::TC_AIRBORNE_VELOCITIES:
+        case ADSBPacket::kTypeCodeAirborneVelocities:
             return IngestAirborneVelocitiesMessage(*aircraft_ptr, packet);
             break;
-        case ADSBPacket::TC_RESERVED:
+        case ADSBPacket::kTypeCodeReserved:
             return false;
             break;
-        case ADSBPacket::TC_AIRCRAFT_STATUS:
+        case ADSBPacket::kTypeCodeAircraftStatus:
             return IngestAircraftStatusMessage(*aircraft_ptr, packet);
             break;
-        case ADSBPacket::TC_TARGET_STATE_AND_STATUS_INFO:
+        case ADSBPacket::kTypeCodeTargetStateAndStatusInfo:
             return IngestTargetStateAndStatusInfoMessage(*aircraft_ptr, packet);
             break;
-        case ADSBPacket::TC_AIRCRAFT_OPERATION_STATUS:
+        case ADSBPacket::kTypeCodeAircraftOperationStatus:
             return IngestAircraftOperationStatusMessage(*aircraft_ptr, packet);
             break;
         default:
-            return false;  // TC_INVALID, etc.
+            return false;  // kTypeCodeInvalid, etc.
     }
 
     return false;
@@ -187,11 +187,6 @@ bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
 
 uint16_t AircraftDictionary::GetNumAircraft() { return dict.size(); }
 
-/**
- * Adds an Aircraft object to the aircraft dictionary, hashed by ICAO address.
- * @param[in] aircraft Aircraft to insert.
- * @retval True if insertaion succeeded, false if failed.
- */
 bool AircraftDictionary::InsertAircraft(const Aircraft &aircraft) {
     auto itr = dict.find(aircraft.icao_address);
     if (itr != dict.end()) {
@@ -211,10 +206,6 @@ bool AircraftDictionary::InsertAircraft(const Aircraft &aircraft) {
     return true;
 }
 
-/**
- * Remove an aircraft from the dictionary, by ICAO address.
- * @retval True if removal succeeded, false if aircraft was not found.
- */
 bool AircraftDictionary::RemoveAircraft(uint32_t icao_address) {
     auto itr = dict.find(icao_address);
     if (itr != dict.end()) {
@@ -224,12 +215,6 @@ bool AircraftDictionary::RemoveAircraft(uint32_t icao_address) {
     return false;  // aircraft was not found in the dictionary
 }
 
-/**
- * Retrieve an aircraft from the dictionary.
- * @param[in] icao_address Address to use for looking up the aircraft.
- * @param[out] aircraft_out Aircraft reference to put the retrieved aircraft into if successful.
- * @retval True if aircraft was found and retrieved, false if aircraft was not in the dictionary.
- */
 bool AircraftDictionary::GetAircraft(uint32_t icao_address, Aircraft &aircraft_out) const {
     auto itr = dict.find(icao_address);
     if (itr != dict.end()) {
@@ -239,11 +224,6 @@ bool AircraftDictionary::GetAircraft(uint32_t icao_address, Aircraft &aircraft_o
     return false;  // aircraft not found
 }
 
-/**
- * Check if an aircraft is contained in the dictionary.
- * @param[in] icao_address Address to use for looking up the aircraft.
- * @retval True if aircraft is in the dictionary, false if not.
- */
 bool AircraftDictionary::ContainsAircraft(uint32_t icao_address) const {
     auto itr = dict.find(icao_address);
     if (itr != dict.end()) {
@@ -252,11 +232,6 @@ bool AircraftDictionary::ContainsAircraft(uint32_t icao_address) const {
     return false;
 }
 
-/**
- * Return a pointer to an aircraft if it's in the aircraft dictionary.
- * @param[in] icao_address ICAO address of the aircraft to find.
- * @retval Pointer to the aircraft if it exists, or NULL if it wasn't in the dictionary.
- */
 Aircraft *AircraftDictionary::GetAircraftPtr(uint32_t icao_address) {
     auto itr = dict.find(icao_address);
     if (itr != dict.end()) {
@@ -275,13 +250,13 @@ Aircraft *AircraftDictionary::GetAircraftPtr(uint32_t icao_address) {
 
 /**
  * Returns the Wake Vortex value of the aircraft that sent a given ADS-B packet.
- * @param[in] packet ADS-B Packet to extract the WakeVortex value from. Must be
- * @retval WakeVortex that matches the combination of capability and typecode from the ADS-B packet, or
- * kWakeVortexInvalid if there is no matching wake vortex value.
+ * @param[in] packet ADS-B Packet to extract the AirframeType value from. Must be
+ * @retval AirframeType that matches the combination of capability and typecode from the ADS-B packet, or
+ * kAirframeTypeInvalid if there is no matching wake vortex value.
  */
-Aircraft::WakeVortex ExtractWakeVortex(const ADSBPacket &packet) {
-    if (packet.GetTypeCodeEnum() != ADSBPacket::TC_AIRCRAFT_ID) {
-        return Aircraft::kWakeVortexInvalid;  // Must have typecode from 1-4.
+Aircraft::AirframeType ExtractAirframeType(const ADSBPacket &packet) {
+    if (packet.GetTypeCodeEnum() != ADSBPacket::kTypeCodeAircraftID) {
+        return Aircraft::kAirframeTypeInvalid;  // Must have typecode from 1-4.
     }
 
     uint32_t typecode = packet.GetNBitWordFromMessage(5, 0);
@@ -289,99 +264,92 @@ Aircraft::WakeVortex ExtractWakeVortex(const ADSBPacket &packet) {
 
     // Table 4.1 from The 1090Mhz Riddle (Junzi Sun), pg. 42.
     if (category == 0) {
-        return Aircraft::kWakeVortexNoCategoryInfo;
+        return Aircraft::kAirframeTypeNoCategoryInfo;
     }
 
     switch (typecode) {
         case 1:
-            return Aircraft::kWakeVortexReserved;
+            return Aircraft::kAirframeTypeReserved;
             break;
         case 2:
             switch (category) {
                 case 1:
-                    return Aircraft::kWakeVortexSurfaceEmergencyVehicle;
+                    return Aircraft::kAirframeTypeSurfaceEmergencyVehicle;
                     break;
                 case 3:
-                    return Aircraft::kWakeVortexSurfaceServiceVehicle;
+                    return Aircraft::kAirframeTypeSurfaceServiceVehicle;
                     break;
                 case 4:
                 case 5:
                 case 6:
                 case 7:
-                    return Aircraft::kWakeVortexGroundObstruction;
+                    return Aircraft::kAirframeTypeGroundObstruction;
                     break;
                 default:
-                    return Aircraft::kWakeVortexInvalid;
+                    return Aircraft::kAirframeTypeInvalid;
             }
             break;
         case 3:
             switch (category) {
                 case 1:
-                    return Aircraft::kWakeVortexGliderSailplane;
+                    return Aircraft::kAirframeTypeGliderSailplane;
                     break;
                 case 2:
-                    return Aircraft::kWakeVortexLighterThanAir;
+                    return Aircraft::kAirframeTypeLighterThanAir;
                     break;
                 case 3:
-                    return Aircraft::kWakeVortexParachutistSkydiver;
+                    return Aircraft::kAirframeTypeParachutistSkydiver;
                     break;
                 case 4:
-                    return Aircraft::kWakeVortexUltralightHangGliderParaglider;
+                    return Aircraft::kAirframeTypeUltralightHangGliderParaglider;
                     break;
                 case 5:
-                    return Aircraft::kWakeVortexReserved;
+                    return Aircraft::kAirframeTypeReserved;
                     break;
                 case 6:
-                    return Aircraft::kWakeVortexUnmannedAerialVehicle;
+                    return Aircraft::kAirframeTypeUnmannedAerialVehicle;
                     break;
                 case 7:
-                    return Aircraft::kWakeVortexSpaceTransatmosphericVehicle;
+                    return Aircraft::kAirframeTypeSpaceTransatmosphericVehicle;
                     break;
                 default:
-                    return Aircraft::kWakeVortexInvalid;
+                    return Aircraft::kAirframeTypeInvalid;
             }
             break;
         case 4:
             switch (category) {
                 case 1:
-                    return Aircraft::kWakeVortexLight;
+                    return Aircraft::kAirframeTypeLight;
                     break;
                 case 2:
-                    return Aircraft::kWakeVortexMedium1;
+                    return Aircraft::kAirframeTypeMedium1;
                     break;
                 case 3:
-                    return Aircraft::kWakeVortexMedium2;
+                    return Aircraft::kAirframeTypeMedium2;
                     break;
                 case 4:
-                    return Aircraft::kWakeVortexHighVortexAircraft;
+                    return Aircraft::kAirframeTypeHighVortexAircraft;
                     break;
                 case 5:
-                    return Aircraft::kWakeVortexHeavy;
+                    return Aircraft::kAirframeTypeHeavy;
                     break;
                 case 6:
-                    return Aircraft::kWakeVortexHighPerformance;
+                    return Aircraft::kAirframeTypeHighPerformance;
                     break;
                 case 7:
-                    return Aircraft::kWakeVortexRotorcraft;
+                    return Aircraft::kAirframeTypeRotorcraft;
                     break;
                 default:
-                    return Aircraft::kWakeVortexInvalid;
+                    return Aircraft::kAirframeTypeInvalid;
             }
             break;
         default:
-            return Aircraft::kWakeVortexInvalid;
+            return Aircraft::kAirframeTypeInvalid;
     }
 }
 
-/**
- * Ingests an Aircraft Identification ADS-B message. Called by IngestADSBPacket, which makes sure that the packet
- * is valid and has the correct Downlink Format.
- * @param[out] aircraft Reference to the Aircraft to populate with info pulled from packet.
- * @param[in] packet ADSBPacket to ingest.
- * @retval True if message was ingested successfully, false otherwise.
- */
 bool AircraftDictionary::IngestAircraftIDMessage(Aircraft &aircraft, ADSBPacket packet) {
-    aircraft.wake_vortex = ExtractWakeVortex(packet);
+    aircraft.wake_vortex = ExtractAirframeType(packet);
     aircraft.transponder_capability = packet.GetCapability();
     for (uint16_t i = 0; i < Aircraft::kCallSignMaxNumChars; i++) {
         char callsign_char = lookup_callsign_char(packet.GetNBitWordFromMessage(6, 8 + (6 * i)));
@@ -403,7 +371,7 @@ bool AircraftDictionary::IngestAirbornePositionMessage(Aircraft &aircraft, ADSBP
 
     // ME[8-19] - Encoded Altitude
     uint16_t encoded_altitude = packet.GetNBitWordFromMessage(12, 8);
-    if (packet.GetTypeCodeEnum() == ADSBPacket::TC_AIRBORNE_POSITION_BARO_ALT) {
+    if (packet.GetTypeCodeEnum() == ADSBPacket::kTypeCodeAirbornePositionBaroAlt) {
         aircraft.barometric_altitude_m = encoded_altitude;
     } else {
         aircraft.gnss_altitude_m = encoded_altitude;

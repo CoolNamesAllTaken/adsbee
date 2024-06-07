@@ -195,7 +195,7 @@ TEST(TransponderPacket, PacketFields)
     EXPECT_TRUE(tpacket.IsValid());
     ADSBPacket packet = ADSBPacket(tpacket);
 
-    EXPECT_EQ(packet.GetDownlinkFormat(), static_cast<uint16_t>(TransponderPacket::DF_EXTENDED_SQUITTER));
+    EXPECT_EQ(packet.GetDownlinkFormat(), static_cast<uint16_t>(TransponderPacket::kDownlinkFormatExtendedSquitter));
     EXPECT_EQ(packet.GetCapability(), 5u);
     EXPECT_EQ(packet.GetICAOAddress(), 0x76CE88u);
     EXPECT_EQ(packet.GetTypeCode(), 4u);
@@ -216,7 +216,7 @@ TEST(TransponderPacket, ConstructValidShortFrame)
     TransponderPacket packet = TransponderPacket((char *)"00050319AB8C22");
     EXPECT_FALSE(packet.IsValid()); // Automatically marked as invalid since not confirmable with CRC.
     EXPECT_EQ(packet.GetICAOAddress(), 0x7C7B5A);
-    EXPECT_EQ(packet.GetDownlinkFormat(), static_cast<uint16_t>(TransponderPacket::DF_SHORT_RANGE_AIR_SURVEILLANCE));
+    EXPECT_EQ(packet.GetDownlinkFormat(), static_cast<uint16_t>(TransponderPacket::kDownlinkFormatShortRangeAirSurveillance));
 }
 
 TEST(TransponderPacket, ConstructInvalidShortFrame)

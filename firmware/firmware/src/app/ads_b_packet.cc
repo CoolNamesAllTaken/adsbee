@@ -72,31 +72,31 @@ TransponderPacket::TransponderPacket(char* rx_string, int rssi_dbm) {
 TransponderPacket::DownlinkFormat TransponderPacket::GetDownlinkFormatEnum() {
     switch (downlink_format_) {
         // DF 0-11 = short messages (56 bits)
-        case DownlinkFormat::DF_SHORT_RANGE_AIR_SURVEILLANCE:
-        case DownlinkFormat::DF_ALTITUDE_REPLY:
-        case DownlinkFormat::DF_IDENTITY_REPLY:
-        case DownlinkFormat::DF_ALL_CALL_REPLY:
+        case DownlinkFormat::kDownlinkFormatShortRangeAirSurveillance:
+        case DownlinkFormat::kDownlinkFormatAltitudeReply:
+        case DownlinkFormat::kDownlinkFormatIdentityReply:
+        case DownlinkFormat::kDownlinkFormatAllCallReply:
         // DF 16-24 = long messages (112 bits)
-        case DownlinkFormat::DF_LONG_RANGE_AIR_SURVEILLANCE:
-        case DownlinkFormat::DF_EXTENDED_SQUITTER:
-        case DownlinkFormat::DF_EXTENDED_SQUITTER_NON_TRANSPONDER:
-        case DownlinkFormat::DF_MILITARY_EXTENDED_SQUITTER:
-        case DownlinkFormat::DF_COMM_B_ALTITUDE_REPLY:
-        case DownlinkFormat::DF_COMM_B_IDENTITY_REPLY:
-        case DownlinkFormat::DF_COMM_D_EXTENDED_LENGTH_MESSAGE:
+        case DownlinkFormat::kDownlinkFormatLongRangeAirSurveillance:
+        case DownlinkFormat::kDownlinkFormatExtendedSquitter:
+        case DownlinkFormat::kDownlinkFormatExtendedSquitterNonTransponder:
+        case DownlinkFormat::kDownlinkFormatMilitaryExtendedSquitter:
+        case DownlinkFormat::kDownlinkFormatCommBAltitudeReply:
+        case DownlinkFormat::kDownlinkFormatCommBIdentityReply:
+        case DownlinkFormat::kDownlinkFormatCommDExtendedLengthMessage:
             // DF 1-3, 6-10, 11-15, 22-23 not used
             return static_cast<DownlinkFormat>(downlink_format_);
             break;
         default:
-            return DownlinkFormat::DF_INVALID;
+            return DownlinkFormat::kDownlinkFormatInvalid;
     }
     // Bits 1-5: Downlink Format (DF)
     enum DownlinkFormat {
-        DF_INVALID = -1,
+        kDownlinkFormatInvalid = -1,
         // DF 0-11 = short messages (56 bits)
-        DF_SHORT_RANGE_AIR_SURVEILLANCE = 0,
-        DF_ALTITUDE_REPLY = 4,
-        DF_IDENTITY_REPLY = 5,
+        kDownlinkFormatShortRangeAirSurveillance = 0,
+        kDownlinkFormatAltitudeReply = 4,
+        kDownlinkFormatIdentityReply = 5,
         DF_ALL_CALL_REPLY = 11,
         // DF 16-24 = long messages (112 bits)
         DF_LONG_RANGE_AIR_SURVEILLANCE = 16,
@@ -156,10 +156,10 @@ void TransponderPacket::ConstructTransponderPacket() {
     uint32_t parity_value = get_24_bit_word_from_buffer(packet_buffer_len_bits_ - BITS_PER_WORD_24, packet_buffer_);
 
     switch (static_cast<DownlinkFormat>(downlink_format_)) {
-        case DF_SHORT_RANGE_AIR_SURVEILLANCE:
-        case DF_ALTITUDE_REPLY:
-        case DF_IDENTITY_REPLY:
-        case DF_ALL_CALL_REPLY: {
+        case kDownlinkFormatShortRangeAirSurveillance:
+        case kDownlinkFormatAltitudeReply:
+        case kDownlinkFormatIdentityReply:
+        case kDownlinkFormatAllCallReply: {
             // Process a 56-bit message.
             is_valid_ = false;  // Calculated checksum is XORed with the ICAO address. See ADS-B Decoding Guide pg. 22.
             // ICAO address is a best guess, needs to be confirmed from the aircraft dictionary.
@@ -198,13 +198,13 @@ ADSBPacket::TypeCode ADSBPacket::GetTypeCodeEnum() const {
         case 2:
         case 3:
         case 4:
-            return TC_AIRCRAFT_ID;
+            return kTypeCodeAircraftID;
             break;
         case 5:
         case 6:
         case 7:
         case 8:
-            return TC_SURFACE_POSITION;
+            return kTypeCodeSurfacePosition;
             break;
         case 9:
         case 10:
@@ -216,33 +216,33 @@ ADSBPacket::TypeCode ADSBPacket::GetTypeCodeEnum() const {
         case 16:
         case 17:
         case 18:
-            return TC_AIRBORNE_POSITION_BARO_ALT;
+            return kTypeCodeAirbornePositionBaroAlt;
             break;
         case 19:
-            return TC_AIRBORNE_VELOCITIES;
+            return kTypeCodeAirborneVelocities;
             break;
         case 20:
         case 21:
         case 22:
-            return TC_AIRBORNE_POSITION_GNSS_ALT;
+            return kTypeCodeAirbornePositionGNSSAlt;
             break;
         case 23:
         case 24:
         case 25:
         case 26:
         case 27:
-            return TC_RESERVED;
+            return kTypeCodeReserved;
             break;
         case 28:
-            return TC_AIRCRAFT_STATUS;
+            return kTypeCodeAircraftStatus;
             break;
         case 29:
-            return TC_TARGET_STATE_AND_STATUS_INFO;
+            return kTypeCodeTargetStateAndStatusInfo;
             break;
         case 31:
-            return TC_AIRCRAFT_OPERATION_STATUS;
+            return kTypeCodeAircraftOperationStatus;
             break;
         default:
-            return TC_INVALID;
+            return kTypeCodeInvalid;
     }
 }

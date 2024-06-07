@@ -10,26 +10,26 @@ class Aircraft {
    public:
     static const uint16_t kCallSignMaxNumChars = 8;
 
-    enum WakeVortex : uint16_t {
-        kWakeVortexInvalid = 0,
-        kWakeVortexReserved,
-        kWakeVortexNoCategoryInfo,
-        kWakeVortexSurfaceEmergencyVehicle,
-        kWakeVortexSurfaceServiceVehicle,
-        kWakeVortexGroundObstruction,
-        kWakeVortexGliderSailplane,
-        kWakeVortexLighterThanAir,
-        kWakeVortexParachutistSkydiver,
-        kWakeVortexUltralightHangGliderParaglider,
-        kWakeVortexUnmannedAerialVehicle,
-        kWakeVortexSpaceTransatmosphericVehicle,
-        kWakeVortexLight,    // < 7000kg
-        kWakeVortexMedium1,  // 7000kg - 34000kg
-        kWakeVortexMedium2,  // 34000kg - 136000kg
-        kWakeVortexHighVortexAircraft,
-        kWakeVortexHeavy,            // > 136000kg
-        kWakeVortexHighPerformance,  // >5g acceleration and >400kt speed
-        kWakeVortexRotorcraft
+    enum AirframeType : uint16_t {
+        kAirframeTypeInvalid = 0,
+        kAirframeTypeReserved,
+        kAirframeTypeNoCategoryInfo,
+        kAirframeTypeSurfaceEmergencyVehicle,
+        kAirframeTypeSurfaceServiceVehicle,
+        kAirframeTypeGroundObstruction,
+        kAirframeTypeGliderSailplane,
+        kAirframeTypeLighterThanAir,
+        kAirframeTypeParachutistSkydiver,
+        kAirframeTypeUltralightHangGliderParaglider,
+        kAirframeTypeUnmannedAerialVehicle,
+        kAirframeTypeSpaceTransatmosphericVehicle,
+        kAirframeTypeLight,    // < 7000kg
+        kAirframeTypeMedium1,  // 7000kg - 34000kg
+        kAirframeTypeMedium2,  // 34000kg - 136000kg
+        kAirframeTypeHighVortexAircraft,
+        kAirframeTypeHeavy,            // > 136000kg
+        kAirframeTypeHighPerformance,  // >5g acceleration and >400kt speed
+        kAirframeTypeRotorcraft
     };
 
     enum SurveillanceStatus : uint16_t {
@@ -44,7 +44,7 @@ class Aircraft {
     uint16_t transponder_capability = 0;
     uint32_t icao_address = 0;
     char callsign[kCallSignMaxNumChars + 1];  // put extra EOS character at end
-    WakeVortex wake_vortex = kWakeVortexInvalid;
+    AirframeType wake_vortex = kAirframeTypeInvalid;
 
     SurveillanceStatus surveillance_status = kSurveillanceStatusNoCondition;
     bool single_antenna_flag = false;
@@ -56,6 +56,11 @@ class Aircraft {
     bool position_valid = false;
     bool is_airborne =
         true;  // assume that most aircraft encountered will be airborne, so put them there until proven otherwise
+
+    float heading_deg = 0.0f;
+    float airspeed_kts = 0.0f;
+    float ground_speed_kts = 0.0f;
+    float vertical_rate_fpm = 0.0f;
 
     Aircraft(uint32_t icao_address_in);
     Aircraft();
@@ -133,16 +138,56 @@ class AircraftDictionary {
     bool IngestADSBPacket(ADSBPacket packet);
     uint16_t GetNumAircraft();
 
+    /**
+     * Adds an Aircraft object to the aircraft dictionary, hashed by ICAO address.
+     * @param[in] aircraft Aircraft to insert.
+     * @retval True if insertaion succeeded, false if failed.
+     */
     bool InsertAircraft(const Aircraft &aircraft);
+
+    /**
+     * Remove an aircraft from the dictionary, by ICAO address.
+     * @param[in] icao_address ICAO address of the aircraft to remove from the dictionary.
+     * @retval True if removal succeeded, false if aircraft was not found.
+     */
     bool RemoveAircraft(uint32_t icao_address);
+
+    /**
+     * Retrieve an aircraft from the dictionary.
+     * @param[in] icao_address Address to use for looking up the aircraft.
+     * @param[out] aircraft_out Aircraft reference to put the retrieved aircraft into if successful.
+     * @retval True if aircraft was found and retrieved, false if aircraft was not in the dictionary.
+     */
     bool GetAircraft(uint32_t icao_address, Aircraft &aircraft_out) const;
+
+    /**
+     * Check if an aircraft is contained in the dictionary.
+     * @param[in] icao_address Address to use for looking up the aircraft.
+     * @retval True if aircraft is in the dictionary, false if not.
+     */
     bool ContainsAircraft(uint32_t icao_address) const;
+
+    /**
+     * Return a pointer to an aircraft if it's in the aircraft dictionary.
+     * @param[in] icao_address ICAO address of the aircraft to find.
+     * @retval Pointer to the aircraft if it exists, or NULL if it wasn't in the dictionary.
+     */
     Aircraft *GetAircraftPtr(uint32_t icao_address);
 
     std::unordered_map<uint32_t, Aircraft> dict;  // index Aircraft objects by their ICAO identifier
 
    private:
     // Helper functions for ingesting specific ADS-B packet types, called by IngestADSBPacket.
+
+    /**
+     * GENERIC COMMENT FOR ALL MESSAGE INGESTION HELPERS
+     * Ingests a <Message Type> ADS-B message. Called by IngestADSBPacket, which makes sure that the packet
+     * is valid and has the correct Downlink Format.
+     * @param[out] aircraft Reference to the Aircraft to populate with info pulled from packet.
+     * @param[in] packet ADSBPacket to ingest.
+     * @retval True if message was ingested successfully, false otherwise.
+     */
+
     bool IngestAircraftIDMessage(Aircraft &aircraft, ADSBPacket packet);
     bool IngestSurfacePositionMessage(Aircraft &aircraft, ADSBPacket packet);
     // bool IngestAirbornePositionBaroAltMessage(ADSBPacket packet);

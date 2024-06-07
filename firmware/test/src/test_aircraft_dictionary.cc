@@ -6,6 +6,7 @@
 
 constexpr float kLatDegCloseEnough = 0.001f;
 constexpr float kLonDegCloseEnough = 0.0001f;
+constexpr float kFloatCloseEnough = 0.0001f; // FOr generic floats.
 
 TEST(AircraftDictionary, BasicInsertRemove)
 {
@@ -14,7 +15,7 @@ TEST(AircraftDictionary, BasicInsertRemove)
     EXPECT_FALSE(dictionary.RemoveAircraft(12345));
 
     Aircraft test_aircraft = Aircraft(12345);
-    test_aircraft.wake_vortex = Aircraft::kWakeVortexRotorcraft;
+    test_aircraft.wake_vortex = Aircraft::kAirframeTypeRotorcraft;
     dictionary.InsertAircraft(test_aircraft);
     EXPECT_EQ(dictionary.GetNumAircraft(), 1);
     EXPECT_TRUE(dictionary.ContainsAircraft(test_aircraft.icao_address));
@@ -36,7 +37,7 @@ TEST(AircraftDictionary, InsertThenRemoveTooMany)
     EXPECT_EQ(dictionary.GetNumAircraft(), 0);
 
     Aircraft test_aircraft = Aircraft(0);
-    test_aircraft.wake_vortex = Aircraft::kWakeVortexGliderSailplane;
+    test_aircraft.wake_vortex = Aircraft::kAirframeTypeGliderSailplane;
 
     // Insert maximum number of aircraft.
     for (uint16_t i = 0; i < AircraftDictionary::kMaxNumAircraft; i++)
@@ -74,13 +75,13 @@ TEST(AircraftDictionary, UseAircraftPtr)
     AircraftDictionary dictionary = AircraftDictionary();
     Aircraft *aircraft = dictionary.GetAircraftPtr(12345);
     EXPECT_TRUE(aircraft); // aircraft should have been automatically inserted just fine
-    aircraft->wake_vortex = Aircraft::kWakeVortexGroundObstruction;
+    aircraft->wake_vortex = Aircraft::kAirframeTypeGroundObstruction;
     Aircraft aircraft_out;
     ASSERT_TRUE(dictionary.GetAircraft(12345, aircraft_out));
-    ASSERT_EQ(aircraft_out.wake_vortex, Aircraft::kWakeVortexGroundObstruction);
-    aircraft->wake_vortex = Aircraft::kWakeVortexHeavy;
+    ASSERT_EQ(aircraft_out.wake_vortex, Aircraft::kAirframeTypeGroundObstruction);
+    aircraft->wake_vortex = Aircraft::kAirframeTypeHeavy;
     ASSERT_TRUE(dictionary.GetAircraft(12345, aircraft_out));
-    ASSERT_EQ(aircraft_out.wake_vortex, Aircraft::kWakeVortexHeavy);
+    ASSERT_EQ(aircraft_out.wake_vortex, Aircraft::kAirframeTypeHeavy);
 }
 
 TEST(AircraftDictionary, AccessFakeAircraft)
@@ -103,7 +104,7 @@ TEST(AircraftDictionary, IngestAircraftIDMessage)
     EXPECT_TRUE(dictionary.GetAircraft(0x76CE88, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x76CE88u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.wake_vortex, Aircraft::kWakeVortexNoCategoryInfo);
+    EXPECT_EQ(aircraft.wake_vortex, Aircraft::kAirframeTypeNoCategoryInfo);
     EXPECT_STREQ(aircraft.callsign, "SIA224");
 
     tpacket = TransponderPacket((char *)"8D7C7181215D01A08208204D8BF1");
@@ -113,7 +114,7 @@ TEST(AircraftDictionary, IngestAircraftIDMessage)
     EXPECT_TRUE(dictionary.GetAircraft(0x7C7181, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x7C7181u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.wake_vortex, Aircraft::kWakeVortexLight);
+    EXPECT_EQ(aircraft.wake_vortex, Aircraft::kAirframeTypeLight);
     EXPECT_STREQ(aircraft.callsign, "WPF");
 
     tpacket = TransponderPacket((char *)"8D7C7745226151A08208205CE9C2");
@@ -123,7 +124,7 @@ TEST(AircraftDictionary, IngestAircraftIDMessage)
     EXPECT_TRUE(dictionary.GetAircraft(0x7C7745, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x7C7745u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.wake_vortex, Aircraft::kWakeVortexMedium1);
+    EXPECT_EQ(aircraft.wake_vortex, Aircraft::kAirframeTypeMedium1);
     EXPECT_STREQ(aircraft.callsign, "XUF");
 
     tpacket = TransponderPacket((char *)"8D7C80AD2358F6B1E35C60FF1925");
@@ -133,7 +134,7 @@ TEST(AircraftDictionary, IngestAircraftIDMessage)
     EXPECT_TRUE(dictionary.GetAircraft(0x7C80AD, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x7C80ADu);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.wake_vortex, Aircraft::kWakeVortexMedium2);
+    EXPECT_EQ(aircraft.wake_vortex, Aircraft::kAirframeTypeMedium2);
     EXPECT_STREQ(aircraft.callsign, "VOZ1851");
 
     tpacket = TransponderPacket((char *)"8D7C146525446074DF5820738E90");
@@ -143,7 +144,7 @@ TEST(AircraftDictionary, IngestAircraftIDMessage)
     EXPECT_TRUE(dictionary.GetAircraft(0x7C1465, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x7C1465u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.wake_vortex, Aircraft::kWakeVortexHeavy);
+    EXPECT_EQ(aircraft.wake_vortex, Aircraft::kAirframeTypeHeavy);
     EXPECT_STREQ(aircraft.callsign, "QFA475");
 }
 
@@ -287,4 +288,24 @@ TEST(AircraftDictionary, IngestAirbornePositionMessage)
     EXPECT_NEAR(aircraft.longitude_deg, -156.5328535600142f, kLonDegCloseEnough);
     EXPECT_EQ(aircraft.surveillance_status, Aircraft::SurveillanceStatus::kSurveillanceStatusNoCondition);
     EXPECT_FALSE(aircraft.single_antenna_flag);
+}
+
+TEST(AircraftDictionary, IngestAirborneVelocityMessage)
+{
+    AircraftDictionary dictionary = AircraftDictionary();
+    TransponderPacket tpacket = TransponderPacket((char *)"8dae56bc99246508b8080b6c230f");
+    ASSERT_TRUE(tpacket.IsValid());
+    ADSBPacket packet = ADSBPacket(tpacket);
+    ASSERT_EQ(packet.GetTypeCodeEnum(), ADSBPacket::TypeCode::kTypeCodeAirborneVelocities);
+
+    // Ingest the airborne velocities packet.
+    ASSERT_TRUE(dictionary.IngestADSBPacket(packet));
+    ASSERT_EQ(dictionary.GetNumAircraft(), 1);
+    auto itr = dictionary.dict.begin();
+    auto &aircraft = itr->second;
+
+    // Aircraft should now have velocities populated.
+    EXPECT_NEAR(aircraft.heading_deg, 304.2157021324374, kFloatCloseEnough);
+    EXPECT_NEAR(aircraft.ground_speed_kts, 122.31925441237777, kFloatCloseEnough);
+    EXPECT_NEAR(aircraft.vertical_rate_fpm, -64.0f, kFloatCloseEnough);
 }

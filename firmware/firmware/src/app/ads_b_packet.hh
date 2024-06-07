@@ -20,20 +20,20 @@ class TransponderPacket {
 
     // Bits 1-5: Downlink Format (DF)
     enum DownlinkFormat {
-        DF_INVALID = -1,
+        kDownlinkFormatInvalid = -1,
         // DF 0-11 = short messages (56 bits)
-        DF_SHORT_RANGE_AIR_SURVEILLANCE = 0,
-        DF_ALTITUDE_REPLY = 4,
-        DF_IDENTITY_REPLY = 5,
-        DF_ALL_CALL_REPLY = 11,
+        kDownlinkFormatShortRangeAirSurveillance = 0,
+        kDownlinkFormatAltitudeReply = 4,
+        kDownlinkFormatIdentityReply = 5,
+        kDownlinkFormatAllCallReply = 11,
         // DF 16-24 = long messages (112 bits)
-        DF_LONG_RANGE_AIR_SURVEILLANCE = 16,
-        DF_EXTENDED_SQUITTER = 17,
-        DF_EXTENDED_SQUITTER_NON_TRANSPONDER = 18,
-        DF_MILITARY_EXTENDED_SQUITTER = 19,
-        DF_COMM_B_ALTITUDE_REPLY = 20,
-        DF_COMM_B_IDENTITY_REPLY = 21,
-        DF_COMM_D_EXTENDED_LENGTH_MESSAGE = 24
+        kDownlinkFormatLongRangeAirSurveillance = 16,
+        kDownlinkFormatExtendedSquitter = 17,
+        kDownlinkFormatExtendedSquitterNonTransponder = 18,
+        kDownlinkFormatMilitaryExtendedSquitter = 19,
+        kDownlinkFormatCommBAltitudeReply = 20,
+        kDownlinkFormatCommBIdentityReply = 21,
+        kDownlinkFormatCommDExtendedLengthMessage = 24
         // DF 1-3, 6-10, 11-15, 22-23 not used
     };
 
@@ -96,7 +96,7 @@ class TransponderPacket {
     uint16_t packet_buffer_len_bits_ = 0;
 
     uint32_t icao_address_ = 0;
-    uint16_t downlink_format_ = static_cast<uint16_t>(DF_INVALID);
+    uint16_t downlink_format_ = static_cast<uint16_t>(kDownlinkFormatInvalid);
     int rssi_dbm_ = INT32_MIN;
 
     uint32_t parity_interrogator_id = 0;
@@ -130,16 +130,16 @@ class ADSBPacket : public TransponderPacket {
     // Bits 33-88 [56]: Message, Extended Squitter (ME)
     // (Bits 33-37 [5]): Type code (TC)
     enum TypeCode {
-        TC_INVALID = 0,
-        TC_AIRCRAFT_ID = 1,                    // 1–4	Aircraft identification
-        TC_SURFACE_POSITION = 5,               // 5–8	Surface position
-        TC_AIRBORNE_POSITION_BARO_ALT = 9,     // 9–18	Airborne position (w/Baro Altitude)
-        TC_AIRBORNE_VELOCITIES = 19,           // 19	Airborne velocities
-        TC_AIRBORNE_POSITION_GNSS_ALT = 20,    // 20–22	Airborne position (w/GNSS Height)
-        TC_RESERVED = 23,                      // 23–27	Reserved
-        TC_AIRCRAFT_STATUS = 28,               // 28	Aircraft status
-        TC_TARGET_STATE_AND_STATUS_INFO = 29,  // 29	Target state and status information
-        TC_AIRCRAFT_OPERATION_STATUS = 31      // 31	Aircraft operation status
+        kTypeCodeInvalid = 0,
+        kTypeCodeAircraftID = 1,                 // 1–4	Aircraft identification
+        kTypeCodeSurfacePosition = 5,            // 5–8	Surface position
+        kTypeCodeAirbornePositionBaroAlt = 9,    // 9–18	Airborne position (w/Baro Altitude)
+        kTypeCodeAirborneVelocities = 19,        // 19	Airborne velocities
+        kTypeCodeAirbornePositionGNSSAlt = 20,   // 20–22	Airborne position (w/GNSS Height)
+        kTypeCodeReserved = 23,                  // 23–27	Reserved
+        kTypeCodeAircraftStatus = 28,            // 28	Aircraft status
+        kTypeCodeTargetStateAndStatusInfo = 29,  // 29	Target state and status information
+        kTypeCodeAircraftOperationStatus = 31    // 31	Aircraft operation status
     };
     // Bits 89-112 [24]: Parity / Interrogator ID (PI)
 
@@ -155,7 +155,7 @@ class ADSBPacket : public TransponderPacket {
    private:
     uint16_t capability_ = 0;
 
-    uint16_t typecode_ = static_cast<uint16_t>(TC_INVALID);
+    uint16_t typecode_ = static_cast<uint16_t>(kTypeCodeInvalid);
 
     void ConstructADSBPacket();
 };
