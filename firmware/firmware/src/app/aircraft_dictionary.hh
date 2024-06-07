@@ -10,43 +10,43 @@ class Aircraft {
    public:
     static const uint16_t kCallSignMaxNumChars = 8;
 
-    typedef enum {
-        WV_INVALID = 0,
-        WV_RESERVED,
-        WV_NO_CATEGORY_INFO,
-        WV_SURFACE_EMERGENCY_VEHICLE,
-        WV_SURVACE_SERVICE_VEHICLE,
-        WV_GROUND_OBSTRUCTION,
-        WV_GLIDER_SAILPLANE,
-        WV_LIGHTER_THAN_AIR,
-        WV_PARACHUTIST_SKYDIVER,
-        WV_ULTRALIGHT_HANG_GLIDER_PARAGLIDER,
-        WV_UNMANNED_AERIAL_VEHICLE,
-        WV_SPACE_TRANSATMOSPHERIC_VEHICLE,
-        WV_LIGHT,     // < 7000kg
-        WV_MEDIUM_1,  // 7000kg - 34000kg
-        WV_MEDIUM_2,  // 34000kg - 136000kg
-        WV_HIGH_VORTEX_AIRCRAFT,
-        WV_HEAVY,             // > 136000kg
-        WV_HIGH_PERFORMANCE,  // >5g acceleration and >400kt speed
-        WV_ROTORCRAFT
-    } WakeVortex_t;
+    enum WakeVortex : uint16_t {
+        kWakeVortexInvalid = 0,
+        kWakeVortexReserved,
+        kWakeVortexNoCategoryInfo,
+        kWakeVortexSurfaceEmergencyVehicle,
+        kWakeVortexSurfaceServiceVehicle,
+        kWakeVortexGroundObstruction,
+        kWakeVortexGliderSailplane,
+        kWakeVortexLighterThanAir,
+        kWakeVortexParachutistSkydiver,
+        kWakeVortexUltralightHangGliderParaglider,
+        kWakeVortexUnmannedAerialVehicle,
+        kWakeVortexSpaceTransatmosphericVehicle,
+        kWakeVortexLight,    // < 7000kg
+        kWakeVortexMedium1,  // 7000kg - 34000kg
+        kWakeVortexMedium2,  // 34000kg - 136000kg
+        kWakeVortexHighVortexAircraft,
+        kWakeVortexHeavy,            // > 136000kg
+        kWakeVortexHighPerformance,  // >5g acceleration and >400kt speed
+        kWakeVortexRotorcraft
+    };
 
-    typedef enum {
-        SS_NO_CONDITION = 0,
-        SS_PERMANENT_ALERT = 1,
-        SS_TEMPORARY_ALERT = 2,
-        SS_SPI_CONDITION = 3
-    } SurveillanceStatus_t;
+    enum SurveillanceStatus : uint16_t {
+        kSurveillanceStatusNoCondition = 0,
+        kSurveillanceStatusPermanantAlert = 1,
+        kSurveillanceStatusTemporaryAlert = 2,
+        kSurveillanceStatusSPICondition = 3
+    };
 
     uint32_t last_seen_timestamp_ms = 0;
 
     uint16_t transponder_capability = 0;
     uint32_t icao_address = 0;
     char callsign[kCallSignMaxNumChars + 1];  // put extra EOS character at end
-    WakeVortex_t wake_vortex = WV_INVALID;
+    WakeVortex wake_vortex = kWakeVortexInvalid;
 
-    SurveillanceStatus_t surveillance_status = SS_NO_CONDITION;
+    SurveillanceStatus surveillance_status = kSurveillanceStatusNoCondition;
     bool single_antenna_flag = false;
     uint16_t barometric_altitude_m = 0;
     uint16_t gnss_altitude_m = 0;
@@ -73,6 +73,15 @@ class Aircraft {
      * considered a successful parse.
      */
     bool SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, bool redigesting = false);
+
+    /**
+     * Simple helper that checks to see whether a packet decode can be attempted (does not guarantee it will succeed,
+     * for instance an odd and even packet may have been received, but from different CPR zones).
+     * @retval True if decode can be attempted, false otherwise.
+     */
+    bool CanDecodePosition() {
+        return last_odd_packet_.received_timestamp_ms > 0 && last_even_packet_.received_timestamp_ms > 0;
+    }
 
     /**
      * Decodes the aircraft position using last_odd_packet_ and last_even_packet_.

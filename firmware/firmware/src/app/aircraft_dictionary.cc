@@ -276,12 +276,12 @@ Aircraft *AircraftDictionary::GetAircraftPtr(uint32_t icao_address) {
 /**
  * Returns the Wake Vortex value of the aircraft that sent a given ADS-B packet.
  * @param[in] packet ADS-B Packet to extract the WakeVortex value from. Must be
- * @retval WakeVortex_t that matches the combination of capability and typecode from the ADS-B packet, or
- * WV_INVALID if there is no matching wake vortex value.
+ * @retval WakeVortex that matches the combination of capability and typecode from the ADS-B packet, or
+ * kWakeVortexInvalid if there is no matching wake vortex value.
  */
-Aircraft::WakeVortex_t ExtractWakeVortex(const ADSBPacket &packet) {
+Aircraft::WakeVortex ExtractWakeVortex(const ADSBPacket &packet) {
     if (packet.GetTypeCodeEnum() != ADSBPacket::TC_AIRCRAFT_ID) {
-        return Aircraft::WV_INVALID;  // Must have typecode from 1-4.
+        return Aircraft::kWakeVortexInvalid;  // Must have typecode from 1-4.
     }
 
     uint32_t typecode = packet.GetNBitWordFromMessage(5, 0);
@@ -289,87 +289,87 @@ Aircraft::WakeVortex_t ExtractWakeVortex(const ADSBPacket &packet) {
 
     // Table 4.1 from The 1090Mhz Riddle (Junzi Sun), pg. 42.
     if (category == 0) {
-        return Aircraft::WV_NO_CATEGORY_INFO;
+        return Aircraft::kWakeVortexNoCategoryInfo;
     }
 
     switch (typecode) {
         case 1:
-            return Aircraft::WV_RESERVED;
+            return Aircraft::kWakeVortexReserved;
             break;
         case 2:
             switch (category) {
                 case 1:
-                    return Aircraft::WV_SURFACE_EMERGENCY_VEHICLE;
+                    return Aircraft::kWakeVortexSurfaceEmergencyVehicle;
                     break;
                 case 3:
-                    return Aircraft::WV_SURVACE_SERVICE_VEHICLE;
+                    return Aircraft::kWakeVortexSurfaceServiceVehicle;
                     break;
                 case 4:
                 case 5:
                 case 6:
                 case 7:
-                    return Aircraft::WV_GROUND_OBSTRUCTION;
+                    return Aircraft::kWakeVortexGroundObstruction;
                     break;
                 default:
-                    return Aircraft::WV_INVALID;
+                    return Aircraft::kWakeVortexInvalid;
             }
             break;
         case 3:
             switch (category) {
                 case 1:
-                    return Aircraft::WV_GLIDER_SAILPLANE;
+                    return Aircraft::kWakeVortexGliderSailplane;
                     break;
                 case 2:
-                    return Aircraft::WV_LIGHTER_THAN_AIR;
+                    return Aircraft::kWakeVortexLighterThanAir;
                     break;
                 case 3:
-                    return Aircraft::WV_PARACHUTIST_SKYDIVER;
+                    return Aircraft::kWakeVortexParachutistSkydiver;
                     break;
                 case 4:
-                    return Aircraft::WV_ULTRALIGHT_HANG_GLIDER_PARAGLIDER;
+                    return Aircraft::kWakeVortexUltralightHangGliderParaglider;
                     break;
                 case 5:
-                    return Aircraft::WV_RESERVED;
+                    return Aircraft::kWakeVortexReserved;
                     break;
                 case 6:
-                    return Aircraft::WV_UNMANNED_AERIAL_VEHICLE;
+                    return Aircraft::kWakeVortexUnmannedAerialVehicle;
                     break;
                 case 7:
-                    return Aircraft::WV_SPACE_TRANSATMOSPHERIC_VEHICLE;
+                    return Aircraft::kWakeVortexSpaceTransatmosphericVehicle;
                     break;
                 default:
-                    return Aircraft::WV_INVALID;
+                    return Aircraft::kWakeVortexInvalid;
             }
             break;
         case 4:
             switch (category) {
                 case 1:
-                    return Aircraft::WV_LIGHT;
+                    return Aircraft::kWakeVortexLight;
                     break;
                 case 2:
-                    return Aircraft::WV_MEDIUM_1;
+                    return Aircraft::kWakeVortexMedium1;
                     break;
                 case 3:
-                    return Aircraft::WV_MEDIUM_2;
+                    return Aircraft::kWakeVortexMedium2;
                     break;
                 case 4:
-                    return Aircraft::WV_HIGH_VORTEX_AIRCRAFT;
+                    return Aircraft::kWakeVortexHighVortexAircraft;
                     break;
                 case 5:
-                    return Aircraft::WV_HEAVY;
+                    return Aircraft::kWakeVortexHeavy;
                     break;
                 case 6:
-                    return Aircraft::WV_HIGH_PERFORMANCE;
+                    return Aircraft::kWakeVortexHighPerformance;
                     break;
                 case 7:
-                    return Aircraft::WV_ROTORCRAFT;
+                    return Aircraft::kWakeVortexRotorcraft;
                     break;
                 default:
-                    return Aircraft::WV_INVALID;
+                    return Aircraft::kWakeVortexInvalid;
             }
             break;
         default:
-            return Aircraft::WV_INVALID;
+            return Aircraft::kWakeVortexInvalid;
     }
 }
 
@@ -395,28 +395,34 @@ bool AircraftDictionary::IngestAircraftIDMessage(Aircraft &aircraft, ADSBPacket 
 bool AircraftDictionary::IngestSurfacePositionMessage(Aircraft &aircraft, ADSBPacket packet) { return false; }
 
 bool AircraftDictionary::IngestAirbornePositionMessage(Aircraft &aircraft, ADSBPacket packet) {
-    // ME[6-7] - Surveillance Status
-    aircraft.surveillance_status = static_cast<Aircraft::SurveillanceStatus_t>(packet.GetNBitWordFromMessage(2, 6));
+    // ME[5-6] - Surveillance Status
+    aircraft.surveillance_status = static_cast<Aircraft::SurveillanceStatus>(packet.GetNBitWordFromMessage(2, 5));
 
-    // ME[8] - Single Antenna Flag
-    aircraft.single_antenna_flag = packet.GetNBitWordFromMessage(1, 8) ? true : false;
+    // ME[7] - Single Antenna Flag
+    aircraft.single_antenna_flag = packet.GetNBitWordFromMessage(1, 7) ? true : false;
 
-    // ME[9-20] - Encoded Altitude
-    uint16_t encoded_altitude = packet.GetNBitWordFromMessage(12, 9);
+    // ME[8-19] - Encoded Altitude
+    uint16_t encoded_altitude = packet.GetNBitWordFromMessage(12, 8);
     if (packet.GetTypeCodeEnum() == ADSBPacket::TC_AIRBORNE_POSITION_BARO_ALT) {
         aircraft.barometric_altitude_m = encoded_altitude;
     } else {
         aircraft.gnss_altitude_m = encoded_altitude;
     }
 
-    // ME[21] - Time
+    // ME[20] - Time
     // TODO: figure out if we need this
 
-    // ME[22] - CPR Format
-    bool odd = packet.GetNBitWordFromMessage(1, 22);
+    // ME[21] - CPR Format
+    bool odd = packet.GetNBitWordFromMessage(1, 21);
 
     // ME[32-?]
-    aircraft.SetCPRLatLon(packet.GetNBitWordFromMessage(17, 23), packet.GetNBitWordFromMessage(17, 40), odd);
+    aircraft.SetCPRLatLon(packet.GetNBitWordFromMessage(17, 22), packet.GetNBitWordFromMessage(17, 39), odd);
+    if (aircraft.CanDecodePosition()) {
+        if (!aircraft.DecodePosition()) {
+            CONSOLE_WARNING("IngestAirbornePositionMessage: DecodePosition failed for aircraft 0x%x.\r\n",
+                            aircraft.icao_address);
+        }
+    }
 
     return true;
 }

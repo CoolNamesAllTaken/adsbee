@@ -4,6 +4,9 @@
 #include "decode_utils.hh"   // for location calculation utility functions
 #include "hal_god_powers.hh" // for changing timestamp
 
+constexpr float kLatDegCloseEnough = 0.001f;
+constexpr float kLonDegCloseEnough = 0.0001f;
+
 TEST(AircraftDictionary, BasicInsertRemove)
 {
     AircraftDictionary dictionary = AircraftDictionary();
@@ -11,7 +14,7 @@ TEST(AircraftDictionary, BasicInsertRemove)
     EXPECT_FALSE(dictionary.RemoveAircraft(12345));
 
     Aircraft test_aircraft = Aircraft(12345);
-    test_aircraft.wake_vortex = Aircraft::WV_ROTORCRAFT;
+    test_aircraft.wake_vortex = Aircraft::kWakeVortexRotorcraft;
     dictionary.InsertAircraft(test_aircraft);
     EXPECT_EQ(dictionary.GetNumAircraft(), 1);
     EXPECT_TRUE(dictionary.ContainsAircraft(test_aircraft.icao_address));
@@ -33,7 +36,7 @@ TEST(AircraftDictionary, InsertThenRemoveTooMany)
     EXPECT_EQ(dictionary.GetNumAircraft(), 0);
 
     Aircraft test_aircraft = Aircraft(0);
-    test_aircraft.wake_vortex = Aircraft::WV_GLIDER_SAILPLANE;
+    test_aircraft.wake_vortex = Aircraft::kWakeVortexGliderSailplane;
 
     // Insert maximum number of aircraft.
     for (uint16_t i = 0; i < AircraftDictionary::kMaxNumAircraft; i++)
@@ -71,13 +74,13 @@ TEST(AircraftDictionary, UseAircraftPtr)
     AircraftDictionary dictionary = AircraftDictionary();
     Aircraft *aircraft = dictionary.GetAircraftPtr(12345);
     EXPECT_TRUE(aircraft); // aircraft should have been automatically inserted just fine
-    aircraft->wake_vortex = Aircraft::WV_GROUND_OBSTRUCTION;
+    aircraft->wake_vortex = Aircraft::kWakeVortexGroundObstruction;
     Aircraft aircraft_out;
     ASSERT_TRUE(dictionary.GetAircraft(12345, aircraft_out));
-    ASSERT_EQ(aircraft_out.wake_vortex, Aircraft::WV_GROUND_OBSTRUCTION);
-    aircraft->wake_vortex = Aircraft::WV_HEAVY;
+    ASSERT_EQ(aircraft_out.wake_vortex, Aircraft::kWakeVortexGroundObstruction);
+    aircraft->wake_vortex = Aircraft::kWakeVortexHeavy;
     ASSERT_TRUE(dictionary.GetAircraft(12345, aircraft_out));
-    ASSERT_EQ(aircraft_out.wake_vortex, Aircraft::WV_HEAVY);
+    ASSERT_EQ(aircraft_out.wake_vortex, Aircraft::kWakeVortexHeavy);
 }
 
 TEST(AircraftDictionary, AccessFakeAircraft)
@@ -100,7 +103,7 @@ TEST(AircraftDictionary, IngestAircraftIDMessage)
     EXPECT_TRUE(dictionary.GetAircraft(0x76CE88, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x76CE88u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.wake_vortex, Aircraft::WV_NO_CATEGORY_INFO);
+    EXPECT_EQ(aircraft.wake_vortex, Aircraft::kWakeVortexNoCategoryInfo);
     EXPECT_STREQ(aircraft.callsign, "SIA224");
 
     tpacket = TransponderPacket((char *)"8D7C7181215D01A08208204D8BF1");
@@ -110,7 +113,7 @@ TEST(AircraftDictionary, IngestAircraftIDMessage)
     EXPECT_TRUE(dictionary.GetAircraft(0x7C7181, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x7C7181u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.wake_vortex, Aircraft::WV_LIGHT);
+    EXPECT_EQ(aircraft.wake_vortex, Aircraft::kWakeVortexLight);
     EXPECT_STREQ(aircraft.callsign, "WPF");
 
     tpacket = TransponderPacket((char *)"8D7C7745226151A08208205CE9C2");
@@ -120,7 +123,7 @@ TEST(AircraftDictionary, IngestAircraftIDMessage)
     EXPECT_TRUE(dictionary.GetAircraft(0x7C7745, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x7C7745u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.wake_vortex, Aircraft::WV_MEDIUM_1);
+    EXPECT_EQ(aircraft.wake_vortex, Aircraft::kWakeVortexMedium1);
     EXPECT_STREQ(aircraft.callsign, "XUF");
 
     tpacket = TransponderPacket((char *)"8D7C80AD2358F6B1E35C60FF1925");
@@ -130,7 +133,7 @@ TEST(AircraftDictionary, IngestAircraftIDMessage)
     EXPECT_TRUE(dictionary.GetAircraft(0x7C80AD, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x7C80ADu);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.wake_vortex, Aircraft::WV_MEDIUM_2);
+    EXPECT_EQ(aircraft.wake_vortex, Aircraft::kWakeVortexMedium2);
     EXPECT_STREQ(aircraft.callsign, "VOZ1851");
 
     tpacket = TransponderPacket((char *)"8D7C146525446074DF5820738E90");
@@ -140,7 +143,7 @@ TEST(AircraftDictionary, IngestAircraftIDMessage)
     EXPECT_TRUE(dictionary.GetAircraft(0x7C1465, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x7C1465u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.wake_vortex, Aircraft::WV_HEAVY);
+    EXPECT_EQ(aircraft.wake_vortex, Aircraft::kWakeVortexHeavy);
     EXPECT_STREQ(aircraft.callsign, "QFA475");
 }
 
@@ -243,4 +246,45 @@ TEST(Aircraft, SetCPRLatLon)
     // Send even / odd latitude pair
 
     /** Test Longitude **/
+}
+
+TEST(AircraftDictionary, IngestAirbornePositionMessage)
+{
+    AircraftDictionary dictionary = AircraftDictionary();
+    TransponderPacket even_tpacket = TransponderPacket((char *)"8da6147f5859f18cdf4d244ac6fa");
+    ASSERT_TRUE(even_tpacket.IsValid());
+    ADSBPacket even_packet = ADSBPacket(even_tpacket);
+    TransponderPacket odd_tpacket = TransponderPacket((char *)"8da6147f585b05533e2ba73e43cb");
+    ASSERT_TRUE(odd_tpacket.IsValid());
+    ADSBPacket odd_packet = ADSBPacket(odd_tpacket);
+
+    ASSERT_EQ(dictionary.GetNumAircraft(), 0);
+
+    // Set time since boot to something positive so packet ingestion time looks legit.
+    set_time_since_boot_ms(1e3);
+
+    // Ingest even packet.
+    ASSERT_TRUE(dictionary.IngestADSBPacket(even_packet));
+    ASSERT_EQ(dictionary.GetNumAircraft(), 1);
+    auto itr = dictionary.dict.begin();
+    auto &aircraft = itr->second;
+
+    // Aircraft should exist but not have its location filled out.
+    ASSERT_EQ(aircraft.icao_address, 0xA6147F);
+    EXPECT_FLOAT_EQ(aircraft.latitude_deg, 0.0f);
+    EXPECT_FLOAT_EQ(aircraft.longitude_deg, 0.0f);
+    EXPECT_EQ(aircraft.surveillance_status, Aircraft::SurveillanceStatus::kSurveillanceStatusNoCondition);
+    EXPECT_FALSE(aircraft.single_antenna_flag);
+
+    inc_time_since_boot_ms(1e3); // Simulate time passing between odd and even packet ingestion.
+
+    // Ingest odd packet.
+    ASSERT_TRUE(dictionary.IngestADSBPacket(odd_packet));
+
+    // Aircraft should now have a valid location.
+    ASSERT_EQ(aircraft.icao_address, 0xA6147F);
+    EXPECT_NEAR(aircraft.latitude_deg, 20.326522568524894f, kLatDegCloseEnough);
+    EXPECT_NEAR(aircraft.longitude_deg, -156.5328535600142f, kLonDegCloseEnough);
+    EXPECT_EQ(aircraft.surveillance_status, Aircraft::SurveillanceStatus::kSurveillanceStatusNoCondition);
+    EXPECT_FALSE(aircraft.single_antenna_flag);
 }
