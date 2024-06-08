@@ -10,9 +10,6 @@ bool CommsManager::InitReporting() { return true; }
 
 bool CommsManager::UpdateReporting() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
-    if (timestamp_ms - last_report_timestamp_ms < reporting_interval_ms) {
-        return true;  // No update required.
-    }
     for (uint16_t iface = 0; iface < SerialInterface::kGNSSUART; iface++) {
         switch (reporting_protocols_[iface]) {
             case kNoReports:
@@ -22,7 +19,11 @@ bool CommsManager::UpdateReporting() {
             case kRawValidated:
                 break;
             case kMAVLINK:
+                if (timestamp_ms - last_report_timestamp_ms < mavlink_reporting_interval_ms) {
+                    return true;  // No update required.
+                }
                 ReportMAVLINK(static_cast<SerialInterface>(iface));
+                last_report_timestamp_ms = timestamp_ms;
                 break;
             case kGDL90:
                 // Currently not supported.
@@ -38,8 +39,13 @@ bool CommsManager::UpdateReporting() {
     return true;
 }
 
-uint16_t AircraftAirframeTypeToMAVLINKEmitterType(Aircraft::AirframeType airframe_type) {
+uint8_t AircraftAirframeTypeToMAVLINKEmitterType(Aircraft::AirframeType airframe_type) {
     switch (airframe_type) {
+        case Aircraft::AirframeType::kAirframeTypeInvalid:
+            CONSOLE_WARNING(
+                "comms_reporting.cc::AircraftAirframeTypeToMAVLINKEmitterType: Encountered airframe type "
+                "kAirframeTypeInvalid.");
+            return UINT8_MAX;
         case Aircraft::AirframeType::kAirframeTypeNoCategoryInfo:
             return 0;  // ADSB_EMITTER_TYPE_NO_INFO
         case Aircraft::AirframeType::kAirframeTypeLight:
@@ -78,7 +84,13 @@ uint16_t AircraftAirframeTypeToMAVLINKEmitterType(Aircraft::AirframeType airfram
             return 18;  // ADSB_EMITTER_TYPE_SERVICE_SURFACE
         case Aircraft::AirframeType::kAirframeTypeGroundObstruction:
             return 19;  // ADSB_EMITTER_TYPE_POINT_OBSTACLE
+        default:
+            CONSOLE_WARNING(
+                "comms_reporting.cc::AircraftAirframeTypeToMAVLINKEmitterType: Encountered unknown airframe type %d.",
+                airframe_type);
+            return UINT8_MAX;
     }
+    return UINT8_MAX;
 }
 
 bool CommsManager::ReportMAVLINK(SerialInterface iface) {
@@ -98,19 +110,25 @@ bool CommsManager::ReportMAVLINK(SerialInterface iface) {
                                          : aircraft.gnss_altitude_ft) *
                         1000,
             // Heding [cdeg]
-            .heading = aircraft.heading_deg * 100,
+            .heading = static_cast<uint16_t>(aircraft.heading_deg * 100.0f),
             // Horizontal Velocity [cm/s]
-            .hor_velocity = KtsToMps(aircraft.velocity_kts) * 100,
+            .hor_velocity = static_cast<uint16_t>(KtsToMps(static_cast<int>(aircraft.velocity_kts)) * 100),
             // Vertical Velocity [cm/s]
-            .ver_velocity = FpmToMps(aircraft.vertical_rate_fpm) * 100,
+            .ver_velocity = static_cast<int16_t>(FpmToMps(aircraft.vertical_rate_fpm) * 100),
             .flags = 0,   // TODO: fix this!
             .squawk = 0,  // TODO: fix this!
-            .altitude_type = aircraft.altitude_source == Aircraft::AltitudeSource::kAltitudeSourceBaro ? 0 : 1,
+            .altitude_type = (aircraft.altitude_source == Aircraft::AltitudeSource::kAltitudeSourceBaro ? 0u : 1u),
             // Fill out callsign later.
             .emitter_type = AircraftAirframeTypeToMAVLINKEmitterType(aircraft.airframe_type),
             // Time Since Last Contact [s]
-            .tslc = (get_time_since_boot_ms() - aircraft.last_seen_timestamp_ms) / 1000};
+            .tslc = static_cast<uint8_t>((get_time_since_boot_ms() - aircraft.last_seen_timestamp_ms) / 1000)};
         strncpy(adsb_vehicle_msg.callsign, aircraft.callsign, Aircraft::kCallSignMaxNumChars);
+
+        // Send the message.
+        // mavlink_message_t mavlink_message;
+        // mavlink_msg_adsb_vehicle_encode(mavlink_system_id, mavlink_component_id, &mavlink_message,
+        // &adsb_vehicle_msg);
+        mavlink_msg_adsb_vehicle_send_struct(static_cast<mavlink_channel_t>(iface), &adsb_vehicle_msg);
     }
     return true;
 }

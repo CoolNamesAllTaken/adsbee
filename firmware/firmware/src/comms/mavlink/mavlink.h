@@ -42,6 +42,7 @@
         {0, 50, 9, 9, 0, 0, 0}, { 300, 217, 22, 22, 0, 0, 0 } \
     }
 #endif
+#define MAVLINK_USE_CONVENIENCE_FUNCTIONS
 #include "mavlink_msg_adsb_vehicle.h"
 
 // End modified by John McNelly 2024-06-06

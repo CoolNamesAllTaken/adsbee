@@ -106,7 +106,11 @@ class CommsManager {
     ConsoleVerbosity console_verbosity = ConsoleVerbosity::kLog;  // Start with highest verbosity by default.
 
     uint32_t last_report_timestamp_ms = 0;
-    uint32_t reporting_interval_ms = 1000;
+
+    // MAVLINK settings.
+    uint32_t mavlink_reporting_interval_ms = 1000;
+    uint8_t mavlink_system_id = 0;
+    uint8_t mavlink_component_id = 0;
 
    private:
     // AT Functions

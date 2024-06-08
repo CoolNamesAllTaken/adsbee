@@ -8,6 +8,8 @@
 #include "string.h"
 
 // Begin added by John McNelly 2024-06-06.
+#include "comms.hh"
+void comm_send_ch(mavlink_channel_t chan, uint8_t);
 
 // End added by John McNelly.
 
@@ -326,8 +328,8 @@ MAVLINK_HELPER void _mav_finalize_message_chan_send(mavlink_channel_t chan, uint
         buf[0] = MAVLINK_STX_MAVLINK1;
         buf[1] = length;
         buf[2] = status->current_tx_seq;
-        buf[3] = mavlink_system.sysid;
-        buf[4] = mavlink_system.compid;
+        buf[3] = comms_manager.mavlink_system_id;     // Modified by John McNelly 2024-06-08.
+        buf[4] = comms_manager.mavlink_component_id;  // Modified by John McNelly 2024-06-08.
         buf[5] = msgid & 0xFF;
     } else {
         uint8_t incompat_flags = 0;
@@ -340,8 +342,8 @@ MAVLINK_HELPER void _mav_finalize_message_chan_send(mavlink_channel_t chan, uint
         buf[2] = incompat_flags;
         buf[3] = 0;  // compat_flags
         buf[4] = status->current_tx_seq;
-        buf[5] = mavlink_system.sysid;
-        buf[6] = mavlink_system.compid;
+        buf[5] = comms_manager.mavlink_system_id;     // Modified by John McNelly 2024-06-08.
+        buf[6] = comms_manager.mavlink_component_id;  // Modified by John McNelly 2024-06-08.
         buf[7] = msgid & 0xFF;
         buf[8] = (msgid >> 8) & 0xFF;
         buf[9] = (msgid >> 16) & 0xFF;
@@ -1079,19 +1081,25 @@ void comm_send_ch(mavlink_channel_t chan, uint8_t ch)
 }
  */
 
+// Begin modified by John McNelly 2024-06-08
 MAVLINK_HELPER void _mavlink_send_uart(mavlink_channel_t chan, const char *buf, uint16_t len) {
-#ifdef MAVLINK_SEND_UART_BYTES
-    /* this is the more efficient approach, if the platform
-       defines it */
-    MAVLINK_SEND_UART_BYTES(chan, (const uint8_t *)buf, len);
-#else
-    /* fallback to one byte at a time */
-    uint16_t i;
-    for (i = 0; i < len; i++) {
-        comm_send_ch(chan, (uint8_t)buf[i]);
+    for (uint16_t i = 0; i < len; i++) {
+        comms_manager.iface_putc(static_cast<CommsManager::SerialInterface>(chan), buf[i]);
     }
-#endif
+    // #ifdef MAVLINK_SEND_UART_BYTES
+    //     /* this is the more efficient approach, if the platform
+    //        defines it */
+    //     MAVLINK_SEND_UART_BYTES(chan, (const uint8_t *)buf, len);
+    // #else
+    //     /* fallback to one byte at a time */
+    //     uint16_t i;
+    //     for (i = 0; i < len; i++) {
+    //         comm_send_ch(chan, (uint8_t)buf[i]);
+    //     }
+    // #endif
 }
+
+// End modified by John McNelly 2024-06-08
 #endif  // MAVLINK_USE_CONVENIENCE_FUNCTIONS
 
 #ifdef MAVLINK_USE_CXX_NAMESPACE

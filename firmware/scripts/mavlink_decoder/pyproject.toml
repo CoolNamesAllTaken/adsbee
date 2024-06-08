@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "mavlink-decoder"
+version = "0.1.0"
+description = ""
+authors = ["John McNelly <jkailimcnelly@gmail.com>"]
+readme = "README.md"
+packages = [{include = "mavlink_decoder"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pymavlink = "^2.4"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

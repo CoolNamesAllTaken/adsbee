@@ -31,6 +31,19 @@ int main() {
     comms_manager.iface_printf(CommsManager::SerialInterface::kGNSSUART, "ADSBee 1090\r\nSoftware Version %s\r\n",
                                kSoftwareVersionStr);
 
+    // Add a test aircraft to start.
+    // TODO: Remove this.
+    Aircraft test_aircraft;
+    test_aircraft.airframe_type = Aircraft::AirframeType::kAirframeTypeSpaceTransatmosphericVehicle;
+    test_aircraft.latitude_deg = 20;
+    test_aircraft.longitude_deg = -140;
+    test_aircraft.baro_altitude_ft = 10000;
+    test_aircraft.vertical_rate_fpm = -5;
+    test_aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeSourceBaro;
+    test_aircraft.heading_deg = 100;
+    test_aircraft.velocity_kts = 200;
+    ads_bee.aircraft_dictionary.InsertAircraft(test_aircraft);
+
     while (true) {
         // Loop forever.
         comms_manager.Update();

@@ -14,6 +14,7 @@ const char CommsManager::ReportingProtocolStrs[CommsManager::ReportingProtocol::
 
 bool CommsManager::Init() {
     InitAT();
+    InitReporting();
 
     gpio_set_function(config_.comms_uart_tx_pin, GPIO_FUNC_UART);
     gpio_set_function(config_.comms_uart_rx_pin, GPIO_FUNC_UART);
@@ -33,6 +34,7 @@ bool CommsManager::Init() {
 
 bool CommsManager::Update() {
     UpdateAT();
+    UpdateReporting();
     return true;
 }
 
