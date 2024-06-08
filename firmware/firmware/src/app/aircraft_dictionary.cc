@@ -517,6 +517,29 @@ bool AircraftDictionary::IngestAirborneVelocitiesMessage(Aircraft &aircraft, ADS
     }
 
     // Decode altitude difference between GNSS and barometric altitude.
+    bool gnss_alt_below_baro_alt = static_cast<bool>(packet.GetNBitWordFromMessage(1, 48));
+    uint16_t encoded_gnss_alt_baro_alt_difference_ft = static_cast<uint16_t>(packet.GetNBitWordFromMessage(7, 49));
+    if (encoded_gnss_alt_baro_alt_difference_ft == 0) {
+        CONSOLE_WARNING(
+            "AircraftDictionary::IngestAirborneVelocitiesMessage: Difference between GNSS and baro altitude not "
+            "available for aircraft 0x%x.",
+            aircraft.icao_address);
+        // Don't set decode_successful to false so that we ignore missing GNSS/Baro altitude info.
+    } else {
+        int gnss_alt_baro_alt_difference_ft =
+            (encoded_gnss_alt_baro_alt_difference_ft - 1) * 25 * (gnss_alt_below_baro_alt ? -1 : 1);
+        switch (aircraft.altitude_source) {
+            case Aircraft::AltitudeSource::kAltitudeSourceBaro:
+                aircraft.gnss_altitude_ft = aircraft.baro_altitude_ft + gnss_alt_baro_alt_difference_ft;
+                break;
+            case Aircraft::AltitudeSource::kAltitudeSourceGNSS:
+                aircraft.baro_altitude_ft = aircraft.gnss_altitude_ft - gnss_alt_baro_alt_difference_ft;
+                break;
+            default:
+                // Don't sweat it if the aircraft doesn't have an altitude yet.
+                break;
+        }
+    }
 
     return decode_successful;
 }

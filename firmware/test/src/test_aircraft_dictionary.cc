@@ -308,7 +308,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage)
     ASSERT_TRUE(dictionary.IngestADSBPacket(packet));
     ASSERT_EQ(dictionary.GetNumAircraft(), 1);
     auto itr = dictionary.dict.begin();
-    auto &aircraft = itr->second;
+    auto &aircraft = itr->second; // NOTE: Aircraft is a mutable reference until we get to Message A!
 
     // Aircraft should now have velocities populated.
     EXPECT_NEAR(aircraft.heading_deg, 304.2157021324374, kFloatCloseEnough);
@@ -326,13 +326,21 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage)
     ASSERT_TRUE(dictionary.IngestADSBPacket(packet));
     uint32_t message_a_icao = 0x485020;
     ASSERT_TRUE(dictionary.ContainsAircraft(message_a_icao));
-    ASSERT_TRUE(dictionary.GetAircraft(message_a_icao, aircraft));
+    ASSERT_TRUE(dictionary.GetAircraft(message_a_icao, aircraft)); // NOTE: Aircraft is read-only now!
 
     // Check values for Message A
     EXPECT_EQ(aircraft.vertical_rate_fpm, -832);
     EXPECT_EQ(aircraft.velocity_source, Aircraft::VelocitySource::kVelocitySourceGroundSpeed);
     EXPECT_NEAR(aircraft.heading_deg, 182.88f, 0.01);
     EXPECT_NEAR(aircraft.velocity_kts, 159.20f, 0.01);
+
+    // Test altitude difference between baro and GNSS altitude for Message A by re-ingesting.
+    Aircraft *aircraft_ptr = dictionary.GetAircraftPtr(0x485020);
+    aircraft_ptr->baro_altitude_ft = 2000;
+    aircraft_ptr->altitude_source = Aircraft::AltitudeSource::kAltitudeSourceBaro;
+    // Re-ingest message A to make sure the GNSS altitude gets corrected.
+    ASSERT_TRUE(dictionary.IngestADSBPacket(packet));
+    ASSERT_EQ(aircraft_ptr->gnss_altitude_ft, 2000 + 550); // GNSS altitude is 550ft above baro altitude.
 
     // Test Message B from https://mode-s.org/decode/content/ads-b/5-airborne-velocity.html
     tpacket = TransponderPacket((char *)"8DA05F219B06B6AF189400CBC33F");
