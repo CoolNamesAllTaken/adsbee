@@ -1,5 +1,6 @@
 #include "ads_bee.hh"
 #include "comms.hh"
+#include "hal.hh"  // For timestamping.
 #include "mavlink/mavlink.h"
 
 extern ADSBee ads_bee;
@@ -7,6 +8,10 @@ extern ADSBee ads_bee;
 bool CommsManager::InitReporting() { return true; }
 
 bool CommsManager::UpdateReporting() {
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+    if (timestamp_ms - last_report_timestamp_ms < reporting_interval_ms) {
+        return true;  // No update required.
+    }
     for (uint16_t iface = 0; iface < SerialInterface::kGNSSUART; iface++) {
         switch (reporting_protocols_[iface]) {
             case kNoReports:
@@ -16,6 +21,7 @@ bool CommsManager::UpdateReporting() {
             case kRawValidated:
                 break;
             case kMAVLINK:
+                ReportMAVLINK(static_cast<SerialInterface>(iface));
                 break;
             case kGDL90:
                 // Currently not supported.
@@ -40,8 +46,8 @@ bool CommsManager::ReportMAVLINK(SerialInterface iface) {
             .ICAO_address = aircraft.icao_address,
             .lat = static_cast<int32_t>(aircraft.latitude_deg * 1e7f),
             .lon = static_cast<int32_t>(aircraft.longitude_deg * 1e7f),
-            .altitude = aircraft.barometric_altitude_m,
-
+            .altitude_type = aircraft..altitude = aircraft.baro_altitude_ft,
+            .heading = aircraft.heading_deg,
         };
     }
     return true;

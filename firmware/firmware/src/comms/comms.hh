@@ -105,6 +105,9 @@ class CommsManager {
     // Public console settings.
     ConsoleVerbosity console_verbosity = ConsoleVerbosity::kLog;  // Start with highest verbosity by default.
 
+    uint32_t last_report_timestamp_ms = 0;
+    uint32_t reporting_interval_ms = 1000;
+
    private:
     // AT Functions
     bool InitAT();

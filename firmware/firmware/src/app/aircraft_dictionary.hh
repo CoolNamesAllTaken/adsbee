@@ -40,6 +40,13 @@ class Aircraft {
         kSurveillanceStatusSPICondition = 3
     };
 
+    enum AltitudeSource : int16_t {
+        kAltitudeNotAvailable = -2,
+        kAltitudeSourceNotSet = -1,
+        kAltitudeSourceBaro = 0,
+        kAltitudeSourceGNSS = 1
+    };
+
     enum VerticalRateSource : int16_t {
         kVerticalRateNotAvailable = -2,
         kVerticalRateSourceNotSet = -1,
@@ -64,20 +71,24 @@ class Aircraft {
 
     SurveillanceStatus surveillance_status = kSurveillanceStatusNotSet;
     bool single_antenna_flag = false;
-    uint16_t barometric_altitude_m = 0;
-    uint16_t gnss_altitude_m = 0;
+    uint32_t baro_altitude_ft = 0;
+    uint32_t gnss_altitude_ft = 0;
+    AltitudeSource altitude_source = kAltitudeSourceNotSet;
 
+    // Airborne Position Message
     float latitude_deg = 0.0f;
     float longitude_deg = 0.0f;
     bool position_valid = false;
     bool is_airborne =
         true;  // assume that most aircraft encountered will be airborne, so put them there until proven otherwise
 
+    // Airborne Velocities Message
     float heading_deg = 0.0f;
     float velocity_kts = 0;
     VelocitySource velocity_source = kVelocitySourceNotSet;
     int vertical_rate_fpm = 0.0f;
     VerticalRateSource vertical_rate_source = kVerticalRateSourceNotSet;
+    int altitude_difference_gnss_above_baro_ft = 0;
 
     Aircraft(uint32_t icao_address_in);
     Aircraft();

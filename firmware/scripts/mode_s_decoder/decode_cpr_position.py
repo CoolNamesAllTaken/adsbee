@@ -16,4 +16,8 @@ if __name__ == "__main__":
     while(True):
         packet_a = input("CPR Packet A: ")
         packet_b = input("CPR packet B: ")
+        print("Lat/Lon: ", end="")
         print(decode_cpr_pos_from_packet_pair(packet_a, packet_b))
+        print("Altitudes: ")
+        print(f"\tA: {pms.adsb.altitude(packet_a)}")
+        print(f"\tB: {pms.adsb.altitude(packet_b)}")

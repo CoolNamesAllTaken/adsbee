@@ -26,10 +26,6 @@ add_subdirectory(src)
 # In case there are files directly in src and inc
 target_include_directories(ads_bee_test PRIVATE 
     src # Our own header files.
-    # ads_bee/src files included already from subdirectory add.
-    # /ads_bee/src
-    # /ads_bee/src/hal # Get hal.hh but not hal.cc from firmware.
-    # /ads_bee/src/app
     /ads_bee/modules/googletest
     /ads_bee/modules/cppAT/src
 )

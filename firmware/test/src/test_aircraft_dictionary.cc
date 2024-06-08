@@ -276,6 +276,9 @@ TEST(AircraftDictionary, IngestAirbornePositionMessage)
     EXPECT_FLOAT_EQ(aircraft.longitude_deg, 0.0f);
     EXPECT_EQ(aircraft.surveillance_status, Aircraft::SurveillanceStatus::kSurveillanceStatusNoCondition);
     EXPECT_FALSE(aircraft.single_antenna_flag);
+    // Altitude should be filled out.
+    EXPECT_EQ(aircraft.altitude_source, Aircraft::AltitudeSource::kAltitudeSourceBaro);
+    EXPECT_EQ(aircraft.baro_altitude_ft, 16975);
 
     inc_time_since_boot_ms(1e3); // Simulate time passing between odd and even packet ingestion.
 
@@ -288,6 +291,9 @@ TEST(AircraftDictionary, IngestAirbornePositionMessage)
     EXPECT_NEAR(aircraft.longitude_deg, -156.5328535600142f, kLonDegCloseEnough);
     EXPECT_EQ(aircraft.surveillance_status, Aircraft::SurveillanceStatus::kSurveillanceStatusNoCondition);
     EXPECT_FALSE(aircraft.single_antenna_flag);
+    // Altitude should be filled out.
+    EXPECT_EQ(aircraft.altitude_source, Aircraft::AltitudeSource::kAltitudeSourceBaro);
+    EXPECT_EQ(aircraft.baro_altitude_ft, 17000);
 }
 
 TEST(AircraftDictionary, IngestAirborneVelocityMessage)

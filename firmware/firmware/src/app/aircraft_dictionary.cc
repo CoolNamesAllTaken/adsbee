@@ -5,6 +5,7 @@
 #include "comms.hh"  // For debug logging.
 #include "decode_utils.hh"
 #include "hal.hh"
+#include "unit_conversions.hh"
 
 // Conditionally define the MAX macro because the pico platform includes it by default in pico/platform.h.
 #ifndef MAX
@@ -365,6 +366,7 @@ bool AircraftDictionary::IngestAircraftIDMessage(Aircraft &aircraft, ADSBPacket 
 bool AircraftDictionary::IngestSurfacePositionMessage(Aircraft &aircraft, ADSBPacket packet) { return false; }
 
 bool AircraftDictionary::IngestAirbornePositionMessage(Aircraft &aircraft, ADSBPacket packet) {
+    bool decode_successful = true;
     // ME[5-6] - Surveillance Status
     aircraft.surveillance_status = static_cast<Aircraft::SurveillanceStatus>(packet.GetNBitWordFromMessage(2, 5));
 
@@ -372,11 +374,35 @@ bool AircraftDictionary::IngestAirbornePositionMessage(Aircraft &aircraft, ADSBP
     aircraft.single_antenna_flag = packet.GetNBitWordFromMessage(1, 7) ? true : false;
 
     // ME[8-19] - Encoded Altitude
-    uint16_t encoded_altitude = packet.GetNBitWordFromMessage(12, 8);
-    if (packet.GetTypeCodeEnum() == ADSBPacket::kTypeCodeAirbornePositionBaroAlt) {
-        aircraft.barometric_altitude_m = encoded_altitude;
-    } else {
-        aircraft.gnss_altitude_m = encoded_altitude;
+    switch (packet.GetTypeCodeEnum()) {
+        case ADSBPacket::TypeCode::kTypeCodeAirbornePositionBaroAlt: {
+            uint16_t encoded_altitude_ft_with_q_bit = static_cast<uint16_t>(packet.GetNBitWordFromMessage(12, 8));
+            if (encoded_altitude_ft_with_q_bit == 0) {
+                aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeNotAvailable;
+                CONSOLE_WARNING("Altitude information not available for aircraft 0x%x.", aircraft.icao_address);
+                decode_successful = false;
+            } else {
+                aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeSourceBaro;
+                bool q_bit = (encoded_altitude_ft_with_q_bit & (0b000000010000)) ? true : false;
+                // Remove Q bit.
+                uint16_t encoded_altitude_ft = ((encoded_altitude_ft_with_q_bit & 0b111111100000) >> 1) |
+                                               (encoded_altitude_ft_with_q_bit & 0b1111);
+                aircraft.baro_altitude_ft = q_bit ? (encoded_altitude_ft * 25) - 1000 : 25 * encoded_altitude_ft;
+                // FIXME: Does not currently support baro altitudes above 50175ft. Something about grey codes?
+            }
+            break;
+        }
+        case ADSBPacket::TypeCode::kTypeCodeAirbornePositionGNSSAlt: {
+            aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeSourceGNSS;
+            uint16_t gnss_altitude_m = static_cast<uint16_t>(packet.GetNBitWordFromMessage(12, 8));
+            aircraft.gnss_altitude_ft = MetersToFeet(gnss_altitude_m);
+            break;
+        }
+        default:
+            CONSOLE_WARNING(
+                "AircraftDictionary::IngestAirbornePositionMessage: Received packet with unsupported typecode %d.",
+                packet.GetTypeCode());
+            return false;
     }
 
     // ME[20] - Time
@@ -391,11 +417,11 @@ bool AircraftDictionary::IngestAirbornePositionMessage(Aircraft &aircraft, ADSBP
         if (!aircraft.DecodePosition()) {
             CONSOLE_WARNING("IngestAirbornePositionMessage: DecodePosition failed for aircraft 0x%x.\r\n",
                             aircraft.icao_address);
-            return false;
+            decode_successful = false;
         }
     }
 
-    return true;
+    return decode_successful;
 }
 
 inline float wrapped_atan2f(float y, float x) {
@@ -489,6 +515,8 @@ bool AircraftDictionary::IngestAirborneVelocitiesMessage(Aircraft &aircraft, ADS
             aircraft.vertical_rate_fpm = (vertical_rate_magnitude_fpm - 1) * 64;
         }
     }
+
+    // Decode altitude difference between GNSS and barometric altitude.
 
     return decode_successful;
 }

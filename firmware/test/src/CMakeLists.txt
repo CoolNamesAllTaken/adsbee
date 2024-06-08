@@ -8,4 +8,5 @@ PRIVATE
     test_aircraft_dictionary.cc
     # test_ads_bee.cc
     test_data_structures.cc
+    test_unit_conversions.cc
 )
