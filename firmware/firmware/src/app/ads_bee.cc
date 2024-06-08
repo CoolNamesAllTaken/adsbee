@@ -80,8 +80,8 @@ bool ADSBee::Init() {
     gpio_set_function(config_.onboard_i2c_scl_pin, GPIO_FUNC_I2C);
     uint8_t wiper_value_counts;
     if (i2c_read_blocking(config_.onboard_i2c, kRxGainDigipotI2CAddr, &wiper_value_counts, 1, false) != 1) {
-        CONSOLE_PRINTF("ADSBee::Init: Failed to read wiper position from Rx Gain Digipot at I2C address 0x%x.\r\n",
-                       kRxGainDigipotI2CAddr);
+        CONSOLE_ERROR("ADSBee::Init: Failed to read wiper position from Rx Gain Digipot at I2C address 0x%x.",
+                      kRxGainDigipotI2CAddr);
         return false;
     }
 
@@ -124,7 +124,7 @@ bool ADSBee::Init() {
     message_decoder_program_init(config_.message_decoder_pio, message_decoder_sm_, message_decoder_offset_,
                                  config_.pulses_pin, config_.recovered_clk_pin, message_decoder_div);
 
-    CONSOLE_PRINTF("ADSBee::Init: PIOs initialized.\r\n");
+    CONSOLE_LOG("ADSBee::Init: PIOs initialized.");
 
     gpio_init(config_.status_led_pin);
     gpio_set_dir(config_.status_led_pin, GPIO_OUT);

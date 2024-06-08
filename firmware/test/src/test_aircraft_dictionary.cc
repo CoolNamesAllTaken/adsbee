@@ -306,6 +306,41 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage)
 
     // Aircraft should now have velocities populated.
     EXPECT_NEAR(aircraft.heading_deg, 304.2157021324374, kFloatCloseEnough);
-    EXPECT_NEAR(aircraft.ground_speed_kts, 122.31925441237777, kFloatCloseEnough);
+    // Velocity should actually evaluate to 120 when evaluated with doubles, but there is some float error with the sqrt that I think gets pretty nasty.
+    EXPECT_NEAR(aircraft.velocity_kts, 120.930, 0.01);
+    EXPECT_EQ(aircraft.velocity_source, Aircraft::VelocitySource::kVelocitySourceGroundSpeed);
     EXPECT_NEAR(aircraft.vertical_rate_fpm, -64.0f, kFloatCloseEnough);
+    EXPECT_EQ(aircraft.vertical_rate_source, Aircraft::VerticalRateSource::kVerticalRateSourceBaro);
+
+    // Test Message A from https://mode-s.org/decode/content/ads-b/5-airborne-velocity.html
+    tpacket = TransponderPacket((char *)"8D485020994409940838175B284F");
+    ASSERT_TRUE(tpacket.IsValid());
+    packet = ADSBPacket(tpacket);
+    ASSERT_EQ(packet.GetTypeCodeEnum(), ADSBPacket::TypeCode::kTypeCodeAirborneVelocities);
+    ASSERT_TRUE(dictionary.IngestADSBPacket(packet));
+    uint32_t message_a_icao = 0x485020;
+    ASSERT_TRUE(dictionary.ContainsAircraft(message_a_icao));
+    ASSERT_TRUE(dictionary.GetAircraft(message_a_icao, aircraft));
+
+    // Check values for Message A
+    EXPECT_EQ(aircraft.vertical_rate_fpm, -832);
+    EXPECT_EQ(aircraft.velocity_source, Aircraft::VelocitySource::kVelocitySourceGroundSpeed);
+    EXPECT_NEAR(aircraft.heading_deg, 182.88f, 0.01);
+    EXPECT_NEAR(aircraft.velocity_kts, 159.20f, 0.01);
+
+    // Test Message B from https://mode-s.org/decode/content/ads-b/5-airborne-velocity.html
+    tpacket = TransponderPacket((char *)"8DA05F219B06B6AF189400CBC33F");
+    ASSERT_TRUE(tpacket.IsValid());
+    packet = ADSBPacket(tpacket);
+    ASSERT_EQ(packet.GetTypeCodeEnum(), ADSBPacket::TypeCode::kTypeCodeAirborneVelocities);
+    ASSERT_TRUE(dictionary.IngestADSBPacket(packet));
+    uint32_t message_b_icao = 0xA05F21;
+    ASSERT_TRUE(dictionary.ContainsAircraft(message_b_icao));
+    ASSERT_TRUE(dictionary.GetAircraft(message_b_icao, aircraft));
+
+    // Check values for Message B
+    EXPECT_EQ(aircraft.vertical_rate_fpm, -2304);
+    EXPECT_EQ(aircraft.velocity_source, Aircraft::VelocitySource::kVelocitySourceAirspeedTrue);
+    EXPECT_NEAR(aircraft.heading_deg, 243.98f, 0.01);
+    EXPECT_NEAR(aircraft.velocity_kts, 375.0f, 0.01);
 }

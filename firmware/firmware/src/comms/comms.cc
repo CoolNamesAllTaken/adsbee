@@ -85,7 +85,7 @@ bool CommsManager::iface_putc(SerialInterface iface, char c) {
             break;
         case kNumSerialInterfaces:
         default:
-            CONSOLE_PRINTF("CommsManager::iface_putc: Unrecognized iface %d.\r\n", iface);
+            CONSOLE_WARNING("CommsManager::iface_putc: Unrecognized iface %d.", iface);
             return false;
     }
     return false;  // Should never get here.
@@ -118,7 +118,7 @@ bool CommsManager::iface_getc(SerialInterface iface, char &c) {
         }
         case kNumSerialInterfaces:
         default:
-            CONSOLE_PRINTF("CommsManager::iface_getc: Unrecognized iface %d.\r\n", iface);
+            CONSOLE_WARNING("CommsManager::iface_getc: Unrecognized iface %d.", iface);
             return false;  // Didn't match an interface.
             break;
     }
@@ -140,7 +140,7 @@ bool CommsManager::iface_puts(SerialInterface iface, const char *buf) {
             break;
         case kNumSerialInterfaces:
         default:
-            CONSOLE_PRINTF("CommsManager::iface_puts: Unrecognized iface %d.\r\n", iface);
+            CONSOLE_WARNING("CommsManager::iface_puts: Unrecognized iface %d.", iface);
             return false;  // Didn't match an interface.
             break;
     }

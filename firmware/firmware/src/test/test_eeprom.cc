@@ -26,7 +26,7 @@ void i2c_bus_scan(i2c_inst_t *i2c_handle, uint32_t i2c_timeout_us) {
         } else {
             ret = i2c_read_timeout_us(i2c_handle, addr, &rxdata, 1, false, i2c_timeout_us);
             if (ret != 1) {
-                CONSOLE_PRINTF("i2c_bus_scan: Read failed at address 0x%x with code %d.\r\n", addr, ret);
+                CONSOLE_ERROR("i2c_bus_scan: Read failed at address 0x%x with code %d.\r\n", addr, ret);
             }
         }
 

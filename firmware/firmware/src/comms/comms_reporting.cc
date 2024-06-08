@@ -22,8 +22,8 @@ bool CommsManager::UpdateReporting() {
                 break;
             case kNumProtocols:
             default:
-                CONSOLE_PRINTF("Invalid reporting protocol %d specified for interface %d.\r\n",
-                               reporting_protocols_[iface], iface);
+                CONSOLE_WARNING("Invalid reporting protocol %d specified for interface %d.",
+                                reporting_protocols_[iface], iface);
                 return false;
                 break;
         }

@@ -132,10 +132,12 @@ extern CommsManager comms_manager;
 
 #define CONSOLE_PRINTF(format, ...) comms_manager.console_printf(format __VA_OPT__(, ) __VA_ARGS__);
 #define CONSOLE_LOG(format, ...) \
-    comms_manager.console_level_printf(CommsManager::ConsoleVerbosity::kLog, format __VA_OPT__(, ) __VA_ARGS__);
-#define CONSOLE_WARNING(format, ...) \
-    comms_manager.console_level_printf(CommsManager::ConsoleVerbosity::kWarning, format __VA_OPT__(, ) __VA_ARGS__);
-#define CONSOLE_ERROR(format, ...) \
-    comms_manager.console_level_printf(CommsManager::ConsoleVerbosity::kError, format __VA_OPT__(, ) __VA_ARGS__);
+    comms_manager.console_level_printf(CommsManager::ConsoleVerbosity::kLog, format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
+#define CONSOLE_WARNING(format, ...)                                             \
+    comms_manager.console_level_printf(CommsManager::ConsoleVerbosity::kWarning, \
+                                       format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
+#define CONSOLE_ERROR(format, ...)                                             \
+    comms_manager.console_level_printf(CommsManager::ConsoleVerbosity::kError, \
+                                       format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
 
 #endif /* COMMS_HH_ */

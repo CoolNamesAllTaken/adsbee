@@ -11,6 +11,8 @@
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #endif
 
+const float kRadiansToDegrees = 360.0f / (2.0f * M_PI);
+
 /**
  * Aircraft
  */
@@ -389,13 +391,107 @@ bool AircraftDictionary::IngestAirbornePositionMessage(Aircraft &aircraft, ADSBP
         if (!aircraft.DecodePosition()) {
             CONSOLE_WARNING("IngestAirbornePositionMessage: DecodePosition failed for aircraft 0x%x.\r\n",
                             aircraft.icao_address);
+            return false;
         }
     }
 
     return true;
 }
 
-bool AircraftDictionary::IngestAirborneVelocitiesMessage(Aircraft &aircraft, ADSBPacket packet) { return false; }
+inline float wrapped_atan2f(float y, float x) {
+    float val = atan2f(y, x);
+    return val < 0.0f ? (val + (2.0f * M_PI)) : val;
+}
+
+bool AircraftDictionary::IngestAirborneVelocitiesMessage(Aircraft &aircraft, ADSBPacket packet) {
+    bool decode_successful = true;
+
+    // Decode horizontal velocity.
+    ADSBPacket::AirborneVelocitiesSubtype subtype =
+        static_cast<ADSBPacket::AirborneVelocitiesSubtype>(packet.GetNBitWordFromMessage(3, 5));
+    bool is_supersonic = false;
+    switch (subtype) {
+        case ADSBPacket::AirborneVelocitiesSubtype::kAirborneVelocitiesGroundSpeedSupersonic:
+            is_supersonic = true;
+            // Cascade into ground speed calculation.
+        case ADSBPacket::AirborneVelocitiesSubtype::kAirborneVelocitiesGroundSpeedSubsonic: {
+            // Ground speed calculation.
+            int v_ew_kts_plus_1 = static_cast<int>(packet.GetNBitWordFromMessage(10, 14));
+            int v_ns_kts_plus_1 = static_cast<int>(packet.GetNBitWordFromMessage(10, 25));
+            if (v_ew_kts_plus_1 == 0 || v_ns_kts_plus_1 == 0) {
+                aircraft.velocity_source = Aircraft::VelocitySource::kVelocityNotAvailable;
+                CONSOLE_WARNING(
+                    "AircraftDictionary::IngestAirborneVelocitiesMessage: Ground speed not available for aircraft "
+                    "0x%x.",
+                    aircraft.icao_address);
+                decode_successful = false;
+            } else {
+                aircraft.velocity_source = Aircraft::VelocitySource::kVelocitySourceGroundSpeed;
+                bool direction_is_east_to_west = static_cast<bool>(packet.GetNBitWordFromMessage(1, 13));
+                int v_x_kts = (v_ew_kts_plus_1 - 1) * (direction_is_east_to_west ? -1 : 1);
+                bool direction_is_north_to_south = static_cast<bool>(packet.GetNBitWordFromMessage(1, 24));
+                int v_y_kts = (v_ns_kts_plus_1 - 1) * (direction_is_north_to_south ? -1 : 1);
+                if (is_supersonic) {
+                    v_x_kts *= 4;
+                    v_y_kts *= 4;
+                }
+                aircraft.velocity_kts = sqrtf(v_x_kts * v_x_kts + v_y_kts * v_y_kts);
+                aircraft.heading_deg = wrapped_atan2f(v_x_kts, v_y_kts) * kRadiansToDegrees;
+            }
+            break;
+        }
+        case ADSBPacket::AirborneVelocitiesSubtype::kAirborneVelocitiesAirspeedSupersonic: {
+            is_supersonic = true;
+            // Cascade into airspeed calculation.
+        }
+        case ADSBPacket::AirborneVelocitiesSubtype::kAirborneVelocitiesAirspeedSubsonic: {
+            int airspeed_kts_plus_1 = static_cast<int>(packet.GetNBitWordFromMessage(10, 25));
+            if (airspeed_kts_plus_1 == 0) {
+                CONSOLE_WARNING(
+                    "AircraftDictionary::IngestAirborneVelocitiesMessage: Airspeed not available for aircraft "
+                    "0x%x.",
+                    aircraft.icao_address);
+                decode_successful = false;
+            } else {
+                aircraft.velocity_kts = (airspeed_kts_plus_1 - 1) * (is_supersonic ? 4 : 1);
+                bool is_true_airspeed = static_cast<bool>(packet.GetNBitWordFromMessage(1, 24));
+                aircraft.velocity_source = is_true_airspeed
+                                               ? Aircraft::VelocitySource::kVelocitySourceAirspeedTrue
+                                               : Aircraft::VelocitySource::kVelocitySourceSirspeedIndicated;
+                aircraft.heading_deg = static_cast<float>((packet.GetNBitWordFromMessage(10, 14) * 360) / 1024.0f);
+            }
+
+            break;
+        }
+        default:
+            CONSOLE_ERROR(
+                "AircraftDictionary::IngestAirborneVelocitiesMessage: Encountered invalid airborne velocities message "
+                "subtype %d (valid values are 1-4).",
+                subtype);
+            return false;  // Don't attempt vertical rate decode if message type is invalid.
+    }
+
+    // Decode vertical rate.
+    int vertical_rate_magnitude_fpm = packet.GetNBitWordFromMessage(9, 37);
+    if (vertical_rate_magnitude_fpm == 0) {
+        aircraft.vertical_rate_source = Aircraft::VerticalRateSource::kVerticalRateNotAvailable;
+        CONSOLE_WARNING(
+            "AircraftDictionary::IngestAirborneVelocitiesMessage: Vertical rate not available for aircraft "
+            "0x%x.",
+            aircraft.icao_address);
+        decode_successful = false;
+    } else {
+        aircraft.vertical_rate_source = static_cast<Aircraft::VerticalRateSource>(packet.GetNBitWordFromMessage(1, 35));
+        bool vertical_rate_sign_is_negative = packet.GetNBitWordFromMessage(1, 36);
+        if (vertical_rate_sign_is_negative) {
+            aircraft.vertical_rate_fpm = -(vertical_rate_magnitude_fpm - 1) * 64;
+        } else {
+            aircraft.vertical_rate_fpm = (vertical_rate_magnitude_fpm - 1) * 64;
+        }
+    }
+
+    return decode_successful;
+}
 
 bool AircraftDictionary::IngestAircraftStatusMessage(Aircraft &aircraft, ADSBPacket packet) { return false; }
 

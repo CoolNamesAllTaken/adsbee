@@ -32,11 +32,27 @@ class Aircraft {
         kAirframeTypeRotorcraft
     };
 
-    enum SurveillanceStatus : uint16_t {
+    enum SurveillanceStatus : int16_t {
+        kSurveillanceStatusNotSet = -1,
         kSurveillanceStatusNoCondition = 0,
         kSurveillanceStatusPermanantAlert = 1,
         kSurveillanceStatusTemporaryAlert = 2,
         kSurveillanceStatusSPICondition = 3
+    };
+
+    enum VerticalRateSource : int16_t {
+        kVerticalRateNotAvailable = -2,
+        kVerticalRateSourceNotSet = -1,
+        kVerticalRateSourceGNSS = 0,
+        kVerticalRateSourceBaro = 1
+    };
+
+    enum VelocitySource : int16_t {
+        kVelocityNotAvailable = -2,
+        kVelocitySourceNotSet = -1,
+        kVelocitySourceGroundSpeed = 0,
+        kVelocitySourceAirspeedTrue = 1,
+        kVelocitySourceSirspeedIndicated = 2
     };
 
     uint32_t last_seen_timestamp_ms = 0;
@@ -46,7 +62,7 @@ class Aircraft {
     char callsign[kCallSignMaxNumChars + 1];  // put extra EOS character at end
     AirframeType wake_vortex = kAirframeTypeInvalid;
 
-    SurveillanceStatus surveillance_status = kSurveillanceStatusNoCondition;
+    SurveillanceStatus surveillance_status = kSurveillanceStatusNotSet;
     bool single_antenna_flag = false;
     uint16_t barometric_altitude_m = 0;
     uint16_t gnss_altitude_m = 0;
@@ -58,9 +74,10 @@ class Aircraft {
         true;  // assume that most aircraft encountered will be airborne, so put them there until proven otherwise
 
     float heading_deg = 0.0f;
-    float airspeed_kts = 0.0f;
-    float ground_speed_kts = 0.0f;
-    float vertical_rate_fpm = 0.0f;
+    float velocity_kts = 0;
+    VelocitySource velocity_source = kVelocitySourceNotSet;
+    int vertical_rate_fpm = 0.0f;
+    VerticalRateSource vertical_rate_source = kVerticalRateSourceNotSet;
 
     Aircraft(uint32_t icao_address_in);
     Aircraft();

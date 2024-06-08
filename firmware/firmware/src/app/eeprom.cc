@@ -23,7 +23,7 @@ int EEPROM::WriteByte(const uint8_t reg, const uint8_t byte) {
     msg[1] = byte;
     WaitForSafeWriteTime();
     int ret = i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, 2, false, config_.i2c_timeout_us);
-    if (ret < 0) CONSOLE_PRINTF("EEPROM::WriteByte: Write to register 0x%d failed with code %d.\r\n", reg, ret);
+    if (ret < 0) CONSOLE_ERROR("EEPROM::WriteByte: Write to register 0x%d failed with code %d.", reg, ret);
     return ret;
 }
 
@@ -43,7 +43,7 @@ int EEPROM::WriteBuf(const uint8_t reg, uint8_t *buf, const uint16_t num_bytes) 
     }
     // Check to make sure registers are in bounds.
     if (reg + num_bytes > config_.size_bytes) {
-        CONSOLE_PRINTF("EEPROM::WriteBuf: Write of %d bytes at 0x%x overruns end of EEPROM.\r\n");
+        CONSOLE_ERROR("EEPROM::WriteBuf: Write of %d bytes at 0x%x overruns end of EEPROM.");
         return PICO_ERROR_INVALID_ARG;
     }
 
@@ -61,8 +61,8 @@ int EEPROM::WriteBuf(const uint8_t reg, uint8_t *buf, const uint16_t num_bytes) 
         int status = i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, write_num_bytes + 1, false,
                                           config_.i2c_timeout_us);
         if (status < 0) {
-            CONSOLE_PRINTF("EEPROM::I2CRegWrite: Write failed at register 0x%x while trying to write %d bytes.\r\n",
-                           write_reg, write_num_bytes);
+            CONSOLE_ERROR("EEPROM::I2CRegWrite: Write failed at register 0x%x while trying to write %d bytes.",
+                          write_reg, write_num_bytes);
             return status;
         }
         write_reg += write_num_bytes;
@@ -80,7 +80,7 @@ int EEPROM::ReadBuf(const uint8_t reg, uint8_t *buf, const uint16_t num_bytes) {
     }
     // Check to make sure registers are in bounds.
     if (reg + num_bytes > config_.size_bytes) {
-        CONSOLE_PRINTF("EEPROM::ReadBuf: Read of %d bytes at 0x%x overruns end of EEPROM.\r\n");
+        CONSOLE_ERROR("EEPROM::ReadBuf: Read of %d bytes at 0x%x overruns end of EEPROM.");
         return PICO_ERROR_INVALID_ARG;
     }
 
@@ -104,8 +104,8 @@ bool EEPROM::Init() {
     uint8_t eeprom_random_address_data;
     if (i2c_read_timeout_us(config_.i2c_handle, config_.i2c_addr, &eeprom_random_address_data, 1, false,
                             config_.i2c_timeout_us) != 1) {
-        CONSOLE_PRINTF("EEPROM::Init: Failed to read current address from EEPROM at I2C address 0x%x.\r\n",
-                       config_.i2c_addr);
+        CONSOLE_ERROR("EEPROM::Init: Failed to read current address from EEPROM at I2C address 0x%x.",
+                      config_.i2c_addr);
         return false;
     }
     return true;

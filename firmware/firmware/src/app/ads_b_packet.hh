@@ -143,6 +143,14 @@ class ADSBPacket : public TransponderPacket {
     };
     // Bits 89-112 [24]: Parity / Interrogator ID (PI)
 
+    // Subtype enums used for specific packet types (not instantiated as part of the ADSBPacket class).
+    enum AirborneVelocitiesSubtype {
+        kAirborneVelocitiesGroundSpeedSubsonic = 1,
+        kAirborneVelocitiesGroundSpeedSupersonic = 2,
+        kAirborneVelocitiesAirspeedSubsonic = 3,
+        kAirborneVelocitiesAirspeedSupersonic = 4
+    };
+
     uint16_t GetCapability() const { return capability_; };
     uint16_t GetTypeCode() const { return typecode_; };
     TypeCode GetTypeCodeEnum() const;

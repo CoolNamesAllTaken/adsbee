@@ -41,25 +41,25 @@ int main() {
             uint32_t packet_buffer[TransponderPacket::kMaxPacketLenWords32];
             packet.DumpPacketBuffer(packet_buffer);
             if (packet.GetPacketBufferLenBits() == TransponderPacket::kExtendedSquitterPacketLenBits) {
-                CONSOLE_PRINTF("New message: 0x%08x|%08x|%08x|%04x RSSI=%d\r\n", packet_buffer[0], packet_buffer[1],
-                               packet_buffer[2], (packet_buffer[3]) >> (4 * kBitsPerNibble), packet.GetRSSIDBm());
+                CONSOLE_LOG("New message: 0x%08x|%08x|%08x|%04x RSSI=%d", packet_buffer[0], packet_buffer[1],
+                            packet_buffer[2], (packet_buffer[3]) >> (4 * kBitsPerNibble), packet.GetRSSIDBm());
             } else {
-                CONSOLE_PRINTF("New message: 0x%08x|%06x RSSI=%d\r\n", packet_buffer[0],
-                               (packet_buffer[1]) >> (2 * kBitsPerNibble), packet.GetRSSIDBm());
+                CONSOLE_LOG("New message: 0x%08x|%06x RSSI=%d", packet_buffer[0],
+                            (packet_buffer[1]) >> (2 * kBitsPerNibble), packet.GetRSSIDBm());
             }
 
             if (packet.IsValid()) {
                 ads_bee.FlashStatusLED();
-                CONSOLE_PRINTF("\tdf=%d icao_address=0x%06x\r\n", packet.GetDownlinkFormat(), packet.GetICAOAddress());
+                CONSOLE_LOG("\tdf=%d icao_address=0x%06x", packet.GetDownlinkFormat(), packet.GetICAOAddress());
                 ads_bee.aircraft_dictionary.IngestADSBPacket(ADSBPacket(packet));
-                CONSOLE_PRINTF("\taircraft_dictionary: %d aircraft\r\n", ads_bee.aircraft_dictionary.GetNumAircraft());
+                CONSOLE_LOG("\taircraft_dictionary: %d aircraft", ads_bee.aircraft_dictionary.GetNumAircraft());
             } else if (packet.GetPacketBufferLenBits() == TransponderPacket::kSquitterPacketNumBits) {
                 // Marked invalid because CRC could not be confirmed. See if it's in the ICAO dictionary!
                 if (ads_bee.aircraft_dictionary.ContainsAircraft(packet.GetICAOAddress())) {
                     ads_bee.FlashStatusLED();
-                    CONSOLE_PRINTF("\tMLAT OK\r\n");
+                    CONSOLE_LOG("\tMLAT OK");
                 }
-                CONSOLE_PRINTF("INVALID %s", packet.debug_string);
+                CONSOLE_LOG("INVALID %s", packet.debug_string);
             }
         }
     }
