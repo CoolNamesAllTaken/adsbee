@@ -67,7 +67,7 @@ class Aircraft {
     uint16_t transponder_capability = 0;
     uint32_t icao_address = 0;
     char callsign[kCallSignMaxNumChars + 1];  // put extra EOS character at end
-    AirframeType wake_vortex = kAirframeTypeInvalid;
+    AirframeType airframe_type = kAirframeTypeInvalid;
 
     SurveillanceStatus surveillance_status = kSurveillanceStatusNotSet;
     bool single_antenna_flag = false;

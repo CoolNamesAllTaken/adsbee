@@ -262,8 +262,8 @@ Aircraft::AirframeType ExtractAirframeType(const ADSBPacket &packet) {
         return Aircraft::kAirframeTypeInvalid;  // Must have typecode from 1-4.
     }
 
-    uint32_t typecode = packet.GetNBitWordFromMessage(5, 0);
-    uint32_t category = packet.GetNBitWordFromMessage(3, 5);
+    uint16_t typecode = packet.GetNBitWordFromMessage(5, 0);
+    uint16_t category = packet.GetNBitWordFromMessage(3, 5);
 
     // Table 4.1 from The 1090Mhz Riddle (Junzi Sun), pg. 42.
     if (category == 0) {
@@ -352,7 +352,7 @@ Aircraft::AirframeType ExtractAirframeType(const ADSBPacket &packet) {
 }
 
 bool AircraftDictionary::IngestAircraftIDMessage(Aircraft &aircraft, ADSBPacket packet) {
-    aircraft.wake_vortex = ExtractAirframeType(packet);
+    aircraft.airframe_type = ExtractAirframeType(packet);
     aircraft.transponder_capability = packet.GetCapability();
     for (uint16_t i = 0; i < Aircraft::kCallSignMaxNumChars; i++) {
         char callsign_char = lookup_callsign_char(packet.GetNBitWordFromMessage(6, 8 + (6 * i)));
