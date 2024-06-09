@@ -117,7 +117,7 @@ bool CommsManager::ReportMAVLINK(SerialInterface iface) {
             .ver_velocity = static_cast<int16_t>(FpmToMps(aircraft.vertical_rate_fpm) * 100),
             .flags = 0,   // TODO: fix this!
             .squawk = 0,  // TODO: fix this!
-            .altitude_type = (aircraft.altitude_source == Aircraft::AltitudeSource::kAltitudeSourceBaro ? 0u : 1u),
+            .altitude_type = static_cast<uint8_t>(aircraft.altitude_source == Aircraft::AltitudeSource::kAltitudeSourceBaro ? 0 : 1),
             // Fill out callsign later.
             .emitter_type = AircraftAirframeTypeToMAVLINKEmitterType(aircraft.airframe_type),
             // Time Since Last Contact [s]
