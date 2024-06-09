@@ -4,12 +4,10 @@ cmake_minimum_required(VERSION 3.13)
 include(pico_sdk_import.cmake)
 
 project(ads_bee C CXX ASM)
-set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 20)
 
-# Force -00 optimization during debug to try fixing JLink issues.
-# SET(CMAKE_CXX_FLAGS_DEBUG "-O0")
-# SET(CMAKE_C_FLAGS_DEBUG "-O0")
+add_definitions(-DHARDWARE_UNIT_TESTS)
 
 if (PICO_SDK_VERSION_STRING VERSION_LESS "1.3.0")
     message(FATAL_ERROR "Raspberry Pi Pico SDK version 1.3.0 (or later) required. Your version is ${PICO_SDK_VERSION_STRING}")
@@ -29,12 +27,16 @@ add_compile_options(
 add_executable(${PROJECT_NAME} "")
 
 add_subdirectory(src)
-add_subdirectory(inc)
 
 # In case there are files directly in src and inc
 target_include_directories(${PROJECT_NAME} PRIVATE 
     src
-    inc
+    /ads_bee/modules/cppAT/src
+)
+
+target_sources(${PROJECT_NAME} PRIVATE
+    /ads_bee/modules/cppAT/src/cpp_at.cc
+    # /ads_bee/modules/cppAT/src/cpp_at.hh
 )
 
 # Create C header file with the name <pio program>.pio.h
@@ -52,6 +54,8 @@ target_link_libraries(${PROJECT_NAME}
     hardware_pio
     hardware_pwm
     hardware_adc
+    hardware_i2c
+    hardware_spi
 )
 
 # Firmware: Create map/bin/hex file etc

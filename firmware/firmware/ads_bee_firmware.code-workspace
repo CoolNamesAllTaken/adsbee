@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "../scripts"
+		},
+		{
+			"path": "../modules"
 		}
 	],
 	"settings": {
@@ -76,7 +79,21 @@
 			"cinttypes": "cpp",
 			"typeinfo": "cpp",
 			"variant": "cpp",
-			"cstring": "cpp"
+			"cstring": "cpp",
+			"hash_map": "cpp",
+			"strstream": "cpp",
+			"bitset": "cpp",
+			"charconv": "cpp",
+			"complex": "cpp",
+			"csetjmp": "cpp",
+			"csignal": "cpp",
+			"forward_list": "cpp",
+			"list": "cpp",
+			"unordered_set": "cpp",
+			"fstream": "cpp",
+			"future": "cpp",
+			"shared_mutex": "cpp",
+			"format": "cpp"
 		}
 	}
 }

@@ -1,7 +1,7 @@
-version: "3.2"
 services:
   pico-docker:
     image: coolnamesalltaken/pico-docker:latest
+    network_mode: host
     volumes:
       - type: bind
         source: firmware # Which directory from the host computer gets mounted to the container.

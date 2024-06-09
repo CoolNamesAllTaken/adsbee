@@ -97,7 +97,7 @@ void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint in_pin, 
 ; Allow side-setting the out_pin for debugging. 1x output pin can be optionally side-set.
 .side_set 1 opt
 ; Assumes line is idle low, first bit is 0
-; One bit is 12 cycles
+; One bit is 16 cycles
 ; a '0' is encoded as 01
 ; a '1' is encoded as 10
 ;
@@ -106,46 +106,51 @@ void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint in_pin, 
 ; Before enabling the SM, it should be placed in a 'wait 1, pin` state, so that
 ; it will not start sampling until the initial line idle state ends.
 jmp initial_entry
-wait_for_decode:
+complete_decode:
     push block          ; empty the ISR into the FIFO in preparation for next decode
-    ; irq set 0   ; set IRQ 0 to indicate waiting for RX FIFO to be cleared before accepting a new message
 initial_entry:
     wait 1 pin decode_in_pin_index side 0       ; Wait to enter DECODE interval.
     jmp pin start_of_1 side 0
     jmp start_of_0 side 0
-    ; wait 1 pin pulses_pin_index    ; Wait for a 0->1 transition to exit idle state
-    ; fall through into start_of_0
 
 start_of_1:            ; We are 0.25 bits into a 1 - signal is HI
+    nop [1]
     wait 0 pin pulses_pin_index      ; Wait for the 1->0 transition - at this point we are 0.5 into the bit
+falling_edge_1:
     in x, 1 side 1    ; Emit a 1, sleep 3/4 of a bit (need 8 delay clocks before jump to start_of_1).
 
-    ; This whole mess is equivalent to "jump to wait_for_decode if the decode pin is 0".
+     ; This whole mess is equivalent to "jump to complete_decode if the decode pin is 0".
     mov osr, pins ; read pulses and decode bit into OSR
     out null, 1 ; dump the pulses bit
     out y, 1 ; move decode bit to scratch y
     out null, 30 ; dump the rest of the bits
-    jmp !y wait_for_decode ; bail into idle state if decode bit is 0
+    jmp !y complete_decode ; bail into idle state if decode bit is 0
     nop [2]
-
     
     jmp pin start_of_1 side 0; If signal is 1 again, it's another 1 bit, otherwise it's a 0
 
 .wrap_target
 start_of_0:            ; We are 0.25 bits into a 0 - signal is LO
+    nop [1]
     wait 1 pin pulses_pin_index     ; Wait for the 0->1 transition - at this point we are 0.5 into the bit
+rising_edge_0:
     in null, 1 side 1    ; Emit a 0, sleep 3/4 of a bit
 
-    ; This whole mess is equivalent to "jump to wait_for_decode if the decode pin is 0".
+    ; This whole mess is equivalent to "jump to complete_decode if the decode pin is 0".
     mov osr, pins ; read pulses and decode bit into OSR
     out null, 1 ; dump the pulses bit
     out y, 1 ; move decode bit to scratch y
     out null, 30 ; dump the rest of the bits
-    jmp !y wait_for_decode ; bail into idle state if decode bit is 0
+    jmp !y complete_decode ; bail into idle state if decode bit is 0
     nop [2] ; wait slightly for down-going slope
 
     jmp pin start_of_1 side 0; If signal is 0 again, it's another 0 bit otherwise it's a 1
 .wrap
+
+abort_decode:
+    out null, 32; dump all the bits
+    jmp initial_entry
+
 
 % c-sdk {
 static inline void message_decoder_program_init(PIO pio, uint sm, uint offset, uint in_pin_base, uint recovered_clk_pin, float div) {

@@ -20,6 +20,10 @@
                     "description": "Enable pretty-printing for gdb",
                     "text": "-enable-pretty-printing",
                     "ignoreFailures": true
+                },
+                // Print values as hex.
+                {
+                    "text": "set output-radix 16"
                 }
             ],
             "miDebuggerPath": "/usr/bin/gdb",
