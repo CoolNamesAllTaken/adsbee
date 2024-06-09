@@ -61,16 +61,11 @@ CPP_AT_CALLBACK(CommsManager::ATBaudrateCallback) {
     CPP_AT_ERROR();  // Should never get here.
 }
 
-/**
- * AT+CONFIG Callback
- * AT+CONFIG=<config_mode:uint16_t>
- *  config_mode = 0 (print as normal), 1 (suppress non-configuration print messages)
- */
-CPP_AT_CALLBACK(CommsManager::ATConfigCallback) {
+CPP_AT_CALLBACK(CommsManager::ATConsoleVerbosityCallback) {
     switch (op) {
         case '?':
             // AT+CONFIG mode query.
-            CPP_AT_CMD_PRINTF("=%d", at_config_mode_);
+            CPP_AT_CMD_PRINTF("=%s", ConsoleVerbosityStrs[console_verbosity]);
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
@@ -78,14 +73,13 @@ CPP_AT_CALLBACK(CommsManager::ATConfigCallback) {
             if (!CPP_AT_HAS_ARG(0)) {
                 CPP_AT_ERROR("Need to specify a config mode to run.");
             }
-            ATConfigMode new_mode;
-            CPP_AT_TRY_ARG2NUM(0, (uint16_t &)new_mode);
-            if (new_mode >= ATConfigMode::kInvalid) {
-                CPP_AT_ERROR("%d is not a valid config mode.", (uint16_t)new_mode);
+            for (uint16_t i = 0; i < kNumVerbosityLevels; i++) {
+                if (args[0].compare(ConsoleVerbosityStrs[i]) == 0) {
+                    console_verbosity = static_cast<ConsoleVerbosity>(i);
+                    CPP_AT_SUCCESS();
+                }
             }
-
-            at_config_mode_ = new_mode;
-            CPP_AT_SUCCESS();
+            CPP_AT_ERROR("Verbosity level %s not recognized.", args[0].data());
             break;
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);
@@ -261,12 +255,12 @@ static const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string_buf = "AT+BAUDRATE=<iface>,<baudrate>\r\n\tSet the baud rate of a serial "
                         "interface.\r\n\tAT+BAUDRATE=COMMS,115200\r\n\tAT+BAUDRATE=GNSS,9600\r\n\tAT_BAUDRATE?",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBaudrateCallback, comms_manager)},
-    {.command_buf = "+CONFIG",
+    {.command_buf = "+LOG_LEVEL",
      .min_args = 0,
      .max_args = 1,
-     .help_string_buf =
-         "AT+CONFIG=<config_mode>\r\n\tSet whether the module is in CONFIG or RUN mode. RUN=0, CONFIG=1.",
-     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATConfigCallback, comms_manager)},
+     .help_string_buf = "AT+LOG_LEVEL=<console_verbosity>\r\n\tSet how much stuff gets printed to the "
+                        "console.\r\n\tconsole_verbosity = [SILENT ERRORS WARNINGS LOGS]",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATConsoleVerbosityCallback, comms_manager)},
     {.command_buf = "+PROTOCOL",
      .min_args = 0,
      .max_args = 2,

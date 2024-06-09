@@ -33,10 +33,21 @@ python-versions = "*"
 future = "*"
 lxml = "*"
 
+[[package]]
+name = "pyserial"
+version = "3.5"
+description = "Python Serial Port Extension"
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.extras]
+cp2110 = ["hidapi"]
+
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "eb0528cc0d46d796388b638f1d932a3cd1d6acb4ca556e33eea6ed716b3a9aba"
+content-hash = "d6ab36c600dfd5fc3962d98dc26fe6911dea6a78f04e4543f5f2b91258f51ba3"
 
 [metadata.files]
 future = [
@@ -190,4 +201,8 @@ lxml = [
 pymavlink = [
     {file = "pymavlink-2.4.41-py3-none-any.whl", hash = "sha256:5cbc975a1192359d60ea75bede789486a84e50d2ea07435b33a32ee5cb13c11f"},
     {file = "pymavlink-2.4.41.tar.gz", hash = "sha256:ed3225ce985d06103aab251afc883d04a98a1d6db5c73995e7de4caacb1f66cd"},
+]
+pyserial = [
+    {file = "pyserial-3.5-py2.py3-none-any.whl", hash = "sha256:c4451db6ba391ca6ca299fb3ec7bae67a5c55dde170964c7a14ceefec02f2cf0"},
+    {file = "pyserial-3.5.tar.gz", hash = "sha256:3c77e014170dfffbd816e6ffc205e9842efb10be9f58ec16d3e8675b4925cddb"},
 ]

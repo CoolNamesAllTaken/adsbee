@@ -9,6 +9,7 @@ packages = [{include = "mavlink_decoder"}]
 [tool.poetry.dependencies]
 python = "^3.10"
 pymavlink = "^2.4"
+pyserial = "^3.5"
 
 
 [build-system]

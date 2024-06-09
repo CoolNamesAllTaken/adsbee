@@ -5,6 +5,9 @@
 
 #include "pico/stdlib.h"
 
+const char CommsManager::ConsoleVerbosityStrs[CommsManager::ConsoleVerbosity::kNumVerbosityLevels]
+                                             [CommsManager::kConsoleVerbosityStrMaxLen] = {"SILENT", "ERRORS",
+                                                                                           "WARNINGS", "LOGS"};
 const char CommsManager::SerialInterfaceStrs[CommsManager::SerialInterface::kNumSerialInterfaces]
                                             [CommsManager::kSerialInterfaceStrMaxLen] = {"CONSOLE", "COMMS_UART",
                                                                                          "GNSS_UART"};
@@ -39,7 +42,7 @@ bool CommsManager::Update() {
 }
 
 int CommsManager::console_printf(const char *format, ...) {
-    if (at_config_mode_ == ATConfigMode::kConfig) return 0;
+    if (console_verbosity == kSilent) return 0;
     va_list args;
     va_start(args, format);
     int res = vprintf(format, args);
