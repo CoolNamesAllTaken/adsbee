@@ -11,6 +11,7 @@ python = "^3.10"
 pyqtgraph = "^0.13.4"
 pyqt6 = "^6.6.1"
 ipyleaflet = "^0.18.2"
+pyserial = "^3.5"
 
 
 [build-system]
