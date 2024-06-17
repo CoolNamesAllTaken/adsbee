@@ -1,17 +1,25 @@
 services:
+  # Pico SDK container for compiling main firmware project.
   pico-docker:
     image: coolnamesalltaken/pico-docker:latest
     network_mode: host
     volumes:
       - type: bind
-        source: firmware # Which directory from the host computer gets mounted to the container.
+        source: pico_firmware # Which directory from the host computer gets mounted to the container.
         target: /ads_bee/firmware # Where the directory gets mounted in the Docker container.
       # You can bind additional project directories to the container with more - type: bind commands,
       # or create volumes that give the container its own storage.
       - type: bind
-        source: test
+        source: pico_test
         target: /ads_bee/test
       - type: bind
         source: modules
         target: /ads_bee/modules
     command: tail -f /dev/null # keep the container running forever
+  # ESP IDF container for compiling custom ESP-AT firmware.
+  # esp-docker:
+  #   # image: espressif/idf:release-v4.4
+  #   build: ./esp_at
+  #   volumes:
+  #     - .:/ads_bee # Bind mount ./esp_at as a folder for generated output from the configurator.
+  #   entrypoint: /bin/bash -c "/project/entrypoint.sh && tail -f /dev/null"

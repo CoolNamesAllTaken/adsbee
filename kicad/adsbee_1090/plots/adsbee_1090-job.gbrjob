@@ -5,7 +5,7 @@
       "Application": "Pcbnew",
       "Version": "8.0.1"
     },
-    "CreationDate": "2024-04-23T11:39:21-07:00"
+    "CreationDate": "2024-06-13T03:10:38-07:00"
   },
   "GeneralSpecs": {
     "ProjectId": {
@@ -19,7 +19,8 @@
     },
     "LayerNumber": 6,
     "BoardThickness": 1.5844,
-    "Finish": "ENIG"
+    "Finish": "ENIG",
+    "ImpedanceControlled": true
   },
   "DesignRules": [
     {
@@ -129,6 +130,8 @@
       "Color": "Black",
       "Thickness": 0.015,
       "Material": "Epoxy (JLC)",
+      "DielectricConstant": "3.8",
+      "LossTangent": "0.02",
       "Name": "Top Solder Mask"
     },
     {
@@ -141,6 +144,8 @@
       "Color": "R109G116B75",
       "Thickness": 0.2104,
       "Material": "FR4 (JLC 7628)",
+      "DielectricConstant": "4.4",
+      "LossTangent": "0.02",
       "Name": "F.Cu/In1.Cu",
       "Notes": "Type: dielectric layer 1 (from F.Cu to In1.Cu)"
     },
@@ -154,6 +159,8 @@
       "Color": "R109G116B75",
       "Thickness": 0.4,
       "Material": "FR4 (JLC Core)",
+      "DielectricConstant": "4.6",
+      "LossTangent": "0.02",
       "Name": "In1.Cu/In2.Cu",
       "Notes": "Type: dielectric layer 2 (from In1.Cu to In2.Cu)"
     },
@@ -167,6 +174,8 @@
       "Color": "R109G116B75",
       "Thickness": 0.2028,
       "Material": "FR4 (JLC 7628)",
+      "DielectricConstant": "4.4",
+      "LossTangent": "0.02",
       "Name": "In2.Cu/In3.Cu",
       "Notes": "Type: dielectric layer 3 (from In2.Cu to In3.Cu)"
     },
@@ -180,6 +189,8 @@
       "Color": "R109G116B75",
       "Thickness": 0.4,
       "Material": "FR4 (JLC Core)",
+      "DielectricConstant": "4.6",
+      "LossTangent": "0.02",
       "Name": "In3.Cu/In4.Cu",
       "Notes": "Type: dielectric layer 4 (from In3.Cu to In4.Cu)"
     },
@@ -193,6 +204,8 @@
       "Color": "R109G116B75",
       "Thickness": 0.2104,
       "Material": "FR4 (JLC 7628)",
+      "DielectricConstant": "4.4",
+      "LossTangent": "0.02",
       "Name": "In4.Cu/B.Cu",
       "Notes": "Type: dielectric layer 5 (from In4.Cu to B.Cu)"
     },
@@ -206,6 +219,8 @@
       "Color": "Black",
       "Thickness": 0.015,
       "Material": "Epoxy (JLC)",
+      "DielectricConstant": "3.8",
+      "LossTangent": "0.02",
       "Name": "Bottom Solder Mask"
     },
     {
