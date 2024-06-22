@@ -3,15 +3,15 @@
     "GenerationSoftware": {
       "Vendor": "KiCad",
       "Application": "Pcbnew",
-      "Version": "8.0.1"
+      "Version": "8.0.3"
     },
-    "CreationDate": "2024-06-13T03:10:38-07:00"
+    "CreationDate": "2024-06-22T03:08:14-07:00"
   },
   "GeneralSpecs": {
     "ProjectId": {
       "Name": "adsbee_1090",
       "GUID": "61647362-6565-45f3-9130-39302e6b6963",
-      "Revision": "C"
+      "Revision": "D"
     },
     "Size": {
       "X": 45.1,

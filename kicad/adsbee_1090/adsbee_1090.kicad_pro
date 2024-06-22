@@ -48,7 +48,7 @@
         "silk_text_thickness": 0.15,
         "silk_text_upright": false,
         "zones": {
-          "min_clearance": 0.15
+          "min_clearance": 0.0
         }
       },
       "diff_pair_dimensions": [
@@ -79,6 +79,7 @@
         "footprint_type_mismatch": "ignore",
         "hole_clearance": "error",
         "hole_near_hole": "error",
+        "holes_co_located": "warning",
         "invalid_outline": "error",
         "isolated_copper": "warning",
         "item_on_disabled_layer": "error",
@@ -509,7 +510,7 @@
         "name": "SE_50_CP",
         "pcb_color": "rgba(0, 0, 0, 0.000)",
         "schematic_color": "rgba(0, 0, 0, 0.000)",
-        "track_width": 0.8,
+        "track_width": 0.6,
         "via_diameter": 0.8,
         "via_drill": 0.4,
         "wire_width": 6
@@ -528,7 +529,6 @@
       "/RF_SAW_OUT": "SE_50_CP",
       "/USB_D+": "BAL_D90_C30_MS",
       "/USB_D-": "BAL_D90_C30_MS",
-      "Net-(C9-Pad1)": "SE_50_CP",
       "Net-(U8-USB_DM)": "BAL_D90_C30_MS",
       "Net-(U8-USB_DP)": "BAL_D90_C30_MS"
     },
@@ -552,13 +552,14 @@
       "pos_files": "",
       "specctra_dsn": "",
       "step": "fab/adsbee_1090.step",
-      "svg": "",
+      "svg": "fab/",
       "vrml": ""
     },
     "page_layout_descr_file": "${KICAD_LIBS_DIR}/templates/pfb_C.kicad_wks"
   },
   "schematic": {
     "annotate_start_num": 0,
+    "bom_export_filename": "bom\\adsbee_1090.csv",
     "bom_fmt_presets": [],
     "bom_fmt_settings": {
       "field_delimiter": ",",

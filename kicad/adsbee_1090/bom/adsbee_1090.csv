@@ -1,48 +1,52 @@
-Reference,Value,Datasheet,Footprint,Qty,DNP,Standard Cost,LCSC MPN,OEM PN,Extended Cost,Note
-"TP1,TP2,TP3,TP4,TP5,TP6,TP7,TP8,TP9,TP10,TP11",TestPoint,~,TestPoint:TestPoint_Pad_D1.0mm,11,,,,,0,
-"C31,C32",10uF,https://datasheet.lcsc.com/lcsc/2304140030_Samsung-Electro-Mechanics-CL21B106KOQNNNE_C95841.pdf,Capacitor_SMD:C_0805_2012Metric,2,,0.02, C95841, CL21B106KOQNNNE,0.04,
-L1,8.2nH RF,~,Inductor_SMD:L_0402_1005Metric,1,,0.03, C361505, SDWL1005C8N2JSTF,0.03,Looking for a wire wound inductor with similar performance to Coilcraft 0402HP-8N2.
-J4,Conn_ARM_JTAG_SWD_10,http://infocenter.arm.com/help/topic/com.arm.doc.ddi0314h/DDI0314H_coresight_components_trm.pdf,Connector_PinHeader_1.27mm:PinHeader_2x05_P1.27mm_Vertical_SMD,1,,0.1, C2935458, PZ127VS-12-10-H10-A38,0.1,Couldn't find connector with keying for SWD connector.
-J3,Conn_02x03_Pin,~,Connector_PinHeader_1.27mm:PinHeader_2x03_P1.27mm_Vertical_SMD,1,,0.04, C3975186, PZ127-2-03-S,0.04,
-U8,RP2040,https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf,Package_DFN_QFN:QFN-56-1EP_7x7mm_P0.4mm_EP3.2x3.2mm,1,,0.69,C2040,RP2040,0.69,
-"C24,C25",1uF,~,Capacitor_SMD:C_0603_1608Metric,2,,0.01,C29936,CL10B105KA8NNNC,0.02,
-"SW1,SW2",SN74LVC1G3157,https://www.ti.com/lit/ds/symlink/sn74lvc1g3157.pdf,Package_TO_SOT_SMD:SOT-363_SC-70-6,2,,0.07,C38663,SN74LVC1G3157DCKR,0.14,
-"C1,C3,C4,C5,C6,C11,C12,C13,C14,C16,C17,C18,C19,C20,C21,C22,C23,C26,C27,C30",0.1uF,~,Capacitor_SMD:C_0402_1005Metric,20,,0.01,C60474,CC0402KRX7R7BB104,0.2,
-"R5,R18,R19,R20",0R,~,Resistor_SMD:R_0402_1005Metric,4,,0.01,C60485,RC0402JR-070RL,0.04,
-"R1,R4,R15,R22,R23,R25",10k,~,Resistor_SMD:R_0402_1005Metric,6,,0.01,C60490,RC0402FR-0710KL,0.06,
-"D2,D3,D6",20V 1A,~,Diode_SMD:D_SOD-123,3,,0.06,C82288,"PMEG2010ER,115",0.18,
-J1,U.FL 6GHz 50R, ~,Custom_Connector_RF:Hirose_U.FL-R-SMT-1,1,,0.41,C88374, U.FL-R-SMT-1(80),0.41,"(80) suffix denotes reel size, can be substituted."
-U7,W25Q128JVS,http://www.winbond.com/resource-files/w25q128jv_dtr%20revc%2003272018%20plus.pdf,Custom_Package_SO:SOIC-8_5.23x5.23mm_P1.27mm,1,,0.37,C97521,W25Q128JVSIQ,0.37,
-"R9,R10",5.1k,~,Resistor_SMD:R_0402_1005Metric,2,,0.01,C105872,RC0402FR-075K1L,0.02,
-"C7,C8",39pF,~,Capacitor_SMD:C_0402_1005Metric,2,,0.01,C106223,CC0402JRNPO9BN390,0.02,
-"R6,R7,R21,R24",1k,~,Resistor_SMD:R_0402_1005Metric,4,,0.01,C106235,RC0402FR-071KL,0.04,
-"C28,C29",27pF NP0,~,Capacitor_SMD:C_0402_1005Metric,2,,0.01,C107002,CC0402JRNPO9BN270,0.02,
-"C2,C15",22nF,~,Capacitor_SMD:C_0402_1005Metric,2,,0.01,C107026,CC0402KRX7R9BB223,0.02,
-"R11,R12,R16,R17",2.2k,~,Resistor_SMD:R_0402_1005Metric,4,,0.01,C114762,RC0402FR-072K2L,0.04,
-R8,20R,~,Resistor_SMD:R_0402_1005Metric,1,,0.01,C138031,RC0402FR-0720RL,0.01,
-"R2,R3",10R,~,Resistor_SMD:R_0402_1005Metric,2,,0.01,C138066,RC0402FR-0710RL,0.02,
-U6,M24C02-RDW,http://www.st.com/content/ccc/resource/technical/document/datasheet/b0/d8/50/40/5a/85/49/6f/DM00071904.pdf/files/DM00071904.pdf/jcr:content/translations/en.DM00071904.pdf,Package_SO:TSSOP-8_4.4x3mm_P0.65mm,1,,0.1,C152731, M24C02-RDW6TP,0.1,
-"R13,R14",27.4R 1%,~,Resistor_SMD:R_0402_1005Metric,2,,0.01,C284479,RC0402FR-0727R4L,0.02,Substituted with part from Viking Tech due to no LCSC stock of Yageo part.
-R27,115R,~,Resistor_SMD:R_0402_1005Metric,1,,0.01,C295872,RC0402FR-07115RL,0.01,
-R26,287R,~,Resistor_SMD:R_0402_1005Metric,1,,0.01,C375493,RC0402FR-07287RL,0.01,
-Y1,12.000MHz 18pF ±20ppm 80R,https://www.lcsc.com/datasheet/lcsc_datasheet_1912111437_Yajingxin-TAXM12M4RKDCDT2T_C403945.pdf,Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm,1,,0.05,C403945,TAXM12M4RKDCDT2T,0.05,
-CR1,DRTR5V0U2SR-7,DRTR5V0U2SR-7,Package_TO_SOT_SMD:SOT-143,1,,0.05,C443828,DRTR5V0U2SR-7,0.05,Low LCSC stock.
-"SW3,SW4",SW_Push,~,Custom_Button_Switch_SMD:SW-SMD_L3.9-W3.0-P4.45,2,,0.03,C455280,TS-1088R-02026,0.06,
-U2,AD8313xRM,https://www.analog.com/media/en/technical-documentation/data-sheets/AD8313.pdf,Package_SO:MSOP-8_3x3mm_P0.65mm,1,,3.35,C481897,AD8313ARMZ,3.35,
-J5,Conn_01x05_Pin,~,Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Vertical,1,,0.02,C492404,PZ254V-11-05P,0.02,XFCN
-D5,GREEN,https://fscdn.rohm.com/en/products/databook/datasheet/opto/led/chip_mono/sml-d12m8wt86-e.pdf,LED_SMD:LED_0603_1608Metric,1,,0.04,C510025,SML-D12M8WT86,0.04,
-D4,RED,~,LED_SMD:LED_0603_1608Metric,1,,0.04,C510027,SML-D12U8WT86,0.04,
-U4,MCP4017-104E 100k,http://ww1.microchip.com/downloads/en/DeviceDoc/22147a.pdf,Package_TO_SOT_SMD:SOT-363_SC-70-6,1,,0.54,C510890,MCP4017T-104E/LT,0.54,
-U5,MCP6566,http://ww1.microchip.com/downloads/en/DeviceDoc/MCP6566-6R-6U-7-9-1.8V-Low-Power-Open-Drain-Output-Comparator-DS20002143G.pdf,Package_TO_SOT_SMD:SOT-353_SC-70-5,1,,0.48,C623508,MCP6566T-E/LT,0.48,Out of stock at LCSC.
-"F1,F2",6V 200mA,https://www.lcsc.com/datasheet/lcsc_datasheet_2305121424_BHFUSE-BSMD0402L-020_C914085.pdf,Fuse:Fuse_0402_1005Metric,2,,0.12,C914085, BSMD0402L-020,0.24,
-U10,AMS1117-3.3,http://www.advanced-monolithic.com/pdf/ds1117.pdf,Package_TO_SOT_SMD:SOT-223-3_TabPin2,1,,0.1,C917183,AMS1117-3.3,0.1,
-"C9,C10",3pF,~,Capacitor_SMD:C_0402_1005Metric,2,,0.01,C1855211,CQ0402CRNPO9BN3R0,0.02,
-J2,USB_C_Receptacle_USB2.0_16P,https://www.usb.org/sites/default/files/documents/usb_type-c.zip,Custom_Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal,1,,0.03,C2765186, TYPE-C 16PIN 2MD(073),0.03,
-U3,TLV3542,https://www.ti.com/lit/ds/symlink/tlv3542.pdf,Package_SO:VSSOP-8_3.0x3.0mm_P0.65mm,1,,0.84,C2876465,TLV3542IDGKR,0.84,
-J6,Conn_01x11_Pin,~,Connector_PinHeader_2.54mm:PinHeader_1x11_P2.54mm_Vertical,1,,0.07,C2894934,PZ254-1-11-Z-8.5,0.07,HCTL
-D1,3.3VWM 0.6pF,https://www.onsemi.com/pdf/datasheet/esd7351-d.pdf,Diode_SMD:D_SOD-523,1,,0.07,C2912559,ESD7351XV2T1G,0.07,Substituted with TECH PUBLIC dupe due to no stock of onsemi part.
-U9,ESP32-PICO-MINI-02U,https://www.espressif.com/sites/default/files/documentation/esp32-pico-mini-02_datasheet_en.pdf,Custom_MCU_Espressif:ESP32-PICO-MINI-02U,1,,4.9,C3013939, ESP32-PICO-MINI-02U-N8R2,4.9,
-X1,SF2321D,https://www.mouser.com/datasheet/2/1100/sf2321d-1917641.pdf,Custom_Filter:Filter_SAW-6_3.8x3.8mm,1,,1.1,C3283372,SF2321D,1.1,Out of stock at LCSC.
-U1,BGA2818,https://www.nxp.com/docs/en/data-sheet/BGA2818.pdf,Package_TO_SOT_SMD:SOT-363_SC-70-6,1,,0.14,None,"BGA2818,115",0.14,Not available from LCSC.
-,,,,,,,,,,
-,,,,,,,,,14.79,
+"Reference","Value","Datasheet","Footprint","Qty","DNP","Standard Cost","MPN","OEM PN","Note"
+"C1,C3,C4,C5,C6,C11,C12,C13,C14,C16,C17,C18,C19,C20,C21,C22,C23,C26,C27,C30,C39","0.1uF","~","Capacitor_SMD:C_0402_1005Metric","21","","0.01","C60474","CC0402KRX7R7BB104",""
+"C2,C35,C36","100pF","~","Capacitor_SMD:C_0402_1005Metric","3","","0.01","C106200","CC0402JRNPO9BN101",""
+"C9,C10","3pF","~","Capacitor_SMD:C_0402_1005Metric","2","","0.01","C1855211","CQ0402CRNPO9BN3R0",""
+"C15,C33","22nF","~","Capacitor_SMD:C_0402_1005Metric","2","","0.01","C107026","CC0402KRX7R9BB223",""
+"C24,C25","1uF","~","Capacitor_SMD:C_0603_1608Metric","2","","0.01","C29936","CL10B105KA8NNNC",""
+"C28,C29","27pF NP0","~","Capacitor_SMD:C_0402_1005Metric","2","","0.01","C107002","CC0402JRNPO9BN270",""
+"C31,C32,C34","10uF","https://datasheet.lcsc.com/lcsc/2304140030_Samsung-Electro-Mechanics-CL21B106KOQNNNE_C95841.pdf","Capacitor_SMD:C_0805_2012Metric","3","","0.02"," C95841"," CL21B106KOQNNNE",""
+"C37,C38","12pF","~","Capacitor_SMD:C_0402_1005Metric","2","","0.01","C326662","CC0402FRNPO9BN120",""
+"CR1","DRTR5V0U2SR-7","DRTR5V0U2SR-7","Package_TO_SOT_SMD:SOT-143","1","","0.05","C443828","DRTR5V0U2SR-7","Low LCSC stock."
+"D1","3.3VWM 0.6pF","https://www.onsemi.com/pdf/datasheet/esd7351-d.pdf","Diode_SMD:D_SOD-523","1","","0.07","C2912559","ESD7351XV2T1G","Substituted with TECH PUBLIC dupe due to no stock of onsemi part."
+"D2,D3,D6","20V 1A","~","Diode_SMD:D_SOD-123","3","","0.06","C82288","PMEG2010ER,115",""
+"D4","RED","~","LED_SMD:LED_0603_1608Metric","1","","0.04","C510027","SML-D12U8WT86",""
+"D5","GREEN","https://fscdn.rohm.com/en/products/databook/datasheet/opto/led/chip_mono/sml-d12m8wt86-e.pdf","LED_SMD:LED_0603_1608Metric","1","","0.04","C510025","SML-D12M8WT86",""
+"D7","ORANGE","https://www.rohm.com/datasheet/SML-D12V8W","LED_SMD:LED_0603_1608Metric","1","","0.06","C510024","SML-D12D8WT86",""
+"F1,F2","6V 200mA","https://www.lcsc.com/datasheet/lcsc_datasheet_2305121424_BHFUSE-BSMD0402L-020_C914085.pdf","Fuse:Fuse_0402_1005Metric","2","","0.12","C914085","BSMD0402L-020",""
+"J1","U.FL 6GHz 50R"," ~","Custom_Connector_RF:Hirose_U.FL-R-SMT-1","1","","0.41","C88374"," U.FL-R-SMT-1(80)","(80) suffix denotes reel size, can be substituted."
+"J2","USB_C_Receptacle_USB2.0_16P","https://www.usb.org/sites/default/files/documents/usb_type-c.zip","Custom_Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal","1","","0.03","C2765186"," TYPE-C 16PIN 2MD(073)",""
+"J3","Conn_02x03_Pin","~","Connector_PinHeader_1.27mm:PinHeader_2x03_P1.27mm_Vertical_SMD","1","","0.04"," C3975186"," PZ127-2-03-S",""
+"J4","Conn_ARM_JTAG_SWD_10","http://infocenter.arm.com/help/topic/com.arm.doc.ddi0314h/DDI0314H_coresight_components_trm.pdf","Connector_PinHeader_1.27mm:PinHeader_2x05_P1.27mm_Vertical_SMD","1","","0.10"," C2935458"," PZ127VS-12-10-H10-A38","Couldn't find connector with keying for SWD connector."
+"J5","1x5 2.54mm Pin Header","~","Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Vertical","1","DNP","0.02","C492404","PZ254V-11-05P","XFCN"
+"J6","1x11 2.54mm Pin Header","~","Connector_PinHeader_2.54mm:PinHeader_1x11_P2.54mm_Vertical","1","DNP","0.07","C2894934","PZ254-1-11-Z-8.5","HCTL"
+"L1","8.2nH RF","~","Inductor_SMD:L_0402_1005Metric","1","","0.03","C361505","SDWL1005C8N2JSTF","Looking for a wire wound inductor with similar performance to Coilcraft 0402HP-8N2."
+"L2","27nH RF","~","Inductor_SMD:L_0402_1005Metric","1","","0.03","C408697","SDWL1005C27NJSTFM01","Wire wound RF part, can't hve self resonance below ~2GHz."
+"L3","82nH RF","~","Inductor_SMD:L_0402_1005Metric","1","","0.03","C54972","SDWL1005C82NJSTF","Wire wound RF part, can't hve self resonance below ~2GHz."
+"R1,R4,R15,R22,R23,R25","10k","~","Resistor_SMD:R_0402_1005Metric","6","","0.01","C60490","RC0402FR-0710KL",""
+"R2,R3","10R","~","Resistor_SMD:R_0402_1005Metric","2","","0.01","C138066","RC0402FR-0710RL",""
+"R5,R18,R19,R20,R32","0R","~","Resistor_SMD:R_0402_1005Metric","5","","0.01","C60485","RC0402JR-070RL",""
+"R6,R7,R21,R24,R28","1k","~","Resistor_SMD:R_0402_1005Metric","5","","0.01","C106235","RC0402FR-071KL",""
+"R8,R29","20R","~","Resistor_SMD:R_0402_1005Metric","2","","0.01","C138031","RC0402FR-0720RL",""
+"R9,R10","5.1k","~","Resistor_SMD:R_0402_1005Metric","2","","0.01","C105872","RC0402FR-075K1L",""
+"R11,R12,R16,R17","2.2k","~","Resistor_SMD:R_0402_1005Metric","4","","0.01","C114762","RC0402FR-072K2L",""
+"R13,R14","27.4R 1%","~","Resistor_SMD:R_0402_1005Metric","2","","0.01","C284479","RC0402FR-0727R4L","Substituted with part from Viking Tech due to no LCSC stock of Yageo part."
+"R26","287R","~","Resistor_SMD:R_0402_1005Metric","1","","0.01","C375493","RC0402FR-07287RL",""
+"R27","115R","~","Resistor_SMD:R_0402_1005Metric","1","","0.01","C295872","RC0402FR-07115RL",""
+"R30","750R","http://www.yageo.com/documents/recent/PYu-RC_Group_51_RoHS_L_10.pdf","Resistor_SMD:R_0402_1005Metric","1","","0.01","C137936","RC0402FR-07750RL",""
+"R31","6.8k","~","Resistor_SMD:R_0402_1005Metric","1","","0.01","C93940","RC0402FR-076K8L",""
+"SW1,SW2","SN74LVC1G3157","https://www.ti.com/lit/ds/symlink/sn74lvc1g3157.pdf","Package_TO_SOT_SMD:SOT-363_SC-70-6","2","","0.07","C38663","SN74LVC1G3157DCKR",""
+"SW3,SW4","SW_Push","~","Custom_Button_Switch_SMD:SW-SMD_L3.9-W3.0-P4.45","2","","0.03","C455280","TS-1088R-02026",""
+"TP1,TP2,TP3,TP4,TP5,TP6,TP7,TP8,TP9,TP10,TP11","TestPoint","~","TestPoint:TestPoint_Pad_D1.0mm","11","","","","",""
+"U2","AD8313xRM","https://www.analog.com/media/en/technical-documentation/data-sheets/AD8313.pdf","Package_SO:MSOP-8_3x3mm_P0.65mm","1","","3.35","C481897","AD8313ARMZ",""
+"U3","TLV3542","https://www.ti.com/lit/ds/symlink/tlv3542.pdf","Package_SO:VSSOP-8_3.0x3.0mm_P0.65mm","1","","0.84","C2876465","TLV3542IDGKR",""
+"U4","MCP4017-104E 100k","http://ww1.microchip.com/downloads/en/DeviceDoc/22147a.pdf","Package_TO_SOT_SMD:SOT-363_SC-70-6","1","","0.54","C510890","MCP4017T-104E/LT",""
+"U5","MCP6566","http://ww1.microchip.com/downloads/en/DeviceDoc/MCP6566-6R-6U-7-9-1.8V-Low-Power-Open-Drain-Output-Comparator-DS20002143G.pdf","Package_TO_SOT_SMD:SOT-353_SC-70-5","1","","0.48","C623508","MCP6566T-E/LT","Out of stock at LCSC."
+"U6","M24C02-RDW","http://www.st.com/content/ccc/resource/technical/document/datasheet/b0/d8/50/40/5a/85/49/6f/DM00071904.pdf/files/DM00071904.pdf/jcr:content/translations/en.DM00071904.pdf","Package_SO:TSSOP-8_4.4x3mm_P0.65mm","1","","0.10","C152731"," M24C02-RDW6TP",""
+"U7","W25Q128JVS","http://www.winbond.com/resource-files/w25q128jv_dtr%20revc%2003272018%20plus.pdf","Custom_Package_SO:SOIC-8_5.23x5.23mm_P1.27mm","1","","0.37","C97521","W25Q128JVSIQ",""
+"U8","RP2040","https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf","Package_DFN_QFN:QFN-56-1EP_7x7mm_P0.4mm_EP3.2x3.2mm","1","","0.69","C2040","RP2040",""
+"U9","ESP32-PICO-MINI-02U","https://www.espressif.com/sites/default/files/documentation/esp32-pico-mini-02_datasheet_en.pdf","Custom_MCU_Espressif:ESP32-PICO-MINI-02U","1","","4.90","C3013939"," ESP32-PICO-MINI-02U-N8R2",""
+"U10","AMS1117-3.3","http://www.advanced-monolithic.com/pdf/ds1117.pdf","Package_TO_SOT_SMD:SOT-223-3_TabPin2","1","","0.10","C917183","AMS1117-3.3",""
+"U11","BLB01","${KICAD_LIBS_DIR}/datasheets/BLB01-V6.6.pdf","Custom_Package_DFN_QFN:DFN-8-1EP_2x2mm_P0.5mm_EP0.9x1.5mm","1","","1.11","","BLB01","Only available at Digikey."
+"X1","TA2003A","https://www.rfmw.com/datasheets/taisaw/ta2003a%20_rev.1.0_.pdf","Custom_Filter:Filter_SAW-6_3.0x3.0mm","1","","2.50","","TA2003A","Out of stock at LCSC."
+"Y1","12.000MHz 18pF ±20ppm 80R","https://www.lcsc.com/datasheet/lcsc_datasheet_1912111437_Yajingxin-TAXM12M4RKDCDT2T_C403945.pdf","Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm","1","","0.05","C403945","TAXM12M4RKDCDT2T",""
