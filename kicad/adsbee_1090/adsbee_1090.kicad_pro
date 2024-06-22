@@ -530,7 +530,9 @@
       "/USB_D+": "BAL_D90_C30_MS",
       "/USB_D-": "BAL_D90_C30_MS",
       "Net-(U8-USB_DM)": "BAL_D90_C30_MS",
-      "Net-(U8-USB_DP)": "BAL_D90_C30_MS"
+      "Net-(U8-USB_DP)": "BAL_D90_C30_MS",
+      "Net-(U9-USB_DM)": "BAL_D90_C30_MS",
+      "Net-(U9-USB_DP)": "BAL_D90_C30_MS"
     },
     "netclass_patterns": [
       {
