@@ -7,7 +7,7 @@
 ; This program runs at 16MHz. Each clock cycle is 1/16us.
 
 .define pulses_pin_index 0
-.define decode_pin_index 1
+.define demod_pin_index 1
 .wrap_target
 ; BEGIN DOUBLE PULSE MATCH
 waiting_for_first_edge:
@@ -31,24 +31,24 @@ check_pulse_2_lo:
 preamble_tail:
     ; enforce preamble tail LO till just before the rising edge if first message bit is a 1
     jmp pin waiting_for_first_edge [7] 
-    nop [5] ; delay 6 clock cycles so that decode signal activates at 0.25 bit time on first bit
+    nop [5] ; delay 6 clock cycles so that demod signal activates at 0.25 bit time on first bit
 ; END EXTRA DELAY AFTER SECOND DOUBLE PULSE
     
-    ; Extra pattern match segments ignored to provide more time for decoder to kick
+    ; Extra pattern match segments ignored to provide more time for demodulator to kick
     ; on before start of actual data.
     ; jmp pin waiting_for_first_edge [7]
 preamble_matched:
     ; Note: IRQ number could be changed with some jumps on scratch y for a dual-band receiver version.
-    ; irq set 0 side 1 ; set the DECODE IRQ to begin decoding message body
-    set pins 1 ; set decode pin to indicate message body beginning
+    ; irq set 0 side 1 ; set the DEMOD IRQ to begin decoding message body
+    set pins 1 ; set demod pin to indicate message body beginning
     wait 1 pin, pulses_pin_index [3] ; wait till middle of message eye to look for end
 waiting_for_end_of_message:
     set x, 20 ; [2.5us] number of sequential idle samples required to mark end of packet
 idle_countdown:
     jmp pin waiting_for_end_of_message [1] ; start over the idle countdown if received a non idle bit
     jmp x-- idle_countdown ; still idle, keep counting down if the timer isn't up
-    ; set pins, 0 ; set decode pin to 0 to indicate message is finished
-    irq set 0 side 0 ; set the DECODE IRQ to indicate the message body is finished
+    ; set pins, 0 ; set demod pin to 0 to indicate message is finished
+    irq set 0 side 0 ; set the DEMOD IRQ to indicate the message body is finished
     wait 0 irq 0 ; don't look for new messages until the current one has been processed
 .wrap
 
@@ -89,9 +89,9 @@ void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint in_pin, 
 
 %}
 
-.program message_decoder
-; Decode pin for knowing when a valid message decode interval has begun.
-.define decode_in_pin_index 1
+.program message_demodulator
+; Demod pin for knowing when a valid message demod interval has begun.
+.define demod_in_pin_index 1
 ; Pulses input pin for reading current power level.
 .define pulses_pin_index 0
 ; Allow side-setting the out_pin for debugging. 1x output pin can be optionally side-set.
@@ -106,10 +106,10 @@ void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint in_pin, 
 ; Before enabling the SM, it should be placed in a 'wait 1, pin` state, so that
 ; it will not start sampling until the initial line idle state ends.
 jmp initial_entry
-complete_decode:
-    push block          ; empty the ISR into the FIFO in preparation for next decode
+complete_demod:
+    push block          ; empty the ISR into the FIFO in preparation for next demod
 initial_entry:
-    wait 1 pin decode_in_pin_index side 0       ; Wait to enter DECODE interval.
+    wait 1 pin demod_in_pin_index side 0       ; Wait to enter DEMOD interval.
     jmp pin start_of_1 side 0
     jmp start_of_0 side 0
 
@@ -119,12 +119,12 @@ start_of_1:            ; We are 0.25 bits into a 1 - signal is HI
 falling_edge_1:
     in x, 1 side 1    ; Emit a 1, sleep 3/4 of a bit (need 8 delay clocks before jump to start_of_1).
 
-     ; This whole mess is equivalent to "jump to complete_decode if the decode pin is 0".
-    mov osr, pins ; read pulses and decode bit into OSR
+     ; This whole mess is equivalent to "jump to complete_demod if the demod pin is 0".
+    mov osr, pins ; read pulses and demod bit into OSR
     out null, 1 ; dump the pulses bit
-    out y, 1 ; move decode bit to scratch y
+    out y, 1 ; move demod bit to scratch y
     out null, 30 ; dump the rest of the bits
-    jmp !y complete_decode ; bail into idle state if decode bit is 0
+    jmp !y complete_demod ; bail into idle state if demod bit is 0
     nop [2]
     
     jmp pin start_of_1 side 0; If signal is 1 again, it's another 1 bit, otherwise it's a 0
@@ -136,36 +136,36 @@ start_of_0:            ; We are 0.25 bits into a 0 - signal is LO
 rising_edge_0:
     in null, 1 side 1    ; Emit a 0, sleep 3/4 of a bit
 
-    ; This whole mess is equivalent to "jump to complete_decode if the decode pin is 0".
-    mov osr, pins ; read pulses and decode bit into OSR
+    ; This whole mess is equivalent to "jump to complete_demod if the demod pin is 0".
+    mov osr, pins ; read pulses and demod bit into OSR
     out null, 1 ; dump the pulses bit
-    out y, 1 ; move decode bit to scratch y
+    out y, 1 ; move demod bit to scratch y
     out null, 30 ; dump the rest of the bits
-    jmp !y complete_decode ; bail into idle state if decode bit is 0
+    jmp !y complete_demod ; bail into idle state if demod bit is 0
     nop [2] ; wait slightly for down-going slope
 
     jmp pin start_of_1 side 0; If signal is 0 again, it's another 0 bit otherwise it's a 1
 .wrap
 
-abort_decode:
+abort_demod:
     out null, 32; dump all the bits
     jmp initial_entry
 
 
 % c-sdk {
-static inline void message_decoder_program_init(PIO pio, uint sm, uint offset, uint in_pin_base, uint recovered_clk_pin, float div) {
-    uint decode_in_pin = in_pin_base+1;
+static inline void message_demodulator_program_init(PIO pio, uint sm, uint offset, uint in_pin_base, uint recovered_clk_pin, float div) {
+    uint demod_in_pin = in_pin_base+1;
     uint pulses_pin = in_pin_base;
 
-    pio_sm_set_consecutive_pindirs(pio, sm, in_pin_base, 2, false); // in_pin_base is DECODE input, in_pin_base + 1 is pulses
+    pio_sm_set_consecutive_pindirs(pio, sm, in_pin_base, 2, false); // in_pin_base is DEMOD input, in_pin_base + 1 is pulses
     //pio_gpio_init(pio, pulses_pin);
-    //pio_gpio_init(pio, decode_in_pin);
+    //pio_gpio_init(pio, demod_in_pin);
 
     // Allow PIO to control GPIO 22 (as output for debugging)
     pio_gpio_init(pio, recovered_clk_pin);
     pio_sm_set_consecutive_pindirs(pio, sm, recovered_clk_pin, 1, true); // set one pin starting at out_pin to OUT
 
-    pio_sm_config c = message_decoder_program_get_default_config(offset);
+    pio_sm_config c = message_demodulator_program_get_default_config(offset);
     sm_config_set_in_pins(&c, in_pin_base); // WAIT pins
     sm_config_set_jmp_pin(&c, pulses_pin); // JMP based on the comparator output
     sm_config_set_out_shift(&c, true, false, 0); // OSR shifts right, autopull turned off (using OSR for scratch)

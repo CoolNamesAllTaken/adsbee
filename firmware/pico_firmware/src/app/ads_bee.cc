@@ -28,7 +28,7 @@ const uint32_t kRxgainDigipotOhmsPerCount = 100e3 / 127;
 
 ADSBee *isr_access = nullptr;
 
-void on_decode_complete() { isr_access->OnDecodeComplete(); }
+void on_decode_complete() { isr_access->OnDemodComplete(); }
 
 void gpio_irq_isr(uint gpio, uint32_t event_mask) { isr_access->GPIOIRQISR(gpio, event_mask); }
 
@@ -166,7 +166,7 @@ void ADSBee::GPIOIRQISR(uint gpio, uint32_t event_mask) {
     }
 }
 
-void ADSBee::OnDecodeComplete() {
+void ADSBee::OnDemodComplete() {
     pio_interrupt_clear(config_.preamble_detector_pio, 0);
 
     uint16_t word_index = 0;

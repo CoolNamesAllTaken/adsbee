@@ -1,0 +1,4 @@
+#ifndef SPI_COPROCESSOR_HH_
+#define SPI_COPROCESSOR_HH_
+
+#endif /* SPI_COPROCESSOR_HH_ */

@@ -69,7 +69,7 @@ class ADSBee {
     /**
      * ISR triggered by DECODE completing, via PIO0 IRQ0.
      */
-    void OnDecodeComplete();
+    void OnDemodComplete();
 
     /**
      * Set the high Minimum Trigger Level (TL) at the AD8314 output in milliVolts.
