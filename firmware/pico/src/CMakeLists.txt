@@ -15,7 +15,7 @@ else()
 # Build for embedded target
 target_include_directories(ads_bee PRIVATE
     app
-    common
+    /ads_bee/common
     comms
     hal
     test

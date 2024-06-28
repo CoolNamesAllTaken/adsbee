@@ -38,8 +38,8 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
     preamble_detector_sm_ = pio_claim_unused_sm(config_.preamble_detector_pio, true);
     preamble_detector_offset_ = pio_add_program(config_.preamble_detector_pio, &preamble_detector_program);
 
-    message_decoder_sm_ = pio_claim_unused_sm(config_.message_decoder_pio, true);
-    message_decoder_offset_ = pio_add_program(config_.message_decoder_pio, &message_decoder_program);
+    message_demodulator_sm_ = pio_claim_unused_sm(config_.message_demodulator_pio, true);
+    message_demodulator_offset_ = pio_add_program(config_.message_demodulator_pio, &message_demodulator_program);
 
     // Put IRQ parameters into the global scope for the on_decode_complete ISR.
     isr_access = this;
@@ -90,7 +90,7 @@ bool ADSBee::Init() {
 
     // Initialize the program using the .pio file helper function
     preamble_detector_program_init(config_.preamble_detector_pio, preamble_detector_sm_, preamble_detector_offset_,
-                                   config_.pulses_pin, config_.decode_out_pin, preamble_detector_div);
+                                   config_.pulses_pin, config_.demod_out_pin, preamble_detector_div);
 
     // enable the DECODE interrupt on PIO0_IRQ_0
     uint preamble_detector_decode_irq = PIO0_IRQ_0;
@@ -103,17 +103,18 @@ bool ADSBee::Init() {
     irq_set_priority(decode_in_irq, 0);
 
     // Handle GPIO interrupts.
-    gpio_set_irq_enabled_with_callback(config_.decode_in_pin, GPIO_IRQ_EDGE_RISE, true, gpio_irq_isr);
+    gpio_set_irq_enabled_with_callback(config_.demod_in_pin, GPIO_IRQ_EDGE_RISE, true, gpio_irq_isr);
 
     // Handle PIO0 IRQ0.
     irq_set_exclusive_handler(preamble_detector_decode_irq, on_decode_complete);
     irq_set_enabled(preamble_detector_decode_irq, true);
 
-    /** MESSAGE DECODER PIO **/
-    float message_decoder_freq = 16e6;  // Run at 32 MHz to decode bits at 1Mbps.
-    float message_decoder_div = (float)clock_get_hz(clk_sys) / message_decoder_freq;
-    message_decoder_program_init(config_.message_decoder_pio, message_decoder_sm_, message_decoder_offset_,
-                                 config_.pulses_pin, config_.recovered_clk_pin, message_decoder_div);
+    /** MESSAGE DEMODULATOR PIO **/
+    float message_demodulator_freq = 16e6;  // Run at 32 MHz to decode bits at 1Mbps.
+    float message_demodulator_div = (float)clock_get_hz(clk_sys) / message_demodulator_freq;
+    message_demodulator_program_init(config_.message_demodulator_pio, message_demodulator_sm_,
+                                     message_demodulator_offset_, config_.pulses_pin, config_.recovered_clk_pin,
+                                     message_demodulator_div);
 
     CONSOLE_LOG("ADSBee::Init: PIOs initialized.");
 
@@ -122,7 +123,7 @@ bool ADSBee::Init() {
 
     // Enable the state machines
     pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_, true);
-    pio_sm_set_enabled(config_.message_decoder_pio, message_decoder_sm_, true);
+    pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_, true);
 
     // Set the last dictionary update timestamp.
     last_aircraft_dictionary_update_timestamp_ms_ = get_time_since_boot_ms();
@@ -156,8 +157,8 @@ bool ADSBee::Update() {
 }
 
 void ADSBee::GPIOIRQISR(uint gpio, uint32_t event_mask) {
-    if (gpio == config_.decode_in_pin && event_mask == GPIO_IRQ_EDGE_RISE) {
-        gpio_acknowledge_irq(config_.decode_in_pin, GPIO_IRQ_EDGE_RISE);
+    if (gpio == config_.demod_in_pin && event_mask == GPIO_IRQ_EDGE_RISE) {
+        gpio_acknowledge_irq(config_.demod_in_pin, GPIO_IRQ_EDGE_RISE);
         // Decode is beginning!
         // Read the RSSI level of the last packet.
         adc_select_input(config_.rssi_hold_adc_input);
@@ -170,8 +171,8 @@ void ADSBee::OnDemodComplete() {
     pio_interrupt_clear(config_.preamble_detector_pio, 0);
 
     uint16_t word_index = 0;
-    while (!pio_sm_is_rx_fifo_empty(config_.message_decoder_pio, message_decoder_sm_)) {
-        uint32_t word = pio_sm_get(config_.message_decoder_pio, message_decoder_sm_);
+    while (!pio_sm_is_rx_fifo_empty(config_.message_demodulator_pio, message_demodulator_sm_)) {
+        uint32_t word = pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_);
         // CONSOLE_PRINTF("\t%d: %08x\r\n", word_index, word);
 
         switch (word_index) {

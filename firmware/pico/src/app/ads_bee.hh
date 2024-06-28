@@ -24,12 +24,12 @@ class ADSBee {
 
     struct ADSBeeConfig {
         PIO preamble_detector_pio = pio0;
-        PIO message_decoder_pio = pio1;
+        PIO message_demodulator_pio = pio1;
 
         uint16_t status_led_pin = 15;
         uint16_t pulses_pin = 19;  // Reading ADS-B on GPIO22. Will look for DECODE signal on GPIO22-1 = GPIO21.
-        uint16_t decode_in_pin = pulses_pin + 1;
-        uint16_t decode_out_pin = 21;  // Use GPIO20 as DECODE signal output, will be wired to GPIO21 as input.
+        uint16_t demod_in_pin = pulses_pin + 1;
+        uint16_t demod_out_pin = 21;  // Use GPIO20 as DECODE signal output, will be wired to GPIO21 as input.
         uint16_t recovered_clk_pin =
             22;  // Use GPIO22 for the decode PIO program to output its recovered clock (for debugging only).
         // GPIO 24-25 used as PWM outputs for setting analog comparator threshold voltages.
@@ -156,8 +156,8 @@ class ADSBee {
     uint32_t preamble_detector_sm_ = 0;
     uint32_t preamble_detector_offset_ = 0;
 
-    uint32_t message_decoder_sm_ = 0;
-    uint32_t message_decoder_offset_ = 0;
+    uint32_t message_demodulator_sm_ = 0;
+    uint32_t message_demodulator_offset_ = 0;
 
     uint32_t led_off_timestamp_ms_ = 0;
 

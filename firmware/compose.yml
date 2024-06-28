@@ -4,17 +4,21 @@ services:
     image: coolnamesalltaken/pico-docker:latest
     network_mode: host
     volumes:
-      - type: bind
-        source: pico_firmware # Which directory from the host computer gets mounted to the container.
-        target: /ads_bee/firmware # Where the directory gets mounted in the Docker container.
-      # You can bind additional project directories to the container with more - type: bind commands,
-      # or create volumes that give the container its own storage.
-      - type: bind
-        source: pico_test
-        target: /ads_bee/test
-      - type: bind
-        source: modules
-        target: /ads_bee/modules
+      - ./pico:/ads_bee/firmware
+      - ./pico_test:/ads_bee/test
+      - ./common:/ads_bee/common
+      - ./modules:/ads_bee/modules
+      # - type: bind
+      #   source: pico # Which directory from the host computer gets mounted to the container.
+      #   target: /ads_bee/firmware # Where the directory gets mounted in the Docker container.
+      # # You can bind additional project directories to the container with more - type: bind commands,
+      # # or create volumes that give the container its own storage.
+      # - type: bind
+      #   source: pico_test
+      #   target: /ads_bee/test
+      # - type: bind
+      #   source: modules
+      #   target: /ads_bee/modules
     command: tail -f /dev/null # keep the container running forever
   # ESP IDF container for compiling custom ESP-AT firmware.
   # esp-docker:
