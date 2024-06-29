@@ -1,12 +1,13 @@
 #ifndef _ADS_BEE_HH_
 #define _ADS_BEE_HH_
 
-#include "ads_b_packet.hh"
+#include "adsb_packet.hh"
 #include "aircraft_dictionary.hh"
 #include "cpp_at.hh"
 #include "data_structures.hh"  // For PFBQueue.
 #include "hardware/i2c.h"
 #include "hardware/pio.h"
+#include "settings.hh"
 #include "stdint.h"
 
 class ADSBee {
@@ -15,9 +16,6 @@ class ADSBee {
     static constexpr int kVDDMV = 3300;               // [mV] Voltage of positive supply rail.
     static constexpr int kTLMaxMV = 3300;             // [mV]
     static constexpr int kTLMinMV = 0;                // [mV]
-    static constexpr int kTLHiDefaultMV = 3000;       // [mV]
-    static constexpr int kTLLoDefaultMV = 2000;       // [mV]
-    static constexpr int kRxGainDefault = 50;         // [unitless]
     static constexpr uint16_t kMaxNumTransponderPackets =
         100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
     static const uint32_t kStatusLEDOnMs = 10;
@@ -166,8 +164,8 @@ class ADSBee {
     uint16_t tl_hi_pwm_chan_ = 0;
     uint16_t tl_lo_pwm_chan_ = 0;
 
-    uint16_t tl_hi_mv_ = kTLHiDefaultMV;
-    uint16_t tl_lo_mv_ = kTLLoDefaultMV;
+    uint16_t tl_hi_mv_ = SettingsManager::kTLHiDefaultMV;
+    uint16_t tl_lo_mv_ = SettingsManager::kTLLoDefaultMV;
     uint16_t tl_hi_pwm_count_ = 0;  // out of kTLMaxPWMCount
     uint16_t tl_lo_pwm_count_ = 0;  // out of kTLMaxPWMCount
 
@@ -175,7 +173,7 @@ class ADSBee {
     uint16_t tl_hi_adc_counts_ = 0;
     uint16_t rssi_adc_counts_ = 0;
 
-    uint32_t rx_gain_ = kRxGainDefault;
+    uint32_t rx_gain_ = SettingsManager::kRxGainDefault;
 
     // Due to a quirk, rx_buffer_ is used to store every word except for the first one.
     uint32_t rx_buffer_[ADSBPacket::kMaxPacketLenWords32 - 1];

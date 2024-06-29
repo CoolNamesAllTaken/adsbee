@@ -20,9 +20,9 @@ class CommsManager {
     static const uint16_t kSerialInterfaceStrMaxLen = 30;
     static const char SerialInterfaceStrs[SerialInterface::kNumSerialInterfaces][kSerialInterfaceStrMaxLen];
 
-    enum ConsoleVerbosity : uint16_t { kSilent = 0, kErrors, kWarnings, kLogs, kNumVerbosityLevels };
+    enum LogLevel : uint16_t { kSilent = 0, kErrors, kWarnings, kInfo, kNumVerbosityLevels };
     static const uint16_t kConsoleVerbosityStrMaxLen = 30;
-    static const char ConsoleVerbosityStrs[ConsoleVerbosity::kNumVerbosityLevels][kConsoleVerbosityStrMaxLen];
+    static const char ConsoleVerbosityStrs[LogLevel::kNumVerbosityLevels][kConsoleVerbosityStrMaxLen];
 
     // Reporting Protocol enum and string conversion array.
     enum ReportingProtocol : uint16_t {
@@ -65,7 +65,7 @@ class CommsManager {
     CPP_AT_CALLBACK(ATWiFiCallback);
 
     int console_printf(const char *format, ...);
-    int console_level_printf(ConsoleVerbosity level, const char *format, ...);
+    int console_level_printf(LogLevel level, const char *format, ...);
     int iface_printf(SerialInterface iface, const char *format, ...);
     bool iface_putc(SerialInterface iface, char c);
     bool iface_getc(SerialInterface iface, char &c);
@@ -150,7 +150,7 @@ class CommsManager {
     bool SetWiFiEnabled(bool new_wifi_enabled);
 
     // Public console settings.
-    ConsoleVerbosity console_verbosity = ConsoleVerbosity::kLogs;  // Start with highest verbosity by default.
+    LogLevel console_verbosity = LogLevel::kInfo;  // Start with highest verbosity by default.
     uint32_t last_report_timestamp_ms = 0;
 
     // Public WiFi Settings
@@ -219,12 +219,12 @@ extern CommsManager comms_manager;
 
 #define CONSOLE_PRINTF(format, ...) comms_manager.console_printf(format __VA_OPT__(, ) __VA_ARGS__);
 #define CONSOLE_LOG(format, ...) \
-    comms_manager.console_level_printf(CommsManager::ConsoleVerbosity::kLogs, format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
-#define CONSOLE_WARNING(format, ...)                                              \
-    comms_manager.console_level_printf(CommsManager::ConsoleVerbosity::kWarnings, \
+    comms_manager.console_level_printf(CommsManager::LogLevel::kInfo, format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
+#define CONSOLE_WARNING(format, ...)                                      \
+    comms_manager.console_level_printf(CommsManager::LogLevel::kWarnings, \
                                        TEXT_COLOR_YELLOW format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) __VA_ARGS__);
-#define CONSOLE_ERROR(format, ...)                                              \
-    comms_manager.console_level_printf(CommsManager::ConsoleVerbosity::kErrors, \
+#define CONSOLE_ERROR(format, ...)                                      \
+    comms_manager.console_level_printf(CommsManager::LogLevel::kErrors, \
                                        TEXT_COLOR_RED format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) __VA_ARGS__);
 
 #endif /* COMMS_HH_ */

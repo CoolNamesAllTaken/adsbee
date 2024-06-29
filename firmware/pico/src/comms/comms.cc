@@ -5,7 +5,7 @@
 
 #include "pico/stdlib.h"
 
-const char CommsManager::ConsoleVerbosityStrs[CommsManager::ConsoleVerbosity::kNumVerbosityLevels]
+const char CommsManager::ConsoleVerbosityStrs[CommsManager::LogLevel::kNumVerbosityLevels]
                                              [CommsManager::kConsoleVerbosityStrMaxLen] = {"SILENT", "ERRORS",
                                                                                            "WARNINGS", "LOGS"};
 const char CommsManager::SerialInterfaceStrs[CommsManager::SerialInterface::kNumSerialInterfaces]
@@ -61,7 +61,7 @@ int CommsManager::console_printf(const char *format, ...) {
     return res;
 }
 
-int CommsManager::console_level_printf(ConsoleVerbosity level, const char *format, ...) {
+int CommsManager::console_level_printf(LogLevel level, const char *format, ...) {
     if (console_verbosity < level) return 0;
     va_list args;
     va_start(args, format);

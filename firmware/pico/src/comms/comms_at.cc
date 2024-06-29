@@ -75,7 +75,7 @@ CPP_AT_CALLBACK(CommsManager::ATConsoleVerbosityCallback) {
             }
             for (uint16_t i = 0; i < kNumVerbosityLevels; i++) {
                 if (args[0].compare(ConsoleVerbosityStrs[i]) == 0) {
-                    console_verbosity = static_cast<ConsoleVerbosity>(i);
+                    console_verbosity = static_cast<LogLevel>(i);
                     CPP_AT_SUCCESS();
                 }
             }

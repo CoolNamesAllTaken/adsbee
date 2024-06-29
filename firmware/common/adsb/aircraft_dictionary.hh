@@ -4,13 +4,15 @@
 #include <cstring>
 #include <unordered_map>
 
-#include "ads_b_packet.hh"
+#include "adsb_packet.hh"
 
-class Aircraft {
-   public:
+class Aircraft
+{
+public:
     static const uint16_t kCallSignMaxNumChars = 8;
 
-    enum AirframeType : uint16_t {
+    enum AirframeType : uint16_t
+    {
         kAirframeTypeInvalid = 0,
         kAirframeTypeReserved,
         kAirframeTypeNoCategoryInfo,
@@ -23,16 +25,17 @@ class Aircraft {
         kAirframeTypeUltralightHangGliderParaglider,
         kAirframeTypeUnmannedAerialVehicle,
         kAirframeTypeSpaceTransatmosphericVehicle,
-        kAirframeTypeLight,    // < 7000kg
-        kAirframeTypeMedium1,  // 7000kg - 34000kg
-        kAirframeTypeMedium2,  // 34000kg - 136000kg
+        kAirframeTypeLight,   // < 7000kg
+        kAirframeTypeMedium1, // 7000kg - 34000kg
+        kAirframeTypeMedium2, // 34000kg - 136000kg
         kAirframeTypeHighVortexAircraft,
-        kAirframeTypeHeavy,            // > 136000kg
-        kAirframeTypeHighPerformance,  // >5g acceleration and >400kt speed
+        kAirframeTypeHeavy,           // > 136000kg
+        kAirframeTypeHighPerformance, // >5g acceleration and >400kt speed
         kAirframeTypeRotorcraft
     };
 
-    enum SurveillanceStatus : int16_t {
+    enum SurveillanceStatus : int16_t
+    {
         kSurveillanceStatusNotSet = -1,
         kSurveillanceStatusNoCondition = 0,
         kSurveillanceStatusPermanantAlert = 1,
@@ -40,21 +43,24 @@ class Aircraft {
         kSurveillanceStatusSPICondition = 3
     };
 
-    enum AltitudeSource : int16_t {
+    enum AltitudeSource : int16_t
+    {
         kAltitudeNotAvailable = -2,
         kAltitudeSourceNotSet = -1,
         kAltitudeSourceBaro = 0,
         kAltitudeSourceGNSS = 1
     };
 
-    enum VerticalRateSource : int16_t {
+    enum VerticalRateSource : int16_t
+    {
         kVerticalRateNotAvailable = -2,
         kVerticalRateSourceNotSet = -1,
         kVerticalRateSourceGNSS = 0,
         kVerticalRateSourceBaro = 1
     };
 
-    enum VelocitySource : int16_t {
+    enum VelocitySource : int16_t
+    {
         kVelocityNotAvailable = -2,
         kVelocitySourceNotSet = -1,
         kVelocitySourceGroundSpeed = 0,
@@ -66,7 +72,7 @@ class Aircraft {
 
     uint16_t transponder_capability = 0;
     uint32_t icao_address = 0;
-    char callsign[kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
+    char callsign[kCallSignMaxNumChars + 1] = "?"; // put extra EOS character at end
     AirframeType airframe_type = kAirframeTypeInvalid;
 
     SurveillanceStatus surveillance_status = kSurveillanceStatusNotSet;
@@ -80,7 +86,7 @@ class Aircraft {
     float longitude_deg = 0.0f;
     bool position_valid = false;
     bool is_airborne =
-        true;  // assume that most aircraft encountered will be airborne, so put them there until proven otherwise
+        true; // assume that most aircraft encountered will be airborne, so put them there until proven otherwise
 
     // Airborne Velocities Message
     float heading_deg = 0.0f;
@@ -112,7 +118,8 @@ class Aircraft {
      * for instance an odd and even packet may have been received, but from different CPR zones).
      * @retval True if decode can be attempted, false otherwise.
      */
-    bool CanDecodePosition() {
+    bool CanDecodePosition()
+    {
         return last_odd_packet_.received_timestamp_ms > 0 && last_even_packet_.received_timestamp_ms > 0;
     }
 
@@ -122,20 +129,21 @@ class Aircraft {
      */
     bool DecodePosition();
 
-   private:
-    struct CPRPacket {
+private:
+    struct CPRPacket
+    {
         // SetCPRLatLon values.
-        uint32_t received_timestamp_ms = 0;  // [ms] time since boot when packet was recorded
-        uint32_t n_lat = 0;                  // 17-bit latitude count
-        uint32_t n_lon = 0;                  // 17-bit longitude count
+        uint32_t received_timestamp_ms = 0; // [ms] time since boot when packet was recorded
+        uint32_t n_lat = 0;                 // 17-bit latitude count
+        uint32_t n_lon = 0;                 // 17-bit longitude count
 
         // DecodePosition values.
-        uint32_t calculated_timestamp_ms = 0;  // [ms] time since boot when packet was calculated
+        uint32_t calculated_timestamp_ms = 0; // [ms] time since boot when packet was calculated
         float lat_cpr = 0.0f;
         float lon_cpr = 0.0f;
-        uint16_t nl_cpr = 0;  // number of longitude cells in latitude band
+        uint16_t nl_cpr = 0; // number of longitude cells in latitude band
         float lat =
-            0.0f;  // only keep latitude since it's reused in cooperative calculations between odd and even packets
+            0.0f; // only keep latitude since it's reused in cooperative calculations between odd and even packets
         // float lon = 0.0f; // longitude
     };
 
@@ -143,9 +151,11 @@ class Aircraft {
     CPRPacket last_even_packet_;
 };
 
-class AircraftDictionary {
-   public:
-    struct AircraftDictionaryConfig_t {
+class AircraftDictionary
+{
+public:
+    struct AircraftDictionaryConfig_t
+    {
         uint32_t aircraft_prune_interval_ms = 60e3;
     };
     static const uint16_t kMaxNumAircraft = 100;
@@ -202,9 +212,9 @@ class AircraftDictionary {
      */
     Aircraft *GetAircraftPtr(uint32_t icao_address);
 
-    std::unordered_map<uint32_t, Aircraft> dict;  // index Aircraft objects by their ICAO identifier
+    std::unordered_map<uint32_t, Aircraft> dict; // index Aircraft objects by their ICAO identifier
 
-   private:
+private:
     // Helper functions for ingesting specific ADS-B packet types, called by IngestADSBPacket.
 
     /**

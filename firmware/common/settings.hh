@@ -7,13 +7,18 @@
 
 class SettingsManager {
    public:
+
+    static const int kTLHiDefaultMV = 3000;       // [mV]
+    static const int kTLLoDefaultMV = 2000;       // [mV]
+    static const int kRxGainDefault = 50;         // [unitless]
+
     struct Settings {
         uint32_t magic_word = 0xDEADBEEF;  // Change this when settings format changes!
 
         // ADSBee settings
-        int tl_lo_mv = ADSBee::kTLLoDefaultMV;
-        int tl_hi_mv = ADSBee::kTLHiDefaultMV;
-        uint16_t rx_gain = ADSBee::kRxGainDefault;
+        int tl_lo_mv = kTLLoDefaultMV;
+        int tl_hi_mv = kTLHiDefaultMV;
+        uint16_t rx_gain = kRxGainDefault;
 
         // CommunicationsManager settings
         CommsManager::ReportingProtocol reporting_protocols[CommsManager::SerialInterface::kNumSerialInterfaces - 1] = {

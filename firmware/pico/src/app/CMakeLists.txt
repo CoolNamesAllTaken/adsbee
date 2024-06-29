@@ -1,18 +1,15 @@
 if(CROSS_COMPILED)
 # Build for testing on host.
-target_sources(ads_bee_test PRIVATE
-    aircraft_dictionary.cc
-    ads_b_packet.cc
+target_sources(${PROJECT_NAME} PRIVATE
     # ads_bee.cc # left out since it requires a lot of mocking
     decode_utils.cc
 )
 else()
 # Build for embedded target
-target_sources(ads_bee PRIVATE 
-    aircraft_dictionary.cc
-    ads_b_packet.cc
+target_sources(${PROJECT_NAME} PRIVATE 
     ads_bee.cc
     decode_utils.cc
     eeprom.cc
+    settings.cc
 )
 endif()
