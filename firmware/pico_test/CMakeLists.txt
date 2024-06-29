@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.13)
 # Flag indicating that build is not for the embedded target. Used to toggle target_source calls.
 set(CROSS_COMPILED 1)
 
-project(ads_bee_project C CXX ASM)
+project(ads_bee_test C CXX ASM)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 20)
 

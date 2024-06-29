@@ -2,15 +2,6 @@
 	"folders": [
 		{
 			"path": "."
-		},
-		{
-			"path": "pico_test"
-		},
-		{
-			"path": "scripts"
-		},
-		{
-			"path": "modules"
 		}
 	],
 	"settings": {
@@ -95,5 +86,41 @@
 			"shared_mutex": "cpp",
 			"format": "cpp"
 		}
+	},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			// {
+			// 	"cwd": "${workspaceFolder}",
+			// 	"executable": "./bin/executable.elf",
+			// 	"name": "Debug with JLink",
+			// 	"request": "launch",
+			// 	"type": "cortex-debug",
+			// 	"device": "",
+			// 	"runToEntryPoint": "main",
+			// 	"showDevDebugOutput": "none",
+			// 	"servertype": "jlink"
+			// },
+			{
+				"name": "Remote Debug",
+				"type": "cortex-debug",
+				"cwd": "${workspaceRoot}",
+				// "executable": "/ads_bee/firmware/build/ads_bee.elf",
+				"executable": "${command:cmake.launchTargetPath}",
+				"request": "attach",
+				"servertype": "external",
+				// "gdbPath": "arm-none-eabi-gdb",
+				"gdbTarget": "host.docker.internal:2331",
+				"showDevDebugOutput": "raw",
+				"svdFile": "/usr/local/pico-sdk/src/rp2040/hardware_regs/rp2040.svd",
+				"preRestartCommands": [
+					"file ${command:cmake.launchTargetPath}",
+					"load",
+					"monitor reset"
+				],
+				"armToolchainPath": "/usr/bin",
+				"device": "RP2040",
+			}
+		]
 	}
 }

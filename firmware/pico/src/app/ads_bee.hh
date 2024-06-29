@@ -164,8 +164,8 @@ class ADSBee {
     uint16_t tl_hi_pwm_chan_ = 0;
     uint16_t tl_lo_pwm_chan_ = 0;
 
-    uint16_t tl_hi_mv_ = SettingsManager::kTLHiDefaultMV;
-    uint16_t tl_lo_mv_ = SettingsManager::kTLLoDefaultMV;
+    uint16_t tl_hi_mv_ = SettingsManager::kDefaultTLHiMV;
+    uint16_t tl_lo_mv_ = SettingsManager::kDefaultTLLoMV;
     uint16_t tl_hi_pwm_count_ = 0;  // out of kTLMaxPWMCount
     uint16_t tl_lo_pwm_count_ = 0;  // out of kTLMaxPWMCount
 
@@ -173,7 +173,7 @@ class ADSBee {
     uint16_t tl_hi_adc_counts_ = 0;
     uint16_t rssi_adc_counts_ = 0;
 
-    uint32_t rx_gain_ = SettingsManager::kRxGainDefault;
+    uint32_t rx_gain_ = SettingsManager::kDefaultRxGain;
 
     // Due to a quirk, rx_buffer_ is used to store every word except for the first one.
     uint32_t rx_buffer_[ADSBPacket::kMaxPacketLenWords32 - 1];

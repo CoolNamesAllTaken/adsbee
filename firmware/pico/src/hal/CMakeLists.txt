@@ -1,11 +1,11 @@
 if(CROSS_COMPILED)
 # Build for testing on host.
-target_sources(ads_bee_test PRIVATE
+target_sources(${PROJECT_NAME} PRIVATE
     
 )
 else()
 # Build for embedded target
-target_sources(ads_bee PRIVATE
+target_sources(${PROJECT_NAME} PRIVATE
     hal.cc
 )
 endif()

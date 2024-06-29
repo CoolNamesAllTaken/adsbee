@@ -1,5 +1,4 @@
-target_sources(ads_bee_test
-PRIVATE
+target_sources(${PROJECT_NAME} PRIVATE
     hal.cc
     main.cc
     test_platform.cc

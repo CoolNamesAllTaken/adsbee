@@ -58,8 +58,8 @@ bool ADSBee::Init() {
     pwm_set_wrap(tl_lo_pwm_slice_, kTLMaxPWMCount);
     pwm_set_wrap(tl_hi_pwm_slice_, kTLMaxPWMCount);  // redundant since it's the same slice
 
-    SetTLLoMilliVolts(kTLLoDefaultMV);
-    SetTLHiMilliVolts(kTLHiDefaultMV);
+    SetTLLoMilliVolts(SettingsManager::kDefaultTLLoMV);
+    SetTLHiMilliVolts(SettingsManager::kDefaultTLHiMV);
     pwm_set_enabled(tl_lo_pwm_slice_, true);
     pwm_set_enabled(tl_hi_pwm_slice_, true);  // redundant since it's the same slice
 

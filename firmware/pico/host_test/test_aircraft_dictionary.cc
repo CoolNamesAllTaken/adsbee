@@ -1,15 +1,14 @@
-#include "gtest/gtest.h"
+#include "adsb_packet.hh"
 #include "aircraft_dictionary.hh"
-#include "ads_b_packet.hh"
-#include "decode_utils.hh"   // for location calculation utility functions
-#include "hal_god_powers.hh" // for changing timestamp
+#include "decode_utils.hh"  // for location calculation utility functions
+#include "gtest/gtest.h"
+#include "hal_god_powers.hh"  // for changing timestamp
 
 constexpr float kLatDegCloseEnough = 0.001f;
 constexpr float kLonDegCloseEnough = 0.0001f;
-constexpr float kFloatCloseEnough = 0.0001f; // FOr generic floats.
+constexpr float kFloatCloseEnough = 0.0001f;  // FOr generic floats.
 
-TEST(AircraftDictionary, BasicInsertRemove)
-{
+TEST(AircraftDictionary, BasicInsertRemove) {
     AircraftDictionary dictionary = AircraftDictionary();
     EXPECT_EQ(dictionary.GetNumAircraft(), 0);
     EXPECT_FALSE(dictionary.RemoveAircraft(12345));
@@ -31,8 +30,7 @@ TEST(AircraftDictionary, BasicInsertRemove)
     EXPECT_EQ(dictionary.GetNumAircraft(), 0);
 }
 
-TEST(AircraftDictionary, InsertThenRemoveTooMany)
-{
+TEST(AircraftDictionary, InsertThenRemoveTooMany) {
     AircraftDictionary dictionary = AircraftDictionary();
     EXPECT_EQ(dictionary.GetNumAircraft(), 0);
 
@@ -40,8 +38,7 @@ TEST(AircraftDictionary, InsertThenRemoveTooMany)
     test_aircraft.airframe_type = Aircraft::kAirframeTypeGliderSailplane;
 
     // Insert maximum number of aircraft.
-    for (uint16_t i = 0; i < AircraftDictionary::kMaxNumAircraft; i++)
-    {
+    for (uint16_t i = 0; i < AircraftDictionary::kMaxNumAircraft; i++) {
         test_aircraft.icao_address = i * 599;
         EXPECT_TRUE(dictionary.InsertAircraft(test_aircraft));
         EXPECT_EQ(dictionary.GetNumAircraft(), i + 1);
@@ -58,8 +55,7 @@ TEST(AircraftDictionary, InsertThenRemoveTooMany)
     EXPECT_FALSE(dictionary.GetAircraftPtr(test_aircraft.icao_address));
 
     // Remove all aircraft.
-    for (uint16_t i = 0; i < AircraftDictionary::kMaxNumAircraft; i++)
-    {
+    for (uint16_t i = 0; i < AircraftDictionary::kMaxNumAircraft; i++) {
         test_aircraft.icao_address = (AircraftDictionary::kMaxNumAircraft - 1 - i) * 599;
         EXPECT_TRUE(dictionary.RemoveAircraft(test_aircraft.icao_address));
         EXPECT_EQ(dictionary.GetNumAircraft(), AircraftDictionary::kMaxNumAircraft - i - 1);
@@ -70,11 +66,10 @@ TEST(AircraftDictionary, InsertThenRemoveTooMany)
     EXPECT_FALSE(dictionary.RemoveAircraft(0));
 }
 
-TEST(AircraftDictionary, UseAircraftPtr)
-{
+TEST(AircraftDictionary, UseAircraftPtr) {
     AircraftDictionary dictionary = AircraftDictionary();
     Aircraft *aircraft = dictionary.GetAircraftPtr(12345);
-    EXPECT_TRUE(aircraft); // aircraft should have been automatically inserted just fine
+    EXPECT_TRUE(aircraft);  // aircraft should have been automatically inserted just fine
     aircraft->airframe_type = Aircraft::kAirframeTypeGroundObstruction;
     Aircraft aircraft_out;
     ASSERT_TRUE(dictionary.GetAircraft(12345, aircraft_out));
@@ -84,8 +79,7 @@ TEST(AircraftDictionary, UseAircraftPtr)
     ASSERT_EQ(aircraft_out.airframe_type, Aircraft::kAirframeTypeHeavy);
 }
 
-TEST(AircraftDictionary, AccessFakeAircraft)
-{
+TEST(AircraftDictionary, AccessFakeAircraft) {
     AircraftDictionary dictionary = AircraftDictionary();
     EXPECT_EQ(dictionary.GetNumAircraft(), 0);
 
@@ -93,8 +87,7 @@ TEST(AircraftDictionary, AccessFakeAircraft)
     EXPECT_FALSE(dictionary.GetAircraft(0, test_aircraft));
 }
 
-TEST(AircraftDictionary, IngestAircraftIDMessage)
-{
+TEST(AircraftDictionary, IngestAircraftIDMessage) {
     AircraftDictionary dictionary = AircraftDictionary();
     TransponderPacket tpacket = TransponderPacket((char *)"8D76CE88204C9072CB48209A504D");
     ADSBPacket packet = ADSBPacket(tpacket);
@@ -148,8 +141,7 @@ TEST(AircraftDictionary, IngestAircraftIDMessage)
     EXPECT_STREQ(aircraft.callsign, "QFA475");
 }
 
-TEST(AircraftDictionary, IngestInvalidAircrfaftIDMessage)
-{
+TEST(AircraftDictionary, IngestInvalidAircrfaftIDMessage) {
     AircraftDictionary dictionary = AircraftDictionary();
     TransponderPacket tpacket = TransponderPacket((char *)"7D76CE88204C9072CB48209A504D");
     ADSBPacket packet = ADSBPacket(tpacket);
@@ -157,8 +149,7 @@ TEST(AircraftDictionary, IngestInvalidAircrfaftIDMessage)
     EXPECT_EQ(dictionary.GetNumAircraft(), 0);
 }
 
-TEST(decode_utils, calc_nl_cpr_from_lat)
-{
+TEST(decode_utils, calc_nl_cpr_from_lat) {
     EXPECT_EQ(calc_nl_cpr_from_lat(0), 59);
     EXPECT_EQ(calc_nl_cpr_from_lat(87), 2);
     EXPECT_EQ(calc_nl_cpr_from_lat(-87), 2);
@@ -166,8 +157,7 @@ TEST(decode_utils, calc_nl_cpr_from_lat)
     EXPECT_EQ(calc_nl_cpr_from_lat(-88), 1);
 }
 
-TEST(Aircraft, SetCPRLatLon)
-{
+TEST(Aircraft, SetCPRLatLon) {
     Aircraft aircraft;
     EXPECT_FALSE(aircraft.position_valid);
 
@@ -179,7 +169,7 @@ TEST(Aircraft, SetCPRLatLon)
     EXPECT_FALSE(aircraft.SetCPRLatLon(52455, 0xFFFFFF, true));
 
     // Send two even packets at startup, no odd packets.
-    aircraft = Aircraft(); // clear everything
+    aircraft = Aircraft();  // clear everything
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(578, 13425, false));
     inc_time_since_boot_ms();
@@ -188,7 +178,7 @@ TEST(Aircraft, SetCPRLatLon)
     EXPECT_FALSE(aircraft.position_valid);
 
     // Send two odd packets at startup, no even packets.
-    aircraft = Aircraft(); // clear everything
+    aircraft = Aircraft();  // clear everything
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(236, 13425, true));
     inc_time_since_boot_ms();
@@ -197,29 +187,29 @@ TEST(Aircraft, SetCPRLatLon)
     EXPECT_FALSE(aircraft.position_valid);
 
     // Send one odd packet and one even packet at startup.
-    aircraft = Aircraft(); // clear everything
+    aircraft = Aircraft();  // clear everything
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true));
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
     EXPECT_TRUE(aircraft.DecodePosition());
     EXPECT_TRUE(aircraft.position_valid);
-    EXPECT_NEAR(aircraft.latitude_deg, 52.25720f, 1e-4); // even latitude
-    EXPECT_NEAR(aircraft.longitude_deg, 3.91937f, 1e-4); // longitude calculated from even latitude
+    EXPECT_NEAR(aircraft.latitude_deg, 52.25720f, 1e-4);  // even latitude
+    EXPECT_NEAR(aircraft.longitude_deg, 3.91937f, 1e-4);  // longitude calculated from even latitude
 
     // Send one even packet and one odd packet at startup.
-    aircraft = Aircraft(); // clear everything
+    aircraft = Aircraft();  // clear everything
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true));
     EXPECT_TRUE(aircraft.DecodePosition());
     EXPECT_TRUE(aircraft.position_valid);
-    EXPECT_NEAR(aircraft.latitude_deg, 52.26578f, 1e-4); // odd latitude
+    EXPECT_NEAR(aircraft.latitude_deg, 52.26578f, 1e-4);  // odd latitude
     // don't have a test value available for the longitude calculated from odd latitude
 
     // Straddle two position packets between different latitude
-    aircraft = Aircraft(); // clear everything
+    aircraft = Aircraft();  // clear everything
     EXPECT_TRUE(aircraft.SetCPRLatLon(93006, 50194, true));
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
@@ -249,8 +239,7 @@ TEST(Aircraft, SetCPRLatLon)
     /** Test Longitude **/
 }
 
-TEST(AircraftDictionary, IngestAirbornePositionMessage)
-{
+TEST(AircraftDictionary, IngestAirbornePositionMessage) {
     AircraftDictionary dictionary = AircraftDictionary();
     TransponderPacket even_tpacket = TransponderPacket((char *)"8da6147f5859f18cdf4d244ac6fa");
     ASSERT_TRUE(even_tpacket.IsValid());
@@ -280,7 +269,7 @@ TEST(AircraftDictionary, IngestAirbornePositionMessage)
     EXPECT_EQ(aircraft.altitude_source, Aircraft::AltitudeSource::kAltitudeSourceBaro);
     EXPECT_EQ(aircraft.baro_altitude_ft, 16975);
 
-    inc_time_since_boot_ms(1e3); // Simulate time passing between odd and even packet ingestion.
+    inc_time_since_boot_ms(1e3);  // Simulate time passing between odd and even packet ingestion.
 
     // Ingest odd packet.
     ASSERT_TRUE(dictionary.IngestADSBPacket(odd_packet));
@@ -296,8 +285,7 @@ TEST(AircraftDictionary, IngestAirbornePositionMessage)
     EXPECT_EQ(aircraft.baro_altitude_ft, 17000);
 }
 
-TEST(AircraftDictionary, IngestAirborneVelocityMessage)
-{
+TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     AircraftDictionary dictionary = AircraftDictionary();
     TransponderPacket tpacket = TransponderPacket((char *)"8dae56bc99246508b8080b6c230f");
     ASSERT_TRUE(tpacket.IsValid());
@@ -308,11 +296,12 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage)
     ASSERT_TRUE(dictionary.IngestADSBPacket(packet));
     ASSERT_EQ(dictionary.GetNumAircraft(), 1);
     auto itr = dictionary.dict.begin();
-    auto &aircraft = itr->second; // NOTE: Aircraft is a mutable reference until we get to Message A!
+    auto &aircraft = itr->second;  // NOTE: Aircraft is a mutable reference until we get to Message A!
 
     // Aircraft should now have velocities populated.
     EXPECT_NEAR(aircraft.heading_deg, 304.2157021324374, kFloatCloseEnough);
-    // Velocity should actually evaluate to 120 when evaluated with doubles, but there is some float error with the sqrt that I think gets pretty nasty.
+    // Velocity should actually evaluate to 120 when evaluated with doubles, but there is some float error with the sqrt
+    // that I think gets pretty nasty.
     EXPECT_NEAR(aircraft.velocity_kts, 120.930, 0.01);
     EXPECT_EQ(aircraft.velocity_source, Aircraft::VelocitySource::kVelocitySourceGroundSpeed);
     EXPECT_NEAR(aircraft.vertical_rate_fpm, -64.0f, kFloatCloseEnough);
@@ -326,7 +315,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage)
     ASSERT_TRUE(dictionary.IngestADSBPacket(packet));
     uint32_t message_a_icao = 0x485020;
     ASSERT_TRUE(dictionary.ContainsAircraft(message_a_icao));
-    ASSERT_TRUE(dictionary.GetAircraft(message_a_icao, aircraft)); // NOTE: Aircraft is read-only now!
+    ASSERT_TRUE(dictionary.GetAircraft(message_a_icao, aircraft));  // NOTE: Aircraft is read-only now!
 
     // Check values for Message A
     EXPECT_EQ(aircraft.vertical_rate_fpm, -832);
@@ -340,7 +329,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage)
     aircraft_ptr->altitude_source = Aircraft::AltitudeSource::kAltitudeSourceBaro;
     // Re-ingest message A to make sure the GNSS altitude gets corrected.
     ASSERT_TRUE(dictionary.IngestADSBPacket(packet));
-    ASSERT_EQ(aircraft_ptr->gnss_altitude_ft, 2000 + 550); // GNSS altitude is 550ft above baro altitude.
+    ASSERT_EQ(aircraft_ptr->gnss_altitude_ft, 2000 + 550);  // GNSS altitude is 550ft above baro altitude.
 
     // Test Message B from https://mode-s.org/decode/content/ads-b/5-airborne-velocity.html
     tpacket = TransponderPacket((char *)"8DA05F219B06B6AF189400CBC33F");
