@@ -1,0 +1,24 @@
+buildType:
+  default: debug
+  description: "The build type for the project"
+  choices:
+    debug:
+      short: Debug
+      long: Emit debug information without optimization
+      buildType: Debug
+    release:
+      short: Release
+      long: Optimize for performance
+      buildType: Release
+    minsize:
+      short: MinSizeRel
+      long: Optimize for size
+      buildType: MinSizeRel
+    reldeb:
+      short: RelWithDebInfo
+      long: Optimize for performance with debug info
+      buildType: RelWithDebInfo
+    test:
+      short: Test
+      long: Cross-compiled unit testing.
+      buildType: Test

@@ -70,3 +70,12 @@ make
 ## Initializing Submodules
 
 From the `modules` directory, run `git submodule update --init --recursive`.
+
+Build googletest:
+```bash
+cd /ads_bee/modules/googletest
+mkdir build
+cd build
+cmake cmake -DBUILD_SHARED_LIBS=ON ..
+make
+```
