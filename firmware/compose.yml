@@ -5,7 +5,6 @@ services:
     network_mode: host
     volumes:
       - ./pico:/ads_bee/pico
-      - ./pico_test:/ads_bee/pico_test
       - ./common:/ads_bee/common
       - ./modules:/ads_bee/modules
       - ./pico.code-workspace:/ads_bee/pico.code-workspace
