@@ -23,6 +23,7 @@ if (NOT CMAKE_BUILD_TYPE STREQUAL "Test")
 
     target_include_directories(${PROJECT_NAME} PRIVATE 
         ../common
+        src
         /ads_bee/modules/cppAT/src
     )
 
