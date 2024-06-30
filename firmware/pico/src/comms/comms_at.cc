@@ -42,11 +42,11 @@ CPP_AT_CALLBACK(CommsManager::ATBaudrateCallback) {
                     "Requires two arguments: AT+BAUDRATE=<iface>,<baudrate> where <iface> can be one of [COMMS, "
                     "GNSS].");
             }
-            SerialInterface iface;
+            SettingsManager::SerialInterface iface;
             if (args[0].compare("COMMS") == 0) {
-                iface = kCommsUART;
+                iface = SettingsManager::kCommsUART;
             } else if (args[0].compare("GNSS") == 0) {
-                iface = kGNSSUART;
+                iface = SettingsManager::kGNSSUART;
             } else {
                 CPP_AT_ERROR("Invalid interface. Must be one of [COMMS, GNSS].");
             }
@@ -65,7 +65,7 @@ CPP_AT_CALLBACK(CommsManager::ATConsoleVerbosityCallback) {
     switch (op) {
         case '?':
             // AT+CONFIG mode query.
-            CPP_AT_CMD_PRINTF("=%s", ConsoleVerbosityStrs[console_verbosity]);
+            CPP_AT_CMD_PRINTF("=%s", SettingsManager::ConsoleLogLevelStrs[console_verbosity]);
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
@@ -73,9 +73,9 @@ CPP_AT_CALLBACK(CommsManager::ATConsoleVerbosityCallback) {
             if (!CPP_AT_HAS_ARG(0)) {
                 CPP_AT_ERROR("Need to specify a config mode to run.");
             }
-            for (uint16_t i = 0; i < kNumVerbosityLevels; i++) {
-                if (args[0].compare(ConsoleVerbosityStrs[i]) == 0) {
-                    console_verbosity = static_cast<LogLevel>(i);
+            for (uint16_t i = 0; i < SettingsManager::kNumLogLevels; i++) {
+                if (args[0].compare(SettingsManager::ConsoleLogLevelStrs[i]) == 0) {
+                    console_verbosity = static_cast<SettingsManager::LogLevel>(i);
                     CPP_AT_SUCCESS();
                 }
             }
@@ -89,9 +89,9 @@ CPP_AT_CALLBACK(CommsManager::ATProtocolCallback) {
     switch (op) {
         case '?':
             // Print out reporting protocols for CONSOLE and COMMS_UART.
-            for (uint16_t iface = 0; iface < SerialInterface::kGNSSUART; iface++) {
-                CPP_AT_CMD_PRINTF("=%s,%s", SerialInterfaceStrs[iface],
-                                  ReportingProtocolStrs[reporting_protocols_[iface]]);
+            for (uint16_t iface = 0; iface < SettingsManager::SerialInterface::kGNSSUART; iface++) {
+                CPP_AT_CMD_PRINTF("=%s,%s", SettingsManager::SerialInterfaceStrs[iface],
+                                  SettingsManager::ReportingProtocolStrs[reporting_protocols_[iface]]);
             }
             CPP_AT_SILENT_SUCCESS();
             break;
@@ -102,26 +102,26 @@ CPP_AT_CALLBACK(CommsManager::ATProtocolCallback) {
             }
 
             // Match the selected serial interface. Don't allow selection of the GNSS interface.
-            SerialInterface selected_iface = SerialInterface::kNumSerialInterfaces;
-            for (uint16_t iface = 0; iface < SerialInterface::kGNSSUART; iface++) {
-                if (args[0].compare(SerialInterfaceStrs[iface]) == 0) {
-                    selected_iface = static_cast<SerialInterface>(iface);
+            SettingsManager::SerialInterface selected_iface = SettingsManager::SerialInterface::kNumSerialInterfaces;
+            for (uint16_t iface = 0; iface < SettingsManager::SerialInterface::kGNSSUART; iface++) {
+                if (args[0].compare(SettingsManager::SerialInterfaceStrs[iface]) == 0) {
+                    selected_iface = static_cast<SettingsManager::SerialInterface>(iface);
                     break;
                 }
             }
-            if (selected_iface == kNumSerialInterfaces) {
+            if (selected_iface == SettingsManager::kNumSerialInterfaces) {
                 CPP_AT_ERROR("Invalid serial interface %s.", args[0].data());
             }
 
             // Match the selected protocol.
-            ReportingProtocol selected_protocol = ReportingProtocol::kNumProtocols;
-            for (uint16_t protocol = 0; protocol < ReportingProtocol::kNumProtocols; protocol++) {
-                if (args[1].compare(ReportingProtocolStrs[protocol]) == 0) {
-                    selected_protocol = static_cast<ReportingProtocol>(protocol);
+            SettingsManager::ReportingProtocol selected_protocol = SettingsManager::ReportingProtocol::kNumProtocols;
+            for (uint16_t protocol = 0; protocol < SettingsManager::ReportingProtocol::kNumProtocols; protocol++) {
+                if (args[1].compare(SettingsManager::ReportingProtocolStrs[protocol]) == 0) {
+                    selected_protocol = static_cast<SettingsManager::ReportingProtocol>(protocol);
                     break;
                 }
             }
-            if (selected_protocol == kNumProtocols) {
+            if (selected_protocol == SettingsManager::kNumProtocols) {
                 CPP_AT_ERROR("Invalid reporting protocol %s.", args[1].data());
             }
 
@@ -137,12 +137,12 @@ CPP_AT_CALLBACK(CommsManager::ATProtocolCallback) {
 CPP_AT_HELP_CALLBACK(CommsManager::ATProtocolHelpCallback) {
     CPP_AT_PRINTF("\tSet the reporting protocol used on a given serial interface:\r\n");
     CPP_AT_PRINTF("\tAT+PROTOCOL=<iface>,<protocol>\r\n\t<iface> = ");
-    for (uint16_t iface = 0; iface < kGNSSUART; iface++) {
-        CPP_AT_PRINTF("%s ", SerialInterfaceStrs[iface]);
+    for (uint16_t iface = 0; iface < SettingsManager::kGNSSUART; iface++) {
+        CPP_AT_PRINTF("%s ", SettingsManager::SerialInterfaceStrs[iface]);
     }
     CPP_AT_PRINTF("\r\n\t<protocol> = ");
-    for (uint16_t protocol = 0; protocol < kNumProtocols; protocol++) {
-        CPP_AT_PRINTF("%s ", ReportingProtocolStrs[protocol]);
+    for (uint16_t protocol = 0; protocol < SettingsManager::kNumProtocols; protocol++) {
+        CPP_AT_PRINTF("%s ", SettingsManager::ReportingProtocolStrs[protocol]);
     }
     CPP_AT_PRINTF("\r\n\tQuery the reporting protocol used on all interfaces:\r\n");
     CPP_AT_PRINTF("\tAT+PROTOCOL?\r\n\t+PROTOCOL=<iface>,<protocol>\r\n\t...\r\n");
@@ -264,8 +264,8 @@ void redact_password(char *password_buf, char *redacted_password_buf, uint16_t b
 CPP_AT_CALLBACK(CommsManager::ATWiFiCallback) {
     switch (op) {
         case '?': {
-            char redacted_password[kWiFiPasswordMaxLen + 1];
-            redact_password(wifi_password, redacted_password, kWiFiPasswordMaxLen);
+            char redacted_password[SettingsManager::kWiFiPasswordMaxLen + 1];
+            redact_password(wifi_password, redacted_password, SettingsManager::kWiFiPasswordMaxLen);
             CPP_AT_CMD_PRINTF("=%d,%s,%s\r\n", static_cast<uint16_t>(wifi_enabled_), wifi_ssid, redacted_password);
             CPP_AT_SILENT_SUCCESS();
             break;
@@ -275,15 +275,15 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiCallback) {
                 bool new_wifi_enabled = false;
                 CPP_AT_TRY_ARG2NUM(0, new_wifi_enabled);
                 if (CPP_AT_HAS_ARG(1)) {
-                    strncpy(wifi_ssid, args[1].data(), kWiFiSSIDMaxLen);
-                    wifi_ssid[kWiFiSSIDMaxLen] = '\0';
+                    strncpy(wifi_ssid, args[1].data(), SettingsManager::kWiFiSSIDMaxLen);
+                    wifi_ssid[SettingsManager::kWiFiSSIDMaxLen] = '\0';
                     CPP_AT_CMD_PRINTF(": ssid=%s\r\n", wifi_ssid);
                 }
                 if (CPP_AT_HAS_ARG(2)) {
-                    strncpy(wifi_password, args[2].data(), kWiFiPasswordMaxLen);
-                    wifi_password[kWiFiPasswordMaxLen] = '\0';
-                    char redacted_password[kWiFiPasswordMaxLen];
-                    redact_password(wifi_password, redacted_password, kWiFiPasswordMaxLen);
+                    strncpy(wifi_password, args[2].data(), SettingsManager::kWiFiPasswordMaxLen);
+                    wifi_password[SettingsManager::kWiFiPasswordMaxLen] = '\0';
+                    char redacted_password[SettingsManager::kWiFiPasswordMaxLen];
+                    redact_password(wifi_password, redacted_password, SettingsManager::kWiFiPasswordMaxLen);
                     CPP_AT_CMD_PRINTF(": password=%s\r\n", redacted_password);
                 }
 

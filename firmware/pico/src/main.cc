@@ -1,5 +1,5 @@
-#include "adsb_packet.hh"
 #include "ads_bee.hh"
+#include "adsb_packet.hh"
 #include "comms.hh"
 #include "eeprom.hh"
 #include "hal.hh"
@@ -24,11 +24,11 @@ int main() {
     ads_bee.Init();
     eeprom.Init();
     comms_manager.Init();
-    comms_manager.iface_printf(CommsManager::SerialInterface::kConsole, "ADSBee 1090\r\nSoftware Version %s\r\n",
+    comms_manager.iface_printf(SettingsManager::SerialInterface::kConsole, "ADSBee 1090\r\nSoftware Version %s\r\n",
                                kSoftwareVersionStr);
-    comms_manager.iface_printf(CommsManager::SerialInterface::kCommsUART, "ADSBee 1090\r\nSoftware Version %s\r\n",
+    comms_manager.iface_printf(SettingsManager::SerialInterface::kCommsUART, "ADSBee 1090\r\nSoftware Version %s\r\n",
                                kSoftwareVersionStr);
-    comms_manager.iface_printf(CommsManager::SerialInterface::kGNSSUART, "ADSBee 1090\r\nSoftware Version %s\r\n",
+    comms_manager.iface_printf(SettingsManager::SerialInterface::kGNSSUART, "ADSBee 1090\r\nSoftware Version %s\r\n",
                                kSoftwareVersionStr);
 
     settings_manager.Load();

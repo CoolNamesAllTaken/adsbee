@@ -3,6 +3,7 @@
 
 #include "adsb_packet.hh"
 #include "aircraft_dictionary.hh"
+#include "settings.hh"
 
 class SPICoprocessor
 {
@@ -16,10 +17,17 @@ class SPICoprocessor
 
     struct SCPacket
     {
+        uint16_t crc16;  // 16-bit CRC of all bytes after the CRC.
+        uint32_t length; // Length of the packet in bytes.
         SPICoprocessor::PacketType type;
     };
 
-        struct AircraftListPacket : public SCPacket
+    struct SettingsPacket : public SCPacket
+    {
+        SettingsManager::Settings settings;
+    };
+
+    struct AircraftListPacket : public SCPacket
     {
         uint16_t num_aicraft;
         Aircraft aircraft_list[];
