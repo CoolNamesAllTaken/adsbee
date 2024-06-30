@@ -194,7 +194,7 @@ extern CommsManager comms_manager;
 #define TEXT_COLOR_RESET            "\033[0m"
 
 #define CONSOLE_PRINTF(format, ...) comms_manager.console_printf(format __VA_OPT__(, ) __VA_ARGS__);
-#define CONSOLE_LOG(format, ...) \
+#define CONSOLE_INFO(format, ...) \
     comms_manager.console_level_printf(SettingsManager::LogLevel::kInfo, format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
 #define CONSOLE_WARNING(format, ...)                                         \
     comms_manager.console_level_printf(SettingsManager::LogLevel::kWarnings, \

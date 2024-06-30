@@ -116,7 +116,7 @@ bool ADSBee::Init() {
                                      message_demodulator_offset_, config_.pulses_pin, config_.recovered_clk_pin,
                                      message_demodulator_div);
 
-    CONSOLE_LOG("ADSBee::Init: PIOs initialized.");
+    CONSOLE_INFO("ADSBee::Init: PIOs initialized.");
 
     gpio_init(config_.status_led_pin);
     gpio_set_dir(config_.status_led_pin, GPIO_OUT);

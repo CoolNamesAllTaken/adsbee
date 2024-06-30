@@ -1,5 +1,6 @@
 
 target_sources(${PROJECT_NAME} PRIVATE
+    spi_coprocessor.cc    
     utils/buffer_utils.cc
     utils/data_structures.cc
     adsb/adsb_packet.cc
