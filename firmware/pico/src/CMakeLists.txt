@@ -2,7 +2,7 @@ add_subdirectory(app)
 add_subdirectory(comms)
 add_subdirectory(hal)
 add_subdirectory(target_test)
-if(CROSS_COMPILED)
+if(NOT COMPILED_FOR_TARGET)
 # Build for testing on host.
 target_include_directories(${PROJECT_NAME} PRIVATE
     app

@@ -12,7 +12,10 @@ if (NOT CMAKE_BUILD_TYPE STREQUAL "Test")
     if (PICO_SDK_VERSION_STRING VERSION_LESS "1.3.0")
         message(FATAL_ERROR "Raspberry Pi Pico SDK version 1.3.0 (or later) required. Your version is ${PICO_SDK_VERSION_STRING}")
     endif()
+
     project(ads_bee C CXX ASM)
+    # Flag indicating that build is for the embedded target. Used to toggle target_source calls.
+    set(COMPILED_FOR_TARGET 1)
 
     # Initialize the SDK
     pico_sdk_init()
@@ -65,8 +68,6 @@ else()
     ## Building for cross-compiled unit tests.
     project(ads_bee_test C CXX ASM)
 
-    # Flag indicating that build is not for the embedded target. Used to toggle target_source calls.
-    set(CROSS_COMPILED 1)
     set(CMAKE_BUILD_TYPE "Debug") # Now that we've identified we're running tests, revert to an actual build config.
 
     add_compile_options(

@@ -1,4 +1,4 @@
-if(CROSS_COMPILED)
+if(NOT COMPILED_FOR_TARGET)
 # Build for testing on host.
 target_sources(ads_bee_test PRIVATE
     # comms.cc
