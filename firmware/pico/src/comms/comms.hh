@@ -21,6 +21,10 @@ class CommsManager {
 
         uint16_t esp32_enable_pin = 14;
         uint16_t esp32_gpio0_boot_pin = 11;
+        uint16_t esp32_mosi_pin = 8;
+        uint16_t esp32_miso_pin = 9;
+        uint16_t esp32_clk_pin = 7;
+        uint16_t esp32_cs_pin = 10;
     };
 
     CommsManager(CommsManagerConfig config_in);
@@ -174,6 +178,8 @@ class CommsManager {
 };
 
 extern CommsManager comms_manager;
+extern const CppAT::ATCommandDef_t at_command_list[];  // Initialized in comms_at.cc
+extern const uint16_t at_command_list_num_commands;
 
 #define TEXT_COLOR_RED              "\033[31m"
 #define TEXT_COLOR_GREEN            "\033[32m"

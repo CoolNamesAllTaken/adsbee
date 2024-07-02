@@ -4,6 +4,18 @@
 #include <cstdio>   // Regular pico/stdio.h doesn't support vprint functions.
 
 #include "pico/stdlib.h"
+#include "spi_coprocessor.hh"
+
+SPICoprocessor spi_coprocessor;
+
+CommsManager::CommsManager(CommsManagerConfig config_in)
+    : config_(config_in), at_parser_(CppAT(at_command_list, at_command_list_num_commands, true)) {}
+
+bool CommsManager::InitAT() {
+    // Initialize AT command parser with statically allocated list of AT commands.
+
+    return true;
+}
 
 bool CommsManager::Init() {
     InitAT();
@@ -29,6 +41,20 @@ bool CommsManager::Init() {
     // gpio_init(config_.esp32_gpio0_boot_pin);
     // gpio_set_dir(config_.esp32_gpio0_boot_pin, GPIO_OUT);
     // gpio_put(config_.esp32_gpio0_boot_pin, 1);  // Disable ESP32 download boot mode.
+
+    // Initialize SPI coprocessor.
+    // ESP32 chip select pin.
+    gpio_init(config_.esp32_cs_pin);
+    gpio_set_dir(config_.esp32_cs_pin, GPIO_OUT);
+    gpio_put(config_.esp32_cs_pin, 1);
+    // ESP32 handshake pin.
+    gpio_init(config_.esp32_gpio0_boot_pin);
+    gpio_set_dir(config_.esp32_gpio0_boot_pin, GPIO_IN);
+    // ESP32 SPI pins.
+    gpio_set_function(config_.esp32_clk_pin, GPIO_FUNC_SPI);
+    gpio_set_function(config_.esp32_mosi_pin, GPIO_FUNC_SPI);
+    gpio_set_function(config_.esp32_miso_pin, GPIO_FUNC_SPI);
+    spi_coprocessor.Init();
 
     stdio_init_all();
     stdio_set_translate_crlf(&stdio_usb, false);

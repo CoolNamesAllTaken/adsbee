@@ -103,7 +103,9 @@ else()
 
 endif()
 
-
+# Differentiate common code between Pico and ESP32. For code highlighting, add this to the "defines" property of
+# "configurations" in c_cpp_properties.json.
+add_compile_definitions(ON_PICO)
 
 # Source files are added with target_sources in subdirectories
 

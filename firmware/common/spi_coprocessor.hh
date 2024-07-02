@@ -5,9 +5,28 @@
 #include "aircraft_dictionary.hh"
 #include "settings.hh"
 
+#ifdef ON_PICO
+#include "hardware/spi.h"
+#else
+// TODO: Include ESP32 SPI header.
+#endif
+
 class SPICoprocessor
 {
 public:
+    struct SPICoprocessorConfig
+    {
+        uint32_t clk_rate_hz = 40e6; // 40 MHz
+#ifdef ON_PICO
+        spi_inst_t *spi_handle = spi0;
+        uint16_t spi_clk_pin = 6;
+        uint16_t spi_mosi_pin = 7;
+        uint16_t spi_miso_pin = 8;
+#else
+        // TODO: Initialize ESP32 SPI parameters here.
+#endif
+    };
+
     enum PacketType : int8_t
     {
         kSCPacketTypeInvalid = -1,
@@ -63,6 +82,26 @@ public:
          */
         AircraftListPacket(uint16_t num_aicraft_in, const Aircraft aircraft_list_in[]);
     };
+
+    // NOTE: Pico (leader) and ESP32 (follower) will have different behaviors for these functions.
+    bool Init();
+    bool Update();
+
+    /**
+     * Transmit a packet to the coprocessor. Blocking.
+     * @param[in] packet Reference to the packet that will be transmitted.
+     * @retval True if succeeded, false otherwise.
+     */
+    bool SendPacket(const SCPacket &packet);
+
+private:
+    bool SPIInit();
+    int SPIWriteBlocking(uint8_t *tx_buf, uint32_t length);
+    int SPIReadBlocking(uint8_t *rx_buf, uint32_t length);
+
+    SPICoprocessorConfig config_;
 };
+
+extern SPICoprocessor spi_coprocessor;
 
 #endif /* SPI_COPROCESSOR_HH_ */

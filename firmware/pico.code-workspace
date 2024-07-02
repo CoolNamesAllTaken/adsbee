@@ -85,7 +85,7 @@
 			"future": "cpp",
 			"shared_mutex": "cpp",
 			"format": "cpp"
-		}
+		},
 	},
 	"launch": {
 		"version": "0.2.0",
@@ -146,5 +146,5 @@
 				"miDebuggerPath": "/usr/bin/gdb",
 			}
 		]
-	}
+	},
 }

@@ -47,3 +47,56 @@ SPICoprocessor::AircraftListPacket::AircraftListPacket(uint16_t num_aicraft_in, 
     // memset(&(aircraft_list[num_aicraft]), 0, sizeof(Aircraft) * (AircraftDictionary::kMaxNumAircraft - num_aicraft));
     PopulateCRCAndLength(sizeof(AircraftListPacket) - sizeof(SCPacket));
 }
+
+bool SPICoprocessor::Init()
+{
+    bool ret = 0;
+    ret &= SPIInit();
+    return ret;
+}
+
+bool SPICoprocessor::Update()
+{
+    return true;
+}
+
+bool SPICoprocessor::SendPacket(const SCPacket &packet)
+{
+
+    return true;
+}
+
+bool SPICoprocessor::SPIInit()
+{
+#ifdef ON_PICO
+    spi_init(config_.spi_handle, config_.clk_rate_hz);
+    spi_set_format(config_.spi_handle,
+                   8,          // Bits per transfer.
+                   SPI_CPOL_1, // Polarity (CPOL).
+                   SPI_CPHA_1, // Phase (CPHA).
+                   SPI_MSB_FIRST);
+#else
+
+#endif
+    return true;
+}
+
+int SPICoprocessor::SPIWriteBlocking(uint8_t *tx_buf, uint32_t length)
+{
+#ifdef ON_PICO
+    return spi_write_blocking(config_.spi_handle, tx_buf, length);
+#else
+
+#endif
+    return -1;
+}
+
+int SPICoprocessor::SPIReadBlocking(uint8_t *rx_buf, uint32_t length)
+{
+#ifdef ON_PICO
+    return spi_read_blocking(config_.spi_handle, 0, rx_buf, length);
+#else
+
+#endif
+    return -1;
+}

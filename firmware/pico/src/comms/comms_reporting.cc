@@ -142,7 +142,7 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
         }
         case 2: {
             mavlink_message_interval_t message_interval_msg = {
-                .interval_us = mavlink_reporting_interval_ms * (uint32_t)kUsPerMs,
+                .interval_us = (int32_t)(mavlink_reporting_interval_ms * (uint32_t)kUsPerMs),
                 .message_id = MAVLINK_MSG_ID_ADSB_VEHICLE};
             mavlink_msg_message_interval_send_struct(static_cast<mavlink_channel_t>(iface), &message_interval_msg);
             break;

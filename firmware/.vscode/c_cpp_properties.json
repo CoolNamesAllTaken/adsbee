@@ -7,12 +7,17 @@
                 "/usr/local/pico-sdk/**",
                 "/usr/bin/**"
             ],
-            "defines": [],
+            "defines": [
+                "ON_PICO"
+            ],
             "compilerPath": "/usr/bin/arm-none-eabi-gcc",
-            "cStandard": "c11",
-            "cppStandard": "c++17",
+            "cStandard": "c17",
+            "cppStandard": "c++20",
             "intelliSenseMode": "gcc-arm",
-            "configurationProvider": "ms-vscode.cmake-tools"
+            // Commented out configurationProvider since it wasn't providing preprocessor macro definitions, and was
+            // masking the "defines" that were added as a workaround:
+            // https://github.com/microsoft/vscode-cpptools/issues/8589#issuecomment-998320176
+            // "configurationProvider": "ms-vscode.cmake-tools"
         }
     ],
     "version": 4

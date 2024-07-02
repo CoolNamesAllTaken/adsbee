@@ -302,7 +302,7 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiCallback) {
     CPP_AT_ERROR();  // Should never get here.
 }
 
-static const CppAT::ATCommandDef_t at_command_list[] = {
+const CppAT::ATCommandDef_t at_command_list[] = {
     {.command_buf = "+BAUDRATE",
      .min_args = 0,
      .max_args = 2,
@@ -361,16 +361,7 @@ static const CppAT::ATCommandDef_t at_command_list[] = {
                         "Get WiFi parameters.\r\n\tAT+WIFI?\r\n\t+WIFI=<enabled[0 1]>,<ssid[str]>,<***[str]>",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATWiFiCallback, comms_manager)},
 };
-
-CommsManager::CommsManager(CommsManagerConfig config_in)
-    : config_(config_in),
-      at_parser_(CppAT(at_command_list, sizeof(at_command_list) / sizeof(at_command_list[0]), true)) {}
-
-bool CommsManager::InitAT() {
-    // Initialize AT command parser with statically allocated list of AT commands.
-
-    return true;
-}
+const uint16_t at_command_list_num_commands = sizeof(at_command_list) / sizeof(at_command_list[0]);
 
 bool CommsManager::UpdateAT() {
     static char at_command_buf[kATCommandBufMaxLen];
