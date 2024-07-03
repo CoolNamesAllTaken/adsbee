@@ -181,7 +181,7 @@ class ADSBee {
     TransponderPacket transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
-    uint16_t last_decode_num_words_ingested_ = 0;
+    uint16_t last_demod_num_words_ingested_ = 0;
 };
 
 extern ADSBee ads_bee;

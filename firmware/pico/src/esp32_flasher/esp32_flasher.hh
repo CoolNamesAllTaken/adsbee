@@ -71,15 +71,15 @@ class ESP32SerialFlasher {
 
     ESP32SerialFlasherStatus SerialRead(uint8_t *dest, size_t len, uint32_t timeout_us) {
         uint32_t start_timestamp_us = get_time_since_boot_us();
-        if (!uart_is_readable_within_us(config_.esp32_uart_handle, timeout_us)) {
-            return kESP32FlasherErrorTimeout;
-        }
+        // if (!uart_is_readable_within_us(config_.esp32_uart_handle, timeout_us)) {
+        //     return kESP32FlasherErrorTimeout;
+        // }
         uint8_t *dest_start = dest;
         while (dest < dest_start + len && uart_is_readable(config_.esp32_uart_handle)) {
             uart_read_blocking(config_.esp32_uart_handle, dest++, 1);
-            if (get_time_since_boot_us() - start_timestamp_us > timeout_us) {
-                return kESP32FlasherErrorTimeout;
-            }
+            // if (get_time_since_boot_us() - start_timestamp_us > timeout_us) {
+            //     return kESP32FlasherErrorTimeout;
+            // }
         }
         return kESP32FlasherOkay;
     }

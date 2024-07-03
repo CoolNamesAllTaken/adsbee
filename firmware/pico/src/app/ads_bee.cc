@@ -28,7 +28,7 @@ const uint32_t kRxgainDigipotOhmsPerCount = 100e3 / 127;
 
 ADSBee *isr_access = nullptr;
 
-void on_decode_complete() { isr_access->OnDemodComplete(); }
+void on_demod_complete() { isr_access->OnDemodComplete(); }
 
 void gpio_irq_isr(uint gpio, uint32_t event_mask) { isr_access->GPIOIRQISR(gpio, event_mask); }
 
@@ -41,7 +41,7 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
     message_demodulator_sm_ = pio_claim_unused_sm(config_.message_demodulator_pio, true);
     message_demodulator_offset_ = pio_add_program(config_.message_demodulator_pio, &message_demodulator_program);
 
-    // Put IRQ parameters into the global scope for the on_decode_complete ISR.
+    // Put IRQ parameters into the global scope for the on_demod_complete ISR.
     isr_access = this;
 
     // Figure out slice and channel values that will be used for setting PWM duty cycle.
@@ -92,25 +92,25 @@ bool ADSBee::Init() {
     preamble_detector_program_init(config_.preamble_detector_pio, preamble_detector_sm_, preamble_detector_offset_,
                                    config_.pulses_pin, config_.demod_out_pin, preamble_detector_div);
 
-    // enable the DECODE interrupt on PIO0_IRQ_0
-    uint preamble_detector_decode_irq = PIO0_IRQ_0;
+    // enable the DEMOD interrupt on PIO0_IRQ_0
+    uint preamble_detector_demod_irq = PIO0_IRQ_0;
     pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt0, true);  // state machine 0 IRQ 0
 
-    uint decode_in_irq = IO_IRQ_BANK0;
+    uint demod_in_irq = IO_IRQ_BANK0;
 
-    // Set GPIO interrupts to be higher priority than the DECODE interrupt to allow RSSI measurement.
-    irq_set_priority(preamble_detector_decode_irq, 1);
-    irq_set_priority(decode_in_irq, 0);
+    // Set GPIO interrupts to be higher priority than the DEMOD interrupt to allow RSSI measurement.
+    irq_set_priority(preamble_detector_demod_irq, 1);
+    irq_set_priority(demod_in_irq, 0);
 
     // Handle GPIO interrupts.
     gpio_set_irq_enabled_with_callback(config_.demod_in_pin, GPIO_IRQ_EDGE_RISE, true, gpio_irq_isr);
 
     // Handle PIO0 IRQ0.
-    irq_set_exclusive_handler(preamble_detector_decode_irq, on_decode_complete);
-    irq_set_enabled(preamble_detector_decode_irq, true);
+    irq_set_exclusive_handler(preamble_detector_demod_irq, on_demod_complete);
+    irq_set_enabled(preamble_detector_demod_irq, true);
 
     /** MESSAGE DEMODULATOR PIO **/
-    float message_demodulator_freq = 16e6;  // Run at 32 MHz to decode bits at 1Mbps.
+    float message_demodulator_freq = 16e6;  // Run at 16 MHz to demodulate bits at 1Mbps.
     float message_demodulator_div = (float)clock_get_hz(clk_sys) / message_demodulator_freq;
     message_demodulator_program_init(config_.message_demodulator_pio, message_demodulator_sm_,
                                      message_demodulator_offset_, config_.pulses_pin, config_.recovered_clk_pin,
@@ -140,7 +140,7 @@ bool ADSBee::Init() {
 
 bool ADSBee::Update() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
-    // Turn off the decode LED if it's been on for long enough.
+    // Turn off the demod LED if it's been on for long enough.
     if (timestamp_ms > led_off_timestamp_ms_) {
         gpio_put(config_.status_led_pin, 0);
     }
@@ -159,11 +159,11 @@ bool ADSBee::Update() {
 void ADSBee::GPIOIRQISR(uint gpio, uint32_t event_mask) {
     if (gpio == config_.demod_in_pin && event_mask == GPIO_IRQ_EDGE_RISE) {
         gpio_acknowledge_irq(config_.demod_in_pin, GPIO_IRQ_EDGE_RISE);
-        // Decode is beginning!
+        // Demodulation period is beginning!
         // Read the RSSI level of the last packet.
         adc_select_input(config_.rssi_hold_adc_input);
         rssi_adc_counts_ = adc_read();
-        // RSSI peak detector will automatically clear when DECODE pin goes LO.
+        // RSSI peak detector will automatically clear when DEMOD pin goes LO.
     }
 }
 
@@ -176,34 +176,34 @@ void ADSBee::OnDemodComplete() {
         switch (word_index) {
             case 0: {
                 // Flush the previous word into a packet before beginning to store the new one.
-                // First word out of the FIFO is actually the last word of the previously decoded message.
+                // First word out of the FIFO is actually the last word of the previously demodulated message.
                 // Assemble a packet buffer using the items in rx_buffer_.
                 uint32_t packet_buffer[TransponderPacket::kMaxPacketLenWords32];
-                for (uint16_t i = 0; i < last_decode_num_words_ingested_; i++) {
+                for (uint16_t i = 0; i < last_demod_num_words_ingested_; i++) {
                     packet_buffer[i] = rx_buffer_[i];
                 }
                 // Trim extra ingested bit off of last word, then left-align.
-                // packet_buffer[last_decode_num_words_ingested_] = (static_cast<uint16_t>(word >> 1)) << 16;
+                // packet_buffer[last_demod_num_words_ingested_] = (static_cast<uint16_t>(word >> 1)) << 16;
                 // Need to left-align by 16 bits for last word of 112-bit packet, 8 bits for last word of 56-bit
                 // packet.
-                if (last_decode_num_words_ingested_ == TransponderPacket::kExtendedSquitterPacketNumWords32 - 1) {
+                if (last_demod_num_words_ingested_ == TransponderPacket::kExtendedSquitterPacketNumWords32 - 1) {
                     // 112-bit packet: trim off extra bit, mask to 16 bits, left align.
-                    packet_buffer[last_decode_num_words_ingested_] = ((word >> 1) & 0xFFFF) << 16;
+                    packet_buffer[last_demod_num_words_ingested_] = ((word >> 1) & 0xFFFF) << 16;
                 } else {
                     // 56-bit packet: trim off extra bit, mask to 24 bits, left align.
-                    packet_buffer[last_decode_num_words_ingested_] = ((word >> 1) & 0xFFFFFF) << 8;
+                    packet_buffer[last_demod_num_words_ingested_] = ((word >> 1) & 0xFFFFFF) << 8;
                 }
                 TransponderPacket packet =
-                    TransponderPacket(packet_buffer, last_decode_num_words_ingested_ + 1, rssi_adc_counts_);
+                    TransponderPacket(packet_buffer, last_demod_num_words_ingested_ + 1, rssi_adc_counts_);
                 transponder_packet_queue.Push(packet);
-                last_decode_num_words_ingested_ = 0;
+                last_demod_num_words_ingested_ = 0;
                 break;
             }
             case 1:
             case 2:
             case 3:
                 rx_buffer_[word_index - 1] = word;
-                last_decode_num_words_ingested_ = word_index;
+                last_demod_num_words_ingested_ = word_index;
                 break;
                 // case 3:
                 //     // Last word ingests an extra bit by accident, pinch it off here.
