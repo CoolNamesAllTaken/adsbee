@@ -84,7 +84,8 @@
 			"fstream": "cpp",
 			"future": "cpp",
 			"shared_mutex": "cpp",
-			"format": "cpp"
+			"format": "cpp",
+			"esp_loader.h": "c"
 		},
 	},
 	"launch": {

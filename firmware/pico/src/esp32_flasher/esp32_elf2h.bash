@@ -4,8 +4,8 @@
 # subsequently be included in the RP2040 firmware.
 
 script_dir=$(dirname $0)
-esp_firmware_bin_file=$script_dir/bin/adsbee_esp.bin
-esp_firmware_header_file=$script_dir/bin/esp_firmware.h
+esp_firmware_bin_file=$script_dir/esp_bin/adsbee_esp.bin
+esp_firmware_header_file=$script_dir/esp_bin/esp_firmware.h
 
 echo "Converting $esp_firmware_bin_file -> $esp_firmware_header_file"
 

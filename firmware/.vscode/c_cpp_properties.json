@@ -8,7 +8,11 @@
                 "/usr/bin/**"
             ],
             "defines": [
-                "ON_PICO"
+                "ON_PICO",
+                // "SERIAL_FLASHER_MD5_ENABLED",
+                // "SERIAL_FLASHER_INTERFACE_UART",
+                // "SERIAL_FLASHER_DEBUG_TRACE=1",
+                // "SERIAL_FLASHER_WRITE_BLOCK_RETRIES=3"
             ],
             "compilerPath": "/usr/bin/arm-none-eabi-gcc",
             "cStandard": "c17",

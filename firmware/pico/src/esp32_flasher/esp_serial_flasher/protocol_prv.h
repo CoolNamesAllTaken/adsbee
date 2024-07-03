@@ -13,12 +13,19 @@
  * limitations under the License.
  */
 
-#warning Please replace serial_io.h with esp_loader_io.h and change the function names \
-to match the new API
+#pragma once
 
-/* Defines used to avoid breaking existing ports */
-#define loader_port_change_baudrate loader_port_change_transmission_rate
-#define loader_port_serial_write loader_port_write
-#define loader_port_serial_read loader_port_read
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
-#include "esp_loader_io.h"
+#include "esp_loader.h"
+#include "protocol.h"
+
+void log_loader_internal_error(error_code_t error);
+
+esp_loader_error_t send_cmd(const void *cmd_data, uint32_t size, uint32_t *reg_value);
+
+esp_loader_error_t send_cmd_with_data(const void *cmd_data, size_t cmd_size, const void *data, size_t data_size);
+
+esp_loader_error_t send_cmd_md5(const void *cmd_data, size_t cmd_size, uint8_t md5_out[MD5_SIZE]);

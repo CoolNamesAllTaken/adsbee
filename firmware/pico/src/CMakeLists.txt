@@ -1,5 +1,6 @@
 add_subdirectory(app)
 add_subdirectory(comms)
+add_subdirectory(esp32_flasher)
 add_subdirectory(hal)
 add_subdirectory(target_test)
 if(NOT COMPILED_FOR_TARGET)

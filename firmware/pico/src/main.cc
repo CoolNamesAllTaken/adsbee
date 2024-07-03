@@ -2,6 +2,7 @@
 #include "adsb_packet.hh"
 #include "comms.hh"
 #include "eeprom.hh"
+#include "esp32_flasher.hh"
 #include "hal.hh"
 #include "pico/binary_info.h"
 #include "settings.hh"
@@ -15,6 +16,7 @@ ADSBee::ADSBeeConfig ads_bee_config;
 // Override default config params here.
 ADSBee ads_bee = ADSBee(ads_bee_config);
 CommsManager comms_manager = CommsManager({});
+ESP32SerialFlasher esp_flasher = ESP32SerialFlasher({});
 EEPROM eeprom = EEPROM({});
 SettingsManager settings_manager;
 
