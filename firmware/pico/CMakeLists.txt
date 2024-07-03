@@ -111,13 +111,19 @@ add_compile_definitions(ON_PICO)
 # Set parameters for serial flasher.
 # NOTE: These are mirrored in the top level `pico/.vscode/c_cpp_properties.json` for intellisense.
 add_compile_definitions(
-    SERIAL_FLASHER_MD5_ENABLED 
+    MD5_ENABLED 
     SERIAL_FLASHER_INTERFACE_UART 
     SERIAL_FLASHER_DEBUG_TRACE=1 
     SERIAL_FLASHER_WRITE_BLOCK_RETRIES=3
 )
 
-# Source files are added with target_sources in subdirectories
+# Embed binaries into the app.
+# In ESP-IDF this can also be done using EMBED_FILES option of idf_component_register.
+# Here an external tool is used to make file embedding similar with other ports.
+include(${CMAKE_CURRENT_LIST_DIR}/src/esp32_flasher/bin2array.cmake)
+create_resources(${CMAKE_CURRENT_LIST_DIR}/src/esp32_flasher/bin ${CMAKE_BINARY_DIR}/binaries.c)
+set_property(SOURCE ${CMAKE_BINARY_DIR}/binaries.c PROPERTY GENERATED 1)
+target_sources(${PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR}/binaries.c)
 
 
 

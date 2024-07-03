@@ -1,3 +1,5 @@
+/** NOTE: John adapted this file from example_common.h in the esp_serial_flasher GitHub on 2024-07-03. **/
+
 /* Copyright 2020-2023 Espressif Systems (Shanghai) CO LTD
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,34 +37,34 @@ typedef struct {
     partition_attr_t boot;
     partition_attr_t part;
     partition_attr_t app;
-} example_binaries_t;
+} esp_binaries_t;
 
 typedef struct {
     partition_attr_t ram_app;
-} example_ram_app_binary_t;
+} esp_ram_app_binary_t;
 
 /**
  * @brief esptool portable bin header format
  */
-typedef struct example_bin_header {
+typedef struct esp_bin_header {
     uint8_t magic;
     uint8_t segments;
     uint8_t flash_mode;
     uint8_t flash_size_freq;
     uint32_t entrypoint;
-} example_bin_header_t;
+} esp_bin_header_t;
 
 /**
  * @brief esptool portable bin segment format
  */
-typedef struct example_bin_segment {
+typedef struct esp_bin_segment {
     uint32_t addr;
     uint32_t size;
     uint8_t *data;
-} example_bin_segment_t;
+} esp_bin_segment_t;
 
-void get_example_binaries(target_chip_t target, example_binaries_t *binaries);
-void get_example_ram_app_binary(target_chip_t target, example_ram_app_binary_t *bin);
+void get_esp_binaries(target_chip_t target, esp_binaries_t *binaries);
+void get_esp_ram_app_binary(target_chip_t target, esp_ram_app_binary_t *bin);
 esp_loader_error_t connect_to_target(uint32_t higher_transmission_rate);
 esp_loader_error_t connect_to_target_with_stub(uint32_t current_transmission_rate, uint32_t higher_transmission_rate);
 esp_loader_error_t flash_binary(const uint8_t *bin, size_t size, size_t address);

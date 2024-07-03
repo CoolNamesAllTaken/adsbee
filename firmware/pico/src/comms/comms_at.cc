@@ -6,6 +6,7 @@
 #include "ads_bee.hh"
 #include "comms.hh"
 #include "eeprom.hh"
+#include "esp32_flasher.hh"
 #include "main.hh"
 #include "pico/stdlib.h"  // for getchar etc
 #include "settings.hh"
@@ -83,6 +84,13 @@ CPP_AT_CALLBACK(CommsManager::ATConsoleVerbosityCallback) {
             break;
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATFlashESP32Callback) {
+    if (esp32_flasher.FlashESP32()) {
+        CPP_AT_SUCCESS();
+    }
+    CPP_AT_ERROR("Flashing ESP32 failed.");
 }
 
 CPP_AT_CALLBACK(CommsManager::ATProtocolCallback) {
@@ -315,6 +323,12 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string_buf = "AT+LOG_LEVEL=<console_verbosity>\r\n\tSet how much stuff gets printed to the "
                         "console.\r\n\tconsole_verbosity = [SILENT ERRORS WARNINGS LOGS]",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATConsoleVerbosityCallback, comms_manager)},
+    {.command_buf = "+FLASH_ESP32",
+     .min_args = 0,
+     .max_args = 0,
+     .help_string_buf = "AT+FLASH_ESP32\r\n\tTriggers a firmware update of the ESP32 from the firmware image stored in "
+                        "the RP2040's flash memory.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFlashESP32Callback, comms_manager)},
     {.command_buf = "+PROTOCOL",
      .min_args = 0,
      .max_args = 2,

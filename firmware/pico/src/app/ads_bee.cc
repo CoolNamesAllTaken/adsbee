@@ -168,8 +168,6 @@ void ADSBee::GPIOIRQISR(uint gpio, uint32_t event_mask) {
 }
 
 void ADSBee::OnDemodComplete() {
-    pio_interrupt_clear(config_.preamble_detector_pio, 0);
-
     uint16_t word_index = 0;
     while (!pio_sm_is_rx_fifo_empty(config_.message_demodulator_pio, message_demodulator_sm_)) {
         uint32_t word = pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_);
