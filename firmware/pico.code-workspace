@@ -85,7 +85,8 @@
 			"future": "cpp",
 			"shared_mutex": "cpp",
 			"format": "cpp",
-			"esp_loader.h": "c"
+			"esp_loader.h": "c",
+			"comms.hh": "c"
 		},
 	},
 	"launch": {

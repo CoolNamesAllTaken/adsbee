@@ -93,21 +93,20 @@ bool ADSBee::Init() {
                                    config_.pulses_pin, config_.demod_out_pin, preamble_detector_div);
 
     // enable the DEMOD interrupt on PIO0_IRQ_0
-    uint preamble_detector_demod_irq = PIO0_IRQ_0;
     pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt0, true);  // state machine 0 IRQ 0
 
     uint demod_in_irq = IO_IRQ_BANK0;
 
     // Set GPIO interrupts to be higher priority than the DEMOD interrupt to allow RSSI measurement.
-    irq_set_priority(preamble_detector_demod_irq, 1);
+    irq_set_priority(config_.preamble_detector_demod_irq, 1);
     irq_set_priority(demod_in_irq, 0);
 
     // Handle GPIO interrupts.
     gpio_set_irq_enabled_with_callback(config_.demod_in_pin, GPIO_IRQ_EDGE_RISE, true, gpio_irq_isr);
 
     // Handle PIO0 IRQ0.
-    irq_set_exclusive_handler(preamble_detector_demod_irq, on_demod_complete);
-    irq_set_enabled(preamble_detector_demod_irq, true);
+    irq_set_exclusive_handler(config_.preamble_detector_demod_irq, on_demod_complete);
+    irq_set_enabled(config_.preamble_detector_demod_irq, true);
 
     /** MESSAGE DEMODULATOR PIO **/
     float message_demodulator_freq = 16e6;  // Run at 16 MHz to demodulate bits at 1Mbps.

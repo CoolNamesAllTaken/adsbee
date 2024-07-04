@@ -36,6 +36,7 @@ class CommsManager {
     CPP_AT_CALLBACK(ATFlashESP32Callback);
     CPP_AT_CALLBACK(ATProtocolCallback);
     CPP_AT_HELP_CALLBACK(ATProtocolHelpCallback);
+    CPP_AT_CALLBACK(ATRxEnableCallback);
     CPP_AT_CALLBACK(ATRxGainCallback);
     CPP_AT_CALLBACK(ATSettingsCallback);
     CPP_AT_CALLBACK(ATTLReadCallback);

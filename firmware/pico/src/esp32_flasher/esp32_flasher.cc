@@ -151,7 +151,7 @@ esp_loader_error_t loader_port_change_transmission_rate(uint32_t baudrate) {
     return ESP_LOADER_SUCCESS;  // Pico doesn't have a meaningful way to fail when setting baudrate.
 }
 
-void loader_port_debug_print(const char *str) { CONSOLE_PRINTF("DEBUG: %s", str); }
+void loader_port_debug_print(const char *str) { CONSOLE_INFO("DEBUG: %s", str); }
 
 /** Begin code from example_common.c **/
 

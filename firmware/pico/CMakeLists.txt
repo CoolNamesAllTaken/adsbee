@@ -16,6 +16,11 @@ if (NOT CMAKE_BUILD_TYPE STREQUAL "Test")
     project(ads_bee C CXX ASM)
     # Flag indicating that build is for the embedded target. Used to toggle target_source calls.
     set(COMPILED_FOR_TARGET 1)
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(PICO_DEOPTIMIZED_DEBUG 1)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0")
+    endif()
 
     # Initialize the SDK
     pico_sdk_init()
@@ -60,12 +65,10 @@ if (NOT CMAKE_BUILD_TYPE STREQUAL "Test")
     # Set up debug USB
     pico_enable_stdio_usb(${PROJECT_NAME} 1) # use USB for standard printing
     pico_enable_stdio_uart(${PROJECT_NAME} 0) # disable STDIO UART
-
-
     
 
 else()
-    ## Building for cross-compiled unit tests.
+    ## Building for unit tests on host.
     project(ads_bee_test C CXX ASM)
 
     set(CMAKE_BUILD_TYPE "Debug") # Now that we've identified we're running tests, revert to an actual build config.

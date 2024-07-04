@@ -41,6 +41,7 @@ class ESP32SerialFlasher {
         gpio_set_function(config_.esp32_uart_tx_pin, GPIO_FUNC_UART);
         gpio_set_function(config_.esp32_uart_rx_pin, GPIO_FUNC_UART);
         uart_set_translate_crlf(config_.esp32_uart_handle, false);
+        uart_set_fifo_enabled(config_.esp32_uart_handle, true);
         uart_init(config_.esp32_uart_handle, config_.esp32_baudrate);
 
         // Initialize the enable and boot pins.
@@ -55,31 +56,31 @@ class ESP32SerialFlasher {
 
     /**  Helper functions exposed to the esp32_serial_flasher functions. **/
 
-    ESP32SerialFlasherStatus SerialWrite(const uint8_t *src, size_t len, uint32_t timeout_us) {
-        uint32_t start_timestamp_us = get_time_since_boot_us();
+    ESP32SerialFlasherStatus SerialWrite(const uint8_t *src, size_t len, uint32_t timeout_ms) {
+        uint32_t start_timestamp_ms = get_time_since_boot_ms();
         // Block until the UART is writeable.
         while (!uart_is_writable(config_.esp32_uart_handle)) {
-            if (get_time_since_boot_us() - start_timestamp_us > timeout_us) return kESP32FlasherErrorTimeout;
+            if (get_time_since_boot_ms() - start_timestamp_ms > timeout_ms) return kESP32FlasherErrorTimeout;
         }
         // NOTE: The timeout implementation is janky and doesn't exit the uart blocking write early.
         uart_write_blocking(config_.esp32_uart_handle, src, len);
-        if (get_time_since_boot_us() - start_timestamp_us > timeout_us) {
+        if (get_time_since_boot_ms() - start_timestamp_ms > timeout_ms) {
             return kESP32FlasherErrorTimeout;
         }
         return kESP32FlasherOkay;
     }
 
-    ESP32SerialFlasherStatus SerialRead(uint8_t *dest, size_t len, uint32_t timeout_us) {
-        uint32_t start_timestamp_us = get_time_since_boot_us();
-        // if (!uart_is_readable_within_us(config_.esp32_uart_handle, timeout_us)) {
-        //     return kESP32FlasherErrorTimeout;
-        // }
+    ESP32SerialFlasherStatus SerialRead(uint8_t *dest, size_t len, uint32_t timeout_ms) {
+        uint64_t start_timestamp_ms = get_time_since_boot_ms();
+        if (!uart_is_readable_within_us(config_.esp32_uart_handle, timeout_ms)) {
+            return kESP32FlasherErrorTimeout;
+        }
         uint8_t *dest_start = dest;
         while (dest < dest_start + len && uart_is_readable(config_.esp32_uart_handle)) {
             uart_read_blocking(config_.esp32_uart_handle, dest++, 1);
-            // if (get_time_since_boot_us() - start_timestamp_us > timeout_us) {
-            //     return kESP32FlasherErrorTimeout;
-            // }
+            if (get_time_since_boot_ms() - start_timestamp_ms > timeout_ms) {
+                return kESP32FlasherErrorTimeout;
+            }
         }
         return kESP32FlasherOkay;
     }

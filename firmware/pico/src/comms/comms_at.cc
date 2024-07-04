@@ -156,6 +156,24 @@ CPP_AT_HELP_CALLBACK(CommsManager::ATProtocolHelpCallback) {
     CPP_AT_PRINTF("\tAT+PROTOCOL?\r\n\t+PROTOCOL=<iface>,<protocol>\r\n\t...\r\n");
 }
 
+CPP_AT_CALLBACK(CommsManager::ATRxEnableCallback) {
+    switch (op) {
+        case '=':
+            if (CPP_AT_HAS_ARG(0)) {
+                bool receiver_enabled;
+                CPP_AT_TRY_ARG2NUM(0, receiver_enabled);
+                ads_bee.SetReceiverEnable(receiver_enabled);
+                CPP_AT_SUCCESS();
+            }
+            break;
+        case '?':
+            CPP_AT_CMD_PRINTF("=%d", ads_bee.ReceiverIsEnabled());
+            CPP_AT_SILENT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATRxGainCallback) {
     switch (op) {
         case '=':
@@ -334,6 +352,15 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .max_args = 2,
      .help_callback = CPP_AT_BIND_MEMBER_HELP_CALLBACK(CommsManager::ATProtocolHelpCallback, comms_manager),
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATProtocolCallback, comms_manager)},
+    {.command_buf = "+RX_ENABLE",
+     .min_args = 0,
+     .max_args = 1,
+     .help_string_buf = "RX_ENABLE=<enabled [1,0]>\r\n\tOK\r\n\tEnables or disables the receiver from receiving "
+                        "messages.\r\n\tAT+RX_ENABLE?\r\n\t+RX_ENABLE=<enabled [1,0]>\r\n\tQuery whether the "
+                        "recevier is enabled.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxEnableCallback, comms_manager)
+
+    },
     {.command_buf = "+RX_GAIN",
      .min_args = 0,
      .max_args = 1,
