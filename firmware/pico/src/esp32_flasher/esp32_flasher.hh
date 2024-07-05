@@ -1,10 +1,12 @@
 #ifndef ESP32_SERIAL_FLASHER_HH_
 #define ESP32_SERIAL_FLASHER_HH_
 
+#include "ads_bee.hh"
 #include "comms.hh"
 #include "hal.hh"  // For system time stuff.
 #include "hardware/uart.h"
 #include "pico/stdlib.h"
+#include "unit_conversions.hh"
 
 class ESP32SerialFlasher {
    public:
@@ -17,9 +19,9 @@ class ESP32SerialFlasher {
         uint16_t esp32_uart_rx_pin = 17;
         uint16_t esp32_enable_pin = 14;
         uint16_t esp32_gpio0_boot_pin = 11;
-        uint32_t esp32_baudrate = 115200;
-        uint32_t esp32_higher_baudrate = 230400;
-        bool enable_md5_check = true;  // Enable MD5 checksum check after flashing.
+        uint32_t esp32_baudrate = 115200;         // Previously 115200
+        uint32_t esp32_higher_baudrate = 230400;  // Previously 230400
+        bool enable_md5_check = true;             // Enable MD5 checksum check after flashing.
     };
 
     enum ESP32SerialFlasherStatus { kESP32FlasherOkay = 1, kESP32FlasherErrorTimeout, kESP32FlasherError };
@@ -32,6 +34,9 @@ class ESP32SerialFlasher {
 
         gpio_deinit(config_.esp32_uart_tx_pin);
         gpio_deinit(config_.esp32_uart_rx_pin);
+
+        // Re-enable receiver after update if it was previously enabled.
+        ads_bee.SetReceiverEnable(receiver_was_enabled_before_update_);
         return true;
     }
 
@@ -43,12 +48,17 @@ class ESP32SerialFlasher {
         uart_set_translate_crlf(config_.esp32_uart_handle, false);
         uart_set_fifo_enabled(config_.esp32_uart_handle, true);
         uart_init(config_.esp32_uart_handle, config_.esp32_baudrate);
+        uart_tx_wait_blocking(config_.esp32_uart_handle);  // Wait for the UART tx buffer to drain.
 
         // Initialize the enable and boot pins.
         gpio_init(config_.esp32_enable_pin);
         gpio_set_dir(config_.esp32_enable_pin, GPIO_OUT);
         gpio_init(config_.esp32_gpio0_boot_pin);
         gpio_set_dir(config_.esp32_gpio0_boot_pin, GPIO_OUT);
+
+        receiver_was_enabled_before_update_ = ads_bee.ReceiverIsEnabled();
+        ads_bee.SetReceiverEnable(false);  // Disable receiver to avoid interrupts during update.
+
         return true;
     }
 
@@ -70,19 +80,23 @@ class ESP32SerialFlasher {
         return kESP32FlasherOkay;
     }
 
+    inline bool uart_rx_not_timed_out_yet(uart_inst_t *uart_handle, uint32_t start_timestamp_ms, uint32_t timeout_ms) {
+        int32_t time_remaining_ms = start_timestamp_ms + timeout_ms - get_time_since_boot_ms();
+        if (time_remaining_ms < 0) return false;
+        return uart_is_readable_within_us(config_.esp32_uart_handle, time_remaining_ms * kUsPerMs);
+    }
+
     ESP32SerialFlasherStatus SerialRead(uint8_t *dest, size_t len, uint32_t timeout_ms) {
         uint64_t start_timestamp_ms = get_time_since_boot_ms();
-        if (!uart_is_readable_within_us(config_.esp32_uart_handle, timeout_ms)) {
-            return kESP32FlasherErrorTimeout;
-        }
         uint8_t *dest_start = dest;
-        while (dest < dest_start + len && uart_is_readable(config_.esp32_uart_handle)) {
+        while (dest < dest_start + len &&
+               uart_rx_not_timed_out_yet(config_.esp32_uart_handle, start_timestamp_ms, timeout_ms)) {
             uart_read_blocking(config_.esp32_uart_handle, dest++, 1);
-            if (get_time_since_boot_ms() - start_timestamp_ms > timeout_ms) {
-                return kESP32FlasherErrorTimeout;
+            if (dest - dest_start == len) {
+                return kESP32FlasherOkay;  // Finished reading all the characters.
             }
         }
-        return kESP32FlasherOkay;
+        return kESP32FlasherErrorTimeout;
     }
 
     void ResetTarget() {
@@ -96,6 +110,11 @@ class ESP32SerialFlasher {
         ResetTarget();
         busy_wait_ms(kSerialFlasherBootHoldTimeMs);
         gpio_put(config_.esp32_gpio0_boot_pin, 1);
+        busy_wait_ms(100);
+        // Flush the rx uart.
+        while (uart_is_readable_within_us(config_.esp32_uart_handle, 100)) {
+            uart_getc(config_.esp32_uart_handle);
+        }
     }
 
     void SetBaudRate(uint32_t baudrate) {
@@ -105,6 +124,7 @@ class ESP32SerialFlasher {
 
    private:
     ESP32SerialFlasherConfig config_;
+    bool receiver_was_enabled_before_update_;
 };
 
 extern ESP32SerialFlasher esp32_flasher;

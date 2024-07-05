@@ -16,11 +16,11 @@ if (NOT CMAKE_BUILD_TYPE STREQUAL "Test")
     project(ads_bee C CXX ASM)
     # Flag indicating that build is for the embedded target. Used to toggle target_source calls.
     set(COMPILED_FOR_TARGET 1)
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        set(PICO_DEOPTIMIZED_DEBUG 1)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0")
-    endif()
+    # if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    #     set(PICO_DEOPTIMIZED_DEBUG 1)
+    #     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0")
+    #     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0")
+    # endif()
 
     # Initialize the SDK
     pico_sdk_init()
