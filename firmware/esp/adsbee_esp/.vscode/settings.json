@@ -6,8 +6,8 @@
     "target/esp32.cfg"
   ],
   "idf.flashType": "UART",
-  "idf.portWin": "COM28",
-  // "idf.flashBaudRate": "9600",
+  "idf.portWin": "COM8",
+  // "idf.flashBaudRate": "230400",
   "terminal.integrated.defaultProfile.windows": "Command Prompt",
   "files.associations": {
     "esp_wifi.h": "c",
