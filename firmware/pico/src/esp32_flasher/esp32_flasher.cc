@@ -84,6 +84,7 @@ bool ESP32SerialFlasher::FlashESP32() {
     } else {
         CONSOLE_ERROR("ESP32SerialFlasher::FlashESP32: Serial initialization failed.");
     }
+    ResetTarget();
     DeInit();
 
     return true;
@@ -181,7 +182,7 @@ esp_loader_error_t connect_to_target(uint32_t higher_transmission_rate) {
                 CONSOLE_PRINTF("Unable to change transmission rate.");
                 return err;
             }
-            CONSOLE_PRINTF("Transmission rate changed changed\n");
+            CONSOLE_PRINTF("Transmission rate changed to %d baud.\n", higher_transmission_rate);
         }
     }
 #endif /* SERIAL_FLASHER_INTERFACE_UART || SERIAL_FLASHER_INTERFACE_USB */
@@ -190,39 +191,6 @@ esp_loader_error_t connect_to_target(uint32_t higher_transmission_rate) {
 }
 
 #if (defined SERIAL_FLASHER_INTERFACE_UART) || (defined SERIAL_FLASHER_INTERFACE_USB)
-esp_loader_error_t connect_to_target_with_stub(const uint32_t current_transmission_rate,
-                                               const uint32_t higher_transmission_rate) {
-    esp_loader_connect_args_t connect_config = ESP_LOADER_CONNECT_DEFAULT();
-
-    esp_loader_error_t err = esp_loader_connect(&connect_config);
-    if (err != ESP_LOADER_SUCCESS) {
-        CONSOLE_PRINTF("Cannot connect to target. Error: %u\n", err);
-        return err;
-    }
-    CONSOLE_PRINTF("Connected to target\n");
-
-    if (higher_transmission_rate != current_transmission_rate) {
-        err = esp_loader_change_transmission_rate(higher_transmission_rate);
-
-        if (err == ESP_LOADER_ERROR_UNSUPPORTED_FUNC) {
-            CONSOLE_PRINTF("ESP8266 does not support change transmission rate command.");
-            return err;
-        } else if (err != ESP_LOADER_SUCCESS) {
-            CONSOLE_PRINTF("Unable to change transmission rate on target.");
-            return err;
-        } else {
-            err = loader_port_change_transmission_rate(higher_transmission_rate);
-            if (err != ESP_LOADER_SUCCESS) {
-                CONSOLE_PRINTF("Unable to change transmission rate.");
-                return err;
-            }
-            CONSOLE_PRINTF("Transmission rate changed changed\n");
-        }
-    }
-
-    return ESP_LOADER_SUCCESS;
-}
-
 esp_loader_error_t flash_binary(const uint8_t *bin, size_t size, size_t address) {
     esp_loader_error_t err;
     static uint8_t payload[1024];
@@ -243,6 +211,7 @@ esp_loader_error_t flash_binary(const uint8_t *bin, size_t size, size_t address)
         size_t to_read = MIN(size, sizeof(payload));
         memcpy(payload, bin_addr, to_read);
 
+        CONSOLE_PRINTF("\nAttempting to write %d Bytes to address 0x%x.", to_read, address + binary_size - size);
         err = esp_loader_flash_write(payload, to_read);
         if (err != ESP_LOADER_SUCCESS) {
             CONSOLE_PRINTF("\nPacket could not be written! Error %d.\n", err);

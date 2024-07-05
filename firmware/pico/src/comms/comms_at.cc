@@ -297,29 +297,30 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiCallback) {
             break;
         }
         case '=': {
+            if (CPP_AT_HAS_ARG(1)) {
+                strncpy(wifi_ssid, args[1].data(), SettingsManager::kWiFiSSIDMaxLen);
+                wifi_ssid[SettingsManager::kWiFiSSIDMaxLen] = '\0';
+                CPP_AT_CMD_PRINTF(": ssid=%s\r\n", wifi_ssid);
+            }
+            if (CPP_AT_HAS_ARG(2)) {
+                strncpy(wifi_password, args[2].data(), SettingsManager::kWiFiPasswordMaxLen);
+                wifi_password[SettingsManager::kWiFiPasswordMaxLen] = '\0';
+                char redacted_password[SettingsManager::kWiFiPasswordMaxLen];
+                redact_password(wifi_password, redacted_password, SettingsManager::kWiFiPasswordMaxLen);
+                CPP_AT_CMD_PRINTF(": password=%s\r\n", redacted_password);
+            }
+
             if (CPP_AT_HAS_ARG(0)) {
                 bool new_wifi_enabled = false;
                 CPP_AT_TRY_ARG2NUM(0, new_wifi_enabled);
-                if (CPP_AT_HAS_ARG(1)) {
-                    strncpy(wifi_ssid, args[1].data(), SettingsManager::kWiFiSSIDMaxLen);
-                    wifi_ssid[SettingsManager::kWiFiSSIDMaxLen] = '\0';
-                    CPP_AT_CMD_PRINTF(": ssid=%s\r\n", wifi_ssid);
-                }
-                if (CPP_AT_HAS_ARG(2)) {
-                    strncpy(wifi_password, args[2].data(), SettingsManager::kWiFiPasswordMaxLen);
-                    wifi_password[SettingsManager::kWiFiPasswordMaxLen] = '\0';
-                    char redacted_password[SettingsManager::kWiFiPasswordMaxLen];
-                    redact_password(wifi_password, redacted_password, SettingsManager::kWiFiPasswordMaxLen);
-                    CPP_AT_CMD_PRINTF(": password=%s\r\n", redacted_password);
-                }
-
                 if (SetWiFiEnabled(new_wifi_enabled)) {
                     CPP_AT_SUCCESS();
                 } else {
                     CPP_AT_ERROR("Seting wifi_enabled=%d failed.", new_wifi_enabled);
                 }
-                break;
             }
+
+            break;
         }
         default: {
             CPP_AT_ERROR("Operator %c not supported.", op);

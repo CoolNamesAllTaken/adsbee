@@ -88,7 +88,7 @@
 			"esp_loader.h": "c",
 			"comms.hh": "c"
 		},
-		"cortex-debug.variableUseNaturalFormat": false,
+		"cortex-debug.variableUseNaturalFormat": true,
 	},
 	"launch": {
 		"version": "0.2.0",

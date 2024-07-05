@@ -18,8 +18,6 @@ if (NOT CMAKE_BUILD_TYPE STREQUAL "Test")
     set(COMPILED_FOR_TARGET 1)
     # if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     #     set(PICO_DEOPTIMIZED_DEBUG 1)
-    #     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0")
-    #     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0")
     # endif()
 
     # Initialize the SDK
@@ -116,7 +114,7 @@ add_compile_definitions(ON_PICO)
 add_compile_definitions(
     MD5_ENABLED 
     SERIAL_FLASHER_INTERFACE_UART 
-    SERIAL_FLASHER_DEBUG_TRACE=1 
+    SERIAL_FLASHER_DEBUG_TRACE=0 
     SERIAL_FLASHER_WRITE_BLOCK_RETRIES=3
 )
 

@@ -20,7 +20,7 @@ class ESP32SerialFlasher {
         uint16_t esp32_enable_pin = 14;
         uint16_t esp32_gpio0_boot_pin = 11;
         uint32_t esp32_baudrate = 115200;         // Previously 115200
-        uint32_t esp32_higher_baudrate = 230400;  // Previously 230400
+        uint32_t esp32_higher_baudrate = 921600;  // Previously 230400
         bool enable_md5_check = true;             // Enable MD5 checksum check after flashing.
     };
 
