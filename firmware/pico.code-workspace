@@ -84,8 +84,11 @@
 			"fstream": "cpp",
 			"future": "cpp",
 			"shared_mutex": "cpp",
-			"format": "cpp"
-		}
+			"format": "cpp",
+			"esp_loader.h": "c",
+			"comms.hh": "c"
+		},
+		"cortex-debug.variableUseNaturalFormat": true,
 	},
 	"launch": {
 		"version": "0.2.0",
@@ -120,7 +123,31 @@
 				],
 				"armToolchainPath": "/usr/bin",
 				"device": "RP2040",
+			},
+			{
+				"name": "(gdb) Launch",
+				"type": "cppdbg",
+				"request": "launch",
+				"program": "${workspaceFolder}/build/ads_bee_test",
+				"args": [],
+				"stopAtEntry": false,
+				"cwd": "${fileDirname}",
+				"environment": [],
+				"externalConsole": false,
+				"MIMode": "gdb",
+				"setupCommands": [
+					{
+						"description": "Enable pretty-printing for gdb",
+						"text": "-enable-pretty-printing",
+						"ignoreFailures": true
+					},
+					// Print values as hex.
+					{
+						"text": "set output-radix 16"
+					}
+				],
+				"miDebuggerPath": "/usr/bin/gdb",
 			}
 		]
-	}
+	},
 }

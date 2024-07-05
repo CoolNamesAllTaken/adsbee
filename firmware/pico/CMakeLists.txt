@@ -12,7 +12,13 @@ if (NOT CMAKE_BUILD_TYPE STREQUAL "Test")
     if (PICO_SDK_VERSION_STRING VERSION_LESS "1.3.0")
         message(FATAL_ERROR "Raspberry Pi Pico SDK version 1.3.0 (or later) required. Your version is ${PICO_SDK_VERSION_STRING}")
     endif()
+
     project(ads_bee C CXX ASM)
+    # Flag indicating that build is for the embedded target. Used to toggle target_source calls.
+    set(COMPILED_FOR_TARGET 1)
+    # if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    #     set(PICO_DEOPTIMIZED_DEBUG 1)
+    # endif()
 
     # Initialize the SDK
     pico_sdk_init()
@@ -57,16 +63,12 @@ if (NOT CMAKE_BUILD_TYPE STREQUAL "Test")
     # Set up debug USB
     pico_enable_stdio_usb(${PROJECT_NAME} 1) # use USB for standard printing
     pico_enable_stdio_uart(${PROJECT_NAME} 0) # disable STDIO UART
-
-
     
 
 else()
-    ## Building for cross-compiled unit tests.
+    ## Building for unit tests on host.
     project(ads_bee_test C CXX ASM)
 
-    # Flag indicating that build is not for the embedded target. Used to toggle target_source calls.
-    set(CROSS_COMPILED 1)
     set(CMAKE_BUILD_TYPE "Debug") # Now that we've identified we're running tests, revert to an actual build config.
 
     add_compile_options(
@@ -103,9 +105,26 @@ else()
 
 endif()
 
+# Differentiate common code between Pico and ESP32. For code highlighting, add this to the "defines" property of
+# "configurations" in c_cpp_properties.json.
+add_compile_definitions(ON_PICO)
 
+# Set parameters for serial flasher.
+# NOTE: These are mirrored in the top level `pico/.vscode/c_cpp_properties.json` for intellisense.
+add_compile_definitions(
+    MD5_ENABLED 
+    SERIAL_FLASHER_INTERFACE_UART 
+    SERIAL_FLASHER_DEBUG_TRACE=0 
+    SERIAL_FLASHER_WRITE_BLOCK_RETRIES=3
+)
 
-# Source files are added with target_sources in subdirectories
+# Embed binaries into the app.
+# In ESP-IDF this can also be done using EMBED_FILES option of idf_component_register.
+# Here an external tool is used to make file embedding similar with other ports.
+include(${CMAKE_CURRENT_LIST_DIR}/src/esp32_flasher/bin2array.cmake)
+create_resources(${CMAKE_CURRENT_LIST_DIR}/src/esp32_flasher/bin ${CMAKE_BINARY_DIR}/binaries.c)
+set_property(SOURCE ${CMAKE_BINARY_DIR}/binaries.c PROPERTY GENERATED 1)
+target_sources(${PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR}/binaries.c)
 
 
 

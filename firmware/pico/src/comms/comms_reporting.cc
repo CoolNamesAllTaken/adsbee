@@ -10,26 +10,26 @@ bool CommsManager::InitReporting() { return true; }
 
 bool CommsManager::UpdateReporting() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
-    for (uint16_t iface = 0; iface < SerialInterface::kGNSSUART; iface++) {
+    for (uint16_t iface = 0; iface < SettingsManager::SerialInterface::kGNSSUART; iface++) {
         switch (reporting_protocols_[iface]) {
-            case kNoReports:
+            case SettingsManager::kNoReports:
                 break;
-            case kRaw:
+            case SettingsManager::kRaw:
                 break;
-            case kRawValidated:
+            case SettingsManager::kRawValidated:
                 break;
-            case kMAVLINK1:
-            case kMAVLINK2:
+            case SettingsManager::kMAVLINK1:
+            case SettingsManager::kMAVLINK2:
                 if (timestamp_ms - last_report_timestamp_ms < mavlink_reporting_interval_ms) {
                     return true;  // No update required.
                 }
-                ReportMAVLINK(static_cast<SerialInterface>(iface));
+                ReportMAVLINK(static_cast<SettingsManager::SerialInterface>(iface));
                 last_report_timestamp_ms = timestamp_ms;
                 break;
-            case kGDL90:
+            case SettingsManager::kGDL90:
                 // Currently not supported.
                 break;
-            case kNumProtocols:
+            case SettingsManager::kNumProtocols:
             default:
                 CONSOLE_WARNING("Invalid reporting protocol %d specified for interface %d.",
                                 reporting_protocols_[iface], iface);
@@ -94,9 +94,9 @@ uint8_t AircraftAirframeTypeToMAVLINKEmitterType(Aircraft::AirframeType airframe
     return UINT8_MAX;
 }
 
-bool CommsManager::ReportMAVLINK(SerialInterface iface) {
-    uint16_t mavlink_version = reporting_protocols_[iface] == kMAVLINK1 ? 1 : 2;
-    mavlink_set_proto_version(SerialInterface::kCommsUART, mavlink_version);
+bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
+    uint16_t mavlink_version = reporting_protocols_[iface] == SettingsManager::kMAVLINK1 ? 1 : 2;
+    mavlink_set_proto_version(SettingsManager::SerialInterface::kCommsUART, mavlink_version);
 
     for (auto &itr : ads_bee.aircraft_dictionary.dict) {
         const Aircraft &aircraft = itr.second;
@@ -141,8 +141,9 @@ bool CommsManager::ReportMAVLINK(SerialInterface iface) {
             break;
         }
         case 2: {
-            mavlink_message_interval_t message_interval_msg = {.interval_us = mavlink_reporting_interval_ms * kUsPerMs,
-                                                               .message_id = MAVLINK_MSG_ID_ADSB_VEHICLE};
+            mavlink_message_interval_t message_interval_msg = {
+                .interval_us = (int32_t)(mavlink_reporting_interval_ms * (uint32_t)kUsPerMs),
+                .message_id = MAVLINK_MSG_ID_ADSB_VEHICLE};
             mavlink_msg_message_interval_send_struct(static_cast<mavlink_channel_t>(iface), &message_interval_msg);
             break;
         }

@@ -3,11 +3,8 @@
 
 #include <cstdio>
 
-#define CONSOLE_LOG(format, ...) \
-    printf("LOG: " format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
-#define CONSOLE_WARNING(format, ...) \
-    printf("WARNING: " format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
-#define CONSOLE_ERROR(format, ...) \
-    printf("ERROR: " format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
+#define CONSOLE_INFO(format, ...)    printf("INFO: " format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
+#define CONSOLE_WARNING(format, ...) printf("WARNING: " format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
+#define CONSOLE_ERROR(format, ...)   printf("ERROR: " format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
 
 #endif /* COMMS_HH_ */

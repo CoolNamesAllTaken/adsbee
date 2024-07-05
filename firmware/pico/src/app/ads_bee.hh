@@ -22,6 +22,7 @@ class ADSBee {
 
     struct ADSBeeConfig {
         PIO preamble_detector_pio = pio0;
+        uint preamble_detector_demod_irq = PIO0_IRQ_0;
         PIO message_demodulator_pio = pio1;
 
         uint16_t status_led_pin = 15;
@@ -57,17 +58,61 @@ class ADSBee {
 
     ADSBee(ADSBeeConfig config_in);
     bool Init();
-
     bool Update();
+
+    void SetReceiverEnable(bool is_enabled) {
+        is_enabled_ = is_enabled;
+        irq_set_enabled(config_.preamble_detector_demod_irq, is_enabled_);
+    }
+
+    bool ReceiverIsEnabled() { return is_enabled_; }
+
+    /**
+     * Blinks the status LED for a given number of milliseconds. Non-blocking.
+     * @param[in] led_on_ms Optional parameter specifying number of milliseconds to turn on for. Defaults to
+     * kStatusLEDOnMs.
+     */
+    void FlashStatusLED(uint32_t led_on_ms = kStatusLEDOnMs);
+
     /**
      * ISR for GPIO interrupts.
      */
     void GPIOIRQISR(uint gpio, uint32_t event_mask);
 
     /**
+     * Returns the last written value of rx_gain.
+     * @retval Gain (integer ratio between 1-101).
+     */
+    int GetRxGain() { return rx_gain_; }
+
+    /**
+     * Return the value of the high Minimum Trigger Level threshold in milliVolts.
+     * @retval TL in milliVolts.
+     */
+    int GetTLHiMilliVolts() { return tl_hi_mv_; }
+
+    /**
+     * Return the value of the low Minimum Trigger Level threshold in milliVolts.
+     * @retval TL in milliVolts.
+     */
+    int GetTLLoMilliVolts() { return tl_lo_mv_; }
+
+    /**
      * ISR triggered by DECODE completing, via PIO0 IRQ0.
      */
     void OnDemodComplete();
+
+    /**
+     * Read the high Minimum Trigger Level threshold via ADC.
+     * @retval TL in milliVolts.
+     */
+    int ReadTLHiMilliVolts();
+
+    /**
+     * Read the low Minimum Trigger Level threshold via ADC.
+     * @retval TL in milliVolts.
+     */
+    int ReadTLLoMilliVolts();
 
     /**
      * Set the high Minimum Trigger Level (TL) at the AD8314 output in milliVolts.
@@ -92,30 +137,6 @@ class ADSBee {
     bool SetTLLoMilliVolts(int tl_lo_mv);
 
     /**
-     * Return the value of the high Minimum Trigger Level threshold in milliVolts.
-     * @retval TL in milliVolts.
-     */
-    int GetTLHiMilliVolts() { return tl_hi_mv_; }
-
-    /**
-     * Return the value of the low Minimum Trigger Level threshold in milliVolts.
-     * @retval TL in milliVolts.
-     */
-    int GetTLLoMilliVolts() { return tl_lo_mv_; }
-
-    /**
-     * Read the high Minimum Trigger Level threshold via ADC.
-     * @retval TL in milliVolts.
-     */
-    int ReadTLHiMilliVolts();
-
-    /**
-     * Read the low Minimum Trigger Level threshold via ADC.
-     * @retval TL in milliVolts.
-     */
-    int ReadTLLoMilliVolts();
-
-    /**
      * Set the value of the receive signal path gain digipot over I2C and store the value for reference.
      * @param[in] rx_gain Gain (integer ratio between 1-101).
      * @retval True if setting was successful, false otherwise.
@@ -123,24 +144,11 @@ class ADSBee {
     bool SetRxGain(int rx_gain);
 
     /**
-     * Returns the last written value of rx_gain.
-     * @retval Gain (integer ratio between 1-101).
-     */
-    int GetRxGain() { return rx_gain_; }
-
-    /**
      * Reads the wiper value from the receive signal path gain digipot over I2C and calculates then returns the
      * resulting gain value.
      * @retval Gain ratio (integer between 1-101).
      */
     int ReadRxGain();
-
-    /**
-     * Blinks the status LED for a given number of milliseconds. Non-blocking.
-     * @param[in] led_on_ms Optional parameter specifying number of milliseconds to turn on for. Defaults to
-     * kStatusLEDOnMs.
-     */
-    void FlashStatusLED(uint32_t led_on_ms = kStatusLEDOnMs);
 
     PFBQueue<TransponderPacket> transponder_packet_queue = PFBQueue<TransponderPacket>(
         {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = transponder_packet_queue_buffer_});
@@ -181,7 +189,9 @@ class ADSBee {
     TransponderPacket transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
-    uint16_t last_decode_num_words_ingested_ = 0;
+    uint16_t last_demod_num_words_ingested_ = 0;
+
+    bool is_enabled_ = true;
 };
 
 extern ADSBee ads_bee;

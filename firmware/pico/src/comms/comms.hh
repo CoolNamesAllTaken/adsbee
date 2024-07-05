@@ -3,39 +3,12 @@
 
 #include "cpp_at.hh"
 #include "hardware/uart.h"
+#include "settings.hh"
 
 class CommsManager {
    public:
     static const uint16_t kATCommandBufMaxLen = 1000;
-    static const uint32_t kDefaultCommsUARTBaudrate = 115200;
-    static const uint32_t kDefaultGNSSUARTBaudrate = 9600;
     static const uint16_t kPrintfBufferMaxSize = 500;
-
-    // NOTE: Length does not include null terminator.
-    static const uint16_t kWiFiSSIDMaxLen = 32;
-    static const uint16_t kWiFiPasswordMaxLen = 32;  // Theoretical max is 63, but limited by CppAT arg max len.
-
-    // Serial Interface enum and string conversion array.
-    enum SerialInterface : uint16_t { kConsole = 0, kCommsUART, kGNSSUART, kNumSerialInterfaces };
-    static const uint16_t kSerialInterfaceStrMaxLen = 30;
-    static const char SerialInterfaceStrs[SerialInterface::kNumSerialInterfaces][kSerialInterfaceStrMaxLen];
-
-    enum LogLevel : uint16_t { kSilent = 0, kErrors, kWarnings, kInfo, kNumVerbosityLevels };
-    static const uint16_t kConsoleVerbosityStrMaxLen = 30;
-    static const char ConsoleVerbosityStrs[LogLevel::kNumVerbosityLevels][kConsoleVerbosityStrMaxLen];
-
-    // Reporting Protocol enum and string conversion array.
-    enum ReportingProtocol : uint16_t {
-        kNoReports = 0,
-        kRaw,
-        kRawValidated,
-        kMAVLINK1,
-        kMAVLINK2,
-        kGDL90,
-        kNumProtocols
-    };
-    static const uint16_t kReportingProtocolStrMaxLen = 30;
-    static const char ReportingProtocolStrs[ReportingProtocol::kNumProtocols][kReportingProtocolStrMaxLen];
 
     struct CommsManagerConfig {
         uart_inst_t *comms_uart_handle = uart1;
@@ -48,6 +21,10 @@ class CommsManager {
 
         uint16_t esp32_enable_pin = 14;
         uint16_t esp32_gpio0_boot_pin = 11;
+        uint16_t esp32_mosi_pin = 8;
+        uint16_t esp32_miso_pin = 9;
+        uint16_t esp32_clk_pin = 7;
+        uint16_t esp32_cs_pin = 10;
     };
 
     CommsManager(CommsManagerConfig config_in);
@@ -56,8 +33,10 @@ class CommsManager {
 
     CPP_AT_CALLBACK(ATBaudrateCallback);
     CPP_AT_CALLBACK(ATConsoleVerbosityCallback);
+    CPP_AT_CALLBACK(ATFlashESP32Callback);
     CPP_AT_CALLBACK(ATProtocolCallback);
     CPP_AT_HELP_CALLBACK(ATProtocolHelpCallback);
+    CPP_AT_CALLBACK(ATRxEnableCallback);
     CPP_AT_CALLBACK(ATRxGainCallback);
     CPP_AT_CALLBACK(ATSettingsCallback);
     CPP_AT_CALLBACK(ATTLReadCallback);
@@ -65,11 +44,11 @@ class CommsManager {
     CPP_AT_CALLBACK(ATWiFiCallback);
 
     int console_printf(const char *format, ...);
-    int console_level_printf(LogLevel level, const char *format, ...);
-    int iface_printf(SerialInterface iface, const char *format, ...);
-    bool iface_putc(SerialInterface iface, char c);
-    bool iface_getc(SerialInterface iface, char &c);
-    bool iface_puts(SerialInterface iface, const char *buf);
+    int console_level_printf(SettingsManager::LogLevel level, const char *format, ...);
+    int iface_printf(SettingsManager::SerialInterface iface, const char *format, ...);
+    bool iface_putc(SettingsManager::SerialInterface iface, char c);
+    bool iface_getc(SettingsManager::SerialInterface iface, char &c);
+    bool iface_puts(SettingsManager::SerialInterface iface, const char *buf);
 
     /**
      * Sets the baudrate for a serial interface.
@@ -77,14 +56,14 @@ class CommsManager {
      * @param[in] baudrate Baudrate to set.
      * @retval True if the baudrate could be set, false if the interface specified does not support a baudrate.
      */
-    bool SetBaudrate(SerialInterface iface, uint32_t baudrate) {
+    bool SetBaudrate(SettingsManager::SerialInterface iface, uint32_t baudrate) {
         switch (iface) {
-            case kCommsUART:
+            case SettingsManager::kCommsUART:
                 // Save the actual set value as comms_uart_baudrate_.
                 comms_uart_baudrate_ = uart_set_baudrate(config_.comms_uart_handle, baudrate);
                 return true;
                 break;
-            case kGNSSUART:
+            case SettingsManager::kGNSSUART:
                 // Save the actual set value as gnss_uart_baudrate_.
                 gnss_uart_baudrate_ = uart_set_baudrate(config_.gnss_uart_handle, baudrate);
                 return true;
@@ -101,14 +80,14 @@ class CommsManager {
      * @param[out] baudrate Reference to uint32_t to fill with retrieved value.
      * @retval True if baudrate retrieval succeeded, false if iface does not support a baudrate.
      */
-    bool GetBaudrate(SerialInterface iface, uint32_t &baudrate) {
+    bool GetBaudrate(SettingsManager::SerialInterface iface, uint32_t &baudrate) {
         switch (iface) {
-            case kCommsUART:
+            case SettingsManager::kCommsUART:
                 // Save the actual set value as comms_uart_baudrate_.
                 baudrate = comms_uart_baudrate_;
                 return true;
                 break;
-            case kGNSSUART:
+            case SettingsManager::kGNSSUART:
                 // Save the actual set value as gnss_uart_baudrate_.
                 baudrate = gnss_uart_baudrate_;
                 return true;
@@ -125,7 +104,7 @@ class CommsManager {
      * @param[in] protocol Reporting protocol to set on iface.
      * @retval True if succeeded, false otherwise.
      */
-    bool SetReportingProtocol(SerialInterface iface, ReportingProtocol protocol) {
+    bool SetReportingProtocol(SettingsManager::SerialInterface iface, SettingsManager::ReportingProtocol protocol) {
         reporting_protocols_[iface] = protocol;
         return true;
     }
@@ -136,7 +115,7 @@ class CommsManager {
      * @param[out] protocol reference to ReportingProtocol to fill with result.
      * @retval True if reportig protocol could be retrieved, false otherwise.
      */
-    bool GetReportingProtocol(SerialInterface iface, ReportingProtocol &protocol) {
+    bool GetReportingProtocol(SettingsManager::SerialInterface iface, SettingsManager::ReportingProtocol &protocol) {
         protocol = reporting_protocols_[iface];
         return true;
     }
@@ -150,12 +129,13 @@ class CommsManager {
     bool SetWiFiEnabled(bool new_wifi_enabled);
 
     // Public console settings.
-    LogLevel console_verbosity = LogLevel::kInfo;  // Start with highest verbosity by default.
+    SettingsManager::LogLevel console_verbosity =
+        SettingsManager::LogLevel::kInfo;  // Start with highest verbosity by default.
     uint32_t last_report_timestamp_ms = 0;
 
     // Public WiFi Settings
-    char wifi_ssid[kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
-    char wifi_password[kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
+    char wifi_ssid[SettingsManager::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
+    char wifi_password[SettingsManager::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
 
     // MAVLINK settings.
     uint32_t mavlink_reporting_interval_ms = 1000;
@@ -180,7 +160,7 @@ class CommsManager {
      * within MAVLINK. Shhhhhhh it's fine for now.
      * @retval True if successful, false if something went sideways.
      */
-    bool ReportMAVLINK(SerialInterface iface);
+    bool ReportMAVLINK(SettingsManager::SerialInterface iface);
 
     CommsManagerConfig config_;
 
@@ -188,16 +168,20 @@ class CommsManager {
     CppAT at_parser_;
 
     // Reporting Settings
-    uint32_t comms_uart_baudrate_ = kDefaultCommsUARTBaudrate;
-    uint32_t gnss_uart_baudrate_ = kDefaultGNSSUARTBaudrate;
-    ReportingProtocol reporting_protocols_[SerialInterface::kNumSerialInterfaces - 1] = {
-        ReportingProtocol::kNoReports, ReportingProtocol::kMAVLINK1};  // GNSS_UART not included.
+    uint32_t comms_uart_baudrate_ = SettingsManager::kDefaultCommsUARTBaudrate;
+    uint32_t gnss_uart_baudrate_ = SettingsManager::kDefaultGNSSUARTBaudrate;
+    SettingsManager::ReportingProtocol
+        reporting_protocols_[SettingsManager::SerialInterface::kNumSerialInterfaces - 1] = {
+            SettingsManager::ReportingProtocol::kNoReports,
+            SettingsManager::ReportingProtocol::kMAVLINK1};  // GNSS_UART not included.
 
     // private WiFi Settings
     bool wifi_enabled_ = false;
 };
 
 extern CommsManager comms_manager;
+extern const CppAT::ATCommandDef_t at_command_list[];  // Initialized in comms_at.cc
+extern const uint16_t at_command_list_num_commands;
 
 #define TEXT_COLOR_RED              "\033[31m"
 #define TEXT_COLOR_GREEN            "\033[32m"
@@ -218,13 +202,13 @@ extern CommsManager comms_manager;
 #define TEXT_COLOR_RESET            "\033[0m"
 
 #define CONSOLE_PRINTF(format, ...) comms_manager.console_printf(format __VA_OPT__(, ) __VA_ARGS__);
-#define CONSOLE_LOG(format, ...) \
-    comms_manager.console_level_printf(CommsManager::LogLevel::kInfo, format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
-#define CONSOLE_WARNING(format, ...)                                      \
-    comms_manager.console_level_printf(CommsManager::LogLevel::kWarnings, \
+#define CONSOLE_INFO(format, ...) \
+    comms_manager.console_level_printf(SettingsManager::LogLevel::kInfo, format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
+#define CONSOLE_WARNING(format, ...)                                         \
+    comms_manager.console_level_printf(SettingsManager::LogLevel::kWarnings, \
                                        TEXT_COLOR_YELLOW format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) __VA_ARGS__);
-#define CONSOLE_ERROR(format, ...)                                      \
-    comms_manager.console_level_printf(CommsManager::LogLevel::kErrors, \
+#define CONSOLE_ERROR(format, ...)                                         \
+    comms_manager.console_level_printf(SettingsManager::LogLevel::kErrors, \
                                        TEXT_COLOR_RED format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) __VA_ARGS__);
 
 #endif /* COMMS_HH_ */
