@@ -16,9 +16,15 @@ if (NOT CMAKE_BUILD_TYPE STREQUAL "Test")
     project(ads_bee C CXX ASM)
     # Flag indicating that build is for the embedded target. Used to toggle target_source calls.
     set(COMPILED_FOR_TARGET 1)
-    # if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    #     set(PICO_DEOPTIMIZED_DEBUG 1)
-    # endif()
+
+    # Differentiate common code between Pico and ESP32. For code highlighting, add this to the "defines" property of
+    # "configurations" in c_cpp_properties.json.
+    add_compile_definitions(ON_PICO)
+
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        # set(PICO_DEOPTIMIZED_DEBUG 1)
+        add_compile_definitions(HARDWARE_UNIT_TESTS)
+    endif()
 
     # Initialize the SDK
     pico_sdk_init()
@@ -104,10 +110,6 @@ else()
     
 
 endif()
-
-# Differentiate common code between Pico and ESP32. For code highlighting, add this to the "defines" property of
-# "configurations" in c_cpp_properties.json.
-add_compile_definitions(ON_PICO)
 
 # Set parameters for serial flasher.
 # NOTE: These are mirrored in the top level `pico/.vscode/c_cpp_properties.json` for intellisense.

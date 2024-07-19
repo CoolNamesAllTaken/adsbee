@@ -17,26 +17,32 @@ void EEPROM::WaitForSafeReadTime() {
     }
 }
 
-int EEPROM::WriteByte(const uint8_t reg, const uint8_t byte) {
-    uint8_t msg[2];
-    msg[0] = reg;
-    msg[1] = byte;
+int EEPROM::WriteByte(const uint16_t reg, const uint8_t byte) {
+    uint8_t msg[3];
+    msg[0] = reg >> 8;
+    msg[1] = reg & 0xFF;
+    msg[2] = byte;
     WaitForSafeWriteTime();
-    int ret = i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, 2, false, config_.i2c_timeout_us);
+    int ret =
+        i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, sizeof(msg), false, config_.i2c_timeout_us);
     if (ret < 0) CONSOLE_ERROR("EEPROM::WriteByte: Write to register 0x%d failed with code %d.", reg, ret);
     return ret;
 }
 
-int EEPROM::ReadByte(const uint8_t reg, uint8_t &byte) {
+int EEPROM::ReadByte(const uint16_t reg, uint8_t &byte) {
     // Write address to read from.
     WaitForSafeReadTime();
-    int status = i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, &reg, 1, true, config_.i2c_timeout_us);
+    uint8_t msg[2];
+    msg[0] = reg >> 8;
+    msg[1] = reg & 0xFF;
+    int status =
+        i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, sizeof(msg), true, config_.i2c_timeout_us);
     if (status < 0) return status;
     // Read reply and put it into byte.
     return i2c_read_timeout_us(config_.i2c_handle, config_.i2c_addr, &byte, 1, false, config_.i2c_timeout_us);
 }
 
-int EEPROM::WriteBuf(const uint8_t reg, uint8_t *buf, const uint16_t num_bytes) {
+int EEPROM::WriteBuf(const uint16_t reg, uint8_t *buf, const uint16_t num_bytes) {
     // Check to make sure caller is sending 1 or more bytes
     if (num_bytes < 1) {
         return 0;
@@ -47,19 +53,20 @@ int EEPROM::WriteBuf(const uint8_t reg, uint8_t *buf, const uint16_t num_bytes) 
         return PICO_ERROR_INVALID_ARG;
     }
 
-    uint8_t write_reg = reg;
+    uint16_t write_reg = reg;
     while (write_reg < reg + num_bytes) {
         uint8_t num_bytes_written = write_reg - reg;
         uint8_t page_bytes_remaining = config_.page_size_bytes - (write_reg % config_.page_size_bytes);
         uint8_t write_num_bytes = MIN(page_bytes_remaining, num_bytes - num_bytes_written);
-        uint8_t msg[write_num_bytes + 1];  // Add a spot for the address.
-        msg[0] = write_reg;
+        uint8_t msg[write_num_bytes + 2];  // Add a spot for the address.
+        msg[0] = write_reg >> 8;
+        msg[1] = write_reg & 0xFF;
         for (uint16_t i = 0; i < write_num_bytes; i++) {
-            msg[i + 1] = buf[num_bytes_written + i];
+            msg[i + 2] = buf[num_bytes_written + i];
         }
         WaitForSafeWriteTime();
-        int status = i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, write_num_bytes + 1, false,
-                                          config_.i2c_timeout_us);
+        int status =
+            i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, sizeof(msg), false, config_.i2c_timeout_us);
         if (status < 0) {
             CONSOLE_ERROR("EEPROM::I2CRegWrite: Write failed at register 0x%x while trying to write %d bytes.",
                           write_reg, write_num_bytes);
@@ -71,7 +78,7 @@ int EEPROM::WriteBuf(const uint8_t reg, uint8_t *buf, const uint16_t num_bytes) 
     return num_bytes;
 }
 
-int EEPROM::ReadBuf(const uint8_t reg, uint8_t *buf, const uint16_t num_bytes) {
+int EEPROM::ReadBuf(const uint16_t reg, uint8_t *buf, const uint16_t num_bytes) {
     int num_bytes_read = 0;
 
     // Check to make sure caller is asking for 1 or more bytes
@@ -86,7 +93,10 @@ int EEPROM::ReadBuf(const uint8_t reg, uint8_t *buf, const uint16_t num_bytes) {
 
     // Read data from register(s) over I2C
     WaitForSafeReadTime();
-    i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, &reg, 1, true, config_.i2c_timeout_us);
+    uint8_t msg[2];
+    msg[0] = reg >> 8;
+    msg[1] = reg & 0xFF;
+    i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, sizeof(msg), true, config_.i2c_timeout_us);
     num_bytes_read =
         i2c_read_timeout_us(config_.i2c_handle, config_.i2c_addr, buf, num_bytes, false, config_.i2c_timeout_us);
 
@@ -121,10 +131,10 @@ void EEPROM::Dump() {
     CONSOLE_PRINTF("\r\n\r\n");
     // Print EEPROM contents.
     for (uint16_t page = 0; page < config_.size_bytes / config_.page_size_bytes; page++) {
-        uint8_t page_start = page * config_.page_size_bytes;
+        uint16_t page_start = page * config_.page_size_bytes;
         CONSOLE_PRINTF("\t%02x:", page_start);
         for (uint16_t i = 0; i < config_.page_size_bytes; i++) {
-            uint8_t byte_addr = page_start + i;
+            uint16_t byte_addr = page_start + i;
             uint8_t byte;
             int status = ReadByte(byte_addr, byte);
             if (status < 0) {
