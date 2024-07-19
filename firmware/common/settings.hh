@@ -6,9 +6,9 @@
 class SettingsManager
 {
 public:
-    static const int kDefaultTLHiMV = 3000; // [mV]
-    static const int kDefaultTLLoMV = 2000; // [mV]
-    static const int kDefaultRxGain = 50;   // [unitless]
+    static const int kDefaultTLHiMV = 400; // [mV]
+    static const int kDefaultTLLoMV = 200; // [mV]
+    static const int kDefaultRxGain = 5;   // [unitless]
 
     // NOTE: Length does not include null terminator.
     static const uint16_t kWiFiSSIDMaxLen = 32;

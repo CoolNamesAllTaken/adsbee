@@ -5,7 +5,7 @@
 
 const char SettingsManager::ConsoleLogLevelStrs[SettingsManager::LogLevel::kNumLogLevels]
                                                [SettingsManager::kConsoleLogLevelStrMaxLen] = {"SILENT", "ERRORS",
-                                                                                               "WARNINGS", "LOGS"};
+                                                                                               "WARNINGS", "INFO"};
 const char SettingsManager::SerialInterfaceStrs[SettingsManager::SerialInterface::kNumSerialInterfaces]
                                                [SettingsManager::kSerialInterfaceStrMaxLen] = {"CONSOLE", "COMMS_UART",
                                                                                                "GNSS_UART"};

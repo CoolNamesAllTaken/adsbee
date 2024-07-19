@@ -365,16 +365,17 @@ const CppAT::ATCommandDef_t at_command_list[] = {
     {.command_buf = "+RX_GAIN",
      .min_args = 0,
      .max_args = 1,
-     .help_string_buf = "Set value of Rx Gain Digipot.\r\n\t"
-                        "AT+RX_GAIN=<rx_gain>\r\n\tAT+RX_GAIN?\r\n\t+RX_GAIN=<rx_gain>.",
+     .help_string_buf =
+         "Set or query value of Rx Gain Digipot.\r\n\t"
+         "AT+RX_GAIN=<rx_gain>\r\n\tAT+RX_GAIN?\r\n\t+RX_GAIN=<rx_gain_commanded>(<Actual rx_gain_actual>).",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxGainCallback, comms_manager)
 
     },
     {.command_buf = "+SETTINGS",
      .min_args = 0,
      .max_args = 3,
-     .help_string_buf = "Load or save nonvolatile settings.\r\n\tAT+SETTINGS=<op>\r\n\t<op> = LOAD SAVE\r\n"
-                        "\tDisplay nonvolatile settings.\r\n\tAT+SETTINGS?\r\n\t+SETTINGS=...\r\n\t",
+     .help_string_buf = "Load, save, or reset nonvolatile settings.\r\n\tAT+SETTINGS=<op [LOAD SAVE RESET]>\r\n\t"
+                        "Display nonvolatile settings.\r\n\tAT+SETTINGS?\r\n\t+SETTINGS=...\r\n\t",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSettingsCallback, comms_manager)},
 #ifdef HARDWARE_UNIT_TESTS
     {.command_buf = "+TEST",
