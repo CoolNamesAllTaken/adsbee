@@ -18,6 +18,8 @@
 #include "driver/spi_slave.h"
 #include "driver/gpio.h"
 
+#include "esp_timer.h"
+
 /*
 SPI receiver (slave) example.
 
@@ -40,6 +42,9 @@ const gpio_num_t kCSGPIOPin = GPIO_NUM_15;
 const gpio_num_t kHandshakeGPIOPin = GPIO_NUM_0;
 const spi_host_device_t kSPIHost = SPI2_HOST; // HSPI
 
+const gpio_num_t kESPLEDPin = GPIO_NUM_5;
+const uint32_t kESPLEDBlinkHalfPeriodMs = 1000;
+
 // Called after a transaction is queued and ready for pickup by master. We use this to set the handshake line high.
 void my_post_setup_cb(spi_slave_transaction_t *trans)
 {
@@ -55,6 +60,23 @@ void my_post_trans_cb(spi_slave_transaction_t *trans)
 // Main application
 extern "C" void app_main(void)
 {
+    gpio_set_direction(kESPLEDPin, GPIO_MODE_OUTPUT);
+    bool esp_led_on = true;
+    gpio_set_level(kESPLEDPin, esp_led_on);
+    uint32_t last_esp_led_blink_timestamp_ms = esp_timer_get_time() / 1000;
+
+    while (1)
+    {
+        uint32_t timestamp_ms = esp_timer_get_time() / 1e3;
+        if (timestamp_ms > last_esp_led_blink_timestamp_ms + kESPLEDBlinkHalfPeriodMs)
+        {
+            ESP_LOGI("app_main", "Blink!");
+            esp_led_on = !esp_led_on;
+            gpio_set_level(kESPLEDPin, esp_led_on);
+            last_esp_led_blink_timestamp_ms = timestamp_ms;
+        }
+    }
+
     int n = 0;
     esp_err_t ret;
 
@@ -100,8 +122,22 @@ extern "C" void app_main(void)
     spi_slave_transaction_t t;
     memset(&t, 0, sizeof(t));
 
+    // gpio_set_direction(kESPLEDPin, GPIO_MODE_OUTPUT);
+    // bool esp_led_on = true;
+    // gpio_set_level(kESPLEDPin, esp_led_on);
+    // uint32_t last_esp_led_blink_timestamp_ms = esp_timer_get_time() / 1000;
+
     while (1)
     {
+        // uint32_t timestamp_ms = esp_timer_get_time() / 1e3;
+        // if (timestamp_ms > last_esp_led_blink_timestamp_ms + kESPLEDBlinkHalfPeriodMs)
+        // {
+        //     ESP_LOGI("app_main", "Blink!");
+        //     esp_led_on = !esp_led_on;
+        //     gpio_set_level(kESPLEDPin, esp_led_on);
+        //     last_esp_led_blink_timestamp_ms = timestamp_ms;
+        // }
+
         // Clear receive buffer, set send buffer to something sane
         memset(recvbuf, 0xA5, 129);
         sprintf(sendbuf, "This is the receiver, sending data for transmission number %04d.", n);
