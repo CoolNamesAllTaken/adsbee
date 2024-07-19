@@ -20,5 +20,5 @@ buildType:
       buildType: RelWithDebInfo
     test:
       short: Test
-      long: Cross-compiled unit testing.
+      long: Compile for unit testing on host.
       buildType: Test

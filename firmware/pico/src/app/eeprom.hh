@@ -88,8 +88,8 @@ class EEPROM {
         return true;
     }
 
-    int WriteByte(const uint8_t reg, const uint8_t byte);
-    int ReadByte(const uint8_t reg, uint8_t &byte);
+    int WriteByte(const uint16_t reg, const uint8_t byte);
+    int ReadByte(const uint16_t reg, uint8_t &byte);
 
     /** I2C helper function that writes 1 byte to the specified register.
      * @param[in] reg Register address (on the device) to write to.
@@ -98,14 +98,14 @@ class EEPROM {
      * @retval Number of bytes that were written, or an error code. Should be equal to num_bytes+1 (includes 1-Byte
      * Address).
      */
-    int WriteBuf(const uint8_t reg, uint8_t *buf, const uint16_t nbytes);
+    int WriteBuf(const uint16_t reg, uint8_t *buf, const uint16_t nbytes);
 
     /** Read byte(s) from the specified register. If num_bytes > 1, read from consecutive registers.
      * @param[in] reg Register address (on the device) to read from.
      * @param[in] buf Byte buffer to read into from the given address.
      * @param[in] num_bytes Number of bytes to read from the device.
      */
-    int ReadBuf(const uint8_t reg, uint8_t *buf, const uint16_t nbytes);
+    int ReadBuf(const uint16_t reg, uint8_t *buf, const uint16_t nbytes);
 
     void Dump();
 

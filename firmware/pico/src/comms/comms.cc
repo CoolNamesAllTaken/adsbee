@@ -182,6 +182,7 @@ bool CommsManager::SetWiFiEnabled(bool new_wifi_enabled) {
 
             // TODO: Enable the rest of the ESP32 SPI GPIO pins here.
 
+            gpio_init(config_.esp32_enable_pin);
             gpio_set_dir(config_.esp32_enable_pin, GPIO_OUT);
             gpio_put(config_.esp32_enable_pin, 1);  // Enable
 

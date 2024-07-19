@@ -20,7 +20,7 @@ class CommsManager {
         uint16_t uart_timeout_us = 0;  // Time to wait for a character if there isn't one alredy available.
 
         uint16_t esp32_enable_pin = 14;
-        uint16_t esp32_gpio0_boot_pin = 11;
+        uint16_t esp32_gpio0_boot_pin = 13;
         uint16_t esp32_mosi_pin = 8;
         uint16_t esp32_miso_pin = 9;
         uint16_t esp32_clk_pin = 7;
