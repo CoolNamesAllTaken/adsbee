@@ -1,0 +1,21 @@
+Circuit: * C:\git-checkouts\ads-bee\ltspice\Draft1.asc
+
+.OP point found by inspection.
+
+Date: Thu Jul 04 17:36:21 2024
+Total elapsed time: 0.374 seconds.
+
+tnom = 27
+temp = 27
+method = modified trap
+totiter = 30606
+traniter = 30606
+tranpoints = 15304
+accept = 13842
+rejected = 1462
+matrix size = 7
+fillins = 0
+solver = Normal
+Matrix Compiler1:      11 opcodes  0.0/[0.0]/0.0
+Matrix Compiler2:      35 opcodes  0.1/[0.0]/0.1
+

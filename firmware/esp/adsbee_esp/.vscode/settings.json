@@ -1,12 +1,12 @@
 {
   "C_Cpp.intelliSenseEngine": "default",
-  "idf.adapterTargetName": "esp32",
+  "idf.adapterTargetName": "esp32s3",
   "idf.openOcdConfigs": [
     "interface/ftdi/esp32_devkitj_v1.cfg",
-    "target/esp32.cfg"
+    "target/esp32s3.cfg"
   ],
   "idf.flashType": "UART",
-  "idf.portWin": "COM8",
+  "idf.portWin": "COM28",
   // "idf.flashBaudRate": "230400",
   "terminal.integrated.defaultProfile.windows": "Command Prompt",
   "files.associations": {
