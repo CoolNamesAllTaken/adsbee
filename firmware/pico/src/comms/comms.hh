@@ -133,6 +133,11 @@ class CommsManager {
         SettingsManager::LogLevel::kInfo;  // Start with highest verbosity by default.
     uint32_t last_report_timestamp_ms = 0;
 
+    // Queue for storing transponder packets before they get reported.
+    PFBQueue<TransponderPacket> transponder_packet_reporting_queue =
+        PFBQueue<TransponderPacket>({.buf_len_num_elements = ADSBee::kMaxNumTransponderPackets,
+                                     .buffer = transponder_packet_reporting_queue_buffer_});
+
     // Public WiFi Settings
     char wifi_ssid[SettingsManager::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
     char wifi_password[SettingsManager::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
@@ -151,6 +156,17 @@ class CommsManager {
     bool InitReporting();
     bool UpdateReporting();
 
+    bool ReportRaw(SettingsManager::SerialInterface iface);
+
+    /**
+     * Sends out Mode S Beast formatted transponder data on the selected serial interface. Reports all transponder
+     * packets received since the last time that UpdateReporting() was called. Utilizes the CommsManager's built-in
+     * transponder_packet_reporting_queue.
+     * @param[in] iface SerialInterface to broadcase Mode S Beast messages on.
+     * @retval True if successful, false if something broke.
+     */
+    bool ReportBeast(SettingsManager::SerialInterface iface);
+
     /**
      * Sends a series of MAVLINK ADSB_VEHICLE messages on the selected serial interface, one for each tracked aircraft
      * in the aircraft dictionary, plus a MAVLINK MESSAGE_INTERVAL message used as a delimiter at the end of the train
@@ -166,6 +182,9 @@ class CommsManager {
 
     // Console Settings
     CppAT at_parser_;
+
+    // Queue for holding new transponder packets before they get reported.
+    TransponderPacket transponder_packet_reporting_queue_buffer_[ADSBee::kMaxNumTransponderPackets];
 
     // Reporting Settings
     uint32_t comms_uart_baudrate_ = SettingsManager::kDefaultCommsUARTBaudrate;

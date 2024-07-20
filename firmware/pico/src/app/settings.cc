@@ -11,7 +11,7 @@ const char SettingsManager::SerialInterfaceStrs[SettingsManager::SerialInterface
                                                                                                "GNSS_UART"};
 const char SettingsManager::ReportingProtocolStrs[SettingsManager::ReportingProtocol::kNumProtocols]
                                                  [SettingsManager::kReportingProtocolStrMaxLen] = {
-                                                     "NONE", "RAW", "RAW_VALIDATED", "MAVLINK1", "MAVLINK2", "GDL90"};
+                                                     "NONE", "RAW", "BEAST", "CSBEE", "MAVLINK1", "MAVLINK2", "GDL90"};
 
 bool SettingsManager::Load() {
     if (!eeprom.Load(settings)) {

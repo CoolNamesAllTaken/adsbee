@@ -67,15 +67,22 @@ int main() {
             }
 
             if (packet.IsValid()) {
+                // 112-bit (extended squitter) packets. If the packet can be validated via CRC, it's Mode S.
                 ads_bee.FlashStatusLED();
+
                 CONSOLE_INFO("\tdf=%d icao_address=0x%06x", packet.GetDownlinkFormat(), packet.GetICAOAddress());
+                comms_manager.transponder_packet_reporting_queue.Push(packet);
+
                 ads_bee.aircraft_dictionary.IngestADSBPacket(ADSBPacket(packet));
                 CONSOLE_INFO("\taircraft_dictionary: %d aircraft", ads_bee.aircraft_dictionary.GetNumAircraft());
             } else if (packet.GetPacketBufferLenBits() == TransponderPacket::kSquitterPacketNumBits) {
-                // Marked invalid because CRC could not be confirmed. See if it's in the ICAO dictionary!
+                // CRC is overlaid with ICAO address for 56-bit (squitter) packets. Check ICAO against aircraft in the
+                // dictionary to validate the CRC.
                 if (ads_bee.aircraft_dictionary.ContainsAircraft(packet.GetICAOAddress())) {
                     ads_bee.FlashStatusLED();
                     CONSOLE_INFO("\tdf=%d icao_address=0x%06x", packet.GetDownlinkFormat(), packet.GetICAOAddress());
+                    comms_manager.transponder_packet_reporting_queue.Push(packet);
+                    // TODO: Add squitter packet support to aircraft dictionary.
                 }
             }
         }

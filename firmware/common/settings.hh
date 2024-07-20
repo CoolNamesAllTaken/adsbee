@@ -44,7 +44,8 @@ public:
     {
         kNoReports = 0,
         kRaw,
-        kRawValidated,
+        kBeast,
+        kCSBee,
         kMAVLINK1,
         kMAVLINK2,
         kGDL90,

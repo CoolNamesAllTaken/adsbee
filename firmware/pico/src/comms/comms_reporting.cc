@@ -9,36 +9,51 @@ extern ADSBee ads_bee;
 bool CommsManager::InitReporting() { return true; }
 
 bool CommsManager::UpdateReporting() {
+    bool ret = true;
     uint32_t timestamp_ms = get_time_since_boot_ms();
-    for (uint16_t iface = 0; iface < SettingsManager::SerialInterface::kGNSSUART; iface++) {
-        switch (reporting_protocols_[iface]) {
+    for (uint16_t i = 0; i < SettingsManager::SerialInterface::kGNSSUART; i++) {
+        SettingsManager::SerialInterface iface = static_cast<SettingsManager::SerialInterface>(i);
+        switch (reporting_protocols_[i]) {
             case SettingsManager::kNoReports:
                 break;
             case SettingsManager::kRaw:
+                ret = ReportRaw(iface);
                 break;
-            case SettingsManager::kRawValidated:
+            case SettingsManager::kBeast:
+                ret = ReportBeast(iface);
+                break;
+            case SettingsManager::kCSBee:
+                CONSOLE_WARNING("Protocol CSBee specified on interface %d but is not yet supported.", i);
+                ret = false;
                 break;
             case SettingsManager::kMAVLINK1:
             case SettingsManager::kMAVLINK2:
-                if (timestamp_ms - last_report_timestamp_ms < mavlink_reporting_interval_ms) {
-                    return true;  // No update required.
+                if (timestamp_ms - last_report_timestamp_ms >= mavlink_reporting_interval_ms) {
+                    ret = ReportMAVLINK(iface);
+                    last_report_timestamp_ms = timestamp_ms;
                 }
-                ReportMAVLINK(static_cast<SettingsManager::SerialInterface>(iface));
-                last_report_timestamp_ms = timestamp_ms;
                 break;
             case SettingsManager::kGDL90:
                 // Currently not supported.
+                CONSOLE_WARNING("Protocol GDL90 specified on interface %d but is not yet supported.", i);
+                ret = false;
                 break;
             case SettingsManager::kNumProtocols:
             default:
-                CONSOLE_WARNING("Invalid reporting protocol %d specified for interface %d.",
-                                reporting_protocols_[iface], iface);
-                return false;
+                CONSOLE_WARNING("Invalid reporting protocol %d specified for interface %d.", reporting_protocols_[i],
+                                i);
+                ret = false;
                 break;
         }
     }
-    return true;
+
+    // Clear out the transponder packet reporting queue.
+    transponder_packet_reporting_queue.Clear();
+
+    return ret;
 }
+
+bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface) {}
 
 uint8_t AircraftAirframeTypeToMAVLINKEmitterType(Aircraft::AirframeType airframe_type) {
     switch (airframe_type) {
