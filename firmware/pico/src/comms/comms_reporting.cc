@@ -11,6 +11,14 @@ bool CommsManager::InitReporting() { return true; }
 bool CommsManager::UpdateReporting() {
     bool ret = true;
     uint32_t timestamp_ms = get_time_since_boot_ms();
+
+    TransponderPacket packets_to_report[ADSBee::kMaxNumTransponderPackets];
+    uint16_t num_packets_to_report = 0;
+    while (transponder_packet_reporting_queue.Pop(packets_to_report[num_packets_to_report])) {
+        num_packets_to_report++;
+    }
+    // TODO: forward packets_to_report to coprocessor over SPI.
+
     for (uint16_t i = 0; i < SettingsManager::SerialInterface::kGNSSUART; i++) {
         SettingsManager::SerialInterface iface = static_cast<SettingsManager::SerialInterface>(i);
         switch (reporting_protocols_[i]) {
@@ -47,13 +55,12 @@ bool CommsManager::UpdateReporting() {
         }
     }
 
-    // Clear out the transponder packet reporting queue.
-    transponder_packet_reporting_queue.Clear();
-
     return ret;
 }
 
-bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface) {}
+bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface) { return true; }
+
+bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface) { return true; }
 
 uint8_t AircraftAirframeTypeToMAVLINKEmitterType(Aircraft::AirframeType airframe_type) {
     switch (airframe_type) {

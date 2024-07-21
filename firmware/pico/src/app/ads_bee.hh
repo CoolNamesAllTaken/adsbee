@@ -150,6 +150,15 @@ class ADSBee {
      */
     int ReadRxGain();
 
+    /**
+     * Returns the Receive Signal Strength Indicator (RSSI) of the previous message, in dBm.
+     */
+    int GetLastMessageRSSIdBm() {
+        int normalized_rssi_adc_counts = last_message_rssi_adc_counts_ / MAX(rx_gain_, 1);  // Avoid divide by 0.
+        int rssi_mv = normalized_rssi_adc_counts * 3300 / 4095;
+        return 60 * (rssi_mv - 1600) / 1000;  // AD8313 0dBm intercept at 1.6V, slope is 60dBm/V.
+    }
+
     PFBQueue<TransponderPacket> transponder_packet_queue = PFBQueue<TransponderPacket>(
         {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = transponder_packet_queue_buffer_});
 
@@ -179,7 +188,7 @@ class ADSBee {
 
     uint16_t tl_lo_adc_counts_ = 0;
     uint16_t tl_hi_adc_counts_ = 0;
-    uint16_t rssi_adc_counts_ = 0;
+    uint16_t last_message_rssi_adc_counts_ = 0;
 
     uint32_t rx_gain_ = SettingsManager::kDefaultRxGain;
 

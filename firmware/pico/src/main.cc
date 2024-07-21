@@ -59,15 +59,15 @@ int main() {
             uint32_t packet_buffer[TransponderPacket::kMaxPacketLenWords32];
             packet.DumpPacketBuffer(packet_buffer);
             if (packet.GetPacketBufferLenBits() == TransponderPacket::kExtendedSquitterPacketLenBits) {
-                CONSOLE_INFO("New message: 0x%08x|%08x|%08x|%04x RSSI=%d", packet_buffer[0], packet_buffer[1],
-                             packet_buffer[2], (packet_buffer[3]) >> (4 * kBitsPerNibble), packet.GetRSSIDBm());
+                CONSOLE_INFO("New message: 0x%08x|%08x|%08x|%04x RSSI=%ddBm", packet_buffer[0], packet_buffer[1],
+                             packet_buffer[2], (packet_buffer[3]) >> (4 * kBitsPerNibble), packet.GetRSSIdBm());
             } else {
-                CONSOLE_INFO("New message: 0x%08x|%06x RSSI=%d", packet_buffer[0],
-                             (packet_buffer[1]) >> (2 * kBitsPerNibble), packet.GetRSSIDBm());
+                CONSOLE_INFO("New message: 0x%08x|%06x RSSI=%ddBm", packet_buffer[0],
+                             (packet_buffer[1]) >> (2 * kBitsPerNibble), packet.GetRSSIdBm());
             }
 
             if (packet.IsValid()) {
-                // 112-bit (extended squitter) packets. If the packet can be validated via CRC, it's Mode S.
+                // 112-bit (extended squitter) packets. These packets can be validated via CRC.
                 ads_bee.FlashStatusLED();
 
                 CONSOLE_INFO("\tdf=%d icao_address=0x%06x", packet.GetDownlinkFormat(), packet.GetICAOAddress());

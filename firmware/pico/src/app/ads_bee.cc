@@ -161,7 +161,7 @@ void ADSBee::GPIOIRQISR(uint gpio, uint32_t event_mask) {
         // Demodulation period is beginning!
         // Read the RSSI level of the last packet.
         adc_select_input(config_.rssi_hold_adc_input);
-        rssi_adc_counts_ = adc_read();
+        last_message_rssi_adc_counts_ = adc_read();
         // RSSI peak detector will automatically clear when DEMOD pin goes LO.
     }
 }
@@ -193,7 +193,7 @@ void ADSBee::OnDemodComplete() {
                     packet_buffer[last_demod_num_words_ingested_] = ((word >> 1) & 0xFFFFFF) << 8;
                 }
                 TransponderPacket packet =
-                    TransponderPacket(packet_buffer, last_demod_num_words_ingested_ + 1, rssi_adc_counts_);
+                    TransponderPacket(packet_buffer, last_demod_num_words_ingested_ + 1, GetLastMessageRSSIdBm());
                 transponder_packet_queue.Push(packet);
                 last_demod_num_words_ingested_ = 0;
                 break;

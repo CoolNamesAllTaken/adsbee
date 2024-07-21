@@ -64,7 +64,7 @@ public:
 
     bool IsValid() const { return is_valid_; };
 
-    int GetRSSIDBm() { return rssi_dbm_; }
+    int GetRSSIdBm() { return rssi_dbm_; }
     uint16_t GetDownlinkFormat() const { return downlink_format_; };
     uint16_t GetDownlinkFormatString(char str_buf[kMaxDFStrLen]) const;
     DownlinkFormat GetDownlinkFormatEnum();

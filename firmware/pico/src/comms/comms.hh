@@ -1,7 +1,10 @@
 #ifndef COMMS_HH_
 #define COMMS_HH_
 
+// #include "adsb_packet.hh"  // For TransponderPacket.
+#include "ads_bee.hh"
 #include "cpp_at.hh"
+#include "data_structures.hh"  // For PFBQueue.
 #include "hardware/uart.h"
 #include "settings.hh"
 

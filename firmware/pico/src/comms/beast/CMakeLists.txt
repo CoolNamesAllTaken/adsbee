@@ -3,11 +3,15 @@ if(NOT COMPILED_FOR_TARGET)
     target_sources(ads_bee_test PRIVATE
         # comms.cc
     )
+    target_include_directories(${PROJECT_NAME} PRIVATE
+        beast_utils.hh
+    )
 else()
     # Build for embedded target
     target_sources(ads_bee PRIVATE
-        comms_at.cc
-        comms.cc
-        comms_reporting.cc
+        
+    )
+    target_include_directories(${PROJECT_NAME} PRIVATE
+        beast_utils.hh
     )
 endif()

@@ -5,8 +5,6 @@
 
 #include <algorithm> // For std::copy.
 
-#include "comms.hh" // For debug prints.
-
 template <class T>
 class PFBQueue
 {
