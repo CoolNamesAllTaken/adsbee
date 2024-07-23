@@ -1,8 +1,12 @@
 #ifndef MOCK_PIO_H_
 #define MOCK_PIO_H_
 
-typedef struct
-{
+#include <cstdint>
+
+#include "hardware/regs/intctrl.h"
+#include "stdio.h"
+
+typedef struct {
     // Empty and fake.
 } pio_hw_t;
 

@@ -1,4 +1,5 @@
 #include "ads_bee.hh"
+#include "beast_utils.hh"
 #include "comms.hh"
 #include "hal.hh"  // For timestamping.
 #include "mavlink/mavlink.h"
@@ -9,32 +10,68 @@ extern ADSBee ads_bee;
 bool CommsManager::InitReporting() { return true; }
 
 bool CommsManager::UpdateReporting() {
+    bool ret = true;
     uint32_t timestamp_ms = get_time_since_boot_ms();
-    for (uint16_t iface = 0; iface < SettingsManager::SerialInterface::kGNSSUART; iface++) {
-        switch (reporting_protocols_[iface]) {
+
+    TransponderPacket packets_to_report[ADSBee::kMaxNumTransponderPackets];
+    uint16_t num_packets_to_report = 0;
+    while (transponder_packet_reporting_queue.Pop(packets_to_report[num_packets_to_report])) {
+        num_packets_to_report++;
+    }
+    // TODO: forward packets_to_report to coprocessor over SPI.
+
+    for (uint16_t i = 0; i < SettingsManager::SerialInterface::kGNSSUART; i++) {
+        SettingsManager::SerialInterface iface = static_cast<SettingsManager::SerialInterface>(i);
+        switch (reporting_protocols_[i]) {
             case SettingsManager::kNoReports:
                 break;
             case SettingsManager::kRaw:
+                ret = ReportRaw(iface, packets_to_report, num_packets_to_report);
                 break;
-            case SettingsManager::kRawValidated:
+            case SettingsManager::kBeast:
+                ret = ReportBeast(iface, packets_to_report, num_packets_to_report);
+                break;
+            case SettingsManager::kCSBee:
+                CONSOLE_WARNING("Protocol CSBee specified on interface %d but is not yet supported.", i);
+                ret = false;
                 break;
             case SettingsManager::kMAVLINK1:
             case SettingsManager::kMAVLINK2:
-                if (timestamp_ms - last_report_timestamp_ms < mavlink_reporting_interval_ms) {
-                    return true;  // No update required.
+                if (timestamp_ms - last_report_timestamp_ms >= mavlink_reporting_interval_ms) {
+                    ret = ReportMAVLINK(iface);
+                    last_report_timestamp_ms = timestamp_ms;
                 }
-                ReportMAVLINK(static_cast<SettingsManager::SerialInterface>(iface));
-                last_report_timestamp_ms = timestamp_ms;
                 break;
             case SettingsManager::kGDL90:
                 // Currently not supported.
+                CONSOLE_WARNING("Protocol GDL90 specified on interface %d but is not yet supported.", i);
+                ret = false;
                 break;
             case SettingsManager::kNumProtocols:
             default:
-                CONSOLE_WARNING("Invalid reporting protocol %d specified for interface %d.",
-                                reporting_protocols_[iface], iface);
-                return false;
+                CONSOLE_WARNING("Invalid reporting protocol %d specified for interface %d.", reporting_protocols_[i],
+                                i);
+                ret = false;
                 break;
+        }
+    }
+
+    return ret;
+}
+
+bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface, const TransponderPacket packets_to_report[],
+                             uint16_t num_packets_to_report) {
+    return true;
+}
+
+bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface, const TransponderPacket packets_to_report[],
+                               uint16_t num_packets_to_report) {
+    for (uint16_t i = 0; i < num_packets_to_report; i++) {
+        uint8_t beast_frame_buf[kBeastFrameMaxLenBytes];
+        uint16_t num_bytes_in_frame = TransponderPacketToBeastFrame(packets_to_report[i], beast_frame_buf);
+        comms_manager.iface_putc(iface, char(0x1a));  // Send beast escape char to denote beginning of frame.
+        for (uint16_t j = 0; j < num_bytes_in_frame; j++) {
+            comms_manager.iface_putc(iface, char(beast_frame_buf[j]));
         }
     }
     return true;

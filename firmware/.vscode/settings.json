@@ -61,7 +61,6 @@
         "cinttypes": "cpp",
         "typeinfo": "cpp"
     },
-    "cortex-debug.variableUseNaturalFormat": false,
     "cmake.sourceDirectory": "/ads_bee/pico",
     "cmake.buildDirectory": "/ads_bee/pico/build",
     "cmake.ignoreCMakeListsMissing": true,

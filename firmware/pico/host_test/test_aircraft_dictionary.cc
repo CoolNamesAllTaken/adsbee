@@ -260,7 +260,7 @@ TEST(AircraftDictionary, IngestAirbornePositionMessage) {
     auto &aircraft = itr->second;
 
     // Aircraft should exist but not have its location filled out.
-    ASSERT_EQ(aircraft.icao_address, 0xA6147F);
+    ASSERT_EQ(aircraft.icao_address, (uint32_t)0xA6147F);
     EXPECT_FLOAT_EQ(aircraft.latitude_deg, 0.0f);
     EXPECT_FLOAT_EQ(aircraft.longitude_deg, 0.0f);
     EXPECT_EQ(aircraft.surveillance_status, Aircraft::SurveillanceStatus::kSurveillanceStatusNoCondition);

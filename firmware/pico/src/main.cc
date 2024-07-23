@@ -6,11 +6,9 @@
 #include "hal.hh"
 #include "pico/binary_info.h"
 #include "settings.hh"
+#include "unit_conversions.hh"
 
 const char* kSoftwareVersionStr = "0.0.1";
-
-static const uint16_t kBitsPerNibble = 4;
-static const uint16_t kBitsPerByte = 8;
 
 ADSBee::ADSBeeConfig ads_bee_config;
 // Override default config params here.
@@ -59,23 +57,32 @@ int main() {
             uint32_t packet_buffer[TransponderPacket::kMaxPacketLenWords32];
             packet.DumpPacketBuffer(packet_buffer);
             if (packet.GetPacketBufferLenBits() == TransponderPacket::kExtendedSquitterPacketLenBits) {
-                CONSOLE_INFO("New message: 0x%08x|%08x|%08x|%04x RSSI=%d", packet_buffer[0], packet_buffer[1],
-                             packet_buffer[2], (packet_buffer[3]) >> (4 * kBitsPerNibble), packet.GetRSSIDBm());
+                CONSOLE_INFO("New message: 0x%08x|%08x|%08x|%04x RSSI=%ddBm MLAT=%u", packet_buffer[0],
+                             packet_buffer[1], packet_buffer[2], (packet_buffer[3]) >> (4 * kBitsPerNibble),
+                             packet.GetRSSIdBm(), packet.GetMLAT12MHzCounter());
             } else {
-                CONSOLE_INFO("New message: 0x%08x|%06x RSSI=%d", packet_buffer[0],
-                             (packet_buffer[1]) >> (2 * kBitsPerNibble), packet.GetRSSIDBm());
+                CONSOLE_INFO("New message: 0x%08x|%06x RSSI=%ddBm MLAT=%u", packet_buffer[0],
+                             (packet_buffer[1]) >> (2 * kBitsPerNibble), packet.GetRSSIdBm(),
+                             packet.GetMLAT12MHzCounter());
             }
 
             if (packet.IsValid()) {
+                // 112-bit (extended squitter) packets. These packets can be validated via CRC.
                 ads_bee.FlashStatusLED();
+
                 CONSOLE_INFO("\tdf=%d icao_address=0x%06x", packet.GetDownlinkFormat(), packet.GetICAOAddress());
+                comms_manager.transponder_packet_reporting_queue.Push(packet);
+
                 ads_bee.aircraft_dictionary.IngestADSBPacket(ADSBPacket(packet));
                 CONSOLE_INFO("\taircraft_dictionary: %d aircraft", ads_bee.aircraft_dictionary.GetNumAircraft());
             } else if (packet.GetPacketBufferLenBits() == TransponderPacket::kSquitterPacketNumBits) {
-                // Marked invalid because CRC could not be confirmed. See if it's in the ICAO dictionary!
+                // CRC is overlaid with ICAO address for 56-bit (squitter) packets. Check ICAO against aircraft in the
+                // dictionary to validate the CRC.
                 if (ads_bee.aircraft_dictionary.ContainsAircraft(packet.GetICAOAddress())) {
                     ads_bee.FlashStatusLED();
                     CONSOLE_INFO("\tdf=%d icao_address=0x%06x", packet.GetDownlinkFormat(), packet.GetICAOAddress());
+                    comms_manager.transponder_packet_reporting_queue.Push(packet);
+                    // TODO: Add squitter packet support to aircraft dictionary.
                 }
             }
         }

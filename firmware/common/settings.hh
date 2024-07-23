@@ -3,6 +3,8 @@
 
 #include <cstdint>
 
+static const uint32_t kSettingsVersionMagicWord = 0xBEEFBEEF; // Change this when settings format changes!
+
 class SettingsManager
 {
 public:
@@ -44,7 +46,8 @@ public:
     {
         kNoReports = 0,
         kRaw,
-        kRawValidated,
+        kBeast,
+        kCSBee,
         kMAVLINK1,
         kMAVLINK2,
         kGDL90,
@@ -55,7 +58,7 @@ public:
 
     struct Settings
     {
-        uint32_t magic_word = 0xDEADBEEF; // Change this when settings format changes!
+        uint32_t magic_word = kSettingsVersionMagicWord;
 
         // ADSBee settings
         int tl_lo_mv = kDefaultTLLoMV;
@@ -63,6 +66,7 @@ public:
         uint16_t rx_gain = kDefaultRxGain;
 
         // CommunicationsManager settings
+        LogLevel log_level = LogLevel::kInfo; // Start with highest verbosity by default.
         ReportingProtocol reporting_protocols[SerialInterface::kNumSerialInterfaces - 1] = {
             ReportingProtocol::kNoReports, ReportingProtocol::kMAVLINK1};
         uint32_t comms_uart_baud_rate = 115200;

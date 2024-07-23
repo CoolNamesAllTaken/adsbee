@@ -66,7 +66,7 @@ CPP_AT_CALLBACK(CommsManager::ATConsoleVerbosityCallback) {
     switch (op) {
         case '?':
             // AT+CONFIG mode query.
-            CPP_AT_CMD_PRINTF("=%s", SettingsManager::ConsoleLogLevelStrs[console_verbosity]);
+            CPP_AT_CMD_PRINTF("=%s", SettingsManager::ConsoleLogLevelStrs[log_level]);
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
@@ -76,7 +76,7 @@ CPP_AT_CALLBACK(CommsManager::ATConsoleVerbosityCallback) {
             }
             for (uint16_t i = 0; i < SettingsManager::kNumLogLevels; i++) {
                 if (args[0].compare(SettingsManager::ConsoleLogLevelStrs[i]) == 0) {
-                    console_verbosity = static_cast<SettingsManager::LogLevel>(i);
+                    log_level = static_cast<SettingsManager::LogLevel>(i);
                     CPP_AT_SUCCESS();
                 }
             }
@@ -339,7 +339,7 @@ const CppAT::ATCommandDef_t at_command_list[] = {
     {.command_buf = "+LOG_LEVEL",
      .min_args = 0,
      .max_args = 1,
-     .help_string_buf = "AT+LOG_LEVEL=<console_verbosity>\r\n\tSet how much stuff gets printed to the "
+     .help_string_buf = "AT+LOG_LEVEL=<log_level>\r\n\tSet how much stuff gets printed to the "
                         "console.\r\n\tconsole_verbosity = [SILENT ERRORS WARNINGS LOGS]",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATConsoleVerbosityCallback, comms_manager)},
     {.command_buf = "+FLASH_ESP32",

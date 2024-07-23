@@ -1,13 +1,16 @@
 #include "ads_bee.hh"
 
+#include <hardware/structs/systick.h>
 #include <stdio.h>  // for printing
 
 #include "hardware/adc.h"
 #include "hardware/clocks.h"
+#include "hardware/exception.h"
 #include "hardware/gpio.h"
 #include "hardware/pio.h"
 #include "hardware/pwm.h"
 #include "pico/stdlib.h"
+#include "pico/time.h"
 // #include "hardware/dma.h"
 #include "capture.pio.h"
 #include "hal.hh"
@@ -29,6 +32,8 @@ const uint32_t kRxgainDigipotOhmsPerCount = 100e3 / 127;
 ADSBee *isr_access = nullptr;
 
 void on_demod_complete() { isr_access->OnDemodComplete(); }
+
+void on_systick_exception() { isr_access->OnSysTickWrap(); }
 
 void gpio_irq_isr(uint gpio, uint32_t event_mask) { isr_access->GPIOIRQISR(gpio, event_mask); }
 
@@ -85,6 +90,17 @@ bool ADSBee::Init() {
         return false;
     }
 
+    // Enable the MLAT timer using the 24-bit SysTick timer connected to the 12MHz external oscillator.
+    // SysTick Control and Status Register
+    systick_hw->csr = 0b010;  // Source = External Reference Clock, TickInt = Enabled, Counter = Disabled.
+    // SysTick Reload Value Register
+    systick_hw->rvr = 0xFFFFFF;  // Use the full 24 bit span of the timer value register.
+    // 0xFFFFFF = 16777215 counts @ 16MHz = approx. 1.398 seconds.
+    // Call the OnSysTickWrap function every time the SysTick timer hits 0.
+    exception_set_exclusive_handler(SYSTICK_EXCEPTION, on_systick_exception);
+    // Let the games begin!
+    systick_hw->csr |= 0b1;  // Enable the counter.
+
     // Calculate the PIO clock divider.
     float preamble_detector_div = (float)clock_get_hz(clk_sys) / kPreambleDetectorFreq;
 
@@ -92,7 +108,7 @@ bool ADSBee::Init() {
     preamble_detector_program_init(config_.preamble_detector_pio, preamble_detector_sm_, preamble_detector_offset_,
                                    config_.pulses_pin, config_.demod_out_pin, preamble_detector_div);
 
-    // enable the DEMOD interrupt on PIO0_IRQ_0
+    // Enable the DEMOD interrupt on PIO0_IRQ_0.
     pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt0, true);  // state machine 0 IRQ 0
 
     uint demod_in_irq = IO_IRQ_BANK0;
@@ -161,8 +177,10 @@ void ADSBee::GPIOIRQISR(uint gpio, uint32_t event_mask) {
         // Demodulation period is beginning!
         // Read the RSSI level of the last packet.
         adc_select_input(config_.rssi_hold_adc_input);
-        rssi_adc_counts_ = adc_read();
+        last_message_rssi_adc_counts_ = adc_read();
         // RSSI peak detector will automatically clear when DEMOD pin goes LO.
+
+        last_message_mlat_12mhz_counts_ = GetMLAT12MHzCounts();
     }
 }
 
@@ -192,8 +210,8 @@ void ADSBee::OnDemodComplete() {
                     // 56-bit packet: trim off extra bit, mask to 24 bits, left align.
                     packet_buffer[last_demod_num_words_ingested_] = ((word >> 1) & 0xFFFFFF) << 8;
                 }
-                TransponderPacket packet =
-                    TransponderPacket(packet_buffer, last_demod_num_words_ingested_ + 1, rssi_adc_counts_);
+                TransponderPacket packet = TransponderPacket(packet_buffer, last_demod_num_words_ingested_ + 1,
+                                                             GetLastMessageRSSIdBm(), GetLastMessageMLAT12MHzCounts());
                 transponder_packet_queue.Push(packet);
                 last_demod_num_words_ingested_ = 0;
                 break;
@@ -220,6 +238,14 @@ void ADSBee::OnDemodComplete() {
 
     gpio_put(config_.rssi_clear_pin, 1);  // restore RSSI peak detector to working order.
     pio_interrupt_clear(config_.preamble_detector_pio, 0);
+}
+
+void ADSBee::OnSysTickWrap() { mlat_counter_1s_wraps_++; }
+
+uint64_t ADSBee::GetMLAT12MHzCounts() {
+    // Combine the wrap counter with the current value of the SysTick register and mask to 48 bits.
+    // Note: 24-bit SysTick value is subtracted from UINT_24_MAX to make it count up instead of down.
+    return (mlat_counter_1s_wraps_ << 24 | (0xFFFFFF - systick_hw->cvr)) & 0xFFFFFFFFFFFF;
 }
 
 bool ADSBee::SetTLHiMilliVolts(int tl_hi_mv) {

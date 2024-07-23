@@ -6,11 +6,6 @@ if(NOT COMPILED_FOR_TARGET)
 else()
     # Build for embedded target
     target_sources(ads_bee PRIVATE
-        comms_at.cc
-        comms.cc
-        comms_reporting.cc
-    )
-    target_include_directories(${PROJECT_NAME} PRIVATE
-        beast
+        
     )
 endif()

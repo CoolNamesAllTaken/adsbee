@@ -9,4 +9,9 @@ target_sources(${PROJECT_NAME} PRIVATE
     test_platform.cc
     test_spi_coprocessor.cc
     test_unit_conversions.cc
+    test_reporting_beast.cc
+)
+
+target_include_directories(${PROJECT_NAME} PRIVATE
+    mocks
 )
