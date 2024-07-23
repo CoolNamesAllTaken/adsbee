@@ -6,11 +6,9 @@
 #include "hal.hh"
 #include "pico/binary_info.h"
 #include "settings.hh"
+#include "unit_conversions.hh"
 
 const char* kSoftwareVersionStr = "0.0.1";
-
-static const uint16_t kBitsPerNibble = 4;
-static const uint16_t kBitsPerByte = 8;
 
 ADSBee::ADSBeeConfig ads_bee_config;
 // Override default config params here.
@@ -59,11 +57,13 @@ int main() {
             uint32_t packet_buffer[TransponderPacket::kMaxPacketLenWords32];
             packet.DumpPacketBuffer(packet_buffer);
             if (packet.GetPacketBufferLenBits() == TransponderPacket::kExtendedSquitterPacketLenBits) {
-                CONSOLE_INFO("New message: 0x%08x|%08x|%08x|%04x RSSI=%ddBm", packet_buffer[0], packet_buffer[1],
-                             packet_buffer[2], (packet_buffer[3]) >> (4 * kBitsPerNibble), packet.GetRSSIdBm());
+                CONSOLE_INFO("New message: 0x%08x|%08x|%08x|%04x RSSI=%ddBm MLAT=%u", packet_buffer[0],
+                             packet_buffer[1], packet_buffer[2], (packet_buffer[3]) >> (4 * kBitsPerNibble),
+                             packet.GetRSSIdBm(), packet.GetMLAT12MHzCounter());
             } else {
-                CONSOLE_INFO("New message: 0x%08x|%06x RSSI=%ddBm", packet_buffer[0],
-                             (packet_buffer[1]) >> (2 * kBitsPerNibble), packet.GetRSSIdBm());
+                CONSOLE_INFO("New message: 0x%08x|%06x RSSI=%ddBm MLAT=%u", packet_buffer[0],
+                             (packet_buffer[1]) >> (2 * kBitsPerNibble), packet.GetRSSIdBm(),
+                             packet.GetMLAT12MHzCounter());
             }
 
             if (packet.IsValid()) {

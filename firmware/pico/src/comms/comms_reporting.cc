@@ -1,4 +1,5 @@
 #include "ads_bee.hh"
+#include "beast_utils.hh"
 #include "comms.hh"
 #include "hal.hh"  // For timestamping.
 #include "mavlink/mavlink.h"
@@ -25,10 +26,10 @@ bool CommsManager::UpdateReporting() {
             case SettingsManager::kNoReports:
                 break;
             case SettingsManager::kRaw:
-                ret = ReportRaw(iface);
+                ret = ReportRaw(iface, packets_to_report, num_packets_to_report);
                 break;
             case SettingsManager::kBeast:
-                ret = ReportBeast(iface);
+                ret = ReportBeast(iface, packets_to_report, num_packets_to_report);
                 break;
             case SettingsManager::kCSBee:
                 CONSOLE_WARNING("Protocol CSBee specified on interface %d but is not yet supported.", i);
@@ -58,9 +59,23 @@ bool CommsManager::UpdateReporting() {
     return ret;
 }
 
-bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface) { return true; }
+bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface, const TransponderPacket packets_to_report[],
+                             uint16_t num_packets_to_report) {
+    return true;
+}
 
-bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface) { return true; }
+bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface, const TransponderPacket packets_to_report[],
+                               uint16_t num_packets_to_report) {
+    for (uint16_t i = 0; i < num_packets_to_report; i++) {
+        uint8_t beast_frame_buf[kBeastFrameMaxLenBytes];
+        uint16_t num_bytes_in_frame = TransponderPacketToBeastFrame(packets_to_report[i], beast_frame_buf);
+        comms_manager.iface_putc(iface, char(0x1a));  // Send beast escape char to denote beginning of frame.
+        for (uint16_t j = 0; j < num_bytes_in_frame; j++) {
+            comms_manager.iface_putc(iface, char(beast_frame_buf[j]));
+        }
+    }
+    return true;
+}
 
 uint8_t AircraftAirframeTypeToMAVLINKEmitterType(Aircraft::AirframeType airframe_type) {
     switch (airframe_type) {

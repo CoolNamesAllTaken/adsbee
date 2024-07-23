@@ -88,7 +88,7 @@
 			"esp_loader.h": "c",
 			"comms.hh": "c"
 		},
-		"cortex-debug.variableUseNaturalFormat": true,
+		// "cortex-debug.variableUseNaturalFormat": true,
 	},
 	"launch": {
 		"version": "0.2.0",
@@ -128,7 +128,7 @@
 				"name": "(gdb) Launch",
 				"type": "cppdbg",
 				"request": "launch",
-				"program": "${workspaceFolder}/build/ads_bee_test",
+				"program": "${workspaceFolder}/pico/build/ads_bee_test",
 				"args": [],
 				"stopAtEntry": false,
 				"cwd": "${fileDirname}",

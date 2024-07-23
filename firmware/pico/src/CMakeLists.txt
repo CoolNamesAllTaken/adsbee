@@ -9,6 +9,7 @@ if(NOT COMPILED_FOR_TARGET)
         app
         hal
         # Don't share comms headers with unit tests.
+        comms/beast
     )
 else()
     # Build for embedded target

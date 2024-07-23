@@ -159,16 +159,20 @@ class CommsManager {
     bool InitReporting();
     bool UpdateReporting();
 
-    bool ReportRaw(SettingsManager::SerialInterface iface);
+    bool ReportRaw(SettingsManager::SerialInterface iface, const TransponderPacket packets_to_report[],
+                   uint16_t num_packets_to_report);
 
     /**
      * Sends out Mode S Beast formatted transponder data on the selected serial interface. Reports all transponder
-     * packets received since the last time that UpdateReporting() was called. Utilizes the CommsManager's built-in
-     * transponder_packet_reporting_queue.
+     * packets in the provided packets_to_report array, which is used to allow printing arbitrary blocks of transponder
+     * packets received via the CommsManager's built-in transponder_packet_reporting_queue_.
      * @param[in] iface SerialInterface to broadcase Mode S Beast messages on.
+     * @param[in] packets_to_report Array of transponder packets to report.
+     * @param[in] num_packets_to_report Number of packets to report from the packets_to_report array.
      * @retval True if successful, false if something broke.
      */
-    bool ReportBeast(SettingsManager::SerialInterface iface);
+    bool ReportBeast(SettingsManager::SerialInterface iface, const TransponderPacket packets_to_report[],
+                     uint16_t num_packets_to_report);
 
     /**
      * Sends a series of MAVLINK ADSB_VEHICLE messages on the selected serial interface, one for each tracked aircraft

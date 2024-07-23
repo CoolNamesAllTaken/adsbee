@@ -216,3 +216,24 @@ TEST(TransponderPacket, ConstructInvalidShortFrame) {
     TransponderPacket packet = TransponderPacket((char *)"00050219AB8C22");
     EXPECT_FALSE(packet.IsValid());  // Automatically marking all 56-bit packets with unknown ICAO as invalid for now.
 }
+
+TEST(TransponderPacket, DumpPacketBufferBytes) {
+    // Dumping packet buffer to a byte buffer (instead of a 32-bit word buffer) was added after the fact, and its
+    // implementation needs to be checked for accuracy. Nominal packet.
+    uint32_t packet_buffer_words[TransponderPacket::kMaxPacketLenWords32];
+    packet_buffer_words[0] = 0x8D76CE88u;
+    packet_buffer_words[1] = 0x204C9072u;
+    packet_buffer_words[2] = 0xCB48209Au;
+    packet_buffer_words[3] = 0x504D0000u;
+
+    TransponderPacket packet = TransponderPacket(packet_buffer_words, 4);
+
+    uint8_t check_buffer_bytes[TransponderPacket::kMaxPacketLenWords32 * kBytesPerWord];
+    ASSERT_EQ(packet.DumpPacketBuffer(check_buffer_bytes), 112 / kBitsPerByte);
+    for (uint16_t i = 0; i < TransponderPacket::kMaxPacketLenWords32; i++) {
+        EXPECT_EQ(packet_buffer_words[i] >> 24, check_buffer_bytes[i * kBytesPerWord]);
+        EXPECT_EQ((packet_buffer_words[i] >> 16) & 0xFF, check_buffer_bytes[i * kBytesPerWord + 1]);
+        EXPECT_EQ((packet_buffer_words[i] >> 8) & 0xFF, check_buffer_bytes[i * kBytesPerWord + 2]);
+        EXPECT_EQ(packet_buffer_words[i] & 0xFF, check_buffer_bytes[i * kBytesPerWord + 3]);
+    }
+}

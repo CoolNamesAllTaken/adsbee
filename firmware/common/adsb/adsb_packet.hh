@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "buffer_utils.hh"
+#include "unit_conversions.hh"
 
 // Useful resource: https://mode-s.org/decode/content/ads-b/1-basics.html
 
@@ -47,15 +48,17 @@ public:
      * first word being the oldest bit.
      * @param[in] rx_buffer_len_words32 Number of 32-bit words to read from the rx_buffer.
      * @param[in] rssi_dbm RSSI of the packet that was received, in dBm. Defaults to INT32_MIN if not set.
+     * @param[in] mlat_12mhz_counts Counts of a 12MHz clock used for the 6-byte multilateration timestamp.
      */
-    TransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len, int rssi_dbm = INT32_MIN);
+    TransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len, int rssi_dbm = INT32_MIN, uint64_t mlat_12mhz_counts = 0);
 
     /**
      * TransponderPacket constructor from string.
      * @param[in] rx_string String of nibbles as hex characters. Big-endian, MSB (oldest byte) first.
      * @param[in] rssi_dbm RSSI of the packet that was received, in dBm. Defaults to INT32_MIN if not set.
+     * @param[in] mlat_12mhz_counts Counts of a 12MHz clock used for the 6-byte multilateration timestamp.
      */
-    TransponderPacket(char *rx_string, int rssi_dbm = INT32_MIN);
+    TransponderPacket(char *rx_string, int rssi_dbm = INT32_MIN, uint64_t mlat_12mhz_counts = 0); // TODO: add mlat counter units, add to construciton method!
 
     /**
      * Default constructor.
@@ -64,7 +67,8 @@ public:
 
     bool IsValid() const { return is_valid_; };
 
-    int GetRSSIdBm() { return rssi_dbm_; }
+    int GetRSSIdBm() const { return rssi_dbm_; }
+    uint64_t GetMLAT12MHzCounter() const { return mlat_12mhz_counts_; }
     uint16_t GetDownlinkFormat() const { return downlink_format_; };
     uint16_t GetDownlinkFormatString(char str_buf[kMaxDFStrLen]) const;
     DownlinkFormat GetDownlinkFormatEnum();
@@ -77,6 +81,7 @@ public:
      * @retval Number of bytes written to destination buffer.
      */
     uint16_t DumpPacketBuffer(uint32_t to_buffer[kMaxPacketLenWords32]) const;
+    uint16_t DumpPacketBuffer(uint8_t to_buffer[kMaxPacketLenWords32 * kBytesPerWord]) const;
 
     // Exposed for testing only.
     uint32_t Get24BitWordFromPacketBuffer(uint16_t first_bit_index) const
@@ -101,6 +106,7 @@ protected:
     uint32_t icao_address_ = 0;
     uint16_t downlink_format_ = static_cast<uint16_t>(kDownlinkFormatInvalid);
     int rssi_dbm_ = INT32_MIN;
+    uint64_t mlat_12mhz_counts_ = 0;
 
     uint32_t parity_interrogator_id = 0;
 

@@ -6,11 +6,7 @@
 #include "decode_utils.hh"
 #include "hal.hh"
 #include "unit_conversions.hh"
-
-// Conditionally define the MAX macro because the pico platform includes it by default in pico/platform.h.
-#ifndef MAX
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
-#endif
+#include "macros.hh"
 
 const float kRadiansToDegrees = 360.0f / (2.0f * M_PI);
 

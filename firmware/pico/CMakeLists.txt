@@ -61,6 +61,7 @@ if (NOT CMAKE_BUILD_TYPE STREQUAL "Test")
         hardware_adc
         hardware_i2c
         hardware_spi
+        hardware_exception
     )
 
     # Firmware: Create map/bin/hex file etc
