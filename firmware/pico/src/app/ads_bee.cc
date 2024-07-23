@@ -243,7 +243,7 @@ void ADSBee::OnDemodComplete() {
 void ADSBee::OnSysTickWrap() { mlat_counter_1s_wraps_++; }
 
 uint64_t ADSBee::GetMLAT12MHzCounts() {
-    // Combine the wrap counter with the current value of the SysTick register and mask to 24 bits.
+    // Combine the wrap counter with the current value of the SysTick register and mask to 48 bits.
     // Note: 24-bit SysTick value is subtracted from UINT_24_MAX to make it count up instead of down.
     return (mlat_counter_1s_wraps_ << 24 | (0xFFFFFF - systick_hw->cvr)) & 0xFFFFFFFFFFFF;
 }
