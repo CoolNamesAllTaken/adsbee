@@ -61,7 +61,7 @@ bool CommsManager::Update() {
 }
 
 int CommsManager::console_printf(const char *format, ...) {
-    if (console_verbosity == SettingsManager::kSilent) return 0;
+    if (log_level == SettingsManager::kSilent) return 0;
     va_list args;
     va_start(args, format);
     int res = vprintf(format, args);
@@ -70,7 +70,7 @@ int CommsManager::console_printf(const char *format, ...) {
 }
 
 int CommsManager::console_level_printf(SettingsManager::LogLevel level, const char *format, ...) {
-    if (console_verbosity < level) return 0;
+    if (log_level < level) return 0;
     va_list args;
     va_start(args, format);
     int res = vprintf(format, args);

@@ -20,7 +20,7 @@ bool SettingsManager::Load() {
     };
 
     // Reset to defaults if loading from a blank EEPROM.
-    if (settings.magic_word != 0xDEADBEEF) {
+    if (settings.magic_word != kSettingsVersionMagicWord) {
         ResetToDefaults();
         if (!eeprom.Save(settings)) {
             CONSOLE_ERROR("settings.h::Load: Failed to save default settings.");
@@ -37,6 +37,9 @@ bool SettingsManager::Save() {
     settings.rx_gain = ads_bee.GetRxGain();
     settings.tl_lo_mv = ads_bee.GetTLLoMilliVolts();
     settings.tl_hi_mv = ads_bee.GetTLHiMilliVolts();
+
+    // Save log level.
+    settings.log_level = comms_manager.log_level;
 
     // Save reporting protocols.
     comms_manager.GetReportingProtocol(SerialInterface::kCommsUART,
@@ -69,17 +72,20 @@ void SettingsManager::Apply() {
     ads_bee.SetTLHiMilliVolts(settings.tl_hi_mv);
     ads_bee.SetRxGain(settings.rx_gain);
 
-    // Save reporting protocols.
+    // Apply log level.
+    comms_manager.log_level = settings.log_level;
+
+    // Apply reporting protocols.
     comms_manager.SetReportingProtocol(SerialInterface::kCommsUART,
                                        settings.reporting_protocols[SerialInterface::kCommsUART]);
     comms_manager.SetReportingProtocol(SerialInterface::kConsole,
                                        settings.reporting_protocols[SerialInterface::kConsole]);
 
-    // Save baud rates.
+    // Apply baud rates.
     comms_manager.SetBaudrate(SerialInterface::kCommsUART, settings.comms_uart_baud_rate);
     comms_manager.SetBaudrate(SerialInterface::kGNSSUART, settings.gnss_uart_baud_rate);
 
-    // Set WiFi configurations.
+    // Apply WiFi configurations.
     comms_manager.SetWiFiEnabled(settings.wifi_enabled);
     strncpy(comms_manager.wifi_ssid, settings.wifi_ssid, kWiFiSSIDMaxLen);
     comms_manager.wifi_ssid[kWiFiSSIDMaxLen] = '\0';

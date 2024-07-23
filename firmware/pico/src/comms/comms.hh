@@ -132,8 +132,7 @@ class CommsManager {
     bool SetWiFiEnabled(bool new_wifi_enabled);
 
     // Public console settings.
-    SettingsManager::LogLevel console_verbosity =
-        SettingsManager::LogLevel::kInfo;  // Start with highest verbosity by default.
+    SettingsManager::LogLevel log_level = SettingsManager::LogLevel::kInfo;  // Start with highest verbosity by default.
     uint32_t last_report_timestamp_ms = 0;
 
     // Queue for storing transponder packets before they get reported.
