@@ -8,7 +8,6 @@ services:
       - ./common:/ads_bee/common
       - ./modules:/ads_bee/modules
       - ./esp:/ads_bee/esp # Bind the ESP32 directory so that its firmwawre can be packaged into the RP2040 image.
-      - ./pico.code-workspace:/ads_bee/pico.code-workspace
       - .vscode:/ads_bee/.vscode
 
     command: tail -f /dev/null # keep the container running forever

@@ -2,6 +2,15 @@
 	"folders": [
 		{
 			"path": "."
+		},
+		{
+			"path": "../.vscode"
+		},
+		{
+			"path": "../common"
+		},
+		{
+			"path": "../modules"
 		}
 	],
 	"settings": {
