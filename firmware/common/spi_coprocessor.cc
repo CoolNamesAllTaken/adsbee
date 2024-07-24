@@ -1,7 +1,7 @@
 #include "spi_coprocessor.hh"
 #include "buffer_utils.hh"
 
-bool SPICoprocessor::SCPacket::IsValid(uint32_t received_length)
+bool SPICoprocessor::SCMessage::IsValid(uint32_t received_length)
 {
     if (received_length != length)
     {
@@ -14,23 +14,23 @@ bool SPICoprocessor::SCPacket::IsValid(uint32_t received_length)
     return true;
 }
 
-void SPICoprocessor::SCPacket::PopulateCRCAndLength(uint32_t payload_length)
+void SPICoprocessor::SCMessage::PopulateCRCAndLength(uint32_t payload_length)
 {
-    length = payload_length + sizeof(SCPacket);
+    length = payload_length + sizeof(SCMessage);
     // CRC calculation starts after the CRC itself.
-    crc = calculate_crc16((uint8_t *)(&length), payload_length + sizeof(SCPacket) - sizeof(crc));
+    crc = calculate_crc16((uint8_t *)(&length), payload_length + sizeof(SCMessage) - sizeof(crc));
 }
 
-/** SCPacket Constructors **/
+/** SCMessage Constructors **/
 
-SPICoprocessor::SettingsPacket::SettingsPacket(const SettingsManager::Settings &settings_in)
+SPICoprocessor::SettingsMessage::SettingsMessage(const SettingsManager::Settings &settings_in)
 {
     type = kSCPacketTypeSettings;
     settings = settings_in;
-    PopulateCRCAndLength(sizeof(SettingsPacket) - sizeof(SCPacket));
+    PopulateCRCAndLength(sizeof(SettingsMessage) - sizeof(SCMessage));
 }
 
-SPICoprocessor::AircraftListPacket::AircraftListPacket(uint16_t num_aicraft_in, const Aircraft aircraft_list_in[])
+SPICoprocessor::AircraftListMessage::AircraftListMessage(uint16_t num_aicraft_in, const Aircraft aircraft_list_in[])
 {
     type = kSCPacketTypeAircraftList;
     num_aicraft = num_aicraft_in;
@@ -45,7 +45,13 @@ SPICoprocessor::AircraftListPacket::AircraftListPacket(uint16_t num_aicraft_in, 
         aircraft_list[i] = Aircraft();
     }
     // memset(&(aircraft_list[num_aicraft]), 0, sizeof(Aircraft) * (AircraftDictionary::kMaxNumAircraft - num_aicraft));
-    PopulateCRCAndLength(sizeof(AircraftListPacket) - sizeof(SCPacket));
+    PopulateCRCAndLength(sizeof(AircraftListMessage) - sizeof(SCMessage));
+}
+
+SPICoprocessor::TransponderPacketMessage::TransponderPacketMessage(const TransponderPacket &packet_in)
+{
+    packet = packet_in;
+    PopulateCRCAndLength(sizeof(TransponderPacketMessage) - sizeof(SCMessage));
 }
 
 bool SPICoprocessor::Init()
@@ -60,7 +66,7 @@ bool SPICoprocessor::Update()
     return true;
 }
 
-bool SPICoprocessor::SendPacket(const SCPacket &packet)
+bool SPICoprocessor::SendMessage(const SCMessage &message)
 {
 
     return true;

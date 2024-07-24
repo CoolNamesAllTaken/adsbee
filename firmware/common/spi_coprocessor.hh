@@ -35,14 +35,14 @@ public:
         kSCPacketTypeAircraftList
     };
 
-    struct SCPacket
+    struct SCMessage
     {
         uint16_t crc;    // 16-bit CRC of all bytes after the CRC.
         uint32_t length; // Length of the packet in bytes.
         SPICoprocessor::PacketType type;
 
         /**
-         * Checks to see if a SPICoprocessor packet (SCPacket) is valid.
+         * Checks to see if a SPICoprocessor packet (SCMessage) is valid.
          * @param[in] received_length Number of bytes received over SPI.
          * @retval True if packet is valid, false otherwise.
          */
@@ -51,40 +51,53 @@ public:
         /**
          * Sets the packet length and CRC based on the payload. CRC is calculated for everything after the CRC itself.
          * @param[in] payload_length Number of bytes in the payload, which begins right after length for packets that
-         * inherit from SCPacket.
+         * inherit from SCMessage.
          */
         void PopulateCRCAndLength(uint32_t payload_length);
     };
 
-    struct SettingsPacket : public SCPacket
+    struct SettingsMessage : public SCMessage
     {
         SettingsManager::Settings settings;
 
         /**
-         * SettingsPacket constructor. Populates the settings and adds length, packet type, and CRC info to parent.
+         * SettingsMessage constructor. Populates the settings and adds length, packet type, and CRC info to parent.
          * @param[in] settings Reference to a SettingsManager::Settings struct to send over.
          * @retval The constructed Settings Packet.
          */
-        SettingsPacket(const SettingsManager::Settings &settings_in);
+        SettingsMessage(const SettingsManager::Settings &settings_in);
     };
 
-    struct AircraftListPacket : public SCPacket
+    struct AircraftListMessage : public SCMessage
     {
         uint16_t num_aicraft;
         Aircraft aircraft_list[AircraftDictionary::kMaxNumAircraft];
 
         /**
-         * AircraftListPacket constructor. Populates the aircraft list and adds length, packet type, and CRC info to
+         * AircraftListMessage constructor. Populates the aircraft list and adds length, packet type, and CRC info to
          * parent.
          * @param[in] num_aircraft Number of aircraft in the list. Determines the length of the packet.
          * @param[in] aircraft_list Array of Aircraft objects.
-         * @retval The constructed AircraftListPacket.
+         * @retval The constructed AircraftListMessage.
          */
-        AircraftListPacket(uint16_t num_aicraft_in, const Aircraft aircraft_list_in[]);
+        AircraftListMessage(uint16_t num_aicraft_in, const Aircraft aircraft_list_in[]);
+    };
+
+    struct TransponderPacketMessage : public SCMessage
+    {
+        TransponderPacket packet;
+
+        /**
+         * TransponderPacketMessage constructor. Populates the packet to send and adds length, packet type, and CRC info
+         * to parent.
+         * @param[in] packet Reference to transponder packet to use for construction.
+         */
+        TransponderPacketMessage(const TransponderPacket &packet_in);
     };
 
     // NOTE: Pico (leader) and ESP32 (follower) will have different behaviors for these functions.
-    bool Init();
+    bool
+    Init();
     bool Update();
 
     /**
@@ -92,7 +105,7 @@ public:
      * @param[in] packet Reference to the packet that will be transmitted.
      * @retval True if succeeded, false otherwise.
      */
-    bool SendPacket(const SCPacket &packet);
+    bool SendMessage(const SCMessage &message);
 
 private:
     bool SPIInit();
