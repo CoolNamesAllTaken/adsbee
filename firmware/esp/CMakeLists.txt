@@ -4,3 +4,8 @@ cmake_minimum_required(VERSION 3.16)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(adsbee_esp)
+
+# add_subdirectory(../common adsbee_common)
+# target_include_directories(${PROJECT_NAME} PRIVATE
+#     ../common
+# )

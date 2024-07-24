@@ -35,10 +35,10 @@ sending a transaction. As soon as the transaction is done, the line gets set low
 /*
 Pins in use. The SPI Master can use the GPIO mux, so feel free to change these if needed.
 */
-const gpio_num_t kMOSIGPIOPin = GPIO_NUM_12;
+const gpio_num_t kMOSIGPIOPin = GPIO_NUM_14;
 const gpio_num_t kMISOGPIOPin = GPIO_NUM_13;
-const gpio_num_t kSCLKGPIOPin = GPIO_NUM_14;
-const gpio_num_t kCSGPIOPin = GPIO_NUM_15;
+const gpio_num_t kSCLKGPIOPin = GPIO_NUM_17;
+const gpio_num_t kCSGPIOPin = GPIO_NUM_18;
 const gpio_num_t kHandshakeGPIOPin = GPIO_NUM_0;
 const spi_host_device_t kSPIHost = SPI2_HOST; // HSPI
 
@@ -46,13 +46,13 @@ const gpio_num_t kESPLEDPin = GPIO_NUM_5;
 const uint32_t kESPLEDBlinkHalfPeriodMs = 1000;
 
 // Called after a transaction is queued and ready for pickup by master. We use this to set the handshake line high.
-void my_post_setup_cb(spi_slave_transaction_t *trans)
+void esp_post_setup_cb(spi_slave_transaction_t *trans)
 {
     gpio_set_level(kHandshakeGPIOPin, 1);
 }
 
 // Called after transaction is sent/received. We use this to set the handshake line low.
-void my_post_trans_cb(spi_slave_transaction_t *trans)
+void esp_post_trans_cb(spi_slave_transaction_t *trans)
 {
     gpio_set_level(kHandshakeGPIOPin, 0);
 }
@@ -65,17 +65,19 @@ extern "C" void app_main(void)
     gpio_set_level(kESPLEDPin, esp_led_on);
     uint32_t last_esp_led_blink_timestamp_ms = esp_timer_get_time() / 1000;
 
-    while (1)
-    {
-        uint32_t timestamp_ms = esp_timer_get_time() / 1e3;
-        if (timestamp_ms > last_esp_led_blink_timestamp_ms + kESPLEDBlinkHalfPeriodMs)
-        {
-            ESP_LOGI("app_main", "Blink!");
-            esp_led_on = !esp_led_on;
-            gpio_set_level(kESPLEDPin, esp_led_on);
-            last_esp_led_blink_timestamp_ms = timestamp_ms;
-        }
-    }
+    // while (1)
+    // {
+    //     uint32_t timestamp_ms = esp_timer_get_time() / 1e3;
+    //     if (timestamp_ms > last_esp_led_blink_timestamp_ms + kESPLEDBlinkHalfPeriodMs)
+    //     {
+    //         ESP_LOGI("app_main", "Blink!");
+    //         esp_led_on = !esp_led_on;
+    //         gpio_set_level(kESPLEDPin, esp_led_on);
+    //         last_esp_led_blink_timestamp_ms = timestamp_ms;
+    //     }
+    // }
+    vTaskDelay(kESPLEDBlinkHalfPeriodMs / portTICK_PERIOD_MS);
+    gpio_set_level(kESPLEDPin, 0);
 
     int n = 0;
     esp_err_t ret;
@@ -95,8 +97,8 @@ extern "C" void app_main(void)
         .flags = 0,
         .queue_size = 3,
         .mode = 0,
-        .post_setup_cb = my_post_setup_cb,
-        .post_trans_cb = my_post_trans_cb};
+        .post_setup_cb = esp_post_setup_cb,
+        .post_trans_cb = esp_post_trans_cb};
 
     // Configuration for the handshake line
     gpio_config_t io_conf = {
