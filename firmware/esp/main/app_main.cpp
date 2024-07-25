@@ -35,12 +35,13 @@ sending a transaction. As soon as the transaction is done, the line gets set low
 /*
 Pins in use. The SPI Master can use the GPIO mux, so feel free to change these if needed.
 */
-const gpio_num_t kMOSIGPIOPin = GPIO_NUM_14;
-const gpio_num_t kMISOGPIOPin = GPIO_NUM_13;
-const gpio_num_t kSCLKGPIOPin = GPIO_NUM_17;
-const gpio_num_t kCSGPIOPin = GPIO_NUM_18;
+const gpio_num_t kMOSIGPIOPin = GPIO_NUM_35;
+const gpio_num_t kMISOGPIOPin = GPIO_NUM_36;
+const gpio_num_t kSCLKGPIOPin = GPIO_NUM_34;
+const gpio_num_t kCSGPIOPin = GPIO_NUM_33;
 const gpio_num_t kHandshakeGPIOPin = GPIO_NUM_0;
 const spi_host_device_t kSPIHost = SPI2_HOST; // HSPI
+const uint16_t kBufferSize = 1000;
 
 const gpio_num_t kESPLEDPin = GPIO_NUM_5;
 const uint32_t kESPLEDBlinkHalfPeriodMs = 1000;
@@ -55,6 +56,43 @@ void esp_post_setup_cb(spi_slave_transaction_t *trans)
 void esp_post_trans_cb(spi_slave_transaction_t *trans)
 {
     gpio_set_level(kHandshakeGPIOPin, 0);
+}
+
+void spi_receive_task(void *pvParameters)
+{
+    ESP_LOGI("spi_receive_task", "Started SPI receive task.");
+    // Buffer for received data
+    uint8_t recvbuf[kBufferSize];
+
+    // Transaction structure
+    spi_slave_transaction_t t;
+    memset(&t, 0, sizeof(t));
+
+    // SPI slave transaction configuration
+    t.length = kBufferSize * 8; // Transaction length is in bits
+    t.tx_buffer = NULL;         // We are not sending any data
+    t.rx_buffer = recvbuf;      // Data will be received in this buffer
+
+    while (1)
+    {
+        // Clear the receive buffer
+        memset(recvbuf, 0, sizeof(recvbuf));
+
+        // Wait for a transaction to complete
+        esp_err_t ret = spi_slave_transmit(kSPIHost, &t, portMAX_DELAY);
+        assert(ret == ESP_OK);
+
+        // Print received data
+        printf("Received: ");
+        for (int i = 0; i < kBufferSize; i++)
+        {
+            printf("%02X ", recvbuf[i]);
+        }
+        printf("\n");
+        gpio_set_level(kESPLEDPin, 1);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+        gpio_set_level(kESPLEDPin, 0);
+    }
 }
 
 // Main application
@@ -111,7 +149,7 @@ extern "C" void app_main(void)
     gpio_config(&io_conf);
     // Enable pull-ups on SPI lines so we don't detect rogue pulses when no master is connected.
     gpio_set_pull_mode(kMOSIGPIOPin, GPIO_PULLUP_ONLY);
-    gpio_set_pull_mode(kSCLKGPIOPin, GPIO_PULLUP_ONLY);
+    // gpio_set_pull_mode(kSCLKGPIOPin, GPIO_PULLUP_ONLY);
     gpio_set_pull_mode(kCSGPIOPin, GPIO_PULLUP_ONLY);
 
     // Initialize SPI slave interface
@@ -129,8 +167,12 @@ extern "C" void app_main(void)
     // gpio_set_level(kESPLEDPin, esp_led_on);
     // uint32_t last_esp_led_blink_timestamp_ms = esp_timer_get_time() / 1000;
 
+    xTaskCreate(spi_receive_task, "spi_receive_task", 4096, NULL, 10, NULL);
+
     while (1)
     {
+        ESP_LOGI("app_main", "In app main loop.");
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
         // uint32_t timestamp_ms = esp_timer_get_time() / 1e3;
         // if (timestamp_ms > last_esp_led_blink_timestamp_ms + kESPLEDBlinkHalfPeriodMs)
         // {
@@ -140,25 +182,25 @@ extern "C" void app_main(void)
         //     last_esp_led_blink_timestamp_ms = timestamp_ms;
         // }
 
-        // Clear receive buffer, set send buffer to something sane
-        memset(recvbuf, 0xA5, 129);
-        sprintf(sendbuf, "This is the receiver, sending data for transmission number %04d.", n);
+        // // Clear receive buffer, set send buffer to something sane
+        // memset(recvbuf, 0xA5, 129);
+        // sprintf(sendbuf, "This is the receiver, sending data for transmission number %04d.", n);
 
-        // Set up a transaction of 128 bytes to send/receive
-        t.length = 128 * 8;
-        t.tx_buffer = sendbuf;
-        t.rx_buffer = recvbuf;
-        /* This call enables the SPI slave interface to send/receive to the sendbuf and recvbuf. The transaction is
-        initialized by the SPI master, however, so it will not actually happen until the master starts a hardware transaction
-        by pulling CS low and pulsing the clock etc. In this specific example, we use the handshake line, pulled up by the
-        .post_setup_cb callback that is called as soon as a transaction is ready, to let the master know it is free to transfer
-        data.
-        */
-        ret = spi_slave_transmit(kSPIHost, &t, portMAX_DELAY);
+        // // Set up a transaction of 128 bytes to send/receive
+        // t.length = 128 * 8;
+        // t.tx_buffer = sendbuf;
+        // t.rx_buffer = recvbuf;
+        // /* This call enables the SPI slave interface to send/receive to the sendbuf and recvbuf. The transaction is
+        // initialized by the SPI master, however, so it will not actually happen until the master starts a hardware transaction
+        // by pulling CS low and pulsing the clock etc. In this specific example, we use the handshake line, pulled up by the
+        // .post_setup_cb callback that is called as soon as a transaction is ready, to let the master know it is free to transfer
+        // data.
+        // */
+        // ret = spi_slave_transmit(kSPIHost, &t, portMAX_DELAY);
 
-        // spi_slave_transmit does not return until the master has done a transmission, so by here we have sent our data and
-        // received data from the master. Print it.
-        printf("Received: %s\n", recvbuf);
-        n++;
+        // // spi_slave_transmit does not return until the master has done a transmission, so by here we have sent our data and
+        // // received data from the master. Print it.
+        // printf("Received: %s\n", recvbuf);
+        // n++;
     }
 }

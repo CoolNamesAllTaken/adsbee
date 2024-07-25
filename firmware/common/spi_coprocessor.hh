@@ -18,10 +18,12 @@ public:
     {
         uint32_t clk_rate_hz = 40e6; // 40 MHz
 #ifdef ON_PICO
-        spi_inst_t *spi_handle = spi0;
-        uint16_t spi_clk_pin = 6;
-        uint16_t spi_mosi_pin = 7;
-        uint16_t spi_miso_pin = 8;
+        spi_inst_t *spi_handle = spi1;
+        uint16_t spi_clk_pin = 10;
+        uint16_t spi_mosi_pin = 11;
+        uint16_t spi_miso_pin = 12;
+        uint16_t spi_cs_pin = 9;
+        uint16_t spi_handshake_pin = 13;
 #else
         // TODO: Initialize ESP32 SPI parameters here.
 #endif
@@ -98,6 +100,7 @@ public:
     // NOTE: Pico (leader) and ESP32 (follower) will have different behaviors for these functions.
     bool
     Init();
+    bool DeInit();
     bool Update();
 
     /**
@@ -105,16 +108,21 @@ public:
      * @param[in] packet Reference to the packet that will be transmitted.
      * @retval True if succeeded, false otherwise.
      */
-    bool SendMessage(const SCMessage &message);
+    bool SendMessage(SCMessage &message);
 
 private:
     bool SPIInit();
+    bool SPIDeInit();
     int SPIWriteBlocking(uint8_t *tx_buf, uint32_t length);
     int SPIReadBlocking(uint8_t *rx_buf, uint32_t length);
 
     SPICoprocessorConfig config_;
 };
 
-extern SPICoprocessor spi_coprocessor;
+#ifdef ON_PICO
+extern SPICoprocessor esp32;
+#else
+extern SPICoprocessor pico;
+#endif
 
 #endif /* SPI_COPROCESSOR_HH_ */

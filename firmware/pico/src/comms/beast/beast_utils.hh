@@ -70,12 +70,6 @@ uint16_t TransponderPacketToBeastFrame(const TransponderPacket &packet, uint8_t 
     for (uint16_t i = 0; i < kBeastMLATTimestampNumBytes; i++) {
         mlat_12mhz_counter_buf[i] = (mlat_12mhz_counter >> (kBeastMLATTimestampNumBytes - i - 1) * kBitsPerByte) & 0xFF;
     }
-    // mlat_12mhz_counter_buf[0] = (mlat_12mhz_counter >> 56) & 0xFF;
-    // mlat_12mhz_counter_buf[1] = (mlat_12mhz_counter >> 48) & 0xFF;
-    // mlat_12mhz_counter_buf[2] = (mlat_12mhz_counter >> 40) & 0xFF;
-    // mlat_12mhz_counter_buf[3] = (mlat_12mhz_counter >> 32) & 0xFF;
-    // mlat_12mhz_counter_buf[4] = (mlat_12mhz_counter >> 1) & 0xFF;
-    // mlat_12mhz_counter_buf[5] = mlat_12mhz_counter & 0xFF;
     bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, mlat_12mhz_counter_buf, 6);
 
     // Write RSSI Byte.

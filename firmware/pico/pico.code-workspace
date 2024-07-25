@@ -97,6 +97,7 @@
 			"esp_loader.h": "c",
 			"comms.hh": "c"
 		},
+		"cortex-debug.variableUseNaturalFormat": true,
 		// "cortex-debug.variableUseNaturalFormat": true,
 	},
 	"launch": {
@@ -116,8 +117,8 @@
 			{
 				"name": "Remote Debug",
 				"type": "cortex-debug",
-				"cwd": "${workspaceRoot}",
-				"executable": "/ads_bee/firmware/build/ads_bee.elf",
+				"cwd": "/ads_bee/",
+				"executable": "/ads_bee/pico/build/ads_bee.elf",
 				// "executable": "${command:cmake.launchTargetPath}",
 				"request": "attach",
 				"servertype": "external",

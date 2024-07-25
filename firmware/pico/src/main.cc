@@ -6,6 +6,7 @@
 #include "hal.hh"
 #include "pico/binary_info.h"
 #include "settings.hh"
+#include "spi_coprocessor.hh"
 #include "unit_conversions.hh"
 
 const char* kSoftwareVersionStr = "0.0.1";
@@ -17,6 +18,7 @@ CommsManager comms_manager = CommsManager({});
 ESP32SerialFlasher esp32_flasher = ESP32SerialFlasher({});
 EEPROM eeprom = EEPROM({});
 SettingsManager settings_manager;
+SPICoprocessor esp32 = SPICoprocessor({});
 
 int main() {
     bi_decl(bi_program_description("ADS-Bee ADSB Receiver"));
@@ -32,6 +34,7 @@ int main() {
                                kSoftwareVersionStr);
 
     settings_manager.Load();
+    esp32.Init();
 
     // Add a test aircraft to start.
     // TODO: Remove this.
@@ -47,7 +50,20 @@ int main() {
     test_aircraft.velocity_kts = 200;
     ads_bee.aircraft_dictionary.InsertAircraft(test_aircraft);
 
+    uint16_t esp32_test_packet_interval_ms = 1000;
+    uint32_t esp32_test_packet_last_sent_timestamp_ms = get_time_since_boot_ms();
+
     while (true) {
+        // Send test packet to ESP32.
+        uint32_t esp32_test_packet_timestamp_ms = get_time_since_boot_ms();
+        if (esp32_test_packet_timestamp_ms > esp32_test_packet_last_sent_timestamp_ms + esp32_test_packet_interval_ms) {
+            TransponderPacket test_packet = TransponderPacket("8dac009458b9970f0aa394359da9");
+            SPICoprocessor::TransponderPacketMessage message = SPICoprocessor::TransponderPacketMessage(test_packet);
+            CONSOLE_INFO("Sent ESP32 message.");
+            esp32.SendMessage(message);
+            esp32_test_packet_last_sent_timestamp_ms = esp32_test_packet_timestamp_ms;
+        }
+
         // Loop forever.
         comms_manager.Update();
         ads_bee.Update();

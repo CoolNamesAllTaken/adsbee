@@ -10,6 +10,7 @@
 #include "main.hh"
 #include "pico/stdlib.h"  // for getchar etc
 #include "settings.hh"
+#include "spi_coprocessor.hh"  // For init / de-init before and after flashing ESP32.
 
 #ifdef HARDWARE_UNIT_TESTS
 #include "hardware_unit_tests.hh"
@@ -62,7 +63,7 @@ CPP_AT_CALLBACK(CommsManager::ATBaudrateCallback) {
     CPP_AT_ERROR();  // Should never get here.
 }
 
-CPP_AT_CALLBACK(CommsManager::ATConsoleVerbosityCallback) {
+CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
     switch (op) {
         case '?':
             // AT+CONFIG mode query.
@@ -87,10 +88,18 @@ CPP_AT_CALLBACK(CommsManager::ATConsoleVerbosityCallback) {
 }
 
 CPP_AT_CALLBACK(CommsManager::ATFlashESP32Callback) {
-    if (esp32_flasher.FlashESP32()) {
-        CPP_AT_SUCCESS();
+    if (!esp32.DeInit()) {
+        CPP_AT_ERROR("Error while de-initializing ESP32 before flashing.");
     }
-    CPP_AT_ERROR("Flashing ESP32 failed.");
+    if (!esp32_flasher.FlashESP32()) {
+        CPP_AT_ERROR("Error while flashing ESP32.");
+    }
+    if (!esp32.Init()) {
+        CPP_AT_ERROR("Error while re-initializing ESP32 after flashing.");
+    }
+
+    CONSOLE_INFO("ESP32 successfully flashed.");
+    CPP_AT_SUCCESS();
 }
 
 CPP_AT_CALLBACK(CommsManager::ATProtocolCallback) {
@@ -341,7 +350,7 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .max_args = 1,
      .help_string_buf = "AT+LOG_LEVEL=<log_level>\r\n\tSet how much stuff gets printed to the "
                         "console.\r\n\tconsole_verbosity = [SILENT ERRORS WARNINGS LOGS]",
-     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATConsoleVerbosityCallback, comms_manager)},
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATLogLevelCallback, comms_manager)},
     {.command_buf = "+FLASH_ESP32",
      .min_args = 0,
      .max_args = 0,

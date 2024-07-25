@@ -34,20 +34,6 @@ bool CommsManager::Init() {
     // Don't mess with ESP32 enable / reset GPIOs here, since they need to be toggled by the programmer. Only initialize
     // them if no programming is required. Don't mess with ESP32 wifi pin until we're ready to try firmware updates.
 
-    // Initialize SPI coprocessor.
-    // ESP32 chip select pin.
-    gpio_init(config_.esp32_cs_pin);
-    gpio_set_dir(config_.esp32_cs_pin, GPIO_OUT);
-    gpio_put(config_.esp32_cs_pin, 1);
-    // ESP32 handshake pin.
-    gpio_init(config_.esp32_gpio0_boot_pin);
-    gpio_set_dir(config_.esp32_gpio0_boot_pin, GPIO_IN);
-    // ESP32 SPI pins.
-    gpio_set_function(config_.esp32_clk_pin, GPIO_FUNC_SPI);
-    gpio_set_function(config_.esp32_mosi_pin, GPIO_FUNC_SPI);
-    gpio_set_function(config_.esp32_miso_pin, GPIO_FUNC_SPI);
-    spi_coprocessor.Init();
-
     stdio_init_all();
     stdio_set_translate_crlf(&stdio_usb, false);
 
