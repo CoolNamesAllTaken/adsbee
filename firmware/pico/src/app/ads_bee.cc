@@ -90,12 +90,12 @@ bool ADSBee::Init() {
         return false;
     }
 
-    // Enable the MLAT timer using the 24-bit SysTick timer connected to the 12MHz external oscillator.
+    // Enable the MLAT timer using the 24-bit SysTick timer connected to the 125MHz processor clock.
     // SysTick Control and Status Register
-    systick_hw->csr = 0b010;  // Source = External Reference Clock, TickInt = Enabled, Counter = Disabled.
+    systick_hw->csr = 0b110;  // Source = External Reference Clock, TickInt = Enabled, Counter = Disabled.
     // SysTick Reload Value Register
     systick_hw->rvr = 0xFFFFFF;  // Use the full 24 bit span of the timer value register.
-    // 0xFFFFFF = 16777215 counts @ 16MHz = approx. 1.398 seconds.
+    // 0xFFFFFF = 16777215 counts @ 125MHz = approx. 0.134 seconds.
     // Call the OnSysTickWrap function every time the SysTick timer hits 0.
     exception_set_exclusive_handler(SYSTICK_EXCEPTION, on_systick_exception);
     // Let the games begin!
@@ -177,10 +177,10 @@ void ADSBee::GPIOIRQISR(uint gpio, uint32_t event_mask) {
         // Demodulation period is beginning!
         // Read the RSSI level of the last packet.
         adc_select_input(config_.rssi_hold_adc_input);
-        last_message_rssi_adc_counts_ = adc_read();
+        sampled_rssi_adc_counts_ = adc_read();
         // RSSI peak detector will automatically clear when DEMOD pin goes LO.
 
-        last_message_mlat_12mhz_counts_ = GetMLAT12MHzCounts();
+        sampled_mlat_48mhz_counts_ = GetMLAT48MHzCounts();
     }
 }
 
@@ -195,37 +195,35 @@ void ADSBee::OnDemodComplete() {
                 // Flush the previous word into a packet before beginning to store the new one.
                 // First word out of the FIFO is actually the last word of the previously demodulated message.
                 // Assemble a packet buffer using the items in rx_buffer_.
-                uint32_t packet_buffer[TransponderPacket::kMaxPacketLenWords32];
+                uint32_t packet_buffer[DecodedTransponderPacket::kMaxPacketLenWords32];
                 for (uint16_t i = 0; i < last_demod_num_words_ingested_; i++) {
                     packet_buffer[i] = rx_buffer_[i];
                 }
-                // Trim extra ingested bit off of last word, then left-align.
-                // packet_buffer[last_demod_num_words_ingested_] = (static_cast<uint16_t>(word >> 1)) << 16;
                 // Need to left-align by 16 bits for last word of 112-bit packet, 8 bits for last word of 56-bit
                 // packet.
-                if (last_demod_num_words_ingested_ == TransponderPacket::kExtendedSquitterPacketNumWords32 - 1) {
+                if (last_demod_num_words_ingested_ == DecodedTransponderPacket::kExtendedSquitterPacketNumWords32 - 1) {
                     // 112-bit packet: trim off extra bit, mask to 16 bits, left align.
                     packet_buffer[last_demod_num_words_ingested_] = ((word >> 1) & 0xFFFF) << 16;
                 } else {
                     // 56-bit packet: trim off extra bit, mask to 24 bits, left align.
                     packet_buffer[last_demod_num_words_ingested_] = ((word >> 1) & 0xFFFFFF) << 8;
                 }
-                TransponderPacket packet = TransponderPacket(packet_buffer, last_demod_num_words_ingested_ + 1,
-                                                             GetLastMessageRSSIdBm(), GetLastMessageMLAT12MHzCounts());
+                DecodedTransponderPacket packet =
+                    DecodedTransponderPacket(packet_buffer, last_demod_num_words_ingested_ + 1, GetLastMessageRSSIdBm(),
+                                             GetLastMessageMLAT12MHzCounts());
                 transponder_packet_queue.Push(packet);
                 last_demod_num_words_ingested_ = 0;
                 break;
             }
             case 1:
+                // Slurp up the sampled RSSI and MLAT timer values while we know we're still aligned with the decode
+                // interval.
+                last_message_rssi_adc_counts_ = sampled_rssi_adc_counts_;
+                last_message_mlat_48mhz_counts_ = sampled_mlat_48mhz_counts_;
             case 2:
             case 3:
                 rx_buffer_[word_index - 1] = word;
                 last_demod_num_words_ingested_ = word_index;
-                break;
-                // case 3:
-                //     // Last word ingests an extra bit by accident, pinch it off here.
-                //     rx_buffer_[word_index-1] = word>>1;
-
                 break;
             default:
                 // Received too many bits for this to be a valid packet. Throw away extra bits!
@@ -242,10 +240,15 @@ void ADSBee::OnDemodComplete() {
 
 void ADSBee::OnSysTickWrap() { mlat_counter_1s_wraps_++; }
 
-uint64_t ADSBee::GetMLAT12MHzCounts() {
+uint64_t ADSBee::GetMLAT48MHzCounts(uint16_t num_bits) {
     // Combine the wrap counter with the current value of the SysTick register and mask to 48 bits.
     // Note: 24-bit SysTick value is subtracted from UINT_24_MAX to make it count up instead of down.
-    return (mlat_counter_1s_wraps_ << 24 | (0xFFFFFF - systick_hw->cvr)) & 0xFFFFFFFFFFFF;
+    return (mlat_counter_1s_wraps_ << 24 | (0xFFFFFF - systick_hw->cvr)) & (UINT64_MAX >> (64 - num_bits));
+}
+
+uint64_t ADSBee::GetMLAT12MHzCounts(uint16_t num_bits) {
+    // Piggyback off the higher resolution 48MHz timer function.
+    return GetMLAT48MHzCounts(50) >> 2;  // Divide 48MHz counter by 4, widen the mask by 2 bits to compensate.
 }
 
 bool ADSBee::SetTLHiMilliVolts(int tl_hi_mv) {

@@ -1,7 +1,7 @@
 #ifndef SPI_COPROCESSOR_HH_
 #define SPI_COPROCESSOR_HH_
 
-#include "adsb_packet.hh"
+#include "transponder_packet.hh"
 #include "aircraft_dictionary.hh"
 #include "settings.hh"
 
@@ -87,14 +87,14 @@ public:
 
     struct TransponderPacketMessage : public SCMessage
     {
-        TransponderPacket packet;
+        DecodedTransponderPacket packet;
 
         /**
          * TransponderPacketMessage constructor. Populates the packet to send and adds length, packet type, and CRC info
          * to parent.
          * @param[in] packet Reference to transponder packet to use for construction.
          */
-        TransponderPacketMessage(const TransponderPacket &packet_in);
+        TransponderPacketMessage(const DecodedTransponderPacket &packet_in);
     };
 
     // NOTE: Pico (leader) and ESP32 (follower) will have different behaviors for these functions.

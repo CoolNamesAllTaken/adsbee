@@ -53,7 +53,7 @@ SPICoprocessor::AircraftListMessage::AircraftListMessage(uint16_t num_aicraft_in
     PopulateCRCAndLength(sizeof(AircraftListMessage) - sizeof(SCMessage));
 }
 
-SPICoprocessor::TransponderPacketMessage::TransponderPacketMessage(const TransponderPacket &packet_in)
+SPICoprocessor::TransponderPacketMessage::TransponderPacketMessage(const DecodedTransponderPacket &packet_in)
 {
     packet = packet_in;
     PopulateCRCAndLength(sizeof(TransponderPacketMessage) - sizeof(SCMessage));

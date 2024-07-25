@@ -8,10 +8,19 @@
 
 // Useful resource: https://mode-s.org/decode/content/ads-b/1-basics.html
 
-class TransponderPacket
+class RawTransponderPacket
 {
 public:
     static const uint16_t kMaxPacketLenWords32 = 4;
+    uint32_t packet_buffer[kMaxPacketLenWords32];
+    int rssi_dbm = INT32_MIN;
+    uint64_t mlat_48mhz_64bit_counts; // High resolution MLAT counter.
+};
+
+class DecodedTransponderPacket
+{
+public:
+    static const uint16_t kMaxPacketLenWords32 = RawTransponderPacket::kMaxPacketLenWords32;
     static const uint16_t kDFNUmBits = 5;    // [1-5] Downlink Format bitlength.
     static const uint16_t kMaxDFStrLen = 50; // Max length of TypeCode string.
     static const uint16_t kDebugStrLen = 200;
@@ -42,33 +51,33 @@ public:
 
     // Constructors
     /**
-     * TransponderPacket constructor.
+     * DecodedTransponderPacket constructor.
      * @param[in] rx_buffer Buffer to read from. Must be packed such that all 32 bits of each word are filled, with each
      * word left (MSb) aligned such that the total number of bits is 112. Words must be big-endian, with the MSb of the
      * first word being the oldest bit.
      * @param[in] rx_buffer_len_words32 Number of 32-bit words to read from the rx_buffer.
      * @param[in] rssi_dbm RSSI of the packet that was received, in dBm. Defaults to INT32_MIN if not set.
-     * @param[in] mlat_12mhz_counts Counts of a 12MHz clock used for the 6-byte multilateration timestamp.
+     * @param[in] mlat_48mhz_64bit_counts Counts of a 12MHz clock used for the 6-byte multilateration timestamp.
      */
-    TransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len, int rssi_dbm = INT32_MIN, uint64_t mlat_12mhz_counts = 0);
+    DecodedTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len, int rssi_dbm = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
 
     /**
-     * TransponderPacket constructor from string.
+     * DecodedTransponderPacket constructor from string.
      * @param[in] rx_string String of nibbles as hex characters. Big-endian, MSB (oldest byte) first.
      * @param[in] rssi_dbm RSSI of the packet that was received, in dBm. Defaults to INT32_MIN if not set.
      * @param[in] mlat_12mhz_counts Counts of a 12MHz clock used for the 6-byte multilateration timestamp.
      */
-    TransponderPacket(char *rx_string, int rssi_dbm = INT32_MIN, uint64_t mlat_12mhz_counts = 0); // TODO: add mlat counter units, add to construciton method!
+    DecodedTransponderPacket(char *rx_string, int rssi_dbm = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0); // TODO: add mlat counter units, add to construciton method!
 
     /**
      * Default constructor.
      */
-    TransponderPacket() { debug_string[0] = '\0'; };
+    DecodedTransponderPacket() { debug_string[0] = '\0'; };
 
     bool IsValid() const { return is_valid_; };
 
     int GetRSSIdBm() const { return rssi_dbm_; }
-    uint64_t GetMLAT12MHzCounter() const { return mlat_12mhz_counts_; }
+    uint64_t GetMLAT12MHzCounter() const { return mlat_12mhz_48bit_counts_; }
     uint16_t GetDownlinkFormat() const { return downlink_format_; };
     uint16_t GetDownlinkFormatString(char str_buf[kMaxDFStrLen]) const;
     DownlinkFormat GetDownlinkFormatEnum();
@@ -106,7 +115,8 @@ protected:
     uint32_t icao_address_ = 0;
     uint16_t downlink_format_ = static_cast<uint16_t>(kDownlinkFormatInvalid);
     int rssi_dbm_ = INT32_MIN;
-    uint64_t mlat_12mhz_counts_ = 0;
+    uint64_t mlat_12mhz_48bit_counts_ = 0;
+    uint64_t mlat_48mhz_64bit_counts_ = 0;
 
     uint32_t parity_interrogator_id = 0;
 
@@ -114,7 +124,7 @@ private:
     void ConstructTransponderPacket();
 };
 
-class ADSBPacket : public TransponderPacket
+class ADSBPacket : public DecodedTransponderPacket
 {
 public:
     static const uint16_t kMaxTCStrLen = 50;
@@ -129,11 +139,11 @@ public:
     static const uint16_t kMEFirstBitIndex = kDFNUmBits + kCANumBits + kICAONumBits;
 
     /**
-     * Constructor. Can only create an ADSBPacket from an existing TransponderPacket, which is is referenced as the
+     * Constructor. Can only create an ADSBPacket from an existing DecodedTransponderPacket, which is is referenced as the
      * parent of the ADSBPacket. Think of this as a way to use the ADSBPacket as a "window" into the contents of the
-     * parent TransponderPacket. The ADSBPacket cannot exist without the parent TransponderPacket!
+     * parent DecodedTransponderPacket. The ADSBPacket cannot exist without the parent DecodedTransponderPacket!
      */
-    ADSBPacket(const TransponderPacket &packet) : TransponderPacket(packet) { ConstructADSBPacket(); };
+    ADSBPacket(const DecodedTransponderPacket &packet) : DecodedTransponderPacket(packet) { ConstructADSBPacket(); };
 
     // Bits 6-8 [3]: Capability (CA)
     // Bits 9-32 [24]: ICAO Aircraft Address (ICAO)

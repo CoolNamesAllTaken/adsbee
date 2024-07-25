@@ -4,7 +4,7 @@
 #include <cstring>
 #include <unordered_map>
 
-#include "adsb_packet.hh"
+#include "transponder_packet.hh"
 
 class Aircraft
 {
@@ -163,12 +163,12 @@ public:
     /**
      * Default constructor. Uses default config values.
      */
-    AircraftDictionary(){};
+    AircraftDictionary() {};
 
     /**
      * Constructor with config values specified.
      */
-    AircraftDictionary(AircraftDictionaryConfig_t config_in) : config_(config_in){};
+    AircraftDictionary(AircraftDictionaryConfig_t config_in) : config_(config_in) {};
 
     void Init();
     void Update(uint32_t timestamp_us);

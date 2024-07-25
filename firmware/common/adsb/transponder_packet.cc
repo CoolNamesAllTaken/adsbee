@@ -1,4 +1,4 @@
-#include "adsb_packet.hh"
+#include "transponder_packet.hh"
 
 #include <cstdint>
 #include <cstdio>  // for snprintf
@@ -29,10 +29,10 @@ const uint32_t kSquitterLastWordPopCount = 24;
 const uint32_t kCRC24Generator = 0x1FFF409;
 const uint16_t kCRC24GeneratorNumBits = 25;
 
-/** TransponderPacket **/
+/** DecodedTransponderPacket **/
 
-TransponderPacket::TransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32,
-                                     int rssi_dbm, uint64_t mlat_counter_12mhz_counts)
+DecodedTransponderPacket::DecodedTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32,
+                                                   int rssi_dbm, uint64_t mlat_counter_12mhz_counts)
 {
     // Set the last word indgestion behavior based on packet length.
     uint32_t last_word_ingestion_mask, last_word_popcount;
@@ -67,11 +67,11 @@ TransponderPacket::TransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], u
         }
     }
     rssi_dbm_ = rssi_dbm;
-    mlat_12mhz_counts_ = mlat_counter_12mhz_counts;
+    mlat_12mhz_48bit_counts_ = mlat_counter_12mhz_counts;
     ConstructTransponderPacket();
 }
 
-TransponderPacket::TransponderPacket(char *rx_string, int rssi_dbm, uint64_t mlat_counter_12mhz_counts)
+DecodedTransponderPacket::DecodedTransponderPacket(char *rx_string, int rssi_dbm, uint64_t mlat_counter_12mhz_counts)
 {
     uint16_t rx_num_bytes = strlen(rx_string) / NIBBLES_PER_BYTE;
     for (uint16_t i = 0; i < rx_num_bytes && i < kMaxPacketLenWords32 * BYTES_PER_WORD_32; i++)
@@ -90,11 +90,11 @@ TransponderPacket::TransponderPacket(char *rx_string, int rssi_dbm, uint64_t mla
         packet_buffer_len_bits_ += BITS_PER_BYTE;
     }
     rssi_dbm_ = rssi_dbm;
-    mlat_12mhz_counts_ = mlat_counter_12mhz_counts;
+    mlat_12mhz_48bit_counts_ = mlat_counter_12mhz_counts;
     ConstructTransponderPacket();
 }
 
-TransponderPacket::DownlinkFormat TransponderPacket::GetDownlinkFormatEnum()
+DecodedTransponderPacket::DownlinkFormat DecodedTransponderPacket::GetDownlinkFormatEnum()
 {
     switch (downlink_format_)
     {
@@ -138,7 +138,7 @@ TransponderPacket::DownlinkFormat TransponderPacket::GetDownlinkFormatEnum()
     };
 }
 
-uint16_t TransponderPacket::DumpPacketBuffer(uint32_t to_buffer[kMaxPacketLenWords32]) const
+uint16_t DecodedTransponderPacket::DumpPacketBuffer(uint32_t to_buffer[kMaxPacketLenWords32]) const
 {
     uint16_t bytes_written = packet_buffer_len_bits_ / BITS_PER_BYTE;
     for (uint16_t i = 0; i < kMaxPacketLenWords32; i++)
@@ -148,7 +148,7 @@ uint16_t TransponderPacket::DumpPacketBuffer(uint32_t to_buffer[kMaxPacketLenWor
     return bytes_written;
 }
 
-uint16_t TransponderPacket::DumpPacketBuffer(uint8_t to_buffer[kMaxPacketLenWords32 * kBytesPerWord]) const
+uint16_t DecodedTransponderPacket::DumpPacketBuffer(uint8_t to_buffer[kMaxPacketLenWords32 * kBytesPerWord]) const
 {
     uint16_t bytes_written = packet_buffer_len_bits_ / BITS_PER_BYTE;
     for (uint16_t i = 0; i < kMaxPacketLenWords32; i++)
@@ -162,7 +162,7 @@ uint16_t TransponderPacket::DumpPacketBuffer(uint8_t to_buffer[kMaxPacketLenWord
     return bytes_written;
 }
 
-uint32_t TransponderPacket::CalculateCRC24(uint16_t packet_len_bits) const
+uint32_t DecodedTransponderPacket::CalculateCRC24(uint16_t packet_len_bits) const
 {
     // CRC calculation algorithm from https://mode-s.org/decode/book-the_1090mhz_riddle-junzi_sun.pdf pg. 91.
     // Must be called on buffer that does not have extra bit ingested at end and has all words left-aligned.
@@ -189,7 +189,7 @@ uint32_t TransponderPacket::CalculateCRC24(uint16_t packet_len_bits) const
     return get_n_bit_word_from_buffer(BITS_PER_WORD_24, packet_len_bits - BITS_PER_WORD_24, crc_buffer);
 }
 
-void TransponderPacket::ConstructTransponderPacket()
+void DecodedTransponderPacket::ConstructTransponderPacket()
 {
     if (packet_buffer_len_bits_ != kExtendedSquitterPacketLenBits &&
         packet_buffer_len_bits_ != kSquitterPacketNumBits)

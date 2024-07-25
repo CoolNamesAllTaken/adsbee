@@ -13,7 +13,7 @@ bool CommsManager::UpdateReporting() {
     bool ret = true;
     uint32_t timestamp_ms = get_time_since_boot_ms();
 
-    TransponderPacket packets_to_report[ADSBee::kMaxNumTransponderPackets];
+    DecodedTransponderPacket packets_to_report[ADSBee::kMaxNumTransponderPackets];
     uint16_t num_packets_to_report = 0;
     while (transponder_packet_reporting_queue.Pop(packets_to_report[num_packets_to_report])) {
         num_packets_to_report++;
@@ -59,13 +59,13 @@ bool CommsManager::UpdateReporting() {
     return ret;
 }
 
-bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface, const TransponderPacket packets_to_report[],
+bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface, const DecodedTransponderPacket packets_to_report[],
                              uint16_t num_packets_to_report) {
     return true;
 }
 
-bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface, const TransponderPacket packets_to_report[],
-                               uint16_t num_packets_to_report) {
+bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface,
+                               const DecodedTransponderPacket packets_to_report[], uint16_t num_packets_to_report) {
     for (uint16_t i = 0; i < num_packets_to_report; i++) {
         uint8_t beast_frame_buf[kBeastFrameMaxLenBytes];
         uint16_t num_bytes_in_frame = TransponderPacketToBeastFrame(packets_to_report[i], beast_frame_buf);

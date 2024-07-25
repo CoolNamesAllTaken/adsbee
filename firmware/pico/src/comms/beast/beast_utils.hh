@@ -1,7 +1,7 @@
 #ifndef BEAST_UTILS_HH_
 #define BEAST_UTILS_HH_
 
-#include "adsb_packet.hh"
+#include "transponder_packet.hh"
 
 // Mode S Beast Protocol Spec: https://github.com/firestuff/adsb-tools/blob/master/protocols/beast.md
 
@@ -40,13 +40,13 @@ uint16_t WriteBufferWithBeastEscapes(uint8_t to_buf[], const uint8_t from_buf[],
 }
 
 /**
- * Converts a TransponderPacket payload to a data buffer in Mode S Beast output format.
- * @param[in] packet Reference to TransponderPacket to convert.
+ * Converts a DecodedTransponderPacket payload to a data buffer in Mode S Beast output format.
+ * @param[in] packet Reference to DecodedTransponderPacket to convert.
  * @param[out] beast_frame_buf Pointer to byte buffer to fill with payload.
  * @retval Number of bytes written to beast_frame_buf.
  */
-uint16_t TransponderPacketToBeastFrame(const TransponderPacket &packet, uint8_t *beast_frame_buf) {
-    uint8_t packet_buf[TransponderPacket::kMaxPacketLenWords32 * kBytesPerWord];
+uint16_t TransponderPacketToBeastFrame(const DecodedTransponderPacket &packet, uint8_t *beast_frame_buf) {
+    uint8_t packet_buf[DecodedTransponderPacket::kMaxPacketLenWords32 * kBytesPerWord];
     uint16_t data_num_bytes = packet.DumpPacketBuffer(packet_buf);
 
     // Determine and write frame type Byte.

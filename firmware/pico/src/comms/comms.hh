@@ -1,7 +1,7 @@
 #ifndef COMMS_HH_
 #define COMMS_HH_
 
-// #include "adsb_packet.hh"  // For TransponderPacket.
+// #include "transponder_packet.hh"  // For DecodedTransponderPacket.
 #include "ads_bee.hh"
 #include "cpp_at.hh"
 #include "data_structures.hh"  // For PFBQueue.
@@ -136,9 +136,9 @@ class CommsManager {
     uint32_t last_report_timestamp_ms = 0;
 
     // Queue for storing transponder packets before they get reported.
-    PFBQueue<TransponderPacket> transponder_packet_reporting_queue =
-        PFBQueue<TransponderPacket>({.buf_len_num_elements = ADSBee::kMaxNumTransponderPackets,
-                                     .buffer = transponder_packet_reporting_queue_buffer_});
+    PFBQueue<DecodedTransponderPacket> transponder_packet_reporting_queue =
+        PFBQueue<DecodedTransponderPacket>({.buf_len_num_elements = ADSBee::kMaxNumTransponderPackets,
+                                            .buffer = transponder_packet_reporting_queue_buffer_});
 
     // Public WiFi Settings
     char wifi_ssid[SettingsManager::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
@@ -158,7 +158,7 @@ class CommsManager {
     bool InitReporting();
     bool UpdateReporting();
 
-    bool ReportRaw(SettingsManager::SerialInterface iface, const TransponderPacket packets_to_report[],
+    bool ReportRaw(SettingsManager::SerialInterface iface, const DecodedTransponderPacket packets_to_report[],
                    uint16_t num_packets_to_report);
 
     /**
@@ -170,7 +170,7 @@ class CommsManager {
      * @param[in] num_packets_to_report Number of packets to report from the packets_to_report array.
      * @retval True if successful, false if something broke.
      */
-    bool ReportBeast(SettingsManager::SerialInterface iface, const TransponderPacket packets_to_report[],
+    bool ReportBeast(SettingsManager::SerialInterface iface, const DecodedTransponderPacket packets_to_report[],
                      uint16_t num_packets_to_report);
 
     /**
@@ -190,7 +190,7 @@ class CommsManager {
     CppAT at_parser_;
 
     // Queue for holding new transponder packets before they get reported.
-    TransponderPacket transponder_packet_reporting_queue_buffer_[ADSBee::kMaxNumTransponderPackets];
+    DecodedTransponderPacket transponder_packet_reporting_queue_buffer_[ADSBee::kMaxNumTransponderPackets];
 
     // Reporting Settings
     uint32_t comms_uart_baudrate_ = SettingsManager::kDefaultCommsUARTBaudrate;

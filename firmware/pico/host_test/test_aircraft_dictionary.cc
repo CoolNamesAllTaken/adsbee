@@ -1,8 +1,8 @@
-#include "adsb_packet.hh"
 #include "aircraft_dictionary.hh"
 #include "decode_utils.hh"  // for location calculation utility functions
 #include "gtest/gtest.h"
 #include "hal_god_powers.hh"  // for changing timestamp
+#include "transponder_packet.hh"
 
 constexpr float kLatDegCloseEnough = 0.001f;
 constexpr float kLonDegCloseEnough = 0.0001f;

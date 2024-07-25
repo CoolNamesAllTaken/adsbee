@@ -1,11 +1,12 @@
-#include "adsb_packet.hh"
 #include "beast_utils.hh"
 #include "gtest/gtest.h"
+#include "transponder_packet.hh"
 
 TEST(BeastUtils, TransponderPacketToBeastFrame) {
     // Create packet with a single 0x1a that must be escaped in data, a typical RSSI value, and an unmasked MLAT
     // counter.
-    TransponderPacket tpacket = TransponderPacket((char *)"8d495066587f469bb826d21ad767", -80, 0xABABFF1AFFFFFF1A);
+    DecodedTransponderPacket tpacket =
+        DecodedTransponderPacket((char *)"8d495066587f469bb826d21ad767", -80, 0xABABFF1AFFFFFF1A);
 
     uint8_t beast_frame_buf[kBeastFrameMaxLenBytes];
     // 1 (frame) + 6 (mlat) + 2 (mlat escape) + 1 (rssi) + 14 (data) + 1 (data escape) = 25 Bytes.

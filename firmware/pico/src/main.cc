@@ -1,5 +1,4 @@
 #include "ads_bee.hh"
-#include "adsb_packet.hh"
 #include "comms.hh"
 #include "eeprom.hh"
 #include "esp32_flasher.hh"
@@ -7,6 +6,7 @@
 #include "pico/binary_info.h"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
+#include "transponder_packet.hh"
 #include "unit_conversions.hh"
 
 const char* kSoftwareVersionStr = "0.0.1";
@@ -57,7 +57,7 @@ int main() {
         // Send test packet to ESP32.
         uint32_t esp32_test_packet_timestamp_ms = get_time_since_boot_ms();
         if (esp32_test_packet_timestamp_ms > esp32_test_packet_last_sent_timestamp_ms + esp32_test_packet_interval_ms) {
-            TransponderPacket test_packet = TransponderPacket("8dac009458b9970f0aa394359da9");
+            DecodedTransponderPacket test_packet = DecodedTransponderPacket("8dac009458b9970f0aa394359da9");
             SPICoprocessor::TransponderPacketMessage message = SPICoprocessor::TransponderPacketMessage(test_packet);
             CONSOLE_INFO("Sent ESP32 message.");
             esp32.SendMessage(message);
@@ -68,11 +68,11 @@ int main() {
         comms_manager.Update();
         ads_bee.Update();
 
-        TransponderPacket packet;
+        DecodedTransponderPacket packet;
         while (ads_bee.transponder_packet_queue.Pop(packet)) {
-            uint32_t packet_buffer[TransponderPacket::kMaxPacketLenWords32];
+            uint32_t packet_buffer[DecodedTransponderPacket::kMaxPacketLenWords32];
             packet.DumpPacketBuffer(packet_buffer);
-            if (packet.GetPacketBufferLenBits() == TransponderPacket::kExtendedSquitterPacketLenBits) {
+            if (packet.GetPacketBufferLenBits() == DecodedTransponderPacket::kExtendedSquitterPacketLenBits) {
                 CONSOLE_INFO("New message: 0x%08x|%08x|%08x|%04x RSSI=%ddBm MLAT=%u", packet_buffer[0],
                              packet_buffer[1], packet_buffer[2], (packet_buffer[3]) >> (4 * kBitsPerNibble),
                              packet.GetRSSIdBm(), packet.GetMLAT12MHzCounter());
@@ -91,7 +91,7 @@ int main() {
 
                 ads_bee.aircraft_dictionary.IngestADSBPacket(ADSBPacket(packet));
                 CONSOLE_INFO("\taircraft_dictionary: %d aircraft", ads_bee.aircraft_dictionary.GetNumAircraft());
-            } else if (packet.GetPacketBufferLenBits() == TransponderPacket::kSquitterPacketNumBits) {
+            } else if (packet.GetPacketBufferLenBits() == DecodedTransponderPacket::kSquitterPacketNumBits) {
                 // CRC is overlaid with ICAO address for 56-bit (squitter) packets. Check ICAO against aircraft in the
                 // dictionary to validate the CRC.
                 if (ads_bee.aircraft_dictionary.ContainsAircraft(packet.GetICAOAddress())) {
