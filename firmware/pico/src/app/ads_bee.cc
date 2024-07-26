@@ -125,7 +125,7 @@ bool ADSBee::Init() {
     irq_set_enabled(config_.preamble_detector_demod_irq, true);
 
     /** MESSAGE DEMODULATOR PIO **/
-    float message_demodulator_freq = 16e6;  // Run at 16 MHz to demodulate bits at 1Mbps.
+    float message_demodulator_freq = 48e6;  // Run at 48 MHz to demodulate bits at 1Mbps.
     float message_demodulator_div = (float)clock_get_hz(clk_sys) / message_demodulator_freq;
     message_demodulator_program_init(config_.message_demodulator_pio, message_demodulator_sm_,
                                      message_demodulator_offset_, config_.pulses_pin, config_.recovered_clk_pin,
