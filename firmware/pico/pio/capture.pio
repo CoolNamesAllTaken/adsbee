@@ -1,6 +1,6 @@
 .program preamble_detector
 
-; This program runs at 16MHz. Each clock cycle is 1/16us.
+; This program runs at 48MHz. Each clock cycle is 1/48us.
 
 .define pulses_pin_index 0
 .define demod_pin_index 1
@@ -41,7 +41,7 @@ preamble_matched:
 waiting_for_end_of_message:
     set x, 20 [2] ; [2.5us] number of sequential idle samples required to mark end of packet
 idle_countdown:
-    jmp pin waiting_for_end_of_message [5] ; start over the idle countdown if received a non idle bit
+    jmp pin waiting_for_end_of_message [2] ; start over the idle countdown if received a non idle bit
     jmp x-- idle_countdown [2] ; still idle, keep counting down if the timer isn't up
     set pins, 0 ; set demod pin to 0 to indicate message is finished
     irq set 0 [1] ; set the DEMOD IRQ to indicate the message body is finished
