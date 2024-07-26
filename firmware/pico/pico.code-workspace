@@ -4,9 +4,6 @@
 			"path": "."
 		},
 		{
-			"path": "../.vscode"
-		},
-		{
 			"path": "../common"
 		},
 		{
@@ -117,7 +114,7 @@
 			{
 				"name": "Remote Debug",
 				"type": "cortex-debug",
-				"cwd": "/ads_bee/",
+				"cwd": "/ads_bee/pico",
 				"executable": "/ads_bee/pico/build/ads_bee.elf",
 				// "executable": "${command:cmake.launchTargetPath}",
 				"request": "attach",
@@ -138,6 +135,7 @@
 				"name": "(gdb) Launch",
 				"type": "cppdbg",
 				"request": "launch",
+				"cwd": "/ads_bee/pico",
 				"program": "/ads_bee/pico/build/ads_bee_test",
 				"args": [],
 				"stopAtEntry": false,

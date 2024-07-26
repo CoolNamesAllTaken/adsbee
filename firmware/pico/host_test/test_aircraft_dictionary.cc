@@ -89,7 +89,7 @@ TEST(AircraftDictionary, AccessFakeAircraft) {
 
 TEST(AircraftDictionary, IngestAircraftIDMessage) {
     AircraftDictionary dictionary = AircraftDictionary();
-    TransponderPacket tpacket = TransponderPacket((char *)"8D76CE88204C9072CB48209A504D");
+    DecodedTransponderPacket tpacket = DecodedTransponderPacket((char *)"8D76CE88204C9072CB48209A504D");
     ADSBPacket packet = ADSBPacket(tpacket);
     EXPECT_TRUE(dictionary.IngestADSBPacket(packet));
     EXPECT_EQ(dictionary.GetNumAircraft(), 1);
@@ -100,7 +100,7 @@ TEST(AircraftDictionary, IngestAircraftIDMessage) {
     EXPECT_EQ(aircraft.airframe_type, Aircraft::kAirframeTypeNoCategoryInfo);
     EXPECT_STREQ(aircraft.callsign, "SIA224");
 
-    tpacket = TransponderPacket((char *)"8D7C7181215D01A08208204D8BF1");
+    tpacket = DecodedTransponderPacket((char *)"8D7C7181215D01A08208204D8BF1");
     packet = ADSBPacket(tpacket);
     EXPECT_TRUE(dictionary.IngestADSBPacket(packet));
     EXPECT_EQ(dictionary.GetNumAircraft(), 2);
@@ -110,7 +110,7 @@ TEST(AircraftDictionary, IngestAircraftIDMessage) {
     EXPECT_EQ(aircraft.airframe_type, Aircraft::kAirframeTypeLight);
     EXPECT_STREQ(aircraft.callsign, "WPF");
 
-    tpacket = TransponderPacket((char *)"8D7C7745226151A08208205CE9C2");
+    tpacket = DecodedTransponderPacket((char *)"8D7C7745226151A08208205CE9C2");
     packet = ADSBPacket(tpacket);
     EXPECT_TRUE(dictionary.IngestADSBPacket(packet));
     EXPECT_EQ(dictionary.GetNumAircraft(), 3);
@@ -120,7 +120,7 @@ TEST(AircraftDictionary, IngestAircraftIDMessage) {
     EXPECT_EQ(aircraft.airframe_type, Aircraft::kAirframeTypeMedium1);
     EXPECT_STREQ(aircraft.callsign, "XUF");
 
-    tpacket = TransponderPacket((char *)"8D7C80AD2358F6B1E35C60FF1925");
+    tpacket = DecodedTransponderPacket((char *)"8D7C80AD2358F6B1E35C60FF1925");
     packet = ADSBPacket(tpacket);
     EXPECT_TRUE(dictionary.IngestADSBPacket(packet));
     EXPECT_EQ(dictionary.GetNumAircraft(), 4);
@@ -130,7 +130,7 @@ TEST(AircraftDictionary, IngestAircraftIDMessage) {
     EXPECT_EQ(aircraft.airframe_type, Aircraft::kAirframeTypeMedium2);
     EXPECT_STREQ(aircraft.callsign, "VOZ1851");
 
-    tpacket = TransponderPacket((char *)"8D7C146525446074DF5820738E90");
+    tpacket = DecodedTransponderPacket((char *)"8D7C146525446074DF5820738E90");
     packet = ADSBPacket(tpacket);
     EXPECT_TRUE(dictionary.IngestADSBPacket(packet));
     EXPECT_EQ(dictionary.GetNumAircraft(), 5);
@@ -143,7 +143,7 @@ TEST(AircraftDictionary, IngestAircraftIDMessage) {
 
 TEST(AircraftDictionary, IngestInvalidAircrfaftIDMessage) {
     AircraftDictionary dictionary = AircraftDictionary();
-    TransponderPacket tpacket = TransponderPacket((char *)"7D76CE88204C9072CB48209A504D");
+    DecodedTransponderPacket tpacket = DecodedTransponderPacket((char *)"7D76CE88204C9072CB48209A504D");
     ADSBPacket packet = ADSBPacket(tpacket);
     EXPECT_FALSE(dictionary.IngestADSBPacket(packet));
     EXPECT_EQ(dictionary.GetNumAircraft(), 0);
@@ -241,10 +241,10 @@ TEST(Aircraft, SetCPRLatLon) {
 
 TEST(AircraftDictionary, IngestAirbornePositionMessage) {
     AircraftDictionary dictionary = AircraftDictionary();
-    TransponderPacket even_tpacket = TransponderPacket((char *)"8da6147f5859f18cdf4d244ac6fa");
+    DecodedTransponderPacket even_tpacket = DecodedTransponderPacket((char *)"8da6147f5859f18cdf4d244ac6fa");
     ASSERT_TRUE(even_tpacket.IsValid());
     ADSBPacket even_packet = ADSBPacket(even_tpacket);
-    TransponderPacket odd_tpacket = TransponderPacket((char *)"8da6147f585b05533e2ba73e43cb");
+    DecodedTransponderPacket odd_tpacket = DecodedTransponderPacket((char *)"8da6147f585b05533e2ba73e43cb");
     ASSERT_TRUE(odd_tpacket.IsValid());
     ADSBPacket odd_packet = ADSBPacket(odd_tpacket);
 
@@ -287,7 +287,7 @@ TEST(AircraftDictionary, IngestAirbornePositionMessage) {
 
 TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     AircraftDictionary dictionary = AircraftDictionary();
-    TransponderPacket tpacket = TransponderPacket((char *)"8dae56bc99246508b8080b6c230f");
+    DecodedTransponderPacket tpacket = DecodedTransponderPacket((char *)"8dae56bc99246508b8080b6c230f");
     ASSERT_TRUE(tpacket.IsValid());
     ADSBPacket packet = ADSBPacket(tpacket);
     ASSERT_EQ(packet.GetTypeCodeEnum(), ADSBPacket::TypeCode::kTypeCodeAirborneVelocities);
@@ -308,7 +308,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     EXPECT_EQ(aircraft.vertical_rate_source, Aircraft::VerticalRateSource::kVerticalRateSourceBaro);
 
     // Test Message A from https://mode-s.org/decode/content/ads-b/5-airborne-velocity.html
-    tpacket = TransponderPacket((char *)"8D485020994409940838175B284F");
+    tpacket = DecodedTransponderPacket((char *)"8D485020994409940838175B284F");
     ASSERT_TRUE(tpacket.IsValid());
     packet = ADSBPacket(tpacket);
     ASSERT_EQ(packet.GetTypeCodeEnum(), ADSBPacket::TypeCode::kTypeCodeAirborneVelocities);
@@ -332,7 +332,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     ASSERT_EQ(aircraft_ptr->gnss_altitude_ft, 2000 + 550);  // GNSS altitude is 550ft above baro altitude.
 
     // Test Message B from https://mode-s.org/decode/content/ads-b/5-airborne-velocity.html
-    tpacket = TransponderPacket((char *)"8DA05F219B06B6AF189400CBC33F");
+    tpacket = DecodedTransponderPacket((char *)"8DA05F219B06B6AF189400CBC33F");
     ASSERT_TRUE(tpacket.IsValid());
     packet = ADSBPacket(tpacket);
     ASSERT_EQ(packet.GetTypeCodeEnum(), ADSBPacket::TypeCode::kTypeCodeAirborneVelocities);

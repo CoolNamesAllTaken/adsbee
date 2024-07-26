@@ -85,21 +85,35 @@ public:
         AircraftListMessage(uint16_t num_aicraft_in, const Aircraft aircraft_list_in[]);
     };
 
-    struct TransponderPacketMessage : public SCMessage
+    struct DecodedTransponderPacketMessage : public SCMessage
     {
         DecodedTransponderPacket packet;
 
         /**
-         * TransponderPacketMessage constructor. Populates the packet to send and adds length, packet type, and CRC info
+         * DecodedTransponderPacketMessage constructor. Populates the packet to send and adds length, packet type, and CRC info
          * to parent.
          * @param[in] packet Reference to transponder packet to use for construction.
          */
-        TransponderPacketMessage(const DecodedTransponderPacket &packet_in);
+        DecodedTransponderPacketMessage(const DecodedTransponderPacket &packet_in)
+        {
+            packet = packet_in;
+            PopulateCRCAndLength(sizeof(DecodedTransponderPacketMessage) - sizeof(SCMessage));
+        }
+    };
+
+    struct RawTransponderPacketMessage : public SCMessage
+    {
+        RawTransponderPacket packet;
+
+        RawTransponderPacketMessage(const RawTransponderPacket &packet_in)
+        {
+            packet = packet_in;
+            PopulateCRCAndLength(sizeof(RawTransponderPacketMessage) - sizeof(SCMessage));
+        }
     };
 
     // NOTE: Pico (leader) and ESP32 (follower) will have different behaviors for these functions.
-    bool
-    Init();
+    bool Init();
     bool DeInit();
     bool Update();
 

@@ -31,8 +31,7 @@ const uint16_t kCRC24GeneratorNumBits = 25;
 
 /** DecodedTransponderPacket **/
 
-DecodedTransponderPacket::DecodedTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32,
-                                                   int rssi_dbm, uint64_t mlat_counter_12mhz_counts)
+RawTransponderPacket::RawTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32, int rssi_dbm_in, uint64_t mlat_48mhz_64bit_counts_in)
 {
     // Set the last word indgestion behavior based on packet length.
     uint32_t last_word_ingestion_mask, last_word_popcount;
@@ -57,21 +56,20 @@ DecodedTransponderPacket::DecodedTransponderPacket(uint32_t rx_buffer[kMaxPacket
             // Last word in packet.
             // Last word may have accidentally ingested a subsequent preamble as a bit (takes a while to know message is
             // over).
-            packet_buffer_[i] = rx_buffer[i] & last_word_ingestion_mask; // trim any crap off of last word
-            packet_buffer_len_bits_ += last_word_popcount;
+            buffer[i] = rx_buffer[i] & last_word_ingestion_mask; // trim any crap off of last word
+            buffer_len_bits += last_word_popcount;
         }
         else
         {
-            packet_buffer_[i] = rx_buffer[i];
-            packet_buffer_len_bits_ += BITS_PER_WORD_32;
+            buffer[i] = rx_buffer[i];
+            buffer_len_bits += BITS_PER_WORD_32;
         }
     }
-    rssi_dbm_ = rssi_dbm;
-    mlat_12mhz_48bit_counts_ = mlat_counter_12mhz_counts;
-    ConstructTransponderPacket();
+    rssi_dbm = rssi_dbm_in;
+    mlat_48mhz_64bit_counts = mlat_48mhz_64bit_counts_in;
 }
 
-DecodedTransponderPacket::DecodedTransponderPacket(char *rx_string, int rssi_dbm, uint64_t mlat_counter_12mhz_counts)
+RawTransponderPacket::RawTransponderPacket(char *rx_string, int rssi_dbm_in, uint64_t mlat_48mhz_64bit_counts_in)
 {
     uint16_t rx_num_bytes = strlen(rx_string) / NIBBLES_PER_BYTE;
     for (uint16_t i = 0; i < rx_num_bytes && i < kMaxPacketLenWords32 * BYTES_PER_WORD_32; i++)
@@ -81,16 +79,28 @@ DecodedTransponderPacket::DecodedTransponderPacket(char *rx_string, int rssi_dbm
         uint16_t byte_offset = i % BYTES_PER_WORD_32; // number of Bytes to shift right from MSB of current word
         if (byte_offset == 0)
         {
-            packet_buffer_[i / BYTES_PER_WORD_32] = byte << (3 * BITS_PER_BYTE); // need to clear out the word
+            buffer[i / BYTES_PER_WORD_32] = byte << (3 * BITS_PER_BYTE); // need to clear out the word
         }
         else
         {
-            packet_buffer_[i / BYTES_PER_WORD_32] |= byte << ((3 - byte_offset) * BITS_PER_BYTE);
+            buffer[i / BYTES_PER_WORD_32] |= byte << ((3 - byte_offset) * BITS_PER_BYTE);
         }
-        packet_buffer_len_bits_ += BITS_PER_BYTE;
+        buffer_len_bits += BITS_PER_BYTE;
     }
-    rssi_dbm_ = rssi_dbm;
-    mlat_12mhz_48bit_counts_ = mlat_counter_12mhz_counts;
+    rssi_dbm = rssi_dbm_in;
+    mlat_48mhz_64bit_counts = mlat_48mhz_64bit_counts_in;
+}
+
+DecodedTransponderPacket::DecodedTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32,
+                                                   int rssi_dbm, uint64_t mlat_48mhz_64bit_counts)
+    : packet(rx_buffer, rx_buffer_len_words32, rssi_dbm, mlat_48mhz_64bit_counts)
+{
+    ConstructTransponderPacket();
+}
+
+DecodedTransponderPacket::DecodedTransponderPacket(char *rx_string, int rssi_dbm, uint64_t mlat_48mhz_64bit_counts)
+    : packet(rx_string, rssi_dbm, mlat_48mhz_64bit_counts)
+{
     ConstructTransponderPacket();
 }
 
@@ -140,24 +150,24 @@ DecodedTransponderPacket::DownlinkFormat DecodedTransponderPacket::GetDownlinkFo
 
 uint16_t DecodedTransponderPacket::DumpPacketBuffer(uint32_t to_buffer[kMaxPacketLenWords32]) const
 {
-    uint16_t bytes_written = packet_buffer_len_bits_ / BITS_PER_BYTE;
+    uint16_t bytes_written = packet.buffer_len_bits / BITS_PER_BYTE;
     for (uint16_t i = 0; i < kMaxPacketLenWords32; i++)
     {
-        to_buffer[i] = packet_buffer_[i];
+        to_buffer[i] = packet.buffer[i];
     }
     return bytes_written;
 }
 
 uint16_t DecodedTransponderPacket::DumpPacketBuffer(uint8_t to_buffer[kMaxPacketLenWords32 * kBytesPerWord]) const
 {
-    uint16_t bytes_written = packet_buffer_len_bits_ / BITS_PER_BYTE;
+    uint16_t bytes_written = packet.buffer_len_bits / BITS_PER_BYTE;
     for (uint16_t i = 0; i < kMaxPacketLenWords32; i++)
     {
         // First received bit is MSb.
-        to_buffer[i * kBytesPerWord] = packet_buffer_[i] >> 24;
-        to_buffer[i * kBytesPerWord + 1] = (packet_buffer_[i] >> 16) & 0xFF;
-        to_buffer[i * kBytesPerWord + 2] = (packet_buffer_[i] >> 8) & 0xFF;
-        to_buffer[i * kBytesPerWord + 3] = packet_buffer_[i] & 0xFF;
+        to_buffer[i * kBytesPerWord] = packet.buffer[i] >> 24;
+        to_buffer[i * kBytesPerWord + 1] = (packet.buffer[i] >> 16) & 0xFF;
+        to_buffer[i * kBytesPerWord + 2] = (packet.buffer[i] >> 8) & 0xFF;
+        to_buffer[i * kBytesPerWord + 3] = packet.buffer[i] & 0xFF;
     }
     return bytes_written;
 }
@@ -169,7 +179,7 @@ uint32_t DecodedTransponderPacket::CalculateCRC24(uint16_t packet_len_bits) cons
     uint32_t crc_buffer[kMaxPacketLenWords32];
     for (uint16_t i = 0; i < kMaxPacketLenWords32; i++)
     {
-        crc_buffer[i] = packet_buffer_[i];
+        crc_buffer[i] = packet.buffer[i];
     }
 
     // Overwrite 24-bit parity word with zeros.
@@ -191,19 +201,19 @@ uint32_t DecodedTransponderPacket::CalculateCRC24(uint16_t packet_len_bits) cons
 
 void DecodedTransponderPacket::ConstructTransponderPacket()
 {
-    if (packet_buffer_len_bits_ != kExtendedSquitterPacketLenBits &&
-        packet_buffer_len_bits_ != kSquitterPacketNumBits)
+    if (packet.buffer_len_bits != kExtendedSquitterPacketLenBits &&
+        packet.buffer_len_bits != kSquitterPacketNumBits)
     {
         snprintf(debug_string, kDebugStrLen,
                  "Bit number mismatch while decoding packet. Expected %d or %d but got %d!\r\n",
-                 kExtendedSquitterPacketLenBits, kSquitterPacketNumBits, packet_buffer_len_bits_);
+                 kExtendedSquitterPacketLenBits, kSquitterPacketNumBits, packet.buffer_len_bits);
 
         return; // leave is_valid_ as false
     }
 
-    downlink_format_ = packet_buffer_[0] >> 27;
-    uint32_t calculated_checksum = CalculateCRC24(packet_buffer_len_bits_);
-    uint32_t parity_value = get_24_bit_word_from_buffer(packet_buffer_len_bits_ - BITS_PER_WORD_24, packet_buffer_);
+    downlink_format_ = packet.buffer[0] >> 27;
+    uint32_t calculated_checksum = CalculateCRC24(packet.buffer_len_bits);
+    uint32_t parity_value = get_24_bit_word_from_buffer(packet.buffer_len_bits - BITS_PER_WORD_24, packet.buffer);
 
     switch (static_cast<DownlinkFormat>(downlink_format_))
     {
@@ -221,7 +231,7 @@ void DecodedTransponderPacket::ConstructTransponderPacket()
     default:
     {
         // Process a 112-bit message.
-        icao_address_ = packet_buffer_[0] & 0xFFFFFF;
+        icao_address_ = packet.buffer[0] & 0xFFFFFF;
         if (calculated_checksum == parity_value)
         {
             is_valid_ = true; // mark packet as valid if CRC matches the parity bits
@@ -243,9 +253,9 @@ void DecodedTransponderPacket::ConstructTransponderPacket()
  */
 void ADSBPacket::ConstructADSBPacket()
 {
-    capability_ = (packet_buffer_[0] >> 24) & 0b111;
-    typecode_ = packet_buffer_[1] >> 27;
-    parity_interrogator_id = packet_buffer_[1] & 0xFFFFFF;
+    capability_ = (packet.buffer[0] >> 24) & 0b111;
+    typecode_ = packet.buffer[1] >> 27;
+    parity_interrogator_id = packet.buffer[1] & 0xFFFFFF;
 }
 
 ADSBPacket::TypeCode ADSBPacket::GetTypeCodeEnum() const

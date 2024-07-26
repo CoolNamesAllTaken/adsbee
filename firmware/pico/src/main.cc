@@ -57,8 +57,8 @@ int main() {
         // Send test packet to ESP32.
         uint32_t esp32_test_packet_timestamp_ms = get_time_since_boot_ms();
         if (esp32_test_packet_timestamp_ms > esp32_test_packet_last_sent_timestamp_ms + esp32_test_packet_interval_ms) {
-            DecodedTransponderPacket test_packet = DecodedTransponderPacket("8dac009458b9970f0aa394359da9");
-            SPICoprocessor::TransponderPacketMessage message = SPICoprocessor::TransponderPacketMessage(test_packet);
+            RawTransponderPacket test_packet = RawTransponderPacket("8dac009458b9970f0aa394359da9", -123, 456789);
+            SPICoprocessor::RawTransponderPacketMessage message = SPICoprocessor::RawTransponderPacketMessage(test_packet);
             CONSOLE_INFO("Sent ESP32 message.");
             esp32.SendMessage(message);
             esp32_test_packet_last_sent_timestamp_ms = esp32_test_packet_timestamp_ms;

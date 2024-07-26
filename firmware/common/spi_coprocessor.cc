@@ -53,11 +53,11 @@ SPICoprocessor::AircraftListMessage::AircraftListMessage(uint16_t num_aicraft_in
     PopulateCRCAndLength(sizeof(AircraftListMessage) - sizeof(SCMessage));
 }
 
-SPICoprocessor::TransponderPacketMessage::TransponderPacketMessage(const DecodedTransponderPacket &packet_in)
-{
-    packet = packet_in;
-    PopulateCRCAndLength(sizeof(TransponderPacketMessage) - sizeof(SCMessage));
-}
+// SPICoprocessor::DecodedTransponderPacketMessage::DecodedTransponderPacketMessage(const DecodedTransponderPacket &packet_in)
+// {
+//     packet = packet_in;
+//     PopulateCRCAndLength(sizeof(DecodedTransponderPacketMessage) - sizeof(SCMessage));
+// }
 
 bool SPICoprocessor::Init()
 {
