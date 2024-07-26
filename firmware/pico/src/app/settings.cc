@@ -15,7 +15,7 @@ const char SettingsManager::ReportingProtocolStrs[SettingsManager::ReportingProt
 
 bool SettingsManager::Load() {
     if (!eeprom.Load(settings)) {
-        CONSOLE_ERROR("settings.h::Load: Failed load settings from EEPROM.");
+        CONSOLE_ERROR("settings.cc::Load: Failed load settings from EEPROM.");
         return false;
     };
 
@@ -23,7 +23,7 @@ bool SettingsManager::Load() {
     if (settings.magic_word != kSettingsVersionMagicWord) {
         ResetToDefaults();
         if (!eeprom.Save(settings)) {
-            CONSOLE_ERROR("settings.h::Load: Failed to save default settings.");
+            CONSOLE_ERROR("settings.cc::Load: Failed to save default settings.");
             return false;
         }
     }

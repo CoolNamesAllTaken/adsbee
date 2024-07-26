@@ -53,9 +53,9 @@ int EEPROM::WriteBuf(const uint16_t reg, uint8_t *buf, const uint16_t num_bytes)
 
     uint16_t write_reg = reg;
     while (write_reg < reg + num_bytes) {
-        uint8_t num_bytes_written = write_reg - reg;
-        uint8_t page_bytes_remaining = config_.page_size_bytes - (write_reg % config_.page_size_bytes);
-        uint8_t write_num_bytes = MIN(page_bytes_remaining, num_bytes - num_bytes_written);
+        uint16_t num_bytes_written = write_reg - reg;
+        uint16_t page_bytes_remaining = config_.page_size_bytes - (write_reg % config_.page_size_bytes);
+        uint16_t write_num_bytes = MIN(page_bytes_remaining, num_bytes - num_bytes_written);
         uint8_t msg[write_num_bytes + kRegAddrNumBytes];  // Add a spot for the address.
         msg[0] = write_reg >> 8;
         msg[1] = write_reg & 0xFF;

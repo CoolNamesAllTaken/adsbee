@@ -70,7 +70,7 @@ class EEPROM {
      */
     template <typename T>  // Implemented here since implementing a template function in a .cc file is a pain.
     bool Load(T &data_to_load, uint16_t start_reg = 0x0) {
-        uint16_t data_size_bytes = sizeof(data_to_load);
+        uint16_t data_size_bytes = sizeof(T);
         uint16_t remaining_capacity_bytes = config_.size_bytes - start_reg;
         if (remaining_capacity_bytes < data_size_bytes) {
             CONSOLE_PRINTF(
@@ -79,7 +79,7 @@ class EEPROM {
                 data_size_bytes, start_reg, remaining_capacity_bytes);
             return false;
         }
-        int num_bytes_read = ReadBuf(start_reg, (uint8_t *)(&data_to_load), sizeof(data_to_load));
+        int num_bytes_read = ReadBuf(start_reg, (uint8_t *)(&data_to_load), sizeof(T));
         if (num_bytes_read != data_size_bytes) {
             // num_bytes_written is usually the number of bytes written, but could be a negative error code value.
             CONSOLE_ERROR("EEPROM::Save: I2C read failed, read byte counter returned %d but expected %d.",

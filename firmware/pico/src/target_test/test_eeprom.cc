@@ -158,13 +158,9 @@ UTEST(EEPROM, FullEEPROMSaveLoadDeadbeef) {
     }
     for (uint16_t reg = 0; reg < eeprom.GetSizeBytes() - page_size_bytes; reg += page_size_bytes) {
         EXPECT_EQ(eeprom.WriteBuf(reg, page_buf, page_size_bytes), page_size_bytes);
-        // EXPECT_EQ(eeprom.WriteByte(reg, 0xde), 3);
-        // EXPECT_EQ(eeprom.WriteByte(reg + 1, 0xad), 3);
-        // EXPECT_EQ(eeprom.WriteByte(reg + 2, 0xbe), 3);
-        // EXPECT_EQ(eeprom.WriteByte(reg + 3, 0xef), 3);
     }
     eeprom.Dump();
-    for (uint16_t reg = 0; reg < eeprom.GetSizeBytes() - 4; reg += 4) {
+    for (uint16_t reg = 0; reg < eeprom.GetSizeBytes() - page_size_bytes; reg += 4) {
         uint8_t byte_out;
         EXPECT_EQ(eeprom.ReadByte(reg, byte_out), 1);
         EXPECT_EQ(byte_out, 0xde);
