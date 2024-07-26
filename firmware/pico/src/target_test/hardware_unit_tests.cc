@@ -1,10 +1,19 @@
 #include "hardware_unit_tests.hh"
+#include "eeprom.hh"
 
 UTEST_STATE();
 
 static bool utest_main_called = false;
 
 CPP_AT_CALLBACK(ATTestCallback) {
+    if (op == '=') {
+        if (CPP_AT_HAS_ARG(0) && args[0].compare("DUMP_EEPROM") == 0) {
+            eeprom.Dump();
+            CPP_AT_SILENT_SUCCESS();
+        }
+
+    }
+
     if (!utest_main_called) {
         int argc = 0;
         const char* argv[1];

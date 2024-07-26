@@ -87,6 +87,91 @@ CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+void ATFeedHelpCallback() {
+    CPP_AT_PRINTF(
+        "AT+FEED=<feed_index>,<feed_uri>,<feed_port>,<active>,<protocol>\r\n\tSet details for a "
+        "network feed.\r\n\tfeed_index = [0-%d], feed_uri = ip address or URL, feed_port = [0-65535], "
+        "active = [0 1], protocol = [BEAST].\r\n\t\r\n\tAT+FEED?\r\n\tPrint details for all "
+        "feeds.\r\n\t\r\n\tAT+FEED?<feed_index>\r\n\tPrint details for a specific feed.\r\n\tfeed_index = [0-%d]",
+        SettingsManager::kMaxNumFeeds - 1, SettingsManager::kMaxNumFeeds - 1);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
+    switch (op) {
+        case '?':
+            if (CPP_AT_HAS_ARG(0)) {
+                // Querying info about a specific feed.
+                uint16_t feed_index = UINT16_MAX;
+                CPP_AT_TRY_ARG2NUM(0, feed_index);
+                if (feed_index >= SettingsManager::kMaxNumFeeds) {
+                    CPP_AT_ERROR("Feed number must be between 0-%d, no details for feed with index %d.",
+                                 SettingsManager::kMaxNumFeeds - 1, feed_index);
+                }
+                CPP_AT_CMD_PRINTF(
+                    "=%d(FEED_INDEX),%s(FEED_URI),%d(FEED_PORT),%d(ACTIVE),%s(PROTOCOL)", feed_index,
+                    settings_manager.settings.feed_uris[feed_index], settings_manager.settings.feed_ports[feed_index],
+                    settings_manager.settings.feed_is_active[feed_index],
+                    SettingsManager::ReportingProtocolStrs[settings_manager.settings.feed_protocols[feed_index]]);
+            } else {
+                // Querying info about all feeds.
+                for (uint16_t i = 0; i < SettingsManager::kMaxNumFeeds; i++) {
+                    CPP_AT_CMD_PRINTF(
+                        "=%d(FEED_INDEX),%s(FEED_URI),%d(FEED_PORT),%d(ACTIVE),%s(PROTOCOL)", i,
+                        settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i],
+                        settings_manager.settings.feed_is_active[i],
+                        SettingsManager::ReportingProtocolStrs[settings_manager.settings.feed_protocols[i]]);
+                }
+            }
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            // Setting feed information for a specific feed.
+            uint16_t feed_index = UINT16_MAX;
+            if (!CPP_AT_HAS_ARG(0)) {
+                CPP_AT_ERROR("Feed index is required for setting feed information.");
+            }
+            CPP_AT_TRY_ARG2NUM(0, feed_index);
+            if (feed_index >= SettingsManager::kMaxNumFeeds) {
+                CPP_AT_ERROR("Feed index must be between 0-%d, no details for feed with index %d.",
+                             SettingsManager::kMaxNumFeeds - 1, feed_index);
+            }
+            // Set FEED_URI.
+            if (CPP_AT_HAS_ARG(1)) {
+                strncpy(settings_manager.settings.feed_uris[feed_index], args[1].data(),
+                        SettingsManager::kFeedURIMaxNumChars);
+                settings_manager.settings.feed_uris[feed_index][SettingsManager::kFeedURIMaxNumChars] = '\0';
+            }
+            // Set FEED_PORT
+            if (CPP_AT_HAS_ARG(2)) {
+                CPP_AT_TRY_ARG2NUM(2, settings_manager.settings.feed_ports[feed_index]);
+            }
+            // Set ACTIVE
+            if (CPP_AT_HAS_ARG(3)) {
+                uint8_t is_active;
+                CPP_AT_TRY_ARG2NUM(3, settings_manager.settings.feed_is_active[feed_index]);
+            }
+            // Set PROTOCOL
+            if (CPP_AT_HAS_ARG(4)) {
+                SettingsManager::ReportingProtocol feed_protocol;
+                for (uint16_t i = 0; i < SettingsManager::ReportingProtocol::kNumProtocols; i++) {
+                    if (args[4].compare(SettingsManager::ReportingProtocolStrs[i]) == 0) {
+                        feed_protocol = static_cast<SettingsManager::ReportingProtocol>(i);
+                    }
+                }
+                // Check that the selected prototcol is valid for use with feeders.
+                if (!(feed_protocol == SettingsManager::ReportingProtocol::kBeast ||
+                      feed_protocol == SettingsManager::ReportingProtocol::kNoReports)) {
+                    CPP_AT_ERROR("Protocol %s is not supported for network feeds.",
+                                 SettingsManager::ReportingProtocolStrs[feed_protocol]);
+                }
+                settings_manager.settings.feed_protocols[feed_index] = feed_protocol;
+            }
+            CPP_AT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATFlashESP32Callback) {
     if (!esp32.DeInit()) {
         CPP_AT_ERROR("Error while de-initializing ESP32 before flashing.");
@@ -351,6 +436,11 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string_buf = "AT+LOG_LEVEL=<log_level>\r\n\tSet how much stuff gets printed to the "
                         "console.\r\n\tconsole_verbosity = [SILENT ERRORS WARNINGS LOGS]",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATLogLevelCallback, comms_manager)},
+    {.command_buf = "+FEED",
+     .min_args = 0,
+     .max_args = 5,
+     .help_callback = ATFeedHelpCallback,
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFeedCallback, comms_manager)},
     {.command_buf = "+FLASH_ESP32",
      .min_args = 0,
      .max_args = 0,
@@ -389,7 +479,7 @@ const CppAT::ATCommandDef_t at_command_list[] = {
 #ifdef HARDWARE_UNIT_TESTS
     {.command_buf = "+TEST",
      .min_args = 0,
-     .max_args = 0,
+     .max_args = 1,
      .help_string_buf = "Run hardware self-tests.",
      .callback = ATTestCallback},
 #endif

@@ -6,11 +6,12 @@
 
 class EEPROM {
    public:
+    static const uint16_t kRegAddrNumBytes = 2;
     struct EEPROMConfig {
         i2c_inst_t *i2c_handle = i2c1;
-        uint8_t i2c_addr = 0b1010001;  // M24C02, TSSOP-8, E3=0 E2=0 E1=1
-        uint16_t size_bytes = 256;     // M24C02 = 2kb = 256B
-        uint16_t page_size_bytes = 16;
+        uint8_t i2c_addr = 0b1010001;  // M24C64, TSSOP-8, E3=0 E2=0 E1=1
+        uint16_t size_bytes = 8e3;     // M24C64 = 64kbit = 8kByte
+        uint16_t page_size_bytes = 32;
         uint32_t i2c_timeout_us = 1e6;
         uint32_t i2c_write_time_us = 10e3;  // 5ms write time for Bytes and pages. 10ms for some buffer.
 
@@ -25,7 +26,7 @@ class EEPROM {
      * Constructor.
      * @param[in] config_in Configuration struct with parameters to use for EEPROM peripheral.
      */
-    EEPROM(EEPROMConfig config_in) : config_(config_in){};
+    EEPROM(EEPROMConfig config_in) : config_(config_in) {};
 
     /**
      * Initializes and tests the EEPROM. Optional (not required if I2C instance is already initialized).
@@ -40,7 +41,7 @@ class EEPROM {
      * @retval True if save succeeded, false otherwise.
      */
     template <typename T>  // Implemented here since implementing a template function in a .cc file is a pain.
-    bool Save(const T &data_to_save, uint8_t start_reg = 0x0) {
+    bool Save(const T &data_to_save, uint16_t start_reg = 0x0) {
         // Check size of data and available space on the EEPROM.
         uint16_t data_size_bytes = sizeof(data_to_save);
         uint16_t remaining_capacity_bytes = config_.size_bytes - start_reg;
@@ -68,7 +69,7 @@ class EEPROM {
      * @retval True if load succeeded, false otherwise.
      */
     template <typename T>  // Implemented here since implementing a template function in a .cc file is a pain.
-    bool Load(T &data_to_load, uint8_t start_reg = 0x0) {
+    bool Load(T &data_to_load, uint16_t start_reg = 0x0) {
         uint16_t data_size_bytes = sizeof(data_to_load);
         uint16_t remaining_capacity_bytes = config_.size_bytes - start_reg;
         if (remaining_capacity_bytes < data_size_bytes) {
@@ -107,6 +108,10 @@ class EEPROM {
      */
     int ReadBuf(const uint16_t reg, uint8_t *buf, const uint16_t nbytes);
 
+    uint16_t GetSizeBytes() { return config_.size_bytes; }
+
+    uint16_t GetPageSizeBytes() { return config_.page_size_bytes; }
+
     void Dump();
 
    private:
@@ -117,12 +122,12 @@ class EEPROM {
      * The EEPROM takes up to 5ms to write a Byte or page. This function gets called before a write operation to ensure
      * that we don't encounter errors by sending more data when the EEPROM isn't ready yet.
      */
-    void WaitForSafeWriteTime();
+    void BeginPostWriteDelay();
 
     /**
-     * Same as WaitForSafeWriteTime, but doesn't record the timestamp as last_write_timeestamp_us_.
+     * Same as WaitForSafeWriteTime, but doesn't record the timestamp as last_write_timestamp_us_.
      */
-    void WaitForSafeReadTime();
+    void WaitFOrSafeReadWriteTime();
 };
 
 extern EEPROM eeprom;
