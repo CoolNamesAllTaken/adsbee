@@ -24,7 +24,8 @@
 
 const uint16_t kStatusLEDBootupNumBlinks = 4;
 const uint16_t kStatusLEDBootupBlinkPeriodMs = 200;
-const float kPreambleDetectorFreq = 16e6;  // Running at 16MHz (8 clock cycles per half bit).
+constexpr float kPreambleDetectorFreq = 48e6;    // Running at 16MHz (8 clock cycles per half bit).
+constexpr float kMessageDemodulatorFreq = 16e6;  // Run at 16 MHz to demodulate bits at 1Mbps.
 
 const uint8_t kRxGainDigipotI2CAddr = 0b0101111;  // MCP4017-104e
 const uint32_t kRxgainDigipotOhmsPerCount = 100e3 / 127;
@@ -125,8 +126,7 @@ bool ADSBee::Init() {
     irq_set_enabled(config_.preamble_detector_demod_irq, true);
 
     /** MESSAGE DEMODULATOR PIO **/
-    float message_demodulator_freq = 48e6;  // Run at 48 MHz to demodulate bits at 1Mbps.
-    float message_demodulator_div = (float)clock_get_hz(clk_sys) / message_demodulator_freq;
+    float message_demodulator_div = (float)clock_get_hz(clk_sys) / kMessageDemodulatorFreq;
     message_demodulator_program_init(config_.message_demodulator_pio, message_demodulator_sm_,
                                      message_demodulator_offset_, config_.pulses_pin, config_.recovered_clk_pin,
                                      message_demodulator_div);

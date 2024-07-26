@@ -11,7 +11,7 @@ waiting_for_first_edge:
     wait 1 pin, pulses_pin_index [11] ; wait for in_pin to go HI, delay to middle of the eye
 check_pulse_1_hi:
     jmp pin check_pulse_1_lo [23] ; if first pulse HI is ok, look for first pulse LO
-    jmp waiting_for_first_edge; first pulse did not go HI, abort
+    jmp waiting_for_first_edge ; first pulse did not go HI, abort
 check_pulse_1_lo:
     jmp pin waiting_for_first_edge [23] ; if first pulse did not go LO, abort
     jmp pin check_pulse_2_lo [23]; if second pulse HI is ok, look for second pulse LO
@@ -21,7 +21,7 @@ check_pulse_2_lo:
     jmp pin waiting_for_first_edge [23]
     jmp pin waiting_for_first_edge [23]
     jmp pin waiting_for_first_edge [20]
-    jmp x-- check_pulse_1_hi ; loop to beginning of double pulse loop at end of first double pulse
+    jmp x-- check_pulse_1_hi [2] ; loop to beginning of double pulse loop at end of first double pulse
 ; END DOUBLE PULSE MATCH
 ; BEGIN EXTRA DELAY AFTER SECOND DOUBLE PULSE
 preamble_tail:
@@ -36,7 +36,7 @@ preamble_tail:
 preamble_matched:
     ; Note: IRQ number could be changed with some jumps on scratch y for a dual-band receiver version.
     ; irq set 0 side 1 ; set the DEMOD IRQ to begin decoding message body
-    set pins 1 ; set demod pin to indicate message body beginning
+    set pins 1 [2] ; set demod pin to indicate message body beginning
     wait 1 pin, pulses_pin_index [11] ; wait till middle of message eye to look for end
 waiting_for_end_of_message:
     set x, 20 [2] ; [2.5us] number of sequential idle samples required to mark end of packet
@@ -44,7 +44,7 @@ idle_countdown:
     jmp pin waiting_for_end_of_message [5] ; start over the idle countdown if received a non idle bit
     jmp x-- idle_countdown [2] ; still idle, keep counting down if the timer isn't up
     set pins, 0 ; set demod pin to 0 to indicate message is finished
-    irq set 0 ; set the DEMOD IRQ to indicate the message body is finished
+    irq set 0 [1] ; set the DEMOD IRQ to indicate the message body is finished
     wait 0 irq 0 ; don't look for new messages until the current one has been processed
 .wrap
 
