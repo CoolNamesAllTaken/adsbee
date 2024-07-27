@@ -8,6 +8,6 @@
 		}
 	],
 	"settings": {
-		"C_Cpp.default.compilerPath": "${HOME}/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20240530/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc"
+		"C_Cpp.default.compilerPath": "/home/jmcnelly/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20240530/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc"
 	}
 }
