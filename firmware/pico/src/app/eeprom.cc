@@ -8,7 +8,7 @@
 
 void EEPROM::BeginPostWriteDelay() { last_write_timestamp_us_ = get_time_since_boot_us(); }
 
-void EEPROM::WaitFOrSafeReadWriteTime() {
+void EEPROM::WaitForSafeReadWriteTime() {
     while ((uint32_t)(get_time_since_boot_us() - last_write_timestamp_us_) < config_.i2c_write_time_us) {
         // Block until write has completed.
     }
@@ -19,7 +19,7 @@ int EEPROM::WriteByte(const uint16_t reg, const uint8_t byte) {
     msg[0] = reg >> 8;
     msg[1] = reg & 0xFF;
     msg[2] = byte;
-    WaitFOrSafeReadWriteTime();
+    WaitForSafeReadWriteTime();
     int ret =
         i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, sizeof(msg), false, config_.i2c_timeout_us);
     BeginPostWriteDelay();
@@ -32,7 +32,7 @@ int EEPROM::ReadByte(const uint16_t reg, uint8_t &byte) {
     uint8_t msg[kRegAddrNumBytes];
     msg[0] = reg >> 8;
     msg[1] = reg & 0xFF;
-    WaitFOrSafeReadWriteTime();
+    WaitForSafeReadWriteTime();
     int status =
         i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, sizeof(msg), true, config_.i2c_timeout_us);
     if (status < 0) return status;
@@ -62,7 +62,7 @@ int EEPROM::WriteBuf(const uint16_t reg, uint8_t *buf, const uint16_t num_bytes)
         for (uint16_t i = 0; i < write_num_bytes; i++) {
             msg[i + kRegAddrNumBytes] = buf[num_bytes_written + i];
         }
-        WaitFOrSafeReadWriteTime();
+        WaitForSafeReadWriteTime();
         int status =
             i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, sizeof(msg), false, config_.i2c_timeout_us);
         BeginPostWriteDelay();
@@ -103,7 +103,7 @@ int EEPROM::ReadBuf(const uint16_t reg, uint8_t *buf, const uint16_t num_bytes) 
     uint8_t msg[kRegAddrNumBytes];
     msg[0] = reg >> 8;
     msg[1] = reg & 0xFF;
-    WaitFOrSafeReadWriteTime();
+    WaitForSafeReadWriteTime();
     i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, sizeof(msg), true, config_.i2c_timeout_us);
     num_bytes_read =
         i2c_read_timeout_us(config_.i2c_handle, config_.i2c_addr, buf, num_bytes, false, config_.i2c_timeout_us);

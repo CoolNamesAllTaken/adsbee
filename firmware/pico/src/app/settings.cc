@@ -2,6 +2,7 @@
 
 #include "ads_bee.hh"
 #include "eeprom.hh"
+#include "spi_coprocessor.hh"
 
 const char SettingsManager::ConsoleLogLevelStrs[SettingsManager::LogLevel::kNumLogLevels]
                                                [SettingsManager::kConsoleLogLevelStrMaxLen] = {"SILENT", "ERRORS",
@@ -57,6 +58,10 @@ bool SettingsManager::Save() {
     settings.wifi_ssid[kWiFiSSIDMaxLen] = '\0';
     strncpy(settings.wifi_password, comms_manager.wifi_password, kWiFiPasswordMaxLen);
     settings.wifi_password[kWiFiPasswordMaxLen] = '\0';
+
+    // Sync settings from RP2040 -> ESP32.
+    SPICoprocessor::SettingsMessage settings_message = SPICoprocessor::SettingsMessage(settings_manager.settings);
+    esp32.SendMessage(settings_message);
 
     return eeprom.Save(settings);
 }

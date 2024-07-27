@@ -8,7 +8,9 @@
 #ifdef ON_PICO
 #include "hardware/spi.h"
 #else
-// TODO: Include ESP32 SPI header.
+#include "esp_log.h"
+#include "driver/spi_slave.h"
+#include "driver/gpio.h"
 #endif
 
 class SPICoprocessor
@@ -25,7 +27,15 @@ public:
         uint16_t spi_cs_pin = 9;
         uint16_t spi_handshake_pin = 13;
 #else
-        // TODO: Initialize ESP32 SPI parameters here.
+        spi_host_device_t spi_host = SPI2_HOST;
+        gpio_num_t spi_mosi_pin = GPIO_NUM_35;
+        gpio_num_t spi_miso_pin = GPIO_NUM_36;
+        gpio_num_t spi_clk_pin = GPIO_NUM_34;
+        gpio_num_t spi_cs_pin = GPIO_NUM_33;
+        gpio_num_t spi_handshake_pin = GPIO_NUM_0;
+        uint16_t spi_buffer_len_bytes = 1000;
+
+        gpio_num_t network_led_pin = GPIO_NUM_5;
 #endif
     };
 

@@ -82,7 +82,13 @@ public:
      * @param[in] rssi_dbm RSSI of the packet that was received, in dBm. Defaults to INT32_MIN if not set.
      * @param[in] mlat_12mhz_counts Counts of a 12MHz clock used for the 6-byte multilateration timestamp.
      */
-    DecodedTransponderPacket(char *rx_string, int rssi_dbm = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0); // TODO: add mlat counter units, add to construciton method!
+    DecodedTransponderPacket(char *rx_string, int rssi_dbm = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
+
+    /**
+     * DecodedTransponderPacket constructor from RawTransponderPacket. Uses RawTransponderPacket's implicit constructor.
+     * @param[in] packet_in RawTransponderPacket to use when creating the DecodedTransponderPacket.
+     */
+    DecodedTransponderPacket(const RawTransponderPacket &packet_in);
 
     /**
      * Default constructor.

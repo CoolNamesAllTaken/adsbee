@@ -104,6 +104,12 @@ DecodedTransponderPacket::DecodedTransponderPacket(char *rx_string, int rssi_dbm
     ConstructTransponderPacket();
 }
 
+DecodedTransponderPacket::DecodedTransponderPacket(const RawTransponderPacket &packet_in)
+    : packet(packet_in)
+{
+    ConstructTransponderPacket();
+}
+
 DecodedTransponderPacket::DownlinkFormat DecodedTransponderPacket::GetDownlinkFormatEnum()
 {
     switch (downlink_format_)

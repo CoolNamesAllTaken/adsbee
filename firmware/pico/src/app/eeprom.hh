@@ -127,7 +127,7 @@ class EEPROM {
     /**
      * Same as WaitForSafeWriteTime, but doesn't record the timestamp as last_write_timestamp_us_.
      */
-    void WaitFOrSafeReadWriteTime();
+    void WaitForSafeReadWriteTime();
 };
 
 extern EEPROM eeprom;
