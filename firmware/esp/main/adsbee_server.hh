@@ -3,15 +3,15 @@
 
 #include "data_structures.hh"
 #include "settings.hh"
+#include "spi_coprocessor.hh"
 
 class ADSBeeServer
 {
 public:
-    ADSBeeServer()
-    {
-        for (uint16_t i = 0; i < SettingsManager::kMaxNumFeeds; i++)
-        {
-        }
-    }
+    ADSBeeServer();
+    bool Init();
+    bool Update();
+
+    bool IngestSPIPacket(uint8_t *buf, uint16_t buf_len_bytes);
 };
 #endif /* ADSBEE_SERVER_HH_ */
