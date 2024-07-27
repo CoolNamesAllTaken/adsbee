@@ -1,14 +1,18 @@
 #pragma once
 
+#include <hardware/exception.h>
 #include <hardware/structs/systick.h>
 
 #include <atomic>
 #include <cstddef>
 #include <cstdlib>
+#include <functional>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 
 #include "ITimeSource.h"
+#include "mutex.h"
 
 namespace adsbee::time {
 
@@ -23,6 +27,7 @@ class SysTickTimeSource : ITimeSource {
         systick_hw->rvr = CLOCK_RESET_VAL;
         systick_hw->cvr = 0; /* Clear current value */
         systick_hw->csr = systick_hw->csr | 1;
+        exception_set_exclusive_handler(SYSTICK_EXCEPTION, handleIrq);
     }
 
     SysTickTimeSource(const SysTickTimeSource&) = delete;
@@ -35,8 +40,17 @@ class SysTickTimeSource : ITimeSource {
     ~SysTickTimeSource() { systick_hw->csr = 0; }
 
    private:
+    static void handleIrq() {
+        std::lock_guard lock(_mutex);
+        // increment on volatile vars is deprecated
+        _interruptCount = _interruptCount + 1;
+    }
+
     bool _external;
     const uint32_t CLOCK_RESET_VAL;
+    // We can make this static since there can only be one instance of the class
+    static volatile uint64_t _interruptCount;
+    static adsbee::hal::Mutex _mutex;
 };
 
 class SysTimeTimeSourceFactory {
