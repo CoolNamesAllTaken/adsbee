@@ -6,6 +6,7 @@
 #include "hal.hh"
 #include "pico/binary_info.h"
 #include "settings.hh"
+#include "SysTickTimeSource.h"
 #include "unit_conversions.hh"
 
 const char* kSoftwareVersionStr = "0.0.1";
@@ -21,6 +22,10 @@ SettingsManager settings_manager;
 int main() {
     bi_decl(bi_program_description("ADS-Bee ADSB Receiver"));
 
+    //test code
+    adsbee::time::SysTimeTimeSourceFactory::create<true>();
+    //end test code
+    
     ads_bee.Init();
     eeprom.Init();
     comms_manager.Init();
