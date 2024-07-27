@@ -27,6 +27,7 @@ class SysTickTimeSource : ITimeSource {
         systick_hw->rvr = CLOCK_RESET_VAL;
         systick_hw->cvr = 0; /* Clear current value */
         systick_hw->csr = systick_hw->csr | 1;
+
         exception_set_exclusive_handler(SYSTICK_EXCEPTION, handleIrq);
     }
 
@@ -38,9 +39,15 @@ class SysTickTimeSource : ITimeSource {
 
    public:
     ~SysTickTimeSource() { systick_hw->csr = 0; }
+    uint64_t getTickCount() {
+        // todo: prevent deadlock with IRQ
+        std::lock_guard lock(_mutex);
+        return CLOCK_RESET_VAL * _interruptCount + systick_hw->cvr;
+    }
 
    private:
     static void handleIrq() {
+        // todo: prevent deadlock with getTickCount()
         std::lock_guard lock(_mutex);
         // increment on volatile vars is deprecated
         _interruptCount = _interruptCount + 1;
