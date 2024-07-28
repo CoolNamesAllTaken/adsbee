@@ -228,13 +228,13 @@ extern const uint16_t at_command_list_num_commands;
 #define TEXT_COLOR_RESET            "\033[0m"
 
 #define CONSOLE_PRINTF(format, ...) comms_manager.console_printf(format __VA_OPT__(, ) __VA_ARGS__);
-#define CONSOLE_INFO(format, ...) \
-    comms_manager.console_level_printf(SettingsManager::LogLevel::kInfo, format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
-#define CONSOLE_WARNING(format, ...)                                         \
+#define CONSOLE_INFO(tag, format, ...) \
+    comms_manager.console_level_printf(SettingsManager::LogLevel::kInfo, tag format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
+#define CONSOLE_WARNING(tag, format, ...)                                         \
     comms_manager.console_level_printf(SettingsManager::LogLevel::kWarnings, \
-                                       TEXT_COLOR_YELLOW format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) __VA_ARGS__);
-#define CONSOLE_ERROR(format, ...)                                         \
+                                       tag TEXT_COLOR_YELLOW format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) __VA_ARGS__);
+#define CONSOLE_ERROR(tag, format, ...)                                         \
     comms_manager.console_level_printf(SettingsManager::LogLevel::kErrors, \
-                                       TEXT_COLOR_RED format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) __VA_ARGS__);
+                                       tag TEXT_COLOR_RED format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) __VA_ARGS__);
 
 #endif /* COMMS_HH_ */

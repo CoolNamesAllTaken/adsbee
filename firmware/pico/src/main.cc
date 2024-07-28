@@ -59,7 +59,7 @@ int main() {
         if (esp32_test_packet_timestamp_ms > esp32_test_packet_last_sent_timestamp_ms + esp32_test_packet_interval_ms) {
             RawTransponderPacket test_packet = RawTransponderPacket("8dac009458b9970f0aa394359da9", -123, 456789);
             SPICoprocessor::RawTransponderPacketMessage message = SPICoprocessor::RawTransponderPacketMessage(test_packet);
-            CONSOLE_INFO("Sent ESP32 message.");
+            CONSOLE_INFO("Debug", "Sent ESP32 message.");
             esp32.SendMessage(message);
             esp32_test_packet_last_sent_timestamp_ms = esp32_test_packet_timestamp_ms;
         }
@@ -73,11 +73,11 @@ int main() {
             uint32_t packet_buffer[DecodedTransponderPacket::kMaxPacketLenWords32];
             packet.DumpPacketBuffer(packet_buffer);
             if (packet.GetPacketBufferLenBits() == DecodedTransponderPacket::kExtendedSquitterPacketLenBits) {
-                CONSOLE_INFO("New message: 0x%08x|%08x|%08x|%04x RSSI=%ddBm MLAT=%u", packet_buffer[0],
+                CONSOLE_INFO("main", "New message: 0x%08x|%08x|%08x|%04x RSSI=%ddBm MLAT=%u", packet_buffer[0],
                              packet_buffer[1], packet_buffer[2], (packet_buffer[3]) >> (4 * kBitsPerNibble),
                              packet.GetRSSIdBm(), packet.GetMLAT12MHzCounter());
             } else {
-                CONSOLE_INFO("New message: 0x%08x|%06x RSSI=%ddBm MLAT=%u", packet_buffer[0],
+                CONSOLE_INFO("main", "New message: 0x%08x|%06x RSSI=%ddBm MLAT=%u", packet_buffer[0],
                              (packet_buffer[1]) >> (2 * kBitsPerNibble), packet.GetRSSIdBm(),
                              packet.GetMLAT12MHzCounter());
             }
@@ -86,17 +86,17 @@ int main() {
                 // 112-bit (extended squitter) packets. These packets can be validated via CRC.
                 ads_bee.FlashStatusLED();
 
-                CONSOLE_INFO("\tdf=%d icao_address=0x%06x", packet.GetDownlinkFormat(), packet.GetICAOAddress());
+                CONSOLE_INFO("main", "\tdf=%d icao_address=0x%06x", packet.GetDownlinkFormat(), packet.GetICAOAddress());
                 comms_manager.transponder_packet_reporting_queue.Push(packet);
 
                 ads_bee.aircraft_dictionary.IngestADSBPacket(ADSBPacket(packet));
-                CONSOLE_INFO("\taircraft_dictionary: %d aircraft", ads_bee.aircraft_dictionary.GetNumAircraft());
+                CONSOLE_INFO("main", "\taircraft_dictionary: %d aircraft", ads_bee.aircraft_dictionary.GetNumAircraft());
             } else if (packet.GetPacketBufferLenBits() == DecodedTransponderPacket::kSquitterPacketNumBits) {
                 // CRC is overlaid with ICAO address for 56-bit (squitter) packets. Check ICAO against aircraft in the
                 // dictionary to validate the CRC.
                 if (ads_bee.aircraft_dictionary.ContainsAircraft(packet.GetICAOAddress())) {
                     ads_bee.FlashStatusLED();
-                    CONSOLE_INFO("\tdf=%d icao_address=0x%06x", packet.GetDownlinkFormat(), packet.GetICAOAddress());
+                    CONSOLE_INFO("main", "\tdf=%d icao_address=0x%06x", packet.GetDownlinkFormat(), packet.GetICAOAddress());
                     comms_manager.transponder_packet_reporting_queue.Push(packet);
                     // TODO: Add squitter packet support to aircraft dictionary.
                 }

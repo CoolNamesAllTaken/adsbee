@@ -72,17 +72,17 @@ esp_binaries_t bin = {
     .app = {.data = adsbee_esp_bin, .size = adsbee_esp_bin_size, .addr = APPLICATION_ADDRESS}};
 
 bool ESP32SerialFlasher::FlashESP32() {
-    CONSOLE_INFO("ESP32SerialFlasher::FlashESP32: Beginning serial initialization.");
+    CONSOLE_INFO("ESP32SerialFlasher::FlashESP32", "Beginning serial initialization.");
     Init();
     if (connect_to_target(config_.esp32_higher_baudrate) == ESP_LOADER_SUCCESS) {
-        CONSOLE_INFO("ESP32SerialFlasher::FlashESP32: Connected to target.");
+        CONSOLE_INFO("ESP32SerialFlasher::FlashESP32", "Connected to target.");
 
         flash_binary(bin.boot.data, bin.boot.size, bin.boot.addr);
         flash_binary(bin.part.data, bin.part.size, bin.part.addr);
         flash_binary(bin.app.data, bin.app.size, bin.app.addr);
-        CONSOLE_INFO("ESP32SerialFlasher::FlashESP32: Firmware upload complete.");
+        CONSOLE_INFO("ESP32SerialFlasher::FlashESP32", "Firmware upload complete.");
     } else {
-        CONSOLE_ERROR("ESP32SerialFlasher::FlashESP32: Serial initialization failed.");
+        CONSOLE_ERROR("ESP32SerialFlasher::FlashESP32", "Serial initialization failed.");
     }
     ResetTarget();
     DeInit();
@@ -153,7 +153,7 @@ esp_loader_error_t loader_port_change_transmission_rate(uint32_t baudrate) {
     return ESP_LOADER_SUCCESS;  // Pico doesn't have a meaningful way to fail when setting baudrate.
 }
 
-void loader_port_debug_print(const char *str) { CONSOLE_INFO("DEBUG: %s", str); }
+void loader_port_debug_print(const char *str) { CONSOLE_INFO("esp32_flasher.cc", "DEBUG: %s", str); }
 
 /** Begin code from example_common.c **/
 

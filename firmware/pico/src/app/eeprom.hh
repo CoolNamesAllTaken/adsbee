@@ -55,7 +55,7 @@ class EEPROM {
         int num_bytes_written = WriteBuf(start_reg, (uint8_t *)(&data_to_save), data_size_bytes);
         if (num_bytes_written != data_size_bytes) {
             // num_bytes_written is usually the number of bytes written, but could be a negative error code value.
-            CONSOLE_ERROR("EEPROM::Save: I2C write failed, written byte counter returned %d but expected %d.",
+            CONSOLE_ERROR("EEPROM::Save", "I2C write failed, written byte counter returned %d but expected %d.",
                           num_bytes_written, data_size_bytes);
             return false;
         }
@@ -73,8 +73,8 @@ class EEPROM {
         uint16_t data_size_bytes = sizeof(T);
         uint16_t remaining_capacity_bytes = config_.size_bytes - start_reg;
         if (remaining_capacity_bytes < data_size_bytes) {
-            CONSOLE_PRINTF(
-                "EEPROM::Load: Failed to load data of size %d Bytes from EEPROM register 0x%x: only %d Bytes "
+            CONSOLE_ERROR(
+                "EEPROM::Load:", "Failed to load data of size %d Bytes from EEPROM register 0x%x: only %d Bytes "
                 "remaining.\r\n",
                 data_size_bytes, start_reg, remaining_capacity_bytes);
             return false;
@@ -82,7 +82,7 @@ class EEPROM {
         int num_bytes_read = ReadBuf(start_reg, (uint8_t *)(&data_to_load), sizeof(T));
         if (num_bytes_read != data_size_bytes) {
             // num_bytes_written is usually the number of bytes written, but could be a negative error code value.
-            CONSOLE_ERROR("EEPROM::Save: I2C read failed, read byte counter returned %d but expected %d.",
+            CONSOLE_ERROR("EEPROM::Save", "I2C read failed, read byte counter returned %d but expected %d.",
                           num_bytes_read, data_size_bytes);
             return false;
         }

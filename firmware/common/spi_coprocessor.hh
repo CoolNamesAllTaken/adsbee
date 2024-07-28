@@ -1,24 +1,46 @@
 #ifndef SPI_COPROCESSOR_HH_
 #define SPI_COPROCESSOR_HH_
 
-#include "transponder_packet.hh"
 #include "aircraft_dictionary.hh"
 #include "settings.hh"
+#include "transponder_packet.hh"
 
 #ifdef ON_PICO
 #include "hardware/spi.h"
 #else
-#include "esp_log.h"
-#include "driver/spi_slave.h"
+#include "data_structures.hh"
 #include "driver/gpio.h"
+#include "driver/spi_slave.h"
+#include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #endif
 
-class SPICoprocessor
-{
-public:
-    struct SPICoprocessorConfig
-    {
-        uint32_t clk_rate_hz = 40e6; // 40 MHz
+class SPICoprocessor {
+   public:
+    static const uint16_t kSPITransactionMaxLenBytes = 1000;
+    static_assert(kSPITransactionMaxLenBytes % 4 == 0);  // Make sure it's word-aligned.
+    static const uint16_t kSPITransactionQueueLenTransactions = 3;
+
+    struct SPITransaction {
+        uint8_t buffer[kSPITransactionMaxLenBytes];
+
+        SPITransaction() {
+            for (uint16_t i = 0; i < kSPITransactionMaxLenBytes; i++) {
+                // ESP_LOGI("SPITransaction", "Clearing i=%d", i);
+                buffer[i] = 0x0;
+            }
+        }
+    };
+
+#ifdef ON_PICO
+#else
+    static const uint32_t kNetworkLEDBLinkDurationMs = 1000;
+    static const uint32_t kSPIRxTaskStackDepthBytes = 4096;
+    static const TickType_t kSPIRxTimeoutTicks = 100 / portTICK_PERIOD_MS;
+#endif
+    struct SPICoprocessorConfig {
+        uint32_t clk_rate_hz = 40e6;  // 40 MHz
 #ifdef ON_PICO
         spi_inst_t *spi_handle = spi1;
         uint16_t spi_clk_pin = 10;
@@ -27,30 +49,27 @@ public:
         uint16_t spi_cs_pin = 9;
         uint16_t spi_handshake_pin = 13;
 #else
-        spi_host_device_t spi_host = SPI2_HOST;
+        spi_host_device_t spi_handle = SPI2_HOST;
         gpio_num_t spi_mosi_pin = GPIO_NUM_35;
         gpio_num_t spi_miso_pin = GPIO_NUM_36;
         gpio_num_t spi_clk_pin = GPIO_NUM_34;
         gpio_num_t spi_cs_pin = GPIO_NUM_33;
         gpio_num_t spi_handshake_pin = GPIO_NUM_0;
-        uint16_t spi_buffer_len_bytes = 1000;
 
         gpio_num_t network_led_pin = GPIO_NUM_5;
 #endif
     };
 
-    enum PacketType : int8_t
-    {
+    enum PacketType : int8_t {
         kSCPacketTypeInvalid = -1,
         kSCPacketTypeSettings,
         kSCPacketTypeNetworkMessage,
         kSCPacketTypeAircraftList
     };
 
-    struct SCMessage
-    {
-        uint16_t crc;    // 16-bit CRC of all bytes after the CRC.
-        uint32_t length; // Length of the packet in bytes.
+    struct SCMessage {
+        uint16_t crc;     // 16-bit CRC of all bytes after the CRC.
+        uint32_t length;  // Length of the packet in bytes.
         SPICoprocessor::PacketType type;
 
         /**
@@ -68,8 +87,7 @@ public:
         void PopulateCRCAndLength(uint32_t payload_length);
     };
 
-    struct SettingsMessage : public SCMessage
-    {
+    struct SettingsMessage : public SCMessage {
         SettingsManager::Settings settings;
 
         /**
@@ -80,8 +98,7 @@ public:
         SettingsMessage(const SettingsManager::Settings &settings_in);
     };
 
-    struct AircraftListMessage : public SCMessage
-    {
+    struct AircraftListMessage : public SCMessage {
         uint16_t num_aicraft;
         Aircraft aircraft_list[AircraftDictionary::kMaxNumAircraft];
 
@@ -95,28 +112,24 @@ public:
         AircraftListMessage(uint16_t num_aicraft_in, const Aircraft aircraft_list_in[]);
     };
 
-    struct DecodedTransponderPacketMessage : public SCMessage
-    {
+    struct DecodedTransponderPacketMessage : public SCMessage {
         DecodedTransponderPacket packet;
 
         /**
-         * DecodedTransponderPacketMessage constructor. Populates the packet to send and adds length, packet type, and CRC info
-         * to parent.
+         * DecodedTransponderPacketMessage constructor. Populates the packet to send and adds length, packet type, and
+         * CRC info to parent.
          * @param[in] packet Reference to transponder packet to use for construction.
          */
-        DecodedTransponderPacketMessage(const DecodedTransponderPacket &packet_in)
-        {
+        DecodedTransponderPacketMessage(const DecodedTransponderPacket &packet_in) {
             packet = packet_in;
             PopulateCRCAndLength(sizeof(DecodedTransponderPacketMessage) - sizeof(SCMessage));
         }
     };
 
-    struct RawTransponderPacketMessage : public SCMessage
-    {
+    struct RawTransponderPacketMessage : public SCMessage {
         RawTransponderPacket packet;
 
-        RawTransponderPacketMessage(const RawTransponderPacket &packet_in)
-        {
+        RawTransponderPacketMessage(const RawTransponderPacket &packet_in) {
             packet = packet_in;
             PopulateCRCAndLength(sizeof(RawTransponderPacketMessage) - sizeof(SCMessage));
         }
@@ -134,13 +147,59 @@ public:
      */
     bool SendMessage(SCMessage &message);
 
-private:
+#ifdef ON_PICO
+#else
+    /**
+     * Helper function used by callbacks to set the handshake pin high or low on the ESP32.
+     */
+    void SetSPIHandshakePinLevel(bool level) { gpio_set_level(config_.spi_handshake_pin, level); }
+
+    /**
+     * Function called from the task spawned during Init().
+     */
+    void SPIReceiveTask();
+
+    /**
+     * Turns on the network LED for a specified number of milliseconds. Relies on the UpdateNetowrkLED() function to
+     * turn the lED off.
+     * @param[in] blink_duration_ms Number of milliseconds that the LED should stay on for.
+     */
+    void BlinkNetworkLED(uint16_t blink_duration_ms = kNetworkLEDBLinkDurationMs) {
+        gpio_set_level(config_.network_led_pin, 1);
+        network_led_turn_off_timestamp_ticks_ = xTaskGetTickCount() + kNetworkLEDBLinkDurationMs / portTICK_PERIOD_MS;
+    }
+
+    /**
+     * Turns off the network LED if necessary.
+     */
+    void UpdateNetworkLED() {
+        if (xTaskGetTickCount() > network_led_turn_off_timestamp_ticks_) {
+            gpio_set_level(config_.network_led_pin, 0);
+        }
+    }
+#endif
+
+   private:
     bool SPIInit();
     bool SPIDeInit();
     int SPIWriteBlocking(uint8_t *tx_buf, uint32_t length);
     int SPIReadBlocking(uint8_t *rx_buf, uint32_t length);
 
     SPICoprocessorConfig config_;
+
+#ifdef ON_PICO
+#else
+    WORD_ALIGNED_ATTR SPITransaction spi_rx_queue_buf_[kSPITransactionQueueLenTransactions];
+    WORD_ALIGNED_ATTR SPITransaction spi_tx_queue_buf_[kSPITransactionQueueLenTransactions];
+
+    PFBQueue<SPITransaction> spi_rx_queue_ = PFBQueue<SPITransaction>(
+        {.buf_len_num_elements = kSPITransactionQueueLenTransactions, .buffer = spi_rx_queue_buf_});
+    PFBQueue<SPITransaction> spi_tx_queue_ = PFBQueue<SPITransaction>(
+        {.buf_len_num_elements = kSPITransactionQueueLenTransactions, .buffer = spi_tx_queue_buf_});
+
+    bool spi_receive_task_should_exit_ = false;  // Flag used to tell SPI receive task to exit.
+    TickType_t network_led_turn_off_timestamp_ticks_ = 0;
+#endif
 };
 
 #ifdef ON_PICO

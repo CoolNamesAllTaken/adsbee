@@ -174,16 +174,16 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
 
 CPP_AT_CALLBACK(CommsManager::ATFlashESP32Callback) {
     if (!esp32.DeInit()) {
-        CPP_AT_ERROR("Error while de-initializing ESP32 before flashing.");
+        CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while de-initializing ESP32 before flashing.");
     }
     if (!esp32_flasher.FlashESP32()) {
-        CPP_AT_ERROR("Error while flashing ESP32.");
+        CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while flashing ESP32.");
     }
     if (!esp32.Init()) {
-        CPP_AT_ERROR("Error while re-initializing ESP32 after flashing.");
+        CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while re-initializing ESP32 after flashing.");
     }
 
-    CONSOLE_INFO("ESP32 successfully flashed.");
+    CONSOLE_INFO("CommsManager::ATFlashESP32Callback", "ESP32 successfully flashed.");
     CPP_AT_SUCCESS();
 }
 
