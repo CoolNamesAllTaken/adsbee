@@ -33,7 +33,7 @@ SysTickTimeSource::~SysTickTimeSource() { systick_hw->csr = 0; }
 uint64_t SysTickTimeSource::getTickCount() {
     // todo: prevent deadlock with IRQ
     std::lock_guard lock(_mutex);
-    return CLOCK_RESET_VAL * _interruptCount + systick_hw->cvr;
+    return (CLOCK_RESET_VAL * _interruptCount) + (CLOCK_RESET_VAL - systick_hw->cvr);
 }
 
 void SysTickTimeSource::handleIrq() {
