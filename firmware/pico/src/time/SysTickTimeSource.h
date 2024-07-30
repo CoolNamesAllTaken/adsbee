@@ -11,12 +11,14 @@ class SysTickTimeSource : ITimeSource {
    public:
     ~SysTickTimeSource();
     uint64_t getTickCount();
+    CLOCK_FREQ_E getFrequency() { return CLOCK_FREQ; }
 
    private:
     static void handleIrq();
 
     bool _external;
     const uint32_t CLOCK_RESET_VAL;
+    const CLOCK_FREQ_E CLOCK_FREQ;
     // We can make this static since there can only be one instance of the class
     static volatile uint64_t _interruptCount;
     static adsbee::hal::Mutex _mutex;
