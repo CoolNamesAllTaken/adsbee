@@ -104,7 +104,11 @@ SPICoprocessor::AircraftListMessage::AircraftListMessage(uint16_t num_aicraft_in
 
 bool SPICoprocessor::Init() {
     bool ret = true;
+
+#ifdef ON_PICO
+#else
     ret &= gpio_set_direction(config_.network_led_pin, GPIO_MODE_OUTPUT);
+#endif
     ret &= SPIInit();
     return ret;
 }

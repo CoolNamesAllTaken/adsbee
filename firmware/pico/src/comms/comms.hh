@@ -229,12 +229,12 @@ extern const uint16_t at_command_list_num_commands;
 
 #define CONSOLE_PRINTF(format, ...) comms_manager.console_printf(format __VA_OPT__(, ) __VA_ARGS__);
 #define CONSOLE_INFO(tag, format, ...) \
-    comms_manager.console_level_printf(SettingsManager::LogLevel::kInfo, tag format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
+    comms_manager.console_level_printf(SettingsManager::LogLevel::kInfo, tag ": " format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
 #define CONSOLE_WARNING(tag, format, ...)                                         \
     comms_manager.console_level_printf(SettingsManager::LogLevel::kWarnings, \
-                                       tag TEXT_COLOR_YELLOW format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) __VA_ARGS__);
+                                       tag ": " TEXT_COLOR_YELLOW format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) __VA_ARGS__);
 #define CONSOLE_ERROR(tag, format, ...)                                         \
     comms_manager.console_level_printf(SettingsManager::LogLevel::kErrors, \
-                                       tag TEXT_COLOR_RED format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) __VA_ARGS__);
+                                       tag ": " TEXT_COLOR_RED format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) __VA_ARGS__);
 
 #endif /* COMMS_HH_ */
