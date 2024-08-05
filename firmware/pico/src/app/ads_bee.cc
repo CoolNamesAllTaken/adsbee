@@ -188,6 +188,7 @@ void ADSBee::OnDemodComplete() {
     uint16_t word_index = 0;
     while (!pio_sm_is_rx_fifo_empty(config_.message_demodulator_pio, message_demodulator_sm_)) {
         uint32_t word = pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_);
+
         // CONSOLE_PRINTF("\t%d: %08x\r\n", word_index, word);
 
         switch (word_index) {
@@ -253,9 +254,9 @@ uint64_t ADSBee::GetMLAT12MHzCounts(uint16_t num_bits) {
 
 bool ADSBee::SetTLHiMilliVolts(int tl_hi_mv) {
     if (tl_hi_mv > kTLMaxMV || tl_hi_mv < kTLMinMV) {
-        CONSOLE_ERROR(
-            "ADSBee::SetTLHiMilliVolts", "Unable to set tl_hi_mv_ to %d, outside of permissible range %d-%d.\r\n",
-            tl_hi_mv, kTLMinMV, kTLMaxMV);
+        CONSOLE_ERROR("ADSBee::SetTLHiMilliVolts",
+                      "Unable to set tl_hi_mv_ to %d, outside of permissible range %d-%d.\r\n", tl_hi_mv, kTLMinMV,
+                      kTLMaxMV);
         return false;
     }
     tl_hi_mv_ = tl_hi_mv;
@@ -266,9 +267,9 @@ bool ADSBee::SetTLHiMilliVolts(int tl_hi_mv) {
 
 bool ADSBee::SetTLLoMilliVolts(int tl_lo_mv) {
     if (tl_lo_mv > kTLMaxMV || tl_lo_mv < kTLMinMV) {
-        CONSOLE_ERROR(
-            "ADSBee::SetTLLoMilliVolts", "Unable to set tl_lo_mv_ to %d, outside of permissible range %d-%d.\r\n",
-            tl_lo_mv, kTLMinMV, kTLMaxMV);
+        CONSOLE_ERROR("ADSBee::SetTLLoMilliVolts",
+                      "Unable to set tl_lo_mv_ to %d, outside of permissible range %d-%d.\r\n", tl_lo_mv, kTLMinMV,
+                      kTLMaxMV);
         return false;
     }
     tl_lo_mv_ = tl_lo_mv;

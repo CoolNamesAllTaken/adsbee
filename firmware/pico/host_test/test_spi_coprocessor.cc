@@ -10,8 +10,11 @@ TEST(SPICoprocessor, CreateSCpacket) {
 }
 
 TEST(SPICoprocessor, CreateSettingsPacket) {
-    SettingsManager::Settings settings = {
-        .rx_gain = 15, .comms_uart_baud_rate = 12345, .wifi_enabled = true, .wifi_password = "helloooo"};
+    SettingsManager::Settings settings;
+    settings.rx_gain = 15;
+    settings.comms_uart_baud_rate = 12345;
+    settings.wifi_enabled = true;
+    strcpy(settings.wifi_password, "helloooo");
 
     SPICoprocessor::SettingsMessage packet = SPICoprocessor::SettingsMessage(settings);
     EXPECT_TRUE(packet.IsValid(sizeof(SPICoprocessor::SettingsMessage)));

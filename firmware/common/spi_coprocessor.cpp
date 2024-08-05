@@ -4,7 +4,7 @@
 
 #ifdef ON_PICO
 #include "hardware/gpio.h"
-#else
+#elif ON_ESP32
 WORD_ALIGNED_ATTR SPICoprocessor::SPITransaction spi_rx_transaction;
 WORD_ALIGNED_ATTR SPICoprocessor::SPITransaction spi_tx_transaction;
 
@@ -106,7 +106,7 @@ bool SPICoprocessor::Init() {
     bool ret = true;
 
 #ifdef ON_PICO
-#else
+#elif ON_ESP32
     ret &= gpio_set_direction(config_.network_led_pin, GPIO_MODE_OUTPUT);
 #endif
     ret &= SPIInit();
@@ -121,7 +121,7 @@ bool SPICoprocessor::DeInit() {
 
 bool SPICoprocessor::Update() {
 #ifdef ON_PICO
-#else
+#elif ON_ESP32
     UpdateNetworkLED();
 #endif
 
@@ -136,7 +136,7 @@ bool SPICoprocessor::SendMessage(SCMessage &message) {
     uint8_t *tx_buf = reinterpret_cast<uint8_t *>(&message);
     spi_write_blocking(config_.spi_handle, tx_buf, message.length);
     gpio_put(config_.spi_cs_pin, 1);
-#else
+#elif ON_ESP32
 #endif
     return true;
 }
@@ -163,7 +163,7 @@ bool SPICoprocessor::SPIInit() {
                    SPI_CPOL_1,  // Polarity (CPOL).
                    SPI_CPHA_1,  // Phase (CPHA).
                    SPI_MSB_FIRST);
-#else
+#elif ON_ESP32
     spi_bus_config_t spi_buscfg = {
         .mosi_io_num = config_.spi_mosi_pin,
         .miso_io_num = config_.spi_miso_pin,
@@ -208,7 +208,7 @@ bool SPICoprocessor::SPIDeInit() {
 
     // De-initialize SPI Peripheral.
     spi_deinit(config_.spi_handle);
-#else
+#elif ON_ESP32
     spi_receive_task_should_exit_ = true;
 #endif
     return true;
@@ -217,7 +217,7 @@ bool SPICoprocessor::SPIDeInit() {
 int SPICoprocessor::SPIWriteBlocking(uint8_t *tx_buf, uint32_t length) {
 #ifdef ON_PICO
     return spi_write_blocking(config_.spi_handle, tx_buf, length);
-#else
+#elif ON_ESP32
 
 #endif
     return -1;
@@ -226,7 +226,7 @@ int SPICoprocessor::SPIWriteBlocking(uint8_t *tx_buf, uint32_t length) {
 int SPICoprocessor::SPIReadBlocking(uint8_t *rx_buf, uint32_t length) {
 #ifdef ON_PICO
     return spi_read_blocking(config_.spi_handle, 0, rx_buf, length);
-#else
+#elif ON_ESP32
 
 #endif
     return -1;

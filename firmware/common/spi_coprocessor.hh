@@ -7,7 +7,7 @@
 
 #ifdef ON_PICO
 #include "hardware/spi.h"
-#else
+#elif ON_ESP32
 #include "data_structures.hh"
 #include "driver/gpio.h"
 #include "driver/spi_slave.h"
@@ -34,7 +34,7 @@ class SPICoprocessor {
     };
 
 #ifdef ON_PICO
-#else
+#elif ON_ESP32
     static const uint32_t kNetworkLEDBLinkDurationMs = 1000;
     static const uint32_t kSPIRxTaskStackDepthBytes = 4096;
     static const TickType_t kSPIRxTimeoutTicks = 100 / portTICK_PERIOD_MS;
@@ -48,7 +48,7 @@ class SPICoprocessor {
         uint16_t spi_miso_pin = 12;
         uint16_t spi_cs_pin = 9;
         uint16_t spi_handshake_pin = 13;
-#else
+#elif ON_ESP32
         spi_host_device_t spi_handle = SPI2_HOST;
         gpio_num_t spi_mosi_pin = GPIO_NUM_35;
         gpio_num_t spi_miso_pin = GPIO_NUM_36;
@@ -148,7 +148,7 @@ class SPICoprocessor {
     bool SendMessage(SCMessage &message);
 
 #ifdef ON_PICO
-#else
+#elif ON_ESP32
     /**
      * Helper function used by callbacks to set the handshake pin high or low on the ESP32.
      */
@@ -188,7 +188,7 @@ class SPICoprocessor {
     SPICoprocessorConfig config_;
 
 #ifdef ON_PICO
-#else
+#elif ON_ESP32
     WORD_ALIGNED_ATTR SPITransaction spi_rx_queue_buf_[kSPITransactionQueueLenTransactions];
     WORD_ALIGNED_ATTR SPITransaction spi_tx_queue_buf_[kSPITransactionQueueLenTransactions];
 
@@ -204,7 +204,7 @@ class SPICoprocessor {
 
 #ifdef ON_PICO
 extern SPICoprocessor esp32;
-#else
+#elif ON_ESP32
 extern SPICoprocessor pico;
 #endif
 
