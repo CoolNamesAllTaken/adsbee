@@ -48,10 +48,7 @@ RawTransponderPacket::RawTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords
     // Pack the packet buffer.
     for (uint16_t i = 0; i < rx_buffer_len_words32 && i < kMaxPacketLenWords32; i++) {
         if (i == rx_buffer_len_words32 - 1) {
-            // Last word in packet.
-            // Last word may have accidentally ingested a subsequent preamble as a bit (takes a while to know message is
-            // over).
-            buffer[i] = rx_buffer[i] & last_word_ingestion_mask;  // trim any crap off of last word
+            buffer[i] = rx_buffer[i] & last_word_ingestion_mask;  // Trim any crap off of last word.
             buffer_len_bits += last_word_popcount;
         } else {
             buffer[i] = rx_buffer[i];

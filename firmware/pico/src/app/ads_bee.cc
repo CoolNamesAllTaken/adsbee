@@ -185,54 +185,66 @@ void ADSBee::GPIOIRQISR(uint gpio, uint32_t event_mask) {
 }
 
 void ADSBee::OnDemodComplete() {
-    uint16_t word_index = 0;
+    // uint16_t word_index = 0;
     while (!pio_sm_is_rx_fifo_empty(config_.message_demodulator_pio, message_demodulator_sm_)) {
         uint32_t word = pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_);
-
-        // CONSOLE_PRINTF("\t%d: %08x\r\n", word_index, word);
-
-        switch (word_index) {
-            case 0: {
-                // Flush the previous word into a packet before beginning to store the new one.
-                // First word out of the FIFO is actually the last word of the previously demodulated message.
-                // Assemble a packet buffer using the items in rx_buffer_.
-                uint32_t packet_buffer[DecodedTransponderPacket::kMaxPacketLenWords32];
-                for (uint16_t i = 0; i < last_demod_num_words_ingested_; i++) {
-                    packet_buffer[i] = rx_buffer_[i];
-                }
-                // Need to left-align by 16 bits for last word of 112-bit packet, 8 bits for last word of 56-bit
-                // packet.
-                if (last_demod_num_words_ingested_ == DecodedTransponderPacket::kExtendedSquitterPacketNumWords32 - 1) {
-                    // 112-bit packet: trim off extra bit, mask to 16 bits, left align.
-                    packet_buffer[last_demod_num_words_ingested_] = ((word >> 1) & 0xFFFF) << 16;
-                } else {
-                    // 56-bit packet: trim off extra bit, mask to 24 bits, left align.
-                    packet_buffer[last_demod_num_words_ingested_] = ((word >> 1) & 0xFFFFFF) << 8;
-                }
-                DecodedTransponderPacket packet =
-                    DecodedTransponderPacket(packet_buffer, last_demod_num_words_ingested_ + 1, GetLastMessageRSSIdBm(),
-                                             GetLastMessageMLAT12MHzCounts());
-                transponder_packet_queue.Push(packet);
-                last_demod_num_words_ingested_ = 0;
-                break;
-            }
-            case 1:
-                // Slurp up the sampled RSSI and MLAT timer values while we know we're still aligned with the decode
-                // interval.
-                last_message_rssi_adc_counts_ = sampled_rssi_adc_counts_;
-                last_message_mlat_48mhz_counts_ = sampled_mlat_48mhz_counts_;
-            case 2:
-            case 3:
-                rx_buffer_[word_index - 1] = word;
-                last_demod_num_words_ingested_ = word_index;
-                break;
-            default:
-                // Received too many bits for this to be a valid packet. Throw away extra bits!
-                // CONSOLE_PRINTF("tossing\r\n");
-                // Throw away extra bits.
-                break;
+        if (!rx_queue_.Push(word)) {
+            CONSOLE_ERROR("ADSBee::OnDemodComplete", "Receive queue overflowed.");
         }
-        word_index++;
+    }
+    uint32_t word;  // Scratch for enqueueing and dequeueing.
+
+    // This while loop looks for and end of packet delimiter in the rx_queue_. If it finds it, it forms a packet and
+    // pushes it onto the transponder_packet_queue for decoding in the main loop. The loop exits when it is unable to
+    // find any additional complete packets in rx_queue_ (i.e. it can't find an end of packet delimiter).
+    while (true) {
+        // Check that the queue has at least one packet (contains an end of message delimiter word).
+        uint16_t packet_num_words = 0;
+        bool found_end_of_packet = false;
+        for (uint16_t i = 0; i < rx_queue_.Length() && !found_end_of_packet; i++) {
+            rx_queue_.Peek(word, i);
+            if (word == kRxQueuePacketDelimiter) {
+                packet_num_words = i;
+                found_end_of_packet = true;
+            }
+        }
+        if (!found_end_of_packet) {
+            // Can't form a complete packet with the contents of the queue, bail out.
+            break;
+        }
+        // Clamp maximum packet size to Extended Squitter (112 bits). Extra bits will be discarded.
+        if (packet_num_words > DecodedTransponderPacket::kExtendedSquitterPacketNumWords32) {
+            CONSOLE_WARNING("ADSBee::OnDemodComplete",
+                            "Received a packet with %d 32-bit words, expected maximum of %d.", packet_num_words,
+                            DecodedTransponderPacket::kExtendedSquitterPacketNumWords32);
+            packet_num_words = DecodedTransponderPacket::kExtendedSquitterPacketNumWords32;
+        }
+        // Stuff the packet words into a buffer.
+        uint32_t packet_buffer[RawTransponderPacket::kMaxPacketLenWords32];
+        for (uint16_t i = 0; i < packet_num_words; i++) {
+            rx_queue_.Pop(word);
+            if (i == packet_num_words - 1) {
+                // Trim off extra ingested bit from last word in the packet.
+                packet_buffer[i] = word >> 1;
+                // Mask and left align final word based on bit length.
+                switch (packet_num_words) {
+                    case DecodedTransponderPacket::kSquitterPacketNumWords32:
+                        packet_buffer[i] = (packet_buffer[i] & 0xFFFFFF) << 8;
+                    case DecodedTransponderPacket::kExtendedSquitterPacketNumWords32:
+                        packet_buffer[i] = (packet_buffer[i] & 0xFFFF) << 16;
+                }
+            } else {
+                packet_buffer[i] = word;
+            }
+        }
+        // Turn packet buffer into a RawTransponderpacket and push it into the queue for digestion in the main loop.
+        RawTransponderPacket packet = RawTransponderPacket(packet_buffer, packet_num_words, GetLastMessageRSSIdBm(),
+                                                           GetLastMessageMLAT48MHzCounts());
+        transponder_packet_queue.Push(packet);
+
+        // Drain the receive queue until we've popped the end of packet delimiter.
+        while (rx_queue_.Pop(word) && word != kRxQueuePacketDelimiter) {
+        }
     }
 
     gpio_put(config_.rssi_clear_pin, 1);  // restore RSSI peak detector to working order.

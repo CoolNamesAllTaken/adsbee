@@ -17,6 +17,8 @@ class ADSBee {
     static constexpr int kVDDMV = 3300;               // [mV] Voltage of positive supply rail.
     static constexpr int kTLMaxMV = 3300;             // [mV]
     static constexpr int kTLMinMV = 0;                // [mV]
+    static const uint16_t kRxQueueLenWords = 20;
+    static const uint32_t kRxQueuePacketDelimiter = 0x00000000;
     static constexpr uint16_t kMaxNumTransponderPackets =
         100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
     static const uint32_t kStatusLEDOnMs = 10;
@@ -183,9 +185,9 @@ class ADSBee {
         return 60 * (rssi_mv - 1600) / 1000;  // AD8313 0dBm intercept at 1.6V, slope is 60dBm/V.
     }
 
-    uint64_t GetLastMessageMLAT12MHzCounts() { return last_message_mlat_48mhz_counts_; }
+    uint64_t GetLastMessageMLAT48MHzCounts() { return last_message_mlat_48mhz_counts_; }
 
-    PFBQueue<DecodedTransponderPacket> transponder_packet_queue = PFBQueue<DecodedTransponderPacket>(
+    PFBQueue<RawTransponderPacket> transponder_packet_queue = PFBQueue<RawTransponderPacket>(
         {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = transponder_packet_queue_buffer_});
 
     AircraftDictionary aircraft_dictionary;
@@ -227,10 +229,10 @@ class ADSBee {
 
     uint32_t rx_gain_ = SettingsManager::kDefaultRxGain;
 
-    // Due to a quirk, rx_buffer_ is used to store every word except for the first one.
-    uint32_t rx_buffer_[ADSBPacket::kMaxPacketLenWords32 - 1];
-
-    DecodedTransponderPacket transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
+    uint32_t rx_buffer_[kRxQueueLenWords + 1];
+    PFBQueue<uint32_t> rx_queue_ =
+        PFBQueue<uint32_t>({.buf_len_num_elements = kRxQueueLenWords + 1, .buffer = rx_buffer_});
+    RawTransponderPacket transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
     uint16_t last_demod_num_words_ingested_ = 0;

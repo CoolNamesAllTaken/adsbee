@@ -8,20 +8,18 @@
 
 // Useful resource: https://mode-s.org/decode/content/ads-b/1-basics.html
 
-class RawTransponderPacket
-{
-public:
+class RawTransponderPacket {
+   public:
     static const uint16_t kMaxPacketLenWords32 = 4;
 
     RawTransponderPacket(char *rx_string, int rssi_dbm = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
-    RawTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len, int rssi_dbm = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
+    RawTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32,
+                         int rssi_dbm = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
     /**
      * Default constructor.
      */
-    RawTransponderPacket()
-    {
-        for (uint16_t i = 0; i < kMaxPacketLenWords32; i++)
-        {
+    RawTransponderPacket() {
+        for (uint16_t i = 0; i < kMaxPacketLenWords32; i++) {
             buffer[i] = 0;
         }
     }
@@ -29,24 +27,22 @@ public:
     uint32_t buffer[kMaxPacketLenWords32];
     uint16_t buffer_len_bits = 0;
     int rssi_dbm = INT32_MIN;
-    uint64_t mlat_48mhz_64bit_counts = 0; // High resolution MLAT counter.
+    uint64_t mlat_48mhz_64bit_counts = 0;  // High resolution MLAT counter.
 };
 
-class DecodedTransponderPacket
-{
-public:
+class DecodedTransponderPacket {
+   public:
     static const uint16_t kMaxPacketLenWords32 = RawTransponderPacket::kMaxPacketLenWords32;
-    static const uint16_t kDFNUmBits = 5;    // [1-5] Downlink Format bitlength.
-    static const uint16_t kMaxDFStrLen = 50; // Max length of TypeCode string.
+    static const uint16_t kDFNUmBits = 5;     // [1-5] Downlink Format bitlength.
+    static const uint16_t kMaxDFStrLen = 50;  // Max length of TypeCode string.
     static const uint16_t kDebugStrLen = 200;
     static const uint16_t kSquitterPacketNumBits = 56;
-    static const uint16_t kSquitterPacketNumWords32 = 2; // 56 bits = 1.75 words, round up to 2.
+    static const uint16_t kSquitterPacketNumWords32 = 2;  // 56 bits = 1.75 words, round up to 2.
     static const uint16_t kExtendedSquitterPacketLenBits = 112;
-    static const uint16_t kExtendedSquitterPacketNumWords32 = 4; // 112 bits = 3.5 words, round up to 4.
+    static const uint16_t kExtendedSquitterPacketNumWords32 = 4;  // 112 bits = 3.5 words, round up to 4.
 
     // Bits 1-5: Downlink Format (DF)
-    enum DownlinkFormat
-    {
+    enum DownlinkFormat {
         kDownlinkFormatInvalid = -1,
         // DF 0-11 = short messages (56 bits)
         kDownlinkFormatShortRangeAirSurveillance = 0,
@@ -74,7 +70,8 @@ public:
      * @param[in] rssi_dbm RSSI of the packet that was received, in dBm. Defaults to INT32_MIN if not set.
      * @param[in] mlat_48mhz_64bit_counts Counts of a 12MHz clock used for the 6-byte multilateration timestamp.
      */
-    DecodedTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len, int rssi_dbm = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
+    DecodedTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len, int rssi_dbm = INT32_MIN,
+                             uint64_t mlat_48mhz_64bit_counts = 0);
 
     /**
      * DecodedTransponderPacket constructor from string.
@@ -114,8 +111,7 @@ public:
     uint16_t DumpPacketBuffer(uint8_t to_buffer[kMaxPacketLenWords32 * kBytesPerWord]) const;
 
     // Exposed for testing only.
-    uint32_t Get24BitWordFromPacketBuffer(uint16_t first_bit_index) const
-    {
+    uint32_t Get24BitWordFromPacketBuffer(uint16_t first_bit_index) const {
         return get_n_bit_word_from_buffer(24, first_bit_index, packet.buffer);
     };
 
@@ -128,7 +124,7 @@ public:
 
     char debug_string[kDebugStrLen] = "";
 
-protected:
+   protected:
     bool is_valid_ = false;
     RawTransponderPacket packet;
 
@@ -137,27 +133,26 @@ protected:
 
     uint32_t parity_interrogator_id = 0;
 
-private:
+   private:
     void ConstructTransponderPacket();
 };
 
-class ADSBPacket : public DecodedTransponderPacket
-{
-public:
+class ADSBPacket : public DecodedTransponderPacket {
+   public:
     static const uint16_t kMaxTCStrLen = 50;
 
     // Bitlengths of each field in the ADS-B frame. See Table 3.1 in The 1090MHz Riddle (Junzi Sun) pg. 35.
-    static const uint16_t kCANumBits = 3;    // [6-8] Capability bitlength.
-    static const uint16_t kICAONumBits = 24; // [9-32] ICAO Address bitlength.
-    static const uint16_t kMENumBits = 56;   // [33-88] Extended Squitter Message bitlength.
-    static const uint16_t kTCNumBits = 5;    // [33-37] Type code bitlength. Not always included.
-    static const uint16_t kPINumBits = 24;   // Parity / Interrogator ID bitlength.
+    static const uint16_t kCANumBits = 3;     // [6-8] Capability bitlength.
+    static const uint16_t kICAONumBits = 24;  // [9-32] ICAO Address bitlength.
+    static const uint16_t kMENumBits = 56;    // [33-88] Extended Squitter Message bitlength.
+    static const uint16_t kTCNumBits = 5;     // [33-37] Type code bitlength. Not always included.
+    static const uint16_t kPINumBits = 24;    // Parity / Interrogator ID bitlength.
 
     static const uint16_t kMEFirstBitIndex = kDFNUmBits + kCANumBits + kICAONumBits;
 
     /**
-     * Constructor. Can only create an ADSBPacket from an existing DecodedTransponderPacket, which is is referenced as the
-     * parent of the ADSBPacket. Think of this as a way to use the ADSBPacket as a "window" into the contents of the
+     * Constructor. Can only create an ADSBPacket from an existing DecodedTransponderPacket, which is is referenced as
+     * the parent of the ADSBPacket. Think of this as a way to use the ADSBPacket as a "window" into the contents of the
      * parent DecodedTransponderPacket. The ADSBPacket cannot exist without the parent DecodedTransponderPacket!
      */
     ADSBPacket(const DecodedTransponderPacket &packet) : DecodedTransponderPacket(packet) { ConstructADSBPacket(); };
@@ -166,24 +161,22 @@ public:
     // Bits 9-32 [24]: ICAO Aircraft Address (ICAO)
     // Bits 33-88 [56]: Message, Extended Squitter (ME)
     // (Bits 33-37 [5]): Type code (TC)
-    enum TypeCode
-    {
+    enum TypeCode {
         kTypeCodeInvalid = 0,
-        kTypeCodeAircraftID = 1,                // 1–4	Aircraft identification
-        kTypeCodeSurfacePosition = 5,           // 5–8	Surface position
-        kTypeCodeAirbornePositionBaroAlt = 9,   // 9–18	Airborne position (w/Baro Altitude)
-        kTypeCodeAirborneVelocities = 19,       // 19	Airborne velocities
-        kTypeCodeAirbornePositionGNSSAlt = 20,  // 20–22	Airborne position (w/GNSS Height)
-        kTypeCodeReserved = 23,                 // 23–27	Reserved
-        kTypeCodeAircraftStatus = 28,           // 28	Aircraft status
-        kTypeCodeTargetStateAndStatusInfo = 29, // 29	Target state and status information
-        kTypeCodeAircraftOperationStatus = 31   // 31	Aircraft operation status
+        kTypeCodeAircraftID = 1,                 // 1–4	Aircraft identification
+        kTypeCodeSurfacePosition = 5,            // 5–8	Surface position
+        kTypeCodeAirbornePositionBaroAlt = 9,    // 9–18	Airborne position (w/Baro Altitude)
+        kTypeCodeAirborneVelocities = 19,        // 19	Airborne velocities
+        kTypeCodeAirbornePositionGNSSAlt = 20,   // 20–22	Airborne position (w/GNSS Height)
+        kTypeCodeReserved = 23,                  // 23–27	Reserved
+        kTypeCodeAircraftStatus = 28,            // 28	Aircraft status
+        kTypeCodeTargetStateAndStatusInfo = 29,  // 29	Target state and status information
+        kTypeCodeAircraftOperationStatus = 31    // 31	Aircraft operation status
     };
     // Bits 89-112 [24]: Parity / Interrogator ID (PI)
 
     // Subtype enums used for specific packet types (not instantiated as part of the ADSBPacket class).
-    enum AirborneVelocitiesSubtype
-    {
+    enum AirborneVelocitiesSubtype {
         kAirborneVelocitiesGroundSpeedSubsonic = 1,
         kAirborneVelocitiesGroundSpeedSupersonic = 2,
         kAirborneVelocitiesAirspeedSubsonic = 3,
@@ -195,12 +188,11 @@ public:
     TypeCode GetTypeCodeEnum() const;
 
     // Exposed for testing only.
-    uint32_t GetNBitWordFromMessage(uint16_t n, uint16_t first_bit_index) const
-    {
+    uint32_t GetNBitWordFromMessage(uint16_t n, uint16_t first_bit_index) const {
         return get_n_bit_word_from_buffer(n, kMEFirstBitIndex + first_bit_index, packet.buffer);
     };
 
-private:
+   private:
     uint16_t capability_ = 0;
 
     uint16_t typecode_ = static_cast<uint16_t>(kTypeCodeInvalid);

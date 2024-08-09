@@ -39,7 +39,7 @@ preamble_matched:
     set pins 1 [2] ; set demod pin to indicate message body beginning
     wait 1 pin, pulses_pin_index [11] ; wait till middle of message eye to look for end
 waiting_for_end_of_message:
-    set x, 20 [2] ; [2.5us] number of sequential idle samples required to mark end of packet
+    set x, 12 [2] ; [1.5us] number of sequential idle samples required to mark end of packet
 idle_countdown:
     jmp pin waiting_for_end_of_message [2] ; start over the idle countdown if received a non idle bit
     jmp x-- idle_countdown [2] ; still idle, keep counting down if the timer isn't up
