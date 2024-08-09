@@ -1,46 +1,33 @@
-* C:\git-checkouts\ads-bee\ltspice\tracking_comparator_amplified_pd.asc
-R1 N013 N014 10k
-D1 N012 N014 1N5819
-R2 N013 N012 100k
-C1 N013 0 100p
-V1 N005 N017 PULSE(0.6 0.7 0 10n 200n 0.2u 1u)
-R3 N016 N012 10k
-C2 N016 0 3p
+* C:\git-checkouts\ads-bee\ltspice\data_slicer.asc
+R1 N009 N010 10k
+D1 N008 N010 1N5819
+R2 N009 N008 100k
+C1 N009 0 100p
+V1 N001 N013 PULSE(0.6 0.7 10u 10n 200n 0.2u 1u)
+R3 N012 N008 10k
+C2 N012 0 3p
 V2 3v3 0 3.3
-XU2 N016 N013 3v3 0 N015 level2 Avol=10Meg GBW=10G Slew=10G Ilimit=25m Rail=0 Vos=0 En=0 Enk=0 In=0 Ink=0 Rin=500Meg
-R4 N012 N005 10k
-XU3 in N009 3v3 0 N007 level2 Avol=10Meg GBW=10G Slew=10G Ilimit=25m Rail=0 Vos=0 En=0 Enk=0 In=0 Ink=0 Rin=500Meg
-R9 N011 N005 10k
-C5 N011 0 3p
-V3 N018 0 SINE(0 0.05 0.01Meg 100u)
-XU5 0 0 0 0 0 TLV354
-C6 N006 N005 10µ
-R14 N006 0 1k
-R15 in N001 10k
-R16 N001 0 1k
-D5 in N002 1N5819
-C7 N002 0 1n
-R5 3v3 N007 1k
-S1 N010 N009 N007 0 SN74LVC1G3157
-R6 tl_hi tl_lo 100k
-R7 tl_lo 0 200k
-R8 N002 tl_hi 100k
-S2 N008 N009 3v3 N007 SN74LVC1G3157
-XU1 N006 N001 3v3 0 in level2 Avol=1Meg GBW=200Meg Slew=100Meg Ilimit=25m Rail=0 Vos=0 En=0 Enk=0 In=0 Ink=0 Rin=500Meg
-R10 tl_hi N008 1Meg
-R11 tl_lo N010 1Meg
-V4 N017 N018 PULSE(0 0.02 0.5u 10n 200n 0.2u 0.4u)
-C3 in N001 3p
-D2 N003 N002 1N5819
-R12 N004 N003 10k
-C4 N003 0 0.1µ ic=1.2V
-V5 N004 0 PULSE(0 3.3 0 0 0 20u 40u)
+XU2 N012 N009 3v3 0 N011 level2 Avol=10Meg GBW=10G Slew=10G Ilimit=25m Rail=0 Vos=0 En=0 Enk=0 In=0 Ink=0 Rin=500Meg
+R4 N008 N001 10k
+R9 N007 N001 10k
+C5 N007 0 3p
+V3 N014 0 SINE(0 0.05 0.01Meg 100u)
+V4 N013 N014 PULSE(0 0.02 0.5u 10n 200n 0.2u 0.4u)
+XU1 N004 N002 3v3 0 out level2 Avol=10Meg GBW=10G Slew=10G Ilimit=25m Rail=0 Vos=0 En=0 Enk=0 In=0 Ink=0 Rin=500Meg
+R5 N003 N001 10k
+C3 N003 0 3p
+R6 N002 N001 10k
+C4 N002 0 1n
+R7 N004 N003 1k
+R10 3v3 N002 1Meg
+D2 N001 N006 RB886CM
+R8 N006 NC_01 100
+C6 out 0 1p IC=0V
 .model D D
 .lib C:\Users\jkail\Documents\LTspiceXVII\lib\cmp\standard.dio
 .tran 0 200u 0 10n
 .model SN74LVC1G3157 SW(Ron=6 Roff=1G Vt=1.65 Vh=0.66)
 * Standard Leaky Comparator
-* Buffered Leaky Comparator
 *$
 * TLV354
 *************************************************************************************************
