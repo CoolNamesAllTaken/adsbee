@@ -66,12 +66,42 @@ TEST(PFBQueue, Clear) {
     PFBQueue<uint32_t> queue = PFBQueue<uint32_t>({.buf_len_num_elements = buf_len_num_elements, .buffer = nullptr});
 
     uint16_t num_pushes_each_time = 10;
-    for (uint16_t i = 0; i < buf_len_num_elements; i++) {
+    for (uint16_t i = 0; i < buf_len_num_elements - 1; i++) {
         ASSERT_EQ(queue.Length(), 0);
         for (uint16_t j = 0; j < num_pushes_each_time; j++) {
             queue.Push(i);
         }
         ASSERT_EQ(queue.Length(), num_pushes_each_time);
         queue.Clear();
+    }
+}
+
+TEST(PFBQueue, OverwriteWhenFull) {
+    uint16_t buf_len_num_elements = 4;
+    PFBQueue<uint32_t> queue = PFBQueue<uint32_t>(
+        {.buf_len_num_elements = buf_len_num_elements, .buffer = nullptr, .overwrite_when_full = true});
+
+    // Load the queue with uint32_t's that have their MSB set to 0xF0.
+    for (uint16_t i = 0; i < queue.MaxNumElements(); i++) {
+        EXPECT_TRUE(queue.Push(0xF0000000 | i));
+    }
+    // Check that they loaded in ok.
+    for (uint16_t i = 0; i < queue.MaxNumElements(); i++) {
+        uint32_t out;
+        EXPECT_TRUE(queue.Peek(out, i));
+        EXPECT_EQ(out, 0xF0000000 | i);
+    }
+    // Queue should be full.
+    EXPECT_EQ(queue.Length(), queue.MaxNumElements());
+    // Overwrite all the elements of the queue with uint32_t's with their MSB set to 0x00.
+    for (uint16_t i = 0; i < queue.MaxNumElements(); i++) {
+        EXPECT_TRUE(queue.Push(i));
+        EXPECT_EQ(queue.Length(), queue.MaxNumElements());
+    }
+    // Make sure all elements were overwritten.
+    for (uint16_t i = 0; i < queue.MaxNumElements(); i++) {
+        uint32_t out;
+        EXPECT_TRUE(queue.Pop(out));
+        EXPECT_EQ(out, i);
     }
 }

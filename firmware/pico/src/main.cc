@@ -1,11 +1,12 @@
 #include "ads_bee.hh"
-#include "adsb_packet.hh"
 #include "comms.hh"
 #include "eeprom.hh"
 #include "esp32_flasher.hh"
 #include "hal.hh"
 #include "pico/binary_info.h"
 #include "settings.hh"
+#include "spi_coprocessor.hh"
+#include "transponder_packet.hh"
 #include "unit_conversions.hh"
 
 const char* kSoftwareVersionStr = "0.0.1";
@@ -17,6 +18,7 @@ CommsManager comms_manager = CommsManager({});
 ESP32SerialFlasher esp32_flasher = ESP32SerialFlasher({});
 EEPROM eeprom = EEPROM({});
 SettingsManager settings_manager;
+SPICoprocessor esp32 = SPICoprocessor({});
 
 int main() {
     bi_decl(bi_program_description("ADS-Bee ADSB Receiver"));
@@ -32,6 +34,7 @@ int main() {
                                kSoftwareVersionStr);
 
     settings_manager.Load();
+    esp32.Init();
 
     // Add a test aircraft to start.
     // TODO: Remove this.
@@ -47,41 +50,58 @@ int main() {
     test_aircraft.velocity_kts = 200;
     ads_bee.aircraft_dictionary.InsertAircraft(test_aircraft);
 
+    uint16_t esp32_test_packet_interval_ms = 1000;
+    uint32_t esp32_test_packet_last_sent_timestamp_ms = get_time_since_boot_ms();
+
     while (true) {
+        // Send test packet to ESP32.
+        uint32_t esp32_test_packet_timestamp_ms = get_time_since_boot_ms();
+        if (esp32_test_packet_timestamp_ms > esp32_test_packet_last_sent_timestamp_ms + esp32_test_packet_interval_ms) {
+            RawTransponderPacket test_packet = RawTransponderPacket("8dac009458b9970f0aa394359da9", -123, 456789);
+            SPICoprocessor::RawTransponderPacketMessage message =
+                SPICoprocessor::RawTransponderPacketMessage(test_packet);
+            CONSOLE_INFO("Debug", "Sent ESP32 message.");
+            esp32.SendMessage(message);
+            esp32_test_packet_last_sent_timestamp_ms = esp32_test_packet_timestamp_ms;
+        }
+
         // Loop forever.
         comms_manager.Update();
         ads_bee.Update();
 
-        TransponderPacket packet;
-        while (ads_bee.transponder_packet_queue.Pop(packet)) {
-            uint32_t packet_buffer[TransponderPacket::kMaxPacketLenWords32];
-            packet.DumpPacketBuffer(packet_buffer);
-            if (packet.GetPacketBufferLenBits() == TransponderPacket::kExtendedSquitterPacketLenBits) {
-                CONSOLE_INFO("New message: 0x%08x|%08x|%08x|%04x RSSI=%ddBm MLAT=%u", packet_buffer[0],
-                             packet_buffer[1], packet_buffer[2], (packet_buffer[3]) >> (4 * kBitsPerNibble),
-                             packet.GetRSSIdBm(), packet.GetMLAT12MHzCounter());
+        RawTransponderPacket raw_packet;
+        while (ads_bee.transponder_packet_queue.Pop(raw_packet)) {
+            uint32_t packet_buffer[RawTransponderPacket::kMaxPacketLenWords32];
+            if (raw_packet.buffer_len_bits == DecodedTransponderPacket::kExtendedSquitterPacketLenBits) {
+                CONSOLE_INFO("main", "New message: 0x%08x|%08x|%08x|%04x RSSI=%ddBm MLAT=%u", raw_packet.buffer[0],
+                             raw_packet.buffer[1], raw_packet.buffer[2], (raw_packet.buffer[3]) >> (4 * kBitsPerNibble),
+                             raw_packet.rssi_dbm, raw_packet.mlat_48mhz_64bit_counts);
             } else {
-                CONSOLE_INFO("New message: 0x%08x|%06x RSSI=%ddBm MLAT=%u", packet_buffer[0],
-                             (packet_buffer[1]) >> (2 * kBitsPerNibble), packet.GetRSSIdBm(),
-                             packet.GetMLAT12MHzCounter());
+                CONSOLE_INFO("main", "New message: 0x%08x|%06x RSSI=%ddBm MLAT=%u", raw_packet.buffer[0],
+                             (raw_packet.buffer[1]) >> (2 * kBitsPerNibble), raw_packet.rssi_dbm,
+                             raw_packet.mlat_48mhz_64bit_counts);
             }
 
-            if (packet.IsValid()) {
+            DecodedTransponderPacket decoded_packet = DecodedTransponderPacket(raw_packet);
+            if (decoded_packet.IsValid()) {
                 // 112-bit (extended squitter) packets. These packets can be validated via CRC.
                 ads_bee.FlashStatusLED();
 
-                CONSOLE_INFO("\tdf=%d icao_address=0x%06x", packet.GetDownlinkFormat(), packet.GetICAOAddress());
-                comms_manager.transponder_packet_reporting_queue.Push(packet);
+                CONSOLE_INFO("main", "\tdf=%d icao_address=0x%06x", decoded_packet.GetDownlinkFormat(),
+                             decoded_packet.GetICAOAddress());
+                comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
 
-                ads_bee.aircraft_dictionary.IngestADSBPacket(ADSBPacket(packet));
-                CONSOLE_INFO("\taircraft_dictionary: %d aircraft", ads_bee.aircraft_dictionary.GetNumAircraft());
-            } else if (packet.GetPacketBufferLenBits() == TransponderPacket::kSquitterPacketNumBits) {
+                ads_bee.aircraft_dictionary.IngestADSBPacket(ADSBPacket(decoded_packet));
+                CONSOLE_INFO("main", "\taircraft_dictionary: %d aircraft",
+                             ads_bee.aircraft_dictionary.GetNumAircraft());
+            } else if (decoded_packet.GetPacketBufferLenBits() == DecodedTransponderPacket::kSquitterPacketNumBits) {
                 // CRC is overlaid with ICAO address for 56-bit (squitter) packets. Check ICAO against aircraft in the
                 // dictionary to validate the CRC.
-                if (ads_bee.aircraft_dictionary.ContainsAircraft(packet.GetICAOAddress())) {
+                if (ads_bee.aircraft_dictionary.ContainsAircraft(decoded_packet.GetICAOAddress())) {
                     ads_bee.FlashStatusLED();
-                    CONSOLE_INFO("\tdf=%d icao_address=0x%06x", packet.GetDownlinkFormat(), packet.GetICAOAddress());
-                    comms_manager.transponder_packet_reporting_queue.Push(packet);
+                    CONSOLE_INFO("main", "\tdf=%d icao_address=0x%06x", decoded_packet.GetDownlinkFormat(),
+                                 decoded_packet.GetICAOAddress());
+                    comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
                     // TODO: Add squitter packet support to aircraft dictionary.
                 }
             }

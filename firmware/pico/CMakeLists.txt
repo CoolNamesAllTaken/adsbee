@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 3.13)
 
-include(SetUpConfigurations.cmake)
-
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 20)
 
@@ -125,6 +123,9 @@ add_compile_definitions(
 # In ESP-IDF this can also be done using EMBED_FILES option of idf_component_register.
 # Here an external tool is used to make file embedding similar with other ports.
 include(${CMAKE_CURRENT_LIST_DIR}/src/esp32_flasher/bin2array.cmake)
+# Create a file dependency that copies over the most recently built ESP32 firmware binary to the bin directory used by
+# esp32_flasher. Re-runs cmake if the file gets changed.
+configure_file(/ads_bee/esp/build/adsbee_esp.bin ${CMAKE_CURRENT_LIST_DIR}/src/esp32_flasher/bin/adsbee_esp.bin COPYONLY)
 create_resources(${CMAKE_CURRENT_LIST_DIR}/src/esp32_flasher/bin ${CMAKE_BINARY_DIR}/binaries.c)
 set_property(SOURCE ${CMAKE_BINARY_DIR}/binaries.c PROPERTY GENERATED 1)
 target_sources(${PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR}/binaries.c)

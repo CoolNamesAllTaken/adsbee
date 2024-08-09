@@ -26,7 +26,7 @@ void i2c_bus_scan(i2c_inst_t *i2c_handle, uint32_t i2c_timeout_us) {
         } else {
             ret = i2c_read_timeout_us(i2c_handle, addr, &rxdata, 1, false, i2c_timeout_us);
             if (ret != 1) {
-                CONSOLE_ERROR("i2c_bus_scan: Read failed at address 0x%x with code %d.\r\n", addr, ret);
+                CONSOLE_ERROR("i2c_bus_scan", "Read failed at address 0x%x with code %d.\r\n", addr, ret);
             }
         }
 
@@ -107,15 +107,15 @@ UTEST(EEPROM, WriteReadBuf) {
     }
 }
 
-UTEST(EEPROM, LoadSaveObject) {
-    struct TestObject {
-        char message[200];
-        uint32_t value;
-    };
+struct TestObject {
+    char message[200];
+    uint32_t value;
+};
 
-    TestObject object_in = {.message = "Hello its a me a test object Mario.", .value = 0xFEFEDEDA};
-    TestObject object_out;
+TestObject object_in = {.message = "Hello its a me a test object Mario.", .value = 0xFEFEDEDA};
+TestObject object_out;
 
+UTEST(EEPROM, SaveLoadObject) {
     // Nominal save and load.
     ASSERT_TRUE(eeprom.Save(object_in));
     ASSERT_TRUE(eeprom.Load(object_out));
@@ -126,11 +126,80 @@ UTEST(EEPROM, LoadSaveObject) {
     object_out.message[0] = '\0';
     object_out.value = 0x0;
 
-    // Custom address save and load.
+    // Custom address save and load with 8-bit address.
     ASSERT_TRUE(eeprom.Save(object_in, 0x20));
     ASSERT_TRUE(eeprom.Load(object_out, 0x20));
+    ASSERT_STREQ(object_in.message, object_out.message);
+    ASSERT_EQ(object_in.value, object_out.value);
 
+    // Clear object out.
+    object_out.message[0] = '\0';
+    object_out.value = 0x0;
+
+    // Custom address save and load with 16-bit address.
+    ASSERT_TRUE(eeprom.Save(object_in, 0x0120));
+    ASSERT_TRUE(eeprom.Load(object_out, 0x0120));
+    ASSERT_STREQ(object_in.message, object_out.message);
+    ASSERT_EQ(object_in.value, object_out.value);
+
+    // Clear object out.
+    object_out.message[0] = '\0';
+    object_out.value = 0x0;
+}
+
+UTEST(EEPROM, FullEEPROMSaveLoadDeadbeef) {
+    uint16_t page_size_bytes = eeprom.GetPageSizeBytes();
+    uint8_t page_buf[page_size_bytes];
+    for (uint16_t i = 0; i < page_size_bytes; i += 4) {
+        page_buf[i] = 0xde;
+        page_buf[i + 1] = 0xad;
+        page_buf[i + 2] = 0xbe;
+        page_buf[i + 3] = 0xef;
+    }
+    for (uint16_t reg = 0; reg < eeprom.GetSizeBytes() - page_size_bytes; reg += page_size_bytes) {
+        EXPECT_EQ(eeprom.WriteBuf(reg, page_buf, page_size_bytes), page_size_bytes);
+    }
+    eeprom.Dump();
+    for (uint16_t reg = 0; reg < eeprom.GetSizeBytes() - page_size_bytes; reg += 4) {
+        uint8_t byte_out;
+        EXPECT_EQ(eeprom.ReadByte(reg, byte_out), 1);
+        EXPECT_EQ(byte_out, 0xde);
+        EXPECT_EQ(eeprom.ReadByte(reg + 1, byte_out), 1);
+        EXPECT_EQ(byte_out, 0xad);
+        EXPECT_EQ(eeprom.ReadByte(reg + 2, byte_out), 1);
+        EXPECT_EQ(byte_out, 0xbe);
+        EXPECT_EQ(eeprom.ReadByte(reg + 3, byte_out), 1);
+        EXPECT_EQ(byte_out, 0xef);
+    }
+}
+
+UTEST(EEPROM, FullEEPROMSaveLoadObject) {
+    // Fill EEPROM with test objects.
+    for (uint16_t reg = 0; reg < eeprom.GetSizeBytes() - sizeof(TestObject); reg += sizeof(TestObject)) {
+        EXPECT_TRUE(eeprom.Save(object_in, reg));
+    }
+    eeprom.Dump();
+    // Load back all test objects that were written.
+    for (uint16_t reg = 0; reg < eeprom.GetSizeBytes() - sizeof(TestObject); reg += sizeof(TestObject)) {
+        // Clear object out.
+        object_out.message[0] = '\0';
+        object_out.value = 0x0;
+        ASSERT_STRNE(object_in.message, object_out.message);
+        ASSERT_NE(object_in.value, object_out.value);
+
+        EXPECT_TRUE(eeprom.Load(object_out, reg));
+
+        EXPECT_STREQ(object_in.message, object_out.message);
+        EXPECT_EQ(object_in.value, object_out.value);
+    }
+
+    // Clear object out.
+    object_out.message[0] = '\0';
+    object_out.value = 0x0;
+}
+
+UTEST(EEPROM, OutOfBoundsSaveLoad) {
     // Out of bounds save and load should fail.
-    ASSERT_FALSE(eeprom.Save(object_in, 0xc0));
-    ASSERT_FALSE(eeprom.Load(object_in, 0xc0));
+    ASSERT_FALSE(eeprom.Save(object_in, 0x1F41));
+    ASSERT_FALSE(eeprom.Load(object_out, 0x1F41));
 }

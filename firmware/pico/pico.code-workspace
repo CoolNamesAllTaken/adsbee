@@ -2,6 +2,12 @@
 	"folders": [
 		{
 			"path": "."
+		},
+		{
+			"path": "../common"
+		},
+		{
+			"path": "../modules"
 		}
 	],
 	"settings": {
@@ -88,6 +94,7 @@
 			"esp_loader.h": "c",
 			"comms.hh": "c"
 		},
+		"cortex-debug.variableUseNaturalFormat": false,
 		// "cortex-debug.variableUseNaturalFormat": true,
 	},
 	"launch": {
@@ -107,8 +114,8 @@
 			{
 				"name": "Remote Debug",
 				"type": "cortex-debug",
-				"cwd": "${workspaceRoot}",
-				"executable": "/ads_bee/firmware/build/ads_bee.elf",
+				"cwd": "/ads_bee/pico",
+				"executable": "/ads_bee/pico/build/ads_bee.elf",
 				// "executable": "${command:cmake.launchTargetPath}",
 				"request": "attach",
 				"servertype": "external",
@@ -128,6 +135,7 @@
 				"name": "(gdb) Launch",
 				"type": "cppdbg",
 				"request": "launch",
+				"cwd": "/ads_bee/pico",
 				"program": "/ads_bee/pico/build/ads_bee_test",
 				"args": [],
 				"stopAtEntry": false,

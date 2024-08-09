@@ -1,7 +1,6 @@
 #ifndef _ADS_BEE_HH_
 #define _ADS_BEE_HH_
 
-#include "adsb_packet.hh"
 #include "aircraft_dictionary.hh"
 #include "cpp_at.hh"
 #include "data_structures.hh"  // For PFBQueue.
@@ -10,6 +9,7 @@
 #include "macros.hh"  // For MAX / MIN.
 #include "settings.hh"
 #include "stdint.h"
+#include "transponder_packet.hh"
 
 class ADSBee {
    public:
@@ -17,6 +17,8 @@ class ADSBee {
     static constexpr int kVDDMV = 3300;               // [mV] Voltage of positive supply rail.
     static constexpr int kTLMaxMV = 3300;             // [mV]
     static constexpr int kTLMinMV = 0;                // [mV]
+    static const uint16_t kRxQueueLenWords = 20;
+    static const uint32_t kRxQueuePacketDelimiter = 0x00000000;
     static constexpr uint16_t kMaxNumTransponderPackets =
         100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
     static const uint32_t kStatusLEDOnMs = 10;
@@ -108,7 +110,23 @@ class ADSBee {
      */
     void OnSysTickWrap();
 
-    inline uint64_t GetMLAT12MHzCounts();
+    /**
+     * Creates a composite timestamp using the current value of the SysTick timer (running at 125MHz) and the SysTick
+     * wrap counter to simulate a timer running at 48MHz (which matches the frequency of the preamble detector PIO).
+     * @param[in] num_bits Number of bits to mask the counter value to. Defaults to full resolution.
+     * @retval 48MHz counter value.
+     */
+    inline uint64_t GetMLAT48MHzCounts(uint16_t num_bits = 64);
+
+    /**
+     * Creates a composite timestamp using the current value of the SysTick timer (running at 125MHz) and the SysTick
+     * wrap counter to simulate a timer running at 12MHz, which matches existing decoders that use the Mode S Beast
+     * protocol.
+     * @param[in] num_bits Number of bits to mask the counter value to. Defaults to 48 bits (6 Bytes) to match Mode S
+     * Beast protocol.
+     * @retval 48MHz counter value.
+     */
+    inline uint64_t GetMLAT12MHzCounts(uint16_t num_bits = 48);
 
     /**
      * Read the high Minimum Trigger Level threshold via ADC.
@@ -167,9 +185,9 @@ class ADSBee {
         return 60 * (rssi_mv - 1600) / 1000;  // AD8313 0dBm intercept at 1.6V, slope is 60dBm/V.
     }
 
-    uint64_t GetLastMessageMLAT12MHzCounts() { return last_message_mlat_12mhz_counts_; }
+    uint64_t GetLastMessageMLAT48MHzCounts() { return last_message_mlat_48mhz_counts_; }
 
-    PFBQueue<TransponderPacket> transponder_packet_queue = PFBQueue<TransponderPacket>(
+    PFBQueue<RawTransponderPacket> transponder_packet_queue = PFBQueue<RawTransponderPacket>(
         {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = transponder_packet_queue_buffer_});
 
     AircraftDictionary aircraft_dictionary;
@@ -198,17 +216,23 @@ class ADSBee {
 
     uint16_t tl_lo_adc_counts_ = 0;
     uint16_t tl_hi_adc_counts_ = 0;
-    uint16_t last_message_rssi_adc_counts_ = 0;
-    uint64_t last_message_mlat_12mhz_counts_ = 0;
+
+    // Messages are sampled and ingested into the circular buffer at different times. A message might be getting
+    // ingested while another sample interval is underway! Separate these values so that we don't accidentally overwrite
+    // sampled values from a previous message.
+    uint16_t sampled_rssi_adc_counts_;
+    uint16_t last_message_rssi_adc_counts_;
+    uint64_t sampled_mlat_48mhz_counts_;
+    uint64_t last_message_mlat_48mhz_counts_;
 
     uint32_t mlat_counter_1s_wraps_ = 0;
 
     uint32_t rx_gain_ = SettingsManager::kDefaultRxGain;
 
-    // Due to a quirk, rx_buffer_ is used to store every word except for the first one.
-    uint32_t rx_buffer_[ADSBPacket::kMaxPacketLenWords32 - 1];
-
-    TransponderPacket transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
+    uint32_t rx_buffer_[kRxQueueLenWords + 1];
+    PFBQueue<uint32_t> rx_queue_ =
+        PFBQueue<uint32_t>({.buf_len_num_elements = kRxQueueLenWords + 1, .buffer = rx_buffer_});
+    RawTransponderPacket transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
     uint16_t last_demod_num_words_ingested_ = 0;

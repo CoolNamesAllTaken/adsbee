@@ -2,15 +2,16 @@
 #define SETTINGS_HH_
 
 #include <cstdint>
+#include <cstring> // for memset
 
 static const uint32_t kSettingsVersionMagicWord = 0xBEEFBEEF; // Change this when settings format changes!
 
 class SettingsManager
 {
 public:
-    static const int kDefaultTLHiMV = 400; // [mV]
+    static const int kDefaultTLHiMV = 250; // [mV]
     static const int kDefaultTLLoMV = 200; // [mV]
-    static const int kDefaultRxGain = 5;   // [unitless]
+    static const int kDefaultRxGain = 2;   // [unitless]
 
     // NOTE: Length does not include null terminator.
     static const uint16_t kWiFiSSIDMaxLen = 32;
@@ -56,6 +57,11 @@ public:
     static const uint16_t kReportingProtocolStrMaxLen = 30;
     static const char ReportingProtocolStrs[ReportingProtocol::kNumProtocols][kReportingProtocolStrMaxLen];
 
+    /** ESP32 Settings **/
+    static const uint16_t kMaxNumFeeds = 6;
+    static const uint16_t kFeedURIMaxNumChars = 63;
+    static const uint16_t kFeedReceiverIDNumBytes = 16;
+
     struct Settings
     {
         uint32_t magic_word = kSettingsVersionMagicWord;
@@ -75,6 +81,28 @@ public:
         bool wifi_enabled = false;
         char wifi_ssid[kWiFiSSIDMaxLen + 1] = "";
         char wifi_password[kWiFiPasswordMaxLen + 1] = "";
+
+        // ESP32 settings
+        char feed_uris[kMaxNumFeeds][SettingsManager::kFeedURIMaxNumChars + 1];
+        uint16_t feed_ports[kMaxNumFeeds];
+        bool feed_is_active[kMaxNumFeeds];
+        ReportingProtocol feed_protocols[kMaxNumFeeds];
+        uint8_t feed_receiver_ids[kMaxNumFeeds][kFeedReceiverIDNumBytes];
+
+        /**
+         * Default constructor.
+         */
+        Settings()
+        {
+            for (uint16_t i = 0; i < kMaxNumFeeds; i++)
+            {
+                memset(feed_uris[i], '\0', kFeedURIMaxNumChars + 1);
+                feed_ports[i] = 0;
+                feed_is_active[i] = false;
+                feed_protocols[i] = kNoReports;
+                memset(feed_receiver_ids[i], 0, kFeedReceiverIDNumBytes);
+            }
+        }
     };
 
     /**

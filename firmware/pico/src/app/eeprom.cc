@@ -6,35 +6,33 @@
 #include "hardware/gpio.h"  // For optional I2C initialization.
 #include "hardware/i2c.h"
 
-void EEPROM::WaitForSafeWriteTime() {
-    WaitForSafeReadTime();
-    last_write_timestamp_us_ = get_time_since_boot_us();
-}
+void EEPROM::BeginPostWriteDelay() { last_write_timestamp_us_ = get_time_since_boot_us(); }
 
-void EEPROM::WaitForSafeReadTime() {
+void EEPROM::WaitForSafeReadWriteTime() {
     while ((uint32_t)(get_time_since_boot_us() - last_write_timestamp_us_) < config_.i2c_write_time_us) {
         // Block until write has completed.
     }
 }
 
 int EEPROM::WriteByte(const uint16_t reg, const uint8_t byte) {
-    uint8_t msg[3];
+    uint8_t msg[kRegAddrNumBytes + 1];
     msg[0] = reg >> 8;
     msg[1] = reg & 0xFF;
     msg[2] = byte;
-    WaitForSafeWriteTime();
+    WaitForSafeReadWriteTime();
     int ret =
         i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, sizeof(msg), false, config_.i2c_timeout_us);
-    if (ret < 0) CONSOLE_ERROR("EEPROM::WriteByte: Write to register 0x%d failed with code %d.", reg, ret);
+    BeginPostWriteDelay();
+    if (ret < 0) CONSOLE_ERROR("EEPROM::WriteByte", "Write to register 0x%d failed with code %d.", reg, ret);
     return ret;
 }
 
 int EEPROM::ReadByte(const uint16_t reg, uint8_t &byte) {
     // Write address to read from.
-    WaitForSafeReadTime();
-    uint8_t msg[2];
+    uint8_t msg[kRegAddrNumBytes];
     msg[0] = reg >> 8;
     msg[1] = reg & 0xFF;
+    WaitForSafeReadWriteTime();
     int status =
         i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, sizeof(msg), true, config_.i2c_timeout_us);
     if (status < 0) return status;
@@ -49,28 +47,38 @@ int EEPROM::WriteBuf(const uint16_t reg, uint8_t *buf, const uint16_t num_bytes)
     }
     // Check to make sure registers are in bounds.
     if (reg + num_bytes > config_.size_bytes) {
-        CONSOLE_ERROR("EEPROM::WriteBuf: Write of %d bytes at 0x%x overruns end of EEPROM.");
+        CONSOLE_ERROR("EEPROM::WriteBuf", "Write of %d bytes at 0x%x overruns end of EEPROM.", num_bytes, reg);
         return PICO_ERROR_INVALID_ARG;
     }
 
     uint16_t write_reg = reg;
     while (write_reg < reg + num_bytes) {
-        uint8_t num_bytes_written = write_reg - reg;
-        uint8_t page_bytes_remaining = config_.page_size_bytes - (write_reg % config_.page_size_bytes);
-        uint8_t write_num_bytes = MIN(page_bytes_remaining, num_bytes - num_bytes_written);
-        uint8_t msg[write_num_bytes + 2];  // Add a spot for the address.
+        uint16_t num_bytes_written = write_reg - reg;
+        uint16_t page_bytes_remaining = config_.page_size_bytes - (write_reg % config_.page_size_bytes);
+        uint16_t write_num_bytes = MIN(page_bytes_remaining, num_bytes - num_bytes_written);
+        uint8_t msg[write_num_bytes + kRegAddrNumBytes];  // Add a spot for the address.
         msg[0] = write_reg >> 8;
         msg[1] = write_reg & 0xFF;
         for (uint16_t i = 0; i < write_num_bytes; i++) {
-            msg[i + 2] = buf[num_bytes_written + i];
+            msg[i + kRegAddrNumBytes] = buf[num_bytes_written + i];
         }
-        WaitForSafeWriteTime();
+        WaitForSafeReadWriteTime();
         int status =
             i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, sizeof(msg), false, config_.i2c_timeout_us);
+        BeginPostWriteDelay();
         if (status < 0) {
-            CONSOLE_ERROR("EEPROM::I2CRegWrite: Write failed at register 0x%x while trying to write %d bytes.",
-                          write_reg, write_num_bytes);
+            CONSOLE_ERROR(
+                "EEPROM::I2CRegWrite", "Write failed at register 0x%x while trying to write %d bytes, with error code "
+                "%d.",
+                write_reg, write_num_bytes, status);
             return status;
+        }
+        if (status != kRegAddrNumBytes + write_num_bytes) {
+            CONSOLE_ERROR(
+                "EEPROM::I2CRegWrite", "Write failed at register 0x%x, expected to write %d bytes including register "
+                "address but wrote %d.",
+                write_reg, write_num_bytes, status);
+            return INT32_MIN;
         }
         write_reg += write_num_bytes;
     }
@@ -87,15 +95,15 @@ int EEPROM::ReadBuf(const uint16_t reg, uint8_t *buf, const uint16_t num_bytes) 
     }
     // Check to make sure registers are in bounds.
     if (reg + num_bytes > config_.size_bytes) {
-        CONSOLE_ERROR("EEPROM::ReadBuf: Read of %d bytes at 0x%x overruns end of EEPROM.");
+        CONSOLE_ERROR("EEPROM::ReadBuf", "Read of %d bytes at 0x%x overruns end of EEPROM.", num_bytes, reg);
         return PICO_ERROR_INVALID_ARG;
     }
 
     // Read data from register(s) over I2C
-    WaitForSafeReadTime();
-    uint8_t msg[2];
+    uint8_t msg[kRegAddrNumBytes];
     msg[0] = reg >> 8;
     msg[1] = reg & 0xFF;
+    WaitForSafeReadWriteTime();
     i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, sizeof(msg), true, config_.i2c_timeout_us);
     num_bytes_read =
         i2c_read_timeout_us(config_.i2c_handle, config_.i2c_addr, buf, num_bytes, false, config_.i2c_timeout_us);
@@ -114,7 +122,7 @@ bool EEPROM::Init() {
     uint8_t eeprom_random_address_data;
     if (i2c_read_timeout_us(config_.i2c_handle, config_.i2c_addr, &eeprom_random_address_data, 1, false,
                             config_.i2c_timeout_us) != 1) {
-        CONSOLE_ERROR("EEPROM::Init: Failed to read current address from EEPROM at I2C address 0x%x.",
+        CONSOLE_ERROR("EEPROM::Init", "Failed to read current address from EEPROM at I2C address 0x%x.",
                       config_.i2c_addr);
         return false;
     }

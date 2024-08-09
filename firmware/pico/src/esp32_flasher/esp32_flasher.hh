@@ -26,10 +26,10 @@ class ESP32SerialFlasher {
 
     enum ESP32SerialFlasherStatus { kESP32FlasherOkay = 1, kESP32FlasherErrorTimeout, kESP32FlasherError };
 
-    ESP32SerialFlasher(ESP32SerialFlasherConfig config_in) : config_(config_in){};
+    ESP32SerialFlasher(ESP32SerialFlasherConfig config_in) : config_(config_in) {};
 
     bool DeInit() {
-        CONSOLE_INFO("ESP32SerialFlasher::DeInit De-Initializing ESP32 firmware upgrade peripherals.");
+        CONSOLE_INFO("ESP32SerialFlasher::DeInit", "De-Initializing ESP32 firmware upgrade peripherals.");
         uart_deinit(config_.esp32_uart_handle);
 
         gpio_deinit(config_.esp32_uart_tx_pin);
@@ -41,7 +41,7 @@ class ESP32SerialFlasher {
     }
 
     bool Init() {
-        CONSOLE_INFO("ESP32SerialFlasher::Init Initializing ESP32 firmware upgrade peripherals.");
+        CONSOLE_INFO("ESP32SerialFlasher::Init", "Initializing ESP32 firmware upgrade peripherals.");
         // Initialize the UART.
         gpio_set_function(config_.esp32_uart_tx_pin, GPIO_FUNC_UART);
         gpio_set_function(config_.esp32_uart_rx_pin, GPIO_FUNC_UART);

@@ -1,8 +1,8 @@
-#include "adsb_packet.hh"
 #include "gtest/gtest.h"
+#include "transponder_packet.hh"
 
-TEST(TransponderPacket, get_n_bit_word_from_buffer) {
-    uint32_t packet_buffer[TransponderPacket::kMaxPacketLenWords32];
+TEST(DecodedTransponderPacket, get_n_bit_word_from_buffer) {
+    uint32_t packet_buffer[DecodedTransponderPacket::kMaxPacketLenWords32];
     packet_buffer[0] = 0x8D76CE88u;
     packet_buffer[1] = 0x204C9072u;
     packet_buffer[2] = 0xCB48209Au;
@@ -38,8 +38,8 @@ TEST(TransponderPacket, get_n_bit_word_from_buffer) {
     EXPECT_EQ(get_n_bit_word_from_buffer(16, 32 * 3 + 16, packet_buffer), 0x504Du);
 }
 
-TEST(TransponderPacket, set_n_bit_word_in_buffer) {
-    uint32_t packet_buffer[TransponderPacket::kMaxPacketLenWords32];
+TEST(DecodedTransponderPacket, set_n_bit_word_in_buffer) {
+    uint32_t packet_buffer[DecodedTransponderPacket::kMaxPacketLenWords32];
     packet_buffer[0] = 0x8D76CE88u;
     packet_buffer[1] = 0x204C9072u;
     packet_buffer[2] = 0xCB48209Au;
@@ -91,8 +91,8 @@ TEST(TransponderPacket, set_n_bit_word_in_buffer) {
 
 // Example packets taken from http://jasonplayne.com:8080/. Thanks, Jason!
 
-TEST(TransponderPacket, PacketBuffer) {
-    uint32_t packet_buffer[TransponderPacket::kMaxPacketLenWords32];
+TEST(DecodedTransponderPacket, PacketBuffer) {
+    uint32_t packet_buffer[DecodedTransponderPacket::kMaxPacketLenWords32];
 
     // Nominal packet.
     packet_buffer[0] = 0x8D76CE88u;
@@ -100,10 +100,10 @@ TEST(TransponderPacket, PacketBuffer) {
     packet_buffer[2] = 0xCB48209Au;
     packet_buffer[3] = 0x504D0000u;
 
-    TransponderPacket packet = TransponderPacket(packet_buffer, 4);
+    DecodedTransponderPacket packet = DecodedTransponderPacket(packet_buffer, 4);
 
     // Check that packet was ingested and conditioned properly.
-    uint32_t check_buffer[TransponderPacket::kMaxPacketLenWords32];
+    uint32_t check_buffer[DecodedTransponderPacket::kMaxPacketLenWords32];
     EXPECT_EQ(112 / 8, packet.DumpPacketBuffer(check_buffer));
     EXPECT_EQ(check_buffer[0], 0x8D76CE88u);
     EXPECT_EQ(check_buffer[1], 0x204C9072u);
@@ -124,9 +124,9 @@ TEST(TransponderPacket, PacketBuffer) {
     // TODO: make this test!
 }
 
-TEST(TransponderPacket, RxStringConstructor) {
-    TransponderPacket packet = TransponderPacket((char *)"8D4840D6202CC371C32CE0576098");
-    uint32_t packet_buffer[TransponderPacket::kMaxPacketLenWords32];
+TEST(DecodedTransponderPacket, RxStringConstructor) {
+    DecodedTransponderPacket packet = DecodedTransponderPacket((char *)"8D4840D6202CC371C32CE0576098");
+    uint32_t packet_buffer[DecodedTransponderPacket::kMaxPacketLenWords32];
     packet.DumpPacketBuffer(packet_buffer);
 
     EXPECT_EQ(packet_buffer[0], 0x8D4840D6u);
@@ -135,8 +135,8 @@ TEST(TransponderPacket, RxStringConstructor) {
     EXPECT_EQ(packet_buffer[3], 0x60980000u);
 }
 
-TEST(TransponderPacket, CRC24Checksum) {
-    uint32_t packet_buffer[TransponderPacket::kMaxPacketLenWords32];  // note: may contain garbage
+TEST(DecodedTransponderPacket, CRC24Checksum) {
+    uint32_t packet_buffer[DecodedTransponderPacket::kMaxPacketLenWords32];  // note: may contain garbage
     const uint16_t packet_buffer_used_len = 4;  // number of 32 bit words populated in the packet buffer
 
     // Test packet from https://mode-s.org/decode/book-the_1090mhz_riddle-junzi_sun.pdf pg. 91.
@@ -146,7 +146,7 @@ TEST(TransponderPacket, CRC24Checksum) {
     packet_buffer[2] = 0xD4D22000u;
     packet_buffer[3] = 0x00000000u;
 
-    TransponderPacket packet = TransponderPacket(packet_buffer, packet_buffer_used_len);
+    DecodedTransponderPacket packet = DecodedTransponderPacket(packet_buffer, packet_buffer_used_len);
 
     EXPECT_EQ(packet.CalculateCRC24(), 0xAA4BDAu);
 
@@ -155,29 +155,29 @@ TEST(TransponderPacket, CRC24Checksum) {
     packet_buffer[1] = 0x204C9072u;
     packet_buffer[2] = 0xCB48209Au;
     packet_buffer[3] = 0x504D0000u;
-    packet = TransponderPacket(packet_buffer, packet_buffer_used_len);
+    packet = DecodedTransponderPacket(packet_buffer, packet_buffer_used_len);
     EXPECT_TRUE(packet.IsValid());
 
     // Check CRC performance with error injection.
     packet_buffer[0] = 0x7D76CE88u;  // error at beginning
-    packet = TransponderPacket(packet_buffer, packet_buffer_used_len);
+    packet = DecodedTransponderPacket(packet_buffer, packet_buffer_used_len);
     EXPECT_FALSE(packet.IsValid());
     packet_buffer[0] = 0x8D76CE88u;  // reset first word
 
     packet_buffer[3] = 0x504E0000u;  // error near end
-    packet = TransponderPacket(packet_buffer, packet_buffer_used_len);
+    packet = DecodedTransponderPacket(packet_buffer, packet_buffer_used_len);
     EXPECT_FALSE(packet.IsValid());
     packet_buffer[3] = 0x504D0000u;  // reset last word
 
     // Extra bit ingestion (last word eats preamble from subsequent packet).
     packet_buffer[3] = 0x504D0001u;  // error where it should be ignored
-    TransponderPacket tpacket = TransponderPacket(packet_buffer, packet_buffer_used_len);
+    DecodedTransponderPacket tpacket = DecodedTransponderPacket(packet_buffer, packet_buffer_used_len);
     EXPECT_TRUE(tpacket.IsValid());
     packet_buffer[3] = 0x504D0000u;  // reset last word
 }
 
-TEST(TransponderPacket, PacketFields) {
-    uint32_t packet_buffer[TransponderPacket::kMaxPacketLenWords32];  // note: may contain garbage
+TEST(DecodedTransponderPacket, PacketFields) {
+    uint32_t packet_buffer[DecodedTransponderPacket::kMaxPacketLenWords32];  // note: may contain garbage
     const uint16_t packet_buffer_used_len = 4;  // number of 32 bit words populated in the packet buffer
 
     // Test Packet: 8D76CE88 204C9072 CB48209A 504D
@@ -185,11 +185,12 @@ TEST(TransponderPacket, PacketFields) {
     packet_buffer[1] = 0x204C9072u;
     packet_buffer[2] = 0xCB48209Au;
     packet_buffer[3] = 0x504D0000u;
-    TransponderPacket tpacket = TransponderPacket(packet_buffer, packet_buffer_used_len);
+    DecodedTransponderPacket tpacket = DecodedTransponderPacket(packet_buffer, packet_buffer_used_len);
     EXPECT_TRUE(tpacket.IsValid());
     ADSBPacket packet = ADSBPacket(tpacket);
 
-    EXPECT_EQ(packet.GetDownlinkFormat(), static_cast<uint16_t>(TransponderPacket::kDownlinkFormatExtendedSquitter));
+    EXPECT_EQ(packet.GetDownlinkFormat(),
+              static_cast<uint16_t>(DecodedTransponderPacket::kDownlinkFormatExtendedSquitter));
     EXPECT_EQ(packet.GetCapability(), 5u);
     EXPECT_EQ(packet.GetICAOAddress(), 0x76CE88u);
     EXPECT_EQ(packet.GetTypeCode(), 4u);
@@ -197,40 +198,40 @@ TEST(TransponderPacket, PacketFields) {
 }
 
 TEST(ADSBPacket, ConstructFromTransponderPacket) {
-    TransponderPacket tpacket = TransponderPacket((char *)"8D7C80AD2358F6B1E35C60FF1925");
+    DecodedTransponderPacket tpacket = DecodedTransponderPacket((char *)"8D7C80AD2358F6B1E35C60FF1925");
     ADSBPacket packet = ADSBPacket(tpacket);
     EXPECT_TRUE(packet.IsValid());
     EXPECT_EQ(packet.GetICAOAddress(), 0x7C80ADu);
     EXPECT_EQ(packet.GetTypeCode(), 4);
 }
 
-TEST(TransponderPacket, ConstructValidShortFrame) {
-    TransponderPacket packet = TransponderPacket((char *)"00050319AB8C22");
+TEST(DecodedTransponderPacket, ConstructValidShortFrame) {
+    DecodedTransponderPacket packet = DecodedTransponderPacket((char *)"00050319AB8C22");
     EXPECT_FALSE(packet.IsValid());  // Automatically marked as invalid since not confirmable with CRC.
     EXPECT_EQ(packet.GetICAOAddress(), 0x7C7B5A);
     EXPECT_EQ(packet.GetDownlinkFormat(),
-              static_cast<uint16_t>(TransponderPacket::kDownlinkFormatShortRangeAirSurveillance));
+              static_cast<uint16_t>(DecodedTransponderPacket::kDownlinkFormatShortRangeAirSurveillance));
 }
 
-TEST(TransponderPacket, ConstructInvalidShortFrame) {
-    TransponderPacket packet = TransponderPacket((char *)"00050219AB8C22");
+TEST(DecodedTransponderPacket, ConstructInvalidShortFrame) {
+    DecodedTransponderPacket packet = DecodedTransponderPacket((char *)"00050219AB8C22");
     EXPECT_FALSE(packet.IsValid());  // Automatically marking all 56-bit packets with unknown ICAO as invalid for now.
 }
 
-TEST(TransponderPacket, DumpPacketBufferBytes) {
+TEST(DecodedTransponderPacket, DumpPacketBufferBytes) {
     // Dumping packet buffer to a byte buffer (instead of a 32-bit word buffer) was added after the fact, and its
     // implementation needs to be checked for accuracy. Nominal packet.
-    uint32_t packet_buffer_words[TransponderPacket::kMaxPacketLenWords32];
+    uint32_t packet_buffer_words[DecodedTransponderPacket::kMaxPacketLenWords32];
     packet_buffer_words[0] = 0x8D76CE88u;
     packet_buffer_words[1] = 0x204C9072u;
     packet_buffer_words[2] = 0xCB48209Au;
     packet_buffer_words[3] = 0x504D0000u;
 
-    TransponderPacket packet = TransponderPacket(packet_buffer_words, 4);
+    DecodedTransponderPacket packet = DecodedTransponderPacket(packet_buffer_words, 4);
 
-    uint8_t check_buffer_bytes[TransponderPacket::kMaxPacketLenWords32 * kBytesPerWord];
+    uint8_t check_buffer_bytes[DecodedTransponderPacket::kMaxPacketLenWords32 * kBytesPerWord];
     ASSERT_EQ(packet.DumpPacketBuffer(check_buffer_bytes), 112 / kBitsPerByte);
-    for (uint16_t i = 0; i < TransponderPacket::kMaxPacketLenWords32; i++) {
+    for (uint16_t i = 0; i < DecodedTransponderPacket::kMaxPacketLenWords32; i++) {
         EXPECT_EQ(packet_buffer_words[i] >> 24, check_buffer_bytes[i * kBytesPerWord]);
         EXPECT_EQ((packet_buffer_words[i] >> 16) & 0xFF, check_buffer_bytes[i * kBytesPerWord + 1]);
         EXPECT_EQ((packet_buffer_words[i] >> 8) & 0xFF, check_buffer_bytes[i * kBytesPerWord + 2]);

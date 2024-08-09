@@ -13,7 +13,7 @@ bool CommsManager::UpdateReporting() {
     bool ret = true;
     uint32_t timestamp_ms = get_time_since_boot_ms();
 
-    TransponderPacket packets_to_report[ADSBee::kMaxNumTransponderPackets];
+    DecodedTransponderPacket packets_to_report[ADSBee::kMaxNumTransponderPackets];
     uint16_t num_packets_to_report = 0;
     while (transponder_packet_reporting_queue.Pop(packets_to_report[num_packets_to_report])) {
         num_packets_to_report++;
@@ -32,7 +32,8 @@ bool CommsManager::UpdateReporting() {
                 ret = ReportBeast(iface, packets_to_report, num_packets_to_report);
                 break;
             case SettingsManager::kCSBee:
-                CONSOLE_WARNING("Protocol CSBee specified on interface %d but is not yet supported.", i);
+                CONSOLE_WARNING("CommsManager::UpdateReporting",
+                                "Protocol CSBee specified on interface %d but is not yet supported.", i);
                 ret = false;
                 break;
             case SettingsManager::kMAVLINK1:
@@ -44,12 +45,14 @@ bool CommsManager::UpdateReporting() {
                 break;
             case SettingsManager::kGDL90:
                 // Currently not supported.
-                CONSOLE_WARNING("Protocol GDL90 specified on interface %d but is not yet supported.", i);
+                CONSOLE_WARNING("CommsManager::UpdateReporting",
+                                "Protocol GDL90 specified on interface %d but is not yet supported.", i);
                 ret = false;
                 break;
             case SettingsManager::kNumProtocols:
             default:
-                CONSOLE_WARNING("Invalid reporting protocol %d specified for interface %d.", reporting_protocols_[i],
+                CONSOLE_WARNING("CommsManager::UpdateReporting",
+                                "Invalid reporting protocol %d specified for interface %d.", reporting_protocols_[i],
                                 i);
                 ret = false;
                 break;
@@ -59,13 +62,13 @@ bool CommsManager::UpdateReporting() {
     return ret;
 }
 
-bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface, const TransponderPacket packets_to_report[],
+bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface, const DecodedTransponderPacket packets_to_report[],
                              uint16_t num_packets_to_report) {
     return true;
 }
 
-bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface, const TransponderPacket packets_to_report[],
-                               uint16_t num_packets_to_report) {
+bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface,
+                               const DecodedTransponderPacket packets_to_report[], uint16_t num_packets_to_report) {
     for (uint16_t i = 0; i < num_packets_to_report; i++) {
         uint8_t beast_frame_buf[kBeastFrameMaxLenBytes];
         uint16_t num_bytes_in_frame = TransponderPacketToBeastFrame(packets_to_report[i], beast_frame_buf);
@@ -80,9 +83,8 @@ bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface, const Tra
 uint8_t AircraftAirframeTypeToMAVLINKEmitterType(Aircraft::AirframeType airframe_type) {
     switch (airframe_type) {
         case Aircraft::AirframeType::kAirframeTypeInvalid:
-            CONSOLE_WARNING(
-                "comms_reporting.cc::AircraftAirframeTypeToMAVLINKEmitterType: Encountered airframe type "
-                "kAirframeTypeInvalid.");
+            CONSOLE_WARNING("comms_reporting.cc::AircraftAirframeTypeToMAVLINKEmitterType",
+                            "Encountered airframe type kAirframeTypeInvalid.");
             return UINT8_MAX;
         case Aircraft::AirframeType::kAirframeTypeNoCategoryInfo:
             return 0;  // ADSB_EMITTER_TYPE_NO_INFO
@@ -123,9 +125,8 @@ uint8_t AircraftAirframeTypeToMAVLINKEmitterType(Aircraft::AirframeType airframe
         case Aircraft::AirframeType::kAirframeTypeGroundObstruction:
             return 19;  // ADSB_EMITTER_TYPE_POINT_OBSTACLE
         default:
-            CONSOLE_WARNING(
-                "comms_reporting.cc::AircraftAirframeTypeToMAVLINKEmitterType: Encountered unknown airframe type %d.",
-                airframe_type);
+            CONSOLE_WARNING("comms_reporting.cc::AircraftAirframeTypeToMAVLINKEmitterType",
+                            "Encountered unknown airframe type %d.", airframe_type);
             return UINT8_MAX;
     }
     return UINT8_MAX;
@@ -185,7 +186,7 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
             break;
         }
         default:
-            CONSOLE_ERROR("MAVLINK version %d does not exist.", mavlink_version);
+            CONSOLE_ERROR("CommsManager::ReportMAVLINK", "MAVLINK version %d does not exist.", mavlink_version);
             return false;
     };
 

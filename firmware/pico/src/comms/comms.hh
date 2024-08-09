@@ -1,7 +1,7 @@
 #ifndef COMMS_HH_
 #define COMMS_HH_
 
-// #include "adsb_packet.hh"  // For TransponderPacket.
+// #include "transponder_packet.hh"  // For DecodedTransponderPacket.
 #include "ads_bee.hh"
 #include "cpp_at.hh"
 #include "data_structures.hh"  // For PFBQueue.
@@ -35,7 +35,8 @@ class CommsManager {
     bool Update();
 
     CPP_AT_CALLBACK(ATBaudrateCallback);
-    CPP_AT_CALLBACK(ATConsoleVerbosityCallback);
+    CPP_AT_CALLBACK(ATLogLevelCallback);
+    CPP_AT_CALLBACK(ATFeedCallback);
     CPP_AT_CALLBACK(ATFlashESP32Callback);
     CPP_AT_CALLBACK(ATProtocolCallback);
     CPP_AT_HELP_CALLBACK(ATProtocolHelpCallback);
@@ -136,9 +137,9 @@ class CommsManager {
     uint32_t last_report_timestamp_ms = 0;
 
     // Queue for storing transponder packets before they get reported.
-    PFBQueue<TransponderPacket> transponder_packet_reporting_queue =
-        PFBQueue<TransponderPacket>({.buf_len_num_elements = ADSBee::kMaxNumTransponderPackets,
-                                     .buffer = transponder_packet_reporting_queue_buffer_});
+    PFBQueue<DecodedTransponderPacket> transponder_packet_reporting_queue =
+        PFBQueue<DecodedTransponderPacket>({.buf_len_num_elements = ADSBee::kMaxNumTransponderPackets,
+                                            .buffer = transponder_packet_reporting_queue_buffer_});
 
     // Public WiFi Settings
     char wifi_ssid[SettingsManager::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
@@ -158,7 +159,7 @@ class CommsManager {
     bool InitReporting();
     bool UpdateReporting();
 
-    bool ReportRaw(SettingsManager::SerialInterface iface, const TransponderPacket packets_to_report[],
+    bool ReportRaw(SettingsManager::SerialInterface iface, const DecodedTransponderPacket packets_to_report[],
                    uint16_t num_packets_to_report);
 
     /**
@@ -170,7 +171,7 @@ class CommsManager {
      * @param[in] num_packets_to_report Number of packets to report from the packets_to_report array.
      * @retval True if successful, false if something broke.
      */
-    bool ReportBeast(SettingsManager::SerialInterface iface, const TransponderPacket packets_to_report[],
+    bool ReportBeast(SettingsManager::SerialInterface iface, const DecodedTransponderPacket packets_to_report[],
                      uint16_t num_packets_to_report);
 
     /**
@@ -190,7 +191,7 @@ class CommsManager {
     CppAT at_parser_;
 
     // Queue for holding new transponder packets before they get reported.
-    TransponderPacket transponder_packet_reporting_queue_buffer_[ADSBee::kMaxNumTransponderPackets];
+    DecodedTransponderPacket transponder_packet_reporting_queue_buffer_[ADSBee::kMaxNumTransponderPackets];
 
     // Reporting Settings
     uint32_t comms_uart_baudrate_ = SettingsManager::kDefaultCommsUARTBaudrate;
@@ -227,13 +228,13 @@ extern const uint16_t at_command_list_num_commands;
 #define TEXT_COLOR_RESET            "\033[0m"
 
 #define CONSOLE_PRINTF(format, ...) comms_manager.console_printf(format __VA_OPT__(, ) __VA_ARGS__);
-#define CONSOLE_INFO(format, ...) \
-    comms_manager.console_level_printf(SettingsManager::LogLevel::kInfo, format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
-#define CONSOLE_WARNING(format, ...)                                         \
+#define CONSOLE_INFO(tag, format, ...) \
+    comms_manager.console_level_printf(SettingsManager::LogLevel::kInfo, tag ": " format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
+#define CONSOLE_WARNING(tag, format, ...)                                         \
     comms_manager.console_level_printf(SettingsManager::LogLevel::kWarnings, \
-                                       TEXT_COLOR_YELLOW format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) __VA_ARGS__);
-#define CONSOLE_ERROR(format, ...)                                         \
+                                       tag ": " TEXT_COLOR_YELLOW format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) __VA_ARGS__);
+#define CONSOLE_ERROR(tag, format, ...)                                         \
     comms_manager.console_level_printf(SettingsManager::LogLevel::kErrors, \
-                                       TEXT_COLOR_RED format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) __VA_ARGS__);
+                                       tag ": " TEXT_COLOR_RED format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) __VA_ARGS__);
 
 #endif /* COMMS_HH_ */
