@@ -94,7 +94,7 @@ int main() {
                 ads_bee.aircraft_dictionary.IngestADSBPacket(ADSBPacket(decoded_packet));
                 CONSOLE_INFO("main", "\taircraft_dictionary: %d aircraft",
                              ads_bee.aircraft_dictionary.GetNumAircraft());
-            } else if (decoded_packet.GetPacketBufferLenBits() == DecodedTransponderPacket::kSquitterPacketNumBits) {
+            } else if (decoded_packet.GetPacketBufferLenBits() == DecodedTransponderPacket::kSquitterPacketLenBits) {
                 // CRC is overlaid with ICAO address for 56-bit (squitter) packets. Check ICAO against aircraft in the
                 // dictionary to validate the CRC.
                 if (ads_bee.aircraft_dictionary.ContainsAircraft(decoded_packet.GetICAOAddress())) {

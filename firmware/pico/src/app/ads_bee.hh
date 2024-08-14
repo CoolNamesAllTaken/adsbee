@@ -25,8 +25,9 @@ class ADSBee {
 
     struct ADSBeeConfig {
         PIO preamble_detector_pio = pio0;
-        uint preamble_detector_demod_irq = PIO0_IRQ_0;
+        uint preamble_detector_demod_begin_irq = IO_IRQ_BANK0;
         PIO message_demodulator_pio = pio1;
+        uint preamble_detector_demod_complete_irq = PIO0_IRQ_0;
 
         uint16_t status_led_pin = 15;
         uint16_t pulses_pin = 19;  // Reading ADS-B on GPIO22. Will look for DECODE signal on GPIO22-1 = GPIO21.
@@ -65,7 +66,7 @@ class ADSBee {
 
     void SetReceiverEnable(bool is_enabled) {
         is_enabled_ = is_enabled;
-        irq_set_enabled(config_.preamble_detector_demod_irq, is_enabled_);
+        irq_set_enabled(config_.preamble_detector_demod_complete_irq, is_enabled_);
     }
 
     bool ReceiverIsEnabled() { return is_enabled_; }
@@ -80,7 +81,7 @@ class ADSBee {
     /**
      * ISR for GPIO interrupts.
      */
-    void GPIOIRQISR(uint gpio, uint32_t event_mask);
+    void OnDemodBegin(uint gpio, uint32_t event_mask);
 
     /**
      * Returns the last written value of rx_gain.
@@ -177,15 +178,9 @@ class ADSBee {
     int ReadRxGain();
 
     /**
-     * Returns the Receive Signal Strength Indicator (RSSI) of the previous message, in dBm.
+     * Returns the Receive Signal Strength Indicator (RSSI) of the message that is currently being read, in dBm.
      */
-    int GetLastMessageRSSIdBm() {
-        int normalized_rssi_adc_counts = last_message_rssi_adc_counts_ / MAX(rx_gain_, 1);  // Avoid divide by 0.
-        int rssi_mv = normalized_rssi_adc_counts * 3300 / 4095;
-        return 60 * (rssi_mv - 1600) / 1000;  // AD8313 0dBm intercept at 1.6V, slope is 60dBm/V.
-    }
-
-    uint64_t GetLastMessageMLAT48MHzCounts() { return last_message_mlat_48mhz_counts_; }
+    int ReadRSSIdBm();
 
     PFBQueue<RawTransponderPacket> transponder_packet_queue = PFBQueue<RawTransponderPacket>(
         {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = transponder_packet_queue_buffer_});
@@ -217,21 +212,14 @@ class ADSBee {
     uint16_t tl_lo_adc_counts_ = 0;
     uint16_t tl_hi_adc_counts_ = 0;
 
-    // Messages are sampled and ingested into the circular buffer at different times. A message might be getting
-    // ingested while another sample interval is underway! Separate these values so that we don't accidentally overwrite
-    // sampled values from a previous message.
-    uint16_t sampled_rssi_adc_counts_;
-    uint16_t last_message_rssi_adc_counts_;
-    uint64_t sampled_mlat_48mhz_counts_;
-    uint64_t last_message_mlat_48mhz_counts_;
-
     uint32_t mlat_counter_1s_wraps_ = 0;
 
     uint32_t rx_gain_ = SettingsManager::kDefaultRxGain;
 
-    uint32_t rx_buffer_[kRxQueueLenWords + 1];
-    PFBQueue<uint32_t> rx_queue_ =
-        PFBQueue<uint32_t>({.buf_len_num_elements = kRxQueueLenWords + 1, .buffer = rx_buffer_});
+    RawTransponderPacket rx_packet_;
+    // uint32_t rx_buffer_[kRxQueueLenWords + 1];
+    // PFBQueue<uint32_t> rx_queue_ =
+    //     PFBQueue<uint32_t>({.buf_len_num_elements = kRxQueueLenWords + 1, .buffer = rx_buffer_});
     RawTransponderPacket transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;

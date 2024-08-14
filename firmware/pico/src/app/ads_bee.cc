@@ -36,7 +36,7 @@ void on_demod_complete() { isr_access->OnDemodComplete(); }
 
 void on_systick_exception() { isr_access->OnSysTickWrap(); }
 
-void gpio_irq_isr(uint gpio, uint32_t event_mask) { isr_access->GPIOIRQISR(gpio, event_mask); }
+void on_demod_begin(uint gpio, uint32_t event_mask) { isr_access->OnDemodBegin(gpio, event_mask); }
 
 ADSBee::ADSBee(ADSBeeConfig config_in) {
     config_ = config_in;
@@ -109,27 +109,25 @@ bool ADSBee::Init() {
     preamble_detector_program_init(config_.preamble_detector_pio, preamble_detector_sm_, preamble_detector_offset_,
                                    config_.pulses_pin, config_.demod_out_pin, preamble_detector_div);
 
-    // Enable the DEMOD interrupt on PIO0_IRQ_0.
-    pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt0, true);  // state machine 0 IRQ 0
-
-    uint demod_in_irq = IO_IRQ_BANK0;
-
-    // Set GPIO interrupts to be higher priority than the DEMOD interrupt to allow RSSI measurement.
-    irq_set_priority(config_.preamble_detector_demod_irq, 1);
-    irq_set_priority(demod_in_irq, 0);
-
     // Handle GPIO interrupts.
-    gpio_set_irq_enabled_with_callback(config_.demod_in_pin, GPIO_IRQ_EDGE_RISE, true, gpio_irq_isr);
+    gpio_set_irq_enabled_with_callback(config_.demod_in_pin, GPIO_IRQ_EDGE_RISE, true, on_demod_begin);
+
+    // Enable the DEMOD interrupt on PIO1_IRQ_0.
+    pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt0, true);  // PIO1 state machine 0 IRQ 0
 
     // Handle PIO0 IRQ0.
-    irq_set_exclusive_handler(config_.preamble_detector_demod_irq, on_demod_complete);
-    irq_set_enabled(config_.preamble_detector_demod_irq, true);
+    irq_set_exclusive_handler(config_.preamble_detector_demod_complete_irq, on_demod_complete);
+    irq_set_enabled(config_.preamble_detector_demod_complete_irq, true);
 
     /** MESSAGE DEMODULATOR PIO **/
     float message_demodulator_div = (float)clock_get_hz(clk_sys) / kMessageDemodulatorFreq;
     message_demodulator_program_init(config_.message_demodulator_pio, message_demodulator_sm_,
                                      message_demodulator_offset_, config_.pulses_pin, config_.recovered_clk_pin,
                                      message_demodulator_div);
+
+    // Set GPIO interrupts to be higher priority than the DEMOD interrupt to allow RSSI measurement.
+    irq_set_priority(config_.preamble_detector_demod_complete_irq, 1);
+    irq_set_priority(config_.preamble_detector_demod_begin_irq, 0);
 
     CONSOLE_INFO("ADSBee::Init", "PIOs initialized.");
 
@@ -171,83 +169,132 @@ bool ADSBee::Update() {
     return true;
 }
 
-void ADSBee::GPIOIRQISR(uint gpio, uint32_t event_mask) {
+void ADSBee::OnDemodBegin(uint gpio, uint32_t event_mask) {
     if (gpio == config_.demod_in_pin && event_mask == GPIO_IRQ_EDGE_RISE) {
         gpio_acknowledge_irq(config_.demod_in_pin, GPIO_IRQ_EDGE_RISE);
         // Demodulation period is beginning!
-        // Read the RSSI level of the last packet.
-        adc_select_input(config_.rssi_hold_adc_input);
-        sampled_rssi_adc_counts_ = adc_read();
-        // RSSI peak detector will automatically clear when DEMOD pin goes LO.
-
-        sampled_mlat_48mhz_counts_ = GetMLAT48MHzCounts();
+        // Read the RSSI level of the current packet.
+        rx_packet_.rssi_dbm = ReadRSSIdBm();
+        // Store the MLAT counter.
+        rx_packet_.mlat_48mhz_64bit_counts = GetMLAT48MHzCounts();
     }
 }
 
 void ADSBee::OnDemodComplete() {
-    // uint16_t word_index = 0;
-    while (!pio_sm_is_rx_fifo_empty(config_.message_demodulator_pio, message_demodulator_sm_)) {
-        uint32_t word = pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_);
-        if (!rx_queue_.Push(word)) {
-            CONSOLE_ERROR("ADSBee::OnDemodComplete", "Receive queue overflowed.");
-        }
+    pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_, false);
+    if (!pio_sm_is_rx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_)) {
+        // Push any partially complete 32-bit word onto the RX FIFO.
+        pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_,
+                                  pio_encode_push(false, true));
     }
-    uint32_t word;  // Scratch for enqueueing and dequeueing.
 
-    // This while loop looks for and end of packet delimiter in the rx_queue_. If it finds it, it forms a packet and
-    // pushes it onto the transponder_packet_queue for decoding in the main loop. The loop exits when it is unable to
-    // find any additional complete packets in rx_queue_ (i.e. it can't find an end of packet delimiter).
-    while (true) {
-        // Check that the queue has at least one packet (contains an end of message delimiter word).
-        uint16_t packet_num_words = 0;
-        bool found_end_of_packet = false;
-        for (uint16_t i = 0; i < rx_queue_.Length() && !found_end_of_packet; i++) {
-            rx_queue_.Peek(word, i);
-            if (word == kRxQueuePacketDelimiter) {
-                packet_num_words = i;
-                found_end_of_packet = true;
+    // Clear the transponder packet buffer.
+    memset((void *)rx_packet_.buffer, 0x0, RawTransponderPacket::kMaxPacketLenWords32);
+
+    // Pull all words out of the RX FIFO.
+    volatile uint16_t packet_num_words =
+        pio_sm_get_rx_fifo_level(config_.message_demodulator_pio, message_demodulator_sm_);
+    if (packet_num_words > RawTransponderPacket::kMaxPacketLenWords32) {
+        // Packet length is invalid; dump everything and try again next time.
+        CONSOLE_WARNING("ADSBee::OnDemodComplete", "Received a packet with %d 32-bit words, expected maximum of %d.",
+                        packet_num_words, DecodedTransponderPacket::kExtendedSquitterPacketNumWords32);
+        // pio_sm_clear_fifos(config_.message_demodulator_pio, message_demodulator_sm_);
+        packet_num_words = RawTransponderPacket::kMaxPacketLenWords32;
+    }
+    // Create a RawTransponderPacket and push it onto the queue.
+    for (uint16_t i = 0; i < packet_num_words; i++) {
+        rx_packet_.buffer[i] = pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_);
+        if (i == packet_num_words - 1) {
+            // // Trim off extra ingested bit from last word in the packet.
+            // word  = word >> 1;
+            // Mask and left align final word based on bit length.
+            switch (packet_num_words) {
+                case DecodedTransponderPacket::kSquitterPacketNumWords32:
+                    rx_packet_.buffer[i] = (rx_packet_.buffer[i] & 0xFFFFFF) << 8;
+                    rx_packet_.buffer_len_bits = DecodedTransponderPacket::kSquitterPacketLenBits;
+                case DecodedTransponderPacket::kExtendedSquitterPacketNumWords32:
+                    rx_packet_.buffer[i] = (rx_packet_.buffer[i] & 0xFFFF) << 16;
+                    rx_packet_.buffer_len_bits = DecodedTransponderPacket::kExtendedSquitterPacketLenBits;
             }
         }
-        if (!found_end_of_packet) {
-            // Can't form a complete packet with the contents of the queue, bail out.
-            break;
-        }
-        // Clamp maximum packet size to Extended Squitter (112 bits). Extra bits will be discarded.
-        if (packet_num_words > DecodedTransponderPacket::kExtendedSquitterPacketNumWords32) {
-            CONSOLE_WARNING("ADSBee::OnDemodComplete",
-                            "Received a packet with %d 32-bit words, expected maximum of %d.", packet_num_words,
-                            DecodedTransponderPacket::kExtendedSquitterPacketNumWords32);
-            packet_num_words = DecodedTransponderPacket::kExtendedSquitterPacketNumWords32;
-        }
-        // Stuff the packet words into a buffer.
-        uint32_t packet_buffer[RawTransponderPacket::kMaxPacketLenWords32];
-        for (uint16_t i = 0; i < packet_num_words; i++) {
-            rx_queue_.Pop(word);
-            if (i == packet_num_words - 1) {
-                // Trim off extra ingested bit from last word in the packet.
-                packet_buffer[i] = word >> 1;
-                // Mask and left align final word based on bit length.
-                switch (packet_num_words) {
-                    case DecodedTransponderPacket::kSquitterPacketNumWords32:
-                        packet_buffer[i] = (packet_buffer[i] & 0xFFFFFF) << 8;
-                    case DecodedTransponderPacket::kExtendedSquitterPacketNumWords32:
-                        packet_buffer[i] = (packet_buffer[i] & 0xFFFF) << 16;
-                }
-            } else {
-                packet_buffer[i] = word;
-            }
-        }
-        // Turn packet buffer into a RawTransponderpacket and push it into the queue for digestion in the main loop.
-        RawTransponderPacket packet = RawTransponderPacket(packet_buffer, packet_num_words, GetLastMessageRSSIdBm(),
-                                                           GetLastMessageMLAT48MHzCounts());
-        transponder_packet_queue.Push(packet);
-
-        // Drain the receive queue until we've popped the end of packet delimiter.
-        while (rx_queue_.Pop(word) && word != kRxQueuePacketDelimiter) {
-        }
     }
+    transponder_packet_queue.Push(rx_packet_);
+
+    // pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_,
+    //                           pio_encode_jmp(0x0));  // Jump to beginning of program.
+    // pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_, true);
+
+    // // uint16_t word_index = 0;
+    // while (!pio_sm_is_rx_fifo_empty(config_.message_demodulator_pio, message_demodulator_sm_)) {
+    //     uint32_t word = pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_);
+    //     if (!rx_queue_.Push(word)) {
+    //         CONSOLE_ERROR("ADSBee::OnDemodComplete", "Receive queue overflowed.");
+    //     }
+    // }
+    // uint32_t word;  // Scratch for enqueueing and dequeueing.
+
+    // // This while loop looks for and end of packet delimiter in the rx_queue_. If it finds it, it forms a packet and
+    // // pushes it onto the transponder_packet_queue for decoding in the main loop. The loop exits when it is unable to
+    // // find any additional complete packets in rx_queue_ (i.e. it can't find an end of packet delimiter).
+    // while (true) {
+    //     // Check that the queue has at least one packet (contains an end of message delimiter word).
+    //     uint16_t packet_num_words = 0;
+    //     bool found_end_of_packet = false;
+    //     for (uint16_t i = 0; i < rx_queue_.Length() && !found_end_of_packet; i++) {
+    //         rx_queue_.Peek(word, i);
+    //         if (word == kRxQueuePacketDelimiter) {
+    //             packet_num_words = i;
+    //             found_end_of_packet = true;
+    //         }
+    //     }
+    //     if (!found_end_of_packet) {
+    //         // Can't form a complete packet with the contents of the queue, bail out.
+    //         break;
+    //     }
+    //     // Clamp maximum packet size to Extended Squitter (112 bits). Extra bits will be discarded.
+    //     if (packet_num_words > DecodedTransponderPacket::kExtendedSquitterPacketNumWords32) {
+    //         CONSOLE_WARNING("ADSBee::OnDemodComplete",
+    //                         "Received a packet with %d 32-bit words, expected maximum of %d.", packet_num_words,
+    //                         DecodedTransponderPacket::kExtendedSquitterPacketNumWords32);
+    //         packet_num_words = DecodedTransponderPacket::kExtendedSquitterPacketNumWords32;
+    //     }
+    //     // Stuff the packet words into a buffer.
+    //     uint32_t packet_buffer[RawTransponderPacket::kMaxPacketLenWords32];
+    //     for (uint16_t i = 0; i < packet_num_words; i++) {
+    //         rx_queue_.Pop(word);
+    //         if (i == packet_num_words - 1) {
+    //             // Trim off extra ingested bit from last word in the packet.
+    //             packet_buffer[i] = word >> 1;
+    //             // Mask and left align final word based on bit length.
+    //             switch (packet_num_words) {
+    //                 case DecodedTransponderPacket::kSquitterPacketNumWords32:
+    //                     packet_buffer[i] = (packet_buffer[i] & 0xFFFFFF) << 8;
+    //                 case DecodedTransponderPacket::kExtendedSquitterPacketNumWords32:
+    //                     packet_buffer[i] = (packet_buffer[i] & 0xFFFF) << 16;
+    //             }
+    //         } else {
+    //             packet_buffer[i] = word;
+    //         }
+    //     }
+    //     // Turn packet buffer into a RawTransponderpacket and push it into the queue for digestion in the main loop.
+    //     RawTransponderPacket packet = RawTransponderPacket(packet_buffer, packet_num_words, GetLastMessageRSSIdBm(),
+    //                                                        GetLastMessageMLAT48MHzCounts());
+    //     transponder_packet_queue.Push(packet);
+
+    //     // Drain the receive queue until we've popped the end of packet delimiter.
+    //     while (rx_queue_.Pop(word) && word != kRxQueuePacketDelimiter) {
+    //     }
+    // }
 
     gpio_put(config_.rssi_clear_pin, 1);  // restore RSSI peak detector to working order.
+
+    // Reset the demodulator state machine to wait for the next decode interval, then enable it.
+    pio_sm_restart(config_.message_demodulator_pio, message_demodulator_sm_);  // Reset FIFOs, ISRs, etc.
+    pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_,
+                              pio_encode_jmp(message_demodulator_offset_));  // Jump to beginning of program.
+    pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_, true);
+
+    // Release the preamble detector from its wait state.
     pio_interrupt_clear(config_.preamble_detector_pio, 0);
 }
 
@@ -317,6 +364,13 @@ int ADSBee::ReadRxGain() {
     uint8_t wiper_value_counts;
     i2c_read_blocking(config_.onboard_i2c, kRxGainDigipotI2CAddr, &wiper_value_counts, 1, false);
     return wiper_value_counts * kRxgainDigipotOhmsPerCount / 1e3 + 1;  // Non-inverting amp with R1 = 1kOhms.
+}
+
+int ADSBee::ReadRSSIdBm() {
+    adc_select_input(config_.rssi_hold_adc_input);
+    int rssi_adc_counts = adc_read();
+    int rssi_mv = rssi_adc_counts * 3300 / 4095;
+    return 60 * (rssi_mv - 1600) / 1000;  // AD8313 0dBm intercept at 1.6V, slope is 60dBm/V.
 }
 
 void ADSBee::FlashStatusLED(uint32_t led_on_ms) {

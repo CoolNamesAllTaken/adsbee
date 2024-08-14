@@ -51,27 +51,26 @@ idle_countdown:
 % c-sdk {
 
 // Helper function (for use in C program) to initialize this PIO program
-void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint in_pin, uint out_pin, float div) {
+void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint pulses_pin, uint demod_pin, float div) {
 
     // Sets up state machine and wrap target. This function is automatically
     // generated in preamble_detector.pio.h.
     pio_sm_config c = preamble_detector_program_get_default_config(offset);
 
-    // Allow PIO to control GPIO in_pin (as input)
-    //pio_gpio_init(pio, in_pin);
-    pio_sm_set_consecutive_pindirs(pio, sm, in_pin, 1, false); // set one pin starting at in_pin to IN
+    // Allow PIO to read GPIO pulses_pin (as input)
+    pio_sm_set_consecutive_pindirs(pio, sm, pulses_pin, 1, false); // set one pin starting at pulses_pin to IN
 
-    // Allow PIO to control GPIO out_pin (as output for debugging)
-    pio_gpio_init(pio, out_pin);
-    pio_sm_set_consecutive_pindirs(pio, sm, out_pin, 1, true); // set one pin starting at out_pin to OUT
+    // Allow PIO to control GPIO demod_pin (as output for debugging)
+    pio_gpio_init(pio, demod_pin);
+    pio_sm_set_consecutive_pindirs(pio, sm, demod_pin, 1, true); // set one pin starting at demod_pin to OUT
 
-    // Connect in_pin to IN pin (control with 'in' instruction)
-    sm_config_set_in_pins(&c, in_pin); // for WAIT
-    sm_config_set_jmp_pin(&c, in_pin); // for JMP
+    // Connect pulses_pin to IN pin (control with 'in' instruction)
+    sm_config_set_in_pins(&c, pulses_pin); // for WAIT
+    sm_config_set_jmp_pin(&c, pulses_pin); // for JMP
 
-    // Connect out_pin to SET and SIDESET
-    sm_config_set_set_pins(&c, out_pin, 1); // set one pin as SET output
-    sm_config_set_sideset_pins(&c, out_pin); 
+    // Connect demod_pin to SET and SIDESET
+    sm_config_set_set_pins(&c, demod_pin, 1); // set one pin as SET output
+    sm_config_set_sideset_pins(&c, demod_pin); 
 
     // Join RX and TX FIFOs together to allow 8x 32-bit words to be stored in the RX FIFO.
     sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
@@ -101,10 +100,7 @@ void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint in_pin, 
 ; Autopush must be enabled.
 ; Before enabling the SM, it should be placed in a 'wait 1, pin` state, so that
 ; it will not start sampling until the initial line idle state ends.
-jmp initial_entry
-complete_demod:
-    push block          ; Empty the ISR into the FIFO in preparation for next demod.
-    in null 32          ; Ingest a full word of 0's into the FIFO to allow alignment.
+
 initial_entry:
     wait 1 pin demod_in_pin_index side 0       ; Wait to enter DEMOD interval.
     jmp pin start_of_1 side 0
@@ -143,10 +139,9 @@ rising_edge_0:
 
     jmp pin start_of_1 side 0; If signal is 0 again, it's another 0 bit otherwise it's a 1
 .wrap
+complete_demod:
+    jmp complete_demod
 
-abort_demod:
-    out null, 32; dump all the bits
-    jmp initial_entry
 
 
 % c-sdk {
@@ -155,8 +150,6 @@ static inline void message_demodulator_program_init(PIO pio, uint sm, uint offse
     uint pulses_pin = in_pin_base;
 
     pio_sm_set_consecutive_pindirs(pio, sm, in_pin_base, 2, false); // in_pin_base is DEMOD input, in_pin_base + 1 is pulses
-    //pio_gpio_init(pio, pulses_pin);
-    //pio_gpio_init(pio, demod_in_pin);
 
     // Allow PIO to control GPIO 22 (as output for debugging)
     pio_gpio_init(pio, recovered_clk_pin);
@@ -178,11 +171,6 @@ static inline void message_demodulator_program_init(PIO pio, uint sm, uint offse
 
     // X and Y are set to 0 and 1, to conveniently emit these to ISR/FIFO.
     pio_sm_exec(pio, sm, pio_encode_set(pio_x, 1));
-    pio_sm_exec(pio, sm, pio_encode_set(pio_y, 0));
-    // Assume line is idle low, and first transmitted bit is 0. Put SM in a
-    // wait state before enabling. RX will begin once the first 0 symbol is
-    // detected.
-    ; pio_sm_exec(pio, sm, pio_encode_wait_pin(1, 0) | pio_encode_delay(2));
-    ; pio_sm_set_enabled(pio, sm, true);
+    pio_sm_exec(pio, sm, pio_encode_mov_not(pio_x, pio_null));
 }
 %}

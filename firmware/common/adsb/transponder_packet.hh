@@ -36,7 +36,7 @@ class DecodedTransponderPacket {
     static const uint16_t kDFNUmBits = 5;     // [1-5] Downlink Format bitlength.
     static const uint16_t kMaxDFStrLen = 50;  // Max length of TypeCode string.
     static const uint16_t kDebugStrLen = 200;
-    static const uint16_t kSquitterPacketNumBits = 56;
+    static const uint16_t kSquitterPacketLenBits = 56;
     static const uint16_t kSquitterPacketNumWords32 = 2;  // 56 bits = 1.75 words, round up to 2.
     static const uint16_t kExtendedSquitterPacketLenBits = 112;
     static const uint16_t kExtendedSquitterPacketNumWords32 = 4;  // 112 bits = 3.5 words, round up to 4.

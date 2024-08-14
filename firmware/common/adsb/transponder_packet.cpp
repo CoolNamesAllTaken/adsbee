@@ -177,10 +177,10 @@ uint32_t DecodedTransponderPacket::CalculateCRC24(uint16_t packet_len_bits) cons
 }
 
 void DecodedTransponderPacket::ConstructTransponderPacket() {
-    if (packet.buffer_len_bits != kExtendedSquitterPacketLenBits && packet.buffer_len_bits != kSquitterPacketNumBits) {
+    if (packet.buffer_len_bits != kExtendedSquitterPacketLenBits && packet.buffer_len_bits != kSquitterPacketLenBits) {
         snprintf(debug_string, kDebugStrLen,
                  "Bit number mismatch while decoding packet. Expected %d or %d but got %d!\r\n",
-                 kExtendedSquitterPacketLenBits, kSquitterPacketNumBits, packet.buffer_len_bits);
+                 kExtendedSquitterPacketLenBits, kSquitterPacketLenBits, packet.buffer_len_bits);
 
         return;  // leave is_valid_ as false
     }
