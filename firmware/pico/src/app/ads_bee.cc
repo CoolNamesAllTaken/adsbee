@@ -173,8 +173,6 @@ void ADSBee::OnDemodBegin(uint gpio, uint32_t event_mask) {
     if (gpio == config_.demod_in_pin && event_mask == GPIO_IRQ_EDGE_RISE) {
         gpio_acknowledge_irq(config_.demod_in_pin, GPIO_IRQ_EDGE_RISE);
         // Demodulation period is beginning!
-        // Read the RSSI level of the current packet.
-        rx_packet_.rssi_dbm = ReadRSSIdBm();
         // Store the MLAT counter.
         rx_packet_.mlat_48mhz_64bit_counts = GetMLAT48MHzCounts();
     }
@@ -182,6 +180,8 @@ void ADSBee::OnDemodBegin(uint gpio, uint32_t event_mask) {
 
 void ADSBee::OnDemodComplete() {
     pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_, false);
+    // Read the RSSI level of the current packet.
+    rx_packet_.rssi_dbm = ReadRSSIdBm();
     if (!pio_sm_is_rx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_)) {
         // Push any partially complete 32-bit word onto the RX FIFO.
         pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_,
