@@ -37,13 +37,10 @@ class ADSBee {
         // Use GPIO22 for the decode PIO program to output its recovered clock (for debugging only).
         uint16_t recovered_clk_pins[kNumDemodStateMachines] = {22, 22};
         // GPIO 24-25 used as PWM outputs for setting analog comparator threshold voltages.
-        uint16_t tl_lo_pwm_pin = 25;
-        uint16_t tl_hi_pwm_pin = 24;
+        uint16_t tl_pwm_pin = 25;
         // GPIO 26-27 used as ADC inputs for reading analog comparator threshold voltages after RF filer.
-        uint16_t tl_lo_adc_pin = 27;
-        uint16_t tl_lo_adc_input = 1;
-        uint16_t tl_hi_adc_pin = 26;
-        uint16_t tl_hi_adc_input = 0;
+        uint16_t tl_adc_pin = 27;
+        uint16_t tl_adc_input = 1;
         // GPIO 28 used as ADC input for the power level of the last decoded packet.
         uint16_t rssi_hold_adc_pin = 28;
         uint16_t rssi_hold_adc_input = 2;
@@ -85,22 +82,10 @@ class ADSBee {
     void OnDemodBegin(uint gpio, uint32_t event_mask);
 
     /**
-     * Returns the last written value of rx_gain.
-     * @retval Gain (integer ratio between 1-101).
-     */
-    int GetRxGain() { return rx_gain_; }
-
-    /**
-     * Return the value of the high Minimum Trigger Level threshold in milliVolts.
-     * @retval TL in milliVolts.
-     */
-    int GetTLHiMilliVolts() { return tl_hi_mv_; }
-
-    /**
      * Return the value of the low Minimum Trigger Level threshold in milliVolts.
      * @retval TL in milliVolts.
      */
-    int GetTLLoMilliVolts() { return tl_lo_mv_; }
+    int GetTLMilliVolts() { return tl_mv_; }
 
     /**
      * ISR triggered by DECODE completing, via PIO0 IRQ0.
@@ -140,7 +125,7 @@ class ADSBee {
      * Read the low Minimum Trigger Level threshold via ADC.
      * @retval TL in milliVolts.
      */
-    int ReadTLLoMilliVolts();
+    int ReadTLMilliVolts();
 
     /**
      * Set the high Minimum Trigger Level (TL) at the AD8314 output in milliVolts.
@@ -155,28 +140,14 @@ class ADSBee {
 
     /**
      * Set the low Minimum Trigger Level (TL) at the AD8314 output in milliVolts.
-     * @param[in] tl_lo_mv Voltage level for a "low" trigger on the V_DN AD8314 output. The AD8314 has a nominal
+     * @param[in] tl_mv Voltage level for a "low" trigger on the V_DN AD8314 output. The AD8314 has a nominal
      * output voltage of 2.25V on V_DN, with a logarithmic slope of around -42.6mV/dB and a minimum output voltage of
      * 0.05V. Thus, power levels received at the input of the AD8314 correspond to the following voltages. 2250mV =
      * -49dBm 50mV = -2.6dBm Note that there is a +30dB LNA gain stage in front of the AD8314, so for the overall
      * receiver, the TL values are more like: 2250mV = -79dBm 50mV = -32.6dBm
      * @retval True if succeeded, False if TL value was out of range.
      */
-    bool SetTLLoMilliVolts(int tl_lo_mv);
-
-    /**
-     * Set the value of the receive signal path gain digipot over I2C and store the value for reference.
-     * @param[in] rx_gain Gain (integer ratio between 1-101).
-     * @retval True if setting was successful, false otherwise.
-     */
-    bool SetRxGain(int rx_gain);
-
-    /**
-     * Reads the wiper value from the receive signal path gain digipot over I2C and calculates then returns the
-     * resulting gain value.
-     * @retval Gain ratio (integer between 1-101).
-     */
-    int ReadRxGain();
+    bool SetTLMilliVolts(int tl_mv);
 
     /**
      * Returns the Receive Signal Strength Indicator (RSSI) of the message that is currently being read, in dBm.
@@ -200,27 +171,17 @@ class ADSBee {
 
     uint32_t led_off_timestamp_ms_ = 0;
 
-    uint16_t tl_lo_pwm_slice_ = 0;
-    uint16_t tl_hi_pwm_slice_ = 0;
-    uint16_t tl_hi_pwm_chan_ = 0;
-    uint16_t tl_lo_pwm_chan_ = 0;
+    uint16_t tl_pwm_slice_ = 0;
+    uint16_t tl_pwm_chan_ = 0;
 
-    uint16_t tl_hi_mv_ = SettingsManager::kDefaultTLHiMV;
-    uint16_t tl_lo_mv_ = SettingsManager::kDefaultTLLoMV;
-    uint16_t tl_hi_pwm_count_ = 0;  // out of kTLMaxPWMCount
-    uint16_t tl_lo_pwm_count_ = 0;  // out of kTLMaxPWMCount
+    uint16_t tl_mv_ = SettingsManager::kDefaultTLMV;
+    uint16_t tl_pwm_count_ = 0;  // out of kTLMaxPWMCount
 
-    uint16_t tl_lo_adc_counts_ = 0;
-    uint16_t tl_hi_adc_counts_ = 0;
+    uint16_t tl_adc_counts_ = 0;
 
     uint32_t mlat_counter_1s_wraps_ = 0;
 
-    uint32_t rx_gain_ = SettingsManager::kDefaultRxGain;
-
     RawTransponderPacket rx_packet_;
-    // uint32_t rx_buffer_[kRxQueueLenWords + 1];
-    // PFBQueue<uint32_t> rx_queue_ =
-    //     PFBQueue<uint32_t>({.buf_len_num_elements = kRxQueueLenWords + 1, .buffer = rx_buffer_});
     RawTransponderPacket transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;

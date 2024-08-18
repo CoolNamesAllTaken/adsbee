@@ -268,27 +268,6 @@ CPP_AT_CALLBACK(CommsManager::ATRxEnableCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
-CPP_AT_CALLBACK(CommsManager::ATRxGainCallback) {
-    switch (op) {
-        case '=':
-            if (CPP_AT_HAS_ARG(0)) {
-                int rx_gain;
-                CPP_AT_TRY_ARG2NUM(0, rx_gain);
-                if (!ads_bee.SetRxGain(rx_gain)) {
-                    CPP_AT_ERROR("Failed while setting rx gain to %d.", rx_gain);
-                }
-                CPP_AT_SUCCESS();
-            }
-            CPP_AT_ERROR("Received operator '%c' but no args.", op);
-            break;
-        case '?':
-            CPP_AT_CMD_PRINTF("=%d(%d)", ads_bee.GetRxGain(), ads_bee.ReadRxGain());
-            CPP_AT_SILENT_SUCCESS();
-            break;
-    }
-    CPP_AT_ERROR("Operator '%c' not supported.", op);
-}
-
 CPP_AT_CALLBACK(CommsManager::ATSettingsCallback) {
     switch (op) {
         case '=':
@@ -310,8 +289,7 @@ CPP_AT_CALLBACK(CommsManager::ATSettingsCallback) {
             CPP_AT_ERROR("No arguments provided.");
             break;
         case '?':
-            CPP_AT_CMD_PRINTF("=%d(tl_lo_mv),%d(tl_hi_mv),%d(rx_gain)\r\n", settings_manager.settings.tl_lo_mv,
-                              settings_manager.settings.tl_hi_mv, settings_manager.settings.rx_gain);
+            CPP_AT_CMD_PRINTF("=%d(tl_mv)\r\n", settings_manager.settings.tl_mv);
             CPP_AT_SUCCESS();
             break;
     }
@@ -322,7 +300,7 @@ CPP_AT_CALLBACK(CommsManager::ATTLReadCallback) {
     switch (op) {
         case '?':
             // Read command.
-            CPP_AT_CMD_PRINTF("=%d,%d\r\n", ads_bee.ReadTLLoMilliVolts(), ads_bee.ReadTLHiMilliVolts());
+            CPP_AT_CMD_PRINTF("=%d\r\n", ads_bee.ReadTLMilliVolts());
             CPP_AT_SILENT_SUCCESS();
             break;
     }
@@ -331,9 +309,8 @@ CPP_AT_CALLBACK(CommsManager::ATTLReadCallback) {
 
 /**
  * AT+TL_SET Callback
- * AT+TL_SET=<mtl_lo_mv>,<mtl_hi_mv>
- *  mtl_lo_mv = Low trigger value, mV.
- *  mtl_hi_mv = High trigger value, mV.
+ * AT+TL_SET=<tl_mv>
+ *  tl_mv = Trigger Level, in milliVolts.
  * AT+TL_SET?
  * +TL_SET=
  */
@@ -341,25 +318,16 @@ CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
     switch (op) {
         case '?':
             // AT+TL_SET value query.
-            CPP_AT_CMD_PRINTF("=%d,%d\r\n", ads_bee.GetTLLoMilliVolts(), ads_bee.GetTLHiMilliVolts());
+            CPP_AT_CMD_PRINTF("=%d\r\n", ads_bee.GetTLMilliVolts());
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
             // Attempt setting LO TL value, in milliVolts, if first argument is not blank.
             if (CPP_AT_HAS_ARG(0)) {
-                uint16_t new_mtl_lo_mv;
-                CPP_AT_TRY_ARG2NUM(0, new_mtl_lo_mv);
-                if (!ads_bee.SetTLLoMilliVolts(new_mtl_lo_mv)) {
-                    CPP_AT_ERROR("Failed to set mtl_lo_mv.");
-                }
-            }
-            // Attempt setting HI TL value, in milliVolts, if second argument is not blank.
-            if (CPP_AT_HAS_ARG(1)) {
-                // Set HI TL value, in milliVolts.
-                uint16_t new_mtl_hi_mv;
-                CPP_AT_TRY_ARG2NUM(1, new_mtl_hi_mv);
-                if (!ads_bee.SetTLHiMilliVolts(new_mtl_hi_mv)) {
-                    CPP_AT_ERROR("Failed to set mtl_hi_mv.");
+                uint16_t new_tl_mv;
+                CPP_AT_TRY_ARG2NUM(0, new_tl_mv);
+                if (!ads_bee.SetTLMilliVolts(new_tl_mv)) {
+                    CPP_AT_ERROR("Failed to set tl_mv.");
                 }
             }
             CPP_AT_SUCCESS();
@@ -461,15 +429,6 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxEnableCallback, comms_manager)
 
     },
-    {.command_buf = "+RX_GAIN",
-     .min_args = 0,
-     .max_args = 1,
-     .help_string_buf =
-         "Set or query value of Rx Gain Digipot.\r\n\t"
-         "AT+RX_GAIN=<rx_gain>\r\n\tAT+RX_GAIN?\r\n\t+RX_GAIN=<rx_gain_commanded>(<Actual rx_gain_actual>).",
-     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxGainCallback, comms_manager)
-
-    },
     {.command_buf = "+SETTINGS",
      .min_args = 0,
      .max_args = 3,
@@ -486,15 +445,15 @@ const CppAT::ATCommandDef_t at_command_list[] = {
     {.command_buf = "+TL_READ",
      .min_args = 0,
      .max_args = 0,
-     .help_string_buf = "Read ADC counts and mV values for high and low TL thresholds. Call with no ops nor arguments, "
-                        "AT+TL_READ.",
+     .help_string_buf =
+         "Read ADC counts and mV value for the minimum trigger level threshold. Call with no ops nor arguments, "
+         "AT+TL_READ.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLReadCallback, comms_manager)},
     {.command_buf = "+TL_SET",
      .min_args = 0,
-     .max_args = 2,
-     .help_string_buf =
-         "Set HI and LO trigger level thresholds for RF power detector.\r\n\tAT+TLSet=<tl_lo_mv_>,<tl_hi_mv_>"
-         "\tQuery trigger level.\r\n\tAT+TL_SET?\r\n\t+TLSet=<tl_lo_mv_>,<tl_hi_mv_>.",
+     .max_args = 1,
+     .help_string_buf = "Set minimum trigger level threshold for RF power detector.\r\n\tAT+TLSet=<tl_mv_>"
+                        "\tQuery trigger level.\r\n\tAT+TL_SET?\r\n\t+TLSet=<tl_mv_>.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLSetCallback, comms_manager)},
     {.command_buf = "+WIFI",
      .min_args = 0,

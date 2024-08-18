@@ -51,28 +51,21 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
     isr_access = this;
 
     // Figure out slice and channel values that will be used for setting PWM duty cycle.
-    tl_lo_pwm_slice_ = pwm_gpio_to_slice_num(config_.tl_lo_pwm_pin);
-    tl_hi_pwm_slice_ = pwm_gpio_to_slice_num(config_.tl_hi_pwm_pin);
-    tl_lo_pwm_chan_ = pwm_gpio_to_channel(config_.tl_lo_pwm_pin);
-    tl_hi_pwm_chan_ = pwm_gpio_to_channel(config_.tl_hi_pwm_pin);
+    tl_pwm_slice_ = pwm_gpio_to_slice_num(config_.tl_pwm_pin);
+    tl_pwm_chan_ = pwm_gpio_to_channel(config_.tl_pwm_pin);
 }
 
 bool ADSBee::Init() {
     // Initialize the TL bias PWM output.
-    gpio_set_function(config_.tl_lo_pwm_pin, GPIO_FUNC_PWM);
-    gpio_set_function(config_.tl_hi_pwm_pin, GPIO_FUNC_PWM);
-    pwm_set_wrap(tl_lo_pwm_slice_, kTLMaxPWMCount);
-    pwm_set_wrap(tl_hi_pwm_slice_, kTLMaxPWMCount);  // redundant since it's the same slice
+    gpio_set_function(config_.tl_pwm_pin, GPIO_FUNC_PWM);
+    pwm_set_wrap(tl_pwm_slice_, kTLMaxPWMCount);
 
-    SetTLLoMilliVolts(SettingsManager::kDefaultTLLoMV);
-    SetTLHiMilliVolts(SettingsManager::kDefaultTLHiMV);
-    pwm_set_enabled(tl_lo_pwm_slice_, true);
-    pwm_set_enabled(tl_hi_pwm_slice_, true);  // redundant since it's the same slice
+    SetTLMilliVolts(SettingsManager::kDefaultTLMV);
+    pwm_set_enabled(tl_pwm_slice_, true);
 
     // Initialize the ML bias ADC input.
     adc_init();
-    adc_gpio_init(config_.tl_lo_adc_pin);
-    adc_gpio_init(config_.tl_hi_adc_pin);
+    adc_gpio_init(config_.tl_adc_pin);
     adc_gpio_init(config_.rssi_hold_adc_pin);
 
     // Initialize RSSI peak detector clear pin.
@@ -159,8 +152,7 @@ bool ADSBee::Update() {
     }
 
     // Update PWM output duty cycle.
-    pwm_set_chan_level(tl_lo_pwm_slice_, tl_lo_pwm_chan_, tl_lo_pwm_count_);
-    pwm_set_chan_level(tl_hi_pwm_slice_, tl_hi_pwm_chan_, tl_hi_pwm_count_);
+    pwm_set_chan_level(tl_pwm_slice_, tl_pwm_chan_, tl_pwm_count_);
 
     // Prune aircraft dictionary.
     if (last_aircraft_dictionary_update_timestamp_ms_ - timestamp_ms > config_.aircraft_dictionary_update_interval_ms) {
@@ -220,72 +212,6 @@ void ADSBee::OnDemodComplete() {
     }
     transponder_packet_queue.Push(rx_packet_);
 
-    // pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_,
-    //                           pio_encode_jmp(0x0));  // Jump to beginning of program.
-    // pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_, true);
-
-    // // uint16_t word_index = 0;
-    // while (!pio_sm_is_rx_fifo_empty(config_.message_demodulator_pio, message_demodulator_sm_)) {
-    //     uint32_t word = pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_);
-    //     if (!rx_queue_.Push(word)) {
-    //         CONSOLE_ERROR("ADSBee::OnDemodComplete", "Receive queue overflowed.");
-    //     }
-    // }
-    // uint32_t word;  // Scratch for enqueueing and dequeueing.
-
-    // // This while loop looks for and end of packet delimiter in the rx_queue_. If it finds it, it forms a packet and
-    // // pushes it onto the transponder_packet_queue for decoding in the main loop. The loop exits when it is unable to
-    // // find any additional complete packets in rx_queue_ (i.e. it can't find an end of packet delimiter).
-    // while (true) {
-    //     // Check that the queue has at least one packet (contains an end of message delimiter word).
-    //     uint16_t packet_num_words = 0;
-    //     bool found_end_of_packet = false;
-    //     for (uint16_t i = 0; i < rx_queue_.Length() && !found_end_of_packet; i++) {
-    //         rx_queue_.Peek(word, i);
-    //         if (word == kRxQueuePacketDelimiter) {
-    //             packet_num_words = i;
-    //             found_end_of_packet = true;
-    //         }
-    //     }
-    //     if (!found_end_of_packet) {
-    //         // Can't form a complete packet with the contents of the queue, bail out.
-    //         break;
-    //     }
-    //     // Clamp maximum packet size to Extended Squitter (112 bits). Extra bits will be discarded.
-    //     if (packet_num_words > DecodedTransponderPacket::kExtendedSquitterPacketNumWords32) {
-    //         CONSOLE_WARNING("ADSBee::OnDemodComplete",
-    //                         "Received a packet with %d 32-bit words, expected maximum of %d.", packet_num_words,
-    //                         DecodedTransponderPacket::kExtendedSquitterPacketNumWords32);
-    //         packet_num_words = DecodedTransponderPacket::kExtendedSquitterPacketNumWords32;
-    //     }
-    //     // Stuff the packet words into a buffer.
-    //     uint32_t packet_buffer[RawTransponderPacket::kMaxPacketLenWords32];
-    //     for (uint16_t i = 0; i < packet_num_words; i++) {
-    //         rx_queue_.Pop(word);
-    //         if (i == packet_num_words - 1) {
-    //             // Trim off extra ingested bit from last word in the packet.
-    //             packet_buffer[i] = word >> 1;
-    //             // Mask and left align final word based on bit length.
-    //             switch (packet_num_words) {
-    //                 case DecodedTransponderPacket::kSquitterPacketNumWords32:
-    //                     packet_buffer[i] = (packet_buffer[i] & 0xFFFFFF) << 8;
-    //                 case DecodedTransponderPacket::kExtendedSquitterPacketNumWords32:
-    //                     packet_buffer[i] = (packet_buffer[i] & 0xFFFF) << 16;
-    //             }
-    //         } else {
-    //             packet_buffer[i] = word;
-    //         }
-    //     }
-    //     // Turn packet buffer into a RawTransponderpacket and push it into the queue for digestion in the main loop.
-    //     RawTransponderPacket packet = RawTransponderPacket(packet_buffer, packet_num_words, GetLastMessageRSSIdBm(),
-    //                                                        GetLastMessageMLAT48MHzCounts());
-    //     transponder_packet_queue.Push(packet);
-
-    //     // Drain the receive queue until we've popped the end of packet delimiter.
-    //     while (rx_queue_.Pop(word) && word != kRxQueuePacketDelimiter) {
-    //     }
-    // }
-
     gpio_put(config_.rssi_clear_pin, 1);  // restore RSSI peak detector to working order.
 
     // Reset the demodulator state machine to wait for the next decode interval, then enable it.
@@ -311,59 +237,25 @@ uint64_t ADSBee::GetMLAT12MHzCounts(uint16_t num_bits) {
     return GetMLAT48MHzCounts(50) >> 2;  // Divide 48MHz counter by 4, widen the mask by 2 bits to compensate.
 }
 
-bool ADSBee::SetTLHiMilliVolts(int tl_hi_mv) {
-    if (tl_hi_mv > kTLMaxMV || tl_hi_mv < kTLMinMV) {
-        CONSOLE_ERROR("ADSBee::SetTLHiMilliVolts",
-                      "Unable to set tl_hi_mv_ to %d, outside of permissible range %d-%d.\r\n", tl_hi_mv, kTLMinMV,
-                      kTLMaxMV);
+bool ADSBee::SetTLMilliVolts(int tl_mv) {
+    if (tl_mv > kTLMaxMV || tl_mv < kTLMinMV) {
+        CONSOLE_ERROR("ADSBee::SetTLMilliVolts", "Unable to set tl_mv_ to %d, outside of permissible range %d-%d.\r\n",
+                      tl_mv, kTLMinMV, kTLMaxMV);
         return false;
     }
-    tl_hi_mv_ = tl_hi_mv;
-    tl_hi_pwm_count_ = tl_hi_mv_ * kTLMaxPWMCount / kVDDMV;
-
-    return true;
-}
-
-bool ADSBee::SetTLLoMilliVolts(int tl_lo_mv) {
-    if (tl_lo_mv > kTLMaxMV || tl_lo_mv < kTLMinMV) {
-        CONSOLE_ERROR("ADSBee::SetTLLoMilliVolts",
-                      "Unable to set tl_lo_mv_ to %d, outside of permissible range %d-%d.\r\n", tl_lo_mv, kTLMinMV,
-                      kTLMaxMV);
-        return false;
-    }
-    tl_lo_mv_ = tl_lo_mv;
-    tl_lo_pwm_count_ = tl_lo_mv_ * kTLMaxPWMCount / kVDDMV;
+    tl_mv_ = tl_mv;
+    tl_pwm_count_ = tl_mv_ * kTLMaxPWMCount / kVDDMV;
 
     return true;
 }
 
 inline int adc_counts_to_mv(uint16_t adc_counts) { return 3300 * adc_counts / 0xFFF; }
 
-int ADSBee::ReadTLHiMilliVolts() {
-    // Read back the high level TL bias output voltage.
-    adc_select_input(config_.tl_hi_adc_input);
-    tl_hi_adc_counts_ = adc_read();
-    return adc_counts_to_mv(tl_hi_adc_counts_);
-}
-
-int ADSBee::ReadTLLoMilliVolts() {
+int ADSBee::ReadTLMilliVolts() {
     // Read back the low level TL bias output voltage.
-    adc_select_input(config_.tl_lo_adc_input);
-    tl_lo_adc_counts_ = adc_read();
-    return adc_counts_to_mv(tl_lo_adc_counts_);
-}
-
-bool ADSBee::SetRxGain(int rx_gain) {
-    rx_gain_ = rx_gain;
-    uint32_t rx_gain_digipot_resistance_ohms = (rx_gain_ - 1) * 1e3;  // Non-inverting amp with R1 = 1kOhms.
-    uint8_t wiper_value_counts = (rx_gain_digipot_resistance_ohms / kRxgainDigipotOhmsPerCount);
-    return i2c_write_blocking(config_.onboard_i2c, kRxGainDigipotI2CAddr, &wiper_value_counts, 1, false) == 1;
-}
-
-int ADSBee::ReadRxGain() {
-    uint8_t wiper_value_counts;
-    i2c_read_blocking(config_.onboard_i2c, kRxGainDigipotI2CAddr, &wiper_value_counts, 1, false);
-    return wiper_value_counts * kRxgainDigipotOhmsPerCount / 1e3 + 1;  // Non-inverting amp with R1 = 1kOhms.
+    adc_select_input(config_.tl_adc_input);
+    tl_adc_counts_ = adc_read();
+    return adc_counts_to_mv(tl_adc_counts_);
 }
 
 int ADSBee::ReadRSSIdBm() {
