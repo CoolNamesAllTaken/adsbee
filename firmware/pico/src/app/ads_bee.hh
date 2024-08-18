@@ -22,6 +22,7 @@ class ADSBee {
     static constexpr uint16_t kMaxNumTransponderPackets =
         100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
     static const uint32_t kStatusLEDOnMs = 10;
+    static const uint16_t kNumDemodStateMachines = 2;
 
     struct ADSBeeConfig {
         PIO preamble_detector_pio = pio0;
@@ -30,11 +31,11 @@ class ADSBee {
         uint preamble_detector_demod_complete_irq = PIO0_IRQ_0;
 
         uint16_t status_led_pin = 15;
-        uint16_t pulses_pin = 19;  // Reading ADS-B on GPIO22. Will look for DECODE signal on GPIO22-1 = GPIO21.
-        uint16_t demod_in_pin = pulses_pin + 1;
-        uint16_t demod_out_pin = 21;  // Use GPIO20 as DECODE signal output, will be wired to GPIO21 as input.
-        uint16_t recovered_clk_pin =
-            22;  // Use GPIO22 for the decode PIO program to output its recovered clock (for debugging only).
+        // Reading ADS-B on GPIO19. Will look for DEMOD signal on GPIO20.
+        uint16_t pulses_pins[kNumDemodStateMachines] = {19, 19};
+        uint16_t demod_pins[kNumDemodStateMachines] = {20, 20};
+        // Use GPIO22 for the decode PIO program to output its recovered clock (for debugging only).
+        uint16_t recovered_clk_pins[kNumDemodStateMachines] = {22, 22};
         // GPIO 24-25 used as PWM outputs for setting analog comparator threshold voltages.
         uint16_t tl_lo_pwm_pin = 25;
         uint16_t tl_hi_pwm_pin = 24;

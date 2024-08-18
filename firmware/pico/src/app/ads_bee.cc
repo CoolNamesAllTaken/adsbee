@@ -107,10 +107,10 @@ bool ADSBee::Init() {
 
     // Initialize the program using the .pio file helper function
     preamble_detector_program_init(config_.preamble_detector_pio, preamble_detector_sm_, preamble_detector_offset_,
-                                   config_.pulses_pin, config_.demod_out_pin, preamble_detector_div);
+                                   config_.pulses_pins[0], config_.demod_pins[0], preamble_detector_div);
 
     // Handle GPIO interrupts.
-    gpio_set_irq_enabled_with_callback(config_.demod_in_pin, GPIO_IRQ_EDGE_RISE, true, on_demod_begin);
+    gpio_set_irq_enabled_with_callback(config_.demod_pins[0], GPIO_IRQ_EDGE_RISE, true, on_demod_begin);
 
     // Enable the DEMOD interrupt on PIO1_IRQ_0.
     pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt0, true);  // PIO1 state machine 0 IRQ 0
@@ -122,7 +122,7 @@ bool ADSBee::Init() {
     /** MESSAGE DEMODULATOR PIO **/
     float message_demodulator_div = (float)clock_get_hz(clk_sys) / kMessageDemodulatorFreq;
     message_demodulator_program_init(config_.message_demodulator_pio, message_demodulator_sm_,
-                                     message_demodulator_offset_, config_.pulses_pin, config_.recovered_clk_pin,
+                                     message_demodulator_offset_, config_.pulses_pins[0], config_.recovered_clk_pins[0],
                                      message_demodulator_div);
 
     // Set GPIO interrupts to be higher priority than the DEMOD interrupt to allow RSSI measurement.
@@ -170,8 +170,8 @@ bool ADSBee::Update() {
 }
 
 void ADSBee::OnDemodBegin(uint gpio, uint32_t event_mask) {
-    if (gpio == config_.demod_in_pin && event_mask == GPIO_IRQ_EDGE_RISE) {
-        gpio_acknowledge_irq(config_.demod_in_pin, GPIO_IRQ_EDGE_RISE);
+    if (gpio == config_.demod_pins[0] && event_mask == GPIO_IRQ_EDGE_RISE) {
+        gpio_acknowledge_irq(config_.demod_pins[0], GPIO_IRQ_EDGE_RISE);
         // Demodulation period is beginning!
         // Store the MLAT counter.
         rx_packet_.mlat_48mhz_64bit_counts = GetMLAT48MHzCounts();
