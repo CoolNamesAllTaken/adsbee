@@ -170,6 +170,7 @@ TEST(Aircraft, SetCPRLatLon) {
 
     // Send two even packets at startup, no odd packets.
     aircraft = Aircraft();  // clear everything
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedPosition));
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(578, 13425, false));
     inc_time_since_boot_ms();
@@ -260,6 +261,8 @@ TEST(AircraftDictionary, IngestAirbornePositionMessage) {
     auto &aircraft = itr->second;
 
     // Aircraft should exist but not have its location filled out.
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne));
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedPosition));
     ASSERT_EQ(aircraft.icao_address, (uint32_t)0xA6147F);
     EXPECT_FLOAT_EQ(aircraft.latitude_deg, 0.0f);
     EXPECT_FLOAT_EQ(aircraft.longitude_deg, 0.0f);
@@ -275,12 +278,14 @@ TEST(AircraftDictionary, IngestAirbornePositionMessage) {
     ASSERT_TRUE(dictionary.IngestADSBPacket(odd_packet));
 
     // Aircraft should now have a valid location.
-    ASSERT_EQ(aircraft.icao_address, 0xA6147F);
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedPosition));
+    ASSERT_EQ(aircraft.icao_address, 0xA6147Fu);
     EXPECT_NEAR(aircraft.latitude_deg, 20.326522568524894f, kLatDegCloseEnough);
     EXPECT_NEAR(aircraft.longitude_deg, -156.5328535600142f, kLonDegCloseEnough);
     EXPECT_EQ(aircraft.surveillance_status, Aircraft::SurveillanceStatus::kSurveillanceStatusNoCondition);
     EXPECT_FALSE(aircraft.single_antenna_flag);
     // Altitude should be filled out.
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedBaroAltitude));
     EXPECT_EQ(aircraft.altitude_source, Aircraft::AltitudeSource::kAltitudeSourceBaro);
     EXPECT_EQ(aircraft.baro_altitude_ft, 17000);
 }
@@ -299,11 +304,14 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     auto &aircraft = itr->second;  // NOTE: Aircraft is a mutable reference until we get to Message A!
 
     // Aircraft should now have velocities populated.
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedTrack));
     EXPECT_NEAR(aircraft.heading_deg, 304.2157021324374, kFloatCloseEnough);
     // Velocity should actually evaluate to 120 when evaluated with doubles, but there is some float error with the sqrt
     // that I think gets pretty nasty.
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity));
     EXPECT_NEAR(aircraft.velocity_kts, 120.930, 0.01);
     EXPECT_EQ(aircraft.velocity_source, Aircraft::VelocitySource::kVelocitySourceGroundSpeed);
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedVerticalVelocity));
     EXPECT_NEAR(aircraft.vertical_rate_fpm, -64.0f, kFloatCloseEnough);
     EXPECT_EQ(aircraft.vertical_rate_source, Aircraft::VerticalRateSource::kVerticalRateSourceBaro);
 
@@ -318,6 +326,9 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     ASSERT_TRUE(dictionary.GetAircraft(message_a_icao, aircraft));  // NOTE: Aircraft is read-only now!
 
     // Check values for Message A
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedVerticalVelocity));
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity));
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedTrack));
     EXPECT_EQ(aircraft.vertical_rate_fpm, -832);
     EXPECT_EQ(aircraft.velocity_source, Aircraft::VelocitySource::kVelocitySourceGroundSpeed);
     EXPECT_NEAR(aircraft.heading_deg, 182.88f, 0.01);
@@ -329,6 +340,8 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     aircraft_ptr->altitude_source = Aircraft::AltitudeSource::kAltitudeSourceBaro;
     // Re-ingest message A to make sure the GNSS altitude gets corrected.
     ASSERT_TRUE(dictionary.IngestADSBPacket(packet));
+    EXPECT_FALSE(aircraft_ptr->HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedBaroAltitude));
+    EXPECT_TRUE(aircraft_ptr->HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedGNSSAltitude));
     ASSERT_EQ(aircraft_ptr->gnss_altitude_ft, 2000 + 550);  // GNSS altitude is 550ft above baro altitude.
 
     // Test Message B from https://mode-s.org/decode/content/ads-b/5-airborne-velocity.html
@@ -342,6 +355,9 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     ASSERT_TRUE(dictionary.GetAircraft(message_b_icao, aircraft));
 
     // Check values for Message B
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedVerticalVelocity));
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity));
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedTrack));
     EXPECT_EQ(aircraft.vertical_rate_fpm, -2304);
     EXPECT_EQ(aircraft.velocity_source, Aircraft::VelocitySource::kVelocitySourceAirspeedTrue);
     EXPECT_NEAR(aircraft.heading_deg, 243.98f, 0.01);

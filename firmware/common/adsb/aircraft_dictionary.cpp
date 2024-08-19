@@ -357,9 +357,14 @@ bool AircraftDictionary::IngestAircraftIDMessage(Aircraft &aircraft, ADSBPacket 
     return true;
 }
 
-bool AircraftDictionary::IngestSurfacePositionMessage(Aircraft &aircraft, ADSBPacket packet) { return false; }
+bool AircraftDictionary::IngestSurfacePositionMessage(Aircraft &aircraft, ADSBPacket packet) {
+    aircraft.ClearBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne);
+
+    return false;
+}
 
 bool AircraftDictionary::IngestAirbornePositionMessage(Aircraft &aircraft, ADSBPacket packet) {
+    aircraft.SetBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne);
     bool decode_successful = true;
     // ME[5-6] - Surveillance Status
     aircraft.surveillance_status = static_cast<Aircraft::SurveillanceStatus>(packet.GetNBitWordFromMessage(2, 5));
@@ -384,6 +389,7 @@ bool AircraftDictionary::IngestAirbornePositionMessage(Aircraft &aircraft, ADSBP
                                                (encoded_altitude_ft_with_q_bit & 0b1111);
                 aircraft.baro_altitude_ft = q_bit ? (encoded_altitude_ft * 25) - 1000 : 25 * encoded_altitude_ft;
                 // FIXME: Does not currently support baro altitudes above 50175ft. Something about grey codes?
+                aircraft.SetBitFlag(Aircraft::BitFlag::kBitFlagUpdatedBaroAltitude);
             }
             break;
         }
@@ -391,6 +397,7 @@ bool AircraftDictionary::IngestAirbornePositionMessage(Aircraft &aircraft, ADSBP
             aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeSourceGNSS;
             uint16_t gnss_altitude_m = static_cast<uint16_t>(packet.GetNBitWordFromMessage(12, 8));
             aircraft.gnss_altitude_ft = MetersToFeet(gnss_altitude_m);
+            aircraft.SetBitFlag(Aircraft::BitFlag::kBitFlagUpdatedGNSSAltitude);
             break;
         }
         default:
@@ -412,6 +419,8 @@ bool AircraftDictionary::IngestAirbornePositionMessage(Aircraft &aircraft, ADSBP
             CONSOLE_WARNING("IngestAirbornePositionMessage", "DecodePosition failed for aircraft 0x%lx.\r\n",
                             aircraft.icao_address);
             decode_successful = false;
+        } else {
+            aircraft.SetBitFlag(Aircraft::BitFlag::kBitFlagUpdatedPosition);
         }
     }
 
@@ -424,6 +433,7 @@ inline float wrapped_atan2f(float y, float x) {
 }
 
 bool AircraftDictionary::IngestAirborneVelocitiesMessage(Aircraft &aircraft, ADSBPacket packet) {
+    aircraft.SetBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne);
     bool decode_successful = true;
 
     // Decode horizontal velocity.
@@ -439,7 +449,7 @@ bool AircraftDictionary::IngestAirborneVelocitiesMessage(Aircraft &aircraft, ADS
             int v_ew_kts_plus_1 = static_cast<int>(packet.GetNBitWordFromMessage(10, 14));
             int v_ns_kts_plus_1 = static_cast<int>(packet.GetNBitWordFromMessage(10, 25));
             if (v_ew_kts_plus_1 == 0 || v_ns_kts_plus_1 == 0) {
-                aircraft.velocity_source = Aircraft::VelocitySource::kVelocityNotAvailable;
+                aircraft.velocity_source = Aircraft::VelocitySource::kVelocitySourceNotAvailable;
                 CONSOLE_WARNING("AircraftDictionary::IngestAirborneVelocitiesMessage",
                                 "Ground speed not available for aircraft 0x%lx.", aircraft.icao_address);
                 decode_successful = false;
@@ -473,7 +483,7 @@ bool AircraftDictionary::IngestAirborneVelocitiesMessage(Aircraft &aircraft, ADS
                 bool is_true_airspeed = static_cast<bool>(packet.GetNBitWordFromMessage(1, 24));
                 aircraft.velocity_source = is_true_airspeed
                                                ? Aircraft::VelocitySource::kVelocitySourceAirspeedTrue
-                                               : Aircraft::VelocitySource::kVelocitySourceSirspeedIndicated;
+                                               : Aircraft::VelocitySource::kVelocitySourceAirspeedIndicated;
                 aircraft.heading_deg = static_cast<float>((packet.GetNBitWordFromMessage(10, 14) * 360) / 1024.0f);
             }
 
@@ -485,6 +495,8 @@ bool AircraftDictionary::IngestAirborneVelocitiesMessage(Aircraft &aircraft, ADS
                           subtype);
             return false;  // Don't attempt vertical rate decode if message type is invalid.
     }
+    aircraft.SetBitFlag(Aircraft::BitFlag::kBitFlagUpdatedTrack);
+    aircraft.SetBitFlag(Aircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity);
 
     // Decode vertical rate.
     int vertical_rate_magnitude_fpm = packet.GetNBitWordFromMessage(9, 37);
@@ -501,6 +513,7 @@ bool AircraftDictionary::IngestAirborneVelocitiesMessage(Aircraft &aircraft, ADS
         } else {
             aircraft.vertical_rate_fpm = (vertical_rate_magnitude_fpm - 1) * 64;
         }
+        aircraft.SetBitFlag(Aircraft::BitFlag::kBitFlagUpdatedVerticalVelocity);
     }
 
     // Decode altitude difference between GNSS and barometric altitude.
@@ -517,9 +530,11 @@ bool AircraftDictionary::IngestAirborneVelocitiesMessage(Aircraft &aircraft, ADS
         switch (aircraft.altitude_source) {
             case Aircraft::AltitudeSource::kAltitudeSourceBaro:
                 aircraft.gnss_altitude_ft = aircraft.baro_altitude_ft + gnss_alt_baro_alt_difference_ft;
+                aircraft.SetBitFlag(Aircraft::BitFlag::kBitFlagUpdatedGNSSAltitude);
                 break;
             case Aircraft::AltitudeSource::kAltitudeSourceGNSS:
                 aircraft.baro_altitude_ft = aircraft.gnss_altitude_ft - gnss_alt_baro_alt_difference_ft;
+                aircraft.SetBitFlag(Aircraft::BitFlag::kBitFlagUpdatedBaroAltitude);
                 break;
             default:
                 // Don't sweat it if the aircraft doesn't have an altitude yet.

@@ -80,6 +80,14 @@ bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface,
     return true;
 }
 
+bool CommsManager::ReportCSBee(SettingsManager::SerialInterface iface) {
+    // for (auto &itr : ads_bee.aircraft_dictionary.dict) {
+    //     const Aircraft &aircraft = itr.second;
+    //     comms_manager.iface_printf("#A:%000000X,%d", aircraft.icao_address, )
+    // }
+    return true;
+}
+
 uint8_t AircraftAirframeTypeToMAVLINKEmitterType(Aircraft::AirframeType airframe_type) {
     switch (airframe_type) {
         case Aircraft::AirframeType::kAirframeTypeInvalid:

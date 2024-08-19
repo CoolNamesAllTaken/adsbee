@@ -208,7 +208,7 @@ TEST(ADSBPacket, ConstructFromTransponderPacket) {
 TEST(DecodedTransponderPacket, ConstructValidShortFrame) {
     DecodedTransponderPacket packet = DecodedTransponderPacket((char *)"00050319AB8C22");
     EXPECT_FALSE(packet.IsValid());  // Automatically marked as invalid since not confirmable with CRC.
-    EXPECT_EQ(packet.GetICAOAddress(), 0x7C7B5A);
+    EXPECT_EQ(packet.GetICAOAddress(), 0x7C7B5Au);
     EXPECT_EQ(packet.GetDownlinkFormat(),
               static_cast<uint16_t>(DecodedTransponderPacket::kDownlinkFormatShortRangeAirSurveillance));
 }
