@@ -34,8 +34,6 @@ ADSBee *isr_access = nullptr;
 
 void on_demod_complete() { isr_access->OnDemodComplete(); }
 
-void on_systick_exception() { isr_access->OnSysTickWrap(); }
-
 void gpio_irq_isr(uint gpio, uint32_t event_mask) { isr_access->GPIOIRQISR(gpio, event_mask); }
 
 ADSBee::ADSBee(ADSBeeConfig config_in) {
@@ -91,16 +89,8 @@ bool ADSBee::Init() {
         return false;
     }
 
-    // Enable the MLAT timer using the 24-bit SysTick timer connected to the 125MHz processor clock.
-    // SysTick Control and Status Register
-    systick_hw->csr = 0b110;  // Source = External Reference Clock, TickInt = Enabled, Counter = Disabled.
-    // SysTick Reload Value Register
-    systick_hw->rvr = 0xFFFFFF;  // Use the full 24 bit span of the timer value register.
-    // 0xFFFFFF = 16777215 counts @ 125MHz = approx. 0.134 seconds.
-    // Call the OnSysTickWrap function every time the SysTick timer hits 0.
-    exception_set_exclusive_handler(SYSTICK_EXCEPTION, on_systick_exception);
-    // Let the games begin!
-    systick_hw->csr |= 0b1;  // Enable the counter.
+    // create ClockSource instance to start the timer
+    ClockSource::instance();
 
     // Calculate the PIO clock divider.
     float preamble_detector_div = (float)clock_get_hz(clk_sys) / kPreambleDetectorFreq;
@@ -180,7 +170,7 @@ void ADSBee::GPIOIRQISR(uint gpio, uint32_t event_mask) {
         sampled_rssi_adc_counts_ = adc_read();
         // RSSI peak detector will automatically clear when DEMOD pin goes LO.
 
-        sampled_mlat_48mhz_counts_ = GetMLAT48MHzCounts();
+        sampled_mlat_48mhz_counts_ = ClockSource::instance().get48MHzTickCount();
     }
 }
 
@@ -249,19 +239,6 @@ void ADSBee::OnDemodComplete() {
 
     gpio_put(config_.rssi_clear_pin, 1);  // restore RSSI peak detector to working order.
     pio_interrupt_clear(config_.preamble_detector_pio, 0);
-}
-
-void ADSBee::OnSysTickWrap() { mlat_counter_1s_wraps_++; }
-
-uint64_t ADSBee::GetMLAT48MHzCounts(uint16_t num_bits) {
-    // Combine the wrap counter with the current value of the SysTick register and mask to 48 bits.
-    // Note: 24-bit SysTick value is subtracted from UINT_24_MAX to make it count up instead of down.
-    return (mlat_counter_1s_wraps_ << 24 | (0xFFFFFF - systick_hw->cvr)) & (UINT64_MAX >> (64 - num_bits));
-}
-
-uint64_t ADSBee::GetMLAT12MHzCounts(uint16_t num_bits) {
-    // Piggyback off the higher resolution 48MHz timer function.
-    return GetMLAT48MHzCounts(50) >> 2;  // Divide 48MHz counter by 4, widen the mask by 2 bits to compensate.
 }
 
 bool ADSBee::SetTLHiMilliVolts(int tl_hi_mv) {

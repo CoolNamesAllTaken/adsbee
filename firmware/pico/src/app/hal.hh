@@ -9,6 +9,7 @@ class ClockSource {
    public:
     static ClockSource& instance();
     ~ClockSource();
+
     uint64_t get48MHzTickCount();
     uint64_t get12MHzTickCount();
 
