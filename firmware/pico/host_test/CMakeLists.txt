@@ -10,6 +10,7 @@ target_sources(${PROJECT_NAME} PRIVATE
     test_spi_coprocessor.cc
     test_unit_conversions.cc
     test_reporting_beast.cc
+    test_decode_utils.cc
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE

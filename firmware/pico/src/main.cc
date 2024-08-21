@@ -83,28 +83,38 @@ int main() {
             }
 
             DecodedTransponderPacket decoded_packet = DecodedTransponderPacket(raw_packet);
-            if (decoded_packet.IsValid()) {
-                // 112-bit (extended squitter) packets. These packets can be validated via CRC.
+            CONSOLE_INFO("main", "\tdf=%d icao_address=0x%06x", decoded_packet.GetDownlinkFormat(),
+                         decoded_packet.GetICAOAddress());
+            if (ads_bee.aircraft_dictionary.IngestDecodedTransponderPacket(ADSBPacket(decoded_packet))) {
+                // Packet was used to update the dictionary or was silently ignored (but presumed to be valid).
                 ads_bee.FlashStatusLED();
-
-                CONSOLE_INFO("main", "\tdf=%d icao_address=0x%06x", decoded_packet.GetDownlinkFormat(),
-                             decoded_packet.GetICAOAddress());
                 comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
-
-                ads_bee.aircraft_dictionary.IngestADSBPacket(ADSBPacket(decoded_packet));
                 CONSOLE_INFO("main", "\taircraft_dictionary: %d aircraft",
                              ads_bee.aircraft_dictionary.GetNumAircraft());
-            } else if (decoded_packet.GetPacketBufferLenBits() == DecodedTransponderPacket::kSquitterPacketNumBits) {
-                // CRC is overlaid with ICAO address for 56-bit (squitter) packets. Check ICAO against aircraft in the
-                // dictionary to validate the CRC.
-                if (ads_bee.aircraft_dictionary.ContainsAircraft(decoded_packet.GetICAOAddress())) {
-                    ads_bee.FlashStatusLED();
-                    CONSOLE_INFO("main", "\tdf=%d icao_address=0x%06x", decoded_packet.GetDownlinkFormat(),
-                                 decoded_packet.GetICAOAddress());
-                    comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
-                    // TODO: Add squitter packet support to aircraft dictionary.
-                }
             }
+            // if (decoded_packet.IsValid()) {
+            //     // 112-bit (extended squitter) packets. These packets can be validated via CRC.
+            //     ads_bee.FlashStatusLED();
+
+            //     CONSOLE_INFO("main", "\tdf=%d icao_address=0x%06x", decoded_packet.GetDownlinkFormat(),
+            //                  decoded_packet.GetICAOAddress());
+            //     comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
+
+            //     ads_bee.aircraft_dictionary.IngestADSBPacket(ADSBPacket(decoded_packet));
+            //     CONSOLE_INFO("main", "\taircraft_dictionary: %d aircraft",
+            //                  ads_bee.aircraft_dictionary.GetNumAircraft());
+            // } else if (decoded_packet.GetPacketBufferLenBits() == DecodedTransponderPacket::kSquitterPacketNumBits) {
+            //     // CRC is overlaid with ICAO address for 56-bit (squitter) packets. Check ICAO against aircraft in
+            //     the
+            //     // dictionary to validate the CRC.
+            //     if (ads_bee.aircraft_dictionary.ContainsAircraft(decoded_packet.GetICAOAddress())) {
+            //         ads_bee.FlashStatusLED();
+            //         CONSOLE_INFO("main", "\tdf=%d icao_address=0x%06x", decoded_packet.GetDownlinkFormat(),
+            //                      decoded_packet.GetICAOAddress());
+            //         comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
+            //         // TODO: Add squitter packet support to aircraft dictionary.
+            //     }
+            // }
         }
     }
 }

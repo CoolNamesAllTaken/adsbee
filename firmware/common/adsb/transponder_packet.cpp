@@ -95,12 +95,12 @@ DecodedTransponderPacket::DecodedTransponderPacket(const RawTransponderPacket &p
 DecodedTransponderPacket::DownlinkFormat DecodedTransponderPacket::GetDownlinkFormatEnum() {
     switch (downlink_format_) {
         // DF 0-11 = short messages (56 bits)
-        case DownlinkFormat::kDownlinkFormatShortRangeAirSurveillance:
+        case DownlinkFormat::kDownlinkFormatShortRangeAirToAirSurveillance:
         case DownlinkFormat::kDownlinkFormatAltitudeReply:
         case DownlinkFormat::kDownlinkFormatIdentityReply:
         case DownlinkFormat::kDownlinkFormatAllCallReply:
         // DF 16-24 = long messages (112 bits)
-        case DownlinkFormat::kDownlinkFormatLongRangeAirSurveillance:
+        case DownlinkFormat::kDownlinkFormatLongRangeAirToAirSurveillance:
         case DownlinkFormat::kDownlinkFormatExtendedSquitter:
         case DownlinkFormat::kDownlinkFormatExtendedSquitterNonTransponder:
         case DownlinkFormat::kDownlinkFormatMilitaryExtendedSquitter:
@@ -117,7 +117,7 @@ DecodedTransponderPacket::DownlinkFormat DecodedTransponderPacket::GetDownlinkFo
     enum DownlinkFormat {
         kDownlinkFormatInvalid = -1,
         // DF 0-11 = short messages (56 bits)
-        kDownlinkFormatShortRangeAirSurveillance = 0,
+        kDownlinkFormatShortRangeAirToAirSurveillance = 0,
         kDownlinkFormatAltitudeReply = 4,
         kDownlinkFormatIdentityReply = 5,
         DF_ALL_CALL_REPLY = 11,
@@ -162,18 +162,18 @@ uint32_t DecodedTransponderPacket::CalculateCRC24(uint16_t packet_len_bits) cons
     }
 
     // Overwrite 24-bit parity word with zeros.
-    set_n_bit_word_in_buffer(BITS_PER_WORD_24, 0x0, packet_len_bits - BITS_PER_WORD_24, crc_buffer);
+    SetNBitWordInBuffer(BITS_PER_WORD_24, 0x0, packet_len_bits - BITS_PER_WORD_24, crc_buffer);
 
     // CRC is a conditional convolve operation using the 25-bit generator word.
     for (uint16_t i = 0; i < packet_len_bits - BITS_PER_WORD_24; i++) {
-        uint32_t word = get_n_bit_word_from_buffer(BITS_PER_WORD_25, i, crc_buffer);
+        uint32_t word = GetNBitWordFromBuffer(BITS_PER_WORD_25, i, crc_buffer);
         if (word & MASK_MSBIT_WORD25) {
             // Most significant bit is a 1. XOR with generator!
-            set_n_bit_word_in_buffer(BITS_PER_WORD_25, word ^ kCRC24Generator, i, crc_buffer);
+            SetNBitWordInBuffer(BITS_PER_WORD_25, word ^ kCRC24Generator, i, crc_buffer);
         }
     }
 
-    return get_n_bit_word_from_buffer(BITS_PER_WORD_24, packet_len_bits - BITS_PER_WORD_24, crc_buffer);
+    return GetNBitWordFromBuffer(BITS_PER_WORD_24, packet_len_bits - BITS_PER_WORD_24, crc_buffer);
 }
 
 void DecodedTransponderPacket::ConstructTransponderPacket() {
@@ -187,20 +187,22 @@ void DecodedTransponderPacket::ConstructTransponderPacket() {
 
     downlink_format_ = packet.buffer[0] >> 27;
     uint32_t calculated_checksum = CalculateCRC24(packet.buffer_len_bits);
-    uint32_t parity_value = get_24_bit_word_from_buffer(packet.buffer_len_bits - BITS_PER_WORD_24, packet.buffer);
+    uint32_t parity_value = Get24BitWordFromBuffer(packet.buffer_len_bits - BITS_PER_WORD_24, packet.buffer);
 
     switch (static_cast<DownlinkFormat>(downlink_format_)) {
-        case kDownlinkFormatShortRangeAirSurveillance:
-        case kDownlinkFormatAltitudeReply:
-        case kDownlinkFormatIdentityReply:
-        case kDownlinkFormatAllCallReply: {
+        case kDownlinkFormatShortRangeAirToAirSurveillance:  // DF = 0
+        case kDownlinkFormatAltitudeReply:                   // DF = 4
+        case kDownlinkFormatIdentityReply:                   // DF = 5
+        case kDownlinkFormatAllCallReply:                    // DF = 11
+        {
             // Process a 56-bit message.
             is_valid_ = false;  // Calculated checksum is XORed with the ICAO address. See ADS-B Decoding Guide pg. 22.
             // ICAO address is a best guess, needs to be confirmed from the aircraft dictionary.
             icao_address_ = parity_value ^ calculated_checksum;
             break;
         }
-        default: {
+        default:  // All other DFs. Note: DF=17-19 for ADS-B.
+        {
             // Process a 112-bit message.
             icao_address_ = packet.buffer[0] & 0xFFFFFF;
             if (calculated_checksum == parity_value) {

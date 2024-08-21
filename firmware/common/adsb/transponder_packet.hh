@@ -45,17 +45,18 @@ class DecodedTransponderPacket {
     enum DownlinkFormat {
         kDownlinkFormatInvalid = -1,
         // DF 0-11 = short messages (56 bits)
-        kDownlinkFormatShortRangeAirSurveillance = 0,
+        kDownlinkFormatShortRangeAirToAirSurveillance = 0,  // All-call request from ground station.
         kDownlinkFormatAltitudeReply = 4,
         kDownlinkFormatIdentityReply = 5,
         kDownlinkFormatAllCallReply = 11,
         // DF 16-24 = long messages (112 bits)
-        kDownlinkFormatLongRangeAirSurveillance = 16,
-        kDownlinkFormatExtendedSquitter = 17,
-        kDownlinkFormatExtendedSquitterNonTransponder = 18,
-        kDownlinkFormatMilitaryExtendedSquitter = 19,
-        kDownlinkFormatCommBAltitudeReply = 20,
-        kDownlinkFormatCommBIdentityReply = 21,
+        kDownlinkFormatLongRangeAirToAirSurveillance = 16,   // ACAS/TCAS message.
+        kDownlinkFormatExtendedSquitter = 17,                // Aircraft (taxiing or airborne).
+        kDownlinkFormatExtendedSquitterNonTransponder = 18,  // Surface vehicle or aircraft in special ground operation.
+        kDownlinkFormatMilitaryExtendedSquitter = 19,        // Used by military aircraft, protocol is not public.
+        // We don't currently do anything with CommB, CommC, CommD.
+        kDownlinkFormatCommBAltitudeReply = 20,  // Data being sent as reply to request from Comm-B ground station.
+        kDownlinkFormatCommBIdentityReply = 21,  // Reply to ground station via Comm-C (higher capacity than Comm-B).
         kDownlinkFormatCommDExtendedLengthMessage = 24
         // DF 1-3, 6-10, 11-15, 22-23 not used
     };
@@ -94,6 +95,13 @@ class DecodedTransponderPacket {
 
     bool IsValid() const { return is_valid_; };
 
+    /**
+     * Forces the validity of the packet to true. Used to mark 56-bit (Squitter) packets as valid after they have been
+     * externally verified against the aircraft dictionary, since they don't have a 0 CRC and are thus set as invalid
+     * upon construction.
+     */
+    void ForceValid() { is_valid_ = true; }
+
     int GetRSSIdBm() const { return packet.rssi_dbm; }
     uint64_t GetMLAT12MHzCounter() const { return (packet.mlat_48mhz_64bit_counts >> 2) & 0xFFFFFFFFFFFF; }
     uint16_t GetDownlinkFormat() const { return downlink_format_; };
@@ -112,7 +120,7 @@ class DecodedTransponderPacket {
 
     // Exposed for testing only.
     uint32_t Get24BitWordFromPacketBuffer(uint16_t first_bit_index) const {
-        return get_n_bit_word_from_buffer(24, first_bit_index, packet.buffer);
+        return GetNBitWordFromBuffer(24, first_bit_index, packet.buffer);
     };
 
     /**
@@ -163,15 +171,15 @@ class ADSBPacket : public DecodedTransponderPacket {
     // (Bits 33-37 [5]): Type code (TC)
     enum TypeCode {
         kTypeCodeInvalid = 0,
-        kTypeCodeAircraftID = 1,                 // 1–4	Aircraft identification
-        kTypeCodeSurfacePosition = 5,            // 5–8	Surface position
+        kTypeCodeAircraftID = 1,                 // 1–4     Aircraft identification
+        kTypeCodeSurfacePosition = 5,            // 5–8     Surface position
         kTypeCodeAirbornePositionBaroAlt = 9,    // 9–18	Airborne position (w/Baro Altitude)
-        kTypeCodeAirborneVelocities = 19,        // 19	Airborne velocities
+        kTypeCodeAirborneVelocities = 19,        // 19      Airborne velocities
         kTypeCodeAirbornePositionGNSSAlt = 20,   // 20–22	Airborne position (w/GNSS Height)
         kTypeCodeReserved = 23,                  // 23–27	Reserved
-        kTypeCodeAircraftStatus = 28,            // 28	Aircraft status
-        kTypeCodeTargetStateAndStatusInfo = 29,  // 29	Target state and status information
-        kTypeCodeAircraftOperationStatus = 31    // 31	Aircraft operation status
+        kTypeCodeAircraftStatus = 28,            // 28      Aircraft status
+        kTypeCodeTargetStateAndStatusInfo = 29,  // 29      Target state and status information
+        kTypeCodeAircraftOperationStatus = 31    // 31      Aircraft operation status
     };
     // Bits 89-112 [24]: Parity / Interrogator ID (PI)
 
@@ -189,7 +197,7 @@ class ADSBPacket : public DecodedTransponderPacket {
 
     // Exposed for testing only.
     uint32_t GetNBitWordFromMessage(uint16_t n, uint16_t first_bit_index) const {
-        return get_n_bit_word_from_buffer(n, kMEFirstBitIndex + first_bit_index, packet.buffer);
+        return GetNBitWordFromBuffer(n, kMEFirstBitIndex + first_bit_index, packet.buffer);
     };
 
    private:

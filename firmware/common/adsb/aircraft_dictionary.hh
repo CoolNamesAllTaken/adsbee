@@ -65,6 +65,7 @@ class Aircraft {
     enum BitFlag : uint16_t {
         kBitFlagIsAirborne = 0,
         kBitFlagIsMilitary,
+        kBitFlagIdent,
         kBitFlagUpdatedBaroAltitude,  // This is the first updated flag bit, used for clearing.
         kBitFlagUpdatedGNSSAltitude,
         kBitFlagUpdatedPosition,
@@ -81,6 +82,7 @@ class Aircraft {
     uint16_t transponder_capability = 0;
     uint32_t icao_address = 0;
     char callsign[kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
+    uint16_t squawk = 0;
     AirframeType airframe_type = kAirframeTypeInvalid;
 
     SurveillanceStatus surveillance_status = kSurveillanceStatusNotSet;
@@ -196,10 +198,38 @@ class AircraftDictionary {
      */
     AircraftDictionary(AircraftDictionaryConfig_t config_in) : config_(config_in) {};
 
+    /**
+     * Removes all aircraft from the aircraft dictionary.
+     */
     void Init();
+
+    /**
+     * Prunes stale aircraft from the dictionary.
+     * @param[in] timestamp_us Current timestamp, in microseconds, to use for pruning. Aircraft older than timestamp_us
+     * minus the pruning interval will be removed.
+     */
     void Update(uint32_t timestamp_us);
 
+    /**
+     * Ingest a DecodedTransponderPacket and use it to insert and update the relevant aircraft.
+     * @param[in] packet DecodedTransponderPacket to ingest. Can be 56-bit (Squitter) or 112-bit (Extended Squitter).
+     * Passed as a reference, since packets can be marked as valid by this function.
+     * @retval True if successful, false if something broke.
+     */
+    bool IngestDecodedTransponderPacket(DecodedTransponderPacket &packet);
+
+    /**
+     * Ingest an ADSBPacket directly. Exposed for testing, but usually this gets called by
+     * IngestDecodedTransponderPacket and should not get touched directly.
+     * @param[in] packet ADSBPacket to ingest. Derived from a DecodedTransponderPacket with DF=17-19.
+     * @retval True if successful, false if something broke.
+     */
     bool IngestADSBPacket(ADSBPacket packet);
+
+    /**
+     * Returns the number of aircraft currently in the dictionary.
+     * @retval Number of aircraaft that are currently in the dictionary.
+     */
     uint16_t GetNumAircraft();
 
     /**
@@ -252,13 +282,13 @@ class AircraftDictionary {
      * @retval True if message was ingested successfully, false otherwise.
      */
 
-    bool IngestAircraftIDMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool IngestSurfacePositionMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool IngestAirbornePositionMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool IngestAirborneVelocitiesMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool IngestAircraftStatusMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool IngestTargetStateAndStatusInfoMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool IngestAircraftOperationStatusMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool ApplyAircraftIDMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool ApplySurfacePositionMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool ApplyAirbornePositionMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool ApplyAirborneVelocitiesMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool ApplyAircraftStatusMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool ApplyTargetStateAndStatusInfoMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool ApplyAircraftOperationStatusMessage(Aircraft &aircraft, ADSBPacket packet);
 
     AircraftDictionaryConfig_t config_;
 };
