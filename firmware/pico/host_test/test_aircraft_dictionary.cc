@@ -358,13 +358,9 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     EXPECT_NEAR(aircraft.velocity_kts, 375.0f, 0.01);
 }
 
-TEST(AircraftDictionary, IngestModeA) {
-    // Try ingesting a squawk packet with nothing in an aircraft dictionary, verify that it fails.
-
-    // Ingest an ADS-B packet into the dictionary and see that it populates an aircraft with the same address as the
-    // squawk packet.
-
-    // Try ingesting the same squawk packet again and see that it now succeeds.
+TEST(AircraftDictionary, IngestModeC) {
+    // Try ingesting a Mode C packet that's marked as valid so that it doesn't require a cross-check with the
+    // dictionary.
     AircraftDictionary dictionary = AircraftDictionary();
     DecodedTransponderPacket tpacket = DecodedTransponderPacket((char *)"200006A2DE8B1C");
     tpacket.ForceValid();  // Mark it as valid so that it gets digested.
@@ -376,5 +372,13 @@ TEST(AircraftDictionary, IngestModeA) {
     Aircraft aircraft;
     EXPECT_TRUE(dictionary.GetAircraft(0x7C1B28u, aircraft));
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
-    // EXPECT_EQ(aircraft.altitude_)
+    EXPECT_EQ(aircraft.baro_altitude_ft, 10000);
+
+    // Ingest another Mode C packet.
+    tpacket = DecodedTransponderPacket((char *)"000001B6747458");
+    EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
+    EXPECT_TRUE(dictionary.GetAircraft(0x7C7A5D, aircraft));
+    EXPECT_EQ(aircraft.baro_altitude_ft, 1950);
+
+    // TODO: Add test case for IDENT bit.
 }
