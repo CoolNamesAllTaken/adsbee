@@ -396,3 +396,7 @@ TEST(DecodeUtils, AltitudeCodeToAltitudeFt) {
     EXPECT_EQ(AltitudeCodeToAltitudeFt(0b0111000111001), 22025);
     EXPECT_EQ(AltitudeCodeToAltitudeFt(0b0000100011100), 900);
 }
+
+TEST(DecodeUtils, IdentityCodeToSquawk) {
+    EXPECT_EQ(IdentityCodeToSquawk(0b1000101101101), 0356);  // Octal 0356.
+}

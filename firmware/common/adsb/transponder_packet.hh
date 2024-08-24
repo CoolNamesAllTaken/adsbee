@@ -163,7 +163,9 @@ class ADSBPacket : public DecodedTransponderPacket {
      * the parent of the ADSBPacket. Think of this as a way to use the ADSBPacket as a "window" into the contents of the
      * parent DecodedTransponderPacket. The ADSBPacket cannot exist without the parent DecodedTransponderPacket!
      */
-    ADSBPacket(const DecodedTransponderPacket &packet) : DecodedTransponderPacket(packet) { ConstructADSBPacket(); };
+    ADSBPacket(const DecodedTransponderPacket &decoded_packet) : DecodedTransponderPacket(decoded_packet) {
+        ConstructADSBPacket();
+    };
 
     // Bits 6-8 [3]: Capability (CA)
     // Bits 9-32 [24]: ICAO Aircraft Address (ICAO)
@@ -206,6 +208,79 @@ class ADSBPacket : public DecodedTransponderPacket {
     uint16_t typecode_ = static_cast<uint16_t>(kTypeCodeInvalid);
 
     void ConstructADSBPacket();
+};
+
+class ModeCPacket : public DecodedTransponderPacket {
+   public:
+    enum DownlinkRequest : uint8_t {
+        kDownlinkRequestNone = 0b00000,
+        kDownlinkRequestSendCommBMessage = 0b00001,
+        kDownlinkRequestCommBBroadcastMessage1Available = 0b00100,
+        kDownlinkRequestCommBBroadcastMessage2Available = 0b00101
+    };
+
+    enum UtilityMessageType : uint8_t {
+        kUtilityMessageNoInformation = 0b00,
+        kUtilityMessageCommBInterrogatorIdentifierCode = 0b10,
+        kUtilityMessageCommCInterrogatorIdentifierCode = 0b10,
+        kUtilityMessageCommDInterrogatorIdentifierCode = 0b11
+    };
+
+    ModeCPacket(const DecodedTransponderPacket &decoded_packet);
+
+    bool IsAirborne() const { return is_airborne_; }
+    bool HasAlert() const { return has_alert_; }
+    DownlinkRequest GetDownlinkRequest() const { return downlink_request_; }
+    uint8_t GetUtilityMessage() const { return utility_message_; }
+    int32_t GetAltitudeFt() const { return altitude_ft_; }
+
+   private:
+    bool is_airborne_ = false;
+    bool has_alert_ = false;
+    // Ident bit not used in Mode C packets.
+
+    DownlinkRequest downlink_request_ = kDownlinkRequestNone;
+    uint8_t utility_message_ = 0b0;
+    UtilityMessageType utility_message_type_ = kUtilityMessageNoInformation;
+
+    int32_t altitude_ft_ = -1;
+};
+
+class ModeAPacket : public DecodedTransponderPacket {
+   public:
+    enum DownlinkRequest : uint8_t {
+        kDownlinkRequestNone = 0b00000,
+        kDownlinkRequestSendCommBMessage = 0b00001,
+        kDownlinkRequestCommBBroadcastMessage1Available = 0b00100,
+        kDownlinkRequestCommBBroadcastMessage2Available = 0b00101
+    };
+
+    enum UtilityMessageType : uint8_t {
+        kUtilityMessageNoInformation = 0b00,
+        kUtilityMessageCommBInterrogatorIdentifierCode = 0b10,
+        kUtilityMessageCommCInterrogatorIdentifierCode = 0b10,
+        kUtilityMessageCommDInterrogatorIdentifierCode = 0b11
+    };
+
+    ModeAPacket(const DecodedTransponderPacket &decoded_packet);
+
+    bool IsAirborne() const { return is_airborne_; }
+    bool HasAlert() const { return has_alert_; }
+    bool HasIdent() const { return has_ident_; }
+    DownlinkRequest GetDownlinkRequest() const { return downlink_request_; }
+    uint8_t GetUtilityMessage() const { return utility_message_; }
+    uint32_t GetSquawk() const { return squawk_; }
+
+   private:
+    bool is_airborne_ = false;
+    bool has_alert_ = false;
+    bool has_ident_ = false;
+
+    DownlinkRequest downlink_request_ = kDownlinkRequestNone;
+    uint8_t utility_message_ = 0b0;
+    UtilityMessageType utility_message_type_ = kUtilityMessageNoInformation;
+
+    uint32_t squawk_ = 0xFFFFFFFF;
 };
 
 #endif /* _ADSB_PACKET_HH_ */

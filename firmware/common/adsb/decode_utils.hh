@@ -54,7 +54,7 @@ int32_t GillhamToAltitudeFt(uint16_t gillham_value);
 uint16_t AltitudeCodeToGillham(uint16_t altitude_code);
 
 /**
- * Converts a Mode C (Surveillance ALtitude Reply) AC field into an altitude in ft. Uses GillhamToAltitudeFt and
+ * Converts a Mode C (Surveillance Altitude Reply) AC field into an altitude in ft. Uses GillhamToAltitudeFt and
  * AltitudeCodeToGillham for regular Mode C replies, but also handles cases where the altitude reply is in metric or
  * 25ft increment units.
  * @param[in] altitude_code Mode C packet AC field, in the format (MSB to LSB):
@@ -62,6 +62,14 @@ uint16_t AltitudeCodeToGillham(uint16_t altitude_code);
  * @retval Pressure altitude in feet.
  */
 int32_t AltitudeCodeToAltitudeFt(uint16_t altitude_code);
+
+/**
+ * Converts a Mode A (Surveillance Identity Reply) ID field into a squawk code in octal.
+ * @param[in] identity_code Mode C packet ID field, in the format (MSB to LSB):
+ *                              C1 A1 C2 A2 C4 A4 M(X) B1 Q(D1) B2 D2 B4 D4
+ * @retval Squawk code in octal (12 bits).
+ */
+uint16_t IdentityCodeToSquawk(uint16_t identity_code);
 
 /**
  * Calculate the number of longituide zones (between 1 and 59) at a given latitude.

@@ -11,6 +11,7 @@ target_sources(${PROJECT_NAME} PRIVATE
     test_unit_conversions.cc
     test_reporting_beast.cc
     test_decode_utils.cc
+    test_mode_a_c_packets.cc
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE

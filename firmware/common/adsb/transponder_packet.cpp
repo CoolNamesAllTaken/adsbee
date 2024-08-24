@@ -5,6 +5,7 @@
 #include <cstring>  // for strlen
 
 #include "comms.hh"  // For debug prints.
+#include "decode_utils.hh"
 
 #define BYTES_PER_WORD_32 4
 #define BITS_PER_WORD_32  32
@@ -282,3 +283,89 @@ ADSBPacket::TypeCode ADSBPacket::GetTypeCodeEnum() const {
             return kTypeCodeInvalid;
     }
 }
+
+ModeCPacket::ModeCPacket(const DecodedTransponderPacket &decoded_packet) : DecodedTransponderPacket(decoded_packet) {
+    uint8_t flight_status = GetNBitWordFromBuffer(3, 5, packet.buffer);  // FS = Bits 5-7.
+    switch (flight_status) {
+        case 0b000:  // No alert, no SPI, aircraft is airborne.
+            has_alert_ = false;
+            is_airborne_ = true;
+            break;
+        case 0b001:  // No alert, no SPI, aircraft is on ground.
+            has_alert_ = false;
+            is_airborne_ = false;
+            break;
+        case 0b010:  // Alert, no SPI, aircraft is airborne.
+            has_alert_ = true;
+            is_airborne_ = true;
+            break;
+        case 0b011:  // Alert, no SPI, aircraft is on ground.
+            has_alert_ = true;
+            is_airborne_ = false;
+            break;
+        case 0b100:  // Alert, SPI, aircraft is airborne or on ground.
+            has_alert_ = true;
+            // Default is_airborne_ to false when not known.
+            break;
+        case 0b101:
+            // No alert, SPI, aircaft is airborne or on ground.
+            has_alert_ = false;
+            // Default is_airborne_ to false when not known.
+            break;
+        case 0b110:  // Reserved.
+            break;
+        case 0b111:  // Not assigned.
+            break;
+    }
+
+    downlink_request_ = static_cast<DownlinkRequest>(GetNBitWordFromBuffer(5, 8, packet.buffer));
+    utility_message_ = GetNBitWordFromBuffer(4, 13, packet.buffer);
+    utility_message_type_ = static_cast<UtilityMessageType>(GetNBitWordFromBuffer(2, 17, packet.buffer));
+    altitude_ft_ = AltitudeCodeToAltitudeFt(GetNBitWordFromBuffer(13, 19, packet.buffer));
+};
+
+ModeAPacket::ModeAPacket(const DecodedTransponderPacket &decoded_packet) : DecodedTransponderPacket(decoded_packet) {
+    uint8_t flight_status = GetNBitWordFromBuffer(3, 5, packet.buffer);  // FS = Bits 5-7.
+    switch (flight_status) {
+        case 0b000:  // No alert, no SPI, aircraft is airborne.
+            has_alert_ = false;
+            has_ident_ = false;
+            is_airborne_ = true;
+            break;
+        case 0b001:  // No alert, no SPI, aircraft is on ground.
+            has_alert_ = false;
+            has_ident_ = false;
+            is_airborne_ = false;
+            break;
+        case 0b010:  // Alert, no SPI, aircraft is airborne.
+            has_alert_ = true;
+            has_ident_ = false;
+            is_airborne_ = true;
+            break;
+        case 0b011:  // Alert, no SPI, aircraft is on ground.
+            has_alert_ = true;
+            has_ident_ = false;
+            is_airborne_ = false;
+            break;
+        case 0b100:  // Alert, SPI, aircraft is airborne or on ground.
+            has_alert_ = true;
+            has_ident_ = true;
+            // Default is_airborne_ to false when not known.
+            break;
+        case 0b101:
+            // No alert, SPI, aircaft is airborne or on ground.
+            has_ident_ = true;
+            has_alert_ = false;
+            // Default is_airborne_ to false when not known.
+            break;
+        case 0b110:  // Reserved.
+            break;
+        case 0b111:  // Not assigned.
+            break;
+    }
+
+    downlink_request_ = static_cast<DownlinkRequest>(GetNBitWordFromBuffer(5, 8, packet.buffer));
+    utility_message_ = GetNBitWordFromBuffer(4, 13, packet.buffer);
+    utility_message_type_ = static_cast<UtilityMessageType>(GetNBitWordFromBuffer(2, 17, packet.buffer));
+    squawk_ = IdentityCodeToSquawk(GetNBitWordFromBuffer(13, 19, packet.buffer));
+};
