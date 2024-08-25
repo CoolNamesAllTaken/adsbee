@@ -80,6 +80,19 @@ bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface,
     return true;
 }
 
+bool CommsManager::ReportCSBee(SettingsManager::SerialInterface iface) {
+    // for (auto &itr : ads_bee.aircraft_dictionary.dict) {
+    //     const Aircraft &aircraft = itr.second;
+    //     comms_manager.iface_printf(iface, "#A:%000000X, %d," aircraft.icao_address, aircraft.flags);
+    //     for (char c : aircraft.callsign) {
+    //         comms_manager.iface_putc(iface, c);
+    //     }
+    //     comms_manager.iface_printf(iface, ",%d,%00.5f,%00.5f", aircraft.squawk, aircraft.latitude_deg,
+    //                                aircraft.longitude_deg);
+    // }
+    return true;
+}
+
 uint8_t AircraftAirframeTypeToMAVLINKEmitterType(Aircraft::AirframeType airframe_type) {
     switch (airframe_type) {
         case Aircraft::AirframeType::kAirframeTypeInvalid:

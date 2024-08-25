@@ -6,13 +6,11 @@
 
 #include "transponder_packet.hh"
 
-class Aircraft
-{
-public:
+class Aircraft {
+   public:
     static const uint16_t kCallSignMaxNumChars = 8;
 
-    enum AirframeType : uint16_t
-    {
+    enum AirframeType : uint16_t {
         kAirframeTypeInvalid = 0,
         kAirframeTypeReserved,
         kAirframeTypeNoCategoryInfo,
@@ -25,17 +23,16 @@ public:
         kAirframeTypeUltralightHangGliderParaglider,
         kAirframeTypeUnmannedAerialVehicle,
         kAirframeTypeSpaceTransatmosphericVehicle,
-        kAirframeTypeLight,   // < 7000kg
-        kAirframeTypeMedium1, // 7000kg - 34000kg
-        kAirframeTypeMedium2, // 34000kg - 136000kg
+        kAirframeTypeLight,    // < 7000kg
+        kAirframeTypeMedium1,  // 7000kg - 34000kg
+        kAirframeTypeMedium2,  // 34000kg - 136000kg
         kAirframeTypeHighVortexAircraft,
-        kAirframeTypeHeavy,           // > 136000kg
-        kAirframeTypeHighPerformance, // >5g acceleration and >400kt speed
+        kAirframeTypeHeavy,            // > 136000kg
+        kAirframeTypeHighPerformance,  // >5g acceleration and >400kt speed
         kAirframeTypeRotorcraft
     };
 
-    enum SurveillanceStatus : int16_t
-    {
+    enum SurveillanceStatus : int16_t {
         kSurveillanceStatusNotSet = -1,
         kSurveillanceStatusNoCondition = 0,
         kSurveillanceStatusPermanantAlert = 1,
@@ -43,50 +40,62 @@ public:
         kSurveillanceStatusSPICondition = 3
     };
 
-    enum AltitudeSource : int16_t
-    {
+    enum AltitudeSource : int16_t {
         kAltitudeNotAvailable = -2,
         kAltitudeSourceNotSet = -1,
         kAltitudeSourceBaro = 0,
         kAltitudeSourceGNSS = 1
     };
 
-    enum VerticalRateSource : int16_t
-    {
+    enum VerticalRateSource : int16_t {
         kVerticalRateNotAvailable = -2,
         kVerticalRateSourceNotSet = -1,
         kVerticalRateSourceGNSS = 0,
         kVerticalRateSourceBaro = 1
     };
 
-    enum VelocitySource : int16_t
-    {
-        kVelocityNotAvailable = -2,
+    enum VelocitySource : int16_t {
+        kVelocitySourceNotAvailable = -2,
         kVelocitySourceNotSet = -1,
         kVelocitySourceGroundSpeed = 0,
         kVelocitySourceAirspeedTrue = 1,
-        kVelocitySourceSirspeedIndicated = 2
+        kVelocitySourceAirspeedIndicated = 2
     };
+
+    enum BitFlag : uint16_t {
+        kBitFlagIsAirborne = 0,
+        kBitFlagIsMilitary,
+        kBitFlagIdent,
+        kBitFlagAlert,
+        kBitFlagUpdatedBaroAltitude,  // This is the first updated flag bit, used for clearing.
+        kBitFlagUpdatedGNSSAltitude,
+        kBitFlagUpdatedPosition,
+        kBitFlagUpdatedTrack,
+        kBitFlagUpdatedHorizontalVelocity,
+        kBitFlagUpdatedVerticalVelocity,
+        kBitFlagNumFlagBits
+    };
+
+    uint32_t flags = 0b0;
 
     uint32_t last_seen_timestamp_ms = 0;
 
     uint16_t transponder_capability = 0;
     uint32_t icao_address = 0;
-    char callsign[kCallSignMaxNumChars + 1] = "?"; // put extra EOS character at end
+    char callsign[kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
+    uint16_t squawk = 0;
     AirframeType airframe_type = kAirframeTypeInvalid;
 
     SurveillanceStatus surveillance_status = kSurveillanceStatusNotSet;
     bool single_antenna_flag = false;
-    uint32_t baro_altitude_ft = 0;
-    uint32_t gnss_altitude_ft = 0;
+    int32_t baro_altitude_ft = 0;
+    int32_t gnss_altitude_ft = 0;
     AltitudeSource altitude_source = kAltitudeSourceNotSet;
 
     // Airborne Position Message
     float latitude_deg = 0.0f;
     float longitude_deg = 0.0f;
     bool position_valid = false;
-    bool is_airborne =
-        true; // assume that most aircraft encountered will be airborne, so put them there until proven otherwise
 
     // Airborne Velocities Message
     float heading_deg = 0.0f;
@@ -118,8 +127,7 @@ public:
      * for instance an odd and even packet may have been received, but from different CPR zones).
      * @retval True if decode can be attempted, false otherwise.
      */
-    bool CanDecodePosition()
-    {
+    bool CanDecodePosition() {
         return last_odd_packet_.received_timestamp_ms > 0 && last_even_packet_.received_timestamp_ms > 0;
     }
 
@@ -129,21 +137,44 @@ public:
      */
     bool DecodePosition();
 
-private:
-    struct CPRPacket
-    {
+    /**
+     * Set a flag bit on the Aircraft.
+     * @param[in] Bit position to set.
+     */
+    inline void SetBitFlag(BitFlag bit) { flags |= (0b1 << bit); }
+
+    /**
+     * Clear a flag bit on the Aircraft.
+     * @param[in] bit Bit position to clear.
+     */
+    inline void ClearBitFlag(BitFlag bit) { flags &= ~(0b1 << bit); }
+
+    /**
+     * Checks whether a flag bit is set.
+     * @param[in] bit Position of bit to check.
+     * @retval True if bit has been set, false if bit has been cleared.
+     */
+    inline bool HasBitFlag(BitFlag bit) { return flags & (0b1 << bit) ? true : false; }
+
+    /**
+     * Resets just the flag bits that show that something updated within the last reporting interval.
+     */
+    inline void ResetUpdatedBitFlags() { flags &= ~(~0b0 << kBitFlagUpdatedBaroAltitude); }
+
+   private:
+    struct CPRPacket {
         // SetCPRLatLon values.
-        uint32_t received_timestamp_ms = 0; // [ms] time since boot when packet was recorded
-        uint32_t n_lat = 0;                 // 17-bit latitude count
-        uint32_t n_lon = 0;                 // 17-bit longitude count
+        uint32_t received_timestamp_ms = 0;  // [ms] time since boot when packet was recorded
+        uint32_t n_lat = 0;                  // 17-bit latitude count
+        uint32_t n_lon = 0;                  // 17-bit longitude count
 
         // DecodePosition values.
-        uint32_t calculated_timestamp_ms = 0; // [ms] time since boot when packet was calculated
+        uint32_t calculated_timestamp_ms = 0;  // [ms] time since boot when packet was calculated
         float lat_cpr = 0.0f;
         float lon_cpr = 0.0f;
-        uint16_t nl_cpr = 0; // number of longitude cells in latitude band
+        uint16_t nl_cpr = 0;  // number of longitude cells in latitude band
         float lat =
-            0.0f; // only keep latitude since it's reused in cooperative calculations between odd and even packets
+            0.0f;  // only keep latitude since it's reused in cooperative calculations between odd and even packets
         // float lon = 0.0f; // longitude
     };
 
@@ -151,11 +182,9 @@ private:
     CPRPacket last_even_packet_;
 };
 
-class AircraftDictionary
-{
-public:
-    struct AircraftDictionaryConfig_t
-    {
+class AircraftDictionary {
+   public:
+    struct AircraftDictionaryConfig_t {
         uint32_t aircraft_prune_interval_ms = 60e3;
     };
     static const uint16_t kMaxNumAircraft = 100;
@@ -170,10 +199,58 @@ public:
      */
     AircraftDictionary(AircraftDictionaryConfig_t config_in) : config_(config_in) {};
 
+    /**
+     * Removes all aircraft from the aircraft dictionary.
+     */
     void Init();
+
+    /**
+     * Prunes stale aircraft from the dictionary.
+     * @param[in] timestamp_us Current timestamp, in microseconds, to use for pruning. Aircraft older than timestamp_us
+     * minus the pruning interval will be removed.
+     */
     void Update(uint32_t timestamp_us);
 
+    /**
+     * Ingests a DecodedTransponderPacket and uses it to insert and update the relevant aircraft.
+     * @param[in] packet DecodedTransponderPacket to ingest. Can be 56-bit (Squitter) or 112-bit (Extended Squitter).
+     * Passed as a reference, since packets can be marked as valid by this function.
+     * @retval True if successful, false if something broke.
+     */
+    bool IngestDecodedTransponderPacket(DecodedTransponderPacket &packet);
+
+    /**
+     * Ingests a Mode A (Identity Surveillance Reply) packet and uses it to update the relevant aircraft. Exposed for
+     * testing, but usually called by IngestDecodedTransponderPacket.
+     * Note: this function requires that the packet be marked as valid using the ForceValid() function. If the packet is
+     * valid and does not match an ICAO in the aircraft dictionary, a new aircraft will be inserted.
+     * @param[in] packet ModeAPacket to ingest.
+     * @retval True if successful, false if something broke.
+     */
+    bool IngestModeAPacket(ModeAPacket packet);
+
+    /**
+     * Ingests a Mode C (Altitude Surveillance Reply) packet and uses it to update the relevant aircraft. Exposed for
+     * testing, but usually called by IngestDecodedTransponderPacket.
+     * Note: this function requires that the packet be marked as valid using the ForceValid() function. If the packet is
+     * valid and does not match an ICAO in the aircraft dictionary, a new aircraft will be inserted.
+     * @param[in] packet ModeCPacket to ingest.
+     * @retval True if successful, false if something broke.
+     */
+    bool IngestModeCPacket(ModeCPacket packet);
+
+    /**
+     * Ingests an ADSBPacket directly. Exposed for testing, but usually this gets called by
+     * IngestDecodedTransponderPacket and should not get touched directly.
+     * @param[in] packet ADSBPacket to ingest. Derived from a DecodedTransponderPacket with DF=17-19.
+     * @retval True if successful, false if something broke.
+     */
     bool IngestADSBPacket(ADSBPacket packet);
+
+    /**
+     * Returns the number of aircraft currently in the dictionary.
+     * @retval Number of aircraaft that are currently in the dictionary.
+     */
     uint16_t GetNumAircraft();
 
     /**
@@ -212,9 +289,9 @@ public:
      */
     Aircraft *GetAircraftPtr(uint32_t icao_address);
 
-    std::unordered_map<uint32_t, Aircraft> dict; // index Aircraft objects by their ICAO identifier
+    std::unordered_map<uint32_t, Aircraft> dict;  // index Aircraft objects by their ICAO identifier
 
-private:
+   private:
     // Helper functions for ingesting specific ADS-B packet types, called by IngestADSBPacket.
 
     /**
@@ -226,15 +303,13 @@ private:
      * @retval True if message was ingested successfully, false otherwise.
      */
 
-    bool IngestAircraftIDMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool IngestSurfacePositionMessage(Aircraft &aircraft, ADSBPacket packet);
-    // bool IngestAirbornePositionBaroAltMessage(ADSBPacket packet);
-    // bool IngestAirbornePositionGNSSAltMessage(ADSBPacket packet);
-    bool IngestAirbornePositionMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool IngestAirborneVelocitiesMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool IngestAircraftStatusMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool IngestTargetStateAndStatusInfoMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool IngestAircraftOperationStatusMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool ApplyAircraftIDMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool ApplySurfacePositionMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool ApplyAirbornePositionMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool ApplyAirborneVelocitiesMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool ApplyAircraftStatusMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool ApplyTargetStateAndStatusInfoMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool ApplyAircraftOperationStatusMessage(Aircraft &aircraft, ADSBPacket packet);
 
     AircraftDictionaryConfig_t config_;
 };

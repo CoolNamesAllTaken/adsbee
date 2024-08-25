@@ -7,8 +7,8 @@
 
 // NOTE: Buffer operations are done big-endian (oldest bits are stored in the MSB), since input buffer shifts left.
 
-uint32_t get_24_bit_word_from_buffer(uint32_t first_bit_index, const uint32_t buffer[]) {
-    return get_n_bit_word_from_buffer(24, first_bit_index, buffer);
+uint32_t Get24BitWordFromBuffer(uint32_t first_bit_index, const uint32_t buffer[]) {
+    return GetNBitWordFromBuffer(24, first_bit_index, buffer);
 }
 
 /**
@@ -20,11 +20,11 @@ uint32_t get_24_bit_word_from_buffer(uint32_t first_bit_index, const uint32_t bu
  * @param[in] buffer Buffer to read from.
  * @retval Right-aligned n-bit word that was read from the buffer.
  */
-uint32_t get_n_bit_word_from_buffer(uint16_t n, uint32_t first_bit_index, const uint32_t buffer[]) {
+uint32_t GetNBitWordFromBuffer(uint16_t n, uint32_t first_bit_index, const uint32_t buffer[]) {
     // NOTE: Bit 0 is the MSb in this format, since the input shift register shifts left (oldest bit is MSb).
     if (n > WORD_32_NUM_BITS || n < 1) {
         printf(
-            "get_n_bit_word_from_buffer: Tried to get %d bit word from buffer, but word bitlength must be between 1 "
+            "GetNBitWordFromBuffer: Tried to get %d bit word from buffer, but word bitlength must be between 1 "
             "and 32.\r\n",
             n);
         return 0;
@@ -52,10 +52,10 @@ uint32_t get_n_bit_word_from_buffer(uint16_t n, uint32_t first_bit_index, const 
  * @param[in] first_bit_index Bit index where the MSb of word should be inserted. MSb of first word in buffer is bit 0.
  * @param[in] buffer Buffer to insert into.
  */
-void set_n_bit_word_in_buffer(uint16_t n, uint32_t word, uint32_t first_bit_index, uint32_t buffer[]) {
+void SetNBitWordInBuffer(uint16_t n, uint32_t word, uint32_t first_bit_index, uint32_t buffer[]) {
     if (n > WORD_32_NUM_BITS || n < 1) {
         printf(
-            "set_n_bit_word_in_buffer: Tried to set %d-bit word in buffer, but word bitlength must be between 1 and "
+            "SetNBitWordInBuffer: Tried to set %d-bit word in buffer, but word bitlength must be between 1 and "
             "32.\r\n",
             n);
         return;
@@ -78,7 +78,7 @@ void set_n_bit_word_in_buffer(uint16_t n, uint32_t word, uint32_t first_bit_inde
     }
 }
 
-void print_binary_32(uint32_t value) {
+void PrintBinary32(uint32_t value) {
     printf("\t0b");
     for (int j = 31; j >= 0; j--) {
         printf(value & (0b1 << j) ? "1" : "0");
@@ -93,7 +93,7 @@ void print_binary_32(uint32_t value) {
  */
 uint16_t swap16(uint16_t value) { return (value << 8) | (value >> 8); }
 
-uint16_t calculate_crc16(const uint8_t *data_p, uint32_t length) {
+uint16_t CalculateCRC16(const uint8_t *data_p, uint32_t length) {
     uint8_t x;
     uint16_t crc = 0xFFFF;
     while (length--) {

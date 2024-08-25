@@ -67,7 +67,7 @@ bool SPICoprocessor::SCMessage::IsValid(uint32_t received_length) {
     if (received_length != length) {
         return false;
     }
-    if (calculate_crc16((uint8_t *)&length, length - sizeof(crc)) != crc) {
+    if (CalculateCRC16((uint8_t *)&length, length - sizeof(crc)) != crc) {
         return false;
     }
     return true;
@@ -76,7 +76,7 @@ bool SPICoprocessor::SCMessage::IsValid(uint32_t received_length) {
 void SPICoprocessor::SCMessage::PopulateCRCAndLength(uint32_t payload_length) {
     length = payload_length + sizeof(SCMessage);
     // CRC calculation starts after the CRC itself.
-    crc = calculate_crc16((uint8_t *)(&length), payload_length + sizeof(SCMessage) - sizeof(crc));
+    crc = CalculateCRC16((uint8_t *)(&length), payload_length + sizeof(SCMessage) - sizeof(crc));
 }
 
 /** SCMessage Constructors **/

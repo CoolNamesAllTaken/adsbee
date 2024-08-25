@@ -2,12 +2,14 @@ from pymavlink import mavutil
 import serial
 import os
 import time # for timestamping
+import sys # for arguments
 
-SERIAL_PORT = "COM3"
-BAUD_RATE = 115200
+SERIAL_PORT = sys.argv[1]
+BAUD_RATE = sys.argv[2]
 REFRESH_RATE_HZ = 1
 MAVLINK_PACKET_TYPE_LIST = ['ADSB_VEHICLE', 'MESSAGE_INTERVAL', 'REQUEST_DATA_STREAM']
 
+print(f"Connecting to MAVLINK device on {SERIAL_PORT} at {BAUD_RATE} baud.")
 mavlink_connection = mavutil.mavlink_connection(SERIAL_PORT, baud=BAUD_RATE)
 
 while (True):
