@@ -142,7 +142,7 @@ bool AircraftDictionary::IngestDecodedTransponderPacket(DecodedTransponderPacket
             // Packet is a 56-bit Squitter packet that is incapable of validating itself, and its CRC was validated
             // against the ICAO addresses in the aircraft dictionary.
             packet.ForceValid();
-
+            // Continue to add packet to dictionary.
         } else {
             // Packet is 112 bits, should have been able to validate itself. Something is borked.
             return false;
@@ -151,6 +151,15 @@ bool AircraftDictionary::IngestDecodedTransponderPacket(DecodedTransponderPacket
 
     uint16_t downlink_format = packet.GetDownlinkFormat();
     switch (downlink_format) {
+        // Mode A Packet.
+        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatAltitudeReply:
+            IngestModeCPacket(ModeAPacket(packet));
+            break;
+        // Mode C Packet.
+        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatIdentityReply:
+            IngestModeAPacket(ModeCPacket(packet));
+            break;
+        // ADS-B Packets.
         case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatExtendedSquitter:                // DF = 17
         case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatExtendedSquitterNonTransponder:  // DF = 18
         case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatMilitaryExtendedSquitter:        // DF = 19
@@ -163,14 +172,62 @@ bool AircraftDictionary::IngestDecodedTransponderPacket(DecodedTransponderPacket
         case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatCommBIdentityReply:              // DF = 21
         case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatCommDExtendedLengthMessage:      // DF = 24
             // Silently handle currently unsupported downlink formats.
-            return true;
             break;
 
         default:
             CONSOLE_WARNING("AircraftDictionary::IngestDecodedTransponderPacket",
                             "Encountered unexpected downlink format %d.", downlink_format);
+            return false;
     }
-    return false;
+    return true;
+}
+
+bool AircraftDictionary::IngestModeAPacket(ModeAPacket packet) {
+    if (!packet.IsValid() || packet.GetDownlinkFormat() != ModeAPacket::kDownlinkFormatIdentityReply) {
+        return false;
+    }
+
+    uint32_t icao_address = packet.GetICAOAddress();
+    Aircraft *aircraft_ptr = GetAircraftPtr(icao_address);
+    if (aircraft_ptr == nullptr) {
+        CONSOLE_WARNING("AircraftDictionary::IngestModeAPacket",
+                        "Unable to find or create new aircraft with ICAO address 0x%lx in dictionary.\r\n",
+                        icao_address);
+        return false;  // unable to find or create new aircraft in dictionary
+    }
+    packet.IsAirborne() ? aircraft_ptr->SetBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne)
+                        : aircraft_ptr->ClearBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne);
+    packet.HasAlert() ? aircraft_ptr->SetBitFlag(Aircraft::BitFlag::kBitFlagAlert)
+                      : aircraft_ptr->ClearBitFlag(Aircraft::BitFlag::kBitFlagAlert);
+    packet.HasIdent() ? aircraft_ptr->SetBitFlag(Aircraft::BitFlag::kBitFlagIdent)
+                      : aircraft_ptr->ClearBitFlag(Aircraft::BitFlag::kBitFlagIdent);
+    aircraft_ptr->squawk = packet.GetSquawk();
+
+    return true;
+}
+
+bool AircraftDictionary::IngestModeCPacket(ModeCPacket packet) {
+    if (!packet.IsValid() || packet.GetDownlinkFormat() != ModeCPacket::kDownlinkFormatAltitudeReply) {
+        return false;
+    }
+
+    uint32_t icao_address = packet.GetICAOAddress();
+    Aircraft *aircraft_ptr = GetAircraftPtr(icao_address);
+    if (aircraft_ptr == nullptr) {
+        CONSOLE_WARNING("AircraftDictionary::IngestModeCPacket",
+                        "Unable to find or create new aircraft with ICAO address 0x%lx in dictionary.\r\n",
+                        icao_address);
+        return false;  // unable to find or create new aircraft in dictionary
+    }
+    packet.IsAirborne() ? aircraft_ptr->SetBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne)
+                        : aircraft_ptr->ClearBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne);
+    packet.HasAlert() ? aircraft_ptr->SetBitFlag(Aircraft::BitFlag::kBitFlagAlert)
+                      : aircraft_ptr->ClearBitFlag(Aircraft::BitFlag::kBitFlagAlert);
+    packet.HasIdent() ? aircraft_ptr->SetBitFlag(Aircraft::BitFlag::kBitFlagIdent)
+                      : aircraft_ptr->ClearBitFlag(Aircraft::BitFlag::kBitFlagIdent);
+    aircraft_ptr->baro_altitude_ft = packet.GetAltitudeFt();
+
+    return true;
 }
 
 bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {

@@ -366,19 +366,76 @@ TEST(AircraftDictionary, IngestModeC) {
     tpacket.ForceValid();  // Mark it as valid so that it gets digested.
     EXPECT_EQ(tpacket.GetICAOAddress(), 0x7C1B28u);
     EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
-    EXPECT_TRUE(dictionary.ContainsAircraft(0x7C1B28));
+    EXPECT_TRUE(dictionary.ContainsAircraft(0x7C1B28u));
 
-    // Check that the aircraft has the right squawk code.
+    // Check that the aircraft has the right altitude.
     Aircraft aircraft;
     EXPECT_TRUE(dictionary.GetAircraft(0x7C1B28u, aircraft));
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
     EXPECT_EQ(aircraft.baro_altitude_ft, 10000);
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne));
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
 
-    // Ingest another Mode C packet.
-    tpacket = DecodedTransponderPacket((char *)"000001B6747458");
+    // Ingest a Mode C packet with an alert and ident.
+    tpacket = DecodedTransponderPacket((char *)"24000E3956BBA1");
+    tpacket.ForceValid();
     EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
-    EXPECT_TRUE(dictionary.GetAircraft(0x7C7A5D, aircraft));
-    EXPECT_EQ(aircraft.baro_altitude_ft, 1950);
+    EXPECT_TRUE(dictionary.GetAircraft(0xD3CCBFu, aircraft));
+    EXPECT_EQ(aircraft.baro_altitude_ft, 22025);
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne));
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
 
-    // TODO: Add test case for IDENT bit.
+    // Ingest a Mode C packet with aircraft on the ground.
+    tpacket = DecodedTransponderPacket((char *)"210000992F8C48");
+    tpacket.ForceValid();
+    EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
+    EXPECT_TRUE(dictionary.GetAircraft(0x7C7539u, aircraft));
+    EXPECT_EQ(aircraft.baro_altitude_ft, 25);
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne));
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
+}
+
+TEST(AircraftDictionary, IngestModeA) {
+    // Ingest a Mode A packet with an alert and ident.
+    AircraftDictionary dictionary = AircraftDictionary();
+    DecodedTransponderPacket tpacket = DecodedTransponderPacket((char *)"2C0006A2DEE500");
+    tpacket.ForceValid();
+    EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
+    Aircraft aircraft;
+    EXPECT_TRUE(dictionary.GetAircraft(0x739EE9u, aircraft));
+    EXPECT_EQ(aircraft.squawk, 06520u);
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
+
+    // Ingest a Mode A packet with an ident but no alert.
+    tpacket = DecodedTransponderPacket((char *)"2D0006A2DEE500");
+    tpacket.ForceValid();
+    EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
+    EXPECT_TRUE(dictionary.GetAircraft(0x5863BAu, aircraft));
+    EXPECT_EQ(aircraft.squawk, 06520u);
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
+
+    // Ingest a Mode A packet with no ident and no alert. Aircraft is airborne.
+    tpacket = DecodedTransponderPacket((char *)"28000D08CEE4C5");
+    tpacket.ForceValid();
+    EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
+    EXPECT_TRUE(dictionary.GetAircraft(0xA8BBE7u, aircraft));
+    EXPECT_EQ(aircraft.squawk, 01260);
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne));
+
+    // Ingest a Mode A packet with no ident and no alert. Aircraft is on ground.
+    tpacket = DecodedTransponderPacket((char *)"29001E0D3CB4BF");
+    tpacket.ForceValid();
+    EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
+    EXPECT_TRUE(dictionary.GetAircraft(0x7C1471u, aircraft));
+    EXPECT_EQ(aircraft.squawk, 03236);
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne));
 }

@@ -230,6 +230,7 @@ class ModeCPacket : public DecodedTransponderPacket {
 
     bool IsAirborne() const { return is_airborne_; }
     bool HasAlert() const { return has_alert_; }
+    bool HasIdent() const { return has_ident_; }
     DownlinkRequest GetDownlinkRequest() const { return downlink_request_; }
     uint8_t GetUtilityMessage() const { return utility_message_; }
     int32_t GetAltitudeFt() const { return altitude_ft_; }
@@ -237,7 +238,7 @@ class ModeCPacket : public DecodedTransponderPacket {
    private:
     bool is_airborne_ = false;
     bool has_alert_ = false;
-    // Ident bit not used in Mode C packets.
+    bool has_ident_ = false;
 
     DownlinkRequest downlink_request_ = kDownlinkRequestNone;
     uint8_t utility_message_ = 0b0;
@@ -269,7 +270,7 @@ class ModeAPacket : public DecodedTransponderPacket {
     bool HasIdent() const { return has_ident_; }
     DownlinkRequest GetDownlinkRequest() const { return downlink_request_; }
     uint8_t GetUtilityMessage() const { return utility_message_; }
-    uint32_t GetSquawk() const { return squawk_; }
+    uint16_t GetSquawk() const { return squawk_; }
 
    private:
     bool is_airborne_ = false;
@@ -280,7 +281,7 @@ class ModeAPacket : public DecodedTransponderPacket {
     uint8_t utility_message_ = 0b0;
     UtilityMessageType utility_message_type_ = kUtilityMessageNoInformation;
 
-    uint32_t squawk_ = 0xFFFFFFFF;
+    uint16_t squawk_ = 0xFFFF;
 };
 
 #endif /* _ADSB_PACKET_HH_ */

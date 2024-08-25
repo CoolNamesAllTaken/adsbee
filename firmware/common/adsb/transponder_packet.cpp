@@ -289,26 +289,32 @@ ModeCPacket::ModeCPacket(const DecodedTransponderPacket &decoded_packet) : Decod
     switch (flight_status) {
         case 0b000:  // No alert, no SPI, aircraft is airborne.
             has_alert_ = false;
+            has_ident_ = false;
             is_airborne_ = true;
             break;
         case 0b001:  // No alert, no SPI, aircraft is on ground.
             has_alert_ = false;
+            has_ident_ = false;
             is_airborne_ = false;
             break;
         case 0b010:  // Alert, no SPI, aircraft is airborne.
             has_alert_ = true;
+            has_ident_ = false;
             is_airborne_ = true;
             break;
         case 0b011:  // Alert, no SPI, aircraft is on ground.
             has_alert_ = true;
+            has_ident_ = false;
             is_airborne_ = false;
             break;
         case 0b100:  // Alert, SPI, aircraft is airborne or on ground.
             has_alert_ = true;
+            has_ident_ = true;
             // Default is_airborne_ to false when not known.
             break;
         case 0b101:
             // No alert, SPI, aircaft is airborne or on ground.
+            has_ident_ = true;
             has_alert_ = false;
             // Default is_airborne_ to false when not known.
             break;
