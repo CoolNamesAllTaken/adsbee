@@ -137,7 +137,7 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
 
 bool AircraftDictionary::IngestDecodedTransponderPacket(DecodedTransponderPacket &packet) {
     if (!packet.IsValid()) {
-        if (packet.GetPacketBufferLenBits() == DecodedTransponderPacket::kSquitterPacketNumBits &&
+        if (packet.GetPacketBufferLenBits() == DecodedTransponderPacket::kSquitterPacketLenBits &&
             ContainsAircraft(packet.GetICAOAddress())) {
             // Packet is a 56-bit Squitter packet that is incapable of validating itself, and its CRC was validated
             // against the ICAO addresses in the aircraft dictionary.
