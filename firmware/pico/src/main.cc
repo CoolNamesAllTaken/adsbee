@@ -57,7 +57,8 @@ int main() {
         // Send test packet to ESP32.
         uint32_t esp32_test_packet_timestamp_ms = get_time_since_boot_ms();
         if (esp32_test_packet_timestamp_ms > esp32_test_packet_last_sent_timestamp_ms + esp32_test_packet_interval_ms) {
-            RawTransponderPacket test_packet = RawTransponderPacket("8dac009458b9970f0aa394359da9", -123, 456789);
+            RawTransponderPacket test_packet =
+                RawTransponderPacket((char*)"8dac009458b9970f0aa394359da9", -123, 456789);
             SPICoprocessor::RawTransponderPacketMessage message =
                 SPICoprocessor::RawTransponderPacketMessage(test_packet);
             CONSOLE_INFO("Debug", "Sent ESP32 message.");
@@ -85,7 +86,7 @@ int main() {
             DecodedTransponderPacket decoded_packet = DecodedTransponderPacket(raw_packet);
             CONSOLE_INFO("main", "\tdf=%d icao_address=0x%06x", decoded_packet.GetDownlinkFormat(),
                          decoded_packet.GetICAOAddress());
-            if (ads_bee.aircraft_dictionary.IngestDecodedTransponderPacket(ADSBPacket(decoded_packet))) {
+            if (ads_bee.aircraft_dictionary.IngestDecodedTransponderPacket(decoded_packet)) {
                 // Packet was used to update the dictionary or was silently ignored (but presumed to be valid).
                 ads_bee.FlashStatusLED();
                 comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
