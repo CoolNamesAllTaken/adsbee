@@ -188,8 +188,9 @@ void ADSBee::OnDemodComplete() {
         pio_sm_get_rx_fifo_level(config_.message_demodulator_pio, message_demodulator_sm_);
     if (packet_num_words > RawTransponderPacket::kMaxPacketLenWords32) {
         // Packet length is invalid; dump everything and try again next time.
-        CONSOLE_WARNING("ADSBee::OnDemodComplete", "Received a packet with %d 32-bit words, expected maximum of %d.",
-                        packet_num_words, DecodedTransponderPacket::kExtendedSquitterPacketNumWords32);
+        // Only enable this print for debugging! Printing from the interrupt causes the USB library to crash.
+        // CONSOLE_WARNING("ADSBee::OnDemodComplete", "Received a packet with %d 32-bit words, expected maximum of %d.",
+        //                 packet_num_words, DecodedTransponderPacket::kExtendedSquitterPacketNumWords32);
         // pio_sm_clear_fifos(config_.message_demodulator_pio, message_demodulator_sm_);
         packet_num_words = RawTransponderPacket::kMaxPacketLenWords32;
     }
