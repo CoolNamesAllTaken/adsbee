@@ -204,13 +204,24 @@ void ADSBee::OnDemodComplete() {
                 case DecodedTransponderPacket::kSquitterPacketNumWords32:
                     rx_packet_.buffer[i] = (rx_packet_.buffer[i] & 0xFFFFFF) << 8;
                     rx_packet_.buffer_len_bits = DecodedTransponderPacket::kSquitterPacketLenBits;
+                    transponder_packet_queue.Push(rx_packet_);
+                    break;
                 case DecodedTransponderPacket::kExtendedSquitterPacketNumWords32:
                     rx_packet_.buffer[i] = (rx_packet_.buffer[i] & 0xFFFF) << 16;
                     rx_packet_.buffer_len_bits = DecodedTransponderPacket::kExtendedSquitterPacketLenBits;
+                    transponder_packet_queue.Push(rx_packet_);
+                    break;
+                default:
+                    // Don't push partial packets.
+                    // Printing to tinyUSB from within an interrupt causes crashes! Don't do it.
+                    // CONSOLE_WARNING(
+                    //     "ADSBee::OnDemodComplete",
+                    //     "Unhandled case while creating RawTransponderPacket, received packet with %d 32-bit words.",
+                    //     packet_num_words);
+                    break;
             }
         }
     }
-    transponder_packet_queue.Push(rx_packet_);
 
     gpio_put(config_.rssi_clear_pin, 1);  // restore RSSI peak detector to working order.
 
