@@ -17,6 +17,14 @@ class FreePoolAllocator {
             } else {
                 return &pool[ringPointer++];
             }
+        } else {
+            if ( (_itemCount - ringPointer) < allocCount ){
+                return nullptr; //should throw std::bad_alloc
+            } else {
+                auto start = &pool[ringPointer];
+                ringPointer += allocCount;
+                return start;
+            }
         }
     }
 
