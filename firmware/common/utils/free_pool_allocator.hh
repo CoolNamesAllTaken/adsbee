@@ -34,7 +34,12 @@ class FreePoolAllocator {
         }
     }
 
-    void deallocate() {}
+    void deallocate(T* ptr, size_t count) {
+        auto startElement = (ptr - &pool[0]) / sizeof(ptr);
+        for (size_t i = 0; i < count; i++) {
+            released.push(startElement + i);
+        }
+    }
 
    private:
     std::stack<uint_fast32_t> released;
