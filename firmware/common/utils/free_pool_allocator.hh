@@ -15,10 +15,16 @@ class FreePoolAllocator {
                 released.pop();
                 return &pool[element];
             } else {
+                if (ringPointer == _itemCount) {
+                    // out of elements in FPA
+                    return nullptr; //should throw std::bad_alloc
+                }
                 return &pool[ringPointer++];
             }
         } else {
             if ( (_itemCount - ringPointer) < allocCount ){
+                // not enough new elements to allocate all requested
+                // TODO: check released list, that will be hard...
                 return nullptr; //should throw std::bad_alloc
             } else {
                 auto start = &pool[ringPointer];
