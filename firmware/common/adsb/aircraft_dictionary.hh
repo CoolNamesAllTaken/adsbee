@@ -1,10 +1,14 @@
 #ifndef _AIRCRAFT_DICTIONARY_HH_
 #define _AIRCRAFT_DICTIONARY_HH_
 
+#include <cstdint>
 #include <cstring>
-#include <unordered_map>
+#include <functional>
+#include <map>
+#include <utility>
 
 #include "transponder_packet.hh"
+#include "free_pool_allocator.hh"
 
 class Aircraft
 {
@@ -212,7 +216,8 @@ public:
      */
     Aircraft *GetAircraftPtr(uint32_t icao_address);
 
-    std::unordered_map<uint32_t, Aircraft> dict; // index Aircraft objects by their ICAO identifier
+    std::map<uint32_t, Aircraft, std::less<uint32_t>, FreePoolAllocator<std::pair<const uint32_t, Aircraft>, kMaxNumAircraft>> dict = 
+        std::map<uint32_t, Aircraft, std::less<uint32_t>, FreePoolAllocator<std::pair<const uint32_t, Aircraft>, kMaxNumAircraft>>(allocator);
 
 private:
     // Helper functions for ingesting specific ADS-B packet types, called by IngestADSBPacket.
@@ -237,6 +242,8 @@ private:
     bool IngestAircraftOperationStatusMessage(Aircraft &aircraft, ADSBPacket packet);
 
     AircraftDictionaryConfig_t config_;
+
+    FreePoolAllocator<std::pair<const uint32_t, Aircraft>, kMaxNumAircraft> allocator;
 };
 
 #endif /* _AIRCRAFT_DICTIONARY_HH_ */

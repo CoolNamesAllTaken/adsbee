@@ -8,6 +8,21 @@
 template <typename T, uint_fast32_t _itemCount>
 class FreePoolAllocator {
    public:
+    // STL required typedefs
+    using value_type = T;
+    using pointer = T*;
+    using const_pointer = const T*;
+    using void_pointer = void*;
+    using const_void_pointer = const void*;
+    using size_type = std::size_t;
+    using difference_type = std::ptrdiff_t;
+    template <typename U>
+    struct rebind {
+        using other = FreePoolAllocator<U, _itemCount>;
+    };
+
+    
+
     T* allocate(size_t allocCount) {
         if (allocCount == 1) {
             if (!released.empty()) {
