@@ -23,6 +23,16 @@ class ADSBee {
         100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
     static const uint32_t kStatusLEDOnMs = 10;
     static const uint16_t kNumDemodStateMachines = 2;
+    static const uint32_t kStatsUpdateIntervalMs = 1000;  // [ms] How often statistics update.
+
+    static const uint32_t kTLLearningIntervalMs =
+        10000;  // [ms] Length of Simulated Annealing interval for learning trigger level.
+    static const uint16_t kTLLearningNumCycles =
+        100;  // Number of simulated annealing cycles for learning trigger level.
+    static const uint16_t kTLLearningStartTemperatureMV =
+        1000;  // [mV] Starting value for simulated annealing temperature when learning triger level. This corresponds
+               // to the maximum value that the trigger level could be moved (up or down) when exploring a neighbor
+               // state.
 
     struct ADSBeeConfig {
         PIO preamble_detector_pio = pio0;
@@ -42,10 +52,8 @@ class ADSBee {
         uint16_t tl_adc_pin = 27;
         uint16_t tl_adc_input = 1;
         // GPIO 28 used as ADC input for the power level of the last decoded packet.
-        uint16_t rssi_hold_adc_pin = 28;
-        uint16_t rssi_hold_adc_input = 2;
-        // GPIO 8 is used for clearing the RSSI peak detector.
-        uint16_t rssi_clear_pin = 8;
+        uint16_t rssi_adc_pin = 28;
+        uint16_t rssi_adc_input = 2;
         // GPIO 2-3 are used for the EEPROM and rx gain digipot I2C bus via I2C1.
         i2c_inst_t *onboard_i2c = i2c1;
         uint16_t onboard_i2c_sda_pin = 2;
@@ -116,6 +124,13 @@ class ADSBee {
     inline uint64_t GetMLAT12MHzCounts(uint16_t num_bits = 48);
 
     /**
+     * Get the current temperature used in learning trigger level (simulated annealing). A temperature of 0 means
+     * learning has completed.
+     * @retval Current temperature used for simulated annealing, in milliVolts.
+     */
+    uint16_t GetTLLearningTemperatureMV();
+
+    /**
      * Read the high Minimum Trigger Level threshold via ADC.
      * @retval TL in milliVolts.
      */
@@ -150,9 +165,38 @@ class ADSBee {
     bool SetTLMilliVolts(int tl_mv);
 
     /**
-     * Returns the Receive Signal Strength Indicator (RSSI) of the message that is currently being read, in dBm.
+     * Start learning the trigger level through Simulated Annealing. Will begin kTLLearningNumCycles annealing cycles
+     * with an annealing interval of kTLLearningIntervalMs milliseconds. Can be provided with maximum and minimum
+     * trigger level bounds to allow a narrower search.
+     * @param[in] tl_learning_num_cycles Number of cycles to use while annealing trigger level (sets the amount that the
+     * annealing temperature is decreased each cycle). Optional, defaults to kTLLearningNumCycles.
+     * @param[in] tl_learning_start_temperature_mv Annealing temperature to start with, in mV.
+     * @param[in] tl_min_mv Minimum trigger level to use while learning, in milliVolts. Optional, defaults to full scale
+     * (kTLMinMV).
+     * @param[in] tl_max_mv Maximum trigger level to use while learning, in milliVolts. Optional, defaults to full scale
+     * (kTLMaxMV).
      */
-    int ReadRSSIdBm();
+    void StartTLLearning(uint16_t tl_learning_num_cycles = kTLLearningNumCycles,
+                         uint16_t tl_learning_start_temperature_mv = kTLLearningStartTemperatureMV,
+                         uint16_t tl_min_mv = kTLMinMV, uint16_t tl_max_mv = kTLMaxMV);
+
+    /**
+     * Returns the Receive Signal Strength Indicator (RSSI) of the signal currently provided by the RF power detector,
+     * in mV.
+     * @retval Voltage from the RF power detector, in mV.
+     */
+    inline int ReadRSSIMilliVolts();
+
+    /**
+     * Returns the Receive Signal Strength Indicator (RSSI) of the message that is currently being provided by the RF
+     * power detector, in dBm. makes use of ReadRSSIMilliVolts().
+     * @retval Voltage form the RF power detector converted to dBm using the chart in the AD8313 datasheet.
+     */
+    inline int ReadRSSIdBm();
+
+    inline uint16_t GetStatsNumDemods() { return stats_num_demods_; }
+    inline uint16_t GetStatsNumModeACPackets() { return stats_num_valid_mode_ac_packets_; }
+    inline uint16_t GetStatsNumModeSPackets() { return stats_num_valid_mode_s_packets_; }
 
     PFBQueue<RawTransponderPacket> transponder_packet_queue = PFBQueue<RawTransponderPacket>(
         {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = transponder_packet_queue_buffer_});
@@ -169,7 +213,7 @@ class ADSBee {
     uint32_t message_demodulator_sm_ = 0;
     uint32_t message_demodulator_offset_ = 0;
 
-    uint32_t led_off_timestamp_ms_ = 0;
+    uint32_t led_on_timestamp_ms_ = 0;
 
     uint16_t tl_pwm_slice_ = 0;
     uint16_t tl_pwm_chan_ = 0;
@@ -179,13 +223,37 @@ class ADSBee {
 
     uint16_t tl_adc_counts_ = 0;
 
+    uint32_t tl_learning_cycle_start_timestamp_ms_ = 0;
+    uint16_t tl_learning_temperature_mv_ = kTLLearningStartTemperatureMV;
+    uint16_t tl_learning_temperature_step_mv_ = 0;
+    uint16_t tl_learning_max_mv_ = kTLMaxMV;
+    uint16_t tl_learning_min_mv_ = kTLMinMV;
+    float tl_learning_decode_rate_ = -1.0f;  // Start with negative value to signal first value shouldn't be averaged.
+    float tl_learning_prev_decode_rate_ =
+        1e-5f;  // Start with a very small positive value to encourage a jump to a new tl value.
+    uint16_t tl_learning_prev_tl_mv_ = tl_mv_;
+
     uint32_t mlat_counter_1s_wraps_ = 0;
 
     RawTransponderPacket rx_packet_;
     RawTransponderPacket transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
-    uint16_t last_demod_num_words_ingested_ = 0;
+
+    // These values are continuous counters of number of packets of each type received. Don't use these values for
+    // anything external!
+    uint16_t stats_num_demods_counter_ = 0;
+    uint16_t stats_num_valid_mode_ac_packets_counter_ = 0;
+    uint16_t stats_num_valid_mode_s_packets_counter_ = 0;
+
+    // Timestamp of the last time that the packet counters were stored and reset to 0.
+    uint32_t stats_last_update_timestamp_ms_ = 0;  // [ms]
+
+    // These values are updated every stats update interval so that they always contain counts across a consistent
+    // interval. Use these values for anything important!
+    uint16_t stats_num_demods_ = 0;
+    uint16_t stats_num_valid_mode_ac_packets_ = 0;
+    uint16_t stats_num_valid_mode_s_packets_ = 0;
 
     bool is_enabled_ = true;
 };

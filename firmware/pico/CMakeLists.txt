@@ -54,6 +54,7 @@ if (NOT CMAKE_BUILD_TYPE STREQUAL "Test")
     target_link_libraries(${PROJECT_NAME} 
         pico_stdlib
         pico_float # for math functions
+        pico_rand # for generating random numbers
         hardware_pio
         hardware_pwm
         hardware_adc

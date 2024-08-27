@@ -324,10 +324,16 @@ CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
         case '=':
             // Attempt setting LO TL value, in milliVolts, if first argument is not blank.
             if (CPP_AT_HAS_ARG(0)) {
-                uint16_t new_tl_mv;
-                CPP_AT_TRY_ARG2NUM(0, new_tl_mv);
-                if (!ads_bee.SetTLMilliVolts(new_tl_mv)) {
-                    CPP_AT_ERROR("Failed to set tl_mv.");
+                if (args[0].compare("LEARN") == 0) {
+                    // Starting a new trigger level learning session.
+                    ads_bee.StartTLLearning();
+                } else {
+                    // Assigning trigger level manually.
+                    uint16_t new_tl_mv;
+                    CPP_AT_TRY_ARG2NUM(0, new_tl_mv);
+                    if (!ads_bee.SetTLMilliVolts(new_tl_mv)) {
+                        CPP_AT_ERROR("Failed to set tl_mv.");
+                    }
                 }
             }
             CPP_AT_SUCCESS();
