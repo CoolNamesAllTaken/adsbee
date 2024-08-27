@@ -8,15 +8,19 @@
 template <typename T, uint_fast32_t _itemCount>
 class FreePoolAllocator {
    public:
-
     T* allocate(size_t allocCount) {
-
+        if (allocCount == 1) {
+            if (!released.empty()) {
+                auto element = released.top();
+                released.pop();
+                return &pool[element];
+            } else {
+                return &pool[ringPointer++];
+            }
+        }
     }
 
-    void deallocate() {
-
-    }
-    
+    void deallocate() {}
 
    private:
     std::stack<uint_fast32_t> released;
