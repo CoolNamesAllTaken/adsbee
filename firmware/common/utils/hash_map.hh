@@ -125,21 +125,33 @@ class HashMap {
     }
 
     T& operator[](const Key& key) {
-        // todo
+        // todo optimize
+        auto itr = find(key);
+        if (itr == end()) {
+            return insert(std::pair<Key, T>(key, {})).first->second;
+        } else {
+            return itr->second;
+        }
     }
 
     iterator find(const Key& key) {
+        //todo optimize
         return std::find_if(begin(), end(), [this, key](auto i) {
             return i.first = key;
         });
     }
 
     const_iterator find(const Key& key) const {
+        //todo optimize
         return std::find_if(begin(), end(), [this, key](auto i) {
             return i.first = key;
         });
     }
     //end STL standard 
+
+    std::pair<iterator, bool> insert(const value_type& value) {
+        //todo
+    }
 
    private:
     using DataArrayT = std::array<value_type, MaxSize>;
