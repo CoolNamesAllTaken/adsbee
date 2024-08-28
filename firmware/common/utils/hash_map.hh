@@ -129,11 +129,15 @@ class HashMap {
     }
 
     iterator find(const Key& key) {
-        //todo
+        return std::find_if(begin(), end(), [this, key](auto i) {
+            return i.first = key;
+        });
     }
 
     const_iterator find(const Key& key) const {
-        //todo
+        return std::find_if(begin(), end(), [this, key](auto i) {
+            return i.first = key;
+        });
     }
     //end STL standard 
 
