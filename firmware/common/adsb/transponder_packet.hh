@@ -168,6 +168,15 @@ class ADSBPacket : public DecodedTransponderPacket {
     };
 
     // Bits 6-8 [3]: Capability (CA)
+    enum Capability : uint8_t {
+        kCALevel1Transponder = 0,
+        // CA = 1-3 reserved for backwards compatibility.
+        kCALevel2PlusTransponderOnSurfaceCanSetCA7 = 4,
+        kCALevel2PlusTransponderAirborneCanSetCA7 = 5,
+        kCALevel2PlusTransponderOnSurfaceOrAirborneCanSetCA7 = 6,
+        kCADRNot0OrFSEquals2345OnSurfaceOrAirborne = 7  // Indicates aircraft is under enhanced surveillance by ATC.
+
+    };
     // Bits 9-32 [24]: ICAO Aircraft Address (ICAO)
     // Bits 33-88 [56]: Message, Extended Squitter (ME)
     // (Bits 33-37 [5]): Type code (TC)
@@ -197,8 +206,8 @@ class ADSBPacket : public DecodedTransponderPacket {
     // Operation Status (TC = 31)
     enum OperationStatusSubtype : uint8_t { kOperationStatusSubtypeAirborne = 0, kOperationStatusSubtypeSurface = 1 };
 
-    inline uint16_t GetCapability() const { return capability_; };
-    inline uint16_t GetTypeCode() const { return typecode_; };
+    inline Capability GetCapability() const { return capability_; };
+    inline TypeCode GetTypeCode() const { return typecode_; };
     TypeCode GetTypeCodeEnum() const;
 
     // Exposed for testing only.
@@ -207,9 +216,9 @@ class ADSBPacket : public DecodedTransponderPacket {
     };
 
    private:
-    uint16_t capability_ = 0;
+    Capability capability_ = kCALevel1Transponder;  // Default to most basic capability.
 
-    uint16_t typecode_ = static_cast<uint16_t>(kTypeCodeInvalid);
+    TypeCode typecode_ = kTypeCodeInvalid;
 
     void ConstructADSBPacket();
 };

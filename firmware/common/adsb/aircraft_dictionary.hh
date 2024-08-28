@@ -8,7 +8,7 @@
 
 class Aircraft {
    public:
-    static const uint16_t kCallSignMaxNumChars = 8;
+    static const uint16_t kCallSignMaxNumChars = 7;
 
     enum AirframeType : uint16_t {
         kAirframeTypeInvalid = 0,
@@ -30,14 +30,6 @@ class Aircraft {
         kAirframeTypeHeavy,            // > 136000kg
         kAirframeTypeHighPerformance,  // >5g acceleration and >400kt speed
         kAirframeTypeRotorcraft
-    };
-
-    enum SurveillanceStatus : int16_t {
-        kSurveillanceStatusNotSet = -1,
-        kSurveillanceStatusNoCondition = 0,
-        kSurveillanceStatusPermanantAlert = 1,
-        kSurveillanceStatusTemporaryAlert = 2,
-        kSurveillanceStatusSPICondition = 3
     };
 
     enum AltitudeSource : int16_t {
@@ -239,7 +231,6 @@ class Aircraft {
     uint16_t squawk = 0;
     AirframeType airframe_type = kAirframeTypeInvalid;
 
-    SurveillanceStatus surveillance_status = kSurveillanceStatusNotSet;
     int32_t baro_altitude_ft = 0;
     int32_t gnss_altitude_ft = 0;
     AltitudeSource altitude_source = kAltitudeSourceNotSet;

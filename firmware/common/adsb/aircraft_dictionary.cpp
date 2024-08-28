@@ -513,7 +513,23 @@ bool AircraftDictionary::ApplyAirbornePositionMessage(Aircraft &aircraft, ADSBPa
 
     bool decode_successful = true;
     // ME[5-6] - Surveillance Status
-    aircraft.surveillance_status = static_cast<Aircraft::SurveillanceStatus>(packet.GetNBitWordFromMessage(2, 5));
+    uint8_t surveillance_status = packet.GetNBitWordFromMessage(2, 5);
+    switch (surveillance_status) {
+        case 0:  // No condition.
+            aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagAlert, false);
+            aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagIdent, false);
+            break;
+        // NOTE: It's possible to have both an alert and an IDENT at the same time, but that can't be conveyed through a
+        // single Airborne Position message.
+        case 1:  // Permanent alert.
+        case 2:  // Temporary alert.
+            // Treat permanent and temporary alerts the same.
+            aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagAlert, true);
+            break;
+        case 3:  // SPI condition.
+            aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagIdent, true);
+            break;
+    }
 
     // ME[7] - NIC B Supplement (Formerly Single Antenna Flag)
     aircraft.WriteNICBit(Aircraft::NICBit::kNICBitB, packet.GetNBitWordFromMessage(1, 7));

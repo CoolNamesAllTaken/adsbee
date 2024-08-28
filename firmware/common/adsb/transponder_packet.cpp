@@ -223,14 +223,14 @@ void DecodedTransponderPacket::ConstructTransponderPacket() {
  * Helper function used by constructors.
  */
 void ADSBPacket::ConstructADSBPacket() {
-    capability_ = (packet.buffer[0] >> 24) & 0b111;
-    typecode_ = packet.buffer[1] >> 27;
+    capability_ = static_cast<ADSBPacket::Capability>((packet.buffer[0] >> 24) & 0b111);
+    typecode_ = static_cast<ADSBPacket::TypeCode>(packet.buffer[1] >> 27);
     parity_interrogator_id = packet.buffer[1] & 0xFFFFFF;
 }
 
 ADSBPacket::TypeCode ADSBPacket::GetTypeCodeEnum() const {
     // Table 3.3 from The 1090Mhz Riddle (Junzi Sun), pg. 37.
-    switch (typecode_) {
+    switch (static_cast<uint16_t>(typecode_)) {
         case 1:
         case 2:
         case 3:

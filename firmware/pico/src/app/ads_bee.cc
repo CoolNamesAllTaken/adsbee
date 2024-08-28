@@ -162,7 +162,7 @@ bool ADSBee::Update() {
         }
 
         DecodedTransponderPacket decoded_packet = DecodedTransponderPacket(raw_packet);
-        CONSOLE_INFO("main", "\tdf=%d icao_address=0x%06x", decoded_packet.GetDownlinkFormat(),
+        CONSOLE_INFO("ADSBee::Update", "\tdf=%d icao_address=0x%06x", decoded_packet.GetDownlinkFormat(),
                      decoded_packet.GetICAOAddress());
         if (aircraft_dictionary.IngestDecodedTransponderPacket(decoded_packet)) {
             // Packet was used to update the dictionary or was silently ignored (but presumed to be valid).
