@@ -259,7 +259,6 @@ TEST(AircraftDictionary, ApplyAirbornePositionMessage) {
     EXPECT_FLOAT_EQ(aircraft.latitude_deg, 0.0f);
     EXPECT_FLOAT_EQ(aircraft.longitude_deg, 0.0f);
     EXPECT_EQ(aircraft.surveillance_status, Aircraft::SurveillanceStatus::kSurveillanceStatusNoCondition);
-    EXPECT_FALSE(aircraft.single_antenna_flag);
     // Altitude should be filled out.
     EXPECT_EQ(aircraft.altitude_source, Aircraft::AltitudeSource::kAltitudeSourceBaro);
     EXPECT_EQ(aircraft.baro_altitude_ft, 16975);
@@ -275,7 +274,6 @@ TEST(AircraftDictionary, ApplyAirbornePositionMessage) {
     EXPECT_NEAR(aircraft.latitude_deg, 20.326522568524894f, kLatDegCloseEnough);
     EXPECT_NEAR(aircraft.longitude_deg, -156.5328535600142f, kLonDegCloseEnough);
     EXPECT_EQ(aircraft.surveillance_status, Aircraft::SurveillanceStatus::kSurveillanceStatusNoCondition);
-    EXPECT_FALSE(aircraft.single_antenna_flag);
     // Altitude should be filled out.
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedBaroAltitude));
     EXPECT_EQ(aircraft.altitude_source, Aircraft::AltitudeSource::kAltitudeSourceBaro);

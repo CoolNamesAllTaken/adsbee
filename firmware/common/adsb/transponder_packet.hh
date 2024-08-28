@@ -171,7 +171,7 @@ class ADSBPacket : public DecodedTransponderPacket {
     // Bits 9-32 [24]: ICAO Aircraft Address (ICAO)
     // Bits 33-88 [56]: Message, Extended Squitter (ME)
     // (Bits 33-37 [5]): Type code (TC)
-    enum TypeCode {
+    enum TypeCode : uint8_t {
         kTypeCodeInvalid = 0,
         kTypeCodeAircraftID = 1,                 // 1–4     Aircraft identification
         kTypeCodeSurfacePosition = 5,            // 5–8     Surface position
@@ -186,12 +186,62 @@ class ADSBPacket : public DecodedTransponderPacket {
     // Bits 89-112 [24]: Parity / Interrogator ID (PI)
 
     // Subtype enums used for specific packet types (not instantiated as part of the ADSBPacket class).
-    enum AirborneVelocitiesSubtype {
+    // Airborne Velocitites (TC = 19)
+    enum AirborneVelocitiesSubtype : uint8_t {
         kAirborneVelocitiesGroundSpeedSubsonic = 1,
         kAirborneVelocitiesGroundSpeedSupersonic = 2,
         kAirborneVelocitiesAirspeedSubsonic = 3,
         kAirborneVelocitiesAirspeedSupersonic = 4
     };
+
+    // Operation Status (TC = 31)
+    enum OperationStatusSubtype : uint8_t { kOperationStatusSubtypeAirborne = 0, kOperationStatusSubtypeSurface = 1 };
+
+    // enum GPSAntennaOffset : uint8_t {
+    //     kGPSAntennaOffsetUnknown = 0b000,
+    //     kGPSAntenna2MetersLeftOfRollAxis = 0b001,
+    //     kGPSAntenna4MetersLeftOfRollAxis = 0b010,
+    //     kGPSAntenna6MetersLeftOfRollAxis = 0b011,
+    //     kGPSAntennaOnRollAxis = 0b100,
+    //     kGPSAntenna2MetersRightOfRollAxis = 0b101,
+    //     kGPSAntenna4MetersRightOfRollAxis = 0b110,
+    //     kGPSAntenna6MetersRightOfRollAxis = 0b111
+    // };
+
+    // enum AirborneOperationalModeBitShift : uint16_t {
+    //     kAirborneOperationalModeBitShiftTCAS = 13,
+    //     kAirborneOperationalModeBitShiftIdent = 12,
+    //     kAirborneOperationalModeBitShiftSingleAntenna = 10,
+    //     kAirborneOperationalModeBitShiftSystemDesignAssurance = 8
+    // };
+
+    // enum AirborneOperationalModeBitMask : uint16_t {
+    //     kAirborneOperationalModeBitMaskTCAS = 0b1 << kAirborneOperationalModeBitShiftTCAS,
+    //     kAirborneOperationalModeBitMaskIdent = 0b1 << kAirborneOperationalModeBitShiftIdent,
+    //     kAirborneOperationalModeBitMaskSingleAntenna = 0b1 << kAirborneOperationalModeBitShiftSingleAntenna,
+    //     kAirborneOperationalModeBitMaskSystemDesignAssurance = 0b11
+    //                                                            <<
+    //                                                            kAirborneOperationalModeBitShiftSystemDesignAssurance
+    // };
+
+    // enum SurfaceOperationalModeBitShift : uint16_t {
+    //     kSurfaceOperationalModeBitShiftTCAS = 13,
+    //     kSurfaceOperationalModeBitShiftIdent = 12,
+    //     kSurfaceOperationalModeBitShiftSingleAntenna = 10,
+    //     kSurfaceOperationalModeBitShiftSystemDesignAssurance = 8,
+    //     kSurfaceOperationalModeBitShiftGPSAntennaOffset = 0
+    // };
+
+    // enum SurfaceOperationalModeBitMask : uint16_t {
+    //     kSurfaceOperationalModeBitMaskTCAS = 0b1 << kSurfaceOperationalModeBitShiftTCAS,
+    //     kSurfaceOperationalModeBitMaskIdent = 0b1 << kSurfaceOperationalModeBitShiftIdent,
+    //     kSurfaceOperationalModeBitMaskSingleAntenna = 0b1 << kSurfaceOperationalModeBitShiftSingleAntenna,
+    //     kSurfaceOperationalModeBitMaskSystemDesignAssurance = 0b11
+    //                                                           <<
+    //                                                           kSurfaceOperationalModeBitShiftSystemDesignAssurance,
+    //     kSurfaceOperationalModeBitMaskGPSAntennaOffset = 0b11111111 <<
+    //     kSurfaceOperationalModeBitShiftGPSAntennaOffset
+    // };
 
     uint16_t GetCapability() const { return capability_; };
     uint16_t GetTypeCode() const { return typecode_; };

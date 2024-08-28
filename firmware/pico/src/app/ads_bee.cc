@@ -167,9 +167,7 @@ bool ADSBee::Update() {
                 case DecodedTransponderPacket::kDownlinkFormatIdentityReply:
                     stats_num_valid_mode_ac_packets_counter_++;
                     break;
-                case DecodedTransponderPacket::kDownlinkFormatExtendedSquitter:
-                case DecodedTransponderPacket::kDownlinkFormatExtendedSquitterNonTransponder:
-                case DecodedTransponderPacket::kDownlinkFormatMilitaryExtendedSquitter:
+                default:
                     stats_num_valid_mode_s_packets_counter_++;
                     break;
             }
@@ -190,11 +188,7 @@ bool ADSBee::Update() {
 
         stats_last_update_timestamp_ms_ = timestamp_ms;
 
-        float decode_rate =
-            static_cast<float>(stats_num_valid_mode_ac_packets_ + stats_num_valid_mode_s_packets_) / stats_num_demods_;
-        // Store decode rate as a moving average during the annealing interval. First value doesn't get averaged.
-        tl_learning_decode_rate_ =
-            (tl_learning_decode_rate_ < 0.0f) ? decode_rate : (tl_learning_decode_rate_ + decode_rate) * 0.5f;
+        tl_learning_num_valid_packets_ += (stats_num_valid_mode_ac_packets_ + stats_num_valid_mode_s_packets_);
     }
 
     // Update trigger level learning if it's active.
@@ -202,14 +196,14 @@ bool ADSBee::Update() {
         timestamp_ms - tl_learning_cycle_start_timestamp_ms_ > kTLLearningIntervalMs) {
         // Trigger level learning is active and due for an update.
         // Is this neighbor (current value for tl_mv) worth traversing to?
-        float decode_ratio =
-            (tl_learning_decode_rate_ - tl_learning_prev_decode_rate_) / ABS(tl_learning_prev_decode_rate_);
+        float valid_packet_ratio = (tl_learning_num_valid_packets_ - tl_learning_prev_num_valid_packets_) /
+                                   MAX(tl_learning_prev_num_valid_packets_, 1);  // Avoid divide by zero.
         float random_weight =
             static_cast<int16_t>(get_rand_32()) * kInt16MaxRecip * 0.25;  // Random value from [-0.25,0.25].
-        if (decode_ratio + random_weight > 0.0f) {
+        if (valid_packet_ratio + random_weight > 0.0f) {
             // Transition to neighbor TL value.
             tl_learning_prev_tl_mv_ = tl_mv_;
-            tl_learning_prev_decode_rate_ = tl_learning_decode_rate_;
+            tl_learning_prev_num_valid_packets_ = tl_learning_num_valid_packets_;
         }
         // Else keep existing TL value in tl_learning_prev_tl_mv_.
 
@@ -226,12 +220,18 @@ bool ADSBee::Update() {
 
         // Update learning temperature. Decrement by the annealing temperature step or set to 0
         // if learning is complete.
-        tl_learning_temperature_mv_ = (tl_learning_temperature_mv_ > tl_learning_temperature_step_mv_)
-                                          ? tl_learning_temperature_mv_ - tl_learning_temperature_step_mv_
-                                          : 0;
+        if (tl_learning_temperature_mv_ > tl_learning_temperature_step_mv_) {
+            // Not done learning: step the trigger level learning temperature.
+            tl_learning_temperature_mv_ -= tl_learning_temperature_step_mv_;
+        } else {
+            // Done learning: take the current best trigger level and yeet outta here.
+            tl_learning_temperature_mv_ = 0;   // Set learning temperature to 0 to finish learnign trigger level.
+            tl_mv_ = tl_learning_prev_tl_mv_;  // Set trigger level to the best value we've seen so far.
+        }
 
         // Store timestamp as start of trigger learning cycle so we know when to come back.
         tl_learning_cycle_start_timestamp_ms_ = timestamp_ms;
+        tl_learning_num_valid_packets_ = 0;  // Start the counter over.
     }
 
     // Update PWM output duty cycle.

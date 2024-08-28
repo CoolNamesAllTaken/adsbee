@@ -194,8 +194,22 @@ class ADSBee {
      */
     inline int ReadRSSIdBm();
 
+    /**
+     * Returns the number of demodulations attempted in the last kStatsUpdateIntervalMs milliseconds.
+     * @retval Number of demods attempted.
+     */
     inline uint16_t GetStatsNumDemods() { return stats_num_demods_; }
+
+    /**
+     * Returns the number of valid Mode A / Mode C packets decoded in the last kStatsUpdateIntervalMs milliseconds.
+     * @retval Number of valid packets received with Downlink Format = 4, 5.
+     */
     inline uint16_t GetStatsNumModeACPackets() { return stats_num_valid_mode_ac_packets_; }
+
+    /**
+     * Returns the number of valid Mode S packets decoded in the last kStatsUpdateIntervalMs milliseconds.
+     * @retval Number of valid packets received with Downlink Format != 4, 5.
+     */
     inline uint16_t GetStatsNumModeSPackets() { return stats_num_valid_mode_s_packets_; }
 
     PFBQueue<RawTransponderPacket> transponder_packet_queue = PFBQueue<RawTransponderPacket>(
@@ -225,12 +239,11 @@ class ADSBee {
 
     uint32_t tl_learning_cycle_start_timestamp_ms_ = 0;
     uint16_t tl_learning_temperature_mv_ = kTLLearningStartTemperatureMV;
-    uint16_t tl_learning_temperature_step_mv_ = 0;
+    int16_t tl_learning_temperature_step_mv_ = 0;
     uint16_t tl_learning_max_mv_ = kTLMaxMV;
     uint16_t tl_learning_min_mv_ = kTLMinMV;
-    float tl_learning_decode_rate_ = -1.0f;  // Start with negative value to signal first value shouldn't be averaged.
-    float tl_learning_prev_decode_rate_ =
-        1e-5f;  // Start with a very small positive value to encourage a jump to a new tl value.
+    int16_t tl_learning_num_valid_packets_ = 0;
+    int16_t tl_learning_prev_num_valid_packets_ = 1;  // Set to 1 to avoid dividing by 0.
     uint16_t tl_learning_prev_tl_mv_ = tl_mv_;
 
     uint32_t mlat_counter_1s_wraps_ = 0;

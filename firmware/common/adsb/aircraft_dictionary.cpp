@@ -195,12 +195,9 @@ bool AircraftDictionary::IngestModeAPacket(ModeAPacket packet) {
                         icao_address);
         return false;  // unable to find or create new aircraft in dictionary
     }
-    packet.IsAirborne() ? aircraft_ptr->SetBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne)
-                        : aircraft_ptr->ClearBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne);
-    packet.HasAlert() ? aircraft_ptr->SetBitFlag(Aircraft::BitFlag::kBitFlagAlert)
-                      : aircraft_ptr->ClearBitFlag(Aircraft::BitFlag::kBitFlagAlert);
-    packet.HasIdent() ? aircraft_ptr->SetBitFlag(Aircraft::BitFlag::kBitFlagIdent)
-                      : aircraft_ptr->ClearBitFlag(Aircraft::BitFlag::kBitFlagIdent);
+    aircraft_ptr->WriteBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne, packet.IsAirborne());
+    aircraft_ptr->WriteBitFlag(Aircraft::BitFlag::kBitFlagAlert, packet.HasAlert());
+    aircraft_ptr->WriteBitFlag(Aircraft::BitFlag::kBitFlagIdent, packet.HasIdent());
     aircraft_ptr->squawk = packet.GetSquawk();
 
     return true;
@@ -219,12 +216,9 @@ bool AircraftDictionary::IngestModeCPacket(ModeCPacket packet) {
                         icao_address);
         return false;  // unable to find or create new aircraft in dictionary
     }
-    packet.IsAirborne() ? aircraft_ptr->SetBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne)
-                        : aircraft_ptr->ClearBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne);
-    packet.HasAlert() ? aircraft_ptr->SetBitFlag(Aircraft::BitFlag::kBitFlagAlert)
-                      : aircraft_ptr->ClearBitFlag(Aircraft::BitFlag::kBitFlagAlert);
-    packet.HasIdent() ? aircraft_ptr->SetBitFlag(Aircraft::BitFlag::kBitFlagIdent)
-                      : aircraft_ptr->ClearBitFlag(Aircraft::BitFlag::kBitFlagIdent);
+    aircraft_ptr->WriteBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne, packet.IsAirborne());
+    aircraft_ptr->WriteBitFlag(Aircraft::BitFlag::kBitFlagAlert, packet.HasAlert());
+    aircraft_ptr->WriteBitFlag(Aircraft::BitFlag::kBitFlagIdent, packet.HasIdent());
     aircraft_ptr->baro_altitude_ft = packet.GetAltitudeFt();
 
     return true;
@@ -245,7 +239,8 @@ bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
     }
     aircraft_ptr->last_seen_timestamp_ms = get_time_since_boot_ms();
 
-    switch (packet.GetTypeCode()) {
+    uint16_t typecode = packet.GetTypeCode();
+    switch (typecode) {
         case ADSBPacket::kTypeCodeAircraftID:      // TC = 1 (Aircraft Identification)
         case ADSBPacket::kTypeCodeAircraftID + 1:  // TC = 2 (Aircraft Identification)
         case ADSBPacket::kTypeCodeAircraftID + 2:  // TC = 3 (Aircraft Identification)
@@ -293,6 +288,8 @@ bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
             return ApplyAircraftOperationStatusMessage(*aircraft_ptr, packet);
             break;
         default:
+            CONSOLE_ERROR("AircraftDictionary::IngestADSBPacket", "Received ADSB message with unsupported typecode %d.",
+                          typecode);
             return false;  // kTypeCodeInvalid, etc.
     }
 
@@ -470,200 +467,401 @@ bool AircraftDictionary::ApplyAircraftIDMessage(Aircraft &aircraft, ADSBPacket p
 }
 
 bool AircraftDictionary::ApplySurfacePositionMessage(Aircraft &aircraft, ADSBPacket packet) {
-    aircraft.ClearBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne);
+    aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne, false);
+
+    if (aircraft.NICBitIsValid(Aircraft::NICBit::kNICBitA) && aircraft.NICBitIsValid(Aircraft::NICBit::kNICBitC)) {
+        // Assign NIC based on NIC supplement bits A and C and received TypeCode.
+        switch ((packet.GetTypeCode() << 3) | (aircraft.nic_bits & 0b101)) {
+            case (5 << 3) | 0b000:
+                aircraft.nic = Aircraft::NICRadiusOfContainment::kRCLessThan7p5Meters;
+                break;
+            case (6 << 3) | 0b000:
+                aircraft.nic = Aircraft::NICRadiusOfContainment::kRCLessThan25Meters;
+                break;
+            case (7 << 3) | 0b000:
+                break;
+            case (8<<3) | 0b101
+        }
+    }
 
     return false;
 }
 
 bool AircraftDictionary::ApplyAirbornePositionMessage(Aircraft &aircraft, ADSBPacket packet) {
-    aircraft.SetBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne);
+    aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne, true);
     bool decode_successful = true;
     // ME[5-6] - Surveillance Status
     aircraft.surveillance_status = static_cast<Aircraft::SurveillanceStatus>(packet.GetNBitWordFromMessage(2, 5));
 
-    // ME[7] - Single Antenna Flag
-    aircraft.single_antenna_flag = packet.GetNBitWordFromMessage(1, 7) ? true : false;
+    // ME[7] - NIC B Supplement (Formerly Single Antenna Flag)
+    aircraft.WriteNICBit(Aircraft::NICBit::kNICBitB, packet.GetNBitWordFromMessage(1, 7));
 
     // ME[8-19] - Encoded Altitude
     switch (packet.GetTypeCodeEnum()) {
         case ADSBPacket::TypeCode::kTypeCodeAirbornePositionBaroAlt: {
-            uint16_t encoded_altitude_ft_with_q_bit = static_cast<uint16_t>(packet.GetNBitWordFromMessage(12, 8));
-            if (encoded_altitude_ft_with_q_bit == 0) {
-                aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeNotAvailable;
-                CONSOLE_WARNING("AIrcraftDictionary::ApplyAirbornePositionMessage",
-                                "Altitude information not available for aircraft 0x%lx.", aircraft.icao_address);
+                uint16_t encoded_altitude_ft_with_q_bit = static_cast<uint16_t>(packet.GetNBitWordFromMessage(12, 8));
+                if (encoded_altitude_ft_with_q_bit == 0) {
+                    aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeNotAvailable;
+                    CONSOLE_WARNING("AIrcraftDictionary::ApplyAirbornePositionMessage",
+                                    "Altitude information not available for aircraft 0x%lx.", aircraft.icao_address);
+                    decode_successful = false;
+                } else {
+                    aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeSourceBaro;
+                    bool q_bit = (encoded_altitude_ft_with_q_bit & (0b000000010000)) ? true : false;
+                    // Remove Q bit.
+                    uint16_t encoded_altitude_ft = ((encoded_altitude_ft_with_q_bit & 0b111111100000) >> 1) |
+                                                   (encoded_altitude_ft_with_q_bit & 0b1111);
+                    aircraft.baro_altitude_ft = q_bit ? (encoded_altitude_ft * 25) - 1000 : 25 * encoded_altitude_ft;
+                    // FIXME: Does not currently support baro altitudes above 50175ft. Something about grey codes?
+                    aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedBaroAltitude, true);
+                }
+                break;
+            }
+            case ADSBPacket::TypeCode::kTypeCodeAirbornePositionGNSSAlt: {
+                aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeSourceGNSS;
+                uint16_t gnss_altitude_m = static_cast<uint16_t>(packet.GetNBitWordFromMessage(12, 8));
+                aircraft.gnss_altitude_ft = MetersToFeet(gnss_altitude_m);
+                aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedGNSSAltitude, true);
+                break;
+            }
+            default:
+                CONSOLE_WARNING("AircraftDictionary::ApplyAirbornePositionMessage",
+                                "Received packet with unsupported typecode %d.", packet.GetTypeCode());
+                return false;
+        }
+
+        // ME[20] - Time
+        // TODO: figure out if we need this
+
+        // ME[21] - CPR Format
+        bool odd = packet.GetNBitWordFromMessage(1, 21);
+
+        // ME[32-?]
+        aircraft.SetCPRLatLon(packet.GetNBitWordFromMessage(17, 22), packet.GetNBitWordFromMessage(17, 39), odd);
+        if (aircraft.CanDecodePosition()) {
+            if (!aircraft.DecodePosition()) {
+                CONSOLE_WARNING("ApplyAirbornePositionMessage", "DecodePosition failed for aircraft 0x%lx.\r\n",
+                                aircraft.icao_address);
                 decode_successful = false;
             } else {
-                aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeSourceBaro;
-                bool q_bit = (encoded_altitude_ft_with_q_bit & (0b000000010000)) ? true : false;
-                // Remove Q bit.
-                uint16_t encoded_altitude_ft = ((encoded_altitude_ft_with_q_bit & 0b111111100000) >> 1) |
-                                               (encoded_altitude_ft_with_q_bit & 0b1111);
-                aircraft.baro_altitude_ft = q_bit ? (encoded_altitude_ft * 25) - 1000 : 25 * encoded_altitude_ft;
-                // FIXME: Does not currently support baro altitudes above 50175ft. Something about grey codes?
-                aircraft.SetBitFlag(Aircraft::BitFlag::kBitFlagUpdatedBaroAltitude);
+                aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedPosition, true);
             }
-            break;
         }
-        case ADSBPacket::TypeCode::kTypeCodeAirbornePositionGNSSAlt: {
-            aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeSourceGNSS;
-            uint16_t gnss_altitude_m = static_cast<uint16_t>(packet.GetNBitWordFromMessage(12, 8));
-            aircraft.gnss_altitude_ft = MetersToFeet(gnss_altitude_m);
-            aircraft.SetBitFlag(Aircraft::BitFlag::kBitFlagUpdatedGNSSAltitude);
-            break;
-        }
-        default:
-            CONSOLE_WARNING("AircraftDictionary::ApplyAirbornePositionMessage",
-                            "Received packet with unsupported typecode %d.", packet.GetTypeCode());
-            return false;
+
+        return decode_successful;
     }
 
-    // ME[20] - Time
-    // TODO: figure out if we need this
+    inline float wrapped_atan2f(float y, float x) {
+        float val = atan2f(y, x);
+        return val < 0.0f ? (val + (2.0f * M_PI)) : val;
+    }
 
-    // ME[21] - CPR Format
-    bool odd = packet.GetNBitWordFromMessage(1, 21);
+    bool AircraftDictionary::ApplyAirborneVelocitiesMessage(Aircraft & aircraft, ADSBPacket packet) {
+        aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne, true);
+        bool decode_successful = true;
 
-    // ME[32-?]
-    aircraft.SetCPRLatLon(packet.GetNBitWordFromMessage(17, 22), packet.GetNBitWordFromMessage(17, 39), odd);
-    if (aircraft.CanDecodePosition()) {
-        if (!aircraft.DecodePosition()) {
-            CONSOLE_WARNING("ApplyAirbornePositionMessage", "DecodePosition failed for aircraft 0x%lx.\r\n",
-                            aircraft.icao_address);
+        // Decode horizontal velocity.
+        ADSBPacket::AirborneVelocitiesSubtype subtype =
+            static_cast<ADSBPacket::AirborneVelocitiesSubtype>(packet.GetNBitWordFromMessage(3, 5));
+        bool is_supersonic = false;
+        switch (subtype) {
+            case ADSBPacket::AirborneVelocitiesSubtype::kAirborneVelocitiesGroundSpeedSupersonic:
+                is_supersonic = true;
+                // Cascade into ground speed calculation.
+            case ADSBPacket::AirborneVelocitiesSubtype::kAirborneVelocitiesGroundSpeedSubsonic: {
+                // Ground speed calculation.
+                int v_ew_kts_plus_1 = static_cast<int>(packet.GetNBitWordFromMessage(10, 14));
+                int v_ns_kts_plus_1 = static_cast<int>(packet.GetNBitWordFromMessage(10, 25));
+                if (v_ew_kts_plus_1 == 0 || v_ns_kts_plus_1 == 0) {
+                    aircraft.velocity_source = Aircraft::VelocitySource::kVelocitySourceNotAvailable;
+                    CONSOLE_WARNING("AircraftDictionary::ApplyAirborneVelocitiesMessage",
+                                    "Ground speed not available for aircraft 0x%lx.", aircraft.icao_address);
+                    decode_successful = false;
+                } else {
+                    aircraft.velocity_source = Aircraft::VelocitySource::kVelocitySourceGroundSpeed;
+                    bool direction_is_east_to_west = static_cast<bool>(packet.GetNBitWordFromMessage(1, 13));
+                    int v_x_kts = (v_ew_kts_plus_1 - 1) * (direction_is_east_to_west ? -1 : 1);
+                    bool direction_is_north_to_south = static_cast<bool>(packet.GetNBitWordFromMessage(1, 24));
+                    int v_y_kts = (v_ns_kts_plus_1 - 1) * (direction_is_north_to_south ? -1 : 1);
+                    if (is_supersonic) {
+                        v_x_kts *= 4;
+                        v_y_kts *= 4;
+                    }
+                    aircraft.velocity_kts = sqrtf(v_x_kts * v_x_kts + v_y_kts * v_y_kts);
+                    aircraft.heading_deg = wrapped_atan2f(v_x_kts, v_y_kts) * kRadiansToDegrees;
+                }
+                break;
+            }
+            case ADSBPacket::AirborneVelocitiesSubtype::kAirborneVelocitiesAirspeedSupersonic: {
+                is_supersonic = true;
+                // Cascade into airspeed calculation.
+            }
+            case ADSBPacket::AirborneVelocitiesSubtype::kAirborneVelocitiesAirspeedSubsonic: {
+                int airspeed_kts_plus_1 = static_cast<int>(packet.GetNBitWordFromMessage(10, 25));
+                if (airspeed_kts_plus_1 == 0) {
+                    CONSOLE_WARNING("AircraftDictionary::ApplyAirborneVelocitiesMessage",
+                                    "Airspeed not available for aircraft 0x%lx.", aircraft.icao_address);
+                    decode_successful = false;
+                } else {
+                    aircraft.velocity_kts = (airspeed_kts_plus_1 - 1) * (is_supersonic ? 4 : 1);
+                    bool is_true_airspeed = static_cast<bool>(packet.GetNBitWordFromMessage(1, 24));
+                    aircraft.velocity_source = is_true_airspeed
+                                                   ? Aircraft::VelocitySource::kVelocitySourceAirspeedTrue
+                                                   : Aircraft::VelocitySource::kVelocitySourceAirspeedIndicated;
+                    aircraft.heading_deg = static_cast<float>((packet.GetNBitWordFromMessage(10, 14) * 360) / 1024.0f);
+                }
+
+                break;
+            }
+            default:
+                CONSOLE_ERROR("AircraftDictionary::ApplyAirborneVelocitiesMessage",
+                              "Encountered invalid airborne velocities message subtype %d (valid values are 1-4).",
+                              subtype);
+                return false;  // Don't attempt vertical rate decode if message type is invalid.
+        }
+        aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedTrack, true);
+        aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity, true);
+
+        // Decode vertical rate.
+        int vertical_rate_magnitude_fpm = packet.GetNBitWordFromMessage(9, 37);
+        if (vertical_rate_magnitude_fpm == 0) {
+            aircraft.vertical_rate_source = Aircraft::VerticalRateSource::kVerticalRateNotAvailable;
+            CONSOLE_WARNING("AircraftDictionary::ApplyAirborneVelocitiesMessage",
+                            "Vertical rate not available for aircraft 0x%lx.", aircraft.icao_address);
             decode_successful = false;
         } else {
-            aircraft.SetBitFlag(Aircraft::BitFlag::kBitFlagUpdatedPosition);
-        }
-    }
-
-    return decode_successful;
-}
-
-inline float wrapped_atan2f(float y, float x) {
-    float val = atan2f(y, x);
-    return val < 0.0f ? (val + (2.0f * M_PI)) : val;
-}
-
-bool AircraftDictionary::ApplyAirborneVelocitiesMessage(Aircraft &aircraft, ADSBPacket packet) {
-    aircraft.SetBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne);
-    bool decode_successful = true;
-
-    // Decode horizontal velocity.
-    ADSBPacket::AirborneVelocitiesSubtype subtype =
-        static_cast<ADSBPacket::AirborneVelocitiesSubtype>(packet.GetNBitWordFromMessage(3, 5));
-    bool is_supersonic = false;
-    switch (subtype) {
-        case ADSBPacket::AirborneVelocitiesSubtype::kAirborneVelocitiesGroundSpeedSupersonic:
-            is_supersonic = true;
-            // Cascade into ground speed calculation.
-        case ADSBPacket::AirborneVelocitiesSubtype::kAirborneVelocitiesGroundSpeedSubsonic: {
-            // Ground speed calculation.
-            int v_ew_kts_plus_1 = static_cast<int>(packet.GetNBitWordFromMessage(10, 14));
-            int v_ns_kts_plus_1 = static_cast<int>(packet.GetNBitWordFromMessage(10, 25));
-            if (v_ew_kts_plus_1 == 0 || v_ns_kts_plus_1 == 0) {
-                aircraft.velocity_source = Aircraft::VelocitySource::kVelocitySourceNotAvailable;
-                CONSOLE_WARNING("AircraftDictionary::ApplyAirborneVelocitiesMessage",
-                                "Ground speed not available for aircraft 0x%lx.", aircraft.icao_address);
-                decode_successful = false;
+            aircraft.vertical_rate_source =
+                static_cast<Aircraft::VerticalRateSource>(packet.GetNBitWordFromMessage(1, 35));
+            bool vertical_rate_sign_is_negative = packet.GetNBitWordFromMessage(1, 36);
+            if (vertical_rate_sign_is_negative) {
+                aircraft.vertical_rate_fpm = -(vertical_rate_magnitude_fpm - 1) * 64;
             } else {
-                aircraft.velocity_source = Aircraft::VelocitySource::kVelocitySourceGroundSpeed;
-                bool direction_is_east_to_west = static_cast<bool>(packet.GetNBitWordFromMessage(1, 13));
-                int v_x_kts = (v_ew_kts_plus_1 - 1) * (direction_is_east_to_west ? -1 : 1);
-                bool direction_is_north_to_south = static_cast<bool>(packet.GetNBitWordFromMessage(1, 24));
-                int v_y_kts = (v_ns_kts_plus_1 - 1) * (direction_is_north_to_south ? -1 : 1);
-                if (is_supersonic) {
-                    v_x_kts *= 4;
-                    v_y_kts *= 4;
-                }
-                aircraft.velocity_kts = sqrtf(v_x_kts * v_x_kts + v_y_kts * v_y_kts);
-                aircraft.heading_deg = wrapped_atan2f(v_x_kts, v_y_kts) * kRadiansToDegrees;
+                aircraft.vertical_rate_fpm = (vertical_rate_magnitude_fpm - 1) * 64;
             }
-            break;
+            aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedVerticalVelocity, true);
         }
-        case ADSBPacket::AirborneVelocitiesSubtype::kAirborneVelocitiesAirspeedSupersonic: {
-            is_supersonic = true;
-            // Cascade into airspeed calculation.
-        }
-        case ADSBPacket::AirborneVelocitiesSubtype::kAirborneVelocitiesAirspeedSubsonic: {
-            int airspeed_kts_plus_1 = static_cast<int>(packet.GetNBitWordFromMessage(10, 25));
-            if (airspeed_kts_plus_1 == 0) {
-                CONSOLE_WARNING("AircraftDictionary::ApplyAirborneVelocitiesMessage",
-                                "Airspeed not available for aircraft 0x%lx.", aircraft.icao_address);
-                decode_successful = false;
-            } else {
-                aircraft.velocity_kts = (airspeed_kts_plus_1 - 1) * (is_supersonic ? 4 : 1);
-                bool is_true_airspeed = static_cast<bool>(packet.GetNBitWordFromMessage(1, 24));
-                aircraft.velocity_source = is_true_airspeed
-                                               ? Aircraft::VelocitySource::kVelocitySourceAirspeedTrue
-                                               : Aircraft::VelocitySource::kVelocitySourceAirspeedIndicated;
-                aircraft.heading_deg = static_cast<float>((packet.GetNBitWordFromMessage(10, 14) * 360) / 1024.0f);
-            }
 
-            break;
-        }
-        default:
-            CONSOLE_ERROR("AircraftDictionary::ApplyAirborneVelocitiesMessage",
-                          "Encountered invalid airborne velocities message subtype %d (valid values are 1-4).",
-                          subtype);
-            return false;  // Don't attempt vertical rate decode if message type is invalid.
-    }
-    aircraft.SetBitFlag(Aircraft::BitFlag::kBitFlagUpdatedTrack);
-    aircraft.SetBitFlag(Aircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity);
-
-    // Decode vertical rate.
-    int vertical_rate_magnitude_fpm = packet.GetNBitWordFromMessage(9, 37);
-    if (vertical_rate_magnitude_fpm == 0) {
-        aircraft.vertical_rate_source = Aircraft::VerticalRateSource::kVerticalRateNotAvailable;
-        CONSOLE_WARNING("AircraftDictionary::ApplyAirborneVelocitiesMessage",
-                        "Vertical rate not available for aircraft 0x%lx.", aircraft.icao_address);
-        decode_successful = false;
-    } else {
-        aircraft.vertical_rate_source = static_cast<Aircraft::VerticalRateSource>(packet.GetNBitWordFromMessage(1, 35));
-        bool vertical_rate_sign_is_negative = packet.GetNBitWordFromMessage(1, 36);
-        if (vertical_rate_sign_is_negative) {
-            aircraft.vertical_rate_fpm = -(vertical_rate_magnitude_fpm - 1) * 64;
+        // Decode altitude difference between GNSS and barometric altitude.
+        bool gnss_alt_below_baro_alt = static_cast<bool>(packet.GetNBitWordFromMessage(1, 48));
+        uint16_t encoded_gnss_alt_baro_alt_difference_ft = static_cast<uint16_t>(packet.GetNBitWordFromMessage(7, 49));
+        if (encoded_gnss_alt_baro_alt_difference_ft == 0) {
+            CONSOLE_WARNING("AircraftDictionary::ApplyAirborneVelocitiesMessage",
+                            "Difference between GNSS and baro altitude not available for aircraft 0x%lx.",
+                            aircraft.icao_address);
+            // Don't set decode_successful to false so that we ignore missing GNSS/Baro altitude info.
         } else {
-            aircraft.vertical_rate_fpm = (vertical_rate_magnitude_fpm - 1) * 64;
+            int gnss_alt_baro_alt_difference_ft =
+                (encoded_gnss_alt_baro_alt_difference_ft - 1) * 25 * (gnss_alt_below_baro_alt ? -1 : 1);
+            switch (aircraft.altitude_source) {
+                case Aircraft::AltitudeSource::kAltitudeSourceBaro:
+                    aircraft.gnss_altitude_ft = aircraft.baro_altitude_ft + gnss_alt_baro_alt_difference_ft;
+                    aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedGNSSAltitude, true);
+                    break;
+                case Aircraft::AltitudeSource::kAltitudeSourceGNSS:
+                    aircraft.baro_altitude_ft = aircraft.gnss_altitude_ft - gnss_alt_baro_alt_difference_ft;
+                    aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedBaroAltitude, true);
+                    break;
+                default:
+                    // Don't sweat it if the aircraft doesn't have an altitude yet.
+                    break;
+            }
         }
-        aircraft.SetBitFlag(Aircraft::BitFlag::kBitFlagUpdatedVerticalVelocity);
+
+        return decode_successful;
     }
 
-    // Decode altitude difference between GNSS and barometric altitude.
-    bool gnss_alt_below_baro_alt = static_cast<bool>(packet.GetNBitWordFromMessage(1, 48));
-    uint16_t encoded_gnss_alt_baro_alt_difference_ft = static_cast<uint16_t>(packet.GetNBitWordFromMessage(7, 49));
-    if (encoded_gnss_alt_baro_alt_difference_ft == 0) {
-        CONSOLE_WARNING("AircraftDictionary::ApplyAirborneVelocitiesMessage",
-                        "Difference between GNSS and baro altitude not available for aircraft 0x%lx.",
-                        aircraft.icao_address);
-        // Don't set decode_successful to false so that we ignore missing GNSS/Baro altitude info.
-    } else {
-        int gnss_alt_baro_alt_difference_ft =
-            (encoded_gnss_alt_baro_alt_difference_ft - 1) * 25 * (gnss_alt_below_baro_alt ? -1 : 1);
-        switch (aircraft.altitude_source) {
-            case Aircraft::AltitudeSource::kAltitudeSourceBaro:
-                aircraft.gnss_altitude_ft = aircraft.baro_altitude_ft + gnss_alt_baro_alt_difference_ft;
-                aircraft.SetBitFlag(Aircraft::BitFlag::kBitFlagUpdatedGNSSAltitude);
+    bool AircraftDictionary::ApplyAircraftStatusMessage(Aircraft & aircraft, ADSBPacket packet) { return false; }
+
+    bool AircraftDictionary::ApplyTargetStateAndStatusInfoMessage(Aircraft & aircraft, ADSBPacket packet) {
+        return false;
+    }
+
+    bool AircraftDictionary::ApplyAircraftOperationStatusMessage(Aircraft & aircraft, ADSBPacket packet) {
+        // TODO: get nac/nic, and supplement airborne status from here.
+        // https://mode-s.org/decode/content/ads-b/6-operation-status.html
+        // More about nic/nac here: https://mode-s.org/decode/content/ads-b/7-uncertainty.html
+
+        // ME[5-7] - Subtype Code
+        ADSBPacket::OperationStatusSubtype subtype =
+            static_cast<ADSBPacket::OperationStatusSubtype>(packet.GetNBitWordFromMessage(3, 5));
+
+        // ME[8-23] - Airborne or Surface Capacity Class Code
+        // ME[11] - 1090ES In
+        aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagHas1090ESIn, packet.GetNBitWordFromMessage(1, 11));
+        // Other fields handled in switch statement.
+
+        // ME[24-39] - Operational Mode Code
+        // ME[26] - TCAS RA Active
+        aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagTCASRAActive, packet.GetNBitWordFromMessage(1, 26));
+        // ME[27] - IDENT Switch Active
+        aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagIdent, packet.GetNBitWordFromMessage(1, 27));
+        // ME[29] - Single Antenna Flag
+        aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagSingleAntenna, packet.GetNBitWordFromMessage(1, 29));
+        // ME[30-31] - System Design Assurance
+        aircraft.system_design_assurance =
+            static_cast<Aircraft::SystemDesignAssurance>(packet.GetNBitWordFromMessage(2, 30));
+
+        // ME[40-42] - ADS-B Version Number
+        aircraft.adsb_version = packet.GetNBitWordFromMessage(3, 40);
+
+        // ME[43] - NIC Supplement A
+        aircraft.WriteNICBit(Aircraft::NICBit::kNICBitC, packet.GetNBitWordFromMessage(1, 43));
+
+        // ME[44-47] - Navigational Accuracy Category, Position
+        aircraft.nac_position =
+            static_cast<Aircraft::NACEstimatedPositionUncertainty>(packet.GetNBitWordFromMessage(4, 44));
+
+        // ME[50-51] - Source Integrity Level (SIL)
+        uint8_t sil = packet.GetNBitWordFromMessage(2, 50);
+        // ME[53] - Horizontal Reference Direction (HRD)
+        aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagHeadingUsesMagneticNorth,
+                              packet.GetNBitWordFromMessage(1, 53));
+        // ME[54] - SIL Supplement
+        uint8_t sil_supplement = packet.GetNBitWordFromMessage(1, 54);
+        aircraft.sil =
+            static_cast<Aircraft::SILProbabilityOfExceedingNICRadiusOfContainmnent>((sil_supplement << 2) | sil);
+
+        // Conditional fields (meaning depends on subtype).
+        switch (subtype) {
+            case ADSBPacket::OperationStatusSubtype::kOperationStatusSubtypeAirborne:  // ST = 0
+            {
+                // ME[10] - TCAS Operational
+                aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagTCASOperational, packet.GetNBitWordFromMessage(1, 10));
+
+                // ME[14] - Air Referenced Velocity (ARV) Report Capability - Ignored
+                // ME[15] - Target State (TS) Report Capability - Ignored
+                // ME[16-17] - Trajectory Change (TC) Report Capability - Ignored
+                // ME[18] - UAT In
+                aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagHasUATIn, packet.GetNBitWordFromMessage(1, 18));
+
+                // ME[48-49] - GVA
+                aircraft.gva = static_cast<Aircraft::GeometricVerticalAccurary>(packet.GetNBitWordFromMessage(2, 48));
+
+                // ME[52] - NIC Baro
+                aircraft.nic_baro =
+                    static_cast<Aircraft::NICBarometricAltitudeIntegrity>(packet.GetNBitWordFromMessage(1, 52));
+
                 break;
-            case Aircraft::AltitudeSource::kAltitudeSourceGNSS:
-                aircraft.baro_altitude_ft = aircraft.gnss_altitude_ft - gnss_alt_baro_alt_difference_ft;
-                aircraft.SetBitFlag(Aircraft::BitFlag::kBitFlagUpdatedBaroAltitude);
+            }
+            case ADSBPacket::OperationStatusSubtype::kOperationStatusSubtypeSurface:  // ST = 1
+            {
+                // ME[14] - B2 Low
+                aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagIsClassB2GroundVehicle,
+                                      packet.GetNBitWordFromMessage(1, 14));
+                // ME[15] - UAT In
+                aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagHasUATIn, packet.GetNBitWordFromMessage(1, 15));
+                // ME[16-18] - NACv
+                aircraft.nac_velocity =
+                    static_cast<Aircraft::NACHorizontalVelocityError>(packet.GetNBitWordFromMessage(3, 16));
+                // ME[19] - NIC Supplement C
+                aircraft.WriteNICBit(Aircraft::NICBit::kNICBitC, packet.GetNBitWordFromMessage(1, 19));
+
+                // ME[20-23] Aircraft/Vehicle Length and Width Code
+                switch (packet.GetNBitWordFromMessage(4, 20)) {
+                    case 0:
+                        aircraft.length_m = 0;
+                        aircraft.width_m = 0;
+                        break;
+                    case 1:
+                        aircraft.length_m = 15;
+                        aircraft.width_m = 23;
+                        break;
+                    case 2:
+                        aircraft.length_m = 25;
+                        aircraft.width_m = 29;  // Rounded up from 28.5.
+                        break;
+                    case 3:
+                        aircraft.length_m = 25;
+                        aircraft.width_m = 34;
+                        break;
+                    case 4:
+                        aircraft.length_m = 35;
+                        aircraft.width_m = 33;
+                        break;
+                    case 5:
+                        aircraft.length_m = 35;
+                        aircraft.width_m = 38;
+                        break;
+                    case 6:
+                        aircraft.length_m = 45;
+                        aircraft.width_m = 40;  // Rounded up from 39.5.
+                        break;
+                    case 7:
+                        aircraft.length_m = 45;
+                        aircraft.width_m = 45;
+                        break;
+                    case 8:
+                        aircraft.length_m = 55;
+                        aircraft.width_m = 45;
+                        break;
+                    case 9:
+                        aircraft.length_m = 55;
+                        aircraft.width_m = 52;
+                        break;
+                    case 10:
+                        aircraft.length_m = 65;
+                        aircraft.width_m = 60;  // Rounded up from 59.5.
+                        break;
+                    case 11:
+                        aircraft.length_m = 65;
+                        aircraft.width_m = 67;
+                        break;
+                    case 12:
+                        aircraft.length_m = 75;
+                        aircraft.width_m = 73;  // Rounded up from 72.5.
+                        break;
+                    case 13:
+                        aircraft.length_m = 75;
+                        aircraft.width_m = 80;
+                        break;
+                    case 14:
+                        aircraft.length_m = 85;
+                        aircraft.width_m = 80;
+                        break;
+                    case 15:
+                        aircraft.length_m = 85;
+                        aircraft.width_m = 90;
+                        break;
+                }
+
+                // ME[32-39] - GPS Antenna Offset
+                // Only present in surface position operation status packets.
+                switch (packet.GetNBitWordFromMessage(8, 32)) {
+                    case 0b000:  // No data.
+                        break;
+                    case 0b001:  // 2 meters left of roll axis.
+                        aircraft.gnss_antenna_offset_right_of_roll_axis_m = -2;
+                        break;
+                    case 0b010:  // 4 meters left of roll axis.
+                        aircraft.gnss_antenna_offset_right_of_roll_axis_m = -4;
+                        break;
+                    case 0b011:  // 6 meters left of roll axis.
+                        aircraft.gnss_antenna_offset_right_of_roll_axis_m = -6;
+                        break;
+                    case 0b100:  // Centered on roll axis.
+                        aircraft.gnss_antenna_offset_right_of_roll_axis_m = 0;
+                        break;
+                    case 0b101:  // 2 meters right of roll axis.
+                        aircraft.gnss_antenna_offset_right_of_roll_axis_m = 2;
+                        break;
+                    case 0b110:  // 4 meters right of roll axis.
+                        aircraft.gnss_antenna_offset_right_of_roll_axis_m = 4;
+                        break;
+                    case 0b111:  // 6 meters right of roll axis.
+                        aircraft.gnss_antenna_offset_right_of_roll_axis_m = 6;
+                        break;
+                }
+
+                // ME[52] Track Angle / Heading for Surface Position Messages
+                aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagSurfacePositionUsesHeading,
+                                      packet.GetNBitWordFromMessage(1, 52));
+
                 break;
+            }
             default:
-                // Don't sweat it if the aircraft doesn't have an altitude yet.
-                break;
+                CONSOLE_ERROR("AircraftDictionary::ApplyAircraftOperationStatusMessage",
+                              "Received unsupported Operation Status (TC=31) message subtype %d. Expected 0 or 1.",
+                              subtype);
         }
+        return false;
     }
-
-    return decode_successful;
-}
-
-bool AircraftDictionary::ApplyAircraftStatusMessage(Aircraft &aircraft, ADSBPacket packet) { return false; }
-
-bool AircraftDictionary::ApplyTargetStateAndStatusInfoMessage(Aircraft &aircraft, ADSBPacket packet) { return false; }
-
-bool AircraftDictionary::ApplyAircraftOperationStatusMessage(Aircraft &aircraft, ADSBPacket packet) {
-    // TODO: get nac/nic, and supplement airborne status from here.
-    // https://mode-s.org/decode/content/ads-b/6-operation-status.html
-    // More about nic/nac here: https://mode-s.org/decode/content/ads-b/7-uncertainty.html
-    return false;
-}

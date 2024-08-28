@@ -62,12 +62,23 @@ class Aircraft {
         kVelocitySourceAirspeedIndicated = 2
     };
 
-    enum BitFlag : uint16_t {
-        kBitFlagIsAirborne = 0,
-        kBitFlagIsMilitary,
-        kBitFlagIdent,
-        kBitFlagAlert,
-        kBitFlagUpdatedBaroAltitude,  // This is the first updated flag bit, used for clearing.
+    enum BitFlag : uint32_t {
+        kBitFlagIsAirborne = 0,          // Received messages or flags indicating the aircraft is airborne.
+        kBitFlagIsMilitary,              // Received at least one military ES message from the aircraft.
+        kBitFlagIsClassB2GroundVehicle,  // Is a class B2 ground vehicle transmitting at <70W.
+        kBitFlagHas1090ESIn,             // Aircraft is equipped with 1090MHz Extended Squitter receive capability.
+        kBitFlagHasUATIn,                // Aircraft can receive UAT.
+        kBitFlagTCASOperational,         // TCAS system on aircraft is functional.
+        kBitFlagSingleAntenna,           // Indicates that the aircraft is using a single antenna. Transmissions may be
+                                         // intermittent.
+        kBitFlagSurfacePositionUsesHeading,  // Surface position heading is aircraft heading and not track angle.
+        kBitFlagHeadingUsesMagneticNorth,    // Heading in surface and airborne position messages is magnetic north, not
+                                             // true north.
+        kBitFlagIdent,                       // IDENT switch is currently active.
+        kBitFlagAlert,                       // Aircraft is indicating an alert.
+        kBitFlagTCASRAActive,                // Indicates a TCAS resolution advisory is active.
+        // Flags after kBitFlagUpdatedBaroAltitude are cleared at the end of every reporting interval.
+        kBitFlagUpdatedBaroAltitude,
         kBitFlagUpdatedGNSSAltitude,
         kBitFlagUpdatedPosition,
         kBitFlagUpdatedTrack,
@@ -76,34 +87,76 @@ class Aircraft {
         kBitFlagNumFlagBits
     };
 
-    uint32_t flags = 0b0;
+    enum NICBit : uint16_t { kNICBitA = 0, kNICBitB = 1, kNICBitC = 2 };
 
-    uint32_t last_seen_timestamp_ms = 0;
+    enum SystemDesignAssurance : uint8_t {
+        kSDASupportedFailureUnknownOrNoSafetyEffect = 0b00,
+        kSDASupportedFailureMinor = 0b01,
+        kSDASupportedFailureMajor = 0b10,
+        kSDASupportedFailureHazardous = 0b11
+    };
 
-    uint16_t transponder_capability = 0;
-    uint32_t icao_address = 0;
-    char callsign[kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
-    uint16_t squawk = 0;
-    AirframeType airframe_type = kAirframeTypeInvalid;
+    enum NICRadiusOfContainment : uint8_t {
+        kRCUnknown = 0,
+        kRCLessThan20NauticalMiles = 1,
+        kRCLessThan8NauticalMiles = 2,
+        kRCLessThan4NauticalMiles = 3,
+        kRCLessThan2NauticalMiles = 4,
+        kRCLessThan1NauticalMile = 5,
+        kRCLessThan0p6NauticalMiles = 6,  // Lump together with <0.5NM and <0.3NM since they share a NIC value.
+        kRCLessThan0p2NauticalMiles = 7,
+        kRCLessThan0p1NauticalMiles = 8,
+        kRCLessThan75Meters = 9,
+        kRCLessThan25Meters = 10,
+        kRCLessThan7p5Meters = 11
+    };
 
-    SurveillanceStatus surveillance_status = kSurveillanceStatusNotSet;
-    bool single_antenna_flag = false;
-    int32_t baro_altitude_ft = 0;
-    int32_t gnss_altitude_ft = 0;
-    AltitudeSource altitude_source = kAltitudeSourceNotSet;
+    enum NICBarometricAltitudeIntegrity : uint8_t {
+        kBAIGillhamInputNotCrossChecked = 0,
+        kBAIGillHamInputCrossCheckedOrNonGillhamSource = 1
+    };
 
-    // Airborne Position Message
-    float latitude_deg = 0.0f;
-    float longitude_deg = 0.0f;
-    bool position_valid = false;
+    enum NACHorizontalVelocityError : uint8_t {
+        kHVEUnknownOrGreaterThanOrEqualTo10MetersPerSecond = 0b000,
+        kHVELessThan10MetersPerSecond = 0b110,
+        kHVELessThan3MetersPerSecond = 0b010,
+        kHVELessThan1MeterPerSecond = 0b011,
+        kHVELessThan0p3MetersPerSecond = 0b100
+    };
 
-    // Airborne Velocities Message
-    float heading_deg = 0.0f;
-    float velocity_kts = 0;
-    VelocitySource velocity_source = kVelocitySourceNotSet;
-    int vertical_rate_fpm = 0.0f;
-    VerticalRateSource vertical_rate_source = kVerticalRateSourceNotSet;
-    int altitude_difference_gnss_above_baro_ft = 0;
+    enum NACEstimatedPositionUncertainty : uint8_t {
+        kEPUUnknownOrGreaterThanOrEqualTo10NauticalMiles = 0,
+        kEPULessThan10NauticalMiles = 1,
+        kEPULessThan4NauticalMiles = 2,
+        kEPULessThan2NauticalMiles = 3,
+        kEPULessThan1NauticalMile = 4,
+        kEPULessThan0p5NauticalMiles = 5,
+        kEPULessThan0p3NauticalMiles = 6,
+        kEPULessThan0p1NauticalMiles = 7,
+        kEPULessThan0p05NauticalMiles = 8,
+        kEPULessThan30Meters = 9,
+        kEPULessThan10Meters = 10,
+        kEPULessThan3Meters = 11
+    };
+
+    // This composite SIL value is SIL | (SIL_supplement << 2).
+    enum SILProbabilityOfExceedingNICRadiusOfContainmnent : uint8_t {
+        kPOERCUnknownOrGreaterThan1em3PerFlightHour = 0b000,
+        kPOERCLessThanOrEqualTo1em3PerFligthHour = 0b001,
+        kPOERCLessThanOrEqualTo1em5PerFlightHour = 0b010,
+        kPOERCLessThanOrEqualTo1em7PerFlightHour = 0b011,
+        kPOERCUnknownOrGreaterThan1em3PerSample = 0b100,
+        kPOERCLessThanOrEqualTo1em3PerSample = 0b101,
+        kPOERCLessThanOrEqualTo1em5PerSample = 0b110,
+        kPOERCLessThanOrEqualTo1em7PerSample = 0b111,
+    };
+
+    enum GeometricVerticalAccurary : uint8_t {
+        kGVAUnknownOrGreaterThan150Meters = 0,
+        GVALessThanOrEqualTo150Meters = 1,
+        GVALessThanOrEqualTo45Meters = 2,
+        GVAReserved = 3
+    };
 
     Aircraft(uint32_t icao_address_in);
     Aircraft();
@@ -138,16 +191,31 @@ class Aircraft {
     bool DecodePosition();
 
     /**
-     * Set a flag bit on the Aircraft.
-     * @param[in] Bit position to set.
+     * Set or clear a bit on the Aircraft.
      */
-    inline void SetBitFlag(BitFlag bit) { flags |= (0b1 << bit); }
+    inline void WriteBitFlag(BitFlag bit, bool value) { value ? flags |= (0b1 << bit) : flags &= ~(0b1 << bit); }
 
     /**
-     * Clear a flag bit on the Aircraft.
-     * @param[in] bit Bit position to clear.
+     * Write a value for a NIC supplement bit. Used to piece together a NIC from separate messages, so that the NIC can
+     * be determined based on a received TypeCode.
+     * @param[in] bit NIC supplement bit to write.
+     * @param[in] value Value to write to the bit.
      */
-    inline void ClearBitFlag(BitFlag bit) { flags &= ~(0b1 << bit); }
+    inline void WriteNICBit(NICBit bit, bool value) {
+        value ? nic_bits |= (0b1 << bit) : nic_bits &= ~(0b1 << bit);
+        // FIXME: Permanently setting NIC bits valid like this can cause invalid navigation integrity values to be read
+        // if a stale NIC supplement bit is being used. Hopefully this isn't a big problem if NIC values don't change
+        // frequently.
+        nic_bits_valid |= (0b1 << bit);
+    }
+
+    /**
+     * Returns whether a NIC supplement bit has been written to. Used to decide when to use NIC supplement bit values to
+     * determine NIC value based on received TypeCodes.
+     * @param[in] bit NIC supplement bit to check.
+     * @retval True if bit has been written to, false otherwise.
+     */
+    inline bool NICBitIsValid(NICBit bit) { return nic_bits & (0b1 << bit); }
 
     /**
      * Checks whether a flag bit is set.
@@ -160,6 +228,57 @@ class Aircraft {
      * Resets just the flag bits that show that something updated within the last reporting interval.
      */
     inline void ResetUpdatedBitFlags() { flags &= ~(~0b0 << kBitFlagUpdatedBaroAltitude); }
+
+    uint32_t flags = 0b0;
+
+    uint32_t last_seen_timestamp_ms = 0;
+
+    uint16_t transponder_capability = 0;
+    uint32_t icao_address = 0;
+    char callsign[kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
+    uint16_t squawk = 0;
+    AirframeType airframe_type = kAirframeTypeInvalid;
+
+    SurveillanceStatus surveillance_status = kSurveillanceStatusNotSet;
+    int32_t baro_altitude_ft = 0;
+    int32_t gnss_altitude_ft = 0;
+    AltitudeSource altitude_source = kAltitudeSourceNotSet;
+
+    // Airborne Position Message
+    float latitude_deg = 0.0f;
+    float longitude_deg = 0.0f;
+    bool position_valid = false;
+
+    // Airborne Velocities Message
+    float heading_deg = 0.0f;
+    float velocity_kts = 0;
+    VelocitySource velocity_source = kVelocitySourceNotSet;
+    int vertical_rate_fpm = 0.0f;
+    VerticalRateSource vertical_rate_source = kVerticalRateSourceNotSet;
+    int altitude_difference_gnss_above_baro_ft = 0;
+
+    // Aircraft Operation Status Message
+    // Navigation Integrity Category (NIC)
+    uint8_t nic_bits_valid = 0b000;  // MSb to LSb: nic_c_valid nic_b_valid nic_a_valid.
+    uint8_t nic_bits = 0b000;        // MSb to LSb: nic_c nic_b nic_a.
+    NICRadiusOfContainment nic = kRCUnknown;
+    NICBarometricAltitudeIntegrity nic_baro = kBAIGillhamInputNotCrossChecked;  // Default to worst case.
+    // Navigation Accuracy Category (NAC)
+    NACHorizontalVelocityError nac_velocity = kHVEUnknownOrGreaterThanOrEqualTo10MetersPerSecond;     // 3 bits.
+    NACEstimatedPositionUncertainty nac_position = kEPUUnknownOrGreaterThanOrEqualTo10NauticalMiles;  // 4 bits.
+    // Geometric Vertical Accuracy (GVA)
+    GeometricVerticalAccurary gva = kGVAUnknownOrGreaterThan150Meters;  // 2 bits.
+    SILProbabilityOfExceedingNICRadiusOfContainmnent sil = kPOERCUnknownOrGreaterThan1em3PerFlightHour;
+    // System Design Assurance
+    SystemDesignAssurance system_design_assurance = kSDASupportedFailureUnknownOrNoSafetyEffect;
+    // GPS Antenna Offset
+    int8_t gnss_antenna_offset_right_of_roll_axis_m =
+        INT8_MAX;  // Defaults to INT8_MAX to indicate it hasn't been read yet.
+    // Aircraft dimensions (on the ground).
+    uint16_t length_m = 0;
+    uint16_t width_m = 0;
+
+    int8_t adsb_version = -1;
 
    private:
     struct CPRPacket {
