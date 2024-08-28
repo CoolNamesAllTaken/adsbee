@@ -13,4 +13,5 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     utils
     comms
     comms/beast
+    comms/csbee
 )

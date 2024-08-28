@@ -22,31 +22,38 @@ class ADSBee {
     static constexpr uint16_t kMaxNumTransponderPackets =
         100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
     static const uint32_t kStatusLEDOnMs = 10;
+    static const uint16_t kNumDemodStateMachines = 2;
+    static const uint32_t kStatsUpdateIntervalMs = 1000;  // [ms] How often statistics update.
+
+    static const uint32_t kTLLearningIntervalMs =
+        10000;  // [ms] Length of Simulated Annealing interval for learning trigger level.
+    static const uint16_t kTLLearningNumCycles =
+        100;  // Number of simulated annealing cycles for learning trigger level.
+    static const uint16_t kTLLearningStartTemperatureMV =
+        1000;  // [mV] Starting value for simulated annealing temperature when learning triger level. This corresponds
+               // to the maximum value that the trigger level could be moved (up or down) when exploring a neighbor
+               // state.
 
     struct ADSBeeConfig {
         PIO preamble_detector_pio = pio0;
-        uint preamble_detector_demod_irq = PIO0_IRQ_0;
+        uint preamble_detector_demod_begin_irq = IO_IRQ_BANK0;
         PIO message_demodulator_pio = pio1;
+        uint preamble_detector_demod_complete_irq = PIO0_IRQ_0;
 
         uint16_t status_led_pin = 15;
-        uint16_t pulses_pin = 19;  // Reading ADS-B on GPIO22. Will look for DECODE signal on GPIO22-1 = GPIO21.
-        uint16_t demod_in_pin = pulses_pin + 1;
-        uint16_t demod_out_pin = 21;  // Use GPIO20 as DECODE signal output, will be wired to GPIO21 as input.
-        uint16_t recovered_clk_pin =
-            22;  // Use GPIO22 for the decode PIO program to output its recovered clock (for debugging only).
+        // Reading ADS-B on GPIO19. Will look for DEMOD signal on GPIO20.
+        uint16_t pulses_pins[kNumDemodStateMachines] = {19, 19};
+        uint16_t demod_pins[kNumDemodStateMachines] = {20, 20};
+        // Use GPIO22 for the decode PIO program to output its recovered clock (for debugging only).
+        uint16_t recovered_clk_pins[kNumDemodStateMachines] = {22, 22};
         // GPIO 24-25 used as PWM outputs for setting analog comparator threshold voltages.
-        uint16_t tl_lo_pwm_pin = 25;
-        uint16_t tl_hi_pwm_pin = 24;
+        uint16_t tl_pwm_pin = 25;
         // GPIO 26-27 used as ADC inputs for reading analog comparator threshold voltages after RF filer.
-        uint16_t tl_lo_adc_pin = 27;
-        uint16_t tl_lo_adc_input = 1;
-        uint16_t tl_hi_adc_pin = 26;
-        uint16_t tl_hi_adc_input = 0;
+        uint16_t tl_adc_pin = 27;
+        uint16_t tl_adc_input = 1;
         // GPIO 28 used as ADC input for the power level of the last decoded packet.
-        uint16_t rssi_hold_adc_pin = 28;
-        uint16_t rssi_hold_adc_input = 2;
-        // GPIO 8 is used for clearing the RSSI peak detector.
-        uint16_t rssi_clear_pin = 8;
+        uint16_t rssi_adc_pin = 28;
+        uint16_t rssi_adc_input = 2;
         // GPIO 2-3 are used for the EEPROM and rx gain digipot I2C bus via I2C1.
         i2c_inst_t *onboard_i2c = i2c1;
         uint16_t onboard_i2c_sda_pin = 2;
@@ -65,7 +72,7 @@ class ADSBee {
 
     void SetReceiverEnable(bool is_enabled) {
         is_enabled_ = is_enabled;
-        irq_set_enabled(config_.preamble_detector_demod_irq, is_enabled_);
+        irq_set_enabled(config_.preamble_detector_demod_complete_irq, is_enabled_);
     }
 
     bool ReceiverIsEnabled() { return is_enabled_; }
@@ -80,25 +87,13 @@ class ADSBee {
     /**
      * ISR for GPIO interrupts.
      */
-    void GPIOIRQISR(uint gpio, uint32_t event_mask);
-
-    /**
-     * Returns the last written value of rx_gain.
-     * @retval Gain (integer ratio between 1-101).
-     */
-    int GetRxGain() { return rx_gain_; }
-
-    /**
-     * Return the value of the high Minimum Trigger Level threshold in milliVolts.
-     * @retval TL in milliVolts.
-     */
-    int GetTLHiMilliVolts() { return tl_hi_mv_; }
+    void OnDemodBegin(uint gpio, uint32_t event_mask);
 
     /**
      * Return the value of the low Minimum Trigger Level threshold in milliVolts.
      * @retval TL in milliVolts.
      */
-    int GetTLLoMilliVolts() { return tl_lo_mv_; }
+    int GetTLMilliVolts() { return tl_mv_; }
 
     /**
      * ISR triggered by DECODE completing, via PIO0 IRQ0.
@@ -129,6 +124,13 @@ class ADSBee {
     inline uint64_t GetMLAT12MHzCounts(uint16_t num_bits = 48);
 
     /**
+     * Get the current temperature used in learning trigger level (simulated annealing). A temperature of 0 means
+     * learning has completed.
+     * @retval Current temperature used for simulated annealing, in milliVolts.
+     */
+    uint16_t GetTLLearningTemperatureMV();
+
+    /**
      * Read the high Minimum Trigger Level threshold via ADC.
      * @retval TL in milliVolts.
      */
@@ -138,7 +140,7 @@ class ADSBee {
      * Read the low Minimum Trigger Level threshold via ADC.
      * @retval TL in milliVolts.
      */
-    int ReadTLLoMilliVolts();
+    int ReadTLMilliVolts();
 
     /**
      * Set the high Minimum Trigger Level (TL) at the AD8314 output in milliVolts.
@@ -153,39 +155,62 @@ class ADSBee {
 
     /**
      * Set the low Minimum Trigger Level (TL) at the AD8314 output in milliVolts.
-     * @param[in] tl_lo_mv Voltage level for a "low" trigger on the V_DN AD8314 output. The AD8314 has a nominal
+     * @param[in] tl_mv Voltage level for a "low" trigger on the V_DN AD8314 output. The AD8314 has a nominal
      * output voltage of 2.25V on V_DN, with a logarithmic slope of around -42.6mV/dB and a minimum output voltage of
      * 0.05V. Thus, power levels received at the input of the AD8314 correspond to the following voltages. 2250mV =
      * -49dBm 50mV = -2.6dBm Note that there is a +30dB LNA gain stage in front of the AD8314, so for the overall
      * receiver, the TL values are more like: 2250mV = -79dBm 50mV = -32.6dBm
      * @retval True if succeeded, False if TL value was out of range.
      */
-    bool SetTLLoMilliVolts(int tl_lo_mv);
+    bool SetTLMilliVolts(int tl_mv);
 
     /**
-     * Set the value of the receive signal path gain digipot over I2C and store the value for reference.
-     * @param[in] rx_gain Gain (integer ratio between 1-101).
-     * @retval True if setting was successful, false otherwise.
+     * Start learning the trigger level through Simulated Annealing. Will begin kTLLearningNumCycles annealing cycles
+     * with an annealing interval of kTLLearningIntervalMs milliseconds. Can be provided with maximum and minimum
+     * trigger level bounds to allow a narrower search.
+     * @param[in] tl_learning_num_cycles Number of cycles to use while annealing trigger level (sets the amount that the
+     * annealing temperature is decreased each cycle). Optional, defaults to kTLLearningNumCycles.
+     * @param[in] tl_learning_start_temperature_mv Annealing temperature to start with, in mV.
+     * @param[in] tl_min_mv Minimum trigger level to use while learning, in milliVolts. Optional, defaults to full scale
+     * (kTLMinMV).
+     * @param[in] tl_max_mv Maximum trigger level to use while learning, in milliVolts. Optional, defaults to full scale
+     * (kTLMaxMV).
      */
-    bool SetRxGain(int rx_gain);
+    void StartTLLearning(uint16_t tl_learning_num_cycles = kTLLearningNumCycles,
+                         uint16_t tl_learning_start_temperature_mv = kTLLearningStartTemperatureMV,
+                         uint16_t tl_min_mv = kTLMinMV, uint16_t tl_max_mv = kTLMaxMV);
 
     /**
-     * Reads the wiper value from the receive signal path gain digipot over I2C and calculates then returns the
-     * resulting gain value.
-     * @retval Gain ratio (integer between 1-101).
+     * Returns the Receive Signal Strength Indicator (RSSI) of the signal currently provided by the RF power detector,
+     * in mV.
+     * @retval Voltage from the RF power detector, in mV.
      */
-    int ReadRxGain();
+    inline int ReadRSSIMilliVolts();
 
     /**
-     * Returns the Receive Signal Strength Indicator (RSSI) of the previous message, in dBm.
+     * Returns the Receive Signal Strength Indicator (RSSI) of the message that is currently being provided by the RF
+     * power detector, in dBm. makes use of ReadRSSIMilliVolts().
+     * @retval Voltage form the RF power detector converted to dBm using the chart in the AD8313 datasheet.
      */
-    int GetLastMessageRSSIdBm() {
-        int normalized_rssi_adc_counts = last_message_rssi_adc_counts_ / MAX(rx_gain_, 1);  // Avoid divide by 0.
-        int rssi_mv = normalized_rssi_adc_counts * 3300 / 4095;
-        return 60 * (rssi_mv - 1600) / 1000;  // AD8313 0dBm intercept at 1.6V, slope is 60dBm/V.
-    }
+    inline int ReadRSSIdBm();
 
-    uint64_t GetLastMessageMLAT48MHzCounts() { return last_message_mlat_48mhz_counts_; }
+    /**
+     * Returns the number of demodulations attempted in the last kStatsUpdateIntervalMs milliseconds.
+     * @retval Number of demods attempted.
+     */
+    inline uint16_t GetStatsNumDemods() { return stats_num_demods_; }
+
+    /**
+     * Returns the number of valid Mode A / Mode C packets decoded in the last kStatsUpdateIntervalMs milliseconds.
+     * @retval Number of valid packets received with Downlink Format = 4, 5.
+     */
+    inline uint16_t GetStatsNumModeACPackets() { return stats_num_valid_mode_ac_packets_; }
+
+    /**
+     * Returns the number of valid Mode S packets decoded in the last kStatsUpdateIntervalMs milliseconds.
+     * @retval Number of valid packets received with Downlink Format != 4, 5.
+     */
+    inline uint16_t GetStatsNumModeSPackets() { return stats_num_valid_mode_s_packets_; }
 
     PFBQueue<RawTransponderPacket> transponder_packet_queue = PFBQueue<RawTransponderPacket>(
         {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = transponder_packet_queue_buffer_});
@@ -202,40 +227,46 @@ class ADSBee {
     uint32_t message_demodulator_sm_ = 0;
     uint32_t message_demodulator_offset_ = 0;
 
-    uint32_t led_off_timestamp_ms_ = 0;
+    uint32_t led_on_timestamp_ms_ = 0;
 
-    uint16_t tl_lo_pwm_slice_ = 0;
-    uint16_t tl_hi_pwm_slice_ = 0;
-    uint16_t tl_hi_pwm_chan_ = 0;
-    uint16_t tl_lo_pwm_chan_ = 0;
+    uint16_t tl_pwm_slice_ = 0;
+    uint16_t tl_pwm_chan_ = 0;
 
-    uint16_t tl_hi_mv_ = SettingsManager::kDefaultTLHiMV;
-    uint16_t tl_lo_mv_ = SettingsManager::kDefaultTLLoMV;
-    uint16_t tl_hi_pwm_count_ = 0;  // out of kTLMaxPWMCount
-    uint16_t tl_lo_pwm_count_ = 0;  // out of kTLMaxPWMCount
+    uint16_t tl_mv_ = SettingsManager::kDefaultTLMV;
+    uint16_t tl_pwm_count_ = 0;  // out of kTLMaxPWMCount
 
-    uint16_t tl_lo_adc_counts_ = 0;
-    uint16_t tl_hi_adc_counts_ = 0;
+    uint16_t tl_adc_counts_ = 0;
 
-    // Messages are sampled and ingested into the circular buffer at different times. A message might be getting
-    // ingested while another sample interval is underway! Separate these values so that we don't accidentally overwrite
-    // sampled values from a previous message.
-    uint16_t sampled_rssi_adc_counts_;
-    uint16_t last_message_rssi_adc_counts_;
-    uint64_t sampled_mlat_48mhz_counts_;
-    uint64_t last_message_mlat_48mhz_counts_;
+    uint32_t tl_learning_cycle_start_timestamp_ms_ = 0;
+    uint16_t tl_learning_temperature_mv_ = 0;  // Don't learn automatically.
+    int16_t tl_learning_temperature_step_mv_ = 0;
+    uint16_t tl_learning_max_mv_ = kTLMaxMV;
+    uint16_t tl_learning_min_mv_ = kTLMinMV;
+    int16_t tl_learning_num_valid_packets_ = 0;
+    int16_t tl_learning_prev_num_valid_packets_ = 1;  // Set to 1 to avoid dividing by 0.
+    uint16_t tl_learning_prev_tl_mv_ = tl_mv_;
 
     uint32_t mlat_counter_1s_wraps_ = 0;
 
-    uint32_t rx_gain_ = SettingsManager::kDefaultRxGain;
-
-    uint32_t rx_buffer_[kRxQueueLenWords + 1];
-    PFBQueue<uint32_t> rx_queue_ =
-        PFBQueue<uint32_t>({.buf_len_num_elements = kRxQueueLenWords + 1, .buffer = rx_buffer_});
+    RawTransponderPacket rx_packet_;
     RawTransponderPacket transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
-    uint16_t last_demod_num_words_ingested_ = 0;
+
+    // These values are continuous counters of number of packets of each type received. Don't use these values for
+    // anything external!
+    uint16_t stats_num_demods_counter_ = 0;
+    uint16_t stats_num_valid_mode_ac_packets_counter_ = 0;
+    uint16_t stats_num_valid_mode_s_packets_counter_ = 0;
+
+    // Timestamp of the last time that the packet counters were stored and reset to 0.
+    uint32_t stats_last_update_timestamp_ms_ = 0;  // [ms]
+
+    // These values are updated every stats update interval so that they always contain counts across a consistent
+    // interval. Use these values for anything important!
+    uint16_t stats_num_demods_ = 0;
+    uint16_t stats_num_valid_mode_ac_packets_ = 0;
+    uint16_t stats_num_valid_mode_s_packets_ = 0;
 
     bool is_enabled_ = true;
 };

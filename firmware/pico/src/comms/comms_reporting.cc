@@ -1,6 +1,7 @@
 #include "ads_bee.hh"
 #include "beast_utils.hh"
 #include "comms.hh"
+#include "csbee_utils.hh"
 #include "hal.hh"  // For timestamping.
 #include "mavlink/mavlink.h"
 #include "unit_conversions.hh"
@@ -76,6 +77,16 @@ bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface,
         for (uint16_t j = 0; j < num_bytes_in_frame; j++) {
             comms_manager.iface_putc(iface, char(beast_frame_buf[j]));
         }
+    }
+    return true;
+}
+
+bool CommsManager::ReportCSBee(SettingsManager::SerialInterface iface) {
+    for (auto &itr : ads_bee.aircraft_dictionary.dict) {
+        const Aircraft &aircraft = itr.second;
+
+        char message[kCSBeeMessageStrMaxLen];
+        WriteCSBeeAircraftMessageStr(message, aircraft);
     }
     return true;
 }

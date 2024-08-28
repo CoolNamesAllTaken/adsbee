@@ -35,9 +35,7 @@ bool SettingsManager::Load() {
 }
 
 bool SettingsManager::Save() {
-    settings.rx_gain = ads_bee.GetRxGain();
-    settings.tl_lo_mv = ads_bee.GetTLLoMilliVolts();
-    settings.tl_hi_mv = ads_bee.GetTLHiMilliVolts();
+    settings.tl_mv = ads_bee.GetTLMilliVolts();
 
     // Save log level.
     settings.log_level = comms_manager.log_level;
@@ -73,9 +71,7 @@ void SettingsManager::ResetToDefaults() {
 }
 
 void SettingsManager::Apply() {
-    ads_bee.SetTLLoMilliVolts(settings.tl_lo_mv);
-    ads_bee.SetTLHiMilliVolts(settings.tl_hi_mv);
-    ads_bee.SetRxGain(settings.rx_gain);
+    ads_bee.SetTLMilliVolts(settings.tl_mv);
 
     // Apply log level.
     comms_manager.log_level = settings.log_level;

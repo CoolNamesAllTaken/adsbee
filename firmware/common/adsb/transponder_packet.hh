@@ -36,7 +36,7 @@ class DecodedTransponderPacket {
     static const uint16_t kDFNUmBits = 5;     // [1-5] Downlink Format bitlength.
     static const uint16_t kMaxDFStrLen = 50;  // Max length of TypeCode string.
     static const uint16_t kDebugStrLen = 200;
-    static const uint16_t kSquitterPacketNumBits = 56;
+    static const uint16_t kSquitterPacketLenBits = 56;
     static const uint16_t kSquitterPacketNumWords32 = 2;  // 56 bits = 1.75 words, round up to 2.
     static const uint16_t kExtendedSquitterPacketLenBits = 112;
     static const uint16_t kExtendedSquitterPacketNumWords32 = 4;  // 112 bits = 3.5 words, round up to 4.
@@ -45,17 +45,18 @@ class DecodedTransponderPacket {
     enum DownlinkFormat {
         kDownlinkFormatInvalid = -1,
         // DF 0-11 = short messages (56 bits)
-        kDownlinkFormatShortRangeAirSurveillance = 0,
+        kDownlinkFormatShortRangeAirToAirSurveillance = 0,  // All-call request from ground station.
         kDownlinkFormatAltitudeReply = 4,
         kDownlinkFormatIdentityReply = 5,
         kDownlinkFormatAllCallReply = 11,
         // DF 16-24 = long messages (112 bits)
-        kDownlinkFormatLongRangeAirSurveillance = 16,
-        kDownlinkFormatExtendedSquitter = 17,
-        kDownlinkFormatExtendedSquitterNonTransponder = 18,
-        kDownlinkFormatMilitaryExtendedSquitter = 19,
-        kDownlinkFormatCommBAltitudeReply = 20,
-        kDownlinkFormatCommBIdentityReply = 21,
+        kDownlinkFormatLongRangeAirToAirSurveillance = 16,   // ACAS/TCAS message.
+        kDownlinkFormatExtendedSquitter = 17,                // Aircraft (taxiing or airborne).
+        kDownlinkFormatExtendedSquitterNonTransponder = 18,  // Surface vehicle or aircraft in special ground operation.
+        kDownlinkFormatMilitaryExtendedSquitter = 19,        // Used by military aircraft, protocol is not public.
+        // We don't currently do anything with CommB, CommC, CommD.
+        kDownlinkFormatCommBAltitudeReply = 20,  // Data being sent as reply to request from Comm-B ground station.
+        kDownlinkFormatCommBIdentityReply = 21,  // Reply to ground station via Comm-C (higher capacity than Comm-B).
         kDownlinkFormatCommDExtendedLengthMessage = 24
         // DF 1-3, 6-10, 11-15, 22-23 not used
     };
@@ -94,6 +95,13 @@ class DecodedTransponderPacket {
 
     bool IsValid() const { return is_valid_; };
 
+    /**
+     * Forces the validity of the packet to true. Used to mark 56-bit (Squitter) packets as valid after they have been
+     * externally verified against the aircraft dictionary, since they don't have a 0 CRC and are thus set as invalid
+     * upon construction.
+     */
+    void ForceValid() { is_valid_ = true; }
+
     int GetRSSIdBm() const { return packet.rssi_dbm; }
     uint64_t GetMLAT12MHzCounter() const { return (packet.mlat_48mhz_64bit_counts >> 2) & 0xFFFFFFFFFFFF; }
     uint16_t GetDownlinkFormat() const { return downlink_format_; };
@@ -112,7 +120,7 @@ class DecodedTransponderPacket {
 
     // Exposed for testing only.
     uint32_t Get24BitWordFromPacketBuffer(uint16_t first_bit_index) const {
-        return get_n_bit_word_from_buffer(24, first_bit_index, packet.buffer);
+        return GetNBitWordFromBuffer(24, first_bit_index, packet.buffer);
     };
 
     /**
@@ -155,41 +163,47 @@ class ADSBPacket : public DecodedTransponderPacket {
      * the parent of the ADSBPacket. Think of this as a way to use the ADSBPacket as a "window" into the contents of the
      * parent DecodedTransponderPacket. The ADSBPacket cannot exist without the parent DecodedTransponderPacket!
      */
-    ADSBPacket(const DecodedTransponderPacket &packet) : DecodedTransponderPacket(packet) { ConstructADSBPacket(); };
+    ADSBPacket(const DecodedTransponderPacket &decoded_packet) : DecodedTransponderPacket(decoded_packet) {
+        ConstructADSBPacket();
+    };
 
     // Bits 6-8 [3]: Capability (CA)
     // Bits 9-32 [24]: ICAO Aircraft Address (ICAO)
     // Bits 33-88 [56]: Message, Extended Squitter (ME)
     // (Bits 33-37 [5]): Type code (TC)
-    enum TypeCode {
+    enum TypeCode : uint8_t {
         kTypeCodeInvalid = 0,
-        kTypeCodeAircraftID = 1,                 // 1–4	Aircraft identification
-        kTypeCodeSurfacePosition = 5,            // 5–8	Surface position
+        kTypeCodeAircraftID = 1,                 // 1–4     Aircraft identification
+        kTypeCodeSurfacePosition = 5,            // 5–8     Surface position
         kTypeCodeAirbornePositionBaroAlt = 9,    // 9–18	Airborne position (w/Baro Altitude)
-        kTypeCodeAirborneVelocities = 19,        // 19	Airborne velocities
+        kTypeCodeAirborneVelocities = 19,        // 19      Airborne velocities
         kTypeCodeAirbornePositionGNSSAlt = 20,   // 20–22	Airborne position (w/GNSS Height)
         kTypeCodeReserved = 23,                  // 23–27	Reserved
-        kTypeCodeAircraftStatus = 28,            // 28	Aircraft status
-        kTypeCodeTargetStateAndStatusInfo = 29,  // 29	Target state and status information
-        kTypeCodeAircraftOperationStatus = 31    // 31	Aircraft operation status
+        kTypeCodeAircraftStatus = 28,            // 28      Aircraft status
+        kTypeCodeTargetStateAndStatusInfo = 29,  // 29      Target state and status information
+        kTypeCodeAircraftOperationStatus = 31    // 31      Aircraft operation status
     };
     // Bits 89-112 [24]: Parity / Interrogator ID (PI)
 
     // Subtype enums used for specific packet types (not instantiated as part of the ADSBPacket class).
-    enum AirborneVelocitiesSubtype {
+    // Airborne Velocitites (TC = 19)
+    enum AirborneVelocitiesSubtype : uint8_t {
         kAirborneVelocitiesGroundSpeedSubsonic = 1,
         kAirborneVelocitiesGroundSpeedSupersonic = 2,
         kAirborneVelocitiesAirspeedSubsonic = 3,
         kAirborneVelocitiesAirspeedSupersonic = 4
     };
 
-    uint16_t GetCapability() const { return capability_; };
-    uint16_t GetTypeCode() const { return typecode_; };
+    // Operation Status (TC = 31)
+    enum OperationStatusSubtype : uint8_t { kOperationStatusSubtypeAirborne = 0, kOperationStatusSubtypeSurface = 1 };
+
+    inline uint16_t GetCapability() const { return capability_; };
+    inline uint16_t GetTypeCode() const { return typecode_; };
     TypeCode GetTypeCodeEnum() const;
 
     // Exposed for testing only.
-    uint32_t GetNBitWordFromMessage(uint16_t n, uint16_t first_bit_index) const {
-        return get_n_bit_word_from_buffer(n, kMEFirstBitIndex + first_bit_index, packet.buffer);
+    inline uint32_t GetNBitWordFromMessage(uint16_t n, uint16_t first_bit_index) const {
+        return GetNBitWordFromBuffer(n, kMEFirstBitIndex + first_bit_index, packet.buffer);
     };
 
    private:
@@ -198,6 +212,80 @@ class ADSBPacket : public DecodedTransponderPacket {
     uint16_t typecode_ = static_cast<uint16_t>(kTypeCodeInvalid);
 
     void ConstructADSBPacket();
+};
+
+class ModeCPacket : public DecodedTransponderPacket {
+   public:
+    enum DownlinkRequest : uint8_t {
+        kDownlinkRequestNone = 0b00000,
+        kDownlinkRequestSendCommBMessage = 0b00001,
+        kDownlinkRequestCommBBroadcastMessage1Available = 0b00100,
+        kDownlinkRequestCommBBroadcastMessage2Available = 0b00101
+    };
+
+    enum UtilityMessageType : uint8_t {
+        kUtilityMessageNoInformation = 0b00,
+        kUtilityMessageCommBInterrogatorIdentifierCode = 0b10,
+        kUtilityMessageCommCInterrogatorIdentifierCode = 0b10,
+        kUtilityMessageCommDInterrogatorIdentifierCode = 0b11
+    };
+
+    ModeCPacket(const DecodedTransponderPacket &decoded_packet);
+
+    bool IsAirborne() const { return is_airborne_; }
+    bool HasAlert() const { return has_alert_; }
+    bool HasIdent() const { return has_ident_; }
+    DownlinkRequest GetDownlinkRequest() const { return downlink_request_; }
+    uint8_t GetUtilityMessage() const { return utility_message_; }
+    int32_t GetAltitudeFt() const { return altitude_ft_; }
+
+   private:
+    bool is_airborne_ = false;
+    bool has_alert_ = false;
+    bool has_ident_ = false;
+
+    DownlinkRequest downlink_request_ = kDownlinkRequestNone;
+    uint8_t utility_message_ = 0b0;
+    UtilityMessageType utility_message_type_ = kUtilityMessageNoInformation;
+
+    int32_t altitude_ft_ = -1;
+};
+
+class ModeAPacket : public DecodedTransponderPacket {
+   public:
+    enum DownlinkRequest : uint8_t {
+        kDownlinkRequestNone = 0b00000,
+        kDownlinkRequestSendCommBMessage = 0b00001,
+        kDownlinkRequestCommBBroadcastMessage1Available = 0b00100,
+        kDownlinkRequestCommBBroadcastMessage2Available = 0b00101
+    };
+
+    enum UtilityMessageType : uint8_t {
+        kUtilityMessageNoInformation = 0b00,
+        kUtilityMessageCommBInterrogatorIdentifierCode = 0b10,
+        kUtilityMessageCommCInterrogatorIdentifierCode = 0b10,
+        kUtilityMessageCommDInterrogatorIdentifierCode = 0b11
+    };
+
+    ModeAPacket(const DecodedTransponderPacket &decoded_packet);
+
+    bool IsAirborne() const { return is_airborne_; }
+    bool HasAlert() const { return has_alert_; }
+    bool HasIdent() const { return has_ident_; }
+    DownlinkRequest GetDownlinkRequest() const { return downlink_request_; }
+    uint8_t GetUtilityMessage() const { return utility_message_; }
+    uint16_t GetSquawk() const { return squawk_; }
+
+   private:
+    bool is_airborne_ = false;
+    bool has_alert_ = false;
+    bool has_ident_ = false;
+
+    DownlinkRequest downlink_request_ = kDownlinkRequestNone;
+    uint8_t utility_message_ = 0b0;
+    UtilityMessageType utility_message_type_ = kUtilityMessageNoInformation;
+
+    uint16_t squawk_ = 0xFFFF;
 };
 
 #endif /* _ADSB_PACKET_HH_ */

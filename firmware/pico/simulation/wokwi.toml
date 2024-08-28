@@ -1,0 +1,4 @@
+[wokwi]
+version = 1
+firmware = '../build/ads_bee.hex'
+elf = '../build/ads_bee.elf'
