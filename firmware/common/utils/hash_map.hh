@@ -80,27 +80,27 @@ class HashMap {
     }
 
     iterator begin() noexcept {
-        //todo
+        return Iterator(_data, _usageList);
     }
 
     const_iterator begin() const noexcept {
-        //todo
+        return Iterator(_data, _usageList);
     }
 
     const_iterator cbegin() const noexcept {
-        //todo
+        return Iterator(_data, _usageList);
     }
 
     iterator end() noexcept{
-        //todo
+        return Iterator(_data, _usageList, MaxSize);
     }
 
     const_iterator end() const noexcept {
-        //todo
+        return Iterator(_data, _usageList, MaxSize);
     }
 
     const_iterator cend() const noexcept {
-        //todo
+        return Iterator(_data, _usageList, MaxSize);
     }
 
     iterator erase(iterator pos) {
