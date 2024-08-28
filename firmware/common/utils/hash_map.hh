@@ -147,6 +147,14 @@ class HashMap {
             return i.first = key;
         });
     }
+
+    bool empty() const noexcept {
+        //todo
+    }
+
+    T& at(const Key& key) {
+        //todo
+    }
     //end STL standard 
 
     std::pair<iterator, bool> insert(const value_type& value) {
