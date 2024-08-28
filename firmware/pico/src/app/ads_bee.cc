@@ -140,6 +140,12 @@ bool ADSBee::Update() {
         gpio_put(config_.status_led_pin, 0);
     }
 
+    // Prune aircraft dictionary. Need to do this up front so that we don't end up with a negative timestamp delta
+    // caused by packets being ingested more recently than the timestamp we take at the beginning of this function.
+    if (last_aircraft_dictionary_update_timestamp_ms_ - timestamp_ms > config_.aircraft_dictionary_update_interval_ms) {
+        aircraft_dictionary.Update(timestamp_ms);
+    }
+
     // Ingest new packets into the dictionary.
     RawTransponderPacket raw_packet;
     while (transponder_packet_queue.Pop(raw_packet)) {
@@ -237,10 +243,6 @@ bool ADSBee::Update() {
     // Update PWM output duty cycle.
     pwm_set_chan_level(tl_pwm_slice_, tl_pwm_chan_, tl_pwm_count_);
 
-    // Prune aircraft dictionary.
-    if (last_aircraft_dictionary_update_timestamp_ms_ - timestamp_ms > config_.aircraft_dictionary_update_interval_ms) {
-        aircraft_dictionary.Update(timestamp_ms);
-    }
     return true;
 }
 

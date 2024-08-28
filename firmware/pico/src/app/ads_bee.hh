@@ -238,7 +238,7 @@ class ADSBee {
     uint16_t tl_adc_counts_ = 0;
 
     uint32_t tl_learning_cycle_start_timestamp_ms_ = 0;
-    uint16_t tl_learning_temperature_mv_ = kTLLearningStartTemperatureMV;
+    uint16_t tl_learning_temperature_mv_ = 0;  // Don't learn automatically.
     int16_t tl_learning_temperature_step_mv_ = 0;
     uint16_t tl_learning_max_mv_ = kTLMaxMV;
     uint16_t tl_learning_min_mv_ = kTLMinMV;

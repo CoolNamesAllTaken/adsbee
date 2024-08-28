@@ -97,18 +97,18 @@ class Aircraft {
     };
 
     enum NICRadiusOfContainment : uint8_t {
-        kRCUnknown = 0,
-        kRCLessThan20NauticalMiles = 1,
-        kRCLessThan8NauticalMiles = 2,
-        kRCLessThan4NauticalMiles = 3,
-        kRCLessThan2NauticalMiles = 4,
-        kRCLessThan1NauticalMile = 5,
-        kRCLessThan0p6NauticalMiles = 6,  // Lump together with <0.5NM and <0.3NM since they share a NIC value.
-        kRCLessThan0p2NauticalMiles = 7,
-        kRCLessThan0p1NauticalMiles = 8,
-        kRCLessThan75Meters = 9,
-        kRCLessThan25Meters = 10,
-        kRCLessThan7p5Meters = 11
+        kROCUnknown = 0,
+        kROCLessThan20NauticalMiles = 1,
+        kROCLessThan8NauticalMiles = 2,
+        kROCLessThan4NauticalMiles = 3,
+        kROCLessThan2NauticalMiles = 4,
+        kROCLessThan1NauticalMile = 5,
+        kROCLessThan0p6NauticalMiles = 6,  // Lump together with <0.5NM and <0.3NM since they share a NIC value.
+        kROCLessThan0p2NauticalMiles = 7,
+        kROCLessThan0p1NauticalMiles = 8,
+        kROCLessThan75Meters = 9,
+        kROCLessThan25Meters = 10,
+        kROCLessThan7p5Meters = 11
     };
 
     enum NICBarometricAltitudeIntegrity : uint8_t {
@@ -261,7 +261,7 @@ class Aircraft {
     // Navigation Integrity Category (NIC)
     uint8_t nic_bits_valid = 0b000;  // MSb to LSb: nic_c_valid nic_b_valid nic_a_valid.
     uint8_t nic_bits = 0b000;        // MSb to LSb: nic_c nic_b nic_a.
-    NICRadiusOfContainment nic = kRCUnknown;
+    NICRadiusOfContainment nic = kROCUnknown;
     NICBarometricAltitudeIntegrity nic_baro = kBAIGillhamInputNotCrossChecked;  // Default to worst case.
     // Navigation Accuracy Category (NAC)
     NACHorizontalVelocityError nac_velocity = kHVEUnknownOrGreaterThanOrEqualTo10MetersPerSecond;     // 3 bits.
