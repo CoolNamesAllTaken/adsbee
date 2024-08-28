@@ -105,12 +105,14 @@ class HashMap {
 
     iterator erase(iterator pos) {
         (*_usageList)[pos._index] = false;
+        _size--;
         return Iterator(_data, _usageList, pos._index+1);
     }
 
     size_type erase(const Key& key) {
         auto& element = (*_usageList)[find(key)._index];
         if (element) {
+            _size--;
             element = false;
             return 1;
         } else {
