@@ -119,7 +119,7 @@ class HashMap {
     }
 
     size_type size() const noexcept {
-        // todo
+        return _size;
     }
 
     T& operator[](const Key& key) {
