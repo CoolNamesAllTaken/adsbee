@@ -74,7 +74,9 @@ class HashMap {
     using const_iterator = const Iterator;
 
     void clear() noexcept {
-        // todo
+        for (size_type i = 0; i < MaxSize; i++){
+            (*_usageList)[i] = false;
+        }
     }
 
     iterator begin() noexcept {

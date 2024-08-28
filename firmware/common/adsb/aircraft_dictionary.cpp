@@ -1,6 +1,5 @@
 #include "aircraft_dictionary.hh"
 
-#include <algorithm>
 #include <cmath>
 
 #include "comms.hh"  // For debug logging.
