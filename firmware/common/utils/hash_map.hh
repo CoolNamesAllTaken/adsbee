@@ -104,11 +104,18 @@ class HashMap {
     }
 
     iterator erase(iterator pos) {
-        //todo
+        (*_usageList)[pos._index] = false;
+        return Iterator(_data, _usageList, pos._index+1);
     }
 
     size_type erase(const Key& key) {
-        //todo
+        auto& element = (*_usageList)[find(key)._index];
+        if (element) {
+            element = false;
+            return 1;
+        } else {
+            return 0;
+        }
     }
 
     size_type size() const noexcept {
