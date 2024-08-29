@@ -13,7 +13,7 @@ const char* kSoftwareVersionStr = "0.0.1";
 
 ADSBee::ADSBeeConfig ads_bee_config;
 // Override default config params here.
-ADSBee ads_bee = ADSBee(ads_bee_config);
+ADSBee adsbee = ADSBee(ads_bee_config);
 CommsManager comms_manager = CommsManager({});
 ESP32SerialFlasher esp32_flasher = ESP32SerialFlasher({});
 EEPROM eeprom = EEPROM({});
@@ -23,7 +23,7 @@ SPICoprocessor esp32 = SPICoprocessor({});
 int main() {
     bi_decl(bi_program_description("ADS-Bee ADSB Receiver"));
 
-    ads_bee.Init();
+    adsbee.Init();
     eeprom.Init();
     comms_manager.Init();
     comms_manager.iface_printf(SettingsManager::SerialInterface::kConsole, "ADSBee 1090\r\nSoftware Version %s\r\n",
@@ -48,7 +48,7 @@ int main() {
     test_aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeSourceBaro;
     test_aircraft.heading_deg = 100;
     test_aircraft.velocity_kts = 200;
-    ads_bee.aircraft_dictionary.InsertAircraft(test_aircraft);
+    adsbee.aircraft_dictionary.InsertAircraft(test_aircraft);
 
     uint16_t esp32_test_packet_interval_ms = 1000;
     uint32_t esp32_test_packet_last_sent_timestamp_ms = get_time_since_boot_ms();
@@ -68,6 +68,6 @@ int main() {
 
         // Loop forever.
         comms_manager.Update();
-        ads_bee.Update();
+        adsbee.Update();
     }
 }

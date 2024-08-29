@@ -35,13 +35,13 @@ class CommsManager {
     bool Update();
 
     CPP_AT_CALLBACK(ATBaudrateCallback);
-    CPP_AT_CALLBACK(ATLogLevelCallback);
+    CPP_AT_CALLBACK(ATBiasTeeEnableCallback);
     CPP_AT_CALLBACK(ATFeedCallback);
     CPP_AT_CALLBACK(ATFlashESP32Callback);
+    CPP_AT_CALLBACK(ATLogLevelCallback);
     CPP_AT_CALLBACK(ATProtocolCallback);
     CPP_AT_HELP_CALLBACK(ATProtocolHelpCallback);
     CPP_AT_CALLBACK(ATRxEnableCallback);
-    CPP_AT_CALLBACK(ATRxGainCallback);
     CPP_AT_CALLBACK(ATSettingsCallback);
     CPP_AT_CALLBACK(ATTLReadCallback);
     CPP_AT_CALLBACK(ATTLSetCallback);

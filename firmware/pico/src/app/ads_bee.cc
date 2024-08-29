@@ -73,6 +73,11 @@ bool ADSBee::Init() {
     gpio_set_function(config_.onboard_i2c_sda_pin, GPIO_FUNC_I2C);
     gpio_set_function(config_.onboard_i2c_scl_pin, GPIO_FUNC_I2C);
 
+    // Initialize the bias tee.
+    gpio_init(config_.bias_tee_enable_pin);
+    gpio_put(config_.bias_tee_enable_pin, 1);  // Enable is active LO.
+    gpio_set_dir(config_.bias_tee_enable_pin, GPIO_OUT);
+
     // Enable the MLAT timer using the 24-bit SysTick timer connected to the 125MHz processor clock.
     // SysTick Control and Status Register
     systick_hw->csr = 0b110;  // Source = External Reference Clock, TickInt = Enabled, Counter = Disabled.
@@ -246,6 +251,11 @@ bool ADSBee::Update() {
     return true;
 }
 
+void ADSBee::FlashStatusLED(uint32_t led_on_ms) {
+    gpio_put(config_.status_led_pin, 1);
+    led_on_timestamp_ms_ = get_time_since_boot_ms();
+}
+
 void ADSBee::OnDemodBegin(uint gpio, uint32_t event_mask) {
     if (gpio == config_.demod_pins[0] && event_mask == GPIO_IRQ_EDGE_RISE) {
         gpio_acknowledge_irq(config_.demod_pins[0], GPIO_IRQ_EDGE_RISE);
@@ -336,6 +346,25 @@ uint64_t ADSBee::GetMLAT12MHzCounts(uint16_t num_bits) {
 
 uint16_t ADSBee::GetTLLearningTemperatureMV() { return tl_learning_temperature_mv_; }
 
+int ADSBee::ReadRSSIMilliVolts() {
+    adc_select_input(config_.rssi_adc_input);
+    int rssi_adc_counts = adc_read();
+    return rssi_adc_counts * 3300 / 4095;
+}
+
+int ADSBee::ReadRSSIdBm() {
+    return 60 * (ReadRSSIMilliVolts() - 1600) / 1000;  // AD8313 0dBm intercept at 1.6V, slope is 60dBm/V.
+}
+
+inline int ADCCountsToMilliVolts(uint16_t adc_counts) { return 3300 * adc_counts / 0xFFF; }
+
+int ADSBee::ReadTLMilliVolts() {
+    // Read back the low level TL bias output voltage.
+    adc_select_input(config_.tl_adc_input);
+    tl_adc_counts_ = adc_read();
+    return ADCCountsToMilliVolts(tl_adc_counts_);
+}
+
 bool ADSBee::SetTLMilliVolts(int tl_mv) {
     if (tl_mv > kTLMaxMV || tl_mv < kTLMinMV) {
         CONSOLE_ERROR("ADSBee::SetTLMilliVolts", "Unable to set tl_mv_ to %d, outside of permissible range %d-%d.\r\n",
@@ -348,33 +377,9 @@ bool ADSBee::SetTLMilliVolts(int tl_mv) {
     return true;
 }
 
-inline int ADCCountsToMilliVolts(uint16_t adc_counts) { return 3300 * adc_counts / 0xFFF; }
-
-int ADSBee::ReadTLMilliVolts() {
-    // Read back the low level TL bias output voltage.
-    adc_select_input(config_.tl_adc_input);
-    tl_adc_counts_ = adc_read();
-    return ADCCountsToMilliVolts(tl_adc_counts_);
-}
-
 void ADSBee::StartTLLearning(uint16_t tl_learning_num_cycles, uint16_t tl_learning_start_temperature_mv,
                              uint16_t tl_min_mv, uint16_t tl_max_mv) {
     tl_learning_temperature_mv_ = tl_learning_start_temperature_mv;
     tl_learning_temperature_step_mv_ = tl_learning_start_temperature_mv / tl_learning_num_cycles;
     tl_learning_cycle_start_timestamp_ms_ = get_time_since_boot_ms();
-}
-
-int ADSBee::ReadRSSIMilliVolts() {
-    adc_select_input(config_.rssi_adc_input);
-    int rssi_adc_counts = adc_read();
-    return rssi_adc_counts * 3300 / 4095;
-}
-
-int ADSBee::ReadRSSIdBm() {
-    return 60 * (ReadRSSIMilliVolts() - 1600) / 1000;  // AD8313 0dBm intercept at 1.6V, slope is 60dBm/V.
-}
-
-void ADSBee::FlashStatusLED(uint32_t led_on_ms) {
-    gpio_put(config_.status_led_pin, 1);
-    led_on_timestamp_ms_ = get_time_since_boot_ms();
 }

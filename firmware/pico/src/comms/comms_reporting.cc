@@ -6,7 +6,7 @@
 #include "mavlink/mavlink.h"
 #include "unit_conversions.hh"
 
-extern ADSBee ads_bee;
+extern ADSBee adsbee;
 
 bool CommsManager::InitReporting() { return true; }
 
@@ -82,7 +82,7 @@ bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface,
 }
 
 bool CommsManager::ReportCSBee(SettingsManager::SerialInterface iface) {
-    for (auto &itr : ads_bee.aircraft_dictionary.dict) {
+    for (auto &itr : adsbee.aircraft_dictionary.dict) {
         const Aircraft &aircraft = itr.second;
 
         char message[kCSBeeMessageStrMaxLen];
@@ -147,7 +147,7 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
     uint16_t mavlink_version = reporting_protocols_[iface] == SettingsManager::kMAVLINK1 ? 1 : 2;
     mavlink_set_proto_version(SettingsManager::SerialInterface::kCommsUART, mavlink_version);
 
-    for (auto &itr : ads_bee.aircraft_dictionary.dict) {
+    for (auto &itr : adsbee.aircraft_dictionary.dict) {
         const Aircraft &aircraft = itr.second;
 
         // Initialize the message

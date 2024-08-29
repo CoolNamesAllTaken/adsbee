@@ -63,28 +63,23 @@ CPP_AT_CALLBACK(CommsManager::ATBaudrateCallback) {
     CPP_AT_ERROR();  // Should never get here.
 }
 
-CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
+CPP_AT_CALLBACK(CommsManager::ATBiasTeeEnableCallback) {
     switch (op) {
         case '?':
-            // AT+CONFIG mode query.
-            CPP_AT_CMD_PRINTF("=%s", SettingsManager::ConsoleLogLevelStrs[log_level]);
+            CPP_AT_CMD_PRINTF("=%d", adsbee.BiasTeeIsEnabled());
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
-            // AT+CONFIG set command.
-            if (!CPP_AT_HAS_ARG(0)) {
-                CPP_AT_ERROR("Need to specify a config mode to run.");
+            if (!(CPP_AT_HAS_ARG(0))) {
+                CPP_AT_ERROR("Requires an argument (0 or 1). AT+BIAS_TEE_ENABLED=<enabled>");
             }
-            for (uint16_t i = 0; i < SettingsManager::kNumLogLevels; i++) {
-                if (args[0].compare(SettingsManager::ConsoleLogLevelStrs[i]) == 0) {
-                    log_level = static_cast<SettingsManager::LogLevel>(i);
-                    CPP_AT_SUCCESS();
-                }
-            }
-            CPP_AT_ERROR("Verbosity level %s not recognized.", args[0].data());
+            bool enabled;
+            CPP_AT_TRY_ARG2NUM(0, enabled);
+            adsbee.SetBiasTeeEnable(enabled);
+            CPP_AT_SUCCESS();
             break;
     }
-    CPP_AT_ERROR("Operator '%c' not supported.", op);
+    CPP_AT_ERROR();  // Should never get here.
 }
 
 void ATFeedHelpCallback() {
@@ -187,6 +182,30 @@ CPP_AT_CALLBACK(CommsManager::ATFlashESP32Callback) {
     CPP_AT_SUCCESS();
 }
 
+CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
+    switch (op) {
+        case '?':
+            // AT+CONFIG mode query.
+            CPP_AT_CMD_PRINTF("=%s", SettingsManager::ConsoleLogLevelStrs[log_level]);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            // AT+CONFIG set command.
+            if (!CPP_AT_HAS_ARG(0)) {
+                CPP_AT_ERROR("Need to specify a config mode to run.");
+            }
+            for (uint16_t i = 0; i < SettingsManager::kNumLogLevels; i++) {
+                if (args[0].compare(SettingsManager::ConsoleLogLevelStrs[i]) == 0) {
+                    log_level = static_cast<SettingsManager::LogLevel>(i);
+                    CPP_AT_SUCCESS();
+                }
+            }
+            CPP_AT_ERROR("Verbosity level %s not recognized.", args[0].data());
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATProtocolCallback) {
     switch (op) {
         case '?':
@@ -256,12 +275,12 @@ CPP_AT_CALLBACK(CommsManager::ATRxEnableCallback) {
             if (CPP_AT_HAS_ARG(0)) {
                 bool receiver_enabled;
                 CPP_AT_TRY_ARG2NUM(0, receiver_enabled);
-                ads_bee.SetReceiverEnable(receiver_enabled);
+                adsbee.SetReceiverEnable(receiver_enabled);
                 CPP_AT_SUCCESS();
             }
             break;
         case '?':
-            CPP_AT_CMD_PRINTF("=%d", ads_bee.ReceiverIsEnabled());
+            CPP_AT_CMD_PRINTF("=%d", adsbee.ReceiverIsEnabled());
             CPP_AT_SILENT_SUCCESS();
             break;
     }
@@ -300,7 +319,7 @@ CPP_AT_CALLBACK(CommsManager::ATTLReadCallback) {
     switch (op) {
         case '?':
             // Read command.
-            CPP_AT_CMD_PRINTF("=%d\r\n", ads_bee.ReadTLMilliVolts());
+            CPP_AT_CMD_PRINTF("=%d\r\n", adsbee.ReadTLMilliVolts());
             CPP_AT_SILENT_SUCCESS();
             break;
     }
@@ -318,7 +337,7 @@ CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
     switch (op) {
         case '?':
             // AT+TL_SET value query.
-            CPP_AT_CMD_PRINTF("=%d\r\n", ads_bee.GetTLMilliVolts());
+            CPP_AT_CMD_PRINTF("=%d\r\n", adsbee.GetTLMilliVolts());
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
@@ -326,12 +345,12 @@ CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
             if (CPP_AT_HAS_ARG(0)) {
                 if (args[0].compare("LEARN") == 0) {
                     // Starting a new trigger level learning session.
-                    ads_bee.StartTLLearning();
+                    adsbee.StartTLLearning();
                 } else {
                     // Assigning trigger level manually.
                     uint16_t new_tl_mv;
                     CPP_AT_TRY_ARG2NUM(0, new_tl_mv);
-                    if (!ads_bee.SetTLMilliVolts(new_tl_mv)) {
+                    if (!adsbee.SetTLMilliVolts(new_tl_mv)) {
                         CPP_AT_ERROR("Failed to set tl_mv.");
                     }
                 }
@@ -404,12 +423,12 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string_buf = "AT+BAUDRATE=<iface>,<baudrate>\r\n\tSet the baud rate of a serial "
                         "interface.\r\n\tAT+BAUDRATE=COMMS,115200\r\n\tAT+BAUDRATE=GNSS,9600\r\n\tAT_BAUDRATE?",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBaudrateCallback, comms_manager)},
-    {.command_buf = "+LOG_LEVEL",
+    {.command_buf = "+BIAS_TEE_ENABLE",
      .min_args = 0,
      .max_args = 1,
-     .help_string_buf = "AT+LOG_LEVEL=<log_level>\r\n\tSet how much stuff gets printed to the "
-                        "console.\r\n\tconsole_verbosity = [SILENT ERRORS WARNINGS LOGS]",
-     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATLogLevelCallback, comms_manager)},
+     .help_string_buf = "AT+BIAS_TEE_ENABLE=<enabled>\r\n\tEnable or disable the bias "
+                        "tee.\r\n\tAT+BIAS_TEE_ENABLE=1\r\n\tAT+BIAS_TEE_ENABLE=0\r\n\tBIAS_TEE_ENABLE?",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBiasTeeEnableCallback, comms_manager)},
     {.command_buf = "+FEED",
      .min_args = 0,
      .max_args = 5,
@@ -421,6 +440,12 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string_buf = "AT+FLASH_ESP32\r\n\tTriggers a firmware update of the ESP32 from the firmware image stored in "
                         "the RP2040's flash memory.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFlashESP32Callback, comms_manager)},
+    {.command_buf = "+LOG_LEVEL",
+     .min_args = 0,
+     .max_args = 1,
+     .help_string_buf = "AT+LOG_LEVEL=<log_level>\r\n\tSet how much stuff gets printed to the "
+                        "console.\r\n\tconsole_verbosity = [SILENT ERRORS WARNINGS LOGS]",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATLogLevelCallback, comms_manager)},
     {.command_buf = "+PROTOCOL",
      .min_args = 0,
      .max_args = 2,
