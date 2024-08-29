@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <cstring>  // for memset
 
-static const uint32_t kSettingsVersionMagicWord = 0xBEEFBEEF;  // Change this when settings format changes!
+static const uint32_t kSettingsVersionMagicWord = 0xBEFEBEEF;  // Change this when settings format changes!
 
 class SettingsManager {
    public:
@@ -50,6 +50,7 @@ class SettingsManager {
 
         // ADSBee settings
         int tl_mv = kDefaultTLMV;
+        bool bias_tee_enabled = false;
 
         // CommunicationsManager settings
         LogLevel log_level = LogLevel::kInfo;  // Start with highest verbosity by default.
