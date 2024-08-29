@@ -42,10 +42,10 @@ class ADSBee {
 
         uint16_t status_led_pin = 15;
         // Reading ADS-B on GPIO19. Will look for DEMOD signal on GPIO20.
-        uint16_t pulses_pins[kNumDemodStateMachines] = {19, 19};
-        uint16_t demod_pins[kNumDemodStateMachines] = {20, 20};
+        uint16_t pulses_pins[kNumDemodStateMachines] = {19, 22};
+        uint16_t demod_pins[kNumDemodStateMachines] = {20, 23};
         // Use GPIO22 for the decode PIO program to output its recovered clock (for debugging only).
-        uint16_t recovered_clk_pins[kNumDemodStateMachines] = {22, 22};
+        uint16_t recovered_clk_pins[kNumDemodStateMachines] = {21, 24};
         // GPIO 24-25 used as PWM outputs for setting analog comparator threshold voltages.
         uint16_t tl_pwm_pin = 25;
         // GPIO 26-27 used as ADC inputs for reading analog comparator threshold voltages after RF filer.
