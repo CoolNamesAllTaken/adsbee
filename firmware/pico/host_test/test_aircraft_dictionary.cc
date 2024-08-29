@@ -153,7 +153,7 @@ TEST(decode_utils, CalcNLCPRFromLat) {
 
 TEST(Aircraft, SetCPRLatLon) {
     Aircraft aircraft;
-    EXPECT_FALSE(aircraft.position_valid);
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
 
     // Send n_lat_cpr out of bounds (bigger than 2^17 bits max value).
     EXPECT_FALSE(aircraft.SetCPRLatLon(0xFFFFFF, 53663, true));
@@ -170,7 +170,7 @@ TEST(Aircraft, SetCPRLatLon) {
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(578, 4651, false));
     EXPECT_FALSE(aircraft.DecodePosition());
-    EXPECT_FALSE(aircraft.position_valid);
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
 
     // Send two odd packets at startup, no even packets.
     aircraft = Aircraft();  // clear everything
@@ -179,7 +179,7 @@ TEST(Aircraft, SetCPRLatLon) {
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(236, 857, true));
     EXPECT_FALSE(aircraft.DecodePosition());
-    EXPECT_FALSE(aircraft.position_valid);
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
 
     // Send one odd packet and one even packet at startup.
     aircraft = Aircraft();  // clear everything
@@ -188,7 +188,7 @@ TEST(Aircraft, SetCPRLatLon) {
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
     EXPECT_TRUE(aircraft.DecodePosition());
-    EXPECT_TRUE(aircraft.position_valid);
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
     EXPECT_NEAR(aircraft.latitude_deg, 52.25720f, 1e-4);  // even latitude
     EXPECT_NEAR(aircraft.longitude_deg, 3.91937f, 1e-4);  // longitude calculated from even latitude
 
@@ -199,7 +199,7 @@ TEST(Aircraft, SetCPRLatLon) {
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true));
     EXPECT_TRUE(aircraft.DecodePosition());
-    EXPECT_TRUE(aircraft.position_valid);
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
     EXPECT_NEAR(aircraft.latitude_deg, 52.26578f, 1e-4);  // odd latitude
     // don't have a test value available for the longitude calculated from odd latitude
 

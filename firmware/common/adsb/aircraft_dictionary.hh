@@ -55,7 +55,8 @@ class Aircraft {
     };
 
     enum BitFlag : uint32_t {
-        kBitFlagIsAirborne = 0,          // Received messages or flags indicating the aircraft is airborne.
+        kBitFlagIsAirborne = 0,  // Received messages or flags indicating the aircraft is airborne.
+        kBitFlagPositionValid,
         kBitFlagIsMilitary,              // Received at least one military ES message from the aircraft.
         kBitFlagIsClassB2GroundVehicle,  // Is a class B2 ground vehicle transmitting at <70W.
         kBitFlagHas1090ESIn,             // Aircraft is equipped with 1090MHz Extended Squitter receive capability.
@@ -143,7 +144,7 @@ class Aircraft {
         kPOERCLessThanOrEqualTo1em7PerSample = 0b111,
     };
 
-    enum GeometricVerticalAccurary : uint8_t {
+    enum GVA : uint8_t {
         kGVAUnknownOrGreaterThan150Meters = 0,
         GVALessThanOrEqualTo150Meters = 1,
         GVALessThanOrEqualTo45Meters = 2,
@@ -238,7 +239,6 @@ class Aircraft {
     // Airborne Position Message
     float latitude_deg = 0.0f;
     float longitude_deg = 0.0f;
-    bool position_valid = false;
 
     // Airborne Velocities Message
     float heading_deg = 0.0f;
@@ -246,20 +246,21 @@ class Aircraft {
     VelocitySource velocity_source = kVelocitySourceNotSet;
     int vertical_rate_fpm = 0.0f;
     VerticalRateSource vertical_rate_source = kVerticalRateSourceNotSet;
-    int altitude_difference_gnss_above_baro_ft = 0;
 
     // Aircraft Operation Status Message
     // Navigation Integrity Category (NIC)
     uint8_t nic_bits_valid = 0b000;  // MSb to LSb: nic_c_valid nic_b_valid nic_a_valid.
     uint8_t nic_bits = 0b000;        // MSb to LSb: nic_c nic_b nic_a.
-    NICRadiusOfContainment nic = kROCUnknown;
-    NICBarometricAltitudeIntegrity nic_baro = kBAIGillhamInputNotCrossChecked;  // Default to worst case.
+    NICRadiusOfContainment navigation_integrity_category = kROCUnknown;
+    NICBarometricAltitudeIntegrity navigation_integrity_category_baro =
+        kBAIGillhamInputNotCrossChecked;  // Default to worst case.
     // Navigation Accuracy Category (NAC)
     NACHorizontalVelocityError nac_velocity = kHVEUnknownOrGreaterThanOrEqualTo10MetersPerSecond;     // 3 bits.
     NACEstimatedPositionUncertainty nac_position = kEPUUnknownOrGreaterThanOrEqualTo10NauticalMiles;  // 4 bits.
     // Geometric Vertical Accuracy (GVA)
-    GeometricVerticalAccurary gva = kGVAUnknownOrGreaterThan150Meters;  // 2 bits.
-    SILProbabilityOfExceedingNICRadiusOfContainmnent sil = kPOERCUnknownOrGreaterThan1em3PerFlightHour;
+    GVA geometric_vertical_accuracy = kGVAUnknownOrGreaterThan150Meters;  // 2 bits.
+    SILProbabilityOfExceedingNICRadiusOfContainmnent system_integrity_level =
+        kPOERCUnknownOrGreaterThan1em3PerFlightHour;
     // System Design Assurance
     SystemDesignAssurance system_design_assurance = kSDASupportedFailureUnknownOrNoSafetyEffect;
     // GPS Antenna Offset
