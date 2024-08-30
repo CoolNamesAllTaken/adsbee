@@ -59,7 +59,7 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
     EXPECT_EQ(GetNextToken().compare("ABCDEFG"), 0);     // Callsign
     EXPECT_EQ(GetNextToken().compare("1234"), 0);        // Squawk
     EXPECT_EQ(GetNextToken().compare("-120.65432"), 0);  // Latitude [deg]
-    EXPECT_EQ(GetNextToken().compare("-80.12345"), 0);   // Longitude [deg]
+    EXPECT_EQ(GetNextToken().compare("-80.12346"), 0);   // Longitude [deg]
     EXPECT_EQ(GetNextToken().compare("1000"), 0);        // Baro Altitude [ft]
     EXPECT_EQ(GetNextToken().compare("997"), 0);         // GNSS Altitude [ft]
     EXPECT_EQ(GetNextToken().compare("301"), 0);         // Track [deg]
@@ -71,4 +71,15 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
     // Use an std::string here as a hack, since we don't want to bother with copying the whole string to another buffer
     // and then finding just the SYSINFO field. Converting the std::string to a uint32_t with base 16 notation.
     uint32_t sysinfo = strtol(std::string(GetNextToken()).c_str(), NULL, 16);
+    EXPECT_EQ(sysinfo & 0b1111, 0b1011u);                 // NIC
+    EXPECT_EQ((sysinfo & (0b1 << 4)) >> 4, 0b1u);         // NIC_baro
+    EXPECT_EQ((sysinfo & (0b111 << 5)) >> 5, 0b101u);     // NAC_v
+    EXPECT_EQ((sysinfo & (0b1111 << 8)) >> 8, 0b1101u);   // NAC_p
+    EXPECT_EQ((sysinfo & (0b11 << 12)) >> 12, 0b11u);     // GVA
+    EXPECT_EQ((sysinfo & (0b11 << 14)) >> 14, 2u);        // SIL
+    EXPECT_EQ((sysinfo & (0b11 << 16)) >> 16, 0b11u);     // SDA
+    EXPECT_EQ((sysinfo & (0b1 << 18)) >> 18, 0b1u);       // GAOK
+    EXPECT_EQ((sysinfo & (0b11 << 19)) >> 19, 6u >> 2);   // GAOD
+    EXPECT_EQ((sysinfo & (0b1 << 21)) >> 21, 0u);         // GAOR
+    EXPECT_EQ((sysinfo & (0b1111111 << 22)) >> 22, 20u);  // MDIM
 }
