@@ -69,7 +69,11 @@ class Aircraft {
                                              // true north.
         kBitFlagIdent,                       // IDENT switch is currently active.
         kBitFlagAlert,                       // Aircraft is indicating an alert.
-        kBitFlagTCASRAActive,                // Indicates a TCAS resolution advisory is active.
+        kBitFlagTCASRA,                      // Indicates a TCAS resolution advisory is active.
+        kBitFlagReserved0,
+        kBitFlagReserved1,
+        kBitFlagReserved2,
+        kBitFlagReserved3,
         // Flags after kBitFlagUpdatedBaroAltitude are cleared at the end of every reporting interval.
         kBitFlagUpdatedBaroAltitude,
         kBitFlagUpdatedGNSSAltitude,
@@ -148,7 +152,7 @@ class Aircraft {
         kGVAUnknownOrGreaterThan150Meters = 0,
         GVALessThanOrEqualTo150Meters = 1,
         GVALessThanOrEqualTo45Meters = 2,
-        GVAReserved = 3
+        GVALessThan45Meters = 3
     };
 
     Aircraft(uint32_t icao_address_in);
@@ -224,7 +228,10 @@ class Aircraft {
 
     uint32_t flags = 0b0;
 
-    uint32_t last_seen_timestamp_ms = 0;
+    uint32_t last_message_timestamp_ms = 0;
+    int16_t last_message_signal_strength_dbm = 0;  // Voltage of RSSI signal during message receipt.
+    int16_t last_message_signal_quality_db = 0;    // Ratio of RSSI to noise floor during message receipt.
+    uint16_t num_frames_received_in_last_reporting_interval = 0;  // Number of valid frames received.
 
     uint16_t transponder_capability = 0;
     uint32_t icao_address = 0;
@@ -241,7 +248,7 @@ class Aircraft {
     float longitude_deg = 0.0f;
 
     // Airborne Velocities Message
-    float heading_deg = 0.0f;
+    float track_deg = 0.0f;
     float velocity_kts = 0;
     VelocitySource velocity_source = kVelocitySourceNotSet;
     int vertical_rate_fpm = 0.0f;
@@ -251,18 +258,20 @@ class Aircraft {
     // Navigation Integrity Category (NIC)
     uint8_t nic_bits_valid = 0b000;  // MSb to LSb: nic_c_valid nic_b_valid nic_a_valid.
     uint8_t nic_bits = 0b000;        // MSb to LSb: nic_c nic_b nic_a.
-    NICRadiusOfContainment navigation_integrity_category = kROCUnknown;
+    NICRadiusOfContainment navigation_integrity_category = kROCUnknown;  // 4 bits.
     NICBarometricAltitudeIntegrity navigation_integrity_category_baro =
-        kBAIGillhamInputNotCrossChecked;  // Default to worst case.
+        kBAIGillhamInputNotCrossChecked;  // 1 bit. Default to worst case.
     // Navigation Accuracy Category (NAC)
-    NACHorizontalVelocityError nac_velocity = kHVEUnknownOrGreaterThanOrEqualTo10MetersPerSecond;     // 3 bits.
-    NACEstimatedPositionUncertainty nac_position = kEPUUnknownOrGreaterThanOrEqualTo10NauticalMiles;  // 4 bits.
+    NACHorizontalVelocityError navigation_accuracy_category_velocity =
+        kHVEUnknownOrGreaterThanOrEqualTo10MetersPerSecond;  // 3 bits.
+    NACEstimatedPositionUncertainty navigation_accuracy_category_position =
+        kEPUUnknownOrGreaterThanOrEqualTo10NauticalMiles;  // 4 bits.
     // Geometric Vertical Accuracy (GVA)
     GVA geometric_vertical_accuracy = kGVAUnknownOrGreaterThan150Meters;  // 2 bits.
     SILProbabilityOfExceedingNICRadiusOfContainmnent system_integrity_level =
-        kPOERCUnknownOrGreaterThan1em3PerFlightHour;
+        kPOERCUnknownOrGreaterThan1em3PerFlightHour;  // 3 bits.
     // System Design Assurance
-    SystemDesignAssurance system_design_assurance = kSDASupportedFailureUnknownOrNoSafetyEffect;
+    SystemDesignAssurance system_design_assurance = kSDASupportedFailureUnknownOrNoSafetyEffect;  // 2 bits.
     // GPS Antenna Offset
     int8_t gnss_antenna_offset_right_of_roll_axis_m =
         INT8_MAX;  // Defaults to INT8_MAX to indicate it hasn't been read yet.

@@ -127,7 +127,7 @@ void AircraftDictionary::Init() {
 void AircraftDictionary::Update(uint32_t timestamp_ms) {
     // Iterate over each key-value pair in the unordered_map
     for (auto it = dict.begin(); it != dict.end(); /* No increment here */) {
-        if (timestamp_ms - it->second.last_seen_timestamp_ms > config_.aircraft_prune_interval_ms) {
+        if (timestamp_ms - it->second.last_message_timestamp_ms > config_.aircraft_prune_interval_ms) {
             it = dict.erase(it);  // Remove stale aircraft entry.
         } else {
             it++;  // Move to the next aircraft entry.
@@ -237,7 +237,7 @@ bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
                         icao_address);
         return false;  // unable to find or create new aircraft in dictionary
     }
-    aircraft_ptr->last_seen_timestamp_ms = get_time_since_boot_ms();
+    aircraft_ptr->last_message_timestamp_ms = get_time_since_boot_ms();
 
     uint16_t typecode = packet.GetTypeCode();
     switch (typecode) {
@@ -688,7 +688,7 @@ bool AircraftDictionary::ApplyAirborneVelocitiesMessage(Aircraft &aircraft, ADSB
                     v_y_kts *= 4;
                 }
                 aircraft.velocity_kts = sqrtf(v_x_kts * v_x_kts + v_y_kts * v_y_kts);
-                aircraft.heading_deg = wrapped_atan2f(v_x_kts, v_y_kts) * kRadiansToDegrees;
+                aircraft.track_deg = wrapped_atan2f(v_x_kts, v_y_kts) * kRadiansToDegrees;
             }
             break;
         }
@@ -708,7 +708,7 @@ bool AircraftDictionary::ApplyAirborneVelocitiesMessage(Aircraft &aircraft, ADSB
                 aircraft.velocity_source = is_true_airspeed
                                                ? Aircraft::VelocitySource::kVelocitySourceAirspeedTrue
                                                : Aircraft::VelocitySource::kVelocitySourceAirspeedIndicated;
-                aircraft.heading_deg = static_cast<float>((packet.GetNBitWordFromMessage(10, 14) * 360) / 1024.0f);
+                aircraft.track_deg = static_cast<float>((packet.GetNBitWordFromMessage(10, 14) * 360) / 1024.0f);
             }
 
             break;
@@ -789,7 +789,7 @@ bool AircraftDictionary::ApplyAircraftOperationStatusMessage(Aircraft &aircraft,
 
     // ME[24-39] - Operational Mode Code
     // ME[26] - TCAS RA Active
-    aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagTCASRAActive, packet.GetNBitWordFromMessage(1, 26));
+    aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagTCASRA, packet.GetNBitWordFromMessage(1, 26));
     // ME[27] - IDENT Switch Active
     aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagIdent, packet.GetNBitWordFromMessage(1, 27));
     // ME[29] - Single Antenna Flag
@@ -805,7 +805,7 @@ bool AircraftDictionary::ApplyAircraftOperationStatusMessage(Aircraft &aircraft,
     aircraft.WriteNICBit(Aircraft::NICBit::kNICBitC, packet.GetNBitWordFromMessage(1, 43));
 
     // ME[44-47] - Navigational Accuracy Category, Position
-    aircraft.nac_position =
+    aircraft.navigation_accuracy_category_position =
         static_cast<Aircraft::NACEstimatedPositionUncertainty>(packet.GetNBitWordFromMessage(4, 44));
 
     // ME[50-51] - Source Integrity Level (SIL)
@@ -847,7 +847,7 @@ bool AircraftDictionary::ApplyAircraftOperationStatusMessage(Aircraft &aircraft,
             // ME[15] - UAT In
             aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagHasUATIn, packet.GetNBitWordFromMessage(1, 15));
             // ME[16-18] - NACv
-            aircraft.nac_velocity =
+            aircraft.navigation_accuracy_category_velocity =
                 static_cast<Aircraft::NACHorizontalVelocityError>(packet.GetNBitWordFromMessage(3, 16));
             // ME[19] - NIC Supplement C
             aircraft.WriteNICBit(Aircraft::NICBit::kNICBitC, packet.GetNBitWordFromMessage(1, 19));

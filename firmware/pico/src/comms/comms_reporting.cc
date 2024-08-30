@@ -163,7 +163,7 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
                                          : aircraft.gnss_altitude_ft) *
                         1000,
             // Heding [cdeg]
-            .heading = static_cast<uint16_t>(aircraft.heading_deg * 100.0f),
+            .heading = static_cast<uint16_t>(aircraft.track_deg * 100.0f),
             // Horizontal Velocity [cm/s]
             .hor_velocity = static_cast<uint16_t>(KtsToMps(static_cast<int>(aircraft.velocity_kts)) * 100),
             // Vertical Velocity [cm/s]
@@ -175,7 +175,7 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
             // Fill out callsign later.
             .emitter_type = AircraftAirframeTypeToMAVLINKEmitterType(aircraft.airframe_type),
             // Time Since Last Contact [s]
-            .tslc = static_cast<uint8_t>((get_time_since_boot_ms() - aircraft.last_seen_timestamp_ms) / 1000)};
+            .tslc = static_cast<uint8_t>((get_time_since_boot_ms() - aircraft.last_message_timestamp_ms) / 1000)};
         strncpy(adsb_vehicle_msg.callsign, aircraft.callsign, Aircraft::kCallSignMaxNumChars);
 
         // Send the message.

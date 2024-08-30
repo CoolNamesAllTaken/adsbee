@@ -29,13 +29,13 @@ TEST(SPICoprocessor, CreateSettingsPacket) {
 TEST(SPICoprocessor, CreateAircraftListPacket) {
     Aircraft aircraft_list[AircraftDictionary::kMaxNumAircraft];
     aircraft_list[0].icao_address = 0x12345;
-    aircraft_list[1].heading_deg = 3;
+    aircraft_list[1].track_deg = 3;
     aircraft_list[99].icao_address = 0xBEEF;
     uint16_t num_aircraft = 100;
     SPICoprocessor::AircraftListMessage packet = SPICoprocessor::AircraftListMessage(num_aircraft, aircraft_list);
     EXPECT_TRUE(packet.IsValid(sizeof(SPICoprocessor::AircraftListMessage)));
     EXPECT_EQ(aircraft_list[0].icao_address, packet.aircraft_list[0].icao_address);
-    EXPECT_EQ(aircraft_list[1].heading_deg, packet.aircraft_list[1].heading_deg);
+    EXPECT_EQ(aircraft_list[1].track_deg, packet.aircraft_list[1].track_deg);
     EXPECT_EQ(aircraft_list[99].icao_address, packet.aircraft_list[99].icao_address);
     EXPECT_EQ(num_aircraft, packet.num_aicraft);
     EXPECT_EQ(packet.type, SPICoprocessor::kSCPacketTypeAircraftList);

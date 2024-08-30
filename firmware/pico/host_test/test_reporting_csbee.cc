@@ -19,7 +19,10 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
 
     Aircraft aircraft;
     aircraft.flags = UINT32_MAX;  // Set allll the flags.
-    aircraft.last_seen_timestamp_ms = 1000;
+    aircraft.last_message_timestamp_ms = 1000;
+    aircraft.last_message_signal_strength_dbm = -75;
+    aircraft.last_message_signal_quality_db = 2;
+    aircraft.num_frames_received_in_last_reporting_interval = 4;
     aircraft.transponder_capability = ADSBPacket::Capability::kCALevel2PlusTransponderOnSurfaceCanSetCA7;
     aircraft.icao_address = 0x12345E;
     strcpy(aircraft.callsign, "ABCDEFG");
@@ -30,15 +33,15 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
     aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeSourceBaro;
     aircraft.latitude_deg = -120.654321;
     aircraft.longitude_deg = -80.123456;
-    aircraft.heading_deg = 300.5678;
+    aircraft.track_deg = 300.5678;
     aircraft.velocity_kts = 123.45;
     aircraft.velocity_source = Aircraft::VelocitySource::kVelocitySourceAirspeedTrue;
     aircraft.vertical_rate_fpm = -200;
     aircraft.vertical_rate_source = Aircraft::VerticalRateSource::kVerticalRateSourceBaro;
     aircraft.navigation_integrity_category = static_cast<Aircraft::NICRadiusOfContainment>(0b1011);
     aircraft.navigation_integrity_category_baro = static_cast<Aircraft::NICBarometricAltitudeIntegrity>(0b1);
-    aircraft.nac_velocity = static_cast<Aircraft::NACHorizontalVelocityError>(0b101);
-    aircraft.nac_position = static_cast<Aircraft::NACEstimatedPositionUncertainty>(0b1101);
+    aircraft.navigation_accuracy_category_velocity = static_cast<Aircraft::NACHorizontalVelocityError>(0b101);
+    aircraft.navigation_accuracy_category_position = static_cast<Aircraft::NACEstimatedPositionUncertainty>(0b1101);
     aircraft.geometric_vertical_accuracy = static_cast<Aircraft::GVA>(0b11);
     aircraft.system_integrity_level = static_cast<Aircraft::SILProbabilityOfExceedingNICRadiusOfContainmnent>(
         Aircraft::kPOERCLessThanOrEqualTo1em5PerFlightHour);
@@ -55,7 +58,17 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
     EXPECT_EQ(GetNextToken().compare("FFFFFFFF"), 0);    // Flags
     EXPECT_EQ(GetNextToken().compare("ABCDEFG"), 0);     // Callsign
     EXPECT_EQ(GetNextToken().compare("1234"), 0);        // Squawk
-    EXPECT_EQ(GetNextToken().compare("-120.65432"), 0);  // Latitude
-    EXPECT_EQ(GetNextToken().compare("-80.12345"), 0);   // Longitude
-    EXPECT_EQ(GetNextToken().compare("1000"), 0);        // Baro Altitude
+    EXPECT_EQ(GetNextToken().compare("-120.65432"), 0);  // Latitude [deg]
+    EXPECT_EQ(GetNextToken().compare("-80.12345"), 0);   // Longitude [deg]
+    EXPECT_EQ(GetNextToken().compare("1000"), 0);        // Baro Altitude [ft]
+    EXPECT_EQ(GetNextToken().compare("997"), 0);         // GNSS Altitude [ft]
+    EXPECT_EQ(GetNextToken().compare("301"), 0);         // Track [deg]
+    EXPECT_EQ(GetNextToken().compare("123"), 0);         // Velocity [kts]
+    EXPECT_EQ(GetNextToken().compare("-200"), 0);        // Vertical Rate [fpm]
+    EXPECT_EQ(GetNextToken().compare("-75"), 0);         // Signal Strength [dBm]
+    EXPECT_EQ(GetNextToken().compare("2"), 0);           // Signal Qualtiy [dB]
+    EXPECT_EQ(GetNextToken().compare("4"), 0);           // Frames Per Second
+    // Use an std::string here as a hack, since we don't want to bother with copying the whole string to another buffer
+    // and then finding just the SYSINFO field. Converting the std::string to a uint32_t with base 16 notation.
+    uint32_t sysinfo = strtol(std::string(GetNextToken()).c_str(), NULL, 16);
 }
