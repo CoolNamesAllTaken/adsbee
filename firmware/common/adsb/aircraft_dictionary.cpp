@@ -72,7 +72,7 @@ bool Aircraft::DecodePosition() {
 
     if (last_odd_packet_.nl_cpr != last_even_packet_.nl_cpr) {
         // Invalidate position if position pair is split across different latitude bands.
-        position_valid = false;  // keep last known good coordinates, but mark as invalid
+        WriteBitFlag(BitFlag::kBitFlagPositionValid, false);  // keep last known good coordinates, but mark as invalid
         CONSOLE_WARNING("Aircraft::DecodePosition",
                         "NL_cpr disagrees between odd (%d) and even (%d) packets. Can't decode "
                         "position.\r\n",
@@ -96,7 +96,7 @@ bool Aircraft::DecodePosition() {
 
     // Equation 5.13 (calc longitude), 5.15 (wrap longitude to between -180 and +180 degrees)
     longitude_deg = WrapCPRDecodeLongitude(d_lon * ((lon_zone_index % num_lon_zones) + last_packet.lon_cpr));
-    position_valid = true;  // TODO: add "reasonable validation" that position is valid
+    WriteBitFlag(BitFlag::kBitFlagPositionValid, true);  // TODO: Add "reasonable validation" that position is valid.
     return true;
 }
 
@@ -127,7 +127,7 @@ void AircraftDictionary::Init() {
 void AircraftDictionary::Update(uint32_t timestamp_ms) {
     // Iterate over each key-value pair in the unordered_map
     for (auto it = dict.begin(); it != dict.end(); /* No increment here */) {
-        if (timestamp_ms - it->second.last_seen_timestamp_ms > config_.aircraft_prune_interval_ms) {
+        if (timestamp_ms - it->second.last_message_timestamp_ms > config_.aircraft_prune_interval_ms) {
             it = dict.erase(it);  // Remove stale aircraft entry.
         } else {
             it++;  // Move to the next aircraft entry.
@@ -199,6 +199,7 @@ bool AircraftDictionary::IngestModeAPacket(ModeAPacket packet) {
     aircraft_ptr->WriteBitFlag(Aircraft::BitFlag::kBitFlagAlert, packet.HasAlert());
     aircraft_ptr->WriteBitFlag(Aircraft::BitFlag::kBitFlagIdent, packet.HasIdent());
     aircraft_ptr->squawk = packet.GetSquawk();
+    aircraft_ptr->IncrementNumFramesReceived(false);
 
     return true;
 }
@@ -220,6 +221,7 @@ bool AircraftDictionary::IngestModeCPacket(ModeCPacket packet) {
     aircraft_ptr->WriteBitFlag(Aircraft::BitFlag::kBitFlagAlert, packet.HasAlert());
     aircraft_ptr->WriteBitFlag(Aircraft::BitFlag::kBitFlagIdent, packet.HasIdent());
     aircraft_ptr->baro_altitude_ft = packet.GetAltitudeFt();
+    aircraft_ptr->IncrementNumFramesReceived(false);
 
     return true;
 }
@@ -237,21 +239,22 @@ bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
                         icao_address);
         return false;  // unable to find or create new aircraft in dictionary
     }
-    aircraft_ptr->last_seen_timestamp_ms = get_time_since_boot_ms();
+    aircraft_ptr->last_message_timestamp_ms = get_time_since_boot_ms();
 
+    bool ret = false;
     uint16_t typecode = packet.GetTypeCode();
     switch (typecode) {
         case ADSBPacket::kTypeCodeAircraftID:      // TC = 1 (Aircraft Identification)
         case ADSBPacket::kTypeCodeAircraftID + 1:  // TC = 2 (Aircraft Identification)
         case ADSBPacket::kTypeCodeAircraftID + 2:  // TC = 3 (Aircraft Identification)
         case ADSBPacket::kTypeCodeAircraftID + 3:  // TC = 4 (Aircraft Identification)
-            return ApplyAircraftIDMessage(*aircraft_ptr, packet);
+            ret = ApplyAircraftIDMessage(*aircraft_ptr, packet);
             break;
         case ADSBPacket::kTypeCodeSurfacePosition:      // TC = 5 (Surface Position)
         case ADSBPacket::kTypeCodeSurfacePosition + 1:  // TC = 6 (Surface Position)
         case ADSBPacket::kTypeCodeSurfacePosition + 2:  // TC = 7 (Surface Position)
         case ADSBPacket::kTypeCodeSurfacePosition + 3:  // TC = 8 (Surface Position)
-            return ApplySurfacePositionMessage(*aircraft_ptr, packet);
+            ret = ApplySurfacePositionMessage(*aircraft_ptr, packet);
             break;
         case ADSBPacket::kTypeCodeAirbornePositionBaroAlt:      // TC = 9 (Airborne Position w/ Baro Altitude)
         case ADSBPacket::kTypeCodeAirbornePositionBaroAlt + 1:  // TC = 10 (Airborne Position w/ Baro Altitude)
@@ -266,34 +269,34 @@ bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
         case ADSBPacket::kTypeCodeAirbornePositionGNSSAlt:      // TC = 20 (Airborne Position w/ GNSS Altitude)
         case ADSBPacket::kTypeCodeAirbornePositionGNSSAlt + 1:  // TC = 21 (Airborne Position w/ GNSS Altitude)
         case ADSBPacket::kTypeCodeAirbornePositionGNSSAlt + 2:  // TC = 22 (Airborne Position w/ GNSS Altitude)
-            return ApplyAirbornePositionMessage(*aircraft_ptr, packet);
+            ret = ApplyAirbornePositionMessage(*aircraft_ptr, packet);
             break;
         case ADSBPacket::kTypeCodeAirborneVelocities:  // TC = 19 (Airborne Velocities)
-            return ApplyAirborneVelocitiesMessage(*aircraft_ptr, packet);
+            ret = ApplyAirborneVelocitiesMessage(*aircraft_ptr, packet);
             break;
         case ADSBPacket::kTypeCodeReserved:      // TC = 23 (Reserved)
         case ADSBPacket::kTypeCodeReserved + 1:  // TC = 24 (Reserved)
         case ADSBPacket::kTypeCodeReserved + 2:  // TC = 25 (Reserved)
         case ADSBPacket::kTypeCodeReserved + 3:  // TC = 26 (Reserved)
         case ADSBPacket::kTypeCodeReserved + 4:  // TC = 27 (Reserved)
-            return false;
+            ret = false;
             break;
         case ADSBPacket::kTypeCodeAircraftStatus:  // TC = 28 (Aircraft Status)
-            return ApplyAircraftStatusMessage(*aircraft_ptr, packet);
+            ret = ApplyAircraftStatusMessage(*aircraft_ptr, packet);
             break;
         case ADSBPacket::kTypeCodeTargetStateAndStatusInfo:  // TC = 29 (Target state and status info)
-            return ApplyTargetStateAndStatusInfoMessage(*aircraft_ptr, packet);
+            ret = ApplyTargetStateAndStatusInfoMessage(*aircraft_ptr, packet);
             break;
         case ADSBPacket::kTypeCodeAircraftOperationStatus:  // TC = 31 (Aircraft operation status)
-            return ApplyAircraftOperationStatusMessage(*aircraft_ptr, packet);
+            ret = ApplyAircraftOperationStatusMessage(*aircraft_ptr, packet);
             break;
         default:
             CONSOLE_ERROR("AircraftDictionary::IngestADSBPacket", "Received ADSB message with unsupported typecode %d.",
                           typecode);
-            return false;  // kTypeCodeInvalid, etc.
+            ret = false;  // kTypeCodeInvalid, etc.
     }
-
-    return false;
+    if (ret) aircraft_ptr->IncrementNumFramesReceived(true);  // Count the received Mode S frame.
+    return ret;
 }
 
 uint16_t AircraftDictionary::GetNumAircraft() { return dict.size(); }
@@ -473,29 +476,29 @@ bool AircraftDictionary::ApplySurfacePositionMessage(Aircraft &aircraft, ADSBPac
         // Assign NIC based on NIC supplement bits A and C and received TypeCode.
         switch ((packet.GetTypeCode() << 3) | (aircraft.nic_bits & 0b101)) {
             case (5 << 3) | 0b000:
-                aircraft.nic = Aircraft::NICRadiusOfContainment::kROCLessThan7p5Meters;
+                aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCLessThan7p5Meters;
                 break;
             case (6 << 3) | 0b000:
-                aircraft.nic = Aircraft::NICRadiusOfContainment::kROCLessThan25Meters;
+                aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCLessThan25Meters;
                 break;
             case (7 << 3) | 0b100:
-                aircraft.nic = Aircraft::NICRadiusOfContainment::kROCLessThan75Meters;
+                aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCLessThan75Meters;
                 break;
             case (7 << 3) | 0b000:
-                aircraft.nic = Aircraft::NICRadiusOfContainment::kROCLessThan0p1NauticalMiles;
+                aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCLessThan0p1NauticalMiles;
                 break;
             case (8 << 3) | 0b101:
-                aircraft.nic = Aircraft::NICRadiusOfContainment::kROCLessThan0p2NauticalMiles;
+                aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCLessThan0p2NauticalMiles;
                 break;
             case (8 << 3) | 0b100:
                 // Should be <0.3NM, but NIC value is shared with <0.6NM.
-                aircraft.nic = Aircraft::NICRadiusOfContainment::kROCLessThan0p6NauticalMiles;
+                aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCLessThan0p6NauticalMiles;
                 break;
             case (8 << 3) | 0b001:
-                aircraft.nic = Aircraft::NICRadiusOfContainment::kROCLessThan0p6NauticalMiles;
+                aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCLessThan0p6NauticalMiles;
                 break;
             case (8 << 3) | 0b000:
-                aircraft.nic = Aircraft::NICRadiusOfContainment::kROCUnknown;
+                aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCUnknown;
                 break;
             default:
                 CONSOLE_WARNING("AircraftDictionary::ApplySurfacePositionMessage",
@@ -513,7 +516,23 @@ bool AircraftDictionary::ApplyAirbornePositionMessage(Aircraft &aircraft, ADSBPa
 
     bool decode_successful = true;
     // ME[5-6] - Surveillance Status
-    aircraft.surveillance_status = static_cast<Aircraft::SurveillanceStatus>(packet.GetNBitWordFromMessage(2, 5));
+    uint8_t surveillance_status = packet.GetNBitWordFromMessage(2, 5);
+    switch (surveillance_status) {
+        case 0:  // No condition.
+            aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagAlert, false);
+            aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagIdent, false);
+            break;
+        // NOTE: It's possible to have both an alert and an IDENT at the same time, but that can't be conveyed through a
+        // single Airborne Position message.
+        case 1:  // Permanent alert.
+        case 2:  // Temporary alert.
+            // Treat permanent and temporary alerts the same.
+            aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagAlert, true);
+            break;
+        case 3:  // SPI condition.
+            aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagIdent, true);
+            break;
+    }
 
     // ME[7] - NIC B Supplement (Formerly Single Antenna Flag)
     aircraft.WriteNICBit(Aircraft::NICBit::kNICBitB, packet.GetNBitWordFromMessage(1, 7));
@@ -522,54 +541,55 @@ bool AircraftDictionary::ApplyAirbornePositionMessage(Aircraft &aircraft, ADSBPa
         // Assign NIC based on NIC supplement bits A and B and received TypeCode.
         switch ((typecode << 3) | (aircraft.nic_bits & 0b101)) {
             case (9 << 3) | 0b000:
-                aircraft.nic = Aircraft::NICRadiusOfContainment::kROCLessThan7p5Meters;
+                aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCLessThan7p5Meters;
                 break;
             case (10 << 3) | 0b000:
-                aircraft.nic = Aircraft::NICRadiusOfContainment::kROCLessThan25Meters;
+                aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCLessThan25Meters;
                 break;
             case (11 << 3) | 0b110:
-                aircraft.nic = Aircraft::NICRadiusOfContainment::kROCLessThan75Meters;
+                aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCLessThan75Meters;
                 break;
             case (11 << 3) | 0b000:
-                aircraft.nic = Aircraft::NICRadiusOfContainment::kROCLessThan0p1NauticalMiles;
+                aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCLessThan0p1NauticalMiles;
                 break;
             case (12 << 3) | 0b000:
-                aircraft.nic = Aircraft::NICRadiusOfContainment::kROCLessThan0p2NauticalMiles;
+                aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCLessThan0p2NauticalMiles;
                 break;
             case (13 << 3) | 0b010:  // Should be <0.3NM, but NIC value is shared with <0.6NM.
             case (13 << 3) | 0b000:  // Should be <0.5NM, but NIC value is shared with <0.6NM.
             case (13 << 3) | 0b110:
-                aircraft.nic = Aircraft::NICRadiusOfContainment::kROCLessThan0p6NauticalMiles;
+                aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCLessThan0p6NauticalMiles;
                 break;
             case (14 << 3) | 0b000:
-                aircraft.nic = Aircraft::NICRadiusOfContainment::kROCLessThan1NauticalMile;
+                aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCLessThan1NauticalMile;
                 break;
             case (15 << 3) | 0b000:
-                aircraft.nic = Aircraft::NICRadiusOfContainment::kROCLessThan2NauticalMiles;
+                aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCLessThan2NauticalMiles;
                 break;
             case (16 << 3) | 0b110:
-                aircraft.nic = Aircraft::NICRadiusOfContainment::kROCLessThan4NauticalMiles;
+                aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCLessThan4NauticalMiles;
                 break;
             case (16 << 3) | 0b000:
-                aircraft.nic = Aircraft::NICRadiusOfContainment::kROCLessThan8NauticalMiles;
+                aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCLessThan8NauticalMiles;
                 break;
             case (17 << 3) | 0b000:
-                aircraft.nic = Aircraft::NICRadiusOfContainment::kROCLessThan20NauticalMiles;
+                aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCLessThan20NauticalMiles;
                 break;
             case (18 << 3) | 0b000:
-                aircraft.nic = Aircraft::NICRadiusOfContainment::kROCUnknown;
+                aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCUnknown;
                 break;
             default:
                 // Check for TypeCodes that can determine a NIC without needing to consult NIC supplement bits.
                 switch (typecode) {
                     case 20:
-                        aircraft.nic = Aircraft::NICRadiusOfContainment::kROCLessThan7p5Meters;
+                        aircraft.navigation_integrity_category =
+                            Aircraft::NICRadiusOfContainment::kROCLessThan7p5Meters;
                         break;
                     case 21:
-                        aircraft.nic = Aircraft::NICRadiusOfContainment::kROCLessThan25Meters;
+                        aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCLessThan25Meters;
                         break;
                     case 22:
-                        aircraft.nic = Aircraft::NICRadiusOfContainment::kROCUnknown;
+                        aircraft.navigation_integrity_category = Aircraft::NICRadiusOfContainment::kROCUnknown;
                         break;
                     default:
                         CONSOLE_WARNING("AircraftDictionary::ApplyAirbornePositionMessage",
@@ -671,7 +691,7 @@ bool AircraftDictionary::ApplyAirborneVelocitiesMessage(Aircraft &aircraft, ADSB
                     v_y_kts *= 4;
                 }
                 aircraft.velocity_kts = sqrtf(v_x_kts * v_x_kts + v_y_kts * v_y_kts);
-                aircraft.heading_deg = wrapped_atan2f(v_x_kts, v_y_kts) * kRadiansToDegrees;
+                aircraft.track_deg = wrapped_atan2f(v_x_kts, v_y_kts) * kRadiansToDegrees;
             }
             break;
         }
@@ -691,7 +711,7 @@ bool AircraftDictionary::ApplyAirborneVelocitiesMessage(Aircraft &aircraft, ADSB
                 aircraft.velocity_source = is_true_airspeed
                                                ? Aircraft::VelocitySource::kVelocitySourceAirspeedTrue
                                                : Aircraft::VelocitySource::kVelocitySourceAirspeedIndicated;
-                aircraft.heading_deg = static_cast<float>((packet.GetNBitWordFromMessage(10, 14) * 360) / 1024.0f);
+                aircraft.track_deg = static_cast<float>((packet.GetNBitWordFromMessage(10, 14) * 360) / 1024.0f);
             }
 
             break;
@@ -757,9 +777,9 @@ bool AircraftDictionary::ApplyAircraftStatusMessage(Aircraft &aircraft, ADSBPack
 bool AircraftDictionary::ApplyTargetStateAndStatusInfoMessage(Aircraft &aircraft, ADSBPacket packet) { return false; }
 
 bool AircraftDictionary::ApplyAircraftOperationStatusMessage(Aircraft &aircraft, ADSBPacket packet) {
-    // TODO: get nac/nic, and supplement airborne status from here.
+    // TODO: get nac/navigation_integrity_category, and supplement airborne status from here.
     // https://mode-s.org/decode/content/ads-b/6-operation-status.html
-    // More about nic/nac here: https://mode-s.org/decode/content/ads-b/7-uncertainty.html
+    // More about navigation_integrity_category/nac here: https://mode-s.org/decode/content/ads-b/7-uncertainty.html
 
     // ME[5-7] - Subtype Code
     ADSBPacket::OperationStatusSubtype subtype =
@@ -772,7 +792,7 @@ bool AircraftDictionary::ApplyAircraftOperationStatusMessage(Aircraft &aircraft,
 
     // ME[24-39] - Operational Mode Code
     // ME[26] - TCAS RA Active
-    aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagTCASRAActive, packet.GetNBitWordFromMessage(1, 26));
+    aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagTCASRA, packet.GetNBitWordFromMessage(1, 26));
     // ME[27] - IDENT Switch Active
     aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagIdent, packet.GetNBitWordFromMessage(1, 27));
     // ME[29] - Single Antenna Flag
@@ -788,16 +808,17 @@ bool AircraftDictionary::ApplyAircraftOperationStatusMessage(Aircraft &aircraft,
     aircraft.WriteNICBit(Aircraft::NICBit::kNICBitC, packet.GetNBitWordFromMessage(1, 43));
 
     // ME[44-47] - Navigational Accuracy Category, Position
-    aircraft.nac_position =
+    aircraft.navigation_accuracy_category_position =
         static_cast<Aircraft::NACEstimatedPositionUncertainty>(packet.GetNBitWordFromMessage(4, 44));
 
     // ME[50-51] - Source Integrity Level (SIL)
-    uint8_t sil = packet.GetNBitWordFromMessage(2, 50);
+    uint8_t source_integrity_level = packet.GetNBitWordFromMessage(2, 50);
     // ME[53] - Horizontal Reference Direction (HRD)
     aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagHeadingUsesMagneticNorth, packet.GetNBitWordFromMessage(1, 53));
     // ME[54] - SIL Supplement
     uint8_t sil_supplement = packet.GetNBitWordFromMessage(1, 54);
-    aircraft.sil = static_cast<Aircraft::SILProbabilityOfExceedingNICRadiusOfContainmnent>((sil_supplement << 2) | sil);
+    aircraft.source_integrity_level = static_cast<Aircraft::SILProbabilityOfExceedingNICRadiusOfContainmnent>(
+        (sil_supplement << 2) | source_integrity_level);
 
     // Conditional fields (meaning depends on subtype).
     switch (subtype) {
@@ -813,10 +834,10 @@ bool AircraftDictionary::ApplyAircraftOperationStatusMessage(Aircraft &aircraft,
             aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagHasUATIn, packet.GetNBitWordFromMessage(1, 18));
 
             // ME[48-49] - GVA
-            aircraft.gva = static_cast<Aircraft::GeometricVerticalAccurary>(packet.GetNBitWordFromMessage(2, 48));
+            aircraft.geometric_vertical_accuracy = static_cast<Aircraft::GVA>(packet.GetNBitWordFromMessage(2, 48));
 
             // ME[52] - NIC Baro
-            aircraft.nic_baro =
+            aircraft.navigation_integrity_category_baro =
                 static_cast<Aircraft::NICBarometricAltitudeIntegrity>(packet.GetNBitWordFromMessage(1, 52));
 
             break;
@@ -829,7 +850,7 @@ bool AircraftDictionary::ApplyAircraftOperationStatusMessage(Aircraft &aircraft,
             // ME[15] - UAT In
             aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagHasUATIn, packet.GetNBitWordFromMessage(1, 15));
             // ME[16-18] - NACv
-            aircraft.nac_velocity =
+            aircraft.navigation_accuracy_category_velocity =
                 static_cast<Aircraft::NACHorizontalVelocityError>(packet.GetNBitWordFromMessage(3, 16));
             // ME[19] - NIC Supplement C
             aircraft.WriteNICBit(Aircraft::NICBit::kNICBitC, packet.GetNBitWordFromMessage(1, 19));

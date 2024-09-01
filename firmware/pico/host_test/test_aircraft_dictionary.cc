@@ -153,7 +153,7 @@ TEST(decode_utils, CalcNLCPRFromLat) {
 
 TEST(Aircraft, SetCPRLatLon) {
     Aircraft aircraft;
-    EXPECT_FALSE(aircraft.position_valid);
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
 
     // Send n_lat_cpr out of bounds (bigger than 2^17 bits max value).
     EXPECT_FALSE(aircraft.SetCPRLatLon(0xFFFFFF, 53663, true));
@@ -170,7 +170,7 @@ TEST(Aircraft, SetCPRLatLon) {
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(578, 4651, false));
     EXPECT_FALSE(aircraft.DecodePosition());
-    EXPECT_FALSE(aircraft.position_valid);
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
 
     // Send two odd packets at startup, no even packets.
     aircraft = Aircraft();  // clear everything
@@ -179,7 +179,7 @@ TEST(Aircraft, SetCPRLatLon) {
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(236, 857, true));
     EXPECT_FALSE(aircraft.DecodePosition());
-    EXPECT_FALSE(aircraft.position_valid);
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
 
     // Send one odd packet and one even packet at startup.
     aircraft = Aircraft();  // clear everything
@@ -188,7 +188,7 @@ TEST(Aircraft, SetCPRLatLon) {
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
     EXPECT_TRUE(aircraft.DecodePosition());
-    EXPECT_TRUE(aircraft.position_valid);
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
     EXPECT_NEAR(aircraft.latitude_deg, 52.25720f, 1e-4);  // even latitude
     EXPECT_NEAR(aircraft.longitude_deg, 3.91937f, 1e-4);  // longitude calculated from even latitude
 
@@ -199,7 +199,7 @@ TEST(Aircraft, SetCPRLatLon) {
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true));
     EXPECT_TRUE(aircraft.DecodePosition());
-    EXPECT_TRUE(aircraft.position_valid);
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
     EXPECT_NEAR(aircraft.latitude_deg, 52.26578f, 1e-4);  // odd latitude
     // don't have a test value available for the longitude calculated from odd latitude
 
@@ -258,7 +258,6 @@ TEST(AircraftDictionary, ApplyAirbornePositionMessage) {
     ASSERT_EQ(aircraft.icao_address, (uint32_t)0xA6147F);
     EXPECT_FLOAT_EQ(aircraft.latitude_deg, 0.0f);
     EXPECT_FLOAT_EQ(aircraft.longitude_deg, 0.0f);
-    EXPECT_EQ(aircraft.surveillance_status, Aircraft::SurveillanceStatus::kSurveillanceStatusNoCondition);
     // Altitude should be filled out.
     EXPECT_EQ(aircraft.altitude_source, Aircraft::AltitudeSource::kAltitudeSourceBaro);
     EXPECT_EQ(aircraft.baro_altitude_ft, 16975);
@@ -273,7 +272,6 @@ TEST(AircraftDictionary, ApplyAirbornePositionMessage) {
     ASSERT_EQ(aircraft.icao_address, 0xA6147Fu);
     EXPECT_NEAR(aircraft.latitude_deg, 20.326522568524894f, kLatDegCloseEnough);
     EXPECT_NEAR(aircraft.longitude_deg, -156.5328535600142f, kLonDegCloseEnough);
-    EXPECT_EQ(aircraft.surveillance_status, Aircraft::SurveillanceStatus::kSurveillanceStatusNoCondition);
     // Altitude should be filled out.
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedBaroAltitude));
     EXPECT_EQ(aircraft.altitude_source, Aircraft::AltitudeSource::kAltitudeSourceBaro);
@@ -297,7 +295,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
 
     // Aircraft should now have velocities populated.
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedTrack));
-    EXPECT_NEAR(aircraft.heading_deg, 304.2157021324374, kFloatCloseEnough);
+    EXPECT_NEAR(aircraft.track_deg, 304.2157021324374, kFloatCloseEnough);
     // Velocity should actually evaluate to 120 when evaluated with doubles, but there is some float error with the sqrt
     // that I think gets pretty nasty.
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity));
@@ -323,7 +321,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedTrack));
     EXPECT_EQ(aircraft.vertical_rate_fpm, -832);
     EXPECT_EQ(aircraft.velocity_source, Aircraft::VelocitySource::kVelocitySourceGroundSpeed);
-    EXPECT_NEAR(aircraft.heading_deg, 182.88f, 0.01);
+    EXPECT_NEAR(aircraft.track_deg, 182.88f, 0.01);
     EXPECT_NEAR(aircraft.velocity_kts, 159.20f, 0.01);
 
     // Test altitude difference between baro and GNSS altitude for Message A by re-ingesting.
@@ -352,7 +350,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedTrack));
     EXPECT_EQ(aircraft.vertical_rate_fpm, -2304);
     EXPECT_EQ(aircraft.velocity_source, Aircraft::VelocitySource::kVelocitySourceAirspeedTrue);
-    EXPECT_NEAR(aircraft.heading_deg, 243.98f, 0.01);
+    EXPECT_NEAR(aircraft.track_deg, 243.98f, 0.01);
     EXPECT_NEAR(aircraft.velocity_kts, 375.0f, 0.01);
 }
 
@@ -436,4 +434,20 @@ TEST(AircraftDictionary, IngestModeA) {
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne));
+}
+
+TEST(Aircraft, AircraftStats) {
+    Aircraft aircraft;
+    aircraft.IncrementNumFramesReceived();
+    EXPECT_EQ(aircraft.stats_frames_received_in_last_interval, 0);
+    aircraft.UpdateStats();
+    EXPECT_EQ(aircraft.stats_frames_received_in_last_interval, 1);
+    EXPECT_EQ(aircraft.stats_mode_s_frames_received_in_last_interval, 0);
+    EXPECT_EQ(aircraft.stats_mode_ac_frames_received_in_last_interval, 1);
+    aircraft.IncrementNumFramesReceived(false);
+    aircraft.IncrementNumFramesReceived(true);
+    aircraft.UpdateStats();
+    EXPECT_EQ(aircraft.stats_frames_received_in_last_interval, 2);
+    EXPECT_EQ(aircraft.stats_mode_ac_frames_received_in_last_interval, 1);
+    EXPECT_EQ(aircraft.stats_mode_s_frames_received_in_last_interval, 1);
 }

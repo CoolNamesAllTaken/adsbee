@@ -12,6 +12,8 @@ class CommsManager {
    public:
     static const uint16_t kATCommandBufMaxLen = 1000;
     static const uint16_t kPrintfBufferMaxSize = 500;
+    static const uint32_t kMAVLINKReportingIntervalMs = 1000;
+    static const uint32_t kCSBeeReportingIntervalMs = 1000;
 
     struct CommsManagerConfig {
         uart_inst_t *comms_uart_handle = uart1;
@@ -35,13 +37,13 @@ class CommsManager {
     bool Update();
 
     CPP_AT_CALLBACK(ATBaudrateCallback);
-    CPP_AT_CALLBACK(ATLogLevelCallback);
+    CPP_AT_CALLBACK(ATBiasTeeEnableCallback);
     CPP_AT_CALLBACK(ATFeedCallback);
     CPP_AT_CALLBACK(ATFlashESP32Callback);
+    CPP_AT_CALLBACK(ATLogLevelCallback);
     CPP_AT_CALLBACK(ATProtocolCallback);
     CPP_AT_HELP_CALLBACK(ATProtocolHelpCallback);
     CPP_AT_CALLBACK(ATRxEnableCallback);
-    CPP_AT_CALLBACK(ATRxGainCallback);
     CPP_AT_CALLBACK(ATSettingsCallback);
     CPP_AT_CALLBACK(ATTLReadCallback);
     CPP_AT_CALLBACK(ATTLSetCallback);
@@ -146,7 +148,6 @@ class CommsManager {
     char wifi_password[SettingsManager::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
 
     // MAVLINK settings.
-    uint32_t mavlink_reporting_interval_ms = 1000;
     uint8_t mavlink_system_id = 0;
     uint8_t mavlink_component_id = 0;
 

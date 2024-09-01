@@ -8,7 +8,7 @@
 
 class Aircraft {
    public:
-    static const uint16_t kCallSignMaxNumChars = 8;
+    static const uint16_t kCallSignMaxNumChars = 7;
 
     enum AirframeType : uint16_t {
         kAirframeTypeInvalid = 0,
@@ -30,14 +30,6 @@ class Aircraft {
         kAirframeTypeHeavy,            // > 136000kg
         kAirframeTypeHighPerformance,  // >5g acceleration and >400kt speed
         kAirframeTypeRotorcraft
-    };
-
-    enum SurveillanceStatus : int16_t {
-        kSurveillanceStatusNotSet = -1,
-        kSurveillanceStatusNoCondition = 0,
-        kSurveillanceStatusPermanantAlert = 1,
-        kSurveillanceStatusTemporaryAlert = 2,
-        kSurveillanceStatusSPICondition = 3
     };
 
     enum AltitudeSource : int16_t {
@@ -63,7 +55,8 @@ class Aircraft {
     };
 
     enum BitFlag : uint32_t {
-        kBitFlagIsAirborne = 0,          // Received messages or flags indicating the aircraft is airborne.
+        kBitFlagIsAirborne = 0,  // Received messages or flags indicating the aircraft is airborne.
+        kBitFlagPositionValid,
         kBitFlagIsMilitary,              // Received at least one military ES message from the aircraft.
         kBitFlagIsClassB2GroundVehicle,  // Is a class B2 ground vehicle transmitting at <70W.
         kBitFlagHas1090ESIn,             // Aircraft is equipped with 1090MHz Extended Squitter receive capability.
@@ -76,7 +69,11 @@ class Aircraft {
                                              // true north.
         kBitFlagIdent,                       // IDENT switch is currently active.
         kBitFlagAlert,                       // Aircraft is indicating an alert.
-        kBitFlagTCASRAActive,                // Indicates a TCAS resolution advisory is active.
+        kBitFlagTCASRA,                      // Indicates a TCAS resolution advisory is active.
+        kBitFlagReserved0,
+        kBitFlagReserved1,
+        kBitFlagReserved2,
+        kBitFlagReserved3,
         // Flags after kBitFlagUpdatedBaroAltitude are cleared at the end of every reporting interval.
         kBitFlagUpdatedBaroAltitude,
         kBitFlagUpdatedGNSSAltitude,
@@ -151,11 +148,11 @@ class Aircraft {
         kPOERCLessThanOrEqualTo1em7PerSample = 0b111,
     };
 
-    enum GeometricVerticalAccurary : uint8_t {
+    enum GVA : uint8_t {
         kGVAUnknownOrGreaterThan150Meters = 0,
         GVALessThanOrEqualTo150Meters = 1,
         GVALessThanOrEqualTo45Meters = 2,
-        GVAReserved = 3
+        GVALessThan45Meters = 3
     };
 
     Aircraft(uint32_t icao_address_in);
@@ -189,6 +186,29 @@ class Aircraft {
      * @retval True if position was decoded successfully, false otherwise.
      */
     bool DecodePosition();
+
+    /**
+     * Indicate that a frame has been received by incrementing the corresponding frame counter.
+     * @param[in] mode_s_frame Set to true if the frame received was a Mode S frame.
+     */
+    inline void IncrementNumFramesReceived(bool mode_s_frame = false) {
+        mode_s_frame ? stats_mode_s_frames_received_counter_++ : stats_mode_ac_frames_received_counter_++;
+    }
+
+    /**
+     * Update the counters for frames received by setting the public value equal to the incrementing counter value, and
+     * resetting the counter. This allows each read of stats_frames_received_in_last_interval to always read a
+     * count for number of packets recieved over a consistent interval of time.
+     */
+    inline void UpdateStats() {
+        stats_mode_ac_frames_received_in_last_interval = stats_mode_ac_frames_received_counter_;
+        stats_mode_ac_frames_received_counter_ = 0;
+        stats_mode_s_frames_received_in_last_interval = stats_mode_s_frames_received_counter_;
+        stats_mode_s_frames_received_counter_ = 0;
+
+        stats_frames_received_in_last_interval =
+            stats_mode_ac_frames_received_in_last_interval + stats_mode_s_frames_received_in_last_interval;
+    }
 
     /**
      * Set or clear a bit on the Aircraft.
@@ -231,7 +251,13 @@ class Aircraft {
 
     uint32_t flags = 0b0;
 
-    uint32_t last_seen_timestamp_ms = 0;
+    uint32_t last_message_timestamp_ms = 0;
+    int16_t last_message_signal_strength_dbm = 0;  // Voltage of RSSI signal during message receipt.
+    int16_t last_message_signal_quality_db = 0;    // Ratio of RSSI to noise floor during message receipt.
+
+    uint16_t stats_frames_received_in_last_interval = 0;  // Number of valid frames received.
+    uint16_t stats_mode_ac_frames_received_in_last_interval = 0;
+    uint16_t stats_mode_s_frames_received_in_last_interval = 0;
 
     uint16_t transponder_capability = 0;
     uint32_t icao_address = 0;
@@ -239,7 +265,6 @@ class Aircraft {
     uint16_t squawk = 0;
     AirframeType airframe_type = kAirframeTypeInvalid;
 
-    SurveillanceStatus surveillance_status = kSurveillanceStatusNotSet;
     int32_t baro_altitude_ft = 0;
     int32_t gnss_altitude_ft = 0;
     AltitudeSource altitude_source = kAltitudeSourceNotSet;
@@ -247,30 +272,32 @@ class Aircraft {
     // Airborne Position Message
     float latitude_deg = 0.0f;
     float longitude_deg = 0.0f;
-    bool position_valid = false;
 
     // Airborne Velocities Message
-    float heading_deg = 0.0f;
+    float track_deg = 0.0f;
     float velocity_kts = 0;
     VelocitySource velocity_source = kVelocitySourceNotSet;
     int vertical_rate_fpm = 0.0f;
     VerticalRateSource vertical_rate_source = kVerticalRateSourceNotSet;
-    int altitude_difference_gnss_above_baro_ft = 0;
 
     // Aircraft Operation Status Message
     // Navigation Integrity Category (NIC)
     uint8_t nic_bits_valid = 0b000;  // MSb to LSb: nic_c_valid nic_b_valid nic_a_valid.
     uint8_t nic_bits = 0b000;        // MSb to LSb: nic_c nic_b nic_a.
-    NICRadiusOfContainment nic = kROCUnknown;
-    NICBarometricAltitudeIntegrity nic_baro = kBAIGillhamInputNotCrossChecked;  // Default to worst case.
+    NICRadiusOfContainment navigation_integrity_category = kROCUnknown;  // 4 bits.
+    NICBarometricAltitudeIntegrity navigation_integrity_category_baro =
+        kBAIGillhamInputNotCrossChecked;  // 1 bit. Default to worst case.
     // Navigation Accuracy Category (NAC)
-    NACHorizontalVelocityError nac_velocity = kHVEUnknownOrGreaterThanOrEqualTo10MetersPerSecond;     // 3 bits.
-    NACEstimatedPositionUncertainty nac_position = kEPUUnknownOrGreaterThanOrEqualTo10NauticalMiles;  // 4 bits.
+    NACHorizontalVelocityError navigation_accuracy_category_velocity =
+        kHVEUnknownOrGreaterThanOrEqualTo10MetersPerSecond;  // 3 bits.
+    NACEstimatedPositionUncertainty navigation_accuracy_category_position =
+        kEPUUnknownOrGreaterThanOrEqualTo10NauticalMiles;  // 4 bits.
     // Geometric Vertical Accuracy (GVA)
-    GeometricVerticalAccurary gva = kGVAUnknownOrGreaterThan150Meters;  // 2 bits.
-    SILProbabilityOfExceedingNICRadiusOfContainmnent sil = kPOERCUnknownOrGreaterThan1em3PerFlightHour;
+    GVA geometric_vertical_accuracy = kGVAUnknownOrGreaterThan150Meters;  // 2 bits.
+    SILProbabilityOfExceedingNICRadiusOfContainmnent source_integrity_level =
+        kPOERCUnknownOrGreaterThan1em3PerFlightHour;  // 3 bits.
     // System Design Assurance
-    SystemDesignAssurance system_design_assurance = kSDASupportedFailureUnknownOrNoSafetyEffect;
+    SystemDesignAssurance system_design_assurance = kSDASupportedFailureUnknownOrNoSafetyEffect;  // 2 bits.
     // GPS Antenna Offset
     int8_t gnss_antenna_offset_right_of_roll_axis_m =
         INT8_MAX;  // Defaults to INT8_MAX to indicate it hasn't been read yet.
@@ -299,6 +326,9 @@ class Aircraft {
 
     CPRPacket last_odd_packet_;
     CPRPacket last_even_packet_;
+
+    uint16_t stats_mode_ac_frames_received_counter_ = 0;
+    uint16_t stats_mode_s_frames_received_counter_ = 0;
 };
 
 class AircraftDictionary {

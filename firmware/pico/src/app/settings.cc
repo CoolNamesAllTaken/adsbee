@@ -35,7 +35,8 @@ bool SettingsManager::Load() {
 }
 
 bool SettingsManager::Save() {
-    settings.tl_mv = ads_bee.GetTLMilliVolts();
+    settings.tl_mv = adsbee.GetTLMilliVolts();
+    settings.bias_tee_enabled = adsbee.BiasTeeIsEnabled();
 
     // Save log level.
     settings.log_level = comms_manager.log_level;
@@ -71,7 +72,8 @@ void SettingsManager::ResetToDefaults() {
 }
 
 void SettingsManager::Apply() {
-    ads_bee.SetTLMilliVolts(settings.tl_mv);
+    adsbee.SetTLMilliVolts(settings.tl_mv);
+    adsbee.SetBiasTeeEnable(settings.bias_tee_enabled);
 
     // Apply log level.
     comms_manager.log_level = settings.log_level;

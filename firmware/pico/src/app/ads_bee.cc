@@ -73,6 +73,11 @@ bool ADSBee::Init() {
     gpio_set_function(config_.onboard_i2c_sda_pin, GPIO_FUNC_I2C);
     gpio_set_function(config_.onboard_i2c_scl_pin, GPIO_FUNC_I2C);
 
+    // Initialize the bias tee.
+    gpio_init(config_.bias_tee_enable_pin);
+    gpio_put(config_.bias_tee_enable_pin, 1);  // Enable is active LO.
+    gpio_set_dir(config_.bias_tee_enable_pin, GPIO_OUT);
+
     // Enable the MLAT timer using the 24-bit SysTick timer connected to the 125MHz processor clock.
     // SysTick Control and Status Register
     systick_hw->csr = 0b110;  // Source = External Reference Clock, TickInt = Enabled, Counter = Disabled.
@@ -162,7 +167,7 @@ bool ADSBee::Update() {
         }
 
         DecodedTransponderPacket decoded_packet = DecodedTransponderPacket(raw_packet);
-        CONSOLE_INFO("main", "\tdf=%d icao_address=0x%06x", decoded_packet.GetDownlinkFormat(),
+        CONSOLE_INFO("ADSBee::Update", "\tdf=%d icao_address=0x%06x", decoded_packet.GetDownlinkFormat(),
                      decoded_packet.GetICAOAddress());
         if (aircraft_dictionary.IngestDecodedTransponderPacket(decoded_packet)) {
             // Packet was used to update the dictionary or was silently ignored (but presumed to be valid).
@@ -171,30 +176,41 @@ bool ADSBee::Update() {
             switch (decoded_packet.GetDownlinkFormat()) {
                 case DecodedTransponderPacket::kDownlinkFormatAltitudeReply:
                 case DecodedTransponderPacket::kDownlinkFormatIdentityReply:
-                    stats_num_valid_mode_ac_packets_counter_++;
+                    stats_valid_mode_ac_frames_in_last_interval_counter_++;
                     break;
                 default:
-                    stats_num_valid_mode_s_packets_counter_++;
+                    stats_valid_mode_s_frames_in_last_interval_counter_++;
                     break;
             }
             comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
-            CONSOLE_INFO("main", "\taircraft_dictionary: %d aircraft", aircraft_dictionary.GetNumAircraft());
+            CONSOLE_INFO("ADSBee::Update", "\taircraft_dictionary: %d aircraft", aircraft_dictionary.GetNumAircraft());
         }
     }
 
     // Update statistics.
     if (timestamp_ms - stats_last_update_timestamp_ms_ > kStatsUpdateIntervalMs) {
-        stats_num_valid_mode_ac_packets_ = stats_num_valid_mode_ac_packets_counter_;
-        stats_num_valid_mode_s_packets_ = stats_num_valid_mode_s_packets_counter_;
+        // kStatsUpdateIntervalMs has elapsed. Time to update stuff!
+        // Update statistics for each aircraft.
+        for (auto &itr : aircraft_dictionary.dict) {
+            Aircraft &aircraft = itr.second;
+            aircraft.UpdateStats();
+        }
+        // Update statistics for the dictionary.
+        stats_valid_mode_ac_frames_in_last_interval_ = stats_valid_mode_ac_frames_in_last_interval_counter_;
+        stats_valid_mode_s_frames_in_last_interval_ = stats_valid_mode_s_frames_in_last_interval_counter_;
         // Read num demods last and reset it first so we can never have a ratio > 1 even in interrupt edge cases.
-        stats_num_demods_ = stats_num_demods_counter_;
-        stats_num_demods_counter_ = 0;
-        stats_num_valid_mode_ac_packets_counter_ = 0;
-        stats_num_valid_mode_s_packets_counter_ = 0;
+        stats_demods_in_last_interval_ = stats_demods_in_last_interval_counter_;
+        stats_demods_in_last_interval_counter_ = 0;
+        stats_valid_mode_ac_frames_in_last_interval_counter_ = 0;
+        stats_valid_mode_s_frames_in_last_interval_counter_ = 0;
 
         stats_last_update_timestamp_ms_ = timestamp_ms;
 
-        tl_learning_num_valid_packets_ += (stats_num_valid_mode_ac_packets_ + stats_num_valid_mode_s_packets_);
+        // If learning, add the number of valid packets received to the pile used for trigger level learning.
+        if (tl_learning_temperature_mv_ > 0) {
+            tl_learning_num_valid_packets_ +=
+                (stats_valid_mode_ac_frames_in_last_interval_ + stats_valid_mode_s_frames_in_last_interval_);
+        }
     }
 
     // Update trigger level learning if it's active.
@@ -246,6 +262,11 @@ bool ADSBee::Update() {
     return true;
 }
 
+void ADSBee::FlashStatusLED(uint32_t led_on_ms) {
+    gpio_put(config_.status_led_pin, 1);
+    led_on_timestamp_ms_ = get_time_since_boot_ms();
+}
+
 void ADSBee::OnDemodBegin(uint gpio, uint32_t event_mask) {
     if (gpio == config_.demod_pins[0] && event_mask == GPIO_IRQ_EDGE_RISE) {
         gpio_acknowledge_irq(config_.demod_pins[0], GPIO_IRQ_EDGE_RISE);
@@ -280,7 +301,7 @@ void ADSBee::OnDemodComplete() {
         packet_num_words = RawTransponderPacket::kMaxPacketLenWords32;
     }
     // Track that we attempted to demodulate something.
-    stats_num_demods_counter_++;
+    stats_demods_in_last_interval_counter_++;
     // Create a RawTransponderPacket and push it onto the queue.
     for (uint16_t i = 0; i < packet_num_words; i++) {
         rx_packet_.buffer[i] = pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_);
@@ -336,6 +357,25 @@ uint64_t ADSBee::GetMLAT12MHzCounts(uint16_t num_bits) {
 
 uint16_t ADSBee::GetTLLearningTemperatureMV() { return tl_learning_temperature_mv_; }
 
+int ADSBee::ReadRSSIMilliVolts() {
+    adc_select_input(config_.rssi_adc_input);
+    int rssi_adc_counts = adc_read();
+    return rssi_adc_counts * 3300 / 4095;
+}
+
+int ADSBee::ReadRSSIdBm() {
+    return 60 * (ReadRSSIMilliVolts() - 1600) / 1000;  // AD8313 0dBm intercept at 1.6V, slope is 60dBm/V.
+}
+
+inline int ADCCountsToMilliVolts(uint16_t adc_counts) { return 3300 * adc_counts / 0xFFF; }
+
+int ADSBee::ReadTLMilliVolts() {
+    // Read back the low level TL bias output voltage.
+    adc_select_input(config_.tl_adc_input);
+    tl_adc_counts_ = adc_read();
+    return ADCCountsToMilliVolts(tl_adc_counts_);
+}
+
 bool ADSBee::SetTLMilliVolts(int tl_mv) {
     if (tl_mv > kTLMaxMV || tl_mv < kTLMinMV) {
         CONSOLE_ERROR("ADSBee::SetTLMilliVolts", "Unable to set tl_mv_ to %d, outside of permissible range %d-%d.\r\n",
@@ -348,33 +388,9 @@ bool ADSBee::SetTLMilliVolts(int tl_mv) {
     return true;
 }
 
-inline int ADCCountsToMilliVolts(uint16_t adc_counts) { return 3300 * adc_counts / 0xFFF; }
-
-int ADSBee::ReadTLMilliVolts() {
-    // Read back the low level TL bias output voltage.
-    adc_select_input(config_.tl_adc_input);
-    tl_adc_counts_ = adc_read();
-    return ADCCountsToMilliVolts(tl_adc_counts_);
-}
-
 void ADSBee::StartTLLearning(uint16_t tl_learning_num_cycles, uint16_t tl_learning_start_temperature_mv,
                              uint16_t tl_min_mv, uint16_t tl_max_mv) {
     tl_learning_temperature_mv_ = tl_learning_start_temperature_mv;
     tl_learning_temperature_step_mv_ = tl_learning_start_temperature_mv / tl_learning_num_cycles;
     tl_learning_cycle_start_timestamp_ms_ = get_time_since_boot_ms();
-}
-
-int ADSBee::ReadRSSIMilliVolts() {
-    adc_select_input(config_.rssi_adc_input);
-    int rssi_adc_counts = adc_read();
-    return rssi_adc_counts * 3300 / 4095;
-}
-
-int ADSBee::ReadRSSIdBm() {
-    return 60 * (ReadRSSIMilliVolts() - 1600) / 1000;  // AD8313 0dBm intercept at 1.6V, slope is 60dBm/V.
-}
-
-void ADSBee::FlashStatusLED(uint32_t led_on_ms) {
-    gpio_put(config_.status_led_pin, 1);
-    led_on_timestamp_ms_ = get_time_since_boot_ms();
 }
