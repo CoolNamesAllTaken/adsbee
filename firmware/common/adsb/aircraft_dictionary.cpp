@@ -199,6 +199,7 @@ bool AircraftDictionary::IngestModeAPacket(ModeAPacket packet) {
     aircraft_ptr->WriteBitFlag(Aircraft::BitFlag::kBitFlagAlert, packet.HasAlert());
     aircraft_ptr->WriteBitFlag(Aircraft::BitFlag::kBitFlagIdent, packet.HasIdent());
     aircraft_ptr->squawk = packet.GetSquawk();
+    aircraft_ptr->IncrementNumFramesReceived(false);
 
     return true;
 }
@@ -220,6 +221,7 @@ bool AircraftDictionary::IngestModeCPacket(ModeCPacket packet) {
     aircraft_ptr->WriteBitFlag(Aircraft::BitFlag::kBitFlagAlert, packet.HasAlert());
     aircraft_ptr->WriteBitFlag(Aircraft::BitFlag::kBitFlagIdent, packet.HasIdent());
     aircraft_ptr->baro_altitude_ft = packet.GetAltitudeFt();
+    aircraft_ptr->IncrementNumFramesReceived(false);
 
     return true;
 }
@@ -239,19 +241,20 @@ bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
     }
     aircraft_ptr->last_message_timestamp_ms = get_time_since_boot_ms();
 
+    bool ret = false;
     uint16_t typecode = packet.GetTypeCode();
     switch (typecode) {
         case ADSBPacket::kTypeCodeAircraftID:      // TC = 1 (Aircraft Identification)
         case ADSBPacket::kTypeCodeAircraftID + 1:  // TC = 2 (Aircraft Identification)
         case ADSBPacket::kTypeCodeAircraftID + 2:  // TC = 3 (Aircraft Identification)
         case ADSBPacket::kTypeCodeAircraftID + 3:  // TC = 4 (Aircraft Identification)
-            return ApplyAircraftIDMessage(*aircraft_ptr, packet);
+            ret = ApplyAircraftIDMessage(*aircraft_ptr, packet);
             break;
         case ADSBPacket::kTypeCodeSurfacePosition:      // TC = 5 (Surface Position)
         case ADSBPacket::kTypeCodeSurfacePosition + 1:  // TC = 6 (Surface Position)
         case ADSBPacket::kTypeCodeSurfacePosition + 2:  // TC = 7 (Surface Position)
         case ADSBPacket::kTypeCodeSurfacePosition + 3:  // TC = 8 (Surface Position)
-            return ApplySurfacePositionMessage(*aircraft_ptr, packet);
+            ret = ApplySurfacePositionMessage(*aircraft_ptr, packet);
             break;
         case ADSBPacket::kTypeCodeAirbornePositionBaroAlt:      // TC = 9 (Airborne Position w/ Baro Altitude)
         case ADSBPacket::kTypeCodeAirbornePositionBaroAlt + 1:  // TC = 10 (Airborne Position w/ Baro Altitude)
@@ -266,34 +269,34 @@ bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
         case ADSBPacket::kTypeCodeAirbornePositionGNSSAlt:      // TC = 20 (Airborne Position w/ GNSS Altitude)
         case ADSBPacket::kTypeCodeAirbornePositionGNSSAlt + 1:  // TC = 21 (Airborne Position w/ GNSS Altitude)
         case ADSBPacket::kTypeCodeAirbornePositionGNSSAlt + 2:  // TC = 22 (Airborne Position w/ GNSS Altitude)
-            return ApplyAirbornePositionMessage(*aircraft_ptr, packet);
+            ret = ApplyAirbornePositionMessage(*aircraft_ptr, packet);
             break;
         case ADSBPacket::kTypeCodeAirborneVelocities:  // TC = 19 (Airborne Velocities)
-            return ApplyAirborneVelocitiesMessage(*aircraft_ptr, packet);
+            ret = ApplyAirborneVelocitiesMessage(*aircraft_ptr, packet);
             break;
         case ADSBPacket::kTypeCodeReserved:      // TC = 23 (Reserved)
         case ADSBPacket::kTypeCodeReserved + 1:  // TC = 24 (Reserved)
         case ADSBPacket::kTypeCodeReserved + 2:  // TC = 25 (Reserved)
         case ADSBPacket::kTypeCodeReserved + 3:  // TC = 26 (Reserved)
         case ADSBPacket::kTypeCodeReserved + 4:  // TC = 27 (Reserved)
-            return false;
+            ret = false;
             break;
         case ADSBPacket::kTypeCodeAircraftStatus:  // TC = 28 (Aircraft Status)
-            return ApplyAircraftStatusMessage(*aircraft_ptr, packet);
+            ret = ApplyAircraftStatusMessage(*aircraft_ptr, packet);
             break;
         case ADSBPacket::kTypeCodeTargetStateAndStatusInfo:  // TC = 29 (Target state and status info)
-            return ApplyTargetStateAndStatusInfoMessage(*aircraft_ptr, packet);
+            ret = ApplyTargetStateAndStatusInfoMessage(*aircraft_ptr, packet);
             break;
         case ADSBPacket::kTypeCodeAircraftOperationStatus:  // TC = 31 (Aircraft operation status)
-            return ApplyAircraftOperationStatusMessage(*aircraft_ptr, packet);
+            ret = ApplyAircraftOperationStatusMessage(*aircraft_ptr, packet);
             break;
         default:
             CONSOLE_ERROR("AircraftDictionary::IngestADSBPacket", "Received ADSB message with unsupported typecode %d.",
                           typecode);
-            return false;  // kTypeCodeInvalid, etc.
+            ret = false;  // kTypeCodeInvalid, etc.
     }
-
-    return false;
+    if (ret) aircraft_ptr->IncrementNumFramesReceived(true);  // Count the received Mode S frame.
+    return ret;
 }
 
 uint16_t AircraftDictionary::GetNumAircraft() { return dict.size(); }
@@ -809,13 +812,13 @@ bool AircraftDictionary::ApplyAircraftOperationStatusMessage(Aircraft &aircraft,
         static_cast<Aircraft::NACEstimatedPositionUncertainty>(packet.GetNBitWordFromMessage(4, 44));
 
     // ME[50-51] - Source Integrity Level (SIL)
-    uint8_t system_integrity_level = packet.GetNBitWordFromMessage(2, 50);
+    uint8_t source_integrity_level = packet.GetNBitWordFromMessage(2, 50);
     // ME[53] - Horizontal Reference Direction (HRD)
     aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagHeadingUsesMagneticNorth, packet.GetNBitWordFromMessage(1, 53));
     // ME[54] - SIL Supplement
     uint8_t sil_supplement = packet.GetNBitWordFromMessage(1, 54);
-    aircraft.system_integrity_level = static_cast<Aircraft::SILProbabilityOfExceedingNICRadiusOfContainmnent>(
-        (sil_supplement << 2) | system_integrity_level);
+    aircraft.source_integrity_level = static_cast<Aircraft::SILProbabilityOfExceedingNICRadiusOfContainmnent>(
+        (sil_supplement << 2) | source_integrity_level);
 
     // Conditional fields (meaning depends on subtype).
     switch (subtype) {

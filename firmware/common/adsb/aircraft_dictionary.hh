@@ -188,6 +188,29 @@ class Aircraft {
     bool DecodePosition();
 
     /**
+     * Indicate that a frame has been received by incrementing the corresponding frame counter.
+     * @param[in] mode_s_frame Set to true if the frame received was a Mode S frame.
+     */
+    inline void IncrementNumFramesReceived(bool mode_s_frame = false) {
+        mode_s_frame ? stats_mode_s_frames_received_counter_++ : stats_mode_ac_frames_received_counter_++;
+    }
+
+    /**
+     * Update the counters for frames received by setting the public value equal to the incrementing counter value, and
+     * resetting the counter. This allows each read of stats_frames_received_in_last_interval to always read a
+     * count for number of packets recieved over a consistent interval of time.
+     */
+    inline void UpdateStats() {
+        stats_mode_ac_frames_received_in_last_interval = stats_mode_ac_frames_received_counter_;
+        stats_mode_ac_frames_received_counter_ = 0;
+        stats_mode_s_frames_received_in_last_interval = stats_mode_s_frames_received_counter_;
+        stats_mode_s_frames_received_counter_ = 0;
+
+        stats_frames_received_in_last_interval =
+            stats_mode_ac_frames_received_in_last_interval + stats_mode_s_frames_received_in_last_interval;
+    }
+
+    /**
      * Set or clear a bit on the Aircraft.
      */
     inline void WriteBitFlag(BitFlag bit, bool value) { value ? flags |= (0b1 << bit) : flags &= ~(0b1 << bit); }
@@ -231,7 +254,10 @@ class Aircraft {
     uint32_t last_message_timestamp_ms = 0;
     int16_t last_message_signal_strength_dbm = 0;  // Voltage of RSSI signal during message receipt.
     int16_t last_message_signal_quality_db = 0;    // Ratio of RSSI to noise floor during message receipt.
-    uint16_t num_frames_received_in_last_reporting_interval = 0;  // Number of valid frames received.
+
+    uint16_t stats_frames_received_in_last_interval = 0;  // Number of valid frames received.
+    uint16_t stats_mode_ac_frames_received_in_last_interval = 0;
+    uint16_t stats_mode_s_frames_received_in_last_interval = 0;
 
     uint16_t transponder_capability = 0;
     uint32_t icao_address = 0;
@@ -268,7 +294,7 @@ class Aircraft {
         kEPUUnknownOrGreaterThanOrEqualTo10NauticalMiles;  // 4 bits.
     // Geometric Vertical Accuracy (GVA)
     GVA geometric_vertical_accuracy = kGVAUnknownOrGreaterThan150Meters;  // 2 bits.
-    SILProbabilityOfExceedingNICRadiusOfContainmnent system_integrity_level =
+    SILProbabilityOfExceedingNICRadiusOfContainmnent source_integrity_level =
         kPOERCUnknownOrGreaterThan1em3PerFlightHour;  // 3 bits.
     // System Design Assurance
     SystemDesignAssurance system_design_assurance = kSDASupportedFailureUnknownOrNoSafetyEffect;  // 2 bits.
@@ -300,6 +326,9 @@ class Aircraft {
 
     CPRPacket last_odd_packet_;
     CPRPacket last_even_packet_;
+
+    uint16_t stats_mode_ac_frames_received_counter_ = 0;
+    uint16_t stats_mode_s_frames_received_counter_ = 0;
 };
 
 class AircraftDictionary {
