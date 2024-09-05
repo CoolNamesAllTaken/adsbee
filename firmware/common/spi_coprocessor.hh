@@ -15,6 +15,7 @@
 #include "driver/spi_slave.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #endif
 
@@ -35,7 +36,7 @@ class SPICoprocessor {
     static const uint16_t kSPITransactionTimeoutTicks = kSPITransactionTimeoutMs / portTICK_PERIOD_MS;
 #endif
     struct SPICoprocessorConfig {
-        uint32_t clk_rate_hz = 40e6;  // 40 MHz
+        uint32_t clk_rate_hz = 10e6;  // 40 MHz
 #ifdef ON_PICO
         spi_inst_t *spi_handle = spi1;
         uint16_t spi_clk_pin = 10;
@@ -318,6 +319,10 @@ class SPICoprocessor {
 #endif
 
    private:
+#ifdef ON_ESP32
+    SemaphoreHandle_t coprocessor_spi_mutex_;
+#endif
+
     /**
      * Top level function that transaltes a write to an object (with associated address) into SPI transaction(s).
      * Included in the header file since the template function implementation needs to be visible to any file that
