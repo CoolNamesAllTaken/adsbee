@@ -55,7 +55,7 @@ class ADSBee {
         uint16_t rssi_adc_pin = 28;
         uint16_t rssi_adc_input = 2;
         // GPIO 2-3 are used for the EEPROM and rx gain digipot I2C bus via I2C1.
-        i2c_inst_t *onboard_i2c = i2c1;
+        i2c_inst_t* onboard_i2c = i2c1;
         uint16_t onboard_i2c_sda_pin = 2;
         uint16_t onboard_i2c_scl_pin = 3;
         uint32_t onboard_i2c_clk_freq_hz = 400e3;  // 400kHz
@@ -89,19 +89,19 @@ class ADSBee {
      * Returns the number of demodulations attempted in the last kStatsUpdateIntervalMs milliseconds.
      * @retval Number of demods attempted.
      */
-    inline uint16_t GetStatsNumDemods() { return stats_num_demods_; }
+    inline uint16_t GetStatsNumDemods() { return stats_demods_in_last_interval_; }
 
     /**
      * Returns the number of valid Mode A / Mode C packets decoded in the last kStatsUpdateIntervalMs milliseconds.
      * @retval Number of valid packets received with Downlink Format = 4, 5.
      */
-    inline uint16_t GetStatsNumModeACPackets() { return stats_num_valid_mode_ac_packets_; }
+    inline uint16_t GetStatsNumModeACPackets() { return stats_valid_mode_ac_frames_in_last_interval_; }
 
     /**
      * Returns the number of valid Mode S packets decoded in the last kStatsUpdateIntervalMs milliseconds.
      * @retval Number of valid packets received with Downlink Format != 4, 5.
      */
-    inline uint16_t GetStatsNumModeSPackets() { return stats_num_valid_mode_s_packets_; }
+    inline uint16_t GetStatsNumModeSPackets() { return stats_valid_mode_s_frames_in_last_interval_; }
 
     /**
      * Return the value of the low Minimum Trigger Level threshold in milliVolts.
@@ -260,18 +260,18 @@ class ADSBee {
 
     // These values are continuous counters of number of packets of each type received. Don't use these values for
     // anything external!
-    uint16_t stats_num_demods_counter_ = 0;
-    uint16_t stats_num_valid_mode_ac_packets_counter_ = 0;
-    uint16_t stats_num_valid_mode_s_packets_counter_ = 0;
+    uint16_t stats_demods_in_last_interval_counter_ = 0;
+    uint16_t stats_valid_mode_ac_frames_in_last_interval_counter_ = 0;
+    uint16_t stats_valid_mode_s_frames_in_last_interval_counter_ = 0;
 
     // Timestamp of the last time that the packet counters were stored and reset to 0.
     uint32_t stats_last_update_timestamp_ms_ = 0;  // [ms]
 
     // These values are updated every stats update interval so that they always contain counts across a consistent
     // interval. Use these values for anything important!
-    uint16_t stats_num_demods_ = 0;
-    uint16_t stats_num_valid_mode_ac_packets_ = 0;
-    uint16_t stats_num_valid_mode_s_packets_ = 0;
+    uint16_t stats_demods_in_last_interval_ = 0;
+    uint16_t stats_valid_mode_ac_frames_in_last_interval_ = 0;
+    uint16_t stats_valid_mode_s_frames_in_last_interval_ = 0;
 
     bool receiver_enabled_ = true;
     bool bias_tee_enabled_ = false;

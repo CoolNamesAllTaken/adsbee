@@ -59,10 +59,9 @@ int main() {
         if (esp32_test_packet_timestamp_ms - esp32_test_packet_last_sent_timestamp_ms > esp32_test_packet_interval_ms) {
             RawTransponderPacket test_packet =
                 RawTransponderPacket((char*)"8dac009458b9970f0aa394359da9", -123, 456789);
-            SPICoprocessor::RawTransponderPacketMessage message =
-                SPICoprocessor::RawTransponderPacketMessage(test_packet);
+            SPICoprocessor::SCWritePacket write_packet;
+            esp32.Write(test_packet);
             CONSOLE_INFO("Debug", "Sent ESP32 message.");
-            esp32.SendMessage(message);
             esp32_test_packet_last_sent_timestamp_ms = esp32_test_packet_timestamp_ms;
         }
 

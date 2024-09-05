@@ -2,6 +2,8 @@
 #define SPI_COPROCESSOR_HH_
 
 #include "aircraft_dictionary.hh"
+#include "comms.hh"
+#include "hal.hh"
 #include "settings.hh"
 #include "transponder_packet.hh"
 
@@ -18,26 +20,19 @@
 
 class SPICoprocessor {
    public:
-    static const uint16_t kSPITransactionMaxLenBytes = 1000;
+    static const uint16_t kSPITransactionMaxLenBytes = 64;
     static_assert(kSPITransactionMaxLenBytes % 4 == 0);  // Make sure it's word-aligned.
     static const uint16_t kSPITransactionQueueLenTransactions = 3;
-
-    struct SPITransaction {
-        uint8_t buffer[kSPITransactionMaxLenBytes];
-
-        SPITransaction() {
-            for (uint16_t i = 0; i < kSPITransactionMaxLenBytes; i++) {
-                // ESP_LOGI("SPITransaction", "Clearing i=%d", i);
-                buffer[i] = 0x0;
-            }
-        }
-    };
+    static const uint16_t kSPITransactionMaxNumRetries =
+        3;  // Max num retries per block in a multi-transfer transaction.
 
 #ifdef ON_PICO
+    static const uint16_t kHandshakePinMaxWaitDurationMs = 10;
 #elif ON_ESP32
-    static const uint32_t kNetworkLEDBLinkDurationMs = 1000;
-    static const uint32_t kSPIRxTaskStackDepthBytes = 4096;
-    static const TickType_t kSPIRxTimeoutTicks = 100 / portTICK_PERIOD_MS;
+    static const uint32_t kNetworkLEDBlinkDurationMs = 10;
+    static const uint32_t kNetworkLEDBlinkDurationTicks = kNetworkLEDBlinkDurationMs / portTICK_PERIOD_MS;
+    static const uint16_t kSPITransactionTimeoutMs = 10000;
+    static const uint16_t kSPITransactionTimeoutTicks = kSPITransactionTimeoutMs / portTICK_PERIOD_MS;
 #endif
     struct SPICoprocessorConfig {
         uint32_t clk_rate_hz = 40e6;  // 40 MHz
@@ -50,89 +45,208 @@ class SPICoprocessor {
         uint16_t spi_handshake_pin = 13;
 #elif ON_ESP32
         spi_host_device_t spi_handle = SPI2_HOST;
-        gpio_num_t spi_mosi_pin = GPIO_NUM_35;
-        gpio_num_t spi_miso_pin = GPIO_NUM_36;
-        gpio_num_t spi_clk_pin = GPIO_NUM_34;
-        gpio_num_t spi_cs_pin = GPIO_NUM_33;
+        gpio_num_t spi_mosi_pin = GPIO_NUM_41;
+        gpio_num_t spi_miso_pin = GPIO_NUM_42;
+        gpio_num_t spi_clk_pin = GPIO_NUM_40;
+        gpio_num_t spi_cs_pin = GPIO_NUM_39;
         gpio_num_t spi_handshake_pin = GPIO_NUM_0;
 
         gpio_num_t network_led_pin = GPIO_NUM_5;
 #endif
     };
 
-    enum PacketType : int8_t {
-        kSCPacketTypeInvalid = -1,
-        kSCPacketTypeSettings,
-        kSCPacketTypeNetworkMessage,
-        kSCPacketTypeAircraftList
+    /** NOTE: Packets should not be used outside of the SPICoprocessor class, they are only exposed for testing. **/
+
+    /** Begin edit these values for new packet types. **/
+
+    enum SCAddr : uint8_t {
+        kAddrInvalid = 0,           // Default value.
+        kAddrScratch,               // Used for testing SPI communications.
+        kAddrRawTransponderPacket,  // Used to forward raw packets from RP2040 to ESP32.
+        kAddrSettingsStruct,        // Used to transfer settings information.
+        kNumSCAddrs
     };
 
-    struct SCMessage {
-        uint16_t crc;     // 16-bit CRC of all bytes after the CRC.
-        uint32_t length;  // Length of the packet in bytes.
-        SPICoprocessor::PacketType type;
+    /** End edit these values for new packet types. **/
 
-        /**
-         * Checks to see if a SPICoprocessor packet (SCMessage) is valid.
-         * @param[in] received_length Number of bytes received over SPI.
-         * @retval True if packet is valid, false otherwise.
-         */
-        bool IsValid(uint32_t received_length);
+    // Commands are written from Master to Slave.
+    enum SCCommand : uint8_t {
+        kCmdInvalid = 0x0,
+        kCmdWriteToSlave,            // No response expected.
+        kCmdWriteToSlaveRequireAck,  // Expects a response to continue to the next block.
+        kCmdReadFromSlave,
+        kCmdWriteToMaster,            // No response expected.
+        kCmdWriteToMasterRequireAck,  // Expects a response to continue to the next block.
+        kCmdReadFromMaster,
+        kCmdDataBlock,
+        kCmdAck
+    };
+    /**
+     * Abstract base struct for SPI Coprocessor packets.
+     */
+    struct __attribute__((__packed__)) SCPacket {
+        static const uint16_t kPacketMaxLenBytes = 64;
+        static const uint16_t kCRCLenBytes = sizeof(uint16_t);
 
-        /**
-         * Sets the packet length and CRC based on the payload. CRC is calculated for everything after the CRC itself.
-         * @param[in] payload_length Number of bytes in the payload, which begins right after length for packets that
-         * inherit from SCMessage.
-         */
-        void PopulateCRCAndLength(uint32_t payload_length);
+        /** Begin packet contents on the wire. **/
+        SCCommand cmd = kCmdInvalid;
+        /** End packet contents on the wire. **/
+
+        // Pure virtual functions.
+        virtual inline uint16_t GetCRC() = 0;
+        virtual inline void SetCRC(uint16_t crc_in) = 0;
+        virtual inline uint16_t GetBufLenBytes() = 0;
+
+        // Virtual functions.
+        virtual inline bool IsValid() { return CalculateCRC16(GetBuf(), GetBufLenBytes() - kCRCLenBytes) == GetCRC(); }
+        virtual inline void PopulateCRC() { SetCRC(CalculateCRC16(GetBuf(), GetBufLenBytes() - kCRCLenBytes)); }
+        virtual inline uint8_t *GetBuf() { return (uint8_t *)(&cmd); }
     };
 
-    struct SettingsMessage : public SCMessage {
-        SettingsManager::Settings settings;
+    /**
+     * SPI Coprocessor Write Packet
+     *
+     * Used to write to slave (from master), or write to master (from slave). Does not receive a reply.
+     */
+    struct __attribute__((__packed__)) SCWritePacket : public SCPacket {
+        static const uint16_t kDataOffsetBytes =
+            sizeof(SCCommand) + sizeof(SCAddr) + sizeof(uint16_t) + sizeof(uint8_t);
+        static const uint16_t kDataMaxLenBytes = kPacketMaxLenBytes - kDataOffsetBytes - kCRCLenBytes;
+        static const uint16_t kBufMinLenBytes =
+            sizeof(SCCommand) + sizeof(SCAddr) + sizeof(uint16_t) + sizeof(uint8_t) + kCRCLenBytes;
+
+        /** Begin packet contents on the wire. **/
+        SCAddr addr = kAddrInvalid;
+        uint16_t offset = 0;
+        uint8_t len = 0;
+        uint8_t data[kDataMaxLenBytes + kCRCLenBytes];  // CRC is secretly appended at the end of data so that the
+                                                        // struct can be used as a buffer to send with.
+        /** End packet contents on the wire. **/
+
+        uint16_t data_len_bytes = 0;  // Length from start of data to beginning of CRC.
 
         /**
-         * SettingsMessage constructor. Populates the settings and adds length, packet type, and CRC info to parent.
-         * @param[in] settings Reference to a SettingsManager::Settings struct to send over.
-         * @retval The constructed Settings Packet.
+         * Default constructor.
          */
-        SettingsMessage(const SettingsManager::Settings &settings_in);
-    };
-
-    struct AircraftListMessage : public SCMessage {
-        uint16_t num_aicraft;
-        Aircraft aircraft_list[AircraftDictionary::kMaxNumAircraft];
+        SCWritePacket() {}
 
         /**
-         * AircraftListMessage constructor. Populates the aircraft list and adds length, packet type, and CRC info to
-         * parent.
-         * @param[in] num_aircraft Number of aircraft in the list. Determines the length of the packet.
-         * @param[in] aircraft_list Array of Aircraft objects.
-         * @retval The constructed AircraftListMessage.
+         * Constructor from buffer. Used for creating an SCCommand packet from a SPI transaction.
+         * @param[in] buf_in Pointer to buffer with SCCommand packet in it.
+         * @param[in] buf_in_len_bytes Length of the buffer to ingest.
          */
-        AircraftListMessage(uint16_t num_aicraft_in, const Aircraft aircraft_list_in[]);
-    };
-
-    struct DecodedTransponderPacketMessage : public SCMessage {
-        DecodedTransponderPacket packet;
-
-        /**
-         * DecodedTransponderPacketMessage constructor. Populates the packet to send and adds length, packet type, and
-         * CRC info to parent.
-         * @param[in] packet Reference to transponder packet to use for construction.
-         */
-        DecodedTransponderPacketMessage(const DecodedTransponderPacket &packet_in) {
-            packet = packet_in;
-            PopulateCRCAndLength(sizeof(DecodedTransponderPacketMessage) - sizeof(SCMessage));
+        SCWritePacket(uint8_t *buf_in, uint16_t buf_in_len_bytes) {
+            if (buf_in_len_bytes < kBufMinLenBytes) {
+                CONSOLE_ERROR("SPICoprocessor::SCWritePacket",
+                              "Attempted to create a packet from a buffer that was too small. Received %d bytes, but"
+                              "needed at least %d!",
+                              buf_in_len_bytes, kBufMinLenBytes);
+                return;
+            }
+            memcpy(GetBuf(), buf_in, buf_in_len_bytes);
+            data_len_bytes = buf_in_len_bytes - kDataOffsetBytes - kCRCLenBytes;
         }
+
+        inline uint16_t GetCRC() override {
+            uint16_t crc;
+            memcpy(&crc, data + data_len_bytes, sizeof(uint16_t));
+            return crc;
+        }
+        inline void SetCRC(uint16_t crc_in) override { memcpy(data + data_len_bytes, &crc_in, sizeof(uint16_t)); }
+        inline uint16_t GetBufLenBytes() override { return kDataOffsetBytes + data_len_bytes + kCRCLenBytes; }
     };
 
-    struct RawTransponderPacketMessage : public SCMessage {
-        RawTransponderPacket packet;
+    /**
+     * SPI Coprocessor Read Request Packet
+     *
+     * Used to request a read from slave (by master) or request a read from master (by slave). Receives a
+     * SCReadReplyPacket in response.
+     */
+    struct __attribute__((__packed__)) SCReadRequestPacket : public SCPacket {
+        static const uint16_t kBufLenBytes = sizeof(SCCommand) + sizeof(SCAddr) + 2 * sizeof(uint16_t) + kCRCLenBytes;
+        /** Begin packet contents on the wire. **/
+        SCAddr addr = kAddrInvalid;
+        uint16_t offset = 0;
+        uint16_t len = 0;
+        uint16_t crc;
+        /** End packet contents on the wire. **/
 
-        RawTransponderPacketMessage(const RawTransponderPacket &packet_in) {
-            packet = packet_in;
-            PopulateCRCAndLength(sizeof(RawTransponderPacketMessage) - sizeof(SCMessage));
+        /**
+         * Default constructor.
+         */
+        SCReadRequestPacket() {}
+
+        /**
+         * Constructor from buffer. Used for creating an SCReadRequest packet from a SPI transaction.
+         * @param[in] buf_in Pointer to buffer with SCReadRequest packet in it.
+         * @param[in] buf_in_len_bytes Length of the buffer to ingest.
+         */
+        SCReadRequestPacket(uint8_t *buf_in, uint16_t buf_in_len_bytes) {
+            if (buf_in_len_bytes < kBufLenBytes) {
+                CONSOLE_ERROR(
+                    "SPICoprocessor::SCReadRequestPacket",
+                    "Attempted to create a packet from a buffer that was too small. Received %d Bytes, but needed %d!",
+                    buf_in_len_bytes, kBufLenBytes);
+                return;
+            }
+            memcpy(GetBuf(), buf_in, buf_in_len_bytes);
         }
+
+        inline uint16_t GetCRC() override { return crc; }
+        inline void SetCRC(uint16_t crc_in) override { crc = crc_in; }
+        inline uint16_t GetBufLenBytes() override { return kBufLenBytes; }
+    };
+
+    /**
+     * SPI Coprocessor Response Packet
+     *
+     * Response to a Read Request Packet, containing the requested data, or response to a Write Request Packet Requiring
+     * Ack, containing an ack.
+     */
+    struct __attribute__((__packed__)) SCResponsePacket : public SCPacket {
+        static const uint16_t kDataMaxLenBytes = kPacketMaxLenBytes - sizeof(SCCommand) - kCRCLenBytes;
+        static const uint16_t kDataOffsetBytes = sizeof(SCCommand);
+        static const uint16_t kBufMinLenBytes =
+            sizeof(SCCommand) + 1 + kCRCLenBytes;  // Need at least one data Byte and CRC.
+
+        // ACK packet is special format of SCResponse packet with a single byte data payload.
+        // ACK format: CMD | ACK | CRC
+        // ADDR = kCmdAck
+        // ACK = true if success, false if fail
+        // CRC = CRC16
+        static const uint16_t kAckLenBytes = sizeof(SCCommand) + 1 + kCRCLenBytes;
+
+        /** Begin packet contents on the wire. **/
+        uint8_t data[kDataMaxLenBytes + kCRCLenBytes];
+        /** End packet contents on the wire. **/
+
+        uint16_t data_len_bytes = 0;  // Length from start of data to beginning of CRC.
+
+        /**
+         * Default constructor.
+         */
+        SCResponsePacket() {}
+
+        /**
+         * Constructor from buffer. Used for creating an SCReadResponse packet from a SPI transaction.
+         * @param[in] buf_in Pointer to buffer with SCReadResponse packet in it.
+         * @param[in] buf_in_len_bytes Length of the buffer to ingest.
+         */
+        SCResponsePacket(uint8_t *buf_in, uint16_t buf_in_len_bytes) {
+            if (buf_in_len_bytes < kBufMinLenBytes) {
+                CONSOLE_ERROR("SPICoprocessor::SCResponsePacket",
+                              "Attempted to create a packet from a buffer that was too small. Received %d Bytes, but "
+                              "needed at least %d!",
+                              buf_in_len_bytes, kBufMinLenBytes);
+                return;
+            }
+            memcpy(GetBuf(), buf_in, buf_in_len_bytes);
+            data_len_bytes = buf_in_len_bytes - kDataOffsetBytes - kCRCLenBytes;
+        }
+
+        inline uint16_t GetCRC() override { return *(uint16_t *)(data + data_len_bytes); }
+        inline void SetCRC(uint16_t crc_in) override { *(uint16_t *)(data + data_len_bytes) = crc_in; }
+        inline uint16_t GetBufLenBytes() override { return kDataOffsetBytes + data_len_bytes + kCRCLenBytes; }
     };
 
     // NOTE: Pico (leader) and ESP32 (follower) will have different behaviors for these functions.
@@ -140,19 +254,37 @@ class SPICoprocessor {
     bool DeInit();
     bool Update();
 
-    /**
-     * Transmit a packet to the coprocessor. Blocking.
-     * @param[in] packet Reference to the packet that will be transmitted.
-     * @retval True if succeeded, false otherwise.
-     */
-    bool SendMessage(SCMessage &message);
+    inline bool Write(RawTransponderPacket tpacket, bool require_ack = false) {
+        return Write(kAddrRawTransponderPacket, tpacket, require_ack);
+    }
+    inline bool Write(SettingsManager::Settings settings_struct, bool require_ack = true) {
+        return Write(kAddrSettingsStruct, settings_struct, require_ack);
+    }
+
+    // ACKs aren't required for reading since it's already a two way transaction.
+    inline bool Read(SettingsManager::Settings settings_struct) { return Read(kAddrSettingsStruct, settings_struct); }
 
 #ifdef ON_PICO
+
+#elif ON_ESP32
+#endif
+
+    // /**
+    //  * Transmit a packet to the coprocessor. Blocking.
+    //  * @param[in] packet Reference to the packet that will be transmitted.
+    //  * @retval True if succeeded, false otherwise.
+    //  */
+    // bool SendMessage(SCMessage &message);
+
+#ifdef ON_PICO
+    bool GetSPIHandshakePinLevel() { return gpio_get(config_.spi_handshake_pin); }
 #elif ON_ESP32
     /**
      * Helper function used by callbacks to set the handshake pin high or low on the ESP32.
      */
-    void SetSPIHandshakePinLevel(bool level) { gpio_set_level(config_.spi_handshake_pin, level); }
+    void SetSPIHandshakePinLevel(bool level) {
+        if (use_handshake_pin_) gpio_set_level(config_.spi_handshake_pin, level);
+    }
 
     /**
      * Function called from the task spawned during Init().
@@ -164,41 +296,170 @@ class SPICoprocessor {
      * turn the lED off.
      * @param[in] blink_duration_ms Number of milliseconds that the LED should stay on for.
      */
-    void BlinkNetworkLED(uint16_t blink_duration_ms = kNetworkLEDBLinkDurationMs) {
+    void BlinkNetworkLED(uint16_t blink_duration_ms = kNetworkLEDBlinkDurationMs) {
         gpio_set_level(config_.network_led_pin, 1);
-        network_led_turn_off_timestamp_ticks_ = xTaskGetTickCount() + kNetworkLEDBLinkDurationMs / portTICK_PERIOD_MS;
+        network_led_turn_on_timestamp_ticks_ = xTaskGetTickCount();
+        network_led_on = true;
     }
 
     /**
      * Turns off the network LED if necessary.
      */
     void UpdateNetworkLED() {
-        if (xTaskGetTickCount() > network_led_turn_off_timestamp_ticks_) {
+        if (network_led_on &&
+            xTaskGetTickCount() - network_led_turn_on_timestamp_ticks_ > kNetworkLEDBlinkDurationTicks) {
             gpio_set_level(config_.network_led_pin, 0);
+            network_led_on = false;
         }
     }
 #endif
 
    private:
-    bool SPIInit();
-    bool SPIDeInit();
-    int SPIWriteBlocking(uint8_t *tx_buf, uint32_t length);
-    int SPIReadBlocking(uint8_t *rx_buf, uint32_t length);
+    /**
+     * Top level function that transaltes a write to an object (with associated address) into SPI transaction(s).
+     * Included in the header file since the template function implementation needs to be visible to any file that
+     * utilizes it.
+     * Note that this function is not generally called directly, use the public Write and Read interfaces instead (no
+     * address required).
+     */
+    template <typename T>
+    bool Write(SCAddr addr, const T &object, bool require_ack = false) {
+        if (sizeof(object) < SCWritePacket::kDataMaxLenBytes) {
+            // Single write.
+            SCWritePacket write_packet;
+#ifdef ON_PICO
+            write_packet.cmd = require_ack ? kCmdWriteToSlaveRequireAck : kCmdWriteToSlave;
+#elif ON_ESP32
+            write_packet.cmd = require_ack ? kCmdWriteToMasterRequireAck : kCmdWriteToMaster;
+#endif
+            write_packet.addr = addr;
+            memcpy(write_packet.data, &object, sizeof(object));
+            write_packet.data_len_bytes = sizeof(object);
+            write_packet.offset = 0;
+            write_packet.PopulateCRC();
+
+#ifdef ON_ESP32
+            use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
+#endif
+            int bytes_written = SPIWriteBlocking(write_packet, true);
+
+            if (bytes_written < 0) {
+                CONSOLE_ERROR("SPICoprocessor::Write", "Error code %d while writing object over SPI.", bytes_written);
+                return bytes_written;
+            }
+            if (require_ack && !SPIWaitForAck()) {
+                CONSOLE_ERROR("SPICoprocessor::Write", "Timed out or received bad ack after writing to master.");
+                return false;
+            }
+            return true;
+        } else {
+            // Multi write.
+            CONSOLE_ERROR("SPICoprocessor::Write", "Multi-write not yet supported.");
+        }
+        return false;
+    }
+
+    /**
+     * Top level function that transaltes a read from an object (with associated address) into SPI transaction(s).
+     * Included in the header file since the template function implementation needs to be visible to any file that
+     * utilizes it.
+     * Note that this function is not generally called directly, use the public Write and Read interfaces instead (no
+     * address required).
+     */
+    template <typename T>
+    bool Read(SCAddr addr, T &object) {
+        if (sizeof(object) < SCResponsePacket::kDataMaxLenBytes) {
+            // Single read.
+        } else {
+            // Multi-read.
+            CONSOLE_ERROR("SPICoprocessor::Read", "Multi-read not yet supported.");
+        }
+        return false;
+    }
+
+    /**
+     * Setter for writing data to the address space.
+     * @param[in] addr Address to write to.
+     * @param[in] buf Buffer to read from.
+     * @param[in] buf_len Number of Bytes to write.
+     * @param[in] offset Byte offset from beginning of object. Used for partial reads.
+     * @retval Returns true if successfully wrote, false if address was invalid or something else borked.
+     */
+    bool SetBytes(SCAddr addr, uint8_t *buf, uint16_t buf_len, uint16_t offset = 0);
+
+    /**
+     * Getter for reading data from the address space.
+     @param[in] addr Address to read from.
+     @param[out] buf Buffer to write to.
+     @param[in] buf_len Number of Bytes to read.
+     @param[in] offset Byte offset from beginning of object. Used for partial reads.
+     @retval Returns true if successfully read, false if address was invalid or something else borked.
+     */
+    bool GetBytes(SCAddr addr, uint8_t *buf, uint16_t buf_len, uint16_t offset = 0);
+
+    /**
+     * Send an SCResponse packet with a single byte ACK payload.
+     * @param[in] success True if sending an ACK, false if sending a NACK.
+     * @retval True if ACK was transmitted successfully, false if something went wrong.
+     */
+    bool SPISendAck(bool success);
+
+    /**
+     * Blocks until an ACK is received or a timeout is reached.
+     * @retval True if received an ACK, false if received NACK or timed out.
+     */
+    bool SPIWaitForAck();
+
+    /**
+     * Low level HAL for SPI Write Read call. Transmits the contents of tx_buf and receives into rx_buf.
+     * Both buffers MUST be at least kSPITransactionMaxLenBytes Bytes long.
+     * @param[in] tx_buf Buffer with data to transmit.
+     * @param[in] rx_buf Buffer to fill with data that is received.
+     * @param[in] len_bytes Number of bytes to transmit. Only has an effect when this function is being called on the
+     * master.
+     * @param[in] end_transaction Whether to de-assert chip select at the end of the transaction. Only has an effect
+     * when this function is being called on the master.
+     * @retval Number of bytes that were written and read, or a negative value if something broke.
+     */
+    int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len_bytes = kSPITransactionMaxLenBytes,
+                             bool end_transaction = true);
+
+    // Write / Read aliases for SPIWriteReadBlocking.
+    inline int SPIWriteBlocking(uint8_t *tx_buf, uint16_t len_bytes = kSPITransactionMaxLenBytes,
+                                bool end_transaction = true) {
+        return SPIWriteReadBlocking(tx_buf, nullptr, len_bytes, end_transaction);
+    }
+    inline int SPIReadBlocking(uint8_t *rx_buf, uint16_t len_bytes = kSPITransactionMaxLenBytes,
+                               bool end_transaction = true) {
+        return SPIWriteReadBlocking(nullptr, rx_buf, len_bytes, end_transaction);
+    }
+
+    // SCPacket aliases for SPIWriteReadBlocking.
+    inline int SPIWriteBlocking(SCPacket &packet, bool end_transaction = true) {
+        return SPIWriteBlocking(packet.GetBuf(), packet.GetBufLenBytes(), end_transaction);
+    }
+    inline int SPIReadBlocking(SCPacket &packet, bool end_transaction = true) {
+        return SPIReadBlocking(packet.GetBuf(), packet.GetBufLenBytes(), end_transaction);
+    }
 
     SPICoprocessorConfig config_;
+    uint32_t scratch_;  // Scratch register used for testing.
 
 #ifdef ON_PICO
 #elif ON_ESP32
-    WORD_ALIGNED_ATTR SPITransaction spi_rx_queue_buf_[kSPITransactionQueueLenTransactions];
-    WORD_ALIGNED_ATTR SPITransaction spi_tx_queue_buf_[kSPITransactionQueueLenTransactions];
+    // WORD_ALIGNED_ATTR SPITransaction spi_rx_queue_buf_[kSPITransactionQueueLenTransactions];
+    // WORD_ALIGNED_ATTR SPITransaction spi_tx_queue_buf_[kSPITransactionQueueLenTransactions];
 
-    PFBQueue<SPITransaction> spi_rx_queue_ = PFBQueue<SPITransaction>(
-        {.buf_len_num_elements = kSPITransactionQueueLenTransactions, .buffer = spi_rx_queue_buf_});
-    PFBQueue<SPITransaction> spi_tx_queue_ = PFBQueue<SPITransaction>(
-        {.buf_len_num_elements = kSPITransactionQueueLenTransactions, .buffer = spi_tx_queue_buf_});
+    // PFBQueue<SPITransaction> spi_rx_queue_ = PFBQueue<SPITransaction>(
+    //     {.buf_len_num_elements = kSPITransactionQueueLenTransactions, .buffer = spi_rx_queue_buf_});
+    // PFBQueue<SPITransaction> spi_tx_queue_ = PFBQueue<SPITransaction>(
+    //     {.buf_len_num_elements = kSPITransactionQueueLenTransactions, .buffer = spi_tx_queue_buf_});
 
     bool spi_receive_task_should_exit_ = false;  // Flag used to tell SPI receive task to exit.
-    TickType_t network_led_turn_off_timestamp_ticks_ = 0;
+    TickType_t network_led_turn_on_timestamp_ticks_ = 0;
+    bool network_led_on = false;
+    bool use_handshake_pin_ =
+        false;  // Allow handshake pin toggle to be skipped if waiting for a mesage and not writing to master.
 #endif
 };
 

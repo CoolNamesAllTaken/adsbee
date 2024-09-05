@@ -435,3 +435,19 @@ TEST(AircraftDictionary, IngestModeA) {
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne));
 }
+
+TEST(Aircraft, AircraftStats) {
+    Aircraft aircraft;
+    aircraft.IncrementNumFramesReceived();
+    EXPECT_EQ(aircraft.stats_frames_received_in_last_interval, 0);
+    aircraft.UpdateStats();
+    EXPECT_EQ(aircraft.stats_frames_received_in_last_interval, 1);
+    EXPECT_EQ(aircraft.stats_mode_s_frames_received_in_last_interval, 0);
+    EXPECT_EQ(aircraft.stats_mode_ac_frames_received_in_last_interval, 1);
+    aircraft.IncrementNumFramesReceived(false);
+    aircraft.IncrementNumFramesReceived(true);
+    aircraft.UpdateStats();
+    EXPECT_EQ(aircraft.stats_frames_received_in_last_interval, 2);
+    EXPECT_EQ(aircraft.stats_mode_ac_frames_received_in_last_interval, 1);
+    EXPECT_EQ(aircraft.stats_mode_s_frames_received_in_last_interval, 1);
+}

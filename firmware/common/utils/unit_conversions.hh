@@ -6,6 +6,8 @@ static const int kBytesPerWord = 4;
 static const int kBitsPerByte = 8;
 static const int kBitsPerNibble = 4;
 
+inline uint16_t CeilBitsToBytes(uint16_t bits) { return (bits + kBitsPerByte - 1) / kBitsPerByte; }
+
 inline int FeetToMeters(int feet) { return feet * 1000 / 3280; }
 
 inline int MetersToFeet(int meters) { return meters * 3280 / 1000; }

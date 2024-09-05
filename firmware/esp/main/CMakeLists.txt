@@ -3,11 +3,13 @@ idf_component_register(
         "."
         "../../common"
         "../../common/adsb"
+        "../../common/comms"
         "../../common/utils"
     INCLUDE_DIRS
         "."
         "../../common"
         "../../common/adsb"
+        "../../common/comms"
         "../../common/utils"
 )
 message("PROJECT_SOURCE_DIR: ${PROJECT_SOURCE_DIR}")

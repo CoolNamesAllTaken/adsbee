@@ -33,13 +33,14 @@ bool CommsManager::UpdateReporting() {
                 ret = ReportBeast(iface, packets_to_report, num_packets_to_report);
                 break;
             case SettingsManager::kCSBee:
-                CONSOLE_WARNING("CommsManager::UpdateReporting",
-                                "Protocol CSBee specified on interface %d but is not yet supported.", i);
-                ret = false;
+                if (timestamp_ms - last_report_timestamp_ms >= kCSBeeReportingIntervalMs) {
+                    ret = ReportCSBee(iface);
+                    last_report_timestamp_ms = timestamp_ms;
+                }
                 break;
             case SettingsManager::kMAVLINK1:
             case SettingsManager::kMAVLINK2:
-                if (timestamp_ms - last_report_timestamp_ms >= mavlink_reporting_interval_ms) {
+                if (timestamp_ms - last_report_timestamp_ms >= kMAVLINKReportingIntervalMs) {
                     ret = ReportMAVLINK(iface);
                     last_report_timestamp_ms = timestamp_ms;
                 }
@@ -82,11 +83,34 @@ bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface,
 }
 
 bool CommsManager::ReportCSBee(SettingsManager::SerialInterface iface) {
+    // Write out a CSBee Aircraft message for each aircraft in the aircraft dictionary.
     for (auto &itr : adsbee.aircraft_dictionary.dict) {
         const Aircraft &aircraft = itr.second;
 
         char message[kCSBeeMessageStrMaxLen];
-        WriteCSBeeAircraftMessageStr(message, aircraft);
+        int16_t message_len = WriteCSBeeAircraftMessageStr(message, aircraft);
+        if (message_len < 0) {
+            CONSOLE_ERROR("CommsManager::ReportCSBee",
+                          "Encountered an error in WriteCSBeeAircraftMessageStr, error code %d.", message_len);
+            return false;
+        }
+        for (uint16_t i = 0; i < message_len; i++) {
+            comms_manager.iface_putc(iface, message[i]);
+        }
+    }
+
+    // Write a CSBee Statistics message.
+    char message[kCSBeeMessageStrMaxLen];
+    int16_t message_len =
+        WriteCSBeeStatisticsMessageStr(message, adsbee.GetStatsNumDemods(), adsbee.GetStatsNumModeACPackets(),
+                                       adsbee.GetStatsNumModeSPackets(), 0u, get_time_since_boot_ms() / 1000);
+    if (message_len < 0) {
+        CONSOLE_ERROR("CommsManager::ReportCSBee",
+                      "Encountered an error in WriteCSBeeStatisticsMessageStr, error code %d.", message_len);
+        return false;
+    }
+    for (uint16_t i = 0; i < message_len; i++) {
+        comms_manager.iface_putc(iface, message[i]);
     }
     return true;
 }
@@ -191,7 +215,7 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
         }
         case 2: {
             mavlink_message_interval_t message_interval_msg = {
-                .interval_us = (int32_t)(mavlink_reporting_interval_ms * (uint32_t)kUsPerMs),
+                .interval_us = (int32_t)(kMAVLINKReportingIntervalMs * (uint32_t)kUsPerMs),
                 .message_id = MAVLINK_MSG_ID_ADSB_VEHICLE};
             mavlink_msg_message_interval_send_struct(static_cast<mavlink_channel_t>(iface), &message_interval_msg);
             break;

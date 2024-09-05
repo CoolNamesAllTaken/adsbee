@@ -176,30 +176,41 @@ bool ADSBee::Update() {
             switch (decoded_packet.GetDownlinkFormat()) {
                 case DecodedTransponderPacket::kDownlinkFormatAltitudeReply:
                 case DecodedTransponderPacket::kDownlinkFormatIdentityReply:
-                    stats_num_valid_mode_ac_packets_counter_++;
+                    stats_valid_mode_ac_frames_in_last_interval_counter_++;
                     break;
                 default:
-                    stats_num_valid_mode_s_packets_counter_++;
+                    stats_valid_mode_s_frames_in_last_interval_counter_++;
                     break;
             }
             comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
-            CONSOLE_INFO("main", "\taircraft_dictionary: %d aircraft", aircraft_dictionary.GetNumAircraft());
+            CONSOLE_INFO("ADSBee::Update", "\taircraft_dictionary: %d aircraft", aircraft_dictionary.GetNumAircraft());
         }
     }
 
     // Update statistics.
     if (timestamp_ms - stats_last_update_timestamp_ms_ > kStatsUpdateIntervalMs) {
-        stats_num_valid_mode_ac_packets_ = stats_num_valid_mode_ac_packets_counter_;
-        stats_num_valid_mode_s_packets_ = stats_num_valid_mode_s_packets_counter_;
+        // kStatsUpdateIntervalMs has elapsed. Time to update stuff!
+        // Update statistics for each aircraft.
+        for (auto &itr : aircraft_dictionary.dict) {
+            Aircraft &aircraft = itr.second;
+            aircraft.UpdateStats();
+        }
+        // Update statistics for the dictionary.
+        stats_valid_mode_ac_frames_in_last_interval_ = stats_valid_mode_ac_frames_in_last_interval_counter_;
+        stats_valid_mode_s_frames_in_last_interval_ = stats_valid_mode_s_frames_in_last_interval_counter_;
         // Read num demods last and reset it first so we can never have a ratio > 1 even in interrupt edge cases.
-        stats_num_demods_ = stats_num_demods_counter_;
-        stats_num_demods_counter_ = 0;
-        stats_num_valid_mode_ac_packets_counter_ = 0;
-        stats_num_valid_mode_s_packets_counter_ = 0;
+        stats_demods_in_last_interval_ = stats_demods_in_last_interval_counter_;
+        stats_demods_in_last_interval_counter_ = 0;
+        stats_valid_mode_ac_frames_in_last_interval_counter_ = 0;
+        stats_valid_mode_s_frames_in_last_interval_counter_ = 0;
 
         stats_last_update_timestamp_ms_ = timestamp_ms;
 
-        tl_learning_num_valid_packets_ += (stats_num_valid_mode_ac_packets_ + stats_num_valid_mode_s_packets_);
+        // If learning, add the number of valid packets received to the pile used for trigger level learning.
+        if (tl_learning_temperature_mv_ > 0) {
+            tl_learning_num_valid_packets_ +=
+                (stats_valid_mode_ac_frames_in_last_interval_ + stats_valid_mode_s_frames_in_last_interval_);
+        }
     }
 
     // Update trigger level learning if it's active.
@@ -290,7 +301,7 @@ void ADSBee::OnDemodComplete() {
         packet_num_words = RawTransponderPacket::kMaxPacketLenWords32;
     }
     // Track that we attempted to demodulate something.
-    stats_num_demods_counter_++;
+    stats_demods_in_last_interval_counter_++;
     // Create a RawTransponderPacket and push it onto the queue.
     for (uint16_t i = 0; i < packet_num_words; i++) {
         rx_packet_.buffer[i] = pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_);
