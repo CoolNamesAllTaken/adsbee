@@ -112,7 +112,7 @@ bool SPICoprocessor::Update() {
                 CONSOLE_ERROR("SPICoprocessor::Update", "Received unsolicited write to master with bad checksum.");
                 return false;
             }
-            ret = SetBytes(write_packet.addr, write_packet.data, write_packet.data_len_bytes);
+            ret = SetBytes(write_packet.addr, write_packet.data, write_packet.len);
             bool ack = true;
             if (!ret) {
                 CONSOLE_ERROR(

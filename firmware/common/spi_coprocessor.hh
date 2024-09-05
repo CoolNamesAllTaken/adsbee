@@ -88,19 +88,17 @@ class SPICoprocessor {
         static const uint16_t kPacketMaxLenBytes = 64;
         static const uint16_t kCRCLenBytes = sizeof(uint16_t);
 
-        /** Begin packet contents on the wire. **/
-        SCCommand cmd = kCmdInvalid;
-        /** End packet contents on the wire. **/
-
         // Pure virtual functions.
         virtual inline uint16_t GetCRC() = 0;
         virtual inline void SetCRC(uint16_t crc_in) = 0;
         virtual inline uint16_t GetBufLenBytes() = 0;
+        // GetBuf needs to return the beginning of the elements of the child class, not "this", since "this" points to
+        // the beginning of the child class struct, which first contains a pointer to this virtual base class.
+        virtual inline uint8_t *GetBuf() = 0;
 
         // Virtual functions.
         virtual inline bool IsValid() { return CalculateCRC16(GetBuf(), GetBufLenBytes() - kCRCLenBytes) == GetCRC(); }
         virtual inline void PopulateCRC() { SetCRC(CalculateCRC16(GetBuf(), GetBufLenBytes() - kCRCLenBytes)); }
-        virtual inline uint8_t *GetBuf() { return (uint8_t *)(&cmd); }
     };
 
     /**
@@ -116,14 +114,13 @@ class SPICoprocessor {
             sizeof(SCCommand) + sizeof(SCAddr) + sizeof(uint16_t) + sizeof(uint8_t) + kCRCLenBytes;
 
         /** Begin packet contents on the wire. **/
+        SCCommand cmd = kCmdInvalid;
         SCAddr addr = kAddrInvalid;
         uint16_t offset = 0;
-        uint8_t len = 0;
+        uint8_t len = 0;                                // Length from start of data to beginning of CRC.
         uint8_t data[kDataMaxLenBytes + kCRCLenBytes];  // CRC is secretly appended at the end of data so that the
                                                         // struct can be used as a buffer to send with.
         /** End packet contents on the wire. **/
-
-        uint16_t data_len_bytes = 0;  // Length from start of data to beginning of CRC.
 
         /**
          * Default constructor.
@@ -144,16 +141,18 @@ class SPICoprocessor {
                 return;
             }
             memcpy(GetBuf(), buf_in, buf_in_len_bytes);
-            data_len_bytes = buf_in_len_bytes - kDataOffsetBytes - kCRCLenBytes;
+            // Override the len field that we read in since it's important for calculating CRC.
+            len = buf_in_len_bytes - kDataOffsetBytes - kCRCLenBytes;
         }
 
         inline uint16_t GetCRC() override {
             uint16_t crc;
-            memcpy(&crc, data + data_len_bytes, sizeof(uint16_t));
+            memcpy(&crc, data + len, sizeof(uint16_t));
             return crc;
         }
-        inline void SetCRC(uint16_t crc_in) override { memcpy(data + data_len_bytes, &crc_in, sizeof(uint16_t)); }
-        inline uint16_t GetBufLenBytes() override { return kDataOffsetBytes + data_len_bytes + kCRCLenBytes; }
+        inline void SetCRC(uint16_t crc_in) override { memcpy(data + len, &crc_in, sizeof(uint16_t)); }
+        inline uint16_t GetBufLenBytes() override { return kDataOffsetBytes + len + kCRCLenBytes; }
+        inline uint8_t *GetBuf() override { return (uint8_t *)(&cmd); }
     };
 
     /**
@@ -165,6 +164,7 @@ class SPICoprocessor {
     struct __attribute__((__packed__)) SCReadRequestPacket : public SCPacket {
         static const uint16_t kBufLenBytes = sizeof(SCCommand) + sizeof(SCAddr) + 2 * sizeof(uint16_t) + kCRCLenBytes;
         /** Begin packet contents on the wire. **/
+        SCCommand cmd = kCmdInvalid;
         SCAddr addr = kAddrInvalid;
         uint16_t offset = 0;
         uint16_t len = 0;
@@ -195,6 +195,7 @@ class SPICoprocessor {
         inline uint16_t GetCRC() override { return crc; }
         inline void SetCRC(uint16_t crc_in) override { crc = crc_in; }
         inline uint16_t GetBufLenBytes() override { return kBufLenBytes; }
+        inline uint8_t *GetBuf() override { return (uint8_t *)(&cmd); }
     };
 
     /**
@@ -217,6 +218,7 @@ class SPICoprocessor {
         static const uint16_t kAckLenBytes = sizeof(SCCommand) + 1 + kCRCLenBytes;
 
         /** Begin packet contents on the wire. **/
+        SCCommand cmd = kCmdInvalid;
         uint8_t data[kDataMaxLenBytes + kCRCLenBytes];
         /** End packet contents on the wire. **/
 
@@ -247,6 +249,7 @@ class SPICoprocessor {
         inline uint16_t GetCRC() override { return *(uint16_t *)(data + data_len_bytes); }
         inline void SetCRC(uint16_t crc_in) override { *(uint16_t *)(data + data_len_bytes) = crc_in; }
         inline uint16_t GetBufLenBytes() override { return kDataOffsetBytes + data_len_bytes + kCRCLenBytes; }
+        inline uint8_t *GetBuf() override { return (uint8_t *)(&cmd); }
     };
 
     // NOTE: Pico (leader) and ESP32 (follower) will have different behaviors for these functions.
@@ -254,10 +257,10 @@ class SPICoprocessor {
     bool DeInit();
     bool Update();
 
-    inline bool Write(RawTransponderPacket tpacket, bool require_ack = false) {
+    bool Write(RawTransponderPacket tpacket, bool require_ack = false) {
         return Write(kAddrRawTransponderPacket, tpacket, require_ack);
     }
-    inline bool Write(SettingsManager::Settings settings_struct, bool require_ack = true) {
+    bool Write(SettingsManager::Settings settings_struct, bool require_ack = true) {
         return Write(kAddrSettingsStruct, settings_struct, require_ack);
     }
 
@@ -334,7 +337,7 @@ class SPICoprocessor {
 #endif
             write_packet.addr = addr;
             memcpy(write_packet.data, &object, sizeof(object));
-            write_packet.data_len_bytes = sizeof(object);
+            write_packet.len = sizeof(object);
             write_packet.offset = 0;
             write_packet.PopulateCRC();
 
