@@ -26,7 +26,7 @@ class SPICoprocessor {
     static const uint16_t kSPITransactionQueueLenTransactions = 3;
     static const uint16_t kSPITransactionMaxNumRetries =
         3;  // Max num retries per block in a multi-transfer transaction.
-    static const uint16_t kSPITransactionTimeoutMs = 1000;
+    static const uint16_t kSPITransactionTimeoutMs = 100;
 
 #ifdef ON_PICO
     static const uint16_t kHandshakePinMaxWaitDurationMs = 10;
@@ -364,6 +364,8 @@ class SPICoprocessor {
 #endif
 
    private:
+    enum ReturnCode : int { kOk = 0, kErrorGeneric = -1, kErrorTimeout = -2 };
+
 #ifdef ON_ESP32
     SemaphoreHandle_t coprocessor_spi_mutex_;
 #endif
@@ -392,7 +394,8 @@ class SPICoprocessor {
             return bytes_written;
         }
         if (require_ack && !SPIWaitForAck()) {
-            CONSOLE_ERROR("SPICoprocessor::PartialWrite", "Timed out or received bad ack after writing to master.");
+            CONSOLE_ERROR("SPICoprocessor::PartialWrite",
+                          "Timed out or received bad ack after writing to coprocessor.");
             return false;
         }
         return true;

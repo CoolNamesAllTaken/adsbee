@@ -156,15 +156,13 @@ bool SPICoprocessor::Update() {
             return false;
     }
 #elif ON_ESP32
-    UpdateNetworkLED();
-
     uint8_t rx_buf[kSPITransactionMaxLenBytes];
     memset(rx_buf, 0, kSPITransactionMaxLenBytes);
 
     use_handshake_pin_ = false;  // Don't solicit a transfer.
     int16_t bytes_read = SPIReadBlocking(rx_buf);
     if (bytes_read < 0) {
-        if (bytes_read != ESP_ERR_TIMEOUT) {
+        if (bytes_read != kErrorTimeout) {
             CONSOLE_ERROR("SPICoprocessor::Update", "SPI read received non-timeout error code 0x%x.", bytes_read);
             return false;
         }
@@ -293,7 +291,8 @@ bool SPICoprocessor::SPIWaitForAck() {
             break;
         }
         if (get_time_since_boot_ms() - wait_begin_timestamp_ms >= kSPITransactionTimeoutMs) {
-            CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "Timed out while waiting for ack.");
+            CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck",
+                          "Timed out while waiting for ack: never received handshake.");
             return false;
         }
     }
@@ -301,6 +300,7 @@ bool SPICoprocessor::SPIWaitForAck() {
     use_handshake_pin_ = false;  // Don't solicit an ack when waiting for one.
 #endif
     int bytes_read = SPIReadBlocking(response_packet.GetBuf(), SCResponsePacket::kBufMinLenBytes);
+    response_packet.data_len_bytes = SCResponsePacket::kBufMinLenBytes;
     if (response_packet.cmd != kCmdAck) {
         CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "Received a message that was not an ack.");
         return false;
@@ -350,19 +350,21 @@ int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint1
     if (xSemaphoreTake(coprocessor_spi_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
         CONSOLE_ERROR("SPICoprocessor::SPIWriteReadBlocking",
                       "Failed to acquire coprocessor SPI mutex after waiting %d ms.", kSPITransactionTimeoutMs);
-        return -1;
+        return kErrorTimeout;
     }
     // Wait for a transaction to complete. Allow this task to block if no SPI transaction is received until max
-    // delay.
-    esp_err_t status = spi_slave_transmit(config_.spi_handle, &t, kSPITransactionTimeoutTicks);
+    // delay. Currently, setting the delay here to anything other than portMAX_DELAY (which allows blocking
+    // indefinitely) causes an error in spi_slave.c due to extra transactions getting stuck in the SPI peripheral queue.
+    esp_err_t status = spi_slave_transmit(config_.spi_handle, &t, portMAX_DELAY /*kSPITransactionTimeoutTicks*/);
     xSemaphoreGive(coprocessor_spi_mutex_);
-    if (status == ESP_ERR_TIMEOUT) {
-        return -1;  // Timeouts fail silently.
-    }
+
     if (status != ESP_OK) {
+        if (status == ESP_ERR_TIMEOUT) {
+            return kErrorTimeout;  // Timeouts fail silently.
+        }
         CONSOLE_ERROR("SPICoprocesor::SPIWriteReadBlocking", "SPI transaction failed unexpectedly with code 0x%x.",
                       status);
-        return -1;
+        return kErrorGeneric;
     }
     bytes_written = CeilBitsToBytes(t.trans_len);
 #endif
