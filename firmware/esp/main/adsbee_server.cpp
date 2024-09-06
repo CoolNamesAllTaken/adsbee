@@ -23,7 +23,7 @@ bool ADSBeeServer::Init() {
 }
 
 bool ADSBeeServer::Update() {
-    if (!pico.Update()) return false;
+    // Do NOT call pico.Update() from here since that's already taken care of by the SPIReceiveTask.
 
     return true;
 }

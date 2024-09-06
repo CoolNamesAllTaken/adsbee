@@ -147,7 +147,7 @@ bool SPICoprocessor::Update() {
                               read_request_packet.addr, read_request_packet.len);
             }
             response_packet.PopulateCRC();
-            SPIWriteBlocking(response_packet);
+            SPIWriteBlocking(response_packet.GetBuf(), response_packet.GetBufLenBytes());
             break;
         }
         default:
@@ -208,14 +208,15 @@ bool SPICoprocessor::Update() {
             response_packet.cmd = kCmdDataBlock;
             ret = GetBytes(read_request_packet.addr, response_packet.data, read_request_packet.len,
                            read_request_packet.offset);
-
             if (!ret) {
                 CONSOLE_ERROR("SPICoprocessor::Update",
                               "Failed to retrieve data for %d Byte read from slave at address 0x%x",
                               read_request_packet.len, read_request_packet.addr);
             }
+            response_packet.data_len_bytes = read_request_packet.len;  // Assume the correct number of bytes were read.
             response_packet.PopulateCRC();
-            SPIWriteBlocking(response_packet);
+            use_handshake_pin_ = true;  // Solicit a read from the RP2040.
+            SPIWriteBlocking(response_packet.GetBuf(), response_packet.GetBufLenBytes());
             break;
         }
         default:
@@ -277,15 +278,33 @@ bool SPICoprocessor::SPISendAck(bool success) {
     response_packet.data[0] = success;
     response_packet.data_len_bytes = 1;
     response_packet.PopulateCRC();
-    return SPIWriteBlocking(response_packet) > 0;
+#ifdef ON_ESP32
+    use_handshake_pin_ = true;  // Solicit a transfer to send the ack.
+#endif
+    return SPIWriteBlocking(response_packet.GetBuf(), SCResponsePacket::kBufMinLenBytes) > 0;
 }
 
 bool SPICoprocessor::SPIWaitForAck() {
     SCResponsePacket response_packet;
-#ifdef ON_ESP32
+#ifdef ON_PICO
+    uint32_t wait_begin_timestamp_ms = get_time_since_boot_ms();
+    while (true) {
+        if (gpio_get(config_.spi_handshake_pin)) {
+            break;
+        }
+        if (get_time_since_boot_ms() - wait_begin_timestamp_ms >= kSPITransactionTimeoutMs) {
+            CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "Timed out while waiting for ack.");
+            return false;
+        }
+    }
+#elif ON_ESP32
     use_handshake_pin_ = false;  // Don't solicit an ack when waiting for one.
 #endif
-    int bytes_read = SPIReadBlocking(response_packet);
+    int bytes_read = SPIReadBlocking(response_packet.GetBuf(), SCResponsePacket::kBufMinLenBytes);
+    if (response_packet.cmd != kCmdAck) {
+        CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "Received a message that was not an ack.");
+        return false;
+    }
     if (bytes_read < 0) {
         CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "SPI read failed with code 0x%x.", bytes_read);
         return false;
@@ -302,7 +321,16 @@ int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint1
 #ifdef ON_PICO
 
     gpio_put(config_.spi_cs_pin, 0);
-    bytes_written = spi_write_read_blocking(config_.spi_handle, tx_buf, rx_buf, len_bytes);
+    // Pico SDK doesn't have nice nullptr behavior for tx_buf and rx_buf, so we have to do this.
+    if (tx_buf == nullptr) {
+        // Transmit 0's when reading.
+        bytes_written = spi_read_blocking(config_.spi_handle, 0x0, rx_buf, len_bytes);
+    } else if (rx_buf == nullptr) {
+        bytes_written = spi_write_blocking(config_.spi_handle, tx_buf, len_bytes);
+    } else {
+        bytes_written = spi_write_read_blocking(config_.spi_handle, tx_buf, rx_buf, len_bytes);
+    }
+
     if (end_transaction) {
         gpio_put(config_.spi_cs_pin, 1);
     }

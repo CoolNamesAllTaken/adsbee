@@ -26,13 +26,13 @@ class SPICoprocessor {
     static const uint16_t kSPITransactionQueueLenTransactions = 3;
     static const uint16_t kSPITransactionMaxNumRetries =
         3;  // Max num retries per block in a multi-transfer transaction.
+    static const uint16_t kSPITransactionTimeoutMs = 1000;
 
 #ifdef ON_PICO
     static const uint16_t kHandshakePinMaxWaitDurationMs = 10;
 #elif ON_ESP32
     static const uint32_t kNetworkLEDBlinkDurationMs = 10;
     static const uint32_t kNetworkLEDBlinkDurationTicks = kNetworkLEDBlinkDurationMs / portTICK_PERIOD_MS;
-    static const uint16_t kSPITransactionTimeoutMs = 10000;
     static const uint16_t kSPITransactionTimeoutTicks = kSPITransactionTimeoutMs / portTICK_PERIOD_MS;
 #endif
     struct SPICoprocessorConfig {
@@ -90,16 +90,25 @@ class SPICoprocessor {
         static const uint16_t kCRCLenBytes = sizeof(uint16_t);
 
         // Pure virtual functions.
-        virtual inline uint16_t GetCRC() = 0;
-        virtual inline void SetCRC(uint16_t crc_in) = 0;
         virtual inline uint16_t GetBufLenBytes() = 0;
         // GetBuf needs to return the beginning of the elements of the child class, not "this", since "this" points to
         // the beginning of the child class struct, which first contains a pointer to this virtual base class.
         virtual inline uint8_t *GetBuf() = 0;
+        virtual inline uint8_t *GetCRCPtr() = 0;
 
         // Virtual functions.
         virtual inline bool IsValid() { return CalculateCRC16(GetBuf(), GetBufLenBytes() - kCRCLenBytes) == GetCRC(); }
         virtual inline void PopulateCRC() { SetCRC(CalculateCRC16(GetBuf(), GetBufLenBytes() - kCRCLenBytes)); }
+        virtual inline uint16_t GetCRC() {
+            uint16_t crc_out = 0x0;
+            // Extract CRC safely regardless of memory alignment.
+            memcpy(&crc_out, GetCRCPtr(), sizeof(uint16_t));
+            return crc_out;
+        }
+        virtual inline void SetCRC(uint16_t crc_in) {
+            // Set CRC safely regardless of memory alignment.
+            memcpy(GetCRCPtr(), &crc_in, sizeof(uint16_t));
+        }
     };
 
     /**
@@ -126,7 +135,7 @@ class SPICoprocessor {
         /**
          * Default constructor.
          */
-        SCWritePacket() {}
+        SCWritePacket() { memset(data, 0x0, kDataMaxLenBytes); }
 
         /**
          * Constructor from buffer. Used for creating an SCCommand packet from a SPI transaction.
@@ -146,14 +155,9 @@ class SPICoprocessor {
             len = buf_in_len_bytes - kDataOffsetBytes - kCRCLenBytes;
         }
 
-        inline uint16_t GetCRC() override {
-            uint16_t crc;
-            memcpy(&crc, data + len, sizeof(uint16_t));
-            return crc;
-        }
-        inline void SetCRC(uint16_t crc_in) override { memcpy(data + len, &crc_in, sizeof(uint16_t)); }
         inline uint16_t GetBufLenBytes() override { return kDataOffsetBytes + len + kCRCLenBytes; }
         inline uint8_t *GetBuf() override { return (uint8_t *)(&cmd); }
+        inline uint8_t *GetCRCPtr() override { return data + len; }
     };
 
     /**
@@ -197,6 +201,7 @@ class SPICoprocessor {
         inline void SetCRC(uint16_t crc_in) override { crc = crc_in; }
         inline uint16_t GetBufLenBytes() override { return kBufLenBytes; }
         inline uint8_t *GetBuf() override { return (uint8_t *)(&cmd); }
+        inline uint8_t *GetCRCPtr() override { return (uint8_t *)&crc; }
     };
 
     /**
@@ -228,7 +233,7 @@ class SPICoprocessor {
         /**
          * Default constructor.
          */
-        SCResponsePacket() {}
+        SCResponsePacket() { memset(data, 0x0, kDataMaxLenBytes); }
 
         /**
          * Constructor from buffer. Used for creating an SCReadResponse packet from a SPI transaction.
@@ -247,10 +252,9 @@ class SPICoprocessor {
             data_len_bytes = buf_in_len_bytes - kDataOffsetBytes - kCRCLenBytes;
         }
 
-        inline uint16_t GetCRC() override { return *(uint16_t *)(data + data_len_bytes); }
-        inline void SetCRC(uint16_t crc_in) override { *(uint16_t *)(data + data_len_bytes) = crc_in; }
         inline uint16_t GetBufLenBytes() override { return kDataOffsetBytes + data_len_bytes + kCRCLenBytes; }
         inline uint8_t *GetBuf() override { return (uint8_t *)(&cmd); }
+        inline uint8_t *GetCRCPtr() override { return data + data_len_bytes; }
     };
 
     // NOTE: Pico (leader) and ESP32 (follower) will have different behaviors for these functions.
@@ -258,11 +262,50 @@ class SPICoprocessor {
     bool DeInit();
     bool Update();
 
+    /**
+     * Top level function that translates a write to an object (with associated address) into SPI transaction(s).
+     * Included in the header file since the template function implementation needs to be visible to any file that
+     * utilizes it.
+     * Note that this function is not generally called directly, use the public Write and Read interfaces instead (no
+     * address required).
+     */
+    template <typename T>
+    bool Write(SCAddr addr, T &object, bool require_ack = false) {
+        if (sizeof(object) < SCWritePacket::kDataMaxLenBytes) {
+            // Single write. Write the full object at once, no offset, require ack if necessary.
+            return PartialWrite(addr, (uint8_t *)&object, sizeof(object), 0, require_ack);
+        } else {
+            // Multi write.
+            CONSOLE_ERROR("SPICoprocessor::Write", "Multi-write not yet supported.");
+        }
+        return false;
+    }
+
     bool Write(RawTransponderPacket tpacket, bool require_ack = false) {
         return Write(kAddrRawTransponderPacket, tpacket, require_ack);
     }
     bool Write(SettingsManager::Settings settings_struct, bool require_ack = true) {
         return Write(kAddrSettingsStruct, settings_struct, require_ack);
+    }
+
+    /**
+     * Top level function that translates a read from an object (with associated address) into SPI transaction(s).
+     * Included in the header file since the template function implementation needs to be visible to any file that
+     * utilizes it.
+     * Note that this function is not generally called directly, use the public Write and Read interfaces instead (no
+     * address required).
+     */
+    template <typename T>
+    bool Read(SCAddr addr, T &object) {
+        if (sizeof(object) < SCResponsePacket::kDataMaxLenBytes) {
+            // Single read.
+            return PartialRead(addr, (uint8_t *)&object, sizeof(object));
+
+        } else {
+            // Multi-read.
+            CONSOLE_ERROR("SPICoprocessor::Read", "Multi-read not yet supported.");
+        }
+        return false;
     }
 
     // ACKs aren't required for reading since it's already a two way transaction.
@@ -287,7 +330,9 @@ class SPICoprocessor {
      * Helper function used by callbacks to set the handshake pin high or low on the ESP32.
      */
     void SetSPIHandshakePinLevel(bool level) {
-        if (use_handshake_pin_) gpio_set_level(config_.spi_handshake_pin, level);
+        // Only set the handshake pin HI when we know we want to solicit a response and not block + wait.
+        // Hanshake pin can always be set low.
+        gpio_set_level(config_.spi_handshake_pin, level && use_handshake_pin_);
     }
 
     /**
@@ -323,66 +368,80 @@ class SPICoprocessor {
     SemaphoreHandle_t coprocessor_spi_mutex_;
 #endif
 
-    /**
-     * Top level function that transaltes a write to an object (with associated address) into SPI transaction(s).
-     * Included in the header file since the template function implementation needs to be visible to any file that
-     * utilizes it.
-     * Note that this function is not generally called directly, use the public Write and Read interfaces instead (no
-     * address required).
-     */
-    template <typename T>
-    bool Write(SCAddr addr, const T &object, bool require_ack = false) {
-        if (sizeof(object) < SCWritePacket::kDataMaxLenBytes) {
-            // Single write.
-            SCWritePacket write_packet;
+    bool PartialWrite(SCAddr addr, uint8_t *object_buf, uint8_t len, uint16_t offset = 0, bool require_ack = false) {
+        SCWritePacket write_packet;
 #ifdef ON_PICO
-            write_packet.cmd = require_ack ? kCmdWriteToSlaveRequireAck : kCmdWriteToSlave;
+        write_packet.cmd = require_ack ? kCmdWriteToSlaveRequireAck : kCmdWriteToSlave;
 #elif ON_ESP32
-            write_packet.cmd = require_ack ? kCmdWriteToMasterRequireAck : kCmdWriteToMaster;
+        write_packet.cmd = require_ack ? kCmdWriteToMasterRequireAck : kCmdWriteToMaster;
 #endif
-            write_packet.addr = addr;
-            memcpy(write_packet.data, &object, sizeof(object));
-            write_packet.len = sizeof(object);
-            write_packet.offset = 0;
-            write_packet.PopulateCRC();
+        write_packet.addr = addr;
+        memcpy(write_packet.data, object_buf + offset, len);
+        write_packet.len = len;
+        write_packet.offset = offset;
+        write_packet.PopulateCRC();
 
 #ifdef ON_ESP32
-            use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
+        use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
 #endif
-            int bytes_written = SPIWriteBlocking(write_packet, true);
+        int bytes_written = SPIWriteBlocking(write_packet.GetBuf(), write_packet.GetBufLenBytes(), true);
 
-            if (bytes_written < 0) {
-                CONSOLE_ERROR("SPICoprocessor::Write", "Error code %d while writing object over SPI.", bytes_written);
-                return bytes_written;
-            }
-            if (require_ack && !SPIWaitForAck()) {
-                CONSOLE_ERROR("SPICoprocessor::Write", "Timed out or received bad ack after writing to master.");
-                return false;
-            }
-            return true;
-        } else {
-            // Multi write.
-            CONSOLE_ERROR("SPICoprocessor::Write", "Multi-write not yet supported.");
+        if (bytes_written < 0) {
+            CONSOLE_ERROR("SPICoprocessor::PartialWrite", "Error code %d while writing object over SPI.",
+                          bytes_written);
+            return bytes_written;
         }
-        return false;
+        if (require_ack && !SPIWaitForAck()) {
+            CONSOLE_ERROR("SPICoprocessor::PartialWrite", "Timed out or received bad ack after writing to master.");
+            return false;
+        }
+        return true;
     }
 
-    /**
-     * Top level function that transaltes a read from an object (with associated address) into SPI transaction(s).
-     * Included in the header file since the template function implementation needs to be visible to any file that
-     * utilizes it.
-     * Note that this function is not generally called directly, use the public Write and Read interfaces instead (no
-     * address required).
-     */
-    template <typename T>
-    bool Read(SCAddr addr, T &object) {
-        if (sizeof(object) < SCResponsePacket::kDataMaxLenBytes) {
-            // Single read.
-        } else {
-            // Multi-read.
-            CONSOLE_ERROR("SPICoprocessor::Read", "Multi-read not yet supported.");
+    bool PartialRead(SCAddr addr, uint8_t *object_buf, uint8_t len, uint16_t offset = 0) {
+        SCReadRequestPacket read_request_packet;
+#ifdef ON_PICO
+        read_request_packet.cmd = kCmdReadFromSlave;
+#elif ON_ESP32
+        read_request_packet.cmd = kCmdReadFromMaster;
+#endif
+        read_request_packet.addr = addr;
+        read_request_packet.offset = offset;
+        read_request_packet.len = len;
+        read_request_packet.PopulateCRC();
+
+        uint8_t rx_buf[kSPITransactionMaxLenBytes];
+
+#ifdef ON_ESP32
+        use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
+#endif
+        int bytes_exchanged = SPIWriteReadBlocking(read_request_packet.GetBuf(), rx_buf, kSPITransactionMaxLenBytes);
+        uint16_t read_request_bytes = read_request_packet.GetBufLenBytes();
+        uint8_t *response_buf = rx_buf + read_request_bytes;
+        SCResponsePacket response_packet = SCResponsePacket(response_buf, bytes_exchanged - read_request_bytes);
+        if (!response_packet.IsValid()) {
+            CONSOLE_ERROR("SPICoprocessor::PartialRead",
+                          "Received response packet of length %d Bytes with an invalid CRC.",
+                          response_packet.GetBufLenBytes());
+            return false;
         }
-        return false;
+        if (response_packet.cmd != SCCommand::kCmdDataBlock) {
+            CONSOLE_ERROR("SPICoprocessor::PartialRead",
+                          "Received invalid response with cmd=0x%x to requested read at address 0x%x of length %d with "
+                          "offset %d Bytes.",
+                          response_packet.cmd, read_request_packet.addr, read_request_packet.len,
+                          read_request_packet.offset);
+            return false;
+        }
+        if (response_packet.data_len_bytes != len) {
+            CONSOLE_ERROR("SPICoprocessor::PartialRead",
+                          "Received incorrect number of Bytes while reading object at address 0x%x with offset %d "
+                          "Bytes. Requested %d Bytes but received %d.",
+                          addr, offset, read_request_packet.len, response_packet.data_len_bytes);
+            return false;
+        }
+        memcpy(object_buf + offset, response_packet.data, response_packet.data_len_bytes);
+        return true;
     }
 
     /**
@@ -440,14 +499,6 @@ class SPICoprocessor {
     inline int SPIReadBlocking(uint8_t *rx_buf, uint16_t len_bytes = kSPITransactionMaxLenBytes,
                                bool end_transaction = true) {
         return SPIWriteReadBlocking(nullptr, rx_buf, len_bytes, end_transaction);
-    }
-
-    // SCPacket aliases for SPIWriteReadBlocking.
-    inline int SPIWriteBlocking(SCPacket &packet, bool end_transaction = true) {
-        return SPIWriteBlocking(packet.GetBuf(), packet.GetBufLenBytes(), end_transaction);
-    }
-    inline int SPIReadBlocking(SCPacket &packet, bool end_transaction = true) {
-        return SPIReadBlocking(packet.GetBuf(), packet.GetBufLenBytes(), end_transaction);
     }
 
     SPICoprocessorConfig config_;
