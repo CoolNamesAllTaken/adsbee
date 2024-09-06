@@ -418,7 +418,8 @@ class SPICoprocessor {
 #ifdef ON_ESP32
         use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
 #endif
-        int bytes_exchanged = SPIWriteReadBlocking(read_request_packet.GetBuf(), rx_buf, kSPITransactionMaxLenBytes);
+        int bytes_exchanged =
+            SPIWriteReadBlocking(read_request_packet.GetBuf(), rx_buf, read_request_packet.GetBufLenBytes());
         uint16_t read_request_bytes = read_request_packet.GetBufLenBytes();
         uint8_t *response_buf = rx_buf + read_request_bytes;
         SCResponsePacket response_packet = SCResponsePacket(response_buf, bytes_exchanged - read_request_bytes);

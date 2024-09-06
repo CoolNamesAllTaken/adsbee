@@ -84,7 +84,7 @@ CPP_AT_CALLBACK(CommsManager::ATBiasTeeEnableCallback) {
 
 void ATFeedHelpCallback() {
     CPP_AT_PRINTF(
-        "AT+FEED=<feed_index>,<feed_uri>,<feed_port>,<active>,<protocol>\r\n\tSet details for a "
+        "\tAT+FEED=<feed_index>,<feed_uri>,<feed_port>,<active>,<protocol>\r\n\tSet details for a "
         "network feed.\r\n\tfeed_index = [0-%d], feed_uri = ip address or URL, feed_port = [0-65535], "
         "active = [0 1], protocol = [BEAST].\r\n\t\r\n\tAT+FEED?\r\n\tPrint details for all "
         "feeds.\r\n\t\r\n\tAT+FEED?<feed_index>\r\n\tPrint details for a specific feed.\r\n\tfeed_index = [0-%d]",
@@ -269,6 +269,11 @@ CPP_AT_HELP_CALLBACK(CommsManager::ATProtocolHelpCallback) {
     CPP_AT_PRINTF("\tAT+PROTOCOL?\r\n\t+PROTOCOL=<iface>,<protocol>\r\n\t...\r\n");
 }
 
+CPP_AT_CALLBACK(CommsManager::ATRebootCallback) {
+    adsbee.Reboot();
+    CPP_AT_SUCCESS();  // There is a slight delay (1s) while the watchdog runs out, which allows this line to print.
+}
+
 CPP_AT_CALLBACK(CommsManager::ATRxEnableCallback) {
     switch (op) {
         case '=':
@@ -451,6 +456,11 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .max_args = 2,
      .help_callback = CPP_AT_BIND_MEMBER_HELP_CALLBACK(CommsManager::ATProtocolHelpCallback, comms_manager),
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATProtocolCallback, comms_manager)},
+    {.command_buf = "+REBOOT",
+     .min_args = 0,
+     .max_args = 0,
+     .help_string_buf = "REBOOT\r\n\tReboots the RP2040.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRebootCallback, comms_manager)},
     {.command_buf = "+RX_ENABLE",
      .min_args = 0,
      .max_args = 1,
