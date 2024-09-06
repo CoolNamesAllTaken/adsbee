@@ -3,6 +3,7 @@
 #include "eeprom.hh"
 #include "esp32_flasher.hh"
 #include "hal.hh"
+#include "hardware_unit_tests.hh"  // For testing only!
 #include "pico/binary_info.h"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
@@ -49,6 +50,10 @@ int main() {
     test_aircraft.track_deg = 100;
     test_aircraft.velocity_kts = 200;
     adsbee.aircraft_dictionary.InsertAircraft(test_aircraft);
+
+    // int argc = 0;
+    // const char* argv[1];
+    // utest_main(argc, argv);
 
     uint16_t esp32_test_packet_interval_ms = 1000;
     uint32_t esp32_test_packet_last_sent_timestamp_ms = get_time_since_boot_ms();
