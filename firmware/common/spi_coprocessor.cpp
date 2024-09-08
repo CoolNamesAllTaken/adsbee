@@ -239,8 +239,8 @@ bool SPICoprocessor::SetBytes(SCAddr addr, uint8_t *buf, uint16_t buf_len, uint1
 #ifdef ON_ESP32
         case kAddrRawTransponderPacket: {
             RawTransponderPacket tpacket = *(RawTransponderPacket *)buf;
-            CONSOLE_INFO("SPICoprocessor::SetBytes", "Received a raw %d-bit transponder packet.",
-                         tpacket.buffer_len_bits);
+            // CONSOLE_INFO("SPICoprocessor::SetBytes", "Received a raw %d-bit transponder packet.",
+            //              tpacket.buffer_len_bits);
             adsbee_server.HandleRawTransponderPacket(tpacket);
             break;
         }

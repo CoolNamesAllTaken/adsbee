@@ -75,7 +75,7 @@ void ADSBeeServer::SPIReceiveTask() {
         // spi_rx_queue_.Push(spi_rx_transaction);
 
         // Yield to the idle task to avoid a watchdog trigger.
-        vTaskDelay(1);  // Delay 1 tick (10ms).
+        // vTaskDelay(1);  // Delay 1 tick (10ms).
     }
 
     ESP_LOGI("esp_spi_receive_task", "Received exit signal, ending SPI receive task.");
