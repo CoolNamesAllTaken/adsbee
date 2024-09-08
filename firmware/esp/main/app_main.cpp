@@ -18,6 +18,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "hardware_unit_tests.hh"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
 
@@ -29,6 +30,8 @@ SettingsManager settings_manager = SettingsManager();
 extern "C" void app_main(void) {
     ESP_LOGI("app_main", "Beginning ADSBee Server Application.");
     adsbee_server.Init();
+
+    RunHardwareUnitTests();
 
     while (1) {
         adsbee_server.Update();

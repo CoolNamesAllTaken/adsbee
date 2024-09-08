@@ -70,6 +70,7 @@ bool SPICoprocessor::Init() {
     }
 
     coprocessor_spi_mutex_ = xSemaphoreCreateMutex();
+    coprocessor_spi_context_mutex_ = xSemaphoreCreateMutex();
 #endif
     return true;
 }
@@ -160,13 +161,18 @@ bool SPICoprocessor::Update() {
     memset(rx_buf, 0, kSPITransactionMaxLenBytes);
 
     use_handshake_pin_ = false;  // Don't solicit a transfer.
+    if (xSemaphoreTake(coprocessor_spi_context_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
+        CONSOLE_ERROR("SPICoprocessor::Update", "Failed to acquire coprocessor SPI context mutex after waiting %d ms.",
+                      kSPITransactionTimeoutMs);
+        return false;
+    }
     int16_t bytes_read = SPIReadBlocking(rx_buf);
     if (bytes_read < 0) {
         if (bytes_read != kErrorTimeout) {
             CONSOLE_ERROR("SPICoprocessor::Update", "SPI read received non-timeout error code 0x%x.", bytes_read);
-            return false;
+            return SPIContextReturnHelper(false);
         }
-        return true;  // Timeout errors are OK and expected.
+        return SPIContextReturnHelper(true);  // Timeout errors are OK and expected.
     }
 
     uint8_t cmd = rx_buf[0];
@@ -178,7 +184,7 @@ bool SPICoprocessor::Update() {
                 CONSOLE_ERROR("SPICoprocessor::Update",
                               "Received unsolicited write to slave with bad checksum, packet length %d Bytes.",
                               bytes_read);
-                return false;
+                return SPIContextReturnHelper(false);
             }
             ret = SetBytes(write_packet.addr, write_packet.data, write_packet.len, write_packet.offset);
             bool ack = true;
@@ -199,7 +205,7 @@ bool SPICoprocessor::Update() {
                 CONSOLE_ERROR("SPICoprocessor::Update",
                               "Received unsolicited read from slave with bad checksum, packet length %d Bytes.",
                               bytes_read);
-                return false;
+                return SPIContextReturnHelper(false);
             }
 
             SCResponsePacket response_packet;
@@ -221,12 +227,12 @@ bool SPICoprocessor::Update() {
             CONSOLE_ERROR("SPICoprocessor::Update",
                           "Received unsolicited packet from RP2040 with unsupported cmd=%d, packet length %d Bytes.",
                           cmd, bytes_read);
-            return false;
+            return SPIContextReturnHelper(false);
     }
 
 #endif
 
-    return ret;
+    return SPIContextReturnHelper(ret);
 }
 
 /** Begin Private Functions **/

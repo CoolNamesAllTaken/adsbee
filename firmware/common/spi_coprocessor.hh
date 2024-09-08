@@ -26,7 +26,11 @@ class SPICoprocessor {
     static const uint16_t kSPITransactionQueueLenTransactions = 3;
     static const uint16_t kSPITransactionMaxNumRetries =
         3;  // Max num retries per block in a multi-transfer transaction.
-    static const uint16_t kSPITransactionTimeoutMs = 100;
+    // Since the transaction timeout value is used by threads waiting to use the SPI peripheral, and the SPI update task
+    // blocks the copro_spi_mutex_ until it receives a transfer from the master, this timeout needs to be set to the
+    // maximum delay between unsolicited packets from the master (heartbeat) to avoid threads giving up while the SPI
+    // update task is hogging the mutex.
+    static const uint16_t kSPITransactionTimeoutMs = 1200;
 
 #ifdef ON_PICO
     static const uint16_t kHandshakePinMaxWaitDurationMs = 10;
@@ -322,18 +326,6 @@ class SPICoprocessor {
     inline bool Read(SettingsManager::Settings settings_struct) { return Read(kAddrSettingsStruct, settings_struct); }
 
 #ifdef ON_PICO
-
-#elif ON_ESP32
-#endif
-
-    // /**
-    //  * Transmit a packet to the coprocessor. Blocking.
-    //  * @param[in] packet Reference to the packet that will be transmitted.
-    //  * @retval True if succeeded, false otherwise.
-    //  */
-    // bool SendMessage(SCMessage &message);
-
-#ifdef ON_PICO
     bool GetSPIHandshakePinLevel() { return gpio_get(config_.spi_handshake_pin); }
 
     /**
@@ -394,8 +386,23 @@ class SPICoprocessor {
     enum ReturnCode : int { kOk = 0, kErrorGeneric = -1, kErrorTimeout = -2 };
 
 #ifdef ON_ESP32
-    SemaphoreHandle_t coprocessor_spi_mutex_;
+    SemaphoreHandle_t coprocessor_spi_mutex_;  // Low level mutex used to guard the SPI peripheral (don't let multiple
+                                               // threads queue packets at the same time).
+    SemaphoreHandle_t
+        coprocessor_spi_context_mutex_;  // High level mutex used to guard conversation contexts in SPI (don't let
+                                         // another thread rip away the SPI peripheral if the master demands a reply).
 #endif
+
+    /**
+     * Helper function that makes sure to return the SPI context mutex when returning from SPICoprocessor::Update() so
+     * that we don't lock other functions out after taking a return shortcut.
+     */
+    inline bool SPIContextReturnHelper(int ret) {
+#ifdef ON_ESP32
+        xSemaphoreGive(coprocessor_spi_context_mutex_);
+#endif
+        return ret;
+    }
 
     bool PartialWrite(SCAddr addr, uint8_t *object_buf, uint8_t len, uint16_t offset = 0, bool require_ack = false) {
         SCWritePacket write_packet;
@@ -412,20 +419,25 @@ class SPICoprocessor {
 
 #ifdef ON_ESP32
         use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
+        if (xSemaphoreTake(coprocessor_spi_context_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
+            CONSOLE_ERROR("SPICoprocessor::PartialWrite", "Failed to take SPI context mutex after waiting for %d ms.",
+                          kSPITransactionTimeoutMs);
+            return false;
+        }
 #endif
         int bytes_written = SPIWriteBlocking(write_packet.GetBuf(), write_packet.GetBufLenBytes(), true);
 
         if (bytes_written < 0) {
             CONSOLE_ERROR("SPICoprocessor::PartialWrite", "Error code %d while writing object over SPI.",
                           bytes_written);
-            return bytes_written;
+            return SPIContextReturnHelper(bytes_written);
         }
         if (require_ack && !SPIWaitForAck()) {
             CONSOLE_ERROR("SPICoprocessor::PartialWrite",
                           "Timed out or received bad ack after writing to coprocessor.");
-            return false;
+            return SPIContextReturnHelper(false);
         }
-        return true;
+        return SPIContextReturnHelper(true);
     }
 
     bool PartialRead(SCAddr addr, uint8_t *object_buf, uint8_t len, uint16_t offset = 0) {
@@ -472,12 +484,16 @@ class SPICoprocessor {
         // On the slave, reading from the master is a single transaction. We preload the beginning of the message
         // with the read request, and the master populates the remainder of the message with the reply.
         use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
-
+        if (xSemaphoreTake(coprocessor_spi_context_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
+            CONSOLE_ERROR("SPICoprocessor::PartialRead", "Failed to take SPI context mutex after waiting for %d ms.",
+                          kSPITransactionTimeoutMs);
+            return false;
+        }
         int bytes_exchanged = SPIWriteReadBlocking(read_request_packet.GetBuf(), rx_buf, read_request_bytes);
         if (bytes_exchanged < 0) {
             CONSOLE_ERROR("SPICoprocessor::PartialRead", "Error code %d during read from master SPI transaction.",
                           bytes_exchanged);
-            return false;
+            return SPIContextReturnHelper(false);
         }
         uint8_t *response_buf = rx_buf + read_request_bytes;
         SCResponsePacket response_packet = SCResponsePacket(response_buf, bytes_exchanged - read_request_bytes);
@@ -486,7 +502,7 @@ class SPICoprocessor {
             CONSOLE_ERROR("SPICoprocessor::PartialRead",
                           "Received response packet of length %d Bytes with an invalid CRC.",
                           response_packet.GetBufLenBytes());
-            return false;
+            return SPIContextReturnHelper(false);
         }
         if (response_packet.cmd != SCCommand::kCmdDataBlock) {
             CONSOLE_ERROR("SPICoprocessor::PartialRead",
@@ -494,17 +510,17 @@ class SPICoprocessor {
                           "offset %d Bytes.",
                           response_packet.cmd, read_request_packet.addr, read_request_packet.len,
                           read_request_packet.offset);
-            return false;
+            return SPIContextReturnHelper(false);
         }
         if (response_packet.data_len_bytes != len) {
             CONSOLE_ERROR("SPICoprocessor::PartialRead",
                           "Received incorrect number of Bytes while reading object at address 0x%x with offset %d "
                           "Bytes. Requested %d Bytes but received %d.",
                           addr, offset, read_request_packet.len, response_packet.data_len_bytes);
-            return false;
+            return SPIContextReturnHelper(false);
         }
         memcpy(object_buf + offset, response_packet.data, response_packet.data_len_bytes);
-        return true;
+        return SPIContextReturnHelper(true);
     }
 
     /**

@@ -24,7 +24,7 @@ bool ADSBeeServer::Init() {
 
 bool ADSBeeServer::Update() {
     // Do NOT call pico.Update() from here since that's already taken care of by the SPIReceiveTask.
-    // Run the LED task here so it has better time resolution than it would in the SPI task, which blocks frequently.
+    // RUpdate the LED here so it has better time resolution than it would in the SPI task, which blocks frequently.
     pico.UpdateNetworkLED();
     return true;
 }
