@@ -285,16 +285,9 @@ bool SPICoprocessor::SPISendAck(bool success) {
 bool SPICoprocessor::SPIWaitForAck() {
     SCResponsePacket response_packet;
 #ifdef ON_PICO
-    uint32_t wait_begin_timestamp_ms = get_time_since_boot_ms();
-    while (true) {
-        if (gpio_get(config_.spi_handshake_pin)) {
-            break;
-        }
-        if (get_time_since_boot_ms() - wait_begin_timestamp_ms >= kSPITransactionTimeoutMs) {
-            CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck",
-                          "Timed out while waiting for ack: never received handshake.");
-            return false;
-        }
+    if (!SPIWaitForHandshake()) {
+        CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "Timed out while waiting for ack: never received handshake.");
+        return false;
     }
 #elif ON_ESP32
     use_handshake_pin_ = false;  // Don't solicit an ack when waiting for one.
@@ -320,6 +313,10 @@ int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint1
     int bytes_written = 0;
 #ifdef ON_PICO
 
+    // Wait for the next transmit interval (blocking) so that we don't overwhelm the slave with messages.
+    while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIMinTransmitIntervalUs) {
+    }
+
     gpio_put(config_.spi_cs_pin, 0);
     // Pico SDK doesn't have nice nullptr behavior for tx_buf and rx_buf, so we have to do this.
     if (tx_buf == nullptr) {
@@ -337,6 +334,9 @@ int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint1
     if (bytes_written < 0) {
         CONSOLE_ERROR("SPICoprocessor::SPIWriteReadBlocking", "SPI write read call returned error code 0x%x.",
                       bytes_written);
+    } else {
+        // Only record the transmit time if the transaction was successful.
+        spi_last_transmit_timestamp_us_ = get_time_since_boot_us();
     }
 #elif ON_ESP32
     spi_slave_transaction_t t;

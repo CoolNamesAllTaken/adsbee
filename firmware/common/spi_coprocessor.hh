@@ -30,6 +30,8 @@ class SPICoprocessor {
 
 #ifdef ON_PICO
     static const uint16_t kHandshakePinMaxWaitDurationMs = 10;
+    // Make sure that we don't talk to the slave before it has a chance to get ready for the next message.
+    static const uint32_t kSPIMinTransmitIntervalUs = 100;
 #elif ON_ESP32
     static const uint32_t kNetworkLEDBlinkDurationMs = 10;
     static const uint32_t kNetworkLEDBlinkDurationTicks = kNetworkLEDBlinkDurationMs / portTICK_PERIOD_MS;
@@ -213,8 +215,7 @@ class SPICoprocessor {
     struct __attribute__((__packed__)) SCResponsePacket : public SCPacket {
         static const uint16_t kDataMaxLenBytes = kPacketMaxLenBytes - sizeof(SCCommand) - kCRCLenBytes;
         static const uint16_t kDataOffsetBytes = sizeof(SCCommand);
-        static const uint16_t kBufMinLenBytes =
-            sizeof(SCCommand) + 1 + kCRCLenBytes;  // Need at least one data Byte and CRC.
+        static const uint16_t kBufMinLenBytes = sizeof(SCCommand) + 1 + kCRCLenBytes;  // Require >= 1 payload Byte.
 
         // ACK packet is special format of SCResponse packet with a single byte data payload.
         // ACK format: CMD | ACK | CRC
@@ -222,6 +223,15 @@ class SPICoprocessor {
         // ACK = true if success, false if fail
         // CRC = CRC16
         static const uint16_t kAckLenBytes = sizeof(SCCommand) + 1 + kCRCLenBytes;
+
+        /**
+         * Convenience function that tells you how long a response packet would be with a payload of X bytes.
+         * @param[in] payload_len_bytes Payload length in Bytes.
+         * @retval Buffer length in Bytes for an SCResponsePacket containing the given payload.
+         */
+        static inline uint16_t GetBufLenForPayloadLenBytes(uint16_t payload_len_bytes) {
+            return kDataOffsetBytes + payload_len_bytes + kCRCLenBytes;
+        }
 
         /** Begin packet contents on the wire. **/
         SCCommand cmd = kCmdInvalid;
@@ -325,6 +335,23 @@ class SPICoprocessor {
 
 #ifdef ON_PICO
     bool GetSPIHandshakePinLevel() { return gpio_get(config_.spi_handshake_pin); }
+
+    /**
+     * Blocks on waiting for the handshake pin to go high, until a timeout is reached.
+     * @retval True if handshake line went high before timeout, false otherwise.
+     */
+    bool SPIWaitForHandshake() {
+        uint32_t wait_begin_timestamp_ms = get_time_since_boot_ms();
+        while (true) {
+            if (gpio_get(config_.spi_handshake_pin)) {
+                break;
+            }
+            if (get_time_since_boot_ms() - wait_begin_timestamp_ms >= kSPITransactionTimeoutMs) {
+                return false;
+            }
+        }
+        return true;
+    }
 #elif ON_ESP32
     /**
      * Helper function used by callbacks to set the handshake pin high or low on the ESP32.
@@ -415,14 +442,46 @@ class SPICoprocessor {
 
         uint8_t rx_buf[kSPITransactionMaxLenBytes];
 
-#ifdef ON_ESP32
-        use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
-#endif
-        int bytes_exchanged =
-            SPIWriteReadBlocking(read_request_packet.GetBuf(), rx_buf, read_request_packet.GetBufLenBytes());
         uint16_t read_request_bytes = read_request_packet.GetBufLenBytes();
+
+#ifdef ON_PICO
+        // On the master, reading from the slave is two transactions: The read request is sent, then we wait on the
+        // handshake line to read the reply.
+        int bytes_written = SPIWriteBlocking(read_request_packet.GetBuf(), read_request_bytes);
+        if (bytes_written < 0) {
+            CONSOLE_ERROR("SPICoprocessor::PartialRead", "Error code %d while writing read request over SPI.",
+                          bytes_written);
+            return false;
+        }
+        if (!SPIWaitForHandshake()) {
+            CONSOLE_ERROR("SPICoprocessor::PartialRead",
+                          "Timed out while waiting for handshake after sending read request.");
+            return false;
+        }
+
+        SCResponsePacket response_packet;
+        response_packet.data_len_bytes =
+            len;  // We need to set this manually since we are using the default constructor.
+        int bytes_read = SPIReadBlocking(response_packet.GetBuf(), SCResponsePacket::GetBufLenForPayloadLenBytes(len));
+        if (bytes_read < 0) {
+            CONSOLE_ERROR("SPICoprocessor::PartialRead", "Error code %d while reading read response over SPI.",
+                          bytes_read);
+            return false;
+        }
+#elif ON_ESP32
+        // On the slave, reading from the master is a single transaction. We preload the beginning of the message
+        // with the read request, and the master populates the remainder of the message with the reply.
+        use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
+
+        int bytes_exchanged = SPIWriteReadBlocking(read_request_packet.GetBuf(), rx_buf, read_request_bytes);
+        if (bytes_exchanged < 0) {
+            CONSOLE_ERROR("SPICoprocessor::PartialRead", "Error code %d during read from master SPI transaction.",
+                          bytes_exchanged);
+            return false;
+        }
         uint8_t *response_buf = rx_buf + read_request_bytes;
         SCResponsePacket response_packet = SCResponsePacket(response_buf, bytes_exchanged - read_request_bytes);
+#endif
         if (!response_packet.IsValid()) {
             CONSOLE_ERROR("SPICoprocessor::PartialRead",
                           "Received response packet of length %d Bytes with an invalid CRC.",
@@ -509,6 +568,7 @@ class SPICoprocessor {
     uint32_t scratch_;  // Scratch register used for testing.
 
 #ifdef ON_PICO
+    uint32_t spi_last_transmit_timestamp_us_ = 0;
 #elif ON_ESP32
     // WORD_ALIGNED_ATTR SPITransaction spi_rx_queue_buf_[kSPITransactionQueueLenTransactions];
     // WORD_ALIGNED_ATTR SPITransaction spi_tx_queue_buf_[kSPITransactionQueueLenTransactions];
