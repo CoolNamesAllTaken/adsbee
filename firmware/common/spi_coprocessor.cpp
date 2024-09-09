@@ -69,8 +69,8 @@ bool SPICoprocessor::Init() {
         return false;
     }
 
-    coprocessor_spi_mutex_ = xSemaphoreCreateMutex();
-    coprocessor_spi_context_mutex_ = xSemaphoreCreateMutex();
+    spi_mutex_ = xSemaphoreCreateMutex();
+    spi_next_transaction_mutex_ = xSemaphoreCreateMutex();
 #endif
     return true;
 }
@@ -98,19 +98,21 @@ bool SPICoprocessor::Update() {
     }
     // Incoming unsolicited transmission from ESP32.
     uint8_t rx_buf[kSPITransactionMaxLenBytes];
-    SPIReadBlocking(rx_buf, false);  // Peek the command first, keep chip select asserted.
-    uint8_t cmd = rx_buf[0];
+    SPIReadBlocking(rx_buf, 1, false);  // Peek the command first, keep chip select asserted.
+    SCCommand cmd = static_cast<SCCommand>(rx_buf[0]);
     switch (cmd) {
         case kCmdWriteToMaster:
         case kCmdWriteToMasterRequireAck: {
             // Figure out how long the write packet is, then read in the rest of it.
-            SPIReadBlocking(rx_buf + sizeof(cmd), SCWritePacket::kDataOffsetBytes - sizeof(cmd),
+            SPIReadBlocking(rx_buf + sizeof(SCCommand), SCWritePacket::kDataOffsetBytes - sizeof(SCCommand),
                             false);  // Read addr, offset, and len.
-            uint8_t len = rx_buf[SCWritePacket::kDataOffsetBytes - sizeof(SCAddr)];
-            // Read the rest of the write packet and complete the transaction.
-            SPIReadBlocking(rx_buf + SCWritePacket::kDataOffsetBytes, len + SCPacket::kCRCLenBytes, true);
+            uint8_t len = rx_buf[SCWritePacket::kDataOffsetBytes - sizeof(uint8_t)];
+            // Read the rest of the write packet and complete the transaction. Guard to not run off end if invalid
+            // len is received.
+            SPIReadBlocking(rx_buf + SCWritePacket::kDataOffsetBytes,
+                            MIN(len, SCWritePacket::kDataMaxLenBytes) + SCPacket::kCRCLenBytes, true);
             SCWritePacket write_packet =
-                SCWritePacket(rx_buf, len + SCWritePacket::kDataOffsetBytes + SCPacket::kCRCLenBytes);
+                SCWritePacket(rx_buf, SCWritePacket::kDataOffsetBytes + len + SCPacket::kCRCLenBytes);
             if (!write_packet.IsValid()) {
                 CONSOLE_ERROR("SPICoprocessor::Update", "Received unsolicited write to master with bad checksum.");
                 return false;
@@ -124,7 +126,7 @@ bool SPICoprocessor::Update() {
                     write_packet.addr, write_packet.offset, write_packet.len);
                 ack = false;
             }
-            if (cmd == kCmdWriteToMasterRequireAck) {
+            if (write_packet.cmd == kCmdWriteToMasterRequireAck) {
                 SPISendAck(ack);
             }
             break;
@@ -132,7 +134,7 @@ bool SPICoprocessor::Update() {
         case kCmdReadFromMaster: {
             // NOTE: If an Object lager than SCResponsePacket::kDataMaxLenBytes - SCReadRequestPacket::kBufLenBytes,
             // the slave must request multiple reads with offsets to read the full object.
-            SPIReadBlocking(rx_buf + sizeof(cmd), SCReadRequestPacket::kBufLenBytes - sizeof(cmd), false);
+            SPIReadBlocking(rx_buf + sizeof(SCCommand), SCReadRequestPacket::kBufLenBytes - sizeof(SCCommand), false);
             SCReadRequestPacket read_request_packet = SCReadRequestPacket(rx_buf, SCReadRequestPacket::kBufLenBytes);
             if (!read_request_packet.IsValid()) {
                 CONSOLE_ERROR("SPICoprocessor::Update", "Received unsolicited read from master with bad checksum.");
@@ -147,6 +149,7 @@ bool SPICoprocessor::Update() {
                               "Failed to retrieve data for read from master at address 0x%x with length %d Bytes.",
                               read_request_packet.addr, read_request_packet.len);
             }
+            response_packet.data_len_bytes = read_request_packet.len;
             response_packet.PopulateCRC();
             SPIWriteBlocking(response_packet.GetBuf(), response_packet.GetBufLenBytes());
             break;
@@ -161,18 +164,13 @@ bool SPICoprocessor::Update() {
     memset(rx_buf, 0, kSPITransactionMaxLenBytes);
 
     use_handshake_pin_ = false;  // Don't solicit a transfer.
-    if (xSemaphoreTake(coprocessor_spi_context_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
-        CONSOLE_ERROR("SPICoprocessor::Update", "Failed to acquire coprocessor SPI context mutex after waiting %d ms.",
-                      kSPITransactionTimeoutMs);
-        return false;
-    }
     int16_t bytes_read = SPIReadBlocking(rx_buf);
     if (bytes_read < 0) {
         if (bytes_read != kErrorTimeout) {
             CONSOLE_ERROR("SPICoprocessor::Update", "SPI read received non-timeout error code 0x%x.", bytes_read);
-            return SPIContextReturnHelper(false);
+            return SPISlaveLoopReturnHelper(false);
         }
-        return SPIContextReturnHelper(true);  // Timeout errors are OK and expected.
+        return SPISlaveLoopReturnHelper(true);  // Timeout errors are OK and expected.
     }
 
     uint8_t cmd = rx_buf[0];
@@ -184,7 +182,7 @@ bool SPICoprocessor::Update() {
                 CONSOLE_ERROR("SPICoprocessor::Update",
                               "Received unsolicited write to slave with bad checksum, packet length %d Bytes.",
                               bytes_read);
-                return SPIContextReturnHelper(false);
+                return SPISlaveLoopReturnHelper(false);
             }
             ret = SetBytes(write_packet.addr, write_packet.data, write_packet.len, write_packet.offset);
             bool ack = true;
@@ -205,7 +203,7 @@ bool SPICoprocessor::Update() {
                 CONSOLE_ERROR("SPICoprocessor::Update",
                               "Received unsolicited read from slave with bad checksum, packet length %d Bytes.",
                               bytes_read);
-                return SPIContextReturnHelper(false);
+                return SPISlaveLoopReturnHelper(false);
             }
 
             SCResponsePacket response_packet;
@@ -227,12 +225,12 @@ bool SPICoprocessor::Update() {
             CONSOLE_ERROR("SPICoprocessor::Update",
                           "Received unsolicited packet from RP2040 with unsupported cmd=%d, packet length %d Bytes.",
                           cmd, bytes_read);
-            return SPIContextReturnHelper(false);
+            return SPISlaveLoopReturnHelper(false);
     }
 
 #endif
 
-    return SPIContextReturnHelper(ret);
+    return SPISlaveLoopReturnHelper(ret);
 }
 
 /** Begin Private Functions **/
@@ -285,7 +283,7 @@ bool SPICoprocessor::SPISendAck(bool success) {
 #ifdef ON_ESP32
     use_handshake_pin_ = true;  // Solicit a transfer to send the ack.
 #endif
-    return SPIWriteBlocking(response_packet.GetBuf(), SCResponsePacket::kBufMinLenBytes) > 0;
+    return SPIWriteBlocking(response_packet.GetBuf(), SCResponsePacket::kAckLenBytes) > 0;
 }
 
 bool SPICoprocessor::SPIWaitForAck() {
@@ -298,8 +296,8 @@ bool SPICoprocessor::SPIWaitForAck() {
 #elif ON_ESP32
     use_handshake_pin_ = false;  // Don't solicit an ack when waiting for one.
 #endif
-    int bytes_read = SPIReadBlocking(response_packet.GetBuf(), SCResponsePacket::kBufMinLenBytes);
-    response_packet.data_len_bytes = SCResponsePacket::kBufMinLenBytes;
+    int bytes_read = SPIReadBlocking(response_packet.GetBuf(), SCResponsePacket::kAckLenBytes);
+    response_packet.data_len_bytes = SCResponsePacket::kAckLenBytes;
     if (response_packet.cmd != kCmdAck) {
         CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "Received a message that was not an ack.");
         return false;
@@ -353,7 +351,7 @@ int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint1
     t.rx_buffer = rx_buf;
 
     /** Send a write packet from slave -> master via handshake. **/
-    if (xSemaphoreTake(coprocessor_spi_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
+    if (xSemaphoreTake(spi_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
         CONSOLE_ERROR("SPICoprocessor::SPIWriteReadBlocking",
                       "Failed to acquire coprocessor SPI mutex after waiting %d ms.", kSPITransactionTimeoutMs);
         return kErrorTimeout;
@@ -362,7 +360,7 @@ int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint1
     // delay. Currently, setting the delay here to anything other than portMAX_DELAY (which allows blocking
     // indefinitely) causes an error in spi_slave.c due to extra transactions getting stuck in the SPI peripheral queue.
     esp_err_t status = spi_slave_transmit(config_.spi_handle, &t, portMAX_DELAY /*kSPITransactionTimeoutTicks*/);
-    xSemaphoreGive(coprocessor_spi_mutex_);
+    xSemaphoreGive(spi_mutex_);
 
     if (status != ESP_OK) {
         if (status == ESP_ERR_TIMEOUT) {

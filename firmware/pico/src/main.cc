@@ -72,5 +72,6 @@ int main() {
         // Loop forever.
         comms_manager.Update();
         adsbee.Update();
+        esp32.Update();
     }
 }
