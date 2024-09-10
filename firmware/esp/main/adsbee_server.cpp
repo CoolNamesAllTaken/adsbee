@@ -71,11 +71,6 @@ void ADSBeeServer::SPIReceiveTask() {
         //     printf("%02X ", spi_rx_transaction.buffer[i]);
         // }
         // printf("\r\n");
-        // TODO: maybe convert to a SPITransaction type and fill in the transaction length property from t?
-        // spi_rx_queue_.Push(spi_rx_transaction);
-
-        // Yield to the idle task to avoid a watchdog trigger.
-        // vTaskDelay(1);  // Delay 1 tick (10ms).
     }
 
     ESP_LOGI("esp_spi_receive_task", "Received exit signal, ending SPI receive task.");

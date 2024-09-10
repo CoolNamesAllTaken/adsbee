@@ -351,7 +351,7 @@ class SPICoprocessor {
      */
     void SetSPIHandshakePinLevel(bool level) {
         // Only set the handshake pin HI when we know we want to solicit a response and not block + wait.
-        // Hanshake pin can always be set low.
+        // Handshake pin can always be set low.
         gpio_set_level(config_.spi_handshake_pin, level && use_handshake_pin_);
     }
 
@@ -506,7 +506,10 @@ class SPICoprocessor {
                           kSPITransactionTimeoutMs);
             return false;
         }
-        int bytes_exchanged = SPIWriteReadBlocking(read_request_packet.GetBuf(), rx_buf, read_request_bytes);
+        // Need to request the max transaction size. If we request something smaller, like read_request_bytes (which
+        // doesn't include the response bytes), the SPI transmit function won't write the additional reply into our
+        // buffer.
+        int bytes_exchanged = SPIWriteReadBlocking(read_request_packet.GetBuf(), rx_buf, SCPacket::kPacketMaxLenBytes);
         if (bytes_exchanged < 0) {
             CONSOLE_ERROR("SPICoprocessor::PartialRead", "Error code %d during read from master SPI transaction.",
                           bytes_exchanged);

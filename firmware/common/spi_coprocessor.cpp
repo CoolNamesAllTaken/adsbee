@@ -137,6 +137,7 @@ bool SPICoprocessor::Update() {
             SPIReadBlocking(rx_buf + sizeof(SCCommand), SCReadRequestPacket::kBufLenBytes - sizeof(SCCommand), false);
             SCReadRequestPacket read_request_packet = SCReadRequestPacket(rx_buf, SCReadRequestPacket::kBufLenBytes);
             if (!read_request_packet.IsValid()) {
+                gpio_put(config_.spi_cs_pin, true);  // Deselect slave when bailing out.
                 CONSOLE_ERROR("SPICoprocessor::Update", "Received unsolicited read from master with bad checksum.");
                 return false;
             }
@@ -155,6 +156,7 @@ bool SPICoprocessor::Update() {
             break;
         }
         default:
+            gpio_put(config_.spi_cs_pin, true);  // Deselect slave when bailing out.
             CONSOLE_ERROR("SPICoprocessor::Update", "Received unsolicited packet from ESP32 with unsupported cmd=%d.",
                           cmd);
             return false;
