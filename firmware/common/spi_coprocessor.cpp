@@ -240,7 +240,7 @@ bool SPICoprocessor::Update() {
 bool SPICoprocessor::SetBytes(SCAddr addr, uint8_t *buf, uint16_t buf_len, uint16_t offset) {
     switch (addr) {
         case kAddrScratch:
-            memcpy(&scratch_ + offset, buf, buf_len);
+            memcpy((uint8_t *)&scratch_ + offset, buf, buf_len);
             break;
 #ifdef ON_ESP32
         case kAddrRawTransponderPacket: {
@@ -252,7 +252,7 @@ bool SPICoprocessor::SetBytes(SCAddr addr, uint8_t *buf, uint16_t buf_len, uint1
         }
 #endif
         case kAddrSettingsStruct:
-            memcpy(&(settings_manager.settings) + offset, buf, buf_len);
+            memcpy((uint8_t *)&(settings_manager.settings) + offset, buf, buf_len);
             break;
         default:
             CONSOLE_ERROR("SPICoprocessor::SetBytes", "No behavior implemented for writing to address 0x%x.", addr);
@@ -264,10 +264,10 @@ bool SPICoprocessor::SetBytes(SCAddr addr, uint8_t *buf, uint16_t buf_len, uint1
 bool SPICoprocessor::GetBytes(SCAddr addr, uint8_t *buf, uint16_t buf_len, uint16_t offset) {
     switch (addr) {
         case kAddrScratch:
-            memcpy(buf, &scratch_ + offset, buf_len);
+            memcpy(buf, (uint8_t *)(&scratch_) + offset, buf_len);
             break;
         case kAddrSettingsStruct:
-            memcpy(buf, &(settings_manager.settings) + offset, buf_len);
+            memcpy(buf, (uint8_t *)&(settings_manager.settings) + offset, buf_len);
             break;
         default:
             CONSOLE_ERROR("SPICoprocessor::SetBytes", "No behavior implemented for reading from address 0x%x.", addr);

@@ -17,7 +17,7 @@ bool ADSBeeServer::Init() {
     spi_receive_task_should_exit_ = false;
     xTaskCreate(esp_spi_receive_task, "spi_receive_task", kSPIRxTaskStackDepthBytes, NULL, 5, NULL);
 
-    pico.Read(settings_manager.settings);
+    // pico.Read(settings_manager.settings);
 
     return true;
 }

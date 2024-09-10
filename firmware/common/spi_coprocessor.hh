@@ -291,7 +291,22 @@ class SPICoprocessor {
             return PartialWrite(addr, (uint8_t *)&object, sizeof(object), 0, require_ack);
         } else {
             // Multi write.
-            CONSOLE_ERROR("SPICoprocessor::Write", "Multi-write not yet supported.");
+            int16_t bytes_remaining = sizeof(object);
+            while (bytes_remaining > 0) {
+                if (!PartialWrite(addr, (uint8_t *)(&object),                             // address
+                                  MIN(SCWritePacket::kDataMaxLenBytes, bytes_remaining),  // len
+                                  sizeof(object) - bytes_remaining,                       // offset
+                                  require_ack)                                            // require_ack
+                ) {
+                    CONSOLE_ERROR(
+                        "SPICoprocessor::Write",
+                        "Multi-transfer %d Byte write of object at address 0x%x failed with %d Bytes remaining.",
+                        sizeof(object), addr, bytes_remaining);
+                    return false;
+                }
+                bytes_remaining -= SCWritePacket::kDataMaxLenBytes;
+            }
+            return true;
         }
         return false;
     }
@@ -318,7 +333,29 @@ class SPICoprocessor {
 
         } else {
             // Multi-read.
-            CONSOLE_ERROR("SPICoprocessor::Read", "Multi-read not yet supported.");
+#ifdef ON_PICO
+            // Write and read are separate transactions.
+            uint16_t max_chunk_size_bytes = SCResponsePacket::kDataMaxLenBytes;
+#elif ON_ESP32
+            // Write and read are a single transaction.
+            uint16_t max_chunk_size_bytes = SCResponsePacket::kDataMaxLenBytes - SCReadRequestPacket::kBufLenBytes;
+#endif
+            int16_t bytes_remaining = sizeof(object);
+            while (bytes_remaining > 0) {
+                if (!PartialRead(addr, (uint8_t *)(&object),                  // address
+                                 MIN(max_chunk_size_bytes, bytes_remaining),  // len
+                                 sizeof(object) - bytes_remaining)            // offset
+                ) {
+                    CONSOLE_ERROR(
+                        "SPICoprocessor::Read",
+                        "Multi-transfer %d Byte read of object at address 0x%x failed with %d Bytes remaining.",
+                        sizeof(object), addr, bytes_remaining);
+                    return false;
+                }
+                bytes_remaining -=
+                    max_chunk_size_bytes;  // Overshoot on purpose on the last chunk. Bytes remaining will go negative.
+            }
+            return true;
         }
         return false;
     }
