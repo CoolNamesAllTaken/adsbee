@@ -276,31 +276,38 @@ class SPICoprocessor {
      */
     template <typename T>
     bool Write(ObjectDictionary::Address addr, T &object, bool require_ack = false) {
+#ifdef ON_ESP32
+        if (xSemaphoreTake(spi_next_transaction_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
+            CONSOLE_ERROR("SPICoprocessor::Write", "Failed to take SPI context mutex after waiting for %d ms.",
+                          kSPITransactionTimeoutMs);
+            return false;
+        }
+#endif
         if (sizeof(object) < SCWritePacket::kDataMaxLenBytes) {
             // Single write. Write the full object at once, no offset, require ack if necessary.
-            return PartialWrite(addr, (uint8_t *)&object, sizeof(object), 0, require_ack);
+            return SPIIndependentLoopReturnHelper(
+                PartialWrite(addr, (uint8_t *)&object, sizeof(object), 0, require_ack));
         } else {
             // Multi write.
             int16_t bytes_remaining = sizeof(object);
             while (bytes_remaining > 0) {
-                if (!PartialWrite(
-                        addr,                                                   // addr
-                        (uint8_t *)(&object),                                   // object     
-                        MIN(SCWritePacket::kDataMaxLenBytes, bytes_remaining),  // len
-                        sizeof(object) - bytes_remaining,                       // offset
-                        require_ack)                                            // require_ack
+                if (!PartialWrite(addr,                                                   // addr
+                                  (uint8_t *)(&object),                                   // object
+                                  MIN(SCWritePacket::kDataMaxLenBytes, bytes_remaining),  // len
+                                  sizeof(object) - bytes_remaining,                       // offset
+                                  require_ack)                                            // require_ack
                 ) {
                     CONSOLE_ERROR(
                         "SPICoprocessor::Write",
                         "Multi-transfer %d Byte write of object at address 0x%x failed with %d Bytes remaining.",
                         sizeof(object), addr, bytes_remaining);
-                    return false;
+                    return SPIIndependentLoopReturnHelper(false);
                 }
                 bytes_remaining -= SCWritePacket::kDataMaxLenBytes;
             }
-            return true;
+            return SPIIndependentLoopReturnHelper(true);
         }
-        return false;
+        return SPIIndependentLoopReturnHelper(false);
     }
 
     /**
@@ -312,9 +319,16 @@ class SPICoprocessor {
      */
     template <typename T>
     bool Read(ObjectDictionary::Address addr, T &object) {
+#ifdef ON_ESP32
+        if (xSemaphoreTake(spi_next_transaction_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
+            CONSOLE_ERROR("SPICoprocessor::PartialRead", "Failed to take SPI context mutex after waiting for %d ms.",
+                          kSPITransactionTimeoutMs);
+            return false;
+        }
+#endif
         if (sizeof(object) < SCResponsePacket::kDataMaxLenBytes) {
             // Single read.
-            return PartialRead(addr, (uint8_t *)&object, sizeof(object));
+            return SPIIndependentLoopReturnHelper(PartialRead(addr, (uint8_t *)&object, sizeof(object)));
 
         } else {
             // Multi-read.
@@ -327,24 +341,23 @@ class SPICoprocessor {
 #endif
             int16_t bytes_remaining = sizeof(object);
             while (bytes_remaining > 0) {
-                if (!PartialRead(
-                        addr, // address
-                        (uint8_t *)(&object), // object  
-                        MIN(max_chunk_size_bytes, bytes_remaining),  // len
-                        sizeof(object) - bytes_remaining)            // offset
+                if (!PartialRead(addr,                                        // address
+                                 (uint8_t *)(&object),                        // object
+                                 MIN(max_chunk_size_bytes, bytes_remaining),  // len
+                                 sizeof(object) - bytes_remaining)            // offset
                 ) {
                     CONSOLE_ERROR(
                         "SPICoprocessor::Read",
                         "Multi-transfer %d Byte read of object at address 0x%x failed with %d Bytes remaining.",
                         sizeof(object), addr, bytes_remaining);
-                    return false;
+                    return SPIIndependentLoopReturnHelper(false);
                 }
                 bytes_remaining -=
                     max_chunk_size_bytes;  // Overshoot on purpose on the last chunk. Bytes remaining will go negative.
             }
-            return true;
+            return SPIIndependentLoopReturnHelper(true);
         }
-        return false;
+        return SPIIndependentLoopReturnHelper(false);
     }
 
 #ifdef ON_PICO
@@ -458,25 +471,20 @@ class SPICoprocessor {
 
 #ifdef ON_ESP32
         use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
-        if (xSemaphoreTake(spi_next_transaction_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
-            CONSOLE_ERROR("SPICoprocessor::PartialWrite", "Failed to take SPI context mutex after waiting for %d ms.",
-                          kSPITransactionTimeoutMs);
-            return false;
-        }
 #endif
         int bytes_written = SPIWriteBlocking(write_packet.GetBuf(), write_packet.GetBufLenBytes());
 
         if (bytes_written < 0) {
             CONSOLE_ERROR("SPICoprocessor::PartialWrite", "Error code %d while writing object over SPI.",
                           bytes_written);
-            return SPIIndependentLoopReturnHelper(bytes_written);
+            return bytes_written;
         }
         if (require_ack && !SPIWaitForAck()) {
             CONSOLE_ERROR("SPICoprocessor::PartialWrite",
                           "Timed out or received bad ack after writing to coprocessor.");
-            return SPIIndependentLoopReturnHelper(false);
+            return false;
         }
-        return SPIIndependentLoopReturnHelper(true);
+        return true;
     }
 
     bool PartialRead(ObjectDictionary::Address addr, uint8_t *object_buf, uint8_t len, uint16_t offset = 0) {
@@ -523,11 +531,6 @@ class SPICoprocessor {
         // On the slave, reading from the master is a single transaction. We preload the beginning of the message
         // with the read request, and the master populates the remainder of the message with the reply.
         use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
-        if (xSemaphoreTake(spi_next_transaction_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
-            CONSOLE_ERROR("SPICoprocessor::PartialRead", "Failed to take SPI context mutex after waiting for %d ms.",
-                          kSPITransactionTimeoutMs);
-            return false;
-        }
         // Need to request the max transaction size. If we request something smaller, like read_request_bytes (which
         // doesn't include the response bytes), the SPI transmit function won't write the additional reply into our
         // buffer.
@@ -535,14 +538,14 @@ class SPICoprocessor {
         if (bytes_exchanged < 0) {
             CONSOLE_ERROR("SPICoprocessor::PartialRead", "Error code %d during read from master SPI transaction.",
                           bytes_exchanged);
-            return SPIIndependentLoopReturnHelper(false);
+            return false;
         }
         if (bytes_exchanged <= read_request_bytes) {
             CONSOLE_ERROR("SPICoprocessor::PartialRead",
                           "SPI transaction was too short, request was %d Bytes, only exchanged %d Bytes including "
                           "request and response.",
                           read_request_bytes, bytes_exchanged);
-            return SPIIndependentLoopReturnHelper(false);
+            return false;
         }
         uint8_t *response_buf = rx_buf + read_request_bytes;
         SCResponsePacket response_packet = SCResponsePacket(response_buf, bytes_exchanged - read_request_bytes);
@@ -551,7 +554,7 @@ class SPICoprocessor {
             CONSOLE_ERROR("SPICoprocessor::PartialRead",
                           "Received response packet of length %d Bytes with an invalid CRC.",
                           response_packet.GetBufLenBytes());
-            return SPIIndependentLoopReturnHelper(false);
+            return false;
         }
         if (response_packet.cmd != SCCommand::kCmdDataBlock) {
             CONSOLE_ERROR("SPICoprocessor::PartialRead",
@@ -559,17 +562,17 @@ class SPICoprocessor {
                           "offset %d Bytes.",
                           response_packet.cmd, read_request_packet.addr, read_request_packet.len,
                           read_request_packet.offset);
-            return SPIIndependentLoopReturnHelper(false);
+            return false;
         }
         if (response_packet.data_len_bytes != len) {
             CONSOLE_ERROR("SPICoprocessor::PartialRead",
                           "Received incorrect number of Bytes while reading object at address 0x%x with offset %d "
                           "Bytes. Requested %d Bytes but received %d.",
                           addr, offset, read_request_packet.len, response_packet.data_len_bytes);
-            return SPIIndependentLoopReturnHelper(false);
+            return false;
         }
         memcpy(object_buf + offset, response_packet.data, response_packet.data_len_bytes);
-        return SPIIndependentLoopReturnHelper(true);
+        return true;
     }
 
     /**
