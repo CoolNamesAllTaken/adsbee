@@ -17,6 +17,6 @@ void SetNBitWordInBuffer(uint16_t n, uint32_t word, uint32_t first_bit_index, ui
  * @param[in] length Number fo bytes to calculate the CRC over.
  * @retval 16-bit CRC.
  */
-uint16_t CalculateCRC16(const uint8_t *data_p, uint32_t length);
+uint16_t CalculateCRC16(const uint8_t *data_p, int32_t length);
 
 #endif /* _BUFFER_UTILS_HH_ */

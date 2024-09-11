@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <cstring>  // for memset
 
-static const uint32_t kSettingsVersionMagicWord = 0xBEFEBEEF;  // Change this when settings format changes!
+static const uint32_t kSettingsVersionMagicWord = 0xBEEFEBEE;  // Change this when settings format changes!
 
 class SettingsManager {
    public:
@@ -49,6 +49,7 @@ class SettingsManager {
         uint32_t magic_word = kSettingsVersionMagicWord;
 
         // ADSBee settings
+        bool receiver_enabled = true;
         int tl_mv = kDefaultTLMV;
         bool bias_tee_enabled = false;
 

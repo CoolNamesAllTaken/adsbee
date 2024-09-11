@@ -3,6 +3,7 @@
 #include "eeprom.hh"
 #include "esp32_flasher.hh"
 #include "hal.hh"
+#include "hardware_unit_tests.hh"  // For testing only!
 #include "pico/binary_info.h"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
@@ -18,6 +19,7 @@ CommsManager comms_manager = CommsManager({});
 ESP32SerialFlasher esp32_flasher = ESP32SerialFlasher({});
 EEPROM eeprom = EEPROM({});
 SettingsManager settings_manager;
+ObjectDictionary object_dictionary;
 SPICoprocessor esp32 = SPICoprocessor({});
 
 int main() {
@@ -50,6 +52,10 @@ int main() {
     test_aircraft.velocity_kts = 200;
     adsbee.aircraft_dictionary.InsertAircraft(test_aircraft);
 
+    // int argc = 0;
+    // const char* argv[1];
+    // utest_main(argc, argv);
+
     uint16_t esp32_test_packet_interval_ms = 1000;
     uint32_t esp32_test_packet_last_sent_timestamp_ms = get_time_since_boot_ms();
 
@@ -59,15 +65,14 @@ int main() {
         if (esp32_test_packet_timestamp_ms - esp32_test_packet_last_sent_timestamp_ms > esp32_test_packet_interval_ms) {
             RawTransponderPacket test_packet =
                 RawTransponderPacket((char*)"8dac009458b9970f0aa394359da9", -123, 456789);
-            SPICoprocessor::RawTransponderPacketMessage message =
-                SPICoprocessor::RawTransponderPacketMessage(test_packet);
+            esp32.Write(ObjectDictionary::kAddrRawTransponderPacket, test_packet, true);
             CONSOLE_INFO("Debug", "Sent ESP32 message.");
-            esp32.SendMessage(message);
             esp32_test_packet_last_sent_timestamp_ms = esp32_test_packet_timestamp_ms;
         }
 
         // Loop forever.
         comms_manager.Update();
         adsbee.Update();
+        esp32.Update();
     }
 }

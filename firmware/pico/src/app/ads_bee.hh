@@ -6,6 +6,7 @@
 #include "data_structures.hh"  // For PFBQueue.
 #include "hardware/i2c.h"
 #include "hardware/pio.h"
+#include "hardware/watchdog.h"
 #include "macros.hh"  // For MAX / MIN.
 #include "settings.hh"
 #include "stdint.h"
@@ -33,6 +34,8 @@ class ADSBee {
         1000;  // [mV] Starting value for simulated annealing temperature when learning triger level. This corresponds
                // to the maximum value that the trigger level could be moved (up or down) when exploring a neighbor
                // state.
+
+    static const uint32_t kWatchdogTimeoutMs = 1000;
 
     struct ADSBeeConfig {
         PIO preamble_detector_pio = pio0;
@@ -170,19 +173,15 @@ class ADSBee {
     int ReadTLMilliVolts();
 
     /**
+     * Reboots the RP2040 via the watchdog.
+     */
+    void Reboot() { watchdog_reboot(0, 0, kWatchdogTimeoutMs); }
+
+    /**
      * Returns whether ADS-B receiving is currently enabled.
      * @retval True if enabled, false otherwise.
      */
     bool ReceiverIsEnabled() { return receiver_enabled_; }
-
-    /**
-     * Enables or disables the ADS-B receiver by hogging the demodulation completed interrupt.
-     * @param[in] is_enabled True if ADS-B receiver should be enabled, false otherwise.
-     */
-    void SetReceiverEnable(bool is_enabled) {
-        receiver_enabled_ = is_enabled;
-        irq_set_enabled(config_.preamble_detector_demod_complete_irq, receiver_enabled_);
-    }
 
     /**
      * Enable or disable the bias tee to inject 3.3V at the RF IN connector.
@@ -194,12 +193,30 @@ class ADSBee {
     }
 
     /**
+     * Enables or disables the ADS-B receiver by hogging the demodulation completed interrupt.
+     * @param[in] is_enabled True if ADS-B receiver should be enabled, false otherwise.
+     */
+    void SetReceiverEnable(bool is_enabled) {
+        receiver_enabled_ = is_enabled;
+        irq_set_enabled(config_.preamble_detector_demod_complete_irq, receiver_enabled_);
+    }
+
+    /**
      * Set the Minimum Trigger Level (TL) at the AD8314 output in milliVolts.
      * @param[in] tl_mv Voltage in milliVolts at the top of the pullup for the LEVEL net in the data slicer. Pull higher
      * to accommodate a higher noise floor without false triggers.
      * @retval True if succeeded, False if TL value was out of range.
      */
     bool SetTLMilliVolts(int tl_mv);
+
+    bool SetWatchdogEnable(bool enable_watchdog) {
+        if (enable_watchdog) {
+            watchdog_enable(kWatchdogTimeoutMs, true);  // Pause the watchdog timer during debug.
+        } else {
+            watchdog_disable();
+        }
+        return true;
+    }
 
     /**
      * Start learning the trigger level through Simulated Annealing. Will begin kTLLearningNumCycles annealing cycles
