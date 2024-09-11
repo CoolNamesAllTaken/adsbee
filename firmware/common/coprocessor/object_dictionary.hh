@@ -29,12 +29,15 @@ class ObjectDictionary {
     bool SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, uint16_t offset = 0) {
         switch (addr) {
             case kAddrScratch:
-                CONSOLE_INFO("ObjectDictionary::SetBytes", "Setting %d settings Bytes at offset %d.", buf_len, offset);
+                // Warning: printing here will cause a timeout and tests will fail.
+                // CONSOLE_INFO("ObjectDictionary::SetBytes", "Setting %d settings Bytes at offset %d.", buf_len,
+                // offset);
                 memcpy((uint8_t *)&scratch_ + offset, buf, buf_len);
                 break;
 #ifdef ON_ESP32
             case kAddrRawTransponderPacket: {
                 RawTransponderPacket tpacket = *(RawTransponderPacket *)buf;
+                // Warning: printing here will cause a timeout and tests will fail.
                 // CONSOLE_INFO("SPICoprocessor::SetBytes", "Received a raw %d-bit transponder packet.",
                 //              tpacket.buffer_len_bits);
                 adsbee_server.HandleRawTransponderPacket(tpacket);
@@ -42,7 +45,9 @@ class ObjectDictionary {
             }
 #endif
             case kAddrSettingsStruct:
-                CONSOLE_INFO("ObjectDictionary::SetBytes", "Setting %d settings Bytes at offset %d.", buf_len, offset);
+                // Warning: printing here will cause a timeout and tests will fail.
+                // CONSOLE_INFO("ObjectDictionary::SetBytes", "Setting %d settings Bytes at offset %d.", buf_len,
+                // offset);
                 memcpy((uint8_t *)&(settings_manager.settings) + offset, buf, buf_len);
                 break;
             default:
@@ -63,11 +68,15 @@ class ObjectDictionary {
     bool GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, uint16_t offset = 0) {
         switch (addr) {
             case kAddrScratch:
-                CONSOLE_INFO("ObjectDictionary::GetBytes", "Getting %d scratch Bytes at offset %d.", buf_len, offset);
+                // Warning: printing here will cause a timeout and tests will fail.
+                // CONSOLE_INFO("ObjectDictionary::GetBytes", "Getting %d scratch Bytes at offset %d.", buf_len,
+                // offset);
                 memcpy(buf, (uint8_t *)(&scratch_) + offset, buf_len);
                 break;
             case kAddrSettingsStruct:
-                CONSOLE_INFO("ObjectDictionary::GetBytes", "Getting %d settings Bytes at offset %d.", buf_len, offset);
+                // Warning: printing here will cause a timeout and tests will fail.
+                // CONSOLE_INFO("ObjectDictionary::GetBytes", "Getting %d settings Bytes at offset %d.", buf_len,
+                // offset);
                 memcpy(buf, (uint8_t *)&(settings_manager.settings) + offset, buf_len);
                 break;
             default:
