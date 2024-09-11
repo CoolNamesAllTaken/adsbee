@@ -25,6 +25,9 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
     aircraft.stats_frames_received_in_last_interval = 4;
     aircraft.stats_mode_ac_frames_received_in_last_interval = 1;
     aircraft.stats_mode_s_frames_received_in_last_interval = 3;
+    aircraft.stats_frames_received_in_last_interval = 4;
+    aircraft.stats_mode_ac_frames_received_in_last_interval = 1;
+    aircraft.stats_mode_s_frames_received_in_last_interval = 3;
     aircraft.transponder_capability = ADSBPacket::Capability::kCALevel2PlusTransponderOnSurfaceCanSetCA7;
     aircraft.icao_address = 0x12345E;
     strcpy(aircraft.callsign, "ABCDEFG");
@@ -56,11 +59,13 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
     WriteCSBeeAircraftMessageStr(message, aircraft);
     std::string_view message_view(message);
     printf("%s\r\n", message_view.data());
+    printf("%s\r\n", message_view.data());
     std::string_view token = GetNextToken(&message_view);
     EXPECT_EQ(token.compare("#A:12345E"), 0);            // ICAO Address
     EXPECT_EQ(GetNextToken().compare("FFFFFFFF"), 0);    // Flags
     EXPECT_EQ(GetNextToken().compare("ABCDEFG"), 0);     // Callsign
     EXPECT_EQ(GetNextToken().compare("1234"), 0);        // Squawk
+    EXPECT_EQ(GetNextToken().compare("6"), 0);           // Emitter Category
     EXPECT_EQ(GetNextToken().compare("6"), 0);           // Emitter Category
     EXPECT_EQ(GetNextToken().compare("-120.65432"), 0);  // Latitude [deg]
     EXPECT_EQ(GetNextToken().compare("-80.12346"), 0);   // Longitude [deg]
@@ -71,6 +76,8 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
     EXPECT_EQ(GetNextToken().compare("-200"), 0);        // Vertical Rate [fpm]
     EXPECT_EQ(GetNextToken().compare("-75"), 0);         // Signal Strength [dBm]
     EXPECT_EQ(GetNextToken().compare("2"), 0);           // Signal Qualtiy [dB]
+    EXPECT_EQ(GetNextToken().compare("1"), 0);           // Mode AC Frames Per Second
+    EXPECT_EQ(GetNextToken().compare("3"), 0);           // Mode S Frames Per Second
     EXPECT_EQ(GetNextToken().compare("1"), 0);           // Mode AC Frames Per Second
     EXPECT_EQ(GetNextToken().compare("3"), 0);           // Mode S Frames Per Second
     // Use an std::string here as a hack, since we don't want to bother with copying the whole string to another buffer
@@ -84,6 +91,7 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
     EXPECT_EQ((sysinfo & (0b11 << 14)) >> 14, 2u);        // SIL
     EXPECT_EQ((sysinfo & (0b11 << 16)) >> 16, 0b11u);     // SDA
     EXPECT_EQ((sysinfo & (0b1 << 18)) >> 18, 0b1u);       // GAOK
+    EXPECT_EQ((sysinfo & (0b11 << 19)) >> 19, 6u >> 1);   // GAOD
     EXPECT_EQ((sysinfo & (0b11 << 19)) >> 19, 6u >> 1);   // GAOD
     EXPECT_EQ((sysinfo & (0b1 << 21)) >> 21, 0u);         // GAOR
     EXPECT_EQ((sysinfo & (0b1111111 << 22)) >> 22, 20u);  // MDIM
