@@ -117,7 +117,8 @@ bool SPICoprocessor::Update() {
                 CONSOLE_ERROR("SPICoprocessor::Update", "Received unsolicited write to master with bad checksum.");
                 return false;
             }
-            ret = SetBytes(write_packet.addr, write_packet.data, write_packet.len);
+            ret =
+                object_dictionary.SetBytes(write_packet.addr, write_packet.data, write_packet.len, write_packet.offset);
             bool ack = true;
             if (!ret) {
                 CONSOLE_ERROR(
@@ -143,8 +144,8 @@ bool SPICoprocessor::Update() {
             }
             SCResponsePacket response_packet;
             response_packet.cmd = kCmdDataBlock;
-            ret = GetBytes(read_request_packet.addr, response_packet.data, read_request_packet.len,
-                           read_request_packet.offset);
+            ret = object_dictionary.GetBytes(read_request_packet.addr, response_packet.data, read_request_packet.len,
+                                             read_request_packet.offset);
             if (!ret) {
                 CONSOLE_ERROR("SPICoprocessor::Update",
                               "Failed to retrieve data for read from master at address 0x%x with length %d Bytes.",
@@ -186,7 +187,8 @@ bool SPICoprocessor::Update() {
                               bytes_read);
                 return SPISlaveLoopReturnHelper(false);
             }
-            ret = SetBytes(write_packet.addr, write_packet.data, write_packet.len, write_packet.offset);
+            ret =
+                object_dictionary.SetBytes(write_packet.addr, write_packet.data, write_packet.len, write_packet.offset);
             bool ack = true;
             if (!ret) {
                 CONSOLE_ERROR("SPICoprocessor::Update",
@@ -210,8 +212,8 @@ bool SPICoprocessor::Update() {
 
             SCResponsePacket response_packet;
             response_packet.cmd = kCmdDataBlock;
-            ret = GetBytes(read_request_packet.addr, response_packet.data, read_request_packet.len,
-                           read_request_packet.offset);
+            ret = object_dictionary.GetBytes(read_request_packet.addr, response_packet.data, read_request_packet.len,
+                                             read_request_packet.offset);
             if (!ret) {
                 CONSOLE_ERROR("SPICoprocessor::Update",
                               "Failed to retrieve data for %d Byte read from slave at address 0x%x",
@@ -236,45 +238,6 @@ bool SPICoprocessor::Update() {
 }
 
 /** Begin Private Functions **/
-
-bool SPICoprocessor::SetBytes(SCAddr addr, uint8_t *buf, uint16_t buf_len, uint16_t offset) {
-    switch (addr) {
-        case kAddrScratch:
-            memcpy((uint8_t *)&scratch_ + offset, buf, buf_len);
-            break;
-#ifdef ON_ESP32
-        case kAddrRawTransponderPacket: {
-            RawTransponderPacket tpacket = *(RawTransponderPacket *)buf;
-            // CONSOLE_INFO("SPICoprocessor::SetBytes", "Received a raw %d-bit transponder packet.",
-            //              tpacket.buffer_len_bits);
-            adsbee_server.HandleRawTransponderPacket(tpacket);
-            break;
-        }
-#endif
-        case kAddrSettingsStruct:
-            memcpy((uint8_t *)&(settings_manager.settings) + offset, buf, buf_len);
-            break;
-        default:
-            CONSOLE_ERROR("SPICoprocessor::SetBytes", "No behavior implemented for writing to address 0x%x.", addr);
-            return false;
-    }
-    return true;
-}
-
-bool SPICoprocessor::GetBytes(SCAddr addr, uint8_t *buf, uint16_t buf_len, uint16_t offset) {
-    switch (addr) {
-        case kAddrScratch:
-            memcpy(buf, (uint8_t *)(&scratch_) + offset, buf_len);
-            break;
-        case kAddrSettingsStruct:
-            memcpy(buf, (uint8_t *)&(settings_manager.settings) + offset, buf_len);
-            break;
-        default:
-            CONSOLE_ERROR("SPICoprocessor::SetBytes", "No behavior implemented for reading from address 0x%x.", addr);
-            return false;
-    }
-    return true;
-}
 
 bool SPICoprocessor::SPISendAck(bool success) {
     SCResponsePacket response_packet;

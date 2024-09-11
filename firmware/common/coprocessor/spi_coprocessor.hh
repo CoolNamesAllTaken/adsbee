@@ -5,6 +5,7 @@
 #include "comms.hh"
 #include "hal.hh"
 #include "macros.hh"
+#include "object_dictionary.hh"
 #include "settings.hh"
 #include "transponder_packet.hh"
 
@@ -65,18 +66,6 @@ class SPICoprocessor {
 
     /** NOTE: Packets should not be used outside of the SPICoprocessor class, they are only exposed for testing. **/
 
-    /** Begin edit these values for new packet types. **/
-
-    enum SCAddr : uint8_t {
-        kAddrInvalid = 0,           // Default value.
-        kAddrScratch,               // Used for testing SPI communications.
-        kAddrRawTransponderPacket,  // Used to forward raw packets from RP2040 to ESP32.
-        kAddrSettingsStruct,        // Used to transfer settings information.
-        kNumSCAddrs
-    };
-
-    /** End edit these values for new packet types. **/
-
     // Commands are written from Master to Slave.
     enum SCCommand : uint8_t {
         kCmdInvalid = 0x0,
@@ -125,14 +114,14 @@ class SPICoprocessor {
      */
     struct __attribute__((__packed__)) SCWritePacket : public SCPacket {
         static const uint16_t kDataOffsetBytes =
-            sizeof(SCCommand) + sizeof(SCAddr) + sizeof(uint16_t) + sizeof(uint8_t);
+            sizeof(SCCommand) + sizeof(ObjectDictionary::Address) + sizeof(uint16_t) + sizeof(uint8_t);
         static const uint16_t kDataMaxLenBytes = kPacketMaxLenBytes - kDataOffsetBytes - kCRCLenBytes;
         static const uint16_t kBufMinLenBytes =
-            sizeof(SCCommand) + sizeof(SCAddr) + sizeof(uint16_t) + sizeof(uint8_t) + kCRCLenBytes;
+            sizeof(SCCommand) + sizeof(ObjectDictionary::Address) + sizeof(uint16_t) + sizeof(uint8_t) + kCRCLenBytes;
 
         /** Begin packet contents on the wire. **/
         SCCommand cmd = kCmdInvalid;
-        SCAddr addr = kAddrInvalid;
+        ObjectDictionary::Address addr = ObjectDictionary::kAddrInvalid;
         uint16_t offset = 0;
         uint8_t len = 0;                                // Length from start of data to beginning of CRC.
         uint8_t data[kDataMaxLenBytes + kCRCLenBytes];  // CRC is secretly appended at the end of data so that the
@@ -174,10 +163,11 @@ class SPICoprocessor {
      * SCReadReplyPacket in response.
      */
     struct __attribute__((__packed__)) SCReadRequestPacket : public SCPacket {
-        static const uint16_t kBufLenBytes = sizeof(SCCommand) + sizeof(SCAddr) + 2 * sizeof(uint16_t) + kCRCLenBytes;
+        static const uint16_t kBufLenBytes =
+            sizeof(SCCommand) + sizeof(ObjectDictionary::Address) + 2 * sizeof(uint16_t) + kCRCLenBytes;
         /** Begin packet contents on the wire. **/
         SCCommand cmd = kCmdInvalid;
-        SCAddr addr = kAddrInvalid;
+        ObjectDictionary::Address addr = ObjectDictionary::kAddrInvalid;
         uint16_t offset = 0;
         uint16_t len = 0;
         uint16_t crc;
@@ -285,7 +275,7 @@ class SPICoprocessor {
      * address required).
      */
     template <typename T>
-    bool Write(SCAddr addr, T &object, bool require_ack = false) {
+    bool Write(ObjectDictionary::Address addr, T &object, bool require_ack = false) {
         if (sizeof(object) < SCWritePacket::kDataMaxLenBytes) {
             // Single write. Write the full object at once, no offset, require ack if necessary.
             return PartialWrite(addr, (uint8_t *)&object, sizeof(object), 0, require_ack);
@@ -293,10 +283,12 @@ class SPICoprocessor {
             // Multi write.
             int16_t bytes_remaining = sizeof(object);
             while (bytes_remaining > 0) {
-                if (!PartialWrite(addr, (uint8_t *)(&object),                             // address
-                                  MIN(SCWritePacket::kDataMaxLenBytes, bytes_remaining),  // len
-                                  sizeof(object) - bytes_remaining,                       // offset
-                                  require_ack)                                            // require_ack
+                if (!PartialWrite(
+                        addr,                                                   // addr
+                        (uint8_t *)(&object),                                   // object     
+                        MIN(SCWritePacket::kDataMaxLenBytes, bytes_remaining),  // len
+                        sizeof(object) - bytes_remaining,                       // offset
+                        require_ack)                                            // require_ack
                 ) {
                     CONSOLE_ERROR(
                         "SPICoprocessor::Write",
@@ -311,13 +303,6 @@ class SPICoprocessor {
         return false;
     }
 
-    bool Write(RawTransponderPacket tpacket, bool require_ack = false) {
-        return Write(kAddrRawTransponderPacket, tpacket, require_ack);
-    }
-    bool Write(SettingsManager::Settings settings_struct, bool require_ack = true) {
-        return Write(kAddrSettingsStruct, settings_struct, require_ack);
-    }
-
     /**
      * Top level function that translates a read from an object (with associated address) into SPI transaction(s).
      * Included in the header file since the template function implementation needs to be visible to any file that
@@ -326,7 +311,7 @@ class SPICoprocessor {
      * address required).
      */
     template <typename T>
-    bool Read(SCAddr addr, T &object) {
+    bool Read(ObjectDictionary::Address addr, T &object) {
         if (sizeof(object) < SCResponsePacket::kDataMaxLenBytes) {
             // Single read.
             return PartialRead(addr, (uint8_t *)&object, sizeof(object));
@@ -342,9 +327,11 @@ class SPICoprocessor {
 #endif
             int16_t bytes_remaining = sizeof(object);
             while (bytes_remaining > 0) {
-                if (!PartialRead(addr, (uint8_t *)(&object),                  // address
-                                 MIN(max_chunk_size_bytes, bytes_remaining),  // len
-                                 sizeof(object) - bytes_remaining)            // offset
+                if (!PartialRead(
+                        addr, // address
+                        (uint8_t *)(&object), // object  
+                        MIN(max_chunk_size_bytes, bytes_remaining),  // len
+                        sizeof(object) - bytes_remaining)            // offset
                 ) {
                     CONSOLE_ERROR(
                         "SPICoprocessor::Read",
@@ -359,9 +346,6 @@ class SPICoprocessor {
         }
         return false;
     }
-
-    // ACKs aren't required for reading since it's already a two way transaction.
-    inline bool Read(SettingsManager::Settings settings_struct) { return Read(kAddrSettingsStruct, settings_struct); }
 
 #ifdef ON_PICO
     bool GetSPIHandshakePinLevel() { return gpio_get(config_.spi_handshake_pin); }
@@ -458,7 +442,8 @@ class SPICoprocessor {
         return ret;
     }
 
-    bool PartialWrite(SCAddr addr, uint8_t *object_buf, uint8_t len, uint16_t offset = 0, bool require_ack = false) {
+    bool PartialWrite(ObjectDictionary::Address addr, uint8_t *object_buf, uint8_t len, uint16_t offset = 0,
+                      bool require_ack = false) {
         SCWritePacket write_packet;
 #ifdef ON_PICO
         write_packet.cmd = require_ack ? kCmdWriteToSlaveRequireAck : kCmdWriteToSlave;
@@ -494,7 +479,7 @@ class SPICoprocessor {
         return SPIIndependentLoopReturnHelper(true);
     }
 
-    bool PartialRead(SCAddr addr, uint8_t *object_buf, uint8_t len, uint16_t offset = 0) {
+    bool PartialRead(ObjectDictionary::Address addr, uint8_t *object_buf, uint8_t len, uint16_t offset = 0) {
         SCReadRequestPacket read_request_packet;
 #ifdef ON_PICO
         read_request_packet.cmd = kCmdReadFromSlave;
@@ -588,26 +573,6 @@ class SPICoprocessor {
     }
 
     /**
-     * Setter for writing data to the address space.
-     * @param[in] addr Address to write to.
-     * @param[in] buf Buffer to read from.
-     * @param[in] buf_len Number of Bytes to write.
-     * @param[in] offset Byte offset from beginning of object. Used for partial reads.
-     * @retval Returns true if successfully wrote, false if address was invalid or something else borked.
-     */
-    bool SetBytes(SCAddr addr, uint8_t *buf, uint16_t buf_len, uint16_t offset = 0);
-
-    /**
-     * Getter for reading data from the address space.
-     @param[in] addr Address to read from.
-     @param[out] buf Buffer to write to.
-     @param[in] buf_len Number of Bytes to read.
-     @param[in] offset Byte offset from beginning of object. Used for partial reads.
-     @retval Returns true if successfully read, false if address was invalid or something else borked.
-     */
-    bool GetBytes(SCAddr addr, uint8_t *buf, uint16_t buf_len, uint16_t offset = 0);
-
-    /**
      * Send an SCResponse packet with a single byte ACK payload.
      * @param[in] success True if sending an ACK, false if sending a NACK.
      * @retval True if ACK was transmitted successfully, false if something went wrong.
@@ -645,7 +610,6 @@ class SPICoprocessor {
     }
 
     SPICoprocessorConfig config_;
-    uint32_t scratch_;  // Scratch register used for testing.
 
 #ifdef ON_PICO
     uint32_t spi_last_transmit_timestamp_us_ = 0;

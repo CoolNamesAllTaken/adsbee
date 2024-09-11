@@ -22,6 +22,7 @@
 #include "settings.hh"
 #include "spi_coprocessor.hh"
 
+ObjectDictionary object_dictionary;
 SPICoprocessor pico = SPICoprocessor({});
 ADSBeeServer adsbee_server = ADSBeeServer();
 SettingsManager settings_manager = SettingsManager();

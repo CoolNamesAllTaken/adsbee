@@ -60,7 +60,7 @@ bool SettingsManager::Save() {
     settings.wifi_password[kWiFiPasswordMaxLen] = '\0';
 
     // Sync settings from RP2040 -> ESP32.
-    esp32.Write(settings);
+    esp32.Write(ObjectDictionary::kAddrSettingsStruct, settings);
 
     return eeprom.Save(settings);
 }

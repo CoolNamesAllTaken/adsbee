@@ -19,6 +19,7 @@ CommsManager comms_manager = CommsManager({});
 ESP32SerialFlasher esp32_flasher = ESP32SerialFlasher({});
 EEPROM eeprom = EEPROM({});
 SettingsManager settings_manager;
+ObjectDictionary object_dictionary;
 SPICoprocessor esp32 = SPICoprocessor({});
 
 int main() {
@@ -64,7 +65,7 @@ int main() {
         if (esp32_test_packet_timestamp_ms - esp32_test_packet_last_sent_timestamp_ms > esp32_test_packet_interval_ms) {
             RawTransponderPacket test_packet =
                 RawTransponderPacket((char*)"8dac009458b9970f0aa394359da9", -123, 456789);
-            esp32.Write(test_packet, true);
+            esp32.Write(ObjectDictionary::kAddrRawTransponderPacket, test_packet, true);
             CONSOLE_INFO("Debug", "Sent ESP32 message.");
             esp32_test_packet_last_sent_timestamp_ms = esp32_test_packet_timestamp_ms;
         }
