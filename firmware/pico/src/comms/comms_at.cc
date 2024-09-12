@@ -313,7 +313,7 @@ CPP_AT_CALLBACK(CommsManager::ATSettingsCallback) {
             CPP_AT_ERROR("No arguments provided.");
             break;
         case '?':
-            CPP_AT_CMD_PRINTF("=%d(tl_mv)\r\n", settings_manager.settings.tl_mv);
+            settings_manager.Print();
             CPP_AT_SUCCESS();
             break;
     }
@@ -366,24 +366,11 @@ CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
-/**
- * Takes a password as a string and fills a buffer with the corresponding number of asterix.
- * @param[in] password_buf Buffer to read the password from. Must be at least password_len+1 chars.
- * @param[out] redacted_password_buf Buffer to write the asterix to. Must be at least password_len+1 chars.
- * @param[in] buf_len Maximum allowable number of characteers in the password. Used to guard against falling off the end
- * of the string. Not used for actually finding ther number of asterix to print.
- */
-void redact_password(char *password_buf, char *redacted_password_buf, uint16_t buf_len) {
-    uint16_t password_len = MIN(strlen(password_buf), buf_len);
-    memset(redacted_password_buf, '*', password_len);
-    redacted_password_buf[password_len] = '\0';
-}
-
 CPP_AT_CALLBACK(CommsManager::ATWiFiCallback) {
     switch (op) {
         case '?': {
             char redacted_password[SettingsManager::kWiFiPasswordMaxLen + 1];
-            redact_password(wifi_password, redacted_password, SettingsManager::kWiFiPasswordMaxLen);
+            SettingsManager::RedactPassword(wifi_password, redacted_password, SettingsManager::kWiFiPasswordMaxLen);
             CPP_AT_CMD_PRINTF("=%d,%s,%s\r\n", static_cast<uint16_t>(wifi_enabled_), wifi_ssid, redacted_password);
             CPP_AT_SILENT_SUCCESS();
             break;
@@ -398,7 +385,7 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiCallback) {
                 strncpy(wifi_password, args[2].data(), SettingsManager::kWiFiPasswordMaxLen);
                 wifi_password[SettingsManager::kWiFiPasswordMaxLen] = '\0';
                 char redacted_password[SettingsManager::kWiFiPasswordMaxLen];
-                redact_password(wifi_password, redacted_password, SettingsManager::kWiFiPasswordMaxLen);
+                SettingsManager::RedactPassword(wifi_password, redacted_password, SettingsManager::kWiFiPasswordMaxLen);
                 CPP_AT_CMD_PRINTF(": password=%s\r\n", redacted_password);
             }
 
