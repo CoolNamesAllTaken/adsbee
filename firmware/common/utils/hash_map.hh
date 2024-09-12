@@ -5,6 +5,7 @@
 #include <functional>
 #include <memory>
 #include <utility>
+#include <cassert>
 
 template <typename Key, typename T, uint_fast32_t MaxSize, class Hash = std::hash<Key>,
           class KeyEqual = std::equal_to<Key>>
@@ -128,7 +129,9 @@ class HashMap {
         // todo optimize
         auto itr = find(key);
         if (itr == end()) {
-            return insert(std::pair<Key, T>(key, {})).first->second;
+            auto inserted = insert(std::pair<Key, T>(key, {}));
+            assert(inserted.second);
+            return inserted.first->second;
         } else {
             return itr->second;
         }
@@ -137,23 +140,19 @@ class HashMap {
     iterator find(const Key& key) {
         //todo optimize
         return std::find_if(begin(), end(), [this, key](auto i) {
-            return i.first = key;
+            return KeyEqual{}(i.first, key);
         });
     }
 
     const_iterator find(const Key& key) const {
         //todo optimize
         return std::find_if(begin(), end(), [this, key](auto i) {
-            return i.first = key;
+            return KeyEqual{}(i.first, key);
         });
     }
 
     bool empty() const noexcept {
-        //todo
-    }
-
-    T& at(const Key& key) {
-        //todo
+        return _size == 0;
     }
     //end STL standard 
 
