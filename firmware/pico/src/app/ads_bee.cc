@@ -170,7 +170,7 @@ void ADSBee::GPIOIRQISR(uint gpio, uint32_t event_mask) {
         sampled_rssi_adc_counts_ = adc_read();
         // RSSI peak detector will automatically clear when DEMOD pin goes LO.
 
-        sampled_mlat_48mhz_counts_ = ClockSource::instance().get48MHzTickCount();
+        sampled_mlat_48mhz_counts_ = ClockSource::instance().Get48MHzTickCount();
     }
 }
 
