@@ -5,12 +5,12 @@
 .define pulses_pin_index 0
 .define demod_pin_index 1
 
+set pins 0 ; DEBUG
 
-set y assert_pin_lo
-
-.wrap_target
 ; BEGIN DOUBLE PULSE MATCH
+.wrap_target
 waiting_for_first_edge:
+    mov isr null                        ; Clear ISR.
     ; Build preamble pattern and load it into OSR: 0b1010000101000000
     set x 0b101                     ; ISR = 0b00000000000000000000000000000000
     in x 3                          ; ISR = 0b00000000000000000000000000000101
@@ -19,6 +19,28 @@ waiting_for_first_edge:
     in null 6                       ; ISR = 0b00000000000000001010000101000000
     mov osr isr                     ; OSR = 0b00000000000000001010000101000000
     out null 16                     ; OSR = 0b1010000101000000
+    
+    ; out null 23                         ; debug:OSR = 0b101000000
+
+    ; test with 0b1
+    ; set x 0b11
+    ; in x 1
+    ; mov osr isr
+    ; out null 31
+
+    ; test with 0b10
+    ; set x 0b10
+    ; in x 2
+    ; mov osr isr
+    ; out null 30
+
+    ; set x 0b1010
+    ; in x 4
+    ; ; in null 4
+    ; mov osr isr
+    ; out null 28
+
+    mov x null
 ; Grab a new bit every 24 cycles.
 ;   6 cycles: Get bit.
 ;   12 cycles: Assert bit.
@@ -26,13 +48,6 @@ waiting_for_first_edge:
     wait 1 pin, pulses_pin_index    ; 1: wait for in_pin to go HI
 check_next_bit:
     jmp !osre preamble_not_done_yet ; 2: 
-    jmp preamble_matched
-preamble_not_done_yet:
-    out x, 1                        ; 3:
-    set y check_next_bit            ; 4:
-    jmp !x assert_pin_lo             ; 5-6:
-    jmp assert_pin_hi               ; 6
-
 preamble_matched:
     set pins 1 [2] ; set demod pin to indicate message body beginning
     wait 1 pin, pulses_pin_index [11] ; wait till middle of message eye to look for end
@@ -44,28 +59,37 @@ idle_countdown:
     set pins, 0 ; set demod pin to 0 to indicate message is finished
     irq set 0 [1] ; set the DEMOD IRQ to indicate the message body is finished
     wait 0 irq 0 ; don't look for new messages until the current one has been processed
+.wrap
+
+preamble_not_done_yet:
+    out x, 1                        ; 3: Find next bit polarity from OSR.         
+    jmp !x assert_pin_lo            ; 4:
+    jmp assert_pin_hi               ; 5:
+
+
+
 
 ; Subroutines
 
 ; y is program counter for jump back
 ; 2*x is number of cycles where pin must be HI
 assert_pin_hi:
-    set x 5 [1] ; Assert HI for 12 cycles (2 cycle setup + 5 * (2 cycles per wrap))
+    set x 2 ; 6: Assert HI for 12 cycles (2 cycle setup + 5 * (2 cycles per wrap))
 aph_wrap:
     jmp pin aph_pin_is_hi
     jmp waiting_for_first_edge
 aph_pin_is_hi:
     jmp x-- aph_wrap
-    mov pc y [5]    ; 6 cycle idle at end
+    jmp check_next_bit [11]    ; 6 cycle idle at end
     
 ; y is program counter for jump back
 ; 2*x is number of cycles where pin must be LO
 assert_pin_lo:
-    set x 5 [1] ; Assert LO for 12 cycles (2 cycle setup + 5 * (2 cycles per wrap))
+    set x 2 [1] ; 5-6: Assert LO for 12 cycles (2 cycle setup + 5 * (2 cycles per wrap))
 apl_wrap:
     jmp pin waiting_for_first_edge
     jmp x-- apl_wrap
-    mov pc y [5]    ; 6 cycle idle at end
+    jmp check_next_bit [11]    ; 6 cycle idle at end
 
 % c-sdk {
 
@@ -91,7 +115,7 @@ void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint pulses_p
     sm_config_set_set_pins(&c, demod_pin, 1); // set one pin as SET output
     sm_config_set_sideset_pins(&c, demod_pin); 
 
-    sm_config_set_out_shift(&c, false, false, 0); // OSR shifts left, autopull turned off (using OSR for scratch)
+    sm_config_set_out_shift(&c, false, false, 32); // OSR shifts left, autopull threshold set to 32 (used for OSRE compare)
     sm_config_set_in_shift(&c, false, false, 32); // ISR shifts left, autopush turned off
     
     // Set the clock divider for the state machine

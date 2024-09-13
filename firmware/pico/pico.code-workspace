@@ -122,7 +122,7 @@
 				// "gdbPath": "arm-none-eabi-gdb",
 				"gdbTarget": "host.docker.internal:2331",
 				"showDevDebugOutput": "raw",
-				"svdFile": "/usr/local/pico-sdk/src/rp2040/hardware_regs/rp2040.svd",
+				"svdFile": "/usr/local/pico-sdk/src/rp2040/hardware_regs/RP2040.svd",
 				"preRestartCommands": [
 					"file ${command:cmake.launchTargetPath}",
 					"load",

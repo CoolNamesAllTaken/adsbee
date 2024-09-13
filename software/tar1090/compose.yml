@@ -1,0 +1,26 @@
+version: '2.0'
+
+networks:
+  adsbnet:
+
+
+services:
+
+  tar1090:
+    image: mikenye/tar1090:latest
+    tty: true
+    container_name: tar1090
+    restart: always
+    environment:
+      - TZ=America/Los_Angeles
+      - BEASTHOST=readsb
+      - MLATHOST=adsbx
+      - LAT=-33.33333
+      - LONG=111.11111
+    networks:
+      - adsbnet
+    ports:
+      - 8078:80
+    tmpfs:
+      - /run:exec,size=64M
+      - /var/log
