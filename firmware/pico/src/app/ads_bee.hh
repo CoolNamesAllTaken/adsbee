@@ -123,37 +123,9 @@ class ADSBee {
     void OnDemodComplete();
 
     /**
-<<<<<<< HEAD
-     * Read the high Minimum Trigger Level threshold via ADC.
-     * @retval TL in milliVolts.
-=======
-     * ISR triggered by SysTick interrupt. Used to wrap the MLAT counter.
-     */
-    void OnSysTickWrap();
-
-    /**
-     * Creates a composite timestamp using the current value of the SysTick timer (running at 125MHz) and the SysTick
-     * wrap counter to simulate a timer running at 48MHz (which matches the frequency of the preamble detector PIO).
-     * @param[in] num_bits Number of bits to mask the counter value to. Defaults to full resolution.
-     * @retval 48MHz counter value.
-     */
-    inline uint64_t GetMLAT48MHzCounts(uint16_t num_bits = 64);
-
-    /**
-     * Creates a composite timestamp using the current value of the SysTick timer (running at 125MHz) and the SysTick
-     * wrap counter to simulate a timer running at 12MHz, which matches existing decoders that use the Mode S Beast
-     * protocol.
-     * @param[in] num_bits Number of bits to mask the counter value to. Defaults to 48 bits (6 Bytes) to match Mode S
-     * Beast protocol.
-     * @retval 48MHz counter value.
-     */
-    inline uint64_t GetMLAT12MHzCounts(uint16_t num_bits = 48);
-
-    /**
      * Get the current temperature used in learning trigger level (simulated annealing). A temperature of 0 means
      * learning has completed.
      * @retval Current temperature used for simulated annealing, in milliVolts.
->>>>>>> main
      */
     uint16_t GetTLLearningTemperatureMV();
 
