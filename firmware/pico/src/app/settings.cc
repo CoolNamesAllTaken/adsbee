@@ -35,9 +35,9 @@ bool SettingsManager::Load() {
 }
 
 bool SettingsManager::Save() {
-    settings.rx_gain = ads_bee.GetRxGain();
-    settings.tl_lo_mv = ads_bee.GetTLLoMilliVolts();
-    settings.tl_hi_mv = ads_bee.GetTLHiMilliVolts();
+    settings.receiver_enabled = adsbee.ReceiverIsEnabled();
+    settings.tl_mv = adsbee.GetTLMilliVolts();
+    settings.bias_tee_enabled = adsbee.BiasTeeIsEnabled();
 
     // Save log level.
     settings.log_level = comms_manager.log_level;
@@ -60,8 +60,7 @@ bool SettingsManager::Save() {
     settings.wifi_password[kWiFiPasswordMaxLen] = '\0';
 
     // Sync settings from RP2040 -> ESP32.
-    SPICoprocessor::SettingsMessage settings_message = SPICoprocessor::SettingsMessage(settings_manager.settings);
-    esp32.SendMessage(settings_message);
+    esp32.Write(ObjectDictionary::kAddrSettingsStruct, settings);
 
     return eeprom.Save(settings);
 }
@@ -73,9 +72,9 @@ void SettingsManager::ResetToDefaults() {
 }
 
 void SettingsManager::Apply() {
-    ads_bee.SetTLLoMilliVolts(settings.tl_lo_mv);
-    ads_bee.SetTLHiMilliVolts(settings.tl_hi_mv);
-    ads_bee.SetRxGain(settings.rx_gain);
+    adsbee.SetReceiverEnable(settings.receiver_enabled);
+    adsbee.SetTLMilliVolts(settings.tl_mv);
+    adsbee.SetBiasTeeEnable(settings.bias_tee_enabled);
 
     // Apply log level.
     comms_manager.log_level = settings.log_level;

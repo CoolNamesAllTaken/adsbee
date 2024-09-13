@@ -7,7 +7,11 @@
 #endif
 
 #ifndef MIN
-#define MIN(a, b) ((b)>(a)?(a):(b))
+#define MIN(a, b) ((b) > (a) ? (a) : (b))
+#endif
+
+#ifndef ABS
+#define ABS(x) ((x) < 0 ? -(x) : (x))
 #endif
 
 #endif /* MACROS_HH_ */

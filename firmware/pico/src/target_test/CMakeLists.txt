@@ -8,5 +8,6 @@ else()
 target_sources(ads_bee PRIVATE
     hardware_unit_tests.cc
     test_eeprom.cc
+    test_spi_coprocessor.cc
 )
 endif()

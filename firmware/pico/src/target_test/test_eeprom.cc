@@ -35,6 +35,8 @@ void i2c_bus_scan(i2c_inst_t *i2c_handle, uint32_t i2c_timeout_us) {
     }
 }
 
+#ifdef TEST_EEPROM
+
 UTEST(EEPROM, BasicWriteReadByte) {
     ASSERT_GE(eeprom.WriteByte(0x0, 0x00), 0);
     ASSERT_GE(eeprom.WriteByte(0x1, 0x11), 0);
@@ -203,3 +205,5 @@ UTEST(EEPROM, OutOfBoundsSaveLoad) {
     ASSERT_FALSE(eeprom.Save(object_in, 0x1F41));
     ASSERT_FALSE(eeprom.Load(object_out, 0x1F41));
 }
+
+#endif /* TEST_EEPROM */

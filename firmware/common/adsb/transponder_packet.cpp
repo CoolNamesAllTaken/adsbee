@@ -5,6 +5,7 @@
 #include <cstring>  // for strlen
 
 #include "comms.hh"  // For debug prints.
+#include "decode_utils.hh"
 
 #define BYTES_PER_WORD_32 4
 #define BITS_PER_WORD_32  32
@@ -95,12 +96,12 @@ DecodedTransponderPacket::DecodedTransponderPacket(const RawTransponderPacket &p
 DecodedTransponderPacket::DownlinkFormat DecodedTransponderPacket::GetDownlinkFormatEnum() {
     switch (downlink_format_) {
         // DF 0-11 = short messages (56 bits)
-        case DownlinkFormat::kDownlinkFormatShortRangeAirSurveillance:
+        case DownlinkFormat::kDownlinkFormatShortRangeAirToAirSurveillance:
         case DownlinkFormat::kDownlinkFormatAltitudeReply:
         case DownlinkFormat::kDownlinkFormatIdentityReply:
         case DownlinkFormat::kDownlinkFormatAllCallReply:
         // DF 16-24 = long messages (112 bits)
-        case DownlinkFormat::kDownlinkFormatLongRangeAirSurveillance:
+        case DownlinkFormat::kDownlinkFormatLongRangeAirToAirSurveillance:
         case DownlinkFormat::kDownlinkFormatExtendedSquitter:
         case DownlinkFormat::kDownlinkFormatExtendedSquitterNonTransponder:
         case DownlinkFormat::kDownlinkFormatMilitaryExtendedSquitter:
@@ -117,7 +118,7 @@ DecodedTransponderPacket::DownlinkFormat DecodedTransponderPacket::GetDownlinkFo
     enum DownlinkFormat {
         kDownlinkFormatInvalid = -1,
         // DF 0-11 = short messages (56 bits)
-        kDownlinkFormatShortRangeAirSurveillance = 0,
+        kDownlinkFormatShortRangeAirToAirSurveillance = 0,
         kDownlinkFormatAltitudeReply = 4,
         kDownlinkFormatIdentityReply = 5,
         DF_ALL_CALL_REPLY = 11,
@@ -162,45 +163,47 @@ uint32_t DecodedTransponderPacket::CalculateCRC24(uint16_t packet_len_bits) cons
     }
 
     // Overwrite 24-bit parity word with zeros.
-    set_n_bit_word_in_buffer(BITS_PER_WORD_24, 0x0, packet_len_bits - BITS_PER_WORD_24, crc_buffer);
+    SetNBitWordInBuffer(BITS_PER_WORD_24, 0x0, packet_len_bits - BITS_PER_WORD_24, crc_buffer);
 
     // CRC is a conditional convolve operation using the 25-bit generator word.
     for (uint16_t i = 0; i < packet_len_bits - BITS_PER_WORD_24; i++) {
-        uint32_t word = get_n_bit_word_from_buffer(BITS_PER_WORD_25, i, crc_buffer);
+        uint32_t word = GetNBitWordFromBuffer(BITS_PER_WORD_25, i, crc_buffer);
         if (word & MASK_MSBIT_WORD25) {
             // Most significant bit is a 1. XOR with generator!
-            set_n_bit_word_in_buffer(BITS_PER_WORD_25, word ^ kCRC24Generator, i, crc_buffer);
+            SetNBitWordInBuffer(BITS_PER_WORD_25, word ^ kCRC24Generator, i, crc_buffer);
         }
     }
 
-    return get_n_bit_word_from_buffer(BITS_PER_WORD_24, packet_len_bits - BITS_PER_WORD_24, crc_buffer);
+    return GetNBitWordFromBuffer(BITS_PER_WORD_24, packet_len_bits - BITS_PER_WORD_24, crc_buffer);
 }
 
 void DecodedTransponderPacket::ConstructTransponderPacket() {
-    if (packet.buffer_len_bits != kExtendedSquitterPacketLenBits && packet.buffer_len_bits != kSquitterPacketNumBits) {
+    if (packet.buffer_len_bits != kExtendedSquitterPacketLenBits && packet.buffer_len_bits != kSquitterPacketLenBits) {
         snprintf(debug_string, kDebugStrLen,
                  "Bit number mismatch while decoding packet. Expected %d or %d but got %d!\r\n",
-                 kExtendedSquitterPacketLenBits, kSquitterPacketNumBits, packet.buffer_len_bits);
+                 kExtendedSquitterPacketLenBits, kSquitterPacketLenBits, packet.buffer_len_bits);
 
         return;  // leave is_valid_ as false
     }
 
     downlink_format_ = packet.buffer[0] >> 27;
     uint32_t calculated_checksum = CalculateCRC24(packet.buffer_len_bits);
-    uint32_t parity_value = get_24_bit_word_from_buffer(packet.buffer_len_bits - BITS_PER_WORD_24, packet.buffer);
+    uint32_t parity_value = Get24BitWordFromBuffer(packet.buffer_len_bits - BITS_PER_WORD_24, packet.buffer);
 
     switch (static_cast<DownlinkFormat>(downlink_format_)) {
-        case kDownlinkFormatShortRangeAirSurveillance:
-        case kDownlinkFormatAltitudeReply:
-        case kDownlinkFormatIdentityReply:
-        case kDownlinkFormatAllCallReply: {
+        case kDownlinkFormatShortRangeAirToAirSurveillance:  // DF = 0
+        case kDownlinkFormatAltitudeReply:                   // DF = 4
+        case kDownlinkFormatIdentityReply:                   // DF = 5
+        case kDownlinkFormatAllCallReply:                    // DF = 11
+        {
             // Process a 56-bit message.
             is_valid_ = false;  // Calculated checksum is XORed with the ICAO address. See ADS-B Decoding Guide pg. 22.
             // ICAO address is a best guess, needs to be confirmed from the aircraft dictionary.
             icao_address_ = parity_value ^ calculated_checksum;
             break;
         }
-        default: {
+        default:  // All other DFs. Note: DF=17-19 for ADS-B.
+        {
             // Process a 112-bit message.
             icao_address_ = packet.buffer[0] & 0xFFFFFF;
             if (calculated_checksum == parity_value) {
@@ -220,14 +223,14 @@ void DecodedTransponderPacket::ConstructTransponderPacket() {
  * Helper function used by constructors.
  */
 void ADSBPacket::ConstructADSBPacket() {
-    capability_ = (packet.buffer[0] >> 24) & 0b111;
-    typecode_ = packet.buffer[1] >> 27;
+    capability_ = static_cast<ADSBPacket::Capability>((packet.buffer[0] >> 24) & 0b111);
+    typecode_ = static_cast<ADSBPacket::TypeCode>(packet.buffer[1] >> 27);
     parity_interrogator_id = packet.buffer[1] & 0xFFFFFF;
 }
 
 ADSBPacket::TypeCode ADSBPacket::GetTypeCodeEnum() const {
     // Table 3.3 from The 1090Mhz Riddle (Junzi Sun), pg. 37.
-    switch (typecode_) {
+    switch (static_cast<uint16_t>(typecode_)) {
         case 1:
         case 2:
         case 3:
@@ -280,3 +283,95 @@ ADSBPacket::TypeCode ADSBPacket::GetTypeCodeEnum() const {
             return kTypeCodeInvalid;
     }
 }
+
+ModeCPacket::ModeCPacket(const DecodedTransponderPacket &decoded_packet) : DecodedTransponderPacket(decoded_packet) {
+    uint8_t flight_status = GetNBitWordFromBuffer(3, 5, packet.buffer);  // FS = Bits 5-7.
+    switch (flight_status) {
+        case 0b000:  // No alert, no SPI, aircraft is airborne.
+            has_alert_ = false;
+            has_ident_ = false;
+            is_airborne_ = true;
+            break;
+        case 0b001:  // No alert, no SPI, aircraft is on ground.
+            has_alert_ = false;
+            has_ident_ = false;
+            is_airborne_ = false;
+            break;
+        case 0b010:  // Alert, no SPI, aircraft is airborne.
+            has_alert_ = true;
+            has_ident_ = false;
+            is_airborne_ = true;
+            break;
+        case 0b011:  // Alert, no SPI, aircraft is on ground.
+            has_alert_ = true;
+            has_ident_ = false;
+            is_airborne_ = false;
+            break;
+        case 0b100:  // Alert, SPI, aircraft is airborne or on ground.
+            has_alert_ = true;
+            has_ident_ = true;
+            // Default is_airborne_ to false when not known.
+            break;
+        case 0b101:
+            // No alert, SPI, aircaft is airborne or on ground.
+            has_ident_ = true;
+            has_alert_ = false;
+            // Default is_airborne_ to false when not known.
+            break;
+        case 0b110:  // Reserved.
+            break;
+        case 0b111:  // Not assigned.
+            break;
+    }
+
+    downlink_request_ = static_cast<DownlinkRequest>(GetNBitWordFromBuffer(5, 8, packet.buffer));
+    utility_message_ = GetNBitWordFromBuffer(4, 13, packet.buffer);
+    utility_message_type_ = static_cast<UtilityMessageType>(GetNBitWordFromBuffer(2, 17, packet.buffer));
+    altitude_ft_ = AltitudeCodeToAltitudeFt(GetNBitWordFromBuffer(13, 19, packet.buffer));
+};
+
+ModeAPacket::ModeAPacket(const DecodedTransponderPacket &decoded_packet) : DecodedTransponderPacket(decoded_packet) {
+    uint8_t flight_status = GetNBitWordFromBuffer(3, 5, packet.buffer);  // FS = Bits 5-7.
+    switch (flight_status) {
+        case 0b000:  // No alert, no SPI, aircraft is airborne.
+            has_alert_ = false;
+            has_ident_ = false;
+            is_airborne_ = true;
+            break;
+        case 0b001:  // No alert, no SPI, aircraft is on ground.
+            has_alert_ = false;
+            has_ident_ = false;
+            is_airborne_ = false;
+            break;
+        case 0b010:  // Alert, no SPI, aircraft is airborne.
+            has_alert_ = true;
+            has_ident_ = false;
+            is_airborne_ = true;
+            break;
+        case 0b011:  // Alert, no SPI, aircraft is on ground.
+            has_alert_ = true;
+            has_ident_ = false;
+            is_airborne_ = false;
+            break;
+        case 0b100:  // Alert, SPI, aircraft is airborne or on ground.
+            has_alert_ = true;
+            has_ident_ = true;
+            // Default is_airborne_ to false when not known.
+            break;
+        case 0b101:
+            // No alert, SPI, aircaft is airborne or on ground.
+            has_ident_ = true;
+            has_alert_ = false;
+            // Default is_airborne_ to false when not known.
+            break;
+        case 0b110:  // Reserved.
+            break;
+        case 0b111:  // Not assigned.
+            break;
+    }
+
+    downlink_request_ = static_cast<DownlinkRequest>(GetNBitWordFromBuffer(5, 8, packet.buffer));
+    utility_message_ = GetNBitWordFromBuffer(4, 13, packet.buffer);
+    utility_message_type_ = static_cast<UtilityMessageType>(GetNBitWordFromBuffer(2, 17, packet.buffer));
+    squawk_ = IdentityCodeToSquawk(GetNBitWordFromBuffer(13, 19, packet.buffer));
+};

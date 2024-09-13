@@ -8,6 +8,39 @@
 		}
 	],
 	"settings": {
-		"C_Cpp.default.compilerPath": "/home/jmcnelly/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20240530/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc"
+		"C_Cpp.default.compilerPath": "/home/jmcnelly/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20240530/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc",
+		"C_Cpp.dimInactiveRegions": true,
+		"C_Cpp.default.defines": [
+			"ON_ESP32"
+		],
+		"files.associations": {
+			"compare": "cpp",
+			"cstdint": "cpp",
+			"chrono": "cpp"
+		},
+	},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			{
+				"type": "gdbtarget",
+				"request": "attach",
+				"name": "Eclipse CDT Remote",
+				"program": "${workspaceFolder:esp}/build/${command:espIdf.getProjectName}.elf",
+				"initCommands": [
+					"set remote hardware-watchpoint-limit {IDF_TARGET_CPU_WATCHPOINT_NUM}",
+					"mon reset halt",
+					"maintenance flush register-cache"
+				],
+				"gdb": "${command:espIdf.getToolchainGdb}",
+				"target": {
+					"connectCommands": [
+						"set remotetimeout 20",
+						"-target-select extended-remote localhost:3333"
+					]
+				}
+			}
+		],
+		"compounds": []
 	}
 }
