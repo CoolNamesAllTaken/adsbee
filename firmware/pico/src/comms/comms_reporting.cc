@@ -1,11 +1,12 @@
 #include "ads_bee.hh"
 #include "beast_utils.hh"
 #include "comms.hh"
+#include "csbee_utils.hh"
 #include "hal.hh"  // For timestamping.
 #include "mavlink/mavlink.h"
 #include "unit_conversions.hh"
 
-extern ADSBee ads_bee;
+extern ADSBee adsbee;
 
 bool CommsManager::InitReporting() { return true; }
 
@@ -32,13 +33,14 @@ bool CommsManager::UpdateReporting() {
                 ret = ReportBeast(iface, packets_to_report, num_packets_to_report);
                 break;
             case SettingsManager::kCSBee:
-                CONSOLE_WARNING("CommsManager::UpdateReporting",
-                                "Protocol CSBee specified on interface %d but is not yet supported.", i);
-                ret = false;
+                if (timestamp_ms - last_report_timestamp_ms >= kCSBeeReportingIntervalMs) {
+                    ret = ReportCSBee(iface);
+                    last_report_timestamp_ms = timestamp_ms;
+                }
                 break;
             case SettingsManager::kMAVLINK1:
             case SettingsManager::kMAVLINK2:
-                if (timestamp_ms - last_report_timestamp_ms >= mavlink_reporting_interval_ms) {
+                if (timestamp_ms - last_report_timestamp_ms >= kMAVLINKReportingIntervalMs) {
                     ret = ReportMAVLINK(iface);
                     last_report_timestamp_ms = timestamp_ms;
                 }
@@ -76,6 +78,39 @@ bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface,
         for (uint16_t j = 0; j < num_bytes_in_frame; j++) {
             comms_manager.iface_putc(iface, char(beast_frame_buf[j]));
         }
+    }
+    return true;
+}
+
+bool CommsManager::ReportCSBee(SettingsManager::SerialInterface iface) {
+    // Write out a CSBee Aircraft message for each aircraft in the aircraft dictionary.
+    for (auto &itr : adsbee.aircraft_dictionary.dict) {
+        const Aircraft &aircraft = itr.second;
+
+        char message[kCSBeeMessageStrMaxLen];
+        int16_t message_len = WriteCSBeeAircraftMessageStr(message, aircraft);
+        if (message_len < 0) {
+            CONSOLE_ERROR("CommsManager::ReportCSBee",
+                          "Encountered an error in WriteCSBeeAircraftMessageStr, error code %d.", message_len);
+            return false;
+        }
+        for (uint16_t i = 0; i < message_len; i++) {
+            comms_manager.iface_putc(iface, message[i]);
+        }
+    }
+
+    // Write a CSBee Statistics message.
+    char message[kCSBeeMessageStrMaxLen];
+    int16_t message_len =
+        WriteCSBeeStatisticsMessageStr(message, adsbee.GetStatsNumDemods(), adsbee.GetStatsNumModeACPackets(),
+                                       adsbee.GetStatsNumModeSPackets(), 0u, get_time_since_boot_ms() / 1000);
+    if (message_len < 0) {
+        CONSOLE_ERROR("CommsManager::ReportCSBee",
+                      "Encountered an error in WriteCSBeeStatisticsMessageStr, error code %d.", message_len);
+        return false;
+    }
+    for (uint16_t i = 0; i < message_len; i++) {
+        comms_manager.iface_putc(iface, message[i]);
     }
     return true;
 }
@@ -136,7 +171,7 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
     uint16_t mavlink_version = reporting_protocols_[iface] == SettingsManager::kMAVLINK1 ? 1 : 2;
     mavlink_set_proto_version(SettingsManager::SerialInterface::kCommsUART, mavlink_version);
 
-    for (auto &itr : ads_bee.aircraft_dictionary.dict) {
+    for (auto &itr : adsbee.aircraft_dictionary.dict) {
         const Aircraft &aircraft = itr.second;
 
         // Initialize the message
@@ -152,7 +187,7 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
                                          : aircraft.gnss_altitude_ft) *
                         1000,
             // Heding [cdeg]
-            .heading = static_cast<uint16_t>(aircraft.heading_deg * 100.0f),
+            .heading = static_cast<uint16_t>(aircraft.track_deg * 100.0f),
             // Horizontal Velocity [cm/s]
             .hor_velocity = static_cast<uint16_t>(KtsToMps(static_cast<int>(aircraft.velocity_kts)) * 100),
             // Vertical Velocity [cm/s]
@@ -164,7 +199,7 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
             // Fill out callsign later.
             .emitter_type = AircraftAirframeTypeToMAVLINKEmitterType(aircraft.airframe_type),
             // Time Since Last Contact [s]
-            .tslc = static_cast<uint8_t>((get_time_since_boot_ms() - aircraft.last_seen_timestamp_ms) / 1000)};
+            .tslc = static_cast<uint8_t>((get_time_since_boot_ms() - aircraft.last_message_timestamp_ms) / 1000)};
         strncpy(adsb_vehicle_msg.callsign, aircraft.callsign, Aircraft::kCallSignMaxNumChars);
 
         // Send the message.
@@ -180,7 +215,7 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
         }
         case 2: {
             mavlink_message_interval_t message_interval_msg = {
-                .interval_us = (int32_t)(mavlink_reporting_interval_ms * (uint32_t)kUsPerMs),
+                .interval_us = (int32_t)(kMAVLINKReportingIntervalMs * (uint32_t)kUsPerMs),
                 .message_id = MAVLINK_MSG_ID_ADSB_VEHICLE};
             mavlink_msg_message_interval_send_struct(static_cast<mavlink_channel_t>(iface), &message_interval_msg);
             break;

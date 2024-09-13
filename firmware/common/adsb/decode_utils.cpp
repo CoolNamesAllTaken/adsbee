@@ -2,27 +2,129 @@
 
 #include <cmath>
 
+#include "unit_conversions.hh"
+
 const uint16_t callsign_char_array_len = 64;
 char callsign_char_array[] = "#ABCDEFGHIJKLMNOPQRSTUVWXYZ##### ###############0123456789######";
 
-/**
- * Converts a numeric value into an ASCII character for use in decoding callsigns.
- * @param[in] value 6-bit value to lookup.
- * @retval Character that matches the input value. If the input value is invalid or unused, returns '#'.
- */
-char lookup_callsign_char(uint8_t value) {
+char LookupCallsignChar(uint8_t value) {
     if (value >= callsign_char_array_len) {
         return '#';
     }
     return callsign_char_array[value];
 }
 
-/**
- * Calculate the number of longituide zones (between 1 and 59) at a given latitude.
- * @param[in] lat Latitude to calculate NL (number of longitude zones) at.
- * @retval NL (number of longitude zones) in the Compact Position Reporting (CPR) representation at the given latitude.
- */
-uint16_t calc_nl_cpr_from_lat(float lat) {
+int32_t GillhamToAltitudeFt(uint16_t gillham_value)
+// Data must be in following order (MSB to LSB)
+// D1 D2 D4 A1 A2 A4 B1 B2 B4 C1 C2 C4
+{
+    int32_t result;
+    int16_t five_hundreds;
+    int16_t one_hundreds;
+
+    // Convert Gillham value using gray code to binary conversion algorithm.
+    // Get rid of Hundreds (lower 3 bits).
+    five_hundreds = gillham_value >> 3;
+
+    // Strip off Five Hundreds leaving lower 3 bits.
+    one_hundreds = gillham_value & 0x07;
+
+    five_hundreds = GrayToBinary(five_hundreds);
+    one_hundreds = GrayToBinary(one_hundreds);
+
+    // Check for invalid codes.
+    if (one_hundreds == 5 || one_hundreds == 6 || one_hundreds == 0) {
+        result = kAltitudeDecodeErrorGillhamDecodeError;
+        return result;
+    }
+
+    // Remove 7s from one_hundreds.
+    if (one_hundreds == 7) one_hundreds = 5;
+
+    // Correct order of one_hundreds.
+    if (five_hundreds % 2) one_hundreds = 6 - one_hundreds;
+
+    // Convert to feet and apply altitude datum offset.
+    result = (int32_t)((five_hundreds * 500) + (one_hundreds * 100)) - 1300;
+
+    return result;
+}
+
+uint16_t AltitudeCodeToGillham(uint16_t altitude_code) {
+    uint8_t d1 = (altitude_code & (0b1 << 4)) >> 4;
+    uint8_t d2 = (altitude_code & (0b1 << 2)) >> 2;
+    uint8_t d4 = altitude_code & 0b1;
+
+    uint8_t a1 = (altitude_code & (0b1 << 11)) >> 11;
+    uint8_t a2 = (altitude_code & (0b1 << 9)) >> 9;
+    uint8_t a4 = (altitude_code & (0b1 << 7)) >> 7;
+
+    uint8_t b1 = (altitude_code & (0b1 << 5)) >> 5;
+    uint8_t b2 = (altitude_code & (0b1 << 3)) >> 3;
+    uint8_t b4 = (altitude_code & (0b1 << 1)) >> 1;
+
+    uint8_t c1 = (altitude_code & (0b1 << 12)) >> 12;
+    uint8_t c2 = (altitude_code & (0b1 << 10)) >> 10;
+    uint8_t c4 = (altitude_code & (0b1 << 8)) >> 8;
+
+    return (d1 << 11) | (d2 << 10) | (d4 << 9) | (a1 << 8) | (a2 << 7) | (a4 << 6) | (b1 << 5) | (b2 << 4) | (b4 << 3) |
+           (c1 << 2) | (c2 << 1) | c4;
+}
+
+int32_t AltitudeCodeToAltitudeFt(uint16_t altitude_code) {
+    // Altitude Code Format
+    //                                     M        Q
+    // +----+----+----+----+----+----+---+----+---+----+----+----+----+
+    // | C1 | A1 | C2 | A2 | C4 | A4 | 0 | B1 | 0 | B2 | D2 | B4 | D4 |
+    // +----+----+----+----+----+----+---+----+---+----+----+----+----+
+
+    if (altitude_code == 0b0) {
+        // All bits are 0: Altitude information not available or invalid.
+        return kAltitudeDecodeErrorNotAvailableOrInvalid;
+    }
+    bool m = (altitude_code >> 6) & 0b1;
+    bool q = (altitude_code >> 4) & 0b1;
+    if (m) {
+        // M=1: Altitude in meters.
+        // Remove the M bit to get altitude in meters.
+        int16_t altitude_meters = ((altitude_code & (0b111111 << 7)) >> 1) | (altitude_code & 0b111111);
+        // Return altitude in feet.
+        return MetersToFeet(altitude_meters);
+    } else if (q) {
+        // M=0, Q=1: Altitude in 25ft increments.
+        int16_t left_blob = altitude_code & (0b111111 << 7);
+        int16_t mid_bit = altitude_code & (0b1 << 5);
+        int16_t right_blob = altitude_code & 0b1111;
+        int16_t altitude_feet_increments = (left_blob >> 2) | (mid_bit >> 1) | right_blob;
+        return 25 * altitude_feet_increments - 1000;
+    } else {
+        // M=0, Q=0: Regular Mode C reply.
+        return GillhamToAltitudeFt(AltitudeCodeToGillham(altitude_code));
+    }
+}
+
+uint16_t IdentityCodeToSquawk(uint16_t identity_code) {
+    uint8_t d1 = (identity_code & (0b1 << 4)) >> 4;
+    uint8_t d2 = (identity_code & (0b1 << 2)) >> 2;
+    uint8_t d4 = identity_code & 0b1;
+
+    uint8_t a1 = (identity_code & (0b1 << 11)) >> 11;
+    uint8_t a2 = (identity_code & (0b1 << 9)) >> 9;
+    uint8_t a4 = (identity_code & (0b1 << 7)) >> 7;
+
+    uint8_t b1 = (identity_code & (0b1 << 5)) >> 5;
+    uint8_t b2 = (identity_code & (0b1 << 3)) >> 3;
+    uint8_t b4 = (identity_code & (0b1 << 1)) >> 1;
+
+    uint8_t c1 = (identity_code & (0b1 << 12)) >> 12;
+    uint8_t c2 = (identity_code & (0b1 << 10)) >> 10;
+    uint8_t c4 = (identity_code & (0b1 << 8)) >> 8;
+
+    return (a4 << 11) | (a2 << 10) | (a1 << 9) | (b4 << 8) | (b2 << 7) | (b1 << 6) | (c4 << 5) | (c2 << 4) | (c1 << 3) |
+           (d4 << 2) | (d2 << 1) | d1;
+}
+
+uint16_t CalcNLCPRFromLat(float lat) {
     lat = floorf(lat);
 
     // Special cases.
@@ -42,24 +144,3 @@ uint16_t calc_nl_cpr_from_lat(float lat) {
     return floorf(2.0f * (float)M_PI /
                   acosf(1 - (1 - cosf((float)M_PI / (2.0f * kCPRNz))) / powf(cosf((float)M_PI / 180.0f * lat), 2)));
 }
-
-float wrap_latitude(float latitude) { return latitude >= 270.0f ? latitude - 360.0f : latitude; }
-
-float wrap_longitude(float longitude) { return longitude >= 180.0f ? longitude - 360.0f : longitude; }
-
-// bool calc_lat_from_cpr(uint32_t n_lat_cpr_even, uint32_t n_lat_cpr_odd, float &lat, uint16_t &nl) {
-//     // Equation 5.5
-//     float lat_cpr_even = n_lat_cpr_even / kCPRMaxCount;
-//     float lat_cpr_odd = n_lat_cpr_odd / kCPRMaxCount;
-
-//     // Equation 5.6
-//     int32_t lat_zone_index = floorf(59.0f * lat_cpr_even - 60.0f * lat_cpr_odd + 0.5f);
-
-//     // Equation 5.7
-//     float lat_even = kCPRdLatEven * ((lat_zone_index % 60) + lat_cpr_even);
-//     float lat_odd = kCPRdLatOdd * ((lat_zone_index % 59) + lat_cpr_odd);
-
-//     // Equation 5.8
-//     lat_even = lat_even >= 270 ? lat_even : lat_even - 360.0f;
-//     lat_odd = lat_odd >= 270 ? lat_odd : lat_odd - 360.0f;
-// }

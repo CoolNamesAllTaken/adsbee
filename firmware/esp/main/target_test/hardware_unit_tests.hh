@@ -3,4 +3,4 @@
 
 // #define TEST_EEPROM
 
-CPP_AT_CALLBACK(ATTestCallback);
+bool RunHardwareUnitTests();

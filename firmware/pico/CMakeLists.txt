@@ -54,12 +54,14 @@ if (NOT CMAKE_BUILD_TYPE STREQUAL "Test")
     target_link_libraries(${PROJECT_NAME} 
         pico_stdlib
         pico_float # for math functions
+        pico_rand # for generating random numbers
         hardware_pio
         hardware_pwm
         hardware_adc
         hardware_i2c
         hardware_spi
         hardware_exception
+        hardware_watchdog
     )
 
     # Firmware: Create map/bin/hex file etc

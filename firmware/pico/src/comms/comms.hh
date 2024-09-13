@@ -12,6 +12,8 @@ class CommsManager {
    public:
     static const uint16_t kATCommandBufMaxLen = 1000;
     static const uint16_t kPrintfBufferMaxSize = 500;
+    static const uint32_t kMAVLINKReportingIntervalMs = 1000;
+    static const uint32_t kCSBeeReportingIntervalMs = 1000;
 
     struct CommsManagerConfig {
         uart_inst_t *comms_uart_handle = uart1;
@@ -35,13 +37,14 @@ class CommsManager {
     bool Update();
 
     CPP_AT_CALLBACK(ATBaudrateCallback);
-    CPP_AT_CALLBACK(ATLogLevelCallback);
+    CPP_AT_CALLBACK(ATBiasTeeEnableCallback);
     CPP_AT_CALLBACK(ATFeedCallback);
     CPP_AT_CALLBACK(ATFlashESP32Callback);
+    CPP_AT_CALLBACK(ATLogLevelCallback);
     CPP_AT_CALLBACK(ATProtocolCallback);
     CPP_AT_HELP_CALLBACK(ATProtocolHelpCallback);
+    CPP_AT_CALLBACK(ATRebootCallback);
     CPP_AT_CALLBACK(ATRxEnableCallback);
-    CPP_AT_CALLBACK(ATRxGainCallback);
     CPP_AT_CALLBACK(ATSettingsCallback);
     CPP_AT_CALLBACK(ATTLReadCallback);
     CPP_AT_CALLBACK(ATTLSetCallback);
@@ -146,7 +149,6 @@ class CommsManager {
     char wifi_password[SettingsManager::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
 
     // MAVLINK settings.
-    uint32_t mavlink_reporting_interval_ms = 1000;
     uint8_t mavlink_system_id = 0;
     uint8_t mavlink_component_id = 0;
 
@@ -166,13 +168,20 @@ class CommsManager {
      * Sends out Mode S Beast formatted transponder data on the selected serial interface. Reports all transponder
      * packets in the provided packets_to_report array, which is used to allow printing arbitrary blocks of transponder
      * packets received via the CommsManager's built-in transponder_packet_reporting_queue_.
-     * @param[in] iface SerialInterface to broadcase Mode S Beast messages on.
+     * @param[in] iface SerialInterface to broadcast Mode S Beast messages on.
      * @param[in] packets_to_report Array of transponder packets to report.
      * @param[in] num_packets_to_report Number of packets to report from the packets_to_report array.
      * @retval True if successful, false if something broke.
      */
     bool ReportBeast(SettingsManager::SerialInterface iface, const DecodedTransponderPacket packets_to_report[],
                      uint16_t num_packets_to_report);
+
+    /**
+     * Sends out comma separated aircraft information for each aircraft in the aircraft dictionary.
+     * @param[in] iface SerialInterface to broadcast aircraft information on.
+     * @retval True if successful, false if something broke.
+     */
+    bool ReportCSBee(SettingsManager::SerialInterface iface);
 
     /**
      * Sends a series of MAVLINK ADSB_VEHICLE messages on the selected serial interface, one for each tracked aircraft
@@ -228,13 +237,15 @@ extern const uint16_t at_command_list_num_commands;
 #define TEXT_COLOR_RESET            "\033[0m"
 
 #define CONSOLE_PRINTF(format, ...) comms_manager.console_printf(format __VA_OPT__(, ) __VA_ARGS__);
-#define CONSOLE_INFO(tag, format, ...) \
-    comms_manager.console_level_printf(SettingsManager::LogLevel::kInfo, tag ": " format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
-#define CONSOLE_WARNING(tag, format, ...)                                         \
-    comms_manager.console_level_printf(SettingsManager::LogLevel::kWarnings, \
-                                       tag ": " TEXT_COLOR_YELLOW format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) __VA_ARGS__);
-#define CONSOLE_ERROR(tag, format, ...)                                         \
-    comms_manager.console_level_printf(SettingsManager::LogLevel::kErrors, \
-                                       tag ": " TEXT_COLOR_RED format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) __VA_ARGS__);
+#define CONSOLE_INFO(tag, format, ...)                                   \
+    comms_manager.console_level_printf(SettingsManager::LogLevel::kInfo, \
+                                       tag ": " format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
+#define CONSOLE_WARNING(tag, format, ...)                                                                       \
+    comms_manager.console_level_printf(SettingsManager::LogLevel::kWarnings,                                    \
+                                       tag ": " TEXT_COLOR_YELLOW format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) \
+                                           __VA_ARGS__);
+#define CONSOLE_ERROR(tag, format, ...)                                        \
+    comms_manager.console_level_printf(SettingsManager::LogLevel::kErrors, tag \
+                                       ": " TEXT_COLOR_RED format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) __VA_ARGS__);
 
 #endif /* COMMS_HH_ */

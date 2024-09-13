@@ -1,47 +1,95 @@
 #include "gtest/gtest.h"
 #include "spi_coprocessor.hh"
 
-TEST(SPICoprocessor, CreateSCpacket) {
-    SPICoprocessor::SCMessage packet = {.crc = 0x1234, .length = 0};
-    EXPECT_FALSE(packet.IsValid(sizeof(SPICoprocessor::SCMessage)));
+TEST(SPICoprocessor, SCWritePacket) {
+    SPICoprocessor::SCWritePacket packet;
+    packet.cmd = SPICoprocessor::SCCommand::kCmdWriteToSlave;
+    packet.addr = SPICoprocessor::SCAddr::kAddrRawTransponderPacket;
+    RawTransponderPacket tpacket = RawTransponderPacket((char *)"8D7C1BE8581B66E9BD8CEEDC1C9F");
+    packet.data_len_bytes = sizeof(RawTransponderPacket);
+    memcpy(packet.data, &tpacket, packet.data_len_bytes);
+    // Calculate CRC and add it to the data buffer.
+    uint16_t crc =
+        CalculateCRC16(packet.GetBuf(), packet.GetBufLenBytes() - SPICoprocessor::SCWritePacket::kCRCLenBytes);
+    memcpy(packet.data + packet.data_len_bytes, &crc, sizeof(uint16_t));
+    EXPECT_TRUE(packet.IsValid());
 
-    packet.PopulateCRCAndLength(0);
-    EXPECT_TRUE(packet.IsValid(sizeof(SPICoprocessor::SCMessage)));
+    packet.PopulateCRC();
+    EXPECT_TRUE(packet.IsValid());
+
+    EXPECT_EQ(packet.GetBufLenBytes(), sizeof(RawTransponderPacket) + sizeof(SPICoprocessor::SCCommand) +
+                                           sizeof(SPICoprocessor::SCAddr) + sizeof(uint16_t) + sizeof(uint8_t) +
+                                           SPICoprocessor::SCWritePacket::kCRCLenBytes);
+
+    SPICoprocessor::SCWritePacket packet_copy = SPICoprocessor::SCWritePacket(packet.GetBuf(), packet.GetBufLenBytes());
+    EXPECT_EQ(packet.cmd, packet_copy.cmd);
+    EXPECT_EQ(packet.addr, packet_copy.addr);
+    EXPECT_EQ(packet.IsValid(), packet_copy.IsValid());
+    RawTransponderPacket *tpacket_copy = (RawTransponderPacket *)packet_copy.data;
+    EXPECT_EQ(tpacket.buffer_len_bits, tpacket_copy->buffer_len_bits);
+    EXPECT_EQ(tpacket.buffer[0], tpacket_copy->buffer[0]);
+    EXPECT_EQ(tpacket.buffer[1], tpacket_copy->buffer[1]);
+    EXPECT_EQ(tpacket.buffer[2], tpacket_copy->buffer[2]);
+    EXPECT_EQ(tpacket.buffer[3], tpacket_copy->buffer[3]);
+
+    // Poke packet and make checksum fail.
+    packet.data[0] = ~packet.data[0];
+    EXPECT_FALSE(packet.IsValid());
 }
 
-TEST(SPICoprocessor, CreateSettingsPacket) {
-    SettingsManager::Settings settings;
-    settings.rx_gain = 15;
-    settings.comms_uart_baud_rate = 12345;
-    settings.wifi_enabled = true;
-    strcpy(settings.wifi_password, "helloooo");
+TEST(SPICoprocessor, SCReadRequestPacket) {
+    // Test packet creation.
+    SPICoprocessor::SCReadRequestPacket packet;
+    packet.cmd = SPICoprocessor::SCCommand::kCmdReadFromMaster;
+    packet.addr = SPICoprocessor::SCAddr::kAddrSettingsStruct;
+    packet.offset = 0xFEBC;
+    packet.len = 40;
+    // Make sure that CRC generation works as expected.
+    packet.PopulateCRC();
+    EXPECT_TRUE(packet.IsValid());
+    EXPECT_EQ(
+        CalculateCRC16(packet.GetBuf(), packet.GetBufLenBytes() - SPICoprocessor::SCReadRequestPacket::kCRCLenBytes),
+        packet.crc);
 
-    SPICoprocessor::SettingsMessage packet = SPICoprocessor::SettingsMessage(settings);
-    EXPECT_TRUE(packet.IsValid(sizeof(SPICoprocessor::SettingsMessage)));
-    EXPECT_EQ(settings.rx_gain, packet.settings.rx_gain);
-    EXPECT_EQ(settings.comms_uart_baud_rate, packet.settings.comms_uart_baud_rate);
-    EXPECT_EQ(settings.wifi_enabled, packet.settings.wifi_enabled);
-    EXPECT_STREQ(settings.wifi_password, packet.settings.wifi_password);
-    EXPECT_EQ(packet.type, SPICoprocessor::kSCPacketTypeSettings);
-
-    packet.settings.comms_uart_baud_rate |= 0x123;  // Corrupt the packet.
-    EXPECT_FALSE(packet.IsValid(sizeof(SPICoprocessor::SettingsMessage)));
+    // Test packet ingestion.
+    SPICoprocessor::SCReadRequestPacket packet_copy =
+        SPICoprocessor::SCReadRequestPacket(packet.GetBuf(), packet.GetBufLenBytes());
+    EXPECT_EQ(packet_copy.cmd, packet.cmd);
+    EXPECT_EQ(packet_copy.addr, packet.addr);
+    EXPECT_EQ(packet_copy.offset, packet.offset);
+    EXPECT_EQ(packet_copy.len, packet.len);
+    EXPECT_TRUE(packet_copy.IsValid());
+    // Changes to packet should not affect packet_copy.
+    packet.GetBuf()[0] = ~packet.GetBuf()[0];
+    EXPECT_FALSE(packet.IsValid());
+    EXPECT_TRUE(packet_copy.IsValid());
 }
 
-TEST(SPICoprocessor, CreateAircraftListPacket) {
-    Aircraft aircraft_list[AircraftDictionary::kMaxNumAircraft];
-    aircraft_list[0].icao_address = 0x12345;
-    aircraft_list[1].heading_deg = 3;
-    aircraft_list[99].icao_address = 0xBEEF;
-    uint16_t num_aircraft = 100;
-    SPICoprocessor::AircraftListMessage packet = SPICoprocessor::AircraftListMessage(num_aircraft, aircraft_list);
-    EXPECT_TRUE(packet.IsValid(sizeof(SPICoprocessor::AircraftListMessage)));
-    EXPECT_EQ(aircraft_list[0].icao_address, packet.aircraft_list[0].icao_address);
-    EXPECT_EQ(aircraft_list[1].heading_deg, packet.aircraft_list[1].heading_deg);
-    EXPECT_EQ(aircraft_list[99].icao_address, packet.aircraft_list[99].icao_address);
-    EXPECT_EQ(num_aircraft, packet.num_aicraft);
-    EXPECT_EQ(packet.type, SPICoprocessor::kSCPacketTypeAircraftList);
+TEST(SPICoprocessor, SCResponsePacket) {
+    // Test packet creation.
+    SPICoprocessor::SCResponsePacket packet;
+    packet.cmd = SPICoprocessor::SCCommand::kCmdDataBlock;
+    EXPECT_EQ(packet.GetBuf()[0], SPICoprocessor::SCCommand::kCmdDataBlock);
+    RawTransponderPacket tpacket = RawTransponderPacket((char *)"8D7C1BE8581B66E9BD8CEEDC1C9F");
+    packet.data_len_bytes = sizeof(RawTransponderPacket);
+    memcpy(packet.data, &tpacket, packet.data_len_bytes);
+    EXPECT_FALSE(packet.IsValid());
+    packet.PopulateCRC();
+    EXPECT_TRUE(packet.IsValid());
 
-    packet.aircraft_list[0].icao_address = 0;  // Corrupt the packet.
-    EXPECT_FALSE(packet.IsValid(sizeof(SPICoprocessor::AircraftListMessage)));
+    // Test packet ingestion.
+    SPICoprocessor::SCResponsePacket packet_copy =
+        SPICoprocessor::SCResponsePacket(packet.GetBuf(), packet.GetBufLenBytes());
+    EXPECT_TRUE(packet_copy.IsValid());
+    EXPECT_EQ(packet_copy.cmd, packet.cmd);
+    RawTransponderPacket *tpacket_copy = (RawTransponderPacket *)packet_copy.data;
+    EXPECT_EQ(tpacket_copy->buffer[0], 0x8D7C1BE8u);
+    EXPECT_EQ(tpacket_copy->buffer[1], 0x581B66E9u);
+    EXPECT_EQ(tpacket_copy->buffer[2], 0xBD8CEEDCu);
+    EXPECT_EQ(tpacket_copy->buffer[3], 0x1C9Fu << 16);
+    // Poke the checksum and see it fail.
+    tpacket_copy->buffer[0] = tpacket_copy->buffer[0] << 1;
+    EXPECT_FALSE(packet_copy.IsValid());
+    // Make sure original packet was not affected.
+    EXPECT_TRUE(packet.IsValid());
 }

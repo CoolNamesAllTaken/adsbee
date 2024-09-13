@@ -2,49 +2,32 @@
 #define SETTINGS_HH_
 
 #include <cstdint>
-#include <cstring> // for memset
+#include <cstring>  // for memset
 
-static const uint32_t kSettingsVersionMagicWord = 0xBEEFBEEF; // Change this when settings format changes!
+static const uint32_t kSettingsVersionMagicWord = 0xBEEFEBEE;  // Change this when settings format changes!
 
-class SettingsManager
-{
-public:
-    static const int kDefaultTLHiMV = 250; // [mV]
-    static const int kDefaultTLLoMV = 200; // [mV]
-    static const int kDefaultRxGain = 2;   // [unitless]
+class SettingsManager {
+   public:
+    static const int kDefaultTLMV = 1500;  // [mV]
 
     // NOTE: Length does not include null terminator.
     static const uint16_t kWiFiSSIDMaxLen = 32;
-    static const uint16_t kWiFiPasswordMaxLen = 63; // Theoretical max is 63, but limited by CppAT arg max len.
+    static const uint16_t kWiFiPasswordMaxLen = 63;  // Theoretical max is 63, but limited by CppAT arg max len.
 
     static const uint32_t kDefaultCommsUARTBaudrate = 115200;
     static const uint32_t kDefaultGNSSUARTBaudrate = 9600;
 
     // Serial Interface enum and string conversion array.
-    enum SerialInterface : uint16_t
-    {
-        kConsole = 0,
-        kCommsUART,
-        kGNSSUART,
-        kNumSerialInterfaces
-    };
+    enum SerialInterface : uint16_t { kConsole = 0, kCommsUART, kGNSSUART, kNumSerialInterfaces };
     static const uint16_t kSerialInterfaceStrMaxLen = 30;
     static const char SerialInterfaceStrs[SerialInterface::kNumSerialInterfaces][kSerialInterfaceStrMaxLen];
 
-    enum LogLevel : uint16_t
-    {
-        kSilent = 0,
-        kErrors,
-        kWarnings,
-        kInfo,
-        kNumLogLevels
-    };
+    enum LogLevel : uint16_t { kSilent = 0, kErrors, kWarnings, kInfo, kNumLogLevels };
     static const uint16_t kConsoleLogLevelStrMaxLen = 30;
     static const char ConsoleLogLevelStrs[LogLevel::kNumLogLevels][kConsoleLogLevelStrMaxLen];
 
     // Reporting Protocol enum and string conversion array.
-    enum ReportingProtocol : uint16_t
-    {
+    enum ReportingProtocol : uint16_t {
         kNoReports = 0,
         kRaw,
         kBeast,
@@ -62,17 +45,16 @@ public:
     static const uint16_t kFeedURIMaxNumChars = 63;
     static const uint16_t kFeedReceiverIDNumBytes = 16;
 
-    struct Settings
-    {
+    struct Settings {
         uint32_t magic_word = kSettingsVersionMagicWord;
 
         // ADSBee settings
-        int tl_lo_mv = kDefaultTLLoMV;
-        int tl_hi_mv = kDefaultTLHiMV;
-        uint16_t rx_gain = kDefaultRxGain;
+        bool receiver_enabled = true;
+        int tl_mv = kDefaultTLMV;
+        bool bias_tee_enabled = false;
 
         // CommunicationsManager settings
-        LogLevel log_level = LogLevel::kInfo; // Start with highest verbosity by default.
+        LogLevel log_level = LogLevel::kInfo;  // Start with highest verbosity by default.
         ReportingProtocol reporting_protocols[SerialInterface::kNumSerialInterfaces - 1] = {
             ReportingProtocol::kNoReports, ReportingProtocol::kMAVLINK1};
         uint32_t comms_uart_baud_rate = 115200;
@@ -92,10 +74,8 @@ public:
         /**
          * Default constructor.
          */
-        Settings()
-        {
-            for (uint16_t i = 0; i < kMaxNumFeeds; i++)
-            {
+        Settings() {
+            for (uint16_t i = 0; i < kMaxNumFeeds; i++) {
                 memset(feed_uris[i], '\0', kFeedURIMaxNumChars + 1);
                 feed_ports[i] = 0;
                 feed_is_active[i] = false;
@@ -124,7 +104,7 @@ public:
 
     Settings settings;
 
-private:
+   private:
     /**
      * Applies internal settings to the relevant objects.
      */
