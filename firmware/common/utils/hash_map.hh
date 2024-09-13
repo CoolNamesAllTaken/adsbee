@@ -127,7 +127,6 @@ class HashMap {
     }
 
     T& operator[](const Key& key) {
-        // todo optimize
         auto itr = find(key);
         if (itr == end()) {
             auto inserted = insert(std::pair<Key, T>(key, {}));
@@ -139,17 +138,42 @@ class HashMap {
     }
 
     iterator find(const Key& key) {
-        //todo optimize
-        return std::find_if(begin(), end(), [this, key](auto i) {
-            return KeyEqual{}(i.first, key);
-        });
+        auto element = Hash{}(key) % MaxSize;
+        const auto start = element;
+        auto looped = false;
+        while ((*_data)[element].first != key && (looped && element == start)) {
+            element++;
+            if (element == MaxSize) {
+                element = 0;
+                looped = true;
+            }
+        }
+
+        if (looped && element == start) {
+            return end();
+        } else {
+            return Iterator(_data, _usageList, element);
+        }
+
     }
 
     const_iterator find(const Key& key) const {
-        //todo optimize
-        return std::find_if(begin(), end(), [this, key](auto i) {
-            return KeyEqual{}(i.first, key);
-        });
+        auto element = Hash{}(key) % MaxSize;
+        const auto start = element;
+        auto looped = false;
+        while ((*_data)[element].first != key && (looped && element == start)) {
+            element++;
+            if (element == MaxSize) {
+                element = 0;
+                looped = true;
+            }
+        }
+
+        if (looped && element == start) {
+            return end();
+        } else {
+            return Iterator(_data, _usageList, element);
+        }
     }
 
     bool empty() const noexcept {
