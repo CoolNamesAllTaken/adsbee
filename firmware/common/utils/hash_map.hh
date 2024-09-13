@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <cassert>
 
@@ -130,7 +131,7 @@ class HashMap {
         auto itr = find(key);
         if (itr == end()) {
             auto inserted = insert(std::pair<Key, T>(key, {}));
-            assert(inserted.second);
+            assert(inserted.second && inserted.first != end());
             return inserted.first->second;
         } else {
             return itr->second;
@@ -157,11 +158,43 @@ class HashMap {
     //end STL standard 
 
     std::pair<iterator, bool> insert(const value_type& value) {
-        //todo
+        //early return for out of space
+        if (size() == MaxSize) {
+            return std::pair(end(), false);
+        }
+
+        auto element = findElement(value.first);
+
+        if (!element.has_value()) {
+            return std::pair(end(), false);
+        } else if ((*_data)[element.value()].first == value.first) {
+            return std::pair(Iterator(_data, _usageList, element.value()), false);
+        } else {
+            (*_data)[element.value()] = value;
+            return std::pair(Iterator(_data, _usageList, element.value()), true);
+        }
     }
 
    private:
     using DataArrayT = std::array<value_type, MaxSize>;
+
+    std::optional<size_type> findElement(const Key& key) {
+        auto element = Hash{}(key) % MaxSize;
+        const auto start = element;
+        auto looped = false;
+        while ((*_usageList)[element] && (*_data)[element].first != key && (looped && element == start)) {
+            element++;
+            if (element == MaxSize) {
+                element = 0;
+                looped = true;
+            }
+        }
+        if (looped && element == start) {
+            return std::nullopt;
+        } else {
+            return element;
+        }
+    }
 
     std::shared_ptr<DataArrayT> _data = std::make_shared<DataArrayT>();
     std::shared_ptr<std::array<bool, MaxSize>> _usageList = std::make_shared<std::array<bool, MaxSize>>();
