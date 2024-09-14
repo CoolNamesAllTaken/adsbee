@@ -4,65 +4,38 @@
 
 .define pulses_pin_index 0
 .define demod_pin_index 1
-
-set pins 0 ; DEBUG
-
-; Set preamble sequence in ISR.
-mov isr null                        ; Clear ISR.
-set x 0b101                     ; ISR = 0b00000000000000000000000000000000
-in x 3                          ; ISR = 0b00000000000000000000000000000101
-in null 4                       ; ISR = 0b00000000000000000000000001010000
-in x 3                          ; ISR = 0b00000000000000000000001010000101
-in null 6                       ; ISR = 0b00000000000000001010000101000000
-mov x null
-
-; BEGIN DOUBLE PULSE MATCH
 .wrap_target
+; BEGIN DOUBLE PULSE MATCH
 waiting_for_first_edge:
-    mov osr isr                     ; OSR = 0b00000000000000001010000101000000
-    out null 16                     ; OSR = 0b1010000101000000
+    set x, 1 ; pulse match section runs twice
+    wait 1 pin, pulses_pin_index [11] ; wait for in_pin to go HI, delay to middle of the eye
+check_pulse_1_hi:
+    jmp pin check_pulse_1_lo [23] ; if first pulse HI is ok, look for first pulse LO
+    jmp waiting_for_first_edge ; first pulse did not go HI, abort
+check_pulse_1_lo:
+    jmp pin waiting_for_first_edge [23] ; if first pulse did not go LO, abort
+    jmp pin check_pulse_2_lo [23]; if second pulse HI is ok, look for second pulse LO
+    jmp waiting_for_first_edge ; second pulse did not go HI, abort
+check_pulse_2_lo:
+    jmp pin waiting_for_first_edge [23] ; if second pulse does not go LO, abort
+    jmp pin waiting_for_first_edge [23]
+    jmp pin waiting_for_first_edge [23]
+    jmp pin waiting_for_first_edge [20]
+    jmp x-- check_pulse_1_hi [2] ; loop to beginning of double pulse loop at end of first double pulse
+; END DOUBLE PULSE MATCH
+; BEGIN EXTRA DELAY AFTER SECOND DOUBLE PULSE
+preamble_tail:
+    ; enforce preamble tail LO till just before the rising edge if first message bit is a 1
+    jmp pin waiting_for_first_edge [23] 
+    nop [17] ; delay 6 clock cycles so that demod signal activates at 0.25 bit time on first bit
+; END EXTRA DELAY AFTER SECOND DOUBLE PULSE
     
-    ; Build preamble pattern and load it into OSR: 0b1010000101000000
-
-    ; set x 0b101                     ; ISR = 0b00000000000000000000000000000000
-    ; in x 3                          ; ISR = 0b00000000000000000000000000000101
-    ; in null 4                       ; ISR = 0b00000000000000000000000001010000
-    ; in isr 7                        ; ISR = 0b00000000000000000010100001010000
-    ; in null 2                       ; ISR = 0b00000000000000001010000101000000
-    ; mov osr isr                     ; OSR = 0b00000000000000001010000101000000
-    ; out null 16                     ; OSR = 0b1010000101000000
-
-
-    
-    ; out null 23                         ; debug:OSR = 0b101000000
-
-    ; test with 0b1
-    ; set x 0b11
-    ; in x 1
-    ; mov osr isr
-    ; out null 31
-
-    ; test with 0b10
-    ; set x 0b10
-    ; in x 2
-    ; mov osr isr
-    ; out null 30
-
-    ; set x 0b1010
-    ; in x 4
-    ; ; in null 4
-    ; mov osr isr
-    ; out null 28
-
-    
-; Grab a new bit every 24 cycles.
-;   6 cycles: Get bit.
-;   12 cycles: Assert bit.
-;   6 cycles: nop.
-    wait 1 pin, pulses_pin_index    ; 1: wait for in_pin to go HI
-check_next_bit:
-    jmp !osre preamble_not_done_yet ; 2: 
+    ; Extra pattern match segments ignored to provide more time for demodulator to kick
+    ; on before start of actual data.
+    ; jmp pin waiting_for_first_edge [7]
 preamble_matched:
+    ; Note: IRQ number could be changed with some jumps on scratch y for a dual-band receiver version.
+    ; irq set 0 side 1 ; set the DEMOD IRQ to begin decoding message body
     set pins 1 [2] ; set demod pin to indicate message body beginning
     wait 1 pin, pulses_pin_index [11] ; wait till middle of message eye to look for end
 waiting_for_end_of_message:
@@ -74,36 +47,6 @@ idle_countdown:
     irq set 0 [1] ; set the DEMOD IRQ to indicate the message body is finished
     wait 0 irq 0 ; don't look for new messages until the current one has been processed
 .wrap
-
-preamble_not_done_yet:
-    out x, 1                        ; 3: Find next bit polarity from OSR.         
-    jmp !x assert_pin_lo            ; 4:
-    jmp assert_pin_hi               ; 5:
-
-
-
-
-; Subroutines
-
-; This section must take 18 cycles. 
-; 2*x is number of cycles where pin must be HI
-assert_pin_hi:
-    set x 0 [4] ; 6: Assert HI for 12 cycles ((x+1) * (2 cycles per wrap))
-aph_wrap:
-    jmp pin aph_pin_is_hi
-    jmp waiting_for_first_edge
-aph_pin_is_hi:
-    jmp x-- aph_wrap
-    jmp check_next_bit [12]    ; 18-25: cycle idle at end
-
-; This section must take 18 cycles.    
-; 2*x is number of cycles where pin must be LO
-assert_pin_lo:
-    set x 0 [5] ; 5-6: Assert LO for 12 cycles ((x+1) * (2 cycles per wrap))
-apl_wrap:
-    jmp pin waiting_for_first_edge
-    jmp x-- apl_wrap
-    jmp check_next_bit [12]    ; 18-25: cycle idle at end (delay = 18-2*(x+1)-1)
 
 % c-sdk {
 
@@ -129,8 +72,8 @@ void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint pulses_p
     sm_config_set_set_pins(&c, demod_pin, 1); // set one pin as SET output
     sm_config_set_sideset_pins(&c, demod_pin); 
 
-    sm_config_set_out_shift(&c, false, false, 32); // OSR shifts left, autopull threshold set to 32 (used for OSRE compare)
-    sm_config_set_in_shift(&c, false, false, 32); // ISR shifts left, autopush turned off
+    // Join RX and TX FIFOs together to allow 8x 32-bit words to be stored in the RX FIFO.
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
     
     // Set the clock divider for the state machine
     sm_config_set_clkdiv(&c, div);
@@ -159,7 +102,7 @@ void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint pulses_p
 ; it will not start sampling until the initial line idle state ends.
 
 initial_entry:
-    wait 1 pin demod_in_pin_index [2]       ; Wait to enter DEMOD interval.
+    wait 1 pin demod_in_pin_index side 0       ; Wait to enter DEMOD interval.
     jmp pin start_of_1 side 0
     jmp start_of_0 side 0
 
