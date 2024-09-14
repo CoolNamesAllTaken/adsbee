@@ -88,22 +88,22 @@ preamble_not_done_yet:
 ; This section must take 18 cycles. 
 ; 2*x is number of cycles where pin must be HI
 assert_pin_hi:
-    set x 0 [4] ; 6: Assert HI for 12 cycles ((x+1) * (2 cycles per wrap))
+    set x 3 [5] ; 6-11: Assert HI for 12 cycles ((x+1) * (2 cycles per wrap))
 aph_wrap:
     jmp pin aph_pin_is_hi
     jmp waiting_for_first_edge
 aph_pin_is_hi:
     jmp x-- aph_wrap
-    jmp check_next_bit [12]    ; 18-25: cycle idle at end
+    jmp check_next_bit [5]    ; 20-25: cycle idle at end
 
 ; This section must take 18 cycles.    
 ; 2*x is number of cycles where pin must be LO
 assert_pin_lo:
-    set x 0 [5] ; 5-6: Assert LO for 12 cycles ((x+1) * (2 cycles per wrap))
+    set x 3 [6] ; 5-11: Assert LO for 12 cycles ((x+1) * (2 cycles per wrap))
 apl_wrap:
     jmp pin waiting_for_first_edge
     jmp x-- apl_wrap
-    jmp check_next_bit [12]    ; 18-25: cycle idle at end (delay = 18-2*(x+1)-1)
+    jmp check_next_bit [5]    ; 20-25: cycle idle at end (delay = 18-2*(x+1)-1)
 
 % c-sdk {
 
