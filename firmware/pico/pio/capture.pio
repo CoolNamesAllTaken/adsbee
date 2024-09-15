@@ -5,34 +5,24 @@
 .define pulses_pin_index 0
 .define demod_pin_index 1
 
-set pins 0 ; DEBUG
+.define filter_correct_samples 3
+.define filter_n_minus_1 3
 
-; Set preamble sequence in ISR.
-mov isr null                        ; Clear ISR.
-set x 0b101                     ; ISR = 0b00000000000000000000000000000000
-in x 3                          ; ISR = 0b00000000000000000000000000000101
-in null 4                       ; ISR = 0b00000000000000000000000001010000
-in x 3                          ; ISR = 0b00000000000000000000001010000101
-in null 6                       ; ISR = 0b00000000000000001010000101000000
-mov x null
+set pins 0 ; DEBUG
+; Build preamble pattern and load it into ISR: 0b1010000101000000
+; mov isr null                        ; Clear ISR.
+; set x 0b101                     ; ISR = 0b00000000000000000000000000000000
+; in x 3                          ; ISR = 0b00000000000000000000000000000101
+; in null 4                       ; ISR = 0b00000000000000000000000001010000
+; in x 3                          ; ISR = 0b00000000000000000000001010000101
+; in null 6                       ; ISR = 0b00000000000000001010000101000000
+; mov x null
 
 ; BEGIN DOUBLE PULSE MATCH
 .wrap_target
 waiting_for_first_edge:
     mov osr isr                     ; OSR = 0b00000000000000001010000101000000
     out null 16                     ; OSR = 0b1010000101000000
-    
-    ; Build preamble pattern and load it into OSR: 0b1010000101000000
-
-    ; set x 0b101                     ; ISR = 0b00000000000000000000000000000000
-    ; in x 3                          ; ISR = 0b00000000000000000000000000000101
-    ; in null 4                       ; ISR = 0b00000000000000000000000001010000
-    ; in isr 7                        ; ISR = 0b00000000000000000010100001010000
-    ; in null 2                       ; ISR = 0b00000000000000001010000101000000
-    ; mov osr isr                     ; OSR = 0b00000000000000001010000101000000
-    ; out null 16                     ; OSR = 0b1010000101000000
-
-
     
     ; out null 23                         ; debug:OSR = 0b101000000
 
@@ -54,7 +44,7 @@ waiting_for_first_edge:
     ; mov osr isr
     ; out null 28
 
-    
+    mov x null
 ; Grab a new bit every 24 cycles.
 ;   6 cycles: Get bit.
 ;   12 cycles: Assert bit.
@@ -62,6 +52,7 @@ waiting_for_first_edge:
     wait 1 pin, pulses_pin_index    ; 1: wait for in_pin to go HI
 check_next_bit:
     jmp !osre preamble_not_done_yet ; 2: 
+; .wrap_target
 preamble_matched:
     set pins 1 [2] ; set demod pin to indicate message body beginning
     wait 1 pin, pulses_pin_index [11] ; wait till middle of message eye to look for end
@@ -76,34 +67,71 @@ idle_countdown:
 .wrap
 
 preamble_not_done_yet:
-    out x, 1                        ; 3: Find next bit polarity from OSR.         
-    jmp !x assert_pin_lo            ; 4:
-    jmp assert_pin_hi               ; 5:
-
-
-
+    set x 3                         ; 3: (filter_num_samples-1) Assert HI for 12 cycles ((x+1) * (3 cycles per wrap))
+    out y, 1                        ; 4: Find next bit polarity from OSR.
+    jmp !y filter_pin_lo            ; 5:
 
 ; Subroutines
 
-; This section must take 18 cycles. 
-; 2*x is number of cycles where pin must be HI
-assert_pin_hi:
-    set x 3 [5] ; 6-11: Assert HI for 12 cycles ((x+1) * (2 cycles per wrap))
-aph_wrap:
-    jmp pin aph_pin_is_hi
-    jmp waiting_for_first_edge
-aph_pin_is_hi:
-    jmp x-- aph_wrap
-    jmp check_next_bit [5]    ; 20-25: cycle idle at end
+filter_pin_hi:
+    ; nop [18] ; 6-24
+    ; jmp check_next_bit ; 25
 
-; This section must take 18 cycles.    
-; 2*x is number of cycles where pin must be LO
-assert_pin_lo:
-    set x 3 [6] ; 5-11: Assert LO for 12 cycles ((x+1) * (2 cycles per wrap))
-apl_wrap:
-    jmp pin waiting_for_first_edge
-    jmp x-- apl_wrap
-    jmp check_next_bit [5]    ; 20-25: cycle idle at end (delay = 18-2*(x+1)-1)
+    set y 3  ; 6: (filter_correct_samples-1) Minimum number of correct samples needed to keep looking.
+fph_wrap_target:
+    jmp pin fph_pin_hi  ; 7+3n
+fph_pin_lo:
+    jmp fph_wrap    ; 8+3n
+fph_pin_hi:
+    jmp y-- fph_wrap    ; 8+3n
+fph_exit_success:
+    jmp x-- fph_exit_success [2] ; Complete remaining loops.
+    jmp check_next_bit [3] ; 22-25
+fph_wrap:
+    jmp x-- fph_wrap_target ; 9+3n
+    jmp waiting_for_first_edge  ; Correlation failed.
+    
+filter_pin_lo:
+    ; Dummy implementation that always passes.
+    ; nop [18] ; 6-24
+    ; jmp check_next_bit ; 253
+
+    ; Generous implementation that accepts a single LO sample anywhere in the sampling window as a success.
+    ; This accounts for the asymmetric nature of the data slicer circuit as it is charging up during the preamble; it
+    ; is a lot harder to get a LO sample than a HI sample from an incoming message.
+    set x 5 [2] ; 6-8: Number of samples = x+1.
+fpl_wrap_target:
+    jmp pin fpl_pin_hi ; 9+2n
+fpl_pin_lo:
+    jmp x-- fpl_pin_lo [1] ; 10+2n,11+2n: Complete remaining loops
+    jmp check_next_bit [4] ; 20-25
+fpl_pin_hi:
+    jmp x-- fpl_wrap_target ; 8+2n
+    jmp waiting_for_first_edge ; Never found a LO sample, correlation failed.
+
+
+
+    ; Single sample implementaiton that samples once in the middle of the interval.
+;     nop [6] ; 6-12
+;     jmp pin fpl_fail ; 13
+; fpl_success:
+;     jmp check_next_bit [11] ; 14-25
+; fpl_fail:
+;     jmp check_next_bit [11] ; 14-25
+
+    ; Correlation implementation that enforces no more than y+1 samples must be incorrect (HI).
+;     set y 1  ; 6: (filter_num_samples - filter_correct_samples - 1) Minimum number of INCORRECT samples needed to abort.
+; fpl_wrap_target:
+;     jmp pin fpl_pin_hi ; 7+3n
+; fpl_pin_lo:
+;     jmp fpl_wrap ; 8+3n
+; fpl_pin_hi:
+;     jmp y-- fpl_wrap ; 8+3n
+;     jmp waiting_for_first_edge
+; fpl_wrap:
+;     jmp x-- fpl_wrap_target ; 9+3n
+;     ; jmp !y waiting_for_first_edge ; 22: Reset if correlation failed.
+;     jmp check_next_bit [3] ; 22-25
 
 % c-sdk {
 
@@ -159,7 +187,7 @@ void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint pulses_p
 ; it will not start sampling until the initial line idle state ends.
 
 initial_entry:
-    wait 1 pin demod_in_pin_index [2]       ; Wait to enter DEMOD interval.
+    wait 1 pin demod_in_pin_index side 0       ; Wait to enter DEMOD interval.
     jmp pin start_of_1 side 0
     jmp start_of_0 side 0
 

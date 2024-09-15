@@ -89,6 +89,7 @@ bool ADSBee::Init() {
     // Let the games begin!
     systick_hw->csr |= 0b1;  // Enable the counter.
 
+    /** PREAMBLE DETECTOR PIO **/
     // Calculate the PIO clock divider.
     float preamble_detector_div = (float)clock_get_hz(clk_sys) / kPreambleDetectorFreq;
 
@@ -105,6 +106,25 @@ bool ADSBee::Init() {
     // Handle PIO0 IRQ0.
     irq_set_exclusive_handler(config_.preamble_detector_demod_complete_irq, on_demod_complete);
     irq_set_enabled(config_.preamble_detector_demod_complete_irq, true);
+
+    // Set the preamble sequnence into the ISR: ISR: 0b1010000101000000
+    // mov isr null ; Clear ISR.
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_mov(pio_isr, pio_null));
+    // set x 0b101  ; ISR = 0b00000000000000000000000000000000
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_set(pio_x, 0b101));
+    // in x 3       ; ISR = 0b00000000000000000000000000000101
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_in(pio_x, 3));
+    // in null 4    ; ISR = 0b00000000000000000000000001010000
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_in(pio_null, 4));
+    // in x 3       ; ISR = 0b00000000000000000000001010000101
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_in(pio_x, 3));
+    // in null 6    ; ISR = 0b00000000000000001010000101000000
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_in(pio_null, 6));
+    // mov x null   ; Clear scratch x.
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_mov(pio_x, pio_null));
+
+    // Use this instruction to verify preamble was formed correctly (pushes ISR to RX FIFO).
+    // pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_push(false, true));
 
     /** MESSAGE DEMODULATOR PIO **/
     float message_demodulator_div = (float)clock_get_hz(clk_sys) / kMessageDemodulatorFreq;
