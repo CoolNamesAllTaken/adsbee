@@ -282,6 +282,9 @@ class SPICoprocessor {
                           kSPITransactionTimeoutMs);
             return false;
         }
+#elif ON_PICO
+#else
+        return false;  // Not supported on other platforms.
 #endif
         if (sizeof(object) < SCWritePacket::kDataMaxLenBytes) {
             // Single write. Write the full object at once, no offset, require ack if necessary.
@@ -325,6 +328,9 @@ class SPICoprocessor {
                           kSPITransactionTimeoutMs);
             return false;
         }
+#elif ON_PICO
+#else
+        return false;  // Not supported on other platforms.
 #endif
         if (sizeof(object) < SCResponsePacket::kDataMaxLenBytes) {
             // Single read.
@@ -338,6 +344,8 @@ class SPICoprocessor {
 #elif ON_ESP32
             // Write and read are a single transaction.
             uint16_t max_chunk_size_bytes = SCResponsePacket::kDataMaxLenBytes - SCReadRequestPacket::kBufLenBytes;
+#else
+            uint16_t max_chunk_size_bytes = 0;  // Dummy to stop compile errors.
 #endif
             int16_t bytes_remaining = sizeof(object);
             while (bytes_remaining > 0) {
@@ -462,6 +470,8 @@ class SPICoprocessor {
         write_packet.cmd = require_ack ? kCmdWriteToSlaveRequireAck : kCmdWriteToSlave;
 #elif ON_ESP32
         write_packet.cmd = require_ack ? kCmdWriteToMasterRequireAck : kCmdWriteToMaster;
+#else
+        return false;  // Not supported on other platforms.
 #endif
         write_packet.addr = addr;
         memcpy(write_packet.data, object_buf + offset, len);
@@ -493,6 +503,8 @@ class SPICoprocessor {
         read_request_packet.cmd = kCmdReadFromSlave;
 #elif ON_ESP32
         read_request_packet.cmd = kCmdReadFromMaster;
+#else
+        return false;  // Not supported on other platforms.
 #endif
         read_request_packet.addr = addr;
         read_request_packet.offset = offset;
@@ -549,6 +561,8 @@ class SPICoprocessor {
         }
         uint8_t *response_buf = rx_buf + read_request_bytes;
         SCResponsePacket response_packet = SCResponsePacket(response_buf, bytes_exchanged - read_request_bytes);
+#else
+        SCResponsePacket response_packet;  // Dummy to stop compile errors.
 #endif
         if (!response_packet.IsValid()) {
             CONSOLE_ERROR("SPICoprocessor::PartialRead",
