@@ -4,21 +4,21 @@
 TEST(SPICoprocessor, SCWritePacket) {
     SPICoprocessor::SCWritePacket packet;
     packet.cmd = SPICoprocessor::SCCommand::kCmdWriteToSlave;
-    packet.addr = SPICoprocessor::SCAddr::kAddrRawTransponderPacket;
+    packet.addr = ObjectDictionary::Address::kAddrRawTransponderPacket;
     RawTransponderPacket tpacket = RawTransponderPacket((char *)"8D7C1BE8581B66E9BD8CEEDC1C9F");
-    packet.data_len_bytes = sizeof(RawTransponderPacket);
-    memcpy(packet.data, &tpacket, packet.data_len_bytes);
+    packet.len = sizeof(RawTransponderPacket);
+    memcpy(packet.data, &tpacket, packet.len);
     // Calculate CRC and add it to the data buffer.
     uint16_t crc =
         CalculateCRC16(packet.GetBuf(), packet.GetBufLenBytes() - SPICoprocessor::SCWritePacket::kCRCLenBytes);
-    memcpy(packet.data + packet.data_len_bytes, &crc, sizeof(uint16_t));
+    memcpy(packet.data + packet.len, &crc, sizeof(uint16_t));
     EXPECT_TRUE(packet.IsValid());
 
     packet.PopulateCRC();
     EXPECT_TRUE(packet.IsValid());
 
     EXPECT_EQ(packet.GetBufLenBytes(), sizeof(RawTransponderPacket) + sizeof(SPICoprocessor::SCCommand) +
-                                           sizeof(SPICoprocessor::SCAddr) + sizeof(uint16_t) + sizeof(uint8_t) +
+                                           sizeof(ObjectDictionary::Address) + sizeof(uint16_t) + sizeof(uint8_t) +
                                            SPICoprocessor::SCWritePacket::kCRCLenBytes);
 
     SPICoprocessor::SCWritePacket packet_copy = SPICoprocessor::SCWritePacket(packet.GetBuf(), packet.GetBufLenBytes());
@@ -41,7 +41,7 @@ TEST(SPICoprocessor, SCReadRequestPacket) {
     // Test packet creation.
     SPICoprocessor::SCReadRequestPacket packet;
     packet.cmd = SPICoprocessor::SCCommand::kCmdReadFromMaster;
-    packet.addr = SPICoprocessor::SCAddr::kAddrSettingsStruct;
+    packet.addr = ObjectDictionary::Address::kAddrSettingsStruct;
     packet.offset = 0xFEBC;
     packet.len = 40;
     // Make sure that CRC generation works as expected.
