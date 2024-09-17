@@ -353,6 +353,12 @@ void ADSBee::OnDemodComplete() {
         }
     }
 
+    // Clear the FIFO by pushing partial word from ISR, not bothering to block if FIFO is full (it shouldn't be).
+    pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_, pio_encode_push(false, false));
+    while (!pio_sm_is_rx_fifo_empty(config_.message_demodulator_pio, message_demodulator_sm_)) {
+        pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_);
+    }
+
     // Reset the demodulator state machine to wait for the next decode interval, then enable it.
     pio_sm_restart(config_.message_demodulator_pio, message_demodulator_sm_);  // Reset FIFOs, ISRs, etc.
     pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_,
