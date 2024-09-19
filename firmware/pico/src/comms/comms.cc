@@ -158,29 +158,25 @@ bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char
 }
 
 bool CommsManager::SetWiFiEnabled(bool new_wifi_enabled) {
-    if (new_wifi_enabled != wifi_enabled_) {
-        if (new_wifi_enabled) {
-            CONSOLE_PRINTF("Enabling WiFi...\r\n");
+    if (new_wifi_enabled) {
+        CONSOLE_PRINTF("Enabling WiFi...\r\n");
 
-            // Configure ESP32 GPIO0 as handshake pin.
-            gpio_init(config_.esp32_gpio0_boot_pin);
-            gpio_set_dir(config_.esp32_gpio0_boot_pin, GPIO_IN);
+        // Configure ESP32 GPIO0 as handshake pin.
+        gpio_init(config_.esp32_gpio0_boot_pin);
+        gpio_set_dir(config_.esp32_gpio0_boot_pin, GPIO_IN);
 
-            // TODO: Enable the rest of the ESP32 SPI GPIO pins here.
+        gpio_init(config_.esp32_enable_pin);
+        gpio_set_dir(config_.esp32_enable_pin, GPIO_OUT);
+        gpio_put(config_.esp32_enable_pin, 1);  // Enable
 
-            gpio_init(config_.esp32_enable_pin);
-            gpio_set_dir(config_.esp32_enable_pin, GPIO_OUT);
-            gpio_put(config_.esp32_enable_pin, 1);  // Enable
-
-        } else {
-            CONSOLE_PRINTF("Disabling WiFi...\r\n");
-            gpio_deinit(config_.esp32_enable_pin);
-            gpio_deinit(config_.esp32_gpio0_boot_pin);
-            // TODO: Deinit the rest of the ESP32 SPI GPIO pins here.
-        }
-
-        wifi_enabled_ = new_wifi_enabled;
+    } else {
+        CONSOLE_PRINTF("Disabling WiFi...\r\n");
+        gpio_put(config_.esp32_enable_pin, 0);  // Disable
+        gpio_deinit(config_.esp32_enable_pin);
+        gpio_deinit(config_.esp32_gpio0_boot_pin);
     }
+
+    wifi_enabled_ = new_wifi_enabled;
 
     return true;
 }

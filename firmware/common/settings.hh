@@ -7,7 +7,7 @@
 #include "macros.hh"
 #include "stdio.h"
 
-static const uint32_t kSettingsVersionMagicWord = 0xBEEFEBEE;  // Change this when settings format changes!
+static const uint32_t kSettingsVersionMagicWord = 0xFEDBFBEF;  // Change this when settings format changes!
 
 class SettingsManager {
    public:
@@ -63,7 +63,7 @@ class SettingsManager {
         uint32_t comms_uart_baud_rate = 115200;
         uint32_t gnss_uart_baud_rate = 9600;
 
-        bool wifi_enabled = false;
+        bool wifi_enabled = true;
         char wifi_ssid[kWiFiSSIDMaxLen + 1] = "";
         char wifi_password[kWiFiPasswordMaxLen + 1] = "";
 
