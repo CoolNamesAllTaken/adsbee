@@ -25,8 +25,8 @@
 
 const uint16_t kStatusLEDBootupNumBlinks = 4;
 const uint16_t kStatusLEDBootupBlinkPeriodMs = 200;
-constexpr float kPreambleDetectorFreq = 48e6;    // Running at 16MHz (8 clock cycles per half bit).
-constexpr float kMessageDemodulatorFreq = 16e6;  // Run at 16 MHz to demodulate bits at 1Mbps.
+constexpr float kPreambleDetectorFreq = 48e6;    // Running at 48MHz (24 clock cycles per half bit).
+constexpr float kMessageDemodulatorFreq = 48e6;  // Run at 48 MHz to demodulate bits at 1Mbps.
 
 constexpr float kInt16MaxRecip = 1.0f / INT16_MAX;
 
@@ -89,6 +89,7 @@ bool ADSBee::Init() {
     // Let the games begin!
     systick_hw->csr |= 0b1;  // Enable the counter.
 
+    /** PREAMBLE DETECTOR PIO **/
     // Calculate the PIO clock divider.
     float preamble_detector_div = (float)clock_get_hz(clk_sys) / kPreambleDetectorFreq;
 
@@ -105,6 +106,26 @@ bool ADSBee::Init() {
     // Handle PIO0 IRQ0.
     irq_set_exclusive_handler(config_.preamble_detector_demod_complete_irq, on_demod_complete);
     irq_set_enabled(config_.preamble_detector_demod_complete_irq, true);
+
+    // Set the preamble sequnence into the ISR: ISR: 0b101000010100000(0)
+    // Last 0 removed from preamble sequence to allow the demodulator more time to start up.
+    // mov isr null ; Clear ISR.
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_mov(pio_isr, pio_null));
+    // set x 0b101  ; ISR = 0b00000000000000000000000000000000
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_set(pio_x, 0b101));
+    // in x 3       ; ISR = 0b00000000000000000000000000000101
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_in(pio_x, 3));
+    // in null 4    ; ISR = 0b00000000000000000000000001010000
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_in(pio_null, 4));
+    // in x 3       ; ISR = 0b00000000000000000000001010000101
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_in(pio_x, 3));
+    // in null 5    ; ISR = 0b00000000000000000101000010100000
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_in(pio_null, 5));
+    // mov x null   ; Clear scratch x.
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_mov(pio_x, pio_null));
+
+    // Use this instruction to verify preamble was formed correctly (pushes ISR to RX FIFO).
+    // pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_push(false, true));
 
     /** MESSAGE DEMODULATOR PIO **/
     float message_demodulator_div = (float)clock_get_hz(clk_sys) / kMessageDemodulatorFreq;
@@ -330,6 +351,12 @@ void ADSBee::OnDemodComplete() {
                     break;
             }
         }
+    }
+
+    // Clear the FIFO by pushing partial word from ISR, not bothering to block if FIFO is full (it shouldn't be).
+    pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_, pio_encode_push(false, false));
+    while (!pio_sm_is_rx_fifo_empty(config_.message_demodulator_pio, message_demodulator_sm_)) {
+        pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_);
     }
 
     // Reset the demodulator state machine to wait for the next decode interval, then enable it.

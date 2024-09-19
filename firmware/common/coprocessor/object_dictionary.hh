@@ -10,11 +10,17 @@
 
 class ObjectDictionary {
    public:
+    static const uint8_t kFirmwareVersionMajor;
+    static const uint8_t kFirmwareVersionMinor;
+    static const uint8_t kFirmwareVersionPatch;
+    static const uint32_t kFirmwareVersion;
+
     enum Address : uint8_t {
-        kAddrInvalid = 0,           // Default value.
-        kAddrScratch,               // Used for testing SPI communications.
-        kAddrRawTransponderPacket,  // Used to forward raw packets from RP2040 to ESP32.
-        kAddrSettingsStruct,        // Used to transfer settings information.
+        kAddrInvalid = 0,             // Default value.
+        kAddrFirmwareVersion = 0x01,  // Firmware version as a uint32_t.
+        kAddrScratch,                 // Used for testing SPI communications.
+        kAddrRawTransponderPacket,    // Used to forward raw packets from RP2040 to ESP32.
+        kAddrSettingsStruct,          // Used to transfer settings information.
         kNumAddrs
     };
 
@@ -67,6 +73,9 @@ class ObjectDictionary {
      */
     bool GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, uint16_t offset = 0) {
         switch (addr) {
+            case kAddrFirmwareVersion:
+                memcpy(buf, (uint8_t *)(&kFirmwareVersion) + offset, buf_len);
+                break;
             case kAddrScratch:
                 // Warning: printing here will cause a timeout and tests will fail.
                 // CONSOLE_INFO("ObjectDictionary::GetBytes", "Getting %d scratch Bytes at offset %d.", buf_len,

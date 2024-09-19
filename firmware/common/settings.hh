@@ -4,7 +4,10 @@
 #include <cstdint>
 #include <cstring>  // for memset
 
-static const uint32_t kSettingsVersionMagicWord = 0xBEEFEBEE;  // Change this when settings format changes!
+#include "macros.hh"
+#include "stdio.h"
+
+static const uint32_t kSettingsVersionMagicWord = 0xFEDBFBEF;  // Change this when settings format changes!
 
 class SettingsManager {
    public:
@@ -60,7 +63,7 @@ class SettingsManager {
         uint32_t comms_uart_baud_rate = 115200;
         uint32_t gnss_uart_baud_rate = 9600;
 
-        bool wifi_enabled = false;
+        bool wifi_enabled = true;
         char wifi_ssid[kWiFiSSIDMaxLen + 1] = "";
         char wifi_password[kWiFiPasswordMaxLen + 1] = "";
 
@@ -90,6 +93,50 @@ class SettingsManager {
      * @retval True if succeeded, false otherwise.
      */
     bool Load();
+
+    void Print() {
+        printf("Settings Struct\r\n");
+        printf("\tReceiver: %s\r\n", settings.receiver_enabled ? "ENABLED" : "DISABLED");
+        printf("\tTrigger Level [milliVolts]: %d\r\n", settings.tl_mv);
+        printf("\tBias Tee: %s\r\n", settings.bias_tee_enabled ? "ENABLED" : "DISABLED");
+        printf("\tLog Level: %s\r\n", ConsoleLogLevelStrs[settings.log_level]);
+        printf("\tReporting Protocols:\r\n");
+        for (uint16_t i = 0; i < SerialInterface::kGNSSUART; i++) {
+            // Only report protocols for CONSOLE and COMMS_UART.
+            printf("\t\t%s: %s\r\n", SerialInterfaceStrs[i], ReportingProtocolStrs[settings.reporting_protocols[i]]);
+        }
+        printf("\tComms UART Baud Rate: %lu baud\r\n", settings.comms_uart_baud_rate);
+        printf("\tGNSS UART Baud Rate: %lu baud\r\n", settings.gnss_uart_baud_rate);
+        printf("\tWifi: %s", settings.wifi_enabled ? "ENABLED" : "DISABLED");
+        printf("\tWifi SSID: %s\r\n", settings.wifi_ssid);
+        char redacted_wifi_password[kWiFiPasswordMaxLen];
+        RedactPassword(settings.wifi_password, redacted_wifi_password, strlen(settings.wifi_password));
+        printf("\tWifi Password: %s\r\n", redacted_wifi_password);
+        printf("\tFeed URIs:\r\n");
+        for (uint16_t i = 0; i < kMaxNumFeeds; i++) {
+            printf("\t\t%d URI:%s Port:%d %s Protocol:%s ID:", i, settings.feed_uris[i], settings.feed_ports[i],
+                   settings.feed_is_active[i] ? "ACTIVE" : "INACTIVE",
+                   ReportingProtocolStrs[settings.feed_protocols[i]]);
+            for (int16_t feeder_id_byte_index = kFeedReceiverIDNumBytes - 1; feeder_id_byte_index >= 0;
+                 feeder_id_byte_index--) {
+                printf("%d", settings.feed_receiver_ids[i][feeder_id_byte_index]);
+            }
+            printf("\r\n");
+        }
+    }
+
+    /**
+     * Takes a password as a string and fills a buffer with the corresponding number of asterix.
+     * @param[in] password_buf Buffer to read the password from. Must be at least password_len+1 chars.
+     * @param[out] redacted_password_buf Buffer to write the asterix to. Must be at least password_len+1 chars.
+     * @param[in] buf_len Maximum allowable number of characteers in the password. Used to guard against falling off the
+     * end of the string. Not used for actually finding ther number of asterix to print.
+     */
+    static void RedactPassword(char *password_buf, char *redacted_password_buf, uint16_t buf_len) {
+        uint16_t password_len = MIN(strlen(password_buf), buf_len);
+        memset(redacted_password_buf, '*', password_len);
+        redacted_password_buf[password_len] = '\0';
+    }
 
     /**
      * Saves settings to EEPROM. Stores settings at address 0x0 and performs no integrity check.

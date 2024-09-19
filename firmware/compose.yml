@@ -1,7 +1,7 @@
 services:
   # Pico SDK container for compiling main firmware project.
   pico-docker:
-    image: coolnamesalltaken/pico-docker:latest
+    image: coolnamesalltaken/pico-docker:2.0.0-v1
     network_mode: host
     volumes:
       - ./pico:/ads_bee/pico

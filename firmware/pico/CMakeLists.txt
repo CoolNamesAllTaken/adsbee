@@ -66,6 +66,7 @@ if (NOT CMAKE_BUILD_TYPE STREQUAL "Test")
 
     # Firmware: Create map/bin/hex file etc
     pico_add_extra_outputs(${PROJECT_NAME})
+    pico_add_hex_output(${PROJECT_NAME}) # temporary workwaround for this bug: https://github.com/raspberrypi/pico-sdk/issues/1829
 
     # Set up debug USB
     pico_enable_stdio_usb(${PROJECT_NAME} 1) # use USB for standard printing

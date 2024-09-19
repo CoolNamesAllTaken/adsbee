@@ -448,17 +448,23 @@ class SPICoprocessor {
         } else {
             xSemaphoreGive(spi_next_transaction_mutex_);
         }
+        if (ret) {
+            BlinkNetworkLED();
+        }
 #endif
         return ret;
     }
 
     /**
      * Helper function that makes sure to return the next transaction mutex when returning from the indpendent loop (low
-     * priority).
+     * priority). Blinks the network LED to indicate a successful transaction.
      */
     inline bool SPIIndependentLoopReturnHelper(bool ret) {
 #ifdef ON_ESP32
         xSemaphoreGive(spi_next_transaction_mutex_);
+        if (ret) {
+            BlinkNetworkLED();
+        }
 #endif
         return ret;
     }

@@ -18,7 +18,42 @@ const uint16_t kBeastMLATTimestampNumBytes = 6;
 uint16_t kBeastFrameMaxLenBytes = 1 /* Frame Type */ + 2 * 6 /* MLAT timestamp + escapes */ + 2 /* RSSI + escape */ +
                                   2 * 14 /* Longest Mode S data + escapes */;  // [Bytes]
 
-enum BeastFrameType { kBeastModeACFrame = 0x31, kBeastModeSShortFrame = 0x32, kBeastModeSLongFrame = 0x33 };
+enum BeastFrameType {
+    kBeastFrameTypeInvalid = 0x0,
+    kBeastFrameTypeId = 0xe3,
+    kBeastFrameTypeModeAC = 0x31,  // Note: This is not used, since I'm assuming it does NOT refer to DF 4,5.
+    kBeastFrameTypeModeSShort = 0x32,
+    kBeastFrameTypeModeSLong = 0x33
+};
+
+/**
+ * Returns the Beast frame type corresponding to a RawTransponderPacket.
+ * NOTE: kBeastFrameTypeModeAC is not used, since ADSBee only decodes Mode S.
+ * @param[in] packet RawTransponderPacket to get the downlink format from.
+ * @retval BeastFrameType corresponding the packet, or kBeastFrameTypeInvalid if it wasn't recognized.
+ */
+BeastFrameType GetBeastFrameType(RawTransponderPacket packet) {
+    DecodedTransponderPacket::DownlinkFormat downlink_format =
+        static_cast<DecodedTransponderPacket::DownlinkFormat>(packet.buffer[0] >> 27);
+    switch (downlink_format) {
+        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatShortRangeAirToAirSurveillance:
+        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatAltitudeReply:
+        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatIdentityReply:
+        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatAllCallReply:
+            return kBeastFrameTypeModeSShort;
+        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatLongRangeAirToAirSurveillance:
+        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatExtendedSquitter:
+        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatExtendedSquitterNonTransponder:
+        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatMilitaryExtendedSquitter:
+        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatCommBAltitudeReply:
+        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatCommBIdentityReply:
+        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatCommDExtendedLengthMessage:
+            return kBeastFrameTypeModeSLong;
+        default:
+            return kBeastFrameTypeInvalid;
+            break;
+    }
+}
 
 /**
  * Writes the specified number of bytes from from_buf to to_buf, adding 0x1a escape characters as necessary.

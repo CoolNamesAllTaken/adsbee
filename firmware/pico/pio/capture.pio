@@ -4,49 +4,102 @@
 
 .define pulses_pin_index 0
 .define demod_pin_index 1
-.wrap_target
+
+.define filter_correct_samples 3
+.define filter_n_minus_1 3
+
+set pins 0 ; DEBUG
+; Build preamble pattern and load it into ISR: 0b101000010100000.
+; Note that one 0 bit has been removed from the preamble to allow more cycles for the demodulator to turn on.
+
 ; BEGIN DOUBLE PULSE MATCH
+.wrap_target
 waiting_for_first_edge:
-    set x, 1 ; pulse match section runs twice
-    wait 1 pin, pulses_pin_index [11] ; wait for in_pin to go HI, delay to middle of the eye
-check_pulse_1_hi:
-    jmp pin check_pulse_1_lo [23] ; if first pulse HI is ok, look for first pulse LO
-    jmp waiting_for_first_edge ; first pulse did not go HI, abort
-check_pulse_1_lo:
-    jmp pin waiting_for_first_edge [23] ; if first pulse did not go LO, abort
-    jmp pin check_pulse_2_lo [23]; if second pulse HI is ok, look for second pulse LO
-    jmp waiting_for_first_edge ; second pulse did not go HI, abort
-check_pulse_2_lo:
-    jmp pin waiting_for_first_edge [23] ; if second pulse does not go LO, abort
-    jmp pin waiting_for_first_edge [23]
-    jmp pin waiting_for_first_edge [23]
-    jmp pin waiting_for_first_edge [20]
-    jmp x-- check_pulse_1_hi [2] ; loop to beginning of double pulse loop at end of first double pulse
-; END DOUBLE PULSE MATCH
-; BEGIN EXTRA DELAY AFTER SECOND DOUBLE PULSE
-preamble_tail:
-    ; enforce preamble tail LO till just before the rising edge if first message bit is a 1
-    jmp pin waiting_for_first_edge [23] 
-    nop [17] ; delay 6 clock cycles so that demod signal activates at 0.25 bit time on first bit
-; END EXTRA DELAY AFTER SECOND DOUBLE PULSE
-    
-    ; Extra pattern match segments ignored to provide more time for demodulator to kick
-    ; on before start of actual data.
-    ; jmp pin waiting_for_first_edge [7]
+    mov osr isr                     ; -2 | OSR = 0b00000000000000000101000010100000
+    out null 17                     ; -1 | OSR = 0b101000010100000
+    mov x null                      ; 0 | Clear out x from last sampling adventure.
+; Grab a new bit every 24 cycles.
+;   6 cycles: Get bit.
+;   12 cycles: Assert bit.
+;   6 cycles: nop.
+    wait 1 pin, pulses_pin_index    ; 1 | wait for in_pin to go HI
+check_next_bit:
+    jmp !osre preamble_not_done_yet ; 2 
+; .wrap_target
 preamble_matched:
-    ; Note: IRQ number could be changed with some jumps on scratch y for a dual-band receiver version.
-    ; irq set 0 side 1 ; set the DEMOD IRQ to begin decoding message body
-    set pins 1 [2] ; set demod pin to indicate message body beginning
-    wait 1 pin, pulses_pin_index [11] ; wait till middle of message eye to look for end
+    set pins 1 [2] ; 3:5 | set demod pin to indicate message body beginning
+    wait 1 pin, pulses_pin_index [11] ; 6:17 | wait till middle of message eye to look for end
 waiting_for_end_of_message:
-    set x, 12 [2] ; [1.5us] number of sequential idle samples required to mark end of packet
+    set x, 12 [2] ; 18:20 | [1.5us] number of sequential idle samples required to mark end of packet
 idle_countdown:
-    jmp pin waiting_for_end_of_message [2] ; start over the idle countdown if received a non idle bit
-    jmp x-- idle_countdown [2] ; still idle, keep counting down if the timer isn't up
-    set pins, 0 ; set demod pin to 0 to indicate message is finished
-    irq set 0 [1] ; set the DEMOD IRQ to indicate the message body is finished
-    wait 0 irq 0 ; don't look for new messages until the current one has been processed
+    jmp pin waiting_for_end_of_message [2] ; 21+2n:24+2n | start over the idle countdown if received a non idle bit
+    jmp x-- idle_countdown [2] ; 25+2n:28+2n | still idle, keep counting down if the timer isn't up
+    set pins, 0 ; 29+2n | set demod pin to 0 to indicate message is finished
+    irq set 0 [1] ; 30+2n:31+2n | set the DEMOD IRQ to indicate the message body is finished
+    wait 0 irq 0 ; 32+2n | don't look for new messages until the current one has been processed
 .wrap
+
+preamble_not_done_yet:
+    set x 3                         ; 3: (filter_num_samples-1) Assert HI for 12 cycles ((x+1) * (3 cycles per wrap))
+    out y, 1                        ; 4: Find next bit polarity from OSR.
+    jmp !y filter_pin_lo            ; 5:
+
+; Subroutines
+
+filter_pin_hi:
+    set y 3  ; 6: (filter_correct_samples-1) Minimum number of correct samples needed to keep looking.
+fph_wrap_target:
+    jmp pin fph_pin_hi  ; 7+3n
+fph_pin_lo:
+    jmp fph_wrap    ; 8+3n
+fph_pin_hi:
+    jmp y-- fph_wrap    ; 8+3n
+fph_exit_success:
+    jmp x-- fph_exit_success [2] ; Complete remaining loops.
+    jmp check_next_bit [3] ; 22-25
+fph_wrap:
+    jmp x-- fph_wrap_target ; 9+3n
+    jmp waiting_for_first_edge  ; Correlation failed.
+    
+filter_pin_lo:
+    ; Dummy implementation that always passes.
+    ; nop [18] ; 6-24
+    ; jmp check_next_bit ; 253
+
+    ; Generous implementation that accepts a single LO sample anywhere in the sampling window as a success.
+    ; This accounts for the asymmetric nature of the data slicer circuit as it is charging up during the preamble; it
+    ; is a lot harder to get a LO sample than a HI sample from an incoming message.
+    set x 5 [2] ; 6-8: Number of samples = x+1.
+fpl_wrap_target:
+    jmp pin fpl_pin_hi ; 9+2n
+fpl_pin_lo:
+    jmp x-- fpl_pin_lo [1] ; 10+2n,11+2n: Complete remaining loops
+    jmp check_next_bit [4] ; 20-25
+fpl_pin_hi:
+    jmp x-- fpl_wrap_target ; 8+2n
+    jmp waiting_for_first_edge ; Never found a LO sample, correlation failed.
+
+    ; Single sample implementaiton that samples once in the middle of the interval.
+;     nop [6] ; 6-12
+;     jmp pin fpl_fail ; 13
+; fpl_success:
+;     jmp check_next_bit [11] ; 14-25
+; fpl_fail:
+;     jmp check_next_bit [11] ; 14-25
+
+    ; Correlation implementation that enforces no more than y+1 samples must be incorrect (HI).
+;     set y 1  ; 6: (filter_num_samples - filter_correct_samples - 1) Minimum number of INCORRECT samples needed to abort.
+; fpl_wrap_target:
+;     jmp pin fpl_pin_hi ; 7+3n
+; fpl_pin_lo:
+;     jmp fpl_wrap ; 8+3n
+; fpl_pin_hi:
+;     jmp y-- fpl_wrap ; 8+3n
+;     jmp waiting_for_first_edge
+; fpl_wrap:
+;     jmp x-- fpl_wrap_target ; 9+3n
+;     ; jmp !y waiting_for_first_edge ; 22: Reset if correlation failed.
+;     jmp check_next_bit [3] ; 22-25
 
 % c-sdk {
 
@@ -72,8 +125,8 @@ void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint pulses_p
     sm_config_set_set_pins(&c, demod_pin, 1); // set one pin as SET output
     sm_config_set_sideset_pins(&c, demod_pin); 
 
-    // Join RX and TX FIFOs together to allow 8x 32-bit words to be stored in the RX FIFO.
-    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+    sm_config_set_out_shift(&c, false, false, 32); // OSR shifts left, autopull threshold set to 32 (used for OSRE compare)
+    sm_config_set_in_shift(&c, false, false, 32); // ISR shifts left, autopush turned off
     
     // Set the clock divider for the state machine
     sm_config_set_clkdiv(&c, div);
@@ -101,46 +154,76 @@ void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint pulses_p
 ; Before enabling the SM, it should be placed in a 'wait 1, pin` state, so that
 ; it will not start sampling until the initial line idle state ends.
 
-initial_entry:
-    wait 1 pin demod_in_pin_index side 0       ; Wait to enter DEMOD interval.
-    jmp pin start_of_1 side 0
-    jmp start_of_0 side 0
+; NEW PROGRAM HERE
+jmp initial_entry
 
-start_of_1:            ; We are 0.25 bits into a 1 - signal is HI
-    nop [1]
-    wait 0 pin pulses_pin_index      ; Wait for the 1->0 transition - at this point we are 0.5 into the bit
-falling_edge_1:
-    in x, 1 side 1    ; Emit a 1, sleep 3/4 of a bit (need 8 delay clocks before jump to start_of_1).
 
-    ; This whole mess is equivalent to "jump to complete_demod if the demod pin is 0".
-    mov osr, pins ; read pulses and demod bit into OSR
-    out null, 1 ; dump the pulses bit
-    out y, 1 ; move demod bit to scratch y
-    out null, 30 ; dump the rest of the bits
-    jmp !y complete_demod ; bail into idle state if demod bit is 0
-    nop [2]
+; SAMPLE SUBROUTINE
+; Samples 3x and uses a majority vote to determine whether it's HI or LO.
+; @param[in] y Goes back to end_of_0 if y = 0, goes back to end_of_1 otherwise.
+; @retval x x=1 if >=2/3 samples were LO, x=1 otherwise.
+sample:
+    set x 2 [7]         ; -15:-7 | (x+1) = number of samples to take (added delay 7)
+    mov osr !null [7]   ; -7:0 | OSR = 0b1111111111111111111111 (added delay 7)
+    out null 30         ; 1 | OSR = 0b11 (3 bits required to classify sampling period as HI)
+    nop [5]             ; 2:7 | This delay controls max allowable clock skew per bit.
+; One sample takes 3 cycles.
+sample_wrap_target:
+    jmp pin sample_hi side 1 ; 8+3n
+sample_lo:
+    jmp sample_wrap ; 9+3n
+sample_hi:
+    out null 1 ; 9+3n
+sample_wrap:
+    jmp x-- sample_wrap_target side 0 ; 10+3n
+    mov x, pins ; 17 | read pulses and demod bit into x
+    jmp !x complete_demod   ; 18 | bail into idle state if demod bit is 0 (also requires pulses to be 0 but hopefully that's ok)
+    jmp !osre sample_net_lo ; 19 | used to have no delay
+
+sample_net_hi:
+    set x 0 [1] ; 20-21
+    jmp sample_return ; 21
+sample_net_lo:
+    set x 1 ; 20 |
     
-    jmp pin start_of_1 side 0; If signal is 1 again, it's another 1 bit, otherwise it's a 0
+sample_return:
+    ; nop [2] ; 20-21 | Previously jumped to complete_demod here but it's not necessary until we interleave multiple SMs.
+    
+    jmp !y end_of_0 ; 22 | End of 0
+    jmp end_of_1  ; 23 | End of 1
+
+initial_entry:
+    wait 1 pin demod_in_pin_index side 0   ; -16 | Wait to enter DEMOD interval.
+    ; Preamble ends LO, so imitate the end of a 1 with its HI->LO transition.
+    jmp initial_entry_cut_in [1]            ; -15:-14 | wait adjusted here
+
+    ; Cascade into start_of_1
+
+start_of_1:
+    wait 0 pin pulses_pin_index ; 0 | Wait for the 1->0 transition - at this point we are 0.5 into the bit.
+falling_edge_1:
+    mov x !null side 1          ; 1
+    in x, 1 side 0              ; 2 | Emit a 1.
+initial_entry_cut_in:
+    set y 1 side 1              ; 3
+    jmp sample side 0           ; 4
+end_of_1:
+    jmp !x start_of_1           ; 24: If signal is 1 again, it's another 1 bit, otherwise it's a 0.
 
 .wrap_target
-start_of_0:            ; We are 0.25 bits into a 0 - signal is LO
-    nop [1]
-    wait 1 pin pulses_pin_index     ; Wait for the 0->1 transition - at this point we are 0.5 into the bit
+start_of_0:                     ; We are 0.25 bits into a 0 - signal is LO
+    wait 1 pin pulses_pin_index ; 0 | Wait for the 0->1 transition - at this point we are 0.5 into the bit.
 rising_edge_0:
-    in null, 1 side 1    ; Emit a 0, sleep 3/4 of a bit
+    in null, 1 [1] side 1       ; 1:2 | Emit a 0, sleep 3/4 of a bit
 
-    ; This whole mess is equivalent to "jump to complete_demod if the demod pin is 0".
-    mov osr, pins ; read pulses and demod bit into OSR
-    out null, 1 ; dump the pulses bit
-    out y, 1 ; move demod bit to scratch y
-    out null, 30 ; dump the rest of the bits
-    jmp !y complete_demod ; bail into idle state if demod bit is 0
-    nop [2] ; wait slightly for down-going slope
-
-    jmp pin start_of_1 side 0; If signal is 0 again, it's another 0 bit otherwise it's a 1
+    set y 0 side 0              ; 3
+    jmp sample                  ; 4
+end_of_0:
+    jmp !x start_of_1 [1]       ; 23:24 | If signal is 0 again, it's another 0 bit otherwise it's a 1
 .wrap
+
 complete_demod:
-    jmp complete_demod
+    jmp complete_demod side 1
 
 
 
@@ -158,8 +241,8 @@ static inline void message_demodulator_program_init(PIO pio, uint sm, uint offse
     pio_sm_config c = message_demodulator_program_get_default_config(offset);
     sm_config_set_in_pins(&c, in_pin_base); // WAIT pins
     sm_config_set_jmp_pin(&c, pulses_pin); // JMP based on the comparator output
-    sm_config_set_out_shift(&c, true, false, 0); // OSR shifts right, autopull turned off (using OSR for scratch)
-    sm_config_set_in_shift(&c, false, true, 32); // ISR shifts left, autopush turned on
+    sm_config_set_out_shift(&c, false, false, 32); // OSR shifts left, autopull turned off, autopull threshold 32 bits
+    sm_config_set_in_shift(&c, false, true, 32); // ISR shifts left, autopush turned on, autopush threshold 32 bits
     sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
     sm_config_set_clkdiv(&c, div);
 

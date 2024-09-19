@@ -22,6 +22,8 @@
 #include "settings.hh"
 #include "spi_coprocessor.hh"
 
+// #define HARDWARE_UNIT_TESTS
+
 ObjectDictionary object_dictionary;
 SPICoprocessor pico = SPICoprocessor({});
 ADSBeeServer adsbee_server = ADSBeeServer();
@@ -32,7 +34,15 @@ extern "C" void app_main(void) {
     ESP_LOGI("app_main", "Beginning ADSBee Server Application.");
     adsbee_server.Init();
 
+#ifdef HARDWARE_UNIT_TESTS
     RunHardwareUnitTests();
+#endif
+
+    if (!pico.Read(ObjectDictionary::kAddrSettingsStruct, settings_manager.settings)) {
+        CONSOLE_ERROR("app_main", "Failed to read settings from Pico on startup.");
+    } else {
+        settings_manager.Print();
+    }
 
     while (1) {
         adsbee_server.Update();
