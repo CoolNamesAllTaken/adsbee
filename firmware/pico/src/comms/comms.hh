@@ -23,13 +23,6 @@ class CommsManager {
         uint16_t gnss_uart_tx_pin = 0;
         uint16_t gnss_uart_rx_pin = 1;
         uint16_t uart_timeout_us = 0;  // Time to wait for a character if there isn't one alredy available.
-
-        uint16_t esp32_enable_pin = 14;
-        uint16_t esp32_gpio0_boot_pin = 13;
-        uint16_t esp32_mosi_pin = 8;
-        uint16_t esp32_miso_pin = 9;
-        uint16_t esp32_clk_pin = 7;
-        uint16_t esp32_cs_pin = 10;
     };
 
     CommsManager(CommsManagerConfig config_in);
@@ -38,6 +31,8 @@ class CommsManager {
 
     CPP_AT_CALLBACK(ATBaudrateCallback);
     CPP_AT_CALLBACK(ATBiasTeeEnableCallback);
+    CPP_AT_CALLBACK(ATDeviceInfoCallback);
+    CPP_AT_CALLBACK(ATESP32EnableCallback);
     CPP_AT_CALLBACK(ATFeedCallback);
     CPP_AT_CALLBACK(ATFlashESP32Callback);
     CPP_AT_CALLBACK(ATLogLevelCallback);

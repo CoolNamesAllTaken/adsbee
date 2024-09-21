@@ -161,19 +161,8 @@ bool CommsManager::SetWiFiEnabled(bool new_wifi_enabled) {
     if (new_wifi_enabled) {
         CONSOLE_PRINTF("Enabling WiFi...\r\n");
 
-        // Configure ESP32 GPIO0 as handshake pin.
-        gpio_init(config_.esp32_gpio0_boot_pin);
-        gpio_set_dir(config_.esp32_gpio0_boot_pin, GPIO_IN);
-
-        gpio_init(config_.esp32_enable_pin);
-        gpio_set_dir(config_.esp32_enable_pin, GPIO_OUT);
-        gpio_put(config_.esp32_enable_pin, 1);  // Enable
-
     } else {
         CONSOLE_PRINTF("Disabling WiFi...\r\n");
-        gpio_put(config_.esp32_enable_pin, 0);  // Disable
-        gpio_deinit(config_.esp32_enable_pin);
-        gpio_deinit(config_.esp32_gpio0_boot_pin);
     }
 
     wifi_enabled_ = new_wifi_enabled;

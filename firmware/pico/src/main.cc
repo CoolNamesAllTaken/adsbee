@@ -43,7 +43,7 @@ int main() {
     esp32.Init();
 
     // If WiFi is enabled, try establishing communication with the ESP32 and maybe update its firmware.
-    if (comms_manager.WiFiIsEnabled()) {
+    if (esp32.IsEnabled()) {
         // Try reading from the ESP32 till it finishes turning on.
         uint32_t esp32_firmware_version = 0x0;
         bool flash_esp32 = true;
@@ -108,21 +108,24 @@ int main() {
     uint32_t esp32_test_packet_last_sent_timestamp_ms = get_time_since_boot_ms();
 
     while (true) {
-        // Send test packet to ESP32.
-        uint32_t esp32_test_packet_timestamp_ms = get_time_since_boot_ms();
-        if (esp32_test_packet_timestamp_ms - esp32_test_packet_last_sent_timestamp_ms > esp32_test_packet_interval_ms) {
-            RawTransponderPacket test_packet =
-                RawTransponderPacket((char*)"8dac009458b9970f0aa394359da9", -123, 456789);
-            esp32.Write(ObjectDictionary::kAddrRawTransponderPacket, test_packet, true);
-            CONSOLE_INFO("Debug", "Sent ESP32 message.");
-            esp32_test_packet_last_sent_timestamp_ms = esp32_test_packet_timestamp_ms;
+        if (esp32.IsEnabled()) {
+            // Send test packet to ESP32.
+            uint32_t esp32_test_packet_timestamp_ms = get_time_since_boot_ms();
+            if (esp32_test_packet_timestamp_ms - esp32_test_packet_last_sent_timestamp_ms >
+                esp32_test_packet_interval_ms) {
+                RawTransponderPacket test_packet =
+                    RawTransponderPacket((char*)"8dac009458b9970f0aa394359da9", -123, 456789);
+                esp32.Write(ObjectDictionary::kAddrRawTransponderPacket, test_packet, true);
+                CONSOLE_INFO("Debug", "Sent ESP32 message.");
+                esp32_test_packet_last_sent_timestamp_ms = esp32_test_packet_timestamp_ms;
+            }
         }
 
         // Loop forever.
         comms_manager.Update();
         adsbee.Update();
 
-        if (comms_manager.WiFiIsEnabled()) {
+        if (esp32.IsEnabled()) {
             esp32.Update();
         }
     }

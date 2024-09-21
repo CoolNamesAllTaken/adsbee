@@ -18,6 +18,11 @@ void esp_spi_post_trans_cb(spi_slave_transaction_t *trans) { pico.SetSPIHandshak
 
 bool SPICoprocessor::Init() {
 #ifdef ON_PICO
+    // ESP32 enable pin.
+    gpio_init(config_.esp32_enable_pin);
+    gpio_set_dir(config_.esp32_enable_pin, GPIO_OUT);
+    gpio_put(config_.esp32_enable_pin, 1);
+    is_enabled_ = true;
     // ESP32 chip select pin.
     gpio_init(config_.spi_cs_pin);
     gpio_set_dir(config_.spi_cs_pin, GPIO_OUT);
@@ -77,6 +82,10 @@ bool SPICoprocessor::Init() {
 
 bool SPICoprocessor::DeInit() {
 #ifdef ON_PICO
+    // ESP32 enable pin.
+    gpio_put(config_.esp32_enable_pin, 0);
+    gpio_deinit(config_.esp32_enable_pin);
+    is_enabled_ = false;
     // ESP32 chip select pin.
     gpio_deinit(config_.spi_cs_pin);
     // ESP32 handshake pin.

@@ -35,22 +35,22 @@ int CppAT::cpp_at_printf(const char *format, ...) {
 CPP_AT_CALLBACK(CommsManager::ATBaudrateCallback) {
     switch (op) {
         case '?':
-            CPP_AT_CMD_PRINTF("=%d(COMMS),%d(GNSS)", comms_uart_baudrate_, gnss_uart_baudrate_);
+            CPP_AT_CMD_PRINTF("=%d(COMMS_UART),%d(GNSS_UART)", comms_uart_baudrate_, gnss_uart_baudrate_);
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
             if (!(CPP_AT_HAS_ARG(0) && CPP_AT_HAS_ARG(1))) {
                 CPP_AT_ERROR(
-                    "Requires two arguments: AT+BAUDRATE=<iface>,<baudrate> where <iface> can be one of [COMMS, "
-                    "GNSS].");
+                    "Requires two arguments: AT+BAUDRATE=<iface>,<baudrate> where <iface> can be one of [COMMS_UART, "
+                    "GNSS_UART].");
             }
             SettingsManager::SerialInterface iface;
-            if (args[0].compare("COMMS") == 0) {
+            if (args[0].compare("COMMS_UART") == 0) {
                 iface = SettingsManager::kCommsUART;
-            } else if (args[0].compare("GNSS") == 0) {
+            } else if (args[0].compare("GNSS_UART") == 0) {
                 iface = SettingsManager::kGNSSUART;
             } else {
-                CPP_AT_ERROR("Invalid interface. Must be one of [COMMS, GNSS].");
+                CPP_AT_ERROR("Invalid interface. Must be one of [COMMS_UART, GNSS_UART].");
             }
             uint32_t baudrate;
             CPP_AT_TRY_ARG2NUM(1, baudrate);
@@ -79,8 +79,34 @@ CPP_AT_CALLBACK(CommsManager::ATBiasTeeEnableCallback) {
             CPP_AT_SUCCESS();
             break;
     }
-    CPP_AT_ERROR();  // Should never get here.
+    CPP_AT_ERROR();
 }
+
+CPP_AT_CALLBACK(CommsManager::ATESP32EnableCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%d", esp32.IsEnabled());
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (!CPP_AT_HAS_ARG(0)) {
+                CPP_AT_ERROR("Requires an argument (0 or 1). AT+ESP32_ENABLED=<enabled>");
+            }
+            bool enabled;
+            bool already_enabled = esp32.IsEnabled();
+            CPP_AT_TRY_ARG2NUM(0, enabled);
+            if (enabled && !already_enabled) {
+                esp32.Init();
+            } else if (!enabled && already_enabled) {
+                esp32.DeInit();
+            }
+            CPP_AT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR();
+}
+
+CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) { CPP_AT_ERROR("Not yet implemented."); }
 
 void ATFeedHelpCallback() {
     CPP_AT_PRINTF(
@@ -413,14 +439,25 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .min_args = 0,
      .max_args = 2,
      .help_string_buf = "AT+BAUDRATE=<iface>,<baudrate>\r\n\tSet the baud rate of a serial "
-                        "interface.\r\n\tAT+BAUDRATE=COMMS,115200\r\n\tAT+BAUDRATE=GNSS,9600\r\n\tAT_BAUDRATE?",
+                        "interface.\r\n\tAT_BAUDRATE?\r\n\tQuery the baud rate of all serial interfaces.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBaudrateCallback, comms_manager)},
     {.command_buf = "+BIAS_TEE_ENABLE",
      .min_args = 0,
      .max_args = 1,
      .help_string_buf = "AT+BIAS_TEE_ENABLE=<enabled>\r\n\tEnable or disable the bias "
-                        "tee.\r\n\tAT+BIAS_TEE_ENABLE=1\r\n\tAT+BIAS_TEE_ENABLE=0\r\n\tBIAS_TEE_ENABLE?",
+                        "tee.\r\n\tBIAS_TEE_ENABLE?\r\n\tQuery the status of the bias tee.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBiasTeeEnableCallback, comms_manager)},
+    {.command_buf = "+DEVICE_INFO",
+     .min_args = 0,
+     .max_args = 5,  // TODO: check this value.
+     .help_string_buf = "AT+DEVICE_INFO?\r\n\tQuery device information.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATDeviceInfoCallback, comms_manager)},
+    {.command_buf = "+ESP32_ENABLE",
+     .min_args = 0,
+     .max_args = 1,
+     .help_string_buf = "AT+ESP32_ENABLE=<enabled>\r\n\tEnable or disable the ESP32.\r\n\tAT+ESP32_ENABLE?\r\n\tQuery "
+                        "the enable status of the ESP32.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATESP32EnableCallback, comms_manager)},
     {.command_buf = "+FEED",
      .min_args = 0,
      .max_args = 5,

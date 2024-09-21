@@ -46,6 +46,7 @@ class SPICoprocessor {
     struct SPICoprocessorConfig {
         uint32_t clk_rate_hz = 10e6;  // 40 MHz
 #ifdef ON_PICO
+        uint16_t esp32_enable_pin = 14;
         spi_inst_t *spi_handle = spi1;
         uint16_t spi_clk_pin = 10;
         uint16_t spi_mosi_pin = 11;
@@ -265,6 +266,9 @@ class SPICoprocessor {
     // NOTE: Pico (leader) and ESP32 (follower) will have different behaviors for these functions.
     bool Init();
     bool DeInit();
+#ifdef ON_PICO
+    bool IsEnabled() { return is_enabled_; }
+#endif
     bool Update();
 
     /**
@@ -636,6 +640,7 @@ class SPICoprocessor {
 
 #ifdef ON_PICO
     uint32_t spi_last_transmit_timestamp_us_ = 0;
+    bool is_enabled_ = false;
 #elif ON_ESP32
     // WORD_ALIGNED_ATTR SPITransaction spi_rx_queue_buf_[kSPITransactionQueueLenTransactions];
     // WORD_ALIGNED_ATTR SPITransaction spi_tx_queue_buf_[kSPITransactionQueueLenTransactions];
