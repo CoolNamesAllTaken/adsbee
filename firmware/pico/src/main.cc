@@ -5,7 +5,6 @@
 #include "hal.hh"
 #include "hardware_unit_tests.hh"  // For testing only!
 #include "pico/binary_info.h"
-#include "settings.hh"
 #include "spi_coprocessor.hh"
 #include "transponder_packet.hh"
 #include "unit_conversions.hh"
@@ -40,7 +39,6 @@ int main() {
                                object_dictionary.kFirmwareVersionMinor, object_dictionary.kFirmwareVersionPatch);
 
     settings_manager.Load();
-    esp32.Init();
 
     // If WiFi is enabled, try establishing communication with the ESP32 and maybe update its firmware.
     if (esp32.IsEnabled()) {

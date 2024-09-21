@@ -7,7 +7,7 @@
 #include "macros.hh"
 #include "stdio.h"
 
-static const uint32_t kSettingsVersionMagicWord = 0xFEDBFBEF;  // Change this when settings format changes!
+static const uint32_t kSettingsVersionMagicWord = 0x1;  // Change this when settings format changes!
 
 class SettingsManager {
    public:
@@ -63,11 +63,13 @@ class SettingsManager {
         uint32_t comms_uart_baud_rate = 115200;
         uint32_t gnss_uart_baud_rate = 9600;
 
+        // ESP32 settings
+        bool esp32_enabled = true;
+
         bool wifi_enabled = true;
         char wifi_ssid[kWiFiSSIDMaxLen + 1] = "";
         char wifi_password[kWiFiPasswordMaxLen + 1] = "";
 
-        // ESP32 settings
         char feed_uris[kMaxNumFeeds][SettingsManager::kFeedURIMaxNumChars + 1];
         uint16_t feed_ports[kMaxNumFeeds];
         bool feed_is_active[kMaxNumFeeds];
@@ -107,6 +109,7 @@ class SettingsManager {
         }
         printf("\tComms UART Baud Rate: %lu baud\r\n", settings.comms_uart_baud_rate);
         printf("\tGNSS UART Baud Rate: %lu baud\r\n", settings.gnss_uart_baud_rate);
+        printf("\tESP32: %s", settings.esp32_enabled ? "ENABLED" : "DISABLED");
         printf("\tWifi: %s", settings.wifi_enabled ? "ENABLED" : "DISABLED");
         printf("\tWifi SSID: %s\r\n", settings.wifi_ssid);
         char redacted_wifi_password[kWiFiPasswordMaxLen];
