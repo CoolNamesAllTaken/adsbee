@@ -94,6 +94,7 @@ else()
     target_include_directories(${PROJECT_NAME} PRIVATE
         ../common
         /ads_bee/modules/googletest
+        /ads_bee/modules/googletest/googlemock/include
         /ads_bee/modules/cppAT/src
         src
         host_test
@@ -127,7 +128,7 @@ add_compile_definitions(
 include(${CMAKE_CURRENT_LIST_DIR}/src/esp32_flasher/bin2array.cmake)
 # Create a file dependency that copies over the most recently built ESP32 firmware binary to the bin directory used by
 # esp32_flasher. Re-runs cmake if the file gets changed.
-configure_file(/ads_bee/esp/build/adsbee_esp.bin ${CMAKE_CURRENT_LIST_DIR}/src/esp32_flasher/bin/adsbee_esp.bin COPYONLY)
+#configure_file(/ads_bee/esp/build/adsbee_esp.bin ${CMAKE_CURRENT_LIST_DIR}/src/esp32_flasher/bin/adsbee_esp.bin COPYONLY)
 create_resources(${CMAKE_CURRENT_LIST_DIR}/src/esp32_flasher/bin ${CMAKE_BINARY_DIR}/binaries.c)
 set_property(SOURCE ${CMAKE_BINARY_DIR}/binaries.c PROPERTY GENERATED 1)
 target_sources(${PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR}/binaries.c)
