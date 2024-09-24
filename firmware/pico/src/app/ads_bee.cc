@@ -60,7 +60,7 @@ bool ADSBee::Init() {
     gpio_set_function(config_.tl_pwm_pin, GPIO_FUNC_PWM);
     pwm_set_wrap(tl_pwm_slice_, kTLMaxPWMCount);
 
-    SetTLMilliVolts(SettingsManager::kDefaultTLMV);
+    SetTLMilliVolts(SettingsManager::Settings::kDefaultTLMV);
     pwm_set_enabled(tl_pwm_slice_, true);
 
     // Initialize the trigger level bias ADC input.

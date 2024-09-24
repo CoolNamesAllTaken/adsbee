@@ -254,7 +254,7 @@ class ADSBee {
     uint16_t tl_pwm_slice_ = 0;
     uint16_t tl_pwm_chan_ = 0;
 
-    uint16_t tl_mv_ = SettingsManager::kDefaultTLMV;
+    uint16_t tl_mv_ = SettingsManager::Settings::kDefaultTLMV;
     uint16_t tl_pwm_count_ = 0;  // out of kTLMaxPWMCount
 
     uint16_t tl_adc_counts_ = 0;

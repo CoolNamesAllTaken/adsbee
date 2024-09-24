@@ -140,8 +140,8 @@ class CommsManager {
                                             .buffer = transponder_packet_reporting_queue_buffer_});
 
     // Public WiFi Settings
-    char wifi_ssid[SettingsManager::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
-    char wifi_password[SettingsManager::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
+    char wifi_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
+    char wifi_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
 
     // MAVLINK settings.
     uint8_t mavlink_system_id = 0;
@@ -198,8 +198,8 @@ class CommsManager {
     DecodedTransponderPacket transponder_packet_reporting_queue_buffer_[ADSBee::kMaxNumTransponderPackets];
 
     // Reporting Settings
-    uint32_t comms_uart_baudrate_ = SettingsManager::kDefaultCommsUARTBaudrate;
-    uint32_t gnss_uart_baudrate_ = SettingsManager::kDefaultGNSSUARTBaudrate;
+    uint32_t comms_uart_baudrate_ = SettingsManager::Settings::kDefaultCommsUARTBaudrate;
+    uint32_t gnss_uart_baudrate_ = SettingsManager::Settings::kDefaultGNSSUARTBaudrate;
     SettingsManager::ReportingProtocol
         reporting_protocols_[SettingsManager::SerialInterface::kNumSerialInterfaces - 1] = {
             SettingsManager::ReportingProtocol::kNoReports,

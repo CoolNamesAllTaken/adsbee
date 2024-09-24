@@ -4,6 +4,9 @@
 #include "eeprom.hh"
 #include "spi_coprocessor.hh"
 
+const uint16_t kDeviceInfoMaxSizeBytes = 200;
+const uint16_t kDeviceInfoEEPROMAddress = 8e3 - kDeviceInfoMaxSizeBytes;
+
 bool SettingsManager::Load() {
     if (!eeprom.Load(settings)) {
         CONSOLE_ERROR("settings.cc::Load", "Failed load settings from EEPROM.");
@@ -11,7 +14,7 @@ bool SettingsManager::Load() {
     };
 
     // Reset to defaults if loading from a blank EEPROM.
-    if (settings.magic_word != kSettingsVersionMagicWord) {
+    if (settings.settings_version != kSettingsVersion) {
         ResetToDefaults();
         if (!eeprom.Save(settings)) {
             CONSOLE_ERROR("settings.cc::Load", "Failed to save default settings.");
@@ -45,10 +48,10 @@ bool SettingsManager::Save() {
     settings.esp32_enabled = esp32.IsEnabled();
     // Save WiFi configuration.
     settings.wifi_enabled = comms_manager.WiFiIsEnabled();
-    strncpy(settings.wifi_ssid, comms_manager.wifi_ssid, kWiFiSSIDMaxLen);
-    settings.wifi_ssid[kWiFiSSIDMaxLen] = '\0';
-    strncpy(settings.wifi_password, comms_manager.wifi_password, kWiFiPasswordMaxLen);
-    settings.wifi_password[kWiFiPasswordMaxLen] = '\0';
+    strncpy(settings.wifi_ssid, comms_manager.wifi_ssid, Settings::kWiFiSSIDMaxLen);
+    settings.wifi_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
+    strncpy(settings.wifi_password, comms_manager.wifi_password, Settings::kWiFiPasswordMaxLen);
+    settings.wifi_password[Settings::kWiFiPasswordMaxLen] = '\0';
 
     // Sync settings from RP2040 -> ESP32.
     if (esp32.IsEnabled()) {
@@ -62,6 +65,14 @@ void SettingsManager::ResetToDefaults() {
     Settings default_settings;
     settings = default_settings;
     Apply();
+}
+
+bool SettingsManager::SetDeviceInfo(const DeviceInfo &device_info) {
+    return eeprom.Save(device_info, kDeviceInfoEEPROMAddress);
+}
+
+bool SettingsManager::GetDeviceInfo(DeviceInfo &device_info) {
+    return eeprom.Load(device_info, kDeviceInfoEEPROMAddress);
 }
 
 void SettingsManager::Apply() {
@@ -86,8 +97,8 @@ void SettingsManager::Apply() {
 
     // Apply WiFi configurations.
     comms_manager.SetWiFiEnabled(settings.wifi_enabled);
-    strncpy(comms_manager.wifi_ssid, settings.wifi_ssid, kWiFiSSIDMaxLen);
-    comms_manager.wifi_ssid[kWiFiSSIDMaxLen] = '\0';
-    strncpy(comms_manager.wifi_password, settings.wifi_password, kWiFiPasswordMaxLen);
-    comms_manager.wifi_password[kWiFiPasswordMaxLen] = '\0';
+    strncpy(comms_manager.wifi_ssid, settings.wifi_ssid, Settings::kWiFiSSIDMaxLen);
+    comms_manager.wifi_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
+    strncpy(comms_manager.wifi_password, settings.wifi_password, Settings::kWiFiPasswordMaxLen);
+    comms_manager.wifi_password[Settings::kWiFiPasswordMaxLen] = '\0';
 }

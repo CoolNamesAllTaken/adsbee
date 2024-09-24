@@ -21,6 +21,9 @@
 // #include "printf.h" // for using custom printf defined in printf.h
 #include <cstdio>  // for using regular printf
 
+const uint32_t kDeviceInfoProgrammingPassword = 0xDEDBEEF;  // This is intended to stop people from accidentally
+                                                            // modifying serial number information on their device.
+
 /** CppAT Printf Override **/
 int CppAT::cpp_at_printf(const char *format, ...) {
     va_list args;
@@ -106,7 +109,50 @@ CPP_AT_CALLBACK(CommsManager::ATESP32EnableCallback) {
     CPP_AT_ERROR();
 }
 
-CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) { CPP_AT_ERROR("Not yet implemented."); }
+CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
+    switch (op) {
+        case '?': {
+            SettingsManager::DeviceInfo device_info;
+            if (!settings_manager.GetDeviceInfo(device_info)) {
+                CPP_AT_ERROR("Error while retrieving device info.");
+            }
+            device_info.part_code[SettingsManager::DeviceInfo::kPartCodeLen] =
+                '\0';  // Use caution in case part code is invalid.
+            CPP_AT_PRINTF("Part Code: %s", device_info.part_code);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        }
+        case '=': {
+            // AT+DEVICE_INFO=<programming_password>,<device_info_version>,<part_code>
+            if (!CPP_AT_HAS_ARG(0)) {
+                CPP_AT_ERROR("Missing programming password.");
+            } else {
+                uint32_t programming_password;
+                CPP_AT_TRY_ARG2NUM_BASE(0, programming_password, 16);
+                if (programming_password != kDeviceInfoProgrammingPassword) {
+                    CPP_AT_ERROR("Programming password 0x%x does not match.", programming_password);
+                }
+                // Program device information here.
+                SettingsManager::DeviceInfo device_info;
+                settings_manager.GetDeviceInfo(device_info);  // Override existing info, if fields are provided.
+                if (CPP_AT_HAS_ARG(1)) {
+                    CPP_AT_TRY_ARG2NUM(1, device_info.device_info_version);
+                }
+                if (CPP_AT_HAS_ARG(2)) {
+                    // Copy part code while guarding against part codes that are too long.
+                    strncpy(device_info.part_code, args[2].data(), SettingsManager::DeviceInfo::kPartCodeLen);
+                    device_info.part_code[SettingsManager::DeviceInfo::kPartCodeLen] = '\0';
+                }
+                if (settings_manager.SetDeviceInfo(device_info)) {
+                    CPP_AT_SUCCESS();
+                }
+                CPP_AT_ERROR("Error while attempting to set device info.");
+            }
+            break;
+        }
+    }
+    CPP_AT_ERROR();
+}
 
 void ATFeedHelpCallback() {
     CPP_AT_PRINTF(
@@ -114,7 +160,7 @@ void ATFeedHelpCallback() {
         "network feed.\r\n\tfeed_index = [0-%d], feed_uri = ip address or URL, feed_port = [0-65535], "
         "active = [0 1], protocol = [BEAST].\r\n\t\r\n\tAT+FEED?\r\n\tPrint details for all "
         "feeds.\r\n\t\r\n\tAT+FEED?<feed_index>\r\n\tPrint details for a specific feed.\r\n\tfeed_index = [0-%d]",
-        SettingsManager::kMaxNumFeeds - 1, SettingsManager::kMaxNumFeeds - 1);
+        SettingsManager::Settings::kMaxNumFeeds - 1, SettingsManager::Settings::kMaxNumFeeds - 1);
 }
 
 CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
@@ -124,9 +170,9 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                 // Querying info about a specific feed.
                 uint16_t feed_index = UINT16_MAX;
                 CPP_AT_TRY_ARG2NUM(0, feed_index);
-                if (feed_index >= SettingsManager::kMaxNumFeeds) {
+                if (feed_index >= SettingsManager::Settings::kMaxNumFeeds) {
                     CPP_AT_ERROR("Feed number must be between 0-%d, no details for feed with index %d.",
-                                 SettingsManager::kMaxNumFeeds - 1, feed_index);
+                                 SettingsManager::Settings::kMaxNumFeeds - 1, feed_index);
                 }
                 CPP_AT_CMD_PRINTF(
                     "=%d(FEED_INDEX),%s(FEED_URI),%d(FEED_PORT),%d(ACTIVE),%s(PROTOCOL)", feed_index,
@@ -135,7 +181,7 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                     SettingsManager::ReportingProtocolStrs[settings_manager.settings.feed_protocols[feed_index]]);
             } else {
                 // Querying info about all feeds.
-                for (uint16_t i = 0; i < SettingsManager::kMaxNumFeeds; i++) {
+                for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
                     CPP_AT_CMD_PRINTF(
                         "=%d(FEED_INDEX),%s(FEED_URI),%d(FEED_PORT),%d(ACTIVE),%s(PROTOCOL)", i,
                         settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i],
@@ -152,15 +198,15 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                 CPP_AT_ERROR("Feed index is required for setting feed information.");
             }
             CPP_AT_TRY_ARG2NUM(0, feed_index);
-            if (feed_index >= SettingsManager::kMaxNumFeeds) {
+            if (feed_index >= SettingsManager::Settings::kMaxNumFeeds) {
                 CPP_AT_ERROR("Feed index must be between 0-%d, no details for feed with index %d.",
-                             SettingsManager::kMaxNumFeeds - 1, feed_index);
+                             SettingsManager::Settings::kMaxNumFeeds - 1, feed_index);
             }
             // Set FEED_URI.
             if (CPP_AT_HAS_ARG(1)) {
                 strncpy(settings_manager.settings.feed_uris[feed_index], args[1].data(),
-                        SettingsManager::kFeedURIMaxNumChars);
-                settings_manager.settings.feed_uris[feed_index][SettingsManager::kFeedURIMaxNumChars] = '\0';
+                        SettingsManager::Settings::kFeedURIMaxNumChars);
+                settings_manager.settings.feed_uris[feed_index][SettingsManager::Settings::kFeedURIMaxNumChars] = '\0';
             }
             // Set FEED_PORT
             if (CPP_AT_HAS_ARG(2)) {
@@ -395,23 +441,25 @@ CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
 CPP_AT_CALLBACK(CommsManager::ATWiFiCallback) {
     switch (op) {
         case '?': {
-            char redacted_password[SettingsManager::kWiFiPasswordMaxLen + 1];
-            SettingsManager::RedactPassword(wifi_password, redacted_password, SettingsManager::kWiFiPasswordMaxLen);
+            char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];
+            SettingsManager::RedactPassword(wifi_password, redacted_password,
+                                            SettingsManager::Settings::kWiFiPasswordMaxLen);
             CPP_AT_CMD_PRINTF("=%d,%s,%s\r\n", static_cast<uint16_t>(wifi_enabled_), wifi_ssid, redacted_password);
             CPP_AT_SILENT_SUCCESS();
             break;
         }
         case '=': {
             if (CPP_AT_HAS_ARG(1)) {
-                strncpy(wifi_ssid, args[1].data(), SettingsManager::kWiFiSSIDMaxLen);
-                wifi_ssid[SettingsManager::kWiFiSSIDMaxLen] = '\0';
+                strncpy(wifi_ssid, args[1].data(), SettingsManager::Settings::kWiFiSSIDMaxLen);
+                wifi_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen] = '\0';
                 CPP_AT_CMD_PRINTF(": ssid=%s\r\n", wifi_ssid);
             }
             if (CPP_AT_HAS_ARG(2)) {
-                strncpy(wifi_password, args[2].data(), SettingsManager::kWiFiPasswordMaxLen);
-                wifi_password[SettingsManager::kWiFiPasswordMaxLen] = '\0';
-                char redacted_password[SettingsManager::kWiFiPasswordMaxLen];
-                SettingsManager::RedactPassword(wifi_password, redacted_password, SettingsManager::kWiFiPasswordMaxLen);
+                strncpy(wifi_password, args[2].data(), SettingsManager::Settings::kWiFiPasswordMaxLen);
+                wifi_password[SettingsManager::Settings::kWiFiPasswordMaxLen] = '\0';
+                char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen];
+                SettingsManager::RedactPassword(wifi_password, redacted_password,
+                                                SettingsManager::Settings::kWiFiPasswordMaxLen);
                 CPP_AT_CMD_PRINTF(": password=%s\r\n", redacted_password);
             }
 

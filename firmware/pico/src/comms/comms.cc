@@ -24,12 +24,12 @@ bool CommsManager::Init() {
     gpio_set_function(config_.comms_uart_tx_pin, GPIO_FUNC_UART);
     gpio_set_function(config_.comms_uart_rx_pin, GPIO_FUNC_UART);
     uart_set_translate_crlf(config_.comms_uart_handle, false);
-    uart_init(config_.comms_uart_handle, SettingsManager::kDefaultCommsUARTBaudrate);
+    uart_init(config_.comms_uart_handle, SettingsManager::Settings::kDefaultCommsUARTBaudrate);
 
     gpio_set_function(config_.gnss_uart_tx_pin, GPIO_FUNC_UART);
     gpio_set_function(config_.gnss_uart_rx_pin, GPIO_FUNC_UART);
     uart_set_translate_crlf(config_.gnss_uart_handle, false);
-    uart_init(config_.gnss_uart_handle, SettingsManager::kDefaultGNSSUARTBaudrate);
+    uart_init(config_.gnss_uart_handle, SettingsManager::Settings::kDefaultGNSSUARTBaudrate);
 
     // Don't mess with ESP32 enable / reset GPIOs here, since they need to be toggled by the programmer. Only initialize
     // them if no programming is required. Don't mess with ESP32 wifi pin until we're ready to try firmware updates.
