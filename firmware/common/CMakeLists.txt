@@ -16,5 +16,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     comms
     comms/beast
     comms/csbee
+    comms/gdl90
     coprocessor
 )

@@ -573,6 +573,9 @@ class SPICoprocessor {
         SCResponsePacket response_packet = SCResponsePacket(response_buf, bytes_exchanged - read_request_bytes);
 #else
         SCResponsePacket response_packet;  // Dummy to stop compile errors.
+        // Total BS used to suppress a compile warning during host unit tests.
+        rx_buf[read_request_bytes] = '\0';
+        printf("%s", rx_buf);
 #endif
         if (!response_packet.IsValid()) {
             CONSOLE_ERROR("SPICoprocessor::PartialRead",
