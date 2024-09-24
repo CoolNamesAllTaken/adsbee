@@ -79,6 +79,7 @@ class HashMap {
         for (size_type i = 0; i < MaxSize; i++){
             (*_usageList)[i] = false;
         }
+        _size = 0;
     }
 
     iterator begin() noexcept {
@@ -106,16 +107,18 @@ class HashMap {
     }
 
     iterator erase(iterator pos) {
+        assert(pos != end());
+        
         (*_usageList)[pos._index] = false;
         _size--;
         return Iterator(_data, _usageList, pos._index+1);
     }
 
     size_type erase(const Key& key) {
-        auto& element = (*_usageList)[find(key)._index];
-        if (element) {
+        auto iter = find(key);
+        if (iter != end()) {
             _size--;
-            element = false;
+            (*_usageList)[iter._index] = false;
             return 1;
         } else {
             return 0;
@@ -141,7 +144,7 @@ class HashMap {
         auto element = Hash{}(key) % MaxSize;
         const auto start = element;
         auto looped = false;
-        while ((*_data)[element].first != key && (looped && element == start)) {
+        while ((*_data)[element].first != key && !(looped && element == start)) {
             element++;
             if (element == MaxSize) {
                 element = 0;
@@ -191,10 +194,12 @@ class HashMap {
 
         if (!element.has_value()) {
             return std::pair(end(), false);
-        } else if ((*_data)[element.value()].first == value.first) {
+        } else if ((*_usageList)[element.value()] && (*_data)[element.value()].first == value.first) {
             return std::pair(Iterator(_data, _usageList, element.value()), false);
         } else {
             (*_data)[element.value()] = value;
+            (*_usageList)[element.value()] = true;
+            _size++;
             return std::pair(Iterator(_data, _usageList, element.value()), true);
         }
     }
@@ -206,7 +211,7 @@ class HashMap {
         auto element = Hash{}(key) % MaxSize;
         const auto start = element;
         auto looped = false;
-        while ((*_usageList)[element] && (*_data)[element].first != key && (looped && element == start)) {
+        while ((*_usageList)[element] && (*_data)[element].first != key && !(looped && element == start)) {
             element++;
             if (element == MaxSize) {
                 element = 0;
