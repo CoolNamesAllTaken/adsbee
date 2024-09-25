@@ -2,6 +2,7 @@
 target_sources(${PROJECT_NAME} PRIVATE
 # NOTE: Annoyingly, all source files need to end with .c or .cpp to be seen by the ESP IDF.
     settings_strs.cpp
+    comms/gdl90/gdl90_utils.cpp
     utils/buffer_utils.cpp
     utils/data_structures.cpp
     adsb/transponder_packet.cpp
