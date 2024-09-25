@@ -1,5 +1,7 @@
 #include "gdl90_utils.hh"
 
+#include "comms.hh"
+
 // Initialize static variables.
 const uint16_t GDL90Reporter::kGDL90CRC16Table[] = {
     0x0,    0x1021, 0x2042, 0x3063, 0x4084, 0x50a5, 0x60c6, 0x70e7, 0x8108, 0x9129, 0xa14a, 0xb16b, 0xc18c, 0xd1ad,
@@ -29,7 +31,7 @@ uint16_t GDL90Reporter::WriteGDL90Message(uint8_t *to_buf, uint8_t *unescaped_me
     bytes_written +=
         WriteBufferWithGDL90Escapes(to_buf + bytes_written, unescaped_message, unescaped_message_len_bytes);
     // Calculate the CRC with unescaped message ID and data.
-    uint16_t crc = CalculateCRC16(unescaped_message, unescaped_message_len_bytes);
+    uint16_t crc = CalculateGDL90CRC16(unescaped_message, unescaped_message_len_bytes);
     uint8_t crc_buf[sizeof(crc)] = {static_cast<uint8_t>(crc & 0xFF), static_cast<uint8_t>(crc >> 8)};  // LSB first.
     bytes_written += WriteBufferWithGDL90Escapes(to_buf + bytes_written, crc_buf, sizeof(crc));
     to_buf[bytes_written++] = kGDL90FlagByte;  // Ending flag byte.
@@ -54,15 +56,19 @@ uint16_t GDL90Reporter::WriteBufferWithGDL90Escapes(uint8_t *to_buf, const uint8
 
 uint16_t GDL90Reporter::WriteGDL90HeartbeatMessage(uint8_t *to_buf, uint32_t timestamp_sec_since_0000z,
                                                    uint16_t message_counts) {
-    uint8_t message_buf[kGDL90MessageMaxLenBytes];
+    const uint16_t kMessageBufLenBytes = 7;
+    uint8_t message_buf[kMessageBufLenBytes];
     // 1: Message ID
     message_buf[0] = kGDL90MessageIDHeartbeat;
     // 2: Status Byte 1
-    message_buf[1] = 0b1                           // UAT Initialized: always set to 1.
-                     | (gnss_position_valid << 7)  // GPS Position Valid: Set valid when ownship GPS position available.
-                     | (maintenance_required << 6);  // Maintenance Required: Set to 1 if indicating an error.
+    message_buf[1] = (gnss_position_valid << 7)  // GPS Position Valid: Set valid when ownship GPS position available.
+                     | (maintenance_required << 6)  // Maintenance Required: Set to 1 if indicating an error.
+                     | uat_initialized;             // UAT Initialized: always set to 1.
     // 3: Status Byte 2
-    message_buf[2] = (timestamp_sec_since_0000z >> 16) << 7 | utc_timing_is_valid;  // Timestamp MS bit.
+    message_buf[2] = (timestamp_sec_since_0000z >> 16) << 7  // Timestamp MS bit.
+                     | (csa_requested << 6)                  // 1 = Conflict Situational Awareness has been requested.
+                     | (csa_not_available << 5)  // 1 = Conflict Situational Awareness not available at this time.
+                     | utc_timing_is_valid;      // 1 = UTC timing is valid.
     // 4-5: Timestamp
     message_buf[3] = timestamp_sec_since_0000z & 0xFF;         // Timestamp LSB.
     message_buf[4] = (timestamp_sec_since_0000z >> 8) & 0xFF;  // Timestamp MSB (missing MS bit).
@@ -70,7 +76,53 @@ uint16_t GDL90Reporter::WriteGDL90HeartbeatMessage(uint8_t *to_buf, uint32_t tim
     message_counts = MIN(1023, message_counts);
     message_buf[5] = message_counts & 0xFF;
     message_buf[6] = message_counts >> 8;
+    return WriteGDL90Message(to_buf, message_buf, kMessageBufLenBytes);
+}
 
-    uint16_t message_buf_len_bytes = 7;
-    return WriteGDL90Message(to_buf, message_buf, message_buf_len_bytes);
+uint16_t GDL90Reporter::WriteGDL90InitMessage(uint8_t *to_buf) {
+    const uint16_t kMessageBufLenBytes = 3;
+    uint8_t message_buf[kMessageBufLenBytes];
+    // 1: Message ID
+    message_buf[0] = kGDL90MessageIDInitialization;
+    // 2: Configuration Byte 1
+    message_buf[1] = (audio_test << 6)       // 1 = Initiate audio test.
+                     | (audio_inhibit << 1)  // 1 = Suppress GDL90 audio output.
+                     | cdti_ok;              // 1 = Cockpit Traffic Display (CDTI) capability is operating.
+    // 3: Configuration Byte 2
+    message_buf[2] = (csa_audio_disable << 1)  // 1 = Disable GDL90 audible traffic alerts.
+                     | csa_disable;            // 1 = Disable CSA traffic alerting.
+    return WriteGDL90Message(to_buf, message_buf, kMessageBufLenBytes);
+}
+
+uint16_t GDL90Reporter::WriteGDL90UplinkDataMessage(uint8_t *to_buf, uint8_t *uplink_payload,
+                                                    uint16_t uplink_payload_len_bytes, uint32_t tor_us) {
+    // Time of Arrival (TOR) = 24-bit value with resolution of 80ns. Valid range is 0 to 1 sec (0-12499999).
+    uint32_t tor = 0xFFFFFF;  // Default value: insufficient timing accuracy to say what the time of arrival is.
+    if (tor_us != 0xFFFFFFFF) {
+        tor = tor_us * 1000 / 80;  // Convert us tor to fractional value with resolution of 80ns.
+    }
+    if (uplink_payload_len_bytes > kGDL90MessageMaxLenBytes) {
+        CONSOLE_ERROR("GDL90Reporter::WriteGDL90UplinkDataMessage",
+                      "Received uplink payload of length %d bytes, maximum is %d Bytes (should actually be smaller to "
+                      "account for potential escaping).",
+                      uplink_payload_len_bytes, kGDL90MessageMaxLenBytes);
+        return 0;
+    }
+    const uint16_t kMessageBufLenBytes = sizeof(GDL90MessageID) + 3 + uplink_payload_len_bytes;
+    uint8_t message_buf[kMessageBufLenBytes];
+    message_buf[0] = kGDL90MessageIDUplinkData;
+    message_buf[1] = tor & 0xFF;
+    message_buf[2] = (tor >> 8) & 0xFF;
+    message_buf[3] = (tor >> 16) & 0xFF;
+    memcpy(message_buf + sizeof(GDL90MessageID) + 3, uplink_payload, uplink_payload_len_bytes);
+    return WriteGDL90Message(to_buf, message_buf, kMessageBufLenBytes);
+}
+
+uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const GDL90TargetReportData &data,
+                                                      bool ownship) {
+    const uint16_t kMessageBufLenBytes = 28;
+    uint8_t message_buf[kMessageBufLenBytes];
+    message_buf[0] = ownship ? kGDL90MessageIDOwnshipReport : kGDL90MessageIDTrafficReport;
+    // TODO: fill in the rest of the message!
+    return WriteGDL90Message(to_buf, message_buf, kMessageBufLenBytes);
 }

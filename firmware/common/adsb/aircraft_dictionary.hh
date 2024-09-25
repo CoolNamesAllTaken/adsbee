@@ -10,26 +10,26 @@ class Aircraft {
    public:
     static const uint16_t kCallSignMaxNumChars = 7;
 
-    enum AirframeType : uint16_t {
-        kAirframeTypeInvalid = 0,
-        kAirframeTypeReserved,
-        kAirframeTypeNoCategoryInfo,
-        kAirframeTypeSurfaceEmergencyVehicle,
-        kAirframeTypeSurfaceServiceVehicle,
-        kAirframeTypeGroundObstruction,
-        kAirframeTypeGliderSailplane,
-        kAirframeTypeLighterThanAir,
-        kAirframeTypeParachutistSkydiver,
-        kAirframeTypeUltralightHangGliderParaglider,
-        kAirframeTypeUnmannedAerialVehicle,
-        kAirframeTypeSpaceTransatmosphericVehicle,
-        kAirframeTypeLight,    // < 7000kg
-        kAirframeTypeMedium1,  // 7000kg - 34000kg
-        kAirframeTypeMedium2,  // 34000kg - 136000kg
-        kAirframeTypeHighVortexAircraft,
-        kAirframeTypeHeavy,            // > 136000kg
-        kAirframeTypeHighPerformance,  // >5g acceleration and >400kt speed
-        kAirframeTypeRotorcraft
+    enum Category : uint8_t {
+        kCategoryInvalid = 0,
+        kCategoryReserved,
+        kCategoryNoCategoryInfo,
+        kCategorySurfaceEmergencyVehicle,
+        kCategorySurfaceServiceVehicle,
+        kCategoryGroundObstruction,
+        kCategoryGliderSailplane,
+        kCategoryLighterThanAir,
+        kCategoryParachutistSkydiver,
+        kCategoryUltralightHangGliderParaglider,
+        kCategoryUnmannedAerialVehicle,
+        kCategorySpaceTransatmosphericVehicle,
+        kCategoryLight,    // < 7000kg
+        kCategoryMedium1,  // 7000kg - 34000kg
+        kCategoryMedium2,  // 34000kg - 136000kg
+        kCategoryHighVortexAircraft,
+        kCategoryHeavy,            // > 136000kg
+        kCategoryHighPerformance,  // >5g acceleration and >400kt speed
+        kCategoryRotorcraft
     };
 
     enum AltitudeSource : int16_t {
@@ -263,7 +263,8 @@ class Aircraft {
     uint32_t icao_address = 0;
     char callsign[kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
     uint16_t squawk = 0;
-    AirframeType airframe_type = kAirframeTypeInvalid;
+    Category category = kCategoryInvalid;
+    uint8_t category_raw = 0;  // Non-enum category in case we want the value without a many to one mapping.
 
     int32_t baro_altitude_ft = 0;
     int32_t gnss_altitude_ft = 0;

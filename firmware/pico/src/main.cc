@@ -87,7 +87,7 @@ int main() {
     // Add a test aircraft to start.
     // TODO: Remove this.
     Aircraft test_aircraft;
-    test_aircraft.airframe_type = Aircraft::AirframeType::kAirframeTypeSpaceTransatmosphericVehicle;
+    test_aircraft.category = Aircraft::Category::kCategorySpaceTransatmosphericVehicle;
     strcpy(test_aircraft.callsign, "TST1234");
     test_aircraft.latitude_deg = 20;
     test_aircraft.longitude_deg = -140;

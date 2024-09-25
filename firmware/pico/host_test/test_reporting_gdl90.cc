@@ -100,10 +100,12 @@ TEST(GDL90Utils, HeartBeatMessage) {
     // Set Status Byte 1 = 0b10000001.
     gdl90.gnss_position_valid = true;
     gdl90.maintenance_required = false;
-    // Set Status Byte 2 = 0b10000001.
+    gdl90.csa_requested = true;
+    gdl90.csa_not_available = false;
+    // Set Status Byte 2 = 0b01000001.
     gdl90.utc_timing_is_valid = true;
-    // Timestamp must have MS bit = 0b1.
-    uint32_t timestamp = (0b1 << 16) | 0xD0DB;  // Set timestamp to match sample message.
+    // Timestamp must have MS bit = 0b0.
+    uint32_t timestamp = (0b0 << 16) | 0xD0DB;  // Set timestamp to match sample message.
     uint16_t message_counts = 0x0208;
     ASSERT_EQ(11, gdl90.WriteGDL90HeartbeatMessage(buf, timestamp, message_counts));
     EXPECT_EQ(buf[0], 0x7E);
@@ -117,4 +119,12 @@ TEST(GDL90Utils, HeartBeatMessage) {
     EXPECT_EQ(buf[8], 0xB3);
     EXPECT_EQ(buf[9], 0x8B);
     EXPECT_EQ(buf[10], 0x7E);
+}
+
+TEST(GDL90Utils, InitMessage) {
+    // TODO: Add tests here!
+}
+
+TEST(GDL90Utils, UplinkDataMessage) {
+    // TODO: Add tests here!
 }

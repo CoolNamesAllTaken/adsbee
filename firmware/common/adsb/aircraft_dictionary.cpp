@@ -362,103 +362,105 @@ Aircraft *AircraftDictionary::GetAircraftPtr(uint32_t icao_address) {
  */
 
 /**
- * Returns the Wake Vortex value of the aircraft that sent a given ADS-B packet.
- * @param[in] packet ADS-B Packet to extract the AirframeType value from. Must be
- * @retval AirframeType that matches the combination of capability and typecode from the ADS-B packet, or
- * kAirframeTypeInvalid if there is no matching wake vortex value.
+ * Returns the Wake Vortex category of the aircraft that sent a given ADS-B packet. Note that some categories have a
+ * many to one mapping!
+ * @param[in] packet ADS-B Packet to extract the Category value from. Must be
+ * @retval Category that matches the combination of capability and typecode from the ADS-B packet, or
+ * kCategoryInvalid if there is no matching wake vortex value.
  */
-Aircraft::AirframeType ExtractAirframeType(const ADSBPacket &packet) {
-    uint16_t typecode = packet.GetNBitWordFromMessage(5, 0);
-    uint16_t category = packet.GetNBitWordFromMessage(3, 5);
+Aircraft::Category ExtractCategory(const ADSBPacket &packet) {
+    uint8_t typecode = packet.GetNBitWordFromMessage(5, 0);
+    uint8_t capability = packet.GetNBitWordFromMessage(3, 5);
 
     // Table 4.1 from The 1090Mhz Riddle (Junzi Sun), pg. 42.
-    if (category == 0) {
-        return Aircraft::kAirframeTypeNoCategoryInfo;
+    if (capability == 0) {
+        return Aircraft::kCategoryNoCategoryInfo;
     }
 
     switch (typecode) {
         case 1:
-            return Aircraft::kAirframeTypeReserved;
+            return Aircraft::kCategoryReserved;
             break;
         case 2:
-            switch (category) {
+            switch (capability) {
                 case 1:
-                    return Aircraft::kAirframeTypeSurfaceEmergencyVehicle;
+                    return Aircraft::kCategorySurfaceEmergencyVehicle;
                     break;
                 case 3:
-                    return Aircraft::kAirframeTypeSurfaceServiceVehicle;
+                    return Aircraft::kCategorySurfaceServiceVehicle;
                     break;
                 case 4:
                 case 5:
                 case 6:
                 case 7:
-                    return Aircraft::kAirframeTypeGroundObstruction;
+                    return Aircraft::kCategoryGroundObstruction;
                     break;
                 default:
-                    return Aircraft::kAirframeTypeInvalid;
+                    return Aircraft::kCategoryInvalid;
             }
             break;
         case 3:
-            switch (category) {
+            switch (capability) {
                 case 1:
-                    return Aircraft::kAirframeTypeGliderSailplane;
+                    return Aircraft::kCategoryGliderSailplane;
                     break;
                 case 2:
-                    return Aircraft::kAirframeTypeLighterThanAir;
+                    return Aircraft::kCategoryLighterThanAir;
                     break;
                 case 3:
-                    return Aircraft::kAirframeTypeParachutistSkydiver;
+                    return Aircraft::kCategoryParachutistSkydiver;
                     break;
                 case 4:
-                    return Aircraft::kAirframeTypeUltralightHangGliderParaglider;
+                    return Aircraft::kCategoryUltralightHangGliderParaglider;
                     break;
                 case 5:
-                    return Aircraft::kAirframeTypeReserved;
+                    return Aircraft::kCategoryReserved;
                     break;
                 case 6:
-                    return Aircraft::kAirframeTypeUnmannedAerialVehicle;
+                    return Aircraft::kCategoryUnmannedAerialVehicle;
                     break;
                 case 7:
-                    return Aircraft::kAirframeTypeSpaceTransatmosphericVehicle;
+                    return Aircraft::kCategorySpaceTransatmosphericVehicle;
                     break;
                 default:
-                    return Aircraft::kAirframeTypeInvalid;
+                    return Aircraft::kCategoryInvalid;
             }
             break;
         case 4:
-            switch (category) {
+            switch (capability) {
                 case 1:
-                    return Aircraft::kAirframeTypeLight;
+                    return Aircraft::kCategoryLight;
                     break;
                 case 2:
-                    return Aircraft::kAirframeTypeMedium1;
+                    return Aircraft::kCategoryMedium1;
                     break;
                 case 3:
-                    return Aircraft::kAirframeTypeMedium2;
+                    return Aircraft::kCategoryMedium2;
                     break;
                 case 4:
-                    return Aircraft::kAirframeTypeHighVortexAircraft;
+                    return Aircraft::kCategoryHighVortexAircraft;
                     break;
                 case 5:
-                    return Aircraft::kAirframeTypeHeavy;
+                    return Aircraft::kCategoryHeavy;
                     break;
                 case 6:
-                    return Aircraft::kAirframeTypeHighPerformance;
+                    return Aircraft::kCategoryHighPerformance;
                     break;
                 case 7:
-                    return Aircraft::kAirframeTypeRotorcraft;
+                    return Aircraft::kCategoryRotorcraft;
                     break;
                 default:
-                    return Aircraft::kAirframeTypeInvalid;
+                    return Aircraft::kCategoryInvalid;
             }
             break;
         default:
-            return Aircraft::kAirframeTypeInvalid;
+            return Aircraft::kCategoryInvalid;
     }
 }
 
 bool AircraftDictionary::ApplyAircraftIDMessage(Aircraft &aircraft, ADSBPacket packet) {
-    aircraft.airframe_type = ExtractAirframeType(packet);
+    aircraft.category = ExtractCategory(packet);
+    aircraft.category_raw = packet.GetNBitWordFromMessage(8, 0);
     aircraft.transponder_capability = packet.GetCapability();
     for (uint16_t i = 0; i < Aircraft::kCallSignMaxNumChars; i++) {
         char callsign_char = LookupCallsignChar(packet.GetNBitWordFromMessage(6, 8 + (6 * i)));
