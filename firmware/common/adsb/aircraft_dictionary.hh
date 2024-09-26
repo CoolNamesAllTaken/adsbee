@@ -192,7 +192,7 @@ class Aircraft {
      * @param[in] mode_s_frame Set to true if the frame received was a Mode S frame.
      */
     inline void IncrementNumFramesReceived(bool mode_s_frame = false) {
-        mode_s_frame ? stats_mode_s_frames_received_counter_++ : stats_mode_ac_frames_received_counter_++;
+        mode_s_frame ? stats_mode_s_frames_received_counter_++ : stats_short_mode_s_frames_received_counter_++;
     }
 
     /**
@@ -201,13 +201,13 @@ class Aircraft {
      * count for number of packets recieved over a consistent interval of time.
      */
     inline void UpdateStats() {
-        stats_mode_ac_frames_received_in_last_interval = stats_mode_ac_frames_received_counter_;
-        stats_mode_ac_frames_received_counter_ = 0;
+        stats_short_mode_s_frames_received_in_last_interval = stats_short_mode_s_frames_received_counter_;
+        stats_short_mode_s_frames_received_counter_ = 0;
         stats_mode_s_frames_received_in_last_interval = stats_mode_s_frames_received_counter_;
         stats_mode_s_frames_received_counter_ = 0;
 
         stats_frames_received_in_last_interval =
-            stats_mode_ac_frames_received_in_last_interval + stats_mode_s_frames_received_in_last_interval;
+            stats_short_mode_s_frames_received_in_last_interval + stats_mode_s_frames_received_in_last_interval;
     }
 
     /**
@@ -256,7 +256,7 @@ class Aircraft {
     int16_t last_message_signal_quality_db = 0;    // Ratio of RSSI to noise floor during message receipt.
 
     uint16_t stats_frames_received_in_last_interval = 0;  // Number of valid frames received.
-    uint16_t stats_mode_ac_frames_received_in_last_interval = 0;
+    uint16_t stats_short_mode_s_frames_received_in_last_interval = 0;
     uint16_t stats_mode_s_frames_received_in_last_interval = 0;
 
     uint16_t transponder_capability = 0;
@@ -328,7 +328,7 @@ class Aircraft {
     CPRPacket last_odd_packet_;
     CPRPacket last_even_packet_;
 
-    uint16_t stats_mode_ac_frames_received_counter_ = 0;
+    uint16_t stats_short_mode_s_frames_received_counter_ = 0;
     uint16_t stats_mode_s_frames_received_counter_ = 0;
 };
 

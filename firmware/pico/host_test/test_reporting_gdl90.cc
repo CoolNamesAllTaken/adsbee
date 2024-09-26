@@ -128,3 +128,11 @@ TEST(GDL90Utils, InitMessage) {
 TEST(GDL90Utils, UplinkDataMessage) {
     // TODO: Add tests here!
 }
+
+TEST(GDL90Utils, OwnshipReport) {
+    // TODO: Add tests here!
+}
+
+TEST(GDL90Utils, TrafficReport) {
+    // TODO: Add tests here!
+}

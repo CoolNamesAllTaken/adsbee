@@ -95,10 +95,10 @@ class ADSBee {
     inline uint16_t GetStatsNumDemods() { return stats_demods_in_last_interval_; }
 
     /**
-     * Returns the number of valid Mode A / Mode C packets decoded in the last kStatsUpdateIntervalMs milliseconds.
+     * Returns the number of valid Short Mode S packets decoded in the last kStatsUpdateIntervalMs milliseconds.
      * @retval Number of valid packets received with Downlink Format = 4, 5.
      */
-    inline uint16_t GetStatsNumModeACPackets() { return stats_valid_mode_ac_frames_in_last_interval_; }
+    inline uint16_t GetStatsNumModeACPackets() { return stats_valid_short_mode_s_frames_in_last_interval_; }
 
     /**
      * Returns the number of valid Mode S packets decoded in the last kStatsUpdateIntervalMs milliseconds.
@@ -278,7 +278,7 @@ class ADSBee {
     // These values are continuous counters of number of packets of each type received. Don't use these values for
     // anything external!
     uint16_t stats_demods_in_last_interval_counter_ = 0;
-    uint16_t stats_valid_mode_ac_frames_in_last_interval_counter_ = 0;
+    uint16_t stats_valid_short_mode_s_frames_in_last_interval_counter_ = 0;
     uint16_t stats_valid_mode_s_frames_in_last_interval_counter_ = 0;
 
     // Timestamp of the last time that the packet counters were stored and reset to 0.
@@ -287,7 +287,7 @@ class ADSBee {
     // These values are updated every stats update interval so that they always contain counts across a consistent
     // interval. Use these values for anything important!
     uint16_t stats_demods_in_last_interval_ = 0;
-    uint16_t stats_valid_mode_ac_frames_in_last_interval_ = 0;
+    uint16_t stats_valid_short_mode_s_frames_in_last_interval_ = 0;
     uint16_t stats_valid_mode_s_frames_in_last_interval_ = 0;
 
     bool receiver_enabled_ = true;

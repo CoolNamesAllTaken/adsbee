@@ -33,7 +33,7 @@ const uint16_t kCRC24GeneratorNumBits = 25;
 /** DecodedTransponderPacket **/
 
 RawTransponderPacket::RawTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32,
-                                           int rssi_dbm_in, uint64_t mlat_48mhz_64bit_counts_in) {
+                                           int sigs_dbm_in, int sigq_db_in, uint64_t mlat_48mhz_64bit_counts_in) {
     // Set the last word indgestion behavior based on packet length.
     uint32_t last_word_ingestion_mask, last_word_popcount;
     if (rx_buffer_len_words32 > 2) {
@@ -56,11 +56,12 @@ RawTransponderPacket::RawTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords
             buffer_len_bits += BITS_PER_WORD_32;
         }
     }
-    rssi_dbm = rssi_dbm_in;
+    sigs_dbm = sigs_dbm_in;
+    sigq_db = sigq_db_in;
     mlat_48mhz_64bit_counts = mlat_48mhz_64bit_counts_in;
 }
 
-RawTransponderPacket::RawTransponderPacket(char *rx_string, int rssi_dbm_in, uint64_t mlat_48mhz_64bit_counts_in) {
+RawTransponderPacket::RawTransponderPacket(char *rx_string, int sigs_dbm_in, uint64_t mlat_48mhz_64bit_counts_in) {
     uint16_t rx_num_bytes = strlen(rx_string) / NIBBLES_PER_BYTE;
     for (uint16_t i = 0; i < rx_num_bytes && i < kMaxPacketLenWords32 * BYTES_PER_WORD_32; i++) {
         uint8_t byte = (CHAR_TO_HEX(rx_string[i * NIBBLES_PER_BYTE]) << BITS_PER_NIBBLE) |
@@ -73,19 +74,19 @@ RawTransponderPacket::RawTransponderPacket(char *rx_string, int rssi_dbm_in, uin
         }
         buffer_len_bits += BITS_PER_BYTE;
     }
-    rssi_dbm = rssi_dbm_in;
+    sigs_dbm = sigs_dbm_in;
     mlat_48mhz_64bit_counts = mlat_48mhz_64bit_counts_in;
 }
 
 DecodedTransponderPacket::DecodedTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32],
-                                                   uint16_t rx_buffer_len_words32, int rssi_dbm,
+                                                   uint16_t rx_buffer_len_words32, int sigs_dbm,
                                                    uint64_t mlat_48mhz_64bit_counts)
-    : packet(rx_buffer, rx_buffer_len_words32, rssi_dbm, mlat_48mhz_64bit_counts) {
+    : packet(rx_buffer, rx_buffer_len_words32, sigs_dbm, mlat_48mhz_64bit_counts) {
     ConstructTransponderPacket();
 }
 
-DecodedTransponderPacket::DecodedTransponderPacket(char *rx_string, int rssi_dbm, uint64_t mlat_48mhz_64bit_counts)
-    : packet(rx_string, rssi_dbm, mlat_48mhz_64bit_counts) {
+DecodedTransponderPacket::DecodedTransponderPacket(char *rx_string, int sigs_dbm, uint64_t mlat_48mhz_64bit_counts)
+    : packet(rx_string, sigs_dbm, mlat_48mhz_64bit_counts) {
     ConstructTransponderPacket();
 }
 

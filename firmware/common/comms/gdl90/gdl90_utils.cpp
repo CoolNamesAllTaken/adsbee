@@ -121,8 +121,51 @@ uint16_t GDL90Reporter::WriteGDL90UplinkDataMessage(uint8_t *to_buf, uint8_t *up
 uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const GDL90TargetReportData &data,
                                                       bool ownship) {
     const uint16_t kMessageBufLenBytes = 28;
+    const float kLatLonDegTo24BitFrac = 46603.3777778f;
+    const float kHeadingTrackDegTo8BitFrac = 0.71111111111f;
     uint8_t message_buf[kMessageBufLenBytes];
     message_buf[0] = ownship ? kGDL90MessageIDOwnshipReport : kGDL90MessageIDTrafficReport;
-    // TODO: fill in the rest of the message!
+    message_buf[1] = ((data.traffic_alert_status & 0xF) << 4)  // s: Traffic Alert Status
+                     | (data.address_type & 0xF);              // t: Address Type
+    // aa aa aa: 24-bit Participant Address
+    message_buf[2] = data.participant_address & 0xFF;
+    message_buf[3] = (data.participant_address >> 8) & 0xFF;
+    message_buf[4] = (data.participant_address >> 16) & 0xFF;
+    // ll ll ll: Latitude as a 24-bit signed binary fraction. Resolution = 180/2^23 degrees.
+    int32_t latitude_frac = static_cast<int32_t>(data.latitude_deg * kLatLonDegTo24BitFrac) & 0x00FFFFFF;
+    message_buf[5] = latitude_frac & 0xFF;
+    message_buf[6] = (latitude_frac >> 8) & 0xFF;
+    message_buf[7] = (latitude_frac >> 16) & 0xFF;
+    // nn nn nn: Longitude as a 24-bit signed binary fraction. Resolution = 180/2^23 degrees.
+    int32_t longitude_frac = static_cast<int32_t>(data.longitude_deg * kLatLonDegTo24BitFrac) & 0x00FFFFFF;
+    message_buf[8] = longitude_frac & 0xFF;
+    message_buf[9] = (longitude_frac >> 8) & 0xFF;
+    message_buf[10] = (longitude_frac >> 16) & 0xFF;
+    // ddd: Altitude as a 12-bit offset integer. Resolution = 25 feet.
+    int16_t altitude_frac = static_cast<int16_t>(data.altitude_ft / 25) & 0x0FFF;
+    message_buf[11] = altitude_frac & 0xFF;  // dd: Altitude LS Byte.
+
+    message_buf[12] = (altitude_frac >> 8) |         // d: Altitude MS nibble.
+                      (data.misc_indicators & 0xF);  // m: Miscellaneous indicators.
+    message_buf[13] =
+        ((data.navigation_integrity_category & 0xF) << 4)      // i: Navigation Integrity Category (NIC).
+        | (data.navigation_accuracy_category_position & 0xF);  // a: Navigation Accuracy Category for Position (NACp).
+    // hhh: Horizontal Velocity. Resolution = 1kt.
+    uint32_t velocity_kts = static_cast<uint32_t>(data.velocity_kts) & 0x00000FFF;
+    // vvv: Vertical Velocity. Signed Integer in units of 64fpm.
+    int32_t vertical_rate_fpm = (data.vertical_rate_fpm / 64) & 0x000000FFF;
+    message_buf[14] = velocity_kts & 0xFF;          // hh: LSB of Horizontal Velocity.
+    message_buf[15] = (velocity_kts >> 8)           // h: MS nibble of Horizontal Velocity.
+                      | (vertical_rate_fpm & 0xF);  // v: LS nibble of Vertical Rate.
+    message_buf[16] = vertical_rate_fpm >> 4;       // vv: MSB of Vertical Rate.
+    // tt: Track / Heading. 8-bit angular weighted binary. Resolution = 360/256 degrees. 0 = North,
+    // 128 = South. Indicate track or heading using misc bit field.
+    message_buf[17] = static_cast<uint32_t>(data.track_heading_deg * kHeadingTrackDegTo8BitFrac) & 0x000000FF;
+    // ee: Emitter Category.
+    message_buf[18] = data.emitter_category;
+    // cc cc cc cc cc cc cc cc: Call sign. 8 ASCII characters, 0-9 and A-Z.
+    memcpy(message_buf + 19, data.callsign, 8);                  // message[19] - message[26]
+    message_buf[27] = (data.emergency_priority_code & 0xF) << 4  // p: Emergency / Priority Code.
+                      | 0b0;                                     // x: Spare
     return WriteGDL90Message(to_buf, message_buf, kMessageBufLenBytes);
 }

@@ -30,14 +30,26 @@ class GDL90Reporter {
     };
 
     struct GDL90TargetReportData {
+        enum AddressType : uint8_t {
+            kAddressTypeADSBWithICAOAddress = 0,
+            kAddressTypeADSBWithSelfAssignedAddress = 1,
+            kAddressTypeTISBWithICAOAddress = 2,
+            kAddressTypeTISBWithTrackFileID = 3,
+            kAddressTypeSurfaceVehicle = 4,
+            kAddressTypeGroundStationBeacon = 5
+            // IDs 6-15 reserved.
+        };
+
+        // Note: Target with no valid position has lat, lon, and NIC set to 0.
         bool traffic_alert_status = false;  // 1 = Traffic Alert is active for this target.
-        uint8_t address_type;               // Type of address conveyed in Participant Address field.
-        uint32_t participant_address;       // 24 bit ICAO address.
-        float latitude_deg;                 // 24-bit signed binary fraction. Resolution = 180/2^23 degrees.
-        float longitude_deg;                // 24-bit signed binary fraction. Resolution = 180/2^23 degrees.
-        float altitude_ft;                  // 12-bit offset integer. Resolution = 25 feet.
+        AddressType address_type =
+            kAddressTypeADSBWithICAOAddress;  // Type of address conveyed in Participant Address field.
+        uint32_t participant_address;         // 24 bit ICAO address.
+        float latitude_deg = 0.0f;
+        float longitude_deg = 0.0f;
+        int16_t altitude_ft;
         uint8_t misc_indicators;
-        uint8_t navigation_integrity_category;          // Navigation Integrity Category (NIC).
+        uint8_t navigation_integrity_category = 0;      // Navigation Integrity Category (NIC).
         uint8_t navigation_accuracy_category_position;  // Navigation Accuracy Category for Postion (NACp).
         float velocity_kts;
         int vertical_rate_fpm;

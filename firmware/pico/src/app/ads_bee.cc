@@ -179,11 +179,11 @@ bool ADSBee::Update() {
         if (raw_packet.buffer_len_bits == DecodedTransponderPacket::kExtendedSquitterPacketLenBits) {
             CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%08x|%08x|%04x RSSI=%ddBm MLAT=%u",
                          raw_packet.buffer[0], raw_packet.buffer[1], raw_packet.buffer[2],
-                         (raw_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_packet.rssi_dbm,
+                         (raw_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_packet.sigs_dbm,
                          raw_packet.mlat_48mhz_64bit_counts);
         } else {
             CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%06x RSSI=%ddBm MLAT=%u", raw_packet.buffer[0],
-                         (raw_packet.buffer[1]) >> (2 * kBitsPerNibble), raw_packet.rssi_dbm,
+                         (raw_packet.buffer[1]) >> (2 * kBitsPerNibble), raw_packet.sigs_dbm,
                          raw_packet.mlat_48mhz_64bit_counts);
         }
 
@@ -197,7 +197,7 @@ bool ADSBee::Update() {
             switch (decoded_packet.GetDownlinkFormat()) {
                 case DecodedTransponderPacket::kDownlinkFormatAltitudeReply:
                 case DecodedTransponderPacket::kDownlinkFormatIdentityReply:
-                    stats_valid_mode_ac_frames_in_last_interval_counter_++;
+                    stats_valid_short_mode_s_frames_in_last_interval_counter_++;
                     break;
                 default:
                     stats_valid_mode_s_frames_in_last_interval_counter_++;
@@ -217,12 +217,12 @@ bool ADSBee::Update() {
             aircraft.UpdateStats();
         }
         // Update statistics for the dictionary.
-        stats_valid_mode_ac_frames_in_last_interval_ = stats_valid_mode_ac_frames_in_last_interval_counter_;
+        stats_valid_short_mode_s_frames_in_last_interval_ = stats_valid_short_mode_s_frames_in_last_interval_counter_;
         stats_valid_mode_s_frames_in_last_interval_ = stats_valid_mode_s_frames_in_last_interval_counter_;
         // Read num demods last and reset it first so we can never have a ratio > 1 even in interrupt edge cases.
         stats_demods_in_last_interval_ = stats_demods_in_last_interval_counter_;
         stats_demods_in_last_interval_counter_ = 0;
-        stats_valid_mode_ac_frames_in_last_interval_counter_ = 0;
+        stats_valid_short_mode_s_frames_in_last_interval_counter_ = 0;
         stats_valid_mode_s_frames_in_last_interval_counter_ = 0;
 
         stats_last_update_timestamp_ms_ = timestamp_ms;
@@ -230,7 +230,7 @@ bool ADSBee::Update() {
         // If learning, add the number of valid packets received to the pile used for trigger level learning.
         if (tl_learning_temperature_mv_ > 0) {
             tl_learning_num_valid_packets_ +=
-                (stats_valid_mode_ac_frames_in_last_interval_ + stats_valid_mode_s_frames_in_last_interval_);
+                (stats_valid_short_mode_s_frames_in_last_interval_ + stats_valid_mode_s_frames_in_last_interval_);
         }
     }
 
@@ -300,7 +300,7 @@ void ADSBee::OnDemodBegin(uint gpio, uint32_t event_mask) {
 void ADSBee::OnDemodComplete() {
     pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_, false);
     // Read the RSSI level of the current packet.
-    rx_packet_.rssi_dbm = ReadRSSIdBm();
+    rx_packet_.sigs_dbm = ReadRSSIdBm();
     if (!pio_sm_is_rx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_)) {
         // Push any partially complete 32-bit word onto the RX FIFO.
         pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_,

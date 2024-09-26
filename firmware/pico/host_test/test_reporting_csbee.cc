@@ -23,10 +23,10 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
     aircraft.last_message_signal_strength_dbm = -75;
     aircraft.last_message_signal_quality_db = 2;
     aircraft.stats_frames_received_in_last_interval = 4;
-    aircraft.stats_mode_ac_frames_received_in_last_interval = 1;
+    aircraft.stats_short_mode_s_frames_received_in_last_interval = 1;
     aircraft.stats_mode_s_frames_received_in_last_interval = 3;
     aircraft.stats_frames_received_in_last_interval = 4;
-    aircraft.stats_mode_ac_frames_received_in_last_interval = 1;
+    aircraft.stats_short_mode_s_frames_received_in_last_interval = 1;
     aircraft.stats_mode_s_frames_received_in_last_interval = 3;
     aircraft.transponder_capability = ADSBPacket::Capability::kCALevel2PlusTransponderOnSurfaceCanSetCA7;
     aircraft.icao_address = 0x12345E;
