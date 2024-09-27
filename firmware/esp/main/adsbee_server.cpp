@@ -32,18 +32,20 @@ bool ADSBeeServer::Update() {
 bool ADSBeeServer::HandleRawTransponderPacket(RawTransponderPacket raw_packet) {
     switch (raw_packet.buffer_len_bits) {
         case DecodedTransponderPacket::kExtendedSquitterPacketLenBits:
-            CONSOLE_INFO("ADSBeeServer::HandleRawTransponderpacket",
-                         "Received Extended Squitter RawTransponderPacket.");
-            // CONSOLE_INFO("ADSBeeServer::HandleRawTransponderPacket",
-            //              "New message: 0x%08x|%08x|%08x|%04x RSSI=%ddBm MLAT=%lu", raw_packet.buffer[0],
-            //              raw_packet.buffer[1], raw_packet.buffer[2], (raw_packet.buffer[3]) >> (4 * kBitsPerNibble),
-            //              raw_packet.rssi_dbm, raw_packet.mlat_48mhz_64bit_counts);
-            break;
+            // CONSOLE_INFO("ADSBeeServer::HandleRawTransponderpacket",
+            //              "Received Extended Squitter RawTransponderPacket.");
+            // // CONSOLE_INFO("ADSBeeServer::HandleRawTransponderPacket",
+            // //              "New message: 0x%08x|%08x|%08x|%04x RSSI=%ddBm MLAT=%lu", raw_packet.buffer[0],
+            // //              raw_packet.buffer[1], raw_packet.buffer[2], (raw_packet.buffer[3]) >> (4 *
+            // kBitsPerNibble),
+            // //              raw_packet.rssi_dbm, raw_packet.mlat_48mhz_64bit_counts);
+            // break;
         case DecodedTransponderPacket::kSquitterPacketLenBits:
-            CONSOLE_INFO("ADSBeeServer::HandleRawTransponderpacket", "Received Squitter RawTransponderPacket.");
-            // CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%06x RSSI=%ddBm MLAT=%lu", raw_packet.buffer[0],
-            //              (raw_packet.buffer[1]) >> (2 * kBitsPerNibble), raw_packet.rssi_dbm,
-            //              raw_packet.mlat_48mhz_64bit_counts);
+            // CONSOLE_INFO("ADSBeeServer::HandleRawTransponderpacket", "Received Squitter RawTransponderPacket.");
+            // // CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%06x RSSI=%ddBm MLAT=%lu", raw_packet.buffer[0],
+            // //              (raw_packet.buffer[1]) >> (2 * kBitsPerNibble), raw_packet.rssi_dbm,
+            // //              raw_packet.mlat_48mhz_64bit_counts);
+            transponder_packet_queue.Push(raw_packet);
             break;
         default:
             CONSOLE_ERROR("ADSBeeServer::HandleRawTransponderpacket",
