@@ -64,7 +64,7 @@ inline int16_t WriteCSBeeAircraftMessageStr(char message_buf[], const Aircraft &
                  aircraft.longitude_deg,                                        // LON
                  aircraft.baro_altitude_ft,                                     // ALT_BARO
                  aircraft.gnss_altitude_ft,                                     // ALT_GEO
-                 aircraft.track_deg,                                            // TRACK
+                 aircraft.direction_deg,                                        // TRACK
                  aircraft.velocity_kts,                                         // VELH
                  aircraft.vertical_rate_fpm,                                    // VELV
                  aircraft.last_message_signal_strength_dbm,                     // SIGS

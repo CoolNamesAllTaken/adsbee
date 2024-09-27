@@ -2,11 +2,14 @@
 #include "beast_utils.hh"
 #include "comms.hh"
 #include "csbee_utils.hh"
+#include "gdl90_utils.hh"
 #include "hal.hh"  // For timestamping.
 #include "mavlink/mavlink.h"
 #include "unit_conversions.hh"
 
 extern ADSBee adsbee;
+
+GDL90Reporter gdl90;
 
 bool CommsManager::InitReporting() { return true; }
 
@@ -46,10 +49,12 @@ bool CommsManager::UpdateReporting() {
                 }
                 break;
             case SettingsManager::kGDL90:
-                // Currently not supported.
-                CONSOLE_WARNING("CommsManager::UpdateReporting",
-                                "Protocol GDL90 specified on interface %d but is not yet supported.", i);
-                ret = false;
+                if (timestamp_ms - last_report_timestamp_ms >= kMAVLINKReportingIntervalMs) {
+                    ret = ReportGDL90(iface);
+                    last_report_timestamp_ms = timestamp_ms;
+                }
+                // CONSOLE_WARNING("CommsManager::UpdateReporting",
+                //                 "Protocol GDL90 specified on interface %d but is not yet supported.", i);
                 break;
             case SettingsManager::kNumProtocols:
             default:
@@ -75,9 +80,7 @@ bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface,
         uint8_t beast_frame_buf[kBeastFrameMaxLenBytes];
         uint16_t num_bytes_in_frame = TransponderPacketToBeastFrame(packets_to_report[i], beast_frame_buf);
         comms_manager.iface_putc(iface, char(0x1a));  // Send beast escape char to denote beginning of frame.
-        for (uint16_t j = 0; j < num_bytes_in_frame; j++) {
-            comms_manager.iface_putc(iface, char(beast_frame_buf[j]));
-        }
+        SendBuf(iface, (char *)beast_frame_buf, num_bytes_in_frame);
     }
     return true;
 }
@@ -88,30 +91,26 @@ bool CommsManager::ReportCSBee(SettingsManager::SerialInterface iface) {
         const Aircraft &aircraft = itr.second;
 
         char message[kCSBeeMessageStrMaxLen];
-        int16_t message_len = WriteCSBeeAircraftMessageStr(message, aircraft);
-        if (message_len < 0) {
+        int16_t message_len_bytes = WriteCSBeeAircraftMessageStr(message, aircraft);
+        if (message_len_bytes < 0) {
             CONSOLE_ERROR("CommsManager::ReportCSBee",
-                          "Encountered an error in WriteCSBeeAircraftMessageStr, error code %d.", message_len);
+                          "Encountered an error in WriteCSBeeAircraftMessageStr, error code %d.", message_len_bytes);
             return false;
         }
-        for (uint16_t i = 0; i < message_len; i++) {
-            comms_manager.iface_putc(iface, message[i]);
-        }
+        SendBuf(iface, message, message_len_bytes);
     }
 
     // Write a CSBee Statistics message.
     char message[kCSBeeMessageStrMaxLen];
-    int16_t message_len =
+    int16_t message_len_bytes =
         WriteCSBeeStatisticsMessageStr(message, adsbee.GetStatsNumDemods(), adsbee.GetStatsNumModeACPackets(),
                                        adsbee.GetStatsNumModeSPackets(), 0u, get_time_since_boot_ms() / 1000);
-    if (message_len < 0) {
+    if (message_len_bytes < 0) {
         CONSOLE_ERROR("CommsManager::ReportCSBee",
-                      "Encountered an error in WriteCSBeeStatisticsMessageStr, error code %d.", message_len);
+                      "Encountered an error in WriteCSBeeStatisticsMessageStr, error code %d.", message_len_bytes);
         return false;
     }
-    for (uint16_t i = 0; i < message_len; i++) {
-        comms_manager.iface_putc(iface, message[i]);
-    }
+    SendBuf(iface, message, message_len_bytes);
     return true;
 }
 
@@ -187,7 +186,7 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
                                          : aircraft.gnss_altitude_ft) *
                         1000,
             // Heding [cdeg]
-            .heading = static_cast<uint16_t>(aircraft.track_deg * 100.0f),
+            .heading = static_cast<uint16_t>(aircraft.direction_deg * 100.0f),
             // Horizontal Velocity [cm/s]
             .hor_velocity = static_cast<uint16_t>(KtsToMps(static_cast<int>(aircraft.velocity_kts)) * 100),
             // Vertical Velocity [cm/s]
@@ -225,5 +224,28 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
             return false;
     };
 
+    return true;
+}
+
+bool CommsManager::ReportGDL90(SettingsManager::SerialInterface iface) {
+    uint8_t buf[GDL90Reporter::kGDL90MessageMaxLenBytes];
+    uint16_t msg_len;
+
+    // Heartbeat Message
+    msg_len = gdl90.WriteGDL90HeartbeatMessage(buf, get_time_since_boot_ms() / 1000, adsbee.GetStatsNumModeSPackets());
+    SendBuf(iface, (char *)buf, msg_len);
+
+    // Ownship Report
+    GDL90Reporter::GDL90TargetReportData ownship_data;
+    // TODO: Actually fill out ownship data!
+    msg_len = gdl90.WriteGDL90TargetReportMessage(buf, ownship_data, true);
+    SendBuf(iface, (char *)buf, msg_len);
+
+    // Traffic Reports
+    for (auto &itr : adsbee.aircraft_dictionary.dict) {
+        const Aircraft &aircraft = itr.second;
+        msg_len = gdl90.WriteGDL90TargetReportMessage(buf, aircraft, false);
+        SendBuf(iface, (char *)buf, msg_len);
+    }
     return true;
 }

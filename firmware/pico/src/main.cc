@@ -94,7 +94,7 @@ int main() {
     test_aircraft.baro_altitude_ft = 10000;
     test_aircraft.vertical_rate_fpm = -5;
     test_aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeSourceBaro;
-    test_aircraft.track_deg = 100;
+    test_aircraft.direction_deg = 100;
     test_aircraft.velocity_kts = 200;
     adsbee.aircraft_dictionary.InsertAircraft(test_aircraft);
 

@@ -64,12 +64,12 @@ class Aircraft {
         kBitFlagTCASOperational,         // TCAS system on aircraft is functional.
         kBitFlagSingleAntenna,           // Indicates that the aircraft is using a single antenna. Transmissions may be
                                          // intermittent.
-        kBitFlagSurfacePositionUsesHeading,  // Surface position heading is aircraft heading and not track angle.
-        kBitFlagHeadingUsesMagneticNorth,    // Heading in surface and airborne position messages is magnetic north, not
-                                             // true north.
-        kBitFlagIdent,                       // IDENT switch is currently active.
-        kBitFlagAlert,                       // Aircraft is indicating an alert.
-        kBitFlagTCASRA,                      // Indicates a TCAS resolution advisory is active.
+        kBitFlagDirectionIsHeading,      // Direction is aircraft heading and not track angle.
+        kBitFlagHeadingUsesMagneticNorth,  // Heading in surface and airborne position messages is magnetic north, not
+                                           // true north.
+        kBitFlagIdent,                     // IDENT switch is currently active.
+        kBitFlagAlert,                     // Aircraft is indicating an alert.
+        kBitFlagTCASRA,                    // Indicates a TCAS resolution advisory is active.
         kBitFlagReserved0,
         kBitFlagReserved1,
         kBitFlagReserved2,
@@ -242,7 +242,7 @@ class Aircraft {
      * @param[in] bit Position of bit to check.
      * @retval True if bit has been set, false if bit has been cleared.
      */
-    inline bool HasBitFlag(BitFlag bit) { return flags & (0b1 << bit) ? true : false; }
+    inline bool HasBitFlag(BitFlag bit) const { return flags & (0b1 << bit) ? true : false; }
 
     /**
      * Resets just the flag bits that show that something updated within the last reporting interval.
@@ -275,7 +275,7 @@ class Aircraft {
     float longitude_deg = 0.0f;
 
     // Airborne Velocities Message
-    float track_deg = 0.0f;
+    float direction_deg = 0.0f;
     float velocity_kts = 0;
     VelocitySource velocity_source = kVelocitySourceNotSet;
     int vertical_rate_fpm = 0.0f;

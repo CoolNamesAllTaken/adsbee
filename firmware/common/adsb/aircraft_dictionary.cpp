@@ -693,7 +693,7 @@ bool AircraftDictionary::ApplyAirborneVelocitiesMessage(Aircraft &aircraft, ADSB
                     v_y_kts *= 4;
                 }
                 aircraft.velocity_kts = sqrtf(v_x_kts * v_x_kts + v_y_kts * v_y_kts);
-                aircraft.track_deg = wrapped_atan2f(v_x_kts, v_y_kts) * kRadiansToDegrees;
+                aircraft.direction_deg = wrapped_atan2f(v_x_kts, v_y_kts) * kRadiansToDegrees;
             }
             break;
         }
@@ -713,7 +713,7 @@ bool AircraftDictionary::ApplyAirborneVelocitiesMessage(Aircraft &aircraft, ADSB
                 aircraft.velocity_source = is_true_airspeed
                                                ? Aircraft::VelocitySource::kVelocitySourceAirspeedTrue
                                                : Aircraft::VelocitySource::kVelocitySourceAirspeedIndicated;
-                aircraft.track_deg = static_cast<float>((packet.GetNBitWordFromMessage(10, 14) * 360) / 1024.0f);
+                aircraft.direction_deg = static_cast<float>((packet.GetNBitWordFromMessage(10, 14) * 360) / 1024.0f);
             }
 
             break;
@@ -954,8 +954,7 @@ bool AircraftDictionary::ApplyAircraftOperationStatusMessage(Aircraft &aircraft,
             }
 
             // ME[52] Track Angle / Heading for Surface Position Messages
-            aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagSurfacePositionUsesHeading,
-                                  packet.GetNBitWordFromMessage(1, 52));
+            aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagDirectionIsHeading, packet.GetNBitWordFromMessage(1, 52));
 
             break;
         }

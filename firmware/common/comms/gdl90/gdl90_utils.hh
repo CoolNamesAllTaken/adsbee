@@ -40,6 +40,29 @@ class GDL90Reporter {
             // IDs 6-15 reserved.
         };
 
+        // Indicate what type of data is contained in the 'tt' field in the ownship and traffic report messages.
+        enum MiscIndicatorTrackOrHeadingValue : uint8_t {
+            kMiscIndicatorTTNotValid = 0,
+            kMiscIndicatorTTIsTrueTrackAngle = 0b1,
+            kMiscIndicatorTTIsMagneticHeading = 0b10,
+            kMiscIndicatorTTIsTrueHeading = 0b11
+        };
+        void SetMiscIndicator(MiscIndicatorTrackOrHeadingValue tt_value, bool report_is_extrapolated,
+                              bool aircraft_is_airborne) {
+            misc_indicators = (aircraft_is_airborne << 3) | (report_is_extrapolated << 2) | (tt_value & 0b11);
+        }
+
+        enum EmergencyPriorityCode : uint8_t {
+            kEmergencyPriorityCodeNoEmergency = 0,
+            kEmergencyPriorityCodeGeneralEmergency = 1,
+            kEmergencyPriorityCodeMedicalEmergency = 2,
+            kEmergencyPriorityCodeMinimumFuel = 3,
+            kEmergencyPriorityCodeNoCommunication = 4,
+            kEmergencyPriorityCodeUnlawfulInterference = 5,
+            kEmergencyPriorityCodeDownedAircraft = 6
+            // Codes 7-15 reserved.
+        };
+
         // Note: Target with no valid position has lat, lon, and NIC set to 0.
         bool traffic_alert_status = false;  // 1 = Traffic Alert is active for this target.
         AddressType address_type =
@@ -53,10 +76,10 @@ class GDL90Reporter {
         uint8_t navigation_accuracy_category_position;  // Navigation Accuracy Category for Postion (NACp).
         float velocity_kts;
         int vertical_rate_fpm;
-        float track_heading_deg;
+        float direction_deg;
         uint8_t emitter_category;
-        char callsign[9];                 // 8 characters, 0-9 and A-Z
-        uint8_t emergency_priority_code;  // 4 bits.
+        char callsign[9];                                                                   // 8 characters, 0-9 and A-Z
+        EmergencyPriorityCode emergency_priority_code = kEmergencyPriorityCodeNoEmergency;  // 4 bits.
     };
 
     /**
@@ -90,7 +113,22 @@ class GDL90Reporter {
      */
     uint16_t WriteGDL90UplinkDataMessage(uint8_t *to_buf, uint8_t *uplink_payload, uint16_t uplink_payload_len_bytes,
                                          uint32_t tor_us = 0xFFFFFFFF);
+
+    /**
+     * Write a GDL90 message for ownship or traffic data.
+     * @param[out] to_buf Buffer to write to.
+     * @param[in] data GDL90TargetReportData struct to use when populating the target report message.
+     * @param[in] ownship Set to true if this message is an ownship report, false if it's a traffic report.
+     */
     uint16_t WriteGDL90TargetReportMessage(uint8_t *to_buf, const GDL90TargetReportData &data, bool ownship = false);
+    /**
+     * Write a GDL90 message for ownship or traffic data. This function calls the version that takes a
+     * GDL90TargetReportData object, and is provided for convenience when sending Aircraft from an AircraftDictionary.
+     * @param[out] to_buf Buffer to write to.
+     * @param[in] aircraft Reference to Aircraft object to report.
+     * @param[in] ownship Set to true if this message is an ownship report, false if it's a traffic report.
+     */
+    uint16_t WriteGDL90TargetReportMessage(uint8_t *to_buf, const Aircraft &aircraft, bool ownship = false);
 
     // uint16_t AircraftToGDL90Frame(const Aircraft &aircraft) {}
 

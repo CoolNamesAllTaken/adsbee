@@ -111,11 +111,59 @@ uint16_t GDL90Reporter::WriteGDL90UplinkDataMessage(uint8_t *to_buf, uint8_t *up
     const uint16_t kMessageBufLenBytes = sizeof(GDL90MessageID) + 3 + uplink_payload_len_bytes;
     uint8_t message_buf[kMessageBufLenBytes];
     message_buf[0] = kGDL90MessageIDUplinkData;
-    message_buf[1] = tor & 0xFF;
+    message_buf[1] = tor & 0xFF;  // TOR is least significant Byte first.
     message_buf[2] = (tor >> 8) & 0xFF;
     message_buf[3] = (tor >> 16) & 0xFF;
     memcpy(message_buf + sizeof(GDL90MessageID) + 3, uplink_payload, uplink_payload_len_bytes);
     return WriteGDL90Message(to_buf, message_buf, kMessageBufLenBytes);
+}
+
+uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const Aircraft &aircraft, bool ownship) {
+    GDL90TargetReportData data;
+
+    // NOTE: Traffic Alert Status currently not used.
+    data.participant_address = aircraft.icao_address;
+    data.latitude_deg = aircraft.latitude_deg;
+    data.longitude_deg = aircraft.longitude_deg;
+    data.altitude_ft = aircraft.baro_altitude_ft;
+    data.direction_deg = aircraft.direction_deg;
+
+    GDL90TargetReportData::MiscIndicatorTrackOrHeadingValue track_heading_value;
+    if (!aircraft.HasBitFlag(Aircraft::kBitFlagPositionValid)) {
+        // No valid position.
+        track_heading_value = GDL90TargetReportData::kMiscIndicatorTTNotValid;
+    } else {
+        // Valid position: indicate what kind of value the track angle / heading field is.
+        if (aircraft.HasBitFlag(Aircraft::kBitFlagDirectionIsHeading)) {
+            // Aircraft is reporting heading instead of track.
+            track_heading_value = aircraft.HasBitFlag(Aircraft::kBitFlagHeadingUsesMagneticNorth)
+                                      ? GDL90TargetReportData::kMiscIndicatorTTIsMagneticHeading
+                                      : GDL90TargetReportData::kMiscIndicatorTTIsTrueHeading;
+        } else {
+            // Aircraft is reporting track angle.
+            track_heading_value = GDL90TargetReportData::kMiscIndicatorTTIsTrueTrackAngle;
+        }
+    }
+    bool aircraft_updated_position = aircraft.HasBitFlag(Aircraft::kBitFlagUpdatedBaroAltitude) ||
+                                     aircraft.HasBitFlag(Aircraft::kBitFlagUpdatedGNSSAltitude) ||
+                                     aircraft.HasBitFlag(Aircraft::kBitFlagUpdatedHorizontalVelocity) ||
+                                     aircraft.HasBitFlag(Aircraft::kBitFlagUpdatedVerticalVelocity) ||
+                                     aircraft.HasBitFlag(Aircraft::kBitFlagUpdatedPosition) ||
+                                     aircraft.HasBitFlag(Aircraft::kBitFlagUpdatedTrack);
+    data.SetMiscIndicator(track_heading_value,
+                          aircraft_updated_position,                         // Aircraft report updated?
+                          aircraft.HasBitFlag(Aircraft::kBitFlagIsAirborne)  // Aircraft is airborne?
+    );
+    data.navigation_integrity_category = aircraft.navigation_integrity_category;
+    data.velocity_kts = aircraft.velocity_kts;
+    data.vertical_rate_fpm = aircraft.vertical_rate_fpm;
+    data.direction_deg = aircraft.direction_deg;
+    data.emitter_category = aircraft.category_raw;
+    // GDL90 includes space for EOS character, since it wants 8 Bytes and the callsign is a maximum of 7 characters.
+    memcpy(data.callsign, aircraft.callsign, Aircraft::kCallSignMaxNumChars + 1);
+    // NOTE: Emergency Priority code currently not used.
+
+    return WriteGDL90TargetReportMessage(to_buf, data, ownship);
 }
 
 uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const GDL90TargetReportData &data,
@@ -128,24 +176,24 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const GDL
     message_buf[1] = ((data.traffic_alert_status & 0xF) << 4)  // s: Traffic Alert Status
                      | (data.address_type & 0xF);              // t: Address Type
     // aa aa aa: 24-bit Participant Address
-    message_buf[2] = data.participant_address & 0xFF;
+    message_buf[2] = (data.participant_address >> 16) & 0xFF;
     message_buf[3] = (data.participant_address >> 8) & 0xFF;
-    message_buf[4] = (data.participant_address >> 16) & 0xFF;
+    message_buf[4] = data.participant_address & 0xFF;
     // ll ll ll: Latitude as a 24-bit signed binary fraction. Resolution = 180/2^23 degrees.
     int32_t latitude_frac = static_cast<int32_t>(data.latitude_deg * kLatLonDegTo24BitFrac) & 0x00FFFFFF;
-    message_buf[5] = latitude_frac & 0xFF;
+    message_buf[5] = (latitude_frac >> 16) & 0xFF;
     message_buf[6] = (latitude_frac >> 8) & 0xFF;
-    message_buf[7] = (latitude_frac >> 16) & 0xFF;
+    message_buf[7] = latitude_frac & 0xFF;
     // nn nn nn: Longitude as a 24-bit signed binary fraction. Resolution = 180/2^23 degrees.
     int32_t longitude_frac = static_cast<int32_t>(data.longitude_deg * kLatLonDegTo24BitFrac) & 0x00FFFFFF;
-    message_buf[8] = longitude_frac & 0xFF;
+    message_buf[8] = (longitude_frac >> 16) & 0xFF;
     message_buf[9] = (longitude_frac >> 8) & 0xFF;
-    message_buf[10] = (longitude_frac >> 16) & 0xFF;
+    message_buf[10] = longitude_frac & 0xFF;
     // ddd: Altitude as a 12-bit offset integer. Resolution = 25 feet.
     int16_t altitude_frac = static_cast<int16_t>(data.altitude_ft / 25) & 0x0FFF;
-    message_buf[11] = altitude_frac & 0xFF;  // dd: Altitude LS Byte.
+    message_buf[11] = altitude_frac >> 4;  // dd: Altitude MS Byte.
 
-    message_buf[12] = (altitude_frac >> 8) |         // d: Altitude MS nibble.
+    message_buf[12] = (altitude_frac & 0xF) |        // d: Altitude LS nibble.
                       (data.misc_indicators & 0xF);  // m: Miscellaneous indicators.
     message_buf[13] =
         ((data.navigation_integrity_category & 0xF) << 4)      // i: Navigation Integrity Category (NIC).
@@ -154,13 +202,13 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const GDL
     uint32_t velocity_kts = static_cast<uint32_t>(data.velocity_kts) & 0x00000FFF;
     // vvv: Vertical Velocity. Signed Integer in units of 64fpm.
     int32_t vertical_rate_fpm = (data.vertical_rate_fpm / 64) & 0x000000FFF;
-    message_buf[14] = velocity_kts & 0xFF;          // hh: LSB of Horizontal Velocity.
-    message_buf[15] = (velocity_kts >> 8)           // h: MS nibble of Horizontal Velocity.
-                      | (vertical_rate_fpm & 0xF);  // v: LS nibble of Vertical Rate.
-    message_buf[16] = vertical_rate_fpm >> 4;       // vv: MSB of Vertical Rate.
+    message_buf[14] = velocity_kts >> 4;           // hh: MSB of Horizontal Velocity.
+    message_buf[15] = (velocity_kts & 0xF)         // h: LS nibble of Horizontal Velocity.
+                      | (vertical_rate_fpm >> 8);  // v: MS nibble of Vertical Rate.
+    message_buf[16] = vertical_rate_fpm & 0xFF;    // vv: LSB of Vertical Rate.
     // tt: Track / Heading. 8-bit angular weighted binary. Resolution = 360/256 degrees. 0 = North,
     // 128 = South. Indicate track or heading using misc bit field.
-    message_buf[17] = static_cast<uint32_t>(data.track_heading_deg * kHeadingTrackDegTo8BitFrac) & 0x000000FF;
+    message_buf[17] = static_cast<uint32_t>(data.direction_deg * kHeadingTrackDegTo8BitFrac) & 0x000000FF;
     // ee: Emitter Category.
     message_buf[18] = data.emitter_category;
     // cc cc cc cc cc cc cc cc: Call sign. 8 ASCII characters, 0-9 and A-Z.

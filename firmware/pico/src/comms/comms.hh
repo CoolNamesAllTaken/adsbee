@@ -14,6 +14,7 @@ class CommsManager {
     static const uint16_t kPrintfBufferMaxSize = 500;
     static const uint32_t kMAVLINKReportingIntervalMs = 1000;
     static const uint32_t kCSBeeReportingIntervalMs = 1000;
+    static const uint32_t kGDL90ReportingIntervalMs = 1000;
 
     struct CommsManagerConfig {
         uart_inst_t *comms_uart_handle = uart1;
@@ -51,6 +52,12 @@ class CommsManager {
     bool iface_putc(SettingsManager::SerialInterface iface, char c);
     bool iface_getc(SettingsManager::SerialInterface iface, char &c);
     bool iface_puts(SettingsManager::SerialInterface iface, const char *buf);
+
+    void SendBuf(SettingsManager::SerialInterface iface, char *buf, uint16_t buf_len) {
+        for (uint16_t i = 0; i < buf_len; i++) {
+            iface_putc(iface, buf[i]);
+        }
+    }
 
     /**
      * Sets the baudrate for a serial interface.
@@ -188,6 +195,11 @@ class CommsManager {
      * @retval True if successful, false if something went sideways.
      */
     bool ReportMAVLINK(SettingsManager::SerialInterface iface);
+
+    /**
+     * Reports the contents of the aircraft dictionary using the Garmin GDL90 protocol.
+     */
+    bool ReportGDL90(SettingsManager::SerialInterface iface);
 
     CommsManagerConfig config_;
 

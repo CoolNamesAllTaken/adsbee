@@ -295,7 +295,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
 
     // Aircraft should now have velocities populated.
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedTrack));
-    EXPECT_NEAR(aircraft.track_deg, 304.2157021324374, kFloatCloseEnough);
+    EXPECT_NEAR(aircraft.direction_deg, 304.2157021324374, kFloatCloseEnough);
     // Velocity should actually evaluate to 120 when evaluated with doubles, but there is some float error with the sqrt
     // that I think gets pretty nasty.
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity));
@@ -321,7 +321,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedTrack));
     EXPECT_EQ(aircraft.vertical_rate_fpm, -832);
     EXPECT_EQ(aircraft.velocity_source, Aircraft::VelocitySource::kVelocitySourceGroundSpeed);
-    EXPECT_NEAR(aircraft.track_deg, 182.88f, 0.01);
+    EXPECT_NEAR(aircraft.direction_deg, 182.88f, 0.01);
     EXPECT_NEAR(aircraft.velocity_kts, 159.20f, 0.01);
 
     // Test altitude difference between baro and GNSS altitude for Message A by re-ingesting.
@@ -350,7 +350,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedTrack));
     EXPECT_EQ(aircraft.vertical_rate_fpm, -2304);
     EXPECT_EQ(aircraft.velocity_source, Aircraft::VelocitySource::kVelocitySourceAirspeedTrue);
-    EXPECT_NEAR(aircraft.track_deg, 243.98f, 0.01);
+    EXPECT_NEAR(aircraft.direction_deg, 243.98f, 0.01);
     EXPECT_NEAR(aircraft.velocity_kts, 375.0f, 0.01);
 }
 

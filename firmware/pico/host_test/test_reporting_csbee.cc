@@ -38,7 +38,7 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
     aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeSourceBaro;
     aircraft.latitude_deg = -120.654321;
     aircraft.longitude_deg = -80.123456;
-    aircraft.track_deg = 300.5678;
+    aircraft.direction_deg = 300.5678;
     aircraft.velocity_kts = 123.45;
     aircraft.velocity_source = Aircraft::VelocitySource::kVelocitySourceAirspeedTrue;
     aircraft.vertical_rate_fpm = -200;
