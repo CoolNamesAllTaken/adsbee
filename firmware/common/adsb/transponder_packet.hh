@@ -103,6 +103,7 @@ class DecodedTransponderPacket {
      */
     void ForceValid() { is_valid_ = true; }
 
+    int GetBufferLenBits() const { return packet.buffer_len_bits; }
     int GetRSSIdBm() const { return packet.sigs_dbm; }
     uint64_t GetMLAT12MHzCounter() const { return (packet.mlat_48mhz_64bit_counts >> 2) & 0xFFFFFFFFFFFF; }
     uint16_t GetDownlinkFormat() const { return downlink_format_; };

@@ -83,16 +83,20 @@ inline int16_t WriteCSBeeAircraftMessageStr(char message_buf[], const Aircraft &
     return num_chars + crc_num_chars;
 }
 
-inline int16_t WriteCSBeeStatisticsMessageStr(char message_buf[], uint16_t dps, uint16_t acfps, uint16_t sfps,
-                                              uint32_t tscal, uint32_t uptime) {
+inline int16_t WriteCSBeeStatisticsMessageStr(char message_buf[], uint16_t dps, uint16_t raw_sfps, uint16_t sfps,
+                                              uint16_t raw_esfps, uint16_t esfps, uint16_t num_aircraft, uint32_t tscal,
+                                              uint32_t uptime) {
     int16_t num_chars =  // Print everything except for CRC into string buffer.
         snprintf(message_buf, kCSBeeMessageStrMaxLen - kCRCMaxNumChars - 1,
                  "#S:%d,"  // DPS, e.g. 106
-                 "%d,"     // ACFPS, e.g. 20
-                 "%d,"     // SFPS, e.g. 3
+                 "%d,"     // RAW_SFPS e.g. 30
+                 "%d,"     // SFPS, e.g. 20
+                 "%d,"     // RAW_ESFPS e.g. 15
+                 "%d,"     // ESFPS, e.g. 13
+                 "%d,"     // NUM_AIRCRAFT, e.g. 13
                  "%d,"     // TSCAL, e.g. 13999415
                  "%d,",    // UPTIME, e.g. 134
-                 dps, acfps, sfps, tscal, uptime);
+                 dps, raw_sfps, sfps, raw_esfps, esfps, num_aircraft, tscal, uptime);
     if (num_chars < 0) return num_chars;  // Check if snprintf call got busted.
 
     // Append a CRC.

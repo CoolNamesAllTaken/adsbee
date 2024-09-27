@@ -168,14 +168,20 @@ bool ADSBee::Update() {
 
     // Prune aircraft dictionary. Need to do this up front so that we don't end up with a negative timestamp delta
     // caused by packets being ingested more recently than the timestamp we take at the beginning of this function.
-    if (last_aircraft_dictionary_update_timestamp_ms_ - timestamp_ms > config_.aircraft_dictionary_update_interval_ms) {
+    if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > config_.aircraft_dictionary_update_interval_ms) {
         aircraft_dictionary.Update(timestamp_ms);
+        // Add the fresh stats values to the pile used for TL learning.
+        // If learning, add the number of valid packets received to the pile used for trigger level learning.
+        if (tl_learning_temperature_mv_ > 0) {
+            tl_learning_num_valid_packets_ += (aircraft_dictionary.stats.valid_squitter_frames +
+                                               aircraft_dictionary.stats.valid_extended_squitter_frames);
+        }
+        last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
     }
 
     // Ingest new packets into the dictionary.
     RawTransponderPacket raw_packet;
     while (transponder_packet_queue.Pop(raw_packet)) {
-        uint32_t packet_buffer[RawTransponderPacket::kMaxPacketLenWords32];
         if (raw_packet.buffer_len_bits == DecodedTransponderPacket::kExtendedSquitterPacketLenBits) {
             CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%08x|%08x|%04x RSSI=%ddBm MLAT=%u",
                          raw_packet.buffer[0], raw_packet.buffer[1], raw_packet.buffer[2],
@@ -190,47 +196,13 @@ bool ADSBee::Update() {
         DecodedTransponderPacket decoded_packet = DecodedTransponderPacket(raw_packet);
         CONSOLE_INFO("ADSBee::Update", "\tdf=%d icao_address=0x%06x", decoded_packet.GetDownlinkFormat(),
                      decoded_packet.GetICAOAddress());
+
         if (aircraft_dictionary.IngestDecodedTransponderPacket(decoded_packet)) {
             // Packet was used to update the dictionary or was silently ignored (but presumed to be valid).
             FlashStatusLED();
-            // Record valid packet in statistics.
-            switch (decoded_packet.GetDownlinkFormat()) {
-                case DecodedTransponderPacket::kDownlinkFormatAltitudeReply:
-                case DecodedTransponderPacket::kDownlinkFormatIdentityReply:
-                    stats_valid_short_mode_s_frames_in_last_interval_counter_++;
-                    break;
-                default:
-                    stats_valid_mode_s_frames_in_last_interval_counter_++;
-                    break;
-            }
+            // NOTE: Pushing to the reporting queue here means that we only will report validated packets!
             comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
             CONSOLE_INFO("ADSBee::Update", "\taircraft_dictionary: %d aircraft", aircraft_dictionary.GetNumAircraft());
-        }
-    }
-
-    // Update statistics.
-    if (timestamp_ms - stats_last_update_timestamp_ms_ > kStatsUpdateIntervalMs) {
-        // kStatsUpdateIntervalMs has elapsed. Time to update stuff!
-        // Update statistics for each aircraft.
-        for (auto &itr : aircraft_dictionary.dict) {
-            Aircraft &aircraft = itr.second;
-            aircraft.UpdateStats();
-        }
-        // Update statistics for the dictionary.
-        stats_valid_short_mode_s_frames_in_last_interval_ = stats_valid_short_mode_s_frames_in_last_interval_counter_;
-        stats_valid_mode_s_frames_in_last_interval_ = stats_valid_mode_s_frames_in_last_interval_counter_;
-        // Read num demods last and reset it first so we can never have a ratio > 1 even in interrupt edge cases.
-        stats_demods_in_last_interval_ = stats_demods_in_last_interval_counter_;
-        stats_demods_in_last_interval_counter_ = 0;
-        stats_valid_short_mode_s_frames_in_last_interval_counter_ = 0;
-        stats_valid_mode_s_frames_in_last_interval_counter_ = 0;
-
-        stats_last_update_timestamp_ms_ = timestamp_ms;
-
-        // If learning, add the number of valid packets received to the pile used for trigger level learning.
-        if (tl_learning_temperature_mv_ > 0) {
-            tl_learning_num_valid_packets_ +=
-                (stats_valid_short_mode_s_frames_in_last_interval_ + stats_valid_mode_s_frames_in_last_interval_);
         }
     }
 
@@ -322,7 +294,7 @@ void ADSBee::OnDemodComplete() {
         packet_num_words = RawTransponderPacket::kMaxPacketLenWords32;
     }
     // Track that we attempted to demodulate something.
-    stats_demods_in_last_interval_counter_++;
+    aircraft_dictionary.RecordDemod1090();
     // Create a RawTransponderPacket and push it onto the queue.
     for (uint16_t i = 0; i < packet_num_words; i++) {
         rx_packet_.buffer[i] = pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_);

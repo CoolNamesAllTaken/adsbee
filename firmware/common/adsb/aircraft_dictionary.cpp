@@ -125,39 +125,61 @@ void AircraftDictionary::Init() {
 }
 
 void AircraftDictionary::Update(uint32_t timestamp_ms) {
-    // Iterate over each key-value pair in the unordered_map
+    // Iterate over each key-value pair in the unordered_map. Prune if stale, update stats if still fresh.
     for (auto it = dict.begin(); it != dict.end(); /* No increment here */) {
         if (timestamp_ms - it->second.last_message_timestamp_ms > config_.aircraft_prune_interval_ms) {
             it = dict.erase(it);  // Remove stale aircraft entry.
         } else {
+            it->second.UpdateStats();
             it++;  // Move to the next aircraft entry.
         }
     }
+
+    // Update aggregate statistics.
+    stats = stats_counter_;              // Swap counter values over to publicly visible values.
+    stats_counter_ = DictionaryStats();  // Use default constructor to clear all values.
 }
 
 bool AircraftDictionary::IngestDecodedTransponderPacket(DecodedTransponderPacket &packet) {
-    if (!packet.IsValid()) {
-        if (packet.GetPacketBufferLenBits() == DecodedTransponderPacket::kSquitterPacketLenBits &&
-            ContainsAircraft(packet.GetICAOAddress())) {
-            // Packet is a 56-bit Squitter packet that is incapable of validating itself, and its CRC was validated
-            // against the ICAO addresses in the aircraft dictionary.
-            packet.ForceValid();
-            // Continue to add packet to dictionary.
-        } else {
-            // Packet is 112 bits, should have been able to validate itself. Something is borked.
+    switch (packet.GetBufferLenBits()) {
+        case DecodedTransponderPacket::kSquitterPacketLenBits:
+            stats_counter_.raw_squitter_frames++;
+            if (ContainsAircraft(packet.GetICAOAddress())) {
+                // Packet is a 56-bit Squitter packet that is incapable of validating itself, and its CRC was validated
+                // against the ICAO addresses in the aircraft dictionary.
+                stats_counter_.valid_squitter_frames++;
+                packet.ForceValid();
+                // Continue to add packet to dictionary.
+            } else {
+                return false;  // Squitter frame could not be validated against ICAOs in dictionary.
+            }
+            break;
+        case DecodedTransponderPacket::kExtendedSquitterPacketLenBits:
+            stats_counter_.raw_extended_squitter_frames++;
+            if (packet.IsValid()) {
+                stats_counter_.valid_extended_squitter_frames++;
+            } else {
+                return false;  // Extended squitter frame failed CRC.
+            }
+            break;
+        default:
+            CONSOLE_ERROR(
+                "AircraftDictionary::IngestDecodedTransponderPacket",
+                "Received packet with unrecognized bitlength %d, expected %d (Squiter) or %d (Extended Squitter).",
+                packet.GetBufferLenBits(), DecodedTransponderPacket::kSquitterPacketLenBits,
+                DecodedTransponderPacket::kExtendedSquitterPacketLenBits);
             return false;
-        }
     }
 
     uint16_t downlink_format = packet.GetDownlinkFormat();
     switch (downlink_format) {
-        // Mode A Packet.
+        // Mode C Packet.
         case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatAltitudeReply:
-            IngestModeCPacket(ModeAPacket(packet));
+            IngestModeCPacket(ModeCPacket(packet));
             break;
         // Mode C Packet.
         case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatIdentityReply:
-            IngestModeAPacket(ModeCPacket(packet));
+            IngestModeAPacket(ModeAPacket(packet));
             break;
         // ADS-B Packets.
         case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatExtendedSquitter:                // DF = 17

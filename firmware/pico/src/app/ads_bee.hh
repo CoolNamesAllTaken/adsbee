@@ -22,7 +22,6 @@ class ADSBee {
         100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
     static const uint32_t kStatusLEDOnMs = 10;
     static const uint16_t kNumDemodStateMachines = 2;
-    static const uint32_t kStatsUpdateIntervalMs = 1000;  // [ms] How often statistics update.
 
     static const uint32_t kTLLearningIntervalMs =
         10000;  // [ms] Length of Simulated Annealing interval for learning trigger level.
@@ -85,24 +84,6 @@ class ADSBee {
      * kStatusLEDOnMs.
      */
     void FlashStatusLED(uint32_t led_on_ms = kStatusLEDOnMs);
-
-    /**
-     * Returns the number of demodulations attempted in the last kStatsUpdateIntervalMs milliseconds.
-     * @retval Number of demods attempted.
-     */
-    inline uint16_t GetStatsNumDemods() { return stats_demods_in_last_interval_; }
-
-    /**
-     * Returns the number of valid Short Mode S packets decoded in the last kStatsUpdateIntervalMs milliseconds.
-     * @retval Number of valid packets received with Downlink Format = 4, 5.
-     */
-    inline uint16_t GetStatsNumModeACPackets() { return stats_valid_short_mode_s_frames_in_last_interval_; }
-
-    /**
-     * Returns the number of valid Mode S packets decoded in the last kStatsUpdateIntervalMs milliseconds.
-     * @retval Number of valid packets received with Downlink Format != 4, 5.
-     */
-    inline uint16_t GetStatsNumModeSPackets() { return stats_valid_mode_s_frames_in_last_interval_; }
 
     /**
      * Return the value of the low Minimum Trigger Level threshold in milliVolts.
@@ -272,21 +253,6 @@ class ADSBee {
     RawTransponderPacket transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
-
-    // These values are continuous counters of number of packets of each type received. Don't use these values for
-    // anything external!
-    uint16_t stats_demods_in_last_interval_counter_ = 0;
-    uint16_t stats_valid_short_mode_s_frames_in_last_interval_counter_ = 0;
-    uint16_t stats_valid_mode_s_frames_in_last_interval_counter_ = 0;
-
-    // Timestamp of the last time that the packet counters were stored and reset to 0.
-    uint32_t stats_last_update_timestamp_ms_ = 0;  // [ms]
-
-    // These values are updated every stats update interval so that they always contain counts across a consistent
-    // interval. Use these values for anything important!
-    uint16_t stats_demods_in_last_interval_ = 0;
-    uint16_t stats_valid_short_mode_s_frames_in_last_interval_ = 0;
-    uint16_t stats_valid_mode_s_frames_in_last_interval_ = 0;
 
     bool receiver_enabled_ = true;
     bool bias_tee_enabled_ = false;

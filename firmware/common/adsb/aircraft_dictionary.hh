@@ -334,10 +334,19 @@ class Aircraft {
 
 class AircraftDictionary {
    public:
+    static const uint16_t kMaxNumAircraft = 100;
+
     struct AircraftDictionaryConfig_t {
         uint32_t aircraft_prune_interval_ms = 60e3;
     };
-    static const uint16_t kMaxNumAircraft = 100;
+
+    struct DictionaryStats {
+        uint32_t raw_squitter_frames = 0;
+        uint32_t valid_squitter_frames = 0;
+        uint32_t raw_extended_squitter_frames = 0;
+        uint32_t valid_extended_squitter_frames = 0;
+        uint32_t demods_1090 = 0;
+    };
 
     /**
      * Default constructor. Uses default config values.
@@ -360,6 +369,12 @@ class AircraftDictionary {
      * minus the pruning interval will be removed.
      */
     void Update(uint32_t timestamp_us);
+
+    /**
+     * Log an attempted demodulation on 1090MHz. Used to record performance statistics. Note that the increment won't be
+     * visible until the next dictionary update occurs.
+     */
+    void RecordDemod1090() { stats_counter_.demods_1090++; }
 
     /**
      * Ingests a DecodedTransponderPacket and uses it to insert and update the relevant aircraft.
@@ -441,6 +456,8 @@ class AircraftDictionary {
 
     std::unordered_map<uint32_t, Aircraft> dict;  // index Aircraft objects by their ICAO identifier
 
+    DictionaryStats stats;
+
    private:
     // Helper functions for ingesting specific ADS-B packet types, called by IngestADSBPacket.
 
@@ -462,6 +479,9 @@ class AircraftDictionary {
     bool ApplyAircraftOperationStatusMessage(Aircraft &aircraft, ADSBPacket packet);
 
     AircraftDictionaryConfig_t config_;
+    // Counters in stats_counter_ are incremented, then stats_counter_ is swapped into stats during the dictionary
+    // update. This ensures that the public stats struct always has valid data.
+    DictionaryStats stats_counter_;
 };
 
 #endif /* _AIRCRAFT_DICTIONARY_HH_ */

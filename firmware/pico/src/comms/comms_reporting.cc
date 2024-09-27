@@ -103,8 +103,16 @@ bool CommsManager::ReportCSBee(SettingsManager::SerialInterface iface) {
     // Write a CSBee Statistics message.
     char message[kCSBeeMessageStrMaxLen];
     int16_t message_len_bytes =
-        WriteCSBeeStatisticsMessageStr(message, adsbee.GetStatsNumDemods(), adsbee.GetStatsNumModeACPackets(),
-                                       adsbee.GetStatsNumModeSPackets(), 0u, get_time_since_boot_ms() / 1000);
+        WriteCSBeeStatisticsMessageStr(message,                                                 // Buffer to write into.
+                                       adsbee.aircraft_dictionary.stats.demods_1090,            // DPS
+                                       adsbee.aircraft_dictionary.stats.raw_squitter_frames,    // RAW_SFPS
+                                       adsbee.aircraft_dictionary.stats.valid_squitter_frames,  // SFPS
+                                       adsbee.aircraft_dictionary.stats.raw_extended_squitter_frames,    // RAW_ESFPS
+                                       adsbee.aircraft_dictionary.stats.valid_extended_squitter_frames,  // ESFPS
+                                       adsbee.aircraft_dictionary.GetNumAircraft(),                      // NUM_AIRCRAFT
+                                       0u,                                                               // TSCAL
+                                       get_time_since_boot_ms() / 1000                                   // UPTIME
+        );
     if (message_len_bytes < 0) {
         CONSOLE_ERROR("CommsManager::ReportCSBee",
                       "Encountered an error in WriteCSBeeStatisticsMessageStr, error code %d.", message_len_bytes);
@@ -232,7 +240,8 @@ bool CommsManager::ReportGDL90(SettingsManager::SerialInterface iface) {
     uint16_t msg_len;
 
     // Heartbeat Message
-    msg_len = gdl90.WriteGDL90HeartbeatMessage(buf, get_time_since_boot_ms() / 1000, adsbee.GetStatsNumModeSPackets());
+    msg_len = gdl90.WriteGDL90HeartbeatMessage(buf, get_time_since_boot_ms() / 1000,
+                                               adsbee.aircraft_dictionary.stats.valid_extended_squitter_frames);
     SendBuf(iface, (char *)buf, msg_len);
 
     // Ownship Report
