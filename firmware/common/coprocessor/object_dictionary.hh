@@ -19,8 +19,9 @@ class ObjectDictionary {
         kAddrInvalid = 0,             // Default value.
         kAddrFirmwareVersion = 0x01,  // Firmware version as a uint32_t.
         kAddrScratch,                 // Used for testing SPI communications.
-        kAddrRawTransponderPacket,    // Used to forward raw packets from RP2040 to ESP32.
         kAddrSettingsStruct,          // Used to transfer settings information.
+        kAddrRawTransponderPacket,    // Used to forward raw packets from RP2040 to ESP32.
+        kAddrDecodedTransponderPacket,
         kNumAddrs
     };
 

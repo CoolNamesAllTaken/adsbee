@@ -92,7 +92,7 @@ class DecodedTransponderPacket {
     /**
      * Default constructor.
      */
-    DecodedTransponderPacket() : packet((char *)"", INT32_MIN, 0) { debug_string[0] = '\0'; };
+    DecodedTransponderPacket() : raw_((char *)"", INT32_MIN, 0) { debug_string[0] = '\0'; };
 
     bool IsValid() const { return is_valid_; };
 
@@ -103,14 +103,15 @@ class DecodedTransponderPacket {
      */
     void ForceValid() { is_valid_ = true; }
 
-    int GetBufferLenBits() const { return packet.buffer_len_bits; }
-    int GetRSSIdBm() const { return packet.sigs_dbm; }
-    uint64_t GetMLAT12MHzCounter() const { return (packet.mlat_48mhz_64bit_counts >> 2) & 0xFFFFFFFFFFFF; }
-    uint16_t GetDownlinkFormat() const { return downlink_format_; };
+    int GetBufferLenBits() const { return raw_.buffer_len_bits; }
+    int GetRSSIdBm() const { return raw_.sigs_dbm; }
+    uint64_t GetMLAT12MHzCounter() const { return (raw_.mlat_48mhz_64bit_counts >> 2) & 0xFFFFFFFFFFFF; }
+    uint16_t GetDownlinkFormat() const { return downlink_format_; }
     uint16_t GetDownlinkFormatString(char str_buf[kMaxDFStrLen]) const;
     DownlinkFormat GetDownlinkFormatEnum();
-    uint32_t GetICAOAddress() const { return icao_address_; };
-    uint16_t GetPacketBufferLenBits() const { return packet.buffer_len_bits; };
+    uint32_t GetICAOAddress() const { return icao_address_; }
+    uint16_t GetPacketBufferLenBits() const { return raw_.buffer_len_bits; }
+    RawTransponderPacket GetRaw() const { return raw_; }
 
     /**
      * Dumps the internal packet buffer to a destination and returns the number of bytes written.
@@ -122,7 +123,7 @@ class DecodedTransponderPacket {
 
     // Exposed for testing only.
     uint32_t Get24BitWordFromPacketBuffer(uint16_t first_bit_index) const {
-        return GetNBitWordFromBuffer(24, first_bit_index, packet.buffer);
+        return GetNBitWordFromBuffer(24, first_bit_index, raw_.buffer);
     };
 
     /**
@@ -136,7 +137,7 @@ class DecodedTransponderPacket {
 
    protected:
     bool is_valid_ = false;
-    RawTransponderPacket packet;
+    RawTransponderPacket raw_;
 
     uint32_t icao_address_ = 0;
     uint16_t downlink_format_ = static_cast<uint16_t>(kDownlinkFormatInvalid);
@@ -214,7 +215,7 @@ class ADSBPacket : public DecodedTransponderPacket {
 
     // Exposed for testing only.
     inline uint32_t GetNBitWordFromMessage(uint16_t n, uint16_t first_bit_index) const {
-        return GetNBitWordFromBuffer(n, kMEFirstBitIndex + first_bit_index, packet.buffer);
+        return GetNBitWordFromBuffer(n, kMEFirstBitIndex + first_bit_index, raw_.buffer);
     };
 
    private:

@@ -5,6 +5,7 @@
 #include "gdl90_utils.hh"
 #include "hal.hh"  // For timestamping.
 #include "mavlink/mavlink.h"
+#include "spi_coprocessor.hh"
 #include "unit_conversions.hh"
 
 extern ADSBee adsbee;
@@ -20,6 +21,11 @@ bool CommsManager::UpdateReporting() {
     DecodedTransponderPacket packets_to_report[ADSBee::kMaxNumTransponderPackets];
     uint16_t num_packets_to_report = 0;
     while (transponder_packet_reporting_queue.Pop(packets_to_report[num_packets_to_report])) {
+        if (esp32.IsEnabled()) {
+            RawTransponderPacket raw_packet_to_report = packets_to_report[num_packets_to_report].GetRaw();
+            // Write packet to ESP32 without forcing an ACK.
+            esp32.Write(ObjectDictionary::kAddrRawTransponderPacket, raw_packet_to_report);
+        }
         num_packets_to_report++;
     }
     // TODO: forward packets_to_report to coprocessor over SPI.

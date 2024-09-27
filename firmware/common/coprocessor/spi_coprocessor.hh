@@ -37,7 +37,7 @@ class SPICoprocessor {
 #ifdef ON_PICO
     static const uint16_t kHandshakePinMaxWaitDurationMs = 10;
     // Make sure that we don't talk to the slave before it has a chance to get ready for the next message.
-    static const uint32_t kSPIMinTransmitIntervalUs = 100;
+    static const uint32_t kSPIMinTransmitIntervalUs = 200;
 #elif ON_ESP32
     static const uint32_t kNetworkLEDBlinkDurationMs = 10;
     static const uint32_t kNetworkLEDBlinkDurationTicks = kNetworkLEDBlinkDurationMs / portTICK_PERIOD_MS;

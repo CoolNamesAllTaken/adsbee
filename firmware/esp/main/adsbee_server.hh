@@ -8,6 +8,7 @@
 class ADSBeeServer {
    public:
     static const uint16_t kMaxNumTransponderPackets = 100;  // Depth of queue for incoming packets from RP2040.
+    static const uint32_t kAircraftDictionaryUpdateIntervalMs = 1000;
 
     ADSBeeServer() {};  // Default constructor.
     bool Init();
@@ -34,6 +35,7 @@ class ADSBeeServer {
     bool spi_receive_task_should_exit_ = false;
 
     RawTransponderPacket transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
+    uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
 };
 
 extern ADSBeeServer adsbee_server;
