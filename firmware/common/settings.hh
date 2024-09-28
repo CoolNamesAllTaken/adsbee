@@ -90,13 +90,6 @@ class SettingsManager {
          * Default constructor.
          */
         Settings() {
-            for (uint16_t i = 0; i < kMaxNumFeeds; i++) {
-                memset(feed_uris[i], '\0', kFeedURIMaxNumChars + 1);
-                feed_ports[i] = 0;
-                feed_is_active[i] = false;
-                feed_protocols[i] = kNoReports;
-                memset(feed_receiver_ids[i], 0, kFeedReceiverIDNumBytes);
-            }
 #ifdef ON_PICO
             DeviceInfo device_info;
             if (GetDeviceInfo(device_info)) {
@@ -106,6 +99,18 @@ class SettingsManager {
                 snprintf(wifi_password, kWiFiPasswordMaxLen, "yummyflowers");
             }
 #endif
+
+            for (uint16_t i = 0; i < kMaxNumFeeds; i++) {
+                memset(feed_uris[i], '\0', kFeedURIMaxNumChars + 1);
+                feed_ports[i] = 0;
+                feed_is_active[i] = false;
+                feed_protocols[i] = kNoReports;
+#ifdef ON_PICO
+                device_info.GetDefaultFeedReceiverID(feed_receiver_ids[i]);
+#else
+                memset(feed_receiver_ids[i], 0, kFeedReceiverIDNumBytes);
+#endif
+            }
         }
     };
 
@@ -179,20 +184,20 @@ class SettingsManager {
         }
         printf("\tComms UART Baud Rate: %lu baud\r\n", settings.comms_uart_baud_rate);
         printf("\tGNSS UART Baud Rate: %lu baud\r\n", settings.gnss_uart_baud_rate);
-        printf("\tESP32: %s", settings.esp32_enabled ? "ENABLED" : "DISABLED");
-        printf("\tWifi: %s", settings.wifi_mode ? "ENABLED" : "DISABLED");
+        printf("\tESP32: %s\r\n", settings.esp32_enabled ? "ENABLED" : "DISABLED");
+        printf("\tWifi Mode: %s\r\n", SettingsManager::kWiFiModeStrs[settings.wifi_mode]);
         printf("\tWifi SSID: %s\r\n", settings.wifi_ssid);
         char redacted_wifi_password[Settings::kWiFiPasswordMaxLen];
         RedactPassword(settings.wifi_password, redacted_wifi_password, strlen(settings.wifi_password));
         printf("\tWifi Password: %s\r\n", redacted_wifi_password);
         printf("\tFeed URIs:\r\n");
         for (uint16_t i = 0; i < Settings::kMaxNumFeeds; i++) {
-            printf("\t\t%d URI:%s Port:%d %s Protocol:%s ID:", i, settings.feed_uris[i], settings.feed_ports[i],
+            printf("\t\t%d URI:%s Port:%d %s Protocol:%s ID:0x", i, settings.feed_uris[i], settings.feed_ports[i],
                    settings.feed_is_active[i] ? "ACTIVE" : "INACTIVE",
                    kReportingProtocolStrs[settings.feed_protocols[i]]);
-            for (int16_t feeder_id_byte_index = Settings::kFeedReceiverIDNumBytes - 1; feeder_id_byte_index >= 0;
-                 feeder_id_byte_index--) {
-                printf("%d", settings.feed_receiver_ids[i][feeder_id_byte_index]);
+            for (int16_t feeder_id_byte_index = 0; feeder_id_byte_index < Settings::kFeedReceiverIDNumBytes;
+                 feeder_id_byte_index++) {
+                printf("%02x", settings.feed_receiver_ids[i][feeder_id_byte_index]);
             }
             printf("\r\n");
         }

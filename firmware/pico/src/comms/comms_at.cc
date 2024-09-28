@@ -444,7 +444,8 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiCallback) {
             char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];
             SettingsManager::RedactPassword(wifi_password, redacted_password,
                                             SettingsManager::Settings::kWiFiPasswordMaxLen);
-            CPP_AT_CMD_PRINTF("=%d,%s,%s\r\n", static_cast<uint16_t>(wifi_mode_), wifi_ssid, redacted_password);
+            CPP_AT_CMD_PRINTF("=%s,%s,%s\r\n", SettingsManager::kWiFiModeStrs[wifi_mode_],
+                              wifi_ssid, redacted_password);
             CPP_AT_SILENT_SUCCESS();
             break;
         }
