@@ -157,15 +157,8 @@ bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char
     return false;  // Should never get here.
 }
 
-bool CommsManager::SetWiFiEnabled(bool new_wifi_enabled) {
-    if (new_wifi_enabled) {
-        CONSOLE_PRINTF("Enabling WiFi...\r\n");
-
-    } else {
-        CONSOLE_PRINTF("Disabling WiFi...\r\n");
-    }
-
-    wifi_enabled_ = new_wifi_enabled;
-
+bool CommsManager::SetWiFiMode(SettingsManager::WiFiMode new_wifi_mode) {
+    // Not much to do on the Pico, this function is more interesting on the ESP32.
+    settings_manager.settings.wifi_mode = new_wifi_mode;
     return true;
 }

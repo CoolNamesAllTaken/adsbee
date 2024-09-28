@@ -47,7 +47,7 @@ bool SettingsManager::Save() {
 
     settings.esp32_enabled = esp32.IsEnabled();
     // Save WiFi configuration.
-    settings.wifi_enabled = comms_manager.WiFiIsEnabled();
+    settings.wifi_mode = comms_manager.GetWiFiMode();
     strncpy(settings.wifi_ssid, comms_manager.wifi_ssid, Settings::kWiFiSSIDMaxLen);
     settings.wifi_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
     strncpy(settings.wifi_password, comms_manager.wifi_password, Settings::kWiFiPasswordMaxLen);
@@ -55,7 +55,7 @@ bool SettingsManager::Save() {
 
     // Sync settings from RP2040 -> ESP32.
     if (esp32.IsEnabled()) {
-        esp32.Write(ObjectDictionary::kAddrSettingsStruct, settings);
+        esp32.Write(ObjectDictionary::kAddrSettingsData, settings);
     }
 
     return eeprom.Save(settings);
@@ -93,10 +93,10 @@ void SettingsManager::Apply() {
     comms_manager.SetBaudrate(SerialInterface::kCommsUART, settings.comms_uart_baud_rate);
     comms_manager.SetBaudrate(SerialInterface::kGNSSUART, settings.gnss_uart_baud_rate);
 
-    settings.wifi_enabled ? esp32.Init() : esp32.DeInit();
+    settings.wifi_mode ? esp32.Init() : esp32.DeInit();
 
     // Apply WiFi configurations.
-    comms_manager.SetWiFiEnabled(settings.wifi_enabled);
+    comms_manager.SetWiFiMode(settings.wifi_mode);
     strncpy(comms_manager.wifi_ssid, settings.wifi_ssid, Settings::kWiFiSSIDMaxLen);
     comms_manager.wifi_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
     strncpy(comms_manager.wifi_password, settings.wifi_password, Settings::kWiFiPasswordMaxLen);

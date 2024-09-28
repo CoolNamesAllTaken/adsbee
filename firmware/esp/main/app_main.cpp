@@ -38,7 +38,7 @@ extern "C" void app_main(void) {
     RunHardwareUnitTests();
 #endif
 
-    if (!pico.Read(ObjectDictionary::kAddrSettingsStruct, settings_manager.settings)) {
+    if (!pico.Read(ObjectDictionary::kAddrSettingsData, settings_manager.settings)) {
         CONSOLE_ERROR("app_main", "Failed to read settings from Pico on startup.");
     } else {
         settings_manager.Print();

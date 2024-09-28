@@ -133,9 +133,9 @@ class CommsManager {
      * Returns whether WiFi is enabled.
      * @retval True if WiFi is enabled, false otherwise.
      */
-    bool WiFiIsEnabled() { return wifi_enabled_; }
+    SettingsManager::WiFiMode GetWiFiMode() { return wifi_mode_; }
 
-    bool SetWiFiEnabled(bool new_wifi_enabled);
+    bool SetWiFiMode(SettingsManager::WiFiMode new_wifi_mode);
 
     // Public console settings.
     SettingsManager::LogLevel log_level = SettingsManager::LogLevel::kInfo;  // Start with highest verbosity by default.
@@ -218,7 +218,7 @@ class CommsManager {
             SettingsManager::ReportingProtocol::kMAVLINK1};  // GNSS_UART not included.
 
     // private WiFi Settings
-    bool wifi_enabled_ = false;
+    SettingsManager::WiFiMode wifi_mode_ = SettingsManager::WiFiMode::kWiFiModeAccessPoint;
 };
 
 extern CommsManager comms_manager;

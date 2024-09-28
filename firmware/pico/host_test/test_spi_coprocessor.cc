@@ -41,7 +41,7 @@ TEST(SPICoprocessor, SCReadRequestPacket) {
     // Test packet creation.
     SPICoprocessor::SCReadRequestPacket packet;
     packet.cmd = SPICoprocessor::SCCommand::kCmdReadFromMaster;
-    packet.addr = ObjectDictionary::Address::kAddrSettingsStruct;
+    packet.addr = ObjectDictionary::Address::kAddrSettingsData;
     packet.offset = 0xFEBC;
     packet.len = 40;
     // Make sure that CRC generation works as expected.

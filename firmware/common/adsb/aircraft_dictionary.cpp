@@ -694,7 +694,7 @@ bool AircraftDictionary::ApplyAirborneVelocitiesMessage(Aircraft &aircraft, ADSB
     switch (subtype) {
         case ADSBPacket::AirborneVelocitiesSubtype::kAirborneVelocitiesGroundSpeedSupersonic:
             is_supersonic = true;
-            // Cascade into ground speed calculation.
+            [[fallthrough]];  // Cascade into ground speed calculation.
         case ADSBPacket::AirborneVelocitiesSubtype::kAirborneVelocitiesGroundSpeedSubsonic: {
             // Ground speed calculation.
             int v_ew_kts_plus_1 = static_cast<int>(packet.GetNBitWordFromMessage(10, 14));
@@ -721,7 +721,7 @@ bool AircraftDictionary::ApplyAirborneVelocitiesMessage(Aircraft &aircraft, ADSB
         }
         case ADSBPacket::AirborneVelocitiesSubtype::kAirborneVelocitiesAirspeedSupersonic: {
             is_supersonic = true;
-            // Cascade into airspeed calculation.
+            [[fallthrough]];  // Cascade into airspeed calculation.
         }
         case ADSBPacket::AirborneVelocitiesSubtype::kAirborneVelocitiesAirspeedSubsonic: {
             int airspeed_kts_plus_1 = static_cast<int>(packet.GetNBitWordFromMessage(10, 25));

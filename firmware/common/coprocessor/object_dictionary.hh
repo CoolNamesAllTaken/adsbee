@@ -19,7 +19,7 @@ class ObjectDictionary {
         kAddrInvalid = 0,             // Default value.
         kAddrFirmwareVersion = 0x01,  // Firmware version as a uint32_t.
         kAddrScratch,                 // Used for testing SPI communications.
-        kAddrSettingsStruct,          // Used to transfer settings information.
+        kAddrSettingsData,            // Used to transfer settings information.
         kAddrRawTransponderPacket,    // Used to forward raw packets from RP2040 to ESP32.
         kAddrDecodedTransponderPacket,
         kNumAddrs
@@ -51,11 +51,16 @@ class ObjectDictionary {
                 break;
             }
 #endif
-            case kAddrSettingsStruct:
+            case kAddrSettingsData:
                 // Warning: printing here will cause a timeout and tests will fail.
                 // CONSOLE_INFO("ObjectDictionary::SetBytes", "Setting %d settings Bytes at offset %d.", buf_len,
                 // offset);
                 memcpy((uint8_t *)&(settings_manager.settings) + offset, buf, buf_len);
+                if (buf + buf_len == (uint8_t *)(&(settings_manager.settings)) + sizeof(SettingsManager::Settings)) {
+                    CONSOLE_INFO("SPICoprocessor::SetBytes", "Wrote last chunk of settings data. Applying new values.");
+                    settings_manager.Apply();
+                    settings_manager.Print();
+                }
                 break;
             default:
                 CONSOLE_ERROR("SPICoprocessor::SetBytes", "No behavior implemented for writing to address 0x%x.", addr);
@@ -83,7 +88,7 @@ class ObjectDictionary {
                 // offset);
                 memcpy(buf, (uint8_t *)(&scratch_) + offset, buf_len);
                 break;
-            case kAddrSettingsStruct:
+            case kAddrSettingsData:
                 // Warning: printing here will cause a timeout and tests will fail.
                 // CONSOLE_INFO("ObjectDictionary::GetBytes", "Getting %d settings Bytes at offset %d.", buf_len,
                 // offset);

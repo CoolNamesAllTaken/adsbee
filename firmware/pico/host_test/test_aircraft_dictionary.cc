@@ -359,8 +359,8 @@ TEST(AircraftDictionary, IngestModeC) {
     // dictionary.
     AircraftDictionary dictionary = AircraftDictionary();
     DecodedTransponderPacket tpacket = DecodedTransponderPacket((char *)"200006A2DE8B1C");
-    tpacket.ForceValid();  // Mark it as valid so that it gets digested.
     EXPECT_EQ(tpacket.GetICAOAddress(), 0x7C1B28u);
+    dictionary.InsertAircraft(Aircraft(0x7C1B28u));  // Put aircraft in the dictionary so the packet can be ingested.
     EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
     EXPECT_TRUE(dictionary.ContainsAircraft(0x7C1B28u));
 
@@ -375,7 +375,8 @@ TEST(AircraftDictionary, IngestModeC) {
 
     // Ingest a Mode C packet with an alert and ident.
     tpacket = DecodedTransponderPacket((char *)"24000E3956BBA1");
-    tpacket.ForceValid();
+    // Add aircraft to dictioanry so packet can be ingested.
+    dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
     EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
     EXPECT_TRUE(dictionary.GetAircraft(0xD3CCBFu, aircraft));
     EXPECT_EQ(aircraft.baro_altitude_ft, 22025);
@@ -385,7 +386,8 @@ TEST(AircraftDictionary, IngestModeC) {
 
     // Ingest a Mode C packet with aircraft on the ground.
     tpacket = DecodedTransponderPacket((char *)"210000992F8C48");
-    tpacket.ForceValid();
+    // Add aircraft to dictioanry so packet can be ingested.
+    dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
     EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
     EXPECT_TRUE(dictionary.GetAircraft(0x7C7539u, aircraft));
     EXPECT_EQ(aircraft.baro_altitude_ft, 25);
@@ -398,7 +400,8 @@ TEST(AircraftDictionary, IngestModeA) {
     // Ingest a Mode A packet with an alert and ident.
     AircraftDictionary dictionary = AircraftDictionary();
     DecodedTransponderPacket tpacket = DecodedTransponderPacket((char *)"2C0006A2DEE500");
-    tpacket.ForceValid();
+    // Add aircraft to dictioanry so packet can be ingested.
+    dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
     EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
     Aircraft aircraft;
     EXPECT_TRUE(dictionary.GetAircraft(0x739EE9u, aircraft));
@@ -408,7 +411,8 @@ TEST(AircraftDictionary, IngestModeA) {
 
     // Ingest a Mode A packet with an ident but no alert.
     tpacket = DecodedTransponderPacket((char *)"2D0006A2DEE500");
-    tpacket.ForceValid();
+    // Add aircraft to dictioanry so packet can be ingested.
+    dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
     EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
     EXPECT_TRUE(dictionary.GetAircraft(0x5863BAu, aircraft));
     EXPECT_EQ(aircraft.squawk, 06520u);
@@ -417,7 +421,8 @@ TEST(AircraftDictionary, IngestModeA) {
 
     // Ingest a Mode A packet with no ident and no alert. Aircraft is airborne.
     tpacket = DecodedTransponderPacket((char *)"28000D08CEE4C5");
-    tpacket.ForceValid();
+    // Add aircraft to dictioanry so packet can be ingested.
+    dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
     EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
     EXPECT_TRUE(dictionary.GetAircraft(0xA8BBE7u, aircraft));
     EXPECT_EQ(aircraft.squawk, 01260);
@@ -427,7 +432,8 @@ TEST(AircraftDictionary, IngestModeA) {
 
     // Ingest a Mode A packet with no ident and no alert. Aircraft is on ground.
     tpacket = DecodedTransponderPacket((char *)"29001E0D3CB4BF");
-    tpacket.ForceValid();
+    // Add aircraft to dictioanry so packet can be ingested.
+    dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
     EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
     EXPECT_TRUE(dictionary.GetAircraft(0x7C1471u, aircraft));
     EXPECT_EQ(aircraft.squawk, 03236);
