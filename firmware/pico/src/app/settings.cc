@@ -47,7 +47,7 @@ bool SettingsManager::Save() {
 
     settings.esp32_enabled = esp32.IsEnabled();
     // Save WiFi configuration.
-    settings.wifi_mode = comms_manager.GetWiFiMode();
+    settings.wifi_mode = comms_manager.wifi_mode;
     strncpy(settings.wifi_ssid, comms_manager.wifi_ssid, Settings::kWiFiSSIDMaxLen);
     settings.wifi_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
     strncpy(settings.wifi_password, comms_manager.wifi_password, Settings::kWiFiPasswordMaxLen);
@@ -96,7 +96,7 @@ void SettingsManager::Apply() {
     settings.wifi_mode ? esp32.Init() : esp32.DeInit();
 
     // Apply WiFi configurations.
-    comms_manager.SetWiFiMode(settings.wifi_mode);
+    comms_manager.wifi_mode = settings.wifi_mode;
     strncpy(comms_manager.wifi_ssid, settings.wifi_ssid, Settings::kWiFiSSIDMaxLen);
     comms_manager.wifi_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
     strncpy(comms_manager.wifi_password, settings.wifi_password, Settings::kWiFiPasswordMaxLen);

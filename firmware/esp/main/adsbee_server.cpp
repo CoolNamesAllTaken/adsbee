@@ -1,6 +1,7 @@
 #include "adsbee_server.hh"
 
 #include "comms.hh"
+#include "nvs_flash.h"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
 
@@ -8,23 +9,52 @@
 
 static const uint32_t kSPIRxTaskStackDepthBytes = 4096;
 
+GDL90Reporter gdl90;
+
 void esp_spi_receive_task(void *pvParameters) {
     adsbee_server.SPIReceiveTask();  // Only returns during DeInit.
     vTaskDelete(NULL);               // Delete this task.
 }
 
 bool ADSBeeServer::Init() {
-    if (!pico.Init()) return false;
+    if (!pico.Init()) {
+        CONSOLE_ERROR("ADSBeeServer::Init", "SPI Coprocessor initialization failed.");
+        return false;
+    }
 
     spi_receive_task_should_exit_ = false;
     xTaskCreate(esp_spi_receive_task, "spi_receive_task", kSPIRxTaskStackDepthBytes, NULL, 5, NULL);
 
-    // pico.Read(settings_manager.settings);
+    while (true) {
+        if (!pico.Read(ObjectDictionary::kAddrSettingsData, settings_manager.settings)) {
+            CONSOLE_ERROR("ADSBeeServer::Init", "Failed to read settings from Pico on startup.");
+            vTaskDelay(1000 / portTICK_PERIOD_MS);  // Delay for 1s before retry.
+            continue;
+        } else {
+            settings_manager.Print();
+            settings_manager.Apply();
+            break;
+        }
+    }
+
+    // Initialize Non Volatile Storage Flash, used by WiFi library.
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    if (!comms_manager.WiFiInit()) {
+        CONSOLE_ERROR("ADSBeeServer::Init", "Failed to initialize WiFi.");
+        return false;
+    }
 
     return true;
 }
 
 bool ADSBeeServer::Update() {
+    bool ret = true;
     // Do NOT call pico.Update() from here since that's already taken care of by the SPIReceiveTask.
     // Update the LED here so it has better time resolution than it would in the SPI task, which blocks frequently.
     pico.UpdateNetworkLED();
@@ -67,7 +97,16 @@ bool ADSBeeServer::Update() {
 #endif
         }
     }
-    return true;
+
+    // Broadcast aircraft locations to connected WiFi clients over GDL90.
+    if (timestamp_ms - last_gdl90_report_timestamp_ms_ > kGDL90ReportingIntervalMs) {
+        last_gdl90_report_timestamp_ms_ = timestamp_ms;
+        if (!ReportGDL90()) {
+            CONSOLE_ERROR("ADSBeeServer::Update", "Encountered error while reporting GDL90.");
+            ret = false;
+        }
+    }
+    return ret;
 }
 
 bool ADSBeeServer::HandleRawTransponderPacket(RawTransponderPacket raw_packet) {
@@ -85,18 +124,30 @@ void ADSBeeServer::SPIReceiveTask() {
         // Wait for a transaction to complete. Allow this task to block if no SPI transaction is received by using
         // max delay.
         pico.Update();
-
-        /** No pending transactions here. Use this section for outgoing messages etc. Maximum delay to execution
-         * when things are idle is SPICoprocessor::kSPITransactionTimeoutMs. **/
-
-        // Print received data
-        // pico.BlinkNetworkLED();
-        // printf("Received: \r\n");
-        // for (int i = 0; i < SPICoprocessor::kSPITransactionMaxLenBytes; i++) {
-        //     printf("%02X ", spi_rx_transaction.buffer[i]);
-        // }
-        // printf("\r\n");
     }
 
     ESP_LOGI("esp_spi_receive_task", "Received exit signal, ending SPI receive task.");
+}
+
+bool ADSBeeServer::ReportGDL90() {
+    CommsManager::NetworkMessage message;
+
+    // Heartbeat Message
+    message.len = gdl90.WriteGDL90HeartbeatMessage(message.data, get_time_since_boot_ms() / 1000,
+                                                   aircraft_dictionary.stats.valid_extended_squitter_frames);
+    comms_manager.WiFiSendMessageToAllClients(message);
+
+    // Ownship Report
+    GDL90Reporter::GDL90TargetReportData ownship_data;
+    // TODO: Actually fill out ownship data!
+    // message.len = gdl90.WriteGDL90TargetReportMessage(message.data, ownship_data, true);
+    comms_manager.WiFiSendMessageToAllClients(message);
+
+    // Traffic Reports
+    for (auto &itr : aircraft_dictionary.dict) {
+        const Aircraft &aircraft = itr.second;
+        message.len = gdl90.WriteGDL90TargetReportMessage(message.data, aircraft, false);
+        comms_manager.WiFiSendMessageToAllClients(message);
+    }
+    return true;
 }

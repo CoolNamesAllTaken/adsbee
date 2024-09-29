@@ -53,6 +53,7 @@ class SettingsManager {
         // NOTE: Length does not include null terminator.
         static const uint16_t kWiFiSSIDMaxLen = 32;
         static const uint16_t kWiFiPasswordMaxLen = 63;  // Theoretical max is 63, but limited by CppAT arg max len.
+        static const uint16_t kWiFiMaxNumClients = 6;
         static const uint32_t kDefaultCommsUARTBaudrate = 115200;
         static const uint32_t kDefaultGNSSUARTBaudrate = 9600;
         static const uint16_t kMaxNumFeeds = 6;
@@ -95,7 +96,7 @@ class SettingsManager {
             if (GetDeviceInfo(device_info)) {
                 // If able to load device info from EEPROM, use the last 16 characters in the part code as part of the
                 // WiFi SSID.
-                snprintf(wifi_ssid, kWiFiSSIDMaxLen - 10, "ADSBee1090%s", device_info.part_code + 10);
+                device_info.GetDefaultSSID(wifi_ssid);
                 snprintf(wifi_password, kWiFiPasswordMaxLen, "yummyflowers");
             }
 #endif

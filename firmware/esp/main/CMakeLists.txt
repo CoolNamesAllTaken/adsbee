@@ -6,6 +6,7 @@ idf_component_register(
         # "../../common/comms" # Currently no src files in here.
         "../../common/coprocessor"
         "../../common/utils"
+        "../../common/comms/gdl90"
         "target_test"
     INCLUDE_DIRS
         "."

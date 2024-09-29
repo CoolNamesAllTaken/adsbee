@@ -129,14 +129,6 @@ class CommsManager {
         return true;
     }
 
-    /**
-     * Returns whether WiFi is enabled.
-     * @retval True if WiFi is enabled, false otherwise.
-     */
-    SettingsManager::WiFiMode GetWiFiMode() { return wifi_mode_; }
-
-    bool SetWiFiMode(SettingsManager::WiFiMode new_wifi_mode);
-
     // Public console settings.
     SettingsManager::LogLevel log_level = SettingsManager::LogLevel::kInfo;  // Start with highest verbosity by default.
     uint32_t last_report_timestamp_ms = 0;
@@ -147,6 +139,7 @@ class CommsManager {
                                             .buffer = transponder_packet_reporting_queue_buffer_});
 
     // Public WiFi Settings
+    SettingsManager::WiFiMode wifi_mode = SettingsManager::WiFiMode::kWiFiModeAccessPoint;
     char wifi_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
     char wifi_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
 
@@ -216,9 +209,6 @@ class CommsManager {
         reporting_protocols_[SettingsManager::SerialInterface::kNumSerialInterfaces - 1] = {
             SettingsManager::ReportingProtocol::kNoReports,
             SettingsManager::ReportingProtocol::kMAVLINK1};  // GNSS_UART not included.
-
-    // private WiFi Settings
-    SettingsManager::WiFiMode wifi_mode_ = SettingsManager::WiFiMode::kWiFiModeAccessPoint;
 };
 
 extern CommsManager comms_manager;

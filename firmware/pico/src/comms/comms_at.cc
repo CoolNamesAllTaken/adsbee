@@ -444,8 +444,7 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiCallback) {
             char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];
             SettingsManager::RedactPassword(wifi_password, redacted_password,
                                             SettingsManager::Settings::kWiFiPasswordMaxLen);
-            CPP_AT_CMD_PRINTF("=%s,%s,%s\r\n", SettingsManager::kWiFiModeStrs[wifi_mode_],
-                              wifi_ssid, redacted_password);
+            CPP_AT_CMD_PRINTF("=%s,%s,%s\r\n", SettingsManager::kWiFiModeStrs[wifi_mode], wifi_ssid, redacted_password);
             CPP_AT_SILENT_SUCCESS();
             break;
         }
@@ -475,11 +474,8 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiCallback) {
                 if (new_wifi_mode == SettingsManager::WiFiMode::kNumWiFiModes) {
                     CPP_AT_ERROR("Unrecognized WiFi mode \"%s\".", args[0].data());
                 }
-                if (SetWiFiMode(new_wifi_mode)) {
-                    CPP_AT_SUCCESS();
-                } else {
-                    CPP_AT_ERROR("Seting wifi_mode=%d failed.", new_wifi_mode);
-                }
+                wifi_mode = new_wifi_mode;
+                CPP_AT_SUCCESS();
             }
 
             break;

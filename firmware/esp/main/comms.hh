@@ -1,21 +1,123 @@
 #ifndef COMMS_HH_
 #define COMMS_HH_
 
+#include "data_structures.hh"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
+#include "gdl90/gdl90_utils.hh"
 #include "settings.hh"
 
 class CommsManager {
    public:
-    bool SetWiFiMode(SettingsManager::WiFiMode new_wifi_mode);
+    static const uint16_t kMaxNetworkMessageLenBytes = 256;
+    static const uint16_t kWiFiMessageQueueLen = 10;
+    static const uint16_t kMACAddressNumBytes = 6;
+
+    struct NetworkMessage {
+        uint16_t len = 0;
+        uint8_t data[kMaxNetworkMessageLenBytes];
+
+        NetworkMessage() { memset(data, 0x0, kMaxNetworkMessageLenBytes); }
+    };
+
+    /**
+     * Helper function that converts a MAC buffer to a uint64_t that's easier to pass around and compare.
+     * @param[in] mac_buf_in Buffer to read the MAC address value from.
+     */
+    static uint64_t MACToUint64(uint8_t* mac_buf_in) {
+        uint64_t mac_out = 0;
+        for (uint16_t i = 0; i < kMACAddressNumBytes; i++) {
+            mac_out |= mac_buf_in[i] << ((5 - i) * 8);
+        }
+        return mac_out;
+    }
+
+    struct NetworkClient {
+        esp_ip4_addr_t ip;
+        uint64_t mac;
+        bool active = false;  // "Active" flag allows reuse of open slots in the list when a client disconnects.
+
+        /**
+         * Set the MAC address from a buffer, assuming the buffer is a 6 Byte MAC address MSB first.
+         * @param[in] mac_buf_in Buffer to read the MAC address value from.
+         */
+        void SetMAC(uint8_t* mac_buf_in) { mac = MACToUint64(mac_buf_in); }
+
+        /**
+         * Get the MAC address by writing it out to a buffer, assuming the buffer is a 6 Byte MAC address MSB first.
+         */
+        void GetMAC(uint8_t* mac_buf_out) {
+            for (uint16_t i = 0; i < kMACAddressNumBytes; i++) {
+                mac_buf_out[i] = mac >> ((5 - i) * 8);
+            }
+        }
+    };
+
+    bool WiFiInit();
+    bool WiFiDeInit();
+    bool WiFiSendMessageToAllClients(NetworkMessage& message);
+
+    void WiFiUDPServerTask(void* pvParameters);
+
+    // Public so that pass-through functions can access it.
+    void WiFiEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
+
+    SettingsManager::WiFiMode wifi_mode = SettingsManager::WiFiMode::kWiFiModeAccessPoint;
+    char wifi_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
+    char wifi_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
 
    private:
-    static void WiFiEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
+    /**
+     * Adds a WiFi client to the WiFi client list. Takes both an IP and a MAC address because this is when the IP
+     * address is assigned, and the MAC address will be needed for removing the client later.
+     * @param[in] client_ip IP address of the new client.
+     * @param[in] client_mac MAC address of the new client.
+     */
+    void WiFiAddClient(esp_ip4_addr_t client_ip, uint8_t* client_mac) {
+        xSemaphoreTake(wifi_clients_list_mutex_, portMAX_DELAY);
+        for (int i = 0; i < SettingsManager::Settings::kWiFiMaxNumClients; i++) {
+            if (!wifi_clients_list_[i].active) {
+                wifi_clients_list_[i].ip = client_ip;
+                wifi_clients_list_[i].SetMAC(client_mac);
+                wifi_clients_list_[i].active = true;
+                num_wifi_clients_++;
+                break;
+            }
+        }
+        xSemaphoreGive(wifi_clients_list_mutex_);
+    }
 
-    static_assert(SettingsManager::WiFiMode::kWiFiModeOff == WIFI_MODE_NULL);
-    static_assert(SettingsManager::kWiFiModeAccessPoint == WIFI_MODE_AP);
-    static_assert(SettingsManager::kWiFiModeStation == WIFI_MODE_STA);
+    /**
+     * Removes a WiFi client from the WiFi client list. Takes a MAC address since disconnection events don't come with
+     * an IP.
+     * @param[in] mac_buf_in 6-Byte buffer containing the MAC address of the client that disconnected.
+     */
+    void WiFiRemoveClient(uint8_t* mac_buf_in) {
+        uint64_t client_mac = MACToUint64(mac_buf_in);
+        xSemaphoreTake(wifi_clients_list_mutex_, portMAX_DELAY);
+        for (int i = 0; i < SettingsManager::Settings::kWiFiMaxNumClients; i++) {
+            if (wifi_clients_list_[i].active && (wifi_clients_list_[i].mac == client_mac)) {
+                wifi_clients_list_[i].active = false;
+                num_wifi_clients_--;
+                break;
+            }
+        }
+        xSemaphoreGive(wifi_clients_list_mutex_);
+    }
+
+    static_assert(static_cast<uint8_t>(SettingsManager::WiFiMode::kWiFiModeOff) == WIFI_MODE_NULL);
+    static_assert(static_cast<uint8_t>(SettingsManager::kWiFiModeAccessPoint) == WIFI_MODE_AP);
+    static_assert(static_cast<uint8_t>(SettingsManager::kWiFiModeStation) == WIFI_MODE_STA);
+
+    NetworkClient wifi_clients_list_[SettingsManager::Settings::kWiFiMaxNumClients] = {0, 0, 0};
+    uint16_t num_wifi_clients_ = 0;
+    SemaphoreHandle_t wifi_clients_list_mutex_;
+    QueueHandle_t wifi_message_queue_;
+    bool run_udp_server_ = false;  // Flag used to tell UDP server to shut down.
 };
 
 extern CommsManager comms_manager;
