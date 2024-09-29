@@ -33,7 +33,7 @@ const uint16_t kCRC24GeneratorNumBits = 25;
 /** DecodedTransponderPacket **/
 
 RawTransponderPacket::RawTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32,
-                                           int rssi_dbm_in, uint64_t mlat_48mhz_64bit_counts_in) {
+                                           int sigs_dbm_in, int sigq_db_in, uint64_t mlat_48mhz_64bit_counts_in) {
     // Set the last word indgestion behavior based on packet length.
     uint32_t last_word_ingestion_mask, last_word_popcount;
     if (rx_buffer_len_words32 > 2) {
@@ -56,11 +56,12 @@ RawTransponderPacket::RawTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords
             buffer_len_bits += BITS_PER_WORD_32;
         }
     }
-    rssi_dbm = rssi_dbm_in;
+    sigs_dbm = sigs_dbm_in;
+    sigq_db = sigq_db_in;
     mlat_48mhz_64bit_counts = mlat_48mhz_64bit_counts_in;
 }
 
-RawTransponderPacket::RawTransponderPacket(char *rx_string, int rssi_dbm_in, uint64_t mlat_48mhz_64bit_counts_in) {
+RawTransponderPacket::RawTransponderPacket(char *rx_string, int sigs_dbm_in, uint64_t mlat_48mhz_64bit_counts_in) {
     uint16_t rx_num_bytes = strlen(rx_string) / NIBBLES_PER_BYTE;
     for (uint16_t i = 0; i < rx_num_bytes && i < kMaxPacketLenWords32 * BYTES_PER_WORD_32; i++) {
         uint8_t byte = (CHAR_TO_HEX(rx_string[i * NIBBLES_PER_BYTE]) << BITS_PER_NIBBLE) |
@@ -73,23 +74,23 @@ RawTransponderPacket::RawTransponderPacket(char *rx_string, int rssi_dbm_in, uin
         }
         buffer_len_bits += BITS_PER_BYTE;
     }
-    rssi_dbm = rssi_dbm_in;
+    sigs_dbm = sigs_dbm_in;
     mlat_48mhz_64bit_counts = mlat_48mhz_64bit_counts_in;
 }
 
 DecodedTransponderPacket::DecodedTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32],
-                                                   uint16_t rx_buffer_len_words32, int rssi_dbm,
+                                                   uint16_t rx_buffer_len_words32, int sigs_dbm,
                                                    uint64_t mlat_48mhz_64bit_counts)
-    : packet(rx_buffer, rx_buffer_len_words32, rssi_dbm, mlat_48mhz_64bit_counts) {
+    : raw_(rx_buffer, rx_buffer_len_words32, sigs_dbm, mlat_48mhz_64bit_counts) {
     ConstructTransponderPacket();
 }
 
-DecodedTransponderPacket::DecodedTransponderPacket(char *rx_string, int rssi_dbm, uint64_t mlat_48mhz_64bit_counts)
-    : packet(rx_string, rssi_dbm, mlat_48mhz_64bit_counts) {
+DecodedTransponderPacket::DecodedTransponderPacket(char *rx_string, int sigs_dbm, uint64_t mlat_48mhz_64bit_counts)
+    : raw_(rx_string, sigs_dbm, mlat_48mhz_64bit_counts) {
     ConstructTransponderPacket();
 }
 
-DecodedTransponderPacket::DecodedTransponderPacket(const RawTransponderPacket &packet_in) : packet(packet_in) {
+DecodedTransponderPacket::DecodedTransponderPacket(const RawTransponderPacket &packet_in) : raw_(packet_in) {
     ConstructTransponderPacket();
 }
 
@@ -135,21 +136,21 @@ DecodedTransponderPacket::DownlinkFormat DecodedTransponderPacket::GetDownlinkFo
 }
 
 uint16_t DecodedTransponderPacket::DumpPacketBuffer(uint32_t to_buffer[kMaxPacketLenWords32]) const {
-    uint16_t bytes_written = packet.buffer_len_bits / BITS_PER_BYTE;
+    uint16_t bytes_written = raw_.buffer_len_bits / BITS_PER_BYTE;
     for (uint16_t i = 0; i < kMaxPacketLenWords32; i++) {
-        to_buffer[i] = packet.buffer[i];
+        to_buffer[i] = raw_.buffer[i];
     }
     return bytes_written;
 }
 
 uint16_t DecodedTransponderPacket::DumpPacketBuffer(uint8_t to_buffer[kMaxPacketLenWords32 * kBytesPerWord]) const {
-    uint16_t bytes_written = packet.buffer_len_bits / BITS_PER_BYTE;
+    uint16_t bytes_written = raw_.buffer_len_bits / BITS_PER_BYTE;
     for (uint16_t i = 0; i < kMaxPacketLenWords32; i++) {
         // First received bit is MSb.
-        to_buffer[i * kBytesPerWord] = packet.buffer[i] >> 24;
-        to_buffer[i * kBytesPerWord + 1] = (packet.buffer[i] >> 16) & 0xFF;
-        to_buffer[i * kBytesPerWord + 2] = (packet.buffer[i] >> 8) & 0xFF;
-        to_buffer[i * kBytesPerWord + 3] = packet.buffer[i] & 0xFF;
+        to_buffer[i * kBytesPerWord] = raw_.buffer[i] >> 24;
+        to_buffer[i * kBytesPerWord + 1] = (raw_.buffer[i] >> 16) & 0xFF;
+        to_buffer[i * kBytesPerWord + 2] = (raw_.buffer[i] >> 8) & 0xFF;
+        to_buffer[i * kBytesPerWord + 3] = raw_.buffer[i] & 0xFF;
     }
     return bytes_written;
 }
@@ -159,7 +160,7 @@ uint32_t DecodedTransponderPacket::CalculateCRC24(uint16_t packet_len_bits) cons
     // Must be called on buffer that does not have extra bit ingested at end and has all words left-aligned.
     uint32_t crc_buffer[kMaxPacketLenWords32];
     for (uint16_t i = 0; i < kMaxPacketLenWords32; i++) {
-        crc_buffer[i] = packet.buffer[i];
+        crc_buffer[i] = raw_.buffer[i];
     }
 
     // Overwrite 24-bit parity word with zeros.
@@ -178,17 +179,17 @@ uint32_t DecodedTransponderPacket::CalculateCRC24(uint16_t packet_len_bits) cons
 }
 
 void DecodedTransponderPacket::ConstructTransponderPacket() {
-    if (packet.buffer_len_bits != kExtendedSquitterPacketLenBits && packet.buffer_len_bits != kSquitterPacketLenBits) {
+    if (raw_.buffer_len_bits != kExtendedSquitterPacketLenBits && raw_.buffer_len_bits != kSquitterPacketLenBits) {
         snprintf(debug_string, kDebugStrLen,
                  "Bit number mismatch while decoding packet. Expected %d or %d but got %d!\r\n",
-                 kExtendedSquitterPacketLenBits, kSquitterPacketLenBits, packet.buffer_len_bits);
+                 kExtendedSquitterPacketLenBits, kSquitterPacketLenBits, raw_.buffer_len_bits);
 
         return;  // leave is_valid_ as false
     }
 
-    downlink_format_ = packet.buffer[0] >> 27;
-    uint32_t calculated_checksum = CalculateCRC24(packet.buffer_len_bits);
-    uint32_t parity_value = Get24BitWordFromBuffer(packet.buffer_len_bits - BITS_PER_WORD_24, packet.buffer);
+    downlink_format_ = raw_.buffer[0] >> 27;
+    uint32_t calculated_checksum = CalculateCRC24(raw_.buffer_len_bits);
+    uint32_t parity_value = Get24BitWordFromBuffer(raw_.buffer_len_bits - BITS_PER_WORD_24, raw_.buffer);
 
     switch (static_cast<DownlinkFormat>(downlink_format_)) {
         case kDownlinkFormatShortRangeAirToAirSurveillance:  // DF = 0
@@ -205,7 +206,7 @@ void DecodedTransponderPacket::ConstructTransponderPacket() {
         default:  // All other DFs. Note: DF=17-19 for ADS-B.
         {
             // Process a 112-bit message.
-            icao_address_ = packet.buffer[0] & 0xFFFFFF;
+            icao_address_ = raw_.buffer[0] & 0xFFFFFF;
             if (calculated_checksum == parity_value) {
                 is_valid_ = true;  // mark packet as valid if CRC matches the parity bits
             } else {
@@ -223,9 +224,9 @@ void DecodedTransponderPacket::ConstructTransponderPacket() {
  * Helper function used by constructors.
  */
 void ADSBPacket::ConstructADSBPacket() {
-    capability_ = static_cast<ADSBPacket::Capability>((packet.buffer[0] >> 24) & 0b111);
-    typecode_ = static_cast<ADSBPacket::TypeCode>(packet.buffer[1] >> 27);
-    parity_interrogator_id = packet.buffer[1] & 0xFFFFFF;
+    capability_ = static_cast<ADSBPacket::Capability>((raw_.buffer[0] >> 24) & 0b111);
+    typecode_ = static_cast<ADSBPacket::TypeCode>(raw_.buffer[1] >> 27);
+    parity_interrogator_id = raw_.buffer[1] & 0xFFFFFF;
 }
 
 ADSBPacket::TypeCode ADSBPacket::GetTypeCodeEnum() const {
@@ -285,7 +286,7 @@ ADSBPacket::TypeCode ADSBPacket::GetTypeCodeEnum() const {
 }
 
 ModeCPacket::ModeCPacket(const DecodedTransponderPacket &decoded_packet) : DecodedTransponderPacket(decoded_packet) {
-    uint8_t flight_status = GetNBitWordFromBuffer(3, 5, packet.buffer);  // FS = Bits 5-7.
+    uint8_t flight_status = GetNBitWordFromBuffer(3, 5, raw_.buffer);  // FS = Bits 5-7.
     switch (flight_status) {
         case 0b000:  // No alert, no SPI, aircraft is airborne.
             has_alert_ = false;
@@ -324,14 +325,14 @@ ModeCPacket::ModeCPacket(const DecodedTransponderPacket &decoded_packet) : Decod
             break;
     }
 
-    downlink_request_ = static_cast<DownlinkRequest>(GetNBitWordFromBuffer(5, 8, packet.buffer));
-    utility_message_ = GetNBitWordFromBuffer(4, 13, packet.buffer);
-    utility_message_type_ = static_cast<UtilityMessageType>(GetNBitWordFromBuffer(2, 17, packet.buffer));
-    altitude_ft_ = AltitudeCodeToAltitudeFt(GetNBitWordFromBuffer(13, 19, packet.buffer));
+    downlink_request_ = static_cast<DownlinkRequest>(GetNBitWordFromBuffer(5, 8, raw_.buffer));
+    utility_message_ = GetNBitWordFromBuffer(4, 13, raw_.buffer);
+    utility_message_type_ = static_cast<UtilityMessageType>(GetNBitWordFromBuffer(2, 17, raw_.buffer));
+    altitude_ft_ = AltitudeCodeToAltitudeFt(GetNBitWordFromBuffer(13, 19, raw_.buffer));
 };
 
 ModeAPacket::ModeAPacket(const DecodedTransponderPacket &decoded_packet) : DecodedTransponderPacket(decoded_packet) {
-    uint8_t flight_status = GetNBitWordFromBuffer(3, 5, packet.buffer);  // FS = Bits 5-7.
+    uint8_t flight_status = GetNBitWordFromBuffer(3, 5, raw_.buffer);  // FS = Bits 5-7.
     switch (flight_status) {
         case 0b000:  // No alert, no SPI, aircraft is airborne.
             has_alert_ = false;
@@ -370,8 +371,8 @@ ModeAPacket::ModeAPacket(const DecodedTransponderPacket &decoded_packet) : Decod
             break;
     }
 
-    downlink_request_ = static_cast<DownlinkRequest>(GetNBitWordFromBuffer(5, 8, packet.buffer));
-    utility_message_ = GetNBitWordFromBuffer(4, 13, packet.buffer);
-    utility_message_type_ = static_cast<UtilityMessageType>(GetNBitWordFromBuffer(2, 17, packet.buffer));
-    squawk_ = IdentityCodeToSquawk(GetNBitWordFromBuffer(13, 19, packet.buffer));
+    downlink_request_ = static_cast<DownlinkRequest>(GetNBitWordFromBuffer(5, 8, raw_.buffer));
+    utility_message_ = GetNBitWordFromBuffer(4, 13, raw_.buffer);
+    utility_message_type_ = static_cast<UtilityMessageType>(GetNBitWordFromBuffer(2, 17, raw_.buffer));
+    squawk_ = IdentityCodeToSquawk(GetNBitWordFromBuffer(13, 19, raw_.buffer));
 };

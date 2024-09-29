@@ -21,6 +21,9 @@
 // #include "printf.h" // for using custom printf defined in printf.h
 #include <cstdio>  // for using regular printf
 
+const uint32_t kDeviceInfoProgrammingPassword = 0xDEDBEEF;  // This is intended to stop people from accidentally
+                                                            // modifying serial number information on their device.
+
 /** CppAT Printf Override **/
 int CppAT::cpp_at_printf(const char *format, ...) {
     va_list args;
@@ -35,22 +38,22 @@ int CppAT::cpp_at_printf(const char *format, ...) {
 CPP_AT_CALLBACK(CommsManager::ATBaudrateCallback) {
     switch (op) {
         case '?':
-            CPP_AT_CMD_PRINTF("=%d(COMMS),%d(GNSS)", comms_uart_baudrate_, gnss_uart_baudrate_);
+            CPP_AT_CMD_PRINTF("=%d(COMMS_UART),%d(GNSS_UART)", comms_uart_baudrate_, gnss_uart_baudrate_);
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
             if (!(CPP_AT_HAS_ARG(0) && CPP_AT_HAS_ARG(1))) {
                 CPP_AT_ERROR(
-                    "Requires two arguments: AT+BAUDRATE=<iface>,<baudrate> where <iface> can be one of [COMMS, "
-                    "GNSS].");
+                    "Requires two arguments: AT+BAUDRATE=<iface>,<baudrate> where <iface> can be one of [COMMS_UART, "
+                    "GNSS_UART].");
             }
             SettingsManager::SerialInterface iface;
-            if (args[0].compare("COMMS") == 0) {
+            if (args[0].compare("COMMS_UART") == 0) {
                 iface = SettingsManager::kCommsUART;
-            } else if (args[0].compare("GNSS") == 0) {
+            } else if (args[0].compare("GNSS_UART") == 0) {
                 iface = SettingsManager::kGNSSUART;
             } else {
-                CPP_AT_ERROR("Invalid interface. Must be one of [COMMS, GNSS].");
+                CPP_AT_ERROR("Invalid interface. Must be one of [COMMS_UART, GNSS_UART].");
             }
             uint32_t baudrate;
             CPP_AT_TRY_ARG2NUM(1, baudrate);
@@ -79,7 +82,76 @@ CPP_AT_CALLBACK(CommsManager::ATBiasTeeEnableCallback) {
             CPP_AT_SUCCESS();
             break;
     }
-    CPP_AT_ERROR();  // Should never get here.
+    CPP_AT_ERROR();
+}
+
+CPP_AT_CALLBACK(CommsManager::ATESP32EnableCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%d", esp32.IsEnabled());
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (!CPP_AT_HAS_ARG(0)) {
+                CPP_AT_ERROR("Requires an argument (0 or 1). AT+ESP32_ENABLED=<enabled>");
+            }
+            bool enabled;
+            bool already_enabled = esp32.IsEnabled();
+            CPP_AT_TRY_ARG2NUM(0, enabled);
+            if (enabled && !already_enabled) {
+                esp32.Init();
+            } else if (!enabled && already_enabled) {
+                esp32.DeInit();
+            }
+            CPP_AT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR();
+}
+
+CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
+    switch (op) {
+        case '?': {
+            SettingsManager::DeviceInfo device_info;
+            if (!settings_manager.GetDeviceInfo(device_info)) {
+                CPP_AT_ERROR("Error while retrieving device info.");
+            }
+            device_info.part_code[SettingsManager::DeviceInfo::kPartCodeLen] =
+                '\0';  // Use caution in case part code is invalid.
+            CPP_AT_PRINTF("Part Code: %s", device_info.part_code);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        }
+        case '=': {
+            // AT+DEVICE_INFO=<programming_password>,<device_info_version>,<part_code>
+            if (!CPP_AT_HAS_ARG(0)) {
+                CPP_AT_ERROR("Missing programming password.");
+            } else {
+                uint32_t programming_password;
+                CPP_AT_TRY_ARG2NUM_BASE(0, programming_password, 16);
+                if (programming_password != kDeviceInfoProgrammingPassword) {
+                    CPP_AT_ERROR("Programming password 0x%x does not match.", programming_password);
+                }
+                // Program device information here.
+                SettingsManager::DeviceInfo device_info;
+                settings_manager.GetDeviceInfo(device_info);  // Override existing info, if fields are provided.
+                if (CPP_AT_HAS_ARG(1)) {
+                    CPP_AT_TRY_ARG2NUM(1, device_info.device_info_version);
+                }
+                if (CPP_AT_HAS_ARG(2)) {
+                    // Copy part code while guarding against part codes that are too long.
+                    strncpy(device_info.part_code, args[2].data(), SettingsManager::DeviceInfo::kPartCodeLen);
+                    device_info.part_code[SettingsManager::DeviceInfo::kPartCodeLen] = '\0';
+                }
+                if (settings_manager.SetDeviceInfo(device_info)) {
+                    CPP_AT_SUCCESS();
+                }
+                CPP_AT_ERROR("Error while attempting to set device info.");
+            }
+            break;
+        }
+    }
+    CPP_AT_ERROR();
 }
 
 void ATFeedHelpCallback() {
@@ -88,7 +160,7 @@ void ATFeedHelpCallback() {
         "network feed.\r\n\tfeed_index = [0-%d], feed_uri = ip address or URL, feed_port = [0-65535], "
         "active = [0 1], protocol = [BEAST].\r\n\t\r\n\tAT+FEED?\r\n\tPrint details for all "
         "feeds.\r\n\t\r\n\tAT+FEED?<feed_index>\r\n\tPrint details for a specific feed.\r\n\tfeed_index = [0-%d]",
-        SettingsManager::kMaxNumFeeds - 1, SettingsManager::kMaxNumFeeds - 1);
+        SettingsManager::Settings::kMaxNumFeeds - 1, SettingsManager::Settings::kMaxNumFeeds - 1);
 }
 
 CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
@@ -98,23 +170,23 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                 // Querying info about a specific feed.
                 uint16_t feed_index = UINT16_MAX;
                 CPP_AT_TRY_ARG2NUM(0, feed_index);
-                if (feed_index >= SettingsManager::kMaxNumFeeds) {
+                if (feed_index >= SettingsManager::Settings::kMaxNumFeeds) {
                     CPP_AT_ERROR("Feed number must be between 0-%d, no details for feed with index %d.",
-                                 SettingsManager::kMaxNumFeeds - 1, feed_index);
+                                 SettingsManager::Settings::kMaxNumFeeds - 1, feed_index);
                 }
                 CPP_AT_CMD_PRINTF(
                     "=%d(FEED_INDEX),%s(FEED_URI),%d(FEED_PORT),%d(ACTIVE),%s(PROTOCOL)", feed_index,
                     settings_manager.settings.feed_uris[feed_index], settings_manager.settings.feed_ports[feed_index],
                     settings_manager.settings.feed_is_active[feed_index],
-                    SettingsManager::ReportingProtocolStrs[settings_manager.settings.feed_protocols[feed_index]]);
+                    SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[feed_index]]);
             } else {
                 // Querying info about all feeds.
-                for (uint16_t i = 0; i < SettingsManager::kMaxNumFeeds; i++) {
+                for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
                     CPP_AT_CMD_PRINTF(
                         "=%d(FEED_INDEX),%s(FEED_URI),%d(FEED_PORT),%d(ACTIVE),%s(PROTOCOL)", i,
                         settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i],
                         settings_manager.settings.feed_is_active[i],
-                        SettingsManager::ReportingProtocolStrs[settings_manager.settings.feed_protocols[i]]);
+                        SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[i]]);
                 }
             }
             CPP_AT_SILENT_SUCCESS();
@@ -126,15 +198,15 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                 CPP_AT_ERROR("Feed index is required for setting feed information.");
             }
             CPP_AT_TRY_ARG2NUM(0, feed_index);
-            if (feed_index >= SettingsManager::kMaxNumFeeds) {
+            if (feed_index >= SettingsManager::Settings::kMaxNumFeeds) {
                 CPP_AT_ERROR("Feed index must be between 0-%d, no details for feed with index %d.",
-                             SettingsManager::kMaxNumFeeds - 1, feed_index);
+                             SettingsManager::Settings::kMaxNumFeeds - 1, feed_index);
             }
             // Set FEED_URI.
             if (CPP_AT_HAS_ARG(1)) {
                 strncpy(settings_manager.settings.feed_uris[feed_index], args[1].data(),
-                        SettingsManager::kFeedURIMaxNumChars);
-                settings_manager.settings.feed_uris[feed_index][SettingsManager::kFeedURIMaxNumChars] = '\0';
+                        SettingsManager::Settings::kFeedURIMaxNumChars);
+                settings_manager.settings.feed_uris[feed_index][SettingsManager::Settings::kFeedURIMaxNumChars] = '\0';
             }
             // Set FEED_PORT
             if (CPP_AT_HAS_ARG(2)) {
@@ -149,7 +221,7 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
             if (CPP_AT_HAS_ARG(4)) {
                 SettingsManager::ReportingProtocol feed_protocol;
                 for (uint16_t i = 0; i < SettingsManager::ReportingProtocol::kNumProtocols; i++) {
-                    if (args[4].compare(SettingsManager::ReportingProtocolStrs[i]) == 0) {
+                    if (args[4].compare(SettingsManager::kReportingProtocolStrs[i]) == 0) {
                         feed_protocol = static_cast<SettingsManager::ReportingProtocol>(i);
                     }
                 }
@@ -157,7 +229,7 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                 if (!(feed_protocol == SettingsManager::ReportingProtocol::kBeast ||
                       feed_protocol == SettingsManager::ReportingProtocol::kNoReports)) {
                     CPP_AT_ERROR("Protocol %s is not supported for network feeds.",
-                                 SettingsManager::ReportingProtocolStrs[feed_protocol]);
+                                 SettingsManager::kReportingProtocolStrs[feed_protocol]);
                 }
                 settings_manager.settings.feed_protocols[feed_index] = feed_protocol;
             }
@@ -186,7 +258,7 @@ CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
     switch (op) {
         case '?':
             // AT+CONFIG mode query.
-            CPP_AT_CMD_PRINTF("=%s", SettingsManager::ConsoleLogLevelStrs[log_level]);
+            CPP_AT_CMD_PRINTF("=%s", SettingsManager::kConsoleLogLevelStrs[log_level]);
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
@@ -195,7 +267,7 @@ CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
                 CPP_AT_ERROR("Need to specify a config mode to run.");
             }
             for (uint16_t i = 0; i < SettingsManager::kNumLogLevels; i++) {
-                if (args[0].compare(SettingsManager::ConsoleLogLevelStrs[i]) == 0) {
+                if (args[0].compare(SettingsManager::kConsoleLogLevelStrs[i]) == 0) {
                     log_level = static_cast<SettingsManager::LogLevel>(i);
                     CPP_AT_SUCCESS();
                 }
@@ -211,8 +283,8 @@ CPP_AT_CALLBACK(CommsManager::ATProtocolCallback) {
         case '?':
             // Print out reporting protocols for CONSOLE and COMMS_UART.
             for (uint16_t iface = 0; iface < SettingsManager::SerialInterface::kGNSSUART; iface++) {
-                CPP_AT_CMD_PRINTF("=%s,%s", SettingsManager::SerialInterfaceStrs[iface],
-                                  SettingsManager::ReportingProtocolStrs[reporting_protocols_[iface]]);
+                CPP_AT_CMD_PRINTF("=%s,%s", SettingsManager::kSerialInterfaceStrs[iface],
+                                  SettingsManager::kReportingProtocolStrs[reporting_protocols_[iface]]);
             }
             CPP_AT_SILENT_SUCCESS();
             break;
@@ -225,7 +297,7 @@ CPP_AT_CALLBACK(CommsManager::ATProtocolCallback) {
             // Match the selected serial interface. Don't allow selection of the GNSS interface.
             SettingsManager::SerialInterface selected_iface = SettingsManager::SerialInterface::kNumSerialInterfaces;
             for (uint16_t iface = 0; iface < SettingsManager::SerialInterface::kGNSSUART; iface++) {
-                if (args[0].compare(SettingsManager::SerialInterfaceStrs[iface]) == 0) {
+                if (args[0].compare(SettingsManager::kSerialInterfaceStrs[iface]) == 0) {
                     selected_iface = static_cast<SettingsManager::SerialInterface>(iface);
                     break;
                 }
@@ -237,7 +309,7 @@ CPP_AT_CALLBACK(CommsManager::ATProtocolCallback) {
             // Match the selected protocol.
             SettingsManager::ReportingProtocol selected_protocol = SettingsManager::ReportingProtocol::kNumProtocols;
             for (uint16_t protocol = 0; protocol < SettingsManager::ReportingProtocol::kNumProtocols; protocol++) {
-                if (args[1].compare(SettingsManager::ReportingProtocolStrs[protocol]) == 0) {
+                if (args[1].compare(SettingsManager::kReportingProtocolStrs[protocol]) == 0) {
                     selected_protocol = static_cast<SettingsManager::ReportingProtocol>(protocol);
                     break;
                 }
@@ -259,11 +331,11 @@ CPP_AT_HELP_CALLBACK(CommsManager::ATProtocolHelpCallback) {
     CPP_AT_PRINTF("\tSet the reporting protocol used on a given serial interface:\r\n");
     CPP_AT_PRINTF("\tAT+PROTOCOL=<iface>,<protocol>\r\n\t<iface> = ");
     for (uint16_t iface = 0; iface < SettingsManager::kGNSSUART; iface++) {
-        CPP_AT_PRINTF("%s ", SettingsManager::SerialInterfaceStrs[iface]);
+        CPP_AT_PRINTF("%s ", SettingsManager::kSerialInterfaceStrs[iface]);
     }
     CPP_AT_PRINTF("\r\n\t<protocol> = ");
     for (uint16_t protocol = 0; protocol < SettingsManager::kNumProtocols; protocol++) {
-        CPP_AT_PRINTF("%s ", SettingsManager::ReportingProtocolStrs[protocol]);
+        CPP_AT_PRINTF("%s ", SettingsManager::kReportingProtocolStrs[protocol]);
     }
     CPP_AT_PRINTF("\r\n\tQuery the reporting protocol used on all interfaces:\r\n");
     CPP_AT_PRINTF("\tAT+PROTOCOL?\r\n\t+PROTOCOL=<iface>,<protocol>\r\n\t...\r\n");
@@ -369,34 +441,41 @@ CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
 CPP_AT_CALLBACK(CommsManager::ATWiFiCallback) {
     switch (op) {
         case '?': {
-            char redacted_password[SettingsManager::kWiFiPasswordMaxLen + 1];
-            SettingsManager::RedactPassword(wifi_password, redacted_password, SettingsManager::kWiFiPasswordMaxLen);
-            CPP_AT_CMD_PRINTF("=%d,%s,%s\r\n", static_cast<uint16_t>(wifi_enabled_), wifi_ssid, redacted_password);
+            char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];
+            SettingsManager::RedactPassword(wifi_password, redacted_password,
+                                            SettingsManager::Settings::kWiFiPasswordMaxLen);
+            CPP_AT_CMD_PRINTF("=%s,%s,%s\r\n", SettingsManager::kWiFiModeStrs[wifi_mode], wifi_ssid, redacted_password);
             CPP_AT_SILENT_SUCCESS();
             break;
         }
         case '=': {
             if (CPP_AT_HAS_ARG(1)) {
-                strncpy(wifi_ssid, args[1].data(), SettingsManager::kWiFiSSIDMaxLen);
-                wifi_ssid[SettingsManager::kWiFiSSIDMaxLen] = '\0';
+                strncpy(wifi_ssid, args[1].data(), SettingsManager::Settings::kWiFiSSIDMaxLen);
+                wifi_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen] = '\0';
                 CPP_AT_CMD_PRINTF(": ssid=%s\r\n", wifi_ssid);
             }
             if (CPP_AT_HAS_ARG(2)) {
-                strncpy(wifi_password, args[2].data(), SettingsManager::kWiFiPasswordMaxLen);
-                wifi_password[SettingsManager::kWiFiPasswordMaxLen] = '\0';
-                char redacted_password[SettingsManager::kWiFiPasswordMaxLen];
-                SettingsManager::RedactPassword(wifi_password, redacted_password, SettingsManager::kWiFiPasswordMaxLen);
+                strncpy(wifi_password, args[2].data(), SettingsManager::Settings::kWiFiPasswordMaxLen);
+                wifi_password[SettingsManager::Settings::kWiFiPasswordMaxLen] = '\0';
+                char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen];
+                SettingsManager::RedactPassword(wifi_password, redacted_password,
+                                                SettingsManager::Settings::kWiFiPasswordMaxLen);
                 CPP_AT_CMD_PRINTF(": password=%s\r\n", redacted_password);
             }
 
             if (CPP_AT_HAS_ARG(0)) {
-                bool new_wifi_enabled = false;
-                CPP_AT_TRY_ARG2NUM(0, new_wifi_enabled);
-                if (SetWiFiEnabled(new_wifi_enabled)) {
-                    CPP_AT_SUCCESS();
-                } else {
-                    CPP_AT_ERROR("Seting wifi_enabled=%d failed.", new_wifi_enabled);
+                SettingsManager::WiFiMode new_wifi_mode;
+                for (uint16_t i = 0; i < SettingsManager::WiFiMode::kNumWiFiModes; i++) {
+                    if (args[0].compare(SettingsManager::kWiFiModeStrs[i]) == 0) {
+                        new_wifi_mode = static_cast<SettingsManager::WiFiMode>(i);
+                        break;
+                    }
                 }
+                if (new_wifi_mode == SettingsManager::WiFiMode::kNumWiFiModes) {
+                    CPP_AT_ERROR("Unrecognized WiFi mode \"%s\".", args[0].data());
+                }
+                wifi_mode = new_wifi_mode;
+                CPP_AT_SUCCESS();
             }
 
             break;
@@ -413,14 +492,25 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .min_args = 0,
      .max_args = 2,
      .help_string_buf = "AT+BAUDRATE=<iface>,<baudrate>\r\n\tSet the baud rate of a serial "
-                        "interface.\r\n\tAT+BAUDRATE=COMMS,115200\r\n\tAT+BAUDRATE=GNSS,9600\r\n\tAT_BAUDRATE?",
+                        "interface.\r\n\tAT_BAUDRATE?\r\n\tQuery the baud rate of all serial interfaces.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBaudrateCallback, comms_manager)},
     {.command_buf = "+BIAS_TEE_ENABLE",
      .min_args = 0,
      .max_args = 1,
      .help_string_buf = "AT+BIAS_TEE_ENABLE=<enabled>\r\n\tEnable or disable the bias "
-                        "tee.\r\n\tAT+BIAS_TEE_ENABLE=1\r\n\tAT+BIAS_TEE_ENABLE=0\r\n\tBIAS_TEE_ENABLE?",
+                        "tee.\r\n\tBIAS_TEE_ENABLE?\r\n\tQuery the status of the bias tee.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBiasTeeEnableCallback, comms_manager)},
+    {.command_buf = "+DEVICE_INFO",
+     .min_args = 0,
+     .max_args = 5,  // TODO: check this value.
+     .help_string_buf = "AT+DEVICE_INFO?\r\n\tQuery device information.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATDeviceInfoCallback, comms_manager)},
+    {.command_buf = "+ESP32_ENABLE",
+     .min_args = 0,
+     .max_args = 1,
+     .help_string_buf = "AT+ESP32_ENABLE=<enabled>\r\n\tEnable or disable the ESP32.\r\n\tAT+ESP32_ENABLE?\r\n\tQuery "
+                        "the enable status of the ESP32.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATESP32EnableCallback, comms_manager)},
     {.command_buf = "+FEED",
      .min_args = 0,
      .max_args = 5,

@@ -14,6 +14,7 @@ class CommsManager {
     static const uint16_t kPrintfBufferMaxSize = 500;
     static const uint32_t kMAVLINKReportingIntervalMs = 1000;
     static const uint32_t kCSBeeReportingIntervalMs = 1000;
+    static const uint32_t kGDL90ReportingIntervalMs = 1000;
 
     struct CommsManagerConfig {
         uart_inst_t *comms_uart_handle = uart1;
@@ -23,13 +24,6 @@ class CommsManager {
         uint16_t gnss_uart_tx_pin = 0;
         uint16_t gnss_uart_rx_pin = 1;
         uint16_t uart_timeout_us = 0;  // Time to wait for a character if there isn't one alredy available.
-
-        uint16_t esp32_enable_pin = 14;
-        uint16_t esp32_gpio0_boot_pin = 13;
-        uint16_t esp32_mosi_pin = 8;
-        uint16_t esp32_miso_pin = 9;
-        uint16_t esp32_clk_pin = 7;
-        uint16_t esp32_cs_pin = 10;
     };
 
     CommsManager(CommsManagerConfig config_in);
@@ -38,6 +32,8 @@ class CommsManager {
 
     CPP_AT_CALLBACK(ATBaudrateCallback);
     CPP_AT_CALLBACK(ATBiasTeeEnableCallback);
+    CPP_AT_CALLBACK(ATDeviceInfoCallback);
+    CPP_AT_CALLBACK(ATESP32EnableCallback);
     CPP_AT_CALLBACK(ATFeedCallback);
     CPP_AT_CALLBACK(ATFlashESP32Callback);
     CPP_AT_CALLBACK(ATLogLevelCallback);
@@ -56,6 +52,12 @@ class CommsManager {
     bool iface_putc(SettingsManager::SerialInterface iface, char c);
     bool iface_getc(SettingsManager::SerialInterface iface, char &c);
     bool iface_puts(SettingsManager::SerialInterface iface, const char *buf);
+
+    void SendBuf(SettingsManager::SerialInterface iface, char *buf, uint16_t buf_len) {
+        for (uint16_t i = 0; i < buf_len; i++) {
+            iface_putc(iface, buf[i]);
+        }
+    }
 
     /**
      * Sets the baudrate for a serial interface.
@@ -127,14 +129,6 @@ class CommsManager {
         return true;
     }
 
-    /**
-     * Returns whether WiFi is enabled.
-     * @retval True if WiFi is enabled, false otherwise.
-     */
-    bool WiFiIsEnabled() { return wifi_enabled_; }
-
-    bool SetWiFiEnabled(bool new_wifi_enabled);
-
     // Public console settings.
     SettingsManager::LogLevel log_level = SettingsManager::LogLevel::kInfo;  // Start with highest verbosity by default.
     uint32_t last_report_timestamp_ms = 0;
@@ -145,8 +139,9 @@ class CommsManager {
                                             .buffer = transponder_packet_reporting_queue_buffer_});
 
     // Public WiFi Settings
-    char wifi_ssid[SettingsManager::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
-    char wifi_password[SettingsManager::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
+    SettingsManager::WiFiMode wifi_mode = SettingsManager::WiFiMode::kWiFiModeAccessPoint;
+    char wifi_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
+    char wifi_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
 
     // MAVLINK settings.
     uint8_t mavlink_system_id = 0;
@@ -194,6 +189,11 @@ class CommsManager {
      */
     bool ReportMAVLINK(SettingsManager::SerialInterface iface);
 
+    /**
+     * Reports the contents of the aircraft dictionary using the Garmin GDL90 protocol.
+     */
+    bool ReportGDL90(SettingsManager::SerialInterface iface);
+
     CommsManagerConfig config_;
 
     // Console Settings
@@ -203,15 +203,12 @@ class CommsManager {
     DecodedTransponderPacket transponder_packet_reporting_queue_buffer_[ADSBee::kMaxNumTransponderPackets];
 
     // Reporting Settings
-    uint32_t comms_uart_baudrate_ = SettingsManager::kDefaultCommsUARTBaudrate;
-    uint32_t gnss_uart_baudrate_ = SettingsManager::kDefaultGNSSUARTBaudrate;
+    uint32_t comms_uart_baudrate_ = SettingsManager::Settings::kDefaultCommsUARTBaudrate;
+    uint32_t gnss_uart_baudrate_ = SettingsManager::Settings::kDefaultGNSSUARTBaudrate;
     SettingsManager::ReportingProtocol
         reporting_protocols_[SettingsManager::SerialInterface::kNumSerialInterfaces - 1] = {
             SettingsManager::ReportingProtocol::kNoReports,
             SettingsManager::ReportingProtocol::kMAVLINK1};  // GNSS_UART not included.
-
-    // private WiFi Settings
-    bool wifi_enabled_ = false;
 };
 
 extern CommsManager comms_manager;

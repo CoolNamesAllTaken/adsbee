@@ -125,39 +125,61 @@ void AircraftDictionary::Init() {
 }
 
 void AircraftDictionary::Update(uint32_t timestamp_ms) {
-    // Iterate over each key-value pair in the unordered_map
+    // Iterate over each key-value pair in the unordered_map. Prune if stale, update stats if still fresh.
     for (auto it = dict.begin(); it != dict.end(); /* No increment here */) {
         if (timestamp_ms - it->second.last_message_timestamp_ms > config_.aircraft_prune_interval_ms) {
             it = dict.erase(it);  // Remove stale aircraft entry.
         } else {
+            it->second.UpdateStats();
             it++;  // Move to the next aircraft entry.
         }
     }
+
+    // Update aggregate statistics.
+    stats = stats_counter_;              // Swap counter values over to publicly visible values.
+    stats_counter_ = DictionaryStats();  // Use default constructor to clear all values.
 }
 
 bool AircraftDictionary::IngestDecodedTransponderPacket(DecodedTransponderPacket &packet) {
-    if (!packet.IsValid()) {
-        if (packet.GetPacketBufferLenBits() == DecodedTransponderPacket::kSquitterPacketLenBits &&
-            ContainsAircraft(packet.GetICAOAddress())) {
-            // Packet is a 56-bit Squitter packet that is incapable of validating itself, and its CRC was validated
-            // against the ICAO addresses in the aircraft dictionary.
-            packet.ForceValid();
-            // Continue to add packet to dictionary.
-        } else {
-            // Packet is 112 bits, should have been able to validate itself. Something is borked.
+    switch (packet.GetBufferLenBits()) {
+        case DecodedTransponderPacket::kSquitterPacketLenBits:
+            stats_counter_.raw_squitter_frames++;
+            if (ContainsAircraft(packet.GetICAOAddress())) {
+                // Packet is a 56-bit Squitter packet that is incapable of validating itself, and its CRC was validated
+                // against the ICAO addresses in the aircraft dictionary.
+                stats_counter_.valid_squitter_frames++;
+                packet.ForceValid();
+                // Continue to add packet to dictionary.
+            } else {
+                return false;  // Squitter frame could not be validated against ICAOs in dictionary.
+            }
+            break;
+        case DecodedTransponderPacket::kExtendedSquitterPacketLenBits:
+            stats_counter_.raw_extended_squitter_frames++;
+            if (packet.IsValid()) {
+                stats_counter_.valid_extended_squitter_frames++;
+            } else {
+                return false;  // Extended squitter frame failed CRC.
+            }
+            break;
+        default:
+            CONSOLE_ERROR(
+                "AircraftDictionary::IngestDecodedTransponderPacket",
+                "Received packet with unrecognized bitlength %d, expected %d (Squiter) or %d (Extended Squitter).",
+                packet.GetBufferLenBits(), DecodedTransponderPacket::kSquitterPacketLenBits,
+                DecodedTransponderPacket::kExtendedSquitterPacketLenBits);
             return false;
-        }
     }
 
     uint16_t downlink_format = packet.GetDownlinkFormat();
     switch (downlink_format) {
-        // Mode A Packet.
+        // Mode C Packet.
         case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatAltitudeReply:
-            IngestModeCPacket(ModeAPacket(packet));
+            IngestModeCPacket(ModeCPacket(packet));
             break;
         // Mode C Packet.
         case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatIdentityReply:
-            IngestModeAPacket(ModeCPacket(packet));
+            IngestModeAPacket(ModeAPacket(packet));
             break;
         // ADS-B Packets.
         case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatExtendedSquitter:                // DF = 17
@@ -362,103 +384,105 @@ Aircraft *AircraftDictionary::GetAircraftPtr(uint32_t icao_address) {
  */
 
 /**
- * Returns the Wake Vortex value of the aircraft that sent a given ADS-B packet.
- * @param[in] packet ADS-B Packet to extract the AirframeType value from. Must be
- * @retval AirframeType that matches the combination of capability and typecode from the ADS-B packet, or
- * kAirframeTypeInvalid if there is no matching wake vortex value.
+ * Returns the Wake Vortex category of the aircraft that sent a given ADS-B packet. Note that some categories have a
+ * many to one mapping!
+ * @param[in] packet ADS-B Packet to extract the Category value from. Must be
+ * @retval Category that matches the combination of capability and typecode from the ADS-B packet, or
+ * kCategoryInvalid if there is no matching wake vortex value.
  */
-Aircraft::AirframeType ExtractAirframeType(const ADSBPacket &packet) {
-    uint16_t typecode = packet.GetNBitWordFromMessage(5, 0);
-    uint16_t category = packet.GetNBitWordFromMessage(3, 5);
+Aircraft::Category ExtractCategory(const ADSBPacket &packet) {
+    uint8_t typecode = packet.GetNBitWordFromMessage(5, 0);
+    uint8_t capability = packet.GetNBitWordFromMessage(3, 5);
 
     // Table 4.1 from The 1090Mhz Riddle (Junzi Sun), pg. 42.
-    if (category == 0) {
-        return Aircraft::kAirframeTypeNoCategoryInfo;
+    if (capability == 0) {
+        return Aircraft::kCategoryNoCategoryInfo;
     }
 
     switch (typecode) {
         case 1:
-            return Aircraft::kAirframeTypeReserved;
+            return Aircraft::kCategoryReserved;
             break;
         case 2:
-            switch (category) {
+            switch (capability) {
                 case 1:
-                    return Aircraft::kAirframeTypeSurfaceEmergencyVehicle;
+                    return Aircraft::kCategorySurfaceEmergencyVehicle;
                     break;
                 case 3:
-                    return Aircraft::kAirframeTypeSurfaceServiceVehicle;
+                    return Aircraft::kCategorySurfaceServiceVehicle;
                     break;
                 case 4:
                 case 5:
                 case 6:
                 case 7:
-                    return Aircraft::kAirframeTypeGroundObstruction;
+                    return Aircraft::kCategoryGroundObstruction;
                     break;
                 default:
-                    return Aircraft::kAirframeTypeInvalid;
+                    return Aircraft::kCategoryInvalid;
             }
             break;
         case 3:
-            switch (category) {
+            switch (capability) {
                 case 1:
-                    return Aircraft::kAirframeTypeGliderSailplane;
+                    return Aircraft::kCategoryGliderSailplane;
                     break;
                 case 2:
-                    return Aircraft::kAirframeTypeLighterThanAir;
+                    return Aircraft::kCategoryLighterThanAir;
                     break;
                 case 3:
-                    return Aircraft::kAirframeTypeParachutistSkydiver;
+                    return Aircraft::kCategoryParachutistSkydiver;
                     break;
                 case 4:
-                    return Aircraft::kAirframeTypeUltralightHangGliderParaglider;
+                    return Aircraft::kCategoryUltralightHangGliderParaglider;
                     break;
                 case 5:
-                    return Aircraft::kAirframeTypeReserved;
+                    return Aircraft::kCategoryReserved;
                     break;
                 case 6:
-                    return Aircraft::kAirframeTypeUnmannedAerialVehicle;
+                    return Aircraft::kCategoryUnmannedAerialVehicle;
                     break;
                 case 7:
-                    return Aircraft::kAirframeTypeSpaceTransatmosphericVehicle;
+                    return Aircraft::kCategorySpaceTransatmosphericVehicle;
                     break;
                 default:
-                    return Aircraft::kAirframeTypeInvalid;
+                    return Aircraft::kCategoryInvalid;
             }
             break;
         case 4:
-            switch (category) {
+            switch (capability) {
                 case 1:
-                    return Aircraft::kAirframeTypeLight;
+                    return Aircraft::kCategoryLight;
                     break;
                 case 2:
-                    return Aircraft::kAirframeTypeMedium1;
+                    return Aircraft::kCategoryMedium1;
                     break;
                 case 3:
-                    return Aircraft::kAirframeTypeMedium2;
+                    return Aircraft::kCategoryMedium2;
                     break;
                 case 4:
-                    return Aircraft::kAirframeTypeHighVortexAircraft;
+                    return Aircraft::kCategoryHighVortexAircraft;
                     break;
                 case 5:
-                    return Aircraft::kAirframeTypeHeavy;
+                    return Aircraft::kCategoryHeavy;
                     break;
                 case 6:
-                    return Aircraft::kAirframeTypeHighPerformance;
+                    return Aircraft::kCategoryHighPerformance;
                     break;
                 case 7:
-                    return Aircraft::kAirframeTypeRotorcraft;
+                    return Aircraft::kCategoryRotorcraft;
                     break;
                 default:
-                    return Aircraft::kAirframeTypeInvalid;
+                    return Aircraft::kCategoryInvalid;
             }
             break;
         default:
-            return Aircraft::kAirframeTypeInvalid;
+            return Aircraft::kCategoryInvalid;
     }
 }
 
 bool AircraftDictionary::ApplyAircraftIDMessage(Aircraft &aircraft, ADSBPacket packet) {
-    aircraft.airframe_type = ExtractAirframeType(packet);
+    aircraft.category = ExtractCategory(packet);
+    aircraft.category_raw = packet.GetNBitWordFromMessage(8, 0);
     aircraft.transponder_capability = packet.GetCapability();
     for (uint16_t i = 0; i < Aircraft::kCallSignMaxNumChars; i++) {
         char callsign_char = LookupCallsignChar(packet.GetNBitWordFromMessage(6, 8 + (6 * i)));
@@ -670,7 +694,7 @@ bool AircraftDictionary::ApplyAirborneVelocitiesMessage(Aircraft &aircraft, ADSB
     switch (subtype) {
         case ADSBPacket::AirborneVelocitiesSubtype::kAirborneVelocitiesGroundSpeedSupersonic:
             is_supersonic = true;
-            // Cascade into ground speed calculation.
+            [[fallthrough]];  // Cascade into ground speed calculation.
         case ADSBPacket::AirborneVelocitiesSubtype::kAirborneVelocitiesGroundSpeedSubsonic: {
             // Ground speed calculation.
             int v_ew_kts_plus_1 = static_cast<int>(packet.GetNBitWordFromMessage(10, 14));
@@ -691,13 +715,13 @@ bool AircraftDictionary::ApplyAirborneVelocitiesMessage(Aircraft &aircraft, ADSB
                     v_y_kts *= 4;
                 }
                 aircraft.velocity_kts = sqrtf(v_x_kts * v_x_kts + v_y_kts * v_y_kts);
-                aircraft.track_deg = wrapped_atan2f(v_x_kts, v_y_kts) * kRadiansToDegrees;
+                aircraft.direction_deg = wrapped_atan2f(v_x_kts, v_y_kts) * kRadiansToDegrees;
             }
             break;
         }
         case ADSBPacket::AirborneVelocitiesSubtype::kAirborneVelocitiesAirspeedSupersonic: {
             is_supersonic = true;
-            // Cascade into airspeed calculation.
+            [[fallthrough]];  // Cascade into airspeed calculation.
         }
         case ADSBPacket::AirborneVelocitiesSubtype::kAirborneVelocitiesAirspeedSubsonic: {
             int airspeed_kts_plus_1 = static_cast<int>(packet.GetNBitWordFromMessage(10, 25));
@@ -711,7 +735,7 @@ bool AircraftDictionary::ApplyAirborneVelocitiesMessage(Aircraft &aircraft, ADSB
                 aircraft.velocity_source = is_true_airspeed
                                                ? Aircraft::VelocitySource::kVelocitySourceAirspeedTrue
                                                : Aircraft::VelocitySource::kVelocitySourceAirspeedIndicated;
-                aircraft.track_deg = static_cast<float>((packet.GetNBitWordFromMessage(10, 14) * 360) / 1024.0f);
+                aircraft.direction_deg = static_cast<float>((packet.GetNBitWordFromMessage(10, 14) * 360) / 1024.0f);
             }
 
             break;
@@ -952,8 +976,7 @@ bool AircraftDictionary::ApplyAircraftOperationStatusMessage(Aircraft &aircraft,
             }
 
             // ME[52] Track Angle / Heading for Surface Position Messages
-            aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagSurfacePositionUsesHeading,
-                                  packet.GetNBitWordFromMessage(1, 52));
+            aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagDirectionIsHeading, packet.GetNBitWordFromMessage(1, 52));
 
             break;
         }

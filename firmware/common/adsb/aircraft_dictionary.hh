@@ -10,26 +10,26 @@ class Aircraft {
    public:
     static const uint16_t kCallSignMaxNumChars = 7;
 
-    enum AirframeType : uint16_t {
-        kAirframeTypeInvalid = 0,
-        kAirframeTypeReserved,
-        kAirframeTypeNoCategoryInfo,
-        kAirframeTypeSurfaceEmergencyVehicle,
-        kAirframeTypeSurfaceServiceVehicle,
-        kAirframeTypeGroundObstruction,
-        kAirframeTypeGliderSailplane,
-        kAirframeTypeLighterThanAir,
-        kAirframeTypeParachutistSkydiver,
-        kAirframeTypeUltralightHangGliderParaglider,
-        kAirframeTypeUnmannedAerialVehicle,
-        kAirframeTypeSpaceTransatmosphericVehicle,
-        kAirframeTypeLight,    // < 7000kg
-        kAirframeTypeMedium1,  // 7000kg - 34000kg
-        kAirframeTypeMedium2,  // 34000kg - 136000kg
-        kAirframeTypeHighVortexAircraft,
-        kAirframeTypeHeavy,            // > 136000kg
-        kAirframeTypeHighPerformance,  // >5g acceleration and >400kt speed
-        kAirframeTypeRotorcraft
+    enum Category : uint8_t {
+        kCategoryInvalid = 0,
+        kCategoryReserved,
+        kCategoryNoCategoryInfo,
+        kCategorySurfaceEmergencyVehicle,
+        kCategorySurfaceServiceVehicle,
+        kCategoryGroundObstruction,
+        kCategoryGliderSailplane,
+        kCategoryLighterThanAir,
+        kCategoryParachutistSkydiver,
+        kCategoryUltralightHangGliderParaglider,
+        kCategoryUnmannedAerialVehicle,
+        kCategorySpaceTransatmosphericVehicle,
+        kCategoryLight,    // < 7000kg
+        kCategoryMedium1,  // 7000kg - 34000kg
+        kCategoryMedium2,  // 34000kg - 136000kg
+        kCategoryHighVortexAircraft,
+        kCategoryHeavy,            // > 136000kg
+        kCategoryHighPerformance,  // >5g acceleration and >400kt speed
+        kCategoryRotorcraft
     };
 
     enum AltitudeSource : int16_t {
@@ -64,12 +64,12 @@ class Aircraft {
         kBitFlagTCASOperational,         // TCAS system on aircraft is functional.
         kBitFlagSingleAntenna,           // Indicates that the aircraft is using a single antenna. Transmissions may be
                                          // intermittent.
-        kBitFlagSurfacePositionUsesHeading,  // Surface position heading is aircraft heading and not track angle.
-        kBitFlagHeadingUsesMagneticNorth,    // Heading in surface and airborne position messages is magnetic north, not
-                                             // true north.
-        kBitFlagIdent,                       // IDENT switch is currently active.
-        kBitFlagAlert,                       // Aircraft is indicating an alert.
-        kBitFlagTCASRA,                      // Indicates a TCAS resolution advisory is active.
+        kBitFlagDirectionIsHeading,      // Direction is aircraft heading and not track angle.
+        kBitFlagHeadingUsesMagneticNorth,  // Heading in surface and airborne position messages is magnetic north, not
+                                           // true north.
+        kBitFlagIdent,                     // IDENT switch is currently active.
+        kBitFlagAlert,                     // Aircraft is indicating an alert.
+        kBitFlagTCASRA,                    // Indicates a TCAS resolution advisory is active.
         kBitFlagReserved0,
         kBitFlagReserved1,
         kBitFlagReserved2,
@@ -192,7 +192,7 @@ class Aircraft {
      * @param[in] mode_s_frame Set to true if the frame received was a Mode S frame.
      */
     inline void IncrementNumFramesReceived(bool mode_s_frame = false) {
-        mode_s_frame ? stats_mode_s_frames_received_counter_++ : stats_mode_ac_frames_received_counter_++;
+        mode_s_frame ? stats_mode_s_frames_received_counter_++ : stats_short_mode_s_frames_received_counter_++;
     }
 
     /**
@@ -201,13 +201,13 @@ class Aircraft {
      * count for number of packets recieved over a consistent interval of time.
      */
     inline void UpdateStats() {
-        stats_mode_ac_frames_received_in_last_interval = stats_mode_ac_frames_received_counter_;
-        stats_mode_ac_frames_received_counter_ = 0;
+        stats_short_mode_s_frames_received_in_last_interval = stats_short_mode_s_frames_received_counter_;
+        stats_short_mode_s_frames_received_counter_ = 0;
         stats_mode_s_frames_received_in_last_interval = stats_mode_s_frames_received_counter_;
         stats_mode_s_frames_received_counter_ = 0;
 
         stats_frames_received_in_last_interval =
-            stats_mode_ac_frames_received_in_last_interval + stats_mode_s_frames_received_in_last_interval;
+            stats_short_mode_s_frames_received_in_last_interval + stats_mode_s_frames_received_in_last_interval;
     }
 
     /**
@@ -242,7 +242,7 @@ class Aircraft {
      * @param[in] bit Position of bit to check.
      * @retval True if bit has been set, false if bit has been cleared.
      */
-    inline bool HasBitFlag(BitFlag bit) { return flags & (0b1 << bit) ? true : false; }
+    inline bool HasBitFlag(BitFlag bit) const { return flags & (0b1 << bit) ? true : false; }
 
     /**
      * Resets just the flag bits that show that something updated within the last reporting interval.
@@ -256,14 +256,15 @@ class Aircraft {
     int16_t last_message_signal_quality_db = 0;    // Ratio of RSSI to noise floor during message receipt.
 
     uint16_t stats_frames_received_in_last_interval = 0;  // Number of valid frames received.
-    uint16_t stats_mode_ac_frames_received_in_last_interval = 0;
+    uint16_t stats_short_mode_s_frames_received_in_last_interval = 0;
     uint16_t stats_mode_s_frames_received_in_last_interval = 0;
 
     uint16_t transponder_capability = 0;
     uint32_t icao_address = 0;
     char callsign[kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
     uint16_t squawk = 0;
-    AirframeType airframe_type = kAirframeTypeInvalid;
+    Category category = kCategoryInvalid;
+    uint8_t category_raw = 0;  // Non-enum category in case we want the value without a many to one mapping.
 
     int32_t baro_altitude_ft = 0;
     int32_t gnss_altitude_ft = 0;
@@ -274,7 +275,7 @@ class Aircraft {
     float longitude_deg = 0.0f;
 
     // Airborne Velocities Message
-    float track_deg = 0.0f;
+    float direction_deg = 0.0f;
     float velocity_kts = 0;
     VelocitySource velocity_source = kVelocitySourceNotSet;
     int vertical_rate_fpm = 0.0f;
@@ -327,16 +328,25 @@ class Aircraft {
     CPRPacket last_odd_packet_;
     CPRPacket last_even_packet_;
 
-    uint16_t stats_mode_ac_frames_received_counter_ = 0;
+    uint16_t stats_short_mode_s_frames_received_counter_ = 0;
     uint16_t stats_mode_s_frames_received_counter_ = 0;
 };
 
 class AircraftDictionary {
    public:
+    static const uint16_t kMaxNumAircraft = 100;
+
     struct AircraftDictionaryConfig_t {
         uint32_t aircraft_prune_interval_ms = 60e3;
     };
-    static const uint16_t kMaxNumAircraft = 100;
+
+    struct DictionaryStats {
+        uint32_t raw_squitter_frames = 0;
+        uint32_t valid_squitter_frames = 0;
+        uint32_t raw_extended_squitter_frames = 0;
+        uint32_t valid_extended_squitter_frames = 0;
+        uint32_t demods_1090 = 0;
+    };
 
     /**
      * Default constructor. Uses default config values.
@@ -359,6 +369,12 @@ class AircraftDictionary {
      * minus the pruning interval will be removed.
      */
     void Update(uint32_t timestamp_us);
+
+    /**
+     * Log an attempted demodulation on 1090MHz. Used to record performance statistics. Note that the increment won't be
+     * visible until the next dictionary update occurs.
+     */
+    void RecordDemod1090() { stats_counter_.demods_1090++; }
 
     /**
      * Ingests a DecodedTransponderPacket and uses it to insert and update the relevant aircraft.
@@ -440,6 +456,8 @@ class AircraftDictionary {
 
     std::unordered_map<uint32_t, Aircraft> dict;  // index Aircraft objects by their ICAO identifier
 
+    DictionaryStats stats;
+
    private:
     // Helper functions for ingesting specific ADS-B packet types, called by IngestADSBPacket.
 
@@ -461,6 +479,9 @@ class AircraftDictionary {
     bool ApplyAircraftOperationStatusMessage(Aircraft &aircraft, ADSBPacket packet);
 
     AircraftDictionaryConfig_t config_;
+    // Counters in stats_counter_ are incremented, then stats_counter_ is swapped into stats during the dictionary
+    // update. This ensures that the public stats struct always has valid data.
+    DictionaryStats stats_counter_;
 };
 
 #endif /* _AIRCRAFT_DICTIONARY_HH_ */

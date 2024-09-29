@@ -37,15 +37,16 @@ class SPICoprocessor {
 #ifdef ON_PICO
     static const uint16_t kHandshakePinMaxWaitDurationMs = 10;
     // Make sure that we don't talk to the slave before it has a chance to get ready for the next message.
-    static const uint32_t kSPIMinTransmitIntervalUs = 100;
+    static const uint32_t kSPIMinTransmitIntervalUs = 200;
 #elif ON_ESP32
     static const uint32_t kNetworkLEDBlinkDurationMs = 10;
     static const uint32_t kNetworkLEDBlinkDurationTicks = kNetworkLEDBlinkDurationMs / portTICK_PERIOD_MS;
     static const uint16_t kSPITransactionTimeoutTicks = kSPITransactionTimeoutMs / portTICK_PERIOD_MS;
 #endif
     struct SPICoprocessorConfig {
-        uint32_t clk_rate_hz = 10e6;  // 40 MHz
+        uint32_t clk_rate_hz = 40e6;  // 40 MHz
 #ifdef ON_PICO
+        uint16_t esp32_enable_pin = 14;
         spi_inst_t *spi_handle = spi1;
         uint16_t spi_clk_pin = 10;
         uint16_t spi_mosi_pin = 11;
@@ -265,6 +266,9 @@ class SPICoprocessor {
     // NOTE: Pico (leader) and ESP32 (follower) will have different behaviors for these functions.
     bool Init();
     bool DeInit();
+#ifdef ON_PICO
+    bool IsEnabled() { return is_enabled_; }
+#endif
     bool Update();
 
     /**
@@ -569,6 +573,9 @@ class SPICoprocessor {
         SCResponsePacket response_packet = SCResponsePacket(response_buf, bytes_exchanged - read_request_bytes);
 #else
         SCResponsePacket response_packet;  // Dummy to stop compile errors.
+        // Total BS used to suppress a compile warning during host unit tests.
+        rx_buf[read_request_bytes] = '\0';
+        printf("%s", rx_buf);
 #endif
         if (!response_packet.IsValid()) {
             CONSOLE_ERROR("SPICoprocessor::PartialRead",
@@ -636,6 +643,7 @@ class SPICoprocessor {
 
 #ifdef ON_PICO
     uint32_t spi_last_transmit_timestamp_us_ = 0;
+    bool is_enabled_ = false;
 #elif ON_ESP32
     // WORD_ALIGNED_ATTR SPITransaction spi_rx_queue_buf_[kSPITransactionQueueLenTransactions];
     // WORD_ALIGNED_ATTR SPITransaction spi_tx_queue_buf_[kSPITransactionQueueLenTransactions];

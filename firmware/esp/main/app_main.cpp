@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "adsbee_server.hh"
+#include "comms.hh"
 #include "driver/gpio.h"
 #include "driver/spi_slave.h"
 #include "esp_log.h"
@@ -28,6 +29,7 @@ ObjectDictionary object_dictionary;
 SPICoprocessor pico = SPICoprocessor({});
 ADSBeeServer adsbee_server = ADSBeeServer();
 SettingsManager settings_manager = SettingsManager();
+CommsManager comms_manager;
 
 // Main application
 extern "C" void app_main(void) {
@@ -37,12 +39,6 @@ extern "C" void app_main(void) {
 #ifdef HARDWARE_UNIT_TESTS
     RunHardwareUnitTests();
 #endif
-
-    if (!pico.Read(ObjectDictionary::kAddrSettingsStruct, settings_manager.settings)) {
-        CONSOLE_ERROR("app_main", "Failed to read settings from Pico on startup.");
-    } else {
-        settings_manager.Print();
-    }
 
     while (1) {
         adsbee_server.Update();

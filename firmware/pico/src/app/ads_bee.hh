@@ -18,13 +18,10 @@ class ADSBee {
     static constexpr int kVDDMV = 3300;               // [mV] Voltage of positive supply rail.
     static constexpr int kTLMaxMV = 3300;             // [mV]
     static constexpr int kTLMinMV = 0;                // [mV]
-    static const uint16_t kRxQueueLenWords = 20;
-    static const uint32_t kRxQueuePacketDelimiter = 0x00000000;
     static constexpr uint16_t kMaxNumTransponderPackets =
         100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
     static const uint32_t kStatusLEDOnMs = 10;
     static const uint16_t kNumDemodStateMachines = 2;
-    static const uint32_t kStatsUpdateIntervalMs = 1000;  // [ms] How often statistics update.
 
     static const uint32_t kTLLearningIntervalMs =
         10000;  // [ms] Length of Simulated Annealing interval for learning trigger level.
@@ -87,24 +84,6 @@ class ADSBee {
      * kStatusLEDOnMs.
      */
     void FlashStatusLED(uint32_t led_on_ms = kStatusLEDOnMs);
-
-    /**
-     * Returns the number of demodulations attempted in the last kStatsUpdateIntervalMs milliseconds.
-     * @retval Number of demods attempted.
-     */
-    inline uint16_t GetStatsNumDemods() { return stats_demods_in_last_interval_; }
-
-    /**
-     * Returns the number of valid Mode A / Mode C packets decoded in the last kStatsUpdateIntervalMs milliseconds.
-     * @retval Number of valid packets received with Downlink Format = 4, 5.
-     */
-    inline uint16_t GetStatsNumModeACPackets() { return stats_valid_mode_ac_frames_in_last_interval_; }
-
-    /**
-     * Returns the number of valid Mode S packets decoded in the last kStatsUpdateIntervalMs milliseconds.
-     * @retval Number of valid packets received with Downlink Format != 4, 5.
-     */
-    inline uint16_t GetStatsNumModeSPackets() { return stats_valid_mode_s_frames_in_last_interval_; }
 
     /**
      * Return the value of the low Minimum Trigger Level threshold in milliVolts.
@@ -254,7 +233,7 @@ class ADSBee {
     uint16_t tl_pwm_slice_ = 0;
     uint16_t tl_pwm_chan_ = 0;
 
-    uint16_t tl_mv_ = SettingsManager::kDefaultTLMV;
+    uint16_t tl_mv_ = SettingsManager::Settings::kDefaultTLMV;
     uint16_t tl_pwm_count_ = 0;  // out of kTLMaxPWMCount
 
     uint16_t tl_adc_counts_ = 0;
@@ -274,21 +253,6 @@ class ADSBee {
     RawTransponderPacket transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
-
-    // These values are continuous counters of number of packets of each type received. Don't use these values for
-    // anything external!
-    uint16_t stats_demods_in_last_interval_counter_ = 0;
-    uint16_t stats_valid_mode_ac_frames_in_last_interval_counter_ = 0;
-    uint16_t stats_valid_mode_s_frames_in_last_interval_counter_ = 0;
-
-    // Timestamp of the last time that the packet counters were stored and reset to 0.
-    uint32_t stats_last_update_timestamp_ms_ = 0;  // [ms]
-
-    // These values are updated every stats update interval so that they always contain counts across a consistent
-    // interval. Use these values for anything important!
-    uint16_t stats_demods_in_last_interval_ = 0;
-    uint16_t stats_valid_mode_ac_frames_in_last_interval_ = 0;
-    uint16_t stats_valid_mode_s_frames_in_last_interval_ = 0;
 
     bool receiver_enabled_ = true;
     bool bias_tee_enabled_ = false;

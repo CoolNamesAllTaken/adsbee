@@ -24,12 +24,12 @@ bool CommsManager::Init() {
     gpio_set_function(config_.comms_uart_tx_pin, GPIO_FUNC_UART);
     gpio_set_function(config_.comms_uart_rx_pin, GPIO_FUNC_UART);
     uart_set_translate_crlf(config_.comms_uart_handle, false);
-    uart_init(config_.comms_uart_handle, SettingsManager::kDefaultCommsUARTBaudrate);
+    uart_init(config_.comms_uart_handle, SettingsManager::Settings::kDefaultCommsUARTBaudrate);
 
     gpio_set_function(config_.gnss_uart_tx_pin, GPIO_FUNC_UART);
     gpio_set_function(config_.gnss_uart_rx_pin, GPIO_FUNC_UART);
     uart_set_translate_crlf(config_.gnss_uart_handle, false);
-    uart_init(config_.gnss_uart_handle, SettingsManager::kDefaultGNSSUARTBaudrate);
+    uart_init(config_.gnss_uart_handle, SettingsManager::Settings::kDefaultGNSSUARTBaudrate);
 
     // Don't mess with ESP32 enable / reset GPIOs here, since they need to be toggled by the programmer. Only initialize
     // them if no programming is required. Don't mess with ESP32 wifi pin until we're ready to try firmware updates.
@@ -155,28 +155,4 @@ bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char
             break;
     }
     return false;  // Should never get here.
-}
-
-bool CommsManager::SetWiFiEnabled(bool new_wifi_enabled) {
-    if (new_wifi_enabled) {
-        CONSOLE_PRINTF("Enabling WiFi...\r\n");
-
-        // Configure ESP32 GPIO0 as handshake pin.
-        gpio_init(config_.esp32_gpio0_boot_pin);
-        gpio_set_dir(config_.esp32_gpio0_boot_pin, GPIO_IN);
-
-        gpio_init(config_.esp32_enable_pin);
-        gpio_set_dir(config_.esp32_enable_pin, GPIO_OUT);
-        gpio_put(config_.esp32_enable_pin, 1);  // Enable
-
-    } else {
-        CONSOLE_PRINTF("Disabling WiFi...\r\n");
-        gpio_put(config_.esp32_enable_pin, 0);  // Disable
-        gpio_deinit(config_.esp32_enable_pin);
-        gpio_deinit(config_.esp32_gpio0_boot_pin);
-    }
-
-    wifi_enabled_ = new_wifi_enabled;
-
-    return true;
 }

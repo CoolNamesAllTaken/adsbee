@@ -14,17 +14,17 @@ TEST(AircraftDictionary, BasicInsertRemove) {
     EXPECT_FALSE(dictionary.RemoveAircraft(12345));
 
     Aircraft test_aircraft = Aircraft(12345);
-    test_aircraft.airframe_type = Aircraft::kAirframeTypeRotorcraft;
+    test_aircraft.category = Aircraft::kCategoryRotorcraft;
     dictionary.InsertAircraft(test_aircraft);
     EXPECT_EQ(dictionary.GetNumAircraft(), 1);
     EXPECT_TRUE(dictionary.ContainsAircraft(test_aircraft.icao_address));
 
     Aircraft aircraft_out = Aircraft(0);
     EXPECT_NE(aircraft_out.icao_address, test_aircraft.icao_address);
-    EXPECT_NE(aircraft_out.airframe_type, test_aircraft.airframe_type);
+    EXPECT_NE(aircraft_out.category, test_aircraft.category);
     EXPECT_TRUE(dictionary.GetAircraft(test_aircraft.icao_address, aircraft_out));
     EXPECT_EQ(aircraft_out.icao_address, test_aircraft.icao_address);
-    EXPECT_EQ(aircraft_out.airframe_type, test_aircraft.airframe_type);
+    EXPECT_EQ(aircraft_out.category, test_aircraft.category);
 
     EXPECT_TRUE(dictionary.RemoveAircraft(12345));
     EXPECT_EQ(dictionary.GetNumAircraft(), 0);
@@ -35,7 +35,7 @@ TEST(AircraftDictionary, InsertThenRemoveTooMany) {
     EXPECT_EQ(dictionary.GetNumAircraft(), 0);
 
     Aircraft test_aircraft = Aircraft(0);
-    test_aircraft.airframe_type = Aircraft::kAirframeTypeGliderSailplane;
+    test_aircraft.category = Aircraft::kCategoryGliderSailplane;
 
     // Insert maximum number of aircraft.
     for (uint16_t i = 0; i < AircraftDictionary::kMaxNumAircraft; i++) {
@@ -70,13 +70,13 @@ TEST(AircraftDictionary, UseAircraftPtr) {
     AircraftDictionary dictionary = AircraftDictionary();
     Aircraft *aircraft = dictionary.GetAircraftPtr(12345);
     EXPECT_TRUE(aircraft);  // aircraft should have been automatically inserted just fine
-    aircraft->airframe_type = Aircraft::kAirframeTypeGroundObstruction;
+    aircraft->category = Aircraft::kCategoryGroundObstruction;
     Aircraft aircraft_out;
     ASSERT_TRUE(dictionary.GetAircraft(12345, aircraft_out));
-    ASSERT_EQ(aircraft_out.airframe_type, Aircraft::kAirframeTypeGroundObstruction);
-    aircraft->airframe_type = Aircraft::kAirframeTypeHeavy;
+    ASSERT_EQ(aircraft_out.category, Aircraft::kCategoryGroundObstruction);
+    aircraft->category = Aircraft::kCategoryHeavy;
     ASSERT_TRUE(dictionary.GetAircraft(12345, aircraft_out));
-    ASSERT_EQ(aircraft_out.airframe_type, Aircraft::kAirframeTypeHeavy);
+    ASSERT_EQ(aircraft_out.category, Aircraft::kCategoryHeavy);
 }
 
 TEST(AircraftDictionary, AccessFakeAircraft) {
@@ -96,7 +96,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_TRUE(dictionary.GetAircraft(0x76CE88, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x76CE88u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.airframe_type, Aircraft::kAirframeTypeNoCategoryInfo);
+    EXPECT_EQ(aircraft.category, Aircraft::kCategoryNoCategoryInfo);
     EXPECT_STREQ(aircraft.callsign, "SIA224");
 
     tpacket = DecodedTransponderPacket((char *)"8D7C7181215D01A08208204D8BF1");
@@ -105,7 +105,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_TRUE(dictionary.GetAircraft(0x7C7181, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x7C7181u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.airframe_type, Aircraft::kAirframeTypeLight);
+    EXPECT_EQ(aircraft.category, Aircraft::kCategoryLight);
     EXPECT_STREQ(aircraft.callsign, "WPF");
 
     tpacket = DecodedTransponderPacket((char *)"8D7C7745226151A08208205CE9C2");
@@ -114,7 +114,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_TRUE(dictionary.GetAircraft(0x7C7745, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x7C7745u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.airframe_type, Aircraft::kAirframeTypeMedium1);
+    EXPECT_EQ(aircraft.category, Aircraft::kCategoryMedium1);
     EXPECT_STREQ(aircraft.callsign, "XUF");
 
     tpacket = DecodedTransponderPacket((char *)"8D7C80AD2358F6B1E35C60FF1925");
@@ -123,7 +123,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_TRUE(dictionary.GetAircraft(0x7C80AD, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x7C80ADu);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.airframe_type, Aircraft::kAirframeTypeMedium2);
+    EXPECT_EQ(aircraft.category, Aircraft::kCategoryMedium2);
     EXPECT_STREQ(aircraft.callsign, "VOZ1851");
 
     tpacket = DecodedTransponderPacket((char *)"8D7C146525446074DF5820738E90");
@@ -132,7 +132,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_TRUE(dictionary.GetAircraft(0x7C1465, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x7C1465u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.airframe_type, Aircraft::kAirframeTypeHeavy);
+    EXPECT_EQ(aircraft.category, Aircraft::kCategoryHeavy);
     EXPECT_STREQ(aircraft.callsign, "QFA475");
 }
 
@@ -295,7 +295,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
 
     // Aircraft should now have velocities populated.
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedTrack));
-    EXPECT_NEAR(aircraft.track_deg, 304.2157021324374, kFloatCloseEnough);
+    EXPECT_NEAR(aircraft.direction_deg, 304.2157021324374, kFloatCloseEnough);
     // Velocity should actually evaluate to 120 when evaluated with doubles, but there is some float error with the sqrt
     // that I think gets pretty nasty.
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity));
@@ -321,7 +321,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedTrack));
     EXPECT_EQ(aircraft.vertical_rate_fpm, -832);
     EXPECT_EQ(aircraft.velocity_source, Aircraft::VelocitySource::kVelocitySourceGroundSpeed);
-    EXPECT_NEAR(aircraft.track_deg, 182.88f, 0.01);
+    EXPECT_NEAR(aircraft.direction_deg, 182.88f, 0.01);
     EXPECT_NEAR(aircraft.velocity_kts, 159.20f, 0.01);
 
     // Test altitude difference between baro and GNSS altitude for Message A by re-ingesting.
@@ -350,7 +350,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedTrack));
     EXPECT_EQ(aircraft.vertical_rate_fpm, -2304);
     EXPECT_EQ(aircraft.velocity_source, Aircraft::VelocitySource::kVelocitySourceAirspeedTrue);
-    EXPECT_NEAR(aircraft.track_deg, 243.98f, 0.01);
+    EXPECT_NEAR(aircraft.direction_deg, 243.98f, 0.01);
     EXPECT_NEAR(aircraft.velocity_kts, 375.0f, 0.01);
 }
 
@@ -359,8 +359,8 @@ TEST(AircraftDictionary, IngestModeC) {
     // dictionary.
     AircraftDictionary dictionary = AircraftDictionary();
     DecodedTransponderPacket tpacket = DecodedTransponderPacket((char *)"200006A2DE8B1C");
-    tpacket.ForceValid();  // Mark it as valid so that it gets digested.
     EXPECT_EQ(tpacket.GetICAOAddress(), 0x7C1B28u);
+    dictionary.InsertAircraft(Aircraft(0x7C1B28u));  // Put aircraft in the dictionary so the packet can be ingested.
     EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
     EXPECT_TRUE(dictionary.ContainsAircraft(0x7C1B28u));
 
@@ -375,7 +375,8 @@ TEST(AircraftDictionary, IngestModeC) {
 
     // Ingest a Mode C packet with an alert and ident.
     tpacket = DecodedTransponderPacket((char *)"24000E3956BBA1");
-    tpacket.ForceValid();
+    // Add aircraft to dictioanry so packet can be ingested.
+    dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
     EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
     EXPECT_TRUE(dictionary.GetAircraft(0xD3CCBFu, aircraft));
     EXPECT_EQ(aircraft.baro_altitude_ft, 22025);
@@ -385,7 +386,8 @@ TEST(AircraftDictionary, IngestModeC) {
 
     // Ingest a Mode C packet with aircraft on the ground.
     tpacket = DecodedTransponderPacket((char *)"210000992F8C48");
-    tpacket.ForceValid();
+    // Add aircraft to dictioanry so packet can be ingested.
+    dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
     EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
     EXPECT_TRUE(dictionary.GetAircraft(0x7C7539u, aircraft));
     EXPECT_EQ(aircraft.baro_altitude_ft, 25);
@@ -398,7 +400,8 @@ TEST(AircraftDictionary, IngestModeA) {
     // Ingest a Mode A packet with an alert and ident.
     AircraftDictionary dictionary = AircraftDictionary();
     DecodedTransponderPacket tpacket = DecodedTransponderPacket((char *)"2C0006A2DEE500");
-    tpacket.ForceValid();
+    // Add aircraft to dictioanry so packet can be ingested.
+    dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
     EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
     Aircraft aircraft;
     EXPECT_TRUE(dictionary.GetAircraft(0x739EE9u, aircraft));
@@ -408,7 +411,8 @@ TEST(AircraftDictionary, IngestModeA) {
 
     // Ingest a Mode A packet with an ident but no alert.
     tpacket = DecodedTransponderPacket((char *)"2D0006A2DEE500");
-    tpacket.ForceValid();
+    // Add aircraft to dictioanry so packet can be ingested.
+    dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
     EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
     EXPECT_TRUE(dictionary.GetAircraft(0x5863BAu, aircraft));
     EXPECT_EQ(aircraft.squawk, 06520u);
@@ -417,7 +421,8 @@ TEST(AircraftDictionary, IngestModeA) {
 
     // Ingest a Mode A packet with no ident and no alert. Aircraft is airborne.
     tpacket = DecodedTransponderPacket((char *)"28000D08CEE4C5");
-    tpacket.ForceValid();
+    // Add aircraft to dictioanry so packet can be ingested.
+    dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
     EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
     EXPECT_TRUE(dictionary.GetAircraft(0xA8BBE7u, aircraft));
     EXPECT_EQ(aircraft.squawk, 01260);
@@ -427,7 +432,8 @@ TEST(AircraftDictionary, IngestModeA) {
 
     // Ingest a Mode A packet with no ident and no alert. Aircraft is on ground.
     tpacket = DecodedTransponderPacket((char *)"29001E0D3CB4BF");
-    tpacket.ForceValid();
+    // Add aircraft to dictioanry so packet can be ingested.
+    dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
     EXPECT_TRUE(dictionary.IngestDecodedTransponderPacket(tpacket));
     EXPECT_TRUE(dictionary.GetAircraft(0x7C1471u, aircraft));
     EXPECT_EQ(aircraft.squawk, 03236);
@@ -443,11 +449,11 @@ TEST(Aircraft, AircraftStats) {
     aircraft.UpdateStats();
     EXPECT_EQ(aircraft.stats_frames_received_in_last_interval, 1);
     EXPECT_EQ(aircraft.stats_mode_s_frames_received_in_last_interval, 0);
-    EXPECT_EQ(aircraft.stats_mode_ac_frames_received_in_last_interval, 1);
+    EXPECT_EQ(aircraft.stats_short_mode_s_frames_received_in_last_interval, 1);
     aircraft.IncrementNumFramesReceived(false);
     aircraft.IncrementNumFramesReceived(true);
     aircraft.UpdateStats();
     EXPECT_EQ(aircraft.stats_frames_received_in_last_interval, 2);
-    EXPECT_EQ(aircraft.stats_mode_ac_frames_received_in_last_interval, 1);
+    EXPECT_EQ(aircraft.stats_short_mode_s_frames_received_in_last_interval, 1);
     EXPECT_EQ(aircraft.stats_mode_s_frames_received_in_last_interval, 1);
 }

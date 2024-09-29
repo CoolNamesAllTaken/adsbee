@@ -12,9 +12,9 @@ class RawTransponderPacket {
    public:
     static const uint16_t kMaxPacketLenWords32 = 4;
 
-    RawTransponderPacket(char *rx_string, int rssi_dbm = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
+    RawTransponderPacket(char *rx_string, int sigs_dbm = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
     RawTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32,
-                         int rssi_dbm = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
+                         int sigs_dbm = INT32_MIN, int sigq_db = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
     /**
      * Default constructor.
      */
@@ -26,7 +26,8 @@ class RawTransponderPacket {
 
     uint32_t buffer[kMaxPacketLenWords32];
     uint16_t buffer_len_bits = 0;
-    int rssi_dbm = INT32_MIN;
+    int sigs_dbm = INT32_MIN;              // Signal strength, in dBm.
+    int sigq_db = INT32_MIN;               // Signal quality (dB above noise floor), in dB.
     uint64_t mlat_48mhz_64bit_counts = 0;  // High resolution MLAT counter.
 };
 
@@ -68,19 +69,19 @@ class DecodedTransponderPacket {
      * word left (MSb) aligned such that the total number of bits is 112. Words must be big-endian, with the MSb of the
      * first word being the oldest bit.
      * @param[in] rx_buffer_len_words32 Number of 32-bit words to read from the rx_buffer.
-     * @param[in] rssi_dbm RSSI of the packet that was received, in dBm. Defaults to INT32_MIN if not set.
+     * @param[in] sigs_dbm RSSI of the packet that was received, in dBm. Defaults to INT32_MIN if not set.
      * @param[in] mlat_48mhz_64bit_counts Counts of a 12MHz clock used for the 6-byte multilateration timestamp.
      */
-    DecodedTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len, int rssi_dbm = INT32_MIN,
+    DecodedTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len, int sigs_dbm = INT32_MIN,
                              uint64_t mlat_48mhz_64bit_counts = 0);
 
     /**
      * DecodedTransponderPacket constructor from string.
      * @param[in] rx_string String of nibbles as hex characters. Big-endian, MSB (oldest byte) first.
-     * @param[in] rssi_dbm RSSI of the packet that was received, in dBm. Defaults to INT32_MIN if not set.
+     * @param[in] sigs_dbm RSSI of the packet that was received, in dBm. Defaults to INT32_MIN if not set.
      * @param[in] mlat_12mhz_counts Counts of a 12MHz clock used for the 6-byte multilateration timestamp.
      */
-    DecodedTransponderPacket(char *rx_string, int rssi_dbm = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
+    DecodedTransponderPacket(char *rx_string, int sigs_dbm = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
 
     /**
      * DecodedTransponderPacket constructor from RawTransponderPacket. Uses RawTransponderPacket's implicit constructor.
@@ -91,7 +92,7 @@ class DecodedTransponderPacket {
     /**
      * Default constructor.
      */
-    DecodedTransponderPacket() : packet((char *)"", INT32_MIN, 0) { debug_string[0] = '\0'; };
+    DecodedTransponderPacket() : raw_((char *)"", INT32_MIN, 0) { debug_string[0] = '\0'; };
 
     bool IsValid() const { return is_valid_; };
 
@@ -102,13 +103,15 @@ class DecodedTransponderPacket {
      */
     void ForceValid() { is_valid_ = true; }
 
-    int GetRSSIdBm() const { return packet.rssi_dbm; }
-    uint64_t GetMLAT12MHzCounter() const { return (packet.mlat_48mhz_64bit_counts >> 2) & 0xFFFFFFFFFFFF; }
-    uint16_t GetDownlinkFormat() const { return downlink_format_; };
+    int GetBufferLenBits() const { return raw_.buffer_len_bits; }
+    int GetRSSIdBm() const { return raw_.sigs_dbm; }
+    uint64_t GetMLAT12MHzCounter() const { return (raw_.mlat_48mhz_64bit_counts >> 2) & 0xFFFFFFFFFFFF; }
+    uint16_t GetDownlinkFormat() const { return downlink_format_; }
     uint16_t GetDownlinkFormatString(char str_buf[kMaxDFStrLen]) const;
     DownlinkFormat GetDownlinkFormatEnum();
-    uint32_t GetICAOAddress() const { return icao_address_; };
-    uint16_t GetPacketBufferLenBits() const { return packet.buffer_len_bits; };
+    uint32_t GetICAOAddress() const { return icao_address_; }
+    uint16_t GetPacketBufferLenBits() const { return raw_.buffer_len_bits; }
+    RawTransponderPacket GetRaw() const { return raw_; }
 
     /**
      * Dumps the internal packet buffer to a destination and returns the number of bytes written.
@@ -120,7 +123,7 @@ class DecodedTransponderPacket {
 
     // Exposed for testing only.
     uint32_t Get24BitWordFromPacketBuffer(uint16_t first_bit_index) const {
-        return GetNBitWordFromBuffer(24, first_bit_index, packet.buffer);
+        return GetNBitWordFromBuffer(24, first_bit_index, raw_.buffer);
     };
 
     /**
@@ -134,7 +137,7 @@ class DecodedTransponderPacket {
 
    protected:
     bool is_valid_ = false;
-    RawTransponderPacket packet;
+    RawTransponderPacket raw_;
 
     uint32_t icao_address_ = 0;
     uint16_t downlink_format_ = static_cast<uint16_t>(kDownlinkFormatInvalid);
@@ -212,7 +215,7 @@ class ADSBPacket : public DecodedTransponderPacket {
 
     // Exposed for testing only.
     inline uint32_t GetNBitWordFromMessage(uint16_t n, uint16_t first_bit_index) const {
-        return GetNBitWordFromBuffer(n, kMEFirstBitIndex + first_bit_index, packet.buffer);
+        return GetNBitWordFromBuffer(n, kMEFirstBitIndex + first_bit_index, raw_.buffer);
     };
 
    private:
