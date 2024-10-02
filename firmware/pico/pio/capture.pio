@@ -34,6 +34,7 @@ waiting_for_end_of_message:
 idle_countdown:
     jmp pin waiting_for_end_of_message [2] ; 21+2n:24+2n | start over the idle countdown if received a non idle bit
     jmp x-- idle_countdown [2] ; 25+2n:28+2n | still idle, keep counting down if the timer isn't up
+message_finished:
     set pins, 0 ; 29+2n | set demod pin to 0 to indicate message is finished
     irq set 0 [1] ; 30+2n:31+2n | set the DEMOD IRQ to indicate the message body is finished
     wait 0 irq 0 ; 32+2n | don't look for new messages until the current one has been processed
@@ -46,26 +47,31 @@ preamble_not_done_yet:
 
 ; Subroutines
 
-filter_pin_hi:
-    set y 3  ; 6: (filter_correct_samples-1) Minimum number of correct samples needed to keep looking.
-fph_wrap_target:
-    jmp pin fph_pin_hi  ; 7+3n
-fph_pin_lo:
-    jmp fph_wrap    ; 8+3n
-fph_pin_hi:
-    jmp y-- fph_wrap    ; 8+3n
-fph_exit_success:
-    jmp x-- fph_exit_success [2] ; Complete remaining loops.
-    jmp check_next_bit [3] ; 22-25
-fph_wrap:
-    jmp x-- fph_wrap_target ; 9+3n
-    jmp waiting_for_first_edge  ; Correlation failed.
+assert_pin_hi:
+    set x 3 [5] ; 6-11: Assert HI for 12 cycles ((x+1) * (2 cycles per wrap))
+aph_wrap:
+    jmp pin aph_pin_is_hi
+    jmp waiting_for_first_edge
+aph_pin_is_hi:
+    jmp x-- aph_wrap
+    jmp check_next_bit [5]    ; 20-25: cycle idle at end
+
+; filter_pin_hi:
+;     set y 3  ; 6: (filter_correct_samples-1) Minimum number of correct samples needed to keep looking.
+; fph_wrap_target:
+;     jmp pin fph_pin_hi  ; 7+3n
+; fph_pin_lo:
+;     jmp fph_wrap    ; 8+3n
+; fph_pin_hi:
+;     jmp y-- fph_wrap    ; 8+3n
+; fph_exit_success:
+;     jmp x-- fph_exit_success [2] ; Complete remaining loops.
+;     jmp check_next_bit [3] ; 22-25
+; fph_wrap:
+;     jmp x-- fph_wrap_target ; 9+3n
+;     jmp waiting_for_first_edge  ; Correlation failed.
     
 filter_pin_lo:
-    ; Dummy implementation that always passes.
-    ; nop [18] ; 6-24
-    ; jmp check_next_bit ; 253
-
     ; Generous implementation that accepts a single LO sample anywhere in the sampling window as a success.
     ; This accounts for the asymmetric nature of the data slicer circuit as it is charging up during the preamble; it
     ; is a lot harder to get a LO sample than a HI sample from an incoming message.
@@ -100,6 +106,8 @@ fpl_pin_hi:
 ;     jmp x-- fpl_wrap_target ; 9+3n
 ;     ; jmp !y waiting_for_first_edge ; 22: Reset if correlation failed.
 ;     jmp check_next_bit [3] ; 22-25
+
+
 
 % c-sdk {
 
