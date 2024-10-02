@@ -10,8 +10,11 @@
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
 #include "nvs_flash.h"
+#include "task_priorities.hh"
 
 static const uint16_t kGDL90Port = 4000;
+static const uint16_t kWiFiNumRetries = 3;
+static const uint16_t kWiFiRetryWaitTimeMs = 100;
 
 /** "Pass-Through" functions used to access member functions in callbacks. **/
 void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
@@ -39,36 +42,53 @@ void CommsManager::WiFiEventHandler(void* arg, esp_event_base_t event_base, int3
 
 void CommsManager::WiFiUDPServerTask(void* pvParameters) {
     NetworkMessage message;
+
+    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+    if (sock < 0) {
+        ESP_LOGE("CommsManager::WiFiUDPServerTask", "Unable to create socket: errno %d", errno);
+        return;
+    }
+    struct sockaddr_in dest_addr;
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_port = htons(kGDL90Port);
+
     while (run_udp_server_) {
         if (xQueueReceive(wifi_message_queue_, &message, portMAX_DELAY) == pdTRUE) {
-            int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-            if (sock < 0) {
-                ESP_LOGE("CommsManager::WiFiUDPServerTask", "Unable to create socket: errno %d", errno);
-                return;
-            }
-
-            struct sockaddr_in dest_addr;
-            dest_addr.sin_family = AF_INET;
-            dest_addr.sin_port = htons(kGDL90Port);
+            // int send_buf_size = 16384;  // Set a larger send buffer
+            // setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &send_buf_size, sizeof(send_buf_size));
 
             xSemaphoreTake(wifi_clients_list_mutex_, portMAX_DELAY);
             for (int i = 0; i < SettingsManager::Settings::kWiFiMaxNumClients; i++) {
                 if (wifi_clients_list_[i].active) {
                     dest_addr.sin_addr.s_addr = wifi_clients_list_[i].ip.addr;
-                    int err =
-                        sendto(sock, message.data, message.len, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
-                    if (err < 0) {
-                        ESP_LOGE("CommsManager::WiFiUDPServerTask", "Error occurred during sending: errno %d", errno);
+                    int ret = 0;
+                    uint16_t num_tries;
+                    for (num_tries = 0; num_tries < kWiFiNumRetries; num_tries++) {
+                        ret =
+                            sendto(sock, message.data, message.len, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+                        // ENOMEM (errno=12) resolution: https://github.com/espressif/esp-idf/issues/390
+                        // Increased the number of UDP control plocks (LWIP_MAX_UDP_PCBS) in SDK menuconfig from 16
+                        // to 96.
+                        // Changed TCP/IP stack size from 3072 to 12288.
+                        if (ret >= 0 || errno != ENOMEM) {
+                            break;
+                        }
+                        vTaskDelay(kWiFiRetryWaitTimeMs /
+                                   portTICK_PERIOD_MS);  // Let packet send to avoid an ENOMEM error.
+                    }
+
+                    if (ret < 0) {
+                        ESP_LOGE("CommsManager::WiFiUDPServerTask",
+                                 "Error occurred during sending: errno %d. Tried %d times.", errno, num_tries);
                     }
                 }
             }
             xSemaphoreGive(wifi_clients_list_mutex_);
 
-            close(sock);
-
-            ESP_LOGI("CommsManager::WiFiUDPServerTask", "Message sent to %d clients.", num_wifi_clients_);
+            // ESP_LOGI("CommsManager::WiFiUDPServerTask", "Message sent to %d clients.", num_wifi_clients_);
         }
     }
+    close(sock);
 }
 
 bool CommsManager::WiFiInit() {
@@ -107,7 +127,8 @@ bool CommsManager::WiFiInit() {
     CONSOLE_INFO("CommsManager::WiFiInit", "WiFi AP started. SSID:%s password:%s", wifi_ssid, wifi_password);
 
     run_udp_server_ = true;
-    xTaskCreate(wifi_udp_server_task, "udp_server", 4096, NULL, 2, NULL);
+    xTaskCreatePinnedToCore(wifi_udp_server_task, "udp_server", 4096, NULL, kUDPServerTaskPriority, NULL,
+                            kUDPServerTaskCore);
     return true;
 }
 

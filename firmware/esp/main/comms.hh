@@ -66,6 +66,8 @@ class CommsManager {
     // Public so that pass-through functions can access it.
     void WiFiEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 
+    inline uint16_t GetNumWiFiClients() { return num_wifi_clients_; }
+
     SettingsManager::WiFiMode wifi_mode = SettingsManager::WiFiMode::kWiFiModeAccessPoint;
     char wifi_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
     char wifi_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.

@@ -312,10 +312,8 @@ int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint1
     if (bytes_written < 0) {
         CONSOLE_ERROR("SPICoprocessor::SPIWriteReadBlocking", "SPI write read call returned error code 0x%x.",
                       bytes_written);
-    } else {
-        // Only record the transmit time if the transaction was successful.
-        spi_last_transmit_timestamp_us_ = get_time_since_boot_us();
     }
+    spi_last_transmit_timestamp_us_ = get_time_since_boot_us();
 #elif ON_ESP32
     spi_slave_transaction_t t;
     memset(&t, 0, sizeof(t));

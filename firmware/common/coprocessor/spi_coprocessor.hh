@@ -44,7 +44,7 @@ class SPICoprocessor {
     static const uint16_t kSPITransactionTimeoutTicks = kSPITransactionTimeoutMs / portTICK_PERIOD_MS;
 #endif
     struct SPICoprocessorConfig {
-        uint32_t clk_rate_hz = 40e6;  // 40 MHz
+        uint32_t clk_rate_hz = 10e6;  // 10 MHz
 #ifdef ON_PICO
         uint16_t esp32_enable_pin = 14;
         spi_inst_t *spi_handle = spi1;
@@ -642,7 +642,7 @@ class SPICoprocessor {
     SPICoprocessorConfig config_;
 
 #ifdef ON_PICO
-    uint32_t spi_last_transmit_timestamp_us_ = 0;
+    uint64_t spi_last_transmit_timestamp_us_ = 0;
     bool is_enabled_ = false;
 #elif ON_ESP32
     // WORD_ALIGNED_ATTR SPITransaction spi_rx_queue_buf_[kSPITransactionQueueLenTransactions];
