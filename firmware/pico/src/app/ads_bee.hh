@@ -36,9 +36,9 @@ class ADSBee {
 
     struct ADSBeeConfig {
         PIO preamble_detector_pio = pio0;
-        uint preamble_detector_demod_begin_irq = IO_IRQ_BANK0;
+        uint preamble_detector_demod_pin_irq = IO_IRQ_BANK0;
         PIO message_demodulator_pio = pio1;
-        uint preamble_detector_demod_complete_irq = PIO0_IRQ_0;
+        // uint preamble_detector_demod_complete_irq = PIO0_IRQ_0;
 
         uint16_t status_led_pin = 15;
         // Reading ADS-B on GPIO19. Will look for DEMOD signal on GPIO20.
@@ -94,12 +94,12 @@ class ADSBee {
     /**
      * ISR for GPIO interrupts.
      */
-    void OnDemodBegin(uint gpio, uint32_t event_mask);
+    void OnDemodBegin(uint sm_index);
 
     /**
      * ISR triggered by DECODE completing, via PIO0 IRQ0.
      */
-    void OnDemodComplete();
+    void OnDemodComplete(uint sm_index);
 
     /**
      * ISR triggered by SysTick interrupt. Used to wrap the MLAT counter.
@@ -177,7 +177,7 @@ class ADSBee {
      */
     void SetReceiverEnable(bool is_enabled) {
         receiver_enabled_ = is_enabled;
-        irq_set_enabled(config_.preamble_detector_demod_complete_irq, receiver_enabled_);
+        irq_set_enabled(config_.preamble_detector_demod_pin_irq, receiver_enabled_);
     }
 
     /**
@@ -222,10 +222,10 @@ class ADSBee {
     ADSBeeConfig config_;
     CppAT parser_;
 
-    uint32_t preamble_detector_sm_ = 0;
+    uint32_t preamble_detector_sm_[kNumDemodStateMachines];
     uint32_t preamble_detector_offset_ = 0;
 
-    uint32_t message_demodulator_sm_ = 0;
+    uint32_t message_demodulator_sm_[kNumDemodStateMachines];
     uint32_t message_demodulator_offset_ = 0;
 
     uint32_t led_on_timestamp_ms_ = 0;
@@ -249,7 +249,7 @@ class ADSBee {
 
     uint32_t mlat_counter_1s_wraps_ = 0;
 
-    RawTransponderPacket rx_packet_;
+    RawTransponderPacket rx_packet_[kNumDemodStateMachines];
     RawTransponderPacket transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;

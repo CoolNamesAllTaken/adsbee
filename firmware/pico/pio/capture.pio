@@ -36,8 +36,10 @@ idle_countdown:
     jmp x-- idle_countdown [2] ; 25+2n:28+2n | still idle, keep counting down if the timer isn't up
 message_finished:
     set pins, 0 ; 29+2n | set demod pin to 0 to indicate message is finished
-    irq set 0 [1] ; 30+2n:31+2n | set the DEMOD IRQ to indicate the message body is finished
-    wait 0 irq 0 ; 32+2n | don't look for new messages until the current one has been processed
+    ; irq set 0 [1] ; 30+2n:31+2n | set the DEMOD IRQ to indicate the message body is finished
+wait_forever:
+    jmp wait_forever ; 32+2n | don't look for new messages until the current one has been processed
+    ; wait 0 irq 0 ; 32+2n | don't look for new messages until the current one has been processed
 .wrap
 
 preamble_not_done_yet:

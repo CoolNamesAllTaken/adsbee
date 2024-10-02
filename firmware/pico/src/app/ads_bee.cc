@@ -32,19 +32,51 @@ constexpr float kInt16MaxRecip = 1.0f / INT16_MAX;
 
 ADSBee *isr_access = nullptr;
 
-void on_demod_complete() { isr_access->OnDemodComplete(); }
-
 void on_systick_exception() { isr_access->OnSysTickWrap(); }
 
-void on_demod_begin(uint gpio, uint32_t event_mask) { isr_access->OnDemodBegin(gpio, event_mask); }
+void on_demod0_pin_change(uint gpio, uint32_t event_mask) {
+    switch (event_mask) {
+        case GPIO_IRQ_EDGE_RISE:
+            isr_access->OnDemodBegin(0);
+            break;
+        case GPIO_IRQ_EDGE_FALL:
+            isr_access->OnDemodComplete(0);
+            break;
+        case GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL:
+            // WARNING: RSSI measurement will be inaccurate here.
+            // isr_access->OnDemodBegin(0);
+            // isr_access->OnDemodComplete(0);
+            break;
+    }
+    gpio_acknowledge_irq(gpio, event_mask);
+}
+
+void on_demod1_pin_change(uint gpio, uint32_t event_mask) {
+    switch (event_mask) {
+        case GPIO_IRQ_EDGE_RISE:
+            isr_access->OnDemodBegin(1);
+            break;
+        case GPIO_IRQ_EDGE_FALL:
+            isr_access->OnDemodComplete(1);
+            break;
+        case GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL:
+            // WARNING: RSSI measurement will be inaccurate here.
+            // isr_access->OnDemodBegin(1);
+            // isr_access->OnDemodComplete(1);
+            break;
+    }
+    gpio_acknowledge_irq(gpio, event_mask);
+}
 
 ADSBee::ADSBee(ADSBeeConfig config_in) {
     config_ = config_in;
 
-    preamble_detector_sm_ = pio_claim_unused_sm(config_.preamble_detector_pio, true);
-    preamble_detector_offset_ = pio_add_program(config_.preamble_detector_pio, &preamble_detector_program);
+    for (uint16_t sm_index = 0; sm_index < kNumDemodStateMachines; sm_index++) {
+        preamble_detector_sm_[sm_index] = pio_claim_unused_sm(config_.preamble_detector_pio, true);
+        message_demodulator_sm_[sm_index] = pio_claim_unused_sm(config_.message_demodulator_pio, true);
+    }
 
-    message_demodulator_sm_ = pio_claim_unused_sm(config_.message_demodulator_pio, true);
+    preamble_detector_offset_ = pio_add_program(config_.preamble_detector_pio, &preamble_detector_program);
     message_demodulator_offset_ = pio_add_program(config_.message_demodulator_pio, &message_demodulator_program);
 
     // Put IRQ parameters into the global scope for the on_demod_complete ISR.
@@ -94,57 +126,60 @@ bool ADSBee::Init() {
     float preamble_detector_div = (float)clock_get_hz(clk_sys) / kPreambleDetectorFreq;
 
     // Initialize the program using the .pio file helper function
-    preamble_detector_program_init(config_.preamble_detector_pio, preamble_detector_sm_, preamble_detector_offset_,
+    preamble_detector_program_init(config_.preamble_detector_pio, preamble_detector_sm_[0], preamble_detector_offset_,
                                    config_.pulses_pins[0], config_.demod_pins[0], preamble_detector_div);
 
     // Handle GPIO interrupts.
-    gpio_set_irq_enabled_with_callback(config_.demod_pins[0], GPIO_IRQ_EDGE_RISE, true, on_demod_begin);
+    gpio_set_irq_enabled_with_callback(config_.demod_pins[0], GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true,
+                                       on_demod0_pin_change);
+    gpio_init(config_.demod_pins[1]);
+    gpio_set_dir(config_.demod_pins[1], GPIO_OUT);
+    gpio_put(config_.demod_pins[1], 0);
+    // gpio_set_irq_enabled_with_callback(config_.demod_pins[1], GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true,
+    //                                    on_demod1_pin_change);
 
     // Enable the DEMOD interrupt on PIO1_IRQ_0.
-    pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt0, true);  // PIO1 state machine 0 IRQ 0
+    // pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt0, true);  // PIO1 state machine 0 IRQ 0
 
     // Handle PIO0 IRQ0.
-    irq_set_exclusive_handler(config_.preamble_detector_demod_complete_irq, on_demod_complete);
-    irq_set_enabled(config_.preamble_detector_demod_complete_irq, true);
+
+    // irq_set_exclusive_handler(config_.preamble_detector_demod_complete_irq, on_demod_complete);
+    // irq_set_enabled(config_.preamble_detector_demod_complete_irq, true);
 
     // Set the preamble sequnence into the ISR: ISR: 0b101000010100000(0)
     // Last 0 removed from preamble sequence to allow the demodulator more time to start up.
     // mov isr null ; Clear ISR.
-    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_mov(pio_isr, pio_null));
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[0], pio_encode_mov(pio_isr, pio_null));
     // set x 0b101  ; ISR = 0b00000000000000000000000000000000
-    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_set(pio_x, 0b101));
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[0], pio_encode_set(pio_x, 0b101));
     // in x 3       ; ISR = 0b00000000000000000000000000000101
-    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_in(pio_x, 3));
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[0], pio_encode_in(pio_x, 3));
     // in null 4    ; ISR = 0b00000000000000000000000001010000
-    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_in(pio_null, 4));
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[0], pio_encode_in(pio_null, 4));
     // in x 3       ; ISR = 0b00000000000000000000001010000101
-    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_in(pio_x, 3));
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[0], pio_encode_in(pio_x, 3));
     // in null 5    ; ISR = 0b00000000000000000101000010100000
-    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_in(pio_null, 5));
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[0], pio_encode_in(pio_null, 5));
     // mov x null   ; Clear scratch x.
-    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_mov(pio_x, pio_null));
+    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[0], pio_encode_mov(pio_x, pio_null));
 
     // Use this instruction to verify preamble was formed correctly (pushes ISR to RX FIFO).
     // pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_push(false, true));
 
     /** MESSAGE DEMODULATOR PIO **/
     float message_demodulator_div = (float)clock_get_hz(clk_sys) / kMessageDemodulatorFreq;
-    message_demodulator_program_init(config_.message_demodulator_pio, message_demodulator_sm_,
+    message_demodulator_program_init(config_.message_demodulator_pio, message_demodulator_sm_[0],
                                      message_demodulator_offset_, config_.pulses_pins[0], config_.recovered_clk_pins[0],
                                      message_demodulator_div);
 
     // Set GPIO interrupts to be higher priority than the DEMOD interrupt to allow RSSI measurement.
-    irq_set_priority(config_.preamble_detector_demod_complete_irq, 1);
-    irq_set_priority(config_.preamble_detector_demod_begin_irq, 0);
+    // irq_set_priority(config_.preamble_detector_demod_complete_irq, 1);
+    irq_set_priority(config_.preamble_detector_demod_pin_irq, 0);
 
     CONSOLE_INFO("ADSBee::Init", "PIOs initialized.");
 
     gpio_init(config_.status_led_pin);
     gpio_set_dir(config_.status_led_pin, GPIO_OUT);
-
-    // Enable the state machines
-    pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_, true);
-    pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_, true);
 
     // Set the last dictionary update timestamp.
     last_aircraft_dictionary_update_timestamp_ms_ = get_time_since_boot_ms();
@@ -156,6 +191,10 @@ bool ADSBee::Init() {
         gpio_put(config_.status_led_pin, 0);
         sleep_ms(kStatusLEDBootupBlinkPeriodMs / 2);
     }
+
+    // Enable the state machines
+    pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[0], true);
+    pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[0], true);
     return true;
 }
 
@@ -260,31 +299,29 @@ void ADSBee::FlashStatusLED(uint32_t led_on_ms) {
     led_on_timestamp_ms_ = get_time_since_boot_ms();
 }
 
-void ADSBee::OnDemodBegin(uint gpio, uint32_t event_mask) {
-    if (gpio == config_.demod_pins[0] && event_mask == GPIO_IRQ_EDGE_RISE) {
-        gpio_acknowledge_irq(config_.demod_pins[0], GPIO_IRQ_EDGE_RISE);
-        // Demodulation period is beginning!
-        // Store the MLAT counter.
-        rx_packet_.mlat_48mhz_64bit_counts = GetMLAT48MHzCounts();
-    }
+void ADSBee::OnDemodBegin(uint sm_index) {
+    // Demodulation period is beginning!
+    // Store the MLAT counter.
+    rx_packet_[sm_index].mlat_48mhz_64bit_counts = GetMLAT48MHzCounts();  // TODO: have separate RX packets
 }
 
-void ADSBee::OnDemodComplete() {
-    pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_, false);
+void ADSBee::OnDemodComplete(uint sm_index) {
+    pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], false);
+    pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], false);
     // Read the RSSI level of the current packet.
-    rx_packet_.sigs_dbm = ReadRSSIdBm();
-    if (!pio_sm_is_rx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_)) {
+    rx_packet_[sm_index].sigs_dbm = ReadRSSIdBm();
+    if (!pio_sm_is_rx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
         // Push any partially complete 32-bit word onto the RX FIFO.
-        pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_,
+        pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
                                   pio_encode_push(false, true));
     }
 
     // Clear the transponder packet buffer.
-    memset((void *)rx_packet_.buffer, 0x0, RawTransponderPacket::kMaxPacketLenWords32);
+    memset((void *)rx_packet_[sm_index].buffer, 0x0, RawTransponderPacket::kMaxPacketLenWords32);
 
     // Pull all words out of the RX FIFO.
     volatile uint16_t packet_num_words =
-        pio_sm_get_rx_fifo_level(config_.message_demodulator_pio, message_demodulator_sm_);
+        pio_sm_get_rx_fifo_level(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);
     if (packet_num_words > RawTransponderPacket::kMaxPacketLenWords32) {
         // Packet length is invalid; dump everything and try again next time.
         // Only enable this print for debugging! Printing from the interrupt causes the USB library to crash.
@@ -297,21 +334,21 @@ void ADSBee::OnDemodComplete() {
     aircraft_dictionary.RecordDemod1090();
     // Create a RawTransponderPacket and push it onto the queue.
     for (uint16_t i = 0; i < packet_num_words; i++) {
-        rx_packet_.buffer[i] = pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_);
+        rx_packet_[sm_index].buffer[i] = pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);
         if (i == packet_num_words - 1) {
             // // Trim off extra ingested bit from last word in the packet.
             // word  = word >> 1;
             // Mask and left align final word based on bit length.
             switch (packet_num_words) {
                 case DecodedTransponderPacket::kSquitterPacketNumWords32:
-                    rx_packet_.buffer[i] = (rx_packet_.buffer[i] & 0xFFFFFF) << 8;
-                    rx_packet_.buffer_len_bits = DecodedTransponderPacket::kSquitterPacketLenBits;
-                    transponder_packet_queue.Push(rx_packet_);
+                    rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFFFF) << 8;
+                    rx_packet_[sm_index].buffer_len_bits = DecodedTransponderPacket::kSquitterPacketLenBits;
+                    transponder_packet_queue.Push(rx_packet_[sm_index]);
                     break;
                 case DecodedTransponderPacket::kExtendedSquitterPacketNumWords32:
-                    rx_packet_.buffer[i] = (rx_packet_.buffer[i] & 0xFFFF) << 16;
-                    rx_packet_.buffer_len_bits = DecodedTransponderPacket::kExtendedSquitterPacketLenBits;
-                    transponder_packet_queue.Push(rx_packet_);
+                    rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFF) << 16;
+                    rx_packet_[sm_index].buffer_len_bits = DecodedTransponderPacket::kExtendedSquitterPacketLenBits;
+                    transponder_packet_queue.Push(rx_packet_[sm_index]);
                     break;
                 default:
                     // Don't push partial packets.
@@ -326,19 +363,26 @@ void ADSBee::OnDemodComplete() {
     }
 
     // Clear the FIFO by pushing partial word from ISR, not bothering to block if FIFO is full (it shouldn't be).
-    pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_, pio_encode_push(false, false));
-    while (!pio_sm_is_rx_fifo_empty(config_.message_demodulator_pio, message_demodulator_sm_)) {
-        pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_);
+    pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
+                              pio_encode_push(false, false));
+    while (!pio_sm_is_rx_fifo_empty(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
+        pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);
     }
 
     // Reset the demodulator state machine to wait for the next decode interval, then enable it.
-    pio_sm_restart(config_.message_demodulator_pio, message_demodulator_sm_);  // Reset FIFOs, ISRs, etc.
-    pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_,
+    pio_sm_restart(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);  // Reset FIFOs, ISRs, etc.
+    pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
                               pio_encode_jmp(message_demodulator_offset_));  // Jump to beginning of program.
-    pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_, true);
+    pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], true);
 
     // Release the preamble detector from its wait state.
-    pio_interrupt_clear(config_.preamble_detector_pio, 0);
+    // pio_interrupt_clear(config_.preamble_detector_pio, 0);
+
+    // Reset the preamble detector state machine so that it starts looking for a new message.
+    // pio_sm_restart(config_.preamble_detector_pio, preamble_detector_sm_[sm_index]);  // Reset FIFOs, ISRs, etc.
+    pio_sm_exec_wait_blocking(config_.preamble_detector_pio, preamble_detector_sm_[sm_index],
+                              pio_encode_jmp(preamble_detector_offset_));  // Jump to beginning of program.
+    pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], true);
 }
 
 void ADSBee::OnSysTickWrap() { mlat_counter_1s_wraps_++; }

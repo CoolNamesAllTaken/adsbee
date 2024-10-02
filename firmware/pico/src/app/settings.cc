@@ -93,7 +93,7 @@ void SettingsManager::Apply() {
     comms_manager.SetBaudrate(SerialInterface::kCommsUART, settings.comms_uart_baud_rate);
     comms_manager.SetBaudrate(SerialInterface::kGNSSUART, settings.gnss_uart_baud_rate);
 
-    settings.wifi_mode ? esp32.Init() : esp32.DeInit();
+    settings.esp32_enabled ? esp32.Init() : esp32.DeInit();
 
     // Apply WiFi configurations.
     comms_manager.wifi_mode = settings.wifi_mode;
