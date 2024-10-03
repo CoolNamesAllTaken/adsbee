@@ -194,6 +194,7 @@ bool ADSBee::Init() {
     // Enable the state machines
     pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[0], true);
     pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[0], true);
+    pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[1], true);
     return true;
 }
 
