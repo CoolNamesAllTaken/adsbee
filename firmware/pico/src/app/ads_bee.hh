@@ -94,12 +94,12 @@ class ADSBee {
     /**
      * ISR for GPIO interrupts.
      */
-    void OnDemodBegin(uint sm_index);
+    void OnDemodBegin(uint gpio);
 
     /**
      * ISR triggered by DECODE completing, via PIO0 IRQ0.
      */
-    void OnDemodComplete(uint sm_index);
+    void OnDemodComplete(uint gpio);
 
     /**
      * ISR triggered by SysTick interrupt. Used to wrap the MLAT counter.

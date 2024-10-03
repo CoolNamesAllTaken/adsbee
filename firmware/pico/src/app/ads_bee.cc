@@ -34,13 +34,13 @@ ADSBee *isr_access = nullptr;
 
 void on_systick_exception() { isr_access->OnSysTickWrap(); }
 
-void on_demod0_pin_change(uint gpio, uint32_t event_mask) {
+void on_demod_pin_change(uint gpio, uint32_t event_mask) {
     switch (event_mask) {
         case GPIO_IRQ_EDGE_RISE:
-            isr_access->OnDemodBegin(0);
+            isr_access->OnDemodBegin(gpio);
             break;
         case GPIO_IRQ_EDGE_FALL:
-            isr_access->OnDemodComplete(0);
+            isr_access->OnDemodComplete(gpio);
             break;
         case GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL:
             // WARNING: RSSI measurement will be inaccurate here.
@@ -51,22 +51,22 @@ void on_demod0_pin_change(uint gpio, uint32_t event_mask) {
     gpio_acknowledge_irq(gpio, event_mask);
 }
 
-void on_demod1_pin_change(uint gpio, uint32_t event_mask) {
-    switch (event_mask) {
-        case GPIO_IRQ_EDGE_RISE:
-            isr_access->OnDemodBegin(1);
-            break;
-        case GPIO_IRQ_EDGE_FALL:
-            isr_access->OnDemodComplete(1);
-            break;
-        case GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL:
-            // WARNING: RSSI measurement will be inaccurate here.
-            // isr_access->OnDemodBegin(1);
-            // isr_access->OnDemodComplete(1);
-            break;
-    }
-    gpio_acknowledge_irq(gpio, event_mask);
-}
+// void on_demod1_pin_change(uint gpio, uint32_t event_mask) {
+//     switch (event_mask) {
+//         case GPIO_IRQ_EDGE_RISE:
+//             isr_access->OnDemodBegin(1);
+//             break;
+//         case GPIO_IRQ_EDGE_FALL:
+//             isr_access->OnDemodComplete(1);
+//             break;
+//         case GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL:
+//             // WARNING: RSSI measurement will be inaccurate here.
+//             // isr_access->OnDemodBegin(1);
+//             // isr_access->OnDemodComplete(1);
+//             break;
+//     }
+//     gpio_acknowledge_irq(gpio, event_mask);
+// }
 
 ADSBee::ADSBee(ADSBeeConfig config_in) {
     config_ = config_in;
@@ -125,46 +125,45 @@ bool ADSBee::Init() {
     // Calculate the PIO clock divider.
     float preamble_detector_div = (float)clock_get_hz(clk_sys) / kPreambleDetectorFreq;
 
-    // Initialize the program using the .pio file helper function
-    preamble_detector_program_init(config_.preamble_detector_pio, preamble_detector_sm_[0], preamble_detector_offset_,
-                                   config_.pulses_pins[0], config_.demod_pins[0], preamble_detector_div);
+    for (uint16_t sm_index = 0; sm_index < kNumDemodStateMachines; sm_index++) {
+        // Initialize the program using the .pio file helper function
+        preamble_detector_program_init(config_.preamble_detector_pio, preamble_detector_sm_[sm_index],
+                                       preamble_detector_offset_, config_.pulses_pins[sm_index],
+                                       config_.demod_pins[sm_index], preamble_detector_div);
 
-    // Handle GPIO interrupts.
-    gpio_set_irq_enabled_with_callback(config_.demod_pins[0], GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true,
-                                       on_demod0_pin_change);
-    gpio_init(config_.demod_pins[1]);
-    gpio_set_dir(config_.demod_pins[1], GPIO_OUT);
-    gpio_put(config_.demod_pins[1], 0);
-    // gpio_set_irq_enabled_with_callback(config_.demod_pins[1], GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true,
-    //                                    on_demod1_pin_change);
+        // Handle GPIO interrupts.
+        gpio_set_irq_enabled_with_callback(config_.demod_pins[sm_index], GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true,
+                                           on_demod_pin_change);
 
-    // Enable the DEMOD interrupt on PIO1_IRQ_0.
-    // pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt0, true);  // PIO1 state machine 0 IRQ 0
+        // Enable the DEMOD interrupt on PIO1_IRQ_0.
+        // pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt0, true);  // PIO1 state machine 0
+        // IRQ 0
 
-    // Handle PIO0 IRQ0.
+        // Handle PIO0 IRQ0.
 
-    // irq_set_exclusive_handler(config_.preamble_detector_demod_complete_irq, on_demod_complete);
-    // irq_set_enabled(config_.preamble_detector_demod_complete_irq, true);
+        // irq_set_exclusive_handler(config_.preamble_detector_demod_complete_irq, on_demod_complete);
+        // irq_set_enabled(config_.preamble_detector_demod_complete_irq, true);
 
-    // Set the preamble sequnence into the ISR: ISR: 0b101000010100000(0)
-    // Last 0 removed from preamble sequence to allow the demodulator more time to start up.
-    // mov isr null ; Clear ISR.
-    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[0], pio_encode_mov(pio_isr, pio_null));
-    // set x 0b101  ; ISR = 0b00000000000000000000000000000000
-    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[0], pio_encode_set(pio_x, 0b101));
-    // in x 3       ; ISR = 0b00000000000000000000000000000101
-    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[0], pio_encode_in(pio_x, 3));
-    // in null 4    ; ISR = 0b00000000000000000000000001010000
-    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[0], pio_encode_in(pio_null, 4));
-    // in x 3       ; ISR = 0b00000000000000000000001010000101
-    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[0], pio_encode_in(pio_x, 3));
-    // in null 5    ; ISR = 0b00000000000000000101000010100000
-    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[0], pio_encode_in(pio_null, 5));
-    // mov x null   ; Clear scratch x.
-    pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[0], pio_encode_mov(pio_x, pio_null));
+        // Set the preamble sequnence into the ISR: ISR: 0b101000010100000(0)
+        // Last 0 removed from preamble sequence to allow the demodulator more time to start up.
+        // mov isr null ; Clear ISR.
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_isr, pio_null));
+        // set x 0b101  ; ISR = 0b00000000000000000000000000000000
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b101));
+        // in x 3       ; ISR = 0b00000000000000000000000000000101
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
+        // in null 4    ; ISR = 0b00000000000000000000000001010000
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 4));
+        // in x 3       ; ISR = 0b00000000000000000000001010000101
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
+        // in null 5    ; ISR = 0b00000000000000000101000010100000
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 5));
+        // mov x null   ; Clear scratch x.
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_x, pio_null));
 
-    // Use this instruction to verify preamble was formed correctly (pushes ISR to RX FIFO).
-    // pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_, pio_encode_push(false, true));
+        // Use this instruction to verify preamble was formed correctly (pushes ISR to RX FIFO).
+        // pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_push(false, true));
+    }
 
     /** MESSAGE DEMODULATOR PIO **/
     float message_demodulator_div = (float)clock_get_hz(clk_sys) / kMessageDemodulatorFreq;
@@ -299,13 +298,15 @@ void ADSBee::FlashStatusLED(uint32_t led_on_ms) {
     led_on_timestamp_ms_ = get_time_since_boot_ms();
 }
 
-void ADSBee::OnDemodBegin(uint sm_index) {
+void ADSBee::OnDemodBegin(uint gpio) {
+    uint sm_index = gpio == config_.demod_pins[0] ? 0 : 1;
     // Demodulation period is beginning!
     // Store the MLAT counter.
     rx_packet_[sm_index].mlat_48mhz_64bit_counts = GetMLAT48MHzCounts();  // TODO: have separate RX packets
 }
 
-void ADSBee::OnDemodComplete(uint sm_index) {
+void ADSBee::OnDemodComplete(uint gpio) {
+    uint sm_index = gpio == config_.demod_pins[0] ? 0 : 1;
     pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], false);
     pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], false);
     // Read the RSSI level of the current packet.
