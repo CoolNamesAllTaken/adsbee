@@ -38,7 +38,7 @@ class ADSBee {
         PIO preamble_detector_pio = pio0;
         uint preamble_detector_demod_pin_irq = IO_IRQ_BANK0;
         PIO message_demodulator_pio = pio1;
-        uint preamble_detector_demod_complete_irq = PIO0_IRQ_0;
+        uint preamble_detector_demod_complete_irq[kNumDemodStateMachines] = {PIO0_IRQ_0, PIO0_IRQ_1};
 
         uint16_t status_led_pin = 15;
         // Reading ADS-B on GPIO19. Will look for DEMOD signal on GPIO20.
@@ -99,7 +99,7 @@ class ADSBee {
     /**
      * ISR triggered by DECODE completing, via PIO0 IRQ0.
      */
-    void OnDemodComplete(uint gpio);
+    void OnDemodComplete(uint sm_index);
 
     /**
      * ISR triggered by SysTick interrupt. Used to wrap the MLAT counter.

@@ -40,17 +40,20 @@ void on_demod_pin_change(uint gpio, uint32_t event_mask) {
             isr_access->OnDemodBegin(gpio);
             break;
         case GPIO_IRQ_EDGE_FALL:
-            isr_access->OnDemodComplete(gpio);
+            // isr_access->OnDemodComplete(gpio);
             break;
         case GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL:
             // WARNING: RSSI measurement will be inaccurate here, but this is necessary because sometimes the interrupts
             // come in together. If there isn't a case here, the PIO will lock up.
-            isr_access->OnDemodBegin(0);
-            isr_access->OnDemodComplete(0);
+            // isr_access->OnDemodBegin(0);
+            // isr_access->OnDemodComplete(0);
             break;
     }
     gpio_acknowledge_irq(gpio, event_mask);
 }
+
+void on_demod0_complete() { isr_access->OnDemodComplete(0); }
+void on_demod1_complete() { isr_access->OnDemodComplete(1); }
 
 // void on_demod1_pin_change(uint gpio, uint32_t event_mask) {
 //     switch (event_mask) {
@@ -136,21 +139,24 @@ bool ADSBee::Init() {
                                        config_.pulses_pins[sm_index],                     // Pulses pin (input).
                                        config_.demod_pins[sm_index],                      // Demod pin (output).
                                        preamble_detector_div,                             // Clock divisor (for 48MHz).
-                                       sm_index > 0  // Make state machine wait if it's not SM 0.
+                                       true  // sm_index > 0  // Make state machine wait if it's not SM 0.
         );
 
         // Handle GPIO interrupts.
-        gpio_set_irq_enabled_with_callback(config_.demod_pins[sm_index], GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true,
-                                           on_demod_pin_change);
+        gpio_set_irq_enabled_with_callback(config_.demod_pins[sm_index], GPIO_IRQ_EDGE_RISE /* | GPIO_IRQ_EDGE_FALL */,
+                                           true, on_demod_pin_change);
 
         // Enable the DEMOD interrupt on PIO1_IRQ_0.
-        // pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt0, true);  // PIO1 state machine 0
+        pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt0, true);  // PIO0 state machine 0
+        pio_set_irq1_source_enabled(config_.preamble_detector_pio, pis_interrupt1, true);  // PIO0 state machine 1
         // IRQ 0
 
         // Handle PIO0 IRQ0.
 
-        // irq_set_exclusive_handler(config_.preamble_detector_demod_complete_irq, on_demod_complete);
-        irq_set_enabled(config_.preamble_detector_demod_complete_irq, true);
+        irq_set_exclusive_handler(config_.preamble_detector_demod_complete_irq[0], on_demod0_complete);
+        irq_set_enabled(config_.preamble_detector_demod_complete_irq[0], true);
+        irq_set_exclusive_handler(config_.preamble_detector_demod_complete_irq[1], on_demod1_complete);
+        irq_set_enabled(config_.preamble_detector_demod_complete_irq[1], true);
 
         // Set the preamble sequnence into the ISR: ISR: 0b101000010100000(0)
         // Last 0 removed from preamble sequence to allow the demodulator more time to start up.
@@ -317,8 +323,7 @@ void ADSBee::OnDemodBegin(uint gpio) {
     rx_packet_[sm_index].mlat_48mhz_64bit_counts = GetMLAT48MHzCounts();  // TODO: have separate RX packets
 }
 
-void ADSBee::OnDemodComplete(uint gpio) {
-    uint sm_index = gpio == config_.demod_pins[0] ? 0 : 1;
+void ADSBee::OnDemodComplete(uint sm_index) {
     pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], false);
     // pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], false);
     // Read the RSSI level of the current packet.
