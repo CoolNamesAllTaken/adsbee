@@ -43,9 +43,10 @@ void on_demod_pin_change(uint gpio, uint32_t event_mask) {
             isr_access->OnDemodComplete(gpio);
             break;
         case GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL:
-            // WARNING: RSSI measurement will be inaccurate here.
-            // isr_access->OnDemodBegin(0);
-            // isr_access->OnDemodComplete(0);
+            // WARNING: RSSI measurement will be inaccurate here, but this is necessary because sometimes the interrupts
+            // come in together. If there isn't a case here, the PIO will lock up.
+            isr_access->OnDemodBegin(0);
+            isr_access->OnDemodComplete(0);
             break;
     }
     gpio_acknowledge_irq(gpio, event_mask);
@@ -75,8 +76,10 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
         preamble_detector_sm_[sm_index] = pio_claim_unused_sm(config_.preamble_detector_pio, true);
         message_demodulator_sm_[sm_index] = pio_claim_unused_sm(config_.message_demodulator_pio, true);
     }
+    irq_wrapper_sm_ = pio_claim_unused_sm(config_.preamble_detector_pio, true);
 
     preamble_detector_offset_ = pio_add_program(config_.preamble_detector_pio, &preamble_detector_program);
+    irq_wrapper_offset_ = pio_add_program(config_.preamble_detector_pio, &irq_wrapper_program);
     message_demodulator_offset_ = pio_add_program(config_.message_demodulator_pio, &message_demodulator_program);
 
     // Put IRQ parameters into the global scope for the on_demod_complete ISR.
@@ -124,12 +127,17 @@ bool ADSBee::Init() {
     /** PREAMBLE DETECTOR PIO **/
     // Calculate the PIO clock divider.
     float preamble_detector_div = (float)clock_get_hz(clk_sys) / kPreambleDetectorFreq;
-
+    irq_wrapper_program_init(config_.preamble_detector_pio, irq_wrapper_offset_, preamble_detector_div);
     for (uint16_t sm_index = 0; sm_index < kNumDemodStateMachines; sm_index++) {
         // Initialize the program using the .pio file helper function
-        preamble_detector_program_init(config_.preamble_detector_pio, preamble_detector_sm_[sm_index],
-                                       preamble_detector_offset_, config_.pulses_pins[sm_index],
-                                       config_.demod_pins[sm_index], preamble_detector_div);
+        preamble_detector_program_init(config_.preamble_detector_pio,                     // Use PIO block 0.
+                                       preamble_detector_sm_[sm_index],                   // State machines 0-2
+                                       preamble_detector_offset_ /* + starting_offset*/,  // Program startin offset.
+                                       config_.pulses_pins[sm_index],                     // Pulses pin (input).
+                                       config_.demod_pins[sm_index],                      // Demod pin (output).
+                                       preamble_detector_div,                             // Clock divisor (for 48MHz).
+                                       sm_index > 0  // Make state machine wait if it's not SM 0.
+        );
 
         // Handle GPIO interrupts.
         gpio_set_irq_enabled_with_callback(config_.demod_pins[sm_index], GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true,
@@ -142,7 +150,7 @@ bool ADSBee::Init() {
         // Handle PIO0 IRQ0.
 
         // irq_set_exclusive_handler(config_.preamble_detector_demod_complete_irq, on_demod_complete);
-        // irq_set_enabled(config_.preamble_detector_demod_complete_irq, true);
+        irq_set_enabled(config_.preamble_detector_demod_complete_irq, true);
 
         // Set the preamble sequnence into the ISR: ISR: 0b101000010100000(0)
         // Last 0 removed from preamble sequence to allow the demodulator more time to start up.
@@ -191,10 +199,13 @@ bool ADSBee::Init() {
         sleep_ms(kStatusLEDBootupBlinkPeriodMs / 2);
     }
 
-    // Enable the state machines
-    pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[0], true);
-    pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[0], true);
+    // Enable the state machines.
+    pio_sm_set_enabled(config_.preamble_detector_pio, irq_wrapper_sm_, true);
     pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[1], true);
+    pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[0],
+                       true);  // Enable SM 0 last since others are waiting.
+    pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[0], true);
+
     return true;
 }
 
@@ -309,7 +320,7 @@ void ADSBee::OnDemodBegin(uint gpio) {
 void ADSBee::OnDemodComplete(uint gpio) {
     uint sm_index = gpio == config_.demod_pins[0] ? 0 : 1;
     pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], false);
-    pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], false);
+    // pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], false);
     // Read the RSSI level of the current packet.
     rx_packet_[sm_index].sigs_dbm = ReadRSSIdBm();
     if (!pio_sm_is_rx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
@@ -378,13 +389,14 @@ void ADSBee::OnDemodComplete(uint gpio) {
     pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], true);
 
     // Release the preamble detector from its wait state.
-    // pio_interrupt_clear(config_.preamble_detector_pio, 0);
+    pio_interrupt_clear(config_.preamble_detector_pio, sm_index);
 
     // Reset the preamble detector state machine so that it starts looking for a new message.
     // pio_sm_restart(config_.preamble_detector_pio, preamble_detector_sm_[sm_index]);  // Reset FIFOs, ISRs, etc.
-    pio_sm_exec_wait_blocking(config_.preamble_detector_pio, preamble_detector_sm_[sm_index],
-                              pio_encode_jmp(preamble_detector_offset_));  // Jump to beginning of program.
-    pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], true);
+    // pio_sm_exec_wait_blocking(config_.preamble_detector_pio, preamble_detector_sm_[sm_index],
+    //                           pio_encode_jmp(preamble_detector_offset_ +
+    //                                          preamble_detector_offset_follow_irq));  // Jump to beginning of program.
+    // pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], true);
 }
 
 void ADSBee::OnSysTickWrap() { mlat_counter_1s_wraps_++; }

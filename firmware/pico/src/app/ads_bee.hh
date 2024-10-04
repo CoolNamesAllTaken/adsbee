@@ -38,7 +38,7 @@ class ADSBee {
         PIO preamble_detector_pio = pio0;
         uint preamble_detector_demod_pin_irq = IO_IRQ_BANK0;
         PIO message_demodulator_pio = pio1;
-        // uint preamble_detector_demod_complete_irq = PIO0_IRQ_0;
+        uint preamble_detector_demod_complete_irq = PIO0_IRQ_0;
 
         uint16_t status_led_pin = 15;
         // Reading ADS-B on GPIO19. Will look for DEMOD signal on GPIO20.
@@ -222,8 +222,11 @@ class ADSBee {
     ADSBeeConfig config_;
     CppAT parser_;
 
+    uint32_t irq_wrapper_sm_ = 0;
     uint32_t preamble_detector_sm_[kNumDemodStateMachines];
     uint32_t preamble_detector_offset_ = 0;
+
+    uint32_t irq_wrapper_offset_ = 0;
 
     uint32_t message_demodulator_sm_[kNumDemodStateMachines];
     uint32_t message_demodulator_offset_ = 0;
