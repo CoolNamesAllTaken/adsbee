@@ -1,3 +1,32 @@
+.program irq_wrapper
+
+; This program runs at 48MHz. Each clock cycle is 1/48us.
+; The only purpose of this program is to wrap an IRQ back to the beginning of the array of state machines.
+
+.define public num_state_machines 2
+
+.wrap_target
+wait 1 irq 6 ; Waits for IRQ 6, then clears it. Set this IRQ number equal to 4+num_state_machines.
+irq set 4 ; Sets IRQ 4 to trigger preamble detector on SM 0 (looping back around).
+.wrap
+
+% c-sdk {
+
+// Helper function (for use in C program) to initialize this PIO program
+void irq_wrapper_program_init(PIO pio, uint offset, float div) {
+
+    // Sets up state machine and wrap target. This function is automatically
+    // generated in preamble_detector.pio.h.
+    pio_sm_config c = irq_wrapper_program_get_default_config(offset);
+    
+    // Set the clock divider for the state machine
+    sm_config_set_clkdiv(&c, div);
+
+    // Load configuration and jump to start of the program
+    pio_sm_init(pio, irq_wrapper_num_state_machines, offset, &c);
+}
+%}
+
 .program preamble_detector
 
 ; This program runs at 48MHz. Each clock cycle is 1/48us.
@@ -5,24 +34,23 @@
 .define pulses_pin_index 0
 .define demod_pin_index 1
 
-.define filter_correct_samples 3
-.define filter_n_minus_1 3
 
-set pins 0 ; DEBUG
 ; Build preamble pattern and load it into ISR: 0b101000010100000.
 ; Note that one 0 bit has been removed from the preamble to allow more cycles for the demodulator to turn on.
+set pins 0 ; DEBUG
 
 ; BEGIN DOUBLE PULSE MATCH
 .wrap_target
 waiting_for_first_edge:
-    mov osr isr                     ; -2 | OSR = 0b00000000000000000101000010100000
-    out null 17                     ; -1 | OSR = 0b101000010100000
-    mov x null                      ; 0 | Clear out x from last sampling adventure.
+    mov osr isr                     ; -3 | OSR = 0b00000000000000000101000010100000
+    out null 17                     ; -2 | OSR = 0b101000010100000
+    mov x null                      ; -1 | Clear out x from last sampling adventure.
 ; Grab a new bit every 24 cycles.
 ;   6 cycles: Get bit.
 ;   12 cycles: Assert bit.
 ;   6 cycles: nop.
-    wait 1 pin, pulses_pin_index    ; 1 | wait for in_pin to go HI
+    wait 1 pin, pulses_pin_index    ; 0 | wait for in_pin to go HI
+    irq set 5 rel ; 1 | set IRQ 0 to indicate to the other preamble detector that it can start looking now
 check_next_bit:
     jmp !osre preamble_not_done_yet ; 2 
 ; .wrap_target
@@ -30,13 +58,18 @@ preamble_matched:
     set pins 1 [2] ; 3:5 | set demod pin to indicate message body beginning
     wait 1 pin, pulses_pin_index [11] ; 6:17 | wait till middle of message eye to look for end
 waiting_for_end_of_message:
-    set x, 12 [2] ; 18:20 | [1.5us] number of sequential idle samples required to mark end of packet
+    set x, 16 [2] ; 18:20 | [2.0us] number of sequential idle samples required to mark end of packet
 idle_countdown:
     jmp pin waiting_for_end_of_message [2] ; 21+2n:24+2n | start over the idle countdown if received a non idle bit
     jmp x-- idle_countdown [2] ; 25+2n:28+2n | still idle, keep counting down if the timer isn't up
+message_finished:
     set pins, 0 ; 29+2n | set demod pin to 0 to indicate message is finished
-    irq set 0 [1] ; 30+2n:31+2n | set the DEMOD IRQ to indicate the message body is finished
-    wait 0 irq 0 ; 32+2n | don't look for new messages until the current one has been processed
+    ; irq set 0 [1] ; 30+2n:31+2n | set the DEMOD IRQ to indicate the message body is finished
+    irq wait 0 rel ; 30+2n | Set IRQ 0+SM, and wait for it to clear (don't look for new messages until the current one has been processed).
+public follow_irq:
+    wait 1 irq 4 rel ; Wait for IRQ 4+SM, then clear it.
+    wait 0 pin, pulses_pin_index ; Wait for line to go LO so that we don't double with the detector that's already running.
+
 .wrap
 
 preamble_not_done_yet:
@@ -46,26 +79,31 @@ preamble_not_done_yet:
 
 ; Subroutines
 
-filter_pin_hi:
-    set y 3  ; 6: (filter_correct_samples-1) Minimum number of correct samples needed to keep looking.
-fph_wrap_target:
-    jmp pin fph_pin_hi  ; 7+3n
-fph_pin_lo:
-    jmp fph_wrap    ; 8+3n
-fph_pin_hi:
-    jmp y-- fph_wrap    ; 8+3n
-fph_exit_success:
-    jmp x-- fph_exit_success [2] ; Complete remaining loops.
-    jmp check_next_bit [3] ; 22-25
-fph_wrap:
-    jmp x-- fph_wrap_target ; 9+3n
-    jmp waiting_for_first_edge  ; Correlation failed.
+assert_pin_hi:
+    set x 3 [5] ; 6-11: Assert HI for 12 cycles ((x+1) * (2 cycles per wrap))
+aph_wrap:
+    jmp pin aph_pin_is_hi
+    jmp follow_irq ; Pin is LO, assert failed.
+aph_pin_is_hi:
+    jmp x-- aph_wrap
+    jmp check_next_bit [5]    ; 20-25: cycle idle at end
+
+; filter_pin_hi:
+;     set y 3  ; 6: (filter_correct_samples-1) Minimum number of correct samples needed to keep looking.
+; fph_wrap_target:
+;     jmp pin fph_pin_hi  ; 7+3n
+; fph_pin_lo:
+;     jmp fph_wrap    ; 8+3n
+; fph_pin_hi:
+;     jmp y-- fph_wrap    ; 8+3n
+; fph_exit_success:
+;     jmp x-- fph_exit_success [2] ; Complete remaining loops.
+;     jmp check_next_bit [3] ; 22-25
+; fph_wrap:
+;     jmp x-- fph_wrap_target ; 9+3n
+;     jmp waiting_for_first_edge  ; Correlation failed.
     
 filter_pin_lo:
-    ; Dummy implementation that always passes.
-    ; nop [18] ; 6-24
-    ; jmp check_next_bit ; 253
-
     ; Generous implementation that accepts a single LO sample anywhere in the sampling window as a success.
     ; This accounts for the asymmetric nature of the data slicer circuit as it is charging up during the preamble; it
     ; is a lot harder to get a LO sample than a HI sample from an incoming message.
@@ -77,7 +115,7 @@ fpl_pin_lo:
     jmp check_next_bit [4] ; 20-25
 fpl_pin_hi:
     jmp x-- fpl_wrap_target ; 8+2n
-    jmp waiting_for_first_edge ; Never found a LO sample, correlation failed.
+    jmp follow_irq ; Never found a LO sample, correlation failed.
 
     ; Single sample implementaiton that samples once in the middle of the interval.
 ;     nop [6] ; 6-12
@@ -101,10 +139,12 @@ fpl_pin_hi:
 ;     ; jmp !y waiting_for_first_edge ; 22: Reset if correlation failed.
 ;     jmp check_next_bit [3] ; 22-25
 
+
+
 % c-sdk {
 
 // Helper function (for use in C program) to initialize this PIO program
-void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint pulses_pin, uint demod_pin, float div) {
+void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint pulses_pin, uint demod_pin, float div, bool waiting) {
 
     // Sets up state machine and wrap target. This function is automatically
     // generated in preamble_detector.pio.h.
@@ -132,7 +172,7 @@ void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint pulses_p
     sm_config_set_clkdiv(&c, div);
 
     // Load configuration and jump to start of the program
-    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_init(pio, sm, offset + (waiting ? preamble_detector_offset_follow_irq : 0), &c);
 }
 
 %}

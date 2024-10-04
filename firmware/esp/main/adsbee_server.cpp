@@ -4,6 +4,7 @@
 #include "nvs_flash.h"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
+#include "task_priorities.hh"
 
 // #define VERBOSE_DEBUG
 
@@ -23,7 +24,8 @@ bool ADSBeeServer::Init() {
     }
 
     spi_receive_task_should_exit_ = false;
-    xTaskCreate(esp_spi_receive_task, "spi_receive_task", kSPIRxTaskStackDepthBytes, NULL, 5, NULL);
+    xTaskCreatePinnedToCore(esp_spi_receive_task, "spi_receive_task", kSPIRxTaskStackDepthBytes, NULL,
+                            kSPIReceiveTaskPriority, NULL, kSPIReceiveTaskCore);
 
     while (true) {
         if (!pico.Read(ObjectDictionary::kAddrSettingsData, settings_manager.settings)) {
@@ -65,8 +67,10 @@ bool ADSBeeServer::Update() {
     if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > kAircraftDictionaryUpdateIntervalMs) {
         aircraft_dictionary.Update(timestamp_ms);
         last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
-        CONSOLE_INFO("ADSBeeServer::Update", "\taircraft_dictionary: %d aircraft",
-                     aircraft_dictionary.GetNumAircraft());
+        CONSOLE_INFO("ADSBeeServer::Update", "\t %d clients, %d aircraft, %lu squitter, %lu extended squitter",
+                     comms_manager.GetNumWiFiClients(), aircraft_dictionary.GetNumAircraft(),
+                     aircraft_dictionary.stats.valid_squitter_frames,
+                     aircraft_dictionary.stats.valid_extended_squitter_frames);
     }
 
     // Ingest new packets into the dictionary.
