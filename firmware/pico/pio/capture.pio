@@ -82,7 +82,7 @@ public follow_irq:
     ; nop
 
     wait 1 irq 4 rel ; Wait for IRQ 4+SM, then clear it.
-
+    wait 0 pin, pulses_pin_index ; Wait for line to go LO so that we don't double with the detector that's already running.
     ; wait 1 irq 4 rel
     ; irq clear 4 rel
 
