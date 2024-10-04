@@ -5,10 +5,7 @@
 
 .define public num_state_machines 2
 
-; irq set 4
 .wrap_target
-; wait 1 irq 4 ; Waits for IRQ 4, then clears it.
-
 wait 1 irq 6 ; Waits for IRQ 6, then clears it. Set this IRQ number equal to 4+num_state_machines.
 irq set 4 ; Sets IRQ 4 to trigger preamble detector on SM 0 (looping back around).
 .wrap
@@ -36,15 +33,6 @@ void irq_wrapper_program_init(PIO pio, uint offset, float div) {
 
 .define pulses_pin_index 0
 .define demod_pin_index 1
-
-; .wrap_target
-; set pins 1 [27]
-; set pins 0 [27]
-; irq set 1 rel
-; public follow_irq:
-;     wait 1 irq 0 rel
-;     irq clear 0 rel
-; .wrap
 
 
 ; Build preamble pattern and load it into ISR: 0b101000010100000.
@@ -79,12 +67,8 @@ message_finished:
     ; irq set 0 [1] ; 30+2n:31+2n | set the DEMOD IRQ to indicate the message body is finished
     irq wait 0 rel ; 30+2n | Set IRQ 0+SM, and wait for it to clear (don't look for new messages until the current one has been processed).
 public follow_irq:
-    ; nop
-
     wait 1 irq 4 rel ; Wait for IRQ 4+SM, then clear it.
     wait 0 pin, pulses_pin_index ; Wait for line to go LO so that we don't double with the detector that's already running.
-    ; wait 1 irq 4 rel
-    ; irq clear 4 rel
 
 .wrap
 

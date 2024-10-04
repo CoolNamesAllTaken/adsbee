@@ -184,6 +184,9 @@ bool ADSBee::Init() {
     message_demodulator_program_init(config_.message_demodulator_pio, message_demodulator_sm_[0],
                                      message_demodulator_offset_, config_.pulses_pins[0], config_.recovered_clk_pins[0],
                                      message_demodulator_div);
+    message_demodulator_program_init(config_.message_demodulator_pio, message_demodulator_sm_[1],
+                                     message_demodulator_offset_, config_.pulses_pins[1], config_.recovered_clk_pins[1],
+                                     message_demodulator_div);
 
     // Set GPIO interrupts to be higher priority than the DEMOD interrupt to allow RSSI measurement.
     // irq_set_priority(config_.preamble_detector_demod_complete_irq, 1);
