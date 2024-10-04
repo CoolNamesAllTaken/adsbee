@@ -9,7 +9,7 @@
 .wrap_target
 ; wait 1 irq 4 ; Waits for IRQ 4, then clears it.
 
-wait 1 irq 6 ; Waits for IRQ 6, then clears it.
+wait 1 irq 6 ; Waits for IRQ 6, then clears it. Set this IRQ number equal to 4+num_state_machines.
 irq set 4 ; Sets IRQ 4 to trigger preamble detector on SM 0 (looping back around).
 .wrap
 
