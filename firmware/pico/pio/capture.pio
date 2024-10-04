@@ -5,10 +5,12 @@
 
 .define public num_state_machines 2
 
+; irq set 4
 .wrap_target
-wait 1 irq 6
-irq clear 6
-irq set 4
+; wait 1 irq 4 ; Waits for IRQ 4, then clears it.
+
+wait 1 irq 6 ; Waits for IRQ 6, then clears it.
+irq set 4 ; Sets IRQ 4 to trigger preamble detector on SM 0 (looping back around).
 .wrap
 
 % c-sdk {
@@ -75,18 +77,15 @@ idle_countdown:
 message_finished:
     set pins, 0 ; 29+2n | set demod pin to 0 to indicate message is finished
     ; irq set 0 [1] ; 30+2n:31+2n | set the DEMOD IRQ to indicate the message body is finished
-wait_forever:
-    irq wait 0 rel
-    ; jmp wait_forever ; 32+2n | don't look for new messages until the current one has been processed
-    ; wait 0 irq 0 ; 32+2n | don't look for new messages until the current one has been processed
+    irq wait 0 rel ; 30+2n | Set IRQ 0+SM, and wait for it to clear (don't look for new messages until the current one has been processed).
 public follow_irq:
-    ; set pins, 1
-    ; jmp waiting_for_first_edge
+    ; nop
+
+    wait 1 irq 4 rel ; Wait for IRQ 4+SM, then clear it.
 
     ; wait 1 irq 4 rel
-    irq clear 4 rel
-    ; set pins 1
-    ; set pins 0
+    ; irq clear 4 rel
+
 .wrap
 
 preamble_not_done_yet:

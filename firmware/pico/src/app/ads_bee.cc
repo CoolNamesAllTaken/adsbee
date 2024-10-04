@@ -139,7 +139,7 @@ bool ADSBee::Init() {
                                        config_.pulses_pins[sm_index],                     // Pulses pin (input).
                                        config_.demod_pins[sm_index],                      // Demod pin (output).
                                        preamble_detector_div,                             // Clock divisor (for 48MHz).
-                                       true  // sm_index > 0  // Make state machine wait if it's not SM 0.
+                                       sm_index > 0  // Make state machine wait if it's not SM 0.
         );
 
         // Handle GPIO interrupts.
