@@ -69,15 +69,15 @@ class SPICoprocessor {
 
     // Commands are written from Master to Slave.
     enum SCCommand : uint8_t {
-        kCmdInvalid = 0x0,
-        kCmdWriteToSlave,            // No response expected.
-        kCmdWriteToSlaveRequireAck,  // Expects a response to continue to the next block.
-        kCmdReadFromSlave,
-        kCmdWriteToMaster,            // No response expected.
-        kCmdWriteToMasterRequireAck,  // Expects a response to continue to the next block.
-        kCmdReadFromMaster,
-        kCmdDataBlock,
-        kCmdAck
+        kCmdInvalid = 0x00,
+        kCmdWriteToSlave = 0x01,            // No response expected.
+        kCmdWriteToSlaveRequireAck = 0x02,  // Expects a response to continue to the next block.
+        kCmdReadFromSlave = 0x03,
+        kCmdWriteToMaster = 0x04,            // No response expected.
+        kCmdWriteToMasterRequireAck = 0x05,  // Expects a response to continue to the next block.
+        kCmdReadFromMaster = 0x06,
+        kCmdDataBlock = 0x07,
+        kCmdAck = 0x08
     };
     /**
      * Abstract base struct for SPI Coprocessor packets.

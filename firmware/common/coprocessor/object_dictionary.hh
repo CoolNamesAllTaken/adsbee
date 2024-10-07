@@ -16,12 +16,12 @@ class ObjectDictionary {
     static const uint32_t kFirmwareVersion;
 
     enum Address : uint8_t {
-        kAddrInvalid = 0,             // Default value.
-        kAddrFirmwareVersion = 0x01,  // Firmware version as a uint32_t.
-        kAddrScratch,                 // Used for testing SPI communications.
-        kAddrSettingsData,            // Used to transfer settings information.
-        kAddrRawTransponderPacket,    // Used to forward raw packets from RP2040 to ESP32.
-        kAddrDecodedTransponderPacket,
+        kAddrInvalid = 0,                  // Default value.
+        kAddrFirmwareVersion = 0x01,       // Firmware version as a uint32_t.
+        kAddrScratch = 0x02,               // Used for testing SPI communications.
+        kAddrSettingsData = 0x03,          // Used to transfer settings information.
+        kAddrRawTransponderPacket = 0x04,  // Used to forward raw packets from RP2040 to ESP32.
+        kAddrDecodedTransponderPacket = 0x05,
         kNumAddrs
     };
 

@@ -5,6 +5,8 @@
 #ifdef ON_PICO
 #include "hal.hh"
 #include "hardware/gpio.h"
+
+static const uint32_t kESP32EnableBootupDelayMs = 500;
 #elif ON_ESP32
 #include "adsbee_server.hh"
 
@@ -43,6 +45,11 @@ bool SPICoprocessor::Init() {
                    SPI_CPOL_0,  // Polarity (CPOL).
                    SPI_CPHA_0,  // Phase (CPHA).
                    SPI_MSB_FIRST);
+
+    // Wait for a bit for the ESP32 to boot up.
+    uint32_t boot_delay_finished_timestamp_ms = get_time_since_boot_ms() + kESP32EnableBootupDelayMs;
+    while (get_time_since_boot_ms() < boot_delay_finished_timestamp_ms) {
+    }
 #elif ON_ESP32
     gpio_set_direction(config_.network_led_pin, GPIO_MODE_OUTPUT);
     spi_bus_config_t spi_buscfg = {
