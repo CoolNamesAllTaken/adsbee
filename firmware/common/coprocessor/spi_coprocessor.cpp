@@ -182,6 +182,12 @@ bool SPICoprocessor::Update() {
     uint8_t rx_buf[kSPITransactionMaxLenBytes];
     memset(rx_buf, 0, kSPITransactionMaxLenBytes);
 
+    if (xSemaphoreTake(spi_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
+        CONSOLE_ERROR("SPICoprocessor::SPIWriteReadBlocking",
+                      "Failed to acquire coprocessor SPI mutex after waiting %d ms.", kSPITransactionTimeoutMs);
+        return false;
+    }
+
     use_handshake_pin_ = false;  // Don't solicit a transfer.
     int16_t bytes_read = SPIReadBlocking(rx_buf);
     if (bytes_read < 0) {
@@ -330,16 +336,10 @@ int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint1
     t.rx_buffer = rx_buf;
 
     /** Send a write packet from slave -> master via handshake. **/
-    if (xSemaphoreTake(spi_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
-        CONSOLE_ERROR("SPICoprocessor::SPIWriteReadBlocking",
-                      "Failed to acquire coprocessor SPI mutex after waiting %d ms.", kSPITransactionTimeoutMs);
-        return kErrorTimeout;
-    }
     // Wait for a transaction to complete. Allow this task to block if no SPI transaction is received until max
     // delay. Currently, setting the delay here to anything other than portMAX_DELAY (which allows blocking
     // indefinitely) causes an error in spi_slave.c due to extra transactions getting stuck in the SPI peripheral queue.
     esp_err_t status = spi_slave_transmit(config_.spi_handle, &t, portMAX_DELAY /*kSPITransactionTimeoutTicks*/);
-    xSemaphoreGive(spi_mutex_);
 
     if (status != ESP_OK) {
         if (status == ESP_ERR_TIMEOUT) {
