@@ -69,15 +69,15 @@ class SPICoprocessor {
 
     // Commands are written from Master to Slave.
     enum SCCommand : uint8_t {
-        kCmdInvalid = 0x0,
-        kCmdWriteToSlave,            // No response expected.
-        kCmdWriteToSlaveRequireAck,  // Expects a response to continue to the next block.
-        kCmdReadFromSlave,
-        kCmdWriteToMaster,            // No response expected.
-        kCmdWriteToMasterRequireAck,  // Expects a response to continue to the next block.
-        kCmdReadFromMaster,
-        kCmdDataBlock,
-        kCmdAck
+        kCmdInvalid = 0x00,
+        kCmdWriteToSlave = 0x01,            // No response expected.
+        kCmdWriteToSlaveRequireAck = 0x02,  // Expects a response to continue to the next block.
+        kCmdReadFromSlave = 0x03,
+        kCmdWriteToMaster = 0x04,            // No response expected.
+        kCmdWriteToMasterRequireAck = 0x05,  // Expects a response to continue to the next block.
+        kCmdReadFromMaster = 0x06,
+        kCmdDataBlock = 0x07,
+        kCmdAck = 0x08
     };
     /**
      * Abstract base struct for SPI Coprocessor packets.
@@ -440,6 +440,8 @@ class SPICoprocessor {
 
     inline bool SPISlaveLoopReturnHelper(bool ret) {
 #ifdef ON_ESP32
+        xSemaphoreGive(spi_mutex_);  // Allow other tasks to access the SPI peripheral.
+
         // Trying to take the next transaction mutex in the slave loop (higher priority) temporarily boosts the priority
         // of other loops (e.g. lower priority independent update loop) if they have already claimed it. The next
         // transaction mutex is released before a SPI transmission so that it is available for other loops to claim
@@ -490,6 +492,12 @@ class SPICoprocessor {
         write_packet.PopulateCRC();
 
 #ifdef ON_ESP32
+        if (xSemaphoreTake(spi_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
+            CONSOLE_ERROR("SPICoprocessor::PartialWrite",
+                          "Failed to acquire coprocessor SPI mutex after waiting %d ms.", kSPITransactionTimeoutMs);
+            return false;
+        }
+
         use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
 #endif
         int bytes_written = SPIWriteBlocking(write_packet.GetBuf(), write_packet.GetBufLenBytes());
@@ -497,13 +505,23 @@ class SPICoprocessor {
         if (bytes_written < 0) {
             CONSOLE_ERROR("SPICoprocessor::PartialWrite", "Error code %d while writing object over SPI.",
                           bytes_written);
+#ifdef ON_ESP32
+            xSemaphoreGive(spi_mutex_);  // Allow other tasks to access the SPI peripheral.
+#endif
             return bytes_written;
         }
         if (require_ack && !SPIWaitForAck()) {
             CONSOLE_ERROR("SPICoprocessor::PartialWrite",
                           "Timed out or received bad ack after writing to coprocessor.");
+#ifdef ON_ESP32
+            xSemaphoreGive(spi_mutex_);  // Allow other tasks to access the SPI peripheral.
+#endif
             return false;
         }
+#ifdef ON_ESP32
+        // Don't give semaphore back until ACK received (if required), unless there's an error.
+        xSemaphoreGive(spi_mutex_);  // Allow other tasks to access the SPI peripheral.
+#endif
         return true;
     }
 
@@ -550,6 +568,12 @@ class SPICoprocessor {
             return false;
         }
 #elif ON_ESP32
+        if (xSemaphoreTake(spi_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
+            CONSOLE_ERROR("SPICoprocessor::PartialRead", "Failed to acquire coprocessor SPI mutex after waiting %d ms.",
+                          kSPITransactionTimeoutMs);
+            return false;
+        }
+
         // On the slave, reading from the master is a single transaction. We preload the beginning of the message
         // with the read request, and the master populates the remainder of the message with the reply.
         use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
@@ -557,6 +581,10 @@ class SPICoprocessor {
         // doesn't include the response bytes), the SPI transmit function won't write the additional reply into our
         // buffer.
         int bytes_exchanged = SPIWriteReadBlocking(read_request_packet.GetBuf(), rx_buf, SCPacket::kPacketMaxLenBytes);
+
+        // Mutex can be given back immediately because we don't ever wait for an ACK.
+        xSemaphoreGive(spi_mutex_);  // Allow other tasks to access the SPI peripheral.
+
         if (bytes_exchanged < 0) {
             CONSOLE_ERROR("SPICoprocessor::PartialRead", "Error code %d during read from master SPI transaction.",
                           bytes_exchanged);

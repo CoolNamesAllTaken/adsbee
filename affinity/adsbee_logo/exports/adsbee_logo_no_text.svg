@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
 <svg width="100%" height="100%" viewBox="0 0 1200 750" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:1.5;">
-    <g transform="matrix(1,0,0,1,-1390.96,-930.791)">
-        <g id="bee_logo_color" transform="matrix(1,0,0,1,940.964,330.791)">
+    <g transform="matrix(1,0,0,1,-7.00918,-1803.5)">
+        <g id="bee_logo_color_no_text" transform="matrix(1,0,0,1,-442.991,1203.5)">
             <rect x="450" y="600" width="1200" height="750" style="fill:none;"/>
             <g transform="matrix(0.994522,0.104528,-0.104528,0.994522,87.2326,-144.135)">
                 <g transform="matrix(1.05106,-0.281631,0.281631,1.05106,-272.607,404.399)">
@@ -21,7 +21,7 @@
             <g transform="matrix(1,0,0,1,-95.5731,38.5425)">
                 <circle cx="845.999" cy="993.326" r="18.131" style="stroke:black;stroke-width:4.17px;"/>
             </g>
-            <path d="M1100.89,900C1183.68,900 1250.89,967.213 1250.89,1050C1250.89,1132.79 1183.68,1200 1100.89,1200L900,1200C817.213,1200 750,1132.79 750,1050C750,967.213 817.213,900 900,900L1100.89,900Z" style="fill:rgb(255,250,0);stroke:black;stroke-width:12.5px;"/>
+            <path d="M1100.89,900C1183.68,900 1250.89,967.213 1250.89,1050C1250.89,1132.79 1183.68,1200 1100.89,1200L900,1200C817.213,1200 750,1132.79 750,1050C750,967.213 817.213,900 900,900L1100.89,900Z" style="fill:rgb(255,204,0);stroke:black;stroke-width:12.5px;"/>
             <g transform="matrix(1,0,0,1,22.7409,38.5425)">
                 <circle cx="845.999" cy="993.326" r="18.131" style="stroke:black;stroke-width:4.17px;"/>
             </g>
@@ -51,9 +51,6 @@
                 <path d="M803.955,934.814C803.955,934.814 783.992,884.984 750,862.543C725.197,846.169 592.503,921.983 592.503,921.983" style="fill:none;stroke:black;stroke-width:12.5px;"/>
             </g>
             <path d="M1250.89,1022.59L1388.62,1050L1250.89,1070.11" style="stroke:black;stroke-width:12.5px;"/>
-            <g transform="matrix(0.981188,-0.193055,0.193055,0.981188,-1132.19,157.04)">
-                <text x="2103.46px" y="1206.67px" style="font-family:'Poppins-Regular', 'Poppins';font-size:50px;">ADSBee</text>
-            </g>
         </g>
     </g>
 </svg>

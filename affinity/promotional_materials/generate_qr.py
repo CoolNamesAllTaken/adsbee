@@ -4,7 +4,7 @@ from PIL import Image
 
 # taking image which user wants 
 # in the QR code center
-logo_link = '../adsbee_logo/exports/adsbee_logo_color.png'
+logo_link = '../adsbee_logo/exports/adsbee_logo_no_text.png'
 
 logo = Image.open(logo_link)
 
@@ -20,7 +20,7 @@ QRcode = qrcode.QRCode(
 )
 
 # taking url or text
-url = 'https:pantsforbirds.com/adsbee-1090'
+url = 'https://pantsforbirds.com/adsbee-1090'
 
 # adding URL or text to QRcode
 QRcode.add_data(url)
@@ -38,9 +38,10 @@ QRimg = QRcode.make_image(
 # set size of QR code
 pos = ((QRimg.size[0] - logo.size[0]) // 2,
 	(QRimg.size[1] - logo.size[1]) // 2)
+QRimg.save('exports/adsbee_1090_qr.png')
 QRimg.paste(logo, pos)
 
 # save the QR code generated
-QRimg.save('exports/adsbee_1090_qr.png')
+QRimg.save('exports/adsbee_1090_qr_with_image.png')
 
 print('QR code generated!')

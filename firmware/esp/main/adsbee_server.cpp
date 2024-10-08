@@ -30,7 +30,7 @@ bool ADSBeeServer::Init() {
     while (true) {
         if (!pico.Read(ObjectDictionary::kAddrSettingsData, settings_manager.settings)) {
             CONSOLE_ERROR("ADSBeeServer::Init", "Failed to read settings from Pico on startup.");
-            vTaskDelay(1000 / portTICK_PERIOD_MS);  // Delay for 1s before retry.
+            vTaskDelay(500 / portTICK_PERIOD_MS);  // Delay for 0.5s before retry.
             continue;
         } else {
             settings_manager.Print();
@@ -65,6 +65,11 @@ bool ADSBeeServer::Update() {
     // Prune aircraft dictionary. Need to do this up front so that we don't end up with a negative timestamp delta
     // caused by packets being ingested more recently than the timestamp we take at the beginning of this function.
     if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > kAircraftDictionaryUpdateIntervalMs) {
+        uint32_t scratch;
+        if (!pico.Read(ObjectDictionary::Address::kAddrScratch, scratch)) {
+            CONSOLE_ERROR("ADSBeeServer::Update", "Read of Pico scratch failed.");
+        }
+
         aircraft_dictionary.Update(timestamp_ms);
         last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
         CONSOLE_INFO("ADSBeeServer::Update", "\t %d clients, %d aircraft, %lu squitter, %lu extended squitter",
