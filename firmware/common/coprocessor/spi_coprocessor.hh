@@ -505,17 +505,23 @@ class SPICoprocessor {
         if (bytes_written < 0) {
             CONSOLE_ERROR("SPICoprocessor::PartialWrite", "Error code %d while writing object over SPI.",
                           bytes_written);
+#ifdef ON_ESP32
             xSemaphoreGive(spi_mutex_);  // Allow other tasks to access the SPI peripheral.
+#endif
             return bytes_written;
         }
         if (require_ack && !SPIWaitForAck()) {
             CONSOLE_ERROR("SPICoprocessor::PartialWrite",
                           "Timed out or received bad ack after writing to coprocessor.");
+#ifdef ON_ESP32
             xSemaphoreGive(spi_mutex_);  // Allow other tasks to access the SPI peripheral.
+#endif
             return false;
         }
+#ifdef ON_ESP32
         // Don't give semaphore back until ACK received (if required), unless there's an error.
         xSemaphoreGive(spi_mutex_);  // Allow other tasks to access the SPI peripheral.
+#endif
         return true;
     }
 
