@@ -1,10 +1,11 @@
 #ifndef _AIRCRAFT_DICTIONARY_HH_
 #define _AIRCRAFT_DICTIONARY_HH_
 
+#include <cstdint>
 #include <cstring>
-#include <unordered_map>
 
 #include "transponder_packet.hh"
+#include "hash_map.hh"
 
 class Aircraft {
    public:
@@ -454,7 +455,7 @@ class AircraftDictionary {
      */
     Aircraft *GetAircraftPtr(uint32_t icao_address);
 
-    std::unordered_map<uint32_t, Aircraft> dict;  // index Aircraft objects by their ICAO identifier
+    HashMap<uint32_t, Aircraft, kMaxNumAircraft> dict;
 
     DictionaryStats stats;
 
