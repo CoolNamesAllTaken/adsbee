@@ -140,8 +140,10 @@ class CommsManager {
 
     // Public WiFi Settings
     SettingsManager::WiFiMode wifi_mode = SettingsManager::WiFiMode::kWiFiModeAccessPoint;
-    char wifi_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
-    char wifi_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
+    char ap_wifi_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];           // Add space for null terminator.
+    char ap_wifi_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];   // Add space for null terminator.
+    char sta_wifi_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
+    char sta_wifi_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
 
     // MAVLINK settings.
     uint8_t mavlink_system_id = 0;

@@ -442,25 +442,36 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiCallback) {
     switch (op) {
         case '?': {
             char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];
-            SettingsManager::RedactPassword(wifi_password, redacted_password,
+            SettingsManager::RedactPassword(ap_wifi_password, redacted_password,
                                             SettingsManager::Settings::kWiFiPasswordMaxLen);
-            CPP_AT_CMD_PRINTF("=%s,%s,%s\r\n", SettingsManager::kWiFiModeStrs[wifi_mode], wifi_ssid, redacted_password);
+            CPP_AT_CMD_PRINTF("=%s,%s,%s\r\n", SettingsManager::kWiFiModeStrs[wifi_mode], ap_wifi_ssid,
+                              redacted_password);
             CPP_AT_SILENT_SUCCESS();
             break;
         }
         case '=': {
             if (CPP_AT_HAS_ARG(1)) {
-                strncpy(wifi_ssid, args[1].data(), SettingsManager::Settings::kWiFiSSIDMaxLen);
-                wifi_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen] = '\0';
-                CPP_AT_CMD_PRINTF(": ssid=%s\r\n", wifi_ssid);
+                strncpy(ap_wifi_ssid, args[1].data(), SettingsManager::Settings::kWiFiSSIDMaxLen);
+                ap_wifi_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen] = '\0';
+                CPP_AT_CMD_PRINTF(": ap_ssid=%s\r\n", ap_wifi_ssid);
             }
             if (CPP_AT_HAS_ARG(2)) {
-                strncpy(wifi_password, args[2].data(), SettingsManager::Settings::kWiFiPasswordMaxLen);
-                wifi_password[SettingsManager::Settings::kWiFiPasswordMaxLen] = '\0';
+                strncpy(ap_wifi_password, args[2].data(), SettingsManager::Settings::kWiFiPasswordMaxLen);
+                ap_wifi_password[SettingsManager::Settings::kWiFiPasswordMaxLen] = '\0';
+                CPP_AT_CMD_PRINTF(": ap_password=%s\r\n", ap_wifi_password);
+            }
+            if (CPP_AT_HAS_ARG(3)) {
+                strncpy(sta_wifi_ssid, args[3].data(), SettingsManager::Settings::kWiFiSSIDMaxLen);
+                sta_wifi_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen] = '\0';
+                CPP_AT_CMD_PRINTF(": sta_ssid=%s\r\n", sta_wifi_ssid);
+            }
+            if (CPP_AT_HAS_ARG(4)) {
+                strncpy(sta_wifi_password, args[4].data(), SettingsManager::Settings::kWiFiPasswordMaxLen);
+                sta_wifi_password[SettingsManager::Settings::kWiFiPasswordMaxLen] = '\0';
                 char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen];
-                SettingsManager::RedactPassword(wifi_password, redacted_password,
+                SettingsManager::RedactPassword(sta_wifi_password, redacted_password,
                                                 SettingsManager::Settings::kWiFiPasswordMaxLen);
-                CPP_AT_CMD_PRINTF(": password=%s\r\n", redacted_password);
+                CPP_AT_CMD_PRINTF(": sta_password=%s\r\n", redacted_password);
             }
 
             if (CPP_AT_HAS_ARG(0)) {
@@ -525,8 +536,9 @@ const CppAT::ATCommandDef_t at_command_list[] = {
     {.command_buf = "+LOG_LEVEL",
      .min_args = 0,
      .max_args = 1,
-     .help_string_buf = "AT+LOG_LEVEL=<log_level>\r\n\tSet how much stuff gets printed to the "
-                        "console.\r\n\tconsole_verbosity = [SILENT ERRORS WARNINGS LOGS]",
+     .help_string_buf =
+         "AT+LOG_LEVEL=<log_level [SILENT ERRORS WARNINGS LOGS]>\r\n\tSet how much stuff gets printed to the "
+         "console.\r\n\t",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATLogLevelCallback, comms_manager)},
     {.command_buf = "+PROTOCOL",
      .min_args = 0,
@@ -570,14 +582,14 @@ const CppAT::ATCommandDef_t at_command_list[] = {
     {.command_buf = "+TL_SET",
      .min_args = 0,
      .max_args = 1,
-     .help_string_buf = "Set minimum trigger level threshold for RF power detector.\r\n\tAT+TLSet=<tl_mv_>"
-                        "\tQuery trigger level.\r\n\tAT+TL_SET?\r\n\t+TLSet=<tl_mv_>.",
+     .help_string_buf = "Set minimum trigger level threshold for RF power detector.\r\n\tAT+TLSet=<tl_mv>"
+                        "\tQuery trigger level.\r\n\tAT+TL_SET?\r\n\t+TLSet=<tl_mv>.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLSetCallback, comms_manager)},
     {.command_buf = "+WIFI",
      .min_args = 0,
-     .max_args = 3,
-     .help_string_buf = "Set WiFi parameters.\r\n\tAT+WIFI=<enabled[0 1]>,<ssid[str]>,<password[str]>\r\n\t"
-                        "Get WiFi parameters.\r\n\tAT+WIFI?\r\n\t+WIFI=<enabled[0 1]>,<ssid[str]>,<***[str]>",
+     .max_args = 5,
+     .help_string_buf = "Set WiFi params.\r\n\tAT+WIFI=<mode>,<ap_ssid>,<ap_pwd>,<sta_ssid>,<sta_pwd>\r\n\t"
+                        "Get WiFi paramss.\r\n\tAT+WIFI?\r\n\t+WIFI=<mode>,<ap_ssid>,<ap_pwd>,<sta_ssid>,<sta_pwd>",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATWiFiCallback, comms_manager)},
 };
 const uint16_t at_command_list_num_commands = sizeof(at_command_list) / sizeof(at_command_list[0]);

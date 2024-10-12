@@ -43,11 +43,19 @@ void CommsManager::WiFiEventHandler(void* arg, esp_event_base_t event_base, int3
 void CommsManager::WiFiUDPServerTask(void* pvParameters) {
     NetworkMessage message;
 
+    // Create socket.
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
     if (sock < 0) {
         ESP_LOGE("CommsManager::WiFiUDPServerTask", "Unable to create socket: errno %d", errno);
         return;
     }
+
+    // Set timeout
+    struct timeval timeout;
+    timeout.tv_sec = 10;
+    timeout.tv_usec = 0;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
+
     struct sockaddr_in dest_addr;
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(kGDL90Port);
@@ -67,7 +75,7 @@ void CommsManager::WiFiUDPServerTask(void* pvParameters) {
                         ret =
                             sendto(sock, message.data, message.len, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
                         // ENOMEM (errno=12) resolution: https://github.com/espressif/esp-idf/issues/390
-                        // Increased the number of UDP control plocks (LWIP_MAX_UDP_PCBS) in SDK menuconfig from 16
+                        // Increased the number of UDP control blocks (LWIP_MAX_UDP_PCBS) in SDK menuconfig from 16
                         // to 96.
                         // Changed TCP/IP stack size from 3072 to 12288.
                         if (ret >= 0 || errno != ENOMEM) {
@@ -78,6 +86,8 @@ void CommsManager::WiFiUDPServerTask(void* pvParameters) {
                     }
 
                     if (ret < 0) {
+                        // ESP_LOGE("CommsManager::WiFiUDPServerTask", "Error occurred during sending: errno %d.",
+                        // errno);
                         ESP_LOGE("CommsManager::WiFiUDPServerTask",
                                  "Error occurred during sending: errno %d. Tried %d times.", errno, num_tries);
                     }
@@ -88,6 +98,7 @@ void CommsManager::WiFiUDPServerTask(void* pvParameters) {
             // ESP_LOGI("CommsManager::WiFiUDPServerTask", "Message sent to %d clients.", num_wifi_clients_);
         }
     }
+    shutdown(sock, 0);
     close(sock);
 }
 
@@ -106,25 +117,24 @@ bool CommsManager::WiFiInit() {
     ESP_ERROR_CHECK(
         esp_event_handler_instance_register(IP_EVENT, IP_EVENT_AP_STAIPASSIGNED, &wifi_event_handler, NULL, NULL));
 
-    wifi_config_t wifi_config = {
-        .ap =
-            {
-                .ssid = "",
-                .password = "",
-                .ssid_len = (uint8_t)strlen(wifi_ssid),
-                .channel = 1,
-                .authmode = WIFI_AUTH_WPA_WPA2_PSK,
-                .max_connection = SettingsManager::Settings::kWiFiMaxNumClients,
-            },
-    };
-    strncpy((char*)(wifi_config.ap.ssid), wifi_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
-    strncpy((char*)(wifi_config.ap.password), wifi_password, SettingsManager::Settings::kWiFiPasswordMaxLen + 1);
+    wifi_config_t wifi_config;
+
+    strncpy((char*)(wifi_config.ap.ssid), ap_wifi_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
+    strncpy((char*)(wifi_config.ap.password), ap_wifi_password, SettingsManager::Settings::kWiFiPasswordMaxLen + 1);
+    wifi_config.ap.channel = 1;
+    wifi_config.ap.ssid_len = (uint8_t)strlen(ap_wifi_ssid);
+    wifi_config.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
+    wifi_config.ap.max_connection = SettingsManager::Settings::kWiFiMaxNumClients;
+
+    // strncpy((char*)(wifi_config.sta.ssid), sta_wifi_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
+    // strncpy((char*)(wifi_config.sta.password), sta_wifi_password, SettingsManager::Settings::kWiFiPasswordMaxLen
+    // + 1);
 
     ESP_ERROR_CHECK(esp_wifi_set_mode((wifi_mode_t)wifi_mode));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    CONSOLE_INFO("CommsManager::WiFiInit", "WiFi AP started. SSID:%s password:%s", wifi_ssid, wifi_password);
+    CONSOLE_INFO("CommsManager::WiFiInit", "WiFi AP started. SSID:%s password:%s", ap_wifi_ssid, ap_wifi_password);
 
     run_udp_server_ = true;
     xTaskCreatePinnedToCore(wifi_udp_server_task, "udp_server", 4096, NULL, kUDPServerTaskPriority, NULL,
