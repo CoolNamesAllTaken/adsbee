@@ -14,7 +14,7 @@
 class CommsManager {
    public:
     static const uint16_t kMaxNetworkMessageLenBytes = 256;
-    static const uint16_t kWiFiMessageQueueLen = 10;
+    static const uint16_t kWiFiMessageQueueLen = 110;
     static const uint16_t kMACAddressNumBytes = 6;
 
     struct NetworkMessage {
@@ -69,8 +69,10 @@ class CommsManager {
     inline uint16_t GetNumWiFiClients() { return num_wifi_clients_; }
 
     SettingsManager::WiFiMode wifi_mode = SettingsManager::WiFiMode::kWiFiModeAccessPoint;
-    char wifi_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
-    char wifi_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
+    char ap_wifi_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];           // Add space for null terminator.
+    char ap_wifi_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];   // Add space for null terminator.
+    char sta_wifi_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
+    char sta_wifi_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
 
    private:
     /**

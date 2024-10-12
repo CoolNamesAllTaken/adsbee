@@ -48,10 +48,10 @@ bool SettingsManager::Save() {
     settings.esp32_enabled = esp32.IsEnabled();
     // Save WiFi configuration.
     settings.wifi_mode = comms_manager.wifi_mode;
-    strncpy(settings.wifi_ssid, comms_manager.wifi_ssid, Settings::kWiFiSSIDMaxLen);
-    settings.wifi_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
-    strncpy(settings.wifi_password, comms_manager.wifi_password, Settings::kWiFiPasswordMaxLen);
-    settings.wifi_password[Settings::kWiFiPasswordMaxLen] = '\0';
+    strncpy(settings.ap_wifi_ssid, comms_manager.ap_wifi_ssid, Settings::kWiFiSSIDMaxLen);
+    settings.ap_wifi_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
+    strncpy(settings.ap_wifi_password, comms_manager.ap_wifi_password, Settings::kWiFiPasswordMaxLen);
+    settings.ap_wifi_password[Settings::kWiFiPasswordMaxLen] = '\0';
 
     // Sync settings from RP2040 -> ESP32.
     if (esp32.IsEnabled()) {
@@ -96,9 +96,15 @@ void SettingsManager::Apply() {
     settings.esp32_enabled ? esp32.Init() : esp32.DeInit();
 
     // Apply WiFi configurations.
+    // Access Point settings
     comms_manager.wifi_mode = settings.wifi_mode;
-    strncpy(comms_manager.wifi_ssid, settings.wifi_ssid, Settings::kWiFiSSIDMaxLen);
-    comms_manager.wifi_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
-    strncpy(comms_manager.wifi_password, settings.wifi_password, Settings::kWiFiPasswordMaxLen);
-    comms_manager.wifi_password[Settings::kWiFiPasswordMaxLen] = '\0';
+    strncpy(comms_manager.ap_wifi_ssid, settings.ap_wifi_ssid, Settings::kWiFiSSIDMaxLen);
+    comms_manager.ap_wifi_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
+    strncpy(comms_manager.ap_wifi_password, settings.ap_wifi_password, Settings::kWiFiPasswordMaxLen);
+    comms_manager.ap_wifi_password[Settings::kWiFiPasswordMaxLen] = '\0';
+    // Station settings
+    strncpy(comms_manager.sta_wifi_ssid, settings.sta_wifi_ssid, Settings::kWiFiSSIDMaxLen);
+    comms_manager.sta_wifi_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
+    strncpy(comms_manager.sta_wifi_password, settings.sta_wifi_password, Settings::kWiFiPasswordMaxLen);
+    comms_manager.sta_wifi_password[Settings::kWiFiPasswordMaxLen] = '\0';
 }
