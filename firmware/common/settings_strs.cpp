@@ -11,6 +11,3 @@ const char SettingsManager::kSerialInterfaceStrs[SettingsManager::SerialInterfac
 const char SettingsManager::kReportingProtocolStrs[SettingsManager::ReportingProtocol::kNumProtocols]
                                                   [SettingsManager::kReportingProtocolStrMaxLen] = {
                                                       "NONE", "RAW", "BEAST", "CSBEE", "MAVLINK1", "MAVLINK2", "GDL90"};
-
-const char SettingsManager::kWiFiModeStrs[SettingsManager::WiFiMode::kNumWiFiModes]
-                                         [SettingsManager::kWiFiModeStrMaxLen] = {"OFF", "STA", "AP", "APSTA"};

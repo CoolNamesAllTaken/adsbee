@@ -21,7 +21,8 @@ void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id
     comms_manager.WiFiEventHandler(arg, event_base, event_id, event_data);
 }
 
-void wifi_udp_server_task(void* pvParameters) { comms_manager.WiFiUDPServerTask(pvParameters); }
+void wifi_access_point_task(void* pvParameters) { comms_manager.WiFiAccessPointTask(pvParameters); }
+void wifi_station_task(void* pvParameters) { comms_manager.WiFiStationTask(pvParameters); }
 /** End "Pass-Through" functions. **/
 
 void CommsManager::WiFiEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
@@ -40,13 +41,13 @@ void CommsManager::WiFiEventHandler(void* arg, esp_event_base_t event_base, int3
     }
 }
 
-void CommsManager::WiFiUDPServerTask(void* pvParameters) {
+void CommsManager::WiFiAccessPointTask(void* pvParameters) {
     NetworkMessage message;
 
     // Create socket.
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
     if (sock < 0) {
-        ESP_LOGE("CommsManager::WiFiUDPServerTask", "Unable to create socket: errno %d", errno);
+        ESP_LOGE("CommsManager::WiFiAccessPointTask", "Unable to create socket: errno %d", errno);
         return;
     }
 
@@ -60,7 +61,7 @@ void CommsManager::WiFiUDPServerTask(void* pvParameters) {
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(kGDL90Port);
 
-    while (run_udp_server_) {
+    while (run_wifi_ap_task_) {
         if (xQueueReceive(wifi_message_queue_, &message, portMAX_DELAY) == pdTRUE) {
             // int send_buf_size = 16384;  // Set a larger send buffer
             // setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &send_buf_size, sizeof(send_buf_size));
@@ -86,9 +87,9 @@ void CommsManager::WiFiUDPServerTask(void* pvParameters) {
                     }
 
                     if (ret < 0) {
-                        // ESP_LOGE("CommsManager::WiFiUDPServerTask", "Error occurred during sending: errno %d.",
+                        // ESP_LOGE("CommsManager::WiFiAccessPointTask", "Error occurred during sending: errno %d.",
                         // errno);
-                        ESP_LOGE("CommsManager::WiFiUDPServerTask",
+                        ESP_LOGE("CommsManager::WiFiAccessPointTask",
                                  "Error occurred during sending: errno %d. Tried %d times.", errno, num_tries);
                     }
                 }
@@ -101,6 +102,8 @@ void CommsManager::WiFiUDPServerTask(void* pvParameters) {
     shutdown(sock, 0);
     close(sock);
 }
+
+void CommsManager::WiFiStationTask(void* pvParameters) {}
 
 bool CommsManager::WiFiInit() {
     wifi_clients_list_mutex_ = xSemaphoreCreateMutex();
@@ -117,28 +120,66 @@ bool CommsManager::WiFiInit() {
     ESP_ERROR_CHECK(
         esp_event_handler_instance_register(IP_EVENT, IP_EVENT_AP_STAIPASSIGNED, &wifi_event_handler, NULL, NULL));
 
-    wifi_config_t wifi_config;
+    if (wifi_ap_enabled) {
+        // Access Point Configuration
+        wifi_config_t wifi_config_ap;
 
-    strncpy((char*)(wifi_config.ap.ssid), ap_wifi_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
-    strncpy((char*)(wifi_config.ap.password), ap_wifi_password, SettingsManager::Settings::kWiFiPasswordMaxLen + 1);
-    wifi_config.ap.channel = 1;
-    wifi_config.ap.ssid_len = (uint8_t)strlen(ap_wifi_ssid);
-    wifi_config.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
-    wifi_config.ap.max_connection = SettingsManager::Settings::kWiFiMaxNumClients;
+        strncpy((char*)(wifi_config_ap.ap.ssid), wifi_ap_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
+        strncpy((char*)(wifi_config_ap.ap.password), wifi_ap_password,
+                SettingsManager::Settings::kWiFiPasswordMaxLen + 1);
+        wifi_config_ap.ap.channel = wifi_ap_channel;
+        wifi_config_ap.ap.ssid_len = (uint8_t)strlen(wifi_ap_ssid);
+        wifi_config_ap.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
+        wifi_config_ap.ap.max_connection = SettingsManager::Settings::kWiFiMaxNumClients;
 
-    // strncpy((char*)(wifi_config.sta.ssid), sta_wifi_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
-    // strncpy((char*)(wifi_config.sta.password), sta_wifi_password, SettingsManager::Settings::kWiFiPasswordMaxLen
-    // + 1);
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config_ap));
+    }
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode((wifi_mode_t)wifi_mode));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
+    if (wifi_sta_enabled) {
+        // Station Configuration
+        wifi_config_t wifi_config_sta;
+
+        strncpy((char*)(wifi_config_sta.sta.ssid), wifi_sta_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
+        strncpy((char*)(wifi_config_sta.sta.password), wifi_sta_password,
+                SettingsManager::Settings::kWiFiPasswordMaxLen + 1);
+
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config_sta));
+    }
+
+    if (!wifi_ap_enabled && !wifi_sta_enabled) {
+        ESP_ERROR_CHECK(esp_wifi_stop());
+        CONSOLE_INFO("CommsManager::WiFiInit", "WiFi disabled.");
+    }
+
+    wifi_mode_t wifi_mode;
+    if (wifi_ap_enabled && wifi_sta_enabled) {
+        wifi_mode = WIFI_MODE_APSTA;
+    } else if (wifi_ap_enabled) {
+        wifi_mode = WIFI_MODE_AP;
+    } else {
+        wifi_mode = WIFI_MODE_STA;
+    }
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    CONSOLE_INFO("CommsManager::WiFiInit", "WiFi AP started. SSID:%s password:%s", ap_wifi_ssid, ap_wifi_password);
+    if (wifi_ap_enabled) {
+        CONSOLE_INFO("CommsManager::WiFiInit", "WiFi AP started. SSID:%s password:%s", wifi_ap_ssid, wifi_ap_password);
 
-    run_udp_server_ = true;
-    xTaskCreatePinnedToCore(wifi_udp_server_task, "udp_server", 4096, NULL, kUDPServerTaskPriority, NULL,
-                            kUDPServerTaskCore);
+        run_wifi_ap_task_ = true;
+        xTaskCreatePinnedToCore(wifi_access_point_task, "wifi_ap_task", 4096, NULL, kWiFiAPTaskPriority, NULL,
+                                kWiFiAPTaskCore);
+    }
+    if (wifi_sta_enabled) {
+        char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen];
+        SettingsManager::RedactPassword(wifi_sta_password, redacted_password,
+                                        SettingsManager::Settings::kWiFiPasswordMaxLen);
+        CONSOLE_INFO("CommsManager::WiFiInit", "WiFi Station started. SSID:%s password:%s", wifi_sta_ssid,
+                     redacted_password);
+
+        run_wifi_sta_task_ = true;
+        xTaskCreatePinnedToCore(wifi_station_task, "wifi_sta_task", 4096, NULL, kWiFiSTATaskPriority, NULL,
+                                kWiFiSTATaskCore);
+    }
+
     return true;
 }
 

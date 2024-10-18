@@ -44,7 +44,8 @@ class CommsManager {
     CPP_AT_CALLBACK(ATSettingsCallback);
     CPP_AT_CALLBACK(ATTLReadCallback);
     CPP_AT_CALLBACK(ATTLSetCallback);
-    CPP_AT_CALLBACK(ATWiFiCallback);
+    CPP_AT_CALLBACK(ATWiFiAPCallback);
+    CPP_AT_CALLBACK(ATWiFiSTACallback);
 
     int console_printf(const char *format, ...);
     int console_level_printf(SettingsManager::LogLevel level, const char *format, ...);
@@ -139,11 +140,12 @@ class CommsManager {
                                             .buffer = transponder_packet_reporting_queue_buffer_});
 
     // Public WiFi Settings
-    SettingsManager::WiFiMode wifi_mode = SettingsManager::WiFiMode::kWiFiModeAccessPoint;
-    char ap_wifi_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];           // Add space for null terminator.
-    char ap_wifi_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];   // Add space for null terminator.
-    char sta_wifi_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
-    char sta_wifi_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
+    bool wifi_ap_enabled, wifi_sta_enabled;
+    char wifi_ap_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
+    char wifi_ap_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
+    uint8_t wifi_ap_channel = 1;
+    char wifi_sta_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
+    char wifi_sta_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
 
     // MAVLINK settings.
     uint8_t mavlink_system_id = 0;

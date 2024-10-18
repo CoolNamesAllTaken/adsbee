@@ -3,11 +3,13 @@
 #include "comms.hh"
 
 void SettingsManager::Apply() {
-    comms_manager.wifi_mode = settings.wifi_mode;
-    strncpy(comms_manager.ap_wifi_ssid, settings.ap_wifi_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
-    strncpy(comms_manager.ap_wifi_password, settings.ap_wifi_password,
+    comms_manager.wifi_ap_enabled = settings.wifi_ap_enabled;
+    comms_manager.wifi_ap_channel = settings.wifi_ap_channel;
+    strncpy(comms_manager.wifi_ap_ssid, settings.wifi_ap_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
+    strncpy(comms_manager.wifi_ap_password, settings.wifi_ap_password,
             SettingsManager::Settings::kWiFiPasswordMaxLen + 1);
-    strncpy(comms_manager.sta_wifi_ssid, settings.sta_wifi_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
-    strncpy(comms_manager.sta_wifi_password, settings.sta_wifi_password,
+    comms_manager.wifi_sta_enabled = settings.wifi_sta_enabled;
+    strncpy(comms_manager.wifi_sta_ssid, settings.wifi_sta_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
+    strncpy(comms_manager.wifi_sta_password, settings.wifi_sta_password,
             SettingsManager::Settings::kWiFiPasswordMaxLen + 1);
 }
