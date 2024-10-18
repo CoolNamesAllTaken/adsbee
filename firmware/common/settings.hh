@@ -185,17 +185,20 @@ class SettingsManager {
         printf("\tESP32: %s\r\n", settings.esp32_enabled ? "ENABLED" : "DISABLED");
 
         // Print WiFi settings.
+        printf("\tWiFi AP: %s\r\n", settings.wifi_ap_enabled ? "ENABLED" : "DISBALED");
         if (settings.wifi_ap_enabled) {
             // Access Point settings. Don't censor password.
-            printf("\tAP Wifi SSID: %s\r\n", settings.wifi_ap_ssid);
-            printf("\tAP Wifi Password: %s\r\n", settings.wifi_ap_password);
+            printf("\t\tChannel: %d\r\n", settings.wifi_ap_channel);
+            printf("\t\tSSID: %s\r\n", settings.wifi_ap_ssid);
+            printf("\t\tPassword: %s\r\n", settings.wifi_ap_password);
         }
+        printf("\tWiFi STA: %s\r\n", settings.wifi_sta_enabled ? "ENABLED" : "DISABLED");
         if (settings.wifi_sta_enabled) {
             // Station settings. Censor password.
-            printf("\tSTA Wifi SSID: %s\r\n", settings.wifi_sta_ssid);
+            printf("\t\tSSID: %s\r\n", settings.wifi_sta_ssid);
             char redacted_wifi_sta_password[Settings::kWiFiPasswordMaxLen];
             RedactPassword(settings.wifi_sta_password, redacted_wifi_sta_password, strlen(settings.wifi_sta_password));
-            printf("\tSTA Wifi Password: %s\r\n", redacted_wifi_sta_password);
+            printf("\t\tPassword: %s\r\n", redacted_wifi_sta_password);
         }
 
         printf("\tFeed URIs:\r\n");

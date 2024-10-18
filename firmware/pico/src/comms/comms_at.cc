@@ -456,7 +456,7 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiAPCallback) {
     switch (op) {
         case '?': {
             char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];
-            CPP_AT_CMD_PRINTF("=%d,%s,%s\r\n", wifi_ap_ssid, wifi_ap_password);
+            CPP_AT_CMD_PRINTF("=%d,%s,%s,%d\r\n", wifi_ap_enabled, wifi_ap_ssid, wifi_ap_password, wifi_ap_channel);
             CPP_AT_SILENT_SUCCESS();
             break;
         }
