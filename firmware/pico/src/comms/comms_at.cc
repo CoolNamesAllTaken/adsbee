@@ -123,14 +123,34 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
                           object_dictionary.kFirmwareVersionMinor, object_dictionary.kFirmwareVersionPatch);
 
             if (esp32.IsEnabled()) {
+                // Read ESP32 firmware verison.
                 uint32_t esp32_firmware_version;
                 if (!esp32.Read(ObjectDictionary::kAddrFirmwareVersion, esp32_firmware_version)) {
                     CPP_AT_ERROR("ESP32 firmware version read failed!");
                 }
                 CPP_AT_PRINTF("ESP32 Firmware Version: %d.%d.%d\r\n", esp32_firmware_version >> 16,
                               (esp32_firmware_version >> 8) & 0xFF, esp32_firmware_version & 0xFF);
+
+                // Read ESP32 base MAC address.
+                uint8_t esp32_base_mac[ObjectDictionary::kMACAddrLenBytes];
+                if (!esp32.Read(ObjectDictionary::kAddrBaseMAC, esp32_base_mac, ObjectDictionary::kMACAddrLenBytes)) {
+                    CPP_AT_ERROR("ESP32 base MAC address read failed!");
+                }
+                CPP_AT_PRINTF("ESP32 Base MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\r\n", esp32_base_mac[0],
+                              esp32_base_mac[1], esp32_base_mac[2], esp32_base_mac[3], esp32_base_mac[4],
+                              esp32_base_mac[5]);
+
+                // Read ESP32 WiFi station MAC address.
+                uint8_t esp32_wifi_sta_mac[ObjectDictionary::kMACAddrLenBytes];
+                if (!esp32.Read(ObjectDictionary::kAddrWiFiStationMAC, esp32_wifi_sta_mac,
+                                ObjectDictionary::kMACAddrLenBytes)) {
+                    CPP_AT_ERROR("ESP32 WiFi Station MAC address read failed!");
+                }
+                CPP_AT_PRINTF("ESP32 WiFi Station MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\r\n",
+                              esp32_wifi_sta_mac[0], esp32_wifi_sta_mac[1], esp32_wifi_sta_mac[2],
+                              esp32_wifi_sta_mac[3], esp32_wifi_sta_mac[4], esp32_wifi_sta_mac[5]);
             } else {
-                CPP_AT_PRINTF("ESP32 Firmware Version: Not Available (ESP32 Disabled)\r\n");
+                CPP_AT_PRINTF("ESP32 Disabled\r\n");
             }
 
             CPP_AT_SILENT_SUCCESS();

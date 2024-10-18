@@ -279,7 +279,10 @@ class SPICoprocessor {
      * address required).
      */
     template <typename T>
-    bool Write(ObjectDictionary::Address addr, T &object, bool require_ack = false) {
+    bool Write(ObjectDictionary::Address addr, T &object, bool require_ack = false, uint16_t len_bytes = 0) {
+        if (len_bytes == 0) {
+            len_bytes = sizeof(object);
+        }
 #ifdef ON_ESP32
         if (xSemaphoreTake(spi_next_transaction_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
             CONSOLE_ERROR("SPICoprocessor::Write", "Failed to take SPI context mutex after waiting for %d ms.",
@@ -290,24 +293,23 @@ class SPICoprocessor {
 #else
         return false;  // Not supported on other platforms.
 #endif
-        if (sizeof(object) < SCWritePacket::kDataMaxLenBytes) {
+        if (len_bytes < SCWritePacket::kDataMaxLenBytes) {
             // Single write. Write the full object at once, no offset, require ack if necessary.
-            return SPIIndependentLoopReturnHelper(
-                PartialWrite(addr, (uint8_t *)&object, sizeof(object), 0, require_ack));
+            return SPIIndependentLoopReturnHelper(PartialWrite(addr, (uint8_t *)&object, len_bytes, 0, require_ack));
         } else {
             // Multi write.
-            int16_t bytes_remaining = sizeof(object);
+            int16_t bytes_remaining = len_bytes;
             while (bytes_remaining > 0) {
                 if (!PartialWrite(addr,                                                   // addr
                                   (uint8_t *)(&object),                                   // object
                                   MIN(SCWritePacket::kDataMaxLenBytes, bytes_remaining),  // len
-                                  sizeof(object) - bytes_remaining,                       // offset
+                                  len_bytes - bytes_remaining,                            // offset
                                   require_ack)                                            // require_ack
                 ) {
                     CONSOLE_ERROR(
                         "SPICoprocessor::Write",
                         "Multi-transfer %d Byte write of object at address 0x%x failed with %d Bytes remaining.",
-                        sizeof(object), addr, bytes_remaining);
+                        len_bytes, addr, bytes_remaining);
                     return SPIIndependentLoopReturnHelper(false);
                 }
                 bytes_remaining -= SCWritePacket::kDataMaxLenBytes;
@@ -325,7 +327,10 @@ class SPICoprocessor {
      * address required).
      */
     template <typename T>
-    bool Read(ObjectDictionary::Address addr, T &object) {
+    bool Read(ObjectDictionary::Address addr, T &object, uint16_t len_bytes = 0) {
+        if (len_bytes == 0) {
+            len_bytes = sizeof(object);
+        }
 #ifdef ON_ESP32
         if (xSemaphoreTake(spi_next_transaction_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
             CONSOLE_ERROR("SPICoprocessor::PartialRead", "Failed to take SPI context mutex after waiting for %d ms.",
@@ -336,9 +341,9 @@ class SPICoprocessor {
 #else
         return false;  // Not supported on other platforms.
 #endif
-        if (sizeof(object) < SCResponsePacket::kDataMaxLenBytes) {
+        if (len_bytes < SCResponsePacket::kDataMaxLenBytes) {
             // Single read.
-            return SPIIndependentLoopReturnHelper(PartialRead(addr, (uint8_t *)&object, sizeof(object)));
+            return SPIIndependentLoopReturnHelper(PartialRead(addr, (uint8_t *)&object, len_bytes));
 
         } else {
             // Multi-read.
@@ -351,17 +356,17 @@ class SPICoprocessor {
 #else
             uint16_t max_chunk_size_bytes = 0;  // Dummy to stop compile errors.
 #endif
-            int16_t bytes_remaining = sizeof(object);
+            int16_t bytes_remaining = len_bytes;
             while (bytes_remaining > 0) {
                 if (!PartialRead(addr,                                        // address
                                  (uint8_t *)(&object),                        // object
                                  MIN(max_chunk_size_bytes, bytes_remaining),  // len
-                                 sizeof(object) - bytes_remaining)            // offset
+                                 len_bytes - bytes_remaining)                 // offset
                 ) {
                     CONSOLE_ERROR(
                         "SPICoprocessor::Read",
                         "Multi-transfer %d Byte read of object at address 0x%x failed with %d Bytes remaining.",
-                        sizeof(object), addr, bytes_remaining);
+                        len_bytes, addr, bytes_remaining);
                     return SPIIndependentLoopReturnHelper(false);
                 }
                 bytes_remaining -=
