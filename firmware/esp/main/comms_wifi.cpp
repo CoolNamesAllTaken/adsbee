@@ -20,6 +20,9 @@ static const uint16_t kWiFiRetryWaitTimeMs = 100;
 void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
     comms_manager.WiFiEventHandler(arg, event_base, event_id, event_data);
 }
+void ip_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+    comms_manager.IPEventHandler(arg, event_base, event_id, event_data);
+}
 
 void wifi_access_point_task(void* pvParameters) { comms_manager.WiFiAccessPointTask(pvParameters); }
 void wifi_station_task(void* pvParameters) { comms_manager.WiFiStationTask(pvParameters); }
@@ -34,9 +37,13 @@ void CommsManager::WiFiEventHandler(void* arg, esp_event_base_t event_base, int3
         wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*)event_data;
         ESP_LOGI("CommsManager::WiFiEventHandler", "Station " MACSTR " left, AID=%d", MAC2STR(event->mac), event->aid);
         WiFiRemoveClient(event->mac);
-    } else if (event_id == IP_EVENT_AP_STAIPASSIGNED) {
+    }
+}
+
+void CommsManager::IPEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+    if (event_id == IP_EVENT_AP_STAIPASSIGNED) {
         ip_event_ap_staipassigned_t* event = (ip_event_ap_staipassigned_t*)event_data;
-        ESP_LOGI("CommsManager::WiFiEventHandler", "Station assigned IP:" IPSTR, IP2STR(&event->ip));
+        ESP_LOGI("CommsManager::IPEventHandler", "Station assigned IP:" IPSTR, IP2STR(&event->ip));
         WiFiAddClient(event->ip, event->mac);
     }
 }
@@ -103,7 +110,10 @@ void CommsManager::WiFiAccessPointTask(void* pvParameters) {
     close(sock);
 }
 
-void CommsManager::WiFiStationTask(void* pvParameters) {}
+void CommsManager::WiFiStationTask(void* pvParameters) {
+    while (true) {
+    }
+}
 
 bool CommsManager::WiFiInit() {
     wifi_clients_list_mutex_ = xSemaphoreCreateMutex();
@@ -112,13 +122,25 @@ bool CommsManager::WiFiInit() {
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_ap();
+    esp_netif_t* sta_netif = esp_netif_create_default_wifi_sta();
+    ESP_ERROR_CHECK(
+        esp_netif_set_hostname(sta_netif, wifi_ap_ssid));  // Reuse the AP SSID as the station hostname for now.
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event_handler, NULL, NULL));
-    ESP_ERROR_CHECK(
-        esp_event_handler_instance_register(IP_EVENT, IP_EVENT_AP_STAIPASSIGNED, &wifi_event_handler, NULL, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, ESP_EVENT_ANY_ID, &ip_event_handler, NULL, NULL));
+
+    wifi_mode_t wifi_mode;
+    if (wifi_ap_enabled && wifi_sta_enabled) {
+        wifi_mode = WIFI_MODE_APSTA;
+    } else if (wifi_ap_enabled) {
+        wifi_mode = WIFI_MODE_AP;
+    } else {
+        wifi_mode = WIFI_MODE_STA;
+    }
+    ESP_ERROR_CHECK(esp_wifi_set_mode(wifi_mode));
 
     if (wifi_ap_enabled) {
         // Access Point Configuration
@@ -151,14 +173,6 @@ bool CommsManager::WiFiInit() {
         CONSOLE_INFO("CommsManager::WiFiInit", "WiFi disabled.");
     }
 
-    wifi_mode_t wifi_mode;
-    if (wifi_ap_enabled && wifi_sta_enabled) {
-        wifi_mode = WIFI_MODE_APSTA;
-    } else if (wifi_ap_enabled) {
-        wifi_mode = WIFI_MODE_AP;
-    } else {
-        wifi_mode = WIFI_MODE_STA;
-    }
     ESP_ERROR_CHECK(esp_wifi_start());
 
     if (wifi_ap_enabled) {

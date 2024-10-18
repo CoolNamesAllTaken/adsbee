@@ -510,12 +510,12 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiSTACallback) {
                 CPP_AT_CMD_PRINTF(": wifi_sta_enabled=%d\r\n", wifi_sta_enabled);
             }
             if (CPP_AT_HAS_ARG(1)) {
-                strncpy(wifi_sta_ssid, args[3].data(), SettingsManager::Settings::kWiFiSSIDMaxLen);
+                strncpy(wifi_sta_ssid, args[1].data(), SettingsManager::Settings::kWiFiSSIDMaxLen);
                 wifi_sta_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen] = '\0';
                 CPP_AT_CMD_PRINTF(": sta_ssid=%s\r\n", wifi_sta_ssid);
             }
             if (CPP_AT_HAS_ARG(2)) {
-                strncpy(wifi_sta_password, args[4].data(), SettingsManager::Settings::kWiFiPasswordMaxLen);
+                strncpy(wifi_sta_password, args[2].data(), SettingsManager::Settings::kWiFiPasswordMaxLen);
                 wifi_sta_password[SettingsManager::Settings::kWiFiPasswordMaxLen] = '\0';
                 char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen];
                 SettingsManager::RedactPassword(wifi_sta_password, redacted_password,
