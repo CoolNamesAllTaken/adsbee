@@ -182,7 +182,7 @@ static const char* get_auth_mode_name(wifi_auth_mode_t auth_mode) {
 }
 
 // WARNING: This function explodes the stack!
-void WiFiScan() {
+static void wifi_scan_task(void* pvParameters) {
     ESP_LOGI("WiFiScan", "Starting scan...");
 
     // Configure scan settings
@@ -224,14 +224,15 @@ bool CommsManager::WiFiInit() {
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_ap();
-    esp_netif_t* sta_netif = esp_netif_create_default_wifi_sta();
-    ESP_ERROR_CHECK(
-        esp_netif_set_hostname(sta_netif, wifi_ap_ssid));  // Reuse the AP SSID as the station hostname for now.
+    esp_netif_create_default_wifi_sta();
+    // esp_netif_t* sta_netif = esp_netif_create_default_wifi_sta();
+    // ESP_ERROR_CHECK(
+    //     esp_netif_set_hostname(sta_netif, wifi_ap_ssid));  // Reuse the AP SSID as the station hostname for now.
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event_handler, NULL, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, ESP_EVENT_ANY_ID, &ip_event_handler, NULL, NULL));
 
     wifi_mode_t wifi_mode;
@@ -266,9 +267,9 @@ bool CommsManager::WiFiInit() {
         strncpy((char*)(wifi_config_sta.sta.ssid), wifi_sta_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
         strncpy((char*)(wifi_config_sta.sta.password), wifi_sta_password,
                 SettingsManager::Settings::kWiFiPasswordMaxLen + 1);
-        wifi_config_sta.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
-        wifi_config_sta.sta.pmf_cfg.capable = true;
-        wifi_config_sta.sta.pmf_cfg.required = false;
+        // wifi_config_sta.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+        // wifi_config_sta.sta.pmf_cfg.capable = true;
+        // wifi_config_sta.sta.pmf_cfg.required = false;
 
         ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config_sta));
     }
@@ -306,7 +307,7 @@ bool CommsManager::WiFiInit() {
         } else if (bits & WIFI_FAIL_BIT) {
             ESP_LOGE("CommsManager::WiFiInit", "Failed to connect to SSID:%s, password:%s", wifi_sta_ssid,
                      wifi_sta_password);
-            WiFiScan();
+            // xTaskCreate(wifi_scan_task, "wifi_scan", 4096, NULL, 5, NULL);
             return ESP_FAIL;
         } else {
             ESP_LOGE("CommsManager::WiFiInit", "UNEXPECTED EVENT");
