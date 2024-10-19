@@ -1,0 +1,60 @@
+/* Base colors */
+:root {
+    --pfb-green: #00ad4d;
+    --pfb-yellow: #ffcb00;
+}
+
+body {
+    margin: 1rem;
+    padding: 0;
+    font-family: 'Poppins', sans-serif;
+    font-size: 16px;
+    color: #333333;
+    background-color: #f5f5f5;
+}
+
+hr {
+    margin: 1rem 0;
+    border: 0;
+    border-top: 0.25rem solid var(--pfb-green);
+}
+
+button {
+    font-family: 'Poppins', sans-serif;
+    font-size: 1rem;
+    margin: 0.5rem;
+    padding: 0.5rem;
+    border: none;
+    border-radius: 0.5rem;
+    background-color: var(--pfb-green);
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+button:hover {
+    background-color: var(--pfb-yellow);
+}
+
+.leaflet-marker-pane > * {
+    -webkit-transition: transform .3s linear;
+    -moz-transition: transform .3s linear;
+    -o-transition: transform .3s linear;
+    -ms-transition: transform .3s linear;
+    transition: transform .3s linear;
+  }
+
+#leaflet-map {
+    height: 100%;
+    width: 100%;
+    max-height: inherit;
+    height: 90vh;
+}
+
+.leaflet-icon {
+    background-color: transparent;
+    border: none;
+    display: block;
+    margin: 0 auto;
+    padding: 0;
+}
