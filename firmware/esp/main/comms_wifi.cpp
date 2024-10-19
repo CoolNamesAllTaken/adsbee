@@ -57,15 +57,16 @@ void CommsManager::WiFiEventHandler(void* arg, esp_event_base_t event_base, int3
         }
         case WIFI_EVENT_STA_START:
             ESP_LOGI("CommsManager::WiFiEventHandler", "WIFI_EVENT_STA_START - Attempting to connect to AP");
-            esp_wifi_connect();
+            ESP_ERROR_CHECK(esp_wifi_connect());
             break;
         case WIFI_EVENT_STA_DISCONNECTED: {
             wifi_event_sta_disconnected_t* event = (wifi_event_sta_disconnected_t*)event_data;
             ESP_LOGW("CommsManager::WiFiEventHandler", "WIFI_EVENT_STA_DISCONNECTED - Disconnect reason : %d",
                      event->reason);
+            xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
 
             if (s_retry_num < kWiFiStaMaxNumReconnectAttempts) {
-                esp_wifi_connect();
+                ESP_ERROR_CHECK(esp_wifi_connect());
                 s_retry_num++;
                 ESP_LOGI("CommsManager::WiFiEventHandler", "Retry to connect to the AP, attempt %d/%d", s_retry_num,
                          kWiFiStaMaxNumReconnectAttempts);
@@ -77,6 +78,7 @@ void CommsManager::WiFiEventHandler(void* arg, esp_event_base_t event_base, int3
             break;
         }
         case WIFI_EVENT_STA_CONNECTED:
+            xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
             ESP_LOGI("CommsManager::WiFiEventHandler", "WIFI_EVENT_STA_CONNECTED - Successfully connected to AP");
             break;
     }
@@ -223,17 +225,18 @@ bool CommsManager::WiFiInit() {
     s_wifi_event_group = xEventGroupCreate();
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_ap();
-    esp_netif_create_default_wifi_sta();
-    // esp_netif_t* sta_netif = esp_netif_create_default_wifi_sta();
-    // ESP_ERROR_CHECK(
-    //     esp_netif_set_hostname(sta_netif, wifi_ap_ssid));  // Reuse the AP SSID as the station hostname for now.
+    esp_netif_t* ap_netif = esp_netif_create_default_wifi_ap();
+    assert(ap_netif);
+    esp_netif_t* sta_netif = esp_netif_create_default_wifi_sta();
+    ESP_ERROR_CHECK(
+        esp_netif_set_hostname(sta_netif, wifi_ap_ssid));  // Reuse the AP SSID as the station hostname for now.
+    assert(sta_netif);
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, ESP_EVENT_ANY_ID, &ip_event_handler, NULL, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, &ip_event_handler, NULL));
 
     wifi_mode_t wifi_mode;
     if (wifi_ap_enabled && wifi_sta_enabled) {
@@ -247,14 +250,18 @@ bool CommsManager::WiFiInit() {
 
     if (wifi_ap_enabled) {
         // Access Point Configuration
-        wifi_config_t wifi_config_ap;
+        wifi_config_t wifi_config_ap = {0};
 
         strncpy((char*)(wifi_config_ap.ap.ssid), wifi_ap_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
         strncpy((char*)(wifi_config_ap.ap.password), wifi_ap_password,
                 SettingsManager::Settings::kWiFiPasswordMaxLen + 1);
         wifi_config_ap.ap.channel = wifi_ap_channel;
         wifi_config_ap.ap.ssid_len = (uint8_t)strlen(wifi_ap_ssid);
-        wifi_config_ap.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
+        if (strlen(wifi_ap_password) == 0) {
+            wifi_config_ap.ap.authmode = WIFI_AUTH_OPEN;
+        } else {
+            wifi_config_ap.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
+        }
         wifi_config_ap.ap.max_connection = SettingsManager::Settings::kWiFiMaxNumClients;
 
         ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config_ap));
@@ -262,11 +269,12 @@ bool CommsManager::WiFiInit() {
 
     if (wifi_sta_enabled) {
         // Station Configuration
-        wifi_config_t wifi_config_sta;
+        wifi_config_t wifi_config_sta = {0};
 
         strncpy((char*)(wifi_config_sta.sta.ssid), wifi_sta_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
         strncpy((char*)(wifi_config_sta.sta.password), wifi_sta_password,
                 SettingsManager::Settings::kWiFiPasswordMaxLen + 1);
+
         // wifi_config_sta.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
         // wifi_config_sta.sta.pmf_cfg.capable = true;
         // wifi_config_sta.sta.pmf_cfg.required = false;
@@ -303,15 +311,15 @@ bool CommsManager::WiFiInit() {
 
         if (bits & WIFI_CONNECTED_BIT) {
             ESP_LOGI("CommsManager::WiFiInit", "Connected to ap SSID:%s password:%s", wifi_sta_ssid, wifi_sta_password);
-            return ESP_OK;
+            return true;
         } else if (bits & WIFI_FAIL_BIT) {
             ESP_LOGE("CommsManager::WiFiInit", "Failed to connect to SSID:%s, password:%s", wifi_sta_ssid,
                      wifi_sta_password);
             // xTaskCreate(wifi_scan_task, "wifi_scan", 4096, NULL, 5, NULL);
-            return ESP_FAIL;
+            return false;
         } else {
             ESP_LOGE("CommsManager::WiFiInit", "UNEXPECTED EVENT");
-            return ESP_FAIL;
+            return false;
         }
 
         run_wifi_sta_task_ = true;
