@@ -20,7 +20,7 @@ class ADSBeeServer {
      * @param[in] raw_packet RawTransponderPacket to ingest.
      * @retval True if packet was handled successfully, false otherwise.
      */
-    bool HandleRawTransponderPacket(RawTransponderPacket raw_packet);
+    bool HandleRawTransponderPacket(RawTransponderPacket& raw_packet);
 
     /**
      * Task that runs continuously to receive SPI messages.

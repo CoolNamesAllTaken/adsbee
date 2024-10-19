@@ -9,6 +9,7 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "gdl90/gdl90_utils.hh"
+#include "lwip/sockets.h"  // For port definition.
 #include "settings.hh"
 
 class CommsManager {
@@ -18,6 +19,7 @@ class CommsManager {
     static const uint16_t kMACAddressNumBytes = 6;
 
     struct NetworkMessage {
+        in_port_t port = 0;
         uint16_t len = 0;
         uint8_t data[kMaxNetworkMessageLenBytes];
 
@@ -57,12 +59,33 @@ class CommsManager {
         }
     };
 
+    /**
+     * Initialize the WiFi peripheral (access point and station). WiFiDeInit() and WiFiInit() should be called every
+     * time network settings are chagned.
+     */
     bool WiFiInit();
-    bool WiFiDeInit();
-    bool WiFiSendMessageToAllClients(NetworkMessage& message);
 
+    /**
+     * De-initialize the WiFi peripheral (access point and station).
+     */
+    bool WiFiDeInit();
+
+    /**
+     * Send a raw UDP message to all statiosn that are connected to the ESP32 while operating in access point mode.
+     */
+    bool WiFiAccessPointSendMessageToAllStations(NetworkMessage& message);
+
+    /**
+     * Send messages to stations connected to the ESP32 access point.
+     */
     void WiFiAccessPointTask(void* pvParameters);
+
+    /**
+     * Send messages to feeds that are being fed via an access point that the ESP32 is connected to as a station.
+     */
     void WiFiStationTask(void* pvParameters);
+
+    bool WiFiStationSendRawTransponderPacket(RawTransponderPacket& tpacket);
 
     // Public so that pass-through functions can access it.
     void WiFiEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
@@ -120,7 +143,8 @@ class CommsManager {
     NetworkClient wifi_clients_list_[SettingsManager::Settings::kWiFiMaxNumClients] = {0, 0, 0};
     uint16_t num_wifi_clients_ = 0;
     SemaphoreHandle_t wifi_clients_list_mutex_;
-    QueueHandle_t wifi_message_queue_;
+    QueueHandle_t wifi_ap_message_queue_;
+    QueueHandle_t wifi_sta_raw_transponder_packet_queue_;
     bool run_wifi_ap_task_ = false;   // Flag used to tell wifi AP task to shut down.
     bool run_wifi_sta_task_ = false;  // Flag used to tell wifi station task to shut down.
 };

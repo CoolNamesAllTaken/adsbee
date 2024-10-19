@@ -9,6 +9,7 @@
 // #define VERBOSE_DEBUG
 
 static const uint32_t kSPIRxTaskStackDepthBytes = 4096;
+static const uint16_t kGDL90Port = 4000;
 
 GDL90Reporter gdl90;
 
@@ -118,10 +119,15 @@ bool ADSBeeServer::Update() {
     return ret;
 }
 
-bool ADSBeeServer::HandleRawTransponderPacket(RawTransponderPacket raw_packet) {
+bool ADSBeeServer::HandleRawTransponderPacket(RawTransponderPacket &raw_packet) {
     if (!transponder_packet_queue.Push(raw_packet)) {
         CONSOLE_ERROR("ADSBeeServer::HandleRawTransponderPacket",
                       "Push to transponder packet queue failed. May have overflowed?");
+    }
+
+    if (!comms_manager.WiFiStationSendRawTransponderPacket(raw_packet)) {
+        CONSOLE_ERROR("ADSBeeServer::HandleRawTransponderPacket",
+                      "Encountered error while sending raw transponder packet to feeds from ESP32 as WiFi station.");
     }
     return true;
 }
@@ -140,17 +146,18 @@ void ADSBeeServer::SPIReceiveTask() {
 
 bool ADSBeeServer::ReportGDL90() {
     CommsManager::NetworkMessage message;
+    message.port = kGDL90Port;
 
     // Heartbeat Message
     message.len = gdl90.WriteGDL90HeartbeatMessage(message.data, get_time_since_boot_ms() / 1000,
                                                    aircraft_dictionary.stats.valid_extended_squitter_frames);
-    comms_manager.WiFiSendMessageToAllClients(message);
+    comms_manager.WiFiAccessPointSendMessageToAllStations(message);
 
     // Ownship Report
     GDL90Reporter::GDL90TargetReportData ownship_data;
     // TODO: Actually fill out ownship data!
     // message.len = gdl90.WriteGDL90TargetReportMessage(message.data, ownship_data, true);
-    comms_manager.WiFiSendMessageToAllClients(message);
+    comms_manager.WiFiAccessPointSendMessageToAllStations(message);
 
     // Traffic Reports
     uint16_t aircraft_index = 0;  // Just used for error reporting.
@@ -159,7 +166,7 @@ bool ADSBeeServer::ReportGDL90() {
         printf("\t%s: %.5f %.5f %ld\r\n", aircraft.callsign, aircraft.latitude_deg, aircraft.longitude_deg,
                aircraft.baro_altitude_ft);
         message.len = gdl90.WriteGDL90TargetReportMessage(message.data, aircraft, false);
-        if (!comms_manager.WiFiSendMessageToAllClients(message)) {
+        if (!comms_manager.WiFiAccessPointSendMessageToAllStations(message)) {
             CONSOLE_ERROR("ADSBeeServer::ReportGDL90", "Failed to send info about aircraft %d to all clients.",
                           aircraft_index);
         }

@@ -2,7 +2,8 @@
 
 #include <functional>  // for std::bind
 
-#include "cc.h"  // For endiannness swapping.
+#include "beast/beast_utils.hh"  // For beast reporting.
+#include "cc.h"                  // For endiannness swapping.
 #include "comms.hh"
 #include "esp_event.h"
 #include "esp_mac.h"
@@ -12,7 +13,6 @@
 #include "nvs_flash.h"
 #include "task_priorities.hh"
 
-static const uint16_t kGDL90Port = 4000;
 static const uint16_t kWiFiNumRetries = 3;
 static const uint16_t kWiFiRetryWaitTimeMs = 100;
 static const uint16_t kWiFiStaMaxNumReconnectAttempts = 5;
@@ -113,10 +113,10 @@ void CommsManager::WiFiAccessPointTask(void* pvParameters) {
 
     struct sockaddr_in dest_addr;
     dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(kGDL90Port);
+    dest_addr.sin_port = htons(message.port);
 
     while (run_wifi_ap_task_) {
-        if (xQueueReceive(wifi_message_queue_, &message, portMAX_DELAY) == pdTRUE) {
+        if (xQueueReceive(wifi_ap_message_queue_, &message, portMAX_DELAY) == pdTRUE) {
             // int send_buf_size = 16384;  // Set a larger send buffer
             // setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &send_buf_size, sizeof(send_buf_size));
 
@@ -158,7 +158,62 @@ void CommsManager::WiFiAccessPointTask(void* pvParameters) {
 }
 
 void CommsManager::WiFiStationTask(void* pvParameters) {
-    while (true) {
+    RawTransponderPacket tpacket;
+
+    while (run_wifi_sta_task_) {
+        if (xQueueReceive(wifi_sta_raw_transponder_packet_queue_, &tpacket, portMAX_DELAY) == pdTRUE) {
+            // Mode S Beast
+            uint8_t beast_frame_buf[kBeastFrameMaxLenBytes];
+            uint16_t beast_frame_len_bytes = TransponderPacketToBeastFrame(tpacket, beast_frame_buf);
+
+            for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+                if (!settings_manager.settings.feed_is_active[i] ||
+                    settings_manager.settings.feed_protocols[i] != SettingsManager::ReportingProtocol::kBeast) {
+                    continue;
+                }
+
+                struct sockaddr_in dest_addr;
+                dest_addr.sin_addr.s_addr = inet_addr(settings_manager.settings.feed_uris[i]);
+                dest_addr.sin_family = AF_INET;
+                dest_addr.sin_port = htons(settings_manager.settings.feed_ports[i]);
+
+                int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+                if (sock < 0) {
+                    ESP_LOGE("CommsManager::WiFiStationTask", "Unable to create socket for feed %d: errno %d", i,
+                             errno);
+                    continue;
+                }
+
+                int err = connect(sock, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+                if (err != 0) {
+                    ESP_LOGE("CommsManager::WiFiStationTask", "Socket unable to connect: errno %d", errno);
+                    close(sock);
+                    continue;
+                }
+                ESP_LOGI("CommsManager::WiFiStationTask", "Successfully connected to %s",
+                         settings_manager.settings.feed_uris[i]);
+
+                uint8_t message_buf[2 * SettingsManager::Settings::kFeedReceiverIDNumBytes +
+                                    kBeastFrameMaxLenBytes];  // Double the length as a hack to make room for the
+                                                              // escaped UUID.
+                uint16_t message_len_bytes = TransponderPacketToBeastFramePrependReceiverID(
+                    tpacket, message_buf, settings_manager.settings.feed_receiver_ids[i],
+                    SettingsManager::Settings::kFeedReceiverIDNumBytes);
+
+                err = send(sock, message_buf, message_len_bytes, 0);
+                if (err < 0) {
+                    ESP_LOGE("CommsManager::WiFiStationTask",
+                             "Error occurred during sending %d Byte beast message to feed %d with URI %s on port %d: "
+                             "errno %d.",
+                             message_len_bytes, i, settings_manager.settings.feed_uris[i],
+                             settings_manager.settings.feed_ports[i], errno);
+                } else {
+                    ESP_LOGI("CommsManager::WiFiStationTask", "Message sent to feed %d.", i);
+                }
+
+                close(sock);
+            }
+        }
     }
 }
 
@@ -220,7 +275,8 @@ static void wifi_scan_task(void* pvParameters) {
 
 bool CommsManager::WiFiInit() {
     wifi_clients_list_mutex_ = xSemaphoreCreateMutex();
-    wifi_message_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(NetworkMessage));
+    wifi_ap_message_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(NetworkMessage));
+    wifi_sta_raw_transponder_packet_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(RawTransponderPacket));
 
     s_wifi_event_group = xEventGroupCreate();
     ESP_ERROR_CHECK(esp_netif_init());
@@ -311,7 +367,6 @@ bool CommsManager::WiFiInit() {
 
         if (bits & WIFI_CONNECTED_BIT) {
             ESP_LOGI("CommsManager::WiFiInit", "Connected to ap SSID:%s password:%s", wifi_sta_ssid, wifi_sta_password);
-            return true;
         } else if (bits & WIFI_FAIL_BIT) {
             ESP_LOGE("CommsManager::WiFiInit", "Failed to connect to SSID:%s, password:%s", wifi_sta_ssid,
                      wifi_sta_password);
@@ -333,13 +388,31 @@ bool CommsManager::WiFiInit() {
 bool CommsManager::WiFiDeInit() {
     vEventGroupDelete(s_wifi_event_group);
     vSemaphoreDelete(wifi_clients_list_mutex_);
-    vQueueDelete(wifi_message_queue_);
+    vQueueDelete(wifi_ap_message_queue_);
+    vQueueDelete(wifi_sta_raw_transponder_packet_queue_);
 
     return true;
 }
 
-bool CommsManager::WiFiSendMessageToAllClients(NetworkMessage& message) {
-    if (xQueueSend(wifi_message_queue_, &message, 0) != pdTRUE) {
+bool CommsManager::WiFiStationSendRawTransponderPacket(RawTransponderPacket& tpacket) {
+    if (!run_wifi_sta_task_) {
+        CONSOLE_WARNING("CommsManager::WiFiStationSendRawTransponderPacket",
+                        "Can't push to WiFi station transponder packet queue if station is not running.");
+        return false;  // Task not started yet, queue not created yet. Pushing to queue would cause an abort.
+    }
+    if (xQueueSend(wifi_sta_raw_transponder_packet_queue_, &tpacket, 0) != pdTRUE) {
+        return false;
+    }
+    return true;
+}
+
+bool CommsManager::WiFiAccessPointSendMessageToAllStations(NetworkMessage& message) {
+    if (!run_wifi_ap_task_) {
+        CONSOLE_WARNING("CommsManager::WiFiAccessPointSendMessageToAllStations",
+                        "Can't push to WiFi AP message queue if AP is not running.");
+        return false;  // Task not started yet, pushing to queue could create an overflow.
+    }
+    if (xQueueSend(wifi_ap_message_queue_, &message, 0) != pdTRUE) {
         return false;
     }
     return true;
