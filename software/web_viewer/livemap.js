@@ -9,6 +9,18 @@ function getColorForAltitude(value) {
     return scale(value)
 }
 
+// Structure of a stats line:
+// #S:DPS,RAW_SFPS,SFPS,RAW_ESFPS,ESFPS,NUM_AIRCRAFT,TSCAL,UPTIME,CRC\r\n
+function updateAdsbeeStatsDisplay(fields) {
+  if (fields.length === 9) {
+    const numberOfAircraft = fields[5]
+    const sfps = parseInt(fields[2])
+    const esfps = parseInt(fields[4])
+    const validFramesPerSecond = sfps + esfps
+    const statsContainer = document.getElementById("stats")
+    statsContainer.innerHTML = `Currently receiving ${validFramesPerSecond} valid packets per second from ${numberOfAircraft} aircraft`
+  }
+}
 
 // CSBee lines have the following format:
 // #A:ICAO,FLAGS,CALL,SQUAWK,ECAT,LAT,LON,ALT_BARO,ALT_GEO,
@@ -21,7 +33,7 @@ function parseCsbeeLine(line) {
     }
     if (fields[0].split(":")[0] !== "#A") {
         if (fields[0].split(":")[0] === "#S") {
-            console.log("Stats:", fields);
+            updateAdsbeeStatsDisplay(fields)
             return [];
         }
         console.error("Received invalid CSBee line:", line);
@@ -241,3 +253,4 @@ setInterval(function() {
 var mapHasBeenCreated = false
 const startConnectionButton = document.getElementById("start-connection");
 startConnectionButton.addEventListener("click", connectToSerialPort);
+updateAdsbeeStatsDisplay([0,0,0,0,0,0,0,0,0])
