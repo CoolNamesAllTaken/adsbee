@@ -1,9 +1,18 @@
+; PIO0
+; SM0: Well Formed Preamble Detector #1
+; SM1: Well Formed Preamble Detector #2
+; SM2: High Power Preamble Detector
+; SM3: IRQ Wrapper for Well Formed Preamble Detectors (wraps between SM0 and SM1) 
+
+; PIO1
+; SM0: Demodulator for Well Formed Preamble Detector #1
+; SM1: Demodulator for Well Formed Preamble Detector #2
+; SM2: Demodulator for High Power Preamble Detector
+
 .program irq_wrapper
 
 ; This program runs at 48MHz. Each clock cycle is 1/48us.
 ; The only purpose of this program is to wrap an IRQ back to the beginning of the array of state machines.
-
-.define public num_state_machines 2
 
 .wrap_target
 wait 1 irq 6 ; Waits for IRQ 6, then clears it. Set this IRQ number equal to 4+num_state_machines.
@@ -13,7 +22,12 @@ irq set 4 ; Sets IRQ 4 to trigger preamble detector on SM 0 (looping back around
 % c-sdk {
 
 // Helper function (for use in C program) to initialize this PIO program
-void irq_wrapper_program_init(PIO pio, uint offset, float div) {
+void irq_wrapper_program_init(
+    PIO pio,
+    uint sm,
+    uint offset,
+    float div
+) {
 
     // Sets up state machine and wrap target. This function is automatically
     // generated in preamble_detector.pio.h.
@@ -23,7 +37,7 @@ void irq_wrapper_program_init(PIO pio, uint offset, float div) {
     sm_config_set_clkdiv(&c, div);
 
     // Load configuration and jump to start of the program
-    pio_sm_init(pio, irq_wrapper_num_state_machines, offset, &c);
+    pio_sm_init(pio, sm, offset, &c);
 }
 %}
 
@@ -41,7 +55,7 @@ set pins 0 ; DEBUG
 
 ; BEGIN DOUBLE PULSE MATCH
 .wrap_target
-waiting_for_first_edge:
+public waiting_for_first_edge:
     mov osr isr                     ; -3 | OSR = 0b00000000000000000101000010100000
     out null 17                     ; -2 | OSR = 0b101000010100000
     mov x null                      ; -1 | Clear out x from last sampling adventure.
@@ -50,7 +64,7 @@ waiting_for_first_edge:
 ;   12 cycles: Assert bit.
 ;   6 cycles: nop.
     wait 1 pin, pulses_pin_index    ; 0 | wait for in_pin to go HI
-    irq set 5 rel ; 1 | set IRQ 0 to indicate to the other preamble detector that it can start looking now
+    irq set 5 rel ; 1 | set IRQ 5+SM to indicate to the other preamble detector that it can start looking now
 check_next_bit:
     jmp !osre preamble_not_done_yet ; 2 
 ; .wrap_target
@@ -144,7 +158,15 @@ fpl_pin_hi:
 % c-sdk {
 
 // Helper function (for use in C program) to initialize this PIO program
-void preamble_detector_program_init(PIO pio, uint sm, uint offset, uint pulses_pin, uint demod_pin, float div, bool waiting) {
+void preamble_detector_program_init(
+    PIO pio, 
+    uint sm, 
+    uint offset, 
+    uint pulses_pin, 
+    uint demod_pin, 
+    float div, 
+    bool waiting
+) {
 
     // Sets up state machine and wrap target. This function is automatically
     // generated in preamble_detector.pio.h.
@@ -268,15 +290,24 @@ complete_demod:
 
 
 % c-sdk {
-static inline void message_demodulator_program_init(PIO pio, uint sm, uint offset, uint in_pin_base, uint recovered_clk_pin, float div) {
+static inline void message_demodulator_program_init(
+    PIO pio, 
+    uint sm, 
+    uint offset, 
+    uint in_pin_base, 
+    uint recovered_clk_pin, 
+    float div
+) {
     uint demod_in_pin = in_pin_base+1;
     uint pulses_pin = in_pin_base;
 
     pio_sm_set_consecutive_pindirs(pio, sm, in_pin_base, 2, false); // in_pin_base is DEMOD input, in_pin_base + 1 is pulses
 
     // Allow PIO to control GPIO 22 (as output for debugging)
-    pio_gpio_init(pio, recovered_clk_pin);
-    pio_sm_set_consecutive_pindirs(pio, sm, recovered_clk_pin, 1, true); // set one pin starting at out_pin to OUT
+    if (recovered_clk_pin != UINT16_MAX) {
+        pio_gpio_init(pio, recovered_clk_pin);
+        pio_sm_set_consecutive_pindirs(pio, sm, recovered_clk_pin, 1, true); // set one pin starting at out_pin to OUT
+    }
 
     pio_sm_config c = message_demodulator_program_get_default_config(offset);
     sm_config_set_in_pins(&c, in_pin_base); // WAIT pins

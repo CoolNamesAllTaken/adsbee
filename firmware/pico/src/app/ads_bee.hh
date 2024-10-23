@@ -21,7 +21,8 @@ class ADSBee {
     static constexpr uint16_t kMaxNumTransponderPackets =
         100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
     static const uint32_t kStatusLEDOnMs = 10;
-    static const uint16_t kNumDemodStateMachines = 2;
+    static const uint16_t kNumDemodStateMachines = 3;  // 2x well-formed preamble, 1x high power preamble
+    static const uint16_t kHighPowerDemodStateMachineIndex = 2;
 
     static const uint32_t kTLLearningIntervalMs =
         10000;  // [ms] Length of Simulated Annealing interval for learning trigger level.
@@ -38,14 +39,14 @@ class ADSBee {
         PIO preamble_detector_pio = pio0;
         uint preamble_detector_demod_pin_irq = IO_IRQ_BANK0;
         PIO message_demodulator_pio = pio1;
-        uint preamble_detector_demod_complete_irq[kNumDemodStateMachines] = {PIO0_IRQ_0, PIO0_IRQ_1};
+        uint preamble_detector_demod_complete_irq = PIO0_IRQ_0;
 
         uint16_t status_led_pin = 15;
         // Reading ADS-B on GPIO19. Will look for DEMOD signal on GPIO20.
-        uint16_t pulses_pins[kNumDemodStateMachines] = {19, 22};
-        uint16_t demod_pins[kNumDemodStateMachines] = {20, 23};
+        uint16_t pulses_pin = 19;
+        uint16_t demod_pins[kNumDemodStateMachines] = {20, 23, 29};
         // Use GPIO22 for the decode PIO program to output its recovered clock (for debugging only).
-        uint16_t recovered_clk_pins[kNumDemodStateMachines] = {21, 24};
+        uint16_t recovered_clk_pins[kNumDemodStateMachines] = {21, 24, UINT16_MAX};
         // GPIO 24-25 used as PWM outputs for setting analog comparator threshold voltages.
         uint16_t tl_pwm_pin = 25;
         // GPIO 26-27 used as ADC inputs for reading analog comparator threshold voltages after RF filer.
@@ -99,7 +100,7 @@ class ADSBee {
     /**
      * ISR triggered by DECODE completing, via PIO0 IRQ0.
      */
-    void OnDemodComplete(uint sm_index);
+    void OnDemodComplete();
 
     /**
      * ISR triggered by SysTick interrupt. Used to wrap the MLAT counter.

@@ -87,11 +87,11 @@ void CommsManager::WiFiEventHandler(void* arg, esp_event_base_t event_base, int3
 void CommsManager::IPEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
     if (event_id == IP_EVENT_AP_STAIPASSIGNED) {
         ip_event_ap_staipassigned_t* event = (ip_event_ap_staipassigned_t*)event_data;
-        CONSOLE_INFO("CommsManager::IPEventHandler", "Station assigned IP:" IPSTR, IP2STR(&event->ip));
+        CONSOLE_INFO("CommsManager::IPEventHandler", "Station assigned IP: " IPSTR, IP2STR(&event->ip));
         WiFiAddClient(event->ip, event->mac);
     } else if (event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*)event_data;
-        CONSOLE_INFO("CommsManager::WiFiEventHandler", "Got IP:" IPSTR, IP2STR(&event->ip_info.ip));
+        CONSOLE_INFO("CommsManager::WiFiEventHandler", "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
     }
 }
 
