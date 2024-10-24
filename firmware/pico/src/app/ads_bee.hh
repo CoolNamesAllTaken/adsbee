@@ -46,7 +46,9 @@ class ADSBee {
         uint16_t pulses_pin = 19;
         uint16_t demod_pins[kNumDemodStateMachines] = {20, 23, 29};
         // Use GPIO22 for the decode PIO program to output its recovered clock (for debugging only).
-        uint16_t recovered_clk_pins[kNumDemodStateMachines] = {21, 24, UINT16_MAX};
+        uint16_t recovered_clk_pins[kNumDemodStateMachines] = {
+            21, 24, 21};  // Set RECOVERED_CLK to fake pin for high power preamble detector. Will be overridden by
+                          // higher priority (lower index) SM.
         // GPIO 24-25 used as PWM outputs for setting analog comparator threshold voltages.
         uint16_t tl_pwm_pin = 25;
         // GPIO 26-27 used as ADC inputs for reading analog comparator threshold voltages after RF filer.

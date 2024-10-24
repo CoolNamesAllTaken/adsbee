@@ -304,10 +304,8 @@ static inline void message_demodulator_program_init(
     pio_sm_set_consecutive_pindirs(pio, sm, in_pin_base, 2, false); // in_pin_base is DEMOD input, in_pin_base + 1 is pulses
 
     // Allow PIO to control GPIO 22 (as output for debugging)
-    if (recovered_clk_pin != UINT16_MAX) {
-        pio_gpio_init(pio, recovered_clk_pin);
-        pio_sm_set_consecutive_pindirs(pio, sm, recovered_clk_pin, 1, true); // set one pin starting at out_pin to OUT
-    }
+    pio_gpio_init(pio, recovered_clk_pin);
+    pio_sm_set_consecutive_pindirs(pio, sm, recovered_clk_pin, 1, true); // set one pin starting at out_pin to OUT
 
     pio_sm_config c = message_demodulator_program_get_default_config(offset);
     sm_config_set_in_pins(&c, in_pin_base); // WAIT pins

@@ -181,12 +181,11 @@ bool ADSBee::Init() {
 
     /** MESSAGE DEMODULATOR PIO **/
     float message_demodulator_div = (float)clock_get_hz(clk_sys) / kMessageDemodulatorFreq;
-    message_demodulator_program_init(config_.message_demodulator_pio, message_demodulator_sm_[0],
-                                     message_demodulator_offset_, config_.pulses_pin, config_.recovered_clk_pins[0],
-                                     message_demodulator_div);
-    message_demodulator_program_init(config_.message_demodulator_pio, message_demodulator_sm_[1],
-                                     message_demodulator_offset_, config_.pulses_pin, config_.recovered_clk_pins[1],
-                                     message_demodulator_div);
+    for (uint16_t sm_index = 0; sm_index < kNumDemodStateMachines; sm_index++) {
+        message_demodulator_program_init(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
+                                         message_demodulator_offset_, config_.pulses_pin,
+                                         config_.recovered_clk_pins[sm_index], message_demodulator_div);
+    }
 
     // Set GPIO interrupts to be higher priority than the DEMOD interrupt to allow RSSI measurement.
     // irq_set_priority(config_.preamble_detector_demod_complete_irq, 1);
@@ -210,10 +209,24 @@ bool ADSBee::Init() {
 
     // Enable the state machines.
     pio_sm_set_enabled(config_.preamble_detector_pio, irq_wrapper_sm_, true);
-    pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[1], true);
-    pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[0],
-                       true);  // Enable SM 0 last since others are waiting.
-    pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[0], true);
+    // Need to enable the demodulator SMs first, since if the preamble detector trips the IRQ but the demodulator isn't
+    // enabled, we end up in a deadlock. TODO: verify whether this is true once the high power preamble detector bug is
+    // fixed.
+    for (uint16_t sm_index = 0; sm_index < kNumDemodStateMachines; sm_index++) {
+        // pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], true);
+        pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], true);
+    }
+    // Enable round robin well formed preamble detectors.
+    // for (uint16_t sm_index = 0; sm_index < kHighPowerDemodStateMachineIndex; sm_index++) {
+    //     pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], true);
+    // }
+    // Enable high power preamble detector.
+    pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[kHighPowerDemodStateMachineIndex], true);
+
+    // pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[1], true);
+    // pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[0],
+    //                    true);  // Enable SM 0 last since others are waiting.
+    // pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[0], true);
 
     return true;
 }
@@ -413,7 +426,7 @@ void ADSBee::OnDemodComplete() {
         if (sm_index == kHighPowerDemodStateMachineIndex) {
             // High power state machine operates alone and doesn't need to wait for any other SM to complete.
             pio_sm_exec_wait_blocking(
-                config_.preamble_detector_pio, sm_index,
+                config_.preamble_detector_pio, preamble_detector_sm_[sm_index],
                 pio_encode_jmp(preamble_detector_offset_ + preamble_detector_offset_waiting_for_first_edge));
         }
 
