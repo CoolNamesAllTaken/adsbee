@@ -134,7 +134,7 @@ bool ADSBee::Init() {
     for (uint16_t sm_index = 0; sm_index < kNumDemodStateMachines; sm_index++) {
         // Only make the state machine wait to start if it's part of the round-robin group of well formed preamble
         // detectors.
-        bool make_sm_wait = sm_index > 0 && sm_index < kNumDemodStateMachines - 1;
+        bool make_sm_wait = sm_index > 0 && sm_index < kHighPowerDemodStateMachineIndex;
         // Initialize the program using the .pio file helper function
         preamble_detector_program_init(config_.preamble_detector_pio,                     // Use PIO block 0.
                                        preamble_detector_sm_[sm_index],                   // State machines 0-2
@@ -153,15 +153,28 @@ bool ADSBee::Init() {
         // Last 0 removed from preamble sequence to allow the demodulator more time to start up.
         // mov isr null ; Clear ISR.
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_isr, pio_null));
-        // set x 0b101  ; ISR = 0b00000000000000000000000000000000
-        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b101));
-        // in x 3       ; ISR = 0b00000000000000000000000000000101
-        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
-        // in null 4    ; ISR = 0b00000000000000000000000001010000
+        // Fill start of preamble pattern with different bits if the state machine is intended to sense high power
+        // preambles.
+        if (sm_index == kHighPowerDemodStateMachineIndex) {
+            // High power preamble.
+            // set x 0b111  ; ISR = 0b00000000000000000000000000000000
+            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b111));
+            // in x 3       ; ISR = 0b00000000000000000000000000000111
+            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
+            // set x 0b101  ; ISR = 0b00000000000000000000000000000000
+            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b101));
+        } else {
+            // Well formed preamble.
+            // set x 0b101  ; ISR = 0b00000000000000000000000000000000
+            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b101));
+            // in x 3       ; ISR = 0b00000000000000000000000000000101
+            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
+        }
+        // in null 4    ; ISR = 0b00000000000000000000000001?10000
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 4));
-        // in x 3       ; ISR = 0b00000000000000000000001010000101
+        // in x 3       ; ISR = 0b00000000000000000000001?10000101
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
-        // in null 5    ; ISR = 0b00000000000000000101000010100000
+        // in null 5    ; ISR = 0b000000000000000001?1000010100000
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 5));
         // mov x null   ; Clear scratch x.
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_x, pio_null));
@@ -210,16 +223,18 @@ bool ADSBee::Init() {
     // Enable the state machines.
     pio_sm_set_enabled(config_.preamble_detector_pio, irq_wrapper_sm_, true);
     // Need to enable the demodulator SMs first, since if the preamble detector trips the IRQ but the demodulator isn't
-    // enabled, we end up in a deadlock. TODO: verify whether this is true once the high power preamble detector bug is
-    // fixed.
+    // enabled, we end up in a deadlock (I think, this maybe should be verified again).
     for (uint16_t sm_index = 0; sm_index < kNumDemodStateMachines; sm_index++) {
         // pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], true);
         pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], true);
     }
     // Enable round robin well formed preamble detectors.
-    // for (uint16_t sm_index = 0; sm_index < kHighPowerDemodStateMachineIndex; sm_index++) {
-    //     pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], true);
-    // }
+    // NOTE: These need to be enable to allow the high power preamble detector to run, since they reset the IRQ that the
+    // high power preamble detector relies on. This is a vestige of the fact that the high power preamble detector uses
+    // the same PIO code that does round-robin for the well formed preamble detectors.
+    for (uint16_t sm_index = 0; sm_index < kHighPowerDemodStateMachineIndex; sm_index++) {
+        pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], true);
+    }
     // Enable high power preamble detector.
     pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[kHighPowerDemodStateMachineIndex], true);
 

@@ -51,11 +51,12 @@ void irq_wrapper_program_init(
 
 ; Build preamble pattern and load it into ISR: 0b101000010100000.
 ; Note that one 0 bit has been removed from the preamble to allow more cycles for the demodulator to turn on.
-set pins 0 ; DEBUG
+; set pins 0 ; DEBUG
 
 ; BEGIN DOUBLE PULSE MATCH
 .wrap_target
 public waiting_for_first_edge:
+    irq set 6                       ; -4 | Spam resetting the high power preamble detector.
     mov osr isr                     ; -3 | OSR = 0b00000000000000000101000010100000
     out null 17                     ; -2 | OSR = 0b101000010100000
     mov x null                      ; -1 | Clear out x from last sampling adventure.
