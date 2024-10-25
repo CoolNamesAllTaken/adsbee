@@ -203,6 +203,8 @@ void preamble_detector_program_init(
 .program message_demodulator
 ; Demod pin for knowing when a valid message demod interval has begun.
 .define demod_in_pin_index 1
+; Demod pin for high power preamble detector. Using GPIO 29, pulses pin on GPIO 19 is base.
+.define high_power_demod_in_pin_index 10
 ; Pulses input pin for reading current power level.
 .define pulses_pin_index 0
 ; Allow side-setting the out_pin for debugging. 1x output pin can be optionally side-set.
@@ -218,7 +220,7 @@ void preamble_detector_program_init(
 ; it will not start sampling until the initial line idle state ends.
 
 ; NEW PROGRAM HERE
-jmp initial_entry
+; jmp initial_entry
 
 
 ; SAMPLE SUBROUTINE
@@ -240,7 +242,10 @@ sample_hi:
 sample_wrap:
     jmp x-- sample_wrap_target side 0 ; 10+3n
     mov x, pins ; 17 | read pulses and demod bit into x
-    jmp !x complete_demod   ; 18 | bail into idle state if demod bit is 0 (also requires pulses to be 0 but hopefully that's ok)
+    jmp !x initial_entry   ; 18 | bail into idle state if demod bit is 0 (also requires pulses to be 0 but hopefully that's ok)
+    ; Note: jumping to initial entry results in perpetual wait: well-formed preamble detector doesn't have DEMOD go high
+    ; until the next demod interval, and high power preamble detector doesn't have a valid GPIO at the regular demod pin
+    ; index.
     jmp !osre sample_net_lo ; 19 | used to have no delay
 
 sample_net_hi:
@@ -255,12 +260,14 @@ sample_return:
     jmp !y end_of_0 ; 22 | End of 0
     jmp end_of_1  ; 23 | End of 1
 
-initial_entry:
+public initial_entry:
     wait 1 pin demod_in_pin_index side 0   ; -16 | Wait to enter DEMOD interval.
     ; Preamble ends LO, so imitate the end of a 1 with its HI->LO transition.
     jmp initial_entry_cut_in [1]            ; -15:-14 | wait adjusted here
 
-    ; Cascade into start_of_1
+public high_power_initial_entry:
+    wait 1 pin high_power_demod_in_pin_index side 0
+    jmp initial_entry_cut_in [1]
 
 start_of_1:
     wait 0 pin pulses_pin_index ; 0 | Wait for the 1->0 transition - at this point we are 0.5 into the bit.
@@ -271,7 +278,7 @@ initial_entry_cut_in:
     set y 1 side 1              ; 3
     jmp sample side 0           ; 4
 end_of_1:
-    jmp !x start_of_1           ; 24: If signal is 1 again, it's another 1 bit, otherwise it's a 0.
+    jmp !x start_of_1           ; 24 | If signal is 1 again, it's another 1 bit, otherwise it's a 0.
 
 .wrap_target
 start_of_0:                     ; We are 0.25 bits into a 0 - signal is LO
@@ -285,8 +292,8 @@ end_of_0:
     jmp !x start_of_1 [1]       ; 23:24 | If signal is 0 again, it's another 0 bit otherwise it's a 1
 .wrap
 
-complete_demod:
-    jmp complete_demod side 1
+; complete_demod:
+;     jmp complete_demod side 1
 
 
 
@@ -295,21 +302,25 @@ static inline void message_demodulator_program_init(
     PIO pio, 
     uint sm, 
     uint offset, 
-    uint in_pin_base, 
+    uint pulses_pin, 
+    uint demod_pin,
     uint recovered_clk_pin, 
     float div
 ) {
-    uint demod_in_pin = in_pin_base+1;
-    uint pulses_pin = in_pin_base;
+    if (demod_pin == pulses_pin+1) {
+        // Standard preamble detector.
+        pio_sm_set_consecutive_pindirs(pio, sm, pulses_pin, 2, false); // in_pin_base is DEMOD input, in_pin_base + 1 is pulses
+    } else {
+        // High power preamble detector. Has a different GPIO index for the demod pin.
+        // pio_sm_set_pindirs_with_mask(pio, sm, 0b0, (0b1 << demod_pin) | (0b1 << pulses_pin)); // Set demod and pulses pins as inputs (0).
+    }
 
-    pio_sm_set_consecutive_pindirs(pio, sm, in_pin_base, 2, false); // in_pin_base is DEMOD input, in_pin_base + 1 is pulses
-
-    // Allow PIO to control GPIO 22 (as output for debugging)
+    // Allow PIO to control recovered_clk_pin (as output for debugging).
     pio_gpio_init(pio, recovered_clk_pin);
     pio_sm_set_consecutive_pindirs(pio, sm, recovered_clk_pin, 1, true); // set one pin starting at out_pin to OUT
 
     pio_sm_config c = message_demodulator_program_get_default_config(offset);
-    sm_config_set_in_pins(&c, in_pin_base); // WAIT pins
+    sm_config_set_in_pins(&c, pulses_pin); // WAIT pins: Utilize pulses_pin as GPIO base.
     sm_config_set_jmp_pin(&c, pulses_pin); // JMP based on the comparator output
     sm_config_set_out_shift(&c, false, false, 32); // OSR shifts left, autopull turned off, autopull threshold 32 bits
     sm_config_set_in_shift(&c, false, true, 32); // ISR shifts left, autopush turned on, autopush threshold 32 bits
@@ -321,9 +332,5 @@ static inline void message_demodulator_program_init(
     sm_config_set_sideset_pins(&c, recovered_clk_pin); 
 
     pio_sm_init(pio, sm, offset, &c);
-
-    // X and Y are set to 0 and 1, to conveniently emit these to ISR/FIFO.
-    pio_sm_exec(pio, sm, pio_encode_set(pio_x, 1));
-    pio_sm_exec(pio, sm, pio_encode_mov_not(pio_x, pio_null));
 }
 %}

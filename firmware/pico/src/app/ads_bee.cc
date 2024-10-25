@@ -139,7 +139,7 @@ bool ADSBee::Init() {
         preamble_detector_program_init(config_.preamble_detector_pio,                     // Use PIO block 0.
                                        preamble_detector_sm_[sm_index],                   // State machines 0-2
                                        preamble_detector_offset_ /* + starting_offset*/,  // Program startin offset.
-                                       config_.pulses_pin,                                // Pulses pin (input).
+                                       config_.pulses_pins[sm_index],                     // Pulses pin (input).
                                        config_.demod_pins[sm_index],                      // Demod pin (output).
                                        preamble_detector_div,                             // Clock divisor (for 48MHz).
                                        make_sm_wait  // Whether state machine should wait for an IRQ to begin.
@@ -196,8 +196,9 @@ bool ADSBee::Init() {
     float message_demodulator_div = (float)clock_get_hz(clk_sys) / kMessageDemodulatorFreq;
     for (uint16_t sm_index = 0; sm_index < kNumDemodStateMachines; sm_index++) {
         message_demodulator_program_init(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
-                                         message_demodulator_offset_, config_.pulses_pin,
-                                         config_.recovered_clk_pins[sm_index], message_demodulator_div);
+                                         message_demodulator_offset_, config_.pulses_pins[sm_index],
+                                         config_.demod_pins[sm_index], config_.recovered_clk_pins[sm_index],
+                                         message_demodulator_div);
     }
 
     // Set GPIO interrupts to be higher priority than the DEMOD interrupt to allow RSSI measurement.
@@ -433,13 +434,23 @@ void ADSBee::OnDemodComplete() {
 
         // Reset the demodulator state machine to wait for the next decode interval, then enable it.
         pio_sm_restart(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);  // Reset FIFOs, ISRs, etc.
+        // The high power demodulator has a different start address to account for the fact that the index of its DEMOD
+        // pin is different. This only matters for the initial program wait, subsequent demod checks are done on the
+        // full GPIO input register.
+        uint demodulator_program_start =
+            sm_index == kHighPowerDemodStateMachineIndex
+                ? message_demodulator_offset_ + message_demodulator_offset_high_power_initial_entry
+                : message_demodulator_offset_ + message_demodulator_offset_initial_entry;
         pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
-                                  pio_encode_jmp(message_demodulator_offset_));  // Jump to beginning of program.
+                                  pio_encode_jmp(demodulator_program_start));  // Jump to beginning of program.
         pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], true);
 
         // Release the preamble detector from its wait state.
         if (sm_index == kHighPowerDemodStateMachineIndex) {
-            // High power state machine operates alone and doesn't need to wait for any other SM to complete.
+            // High power state machine operates alone and doesn't need to wait for any other SM to complete. It would
+            // normally be enabled by one of the interleaved well formed preamble detector state machines refreshin, but
+            // doing it here brings it up a little quicker and allows it to catch a subsequent high power packet if it
+            // comes in quickly.
             pio_sm_exec_wait_blocking(
                 config_.preamble_detector_pio, preamble_detector_sm_[sm_index],
                 pio_encode_jmp(preamble_detector_offset_ + preamble_detector_offset_waiting_for_first_edge));
