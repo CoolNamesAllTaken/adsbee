@@ -92,6 +92,7 @@ void CommsManager::IPEventHandler(void* arg, esp_event_base_t event_base, int32_
     } else if (event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*)event_data;
         CONSOLE_INFO("CommsManager::WiFiEventHandler", "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+        wifi_sta_has_ip_ = true;
     }
 }
 
@@ -157,22 +158,30 @@ void CommsManager::WiFiAccessPointTask(void* pvParameters) {
 void CommsManager::WiFiStationTask(void* pvParameters) {
     RawTransponderPacket tpacket;
 
+    // Don't try establishing socket connections until the ESP32 has been assigned an IP address.
+    while (!wifi_sta_has_ip_) {
+        vTaskDelay(1);  // Delay for 1 tick.
+    }
+
     int feed_sock[SettingsManager::Settings::kMaxNumFeeds] = {0};
     bool feed_sock_is_active[SettingsManager::Settings::kMaxNumFeeds] = {0};
 
     for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
         if (settings_manager.settings.feed_is_active[i]) {
             struct sockaddr_in dest_addr;
-            dest_addr.sin_addr.s_addr = inet_addr(settings_manager.settings.feed_uris[i]);
+            inet_pton(AF_INET, settings_manager.settings.feed_uris[i], &dest_addr.sin_addr);
+            // dest_addr.sin_addr.s_addr = inet_addr(settings_manager.settings.feed_uris[i]);
             dest_addr.sin_family = AF_INET;
             dest_addr.sin_port = htons(settings_manager.settings.feed_ports[i]);
 
-            feed_sock[i] = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+            feed_sock[i] = socket(dest_addr.sin_family, SOCK_STREAM, IPPROTO_IP);
             if (feed_sock[i] < 0) {
                 CONSOLE_ERROR("CommsManager::WiFiStationTask", "Unable to create socket for feed %d: errno %d", i,
                               errno);
                 continue;
             }
+            CONSOLE_INFO("CommsManager::WiFiStationTask", "Socket for feed %d created, connecting to %s:%d", i,
+                         settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i]);
 
             int err = connect(feed_sock[i], (struct sockaddr*)&dest_addr, sizeof(dest_addr));
             if (err != 0) {
@@ -189,10 +198,6 @@ void CommsManager::WiFiStationTask(void* pvParameters) {
 
     while (run_wifi_sta_task_) {
         if (xQueueReceive(wifi_sta_raw_transponder_packet_queue_, &tpacket, portMAX_DELAY) == pdTRUE) {
-            // Mode S Beast
-            uint8_t beast_frame_buf[kBeastFrameMaxLenBytes];
-            uint16_t beast_frame_len_bytes = TransponderPacketToBeastFrame(tpacket, beast_frame_buf);
-
             for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
                 if (!feed_sock_is_active[i] ||
                     settings_manager.settings.feed_protocols[i] != SettingsManager::ReportingProtocol::kBeast) {
@@ -215,7 +220,7 @@ void CommsManager::WiFiStationTask(void* pvParameters) {
                         message_len_bytes, i, settings_manager.settings.feed_uris[i],
                         settings_manager.settings.feed_ports[i], errno);
                 } else {
-                    CONSOLE_ERROR("CommsManager::WiFiStationTask", "Message sent to feed %d.", i);
+                    CONSOLE_INFO("CommsManager::WiFiStationTask", "Message sent to feed %d.", i);
                 }
             }
         }
