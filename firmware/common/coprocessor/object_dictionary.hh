@@ -6,6 +6,9 @@
 #include "stdint.h"
 #ifdef ON_ESP32
 #include "adsbee_server.hh"
+#include "esp_mac.h"   // For retrieving Base MAC address.
+#include "esp_wifi.h"  // For retrieving WiFi Station MAC address.
+
 #endif
 
 class ObjectDictionary {
@@ -15,6 +18,8 @@ class ObjectDictionary {
     static const uint8_t kFirmwareVersionPatch;
     static const uint32_t kFirmwareVersion;
 
+    static const uint16_t kMACAddrLenBytes = 6;
+
     enum Address : uint8_t {
         kAddrInvalid = 0,                  // Default value.
         kAddrFirmwareVersion = 0x01,       // Firmware version as a uint32_t.
@@ -22,6 +27,8 @@ class ObjectDictionary {
         kAddrSettingsData = 0x03,          // Used to transfer settings information.
         kAddrRawTransponderPacket = 0x04,  // Used to forward raw packets from RP2040 to ESP32.
         kAddrDecodedTransponderPacket = 0x05,
+        kAddrBaseMAC = 0x06,         // ESP32 base MAC address.
+        kAddrWiFiStationMAC = 0x07,  // ESP32 WiFi station MAC address.
         kNumAddrs
     };
 
@@ -94,6 +101,24 @@ class ObjectDictionary {
                 // offset);
                 memcpy(buf, (uint8_t *)&(settings_manager.settings) + offset, buf_len);
                 break;
+#ifdef ON_ESP32
+            case kAddrBaseMAC: {
+                uint8_t mac[kMACAddrLenBytes];
+
+                // Get Base MAC address.
+                ESP_ERROR_CHECK(esp_efuse_mac_get_default(mac));
+                memcpy(buf, mac + offset, buf_len);
+                break;
+            }
+            case kAddrWiFiStationMAC: {
+                uint8_t mac[kMACAddrLenBytes];
+
+                // Get WiFi Station MAC address.
+                ESP_ERROR_CHECK(esp_wifi_get_mac(WIFI_IF_STA, mac));
+                memcpy(buf, mac + offset, buf_len);
+                break;
+            }
+#endif
             default:
                 CONSOLE_ERROR("SPICoprocessor::SetBytes", "No behavior implemented for reading from address 0x%x.",
                               addr);

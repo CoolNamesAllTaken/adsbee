@@ -47,11 +47,18 @@ bool SettingsManager::Save() {
 
     settings.esp32_enabled = esp32.IsEnabled();
     // Save WiFi configuration.
-    settings.wifi_mode = comms_manager.wifi_mode;
-    strncpy(settings.ap_wifi_ssid, comms_manager.ap_wifi_ssid, Settings::kWiFiSSIDMaxLen);
-    settings.ap_wifi_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
-    strncpy(settings.ap_wifi_password, comms_manager.ap_wifi_password, Settings::kWiFiPasswordMaxLen);
-    settings.ap_wifi_password[Settings::kWiFiPasswordMaxLen] = '\0';
+    settings.wifi_ap_enabled = comms_manager.wifi_ap_enabled;
+    settings.wifi_ap_channel = comms_manager.wifi_ap_channel;
+    strncpy(settings.wifi_ap_ssid, comms_manager.wifi_ap_ssid, Settings::kWiFiSSIDMaxLen);
+    settings.wifi_ap_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
+    strncpy(settings.wifi_ap_password, comms_manager.wifi_ap_password, Settings::kWiFiPasswordMaxLen);
+    settings.wifi_ap_password[Settings::kWiFiPasswordMaxLen] = '\0';
+
+    settings.wifi_sta_enabled = comms_manager.wifi_sta_enabled;
+    strncpy(settings.wifi_sta_ssid, comms_manager.wifi_sta_ssid, Settings::kWiFiSSIDMaxLen);
+    settings.wifi_sta_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
+    strncpy(settings.wifi_sta_password, comms_manager.wifi_sta_password, Settings::kWiFiPasswordMaxLen);
+    settings.wifi_sta_password[Settings::kWiFiPasswordMaxLen] = '\0';
 
     // Sync settings from RP2040 -> ESP32.
     if (esp32.IsEnabled()) {
@@ -97,14 +104,16 @@ void SettingsManager::Apply() {
 
     // Apply WiFi configurations.
     // Access Point settings
-    comms_manager.wifi_mode = settings.wifi_mode;
-    strncpy(comms_manager.ap_wifi_ssid, settings.ap_wifi_ssid, Settings::kWiFiSSIDMaxLen);
-    comms_manager.ap_wifi_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
-    strncpy(comms_manager.ap_wifi_password, settings.ap_wifi_password, Settings::kWiFiPasswordMaxLen);
-    comms_manager.ap_wifi_password[Settings::kWiFiPasswordMaxLen] = '\0';
+    comms_manager.wifi_ap_enabled = settings.wifi_ap_enabled;
+    comms_manager.wifi_ap_channel = settings.wifi_ap_channel;
+    strncpy(comms_manager.wifi_ap_ssid, settings.wifi_ap_ssid, Settings::kWiFiSSIDMaxLen);
+    comms_manager.wifi_ap_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
+    strncpy(comms_manager.wifi_ap_password, settings.wifi_ap_password, Settings::kWiFiPasswordMaxLen);
+    comms_manager.wifi_ap_password[Settings::kWiFiPasswordMaxLen] = '\0';
     // Station settings
-    strncpy(comms_manager.sta_wifi_ssid, settings.sta_wifi_ssid, Settings::kWiFiSSIDMaxLen);
-    comms_manager.sta_wifi_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
-    strncpy(comms_manager.sta_wifi_password, settings.sta_wifi_password, Settings::kWiFiPasswordMaxLen);
-    comms_manager.sta_wifi_password[Settings::kWiFiPasswordMaxLen] = '\0';
+    comms_manager.wifi_sta_enabled = settings.wifi_sta_enabled;
+    strncpy(comms_manager.wifi_sta_ssid, settings.wifi_sta_ssid, Settings::kWiFiSSIDMaxLen);
+    comms_manager.wifi_sta_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
+    strncpy(comms_manager.wifi_sta_password, settings.wifi_sta_password, Settings::kWiFiPasswordMaxLen);
+    comms_manager.wifi_sta_password[Settings::kWiFiPasswordMaxLen] = '\0';
 }

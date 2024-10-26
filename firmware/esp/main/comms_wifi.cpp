@@ -2,7 +2,8 @@
 
 #include <functional>  // for std::bind
 
-#include "cc.h"  // For endiannness swapping.
+#include "beast/beast_utils.hh"  // For beast reporting.
+#include "cc.h"                  // For endiannness swapping.
 #include "comms.hh"
 #include "esp_event.h"
 #include "esp_mac.h"
@@ -12,41 +13,95 @@
 #include "nvs_flash.h"
 #include "task_priorities.hh"
 
-static const uint16_t kGDL90Port = 4000;
 static const uint16_t kWiFiNumRetries = 3;
 static const uint16_t kWiFiRetryWaitTimeMs = 100;
+static const uint16_t kWiFiStaMaxNumReconnectAttempts = 5;
+static const uint16_t kWiFiScanDefaultListSize = 20;
+
+/* FreeRTOS event group to signal when we are connected*/
+static EventGroupHandle_t s_wifi_event_group;
+/* The event group allows multiple bits for each event, but we only care about two events:
+ * - we are connected to the AP with an IP
+ * - we failed to connect after the maximum amount of retries */
+#define WIFI_CONNECTED_BIT BIT0
+#define WIFI_FAIL_BIT      BIT1
 
 /** "Pass-Through" functions used to access member functions in callbacks. **/
 void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
     comms_manager.WiFiEventHandler(arg, event_base, event_id, event_data);
 }
+void ip_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+    comms_manager.IPEventHandler(arg, event_base, event_id, event_data);
+}
 
-void wifi_udp_server_task(void* pvParameters) { comms_manager.WiFiUDPServerTask(pvParameters); }
+void wifi_access_point_task(void* pvParameters) { comms_manager.WiFiAccessPointTask(pvParameters); }
+void wifi_station_task(void* pvParameters) { comms_manager.WiFiStationTask(pvParameters); }
 /** End "Pass-Through" functions. **/
 
 void CommsManager::WiFiEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
-    if (event_id == WIFI_EVENT_AP_STACONNECTED) {
-        wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*)event_data;
-        ESP_LOGI("CommsManager::WiFiEventHandler", "Station " MACSTR " joined, AID=%d", MAC2STR(event->mac),
-                 event->aid);
-    } else if (event_id == WIFI_EVENT_AP_STADISCONNECTED) {
-        wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*)event_data;
-        ESP_LOGI("CommsManager::WiFiEventHandler", "Station " MACSTR " left, AID=%d", MAC2STR(event->mac), event->aid);
-        WiFiRemoveClient(event->mac);
-    } else if (event_id == IP_EVENT_AP_STAIPASSIGNED) {
-        ip_event_ap_staipassigned_t* event = (ip_event_ap_staipassigned_t*)event_data;
-        ESP_LOGI("CommsManager::WiFiEventHandler", "Station assigned IP:" IPSTR, IP2STR(&event->ip));
-        WiFiAddClient(event->ip, event->mac);
+    static int s_retry_num = 0;
+
+    switch (event_id) {
+        case WIFI_EVENT_AP_STACONNECTED: {
+            wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*)event_data;
+            CONSOLE_INFO("CommsManager::WiFiEventHandler", "Station " MACSTR " joined, AID=%d", MAC2STR(event->mac),
+                         event->aid);
+            break;
+        }
+        case WIFI_EVENT_AP_STADISCONNECTED: {
+            wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*)event_data;
+            CONSOLE_INFO("CommsManager::WiFiEventHandler", "Station " MACSTR " left, AID=%d", MAC2STR(event->mac),
+                         event->aid);
+            WiFiRemoveClient(event->mac);
+            break;
+        }
+        case WIFI_EVENT_STA_START:
+            CONSOLE_INFO("CommsManager::WiFiEventHandler", "WIFI_EVENT_STA_START - Attempting to connect to AP");
+            ESP_ERROR_CHECK(esp_wifi_connect());
+            break;
+        case WIFI_EVENT_STA_DISCONNECTED: {
+            wifi_event_sta_disconnected_t* event = (wifi_event_sta_disconnected_t*)event_data;
+            ESP_LOGW("CommsManager::WiFiEventHandler", "WIFI_EVENT_STA_DISCONNECTED - Disconnect reason : %d",
+                     event->reason);
+            xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+
+            if (s_retry_num < kWiFiStaMaxNumReconnectAttempts) {
+                ESP_ERROR_CHECK(esp_wifi_connect());
+                s_retry_num++;
+                CONSOLE_INFO("CommsManager::WiFiEventHandler", "Retry to connect to the AP, attempt %d/%d", s_retry_num,
+                             kWiFiStaMaxNumReconnectAttempts);
+            } else {
+                xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+                CONSOLE_ERROR("CommsManager::WiFiEventHandler", "Failed to connect to AP after %d attempts",
+                              kWiFiStaMaxNumReconnectAttempts);
+            }
+            break;
+        }
+        case WIFI_EVENT_STA_CONNECTED:
+            xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+            CONSOLE_INFO("CommsManager::WiFiEventHandler", "WIFI_EVENT_STA_CONNECTED - Successfully connected to AP");
+            break;
     }
 }
 
-void CommsManager::WiFiUDPServerTask(void* pvParameters) {
+void CommsManager::IPEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+    if (event_id == IP_EVENT_AP_STAIPASSIGNED) {
+        ip_event_ap_staipassigned_t* event = (ip_event_ap_staipassigned_t*)event_data;
+        CONSOLE_INFO("CommsManager::IPEventHandler", "Station assigned IP: " IPSTR, IP2STR(&event->ip));
+        WiFiAddClient(event->ip, event->mac);
+    } else if (event_id == IP_EVENT_STA_GOT_IP) {
+        ip_event_got_ip_t* event = (ip_event_got_ip_t*)event_data;
+        CONSOLE_INFO("CommsManager::WiFiEventHandler", "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+    }
+}
+
+void CommsManager::WiFiAccessPointTask(void* pvParameters) {
     NetworkMessage message;
 
     // Create socket.
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
     if (sock < 0) {
-        ESP_LOGE("CommsManager::WiFiUDPServerTask", "Unable to create socket: errno %d", errno);
+        CONSOLE_ERROR("CommsManager::WiFiAccessPointTask", "Unable to create socket: errno %d", errno);
         return;
     }
 
@@ -56,14 +111,11 @@ void CommsManager::WiFiUDPServerTask(void* pvParameters) {
     timeout.tv_usec = 0;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
 
-    struct sockaddr_in dest_addr;
-    dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(kGDL90Port);
-
-    while (run_udp_server_) {
-        if (xQueueReceive(wifi_message_queue_, &message, portMAX_DELAY) == pdTRUE) {
-            // int send_buf_size = 16384;  // Set a larger send buffer
-            // setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &send_buf_size, sizeof(send_buf_size));
+    while (run_wifi_ap_task_) {
+        if (xQueueReceive(wifi_ap_message_queue_, &message, portMAX_DELAY) == pdTRUE) {
+            struct sockaddr_in dest_addr;
+            dest_addr.sin_family = AF_INET;
+            dest_addr.sin_port = htons(message.port);
 
             xSemaphoreTake(wifi_clients_list_mutex_, portMAX_DELAY);
             for (int i = 0; i < SettingsManager::Settings::kWiFiMaxNumClients; i++) {
@@ -75,9 +127,8 @@ void CommsManager::WiFiUDPServerTask(void* pvParameters) {
                         ret =
                             sendto(sock, message.data, message.len, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
                         // ENOMEM (errno=12) resolution: https://github.com/espressif/esp-idf/issues/390
-                        // Increased the number of UDP control blocks (LWIP_MAX_UDP_PCBS) in SDK menuconfig from 16
-                        // to 96.
-                        // Changed TCP/IP stack size from 3072 to 12288.
+                        // Increased the number of UDP control blocks (LWIP_MAX_UDP_PCBS) in SDK menuconfig
+                        // from 16 to 96. Changed TCP/IP stack size from 3072 to 12288.
                         if (ret >= 0 || errno != ENOMEM) {
                             break;
                         }
@@ -86,71 +137,294 @@ void CommsManager::WiFiUDPServerTask(void* pvParameters) {
                     }
 
                     if (ret < 0) {
-                        // ESP_LOGE("CommsManager::WiFiUDPServerTask", "Error occurred during sending: errno %d.",
-                        // errno);
-                        ESP_LOGE("CommsManager::WiFiUDPServerTask",
-                                 "Error occurred during sending: errno %d. Tried %d times.", errno, num_tries);
+                        // CONSOLE_ERROR("CommsManager::WiFiAccessPointTask", "Error occurred during sending:
+                        // errno %d.", errno);
+                        CONSOLE_ERROR("CommsManager::WiFiAccessPointTask",
+                                      "Error occurred during sending: errno %d. Tried %d times.", errno, num_tries);
                     }
                 }
             }
             xSemaphoreGive(wifi_clients_list_mutex_);
 
-            // ESP_LOGI("CommsManager::WiFiUDPServerTask", "Message sent to %d clients.", num_wifi_clients_);
+            // CONSOLE_INFO("CommsManager::WiFiUDPServerTask", "Message sent to %d clients.",
+            // num_wifi_clients_);
         }
     }
     shutdown(sock, 0);
     close(sock);
 }
 
+void CommsManager::WiFiStationTask(void* pvParameters) {
+    RawTransponderPacket tpacket;
+
+    int feed_sock[SettingsManager::Settings::kMaxNumFeeds] = {0};
+    bool feed_sock_is_active[SettingsManager::Settings::kMaxNumFeeds] = {0};
+
+    for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+        if (settings_manager.settings.feed_is_active[i]) {
+            struct sockaddr_in dest_addr;
+            dest_addr.sin_addr.s_addr = inet_addr(settings_manager.settings.feed_uris[i]);
+            dest_addr.sin_family = AF_INET;
+            dest_addr.sin_port = htons(settings_manager.settings.feed_ports[i]);
+
+            feed_sock[i] = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+            if (feed_sock[i] < 0) {
+                CONSOLE_ERROR("CommsManager::WiFiStationTask", "Unable to create socket for feed %d: errno %d", i,
+                              errno);
+                continue;
+            }
+
+            int err = connect(feed_sock[i], (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+            if (err != 0) {
+                CONSOLE_ERROR("CommsManager::WiFiStationTask", "Socket unable to connect to URI for feed %d: errno %d",
+                              i, errno);
+                close(feed_sock[i]);
+                continue;
+            }
+            CONSOLE_INFO("CommsManager::WiFiStationTask", "Successfully connected to %s",
+                         settings_manager.settings.feed_uris[i]);
+            feed_sock_is_active[i] = true;
+        }
+    }
+
+    while (run_wifi_sta_task_) {
+        if (xQueueReceive(wifi_sta_raw_transponder_packet_queue_, &tpacket, portMAX_DELAY) == pdTRUE) {
+            // Mode S Beast
+            uint8_t beast_frame_buf[kBeastFrameMaxLenBytes];
+            uint16_t beast_frame_len_bytes = TransponderPacketToBeastFrame(tpacket, beast_frame_buf);
+
+            for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+                if (!feed_sock_is_active[i] ||
+                    settings_manager.settings.feed_protocols[i] != SettingsManager::ReportingProtocol::kBeast) {
+                    continue;
+                }
+
+                uint8_t message_buf[2 * SettingsManager::Settings::kFeedReceiverIDNumBytes +
+                                    kBeastFrameMaxLenBytes];  // Double the length as a hack to make room for the
+                                                              // escaped UUID.
+                uint16_t message_len_bytes = TransponderPacketToBeastFramePrependReceiverID(
+                    tpacket, message_buf, settings_manager.settings.feed_receiver_ids[i],
+                    SettingsManager::Settings::kFeedReceiverIDNumBytes);
+
+                int err = send(feed_sock[i], message_buf, message_len_bytes, 0);
+                if (err < 0) {
+                    CONSOLE_ERROR(
+                        "CommsManager::WiFiStationTask",
+                        "Error occurred during sending %d Byte beast message to feed %d with URI %s on port %d: "
+                        "errno %d.",
+                        message_len_bytes, i, settings_manager.settings.feed_uris[i],
+                        settings_manager.settings.feed_ports[i], errno);
+                } else {
+                    CONSOLE_ERROR("CommsManager::WiFiStationTask", "Message sent to feed %d.", i);
+                }
+            }
+        }
+    }
+
+    for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+        if (feed_sock_is_active[i]) {
+            close(feed_sock[i]);
+        }
+    }
+}
+
+static const char* get_auth_mode_name(wifi_auth_mode_t auth_mode) {
+    switch (auth_mode) {
+        case WIFI_AUTH_OPEN:
+            return "OPEN";
+        case WIFI_AUTH_WEP:
+            return "WEP";
+        case WIFI_AUTH_WPA_PSK:
+            return "WPA_PSK";
+        case WIFI_AUTH_WPA2_PSK:
+            return "WPA2_PSK";
+        case WIFI_AUTH_WPA_WPA2_PSK:
+            return "WPA_WPA2_PSK";
+        case WIFI_AUTH_WPA3_PSK:
+            return "WPA3_PSK";
+        case WIFI_AUTH_WPA2_WPA3_PSK:
+            return "WPA2_WPA3_PSK";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+// WARNING: This function explodes the stack!
+static void wifi_scan_task(void* pvParameters) {
+    CONSOLE_INFO("WiFiScan", "Starting scan...");
+
+    // Configure scan settings
+    wifi_scan_config_t scan_config = {
+        .ssid = 0,
+        .bssid = 0,
+        .channel = 0,        // 0 = scan all channels
+        .show_hidden = true  // show hidden SSIDs
+    };
+
+    // Start scan
+    ESP_ERROR_CHECK(esp_wifi_scan_start(&scan_config, true));
+
+    // Get number of APs found
+    uint16_t ap_num = kWiFiScanDefaultListSize;
+    wifi_ap_record_t ap_records[kWiFiScanDefaultListSize];
+    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&ap_num, ap_records));
+
+    // Print header
+    CONSOLE_INFO("WiFiScan", "Found %d access points:", ap_num);
+    CONSOLE_INFO("WiFiScan", "               SSID              | Channel | RSSI |   Auth Mode");
+    CONSOLE_INFO("WiFiScan", "----------------------------------------------------------------");
+
+    // Print AP details
+    for (int i = 0; i < ap_num; i++) {
+        CONSOLE_INFO("WiFiScan", "%32s | %7d | %4d | %s", ap_records[i].ssid, ap_records[i].primary, ap_records[i].rssi,
+                     get_auth_mode_name(ap_records[i].authmode));
+    }
+
+    // Print footer
+    CONSOLE_INFO("WiFiScan", "----------------------------------------------------------------");
+}
+
 bool CommsManager::WiFiInit() {
     wifi_clients_list_mutex_ = xSemaphoreCreateMutex();
-    wifi_message_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(NetworkMessage));
+    wifi_ap_message_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(NetworkMessage));
+    wifi_sta_raw_transponder_packet_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(RawTransponderPacket));
 
+    s_wifi_event_group = xEventGroupCreate();
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_ap();
+    esp_netif_t* ap_netif = esp_netif_create_default_wifi_ap();
+    assert(ap_netif);
+    esp_netif_t* sta_netif = esp_netif_create_default_wifi_sta();
+    ESP_ERROR_CHECK(
+        esp_netif_set_hostname(sta_netif, wifi_ap_ssid));  // Reuse the AP SSID as the station hostname for now.
+    assert(sta_netif);
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event_handler, NULL, NULL));
-    ESP_ERROR_CHECK(
-        esp_event_handler_instance_register(IP_EVENT, IP_EVENT_AP_STAIPASSIGNED, &wifi_event_handler, NULL, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, &ip_event_handler, NULL));
 
-    wifi_config_t wifi_config;
+    wifi_mode_t wifi_mode;
+    if (wifi_ap_enabled && wifi_sta_enabled) {
+        wifi_mode = WIFI_MODE_APSTA;
+    } else if (wifi_ap_enabled) {
+        wifi_mode = WIFI_MODE_AP;
+    } else {
+        wifi_mode = WIFI_MODE_STA;
+    }
+    ESP_ERROR_CHECK(esp_wifi_set_mode(wifi_mode));
 
-    strncpy((char*)(wifi_config.ap.ssid), ap_wifi_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
-    strncpy((char*)(wifi_config.ap.password), ap_wifi_password, SettingsManager::Settings::kWiFiPasswordMaxLen + 1);
-    wifi_config.ap.channel = 1;
-    wifi_config.ap.ssid_len = (uint8_t)strlen(ap_wifi_ssid);
-    wifi_config.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
-    wifi_config.ap.max_connection = SettingsManager::Settings::kWiFiMaxNumClients;
+    if (wifi_ap_enabled) {
+        // Access Point Configuration
+        wifi_config_t wifi_config_ap = {0};
 
-    // strncpy((char*)(wifi_config.sta.ssid), sta_wifi_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
-    // strncpy((char*)(wifi_config.sta.password), sta_wifi_password, SettingsManager::Settings::kWiFiPasswordMaxLen
-    // + 1);
+        strncpy((char*)(wifi_config_ap.ap.ssid), wifi_ap_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
+        strncpy((char*)(wifi_config_ap.ap.password), wifi_ap_password,
+                SettingsManager::Settings::kWiFiPasswordMaxLen + 1);
+        wifi_config_ap.ap.channel = wifi_ap_channel;
+        wifi_config_ap.ap.ssid_len = (uint8_t)strlen(wifi_ap_ssid);
+        if (strlen(wifi_ap_password) == 0) {
+            wifi_config_ap.ap.authmode = WIFI_AUTH_OPEN;
+        } else {
+            wifi_config_ap.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
+        }
+        wifi_config_ap.ap.max_connection = SettingsManager::Settings::kWiFiMaxNumClients;
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode((wifi_mode_t)wifi_mode));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config_ap));
+    }
+
+    if (wifi_sta_enabled) {
+        // Station Configuration
+        wifi_config_t wifi_config_sta = {0};
+
+        strncpy((char*)(wifi_config_sta.sta.ssid), wifi_sta_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
+        strncpy((char*)(wifi_config_sta.sta.password), wifi_sta_password,
+                SettingsManager::Settings::kWiFiPasswordMaxLen + 1);
+
+        // wifi_config_sta.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+        // wifi_config_sta.sta.pmf_cfg.capable = true;
+        // wifi_config_sta.sta.pmf_cfg.required = false;
+
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config_sta));
+    }
+
+    if (!wifi_ap_enabled && !wifi_sta_enabled) {
+        ESP_ERROR_CHECK(esp_wifi_stop());
+        CONSOLE_INFO("CommsManager::WiFiInit", "WiFi disabled.");
+        return true;
+    }
+
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    CONSOLE_INFO("CommsManager::WiFiInit", "WiFi AP started. SSID:%s password:%s", ap_wifi_ssid, ap_wifi_password);
+    if (wifi_ap_enabled) {
+        CONSOLE_INFO("CommsManager::WiFiInit", "WiFi AP started. SSID:%s password:%s", wifi_ap_ssid, wifi_ap_password);
 
-    run_udp_server_ = true;
-    xTaskCreatePinnedToCore(wifi_udp_server_task, "udp_server", 4096, NULL, kUDPServerTaskPriority, NULL,
-                            kUDPServerTaskCore);
+        run_wifi_ap_task_ = true;
+        xTaskCreatePinnedToCore(wifi_access_point_task, "wifi_ap_task", 4096, NULL, kWiFiAPTaskPriority, NULL,
+                                kWiFiAPTaskCore);
+    }
+    if (wifi_sta_enabled) {
+        char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen];
+        SettingsManager::RedactPassword(wifi_sta_password, redacted_password,
+                                        SettingsManager::Settings::kWiFiPasswordMaxLen);
+        CONSOLE_INFO("CommsManager::WiFiInit", "WiFi Station started. SSID:%s password:%s", wifi_sta_ssid,
+                     redacted_password);
+
+        /* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed for the
+         * maximum number of re-tries (WIFI_FAIL_BIT). The bits are set by event_handler() */
+        EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT, pdFALSE, pdFALSE,
+                                               portMAX_DELAY);
+
+        if (bits & WIFI_CONNECTED_BIT) {
+            CONSOLE_INFO("CommsManager::WiFiInit", "Connected to ap SSID:%s password:%s", wifi_sta_ssid,
+                         wifi_sta_password);
+        } else if (bits & WIFI_FAIL_BIT) {
+            CONSOLE_ERROR("CommsManager::WiFiInit", "Failed to connect to SSID:%s, password:%s", wifi_sta_ssid,
+                          wifi_sta_password);
+            // xTaskCreate(wifi_scan_task, "wifi_scan", 4096, NULL, 5, NULL);
+            return false;
+        } else {
+            CONSOLE_ERROR("CommsManager::WiFiInit", "UNEXPECTED EVENT");
+            return false;
+        }
+
+        run_wifi_sta_task_ = true;
+        xTaskCreatePinnedToCore(wifi_station_task, "wifi_sta_task", 4096, NULL, kWiFiSTATaskPriority, NULL,
+                                kWiFiSTATaskCore);
+    }
+
     return true;
 }
 
 bool CommsManager::WiFiDeInit() {
+    vEventGroupDelete(s_wifi_event_group);
     vSemaphoreDelete(wifi_clients_list_mutex_);
-    vQueueDelete(wifi_message_queue_);
+    vQueueDelete(wifi_ap_message_queue_);
+    vQueueDelete(wifi_sta_raw_transponder_packet_queue_);
 
     return true;
 }
 
-bool CommsManager::WiFiSendMessageToAllClients(NetworkMessage& message) {
-    if (xQueueSend(wifi_message_queue_, &message, 0) != pdTRUE) {
+bool CommsManager::WiFiStationSendRawTransponderPacket(RawTransponderPacket& tpacket) {
+    if (!run_wifi_sta_task_) {
+        CONSOLE_WARNING("CommsManager::WiFiStationSendRawTransponderPacket",
+                        "Can't push to WiFi station transponder packet queue if station is not running.");
+        return false;  // Task not started yet, queue not created yet. Pushing to queue would cause an abort.
+    }
+    if (xQueueSend(wifi_sta_raw_transponder_packet_queue_, &tpacket, 0) != pdTRUE) {
+        return false;
+    }
+    return true;
+}
+
+bool CommsManager::WiFiAccessPointSendMessageToAllStations(NetworkMessage& message) {
+    if (!run_wifi_ap_task_) {
+        CONSOLE_WARNING("CommsManager::WiFiAccessPointSendMessageToAllStations",
+                        "Can't push to WiFi AP message queue if AP is not running.");
+        return false;  // Task not started yet, pushing to queue could create an overflow.
+    }
+    if (xQueueSend(wifi_ap_message_queue_, &message, 0) != pdTRUE) {
         return false;
     }
     return true;

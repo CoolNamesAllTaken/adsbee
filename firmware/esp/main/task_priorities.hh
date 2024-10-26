@@ -7,7 +7,9 @@
 
 static const unsigned int kSPIReceiveTaskPriority = 10;
 static const unsigned int kSPIReceiveTaskCore = 1;
-static const unsigned int kUDPServerTaskPriority = tskIDLE_PRIORITY;
-static const unsigned int kUDPServerTaskCore = 0;
+static const unsigned int kWiFiAPTaskPriority = tskIDLE_PRIORITY;
+static const unsigned int kWiFiAPTaskCore = 0;
+static const unsigned int kWiFiSTATaskPriority = tskIDLE_PRIORITY;
+static const unsigned int kWiFiSTATaskCore = 0;
 
 #endif /* TASK_PRIORITIES_HH_ */

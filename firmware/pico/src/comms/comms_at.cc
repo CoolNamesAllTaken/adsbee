@@ -118,7 +118,41 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
             }
             device_info.part_code[SettingsManager::DeviceInfo::kPartCodeLen] =
                 '\0';  // Use caution in case part code is invalid.
-            CPP_AT_PRINTF("Part Code: %s", device_info.part_code);
+            CPP_AT_PRINTF("Part Code: %s\r\n", device_info.part_code);
+            CPP_AT_PRINTF("RP2040 Firmware Version: %d.%d.%d\r\n", object_dictionary.kFirmwareVersionMajor,
+                          object_dictionary.kFirmwareVersionMinor, object_dictionary.kFirmwareVersionPatch);
+
+            if (esp32.IsEnabled()) {
+                // Read ESP32 firmware verison.
+                uint32_t esp32_firmware_version;
+                if (!esp32.Read(ObjectDictionary::kAddrFirmwareVersion, esp32_firmware_version)) {
+                    CPP_AT_ERROR("ESP32 firmware version read failed!");
+                }
+                CPP_AT_PRINTF("ESP32 Firmware Version: %d.%d.%d\r\n", esp32_firmware_version >> 16,
+                              (esp32_firmware_version >> 8) & 0xFF, esp32_firmware_version & 0xFF);
+
+                // Read ESP32 base MAC address.
+                uint8_t esp32_base_mac[ObjectDictionary::kMACAddrLenBytes];
+                if (!esp32.Read(ObjectDictionary::kAddrBaseMAC, esp32_base_mac, ObjectDictionary::kMACAddrLenBytes)) {
+                    CPP_AT_ERROR("ESP32 base MAC address read failed!");
+                }
+                CPP_AT_PRINTF("ESP32 Base MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\r\n", esp32_base_mac[0],
+                              esp32_base_mac[1], esp32_base_mac[2], esp32_base_mac[3], esp32_base_mac[4],
+                              esp32_base_mac[5]);
+
+                // Read ESP32 WiFi station MAC address.
+                uint8_t esp32_wifi_sta_mac[ObjectDictionary::kMACAddrLenBytes];
+                if (!esp32.Read(ObjectDictionary::kAddrWiFiStationMAC, esp32_wifi_sta_mac,
+                                ObjectDictionary::kMACAddrLenBytes)) {
+                    CPP_AT_ERROR("ESP32 WiFi Station MAC address read failed!");
+                }
+                CPP_AT_PRINTF("ESP32 WiFi Station MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\r\n",
+                              esp32_wifi_sta_mac[0], esp32_wifi_sta_mac[1], esp32_wifi_sta_mac[2],
+                              esp32_wifi_sta_mac[3], esp32_wifi_sta_mac[4], esp32_wifi_sta_mac[5]);
+            } else {
+                CPP_AT_PRINTF("ESP32 Disabled\r\n");
+            }
+
             CPP_AT_SILENT_SUCCESS();
             break;
         }
@@ -438,57 +472,78 @@ CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
-CPP_AT_CALLBACK(CommsManager::ATWiFiCallback) {
+CPP_AT_CALLBACK(CommsManager::ATWiFiAPCallback) {
     switch (op) {
         case '?': {
             char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];
-            SettingsManager::RedactPassword(ap_wifi_password, redacted_password,
-                                            SettingsManager::Settings::kWiFiPasswordMaxLen);
-            CPP_AT_CMD_PRINTF("=%s,%s,%s\r\n", SettingsManager::kWiFiModeStrs[wifi_mode], ap_wifi_ssid,
-                              redacted_password);
+            CPP_AT_CMD_PRINTF("=%d,%s,%s,%d\r\n", wifi_ap_enabled, wifi_ap_ssid, wifi_ap_password, wifi_ap_channel);
             CPP_AT_SILENT_SUCCESS();
             break;
         }
         case '=': {
+            if (CPP_AT_HAS_ARG(0)) {
+                CPP_AT_TRY_ARG2NUM(0, wifi_ap_enabled);
+                CPP_AT_CMD_PRINTF(": wifi_ap_enabled=%d\r\n", wifi_ap_enabled);
+            }
             if (CPP_AT_HAS_ARG(1)) {
-                strncpy(ap_wifi_ssid, args[1].data(), SettingsManager::Settings::kWiFiSSIDMaxLen);
-                ap_wifi_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen] = '\0';
-                CPP_AT_CMD_PRINTF(": ap_ssid=%s\r\n", ap_wifi_ssid);
+                strncpy(wifi_ap_ssid, args[1].data(), SettingsManager::Settings::kWiFiSSIDMaxLen);
+                wifi_ap_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen] = '\0';
+                CPP_AT_CMD_PRINTF(": wifi_ap_ssid=%s\r\n", wifi_ap_ssid);
             }
             if (CPP_AT_HAS_ARG(2)) {
-                strncpy(ap_wifi_password, args[2].data(), SettingsManager::Settings::kWiFiPasswordMaxLen);
-                ap_wifi_password[SettingsManager::Settings::kWiFiPasswordMaxLen] = '\0';
-                CPP_AT_CMD_PRINTF(": ap_password=%s\r\n", ap_wifi_password);
+                strncpy(wifi_ap_password, args[2].data(), SettingsManager::Settings::kWiFiPasswordMaxLen);
+                wifi_ap_password[SettingsManager::Settings::kWiFiPasswordMaxLen] = '\0';
+                CPP_AT_CMD_PRINTF(": wifi_ap_password=%s\r\n", wifi_ap_password);
             }
             if (CPP_AT_HAS_ARG(3)) {
-                strncpy(sta_wifi_ssid, args[3].data(), SettingsManager::Settings::kWiFiSSIDMaxLen);
-                sta_wifi_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen] = '\0';
-                CPP_AT_CMD_PRINTF(": sta_ssid=%s\r\n", sta_wifi_ssid);
+                uint8_t channel;
+                CPP_AT_TRY_ARG2NUM(3, channel);
+                if (channel > SettingsManager::kWiFiAPChannelMax) {
+                    CPP_AT_ERROR("WiFi channel out of range, must be <= %d.", SettingsManager::kWiFiAPChannelMax);
+                }
+                wifi_ap_channel = channel;
+                CPP_AT_CMD_PRINTF(": wifi_ap_channel = %d\r\n", wifi_ap_channel);
             }
-            if (CPP_AT_HAS_ARG(4)) {
-                strncpy(sta_wifi_password, args[4].data(), SettingsManager::Settings::kWiFiPasswordMaxLen);
-                sta_wifi_password[SettingsManager::Settings::kWiFiPasswordMaxLen] = '\0';
+            CPP_AT_SUCCESS();
+            break;
+        }
+        default: {
+            CPP_AT_ERROR("Operator %c not supported.", op);
+        }
+    }
+    CPP_AT_ERROR();  // Should never get here.
+}
+
+CPP_AT_CALLBACK(CommsManager::ATWiFiSTACallback) {
+    switch (op) {
+        case '?': {
+            char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];
+            SettingsManager::RedactPassword(wifi_sta_password, redacted_password,
+                                            SettingsManager::Settings::kWiFiPasswordMaxLen);
+            CPP_AT_CMD_PRINTF("=%d,%s,%s\r\n", wifi_sta_enabled, wifi_sta_ssid, redacted_password);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        }
+        case '=': {
+            if (CPP_AT_HAS_ARG(0)) {
+                CPP_AT_TRY_ARG2NUM(0, wifi_sta_enabled);
+                CPP_AT_CMD_PRINTF(": wifi_sta_enabled=%d\r\n", wifi_sta_enabled);
+            }
+            if (CPP_AT_HAS_ARG(1)) {
+                strncpy(wifi_sta_ssid, args[1].data(), SettingsManager::Settings::kWiFiSSIDMaxLen);
+                wifi_sta_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen] = '\0';
+                CPP_AT_CMD_PRINTF(": sta_ssid=%s\r\n", wifi_sta_ssid);
+            }
+            if (CPP_AT_HAS_ARG(2)) {
+                strncpy(wifi_sta_password, args[2].data(), SettingsManager::Settings::kWiFiPasswordMaxLen);
+                wifi_sta_password[SettingsManager::Settings::kWiFiPasswordMaxLen] = '\0';
                 char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen];
-                SettingsManager::RedactPassword(sta_wifi_password, redacted_password,
+                SettingsManager::RedactPassword(wifi_sta_password, redacted_password,
                                                 SettingsManager::Settings::kWiFiPasswordMaxLen);
                 CPP_AT_CMD_PRINTF(": sta_password=%s\r\n", redacted_password);
             }
 
-            if (CPP_AT_HAS_ARG(0)) {
-                SettingsManager::WiFiMode new_wifi_mode;
-                for (uint16_t i = 0; i < SettingsManager::WiFiMode::kNumWiFiModes; i++) {
-                    if (args[0].compare(SettingsManager::kWiFiModeStrs[i]) == 0) {
-                        new_wifi_mode = static_cast<SettingsManager::WiFiMode>(i);
-                        break;
-                    }
-                }
-                if (new_wifi_mode == SettingsManager::WiFiMode::kNumWiFiModes) {
-                    CPP_AT_ERROR("Unrecognized WiFi mode \"%s\".", args[0].data());
-                }
-                wifi_mode = new_wifi_mode;
-                CPP_AT_SUCCESS();
-            }
-
+            CPP_AT_SUCCESS();
             break;
         }
         default: {
@@ -585,12 +640,19 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string_buf = "Set minimum trigger level threshold for RF power detector.\r\n\tAT+TLSet=<tl_mv>"
                         "\tQuery trigger level.\r\n\tAT+TL_SET?\r\n\t+TLSet=<tl_mv>.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLSetCallback, comms_manager)},
-    {.command_buf = "+WIFI",
+    {.command_buf = "+WIFI_AP",
      .min_args = 0,
-     .max_args = 5,
-     .help_string_buf = "Set WiFi params.\r\n\tAT+WIFI=<mode>,<ap_ssid>,<ap_pwd>,<sta_ssid>,<sta_pwd>\r\n\t"
-                        "Get WiFi paramss.\r\n\tAT+WIFI?\r\n\t+WIFI=<mode>,<ap_ssid>,<ap_pwd>,<sta_ssid>,<sta_pwd>",
-     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATWiFiCallback, comms_manager)},
+     .max_args = 4,
+     .help_string_buf =
+         "Set WiFi access point params.\r\n\tAT+WIFI_AP=<enabled>,<ap_ssid>,<ap_pwd>,<ap_channel>\r\n\t"
+         "Get WiFi access point params.\r\n\tAT+WIFI_AP?\r\n\t+WIFI_AP=<enabled>,<ap_ssid>,<ap_pwd>,<ap_channel>",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATWiFiAPCallback, comms_manager)},
+    {.command_buf = "+WIFI_STA",
+     .min_args = 0,
+     .max_args = 3,
+     .help_string_buf = "Set WiFi station params.\r\n\tAT+WIFI_STA=<enabled>,<sta_ssid>,<sta_pwd>\r\n\t"
+                        "Get WiFi station params.\r\n\tAT+WIFI_STA?\r\n\t+WIFI_STA=<enabled>,<sta_ssid>,<sta_pwd>",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATWiFiSTACallback, comms_manager)},
 };
 const uint16_t at_command_list_num_commands = sizeof(at_command_list) / sizeof(at_command_list[0]);
 

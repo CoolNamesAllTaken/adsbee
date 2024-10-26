@@ -8,7 +8,7 @@
 #include "macros.hh"
 #include "stdio.h"
 
-static const uint32_t kSettingsVersion = 0x3;  // Change this when settings format changes!
+static const uint32_t kSettingsVersion = 0x4;  // Change this when settings format changes!
 static const uint32_t kDeviceInfoVersion = 0x1;
 
 class SettingsManager {
@@ -36,20 +36,12 @@ class SettingsManager {
     static const uint16_t kReportingProtocolStrMaxLen = 30;
     static const char kReportingProtocolStrs[ReportingProtocol::kNumProtocols][kReportingProtocolStrMaxLen];
 
-    enum WiFiMode : uint8_t {
-        kWiFiModeOff = 0,
-        kWiFiModeStation = 1,
-        kWiFiModeAccessPoint = 2,
-        kWiFiModeAccessPointAndStation = 3,
-        kNumWiFiModes
-    };
-    static const uint8_t kWiFiModeStrMaxLen = 30;
-    static const char kWiFiModeStrs[WiFiMode::kNumWiFiModes][kWiFiModeStrMaxLen];
+    static const uint8_t kWiFiAPChannelMax = 11;  // Operation in channels 12-14 avoided in USA.
 
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a
     // firmware upgrade if the format of the settings struct changes.
     struct Settings {
-        static const int kDefaultTLMV = 1500;  // [mV]
+        static const int kDefaultTLMV = 1300;  // [mV]
         // NOTE: Length does not include null terminator.
         static const uint16_t kWiFiSSIDMaxLen = 32;
         static const uint16_t kWiFiPasswordMaxLen = 63;  // Theoretical max is 63, but limited by CppAT arg max len.
@@ -77,12 +69,14 @@ class SettingsManager {
         // ESP32 settings
         bool esp32_enabled = true;
 
-        WiFiMode wifi_mode = kWiFiModeAccessPoint;
-        char ap_wifi_ssid[kWiFiSSIDMaxLen + 1] = "";
-        char ap_wifi_password[kWiFiPasswordMaxLen + 1] = "";
+        bool wifi_ap_enabled = true;
+        uint8_t wifi_ap_channel = 1;
+        char wifi_ap_ssid[kWiFiSSIDMaxLen + 1] = "";
+        char wifi_ap_password[kWiFiPasswordMaxLen + 1] = "";
 
-        char sta_wifi_ssid[kWiFiSSIDMaxLen + 1] = "";
-        char sta_wifi_password[kWiFiPasswordMaxLen + 1] = "";
+        bool wifi_sta_enabled = false;
+        char wifi_sta_ssid[kWiFiSSIDMaxLen + 1] = "";
+        char wifi_sta_password[kWiFiPasswordMaxLen + 1] = "";
 
         char feed_uris[kMaxNumFeeds][kFeedURIMaxNumChars + 1];
         uint16_t feed_ports[kMaxNumFeeds];
@@ -99,8 +93,8 @@ class SettingsManager {
             if (GetDeviceInfo(device_info)) {
                 // If able to load device info from EEPROM, use the last 16 characters in the part code as part of the
                 // WiFi SSID.
-                device_info.GetDefaultSSID(ap_wifi_ssid);
-                snprintf(ap_wifi_password, kWiFiPasswordMaxLen, "yummyflowers");
+                device_info.GetDefaultSSID(wifi_ap_ssid);
+                snprintf(wifi_ap_password, kWiFiPasswordMaxLen, "yummyflowers");
             }
 #endif
 
@@ -191,18 +185,20 @@ class SettingsManager {
         printf("\tESP32: %s\r\n", settings.esp32_enabled ? "ENABLED" : "DISABLED");
 
         // Print WiFi settings.
-        printf("\tWifi Mode: %s\r\n", SettingsManager::kWiFiModeStrs[settings.wifi_mode]);
-        if (settings.wifi_mode == kWiFiModeAccessPoint || settings.wifi_mode == kWiFiModeAccessPointAndStation) {
+        printf("\tWiFi AP: %s\r\n", settings.wifi_ap_enabled ? "ENABLED" : "DISBALED");
+        if (settings.wifi_ap_enabled) {
             // Access Point settings. Don't censor password.
-            printf("\tAP Wifi SSID: %s\r\n", settings.ap_wifi_ssid);
-            printf("\tAP Wifi Password: %s\r\n", settings.ap_wifi_password);
+            printf("\t\tChannel: %d\r\n", settings.wifi_ap_channel);
+            printf("\t\tSSID: %s\r\n", settings.wifi_ap_ssid);
+            printf("\t\tPassword: %s\r\n", settings.wifi_ap_password);
         }
-        if (settings.wifi_mode == kWiFiModeStation || settings.wifi_mode == kWiFiModeAccessPointAndStation) {
+        printf("\tWiFi STA: %s\r\n", settings.wifi_sta_enabled ? "ENABLED" : "DISABLED");
+        if (settings.wifi_sta_enabled) {
             // Station settings. Censor password.
-            printf("\tSTA Wifi SSID: %s\r\n", settings.sta_wifi_ssid);
-            char redacted_sta_wifi_password[Settings::kWiFiPasswordMaxLen];
-            RedactPassword(settings.sta_wifi_password, redacted_sta_wifi_password, strlen(settings.sta_wifi_password));
-            printf("\tSTA Wifi Password: %s\r\n", redacted_sta_wifi_password);
+            printf("\t\tSSID: %s\r\n", settings.wifi_sta_ssid);
+            char redacted_wifi_sta_password[Settings::kWiFiPasswordMaxLen];
+            RedactPassword(settings.wifi_sta_password, redacted_wifi_sta_password, strlen(settings.wifi_sta_password));
+            printf("\t\tPassword: %s\r\n", redacted_wifi_sta_password);
         }
 
         printf("\tFeed URIs:\r\n");
