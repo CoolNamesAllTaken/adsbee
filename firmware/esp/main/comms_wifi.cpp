@@ -111,14 +111,11 @@ void CommsManager::WiFiAccessPointTask(void* pvParameters) {
     timeout.tv_usec = 0;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
 
-    struct sockaddr_in dest_addr;
-    dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(message.port);
-
     while (run_wifi_ap_task_) {
         if (xQueueReceive(wifi_ap_message_queue_, &message, portMAX_DELAY) == pdTRUE) {
-            // int send_buf_size = 16384;  // Set a larger send buffer
-            // setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &send_buf_size, sizeof(send_buf_size));
+            struct sockaddr_in dest_addr;
+            dest_addr.sin_family = AF_INET;
+            dest_addr.sin_port = htons(message.port);
 
             xSemaphoreTake(wifi_clients_list_mutex_, portMAX_DELAY);
             for (int i = 0; i < SettingsManager::Settings::kWiFiMaxNumClients; i++) {

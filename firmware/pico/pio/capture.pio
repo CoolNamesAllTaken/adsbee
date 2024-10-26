@@ -219,9 +219,6 @@ void preamble_detector_program_init(
 ; Before enabling the SM, it should be placed in a 'wait 1, pin` state, so that
 ; it will not start sampling until the initial line idle state ends.
 
-; NEW PROGRAM HERE
-; jmp initial_entry
-
 
 ; SAMPLE SUBROUTINE
 ; Samples 3x and uses a majority vote to determine whether it's HI or LO.
@@ -291,11 +288,6 @@ rising_edge_0:
 end_of_0:
     jmp !x start_of_1 [1]       ; 23:24 | If signal is 0 again, it's another 0 bit otherwise it's a 1
 .wrap
-
-; complete_demod:
-;     jmp complete_demod side 1
-
-
 
 % c-sdk {
 static inline void message_demodulator_program_init(

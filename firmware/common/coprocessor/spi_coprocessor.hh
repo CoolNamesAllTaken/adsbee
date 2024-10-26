@@ -290,6 +290,7 @@ class SPICoprocessor {
             return false;
         }
 #elif ON_PICO
+        Update();  // Check to see if handshake line is raised before blasting a packet into the ESP32.
 #else
         return false;  // Not supported on other platforms.
 #endif
@@ -338,6 +339,7 @@ class SPICoprocessor {
             return false;
         }
 #elif ON_PICO
+        Update();  // Check to see if handshake line is raised before blasting a packet into the ESP32.
 #else
         return false;  // Not supported on other platforms.
 #endif
