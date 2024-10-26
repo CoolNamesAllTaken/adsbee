@@ -13,14 +13,16 @@ services:
     restart: always
     environment:
       - TZ=America/Los_Angeles
-      - BEASTHOST=readsb
-      - MLATHOST=adsbx
+      - BEASTHOST=192.168.1.182
+      # - BEASTPORT=30005
       - LAT=-33.33333
       - LONG=111.11111
     networks:
       - adsbnet
     ports:
       - 8078:80
+      - 30004:30004
+      - 30005:30005
     tmpfs:
       - /run:exec,size=64M
       - /var/log

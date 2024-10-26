@@ -84,20 +84,21 @@ uint16_t TransponderPacketToBeastFrame(const DecodedTransponderPacket &packet, u
     uint8_t packet_buf[DecodedTransponderPacket::kMaxPacketLenWords32 * kBytesPerWord];
     uint16_t data_num_bytes = packet.DumpPacketBuffer(packet_buf);
 
+    beast_frame_buf[0] = kBeastEscapeChar;
     // Determine and write frame type Byte.
     switch (data_num_bytes * kBitsPerByte) {
         case 56:
             // 56-bit data (squitter): Mode S short frame.
-            beast_frame_buf[0] = 0x32;
+            beast_frame_buf[1] = kBeastFrameTypeModeSShort;
             break;
         case 112:
             // 112-bit data (extended squitter): Mode S long frame.
-            beast_frame_buf[0] = 0x33;
+            beast_frame_buf[1] = kBeastFrameTypeModeSLong;
             break;
         default:
             return 0;
     }
-    uint16_t bytes_written = 1;
+    uint16_t bytes_written = 2;
 
     // Write 6-Byte MLAT timestamp.
     uint64_t mlat_12mhz_counter = packet.GetMLAT12MHzCounter();

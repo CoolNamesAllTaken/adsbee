@@ -147,6 +147,8 @@ class CommsManager {
     QueueHandle_t wifi_sta_raw_transponder_packet_queue_;
     bool run_wifi_ap_task_ = false;   // Flag used to tell wifi AP task to shut down.
     bool run_wifi_sta_task_ = false;  // Flag used to tell wifi station task to shut down.
+    bool wifi_sta_has_ip_ =
+        false;  // Flag to indicate when successfully connected to WiFi. Don't create sockets until STA is connected.
 };
 
 extern CommsManager comms_manager;
