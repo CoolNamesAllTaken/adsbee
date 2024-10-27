@@ -1,3 +1,10 @@
+## `pico` Directory Structure
+
+* `application` - Contains code for the main application (ADSBee).
+* `bootloader` - Contains code for a bootloader that allows the main application to be reflashed over UART.
+* `common` - Contains code that is shared between the `application` and `bootloader` firmwares on the RP2040.
+* `host_test` - Contains unit tests that are used to exercise code in the `applications` and `bootloader` folders from a host computer.
+
 ## Troubleshooting
 ### RP2040 does not enumerate as a USB device when running program with USB functionality.
 

@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 20)
 
 if (NOT CMAKE_BUILD_TYPE STREQUAL "Test")
     ## Building for target.
+    # Flag indicating that build is for the embedded target. Used to toggle target_source calls.
+    set(COMPILED_FOR_TARGET 1)
     # Pull in SDK (must be before project)
     include(pico_sdk_import.cmake)
     if (PICO_SDK_VERSION_STRING VERSION_LESS "1.3.0")
@@ -12,40 +14,49 @@ if (NOT CMAKE_BUILD_TYPE STREQUAL "Test")
     endif()
 
     project(ads_bee C CXX ASM)
-    # Flag indicating that build is for the embedded target. Used to toggle target_source calls.
-    set(COMPILED_FOR_TARGET 1)
 
     # Differentiate common code between Pico and ESP32. For code highlighting, add this to the "defines" property of
     # "configurations" in c_cpp_properties.json.
     add_compile_definitions(ON_PICO)
+
+    # Initialize the SDK
+    pico_sdk_init()
+    add_executable(${PROJECT_NAME} "")
+
+    if (CMAKE_BUILD_TYPE STREQUAL "Bootloader Debug")
+        message("Building and linking bootloader image ONLY in Debug mode with bootloader.ld.")
+
+        set(CMAKE_BUILD_TYPE "Debug") # Cascade into a regular Debug build.
+    elseif(CMAKE_BUILD_TYPE STREQUAL "Bootloader Release")
+        message("Building and linking bootloader image ONLY in Release mode with bootloader.ld.")
+
+        set(CMAKE_BUILD_TYPE "Release") # Cascade into a regular Release build.
+    else()
+        message("Building and linking bootloader and application image with combined.ld.")
+        pico_set_linker_script(${PROJECT_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/default.ld)
+    endif()
 
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         # set(PICO_DEOPTIMIZED_DEBUG 1)
         add_compile_definitions(HARDWARE_UNIT_TESTS)
     endif()
 
-    # Initialize the SDK
-    pico_sdk_init()
-    add_executable(${PROJECT_NAME} "")
-
     add_subdirectory(../common adsbee_common)
-    add_subdirectory(src)
+    add_subdirectory(common pico_common)
+    add_subdirectory(application)
 
     target_include_directories(${PROJECT_NAME} PRIVATE 
         ../common
-        src
+        common
+        application
         /ads_bee/modules/cppAT/src
     )
 
     target_sources(${PROJECT_NAME} PRIVATE
         /ads_bee/modules/cppAT/src/cpp_at.cc
-        # /ads_bee/modules/cppAT/src/cpp_at.hh
     )
 
     # Create C header file with the name <pio program>.pio.h
-    pico_generate_pio_header(${PROJECT_NAME}  
-    ${CMAKE_CURRENT_LIST_DIR}/pio/blink.pio 
-    )
     pico_generate_pio_header(${PROJECT_NAME}  
     ${CMAKE_CURRENT_LIST_DIR}/pio/capture.pio       
     )
@@ -89,7 +100,7 @@ else()
     add_executable(${PROJECT_NAME} "")
 
     add_subdirectory(../common adsbee_common)
-    add_subdirectory(src)
+    add_subdirectory(application)
     add_subdirectory(host_test)
 
     target_include_directories(${PROJECT_NAME} PRIVATE
@@ -125,11 +136,11 @@ add_compile_definitions(
 # Embed binaries into the app.
 # In ESP-IDF this can also be done using EMBED_FILES option of idf_component_register.
 # Here an external tool is used to make file embedding similar with other ports.
-include(${CMAKE_CURRENT_LIST_DIR}/src/esp32_flasher/bin2array.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/common/esp32_flasher/bin2array.cmake)
 # Create a file dependency that copies over the most recently built ESP32 firmware binary to the bin directory used by
 # esp32_flasher. Re-runs cmake if the file gets changed.
-configure_file(/ads_bee/esp/build/adsbee_esp.bin ${CMAKE_CURRENT_LIST_DIR}/src/esp32_flasher/bin/adsbee_esp.bin COPYONLY)
-create_resources(${CMAKE_CURRENT_LIST_DIR}/src/esp32_flasher/bin ${CMAKE_BINARY_DIR}/binaries.c)
+configure_file(/ads_bee/esp/build/adsbee_esp.bin ${CMAKE_CURRENT_LIST_DIR}/common/esp32_flasher/bin/adsbee_esp.bin COPYONLY)
+create_resources(${CMAKE_CURRENT_LIST_DIR}/common/esp32_flasher/bin ${CMAKE_BINARY_DIR}/binaries.c)
 set_property(SOURCE ${CMAKE_BINARY_DIR}/binaries.c PROPERTY GENERATED 1)
 target_sources(${PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR}/binaries.c)
 
