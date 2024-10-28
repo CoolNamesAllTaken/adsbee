@@ -1,4 +1,6 @@
-target_sources(${PROJECT_NAME} PRIVATE
+add_executable(host_test main.cc)
+
+target_sources(host_test PRIVATE
     hal.cc
     main.cc
     # test_ads_b_decoder.cc
@@ -17,6 +19,6 @@ target_sources(${PROJECT_NAME} PRIVATE
     test_mode_a_c_packets.cc
 )
 
-target_include_directories(${PROJECT_NAME} PRIVATE
+target_include_directories(host_test PRIVATE
     mocks
 )

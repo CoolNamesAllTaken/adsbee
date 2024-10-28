@@ -1,22 +1,32 @@
 
-target_sources(${PROJECT_NAME} PRIVATE
-# NOTE: Annoyingly, all source files need to end with .c or .cpp to be seen by the ESP IDF.
-    settings_strs.cpp
-    comms/gdl90/gdl90_utils.cpp
-    utils/buffer_utils.cpp
-    utils/data_structures.cpp
-    adsb/transponder_packet.cpp
-    adsb/aircraft_dictionary.cpp
-    adsb/decode_utils.cpp
-    coprocessor/spi_coprocessor.cpp
-    coprocessor/object_dictionary.cpp
-)
-target_include_directories(${PROJECT_NAME} PRIVATE
-    adsb
-    utils
-    comms
-    comms/beast
-    comms/csbee
-    comms/gdl90
-    coprocessor
-)
+if (TARGET application)
+    target_sources(application PRIVATE
+    # NOTE: Annoyingly, all source files need to end with .c or .cpp to be seen by the ESP IDF.
+        settings_strs.cpp
+        comms/gdl90/gdl90_utils.cpp
+        utils/buffer_utils.cpp
+        utils/data_structures.cpp
+        adsb/transponder_packet.cpp
+        adsb/aircraft_dictionary.cpp
+        adsb/decode_utils.cpp
+        coprocessor/spi_coprocessor.cpp
+        coprocessor/object_dictionary.cpp
+    )
+    target_include_directories(application PRIVATE
+        .
+        adsb
+        utils
+        comms
+        comms/beast
+        comms/csbee
+        comms/gdl90
+        coprocessor
+    )
+elseif (TARGET bootloader)
+    target_sources(bootloader PRIVATE
+        utils
+    )
+    target_include_directories(bootloader PRIVATE
+        utils # We just want hal.hh for now.    
+    )
+endif()
