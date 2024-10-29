@@ -2,6 +2,8 @@ if (ON_EMBEDDED_DEVICE)
     ## Building for target.
     add_executable(application main.cc)
 
+    add_subdirectory(${ADSBEE_COMMON_DIR} ${CMAKE_BINARY_DIR}/adsbee_common)
+
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         # set(PICO_DEOPTIMIZED_DEBUG 1)
         add_compile_definitions(HARDWARE_UNIT_TESTS)
@@ -57,14 +59,6 @@ if (ON_EMBEDDED_DEVICE)
     set_property(SOURCE ${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin/binaries.c PROPERTY GENERATED 1)
     target_sources(application PRIVATE ${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin/binaries.c)
     
-
-else()
-    
-    
-
-endif()
-
-if(ON_EMBEDDED_DEVICE)
     # Build for embedded target
     add_subdirectory(esp32_flasher)
     target_include_directories(application PRIVATE

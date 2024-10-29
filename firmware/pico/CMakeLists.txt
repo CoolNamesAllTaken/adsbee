@@ -39,14 +39,15 @@ if (ON_EMBEDDED_DEVICE)
 
     # add_subdirectory(${PICO_COMMON_DIR} ${CMAKE_BINARY_DIR}/pico_common)
 
-    add_subdirectory(bootloader)
-    add_subdirectory(application)
+    if (TARGET bootloader)
+        add_subdirectory(bootloader)
+    else ()
+        add_subdirectory(application)
+    endif()
     add_custom_target(combined DEPENDS
         bootloader
         application
     )
-
-    add_subdirectory(${ADSBEE_COMMON_DIR} ${CMAKE_BINARY_DIR}/adsbee_common)
 
     # Select linker script corresponding to target being built.
     if (TARGET bootloader)
