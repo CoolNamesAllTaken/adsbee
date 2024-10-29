@@ -9,6 +9,9 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#else
+#include "hal_god_powers.hh"
+static uint64_t time_since_boot_us = 0;
 #endif
 
 inline uint64_t get_time_since_boot_us() {
@@ -16,6 +19,8 @@ inline uint64_t get_time_since_boot_us() {
     return to_us_since_boot(get_absolute_time());
 #elif ON_ESP32
     return esp_timer_get_time();
+#else
+    return time_since_boot_us;
 #endif
 }
 inline uint32_t get_time_since_boot_ms() {
@@ -23,6 +28,8 @@ inline uint32_t get_time_since_boot_ms() {
     return to_ms_since_boot(get_absolute_time());
 #elif ON_ESP32
     return xTaskGetTickCount() * portTICK_PERIOD_MS;
+#else
+    return time_since_boot_us / 1e3;
 #endif
 }
 

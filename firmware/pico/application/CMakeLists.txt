@@ -59,34 +59,7 @@ if (ON_EMBEDDED_DEVICE)
     
 
 else()
-    set(CMAKE_BUILD_TYPE "Debug") # Now that we've identified we're running tests, revert to an actual build config.
-
-    add_compile_options(
-        -Wall                # Include all warnings.
-        -Wno-format          # int != int32_t as far as the compiler is concerned because gcc has int32_t as long int
-        -Wno-unused-function # we have some for the docs that aren't called
-        -Wno-maybe-uninitialized
-    )
-
-    add_subdirectory(${CMAKE_SOURCE_DIR}/host_test)
-
-    target_include_directories(host_test PRIVATE
-        ../common
-        /ads_bee/modules/googletest
-        /ads_bee/modules/cppAT/src
-        src
-        host_test
-    )
-
-    target_sources(host_test PRIVATE
-        /ads_bee/modules/cppAT/src/cpp_at.cc
-        /ads_bee/modules/cppAT/test/test_cpp_at.cc
-    )
-
-    # Test: Pull in google test library
-    add_library(libgtest SHARED IMPORTED)
-    set_target_properties(libgtest PROPERTIES IMPORTED_LOCATION /ads_bee/modules/googletest/build/lib/libgtest.so)
-    target_link_libraries(host_test PRIVATE libgtest)
+    
     
 
 endif()
@@ -95,11 +68,11 @@ if(ON_EMBEDDED_DEVICE)
     # Build for embedded target
     add_subdirectory(esp32_flasher)
     target_include_directories(application PRIVATE
-        ${CMAKE_SOURCE_DIR}/../modules/cppAT/src
+        ${ADSBEE_MODULES_DIR}/cppAT/src
         .
     )
     target_sources(application PRIVATE
-        ${CMAKE_SOURCE_DIR}/../modules/cppAT/src/cpp_at.cc
+        ${ADSBEE_MODULES_DIR}/cppAT/src/cpp_at.cc
         main.cc # Don't include main for testing.
         ads_bee.cc
         settings.cc
@@ -111,8 +84,7 @@ else()
 
     )
     target_sources(host_test PRIVATE
-        ads_bee.cc
-        settings.cc
+
     )
 endif()
 

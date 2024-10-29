@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(LINKER_SCRIPTS_DIR "${CMAKE_SOURCE_DIR}/linker_scripts")
 set(PICO_COMMON_DIR "${CMAKE_SOURCE_DIR}/pico_common") # Used for code shared among bootloader and application on RP2040.
 set(ADSBEE_COMMON_DIR "${CMAKE_SOURCE_DIR}/../common") # Used for code shared between ESP32 and RP2040.
+set(ADSBEE_MODULES_DIR "${CMAKE_SOURCE_DIR}/../modules")
 
 # TODO: Change these linker scripts as they get populated.
 set(BOOTLOADER_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/default.ld")
@@ -62,9 +63,6 @@ if (ON_EMBEDDED_DEVICE)
         pico_set_linker_script(combined ${COMBINED_LINKER_SCRIPT})
     endif()
 
-    
-
-
 else()
     ## Compiling for testing on host.
 
@@ -87,24 +85,4 @@ else()
     add_library(libgtest SHARED IMPORTED)
     set_target_properties(libgtest PROPERTIES IMPORTED_LOCATION /ads_bee/modules/googletest/build/lib/libgtest.so)
     target_link_libraries(host_test PRIVATE libgtest)
-
-    add_subdirectory(${CMAKE_SOURCE_DIR}/../common ${CMAKE_BINARY_DIR}/adsbee_common)
-    add_subdirectory(bootloader)
-    add_subdirectory(application)
-
-    target_include_directories(host_test PRIVATE
-        ../common
-        ../modules/googletest
-        ../modules/cppAT/src
-        application
-        bootloader
-        host_test
-    )
-
-    target_sources(host_test PRIVATE
-        ../modules/cppAT/src/cpp_at.cc
-        ../modules/cppAT/test/test_cpp_at.cc
-    )
-
-    
 endif()

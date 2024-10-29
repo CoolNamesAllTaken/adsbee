@@ -1,6 +1,26 @@
 add_executable(host_test main.cc)
 
+set(CMAKE_BUILD_TYPE "Debug") # Now that we've identified we're running tests, revert to an actual build config.
+
+add_compile_options(
+    -Wall                # Include all warnings.
+    -Wno-format          # int != int32_t as far as the compiler is concerned because gcc has int32_t as long int
+    -Wno-unused-function # we have some for the docs that aren't called
+    -Wno-maybe-uninitialized
+)
+
+# Test: Pull in google test library
+add_library(libgtest SHARED IMPORTED)
+set_target_properties(libgtest PROPERTIES IMPORTED_LOCATION /ads_bee/modules/googletest/build/lib/libgtest.so)
+target_link_libraries(host_test PRIVATE libgtest)
+
+add_subdirectory(${ADSBEE_COMMON_DIR} ${CMAKE_BINARY_DIR}/adsbee_common)
+add_subdirectory(${CMAKE_SOURCE_DIR}/bootloader ${CMAKE_BINARY_DIR}/bootloader)
+add_subdirectory(${CMAKE_SOURCE_DIR}/application ${CMAKE_BINARY_DIR}/application)
+
 target_sources(host_test PRIVATE
+    ${ADSBEE_MODULES_DIR}/cppAT/src/cpp_at.cc
+    ${ADSBEE_MODULES_DIR}/cppAT/test/test_cpp_at.cc
     hal.cc
     main.cc
     # test_ads_b_decoder.cc
@@ -20,5 +40,9 @@ target_sources(host_test PRIVATE
 )
 
 target_include_directories(host_test PRIVATE
+    ${ADSBEE_COMMON_DIR}
+    ${ADSBEE_MODULES_DIR}/googletest
+    ${ADSBEE_MODULES_DIR}/cppAT/src
+    .
     mocks
 )
