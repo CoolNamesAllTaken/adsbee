@@ -39,18 +39,20 @@ if (ON_EMBEDDED_DEVICE)
 
     # add_subdirectory(${PICO_COMMON_DIR} ${CMAKE_BINARY_DIR}/pico_common)
 
-    if (TARGET bootloader)
-        add_subdirectory(bootloader)
-    else ()
-        add_subdirectory(application)
-    endif()
+    add_subdirectory(bootloader)
+    add_subdirectory(application)
+
     add_custom_target(combined DEPENDS
         bootloader
         application
     )
-
+ 
     # Select linker script corresponding to target being built.
-    if (TARGET bootloader)
+    if (TARGET combined)
+        # Building both the bootloader and the main application.
+        message("Building and linking bootloader and application with ${COMBINED_LINKER_SCRIPT}")
+        pico_set_linker_script(combined ${COMBINED_LINKER_SCRIPT})
+    elseif (TARGET bootloader)
         # Building only the bootloader.
         message("Building and linking bootloader only with ${BOOTLOADER_LINKER_SCRIPT}")
         pico_set_linker_script(bootloader ${BOOTLOADER_LINKER_SCRIPT})
@@ -58,10 +60,6 @@ if (ON_EMBEDDED_DEVICE)
         # Building only the main application.
         message("Building and linking application only with ${APPLICATION_LINKER_SCRIPT}")
         pico_set_linker_script(application ${APPLICATION_LINKER_SCRIPT})
-    else()
-        # Building both the bootloader and the main application.
-        message("Building and linking bootloader and application with ${COMBINED_LINKER_SCRIPT}")
-        pico_set_linker_script(combined ${COMBINED_LINKER_SCRIPT})
     endif()
 
 else()

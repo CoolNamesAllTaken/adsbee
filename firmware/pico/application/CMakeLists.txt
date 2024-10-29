@@ -2,7 +2,7 @@ if (ON_EMBEDDED_DEVICE)
     ## Building for target.
     add_executable(application main.cc)
 
-    add_subdirectory(${ADSBEE_COMMON_DIR} ${CMAKE_BINARY_DIR}/adsbee_common)
+    add_subdirectory(${ADSBEE_COMMON_DIR} ${CMAKE_BINARY_DIR}/application/adsbee_common)
 
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         # set(PICO_DEOPTIMIZED_DEBUG 1)
