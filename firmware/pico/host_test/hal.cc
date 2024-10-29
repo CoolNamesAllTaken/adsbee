@@ -2,6 +2,8 @@
 
 #include "hal_god_powers.hh"
 
+uint64_t time_since_boot_us = 0;
+
 /** Mock Pico SDK functions here for testing. **/
 
 // PWM Mocks: Currently unused.

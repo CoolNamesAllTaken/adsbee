@@ -11,7 +11,7 @@
 #include "freertos/task.h"
 #else
 #include "hal_god_powers.hh"
-static uint64_t time_since_boot_us = 0;
+extern uint64_t time_since_boot_us;
 #endif
 
 inline uint64_t get_time_since_boot_us() {
