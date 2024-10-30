@@ -15,6 +15,7 @@ target_sources(${PROJECT_NAME} PRIVATE
     test_reporting_gdl90.cc
     test_decode_utils.cc
     test_mode_a_c_packets.cc
+    test_hash_map.cc
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
