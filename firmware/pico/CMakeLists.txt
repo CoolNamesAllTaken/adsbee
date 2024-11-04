@@ -46,21 +46,23 @@ if (ON_EMBEDDED_DEVICE)
         bootloader
         application
     )
+
+    pico_set_linker_script(combined ${COMBINED_LINKER_SCRIPT})
  
-    # Select linker script corresponding to target being built.
-    if (TARGET combined)
-        # Building both the bootloader and the main application.
-        message("Building and linking bootloader and application with ${COMBINED_LINKER_SCRIPT}")
-        pico_set_linker_script(combined ${COMBINED_LINKER_SCRIPT})
-    elseif (TARGET bootloader)
-        # Building only the bootloader.
-        message("Building and linking bootloader only with ${BOOTLOADER_LINKER_SCRIPT}")
-        pico_set_linker_script(bootloader ${BOOTLOADER_LINKER_SCRIPT})
-    elseif (TARGET application)
-        # Building only the main application.
-        message("Building and linking application only with ${APPLICATION_LINKER_SCRIPT}")
-        pico_set_linker_script(application ${APPLICATION_LINKER_SCRIPT})
-    endif()
+    # # Select linker script corresponding to target being built.
+    # if (TARGET combined)
+    #     # Building both the bootloader and the main application.
+    #     message("Building and linking bootloader and application with ${COMBINED_LINKER_SCRIPT}")
+    #     pico_set_linker_script(combined ${COMBINED_LINKER_SCRIPT})
+    # elseif (TARGET bootloader)
+    #     # Building only the bootloader.
+    #     message("Building and linking bootloader only with ${BOOTLOADER_LINKER_SCRIPT}")
+    #     pico_set_linker_script(bootloader ${BOOTLOADER_LINKER_SCRIPT})
+    # elseif (TARGET application)
+    #     # Building only the main application.
+    #     message("Building and linking application only with ${APPLICATION_LINKER_SCRIPT}")
+    #     pico_set_linker_script(application ${APPLICATION_LINKER_SCRIPT})
+    # endif()
 
 else()
     ## Compiling for testing on host.

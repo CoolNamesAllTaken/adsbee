@@ -32,4 +32,6 @@ if (ON_EMBEDDED_DEVICE)
     # Set up debug USB
     pico_enable_stdio_usb(bootloader 1) # use USB for standard printing
     pico_enable_stdio_uart(bootloader 0) # disable STDIO UART
+
+    pico_set_linker_script(bootloader ${BOOTLOADER_LINKER_SCRIPT})
 endif()

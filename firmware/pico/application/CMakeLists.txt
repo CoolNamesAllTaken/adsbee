@@ -29,8 +29,8 @@ if (ON_EMBEDDED_DEVICE)
     )
 
     # Firmware: Create map/bin/hex file etc
-    pico_add_extra_outputs(application)
-    pico_add_hex_output(application) # temporary workwaround for this bug: https://github.com/raspberrypi/pico-sdk/issues/1829
+    # pico_add_extra_outputs(application)
+    # pico_add_hex_output(application) # temporary workwaround for this bug: https://github.com/raspberrypi/pico-sdk/issues/1829
 
     # Set up debug USB
     pico_enable_stdio_usb(application 1) # use USB for standard printing
@@ -72,6 +72,52 @@ if (ON_EMBEDDED_DEVICE)
         settings.cc
         eeprom.cc
     )
+
+    pico_set_linker_script(application ${APPLICATION_LINKER_SCRIPT})
+
+    pico_add_extra_outputs(application)
+
+    # First, we'll create a copy of the original .bin file
+    add_custom_command(TARGET application POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy 
+                ${CMAKE_CURRENT_BINARY_DIR}/application.bin
+                ${CMAKE_CURRENT_BINARY_DIR}/application_original.bin
+        COMMENT "Backing up original binary"
+    )
+
+    # Then append the CRC32
+    add_custom_command(TARGET application POST_BUILD
+        COMMAND python3 ${LINKER_SCRIPTS_DIR}/append_crc32.py
+                ${CMAKE_CURRENT_BINARY_DIR}/application.bin
+        COMMENT "Calculating and appending CRC32 to firmware"
+    )
+    
+    # Finally generate additional outputs using pico_add_extra_outputs
+    # pico_add_extra_outputs(application)
+
+    # # Function to calculate CRC32 and generate additional outputs
+    # function(calculate_append_crc_and_generate_outputs TARGET_NAME)
+    #     # First, we'll create a copy of the original .bin file
+    #     add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+    #         COMMAND ${CMAKE_COMMAND} -E copy 
+    #                 ${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}.bin
+    #                 ${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}_original.bin
+    #         COMMENT "Backing up original binary"
+    #     )
+
+    #     # Then append the CRC32
+    #     add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+    #         COMMAND python3 ${LINKER_SCRIPTS_DIR}/append_crc32.py
+    #                 ${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}.bin
+    #         COMMENT "Calculating and appending CRC32 to firmware"
+    #     )
+
+    #     # Finally generate additional outputs using pico_add_extra_outputs
+    #     pico_add_extra_outputs(${TARGET_NAME})
+    # endfunction()
+
+    # calculate_append_crc_and_generate_outputs(application)
+
 else()
     # Build for testing on host.
     target_include_directories(host_test PRIVATE
