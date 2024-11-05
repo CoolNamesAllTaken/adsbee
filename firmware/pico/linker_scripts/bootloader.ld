@@ -23,7 +23,17 @@
 
 MEMORY
 {
-    FLASH(rx) : ORIGIN = 0x10000000, LENGTH = 16k
+    /* Original flash length: 16384k Bytes.
+    FLASH MAP
+        0x10000000 (12k) FLASH_BL: Bootloader
+        0x10002EE0 (4k) FLASH_HDR: Image Header
+        0x10003E80 (8184k) FLASH_APP0: Application 0
+        0x107D1F40 (8184k) FLASH_APP1: Application 1
+    */
+    FLASH_BL(rx) : ORIGIN = 0x10000000, LENGTH = 12k
+    FLASH_HDR(rx) : ORIGIN = 0x10000000+12k, LENGTH = 4k
+    FLASH_APP0(rx) : ORIGIN = 0x10000000+12k+4k, LENGTH = 8148k
+    FLASH_APP1(rx) : ORIGIN = 0x10000000+12k+4k+8148k, LENGTH = 8148k
     RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 256k
     SCRATCH_X(rwx) : ORIGIN = 0x20040000, LENGTH = 4k
     SCRATCH_Y(rwx) : ORIGIN = 0x20041000, LENGTH = 4k
@@ -40,13 +50,13 @@ SECTIONS
 
     .flash_begin : {
         __flash_binary_start = .;
-    } > FLASH
+    } > FLASH_BL
 
     .boot2 : {
         __boot2_start__ = .;
         KEEP (*(.boot2))
         __boot2_end__ = .;
-    } > FLASH
+    } > FLASH_BL
 
     ASSERT(__boot2_end__ - __boot2_start__ == 256,
         "ERROR: Pico second stage bootloader must be 256 bytes in size")
@@ -66,7 +76,7 @@ SECTIONS
         KEEP (*(.reset))
         /* TODO revisit this now memset/memcpy/float in ROM */
         /* bit of a hack right now to exclude all floating point and time critical (e.g. memset, memcpy) code from
-         * FLASH ... we will include any thing excluded here in .data below by default */
+         * FLASH_BL ... we will include any thing excluded here in .data below by default */
         *(.init)
         *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:) .text*)
         *(.fini)
@@ -85,25 +95,25 @@ SECTIONS
 
         *(.eh_frame*)
         . = ALIGN(4);
-    } > FLASH
+    } > FLASH_BL
 
     .rodata : {
         *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:) .rodata*)
         . = ALIGN(4);
         *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.flashdata*)))
         . = ALIGN(4);
-    } > FLASH
+    } > FLASH_BL
 
     .ARM.extab :
     {
         *(.ARM.extab* .gnu.linkonce.armextab.*)
-    } > FLASH
+    } > FLASH_BL
 
     __exidx_start = .;
     .ARM.exidx :
     {
         *(.ARM.exidx* .gnu.linkonce.armexidx.*)
-    } > FLASH
+    } > FLASH_BL
     __exidx_end = .;
 
     /* Machine inspectable binary information */
@@ -113,7 +123,7 @@ SECTIONS
     {
         KEEP(*(.binary_info.keep.*))
         *(.binary_info.*)
-    } > FLASH
+    } > FLASH_BL
     __binary_info_end = .;
     . = ALIGN(4);
 
@@ -172,7 +182,7 @@ SECTIONS
         . = ALIGN(4);
         /* All data end */
         __data_end__ = .;
-    } > RAM AT> FLASH
+    } > RAM AT> FLASH_BL
 
     .uninitialized_data (COPY): {
         . = ALIGN(4);
@@ -185,7 +195,7 @@ SECTIONS
         *(.scratch_x.*)
         . = ALIGN(4);
         __scratch_x_end__ = .;
-    } > SCRATCH_X AT > FLASH
+    } > SCRATCH_X AT > FLASH_BL
     __scratch_x_source__ = LOADADDR(.scratch_x);
 
     .scratch_y : {
@@ -193,7 +203,7 @@ SECTIONS
         *(.scratch_y.*)
         . = ALIGN(4);
         __scratch_y_end__ = .;
-    } > SCRATCH_Y AT > FLASH
+    } > SCRATCH_Y AT > FLASH_BL
     __scratch_y_source__ = LOADADDR(.scratch_y);
 
     .bss  : {
@@ -233,7 +243,7 @@ SECTIONS
 
     .flash_end : {
         __flash_binary_end = .;
-    } > FLASH
+    } > FLASH_BL
 
     /* stack limit is poorly named, but historically is maximum heap ptr */
     __StackLimit = ORIGIN(RAM) + LENGTH(RAM);

@@ -75,7 +75,8 @@ if (ON_EMBEDDED_DEVICE)
 
     pico_set_linker_script(application ${APPLICATION_LINKER_SCRIPT})
 
-    pico_add_extra_outputs(application)
+    # Generated outputs are .elf and .bin. Manually generate .UF2 output to take into account checksum.
+    pico_add_bin_output(application)
 
     # First, we'll create a copy of the original .bin file
     add_custom_command(TARGET application POST_BUILD
@@ -85,38 +86,13 @@ if (ON_EMBEDDED_DEVICE)
         COMMENT "Backing up original binary"
     )
 
-    # Then append the CRC32
+    # Append the CRC32 in application.bin, then turn application.bin into a UF2 file.
     add_custom_command(TARGET application POST_BUILD
         COMMAND python3 ${LINKER_SCRIPTS_DIR}/append_crc32.py
                 ${CMAKE_CURRENT_BINARY_DIR}/application.bin
+                ${CMAKE_CURRENT_BINARY_DIR}/application.uf2
         COMMENT "Calculating and appending CRC32 to firmware"
     )
-    
-    # Finally generate additional outputs using pico_add_extra_outputs
-    # pico_add_extra_outputs(application)
-
-    # # Function to calculate CRC32 and generate additional outputs
-    # function(calculate_append_crc_and_generate_outputs TARGET_NAME)
-    #     # First, we'll create a copy of the original .bin file
-    #     add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
-    #         COMMAND ${CMAKE_COMMAND} -E copy 
-    #                 ${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}.bin
-    #                 ${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}_original.bin
-    #         COMMENT "Backing up original binary"
-    #     )
-
-    #     # Then append the CRC32
-    #     add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
-    #         COMMAND python3 ${LINKER_SCRIPTS_DIR}/append_crc32.py
-    #                 ${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}.bin
-    #         COMMENT "Calculating and appending CRC32 to firmware"
-    #     )
-
-    #     # Finally generate additional outputs using pico_add_extra_outputs
-    #     pico_add_extra_outputs(${TARGET_NAME})
-    # endfunction()
-
-    # calculate_append_crc_and_generate_outputs(application)
 
 else()
     # Build for testing on host.

@@ -20,16 +20,11 @@ def append_crc32_bin(filename):
     print(f"Appended CRC32: 0x{crc:08X}")
     return crc
 
-
-
-def append_crc_uf2(filename):
-    with open(filename, 'rb') as f:
-        uf2_data = f.read()
-
 if __name__ == '__main__':
+    print(f"Appending CRC to {sys.argv[1]} amd then converting to {sys.argv[2]}.")
     if len(sys.argv) != 3:
         print("Usage: append_crc.py <firmware.bin> <firmware.uf2>")
         sys.exit(1)
     
     append_crc32_bin(sys.argv[1])
-    append_crc_uf2(sys.argv[2])
+    bin_file_to_uf2_file(sys.argv[1], sys.argv[2])

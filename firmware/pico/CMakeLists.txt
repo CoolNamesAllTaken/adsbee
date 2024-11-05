@@ -12,7 +12,7 @@ set(ADSBEE_MODULES_DIR "${CMAKE_SOURCE_DIR}/../modules")
 # TODO: Change these linker scripts as they get populated.
 set(BOOTLOADER_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/default.ld")
 set(APPLICATION_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/default.ld")
-set(COMBINED_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/default.ld")
+set(COMBINED_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/combined.ld")
 
 if (NOT CMAKE_BUILD_TYPE STREQUAL "Test")
     # Flag indicating that build is for the embedded target. Used to toggle target_source calls.
@@ -43,7 +43,7 @@ if (ON_EMBEDDED_DEVICE)
     add_subdirectory(application)
 
     add_custom_target(combined DEPENDS
-        bootloader
+        bootloader_library
         application
     )
 
@@ -81,9 +81,4 @@ else()
 
     # Create the executable and bring in testing source files.
     add_subdirectory(host_test)
-
-    # Test: Pull in google test library
-    add_library(libgtest SHARED IMPORTED)
-    set_target_properties(libgtest PROPERTIES IMPORTED_LOCATION /ads_bee/modules/googletest/build/lib/libgtest.so)
-    target_link_libraries(host_test PRIVATE libgtest)
 endif()

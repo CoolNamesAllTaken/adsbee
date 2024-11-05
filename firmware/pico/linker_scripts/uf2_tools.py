@@ -178,6 +178,9 @@ def dump_uf2_file(filename):
         print(block)
 
 if __name__ == "__main__":
+    """
+    Expose UF2 file dump capability as command line flag.
+    """
     parser = argparse.ArgumentParser(description="UF2 Tools")
     parser.add_argument("filename_in")
     parser.add_argument("-d", "--dump", help="Dump contents of .uf2 file.", action="store_true")
