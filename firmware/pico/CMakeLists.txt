@@ -10,8 +10,8 @@ set(ADSBEE_COMMON_DIR "${CMAKE_SOURCE_DIR}/../common") # Used for code shared be
 set(ADSBEE_MODULES_DIR "${CMAKE_SOURCE_DIR}/../modules")
 
 # TODO: Change these linker scripts as they get populated.
-set(BOOTLOADER_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/default.ld")
-set(APPLICATION_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/default.ld")
+set(BOOTLOADER_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/bootloader.ld")
+set(APPLICATION_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/application.ld")
 set(COMBINED_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/combined.ld")
 
 set(BOOTLOADER_SECTION_NAME boot3)
@@ -19,7 +19,7 @@ set(BOOTLOADER_SECTION_NAME boot3)
 find_package (Python3 REQUIRED COMPONENTS Interpreter)
 
 # Function that converts a .bin file into a .S (assembly) file, allowing the .bin to be linked within a linker script
-# via its section name.
+# via its section name. Currently only used to create boot3.S in the bootloader folder.
 function(bin2asm BIN_FILE SECTION_NAME ASM_FILE)
     add_custom_target(${BOOTLOADER_SECTION_NAME} DEPENDS bootloader)
     add_custom_command(
@@ -57,49 +57,11 @@ if (ON_EMBEDDED_DEVICE)
     # Initialize the SDK
     pico_sdk_init()
 
-    # add_subdirectory(${PICO_COMMON_DIR} ${CMAKE_BINARY_DIR}/pico_common)
-
     add_subdirectory(bootloader)
     add_subdirectory(application)
-    # add_dependencies(bootloader_object bootloader)
-    # set_target_properties(bootloader_object PROPERTIES
-    #     SOURCES ${CMAKE_BINARY_DIR}/bootloader/${BOOTLOADER_SECTION_NAME}.S
-    # )
-    # # add_dependencies(bootloader_object bootloader)
 
-    
-    # # target_link_libraries(combined bootloader_library)
-    # add_dependencies(combined
-    #     bootloader
-    #     # bootloader_library
-    #     application
-    # )
-
-    
-    # # add_custom_target(combined DEPENDS
-    # #     bootloader
-    # #     bootloader_library
-    # #     application
-    # # )
-
-    # # bootloader -> bootloader.bin -> boot3.S -> bootloader_library -> combined.bin
-
-    # pico_set_linker_script(combined ${COMBINED_LINKER_SCRIPT})
- 
-    # # Select linker script corresponding to target being built.
-    # if (TARGET combined)
-    #     # Building both the bootloader and the main application.
-    #     message("Building and linking bootloader and application with ${COMBINED_LINKER_SCRIPT}")
-    #     pico_set_linker_script(combined ${COMBINED_LINKER_SCRIPT})
-    # elseif (TARGET bootloader)
-    #     # Building only the bootloader.
-    #     message("Building and linking bootloader only with ${BOOTLOADER_LINKER_SCRIPT}")
-    #     pico_set_linker_script(bootloader ${BOOTLOADER_LINKER_SCRIPT})
-    # elseif (TARGET application)
-    #     # Building only the main application.
-    #     message("Building and linking application only with ${APPLICATION_LINKER_SCRIPT}")
-    #     pico_set_linker_script(application ${APPLICATION_LINKER_SCRIPT})
-    # endif()
+    # Note: "combined" build lives in the application subdirectory, since all the include directories and source paths
+    # copied from the "application" build are referneced to that directory.
 
 else()
     ## Compiling for testing on host.

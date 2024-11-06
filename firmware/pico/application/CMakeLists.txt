@@ -95,7 +95,7 @@ if (ON_EMBEDDED_DEVICE)
     )
 
     ## Combined build
-    # Turn the bootloader .S file into a linkable object.
+    # Turn the bootloader boot3.S file into a linkable library that consists of a single object file.
     add_library(bootloader_object OBJECT)
     set_source_files_properties(${CMAKE_BINARY_DIR}/bootloader/${BOOTLOADER_SECTION_NAME}.S PROPERTIES
         # Bootloader's boot3.S file is created during build, so don't try finding it during the configuration stage.
@@ -104,22 +104,23 @@ if (ON_EMBEDDED_DEVICE)
     target_sources(bootloader_object PRIVATE 
         ${CMAKE_BINARY_DIR}/bootloader/${BOOTLOADER_SECTION_NAME}.S
     )
+    # Make sure the boot3.S file gets created before we try building the library!
     add_dependencies(bootloader_object bootloader)
 
+    # Create a new executable called "combined" that uses the bootloader_object library and copies all sources from application.
     add_executable(combined
         $<TARGET_OBJECTS:bootloader_object>
         $<TARGET_PROPERTY:application,SOURCES>
-        
     )
     target_include_directories(combined PRIVATE $<TARGET_PROPERTY:application,INCLUDE_DIRECTORIES>)
     target_link_libraries(combined $<TARGET_PROPERTY:application,LINK_LIBRARIES>)
     add_dependencies(combined
         bootloader
-        # bootloader_library
         application
     )
     pico_enable_stdio_usb(combined 1) # use USB for standard printing
     pico_enable_stdio_uart(combined 0) # disable STDIO UART
+    pico_set_linker_script(combined ${COMBINED_LINKER_SCRIPT})
 
 else()
     # Build for testing on host.

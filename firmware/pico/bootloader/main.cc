@@ -12,7 +12,7 @@ void set_status_led_for_duration(bool led_on, uint16_t duration_ms) {
 
 int main() {
     stdio_init_all();
-    stdio_set_translate_crlf(&stdio_usb, false);
+    // stdio_set_translate_crlf(&stdio_usb, false);
 
     gpio_init(kStatusLEDPin);
     gpio_set_dir(kStatusLEDPin, GPIO_OUT);

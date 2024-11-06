@@ -23,17 +23,7 @@
 
 MEMORY
 {
-    /* Original flash length: 16384k Bytes.
-    FLASH MAP
-        0x1000 0000 (180k) FLASH_BL: Bootloader
-        0x1002 BF20 (4k) FLASH_HDR: Header
-        0x1002 CEC0 (8100k) FLASH_APP0: Application 0
-        0x107E 6760 (8100k) FLASH_APP1: Application 1
-    */
-    FLASH_BL(rx) : ORIGIN = 0x10000000, LENGTH = 180k
-    FLASH_HDR(rx) : ORIGIN = 0x10000000+180k, LENGTH = 4k
-    FLASH_APP0(rx) : ORIGIN = 0x10000000+184k, LENGTH = 8100k
-    FLASH_APP1(rx) : ORIGIN = 0x10000000+8284k, LENGTH = 8100k
+    FLASH(rx) : ORIGIN = 0x10000000, LENGTH = 2048k
     RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 256k
     SCRATCH_X(rwx) : ORIGIN = 0x20040000, LENGTH = 4k
     SCRATCH_Y(rwx) : ORIGIN = 0x20041000, LENGTH = 4k
@@ -50,16 +40,16 @@ SECTIONS
 
     .flash_begin : {
         __flash_binary_start = .;
-    } > FLASH_BL
+    } > FLASH
 
-    .boot3 : {
-        __boot3_start__ = .;
-        KEEP (*(.boot3))
-        __boot3_end__ = .;
-    } > FLASH_BL
+    .boot2 : {
+        __boot2_start__ = .;
+        KEEP (*(.boot2))
+        __boot2_end__ = .;
+    } > FLASH
 
-    ASSERT(__boot3_end__ - __boot3_start__ <= 180k,
-        "ERROR: Bootloader (custom bootloader plus Pico SDK boot2) must be <180k in size")
+    ASSERT(__boot2_end__ - __boot2_start__ == 256,
+        "ERROR: Pico second stage bootloader must be 256 bytes in size")
 
     /* The second stage will always enter the image at the start of .text.
        The debugger will use the ELF entry point, which is the _entry_point
@@ -76,7 +66,7 @@ SECTIONS
         KEEP (*(.reset))
         /* TODO revisit this now memset/memcpy/float in ROM */
         /* bit of a hack right now to exclude all floating point and time critical (e.g. memset, memcpy) code from
-         * FLASH_APP0 ... we will include any thing excluded here in .data below by default */
+         * FLASH ... we will include any thing excluded here in .data below by default */
         *(.init)
         *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:) .text*)
         *(.fini)
@@ -95,25 +85,25 @@ SECTIONS
 
         *(.eh_frame*)
         . = ALIGN(4);
-    } > FLASH_APP0
+    } > FLASH
 
     .rodata : {
         *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:) .rodata*)
         . = ALIGN(4);
         *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.flashdata*)))
         . = ALIGN(4);
-    } > FLASH_APP0
+    } > FLASH
 
     .ARM.extab :
     {
         *(.ARM.extab* .gnu.linkonce.armextab.*)
-    } > FLASH_APP0
+    } > FLASH
 
     __exidx_start = .;
     .ARM.exidx :
     {
         *(.ARM.exidx* .gnu.linkonce.armexidx.*)
-    } > FLASH_APP0
+    } > FLASH
     __exidx_end = .;
 
     /* Machine inspectable binary information */
@@ -123,7 +113,7 @@ SECTIONS
     {
         KEEP(*(.binary_info.keep.*))
         *(.binary_info.*)
-    } > FLASH_APP0
+    } > FLASH
     __binary_info_end = .;
     . = ALIGN(4);
 
@@ -182,7 +172,7 @@ SECTIONS
         . = ALIGN(4);
         /* All data end */
         __data_end__ = .;
-    } > RAM AT> FLASH_APP0
+    } > RAM AT> FLASH
 
     .uninitialized_data (COPY): {
         . = ALIGN(4);
@@ -195,7 +185,7 @@ SECTIONS
         *(.scratch_x.*)
         . = ALIGN(4);
         __scratch_x_end__ = .;
-    } > SCRATCH_X AT > FLASH_APP0
+    } > SCRATCH_X AT > FLASH
     __scratch_x_source__ = LOADADDR(.scratch_x);
 
     .scratch_y : {
@@ -203,7 +193,7 @@ SECTIONS
         *(.scratch_y.*)
         . = ALIGN(4);
         __scratch_y_end__ = .;
-    } > SCRATCH_Y AT > FLASH_APP0
+    } > SCRATCH_Y AT > FLASH
     __scratch_y_source__ = LOADADDR(.scratch_y);
 
     .bss  : {
@@ -243,7 +233,7 @@ SECTIONS
 
     .flash_end : {
         __flash_binary_end = .;
-    } > FLASH_APP0
+    } > FLASH
 
     /* stack limit is poorly named, but historically is maximum heap ptr */
     __StackLimit = ORIGIN(RAM) + LENGTH(RAM);
