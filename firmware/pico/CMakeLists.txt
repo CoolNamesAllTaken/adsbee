@@ -14,6 +14,26 @@ set(BOOTLOADER_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/default.ld")
 set(APPLICATION_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/default.ld")
 set(COMBINED_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/combined.ld")
 
+set(BOOTLOADER_SECTION_NAME boot3)
+
+find_package (Python3 REQUIRED COMPONENTS Interpreter)
+
+# Function that converts a .bin file into a .S (assembly) file, allowing the .bin to be linked within a linker script
+# via its section name.
+function(bin2asm BIN_FILE SECTION_NAME ASM_FILE)
+    add_custom_target(${BOOTLOADER_SECTION_NAME} DEPENDS bootloader)
+    add_custom_command(
+        # OUTPUT bootloader 
+        TARGET bootloader POST_BUILD
+        DEPENDS ${BIN_FILE}
+        COMMAND ${Python3_EXECUTABLE} ${LINKER_SCRIPTS_DIR}/mkasm.py 
+                ${BIN_FILE}
+                ${ASM_FILE}
+                --section ${SECTION_NAME}
+        COMMENT "Converting ${BIN_FILE} to ${ASM_FILE} in section labelled ${SECTION_NAME}"
+    )
+endfunction()
+
 if (NOT CMAKE_BUILD_TYPE STREQUAL "Test")
     # Flag indicating that build is for the embedded target. Used to toggle target_source calls.
     set(ON_EMBEDDED_DEVICE 1)
@@ -41,13 +61,30 @@ if (ON_EMBEDDED_DEVICE)
 
     add_subdirectory(bootloader)
     add_subdirectory(application)
+    # add_dependencies(bootloader_object bootloader)
+    # set_target_properties(bootloader_object PROPERTIES
+    #     SOURCES ${CMAKE_BINARY_DIR}/bootloader/${BOOTLOADER_SECTION_NAME}.S
+    # )
+    # # add_dependencies(bootloader_object bootloader)
 
-    add_custom_target(combined DEPENDS
-        bootloader_library
-        application
-    )
+    
+    # # target_link_libraries(combined bootloader_library)
+    # add_dependencies(combined
+    #     bootloader
+    #     # bootloader_library
+    #     application
+    # )
 
-    pico_set_linker_script(combined ${COMBINED_LINKER_SCRIPT})
+    
+    # # add_custom_target(combined DEPENDS
+    # #     bootloader
+    # #     bootloader_library
+    # #     application
+    # # )
+
+    # # bootloader -> bootloader.bin -> boot3.S -> bootloader_library -> combined.bin
+
+    # pico_set_linker_script(combined ${COMBINED_LINKER_SCRIPT})
  
     # # Select linker script corresponding to target being built.
     # if (TARGET combined)

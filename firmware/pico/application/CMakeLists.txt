@@ -83,16 +83,43 @@ if (ON_EMBEDDED_DEVICE)
         COMMAND ${CMAKE_COMMAND} -E copy 
                 ${CMAKE_CURRENT_BINARY_DIR}/application.bin
                 ${CMAKE_CURRENT_BINARY_DIR}/application_original.bin
-        COMMENT "Backing up original binary"
+        COMMENT "Backing up original application binary"
     )
 
     # Append the CRC32 in application.bin, then turn application.bin into a UF2 file.
     add_custom_command(TARGET application POST_BUILD
-        COMMAND python3 ${LINKER_SCRIPTS_DIR}/append_crc32.py
+        COMMAND ${Python3_EXECUTABLE} ${LINKER_SCRIPTS_DIR}/append_crc32.py
                 ${CMAKE_CURRENT_BINARY_DIR}/application.bin
                 ${CMAKE_CURRENT_BINARY_DIR}/application.uf2
-        COMMENT "Calculating and appending CRC32 to firmware"
+        COMMENT "Calculating and appending CRC32 to application binary and UF2"
     )
+
+    ## Combined build
+    # Turn the bootloader .S file into a linkable object.
+    add_library(bootloader_object OBJECT)
+    set_source_files_properties(${CMAKE_BINARY_DIR}/bootloader/${BOOTLOADER_SECTION_NAME}.S PROPERTIES
+        # Bootloader's boot3.S file is created during build, so don't try finding it during the configuration stage.
+        GENERATED TRUE 
+    )
+    target_sources(bootloader_object PRIVATE 
+        ${CMAKE_BINARY_DIR}/bootloader/${BOOTLOADER_SECTION_NAME}.S
+    )
+    add_dependencies(bootloader_object bootloader)
+
+    add_executable(combined
+        $<TARGET_OBJECTS:bootloader_object>
+        $<TARGET_PROPERTY:application,SOURCES>
+        
+    )
+    target_include_directories(combined PRIVATE $<TARGET_PROPERTY:application,INCLUDE_DIRECTORIES>)
+    target_link_libraries(combined $<TARGET_PROPERTY:application,LINK_LIBRARIES>)
+    add_dependencies(combined
+        bootloader
+        # bootloader_library
+        application
+    )
+    pico_enable_stdio_usb(combined 1) # use USB for standard printing
+    pico_enable_stdio_uart(combined 0) # disable STDIO UART
 
 else()
     # Build for testing on host.
