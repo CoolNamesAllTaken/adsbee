@@ -26,10 +26,10 @@ function(bin2asm BIN_FILE SECTION_NAME ASM_FILE)
         # OUTPUT bootloader 
         TARGET bootloader POST_BUILD
         DEPENDS ${BIN_FILE}
-        COMMAND ${Python3_EXECUTABLE} ${LINKER_SCRIPTS_DIR}/mkasm.py 
+        COMMAND ${Python3_EXECUTABLE} ${LINKER_SCRIPTS_DIR}/util_asm.py 
                 ${BIN_FILE}
                 ${ASM_FILE}
-                --section ${SECTION_NAME}
+                ${SECTION_NAME}
         COMMENT "Converting ${BIN_FILE} to ${ASM_FILE} in section labelled ${SECTION_NAME}"
     )
 endfunction()

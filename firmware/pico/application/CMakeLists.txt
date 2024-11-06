@@ -79,20 +79,20 @@ if (ON_EMBEDDED_DEVICE)
     pico_add_bin_output(application)
 
     # First, we'll create a copy of the original .bin file
-    add_custom_command(TARGET application POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy 
-                ${CMAKE_CURRENT_BINARY_DIR}/application.bin
-                ${CMAKE_CURRENT_BINARY_DIR}/application_original.bin
-        COMMENT "Backing up original application binary"
-    )
+    # add_custom_command(TARGET application POST_BUILD
+    #     COMMAND ${CMAKE_COMMAND} -E copy 
+    #             ${CMAKE_CURRENT_BINARY_DIR}/application.bin
+    #             ${CMAKE_CURRENT_BINARY_DIR}/application_original.bin
+    #     COMMENT "Backing up original application binary"
+    # )
 
     # Append the CRC32 in application.bin, then turn application.bin into a UF2 file.
-    add_custom_command(TARGET application POST_BUILD
-        COMMAND ${Python3_EXECUTABLE} ${LINKER_SCRIPTS_DIR}/append_crc32.py
-                ${CMAKE_CURRENT_BINARY_DIR}/application.bin
-                ${CMAKE_CURRENT_BINARY_DIR}/application.uf2
-        COMMENT "Calculating and appending CRC32 to application binary and UF2"
-    )
+    # add_custom_command(TARGET application POST_BUILD
+    #     COMMAND ${Python3_EXECUTABLE} ${LINKER_SCRIPTS_DIR}/append_crc32.py
+    #             ${CMAKE_CURRENT_BINARY_DIR}/application.bin
+    #             ${CMAKE_CURRENT_BINARY_DIR}/application.uf2
+    #     COMMENT "Calculating and appending CRC32 to application binary and UF2"
+    # )
 
     ## Combined build
     # Turn the bootloader boot3.S file into a linkable library that consists of a single object file.

@@ -28,28 +28,33 @@ import binascii
 import struct
 import sys
 
-parser = argparse.ArgumentParser()
-parser.add_argument("ifile", help="Input file (binary)")
-parser.add_argument("ofile", help="Output file (assembly)")
-parser.add_argument("--section", default="boot3", required=False, help="Section name in assembly file to be created. Used for linking.")
-args = parser.parse_args()
 
-try:
-    idata = open(args.ifile, "rb").read()
-except:
-    sys.exit(f"Could not open input file '{args.ifile}'")
+def bin_file_to_asm_file(bin_filename, asm_filename, section):
+    try:
+        idata = open(bin_filename, "rb").read()
+    except:
+        sys.exit(f"Could not open input file '{bin_filename}'")
 
-odata = idata
+    odata = idata
 
-try:
-    print(f"Converting {args.ifile} to {args.ofile} with section name {args.section}.")
-    with open(args.ofile, "w") as ofile:
-        ofile.write(f"// ASM-ified version of: {args.ifile}\n\n")
-        ofile.write(".cpu cortex-m0plus\n")
-        ofile.write(".thumb\n\n")
-        ofile.write(f".section .{args.section}, \"ax\"\n\n")
-        for offs in range(0, len(odata), 16):
-            chunk = odata[offs:min(offs + 16, len(odata))]
-            ofile.write(".byte {}\n".format(", ".join("0x{:02x}".format(b) for b in chunk)))
-except:
-    sys.exit("Could not open output file '{}'".format(args.ofile))
+    try:
+        print(f"Converting {bin_filename} to {asm_filename} with section name {section}.")
+        with open(asm_filename, "w") as ofile:
+            ofile.write(f"// ASM-ified version of: {bin_filename}\n\n")
+            ofile.write(".cpu cortex-m0plus\n")
+            ofile.write(".thumb\n\n")
+            ofile.write(f".section .{section}, \"ax\"\n\n")
+            for offs in range(0, len(odata), 16):
+                chunk = odata[offs:min(offs + 16, len(odata))]
+                ofile.write(".byte {}\n".format(", ".join("0x{:02x}".format(b) for b in chunk)))
+    except:
+        sys.exit("Could not open output file '{}'".format(asm_filename))
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("ifile", help="Input file (binary)")
+    parser.add_argument("ofile", help="Output file (assembly)")
+    parser.add_argument("section", help="Section name in assembly file to be created. Used for linking.")
+    args = parser.parse_args()
+
+    bin_file_to_asm_file(args.ifile, args.ofile, args.section)

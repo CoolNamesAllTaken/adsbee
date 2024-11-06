@@ -182,13 +182,13 @@ if __name__ == "__main__":
     Expose UF2 file dump capability as command line flag.
     """
     parser = argparse.ArgumentParser(description="UF2 Tools")
-    parser.add_argument("filename_in")
+    parser.add_argument("filename")
     parser.add_argument("-d", "--dump", help="Dump contents of .uf2 file.", action="store_true")
 
     args = parser.parse_args()
 
     
-    print("File:", args.filename_in)
+    print("File:", args.filename)
     if args.dump:
         print("Dumping file contents.")
-        dump_uf2_file(args.filename_in)
+        dump_uf2_file(args.filename)

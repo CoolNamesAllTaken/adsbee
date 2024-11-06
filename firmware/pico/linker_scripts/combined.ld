@@ -25,14 +25,17 @@ MEMORY
 {
     /* Original flash length: 16384k Bytes.
     FLASH MAP
-        0x1000 0000 (180k) FLASH_BL: Bootloader
-        0x1002 BF20 (4k) FLASH_HDR: Header
-        0x1002 CEC0 (8100k) FLASH_APP0: Application 0
-        0x107E 6760 (8100k) FLASH_APP1: Application 1
+        0x10000000	(176k)	FLASH_BL	Bootloader
+        0x1002AF80	(4k)	FLASH_HDR0	Application 0 Header
+        0x1002BF20	(8100k)	FLASH_APP0	Application 0 Data
+        0x107E57C0	(4k)	FLASH_HDR1	Application 1 Header
+        0x107E6760	(8100k)	FLASH_APP1	Application 1 Data
+
     */
-    FLASH_BL(rx) : ORIGIN = 0x10000000, LENGTH = 180k
-    FLASH_HDR(rx) : ORIGIN = 0x10000000+180k, LENGTH = 4k
-    FLASH_APP0(rx) : ORIGIN = 0x10000000+184k, LENGTH = 8100k
+    FLASH_BL(rx) : ORIGIN = 0x10000000, LENGTH = 176k
+    FLASH_HDR0(rx) : ORIGIN = 0x10000000+176k, LENGTH = 4k
+    FLASH_APP0(rx) : ORIGIN = 0x10000000+180k, LENGTH = 8100k
+    FLASH_HDR1(rx) : ORIGIN = 0x10000000+8280k, LENGTH = 4k
     FLASH_APP1(rx) : ORIGIN = 0x10000000+8284k, LENGTH = 8100k
     RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 256k
     SCRATCH_X(rwx) : ORIGIN = 0x20040000, LENGTH = 4k
