@@ -26,10 +26,10 @@ MEMORY
     /* Original flash length: 16384k Bytes.
     FLASH MAP
         0x10000000	(176k)	FLASH_BL	Bootloader
-        0x1002AF80	(4k)	FLASH_HDR0	Application 0 Header
-        0x1002BF20	(8100k)	FLASH_APP0	Application 0 Data
-        0x107E57C0	(4k)	FLASH_HDR1	Application 1 Header
-        0x107E6760	(8100k)	FLASH_APP1	Application 1 Data
+        0x1002C000	(4k)	FLASH_HDR0	Application 0 Header
+        0x1002D000	(8100k)	FLASH_APP0	Application 0 Data
+        0x10816000	(4k)	FLASH_HDR1	Application 1 Header
+        0x10817000	(8100k)	FLASH_APP1	Application 1 Data
 
     */
     FLASH_BL(rx) : ORIGIN = 0x10000000, LENGTH = 176k

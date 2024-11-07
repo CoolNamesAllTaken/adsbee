@@ -15,6 +15,8 @@ set(APPLICATION_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/application.ld")
 set(COMBINED_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/combined.ld")
 
 set(BOOTLOADER_SECTION_NAME boot3)
+set(APPLICATION_HEADER_SECTION_NAME hdr0)
+set(APPLICATION_SECTION_NAME app0)
 
 find_package (Python3 REQUIRED COMPONENTS Interpreter)
 
@@ -30,7 +32,7 @@ function(bin2asm BIN_FILE SECTION_NAME ASM_FILE)
                 ${BIN_FILE}
                 ${ASM_FILE}
                 ${SECTION_NAME}
-        COMMENT "Converting ${BIN_FILE} to ${ASM_FILE} in section labelled ${SECTION_NAME}"
+        # COMMENT "Converting ${BIN_FILE} to ${ASM_FILE} with section name ${SECTION_NAME}"
     )
 endfunction()
 

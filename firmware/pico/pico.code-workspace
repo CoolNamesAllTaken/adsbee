@@ -169,6 +169,25 @@
 				"device": "RP2040",
 			},
 			{
+				"name": "Combined Debug",
+				"type": "cortex-debug",
+				"cwd": "/ads_bee/pico",
+				"executable": "/ads_bee/pico/build/application/combined.elf",
+				"request": "attach",
+				"servertype": "external",
+				// "gdbPath": "arm-none-eabi-gdb",
+				"gdbTarget": "host.docker.internal:2331",
+				"showDevDebugOutput": "raw",
+				"svdFile": "/usr/local/pico-sdk/src/rp2040/hardware_regs/RP2040.svd",
+				"preRestartCommands": [
+					"file /ads_bee/pico/build/application/combined.elf",
+					"load",
+					"monitor reset"
+				],
+				"armToolchainPath": "/usr/bin",
+				"device": "RP2040",
+			},
+			{
 				"name": "(gdb) Launch",
 				"type": "cppdbg",
 				"request": "launch",

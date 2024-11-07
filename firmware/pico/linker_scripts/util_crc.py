@@ -57,10 +57,10 @@ def generate_header(app_bin_filename, asm_section=None):
     struct.pack_into('<I', hdr_bin_contents, 8, len(app_bin_contents))
     struct.pack_into('<I', hdr_bin_contents, 12, app_crc)
 
-    app_bin_basename = os.path.splitext(os.path.basename(app_bin_filename))[0]
+    # app_bin_basename = os.path.splitext(os.path.basename(app_bin_filename))[0]
     app_bin_dir = os.path.dirname(app_bin_filename)
-    hdr_bin_filename = os.path.join(app_bin_dir, f"{app_bin_basename}_hdr.bin")
-    hdr_asm_filename = os.path.join(app_bin_dir, f"{app_bin_basename}_hdr.S")
+    hdr_bin_filename = os.path.join(app_bin_dir, f"{asm_section}.bin")
+    hdr_asm_filename = os.path.join(app_bin_dir, f"{asm_section}.S")
 
     print(f"\tWriting {len(hdr_bin_contents)} Bytes to {hdr_bin_filename}.")
     with open(hdr_bin_filename, 'wb') as f:

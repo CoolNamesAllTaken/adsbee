@@ -12,7 +12,7 @@ if (ON_EMBEDDED_DEVICE)
 
     # Firmware: Pull in Pico library
     target_link_libraries(bootloader
-        pico_stdlib
+        # pico_stdlib
         # pico_float # for math functions
         # pico_rand # for generating random numbers
         # hardware_pio
@@ -20,9 +20,16 @@ if (ON_EMBEDDED_DEVICE)
         # hardware_adc
         # hardware_i2c
         # hardware_spi
-        hardware_exception
-        hardware_watchdog
-        hardware_dma # for checksums
+        # hardware_exception
+        # hardware_watchdog
+        # hardware_dma # for checksums
+
+        pico_stdlib
+        hardware_dma
+        hardware_flash
+        hardware_structs
+        hardware_resets
+        cmsis_core
     )
 
     pico_add_bin_output(bootloader)

@@ -86,37 +86,51 @@ if (ON_EMBEDDED_DEVICE)
     #     COMMENT "Backing up original application binary"
     # )
 
-    # Append the CRC32 in application.bin, then turn application.bin into a UF2 file.
-    # add_custom_command(TARGET application POST_BUILD
-    #     COMMAND ${Python3_EXECUTABLE} ${LINKER_SCRIPTS_DIR}/append_crc32.py
-    #             ${CMAKE_CURRENT_BINARY_DIR}/application.bin
-    #             ${CMAKE_CURRENT_BINARY_DIR}/application.uf2
-    #     COMMENT "Calculating and appending CRC32 to application binary and UF2"
-    # )
+    # Create a header binary and assembly file for application.bin with section name hdr0.
+    # Keeping the checksum separate allows us to do a combined build utilizing the sources for application.bin while
+    # also loading the checksum onto the target so that the bootloader can examine it.
+    add_custom_command(TARGET application POST_BUILD
+        COMMAND ${Python3_EXECUTABLE} ${LINKER_SCRIPTS_DIR}/util_crc.py
+                ${CMAKE_CURRENT_BINARY_DIR}/application.bin
+                --header ${APPLICATION_HEADER_SECTION_NAME}
+        COMMENT "Calculating and appending CRC32 to application binary and UF2"
+    )
 
     ## Combined build
-    # Turn the bootloader boot3.S file into a linkable library that consists of a single object file.
-    add_library(bootloader_object OBJECT)
-    set_source_files_properties(${CMAKE_BINARY_DIR}/bootloader/${BOOTLOADER_SECTION_NAME}.S PROPERTIES
-        # Bootloader's boot3.S file is created during build, so don't try finding it during the configuration stage.
-        GENERATED TRUE 
-    )
-    target_sources(bootloader_object PRIVATE 
+    # Build a library with items that need to be linked for the combined build.
+    add_library(combined_library OBJECT)
+    # Ignore .S files during configuration since they are created after the build stage.
+    set_source_files_properties(
         ${CMAKE_BINARY_DIR}/bootloader/${BOOTLOADER_SECTION_NAME}.S
+        ${CMAKE_BINARY_DIR}/application/${APPLICATION_HEADER_SECTION_NAME}.S
+        PROPERTIES
+            GENERATED TRUE
+            DEPENDS bootloader
+            DEPENDS application
     )
-    # Make sure the boot3.S file gets created before we try building the library!
-    add_dependencies(bootloader_object bootloader)
+    # These source dependencies ensure that the combined target gets rebuilt if the bootloader or app get changed.
+    target_sources(combined_library PRIVATE 
+        ${CMAKE_BINARY_DIR}/bootloader/${BOOTLOADER_SECTION_NAME}.S
+        ${CMAKE_BINARY_DIR}/application/${APPLICATION_HEADER_SECTION_NAME}.S
+    )
+    # Make sure the boot3.S and hdr0.S files get created before we try building the library!
+    add_dependencies(combined_library
+        bootloader
+        application
+    )
 
-    # Create a new executable called "combined" that uses the bootloader_object library and copies all sources from application.
+    # Create a new executable called "combined" that uses the combined_library library and copies all sources from application.
     add_executable(combined
-        $<TARGET_OBJECTS:bootloader_object>
+        $<TARGET_OBJECTS:combined_library>
         $<TARGET_PROPERTY:application,SOURCES>
     )
     target_include_directories(combined PRIVATE $<TARGET_PROPERTY:application,INCLUDE_DIRECTORIES>)
     target_link_libraries(combined $<TARGET_PROPERTY:application,LINK_LIBRARIES>)
+    target_link_options(combined PUBLIC "-Wl,-Map=combined.map")
     add_dependencies(combined
         bootloader
         application
+        combined_library
     )
     pico_enable_stdio_usb(combined 1) # use USB for standard printing
     pico_enable_stdio_uart(combined 0) # disable STDIO UART
