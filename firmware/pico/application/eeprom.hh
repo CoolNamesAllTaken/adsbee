@@ -15,7 +15,7 @@ class EEPROM {
         uint32_t i2c_timeout_us = 1e6;
         uint32_t i2c_write_time_us = 10e3;  // 5ms write time for Bytes and pages. 10ms for some buffer.
 
-        bool requires_init = false;
+        bool requires_init = true;
         // These parameters only used if initialization is required.
         uint16_t onboard_i2c_sda_pin = 2;
         uint16_t onboard_i2c_scl_pin = 3;
@@ -33,6 +33,12 @@ class EEPROM {
      * @retval True if initialization was successful, false if there was an error.
      */
     bool Init();
+
+    /**
+     * Returns whether the EEPROM requires initialization. Can be used to avoid queries if the EEPROM has not yet been
+     * initialized.
+     */
+    bool RequiresInit() { return config_.requires_init; }
 
     /**
      * Save an instance of an object to the EEPROM, stating at address start_addr.
@@ -73,10 +79,10 @@ class EEPROM {
         uint16_t data_size_bytes = sizeof(T);
         uint16_t remaining_capacity_bytes = config_.size_bytes - start_reg;
         if (remaining_capacity_bytes < data_size_bytes) {
-            CONSOLE_ERROR(
-                "EEPROM::Load:", "Failed to load data of size %d Bytes from EEPROM register 0x%x: only %d Bytes "
-                "remaining.\r\n",
-                data_size_bytes, start_reg, remaining_capacity_bytes);
+            CONSOLE_ERROR("EEPROM::Load:",
+                          "Failed to load data of size %d Bytes from EEPROM register 0x%x: only %d Bytes "
+                          "remaining.\r\n",
+                          data_size_bytes, start_reg, remaining_capacity_bytes);
             return false;
         }
         int num_bytes_read = ReadBuf(start_reg, (uint8_t *)(&data_to_load), sizeof(T));

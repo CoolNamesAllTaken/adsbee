@@ -75,10 +75,12 @@ void SettingsManager::ResetToDefaults() {
 }
 
 bool SettingsManager::SetDeviceInfo(const DeviceInfo &device_info) {
+    if (eeprom.RequiresInit()) return false;
     return eeprom.Save(device_info, kDeviceInfoEEPROMAddress);
 }
 
 bool SettingsManager::GetDeviceInfo(DeviceInfo &device_info) {
+    if (eeprom.RequiresInit()) return false;
     return eeprom.Load(device_info, kDeviceInfoEEPROMAddress);
 }
 

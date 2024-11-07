@@ -93,6 +93,10 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
 }
 
 bool ADSBee::Init() {
+    gpio_init(config_.status_led_pin);
+    gpio_set_dir(config_.status_led_pin, GPIO_OUT);
+    gpio_put(config_.status_led_pin, 1);  // Leave status LED on during configuration in case something hangs.
+
     // Initialize the TL bias PWM output.
     gpio_set_function(config_.tl_pwm_pin, GPIO_FUNC_PWM);
     pwm_set_wrap(tl_pwm_slice_, kTLMaxPWMCount);
@@ -106,9 +110,11 @@ bool ADSBee::Init() {
     adc_gpio_init(config_.rssi_adc_pin);
 
     // Initialize I2C for talking to the EEPROM and rx gain digipot.
-    i2c_init(config_.onboard_i2c, config_.onboard_i2c_clk_freq_hz);
-    gpio_set_function(config_.onboard_i2c_sda_pin, GPIO_FUNC_I2C);
-    gpio_set_function(config_.onboard_i2c_scl_pin, GPIO_FUNC_I2C);
+    if (config_.onboard_i2c_requires_init) {
+        i2c_init(config_.onboard_i2c, config_.onboard_i2c_clk_freq_hz);
+        gpio_set_function(config_.onboard_i2c_sda_pin, GPIO_FUNC_I2C);
+        gpio_set_function(config_.onboard_i2c_scl_pin, GPIO_FUNC_I2C);
+    }
 
     // Initialize the bias tee.
     gpio_init(config_.bias_tee_enable_pin);
@@ -207,19 +213,8 @@ bool ADSBee::Init() {
 
     CONSOLE_INFO("ADSBee::Init", "PIOs initialized.");
 
-    gpio_init(config_.status_led_pin);
-    gpio_set_dir(config_.status_led_pin, GPIO_OUT);
-
     // Set the last dictionary update timestamp.
     last_aircraft_dictionary_update_timestamp_ms_ = get_time_since_boot_ms();
-
-    // Blink the LED a few times to indicate a successful startup.
-    for (uint16_t i = 0; i < kStatusLEDBootupNumBlinks; i++) {
-        gpio_put(config_.status_led_pin, 1);
-        sleep_ms(kStatusLEDBootupBlinkPeriodMs / 2);
-        gpio_put(config_.status_led_pin, 0);
-        sleep_ms(kStatusLEDBootupBlinkPeriodMs / 2);
-    }
 
     // Enable the state machines.
     pio_sm_set_enabled(config_.preamble_detector_pio, irq_wrapper_sm_, true);
@@ -239,6 +234,13 @@ bool ADSBee::Init() {
     // Enable high power preamble detector.
     pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[kHighPowerDemodStateMachineIndex], true);
 
+    // Blink the LED a few times to indicate a successful startup.
+    for (uint16_t i = 0; i < kStatusLEDBootupNumBlinks; i++) {
+        gpio_put(config_.status_led_pin, 1);
+        sleep_ms(kStatusLEDBootupBlinkPeriodMs / 2);
+        gpio_put(config_.status_led_pin, 0);
+        sleep_ms(kStatusLEDBootupBlinkPeriodMs / 2);
+    }
     // pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[1], true);
     // pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[0],
     //                    true);  // Enable SM 0 last since others are waiting.

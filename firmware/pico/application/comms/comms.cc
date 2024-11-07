@@ -11,14 +11,7 @@ SPICoprocessor spi_coprocessor;
 CommsManager::CommsManager(CommsManagerConfig config_in)
     : config_(config_in), at_parser_(CppAT(at_command_list, at_command_list_num_commands, true)) {}
 
-bool CommsManager::InitAT() {
-    // Initialize AT command parser with statically allocated list of AT commands.
-
-    return true;
-}
-
 bool CommsManager::Init() {
-    InitAT();
     InitReporting();
 
     gpio_set_function(config_.comms_uart_tx_pin, GPIO_FUNC_UART);

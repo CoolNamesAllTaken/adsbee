@@ -4,7 +4,7 @@
 
 static const uint16_t kStatusLEDPin = 15;
 static const uint16_t kBlinkDurationMs = 100;
-static const uint16_t kNumBlinks = 10;
+static const uint16_t kNumBlinks = 2;
 
 static const uint32_t kFlashAddrHdr0 = 0x1002C000;
 static const uint32_t kFlashAddrApp0 = 0x1002D000;
@@ -14,6 +14,18 @@ static const uint32_t kFlashAddrApp1 = 0x10817000;
 void set_status_led_for_duration(bool led_on, uint16_t duration_ms) {
     gpio_put(kStatusLEDPin, led_on);
     busy_wait_ms(duration_ms);
+}
+
+static void disable_interrupts(void) {
+    SysTick->CTRL &= ~1;
+
+    NVIC->ICER[0] = 0xFFFFFFFF;
+    NVIC->ICPR[0] = 0xFFFFFFFF;
+}
+
+static void reset_peripherals(void) {
+    reset_block(~(RESETS_RESET_IO_QSPI_BITS | RESETS_RESET_PADS_QSPI_BITS | RESETS_RESET_SYSCFG_BITS |
+                  RESETS_RESET_PLL_SYS_BITS));
 }
 
 static void jump_to_vtor(uint32_t vtor) {
@@ -42,5 +54,7 @@ int main() {
         // i = 0;  // loop forever
     }
 
+    disable_interrupts();
+    reset_peripherals();
     jump_to_vtor(kFlashAddrApp0);
 }

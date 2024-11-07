@@ -135,6 +135,7 @@ if (ON_EMBEDDED_DEVICE)
     pico_enable_stdio_usb(combined 1) # use USB for standard printing
     pico_enable_stdio_uart(combined 0) # disable STDIO UART
     pico_set_linker_script(combined ${COMBINED_LINKER_SCRIPT})
+    pico_add_uf2_output(combined)
 
 else()
     # Build for testing on host.

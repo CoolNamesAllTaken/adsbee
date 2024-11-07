@@ -62,6 +62,8 @@ class ADSBee {
         uint16_t onboard_i2c_sda_pin = 2;
         uint16_t onboard_i2c_scl_pin = 3;
         uint32_t onboard_i2c_clk_freq_hz = 400e3;  // 400kHz
+        bool onboard_i2c_requires_init =
+            false;  // In case I2c is shared with something else that already initializes it.
 
         uint16_t uart_tx_pin = 4;
         uint16_t uart_rx_pin = 5;

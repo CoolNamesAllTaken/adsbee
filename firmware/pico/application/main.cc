@@ -9,12 +9,14 @@
 #include "transponder_packet.hh"
 #include "unit_conversions.hh"
 
+// For testing only
+#include "hardware/gpio.h"
+
 const uint32_t kESP32BootupTimeoutMs = 10000;
 const uint32_t kESP32BootupCommsRetryMs = 500;
 
-ADSBee::ADSBeeConfig ads_bee_config;
 // Override default config params here.
-ADSBee adsbee = ADSBee(ads_bee_config);
+ADSBee adsbee = ADSBee({});
 CommsManager comms_manager = CommsManager({});
 ESP32SerialFlasher esp32_flasher = ESP32SerialFlasher({});
 EEPROM eeprom = EEPROM({});
@@ -25,8 +27,14 @@ SPICoprocessor esp32 = SPICoprocessor({});
 int main() {
     bi_decl(bi_program_description("ADS-Bee ADSB Receiver"));
 
-    adsbee.Init();
+    // gpio_init(15);
+    // gpio_set_dir(15, GPIO_OUT);
+    // gpio_put(15, 1);  // Leave status LED on during configuration in case something hangs.
+    // while (1) {
+    // }
+
     eeprom.Init();
+    adsbee.Init();
     comms_manager.Init();
     comms_manager.iface_printf(SettingsManager::SerialInterface::kConsole,
                                "ADSBee 1090\r\nSoftware Version %d.%d.%d\r\n", object_dictionary.kFirmwareVersionMajor,

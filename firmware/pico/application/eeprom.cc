@@ -67,17 +67,17 @@ int EEPROM::WriteBuf(const uint16_t reg, uint8_t *buf, const uint16_t num_bytes)
             i2c_write_timeout_us(config_.i2c_handle, config_.i2c_addr, msg, sizeof(msg), false, config_.i2c_timeout_us);
         BeginPostWriteDelay();
         if (status < 0) {
-            CONSOLE_ERROR(
-                "EEPROM::I2CRegWrite", "Write failed at register 0x%x while trying to write %d bytes, with error code "
-                "%d.",
-                write_reg, write_num_bytes, status);
+            CONSOLE_ERROR("EEPROM::I2CRegWrite",
+                          "Write failed at register 0x%x while trying to write %d bytes, with error code "
+                          "%d.",
+                          write_reg, write_num_bytes, status);
             return status;
         }
         if (status != kRegAddrNumBytes + write_num_bytes) {
-            CONSOLE_ERROR(
-                "EEPROM::I2CRegWrite", "Write failed at register 0x%x, expected to write %d bytes including register "
-                "address but wrote %d.",
-                write_reg, write_num_bytes, status);
+            CONSOLE_ERROR("EEPROM::I2CRegWrite",
+                          "Write failed at register 0x%x, expected to write %d bytes including register "
+                          "address but wrote %d.",
+                          write_reg, write_num_bytes, status);
             return INT32_MIN;
         }
         write_reg += write_num_bytes;
@@ -117,6 +117,7 @@ bool EEPROM::Init() {
         i2c_init(config_.i2c_handle, config_.onboard_i2c_clk_freq_hz);
         gpio_set_function(config_.onboard_i2c_sda_pin, GPIO_FUNC_I2C);
         gpio_set_function(config_.onboard_i2c_scl_pin, GPIO_FUNC_I2C);
+        config_.requires_init = false;
     }
 
     uint8_t eeprom_random_address_data;
