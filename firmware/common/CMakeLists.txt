@@ -24,10 +24,10 @@ if (TARGET application)
     )
 elseif (TARGET bootloader)
     target_sources(bootloader PRIVATE
-        utils
+        
     )
     target_include_directories(bootloader PRIVATE
-        utils # We just want hal.hh for now.    
+        utils # We just want hal.hh for now.
     )
 elseif (TARGET host_test)
     target_sources(host_test PRIVATE

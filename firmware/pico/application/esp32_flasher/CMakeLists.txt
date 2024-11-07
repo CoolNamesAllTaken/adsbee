@@ -5,6 +5,7 @@ if(ON_EMBEDDED_DEVICE)
     file(GLOB SRC_FILES "esp_serial_flasher/*.c")
     target_sources(application PRIVATE
         ${SRC_FILES}
+        bin/binaries.c
         esp32_flasher.cc
     )
 

@@ -3,12 +3,10 @@
 #include <inttypes.h>  // For PRIx32, PRIu32.
 #include <string.h>    // For memcpy.
 
-#include "binaries.c"
+#include "bin/binaries.c"
 #include "comms.hh"
 #include "esp_serial_flasher/esp_loader.h"
 #include "esp_serial_flasher/esp_loader_io.h"
-
-// #include "esp_serial_flasher/esp_common.h"
 
 #define BIN_FIRST_SEGMENT_OFFSET 0x18
 // Maximum block sized for RAM and Flash writes, respectively.

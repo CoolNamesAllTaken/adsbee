@@ -26,6 +26,12 @@ if (ON_EMBEDDED_DEVICE)
         hardware_spi
         hardware_exception
         hardware_watchdog
+
+        hardware_dma
+        hardware_flash
+        hardware_structs
+        hardware_resets
+        cmsis_core # for bootloader regs
     )
 
     # Firmware: Create map/bin/hex file etc
@@ -52,10 +58,15 @@ if (ON_EMBEDDED_DEVICE)
     include(${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin2array.cmake)
     # Create a file dependency that copies over the most recently built ESP32 firmware binary to the bin directory used by
     # esp32_flasher. Re-runs cmake if the file gets changed.
+    configure_file(${CMAKE_SOURCE_DIR}/../esp/build/adsbee_esp.bin
+        ${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin/adsbee_esp.bin
+        COPYONLY
+    )
     # For some reason putting binaries.c in the build folder never works out. Put it in the esp32_flasher bin directory
     # instead.
-    configure_file(${CMAKE_SOURCE_DIR}/../esp/build/adsbee_esp.bin ${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin/adsbee_esp.bin COPYONLY)
-    create_resources(${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin ${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin/binaries.c)
+    create_resources(${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin
+        ${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin/binaries.c
+    )
     set_property(SOURCE ${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin/binaries.c PROPERTY GENERATED 1)
     target_sources(application PRIVATE ${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin/binaries.c)
     

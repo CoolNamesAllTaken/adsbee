@@ -32,7 +32,7 @@ class SPICoprocessor {
     // blocks the copro_spi_mutex_ until it receives a transfer from the master, this timeout needs to be set to the
     // maximum delay between unsolicited packets from the master (heartbeat) to avoid threads giving up while the SPI
     // update task is hogging the mutex.
-    static const uint16_t kSPITransactionTimeoutMs = 1200;
+    static const uint16_t kSPITransactionTimeoutMs = 200;
 
 #ifdef ON_PICO
     static const uint16_t kHandshakePinMaxWaitDurationMs = 10;
