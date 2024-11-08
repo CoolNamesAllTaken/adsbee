@@ -12,6 +12,7 @@ class CommsManager {
    public:
     static const uint16_t kATCommandBufMaxLen = 1000;
     static const uint16_t kPrintfBufferMaxSize = 500;
+    static const uint32_t kRawReportingIntervalMs = 50;  // Report packets internally at 20Hz.
     static const uint32_t kMAVLINKReportingIntervalMs = 1000;
     static const uint32_t kCSBeeReportingIntervalMs = 1000;
     static const uint32_t kGDL90ReportingIntervalMs = 1000;
@@ -132,7 +133,6 @@ class CommsManager {
 
     // Public console settings.
     SettingsManager::LogLevel log_level = SettingsManager::LogLevel::kInfo;  // Start with highest verbosity by default.
-    uint32_t last_report_timestamp_ms = 0;
 
     // Queue for storing transponder packets before they get reported.
     PFBQueue<DecodedTransponderPacket> transponder_packet_reporting_queue =
@@ -223,6 +223,13 @@ class CommsManager {
         reporting_protocols_[SettingsManager::SerialInterface::kNumSerialInterfaces - 1] = {
             SettingsManager::ReportingProtocol::kNoReports,
             SettingsManager::ReportingProtocol::kMAVLINK1};  // GNSS_UART not included.
+
+    // Reporting protocol timestamps
+    // NOTE: Raw reporting interval used for RAW and BEAST protocols as well as internal functions.
+    uint32_t last_raw_report_timestamp_ms_ = 0;
+    uint32_t last_csbee_report_timestamp_ms_ = 0;
+    uint32_t last_mavlink_report_timestamp_ms_ = 0;
+    uint32_t last_gdl90_report_timestamp_ms_ = 0;
 };
 
 extern CommsManager comms_manager;

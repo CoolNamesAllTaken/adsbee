@@ -27,6 +27,8 @@ class ObjectDictionary {
         kAddrSettingsData = 0x03,          // Used to transfer settings information.
         kAddrRawTransponderPacket = 0x04,  // Used to forward raw packets from RP2040 to ESP32.
         kAddrDecodedTransponderPacket = 0x05,
+        kAddrRawTransponderPacketArray = 0xB,
+        kAddrDecodedTransponderPacketArray = 0xC,
         kAddrBaseMAC = 0x06,         // ESP32 base MAC address.
         kAddrWiFiStationMAC = 0x07,  // ESP32 WiFi station MAC address.
         kAddrWiFiAccessPointMAC = 0x08,
@@ -63,12 +65,23 @@ class ObjectDictionary {
                 // RP2040 writing to the ESP32's network console interface.
                 break;
             case kAddrRawTransponderPacket: {
-                RawTransponderPacket tpacket = *(RawTransponderPacket *)buf;
+                RawTransponderPacket tpacket;
+                memcpy(&tpacket, buf, sizeof(RawTransponderPacket));
                 // Warning: printing here will cause a timeout and tests will fail.
                 // CONSOLE_INFO("SPICoprocessor::SetBytes", "Received a raw %d-bit transponder packet.",
                 //              tpacket.buffer_len_bits);
                 adsbee_server.HandleRawTransponderPacket(tpacket);
                 break;
+            }
+            case kAddrRawTransponderPacketArray: {
+                uint8_t num_packets = buf[0];
+                RawTransponderPacket tpacket;
+                for (uint16_t i = 0; i < num_packets && i * sizeof(RawTransponderPacket) + sizeof(uint8_t) < buf_len;
+                     i++) {
+                    memcpy(&tpacket, buf + sizeof(uint8_t) + i * sizeof(RawTransponderPacket),
+                           sizeof(RawTransponderPacket));
+                    adsbee_server.HandleRawTransponderPacket(tpacket);
+                }
             }
 #endif
             case kAddrSettingsData:

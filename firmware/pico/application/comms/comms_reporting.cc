@@ -18,17 +18,42 @@ bool CommsManager::UpdateReporting() {
     bool ret = true;
     uint32_t timestamp_ms = get_time_since_boot_ms();
 
-    DecodedTransponderPacket packets_to_report[ADSBee::kMaxNumTransponderPackets];
-    uint16_t num_packets_to_report = 0;
-    while (transponder_packet_reporting_queue.Pop(packets_to_report[num_packets_to_report])) {
-        if (esp32.IsEnabled()) {
-            RawTransponderPacket raw_packet_to_report = packets_to_report[num_packets_to_report].GetRaw();
-            // Write packet to ESP32 without forcing an ACK.
-            esp32.Write(ObjectDictionary::kAddrRawTransponderPacket, raw_packet_to_report);
-        }
-        num_packets_to_report++;
+    if (timestamp_ms - last_raw_report_timestamp_ms_ <= kRawReportingIntervalMs) {
+        return true;  // Nothing to update.
     }
-    // TODO: forward packets_to_report to coprocessor over SPI.
+    // Proceed with update and record timestamp.
+    last_raw_report_timestamp_ms_ = timestamp_ms;
+
+    DecodedTransponderPacket packets_to_report[ADSBee::kMaxNumTransponderPackets];
+    /**
+     * Raw packet reporting buffer used to transfer multiple packets at once over SPI.
+     * [<uint8_t num_packets to report> <packet 1> <packet 2> ...]
+     */
+    uint8_t spi_raw_packet_reporting_buffer[sizeof(uint8_t) + ADSBee::kMaxNumTransponderPackets];
+
+    // Fill up the array of DecodedTransponderPackets for internal functions, and the buffer of RawTransponderPackets to
+    // send to the ESP32 over SPI. RawTransponderPackets are used instead of DecodedTransponderPackets over the SPI link
+    // in order to preserve bandwidth.
+    uint16_t num_packets_to_report = 0;
+    for (; num_packets_to_report < ADSBee::kMaxNumTransponderPackets &&
+           transponder_packet_reporting_queue.Pop(packets_to_report[num_packets_to_report]);
+         num_packets_to_report++) {
+        if (esp32.IsEnabled()) {
+            // Pop all the packets to report (up to max limit of the buffer).
+            RawTransponderPacket raw_packet = packets_to_report[num_packets_to_report].GetRaw();
+            memcpy(spi_raw_packet_reporting_buffer + sizeof(uint8_t) +
+                       sizeof(RawTransponderPacket) * num_packets_to_report,
+                   &raw_packet, sizeof(RawTransponderPacket));
+        }
+    }
+    if (esp32.IsEnabled() && num_packets_to_report > 0) {
+        // Write packet to ESP32 with a forced ACK.
+        esp32.Write(ObjectDictionary::kAddrRawTransponderPacketArray,                       // addr
+                    spi_raw_packet_reporting_buffer,                                        // buf
+                    true,                                                                   // require_ack
+                    sizeof(uint8_t) + num_packets_to_report * sizeof(RawTransponderPacket)  // len
+        );
+    }
 
     for (uint16_t i = 0; i < SettingsManager::SerialInterface::kGNSSUART; i++) {
         SettingsManager::SerialInterface iface = static_cast<SettingsManager::SerialInterface>(i);
@@ -42,25 +67,23 @@ bool CommsManager::UpdateReporting() {
                 ret = ReportBeast(iface, packets_to_report, num_packets_to_report);
                 break;
             case SettingsManager::kCSBee:
-                if (timestamp_ms - last_report_timestamp_ms >= kCSBeeReportingIntervalMs) {
+                if (timestamp_ms - last_csbee_report_timestamp_ms_ >= kCSBeeReportingIntervalMs) {
                     ret = ReportCSBee(iface);
-                    last_report_timestamp_ms = timestamp_ms;
+                    last_csbee_report_timestamp_ms_ = timestamp_ms;
                 }
                 break;
             case SettingsManager::kMAVLINK1:
             case SettingsManager::kMAVLINK2:
-                if (timestamp_ms - last_report_timestamp_ms >= kMAVLINKReportingIntervalMs) {
+                if (timestamp_ms - last_mavlink_report_timestamp_ms_ >= kMAVLINKReportingIntervalMs) {
                     ret = ReportMAVLINK(iface);
-                    last_report_timestamp_ms = timestamp_ms;
+                    last_mavlink_report_timestamp_ms_ = timestamp_ms;
                 }
                 break;
             case SettingsManager::kGDL90:
-                if (timestamp_ms - last_report_timestamp_ms >= kMAVLINKReportingIntervalMs) {
+                if (timestamp_ms - last_gdl90_report_timestamp_ms_ >= kGDL90ReportingIntervalMs) {
                     ret = ReportGDL90(iface);
-                    last_report_timestamp_ms = timestamp_ms;
+                    last_gdl90_report_timestamp_ms_ = timestamp_ms;
                 }
-                // CONSOLE_WARNING("CommsManager::UpdateReporting",
-                //                 "Protocol GDL90 specified on interface %d but is not yet supported.", i);
                 break;
             case SettingsManager::kNumProtocols:
             default:
