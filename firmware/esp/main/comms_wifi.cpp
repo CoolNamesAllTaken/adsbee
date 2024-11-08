@@ -155,6 +155,18 @@ void CommsManager::WiFiAccessPointTask(void* pvParameters) {
     close(sock);
 }
 
+/**
+ * Helper function that returns whether a TCP socket is currently connected.
+ * @param[in] socket Socket to check conection status of.
+ * @retval True if socket is connected (even if no data is available), false otherwise.
+ */
+bool socket_is_connected(int sock) {
+    uint8_t buf[1];
+    int peek_ret = recv(sock, buf, 1, MSG_PEEK | MSG_DONTWAIT);
+    // 0 = closed by peer. <0 = no data available.
+    return peek_ret != 0;
+}
+
 void CommsManager::WiFiStationTask(void* pvParameters) {
     RawTransponderPacket tpacket;
 
@@ -164,70 +176,96 @@ void CommsManager::WiFiStationTask(void* pvParameters) {
     }
 
     int feed_sock[SettingsManager::Settings::kMaxNumFeeds] = {0};
-    bool feed_sock_is_active[SettingsManager::Settings::kMaxNumFeeds] = {0};
-
-    for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
-        if (settings_manager.settings.feed_is_active[i]) {
-            struct sockaddr_in dest_addr;
-            inet_pton(AF_INET, settings_manager.settings.feed_uris[i], &dest_addr.sin_addr);
-            // dest_addr.sin_addr.s_addr = inet_addr(settings_manager.settings.feed_uris[i]);
-            dest_addr.sin_family = AF_INET;
-            dest_addr.sin_port = htons(settings_manager.settings.feed_ports[i]);
-
-            feed_sock[i] = socket(dest_addr.sin_family, SOCK_STREAM, IPPROTO_IP);
-            if (feed_sock[i] < 0) {
-                CONSOLE_ERROR("CommsManager::WiFiStationTask", "Unable to create socket for feed %d: errno %d", i,
-                              errno);
-                continue;
-            }
-            CONSOLE_INFO("CommsManager::WiFiStationTask", "Socket for feed %d created, connecting to %s:%d", i,
-                         settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i]);
-
-            int err = connect(feed_sock[i], (struct sockaddr*)&dest_addr, sizeof(dest_addr));
-            if (err != 0) {
-                CONSOLE_ERROR("CommsManager::WiFiStationTask", "Socket unable to connect to URI for feed %d: errno %d",
-                              i, errno);
-                close(feed_sock[i]);
-                continue;
-            }
-            CONSOLE_INFO("CommsManager::WiFiStationTask", "Successfully connected to %s",
-                         settings_manager.settings.feed_uris[i]);
-            feed_sock_is_active[i] = true;
-        }
-    }
+    // bool feed_sock_is_active[SettingsManager::Settings::kMaxNumFeeds] = {0};
+    uint32_t feed_sock_last_connect_timestamp_ms[SettingsManager::Settings::kMaxNumFeeds] = {0};
 
     while (run_wifi_sta_task_) {
-        if (xQueueReceive(wifi_sta_raw_transponder_packet_queue_, &tpacket, portMAX_DELAY) == pdTRUE) {
-            for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
-                if (!feed_sock_is_active[i] ||
-                    settings_manager.settings.feed_protocols[i] != SettingsManager::ReportingProtocol::kBeast) {
-                    continue;
+        // Gather packet(s) to send.
+        if (xQueueReceive(wifi_sta_raw_transponder_packet_queue_, &tpacket, portMAX_DELAY) != pdTRUE) {
+            // No packets available to send, wait and try again.
+            vTaskDelay(1);
+            continue;
+        }
+
+        // NOTE: Construct packets that are shared between feeds here!
+
+        for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+            // Iterate through feeds, open/close and send message as required.
+            if (settings_manager.settings.feed_is_active[i]) {
+                // Socket should be open.
+                if (!socket_is_connected(feed_sock[i])) {
+                    // Need to open the socket connection.
+                    struct sockaddr_in dest_addr;
+                    inet_pton(AF_INET, settings_manager.settings.feed_uris[i], &dest_addr.sin_addr);
+                    // dest_addr.sin_addr.s_addr = inet_addr(settings_manager.settings.feed_uris[i]);
+                    dest_addr.sin_family = AF_INET;
+                    dest_addr.sin_port = htons(settings_manager.settings.feed_ports[i]);
+
+                    feed_sock[i] = socket(dest_addr.sin_family, SOCK_STREAM, IPPROTO_IP);
+                    if (feed_sock[i] < 0) {
+                        CONSOLE_ERROR("CommsManager::WiFiStationTask", "Unable to create socket for feed %d: errno %d",
+                                      i, errno);
+                        continue;
+                    }
+                    CONSOLE_INFO("CommsManager::WiFiStationTask", "Socket for feed %d created, connecting to %s:%d", i,
+                                 settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i]);
+
+                    int err = connect(feed_sock[i], (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+                    if (err != 0) {
+                        CONSOLE_ERROR("CommsManager::WiFiStationTask",
+                                      "Socket unable to connect to URI for feed %d: errno %d", i, errno);
+                        close(feed_sock[i]);
+                        continue;
+                    }
+                    CONSOLE_INFO("CommsManager::WiFiStationTask", "Successfully connected to %s",
+                                 settings_manager.settings.feed_uris[i]);
+                    // feed_sock_is_active[i] = true;
                 }
 
-                uint8_t message_buf[2 * SettingsManager::Settings::kFeedReceiverIDNumBytes +
-                                    kBeastFrameMaxLenBytes];  // Double the length as a hack to make room for the
-                                                              // escaped UUID.
-                uint16_t message_len_bytes = TransponderPacketToBeastFramePrependReceiverID(
-                    tpacket, message_buf, settings_manager.settings.feed_receiver_ids[i],
-                    SettingsManager::Settings::kFeedReceiverIDNumBytes);
+                // Send packet!
+                // NOTE: Construct packets that are specific to a feed in case statements here!
+                switch (settings_manager.settings.feed_protocols[i]) {
+                    case SettingsManager::ReportingProtocol::kBeast: {
+                        // Send Beast packet.
+                        // Double the length as a hack to make room for the escaped UUID.
+                        uint8_t beast_message_buf[2 * SettingsManager::Settings::kFeedReceiverIDNumBytes +
+                                                  kBeastFrameMaxLenBytes];
+                        uint16_t beast_message_len_bytes = TransponderPacketToBeastFramePrependReceiverID(
+                            tpacket, beast_message_buf, settings_manager.settings.feed_receiver_ids[i],
+                            SettingsManager::Settings::kFeedReceiverIDNumBytes);
 
-                int err = send(feed_sock[i], message_buf, message_len_bytes, 0);
-                if (err < 0) {
-                    CONSOLE_ERROR(
-                        "CommsManager::WiFiStationTask",
-                        "Error occurred during sending %d Byte beast message to feed %d with URI %s on port %d: "
-                        "errno %d.",
-                        message_len_bytes, i, settings_manager.settings.feed_uris[i],
-                        settings_manager.settings.feed_ports[i], errno);
-                } else {
-                    CONSOLE_INFO("CommsManager::WiFiStationTask", "Message sent to feed %d.", i);
+                        int err = send(feed_sock[i], beast_message_buf, beast_message_len_bytes, 0);
+                        if (err < 0) {
+                            CONSOLE_ERROR("CommsManager::WiFiStationTask",
+                                          "Error occurred during sending %d Byte beast message to feed %d with URI %s "
+                                          "on port %d: "
+                                          "errno %d.",
+                                          beast_message_len_bytes, i, settings_manager.settings.feed_uris[i],
+                                          settings_manager.settings.feed_ports[i], errno);
+                        } else {
+                            CONSOLE_INFO("CommsManager::WiFiStationTask", "Message sent to feed %d.", i);
+                        }
+                        break;
+                    }
+                    // TODO: add other protocols here
+                    default:
+                        // No reporting protocol or unsupported protocol: do nothing.
+                        break;
+                }
+            } else {
+                // Socket should be closed.
+                if (socket_is_connected(feed_sock[i])) {
+                    // Need to close the socket connection.
+                    close(feed_sock[i]);
                 }
             }
         }
     }
 
+    // Close all sockets while exiting.
     for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
-        if (feed_sock_is_active[i]) {
+        if (socket_is_connected(feed_sock[i])) {
+            // Need to close the socket connection.
             close(feed_sock[i]);
         }
     }

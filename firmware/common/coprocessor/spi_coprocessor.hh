@@ -30,20 +30,24 @@ class SPICoprocessor {
     static const uint16_t kSPITransactionQueueLenTransactions = 3;
     static const uint16_t kSPITransactionMaxNumRetries =
         3;  // Max num retries per block in a multi-transfer transaction.
+
+#ifdef ON_PICO
+    // Make sure that we don't talk to the slave before it has a chance to get ready for the next message.
+    static const uint32_t kSPIMinTransmitIntervalUs = 200;
+    // NOTE: Max transmission time is ~10ms with a 4kB packet at 40MHz.
+    // How long to wait once a transaction is started before timing out.
+    static const uint16_t kSPITransactionTimeoutMs = 20;
+    // How long a blocking wait for a handshake can last.
+    static const uint16_t kSPIHandshakeTimeoutMs = 20;
+#elif ON_ESP32
+    static const uint32_t kNetworkLEDBlinkDurationMs = 10;
+    static const uint32_t kNetworkLEDBlinkDurationTicks = kNetworkLEDBlinkDurationMs / portTICK_PERIOD_MS;
     // Since the transaction timeout value is used by threads waiting to use the SPI peripheral, and the SPI update task
     // blocks the copro_spi_mutex_ until it receives a transfer from the master, this timeout needs to be set to the
     // maximum delay between unsolicited packets from the master (heartbeat) to avoid threads giving up while the SPI
     // update task is hogging the mutex.
-    static const uint16_t kSPITransactionTimeoutMs =
-        200;  // How long to wait once a transaction is started before timing out.
-
-#ifdef ON_PICO
-    static const uint16_t kHandshakePinMaxWaitDurationMs = 10;
-    // Make sure that we don't talk to the slave before it has a chance to get ready for the next message.
-    static const uint32_t kSPIMinTransmitIntervalUs = 200;
-#elif ON_ESP32
-    static const uint32_t kNetworkLEDBlinkDurationMs = 10;
-    static const uint32_t kNetworkLEDBlinkDurationTicks = kNetworkLEDBlinkDurationMs / portTICK_PERIOD_MS;
+    // How long to wait once a transaction is started before timing out.
+    static const uint16_t kSPITransactionTimeoutMs = 200;
     static const uint16_t kSPITransactionTimeoutTicks = kSPITransactionTimeoutMs / portTICK_PERIOD_MS;
     static const uint16_t kSPIMutexTimeoutMs = 1200;  // How long to wait for the transaction mutex before timing out.
     static const uint16_t kSPIMutexTimeoutTicks = kSPIMutexTimeoutMs / portTICK_PERIOD_MS;
@@ -88,7 +92,7 @@ class SPICoprocessor {
      * Abstract base struct for SPI Coprocessor packets.
      */
     struct __attribute__((__packed__)) SCPacket {
-        static const uint16_t kPacketMaxLenBytes = 4096;
+        static const uint16_t kPacketMaxLenBytes = kSPITransactionMaxLenBytes;
         static const uint16_t kCRCLenBytes = sizeof(uint16_t);
 
         // Pure virtual functions.
@@ -422,7 +426,7 @@ class SPICoprocessor {
             if (gpio_get(config_.spi_handshake_pin)) {
                 break;
             }
-            if (get_time_since_boot_ms() - wait_begin_timestamp_ms >= kSPITransactionTimeoutMs) {
+            if (get_time_since_boot_ms() - wait_begin_timestamp_ms >= kSPIHandshakeTimeoutMs) {
                 return false;
             }
         }
