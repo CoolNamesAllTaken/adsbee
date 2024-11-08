@@ -15,8 +15,9 @@ services:
       - TZ=America/Los_Angeles
         #- BEASTHOST=192.168.1.55
         # - BEASTPORT=30004
-      - LAT=-33.33333
-      - LONG=111.11111
+        # NOTE: LAT/LON must be changed to your location for aircraft to show on the map!!
+      - LAT=37.2833
+      - LONG=-121.9355
     networks:
       - adsbnet
     ports:

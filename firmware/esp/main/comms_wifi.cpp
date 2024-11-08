@@ -155,17 +155,17 @@ void CommsManager::WiFiAccessPointTask(void* pvParameters) {
     close(sock);
 }
 
-/**
- * Helper function that returns whether a TCP socket is currently connected.
- * @param[in] socket Socket to check conection status of.
- * @retval True if socket is connected (even if no data is available), false otherwise.
- */
-bool socket_is_connected(int sock) {
-    uint8_t buf[1];
-    int peek_ret = recv(sock, buf, 1, MSG_PEEK | MSG_DONTWAIT);
-    // 0 = closed by peer. <0 = no data available.
-    return peek_ret != 0;
-}
+// /**
+//  * Helper function that returns whether a TCP socket is currently connected.
+//  * @param[in] socket Socket to check conection status of.
+//  * @retval True if socket is connected (even if no data is available), false otherwise.
+//  */
+// bool socket_is_connected(int sock) {
+//     uint8_t buf[1];
+//     int peek_ret = recv(sock, buf, 1, MSG_PEEK | MSG_DONTWAIT);
+//     // 0 = closed by peer. <0 = no data available.
+//     return peek_ret != 0;
+// }
 
 void CommsManager::WiFiStationTask(void* pvParameters) {
     RawTransponderPacket tpacket;
@@ -176,7 +176,7 @@ void CommsManager::WiFiStationTask(void* pvParameters) {
     }
 
     int feed_sock[SettingsManager::Settings::kMaxNumFeeds] = {0};
-    // bool feed_sock_is_active[SettingsManager::Settings::kMaxNumFeeds] = {0};
+    bool feed_sock_is_connected[SettingsManager::Settings::kMaxNumFeeds] = {false};
     uint32_t feed_sock_last_connect_timestamp_ms[SettingsManager::Settings::kMaxNumFeeds] = {0};
 
     while (run_wifi_sta_task_) {
@@ -192,16 +192,10 @@ void CommsManager::WiFiStationTask(void* pvParameters) {
         for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
             // Iterate through feeds, open/close and send message as required.
             if (settings_manager.settings.feed_is_active[i]) {
-                // Socket should be open.
-                if (!socket_is_connected(feed_sock[i])) {
-                    // Need to open the socket connection.
-                    struct sockaddr_in dest_addr;
-                    inet_pton(AF_INET, settings_manager.settings.feed_uris[i], &dest_addr.sin_addr);
-                    // dest_addr.sin_addr.s_addr = inet_addr(settings_manager.settings.feed_uris[i]);
-                    dest_addr.sin_family = AF_INET;
-                    dest_addr.sin_port = htons(settings_manager.settings.feed_ports[i]);
-
-                    feed_sock[i] = socket(dest_addr.sin_family, SOCK_STREAM, IPPROTO_IP);
+                // Socket needs to be created.
+                if (feed_sock[i] <= 0) {
+                    // IPv4, TCP
+                    feed_sock[i] = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
                     if (feed_sock[i] < 0) {
                         CONSOLE_ERROR("CommsManager::WiFiStationTask", "Unable to create socket for feed %d: errno %d",
                                       i, errno);
@@ -209,17 +203,29 @@ void CommsManager::WiFiStationTask(void* pvParameters) {
                     }
                     CONSOLE_INFO("CommsManager::WiFiStationTask", "Socket for feed %d created, connecting to %s:%d", i,
                                  settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i]);
+                }
+
+                // Socket should be open.
+                if (!feed_sock_is_connected[i]) {
+                    // Need to open the socket connection.
+                    struct sockaddr_in dest_addr;
+                    inet_pton(AF_INET, settings_manager.settings.feed_uris[i], &dest_addr.sin_addr);
+                    // dest_addr.sin_addr.s_addr = inet_addr(settings_manager.settings.feed_uris[i]);
+                    dest_addr.sin_family = AF_INET;
+                    dest_addr.sin_port = htons(settings_manager.settings.feed_ports[i]);
 
                     int err = connect(feed_sock[i], (struct sockaddr*)&dest_addr, sizeof(dest_addr));
                     if (err != 0) {
                         CONSOLE_ERROR("CommsManager::WiFiStationTask",
                                       "Socket unable to connect to URI for feed %d: errno %d", i, errno);
                         close(feed_sock[i]);
+                        feed_sock[i] = 0;
+                        feed_sock_is_connected[i] = false;
                         continue;
                     }
                     CONSOLE_INFO("CommsManager::WiFiStationTask", "Successfully connected to %s",
                                  settings_manager.settings.feed_uris[i]);
-                    // feed_sock_is_active[i] = true;
+                    feed_sock_is_connected[i] = true;
                 }
 
                 // Send packet!
@@ -242,6 +248,9 @@ void CommsManager::WiFiStationTask(void* pvParameters) {
                                           "errno %d.",
                                           beast_message_len_bytes, i, settings_manager.settings.feed_uris[i],
                                           settings_manager.settings.feed_ports[i], errno);
+                            // Mark socket as disconnected and try reconnecting in next reporting interval. Currently
+                            // this will try to reconnect every raw packet reporting interval.
+                            feed_sock_is_connected[i] = false;
                         } else {
                             CONSOLE_INFO("CommsManager::WiFiStationTask", "Message sent to feed %d.", i);
                         }
@@ -254,9 +263,11 @@ void CommsManager::WiFiStationTask(void* pvParameters) {
                 }
             } else {
                 // Socket should be closed.
-                if (socket_is_connected(feed_sock[i])) {
+                if (feed_sock_is_connected[i]) {
                     // Need to close the socket connection.
                     close(feed_sock[i]);
+                    feed_sock[i] = 0;
+                    feed_sock_is_connected[i] = false;
                 }
             }
         }
@@ -264,9 +275,11 @@ void CommsManager::WiFiStationTask(void* pvParameters) {
 
     // Close all sockets while exiting.
     for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
-        if (socket_is_connected(feed_sock[i])) {
+        if (feed_sock_is_connected[i]) {
             // Need to close the socket connection.
             close(feed_sock[i]);
+            feed_sock[i] = 0;
+            feed_sock_is_connected[i] = false;  // Not necessary but leaving this here in case of refactor.
         }
     }
 }
