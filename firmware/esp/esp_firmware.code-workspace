@@ -16,7 +16,10 @@
 		"files.associations": {
 			"compare": "cpp",
 			"cstdint": "cpp",
-			"chrono": "cpp"
+			"chrono": "cpp",
+			"cstring": "cpp",
+			"variant": "cpp",
+			"*.inc": "cpp"
 		},
 	},
 	"launch": {

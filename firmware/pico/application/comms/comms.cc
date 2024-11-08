@@ -6,8 +6,6 @@
 #include "pico/stdlib.h"
 #include "spi_coprocessor.hh"
 
-SPICoprocessor spi_coprocessor;
-
 CommsManager::CommsManager(CommsManagerConfig config_in)
     : config_(config_in), at_parser_(CppAT(at_command_list, at_command_list_num_commands, true)) {}
 

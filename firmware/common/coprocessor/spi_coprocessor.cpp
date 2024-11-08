@@ -52,13 +52,16 @@ bool SPICoprocessor::Init() {
     }
 #elif ON_ESP32
     gpio_set_direction(config_.network_led_pin, GPIO_MODE_OUTPUT);
-    spi_bus_config_t spi_buscfg = {
-        .mosi_io_num = config_.spi_mosi_pin,
-        .miso_io_num = config_.spi_miso_pin,
-        .sclk_io_num = config_.spi_clk_pin,
-        .quadwp_io_num = -1,
-        .quadhd_io_num = -1,
-    };
+    spi_bus_config_t spi_buscfg = {.mosi_io_num = config_.spi_mosi_pin,
+                                   .miso_io_num = config_.spi_miso_pin,
+                                   .sclk_io_num = config_.spi_clk_pin,
+                                   .data2_io_num = -1,  // union with quadwp_io_num
+                                   .data3_io_num = -1,  // union with quadhd_io_num
+                                   .data4_io_num = -1,
+                                   .data5_io_num = -1,
+                                   .data6_io_num = -1,
+                                   .data7_io_num = -1,
+                                   .max_transfer_sz = SPICoprocessor::kSPITransactionMaxLenBytes};
     spi_slave_interface_config_t spi_slvcfg = {.spics_io_num = config_.spi_cs_pin,
                                                .flags = 0,
                                                .queue_size = 3,
@@ -68,6 +71,8 @@ bool SPICoprocessor::Init() {
     gpio_config_t handshake_io_conf = {
         .pin_bit_mask = (static_cast<uint64_t>(0b1) << config_.spi_handshake_pin),
         .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE,
     };
     gpio_config(&handshake_io_conf);
@@ -182,7 +187,7 @@ bool SPICoprocessor::Update() {
     uint8_t rx_buf[kSPITransactionMaxLenBytes];
     memset(rx_buf, 0, kSPITransactionMaxLenBytes);
 
-    if (xSemaphoreTake(spi_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
+    if (xSemaphoreTake(spi_mutex_, kSPIMutexTimeoutTicks) != pdTRUE) {
         CONSOLE_ERROR("SPICoprocessor::SPIWriteReadBlocking",
                       "Failed to acquire coprocessor SPI mutex after waiting %d ms.", kSPITransactionTimeoutMs);
         return false;
@@ -332,8 +337,12 @@ int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint1
     memset(&t, 0, sizeof(t));
 
     t.length = len_bytes * kBitsPerByte;  // Transaction length is in bits
-    t.tx_buffer = tx_buf;
-    t.rx_buffer = rx_buf;
+    t.tx_buffer = tx_buf == nullptr ? nullptr : spi_tx_buf_;
+    t.rx_buffer = rx_buf == nullptr ? nullptr : spi_rx_buf_;
+
+    if (tx_buf != nullptr) {
+        memcpy(spi_tx_buf_, tx_buf, len_bytes);
+    }
 
     /** Send a write packet from slave -> master via handshake. **/
     // Wait for a transaction to complete. Allow this task to block if no SPI transaction is received until max
@@ -350,6 +359,9 @@ int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint1
         return kErrorGeneric;
     }
     bytes_written = CeilBitsToBytes(t.trans_len);
+    if (rx_buf != nullptr) {
+        memcpy(rx_buf, spi_rx_buf_, len_bytes);
+    }
 #endif
     return bytes_written;
 }

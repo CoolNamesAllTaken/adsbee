@@ -8,7 +8,8 @@
 
 // #define VERBOSE_DEBUG
 
-static const uint32_t kSPIRxTaskStackDepthBytes = 4096;
+// This will cause weird crashes if it's too small to support full size SPI transfers!
+static const uint32_t kSPIRxTaskStackDepthBytes = 6 * 4096;
 static const uint16_t kGDL90Port = 4000;
 
 GDL90Reporter gdl90;

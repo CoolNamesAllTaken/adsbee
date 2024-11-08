@@ -61,6 +61,7 @@ class ObjectDictionary {
 #elif ON_ESP32
             case kAddrConsole:
                 // RP2040 writing to the ESP32's network console interface.
+                break;
             case kAddrRawTransponderPacket: {
                 RawTransponderPacket tpacket = *(RawTransponderPacket *)buf;
                 // Warning: printing here will cause a timeout and tests will fail.
