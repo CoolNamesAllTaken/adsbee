@@ -33,7 +33,7 @@ class SPICoprocessor {
 
 #ifdef ON_PICO
     // Make sure that we don't talk to the slave before it has a chance to get ready for the next message.
-    static const uint32_t kSPIMinTransmitIntervalUs = 200;
+    static const uint32_t kSPIMinTransmitIntervalUs = 400;
     // NOTE: Max transmission time is ~10ms with a 4kB packet at 40MHz.
     // How long to wait once a transaction is started before timing out.
     static const uint16_t kSPITransactionTimeoutMs = 20;
