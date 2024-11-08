@@ -124,16 +124,15 @@ class SPICoprocessor {
      */
     struct __attribute__((__packed__)) SCWritePacket : public SCPacket {
         static const uint16_t kDataOffsetBytes =
-            sizeof(SCCommand) + sizeof(ObjectDictionary::Address) + sizeof(uint16_t) + sizeof(uint8_t);
+            sizeof(SCCommand) + sizeof(ObjectDictionary::Address) + sizeof(uint16_t) + sizeof(uint16_t);
         static const uint16_t kDataMaxLenBytes = kPacketMaxLenBytes - kDataOffsetBytes - kCRCLenBytes;
-        static const uint16_t kBufMinLenBytes =
-            sizeof(SCCommand) + sizeof(ObjectDictionary::Address) + sizeof(uint16_t) + sizeof(uint8_t) + kCRCLenBytes;
+        static const uint16_t kBufMinLenBytes = kDataOffsetBytes + kCRCLenBytes;
 
         /** Begin packet contents on the wire. **/
         SCCommand cmd = kCmdInvalid;
         ObjectDictionary::Address addr = ObjectDictionary::kAddrInvalid;
         uint16_t offset = 0;
-        uint8_t len = 0;                                // Length from start of data to beginning of CRC.
+        uint16_t len = 0;                               // Length from start of data to beginning of CRC.
         uint8_t data[kDataMaxLenBytes + kCRCLenBytes];  // CRC is secretly appended at the end of data so that the
                                                         // struct can be used as a buffer to send with.
         /** End packet contents on the wire. **/
@@ -170,7 +169,7 @@ class SPICoprocessor {
      * SPI Coprocessor Read Request Packet
      *
      * Used to request a read from slave (by master) or request a read from master (by slave). Receives a
-     * SCReadReplyPacket in response.
+     * SCResponsePacket in response.
      */
     struct __attribute__((__packed__)) SCReadRequestPacket : public SCPacket {
         static const uint16_t kBufLenBytes =
@@ -516,7 +515,7 @@ class SPICoprocessor {
         return ret;
     }
 
-    bool PartialWrite(ObjectDictionary::Address addr, uint8_t *object_buf, uint8_t len, uint16_t offset = 0,
+    bool PartialWrite(ObjectDictionary::Address addr, uint8_t *object_buf, uint16_t len, uint16_t offset = 0,
                       bool require_ack = false) {
         SCWritePacket write_packet;
 #ifdef ON_PICO
@@ -566,7 +565,7 @@ class SPICoprocessor {
         return true;
     }
 
-    bool PartialRead(ObjectDictionary::Address addr, uint8_t *object_buf, uint8_t len, uint16_t offset = 0) {
+    bool PartialRead(ObjectDictionary::Address addr, uint8_t *object_buf, uint16_t len, uint16_t offset = 0) {
         SCReadRequestPacket read_request_packet;
 #ifdef ON_PICO
         read_request_packet.cmd = kCmdReadFromSlave;
