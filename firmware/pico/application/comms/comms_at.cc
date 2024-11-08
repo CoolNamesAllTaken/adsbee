@@ -26,11 +26,26 @@ const uint32_t kDeviceInfoProgrammingPassword = 0xDEDBEEF;  // This is intended 
 
 /** CppAT Printf Override **/
 int CppAT::cpp_at_printf(const char *format, ...) {
+    // Print to STDIO.
     va_list args;
     va_start(args, format);
-    int res = vprintf(format, args);
+    int stdio_chars = vprintf(format, args);
     va_end(args);
-    return res;
+
+    // Print to network console.
+    char network_console_buffer[CommsManager::kATCommandBufMaxLen];
+    va_start(args, format);
+    int network_chars = vsnprintf(network_console_buffer, CommsManager::kATCommandBufMaxLen, format, args);
+    va_end(args);
+
+    for (uint16_t i = 0; i < network_chars; i++) {
+        if (!comms_manager.esp32_console_tx_queue.Push(network_console_buffer[i])) {
+            CONSOLE_ERROR("CppAT::cpp_at_printf", "Overflowed buffer for outgoing network console chars.");
+        }
+    }
+
+    // Note: Character count does not include terminating '\0'.
+    return MIN(stdio_chars, network_chars);
 }
 
 /** AT Command Callback Functions **/
@@ -657,17 +672,45 @@ const CppAT::ATCommandDef_t at_command_list[] = {
 const uint16_t at_command_list_num_commands = sizeof(at_command_list) / sizeof(at_command_list[0]);
 
 bool CommsManager::UpdateAT() {
-    static char at_command_buf[kATCommandBufMaxLen];
-    // Check for new AT commands. Process up to one line per loop.
-    int c = getchar_timeout_us(0);
-    while (c != PICO_ERROR_TIMEOUT) {
-        char buf[2] = {static_cast<char>(c), '\0'};
-        strcat(at_command_buf, buf);
+    static char stdio_at_command_buf[kATCommandBufMaxLen];
+    // Check for new AT commands from STDIO. Process up to one line per loop.
+    char c = static_cast<char>(getchar_timeout_us(0));
+    while (static_cast<int8_t>(c) != PICO_ERROR_TIMEOUT) {
+        char buf[2] = {c, '\0'};
+        strcat(stdio_at_command_buf, buf);
         if (c == '\n') {
-            at_parser_.ParseMessage(std::string_view(at_command_buf));
-            at_command_buf[0] = '\0';  // clear command buffer
+            at_parser_.ParseMessage(std::string_view(stdio_at_command_buf));
+            stdio_at_command_buf[0] = '\0';  // clear command buffer
         }
-        c = getchar_timeout_us(0);
+        c = static_cast<char>(getchar_timeout_us(0));
     }
+
+    // Receive incoming network console characters.
+    static char esp32_console_rx_buf[kATCommandBufMaxLen];
+    while (esp32_console_rx_queue.Pop(c)) {
+        char buf[2] = {c, '\0'};
+        strcat(esp32_console_rx_buf, buf);
+        if (c == '\n') {
+            CONSOLE_INFO("CommsManager::UpdateAT", "Received network console message: %s\r\n", esp32_console_rx_buf);
+            at_parser_.ParseMessage(std::string_view(esp32_console_rx_buf));
+            stdio_at_command_buf[0] = '\0';  // clear command buffer
+        }
+    }
+
+    // Send outgoing network console characters.
+    char esp32_console_tx_buf[SPICoprocessor::SCWritePacket::kDataMaxLenBytes];
+    while (esp32_console_tx_queue.Length() > 0) {
+        uint16_t message_len = 0;
+        for (; message_len < SPICoprocessor::SCWritePacket::kDataMaxLenBytes && esp32_console_tx_queue.Pop(c);
+             message_len++) {
+            esp32_console_tx_buf[message_len] = c;
+        }
+        // Ran out of characters to send, or hit the max packet length.
+        if (message_len > 0) {
+            // Don't send empty messages.
+            esp32.Write(ObjectDictionary::kAddrConsole, esp32_console_tx_buf, true, message_len);
+        }
+    }
+
     return true;
 }

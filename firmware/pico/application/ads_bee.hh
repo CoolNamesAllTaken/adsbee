@@ -182,7 +182,7 @@ class ADSBee {
      */
     void SetReceiverEnable(bool is_enabled) {
         receiver_enabled_ = is_enabled;
-        irq_set_enabled(config_.preamble_detector_demod_pin_irq, receiver_enabled_);
+        irq_set_enabled(config_.preamble_detector_demod_complete_irq, receiver_enabled_);
     }
 
     /**

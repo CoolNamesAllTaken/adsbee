@@ -139,6 +139,12 @@ class CommsManager {
         PFBQueue<DecodedTransponderPacket>({.buf_len_num_elements = ADSBee::kMaxNumTransponderPackets,
                                             .buffer = transponder_packet_reporting_queue_buffer_});
 
+    // Queues for incoming / outgoing network characters.
+    PFBQueue<char> esp32_console_rx_queue =
+        PFBQueue<char>({.buf_len_num_elements = kATCommandBufMaxLen, .buffer = esp32_console_rx_queue_buffer_});
+    PFBQueue<char> esp32_console_tx_queue =
+        PFBQueue<char>({.buf_len_num_elements = kATCommandBufMaxLen, .buffer = esp32_console_tx_queue_buffer_});
+
     // Public WiFi Settings
     bool wifi_ap_enabled, wifi_sta_enabled;
     char wifi_ap_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
@@ -202,6 +208,10 @@ class CommsManager {
 
     // Console Settings
     CppAT at_parser_;
+
+    // Queues for incoming / outgoing network console characters.
+    char esp32_console_rx_queue_buffer_[kATCommandBufMaxLen];
+    char esp32_console_tx_queue_buffer_[kATCommandBufMaxLen];
 
     // Queue for holding new transponder packets before they get reported.
     DecodedTransponderPacket transponder_packet_reporting_queue_buffer_[ADSBee::kMaxNumTransponderPackets];

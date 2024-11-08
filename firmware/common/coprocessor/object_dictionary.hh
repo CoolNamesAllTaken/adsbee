@@ -29,6 +29,9 @@ class ObjectDictionary {
         kAddrDecodedTransponderPacket = 0x05,
         kAddrBaseMAC = 0x06,         // ESP32 base MAC address.
         kAddrWiFiStationMAC = 0x07,  // ESP32 WiFi station MAC address.
+        kAddrWiFiAccessPointMAC = 0x08,
+        kAddrBluetoothMAC = 0x09,
+        kAddrConsole = 0xA,  // Pipe for console characters.
         kNumAddrs
     };
 
@@ -48,7 +51,16 @@ class ObjectDictionary {
                 // offset);
                 memcpy((uint8_t *)&scratch_ + offset, buf, buf_len);
                 break;
-#ifdef ON_ESP32
+#ifdef ON_PICO
+            case kAddrConsole:
+                // ESP32 writing to the RP2040's network console interface.
+                for (uint16_t i = 0; i < buf_len; i++) {
+                    comms_manager.esp32_console_rx_queue.Push((char)buf[i]);
+                }
+                break;
+#elif ON_ESP32
+            case kAddrConsole:
+                // RP2040 writing to the ESP32's network console interface.
             case kAddrRawTransponderPacket: {
                 RawTransponderPacket tpacket = *(RawTransponderPacket *)buf;
                 // Warning: printing here will cause a timeout and tests will fail.
