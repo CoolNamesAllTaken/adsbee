@@ -32,15 +32,23 @@ int CppAT::cpp_at_printf(const char *format, ...) {
     int stdio_chars = vprintf(format, args);
     va_end(args);
 
-    // Print to network console.
-    char network_console_buffer[CommsManager::kATCommandBufMaxLen];
-    va_start(args, format);
-    int network_chars = vsnprintf(network_console_buffer, CommsManager::kATCommandBufMaxLen, format, args);
-    va_end(args);
+    int network_chars = INT32_MAX;  // Give stupid high value so it gets ignored in the return value if esp32 disabled.
+    if (esp32.IsEnabled()) {
+        // Print to network console.
+        char network_console_buffer[CommsManager::kATCommandBufMaxLen];
+        va_start(args, format);
+        network_chars = vsnprintf(network_console_buffer, CommsManager::kATCommandBufMaxLen, format, args);
+        va_end(args);
 
-    for (uint16_t i = 0; i < network_chars; i++) {
-        if (!comms_manager.esp32_console_tx_queue.Push(network_console_buffer[i])) {
-            CONSOLE_ERROR("CppAT::cpp_at_printf", "Overflowed buffer for outgoing network console chars.");
+        for (uint16_t i = 0; i < network_chars; i++) {
+            if (!comms_manager.esp32_console_tx_queue.Push(network_console_buffer[i])) {
+                comms_manager.Update();
+                if (!comms_manager.esp32_console_tx_queue.Push(network_console_buffer[i])) {
+                    CONSOLE_ERROR(
+                        "CppAT::cpp_at_printf",
+                        "Overflowed buffer for outgoing network console chars after attempting to clear buffer.");
+                }
+            }
         }
     }
 
@@ -685,30 +693,33 @@ bool CommsManager::UpdateAT() {
         c = static_cast<char>(getchar_timeout_us(0));
     }
 
-    // Receive incoming network console characters.
-    static char esp32_console_rx_buf[kATCommandBufMaxLen];
-    while (esp32_console_rx_queue.Pop(c)) {
-        char buf[2] = {c, '\0'};
-        strcat(esp32_console_rx_buf, buf);
-        if (c == '\n') {
-            CONSOLE_INFO("CommsManager::UpdateAT", "Received network console message: %s\r\n", esp32_console_rx_buf);
-            at_parser_.ParseMessage(std::string_view(esp32_console_rx_buf));
-            stdio_at_command_buf[0] = '\0';  // clear command buffer
+    if (esp32.IsEnabled()) {
+        // Receive incoming network console characters.
+        static char esp32_console_rx_buf[kATCommandBufMaxLen];
+        while (esp32_console_rx_queue.Pop(c)) {
+            char buf[2] = {c, '\0'};
+            strcat(esp32_console_rx_buf, buf);
+            if (c == '\n') {
+                CONSOLE_INFO("CommsManager::UpdateAT", "Received network console message: %s\r\n",
+                             esp32_console_rx_buf);
+                at_parser_.ParseMessage(std::string_view(esp32_console_rx_buf));
+                stdio_at_command_buf[0] = '\0';  // clear command buffer
+            }
         }
-    }
 
-    // Send outgoing network console characters.
-    char esp32_console_tx_buf[SPICoprocessor::SCWritePacket::kDataMaxLenBytes];
-    while (esp32_console_tx_queue.Length() > 0) {
-        uint16_t message_len = 0;
-        for (; message_len < SPICoprocessor::SCWritePacket::kDataMaxLenBytes && esp32_console_tx_queue.Pop(c);
-             message_len++) {
-            esp32_console_tx_buf[message_len] = c;
-        }
-        // Ran out of characters to send, or hit the max packet length.
-        if (message_len > 0) {
-            // Don't send empty messages.
-            esp32.Write(ObjectDictionary::kAddrConsole, esp32_console_tx_buf, true, message_len);
+        // Send outgoing network console characters.
+        char esp32_console_tx_buf[SPICoprocessor::SCWritePacket::kDataMaxLenBytes];
+        while (esp32_console_tx_queue.Length() > 0) {
+            uint16_t message_len = 0;
+            for (; message_len < SPICoprocessor::SCWritePacket::kDataMaxLenBytes && esp32_console_tx_queue.Pop(c);
+                 message_len++) {
+                esp32_console_tx_buf[message_len] = c;
+            }
+            // Ran out of characters to send, or hit the max packet length.
+            if (message_len > 0) {
+                // Don't send empty messages.
+                esp32.Write(ObjectDictionary::kAddrConsole, esp32_console_tx_buf, true, message_len);
+            }
         }
     }
 
