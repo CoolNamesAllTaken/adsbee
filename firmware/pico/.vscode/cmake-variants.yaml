@@ -4,21 +4,28 @@ buildType:
   choices:
     debug:
       short: Debug
-      long: Emit debug information without optimization
+      long: Emit debug information without optimization.
       buildType: Debug
     release:
       short: Release
-      long: Optimize for performance
+      long: Optimize for performance.
       buildType: Release
     minsize:
       short: MinSizeRel
-      long: Optimize for size
+      long: Optimize for size.
       buildType: MinSizeRel
     reldeb:
       short: RelWithDebInfo
-      long: Optimize for performance with debug info
+      long: Optimize for performance with debug info.
       buildType: RelWithDebInfo
     test:
       short: Test
       long: Compile for unit testing on host.
       buildType: Test
+    # bl_debug:
+    #   short: Bootloader Debug
+    #   long: Bootloader only, emit debug information without optimization.
+    #   buildType: Debug
+    # bl_release:
+    #   short: Bootloader Release
+    #   long: Bootloader only, optimize for performance.

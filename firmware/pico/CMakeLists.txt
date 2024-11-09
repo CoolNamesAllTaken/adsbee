@@ -3,138 +3,83 @@ cmake_minimum_required(VERSION 3.13)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 20)
 
+# Directories
+set(LINKER_SCRIPTS_DIR "${CMAKE_SOURCE_DIR}/linker_scripts")
+set(PICO_COMMON_DIR "${CMAKE_SOURCE_DIR}/pico_common") # Used for code shared among bootloader and application on RP2040.
+set(ADSBEE_COMMON_DIR "${CMAKE_SOURCE_DIR}/../common") # Used for code shared between ESP32 and RP2040.
+set(ADSBEE_MODULES_DIR "${CMAKE_SOURCE_DIR}/../modules")
+
+# TODO: Change these linker scripts as they get populated.
+set(BOOTLOADER_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/bootloader.ld")
+set(APPLICATION_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/application.ld")
+set(COMBINED_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/combined.ld")
+
+set(BOOTLOADER_SECTION_NAME boot3)
+set(APPLICATION_HEADER_SECTION_NAME hdr0)
+set(APPLICATION_SECTION_NAME app0)
+
+find_package (Python3 REQUIRED COMPONENTS Interpreter)
+
+# Function that converts a .bin file into a .S (assembly) file, allowing the .bin to be linked within a linker script
+# via its section name. Currently only used to create boot3.S in the bootloader folder.
+function(bin2asm BIN_FILE SECTION_NAME ASM_FILE)
+    add_custom_target(${BOOTLOADER_SECTION_NAME} DEPENDS bootloader)
+    add_custom_command(
+        # OUTPUT bootloader 
+        TARGET bootloader POST_BUILD
+        DEPENDS ${BIN_FILE}
+        COMMAND ${Python3_EXECUTABLE} ${LINKER_SCRIPTS_DIR}/util_asm.py 
+                ${BIN_FILE}
+                ${ASM_FILE}
+                ${SECTION_NAME}
+        # COMMENT "Converting ${BIN_FILE} to ${ASM_FILE} with section name ${SECTION_NAME}"
+    )
+endfunction()
+
 if (NOT CMAKE_BUILD_TYPE STREQUAL "Test")
+    # Flag indicating that build is for the embedded target. Used to toggle target_source calls.
+    set(ON_EMBEDDED_DEVICE 1)
+endif()
+
+if (ON_EMBEDDED_DEVICE)
+
     ## Building for target.
+
     # Pull in SDK (must be before project)
     include(pico_sdk_import.cmake)
     if (PICO_SDK_VERSION_STRING VERSION_LESS "1.3.0")
         message(FATAL_ERROR "Raspberry Pi Pico SDK version 1.3.0 (or later) required. Your version is ${PICO_SDK_VERSION_STRING}")
     endif()
-
     project(ads_bee C CXX ASM)
-    # Flag indicating that build is for the embedded target. Used to toggle target_source calls.
-    set(COMPILED_FOR_TARGET 1)
 
     # Differentiate common code between Pico and ESP32. For code highlighting, add this to the "defines" property of
     # "configurations" in c_cpp_properties.json.
     add_compile_definitions(ON_PICO)
 
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        # set(PICO_DEOPTIMIZED_DEBUG 1)
-        add_compile_definitions(HARDWARE_UNIT_TESTS)
-    endif()
-
     # Initialize the SDK
     pico_sdk_init()
-    add_executable(${PROJECT_NAME} "")
 
-    add_subdirectory(../common adsbee_common)
-    add_subdirectory(src)
+    add_subdirectory(bootloader)
+    add_subdirectory(application)
 
-    target_include_directories(${PROJECT_NAME} PRIVATE 
-        ../common
-        src
-        /ads_bee/modules/cppAT/src
-    )
-
-    target_sources(${PROJECT_NAME} PRIVATE
-        /ads_bee/modules/cppAT/src/cpp_at.cc
-        # /ads_bee/modules/cppAT/src/cpp_at.hh
-    )
-
-    # Create C header file with the name <pio program>.pio.h
-    pico_generate_pio_header(${PROJECT_NAME}  
-    ${CMAKE_CURRENT_LIST_DIR}/pio/blink.pio 
-    )
-    pico_generate_pio_header(${PROJECT_NAME}  
-    ${CMAKE_CURRENT_LIST_DIR}/pio/capture.pio       
-    )
-
-    # Firmware: Pull in Pico library
-    target_link_libraries(${PROJECT_NAME} 
-        pico_stdlib
-        pico_float # for math functions
-        pico_rand # for generating random numbers
-        hardware_pio
-        hardware_pwm
-        hardware_adc
-        hardware_i2c
-        hardware_spi
-        hardware_exception
-        hardware_watchdog
-    )
-
-    # Firmware: Create map/bin/hex file etc
-    pico_add_extra_outputs(${PROJECT_NAME})
-    pico_add_hex_output(${PROJECT_NAME}) # temporary workwaround for this bug: https://github.com/raspberrypi/pico-sdk/issues/1829
-
-    # Set up debug USB
-    pico_enable_stdio_usb(${PROJECT_NAME} 1) # use USB for standard printing
-    pico_enable_stdio_uart(${PROJECT_NAME} 0) # disable STDIO UART
-    
+    # Note: "combined" build lives in the application subdirectory, since all the include directories and source paths
+    # copied from the "application" build are referneced to that directory.
 
 else()
-    ## Building for unit tests on host.
-    project(ads_bee_test C CXX ASM)
+    ## Compiling for testing on host.
+
+    project(ads_bee C CXX ASM) # This is duplicated since the target firmware CMakeLists needs to create the project
+    # after the pico SDK is pulled in.
 
     set(CMAKE_BUILD_TYPE "Debug") # Now that we've identified we're running tests, revert to an actual build config.
 
     add_compile_options(
-        -Wall
+        -Wall                # Include all warnings.
         -Wno-format          # int != int32_t as far as the compiler is concerned because gcc has int32_t as long int
         -Wno-unused-function # we have some for the docs that aren't called
         -Wno-maybe-uninitialized
     )
 
-    add_executable(${PROJECT_NAME} "")
-
-    add_subdirectory(../common adsbee_common)
-    add_subdirectory(src)
+    # Create the executable and bring in testing source files.
     add_subdirectory(host_test)
-
-    target_include_directories(${PROJECT_NAME} PRIVATE
-        ../common
-        /ads_bee/modules/googletest
-        /ads_bee/modules/cppAT/src
-        src
-        host_test
-    )
-
-    target_sources(${PROJECT_NAME} PRIVATE
-        /ads_bee/modules/cppAT/src/cpp_at.cc
-        /ads_bee/modules/cppAT/test/test_cpp_at.cc
-    )
-
-    # Test: Pull in google test library
-    add_library(libgtest SHARED IMPORTED)
-    set_target_properties(libgtest PROPERTIES IMPORTED_LOCATION /ads_bee/modules/googletest/build/lib/libgtest.so)
-    target_link_libraries(${PROJECT_NAME} PRIVATE libgtest)
-    
-
 endif()
-
-# Set parameters for serial flasher.
-# NOTE: These are mirrored in the top level `pico/.vscode/c_cpp_properties.json` for intellisense.
-add_compile_definitions(
-    MD5_ENABLED 
-    SERIAL_FLASHER_INTERFACE_UART 
-    SERIAL_FLASHER_DEBUG_TRACE=0 
-    SERIAL_FLASHER_WRITE_BLOCK_RETRIES=3
-)
-
-# Embed binaries into the app.
-# In ESP-IDF this can also be done using EMBED_FILES option of idf_component_register.
-# Here an external tool is used to make file embedding similar with other ports.
-include(${CMAKE_CURRENT_LIST_DIR}/src/esp32_flasher/bin2array.cmake)
-# Create a file dependency that copies over the most recently built ESP32 firmware binary to the bin directory used by
-# esp32_flasher. Re-runs cmake if the file gets changed.
-configure_file(/ads_bee/esp/build/adsbee_esp.bin ${CMAKE_CURRENT_LIST_DIR}/src/esp32_flasher/bin/adsbee_esp.bin COPYONLY)
-create_resources(${CMAKE_CURRENT_LIST_DIR}/src/esp32_flasher/bin ${CMAKE_BINARY_DIR}/binaries.c)
-set_property(SOURCE ${CMAKE_BINARY_DIR}/binaries.c PROPERTY GENERATED 1)
-target_sources(${PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR}/binaries.c)
-
-
-
-
-
-

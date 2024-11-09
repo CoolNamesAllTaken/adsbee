@@ -185,7 +185,7 @@ class SettingsManager {
         printf("\tESP32: %s\r\n", settings.esp32_enabled ? "ENABLED" : "DISABLED");
 
         // Print WiFi settings.
-        printf("\tWiFi AP: %s\r\n", settings.wifi_ap_enabled ? "ENABLED" : "DISBALED");
+        printf("\tWiFi AP: %s\r\n", settings.wifi_ap_enabled ? "ENABLED" : "DISABLED");
         if (settings.wifi_ap_enabled) {
             // Access Point settings. Don't censor password.
             printf("\t\tChannel: %d\r\n", settings.wifi_ap_channel);

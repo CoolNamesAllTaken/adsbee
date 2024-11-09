@@ -15,6 +15,7 @@
 #include "data_structures.hh"
 #include "driver/gpio.h"
 #include "driver/spi_slave.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -23,25 +24,33 @@
 
 class SPICoprocessor {
    public:
-    static const uint16_t kSPITransactionMaxLenBytes = 64;
+    static const uint16_t kSPITransactionMaxLenBytes =
+        4096;  // Default max is 4096 Bytes on ESP32 (with DMA) and 4096 Bytes on RP2040.
     static_assert(kSPITransactionMaxLenBytes % 4 == 0);  // Make sure it's word-aligned.
     static const uint16_t kSPITransactionQueueLenTransactions = 3;
     static const uint16_t kSPITransactionMaxNumRetries =
         3;  // Max num retries per block in a multi-transfer transaction.
+
+#ifdef ON_PICO
+    // Make sure that we don't talk to the slave before it has a chance to get ready for the next message.
+    static const uint32_t kSPIMinTransmitIntervalUs = 400;
+    // NOTE: Max transmission time is ~10ms with a 4kB packet at 40MHz.
+    // How long to wait once a transaction is started before timing out.
+    static const uint16_t kSPITransactionTimeoutMs = 20;
+    // How long a blocking wait for a handshake can last.
+    static const uint16_t kSPIHandshakeTimeoutMs = 20;
+#elif ON_ESP32
+    static const uint32_t kNetworkLEDBlinkDurationMs = 10;
+    static const uint32_t kNetworkLEDBlinkDurationTicks = kNetworkLEDBlinkDurationMs / portTICK_PERIOD_MS;
     // Since the transaction timeout value is used by threads waiting to use the SPI peripheral, and the SPI update task
     // blocks the copro_spi_mutex_ until it receives a transfer from the master, this timeout needs to be set to the
     // maximum delay between unsolicited packets from the master (heartbeat) to avoid threads giving up while the SPI
     // update task is hogging the mutex.
-    static const uint16_t kSPITransactionTimeoutMs = 1200;
-
-#ifdef ON_PICO
-    static const uint16_t kHandshakePinMaxWaitDurationMs = 10;
-    // Make sure that we don't talk to the slave before it has a chance to get ready for the next message.
-    static const uint32_t kSPIMinTransmitIntervalUs = 200;
-#elif ON_ESP32
-    static const uint32_t kNetworkLEDBlinkDurationMs = 10;
-    static const uint32_t kNetworkLEDBlinkDurationTicks = kNetworkLEDBlinkDurationMs / portTICK_PERIOD_MS;
+    // How long to wait once a transaction is started before timing out.
+    static const uint16_t kSPITransactionTimeoutMs = 200;
     static const uint16_t kSPITransactionTimeoutTicks = kSPITransactionTimeoutMs / portTICK_PERIOD_MS;
+    static const uint16_t kSPIMutexTimeoutMs = 1200;  // How long to wait for the transaction mutex before timing out.
+    static const uint16_t kSPIMutexTimeoutTicks = kSPIMutexTimeoutMs / portTICK_PERIOD_MS;
 #endif
     struct SPICoprocessorConfig {
         uint32_t clk_rate_hz = 40e6;  // 40 MHz
@@ -83,7 +92,7 @@ class SPICoprocessor {
      * Abstract base struct for SPI Coprocessor packets.
      */
     struct __attribute__((__packed__)) SCPacket {
-        static const uint16_t kPacketMaxLenBytes = 64;
+        static const uint16_t kPacketMaxLenBytes = kSPITransactionMaxLenBytes;
         static const uint16_t kCRCLenBytes = sizeof(uint16_t);
 
         // Pure virtual functions.
@@ -115,16 +124,15 @@ class SPICoprocessor {
      */
     struct __attribute__((__packed__)) SCWritePacket : public SCPacket {
         static const uint16_t kDataOffsetBytes =
-            sizeof(SCCommand) + sizeof(ObjectDictionary::Address) + sizeof(uint16_t) + sizeof(uint8_t);
+            sizeof(SCCommand) + sizeof(ObjectDictionary::Address) + sizeof(uint16_t) + sizeof(uint16_t);
         static const uint16_t kDataMaxLenBytes = kPacketMaxLenBytes - kDataOffsetBytes - kCRCLenBytes;
-        static const uint16_t kBufMinLenBytes =
-            sizeof(SCCommand) + sizeof(ObjectDictionary::Address) + sizeof(uint16_t) + sizeof(uint8_t) + kCRCLenBytes;
+        static const uint16_t kBufMinLenBytes = kDataOffsetBytes + kCRCLenBytes;
 
         /** Begin packet contents on the wire. **/
         SCCommand cmd = kCmdInvalid;
         ObjectDictionary::Address addr = ObjectDictionary::kAddrInvalid;
         uint16_t offset = 0;
-        uint8_t len = 0;                                // Length from start of data to beginning of CRC.
+        uint16_t len = 0;                               // Length from start of data to beginning of CRC.
         uint8_t data[kDataMaxLenBytes + kCRCLenBytes];  // CRC is secretly appended at the end of data so that the
                                                         // struct can be used as a buffer to send with.
         /** End packet contents on the wire. **/
@@ -161,7 +169,7 @@ class SPICoprocessor {
      * SPI Coprocessor Read Request Packet
      *
      * Used to request a read from slave (by master) or request a read from master (by slave). Receives a
-     * SCReadReplyPacket in response.
+     * SCResponsePacket in response.
      */
     struct __attribute__((__packed__)) SCReadRequestPacket : public SCPacket {
         static const uint16_t kBufLenBytes =
@@ -263,7 +271,32 @@ class SPICoprocessor {
         inline uint8_t *GetCRCPtr() override { return data + data_len_bytes; }
     };
 
-    // NOTE: Pico (leader) and ESP32 (follower) will have different behaviors for these functions.
+    /**
+     * Constructor
+     */
+    SPICoprocessor(SPICoprocessorConfig config_in) : config_(config_in) {
+#ifdef ON_ESP32
+        spi_rx_buf_ = static_cast<uint8_t *>(heap_caps_malloc(kSPITransactionMaxLenBytes, MALLOC_CAP_DMA));
+        spi_tx_buf_ = static_cast<uint8_t *>(heap_caps_malloc(kSPITransactionMaxLenBytes, MALLOC_CAP_DMA));
+
+        if (!spi_rx_buf_ || !spi_tx_buf_) {
+            CONSOLE_ERROR("SPICoprocessor::SPICoprocessor", "Failed to allocate SPI tx/rx buffers.");
+        }
+        memset(spi_rx_buf_, 0x0, kSPITransactionMaxLenBytes);
+        memset(spi_tx_buf_, 0x0, kSPITransactionMaxLenBytes);
+#endif
+    };
+
+    /**
+     * Destructor
+     */
+    ~SPICoprocessor() {
+#ifdef ON_ESP32
+        heap_caps_free(spi_rx_buf_);
+        heap_caps_free(spi_tx_buf_);
+#endif
+    }
+
     bool Init();
     bool DeInit();
 #ifdef ON_PICO
@@ -392,7 +425,7 @@ class SPICoprocessor {
             if (gpio_get(config_.spi_handshake_pin)) {
                 break;
             }
-            if (get_time_since_boot_ms() - wait_begin_timestamp_ms >= kSPITransactionTimeoutMs) {
+            if (get_time_since_boot_ms() - wait_begin_timestamp_ms >= kSPIHandshakeTimeoutMs) {
                 return false;
             }
         }
@@ -482,7 +515,7 @@ class SPICoprocessor {
         return ret;
     }
 
-    bool PartialWrite(ObjectDictionary::Address addr, uint8_t *object_buf, uint8_t len, uint16_t offset = 0,
+    bool PartialWrite(ObjectDictionary::Address addr, uint8_t *object_buf, uint16_t len, uint16_t offset = 0,
                       bool require_ack = false) {
         SCWritePacket write_packet;
 #ifdef ON_PICO
@@ -499,7 +532,7 @@ class SPICoprocessor {
         write_packet.PopulateCRC();
 
 #ifdef ON_ESP32
-        if (xSemaphoreTake(spi_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
+        if (xSemaphoreTake(spi_mutex_, kSPIMutexTimeoutTicks) != pdTRUE) {
             CONSOLE_ERROR("SPICoprocessor::PartialWrite",
                           "Failed to acquire coprocessor SPI mutex after waiting %d ms.", kSPITransactionTimeoutMs);
             return false;
@@ -532,7 +565,7 @@ class SPICoprocessor {
         return true;
     }
 
-    bool PartialRead(ObjectDictionary::Address addr, uint8_t *object_buf, uint8_t len, uint16_t offset = 0) {
+    bool PartialRead(ObjectDictionary::Address addr, uint8_t *object_buf, uint16_t len, uint16_t offset = 0) {
         SCReadRequestPacket read_request_packet;
 #ifdef ON_PICO
         read_request_packet.cmd = kCmdReadFromSlave;
@@ -575,7 +608,7 @@ class SPICoprocessor {
             return false;
         }
 #elif ON_ESP32
-        if (xSemaphoreTake(spi_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
+        if (xSemaphoreTake(spi_mutex_, kSPIMutexTimeoutTicks) != pdTRUE) {
             CONSOLE_ERROR("SPICoprocessor::PartialRead", "Failed to acquire coprocessor SPI mutex after waiting %d ms.",
                           kSPITransactionTimeoutMs);
             return false;
@@ -680,13 +713,9 @@ class SPICoprocessor {
     uint64_t spi_last_transmit_timestamp_us_ = 0;
     bool is_enabled_ = false;
 #elif ON_ESP32
-    // WORD_ALIGNED_ATTR SPITransaction spi_rx_queue_buf_[kSPITransactionQueueLenTransactions];
-    // WORD_ALIGNED_ATTR SPITransaction spi_tx_queue_buf_[kSPITransactionQueueLenTransactions];
-
-    // PFBQueue<SPITransaction> spi_rx_queue_ = PFBQueue<SPITransaction>(
-    //     {.buf_len_num_elements = kSPITransactionQueueLenTransactions, .buffer = spi_rx_queue_buf_});
-    // PFBQueue<SPITransaction> spi_tx_queue_ = PFBQueue<SPITransaction>(
-    //     {.buf_len_num_elements = kSPITransactionQueueLenTransactions, .buffer = spi_tx_queue_buf_});
+    // SPI peripheral needs to operate on special buffers that are 32-bit word aligned and in DMA accessible memory.
+    uint8_t *spi_rx_buf_ = nullptr;
+    uint8_t *spi_tx_buf_ = nullptr;
 
     bool spi_receive_task_should_exit_ = false;  // Flag used to tell SPI receive task to exit.
     TickType_t network_led_turn_on_timestamp_ticks_ = 0;
