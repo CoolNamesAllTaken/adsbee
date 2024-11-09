@@ -19,7 +19,8 @@
 			"chrono": "cpp",
 			"cstring": "cpp",
 			"variant": "cpp",
-			"*.inc": "cpp"
+			"*.inc": "cpp",
+			"functional": "cpp"
 		},
 	},
 	"launch": {

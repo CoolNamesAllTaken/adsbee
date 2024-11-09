@@ -118,7 +118,7 @@ uint16_t TransponderPacketToBeastFrame(const DecodedTransponderPacket &packet, u
 }
 
 uint16_t TransponderPacketToBeastFramePrependReceiverID(const DecodedTransponderPacket &packet,
-                                                        uint8_t *beast_frame_buf, uint8_t *receiver_id,
+                                                        uint8_t *beast_frame_buf, const uint8_t *receiver_id,
                                                         uint16_t receiver_id_len_bytes) {
     uint16_t bytes_written = 0;
     beast_frame_buf[bytes_written++] = kBeastEscapeChar;

@@ -234,8 +234,9 @@ void CommsManager::WiFiStationTask(void* pvParameters) {
 
                 int err = connect(feed_sock[i], (struct sockaddr*)&dest_addr, sizeof(dest_addr));
                 if (err != 0) {
-                    CONSOLE_ERROR("CommsManager::WiFiStationTask",
-                                  "Socket unable to connect to URI for feed %d: errno %d", i, errno);
+                    CONSOLE_ERROR(
+                        "CommsManager::WiFiStationTask", "Socket unable to connect to URI %s:%d for feed %d: errno %d",
+                        settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i], i, errno);
                     close(feed_sock[i]);
                     feed_sock_is_connected[i] = false;
                     continue;

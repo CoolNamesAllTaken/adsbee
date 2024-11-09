@@ -82,6 +82,7 @@ class ObjectDictionary {
                            sizeof(RawTransponderPacket));
                     adsbee_server.HandleRawTransponderPacket(tpacket);
                 }
+                break;
             }
 #endif
             case kAddrSettingsData:
