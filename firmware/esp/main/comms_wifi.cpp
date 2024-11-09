@@ -7,6 +7,7 @@
 #include "comms.hh"
 #include "esp_event.h"
 #include "esp_mac.h"
+#include "hal.hh"
 #include "lwip/err.h"
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
@@ -17,6 +18,7 @@ static const uint16_t kWiFiNumRetries = 3;
 static const uint16_t kWiFiRetryWaitTimeMs = 100;
 static const uint16_t kWiFiStaMaxNumReconnectAttempts = 5;
 static const uint16_t kWiFiScanDefaultListSize = 20;
+static const uint32_t kWiFiTCPSocketReconnectIntervalMs = 5000;
 
 /* FreeRTOS event group to signal when we are connected*/
 static EventGroupHandle_t s_wifi_event_group;
@@ -191,84 +193,90 @@ void CommsManager::WiFiStationTask(void* pvParameters) {
 
         for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
             // Iterate through feeds, open/close and send message as required.
-            if (settings_manager.settings.feed_is_active[i]) {
-                // Socket needs to be created.
-                if (feed_sock[i] <= 0) {
-                    // IPv4, TCP
-                    feed_sock[i] = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-                    if (feed_sock[i] < 0) {
-                        CONSOLE_ERROR("CommsManager::WiFiStationTask", "Unable to create socket for feed %d: errno %d",
-                                      i, errno);
-                        continue;
-                    }
-                    CONSOLE_INFO("CommsManager::WiFiStationTask", "Socket for feed %d created, connecting to %s:%d", i,
-                                 settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i]);
-                }
-
-                // Socket should be open.
-                if (!feed_sock_is_connected[i]) {
-                    // Need to open the socket connection.
-                    struct sockaddr_in dest_addr;
-                    inet_pton(AF_INET, settings_manager.settings.feed_uris[i], &dest_addr.sin_addr);
-                    // dest_addr.sin_addr.s_addr = inet_addr(settings_manager.settings.feed_uris[i]);
-                    dest_addr.sin_family = AF_INET;
-                    dest_addr.sin_port = htons(settings_manager.settings.feed_ports[i]);
-
-                    int err = connect(feed_sock[i], (struct sockaddr*)&dest_addr, sizeof(dest_addr));
-                    if (err != 0) {
-                        CONSOLE_ERROR("CommsManager::WiFiStationTask",
-                                      "Socket unable to connect to URI for feed %d: errno %d", i, errno);
-                        close(feed_sock[i]);
-                        feed_sock[i] = 0;
-                        feed_sock_is_connected[i] = false;
-                        continue;
-                    }
-                    CONSOLE_INFO("CommsManager::WiFiStationTask", "Successfully connected to %s",
-                                 settings_manager.settings.feed_uris[i]);
-                    feed_sock_is_connected[i] = true;
-                }
-
-                // Send packet!
-                // NOTE: Construct packets that are specific to a feed in case statements here!
-                switch (settings_manager.settings.feed_protocols[i]) {
-                    case SettingsManager::ReportingProtocol::kBeast: {
-                        // Send Beast packet.
-                        // Double the length as a hack to make room for the escaped UUID.
-                        uint8_t beast_message_buf[2 * SettingsManager::Settings::kFeedReceiverIDNumBytes +
-                                                  kBeastFrameMaxLenBytes];
-                        uint16_t beast_message_len_bytes = TransponderPacketToBeastFramePrependReceiverID(
-                            tpacket, beast_message_buf, settings_manager.settings.feed_receiver_ids[i],
-                            SettingsManager::Settings::kFeedReceiverIDNumBytes);
-
-                        int err = send(feed_sock[i], beast_message_buf, beast_message_len_bytes, 0);
-                        if (err < 0) {
-                            CONSOLE_ERROR("CommsManager::WiFiStationTask",
-                                          "Error occurred during sending %d Byte beast message to feed %d with URI %s "
-                                          "on port %d: "
-                                          "errno %d.",
-                                          beast_message_len_bytes, i, settings_manager.settings.feed_uris[i],
-                                          settings_manager.settings.feed_ports[i], errno);
-                            // Mark socket as disconnected and try reconnecting in next reporting interval. Currently
-                            // this will try to reconnect every raw packet reporting interval.
-                            feed_sock_is_connected[i] = false;
-                        } else {
-                            CONSOLE_INFO("CommsManager::WiFiStationTask", "Message sent to feed %d.", i);
-                        }
-                        break;
-                    }
-                    // TODO: add other protocols here
-                    default:
-                        // No reporting protocol or unsupported protocol: do nothing.
-                        break;
-                }
-            } else {
-                // Socket should be closed.
+            if (!settings_manager.settings.feed_is_active[i]) {
+                // Socket should not be fed.
                 if (feed_sock_is_connected[i]) {
                     // Need to close the socket connection.
                     close(feed_sock[i]);
-                    feed_sock[i] = 0;
                     feed_sock_is_connected[i] = false;
+                    CONSOLE_INFO("CommsManager::WiFiStationTask", "Closed socket for feed %d.", i);
                 }
+                continue;  // Don't need to do anything else if socket should be closed and is closed.
+            }
+
+            // Socket should be open.
+            if (!feed_sock_is_connected[i]) {
+                // Need to open the socket connection.
+
+                // Meter reconnect attempt interval.
+                uint32_t timestamp_ms = get_time_since_boot_ms();
+                if (timestamp_ms - feed_sock_last_connect_timestamp_ms[i] <= kWiFiTCPSocketReconnectIntervalMs) {
+                    continue;
+                }
+                feed_sock_last_connect_timestamp_ms[i] = timestamp_ms;
+
+                // Create socket.
+                // IPv4, TCP
+                feed_sock[i] = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+                if (feed_sock[i] <= 0) {
+                    CONSOLE_ERROR("CommsManager::WiFiStationTask", "Unable to create socket for feed %d: errno %d", i,
+                                  errno);
+                    continue;
+                }
+                CONSOLE_INFO("CommsManager::WiFiStationTask", "Socket for feed %d created, connecting to %s:%d", i,
+                             settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i]);
+
+                struct sockaddr_in dest_addr;
+                inet_pton(AF_INET, settings_manager.settings.feed_uris[i], &dest_addr.sin_addr);
+                // dest_addr.sin_addr.s_addr = inet_addr(settings_manager.settings.feed_uris[i]);
+                dest_addr.sin_family = AF_INET;
+                dest_addr.sin_port = htons(settings_manager.settings.feed_ports[i]);
+
+                int err = connect(feed_sock[i], (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+                if (err != 0) {
+                    CONSOLE_ERROR("CommsManager::WiFiStationTask",
+                                  "Socket unable to connect to URI for feed %d: errno %d", i, errno);
+                    close(feed_sock[i]);
+                    feed_sock_is_connected[i] = false;
+                    continue;
+                }
+                CONSOLE_INFO("CommsManager::WiFiStationTask", "Successfully connected to %s",
+                             settings_manager.settings.feed_uris[i]);
+                feed_sock_is_connected[i] = true;
+            }
+
+            // Send packet!
+            // NOTE: Construct packets that are specific to a feed in case statements here!
+            switch (settings_manager.settings.feed_protocols[i]) {
+                case SettingsManager::ReportingProtocol::kBeast: {
+                    // Send Beast packet.
+                    // Double the length as a hack to make room for the escaped UUID.
+                    uint8_t beast_message_buf[2 * SettingsManager::Settings::kFeedReceiverIDNumBytes +
+                                              kBeastFrameMaxLenBytes];
+                    uint16_t beast_message_len_bytes = TransponderPacketToBeastFramePrependReceiverID(
+                        tpacket, beast_message_buf, settings_manager.settings.feed_receiver_ids[i],
+                        SettingsManager::Settings::kFeedReceiverIDNumBytes);
+
+                    int err = send(feed_sock[i], beast_message_buf, beast_message_len_bytes, 0);
+                    if (err < 0) {
+                        CONSOLE_ERROR("CommsManager::WiFiStationTask",
+                                      "Error occurred during sending %d Byte beast message to feed %d with URI %s "
+                                      "on port %d: "
+                                      "errno %d.",
+                                      beast_message_len_bytes, i, settings_manager.settings.feed_uris[i],
+                                      settings_manager.settings.feed_ports[i], errno);
+                        // Mark socket as disconnected and try reconnecting in next reporting interval.
+                        close(feed_sock[i]);
+                        feed_sock_is_connected[i] = false;
+                    } else {
+                        CONSOLE_INFO("CommsManager::WiFiStationTask", "Message sent to feed %d.", i);
+                    }
+                    break;
+                }
+                // TODO: add other protocols here
+                default:
+                    // No reporting protocol or unsupported protocol: do nothing.
+                    break;
             }
         }
     }
@@ -278,7 +286,6 @@ void CommsManager::WiFiStationTask(void* pvParameters) {
         if (feed_sock_is_connected[i]) {
             // Need to close the socket connection.
             close(feed_sock[i]);
-            feed_sock[i] = 0;
             feed_sock_is_connected[i] = false;  // Not necessary but leaving this here in case of refactor.
         }
     }
@@ -468,7 +475,15 @@ bool CommsManager::WiFiStationSendRawTransponderPacket(RawTransponderPacket& tpa
                         "Can't push to WiFi station transponder packet queue if station is not running.");
         return false;  // Task not started yet, queue not created yet. Pushing to queue would cause an abort.
     }
-    if (xQueueSend(wifi_sta_raw_transponder_packet_queue_, &tpacket, 0) != pdTRUE) {
+    int err = xQueueSend(wifi_sta_raw_transponder_packet_queue_, &tpacket, 0);
+    if (err == errQUEUE_FULL) {
+        CONSOLE_WARNING("CommsManager::WiFiStationSendRawTransponderPacket",
+                        "Overflowed WiFi station transponder packet queue.");
+        xQueueReset(wifi_sta_raw_transponder_packet_queue_);
+        return false;
+    } else if (err != pdTRUE) {
+        CONSOLE_WARNING("CommsManager::WiFiStationSendRawTransponderPacket",
+                        "Pushing transponder packet to WiFi station queue resulted in error code %d.", err);
         return false;
     }
     return true;
@@ -480,7 +495,14 @@ bool CommsManager::WiFiAccessPointSendMessageToAllStations(NetworkMessage& messa
                         "Can't push to WiFi AP message queue if AP is not running.");
         return false;  // Task not started yet, pushing to queue could create an overflow.
     }
-    if (xQueueSend(wifi_ap_message_queue_, &message, 0) != pdTRUE) {
+    int err = xQueueSend(wifi_ap_message_queue_, &message, 0);
+    if (err == errQUEUE_FULL) {
+        CONSOLE_WARNING("CommsManager::WiFiAccessPointSendMessageToAllStations", "Overflowed WiFi AP message queue.");
+        xQueueReset(wifi_ap_message_queue_);
+        return false;
+    } else if (err != pdTRUE) {
+        CONSOLE_WARNING("CommsManager::WiFiAccessPointSendMessageToAllStations",
+                        "Pushing message to WiFi AP message queue resulted in error code %d.", err);
         return false;
     }
     return true;

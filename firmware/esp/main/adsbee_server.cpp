@@ -121,16 +121,19 @@ bool ADSBeeServer::Update() {
 }
 
 bool ADSBeeServer::HandleRawTransponderPacket(RawTransponderPacket &raw_packet) {
+    bool ret = true;
     if (!transponder_packet_queue.Push(raw_packet)) {
         CONSOLE_ERROR("ADSBeeServer::HandleRawTransponderPacket",
                       "Push to transponder packet queue failed. May have overflowed?");
+        ret = false;
     }
 
     if (!comms_manager.WiFiStationSendRawTransponderPacket(raw_packet)) {
         CONSOLE_ERROR("ADSBeeServer::HandleRawTransponderPacket",
                       "Encountered error while sending raw transponder packet to feeds from ESP32 as WiFi station.");
+        ret = false;
     }
-    return true;
+    return ret;
 }
 
 void ADSBeeServer::SPIReceiveTask() {
@@ -167,7 +170,8 @@ bool ADSBeeServer::ReportGDL90() {
         printf("\t%s: %.5f %.5f %ld\r\n", aircraft.callsign, aircraft.latitude_deg, aircraft.longitude_deg,
                aircraft.baro_altitude_ft);
         message.len = gdl90.WriteGDL90TargetReportMessage(message.data, aircraft, false);
-        if (!comms_manager.WiFiAccessPointSendMessageToAllStations(message)) {
+        if (settings_manager.settings.wifi_ap_enabled &&
+            !comms_manager.WiFiAccessPointSendMessageToAllStations(message)) {
             CONSOLE_ERROR("ADSBeeServer::ReportGDL90", "Failed to send info about aircraft %d to all clients.",
                           aircraft_index);
         }
