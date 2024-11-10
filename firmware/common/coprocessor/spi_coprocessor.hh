@@ -317,9 +317,9 @@ class SPICoprocessor {
             len_bytes = sizeof(object);
         }
 #ifdef ON_ESP32
-        if (xSemaphoreTake(spi_next_transaction_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
+        if (xSemaphoreTake(spi_next_transaction_mutex_, kSPIMutexTimeoutTicks) != pdTRUE) {
             CONSOLE_ERROR("SPICoprocessor::Write", "Failed to take SPI context mutex after waiting for %d ms.",
-                          kSPITransactionTimeoutMs);
+                          kSPIMutexTimeoutMs);
             return false;
         }
 #elif ON_PICO
@@ -366,9 +366,9 @@ class SPICoprocessor {
             len_bytes = sizeof(object);
         }
 #ifdef ON_ESP32
-        if (xSemaphoreTake(spi_next_transaction_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
+        if (xSemaphoreTake(spi_next_transaction_mutex_, kSPIMutexTimeoutTicks) != pdTRUE) {
             CONSOLE_ERROR("SPICoprocessor::PartialRead", "Failed to take SPI context mutex after waiting for %d ms.",
-                          kSPITransactionTimeoutMs);
+                          kSPIMutexTimeoutMs);
             return false;
         }
 #elif ON_PICO
@@ -486,11 +486,11 @@ class SPICoprocessor {
         // of other loops (e.g. lower priority independent update loop) if they have already claimed it. The next
         // transaction mutex is released before a SPI transmission so that it is available for other loops to claim
         // while the slave loop is blocking with no pending transactions.
-        if (xSemaphoreTake(spi_next_transaction_mutex_, kSPITransactionTimeoutTicks) != pdTRUE) {
+        if (xSemaphoreTake(spi_next_transaction_mutex_, kSPIMutexTimeoutTicks) != pdTRUE) {
             CONSOLE_ERROR("SPICoprocessor::SPISlaveLoopReturnHelper",
                           "Other loops claiming the next SPI transaction didn't complete and return the next "
                           "transaction mutex within %d ms.",
-                          kSPITransactionTimeoutMs);
+                          kSPIMutexTimeoutMs);
         } else {
             xSemaphoreGive(spi_next_transaction_mutex_);
         }
@@ -534,7 +534,7 @@ class SPICoprocessor {
 #ifdef ON_ESP32
         if (xSemaphoreTake(spi_mutex_, kSPIMutexTimeoutTicks) != pdTRUE) {
             CONSOLE_ERROR("SPICoprocessor::PartialWrite",
-                          "Failed to acquire coprocessor SPI mutex after waiting %d ms.", kSPITransactionTimeoutMs);
+                          "Failed to acquire coprocessor SPI mutex after waiting %d ms.", kSPIMutexTimeoutMs);
             return false;
         }
 
@@ -610,7 +610,7 @@ class SPICoprocessor {
 #elif ON_ESP32
         if (xSemaphoreTake(spi_mutex_, kSPIMutexTimeoutTicks) != pdTRUE) {
             CONSOLE_ERROR("SPICoprocessor::PartialRead", "Failed to acquire coprocessor SPI mutex after waiting %d ms.",
-                          kSPITransactionTimeoutMs);
+                          kSPIMutexTimeoutMs);
             return false;
         }
 

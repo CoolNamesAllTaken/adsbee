@@ -306,42 +306,42 @@ static esp_err_t css_handler(httpd_req_t *req) {
  * and internal socket fd in order
  * to use out of request send
  */
-struct async_resp_arg {
-    httpd_handle_t hd;
-    int fd;
-};
+// struct async_resp_arg {
+//     httpd_handle_t hd;
+//     int fd;
+// };
 
 /*
  * async send function, which we put into the httpd work queue
  */
-static void ws_async_send(void *arg) {
-    static const char *data = "Async data";
-    async_resp_arg *resp_arg = (async_resp_arg *)arg;
-    httpd_handle_t hd = resp_arg->hd;
-    int fd = resp_arg->fd;
-    httpd_ws_frame_t ws_pkt;
-    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    ws_pkt.payload = (uint8_t *)data;
-    ws_pkt.len = strlen(data);
-    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+// static void ws_async_send(void *arg) {
+//     static const char *data = "Async data";
+//     async_resp_arg *resp_arg = (async_resp_arg *)arg;
+//     httpd_handle_t hd = resp_arg->hd;
+//     int fd = resp_arg->fd;
+//     httpd_ws_frame_t ws_pkt;
+//     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+//     ws_pkt.payload = (uint8_t *)data;
+//     ws_pkt.len = strlen(data);
+//     ws_pkt.type = HTTPD_WS_TYPE_TEXT;
 
-    httpd_ws_send_frame_async(hd, fd, &ws_pkt);
-    free(resp_arg);
-}
+//     httpd_ws_send_frame_async(hd, fd, &ws_pkt);
+//     free(resp_arg);
+// }
 
-static esp_err_t trigger_async_send(httpd_handle_t handle, httpd_req_t *req) {
-    struct async_resp_arg *resp_arg = (async_resp_arg *)malloc(sizeof(async_resp_arg));
-    if (resp_arg == NULL) {
-        return ESP_ERR_NO_MEM;
-    }
-    resp_arg->hd = req->handle;
-    resp_arg->fd = httpd_req_to_sockfd(req);
-    esp_err_t ret = httpd_queue_work(handle, ws_async_send, resp_arg);
-    if (ret != ESP_OK) {
-        free(resp_arg);
-    }
-    return ret;
-}
+// static esp_err_t trigger_async_send(httpd_handle_t handle, httpd_req_t *req) {
+//     struct async_resp_arg *resp_arg = (async_resp_arg *)malloc(sizeof(async_resp_arg));
+//     if (resp_arg == NULL) {
+//         return ESP_ERR_NO_MEM;
+//     }
+//     resp_arg->hd = req->handle;
+//     resp_arg->fd = httpd_req_to_sockfd(req);
+//     esp_err_t ret = httpd_queue_work(handle, ws_async_send, resp_arg);
+//     if (ret != ESP_OK) {
+//         free(resp_arg);
+//     }
+//     return ret;
+// }
 
 esp_err_t ADSBeeServer::ConsoleWebSocketHandler(httpd_req_t *req) {
     if (req->method == HTTP_GET) {
@@ -376,13 +376,17 @@ esp_err_t ADSBeeServer::ConsoleWebSocketHandler(httpd_req_t *req) {
             return ret;
         }
         CONSOLE_INFO("ADSBeeServer::ConsoleWebsocketHandler", "Got packet with message: %s", ws_pkt.payload);
+        // Forward console data to RP2040 console.
+        // pico.Write(ObjectDictionary::kAddrConsole, ws_pkt.payload, true, ws_pkt.len); // This currently crashes with
+        // StoreProhibited exception.
     }
     CONSOLE_INFO("ADSBeeServer::ConsoleWebsocketHandler", "Packet type: %d", ws_pkt.type);
-    if (ws_pkt.type == HTTPD_WS_TYPE_TEXT && strcmp((char *)ws_pkt.payload, "Trigger async") == 0) {
-        free(buf);
-        return trigger_async_send(req->handle, req);
-    }
+    // if (ws_pkt.type == HTTPD_WS_TYPE_TEXT && strcmp((char *)ws_pkt.payload, "Trigger async") == 0) {
+    //     free(buf);
+    //     return trigger_async_send(req->handle, req);
+    // }
 
+    // Simple loopback.
     ret = httpd_ws_send_frame(req, &ws_pkt);
     if (ret != ESP_OK) {
         CONSOLE_ERROR("ADSBeeServer::ConsoleWebsocketHandler", "httpd_ws_send_frame failed with %d", ret);
@@ -416,7 +420,7 @@ bool ADSBeeServer::TCPServerInit() {
         httpd_register_uri_handler(server, &console_ws);
     }
 
-    xTaskCreatePinnedToCore(tcp_server_task, "tcp_server", 4096, NULL, kTCPServerTaskPriority, NULL,
+    xTaskCreatePinnedToCore(tcp_server_task, "tcp_server", kTCPServerStackSizeBytes, NULL, kTCPServerTaskPriority, NULL,
                             kTCPServerTaskCore);
 
     return server;
