@@ -3,6 +3,7 @@
 
 #include "aircraft_dictionary.hh"
 #include "data_structures.hh"
+#include "esp_http_server.h"
 #include "transponder_packet.hh"
 
 class ADSBeeServer {
@@ -31,6 +32,8 @@ class ADSBeeServer {
      * TCP server that accepts incoming connections (used for network control via port 3333).
      */
     void TCPServerTask(void* pvParameters);
+
+    esp_err_t ConsoleWebSocketHandler(httpd_req_t* req);
 
     PFBQueue<RawTransponderPacket> transponder_packet_queue = PFBQueue<RawTransponderPacket>(
         {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = transponder_packet_queue_buffer_});

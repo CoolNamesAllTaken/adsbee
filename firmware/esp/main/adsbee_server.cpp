@@ -1,7 +1,6 @@
 #include "adsbee_server.hh"
 
 #include "comms.hh"
-#include "esp_http_server.h"
 #include "nvs_flash.h"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
@@ -42,6 +41,7 @@ void esp_spi_receive_task(void *pvParameters) {
 }
 
 void tcp_server_task(void *pvParameters) { adsbee_server.TCPServerTask(pvParameters); }
+esp_err_t console_ws_handler(httpd_req_t *req) { return adsbee_server.ConsoleWebSocketHandler(req); }
 /** End "Pass-Through" functions. **/
 
 bool ADSBeeServer::Init() {
@@ -224,9 +224,6 @@ void ADSBeeServer::TCPServerTask(void *pvParameters) {
         vTaskDelete(NULL);
         return;
     }
-    // // Set SO_REUSEADDR option
-    // setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &kTCPServerSockOptReuseAddr,
-    // sizeof(kTCPServerSockOptReuseAddr));
 
     int err = bind(listen_sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
     if (err != 0) {
@@ -255,17 +252,6 @@ void ADSBeeServer::TCPServerTask(void *pvParameters) {
             break;
         }
 
-        // // Set socket to non-blocking mode
-        // fcntl(sock, F_SETFL, O_NONBLOCK);
-
-        // // Set keep-alive properties
-        // setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &kTCPServerSockOptKeepAlive, sizeof(int));
-        // setsockopt(sock, IPPROTO_TCP, TCP_KEEPIDLE, &kTCPServerSockOptKeepIdleTimeoutSec, sizeof(int));
-        // setsockopt(sock, IPPROTO_TCP, TCP_KEEPINTVL, &kTCPServerSockOptKeepAliveIntervalSec, sizeof(int));
-        // setsockopt(sock, IPPROTO_TCP, TCP_KEEPCNT, &kTCPServerSockOptMaxFailedKeepAliveCount, sizeof(int));
-
-        // Convert ip address to string
-
         // Display IPv4 address.
         char addr_str[128];
         inet_ntoa_r(((struct sockaddr_in *)&source_addr)->sin_addr, addr_str, sizeof(addr_str) - 1);
@@ -273,22 +259,6 @@ void ADSBeeServer::TCPServerTask(void *pvParameters) {
 
         // Handle received data
         while (1) {
-            // fd_set read_fds;
-            // struct timeval tv = {.tv_sec = kTCPServerSockSelectTimeoutSec, .tv_usec = 0};
-
-            // FD_ZERO(&read_fds);
-            // FD_SET(sock, &read_fds);
-
-            // int select_result = select(sock + 1, &read_fds, NULL, NULL, &tv);
-
-            // if (select_result < 0) {
-            //     CONSOLE_ERROR("ADSBeeServer::TCPServerTask", "Error in select: errno %d", errno);
-            //     break;
-            // } else if (select_result == 0) {
-            //     // Timeout occurred, no data available
-            //     continue;
-            // }
-
             // Data is available to read
             uint8_t rx_buffer[128];
             int len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
@@ -309,18 +279,6 @@ void ADSBeeServer::TCPServerTask(void *pvParameters) {
             // Process received data
             rx_buffer[len] = 0;  // Null-terminate
             CONSOLE_INFO("ADSBeeServer::TCPServerTask", "Received %d bytes: %s", len, rx_buffer);
-
-            // Echo received data back
-            // int err = send(sock, rx_buffer, len, 0);
-            // if (err < 0) {
-            //     if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            //         // Socket buffer is full, try again later
-            //         vTaskDelay(pdMS_TO_TICKS(10));
-            //         continue;
-            //     }
-            //     CONSOLE_ERROR("ADSBeeServer::TCPServerTask", "Error occurred during sending: errno %d", errno);
-            //     break;
-            // }
         }
 
         shutdown(sock, 0);
@@ -343,6 +301,96 @@ static esp_err_t css_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
+/*
+ * Structure holding server handle
+ * and internal socket fd in order
+ * to use out of request send
+ */
+struct async_resp_arg {
+    httpd_handle_t hd;
+    int fd;
+};
+
+/*
+ * async send function, which we put into the httpd work queue
+ */
+static void ws_async_send(void *arg) {
+    static const char *data = "Async data";
+    async_resp_arg *resp_arg = (async_resp_arg *)arg;
+    httpd_handle_t hd = resp_arg->hd;
+    int fd = resp_arg->fd;
+    httpd_ws_frame_t ws_pkt;
+    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    ws_pkt.payload = (uint8_t *)data;
+    ws_pkt.len = strlen(data);
+    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+
+    httpd_ws_send_frame_async(hd, fd, &ws_pkt);
+    free(resp_arg);
+}
+
+static esp_err_t trigger_async_send(httpd_handle_t handle, httpd_req_t *req) {
+    struct async_resp_arg *resp_arg = (async_resp_arg *)malloc(sizeof(async_resp_arg));
+    if (resp_arg == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    resp_arg->hd = req->handle;
+    resp_arg->fd = httpd_req_to_sockfd(req);
+    esp_err_t ret = httpd_queue_work(handle, ws_async_send, resp_arg);
+    if (ret != ESP_OK) {
+        free(resp_arg);
+    }
+    return ret;
+}
+
+esp_err_t ADSBeeServer::ConsoleWebSocketHandler(httpd_req_t *req) {
+    if (req->method == HTTP_GET) {
+        CONSOLE_INFO("ADSBeeServer::ConsoleWebsocketHandler", "Handshake done, the new connection was opened");
+        return ESP_OK;
+    }
+    httpd_ws_frame_t ws_pkt;
+    uint8_t *buf = NULL;
+    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+    /* Set max_len = 0 to get the frame len */
+    esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
+    if (ret != ESP_OK) {
+        CONSOLE_ERROR("ADSBeeServer::ConsoleWebsocketHandler", "httpd_ws_recv_frame failed to get frame len with %d",
+                      ret);
+        return ret;
+    }
+    CONSOLE_INFO("ADSBeeServer::ConsoleWebsocketHandler", "frame len is %d", ws_pkt.len);
+    if (ws_pkt.len) {
+        /* ws_pkt.len + 1 is for NULL termination as we are expecting a string */
+        buf = (uint8_t *)calloc(1, ws_pkt.len + 1);
+        if (buf == NULL) {
+            CONSOLE_ERROR("ADSBeeServer::ConsoleWebsocketHandler", "Failed to calloc memory for buf");
+            return ESP_ERR_NO_MEM;
+        }
+        ws_pkt.payload = buf;
+        /* Set max_len = ws_pkt.len to get the frame payload */
+        ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
+        if (ret != ESP_OK) {
+            CONSOLE_ERROR("ADSBeeServer::ConsoleWebsocketHandler", "httpd_ws_recv_frame failed with %d", ret);
+            free(buf);
+            return ret;
+        }
+        CONSOLE_INFO("ADSBeeServer::ConsoleWebsocketHandler", "Got packet with message: %s", ws_pkt.payload);
+    }
+    CONSOLE_INFO("ADSBeeServer::ConsoleWebsocketHandler", "Packet type: %d", ws_pkt.type);
+    if (ws_pkt.type == HTTPD_WS_TYPE_TEXT && strcmp((char *)ws_pkt.payload, "Trigger async") == 0) {
+        free(buf);
+        return trigger_async_send(req->handle, req);
+    }
+
+    ret = httpd_ws_send_frame(req, &ws_pkt);
+    if (ret != ESP_OK) {
+        CONSOLE_ERROR("ADSBeeServer::ConsoleWebsocketHandler", "httpd_ws_send_frame failed with %d", ret);
+    }
+    free(buf);
+    return ret;
+}
+
 bool ADSBeeServer::TCPServerInit() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     // Increase stack size if needed for handling larger files
@@ -358,6 +406,14 @@ bool ADSBeeServer::TCPServerInit() {
         // CSS URI handler
         httpd_uri_t css = {.uri = "/style.css", .method = HTTP_GET, .handler = css_handler, .user_ctx = NULL};
         httpd_register_uri_handler(server, &css);
+
+        // Network console Websocket handler
+        httpd_uri_t console_ws = {.uri = "/console",
+                                  .method = HTTP_GET,
+                                  .handler = console_ws_handler,
+                                  .user_ctx = NULL,
+                                  .is_websocket = true};
+        httpd_register_uri_handler(server, &console_ws);
     }
 
     xTaskCreatePinnedToCore(tcp_server_task, "tcp_server", 4096, NULL, kTCPServerTaskPriority, NULL,

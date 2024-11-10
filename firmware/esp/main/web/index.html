@@ -17,14 +17,10 @@
     </div>
     <input type="text" class="hidden-input" id="hidden-input" autocomplete="off">
 
-    <script type="module">
-        const net = require('net'); // For TCP sockets.
-
-        const TCP_SOCKET_CONFIG = {
-            host: window.location.hostname,
-            port: 3333,
-            reconnect_interval_ms: 5000
-            // timeout_ms: 5000
+    <script>
+        const WS_CONFIG = {
+            url: `ws://${window.location.hostname}/console`,
+            reconnectDelayMs: 5000
         };
 
         const terminal = document.getElementById('terminal');
@@ -33,75 +29,92 @@
         const hiddenInput = document.getElementById('hidden-input');
         const cursor = document.getElementById('cursor');
 
-        const client = new net.Socket();
-
         let socket = null;
         let commandHistory = [];
         let historyIndex = -1;
         let currentCommand = '';
 
-        class TCPClient {
-            constructor(host, port, reconnect_interval_ms) {
-                this.host = host;
-                this.port = port;
-                this.reconnect_interval_ms = reconnect_interval_ms;
+        class WebSocketClient {
+            constructor(url) {
+                this.url = url;
+                this.init();
             }
 
             init() {
-                this.client = new net.Socket();
+                this.ws = new WebSocket(this.url)
                 this.attachEventHandlers();
-                this.connect();
-            }
-
-            connect() {
-                this.client.connect(this.port, this.host, () => {
-                    console.log(`Connected to ${this.host}:${this.port}`);
-
-                    // Send the message
-                    this.client.write("Hello world!");
-                    console.log(`Sent first message.`);
-                });
-
             }
 
             attachEventHandlers() {
-                // Handle received data
-                this.client.on('data', (data) => {
-                    console.log(`Received response: ${data}`);
-                    appendToTerminal(data);
+                // Connection opened
+                this.ws.addEventListener('open', () => {
+                    console.log(`Connected to ${this.url}`);
+
+                    // Send the message once connected
+                    this.send("Hello!");
                 });
 
-                // Handle connection close
-                this.client.on('close', () => {
-                    console.log(`Connection closed, retrying in ${TCP_SOCKET_CONFIG.reconnect_interval_ms} ms.`);
-                    appendToTerminal(`Connection closed, retrying in ${TCP_SOCKET_CONFIG.reconnect_interval_ms} ms.\n`);
-                    // Schedule a call to connect() in order to try again.
-                    setTimeout(connect, TCP_SOCKET_CONFIG.reconnect_interval_ms);
+                // Listen for messages
+                this.ws.addEventListener('message', (event) => {
+                    console.log('Received message:', event.data);
+                    appendToTerminal(event.data);
                 });
 
-                // Handle errors
-                this.client.on('error', (error) => {
-                    console.error('Connection error:', error);
-                    appendToTerminal('Connection error:' + error + '\n');
-                    this.client.destroy();
-                    // Schedule a call to connect() in order to try again.
-                    setTimeout(connect, TCP_SOCKET_CONFIG.reconnect_interval_ms);
+                // Connection closed (both clean and unclean closes)
+                this.ws.addEventListener('close', (event) => {
+                    console.log(`Connection closed. Code: ${event.code}, Reason: ${event.reason}`);
+                    appendToTerminal(`Connection closed. Code: ${event.code}\n`);
+                    this.attemptReconnect();
                 });
 
-                // // Set connection timeout
-                // this.client.setTimeout(CONFIG.timeout);
-                // this.client.on('timeout', () => {
-                //     console.log('Connection timed out.');
-                //     this.client.end();
-                // });
+                // Connection error
+                this.ws.addEventListener('error', (error) => {
+                    console.error('WebSocket error:', error);
+                    // Don't call attemptReconnect here as the close event will be fired after error
+                });
+            }
+
+            send(message) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(message);
+                    console.log(`Sent message: ${message}`);
+                    return true;
+                } else {
+                    console.warn('Cannot send message - connection is not open');
+                    return false;
+                }
             }
 
             attemptReconnect() {
                 setTimeout(() => {
-                    // Create a new socket instance
-                    this.client.destroy();
-                    this.init();
-                }, CONFIG.reconnectDelay);
+                    // Check again if we should reconnect before attempting
+                    this.init()
+                }, WS_CONFIG.reconnectDelayMs);
+            }
+
+            stop() {
+                if (this.ws) {
+                    this.ws.close();
+                }
+            }
+
+            getState() {
+                const states = {
+                    0: 'CONNECTING',
+                    1: 'OPEN',
+                    2: 'CLOSING',
+                    3: 'CLOSED'
+                };
+                return states[this.ws ? this.ws.readyState : 3];
+            }
+
+            // Method to manually trigger reconnection
+            reconnect() {
+                if (this.ws) {
+                    this.ws.close();
+                } else {
+                    this.attemptReconnect();
+                }
             }
 
         }
@@ -121,10 +134,11 @@
                 historyIndex = commandHistory.length;
                 appendToTerminal('> ' + command + '\n');
 
-                client.send(command);
+                wsClient.send(command);
             }
             currentLine.textContent = '';
             currentCommand = '';
+            hiddenInput.value = '';
         }
 
         hiddenInput.addEventListener('input', (e) => {
@@ -194,7 +208,7 @@
         });
 
         // Initialize
-        connect();
+        const wsClient = new WebSocketClient(WS_CONFIG.url);
         focusTerminal();
     </script>
 </body>
