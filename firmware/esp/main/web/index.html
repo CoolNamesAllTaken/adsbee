@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>ESP32 Web Terminal</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="terminal" onclick="focusTerminal()">
+        <div id="terminal-content"></div>
+        <div class="input-line">
+            <span class="prompt">&gt;</span>
+            <span id="current-line"></span>
+            <span id="cursor"></span>
+        </div>
+    </div>
+    <input type="text" class="hidden-input" id="hidden-input" autocomplete="off">
+
+    <script>
+        const terminal = document.getElementById('terminal');
+        const terminalContent = document.getElementById('terminal-content');
+        const currentLine = document.getElementById('current-line');
+        const hiddenInput = document.getElementById('hidden-input');
+        const cursor = document.getElementById('cursor');
+        let socket = null;
+        let commandHistory = [];
+        let historyIndex = -1;
+        let currentCommand = '';
+
+        function connect() {
+            socket = new WebSocket('ws://' + window.location.hostname + ':3333');
+
+            socket.onopen = () => {
+                appendToTerminal('Connected to ESP32\n');
+            };
+
+            socket.onclose = () => {
+                appendToTerminal('Connection closed. Reconnecting...\n');
+                setTimeout(connect, 1000);
+            };
+
+            socket.onmessage = (event) => {
+                appendToTerminal(event.data + '\n');
+            };
+        }
+
+        function appendToTerminal(text) {
+            terminalContent.innerHTML += text;
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function focusTerminal() {
+            hiddenInput.focus();
+        }
+
+        function handleCommand(command) {
+            if (command.trim()) {
+                commandHistory.push(command);
+                historyIndex = commandHistory.length;
+                appendToTerminal('> ' + command + '\n');
+
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(command);
+                }
+            }
+            currentLine.textContent = '';
+            currentCommand = '';
+        }
+
+        hiddenInput.addEventListener('input', (e) => {
+            currentCommand = hiddenInput.value;
+            currentLine.textContent = currentCommand;
+            hiddenInput.value = currentCommand;
+        });
+
+        hiddenInput.addEventListener('keydown', (e) => {
+            switch (e.key) {
+                case 'Enter':
+                    e.preventDefault();
+                    handleCommand(currentCommand);
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    if (historyIndex > 0) {
+                        historyIndex--;
+                        currentCommand = commandHistory[historyIndex];
+                        currentLine.textContent = currentCommand;
+                        hiddenInput.value = currentCommand;
+                    }
+                    break;
+                case 'ArrowDown':
+                    e.preventDefault();
+                    if (historyIndex < commandHistory.length - 1) {
+                        historyIndex++;
+                        currentCommand = commandHistory[historyIndex];
+                    } else {
+                        historyIndex = commandHistory.length;
+                        currentCommand = '';
+                    }
+                    currentLine.textContent = currentCommand;
+                    hiddenInput.value = currentCommand;
+                    break;
+                case 'Tab':
+                    e.preventDefault();
+                    // Could implement command completion here
+                    break;
+            }
+        });
+
+        // Handle copy/paste
+        document.addEventListener('copy', (e) => {
+            const selection = window.getSelection();
+            if (selection.toString().length > 0) {
+                e.clipboardData.setData('text/plain', selection.toString());
+                e.preventDefault();
+            }
+        });
+
+        document.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const paste = e.clipboardData.getData('text');
+            currentCommand += paste;
+            currentLine.textContent = currentCommand;
+            hiddenInput.value = currentCommand;
+        });
+
+        // Keep cursor blinking when window is inactive
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                cursor.style.animation = 'none';
+                cursor.offsetHeight; // Trigger reflow
+                cursor.style.animation = null;
+            }
+        });
+
+        // Initialize
+        connect();
+        focusTerminal();
+    </script>
+</body>
+
+</html>

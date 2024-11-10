@@ -61,7 +61,11 @@ bool SPICoprocessor::Init() {
                                    .data5_io_num = -1,
                                    .data6_io_num = -1,
                                    .data7_io_num = -1,
-                                   .max_transfer_sz = SPICoprocessor::kSPITransactionMaxLenBytes};
+                                   .data_io_default_level = false,  // keep lines LO when not in use
+                                   .max_transfer_sz = SPICoprocessor::kSPITransactionMaxLenBytes,
+                                   .flags = 0,
+                                   .isr_cpu_id = ESP_INTR_CPU_AFFINITY_AUTO,
+                                   .intr_flags = 0};
     spi_slave_interface_config_t spi_slvcfg = {.spics_io_num = config_.spi_cs_pin,
                                                .flags = 0,
                                                .queue_size = 3,

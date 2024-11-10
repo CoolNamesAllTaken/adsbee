@@ -16,5 +16,9 @@ idf_component_register(
         "../../common/coprocessor"
         "../../common/utils"
         "target_test"
+    EMBED_TXTFILES
+        "web/index.html"
+        "web/style.css"
 )
+
 message("PROJECT_SOURCE_DIR: ${PROJECT_SOURCE_DIR}")

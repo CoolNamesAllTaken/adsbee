@@ -27,6 +27,11 @@ class ADSBeeServer {
      */
     void SPIReceiveTask();
 
+    /**
+     * TCP server that accepts incoming connections (used for network control via port 3333).
+     */
+    void TCPServerTask(void* pvParameters);
+
     PFBQueue<RawTransponderPacket> transponder_packet_queue = PFBQueue<RawTransponderPacket>(
         {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = transponder_packet_queue_buffer_});
 
@@ -34,6 +39,8 @@ class ADSBeeServer {
 
    private:
     bool ReportGDL90();
+
+    bool TCPServerInit();
 
     bool spi_receive_task_should_exit_ = false;
 
