@@ -224,19 +224,24 @@ void ADSBeeServer::TCPServerTask(void *pvParameters) {
         vTaskDelete(NULL);
         return;
     }
-    // Set SO_REUSEADDR option
-    setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &kTCPServerSockOptReuseAddr, sizeof(kTCPServerSockOptReuseAddr));
+    // // Set SO_REUSEADDR option
+    // setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &kTCPServerSockOptReuseAddr,
+    // sizeof(kTCPServerSockOptReuseAddr));
 
     int err = bind(listen_sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
     if (err != 0) {
         CONSOLE_ERROR("ADSBeeServer::TCPServerTask", "Socket unable to bind: errno %d", errno);
-        goto TCP_SERVER_TASK_CLEAN_UP;
+        close(listen_sock);
+        vTaskDelete(NULL);
+        return;
     }
 
     err = listen(listen_sock, 1);
     if (err != 0) {
         CONSOLE_ERROR("ADSBeeServer::TCPServerTask", "Error occurred during listen: errno %d", errno);
-        goto TCP_SERVER_TASK_CLEAN_UP;
+        close(listen_sock);
+        vTaskDelete(NULL);
+        return;
     }
 
     while (1) {
@@ -250,41 +255,39 @@ void ADSBeeServer::TCPServerTask(void *pvParameters) {
             break;
         }
 
-        // Set socket to non-blocking mode
-        fcntl(sock, F_SETFL, O_NONBLOCK);
+        // // Set socket to non-blocking mode
+        // fcntl(sock, F_SETFL, O_NONBLOCK);
 
-        // Set keep-alive properties
-        setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &kTCPServerSockOptKeepAlive, sizeof(int));
-        setsockopt(sock, IPPROTO_TCP, TCP_KEEPIDLE, &kTCPServerSockOptKeepIdleTimeoutSec, sizeof(int));
-        setsockopt(sock, IPPROTO_TCP, TCP_KEEPINTVL, &kTCPServerSockOptKeepAliveIntervalSec, sizeof(int));
-        setsockopt(sock, IPPROTO_TCP, TCP_KEEPCNT, &kTCPServerSockOptMaxFailedKeepAliveCount, sizeof(int));
+        // // Set keep-alive properties
+        // setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &kTCPServerSockOptKeepAlive, sizeof(int));
+        // setsockopt(sock, IPPROTO_TCP, TCP_KEEPIDLE, &kTCPServerSockOptKeepIdleTimeoutSec, sizeof(int));
+        // setsockopt(sock, IPPROTO_TCP, TCP_KEEPINTVL, &kTCPServerSockOptKeepAliveIntervalSec, sizeof(int));
+        // setsockopt(sock, IPPROTO_TCP, TCP_KEEPCNT, &kTCPServerSockOptMaxFailedKeepAliveCount, sizeof(int));
 
         // Convert ip address to string
 
-        if (source_addr.ss_family == PF_INET) {
-            // Display IPv4 address.
-            char addr_str[128];
-            inet_ntoa_r(((struct sockaddr_in *)&source_addr)->sin_addr, addr_str, sizeof(addr_str) - 1);
-            CONSOLE_INFO("ADSBeeServer::TCPServerTask", "Socket accepted ip address: %s", addr_str);
-        }
+        // Display IPv4 address.
+        char addr_str[128];
+        inet_ntoa_r(((struct sockaddr_in *)&source_addr)->sin_addr, addr_str, sizeof(addr_str) - 1);
+        CONSOLE_INFO("ADSBeeServer::TCPServerTask", "Socket accepted ip address: %s", addr_str);
 
         // Handle received data
         while (1) {
-            fd_set read_fds;
-            struct timeval tv = {.tv_sec = kTCPServerSockSelectTimeoutSec, .tv_usec = 0};
+            // fd_set read_fds;
+            // struct timeval tv = {.tv_sec = kTCPServerSockSelectTimeoutSec, .tv_usec = 0};
 
-            FD_ZERO(&read_fds);
-            FD_SET(sock, &read_fds);
+            // FD_ZERO(&read_fds);
+            // FD_SET(sock, &read_fds);
 
-            int select_result = select(sock + 1, &read_fds, NULL, NULL, &tv);
+            // int select_result = select(sock + 1, &read_fds, NULL, NULL, &tv);
 
-            if (select_result < 0) {
-                CONSOLE_ERROR("ADSBeeServer::TCPServerTask", "Error in select: errno %d", errno);
-                break;
-            } else if (select_result == 0) {
-                // Timeout occurred, no data available
-                continue;
-            }
+            // if (select_result < 0) {
+            //     CONSOLE_ERROR("ADSBeeServer::TCPServerTask", "Error in select: errno %d", errno);
+            //     break;
+            // } else if (select_result == 0) {
+            //     // Timeout occurred, no data available
+            //     continue;
+            // }
 
             // Data is available to read
             uint8_t rx_buffer[128];
@@ -308,25 +311,21 @@ void ADSBeeServer::TCPServerTask(void *pvParameters) {
             CONSOLE_INFO("ADSBeeServer::TCPServerTask", "Received %d bytes: %s", len, rx_buffer);
 
             // Echo received data back
-            int err = send(sock, rx_buffer, len, 0);
-            if (err < 0) {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                    // Socket buffer is full, try again later
-                    vTaskDelay(pdMS_TO_TICKS(10));
-                    continue;
-                }
-                CONSOLE_ERROR("ADSBeeServer::TCPServerTask", "Error occurred during sending: errno %d", errno);
-                break;
-            }
+            // int err = send(sock, rx_buffer, len, 0);
+            // if (err < 0) {
+            //     if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            //         // Socket buffer is full, try again later
+            //         vTaskDelay(pdMS_TO_TICKS(10));
+            //         continue;
+            //     }
+            //     CONSOLE_ERROR("ADSBeeServer::TCPServerTask", "Error occurred during sending: errno %d", errno);
+            //     break;
+            // }
         }
 
         shutdown(sock, 0);
         close(sock);
     }
-
-TCP_SERVER_TASK_CLEAN_UP:
-    close(listen_sock);
-    vTaskDelete(NULL);
 }
 
 static esp_err_t root_handler(httpd_req_t *req) {
