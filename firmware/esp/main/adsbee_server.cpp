@@ -41,7 +41,7 @@ void esp_spi_receive_task(void *pvParameters) {
 }
 
 void tcp_server_task(void *pvParameters) { adsbee_server.TCPServerTask(pvParameters); }
-esp_err_t console_ws_handler(httpd_req_t *req) { return adsbee_server.ConsoleWebSocketHandler(req); }
+esp_err_t console_ws_handler(httpd_req_t *req) { return adsbee_server.NetworkConsoleWebSocketHandler(req); }
 /** End "Pass-Through" functions. **/
 
 bool ADSBeeServer::Init() {
@@ -49,6 +49,9 @@ bool ADSBeeServer::Init() {
         CONSOLE_ERROR("ADSBeeServer::Init", "SPI Coprocessor initialization failed.");
         return false;
     }
+
+    network_console_rx_queue = xQueueCreate(kNetworkConsoleQueueLen, sizeof(NetworkConsoleMessage));
+    network_console_tx_queue = xQueueCreate(kNetworkConsoleQueueLen, sizeof(NetworkConsoleMessage));
 
     spi_receive_task_should_exit_ = false;
     xTaskCreatePinnedToCore(esp_spi_receive_task, "spi_receive_task", kSPIRxTaskStackDepthBytes, NULL,
@@ -144,6 +147,18 @@ bool ADSBeeServer::Update() {
             ret = false;
         }
     }
+
+    NetworkConsoleMessage message;
+    while (xQueueReceive(network_console_rx_queue, &message, 0) == pdTRUE) {
+        // Non-blocking receive of network console messages.
+        // Write message contents to Pico console, requiring ack.
+        if (!pico.Write(ObjectDictionary::kAddrConsole, message.buf, true, message.buf_len)) {
+            CONSOLE_ERROR("ADSBeeServer::Update", "Failed to write network console message to Pico with contents: %s.",
+                          message.buf);
+            message.Destroy();  // Free the message buffer to prevent memory leaks.
+        }
+    }
+
     return ret;
 }
 
@@ -343,7 +358,7 @@ static esp_err_t css_handler(httpd_req_t *req) {
 //     return ret;
 // }
 
-esp_err_t ADSBeeServer::ConsoleWebSocketHandler(httpd_req_t *req) {
+esp_err_t ADSBeeServer::NetworkConsoleWebSocketHandler(httpd_req_t *req) {
     if (req->method == HTTP_GET) {
         CONSOLE_INFO("ADSBeeServer::ConsoleWebsocketHandler", "Handshake done, the new connection was opened");
         return ESP_OK;
@@ -377,7 +392,22 @@ esp_err_t ADSBeeServer::ConsoleWebSocketHandler(httpd_req_t *req) {
         }
         CONSOLE_INFO("ADSBeeServer::ConsoleWebsocketHandler", "Got packet with message: %s", ws_pkt.payload);
         // Forward console data to RP2040 console.
-        // pico.Write(ObjectDictionary::kAddrConsole, ws_pkt.payload, true, ws_pkt.len); // This currently crashes with
+        // char test_str[] = "hello";
+        // // pico.Write(ObjectDictionary::kAddrConsole, test_str, true,
+        // //            strlen(test_str));  // This currently crashes with
+        // char test_byte = 'h';
+        // pico.Write(ObjectDictionary::kAddrConsole, test_byte, true, 1);
+        NetworkConsoleMessage message = NetworkConsoleMessage((char *)ws_pkt.payload, (uint16_t)ws_pkt.len);
+        int err = xQueueSend(network_console_rx_queue, &message, 0);
+        if (err == errQUEUE_FULL) {
+            CONSOLE_WARNING("ADSBeeServer::NetworkConsoleWebSocketHandler", "Overflowed network console rx queue.");
+            xQueueReset(network_console_rx_queue);
+            return ESP_FAIL;
+        } else if (err != pdTRUE) {
+            CONSOLE_WARNING("ADSBeeServer::NetworkConsoleWebSocketHandler",
+                            "Pushing network console message to network console rx queue resulted in error %d.", err);
+            return ESP_FAIL;
+        }
         // StoreProhibited exception.
     }
     CONSOLE_INFO("ADSBeeServer::ConsoleWebsocketHandler", "Packet type: %d", ws_pkt.type);
@@ -397,8 +427,7 @@ esp_err_t ADSBeeServer::ConsoleWebSocketHandler(httpd_req_t *req) {
 
 bool ADSBeeServer::TCPServerInit() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    // Increase stack size if needed for handling larger files
-    config.stack_size = 8192;
+    config.stack_size = 4 * 4096;  // Extra stack needed for calls to SPI peripheral and handling large files.
 
     httpd_handle_t server = NULL;
 

@@ -12,6 +12,33 @@ class ADSBeeServer {
     static const uint32_t kAircraftDictionaryUpdateIntervalMs = 1000;
     static const uint32_t kGDL90ReportingIntervalMs = 1000;
 
+    static const uint16_t kNetworkConsoleQueueLen = 10;
+
+    /**
+     * Data structure used to pass netowrk console messages between threads (SPI <-> WebSocket server). Needs to be
+     * manually destroyed when it's popped out of the network console packet queue.
+     */
+    struct NetworkConsoleMessage {
+        char* buf = nullptr;
+        uint16_t buf_len = 0;
+
+        /**
+         * Default constructor.
+         */
+        NetworkConsoleMessage() {}
+
+        /**
+         * Constructor for ingesting a pre-existing buffer. Allocates new memory and copies over the buffer contents.
+         */
+        NetworkConsoleMessage(const char* buf_in, uint16_t buf_in_len) : buf_len(buf_in_len) {
+            buf = (char*)malloc(buf_len + 1);  // Leave room for extra null terminator.
+            buf[buf_len] = '\0';               // Null terminate for safety.
+            memcpy(buf, buf_in, buf_len);
+        }
+
+        void Destroy() { free(buf); }
+    };
+
     ADSBeeServer() {};  // Default constructor.
     bool Init();
     bool Update();
@@ -33,12 +60,15 @@ class ADSBeeServer {
      */
     void TCPServerTask(void* pvParameters);
 
-    esp_err_t ConsoleWebSocketHandler(httpd_req_t* req);
+    esp_err_t NetworkConsoleWebSocketHandler(httpd_req_t* req);
 
     PFBQueue<RawTransponderPacket> transponder_packet_queue = PFBQueue<RawTransponderPacket>(
         {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = transponder_packet_queue_buffer_});
 
     AircraftDictionary aircraft_dictionary;
+
+    QueueHandle_t network_console_rx_queue;
+    QueueHandle_t network_console_tx_queue;
 
    private:
     bool ReportGDL90();

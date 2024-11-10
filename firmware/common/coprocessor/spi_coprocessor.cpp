@@ -131,7 +131,8 @@ bool SPICoprocessor::Update() {
             // Figure out how long the write packet is, then read in the rest of it.
             SPIReadBlocking(rx_buf + sizeof(SCCommand), SCWritePacket::kDataOffsetBytes - sizeof(SCCommand),
                             false);  // Read addr, offset, and len.
-            uint8_t len = rx_buf[SCWritePacket::kDataOffsetBytes - sizeof(uint8_t)];
+            uint16_t len;
+            memcpy(&len, rx_buf + SCWritePacket::kDataOffsetBytes - sizeof(uint16_t), sizeof(uint16_t));
             // Read the rest of the write packet and complete the transaction. Guard to not run off end if invalid
             // len is received.
             SPIReadBlocking(rx_buf + SCWritePacket::kDataOffsetBytes,
@@ -335,7 +336,12 @@ int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint1
         CONSOLE_ERROR("SPICoprocessor::SPIWriteReadBlocking", "SPI write read call returned error code 0x%x.",
                       bytes_written);
     }
-    spi_last_transmit_timestamp_us_ = get_time_since_boot_us();
+    if (end_transaction) {
+        // Only the last transfer chunk of the transaction is used to record the last transmission timestamp. This stops
+        // transactions from getting too long as earlier chunks reset the lockout timer for later chungs, e.g. if we
+        // only read one byte we don't want to wait for the timeout before conducting the rest of the transaction.
+        spi_last_transmit_timestamp_us_ = get_time_since_boot_us();
+    }
 #elif ON_ESP32
     spi_slave_transaction_t t;
     memset(&t, 0, sizeof(t));

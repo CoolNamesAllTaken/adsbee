@@ -308,8 +308,6 @@ class SPICoprocessor {
      * Top level function that translates a write to an object (with associated address) into SPI transaction(s).
      * Included in the header file since the template function implementation needs to be visible to any file that
      * utilizes it.
-     * Note that this function is not generally called directly, use the public Write and Read interfaces instead (no
-     * address required).
      */
     template <typename T>
     bool Write(ObjectDictionary::Address addr, T &object, bool require_ack = false, uint16_t len_bytes = 0) {
@@ -357,8 +355,6 @@ class SPICoprocessor {
      * Top level function that translates a read from an object (with associated address) into SPI transaction(s).
      * Included in the header file since the template function implementation needs to be visible to any file that
      * utilizes it.
-     * Note that this function is not generally called directly, use the public Write and Read interfaces instead (no
-     * address required).
      */
     template <typename T>
     bool Read(ObjectDictionary::Address addr, T &object, uint16_t len_bytes = 0) {
