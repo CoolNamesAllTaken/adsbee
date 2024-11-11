@@ -314,39 +314,40 @@ static const char* get_auth_mode_name(wifi_auth_mode_t auth_mode) {
 }
 
 // WARNING: This function explodes the stack!
-static void wifi_scan_task(void* pvParameters) {
-    CONSOLE_INFO("WiFiScan", "Starting scan...");
+// static void wifi_scan_task(void* pvParameters) {
+//     CONSOLE_INFO("WiFiScan", "Starting scan...");
 
-    // Configure scan settings
-    wifi_scan_config_t scan_config = {
-        .ssid = 0,
-        .bssid = 0,
-        .channel = 0,        // 0 = scan all channels
-        .show_hidden = true  // show hidden SSIDs
-    };
+//     // Configure scan settings
+//     wifi_scan_config_t scan_config = {
+//         .ssid = 0,
+//         .bssid = 0,
+//         .channel = 0,        // 0 = scan all channels
+//         .show_hidden = true  // show hidden SSIDs
+//     };
 
-    // Start scan
-    ESP_ERROR_CHECK(esp_wifi_scan_start(&scan_config, true));
+//     // Start scan
+//     ESP_ERROR_CHECK(esp_wifi_scan_start(&scan_config, true));
 
-    // Get number of APs found
-    uint16_t ap_num = kWiFiScanDefaultListSize;
-    wifi_ap_record_t ap_records[kWiFiScanDefaultListSize];
-    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&ap_num, ap_records));
+//     // Get number of APs found
+//     uint16_t ap_num = kWiFiScanDefaultListSize;
+//     wifi_ap_record_t ap_records[kWiFiScanDefaultListSize];
+//     ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&ap_num, ap_records));
 
-    // Print header
-    CONSOLE_INFO("WiFiScan", "Found %d access points:", ap_num);
-    CONSOLE_INFO("WiFiScan", "               SSID              | Channel | RSSI |   Auth Mode");
-    CONSOLE_INFO("WiFiScan", "----------------------------------------------------------------");
+//     // Print header
+//     CONSOLE_INFO("WiFiScan", "Found %d access points:", ap_num);
+//     CONSOLE_INFO("WiFiScan", "               SSID              | Channel | RSSI |   Auth Mode");
+//     CONSOLE_INFO("WiFiScan", "----------------------------------------------------------------");
 
-    // Print AP details
-    for (int i = 0; i < ap_num; i++) {
-        CONSOLE_INFO("WiFiScan", "%32s | %7d | %4d | %s", ap_records[i].ssid, ap_records[i].primary, ap_records[i].rssi,
-                     get_auth_mode_name(ap_records[i].authmode));
-    }
+//     // Print AP details
+//     for (int i = 0; i < ap_num; i++) {
+//         CONSOLE_INFO("WiFiScan", "%32s | %7d | %4d | %s", ap_records[i].ssid, ap_records[i].primary,
+//         ap_records[i].rssi,
+//                      get_auth_mode_name(ap_records[i].authmode));
+//     }
 
-    // Print footer
-    CONSOLE_INFO("WiFiScan", "----------------------------------------------------------------");
-}
+//     // Print footer
+//     CONSOLE_INFO("WiFiScan", "----------------------------------------------------------------");
+// }
 
 bool CommsManager::WiFiInit() {
     wifi_clients_list_mutex_ = xSemaphoreCreateMutex();

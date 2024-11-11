@@ -51,9 +51,13 @@ class CommsManager {
     int console_printf(const char *format, ...);
     int console_level_printf(SettingsManager::LogLevel level, const char *format, ...);
     int iface_printf(SettingsManager::SerialInterface iface, const char *format, ...);
+    int iface_vprintf(SettingsManager::SerialInterface iface, const char *format, va_list args);
     bool iface_putc(SettingsManager::SerialInterface iface, char c);
     bool iface_getc(SettingsManager::SerialInterface iface, char &c);
     bool iface_puts(SettingsManager::SerialInterface iface, const char *buf);
+
+    bool network_console_putc(char c);
+    bool network_console_puts(const char *buf, uint16_t len = UINT16_MAX);
 
     void SendBuf(SettingsManager::SerialInterface iface, char *buf, uint16_t buf_len) {
         for (uint16_t i = 0; i < buf_len; i++) {

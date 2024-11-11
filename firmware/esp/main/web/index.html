@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>ESP32 Web Terminal</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="terminal" onclick="focusTerminal()">
+        <div id="terminal-content"></div>
+        <div class="input-line">
+            <span class="prompt">&gt;</span>
+            <span id="current-line"></span>
+            <span id="cursor"></span>
+        </div>
+    </div>
+    <input type="text" class="hidden-input" id="hidden-input" autocomplete="off">
+
+    <script>
+        const WS_CONFIG = {
+            url: `ws://${window.location.hostname}/console`,
+            reconnectDelayMs: 5000
+        };
+
+        const terminal = document.getElementById('terminal');
+        const terminalContent = document.getElementById('terminal-content');
+        const currentLine = document.getElementById('current-line');
+        const hiddenInput = document.getElementById('hidden-input');
+        const cursor = document.getElementById('cursor');
+
+        let socket = null;
+        let commandHistory = [];
+        let historyIndex = -1;
+        let currentCommand = '';
+
+        class WebSocketClient {
+            constructor(url) {
+                this.url = url;
+                this.init();
+            }
+
+            init() {
+                this.ws = new WebSocket(this.url)
+                this.attachEventHandlers();
+            }
+
+            attachEventHandlers() {
+                // Connection opened
+                this.ws.addEventListener('open', () => {
+                    console.log(`Connected to ${this.url}`);
+
+                    // Send the message once connected
+                    // this.send("AT+HELP\r\n");
+                });
+
+                // Listen for messages
+                this.ws.addEventListener('message', (event) => {
+                    console.log('Received message:', event.data);
+                    appendToTerminal(event.data);
+                });
+
+                // Connection closed (both clean and unclean closes)
+                this.ws.addEventListener('close', (event) => {
+                    console.log(`Connection closed. Code: ${event.code}, Reason: ${event.reason}`);
+                    appendToTerminal(`Connection closed. Code: ${event.code}\n`);
+                    this.attemptReconnect();
+                });
+
+                // Connection error
+                this.ws.addEventListener('error', (error) => {
+                    console.error('WebSocket error:', error);
+                    // Don't call attemptReconnect here as the close event will be fired after error
+                });
+            }
+
+            send(message) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(message);
+                    console.log(`Sent message: ${message}`);
+                    return true;
+                } else {
+                    console.warn('Cannot send message - connection is not open');
+                    return false;
+                }
+            }
+
+            attemptReconnect() {
+                setTimeout(() => {
+                    // Check again if we should reconnect before attempting
+                    this.init()
+                }, WS_CONFIG.reconnectDelayMs);
+            }
+
+            close(code, reason) {
+                if (this.ws) {
+                    this.ws.close(code, reason);
+                }
+            }
+
+            getState() {
+                const states = {
+                    0: 'CONNECTING',
+                    1: 'OPEN',
+                    2: 'CLOSING',
+                    3: 'CLOSED'
+                };
+                return states[this.ws ? this.ws.readyState : 3];
+            }
+
+            // Method to manually trigger reconnection
+            reconnect() {
+                if (this.ws) {
+                    this.ws.close();
+                } else {
+                    this.attemptReconnect();
+                }
+            }
+
+        }
+
+        function appendToTerminal(text) {
+            terminalContent.innerHTML += text;
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function focusTerminal() {
+            hiddenInput.focus();
+        }
+
+        function handleCommand(command) {
+            if (command.trim()) {
+                commandHistory.push(command);
+                historyIndex = commandHistory.length;
+                appendToTerminal('> ' + command + '\n');
+
+                wsClient.send(command + '\r\n');
+            }
+            currentLine.textContent = '';
+            currentCommand = '';
+            hiddenInput.value = '';
+        }
+
+        hiddenInput.addEventListener('input', (e) => {
+            currentCommand = hiddenInput.value;
+            currentLine.textContent = currentCommand;
+            hiddenInput.value = currentCommand;
+        });
+
+        hiddenInput.addEventListener('keydown', (e) => {
+            switch (e.key) {
+                case 'Enter':
+                    e.preventDefault();
+                    handleCommand(currentCommand);
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    if (historyIndex > 0) {
+                        historyIndex--;
+                        currentCommand = commandHistory[historyIndex];
+                        currentLine.textContent = currentCommand;
+                        hiddenInput.value = currentCommand;
+                    }
+                    break;
+                case 'ArrowDown':
+                    e.preventDefault();
+                    if (historyIndex < commandHistory.length - 1) {
+                        historyIndex++;
+                        currentCommand = commandHistory[historyIndex];
+                    } else {
+                        historyIndex = commandHistory.length;
+                        currentCommand = '';
+                    }
+                    currentLine.textContent = currentCommand;
+                    hiddenInput.value = currentCommand;
+                    break;
+                case 'Tab':
+                    e.preventDefault();
+                    // Could implement command completion here
+                    break;
+            }
+        });
+
+        // Handle copy/paste
+        document.addEventListener('copy', (e) => {
+            const selection = window.getSelection();
+            if (selection.toString().length > 0) {
+                e.clipboardData.setData('text/plain', selection.toString());
+                e.preventDefault();
+            }
+        });
+
+        document.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const paste = e.clipboardData.getData('text');
+            currentCommand += paste;
+            currentLine.textContent = currentCommand;
+            hiddenInput.value = currentCommand;
+        });
+
+        // Keep cursor blinking when window is inactive
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                cursor.style.animation = 'none';
+                cursor.offsetHeight; // Trigger reflow
+                cursor.style.animation = null;
+            }
+        });
+
+        window.addEventListener('pagehide', (event) => {
+            // Close WebSocket connection gracefully
+            wsClient.close(1000, 'Tab closing - normal shutdown');
+        });
+
+        // Initialize
+        const wsClient = new WebSocketClient(WS_CONFIG.url);
+        focusTerminal();
+    </script>
+</body>
+
+</html>

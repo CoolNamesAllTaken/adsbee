@@ -41,7 +41,7 @@ def generate_header(app_bin_filename, asm_section=None):
 
     """
     HEADER_VERSION = 0
-    HEADER_SIZE_BYTES = 4*4
+    HEADER_SIZE_BYTES = 5*4
 
     print(f"Generating header for {app_bin_filename}")
 
@@ -52,10 +52,11 @@ def generate_header(app_bin_filename, asm_section=None):
     print(f"\tCalculated CRC32 for {app_bin_filename} ({len(app_bin_contents)} Bytes): 0x{app_crc:x}")
 
     hdr_bin_contents = bytearray(HEADER_SIZE_BYTES)
-    struct.pack_into('<I', hdr_bin_contents, 0, 0xBEEFBEEF)
-    struct.pack_into('<I', hdr_bin_contents, 4, HEADER_VERSION)
-    struct.pack_into('<I', hdr_bin_contents, 8, len(app_bin_contents))
-    struct.pack_into('<I', hdr_bin_contents, 12, app_crc)
+    struct.pack_into('<I', hdr_bin_contents, 0, 0xAD5BEEE) # MAGIC_WORD: Marks beginning of application header.
+    struct.pack_into('<I', hdr_bin_contents, 4, HEADER_VERSION) # HEADER_VERSION: Version of this header schema.
+    struct.pack_into('<I', hdr_bin_contents, 8, len(app_bin_contents)) # LEN_BYTES: Application image length in  Bytes.
+    struct.pack_into('<I', hdr_bin_contents, 12, app_crc) # CRC: CRC32 of application data.
+    struct.pack_into('<I', hdr_bin_contents, 16, 0xFFFFFFFF) # STATUS: Application boot priority.
 
     # app_bin_basename = os.path.splitext(os.path.basename(app_bin_filename))[0]
     app_bin_dir = os.path.dirname(app_bin_filename)
