@@ -41,7 +41,7 @@ int CommsManager::console_printf(const char *format, ...) {
     if (log_level == SettingsManager::kSilent) return 0;
     va_list args;
     va_start(args, format);
-    int res = vprintf(format, args);
+    int res = iface_vprintf(SettingsManager::SerialInterface::kConsole, format, args);
     va_end(args);
     return res;
 }
@@ -50,17 +50,24 @@ int CommsManager::console_level_printf(SettingsManager::LogLevel level, const ch
     if (log_level < level) return 0;
     va_list args;
     va_start(args, format);
-    int res = vprintf(format, args);
+    int res = iface_vprintf(SettingsManager::SerialInterface::kConsole, format, args);
     va_end(args);
     return res;
 }
 
 int CommsManager::iface_printf(SettingsManager::SerialInterface iface, const char *format, ...) {
-    char buf[kPrintfBufferMaxSize];
     va_list args;
     va_start(args, format);
-    int res = vsnprintf(buf, kPrintfBufferMaxSize, format, args);
+    int res = iface_vprintf(iface, format, args);
     va_end(args);
+    return res;
+}
+
+int CommsManager::iface_vprintf(SettingsManager::SerialInterface iface, const char *format, va_list args) {
+    char buf[kPrintfBufferMaxSize];
+
+    int res = vsnprintf(buf, kPrintfBufferMaxSize, format, args);
+
     if (res <= 0) {
         return res;  // vsnprintf failed.
     }
@@ -82,7 +89,7 @@ bool CommsManager::iface_putc(SettingsManager::SerialInterface iface, char c) {
             return true;  // Function is void so we won't know if it succeeds.
             break;
         case SettingsManager::kConsole:
-            return putchar(c) >= 0;
+            return putchar(c) >= 0 && (!esp32.IsEnabled() || network_console_putc(c) >= 0);
             break;
         case SettingsManager::kNumSerialInterfaces:
         default:
@@ -137,7 +144,7 @@ bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char
             return true;  // Function is void so we won't know if it succeeds.
             break;
         case SettingsManager::kConsole:
-            return puts(buf) >= 0;
+            return puts(buf) >= 0 && (!esp32.IsEnabled() || network_console_puts(buf) >= 0);
             break;
         case SettingsManager::kNumSerialInterfaces:
         default:
@@ -146,4 +153,41 @@ bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char
             break;
     }
     return false;  // Should never get here.
+}
+
+// int CommsManager::network_console_printf(const char *format, ...) {
+//     int network_chars = 0;
+//     if (esp32.IsEnabled()) {
+//         // Print to network console.
+//         char network_console_buffer[CommsManager::kATCommandBufMaxLen];
+//         va_list args;
+//         va_start(args, format);
+//         network_chars = vsnprintf(network_console_buffer, CommsManager::kATCommandBufMaxLen, format, args);
+//         va_end(args);
+
+//         if (!network_console_puts(network_console_buffer, CommsManager::kATCommandBufMaxLen)) {
+//             return -1;
+//         }
+//     }
+//     return network_chars;
+// }
+
+bool CommsManager::network_console_putc(char c) {
+    if (!comms_manager.esp32_console_tx_queue.Push(c)) {
+        comms_manager.Update();
+        if (!comms_manager.esp32_console_tx_queue.Push(c)) {
+            CONSOLE_ERROR("CommsManager::network_console_putc",
+                          "Overflowed buffer for outgoing network console chars after attempting to clear buffer.");
+            return false;
+        }
+    }
+    return true;
+}
+bool CommsManager::network_console_puts(const char *buf, uint16_t len) {
+    for (uint16_t i = 0; i < strlen(buf) && i < len; i++) {
+        if (!network_console_putc(buf[i])) {
+            return false;
+        }
+    }
+    return true;
 }
