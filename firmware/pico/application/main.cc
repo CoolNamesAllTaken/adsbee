@@ -110,7 +110,7 @@ int main() {
     // const char* argv[1];
     // utest_main(argc, argv);
 
-    uint16_t esp32_heartbeat_interval_ms = 1000;
+    uint16_t esp32_heartbeat_interval_ms = 200;  // Set to 5Hz to make network terminal commands pass less laggy.
     uint32_t esp32_test_packet_last_sent_timestamp_ms = get_time_since_boot_ms();
 
     while (true) {

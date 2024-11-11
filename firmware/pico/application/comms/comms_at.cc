@@ -703,7 +703,7 @@ bool CommsManager::UpdateAT() {
                 CONSOLE_INFO("CommsManager::UpdateAT", "Received network console message: %s\r\n",
                              esp32_console_rx_buf);
                 at_parser_.ParseMessage(std::string_view(esp32_console_rx_buf));
-                stdio_at_command_buf[0] = '\0';  // clear command buffer
+                esp32_console_rx_buf[0] = '\0';  // clear command buffer
             }
         }
 

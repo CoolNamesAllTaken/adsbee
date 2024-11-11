@@ -161,13 +161,11 @@ bool ADSBeeServer::Update() {
     while (xQueueReceive(network_console_rx_queue, &message, 0) == pdTRUE) {
         // Non-blocking receive of network console messages.
         // Write message contents to Pico console, requiring ack.
-        char test_str[] = "AT+HELP\r\n";
-        if (!pico.Write(ObjectDictionary::kAddrConsole, /*message.buf*/ test_str, true,
-                        strlen(test_str) /*message.buf_len*/)) {
+        if (!pico.Write(ObjectDictionary::kAddrConsole, *(message.buf), true, message.buf_len)) {
             CONSOLE_ERROR("ADSBeeServer::Update", "Failed to write network console message to Pico with contents: %s.",
                           message.buf);
-            message.Destroy();  // Free the message buffer to prevent memory leaks.
         }
+        message.Destroy();  // Free the message buffer to prevent memory leaks.
     }
 
     // Prune inactive network console clients.
@@ -340,48 +338,6 @@ static esp_err_t css_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
-/*
- * Structure holding server handle
- * and internal socket fd in order
- * to use out of request send
- */
-// struct async_resp_arg {
-//     httpd_handle_t hd;
-//     int fd;
-// };
-
-/*
- * async send function, which we put into the httpd work queue
- */
-// static void ws_async_send(void *arg) {
-//     static const char *data = "Async data";
-//     async_resp_arg *resp_arg = (async_resp_arg *)arg;
-//     httpd_handle_t hd = resp_arg->hd;
-//     int fd = resp_arg->fd;
-//     httpd_ws_frame_t ws_pkt;
-//     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-//     ws_pkt.payload = (uint8_t *)data;
-//     ws_pkt.len = strlen(data);
-//     ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-
-//     httpd_ws_send_frame_async(hd, fd, &ws_pkt);
-//     free(resp_arg);
-// }
-
-// static esp_err_t trigger_async_send(httpd_handle_t handle, httpd_req_t *req) {
-//     struct async_resp_arg *resp_arg = (async_resp_arg *)malloc(sizeof(async_resp_arg));
-//     if (resp_arg == NULL) {
-//         return ESP_ERR_NO_MEM;
-//     }
-//     resp_arg->hd = req->handle;
-//     resp_arg->fd = httpd_req_to_sockfd(req);
-//     esp_err_t ret = httpd_queue_work(handle, ws_async_send, resp_arg);
-//     if (ret != ESP_OK) {
-//         free(resp_arg);
-//     }
-//     return ret;
-// }
-
 // Function to broadcast message to all connected clients
 void ADSBeeServer::NetworkConsoleBroadcastMessage(const char *message) {
     for (int i = 0; i < kNetworkConsoleMaxNumClients; i++) {
@@ -505,20 +461,8 @@ esp_err_t ADSBeeServer::NetworkConsoleWebSocketHandler(httpd_req_t *req) {
             return ret;
         }
 
-        // if (ws_pkt.type == HTTPD_WS_TYPE_CLOSE) {
-        //     CONSOLE_INFO("ADSBeeServer::ConsoleWebSocketHandler", "Client with fd %d disconnected.", client_fd);
-        //     NetworkConsoleRemoveWebsocketClient(client_fd);
-        //     return ESP_OK;
-        // }
-
         NetworkConsoleUpdateActivityTimer(client_fd);
         CONSOLE_INFO("ADSBeeServer::ConsoleWebsocketHandler", "Got packet with message: %s", ws_pkt.payload);
-        // Forward console data to RP2040 console.
-        // char test_str[] = "hello";
-        // // pico.Write(ObjectDictionary::kAddrConsole, test_str, true,
-        // //            strlen(test_str));  // This currently crashes with
-        // char test_byte = 'h';
-        // pico.Write(ObjectDictionary::kAddrConsole, test_byte, true, 1);
 
         // Forward the network console message to the RP2040.
         NetworkConsoleMessage message = NetworkConsoleMessage((char *)ws_pkt.payload, (uint16_t)ws_pkt.len);
@@ -532,20 +476,14 @@ esp_err_t ADSBeeServer::NetworkConsoleWebSocketHandler(httpd_req_t *req) {
                             "Pushing network console message to network console rx queue resulted in error %d.", err);
             return ESP_FAIL;
         }
-        // StoreProhibited exception.
     }
-    CONSOLE_INFO("ADSBeeServer::ConsoleWebsocketHandler", "Packet type: %d", ws_pkt.type);
-    // if (ws_pkt.type == HTTPD_WS_TYPE_TEXT && strcmp((char *)ws_pkt.payload, "Trigger async") == 0) {
-    //     free(buf);
-    //     return trigger_async_send(req->handle, req);
-    // }
 
     // Simple loopback.
-    // ret = httpd_ws_send_frame(req, &ws_pkt);
-    ret = NetworkConsoleSendMessage(httpd_req_to_sockfd(req), (const char *)ws_pkt.payload);
-    if (ret != ESP_OK) {
-        CONSOLE_ERROR("ADSBeeServer::ConsoleWebsocketHandler", "httpd_ws_send_frame failed with %d", ret);
-    }
+    // ret = NetworkConsoleSendMessage(httpd_req_to_sockfd(req), (const char *)ws_pkt.payload);
+    // if (ret != ESP_OK) {
+    //     CONSOLE_ERROR("ADSBeeServer::ConsoleWebsocketHandler", "httpd_ws_send_frame failed with %d", ret);
+    // }
+
     free(buf);
     return ret;
 }

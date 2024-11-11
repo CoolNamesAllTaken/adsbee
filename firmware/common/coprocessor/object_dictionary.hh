@@ -20,6 +20,8 @@ class ObjectDictionary {
 
     static const uint16_t kMACAddrLenBytes = 6;
 
+    static const uint16_t kNetworkConsoleMessageMaxLenBytes = 4000;
+
     enum Address : uint8_t {
         kAddrInvalid = 0,                  // Default value.
         kAddrFirmwareVersion = 0x01,       // Firmware version as a uint32_t.
@@ -57,13 +59,19 @@ class ObjectDictionary {
             case kAddrConsole:
                 // ESP32 writing to the RP2040's network console interface.
                 for (uint16_t i = 0; i < buf_len; i++) {
-                    comms_manager.esp32_console_rx_queue.Push((char)buf[i]);
+                    char c = (char)buf[i];
+                    comms_manager.esp32_console_rx_queue.Push(c);
                 }
                 break;
 #elif ON_ESP32
-            case kAddrConsole:
+            case kAddrConsole: {
                 // RP2040 writing to the ESP32's network console interface.
+                char message[kNetworkConsoleMessageMaxLenBytes + 1] = {0};
+                strncpy(message, (char *)buf, buf_len);
+                message[kNetworkConsoleMessageMaxLenBytes] = '\0';  // Null terminate for safety.
+                adsbee_server.NetworkConsoleBroadcastMessage(message);
                 break;
+            }
             case kAddrRawTransponderPacket: {
                 RawTransponderPacket tpacket;
                 memcpy(&tpacket, buf, sizeof(RawTransponderPacket));

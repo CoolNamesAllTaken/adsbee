@@ -51,7 +51,7 @@
                     console.log(`Connected to ${this.url}`);
 
                     // Send the message once connected
-                    this.send("Hello!");
+                    // this.send("AT+HELP\r\n");
                 });
 
                 // Listen for messages
@@ -134,7 +134,7 @@
                 historyIndex = commandHistory.length;
                 appendToTerminal('> ' + command + '\n');
 
-                wsClient.send(command);
+                wsClient.send(command + '\r\n');
             }
             currentLine.textContent = '';
             currentCommand = '';

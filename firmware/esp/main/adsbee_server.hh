@@ -34,12 +34,12 @@ class ADSBeeServer {
          * Constructor for ingesting a pre-existing buffer. Allocates new memory and copies over the buffer contents.
          */
         NetworkConsoleMessage(const char* buf_in, uint16_t buf_in_len) : buf_len(buf_in_len) {
-            buf = (char*)malloc(buf_len + 1);  // Leave room for extra null terminator.
-            buf[buf_len] = '\0';               // Null terminate for safety.
+            buf = (char*)heap_caps_malloc(buf_len + 1, MALLOC_CAP_DMA);  // Leave room for extra null terminator.
+            buf[buf_len] = '\0';                                         // Null terminate for safety.
             memcpy(buf, buf_in, buf_len);
         }
 
-        void Destroy() { free(buf); }
+        void Destroy() { heap_caps_free(buf); }
     };
 
     ADSBeeServer() {};  // Default constructor.
