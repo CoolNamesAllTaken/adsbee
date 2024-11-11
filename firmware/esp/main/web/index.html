@@ -92,9 +92,9 @@
                 }, WS_CONFIG.reconnectDelayMs);
             }
 
-            stop() {
+            close(code, reason) {
                 if (this.ws) {
-                    this.ws.close();
+                    this.ws.close(code, reason);
                 }
             }
 
@@ -205,6 +205,11 @@
                 cursor.offsetHeight; // Trigger reflow
                 cursor.style.animation = null;
             }
+        });
+
+        window.addEventListener('pagehide', (event) => {
+            // Close WebSocket connection gracefully
+            wsClient.close(1000, 'Tab closing - normal shutdown');
         });
 
         // Initialize

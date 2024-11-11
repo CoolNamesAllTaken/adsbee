@@ -11,6 +11,10 @@
 // This will cause weird crashes if it's too small to support full size SPI transfers!
 static const uint32_t kSPIRxTaskStackDepthBytes = 6 * 4096;
 static const uint16_t kGDL90Port = 4000;
+
+static const uint32_t kNetworkConsoleWelcomeMessageMaxLen = 1000;
+
+/* obsolete */
 static const uint16_t kNetworkControlPort = 3333;  // NOTE: This must match the port number used in index.html!
 
 // TCP Server socket options
@@ -24,6 +28,7 @@ static const int kTCPServerSockOptKeepAliveIntervalSec = 5;
 static const int kTCPServerSockOptMaxFailedKeepAliveCount = 3;
 // Number of seconds to wait before giving up on selecting a TCP socket.
 static const int kTCPServerSockSelectTimeoutSec = 1;
+/* end obsolete */
 
 // Embedded files from the web folder.
 extern const uint8_t index_html_start[] asm("_binary_index_html_start");
@@ -42,6 +47,10 @@ void esp_spi_receive_task(void *pvParameters) {
 
 void tcp_server_task(void *pvParameters) { adsbee_server.TCPServerTask(pvParameters); }
 esp_err_t console_ws_handler(httpd_req_t *req) { return adsbee_server.NetworkConsoleWebSocketHandler(req); }
+void console_ws_close_fd(httpd_handle_t hd, int sockfd) {
+    adsbee_server.NetworkConsoleRemoveWebsocketClient(sockfd);
+    close(sockfd);
+}
 /** End "Pass-Through" functions. **/
 
 bool ADSBeeServer::Init() {
@@ -453,6 +462,18 @@ esp_err_t ADSBeeServer::NetworkConsoleWebSocketHandler(httpd_req_t *req) {
             // Return error to reject the connection
             return ESP_FAIL;
         }
+        char welcome_message[kNetworkConsoleWelcomeMessageMaxLen];
+        snprintf(welcome_message, kNetworkConsoleWelcomeMessageMaxLen,
+                 "\r\n █████  ██████  ███████ ██████  ███████ ███████      ██  ██████   █████   ██████  "
+                 "\r\n██   ██ ██   ██ ██      ██   ██ ██      ██          ███ ██  ████ ██   ██ ██  ████ "
+                 "\r\n███████ ██   ██ ███████ ██████  █████   █████        ██ ██ ██ ██  ██████ ██ ██ ██ "
+                 "\r\n██   ██ ██   ██      ██ ██   ██ ██      ██           ██ ████  ██      ██ ████  ██ "
+                 "\r\n██   ██ ██████  ███████ ██████  ███████ ███████      ██  ██████   █████   ██████  "
+                 "\r\n\r\nFirmware Version: %d.%d.%d\r\nAP SSID: %s\r\n",
+                 object_dictionary.kFirmwareVersionMajor, object_dictionary.kFirmwareVersionMinor,
+                 object_dictionary.kFirmwareVersionPatch, settings_manager.settings.wifi_ap_ssid);
+        welcome_message[kNetworkConsoleWelcomeMessageMaxLen] = '\0';  // Null terminate for safety.
+        NetworkConsoleSendMessage(client_fd, welcome_message);
         return ESP_OK;
     }
     httpd_ws_frame_t ws_pkt;
@@ -484,11 +505,11 @@ esp_err_t ADSBeeServer::NetworkConsoleWebSocketHandler(httpd_req_t *req) {
             return ret;
         }
 
-        if (ws_pkt.type == HTTPD_WS_TYPE_CLOSE) {
-            CONSOLE_INFO("ADSBeeServer::ConsoleWebSocketHandler", "Client with fd %d disconnected.", client_fd);
-            NetworkConsoleRemoveWebsocketClient(client_fd);
-            return ESP_OK;
-        }
+        // if (ws_pkt.type == HTTPD_WS_TYPE_CLOSE) {
+        //     CONSOLE_INFO("ADSBeeServer::ConsoleWebSocketHandler", "Client with fd %d disconnected.", client_fd);
+        //     NetworkConsoleRemoveWebsocketClient(client_fd);
+        //     return ESP_OK;
+        // }
 
         NetworkConsoleUpdateActivityTimer(client_fd);
         CONSOLE_INFO("ADSBeeServer::ConsoleWebsocketHandler", "Got packet with message: %s", ws_pkt.payload);
@@ -532,6 +553,7 @@ esp_err_t ADSBeeServer::NetworkConsoleWebSocketHandler(httpd_req_t *req) {
 bool ADSBeeServer::TCPServerInit() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = 4 * 4096;  // Extra stack needed for calls to SPI peripheral and handling large files.
+    config.close_fn = console_ws_close_fd;
 
     if (httpd_start(&server, &config) == ESP_OK) {
         // Root URI handler (HTML)
