@@ -41,6 +41,7 @@ bool CommsManager::UpdateReporting() {
         if (esp32.IsEnabled()) {
             // Pop all the packets to report (up to max limit of the buffer).
             RawTransponderPacket raw_packet = packets_to_report[num_packets_to_report].GetRaw();
+            spi_raw_packet_reporting_buffer[0] = num_packets_to_report;
             memcpy(spi_raw_packet_reporting_buffer + sizeof(uint8_t) +
                        sizeof(RawTransponderPacket) * num_packets_to_report,
                    &raw_packet, sizeof(RawTransponderPacket));

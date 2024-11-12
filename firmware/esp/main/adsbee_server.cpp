@@ -8,8 +8,6 @@
 
 // #define VERBOSE_DEBUG
 
-// This will cause weird crashes if it's too small to support full size SPI transfers!
-static const uint32_t kSPIRxTaskStackDepthBytes = 6 * 4096;
 static const uint16_t kGDL90Port = 4000;
 
 static const uint32_t kNetworkConsoleWelcomeMessageMaxLen = 1000;
@@ -63,7 +61,7 @@ bool ADSBeeServer::Init() {
     network_console_tx_queue = xQueueCreate(kNetworkConsoleQueueLen, sizeof(NetworkConsoleMessage));
 
     spi_receive_task_should_exit_ = false;
-    xTaskCreatePinnedToCore(esp_spi_receive_task, "spi_receive_task", kSPIRxTaskStackDepthBytes, NULL,
+    xTaskCreatePinnedToCore(esp_spi_receive_task, "spi_receive_task", kSPIReceiveTaskStackSizeBytes, NULL,
                             kSPIReceiveTaskPriority, NULL, kSPIReceiveTaskCore);
 
     while (true) {
@@ -511,8 +509,8 @@ bool ADSBeeServer::TCPServerInit() {
         httpd_register_uri_handler(server, &console_ws);
     }
 
-    xTaskCreatePinnedToCore(tcp_server_task, "tcp_server", kTCPServerStackSizeBytes, NULL, kTCPServerTaskPriority, NULL,
-                            kTCPServerTaskCore);
+    xTaskCreatePinnedToCore(tcp_server_task, "tcp_server", kTCPServerTaskStackSizeBytes, NULL, kTCPServerTaskPriority,
+                            NULL, kTCPServerTaskCore);
 
     return server != nullptr;
 }

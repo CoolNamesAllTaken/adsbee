@@ -1,0 +1,13 @@
+{
+  "name": "spi_coprocessor_decoder",
+  "apiVersion": "1.0.0",
+  "author": "shy coder",
+  "version": "0.0.1",
+  "description": "",
+  "extensions": {
+    "spi_coprocessor_decoder": {
+      "type": "HighLevelAnalyzer",
+      "entryPoint": "HighLevelAnalyzer.SPICoprocessorPacket"
+    }
+  }
+}
