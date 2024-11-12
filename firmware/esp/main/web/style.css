@@ -1,3 +1,15 @@
+.page-container {
+    display: flex;
+    flex-direction: column;
+    /* Ensures a vertical column layout */
+}
+
+.column-element {
+    margin: 0.5rem 0;
+    /* Optional: Adds space between the divs */
+}
+
+/* Terminal styling */
 #terminal {
     width: 100%;
     height: 400px;
@@ -46,4 +58,92 @@
     opacity: 0;
     height: 0;
     width: 0;
+}
+
+/* Stats cards styling */
+#feed-stats {
+    width: 100%;
+    display: block;
+}
+
+.metrics-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    padding: 2rem;
+    background: #f8fafc;
+    border-radius: 8px;
+    font-family: system-ui, -apple-system, sans-serif;
+}
+
+.metric-card {
+    background: white;
+    padding: 1rem;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    min-width: 200px;
+    flex: 1;
+    min-width: 250px;
+    max-width: 350px;
+}
+
+.metric-title {
+    color: #64748b;
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.metric-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.sparkline {
+    margin-top: 0.5rem;
+    height: 30px;
+}
+
+.sparkline path {
+    stroke: #3b82f6;
+    stroke-width: 2;
+    fill: none;
+}
+
+.sparkline path.area {
+    fill: #bfdbfe;
+    opacity: 0.5;
+}
+
+.connection-status {
+    /* position: fixed;
+    top: 1rem;
+    right: 1rem; */
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+.connection-status.connected {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.connection-status.disconnected {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.sites-count {
+    /* position: fixed;
+    top: 1rem;
+    left: 1rem; */
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    background: #f1f5f9;
+    color: #475569;
 }

@@ -182,10 +182,33 @@ void CommsManager::WiFiStationTask(void* pvParameters) {
     uint32_t feed_sock_last_connect_timestamp_ms[SettingsManager::Settings::kMaxNumFeeds] = {0};
 
     while (run_wifi_sta_task_) {
+        // Update feed statistics once per second and print them. Put this before the queue receive so that it runs even
+        // if no packets are received.
+        static const uint16_t kStatsMessageMaxLen = 500;
+        uint32_t timestamp_ms = get_time_since_boot_ms();
+        if (timestamp_ms - feed_mps_last_update_timestamp_ms_ > kMsPerSec) {
+            for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+                feed_mps[i] = feed_mps_counter_[i];
+                feed_mps_counter_[i] = 0;
+            }
+            feed_mps_last_update_timestamp_ms_ = timestamp_ms;
+
+            char feeds_stats_message[kStatsMessageMaxLen] = {'\0'};
+
+            for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+                char single_feed_stats_message[kStatsMessageMaxLen / SettingsManager::Settings::kMaxNumFeeds] = {'\0'};
+                snprintf(single_feed_stats_message, kStatsMessageMaxLen / SettingsManager::Settings::kMaxNumFeeds,
+                         "%d:[%d] ", i, feed_mps[i]);
+                strcat(feeds_stats_message, single_feed_stats_message);
+            }
+            CONSOLE_INFO("CommsManager::WiFiStationTask", "Feed msgs/s: %s", feeds_stats_message);
+        }
+
         // Gather packet(s) to send.
-        if (xQueueReceive(wifi_sta_raw_transponder_packet_queue_, &tpacket, portMAX_DELAY) != pdTRUE) {
+        if (xQueueReceive(wifi_sta_raw_transponder_packet_queue_, &tpacket, kWiFiSTATaskUpdateIntervalTicks) !=
+            pdTRUE) {
             // No packets available to send, wait and try again.
-            vTaskDelay(1);
+            // vTaskDelay(1);
             continue;
         }
 
@@ -270,7 +293,8 @@ void CommsManager::WiFiStationTask(void* pvParameters) {
                         close(feed_sock[i]);
                         feed_sock_is_connected[i] = false;
                     } else {
-                        CONSOLE_INFO("CommsManager::WiFiStationTask", "Message sent to feed %d.", i);
+                        // CONSOLE_INFO("CommsManager::WiFiStationTask", "Message sent to feed %d.", i);
+                        feed_mps_counter_[i]++;  // Log that a message was sent in statistics.
                     }
                     break;
                 }

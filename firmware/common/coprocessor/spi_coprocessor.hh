@@ -33,7 +33,12 @@ class SPICoprocessor {
 
 #ifdef ON_PICO
     // Make sure that we don't talk to the slave before it has a chance to get ready for the next message.
+    // Note that this value is ignored if the HANDSHAKE line is pulled high.
     static const uint32_t kSPIMinTransmitIntervalUs = 400;
+    // Wait this long after a transmission is complete before allowing the HANDSHAKE line to override the minimum
+    // transmit interval timeout. This ensures that we don't double-transmit to the slave before it has a chance to
+    // lower the HANDSHAKE line following a transaction.
+    static const uint32_t kSPIPostTransmitLockoutUs = 100;
     // NOTE: Max transmission time is ~10ms with a 4kB packet at 40MHz.
     // How long to wait once a transaction is started before timing out.
     static const uint16_t kSPITransactionTimeoutMs = 20;
@@ -536,6 +541,9 @@ class SPICoprocessor {
 
         use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
 #endif
+        // int num_attempts = 0;
+        // bool ret = false;
+        // while (num_attempts < kSPITransactionMaxNumRetries) {
         int bytes_written = SPIWriteBlocking(write_packet.GetBuf(), write_packet.GetBufLenBytes());
 
         if (bytes_written < 0) {

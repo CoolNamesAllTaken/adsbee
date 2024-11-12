@@ -7,21 +7,35 @@
 </head>
 
 <body>
-    <div id="terminal" onclick="focusTerminal()">
-        <div id="terminal-content"></div>
-        <div class="input-line">
-            <span class="prompt">&gt;</span>
-            <span id="current-line"></span>
-            <span id="cursor"></span>
+    <div class="column-container">
+        <div id="terminal" class="column-element" onclick="focusTerminal()">
+            <div id="terminal-content"></div>
+            <div class="input-line">
+                <span class="prompt">&gt;</span>
+                <span id="current-line"></span>
+                <span id="cursor"></span>
+            </div>
+            <input type="text" class="hidden-input" id="hidden-input" autocomplete="off">
+        </div>
+
+        <div id="feed-stats" class="column-element">
+            <div id="status" class="connection-status disconnected">Disconnected</div>
+            <div id="sites-count" class="sites-count">Sites: 0</div>
+
+            <!-- Cards will be dynamically inserted here -->
         </div>
     </div>
-    <input type="text" class="hidden-input" id="hidden-input" autocomplete="off">
 
     <script>
         const WS_CONFIG = {
-            url: `ws://${window.location.hostname}/console`,
+            console_ws_url: `ws://${window.location.hostname}/console`,
+            stats_ws_url: `ws://${window.location.hostname}/stats`,
             reconnectDelayMs: 5000
         };
+
+        /**
+         * Network console terminal. 
+         */
 
         const terminal = document.getElementById('terminal');
         const terminalContent = document.getElementById('terminal-content');
@@ -34,7 +48,7 @@
         let historyIndex = -1;
         let currentCommand = '';
 
-        class WebSocketClient {
+        class TerminalWebSocket {
             constructor(url) {
                 this.url = url;
                 this.init();
@@ -213,8 +227,131 @@
         });
 
         // Initialize
-        const wsClient = new WebSocketClient(WS_CONFIG.url);
+        const wsClient = new TerminalWebSocket(WS_CONFIG.console_ws_url);
         focusTerminal();
+
+        /**
+         * Sparkline feed stats cards.
+         */
+        class SparklineChart {
+            constructor(id, maxPoints = 20) {
+                this.svg = document.getElementById(id);
+                this.maxPoints = maxPoints;
+                this.points = Array(maxPoints).fill(0);
+                this.valueEl = this.svg.parentNode.querySelector('.metric-value');
+                this.createPaths();
+            }
+
+            createPaths() {
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                const area = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                area.classList.add('area');
+                this.svg.appendChild(area);
+                this.svg.appendChild(line);
+                this.linePath = line;
+                this.areaPath = area;
+            }
+
+            update(value) {
+                this.points.push(value);
+                this.points.shift();
+                this.valueEl.textContent = `${value} msg/s`;
+
+                const max = Math.max(...this.points, 1);
+                const points = this.points.map((p, i) => [
+                    (i / (this.maxPoints - 1)) * 100,
+                    30 - (p / max) * 30
+                ]);
+
+                const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p[0]} ${p[1]}`).join(' ');
+                this.linePath.setAttribute('d', line);
+
+                const area = line + ` L ${points[points.length - 1][0]} 30 L 0 30 Z`;
+                this.areaPath.setAttribute('d', area);
+            }
+        }
+
+        class MetricsWebSocket {
+            constructor(url) {
+                this.url = url;
+                this.charts = {};
+                this.connect();
+                this.statusEl = document.getElementById('status');
+                this.sitesCountEl = document.getElementById('sites-count');
+                this.container = document.getElementById('metrics-container');
+            }
+
+            createMetricCard(site) {
+                const cardId = `chart-${site.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                const card = document.createElement('div');
+                card.className = 'metric-card';
+                card.innerHTML = `
+          <div class="metric-title" title="${site}">${site}</div>
+          <div class="metric-value">0 msg/s</div>
+          <svg class="sparkline" id="${cardId}" viewBox="0 0 100 30"></svg>
+        `;
+                this.container.appendChild(card);
+                return new SparklineChart(cardId);
+            }
+
+            updateCharts(data) {
+                // Remove charts that are no longer in the data
+                Object.keys(this.charts).forEach(site => {
+                    if (!data.hasOwnProperty(site)) {
+                        const cardElement = document.getElementById(`chart-${site.replace(/[^a-zA-Z0-9]/g, '-')}`).parentNode;
+                        cardElement.remove();
+                        delete this.charts[site];
+                    }
+                });
+
+                // Update existing charts and create new ones
+                Object.entries(data).forEach(([site, value]) => {
+                    if (!this.charts[site]) {
+                        this.charts[site] = this.createMetricCard(site);
+                    }
+                    this.charts[site].update(value);
+                });
+
+                // Update sites count
+                this.sitesCountEl.textContent = `Sites: ${Object.keys(data).length}`;
+            }
+
+            connect() {
+                this.ws = new WebSocket(this.url);
+
+                this.ws.onopen = () => {
+                    console.log('Connected to WebSocket');
+                    this.statusEl.textContent = 'Connected';
+                    this.statusEl.classList.remove('disconnected');
+                    this.statusEl.classList.add('connected');
+                };
+
+                this.ws.onclose = () => {
+                    console.log('Disconnected from WebSocket');
+                    this.statusEl.textContent = 'Disconnected - Reconnecting...';
+                    this.statusEl.classList.remove('connected');
+                    this.statusEl.classList.add('disconnected');
+                    setTimeout(() => this.connect(), 3000);
+                };
+
+                this.ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                };
+
+                this.ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        this.updateCharts(data);
+                    } catch (error) {
+                        console.error('Error parsing WebSocket message:', error);
+                    }
+                };
+            }
+        }
+
+        // Initialize WebSocket connection
+        // Replace 'YOUR_WEBSOCKET_URL' with your actual WebSocket server URL
+        const metrics = new MetricsWebSocket('YOUR_WEBSOCKET_URL');
     </script>
 </body>
 

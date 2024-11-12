@@ -5,6 +5,7 @@
 #include "settings.hh"
 #include "spi_coprocessor.hh"
 #include "task_priorities.hh"
+#include "unit_conversions.hh"
 
 // #define VERBOSE_DEBUG
 

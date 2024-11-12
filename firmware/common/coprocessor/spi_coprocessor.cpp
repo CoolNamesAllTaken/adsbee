@@ -316,6 +316,11 @@ int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint1
 
     // Wait for the next transmit interval (blocking) so that we don't overwhelm the slave with messages.
     while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIMinTransmitIntervalUs) {
+        if (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ > kSPIPostTransmitLockoutUs &&
+            gpio_get(config_.spi_handshake_pin)) {
+            // Slave is requesting another write, and we're convinced it's properly processed the previous transaction.
+            break;
+        }
     }
 
     gpio_put(config_.spi_cs_pin, 0);

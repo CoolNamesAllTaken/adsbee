@@ -313,8 +313,8 @@ bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
             ret = ApplyAircraftOperationStatusMessage(*aircraft_ptr, packet);
             break;
         default:
-            CONSOLE_ERROR("AircraftDictionary::IngestADSBPacket", "Received ADSB message with unsupported typecode %d.",
-                          typecode);
+            CONSOLE_WARNING("AircraftDictionary::IngestADSBPacket",
+                            "Received ADSB message with unsupported typecode %d.", typecode);
             ret = false;  // kTypeCodeInvalid, etc.
     }
     if (ret) aircraft_ptr->IncrementNumFramesReceived(true);  // Count the received Mode S frame.

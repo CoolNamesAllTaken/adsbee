@@ -17,6 +17,8 @@ class CommsManager {
     static const uint16_t kMaxNetworkMessageLenBytes = 256;
     static const uint16_t kWiFiMessageQueueLen = 110;
     static const uint16_t kMACAddressNumBytes = 6;
+    static const uint32_t kWiFiSTATaskUpdateIntervalMs = 100;
+    static const uint32_t kWiFiSTATaskUpdateIntervalTicks = kWiFiSTATaskUpdateIntervalMs / portTICK_PERIOD_MS;
 
     struct NetworkMessage {
         in_port_t port = 0;
@@ -101,6 +103,9 @@ class CommsManager {
     char wifi_sta_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
     char wifi_sta_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
 
+    // Feed statistics (messages per second).
+    uint16_t feed_mps[SettingsManager::Settings::kMaxNumFeeds] = {0};
+
    private:
     /**
      * Adds a WiFi client to the WiFi client list. Takes both an IP and a MAC address because this is when the IP
@@ -149,6 +154,9 @@ class CommsManager {
     bool run_wifi_sta_task_ = false;  // Flag used to tell wifi station task to shut down.
     bool wifi_sta_has_ip_ =
         false;  // Flag to indicate when successfully connected to WiFi. Don't create sockets until STA is connected.
+
+    uint16_t feed_mps_counter_[SettingsManager::Settings::kMaxNumFeeds] = {0};
+    uint32_t feed_mps_last_update_timestamp_ms_ = 0;
 };
 
 extern CommsManager comms_manager;
