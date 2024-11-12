@@ -155,23 +155,6 @@ bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char
     return false;  // Should never get here.
 }
 
-// int CommsManager::network_console_printf(const char *format, ...) {
-//     int network_chars = 0;
-//     if (esp32.IsEnabled()) {
-//         // Print to network console.
-//         char network_console_buffer[CommsManager::kATCommandBufMaxLen];
-//         va_list args;
-//         va_start(args, format);
-//         network_chars = vsnprintf(network_console_buffer, CommsManager::kATCommandBufMaxLen, format, args);
-//         va_end(args);
-
-//         if (!network_console_puts(network_console_buffer, CommsManager::kATCommandBufMaxLen)) {
-//             return -1;
-//         }
-//     }
-//     return network_chars;
-// }
-
 bool CommsManager::network_console_putc(char c) {
     if (!comms_manager.esp32_console_tx_queue.Push(c)) {
         comms_manager.Update();
