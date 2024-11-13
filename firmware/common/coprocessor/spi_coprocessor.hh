@@ -414,7 +414,14 @@ class SPICoprocessor {
     }
 
 #ifdef ON_PICO
-    bool GetSPIHandshakePinLevel() { return gpio_get(config_.spi_handshake_pin); }
+    bool GetSPIHandshakePinLevel() {
+        if (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
+            // Don't actually read the handshake pin if it might overlap with an existing transaction, since we could
+            // try reading the slave when nothing is here (slave hasn't yet had time to de-assert handshake pin).
+            return false;
+        }
+        return gpio_get(config_.spi_handshake_pin);
+    }
 
     /**
      * Blocks on waiting for the handshake pin to go high, until a timeout is reached.
@@ -541,32 +548,39 @@ class SPICoprocessor {
 
         use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
 #endif
-        // int num_attempts = 0;
-        // bool ret = false;
-        // while (num_attempts < kSPITransactionMaxNumRetries) {
-        int bytes_written = SPIWriteBlocking(write_packet.GetBuf(), write_packet.GetBufLenBytes());
+        int num_attempts = 0;
+        static const uint16_t kErrorMessageMaxLen = 500;
+        char error_message[kErrorMessageMaxLen] = "No error.";
+        bool ret = true;
+        while (num_attempts < kSPITransactionMaxNumRetries) {
+            int bytes_written = SPIWriteBlocking(write_packet.GetBuf(), write_packet.GetBufLenBytes());
 
-        if (bytes_written < 0) {
-            CONSOLE_ERROR("SPICoprocessor::PartialWrite", "Error code %d while writing object over SPI.",
-                          bytes_written);
-#ifdef ON_ESP32
-            xSemaphoreGive(spi_mutex_);  // Allow other tasks to access the SPI peripheral.
-#endif
-            return bytes_written;
+            if (bytes_written < 0) {
+                snprintf(error_message, kErrorMessageMaxLen, "Error code %d while writing object over SPI.",
+                         bytes_written);
+                goto PARTIAL_WRITE_FAILED;
+            }
+            if (require_ack && !SPIWaitForAck()) {
+                snprintf(error_message, kErrorMessageMaxLen,
+                         "Timed out or received bad ack after writing to coprocessor.");
+                goto PARTIAL_WRITE_FAILED;
+            }
+            // Completed successfully!
+            ret = true;
+            break;
+        PARTIAL_WRITE_FAILED:
+            CONSOLE_WARNING("SPICoprocessor::PartialWrite", "%s", error_message);
+            num_attempts++;
+            ret = false;
+            continue;
         }
-        if (require_ack && !SPIWaitForAck()) {
-            CONSOLE_ERROR("SPICoprocessor::PartialWrite",
-                          "Timed out or received bad ack after writing to coprocessor.");
 #ifdef ON_ESP32
-            xSemaphoreGive(spi_mutex_);  // Allow other tasks to access the SPI peripheral.
-#endif
-            return false;
-        }
-#ifdef ON_ESP32
-        // Don't give semaphore back until ACK received (if required), unless there's an error.
         xSemaphoreGive(spi_mutex_);  // Allow other tasks to access the SPI peripheral.
 #endif
-        return true;
+        if (!ret) {
+            CONSOLE_ERROR("SPICoprocessor::PartialWrite", "Failed after %d tries: %s", num_attempts, error_message);
+        }
+        return ret;
     }
 
     bool PartialRead(ObjectDictionary::Address addr, uint8_t *object_buf, uint16_t len, uint16_t offset = 0) {
