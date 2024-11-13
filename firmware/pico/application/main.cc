@@ -27,12 +27,6 @@ SPICoprocessor esp32 = SPICoprocessor({});
 int main() {
     bi_decl(bi_program_description("ADS-Bee ADSB Receiver"));
 
-    // gpio_init(15);
-    // gpio_set_dir(15, GPIO_OUT);
-    // gpio_put(15, 1);  // Leave status LED on during configuration in case something hangs.
-    // while (1) {
-    // }
-
     eeprom.Init();
     adsbee.Init();
     comms_manager.Init();
@@ -93,36 +87,28 @@ int main() {
     }
 
     // Add a test aircraft to start.
-    // TODO: Remove this.
-    Aircraft test_aircraft;
-    test_aircraft.category = Aircraft::Category::kCategorySpaceTransatmosphericVehicle;
-    strcpy(test_aircraft.callsign, "TST1234");
-    test_aircraft.latitude_deg = 20;
-    test_aircraft.longitude_deg = -140;
-    test_aircraft.baro_altitude_ft = 10000;
-    test_aircraft.vertical_rate_fpm = -5;
-    test_aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeSourceBaro;
-    test_aircraft.direction_deg = 100;
-    test_aircraft.velocity_kts = 200;
-    adsbee.aircraft_dictionary.InsertAircraft(test_aircraft);
-
-    // int argc = 0;
-    // const char* argv[1];
-    // utest_main(argc, argv);
+    // Aircraft test_aircraft;
+    // test_aircraft.category = Aircraft::Category::kCategorySpaceTransatmosphericVehicle;
+    // strcpy(test_aircraft.callsign, "TST1234");
+    // test_aircraft.latitude_deg = 20;
+    // test_aircraft.longitude_deg = -140;
+    // test_aircraft.baro_altitude_ft = 10000;
+    // test_aircraft.vertical_rate_fpm = -5;
+    // test_aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeSourceBaro;
+    // test_aircraft.direction_deg = 100;
+    // test_aircraft.velocity_kts = 200;
+    // adsbee.aircraft_dictionary.InsertAircraft(test_aircraft);
 
     uint16_t esp32_heartbeat_interval_ms = 200;  // Set to 5Hz to make network terminal commands pass less laggy.
-    uint32_t esp32_test_packet_last_sent_timestamp_ms = get_time_since_boot_ms();
+    uint32_t esp32_heartbeat_last_sent_timestamp_ms = get_time_since_boot_ms();
 
     while (true) {
         if (esp32.IsEnabled()) {
-            // Send test packet to ESP32.
             uint32_t esp32_heartbeat_timestamp_ms = get_time_since_boot_ms();
-            if (esp32_heartbeat_timestamp_ms - esp32_test_packet_last_sent_timestamp_ms > esp32_heartbeat_interval_ms) {
-                // RawTransponderPacket test_packet =
-                //     RawTransponderPacket((char*)"8dac009458b9970f0aa394359da9", -123, 456789);
+            if (esp32_heartbeat_timestamp_ms - esp32_heartbeat_last_sent_timestamp_ms > esp32_heartbeat_interval_ms) {
                 esp32.Write(ObjectDictionary::kAddrScratch, esp32_heartbeat_timestamp_ms, true);
                 CONSOLE_INFO("main", "Sent ESP32 heartbeat.");
-                esp32_test_packet_last_sent_timestamp_ms = esp32_heartbeat_timestamp_ms;
+                esp32_heartbeat_last_sent_timestamp_ms = esp32_heartbeat_timestamp_ms;
             }
         }
 

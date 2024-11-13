@@ -33,6 +33,11 @@ class ADSBee {
                // to the maximum value that the trigger level could be moved (up or down) when exploring a neighbor
                // state.
 
+    static const int32_t kNoiseFloorExpoFilterPercent =
+        50;  // [%] Weight to use for low pass expo filter of noise floor ADC counts. 0 = no filter, 100 = hold value.
+    static const uint32_t kNoiseFloorADCSampleIntervalMs =
+        1;  // [ms] Interval between ADC samples to approximate noise floor value.
+
     static const uint32_t kWatchdogTimeoutMs = 1000;
 
     struct ADSBeeConfig {
@@ -91,6 +96,38 @@ class ADSBee {
     void FlashStatusLED(uint32_t led_on_ms = kStatusLEDOnMs);
 
     /**
+     * Creates a composite timestamp using the current value of the SysTick timer (running at 125MHz) and the SysTick
+     * wrap counter to simulate a timer running at 48MHz (which matches the frequency of the preamble detector PIO).
+     * @param[in] num_bits Number of bits to mask the counter value to. Defaults to full resolution.
+     * @retval 48MHz counter value.
+     */
+    inline uint64_t GetMLAT48MHzCounts(uint16_t num_bits = 64);
+
+    /**
+     * Creates a composite timestamp using the current value of the SysTick timer (running at 125MHz) and the SysTick
+     * wrap counter to simulate a timer running at 12MHz, which matches existing decoders that use the Mode S Beast
+     * protocol.
+     * @param[in] num_bits Number of bits to mask the counter value to. Defaults to 48 bits (6 Bytes) to match Mode S
+     * Beast protocol.
+     * @retval 48MHz counter value.
+     */
+    inline uint64_t GetMLAT12MHzCounts(uint16_t num_bits = 48);
+
+    /**
+     * Returns the power level of the noise floor (signal strength sampled mostly during non-decode intervals and then
+     * low-pass filtered).
+     * @retval Power level of the noise floor, in dBm.
+     */
+    int GetNoiseFloordBm();
+
+    /**
+     * Get the current temperature used in learning trigger level (simulated annealing). A temperature of 0 means
+     * learning has completed.
+     * @retval Current temperature used for simulated annealing, in milliVolts.
+     */
+    uint16_t GetTLLearningTemperatureMV();
+
+    /**
      * Return the value of the low Minimum Trigger Level threshold in milliVolts.
      * @retval TL in milliVolts.
      */
@@ -112,43 +149,18 @@ class ADSBee {
     void OnSysTickWrap();
 
     /**
-     * Creates a composite timestamp using the current value of the SysTick timer (running at 125MHz) and the SysTick
-     * wrap counter to simulate a timer running at 48MHz (which matches the frequency of the preamble detector PIO).
-     * @param[in] num_bits Number of bits to mask the counter value to. Defaults to full resolution.
-     * @retval 48MHz counter value.
-     */
-    inline uint64_t GetMLAT48MHzCounts(uint16_t num_bits = 64);
-
-    /**
-     * Creates a composite timestamp using the current value of the SysTick timer (running at 125MHz) and the SysTick
-     * wrap counter to simulate a timer running at 12MHz, which matches existing decoders that use the Mode S Beast
-     * protocol.
-     * @param[in] num_bits Number of bits to mask the counter value to. Defaults to 48 bits (6 Bytes) to match Mode S
-     * Beast protocol.
-     * @retval 48MHz counter value.
-     */
-    inline uint64_t GetMLAT12MHzCounts(uint16_t num_bits = 48);
-
-    /**
-     * Get the current temperature used in learning trigger level (simulated annealing). A temperature of 0 means
-     * learning has completed.
-     * @retval Current temperature used for simulated annealing, in milliVolts.
-     */
-    uint16_t GetTLLearningTemperatureMV();
-
-    /**
      * Returns the Receive Signal Strength Indicator (RSSI) of the signal currently provided by the RF power detector,
      * in mV.
      * @retval Voltage from the RF power detector, in mV.
      */
-    inline int ReadRSSIMilliVolts();
+    inline int ReadSignalStrengthMilliVolts();
 
     /**
      * Returns the Receive Signal Strength Indicator (RSSI) of the message that is currently being provided by the RF
-     * power detector, in dBm. makes use of ReadRSSIMilliVolts().
+     * power detector, in dBm. makes use of ReadSignalStrengthMilliVolts().
      * @retval Voltage form the RF power detector converted to dBm using the chart in the AD8313 datasheet.
      */
-    inline int ReadRSSIdBm();
+    inline int ReadSignalStrengthdBm();
 
     /**
      * Read the low Minimum Trigger Level threshold via ADC.
@@ -264,6 +276,9 @@ class ADSBee {
 
     bool receiver_enabled_ = true;
     bool bias_tee_enabled_ = false;
+
+    int32_t noise_floor_mv_;
+    uint32_t noise_floor_last_sample_timestamp_ms_ = 0;
 };
 
 extern ADSBee adsbee;

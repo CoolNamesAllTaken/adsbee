@@ -36,7 +36,7 @@ class ObjectDictionary {
         kAddrWiFiAccessPointMAC = 0x08,
         kAddrBluetoothMAC = 0x09,
         kAddrConsole = 0xA,  // Pipe for console characters.
-        kNumAddrs = 0xD
+        kNumAddrs
     };
 
     /**
