@@ -307,7 +307,13 @@ class SPICoprocessor {
 #ifdef ON_PICO
     bool IsEnabled() { return is_enabled_; }
 #endif
-    bool Update();
+    /**
+     *
+     * @param[in] blocking On RP2040, blocks until kSPIMinTransactionIntervalUs after the previous transaction to check
+     * to see if the ESP32 has anything to say. Set to true if using this as a way to flush the ESP32 of messages before
+     * writing to it. On ESP32, has no effect.
+     */
+    bool Update(bool blocking = false);
 
     /**
      * Top level function that translates a write to an object (with associated address) into SPI transaction(s).
@@ -326,7 +332,9 @@ class SPICoprocessor {
             return false;
         }
 #elif ON_PICO
-        Update();  // Check to see if handshake line is raised before blasting a packet into the ESP32.
+        // Call Update with blocking to flush ESP32 of messages before write (block to make sure it has a chance to talk
+        // if it needs to).
+        Update(true);  // Check to see if handshake line is raised before blasting a packet into the ESP32.
 #else
         return false;  // Not supported on other platforms.
 #endif
@@ -373,7 +381,9 @@ class SPICoprocessor {
             return false;
         }
 #elif ON_PICO
-        Update();  // Check to see if handshake line is raised before blasting a packet into the ESP32.
+        // Call Update with blocking to flush ESP32 of messages before write (block to make sure it has a chance to talk
+        // if it needs to).
+        Update(true);  // Check to see if handshake line is raised before blasting a packet into the ESP32.
 #else
         return false;  // Not supported on other platforms.
 #endif
@@ -414,8 +424,26 @@ class SPICoprocessor {
     }
 
 #ifdef ON_PICO
-    bool GetSPIHandshakePinLevel() {
-        if (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
+    /**
+     * Checks the level of the HANDSHAKE pin used to initiate communication from the ESP32 to RP2040.
+     * NOTE: There is some hysteresis! The ESP32 can request a transfer as soon as kSPIPostTransmitLockoutUs is up, but
+     * this function won't unblock and confidently state that the HANDSHAKE pin is not asserted unless
+     * kSPIMinTransmitIntervalUs has elapsed.
+     * @param[in] blocking If true, wait until the pin is readable before reading it (e.g. it's been long enough since
+     * the end of the last transaction that the ESP32 has been able to assert or de-assert the HANDSHAKE pin as
+     * necessary). If false, return false if kSPIPostTransmitLockoutUs has not elapsed, otherwise return the HANDSHAKE
+     * pin state.
+     */
+    bool GetSPIHandshakePinLevel(bool blocking = false) {
+        if (blocking) {
+            while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIMinTransmitIntervalUs) {
+                if (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ > kSPIPostTransmitLockoutUs &&
+                    gpio_get(config_.spi_handshake_pin)) {
+                    // Allowed to exit blocking early if ESP32 asserts the HANDSHAKE pin.
+                    return true;
+                }
+            }
+        } else if (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
             // Don't actually read the handshake pin if it might overlap with an existing transaction, since we could
             // try reading the slave when nothing is here (slave hasn't yet had time to de-assert handshake pin).
             return false;

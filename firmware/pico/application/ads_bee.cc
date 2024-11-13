@@ -291,9 +291,10 @@ bool ADSBee::Update() {
             // Packet was used to update the dictionary or was silently ignored (but presumed to be valid).
             FlashStatusLED();
             // NOTE: Pushing to the reporting queue here means that we only will report validated packets!
-            comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
+            // comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
             CONSOLE_INFO("ADSBee::Update", "\taircraft_dictionary: %d aircraft", aircraft_dictionary.GetNumAircraft());
         }
+        comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
     }
 
     // Update trigger level learning if it's active.
