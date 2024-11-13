@@ -23,7 +23,7 @@
 #include "settings.hh"
 #include "spi_coprocessor.hh"
 
-// #define HARDWARE_UNIT_TESTS
+#define HARDWARE_UNIT_TESTS
 
 ObjectDictionary object_dictionary;
 SPICoprocessor pico = SPICoprocessor({});

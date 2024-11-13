@@ -478,6 +478,7 @@ class SPICoprocessor {
 #endif
 
    private:
+    static const uint16_t kErrorMessageMaxLen = 500;
     enum ReturnCode : int { kOk = 0, kErrorGeneric = -1, kErrorTimeout = -2 };
 
 #ifdef ON_ESP32
@@ -549,8 +550,8 @@ class SPICoprocessor {
         use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
 #endif
         int num_attempts = 0;
-        static const uint16_t kErrorMessageMaxLen = 500;
-        char error_message[kErrorMessageMaxLen] = "No error.";
+        char error_message[kErrorMessageMaxLen + 1] = "No error.";
+        error_message[kErrorMessageMaxLen] = '\0';
         bool ret = true;
         while (num_attempts < kSPITransactionMaxNumRetries) {
             int bytes_written = SPIWriteBlocking(write_packet.GetBuf(), write_packet.GetBufLenBytes());
@@ -601,91 +602,124 @@ class SPICoprocessor {
 
         uint16_t read_request_bytes = read_request_packet.GetBufLenBytes();
 
-#ifdef ON_PICO
-        // On the master, reading from the slave is two transactions: The read request is sent, then we wait on the
-        // handshake line to read the reply.
-        int bytes_written = SPIWriteBlocking(read_request_packet.GetBuf(), read_request_bytes);
-        if (bytes_written < 0) {
-            CONSOLE_ERROR("SPICoprocessor::PartialRead", "Error code %d while writing read request over SPI.",
-                          bytes_written);
-            return false;
-        }
-        if (!SPIWaitForHandshake()) {
-            CONSOLE_ERROR("SPICoprocessor::PartialRead",
-                          "Timed out while waiting for handshake after sending read request.");
-            return false;
-        }
-
-        SCResponsePacket response_packet;
-        response_packet.data_len_bytes =
-            len;  // We need to set this manually since we are using the default constructor.
-        int bytes_read = SPIReadBlocking(response_packet.GetBuf(), SCResponsePacket::GetBufLenForPayloadLenBytes(len));
-        if (bytes_read < 0) {
-            CONSOLE_ERROR("SPICoprocessor::PartialRead", "Error code %d while reading read response over SPI.",
-                          bytes_read);
-            return false;
-        }
-#elif ON_ESP32
+#ifdef ON_ESP32
         if (xSemaphoreTake(spi_mutex_, kSPIMutexTimeoutTicks) != pdTRUE) {
             CONSOLE_ERROR("SPICoprocessor::PartialRead", "Failed to acquire coprocessor SPI mutex after waiting %d ms.",
                           kSPIMutexTimeoutMs);
             return false;
         }
-
-        // On the slave, reading from the master is a single transaction. We preload the beginning of the message
-        // with the read request, and the master populates the remainder of the message with the reply.
-        use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
-        // Need to request the max transaction size. If we request something smaller, like read_request_bytes (which
-        // doesn't include the response bytes), the SPI transmit function won't write the additional reply into our
-        // buffer.
-        int bytes_exchanged = SPIWriteReadBlocking(read_request_packet.GetBuf(), rx_buf, SCPacket::kPacketMaxLenBytes);
-
-        // Mutex can be given back immediately because we don't ever wait for an ACK.
-        xSemaphoreGive(spi_mutex_);  // Allow other tasks to access the SPI peripheral.
-
-        if (bytes_exchanged < 0) {
-            CONSOLE_ERROR("SPICoprocessor::PartialRead", "Error code %d during read from master SPI transaction.",
-                          bytes_exchanged);
-            return false;
-        }
-        if (bytes_exchanged <= read_request_bytes) {
-            CONSOLE_ERROR("SPICoprocessor::PartialRead",
-                          "SPI transaction was too short, request was %d Bytes, only exchanged %d Bytes including "
-                          "request and response.",
-                          read_request_bytes, bytes_exchanged);
-            return false;
-        }
-        uint8_t *response_buf = rx_buf + read_request_bytes;
-        SCResponsePacket response_packet = SCResponsePacket(response_buf, bytes_exchanged - read_request_bytes);
-#else
-        SCResponsePacket response_packet;  // Dummy to stop compile errors.
-        // Total BS used to suppress a compile warning during host unit tests.
-        rx_buf[read_request_bytes] = '\0';
-        printf("%s", rx_buf);
 #endif
-        if (!response_packet.IsValid()) {
-            CONSOLE_ERROR("SPICoprocessor::PartialRead",
-                          "Received response packet of length %d Bytes with an invalid CRC.",
-                          response_packet.GetBufLenBytes());
-            return false;
+
+        int num_attempts = 0;
+        char error_message[kErrorMessageMaxLen + 1] = "No error.";
+        error_message[kErrorMessageMaxLen] = '\0';
+        bool ret = true;
+        while (num_attempts < kSPITransactionMaxNumRetries) {
+#ifdef ON_PICO
+            // On the master, reading from the slave is two transactions: The read request is sent, then we wait on the
+            // handshake line to read the reply.
+            SCResponsePacket response_packet;  // Declare this up here so the goto's don't cross it.
+            int bytes_written = SPIWriteBlocking(read_request_packet.GetBuf(), read_request_bytes);
+            int bytes_read = 0;
+            if (bytes_written < 0) {
+                snprintf(error_message, kErrorMessageMaxLen, "Error code %d while writing read request over SPI.",
+                         bytes_written);
+                goto PARTIAL_READ_FAILED;
+            }
+            if (!SPIWaitForHandshake()) {
+                snprintf(error_message, kErrorMessageMaxLen, "SPICoprocessor::PartialRead",
+                         "Timed out while waiting for handshake after sending read request.");
+                goto PARTIAL_READ_FAILED;
+            }
+
+            response_packet.data_len_bytes =
+                len;  // We need to set this manually since we are using the default constructor.
+            bytes_read = SPIReadBlocking(response_packet.GetBuf(), SCResponsePacket::GetBufLenForPayloadLenBytes(len));
+            if (bytes_read < 0) {
+                snprintf(error_message, kErrorMessageMaxLen, "Error code %d while reading read response over SPI.",
+                         bytes_read);
+                goto PARTIAL_READ_FAILED;
+            }
+#elif ON_ESP32
+            // On the slave, reading from the master is a single transaction. We preload the beginning of the message
+            // with the read request, and the master populates the remainder of the message with the reply.
+            use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
+            // Need to request the max transaction size. If we request something smaller, like read_request_bytes (which
+            // doesn't include the response bytes), the SPI transmit function won't write the additional reply into our
+            // buffer.
+            int bytes_exchanged =
+                SPIWriteReadBlocking(read_request_packet.GetBuf(), rx_buf, SCPacket::kPacketMaxLenBytes);
+
+            if (bytes_exchanged < 0) {
+                snprintf(error_message, kErrorMessageMaxLen, "Error code %d during read from master SPI transaction.",
+                         bytes_exchanged);
+                // Can't use the goto shortcut here because it would cross over response_packet initialization.
+                CONSOLE_WARNING("SPICoprocessor::PartialRead", "%s", error_message);
+                num_attempts++;
+                ret = false;
+                // Mutex can be given back immediately because we don't ever wait for an ACK.
+                xSemaphoreGive(spi_mutex_);  // Allow other tasks to access the SPI peripheral.
+                continue;
+            }
+            if (bytes_exchanged <= read_request_bytes) {
+                snprintf(error_message, kErrorMessageMaxLen,
+                         "SPI transaction was too short, request was %d Bytes, only exchanged %d Bytes including "
+                         "request and response.",
+                         read_request_bytes, bytes_exchanged);
+                // Can't use the goto shortcut here because it would cross over response_packet initialization.
+                CONSOLE_WARNING("SPICoprocessor::PartialRead", "%s", error_message);
+                num_attempts++;
+                ret = false;
+                // Mutex can be given back immediately because we don't ever wait for an ACK.
+                xSemaphoreGive(spi_mutex_);  // Allow other tasks to access the SPI peripheral.
+                continue;
+            }
+            SCResponsePacket response_packet =
+                SCResponsePacket(rx_buf + read_request_bytes, bytes_exchanged - read_request_bytes);
+#else
+            SCResponsePacket response_packet;  // Dummy to stop compile errors.
+            // Total BS used to suppress a compile warning during host unit tests.
+            rx_buf[read_request_bytes] = '\0';
+            printf("%s", rx_buf);
+#endif
+            if (!response_packet.IsValid()) {
+                snprintf(error_message, kErrorMessageMaxLen,
+                         "Received response packet of length %d Bytes with an invalid CRC.",
+                         response_packet.GetBufLenBytes());
+                goto PARTIAL_READ_FAILED;
+            }
+            if (response_packet.cmd != SCCommand::kCmdDataBlock) {
+                snprintf(error_message, kErrorMessageMaxLen,
+                         "Received invalid response with cmd=0x%x to requested read at address 0x%x of length %d with "
+                         "offset %d Bytes.",
+                         response_packet.cmd, read_request_packet.addr, read_request_packet.len,
+                         read_request_packet.offset);
+                goto PARTIAL_READ_FAILED;
+            }
+            if (response_packet.data_len_bytes != len) {
+                snprintf(error_message, kErrorMessageMaxLen,
+                         "Received incorrect number of Bytes while reading object at address 0x%x with offset %d "
+                         "Bytes. Requested %d Bytes but received %d.",
+                         addr, offset, read_request_packet.len, response_packet.data_len_bytes);
+                goto PARTIAL_READ_FAILED;
+            }
+            // Completed successfully!
+            ret = true;
+            memcpy(object_buf + offset, response_packet.data, response_packet.data_len_bytes);
+            break;
+        PARTIAL_READ_FAILED:
+            CONSOLE_WARNING("SPICoprocessor::PartialRead", "%s", error_message);
+            num_attempts++;
+            ret = false;
+            continue;
         }
-        if (response_packet.cmd != SCCommand::kCmdDataBlock) {
-            CONSOLE_ERROR("SPICoprocessor::PartialRead",
-                          "Received invalid response with cmd=0x%x to requested read at address 0x%x of length %d with "
-                          "offset %d Bytes.",
-                          response_packet.cmd, read_request_packet.addr, read_request_packet.len,
-                          read_request_packet.offset);
-            return false;
+#ifdef ON_ESP32
+        xSemaphoreGive(spi_mutex_);  // Allow other tasks to access the SPI peripheral.
+#endif
+        if (!ret) {
+            CONSOLE_ERROR("SPICoprocessor::PartialRead", "Failed after %d tries: %s", num_attempts, error_message);
         }
-        if (response_packet.data_len_bytes != len) {
-            CONSOLE_ERROR("SPICoprocessor::PartialRead",
-                          "Received incorrect number of Bytes while reading object at address 0x%x with offset %d "
-                          "Bytes. Requested %d Bytes but received %d.",
-                          addr, offset, read_request_packet.len, response_packet.data_len_bytes);
-            return false;
-        }
-        memcpy(object_buf + offset, response_packet.data, response_packet.data_len_bytes);
-        return true;
+        return ret;
     }
 
     /**
