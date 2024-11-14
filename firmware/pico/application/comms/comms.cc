@@ -161,6 +161,7 @@ bool CommsManager::network_console_putc(char c) {
         if (!comms_manager.esp32_console_tx_queue.Push(c)) {
             CONSOLE_ERROR("CommsManager::network_console_putc",
                           "Overflowed buffer for outgoing network console chars after attempting to clear buffer.");
+            comms_manager.esp32_console_tx_queue.Clear();
             return false;
         }
     }

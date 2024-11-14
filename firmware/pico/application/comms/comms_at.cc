@@ -696,7 +696,10 @@ bool CommsManager::UpdateAT() {
             // Ran out of characters to send, or hit the max packet length.
             if (message_len > 0) {
                 // Don't send empty messages.
-                esp32.Write(ObjectDictionary::kAddrConsole, esp32_console_tx_buf, true, message_len);
+                if (!esp32.Write(ObjectDictionary::kAddrConsole, esp32_console_tx_buf, true, message_len)) {
+                    // Don't enter infinite loop of error messages if writing to the ESP32 isn't working.
+                    break;
+                }
             }
         }
     }
