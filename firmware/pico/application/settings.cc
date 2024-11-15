@@ -113,7 +113,7 @@ bool SettingsManager::Save() {
 
     // Sync settings from RP2040 -> ESP32.
     if (esp32.IsEnabled()) {
-        esp32.Write(ObjectDictionary::kAddrSettingsData, settings);
+        esp32.Write(ObjectDictionary::kAddrSettingsData, settings, true);  // Require ACK.
     }
 
     return eeprom.Save(settings);
@@ -135,7 +135,7 @@ bool SettingsManager::GetDeviceInfo(DeviceInfo &device_info) {
     return eeprom.Load(device_info, kDeviceInfoEEPROMAddress);
 }
 
-void SettingsManager::Apply() {
+bool SettingsManager::Apply() {
     adsbee.SetReceiverEnable(settings.receiver_enabled);
     adsbee.SetTLMilliVolts(settings.tl_mv);
     adsbee.SetBiasTeeEnable(settings.bias_tee_enabled);
@@ -170,4 +170,7 @@ void SettingsManager::Apply() {
     comms_manager.wifi_sta_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
     strncpy(comms_manager.wifi_sta_password, settings.wifi_sta_password, Settings::kWiFiPasswordMaxLen);
     comms_manager.wifi_sta_password[Settings::kWiFiPasswordMaxLen] = '\0';
+
+    return true;  // Not currently doing any error checking here, relying on AT commands to limit parameters to
+                  // allowable ranges. Could be a problem if loading from corrupted EEPROM.
 }

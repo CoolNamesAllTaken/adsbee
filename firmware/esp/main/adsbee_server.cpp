@@ -65,6 +65,14 @@ bool ADSBeeServer::Init() {
     xTaskCreatePinnedToCore(esp_spi_receive_task, "spi_receive_task", kSPIReceiveTaskStackSizeBytes, NULL,
                             kSPIReceiveTaskPriority, NULL, kSPIReceiveTaskCore);
 
+    // Initialize Non Volatile Storage Flash, used by WiFi library.
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
     while (true) {
         if (!pico.Read(ObjectDictionary::kAddrSettingsData, settings_manager.settings)) {
             CONSOLE_ERROR("ADSBeeServer::Init", "Failed to read settings from Pico on startup.");
@@ -77,18 +85,10 @@ bool ADSBeeServer::Init() {
         }
     }
 
-    // Initialize Non Volatile Storage Flash, used by WiFi library.
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
-
-    if (!comms_manager.WiFiInit()) {
-        CONSOLE_ERROR("ADSBeeServer::Init", "Failed to initialize WiFi.");
-        return false;
-    }
+    // if (!comms_manager.WiFiInit()) {
+    //     CONSOLE_ERROR("ADSBeeServer::Init", "Failed to initialize WiFi.");
+    //     return false;
+    // }
 
     TCPServerInit();
 
@@ -191,10 +191,11 @@ bool ADSBeeServer::HandleRawTransponderPacket(RawTransponderPacket &raw_packet) 
     if (!transponder_packet_queue.Push(raw_packet)) {
         CONSOLE_ERROR("ADSBeeServer::HandleRawTransponderPacket",
                       "Push to transponder packet queue failed. May have overflowed?");
+        transponder_packet_queue.Clear();
         ret = false;
     }
 
-    if (!comms_manager.WiFiStationSendRawTransponderPacket(raw_packet)) {
+    if (comms_manager.WiFiStationhasIP() && !comms_manager.WiFiStationSendRawTransponderPacket(raw_packet)) {
         CONSOLE_ERROR("ADSBeeServer::HandleRawTransponderPacket",
                       "Encountered error while sending raw transponder packet to feeds from ESP32 as WiFi station.");
         ret = false;

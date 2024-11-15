@@ -20,8 +20,6 @@ static const uint16_t kWiFiStaMaxNumReconnectAttempts = 5;
 static const uint16_t kWiFiScanDefaultListSize = 20;
 static const uint32_t kWiFiTCPSocketReconnectIntervalMs = 5000;
 
-/* FreeRTOS event group to signal when we are connected*/
-static EventGroupHandle_t s_wifi_event_group;
 /* The event group allows multiple bits for each event, but we only care about two events:
  * - we are connected to the AP with an IP
  * - we failed to connect after the maximum amount of retries */
@@ -45,12 +43,14 @@ void CommsManager::WiFiEventHandler(void* arg, esp_event_base_t event_base, int3
 
     switch (event_id) {
         case WIFI_EVENT_AP_STACONNECTED: {
+            // A new station has connected to the ADSBee's softAP network.
             wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*)event_data;
             CONSOLE_INFO("CommsManager::WiFiEventHandler", "Station " MACSTR " joined, AID=%d", MAC2STR(event->mac),
                          event->aid);
             break;
         }
         case WIFI_EVENT_AP_STADISCONNECTED: {
+            // A station has disconnected from the ADSBee's softAP network.
             wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*)event_data;
             CONSOLE_INFO("CommsManager::WiFiEventHandler", "Station " MACSTR " left, AID=%d", MAC2STR(event->mac),
                          event->aid);
@@ -58,14 +58,18 @@ void CommsManager::WiFiEventHandler(void* arg, esp_event_base_t event_base, int3
             break;
         }
         case WIFI_EVENT_STA_START:
+            // The ADSBee is attempting to connect to an external network.
             CONSOLE_INFO("CommsManager::WiFiEventHandler", "WIFI_EVENT_STA_START - Attempting to connect to AP");
             ESP_ERROR_CHECK(esp_wifi_connect());
+            // Note: wifi_sta_has_ip_ will get filled in by the IP event handler if an IP is issued.
             break;
         case WIFI_EVENT_STA_DISCONNECTED: {
+            // The ADSBee has disconnected from an external network.
             wifi_event_sta_disconnected_t* event = (wifi_event_sta_disconnected_t*)event_data;
             ESP_LOGW("CommsManager::WiFiEventHandler", "WIFI_EVENT_STA_DISCONNECTED - Disconnect reason : %d",
                      event->reason);
-            xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+            xEventGroupClearBits(wifi_event_group_, WIFI_CONNECTED_BIT);
+            wifi_sta_has_ip_ = false;
 
             if (s_retry_num < kWiFiStaMaxNumReconnectAttempts) {
                 ESP_ERROR_CHECK(esp_wifi_connect());
@@ -73,14 +77,14 @@ void CommsManager::WiFiEventHandler(void* arg, esp_event_base_t event_base, int3
                 CONSOLE_INFO("CommsManager::WiFiEventHandler", "Retry to connect to the AP, attempt %d/%d", s_retry_num,
                              kWiFiStaMaxNumReconnectAttempts);
             } else {
-                xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+                xEventGroupSetBits(wifi_event_group_, WIFI_FAIL_BIT);
                 CONSOLE_ERROR("CommsManager::WiFiEventHandler", "Failed to connect to AP after %d attempts",
                               kWiFiStaMaxNumReconnectAttempts);
             }
             break;
         }
         case WIFI_EVENT_STA_CONNECTED:
-            xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+            xEventGroupSetBits(wifi_event_group_, WIFI_CONNECTED_BIT);
             CONSOLE_INFO("CommsManager::WiFiEventHandler", "WIFI_EVENT_STA_CONNECTED - Successfully connected to AP");
             break;
     }
@@ -374,19 +378,15 @@ static const char* get_auth_mode_name(wifi_auth_mode_t auth_mode) {
 // }
 
 bool CommsManager::WiFiInit() {
-    wifi_clients_list_mutex_ = xSemaphoreCreateMutex();
-    wifi_ap_message_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(NetworkMessage));
-    wifi_sta_raw_transponder_packet_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(RawTransponderPacket));
-
-    s_wifi_event_group = xEventGroupCreate();
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_t* ap_netif = esp_netif_create_default_wifi_ap();
-    assert(ap_netif);
-    esp_netif_t* sta_netif = esp_netif_create_default_wifi_sta();
+    esp_netif_t* wifi_ap_netif_ = esp_netif_create_default_wifi_ap();
+    assert(wifi_ap_netif_);
+    esp_netif_t* wifi_sta_netif_ = esp_netif_create_default_wifi_sta();
+    assert(wifi_sta_netif_);
+
     ESP_ERROR_CHECK(
-        esp_netif_set_hostname(sta_netif, wifi_ap_ssid));  // Reuse the AP SSID as the station hostname for now.
-    assert(sta_netif);
+        esp_netif_set_hostname(wifi_sta_netif_, wifi_ap_ssid));  // Reuse the AP SSID as the station hostname for now.
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
@@ -403,6 +403,8 @@ bool CommsManager::WiFiInit() {
         wifi_mode = WIFI_MODE_STA;
     }
     ESP_ERROR_CHECK(esp_wifi_set_mode(wifi_mode));
+
+    wifi_was_initialized_ = true;
 
     if (wifi_ap_enabled) {
         // Access Point Configuration
@@ -431,10 +433,6 @@ bool CommsManager::WiFiInit() {
         strncpy((char*)(wifi_config_sta.sta.password), wifi_sta_password,
                 SettingsManager::Settings::kWiFiPasswordMaxLen + 1);
 
-        // wifi_config_sta.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
-        // wifi_config_sta.sta.pmf_cfg.capable = true;
-        // wifi_config_sta.sta.pmf_cfg.required = false;
-
         ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config_sta));
     }
 
@@ -450,8 +448,8 @@ bool CommsManager::WiFiInit() {
         CONSOLE_INFO("CommsManager::WiFiInit", "WiFi AP started. SSID:%s password:%s", wifi_ap_ssid, wifi_ap_password);
 
         run_wifi_ap_task_ = true;
-        xTaskCreatePinnedToCore(wifi_access_point_task, "wifi_ap_task", 4096, NULL, kWiFiAPTaskPriority, NULL,
-                                kWiFiAPTaskCore);
+        xTaskCreatePinnedToCore(wifi_access_point_task, "wifi_ap_task", 4096, &wifi_ap_task_handle, kWiFiAPTaskPriority,
+                                NULL, kWiFiAPTaskCore);
     }
     if (wifi_sta_enabled) {
         char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen];
@@ -462,8 +460,8 @@ bool CommsManager::WiFiInit() {
 
         /* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed for the
          * maximum number of re-tries (WIFI_FAIL_BIT). The bits are set by event_handler() */
-        EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT, pdFALSE, pdFALSE,
-                                               portMAX_DELAY);
+        EventBits_t bits =
+            xEventGroupWaitBits(wifi_event_group_, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
 
         if (bits & WIFI_CONNECTED_BIT) {
             CONSOLE_INFO("CommsManager::WiFiInit", "Connected to ap SSID:%s password:%s", wifi_sta_ssid,
@@ -479,18 +477,27 @@ bool CommsManager::WiFiInit() {
         }
 
         run_wifi_sta_task_ = true;
-        xTaskCreatePinnedToCore(wifi_station_task, "wifi_sta_task", 4096, NULL, kWiFiSTATaskPriority, NULL,
-                                kWiFiSTATaskCore);
+        xTaskCreatePinnedToCore(wifi_station_task, "wifi_sta_task", 4096, &wifi_sta_task_handle, kWiFiSTATaskPriority,
+                                NULL, kWiFiSTATaskCore);
     }
 
     return true;
 }
 
 bool CommsManager::WiFiDeInit() {
-    vEventGroupDelete(s_wifi_event_group);
-    vSemaphoreDelete(wifi_clients_list_mutex_);
-    vQueueDelete(wifi_ap_message_queue_);
-    vQueueDelete(wifi_sta_raw_transponder_packet_queue_);
+    if (!wifi_was_initialized_) return true;  // Don't try de-initializing if it was never initialized.
+    ESP_ERROR_CHECK(esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler));
+    ESP_ERROR_CHECK(esp_event_handler_unregister(IP_EVENT, ESP_EVENT_ANY_ID, &ip_event_handler));
+    esp_netif_destroy(wifi_ap_netif_);
+    esp_netif_destroy(wifi_sta_netif_);
+
+    if (wifi_ap_enabled) {
+        vTaskDelete(wifi_ap_task_handle);
+    }
+    if (wifi_sta_enabled) {
+        vTaskDelete(wifi_sta_task_handle);
+    }
+    wifi_was_initialized_ = false;
 
     return true;
 }

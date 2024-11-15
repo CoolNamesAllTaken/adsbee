@@ -2,16 +2,55 @@
 
 #include "comms.hh"
 
-void SettingsManager::Apply() {
+bool SettingsManager::Apply() {
+    // Check if the AP settings have changed.
+    bool wifi_ap_restart_required = false;
+    if (comms_manager.wifi_ap_enabled != settings.wifi_ap_enabled) {
+        wifi_ap_restart_required = true;
+    } else if (comms_manager.wifi_ap_enabled) {
+        if (comms_manager.wifi_ap_channel != settings.wifi_ap_channel) {
+            wifi_ap_restart_required = true;
+        } else if (strcmp(comms_manager.wifi_ap_ssid, settings.wifi_ap_ssid) != 0) {
+            wifi_ap_restart_required = true;
+        } else if (strcmp(comms_manager.wifi_ap_password, settings.wifi_ap_password) != 0) {
+            wifi_ap_restart_required = true;
+        }
+    }
+    // Apply the AP settings.
     comms_manager.wifi_ap_enabled = settings.wifi_ap_enabled;
     comms_manager.wifi_ap_channel = settings.wifi_ap_channel;
     strncpy(comms_manager.wifi_ap_ssid, settings.wifi_ap_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
     strncpy(comms_manager.wifi_ap_password, settings.wifi_ap_password,
             SettingsManager::Settings::kWiFiPasswordMaxLen + 1);
+
+    // Check if the Station settings have changed.
+    bool wifi_sta_restart_required = false;
+    if (comms_manager.wifi_sta_enabled != settings.wifi_sta_enabled) {
+        wifi_sta_restart_required = true;
+    } else if (comms_manager.wifi_sta_enabled) {
+        if (strcmp(comms_manager.wifi_sta_ssid, settings.wifi_sta_ssid) != 0) {
+            wifi_sta_restart_required = true;
+        } else if (strcmp(comms_manager.wifi_sta_password, settings.wifi_sta_password) != 0) {
+            wifi_sta_restart_required = true;
+        }
+    }
+    // Apply the Station settings.
     comms_manager.wifi_sta_enabled = settings.wifi_sta_enabled;
     strncpy(comms_manager.wifi_sta_ssid, settings.wifi_sta_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
     strncpy(comms_manager.wifi_sta_password, settings.wifi_sta_password,
             SettingsManager::Settings::kWiFiPasswordMaxLen + 1);
+
+    if (wifi_ap_restart_required || wifi_sta_restart_required) {
+        if (!comms_manager.WiFiDeInit()) {
+            CONSOLE_ERROR("SettingsManager::Apply", "Failed to deinitialize WiFi.");
+            return false;
+        }
+        if (!comms_manager.WiFiInit()) {
+            CONSOLE_ERROR("SettingsManager::Apply", "Failed to initialize WiFi.");
+            return false;
+        }
+    }
+    return true;
 }
 
 void SettingsManager::Print() {

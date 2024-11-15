@@ -199,7 +199,7 @@ class SettingsManager {
      * Applies internal settings to the relevant objects. This is only used after the settings struct has been updated
      * by loading it from EEPROM or by overwriting it via the coprocessor SPI bus.
      */
-    void Apply();
+    bool Apply();
 
     /**
      * Saves settings to EEPROM. Stores settings at address 0x0 and performs no integrity check.

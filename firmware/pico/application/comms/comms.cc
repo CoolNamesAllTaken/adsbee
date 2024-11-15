@@ -38,7 +38,6 @@ bool CommsManager::Update() {
 }
 
 int CommsManager::console_printf(const char *format, ...) {
-    if (log_level == SettingsManager::kSilent) return 0;
     va_list args;
     va_start(args, format);
     int res = iface_vprintf(SettingsManager::SerialInterface::kConsole, format, args);
@@ -156,7 +155,19 @@ bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char
 }
 
 bool CommsManager::network_console_putc(char c) {
+    static bool recursion_alert = false;
     if (!comms_manager.esp32_console_tx_queue.Push(c)) {
+        if (!recursion_alert) {
+            // Try flushing the buffer before dumping it, but don't get into an infinite loop if that creates errors
+            // that also want to be printed.
+            recursion_alert = true;
+            comms_manager.UpdateAT();
+            recursion_alert = false;
+            if (comms_manager.esp32_console_tx_queue.Push(c)) {
+                return true;  // Crisis averted! Phew.
+            }
+        }
+
         comms_manager.esp32_console_tx_queue.Clear();
         CONSOLE_ERROR("CommsManager::network_console_putc", "Overflowed buffer for outgoing network console chars.");
         return false;

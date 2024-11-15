@@ -47,121 +47,17 @@ class ObjectDictionary {
      * @param[in] offset Byte offset from beginning of object. Used for partial reads.
      * @retval Returns true if successfully wrote, false if address was invalid or something else borked.
      */
-    bool SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, uint16_t offset = 0) {
-        switch (addr) {
-            case kAddrScratch:
-                // Warning: printing here will cause a timeout and tests will fail.
-                // CONSOLE_INFO("ObjectDictionary::SetBytes", "Setting %d settings Bytes at offset %d.", buf_len,
-                // offset);
-                memcpy((uint8_t *)&scratch_ + offset, buf, buf_len);
-                break;
-#ifdef ON_PICO
-            case kAddrConsole:
-                // ESP32 writing to the RP2040's network console interface.
-                for (uint16_t i = 0; i < buf_len; i++) {
-                    char c = (char)buf[i];
-                    comms_manager.esp32_console_rx_queue.Push(c);
-                }
-                break;
-#elif ON_ESP32
-            case kAddrConsole: {
-                // RP2040 writing to the ESP32's network console interface.
-                char message[kNetworkConsoleMessageMaxLenBytes + 1] = {0};
-                strncpy(message, (char *)buf, buf_len);
-                message[kNetworkConsoleMessageMaxLenBytes] = '\0';  // Null terminate for safety.
-                CONSOLE_INFO("ObjectDictionary::SetBytes", "Forwarding message to network console: %s", message);
-                adsbee_server.network_console.BroadcastMessage(message);
-                break;
-            }
-            case kAddrRawTransponderPacket: {
-                RawTransponderPacket tpacket;
-                memcpy(&tpacket, buf, sizeof(RawTransponderPacket));
-                // Warning: printing here will cause a timeout and tests will fail.
-                // CONSOLE_INFO("SPICoprocessor::SetBytes", "Received a raw %d-bit transponder packet.",
-                //              tpacket.buffer_len_bits);
-                adsbee_server.HandleRawTransponderPacket(tpacket);
-                break;
-            }
-            case kAddrRawTransponderPacketArray: {
-                uint8_t num_packets = buf[0];
-                RawTransponderPacket tpacket;
-                for (uint16_t i = 0; i < num_packets && i * sizeof(RawTransponderPacket) + sizeof(uint8_t) < buf_len;
-                     i++) {
-                    memcpy(&tpacket, buf + sizeof(uint8_t) + i * sizeof(RawTransponderPacket),
-                           sizeof(RawTransponderPacket));
-                    adsbee_server.HandleRawTransponderPacket(tpacket);
-                }
-                break;
-            }
-#endif
-            case kAddrSettingsData:
-                // Warning: printing here will cause a timeout and tests will fail.
-                // CONSOLE_INFO("ObjectDictionary::SetBytes", "Setting %d settings Bytes at offset %d.", buf_len,
-                // offset);
-                memcpy((uint8_t *)&(settings_manager.settings) + offset, buf, buf_len);
-                if (buf + buf_len == (uint8_t *)(&(settings_manager.settings)) + sizeof(SettingsManager::Settings)) {
-                    CONSOLE_INFO("SPICoprocessor::SetBytes", "Wrote last chunk of settings data. Applying new values.");
-                    settings_manager.Apply();
-                    settings_manager.Print();
-                }
-                break;
-            default:
-                CONSOLE_ERROR("SPICoprocessor::SetBytes", "No behavior implemented for writing to address 0x%x.", addr);
-                return false;
-        }
-        return true;
-    }
+    bool SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, uint16_t offset = 0);
 
     /**
      * Getter for reading data from the address space.
-     @param[in] addr Address to read from.
-     @param[out] buf Buffer to write to.
-     @param[in] buf_len Number of Bytes to read.
-     @param[in] offset Byte offset from beginning of object. Used for partial reads.
-     @retval Returns true if successfully read, false if address was invalid or something else borked.
+     * @param[in] addr Address to read from.
+     * @param[out] buf Buffer to write to.
+     * @param[in] buf_len Number of Bytes to read.
+     * @param[in] offset Byte offset from beginning of object. Used for partial reads.
+     * @retval Returns true if successfully read, false if address was invalid or something else borked.
      */
-    bool GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, uint16_t offset = 0) {
-        switch (addr) {
-            case kAddrFirmwareVersion:
-                memcpy(buf, (uint8_t *)(&kFirmwareVersion) + offset, buf_len);
-                break;
-            case kAddrScratch:
-                // Warning: printing here will cause a timeout and tests will fail.
-                // CONSOLE_INFO("ObjectDictionary::GetBytes", "Getting %d scratch Bytes at offset %d.", buf_len,
-                // offset);
-                memcpy(buf, (uint8_t *)(&scratch_) + offset, buf_len);
-                break;
-            case kAddrSettingsData:
-                // Warning: printing here will cause a timeout and tests will fail.
-                // CONSOLE_INFO("ObjectDictionary::GetBytes", "Getting %d settings Bytes at offset %d.", buf_len,
-                // offset);
-                memcpy(buf, (uint8_t *)&(settings_manager.settings) + offset, buf_len);
-                break;
-#ifdef ON_ESP32
-            case kAddrBaseMAC: {
-                uint8_t mac[kMACAddrLenBytes];
-
-                // Get Base MAC address.
-                ESP_ERROR_CHECK(esp_efuse_mac_get_default(mac));
-                memcpy(buf, mac + offset, buf_len);
-                break;
-            }
-            case kAddrWiFiStationMAC: {
-                uint8_t mac[kMACAddrLenBytes];
-
-                // Get WiFi Station MAC address.
-                ESP_ERROR_CHECK(esp_wifi_get_mac(WIFI_IF_STA, mac));
-                memcpy(buf, mac + offset, buf_len);
-                break;
-            }
-#endif
-            default:
-                CONSOLE_ERROR("SPICoprocessor::SetBytes", "No behavior implemented for reading from address 0x%x.",
-                              addr);
-                return false;
-        }
-        return true;
-    }
+    bool GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, uint16_t offset = 0);
 
    private:
     uint32_t scratch_ = 0x0;  // Scratch register used for testing.

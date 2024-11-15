@@ -88,7 +88,8 @@ class ADSBee {
      * @retval Corresponding power level, in dBm.
      */
     static inline int AD8313MilliVoltsTodBm(int mv) {
-        return 60 * (mv - 1600) / 1000;  // AD8313 0dBm intercept at 1.6V, slope is 60dBm/V.
+        static const uint16_t kLNAGaindB = 44;        // Gain of 2x LNAs in front of the AD8313, from bench testing.
+        return 60 * (mv - 1600) / 1000 - kLNAGaindB;  // AD8313 0dBm intercept at 1.6V, slope is 60dBm/V.
     }
 
     /**
