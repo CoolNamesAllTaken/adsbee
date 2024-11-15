@@ -35,7 +35,7 @@ void SettingsManager::Print() {
     CONSOLE_PRINTF("\tTrigger Level: %d milliVolts (%d dBm)\r\n", settings.tl_mv,
                    adsbee.AD8313MilliVoltsTodBm(settings.tl_mv));
     CONSOLE_PRINTF("\tBias Tee: %s\r\n", settings.bias_tee_enabled ? "ENABLED" : "DISABLED");
-    CONSOLE_PRINTF("\tWatchdog Timeout %lu seconds\r\n", settings.watchdog_timeout_sec);
+    CONSOLE_PRINTF("\tWatchdog Timeout: %lu seconds\r\n", settings.watchdog_timeout_sec);
     CONSOLE_PRINTF("\tLog Level: %s\r\n", kConsoleLogLevelStrs[settings.log_level]);
     CONSOLE_PRINTF("\tReporting Protocols:\r\n");
     for (uint16_t i = 0; i < SerialInterface::kGNSSUART; i++) {
@@ -139,7 +139,7 @@ bool SettingsManager::Apply() {
     adsbee.SetReceiverEnable(settings.receiver_enabled);
     adsbee.SetTLMilliVolts(settings.tl_mv);
     adsbee.SetBiasTeeEnable(settings.bias_tee_enabled);
-    // adsbee.SetWatchdogTimeoutSec(settings.watchdog_timeout_sec);
+    adsbee.SetWatchdogTimeoutSec(settings.watchdog_timeout_sec);
 
     // Apply log level.
     comms_manager.log_level = settings.log_level;

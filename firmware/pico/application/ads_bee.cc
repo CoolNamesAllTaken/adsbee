@@ -328,9 +328,6 @@ bool ADSBee::Update() {
                           100;
         noise_floor_last_sample_timestamp_ms_ = timestamp_ms;
     }
-
-    // Poke the watchdog. Add additional conditions here for satisfying watchdog if desired.
-    PokeWatchdog();
     return true;
 }
 

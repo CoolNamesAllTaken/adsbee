@@ -150,7 +150,7 @@ class ADSBee {
      */
     int GetTLMilliVolts() { return tl_mv_; }
 
-    inline uint32_t GetWatchdogTimeoutSec() { return watchdog_timeout_sec_ / kMsPerSec; }
+    inline uint32_t GetWatchdogTimeoutSec() { return watchdog_timeout_sec_; }
 
     /**
      * ISR for GPIO interrupts.

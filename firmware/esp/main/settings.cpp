@@ -58,7 +58,7 @@ void SettingsManager::Print() {
     CONSOLE_PRINTF("\tReceiver: %s\r\n", settings.receiver_enabled ? "ENABLED" : "DISABLED");
     CONSOLE_PRINTF("\tTrigger Level: %d milliVolts\r\n", settings.tl_mv);
     CONSOLE_PRINTF("\tBias Tee: %s\r\n", settings.bias_tee_enabled ? "ENABLED" : "DISABLED");
-    CONSOLE_PRINTF("\tWatchdog Timeout %lu seconds\r\n", settings.watchdog_timeout_sec);
+    CONSOLE_PRINTF("\tWatchdog Timeout: %lu seconds\r\n", settings.watchdog_timeout_sec);
     CONSOLE_PRINTF("\tLog Level: %s\r\n", kConsoleLogLevelStrs[settings.log_level]);
     CONSOLE_PRINTF("\tReporting Protocols:\r\n");
     for (uint16_t i = 0; i < SerialInterface::kGNSSUART; i++) {
