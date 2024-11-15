@@ -45,9 +45,9 @@ void esp_spi_receive_task(void *pvParameters) {
 }
 
 void tcp_server_task(void *pvParameters) { adsbee_server.TCPServerTask(pvParameters); }
-esp_err_t console_ws_handler(httpd_req_t *req) { return adsbee_server.NetworkConsoleWebSocketHandler(req); }
+// esp_err_t console_ws_handler(httpd_req_t *req) { return adsbee_server.NetworkConsoleWebSocketHandler(req); }
 void console_ws_close_fd(httpd_handle_t hd, int sockfd) {
-    adsbee_server.NetworkConsoleRemoveWebsocketClient(sockfd);
+    adsbee_server.network_console.RemoveClient(sockfd);
     close(sockfd);
 }
 /** End "Pass-Through" functions. **/
@@ -167,19 +167,21 @@ bool ADSBeeServer::Update() {
         message.Destroy();  // Free the message buffer to prevent memory leaks.
     }
 
-    // Prune inactive network console clients.
-    timestamp_ms = get_time_since_boot_ms();  // Refresh timestamp to avoid negative values for time since last message
-                                              // (except for wraps)
-    for (uint16_t i = 0; i < kNetworkConsoleMaxNumClients; i++) {
-        uint32_t time_since_last_message_ms = timestamp_ms - network_console_clients[i].last_message_timestamp_ms;
-        if (network_console_clients[i].in_use && time_since_last_message_ms > kNetworkConsoleInactivityTimeoutMs) {
-            // Client is in use and has timed out.
-            int client_fd = network_console_clients[i].client_fd;
-            CONSOLE_WARNING("ADSBeeServer::Update", "Network console client with fd %d timed out after %lu ms.",
-                            client_fd, time_since_last_message_ms);
-            NetworkConsoleRemoveWebsocketClient(client_fd);
-        }
-    }
+    network_console.Update();
+    // // Prune inactive network console clients.
+    // timestamp_ms = get_time_since_boot_ms();  // Refresh timestamp to avoid negative values for time since last
+    // message
+    //                                           // (except for wraps)
+    // for (uint16_t i = 0; i < kNetworkConsoleMaxNumClients; i++) {
+    //     uint32_t time_since_last_message_ms = timestamp_ms - network_console_clients[i].last_message_timestamp_ms;
+    //     if (network_console_clients[i].in_use && time_since_last_message_ms > kNetworkConsoleInactivityTimeoutMs) {
+    //         // Client is in use and has timed out.
+    //         int client_fd = network_console_clients[i].client_fd;
+    //         CONSOLE_WARNING("ADSBeeServer::Update", "Network console client with fd %d timed out after %lu ms.",
+    //                         client_fd, time_since_last_message_ms);
+    //         NetworkConsoleRemoveWebsocketClient(client_fd);
+    //     }
+    // }
 
     return ret;
 }
@@ -244,83 +246,83 @@ bool ADSBeeServer::ReportGDL90() {
     return true;
 }
 
-void ADSBeeServer::TCPServerTask(void *pvParameters) {
-    int addr_family = AF_INET;
-    int ip_protocol = 0;
-    struct sockaddr_in dest_addr;
+// void ADSBeeServer::TCPServerTask(void *pvParameters) {
+//     int addr_family = AF_INET;
+//     int ip_protocol = 0;
+//     struct sockaddr_in dest_addr;
 
-    dest_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(kNetworkControlPort);
-    ip_protocol = IPPROTO_IP;
+//     dest_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+//     dest_addr.sin_family = AF_INET;
+//     dest_addr.sin_port = htons(kNetworkControlPort);
+//     ip_protocol = IPPROTO_IP;
 
-    int listen_sock = socket(addr_family, SOCK_STREAM, ip_protocol);
-    if (listen_sock < 0) {
-        CONSOLE_ERROR("ADSBeeServer::TCPServerTask", "Unable to create socket: errno %d", errno);
-        vTaskDelete(NULL);
-        return;
-    }
+//     int listen_sock = socket(addr_family, SOCK_STREAM, ip_protocol);
+//     if (listen_sock < 0) {
+//         CONSOLE_ERROR("ADSBeeServer::TCPServerTask", "Unable to create socket: errno %d", errno);
+//         vTaskDelete(NULL);
+//         return;
+//     }
 
-    int err = bind(listen_sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
-    if (err != 0) {
-        CONSOLE_ERROR("ADSBeeServer::TCPServerTask", "Socket unable to bind: errno %d", errno);
-        close(listen_sock);
-        vTaskDelete(NULL);
-        return;
-    }
+//     int err = bind(listen_sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+//     if (err != 0) {
+//         CONSOLE_ERROR("ADSBeeServer::TCPServerTask", "Socket unable to bind: errno %d", errno);
+//         close(listen_sock);
+//         vTaskDelete(NULL);
+//         return;
+//     }
 
-    err = listen(listen_sock, 1);
-    if (err != 0) {
-        CONSOLE_ERROR("ADSBeeServer::TCPServerTask", "Error occurred during listen: errno %d", errno);
-        close(listen_sock);
-        vTaskDelete(NULL);
-        return;
-    }
+//     err = listen(listen_sock, 1);
+//     if (err != 0) {
+//         CONSOLE_ERROR("ADSBeeServer::TCPServerTask", "Error occurred during listen: errno %d", errno);
+//         close(listen_sock);
+//         vTaskDelete(NULL);
+//         return;
+//     }
 
-    while (1) {
-        CONSOLE_INFO("ADSBeeServer::TCPServerTask", "Socket listening");
+//     while (1) {
+//         CONSOLE_INFO("ADSBeeServer::TCPServerTask", "Socket listening");
 
-        struct sockaddr_storage source_addr;
-        socklen_t addr_len = sizeof(source_addr);
-        int sock = accept(listen_sock, (struct sockaddr *)&source_addr, &addr_len);
-        if (sock < 0) {
-            CONSOLE_ERROR("ADSBeeServer::TCPServerTask", "Unable to accept connection: errno %d", errno);
-            break;
-        }
+//         struct sockaddr_storage source_addr;
+//         socklen_t addr_len = sizeof(source_addr);
+//         int sock = accept(listen_sock, (struct sockaddr *)&source_addr, &addr_len);
+//         if (sock < 0) {
+//             CONSOLE_ERROR("ADSBeeServer::TCPServerTask", "Unable to accept connection: errno %d", errno);
+//             break;
+//         }
 
-        // Display IPv4 address.
-        char addr_str[128];
-        inet_ntoa_r(((struct sockaddr_in *)&source_addr)->sin_addr, addr_str, sizeof(addr_str) - 1);
-        CONSOLE_INFO("ADSBeeServer::TCPServerTask", "Socket accepted ip address: %s", addr_str);
+//         // Display IPv4 address.
+//         char addr_str[128];
+//         inet_ntoa_r(((struct sockaddr_in *)&source_addr)->sin_addr, addr_str, sizeof(addr_str) - 1);
+//         CONSOLE_INFO("ADSBeeServer::TCPServerTask", "Socket accepted ip address: %s", addr_str);
 
-        // Handle received data
-        while (1) {
-            // Data is available to read
-            uint8_t rx_buffer[128];
-            int len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
+//         // Handle received data
+//         while (1) {
+//             // Data is available to read
+//             uint8_t rx_buffer[128];
+//             int len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
 
-            if (len < 0) {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                    // No data available right now, try again later
-                    continue;
-                }
-                // Some other error occurred
-                CONSOLE_ERROR("ADSBeeServer::TCPServerTask", "Error occurred during receiving: errno %d", errno);
-                break;
-            } else if (len == 0) {
-                CONSOLE_INFO("ADSBeeServer::TCPServerTask", "Connection closed by peer");
-                break;
-            }
+//             if (len < 0) {
+//                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
+//                     // No data available right now, try again later
+//                     continue;
+//                 }
+//                 // Some other error occurred
+//                 CONSOLE_ERROR("ADSBeeServer::TCPServerTask", "Error occurred during receiving: errno %d", errno);
+//                 break;
+//             } else if (len == 0) {
+//                 CONSOLE_INFO("ADSBeeServer::TCPServerTask", "Connection closed by peer");
+//                 break;
+//             }
 
-            // Process received data
-            rx_buffer[len] = 0;  // Null-terminate
-            CONSOLE_INFO("ADSBeeServer::TCPServerTask", "Received %d bytes: %s", len, rx_buffer);
-        }
+//             // Process received data
+//             rx_buffer[len] = 0;  // Null-terminate
+//             CONSOLE_INFO("ADSBeeServer::TCPServerTask", "Received %d bytes: %s", len, rx_buffer);
+//         }
 
-        shutdown(sock, 0);
-        close(sock);
-    }
-}
+//         shutdown(sock, 0);
+//         close(sock);
+//     }
+// }
 
 static esp_err_t root_handler(httpd_req_t *req) {
     httpd_resp_send(req, (const char *)index_html_start, index_html_end - index_html_start);
@@ -337,154 +339,180 @@ static esp_err_t css_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
-// Function to broadcast message to all connected clients
-void ADSBeeServer::NetworkConsoleBroadcastMessage(const char *message) {
-    for (int i = 0; i < kNetworkConsoleMaxNumClients; i++) {
-        if (network_console_clients[i].in_use) {
-            esp_err_t ret = NetworkConsoleSendMessage(network_console_clients[i].client_fd, message);
-            if (ret != ESP_OK) {
-                CONSOLE_ERROR("ADSBeeServer::NetworkConsoleBroadcastMessage", "Failed to send message to client %d: %d",
-                              i, ret);
-                // If send failed, assume client disconnected
-                NetworkConsoleRemoveWebsocketClient(network_console_clients[i].client_fd);
-            }
-        }
-    }
-}
+// // Function to broadcast message to all connected clients
+// void ADSBeeServer::NetworkConsoleBroadcastMessage(const char *message) {
+//     for (int i = 0; i < kNetworkConsoleMaxNumClients; i++) {
+//         if (network_console_clients[i].in_use) {
+//             esp_err_t ret = NetworkConsoleSendMessage(network_console_clients[i].client_fd, message);
+//             if (ret != ESP_OK) {
+//                 CONSOLE_ERROR("ADSBeeServer::NetworkConsoleBroadcastMessage", "Failed to send message to client %d:
+//                 %d",
+//                               i, ret);
+//                 // If send failed, assume client disconnected
+//                 NetworkConsoleRemoveWebsocketClient(network_console_clients[i].client_fd);
+//             }
+//         }
+//     }
+// }
 
-bool ADSBeeServer::NetworkConsoleAddWebSocketClient(int client_fd) {
-    for (int i = 0; i < kNetworkConsoleMaxNumClients; i++) {
-        if (!network_console_clients[i].in_use) {
-            network_console_clients[i].in_use = true;
-            network_console_clients[i].client_fd = client_fd;
-            network_console_clients[i].last_message_timestamp_ms = get_time_since_boot_ms();
-            CONSOLE_INFO("ADSBeeServer::NetworkConsoleAddWebSocketClient", "New client stored at index %d", i);
-            return true;
-        }
-    }
-    CONSOLE_ERROR("ADSBeeServer:NetworkConsoleAddWebSocketClient",
-                  "Can't connect additional clients, already reached maximum of %d.", kNetworkConsoleMaxNumClients);
-    return false;
-}
+// bool ADSBeeServer::NetworkConsoleAddWebSocketClient(int client_fd) {
+//     for (int i = 0; i < kNetworkConsoleMaxNumClients; i++) {
+//         if (!network_console_clients[i].in_use) {
+//             network_console_clients[i].in_use = true;
+//             network_console_clients[i].client_fd = client_fd;
+//             network_console_clients[i].last_message_timestamp_ms = get_time_since_boot_ms();
+//             CONSOLE_INFO("ADSBeeServer::NetworkConsoleAddWebSocketClient", "New client stored at index %d", i);
+//             return true;
+//         }
+//     }
+//     CONSOLE_ERROR("ADSBeeServer:NetworkConsoleAddWebSocketClient",
+//                   "Can't connect additional clients, already reached maximum of %d.", kNetworkConsoleMaxNumClients);
+//     return false;
+// }
 
-bool ADSBeeServer::NetworkConsoleRemoveWebsocketClient(int client_fd) {
-    for (int i = 0; i < kNetworkConsoleMaxNumClients; i++) {
-        if (network_console_clients[i].in_use && network_console_clients[i].client_fd == client_fd) {
-            network_console_clients[i].in_use = false;
-            network_console_clients[i].client_fd = -1;
-            CONSOLE_INFO("ADSBeeServer::NetworkConsoleRemoveWebSocketClient", "Client removed from index %d", i);
-            return true;
-        }
-    }
-    CONSOLE_ERROR("ADSBeeServer::NetworkConsoleRemoveWebSocketClient", "Client with fd %d not found.", client_fd);
-    return false;
-}
+// bool ADSBeeServer::NetworkConsoleRemoveWebsocketClient(int client_fd) {
+//     for (int i = 0; i < kNetworkConsoleMaxNumClients; i++) {
+//         if (network_console_clients[i].in_use && network_console_clients[i].client_fd == client_fd) {
+//             network_console_clients[i].in_use = false;
+//             network_console_clients[i].client_fd = -1;
+//             CONSOLE_INFO("ADSBeeServer::NetworkConsoleRemoveWebSocketClient", "Client removed from index %d", i);
+//             return true;
+//         }
+//     }
+//     CONSOLE_ERROR("ADSBeeServer::NetworkConsoleRemoveWebSocketClient", "Client with fd %d not found.", client_fd);
+//     return false;
+// }
 
 // Function to send message to a specific client
-esp_err_t ADSBeeServer::NetworkConsoleSendMessage(int client_fd, const char *message) {
-    httpd_ws_frame_t ws_pkt = {.final = true,
-                               .fragmented = false,
-                               .type = HTTPD_WS_TYPE_TEXT,
-                               .payload = (uint8_t *)message,
-                               .len = strlen(message)};
+// esp_err_t ADSBeeServer::NetworkConsoleSendMessage(int client_fd, const char *message) {
+//     httpd_ws_frame_t ws_pkt = {.final = true,
+//                                .fragmented = false,
+//                                .type = HTTPD_WS_TYPE_TEXT,
+//                                .payload = (uint8_t *)message,
+//                                .len = strlen(message)};
 
-    return httpd_ws_send_frame_async(server, client_fd, &ws_pkt);
+//     return httpd_ws_send_frame_async(server, client_fd, &ws_pkt);
+// }
+
+// bool ADSBeeServer::NetworkConsoleUpdateActivityTimer(int client_fd) {
+//     for (int i = 0; i < kNetworkConsoleMaxNumClients; i++) {
+//         if (network_console_clients[i].client_fd == client_fd) {
+//             network_console_clients[i].last_message_timestamp_ms = get_time_since_boot_ms();
+//             return true;
+//         }
+//     }
+//     return false;  // Couldn't find client.
+// }
+
+// esp_err_t ADSBeeServer::NetworkConsoleWebSocketHandler(httpd_req_t *req) {
+//     int client_fd = httpd_req_to_sockfd(req);
+
+//     if (req->method == HTTP_GET) {
+//         CONSOLE_INFO("ADSBeeServer::ConsoleWebsocketHandler", "Handshake done, the new connection was opened");
+//         if (!NetworkConsoleAddWebSocketClient(client_fd)) {
+//             CONSOLE_ERROR("ADSBee::NetworkConsoleWebSocketHandler", "Rejecting websocket connection.");
+//             // Send a close frame
+//             httpd_ws_frame_t ws_pkt = {
+//                 .final = true, .fragmented = false, .type = HTTPD_WS_TYPE_CLOSE, .payload = NULL, .len = 0};
+
+//             httpd_ws_send_frame(req, &ws_pkt);
+
+//             // Return error to reject the connection
+//             return ESP_FAIL;
+//         }
+//         char welcome_message[kNetworkConsoleWelcomeMessageMaxLen];
+//         snprintf(welcome_message, kNetworkConsoleWelcomeMessageMaxLen,
+//                  "\r\n █████  ██████  ███████ ██████  ███████ ███████      ██  ██████   █████   ██████  "
+//                  "\r\n██   ██ ██   ██ ██      ██   ██ ██      ██          ███ ██  ████ ██   ██ ██  ████ "
+//                  "\r\n███████ ██   ██ ███████ ██████  █████   █████        ██ ██ ██ ██  ██████ ██ ██ ██ "
+//                  "\r\n██   ██ ██   ██      ██ ██   ██ ██      ██           ██ ████  ██      ██ ████  ██ "
+//                  "\r\n██   ██ ██████  ███████ ██████  ███████ ███████      ██  ██████   █████   ██████  "
+//                  "\r\n\r\nFirmware Version: %d.%d.%d\r\nAP SSID: %s\r\n",
+//                  object_dictionary.kFirmwareVersionMajor, object_dictionary.kFirmwareVersionMinor,
+//                  object_dictionary.kFirmwareVersionPatch, settings_manager.settings.wifi_ap_ssid);
+//         welcome_message[kNetworkConsoleWelcomeMessageMaxLen] = '\0';  // Null terminate for safety.
+//         NetworkConsoleSendMessage(client_fd, welcome_message);
+//         return ESP_OK;
+//     }
+//     httpd_ws_frame_t ws_pkt;
+//     uint8_t *buf = NULL;
+//     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+//     ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+//     /* Set max_len = 0 to get the frame len */
+//     esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
+//     if (ret != ESP_OK) {
+//         CONSOLE_ERROR("ADSBeeServer::ConsoleWebsocketHandler", "httpd_ws_recv_frame failed to get frame len with
+//         %d.",
+//                       ret);
+//         return ret;
+//     }
+//     CONSOLE_INFO("ADSBeeServer::ConsoleWebsocketHandler", "frame len is %d.", ws_pkt.len);
+//     if (ws_pkt.len) {
+//         /* ws_pkt.len + 1 is for NULL termination as we are expecting a string */
+//         buf = (uint8_t *)calloc(1, ws_pkt.len + 1);
+//         if (buf == NULL) {
+//             CONSOLE_ERROR("ADSBeeServer::ConsoleWebsocketHandler", "Failed to calloc memory for buf.");
+//             return ESP_ERR_NO_MEM;
+//         }
+//         ws_pkt.payload = buf;
+//         /* Set max_len = ws_pkt.len to get the frame payload */
+//         ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
+//         if (ret != ESP_OK) {
+//             CONSOLE_ERROR("ADSBeeServer::ConsoleWebsocketHandler", "httpd_ws_recv_frame failed with %d.", ret);
+//             free(buf);
+//             NetworkConsoleRemoveWebsocketClient(client_fd);
+//             return ret;
+//         }
+
+//         NetworkConsoleUpdateActivityTimer(client_fd);
+//         CONSOLE_INFO("ADSBeeServer::ConsoleWebsocketHandler", "Got packet with message: %s", ws_pkt.payload);
+
+//         // Forward the network console message to the RP2040.
+//         NetworkConsoleMessage message = NetworkConsoleMessage((char *)ws_pkt.payload, (uint16_t)ws_pkt.len);
+//         int err = xQueueSend(network_console_rx_queue, &message, 0);
+//         if (err == errQUEUE_FULL) {
+//             CONSOLE_WARNING("ADSBeeServer::NetworkConsoleWebSocketHandler", "Overflowed network console rx queue.");
+//             xQueueReset(network_console_rx_queue);
+//             return ESP_FAIL;
+//         } else if (err != pdTRUE) {
+//             CONSOLE_WARNING("ADSBeeServer::NetworkConsoleWebSocketHandler",
+//                             "Pushing network console message to network console rx queue resulted in error %d.",
+//                             err);
+//             return ESP_FAIL;
+//         }
+//     }
+
+//     free(buf);
+//     return ret;
+// }
+
+void NetworkConsolePostConnectCallback(WebSocketServer *ws_server, int client_fd) {
+    char welcome_message[kNetworkConsoleWelcomeMessageMaxLen];
+    snprintf(welcome_message, kNetworkConsoleWelcomeMessageMaxLen,
+             "\r\n █████  ██████  ███████ ██████  ███████ ███████      ██  ██████   █████   ██████  "
+             "\r\n██   ██ ██   ██ ██      ██   ██ ██      ██          ███ ██  ████ ██   ██ ██  ████ "
+             "\r\n███████ ██   ██ ███████ ██████  █████   █████        ██ ██ ██ ██  ██████ ██ ██ ██ "
+             "\r\n██   ██ ██   ██      ██ ██   ██ ██      ██           ██ ████  ██      ██ ████  ██ "
+             "\r\n██   ██ ██████  ███████ ██████  ███████ ███████      ██  ██████   █████   ██████  "
+             "\r\n\r\nFirmware Version: %d.%d.%d\r\nAP SSID: %s\r\n",
+             object_dictionary.kFirmwareVersionMajor, object_dictionary.kFirmwareVersionMinor,
+             object_dictionary.kFirmwareVersionPatch, settings_manager.settings.wifi_ap_ssid);
+    welcome_message[kNetworkConsoleWelcomeMessageMaxLen] = '\0';  // Null terminate for safety.
+    ws_server->SendMessage(client_fd, welcome_message);
 }
 
-bool ADSBeeServer::NetworkConsoleUpdateActivityTimer(int client_fd) {
-    for (int i = 0; i < kNetworkConsoleMaxNumClients; i++) {
-        if (network_console_clients[i].client_fd == client_fd) {
-            network_console_clients[i].last_message_timestamp_ms = get_time_since_boot_ms();
-            return true;
-        }
+void NetworkConsoleMessageReceivedCallback(WebSocketServer *ws_server, int client_fd, httpd_ws_frame_t &ws_pkt) {
+    // Forward the network console message to the RP2040.
+    ADSBeeServer::NetworkConsoleMessage message =
+        ADSBeeServer::NetworkConsoleMessage((char *)ws_pkt.payload, (uint16_t)ws_pkt.len);
+    int err = xQueueSend(adsbee_server.network_console_rx_queue, &message, 0);
+    if (err == errQUEUE_FULL) {
+        CONSOLE_WARNING("NetworkConsoleMessageReceivedCallback", "Overflowed network console rx queue.");
+        xQueueReset(adsbee_server.network_console_rx_queue);
+    } else if (err != pdTRUE) {
+        CONSOLE_WARNING("NetworkConsoleMessageReceivedCallback",
+                        "Pushing network console message to network console rx queue resulted in error %d.", err);
     }
-    return false;  // Couldn't find client.
-}
-
-esp_err_t ADSBeeServer::NetworkConsoleWebSocketHandler(httpd_req_t *req) {
-    int client_fd = httpd_req_to_sockfd(req);
-
-    if (req->method == HTTP_GET) {
-        CONSOLE_INFO("ADSBeeServer::ConsoleWebsocketHandler", "Handshake done, the new connection was opened");
-        if (!NetworkConsoleAddWebSocketClient(client_fd)) {
-            CONSOLE_ERROR("ADSBee::NetworkConsoleWebSocketHandler", "Rejecting websocket connection.");
-            // Send a close frame
-            httpd_ws_frame_t ws_pkt = {
-                .final = true, .fragmented = false, .type = HTTPD_WS_TYPE_CLOSE, .payload = NULL, .len = 0};
-
-            httpd_ws_send_frame(req, &ws_pkt);
-
-            // Return error to reject the connection
-            return ESP_FAIL;
-        }
-        char welcome_message[kNetworkConsoleWelcomeMessageMaxLen];
-        snprintf(welcome_message, kNetworkConsoleWelcomeMessageMaxLen,
-                 "\r\n █████  ██████  ███████ ██████  ███████ ███████      ██  ██████   █████   ██████  "
-                 "\r\n██   ██ ██   ██ ██      ██   ██ ██      ██          ███ ██  ████ ██   ██ ██  ████ "
-                 "\r\n███████ ██   ██ ███████ ██████  █████   █████        ██ ██ ██ ██  ██████ ██ ██ ██ "
-                 "\r\n██   ██ ██   ██      ██ ██   ██ ██      ██           ██ ████  ██      ██ ████  ██ "
-                 "\r\n██   ██ ██████  ███████ ██████  ███████ ███████      ██  ██████   █████   ██████  "
-                 "\r\n\r\nFirmware Version: %d.%d.%d\r\nAP SSID: %s\r\n",
-                 object_dictionary.kFirmwareVersionMajor, object_dictionary.kFirmwareVersionMinor,
-                 object_dictionary.kFirmwareVersionPatch, settings_manager.settings.wifi_ap_ssid);
-        welcome_message[kNetworkConsoleWelcomeMessageMaxLen] = '\0';  // Null terminate for safety.
-        NetworkConsoleSendMessage(client_fd, welcome_message);
-        return ESP_OK;
-    }
-    httpd_ws_frame_t ws_pkt;
-    uint8_t *buf = NULL;
-    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-    /* Set max_len = 0 to get the frame len */
-    esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
-    if (ret != ESP_OK) {
-        CONSOLE_ERROR("ADSBeeServer::ConsoleWebsocketHandler", "httpd_ws_recv_frame failed to get frame len with %d.",
-                      ret);
-        return ret;
-    }
-    CONSOLE_INFO("ADSBeeServer::ConsoleWebsocketHandler", "frame len is %d.", ws_pkt.len);
-    if (ws_pkt.len) {
-        /* ws_pkt.len + 1 is for NULL termination as we are expecting a string */
-        buf = (uint8_t *)calloc(1, ws_pkt.len + 1);
-        if (buf == NULL) {
-            CONSOLE_ERROR("ADSBeeServer::ConsoleWebsocketHandler", "Failed to calloc memory for buf.");
-            return ESP_ERR_NO_MEM;
-        }
-        ws_pkt.payload = buf;
-        /* Set max_len = ws_pkt.len to get the frame payload */
-        ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
-        if (ret != ESP_OK) {
-            CONSOLE_ERROR("ADSBeeServer::ConsoleWebsocketHandler", "httpd_ws_recv_frame failed with %d.", ret);
-            free(buf);
-            NetworkConsoleRemoveWebsocketClient(client_fd);
-            return ret;
-        }
-
-        NetworkConsoleUpdateActivityTimer(client_fd);
-        CONSOLE_INFO("ADSBeeServer::ConsoleWebsocketHandler", "Got packet with message: %s", ws_pkt.payload);
-
-        // Forward the network console message to the RP2040.
-        NetworkConsoleMessage message = NetworkConsoleMessage((char *)ws_pkt.payload, (uint16_t)ws_pkt.len);
-        int err = xQueueSend(network_console_rx_queue, &message, 0);
-        if (err == errQUEUE_FULL) {
-            CONSOLE_WARNING("ADSBeeServer::NetworkConsoleWebSocketHandler", "Overflowed network console rx queue.");
-            xQueueReset(network_console_rx_queue);
-            return ESP_FAIL;
-        } else if (err != pdTRUE) {
-            CONSOLE_WARNING("ADSBeeServer::NetworkConsoleWebSocketHandler",
-                            "Pushing network console message to network console rx queue resulted in error %d.", err);
-            return ESP_FAIL;
-        }
-    }
-
-    // Simple loopback.
-    // ret = NetworkConsoleSendMessage(httpd_req_to_sockfd(req), (const char *)ws_pkt.payload);
-    // if (ret != ESP_OK) {
-    //     CONSOLE_ERROR("ADSBeeServer::ConsoleWebsocketHandler", "httpd_ws_send_frame failed with %d", ret);
-    // }
-
-    free(buf);
-    return ret;
 }
 
 bool ADSBeeServer::TCPServerInit() {
@@ -502,16 +530,24 @@ bool ADSBeeServer::TCPServerInit() {
         httpd_register_uri_handler(server, &css);
 
         // Network console Websocket handler
-        httpd_uri_t console_ws = {.uri = "/console",
-                                  .method = HTTP_GET,
-                                  .handler = console_ws_handler,
-                                  .user_ctx = NULL,
-                                  .is_websocket = true};
-        httpd_register_uri_handler(server, &console_ws);
+        // httpd_uri_t console_ws = {.uri = "/console",
+        //                           .method = HTTP_GET,
+        //                           .handler = console_ws_handler,
+        //                           .user_ctx = NULL,
+        //                           .is_websocket = true};
+        // httpd_register_uri_handler(server, &console_ws);
+        network_console = WebSocketServer({.label = "Network Console",
+                                           .server = server,
+                                           .uri = "/console",
+                                           .num_clients_allowed = 3,
+                                           .post_connect_callback = NetworkConsolePostConnectCallback,
+                                           .message_received_callback = NetworkConsoleMessageReceivedCallback});
+        network_console.Init();
     }
 
-    xTaskCreatePinnedToCore(tcp_server_task, "tcp_server", kTCPServerTaskStackSizeBytes, NULL, kTCPServerTaskPriority,
-                            NULL, kTCPServerTaskCore);
+    // xTaskCreatePinnedToCore(tcp_server_task, "tcp_server", kTCPServerTaskStackSizeBytes, NULL,
+    // kTCPServerTaskPriority,
+    //                         NULL, kTCPServerTaskCore);
 
     return server != nullptr;
 }
