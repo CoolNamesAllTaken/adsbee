@@ -157,13 +157,9 @@ bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char
 
 bool CommsManager::network_console_putc(char c) {
     if (!comms_manager.esp32_console_tx_queue.Push(c)) {
-        comms_manager.Update();
-        if (!comms_manager.esp32_console_tx_queue.Push(c)) {
-            CONSOLE_ERROR("CommsManager::network_console_putc",
-                          "Overflowed buffer for outgoing network console chars after attempting to clear buffer.");
-            comms_manager.esp32_console_tx_queue.Clear();
-            return false;
-        }
+        comms_manager.esp32_console_tx_queue.Clear();
+        CONSOLE_ERROR("CommsManager::network_console_putc", "Overflowed buffer for outgoing network console chars.");
+        return false;
     }
     return true;
 }

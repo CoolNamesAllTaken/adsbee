@@ -42,6 +42,7 @@ target_sources(host_test PRIVATE
 target_include_directories(host_test PRIVATE
     ${ADSBEE_COMMON_DIR}
     ${ADSBEE_MODULES_DIR}/googletest
+    ${ADSBEE_MODULES_DIR}/cppAT/settings # use default settings for testing
     ${ADSBEE_MODULES_DIR}/cppAT/src
     .
     mocks

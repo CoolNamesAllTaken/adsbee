@@ -23,6 +23,7 @@ class ADSBee {
     static const uint32_t kStatusLEDOnMs = 10;
     static const uint16_t kNumDemodStateMachines = 3;  // 2x well-formed preamble, 1x high power preamble
     static const uint16_t kHighPowerDemodStateMachineIndex = 2;
+    static const uint16_t kRebootDelayMs = 1000;
 
     static const uint32_t kTLLearningIntervalMs =
         10000;  // [ms] Length of Simulated Annealing interval for learning trigger level.
@@ -37,8 +38,6 @@ class ADSBee {
         50;  // [%] Weight to use for low pass expo filter of noise floor ADC counts. 0 = no filter, 100 = hold value.
     static const uint32_t kNoiseFloorADCSampleIntervalMs =
         1;  // [ms] Interval between ADC samples to approximate noise floor value.
-
-    static const uint32_t kWatchdogTimeoutMs = 1000;
 
     struct ADSBeeConfig {
         PIO preamble_detector_pio = pio0;
@@ -81,6 +80,23 @@ class ADSBee {
     ADSBee(ADSBeeConfig config_in);
     bool Init();
     bool Update();
+
+    /**
+     * Inlne helper function that converts milliVolts at the AD8313 input to a corresponding value in dBm, using values
+     * from the AD8313 datasheet.
+     * @param[in] mv Voltage level, in milliVolts.
+     * @retval Corresponding power level, in dBm.
+     */
+    static inline int AD8313MilliVoltsTodBm(int mv) {
+        return 60 * (mv - 1600) / 1000;  // AD8313 0dBm intercept at 1.6V, slope is 60dBm/V.
+    }
+
+    /**
+     * Inline helper function that converts ADC counts on theRP2040 to milliVolts.
+     * @param[in] adc_counts ADC counts, 0 to 4095.
+     * @retval Voltage in milliVolts.
+     */
+    static inline int ADCCountsToMilliVolts(uint16_t adc_counts) { return 3300 * adc_counts / 0xFFF; }
 
     /**
      * Returns whether the bias tee is enabled.
@@ -133,6 +149,8 @@ class ADSBee {
      */
     int GetTLMilliVolts() { return tl_mv_; }
 
+    inline uint32_t GetWatchdogTimeoutSec() { return watchdog_timeout_sec_ / kMsPerSec; }
+
     /**
      * ISR for GPIO interrupts.
      */
@@ -147,6 +165,11 @@ class ADSBee {
      * ISR triggered by SysTick interrupt. Used to wrap the MLAT counter.
      */
     void OnSysTickWrap();
+
+    /**
+     * Resets the watchdog counter to the value set in SetWatchdogTimeoutSec().
+     */
+    inline void PokeWatchdog() { watchdog_update(); }
 
     /**
      * Returns the Receive Signal Strength Indicator (RSSI) of the signal currently provided by the RF power detector,
@@ -171,7 +194,7 @@ class ADSBee {
     /**
      * Reboots the RP2040 via the watchdog.
      */
-    void Reboot() { watchdog_reboot(0, 0, kWatchdogTimeoutMs); }
+    void Reboot() { watchdog_reboot(0, 0, kRebootDelayMs); }
 
     /**
      * Returns whether ADS-B receiving is currently enabled.
@@ -183,7 +206,7 @@ class ADSBee {
      * Enable or disable the bias tee to inject 3.3V at the RF IN connector.
      * @param[in] is_enabled True to enable the bias tee, false otherwise.
      */
-    void SetBiasTeeEnable(bool is_enabled) {
+    inline void SetBiasTeeEnable(bool is_enabled) {
         bias_tee_enabled_ = is_enabled;
         gpio_put(config_.bias_tee_enable_pin, !bias_tee_enabled_);
     }
@@ -192,7 +215,7 @@ class ADSBee {
      * Enables or disables the ADS-B receiver by hogging the demodulation completed interrupt.
      * @param[in] is_enabled True if ADS-B receiver should be enabled, false otherwise.
      */
-    void SetReceiverEnable(bool is_enabled) {
+    inline void SetReceiverEnable(bool is_enabled) {
         receiver_enabled_ = is_enabled;
         irq_set_enabled(config_.preamble_detector_demod_complete_irq, receiver_enabled_);
     }
@@ -205,9 +228,21 @@ class ADSBee {
      */
     bool SetTLMilliVolts(int tl_mv);
 
-    bool SetWatchdogEnable(bool enable_watchdog) {
-        if (enable_watchdog) {
-            watchdog_enable(kWatchdogTimeoutMs, true);  // Pause the watchdog timer during debug.
+    /**
+     * Sets the watchdog timer.
+     * @param[in] watchdog_timeout_sec Maximum interval between PokeWatchdog() calls before watchdog times out and
+     * triggers a reboot. 0 = watchodg is disabled. Note that this value is in seconds, to hopefully prevent an
+     * unrecoverable loop where the watchdog timer gets set too short and causes the device to reboot before the setting
+     * can be changed.
+     * @retval True if set successfully, false if invalid watchdog value.
+     */
+    inline bool SetWatchdogTimeoutSec(uint32_t watchdog_timeout_sec) {
+        if (watchdog_timeout_sec > UINT32_MAX / kMsPerSec) {
+            return false;  // Watchdog timeout value too big.
+        }
+        if (watchdog_timeout_sec > 0) {
+            watchdog_timeout_sec_ = watchdog_timeout_sec;
+            watchdog_enable(watchdog_timeout_sec_ * kMsPerSec, true);  // Pause the watchdog timer during debug.
         } else {
             watchdog_disable();
         }
@@ -276,6 +311,7 @@ class ADSBee {
 
     bool receiver_enabled_ = true;
     bool bias_tee_enabled_ = false;
+    uint32_t watchdog_timeout_sec_ = SettingsManager::Settings::kDefaultWatchdogTimeoutSec * kMsPerSec;
 
     int32_t noise_floor_mv_;
     uint32_t noise_floor_last_sample_timestamp_ms_ = 0;

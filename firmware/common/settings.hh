@@ -8,8 +8,8 @@
 #include "macros.hh"
 #include "stdio.h"
 
-static const uint32_t kSettingsVersion = 0x4;  // Change this when settings format changes!
-static const uint32_t kDeviceInfoVersion = 0x1;
+static const uint32_t kSettingsVersion = 0x5;  // Change this when settings format changes!
+static const uint32_t kDeviceInfoVersion = 0x2;
 
 class SettingsManager {
    public:
@@ -42,7 +42,8 @@ class SettingsManager {
     // firmware upgrade if the format of the settings struct changes.
     struct Settings {
         static const int kDefaultTLMV = 1300;  // [mV]
-        // NOTE: Length does not include null terminator.
+        static const uint32_t kDefaultWatchdogTimeoutSec = 10;
+        // NOTE: Lengths do not include null terminator.
         static const uint16_t kWiFiSSIDMaxLen = 32;
         static const uint16_t kWiFiPasswordMaxLen = 63;  // Theoretical max is 63, but limited by CppAT arg max len.
         static const uint16_t kWiFiMaxNumClients = 6;
@@ -58,6 +59,7 @@ class SettingsManager {
         bool receiver_enabled = true;
         int tl_mv = kDefaultTLMV;
         bool bias_tee_enabled = false;
+        uint32_t watchdog_timeout_sec = kDefaultWatchdogTimeoutSec;
 
         // CommunicationsManager settings
         LogLevel log_level = LogLevel::kInfo;  // Start with highest verbosity by default.
@@ -114,15 +116,24 @@ class SettingsManager {
 
     // This struct contains device information that should persist across firmware upgrades.
     struct DeviceInfo {
+        // NOTE: Lengths do not include null terminator.
         static const uint16_t kPartCodeLen = 26;  // NNNNNNNNNR-YYYYMMDD-VVXXXX (not counting end of string char).
+        static const uint16_t kOTAKeyMaxLen = 128;
+        static const uint16_t kNumOTAKeys = 2;
 
         uint32_t device_info_version = kDeviceInfoVersion;
         char part_code[kPartCodeLen + 1];
+        char ota_keys[kNumOTAKeys][kOTAKeyMaxLen + 1];
 
         /**
          * Default constructor.
          */
-        DeviceInfo() { memset(part_code, '\0', kPartCodeLen + 1); }
+        DeviceInfo() {
+            memset(part_code, '\0', kPartCodeLen + 1);
+            for (uint16_t i = 0; i < kNumOTAKeys; i++) {
+                memset(ota_keys[i], '\0', kOTAKeyMaxLen + 1);
+            }
+        }
 
         static const uint16_t kDefaultSSIDLenChars = 24;  // ADSBee1090-YYYMMDDVVXXXX
         /**
@@ -169,50 +180,7 @@ class SettingsManager {
      */
     bool Load();
 
-    void Print() {
-        printf("Settings Struct\r\n");
-        printf("\tReceiver: %s\r\n", settings.receiver_enabled ? "ENABLED" : "DISABLED");
-        printf("\tTrigger Level [milliVolts]: %d\r\n", settings.tl_mv);
-        printf("\tBias Tee: %s\r\n", settings.bias_tee_enabled ? "ENABLED" : "DISABLED");
-        printf("\tLog Level: %s\r\n", kConsoleLogLevelStrs[settings.log_level]);
-        printf("\tReporting Protocols:\r\n");
-        for (uint16_t i = 0; i < SerialInterface::kGNSSUART; i++) {
-            // Only report protocols for CONSOLE and COMMS_UART.
-            printf("\t\t%s: %s\r\n", kSerialInterfaceStrs[i], kReportingProtocolStrs[settings.reporting_protocols[i]]);
-        }
-        printf("\tComms UART Baud Rate: %lu baud\r\n", settings.comms_uart_baud_rate);
-        printf("\tGNSS UART Baud Rate: %lu baud\r\n", settings.gnss_uart_baud_rate);
-        printf("\tESP32: %s\r\n", settings.esp32_enabled ? "ENABLED" : "DISABLED");
-
-        // Print WiFi settings.
-        printf("\tWiFi AP: %s\r\n", settings.wifi_ap_enabled ? "ENABLED" : "DISABLED");
-        if (settings.wifi_ap_enabled) {
-            // Access Point settings. Don't censor password.
-            printf("\t\tChannel: %d\r\n", settings.wifi_ap_channel);
-            printf("\t\tSSID: %s\r\n", settings.wifi_ap_ssid);
-            printf("\t\tPassword: %s\r\n", settings.wifi_ap_password);
-        }
-        printf("\tWiFi STA: %s\r\n", settings.wifi_sta_enabled ? "ENABLED" : "DISABLED");
-        if (settings.wifi_sta_enabled) {
-            // Station settings. Censor password.
-            printf("\t\tSSID: %s\r\n", settings.wifi_sta_ssid);
-            char redacted_wifi_sta_password[Settings::kWiFiPasswordMaxLen];
-            RedactPassword(settings.wifi_sta_password, redacted_wifi_sta_password, strlen(settings.wifi_sta_password));
-            printf("\t\tPassword: %s\r\n", redacted_wifi_sta_password);
-        }
-
-        printf("\tFeed URIs:\r\n");
-        for (uint16_t i = 0; i < Settings::kMaxNumFeeds; i++) {
-            printf("\t\t%d URI:%s Port:%d %s Protocol:%s ID:0x", i, settings.feed_uris[i], settings.feed_ports[i],
-                   settings.feed_is_active[i] ? "ACTIVE" : "INACTIVE",
-                   kReportingProtocolStrs[settings.feed_protocols[i]]);
-            for (int16_t feeder_id_byte_index = 0; feeder_id_byte_index < Settings::kFeedReceiverIDNumBytes;
-                 feeder_id_byte_index++) {
-                printf("%02x", settings.feed_receiver_ids[i][feeder_id_byte_index]);
-            }
-            printf("\r\n");
-        }
-    }
+    void Print();
 
     /**
      * Takes a password as a string and fills a buffer with the corresponding number of asterix.

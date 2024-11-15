@@ -72,7 +72,9 @@ if (ON_EMBEDDED_DEVICE)
     
     # Build for embedded target
     add_subdirectory(esp32_flasher)
+    MESSAGE("CppAT settings: ${ADSBEE_MODULES_DIR}/cppAT/settings")
     target_include_directories(application PRIVATE
+        # ${ADSBEE_MODULES_DIR}/cppAT/settings # No longer need this since it's being overridden.
         ${ADSBEE_MODULES_DIR}/cppAT/src
         .
     )

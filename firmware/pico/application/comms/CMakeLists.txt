@@ -9,11 +9,12 @@ if(NOT ON_EMBEDDED_DEVICE)
 else()
     # Build for embedded target
     target_sources(application PRIVATE
-        comms_at.cc
+        at/comms_at.cc
         comms.cc
         comms_reporting.cc
     )
     target_include_directories(application PRIVATE
+        at
         .
     )
 endif()

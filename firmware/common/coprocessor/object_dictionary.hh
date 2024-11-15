@@ -70,7 +70,7 @@ class ObjectDictionary {
                 strncpy(message, (char *)buf, buf_len);
                 message[kNetworkConsoleMessageMaxLenBytes] = '\0';  // Null terminate for safety.
                 CONSOLE_INFO("ObjectDictionary::SetBytes", "Forwarding message to network console: %s", message);
-                adsbee_server.NetworkConsoleBroadcastMessage(message);
+                adsbee_server.network_console.BroadcastMessage(message);
                 break;
             }
             case kAddrRawTransponderPacket: {

@@ -52,16 +52,6 @@ void on_demod_complete() { isr_access->OnDemodComplete(); }
 
 /** End pass-through functions for public access **/
 
-/** Begin inline helper functions. **/
-
-inline int AD8313MilliVoltsTodBm(int mv) {
-    return 60 * (mv - 1600) / 1000;  // AD8313 0dBm intercept at 1.6V, slope is 60dBm/V.
-}
-
-inline int ADCCountsToMilliVolts(uint16_t adc_counts) { return 3300 * adc_counts / 0xFFF; }
-
-/** End inline helper functions. **/
-
 ADSBee::ADSBee(ADSBeeConfig config_in) {
     config_ = config_in;
 
@@ -232,10 +222,6 @@ bool ADSBee::Init() {
         gpio_put(config_.status_led_pin, 0);
         sleep_ms(kStatusLEDBootupBlinkPeriodMs / 2);
     }
-    // pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[1], true);
-    // pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[0],
-    //                    true);  // Enable SM 0 last since others are waiting.
-    // pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[0], true);
 
     return true;
 }
@@ -343,6 +329,8 @@ bool ADSBee::Update() {
         noise_floor_last_sample_timestamp_ms_ = timestamp_ms;
     }
 
+    // Poke the watchdog. Add additional conditions here for satisfying watchdog if desired.
+    PokeWatchdog();
     return true;
 }
 
