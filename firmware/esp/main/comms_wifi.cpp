@@ -486,8 +486,19 @@ bool CommsManager::WiFiInit() {
 
 bool CommsManager::WiFiDeInit() {
     if (!wifi_was_initialized_) return true;  // Don't try de-initializing if it was never initialized.
+
+    // The de-init functions are not yet supported by ESP IDF, so the best bet is to just restart.
+    esp_restart();  // Software reset.
+    return false;   // abort didn't work
+
+    /*
+    ESP_ERROR_CHECK(esp_wifi_disconnect());
+    ESP_ERROR_CHECK(esp_wifi_stop());
+    ESP_ERROR_CHECK(esp_wifi_deinit());
+
     ESP_ERROR_CHECK(esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler));
     ESP_ERROR_CHECK(esp_event_handler_unregister(IP_EVENT, ESP_EVENT_ANY_ID, &ip_event_handler));
+    ESP_ERROR_CHECK(esp_netif_deinit()); // Deinitialization not supported!!
     esp_netif_destroy(wifi_ap_netif_);
     esp_netif_destroy(wifi_sta_netif_);
 
@@ -500,6 +511,7 @@ bool CommsManager::WiFiDeInit() {
     wifi_was_initialized_ = false;
 
     return true;
+    */
 }
 
 bool CommsManager::WiFiStationSendRawTransponderPacket(RawTransponderPacket& tpacket) {
