@@ -44,6 +44,9 @@ int main() {
 
     // If WiFi is enabled, try establishing communication with the ESP32 and maybe update its firmware.
     if (esp32.IsEnabled()) {
+        adsbee.SetWatchdogTimeoutSec(0);  // Disable watchdog while setting up ESP32, in case kESP32BootupTimeoutMs >=
+                                          // watchdog timeout, and to avoid watchdog reboot during ESP32 programming.
+
         // Try reading from the ESP32 till it finishes turning on.
         uint32_t esp32_firmware_version = 0x0;
         bool flash_esp32 = true;
@@ -74,15 +77,16 @@ int main() {
         }
         // If we never read from the ESP32, or read a different firmware version, try writing to it.
         if (flash_esp32) {
+            adsbee.SetWatchdogTimeoutSec(0);  // Disable watchdog while flashing.
             if (!esp32.DeInit()) {
                 CONSOLE_ERROR("main", "Error while de-initializing ESP32 before flashing.");
-            }
-            if (!esp32_flasher.FlashESP32()) {
+            } else if (!esp32_flasher.FlashESP32()) {
                 CONSOLE_ERROR("main", "Error while flashing ESP32.");
-            }
-            if (!esp32.Init()) {
+            } else if (!esp32.Init()) {
                 CONSOLE_ERROR("main", "Error while re-initializing ESP32 after flashing.");
             }
+            adsbee.SetWatchdogTimeoutSec(
+                settings_manager.settings.watchdog_timeout_sec);  // Restore watchdog after flashing.
         }
     }
 
