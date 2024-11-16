@@ -14,9 +14,6 @@ class ADSBeeServer {
     static const uint32_t kGDL90ReportingIntervalMs = 1000;
 
     static const uint16_t kNetworkConsoleQueueLen = 10;
-    // static const uint16_t kNetworkConsoleMaxNumClients = 3;
-    // static const uint32_t kNetworkConsoleInactivityTimeoutMs =
-    //     10 * 60e3;  // Time without a message before a network console client is disconnected.
 
     /**
      * Data structure used to pass netowrk console messages between threads (SPI <-> WebSocket server). Needs to be
@@ -63,29 +60,6 @@ class ADSBeeServer {
      * TCP server that accepts incoming connections (used for network control via port 3333).
      */
     void TCPServerTask(void* pvParameters);
-
-    // /**
-    //  * Add a new client connection for the Network Console WebSocket.
-    //  * @param[in] client_fd File descriptor for writing to the client.
-    //  * @retval True if client was successfully added, false if maximum number of clients already reached.
-    //  */
-    // bool NetworkConsoleAddWebSocketClient(int client_fd);
-
-    // /**
-    //  * Remove a client connection from the Network Console WebSocket.
-    //  * @param[in] client_fd File descriptor for the client to remove.
-    //  * @retval True if client was successfully removed, false if client wasn't found in the connectin list.
-    //  */
-    // bool NetworkConsoleRemoveWebsocketClient(int client_fd);
-
-    // void NetworkConsoleBroadcastMessage(const char* message);
-    // esp_err_t NetworkConsoleSendMessage(int client_fd, const char* message);
-    // bool NetworkConsoleUpdateActivityTimer(int client_fd);
-
-    // /**
-    //  * Handler for incoming websocket connections to the network console.
-    //  */
-    // esp_err_t NetworkConsoleWebSocketHandler(httpd_req_t* req);
 
     PFBQueue<RawTransponderPacket> transponder_packet_queue = PFBQueue<RawTransponderPacket>(
         {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = transponder_packet_queue_buffer_});
