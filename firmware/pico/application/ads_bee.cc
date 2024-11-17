@@ -324,7 +324,7 @@ bool ADSBee::Update() {
     timestamp_ms = get_time_since_boot_ms();
     if (timestamp_ms - noise_floor_last_sample_timestamp_ms_ > kNoiseFloorADCSampleIntervalMs) {
         noise_floor_mv_ = ((noise_floor_mv_ * kNoiseFloorExpoFilterPercent) +
-                           ReadSignalStrengthMilliVolts() * (1 - kNoiseFloorExpoFilterPercent)) /
+                           ReadSignalStrengthMilliVolts() * (100 - kNoiseFloorExpoFilterPercent)) /
                           100;
         noise_floor_last_sample_timestamp_ms_ = timestamp_ms;
     }
