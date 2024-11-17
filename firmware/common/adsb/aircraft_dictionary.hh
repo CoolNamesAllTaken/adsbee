@@ -418,9 +418,9 @@ class AircraftDictionary {
                          (i < kMaxNumSources - 1) ? ", " : "");
             }
             // Note: No trailing comma since it's the last element (JSON does not allow a trailing comma).
-            strncat(buf, "] ", message_max_len - strlen(buf));
+            strncat(buf, "] }", message_max_len - strlen(buf));
 
-            strcat(buf, "}");
+            buf[buf_len - 1] = '\0';  // Ensure null terminator.
         }
     };
 

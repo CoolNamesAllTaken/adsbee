@@ -250,14 +250,14 @@ bool ADSBee::Update() {
     RawTransponderPacket raw_packet;
     while (transponder_packet_queue.Pop(raw_packet)) {
         if (raw_packet.buffer_len_bits == DecodedTransponderPacket::kExtendedSquitterPacketLenBits) {
-            CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%08x|%08x|%04x SIGS=%ddBm SIGQ=%ddB MLAT=%u",
+            CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%08x|%08x|%04x SRC=%d SIGS=%ddBm SIGQ=%ddB MLAT=%u",
                          raw_packet.buffer[0], raw_packet.buffer[1], raw_packet.buffer[2],
-                         (raw_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_packet.sigs_dbm, raw_packet.sigq_db,
-                         raw_packet.mlat_48mhz_64bit_counts);
-        } else {
-            CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%06x SIGS=%ddBm SIGQ=%ddB MLAT=%u",
-                         raw_packet.buffer[0], (raw_packet.buffer[1]) >> (2 * kBitsPerNibble), raw_packet.sigs_dbm,
+                         (raw_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_packet.source, raw_packet.sigs_dbm,
                          raw_packet.sigq_db, raw_packet.mlat_48mhz_64bit_counts);
+        } else {
+            CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%06x SRC=%d SIGS=%ddBm SIGQ=%ddB MLAT=%u",
+                         raw_packet.buffer[0], (raw_packet.buffer[1]) >> (2 * kBitsPerNibble), raw_packet.source,
+                         raw_packet.sigs_dbm, raw_packet.sigq_db, raw_packet.mlat_48mhz_64bit_counts);
         }
 
         DecodedTransponderPacket decoded_packet = DecodedTransponderPacket(raw_packet);

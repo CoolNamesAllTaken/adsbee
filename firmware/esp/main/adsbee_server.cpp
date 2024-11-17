@@ -115,26 +115,11 @@ bool ADSBeeServer::Update() {
                      aircraft_dictionary.stats.valid_extended_squitter_frames);
 
         // Broadcast dictionary stats over the stats Websocket.
-        char stats_message[kNetworkStatsMessageMaxLen + 1] = {'\0'};
-        strcat(stats_message, "{");
-        snprintf(stats_message + strlen(stats_message), kNetworkStatsMessageMaxLen - strlen(stats_message),
-                 "\"raw_squitter_frames\": %lu, \"valid_squitter_frames\": %lu, \"raw_extended_squitter_frames\": %lu, "
-                 "\"valid_extended_squitter_frames\": %lu, \"demods_1090\": %lu,",
-                 aircraft_dictionary.stats.raw_squitter_frames, aircraft_dictionary.stats.valid_squitter_frames,
-                 aircraft_dictionary.stats.raw_extended_squitter_frames,
-                 aircraft_dictionary.stats.valid_extended_squitter_frames, aircraft_dictionary.stats.demods_1090);
-
-        strncat(stats_message, "\"sources_raw_squitter_frames\": [",
-                kNetworkStatsMessageMaxLen - strlen(stats_message));
-        for (uint16_t i = 0; i < kNumTransponderPacketSources; i++) {
-            snprintf(stats_message + strlen(stats_message), kNetworkStatsMessageMaxLen - strlen(stats_message), "%lu%s",
-                     aircraft_dictionary.stats.sources_raw_squitter_frames[i],
-                     (i < kNumTransponderPacketSources - 1) ? ", " : "");
-        }
-        strncat(stats_message, "], ", kNetworkStatsMessageMaxLen - strlen(stats_message));
-        strcat(stats_message, "}");
+        char stats_message[AircraftDictionary::Stats::kStatsJSONMaxLen];
+        aircraft_dictionary.stats.ToJSON(stats_message, AircraftDictionary::Stats::kStatsJSONMaxLen);
 
         for (uint16_t i = 0; i < kNumTransponderPacketSources; i++) {
+            network_stats.BroadcastMessage(stats_message, strlen(stats_message));
         }
     }
 

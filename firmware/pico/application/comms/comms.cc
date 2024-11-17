@@ -143,7 +143,8 @@ bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char
             return true;  // Function is void so we won't know if it succeeds.
             break;
         case SettingsManager::kConsole:
-            return puts(buf) >= 0 && (!esp32.IsEnabled() || network_console_puts(buf) >= 0);
+            // Note: Using fputs instead of standard puts, since puts adds a line feed.
+            return fputs(buf, stdout) >= 0 && (!esp32.IsEnabled() || network_console_puts(buf) >= 0);
             break;
         case SettingsManager::kNumSerialInterfaces:
         default:
