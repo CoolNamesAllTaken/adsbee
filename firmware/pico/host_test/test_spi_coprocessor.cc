@@ -18,7 +18,7 @@ TEST(SPICoprocessor, SCWritePacket) {
     EXPECT_TRUE(packet.IsValid());
 
     EXPECT_EQ(packet.GetBufLenBytes(), sizeof(RawTransponderPacket) + sizeof(SPICoprocessor::SCCommand) +
-                                           sizeof(ObjectDictionary::Address) + sizeof(uint16_t) + sizeof(uint8_t) +
+                                           sizeof(ObjectDictionary::Address) + 2 * sizeof(uint16_t) +
                                            SPICoprocessor::SCWritePacket::kCRCLenBytes);
 
     SPICoprocessor::SCWritePacket packet_copy = SPICoprocessor::SCWritePacket(packet.GetBuf(), packet.GetBufLenBytes());

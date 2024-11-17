@@ -1,6 +1,7 @@
 #ifndef _AIRCRAFT_DICTIONARY_HH_
 #define _AIRCRAFT_DICTIONARY_HH_
 
+#include <cstdio>
 #include <cstring>
 #include <unordered_map>
 
@@ -335,6 +336,7 @@ class Aircraft {
 class AircraftDictionary {
    public:
     static const uint16_t kMaxNumAircraft = 100;
+    static const uint16_t kMaxNumSources = 3;
 
     struct AircraftDictionaryConfig_t {
         uint32_t aircraft_prune_interval_ms = 60e3;
@@ -346,6 +348,82 @@ class AircraftDictionary {
         uint32_t raw_extended_squitter_frames = 0;
         uint32_t valid_extended_squitter_frames = 0;
         uint32_t demods_1090 = 0;
+
+        uint16_t raw_squitter_frames_by_source[kMaxNumSources] = {0};
+        uint16_t valid_squitter_frames_by_source[kMaxNumSources] = {0};
+        uint16_t raw_extended_squitter_frames_by_source[kMaxNumSources] = {0};
+        uint16_t valid_extended_squitter_frames_by_source[kMaxNumSources] = {0};
+        uint16_t demods_1090_by_source[kMaxNumSources] = {0};
+
+        /**
+         * Formats the stats dictionary into a JSON packet with the following structure.
+         * {
+         *      "raw_squitter_frames" = 10,
+         *      "valid_squitter_frames" = 7,
+         *      "raw_extended_squitter_frames" = 30,
+         *      "valid_extended_squitter_frames" = 16,
+         *      "demods_1090" = 50,
+         *      "raw_squitter_frames_by_source" = [3, 3, 4],
+         *      "valid_squitter_frames_by_source" = [2, 2, 3],
+         *      "raw_extended_squitter_frames_by_source" = [10, 11, 9],
+         *      "valid_squitter_frames_by_source" = [4, 4, 8],
+         *      "demods_1090_by_source" = [20, 10, 20]
+         * }
+         * @param[in] buf Buffer to write the JSON string to.
+         * @param[in] buf_len Length of the buffer, including the null terminator.
+         */
+        inline void ToJSON(char *buf, size_t buf_len) {
+            uint16_t message_max_len = buf_len - 1;  // Leave space for null terminator.
+            strcat(buf, "{");
+            snprintf(
+                buf + strlen(buf), message_max_len - strlen(buf),
+                "\"raw_squitter_frames\": %lu, \"valid_squitter_frames\": %lu, \"raw_extended_squitter_frames\": %lu, "
+                "\"valid_extended_squitter_frames\": %lu, \"demods_1090\": %lu,",
+                raw_squitter_frames, valid_squitter_frames, raw_extended_squitter_frames,
+                valid_extended_squitter_frames, demods_1090);
+
+            // Raw Squitter Frames by Source
+            strncat(buf, "\"raw_squitter_frames_by_source\": [", message_max_len - strlen(buf));
+            for (uint16_t i = 0; i < kMaxNumSources; i++) {
+                snprintf(buf + strlen(buf), message_max_len - strlen(buf), "%lu%s", raw_squitter_frames_by_source[i],
+                         (i < kMaxNumSources - 1) ? ", " : "");
+            }
+            strncat(buf, "], ", message_max_len - strlen(buf));
+
+            // Valid Squitter Frames by Source
+            strncat(buf, "\"valid_squitter_frames_by_source\": [", message_max_len - strlen(buf));
+            for (uint16_t i = 0; i < kMaxNumSources; i++) {
+                snprintf(buf + strlen(buf), message_max_len - strlen(buf), "%lu%s", valid_squitter_frames_by_source[i],
+                         (i < kMaxNumSources - 1) ? ", " : "");
+            }
+            strncat(buf, "], ", message_max_len - strlen(buf));
+
+            // Raw Extended Squitter Frames by Source
+            strncat(buf, "\"raw_extended_squitter_frames_by_source\": [", message_max_len - strlen(buf));
+            for (uint16_t i = 0; i < kMaxNumSources; i++) {
+                snprintf(buf + strlen(buf), message_max_len - strlen(buf), "%lu%s",
+                         raw_extended_squitter_frames_by_source[i], (i < kMaxNumSources - 1) ? ", " : "");
+            }
+            strncat(buf, "], ", message_max_len - strlen(buf));
+
+            // Valid Extended Squitter Frames by Source
+            strncat(buf, "\"valid_extended_squitter_frames_by_source\": [", message_max_len - strlen(buf));
+            for (uint16_t i = 0; i < kMaxNumSources; i++) {
+                snprintf(buf + strlen(buf), message_max_len - strlen(buf), "%lu%s",
+                         valid_extended_squitter_frames_by_source[i], (i < kMaxNumSources - 1) ? ", " : "");
+            }
+            strncat(buf, "], ", message_max_len - strlen(buf));
+
+            // Demods 1090 by Source
+            strncat(buf, "\"demods_1090_by_source\": [", message_max_len - strlen(buf));
+            for (uint16_t i = 0; i < kMaxNumSources; i++) {
+                snprintf(buf + strlen(buf), message_max_len - strlen(buf), "%lu%s", demods_1090_by_source[i],
+                         (i < kMaxNumSources - 1) ? ", " : "");
+            }
+            strncat(buf, "], ", message_max_len - strlen(buf));
+
+            strcat(buf, "}");
+        }
     };
 
     /**
@@ -374,7 +452,12 @@ class AircraftDictionary {
      * Log an attempted demodulation on 1090MHz. Used to record performance statistics. Note that the increment won't be
      * visible until the next dictionary update occurs.
      */
-    void RecordDemod1090() { stats_counter_.demods_1090++; }
+    void RecordDemod1090(int16_t source = -1) {
+        stats_counter_.demods_1090++;
+        if (source >= 0 && source < kMaxNumSources) {
+            stats_counter_.demods_1090_by_source[source]++;
+        }
+    }
 
     /**
      * Ingests a DecodedTransponderPacket and uses it to insert and update the relevant aircraft.

@@ -271,7 +271,7 @@
             }
         }
 
-        class MetricsWebSocket {
+        class StatsWebSocket {
             constructor(url) {
                 this.url = url;
                 this.charts = {};
@@ -349,9 +349,8 @@
             }
         }
 
-        // Initialize WebSocket connection
-        // Replace 'YOUR_WEBSOCKET_URL' with your actual WebSocket server URL
-        const metrics = new MetricsWebSocket('YOUR_WEBSOCKET_URL');
+        // Initialize WebSocket connection for stats feed
+        const metrics = new StatsWebSocket(WS_CONFIG.stats_ws_url);
     </script>
 </body>
 

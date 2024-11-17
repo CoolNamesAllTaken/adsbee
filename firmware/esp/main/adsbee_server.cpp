@@ -11,7 +11,9 @@
 
 static const uint16_t kGDL90Port = 4000;
 
-static const uint32_t kNetworkConsoleWelcomeMessageMaxLen = 1000;
+static const uint16_t kNetworkConsoleWelcomeMessageMaxLen = 1000;
+static const uint16_t kNetworkStatsMessageMaxLen = 1000;
+static const uint16_t kNumTransponderPacketSources = 3;
 
 /* obsolete */
 static const uint16_t kNetworkControlPort = 3333;  // NOTE: This must match the port number used in index.html!
@@ -111,6 +113,29 @@ bool ADSBeeServer::Update() {
                      comms_manager.GetNumWiFiClients(), aircraft_dictionary.GetNumAircraft(),
                      aircraft_dictionary.stats.valid_squitter_frames,
                      aircraft_dictionary.stats.valid_extended_squitter_frames);
+
+        // Broadcast dictionary stats over the stats Websocket.
+        char stats_message[kNetworkStatsMessageMaxLen + 1] = {'\0'};
+        strcat(stats_message, "{");
+        snprintf(stats_message + strlen(stats_message), kNetworkStatsMessageMaxLen - strlen(stats_message),
+                 "\"raw_squitter_frames\": %lu, \"valid_squitter_frames\": %lu, \"raw_extended_squitter_frames\": %lu, "
+                 "\"valid_extended_squitter_frames\": %lu, \"demods_1090\": %lu,",
+                 aircraft_dictionary.stats.raw_squitter_frames, aircraft_dictionary.stats.valid_squitter_frames,
+                 aircraft_dictionary.stats.raw_extended_squitter_frames,
+                 aircraft_dictionary.stats.valid_extended_squitter_frames, aircraft_dictionary.stats.demods_1090);
+
+        strncat(stats_message, "\"sources_raw_squitter_frames\": [",
+                kNetworkStatsMessageMaxLen - strlen(stats_message));
+        for (uint16_t i = 0; i < kNumTransponderPacketSources; i++) {
+            snprintf(stats_message + strlen(stats_message), kNetworkStatsMessageMaxLen - strlen(stats_message), "%lu%s",
+                     aircraft_dictionary.stats.sources_raw_squitter_frames[i],
+                     (i < kNumTransponderPacketSources - 1) ? ", " : "");
+        }
+        strncat(stats_message, "], ", kNetworkStatsMessageMaxLen - strlen(stats_message));
+        strcat(stats_message, "}");
+
+        for (uint16_t i = 0; i < kNumTransponderPacketSources; i++) {
+        }
     }
 
     // Ingest new packets into the dictionary.
@@ -151,6 +176,7 @@ bool ADSBeeServer::Update() {
         }
     }
 
+    // Receive incoming network console messages from the console websocket.
     NetworkConsoleMessage message;
     while (xQueueReceive(network_console_rx_queue, &message, 0) == pdTRUE) {
         // Non-blocking receive of network console messages.
@@ -162,6 +188,7 @@ bool ADSBeeServer::Update() {
         message.Destroy();  // Free the message buffer to prevent memory leaks.
     }
 
+    // Prune inactive WebSocket clients and other housekeeping.
     network_console.Update();
 
     return ret;
@@ -371,6 +398,13 @@ bool ADSBeeServer::TCPServerInit() {
                                            .post_connect_callback = NetworkConsolePostConnectCallback,
                                            .message_received_callback = NetworkConsoleMessageReceivedCallback});
         network_console.Init();
+        network_stats = WebSocketServer({.label = "Network Stats",
+                                         .server = server,
+                                         .uri = "/stats",
+                                         .num_clients_allowed = 3,
+                                         .post_connect_callback = nullptr,
+                                         .message_received_callback = nullptr});
+        network_stats.Init();
     }
 
     // xTaskCreatePinnedToCore(tcp_server_task, "tcp_server", kTCPServerTaskStackSizeBytes, NULL,

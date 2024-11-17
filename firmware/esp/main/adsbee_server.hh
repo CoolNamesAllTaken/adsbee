@@ -70,6 +70,7 @@ class ADSBeeServer {
     QueueHandle_t network_console_tx_queue;
     httpd_handle_t server = nullptr;
     WebSocketServer network_console;
+    WebSocketServer network_stats;
 
    private:
     struct WSClientInfo {

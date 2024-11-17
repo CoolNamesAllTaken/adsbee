@@ -6,8 +6,12 @@ TEST(BeastUtils, TransponderPacketToBeastFrame) {
     // Create packet with a single 0x1a that must be escaped in data, a typical RSSI value, and an unmasked MLAT
     // counter. Note: MLAT counter is shifted left by 2 bits to simulate multiplying a 48MHz counter with a 12MHz
     // desired result.
-    DecodedTransponderPacket tpacket =
-        DecodedTransponderPacket((char *)"8d495066587f469bb826d21ad767", -80, 0xABABFF1AFFFFFF1A << 2);
+    DecodedTransponderPacket tpacket = DecodedTransponderPacket((char *)"8d495066587f469bb826d21ad767",  // string
+                                                                0,                                       // source
+                                                                -80,                                     // sigs
+                                                                50,                                      // sigq
+                                                                0xABABFF1AFFFFFF1A << 2                  // mlat
+    );
 
     uint8_t beast_frame_buf[kBeastFrameMaxLenBytes];
     // 1 (frame) + 6 (mlat) + 2 (mlat escape) + 1 (rssi) + 14 (data) + 1 (data escape) = 25 Bytes.
@@ -44,8 +48,11 @@ TEST(BeastUtils, TransponderPacketToBeastFramePrependReceiverID) {
     // Create packet with a single 0x1a that must be escaped in data, a typical RSSI value, and an unmasked MLAT
     // counter. Note: MLAT counter is shifted left by 2 bits to simulate multiplying a 48MHz counter with a 12MHz
     // desired result.
-    DecodedTransponderPacket tpacket =
-        DecodedTransponderPacket((char *)"8d495066587f469bb826d21ad767", -80, 0xABABFF1AFFFFFF1A << 2);
+    DecodedTransponderPacket tpacket = DecodedTransponderPacket((char *)"8d495066587f469bb826d21ad767",  // string
+                                                                0,                                       // source
+                                                                -80,                                     // sigs
+                                                                50,                                      // sigq
+                                                                0xABABFF1AFFFFFF1A << 2);
 
     uint8_t beast_frame_buf[kBeastFrameMaxLenBytes];
     // 1 (frame) + 6 (mlat) + 2 (mlat escape) + 1 (rssi) + 14 (data) + 1 (data escape) = 25 Bytes.

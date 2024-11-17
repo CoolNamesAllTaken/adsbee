@@ -23,6 +23,7 @@ target_sources(host_test PRIVATE
     ${ADSBEE_MODULES_DIR}/cppAT/test/test_cpp_at.cc
     hal.cc
     main.cc
+    settings.cc
     # test_ads_b_decoder.cc
     test_ads_b_packet.cc
     test_aircraft_dictionary.cc
