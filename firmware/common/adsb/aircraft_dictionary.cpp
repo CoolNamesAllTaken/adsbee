@@ -136,8 +136,8 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
     }
 
     // Update aggregate statistics.
-    stats = stats_counter_;              // Swap counter values over to publicly visible values.
-    stats_counter_ = DictionaryStats();  // Use default constructor to clear all values.
+    stats = stats_counter_;    // Swap counter values over to publicly visible values.
+    stats_counter_ = Stats();  // Use default constructor to clear all values.
 }
 
 bool AircraftDictionary::IngestDecodedTransponderPacket(DecodedTransponderPacket &packet) {

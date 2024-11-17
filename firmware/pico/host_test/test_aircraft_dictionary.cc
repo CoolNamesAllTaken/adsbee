@@ -442,6 +442,33 @@ TEST(AircraftDictionary, IngestModeA) {
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne));
 }
 
+TEST(AircraftDictionary, StatsToJSON) {
+    AircraftDictionary::Stats stats = {.raw_squitter_frames = 10,
+                                       .valid_squitter_frames = 7,
+                                       .raw_extended_squitter_frames = 30,
+                                       .valid_extended_squitter_frames = 16,
+                                       .demods_1090 = 50,
+                                       .raw_squitter_frames_by_source = {2, 3, 5},
+                                       .valid_squitter_frames_by_source = {1, 2, 4},
+                                       .raw_extended_squitter_frames_by_source = {10, 11, 9},
+                                       .valid_extended_squitter_frames_by_source = {3, 5, 8},
+                                       .demods_1090_by_source = {19, 10, 21}};
+    char buf[AircraftDictionary::Stats::kStatsJSONMaxLen] = {'\0'};
+    stats.ToJSON(buf, AircraftDictionary::Stats::kStatsJSONMaxLen);
+    ASSERT_STREQ(buf,
+                 "{ \"raw_squitter_frames\": 10, \
+\"valid_squitter_frames\": 7, \
+\"raw_extended_squitter_frames\": 30, \
+\"valid_extended_squitter_frames\": 16, \
+\"demods_1090\": 50, \
+\"raw_squitter_frames_by_source\": [2, 3, 5], \
+\"valid_squitter_frames_by_source\": [1, 2, 4], \
+\"raw_extended_squitter_frames_by_source\": [10, 11, 9], \
+\"valid_extended_squitter_frames_by_source\": [3, 5, 8], \
+\"demods_1090_by_source\": [19, 10, 21] \
+}");
+}
+
 TEST(Aircraft, AircraftStats) {
     Aircraft aircraft;
     aircraft.IncrementNumFramesReceived();

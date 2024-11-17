@@ -337,7 +337,9 @@ class AircraftDictionary {
         uint32_t aircraft_prune_interval_ms = 60e3;
     };
 
-    struct DictionaryStats {
+    struct Stats {
+        static const uint16_t kStatsJSONMaxLen = 1000;  // Includes null terminator.
+
         uint32_t raw_squitter_frames = 0;
         uint32_t valid_squitter_frames = 0;
         uint32_t raw_extended_squitter_frames = 0;
@@ -353,27 +355,27 @@ class AircraftDictionary {
         /**
          * Formats the stats dictionary into a JSON packet with the following structure.
          * {
-         *      "raw_squitter_frames" = 10,
-         *      "valid_squitter_frames" = 7,
-         *      "raw_extended_squitter_frames" = 30,
-         *      "valid_extended_squitter_frames" = 16,
-         *      "demods_1090" = 50,
-         *      "raw_squitter_frames_by_source" = [3, 3, 4],
-         *      "valid_squitter_frames_by_source" = [2, 2, 3],
-         *      "raw_extended_squitter_frames_by_source" = [10, 11, 9],
-         *      "valid_squitter_frames_by_source" = [4, 4, 8],
-         *      "demods_1090_by_source" = [20, 10, 20]
+         *      "raw_squitter_frames": 10,
+         *      "valid_squitter_frames": 7,
+         *      "raw_extended_squitter_frames": 30,
+         *      "valid_extended_squitter_frames": 16,
+         *      "demods_1090": 50,
+         *      "raw_squitter_frames_by_source": [3, 3, 4],
+         *      "valid_squitter_frames_by_source": [2, 2, 3],
+         *      "raw_extended_squitter_frames_by_source": [10, 11, 9],
+         *      "valid_squitter_frames_by_source": [4, 4, 8],
+         *      "demods_1090_by_source": [20, 10, 20]
          * }
          * @param[in] buf Buffer to write the JSON string to.
          * @param[in] buf_len Length of the buffer, including the null terminator.
          */
         inline void ToJSON(char *buf, size_t buf_len) {
             uint16_t message_max_len = buf_len - 1;  // Leave space for null terminator.
-            strcat(buf, "{");
+            strcat(buf, "{ ");
             snprintf(
                 buf + strlen(buf), message_max_len - strlen(buf),
                 "\"raw_squitter_frames\": %lu, \"valid_squitter_frames\": %lu, \"raw_extended_squitter_frames\": %lu, "
-                "\"valid_extended_squitter_frames\": %lu, \"demods_1090\": %lu,",
+                "\"valid_extended_squitter_frames\": %lu, \"demods_1090\": %lu, ",
                 raw_squitter_frames, valid_squitter_frames, raw_extended_squitter_frames,
                 valid_extended_squitter_frames, demods_1090);
 
@@ -415,7 +417,8 @@ class AircraftDictionary {
                 snprintf(buf + strlen(buf), message_max_len - strlen(buf), "%lu%s", demods_1090_by_source[i],
                          (i < kMaxNumSources - 1) ? ", " : "");
             }
-            strncat(buf, "], ", message_max_len - strlen(buf));
+            // Note: No trailing comma since it's the last element (JSON does not allow a trailing comma).
+            strncat(buf, "] ", message_max_len - strlen(buf));
 
             strcat(buf, "}");
         }
@@ -534,7 +537,7 @@ class AircraftDictionary {
 
     std::unordered_map<uint32_t, Aircraft> dict;  // index Aircraft objects by their ICAO identifier
 
-    DictionaryStats stats;
+    Stats stats;
 
    private:
     // Helper functions for ingesting specific ADS-B packet types, called by IngestADSBPacket.
@@ -559,7 +562,7 @@ class AircraftDictionary {
     AircraftDictionaryConfig_t config_;
     // Counters in stats_counter_ are incremented, then stats_counter_ is swapped into stats during the dictionary
     // update. This ensures that the public stats struct always has valid data.
-    DictionaryStats stats_counter_;
+    Stats stats_counter_;
 };
 
 #endif /* _AIRCRAFT_DICTIONARY_HH_ */
