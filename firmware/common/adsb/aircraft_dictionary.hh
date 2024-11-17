@@ -156,6 +156,12 @@ class Aircraft {
         GVALessThan45Meters = 3
     };
 
+    struct Stats {
+        // We can only confirm that valid frames came from this aircraft. Not sure who invalid frames are from.
+        uint16_t valid_squitter_frames = 0;
+        uint16_t valid_extended_squitter_frames = 0;
+    };
+
     Aircraft(uint32_t icao_address_in);
     Aircraft();
 
@@ -190,25 +196,18 @@ class Aircraft {
 
     /**
      * Indicate that a frame has been received by incrementing the corresponding frame counter.
-     * @param[in] mode_s_frame Set to true if the frame received was a Mode S frame.
+     * @param[in] is_extended_squitter Set to true if the frame received was a Mode S frame.
      */
-    inline void IncrementNumFramesReceived(bool mode_s_frame = false) {
-        mode_s_frame ? stats_mode_s_frames_received_counter_++ : stats_short_mode_s_frames_received_counter_++;
+    inline void IncrementNumFramesReceived(bool is_extended_squitter = false) {
+        is_extended_squitter ? stats_counter_.valid_extended_squitter_frames++ : stats_counter_.valid_squitter_frames++;
     }
 
     /**
-     * Update the counters for frames received by setting the public value equal to the incrementing counter value, and
-     * resetting the counter. This allows each read of stats_frames_received_in_last_interval to always read a
-     * count for number of packets recieved over a consistent interval of time.
+     * Roll the stats counter over to the public stats field.
      */
     inline void UpdateStats() {
-        stats_short_mode_s_frames_received_in_last_interval = stats_short_mode_s_frames_received_counter_;
-        stats_short_mode_s_frames_received_counter_ = 0;
-        stats_mode_s_frames_received_in_last_interval = stats_mode_s_frames_received_counter_;
-        stats_mode_s_frames_received_counter_ = 0;
-
-        stats_frames_received_in_last_interval =
-            stats_short_mode_s_frames_received_in_last_interval + stats_mode_s_frames_received_in_last_interval;
+        stats = stats_counter_;
+        stats_counter_ = Stats();
     }
 
     /**
@@ -255,10 +254,7 @@ class Aircraft {
     uint32_t last_message_timestamp_ms = 0;
     int16_t last_message_signal_strength_dbm = 0;  // Voltage of RSSI signal during message receipt.
     int16_t last_message_signal_quality_db = 0;    // Ratio of RSSI to noise floor during message receipt.
-
-    uint16_t stats_frames_received_in_last_interval = 0;  // Number of valid frames received.
-    uint16_t stats_short_mode_s_frames_received_in_last_interval = 0;
-    uint16_t stats_mode_s_frames_received_in_last_interval = 0;
+    Stats stats;
 
     uint16_t transponder_capability = 0;
     uint32_t icao_address = 0;
@@ -329,8 +325,7 @@ class Aircraft {
     CPRPacket last_odd_packet_;
     CPRPacket last_even_packet_;
 
-    uint16_t stats_short_mode_s_frames_received_counter_ = 0;
-    uint16_t stats_mode_s_frames_received_counter_ = 0;
+    Stats stats_counter_;
 };
 
 class AircraftDictionary {
