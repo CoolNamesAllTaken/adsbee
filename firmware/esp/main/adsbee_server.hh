@@ -61,8 +61,8 @@ class ADSBeeServer {
      */
     void TCPServerTask(void* pvParameters);
 
-    PFBQueue<RawTransponderPacket> transponder_packet_queue = PFBQueue<RawTransponderPacket>(
-        {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = transponder_packet_queue_buffer_});
+    PFBQueue<RawTransponderPacket> raw_transponder_packet_queue = PFBQueue<RawTransponderPacket>(
+        {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = raw_transponder_packet_queue_buffer_});
 
     AircraftDictionary aircraft_dictionary;
 
@@ -88,12 +88,11 @@ class ADSBeeServer {
 
     bool spi_receive_task_should_exit_ = false;
 
-    RawTransponderPacket transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
+    // Queue for raw packets from RP2040.
+    RawTransponderPacket raw_transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
 
     uint32_t last_gdl90_report_timestamp_ms_ = 0;
-
-    // WSClientInfo network_console_clients[kNetworkConsoleMaxNumClients] = {0};
 };
 
 extern ADSBeeServer adsbee_server;

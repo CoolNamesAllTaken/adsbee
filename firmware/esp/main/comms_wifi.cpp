@@ -174,7 +174,7 @@ void CommsManager::WiFiAccessPointTask(void* pvParameters) {
 // }
 
 void CommsManager::WiFiStationTask(void* pvParameters) {
-    RawTransponderPacket tpacket;
+    DecodedTransponderPacket decoded_packet;
 
     // Don't try establishing socket connections until the ESP32 has been assigned an IP address.
     while (!wifi_sta_has_ip_) {
@@ -209,8 +209,8 @@ void CommsManager::WiFiStationTask(void* pvParameters) {
         }
 
         // Gather packet(s) to send.
-        if (xQueueReceive(wifi_sta_raw_transponder_packet_queue_, &tpacket, kWiFiSTATaskUpdateIntervalTicks) !=
-            pdTRUE) {
+        if (xQueueReceive(wifi_sta_decoded_transponder_packet_queue_, &decoded_packet,
+                          kWiFiSTATaskUpdateIntervalTicks) != pdTRUE) {
             // No packets available to send, wait and try again.
             continue;
         }
@@ -275,13 +275,19 @@ void CommsManager::WiFiStationTask(void* pvParameters) {
             // Send packet!
             // NOTE: Construct packets that are specific to a feed in case statements here!
             switch (settings_manager.settings.feed_protocols[i]) {
-                case SettingsManager::ReportingProtocol::kBeast: {
+                case SettingsManager::ReportingProtocol::kBeast:
+                    if (!decoded_packet.IsValid()) {
+                        // Packet is invalid, don't send.
+                        break;
+                    }
+                    [[fallthrough]];  // Intentional cascade into BEAST_RAW, since reporting code is shared.
+                case SettingsManager::ReportingProtocol::kBeastRaw: {
                     // Send Beast packet.
                     // Double the length as a hack to make room for the escaped UUID.
                     uint8_t beast_message_buf[2 * SettingsManager::Settings::kFeedReceiverIDNumBytes +
                                               kBeastFrameMaxLenBytes];
                     uint16_t beast_message_len_bytes = TransponderPacketToBeastFramePrependReceiverID(
-                        tpacket, beast_message_buf, settings_manager.settings.feed_receiver_ids[i],
+                        decoded_packet, beast_message_buf, settings_manager.settings.feed_receiver_ids[i],
                         SettingsManager::Settings::kFeedReceiverIDNumBytes);
 
                     int err = send(feed_sock[i], beast_message_buf, beast_message_len_bytes, 0);
@@ -513,20 +519,20 @@ bool CommsManager::WiFiDeInit() {
     */
 }
 
-bool CommsManager::WiFiStationSendRawTransponderPacket(RawTransponderPacket& tpacket) {
+bool CommsManager::WiFiStationSendDecodedTransponderPacket(DecodedTransponderPacket& decoded_packet) {
     if (!run_wifi_sta_task_) {
-        CONSOLE_WARNING("CommsManager::WiFiStationSendRawTransponderPacket",
+        CONSOLE_WARNING("CommsManager::WiFiStationSendDecodedTransponderPacket",
                         "Can't push to WiFi station transponder packet queue if station is not running.");
         return false;  // Task not started yet, queue not created yet. Pushing to queue would cause an abort.
     }
-    int err = xQueueSend(wifi_sta_raw_transponder_packet_queue_, &tpacket, 0);
+    int err = xQueueSend(wifi_sta_decoded_transponder_packet_queue_, &decoded_packet, 0);
     if (err == errQUEUE_FULL) {
-        CONSOLE_WARNING("CommsManager::WiFiStationSendRawTransponderPacket",
+        CONSOLE_WARNING("CommsManager::WiFiStationSendDecodedTransponderPacket",
                         "Overflowed WiFi station transponder packet queue.");
-        xQueueReset(wifi_sta_raw_transponder_packet_queue_);
+        xQueueReset(wifi_sta_decoded_transponder_packet_queue_);
         return false;
     } else if (err != pdTRUE) {
-        CONSOLE_WARNING("CommsManager::WiFiStationSendRawTransponderPacket",
+        CONSOLE_WARNING("CommsManager::WiFiStationSendDecodedTransponderPacket",
                         "Pushing transponder packet to WiFi station queue resulted in error code %d.", err);
         return false;
     }

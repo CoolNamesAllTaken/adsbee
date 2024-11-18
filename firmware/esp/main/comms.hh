@@ -31,7 +31,8 @@ class CommsManager {
     CommsManager() {
         wifi_clients_list_mutex_ = xSemaphoreCreateMutex();
         wifi_ap_message_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(NetworkMessage));
-        wifi_sta_raw_transponder_packet_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(RawTransponderPacket));
+        wifi_sta_decoded_transponder_packet_queue_ =
+            xQueueCreate(kWiFiMessageQueueLen, sizeof(DecodedTransponderPacket));
         wifi_event_group_ = xEventGroupCreate();
     }
 
@@ -39,7 +40,7 @@ class CommsManager {
         vEventGroupDelete(wifi_event_group_);
         vSemaphoreDelete(wifi_clients_list_mutex_);
         vQueueDelete(wifi_ap_message_queue_);
-        vQueueDelete(wifi_sta_raw_transponder_packet_queue_);
+        vQueueDelete(wifi_sta_decoded_transponder_packet_queue_);
     }
 
     /**
@@ -110,10 +111,10 @@ class CommsManager {
     /**
      * Sends a raw transponder packet to feeds via the external WiFi network that the ESP32 is a station on. It's
      * recommended to only call this function if WiFiStationhasIP() returns true, otherwise it will throw a warning.
-     * @param[in] tpacket RawTransponderPacket to send.
+     * @param[in] decoded_packet DecodedTransponderPacket to send.
      * @retval True if packet was successfully sent, false otherwise.
      */
-    bool WiFiStationSendRawTransponderPacket(RawTransponderPacket& tpacket);
+    bool WiFiStationSendDecodedTransponderPacket(DecodedTransponderPacket& decoded_packet);
 
     // Public so that pass-through functions can access it.
     void WiFiEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
@@ -179,7 +180,7 @@ class CommsManager {
     SemaphoreHandle_t wifi_clients_list_mutex_;
     EventGroupHandle_t wifi_event_group_;  // FreeRTOS event group to signal when we are connected.
     QueueHandle_t wifi_ap_message_queue_;
-    QueueHandle_t wifi_sta_raw_transponder_packet_queue_;
+    QueueHandle_t wifi_sta_decoded_transponder_packet_queue_;
     bool run_wifi_ap_task_ = false;   // Flag used to tell wifi AP task to shut down.
     bool run_wifi_sta_task_ = false;  // Flag used to tell wifi station task to shut down.
     TaskHandle_t wifi_ap_task_handle = nullptr;

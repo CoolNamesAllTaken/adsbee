@@ -27,6 +27,7 @@ class SettingsManager {
         kNoReports = 0,
         kRaw,
         kBeast,
+        kBeastRaw,
         kCSBee,
         kMAVLINK1,
         kMAVLINK2,

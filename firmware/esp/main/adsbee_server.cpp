@@ -134,7 +134,7 @@ bool ADSBeeServer::Update() {
 
     // Ingest new packets into the dictionary.
     RawTransponderPacket raw_packet;
-    while (transponder_packet_queue.Pop(raw_packet)) {
+    while (raw_transponder_packet_queue.Pop(raw_packet)) {
         DecodedTransponderPacket decoded_packet = DecodedTransponderPacket(raw_packet);
 #ifdef VERBOSE_DEBUG
         if (raw_packet.buffer_len_bits == DecodedTransponderPacket::kExtendedSquitterPacketLenBits) {
@@ -152,12 +152,20 @@ bool ADSBeeServer::Update() {
 #endif
 
         if (aircraft_dictionary.IngestDecodedTransponderPacket(decoded_packet)) {
-            // NOTE: Pushing to the reporting queue here means that we only will report validated packets!
-            // comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
+            // NOTE: Pushing to a queue here will only forward valid packets!
 #ifdef VERBOSE_DEBUG
             CONSOLE_INFO("ADSBeeServer::Update", "\taircraft_dictionary: %d aircraft",
                          aircraft_dictionary.GetNumAircraft());
 #endif
+        }
+
+        // Send decoded transponder packet to feeds.
+        if (comms_manager.WiFiStationhasIP() &&
+            !comms_manager.WiFiStationSendDecodedTransponderPacket(decoded_packet)) {
+            CONSOLE_ERROR(
+                "ADSBeeServer::Update",
+                "Encountered error while sending decoded transponder packet to feeds from ESP32 as WiFi station.");
+            ret = false;
         }
     }
 
@@ -190,16 +198,10 @@ bool ADSBeeServer::Update() {
 
 bool ADSBeeServer::HandleRawTransponderPacket(RawTransponderPacket &raw_packet) {
     bool ret = true;
-    if (!transponder_packet_queue.Push(raw_packet)) {
+    if (!raw_transponder_packet_queue.Push(raw_packet)) {
         CONSOLE_ERROR("ADSBeeServer::HandleRawTransponderPacket",
                       "Push to transponder packet queue failed. May have overflowed?");
-        transponder_packet_queue.Clear();
-        ret = false;
-    }
-
-    if (comms_manager.WiFiStationhasIP() && !comms_manager.WiFiStationSendRawTransponderPacket(raw_packet)) {
-        CONSOLE_ERROR("ADSBeeServer::HandleRawTransponderPacket",
-                      "Encountered error while sending raw transponder packet to feeds from ESP32 as WiFi station.");
+        raw_transponder_packet_queue.Clear();
         ret = false;
     }
     return ret;
