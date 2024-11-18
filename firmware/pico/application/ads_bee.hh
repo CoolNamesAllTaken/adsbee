@@ -23,7 +23,6 @@ class ADSBee {
     static const uint32_t kStatusLEDOnMs = 10;
     static const uint16_t kNumDemodStateMachines = 3;  // 2x well-formed preamble, 1x high power preamble
     static const uint16_t kHighPowerDemodStateMachineIndex = 2;
-    static const uint16_t kRebootDelayMs = 1000;
 
     static const uint32_t kTLLearningIntervalMs =
         10000;  // [ms] Length of Simulated Annealing interval for learning trigger level.
@@ -194,8 +193,9 @@ class ADSBee {
 
     /**
      * Reboots the RP2040 via the watchdog.
+     * @param[in] delay_ms Milliseconds to wait befor rebooting. Defaults to 0 (immediate reboot).
      */
-    void Reboot() { watchdog_reboot(0, 0, kRebootDelayMs); }
+    inline void Reboot(uint16_t delay_ms = 0) { watchdog_reboot(0, 0, delay_ms); }
 
     /**
      * Returns whether ADS-B receiving is currently enabled.

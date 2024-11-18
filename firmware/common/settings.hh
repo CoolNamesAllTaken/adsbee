@@ -62,7 +62,7 @@ class SettingsManager {
         uint32_t watchdog_timeout_sec = kDefaultWatchdogTimeoutSec;
 
         // CommunicationsManager settings
-        LogLevel log_level = LogLevel::kInfo;  // Start with highest verbosity by default.
+        LogLevel log_level = LogLevel::kWarnings;
         ReportingProtocol reporting_protocols[SerialInterface::kNumSerialInterfaces - 1] = {
             ReportingProtocol::kNoReports, ReportingProtocol::kMAVLINK1};
         uint32_t comms_uart_baud_rate = 115200;

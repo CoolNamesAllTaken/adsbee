@@ -400,7 +400,8 @@ CPP_AT_HELP_CALLBACK(CommsManager::ATProtocolHelpCallback) {
 
 CPP_AT_CALLBACK(CommsManager::ATRebootCallback) {
     adsbee.Reboot();
-    CPP_AT_SUCCESS();  // There is a slight delay (1s) while the watchdog runs out, which allows this line to print.
+    // Note: would need to block here if there was a reboot delay.
+    CPP_AT_ERROR("Failed to reboot.");
 }
 
 CPP_AT_CALLBACK(CommsManager::ATRxEnableCallback) {

@@ -212,7 +212,6 @@ void CommsManager::WiFiStationTask(void* pvParameters) {
         if (xQueueReceive(wifi_sta_raw_transponder_packet_queue_, &tpacket, kWiFiSTATaskUpdateIntervalTicks) !=
             pdTRUE) {
             // No packets available to send, wait and try again.
-            // vTaskDelay(1);
             continue;
         }
 

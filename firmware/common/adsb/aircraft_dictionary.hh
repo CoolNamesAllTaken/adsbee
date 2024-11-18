@@ -339,7 +339,7 @@ class AircraftDictionary {
     };
 
     struct Stats {
-        static const uint16_t kStatsJSONMaxLen = 500;  // Includes null terminator.
+        static const uint16_t kStatsJSONMaxLen = 1000;  // Includes null terminator.
 
         uint32_t raw_squitter_frames = 0;
         uint32_t valid_squitter_frames = 0;

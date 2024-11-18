@@ -18,18 +18,19 @@
             <input type="text" class="hidden-input" id="hidden-input" autocomplete="off">
         </div>
 
-        <div id="feed-stats" class="column-element">
+        <div id="metrics-container" class="column-element">
             <div id="status" class="connection-status disconnected">Disconnected</div>
-            <div id="sites-count" class="sites-count">Sites: 0</div>
-
+            <div id="feed-count" class="feed-count">Feeds: 0</div>
             <!-- Cards will be dynamically inserted here -->
         </div>
     </div>
 
     <script>
+        // const HOST_URI = `${window.location.hostname}`;
+        const HOST_URI = "192.168.1.182";
         const WS_CONFIG = {
-            console_ws_url: `ws://${window.location.hostname}/console`,
-            stats_ws_url: `ws://${window.location.hostname}/stats`,
+            console_ws_url: `ws://${HOST_URI}/console`,
+            metrics_ws_url: `ws://${HOST_URI}/stats`,
             reconnectDelayMs: 5000
         };
 
@@ -271,22 +272,22 @@
             }
         }
 
-        class StatsWebSocket {
+        class MetricsWebSocket {
             constructor(url) {
                 this.url = url;
                 this.charts = {};
                 this.connect();
                 this.statusEl = document.getElementById('status');
-                this.sitesCountEl = document.getElementById('sites-count');
+                this.feedsCountEl = document.getElementById('feed-count');
                 this.container = document.getElementById('metrics-container');
             }
 
-            createMetricCard(site) {
-                const cardId = `chart-${site.replace(/[^a-zA-Z0-9]/g, '-')}`;
+            createMetricCard(label) {
+                const cardId = `chart-${label.replace(/[^a-zA-Z0-9]/g, '-')}`;
                 const card = document.createElement('div');
                 card.className = 'metric-card';
                 card.innerHTML = `
-          <div class="metric-title" title="${site}">${site}</div>
+          <div class="metric-title" title="${label}">${label}</div>
           <div class="metric-value">0 msg/s</div>
           <svg class="sparkline" id="${cardId}" viewBox="0 0 100 30"></svg>
         `;
@@ -294,26 +295,31 @@
                 return new SparklineChart(cardId);
             }
 
+            removeMetricCard(label) {
+                // Replace any non-alphanumeric characters with hyphens.
+                const cardElement = document.getElementById(`chart-${label.replace(/[^a-zA-Z0-9]/g, '-')}`).parentNode;
+                cardElement.remove();
+                delete this.charts[label];
+            }
+
             updateCharts(data) {
                 // Remove charts that are no longer in the data
-                Object.keys(this.charts).forEach(site => {
-                    if (!data.hasOwnProperty(site)) {
-                        const cardElement = document.getElementById(`chart-${site.replace(/[^a-zA-Z0-9]/g, '-')}`).parentNode;
-                        cardElement.remove();
-                        delete this.charts[site];
+                Object.keys(this.charts).forEach(label => {
+                    if (!data.hasOwnProperty(label)) {
+                        this.removeMetricCard(label);
                     }
                 });
 
                 // Update existing charts and create new ones
-                Object.entries(data).forEach(([site, value]) => {
-                    if (!this.charts[site]) {
-                        this.charts[site] = this.createMetricCard(site);
+                Object.entries(data).forEach(([label, value]) => {
+                    if (!this.charts[label]) {
+                        this.charts[label] = this.createMetricCard(label);
                     }
-                    this.charts[site].update(value);
+                    this.charts[label].update(value);
                 });
 
-                // Update sites count
-                this.sitesCountEl.textContent = `Sites: ${Object.keys(data).length}`;
+                // Update labels count
+                this.feedsCountEl.textContent = `Feeds: ${Object.keys(data).length}`;
             }
 
             connect() {
@@ -341,7 +347,19 @@
                 this.ws.onmessage = (event) => {
                     try {
                         const data = JSON.parse(event.data);
-                        this.updateCharts(data);
+
+                        if (data.hasOwnProperty('server_stats')) {
+                            const serverStats = data['server_stats'];
+                            console.log('Server Stats:', serverStats);
+
+                            const feedMetrics = {};
+                            for (let i = 0; i < serverStats['feed_uri'].length; i++) {
+                                feedMetrics[serverStats['feed_uri'][i]] = serverStats['feed_mps'][i];
+                            }
+                            console.log('Feed Metrics:', feedMetrics);
+                            this.updateCharts(feedMetrics);
+                            // this.updateCharts(serverStats);
+                        }
                     } catch (error) {
                         console.error('Error parsing WebSocket message:', error);
                     }
@@ -350,7 +368,7 @@
         }
 
         // Initialize WebSocket connection for stats feed
-        const metrics = new StatsWebSocket(WS_CONFIG.stats_ws_url);
+        const metrics = new MetricsWebSocket(WS_CONFIG.metrics_ws_url);
     </script>
 </body>
 

@@ -61,7 +61,7 @@
 }
 
 /* Stats cards styling */
-#feed-stats {
+#feed-metrics {
     width: 100%;
     display: block;
 }
@@ -76,7 +76,7 @@
     font-family: system-ui, -apple-system, sans-serif;
 }
 
-.metric-card {
+.metrics-card {
     background: white;
     padding: 1rem;
     border-radius: 6px;
@@ -87,7 +87,7 @@
     max-width: 350px;
 }
 
-.metric-title {
+.metrics-title {
     color: #64748b;
     font-size: 0.875rem;
     margin-bottom: 0.5rem;
@@ -96,7 +96,7 @@
     text-overflow: ellipsis;
 }
 
-.metric-value {
+.metrics-value {
     font-size: 1.5rem;
     font-weight: 600;
     color: #0f172a;
@@ -137,7 +137,7 @@
     color: #991b1b;
 }
 
-.sites-count {
+.labels-count {
     /* position: fixed;
     top: 1rem;
     left: 1rem; */
