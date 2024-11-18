@@ -5,6 +5,7 @@
 #include <cstring>
 #include <unordered_map>
 
+#include "json_utils.hh"
 #include "transponder_packet.hh"
 
 class Aircraft {
@@ -338,7 +339,7 @@ class AircraftDictionary {
     };
 
     struct Stats {
-        static const uint16_t kStatsJSONMaxLen = 1000;  // Includes null terminator.
+        static const uint16_t kStatsJSONMaxLen = 500;  // Includes null terminator.
 
         uint32_t raw_squitter_frames = 0;
         uint32_t valid_squitter_frames = 0;
@@ -369,58 +370,31 @@ class AircraftDictionary {
          * @param[in] buf Buffer to write the JSON string to.
          * @param[in] buf_len Length of the buffer, including the null terminator.
          */
-        inline void ToJSON(char *buf, size_t buf_len) {
+        inline uint16_t ToJSON(char *buf, size_t buf_len) {
             uint16_t message_max_len = buf_len - 1;  // Leave space for null terminator.
-            strcat(buf, "{ ");
-            snprintf(
-                buf + strlen(buf), message_max_len - strlen(buf),
-                "\"raw_squitter_frames\": %lu, \"valid_squitter_frames\": %lu, \"raw_extended_squitter_frames\": %lu, "
-                "\"valid_extended_squitter_frames\": %lu, \"demods_1090\": %lu, ",
-                raw_squitter_frames, valid_squitter_frames, raw_extended_squitter_frames,
-                valid_extended_squitter_frames, demods_1090);
-
-            // Raw Squitter Frames by Source
-            strncat(buf, "\"raw_squitter_frames_by_source\": [", message_max_len - strlen(buf));
-            for (uint16_t i = 0; i < kMaxNumSources; i++) {
-                snprintf(buf + strlen(buf), message_max_len - strlen(buf), "%lu%s", raw_squitter_frames_by_source[i],
-                         (i < kMaxNumSources - 1) ? ", " : "");
-            }
-            strncat(buf, "], ", message_max_len - strlen(buf));
-
-            // Valid Squitter Frames by Source
-            strncat(buf, "\"valid_squitter_frames_by_source\": [", message_max_len - strlen(buf));
-            for (uint16_t i = 0; i < kMaxNumSources; i++) {
-                snprintf(buf + strlen(buf), message_max_len - strlen(buf), "%lu%s", valid_squitter_frames_by_source[i],
-                         (i < kMaxNumSources - 1) ? ", " : "");
-            }
-            strncat(buf, "], ", message_max_len - strlen(buf));
-
-            // Raw Extended Squitter Frames by Source
-            strncat(buf, "\"raw_extended_squitter_frames_by_source\": [", message_max_len - strlen(buf));
-            for (uint16_t i = 0; i < kMaxNumSources; i++) {
-                snprintf(buf + strlen(buf), message_max_len - strlen(buf), "%lu%s",
-                         raw_extended_squitter_frames_by_source[i], (i < kMaxNumSources - 1) ? ", " : "");
-            }
-            strncat(buf, "], ", message_max_len - strlen(buf));
-
-            // Valid Extended Squitter Frames by Source
-            strncat(buf, "\"valid_extended_squitter_frames_by_source\": [", message_max_len - strlen(buf));
-            for (uint16_t i = 0; i < kMaxNumSources; i++) {
-                snprintf(buf + strlen(buf), message_max_len - strlen(buf), "%lu%s",
-                         valid_extended_squitter_frames_by_source[i], (i < kMaxNumSources - 1) ? ", " : "");
-            }
-            strncat(buf, "], ", message_max_len - strlen(buf));
-
-            // Demods 1090 by Source
-            strncat(buf, "\"demods_1090_by_source\": [", message_max_len - strlen(buf));
-            for (uint16_t i = 0; i < kMaxNumSources; i++) {
-                snprintf(buf + strlen(buf), message_max_len - strlen(buf), "%lu%s", demods_1090_by_source[i],
-                         (i < kMaxNumSources - 1) ? ", " : "");
-            }
-            // Note: No trailing comma since it's the last element (JSON does not allow a trailing comma).
-            strncat(buf, "] }", message_max_len - strlen(buf));
-
-            buf[buf_len - 1] = '\0';  // Ensure null terminator.
+            snprintf(buf, message_max_len - strlen(buf),
+                     "{ \"raw_squitter_frames\": %lu, \"valid_squitter_frames\": %lu, "
+                     "\"raw_extended_squitter_frames\": %lu, "
+                     "\"valid_extended_squitter_frames\": %lu, \"demods_1090\": %lu, ",
+                     raw_squitter_frames, valid_squitter_frames, raw_extended_squitter_frames,
+                     valid_extended_squitter_frames, demods_1090);
+            uint16_t chars_written = strlen(buf);
+            chars_written += ArrayToJSON(buf + chars_written, buf_len - chars_written, "raw_squitter_frames_by_source",
+                                         raw_squitter_frames_by_source, "%u", true);
+            chars_written +=
+                ArrayToJSON(buf + chars_written, buf_len - chars_written, "valid_squitter_frames_by_source",
+                            valid_squitter_frames_by_source, "%u", true);
+            chars_written +=
+                ArrayToJSON(buf + chars_written, buf_len - chars_written, "raw_extended_squitter_frames_by_source",
+                            raw_extended_squitter_frames_by_source, "%u", true);
+            chars_written +=
+                ArrayToJSON(buf + chars_written, buf_len - chars_written, "valid_extended_squitter_frames_by_source",
+                            valid_extended_squitter_frames_by_source, "%u", true);
+            chars_written += ArrayToJSON(buf + strlen(buf), buf_len - strlen(buf), "demods_1090_by_source",
+                                         demods_1090_by_source, "%u",
+                                         false);  // No trailing comma.
+            chars_written += snprintf(buf + chars_written, buf_len - chars_written, "}");
+            return chars_written;
         }
     };
 

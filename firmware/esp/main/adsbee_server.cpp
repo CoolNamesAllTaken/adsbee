@@ -116,11 +116,19 @@ bool ADSBeeServer::Update() {
 
         // Broadcast dictionary stats over the stats Websocket.
         char stats_message[AircraftDictionary::Stats::kStatsJSONMaxLen];
-        aircraft_dictionary.stats.ToJSON(stats_message, AircraftDictionary::Stats::kStatsJSONMaxLen);
-
-        for (uint16_t i = 0; i < kNumTransponderPacketSources; i++) {
-            network_stats.BroadcastMessage(stats_message, strlen(stats_message));
+        snprintf(stats_message, kNetworkStatsMessageMaxLen, "{ \"aircraft_dictionary_stats\" = ");
+        aircraft_dictionary.stats.ToJSON(stats_message + strlen(stats_message),
+                                         kNetworkStatsMessageMaxLen - strlen(stats_message));
+        snprintf(stats_message + strlen(stats_message), kNetworkStatsMessageMaxLen - strlen(stats_message),
+                 "}, \"server_stats\" = { \"feed_mps\": [ ");
+        // ADSBee Server Stats
+        for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+            snprintf(stats_message + strlen(stats_message), kNetworkStatsMessageMaxLen - strlen(stats_message), "%u%s",
+                     comms_manager.feed_mps[i], i == SettingsManager::Settings::kMaxNumFeeds - 1 ? " " : ", ");
         }
+        snprintf(stats_message + strlen(stats_message), kNetworkStatsMessageMaxLen - strlen(stats_message), "] }");
+
+        network_stats.BroadcastMessage(stats_message, strlen(stats_message));
     }
 
     // Ingest new packets into the dictionary.

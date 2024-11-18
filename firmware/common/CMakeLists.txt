@@ -20,6 +20,7 @@ if (TARGET application)
         comms/beast
         comms/csbee
         comms/gdl90
+        comms/json
         coprocessor
     )
 elseif (TARGET bootloader)
@@ -46,6 +47,7 @@ elseif (TARGET host_test)
         comms/beast
         comms/csbee
         comms/gdl90
+        comms/json
         coprocessor
         utils
     )

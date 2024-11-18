@@ -454,9 +454,8 @@ TEST(AircraftDictionary, StatsToJSON) {
                                        .valid_extended_squitter_frames_by_source = {3, 5, 8},
                                        .demods_1090_by_source = {19, 10, 21}};
     char buf[AircraftDictionary::Stats::kStatsJSONMaxLen] = {'\0'};
-    stats.ToJSON(buf, AircraftDictionary::Stats::kStatsJSONMaxLen);
-    ASSERT_STREQ(buf,
-                 "{ \"raw_squitter_frames\": 10, \
+    char * expected_result =
+        (char *)"{ \"raw_squitter_frames\": 10, \
 \"valid_squitter_frames\": 7, \
 \"raw_extended_squitter_frames\": 30, \
 \"valid_extended_squitter_frames\": 16, \
@@ -466,7 +465,9 @@ TEST(AircraftDictionary, StatsToJSON) {
 \"raw_extended_squitter_frames_by_source\": [10, 11, 9], \
 \"valid_extended_squitter_frames_by_source\": [3, 5, 8], \
 \"demods_1090_by_source\": [19, 10, 21] \
-}");
+}";
+    EXPECT_EQ(stats.ToJSON(buf, AircraftDictionary::Stats::kStatsJSONMaxLen), strlen(expected_result));
+    EXPECT_STREQ(buf, expected_result);
 }
 
 TEST(Aircraft, AircraftStats) {
