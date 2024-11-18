@@ -8,7 +8,9 @@
 #include "esp_event.h"
 #include "esp_mac.h"
 #include "hal.hh"
+#include "lwip/dns.h"
 #include "lwip/err.h"
+#include "lwip/netdb.h"
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
 #include "nvs_flash.h"
@@ -173,6 +175,40 @@ void CommsManager::WiFiAccessPointTask(void* pvParameters) {
 //     return peek_ret != 0;
 // }
 
+bool IsNotIPAddress(const char* uri) {
+    // Check if the URI contains any letters
+    for (const char* p = uri; *p != '\0'; p++) {
+        if (isalpha(*p)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ResolveURIToIP(const char* url, char* ip) {
+    struct addrinfo hints;
+    struct addrinfo* res;
+    struct in_addr addr;
+    int err;
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    err = getaddrinfo(url, NULL, &hints, &res);
+    if (err != 0 || res == NULL) {
+        CONSOLE_ERROR("ResolveURLToIP", "DNS lookup failed for %s: %d", url, err);
+        return false;
+    }
+
+    addr.s_addr = ((struct sockaddr_in*)res->ai_addr)->sin_addr.s_addr;
+    inet_ntop(AF_INET, &addr, ip, 16);
+    CONSOLE_INFO("ResolveURLToIP", "DNS lookup succeeded. IP=%s", ip);
+
+    freeaddrinfo(res);
+    return true;
+}
+
 void CommsManager::WiFiStationTask(void* pvParameters) {
     DecodedTransponderPacket decoded_packet;
 
@@ -253,8 +289,23 @@ void CommsManager::WiFiStationTask(void* pvParameters) {
                              settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i]);
 
                 struct sockaddr_in dest_addr;
-                inet_pton(AF_INET, settings_manager.settings.feed_uris[i], &dest_addr.sin_addr);
-                // dest_addr.sin_addr.s_addr = inet_addr(settings_manager.settings.feed_uris[i]);
+                // If the URI contains letters, resolve it to an IP address
+                if (IsNotIPAddress(settings_manager.settings.feed_uris[i])) {
+                    // Is not an IP address, try DNS resolution.
+                    char resolved_ip[16];
+                    if (!ResolveURIToIP(settings_manager.settings.feed_uris[i], resolved_ip)) {
+                        CONSOLE_ERROR("CommsManager::WiFiStationTask", "Failed to resolve URL %s for feed %d",
+                                      settings_manager.settings.feed_uris[i], i);
+                        close(feed_sock[i]);
+                        feed_sock_is_connected[i] = false;
+                        continue;
+                    }
+                    inet_pton(AF_INET, resolved_ip, &dest_addr.sin_addr);
+                } else {
+                    // Is an IP address, use it directly.
+                    inet_pton(AF_INET, settings_manager.settings.feed_uris[i], &dest_addr.sin_addr);
+                }
+
                 dest_addr.sin_family = AF_INET;
                 dest_addr.sin_port = htons(settings_manager.settings.feed_ports[i]);
 

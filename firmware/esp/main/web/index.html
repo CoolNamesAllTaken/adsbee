@@ -20,7 +20,7 @@
 
         <div id="metrics-container" class="column-element">
             <div id="status" class="connection-status disconnected">Disconnected</div>
-            <div id="feed-count" class="feed-count">Feeds: 0</div>
+            <div id="feed-count" class="metrics-header">Feeds: 0</div>
             <!-- Cards will be dynamically inserted here -->
         </div>
     </div>
@@ -285,7 +285,7 @@
             createMetricCard(label) {
                 const cardId = `chart-${label.replace(/[^a-zA-Z0-9]/g, '-')}`;
                 const card = document.createElement('div');
-                card.className = 'metric-card';
+                card.className = 'metrics-card';
                 card.innerHTML = `
           <div class="metric-title" title="${label}">${label}</div>
           <div class="metric-value">0 msg/s</div>
@@ -327,7 +327,7 @@
 
                 this.ws.onopen = () => {
                     console.log('Connected to WebSocket');
-                    this.statusEl.textContent = 'Connected';
+                    this.statusEl.textContent = `Connected to ADSBee at ${HOST_URI}`;
                     this.statusEl.classList.remove('disconnected');
                     this.statusEl.classList.add('connected');
                 };
@@ -354,6 +354,9 @@
 
                             const feedMetrics = {};
                             for (let i = 0; i < serverStats['feed_uri'].length; i++) {
+                                if (serverStats['feed_uri'][i] === '') {
+                                    continue;
+                                }
                                 feedMetrics[serverStats['feed_uri'][i]] = serverStats['feed_mps'][i];
                             }
                             console.log('Feed Metrics:', feedMetrics);

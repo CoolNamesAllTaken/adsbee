@@ -112,6 +112,20 @@ class SettingsManager {
                 memset(feed_receiver_ids[i], 0, kFeedReceiverIDNumBytes);
 #endif
             }
+
+            // Set default feed URIs.
+            // airplanes.live: 78.46.238.18:30004, Beast
+            strncpy(feed_uris[kMaxNumFeeds - 1], "78.46.238.18", kFeedURIMaxNumChars);
+            feed_uris[kMaxNumFeeds - 1][kFeedURIMaxNumChars] = '\0';
+            feed_ports[kMaxNumFeeds - 1] = 30004;
+            feed_is_active[kMaxNumFeeds - 1] = true;
+            feed_protocols[kMaxNumFeeds - 1] = kBeast;
+            // whereplane.xyz: whereplane.xyz:30004, Beast
+            strncpy(feed_uris[kMaxNumFeeds - 2], "feed.whereplane.xyz", kFeedURIMaxNumChars);
+            feed_uris[kMaxNumFeeds - 2][kFeedURIMaxNumChars] = '\0';
+            feed_ports[kMaxNumFeeds - 2] = 30004;
+            feed_is_active[kMaxNumFeeds - 2] = true;
+            feed_protocols[kMaxNumFeeds - 2] = kBeast;
         }
     };
 
