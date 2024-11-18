@@ -72,18 +72,6 @@ esp_err_t WebSocketServer::Handler(httpd_req_t *req) {
             config_.post_connect_callback(this, client_fd);
         }
 
-        // char welcome_message[kNetworkConsoleWelcomeMessageMaxLen];
-        // snprintf(welcome_message, kNetworkConsoleWelcomeMessageMaxLen,
-        //          "\r\n █████  ██████  ███████ ██████  ███████ ███████      ██  ██████   █████   ██████  "
-        //          "\r\n██   ██ ██   ██ ██      ██   ██ ██      ██          ███ ██  ████ ██   ██ ██  ████ "
-        //          "\r\n███████ ██   ██ ███████ ██████  █████   █████        ██ ██ ██ ██  ██████ ██ ██ ██ "
-        //          "\r\n██   ██ ██   ██      ██ ██   ██ ██      ██           ██ ████  ██      ██ ████  ██ "
-        //          "\r\n██   ██ ██████  ███████ ██████  ███████ ███████      ██  ██████   █████   ██████  "
-        //          "\r\n\r\nFirmware Version: %d.%d.%d\r\nAP SSID: %s\r\n",
-        //          object_dictionary.kFirmwareVersionMajor, object_dictionary.kFirmwareVersionMinor,
-        //          object_dictionary.kFirmwareVersionPatch, settings_manager.settings.wifi_ap_ssid);
-        // welcome_message[kNetworkConsoleWelcomeMessageMaxLen] = '\0';  // Null terminate for safety.
-        // NetworkConsoleSendMessage(client_fd, welcome_message);
         return ESP_OK;
     }
     httpd_ws_frame_t ws_pkt;
@@ -123,17 +111,6 @@ esp_err_t WebSocketServer::Handler(httpd_req_t *req) {
         if (config_.message_received_callback) {
             config_.message_received_callback(this, client_fd, ws_pkt);
         }
-        // // Forward the network console message to the RP2040.
-        // NetworkConsoleMessage message = NetworkConsoleMessage((char *)ws_pkt.payload, (uint16_t)ws_pkt.len);
-        // int err = xQueueSend(network_console_rx_queue, &message, 0);
-        // if (err == errQUEUE_FULL) {
-        //     CONSOLE_WARNING("ADSBeeServer::NetworkConsoleWebSocketHandler", "Overflowed network console rx queue.");
-        //     xQueueReset(network_console_rx_queue);
-        // } else if (err != pdTRUE) {
-        //     CONSOLE_WARNING("ADSBeeServer::NetworkConsoleWebSocketHandler",
-        //                     "Pushing network console message to network console rx queue resulted in error %d.",
-        //                     err);
-        // }
     }
 
     free(buf);

@@ -1,6 +1,7 @@
 #include "adsbee_server.hh"
 
 #include "comms.hh"
+#include "json_utils.hh"
 #include "nvs_flash.h"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
@@ -116,17 +117,17 @@ bool ADSBeeServer::Update() {
 
         // Broadcast dictionary stats over the stats Websocket.
         char stats_message[AircraftDictionary::Stats::kStatsJSONMaxLen];
-        snprintf(stats_message, kNetworkStatsMessageMaxLen, "{ \"aircraft_dictionary_stats\" = ");
+        snprintf(stats_message, kNetworkStatsMessageMaxLen, "{ \"aircraft_dictionary_stats\": ");
         aircraft_dictionary.stats.ToJSON(stats_message + strlen(stats_message),
                                          kNetworkStatsMessageMaxLen - strlen(stats_message));
         snprintf(stats_message + strlen(stats_message), kNetworkStatsMessageMaxLen - strlen(stats_message),
-                 "}, \"server_stats\" = { \"feed_mps\": [ ");
+                 ", \"server_stats\": { ");
         // ADSBee Server Stats
-        for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
-            snprintf(stats_message + strlen(stats_message), kNetworkStatsMessageMaxLen - strlen(stats_message), "%u%s",
-                     comms_manager.feed_mps[i], i == SettingsManager::Settings::kMaxNumFeeds - 1 ? " " : ", ");
-        }
-        snprintf(stats_message + strlen(stats_message), kNetworkStatsMessageMaxLen - strlen(stats_message), "] }");
+        ArrayToJSON(stats_message + strlen(stats_message), kNetworkStatsMessageMaxLen - strlen(stats_message),
+                    "feed_uri", settings_manager.settings.feed_uris, "\"%s\"", true);
+        ArrayToJSON(stats_message + strlen(stats_message), kNetworkStatsMessageMaxLen - strlen(stats_message),
+                    "feed_mps", comms_manager.feed_mps, "%u", false);  // Mo trailing comma.
+        snprintf(stats_message + strlen(stats_message), kNetworkStatsMessageMaxLen - strlen(stats_message), "}}");
 
         network_stats.BroadcastMessage(stats_message, strlen(stats_message));
     }
