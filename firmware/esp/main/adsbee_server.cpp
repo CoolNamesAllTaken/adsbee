@@ -61,9 +61,6 @@ bool ADSBeeServer::Init() {
         return false;
     }
 
-    network_console_rx_queue = xQueueCreate(kNetworkConsoleQueueLen, sizeof(NetworkConsoleMessage));
-    network_console_tx_queue = xQueueCreate(kNetworkConsoleQueueLen, sizeof(NetworkConsoleMessage));
-
     spi_receive_task_should_exit_ = false;
     xTaskCreatePinnedToCore(esp_spi_receive_task, "spi_receive_task", kSPIReceiveTaskStackSizeBytes, NULL,
                             kSPIReceiveTaskPriority, NULL, kSPIReceiveTaskCore);
@@ -115,11 +112,18 @@ bool ADSBeeServer::Update() {
                      aircraft_dictionary.metrics.valid_squitter_frames,
                      aircraft_dictionary.metrics.valid_extended_squitter_frames);
 
+        // ESP32 can't see number of attempted demodulations, so steal that from RP2040 metrics dictionary.
+        AircraftDictionary::Metrics combined_metrics = aircraft_dictionary.metrics;
+        combined_metrics.demods_1090 = adsbee_server.rp2040_aircraft_dictionary_metrics.demods_1090;
+        for (uint16_t i = 0; i < AircraftDictionary::kMaxNumSources; i++) {
+            combined_metrics.demods_1090_by_source[i] +=
+                adsbee_server.rp2040_aircraft_dictionary_metrics.demods_1090_by_source[i];
+        }
         // Broadcast dictionary metrics over the metrics Websocket.
         char metrics_message[AircraftDictionary::Metrics::kMetricsJSONMaxLen];
         snprintf(metrics_message, kNetworkMetricsMessageMaxLen, "{ \"aircraft_dictionary_metrics\": ");
-        aircraft_dictionary.metrics.ToJSON(metrics_message + strlen(metrics_message),
-                                           kNetworkMetricsMessageMaxLen - strlen(metrics_message));
+        combined_metrics.ToJSON(metrics_message + strlen(metrics_message),
+                                kNetworkMetricsMessageMaxLen - strlen(metrics_message));
         snprintf(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
                  ", \"server_metrics\": { ");
         // ADSBee Server Metrics
@@ -193,6 +197,9 @@ bool ADSBeeServer::Update() {
 
     // Prune inactive WebSocket clients and other housekeeping.
     network_console.Update();
+
+    // Check to see whether the RP2040 sent over new metrics.
+    xQueueReceive(rp2040_aircraft_dictionary_metrics_queue, &rp2040_aircraft_dictionary_metrics, 0);
 
     return ret;
 }

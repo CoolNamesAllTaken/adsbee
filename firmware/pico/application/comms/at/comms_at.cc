@@ -221,7 +221,7 @@ void ATFeedHelpCallback() {
     CPP_AT_PRINTF(
         "\tAT+FEED=<feed_index>,<feed_uri>,<feed_port>,<active>,<protocol>\r\n\tSet details for a "
         "network feed.\r\n\tfeed_index = [0-%d], feed_uri = ip address or URL, feed_port = [0-65535], "
-        "active = [0 1], protocol = [BEAST].\r\n\t\r\n\tAT+FEED?\r\n\tPrint details for all "
+        "active = [0 1], protocol = [BEAST BEAST_RAW].\r\n\t\r\n\tAT+FEED?\r\n\tPrint details for all "
         "feeds.\r\n\t\r\n\tAT+FEED?<feed_index>\r\n\tPrint details for a specific feed.\r\n\tfeed_index = [0-%d]",
         SettingsManager::Settings::kMaxNumFeeds - 1, SettingsManager::Settings::kMaxNumFeeds - 1);
 }
@@ -237,19 +237,26 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                     CPP_AT_ERROR("Feed number must be between 0-%d, no details for feed with index %d.",
                                  SettingsManager::Settings::kMaxNumFeeds - 1, feed_index);
                 }
+                char receiver_id_str[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
+                SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[feed_index],
+                                                 receiver_id_str);
                 CPP_AT_CMD_PRINTF(
-                    "=%d(FEED_INDEX),%s(FEED_URI),%d(FEED_PORT),%d(ACTIVE),%s(PROTOCOL)", feed_index,
+                    "=%d(FEED_INDEX),%s(FEED_URI),%d(FEED_PORT),%d(ACTIVE),%s(PROTOCOL),%s(RECEIVER_ID)", feed_index,
                     settings_manager.settings.feed_uris[feed_index], settings_manager.settings.feed_ports[feed_index],
                     settings_manager.settings.feed_is_active[feed_index],
-                    SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[feed_index]]);
+                    SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[feed_index]],
+                    receiver_id_str);
             } else {
                 // Querying info about all feeds.
                 for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+                    char receiver_id_str[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
+                    SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[i], receiver_id_str);
                     CPP_AT_CMD_PRINTF(
-                        "=%d(FEED_INDEX),%s(FEED_URI),%d(FEED_PORT),%d(ACTIVE),%s(PROTOCOL)", i,
+                        "=%d(FEED_INDEX),%s(FEED_URI),%d(FEED_PORT),%d(ACTIVE),%s(PROTOCOL),%s(RECEIVER_ID)", i,
                         settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i],
                         settings_manager.settings.feed_is_active[i],
-                        SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[i]]);
+                        SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[i]],
+                        receiver_id_str);
                 }
             }
             CPP_AT_SILENT_SUCCESS();

@@ -52,6 +52,12 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             }
             break;
         }
+        case kAddrAircraftDictionaryMetrics: {
+            AircraftDictionary::Metrics rp2040_metrics;
+            memcpy(&rp2040_metrics, buf + offset, buf_len);
+            xQueueSend(adsbee_server.rp2040_aircraft_dictionary_metrics_queue, &rp2040_metrics, 0);
+            break;
+        }
 #endif
         case kAddrSettingsData:
             // Warning: printing here will cause a timeout and tests will fail.

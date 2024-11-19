@@ -17,6 +17,7 @@
 #include "hal.hh"
 #include "hardware/irq.h"
 #include "pico/binary_info.h"
+#include "spi_coprocessor.hh"
 
 // #include <charconv>
 #include <string.h>  // for strcat
@@ -237,6 +238,11 @@ bool ADSBee::Update() {
     // caused by packets being ingested more recently than the timestamp we take at the beginning of this function.
     if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > config_.aircraft_dictionary_update_interval_ms) {
         aircraft_dictionary.Update(timestamp_ms);
+        if (esp32.IsEnabled()) {
+            // Send fresh aircraft dictionary stats to ESPS32.
+            esp32.Write(ObjectDictionary::kAddrAircraftDictionaryMetrics, aircraft_dictionary.metrics,
+                        true);  // require ACK.
+        }
         // Add the fresh metrics values to the pile used for TL learning.
         // If learning, add the number of valid packets received to the pile used for trigger level learning.
         if (tl_learning_temperature_mv_ > 0) {

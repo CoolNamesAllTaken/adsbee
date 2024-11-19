@@ -211,7 +211,7 @@ class SettingsManager {
      * @param[in] buf_len Maximum allowable number of characteers in the password. Used to guard against falling off the
      * end of the string. Not used for actually finding ther number of asterix to print.
      */
-    static void RedactPassword(char *password_buf, char *redacted_password_buf, uint16_t buf_len) {
+    static inline void RedactPassword(char *password_buf, char *redacted_password_buf, uint16_t buf_len) {
         uint16_t password_len = MIN(strlen(password_buf), buf_len);
         memset(redacted_password_buf, '*', password_len);
         redacted_password_buf[password_len] = '\0';
@@ -228,6 +228,19 @@ class SettingsManager {
      * @retval True if succeeded, false otherwise.
      */
     bool Save();
+
+    /**
+     * Prints an 8-Byte receiver ID to a string buffer.
+     * @param[in] receiver_id Pointer to first byte of an 8-Byte receiver ID.
+     * @param[in] buf Buffer to write receiver ID string to. Must be at least 17 chars (including null terminator).
+     */
+    static inline void ReceiverIDToStr(uint8_t *receiver_id, char *buf) {
+        for (int16_t i = 0; i < SettingsManager::Settings::kFeedReceiverIDNumBytes; i++) {
+            snprintf(buf, 2 * SettingsManager::Settings::kFeedReceiverIDNumBytes, "%02x%02x%02x%02x%02x%02x%02x%02x",
+                     receiver_id[0], receiver_id[1], receiver_id[2], receiver_id[3], receiver_id[4], receiver_id[5],
+                     receiver_id[6], receiver_id[7]);
+        }
+    }
 
     /**
      * Restores settings to factory default values.

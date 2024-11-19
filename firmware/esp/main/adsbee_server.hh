@@ -40,7 +40,24 @@ class ADSBeeServer {
         void Destroy() { heap_caps_free(buf); }
     };
 
-    ADSBeeServer() {};  // Default constructor.
+    /**
+     * Constructor.
+     */
+    ADSBeeServer() {
+        network_console_rx_queue = xQueueCreate(kNetworkConsoleQueueLen, sizeof(NetworkConsoleMessage));
+        network_console_tx_queue = xQueueCreate(kNetworkConsoleQueueLen, sizeof(NetworkConsoleMessage));
+        rp2040_aircraft_dictionary_metrics_queue = xQueueCreate(1, sizeof(AircraftDictionary::Metrics));
+    };
+
+    /**
+     * Destructor.
+     */
+    ~ADSBeeServer() {
+        vQueueDelete(network_console_rx_queue);
+        vQueueDelete(network_console_tx_queue);
+        vQueueDelete(rp2040_aircraft_dictionary_metrics_queue);
+    }
+
     bool Init();
     bool Update();
 
@@ -72,8 +89,7 @@ class ADSBeeServer {
     WebSocketServer network_console;
     WebSocketServer network_metrics;
 
-    // Store RP2040 aircraft dictionary metrics for reporting metrics that we can't source directly from the ESP32's own
-    // aircraft dictionary.
+    QueueHandle_t rp2040_aircraft_dictionary_metrics_queue = nullptr;
     AircraftDictionary::Metrics rp2040_aircraft_dictionary_metrics;
 
    private:
