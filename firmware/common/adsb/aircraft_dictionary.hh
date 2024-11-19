@@ -157,7 +157,7 @@ class Aircraft {
         GVALessThan45Meters = 3
     };
 
-    struct Stats {
+    struct Metrics {
         // We can only confirm that valid frames came from this aircraft. Not sure who invalid frames are from.
         uint16_t valid_squitter_frames = 0;
         uint16_t valid_extended_squitter_frames = 0;
@@ -200,15 +200,16 @@ class Aircraft {
      * @param[in] is_extended_squitter Set to true if the frame received was a Mode S frame.
      */
     inline void IncrementNumFramesReceived(bool is_extended_squitter = false) {
-        is_extended_squitter ? stats_counter_.valid_extended_squitter_frames++ : stats_counter_.valid_squitter_frames++;
+        is_extended_squitter ? metrics_counter_.valid_extended_squitter_frames++
+                             : metrics_counter_.valid_squitter_frames++;
     }
 
     /**
-     * Roll the stats counter over to the public stats field.
+     * Roll the metrics counter over to the public metrics field.
      */
-    inline void UpdateStats() {
-        stats = stats_counter_;
-        stats_counter_ = Stats();
+    inline void UpdateMetrics() {
+        metrics = metrics_counter_;
+        metrics_counter_ = Metrics();
     }
 
     /**
@@ -255,7 +256,7 @@ class Aircraft {
     uint32_t last_message_timestamp_ms = 0;
     int16_t last_message_signal_strength_dbm = 0;  // Voltage of RSSI signal during message receipt.
     int16_t last_message_signal_quality_db = 0;    // Ratio of RSSI to noise floor during message receipt.
-    Stats stats;
+    Metrics metrics;
 
     uint16_t transponder_capability = 0;
     uint32_t icao_address = 0;
@@ -326,7 +327,7 @@ class Aircraft {
     CPRPacket last_odd_packet_;
     CPRPacket last_even_packet_;
 
-    Stats stats_counter_;
+    Metrics metrics_counter_;
 };
 
 class AircraftDictionary {
@@ -338,8 +339,8 @@ class AircraftDictionary {
         uint32_t aircraft_prune_interval_ms = 60e3;
     };
 
-    struct Stats {
-        static const uint16_t kStatsJSONMaxLen = 1000;  // Includes null terminator.
+    struct Metrics {
+        static const uint16_t kMetricsJSONMaxLen = 1000;  // Includes null terminator.
 
         uint32_t raw_squitter_frames = 0;
         uint32_t valid_squitter_frames = 0;
@@ -354,7 +355,7 @@ class AircraftDictionary {
         uint16_t demods_1090_by_source[kMaxNumSources] = {0};
 
         /**
-         * Formats the stats dictionary into a JSON packet with the following structure.
+         * Formats the metrics dictionary into a JSON packet with the following structure.
          * {
          *      "raw_squitter_frames": 10,
          *      "valid_squitter_frames": 7,
@@ -425,9 +426,9 @@ class AircraftDictionary {
      * visible until the next dictionary update occurs.
      */
     void RecordDemod1090(int16_t source = -1) {
-        stats_counter_.demods_1090++;
+        metrics_counter_.demods_1090++;
         if (source >= 0 && source < kMaxNumSources) {
-            stats_counter_.demods_1090_by_source[source]++;
+            metrics_counter_.demods_1090_by_source[source]++;
         }
     }
 
@@ -511,7 +512,7 @@ class AircraftDictionary {
 
     std::unordered_map<uint32_t, Aircraft> dict;  // index Aircraft objects by their ICAO identifier
 
-    Stats stats;
+    Metrics metrics;
 
    private:
     // Helper functions for ingesting specific ADS-B packet types, called by IngestADSBPacket.
@@ -534,9 +535,9 @@ class AircraftDictionary {
     bool ApplyAircraftOperationStatusMessage(Aircraft &aircraft, ADSBPacket packet);
 
     AircraftDictionaryConfig_t config_;
-    // Counters in stats_counter_ are incremented, then stats_counter_ is swapped into stats during the dictionary
-    // update. This ensures that the public stats struct always has valid data.
-    Stats stats_counter_;
+    // Counters in metrics_counter_ are incremented, then metrics_counter_ is swapped into metrics during the dictionary
+    // update. This ensures that the public metrics struct always has valid data.
+    Metrics metrics_counter_;
 };
 
 #endif /* _AIRCRAFT_DICTIONARY_HH_ */

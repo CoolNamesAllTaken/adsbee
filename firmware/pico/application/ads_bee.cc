@@ -237,11 +237,11 @@ bool ADSBee::Update() {
     // caused by packets being ingested more recently than the timestamp we take at the beginning of this function.
     if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > config_.aircraft_dictionary_update_interval_ms) {
         aircraft_dictionary.Update(timestamp_ms);
-        // Add the fresh stats values to the pile used for TL learning.
+        // Add the fresh metrics values to the pile used for TL learning.
         // If learning, add the number of valid packets received to the pile used for trigger level learning.
         if (tl_learning_temperature_mv_ > 0) {
-            tl_learning_num_valid_packets_ += (aircraft_dictionary.stats.valid_squitter_frames +
-                                               aircraft_dictionary.stats.valid_extended_squitter_frames);
+            tl_learning_num_valid_packets_ += (aircraft_dictionary.metrics.valid_squitter_frames +
+                                               aircraft_dictionary.metrics.valid_extended_squitter_frames);
         }
         last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
     }

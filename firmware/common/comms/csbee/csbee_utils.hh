@@ -69,8 +69,8 @@ inline int16_t WriteCSBeeAircraftMessageStr(char message_buf[], const Aircraft &
                  aircraft.vertical_rate_fpm,                     // VELV
                  aircraft.last_message_signal_strength_dbm,      // SIGS
                  aircraft.last_message_signal_quality_db,        // SIGQ
-                 aircraft.stats.valid_squitter_frames,           // SFPS
-                 aircraft.stats.valid_extended_squitter_frames,  // ESFPS
+                 aircraft.metrics.valid_squitter_frames,           // SFPS
+                 aircraft.metrics.valid_extended_squitter_frames,  // ESFPS
                  sysinfo                                         // SYSINFO
         );
     if (num_chars < 0) return num_chars;  // Check if snprintf call got busted.

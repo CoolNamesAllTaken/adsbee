@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title>ESP32 Web Terminal</title>
+    <title>ADSBee Web Terminal</title>
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -32,11 +32,11 @@
     </div>
 
     <script>
-        // const HOST_URI = `${window.location.hostname}`;
-        const HOST_URI = "192.168.1.182";
+        const HOST_URI = `${window.location.hostname}`;
+        // const HOST_URI = "192.168.1.182";
         const WS_CONFIG = {
             console_ws_url: `ws://${HOST_URI}/console`,
-            metrics_ws_url: `ws://${HOST_URI}/stats`,
+            metrics_ws_url: `ws://${HOST_URI}/metrics`,
             reconnectDelayMs: 5000
         };
 
@@ -238,7 +238,7 @@
         focusTerminal();
 
         /**
-         * Sparkline feed stats cards.
+         * Sparkline feed metrics cards.
          */
         class SparklineChart {
             constructor(id, maxPoints = 20) {
@@ -369,16 +369,16 @@
                     try {
                         const data = JSON.parse(event.data);
 
-                        if (data.hasOwnProperty('aircraft_dictionary_stats')) {
+                        if (data.hasOwnProperty('aircraft_dictionary_metrics')) {
                             const dictionaryMetrics = Object.fromEntries(
-                                Object.entries(data['aircraft_dictionary_stats']).filter(([key, value]) => !Array.isArray(value))
+                                Object.entries(data['aircraft_dictionary_metrics']).filter(([key, value]) => !Array.isArray(value))
                             );
                             console.log('Dictionary Metrics:', dictionaryMetrics);
                             this.updateMetricsCards('receiver', dictionaryMetrics);
                         }
-                        if (data.hasOwnProperty('server_stats')) {
-                            const serverMetrics = data['server_stats'];
-                            console.log('Server Stats:', serverMetrics);
+                        if (data.hasOwnProperty('server_metrics')) {
+                            const serverMetrics = data['server_metrics'];
+                            console.log('Server Metrics:', serverMetrics);
                             const feedMetrics = {};
                             for (let i = 0; i < serverMetrics['feed_uri'].length; i++) {
                                 if (serverMetrics['feed_uri'][i] === '') {
@@ -398,7 +398,7 @@
             }
         }
 
-        // Initialize WebSocket connection for stats feed
+        // Initialize WebSocket connection for metrics feed
         const metrics = new MetricsWebSocket(WS_CONFIG.metrics_ws_url);
     </script>
 </body>

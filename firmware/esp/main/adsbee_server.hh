@@ -70,7 +70,11 @@ class ADSBeeServer {
     QueueHandle_t network_console_tx_queue;
     httpd_handle_t server = nullptr;
     WebSocketServer network_console;
-    WebSocketServer network_stats;
+    WebSocketServer network_metrics;
+
+    // Store RP2040 aircraft dictionary metrics for reporting metrics that we can't source directly from the ESP32's own
+    // aircraft dictionary.
+    AircraftDictionary::Metrics rp2040_aircraft_dictionary_metrics;
 
    private:
     struct WSClientInfo {

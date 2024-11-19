@@ -8,7 +8,6 @@
 #include "adsbee_server.hh"
 #include "esp_mac.h"   // For retrieving Base MAC address.
 #include "esp_wifi.h"  // For retrieving WiFi Station MAC address.
-
 #endif
 
 class ObjectDictionary {
@@ -29,14 +28,20 @@ class ObjectDictionary {
         kAddrSettingsData = 0x03,          // Used to transfer settings information.
         kAddrRawTransponderPacket = 0x04,  // Used to forward raw packets from RP2040 to ESP32.
         kAddrDecodedTransponderPacket = 0x05,
-        kAddrRawTransponderPacketArray = 0x0B,
-        kAddrDecodedTransponderPacketArray = 0x0C,
-        kAddrBaseMAC = 0x06,         // ESP32 base MAC address.
-        kAddrWiFiStationMAC = 0x07,  // ESP32 WiFi station MAC address.
-        kAddrWiFiAccessPointMAC = 0x08,
-        kAddrBluetoothMAC = 0x09,
-        kAddrConsole = 0xA,  // Pipe for console characters.
+        kAddrRawTransponderPacketArray = 0x06,
+        kAddrDecodedTransponderPacketArray = 0x07,
+        kAddrAircraftDictionaryMetrics = 0x08,  // For forwarding dictionary metrics from RP2040 to ESP32.
+        kAddrDeviceInfo = 0x09,                 // ESP32 MAC addresses.
+        kAddrConsole = 0xA,                     // Pipe for console characters.
         kNumAddrs
+    };
+
+    struct ESP32DeviceInfo {
+        uint8_t base_mac[kMACAddrLenBytes];
+        uint8_t wifi_station_mac[kMACAddrLenBytes];
+        uint8_t wifi_ap_mac[kMACAddrLenBytes];
+        uint8_t bluetooth_mac[kMACAddrLenBytes];
+        uint8_t ethernet_mac[kMACAddrLenBytes];
     };
 
     /**

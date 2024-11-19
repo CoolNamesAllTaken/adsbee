@@ -7,6 +7,9 @@
 
 #include "macros.hh"
 #include "stdio.h"
+#ifdef ON_PICO
+#include "pico/rand.h"
+#endif
 
 static const uint32_t kSettingsVersion = 0x5;  // Change this when settings format changes!
 static const uint32_t kDeviceInfoVersion = 0x2;
@@ -99,6 +102,8 @@ class SettingsManager {
                 device_info.GetDefaultSSID(wifi_ap_ssid);
                 snprintf(wifi_ap_password, kWiFiPasswordMaxLen, "yummyflowers");
             }
+
+            wifi_ap_channel = get_rand_32() % kWiFiAPChannelMax + 1;
 #endif
 
             for (uint16_t i = 0; i < kMaxNumFeeds; i++) {
@@ -107,8 +112,10 @@ class SettingsManager {
                 feed_is_active[i] = false;
                 feed_protocols[i] = kNoReports;
 #ifdef ON_PICO
+                // Pico has access to EEPROM for receiver ID in device info.
                 device_info.GetDefaultFeedReceiverID(feed_receiver_ids[i]);
 #else
+                // ESP32 will have to query for receiver ID later.
                 memset(feed_receiver_ids[i], 0, kFeedReceiverIDNumBytes);
 #endif
             }
@@ -124,7 +131,7 @@ class SettingsManager {
             strncpy(feed_uris[kMaxNumFeeds - 2], "feed.whereplane.xyz", kFeedURIMaxNumChars);
             feed_uris[kMaxNumFeeds - 2][kFeedURIMaxNumChars] = '\0';
             feed_ports[kMaxNumFeeds - 2] = 30004;
-            feed_is_active[kMaxNumFeeds - 2] = true;
+            feed_is_active[kMaxNumFeeds - 2] = false;  // Not ready for primetime yet.
             feed_protocols[kMaxNumFeeds - 2] = kBeast;
         }
     };

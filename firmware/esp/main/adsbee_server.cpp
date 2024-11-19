@@ -13,7 +13,7 @@
 static const uint16_t kGDL90Port = 4000;
 
 static const uint16_t kNetworkConsoleWelcomeMessageMaxLen = 1000;
-static const uint16_t kNetworkStatsMessageMaxLen = 1000;
+static const uint16_t kNetworkMetricsMessageMaxLen = 1000;
 static const uint16_t kNumTransponderPacketSources = 3;
 
 /* obsolete */
@@ -112,24 +112,25 @@ bool ADSBeeServer::Update() {
         last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
         CONSOLE_INFO("ADSBeeServer::Update", "\t %d clients, %d aircraft, %lu squitter, %lu extended squitter",
                      comms_manager.GetNumWiFiClients(), aircraft_dictionary.GetNumAircraft(),
-                     aircraft_dictionary.stats.valid_squitter_frames,
-                     aircraft_dictionary.stats.valid_extended_squitter_frames);
+                     aircraft_dictionary.metrics.valid_squitter_frames,
+                     aircraft_dictionary.metrics.valid_extended_squitter_frames);
 
-        // Broadcast dictionary stats over the stats Websocket.
-        char stats_message[AircraftDictionary::Stats::kStatsJSONMaxLen];
-        snprintf(stats_message, kNetworkStatsMessageMaxLen, "{ \"aircraft_dictionary_stats\": ");
-        aircraft_dictionary.stats.ToJSON(stats_message + strlen(stats_message),
-                                         kNetworkStatsMessageMaxLen - strlen(stats_message));
-        snprintf(stats_message + strlen(stats_message), kNetworkStatsMessageMaxLen - strlen(stats_message),
-                 ", \"server_stats\": { ");
-        // ADSBee Server Stats
-        ArrayToJSON(stats_message + strlen(stats_message), kNetworkStatsMessageMaxLen - strlen(stats_message),
+        // Broadcast dictionary metrics over the metrics Websocket.
+        char metrics_message[AircraftDictionary::Metrics::kMetricsJSONMaxLen];
+        snprintf(metrics_message, kNetworkMetricsMessageMaxLen, "{ \"aircraft_dictionary_metrics\": ");
+        aircraft_dictionary.metrics.ToJSON(metrics_message + strlen(metrics_message),
+                                           kNetworkMetricsMessageMaxLen - strlen(metrics_message));
+        snprintf(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
+                 ", \"server_metrics\": { ");
+        // ADSBee Server Metrics
+        ArrayToJSON(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
                     "feed_uri", settings_manager.settings.feed_uris, "\"%s\"", true);
-        ArrayToJSON(stats_message + strlen(stats_message), kNetworkStatsMessageMaxLen - strlen(stats_message),
+        ArrayToJSON(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
                     "feed_mps", comms_manager.feed_mps, "%u", false);  // Mo trailing comma.
-        snprintf(stats_message + strlen(stats_message), kNetworkStatsMessageMaxLen - strlen(stats_message), "}}");
+        snprintf(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
+                 "}}");
 
-        network_stats.BroadcastMessage(stats_message, strlen(stats_message));
+        network_metrics.BroadcastMessage(metrics_message, strlen(metrics_message));
     }
 
     // Ingest new packets into the dictionary.
@@ -225,7 +226,7 @@ bool ADSBeeServer::ReportGDL90() {
 
     // Heartbeat Message
     message.len = gdl90.WriteGDL90HeartbeatMessage(message.data, get_time_since_boot_ms() / 1000,
-                                                   aircraft_dictionary.stats.valid_extended_squitter_frames);
+                                                   aircraft_dictionary.metrics.valid_extended_squitter_frames);
     comms_manager.WiFiAccessPointSendMessageToAllStations(message);
 
     // Ownship Report
@@ -394,13 +395,13 @@ bool ADSBeeServer::TCPServerInit() {
                                            .post_connect_callback = NetworkConsolePostConnectCallback,
                                            .message_received_callback = NetworkConsoleMessageReceivedCallback});
         network_console.Init();
-        network_stats = WebSocketServer({.label = "Network Stats",
-                                         .server = server,
-                                         .uri = "/stats",
-                                         .num_clients_allowed = 3,
-                                         .post_connect_callback = nullptr,
-                                         .message_received_callback = nullptr});
-        network_stats.Init();
+        network_metrics = WebSocketServer({.label = "Network Metrics",
+                                           .server = server,
+                                           .uri = "/metrics",
+                                           .num_clients_allowed = 3,
+                                           .post_connect_callback = nullptr,
+                                           .message_received_callback = nullptr});
+        network_metrics.Init();
     }
 
     // xTaskCreatePinnedToCore(tcp_server_task, "tcp_server", kTCPServerTaskStackSizeBytes, NULL,

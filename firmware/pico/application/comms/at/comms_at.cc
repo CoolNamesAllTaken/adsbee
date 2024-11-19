@@ -135,24 +135,30 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
                 CPP_AT_PRINTF("ESP32 Firmware Version: %d.%d.%d\r\n", esp32_firmware_version >> 16,
                               (esp32_firmware_version >> 8) & 0xFF, esp32_firmware_version & 0xFF);
 
-                // Read ESP32 base MAC address.
-                uint8_t esp32_base_mac[ObjectDictionary::kMACAddrLenBytes];
-                if (!esp32.Read(ObjectDictionary::kAddrBaseMAC, esp32_base_mac, ObjectDictionary::kMACAddrLenBytes)) {
-                    CPP_AT_ERROR("ESP32 base MAC address read failed!");
+                ObjectDictionary::ESP32DeviceInfo esp32_device_info;
+                if (!esp32.Read(ObjectDictionary::kAddrDeviceInfo, esp32_device_info, sizeof(esp32_device_info))) {
+                    CPP_AT_ERROR("ESP32 device info read failed!");
                 }
-                CPP_AT_PRINTF("ESP32 Base MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\r\n", esp32_base_mac[0],
-                              esp32_base_mac[1], esp32_base_mac[2], esp32_base_mac[3], esp32_base_mac[4],
-                              esp32_base_mac[5]);
-
-                // Read ESP32 WiFi station MAC address.
-                uint8_t esp32_wifi_sta_mac[ObjectDictionary::kMACAddrLenBytes];
-                if (!esp32.Read(ObjectDictionary::kAddrWiFiStationMAC, esp32_wifi_sta_mac,
-                                ObjectDictionary::kMACAddrLenBytes)) {
-                    CPP_AT_ERROR("ESP32 WiFi Station MAC address read failed!");
-                }
+                CPP_AT_PRINTF("ESP32 Base MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\r\n",
+                              esp32_device_info.base_mac[0], esp32_device_info.base_mac[1],
+                              esp32_device_info.base_mac[2], esp32_device_info.base_mac[3],
+                              esp32_device_info.base_mac[4], esp32_device_info.base_mac[5]);
                 CPP_AT_PRINTF("ESP32 WiFi Station MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\r\n",
-                              esp32_wifi_sta_mac[0], esp32_wifi_sta_mac[1], esp32_wifi_sta_mac[2],
-                              esp32_wifi_sta_mac[3], esp32_wifi_sta_mac[4], esp32_wifi_sta_mac[5]);
+                              esp32_device_info.wifi_station_mac[0], esp32_device_info.wifi_station_mac[1],
+                              esp32_device_info.wifi_station_mac[2], esp32_device_info.wifi_station_mac[3],
+                              esp32_device_info.wifi_station_mac[4], esp32_device_info.wifi_station_mac[5]);
+                CPP_AT_PRINTF("ESP32 WiFi AP MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\r\n",
+                              esp32_device_info.wifi_ap_mac[0], esp32_device_info.wifi_ap_mac[1],
+                              esp32_device_info.wifi_ap_mac[2], esp32_device_info.wifi_ap_mac[3],
+                              esp32_device_info.wifi_ap_mac[4], esp32_device_info.wifi_ap_mac[5]);
+                CPP_AT_PRINTF("ESP32 Bluetooth MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\r\n",
+                              esp32_device_info.bluetooth_mac[0], esp32_device_info.bluetooth_mac[1],
+                              esp32_device_info.bluetooth_mac[2], esp32_device_info.bluetooth_mac[3],
+                              esp32_device_info.bluetooth_mac[4], esp32_device_info.bluetooth_mac[5]);
+                CPP_AT_PRINTF("ESP32 Ethernet MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\r\n",
+                              esp32_device_info.ethernet_mac[0], esp32_device_info.ethernet_mac[1],
+                              esp32_device_info.ethernet_mac[2], esp32_device_info.ethernet_mac[3],
+                              esp32_device_info.ethernet_mac[4], esp32_device_info.ethernet_mac[5]);
             } else {
                 CPP_AT_PRINTF("ESP32 Disabled\r\n");
             }
