@@ -125,29 +125,36 @@ void AircraftDictionary::Init() {
 }
 
 void AircraftDictionary::Update(uint32_t timestamp_ms) {
-    // Iterate over each key-value pair in the unordered_map. Prune if stale, update stats if still fresh.
+    // Iterate over each key-value pair in the unordered_map. Prune if stale, update metrics if still fresh.
     for (auto it = dict.begin(); it != dict.end(); /* No increment here */) {
         if (timestamp_ms - it->second.last_message_timestamp_ms > config_.aircraft_prune_interval_ms) {
             it = dict.erase(it);  // Remove stale aircraft entry.
         } else {
-            it->second.UpdateStats();
+            it->second.UpdateMetrics();
             it++;  // Move to the next aircraft entry.
         }
     }
 
     // Update aggregate statistics.
-    stats = stats_counter_;              // Swap counter values over to publicly visible values.
-    stats_counter_ = DictionaryStats();  // Use default constructor to clear all values.
+    metrics = metrics_counter_;    // Swap counter values over to publicly visible values.
+    metrics_counter_ = Metrics();  // Use default constructor to clear all values.
 }
 
 bool AircraftDictionary::IngestDecodedTransponderPacket(DecodedTransponderPacket &packet) {
+    int16_t source = packet.GetRaw().source;
     switch (packet.GetBufferLenBits()) {
         case DecodedTransponderPacket::kSquitterPacketLenBits:
-            stats_counter_.raw_squitter_frames++;
+            metrics_counter_.raw_squitter_frames++;
+            if (source > 0) {
+                metrics_counter_.raw_squitter_frames_by_source[source]++;
+            }
             if (ContainsAircraft(packet.GetICAOAddress())) {
                 // Packet is a 56-bit Squitter packet that is incapable of validating itself, and its CRC was validated
                 // against the ICAO addresses in the aircraft dictionary.
-                stats_counter_.valid_squitter_frames++;
+                metrics_counter_.valid_squitter_frames++;
+                if (source > 0) {
+                    metrics_counter_.valid_squitter_frames_by_source[source]++;
+                }
                 packet.ForceValid();
                 // Continue to add packet to dictionary.
             } else {
@@ -155,9 +162,15 @@ bool AircraftDictionary::IngestDecodedTransponderPacket(DecodedTransponderPacket
             }
             break;
         case DecodedTransponderPacket::kExtendedSquitterPacketLenBits:
-            stats_counter_.raw_extended_squitter_frames++;
+            metrics_counter_.raw_extended_squitter_frames++;
+            if (source > 0) {
+                metrics_counter_.raw_extended_squitter_frames_by_source[source]++;
+            }
             if (packet.IsValid()) {
-                stats_counter_.valid_extended_squitter_frames++;
+                metrics_counter_.valid_extended_squitter_frames++;
+                if (source > 0) {
+                    metrics_counter_.valid_extended_squitter_frames_by_source[source]++;
+                }
             } else {
                 return false;  // Extended squitter frame failed CRC.
             }
@@ -313,8 +326,8 @@ bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
             ret = ApplyAircraftOperationStatusMessage(*aircraft_ptr, packet);
             break;
         default:
-            CONSOLE_ERROR("AircraftDictionary::IngestADSBPacket", "Received ADSB message with unsupported typecode %d.",
-                          typecode);
+            CONSOLE_WARNING("AircraftDictionary::IngestADSBPacket",
+                            "Received ADSB message with unsupported typecode %d.", typecode);
             ret = false;  // kTypeCodeInvalid, etc.
     }
     if (ret) aircraft_ptr->IncrementNumFramesReceived(true);  // Count the received Mode S frame.

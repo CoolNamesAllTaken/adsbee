@@ -10,4 +10,5 @@ const char SettingsManager::kSerialInterfaceStrs[SettingsManager::SerialInterfac
                                                                                                 "GNSS_UART"};
 const char SettingsManager::kReportingProtocolStrs[SettingsManager::ReportingProtocol::kNumProtocols]
                                                   [SettingsManager::kReportingProtocolStrMaxLen] = {
-                                                      "NONE", "RAW", "BEAST", "CSBEE", "MAVLINK1", "MAVLINK2", "GDL90"};
+                                                      "NONE",  "RAW",      "BEAST",    "BEAST_RAW",
+                                                      "CSBEE", "MAVLINK1", "MAVLINK2", "GDL90"};

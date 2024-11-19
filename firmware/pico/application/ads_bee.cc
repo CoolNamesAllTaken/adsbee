@@ -17,6 +17,7 @@
 #include "hal.hh"
 #include "hardware/irq.h"
 #include "pico/binary_info.h"
+#include "spi_coprocessor.hh"
 
 // #include <charconv>
 #include <string.h>  // for strcat
@@ -32,6 +33,7 @@ constexpr float kInt16MaxRecip = 1.0f / INT16_MAX;
 
 ADSBee *isr_access = nullptr;
 
+/** Begin pass-through functions for public access **/
 void on_systick_exception() { isr_access->OnSysTickWrap(); }
 
 void on_demod_pin_change(uint gpio, uint32_t event_mask) {
@@ -40,13 +42,8 @@ void on_demod_pin_change(uint gpio, uint32_t event_mask) {
             isr_access->OnDemodBegin(gpio);
             break;
         case GPIO_IRQ_EDGE_FALL:
-            // isr_access->OnDemodComplete(gpio);
             break;
         case GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL:
-            // WARNING: RSSI measurement will be inaccurate here, but this is necessary because sometimes the interrupts
-            // come in together. If there isn't a case here, the PIO will lock up.
-            // isr_access->OnDemodBegin(0);
-            // isr_access->OnDemodComplete(0);
             break;
     }
     gpio_acknowledge_irq(gpio, event_mask);
@@ -54,22 +51,7 @@ void on_demod_pin_change(uint gpio, uint32_t event_mask) {
 
 void on_demod_complete() { isr_access->OnDemodComplete(); }
 
-// void on_demod1_pin_change(uint gpio, uint32_t event_mask) {
-//     switch (event_mask) {
-//         case GPIO_IRQ_EDGE_RISE:
-//             isr_access->OnDemodBegin(1);
-//             break;
-//         case GPIO_IRQ_EDGE_FALL:
-//             isr_access->OnDemodComplete(1);
-//             break;
-//         case GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL:
-//             // WARNING: RSSI measurement will be inaccurate here.
-//             // isr_access->OnDemodBegin(1);
-//             // isr_access->OnDemodComplete(1);
-//             break;
-//     }
-//     gpio_acknowledge_irq(gpio, event_mask);
-// }
+/** End pass-through functions for public access **/
 
 ADSBee::ADSBee(ADSBeeConfig config_in) {
     config_ = config_in;
@@ -241,10 +223,6 @@ bool ADSBee::Init() {
         gpio_put(config_.status_led_pin, 0);
         sleep_ms(kStatusLEDBootupBlinkPeriodMs / 2);
     }
-    // pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[1], true);
-    // pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[0],
-    //                    true);  // Enable SM 0 last since others are waiting.
-    // pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[0], true);
 
     return true;
 }
@@ -260,11 +238,16 @@ bool ADSBee::Update() {
     // caused by packets being ingested more recently than the timestamp we take at the beginning of this function.
     if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > config_.aircraft_dictionary_update_interval_ms) {
         aircraft_dictionary.Update(timestamp_ms);
-        // Add the fresh stats values to the pile used for TL learning.
+        if (esp32.IsEnabled()) {
+            // Send fresh aircraft dictionary stats to ESPS32.
+            esp32.Write(ObjectDictionary::kAddrAircraftDictionaryMetrics, aircraft_dictionary.metrics,
+                        true);  // require ACK.
+        }
+        // Add the fresh metrics values to the pile used for TL learning.
         // If learning, add the number of valid packets received to the pile used for trigger level learning.
         if (tl_learning_temperature_mv_ > 0) {
-            tl_learning_num_valid_packets_ += (aircraft_dictionary.stats.valid_squitter_frames +
-                                               aircraft_dictionary.stats.valid_extended_squitter_frames);
+            tl_learning_num_valid_packets_ += (aircraft_dictionary.metrics.valid_squitter_frames +
+                                               aircraft_dictionary.metrics.valid_extended_squitter_frames);
         }
         last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
     }
@@ -273,14 +256,14 @@ bool ADSBee::Update() {
     RawTransponderPacket raw_packet;
     while (transponder_packet_queue.Pop(raw_packet)) {
         if (raw_packet.buffer_len_bits == DecodedTransponderPacket::kExtendedSquitterPacketLenBits) {
-            CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%08x|%08x|%04x RSSI=%ddBm MLAT=%u",
+            CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%08x|%08x|%04x SRC=%d SIGS=%ddBm SIGQ=%ddB MLAT=%u",
                          raw_packet.buffer[0], raw_packet.buffer[1], raw_packet.buffer[2],
-                         (raw_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_packet.sigs_dbm,
-                         raw_packet.mlat_48mhz_64bit_counts);
+                         (raw_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_packet.source, raw_packet.sigs_dbm,
+                         raw_packet.sigq_db, raw_packet.mlat_48mhz_64bit_counts);
         } else {
-            CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%06x RSSI=%ddBm MLAT=%u", raw_packet.buffer[0],
-                         (raw_packet.buffer[1]) >> (2 * kBitsPerNibble), raw_packet.sigs_dbm,
-                         raw_packet.mlat_48mhz_64bit_counts);
+            CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%06x SRC=%d SIGS=%ddBm SIGQ=%ddB MLAT=%u",
+                         raw_packet.buffer[0], (raw_packet.buffer[1]) >> (2 * kBitsPerNibble), raw_packet.source,
+                         raw_packet.sigs_dbm, raw_packet.sigq_db, raw_packet.mlat_48mhz_64bit_counts);
         }
 
         DecodedTransponderPacket decoded_packet = DecodedTransponderPacket(raw_packet);
@@ -291,9 +274,10 @@ bool ADSBee::Update() {
             // Packet was used to update the dictionary or was silently ignored (but presumed to be valid).
             FlashStatusLED();
             // NOTE: Pushing to the reporting queue here means that we only will report validated packets!
-            comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
+            // comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
             CONSOLE_INFO("ADSBee::Update", "\taircraft_dictionary: %d aircraft", aircraft_dictionary.GetNumAircraft());
         }
+        comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
     }
 
     // Update trigger level learning if it's active.
@@ -342,6 +326,14 @@ bool ADSBee::Update() {
     // Update PWM output duty cycle.
     pwm_set_chan_level(tl_pwm_slice_, tl_pwm_chan_, tl_pwm_count_);
 
+    // Occasionally sample the signal strength to approximate the noise floor.
+    timestamp_ms = get_time_since_boot_ms();
+    if (timestamp_ms - noise_floor_last_sample_timestamp_ms_ > kNoiseFloorADCSampleIntervalMs) {
+        noise_floor_mv_ = ((noise_floor_mv_ * kNoiseFloorExpoFilterPercent) +
+                           ReadSignalStrengthMilliVolts() * (100 - kNoiseFloorExpoFilterPercent)) /
+                          100;
+        noise_floor_last_sample_timestamp_ms_ = timestamp_ms;
+    }
     return true;
 }
 
@@ -349,6 +341,21 @@ void ADSBee::FlashStatusLED(uint32_t led_on_ms) {
     gpio_put(config_.status_led_pin, 1);
     led_on_timestamp_ms_ = get_time_since_boot_ms();
 }
+
+uint64_t ADSBee::GetMLAT48MHzCounts(uint16_t num_bits) {
+    // Combine the wrap counter with the current value of the SysTick register and mask to 48 bits.
+    // Note: 24-bit SysTick value is subtracted from UINT_24_MAX to make it count up instead of down.
+    return (mlat_counter_1s_wraps_ << 24 | (0xFFFFFF - systick_hw->cvr)) & (UINT64_MAX >> (64 - num_bits));
+}
+
+uint64_t ADSBee::GetMLAT12MHzCounts(uint16_t num_bits) {
+    // Piggyback off the higher resolution 48MHz timer function.
+    return GetMLAT48MHzCounts(50) >> 2;  // Divide 48MHz counter by 4, widen the mask by 2 bits to compensate.
+}
+
+int ADSBee::GetNoiseFloordBm() { return AD8313MilliVoltsTodBm(noise_floor_mv_); }
+
+uint16_t ADSBee::GetTLLearningTemperatureMV() { return tl_learning_temperature_mv_; }
 
 void ADSBee::OnDemodBegin(uint gpio) {
     uint16_t sm_index;
@@ -364,15 +371,15 @@ void ADSBee::OnDemodBegin(uint gpio) {
 }
 
 void ADSBee::OnDemodComplete() {
-    // uint8_t pio_irq = config_.preamble_detector_pio->irq;
     for (uint16_t sm_index = 0; sm_index < kNumDemodStateMachines; sm_index++) {
         if (!pio_interrupt_get(config_.preamble_detector_pio, sm_index)) {
             continue;
         }
         pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], false);
-        // pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], false);
         // Read the RSSI level of the current packet.
-        rx_packet_[sm_index].sigs_dbm = ReadRSSIdBm();
+        rx_packet_[sm_index].sigs_dbm = ReadSignalStrengthdBm();
+        rx_packet_[sm_index].sigq_db = rx_packet_[sm_index].sigs_dbm - GetNoiseFloordBm();
+        rx_packet_[sm_index].source = sm_index;  // Record this state machine as the source of the packet.
         if (!pio_sm_is_rx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
             // Push any partially complete 32-bit word onto the RX FIFO.
             pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
@@ -472,30 +479,13 @@ void ADSBee::OnDemodComplete() {
 
 void ADSBee::OnSysTickWrap() { mlat_counter_1s_wraps_++; }
 
-uint64_t ADSBee::GetMLAT48MHzCounts(uint16_t num_bits) {
-    // Combine the wrap counter with the current value of the SysTick register and mask to 48 bits.
-    // Note: 24-bit SysTick value is subtracted from UINT_24_MAX to make it count up instead of down.
-    return (mlat_counter_1s_wraps_ << 24 | (0xFFFFFF - systick_hw->cvr)) & (UINT64_MAX >> (64 - num_bits));
-}
-
-uint64_t ADSBee::GetMLAT12MHzCounts(uint16_t num_bits) {
-    // Piggyback off the higher resolution 48MHz timer function.
-    return GetMLAT48MHzCounts(50) >> 2;  // Divide 48MHz counter by 4, widen the mask by 2 bits to compensate.
-}
-
-uint16_t ADSBee::GetTLLearningTemperatureMV() { return tl_learning_temperature_mv_; }
-
-int ADSBee::ReadRSSIMilliVolts() {
+int ADSBee::ReadSignalStrengthMilliVolts() {
     adc_select_input(config_.rssi_adc_input);
     int rssi_adc_counts = adc_read();
     return rssi_adc_counts * 3300 / 4095;
 }
 
-int ADSBee::ReadRSSIdBm() {
-    return 60 * (ReadRSSIMilliVolts() - 1600) / 1000;  // AD8313 0dBm intercept at 1.6V, slope is 60dBm/V.
-}
-
-inline int ADCCountsToMilliVolts(uint16_t adc_counts) { return 3300 * adc_counts / 0xFFF; }
+int ADSBee::ReadSignalStrengthdBm() { return AD8313MilliVoltsTodBm(ReadSignalStrengthMilliVolts()); }
 
 int ADSBee::ReadTLMilliVolts() {
     // Read back the low level TL bias output voltage.

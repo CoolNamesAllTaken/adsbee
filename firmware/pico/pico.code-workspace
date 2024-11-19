@@ -92,7 +92,9 @@
 			"shared_mutex": "cpp",
 			"format": "cpp",
 			"esp_loader.h": "c",
-			"comms.hh": "c"
+			"comms.hh": "c",
+			"ads_bee.hh": "c",
+			"valarray": "cpp"
 		},
 		"cortex-debug.variableUseNaturalFormat": true,
 		// "cortex-debug.variableUseNaturalFormat": true,

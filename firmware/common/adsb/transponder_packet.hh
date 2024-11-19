@@ -12,9 +12,11 @@ class RawTransponderPacket {
    public:
     static const uint16_t kMaxPacketLenWords32 = 4;
 
-    RawTransponderPacket(char *rx_string, int sigs_dbm = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
+    RawTransponderPacket(char *rx_string, int16_t source_in = -1, int32_t sigs_dbm_in = INT32_MIN,
+                         int32_t sigq_db_in = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
     RawTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32,
-                         int sigs_dbm = INT32_MIN, int sigq_db = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
+                         int16_t source_in = -1, int32_t sigs_dbm_in = INT32_MIN, int32_t sigq_db_in = INT32_MIN,
+                         uint64_t mlat_48mhz_64bit_counts = 0);
     /**
      * Default constructor.
      */
@@ -26,8 +28,9 @@ class RawTransponderPacket {
 
     uint32_t buffer[kMaxPacketLenWords32];
     uint16_t buffer_len_bits = 0;
-    int sigs_dbm = INT32_MIN;              // Signal strength, in dBm.
-    int sigq_db = INT32_MIN;               // Signal quality (dB above noise floor), in dB.
+    int16_t source = -1;                   // Source of the ADS-B packet (PIO state machine number).
+    int32_t sigs_dbm = INT32_MIN;          // Signal strength, in dBm.
+    int32_t sigq_db = INT32_MIN;           // Signal quality (dB above noise floor), in dB.
     uint64_t mlat_48mhz_64bit_counts = 0;  // High resolution MLAT counter.
 };
 
@@ -72,7 +75,8 @@ class DecodedTransponderPacket {
      * @param[in] sigs_dbm RSSI of the packet that was received, in dBm. Defaults to INT32_MIN if not set.
      * @param[in] mlat_48mhz_64bit_counts Counts of a 12MHz clock used for the 6-byte multilateration timestamp.
      */
-    DecodedTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len, int sigs_dbm = INT32_MIN,
+    DecodedTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len, int16_t source = -1,
+                             int32_t sigs_dbm = INT32_MIN, int32_t sigq_db = INT32_MIN,
                              uint64_t mlat_48mhz_64bit_counts = 0);
 
     /**
@@ -81,7 +85,8 @@ class DecodedTransponderPacket {
      * @param[in] sigs_dbm RSSI of the packet that was received, in dBm. Defaults to INT32_MIN if not set.
      * @param[in] mlat_12mhz_counts Counts of a 12MHz clock used for the 6-byte multilateration timestamp.
      */
-    DecodedTransponderPacket(char *rx_string, int sigs_dbm = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
+    DecodedTransponderPacket(char *rx_string, int16_t source = -1, int32_t sigs_dbm = INT32_MIN,
+                             int32_t sigq_db = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
 
     /**
      * DecodedTransponderPacket constructor from RawTransponderPacket. Uses RawTransponderPacket's implicit constructor.
@@ -92,7 +97,7 @@ class DecodedTransponderPacket {
     /**
      * Default constructor.
      */
-    DecodedTransponderPacket() : raw_((char *)"", INT32_MIN, 0) { debug_string[0] = '\0'; };
+    DecodedTransponderPacket() : raw_((char *)"") { debug_string[0] = '\0'; };
 
     bool IsValid() const { return is_valid_; };
 

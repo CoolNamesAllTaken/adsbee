@@ -38,7 +38,6 @@ bool CommsManager::Update() {
 }
 
 int CommsManager::console_printf(const char *format, ...) {
-    if (log_level == SettingsManager::kSilent) return 0;
     va_list args;
     va_start(args, format);
     int res = iface_vprintf(SettingsManager::SerialInterface::kConsole, format, args);
@@ -144,7 +143,8 @@ bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char
             return true;  // Function is void so we won't know if it succeeds.
             break;
         case SettingsManager::kConsole:
-            return puts(buf) >= 0 && (!esp32.IsEnabled() || network_console_puts(buf) >= 0);
+            // Note: Using fputs instead of standard puts, since puts adds a line feed.
+            return fputs(buf, stdout) >= 0 && (!esp32.IsEnabled() || network_console_puts(buf) >= 0);
             break;
         case SettingsManager::kNumSerialInterfaces:
         default:
@@ -155,31 +155,23 @@ bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char
     return false;  // Should never get here.
 }
 
-// int CommsManager::network_console_printf(const char *format, ...) {
-//     int network_chars = 0;
-//     if (esp32.IsEnabled()) {
-//         // Print to network console.
-//         char network_console_buffer[CommsManager::kATCommandBufMaxLen];
-//         va_list args;
-//         va_start(args, format);
-//         network_chars = vsnprintf(network_console_buffer, CommsManager::kATCommandBufMaxLen, format, args);
-//         va_end(args);
-
-//         if (!network_console_puts(network_console_buffer, CommsManager::kATCommandBufMaxLen)) {
-//             return -1;
-//         }
-//     }
-//     return network_chars;
-// }
-
 bool CommsManager::network_console_putc(char c) {
+    static bool recursion_alert = false;
     if (!comms_manager.esp32_console_tx_queue.Push(c)) {
-        comms_manager.Update();
-        if (!comms_manager.esp32_console_tx_queue.Push(c)) {
-            CONSOLE_ERROR("CommsManager::network_console_putc",
-                          "Overflowed buffer for outgoing network console chars after attempting to clear buffer.");
-            return false;
+        if (!recursion_alert) {
+            // Try flushing the buffer before dumping it, but don't get into an infinite loop if that creates errors
+            // that also want to be printed.
+            recursion_alert = true;
+            comms_manager.UpdateAT();
+            recursion_alert = false;
+            if (comms_manager.esp32_console_tx_queue.Push(c)) {
+                return true;  // Crisis averted! Phew.
+            }
         }
+
+        comms_manager.esp32_console_tx_queue.Clear();
+        CONSOLE_ERROR("CommsManager::network_console_putc", "Overflowed buffer for outgoing network console chars.");
+        return false;
     }
     return true;
 }

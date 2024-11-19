@@ -442,18 +442,46 @@ TEST(AircraftDictionary, IngestModeA) {
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne));
 }
 
+TEST(AircraftDictionary, MetricsToJSON) {
+    AircraftDictionary::Metrics metrics = {.raw_squitter_frames = 10,
+                                           .valid_squitter_frames = 7,
+                                           .raw_extended_squitter_frames = 30,
+                                           .valid_extended_squitter_frames = 16,
+                                           .demods_1090 = 50,
+                                           .raw_squitter_frames_by_source = {2, 3, 5},
+                                           .valid_squitter_frames_by_source = {1, 2, 4},
+                                           .raw_extended_squitter_frames_by_source = {10, 11, 9},
+                                           .valid_extended_squitter_frames_by_source = {3, 5, 8},
+                                           .demods_1090_by_source = {19, 10, 21}};
+    char buf[AircraftDictionary::Metrics::kMetricsJSONMaxLen] = {'\0'};
+    char * expected_result =
+        (char *)"{ \"raw_squitter_frames\": 10, \
+\"valid_squitter_frames\": 7, \
+\"raw_extended_squitter_frames\": 30, \
+\"valid_extended_squitter_frames\": 16, \
+\"demods_1090\": 50, \
+\"raw_squitter_frames_by_source\": [2, 3, 5], \
+\"valid_squitter_frames_by_source\": [1, 2, 4], \
+\"raw_extended_squitter_frames_by_source\": [10, 11, 9], \
+\"valid_extended_squitter_frames_by_source\": [3, 5, 8], \
+\"demods_1090_by_source\": [19, 10, 21] \
+}";
+    EXPECT_EQ(metrics.ToJSON(buf, AircraftDictionary::Metrics::kMetricsJSONMaxLen), strlen(expected_result));
+    EXPECT_STREQ(buf, expected_result);
+}
+
 TEST(Aircraft, AircraftStats) {
     Aircraft aircraft;
     aircraft.IncrementNumFramesReceived();
-    EXPECT_EQ(aircraft.stats_frames_received_in_last_interval, 0);
-    aircraft.UpdateStats();
-    EXPECT_EQ(aircraft.stats_frames_received_in_last_interval, 1);
-    EXPECT_EQ(aircraft.stats_mode_s_frames_received_in_last_interval, 0);
-    EXPECT_EQ(aircraft.stats_short_mode_s_frames_received_in_last_interval, 1);
+    EXPECT_EQ(aircraft.metrics.valid_extended_squitter_frames + aircraft.metrics.valid_squitter_frames, 0);
+    aircraft.UpdateMetrics();
+    EXPECT_EQ(aircraft.metrics.valid_extended_squitter_frames + aircraft.metrics.valid_squitter_frames, 1);
+    EXPECT_EQ(aircraft.metrics.valid_extended_squitter_frames, 0);
+    EXPECT_EQ(aircraft.metrics.valid_squitter_frames, 1);
     aircraft.IncrementNumFramesReceived(false);
     aircraft.IncrementNumFramesReceived(true);
-    aircraft.UpdateStats();
-    EXPECT_EQ(aircraft.stats_frames_received_in_last_interval, 2);
-    EXPECT_EQ(aircraft.stats_short_mode_s_frames_received_in_last_interval, 1);
-    EXPECT_EQ(aircraft.stats_mode_s_frames_received_in_last_interval, 1);
+    aircraft.UpdateMetrics();
+    EXPECT_EQ(aircraft.metrics.valid_extended_squitter_frames + aircraft.metrics.valid_squitter_frames, 2);
+    EXPECT_EQ(aircraft.metrics.valid_extended_squitter_frames, 1);
+    EXPECT_EQ(aircraft.metrics.valid_squitter_frames, 1);
 }

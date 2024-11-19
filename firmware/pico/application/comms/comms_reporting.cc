@@ -41,6 +41,7 @@ bool CommsManager::UpdateReporting() {
         if (esp32.IsEnabled()) {
             // Pop all the packets to report (up to max limit of the buffer).
             RawTransponderPacket raw_packet = packets_to_report[num_packets_to_report].GetRaw();
+            spi_raw_packet_reporting_buffer[0] = num_packets_to_report;
             memcpy(spi_raw_packet_reporting_buffer + sizeof(uint8_t) +
                        sizeof(RawTransponderPacket) * num_packets_to_report,
                    &raw_packet, sizeof(RawTransponderPacket));
@@ -133,14 +134,14 @@ bool CommsManager::ReportCSBee(SettingsManager::SerialInterface iface) {
     char message[kCSBeeMessageStrMaxLen];
     int16_t message_len_bytes =
         WriteCSBeeStatisticsMessageStr(message,                                                 // Buffer to write into.
-                                       adsbee.aircraft_dictionary.stats.demods_1090,            // DPS
-                                       adsbee.aircraft_dictionary.stats.raw_squitter_frames,    // RAW_SFPS
-                                       adsbee.aircraft_dictionary.stats.valid_squitter_frames,  // SFPS
-                                       adsbee.aircraft_dictionary.stats.raw_extended_squitter_frames,    // RAW_ESFPS
-                                       adsbee.aircraft_dictionary.stats.valid_extended_squitter_frames,  // ESFPS
-                                       adsbee.aircraft_dictionary.GetNumAircraft(),                      // NUM_AIRCRAFT
-                                       0u,                                                               // TSCAL
-                                       get_time_since_boot_ms() / 1000                                   // UPTIME
+                                       adsbee.aircraft_dictionary.metrics.demods_1090,          // DPS
+                                       adsbee.aircraft_dictionary.metrics.raw_squitter_frames,  // RAW_SFPS
+                                       adsbee.aircraft_dictionary.metrics.valid_squitter_frames,           // SFPS
+                                       adsbee.aircraft_dictionary.metrics.raw_extended_squitter_frames,    // RAW_ESFPS
+                                       adsbee.aircraft_dictionary.metrics.valid_extended_squitter_frames,  // ESFPS
+                                       adsbee.aircraft_dictionary.GetNumAircraft(),  // NUM_AIRCRAFT
+                                       0u,                                           // TSCAL
+                                       get_time_since_boot_ms() / 1000               // UPTIME
         );
     if (message_len_bytes < 0) {
         CONSOLE_ERROR("CommsManager::ReportCSBee",
@@ -270,7 +271,7 @@ bool CommsManager::ReportGDL90(SettingsManager::SerialInterface iface) {
 
     // Heartbeat Message
     msg_len = gdl90.WriteGDL90HeartbeatMessage(buf, get_time_since_boot_ms() / 1000,
-                                               adsbee.aircraft_dictionary.stats.valid_extended_squitter_frames);
+                                               adsbee.aircraft_dictionary.metrics.valid_extended_squitter_frames);
     SendBuf(iface, (char *)buf, msg_len);
 
     // Ownship Report

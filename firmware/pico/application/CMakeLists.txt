@@ -72,7 +72,9 @@ if (ON_EMBEDDED_DEVICE)
     
     # Build for embedded target
     add_subdirectory(esp32_flasher)
+    MESSAGE("CppAT settings: ${ADSBEE_MODULES_DIR}/cppAT/settings")
     target_include_directories(application PRIVATE
+        # ${ADSBEE_MODULES_DIR}/cppAT/settings # No longer need this since it's being overridden.
         ${ADSBEE_MODULES_DIR}/cppAT/src
         .
     )
@@ -104,6 +106,7 @@ if (ON_EMBEDDED_DEVICE)
         COMMAND ${Python3_EXECUTABLE} ${LINKER_SCRIPTS_DIR}/util_crc.py
                 ${CMAKE_CURRENT_BINARY_DIR}/application.bin
                 --header ${APPLICATION_HEADER_SECTION_NAME}
+                --ota ${CMAKE_CURRENT_BINARY_DIR}/adsbee_1090.ota
         COMMENT "Calculating and appending CRC32 to application binary and UF2"
     )
 

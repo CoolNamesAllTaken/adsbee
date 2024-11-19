@@ -31,14 +31,14 @@ def append_crc32_bin(filename):
     print(f"Appended CRC32: 0x{crc:08X}")
     return crc
 
-def generate_header(app_bin_filename, asm_section=None):
+def generate_header(app_bin_filename, asm_section=None, ota_filename=None):
     """
     Generate a header binary and corresponding assembly file which includes the following:
-        0xBEEFBEEF
+        0xAD5BEEE
         header_version (uint32_t)
         app_size_bytes (uint32_t)
         app_crc (uint32_t)
-
+        status (uint32_t)
     """
     HEADER_VERSION = 0
     HEADER_SIZE_BYTES = 5*4
@@ -70,20 +70,27 @@ def generate_header(app_bin_filename, asm_section=None):
     if asm_section is not None:
         print(f"\tConverting header file to assembly as {hdr_asm_filename}.")
         bin_file_to_asm_file(hdr_bin_filename, hdr_asm_filename, asm_section)
+    
+    if ota_filename is not None:
+        with open(ota_filename, 'wb') as f:
+            f.write(hdr_bin_contents)
+            f.write(app_bin_contents)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="CRC tools.")
     parser.add_argument("filename")
     parser.add_argument("--header", help="Generate a binary header, then turn it into an assembly header with the provided section name.")
+    parser.add_argument("--ota", help="Generate a .ota file that combines the header and application binary.")
 
     args = parser.parse_args()
 
     if args.header:
         # Generate header binary and assembly files.
-        generate_header(args.filename, args.header)
+        generate_header(args.filename, args.header, args.ota)
     else:
         # Just calculate CRC of a binary.
         with open(args.filename, 'rb') as f:
             contents = f.read()
         print(f"Calculated CRC32: 0x{calculate_crc32(contents):x}")
+    

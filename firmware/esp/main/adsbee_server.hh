@@ -5,6 +5,7 @@
 #include "data_structures.hh"
 #include "esp_http_server.h"
 #include "transponder_packet.hh"
+#include "websocket_server.hh"
 
 class ADSBeeServer {
    public:
@@ -13,9 +14,6 @@ class ADSBeeServer {
     static const uint32_t kGDL90ReportingIntervalMs = 1000;
 
     static const uint16_t kNetworkConsoleQueueLen = 10;
-    static const uint16_t kNetworkConsoleMaxNumClients = 3;
-    static const uint32_t kNetworkConsoleInactivityTimeoutMs =
-        10 * 60e3;  // Time without a message before a network console client is disconnected.
 
     /**
      * Data structure used to pass netowrk console messages between threads (SPI <-> WebSocket server). Needs to be
@@ -42,7 +40,24 @@ class ADSBeeServer {
         void Destroy() { heap_caps_free(buf); }
     };
 
-    ADSBeeServer() {};  // Default constructor.
+    /**
+     * Constructor.
+     */
+    ADSBeeServer() {
+        network_console_rx_queue = xQueueCreate(kNetworkConsoleQueueLen, sizeof(NetworkConsoleMessage));
+        network_console_tx_queue = xQueueCreate(kNetworkConsoleQueueLen, sizeof(NetworkConsoleMessage));
+        rp2040_aircraft_dictionary_metrics_queue = xQueueCreate(1, sizeof(AircraftDictionary::Metrics));
+    };
+
+    /**
+     * Destructor.
+     */
+    ~ADSBeeServer() {
+        vQueueDelete(network_console_rx_queue);
+        vQueueDelete(network_console_tx_queue);
+        vQueueDelete(rp2040_aircraft_dictionary_metrics_queue);
+    }
+
     bool Init();
     bool Update();
 
@@ -63,37 +78,19 @@ class ADSBeeServer {
      */
     void TCPServerTask(void* pvParameters);
 
-    /**
-     * Add a new client connection for the Network Console WebSocket.
-     * @param[in] client_fd File descriptor for writing to the client.
-     * @retval True if client was successfully added, false if maximum number of clients already reached.
-     */
-    bool NetworkConsoleAddWebSocketClient(int client_fd);
-
-    /**
-     * Remove a client connection from the Network Console WebSocket.
-     * @param[in] client_fd File descriptor for the client to remove.
-     * @retval True if client was successfully removed, false if client wasn't found in the connectin list.
-     */
-    bool NetworkConsoleRemoveWebsocketClient(int client_fd);
-
-    void NetworkConsoleBroadcastMessage(const char* message);
-    esp_err_t NetworkConsoleSendMessage(int client_fd, const char* message);
-    bool NetworkConsoleUpdateActivityTimer(int client_fd);
-
-    /**
-     * Handler for incoming websocket connections to the network console.
-     */
-    esp_err_t NetworkConsoleWebSocketHandler(httpd_req_t* req);
-
-    PFBQueue<RawTransponderPacket> transponder_packet_queue = PFBQueue<RawTransponderPacket>(
-        {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = transponder_packet_queue_buffer_});
+    PFBQueue<RawTransponderPacket> raw_transponder_packet_queue = PFBQueue<RawTransponderPacket>(
+        {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = raw_transponder_packet_queue_buffer_});
 
     AircraftDictionary aircraft_dictionary;
 
     QueueHandle_t network_console_rx_queue;
     QueueHandle_t network_console_tx_queue;
     httpd_handle_t server = nullptr;
+    WebSocketServer network_console;
+    WebSocketServer network_metrics;
+
+    QueueHandle_t rp2040_aircraft_dictionary_metrics_queue = nullptr;
+    AircraftDictionary::Metrics rp2040_aircraft_dictionary_metrics;
 
    private:
     struct WSClientInfo {
@@ -111,12 +108,11 @@ class ADSBeeServer {
 
     bool spi_receive_task_should_exit_ = false;
 
-    RawTransponderPacket transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
+    // Queue for raw packets from RP2040.
+    RawTransponderPacket raw_transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
 
     uint32_t last_gdl90_report_timestamp_ms_ = 0;
-
-    WSClientInfo network_console_clients[kNetworkConsoleMaxNumClients] = {0};
 };
 
 extern ADSBeeServer adsbee_server;

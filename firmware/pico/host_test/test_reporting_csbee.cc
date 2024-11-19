@@ -22,12 +22,8 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
     aircraft.last_message_timestamp_ms = 1000;
     aircraft.last_message_signal_strength_dbm = -75;
     aircraft.last_message_signal_quality_db = 2;
-    aircraft.stats_frames_received_in_last_interval = 4;
-    aircraft.stats_short_mode_s_frames_received_in_last_interval = 1;
-    aircraft.stats_mode_s_frames_received_in_last_interval = 3;
-    aircraft.stats_frames_received_in_last_interval = 4;
-    aircraft.stats_short_mode_s_frames_received_in_last_interval = 1;
-    aircraft.stats_mode_s_frames_received_in_last_interval = 3;
+    aircraft.stats.valid_squitter_frames = 1;
+    aircraft.stats.valid_extended_squitter_frames = 3;
     aircraft.transponder_capability = ADSBPacket::Capability::kCALevel2PlusTransponderOnSurfaceCanSetCA7;
     aircraft.icao_address = 0x12345E;
     strcpy(aircraft.callsign, "ABCDEFG");
@@ -75,8 +71,8 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
     EXPECT_EQ(GetNextToken().compare("-200"), 0);        // Vertical Rate [fpm]
     EXPECT_EQ(GetNextToken().compare("-75"), 0);         // Signal Strength [dBm]
     EXPECT_EQ(GetNextToken().compare("2"), 0);           // Signal Qualtiy [dB]
-    EXPECT_EQ(GetNextToken().compare("1"), 0);           // Mode AC Frames Per Second
-    EXPECT_EQ(GetNextToken().compare("3"), 0);           // Mode S Frames Per Second
+    EXPECT_EQ(GetNextToken().compare("1"), 0);           // Squitter Frames Per Second
+    EXPECT_EQ(GetNextToken().compare("3"), 0);           // Extended Squitter Frames Per Second
     // Use an std::string here as a hack, since we don't want to bother with copying the whole string to another buffer
     // and then finding just the SYSINFO field. Converting the std::string to a uint32_t with base 16 notation.
     uint32_t sysinfo = strtol(std::string(GetNextToken()).c_str(), NULL, 16);

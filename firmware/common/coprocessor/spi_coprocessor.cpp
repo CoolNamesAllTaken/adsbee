@@ -115,12 +115,14 @@ bool SPICoprocessor::DeInit() {
     return true;
 }
 
-bool SPICoprocessor::Update() {
+bool SPICoprocessor::Update(bool blocking) {
     bool ret = false;
 #ifdef ON_PICO
-    if (!GetSPIHandshakePinLevel()) {
+    // Do a blocking check of the HANDSHAKE pin to make sure that the ESP32 can have its say.
+    if (!GetSPIHandshakePinLevel(blocking)) {
         return true;  // Nothing to do.
     }
+
     // Incoming unsolicited transmission from ESP32.
     uint8_t rx_buf[kSPITransactionMaxLenBytes];
     SPIReadBlocking(rx_buf, 1, false);  // Peek the command first, keep chip select asserted.
@@ -316,6 +318,11 @@ int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint1
 
     // Wait for the next transmit interval (blocking) so that we don't overwhelm the slave with messages.
     while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIMinTransmitIntervalUs) {
+        if (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ > kSPIPostTransmitLockoutUs &&
+            gpio_get(config_.spi_handshake_pin)) {
+            // Slave is requesting another write, and we're convinced it's properly processed the previous transaction.
+            break;
+        }
     }
 
     gpio_put(config_.spi_cs_pin, 0);

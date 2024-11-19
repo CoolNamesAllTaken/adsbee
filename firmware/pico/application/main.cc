@@ -27,12 +27,6 @@ SPICoprocessor esp32 = SPICoprocessor({});
 int main() {
     bi_decl(bi_program_description("ADS-Bee ADSB Receiver"));
 
-    // gpio_init(15);
-    // gpio_set_dir(15, GPIO_OUT);
-    // gpio_put(15, 1);  // Leave status LED on during configuration in case something hangs.
-    // while (1) {
-    // }
-
     eeprom.Init();
     adsbee.Init();
     comms_manager.Init();
@@ -50,6 +44,9 @@ int main() {
 
     // If WiFi is enabled, try establishing communication with the ESP32 and maybe update its firmware.
     if (esp32.IsEnabled()) {
+        adsbee.SetWatchdogTimeoutSec(0);  // Disable watchdog while setting up ESP32, in case kESP32BootupTimeoutMs >=
+                                          // watchdog timeout, and to avoid watchdog reboot during ESP32 programming.
+
         // Try reading from the ESP32 till it finishes turning on.
         uint32_t esp32_firmware_version = 0x0;
         bool flash_esp32 = true;
@@ -80,58 +77,64 @@ int main() {
         }
         // If we never read from the ESP32, or read a different firmware version, try writing to it.
         if (flash_esp32) {
+            adsbee.SetWatchdogTimeoutSec(0);  // Disable watchdog while flashing.
             if (!esp32.DeInit()) {
                 CONSOLE_ERROR("main", "Error while de-initializing ESP32 before flashing.");
-            }
-            if (!esp32_flasher.FlashESP32()) {
+            } else if (!esp32_flasher.FlashESP32()) {
                 CONSOLE_ERROR("main", "Error while flashing ESP32.");
-            }
-            if (!esp32.Init()) {
+            } else if (!esp32.Init()) {
                 CONSOLE_ERROR("main", "Error while re-initializing ESP32 after flashing.");
             }
+            adsbee.SetWatchdogTimeoutSec(
+                settings_manager.settings.watchdog_timeout_sec);  // Restore watchdog after flashing.
         }
     }
 
     // Add a test aircraft to start.
-    // TODO: Remove this.
-    Aircraft test_aircraft;
-    test_aircraft.category = Aircraft::Category::kCategorySpaceTransatmosphericVehicle;
-    strcpy(test_aircraft.callsign, "TST1234");
-    test_aircraft.latitude_deg = 20;
-    test_aircraft.longitude_deg = -140;
-    test_aircraft.baro_altitude_ft = 10000;
-    test_aircraft.vertical_rate_fpm = -5;
-    test_aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeSourceBaro;
-    test_aircraft.direction_deg = 100;
-    test_aircraft.velocity_kts = 200;
-    adsbee.aircraft_dictionary.InsertAircraft(test_aircraft);
-
-    // int argc = 0;
-    // const char* argv[1];
-    // utest_main(argc, argv);
+    // Aircraft test_aircraft;
+    // test_aircraft.category = Aircraft::Category::kCategorySpaceTransatmosphericVehicle;
+    // strcpy(test_aircraft.callsign, "TST1234");
+    // test_aircraft.latitude_deg = 20;
+    // test_aircraft.longitude_deg = -140;
+    // test_aircraft.baro_altitude_ft = 10000;
+    // test_aircraft.vertical_rate_fpm = -5;
+    // test_aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeSourceBaro;
+    // test_aircraft.direction_deg = 100;
+    // test_aircraft.velocity_kts = 200;
+    // adsbee.aircraft_dictionary.InsertAircraft(test_aircraft);
 
     uint16_t esp32_heartbeat_interval_ms = 200;  // Set to 5Hz to make network terminal commands pass less laggy.
-    uint32_t esp32_test_packet_last_sent_timestamp_ms = get_time_since_boot_ms();
+    uint32_t esp32_heartbeat_last_sent_timestamp_ms = get_time_since_boot_ms();
 
     while (true) {
-        if (esp32.IsEnabled()) {
-            // Send test packet to ESP32.
-            uint32_t esp32_heartbeat_timestamp_ms = get_time_since_boot_ms();
-            if (esp32_heartbeat_timestamp_ms - esp32_test_packet_last_sent_timestamp_ms > esp32_heartbeat_interval_ms) {
-                // RawTransponderPacket test_packet =
-                //     RawTransponderPacket((char*)"8dac009458b9970f0aa394359da9", -123, 456789);
-                esp32.Write(ObjectDictionary::kAddrScratch, esp32_heartbeat_timestamp_ms, true);
-                CONSOLE_INFO("main", "Sent ESP32 heartbeat.");
-                esp32_test_packet_last_sent_timestamp_ms = esp32_heartbeat_timestamp_ms;
-            }
-        }
-
         // Loop forever.
+
         comms_manager.Update();
         adsbee.Update();
 
+        bool esp32_heartbeat_was_acked = false;
         if (esp32.IsEnabled()) {
-            esp32.Update();
+            // Send ESP32 heartbeat.
+            uint32_t esp32_heartbeat_timestamp_ms = get_time_since_boot_ms();
+            if (esp32_heartbeat_timestamp_ms - esp32_heartbeat_last_sent_timestamp_ms > esp32_heartbeat_interval_ms) {
+                if (!esp32.Write(ObjectDictionary::kAddrScratch, esp32_heartbeat_timestamp_ms, true)) {
+                    CONSOLE_ERROR("main", "ESP32 heartbeat failed.");
+                } else {
+                    esp32_heartbeat_was_acked = true;
+                }
+
+                esp32_heartbeat_last_sent_timestamp_ms = esp32_heartbeat_timestamp_ms;
+            } else {
+                // The heartbeat write calls Update() if the handshake line is pending, so only call Update() manually
+                // if no heartbeat packet was sent.
+                esp32.Update();
+            }
+        }
+
+        if (!esp32.IsEnabled() || esp32_heartbeat_was_acked) {
+            // Don't need to talk to the ESP32, or it acknowledged a heartbeat just now: poke the watchdog since nothing
+            // seems amiss.
+            adsbee.PokeWatchdog();
         }
     }
 }

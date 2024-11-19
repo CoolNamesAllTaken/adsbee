@@ -3,12 +3,13 @@ if (ON_EMBEDDED_DEVICE)
 
     add_subdirectory(${ADSBEE_COMMON_DIR} ${CMAKE_BINARY_DIR}/bootloader/adsbee_common)
 
-    target_include_directories(bootloader PRIVATE 
-        ${CMAKE_SOURCE_DIR}/../modules/cppAT/src
-    )
-    target_sources(bootloader PRIVATE
-        ${CMAKE_SOURCE_DIR}/../modules/cppAT/src/cpp_at.cc
-    )
+    # target_include_directories(bootloader PRIVATE 
+    #     ${CMAKE_SOURCE_DIR}/../modules/cppAT/src
+    #     ${CMAKE_SOURCE_DIR}/../modules/cppAT/settings
+    # )
+    # target_sources(bootloader PRIVATE
+    #     ${CMAKE_SOURCE_DIR}/../modules/cppAT/src/cpp_at.cc
+    # )
 
     # Firmware: Pull in Pico library
     target_link_libraries(bootloader

@@ -7,9 +7,12 @@
 
 #include "macros.hh"
 #include "stdio.h"
+#ifdef ON_PICO
+#include "pico/rand.h"
+#endif
 
-static const uint32_t kSettingsVersion = 0x4;  // Change this when settings format changes!
-static const uint32_t kDeviceInfoVersion = 0x1;
+static const uint32_t kSettingsVersion = 0x5;  // Change this when settings format changes!
+static const uint32_t kDeviceInfoVersion = 0x2;
 
 class SettingsManager {
    public:
@@ -27,6 +30,7 @@ class SettingsManager {
         kNoReports = 0,
         kRaw,
         kBeast,
+        kBeastRaw,
         kCSBee,
         kMAVLINK1,
         kMAVLINK2,
@@ -42,7 +46,8 @@ class SettingsManager {
     // firmware upgrade if the format of the settings struct changes.
     struct Settings {
         static const int kDefaultTLMV = 1300;  // [mV]
-        // NOTE: Length does not include null terminator.
+        static const uint32_t kDefaultWatchdogTimeoutSec = 10;
+        // NOTE: Lengths do not include null terminator.
         static const uint16_t kWiFiSSIDMaxLen = 32;
         static const uint16_t kWiFiPasswordMaxLen = 63;  // Theoretical max is 63, but limited by CppAT arg max len.
         static const uint16_t kWiFiMaxNumClients = 6;
@@ -58,9 +63,10 @@ class SettingsManager {
         bool receiver_enabled = true;
         int tl_mv = kDefaultTLMV;
         bool bias_tee_enabled = false;
+        uint32_t watchdog_timeout_sec = kDefaultWatchdogTimeoutSec;
 
         // CommunicationsManager settings
-        LogLevel log_level = LogLevel::kInfo;  // Start with highest verbosity by default.
+        LogLevel log_level = LogLevel::kWarnings;
         ReportingProtocol reporting_protocols[SerialInterface::kNumSerialInterfaces - 1] = {
             ReportingProtocol::kNoReports, ReportingProtocol::kMAVLINK1};
         uint32_t comms_uart_baud_rate = 115200;
@@ -96,6 +102,8 @@ class SettingsManager {
                 device_info.GetDefaultSSID(wifi_ap_ssid);
                 snprintf(wifi_ap_password, kWiFiPasswordMaxLen, "yummyflowers");
             }
+
+            wifi_ap_channel = get_rand_32() % kWiFiAPChannelMax + 1;
 #endif
 
             for (uint16_t i = 0; i < kMaxNumFeeds; i++) {
@@ -104,25 +112,50 @@ class SettingsManager {
                 feed_is_active[i] = false;
                 feed_protocols[i] = kNoReports;
 #ifdef ON_PICO
+                // Pico has access to EEPROM for receiver ID in device info.
                 device_info.GetDefaultFeedReceiverID(feed_receiver_ids[i]);
 #else
+                // ESP32 will have to query for receiver ID later.
                 memset(feed_receiver_ids[i], 0, kFeedReceiverIDNumBytes);
 #endif
             }
+
+            // Set default feed URIs.
+            // airplanes.live: 78.46.238.18:30004, Beast
+            strncpy(feed_uris[kMaxNumFeeds - 1], "78.46.238.18", kFeedURIMaxNumChars);
+            feed_uris[kMaxNumFeeds - 1][kFeedURIMaxNumChars] = '\0';
+            feed_ports[kMaxNumFeeds - 1] = 30004;
+            feed_is_active[kMaxNumFeeds - 1] = true;
+            feed_protocols[kMaxNumFeeds - 1] = kBeast;
+            // whereplane.xyz: whereplane.xyz:30004, Beast
+            strncpy(feed_uris[kMaxNumFeeds - 2], "feed.whereplane.xyz", kFeedURIMaxNumChars);
+            feed_uris[kMaxNumFeeds - 2][kFeedURIMaxNumChars] = '\0';
+            feed_ports[kMaxNumFeeds - 2] = 30004;
+            feed_is_active[kMaxNumFeeds - 2] = false;  // Not ready for primetime yet.
+            feed_protocols[kMaxNumFeeds - 2] = kBeast;
         }
     };
 
     // This struct contains device information that should persist across firmware upgrades.
     struct DeviceInfo {
+        // NOTE: Lengths do not include null terminator.
         static const uint16_t kPartCodeLen = 26;  // NNNNNNNNNR-YYYYMMDD-VVXXXX (not counting end of string char).
+        static const uint16_t kOTAKeyMaxLen = 128;
+        static const uint16_t kNumOTAKeys = 2;
 
         uint32_t device_info_version = kDeviceInfoVersion;
         char part_code[kPartCodeLen + 1];
+        char ota_keys[kNumOTAKeys][kOTAKeyMaxLen + 1];
 
         /**
          * Default constructor.
          */
-        DeviceInfo() { memset(part_code, '\0', kPartCodeLen + 1); }
+        DeviceInfo() {
+            memset(part_code, '\0', kPartCodeLen + 1);
+            for (uint16_t i = 0; i < kNumOTAKeys; i++) {
+                memset(ota_keys[i], '\0', kOTAKeyMaxLen + 1);
+            }
+        }
 
         static const uint16_t kDefaultSSIDLenChars = 24;  // ADSBee1090-YYYMMDDVVXXXX
         /**
@@ -169,50 +202,7 @@ class SettingsManager {
      */
     bool Load();
 
-    void Print() {
-        printf("Settings Struct\r\n");
-        printf("\tReceiver: %s\r\n", settings.receiver_enabled ? "ENABLED" : "DISABLED");
-        printf("\tTrigger Level [milliVolts]: %d\r\n", settings.tl_mv);
-        printf("\tBias Tee: %s\r\n", settings.bias_tee_enabled ? "ENABLED" : "DISABLED");
-        printf("\tLog Level: %s\r\n", kConsoleLogLevelStrs[settings.log_level]);
-        printf("\tReporting Protocols:\r\n");
-        for (uint16_t i = 0; i < SerialInterface::kGNSSUART; i++) {
-            // Only report protocols for CONSOLE and COMMS_UART.
-            printf("\t\t%s: %s\r\n", kSerialInterfaceStrs[i], kReportingProtocolStrs[settings.reporting_protocols[i]]);
-        }
-        printf("\tComms UART Baud Rate: %lu baud\r\n", settings.comms_uart_baud_rate);
-        printf("\tGNSS UART Baud Rate: %lu baud\r\n", settings.gnss_uart_baud_rate);
-        printf("\tESP32: %s\r\n", settings.esp32_enabled ? "ENABLED" : "DISABLED");
-
-        // Print WiFi settings.
-        printf("\tWiFi AP: %s\r\n", settings.wifi_ap_enabled ? "ENABLED" : "DISABLED");
-        if (settings.wifi_ap_enabled) {
-            // Access Point settings. Don't censor password.
-            printf("\t\tChannel: %d\r\n", settings.wifi_ap_channel);
-            printf("\t\tSSID: %s\r\n", settings.wifi_ap_ssid);
-            printf("\t\tPassword: %s\r\n", settings.wifi_ap_password);
-        }
-        printf("\tWiFi STA: %s\r\n", settings.wifi_sta_enabled ? "ENABLED" : "DISABLED");
-        if (settings.wifi_sta_enabled) {
-            // Station settings. Censor password.
-            printf("\t\tSSID: %s\r\n", settings.wifi_sta_ssid);
-            char redacted_wifi_sta_password[Settings::kWiFiPasswordMaxLen];
-            RedactPassword(settings.wifi_sta_password, redacted_wifi_sta_password, strlen(settings.wifi_sta_password));
-            printf("\t\tPassword: %s\r\n", redacted_wifi_sta_password);
-        }
-
-        printf("\tFeed URIs:\r\n");
-        for (uint16_t i = 0; i < Settings::kMaxNumFeeds; i++) {
-            printf("\t\t%d URI:%s Port:%d %s Protocol:%s ID:0x", i, settings.feed_uris[i], settings.feed_ports[i],
-                   settings.feed_is_active[i] ? "ACTIVE" : "INACTIVE",
-                   kReportingProtocolStrs[settings.feed_protocols[i]]);
-            for (int16_t feeder_id_byte_index = 0; feeder_id_byte_index < Settings::kFeedReceiverIDNumBytes;
-                 feeder_id_byte_index++) {
-                printf("%02x", settings.feed_receiver_ids[i][feeder_id_byte_index]);
-            }
-            printf("\r\n");
-        }
-    }
+    void Print();
 
     /**
      * Takes a password as a string and fills a buffer with the corresponding number of asterix.
@@ -221,7 +211,7 @@ class SettingsManager {
      * @param[in] buf_len Maximum allowable number of characteers in the password. Used to guard against falling off the
      * end of the string. Not used for actually finding ther number of asterix to print.
      */
-    static void RedactPassword(char *password_buf, char *redacted_password_buf, uint16_t buf_len) {
+    static inline void RedactPassword(char *password_buf, char *redacted_password_buf, uint16_t buf_len) {
         uint16_t password_len = MIN(strlen(password_buf), buf_len);
         memset(redacted_password_buf, '*', password_len);
         redacted_password_buf[password_len] = '\0';
@@ -231,13 +221,26 @@ class SettingsManager {
      * Applies internal settings to the relevant objects. This is only used after the settings struct has been updated
      * by loading it from EEPROM or by overwriting it via the coprocessor SPI bus.
      */
-    void Apply();
+    bool Apply();
 
     /**
      * Saves settings to EEPROM. Stores settings at address 0x0 and performs no integrity check.
      * @retval True if succeeded, false otherwise.
      */
     bool Save();
+
+    /**
+     * Prints an 8-Byte receiver ID to a string buffer.
+     * @param[in] receiver_id Pointer to first byte of an 8-Byte receiver ID.
+     * @param[in] buf Buffer to write receiver ID string to. Must be at least 17 chars (including null terminator).
+     */
+    static inline void ReceiverIDToStr(uint8_t *receiver_id, char *buf) {
+        for (int16_t i = 0; i < SettingsManager::Settings::kFeedReceiverIDNumBytes; i++) {
+            snprintf(buf, 2 * SettingsManager::Settings::kFeedReceiverIDNumBytes, "%02x%02x%02x%02x%02x%02x%02x%02x",
+                     receiver_id[0], receiver_id[1], receiver_id[2], receiver_id[3], receiver_id[4], receiver_id[5],
+                     receiver_id[6], receiver_id[7]);
+        }
+    }
 
     /**
      * Restores settings to factory default values.

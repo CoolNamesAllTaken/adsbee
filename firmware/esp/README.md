@@ -9,3 +9,12 @@
 * `idf.py build`
 * `idfx flash COM2`
 * `idfx monitor COM2`
+
+## Killing a rogue OpenOCD app (in case debugger won't let you bind to a port because it's already in use)
+
+### Kill with PID:
+`lsof -n -i | grep ":6666"` (or whatever the port is).
+`kill <pid>` with pid set to the process number for OpenOCD.
+
+### Kill with Process Name:
+`pkill openocd`
