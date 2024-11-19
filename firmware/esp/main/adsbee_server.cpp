@@ -37,6 +37,8 @@ extern const uint8_t index_html_start[] asm("_binary_index_html_start");
 extern const uint8_t index_html_end[] asm("_binary_index_html_end");
 extern const uint8_t style_css_start[] asm("_binary_style_css_start");
 extern const uint8_t style_css_end[] asm("_binary_style_css_end");
+extern const uint8_t favicon_png_start[] asm("_binary_favicon_png_start");
+extern const uint8_t favicon_png_end[] asm("_binary_favicon_png_end");
 
 GDL90Reporter gdl90;
 
@@ -352,6 +354,18 @@ static esp_err_t css_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
+esp_err_t favicon_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "image/png");
+    httpd_resp_set_hdr(req, "Cache-Control", "max-age=2592000, public");  // Cache for 30 days
+
+    esp_err_t res = httpd_resp_send(req, (const char *)favicon_png_start, favicon_png_end - favicon_png_start);
+    if (res != ESP_OK) {
+        ESP_LOGE("FAVICON", "Failed to send favicon");
+        return res;
+    }
+    return ESP_OK;
+}
+
 void NetworkConsolePostConnectCallback(WebSocketServer *ws_server, int client_fd) {
     char welcome_message[kNetworkConsoleWelcomeMessageMaxLen];
     snprintf(welcome_message, kNetworkConsoleWelcomeMessageMaxLen,
@@ -383,17 +397,21 @@ void NetworkConsoleMessageReceivedCallback(WebSocketServer *ws_server, int clien
 
 bool ADSBeeServer::TCPServerInit() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.stack_size = 4 * 4096;  // Extra stack needed for calls to SPI peripheral and handling large files.
+    config.stack_size = kHTTPServerStackSizeBytes;
     config.close_fn = console_ws_close_fd;
 
     if (httpd_start(&server, &config) == ESP_OK) {
         // Root URI handler (HTML)
         httpd_uri_t root = {.uri = "/", .method = HTTP_GET, .handler = root_handler, .user_ctx = NULL};
-        httpd_register_uri_handler(server, &root);
+        ESP_ERROR_CHECK(httpd_register_uri_handler(server, &root));
 
         // CSS URI handler
         httpd_uri_t css = {.uri = "/style.css", .method = HTTP_GET, .handler = css_handler, .user_ctx = NULL};
-        httpd_register_uri_handler(server, &css);
+        ESP_ERROR_CHECK(httpd_register_uri_handler(server, &css));
+
+        // Favicon URI handler
+        httpd_uri_t favicon = {.uri = "/favicon.png", .method = HTTP_GET, .handler = favicon_handler, .user_ctx = NULL};
+        ESP_ERROR_CHECK(httpd_register_uri_handler(server, &favicon));
 
         network_console = WebSocketServer({.label = "Network Console",
                                            .server = server,

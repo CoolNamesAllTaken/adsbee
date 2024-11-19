@@ -17,5 +17,7 @@ static const unsigned int kTCPServerTaskPriority = tskIDLE_PRIORITY;
 static const unsigned int kTCPServerTaskCore = 0;
 // Handles network console buffers but that happens in heap.
 static const unsigned int kTCPServerTaskStackSizeBytes = 4096;
+static const unsigned int kHTTPServerStackSizeBytes =
+    8 * 4096;  // Extra stack needed for calls to SPI peripheral and handling large files.
 
 #endif /* TASK_PRIORITIES_HH_ */

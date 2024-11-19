@@ -4,6 +4,7 @@
 <head>
     <title>ADSBee Web Terminal</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="favicon.png">
 </head>
 
 <body>
@@ -55,7 +56,7 @@
         let historyIndex = -1;
         let currentCommand = '';
 
-        class TerminalWebSocket {
+        class ConsoleWebSocket {
             constructor(url) {
                 this.url = url;
                 this.init();
@@ -155,7 +156,7 @@
                 historyIndex = commandHistory.length;
                 appendToTerminal('> ' + command + '\n');
 
-                wsClient.send(command + '\r\n');
+                consoleWebSocket.send(command + '\r\n');
             }
             currentLine.textContent = '';
             currentCommand = '';
@@ -230,11 +231,12 @@
 
         window.addEventListener('pagehide', (event) => {
             // Close WebSocket connection gracefully
-            wsClient.close(1000, 'Tab closing - normal shutdown');
+            consoleWebSocket.close(1000, 'Tab closing - normal shutdown');
+            metricsWebSocket.close(1000, 'Tab closing - normal shutdown');
         });
 
         // Initialize
-        const wsClient = new TerminalWebSocket(WS_CONFIG.console_ws_url);
+        const consoleWebSocket = new ConsoleWebSocket(WS_CONFIG.console_ws_url);
         focusTerminal();
 
         /**
@@ -396,10 +398,16 @@
                     }
                 };
             }
+
+            close(code, reason) {
+                if (this.ws) {
+                    this.ws.close(code, reason);
+                }
+            }
         }
 
         // Initialize WebSocket connection for metrics feed
-        const metrics = new MetricsWebSocket(WS_CONFIG.metrics_ws_url);
+        const metricsWebSocket = new MetricsWebSocket(WS_CONFIG.metrics_ws_url);
     </script>
 </body>
 

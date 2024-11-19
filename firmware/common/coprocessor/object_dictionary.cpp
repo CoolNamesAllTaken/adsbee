@@ -26,7 +26,7 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
 #elif ON_ESP32
         case kAddrConsole: {
             // RP2040 writing to the ESP32's network console interface.
-            char message[kNetworkConsoleMessageMaxLenBytes + 1] = {0};
+            char message[kNetworkConsoleMessageMaxLenBytes + 1] = {'\0'};
             strncpy(message, (char *)buf, buf_len);
             message[kNetworkConsoleMessageMaxLenBytes] = '\0';  // Null terminate for safety.
             CONSOLE_INFO("ObjectDictionary::SetBytes", "Forwarding message to network console: %s", message);

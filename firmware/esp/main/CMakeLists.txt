@@ -21,6 +21,7 @@ idf_component_register(
     EMBED_TXTFILES
         "web/index.html"
         "web/style.css"
+        "web/favicon.png"
 )
 
 message("PROJECT_SOURCE_DIR: ${PROJECT_SOURCE_DIR}")
