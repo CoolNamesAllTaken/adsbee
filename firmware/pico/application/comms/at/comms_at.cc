@@ -486,7 +486,7 @@ CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
     switch (op) {
         case '?': {
             // AT+TL_SET value query.
-            int tl_mv = adsbee.ReadTLMilliVolts();
+            int tl_mv = adsbee.GetTLMilliVolts();
             CPP_AT_CMD_PRINTF("=%dmV (%d dBm)\r\n", tl_mv, adsbee.AD8313MilliVoltsTodBm(tl_mv));
             CPP_AT_SILENT_SUCCESS();
             break;
