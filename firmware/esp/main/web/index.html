@@ -20,8 +20,14 @@
 
         <div id="metrics-container" class="column-element">
             <div id="status" class="connection-status disconnected">Disconnected</div>
-            <div id="feed-count" class="metrics-header">Feeds: 0</div>
-            <!-- Cards will be dynamically inserted here -->
+            <div id="receiver-metrics-container">
+                <div class="metrics-header">Receiver Metrics</div>
+                <!-- Cards will be dynamically inserted here -->
+            </div>
+            <div id="feed-metrics-container">
+                <div id="feed-count" class="metrics-header">Feeds: 0</div>
+                <!-- Cards will be dynamically inserted here -->
+            </div>
         </div>
     </div>
 
@@ -272,54 +278,69 @@
             }
         }
 
+        class MetricCard {
+            constructor(container, label) {
+                this.container = container;
+                this.label = label;
+                this.id = `chart-${this.labelToID(label)}`
+
+                const card = document.createElement('div');
+                card.className = 'metrics-card';
+                card.innerHTML = `
+          <div class="metric-title" title="${label}">${label}</div>
+          <div class="metric-value">0 msg/s</div>
+          <svg class="sparkline" id="${this.id}" viewBox="0 0 100 30"></svg>
+        `;
+                this.container.appendChild(card);
+                this.chart = new SparklineChart(this.id);
+
+            }
+
+            destroy() {
+                this.container.removeChild(this.card);
+                delete this.chart;
+            }
+
+            labelToID(label) {
+                return label.replace(/[^a-zA-Z0-9]/g, '-');
+            }
+
+            update(value) {
+                this.chart.update(value);
+            }
+        }
+
         class MetricsWebSocket {
             constructor(url) {
                 this.url = url;
-                this.charts = {};
+                this.cards = {
+                    'feed': {},
+                    'receiver': {}
+                };
                 this.connect();
                 this.statusEl = document.getElementById('status');
                 this.feedsCountEl = document.getElementById('feed-count');
                 this.container = document.getElementById('metrics-container');
             }
 
-            createMetricCard(label) {
-                const cardId = `chart-${label.replace(/[^a-zA-Z0-9]/g, '-')}`;
-                const card = document.createElement('div');
-                card.className = 'metrics-card';
-                card.innerHTML = `
-          <div class="metric-title" title="${label}">${label}</div>
-          <div class="metric-value">0 msg/s</div>
-          <svg class="sparkline" id="${cardId}" viewBox="0 0 100 30"></svg>
-        `;
-                this.container.appendChild(card);
-                return new SparklineChart(cardId);
-            }
 
-            removeMetricCard(label) {
-                // Replace any non-alphanumeric characters with hyphens.
-                const cardElement = document.getElementById(`chart-${label.replace(/[^a-zA-Z0-9]/g, '-')}`).parentNode;
-                cardElement.remove();
-                delete this.charts[label];
-            }
 
-            updateCharts(data) {
+            updateMetricsCards(parentLabel, data) {
                 // Remove charts that are no longer in the data
-                Object.keys(this.charts).forEach(label => {
+                Object.keys(this.cards[parentLabel]).forEach(label => {
                     if (!data.hasOwnProperty(label)) {
-                        this.removeMetricCard(label);
+                        this.cards[parentLabel][label].destroy();
                     }
                 });
 
                 // Update existing charts and create new ones
                 Object.entries(data).forEach(([label, value]) => {
-                    if (!this.charts[label]) {
-                        this.charts[label] = this.createMetricCard(label);
+                    if (!this.cards[parentLabel][label]) {
+                        this.cards[parentLabel][label] = new MetricCard(document.getElementById(`${parentLabel}-metrics-container`), label);
+                        // this.createMetricCard(parentLabel, label);
                     }
-                    this.charts[label].update(value);
+                    this.cards[parentLabel][label].update(value);
                 });
-
-                // Update labels count
-                this.feedsCountEl.textContent = `Feeds: ${Object.keys(data).length}`;
             }
 
             connect() {
@@ -348,20 +369,27 @@
                     try {
                         const data = JSON.parse(event.data);
 
+                        if (data.hasOwnProperty('aircraft_dictionary_stats')) {
+                            const dictionaryMetrics = Object.fromEntries(
+                                Object.entries(data['aircraft_dictionary_stats']).filter(([key, value]) => !Array.isArray(value))
+                            );
+                            console.log('Dictionary Metrics:', dictionaryMetrics);
+                            this.updateMetricsCards('receiver', dictionaryMetrics);
+                        }
                         if (data.hasOwnProperty('server_stats')) {
-                            const serverStats = data['server_stats'];
-                            console.log('Server Stats:', serverStats);
-
+                            const serverMetrics = data['server_stats'];
+                            console.log('Server Stats:', serverMetrics);
                             const feedMetrics = {};
-                            for (let i = 0; i < serverStats['feed_uri'].length; i++) {
-                                if (serverStats['feed_uri'][i] === '') {
+                            for (let i = 0; i < serverMetrics['feed_uri'].length; i++) {
+                                if (serverMetrics['feed_uri'][i] === '') {
                                     continue;
                                 }
-                                feedMetrics[serverStats['feed_uri'][i]] = serverStats['feed_mps'][i];
+                                feedMetrics[serverMetrics['feed_uri'][i]] = serverMetrics['feed_mps'][i];
                             }
                             console.log('Feed Metrics:', feedMetrics);
-                            this.updateCharts(feedMetrics);
-                            // this.updateCharts(serverStats);
+                            this.updateMetricsCards('feed', feedMetrics);
+                            // Update labels count
+                            this.feedsCountEl.textContent = `Feeds: ${Object.keys(feedMetrics).length}`;
                         }
                     } catch (error) {
                         console.error('Error parsing WebSocket message:', error);

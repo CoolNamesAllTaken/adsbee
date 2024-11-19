@@ -11,7 +11,8 @@
 
 /* Terminal styling */
 #terminal {
-    width: 100%;
+    /* Keep width just below 100% to avoid horizontal scroll bar. */
+    width: 98%;
     height: 400px;
     background: black;
     color: #ffffff;
