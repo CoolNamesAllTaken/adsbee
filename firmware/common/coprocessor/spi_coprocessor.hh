@@ -655,7 +655,7 @@ class SPICoprocessor {
                 goto PARTIAL_READ_FAILED;
             }
             if (!SPIWaitForHandshake()) {
-                snprintf(error_message, kErrorMessageMaxLen, "SPICoprocessor::PartialRead",
+                snprintf(error_message, kErrorMessageMaxLen,
                          "Timed out while waiting for handshake after sending read request.");
                 goto PARTIAL_READ_FAILED;
             }

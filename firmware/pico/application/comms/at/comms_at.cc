@@ -219,10 +219,10 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
 
 void ATFeedHelpCallback() {
     CPP_AT_PRINTF(
-        "\tAT+FEED=<feed_index>,<feed_uri>,<feed_port>,<active>,<protocol>\r\n\tSet details for a "
-        "network feed.\r\n\tfeed_index = [0-%d], feed_uri = ip address or URL, feed_port = [0-65535], "
+        "\tAT+FEED=<index>,<uri>,<port>,<active>,<protocol>\r\n\tSet details for a "
+        "network feed.\r\n\tindex = [0-%d], uri = ip address or URL, feed_port = [0-65535], "
         "active = [0 1], protocol = [BEAST BEAST_RAW].\r\n\t\r\n\tAT+FEED?\r\n\tPrint details for all "
-        "feeds.\r\n\t\r\n\tAT+FEED?<feed_index>\r\n\tPrint details for a specific feed.\r\n\tfeed_index = [0-%d]",
+        "feeds.\r\n\t\r\n\tAT+FEED?<index>\r\n\tPrint details for a specific feed.\r\n\tfeed_index = [0-%d]",
         SettingsManager::Settings::kMaxNumFeeds - 1, SettingsManager::Settings::kMaxNumFeeds - 1);
 }
 
@@ -231,20 +231,19 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
         case '?':
             if (CPP_AT_HAS_ARG(0)) {
                 // Querying info about a specific feed.
-                uint16_t feed_index = UINT16_MAX;
-                CPP_AT_TRY_ARG2NUM(0, feed_index);
-                if (feed_index >= SettingsManager::Settings::kMaxNumFeeds) {
+                uint16_t index = UINT16_MAX;
+                CPP_AT_TRY_ARG2NUM(0, index);
+                if (index >= SettingsManager::Settings::kMaxNumFeeds) {
                     CPP_AT_ERROR("Feed number must be between 0-%d, no details for feed with index %d.",
-                                 SettingsManager::Settings::kMaxNumFeeds - 1, feed_index);
+                                 SettingsManager::Settings::kMaxNumFeeds - 1, index);
                 }
                 char receiver_id_str[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
-                SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[feed_index],
-                                                 receiver_id_str);
+                SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[index], receiver_id_str);
                 CPP_AT_CMD_PRINTF(
-                    "=%d(FEED_INDEX),%s(FEED_URI),%d(FEED_PORT),%d(ACTIVE),%s(PROTOCOL),%s(RECEIVER_ID)", feed_index,
-                    settings_manager.settings.feed_uris[feed_index], settings_manager.settings.feed_ports[feed_index],
-                    settings_manager.settings.feed_is_active[feed_index],
-                    SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[feed_index]],
+                    "=%d(INDEX),%s(URI),%d(PORT),%d(ACTIVE),%s(PROTOCOL),%s(RECEIVER_ID)", index,
+                    settings_manager.settings.feed_uris[index], settings_manager.settings.feed_ports[index],
+                    settings_manager.settings.feed_is_active[index],
+                    SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[index]],
                     receiver_id_str);
             } else {
                 // Querying info about all feeds.
@@ -252,7 +251,7 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                     char receiver_id_str[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
                     SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[i], receiver_id_str);
                     CPP_AT_CMD_PRINTF(
-                        "=%d(FEED_INDEX),%s(FEED_URI),%d(FEED_PORT),%d(ACTIVE),%s(PROTOCOL),%s(RECEIVER_ID)", i,
+                        "=%d(INDEX),%s(URI),%d(PORT),%d(ACTIVE),%s(PROTOCOL),%s(RECEIVER_ID)", i,
                         settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i],
                         settings_manager.settings.feed_is_active[i],
                         SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[i]],
@@ -263,29 +262,29 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
             break;
         case '=':
             // Setting feed information for a specific feed.
-            uint16_t feed_index = UINT16_MAX;
+            uint16_t index = UINT16_MAX;
             if (!CPP_AT_HAS_ARG(0)) {
                 CPP_AT_ERROR("Feed index is required for setting feed information.");
             }
-            CPP_AT_TRY_ARG2NUM(0, feed_index);
-            if (feed_index >= SettingsManager::Settings::kMaxNumFeeds) {
+            CPP_AT_TRY_ARG2NUM(0, index);
+            if (index >= SettingsManager::Settings::kMaxNumFeeds) {
                 CPP_AT_ERROR("Feed index must be between 0-%d, no details for feed with index %d.",
-                             SettingsManager::Settings::kMaxNumFeeds - 1, feed_index);
+                             SettingsManager::Settings::kMaxNumFeeds - 1, index);
             }
             // Set FEED_URI.
             if (CPP_AT_HAS_ARG(1)) {
-                strncpy(settings_manager.settings.feed_uris[feed_index], args[1].data(),
+                strncpy(settings_manager.settings.feed_uris[index], args[1].data(),
                         SettingsManager::Settings::kFeedURIMaxNumChars);
-                settings_manager.settings.feed_uris[feed_index][SettingsManager::Settings::kFeedURIMaxNumChars] = '\0';
+                settings_manager.settings.feed_uris[index][SettingsManager::Settings::kFeedURIMaxNumChars] = '\0';
             }
             // Set FEED_PORT
             if (CPP_AT_HAS_ARG(2)) {
-                CPP_AT_TRY_ARG2NUM(2, settings_manager.settings.feed_ports[feed_index]);
+                CPP_AT_TRY_ARG2NUM(2, settings_manager.settings.feed_ports[index]);
             }
             // Set ACTIVE
             if (CPP_AT_HAS_ARG(3)) {
                 uint8_t is_active;
-                CPP_AT_TRY_ARG2NUM(3, settings_manager.settings.feed_is_active[feed_index]);
+                CPP_AT_TRY_ARG2NUM(3, settings_manager.settings.feed_is_active[index]);
             }
             // Set PROTOCOL
             if (CPP_AT_HAS_ARG(4)) {
@@ -301,7 +300,7 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                     CPP_AT_ERROR("Protocol %s is not supported for network feeds.",
                                  SettingsManager::kReportingProtocolStrs[feed_protocol]);
                 }
-                settings_manager.settings.feed_protocols[feed_index] = feed_protocol;
+                settings_manager.settings.feed_protocols[index] = feed_protocol;
             }
             CPP_AT_SUCCESS();
             break;
@@ -450,6 +449,8 @@ CPP_AT_CALLBACK(CommsManager::ATSettingsCallback) {
                     }
                 } else if (args[0].compare("RESET") == 0) {
                     settings_manager.ResetToDefaults();
+                } else {
+                    CPP_AT_ERROR("Invalid argument %s.", args[0].data());
                 }
                 CPP_AT_SUCCESS();
             }
