@@ -75,6 +75,7 @@ int main() {
                 break;
             }
         }
+        adsbee.SetWatchdogTimeoutSec(settings_manager.settings.watchdog_timeout_sec);  // Restore watchdog.
         // If we never read from the ESP32, or read a different firmware version, try writing to it.
         if (flash_esp32) {
             adsbee.SetWatchdogTimeoutSec(0);  // Disable watchdog while flashing.
