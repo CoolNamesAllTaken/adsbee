@@ -103,7 +103,7 @@ class SettingsManager {
                 snprintf(wifi_ap_password, kWiFiPasswordMaxLen, "yummyflowers");
             }
 
-            wifi_ap_channel = get_rand_32() % kWiFiAPChannelMax + 1;
+            wifi_ap_channel = get_rand_32() % kWiFiAPChannelMax + 1;  // Randomly select channel 1-11.
 #endif
 
             for (uint16_t i = 0; i < kMaxNumFeeds; i++) {

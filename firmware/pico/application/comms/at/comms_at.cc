@@ -593,8 +593,8 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiAPCallback) {
             if (CPP_AT_HAS_ARG(3)) {
                 uint8_t channel;
                 CPP_AT_TRY_ARG2NUM(3, channel);
-                if (channel > SettingsManager::kWiFiAPChannelMax) {
-                    CPP_AT_ERROR("WiFi channel out of range, must be <= %d.", SettingsManager::kWiFiAPChannelMax);
+                if (channel == 0 || channel > SettingsManager::kWiFiAPChannelMax) {
+                    CPP_AT_ERROR("WiFi channel out of range, must be >0 and <=%d.", SettingsManager::kWiFiAPChannelMax);
                 }
                 wifi_ap_channel = channel;
                 CPP_AT_CMD_PRINTF(": wifi_ap_channel = %d\r\n", wifi_ap_channel);
