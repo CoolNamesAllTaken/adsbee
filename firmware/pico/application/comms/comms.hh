@@ -37,6 +37,8 @@ class CommsManager {
     CPP_AT_CALLBACK(ATESP32EnableCallback);
     CPP_AT_CALLBACK(ATFeedCallback);
     CPP_AT_CALLBACK(ATFlashESP32Callback);
+    CPP_AT_CALLBACK(ATOTACallback);
+    CPP_AT_HELP_CALLBACK(ATOTAHelpCallback);
     CPP_AT_CALLBACK(ATLogLevelCallback);
     CPP_AT_CALLBACK(ATProtocolCallback);
     CPP_AT_HELP_CALLBACK(ATProtocolHelpCallback);
@@ -235,6 +237,10 @@ class CommsManager {
     uint32_t last_csbee_report_timestamp_ms_ = 0;
     uint32_t last_mavlink_report_timestamp_ms_ = 0;
     uint32_t last_gdl90_report_timestamp_ms_ = 0;
+
+    // OTA configuration. Used to ignore incoming UART commands while processing OTA data.
+    uint32_t ota_transfer_begin_timestamp_ms_ = 0;
+    uint32_t ota_transfer_bytes_remaining_ = 0;
 };
 
 extern CommsManager comms_manager;

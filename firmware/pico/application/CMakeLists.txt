@@ -30,6 +30,7 @@ if (ON_EMBEDDED_DEVICE)
         hardware_dma
         hardware_flash
         hardware_structs
+        hardware_sync # for flashing stuff
         hardware_resets
         cmsis_core # for bootloader regs
     )

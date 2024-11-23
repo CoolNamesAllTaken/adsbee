@@ -7,6 +7,7 @@
 #include "comms.hh"
 #include "eeprom.hh"
 #include "esp32_flasher.hh"
+#include "firmware_update.hh"
 #include "main.hh"
 #include "pico/stdlib.h"  // for getchar etc
 #include "settings.hh"
@@ -323,6 +324,16 @@ CPP_AT_CALLBACK(CommsManager::ATFlashESP32Callback) {
     CPP_AT_SUCCESS();
 }
 
+CPP_AT_CALLBACK(CommsManager::ATOTACallback) {}
+
+CPP_AT_HELP_CALLBACK(CommsManager::ATOTAHelpCallback) {
+    CPP_AT_PRINTF(
+        "AT+OTA?\r\n\tQueries current OTA status.\r\n\tAT+OTA=ERASE\r\n\tErase the sector to "
+        "update.\r\n\tAT+OTA=TRANSFER,<addr>,<num_bytes>,<checksum>\r\n\tBegin an "
+        "OTA transfer of num_bytes to address with provided checksum. Will respond with BEGIN, and then OK when "
+        "complete, or ERROR if checksum doesn't match or timeout reached.");
+}
+
 CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
     switch (op) {
         case '?':
@@ -404,7 +415,7 @@ CPP_AT_HELP_CALLBACK(CommsManager::ATProtocolHelpCallback) {
     }
     CPP_AT_PRINTF("\r\n\t<protocol> = ");
     for (uint16_t protocol = 0; protocol < SettingsManager::kNumProtocols; protocol++) {
-        CPP_AT_PRINTF("%s ", SettingsManager::kReportingProtocolStrs[protocol]);
+        CPP_AT_PRINTF("\t\t%s ", SettingsManager::kReportingProtocolStrs[protocol]);
     }
     CPP_AT_PRINTF("\r\n\tQuery the reporting protocol used on all interfaces:\r\n");
     CPP_AT_PRINTF("\tAT+PROTOCOL?\r\n\t+PROTOCOL=<iface>,<protocol>\r\n\t...\r\n");
@@ -678,6 +689,11 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string_buf =
          "AT+LOG_LEVEL=<log_level [SILENT ERRORS WARNINGS LOGS]>\r\n\tSet how much stuff gets printed to the "
          "console.\r\n\t",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATOTACallback, comms_manager)},
+    {.command_buf = "+OTA",
+     .min_args = 0,
+     .max_args = 2,
+     .help_callback = CPP_AT_BIND_MEMBER_HELP_CALLBACK(CommsManager::ATOTAHelpCallback, comms_manager),
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATLogLevelCallback, comms_manager)},
     {.command_buf = "+PROTOCOL",
      .min_args = 0,

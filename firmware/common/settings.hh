@@ -49,7 +49,7 @@ class SettingsManager {
         static const uint32_t kDefaultWatchdogTimeoutSec = 10;
         // NOTE: Lengths do not include null terminator.
         static const uint16_t kWiFiSSIDMaxLen = 32;
-        static const uint16_t kWiFiPasswordMaxLen = 63;  // Theoretical max is 63, but limited by CppAT arg max len.
+        static const uint16_t kWiFiPasswordMaxLen = 64;
         static const uint16_t kWiFiMaxNumClients = 6;
         static const uint32_t kDefaultCommsUARTBaudrate = 115200;
         static const uint32_t kDefaultGNSSUARTBaudrate = 9600;
