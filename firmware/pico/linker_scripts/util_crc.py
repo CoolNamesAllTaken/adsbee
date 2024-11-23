@@ -56,7 +56,7 @@ def generate_header(app_bin_filename, asm_section=None, ota_filename=None):
     struct.pack_into('<I', hdr_bin_contents, 4, HEADER_VERSION) # HEADER_VERSION: Version of this header schema.
     struct.pack_into('<I', hdr_bin_contents, 8, len(app_bin_contents)) # LEN_BYTES: Application image length in  Bytes.
     struct.pack_into('<I', hdr_bin_contents, 12, app_crc) # CRC: CRC32 of application data.
-    struct.pack_into('<I', hdr_bin_contents, 16, 0xFFFFFFFF) # STATUS: Application boot priority.
+    struct.pack_into('<I', hdr_bin_contents, 16, 0xFFADFFFF) # STATUS: Application boot priority.
 
     # app_bin_basename = os.path.splitext(os.path.basename(app_bin_filename))[0]
     app_bin_dir = os.path.dirname(app_bin_filename)

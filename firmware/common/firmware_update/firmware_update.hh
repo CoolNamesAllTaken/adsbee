@@ -26,6 +26,24 @@ class FirmwareUpdateManager {
     static const uint32_t kFlashHeaderStartAddrs[kNumPartitions];
     static const uint32_t kFlashAppStartAddrs[kNumPartitions];
 
+    static const uint32_t kFlashHeaderMagicWord = 0xAD5BEEE;
+    static const uint32_t kFlashHeaderVersion = 0;
+
+    enum FlashPartitionStatus : uint32_t {
+        kFlashPartitionStatusBlank = 0xFFFFFFFF,   // Freshly erased.
+        kFlashPartitionStatusNew = 0xFFADFFFF,     // Freshly flashed.
+        kFlashPartitionStatusStale = 0xDEADFFFF,   // Not the newest firmware, but OK to boot.
+        kFlashpartitionStatusInvalid = 0xDEADDEAD  // Do not boot.
+    };
+
+    struct __attribute__((__packed__)) FlashPartitionHeader {
+        uint32_t magic_word;
+        uint32_t header_version;
+        uint32_t app_size_bytes;
+        uint32_t app_crc;
+        uint32_t status;
+    };
+
     /**
      * Boots to a given flash partition.
      * @param[in] partition Partition index to boot to. Must be less than kNumPartitions.
@@ -44,30 +62,31 @@ class FirmwareUpdateManager {
     /**
      * Calculate a CRC-32 with the IEEE802.3 polynomial.
      */
-    static inline uint32_t CalculateCRC32(const uint8_t *buffer, size_t length) {
+    static inline uint32_t CalculateCRC32(const uint8_t *buffer, size_t len_bytes) {
         const uint32_t kSnifferMode = 0x1;  // Calculate a CRC-32 (IEEE802.3 polynomial) with bit reversed data
         // Good RP2040 CRC with DMA discussion: https://github.com/raspberrypi/pico-feedback/issues/247
 
         // Allocate a DMA channel
-        int dma_chan = dma_claim_unused_channel(true);
+        int dma_chan = dma_claim_unused_channel(true);  // Panic if no DMA channels are available.
 
         // Configure the DMA channel
         dma_channel_config config = dma_channel_get_default_config(dma_chan);
-        channel_config_set_transfer_data_size(&config, DMA_SIZE_8);  // 8-bit transfers
-        channel_config_set_read_increment(&config, true);            // Increment source address
-        channel_config_set_write_increment(&config, false);          // Fixed destination address
+        channel_config_set_transfer_data_size(&config, DMA_SIZE_32);  // 32-bit transfers
+        channel_config_set_read_increment(&config, true);             // Increment source address
+        channel_config_set_write_increment(&config, false);           // Fixed destination address
+        // Set up the source and destination
+        uint32_t scratch;  // Write doesn't increment, just dump here since we aren't using it.
+        uint32_t len_words = len_bytes / kBytesPerWord + (len_bytes % kBytesPerWord ? 1 : 0);
+        dma_channel_configure(dma_chan, &config,
+                              &scratch,   // Destination
+                              buffer,     // Source (buffer to calculate CRC for)
+                              len_words,  // Number of bytes to transfer
+                              false);     // Don't start yet
 
         // Configure SNIFF hardware for CRC32
-        dma_sniffer_enable(dma_chan, kSnifferMode, true);   // Enable SNIFF for the DMA channel
-        dma_hw->sniff_ctrl = DMA_SNIFF_CTRL_OUT_INV_BITS |  // Output inversion (for CRC32)
-                             DMA_SNIFF_CTRL_OUT_REV_BITS;   // Output reversal (for CRC32)
-
-        // Set up the source and destination
-        dma_channel_configure(dma_chan, &config,
-                              &dma_hw->sniff_data,  // Destination (sniffer data register)
-                              buffer,               // Source (buffer to calculate CRC for)
-                              length,               // Number of bytes to transfer
-                              false);               // Don't start yet
+        dma_sniffer_enable(dma_chan, kSnifferMode, true);                   // Enable SNIFF for the DMA channel
+        hw_set_bits(&dma_hw->sniff_ctrl, DMA_SNIFF_CTRL_OUT_INV_BITS |      // Output inversion (for CRC32)
+                                             DMA_SNIFF_CTRL_OUT_REV_BITS);  // Output reversal (for CRC32)
 
         // Clear sniff data register before starting
         dma_hw->sniff_data = 0xFFFFFFFF;
@@ -80,7 +99,7 @@ class FirmwareUpdateManager {
 
         // Retrieve the CRC value (invert it for CRC32 finalization)
         // uint32_t crc = ~dma_hw->sniff_data;
-        uint32_t crc = dma_hw->sniff_data;
+        volatile uint32_t crc = dma_hw->sniff_data;
 
         // Clean up
         dma_sniffer_disable();
@@ -148,7 +167,27 @@ class FirmwareUpdateManager {
     /**
      * Calculates the CRC32 of a flash partition and confirms it matches the CRC32 provided in the header.
      */
-    static inline bool VerifyFlashPartition(uint16_t partition) { return false; }
+    static inline bool VerifyFlashPartition(uint16_t partition) {
+        if (partition >= kNumPartitions) {
+            CONSOLE_ERROR("FirmwareUpdateManager::VerifyFlashPartition",
+                          "Can't verify flash partition %u, value must be less than %u.", partition, kNumPartitions);
+            return false;
+        }
+        uint32_t header_crc = flash_partition_headers[partition]->app_crc;
+        uint32_t calculated_crc =
+            CalculateCRC32(flash_partition_apps[partition],
+                           MIN(flash_partition_headers[partition]->app_size_bytes, kFlashAppLenBytes));
+        if (header_crc != calculated_crc) {
+            CONSOLE_ERROR("FirmwareUpdateManager::VerifyFlashPartition",
+                          "Flash partition %u has calculated CRC 0x%x but header crc 0x%x.", partition, calculated_crc,
+                          header_crc);
+            return false;
+        }
+        return true;
+    }
+
+    static const FlashPartitionHeader *flash_partition_headers[kNumPartitions];
+    static const uint8_t *flash_partition_apps[kNumPartitions];
 
    private:
     /**

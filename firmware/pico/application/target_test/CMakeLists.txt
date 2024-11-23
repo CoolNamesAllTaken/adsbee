@@ -4,6 +4,7 @@ if(ON_EMBEDDED_DEVICE)
         hardware_unit_tests.cc
         test_eeprom.cc
         test_spi_coprocessor.cc
+        test_flash.cc
     )
     target_include_directories(application PRIVATE
         .
