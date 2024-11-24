@@ -17,9 +17,21 @@ UTEST(Flash, AmWithinFlashPartition) {
     ASSERT_NE_MSG(own_partition, other_partition, "Partitions can't match!");
 }
 
-UTEST(Flash, CRC32) {
+UTEST(Flash, CRC32SymmetricWordAligned) {
     uint8_t sequence[] = {0xEF, 0xBE, 0xAD, 0xBE, 0xEF, 0xBE, 0xAD, 0xBE};
     uint32_t expected_crc = 0x3341B647;
+    ASSERT_EQ(FirmwareUpdateManager::CalculateCRC32(sequence, sizeof(sequence)), expected_crc);
+}
+
+UTEST(Flash, CRC32SymmetricNotWordAligned) {
+    uint8_t sequence[] = {0xEF, 0xBE, 0xAD, 0xEF, 0xBE, 0xAD};
+    uint32_t expected_crc = 0x36b9b4a7;
+    ASSERT_EQ(FirmwareUpdateManager::CalculateCRC32(sequence, sizeof(sequence)), expected_crc);
+}
+
+UTEST(Flash, CRC32AsymmetricNotWordAligned) {
+    uint8_t sequence[] = {0xEF, 0xBE, 0xAD, 0xBE, 0xEF, 0xBE, 0xAD, 0xBE, 0x7, 0x8, 0x00};
+    uint32_t expected_crc = 0xf446a6d1;
     ASSERT_EQ(FirmwareUpdateManager::CalculateCRC32(sequence, sizeof(sequence)), expected_crc);
 }
 
