@@ -37,6 +37,9 @@ bool SPICoprocessor::Init() {
     gpio_set_function(config_.spi_clk_pin, GPIO_FUNC_SPI);
     gpio_set_function(config_.spi_mosi_pin, GPIO_FUNC_SPI);
     gpio_set_function(config_.spi_miso_pin, GPIO_FUNC_SPI);
+    gpio_set_drive_strength(config_.spi_clk_pin, GPIO_DRIVE_STRENGTH_2MA);
+    gpio_set_drive_strength(config_.spi_mosi_pin, GPIO_DRIVE_STRENGTH_2MA);
+    gpio_set_drive_strength(config_.spi_cs_pin, GPIO_DRIVE_STRENGTH_2MA);
 
     // Initialize SPI Peripheral.
     spi_init(config_.spi_handle, config_.clk_rate_hz);
