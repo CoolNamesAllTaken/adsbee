@@ -4,7 +4,6 @@
 
 #ifdef ON_PICO
 #include "hal.hh"
-#include "hardware/gpio.h"
 
 static const uint32_t kESP32EnableBootupDelayMs = 500;
 #elif ON_ESP32
@@ -37,9 +36,12 @@ bool SPICoprocessor::Init() {
     gpio_set_function(config_.spi_clk_pin, GPIO_FUNC_SPI);
     gpio_set_function(config_.spi_mosi_pin, GPIO_FUNC_SPI);
     gpio_set_function(config_.spi_miso_pin, GPIO_FUNC_SPI);
-    gpio_set_drive_strength(config_.spi_clk_pin, GPIO_DRIVE_STRENGTH_2MA);
-    gpio_set_drive_strength(config_.spi_mosi_pin, GPIO_DRIVE_STRENGTH_2MA);
-    gpio_set_drive_strength(config_.spi_cs_pin, GPIO_DRIVE_STRENGTH_2MA);
+    // gpio_set_slew_rate(config_.spi_clk_pin, config_.spi_gpio_slew_rate);
+    // gpio_set_slew_rate(config_.spi_mosi_pin, config_.spi_gpio_slew_rate);
+    // gpio_set_slew_rate(config_.spi_cs_pin, config_.spi_gpio_slew_rate);
+    gpio_set_drive_strength(config_.spi_clk_pin, config_.spi_gpio_drive_strength);
+    gpio_set_drive_strength(config_.spi_mosi_pin, config_.spi_gpio_drive_strength);
+    gpio_set_drive_strength(config_.spi_cs_pin, config_.spi_gpio_drive_strength);
 
     // Initialize SPI Peripheral.
     spi_init(config_.spi_handle, config_.clk_rate_hz);

@@ -10,6 +10,7 @@
 #include "transponder_packet.hh"
 
 #ifdef ON_PICO
+#include "hardware/gpio.h"
 #include "hardware/spi.h"
 #elif ON_ESP32
 #include "data_structures.hh"
@@ -67,6 +68,8 @@ class SPICoprocessor {
         uint16_t spi_miso_pin = 12;
         uint16_t spi_cs_pin = 9;
         uint16_t spi_handshake_pin = 13;
+        // gpio_slew_rate spi_gpio_slew_rate = GPIO_SLEW_RATE_SLOW;
+        gpio_drive_strength spi_gpio_drive_strength = GPIO_DRIVE_STRENGTH_2MA;
 #elif ON_ESP32
         spi_host_device_t spi_handle = SPI2_HOST;
         gpio_num_t spi_mosi_pin = GPIO_NUM_41;

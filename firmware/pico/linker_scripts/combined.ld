@@ -61,8 +61,8 @@ SECTIONS
         __boot3_end__ = .;
     } > FLASH_BL
 
-    ASSERT(__boot3_end__ - __boot3_start__ <= 180k,
-        "ERROR: Bootloader (custom bootloader plus Pico SDK boot2) must be <180k in size")
+    ASSERT(__boot3_end__ - __boot3_start__ <= 176k,
+        "ERROR: Bootloader (custom bootloader plus Pico SDK boot2) must be <176k in size")
 
     /* The second stage will always enter the image at the start of .text.
        The debugger will use the ELF entry point, which is the _entry_point

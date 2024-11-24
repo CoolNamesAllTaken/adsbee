@@ -42,11 +42,15 @@ def generate_header(app_bin_filename, asm_section=None, ota_filename=None):
     """
     HEADER_VERSION = 0
     HEADER_SIZE_BYTES = 5*4
+    # application.bin includes a 256-Byte stage 2 bootloader to amke it bootable on its own.
+    # Remove this when creating the OTA file, since it's already baked into the bootloader binary.
+    STAGE_2_BOOTLOADER_LEN_BYTES = 256
 
     print(f"Generating header for {app_bin_filename}")
 
     with open(app_bin_filename, 'rb') as f:
         app_bin_contents = f.read()
+    app_bin_contents = app_bin_contents[STAGE_2_BOOTLOADER_LEN_BYTES:]
     
     app_crc = calculate_crc32(app_bin_contents)
     print(f"\tCalculated CRC32 for {app_bin_filename} ({len(app_bin_contents)} Bytes): 0x{app_crc:x}")
