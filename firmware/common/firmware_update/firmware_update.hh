@@ -71,16 +71,15 @@ class FirmwareUpdateManager {
 
         // Configure the DMA channel
         dma_channel_config config = dma_channel_get_default_config(dma_chan);
-        channel_config_set_transfer_data_size(&config, DMA_SIZE_32);  // 32-bit transfers
-        channel_config_set_read_increment(&config, true);             // Increment source address
-        channel_config_set_write_increment(&config, false);           // Fixed destination address
+        channel_config_set_transfer_data_size(&config, DMA_SIZE_8);  // 8-bit transfers
+        channel_config_set_read_increment(&config, true);            // Increment source address
+        channel_config_set_write_increment(&config, false);          // Fixed destination address
         // Set up the source and destination
         uint32_t scratch;  // Write doesn't increment, just dump here since we aren't using it.
-        uint32_t len_words = len_bytes / kBytesPerWord + (len_bytes % kBytesPerWord ? 1 : 0);
         dma_channel_configure(dma_chan, &config,
                               &scratch,   // Destination
                               buffer,     // Source (buffer to calculate CRC for)
-                              len_words,  // Number of bytes to transfer
+                              len_bytes,  // Number of bytes to transfer
                               false);     // Don't start yet
 
         // Configure SNIFF hardware for CRC32

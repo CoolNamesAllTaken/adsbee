@@ -35,4 +35,10 @@ UTEST(Flash, CRC32AsymmetricNotWordAligned) {
     ASSERT_EQ(FirmwareUpdateManager::CalculateCRC32(sequence, sizeof(sequence)), expected_crc);
 }
 
+UTEST(Flash, CRC32AsymmetricWordAligned) {
+    uint8_t sequence[] = {0xEF, 0xBE, 0xAD, 0xBE, 0xEF, 0xBE, 0xAD, 0xBE, 0x7, 0x8, 0x00, 0x01};
+    uint32_t expected_crc = 0x54257bff;
+    ASSERT_EQ(FirmwareUpdateManager::CalculateCRC32(sequence, sizeof(sequence)), expected_crc);
+}
+
 UTEST(Flash, VerifyOwnPartition) { ASSERT_TRUE(FirmwareUpdateManager::VerifyFlashPartition(own_partition)); }
