@@ -105,6 +105,16 @@ class ADSBee {
     bool BiasTeeIsEnabled() { return bias_tee_enabled_; }
 
     /**
+     * Convenience function for temporarily disabling the watchdog without changing its timeout.
+     */
+    void DisableWatchdog() { watchdog_disable(); }
+
+    /**
+     * Convenience function for re-enabling the watchdog with the last used timeout.
+     */
+    void EnableWatchdog() { SetWatchdogTimeoutSec(watchdog_timeout_sec_); }
+
+    /**
      * Blinks the status LED for a given number of milliseconds. Non-blocking.
      * @param[in] led_on_ms Optional parameter specifying number of milliseconds to turn on for. Defaults to
      * kStatusLEDOnMs.
@@ -230,7 +240,7 @@ class ADSBee {
     bool SetTLMilliVolts(int tl_mv);
 
     /**
-     * Sets the watchdog timer.
+     * Sets the watchdog timer and enables it.
      * @param[in] watchdog_timeout_sec Maximum interval between PokeWatchdog() calls before watchdog times out and
      * triggers a reboot. 0 = watchodg is disabled. Note that this value is in seconds, to hopefully prevent an
      * unrecoverable loop where the watchdog timer gets set too short and causes the device to reboot before the setting

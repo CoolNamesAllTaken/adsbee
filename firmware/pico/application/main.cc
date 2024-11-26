@@ -1,4 +1,4 @@
-#include "ads_bee.hh"
+#include "adsbee.hh"
 #include "comms.hh"
 #include "eeprom.hh"
 #include "esp32_flasher.hh"
@@ -25,27 +25,21 @@ ObjectDictionary object_dictionary;
 SPICoprocessor esp32 = SPICoprocessor({});
 
 int main() {
-    bi_decl(bi_program_description("ADS-Bee ADSB Receiver"));
+    bi_decl(bi_program_description("ADSBee 1090 ADSB Receiver"));
 
     eeprom.Init();
     adsbee.Init();
     comms_manager.Init();
-    comms_manager.iface_printf(SettingsManager::SerialInterface::kConsole,
-                               "ADSBee 1090\r\nSoftware Version %d.%d.%d\r\n", object_dictionary.kFirmwareVersionMajor,
-                               object_dictionary.kFirmwareVersionMinor, object_dictionary.kFirmwareVersionPatch);
-    comms_manager.iface_printf(SettingsManager::SerialInterface::kCommsUART,
-                               "ADSBee 1090\r\nSoftware Version %d.%d.%d\r\n", object_dictionary.kFirmwareVersionMajor,
-                               object_dictionary.kFirmwareVersionMinor, object_dictionary.kFirmwareVersionPatch);
-    comms_manager.iface_printf(SettingsManager::SerialInterface::kGNSSUART,
-                               "ADSBee 1090\r\nSoftware Version %d.%d.%d\r\n", object_dictionary.kFirmwareVersionMajor,
-                               object_dictionary.kFirmwareVersionMinor, object_dictionary.kFirmwareVersionPatch);
+    comms_manager.console_printf("ADSBee 1090\r\nSoftware Version %d.%d.%d\r\n",
+                                 object_dictionary.kFirmwareVersionMajor, object_dictionary.kFirmwareVersionMinor,
+                                 object_dictionary.kFirmwareVersionPatch);
 
     settings_manager.Load();
 
     // If WiFi is enabled, try establishing communication with the ESP32 and maybe update its firmware.
     if (esp32.IsEnabled()) {
-        adsbee.SetWatchdogTimeoutSec(0);  // Disable watchdog while setting up ESP32, in case kESP32BootupTimeoutMs >=
-                                          // watchdog timeout, and to avoid watchdog reboot during ESP32 programming.
+        adsbee.DisableWatchdog();  // Disable watchdog while setting up ESP32, in case kESP32BootupTimeoutMs >=
+                                   // watchdog timeout, and to avoid watchdog reboot during ESP32 programming.
 
         // Try reading from the ESP32 till it finishes turning on.
         uint32_t esp32_firmware_version = 0x0;
@@ -75,10 +69,10 @@ int main() {
                 break;
             }
         }
-        adsbee.SetWatchdogTimeoutSec(settings_manager.settings.watchdog_timeout_sec);  // Restore watchdog.
+        adsbee.EnableWatchdog();  // Restore watchdog.
         // If we never read from the ESP32, or read a different firmware version, try writing to it.
         if (flash_esp32) {
-            adsbee.SetWatchdogTimeoutSec(0);  // Disable watchdog while flashing.
+            adsbee.DisableWatchdog();  // Disable watchdog while flashing.
             if (!esp32.DeInit()) {
                 CONSOLE_ERROR("main", "Error while de-initializing ESP32 before flashing.");
             } else if (!esp32_flasher.FlashESP32()) {
@@ -86,8 +80,7 @@ int main() {
             } else if (!esp32.Init()) {
                 CONSOLE_ERROR("main", "Error while re-initializing ESP32 after flashing.");
             }
-            adsbee.SetWatchdogTimeoutSec(
-                settings_manager.settings.watchdog_timeout_sec);  // Restore watchdog after flashing.
+            adsbee.EnableWatchdog();  // Restore watchdog after flashing.
         }
     }
 

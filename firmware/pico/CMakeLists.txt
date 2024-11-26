@@ -50,7 +50,7 @@ if (ON_EMBEDDED_DEVICE)
     if (PICO_SDK_VERSION_STRING VERSION_LESS "1.3.0")
         message(FATAL_ERROR "Raspberry Pi Pico SDK version 1.3.0 (or later) required. Your version is ${PICO_SDK_VERSION_STRING}")
     endif()
-    project(ads_bee C CXX ASM)
+    project(adsbee C CXX ASM)
 
     # Differentiate common code between Pico and ESP32. For code highlighting, add this to the "defines" property of
     # "configurations" in c_cpp_properties.json.
@@ -72,7 +72,7 @@ if (ON_EMBEDDED_DEVICE)
 else()
     ## Compiling for testing on host.
 
-    project(ads_bee C CXX ASM) # This is duplicated since the target firmware CMakeLists needs to create the project
+    project(adsbee C CXX ASM) # This is duplicated since the target firmware CMakeLists needs to create the project
     # after the pico SDK is pulled in.
 
     set(CMAKE_BUILD_TYPE "Debug") # Now that we've identified we're running tests, revert to an actual build config.

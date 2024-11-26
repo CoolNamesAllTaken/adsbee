@@ -94,7 +94,9 @@
 			"esp_loader.h": "c",
 			"comms.hh": "c",
 			"ads_bee.hh": "c",
-			"valarray": "cpp"
+			"valarray": "cpp",
+			"cpp_at.hh": "c",
+			"uart.h": "c"
 		},
 		"cortex-debug.variableUseNaturalFormat": false,
 		// "cortex-debug.variableUseNaturalFormat": true,

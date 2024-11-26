@@ -2,7 +2,7 @@
 #define COMMS_HH_
 
 // #include "transponder_packet.hh"  // For DecodedTransponderPacket.
-#include "ads_bee.hh"
+#include "adsbee.hh"
 #include "cpp_at.hh"
 #include "data_structures.hh"  // For PFBQueue.
 #include "hardware/uart.h"
@@ -16,6 +16,8 @@ class CommsManager {
     static const uint32_t kMAVLINKReportingIntervalMs = 1000;
     static const uint32_t kCSBeeReportingIntervalMs = 1000;
     static const uint32_t kGDL90ReportingIntervalMs = 1000;
+
+    static const uint32_t kOTAWriteTimeoutMs = 5000;  // ms until OTA write command exits if all bytes not received.
 
     struct CommsManagerConfig {
         uart_inst_t *comms_uart_handle = uart1;

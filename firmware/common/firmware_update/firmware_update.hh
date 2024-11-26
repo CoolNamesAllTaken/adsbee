@@ -1,5 +1,6 @@
 #include "RP2040.h"
-#include "comms.hh"  // For errors.
+#include "adsbee.hh"  // For watchdog access.
+#include "comms.hh"   // For errors.
 #include "hal.hh"
 #include "hardware/dma.h"  // for CRC32 calculation
 #include "hardware/flash.h"
@@ -28,6 +29,8 @@ class FirmwareUpdateManager {
 
     static const uint32_t kFlashHeaderMagicWord = 0xAD5BEEE;
     static const uint32_t kFlashHeaderVersion = 0;
+
+    static const uint16_t kMaxSectorsPerErase = 500;
 
     enum FlashPartitionStatus : uint32_t {
         kFlashPartitionStatusBlank = 0xFFFFFFFF,   // Freshly erased.
@@ -130,24 +133,33 @@ class FirmwareUpdateManager {
      * @param[in] partition Partition index to erase. Must be < kNumPartitions.
      */
     static inline bool EraseFlashParition(uint16_t partition) {
+        adsbee.DisableWatchdog();  // Flash erase can take a while, prevent watchdog from rebooting us during erase!
+
         if (partition >= kNumPartitions) {
             CONSOLE_ERROR("FirmwareUpdateManager::EraseFlashPartition",
                           "Can't erase partition %u, value must be less than %u.", partition, kNumPartitions);
+            adsbee.EnableWatchdog();
             return false;
         }
-        // DisableInterrupts();
         uint32_t bytes_to_erase = kFlashHeaderLenBytes + kFlashAppLenBytes;
-        uint16_t sectors_to_erase = bytes_to_erase / FLASH_SECTOR_SIZE + (bytes_to_erase % FLASH_SECTOR_SIZE ? 1 : 0);
-        for (uint16_t sector = 0; sector < sectors_to_erase; sector++) {
+        uint16_t total_sectors_to_erase =
+            bytes_to_erase / FLASH_SECTOR_SIZE + (bytes_to_erase % FLASH_SECTOR_SIZE ? 1 : 0);
+        uint16_t remaining_sectors_to_erase = total_sectors_to_erase;
+        uint16_t num_sectors_to_erase;
+        for (uint16_t sector = 0; remaining_sectors_to_erase > 0; sector += num_sectors_to_erase) {
             uint32_t sector_start_addr = kFlashHeaderStartAddrs[partition] + sector * FLASH_SECTOR_SIZE;
-            CONSOLE_PRINTF("Erasing sector %u/%u (%u Bytes at 0x%x).\r\n", sector + 1, sectors_to_erase,
-                           FLASH_SECTOR_SIZE, sector_start_addr);
-            uint32_t ints = save_and_disable_interrupts();
-            flash_range_erase(FlashAddrToOffset(sector_start_addr), FLASH_SECTOR_SIZE);
-            // RestoreInterrupts();
-            restore_interrupts(ints);
+            num_sectors_to_erase = MIN(remaining_sectors_to_erase, kMaxSectorsPerErase);
+            uint32_t num_bytes_to_erase = num_sectors_to_erase * FLASH_SECTOR_SIZE;
+            CONSOLE_PRINTF("Erasing %u sector(s) starting at %u/%u (%u Bytes at 0x%x).\r\n", num_sectors_to_erase,
+                           sector + 1, total_sectors_to_erase, num_bytes_to_erase * num_sectors_to_erase,
+                           sector_start_addr);
+            DisableInterrupts();
+            flash_range_erase(FlashAddrToOffset(sector_start_addr), num_bytes_to_erase);
+            RestoreInterrupts();
+            remaining_sectors_to_erase -= num_sectors_to_erase;
         }
 
+        adsbee.EnableWatchdog();
         return true;
     }
 
@@ -185,7 +197,31 @@ class FirmwareUpdateManager {
      * @retval True if bytes written successfully, false if error.
      */
     static inline bool PartialWriteFlashPartition(uint16_t partition, uint32_t offset, uint32_t len_bytes,
-                                                  const uint8_t *buf) {}
+                                                  const uint8_t *buf) {
+        if (partition >= kNumPartitions) {
+            CONSOLE_ERROR("FirmwareUpdateManager::PartialWriteFlashPartition",
+                          "Can't write flash partition %u, value must be less than %u.", partition, kNumPartitions);
+            return false;
+        }
+        if (offset > kFlashHeaderLenBytes + kFlashAppLenBytes) {
+            CONSOLE_ERROR("FirmwareUpdateManager::PartialWriteFlashPartition",
+                          "Offset %u is larger than maximum partition size %u Bytes.", offset,
+                          kFlashHeaderLenBytes + kFlashAppLenBytes);
+            return false;
+        }
+        if (len_bytes > kFlashHeaderLenBytes + kFlashAppLenBytes) {
+            CONSOLE_ERROR("FirmwareUpdateManager::PartialWriteFlashPartition",
+                          "Length %u is larger than maximum partition size %u Bytes.", len_bytes,
+                          kFlashHeaderLenBytes + kFlashAppLenBytes);
+            return false;
+        }
+        adsbee.DisableWatchdog();
+        DisableInterrupts();
+        flash_range_program(FlashAddrToOffset(kFlashHeaderStartAddrs[partition]) + offset, buf, len_bytes);
+        RestoreInterrupts();
+        adsbee.EnableWatchdog();
+        return true;
+    }
 
     /**
      * Calculates the CRC32 of a flash partition and confirms it matches the CRC32 provided in the header.

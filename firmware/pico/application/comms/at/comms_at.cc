@@ -3,7 +3,7 @@
 #include <cstring>   // for strcat
 #include <iostream>  // for AT command ingestion
 
-#include "ads_bee.hh"
+#include "adsbee.hh"
 #include "comms.hh"
 #include "eeprom.hh"
 #include "esp32_flasher.hh"
@@ -331,15 +331,55 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
             break;
         case '=':
             if (CPP_AT_HAS_ARG(0)) {
+                uint16_t complementary_partition = FirmwareUpdateManager::GetComplementaryFlashPartition();
                 if (args[0].compare("ERASE") == 0) {
-                    uint16_t complementary_partition = FirmwareUpdateManager::GetComplementaryFlashPartition();
                     // Erase the complementary flash sector.
                     CPP_AT_PRINTF("Erasing partition %d.\r\n", complementary_partition);
                     if (!FirmwareUpdateManager::EraseFlashParition(complementary_partition)) {
-                        CPP_AT_PRINTF("FAILED\r\n");
                         CPP_AT_ERROR("Failed to erase complmentary flash partition.");
                     }
                     CPP_AT_SUCCESS();
+                } else if (args[0].compare("WRITE") == 0) {
+                    // Write a section of the complementary flash sector.
+                    // AT+OTA=WRITE,<offset (base 16)>,<len_bytes>,<crc (base 16)>
+                    uint32_t offset, len_bytes, crc;
+                    CPP_AT_TRY_ARG2NUM_BASE(1, offset, 16);
+                    CPP_AT_TRY_ARG2NUM_BASE(2, len_bytes, 16);
+                    CPP_AT_TRY_ARG2NUM_BASE(3, crc, 16);
+                    uint8_t buf[kATCommandBufMaxLen];
+                    uint16_t buf_len_bytes = 0;
+                    uint32_t timestamp_ms = get_time_since_boot_ms();
+                    uint32_t data_read_start_timestamp_ms = timestamp_ms;
+                    while (timestamp_ms - data_read_start_timestamp_ms < kOTAWriteTimeoutMs &&
+                           buf_len_bytes < kATCommandBufMaxLen) {
+                        // Priority 1: Check STDIO for data.
+                        int stdio_console_getchar_reply = getchar_timeout_us(0);
+                        if (stdio_console_getchar_reply) {
+                            // Didn't have timeout or other error: got a valid data byte.
+                            buf[buf_len_bytes] = static_cast<char>(stdio_console_getchar_reply);
+                            buf_len_bytes++;
+                            continue;  // Don't check network console if stdio had a byte.
+                        }
+
+                        // Priority 2: Check network console for data.
+                        char network_console_byte;
+                        bool network_console_had_byte = esp32_console_rx_queue.Pop(network_console_byte);
+                        if (network_console_had_byte) {
+                            buf[buf_len_bytes] = network_console_byte;
+                            buf_len_bytes++;
+                            continue;  // Don't refresh timestamp as long as data is being actively
+                                       // received.
+                        }
+
+                        // Didn't receive any Bytes. Refresh network console and update timeout timestamp.
+                        esp32.Update();
+                        timestamp_ms = get_time_since_boot_ms();
+                    }
+                    if (!FirmwareUpdateManager::PartialWriteFlashPartition(complementary_partition, offset, len_bytes,
+                                                                           buf)) {
+                        CPP_AT_ERROR("Partial %u Byte write failed in partition %u at offset %u.", len_bytes,
+                                     complementary_partition, offset);
+                    }
                 }
             }
             break;
@@ -350,9 +390,11 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
 CPP_AT_HELP_CALLBACK(CommsManager::ATOTAHelpCallback) {
     CPP_AT_PRINTF(
         "AT+OTA?\r\n\tQueries current OTA status.\r\n\tAT+OTA=ERASE\r\n\tErase the sector to "
-        "update.\r\n\tAT+OTA=TRANSFER,<addr>,<num_bytes>,<checksum>\r\n\tBegin an "
-        "OTA transfer of num_bytes to address with provided checksum. Will respond with BEGIN, and then OK when "
-        "complete, or ERROR if checksum doesn't match or timeout reached.");
+        "update. Responds with status messages for each erase operation, then OK when "
+        "complete.\r\n\tAT+OTA=WRITE,<offset>,<num_bytes>,<checksum>\r\n\tBegin an "
+        "OTA write operation of num_bytes to offset bytes from the start of the partition with provided CRC32 "
+        "checksum. Will respond with BEGIN, and then OK when complete, or ERROR if checksum doesn't match or timeout "
+        "reached.");
 }
 
 CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {

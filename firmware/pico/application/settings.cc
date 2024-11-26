@@ -1,6 +1,6 @@
 #include "settings.hh"
 
-#include "ads_bee.hh"
+#include "adsbee.hh"
 #include "comms.hh"
 #include "eeprom.hh"
 #include "spi_coprocessor.hh"

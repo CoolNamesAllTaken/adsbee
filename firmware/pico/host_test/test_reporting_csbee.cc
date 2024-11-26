@@ -22,8 +22,8 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
     aircraft.last_message_timestamp_ms = 1000;
     aircraft.last_message_signal_strength_dbm = -75;
     aircraft.last_message_signal_quality_db = 2;
-    aircraft.stats.valid_squitter_frames = 1;
-    aircraft.stats.valid_extended_squitter_frames = 3;
+    aircraft.metrics.valid_squitter_frames = 1;
+    aircraft.metrics.valid_extended_squitter_frames = 3;
     aircraft.transponder_capability = ADSBPacket::Capability::kCALevel2PlusTransponderOnSurfaceCanSetCA7;
     aircraft.icao_address = 0x12345E;
     strcpy(aircraft.callsign, "ABCDEFG");

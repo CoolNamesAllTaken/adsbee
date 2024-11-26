@@ -82,7 +82,7 @@ if (ON_EMBEDDED_DEVICE)
     target_sources(application PRIVATE
         ${ADSBEE_MODULES_DIR}/cppAT/src/cpp_at.cc
         main.cc # Don't include main for testing.
-        ads_bee.cc
+        adsbee.cc
         settings.cc
         eeprom.cc
     )
