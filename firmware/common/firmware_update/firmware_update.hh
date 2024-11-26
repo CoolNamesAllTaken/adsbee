@@ -9,20 +9,20 @@
 class FirmwareUpdateManager {
    public:
     /* Original flash length: 16384k Bytes.
-     FLASH MAP
-         0x10000000	(176k)	FLASH_BL	Bootloader
-         0x1002C000	(4k)	FLASH_HDR0	Application 0 Header
-         0x1002D000	(8100k)	FLASH_APP0	Application 0 Data
-         0x10816000	(4k)	FLASH_HDR1	Application 1 Header
-         0x10817000	(8100k)	FLASH_APP1	Application 1 Data
-
-     */
+    FLASH MAP
+        0x10000000	(176k)	FLASH_BL	Bootloader
+        0x1002C000	(4k)	FLASH_HDR0	Application 0 Header
+        0x1002D000	(8096k)	FLASH_APP0	Application 0 Data
+        0x10815000	(4k)	FLASH_HDR1	Application 1 Header
+        0x10816000	(8096k)	FLASH_APP1	Application 1 Data
+        0x10FFE000	(8k)	FLASH_EXTRA	Extra
+    */
 
     static const uint32_t kFlashBlStartAddr = 0x10000000;
     static const uint32_t kFlashBlLenBytes = 176 * 1024;  // 176 kBytes
     static const uint16_t kNumPartitions = 2;  // Partition = header and application (not counting bootloader).
     static const uint32_t kFlashHeaderLenBytes = 4 * 1024;  // 4 kBytes
-    static const uint32_t kFlashAppLenBytes = 8100 * 1024;  // 8100 kBytes
+    static const uint32_t kFlashAppLenBytes = 8096 * 1024;  // 8096 kBytes
 
     static const uint32_t kFlashHeaderStartAddrs[kNumPartitions];
     static const uint32_t kFlashAppStartAddrs[kNumPartitions];
@@ -31,7 +31,7 @@ class FirmwareUpdateManager {
     static const uint32_t kFlashHeaderVersion = 0;
 
     // Set this value large enough to be efficient, but small enough that programs don't time out waiting for an update.
-    static const uint16_t kMaxSectorsPerErase = FLASH_BLOCK_SIZE / FLASH_SECTOR_SIZE;
+    static const uint16_t kMaxSectorsPerErase = 10 * FLASH_BLOCK_SIZE / FLASH_SECTOR_SIZE;
 
     enum FlashPartitionStatus : uint32_t {
         kFlashPartitionStatusBlank = 0xFFFFFFFF,   // Freshly erased.
