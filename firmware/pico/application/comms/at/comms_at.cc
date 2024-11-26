@@ -345,16 +345,15 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     uint32_t offset, len_bytes, crc;
                     CPP_AT_TRY_ARG2NUM_BASE(1, offset, 16);
                     CPP_AT_TRY_ARG2NUM_BASE(2, len_bytes, 16);
-                    CPP_AT_TRY_ARG2NUM_BASE(3, crc, 16);
                     uint8_t buf[kATCommandBufMaxLen];
                     uint16_t buf_len_bytes = 0;
                     uint32_t timestamp_ms = get_time_since_boot_ms();
                     uint32_t data_read_start_timestamp_ms = timestamp_ms;
-                    while (timestamp_ms - data_read_start_timestamp_ms < kOTAWriteTimeoutMs &&
-                           buf_len_bytes < kATCommandBufMaxLen) {
+                    // Read len_bytes from stdio and network console. Timeout after kOTAWriteTimeoutMs.
+                    while (buf_len_bytes < len_bytes) {
                         // Priority 1: Check STDIO for data.
                         int stdio_console_getchar_reply = getchar_timeout_us(0);
-                        if (stdio_console_getchar_reply) {
+                        if (stdio_console_getchar_reply >= 0) {
                             // Didn't have timeout or other error: got a valid data byte.
                             buf[buf_len_bytes] = static_cast<char>(stdio_console_getchar_reply);
                             buf_len_bytes++;
@@ -374,12 +373,30 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         // Didn't receive any Bytes. Refresh network console and update timeout timestamp.
                         esp32.Update();
                         timestamp_ms = get_time_since_boot_ms();
+                        if (timestamp_ms - data_read_start_timestamp_ms > kOTAWriteTimeoutMs) {
+                            CPP_AT_ERROR("Timed out after %u ms.", timestamp_ms - data_read_start_timestamp_ms);
+                        }
                     }
+                    CPP_AT_PRINTF("Writing %u Bytes to partition %u at offset %u.\r\n", len_bytes,
+                                  complementary_partition, offset);
                     if (!FirmwareUpdateManager::PartialWriteFlashPartition(complementary_partition, offset, len_bytes,
                                                                            buf)) {
                         CPP_AT_ERROR("Partial %u Byte write failed in partition %u at offset %u.", len_bytes,
                                      complementary_partition, offset);
                     }
+                    if (CPP_AT_HAS_ARG(3)) {
+                        // CRC provided.
+                        CPP_AT_TRY_ARG2NUM_BASE(3, crc, 16);
+                        CPP_AT_PRINTF("Verifying with CRC 0x%x.\r\n", crc);
+                        uint32_t calculated_crc = FirmwareUpdateManager::CalculateCRC32(
+                            (uint8_t *)(FirmwareUpdateManager::flash_partition_headers[complementary_partition]) +
+                                offset,
+                            len_bytes);
+                        if (calculated_crc != crc) {
+                            CPP_AT_ERROR("Calculated CRC 0x%x did not match provided CRC 0x%x.", calculated_crc, crc);
+                        }
+                    }
+                    CPP_AT_SUCCESS();
                 }
             }
             break;
@@ -755,7 +772,7 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATLogLevelCallback, comms_manager)},
     {.command_buf = "+OTA",
      .min_args = 0,
-     .max_args = 2,
+     .max_args = 4,
      .help_callback = CPP_AT_BIND_MEMBER_HELP_CALLBACK(CommsManager::ATOTAHelpCallback, comms_manager),
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATOTACallback, comms_manager)},
     {.command_buf = "+PROTOCOL",

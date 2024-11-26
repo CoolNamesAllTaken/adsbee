@@ -98,7 +98,7 @@
 			"cpp_at.hh": "c",
 			"uart.h": "c"
 		},
-		"cortex-debug.variableUseNaturalFormat": false,
+		"cortex-debug.variableUseNaturalFormat": true,
 		// "cortex-debug.variableUseNaturalFormat": true,
 	},
 	"launch": {

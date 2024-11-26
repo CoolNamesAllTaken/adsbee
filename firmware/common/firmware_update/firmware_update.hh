@@ -30,7 +30,8 @@ class FirmwareUpdateManager {
     static const uint32_t kFlashHeaderMagicWord = 0xAD5BEEE;
     static const uint32_t kFlashHeaderVersion = 0;
 
-    static const uint16_t kMaxSectorsPerErase = 500;
+    // Set this value large enough to be efficient, but small enough that programs don't time out waiting for an update.
+    static const uint16_t kMaxSectorsPerErase = FLASH_BLOCK_SIZE / FLASH_SECTOR_SIZE;
 
     enum FlashPartitionStatus : uint32_t {
         kFlashPartitionStatusBlank = 0xFFFFFFFF,   // Freshly erased.
