@@ -324,7 +324,28 @@ CPP_AT_CALLBACK(CommsManager::ATFlashESP32Callback) {
     CPP_AT_SUCCESS();
 }
 
-CPP_AT_CALLBACK(CommsManager::ATOTACallback) {}
+CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (CPP_AT_HAS_ARG(0)) {
+                if (args[0].compare("ERASE") == 0) {
+                    uint16_t complementary_partition = FirmwareUpdateManager::GetComplementaryFlashPartition();
+                    // Erase the complementary flash sector.
+                    CPP_AT_PRINTF("Erasing partition %d.\r\n", complementary_partition);
+                    if (!FirmwareUpdateManager::EraseFlashParition(complementary_partition)) {
+                        CPP_AT_PRINTF("FAILED\r\n");
+                        CPP_AT_ERROR("Failed to erase complmentary flash partition.");
+                    }
+                    CPP_AT_SUCCESS();
+                }
+            }
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
 
 CPP_AT_HELP_CALLBACK(CommsManager::ATOTAHelpCallback) {
     CPP_AT_PRINTF(
@@ -765,14 +786,17 @@ const uint16_t at_command_list_num_commands = sizeof(at_command_list) / sizeof(a
 
 bool CommsManager::UpdateAT() {
     static char stdio_at_command_buf[kATCommandBufMaxLen];
+    static uint16_t stdio_at_command_buf_len = 0;
     // Check for new AT commands from STDIO. Process up to one line per loop.
     char c = static_cast<char>(getchar_timeout_us(0));
     while (static_cast<int8_t>(c) != PICO_ERROR_TIMEOUT) {
-        char buf[2] = {c, '\0'};
-        strcat(stdio_at_command_buf, buf);
+        stdio_at_command_buf[stdio_at_command_buf_len] = c;
+        stdio_at_command_buf_len++;
+        stdio_at_command_buf[stdio_at_command_buf_len] = '\0';
         if (c == '\n') {
             at_parser_.ParseMessage(std::string_view(stdio_at_command_buf));
-            stdio_at_command_buf[0] = '\0';  // clear command buffer
+            stdio_at_command_buf_len = 0;
+            stdio_at_command_buf[stdio_at_command_buf_len] = '\0';  // clear command buffer
         }
         c = static_cast<char>(getchar_timeout_us(0));
     }
@@ -780,14 +804,17 @@ bool CommsManager::UpdateAT() {
     if (esp32.IsEnabled()) {
         // Receive incoming network console characters.
         static char esp32_console_rx_buf[kATCommandBufMaxLen];
+        static uint16_t esp32_console_rx_buf_len = 0;
         while (esp32_console_rx_queue.Pop(c)) {
-            char buf[2] = {c, '\0'};
-            strcat(esp32_console_rx_buf, buf);
+            esp32_console_rx_buf[esp32_console_rx_buf_len] = c;
+            esp32_console_rx_buf_len++;
+            esp32_console_rx_buf[esp32_console_rx_buf_len] = '\0';
             if (c == '\n') {
                 CONSOLE_INFO("CommsManager::UpdateAT", "Received network console message: %s\r\n",
                              esp32_console_rx_buf);
                 at_parser_.ParseMessage(std::string_view(esp32_console_rx_buf));
-                esp32_console_rx_buf[0] = '\0';  // clear command buffer
+                esp32_console_rx_buf_len = 0;
+                esp32_console_rx_buf[esp32_console_rx_buf_len] = '\0';  // clear command buffer
             }
         }
 

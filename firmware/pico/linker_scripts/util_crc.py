@@ -51,6 +51,7 @@ def generate_header(app_bin_filename, asm_section=None, ota_filename=None):
     with open(app_bin_filename, 'rb') as f:
         app_bin_contents = f.read()
     app_bin_contents = app_bin_contents[STAGE_2_BOOTLOADER_LEN_BYTES:]
+    print(f"\tapp_bin_contents: " + ", ".join([f"{app_bin_contents[i]:x}" for i in range(10)]) + "..." + ", ".join([f"{app_bin_contents[i]:x}" for i in range(-11,-1)]))
     
     app_crc = calculate_crc32(app_bin_contents)
     print(f"\tCalculated CRC32 for {app_bin_filename} ({len(app_bin_contents)} Bytes): 0x{app_crc:x}")

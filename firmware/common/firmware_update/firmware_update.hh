@@ -45,6 +45,24 @@ class FirmwareUpdateManager {
     };
 
     /**
+     * Checks whether the program counter is currently within the specified flash partition.
+     * @param[in] partition Partition index. Must be < kNumPartitions
+     * @retval True if within partition, false if not or partition does not exist.
+     */
+    static inline bool AmWithinFlashPartition(uint16_t partition) {
+        if (partition >= kNumPartitions) {
+            CONSOLE_ERROR("FirmwareUpdateManager::AmWithinFlashPartition",
+                          "Can't check if within partition %u, value must be less than %u.", partition, kNumPartitions);
+            return false;
+        }
+        uint32_t pc_addr = (uint32_t)__builtin_return_address(0);
+        if (pc_addr >= kFlashAppStartAddrs[partition] && pc_addr < kFlashAppStartAddrs[partition] + kFlashAppLenBytes) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Boots to a given flash partition.
      * @param[in] partition Partition index to boot to. Must be less than kNumPartitions.
      */
@@ -66,15 +84,15 @@ class FirmwareUpdateManager {
         const uint32_t kSnifferMode = 0x1;  // Calculate a CRC-32 (IEEE802.3 polynomial) with bit reversed data
         // Good RP2040 CRC with DMA discussion: https://github.com/raspberrypi/pico-feedback/issues/247
 
-        // Allocate a DMA channel
+        // Allocate a DMA channel.
         int dma_chan = dma_claim_unused_channel(true);  // Panic if no DMA channels are available.
 
-        // Configure the DMA channel
+        // Configure the DMA channel.
         dma_channel_config config = dma_channel_get_default_config(dma_chan);
         channel_config_set_transfer_data_size(&config, DMA_SIZE_8);  // 8-bit transfers
         channel_config_set_read_increment(&config, true);            // Increment source address
         channel_config_set_write_increment(&config, false);          // Fixed destination address
-        // Set up the source and destination
+        // Set up the source and destination.
         uint32_t scratch;  // Write doesn't increment, just dump here since we aren't using it.
         dma_channel_configure(dma_chan, &config,
                               &scratch,   // Destination
@@ -82,21 +100,21 @@ class FirmwareUpdateManager {
                               len_bytes,  // Number of bytes to transfer
                               false);     // Don't start yet
 
-        // Configure SNIFF hardware for CRC32
+        // Configure SNIFF hardware for CRC32.
         dma_sniffer_enable(dma_chan, kSnifferMode, true);                   // Enable SNIFF for the DMA channel
         hw_set_bits(&dma_hw->sniff_ctrl, DMA_SNIFF_CTRL_OUT_INV_BITS |      // Output inversion (for CRC32)
                                              DMA_SNIFF_CTRL_OUT_REV_BITS);  // Output reversal (for CRC32)
 
-        // Clear sniff data register before starting
+        // Clear sniff data register before starting.
         dma_hw->sniff_data = 0xFFFFFFFF;
 
-        // Start the transfer
+        // Start the transfer.
         dma_channel_start(dma_chan);
 
-        // Wait for the transfer to complete
+        // Wait for the transfer to complete.
         dma_channel_wait_for_finish_blocking(dma_chan);
 
-        // Retrieve the CRC value (invert it for CRC32 finalization)
+        // Retrieve the CRC value (invert it for CRC32 finalization).
         // uint32_t crc = ~dma_hw->sniff_data;
         volatile uint32_t crc = dma_hw->sniff_data;
 
@@ -117,28 +135,34 @@ class FirmwareUpdateManager {
                           "Can't erase partition %u, value must be less than %u.", partition, kNumPartitions);
             return false;
         }
-        DisableInterrupts();
-        flash_range_erase(kFlashHeaderStartAddrs[partition], kFlashHeaderLenBytes + kFlashAppLenBytes);
-        RestoreInterrupts();
+        // DisableInterrupts();
+        uint32_t bytes_to_erase = kFlashHeaderLenBytes + kFlashAppLenBytes;
+        uint16_t sectors_to_erase = bytes_to_erase / FLASH_SECTOR_SIZE + (bytes_to_erase % FLASH_SECTOR_SIZE ? 1 : 0);
+        for (uint16_t sector = 0; sector < sectors_to_erase; sector++) {
+            uint32_t sector_start_addr = kFlashHeaderStartAddrs[partition] + sector * FLASH_SECTOR_SIZE;
+            CONSOLE_PRINTF("Erasing sector %u/%u (%u Bytes at 0x%x).\r\n", sector + 1, sectors_to_erase,
+                           FLASH_SECTOR_SIZE, sector_start_addr);
+            uint32_t ints = save_and_disable_interrupts();
+            flash_range_erase(FlashAddrToOffset(sector_start_addr), FLASH_SECTOR_SIZE);
+            // RestoreInterrupts();
+            restore_interrupts(ints);
+        }
+
+        return true;
     }
 
     /**
-     * Checks whether the program counter is currently within the specified flash partition.
-     * @param[in] partition Partition index. Must be < kNumPartitions
-     * @retval True if within partition, false if not or partition does not exist.
+     * Converts from addresses in flash to flash offsets required by the Pico SDK flash functions.
+     * @param[in] flash_addr Absolute address in flash.
+     * @retval Offset from start of flash.
      */
-    static inline bool AmWithinFlashPartition(uint16_t partition) {
-        if (partition >= kNumPartitions) {
-            CONSOLE_ERROR("FirmwareUpdateManager::AmWithinFlashPartition",
-                          "Can't check if within partition %u, value must be less than %u.", partition, kNumPartitions);
-            return false;
-        }
-        uint32_t pc_addr = (uint32_t)__builtin_return_address(0);
-        if (pc_addr >= kFlashAppStartAddrs[partition] && pc_addr < kFlashAppStartAddrs[partition] + kFlashAppLenBytes) {
-            return true;
-        }
-        return false;
-    }
+    static inline uint32_t FlashAddrToOffset(uint32_t flash_addr) { return flash_addr - kFlashBlStartAddr; }
+
+    /**
+     * Returns the index of the other flash partition (e.g. the one we can safely operate on).
+     * @retval Index of the flash aprtition that is currently not being executed from.
+     */
+    static inline uint16_t GetComplementaryFlashPartition() { return AmWithinFlashPartition(0) ? 1 : 0; }
 
     /**
      * Read Bytes from a flash partition starting at offset bytes from the beginning, and copy them to the provided
@@ -173,13 +197,20 @@ class FirmwareUpdateManager {
             return false;
         }
         uint32_t header_crc = flash_partition_headers[partition]->app_crc;
-        uint32_t calculated_crc =
-            CalculateCRC32(flash_partition_apps[partition],
-                           MIN(flash_partition_headers[partition]->app_size_bytes, kFlashAppLenBytes));
-        if (header_crc != calculated_crc) {
+        uint32_t len_bytes = flash_partition_headers[partition]->app_size_bytes;
+        if (len_bytes > kFlashAppLenBytes) {
             CONSOLE_ERROR("FirmwareUpdateManager::VerifyFlashPartition",
-                          "Flash partition %u has calculated CRC 0x%x but header crc 0x%x.", partition, calculated_crc,
-                          header_crc);
+                          "Flash partition %u is described by header as having %d Bytes, but maximum permissible size "
+                          "is %d Bytes.",
+                          partition, len_bytes, kFlashAppLenBytes);
+            return false;
+        }
+        uint32_t calculated_crc = CalculateCRC32(flash_partition_apps[partition], len_bytes);
+        if (header_crc != calculated_crc) {
+            CONSOLE_ERROR(
+                "FirmwareUpdateManager::VerifyFlashPartition",
+                "Flash partition %u (%d Bytes beginning at 0x%x) has calculated CRC 0x%x but header crc 0x%x.",
+                partition, len_bytes, flash_partition_apps[partition], calculated_crc, header_crc);
             return false;
         }
         return true;

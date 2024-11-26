@@ -41,4 +41,6 @@ UTEST(Flash, CRC32AsymmetricWordAligned) {
     ASSERT_EQ(FirmwareUpdateManager::CalculateCRC32(sequence, sizeof(sequence)), expected_crc);
 }
 
+// NOTE: Self verify does NOT work unless the firmware image was flashed from a .OTA file, since the application.bin
+// used for checksum calculation differs from the result of the combined linking process.
 UTEST(Flash, VerifyOwnPartition) { ASSERT_TRUE(FirmwareUpdateManager::VerifyFlashPartition(own_partition)); }

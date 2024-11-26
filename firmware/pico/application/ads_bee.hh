@@ -241,8 +241,8 @@ class ADSBee {
         if (watchdog_timeout_sec > UINT32_MAX / kMsPerSec) {
             return false;  // Watchdog timeout value too big.
         }
-        if (watchdog_timeout_sec > 0) {
-            watchdog_timeout_sec_ = watchdog_timeout_sec;
+        watchdog_timeout_sec_ = watchdog_timeout_sec;
+        if (watchdog_timeout_sec_ > 0) {
             watchdog_enable(watchdog_timeout_sec_ * kMsPerSec, true);  // Pause the watchdog timer during debug.
         } else {
             watchdog_disable();
