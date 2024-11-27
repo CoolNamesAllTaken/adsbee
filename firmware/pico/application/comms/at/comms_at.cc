@@ -341,12 +341,12 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     CPP_AT_SUCCESS();
                 } else if (args[0].compare("WRITE") == 0) {
                     // Write a section of the complementary flash sector.
-                    // AT+OTA=WRITE,<offset (base 16)>,<len_bytes>,<crc (base 16)>
+                    // AT+OTA=WRITE,<offset (base 16)>,<len_bytes (base 10)>,<crc (base 16)>
                     uint32_t offset, len_bytes, crc;
                     CPP_AT_TRY_ARG2NUM_BASE(1, offset, 16);
-                    CPP_AT_TRY_ARG2NUM_BASE(2, len_bytes, 16);
-                    uint8_t buf[kATCommandBufMaxLen];
-                    uint16_t buf_len_bytes = 0;
+                    CPP_AT_TRY_ARG2NUM_BASE(2, len_bytes, 10);
+                    uint8_t buf[FirmwareUpdateManager::kFlashWriteBufMaxLenBytes];
+                    uint32_t buf_len_bytes = 0;
                     uint32_t timestamp_ms = get_time_since_boot_ms();
                     uint32_t data_read_start_timestamp_ms = timestamp_ms;
                     // Read len_bytes from stdio and network console. Timeout after kOTAWriteTimeoutMs.
@@ -377,11 +377,11 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                             CPP_AT_ERROR("Timed out after %u ms.", timestamp_ms - data_read_start_timestamp_ms);
                         }
                     }
-                    CPP_AT_PRINTF("Writing %u Bytes to partition %u at offset %u.\r\n", len_bytes,
+                    CPP_AT_PRINTF("Writing %u Bytes to partition %u at offset 0x%x.\r\n", len_bytes,
                                   complementary_partition, offset);
                     if (!FirmwareUpdateManager::PartialWriteFlashPartition(complementary_partition, offset, len_bytes,
                                                                            buf)) {
-                        CPP_AT_ERROR("Partial %u Byte write failed in partition %u at offset %u.", len_bytes,
+                        CPP_AT_ERROR("Partial %u Byte write failed in partition %u at offset 0x%x.", len_bytes,
                                      complementary_partition, offset);
                     }
                     if (CPP_AT_HAS_ARG(3)) {

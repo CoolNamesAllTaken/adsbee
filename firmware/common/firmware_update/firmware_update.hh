@@ -1,3 +1,5 @@
+
+#ifdef ON_PICO
 #include "RP2040.h"
 #include "adsbee.hh"  // For watchdog access.
 #include "comms.hh"   // For errors.
@@ -5,6 +7,9 @@
 #include "hardware/dma.h"  // for CRC32 calculation
 #include "hardware/flash.h"
 #include "hardware/sync.h"
+#elif ON_ESP32
+#include "stdint.h"
+#endif
 
 class FirmwareUpdateManager {
    public:
@@ -30,6 +35,9 @@ class FirmwareUpdateManager {
     static const uint32_t kFlashHeaderMagicWord = 0xAD5BEEE;
     static const uint32_t kFlashHeaderVersion = 0;
 
+    // Leave some room in max length SPI packet (4096 Bytes) for other stuff.
+    static const uint32_t kFlashWriteBufMaxLenBytes = 3840;
+
     // Set this value large enough to be efficient, but small enough that programs don't time out waiting for an update.
     static const uint16_t kMaxSectorsPerErase = 10 * FLASH_BLOCK_SIZE / FLASH_SECTOR_SIZE;
 
@@ -48,6 +56,7 @@ class FirmwareUpdateManager {
         uint32_t status;
     };
 
+#ifdef ON_PICO
     /**
      * Checks whether the program counter is currently within the specified flash partition.
      * @param[in] partition Partition index. Must be < kNumPartitions
@@ -295,4 +304,6 @@ class FirmwareUpdateManager {
     static inline void RestoreInterrupts(void) { restore_interrupts(stored_interrupts_); }
 
     static uint32_t stored_interrupts_;
+
+#endif /* ON_PICO */
 };
