@@ -327,20 +327,44 @@ CPP_AT_CALLBACK(CommsManager::ATFlashESP32Callback) {
 CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
     switch (op) {
         case '?':
+            CPP_AT_PRINTF("Flash Partition Information\r\n");
+            for (uint16_t partition = 0; partition < FirmwareUpdateManager::kNumPartitions; partition++) {
+                if (FirmwareUpdateManager::flash_partition_headers[partition]->magic_word !=
+                    FirmwareUpdateManager::kFlashHeaderMagicWord) {
+                    CPP_AT_PRINTF("\tNO VALID HEADER\r\n");
+                    continue;
+                }
+                CPP_AT_PRINTF("\t===Partition %u===\r\n\tLength: %u Bytes\r\n", partition,
+                              FirmwareUpdateManager::flash_partition_headers[partition]->app_size_bytes);
+                CPP_AT_PRINTF("\tApplication CRC: 0x%x\r\n",
+                              FirmwareUpdateManager::flash_partition_headers[partition]->app_crc);
+                char status_str[FirmwareUpdateManager::kFlashPartitionStatusStrMaxLen];
+                FirmwareUpdateManager::FlashPartitionStatusToStr(
+                    (FirmwareUpdateManager::FlashPartitionStatus)
+                        FirmwareUpdateManager::flash_partition_headers[partition]
+                            ->status,
+                    status_str);
+                CPP_AT_PRINTF("\tStatus: %s (0x%x)\r\n", status_str,
+                              FirmwareUpdateManager::flash_partition_headers[partition]->status);
+                CPP_AT_PRINTF("\tCRC %s with header.\r\n", FirmwareUpdateManager::VerifyFlashPartition(partition, false)
+                                                               ? "matches"
+                                                               : "does not match");
+                CPP_AT_PRINTF("\t===============\r\n");
+            }
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
             if (CPP_AT_HAS_ARG(0)) {
                 uint16_t complementary_partition = FirmwareUpdateManager::GetComplementaryFlashPartition();
                 if (args[0].compare("ERASE") == 0) {
-                    // Erase the complementary flash sector.
+                    // Erase the complementary flash partition.
                     CPP_AT_PRINTF("Erasing partition %d.\r\n", complementary_partition);
                     if (!FirmwareUpdateManager::EraseFlashParition(complementary_partition)) {
                         CPP_AT_ERROR("Failed to erase complmentary flash partition.");
                     }
                     CPP_AT_SUCCESS();
                 } else if (args[0].compare("WRITE") == 0) {
-                    // Write a section of the complementary flash sector.
+                    // Write a section of the complementary flash partition.
                     // AT+OTA=WRITE,<offset (base 16)>,<len_bytes (base 10)>,<crc (base 16)>
                     uint32_t offset, len_bytes, crc;
                     CPP_AT_TRY_ARG2NUM_BASE(1, offset, 16);
@@ -397,6 +421,25 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         }
                     }
                     CPP_AT_SUCCESS();
+                } else if (args[0].compare("VERIFY") == 0) {
+                    // Verify the complementary flash partition.
+                    CPP_AT_PRINTF(
+                        "Verifying partition %u: %u Bytes, status 0x%x, application CRC 0x%x\r\n",
+                        complementary_partition,
+                        FirmwareUpdateManager::flash_partition_headers[complementary_partition]->app_size_bytes,
+                        FirmwareUpdateManager::flash_partition_headers[complementary_partition]->status,
+                        FirmwareUpdateManager::flash_partition_headers[complementary_partition]->app_crc);
+                    // Modify the partition header.
+                    if (FirmwareUpdateManager::VerifyFlashPartition(complementary_partition, true)) {
+                        CPP_AT_SUCCESS();
+                    } else {
+                        CPP_AT_ERROR("Partition %u failed verification.", complementary_partition);
+                    }
+                } else if (args[0].compare("BOOT") == 0) {
+                    // Boot the complementary flash partition.
+                    CPP_AT_PRINTF("Booting partition %u...", complementary_partition);
+                    FirmwareUpdateManager::BootPartition(complementary_partition);
+                    CPP_AT_ERROR("Failed to boot partition %u.", complementary_partition);
                 }
             }
             break;

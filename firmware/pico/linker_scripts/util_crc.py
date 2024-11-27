@@ -31,6 +31,33 @@ def append_crc32_bin(filename):
     print(f"Appended CRC32: 0x{crc:08X}")
     return crc
 
+def create_header_bin_contents(app_len_bytes, app_crc, status_valid=False):
+    """
+    Create a bytearray with the contents of a flash partition header.
+    @param[in] app_len_bytes Length of the application binary. Used to populate the length field in the header.
+    @param[in] app_crc CRC32 of the application binary. Used to populate the crc field in the header.
+    @param[in] status_valid Whether to force the status word to be kFlashPartitionStatusValid. Mark this TRUE for
+    firmware that we won't verify before booting (e.g. firmware loaded by debugger). Mark this FALSE for firmware
+    loaded via OTA updates that will need to be verified before booting.
+    @retval Bytearray with contents of header.
+    """
+    HEADER_VERSION = 0
+    HEADER_SIZE_BYTES = 5*4
+
+    status = 0xFFFFFFFF # Default to kFlashPartitionStatusBlank.
+    if status_valid:
+        status = 0xFFADFFFF # Force kFlashPartitionStatusValid (avoids checksum verification).
+
+    hdr_bin_contents = bytearray(HEADER_SIZE_BYTES)
+    struct.pack_into('<I', hdr_bin_contents, 0, 0xAD5BEEE) # MAGIC_WORD: Marks beginning of application header.
+    struct.pack_into('<I', hdr_bin_contents, 4, HEADER_VERSION) # HEADER_VERSION: Version of this header schema.
+    struct.pack_into('<I', hdr_bin_contents, 8, app_len_bytes) # LEN_BYTES: Application image length in  Bytes.
+    struct.pack_into('<I', hdr_bin_contents, 12, app_crc) # CRC: CRC32 of application data.
+    struct.pack_into('<I', hdr_bin_contents, 16, status) # STATUS: Application CRC check and boot priority.
+    
+    return hdr_bin_contents
+
+
 def generate_header(app_bin_filename, asm_section=None, ota_filename=None):
     """
     Generate a header binary and corresponding assembly file which includes the following:
@@ -40,8 +67,6 @@ def generate_header(app_bin_filename, asm_section=None, ota_filename=None):
         app_crc (uint32_t)
         status (uint32_t)
     """
-    HEADER_VERSION = 0
-    HEADER_SIZE_BYTES = 5*4
     # application.bin includes a 256-Byte stage 2 bootloader to amke it bootable on its own.
     # Remove this when creating the OTA file, since it's already baked into the bootloader binary.
     STAGE_2_BOOTLOADER_LEN_BYTES = 256
@@ -56,12 +81,9 @@ def generate_header(app_bin_filename, asm_section=None, ota_filename=None):
     app_crc = calculate_crc32(app_bin_contents)
     print(f"\tCalculated CRC32 for {app_bin_filename} ({len(app_bin_contents)} Bytes): 0x{app_crc:x}")
 
-    hdr_bin_contents = bytearray(HEADER_SIZE_BYTES)
-    struct.pack_into('<I', hdr_bin_contents, 0, 0xAD5BEEE) # MAGIC_WORD: Marks beginning of application header.
-    struct.pack_into('<I', hdr_bin_contents, 4, HEADER_VERSION) # HEADER_VERSION: Version of this header schema.
-    struct.pack_into('<I', hdr_bin_contents, 8, len(app_bin_contents)) # LEN_BYTES: Application image length in  Bytes.
-    struct.pack_into('<I', hdr_bin_contents, 12, app_crc) # CRC: CRC32 of application data.
-    struct.pack_into('<I', hdr_bin_contents, 16, 0xFFADFFFF) # STATUS: Application boot priority.
+    # Create a header with the status Byte forced to valid to skip the CRC check in the bootloader
+    # (header CRC from application.bin does not match the CRC calculated from the contents flashed by combined.elf).
+    hdr_bin_contents = create_header_bin_contents(len(app_bin_contents), app_crc, status_valid=True)
 
     # app_bin_basename = os.path.splitext(os.path.basename(app_bin_filename))[0]
     app_bin_dir = os.path.dirname(app_bin_filename)
@@ -77,8 +99,10 @@ def generate_header(app_bin_filename, asm_section=None, ota_filename=None):
         bin_file_to_asm_file(hdr_bin_filename, hdr_asm_filename, asm_section)
     
     if ota_filename is not None:
+        # Don't mark header as valid for OTA files in order to force a checksum validation before booting.
+        ota_hdr_bin_contents = create_header_bin_contents(len(app_bin_contents), app_crc, status_valid=False)
         with open(ota_filename, 'wb') as f:
-            f.write(hdr_bin_contents)
+            f.write(ota_hdr_bin_contents)
             f.write(app_bin_contents)
 
 

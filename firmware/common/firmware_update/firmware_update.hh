@@ -41,11 +41,13 @@ class FirmwareUpdateManager {
     // Set this value large enough to be efficient, but small enough that programs don't time out waiting for an update.
     static const uint16_t kMaxSectorsPerErase = 10 * FLASH_BLOCK_SIZE / FLASH_SECTOR_SIZE;
 
+    static const uint16_t kFlashPartitionStatusStrMaxLen = 20;
+
     enum FlashPartitionStatus : uint32_t {
-        kFlashPartitionStatusBlank = 0xFFFFFFFF,   // Freshly erased.
-        kFlashPartitionStatusNew = 0xFFADFFFF,     // Freshly flashed.
-        kFlashPartitionStatusStale = 0xDEADFFFF,   // Not the newest firmware, but OK to boot.
-        kFlashpartitionStatusInvalid = 0xDEADDEAD  // Do not boot.
+        kFlashPartitionStatusBlank = 0xFFFFFFFF,    // BLANK
+        kFlashPartitionStatusValid = 0xFFADFFFF,    // VALID
+        kFlashPartitionStatusStale = 0xDEADFFFF,    // STALE (Not the newest firmware, but OK to boot.)
+        kFlashPartitionStatusInvalid = 0xDEADDEAD,  // INVALID (Do not boot.)
     };
 
     struct __attribute__((__packed__)) FlashPartitionHeader {
@@ -85,6 +87,30 @@ class FirmwareUpdateManager {
                           "Can't boot partition %u, value must be less than %u.", partition, kNumPartitions);
             return;
         }
+
+        // Check header magic word.
+        uint32_t magic_word = flash_partition_headers[partition]->magic_word;
+        if (magic_word != FirmwareUpdateManager::kFlashHeaderMagicWord) {
+            CONSOLE_ERROR("FirmwareUpdateManager::BootPartition",
+                          "Can't boot partition %u, header has invalid magic word 0x%x (expected 0x%x).", partition,
+                          magic_word, FirmwareUpdateManager::kFlashHeaderMagicWord);
+            return;
+        }
+
+        // Check header status.
+        uint32_t status = flash_partition_headers[partition]->status;
+        switch (status) {
+            case kFlashPartitionStatusValid:
+            case kFlashPartitionStatusStale:
+                break;  // OK to boot these.
+            case kFlashPartitionStatusInvalid:
+            case kFlashPartitionStatusBlank:
+            default:
+                CONSOLE_ERROR("FirmwareUpdateManager::BootPartition", "Can't boot partition %u with status %u.",
+                              partition, status);
+                return;  // Not OK to boot these.
+        }
+
         DisableInterrupts();
         ResetPeripherals();
         JumpToVTOR(kFlashAppStartAddrs[partition]);
@@ -181,6 +207,31 @@ class FirmwareUpdateManager {
     static inline uint32_t FlashAddrToOffset(uint32_t flash_addr) { return flash_addr - kFlashBlStartAddr; }
 
     /**
+     * Converts flash partition status to a string.
+     * @param[in] status Flash partition status.
+     * @param[out] buf Buffer to write to. Must be at least kFlashPartitionStatusStrMaxLen long.
+     */
+    static inline void FlashPartitionStatusToStr(FlashPartitionStatus status, char *buf) {
+        switch (status) {
+            case kFlashPartitionStatusBlank:
+                strncpy(buf, "BLANK", kFlashPartitionStatusStrMaxLen);
+                break;
+            case kFlashPartitionStatusInvalid:
+                strncpy(buf, "INVALID", kFlashPartitionStatusStrMaxLen);
+                break;
+            case kFlashPartitionStatusStale:
+                strncpy(buf, "STALE", kFlashPartitionStatusStrMaxLen);
+                break;
+            case kFlashPartitionStatusValid:
+                strncpy(buf, "VALID", kFlashPartitionStatusStrMaxLen);
+                break;
+            default:
+                strncpy(buf, "UNKNOWN", kFlashPartitionStatusStrMaxLen);
+                break;
+        }
+    }
+
+    /**
      * Returns the index of the other flash partition (e.g. the one we can safely operate on).
      * @retval Index of the flash aprtition that is currently not being executed from.
      */
@@ -235,8 +286,10 @@ class FirmwareUpdateManager {
 
     /**
      * Calculates the CRC32 of a flash partition and confirms it matches the CRC32 provided in the header.
+     * @param[in] partition Index of partition to verify.
+     * @param[in] modify_header True to modify the status word with the verification result, false to not touch it.
      */
-    static inline bool VerifyFlashPartition(uint16_t partition) {
+    static inline bool VerifyFlashPartition(uint16_t partition, bool modify_header = false) {
         if (partition >= kNumPartitions) {
             CONSOLE_ERROR("FirmwareUpdateManager::VerifyFlashPartition",
                           "Can't verify flash partition %u, value must be less than %u.", partition, kNumPartitions);
@@ -249,6 +302,9 @@ class FirmwareUpdateManager {
                           "Flash partition %u is described by header as having %d Bytes, but maximum permissible size "
                           "is %d Bytes.",
                           partition, len_bytes, kFlashAppLenBytes);
+            if (modify_header) {
+                WriteHeaderStatusWord(partition, kFlashPartitionStatusInvalid);
+            }
             return false;
         }
         uint32_t calculated_crc = CalculateCRC32(flash_partition_apps[partition], len_bytes);
@@ -257,7 +313,15 @@ class FirmwareUpdateManager {
                 "FirmwareUpdateManager::VerifyFlashPartition",
                 "Flash partition %u (%d Bytes beginning at 0x%x) has calculated CRC 0x%x but header crc 0x%x.",
                 partition, len_bytes, flash_partition_apps[partition], calculated_crc, header_crc);
+            if (modify_header) {
+                WriteHeaderStatusWord(partition, kFlashPartitionStatusInvalid);
+            }
             return false;
+        }
+
+        // Verification passed: mark flash partition as valid.
+        if (modify_header) {
+            WriteHeaderStatusWord(partition, kFlashPartitionStatusValid);
         }
         return true;
     }
@@ -302,6 +366,19 @@ class FirmwareUpdateManager {
      * Restore interrupts from stored values. Call this after erasing flash or performing a boot jump.
      */
     static inline void RestoreInterrupts(void) { restore_interrupts(stored_interrupts_); }
+
+    /**
+     * Modifies the header status word of a flash partition header by re-writing the full header. Note that not all
+     * values are possible for the status word, since bits can only be flipped from 1->0 and not the other way around,
+     * without erasing the full sector.
+     * @param[in] partition Index of the partition to modify the header of.
+     * @param[in] status New status word to write.
+     */
+    static inline void WriteHeaderStatusWord(uint16_t partition, FlashPartitionStatus status) {
+        FlashPartitionHeader header = *(flash_partition_headers[partition]);  // Copy the existing header.
+        header.status = status;
+        PartialWriteFlashPartition(partition, 0, kFlashHeaderLenBytes, (uint8_t *)&header);
+    }
 
     static uint32_t stored_interrupts_;
 

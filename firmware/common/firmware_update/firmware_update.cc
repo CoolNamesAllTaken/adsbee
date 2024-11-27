@@ -1,6 +1,5 @@
 #include "firmware_update.hh"
 
-// Initialize static members.
 // Start addresses.
 const uint32_t FirmwareUpdateManager::kFlashHeaderStartAddrs[] = {
     FirmwareUpdateManager::kFlashBlStartAddr + FirmwareUpdateManager::kFlashBlLenBytes,
@@ -10,6 +9,7 @@ const uint32_t FirmwareUpdateManager::kFlashAppStartAddrs[] = {
     FirmwareUpdateManager::kFlashHeaderStartAddrs[0] + FirmwareUpdateManager::kFlashHeaderLenBytes,
     FirmwareUpdateManager::kFlashHeaderStartAddrs[1] + FirmwareUpdateManager::kFlashHeaderLenBytes};
 
+// Convenience arrays for accessing headers and apps.
 const FirmwareUpdateManager::FlashPartitionHeader
     *FirmwareUpdateManager::flash_partition_headers[FirmwareUpdateManager::kNumPartitions] = {
         (FirmwareUpdateManager::FlashPartitionHeader *)FirmwareUpdateManager::kFlashHeaderStartAddrs[0],
