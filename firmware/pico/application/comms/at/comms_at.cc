@@ -369,7 +369,7 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                 } else if (args[0].compare("GET_PARTITION") == 0) {
                     // Reply with the complementary flash partition number. This is used to select the correct flash
                     // partition from the OTA file.
-                    CPP_AT_CMD_PRINTF("Partition: %u", complementary_partition);
+                    CPP_AT_PRINTF("Partition: %u", complementary_partition);
                     CPP_AT_SUCCESS();
                 } else if (args[0].compare("WRITE") == 0) {
                     // Write a section of the complementary flash partition.
