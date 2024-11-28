@@ -110,6 +110,13 @@ class FirmwareUpdateManager {
                 return;  // Not OK to boot these.
         }
 
+        // Mark own partition as stale.
+        if (AmWithinFlashPartition(0)) {
+            WriteHeaderStatusWord(0, kFlashPartitionStatusStale);
+        } else if (AmWithinFlashPartition(1)) {
+            WriteHeaderStatusWord(1, kFlashPartitionStatusStale);
+        }  // else: Don't do anything in the bootloader.
+
         DisableInterruptsForJump();
         ResetPeripherals();
         JumpToVTOR(kFlashAppStartAddrs[partition]);
@@ -226,10 +233,16 @@ class FirmwareUpdateManager {
     }
 
     /**
-     * Returns the index of the other flash partition (e.g. the one we can safely operate on).
+     * Returns the index of the other flash partition (e.g. the one we can safely write / erase).
      * @retval Index of the flash aprtition that is currently not being executed from.
      */
     static inline uint16_t GetComplementaryFlashPartition() { return AmWithinFlashPartition(0) ? 1 : 0; }
+
+    /**
+     * Returns the index of the currently running flash partition (i.e. the one we are executing from).
+     * @retval Index of the flash aprtition that is currently being executed from.
+     */
+    static inline uint16_t GetOwnFlashPartition() { return AmWithinFlashPartition(0) ? 0 : 1; }
 
     /**
      * Read Bytes from a flash partition starting at offset bytes from the beginning, and copy them to the provided
