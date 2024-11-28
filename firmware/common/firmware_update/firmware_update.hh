@@ -324,6 +324,41 @@ class FirmwareUpdateManager {
             return false;
         }
 
+        // Do sanity checks on main stack pointer and reset vector.
+        uint32_t *vtor = (uint32_t *)(uintptr_t)(flash_partition_apps[partition]);
+        uint32_t msp = vtor[0];
+        uint32_t reset_vector = vtor[1];
+
+        // Stack pointer needs to be in RAM.
+        if (msp < SRAM_BASE) {
+            CONSOLE_ERROR("FirmwareUpdateManager::VerifyFlashPartition",
+                          "Flash partition %u has stack pointer 0x%x outside of RAM.", partition, msp);
+            if (modify_header) {
+                WriteHeaderStatusWord(partition, kFlashPartitionStatusInvalid);
+            }
+            return false;
+        }
+
+        // Reset vector should be in the image, and thumb (bit 0 set)
+        if ((reset_vector < (uint32_t)(flash_partition_apps[partition])) ||
+            (reset_vector > (uint32_t)(flash_partition_apps[partition]) + len_bytes)) {
+            CONSOLE_ERROR("FirmwareUpdateManager::VerifyFlashPartition",
+                          "Flash partition %u has reset vector 0x%x outside of image.", partition, reset_vector);
+            if (modify_header) {
+                WriteHeaderStatusWord(partition, kFlashPartitionStatusInvalid);
+            }
+            return false;
+        }
+
+        if (!(reset_vector & 1)) {
+            CONSOLE_ERROR("FirmwareUpdateManager::VerifyFlashPartition",
+                          "Flash partition %u has reset vector 0x%x not in thumb mode.", partition, reset_vector);
+            if (modify_header) {
+                WriteHeaderStatusWord(partition, kFlashPartitionStatusInvalid);
+            }
+            return false;
+        }
+
         // Verification passed: mark flash partition as valid.
         if (modify_header) {
             WriteHeaderStatusWord(partition, kFlashPartitionStatusValid);
@@ -364,6 +399,9 @@ class FirmwareUpdateManager {
         uint32_t reset_vector = *(volatile uint32_t *)(vtor + 0x04);
 
         SCB->VTOR = (volatile uint32_t)(vtor);
+
+        __DSB();  // Ensure VTOR write completes
+        __ISB();  // Flush pipeline
 
         asm volatile("msr msp, %0" ::"g"(*(volatile uint32_t *)vtor));
         asm volatile("bx %0" ::"r"(reset_vector));

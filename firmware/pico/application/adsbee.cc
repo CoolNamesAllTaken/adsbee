@@ -214,6 +214,16 @@ bool ADSBee::Init() {
     // Enable high power preamble detector.
     pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[kHighPowerDemodStateMachineIndex], true);
 
+    // Throw a fit if the watchdog caused a reboot.
+    if (watchdog_caused_reboot()) {
+        CONSOLE_WARNING("ADSBee::Init", "Watchdog caused reboot.");
+        DisableWatchdog();
+        SetStatusLED(true);
+        sleep_ms(5000);
+        SetStatusLED(false);
+        EnableWatchdog();
+    }
+
     return true;
 }
 

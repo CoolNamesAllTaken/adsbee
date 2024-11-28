@@ -58,7 +58,7 @@ def create_header_bin_contents(app_len_bytes, app_crc, status_valid=False):
     return hdr_bin_contents
 
 
-def generate_header(app_bin_filename, asm_section=None, ota_filename=None):
+def generate_header(app_bin_filenames, asm_section=None, ota_filename=None):
     """
     Generate a header binary and corresponding assembly file which includes the following:
         0xAD5BEEE
@@ -66,49 +66,86 @@ def generate_header(app_bin_filename, asm_section=None, ota_filename=None):
         app_size_bytes (uint32_t)
         app_crc (uint32_t)
         status (uint32_t)
+
+    @param[in] app_bin_filenames List of binary filenames to generate headers for.
+    @param[in] asm_section Section name to use for the assembly file.
+    @param[in] ota_filename Filename to write the OTA file to. If None, no OTA file will be generated.
     """
-    # application.bin includes a 256-Byte stage 2 bootloader to amke it bootable on its own.
-    # Remove this when creating the OTA file, since it's already baked into the bootloader binary.
-    STAGE_2_BOOTLOADER_LEN_BYTES = 256
 
-    print(f"Generating header for {app_bin_filename}")
+    print(f"Generating headers for " + ", ".join(app_bin_filenames) + ".")
 
-    with open(app_bin_filename, 'rb') as f:
-        app_bin_contents = f.read()
-    app_bin_contents = app_bin_contents[STAGE_2_BOOTLOADER_LEN_BYTES:]
-    print(f"\tapp_bin_contents: " + ", ".join([f"{app_bin_contents[i]:x}" for i in range(10)]) + "..." + ", ".join([f"{app_bin_contents[i]:x}" for i in range(-11,-1)]))
+    # List of bytearrays to hold header and OTA app binary contents for each partition.
+    ota_partition_contents = []
+
+    for i in range(len(app_bin_filenames)):
+        app_bin_filename = app_bin_filenames[i]
+        print(f"Reading {app_bin_filename}.")
+        if not os.path.exists(app_bin_filename):
+            print(f"Error: {app_bin_filename} does not exist.")
+            sys.exit(1)
+        with open(app_bin_filename, 'rb') as f:
+            app_bin_contents = f.read()
+        # print(f"\tapp_bin_contents: " + ", ".join([f"{app_bin_contents[i]:x}" for i in range(10)]) + "..." + ", ".join([f"{app_bin_contents[i]:x}" for i in range(-11,-1)]))
     
-    app_crc = calculate_crc32(app_bin_contents)
-    print(f"\tCalculated CRC32 for {app_bin_filename} ({len(app_bin_contents)} Bytes): 0x{app_crc:x}")
+        app_crc = calculate_crc32(app_bin_contents)
+        print(f"\tCalculated CRC32 for {app_bin_filename} ({len(app_bin_contents)} Bytes): 0x{app_crc:x}")
 
-    # Create a header with the status Byte forced to valid to skip the CRC check in the bootloader
-    # (header CRC from application.bin does not match the CRC calculated from the contents flashed by combined.elf).
-    hdr_bin_contents = create_header_bin_contents(len(app_bin_contents), app_crc, status_valid=True)
+        app_bin_dir = os.path.dirname(app_bin_filename)
 
-    # app_bin_basename = os.path.splitext(os.path.basename(app_bin_filename))[0]
-    app_bin_dir = os.path.dirname(app_bin_filename)
-    hdr_bin_filename = os.path.join(app_bin_dir, f"{asm_section}.bin")
-    hdr_asm_filename = os.path.join(app_bin_dir, f"{asm_section}.S")
+        # Special case: assume the first application binary is used for debugging, so we should create an assembly file
+        # for it with the CRC check skipped.
+        if i == 0:
+            hdr_bin_filename = os.path.join(app_bin_dir, f"{asm_section}.bin")
+            hdr_asm_filename = os.path.join(app_bin_dir, f"{asm_section}.S")
+            # Create a header with the status Byte forced to valid to skip the CRC check in the bootloader
+            # (header CRC from application.bin does not match the CRC calculated from the contents flashed by combined.elf).
+            hdr_bin_contents = create_header_bin_contents(len(app_bin_contents), app_crc, status_valid=True)
 
-    print(f"\tWriting {len(hdr_bin_contents)} Bytes to {hdr_bin_filename}.")
-    with open(hdr_bin_filename, 'wb') as f:
-        f.write(hdr_bin_contents)
+            print(f"\tWriting {len(hdr_bin_contents)} Bytes to {hdr_bin_filename}.")
+            with open(hdr_bin_filename, 'wb') as f:
+                f.write(hdr_bin_contents)
     
-    if asm_section is not None:
-        print(f"\tConverting header file to assembly as {hdr_asm_filename}.")
-        bin_file_to_asm_file(hdr_bin_filename, hdr_asm_filename, asm_section)
+            if asm_section is not None:
+                print(f"\tConverting header file to assembly as {hdr_asm_filename}.")
+                bin_file_to_asm_file(hdr_bin_filename, hdr_asm_filename, asm_section)
     
-    if ota_filename is not None:
         # Don't mark header as valid for OTA files in order to force a checksum validation before booting.
         ota_hdr_bin_contents = create_header_bin_contents(len(app_bin_contents), app_crc, status_valid=False)
+        ota_partition_contents.append(ota_hdr_bin_contents + app_bin_contents)
+
+    # Package the header and application binaries for each partition into an OTA file.
+    if ota_filename is not None:
+        # OTA File Contents:
+        #   NUM_PARTITIONS (4 Bytes)
+        #   PARTITION_0_0FFSET (4 Bytes)
+        #   PARTITION_1_OFFSET (4 Bytes)
+        #   PARTITION 0 HEADER (4 Bytes)
+        #   PARTITION 0 APP (4 Bytes)
+        #   PARTITION 1 HEADER (4 Bytes)
+        #   PARTITION 1 APP (4 Bytes)
+
+        ota_file_contents = bytearray(4)
+        num_partitions = len(ota_partition_contents)
+        print(f"Writing {num_partitions} partitions to {ota_filename}.")
+        struct.pack_into('<I', ota_file_contents, 0, num_partitions)
+        partition_lengths = [len(part) for part in ota_partition_contents]
+        # Add array of offsets.
+        current_offset = 4 + 4*num_partitions
+        for i in range(num_partitions):
+            print(f"\tPartition {i} offset: {current_offset} Bytes.")
+            ota_file_contents.extend(struct.pack('<I', current_offset))
+            current_offset += partition_lengths[i]
+        # Add array of partition headers and app binaries.
+        for i in range(num_partitions):
+            ota_file_contents.extend(ota_partition_contents[i])
+            
         with open(ota_filename, 'wb') as f:
-            f.write(ota_hdr_bin_contents)
-            f.write(app_bin_contents)
+            f.write(ota_file_contents)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="CRC tools.")
-    parser.add_argument("filename")
+    parser.add_argument("filenames", nargs='+', help="List of binary filenames.")
     parser.add_argument("--header", help="Generate a binary header, then turn it into an assembly header with the provided section name.")
     parser.add_argument("--ota", help="Generate a .ota file that combines the header and application binary.")
 
@@ -116,7 +153,7 @@ if __name__ == '__main__':
 
     if args.header:
         # Generate header binary and assembly files.
-        generate_header(args.filename, args.header, args.ota)
+        generate_header(args.filenames, args.header, args.ota)
     else:
         # Just calculate CRC of a binary.
         with open(args.filename, 'rb') as f:

@@ -347,9 +347,8 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     status_str);
                 CPP_AT_PRINTF("\t\tStatus: %s (0x%x)\r\n", status_str,
                               FirmwareUpdateManager::flash_partition_headers[partition]->status);
-                CPP_AT_PRINTF(
-                    "\t\tCRC %s with header.\r\n",
-                    FirmwareUpdateManager::VerifyFlashPartition(partition, false) ? "matches" : "does not match");
+                CPP_AT_PRINTF("\t\tSector %s verification.\r\n",
+                              FirmwareUpdateManager::VerifyFlashPartition(partition, false) ? "PASSED" : "FAILED");
             }
             CPP_AT_SILENT_SUCCESS();
             break;
@@ -366,6 +365,11 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     if (!flash_erase_succeeded) {
                         CPP_AT_ERROR("Failed to erase complmentary flash partition.");
                     }
+                    CPP_AT_SUCCESS();
+                } else if (args[0].compare("GET_PARTITION") == 0) {
+                    // Reply with the complementary flash partition number. This is used to select the correct flash
+                    // partition from the OTA file.
+                    CPP_AT_CMD_PRINTF("Partition: %u", complementary_partition);
                     CPP_AT_SUCCESS();
                 } else if (args[0].compare("WRITE") == 0) {
                     // Write a section of the complementary flash partition.

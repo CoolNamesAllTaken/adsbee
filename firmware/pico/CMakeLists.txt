@@ -12,6 +12,8 @@ set(ADSBEE_MODULES_DIR "${CMAKE_SOURCE_DIR}/../modules")
 # TODO: Change these linker scripts as they get populated.
 set(BOOTLOADER_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/bootloader.ld")
 set(APPLICATION_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/application.ld")
+set(APP0_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/app0.ld")
+set(APP1_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/app1.ld")
 set(COMBINED_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/combined.ld")
 
 set(BOOTLOADER_SECTION_NAME boot3)
