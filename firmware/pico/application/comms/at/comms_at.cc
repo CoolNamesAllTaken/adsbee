@@ -331,12 +331,13 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
             for (uint16_t partition = 0; partition < FirmwareUpdateManager::kNumPartitions; partition++) {
                 if (FirmwareUpdateManager::flash_partition_headers[partition]->magic_word !=
                     FirmwareUpdateManager::kFlashHeaderMagicWord) {
-                    CPP_AT_PRINTF("\tNO VALID HEADER\r\n");
+                    CPP_AT_PRINTF("\t\tNO VALID HEADER\r\n");
                     continue;
                 }
-                CPP_AT_PRINTF("\t===Partition %u===\r\n\tLength: %u Bytes\r\n", partition,
+                CPP_AT_PRINTF("\tPartition %u %s\r\n\t\tLength: %u Bytes\r\n", partition,
+                              FirmwareUpdateManager::AmWithinFlashPartition(partition) ? "(ACTIVE)" : "",
                               FirmwareUpdateManager::flash_partition_headers[partition]->app_size_bytes);
-                CPP_AT_PRINTF("\tApplication CRC: 0x%x\r\n",
+                CPP_AT_PRINTF("\t\tApplication CRC: 0x%x\r\n",
                               FirmwareUpdateManager::flash_partition_headers[partition]->app_crc);
                 char status_str[FirmwareUpdateManager::kFlashPartitionStatusStrMaxLen];
                 FirmwareUpdateManager::FlashPartitionStatusToStr(
@@ -344,12 +345,11 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         FirmwareUpdateManager::flash_partition_headers[partition]
                             ->status,
                     status_str);
-                CPP_AT_PRINTF("\tStatus: %s (0x%x)\r\n", status_str,
+                CPP_AT_PRINTF("\t\tStatus: %s (0x%x)\r\n", status_str,
                               FirmwareUpdateManager::flash_partition_headers[partition]->status);
-                CPP_AT_PRINTF("\tCRC %s with header.\r\n", FirmwareUpdateManager::VerifyFlashPartition(partition, false)
-                                                               ? "matches"
-                                                               : "does not match");
-                CPP_AT_PRINTF("\t===============\r\n");
+                CPP_AT_PRINTF(
+                    "\t\tCRC %s with header.\r\n",
+                    FirmwareUpdateManager::VerifyFlashPartition(partition, false) ? "matches" : "does not match");
             }
             CPP_AT_SILENT_SUCCESS();
             break;
@@ -359,7 +359,11 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                 if (args[0].compare("ERASE") == 0) {
                     // Erase the complementary flash partition.
                     CPP_AT_PRINTF("Erasing partition %d.\r\n", complementary_partition);
-                    if (!FirmwareUpdateManager::EraseFlashParition(complementary_partition)) {
+                    // Flash erase can take a while, prevent watchdog from rebooting us during erase!
+                    adsbee.DisableWatchdog();
+                    bool flash_erase_succeeded = FirmwareUpdateManager::EraseFlashParition(complementary_partition);
+                    adsbee.EnableWatchdog();
+                    if (!flash_erase_succeeded) {
                         CPP_AT_ERROR("Failed to erase complmentary flash partition.");
                     }
                     CPP_AT_SUCCESS();
@@ -403,8 +407,12 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     }
                     CPP_AT_PRINTF("Writing %u Bytes to partition %u at offset 0x%x.\r\n", len_bytes,
                                   complementary_partition, offset);
-                    if (!FirmwareUpdateManager::PartialWriteFlashPartition(complementary_partition, offset, len_bytes,
-                                                                           buf)) {
+                    adsbee.DisableWatchdog();  // Flash write can take a while, prevent watchdog from rebooting us
+                    // during write!
+                    bool flash_write_succeeded = FirmwareUpdateManager::PartialWriteFlashPartition(
+                        complementary_partition, offset, len_bytes, buf);
+                    adsbee.EnableWatchdog();
+                    if (!flash_write_succeeded) {
                         CPP_AT_ERROR("Partial %u Byte write failed in partition %u at offset 0x%x.", len_bytes,
                                      complementary_partition, offset);
                     }
@@ -438,7 +446,9 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                 } else if (args[0].compare("BOOT") == 0) {
                     // Boot the complementary flash partition.
                     CPP_AT_PRINTF("Booting partition %u...", complementary_partition);
+                    adsbee.DisableWatchdog();
                     FirmwareUpdateManager::BootPartition(complementary_partition);
+                    adsbee.EnableWatchdog();
                     CPP_AT_ERROR("Failed to boot partition %u.", complementary_partition);
                 }
             }

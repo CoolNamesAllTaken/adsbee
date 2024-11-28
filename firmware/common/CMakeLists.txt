@@ -27,10 +27,11 @@ if (TARGET application)
     )
 elseif (TARGET bootloader)
     target_sources(bootloader PRIVATE
-        
+        firmware_update/firmware_update.cc
     )
     target_include_directories(bootloader PRIVATE
         utils # We just want hal.hh for now.
+        firmware_update
     )
 elseif (TARGET host_test)
     target_sources(host_test PRIVATE

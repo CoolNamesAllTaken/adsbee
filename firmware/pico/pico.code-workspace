@@ -100,7 +100,7 @@
 			"uart.h": "c",
 			"settings.hh": "c"
 		},
-		"cortex-debug.variableUseNaturalFormat": true,
+		"cortex-debug.variableUseNaturalFormat": false,
 		// "cortex-debug.variableUseNaturalFormat": true,
 	},
 	"launch": {

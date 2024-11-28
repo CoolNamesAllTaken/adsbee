@@ -1,8 +1,7 @@
 
 #ifdef ON_PICO
 #include "RP2040.h"
-#include "adsbee.hh"  // For watchdog access.
-#include "comms.hh"   // For errors.
+#include "comms.hh"  // For errors.
 #include "hal.hh"
 #include "hardware/dma.h"  // for CRC32 calculation
 #include "hardware/flash.h"
@@ -111,7 +110,7 @@ class FirmwareUpdateManager {
                 return;  // Not OK to boot these.
         }
 
-        DisableInterrupts();
+        DisableInterruptsForJump();
         ResetPeripherals();
         JumpToVTOR(kFlashAppStartAddrs[partition]);
     }
@@ -169,12 +168,9 @@ class FirmwareUpdateManager {
      * @param[in] partition Partition index to erase. Must be < kNumPartitions.
      */
     static inline bool EraseFlashParition(uint16_t partition) {
-        adsbee.DisableWatchdog();  // Flash erase can take a while, prevent watchdog from rebooting us during erase!
-
         if (partition >= kNumPartitions) {
             CONSOLE_ERROR("FirmwareUpdateManager::EraseFlashPartition",
                           "Can't erase partition %u, value must be less than %u.", partition, kNumPartitions);
-            adsbee.EnableWatchdog();
             return false;
         }
         uint32_t bytes_to_erase = kFlashHeaderLenBytes + kFlashAppLenBytes;
@@ -194,8 +190,6 @@ class FirmwareUpdateManager {
             RestoreInterrupts();
             remaining_sectors_to_erase -= num_sectors_to_erase;
         }
-
-        adsbee.EnableWatchdog();
         return true;
     }
 
@@ -276,11 +270,22 @@ class FirmwareUpdateManager {
                           kFlashHeaderLenBytes + kFlashAppLenBytes);
             return false;
         }
-        adsbee.DisableWatchdog();
+        uint32_t padded_len_bytes = len_bytes + FLASH_PAGE_SIZE - (len_bytes % FLASH_PAGE_SIZE);
         DisableInterrupts();
-        flash_range_program(FlashAddrToOffset(kFlashHeaderStartAddrs[partition]) + offset, buf, len_bytes);
+        if (padded_len_bytes != len_bytes) {
+            CONSOLE_WARNING("FirmwareUpdateManager::PartialWriteFlashPartition",
+                            "Length %u is not a multiple of flash sector size %u Bytes.", len_bytes, FLASH_PAGE_SIZE);
+            uint8_t padded_buf[padded_len_bytes];
+            memcpy(padded_buf, buf, len_bytes);
+            memset(padded_buf + len_bytes, 0xFF, padded_len_bytes - len_bytes);  // Pad the extra with 0xFF.
+
+            flash_range_program(FlashAddrToOffset(kFlashHeaderStartAddrs[partition]) + offset, padded_buf,
+                                padded_len_bytes);
+        } else {
+            // Buffer was already sector-aligned.
+            flash_range_program(FlashAddrToOffset(kFlashHeaderStartAddrs[partition]) + offset, buf, len_bytes);
+        }
         RestoreInterrupts();
-        adsbee.EnableWatchdog();
         return true;
     }
 
@@ -299,8 +304,8 @@ class FirmwareUpdateManager {
         uint32_t len_bytes = flash_partition_headers[partition]->app_size_bytes;
         if (len_bytes > kFlashAppLenBytes) {
             CONSOLE_ERROR("FirmwareUpdateManager::VerifyFlashPartition",
-                          "Flash partition %u is described by header as having %d Bytes, but maximum permissible size "
-                          "is %d Bytes.",
+                          "Flash partition %u is described by header as having %u Bytes, but maximum permissible size "
+                          "is %u Bytes.",
                           partition, len_bytes, kFlashAppLenBytes);
             if (modify_header) {
                 WriteHeaderStatusWord(partition, kFlashPartitionStatusInvalid);
@@ -331,10 +336,20 @@ class FirmwareUpdateManager {
 
    private:
     /**
-     * Disable interrupts and store them for use in a restore command. Call this before erasing flash or performing
-     * boot jumps.
+     * Disable interrupts and store them for use in a restore command. Call this for TEMPORARILY disabling interrupts,
+     * like during flash operations.
      */
     static inline void DisableInterrupts(void) { stored_interrupts_ = save_and_disable_interrupts(); }
+
+    /**
+     * Permanently disable interrupts, for use before jumping to a new application.
+     */
+    static inline void DisableInterruptsForJump(void) {
+        SysTick->CTRL &= ~1;
+
+        NVIC->ICER[0] = 0xFFFFFFFF;
+        NVIC->ICPR[0] = 0xFFFFFFFF;
+    }
 
     /**
      * Jumps to an address in XIP flash.
@@ -377,7 +392,7 @@ class FirmwareUpdateManager {
     static inline void WriteHeaderStatusWord(uint16_t partition, FlashPartitionStatus status) {
         FlashPartitionHeader header = *(flash_partition_headers[partition]);  // Copy the existing header.
         header.status = status;
-        PartialWriteFlashPartition(partition, 0, kFlashHeaderLenBytes, (uint8_t *)&header);
+        PartialWriteFlashPartition(partition, 0, sizeof(FlashPartitionHeader), (uint8_t *)&header);
     }
 
     static uint32_t stored_interrupts_;

@@ -24,8 +24,6 @@
 
 #include "comms.hh"  // For debug prints.
 
-const uint16_t kStatusLEDBootupNumBlinks = 4;
-const uint16_t kStatusLEDBootupBlinkPeriodMs = 200;
 constexpr float kPreambleDetectorFreq = 48e6;    // Running at 48MHz (24 clock cycles per half bit).
 constexpr float kMessageDemodulatorFreq = 48e6;  // Run at 48 MHz to demodulate bits at 1Mbps.
 
@@ -77,7 +75,7 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
 bool ADSBee::Init() {
     gpio_init(config_.status_led_pin);
     gpio_set_dir(config_.status_led_pin, GPIO_OUT);
-    gpio_put(config_.status_led_pin, 1);  // Leave status LED on during configuration in case something hangs.
+    gpio_put(config_.status_led_pin, 0);
 
     // Initialize the TL bias PWM output.
     gpio_set_function(config_.tl_pwm_pin, GPIO_FUNC_PWM);
@@ -216,14 +214,6 @@ bool ADSBee::Init() {
     // Enable high power preamble detector.
     pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[kHighPowerDemodStateMachineIndex], true);
 
-    // Blink the LED a few times to indicate a successful startup.
-    for (uint16_t i = 0; i < kStatusLEDBootupNumBlinks; i++) {
-        gpio_put(config_.status_led_pin, 1);
-        sleep_ms(kStatusLEDBootupBlinkPeriodMs / 2);
-        gpio_put(config_.status_led_pin, 0);
-        sleep_ms(kStatusLEDBootupBlinkPeriodMs / 2);
-    }
-
     return true;
 }
 
@@ -338,7 +328,7 @@ bool ADSBee::Update() {
 }
 
 void ADSBee::FlashStatusLED(uint32_t led_on_ms) {
-    gpio_put(config_.status_led_pin, 1);
+    SetStatusLED(true);
     led_on_timestamp_ms_ = get_time_since_boot_ms();
 }
 

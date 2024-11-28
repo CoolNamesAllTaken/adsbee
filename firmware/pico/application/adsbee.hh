@@ -232,6 +232,12 @@ class ADSBee {
     }
 
     /**
+     * Sets the status LED to a given state. Does not record timestamps for turning off the LED.
+     * @param[in] on True to turn on the LED, false to turn it off.
+     */
+    inline void SetStatusLED(bool on) { gpio_put(config_.status_led_pin, on ? 1 : 0); }
+
+    /**
      * Set the Minimum Trigger Level (TL) at the AD8314 output in milliVolts.
      * @param[in] tl_mv Voltage in milliVolts at the top of the pullup for the LEVEL net in the data slicer. Pull higher
      * to accommodate a higher noise floor without false triggers.

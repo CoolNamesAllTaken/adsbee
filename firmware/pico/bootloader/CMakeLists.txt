@@ -3,10 +3,9 @@ if (ON_EMBEDDED_DEVICE)
 
     add_subdirectory(${ADSBEE_COMMON_DIR} ${CMAKE_BINARY_DIR}/bootloader/adsbee_common)
 
-    # target_include_directories(bootloader PRIVATE 
-    #     ${CMAKE_SOURCE_DIR}/../modules/cppAT/src
-    #     ${CMAKE_SOURCE_DIR}/../modules/cppAT/settings
-    # )
+    target_include_directories(bootloader PRIVATE 
+        .
+    )
     # target_sources(bootloader PRIVATE
     #     ${CMAKE_SOURCE_DIR}/../modules/cppAT/src/cpp_at.cc
     # )
@@ -26,11 +25,13 @@ if (ON_EMBEDDED_DEVICE)
         # hardware_dma # for checksums
 
         pico_stdlib
+
         hardware_dma
         hardware_flash
         hardware_structs
+        hardware_sync # for flashing stuff
         hardware_resets
-        cmsis_core
+        cmsis_core # for bootloader regs
     )
 
     pico_add_bin_output(bootloader)

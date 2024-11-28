@@ -2,6 +2,7 @@
 #include "comms.hh"
 #include "eeprom.hh"
 #include "esp32_flasher.hh"
+#include "firmware_update.hh"  // For figuring out which flash partition we're in.
 #include "hal.hh"
 #include "hardware_unit_tests.hh"  // For testing only!
 #include "pico/binary_info.h"
@@ -12,6 +13,7 @@
 // For testing only
 #include "hardware/gpio.h"
 
+const uint16_t kStatusLEDBootupBlinkPeriodMs = 200;
 const uint32_t kESP32BootupTimeoutMs = 10000;
 const uint32_t kESP32BootupCommsRetryMs = 500;
 
@@ -35,6 +37,15 @@ int main() {
                                  object_dictionary.kFirmwareVersionPatch);
 
     settings_manager.Load();
+
+    uint16_t num_status_led_blinks = FirmwareUpdateManager::AmWithinFlashPartition(0) ? 1 : 2;
+    // Blink the LED a few times to indicate a successful startup.
+    for (uint16_t i = 0; i < num_status_led_blinks; i++) {
+        adsbee.SetStatusLED(true);
+        sleep_ms(kStatusLEDBootupBlinkPeriodMs / 2);
+        adsbee.SetStatusLED(false);
+        sleep_ms(kStatusLEDBootupBlinkPeriodMs / 2);
+    }
 
     // If WiFi is enabled, try establishing communication with the ESP32 and maybe update its firmware.
     if (esp32.IsEnabled()) {
