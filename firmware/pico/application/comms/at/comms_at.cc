@@ -22,8 +22,12 @@
 // #include "printf.h" // for using custom printf defined in printf.h
 #include <cstdio>  // for using regular printf
 
-const uint32_t kDeviceInfoProgrammingPassword = 0xDEDBEEF;  // This is intended to stop people from accidentally
-                                                            // modifying serial number information on their device.
+// This is intended to stop people from accidentally modifying serial number information on their device.
+const uint32_t kDeviceInfoProgrammingPassword = 0xDEDBEEF;
+// Polling interval during OTA update. Faster than the normal ESP32 heartbeat for better transfer bandwidth.
+// Heartbeat is required since the ESP32 firmware won't hand off the SPI mutex until it gets poked, so it needs a
+// heartbeat between each message (no ACK required).
+const uint32_t kOTAHeartbeatMs = 5;
 
 /** CppAT Printf Override **/
 int CppAT::cpp_at_printf(const char *format, ...) {
@@ -374,7 +378,7 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                 } else if (args[0].compare("GET_PARTITION") == 0) {
                     // Reply with the complementary flash partition number. This is used to select the correct flash
                     // partition from the OTA file.
-                    CPP_AT_PRINTF("Partition: %u", complementary_partition);
+                    CPP_AT_PRINTF("Partition: %u\r\n", complementary_partition);
                     CPP_AT_SUCCESS();
                 } else if (args[0].compare("WRITE") == 0) {
                     // Write a section of the complementary flash partition.
@@ -386,6 +390,7 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     uint32_t buf_len_bytes = 0;
                     uint32_t timestamp_ms = get_time_since_boot_ms();
                     uint32_t data_read_start_timestamp_ms = timestamp_ms;
+                    uint32_t last_ota_heartbeat_timestamp_ms = timestamp_ms;
                     // Read len_bytes from stdio and network console. Timeout after kOTAWriteTimeoutMs.
                     while (buf_len_bytes < len_bytes) {
                         // Priority 1: Check STDIO for data.
@@ -398,20 +403,30 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         }
 
                         // Priority 2: Check network console for data.
-                        char network_console_byte;
-                        bool network_console_had_byte = esp32_console_rx_queue.Pop(network_console_byte);
-                        if (network_console_had_byte) {
-                            buf[buf_len_bytes] = network_console_byte;
-                            buf_len_bytes++;
-                            continue;  // Don't refresh timestamp as long as data is being actively
-                                       // received.
+                        if (esp32.IsEnabled()) {
+                            char network_console_byte;
+                            bool network_console_had_byte = esp32_console_rx_queue.Pop(network_console_byte);
+                            if (network_console_had_byte) {
+                                buf[buf_len_bytes] = network_console_byte;
+                                buf_len_bytes++;
+                                continue;  // Don't refresh timestamp as long as data is being actively
+                                           // received.
+                            }
+
+                            // Didn't receive any Bytes. Refresh network console and update timeout timestamp.
+                            // esp32.Update();
+                            // Poll the ESP32 by sending a heartbeat message (no ACK required) get the ESP32 firmware to
+                            // release the SPI mutex to the task that's forwarding data from the network console.
+                            if (timestamp_ms - last_ota_heartbeat_timestamp_ms > kOTAHeartbeatMs) {
+                                esp32.Write(ObjectDictionary::kAddrScratch, timestamp_ms, false);
+                                last_ota_heartbeat_timestamp_ms = timestamp_ms;
+                            }
                         }
 
-                        // Didn't receive any Bytes. Refresh network console and update timeout timestamp.
-                        esp32.Update();
                         timestamp_ms = get_time_since_boot_ms();
                         if (timestamp_ms - data_read_start_timestamp_ms > kOTAWriteTimeoutMs) {
-                            CPP_AT_ERROR("Timed out after %u ms.", timestamp_ms - data_read_start_timestamp_ms);
+                            CPP_AT_ERROR("Timed out after %u ms. Received %u Bytes.",
+                                         timestamp_ms - data_read_start_timestamp_ms, buf_len_bytes);
                         }
                     }
                     CPP_AT_PRINTF("Writing %u Bytes to partition %u at offset 0x%x.\r\n", len_bytes,
@@ -473,7 +488,7 @@ CPP_AT_HELP_CALLBACK(CommsManager::ATOTAHelpCallback) {
         "complete.\r\n\tAT+OTA=WRITE,<offset>,<num_bytes>,<checksum>\r\n\tBegin an "
         "OTA write operation of num_bytes to offset bytes from the start of the partition with provided CRC32 "
         "checksum. Will respond with BEGIN, and then OK when complete, or ERROR if checksum doesn't match or timeout "
-        "reached.");
+        "reached.\r\n");
 }
 
 CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
@@ -936,24 +951,6 @@ bool CommsManager::UpdateAT() {
                 at_parser_.ParseMessage(std::string_view(esp32_console_rx_buf));
                 esp32_console_rx_buf_len = 0;
                 esp32_console_rx_buf[esp32_console_rx_buf_len] = '\0';  // clear command buffer
-            }
-        }
-
-        // Send outgoing network console characters.
-        char esp32_console_tx_buf[SPICoprocessor::SCWritePacket::kDataMaxLenBytes];
-        while (esp32_console_tx_queue.Length() > 0) {
-            uint16_t message_len = 0;
-            for (; message_len < SPICoprocessor::SCWritePacket::kDataMaxLenBytes && esp32_console_tx_queue.Pop(c);
-                 message_len++) {
-                esp32_console_tx_buf[message_len] = c;
-            }
-            // Ran out of characters to send, or hit the max packet length.
-            if (message_len > 0) {
-                // Don't send empty messages.
-                if (!esp32.Write(ObjectDictionary::kAddrConsole, esp32_console_tx_buf, true, message_len)) {
-                    // Don't enter infinite loop of error messages if writing to the ESP32 isn't working.
-                    break;
-                }
             }
         }
     }

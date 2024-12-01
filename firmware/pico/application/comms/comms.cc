@@ -33,7 +33,32 @@ bool CommsManager::Init() {
 
 bool CommsManager::Update() {
     UpdateAT();
+    UpdateNetworkConsole();
     UpdateReporting();
+    return true;
+}
+
+bool CommsManager::UpdateNetworkConsole() {
+    if (esp32.IsEnabled()) {
+        // Send outgoing network console characters.
+        char esp32_console_tx_buf[SPICoprocessor::SCWritePacket::kDataMaxLenBytes];
+        char c = '\0';
+        while (esp32_console_tx_queue.Length() > 0) {
+            uint16_t message_len = 0;
+            for (; message_len < SPICoprocessor::SCWritePacket::kDataMaxLenBytes && esp32_console_tx_queue.Pop(c);
+                 message_len++) {
+                esp32_console_tx_buf[message_len] = c;
+            }
+            // Ran out of characters to send, or hit the max packet length.
+            if (message_len > 0) {
+                // Don't send empty messages.
+                if (!esp32.Write(ObjectDictionary::kAddrConsole, esp32_console_tx_buf, true, message_len)) {
+                    // Don't enter infinite loop of error messages if writing to the ESP32 isn't working.
+                    break;
+                }
+            }
+        }
+    }
     return true;
 }
 
@@ -66,6 +91,8 @@ int CommsManager::iface_vprintf(SettingsManager::SerialInterface iface, const ch
     char buf[kPrintfBufferMaxSize];
 
     int res = vsnprintf(buf, kPrintfBufferMaxSize, format, args);
+    // Need to manually push messages here, otherwise they only pop out when the buffer gets full.
+    comms_manager.UpdateNetworkConsole();
 
     if (res <= 0) {
         return res;  // vsnprintf failed.

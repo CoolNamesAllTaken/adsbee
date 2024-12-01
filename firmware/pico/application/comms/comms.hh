@@ -11,6 +11,7 @@
 class CommsManager {
    public:
     static const uint16_t kATCommandBufMaxLen = 1000;
+    static const uint16_t kNetworkConsoleBufMaxLen = 4096;
     static const uint16_t kPrintfBufferMaxSize = 500;
     static const uint32_t kRawReportingIntervalMs = 50;  // Report packets internally at 20Hz.
     static const uint32_t kMAVLINKReportingIntervalMs = 1000;
@@ -30,8 +31,26 @@ class CommsManager {
     };
 
     CommsManager(CommsManagerConfig config_in);
+
+    /**
+     * Initialize the CommsManager. Sets up UARTs and other necessary peripherals.
+     * @retval True if initialization succeeded, false otherwise.
+     */
     bool Init();
+
+    /**
+     * Update the CommsManager. Runs all the update subroutines required for normal operation.
+     * @retval True if update succeeded, false otherwise.
+     */
     bool Update();
+
+    /**
+     * Update incoming and outgoing buffers for the ESP32 network console. Called as part of Update(), or can be called
+     * separately if desired (e.g. while printing to the console without forwarding incoming data to the AT command
+     * parser).
+     * @retval True if update succeeded, false otherwise.
+     */
+    bool UpdateNetworkConsole();
 
     CPP_AT_CALLBACK(ATBaudrateCallback);
     CPP_AT_CALLBACK(ATBiasTeeEnableCallback);
@@ -150,9 +169,9 @@ class CommsManager {
 
     // Queues for incoming / outgoing network characters.
     PFBQueue<char> esp32_console_rx_queue =
-        PFBQueue<char>({.buf_len_num_elements = kATCommandBufMaxLen, .buffer = esp32_console_rx_queue_buffer_});
+        PFBQueue<char>({.buf_len_num_elements = kNetworkConsoleBufMaxLen, .buffer = esp32_console_rx_queue_buffer_});
     PFBQueue<char> esp32_console_tx_queue =
-        PFBQueue<char>({.buf_len_num_elements = kATCommandBufMaxLen, .buffer = esp32_console_tx_queue_buffer_});
+        PFBQueue<char>({.buf_len_num_elements = kNetworkConsoleBufMaxLen, .buffer = esp32_console_tx_queue_buffer_});
 
     // Public WiFi Settings
     bool wifi_ap_enabled, wifi_sta_enabled;
@@ -219,8 +238,8 @@ class CommsManager {
     CppAT at_parser_;
 
     // Queues for incoming / outgoing network console characters.
-    char esp32_console_rx_queue_buffer_[kATCommandBufMaxLen];
-    char esp32_console_tx_queue_buffer_[kATCommandBufMaxLen];
+    char esp32_console_rx_queue_buffer_[kNetworkConsoleBufMaxLen];
+    char esp32_console_tx_queue_buffer_[kNetworkConsoleBufMaxLen];
 
     // Queue for holding new transponder packets before they get reported.
     DecodedTransponderPacket transponder_packet_reporting_queue_buffer_[ADSBee::kMaxNumTransponderPackets];
