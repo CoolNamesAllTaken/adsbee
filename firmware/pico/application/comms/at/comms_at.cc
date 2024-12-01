@@ -313,9 +313,13 @@ CPP_AT_CALLBACK(CommsManager::ATFlashESP32Callback) {
     if (!esp32.DeInit()) {
         CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while de-initializing ESP32 before flashing.");
     }
-    if (!esp32_flasher.FlashESP32()) {
+    adsbee.DisableWatchdog();
+    bool flashed_successfully = esp32_flasher.FlashESP32();
+    adsbee.EnableWatchdog();
+    if (!flashed_successfully) {
         CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while flashing ESP32.");
     }
+
     if (!esp32.Init()) {
         CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while re-initializing ESP32 after flashing.");
     }
@@ -329,13 +333,14 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
         case '?':
             CPP_AT_PRINTF("Flash Partition Information\r\n");
             for (uint16_t partition = 0; partition < FirmwareUpdateManager::kNumPartitions; partition++) {
+                CPP_AT_PRINTF("\tPartition %u %s\r\n", partition,
+                              FirmwareUpdateManager::AmWithinFlashPartition(partition) ? "(ACTIVE)" : "");
                 if (FirmwareUpdateManager::flash_partition_headers[partition]->magic_word !=
                     FirmwareUpdateManager::kFlashHeaderMagicWord) {
                     CPP_AT_PRINTF("\t\tNO VALID HEADER\r\n");
                     continue;
                 }
-                CPP_AT_PRINTF("\tPartition %u %s\r\n\t\tLength: %u Bytes\r\n", partition,
-                              FirmwareUpdateManager::AmWithinFlashPartition(partition) ? "(ACTIVE)" : "",
+                CPP_AT_PRINTF("\t\tLength: %u Bytes\r\n",
                               FirmwareUpdateManager::flash_partition_headers[partition]->app_size_bytes);
                 CPP_AT_PRINTF("\t\tApplication CRC: 0x%x\r\n",
                               FirmwareUpdateManager::flash_partition_headers[partition]->app_crc);
