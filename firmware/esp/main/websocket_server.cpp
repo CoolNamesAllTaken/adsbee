@@ -107,7 +107,8 @@ esp_err_t WebSocketServer::Handler(httpd_req_t *req) {
         }
 
         UpdateActivityTimer(client_fd);
-        CONSOLE_INFO("WebSocketServer::Handler", "[%s] Got packet with message: %s", config_.label, ws_pkt.payload);
+        // Don't print packet payload, it's not safe if it's binary data that isn't null-terminated.
+        // CONSOLE_INFO("WebSocketServer::Handler", "[%s] Got packet with message: %s", config_.label, ws_pkt.payload);
         if (config_.message_received_callback) {
             config_.message_received_callback(this, client_fd, ws_pkt);
         }
