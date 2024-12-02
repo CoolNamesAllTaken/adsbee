@@ -35,7 +35,7 @@ class FirmwareUpdateManager {
     static const uint32_t kFlashHeaderVersion = 0;
 
     // Leave some room in max length SPI packet (4096 Bytes) for other stuff.
-    static const uint32_t kFlashWriteBufMaxLenBytes = 3840;
+    static const uint32_t kFlashWriteBufMaxLenBytes = 3840 * 10;
 
     // Set this value large enough to be efficient, but small enough that programs don't time out waiting for an update.
     static const uint16_t kMaxSectorsPerErase = 10 * FLASH_BLOCK_SIZE / FLASH_SECTOR_SIZE;

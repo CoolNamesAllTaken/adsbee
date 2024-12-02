@@ -39,9 +39,9 @@ bool SPICoprocessor::Init() {
     // gpio_set_slew_rate(config_.spi_clk_pin, config_.spi_gpio_slew_rate);
     // gpio_set_slew_rate(config_.spi_mosi_pin, config_.spi_gpio_slew_rate);
     // gpio_set_slew_rate(config_.spi_cs_pin, config_.spi_gpio_slew_rate);
-    gpio_set_drive_strength(config_.spi_clk_pin, config_.spi_gpio_drive_strength);
-    gpio_set_drive_strength(config_.spi_mosi_pin, config_.spi_gpio_drive_strength);
-    gpio_set_drive_strength(config_.spi_cs_pin, config_.spi_gpio_drive_strength);
+    // gpio_set_drive_strength(config_.spi_clk_pin, config_.spi_gpio_drive_strength);
+    // gpio_set_drive_strength(config_.spi_mosi_pin, config_.spi_gpio_drive_strength);
+    // gpio_set_drive_strength(config_.spi_cs_pin, config_.spi_gpio_drive_strength);
 
     // Initialize SPI Peripheral.
     spi_init(config_.spi_handle, config_.clk_rate_hz);
@@ -303,7 +303,9 @@ bool SPICoprocessor::SPIWaitForAck() {
     int bytes_read = SPIReadBlocking(response_packet.GetBuf(), SCResponsePacket::kAckLenBytes);
     response_packet.data_len_bytes = SCResponsePacket::kAckLenBytes;
     if (response_packet.cmd != kCmdAck) {
-        CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "Received a message that was not an ack.");
+        CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck",
+                      "Received a message that was not an ack (cmd=0x%x, expected 0x%x).", response_packet.cmd,
+                      kCmdAck);
         return false;
     }
     if (bytes_read < 0) {

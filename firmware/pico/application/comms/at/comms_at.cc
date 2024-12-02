@@ -386,7 +386,11 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     uint32_t offset, len_bytes, crc;
                     CPP_AT_TRY_ARG2NUM_BASE(1, offset, 16);
                     CPP_AT_TRY_ARG2NUM_BASE(2, len_bytes, 10);
-                    uint8_t buf[FirmwareUpdateManager::kFlashWriteBufMaxLenBytes];
+                    if (len_bytes > FirmwareUpdateManager::kFlashWriteBufMaxLenBytes) {
+                        CPP_AT_ERROR("Write length %u exceeds maximum %u Bytes.", len_bytes,
+                                     FirmwareUpdateManager::kFlashWriteBufMaxLenBytes);
+                    }
+                    uint8_t buf[len_bytes];
                     uint32_t buf_len_bytes = 0;
                     uint32_t timestamp_ms = get_time_since_boot_ms();
                     uint32_t data_read_start_timestamp_ms = timestamp_ms;
