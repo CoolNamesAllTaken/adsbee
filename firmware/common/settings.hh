@@ -121,8 +121,8 @@ class SettingsManager {
             }
 
             // Set default feed URIs.
-            // airplanes.live: 78.46.238.18:30004, Beast
-            strncpy(feed_uris[kMaxNumFeeds - 1], "78.46.238.18", kFeedURIMaxNumChars);
+            // airplanes.live: feed.airplanes.live:30004, Beast
+            strncpy(feed_uris[kMaxNumFeeds - 1], "feed.airplanes.live", kFeedURIMaxNumChars);
             feed_uris[kMaxNumFeeds - 1][kFeedURIMaxNumChars] = '\0';
             feed_ports[kMaxNumFeeds - 1] = 30004;
             feed_is_active[kMaxNumFeeds - 1] = true;
