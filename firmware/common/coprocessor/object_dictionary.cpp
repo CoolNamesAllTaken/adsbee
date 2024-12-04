@@ -20,7 +20,10 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             // ESP32 writing to the RP2040's network console interface.
             for (uint16_t i = 0; i < buf_len; i++) {
                 char c = (char)buf[i];
-                comms_manager.esp32_console_rx_queue.Push(c);
+                if (!comms_manager.esp32_console_rx_queue.Push(c)) {
+                    CONSOLE_ERROR("ObjectDictionary::SetBytes", "ESP32 overflowed RP2040's network console queue.");
+                    comms_manager.esp32_console_rx_queue.Clear();
+                }
             }
             break;
 #elif ON_ESP32

@@ -27,7 +27,7 @@ const uint32_t kDeviceInfoProgrammingPassword = 0xDEDBEEF;
 // Polling interval during OTA update. Faster than the normal ESP32 heartbeat for better transfer bandwidth.
 // Heartbeat is required since the ESP32 firmware won't hand off the SPI mutex until it gets poked, so it needs a
 // heartbeat between each message (no ACK required).
-const uint32_t kOTAHeartbeatMs = 5;
+const uint32_t kOTAHeartbeatMs = 10;
 
 /** CppAT Printf Override **/
 int CppAT::cpp_at_printf(const char *format, ...) {
@@ -409,21 +409,25 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         // Priority 2: Check network console for data.
                         if (esp32.IsEnabled()) {
                             char network_console_byte;
-                            bool network_console_had_byte = esp32_console_rx_queue.Pop(network_console_byte);
-                            if (network_console_had_byte) {
+                            if (esp32_console_rx_queue.Pop(network_console_byte)) {
+                                // Was able to read a char from the network buffer.
                                 buf[buf_len_bytes] = network_console_byte;
                                 buf_len_bytes++;
-                                continue;  // Don't refresh timestamp as long as data is being actively
-                                           // received.
-                            }
-
-                            // Didn't receive any Bytes. Refresh network console and update timeout timestamp.
-                            // esp32.Update();
-                            // Poll the ESP32 by sending a heartbeat message (no ACK required) get the ESP32 firmware to
-                            // release the SPI mutex to the task that's forwarding data from the network console.
-                            if (timestamp_ms - last_ota_heartbeat_timestamp_ms > kOTAHeartbeatMs) {
-                                esp32.Write(ObjectDictionary::kAddrScratch, timestamp_ms, false);
-                                last_ota_heartbeat_timestamp_ms = timestamp_ms;
+                                // Loop back to beginning for length check.
+                                continue;
+                            } else {
+                                // Didn't receive any Bytes. Refresh network console and update timeout timestamp.
+                                // esp32.Update();
+                                // Poll the ESP32 by sending a heartbeat message (no ACK required) get the ESP32
+                                // firmware to release the SPI mutex to the task that's forwarding data from the network
+                                // console.
+                                timestamp_ms = get_time_since_boot_ms();
+                                if (timestamp_ms - last_ota_heartbeat_timestamp_ms > kOTAHeartbeatMs) {
+                                    // esp32.Write(ObjectDictionary::kAddrScratch, timestamp_ms, false);
+                                    esp32.Update(true);
+                                    esp32.Write(ObjectDictionary::kAddrScratch, timestamp_ms, false);
+                                    last_ota_heartbeat_timestamp_ms = timestamp_ms;
+                                }
                             }
                         }
 

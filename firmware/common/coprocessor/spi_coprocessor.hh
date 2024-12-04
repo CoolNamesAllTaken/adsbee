@@ -35,11 +35,15 @@ class SPICoprocessor {
 #ifdef ON_PICO
     // Make sure that we don't talk to the slave before it has a chance to get ready for the next message.
     // Note that this value is ignored if the HANDSHAKE line is pulled high.
-    static const uint32_t kSPIMinTransmitIntervalUs = 400;
+    static const uint32_t kSPIMinTransmitIntervalUs = 600;
     // Wait this long after a transmission is complete before allowing the HANDSHAKE line to override the minimum
     // transmit interval timeout. This ensures that we don't double-transmit to the slave before it has a chance to
     // lower the HANDSHAKE line following a transaction.
     static const uint32_t kSPIPostTransmitLockoutUs = 100;
+    // How long before the end of kSPIMinTransmitIntervalUs to assert the CS line during a blocking update. This
+    // prevents the ESP32 from handshaking at the same instant that the Pico starts a transaction with the assumption
+    // that the Hanshake line was LO.
+    static const uint32_t kSPIUpdateCSPreAssertIntervalUs = 100;
     // NOTE: Max transmission time is ~10ms with a 4kB packet at 40MHz.
     // How long to wait once a transaction is started before timing out.
     static const uint16_t kSPITransactionTimeoutMs = 20;
@@ -335,9 +339,7 @@ class SPICoprocessor {
             return false;
         }
 #elif ON_PICO
-        // Call Update with blocking to flush ESP32 of messages before write (block to make sure it has a chance to talk
-        // if it needs to).
-        Update(true);  // Check to see if handshake line is raised before blasting a packet into the ESP32.
+
 #else
         return false;  // Not supported on other platforms.
 #endif
@@ -384,9 +386,7 @@ class SPICoprocessor {
             return false;
         }
 #elif ON_PICO
-        // Call Update with blocking to flush ESP32 of messages before write (block to make sure it has a chance to talk
-        // if it needs to).
-        Update(true);  // Check to see if handshake line is raised before blasting a packet into the ESP32.
+
 #else
         return false;  // Not supported on other platforms.
 #endif
@@ -439,13 +439,29 @@ class SPICoprocessor {
      */
     bool GetSPIHandshakePinLevel(bool blocking = false) {
         if (blocking) {
-            while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIMinTransmitIntervalUs) {
+            // Blocking wait before pre-assert interval.
+            while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ <
+                   kSPIMinTransmitIntervalUs - kSPIUpdateCSPreAssertIntervalUs) {
+                // Check for Handshake pin going high after post transmit lockout period.
                 if (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ > kSPIPostTransmitLockoutUs &&
                     gpio_get(config_.spi_handshake_pin)) {
+                    // Allowed to exit blocking early if ESP32 asserts the HANDSHAKE pin.
+                    volatile bool early_exit = true;  // Just for debugging, allows breakpoint here.
+                    return true;
+                }
+            }
+            // Put CS pin LO during pre-assert interval to stop ESP32 from initiating a transaction with HANDSHAKE pin.
+            BeginSPITransaction();
+            // Enforce CS pre-assert interval with blocking wait.
+            uint32_t pre_assert_interval_start = get_time_since_boot_us();
+            while (get_time_since_boot_us() - pre_assert_interval_start < kSPIUpdateCSPreAssertIntervalUs) {
+                // Assert the CS line before the ESP32 has a chance to handshake.
+                if (gpio_get(config_.spi_handshake_pin)) {
                     // Allowed to exit blocking early if ESP32 asserts the HANDSHAKE pin.
                     return true;
                 }
             }
+            return false;
         } else if (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
             // Don't actually read the handshake pin if it might overlap with an existing transaction, since we could
             // try reading the slave when nothing is here (slave hasn't yet had time to de-assert handshake pin).
@@ -512,7 +528,15 @@ class SPICoprocessor {
     static const uint16_t kErrorMessageMaxLen = 500;
     enum ReturnCode : int { kOk = 0, kErrorGeneric = -1, kErrorTimeout = -2 };
 
-#ifdef ON_ESP32
+#ifdef ON_PICO
+    void BeginSPITransaction() { gpio_put(config_.spi_cs_pin, 0); }
+
+    void EndSPITransaction() {
+        gpio_put(config_.spi_cs_pin, 1);
+        spi_last_transmit_timestamp_us_ = get_time_since_boot_us();
+    }
+
+#elif ON_ESP32
     SemaphoreHandle_t spi_mutex_;  // Low level mutex used to guard the SPI peripheral (don't let multiple
                                    // threads queue packets at the same time).
     SemaphoreHandle_t spi_next_transaction_mutex_;  // High level mutex used to claim the next transaction interval.
@@ -585,6 +609,11 @@ class SPICoprocessor {
         error_message[kErrorMessageMaxLen] = '\0';
         bool ret = true;
         while (num_attempts < kSPITransactionMaxNumRetries) {
+#ifdef ON_PICO
+            // Call Update with blocking to flush ESP32 of messages before write (block to make sure it has a chance to
+            // talk if it needs to).
+            Update(true);  // Check to see if handshake line is raised before blasting a packet into the ESP32.
+#endif
             int bytes_written = SPIWriteBlocking(write_packet.GetBuf(), write_packet.GetBufLenBytes());
 
             if (bytes_written < 0) {
@@ -650,6 +679,10 @@ class SPICoprocessor {
             // On the master, reading from the slave is two transactions: The read request is sent, then we wait on the
             // handshake line to read the reply.
             SCResponsePacket response_packet;  // Declare this up here so the goto's don't cross it.
+            // Call Update with blocking to flush ESP32 of messages before write (block to make sure it has a chance to
+            // talk
+            // if it needs to).
+            Update(true);  // Check to see if handshake line is raised before blasting a packet into the ESP32.
             int bytes_written = SPIWriteBlocking(read_request_packet.GetBuf(), read_request_bytes);
             int bytes_read = 0;
             if (bytes_written < 0) {
