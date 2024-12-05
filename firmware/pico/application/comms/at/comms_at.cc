@@ -3,10 +3,11 @@
 #include <cstring>   // for strcat
 #include <iostream>  // for AT command ingestion
 
-#include "ads_bee.hh"
+#include "adsbee.hh"
 #include "comms.hh"
 #include "eeprom.hh"
 #include "esp32_flasher.hh"
+#include "firmware_update.hh"
 #include "main.hh"
 #include "pico/stdlib.h"  // for getchar etc
 #include "settings.hh"
@@ -21,8 +22,12 @@
 // #include "printf.h" // for using custom printf defined in printf.h
 #include <cstdio>  // for using regular printf
 
-const uint32_t kDeviceInfoProgrammingPassword = 0xDEDBEEF;  // This is intended to stop people from accidentally
-                                                            // modifying serial number information on their device.
+// This is intended to stop people from accidentally modifying serial number information on their device.
+const uint32_t kDeviceInfoProgrammingPassword = 0xDEDBEEF;
+// Polling interval during OTA update. Faster than the normal ESP32 heartbeat for better transfer bandwidth.
+// Heartbeat is required since the ESP32 firmware won't hand off the SPI mutex until it gets poked, so it needs a
+// heartbeat between each message (no ACK required).
+const uint32_t kOTAHeartbeatMs = 10;
 
 /** CppAT Printf Override **/
 int CppAT::cpp_at_printf(const char *format, ...) {
@@ -219,10 +224,10 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
 
 void ATFeedHelpCallback() {
     CPP_AT_PRINTF(
-        "\tAT+FEED=<feed_index>,<feed_uri>,<feed_port>,<active>,<protocol>\r\n\tSet details for a "
-        "network feed.\r\n\tfeed_index = [0-%d], feed_uri = ip address or URL, feed_port = [0-65535], "
+        "\tAT+FEED=<index>,<uri>,<port>,<active>,<protocol>\r\n\tSet details for a "
+        "network feed.\r\n\tindex = [0-%d], uri = ip address or URL, feed_port = [0-65535], "
         "active = [0 1], protocol = [BEAST BEAST_RAW].\r\n\t\r\n\tAT+FEED?\r\n\tPrint details for all "
-        "feeds.\r\n\t\r\n\tAT+FEED?<feed_index>\r\n\tPrint details for a specific feed.\r\n\tfeed_index = [0-%d]",
+        "feeds.\r\n\t\r\n\tAT+FEED?<index>\r\n\tPrint details for a specific feed.\r\n\tfeed_index = [0-%d]",
         SettingsManager::Settings::kMaxNumFeeds - 1, SettingsManager::Settings::kMaxNumFeeds - 1);
 }
 
@@ -231,20 +236,19 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
         case '?':
             if (CPP_AT_HAS_ARG(0)) {
                 // Querying info about a specific feed.
-                uint16_t feed_index = UINT16_MAX;
-                CPP_AT_TRY_ARG2NUM(0, feed_index);
-                if (feed_index >= SettingsManager::Settings::kMaxNumFeeds) {
+                uint16_t index = UINT16_MAX;
+                CPP_AT_TRY_ARG2NUM(0, index);
+                if (index >= SettingsManager::Settings::kMaxNumFeeds) {
                     CPP_AT_ERROR("Feed number must be between 0-%d, no details for feed with index %d.",
-                                 SettingsManager::Settings::kMaxNumFeeds - 1, feed_index);
+                                 SettingsManager::Settings::kMaxNumFeeds - 1, index);
                 }
                 char receiver_id_str[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
-                SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[feed_index],
-                                                 receiver_id_str);
+                SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[index], receiver_id_str);
                 CPP_AT_CMD_PRINTF(
-                    "=%d(FEED_INDEX),%s(FEED_URI),%d(FEED_PORT),%d(ACTIVE),%s(PROTOCOL),%s(RECEIVER_ID)", feed_index,
-                    settings_manager.settings.feed_uris[feed_index], settings_manager.settings.feed_ports[feed_index],
-                    settings_manager.settings.feed_is_active[feed_index],
-                    SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[feed_index]],
+                    "=%d(INDEX),%s(URI),%d(PORT),%d(ACTIVE),%s(PROTOCOL),%s(RECEIVER_ID)", index,
+                    settings_manager.settings.feed_uris[index], settings_manager.settings.feed_ports[index],
+                    settings_manager.settings.feed_is_active[index],
+                    SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[index]],
                     receiver_id_str);
             } else {
                 // Querying info about all feeds.
@@ -252,7 +256,7 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                     char receiver_id_str[SettingsManager::Settings::kFeedReceiverIDNumBytes * 2 + 1];
                     SettingsManager::ReceiverIDToStr(settings_manager.settings.feed_receiver_ids[i], receiver_id_str);
                     CPP_AT_CMD_PRINTF(
-                        "=%d(FEED_INDEX),%s(FEED_URI),%d(FEED_PORT),%d(ACTIVE),%s(PROTOCOL),%s(RECEIVER_ID)", i,
+                        "=%d(INDEX),%s(URI),%d(PORT),%d(ACTIVE),%s(PROTOCOL),%s(RECEIVER_ID)", i,
                         settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i],
                         settings_manager.settings.feed_is_active[i],
                         SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[i]],
@@ -263,29 +267,29 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
             break;
         case '=':
             // Setting feed information for a specific feed.
-            uint16_t feed_index = UINT16_MAX;
+            uint16_t index = UINT16_MAX;
             if (!CPP_AT_HAS_ARG(0)) {
                 CPP_AT_ERROR("Feed index is required for setting feed information.");
             }
-            CPP_AT_TRY_ARG2NUM(0, feed_index);
-            if (feed_index >= SettingsManager::Settings::kMaxNumFeeds) {
+            CPP_AT_TRY_ARG2NUM(0, index);
+            if (index >= SettingsManager::Settings::kMaxNumFeeds) {
                 CPP_AT_ERROR("Feed index must be between 0-%d, no details for feed with index %d.",
-                             SettingsManager::Settings::kMaxNumFeeds - 1, feed_index);
+                             SettingsManager::Settings::kMaxNumFeeds - 1, index);
             }
             // Set FEED_URI.
             if (CPP_AT_HAS_ARG(1)) {
-                strncpy(settings_manager.settings.feed_uris[feed_index], args[1].data(),
+                strncpy(settings_manager.settings.feed_uris[index], args[1].data(),
                         SettingsManager::Settings::kFeedURIMaxNumChars);
-                settings_manager.settings.feed_uris[feed_index][SettingsManager::Settings::kFeedURIMaxNumChars] = '\0';
+                settings_manager.settings.feed_uris[index][SettingsManager::Settings::kFeedURIMaxNumChars] = '\0';
             }
             // Set FEED_PORT
             if (CPP_AT_HAS_ARG(2)) {
-                CPP_AT_TRY_ARG2NUM(2, settings_manager.settings.feed_ports[feed_index]);
+                CPP_AT_TRY_ARG2NUM(2, settings_manager.settings.feed_ports[index]);
             }
             // Set ACTIVE
             if (CPP_AT_HAS_ARG(3)) {
                 uint8_t is_active;
-                CPP_AT_TRY_ARG2NUM(3, settings_manager.settings.feed_is_active[feed_index]);
+                CPP_AT_TRY_ARG2NUM(3, settings_manager.settings.feed_is_active[index]);
             }
             // Set PROTOCOL
             if (CPP_AT_HAS_ARG(4)) {
@@ -301,7 +305,7 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                     CPP_AT_ERROR("Protocol %s is not supported for network feeds.",
                                  SettingsManager::kReportingProtocolStrs[feed_protocol]);
                 }
-                settings_manager.settings.feed_protocols[feed_index] = feed_protocol;
+                settings_manager.settings.feed_protocols[index] = feed_protocol;
             }
             CPP_AT_SUCCESS();
             break;
@@ -313,15 +317,193 @@ CPP_AT_CALLBACK(CommsManager::ATFlashESP32Callback) {
     if (!esp32.DeInit()) {
         CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while de-initializing ESP32 before flashing.");
     }
-    if (!esp32_flasher.FlashESP32()) {
+    adsbee.DisableWatchdog();
+    bool flashed_successfully = esp32_flasher.FlashESP32();
+    adsbee.EnableWatchdog();
+    if (!flashed_successfully) {
         CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while flashing ESP32.");
     }
+
     if (!esp32.Init()) {
         CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while re-initializing ESP32 after flashing.");
     }
 
     CONSOLE_INFO("CommsManager::ATFlashESP32Callback", "ESP32 successfully flashed.");
     CPP_AT_SUCCESS();
+}
+
+CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_PRINTF("Flash Partition Information\r\n");
+            for (uint16_t partition = 0; partition < FirmwareUpdateManager::kNumPartitions; partition++) {
+                CPP_AT_PRINTF("\tPartition %u %s\r\n", partition,
+                              FirmwareUpdateManager::AmWithinFlashPartition(partition) ? "(ACTIVE)" : "");
+                if (FirmwareUpdateManager::flash_partition_headers[partition]->magic_word !=
+                    FirmwareUpdateManager::kFlashHeaderMagicWord) {
+                    CPP_AT_PRINTF("\t\tNO VALID HEADER\r\n");
+                    continue;
+                }
+                CPP_AT_PRINTF("\t\tLength: %u Bytes\r\n",
+                              FirmwareUpdateManager::flash_partition_headers[partition]->app_size_bytes);
+                CPP_AT_PRINTF("\t\tApplication CRC: 0x%x\r\n",
+                              FirmwareUpdateManager::flash_partition_headers[partition]->app_crc);
+                char status_str[FirmwareUpdateManager::kFlashPartitionStatusStrMaxLen];
+                FirmwareUpdateManager::FlashPartitionStatusToStr(
+                    (FirmwareUpdateManager::FlashPartitionStatus)
+                        FirmwareUpdateManager::flash_partition_headers[partition]
+                            ->status,
+                    status_str);
+                CPP_AT_PRINTF("\t\tStatus: %s (0x%x)\r\n", status_str,
+                              FirmwareUpdateManager::flash_partition_headers[partition]->status);
+                CPP_AT_PRINTF("\t\tSector %s verification.\r\n",
+                              FirmwareUpdateManager::VerifyFlashPartition(partition, false) ? "PASSED" : "FAILED");
+            }
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (CPP_AT_HAS_ARG(0)) {
+                uint16_t complementary_partition = FirmwareUpdateManager::GetComplementaryFlashPartition();
+                if (args[0].compare("ERASE") == 0) {
+                    // Erase the complementary flash partition.
+                    CPP_AT_PRINTF("Erasing partition %d.\r\n", complementary_partition);
+                    // Flash erase can take a while, prevent watchdog from rebooting us during erase!
+                    adsbee.DisableWatchdog();
+                    bool flash_erase_succeeded = FirmwareUpdateManager::EraseFlashParition(complementary_partition);
+                    adsbee.EnableWatchdog();
+                    if (!flash_erase_succeeded) {
+                        CPP_AT_ERROR("Failed to erase complmentary flash partition.");
+                    }
+                    CPP_AT_SUCCESS();
+                } else if (args[0].compare("GET_PARTITION") == 0) {
+                    // Reply with the complementary flash partition number. This is used to select the correct flash
+                    // partition from the OTA file.
+                    CPP_AT_PRINTF("Partition: %u\r\n", complementary_partition);
+                    CPP_AT_SUCCESS();
+                } else if (args[0].compare("WRITE") == 0) {
+                    // Write a section of the complementary flash partition.
+                    // AT+OTA=WRITE,<offset (base 16)>,<len_bytes (base 10)>,<crc (base 16)>
+                    adsbee.SetReceiverEnable(0);  // Stop ADSB packets from mucking up the SPI bus.
+                    uint32_t offset, len_bytes, crc;
+                    CPP_AT_TRY_ARG2NUM_BASE(1, offset, 16);
+                    CPP_AT_TRY_ARG2NUM_BASE(2, len_bytes, 10);
+                    if (len_bytes > FirmwareUpdateManager::kFlashWriteBufMaxLenBytes) {
+                        adsbee.SetReceiverEnable(1);  // Re-enable receiver before exit.
+                        CPP_AT_ERROR("Write length %u exceeds maximum %u Bytes.", len_bytes,
+                                     FirmwareUpdateManager::kFlashWriteBufMaxLenBytes);
+                    }
+                    uint8_t buf[len_bytes];
+                    uint32_t buf_len_bytes = 0;
+                    uint32_t timestamp_ms = get_time_since_boot_ms();
+                    uint32_t data_read_start_timestamp_ms = timestamp_ms;
+                    uint32_t last_ota_heartbeat_timestamp_ms = timestamp_ms;
+                    // Read len_bytes from stdio and network console. Timeout after kOTAWriteTimeoutMs.
+                    while (buf_len_bytes < len_bytes) {
+                        // Priority 1: Check STDIO for data.
+                        int stdio_console_getchar_reply = getchar_timeout_us(0);
+                        if (stdio_console_getchar_reply >= 0) {
+                            // Didn't have timeout or other error: got a valid data byte.
+                            buf[buf_len_bytes] = static_cast<char>(stdio_console_getchar_reply);
+                            buf_len_bytes++;
+                            continue;  // Don't check network console if stdio had a byte.
+                        }
+
+                        // Priority 2: Check network console for data.
+                        if (esp32.IsEnabled()) {
+                            char network_console_byte;
+                            if (esp32_console_rx_queue.Length() > 0) {
+                                while (buf_len_bytes < len_bytes && esp32_console_rx_queue.Pop(network_console_byte)) {
+                                    // Was able to read a char from the network buffer.
+                                    buf[buf_len_bytes] = network_console_byte;
+                                    buf_len_bytes++;
+                                }
+                            } else {
+                                // Didn't receive any Bytes. Refresh network console and update timeout timestamp.
+                                // esp32.Update();
+                                // Poll the ESP32 by sending a heartbeat message (no ACK required) get the ESP32
+                                // firmware to release the SPI mutex to the task that's forwarding data from the network
+                                // console.
+                                timestamp_ms = get_time_since_boot_ms();
+                                if (timestamp_ms - last_ota_heartbeat_timestamp_ms > kOTAHeartbeatMs) {
+                                    // Don't call update manually here, it gets taken care of in the Write function.
+                                    // Calling Update twice will result in the network console buffer overflowing if two
+                                    // blobs of characters are ready to be transmitted sequentially!
+                                    esp32.Write(ObjectDictionary::kAddrScratch, timestamp_ms, false);
+                                    last_ota_heartbeat_timestamp_ms = timestamp_ms;
+                                }
+                            }
+                        }
+
+                        timestamp_ms = get_time_since_boot_ms();
+                        if (timestamp_ms - data_read_start_timestamp_ms > kOTAWriteTimeoutMs) {
+                            adsbee.SetReceiverEnable(1);  // Re-enable receiver before exit.
+                            CPP_AT_ERROR("Timed out after %u ms. Received %u Bytes.",
+                                         timestamp_ms - data_read_start_timestamp_ms, buf_len_bytes);
+                        }
+                    }
+                    CPP_AT_PRINTF("Writing %u Bytes to partition %u at offset 0x%x.\r\n", len_bytes,
+                                  complementary_partition, offset);
+                    adsbee.DisableWatchdog();  // Flash write can take a while, prevent watchdog from rebooting us
+                    // during write!
+                    bool flash_write_succeeded = FirmwareUpdateManager::PartialWriteFlashPartition(
+                        complementary_partition, offset, len_bytes, buf);
+                    adsbee.EnableWatchdog();
+                    if (!flash_write_succeeded) {
+                        adsbee.SetReceiverEnable(1);  // Re-enable receiver before exit.
+                        CPP_AT_ERROR("Partial %u Byte write failed in partition %u at offset 0x%x.", len_bytes,
+                                     complementary_partition, offset);
+                    }
+                    if (CPP_AT_HAS_ARG(3)) {
+                        // CRC provided.
+                        CPP_AT_TRY_ARG2NUM_BASE(3, crc, 16);
+                        CPP_AT_PRINTF("Verifying with CRC 0x%x.\r\n", crc);
+                        uint32_t calculated_crc = FirmwareUpdateManager::CalculateCRC32(
+                            (uint8_t *)(FirmwareUpdateManager::flash_partition_headers[complementary_partition]) +
+                                offset,
+                            len_bytes);
+                        if (calculated_crc != crc) {
+                            adsbee.SetReceiverEnable(1);  // Re-enable receiver before exit.
+                            CPP_AT_ERROR("Calculated CRC 0x%x did not match provided CRC 0x%x.", calculated_crc, crc);
+                        }
+                    }
+                    adsbee.SetReceiverEnable(1);  // Re-enable receiver before exit.
+                    CPP_AT_SUCCESS();
+                } else if (args[0].compare("VERIFY") == 0) {
+                    // Verify the complementary flash partition.
+                    CPP_AT_PRINTF(
+                        "Verifying partition %u: %u Bytes, status 0x%x, application CRC 0x%x\r\n",
+                        complementary_partition,
+                        FirmwareUpdateManager::flash_partition_headers[complementary_partition]->app_size_bytes,
+                        FirmwareUpdateManager::flash_partition_headers[complementary_partition]->status,
+                        FirmwareUpdateManager::flash_partition_headers[complementary_partition]->app_crc);
+                    // Modify the partition header.
+                    if (FirmwareUpdateManager::VerifyFlashPartition(complementary_partition, true)) {
+                        CPP_AT_SUCCESS();
+                    } else {
+                        CPP_AT_ERROR("Partition %u failed verification.", complementary_partition);
+                    }
+                } else if (args[0].compare("BOOT") == 0) {
+                    // Boot the complementary flash partition.
+                    CPP_AT_PRINTF("Booting partition %u...", complementary_partition);
+                    adsbee.DisableWatchdog();
+                    FirmwareUpdateManager::BootPartition(complementary_partition);
+                    adsbee.EnableWatchdog();
+                    CPP_AT_ERROR("Failed to boot partition %u.", complementary_partition);
+                }
+            }
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_HELP_CALLBACK(CommsManager::ATOTAHelpCallback) {
+    CPP_AT_PRINTF(
+        "AT+OTA?\r\n\tQueries current OTA status.\r\n\tAT+OTA=ERASE\r\n\tErase the sector to "
+        "update. Responds with status messages for each erase operation, then OK when "
+        "complete.\r\n\tAT+OTA=WRITE,<offset>,<num_bytes>,<checksum>\r\n\tBegin an "
+        "OTA write operation of num_bytes to offset bytes from the start of the partition with provided CRC32 "
+        "checksum. Will respond with BEGIN, and then OK when complete, or ERROR if checksum doesn't match or timeout "
+        "reached.\r\n");
 }
 
 CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
@@ -405,7 +587,7 @@ CPP_AT_HELP_CALLBACK(CommsManager::ATProtocolHelpCallback) {
     }
     CPP_AT_PRINTF("\r\n\t<protocol> = ");
     for (uint16_t protocol = 0; protocol < SettingsManager::kNumProtocols; protocol++) {
-        CPP_AT_PRINTF("%s ", SettingsManager::kReportingProtocolStrs[protocol]);
+        CPP_AT_PRINTF("\t\t%s ", SettingsManager::kReportingProtocolStrs[protocol]);
     }
     CPP_AT_PRINTF("\r\n\tQuery the reporting protocol used on all interfaces:\r\n");
     CPP_AT_PRINTF("\tAT+PROTOCOL?\r\n\t+PROTOCOL=<iface>,<protocol>\r\n\t...\r\n");
@@ -450,6 +632,8 @@ CPP_AT_CALLBACK(CommsManager::ATSettingsCallback) {
                     }
                 } else if (args[0].compare("RESET") == 0) {
                     settings_manager.ResetToDefaults();
+                } else {
+                    CPP_AT_ERROR("Invalid argument %s.", args[0].data());
                 }
                 CPP_AT_SUCCESS();
             }
@@ -581,8 +765,8 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiAPCallback) {
             if (CPP_AT_HAS_ARG(3)) {
                 uint8_t channel;
                 CPP_AT_TRY_ARG2NUM(3, channel);
-                if (channel > SettingsManager::kWiFiAPChannelMax) {
-                    CPP_AT_ERROR("WiFi channel out of range, must be <= %d.", SettingsManager::kWiFiAPChannelMax);
+                if (channel == 0 || channel > SettingsManager::kWiFiAPChannelMax) {
+                    CPP_AT_ERROR("WiFi channel out of range, must be >0 and <=%d.", SettingsManager::kWiFiAPChannelMax);
                 }
                 wifi_ap_channel = channel;
                 CPP_AT_CMD_PRINTF(": wifi_ap_channel = %d\r\n", wifi_ap_channel);
@@ -678,6 +862,11 @@ const CppAT::ATCommandDef_t at_command_list[] = {
          "AT+LOG_LEVEL=<log_level [SILENT ERRORS WARNINGS LOGS]>\r\n\tSet how much stuff gets printed to the "
          "console.\r\n\t",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATLogLevelCallback, comms_manager)},
+    {.command_buf = "+OTA",
+     .min_args = 0,
+     .max_args = 4,
+     .help_callback = CPP_AT_BIND_MEMBER_HELP_CALLBACK(CommsManager::ATOTAHelpCallback, comms_manager),
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATOTACallback, comms_manager)},
     {.command_buf = "+PROTOCOL",
      .min_args = 0,
      .max_args = 2,
@@ -748,14 +937,17 @@ const uint16_t at_command_list_num_commands = sizeof(at_command_list) / sizeof(a
 
 bool CommsManager::UpdateAT() {
     static char stdio_at_command_buf[kATCommandBufMaxLen];
+    static uint16_t stdio_at_command_buf_len = 0;
     // Check for new AT commands from STDIO. Process up to one line per loop.
     char c = static_cast<char>(getchar_timeout_us(0));
     while (static_cast<int8_t>(c) != PICO_ERROR_TIMEOUT) {
-        char buf[2] = {c, '\0'};
-        strcat(stdio_at_command_buf, buf);
+        stdio_at_command_buf[stdio_at_command_buf_len] = c;
+        stdio_at_command_buf_len++;
+        stdio_at_command_buf[stdio_at_command_buf_len] = '\0';
         if (c == '\n') {
             at_parser_.ParseMessage(std::string_view(stdio_at_command_buf));
-            stdio_at_command_buf[0] = '\0';  // clear command buffer
+            stdio_at_command_buf_len = 0;
+            stdio_at_command_buf[stdio_at_command_buf_len] = '\0';  // clear command buffer
         }
         c = static_cast<char>(getchar_timeout_us(0));
     }
@@ -763,32 +955,17 @@ bool CommsManager::UpdateAT() {
     if (esp32.IsEnabled()) {
         // Receive incoming network console characters.
         static char esp32_console_rx_buf[kATCommandBufMaxLen];
+        static uint16_t esp32_console_rx_buf_len = 0;
         while (esp32_console_rx_queue.Pop(c)) {
-            char buf[2] = {c, '\0'};
-            strcat(esp32_console_rx_buf, buf);
+            esp32_console_rx_buf[esp32_console_rx_buf_len] = c;
+            esp32_console_rx_buf_len++;
+            esp32_console_rx_buf[esp32_console_rx_buf_len] = '\0';
             if (c == '\n') {
                 CONSOLE_INFO("CommsManager::UpdateAT", "Received network console message: %s\r\n",
                              esp32_console_rx_buf);
                 at_parser_.ParseMessage(std::string_view(esp32_console_rx_buf));
-                esp32_console_rx_buf[0] = '\0';  // clear command buffer
-            }
-        }
-
-        // Send outgoing network console characters.
-        char esp32_console_tx_buf[SPICoprocessor::SCWritePacket::kDataMaxLenBytes];
-        while (esp32_console_tx_queue.Length() > 0) {
-            uint16_t message_len = 0;
-            for (; message_len < SPICoprocessor::SCWritePacket::kDataMaxLenBytes && esp32_console_tx_queue.Pop(c);
-                 message_len++) {
-                esp32_console_tx_buf[message_len] = c;
-            }
-            // Ran out of characters to send, or hit the max packet length.
-            if (message_len > 0) {
-                // Don't send empty messages.
-                if (!esp32.Write(ObjectDictionary::kAddrConsole, esp32_console_tx_buf, true, message_len)) {
-                    // Don't enter infinite loop of error messages if writing to the ESP32 isn't working.
-                    break;
-                }
+                esp32_console_rx_buf_len = 0;
+                esp32_console_rx_buf[esp32_console_rx_buf_len] = '\0';  // clear command buffer
             }
         }
     }

@@ -2,6 +2,23 @@ if (ON_EMBEDDED_DEVICE)
     ## Building for target.
     add_executable(application main.cc)
 
+    # application is Position Independent Code (PIC) since it could be loaded in either partition. combined is not PIC
+    # since it only runs in partition 0 as loaded by the debugger.
+    # Enable position independent code
+    # set_target_properties(application PROPERTIES
+    #     POSITION_INDEPENDENT_CODE ON
+    # )
+    # # Add extra compiler flags for PIC
+    # target_compile_options(application PRIVATE
+    #     -fPIC
+    #     -msingle-pic-base
+    #     -mno-pic-data-is-text-relative
+    # )
+    # # Additional PIC-related linker flags
+    # target_link_options(application PRIVATE
+    #     -Wl,--pic-executable
+    # )
+
     add_subdirectory(${ADSBEE_COMMON_DIR} ${CMAKE_BINARY_DIR}/application/adsbee_common)
 
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -30,6 +47,7 @@ if (ON_EMBEDDED_DEVICE)
         hardware_dma
         hardware_flash
         hardware_structs
+        hardware_sync # for flashing stuff
         hardware_resets
         cmsis_core # for bootloader regs
     )
@@ -81,7 +99,7 @@ if (ON_EMBEDDED_DEVICE)
     target_sources(application PRIVATE
         ${ADSBEE_MODULES_DIR}/cppAT/src/cpp_at.cc
         main.cc # Don't include main for testing.
-        ads_bee.cc
+        adsbee.cc
         settings.cc
         eeprom.cc
     )
@@ -89,22 +107,34 @@ if (ON_EMBEDDED_DEVICE)
     pico_set_linker_script(application ${APPLICATION_LINKER_SCRIPT})
 
     # Generated outputs are .elf and .bin. Manually generate .UF2 output to take into account checksum.
-    pico_add_bin_output(application)
+    # pico_add_bin_output(application)
 
-    # First, we'll create a copy of the original .bin file
-    # add_custom_command(TARGET application POST_BUILD
-    #     COMMAND ${CMAKE_COMMAND} -E copy 
-    #             ${CMAKE_CURRENT_BINARY_DIR}/application.bin
-    #             ${CMAKE_CURRENT_BINARY_DIR}/application_original.bin
-    #     COMMENT "Backing up original application binary"
-    # )
+    # Create an executable for the application0 flash slot.
+    add_executable(app0 $<TARGET_PROPERTY:application,SOURCES>)
+    target_include_directories(app0 PRIVATE $<TARGET_PROPERTY:application,INCLUDE_DIRECTORIES>)
+    target_link_libraries(app0 $<TARGET_PROPERTY:application,LINK_LIBRARIES>)
+    pico_enable_stdio_usb(app0 1) # use USB for standard printing
+    pico_enable_stdio_uart(app0 0) # disable STDIO UART
+    pico_set_linker_script(app0 ${APP0_LINKER_SCRIPT})
+    pico_add_bin_output(app0)
+
+    # Create an executable for the application1 flash slot.
+    add_executable(app1 $<TARGET_PROPERTY:application,SOURCES>)
+    target_include_directories(app1 PRIVATE $<TARGET_PROPERTY:application,INCLUDE_DIRECTORIES>)
+    target_link_libraries(app1 $<TARGET_PROPERTY:application,LINK_LIBRARIES>)
+    pico_enable_stdio_usb(app1 1) # use USB for standard printing
+    pico_enable_stdio_uart(app1 0) # disable STDIO UART
+    pico_set_linker_script(app1 ${APP1_LINKER_SCRIPT})
+    pico_add_bin_output(app1)
+
 
     # Create a header binary and assembly file for application.bin with section name hdr0.
     # Keeping the checksum separate allows us to do a combined build utilizing the sources for application.bin while
     # also loading the checksum onto the target so that the bootloader can examine it.
     add_custom_command(TARGET application POST_BUILD
         COMMAND ${Python3_EXECUTABLE} ${LINKER_SCRIPTS_DIR}/util_crc.py
-                ${CMAKE_CURRENT_BINARY_DIR}/application.bin
+                ${CMAKE_CURRENT_BINARY_DIR}/app0.bin
+                ${CMAKE_CURRENT_BINARY_DIR}/app1.bin
                 --header ${APPLICATION_HEADER_SECTION_NAME}
                 --ota ${CMAKE_CURRENT_BINARY_DIR}/adsbee_1090.ota
         COMMENT "Calculating and appending CRC32 to application binary and UF2"
@@ -121,6 +151,9 @@ if (ON_EMBEDDED_DEVICE)
             GENERATED TRUE
             DEPENDS bootloader
             DEPENDS application
+            # Also build app0 and app1 to allow processing them into an OTA file.
+            DEPENDS app0
+            DEPENDS app1
     )
     # These source dependencies ensure that the combined target gets rebuilt if the bootloader or app get changed.
     target_sources(combined_library PRIVATE 

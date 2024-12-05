@@ -12,6 +12,8 @@ set(ADSBEE_MODULES_DIR "${CMAKE_SOURCE_DIR}/../modules")
 # TODO: Change these linker scripts as they get populated.
 set(BOOTLOADER_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/bootloader.ld")
 set(APPLICATION_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/application.ld")
+set(APP0_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/app0.ld")
+set(APP1_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/app1.ld")
 set(COMBINED_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/combined.ld")
 
 set(BOOTLOADER_SECTION_NAME boot3)
@@ -50,11 +52,15 @@ if (ON_EMBEDDED_DEVICE)
     if (PICO_SDK_VERSION_STRING VERSION_LESS "1.3.0")
         message(FATAL_ERROR "Raspberry Pi Pico SDK version 1.3.0 (or later) required. Your version is ${PICO_SDK_VERSION_STRING}")
     endif()
-    project(ads_bee C CXX ASM)
+    project(adsbee C CXX ASM)
 
     # Differentiate common code between Pico and ESP32. For code highlighting, add this to the "defines" property of
     # "configurations" in c_cpp_properties.json.
     add_compile_definitions(ON_PICO)
+    add_compile_definitions(
+        # Can't pass in expression in parentheses or else it's a "functional" macro that isn't supported.
+        PICO_FLASH_SIZE_BYTES=16777216 # 16MB = 16*1024*1024 Bytes of flash.
+    ) 
 
     # Initialize the SDK
     pico_sdk_init()
@@ -68,7 +74,7 @@ if (ON_EMBEDDED_DEVICE)
 else()
     ## Compiling for testing on host.
 
-    project(ads_bee C CXX ASM) # This is duplicated since the target firmware CMakeLists needs to create the project
+    project(adsbee C CXX ASM) # This is duplicated since the target firmware CMakeLists needs to create the project
     # after the pico SDK is pulled in.
 
     set(CMAKE_BUILD_TYPE "Debug") # Now that we've identified we're running tests, revert to an actual build config.

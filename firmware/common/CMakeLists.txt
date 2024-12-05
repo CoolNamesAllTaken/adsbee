@@ -11,6 +11,7 @@ if (TARGET application)
         adsb/decode_utils.cpp
         coprocessor/spi_coprocessor.cpp
         coprocessor/object_dictionary.cpp
+        firmware_update/firmware_update.cc
     )
     target_include_directories(application PRIVATE
         .
@@ -22,13 +23,15 @@ if (TARGET application)
         comms/gdl90
         comms/json
         coprocessor
+        firmware_update
     )
 elseif (TARGET bootloader)
     target_sources(bootloader PRIVATE
-        
+        firmware_update/firmware_update.cc
     )
     target_include_directories(bootloader PRIVATE
         utils # We just want hal.hh for now.
+        firmware_update
     )
 elseif (TARGET host_test)
     target_sources(host_test PRIVATE

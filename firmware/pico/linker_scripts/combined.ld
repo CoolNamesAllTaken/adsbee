@@ -27,16 +27,17 @@ MEMORY
     FLASH MAP
         0x10000000	(176k)	FLASH_BL	Bootloader
         0x1002C000	(4k)	FLASH_HDR0	Application 0 Header
-        0x1002D000	(8100k)	FLASH_APP0	Application 0 Data
-        0x10816000	(4k)	FLASH_HDR1	Application 1 Header
-        0x10817000	(8100k)	FLASH_APP1	Application 1 Data
-
+        0x1002D000	(8096k)	FLASH_APP0	Application 0 Data
+        0x10815000	(4k)	FLASH_HDR1	Application 1 Header
+        0x10816000	(8096k)	FLASH_APP1	Application 1 Data
+        0x10FFE000	(8k)	FLASH_EXTRA	Extra
     */
     FLASH_BL(rx) : ORIGIN = 0x10000000, LENGTH = 176k
     FLASH_HDR0(rx) : ORIGIN = 0x10000000+176k, LENGTH = 4k
-    FLASH_APP0(rx) : ORIGIN = 0x10000000+180k, LENGTH = 8100k
-    FLASH_HDR1(rx) : ORIGIN = 0x10000000+8280k, LENGTH = 4k
-    FLASH_APP1(rx) : ORIGIN = 0x10000000+8284k, LENGTH = 8100k
+    FLASH_APP0(rx) : ORIGIN = 0x10000000+180k, LENGTH = 8096k
+    FLASH_HDR1(rx) : ORIGIN = 0x10000000+8276k, LENGTH = 4k
+    FLASH_APP1(rx) : ORIGIN = 0x10000000+8280k, LENGTH = 8096k
+    FLASH_EXTRA(rx) : ORIGIN = 0x10000000+16376k, LENGTH = 8k
     RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 256k
     SCRATCH_X(rwx) : ORIGIN = 0x20040000, LENGTH = 4k
     SCRATCH_Y(rwx) : ORIGIN = 0x20041000, LENGTH = 4k
@@ -61,8 +62,8 @@ SECTIONS
         __boot3_end__ = .;
     } > FLASH_BL
 
-    ASSERT(__boot3_end__ - __boot3_start__ <= 180k,
-        "ERROR: Bootloader (custom bootloader plus Pico SDK boot2) must be <180k in size")
+    ASSERT(__boot3_end__ - __boot3_start__ <= 176k,
+        "ERROR: Bootloader (custom bootloader plus Pico SDK boot2) must be <176k in size")
 
     /* The second stage will always enter the image at the start of .text.
        The debugger will use the ELF entry point, which is the _entry_point

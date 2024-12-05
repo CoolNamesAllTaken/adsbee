@@ -49,7 +49,7 @@ class SettingsManager {
         static const uint32_t kDefaultWatchdogTimeoutSec = 10;
         // NOTE: Lengths do not include null terminator.
         static const uint16_t kWiFiSSIDMaxLen = 32;
-        static const uint16_t kWiFiPasswordMaxLen = 63;  // Theoretical max is 63, but limited by CppAT arg max len.
+        static const uint16_t kWiFiPasswordMaxLen = 64;
         static const uint16_t kWiFiMaxNumClients = 6;
         static const uint32_t kDefaultCommsUARTBaudrate = 115200;
         static const uint32_t kDefaultGNSSUARTBaudrate = 9600;
@@ -103,7 +103,7 @@ class SettingsManager {
                 snprintf(wifi_ap_password, kWiFiPasswordMaxLen, "yummyflowers");
             }
 
-            wifi_ap_channel = get_rand_32() % kWiFiAPChannelMax + 1;
+            wifi_ap_channel = get_rand_32() % kWiFiAPChannelMax + 1;  // Randomly select channel 1-11.
 #endif
 
             for (uint16_t i = 0; i < kMaxNumFeeds; i++) {
@@ -121,8 +121,8 @@ class SettingsManager {
             }
 
             // Set default feed URIs.
-            // airplanes.live: feed.airplanes.live:30004, Beast
-            strncpy(feed_uris[kMaxNumFeeds - 1], "feed.airplanes.live", kFeedURIMaxNumChars);
+            // airplanes.live: 78.46.238.18:30004, Beast
+            strncpy(feed_uris[kMaxNumFeeds - 1], "78.46.238.18", kFeedURIMaxNumChars);
             feed_uris[kMaxNumFeeds - 1][kFeedURIMaxNumChars] = '\0';
             feed_ports[kMaxNumFeeds - 1] = 30004;
             feed_is_active[kMaxNumFeeds - 1] = true;

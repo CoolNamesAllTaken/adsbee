@@ -1,4 +1,4 @@
-#include "ads_bee.hh"
+#include "adsbee.hh"
 #include "beast_utils.hh"
 #include "comms.hh"
 #include "csbee_utils.hh"
@@ -155,8 +155,8 @@ bool CommsManager::ReportCSBee(SettingsManager::SerialInterface iface) {
 uint8_t AircraftCategoryToMAVLINKEmitterType(Aircraft::Category category) {
     switch (category) {
         case Aircraft::Category::kCategoryInvalid:
-            CONSOLE_WARNING("comms_reporting.cc::AircraftCategoryToMAVLINKEmitterType",
-                            "Encountered airframe type kCategoryInvalid.");
+            // CONSOLE_WARNING("comms_reporting.cc::AircraftCategoryToMAVLINKEmitterType",
+            //                 "Encountered airframe type kCategoryInvalid.");
             return UINT8_MAX;
         case Aircraft::Category::kCategoryNoCategoryInfo:
             return 0;  // ADSB_EMITTER_TYPE_NO_INFO

@@ -26,9 +26,14 @@ UTEST(SPICoprocessor, ReadWriteReadRewriteRereadBigNoAck) {
     for (uint16_t i = 0; i < sizeof(settings_out); i++) {
         ((uint8_t *)&settings_out)[i] = i % UINT8_MAX;
     }
-    ASSERT_TRUE(esp32.Write(ObjectDictionary::Address::kAddrSettingsData, settings_out));
+    // Don't require ACK, don't write last Byte of Settings in order to avoid triggering a reboot.
+    ASSERT_TRUE(esp32.Write(ObjectDictionary::Address::kAddrSettingsData, settings_out, false,
+                            sizeof(SettingsManager::Settings) - 1));
     SettingsManager::Settings settings_in_modified;
     ASSERT_TRUE(esp32.Read(ObjectDictionary::Address::kAddrSettingsData, settings_in_modified));
+    // Fake the last Byte.
+    memcpy((uint8_t *)&settings_in_modified + sizeof(SettingsManager::Settings) - 1,
+           (uint8_t *)&settings_out + sizeof(SettingsManager::Settings) - 1, 1);
     for (uint16_t i = 0; i < sizeof(settings_out); i++) {
         EXPECT_EQ(i % UINT8_MAX, ((uint8_t *)&settings_in_modified)[i]);
     }
@@ -43,9 +48,14 @@ UTEST(SPICoprocessor, ReadWriteReadRewriteRereadBigWithAck) {
     for (uint16_t i = 0; i < sizeof(settings_out); i++) {
         ((uint8_t *)&settings_out)[i] = i % UINT8_MAX;
     }
-    ASSERT_TRUE(esp32.Write(ObjectDictionary::Address::kAddrSettingsData, settings_out, true));
+    // Don't require ACK, don't write last Byte of Settings in order to avoid triggering a reboot.
+    ASSERT_TRUE(esp32.Write(ObjectDictionary::Address::kAddrSettingsData, settings_out, true,
+                            sizeof(SettingsManager::Settings) - 1));
     SettingsManager::Settings settings_in_modified;
     ASSERT_TRUE(esp32.Read(ObjectDictionary::Address::kAddrSettingsData, settings_in_modified));
+    // Fake the last Byte.
+    memcpy((uint8_t *)&settings_in_modified + sizeof(SettingsManager::Settings) - 1,
+           (uint8_t *)&settings_out + sizeof(SettingsManager::Settings) - 1, 1);
     for (uint16_t i = 0; i < sizeof(settings_out); i++) {
         EXPECT_EQ(i % UINT8_MAX, ((uint8_t *)&settings_in_modified)[i]);
     }

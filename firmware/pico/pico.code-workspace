@@ -12,6 +12,7 @@
 	],
 	"settings": {
 		"files.associations": {
+			"*.py": "python",
 			"gpio.h": "c",
 			"binary_info.h": "c",
 			"cmath": "cpp",
@@ -94,9 +95,12 @@
 			"esp_loader.h": "c",
 			"comms.hh": "c",
 			"ads_bee.hh": "c",
-			"valarray": "cpp"
+			"valarray": "cpp",
+			"cpp_at.hh": "c",
+			"uart.h": "c",
+			"settings.hh": "c"
 		},
-		"cortex-debug.variableUseNaturalFormat": true,
+		"cortex-debug.variableUseNaturalFormat": false,
 		// "cortex-debug.variableUseNaturalFormat": true,
 	},
 	"launch": {

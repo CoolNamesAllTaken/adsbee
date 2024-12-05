@@ -4,7 +4,6 @@
 
 #ifdef ON_PICO
 #include "hal.hh"
-#include "hardware/gpio.h"
 
 static const uint32_t kESP32EnableBootupDelayMs = 500;
 #elif ON_ESP32
@@ -37,6 +36,12 @@ bool SPICoprocessor::Init() {
     gpio_set_function(config_.spi_clk_pin, GPIO_FUNC_SPI);
     gpio_set_function(config_.spi_mosi_pin, GPIO_FUNC_SPI);
     gpio_set_function(config_.spi_miso_pin, GPIO_FUNC_SPI);
+    // gpio_set_slew_rate(config_.spi_clk_pin, config_.spi_gpio_slew_rate);
+    // gpio_set_slew_rate(config_.spi_mosi_pin, config_.spi_gpio_slew_rate);
+    // gpio_set_slew_rate(config_.spi_cs_pin, config_.spi_gpio_slew_rate);
+    // gpio_set_drive_strength(config_.spi_clk_pin, config_.spi_gpio_drive_strength);
+    // gpio_set_drive_strength(config_.spi_mosi_pin, config_.spi_gpio_drive_strength);
+    // gpio_set_drive_strength(config_.spi_cs_pin, config_.spi_gpio_drive_strength);
 
     // Initialize SPI Peripheral.
     spi_init(config_.spi_handle, config_.clk_rate_hz);
@@ -166,7 +171,7 @@ bool SPICoprocessor::Update(bool blocking) {
             SPIReadBlocking(rx_buf + sizeof(SCCommand), SCReadRequestPacket::kBufLenBytes - sizeof(SCCommand), false);
             SCReadRequestPacket read_request_packet = SCReadRequestPacket(rx_buf, SCReadRequestPacket::kBufLenBytes);
             if (!read_request_packet.IsValid()) {
-                gpio_put(config_.spi_cs_pin, true);  // Deselect slave when bailing out.
+                EndSPITransaction();
                 CONSOLE_ERROR("SPICoprocessor::Update", "Received unsolicited read from master with bad checksum.");
                 return false;
             }
@@ -185,7 +190,7 @@ bool SPICoprocessor::Update(bool blocking) {
             break;
         }
         default:
-            gpio_put(config_.spi_cs_pin, true);  // Deselect slave when bailing out.
+            EndSPITransaction();
             CONSOLE_ERROR("SPICoprocessor::Update", "Received unsolicited packet from ESP32 with unsupported cmd=%d.",
                           cmd);
             return false;
@@ -298,7 +303,9 @@ bool SPICoprocessor::SPIWaitForAck() {
     int bytes_read = SPIReadBlocking(response_packet.GetBuf(), SCResponsePacket::kAckLenBytes);
     response_packet.data_len_bytes = SCResponsePacket::kAckLenBytes;
     if (response_packet.cmd != kCmdAck) {
-        CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "Received a message that was not an ack.");
+        CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck",
+                      "Received a message that was not an ack (cmd=0x%x, expected 0x%x).", response_packet.cmd,
+                      kCmdAck);
         return false;
     }
     if (bytes_read < 0) {
@@ -325,7 +332,7 @@ int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint1
         }
     }
 
-    gpio_put(config_.spi_cs_pin, 0);
+    BeginSPITransaction();
     // Pico SDK doesn't have nice nullptr behavior for tx_buf and rx_buf, so we have to do this.
     if (tx_buf == nullptr) {
         // Transmit 0's when reading.
@@ -337,17 +344,14 @@ int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint1
     }
 
     if (end_transaction) {
-        gpio_put(config_.spi_cs_pin, 1);
+        EndSPITransaction();
+        // Only the last transfer chunk of the transaction is used to record the last transmission timestamp. This stops
+        // transactions from getting too long as earlier chunks reset the lockout timer for later chungs, e.g. if we
+        // only read one byte we don't want to wait for the timeout before conducting the rest of the transaction.
     }
     if (bytes_written < 0) {
         CONSOLE_ERROR("SPICoprocessor::SPIWriteReadBlocking", "SPI write read call returned error code 0x%x.",
                       bytes_written);
-    }
-    if (end_transaction) {
-        // Only the last transfer chunk of the transaction is used to record the last transmission timestamp. This stops
-        // transactions from getting too long as earlier chunks reset the lockout timer for later chungs, e.g. if we
-        // only read one byte we don't want to wait for the timeout before conducting the rest of the transaction.
-        spi_last_transmit_timestamp_us_ = get_time_since_boot_us();
     }
 #elif ON_ESP32
     spi_slave_transaction_t t;

@@ -2,7 +2,7 @@
 #define COMMS_HH_
 
 // #include "transponder_packet.hh"  // For DecodedTransponderPacket.
-#include "ads_bee.hh"
+#include "adsbee.hh"
 #include "cpp_at.hh"
 #include "data_structures.hh"  // For PFBQueue.
 #include "hardware/uart.h"
@@ -11,11 +11,14 @@
 class CommsManager {
    public:
     static const uint16_t kATCommandBufMaxLen = 1000;
+    static const uint16_t kNetworkConsoleBufMaxLen = 4096;
     static const uint16_t kPrintfBufferMaxSize = 500;
     static const uint32_t kRawReportingIntervalMs = 50;  // Report packets internally at 20Hz.
     static const uint32_t kMAVLINKReportingIntervalMs = 1000;
     static const uint32_t kCSBeeReportingIntervalMs = 1000;
     static const uint32_t kGDL90ReportingIntervalMs = 1000;
+
+    static const uint32_t kOTAWriteTimeoutMs = 5000;  // ms until OTA write command exits if all bytes not received.
 
     struct CommsManagerConfig {
         uart_inst_t *comms_uart_handle = uart1;
@@ -28,8 +31,26 @@ class CommsManager {
     };
 
     CommsManager(CommsManagerConfig config_in);
+
+    /**
+     * Initialize the CommsManager. Sets up UARTs and other necessary peripherals.
+     * @retval True if initialization succeeded, false otherwise.
+     */
     bool Init();
+
+    /**
+     * Update the CommsManager. Runs all the update subroutines required for normal operation.
+     * @retval True if update succeeded, false otherwise.
+     */
     bool Update();
+
+    /**
+     * Update incoming and outgoing buffers for the ESP32 network console. Called as part of Update(), or can be called
+     * separately if desired (e.g. while printing to the console without forwarding incoming data to the AT command
+     * parser).
+     * @retval True if update succeeded, false otherwise.
+     */
+    bool UpdateNetworkConsole();
 
     CPP_AT_CALLBACK(ATBaudrateCallback);
     CPP_AT_CALLBACK(ATBiasTeeEnableCallback);
@@ -37,6 +58,8 @@ class CommsManager {
     CPP_AT_CALLBACK(ATESP32EnableCallback);
     CPP_AT_CALLBACK(ATFeedCallback);
     CPP_AT_CALLBACK(ATFlashESP32Callback);
+    CPP_AT_CALLBACK(ATOTACallback);
+    CPP_AT_HELP_CALLBACK(ATOTAHelpCallback);
     CPP_AT_CALLBACK(ATLogLevelCallback);
     CPP_AT_CALLBACK(ATProtocolCallback);
     CPP_AT_HELP_CALLBACK(ATProtocolHelpCallback);
@@ -146,9 +169,9 @@ class CommsManager {
 
     // Queues for incoming / outgoing network characters.
     PFBQueue<char> esp32_console_rx_queue =
-        PFBQueue<char>({.buf_len_num_elements = kATCommandBufMaxLen, .buffer = esp32_console_rx_queue_buffer_});
+        PFBQueue<char>({.buf_len_num_elements = kNetworkConsoleBufMaxLen, .buffer = esp32_console_rx_queue_buffer_});
     PFBQueue<char> esp32_console_tx_queue =
-        PFBQueue<char>({.buf_len_num_elements = kATCommandBufMaxLen, .buffer = esp32_console_tx_queue_buffer_});
+        PFBQueue<char>({.buf_len_num_elements = kNetworkConsoleBufMaxLen, .buffer = esp32_console_tx_queue_buffer_});
 
     // Public WiFi Settings
     bool wifi_ap_enabled, wifi_sta_enabled;
@@ -215,8 +238,8 @@ class CommsManager {
     CppAT at_parser_;
 
     // Queues for incoming / outgoing network console characters.
-    char esp32_console_rx_queue_buffer_[kATCommandBufMaxLen];
-    char esp32_console_tx_queue_buffer_[kATCommandBufMaxLen];
+    char esp32_console_rx_queue_buffer_[kNetworkConsoleBufMaxLen];
+    char esp32_console_tx_queue_buffer_[kNetworkConsoleBufMaxLen];
 
     // Queue for holding new transponder packets before they get reported.
     DecodedTransponderPacket transponder_packet_reporting_queue_buffer_[ADSBee::kMaxNumTransponderPackets];
@@ -235,6 +258,10 @@ class CommsManager {
     uint32_t last_csbee_report_timestamp_ms_ = 0;
     uint32_t last_mavlink_report_timestamp_ms_ = 0;
     uint32_t last_gdl90_report_timestamp_ms_ = 0;
+
+    // OTA configuration. Used to ignore incoming UART commands while processing OTA data.
+    uint32_t ota_transfer_begin_timestamp_ms_ = 0;
+    uint32_t ota_transfer_bytes_remaining_ = 0;
 };
 
 extern CommsManager comms_manager;
