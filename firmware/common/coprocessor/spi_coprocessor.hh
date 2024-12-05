@@ -39,7 +39,7 @@ class SPICoprocessor {
     // Wait this long after a transmission is complete before allowing the HANDSHAKE line to override the minimum
     // transmit interval timeout. This ensures that we don't double-transmit to the slave before it has a chance to
     // lower the HANDSHAKE line following a transaction.
-    static const uint32_t kSPIPostTransmitLockoutUs = 100;
+    static const uint32_t kSPIPostTransmitLockoutUs = 10;
     // How long before the end of kSPIMinTransmitIntervalUs to assert the CS line during a blocking update. This
     // prevents the ESP32 from handshaking at the same instant that the Pico starts a transaction with the assumption
     // that the Hanshake line was LO.
@@ -601,8 +601,6 @@ class SPICoprocessor {
                           "Failed to acquire coprocessor SPI mutex after waiting %d ms.", kSPIMutexTimeoutMs);
             return false;
         }
-
-        use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
 #endif
         int num_attempts = 0;
         char error_message[kErrorMessageMaxLen + 1] = "No error.";
@@ -613,6 +611,9 @@ class SPICoprocessor {
             // Call Update with blocking to flush ESP32 of messages before write (block to make sure it has a chance to
             // talk if it needs to).
             Update(true);  // Check to see if handshake line is raised before blasting a packet into the ESP32.
+#elif ON_ESP32
+            // Handshake pin gets set LO by SPIWaitForAck(), so we need to re-assert it here for retries to bring it HI.
+            use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
 #endif
             int bytes_written = SPIWriteBlocking(write_packet.GetBuf(), write_packet.GetBufLenBytes());
 

@@ -383,10 +383,12 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                 } else if (args[0].compare("WRITE") == 0) {
                     // Write a section of the complementary flash partition.
                     // AT+OTA=WRITE,<offset (base 16)>,<len_bytes (base 10)>,<crc (base 16)>
+                    adsbee.SetReceiverEnable(0);  // Stop ADSB packets from mucking up the SPI bus.
                     uint32_t offset, len_bytes, crc;
                     CPP_AT_TRY_ARG2NUM_BASE(1, offset, 16);
                     CPP_AT_TRY_ARG2NUM_BASE(2, len_bytes, 10);
                     if (len_bytes > FirmwareUpdateManager::kFlashWriteBufMaxLenBytes) {
+                        adsbee.SetReceiverEnable(1);  // Re-enable receiver before exit.
                         CPP_AT_ERROR("Write length %u exceeds maximum %u Bytes.", len_bytes,
                                      FirmwareUpdateManager::kFlashWriteBufMaxLenBytes);
                     }
@@ -409,12 +411,12 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         // Priority 2: Check network console for data.
                         if (esp32.IsEnabled()) {
                             char network_console_byte;
-                            if (esp32_console_rx_queue.Pop(network_console_byte)) {
-                                // Was able to read a char from the network buffer.
-                                buf[buf_len_bytes] = network_console_byte;
-                                buf_len_bytes++;
-                                // Loop back to beginning for length check.
-                                continue;
+                            if (esp32_console_rx_queue.Length() > 0) {
+                                while (buf_len_bytes < len_bytes && esp32_console_rx_queue.Pop(network_console_byte)) {
+                                    // Was able to read a char from the network buffer.
+                                    buf[buf_len_bytes] = network_console_byte;
+                                    buf_len_bytes++;
+                                }
                             } else {
                                 // Didn't receive any Bytes. Refresh network console and update timeout timestamp.
                                 // esp32.Update();
@@ -423,8 +425,9 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                                 // console.
                                 timestamp_ms = get_time_since_boot_ms();
                                 if (timestamp_ms - last_ota_heartbeat_timestamp_ms > kOTAHeartbeatMs) {
-                                    // esp32.Write(ObjectDictionary::kAddrScratch, timestamp_ms, false);
-                                    esp32.Update(true);
+                                    // Don't call update manually here, it gets taken care of in the Write function.
+                                    // Calling Update twice will result in the network console buffer overflowing if two
+                                    // blobs of characters are ready to be transmitted sequentially!
                                     esp32.Write(ObjectDictionary::kAddrScratch, timestamp_ms, false);
                                     last_ota_heartbeat_timestamp_ms = timestamp_ms;
                                 }
@@ -433,6 +436,7 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
 
                         timestamp_ms = get_time_since_boot_ms();
                         if (timestamp_ms - data_read_start_timestamp_ms > kOTAWriteTimeoutMs) {
+                            adsbee.SetReceiverEnable(1);  // Re-enable receiver before exit.
                             CPP_AT_ERROR("Timed out after %u ms. Received %u Bytes.",
                                          timestamp_ms - data_read_start_timestamp_ms, buf_len_bytes);
                         }
@@ -445,6 +449,7 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         complementary_partition, offset, len_bytes, buf);
                     adsbee.EnableWatchdog();
                     if (!flash_write_succeeded) {
+                        adsbee.SetReceiverEnable(1);  // Re-enable receiver before exit.
                         CPP_AT_ERROR("Partial %u Byte write failed in partition %u at offset 0x%x.", len_bytes,
                                      complementary_partition, offset);
                     }
@@ -457,9 +462,11 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                                 offset,
                             len_bytes);
                         if (calculated_crc != crc) {
+                            adsbee.SetReceiverEnable(1);  // Re-enable receiver before exit.
                             CPP_AT_ERROR("Calculated CRC 0x%x did not match provided CRC 0x%x.", calculated_crc, crc);
                         }
                     }
+                    adsbee.SetReceiverEnable(1);  // Re-enable receiver before exit.
                     CPP_AT_SUCCESS();
                 } else if (args[0].compare("VERIFY") == 0) {
                     // Verify the complementary flash partition.
