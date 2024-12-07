@@ -69,7 +69,7 @@ CPP_AT_CALLBACK(CommsManager::ATBaudrateCallback) {
             CPP_AT_SUCCESS();
             break;
     }
-    CPP_AT_ERROR();  // Should never get here.
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
 CPP_AT_CALLBACK(CommsManager::ATBiasTeeEnableCallback) {
@@ -88,7 +88,7 @@ CPP_AT_CALLBACK(CommsManager::ATBiasTeeEnableCallback) {
             CPP_AT_SUCCESS();
             break;
     }
-    CPP_AT_ERROR();
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
 CPP_AT_CALLBACK(CommsManager::ATESP32EnableCallback) {
@@ -112,7 +112,7 @@ CPP_AT_CALLBACK(CommsManager::ATESP32EnableCallback) {
             CPP_AT_SUCCESS();
             break;
     }
-    CPP_AT_ERROR();
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
 CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
@@ -219,7 +219,26 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
             break;
         }
     }
-    CPP_AT_ERROR();
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATEthernetCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%d", settings_manager.settings.ethernet_enabled);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (!CPP_AT_HAS_ARG(0)) {
+                CPP_AT_ERROR("Requires an argument (0 or 1). AT+ETHERNET_ENABLED=<enabled>");
+            }
+            bool enabled;
+            CPP_AT_TRY_ARG2NUM(0, settings_manager.settings.ethernet_enabled);
+            CPP_AT_PRINTF(": ethernet_enabled: %d\r\n", settings_manager.settings.ethernet_enabled);
+            CPP_AT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
 void ATFeedHelpCallback() {
@@ -330,6 +349,24 @@ CPP_AT_CALLBACK(CommsManager::ATFlashESP32Callback) {
 
     CONSOLE_INFO("CommsManager::ATFlashESP32Callback", "ESP32 successfully flashed.");
     CPP_AT_SUCCESS();
+}
+
+CPP_AT_CALLBACK(CommsManager::ATHostnameCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%s", settings_manager.settings.hostname);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (!CPP_AT_HAS_ARG(0)) {
+                CPP_AT_ERROR("Requires an argument. AT+HOSTNAME=<hostname>");
+            }
+            strncpy(settings_manager.settings.hostname, args[0].data(), SettingsManager::Settings::kHostnameMaxLen);
+            settings_manager.settings.hostname[SettingsManager::Settings::kHostnameMaxLen] = '\0';
+            CPP_AT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
 CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
@@ -530,6 +567,22 @@ CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATNetworkInfoCallback) {
+    switch (op) {
+        case '?':
+            ObjectDictionary::ESP32NetworkInfo network_info;
+            if (!esp32.Read(ObjectDictionary::kAddrNetworkInfo, network_info, sizeof(network_info))) {
+                CPP_AT_ERROR("Error while reading network info from ESP32.");
+            }
+
+            CPP_AT_PRINTF("Ethernet: %s\r\n", network_info.ethernet_enabled ? "ENABLED" : "DISABLED");
+            // CPP_AT_PRINTF("\tIP Address: ")
+
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATProtocolCallback) {
     switch (op) {
         case '?':
@@ -575,8 +628,7 @@ CPP_AT_CALLBACK(CommsManager::ATProtocolCallback) {
             CPP_AT_SUCCESS();
             break;
     }
-
-    CPP_AT_ERROR();  // Should never get here.
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
 CPP_AT_HELP_CALLBACK(CommsManager::ATProtocolHelpCallback) {
@@ -736,7 +788,7 @@ CPP_AT_CALLBACK(CommsManager::ATWatchdogCallback) {
             CPP_AT_ERROR("Operator %c not supported.", op);
         }
     }
-    CPP_AT_ERROR();  // Should never get here.
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
 CPP_AT_CALLBACK(CommsManager::ATWiFiAPCallback) {
@@ -778,7 +830,7 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiAPCallback) {
             CPP_AT_ERROR("Operator %c not supported.", op);
         }
     }
-    CPP_AT_ERROR();  // Should never get here.
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
 CPP_AT_CALLBACK(CommsManager::ATWiFiSTACallback) {
@@ -817,7 +869,7 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiSTACallback) {
             CPP_AT_ERROR("Operator %c not supported.", op);
         }
     }
-    CPP_AT_ERROR();  // Should never get here.
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
 const CppAT::ATCommandDef_t at_command_list[] = {
@@ -838,6 +890,12 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .max_args = 5,  // TODO: check this value.
      .help_string_buf = "AT+DEVICE_INFO?\r\n\tQuery device information.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATDeviceInfoCallback, comms_manager)},
+    {.command_buf = "+ETHERNET",
+     .min_args = 0,
+     .max_args = 1,
+     .help_string_buf = "AT+ETHERNET=<enabled>\r\n\tEnable or disable the Ethernet "
+                        "interface.\r\n\tETHERNET?\r\n\tQuery the status of the Ethernet interface.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATEthernetCallback, comms_manager)},
     {.command_buf = "+ESP32_ENABLE",
      .min_args = 0,
      .max_args = 1,
@@ -855,6 +913,13 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string_buf = "AT+FLASH_ESP32\r\n\tTriggers a firmware update of the ESP32 from the firmware image stored in "
                         "the RP2040's flash memory.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFlashESP32Callback, comms_manager)},
+    {.command_buf = "+HOSTNAME",
+     .min_args = 0,
+     .max_args = 1,
+     .help_string_buf = "AT+HOSTNAME=<hostname>\r\n\tSet the hostname for all network "
+                        "interfaces.\r\n\tAT+HOSTNAME?\r\n\tQuery the "
+                        "hostname used for all network interfaces.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATHostnameCallback, comms_manager)},
     {.command_buf = "+LOG_LEVEL",
      .min_args = 0,
      .max_args = 1,
@@ -862,6 +927,11 @@ const CppAT::ATCommandDef_t at_command_list[] = {
          "AT+LOG_LEVEL=<log_level [SILENT ERRORS WARNINGS LOGS]>\r\n\tSet how much stuff gets printed to the "
          "console.\r\n\t",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATLogLevelCallback, comms_manager)},
+    {.command_buf = "+NETWORK_INFO",
+     .min_args = 0,
+     .max_args = 0,
+     .help_string_buf = "AT+NETWORK_INFO?\r\n\tQueries network information.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATNetworkInfoCallback, comms_manager)},
     {.command_buf = "+OTA",
      .min_args = 0,
      .max_args = 4,

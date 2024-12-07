@@ -1,5 +1,7 @@
 #include "object_dictionary.hh"
 
+#include "comms.hh"
+
 const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
 const uint8_t ObjectDictionary::kFirmwareVersionMinor = 6;
 const uint8_t ObjectDictionary::kFirmwareVersionPatch = 2;
@@ -112,6 +114,11 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             esp32_device_info.ethernet_mac[5] += 3;  // Ethernet MAC is base MAC + 3 to the last octet.
 
             memcpy(buf, &esp32_device_info + offset, buf_len);
+            break;
+        }
+        case kAddrNetworkInfo: {
+            ESP32NetworkInfo network_info = comms_manager.GetNetworkInfo();
+            memcpy(buf, &network_info + offset, buf_len);
             break;
         }
 #endif

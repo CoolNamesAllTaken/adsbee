@@ -3,18 +3,36 @@
 #include "comms.hh"
 
 bool SettingsManager::Apply() {
-    // Check if the AP settings have changed.
+    bool ethernet_restart_required = false;
+    bool wifi_sta_restart_required = false;
     bool wifi_ap_restart_required = false;
-    if (comms_manager.wifi_ap_enabled != settings.wifi_ap_enabled) {
+
+    // Check if the hostname has changed.
+    if (strcmp(comms_manager.hostname, settings.hostname) != 0) {
+        // Restart all network interfaces if the hostname has changed.
+        ethernet_restart_required = true;
+        wifi_sta_restart_required = true;
         wifi_ap_restart_required = true;
-    } else if (comms_manager.wifi_ap_enabled) {
-        if (comms_manager.wifi_ap_channel != settings.wifi_ap_channel) {
-            wifi_ap_restart_required = true;
-        } else if (strcmp(comms_manager.wifi_ap_ssid, settings.wifi_ap_ssid) != 0) {
-            wifi_ap_restart_required = true;
-        } else if (strcmp(comms_manager.wifi_ap_password, settings.wifi_ap_password) != 0) {
-            wifi_ap_restart_required = true;
-        }
+    }
+
+    // Apply the hostname.
+    strncpy(comms_manager.hostname, settings.hostname, Settings::kHostnameMaxLen);
+    comms_manager.hostname[Settings::kHostnameMaxLen] = '\0';
+
+    // Check if Ethernet settings have changed.
+    if (comms_manager.ethernet_enabled != settings.ethernet_enabled) {
+        ethernet_restart_required = true;
+    }
+
+    // Apply the Ethernet settings.
+    // Currently nothing to do here.
+
+    // Check if the AP settings have changed.
+    if (comms_manager.wifi_ap_enabled != settings.wifi_ap_enabled ||
+        (comms_manager.wifi_ap_enabled && (comms_manager.wifi_ap_channel != settings.wifi_ap_channel ||
+                                           strcmp(comms_manager.wifi_ap_ssid, settings.wifi_ap_ssid) != 0 ||
+                                           strcmp(comms_manager.wifi_ap_password, settings.wifi_ap_password) != 0))) {
+        wifi_ap_restart_required = true;
     }
     // Apply the AP settings.
     comms_manager.wifi_ap_enabled = settings.wifi_ap_enabled;
@@ -24,21 +42,30 @@ bool SettingsManager::Apply() {
             SettingsManager::Settings::kWiFiPasswordMaxLen + 1);
 
     // Check if the Station settings have changed.
-    bool wifi_sta_restart_required = false;
-    if (comms_manager.wifi_sta_enabled != settings.wifi_sta_enabled) {
+    if (comms_manager.wifi_sta_enabled != settings.wifi_sta_enabled ||
+        (comms_manager.wifi_sta_enabled &&
+         (strcmp(comms_manager.wifi_sta_ssid, settings.wifi_sta_ssid) != 0 ||
+          strcmp(comms_manager.wifi_sta_password, settings.wifi_sta_password) != 0))) {
         wifi_sta_restart_required = true;
-    } else if (comms_manager.wifi_sta_enabled) {
-        if (strcmp(comms_manager.wifi_sta_ssid, settings.wifi_sta_ssid) != 0) {
-            wifi_sta_restart_required = true;
-        } else if (strcmp(comms_manager.wifi_sta_password, settings.wifi_sta_password) != 0) {
-            wifi_sta_restart_required = true;
-        }
     }
+
     // Apply the Station settings.
     comms_manager.wifi_sta_enabled = settings.wifi_sta_enabled;
     strncpy(comms_manager.wifi_sta_ssid, settings.wifi_sta_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
     strncpy(comms_manager.wifi_sta_password, settings.wifi_sta_password,
             SettingsManager::Settings::kWiFiPasswordMaxLen + 1);
+
+    // Restart network interfaces if necessary.
+    if (ethernet_restart_required) {
+        if (!comms_manager.EthernetDeInit()) {
+            CONSOLE_ERROR("SettingsManager::Apply", "Failed to deinitialize Ethernet.");
+            return false;
+        }
+        if (!comms_manager.EthernetInit()) {
+            CONSOLE_ERROR("SettingsManager::Apply", "Failed to initialize Ethernet.");
+            return false;
+        }
+    }
 
     if (wifi_ap_restart_required || wifi_sta_restart_required) {
         if (!comms_manager.WiFiDeInit()) {

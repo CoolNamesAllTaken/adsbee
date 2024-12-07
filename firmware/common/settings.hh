@@ -11,7 +11,7 @@
 #include "pico/rand.h"
 #endif
 
-static const uint32_t kSettingsVersion = 0x5;  // Change this when settings format changes!
+static const uint32_t kSettingsVersion = 0x6;  // Change this when settings format changes!
 static const uint32_t kDeviceInfoVersion = 0x2;
 
 class SettingsManager {
@@ -48,6 +48,7 @@ class SettingsManager {
         static const int kDefaultTLMV = 1300;  // [mV]
         static const uint32_t kDefaultWatchdogTimeoutSec = 10;
         // NOTE: Lengths do not include null terminator.
+        static const uint16_t kHostnameMaxLen = 32;
         static const uint16_t kWiFiSSIDMaxLen = 32;
         static const uint16_t kWiFiPasswordMaxLen = 64;
         static const uint16_t kWiFiMaxNumClients = 6;
@@ -56,6 +57,9 @@ class SettingsManager {
         static const uint16_t kMaxNumFeeds = 6;
         static const uint16_t kFeedURIMaxNumChars = 63;
         static const uint16_t kFeedReceiverIDNumBytes = 8;
+        static const uint16_t kIPAddrStrLen = 16;   // XXX.XXX.XXX.XXX (does not include null terminator)
+        static const uint16_t kMACAddrStrLen = 18;  // XX:XX:XX:XX:XX:XX (does not include null terminator)
+        static const uint16_t kMACAddrNumBytes = 6;
 
         uint32_t settings_version = kSettingsVersion;
 
@@ -75,6 +79,9 @@ class SettingsManager {
         // ESP32 settings
         bool esp32_enabled = true;
 
+        char hostname[kHostnameMaxLen + 1] =
+            "ADSBee1090";  // Will be overwritten by the default SSID when device info is set.
+
         bool wifi_ap_enabled = true;
         uint8_t wifi_ap_channel = 1;
         char wifi_ap_ssid[kWiFiSSIDMaxLen + 1] = "";
@@ -83,6 +90,8 @@ class SettingsManager {
         bool wifi_sta_enabled = false;
         char wifi_sta_ssid[kWiFiSSIDMaxLen + 1] = "";
         char wifi_sta_password[kWiFiPasswordMaxLen + 1] = "";
+
+        bool ethernet_enabled = false;
 
         char feed_uris[kMaxNumFeeds][kFeedURIMaxNumChars + 1];
         uint16_t feed_ports[kMaxNumFeeds];
@@ -100,6 +109,8 @@ class SettingsManager {
                 // If able to load device info from EEPROM, use the last 16 characters in the part code as part of the
                 // WiFi SSID.
                 device_info.GetDefaultSSID(wifi_ap_ssid);
+                // Reuse the WiFi SSID as the hostname.
+                strncpy(hostname, wifi_ap_ssid, 32);
                 snprintf(wifi_ap_password, kWiFiPasswordMaxLen, "yummyflowers");
             }
 
@@ -121,17 +132,17 @@ class SettingsManager {
             }
 
             // Set default feed URIs.
-            // airplanes.live: 78.46.238.18:30004, Beast
-            strncpy(feed_uris[kMaxNumFeeds - 1], "78.46.238.18", kFeedURIMaxNumChars);
+            // adsb.fi: feed.adsb.fi:30004, Beast
+            strncpy(feed_uris[kMaxNumFeeds - 1], "feed.adsb.fi", kFeedURIMaxNumChars);
             feed_uris[kMaxNumFeeds - 1][kFeedURIMaxNumChars] = '\0';
             feed_ports[kMaxNumFeeds - 1] = 30004;
             feed_is_active[kMaxNumFeeds - 1] = true;
             feed_protocols[kMaxNumFeeds - 1] = kBeast;
-            // whereplane.xyz: whereplane.xyz:30004, Beast
-            strncpy(feed_uris[kMaxNumFeeds - 2], "feed.whereplane.xyz", kFeedURIMaxNumChars);
+            // airplanes.live: feed.airplanes.live:30004, Beast
+            strncpy(feed_uris[kMaxNumFeeds - 2], "feed.airplanes.live", kFeedURIMaxNumChars);
             feed_uris[kMaxNumFeeds - 2][kFeedURIMaxNumChars] = '\0';
             feed_ports[kMaxNumFeeds - 2] = 30004;
-            feed_is_active[kMaxNumFeeds - 2] = false;  // Not ready for primetime yet.
+            feed_is_active[kMaxNumFeeds - 2] = true;
             feed_protocols[kMaxNumFeeds - 2] = kBeast;
         }
     };
