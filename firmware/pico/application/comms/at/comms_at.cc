@@ -576,8 +576,31 @@ CPP_AT_CALLBACK(CommsManager::ATNetworkInfoCallback) {
             }
 
             CPP_AT_PRINTF("Ethernet: %s\r\n", network_info.ethernet_enabled ? "ENABLED" : "DISABLED");
-            // CPP_AT_PRINTF("\tIP Address: ")
+            if (!network_info.ethernet_has_ip) {
+                CPP_AT_PRINTF("\tNo IP address assigned.\r\n");
+            } else {
+                CPP_AT_PRINTF("\tIP Address: %s\r\n", network_info.ethernet_ip);
+                CPP_AT_PRINTF("\tSubnet Mask: %s\r\n", network_info.ethernet_netmask);
+                CPP_AT_PRINTF("\tGateway: %s\r\n", network_info.ethernet_gateway);
+            }
 
+            CPP_AT_PRINTF("WiFi Station: %s\r\n", network_info.wifi_sta_enabled ? "ENABLED" : "DISABLED");
+            CPP_AT_PRINTF("\tSSID: %s\r\n", network_info.wifi_sta_ssid);
+            if (!network_info.wifi_sta_has_ip) {
+                CPP_AT_PRINTF("\tNo IP address assigned.\r\n");
+            } else {
+                CPP_AT_PRINTF("\tIP Address: %s\r\n", network_info.wifi_sta_ip);
+                CPP_AT_PRINTF("\tSubnet Mask: %s\r\n", network_info.wifi_sta_netmask);
+                CPP_AT_PRINTF("\tGateway: %s\r\n", network_info.wifi_sta_gateway);
+            }
+
+            CPP_AT_PRINTF("WiFi Access Point: %s\r\n", network_info.wifi_ap_enabled ? "ENABLED" : "DISABLED");
+            CPP_AT_PRINTF("\tNum Clients: %u\r\n", network_info.wifi_ap_num_clients);
+            for (uint16_t i = 0; i < network_info.wifi_ap_num_clients; i++) {
+                CPP_AT_PRINTF("\t\tClient %u | IP: %s MAC: %s\r\n", i, network_info.wifi_ap_client_ips[i],
+                              network_info.wifi_ap_client_macs[i]);
+            }
+            CPP_AT_SILENT_SUCCESS();
             break;
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);

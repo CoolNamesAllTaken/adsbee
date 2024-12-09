@@ -119,12 +119,16 @@ class CommsManager {
         network_info.ethernet_enabled = ethernet_enabled;
         network_info.ethernet_has_ip = ethernet_has_ip_;
         memcpy(network_info.ethernet_ip, ethernet_ip, SettingsManager::Settings::kIPAddrStrLen + 1);
+        memcpy(network_info.ethernet_netmask, ethernet_netmask, SettingsManager::Settings::kIPAddrStrLen + 1);
+        memcpy(network_info.ethernet_gateway, ethernet_gateway, SettingsManager::Settings::kIPAddrStrLen + 1);
 
         // WiFi station network info.
         network_info.wifi_sta_enabled = wifi_sta_enabled;
         memcpy(network_info.wifi_sta_ssid, wifi_sta_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
         network_info.wifi_sta_has_ip = wifi_sta_has_ip_;
         memcpy(network_info.wifi_sta_ip, wifi_sta_ip, SettingsManager::Settings::kIPAddrStrLen + 1);
+        memcpy(network_info.wifi_sta_netmask, wifi_sta_netmask, SettingsManager::Settings::kIPAddrStrLen + 1);
+        memcpy(network_info.wifi_sta_gateway, wifi_sta_gateway, SettingsManager::Settings::kIPAddrStrLen + 1);
 
         // WiFi access point network info.
         network_info.wifi_ap_enabled = wifi_ap_enabled;

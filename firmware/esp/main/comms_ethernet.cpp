@@ -67,14 +67,15 @@ bool CommsManager::EthernetInit() {
     esp_netif_config.route_prio = 30;
     ethernet_netif_ = esp_netif_new(&cfg_spi);
 
-    ESP_ERROR_CHECK(esp_netif_set_hostname(ethernet_netif_, hostname));
+    // ESP_ERROR_CHECK(esp_netif_set_hostname(ethernet_netif_, hostname));
 
     // Init MAC and PHY configs to default
     eth_mac_config_t mac_config_spi = ETH_MAC_DEFAULT_CONFIG();
 
     eth_phy_config_t phy_config_spi = ETH_PHY_DEFAULT_CONFIG();
     phy_config_spi.autonego_timeout_ms = 0;
-    phy_config_spi.reset_gpio_num = config_.aux_io_c_pin;
+    phy_config_spi.reset_gpio_num = config_.aux_io_b_pin;
+    phy_config_spi.phy_addr = -1;  // Enable PHY address detection during initialization.
 
     // Init SPI bus
     spi_bus_config_t buscfg = {
@@ -84,6 +85,14 @@ bool CommsManager::EthernetInit() {
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
     };
+    esp_err_t ret = gpio_install_isr_service(0);
+    if (ret == ESP_ERR_INVALID_STATE) {
+        // ISR handler has been already installed so no issues
+        CONSOLE_INFO("CommsManager::EthernetInit", "GPIO ISR handler has been already installed");
+    } else if (ret != ESP_OK) {
+        CONSOLE_ERROR("CommsManager::EthernetInit", "GPIO ISR handler install failed");
+        return false;
+    }
     ESP_ERROR_CHECK(spi_bus_initialize(config_.aux_spi_handle, &buscfg, SPI_DMA_CH_AUTO));
 
     // Configure SPI interface and Ethernet driver for specific SPI module
@@ -101,11 +110,9 @@ bool CommsManager::EthernetInit() {
         .pre_cb = nullptr,
         .post_cb = nullptr};
 
-    // Set remaining GPIO numbers and configuration used by the SPI module
-    phy_config_spi.phy_addr = 1;
-
+    // Set remaining GPIO numbers and configuration used by the SPI module.
     eth_w5500_config_t w5500_config = ETH_W5500_DEFAULT_CONFIG(config_.aux_spi_handle, &spi_devcfg);
-    w5500_config.int_gpio_num = config_.aux_io_b_pin;
+    w5500_config.int_gpio_num = config_.aux_io_c_pin;
     mac_spi = esp_eth_mac_new_w5500(&w5500_config, &mac_config_spi);
     phy_spi = esp_eth_phy_new_w5500(&phy_config_spi);
 

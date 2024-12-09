@@ -55,11 +55,15 @@ class ObjectDictionary {
         bool ethernet_enabled = false;
         bool ethernet_has_ip = false;
         char ethernet_ip[SettingsManager::Settings::kIPAddrStrLen + 1] = {0};
+        char ethernet_netmask[SettingsManager::Settings::kIPAddrStrLen + 1] = {0};
+        char ethernet_gateway[SettingsManager::Settings::kIPAddrStrLen + 1] = {0};
 
         bool wifi_sta_enabled = false;
         char wifi_sta_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1] = {0};
         bool wifi_sta_has_ip = false;
         char wifi_sta_ip[SettingsManager::Settings::kIPAddrStrLen + 1] = {0};
+        char wifi_sta_netmask[SettingsManager::Settings::kIPAddrStrLen + 1] = {0};
+        char wifi_sta_gateway[SettingsManager::Settings::kIPAddrStrLen + 1] = {0};
 
         bool wifi_ap_enabled = false;
         bool wifi_ap_num_clients = 0;
