@@ -90,6 +90,21 @@ class CommsManager {
     };
 
     /**
+     * Initialize prerequisites for WiFi and Ethernet.
+     */
+    bool Init() {
+        if (esp_netif_init() != ESP_OK) {
+            ESP_LOGE("CommsManager::Init", "Failed to initialize esp_netif.");
+            return false;
+        }
+        if (esp_event_loop_create_default() != ESP_OK) {
+            ESP_LOGE("CommsManager::Init", "Failed to create default event loop.");
+            return false;
+        }
+        return true;
+    }
+
+    /**
      * Initialize the Ethernet peripheral (WIZNet W5500).
      */
     bool EthernetInit();

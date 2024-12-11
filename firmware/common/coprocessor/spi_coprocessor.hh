@@ -489,8 +489,9 @@ class SPICoprocessor {
 #elif ON_ESP32
     /**
      * Helper function used by callbacks to set the handshake pin high or low on the ESP32.
+     * Located in IRAM for performance improvements when called from ISR.
      */
-    void SetSPIHandshakePinLevel(bool level) {
+    void IRAM_ATTR SetSPIHandshakePinLevel(bool level) {
         // Only set the handshake pin HI when we know we want to solicit a response and not block + wait.
         // Handshake pin can always be set low.
         gpio_set_level(config_.spi_handshake_pin, level && use_handshake_pin_);

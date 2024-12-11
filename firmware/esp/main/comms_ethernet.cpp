@@ -50,11 +50,8 @@ void CommsManager::EthernetEventHandler(void* arg, esp_event_base_t event_base, 
 }
 
 bool CommsManager::EthernetInit() {
-    ESP_ERROR_CHECK(esp_netif_init());
-
     //  Create instance(s) of esp-netif for SPI Ethernet(s)
-    esp_netif_inherent_config_t esp_netif_config = ESP_NETIF_INHERENT_DEFAULT_ETH();
-    esp_netif_config_t cfg_spi = {.base = &esp_netif_config, .stack = ESP_NETIF_NETSTACK_DEFAULT_ETH};
+    esp_netif_config_t cfg = ESP_NETIF_DEFAULT_ETH();
 
     char if_key_str[10];
     char if_desc_str[10];
@@ -62,10 +59,7 @@ bool CommsManager::EthernetInit() {
     itoa(0, num_str, 10);
     strcat(strcpy(if_key_str, "ETH_SPI_"), num_str);
     strcat(strcpy(if_desc_str, "eth"), num_str);
-    esp_netif_config.if_key = if_key_str;
-    esp_netif_config.if_desc = if_desc_str;
-    esp_netif_config.route_prio = 30;
-    ethernet_netif_ = esp_netif_new(&cfg_spi);
+    ethernet_netif_ = esp_netif_new(&cfg);
 
     // ESP_ERROR_CHECK(esp_netif_set_hostname(ethernet_netif_, hostname));
 
@@ -103,9 +97,13 @@ bool CommsManager::EthernetInit() {
 
         .command_bits = 16,  // Actually it's the address phase in W5500 SPI frame
         .address_bits = 8,   // Actually it's the control phase in W5500 SPI frame
+        .dummy_bits = 0,
         .mode = 0,
+        .clock_source = SPI_CLK_SRC_DEFAULT,
         .clock_speed_hz = config_.aux_spi_clk_rate_hz,
+        .input_delay_ns = 0,
         .spics_io_num = config_.aux_spi_cs_pin,
+        .flags = 0,
         .queue_size = 20,
         .pre_cb = nullptr,
         .post_cb = nullptr};

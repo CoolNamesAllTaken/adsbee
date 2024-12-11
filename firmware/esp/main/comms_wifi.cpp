@@ -419,8 +419,6 @@ static const char* get_auth_mode_name(wifi_auth_mode_t auth_mode) {
 // }
 
 bool CommsManager::WiFiInit() {
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_t* wifi_ap_netif_ = esp_netif_create_default_wifi_ap();
     assert(wifi_ap_netif_);
     esp_netif_t* wifi_sta_netif_ = esp_netif_create_default_wifi_sta();
