@@ -39,7 +39,12 @@ bool CommsManager::Update() {
 }
 
 bool CommsManager::UpdateNetworkConsole() {
+    static bool recursion_alert = false;
+    if (recursion_alert) {
+        return false;
+    }
     if (esp32.IsEnabled()) {
+        recursion_alert = true;
         // Send outgoing network console characters.
         char esp32_console_tx_buf[SPICoprocessor::SCWritePacket::kDataMaxLenBytes];
         char c = '\0';
@@ -58,6 +63,7 @@ bool CommsManager::UpdateNetworkConsole() {
                 }
             }
         }
+        recursion_alert = false;
     }
     return true;
 }
@@ -202,6 +208,7 @@ bool CommsManager::network_console_putc(char c) {
         CONSOLE_ERROR("CommsManager::network_console_putc", "Overflowed buffer for outgoing network console chars.");
         return false;
     }
+    recursion_alert = false;
     return true;
 }
 bool CommsManager::network_console_puts(const char *buf, uint16_t len) {
