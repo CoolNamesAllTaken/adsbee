@@ -51,8 +51,7 @@ class CommsManager {
     CommsManager(CommsManagerConfig config_in) : config_(config_in) {
         wifi_clients_list_mutex_ = xSemaphoreCreateMutex();
         wifi_ap_message_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(NetworkMessage));
-        ip_wan_decoded_transponder_packet_queue_ =
-            xQueueCreate(kWiFiMessageQueueLen, sizeof(DecodedTransponderPacket));
+        ip_wan_decoded_transponder_packet_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(DecodedTransponderPacket));
     }
 
     ~CommsManager() {
@@ -109,7 +108,7 @@ class CommsManager {
         return true;
     }
 
-        /**
+    /**
      * Returns whether the ESP32 is connected to an external network via Ethernet.
      * @retval True if connected and assigned IP address, false otherwise.
      */
@@ -195,6 +194,12 @@ class CommsManager {
     bool WiFiDeInit();
 
     /**
+     * Returns whether the WiFi access point is currently hosting any clients. Used to avoid sending packets to the WiFi
+     * AP queue when nobody is listening.
+     */
+    bool WiFiAccessPointHasClients() { return num_wifi_clients_ > 0; }
+
+    /**
      * Send a raw UDP message to all statiosn that are connected to the ESP32 while operating in access point mode.
      */
     bool WiFiAccessPointSendMessageToAllStations(NetworkMessage& message);
@@ -210,6 +215,9 @@ class CommsManager {
      */
     bool WiFiStationHasIP() { return wifi_sta_has_ip_; }
 
+    // Public so that pass-through functions can access it.
+    void WiFiEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
+
     /**
      * Send messages to feeds that are being fed via an internet or LAN connection.
      */
@@ -222,9 +230,6 @@ class CommsManager {
      * @retval True if packet was successfully sent, false otherwise.
      */
     bool IPWANSendDecodedTransponderPacket(DecodedTransponderPacket& decoded_packet);
-
-    // Public so that pass-through functions can access it.
-    void WiFiEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 
     // Network hostname.
     char hostname[SettingsManager::Settings::kHostnameMaxLen + 1] = {0};

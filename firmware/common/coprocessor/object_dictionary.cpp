@@ -1,4 +1,7 @@
 #include "object_dictionary.hh"
+#ifdef ON_ESP32
+#include "device_info.hh"
+#endif
 
 #include "comms.hh"
 
@@ -101,18 +104,7 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             break;
 #ifdef ON_ESP32
         case kAddrDeviceInfo: {
-            ESP32DeviceInfo esp32_device_info;
-
-            // Get Base MAC address as well as WiFi Station and AP MAC addresses.
-            ESP_ERROR_CHECK(esp_efuse_mac_get_default(esp32_device_info.base_mac));
-            ESP_ERROR_CHECK(esp_wifi_get_mac(WIFI_IF_STA, esp32_device_info.wifi_station_mac));  // base mac.
-            ESP_ERROR_CHECK(esp_wifi_get_mac(WIFI_IF_AP, esp32_device_info.wifi_ap_mac));  // base+1 to last octet.
-            // Calculate the remaining (BT + Ethernet) MAC addresses from base MAC.
-            memcpy(esp32_device_info.bluetooth_mac, esp32_device_info.base_mac, kMACAddrLenBytes);
-            esp32_device_info.bluetooth_mac[5] += 2;  // Bluetooth MAC is base MAC + 2 to the last octet.
-            memcpy(esp32_device_info.ethernet_mac, esp32_device_info.base_mac, kMACAddrLenBytes);
-            esp32_device_info.ethernet_mac[5] += 3;  // Ethernet MAC is base MAC + 3 to the last octet.
-
+            ESP32DeviceInfo esp32_device_info = GetESP32DeviceInfo();
             memcpy(buf, &esp32_device_info + offset, buf_len);
             break;
         }

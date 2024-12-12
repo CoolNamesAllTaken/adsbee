@@ -181,7 +181,7 @@ bool ADSBeeServer::Update() {
     // Broadcast aircraft locations to connected WiFi clients over GDL90.
     if (timestamp_ms - last_gdl90_report_timestamp_ms_ > kGDL90ReportingIntervalMs) {
         last_gdl90_report_timestamp_ms_ = timestamp_ms;
-        if (!ReportGDL90()) {
+        if (comms_manager.WiFiAccessPointHasClients() && !ReportGDL90()) {
             CONSOLE_ERROR("ADSBeeServer::Update", "Encountered error while reporting GDL90.");
             ret = false;
         }

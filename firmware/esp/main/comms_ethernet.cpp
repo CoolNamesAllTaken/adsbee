@@ -1,4 +1,5 @@
 #include "comms.hh"
+#include "device_info.hh"  // For getting MAC address.
 #include "driver/spi_master.h"
 #include "esp_check.h"
 #include "esp_eth_driver.h"
@@ -32,11 +33,11 @@ bool CommsManager::EthernetDeInit() {
 }
 
 void CommsManager::EthernetEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
-    uint8_t mac_addr[6] = {0};
     esp_eth_handle_t eth_handle = *(esp_eth_handle_t*)event_data;
 
     switch (event_id) {
-        case ETHERNET_EVENT_CONNECTED:
+        case ETHERNET_EVENT_CONNECTED: {
+            uint8_t mac_addr[6] = {0};
             esp_eth_ioctl(eth_handle, ETH_CMD_G_MAC_ADDR, mac_addr);
             CONSOLE_INFO("CommsManager::EthernetEventHandler", "Ethernet Link Up");
             CONSOLE_INFO("CommsManager::EthernetEventHandler", "Ethernet HW Addr %02x:%02x:%02x:%02x:%02x:%02x",
@@ -44,7 +45,8 @@ void CommsManager::EthernetEventHandler(void* arg, esp_event_base_t event_base, 
             ethernet_connected_ = true;
             ethernet_link_up_timestamp_ms_ = get_time_since_boot_ms();
             break;
-        case ETHERNET_EVENT_DISCONNECTED:
+        }
+        case ETHERNET_EVENT_DISCONNECTED: {
             CONSOLE_INFO("CommsManager::EthernetEventHandler", "Ethernet Link Down");
             ethernet_connected_ = false;
             ethernet_has_ip_ = false;
@@ -53,14 +55,18 @@ void CommsManager::EthernetEventHandler(void* arg, esp_event_base_t event_base, 
                 ScheduleDelayedFunctionCall(kEthernetReconnectIntervalMs, &connect_to_ethernet);
             }
             break;
-        case ETHERNET_EVENT_START:
+        }
+        case ETHERNET_EVENT_START: {
             CONSOLE_INFO("CommsManager::EthernetEventHandler", "Ethernet Started");
             break;
-        case ETHERNET_EVENT_STOP:
+        }
+        case ETHERNET_EVENT_STOP: {
             CONSOLE_INFO("CommsManager::EthernetEventHandler", "Ethernet Stopped");
             break;
-        default:
+        }
+        default: {
             break;
+        }
     }
 }
 
@@ -131,6 +137,10 @@ bool CommsManager::EthernetInit() {
     ESP_ERROR_CHECK(esp_eth_driver_install(&eth_config, &ethernet_handle));
 
     // Attach Ethernet driver to TCP/IP stack
+    // ESP_ERROR_CHECK(esp_netif_set_mac(ethernet_netif_, GetESP32DeviceInfo().ethernet_mac));
+    // memcpy(ethernet_netif_->mac, GetESP32DeviceInfo().ethernet_mac, sizeof(ethernet_netif_->mac));
+    ObjectDictionary::ESP32DeviceInfo device_info = GetESP32DeviceInfo();
+    ESP_ERROR_CHECK(esp_eth_ioctl(ethernet_handle, ETH_CMD_S_MAC_ADDR, device_info.ethernet_mac));
     ESP_ERROR_CHECK(esp_netif_attach(ethernet_netif_, esp_eth_new_netif_glue(ethernet_handle)));
 
     // Start Ethernet driver
