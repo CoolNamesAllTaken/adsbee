@@ -29,7 +29,7 @@ ObjectDictionary object_dictionary;
 SPICoprocessor pico = SPICoprocessor({});
 ADSBeeServer adsbee_server = ADSBeeServer();
 SettingsManager settings_manager = SettingsManager();
-CommsManager comms_manager;
+CommsManager comms_manager = CommsManager({});
 
 // Main application
 extern "C" void app_main(void) {

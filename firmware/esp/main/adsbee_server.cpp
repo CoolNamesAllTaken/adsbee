@@ -75,6 +75,8 @@ bool ADSBeeServer::Init() {
     }
     ESP_ERROR_CHECK(ret);
 
+    comms_manager.Init();  // Initialize prerequisites for Ethernet and WiFi.
+
     while (true) {
         if (!pico.Read(ObjectDictionary::kAddrSettingsData, settings_manager.settings)) {
             CONSOLE_ERROR("ADSBeeServer::Init", "Failed to read settings from Pico on startup.");

@@ -10,10 +10,10 @@ static const uint32_t kESP32EnableBootupDelayMs = 500;
 #include "adsbee_server.hh"
 
 // Called after a transaction is queued and ready for pickup by master. We use this to set the handshake line high.
-void esp_spi_post_setup_cb(spi_slave_transaction_t *trans) { pico.SetSPIHandshakePinLevel(1); }
+void IRAM_ATTR esp_spi_post_setup_cb(spi_slave_transaction_t *trans) { pico.SetSPIHandshakePinLevel(1); }
 
 // Called after transaction is sent/received. We use this to set the handshake line low.
-void esp_spi_post_trans_cb(spi_slave_transaction_t *trans) { pico.SetSPIHandshakePinLevel(0); }
+void IRAM_ATTR esp_spi_post_trans_cb(spi_slave_transaction_t *trans) { pico.SetSPIHandshakePinLevel(0); }
 
 #endif
 

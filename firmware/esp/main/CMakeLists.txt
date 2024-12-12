@@ -8,6 +8,7 @@ idf_component_register(
         "../../common/utils"
         "../../common/comms/gdl90"
         "../../common/comms/json"
+        "../../common/settings"
         "target_test"
     INCLUDE_DIRS
         "."
@@ -17,6 +18,7 @@ idf_component_register(
         "../../common/comms/json"
         "../../common/coprocessor"
         "../../common/utils"
+        "../../common/settings"
         "target_test"
     EMBED_TXTFILES
         "web/index.html"

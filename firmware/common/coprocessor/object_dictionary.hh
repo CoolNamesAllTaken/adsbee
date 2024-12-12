@@ -1,7 +1,6 @@
 #ifndef OBJECT_DICTIONARY_HH_
 #define OBJECT_DICTIONARY_HH_
 
-#include "comms.hh"
 #include "settings.hh"
 #include "stdint.h"
 #ifdef ON_ESP32
@@ -33,15 +32,52 @@ class ObjectDictionary {
         kAddrAircraftDictionaryMetrics = 0x08,  // For forwarding dictionary metrics from RP2040 to ESP32.
         kAddrDeviceInfo = 0x09,                 // ESP32 MAC addresses.
         kAddrConsole = 0xA,                     // Pipe for console characters.
+        kAddrNetworkInfo = 0xB,                 // Network information for ESP32.
         kNumAddrs
     };
 
+    /**
+     * Struct used to retrieve device information from the ESP32.
+     */
     struct ESP32DeviceInfo {
         uint8_t base_mac[kMACAddrLenBytes];
         uint8_t wifi_station_mac[kMACAddrLenBytes];
         uint8_t wifi_ap_mac[kMACAddrLenBytes];
         uint8_t bluetooth_mac[kMACAddrLenBytes];
         uint8_t ethernet_mac[kMACAddrLenBytes];
+    };
+
+    /**
+     * Struct used to retrieve network information from the ESP32.
+     */
+    // TODO: Move all consts to SettingsManager so it compiles on RP2040.
+    struct ESP32NetworkInfo {
+        bool ethernet_enabled = false;
+        bool ethernet_has_ip = false;
+        char ethernet_ip[SettingsManager::Settings::kIPAddrStrLen + 1] = {0};
+        char ethernet_netmask[SettingsManager::Settings::kIPAddrStrLen + 1] = {0};
+        char ethernet_gateway[SettingsManager::Settings::kIPAddrStrLen + 1] = {0};
+
+        bool wifi_sta_enabled = false;
+        char wifi_sta_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1] = {0};
+        bool wifi_sta_has_ip = false;
+        char wifi_sta_ip[SettingsManager::Settings::kIPAddrStrLen + 1] = {0};
+        char wifi_sta_netmask[SettingsManager::Settings::kIPAddrStrLen + 1] = {0};
+        char wifi_sta_gateway[SettingsManager::Settings::kIPAddrStrLen + 1] = {0};
+
+        bool wifi_ap_enabled = false;
+        bool wifi_ap_num_clients = 0;
+        char wifi_ap_client_ips[SettingsManager::Settings::kWiFiMaxNumClients]
+                               [SettingsManager::Settings::kIPAddrStrLen + 1];
+        char wifi_ap_client_macs[SettingsManager::Settings::kWiFiMaxNumClients]
+                                [SettingsManager::Settings::kMACAddrStrLen + 1];
+
+        ESP32NetworkInfo() {
+            for (uint16_t i = 0; i < SettingsManager::Settings::kWiFiMaxNumClients; i++) {
+                memset(wifi_ap_client_ips[i], 0x0, SettingsManager::Settings::kIPAddrStrLen + 1);
+                memset(wifi_ap_client_macs[i], 0x0, SettingsManager::Settings::kMACAddrNumBytes);
+            }
+        }
     };
 
     /**

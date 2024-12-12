@@ -39,7 +39,12 @@ bool CommsManager::Update() {
 }
 
 bool CommsManager::UpdateNetworkConsole() {
+    static bool recursion_alert = false;
+    if (recursion_alert) {
+        return false;
+    }
     if (esp32.IsEnabled()) {
+        recursion_alert = true;
         // Send outgoing network console characters.
         char esp32_console_tx_buf[SPICoprocessor::SCWritePacket::kDataMaxLenBytes];
         char c = '\0';
@@ -58,6 +63,7 @@ bool CommsManager::UpdateNetworkConsole() {
                 }
             }
         }
+        recursion_alert = false;
     }
     return true;
 }
@@ -184,22 +190,25 @@ bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char
 
 bool CommsManager::network_console_putc(char c) {
     static bool recursion_alert = false;
+    if (recursion_alert) {
+        return false;  // Don't get into infinite loops in case UpdateAT or Push() create error messages that would in
+                       // turn create more network_console_putc calls.
+    }
+    recursion_alert = true;
     if (!comms_manager.esp32_console_tx_queue.Push(c)) {
-        if (!recursion_alert) {
-            // Try flushing the buffer before dumping it, but don't get into an infinite loop if that creates errors
-            // that also want to be printed.
-            recursion_alert = true;
-            comms_manager.UpdateAT();
+        // Try flushing the buffer before dumping it.
+        comms_manager.UpdateAT();
+        if (comms_manager.esp32_console_tx_queue.Push(c)) {
             recursion_alert = false;
-            if (comms_manager.esp32_console_tx_queue.Push(c)) {
-                return true;  // Crisis averted! Phew.
-            }
+            return true;  // Crisis averted! Phew.
         }
-
+        // Flush failed, clear the buffer.
         comms_manager.esp32_console_tx_queue.Clear();
+        recursion_alert = false;
         CONSOLE_ERROR("CommsManager::network_console_putc", "Overflowed buffer for outgoing network console chars.");
         return false;
     }
+    recursion_alert = false;
     return true;
 }
 bool CommsManager::network_console_puts(const char *buf, uint16_t len) {

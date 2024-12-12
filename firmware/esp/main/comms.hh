@@ -2,6 +2,8 @@
 #define COMMS_HH_
 
 #include "data_structures.hh"
+#include "driver/gpio.h"
+#include "esp_eth.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
@@ -10,15 +12,26 @@
 #include "freertos/task.h"
 #include "gdl90/gdl90_utils.hh"
 #include "lwip/sockets.h"  // For port definition.
+#include "object_dictionary.hh"
 #include "settings.hh"
 
 class CommsManager {
    public:
     static const uint16_t kMaxNetworkMessageLenBytes = 256;
     static const uint16_t kWiFiMessageQueueLen = 110;
-    static const uint16_t kMACAddressNumBytes = 6;
     static const uint32_t kWiFiSTATaskUpdateIntervalMs = 100;
     static const uint32_t kWiFiSTATaskUpdateIntervalTicks = kWiFiSTATaskUpdateIntervalMs / portTICK_PERIOD_MS;
+
+    struct CommsManagerConfig {
+        int32_t aux_spi_clk_rate_hz = 40e6;  // 40 MHz (this could go up to 80MHz).
+        spi_host_device_t aux_spi_handle = SPI3_HOST;
+        gpio_num_t aux_spi_mosi_pin = GPIO_NUM_14;
+        gpio_num_t aux_spi_miso_pin = GPIO_NUM_13;
+        gpio_num_t aux_spi_clk_pin = GPIO_NUM_17;
+        gpio_num_t aux_spi_cs_pin = GPIO_NUM_18;
+        gpio_num_t aux_io_b_pin = GPIO_NUM_48;  // W5500 RST
+        gpio_num_t aux_io_c_pin = GPIO_NUM_47;  // W5500 INT
+    };
 
     struct NetworkMessage {
         in_port_t port = 0;
@@ -28,7 +41,7 @@ class CommsManager {
         NetworkMessage() { memset(data, 0x0, kMaxNetworkMessageLenBytes); }
     };
 
-    CommsManager() {
+    CommsManager(CommsManagerConfig config_in) : config_(config_in) {
         wifi_clients_list_mutex_ = xSemaphoreCreateMutex();
         wifi_ap_message_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(NetworkMessage));
         wifi_sta_decoded_transponder_packet_queue_ =
@@ -49,7 +62,7 @@ class CommsManager {
      */
     static uint64_t MACToUint64(uint8_t* mac_buf_in) {
         uint64_t mac_out = 0;
-        for (uint16_t i = 0; i < kMACAddressNumBytes; i++) {
+        for (uint16_t i = 0; i < SettingsManager::Settings::kMACAddrNumBytes; i++) {
             mac_out |= mac_buf_in[i] << ((5 - i) * 8);
         }
         return mac_out;
@@ -70,11 +83,94 @@ class CommsManager {
          * Get the MAC address by writing it out to a buffer, assuming the buffer is a 6 Byte MAC address MSB first.
          */
         void GetMAC(uint8_t* mac_buf_out) {
-            for (uint16_t i = 0; i < kMACAddressNumBytes; i++) {
+            for (uint16_t i = 0; i < SettingsManager::Settings::kMACAddrNumBytes; i++) {
                 mac_buf_out[i] = mac >> ((5 - i) * 8);
             }
         }
     };
+
+    /**
+     * Initialize prerequisites for WiFi and Ethernet.
+     */
+    bool Init() {
+        if (esp_netif_init() != ESP_OK) {
+            ESP_LOGE("CommsManager::Init", "Failed to initialize esp_netif.");
+            return false;
+        }
+        if (esp_event_loop_create_default() != ESP_OK) {
+            ESP_LOGE("CommsManager::Init", "Failed to create default event loop.");
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Initialize the Ethernet peripheral (WIZNet W5500).
+     */
+    bool EthernetInit();
+
+    /**
+     * De-initialize the Ethernet peripheral (WIZNet W5500).
+     */
+    bool EthernetDeInit();
+
+    /**
+     * Handle Ethernet hardware level events.
+     */
+    void EthernetEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
+
+    /**
+     * Handle IP level events for Ethernet. Automatically initialized when either Ethernet or WiFi is initialized.
+     */
+    void EthernetIPEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
+
+    /**
+     * Get the current status of ESP32 network interfaces as an ESP32NetworkInfo struct.
+     */
+    ObjectDictionary::ESP32NetworkInfo GetNetworkInfo() {
+        ObjectDictionary::ESP32NetworkInfo network_info;
+
+        // Ethernet network info.
+        network_info.ethernet_enabled = ethernet_enabled;
+        network_info.ethernet_has_ip = ethernet_has_ip_;
+        memcpy(network_info.ethernet_ip, ethernet_ip, SettingsManager::Settings::kIPAddrStrLen + 1);
+        memcpy(network_info.ethernet_netmask, ethernet_netmask, SettingsManager::Settings::kIPAddrStrLen + 1);
+        memcpy(network_info.ethernet_gateway, ethernet_gateway, SettingsManager::Settings::kIPAddrStrLen + 1);
+
+        // WiFi station network info.
+        network_info.wifi_sta_enabled = wifi_sta_enabled;
+        memcpy(network_info.wifi_sta_ssid, wifi_sta_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
+        network_info.wifi_sta_has_ip = wifi_sta_has_ip_;
+        memcpy(network_info.wifi_sta_ip, wifi_sta_ip, SettingsManager::Settings::kIPAddrStrLen + 1);
+        memcpy(network_info.wifi_sta_netmask, wifi_sta_netmask, SettingsManager::Settings::kIPAddrStrLen + 1);
+        memcpy(network_info.wifi_sta_gateway, wifi_sta_gateway, SettingsManager::Settings::kIPAddrStrLen + 1);
+
+        // WiFi access point network info.
+        network_info.wifi_ap_enabled = wifi_ap_enabled;
+        network_info.wifi_ap_num_clients = num_wifi_clients_;
+        for (uint16_t i = 0; i < SettingsManager::Settings::kWiFiMaxNumClients; i++) {
+            // Turn client IP address into a string.
+            esp_ip4_addr_t ip = wifi_clients_list_[i].ip;
+            snprintf(network_info.wifi_ap_client_ips[i], SettingsManager::Settings::kIPAddrStrLen, IPSTR, IP2STR(&ip));
+            network_info.wifi_ap_client_ips[i][SettingsManager::Settings::kIPAddrStrLen] = '\0';
+
+            // Turn client MAC address into a string.
+            uint8_t mac[SettingsManager::Settings::kMACAddrNumBytes];
+            wifi_clients_list_[i].GetMAC(mac);
+            snprintf(network_info.wifi_ap_client_macs[i], SettingsManager::Settings::kMACAddrStrLen, MACSTR,
+                     MAC2STR(mac));
+            network_info.wifi_ap_client_macs[i][SettingsManager::Settings::kMACAddrStrLen] = '\0';
+        }
+
+        return network_info;
+    }
+
+    inline uint16_t GetNumWiFiClients() { return num_wifi_clients_; }
+
+    /**
+     * Handler for IP events associated with ethernet and WiFi. Public so that pass through functions can access it.
+     */
+    void IPEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 
     /**
      * Initialize the WiFi peripheral (access point and station). WiFiDeInit() and WiFiInit() should be called every
@@ -118,25 +214,44 @@ class CommsManager {
 
     // Public so that pass-through functions can access it.
     void WiFiEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
-    void IPEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 
-    inline uint16_t GetNumWiFiClients() { return num_wifi_clients_; }
+    // Network hostname.
+    char hostname[SettingsManager::Settings::kHostnameMaxLen + 1] = {0};
 
+    // Ethernet public variables.
+    bool ethernet_enabled = false;
+    char ethernet_ip[SettingsManager::Settings::kIPAddrStrLen + 1] = {
+        0};  // IP address of the ESP32 Ethernet interface.
+    char ethernet_netmask[SettingsManager::Settings::kIPAddrStrLen + 1] = {
+        0};  // Netmask of the ESP32 Ethernet interface.
+    char ethernet_gateway[SettingsManager::Settings::kIPAddrStrLen + 1] = {
+        0};  // Gateway of the ESP32 Ethernet interface.
+
+    // WiFi AP public variables.
     bool wifi_ap_enabled = true;
     uint8_t wifi_ap_channel = 1;
-    esp_netif_t* wifi_ap_netif_ = nullptr;
-    ;
     char wifi_ap_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
     char wifi_ap_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
-    esp_netif_t* wifi_sta_netif_ = nullptr;
+
+    // WiFi STA public variables.
     bool wifi_sta_enabled = false;
     char wifi_sta_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
     char wifi_sta_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
+    char wifi_sta_ip[SettingsManager::Settings::kIPAddrStrLen + 1] = {0};       // IP address of the ESP32 WiFi station.
+    char wifi_sta_netmask[SettingsManager::Settings::kIPAddrStrLen + 1] = {0};  // Netmask of the ESP32 WiFi station.
+    char wifi_sta_gateway[SettingsManager::Settings::kIPAddrStrLen + 1] = {0};  // Gateway of the ESP32 WiFi station.
 
     // Feed statistics (messages per second).
     uint16_t feed_mps[SettingsManager::Settings::kMaxNumFeeds] = {0};
 
    private:
+    /**
+     * Initializes the IP event handler that is common to both Ethernet and WiFi events. Automatically called by
+     * WiFiInit() and EthernetInit().
+     * @retval True if successfully initialized, false otherwise.
+     */
+    bool IPInit();
+
     /**
      * Adds a WiFi client to the WiFi client list. Takes both an IP and a MAC address because this is when the IP
      * address is assigned, and the MAC address will be needed for removing the client later.
@@ -175,17 +290,30 @@ class CommsManager {
         xSemaphoreGive(wifi_clients_list_mutex_);
     }
 
+    CommsManagerConfig config_;
+
+    bool wifi_was_initialized_ = false;
+    bool ip_event_handler_was_initialized_ = false;
+
+    // Ethernet private variables.
+    esp_netif_t* ethernet_netif_ = nullptr;
+    bool ethernet_has_ip_ = false;
+
+    // WiFi AP private variables.
+    esp_netif_t* wifi_ap_netif_ = nullptr;
     NetworkClient wifi_clients_list_[SettingsManager::Settings::kWiFiMaxNumClients] = {0, 0, 0};
     uint16_t num_wifi_clients_ = 0;
     SemaphoreHandle_t wifi_clients_list_mutex_;
-    EventGroupHandle_t wifi_event_group_;  // FreeRTOS event group to signal when we are connected.
     QueueHandle_t wifi_ap_message_queue_;
+
+    // WiFi STA private variables.
+    esp_netif_t* wifi_sta_netif_ = nullptr;
+    EventGroupHandle_t wifi_event_group_;  // FreeRTOS event group to signal when we are connected.
     QueueHandle_t wifi_sta_decoded_transponder_packet_queue_;
     bool run_wifi_ap_task_ = false;   // Flag used to tell wifi AP task to shut down.
     bool run_wifi_sta_task_ = false;  // Flag used to tell wifi station task to shut down.
     TaskHandle_t wifi_ap_task_handle = nullptr;
     TaskHandle_t wifi_sta_task_handle = nullptr;
-    bool wifi_was_initialized_ = false;
     bool wifi_sta_has_ip_ =
         false;  // Flag to indicate when successfully connected to WiFi. Don't create sockets until STA is connected.
 
