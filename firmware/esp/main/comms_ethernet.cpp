@@ -54,7 +54,7 @@ bool CommsManager::EthernetInit() {
     esp_netif_config_t cfg = ESP_NETIF_DEFAULT_ETH();
     ethernet_netif_ = esp_netif_new(&cfg);
 
-    // ESP_ERROR_CHECK(esp_netif_set_hostname(ethernet_netif_, hostname));
+    ESP_ERROR_CHECK(esp_netif_set_hostname(ethernet_netif_, hostname));
 
     // Register user defined event handers
     ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &ethernet_event_handler, NULL));
@@ -121,43 +121,4 @@ bool CommsManager::EthernetInit() {
     ESP_ERROR_CHECK(esp_eth_start(eth_handle));
 
     return true;
-
-    // phy_config.autonego_timeout_ms = 0;
-    // phy_config.reset_gpio_num = config_.aux_io_b_pin;
-    // phy_config.phy_addr = -1;  // Enable PHY address detection during initialization.
-
-    // esp_err_t ret = gpio_install_isr_service(0);
-    // if (ret == ESP_ERR_INVALID_STATE) {
-    //     // ISR handler has been already installed so no issues
-    //     CONSOLE_INFO("CommsManager::EthernetInit", "GPIO ISR handler has been already installed");
-    // } else if (ret != ESP_OK) {
-    //     CONSOLE_ERROR("CommsManager::EthernetInit", "GPIO ISR handler install failed");
-    //     return false;
-    // }
-
-    // // Configure SPI interface and Ethernet driver for specific SPI module
-    // esp_eth_mac_t* mac_spi;
-    // esp_eth_phy_t* phy_spi;
-    // esp_eth_handle_t eth_handle_spi = NULL;
-
-    // // Set remaining GPIO numbers and configuration used by the SPI module.
-
-    // mac_spi = esp_eth_mac_new_w5500(&w5500_config, &mac_config);
-    // phy_spi = esp_eth_phy_new_w5500(&phy_config);
-
-    // esp_eth_config_t eth_config_spi = ETH_DEFAULT_CONFIG(mac_spi, phy_spi);
-    // ESP_ERROR_CHECK(esp_eth_driver_install(&eth_config_spi, &eth_handle_spi));
-
-    // uint8_t mac_addr[6];
-    // esp_read_mac(mac_addr, ESP_MAC_ETH);
-
-    // ESP_ERROR_CHECK(esp_eth_ioctl(eth_handle_spi, ETH_CMD_S_MAC_ADDR, mac_addr));
-
-    // // attach Ethernet driver to TCP/IP stack
-    // ESP_ERROR_CHECK(esp_netif_attach(ethernet_netif_, esp_eth_new_netif_glue(eth_handle_spi)));
-
-    // /* start Ethernet driver state machine */
-    // ESP_ERROR_CHECK(esp_eth_start(eth_handle_spi));
-
-    // return true;
 }

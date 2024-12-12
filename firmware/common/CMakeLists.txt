@@ -2,7 +2,8 @@
 if (TARGET application)
     target_sources(application PRIVATE
         # NOTE: Annoyingly, all source files need to end with .c or .cpp to be seen by the ESP IDF.
-        settings_strs.cpp
+        settings/settings_strs.cpp
+        settings/settings.cpp
         comms/gdl90/gdl90_utils.cpp
         utils/buffer_utils.cpp
         utils/data_structures.cpp
@@ -24,6 +25,7 @@ if (TARGET application)
         comms/json
         coprocessor
         firmware_update
+        settings
     )
 elseif (TARGET bootloader)
     target_sources(bootloader PRIVATE
@@ -35,15 +37,16 @@ elseif (TARGET bootloader)
     )
 elseif (TARGET host_test)
     target_sources(host_test PRIVATE
-        settings_strs.cpp
-        comms/gdl90/gdl90_utils.cpp
-        utils/buffer_utils.cpp
-        utils/data_structures.cpp
         adsb/transponder_packet.cpp
         adsb/aircraft_dictionary.cpp
         adsb/decode_utils.cpp
+        comms/gdl90/gdl90_utils.cpp
         coprocessor/spi_coprocessor.cpp
         coprocessor/object_dictionary.cpp
+        settings/settings_strs.cpp
+        settings/settings.cpp
+        utils/buffer_utils.cpp
+        utils/data_structures.cpp
     )
     target_include_directories(host_test PRIVATE
         adsb
@@ -53,5 +56,6 @@ elseif (TARGET host_test)
         comms/json
         coprocessor
         utils
+        settings
     )
 endif()

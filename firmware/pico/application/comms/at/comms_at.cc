@@ -234,7 +234,7 @@ CPP_AT_CALLBACK(CommsManager::ATEthernetCallback) {
             }
             bool enabled;
             CPP_AT_TRY_ARG2NUM(0, settings_manager.settings.ethernet_enabled);
-            CPP_AT_PRINTF(": ethernet_enabled: %d\r\n", settings_manager.settings.ethernet_enabled);
+            CPP_AT_CMD_PRINTF(": ethernet_enabled: %d\r\n", settings_manager.settings.ethernet_enabled);
             CPP_AT_SUCCESS();
             break;
     }

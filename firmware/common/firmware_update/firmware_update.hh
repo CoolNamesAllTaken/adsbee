@@ -254,7 +254,9 @@ class FirmwareUpdateManager {
      * @retval True if bytes read successfully, false if error.
      */
     static inline bool PartialReadFlashPartition(uint16_t partition, uint32_t offset, uint32_t len_bytes,
-                                                 uint8_t *buf) {}
+                                                 uint8_t *buf) {
+        return false;  // Not yet implemented.
+    }
 
     /**
      * Write to a section of a flash partition. Note that the section of flash to be written must be erased first.
