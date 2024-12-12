@@ -56,7 +56,7 @@ esp_err_t WebSocketServer::Handler(httpd_req_t *req) {
     int client_fd = httpd_req_to_sockfd(req);
 
     if (req->method == HTTP_GET) {
-        CONSOLE_INFO("WebSocketServer::Handler", " [%s] Handshake done, the new connection was opened", config_.label);
+        CONSOLE_INFO("WebSocketServer::Handler", " [%s] Handshake done, new connection was opened.", config_.label);
         if (!AddClient(client_fd)) {
             CONSOLE_ERROR("WebSocketServer::Handler", "[%s] Rejecting websocket connection.", config_.label);
             // Send a close frame
@@ -124,7 +124,7 @@ bool WebSocketServer::AddClient(int client_fd) {
             clients_[i].in_use = true;
             clients_[i].client_fd = client_fd;
             clients_[i].last_message_timestamp_ms = get_time_since_boot_ms();
-            CONSOLE_INFO("WebSocketServer::AddClient", "[%s] New client stored at index %d", config_.label, i);
+            CONSOLE_INFO("WebSocketServer::AddClient", "[%s] New client stored at index %d.", config_.label, i);
             return true;
         }
     }

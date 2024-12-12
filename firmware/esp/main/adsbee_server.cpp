@@ -169,8 +169,8 @@ bool ADSBeeServer::Update() {
         }
 
         // Send decoded transponder packet to feeds.
-        if (comms_manager.WiFiStationhasIP() &&
-            !comms_manager.WiFiStationSendDecodedTransponderPacket(decoded_packet)) {
+        if ((comms_manager.WiFiStationHasIP() || comms_manager.EthernetHasIP()) &&
+            !comms_manager.IPWANSendDecodedTransponderPacket(decoded_packet)) {
             CONSOLE_ERROR(
                 "ADSBeeServer::Update",
                 "Encountered error while sending decoded transponder packet to feeds from ESP32 as WiFi station.");
