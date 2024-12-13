@@ -12,6 +12,7 @@
 #include "freertos/task.h"
 #include "gdl90/gdl90_utils.hh"
 #include "lwip/sockets.h"  // For port definition.
+#include "nvs_flash.h"
 #include "object_dictionary.hh"
 #include "settings.hh"
 
@@ -100,6 +101,14 @@ class CommsManager {
      * Initialize prerequisites for WiFi and Ethernet.
      */
     bool Init() {
+        // Initialize Non Volatile Storage Flash, used by WiFi library.
+        esp_err_t ret = nvs_flash_init();
+        if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+            ESP_ERROR_CHECK(nvs_flash_erase());
+            ret = nvs_flash_init();
+        }
+        ESP_ERROR_CHECK(ret);
+
         if (esp_netif_init() != ESP_OK) {
             CONSOLE_ERROR("CommsManager::Init", "Failed to initialize esp_netif.");
             return false;

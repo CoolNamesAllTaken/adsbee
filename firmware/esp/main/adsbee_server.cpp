@@ -2,7 +2,6 @@
 
 #include "comms.hh"
 #include "json_utils.hh"
-#include "nvs_flash.h"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
 #include "task_priorities.hh"
@@ -66,14 +65,6 @@ bool ADSBeeServer::Init() {
     spi_receive_task_should_exit_ = false;
     xTaskCreatePinnedToCore(esp_spi_receive_task, "spi_receive_task", kSPIReceiveTaskStackSizeBytes, NULL,
                             kSPIReceiveTaskPriority, NULL, kSPIReceiveTaskCore);
-
-    // Initialize Non Volatile Storage Flash, used by WiFi library.
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
 
     comms_manager.Init();  // Initialize prerequisites for Ethernet and WiFi.
 
