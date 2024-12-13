@@ -136,11 +136,11 @@ bool CommsManager::EthernetInit() {
     esp_eth_config_t eth_config = ETH_DEFAULT_CONFIG(mac, phy);
     ESP_ERROR_CHECK(esp_eth_driver_install(&eth_config, &ethernet_handle));
 
-    // Attach Ethernet driver to TCP/IP stack
-    // ESP_ERROR_CHECK(esp_netif_set_mac(ethernet_netif_, GetESP32DeviceInfo().ethernet_mac));
-    // memcpy(ethernet_netif_->mac, GetESP32DeviceInfo().ethernet_mac, sizeof(ethernet_netif_->mac));
+    // Set MAC address.
     ObjectDictionary::ESP32DeviceInfo device_info = GetESP32DeviceInfo();
     ESP_ERROR_CHECK(esp_eth_ioctl(ethernet_handle, ETH_CMD_S_MAC_ADDR, device_info.ethernet_mac));
+
+    // Attach Ethernet driver to TCP/IP stack
     ESP_ERROR_CHECK(esp_netif_attach(ethernet_netif_, esp_eth_new_netif_glue(ethernet_handle)));
 
     // Start Ethernet driver

@@ -95,7 +95,7 @@ void CommsManager::IPEventHandler(void* arg, esp_event_base_t event_base, int32_
             snprintf(wifi_sta_gateway, SettingsManager::Settings::kIPAddrStrLen, IPSTR, IP2STR(&ip_info->gw));
             wifi_sta_gateway[SettingsManager::Settings::kIPAddrStrLen] = '\0';
 
-            CONSOLE_INFO("CommsManager::WiFiIPEventHandler",
+            CONSOLE_INFO("CommsManager::IPEventHandler",
                          "WiFi Station got IP Address. IP: %s, Netmask: %s, Gateway: %s", wifi_sta_ip, wifi_sta_netmask,
                          wifi_sta_gateway);
             break;
@@ -113,15 +113,14 @@ void CommsManager::IPEventHandler(void* arg, esp_event_base_t event_base, int32_
             snprintf(ethernet_gateway, SettingsManager::Settings::kIPAddrStrLen, IPSTR, IP2STR(&ip_info->gw));
             ethernet_gateway[SettingsManager::Settings::kIPAddrStrLen] = '\0';
 
-            CONSOLE_INFO("CommsManager::EthernetIPEventHandler",
-                         "Ethernet got IP address. IP: %s, Netmask: %s, Gateway: %s", ethernet_ip, ethernet_netmask,
-                         ethernet_gateway);
+            CONSOLE_INFO("CommsManager::IPEventHandler", "Ethernet got IP address. IP: %s, Netmask: %s, Gateway: %s",
+                         ethernet_ip, ethernet_netmask, ethernet_gateway);
             break;
         }
         case IP_EVENT_ETH_LOST_IP: {
             // The ADSBee's Ethernet interface has disconnected from an external network.
             ethernet_has_ip_ = false;
-            CONSOLE_INFO("CommsManager::EthernetIPEventHandler", "Ethernet lost IP address.");
+            CONSOLE_INFO("CommsManager::IPEventHandler", "Ethernet lost IP address.");
             break;
         }
     }
@@ -165,8 +164,8 @@ void CommsManager::IPWANTask(void* pvParameters) {
         }
 
         // Gather packet(s) to send.
-        if (xQueueReceive(ip_wan_decoded_transponder_packet_queue_, &decoded_packet,
-                          kWiFiSTATaskUpdateIntervalTicks) != pdTRUE) {
+        if (xQueueReceive(ip_wan_decoded_transponder_packet_queue_, &decoded_packet, kWiFiSTATaskUpdateIntervalTicks) !=
+            pdTRUE) {
             // No packets available to send, wait and try again.
             continue;
         }

@@ -24,8 +24,11 @@ class CommsManager {
    public:
     static const uint16_t kMaxNetworkMessageLenBytes = 256;
     static const uint16_t kWiFiMessageQueueLen = 110;
-    static const uint32_t kWiFiStaReconnectIntervalMs = 5000;
-    static const uint32_t kEthernetReconnectIntervalMs = 5000;
+    // Reconnect intervals must be long enough that we register an IP lost event before trying the reconnect, otherwise
+    // we get stuck in limbo where we may attempt a reconnect but the new IP address is never looked for (not controlled
+    // by our own flags, but by internal LwIP stuff).
+    static const uint32_t kWiFiStaReconnectIntervalMs = 10e3;
+    static const uint32_t kEthernetReconnectIntervalMs = 10e3;
     static const uint32_t kWiFiSTATaskUpdateIntervalMs = 100;
     static const uint32_t kWiFiSTATaskUpdateIntervalTicks = kWiFiSTATaskUpdateIntervalMs / portTICK_PERIOD_MS;
 
@@ -128,12 +131,6 @@ class CommsManager {
      * Handle Ethernet hardware level events.
      */
     void EthernetEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
-
-    /**
-     * Handle IP level events for Ethernet. Automatically initialized when either Ethernet or WiFi is initialized.
-     */
-    void EthernetIPEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
-
     /**
      * Get the current status of ESP32 network interfaces as an ESP32NetworkInfo struct.
      */
