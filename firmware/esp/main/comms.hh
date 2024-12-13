@@ -112,6 +112,14 @@ class CommsManager {
     }
 
     /**
+     * Connect to an external network via Ethernet. Used during ethernet restarts to acquire new IP address. For some
+     * reason ethernet requires the DHCP client service to be stopped and restarted in order to recover with an IP
+     * address, so this function provides a convenient function that does that.
+     * @retval True if successfully connected, false otherwise.
+     */
+    bool ConnectToEthernet();
+
+    /**
      * Returns whether the ESP32 is connected to an external network via Ethernet.
      * @retval True if connected and assigned IP address, false otherwise.
      */
@@ -241,7 +249,6 @@ class CommsManager {
         0};  // Gateway of the ESP32 Ethernet interface.
 
     // Ethernet public variables.
-    esp_eth_handle_t ethernet_handle;  // Used by pass-through functions for connect / disconnect.
 
     // WiFi AP public variables.
     bool wifi_ap_enabled = true;
@@ -313,6 +320,7 @@ class CommsManager {
     bool ip_event_handler_was_initialized_ = false;
 
     // Ethernet private variables.
+    esp_eth_handle_t ethernet_handle_;
     esp_netif_t* ethernet_netif_ = nullptr;
     bool ethernet_connected_ = false;
     bool ethernet_has_ip_ = false;

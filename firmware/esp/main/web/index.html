@@ -30,11 +30,31 @@
                 <!-- Cards will be dynamically inserted here -->
             </div>
         </div>
+
+        <div class="upload-container column-element">
+            <button id="uploadButton" class="upload-button">
+                Upload Firmware
+            </button>
+            <input type="file" id="fileInput" accept=".ota" style="display: none;">
+
+            <div id="progressContainer" class="progress-container">
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
+                <div id="progressText" class="progress-text">0%</div>
+            </div>
+
+            <div id="successAlert" class="alert success">
+                Firmware has been successfully uploaded and device is rebooting.
+            </div>
+
+            <div id="errorAlert" class="alert error"></div>
+        </div>
     </div>
 
     <script>
-        const HOST_URI = `${window.location.hostname}`;
-        // const HOST_URI = "192.168.1.182";
+        // const HOST_URI = `${window.location.hostname}`;
+        const HOST_URI = "192.168.1.46";
         const WS_CONFIG = {
             console_ws_url: `ws://${HOST_URI}/console`,
             metrics_ws_url: `ws://${HOST_URI}/metrics`,
@@ -408,6 +428,384 @@
 
         // Initialize WebSocket connection for metrics feed
         const metricsWebSocket = new MetricsWebSocket(WS_CONFIG.metrics_ws_url);
+
+        /**
+         * ADSBee Library
+         */
+        class ADSBeeAT {
+            static MS_PER_SEC = 1000;
+
+            constructor(url = HOST_URI) {
+                if (!url) {
+                    throw new Error('URL is required');
+                }
+                this.url = url;
+                this.ws = null;
+                this.initTimestamp = Date.now();
+                this.lastCmdTimestamp = Date.now();
+            }
+
+            async connect() {
+                return new Promise((resolve, reject) => {
+                    this.ws = new WebSocket(`ws://${this.url}/console`);
+                    this.ws.binaryType = 'arraybuffer';
+                    this.ws.onopen = () => resolve();
+                    this.ws.onerror = (error) => reject(error);
+                });
+            }
+
+            async disconnect() {
+                if (this.ws) {
+                    this.ws.close();
+                    this.ws = null;
+                }
+            }
+
+            getMsTimestamp() {
+                return Math.floor((Date.now() - this.initTimestamp));
+            }
+
+            async flushInputBuffer() {
+                const WS_FLUSH_TIMEOUT = 10; // 10ms
+                const originalOnmessage = this.ws.onmessage;
+
+                await new Promise(resolve => {
+                    const timeout = setTimeout(resolve, WS_FLUSH_TIMEOUT);
+                    this.ws.onmessage = () => {
+                        clearTimeout(timeout);
+                        setTimeout(resolve, WS_FLUSH_TIMEOUT);
+                    };
+                });
+
+                this.ws.onmessage = originalOnmessage;
+            }
+
+            async receiveResponse(printResponse = false, waitForOkOrError = false) {
+                const decodedResponse = [];
+
+                while (true) {
+                    try {
+                        const raw = await new Promise((resolve, reject) => {
+                            const timeout = setTimeout(() => reject('timeout'), 100);
+                            this.ws.onmessage = (event) => {
+                                clearTimeout(timeout);
+                                resolve(new Uint8Array(event.data));
+                            };
+                        });
+
+                        if (waitForOkOrError) {
+                            const decoded = new TextDecoder().decode(raw);
+                            if (decoded.includes('OK')) {
+                                waitForOkOrError = false;
+                            } else if (decoded.includes('ERROR')) {
+                                throw new Error(`ERROR response: ${decoded}`);
+                            }
+                        }
+
+                        let logStr = '';
+                        try {
+                            const decoded = new TextDecoder().decode(raw).trim();
+                            if (decoded) {
+                                decodedResponse.push(decoded);
+                                logStr = `Response (+${this.getMsTimestamp() - this.lastCmdTimestamp} ms): \t\t${decoded}`;
+                            }
+                        } catch {
+                            logStr = `Non-ASCII response: \t${raw}`;
+                        }
+
+                        if (printResponse && logStr) {
+                            console.log(logStr);
+                        }
+                    } catch (e) {
+                        if (!waitForOkOrError) break;
+                    }
+                }
+
+                return decodedResponse;
+            }
+
+            async sendCmd(cmdStr, delay = 10, printResponse = false, waitForOkOrError = false) {
+                await this.flushInputBuffer();
+                this.lastCmdTimestamp = this.getMsTimestamp();
+
+                if (printResponse) {
+                    console.log(`Command (${this.getMsTimestamp()} ms): \t${cmdStr.trim()}`);
+                }
+
+                this.ws.send(new TextEncoder().encode(cmdStr));
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return await this.receiveResponse(printResponse, waitForOkOrError);
+            }
+
+            async sendBytes(data, printResponse = false, waitForOkOrError = false) {
+                await this.flushInputBuffer();
+                this.ws.send(data);
+                return await this.receiveResponse(printResponse, waitForOkOrError);
+            }
+
+            async silenceConsole() {
+                await this.sendCmd("AT+LOG_LEVEL=SILENT\r\n");
+                await this.sendCmd("AT+PROTOCOL=CONSOLE,NONE\r\n");
+            }
+
+            async getMacAddress() {
+                await this.silenceConsole();
+                const decodedResponse = await this.sendCmd("AT+DEVICE_INFO?\r\n");
+
+                for (const line of decodedResponse) {
+                    const match = line.match(/ESP32 Base MAC Address: ([0-9A-Fa-f:]+)/);
+                    if (match) {
+                        return match[1];
+                    }
+                }
+                return null;
+            }
+
+            async readDeviceInfo(printInfo = false) {
+                const deviceInfo = {
+                    otaKeys: [],
+                    partCode: "",
+                    rp2040FirmwareVersion: "",
+                    esp32FirmwareVersion: "",
+                    macAddress: ""
+                };
+
+                await this.silenceConsole();
+                const decodedResponse = await this.sendCmd("AT+DEVICE_INFO?\r\n");
+
+                for (const line of decodedResponse) {
+                    const partCodeMatch = line.match(/Part Code: (.+)/);
+                    const rp2040FirmwareVersionMatch = line.match(/RP2040 Firmware Version: (.+)/);
+                    const otaKeyMatch = line.match(/OTA Key \d+: (.+)/);
+                    const esp32FirmwareVersionMatch = line.match(/ESP32 Firmware Version: (.+)/);
+                    const macAddressMatch = line.match(/ESP32 Base MAC Address: (.+)/);
+
+                    if (partCodeMatch) {
+                        deviceInfo.partCode = partCodeMatch[1];
+                        if (printInfo) console.log(`\tPart Code: ${deviceInfo.partCode}`);
+                    } else if (rp2040FirmwareVersionMatch) {
+                        deviceInfo.rp2040FirmwareVersion = rp2040FirmwareVersionMatch[1];
+                        if (printInfo) console.log(`\tRP2040 Firmware Version: ${deviceInfo.rp2040FirmwareVersion}`);
+                    } else if (otaKeyMatch) {
+                        deviceInfo.otaKeys.push(otaKeyMatch[1]);
+                        if (printInfo) console.log(`\tOTA Key ${deviceInfo.otaKeys.length - 1}: ${deviceInfo.otaKeys[deviceInfo.otaKeys.length - 1]}`);
+                    } else if (esp32FirmwareVersionMatch) {
+                        deviceInfo.esp32FirmwareVersion = esp32FirmwareVersionMatch[1];
+                        if (printInfo) console.log(`\tESP32 Firmware Version: ${deviceInfo.esp32FirmwareVersion}`);
+                    } else if (macAddressMatch) {
+                        deviceInfo.macAddress = macAddressMatch[1];
+                        if (printInfo) console.log(`\tESP32 Base MAC Address: ${deviceInfo.macAddress}`);
+                    }
+                }
+
+                return deviceInfo;
+            }
+
+            async otaGetFlashPartition() {
+                await this.silenceConsole();
+                const decodedResponse = await this.sendCmd("AT+OTA=GET_PARTITION\r\n", 0, true, true);
+
+                for (const line of decodedResponse) {
+                    const match = line.match(/Partition: (\d+)/);
+                    if (match) {
+                        return parseInt(match[1]);
+                    }
+                }
+                return null;
+            }
+
+            async otaWriteBytes(offset, data) {
+                const crc32 = this.calculateCRC32(data);
+                await this.sendCmd(`AT+OTA=WRITE,${offset.toString(16)},${data.length},${crc32.toString(16)}\r\n`, 0, true);
+                await this.sendBytes(data, true, true);
+            }
+
+            async otaErase() {
+                await this.silenceConsole();
+                await this.sendCmd("AT+OTA=ERASE\r\n", 0, true, true);
+            }
+
+            async otaWriteFile(file) {
+                const HEADER_SIZE_BYTES = 5 * 4;
+                const APP_OFFSET_BYTES = 4 * 1024;
+                const WRITE_CHUNK_BYTES = 3840 * 4;
+
+                await this.silenceConsole();
+                const partition = await this.otaGetFlashPartition();
+
+                if (partition === null) {
+                    throw new Error("Failed to get OTA partition from ADSBee.");
+                }
+
+                const fileData = await this.readFile(file);
+                const dataView = new DataView(fileData.buffer);
+
+                const numPartitions = dataView.getUint32(0, true);
+                if (partition > numPartitions) {
+                    throw new Error(`Partition ${partition} is out of range. Only ${numPartitions} partitions available.`);
+                }
+
+                const offset = dataView.getUint32(4 + 4 * partition, true);
+                const contents = fileData.slice(offset);
+                const headerContents = contents.slice(0, HEADER_SIZE_BYTES);
+
+                // Write the header
+                await this.otaWriteBytes(0, headerContents);
+
+                // Write the application in chunks
+                const appLenBytes = dataView.getUint32(offset + 8, true);
+
+                for (let i = HEADER_SIZE_BYTES; i < appLenBytes; i += WRITE_CHUNK_BYTES) {
+                    const offsetBytes = (i - HEADER_SIZE_BYTES) + APP_OFFSET_BYTES;
+                    await this.otaWriteBytes(offsetBytes, contents.slice(i, i + WRITE_CHUNK_BYTES));
+                }
+
+                // Verify and boot the new partition
+                await this.sendCmd("AT+OTA=VERIFY\r\n", 0, true, true);
+            }
+
+            async otaBoot() {
+                await this.sendCmd("AT+OTA=BOOT\r\n", 0, true);
+            }
+
+            // Helper function to read file in browser
+            async readFile(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(new Uint8Array(reader.result));
+                    reader.onerror = reject;
+                    reader.readAsArrayBuffer(file);
+                });
+            }
+
+            // CRC32 calculation
+            calculateCRC32(data) {
+                let crc = 0xFFFFFFFF;
+                for (let i = 0; i < data.length; i++) {
+                    crc = (crc >>> 8) ^ ADSBeeAT.crcTable[(crc ^ data[i]) & 0xFF];
+                }
+                return (crc ^ 0xFFFFFFFF) >>> 0;
+            }
+
+            static crcTable = (() => {
+                const table = new Uint32Array(256);
+                for (let i = 0; i < 256; i++) {
+                    let c = i;
+                    for (let j = 0; j < 8; j++) {
+                        c = ((c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1));
+                    }
+                    table[i] = c;
+                }
+                return table;
+            })();
+        }
+
+        class FirmwareUploader {
+            constructor(adsbeeUrl) {
+                this.adsbeeUrl = adsbeeUrl;
+                this.uploadButton = document.getElementById('uploadButton');
+                this.fileInput = document.getElementById('fileInput');
+                this.progressContainer = document.getElementById('progressContainer');
+                this.progressFill = document.getElementById('progressFill');
+                this.progressText = document.getElementById('progressText');
+                this.successAlert = document.getElementById('successAlert');
+                this.errorAlert = document.getElementById('errorAlert');
+
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
+                this.uploadButton.addEventListener('click', () => {
+                    this.fileInput.click();
+                });
+
+                this.fileInput.addEventListener('change', async (event) => {
+                    const file = event.target.files[0];
+                    if (file) {
+                        await this.uploadFirmware(file);
+                    }
+                    this.fileInput.value = '';
+                });
+            }
+
+            setUploadingState(isUploading) {
+                this.uploadButton.disabled = isUploading;
+                if (isUploading) {
+                    this.uploadButton.innerHTML = '<span class="spinner"></span> Uploading...';
+                    this.progressContainer.style.display = 'block';
+                } else {
+                    this.uploadButton.innerHTML = 'Upload Firmware';
+                    this.progressContainer.style.display = 'none';
+                }
+            }
+
+            updateProgress(percent) {
+                this.progressFill.style.width = `${percent}%`;
+                this.progressText.textContent = `${percent}%`;
+            }
+
+            showSuccess() {
+                this.successAlert.style.display = 'block';
+                this.errorAlert.style.display = 'none';
+                this.uploadButton.innerHTML = 'Upload Complete';
+                setTimeout(() => {
+                    this.successAlert.style.display = 'none';
+                    this.uploadButton.innerHTML = 'Upload Firmware';
+                }, 5000);
+            }
+
+            showError(message) {
+                this.errorAlert.textContent = message;
+                this.errorAlert.style.display = 'block';
+                this.successAlert.style.display = 'none';
+                this.uploadButton.innerHTML = 'Upload Failed';
+                setTimeout(() => {
+                    this.errorAlert.style.display = 'none';
+                    this.uploadButton.innerHTML = 'Upload Firmware';
+                }, 5000);
+            }
+
+            async uploadFirmware(file) {
+                try {
+                    this.setUploadingState(true);
+                    this.updateProgress(0);
+
+                    const adsbee = new ADSBeeAT(this.adsbeeUrl);
+                    await adsbee.connect();
+
+                    const totalSize = file.size;
+                    let uploadedSize = 0;
+
+                    // Override otaWriteBytes to track progress
+                    const originalOtaWriteBytes = adsbee.otaWriteBytes.bind(adsbee);
+                    adsbee.otaWriteBytes = async (offset, data) => {
+                        await originalOtaWriteBytes(offset, data);
+                        uploadedSize += data.length;
+                        const progress = Math.min(Math.round((uploadedSize / totalSize) * 100), 100);
+                        this.updateProgress(progress);
+                    };
+
+                    await adsbee.otaErase();
+                    await adsbee.otaWriteFile(file);
+                    await adsbee.otaBoot();
+
+                    this.updateProgress(100);
+                    this.showSuccess();
+                    await adsbee.disconnect();
+
+                } catch (error) {
+                    console.error('Firmware upload failed:', error);
+                    this.showError(error.message || 'Failed to upload firmware. Please try again.');
+                } finally {
+                    this.setUploadingState(false);
+                }
+            }
+        }
+
+        // Initialize the uploader when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            const uploader = new FirmwareUploader(HOST_URI);
+        });
     </script>
 </body>
 

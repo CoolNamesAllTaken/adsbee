@@ -17,12 +17,20 @@
 void ethernet_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
     comms_manager.EthernetEventHandler(arg, event_base, event_id, event_data);
 }
-inline void connect_to_ethernet(void* arg = nullptr) {
-    if (esp_eth_start(comms_manager.ethernet_handle) != ESP_OK) {
-        CONSOLE_ERROR("connect_to_ethernet", "Failed to connect to Ethernet.");
-    }
-}
+inline void connect_to_ethernet(void* arg = nullptr) { comms_manager.ConnectToEthernet(); }
 /** End "Pass-Through" functions. **/
+
+bool CommsManager::ConnectToEthernet() {
+    if (esp_netif_dhcpc_start(ethernet_netif_) != ESP_OK) {
+        CONSOLE_ERROR("connect_to_ethernet", "Failed to start DHCP client.");
+        return false;
+    }
+    if (esp_eth_start(ethernet_handle_) != ESP_OK) {
+        CONSOLE_ERROR("connect_to_ethernet", "Failed to connect to Ethernet.");
+        return false;
+    }
+    return true;
+}
 
 bool CommsManager::EthernetDeInit() {
     if (!ethernet_was_initialized_) return true;  // Don't try de-initializing if it was never initialized.
@@ -50,6 +58,7 @@ void CommsManager::EthernetEventHandler(void* arg, esp_event_base_t event_base, 
             CONSOLE_INFO("CommsManager::EthernetEventHandler", "Ethernet Link Down");
             ethernet_connected_ = false;
             ethernet_has_ip_ = false;
+            ESP_ERROR_CHECK(esp_netif_dhcpc_stop(ethernet_netif_));
             ESP_ERROR_CHECK(esp_eth_stop(eth_handle));
             if (ethernet_enabled) {
                 ScheduleDelayedFunctionCall(kEthernetReconnectIntervalMs, &connect_to_ethernet);
@@ -134,17 +143,17 @@ bool CommsManager::EthernetInit() {
     esp_eth_phy_t* phy = esp_eth_phy_new_w5500(&phy_config);
 
     esp_eth_config_t eth_config = ETH_DEFAULT_CONFIG(mac, phy);
-    ESP_ERROR_CHECK(esp_eth_driver_install(&eth_config, &ethernet_handle));
+    ESP_ERROR_CHECK(esp_eth_driver_install(&eth_config, &ethernet_handle_));
 
     // Set MAC address.
     ObjectDictionary::ESP32DeviceInfo device_info = GetESP32DeviceInfo();
-    ESP_ERROR_CHECK(esp_eth_ioctl(ethernet_handle, ETH_CMD_S_MAC_ADDR, device_info.ethernet_mac));
+    ESP_ERROR_CHECK(esp_eth_ioctl(ethernet_handle_, ETH_CMD_S_MAC_ADDR, device_info.ethernet_mac));
 
     // Attach Ethernet driver to TCP/IP stack
-    ESP_ERROR_CHECK(esp_netif_attach(ethernet_netif_, esp_eth_new_netif_glue(ethernet_handle)));
+    ESP_ERROR_CHECK(esp_netif_attach(ethernet_netif_, esp_eth_new_netif_glue(ethernet_handle_)));
 
     // Start Ethernet driver
-    ESP_ERROR_CHECK(esp_eth_start(ethernet_handle));
+    ESP_ERROR_CHECK(esp_eth_start(ethernet_handle_));
 
     return true;
 }
