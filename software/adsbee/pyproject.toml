@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "adsbee"
+version = "0.1.0"
+description = "Utility software functions for interacting with an ADSBee 1090 open-source ADSBee receiver."
+authors = ["John McNelly <jkailimcnelly@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+ecdsa = "^0.19.0"
+pyserial = "^3.5"
+websocket-client = "^1.8.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -2,7 +2,6 @@
 
 #include "comms.hh"
 #include "json_utils.hh"
-#include "nvs_flash.h"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
 #include "task_priorities.hh"
@@ -67,14 +66,6 @@ bool ADSBeeServer::Init() {
     xTaskCreatePinnedToCore(esp_spi_receive_task, "spi_receive_task", kSPIReceiveTaskStackSizeBytes, NULL,
                             kSPIReceiveTaskPriority, NULL, kSPIReceiveTaskCore);
 
-    // Initialize Non Volatile Storage Flash, used by WiFi library.
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
-
     comms_manager.Init();  // Initialize prerequisites for Ethernet and WiFi.
 
     while (true) {
@@ -104,10 +95,10 @@ bool ADSBeeServer::Update() {
     // Prune aircraft dictionary. Need to do this up front so that we don't end up with a negative timestamp delta
     // caused by packets being ingested more recently than the timestamp we take at the beginning of this function.
     if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > kAircraftDictionaryUpdateIntervalMs) {
-        uint32_t scratch;
-        if (!pico.Read(ObjectDictionary::Address::kAddrScratch, scratch)) {
-            CONSOLE_ERROR("ADSBeeServer::Update", "Read of Pico scratch failed.");
-        }
+        // uint32_t scratch;
+        // if (!pico.Read(ObjectDictionary::Address::kAddrScratch, scratch)) {
+        //     CONSOLE_ERROR("ADSBeeServer::Update", "Read of Pico scratch failed.");
+        // }
 
         aircraft_dictionary.Update(timestamp_ms);
         last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
@@ -169,8 +160,8 @@ bool ADSBeeServer::Update() {
         }
 
         // Send decoded transponder packet to feeds.
-        if (comms_manager.WiFiStationhasIP() &&
-            !comms_manager.WiFiStationSendDecodedTransponderPacket(decoded_packet)) {
+        if ((comms_manager.WiFiStationHasIP() || comms_manager.EthernetHasIP()) &&
+            !comms_manager.IPWANSendDecodedTransponderPacket(decoded_packet)) {
             CONSOLE_ERROR(
                 "ADSBeeServer::Update",
                 "Encountered error while sending decoded transponder packet to feeds from ESP32 as WiFi station.");
@@ -181,7 +172,7 @@ bool ADSBeeServer::Update() {
     // Broadcast aircraft locations to connected WiFi clients over GDL90.
     if (timestamp_ms - last_gdl90_report_timestamp_ms_ > kGDL90ReportingIntervalMs) {
         last_gdl90_report_timestamp_ms_ = timestamp_ms;
-        if (!ReportGDL90()) {
+        if (comms_manager.WiFiAccessPointHasClients() && !ReportGDL90()) {
             CONSOLE_ERROR("ADSBeeServer::Update", "Encountered error while reporting GDL90.");
             ret = false;
         }
@@ -419,6 +410,7 @@ bool ADSBeeServer::TCPServerInit() {
                                            .server = server,
                                            .uri = "/console",
                                            .num_clients_allowed = 3,
+                                           .send_as_binary = true,  // Network console messages can contain binary data.
                                            .post_connect_callback = NetworkConsolePostConnectCallback,
                                            .message_received_callback = NetworkConsoleMessageReceivedCallback});
         network_console.Init();
@@ -426,6 +418,7 @@ bool ADSBeeServer::TCPServerInit() {
                                            .server = server,
                                            .uri = "/metrics",
                                            .num_clients_allowed = 3,
+                                           .send_as_binary = false,  // Network metrics are always ASCII.
                                            .post_connect_callback = nullptr,
                                            .message_received_callback = nullptr});
         network_metrics.Init();

@@ -56,7 +56,7 @@ esp_err_t WebSocketServer::Handler(httpd_req_t *req) {
     int client_fd = httpd_req_to_sockfd(req);
 
     if (req->method == HTTP_GET) {
-        CONSOLE_INFO("WebSocketServer::Handler", " [%s] Handshake done, the new connection was opened", config_.label);
+        CONSOLE_INFO("WebSocketServer::Handler", " [%s] Handshake done, new connection was opened.", config_.label);
         if (!AddClient(client_fd)) {
             CONSOLE_ERROR("WebSocketServer::Handler", "[%s] Rejecting websocket connection.", config_.label);
             // Send a close frame
@@ -77,7 +77,7 @@ esp_err_t WebSocketServer::Handler(httpd_req_t *req) {
     httpd_ws_frame_t ws_pkt;
     uint8_t *buf = NULL;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+    ws_pkt.type = config_.send_as_binary ? HTTPD_WS_TYPE_BINARY : HTTPD_WS_TYPE_TEXT;
     /* Set max_len = 0 to get the frame len */
     esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
     if (ret != ESP_OK) {
@@ -124,7 +124,7 @@ bool WebSocketServer::AddClient(int client_fd) {
             clients_[i].in_use = true;
             clients_[i].client_fd = client_fd;
             clients_[i].last_message_timestamp_ms = get_time_since_boot_ms();
-            CONSOLE_INFO("WebSocketServer::AddClient", "[%s] New client stored at index %d", config_.label, i);
+            CONSOLE_INFO("WebSocketServer::AddClient", "[%s] New client stored at index %d.", config_.label, i);
             return true;
         }
     }
@@ -163,7 +163,7 @@ void WebSocketServer::BroadcastMessage(const char *message, int16_t len_bytes) {
 esp_err_t WebSocketServer::SendMessage(int client_fd, const char *message, int16_t len_bytes) {
     httpd_ws_frame_t ws_pkt = {.final = true,
                                .fragmented = false,
-                               .type = HTTPD_WS_TYPE_TEXT,
+                               .type = config_.send_as_binary ? HTTPD_WS_TYPE_BINARY : HTTPD_WS_TYPE_TEXT,
                                .payload = (uint8_t *)message,
                                .len = len_bytes > 0 ? len_bytes : strlen(message)};
 

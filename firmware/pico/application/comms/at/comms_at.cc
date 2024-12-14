@@ -402,16 +402,34 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
             if (CPP_AT_HAS_ARG(0)) {
                 uint16_t complementary_partition = FirmwareUpdateManager::GetComplementaryFlashPartition();
                 if (args[0].compare("ERASE") == 0) {
-                    // Erase the complementary flash partition.
-                    CPP_AT_PRINTF("Erasing partition %d.\r\n", complementary_partition);
-                    // Flash erase can take a while, prevent watchdog from rebooting us during erase!
-                    adsbee.DisableWatchdog();
-                    bool flash_erase_succeeded = FirmwareUpdateManager::EraseFlashParition(complementary_partition);
-                    adsbee.EnableWatchdog();
-                    if (!flash_erase_succeeded) {
-                        CPP_AT_ERROR("Failed to erase complmentary flash partition.");
+                    if (CPP_AT_HAS_ARG(1) && CPP_AT_HAS_ARG(2)) {
+                        // Performing a partial erase with AT+OTA=ERASE,<offset>,<len_bytes>
+                        uint32_t offset, len_bytes;
+                        CPP_AT_TRY_ARG2NUM_BASE(1, offset, 16);
+                        CPP_AT_TRY_ARG2NUM_BASE(2, len_bytes, 10);
+                        CPP_AT_PRINTF("Erasing %u Bytes at offset 0x%x in partition %u.\r\n", len_bytes, offset,
+                                      complementary_partition);
+                        adsbee.DisableWatchdog();  // Flash erase can take a while, prevent watchdog from rebooting us.
+                        bool flash_erase_succeeded =
+                            FirmwareUpdateManager::EraseFlashParition(complementary_partition, offset, len_bytes);
+                        adsbee.EnableWatchdog();
+                        if (!flash_erase_succeeded) {
+                            CPP_AT_ERROR("Failed partial erase of complementary flash partition.");
+                        }
+                        CPP_AT_SUCCESS();
+                    } else {
+                        // Performing a full partition erase with AT+OTA=ERASE.
+                        CPP_AT_PRINTF("Erasing partition %d.\r\n", complementary_partition);
+                        // Flash erase can take a while, prevent watchdog from rebooting us during erase!
+                        adsbee.DisableWatchdog();
+                        bool flash_erase_succeeded = FirmwareUpdateManager::EraseFlashParition(complementary_partition);
+                        adsbee.EnableWatchdog();
+                        if (!flash_erase_succeeded) {
+                            CPP_AT_ERROR("Failed full erase of complementary flash partition.");
+                        }
+                        CPP_AT_SUCCESS();
                     }
-                    CPP_AT_SUCCESS();
+
                 } else if (args[0].compare("GET_PARTITION") == 0) {
                     // Reply with the complementary flash partition number. This is used to select the correct flash
                     // partition from the OTA file.
@@ -420,12 +438,13 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                 } else if (args[0].compare("WRITE") == 0) {
                     // Write a section of the complementary flash partition.
                     // AT+OTA=WRITE,<offset (base 16)>,<len_bytes (base 10)>,<crc (base 16)>
+                    bool receiver_was_enabled = adsbee.ReceiverIsEnabled();
                     adsbee.SetReceiverEnable(0);  // Stop ADSB packets from mucking up the SPI bus.
                     uint32_t offset, len_bytes, crc;
                     CPP_AT_TRY_ARG2NUM_BASE(1, offset, 16);
                     CPP_AT_TRY_ARG2NUM_BASE(2, len_bytes, 10);
                     if (len_bytes > FirmwareUpdateManager::kFlashWriteBufMaxLenBytes) {
-                        adsbee.SetReceiverEnable(1);  // Re-enable receiver before exit.
+                        adsbee.SetReceiverEnable(receiver_was_enabled);  // Re-enable receiver before exit.
                         CPP_AT_ERROR("Write length %u exceeds maximum %u Bytes.", len_bytes,
                                      FirmwareUpdateManager::kFlashWriteBufMaxLenBytes);
                     }
@@ -473,7 +492,7 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
 
                         timestamp_ms = get_time_since_boot_ms();
                         if (timestamp_ms - data_read_start_timestamp_ms > kOTAWriteTimeoutMs) {
-                            adsbee.SetReceiverEnable(1);  // Re-enable receiver before exit.
+                            adsbee.SetReceiverEnable(receiver_was_enabled);  // Re-enable receiver before exit.
                             CPP_AT_ERROR("Timed out after %u ms. Received %u Bytes.",
                                          timestamp_ms - data_read_start_timestamp_ms, buf_len_bytes);
                         }
@@ -486,7 +505,7 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         complementary_partition, offset, len_bytes, buf);
                     adsbee.EnableWatchdog();
                     if (!flash_write_succeeded) {
-                        adsbee.SetReceiverEnable(1);  // Re-enable receiver before exit.
+                        adsbee.SetReceiverEnable(receiver_was_enabled);  // Re-enable receiver before exit.
                         CPP_AT_ERROR("Partial %u Byte write failed in partition %u at offset 0x%x.", len_bytes,
                                      complementary_partition, offset);
                     }
@@ -499,11 +518,11 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                                 offset,
                             len_bytes);
                         if (calculated_crc != crc) {
-                            adsbee.SetReceiverEnable(1);  // Re-enable receiver before exit.
+                            adsbee.SetReceiverEnable(receiver_was_enabled);  // Re-enable receiver before exit.
                             CPP_AT_ERROR("Calculated CRC 0x%x did not match provided CRC 0x%x.", calculated_crc, crc);
                         }
                     }
-                    adsbee.SetReceiverEnable(1);  // Re-enable receiver before exit.
+                    adsbee.SetReceiverEnable(receiver_was_enabled);  // Re-enable receiver before exit.
                     CPP_AT_SUCCESS();
                 } else if (args[0].compare("VERIFY") == 0) {
                     // Verify the complementary flash partition.

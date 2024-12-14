@@ -13,11 +13,12 @@ class WebSocketServer {
         20;  // For sizing arrays etc. See config_.num_clients_allowed for settable limit.
     static const uint16_t kURIMaxLen = 200;
 
-    struct WebSocketManagerConfig {
+    struct WebSocketServerConfig {
         char label[kWebSocketLabelMaxLen] = "Untitled";
         httpd_handle_t server;
         char uri[kURIMaxLen] = "/your-websocket-uri";
         uint16_t num_clients_allowed = 3;
+        bool send_as_binary = false;  // Set to true if sending anything other than ASCII.
         // Time without a message before a network console client is disconnected.
         uint32_t inactivity_timeout_ms = 10 * 60e3;
         // Callback function that gets executed when the websocket connects.
@@ -32,7 +33,7 @@ class WebSocketServer {
     /**
      * Constructor.
      */
-    WebSocketServer(WebSocketManagerConfig config_in) : config_(config_in) {};
+    WebSocketServer(WebSocketServerConfig config_in) : config_(config_in) {};
 
     /**
      * Default constructor.
@@ -92,9 +93,9 @@ class WebSocketServer {
      */
     bool AddClient(int client_fd);
 
-        bool UpdateActivityTimer(int client_fd);
+    bool UpdateActivityTimer(int client_fd);
 
-    WebSocketManagerConfig config_;
+    WebSocketServerConfig config_;
 
     WSClientInfo clients_[kMaxNumClients] = {0};
 };
