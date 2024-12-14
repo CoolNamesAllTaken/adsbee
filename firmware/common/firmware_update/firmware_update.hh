@@ -171,27 +171,54 @@ class FirmwareUpdateManager {
     }
 
     /**
-     * Erase all contents of a flash partition, including the header and application.
+     * Erase contents from a flash partition. Defaults to erasing the entire partition, including the header and the
+     * application.
      * @param[in] partition Partition index to erase. Must be < kNumPartitions.
+     * @param[in] offset Offset from the beginning of the partition to start erasing from. Must be a multiple of the
+     * sector size.
+     * @param[in] len_bytes Length of partition contents starting at offset to erase. If len_bytes is not a multiple of
+     * the sector size, the full sector containing the last byte will be erased.
+     * @retval True if erase successful, false if error.
      */
-    static inline bool EraseFlashParition(uint16_t partition) {
+    static inline bool EraseFlashParition(uint16_t partition, uint32_t offset = 0x0,
+                                          uint32_t len_bytes = kFlashHeaderLenBytes + kFlashAppLenBytes) {
         if (partition >= kNumPartitions) {
             CONSOLE_ERROR("FirmwareUpdateManager::EraseFlashPartition",
                           "Can't erase partition %u, value must be less than %u.", partition, kNumPartitions);
             return false;
         }
-        uint32_t bytes_to_erase = kFlashHeaderLenBytes + kFlashAppLenBytes;
-        uint16_t total_sectors_to_erase =
-            bytes_to_erase / FLASH_SECTOR_SIZE + (bytes_to_erase % FLASH_SECTOR_SIZE ? 1 : 0);
+        if (offset > kFlashHeaderLenBytes + kFlashAppLenBytes) {
+            CONSOLE_ERROR("FirmwareUpdateManager::EraseFlashPartition",
+                          "Offset 0x%x is larger than maximum partition size 0x%x Bytes.", offset,
+                          kFlashHeaderLenBytes + kFlashAppLenBytes);
+            return false;
+        }
+        if (len_bytes > kFlashHeaderLenBytes + kFlashAppLenBytes - offset) {
+            CONSOLE_ERROR("FirmwareUpdateManager::EraseFlashPartition",
+                          "Length %u is larger than maximum partition size %u Bytes.", len_bytes,
+                          kFlashHeaderLenBytes + kFlashAppLenBytes);
+            return false;
+        }
+        if (offset % FLASH_SECTOR_SIZE != 0) {
+            CONSOLE_ERROR("FirmwareUpdateManager::EraseFlashPartition",
+                          "Offset 0x%x is not a multiple of the sector size 0x%x Bytes.", offset, FLASH_SECTOR_SIZE);
+            return false;
+        }
+        uint16_t total_sectors_to_erase = len_bytes / FLASH_SECTOR_SIZE + (len_bytes % FLASH_SECTOR_SIZE ? 1 : 0);
+        if (total_sectors_to_erase == 0) {
+            CONSOLE_PRINTF("No sectors to erase.\r\n");
+            return true;
+        }
         uint16_t remaining_sectors_to_erase = total_sectors_to_erase;
         uint16_t num_sectors_to_erase;
-        for (uint16_t sector = 0; remaining_sectors_to_erase > 0; sector += num_sectors_to_erase) {
+        for (uint16_t sector = offset / FLASH_SECTOR_SIZE; remaining_sectors_to_erase > 0;
+             sector += num_sectors_to_erase) {
             uint32_t sector_start_addr = kFlashHeaderStartAddrs[partition] + sector * FLASH_SECTOR_SIZE;
             num_sectors_to_erase = MIN(remaining_sectors_to_erase, kMaxSectorsPerErase);
             uint32_t num_bytes_to_erase = num_sectors_to_erase * FLASH_SECTOR_SIZE;
             CONSOLE_PRINTF("Erasing %u sector(s) starting at %u/%u (%u Bytes at 0x%x).\r\n", num_sectors_to_erase,
-                           sector + 1, total_sectors_to_erase, num_bytes_to_erase * num_sectors_to_erase,
-                           sector_start_addr);
+                           sector + 1, (kFlashHeaderLenBytes + kFlashAppLenBytes) / FLASH_SECTOR_SIZE,
+                           num_bytes_to_erase * num_sectors_to_erase, sector_start_addr);
             DisableInterrupts();
             flash_range_erase(FlashAddrToOffset(sector_start_addr), num_bytes_to_erase);
             RestoreInterrupts();
