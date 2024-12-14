@@ -95,10 +95,10 @@ bool ADSBeeServer::Update() {
     // Prune aircraft dictionary. Need to do this up front so that we don't end up with a negative timestamp delta
     // caused by packets being ingested more recently than the timestamp we take at the beginning of this function.
     if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > kAircraftDictionaryUpdateIntervalMs) {
-        uint32_t scratch;
-        if (!pico.Read(ObjectDictionary::Address::kAddrScratch, scratch)) {
-            CONSOLE_ERROR("ADSBeeServer::Update", "Read of Pico scratch failed.");
-        }
+        // uint32_t scratch;
+        // if (!pico.Read(ObjectDictionary::Address::kAddrScratch, scratch)) {
+        //     CONSOLE_ERROR("ADSBeeServer::Update", "Read of Pico scratch failed.");
+        // }
 
         aircraft_dictionary.Update(timestamp_ms);
         last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
@@ -410,6 +410,7 @@ bool ADSBeeServer::TCPServerInit() {
                                            .server = server,
                                            .uri = "/console",
                                            .num_clients_allowed = 3,
+                                           .send_as_binary = true,  // Network console messages can contain binary data.
                                            .post_connect_callback = NetworkConsolePostConnectCallback,
                                            .message_received_callback = NetworkConsoleMessageReceivedCallback});
         network_console.Init();
@@ -417,6 +418,7 @@ bool ADSBeeServer::TCPServerInit() {
                                            .server = server,
                                            .uri = "/metrics",
                                            .num_clients_allowed = 3,
+                                           .send_as_binary = false,  // Network metrics are always ASCII.
                                            .post_connect_callback = nullptr,
                                            .message_received_callback = nullptr});
         network_metrics.Init();
