@@ -21,10 +21,10 @@ inline void connect_to_ethernet(void* arg = nullptr) { comms_manager.ConnectToEt
 /** End "Pass-Through" functions. **/
 
 bool CommsManager::ConnectToEthernet() {
-    if (esp_netif_dhcpc_start(ethernet_netif_) != ESP_OK) {
-        CONSOLE_ERROR("connect_to_ethernet", "Failed to start DHCP client.");
-        return false;
-    }
+    // if (esp_netif_dhcpc_start(ethernet_netif_) != ESP_OK) {
+    //     CONSOLE_ERROR("connect_to_ethernet", "Failed to start DHCP client.");
+    //     return false;
+    // }
     if (esp_eth_start(ethernet_handle_) != ESP_OK) {
         CONSOLE_ERROR("connect_to_ethernet", "Failed to connect to Ethernet.");
         return false;
@@ -58,7 +58,7 @@ void CommsManager::EthernetEventHandler(void* arg, esp_event_base_t event_base, 
             CONSOLE_INFO("CommsManager::EthernetEventHandler", "Ethernet Link Down");
             ethernet_connected_ = false;
             ethernet_has_ip_ = false;
-            ESP_ERROR_CHECK(esp_netif_dhcpc_stop(ethernet_netif_));
+            // ESP_ERROR_CHECK(esp_netif_dhcpc_stop(ethernet_netif_));
             ESP_ERROR_CHECK(esp_eth_stop(eth_handle));
             if (ethernet_enabled) {
                 ScheduleDelayedFunctionCall(kEthernetReconnectIntervalMs, &connect_to_ethernet);
@@ -104,18 +104,18 @@ bool CommsManager::EthernetInit() {
     // W5500 SPI device configuration.
     spi_device_interface_config_t spi_devcfg = {
 
-        .command_bits = 16,  // Actually it's the address phase in W5500 SPI frame
-        .address_bits = 8,   // Actually it's the control phase in W5500 SPI frame
-        .dummy_bits = 0,
+        // .command_bits = 16,  // Actually it's the address phase in W5500 SPI frame
+        // .address_bits = 8,   // Actually it's the control phase in W5500 SPI frame
+        // .dummy_bits = 0,
         .mode = 0,
-        .clock_source = SPI_CLK_SRC_DEFAULT,
+        // .clock_source = SPI_CLK_SRC_DEFAULT,
         .clock_speed_hz = config_.aux_spi_clk_rate_hz,
-        .input_delay_ns = 0,
+        // .input_delay_ns = 0,
         .spics_io_num = config_.aux_spi_cs_pin,
-        .flags = 0,
+        // .flags = 0,
         .queue_size = 20,
-        .pre_cb = nullptr,
-        .post_cb = nullptr,
+        // .pre_cb = nullptr,
+        // .post_cb = nullptr,
     };
 
     eth_w5500_config_t w5500_config = ETH_W5500_DEFAULT_CONFIG(config_.aux_spi_handle, &spi_devcfg);

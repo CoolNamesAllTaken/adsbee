@@ -89,3 +89,5 @@ else()
     # Create the executable and bring in testing source files.
     add_subdirectory(host_test)
 endif()
+
+enable_testing() # Allow subdirectories to create tests.

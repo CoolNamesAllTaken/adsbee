@@ -7,5 +7,6 @@
 #define CONSOLE_INFO(tag, format, ...)    printf("INFO: " tag ": " format "\r\n" __VA_OPT__(, ) __VA_ARGS__)
 #define CONSOLE_WARNING(tag, format, ...) printf("WARNING: " tag ": " format "\r\n" __VA_OPT__(, ) __VA_ARGS__)
 #define CONSOLE_ERROR(tag, format, ...)   printf("ERROR: " tag ": " format "\r\n" __VA_OPT__(, ) __VA_ARGS__)
+#define CONSOLE_PRINTF(format, ...)       printf(format "\r\n" __VA_OPT__(, ) __VA_ARGS__)
 
 #endif /* COMMS_HH_ */
