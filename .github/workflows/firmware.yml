@@ -35,6 +35,7 @@ jobs:
 
   esp_target_build_release:
     runs-on: ubuntu-latest
+    container: coolnamesalltaken/pico-docker
 
     steps:
     - name: Checkout repo
@@ -44,9 +45,15 @@ jobs:
     - name: esp-idf build
       uses: espressif/esp-idf-ci-action@v1
       with:
-        esp_idf_version: v5.4
+        esp_idf_version: release-v5.4
         target: esp32s3
         path: firmware/esp
+    - name: Upload ESP32 firmware
+      uses: actions/upload-artifact@v4
+      with:
+        name: adsbee_esp.bin
+        path: firmware/esp/build/adsbee_esp.bin
+        retention-days: 1
 
   # pico_target_build_release:
   #   runs-on: ubuntu-latest
