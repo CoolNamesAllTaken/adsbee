@@ -14,8 +14,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: configure
-      run: ./configure
     - name: cd to firmware/pico directory
       run: cd /home/runner/work/adsbee/adsbee/firmware/pico
     - name: set build type to Test
