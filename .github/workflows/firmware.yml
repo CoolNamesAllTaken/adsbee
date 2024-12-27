@@ -44,7 +44,7 @@ jobs:
         submodules: 'recursive'
     # Need to install docker, in the docker container, to allow the ESP-IDF CI action to run.
     - name: Install Docker
-      uses: papodaca/install-docker-action@V1
+      uses: papodaca/install-docker-action@v1
     - name: Build ESP32 firmware
       uses: espressif/esp-idf-ci-action@v1
       with:
