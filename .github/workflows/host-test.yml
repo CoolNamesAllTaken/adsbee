@@ -17,10 +17,13 @@ jobs:
       uses: actions/checkout@v4
       with:
         submodules: 'recursive'
+    - name: build googletest submodule
+      working-directory: firmware/modules/googletest
+      run: mkdir build && cd build && cmake -DBUILD_SHARED_LIBS=ON .. && make
     - name: create build directory
       working-directory: firmware/pico
       run: mkdir -p build
-    - name: set build type to Test
+    - name: run cmake with build type "Test"
       working-directory: firmware/pico/build
       run: cmake -DCMAKE_BUILD_TYPE=Test ..
     - name: make
