@@ -33,7 +33,7 @@ jobs:
       working-directory: firmware/pico/build
       run: ctest --verbose
 
-  esp_target_build_release:
+  target_build_release:
     runs-on: ubuntu-latest
     container: coolnamesalltaken/pico-docker
 
@@ -42,18 +42,21 @@ jobs:
       uses: actions/checkout@v4
       with:
         submodules: 'recursive'
-    - name: esp-idf build
+    # Need to install docker, in the docker container, to allow the ESP-IDF CI action to run.
+    - name: Install Docker
+      uses: papodaca/install-docker-action@V1
+    - name: Build ESP32 firmware
       uses: espressif/esp-idf-ci-action@v1
       with:
         esp_idf_version: release-v5.4
         target: esp32s3
         path: firmware/esp
-    - name: Upload ESP32 firmware
-      uses: actions/upload-artifact@v4
-      with:
-        name: adsbee_esp.bin
-        path: firmware/esp/build/adsbee_esp.bin
-        retention-days: 1
+    # - name: Upload ESP32 firmware
+    #   uses: actions/upload-artifact@v4
+    #   with:
+    #     name: adsbee_esp.bin
+    #     path: firmware/esp/build/adsbee_esp.bin
+    #     retention-days: 1
 
   # pico_target_build_release:
   #   runs-on: ubuntu-latest
