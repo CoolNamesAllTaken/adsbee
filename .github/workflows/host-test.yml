@@ -18,13 +18,14 @@ jobs:
       with:
         submodules: 'recursive'
     - name: create build directory
-      run: mkdir -p $GITHUB_WORKSPACE/adsbee/firmware/pico/build
+      working-directory: firmware/pico
+      run: mkdir -p build
     - name: set build type to Test
-      working-directory: $GITHUB_WORKSPACE/adsbee/firmware/pico/build
+      working-directory: firmware/pico/build
       run: cmake -DCMAKE_BUILD_TYPE=Test ..
     - name: make
-      working-directory: $GITHUB_WORKSPACE/adsbee/firmware/pico/build
+      working-directory: firmware/pico/build
       run: make
     - name: ctest
-      working-directory: $GITHUB_WORKSPACE/adsbee/firmware/pico/build
+      working-directory: firmware/pico/build
       run: ctest
