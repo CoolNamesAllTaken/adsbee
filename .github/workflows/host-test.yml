@@ -1,0 +1,26 @@
+name: C/C++ CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: coolnamesalltaken/pico-docker
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: configure
+      run: ./configure
+    - name: cd to firmware/pico directory
+      run: cd /home/runner/work/adsbee/adsbee/firmware/pico
+    - name: set build type to Test
+      run: mkdir build && cd build
+      run: cmake -DCMAKE_BUILD_TYPE=Test ..
+    - name: make
+      run: make
+    - name: ctest
+      run: ctest
