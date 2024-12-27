@@ -46,7 +46,7 @@ jobs:
     - name: Install Docker
       uses: papodaca/install-docker-action@v1
     - name: List contents of esp directory
-      run: echo ${ls -la firmware/esp}
+      run: ls -la firmware/esp
     - name: Build ESP32 firmware
       uses: espressif/esp-idf-ci-action@v1
       with:
