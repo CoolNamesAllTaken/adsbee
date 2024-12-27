@@ -11,7 +11,7 @@ add_compile_options(
 
 # Test: Pull in google test library
 add_library(libgtest SHARED IMPORTED)
-set_target_properties(libgtest PROPERTIES IMPORTED_LOCATION /ads_bee/modules/googletest/build/lib/libgtest.so)
+set_target_properties(libgtest PROPERTIES IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/../modules/googletest/build/lib/libgtest.so)
 target_link_libraries(host_test PRIVATE libgtest)
 
 add_subdirectory(${ADSBEE_COMMON_DIR} ${CMAKE_BINARY_DIR}/adsbee_common)
