@@ -52,7 +52,7 @@ jobs:
       with:
         esp_idf_version: release-v5.4
         target: esp32s3
-        path: firmware/esp
+        path: 'firmware/esp'
     # - name: Upload ESP32 firmware
     #   uses: actions/upload-artifact@v4
     #   with:
