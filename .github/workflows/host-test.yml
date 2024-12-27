@@ -9,7 +9,8 @@ on:
 jobs:
   build:
 
-    runs-on: coolnamesalltaken/pico-docker
+    runs-on: ubuntu-latest
+    container: coolnamesalltaken/pico-docker
 
     steps:
     - uses: actions/checkout@v4
