@@ -18,8 +18,7 @@ jobs:
     - name: cd to firmware/pico directory
       run: cd /home/runner/work/adsbee/adsbee/firmware/pico
     - name: set build type to Test
-      run: mkdir build && cd build
-      run: cmake -DCMAKE_BUILD_TYPE=Test ..
+      run: mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Test ..
     - name: make
       run: make
     - name: ctest
