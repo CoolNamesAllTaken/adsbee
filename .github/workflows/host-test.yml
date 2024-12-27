@@ -13,11 +13,16 @@ jobs:
     container: coolnamesalltaken/pico-docker
 
     steps:
-    - uses: actions/checkout@v4
-    - name: cd to firmware/pico directory
-      run: cd /home/runner/work/adsbee/adsbee/firmware/pico
+    - name: checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+    - name: create build directory
+      run: mkdir -p $GITHUB_WORKSPACE/adsbee/firmware/pico/build
+    - name: cd to build direcotry.
+      run: cd $GITHUB_WORKSPACE/adsbee/firmware/pico/build
     - name: set build type to Test
-      run: mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Test ..
+      run: cmake -DCMAKE_BUILD_TYPE=Test ..
     - name: make
       run: make
     - name: ctest
