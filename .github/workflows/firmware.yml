@@ -57,7 +57,7 @@ jobs:
   pico_target_build:
     runs-on: ubuntu-latest
     container: coolnamesalltaken/pico-docker
-    needs: esp_target_build_release
+    needs: esp_target_build
 
     steps:
     - name: Checkout repository
