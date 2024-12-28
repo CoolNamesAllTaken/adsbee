@@ -87,7 +87,7 @@ jobs:
       run: mkdir -p build
     - name: Run cmake with build type "Release"
       working-directory: firmware/pico/build
-        run: cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=/usr/bin/arm-none-eabi-gcc -DCMAKE_CXX_COMPILER=/usr/bin/arm-none-eabi-g++ ..
+      run: cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=/usr/bin/arm-none-eabi-gcc -DCMAKE_CXX_COMPILER=/usr/bin/arm-none-eabi-g++ ..
     - name: Build
       working-directory: firmware/pico/build
       run: make
