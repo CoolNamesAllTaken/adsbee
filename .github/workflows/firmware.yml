@@ -46,20 +46,23 @@ jobs:
     - name: Install Docker
       uses: papodaca/install-docker-action@v1
     - name: List contents of esp directory
-      run: ls -la $GITHUB_WORKSPACE/firmware/esp
+      working-directory: firmware/esp
+      run: ls -la
     - name: List contents of esp directory inside docker container
+      working-directory: firmware/esp
       uses: espressif/esp-idf-ci-action@v1
       with:
         esp_idf_version: release-v5.4
         target: esp32s3
-        path: firmware/esp
+        # path: firmware/esp
         command: pwd && ls -la
     - name: Build ESP32 firmware
+      working-directory: firmware/esp
       uses: espressif/esp-idf-ci-action@v1
       with:
         esp_idf_version: release-v5.4
         target: esp32s3
-        path: firmware/esp
+        # path: firmware/esp
     # - name: Upload ESP32 firmware
     #   uses: actions/upload-artifact@v4
     #   with:
