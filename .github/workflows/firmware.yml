@@ -47,6 +47,8 @@ jobs:
       uses: papodaca/install-docker-action@v1
     - name: List contents of esp directory
       run: ls -la firmware/esp
+    - name: List contents of esp idf ci directory
+      run: ls -la /app/CoolNamesAllTaken/adsbee/firmware/esp
     - name: Build ESP32 firmware
       uses: espressif/esp-idf-ci-action@v1
       with:
