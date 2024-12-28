@@ -80,7 +80,7 @@ jobs:
       run: cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=/usr/bin/arm-none-eabi-gcc -DCMAKE_CXX_COMPILER=/usr/bin/arm-none-eabi-g++ ..
     - name: Build
       working-directory: firmware/pico/build
-      run: cmake --build /ads_bee/pico/build --config Debug --target all -j 22
+      run: cmake --build . --config Debug --target all -j 22
     - name: upload artifacts
       uses: actions/upload-artifact@v4
       with:
