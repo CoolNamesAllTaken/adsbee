@@ -53,7 +53,7 @@ jobs:
         esp_idf_version: release-v5.4
         target: esp32s3
         path: firmware/esp
-        command: ls -la
+        command: pwd && ls -la
     - name: Build ESP32 firmware
       uses: espressif/esp-idf-ci-action@v1
       with:
