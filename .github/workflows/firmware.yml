@@ -49,16 +49,16 @@ jobs:
       working-directory: firmware/esp
       run: ls -la
     - name: List contents of esp directory inside docker container
-      working-directory: firmware/esp
       uses: espressif/esp-idf-ci-action@v1
+      working-directory: firmware/esp
       with:
         esp_idf_version: release-v5.4
         target: esp32s3
         # path: firmware/esp
         command: pwd && ls -la
     - name: Build ESP32 firmware
-      working-directory: firmware/esp
       uses: espressif/esp-idf-ci-action@v1
+      working-directory: firmware/esp
       with:
         esp_idf_version: release-v5.4
         target: esp32s3
