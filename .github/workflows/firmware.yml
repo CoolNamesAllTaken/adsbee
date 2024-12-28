@@ -1,0 +1,90 @@
+name: ADSBee Firmware CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  host_build_and_test:
+
+    runs-on: ubuntu-latest
+    container: coolnamesalltaken/pico-docker
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+    - name: Build googletest submodule
+      working-directory: firmware/modules/googletest
+      run: mkdir build && cd build && cmake -DBUILD_SHARED_LIBS=ON .. && make
+    - name: Create build directory
+      working-directory: firmware/pico
+      run: mkdir -p build
+    - name: Run cmake with build type "Test"
+      working-directory: firmware/pico/build
+      run: cmake -DCMAKE_BUILD_TYPE=Test -DCMAKE_C_COMPILER=/usr/bin/gcc -DCMAKE_CXX_COMPILER=/usr/bin/g++ ..
+    - name: Build
+      working-directory: firmware/pico/build
+      run: make
+    - name: Run unit tests
+      working-directory: firmware/pico/build
+      run: ctest --verbose
+
+  esp_target_build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+    - name: Build ESP32 firmware
+      uses: espressif/esp-idf-ci-action@v1
+      with:
+        esp_idf_version: release-v5.4
+        target: esp32s3
+        path: firmware/esp
+    - name: Upload ESP32 firmware
+      uses: actions/upload-artifact@v4
+      with:
+        name: adsbee_esp.bin
+        path: firmware/esp/build/adsbee_esp.bin
+        retention-days: 1
+
+  pico_target_build:
+    runs-on: ubuntu-latest
+    container: coolnamesalltaken/pico-docker
+    needs: esp_target_build
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+    - name: Create ESP32 build directory
+      working-directory: firmware/esp
+      run: mkdir -p build
+    - name: Download ESP32 firmware
+      uses: actions/download-artifact@v4
+      with:
+        name: adsbee_esp.bin
+        path: firmware/esp/build
+    - name: Create Pico build directory
+      working-directory: firmware/pico
+      run: mkdir -p build
+    - name: Run cmake with build type "Release"
+      working-directory: firmware/pico/build
+      run: cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=/usr/bin/arm-none-eabi-gcc -DCMAKE_CXX_COMPILER=/usr/bin/arm-none-eabi-g++ ..
+    - name: Build
+      working-directory: firmware/pico/build
+      run: cmake --build . --config Debug --target all -j 22
+    - name: upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: firmware
+        path: |
+          firmware/pico/build/application/combined.uf2
+          firmware/pico/build/application/adsbee_1090.ota

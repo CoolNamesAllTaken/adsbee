@@ -1,0 +1,5 @@
+bin/*
+
+# Don't ignore files in bin that aren't generated.
+!bin/bootloader.bin
+!bin/partition-table.bin
