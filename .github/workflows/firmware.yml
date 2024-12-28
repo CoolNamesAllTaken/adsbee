@@ -33,7 +33,7 @@ jobs:
       working-directory: firmware/pico/build
       run: ctest --verbose
 
-  esp_target_build_release:
+  esp_target_build:
     runs-on: ubuntu-latest
 
     steps:
@@ -41,16 +41,6 @@ jobs:
       uses: actions/checkout@v4
       with:
         submodules: 'recursive'
-    # - name: List contents of esp directory
-    #   working-directory: firmware/esp
-    #   run: chmod -R 777 . && ls -la
-    # - name: List contents of esp directory inside docker container
-    #   uses: espressif/esp-idf-ci-action@v1
-    #   with:
-    #     esp_idf_version: release-v5.4
-    #     target: esp32s3
-    #     path: firmware/esp
-    #     command: pwd && ls -la
     - name: Build ESP32 firmware
       uses: espressif/esp-idf-ci-action@v1
       with:
@@ -64,7 +54,7 @@ jobs:
         path: firmware/esp/build/adsbee_esp.bin
         retention-days: 1
 
-  pico_target_build_release:
+  pico_target_build:
     runs-on: ubuntu-latest
     container: coolnamesalltaken/pico-docker
     needs: esp_target_build_release
@@ -90,7 +80,7 @@ jobs:
       run: cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=/usr/bin/arm-none-eabi-gcc -DCMAKE_CXX_COMPILER=/usr/bin/arm-none-eabi-g++ ..
     - name: Build
       working-directory: firmware/pico/build
-      run: make
+      run: cmake --build /ads_bee/pico/build --config Debug --target all -j 22
     - name: upload artifacts
       uses: actions/upload-artifact@v4
       with:

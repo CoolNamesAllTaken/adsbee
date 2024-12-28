@@ -127,17 +127,19 @@ if (ON_EMBEDDED_DEVICE)
     pico_set_linker_script(app1 ${APP1_LINKER_SCRIPT})
     pico_add_bin_output(app1)
 
-
+    
     # Create a header binary and assembly file for application.bin with section name hdr0.
     # Keeping the checksum separate allows us to do a combined build utilizing the sources for application.bin while
     # also loading the checksum onto the target so that the bootloader can examine it.
-    add_custom_command(TARGET application POST_BUILD
-        COMMAND ${Python3_EXECUTABLE} ${LINKER_SCRIPTS_DIR}/util_crc.py
-                ${CMAKE_CURRENT_BINARY_DIR}/app0.bin
-                ${CMAKE_CURRENT_BINARY_DIR}/app1.bin
-                --header ${APPLICATION_HEADER_SECTION_NAME}
-                --ota ${CMAKE_CURRENT_BINARY_DIR}/adsbee_1090.ota
-        COMMENT "Calculating and appending CRC32 to application binary and UF2"
+    # Make this execute after app1 so that app0.bin and app1.bin are available.
+    add_custom_command(TARGET app1
+        POST_BUILD
+            COMMAND ${Python3_EXECUTABLE} ${LINKER_SCRIPTS_DIR}/util_crc.py
+                    ${CMAKE_CURRENT_BINARY_DIR}/app0.bin
+                    ${CMAKE_CURRENT_BINARY_DIR}/app1.bin
+                    --header ${APPLICATION_HEADER_SECTION_NAME}
+                    --ota ${CMAKE_CURRENT_BINARY_DIR}/adsbee_1090.ota
+            COMMENT "Calculating and appending CRC32 to application binary and UF2"
     )
 
     ## Combined build
@@ -164,6 +166,8 @@ if (ON_EMBEDDED_DEVICE)
     add_dependencies(combined_library
         bootloader
         application
+        app0
+        app1
     )
 
     # Create a new executable called "combined" that uses the combined_library library and copies all sources from application.
