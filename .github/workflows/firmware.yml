@@ -78,10 +78,10 @@ jobs:
       working-directory: firmware/esp
       run: mkdir -p build
     - name: Download ESP32 firmware
-        uses: actions/download-artifact@v4
-        with:
-          name: adsbee_esp.bin
-          path: firmware/esp/build
+      uses: actions/download-artifact@v4
+      with:
+        name: adsbee_esp.bin
+        path: firmware/esp/build
     - name: Create Pico build directory
       working-directory: firmware/pico
       run: mkdir -p build
