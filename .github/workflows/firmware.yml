@@ -33,60 +33,68 @@ jobs:
       working-directory: firmware/pico/build
       run: ctest --verbose
 
-  target_build_release:
+  esp_target_build_release:
     runs-on: ubuntu-latest
-    # container: coolnamesalltaken/pico-docker
 
     steps:
     - name: Checkout repo
       uses: actions/checkout@v4
       with:
         submodules: 'recursive'
-    # Need to install docker, in the docker container, to allow the ESP-IDF CI action to run.
-    # - name: Install Docker
-    #   uses: papodaca/install-docker-action@v1
-    - name: List contents of esp directory
-      working-directory: firmware/esp
-      run: chmod -R 777 . && ls -la
-    - name: List contents of esp directory inside docker container
-      uses: espressif/esp-idf-ci-action@v1
-      with:
-        esp_idf_version: release-v5.4
-        target: esp32s3
-        path: firmware/esp
-        command: pwd && ls -la
+    # - name: List contents of esp directory
+    #   working-directory: firmware/esp
+    #   run: chmod -R 777 . && ls -la
+    # - name: List contents of esp directory inside docker container
+    #   uses: espressif/esp-idf-ci-action@v1
+    #   with:
+    #     esp_idf_version: release-v5.4
+    #     target: esp32s3
+    #     path: firmware/esp
+    #     command: pwd && ls -la
     - name: Build ESP32 firmware
       uses: espressif/esp-idf-ci-action@v1
       with:
         esp_idf_version: release-v5.4
         target: esp32s3
         path: firmware/esp
-    # - name: Upload ESP32 firmware
-    #   uses: actions/upload-artifact@v4
-    #   with:
-    #     name: adsbee_esp.bin
-    #     path: firmware/esp/build/adsbee_esp.bin
-    #     retention-days: 1
+    - name: Upload ESP32 firmware
+      uses: actions/upload-artifact@v4
+      with:
+        name: adsbee_esp.bin
+        path: firmware/esp/build/adsbee_esp.bin
+        retention-days: 1
 
-  # pico_target_build_release:
-  #   runs-on: ubuntu-latest
-  #   container: coolnamesalltaken/pico-docker
+  pico_target_build_release:
+    runs-on: ubuntu-latest
+    container: coolnamesalltaken/pico-docker
+    needs: esp_target_build_release
 
-  #   steps:
-  #   - name: Checkout repository
-  #     uses: actions/checkout@v4
-  #     with:
-  #       submodules: 'recursive'
-  #   - name: Create build directory
-  #     working-directory: firmware/pico
-  #     run: mkdir -p build
-  #   - name: Run cmake with build type "Release"
-  #     working-directory: firmware/pico/build
-  #       run: cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=/usr/bin/arm-none-eabi-gcc -DCMAKE_CXX_COMPILER=/usr/bin/arm-none-eabi-g++ ..
-  #   - name: Build
-  #     working-directory: firmware/pico/build
-  #     run: make
-  #   - name: upload artifacts
-  #     uses: actions/upload-artifact@v4
-  #     working-directory: firmware/pico/build
-  #     run: ctest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+    - name: Create ESP32 build directory
+      working-directory: firmware/esp
+      run: mkdir -p build
+    - name: Download ESP32 firmware
+        uses: actions/download-artifact@v4
+        with:
+          name: adsbee_esp.bin
+          path: firmware/esp/build
+    - name: Create Pico build directory
+      working-directory: firmware/pico
+      run: mkdir -p build
+    - name: Run cmake with build type "Release"
+      working-directory: firmware/pico/build
+        run: cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=/usr/bin/arm-none-eabi-gcc -DCMAKE_CXX_COMPILER=/usr/bin/arm-none-eabi-g++ ..
+    - name: Build
+      working-directory: firmware/pico/build
+      run: make
+    - name: upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: firmware
+        path: |
+          firmware/pico/build/application/combined.uf2
+          firmware/pico/build/application/adsbee_1090.ota
