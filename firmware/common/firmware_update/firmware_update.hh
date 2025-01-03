@@ -15,11 +15,11 @@ class FirmwareUpdateManager {
     /* Original flash length: 16384k Bytes.
     FLASH MAP
         0x10000000	(176k)	FLASH_BL	Bootloader
-        0x1002C000	(4k)	FLASH_HDR0	Application 0 Header
-        0x1002D000	(8096k)	FLASH_APP0	Application 0 Data
-        0x10815000	(4k)	FLASH_HDR1	Application 1 Header
-        0x10816000	(8096k)	FLASH_APP1	Application 1 Data
-        0x10FFE000	(8k)	FLASH_EXTRA	Extra
+        0x1002C000	(4k)	FLASH_HDR0	    Application 0 Header
+        0x1002D000	(8096k)	FLASH_APP0	    Application 0 Data
+        0x10815000	(4k)	FLASH_HDR1	    Application 1 Header
+        0x10816000	(8096k)	FLASH_APP1	    Application 1 Data
+        0x10FFE000	(8k)	FLASH_SETTINGS	Settings
     */
 
     static const uint32_t kFlashBlStartAddr = 0x10000000;
