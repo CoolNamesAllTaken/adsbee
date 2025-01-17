@@ -1,7 +1,7 @@
 #ifndef COMMS_HH_
 #define COMMS_HH_
 
-// #include "transponder_packet.hh"  // For DecodedTransponderPacket.
+// #include "transponder_packet.hh"  // For Decoded1090Packet.
 #include "adsbee.hh"
 #include "cpp_at.hh"
 #include "data_structures.hh"  // For PFBQueue.
@@ -166,9 +166,9 @@ class CommsManager {
     SettingsManager::LogLevel log_level = SettingsManager::LogLevel::kInfo;  // Start with highest verbosity by default.
 
     // Queue for storing transponder packets before they get reported.
-    PFBQueue<DecodedTransponderPacket> transponder_packet_reporting_queue =
-        PFBQueue<DecodedTransponderPacket>({.buf_len_num_elements = ADSBee::kMaxNumTransponderPackets,
-                                            .buffer = transponder_packet_reporting_queue_buffer_});
+    PFBQueue<Decoded1090Packet> transponder_packet_reporting_queue =
+        PFBQueue<Decoded1090Packet>({.buf_len_num_elements = ADSBee::kMaxNumTransponderPackets,
+                                     .buffer = transponder_packet_reporting_queue_buffer_});
 
     // Queues for incoming / outgoing network characters.
     PFBQueue<char> esp32_console_rx_queue =
@@ -197,7 +197,7 @@ class CommsManager {
     bool InitReporting();
     bool UpdateReporting();
 
-    bool ReportRaw(SettingsManager::SerialInterface iface, const DecodedTransponderPacket packets_to_report[],
+    bool ReportRaw(SettingsManager::SerialInterface iface, const Decoded1090Packet packets_to_report[],
                    uint16_t num_packets_to_report);
 
     /**
@@ -209,7 +209,7 @@ class CommsManager {
      * @param[in] num_packets_to_report Number of packets to report from the packets_to_report array.
      * @retval True if successful, false if something broke.
      */
-    bool ReportBeast(SettingsManager::SerialInterface iface, const DecodedTransponderPacket packets_to_report[],
+    bool ReportBeast(SettingsManager::SerialInterface iface, const Decoded1090Packet packets_to_report[],
                      uint16_t num_packets_to_report);
 
     /**
@@ -245,7 +245,7 @@ class CommsManager {
     char esp32_console_tx_queue_buffer_[kNetworkConsoleBufMaxLen];
 
     // Queue for holding new transponder packets before they get reported.
-    DecodedTransponderPacket transponder_packet_reporting_queue_buffer_[ADSBee::kMaxNumTransponderPackets];
+    Decoded1090Packet transponder_packet_reporting_queue_buffer_[ADSBee::kMaxNumTransponderPackets];
 
     // Reporting Settings
     uint32_t comms_uart_baudrate_ = SettingsManager::Settings::kDefaultCommsUARTBaudrate;

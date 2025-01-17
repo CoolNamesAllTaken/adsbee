@@ -433,16 +433,16 @@ class AircraftDictionary {
     }
 
     /**
-     * Ingests a DecodedTransponderPacket and uses it to insert and update the relevant aircraft.
-     * @param[in] packet DecodedTransponderPacket to ingest. Can be 56-bit (Squitter) or 112-bit (Extended Squitter).
+     * Ingests a Decoded1090Packet and uses it to insert and update the relevant aircraft.
+     * @param[in] packet Decoded1090Packet to ingest. Can be 56-bit (Squitter) or 112-bit (Extended Squitter).
      * Passed as a reference, since packets can be marked as valid by this function.
      * @retval True if successful, false if something broke.
      */
-    bool IngestDecodedTransponderPacket(DecodedTransponderPacket &packet);
+    bool IngestDecoded1090Packet(Decoded1090Packet &packet);
 
     /**
      * Ingests a Mode A (Identity Surveillance Reply) packet and uses it to update the relevant aircraft. Exposed for
-     * testing, but usually called by IngestDecodedTransponderPacket.
+     * testing, but usually called by IngestDecoded1090Packet.
      * Note: this function requires that the packet be marked as valid using the ForceValid() function. If the packet is
      * valid and does not match an ICAO in the aircraft dictionary, a new aircraft will be inserted.
      * @param[in] packet ModeAPacket to ingest.
@@ -452,7 +452,7 @@ class AircraftDictionary {
 
     /**
      * Ingests a Mode C (Altitude Surveillance Reply) packet and uses it to update the relevant aircraft. Exposed for
-     * testing, but usually called by IngestDecodedTransponderPacket.
+     * testing, but usually called by IngestDecoded1090Packet.
      * Note: this function requires that the packet be marked as valid using the ForceValid() function. If the packet is
      * valid and does not match an ICAO in the aircraft dictionary, a new aircraft will be inserted.
      * @param[in] packet ModeCPacket to ingest.
@@ -462,8 +462,8 @@ class AircraftDictionary {
 
     /**
      * Ingests an ADSBPacket directly. Exposed for testing, but usually this gets called by
-     * IngestDecodedTransponderPacket and should not get touched directly.
-     * @param[in] packet ADSBPacket to ingest. Derived from a DecodedTransponderPacket with DF=17-19.
+     * IngestDecoded1090Packet and should not get touched directly.
+     * @param[in] packet ADSBPacket to ingest. Derived from a Decoded1090Packet with DF=17-19.
      * @retval True if successful, false if something broke.
      */
     bool IngestADSBPacket(ADSBPacket packet);

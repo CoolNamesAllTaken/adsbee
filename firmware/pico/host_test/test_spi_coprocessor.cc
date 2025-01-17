@@ -4,9 +4,9 @@
 TEST(SPICoprocessor, SCWritePacket) {
     SPICoprocessor::SCWritePacket packet;
     packet.cmd = SPICoprocessor::SCCommand::kCmdWriteToSlave;
-    packet.addr = ObjectDictionary::Address::kAddrRawTransponderPacket;
-    RawTransponderPacket tpacket = RawTransponderPacket((char *)"8D7C1BE8581B66E9BD8CEEDC1C9F");
-    packet.len = sizeof(RawTransponderPacket);
+    packet.addr = ObjectDictionary::Address::kAddrRaw1090Packet;
+    Raw1090Packet tpacket = Raw1090Packet((char *)"8D7C1BE8581B66E9BD8CEEDC1C9F");
+    packet.len = sizeof(Raw1090Packet);
     memcpy(packet.data, &tpacket, packet.len);
     // Calculate CRC and add it to the data buffer.
     uint16_t crc =
@@ -17,7 +17,7 @@ TEST(SPICoprocessor, SCWritePacket) {
     packet.PopulateCRC();
     EXPECT_TRUE(packet.IsValid());
 
-    EXPECT_EQ(packet.GetBufLenBytes(), sizeof(RawTransponderPacket) + sizeof(SPICoprocessor::SCCommand) +
+    EXPECT_EQ(packet.GetBufLenBytes(), sizeof(Raw1090Packet) + sizeof(SPICoprocessor::SCCommand) +
                                            sizeof(ObjectDictionary::Address) + 2 * sizeof(uint16_t) +
                                            SPICoprocessor::SCWritePacket::kCRCLenBytes);
 
@@ -25,7 +25,7 @@ TEST(SPICoprocessor, SCWritePacket) {
     EXPECT_EQ(packet.cmd, packet_copy.cmd);
     EXPECT_EQ(packet.addr, packet_copy.addr);
     EXPECT_EQ(packet.IsValid(), packet_copy.IsValid());
-    RawTransponderPacket *tpacket_copy = (RawTransponderPacket *)packet_copy.data;
+    Raw1090Packet *tpacket_copy = (Raw1090Packet *)packet_copy.data;
     EXPECT_EQ(tpacket.buffer_len_bits, tpacket_copy->buffer_len_bits);
     EXPECT_EQ(tpacket.buffer[0], tpacket_copy->buffer[0]);
     EXPECT_EQ(tpacket.buffer[1], tpacket_copy->buffer[1]);
@@ -70,8 +70,8 @@ TEST(SPICoprocessor, SCResponsePacket) {
     SPICoprocessor::SCResponsePacket packet;
     packet.cmd = SPICoprocessor::SCCommand::kCmdDataBlock;
     EXPECT_EQ(packet.GetBuf()[0], SPICoprocessor::SCCommand::kCmdDataBlock);
-    RawTransponderPacket tpacket = RawTransponderPacket((char *)"8D7C1BE8581B66E9BD8CEEDC1C9F");
-    packet.data_len_bytes = sizeof(RawTransponderPacket);
+    Raw1090Packet tpacket = Raw1090Packet((char *)"8D7C1BE8581B66E9BD8CEEDC1C9F");
+    packet.data_len_bytes = sizeof(Raw1090Packet);
     memcpy(packet.data, &tpacket, packet.data_len_bytes);
     EXPECT_FALSE(packet.IsValid());
     packet.PopulateCRC();
@@ -82,7 +82,7 @@ TEST(SPICoprocessor, SCResponsePacket) {
         SPICoprocessor::SCResponsePacket(packet.GetBuf(), packet.GetBufLenBytes());
     EXPECT_TRUE(packet_copy.IsValid());
     EXPECT_EQ(packet_copy.cmd, packet.cmd);
-    RawTransponderPacket *tpacket_copy = (RawTransponderPacket *)packet_copy.data;
+    Raw1090Packet *tpacket_copy = (Raw1090Packet *)packet_copy.data;
     EXPECT_EQ(tpacket_copy->buffer[0], 0x8D7C1BE8u);
     EXPECT_EQ(tpacket_copy->buffer[1], 0x581B66E9u);
     EXPECT_EQ(tpacket_copy->buffer[2], 0xBD8CEEDCu);

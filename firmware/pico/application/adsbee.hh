@@ -282,7 +282,7 @@ class ADSBee {
                          uint16_t tl_learning_start_temperature_mv = kTLLearningStartTemperatureMV,
                          uint16_t tl_min_mv = kTLMinMV, uint16_t tl_max_mv = kTLMaxMV);
 
-    PFBQueue<RawTransponderPacket> transponder_packet_queue = PFBQueue<RawTransponderPacket>(
+    PFBQueue<Raw1090Packet> transponder_packet_queue = PFBQueue<Raw1090Packet>(
         {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = transponder_packet_queue_buffer_});
 
     AircraftDictionary aircraft_dictionary;
@@ -321,8 +321,8 @@ class ADSBee {
 
     uint32_t mlat_counter_1s_wraps_ = 0;
 
-    RawTransponderPacket rx_packet_[kNumDemodStateMachines];
-    RawTransponderPacket transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
+    Raw1090Packet rx_packet_[kNumDemodStateMachines];
+    Raw1090Packet transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
 

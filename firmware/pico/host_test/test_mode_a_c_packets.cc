@@ -2,7 +2,7 @@
 #include "transponder_packet.hh"
 
 TEST(ModeCPacket, JasonPlaynePackets) {
-    ModeCPacket packet = ModeCPacket(DecodedTransponderPacket((char *)"200006A2DE8B1C"));
+    ModeCPacket packet = ModeCPacket(Decoded1090Packet((char *)"200006A2DE8B1C"));
     EXPECT_FALSE(packet.IsValid());
     packet.ForceValid();
     EXPECT_TRUE(packet.IsValid());
@@ -12,7 +12,7 @@ TEST(ModeCPacket, JasonPlaynePackets) {
     EXPECT_TRUE(packet.IsAirborne());
     EXPECT_EQ(packet.GetICAOAddress(), 0x7C1B28u);
 
-    packet = ModeCPacket(DecodedTransponderPacket((char *)"210000992F8C48"));
+    packet = ModeCPacket(Decoded1090Packet((char *)"210000992F8C48"));
     EXPECT_FALSE(packet.IsValid());
     packet.ForceValid();
     EXPECT_TRUE(packet.IsValid());
@@ -24,7 +24,7 @@ TEST(ModeCPacket, JasonPlaynePackets) {
 }
 
 TEST(ModeAPacket, JasonPlaynePackets) {
-    ModeAPacket packet = ModeAPacket(DecodedTransponderPacket((char *)"29001B3AF47E76"));
+    ModeAPacket packet = ModeAPacket(Decoded1090Packet((char *)"29001B3AF47E76"));
     EXPECT_FALSE(packet.IsValid());
     packet.ForceValid();
     EXPECT_TRUE(packet.IsValid());
@@ -35,7 +35,7 @@ TEST(ModeAPacket, JasonPlaynePackets) {
     EXPECT_EQ(packet.GetICAOAddress(), 0x7C1474u);
     EXPECT_FALSE(packet.HasIdent());
 
-    packet = ModeAPacket(DecodedTransponderPacket((char *)"2820050BD0D698"));
+    packet = ModeAPacket(Decoded1090Packet((char *)"2820050BD0D698"));
     EXPECT_FALSE(packet.IsValid());
     packet.ForceValid();
     EXPECT_TRUE(packet.IsValid());
@@ -49,7 +49,7 @@ TEST(ModeAPacket, JasonPlaynePackets) {
     EXPECT_FALSE(packet.HasIdent());
 
     // Edit the previous packet to force an ident.
-    packet = ModeAPacket(DecodedTransponderPacket((char *)"2D20050BD0D698"));
+    packet = ModeAPacket(Decoded1090Packet((char *)"2D20050BD0D698"));
     EXPECT_EQ(packet.GetUtilityMessage(), ModeAPacket::UtilityMessageType::kUtilityMessageNoInformation);
     EXPECT_EQ(packet.GetDownlinkRequest(),
               ModeAPacket::DownlinkRequest::kDownlinkRequestCommBBroadcastMessage1Available);
@@ -59,7 +59,7 @@ TEST(ModeAPacket, JasonPlaynePackets) {
     EXPECT_TRUE(packet.HasIdent());
 
     // Edit the previous packet to force an ident and alert.
-    packet = ModeAPacket(DecodedTransponderPacket((char *)"2C20050BD0D698"));
+    packet = ModeAPacket(Decoded1090Packet((char *)"2C20050BD0D698"));
     EXPECT_EQ(packet.GetUtilityMessage(), ModeAPacket::UtilityMessageType::kUtilityMessageNoInformation);
     EXPECT_EQ(packet.GetDownlinkRequest(),
               ModeAPacket::DownlinkRequest::kDownlinkRequestCommBBroadcastMessage1Available);
