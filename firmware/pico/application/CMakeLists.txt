@@ -132,13 +132,13 @@ if (ON_EMBEDDED_DEVICE)
     # Keeping the checksum separate allows us to do a combined build utilizing the sources for application.bin while
     # also loading the checksum onto the target so that the bootloader can examine it.
     # Make this execute after app1 so that app0.bin and app1.bin are available.
-    add_custom_command(TARGET app1
-        POST_BUILD
+    add_custom_target(app_crcs
             COMMAND ${Python3_EXECUTABLE} ${LINKER_SCRIPTS_DIR}/util_crc.py
                     ${CMAKE_CURRENT_BINARY_DIR}/app0.bin
                     ${CMAKE_CURRENT_BINARY_DIR}/app1.bin
                     --header ${APPLICATION_HEADER_SECTION_NAME}
                     --ota ${CMAKE_CURRENT_BINARY_DIR}/adsbee_1090.ota
+            DEPENDS app0 app1
             COMMENT "Calculating and appending CRC32 to application binary and UF2"
     )
 
@@ -154,8 +154,7 @@ if (ON_EMBEDDED_DEVICE)
             DEPENDS bootloader
             DEPENDS application
             # Also build app0 and app1 to allow processing them into an OTA file.
-            DEPENDS app0
-            DEPENDS app1
+            DEPENDS app_crcs
     )
     # These source dependencies ensure that the combined target gets rebuilt if the bootloader or app get changed.
     target_sources(combined_library PRIVATE 
@@ -168,6 +167,7 @@ if (ON_EMBEDDED_DEVICE)
         application
         app0
         app1
+        app_crcs
     )
 
     # Create a new executable called "combined" that uses the combined_library library and copies all sources from application.
