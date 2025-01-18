@@ -6,7 +6,7 @@
 
 class EEPROM {
    public:
-    static const uint16_t kRegAddrNumBytes = 2;
+    static constexpr uint16_t kRegAddrNumBytes = 2;
     struct EEPROMConfig {
         i2c_inst_t *i2c_handle = i2c1;
         uint8_t i2c_addr = 0b1010001;  // M24C64, TSSOP-8, E3=0 E2=0 E1=1

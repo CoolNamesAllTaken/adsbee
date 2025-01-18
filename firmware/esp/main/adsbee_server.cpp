@@ -133,11 +133,11 @@ bool ADSBeeServer::Update() {
     }
 
     // Ingest new packets into the dictionary.
-    RawTransponderPacket raw_packet;
+    Raw1090Packet raw_packet;
     while (raw_transponder_packet_queue.Pop(raw_packet)) {
-        DecodedTransponderPacket decoded_packet = DecodedTransponderPacket(raw_packet);
+        Decoded1090Packet decoded_packet = Decoded1090Packet(raw_packet);
 #ifdef VERBOSE_DEBUG
-        if (raw_packet.buffer_len_bits == DecodedTransponderPacket::kExtendedSquitterPacketLenBits) {
+        if (raw_packet.buffer_len_bits == Decoded1090Packet::kExtendedSquitterPacketLenBits) {
             CONSOLE_INFO("ADSBeeServer::Update", "New message: 0x%08lx|%08lx|%08lx|%04lx RSSI=%ddBm MLAT=%llu",
                          raw_packet.buffer[0], raw_packet.buffer[1], raw_packet.buffer[2],
                          (raw_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_packet.sigs_dbm,
@@ -151,7 +151,7 @@ bool ADSBeeServer::Update() {
                      decoded_packet.GetICAOAddress());
 #endif
 
-        if (aircraft_dictionary.IngestDecodedTransponderPacket(decoded_packet)) {
+        if (aircraft_dictionary.IngestDecoded1090Packet(decoded_packet)) {
             // NOTE: Pushing to a queue here will only forward valid packets!
 #ifdef VERBOSE_DEBUG
             CONSOLE_INFO("ADSBeeServer::Update", "\taircraft_dictionary: %d aircraft",
@@ -161,7 +161,7 @@ bool ADSBeeServer::Update() {
 
         // Send decoded transponder packet to feeds.
         if ((comms_manager.WiFiStationHasIP() || comms_manager.EthernetHasIP()) &&
-            !comms_manager.IPWANSendDecodedTransponderPacket(decoded_packet)) {
+            !comms_manager.IPWANSendDecoded1090Packet(decoded_packet)) {
             CONSOLE_ERROR(
                 "ADSBeeServer::Update",
                 "Encountered error while sending decoded transponder packet to feeds from ESP32 as WiFi station.");
@@ -199,10 +199,10 @@ bool ADSBeeServer::Update() {
     return ret;
 }
 
-bool ADSBeeServer::HandleRawTransponderPacket(RawTransponderPacket &raw_packet) {
+bool ADSBeeServer::HandleRaw1090Packet(Raw1090Packet &raw_packet) {
     bool ret = true;
     if (!raw_transponder_packet_queue.Push(raw_packet)) {
-        CONSOLE_ERROR("ADSBeeServer::HandleRawTransponderPacket",
+        CONSOLE_ERROR("ADSBeeServer::HandleRaw1090Packet",
                       "Push to transponder packet queue failed. May have overflowed?");
         raw_transponder_packet_queue.Clear();
         ret = false;

@@ -253,9 +253,9 @@ bool ADSBee::Update() {
     }
 
     // Ingest new packets into the dictionary.
-    RawTransponderPacket raw_packet;
+    Raw1090Packet raw_packet;
     while (transponder_packet_queue.Pop(raw_packet)) {
-        if (raw_packet.buffer_len_bits == DecodedTransponderPacket::kExtendedSquitterPacketLenBits) {
+        if (raw_packet.buffer_len_bits == Decoded1090Packet::kExtendedSquitterPacketLenBits) {
             CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%08x|%08x|%04x SRC=%d SIGS=%ddBm SIGQ=%ddB MLAT=%u",
                          raw_packet.buffer[0], raw_packet.buffer[1], raw_packet.buffer[2],
                          (raw_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_packet.source, raw_packet.sigs_dbm,
@@ -266,11 +266,11 @@ bool ADSBee::Update() {
                          raw_packet.sigs_dbm, raw_packet.sigq_db, raw_packet.mlat_48mhz_64bit_counts);
         }
 
-        DecodedTransponderPacket decoded_packet = DecodedTransponderPacket(raw_packet);
+        Decoded1090Packet decoded_packet = Decoded1090Packet(raw_packet);
         CONSOLE_INFO("ADSBee::Update", "\tdf=%d icao_address=0x%06x", decoded_packet.GetDownlinkFormat(),
                      decoded_packet.GetICAOAddress());
 
-        if (aircraft_dictionary.IngestDecodedTransponderPacket(decoded_packet)) {
+        if (aircraft_dictionary.IngestDecoded1090Packet(decoded_packet)) {
             // Packet was used to update the dictionary or was silently ignored (but presumed to be valid).
             FlashStatusLED();
             // NOTE: Pushing to the reporting queue here means that we only will report validated packets!
@@ -387,23 +387,23 @@ void ADSBee::OnDemodComplete() {
         }
 
         // Clear the transponder packet buffer.
-        memset((void *)rx_packet_[sm_index].buffer, 0x0, RawTransponderPacket::kMaxPacketLenWords32);
+        memset((void *)rx_packet_[sm_index].buffer, 0x0, Raw1090Packet::kMaxPacketLenWords32);
 
         // Pull all words out of the RX FIFO.
         volatile uint16_t packet_num_words =
             pio_sm_get_rx_fifo_level(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);
-        if (packet_num_words > RawTransponderPacket::kMaxPacketLenWords32) {
+        if (packet_num_words > Raw1090Packet::kMaxPacketLenWords32) {
             // Packet length is invalid; dump everything and try again next time.
             // Only enable this print for debugging! Printing from the interrupt causes the USB library to crash.
             // CONSOLE_WARNING("ADSBee::OnDemodComplete", "Received a packet with %d 32-bit words, expected maximum of
             // %d.",
-            //                 packet_num_words, DecodedTransponderPacket::kExtendedSquitterPacketNumWords32);
+            //                 packet_num_words, Decoded1090Packet::kExtendedSquitterPacketNumWords32);
             // pio_sm_clear_fifos(config_.message_demodulator_pio, message_demodulator_sm_);
-            packet_num_words = RawTransponderPacket::kMaxPacketLenWords32;
+            packet_num_words = Raw1090Packet::kMaxPacketLenWords32;
         }
         // Track that we attempted to demodulate something.
         aircraft_dictionary.RecordDemod1090();
-        // Create a RawTransponderPacket and push it onto the queue.
+        // Create a Raw1090Packet and push it onto the queue.
         for (uint16_t i = 0; i < packet_num_words; i++) {
             rx_packet_[sm_index].buffer[i] =
                 pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);
@@ -412,14 +412,14 @@ void ADSBee::OnDemodComplete() {
                 // word  = word >> 1;
                 // Mask and left align final word based on bit length.
                 switch (packet_num_words) {
-                    case DecodedTransponderPacket::kSquitterPacketNumWords32:
+                    case Decoded1090Packet::kSquitterPacketNumWords32:
                         rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFFFF) << 8;
-                        rx_packet_[sm_index].buffer_len_bits = DecodedTransponderPacket::kSquitterPacketLenBits;
+                        rx_packet_[sm_index].buffer_len_bits = Decoded1090Packet::kSquitterPacketLenBits;
                         transponder_packet_queue.Push(rx_packet_[sm_index]);
                         break;
-                    case DecodedTransponderPacket::kExtendedSquitterPacketNumWords32:
+                    case Decoded1090Packet::kExtendedSquitterPacketNumWords32:
                         rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFF) << 16;
-                        rx_packet_[sm_index].buffer_len_bits = DecodedTransponderPacket::kExtendedSquitterPacketLenBits;
+                        rx_packet_[sm_index].buffer_len_bits = Decoded1090Packet::kExtendedSquitterPacketLenBits;
                         transponder_packet_queue.Push(rx_packet_[sm_index]);
                         break;
                     default:
@@ -427,7 +427,7 @@ void ADSBee::OnDemodComplete() {
                         // Printing to tinyUSB from within an interrupt causes crashes! Don't do it.
                         // CONSOLE_WARNING(
                         //     "ADSBee::OnDemodComplete",
-                        //     "Unhandled case while creating RawTransponderPacket, received packet with %d 32-bit
+                        //     "Unhandled case while creating Raw1090Packet, received packet with %d 32-bit
                         //     words.", packet_num_words);
                         break;
                 }

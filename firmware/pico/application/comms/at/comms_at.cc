@@ -803,7 +803,7 @@ CPP_AT_CALLBACK(CommsManager::ATWatchdogCallback) {
                 if (args[0].compare("TEST") == 0) {
                     // Block for watdog timeout + 1 seconds to try triggering a watchdog event.
                     uint32_t begin_timestamp_ms = get_time_since_boot_ms();
-                    static const uint32_t kDotPrintIntervalMs = 1 * kMsPerSec;
+                    static constexpr uint32_t kDotPrintIntervalMs = 1 * kMsPerSec;
                     uint32_t last_dot_print_timestamp_ms = begin_timestamp_ms;
                     uint32_t watchdog_test_blocking_interval_sec = adsbee.GetWatchdogTimeoutSec() + 1;
                     CPP_AT_PRINTF("Blocking for %d seconds.\r\n", watchdog_test_blocking_interval_sec);

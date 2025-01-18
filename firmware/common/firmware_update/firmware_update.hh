@@ -22,25 +22,25 @@ class FirmwareUpdateManager {
         0x10FFE000	(8k)	FLASH_SETTINGS	Settings
     */
 
-    static const uint32_t kFlashBlStartAddr = 0x10000000;
-    static const uint32_t kFlashBlLenBytes = 176 * 1024;  // 176 kBytes
-    static const uint16_t kNumPartitions = 2;  // Partition = header and application (not counting bootloader).
-    static const uint32_t kFlashHeaderLenBytes = 4 * 1024;  // 4 kBytes
-    static const uint32_t kFlashAppLenBytes = 8096 * 1024;  // 8096 kBytes
+    static constexpr uint32_t kFlashBlStartAddr = 0x10000000;
+    static constexpr uint32_t kFlashBlLenBytes = 176 * 1024;  // 176 kBytes
+    static constexpr uint16_t kNumPartitions = 2;  // Partition = header and application (not counting bootloader).
+    static constexpr uint32_t kFlashHeaderLenBytes = 4 * 1024;  // 4 kBytes
+    static constexpr uint32_t kFlashAppLenBytes = 8096 * 1024;  // 8096 kBytes
 
     static const uint32_t kFlashHeaderStartAddrs[kNumPartitions];
     static const uint32_t kFlashAppStartAddrs[kNumPartitions];
 
-    static const uint32_t kFlashHeaderMagicWord = 0xAD5BEEE;
-    static const uint32_t kFlashHeaderVersion = 0;
+    static constexpr uint32_t kFlashHeaderMagicWord = 0xAD5BEEE;
+    static constexpr uint32_t kFlashHeaderVersion = 0;
 
     // Leave some room in max length SPI packet (4096 Bytes) for other stuff.
-    static const uint32_t kFlashWriteBufMaxLenBytes = 3840 * 10;
+    static constexpr uint32_t kFlashWriteBufMaxLenBytes = 3840 * 10;
 
     // Set this value large enough to be efficient, but small enough that programs don't time out waiting for an update.
-    static const uint16_t kMaxSectorsPerErase = 10 * FLASH_BLOCK_SIZE / FLASH_SECTOR_SIZE;
+    static constexpr uint16_t kMaxSectorsPerErase = 10 * FLASH_BLOCK_SIZE / FLASH_SECTOR_SIZE;
 
-    static const uint16_t kFlashPartitionStatusStrMaxLen = 20;
+    static constexpr uint16_t kFlashPartitionStatusStrMaxLen = 20;
 
     enum FlashPartitionStatus : uint32_t {
         kFlashPartitionStatusBlank = 0xFFFFFFFF,    // BLANK

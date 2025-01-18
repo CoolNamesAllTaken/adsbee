@@ -1,16 +1,23 @@
-#ifndef _AIRCRAFT_DICTIONARY_HH_
-#define _AIRCRAFT_DICTIONARY_HH_
+#ifndef AIRCRAFT_DICTIONARY_HH_
+#define AIRCRAFT_DICTIONARY_HH_
 
 #include <cstdio>
 #include <cstring>
 #include <unordered_map>
 
 #include "json_utils.hh"
+#include "macros.hh"
 #include "transponder_packet.hh"
 
 class Aircraft {
    public:
-    static const uint16_t kCallSignMaxNumChars = 7;
+    static constexpr uint16_t kCallSignMaxNumChars = 7;
+    // These variables define filter bounds for time between CPR packets. If the time between packets is greater than
+    // the time delta limit, the old CPR packet is discarded and the CPR packet pair is not used for position decoding.
+    static constexpr uint32_t kMinCPRTimeDeltaMs = 10e3;  // Never reject CPR packet pairs less than 10 seconds apart.
+    static constexpr uint32_t kRefCPRTimeDeltaMs =
+        19e3;  // Reference time threshold for rejecting CPR packet pairs, used in calculations.
+    static constexpr uint32_t kMaxCPRTimeDeltaMs = 30e3;  // Never accept CPR packet pairs more than 30 seconds apart.
 
     enum Category : uint8_t {
         kCategoryInvalid = 0,
@@ -167,20 +174,6 @@ class Aircraft {
     Aircraft();
 
     /**
-     * Set an aircraft's position in Compact Position Reporting (CPR) format. Takes either an even or odd set of lat/lon
-     * coordinates and uses them to set the aircraft's position.
-     * @param[in] n_lat_cpr 17-bit latitude count.
-     * @param[in] n_lon_cpr 17-bit longitude count.
-     * @param[in] odd Boolean indicating that the position update is relative to an odd grid reference (if true) or an
-     * even grid reference.
-     * @param[in] redigesting Boolean flag used if SetCPRLatLon is being used to re-digest a packet. Assures that it
-     * won't call itself again if set.
-     * @retval True if coordinates were parsed successfully, false if not. NOTE: invalid positions can still be
-     * considered a successful parse.
-     */
-    bool SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, bool redigesting = false);
-
-    /**
      * Simple helper that checks to see whether a packet decode can be attempted (does not guarantee it will succeed,
      * for instance an odd and even packet may have been received, but from different CPR zones).
      * @retval True if decode can be attempted, false otherwise.
@@ -190,10 +183,41 @@ class Aircraft {
     }
 
     /**
+     * Clears the CPR packet cache. Used when too much time has elapsed since the last CPR packet was received, to avoid
+     * decoding CPR location with invalid packet pairings.
+     */
+    void ClearCPRPackets() {
+        // Clearng received timestamps causes the packet pair to be rejected during the decoding stage, so it's as good
+        // as wiping all of the received packet contents.
+        last_odd_packet_.received_timestamp_ms = 0;
+        last_even_packet_.received_timestamp_ms = 0;
+    }
+
+    /**
      * Decodes the aircraft position using last_odd_packet_ and last_even_packet_.
      * @retval True if position was decoded successfully, false otherwise.
      */
     bool DecodePosition();
+
+    /**
+     * Returns the maximum time delta between CPR packets that will be accepted for decoding.
+     * @retval Maximum allowed time delta between CPR packets.
+     */
+    uint32_t GetMaxAllowedCPRTimeDeltaMs() const {
+        if (velocity_source == kVelocitySourceNotSet || velocity_source == kVelocitySourceNotAvailable) {
+            return kMinCPRTimeDeltaMs;
+        }
+        // Scale time delta threshold based on the velocity of the aircraft relative to 500kts, but clamp the result to
+        // the min and max time delta thresholds.
+        return MIN(MAX(kRefCPRTimeDeltaMs * 500 / velocity_kts, kMinCPRTimeDeltaMs), kMaxCPRTimeDeltaMs);
+    }
+
+    /**
+     * Checks whether a flag bit is set.
+     * @param[in] bit Position of bit to check.
+     * @retval True if bit has been set, false if bit has been cleared.
+     */
+    inline bool HasBitFlag(BitFlag bit) const { return flags & (0b1 << bit) ? true : false; }
 
     /**
      * Indicate that a frame has been received by incrementing the corresponding frame counter.
@@ -203,6 +227,34 @@ class Aircraft {
         is_extended_squitter ? metrics_counter_.valid_extended_squitter_frames++
                              : metrics_counter_.valid_squitter_frames++;
     }
+
+    /**
+     * Returns whether a NIC supplement bit has been written to. Used to decide when to use NIC supplement bit values to
+     * determine NIC value based on received TypeCodes.
+     * @param[in] bit NIC supplement bit to check.
+     * @retval True if bit has been written to, false otherwise.
+     */
+    inline bool NICBitIsValid(NICBit bit) { return nic_bits & (0b1 << bit); }
+
+    /**
+     * Resets just the flag bits that show that something updated within the last reporting interval.
+     */
+    inline void ResetUpdatedBitFlags() { flags &= ~(~0b0 << kBitFlagUpdatedBaroAltitude); }
+
+    /**
+     * Set an aircraft's position in Compact Position Reporting (CPR) format. Takes either an even or odd set of lat/lon
+     * coordinates and uses them to set the aircraft's position.
+     * @param[in] n_lat_cpr 17-bit latitude count.
+     * @param[in] n_lon_cpr 17-bit longitude count.
+     * @param[in] odd Boolean indicating that the position update is relative to an odd grid reference (if true) or an
+     * even grid reference.
+     * @param[in] received_timestamp_ms Timestamp in milliseconds when the position packet was received. Should be
+     * derived from the MLAT counter, but the precision can be pretty lax since it is only used when deciding whether to
+     * reject CPR packet pairings due to too much time elapsed between even and odd packets.
+     * @retval True if coordinates were parsed successfully, false if not. NOTE: Invalid positions can still be
+     * considered a successful parse.
+     */
+    bool SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, uint32_t received_timestamp_ms);
 
     /**
      * Roll the metrics counter over to the public metrics field.
@@ -230,26 +282,6 @@ class Aircraft {
         // frequently.
         nic_bits_valid |= (0b1 << bit);
     }
-
-    /**
-     * Returns whether a NIC supplement bit has been written to. Used to decide when to use NIC supplement bit values to
-     * determine NIC value based on received TypeCodes.
-     * @param[in] bit NIC supplement bit to check.
-     * @retval True if bit has been written to, false otherwise.
-     */
-    inline bool NICBitIsValid(NICBit bit) { return nic_bits & (0b1 << bit); }
-
-    /**
-     * Checks whether a flag bit is set.
-     * @param[in] bit Position of bit to check.
-     * @retval True if bit has been set, false if bit has been cleared.
-     */
-    inline bool HasBitFlag(BitFlag bit) const { return flags & (0b1 << bit) ? true : false; }
-
-    /**
-     * Resets just the flag bits that show that something updated within the last reporting interval.
-     */
-    inline void ResetUpdatedBitFlags() { flags &= ~(~0b0 << kBitFlagUpdatedBaroAltitude); }
 
     uint32_t flags = 0b0;
 
@@ -433,16 +465,16 @@ class AircraftDictionary {
     }
 
     /**
-     * Ingests a DecodedTransponderPacket and uses it to insert and update the relevant aircraft.
-     * @param[in] packet DecodedTransponderPacket to ingest. Can be 56-bit (Squitter) or 112-bit (Extended Squitter).
+     * Ingests a Decoded1090Packet and uses it to insert and update the relevant aircraft.
+     * @param[in] packet Decoded1090Packet to ingest. Can be 56-bit (Squitter) or 112-bit (Extended Squitter).
      * Passed as a reference, since packets can be marked as valid by this function.
      * @retval True if successful, false if something broke.
      */
-    bool IngestDecodedTransponderPacket(DecodedTransponderPacket &packet);
+    bool IngestDecoded1090Packet(Decoded1090Packet &packet);
 
     /**
      * Ingests a Mode A (Identity Surveillance Reply) packet and uses it to update the relevant aircraft. Exposed for
-     * testing, but usually called by IngestDecodedTransponderPacket.
+     * testing, but usually called by IngestDecoded1090Packet.
      * Note: this function requires that the packet be marked as valid using the ForceValid() function. If the packet is
      * valid and does not match an ICAO in the aircraft dictionary, a new aircraft will be inserted.
      * @param[in] packet ModeAPacket to ingest.
@@ -452,7 +484,7 @@ class AircraftDictionary {
 
     /**
      * Ingests a Mode C (Altitude Surveillance Reply) packet and uses it to update the relevant aircraft. Exposed for
-     * testing, but usually called by IngestDecodedTransponderPacket.
+     * testing, but usually called by IngestDecoded1090Packet.
      * Note: this function requires that the packet be marked as valid using the ForceValid() function. If the packet is
      * valid and does not match an ICAO in the aircraft dictionary, a new aircraft will be inserted.
      * @param[in] packet ModeCPacket to ingest.
@@ -462,8 +494,8 @@ class AircraftDictionary {
 
     /**
      * Ingests an ADSBPacket directly. Exposed for testing, but usually this gets called by
-     * IngestDecodedTransponderPacket and should not get touched directly.
-     * @param[in] packet ADSBPacket to ingest. Derived from a DecodedTransponderPacket with DF=17-19.
+     * IngestDecoded1090Packet and should not get touched directly.
+     * @param[in] packet ADSBPacket to ingest. Derived from a Decoded1090Packet with DF=17-19.
      * @retval True if successful, false if something broke.
      */
     bool IngestADSBPacket(ADSBPacket packet);
@@ -540,4 +572,4 @@ class AircraftDictionary {
     Metrics metrics_counter_;
 };
 
-#endif /* _AIRCRAFT_DICTIONARY_HH_ */
+#endif /* AIRCRAFT_DICTIONARY_HH_ */

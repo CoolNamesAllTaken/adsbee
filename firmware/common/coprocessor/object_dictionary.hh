@@ -16,19 +16,19 @@ class ObjectDictionary {
     static const uint8_t kFirmwareVersionPatch;
     static const uint32_t kFirmwareVersion;
 
-    static const uint16_t kMACAddrLenBytes = 6;
+    static constexpr uint16_t kMACAddrLenBytes = 6;
 
-    static const uint16_t kNetworkConsoleMessageMaxLenBytes = 4000;
+    static constexpr uint16_t kNetworkConsoleMessageMaxLenBytes = 4000;
 
     enum Address : uint8_t {
-        kAddrInvalid = 0,                  // Default value.
-        kAddrFirmwareVersion = 0x01,       // Firmware version as a uint32_t.
-        kAddrScratch = 0x02,               // Used for testing SPI communications.
-        kAddrSettingsData = 0x03,          // Used to transfer settings information.
-        kAddrRawTransponderPacket = 0x04,  // Used to forward raw packets from RP2040 to ESP32.
-        kAddrDecodedTransponderPacket = 0x05,
-        kAddrRawTransponderPacketArray = 0x06,
-        kAddrDecodedTransponderPacketArray = 0x07,
+        kAddrInvalid = 0,             // Default value.
+        kAddrFirmwareVersion = 0x01,  // Firmware version as a uint32_t.
+        kAddrScratch = 0x02,          // Used for testing SPI communications.
+        kAddrSettingsData = 0x03,     // Used to transfer settings information.
+        kAddrRaw1090Packet = 0x04,    // Used to forward raw packets from RP2040 to ESP32.
+        kAddrDecoded1090Packet = 0x05,
+        kAddrRaw1090PacketArray = 0x06,
+        kAddrDecoded1090PacketArray = 0x07,
         kAddrAircraftDictionaryMetrics = 0x08,  // For forwarding dictionary metrics from RP2040 to ESP32.
         kAddrDeviceInfo = 0x09,                 // ESP32 MAC addresses.
         kAddrConsole = 0xA,                     // Pipe for console characters.

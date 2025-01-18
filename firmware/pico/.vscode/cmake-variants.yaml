@@ -22,10 +22,3 @@ buildType:
       short: Test
       long: Compile for unit testing on host.
       buildType: Test
-    # bl_debug:
-    #   short: Bootloader Debug
-    #   long: Bootloader only, emit debug information without optimization.
-    #   buildType: Debug
-    # bl_release:
-    #   short: Bootloader Release
-    #   long: Bootloader only, optimize for performance.

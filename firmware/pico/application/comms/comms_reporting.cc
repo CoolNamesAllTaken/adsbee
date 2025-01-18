@@ -24,15 +24,15 @@ bool CommsManager::UpdateReporting() {
     // Proceed with update and record timestamp.
     last_raw_report_timestamp_ms_ = timestamp_ms;
 
-    DecodedTransponderPacket packets_to_report[ADSBee::kMaxNumTransponderPackets];
+    Decoded1090Packet packets_to_report[ADSBee::kMaxNumTransponderPackets];
     /**
      * Raw packet reporting buffer used to transfer multiple packets at once over SPI.
      * [<uint8_t num_packets to report> <packet 1> <packet 2> ...]
      */
     uint8_t spi_raw_packet_reporting_buffer[sizeof(uint8_t) + ADSBee::kMaxNumTransponderPackets];
 
-    // Fill up the array of DecodedTransponderPackets for internal functions, and the buffer of RawTransponderPackets to
-    // send to the ESP32 over SPI. RawTransponderPackets are used instead of DecodedTransponderPackets over the SPI link
+    // Fill up the array of Decoded1090Packets for internal functions, and the buffer of Raw1090Packets to
+    // send to the ESP32 over SPI. Raw1090Packets are used instead of Decoded1090Packets over the SPI link
     // in order to preserve bandwidth.
     uint16_t num_packets_to_report = 0;
     for (; num_packets_to_report < ADSBee::kMaxNumTransponderPackets &&
@@ -40,19 +40,18 @@ bool CommsManager::UpdateReporting() {
          num_packets_to_report++) {
         if (esp32.IsEnabled()) {
             // Pop all the packets to report (up to max limit of the buffer).
-            RawTransponderPacket raw_packet = packets_to_report[num_packets_to_report].GetRaw();
+            Raw1090Packet raw_packet = packets_to_report[num_packets_to_report].GetRaw();
             spi_raw_packet_reporting_buffer[0] = num_packets_to_report;
-            memcpy(spi_raw_packet_reporting_buffer + sizeof(uint8_t) +
-                       sizeof(RawTransponderPacket) * num_packets_to_report,
-                   &raw_packet, sizeof(RawTransponderPacket));
+            memcpy(spi_raw_packet_reporting_buffer + sizeof(uint8_t) + sizeof(Raw1090Packet) * num_packets_to_report,
+                   &raw_packet, sizeof(Raw1090Packet));
         }
     }
     if (esp32.IsEnabled() && num_packets_to_report > 0) {
         // Write packet to ESP32 with a forced ACK.
-        esp32.Write(ObjectDictionary::kAddrRawTransponderPacketArray,                       // addr
-                    spi_raw_packet_reporting_buffer,                                        // buf
-                    true,                                                                   // require_ack
-                    sizeof(uint8_t) + num_packets_to_report * sizeof(RawTransponderPacket)  // len
+        esp32.Write(ObjectDictionary::kAddrRaw1090PacketArray,                       // addr
+                    spi_raw_packet_reporting_buffer,                                 // buf
+                    true,                                                            // require_ack
+                    sizeof(uint8_t) + num_packets_to_report * sizeof(Raw1090Packet)  // len
         );
     }
 
@@ -99,13 +98,13 @@ bool CommsManager::UpdateReporting() {
     return ret;
 }
 
-bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface, const DecodedTransponderPacket packets_to_report[],
+bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface, const Decoded1090Packet packets_to_report[],
                              uint16_t num_packets_to_report) {
     return true;
 }
 
-bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface,
-                               const DecodedTransponderPacket packets_to_report[], uint16_t num_packets_to_report) {
+bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface, const Decoded1090Packet packets_to_report[],
+                               uint16_t num_packets_to_report) {
     for (uint16_t i = 0; i < num_packets_to_report; i++) {
         uint8_t beast_frame_buf[kBeastFrameMaxLenBytes];
         uint16_t num_bytes_in_frame = TransponderPacketToBeastFrame(packets_to_report[i], beast_frame_buf);

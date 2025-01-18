@@ -264,20 +264,20 @@ bool CommsManager::WiFiDeInit() {
     */
 }
 
-bool CommsManager::IPWANSendDecodedTransponderPacket(DecodedTransponderPacket& decoded_packet) {
+bool CommsManager::IPWANSendDecoded1090Packet(Decoded1090Packet& decoded_packet) {
     if (!wifi_sta_has_ip_ && !ethernet_has_ip_) {
         CONSOLE_WARNING(
-            "CommsManager::IPWANSendDecodedTransponderPacket",
+            "CommsManager::IPWANSendDecoded1090Packet",
             "Can't push to WAN transponder packet queue if WiFi station is not running and Ethernet is disconnected.");
         return false;  // Task not started yet, queue not created yet. Pushing to queue would cause an abort.
     }
     int err = xQueueSend(ip_wan_decoded_transponder_packet_queue_, &decoded_packet, 0);
     if (err == errQUEUE_FULL) {
-        CONSOLE_WARNING("CommsManager::IPWANSendDecodedTransponderPacket", "Overflowed WAN transponder packet queue.");
+        CONSOLE_WARNING("CommsManager::IPWANSendDecoded1090Packet", "Overflowed WAN transponder packet queue.");
         xQueueReset(ip_wan_decoded_transponder_packet_queue_);
         return false;
     } else if (err != pdTRUE) {
-        CONSOLE_WARNING("CommsManager::IPWANSendDecodedTransponderPacket",
+        CONSOLE_WARNING("CommsManager::IPWANSendDecoded1090Packet",
                         "Pushing transponder packet to WAN queue resulted in error code %d.", err);
         return false;
     }

@@ -25,42 +25,43 @@
 
 class SPICoprocessor {
    public:
-    static const uint16_t kSPITransactionMaxLenBytes =
+    static constexpr uint16_t kSPITransactionMaxLenBytes =
         4096;  // Default max is 4096 Bytes on ESP32 (with DMA) and 4096 Bytes on RP2040.
     static_assert(kSPITransactionMaxLenBytes % 4 == 0);  // Make sure it's word-aligned.
-    static const uint16_t kSPITransactionQueueLenTransactions = 3;
-    static const uint16_t kSPITransactionMaxNumRetries =
+    static constexpr uint16_t kSPITransactionQueueLenTransactions = 3;
+    static constexpr uint16_t kSPITransactionMaxNumRetries =
         3;  // Max num retries per block in a multi-transfer transaction.
 
 #ifdef ON_PICO
     // Make sure that we don't talk to the slave before it has a chance to get ready for the next message.
     // Note that this value is ignored if the HANDSHAKE line is pulled high.
-    static const uint32_t kSPIMinTransmitIntervalUs = 600;
+    static constexpr uint32_t kSPIMinTransmitIntervalUs = 600;
     // Wait this long after a transmission is complete before allowing the HANDSHAKE line to override the minimum
     // transmit interval timeout. This ensures that we don't double-transmit to the slave before it has a chance to
     // lower the HANDSHAKE line following a transaction.
-    static const uint32_t kSPIPostTransmitLockoutUs = 10;
+    static constexpr uint32_t kSPIPostTransmitLockoutUs = 10;
     // How long before the end of kSPIMinTransmitIntervalUs to assert the CS line during a blocking update. This
     // prevents the ESP32 from handshaking at the same instant that the Pico starts a transaction with the assumption
     // that the Hanshake line was LO.
-    static const uint32_t kSPIUpdateCSPreAssertIntervalUs = 100;
+    static constexpr uint32_t kSPIUpdateCSPreAssertIntervalUs = 100;
     // NOTE: Max transmission time is ~10ms with a 4kB packet at 40MHz.
     // How long to wait once a transaction is started before timing out.
-    static const uint16_t kSPITransactionTimeoutMs = 20;
+    static constexpr uint16_t kSPITransactionTimeoutMs = 20;
     // How long a blocking wait for a handshake can last.
-    static const uint16_t kSPIHandshakeTimeoutMs = 20;
+    static constexpr uint16_t kSPIHandshakeTimeoutMs = 20;
 #elif ON_ESP32
-    static const uint32_t kNetworkLEDBlinkDurationMs = 10;
-    static const uint32_t kNetworkLEDBlinkDurationTicks = kNetworkLEDBlinkDurationMs / portTICK_PERIOD_MS;
+    static constexpr uint32_t kNetworkLEDBlinkDurationMs = 10;
+    static constexpr uint32_t kNetworkLEDBlinkDurationTicks = kNetworkLEDBlinkDurationMs / portTICK_PERIOD_MS;
     // Since the transaction timeout value is used by threads waiting to use the SPI peripheral, and the SPI update task
     // blocks the copro_spi_mutex_ until it receives a transfer from the master, this timeout needs to be set to the
     // maximum delay between unsolicited packets from the master (heartbeat) to avoid threads giving up while the SPI
     // update task is hogging the mutex.
     // How long to wait once a transaction is started before timing out.
-    static const uint16_t kSPITransactionTimeoutMs = 200;
-    static const uint16_t kSPITransactionTimeoutTicks = kSPITransactionTimeoutMs / portTICK_PERIOD_MS;
-    static const uint16_t kSPIMutexTimeoutMs = 1200;  // How long to wait for the transaction mutex before timing out.
-    static const uint16_t kSPIMutexTimeoutTicks = kSPIMutexTimeoutMs / portTICK_PERIOD_MS;
+    static constexpr uint16_t kSPITransactionTimeoutMs = 200;
+    static constexpr uint16_t kSPITransactionTimeoutTicks = kSPITransactionTimeoutMs / portTICK_PERIOD_MS;
+    static constexpr uint16_t kSPIMutexTimeoutMs =
+        1200;  // How long to wait for the transaction mutex before timing out.
+    static constexpr uint16_t kSPIMutexTimeoutTicks = kSPIMutexTimeoutMs / portTICK_PERIOD_MS;
 #endif
     struct SPICoprocessorConfig {
         uint32_t clk_rate_hz = 40e6;  // 40 MHz
@@ -104,8 +105,8 @@ class SPICoprocessor {
      * Abstract base struct for SPI Coprocessor packets.
      */
     struct __attribute__((__packed__)) SCPacket {
-        static const uint16_t kPacketMaxLenBytes = kSPITransactionMaxLenBytes;
-        static const uint16_t kCRCLenBytes = sizeof(uint16_t);
+        static constexpr uint16_t kPacketMaxLenBytes = kSPITransactionMaxLenBytes;
+        static constexpr uint16_t kCRCLenBytes = sizeof(uint16_t);
 
         // Pure virtual functions.
         virtual inline uint16_t GetBufLenBytes() = 0;
@@ -135,10 +136,10 @@ class SPICoprocessor {
      * Used to write to slave (from master), or write to master (from slave). Does not receive a reply.
      */
     struct __attribute__((__packed__)) SCWritePacket : public SCPacket {
-        static const uint16_t kDataOffsetBytes =
+        static constexpr uint16_t kDataOffsetBytes =
             sizeof(SCCommand) + sizeof(ObjectDictionary::Address) + sizeof(uint16_t) + sizeof(uint16_t);
-        static const uint16_t kDataMaxLenBytes = kPacketMaxLenBytes - kDataOffsetBytes - kCRCLenBytes;
-        static const uint16_t kBufMinLenBytes = kDataOffsetBytes + kCRCLenBytes;
+        static constexpr uint16_t kDataMaxLenBytes = kPacketMaxLenBytes - kDataOffsetBytes - kCRCLenBytes;
+        static constexpr uint16_t kBufMinLenBytes = kDataOffsetBytes + kCRCLenBytes;
 
         /** Begin packet contents on the wire. **/
         SCCommand cmd = kCmdInvalid;
@@ -184,7 +185,7 @@ class SPICoprocessor {
      * SCResponsePacket in response.
      */
     struct __attribute__((__packed__)) SCReadRequestPacket : public SCPacket {
-        static const uint16_t kBufLenBytes =
+        static constexpr uint16_t kBufLenBytes =
             sizeof(SCCommand) + sizeof(ObjectDictionary::Address) + 2 * sizeof(uint16_t) + kCRCLenBytes;
         /** Begin packet contents on the wire. **/
         SCCommand cmd = kCmdInvalid;
@@ -229,16 +230,16 @@ class SPICoprocessor {
      * Ack, containing an ack.
      */
     struct __attribute__((__packed__)) SCResponsePacket : public SCPacket {
-        static const uint16_t kDataMaxLenBytes = kPacketMaxLenBytes - sizeof(SCCommand) - kCRCLenBytes;
-        static const uint16_t kDataOffsetBytes = sizeof(SCCommand);
-        static const uint16_t kBufMinLenBytes = sizeof(SCCommand) + kCRCLenBytes;  // No payload Bytes.
+        static constexpr uint16_t kDataMaxLenBytes = kPacketMaxLenBytes - sizeof(SCCommand) - kCRCLenBytes;
+        static constexpr uint16_t kDataOffsetBytes = sizeof(SCCommand);
+        static constexpr uint16_t kBufMinLenBytes = sizeof(SCCommand) + kCRCLenBytes;  // No payload Bytes.
 
         // ACK packet is special format of SCResponse packet with a single byte data payload.
         // ACK format: CMD | ACK | CRC
         // ADDR = kCmdAck
         // ACK = true if success, false if fail
         // CRC = CRC16
-        static const uint16_t kAckLenBytes = sizeof(SCCommand) + 1 + kCRCLenBytes;
+        static constexpr uint16_t kAckLenBytes = sizeof(SCCommand) + 1 + kCRCLenBytes;
 
         /**
          * Convenience function that tells you how long a response packet would be with a payload of X bytes.
@@ -526,7 +527,7 @@ class SPICoprocessor {
 #endif
 
    private:
-    static const uint16_t kErrorMessageMaxLen = 500;
+    static constexpr uint16_t kErrorMessageMaxLen = 500;
     enum ReturnCode : int { kOk = 0, kErrorGeneric = -1, kErrorTimeout = -2 };
 
 #ifdef ON_PICO

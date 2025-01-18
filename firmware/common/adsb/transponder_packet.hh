@@ -8,23 +8,30 @@
 
 // Useful resource: https://mode-s.org/decode/content/ads-b/1-basics.html
 
-class RawTransponderPacket {
+class Raw1090Packet {
    public:
     static const uint16_t kMaxPacketLenWords32 = 4;
 
-    RawTransponderPacket(char *rx_string, int16_t source_in = -1, int32_t sigs_dbm_in = INT32_MIN,
-                         int32_t sigq_db_in = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
-    RawTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32,
-                         int16_t source_in = -1, int32_t sigs_dbm_in = INT32_MIN, int32_t sigq_db_in = INT32_MIN,
-                         uint64_t mlat_48mhz_64bit_counts = 0);
+    Raw1090Packet(char *rx_string, int16_t source_in = -1, int32_t sigs_dbm_in = INT32_MIN,
+                  int32_t sigq_db_in = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
+    Raw1090Packet(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32, int16_t source_in = -1,
+                  int32_t sigs_dbm_in = INT32_MIN, int32_t sigq_db_in = INT32_MIN,
+                  uint64_t mlat_48mhz_64bit_counts = 0);
     /**
      * Default constructor.
      */
-    RawTransponderPacket() {
+    Raw1090Packet() {
         for (uint16_t i = 0; i < kMaxPacketLenWords32; i++) {
             buffer[i] = 0;
         }
     }
+
+    /**
+     * Helper function that returns the timestamp in seconds. Used to abstract the MLAT timestamp resolution for
+     * functions that don't care about it.
+     * @return Timestamp in seconds.
+     */
+    uint64_t GetTimestampMs() { return mlat_48mhz_64bit_counts / 48e3; }
 
     uint32_t buffer[kMaxPacketLenWords32];
     uint16_t buffer_len_bits = 0;
@@ -34,9 +41,9 @@ class RawTransponderPacket {
     uint64_t mlat_48mhz_64bit_counts = 0;  // High resolution MLAT counter.
 };
 
-class DecodedTransponderPacket {
+class Decoded1090Packet {
    public:
-    static const uint16_t kMaxPacketLenWords32 = RawTransponderPacket::kMaxPacketLenWords32;
+    static const uint16_t kMaxPacketLenWords32 = Raw1090Packet::kMaxPacketLenWords32;
     static const uint16_t kDFNUmBits = 5;     // [1-5] Downlink Format bitlength.
     static const uint16_t kMaxDFStrLen = 50;  // Max length of TypeCode string.
     static const uint16_t kDebugStrLen = 200;
@@ -67,7 +74,7 @@ class DecodedTransponderPacket {
 
     // Constructors
     /**
-     * DecodedTransponderPacket constructor.
+     * Decoded1090Packet constructor.
      * @param[in] rx_buffer Buffer to read from. Must be packed such that all 32 bits of each word are filled, with each
      * word left (MSb) aligned such that the total number of bits is 112. Words must be big-endian, with the MSb of the
      * first word being the oldest bit.
@@ -75,29 +82,28 @@ class DecodedTransponderPacket {
      * @param[in] sigs_dbm RSSI of the packet that was received, in dBm. Defaults to INT32_MIN if not set.
      * @param[in] mlat_48mhz_64bit_counts Counts of a 12MHz clock used for the 6-byte multilateration timestamp.
      */
-    DecodedTransponderPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len, int16_t source = -1,
-                             int32_t sigs_dbm = INT32_MIN, int32_t sigq_db = INT32_MIN,
-                             uint64_t mlat_48mhz_64bit_counts = 0);
+    Decoded1090Packet(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len, int16_t source = -1,
+                      int32_t sigs_dbm = INT32_MIN, int32_t sigq_db = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
 
     /**
-     * DecodedTransponderPacket constructor from string.
+     * Decoded1090Packet constructor from string.
      * @param[in] rx_string String of nibbles as hex characters. Big-endian, MSB (oldest byte) first.
      * @param[in] sigs_dbm RSSI of the packet that was received, in dBm. Defaults to INT32_MIN if not set.
      * @param[in] mlat_12mhz_counts Counts of a 12MHz clock used for the 6-byte multilateration timestamp.
      */
-    DecodedTransponderPacket(char *rx_string, int16_t source = -1, int32_t sigs_dbm = INT32_MIN,
-                             int32_t sigq_db = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
+    Decoded1090Packet(char *rx_string, int16_t source = -1, int32_t sigs_dbm = INT32_MIN, int32_t sigq_db = INT32_MIN,
+                      uint64_t mlat_48mhz_64bit_counts = 0);
 
     /**
-     * DecodedTransponderPacket constructor from RawTransponderPacket. Uses RawTransponderPacket's implicit constructor.
-     * @param[in] packet_in RawTransponderPacket to use when creating the DecodedTransponderPacket.
+     * Decoded1090Packet constructor from Raw1090Packet. Uses Raw1090Packet's implicit constructor.
+     * @param[in] packet_in Raw1090Packet to use when creating the Decoded1090Packet.
      */
-    DecodedTransponderPacket(const RawTransponderPacket &packet_in);
+    Decoded1090Packet(const Raw1090Packet &packet_in);
 
     /**
      * Default constructor.
      */
-    DecodedTransponderPacket() : raw_((char *)"") { debug_string[0] = '\0'; };
+    Decoded1090Packet() : raw_((char *)"") { debug_string[0] = '\0'; };
 
     bool IsValid() const { return is_valid_; };
 
@@ -111,12 +117,14 @@ class DecodedTransponderPacket {
     int GetBufferLenBits() const { return raw_.buffer_len_bits; }
     int GetRSSIdBm() const { return raw_.sigs_dbm; }
     uint64_t GetMLAT12MHzCounter() const { return (raw_.mlat_48mhz_64bit_counts >> 2) & 0xFFFFFFFFFFFF; }
+    uint64_t GetTimestampMs() { return raw_.GetTimestampMs(); }
     uint16_t GetDownlinkFormat() const { return downlink_format_; }
     uint16_t GetDownlinkFormatString(char str_buf[kMaxDFStrLen]) const;
     DownlinkFormat GetDownlinkFormatEnum();
     uint32_t GetICAOAddress() const { return icao_address_; }
     uint16_t GetPacketBufferLenBits() const { return raw_.buffer_len_bits; }
-    RawTransponderPacket GetRaw() const { return raw_; }
+    Raw1090Packet GetRaw() const { return raw_; }
+    Raw1090Packet *GetRawPtr() { return &raw_; }
 
     /**
      * Dumps the internal packet buffer to a destination and returns the number of bytes written.
@@ -142,7 +150,7 @@ class DecodedTransponderPacket {
 
    protected:
     bool is_valid_ = false;
-    RawTransponderPacket raw_;
+    Raw1090Packet raw_;
 
     uint32_t icao_address_ = 0;
     uint16_t downlink_format_ = static_cast<uint16_t>(kDownlinkFormatInvalid);
@@ -153,7 +161,7 @@ class DecodedTransponderPacket {
     void ConstructTransponderPacket();
 };
 
-class ADSBPacket : public DecodedTransponderPacket {
+class ADSBPacket : public Decoded1090Packet {
    public:
     static const uint16_t kMaxTCStrLen = 50;
 
@@ -167,13 +175,11 @@ class ADSBPacket : public DecodedTransponderPacket {
     static const uint16_t kMEFirstBitIndex = kDFNUmBits + kCANumBits + kICAONumBits;
 
     /**
-     * Constructor. Can only create an ADSBPacket from an existing DecodedTransponderPacket, which is is referenced as
+     * Constructor. Can only create an ADSBPacket from an existing Decoded1090Packet, which is is referenced as
      * the parent of the ADSBPacket. Think of this as a way to use the ADSBPacket as a "window" into the contents of the
-     * parent DecodedTransponderPacket. The ADSBPacket cannot exist without the parent DecodedTransponderPacket!
+     * parent Decoded1090Packet. The ADSBPacket cannot exist without the parent Decoded1090Packet!
      */
-    ADSBPacket(const DecodedTransponderPacket &decoded_packet) : DecodedTransponderPacket(decoded_packet) {
-        ConstructADSBPacket();
-    };
+    ADSBPacket(const Decoded1090Packet &decoded_packet) : Decoded1090Packet(decoded_packet) { ConstructADSBPacket(); };
 
     // Bits 6-8 [3]: Capability (CA)
     enum Capability : uint8_t {
@@ -231,7 +237,7 @@ class ADSBPacket : public DecodedTransponderPacket {
     void ConstructADSBPacket();
 };
 
-class ModeCPacket : public DecodedTransponderPacket {
+class ModeCPacket : public Decoded1090Packet {
    public:
     enum DownlinkRequest : uint8_t {
         kDownlinkRequestNone = 0b00000,
@@ -247,7 +253,7 @@ class ModeCPacket : public DecodedTransponderPacket {
         kUtilityMessageCommDInterrogatorIdentifierCode = 0b11
     };
 
-    ModeCPacket(const DecodedTransponderPacket &decoded_packet);
+    ModeCPacket(const Decoded1090Packet &decoded_packet);
 
     bool IsAirborne() const { return is_airborne_; }
     bool HasAlert() const { return has_alert_; }
@@ -268,7 +274,7 @@ class ModeCPacket : public DecodedTransponderPacket {
     int32_t altitude_ft_ = -1;
 };
 
-class ModeAPacket : public DecodedTransponderPacket {
+class ModeAPacket : public Decoded1090Packet {
    public:
     enum DownlinkRequest : uint8_t {
         kDownlinkRequestNone = 0b00000,
@@ -284,7 +290,7 @@ class ModeAPacket : public DecodedTransponderPacket {
         kUtilityMessageCommDInterrogatorIdentifierCode = 0b11
     };
 
-    ModeAPacket(const DecodedTransponderPacket &decoded_packet);
+    ModeAPacket(const Decoded1090Packet &decoded_packet);
 
     bool IsAirborne() const { return is_airborne_; }
     bool HasAlert() const { return has_alert_; }

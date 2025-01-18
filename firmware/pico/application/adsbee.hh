@@ -20,22 +20,22 @@ class ADSBee {
     static constexpr int kTLMinMV = 0;                // [mV]
     static constexpr uint16_t kMaxNumTransponderPackets =
         100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
-    static const uint32_t kStatusLEDOnMs = 10;
-    static const uint16_t kNumDemodStateMachines = 3;  // 2x well-formed preamble, 1x high power preamble
-    static const uint16_t kHighPowerDemodStateMachineIndex = 2;
+    static constexpr uint32_t kStatusLEDOnMs = 10;
+    static constexpr uint16_t kNumDemodStateMachines = 3;  // 2x well-formed preamble, 1x high power preamble
+    static constexpr uint16_t kHighPowerDemodStateMachineIndex = 2;
 
-    static const uint32_t kTLLearningIntervalMs =
+    static constexpr uint32_t kTLLearningIntervalMs =
         10000;  // [ms] Length of Simulated Annealing interval for learning trigger level.
-    static const uint16_t kTLLearningNumCycles =
+    static constexpr uint16_t kTLLearningNumCycles =
         100;  // Number of simulated annealing cycles for learning trigger level.
-    static const uint16_t kTLLearningStartTemperatureMV =
+    static constexpr uint16_t kTLLearningStartTemperatureMV =
         1000;  // [mV] Starting value for simulated annealing temperature when learning triger level. This corresponds
                // to the maximum value that the trigger level could be moved (up or down) when exploring a neighbor
                // state.
 
-    static const int32_t kNoiseFloorExpoFilterPercent =
+    static constexpr int32_t kNoiseFloorExpoFilterPercent =
         50;  // [%] Weight to use for low pass expo filter of noise floor ADC counts. 0 = no filter, 100 = hold value.
-    static const uint32_t kNoiseFloorADCSampleIntervalMs =
+    static constexpr uint32_t kNoiseFloorADCSampleIntervalMs =
         1;  // [ms] Interval between ADC samples to approximate noise floor value.
 
     struct ADSBeeConfig {
@@ -87,7 +87,7 @@ class ADSBee {
      * @retval Corresponding power level, in dBm.
      */
     static inline int AD8313MilliVoltsTodBm(int mv) {
-        static const uint16_t kLNAGaindB = 44;        // Gain of 2x LNAs in front of the AD8313, from bench testing.
+        static constexpr uint16_t kLNAGaindB = 44;    // Gain of 2x LNAs in front of the AD8313, from bench testing.
         return 60 * (mv - 1600) / 1000 - kLNAGaindB;  // AD8313 0dBm intercept at 1.6V, slope is 60dBm/V.
     }
 
@@ -282,7 +282,7 @@ class ADSBee {
                          uint16_t tl_learning_start_temperature_mv = kTLLearningStartTemperatureMV,
                          uint16_t tl_min_mv = kTLMinMV, uint16_t tl_max_mv = kTLMaxMV);
 
-    PFBQueue<RawTransponderPacket> transponder_packet_queue = PFBQueue<RawTransponderPacket>(
+    PFBQueue<Raw1090Packet> transponder_packet_queue = PFBQueue<Raw1090Packet>(
         {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = transponder_packet_queue_buffer_});
 
     AircraftDictionary aircraft_dictionary;
@@ -321,8 +321,8 @@ class ADSBee {
 
     uint32_t mlat_counter_1s_wraps_ = 0;
 
-    RawTransponderPacket rx_packet_[kNumDemodStateMachines];
-    RawTransponderPacket transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
+    Raw1090Packet rx_packet_[kNumDemodStateMachines];
+    Raw1090Packet transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
 

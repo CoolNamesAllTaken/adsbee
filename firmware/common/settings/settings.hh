@@ -11,18 +11,18 @@
 #include "pico/rand.h"
 #endif
 
-static const uint32_t kSettingsVersion = 0x6;  // Change this when settings format changes!
-static const uint32_t kDeviceInfoVersion = 0x2;
+static constexpr uint32_t kSettingsVersion = 0x6;  // Change this when settings format changes!
+static constexpr uint32_t kDeviceInfoVersion = 0x2;
 
 class SettingsManager {
    public:
     // Serial Interface enum and string conversion array.
     enum SerialInterface : uint16_t { kConsole = 0, kCommsUART, kGNSSUART, kNumSerialInterfaces };
-    static const uint16_t kSerialInterfaceStrMaxLen = 30;
+    static constexpr uint16_t kSerialInterfaceStrMaxLen = 30;
     static const char kSerialInterfaceStrs[SerialInterface::kNumSerialInterfaces][kSerialInterfaceStrMaxLen];
 
     enum LogLevel : uint16_t { kSilent = 0, kErrors, kWarnings, kInfo, kNumLogLevels };
-    static const uint16_t kConsoleLogLevelStrMaxLen = 30;
+    static constexpr uint16_t kConsoleLogLevelStrMaxLen = 30;
     static const char kConsoleLogLevelStrs[LogLevel::kNumLogLevels][kConsoleLogLevelStrMaxLen];
 
     // Reporting Protocol enum and string conversion array.
@@ -37,29 +37,29 @@ class SettingsManager {
         kGDL90,
         kNumProtocols
     };
-    static const uint16_t kReportingProtocolStrMaxLen = 30;
+    static constexpr uint16_t kReportingProtocolStrMaxLen = 30;
     static const char kReportingProtocolStrs[ReportingProtocol::kNumProtocols][kReportingProtocolStrMaxLen];
 
-    static const uint8_t kWiFiAPChannelMax = 11;  // Operation in channels 12-14 avoided in USA.
+    static constexpr uint8_t kWiFiAPChannelMax = 11;  // Operation in channels 12-14 avoided in USA.
 
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a
     // firmware upgrade if the format of the settings struct changes.
     struct Settings {
-        static const int kDefaultTLMV = 1300;  // [mV]
-        static const uint32_t kDefaultWatchdogTimeoutSec = 10;
+        static constexpr int kDefaultTLMV = 1300;  // [mV]
+        static constexpr uint32_t kDefaultWatchdogTimeoutSec = 10;
         // NOTE: Lengths do not include null terminator.
-        static const uint16_t kHostnameMaxLen = 32;
-        static const uint16_t kWiFiSSIDMaxLen = 32;
-        static const uint16_t kWiFiPasswordMaxLen = 64;
-        static const uint16_t kWiFiMaxNumClients = 6;
-        static const uint32_t kDefaultCommsUARTBaudrate = 115200;
-        static const uint32_t kDefaultGNSSUARTBaudrate = 9600;
-        static const uint16_t kMaxNumFeeds = 6;
-        static const uint16_t kFeedURIMaxNumChars = 63;
-        static const uint16_t kFeedReceiverIDNumBytes = 8;
-        static const uint16_t kIPAddrStrLen = 16;   // XXX.XXX.XXX.XXX (does not include null terminator)
-        static const uint16_t kMACAddrStrLen = 18;  // XX:XX:XX:XX:XX:XX (does not include null terminator)
-        static const uint16_t kMACAddrNumBytes = 6;
+        static constexpr uint16_t kHostnameMaxLen = 32;
+        static constexpr uint16_t kWiFiSSIDMaxLen = 32;
+        static constexpr uint16_t kWiFiPasswordMaxLen = 64;
+        static constexpr uint16_t kWiFiMaxNumClients = 6;
+        static constexpr uint32_t kDefaultCommsUARTBaudrate = 115200;
+        static constexpr uint32_t kDefaultGNSSUARTBaudrate = 9600;
+        static constexpr uint16_t kMaxNumFeeds = 6;
+        static constexpr uint16_t kFeedURIMaxNumChars = 63;
+        static constexpr uint16_t kFeedReceiverIDNumBytes = 8;
+        static constexpr uint16_t kIPAddrStrLen = 16;   // XXX.XXX.XXX.XXX (does not include null terminator)
+        static constexpr uint16_t kMACAddrStrLen = 18;  // XX:XX:XX:XX:XX:XX (does not include null terminator)
+        static constexpr uint16_t kMACAddrNumBytes = 6;
 
         uint32_t settings_version = kSettingsVersion;
 
@@ -150,9 +150,9 @@ class SettingsManager {
     // This struct contains device information that should persist across firmware upgrades.
     struct DeviceInfo {
         // NOTE: Lengths do not include null terminator.
-        static const uint16_t kPartCodeLen = 26;  // NNNNNNNNNR-YYYYMMDD-VVXXXX (not counting end of string char).
-        static const uint16_t kOTAKeyMaxLen = 128;
-        static const uint16_t kNumOTAKeys = 2;
+        static constexpr uint16_t kPartCodeLen = 26;  // NNNNNNNNNR-YYYYMMDD-VVXXXX (not counting end of string char).
+        static constexpr uint16_t kOTAKeyMaxLen = 128;
+        static constexpr uint16_t kNumOTAKeys = 2;
 
         uint32_t device_info_version = kDeviceInfoVersion;
         char part_code[kPartCodeLen + 1];
@@ -168,7 +168,7 @@ class SettingsManager {
             }
         }
 
-        static const uint16_t kDefaultSSIDLenChars = 24;  // ADSBee1090-YYYMMDDVVXXXX
+        static constexpr uint16_t kDefaultSSIDLenChars = 24;  // ADSBee1090-YYYMMDDVVXXXX
         /**
          * Writes a default value for a network SSID to a buffer. The buffer must be at least kDefaultSSIDLenChars+1 so
          * that there is space for an end of string character. This default network SSID value is intended to not

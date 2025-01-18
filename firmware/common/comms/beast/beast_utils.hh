@@ -27,27 +27,27 @@ enum BeastFrameType {
 };
 
 /**
- * Returns the Beast frame type corresponding to a RawTransponderPacket.
+ * Returns the Beast frame type corresponding to a Raw1090Packet.
  * NOTE: kBeastFrameTypeModeAC is not used, since ADSBee only decodes Mode S.
- * @param[in] packet RawTransponderPacket to get the downlink format from.
+ * @param[in] packet Raw1090Packet to get the downlink format from.
  * @retval BeastFrameType corresponding the packet, or kBeastFrameTypeInvalid if it wasn't recognized.
  */
-BeastFrameType GetBeastFrameType(RawTransponderPacket packet) {
-    DecodedTransponderPacket::DownlinkFormat downlink_format =
-        static_cast<DecodedTransponderPacket::DownlinkFormat>(packet.buffer[0] >> 27);
+BeastFrameType GetBeastFrameType(Raw1090Packet packet) {
+    Decoded1090Packet::DownlinkFormat downlink_format =
+        static_cast<Decoded1090Packet::DownlinkFormat>(packet.buffer[0] >> 27);
     switch (downlink_format) {
-        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatShortRangeAirToAirSurveillance:
-        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatAltitudeReply:
-        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatIdentityReply:
-        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatAllCallReply:
+        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatShortRangeAirToAirSurveillance:
+        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatAltitudeReply:
+        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatIdentityReply:
+        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatAllCallReply:
             return kBeastFrameTypeModeSShort;
-        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatLongRangeAirToAirSurveillance:
-        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatExtendedSquitter:
-        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatExtendedSquitterNonTransponder:
-        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatMilitaryExtendedSquitter:
-        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatCommBAltitudeReply:
-        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatCommBIdentityReply:
-        case DecodedTransponderPacket::DownlinkFormat::kDownlinkFormatCommDExtendedLengthMessage:
+        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatLongRangeAirToAirSurveillance:
+        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatExtendedSquitter:
+        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatExtendedSquitterNonTransponder:
+        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatMilitaryExtendedSquitter:
+        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatCommBAltitudeReply:
+        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatCommBIdentityReply:
+        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatCommDExtendedLengthMessage:
             return kBeastFrameTypeModeSLong;
         default:
             return kBeastFrameTypeInvalid;
@@ -75,13 +75,13 @@ uint16_t WriteBufferWithBeastEscapes(uint8_t to_buf[], const uint8_t from_buf[],
 }
 
 /**
- * Converts a DecodedTransponderPacket payload to a data buffer in Mode S Beast output format.
- * @param[in] packet Reference to DecodedTransponderPacket to convert.
+ * Converts a Decoded1090Packet payload to a data buffer in Mode S Beast output format.
+ * @param[in] packet Reference to Decoded1090Packet to convert.
  * @param[out] beast_frame_buf Pointer to byte buffer to fill with payload.
  * @retval Number of bytes written to beast_frame_buf.
  */
-uint16_t TransponderPacketToBeastFrame(const DecodedTransponderPacket &packet, uint8_t *beast_frame_buf) {
-    uint8_t packet_buf[DecodedTransponderPacket::kMaxPacketLenWords32 * kBytesPerWord];
+uint16_t TransponderPacketToBeastFrame(const Decoded1090Packet &packet, uint8_t *beast_frame_buf) {
+    uint8_t packet_buf[Decoded1090Packet::kMaxPacketLenWords32 * kBytesPerWord];
     uint16_t data_num_bytes = packet.DumpPacketBuffer(packet_buf);
 
     beast_frame_buf[0] = kBeastEscapeChar;
@@ -117,9 +117,8 @@ uint16_t TransponderPacketToBeastFrame(const DecodedTransponderPacket &packet, u
     return bytes_written;
 }
 
-uint16_t TransponderPacketToBeastFramePrependReceiverID(const DecodedTransponderPacket &packet,
-                                                        uint8_t *beast_frame_buf, const uint8_t *receiver_id,
-                                                        uint16_t receiver_id_len_bytes) {
+uint16_t TransponderPacketToBeastFramePrependReceiverID(const Decoded1090Packet &packet, uint8_t *beast_frame_buf,
+                                                        const uint8_t *receiver_id, uint16_t receiver_id_len_bytes) {
     uint16_t bytes_written = 0;
     beast_frame_buf[bytes_written++] = kBeastEscapeChar;
     beast_frame_buf[bytes_written++] = 0xe3;  // Message Type Receiver ID
