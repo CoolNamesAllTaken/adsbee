@@ -10,15 +10,15 @@
 
 class CommsManager {
    public:
-    static const uint16_t kATCommandBufMaxLen = 1000;
-    static const uint16_t kNetworkConsoleBufMaxLen = 4096;
-    static const uint16_t kPrintfBufferMaxSize = 500;
-    static const uint32_t kRawReportingIntervalMs = 50;  // Report packets internally at 20Hz.
-    static const uint32_t kMAVLINKReportingIntervalMs = 1000;
-    static const uint32_t kCSBeeReportingIntervalMs = 1000;
-    static const uint32_t kGDL90ReportingIntervalMs = 1000;
+    static constexpr uint16_t kATCommandBufMaxLen = 1000;
+    static constexpr uint16_t kNetworkConsoleBufMaxLen = 4096;
+    static constexpr uint16_t kPrintfBufferMaxSize = 500;
+    static constexpr uint32_t kRawReportingIntervalMs = 50;  // Report packets internally at 20Hz.
+    static constexpr uint32_t kMAVLINKReportingIntervalMs = 1000;
+    static constexpr uint32_t kCSBeeReportingIntervalMs = 1000;
+    static constexpr uint32_t kGDL90ReportingIntervalMs = 1000;
 
-    static const uint32_t kOTAWriteTimeoutMs = 5000;  // ms until OTA write command exits if all bytes not received.
+    static constexpr uint32_t kOTAWriteTimeoutMs = 5000;  // ms until OTA write command exits if all bytes not received.
 
     struct CommsManagerConfig {
         uart_inst_t *comms_uart_handle = uart1;

@@ -23,6 +23,8 @@ Aircraft::Aircraft() {
 }
 
 bool Aircraft::DecodePosition() {
+    // TODO: There could be a condition here where we temporarily lose packets when the MLAT counter wraps around and
+    // the packet timestamps all get seen as 0ms, but this probably is not a big deal.
     if (!(last_odd_packet_.received_timestamp_ms > 0 && last_even_packet_.received_timestamp_ms > 0)) {
         CONSOLE_WARNING("Aircraft::DecodePosition",
                         "Unable to decode position without receiving an odd and even packet pair.\r\n");
@@ -100,22 +102,6 @@ bool Aircraft::DecodePosition() {
     return true;
 }
 
-bool Aircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, bool redigesting) {
-    if (n_lat_cpr > kCPRLatLonMaxCount || n_lon_cpr > kCPRLatLonMaxCount) {
-        return false;  // counts out of bounds, don't parse
-    }
-
-    CPRPacket &packet = odd ? last_odd_packet_ : last_even_packet_;
-    packet.received_timestamp_ms = get_time_since_boot_ms();
-    packet.n_lat = n_lat_cpr;
-    packet.n_lon = n_lon_cpr;
-    // Equation 5.5
-    packet.lat_cpr = static_cast<float>(n_lat_cpr) / kCPRLatLonMaxCount;
-    packet.lon_cpr = static_cast<float>(n_lon_cpr) / kCPRLatLonMaxCount;
-
-    return true;
-}
-
 /**
  * Aircraft Dictionary
  */
@@ -139,6 +125,37 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
     metrics = metrics_counter_;    // Swap counter values over to publicly visible values.
     metrics_counter_ = Metrics();  // Use default constructor to clear all values.
 }
+
+bool AircraftDictionary::ContainsAircraft(uint32_t icao_address) const {
+    auto itr = dict.find(icao_address);
+    if (itr != dict.end()) {
+        return true;
+    }
+    return false;
+}
+
+bool AircraftDictionary::GetAircraft(uint32_t icao_address, Aircraft &aircraft_out) const {
+    auto itr = dict.find(icao_address);
+    if (itr != dict.end()) {
+        aircraft_out = itr->second;
+        return true;
+    }
+    return false;  // aircraft not found
+}
+
+Aircraft *AircraftDictionary::GetAircraftPtr(uint32_t icao_address) {
+    auto itr = dict.find(icao_address);
+    if (itr != dict.end()) {
+        return &(itr->second);  // return address of existing aircraft
+    } else if (dict.size() < kMaxNumAircraft) {
+        Aircraft new_aircraft = Aircraft(icao_address);
+        dict[icao_address] = new_aircraft;
+        return &(dict[icao_address]);  // insert new aircraft and return its address
+    }
+    return nullptr;  // can't find the aircraft or insert a new one
+}
+
+uint16_t AircraftDictionary::GetNumAircraft() { return dict.size(); }
 
 bool AircraftDictionary::IngestDecoded1090Packet(Decoded1090Packet &packet) {
     int16_t source = packet.GetRaw().source;
@@ -334,8 +351,6 @@ bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
     return ret;
 }
 
-uint16_t AircraftDictionary::GetNumAircraft() { return dict.size(); }
-
 bool AircraftDictionary::InsertAircraft(const Aircraft &aircraft) {
     auto itr = dict.find(aircraft.icao_address);
     if (itr != dict.end()) {
@@ -363,33 +378,28 @@ bool AircraftDictionary::RemoveAircraft(uint32_t icao_address) {
     return false;  // aircraft was not found in the dictionary
 }
 
-bool AircraftDictionary::GetAircraft(uint32_t icao_address, Aircraft &aircraft_out) const {
-    auto itr = dict.find(icao_address);
-    if (itr != dict.end()) {
-        aircraft_out = itr->second;
-        return true;
+bool Aircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, uint32_t received_timestamp_ms) {
+    if (n_lat_cpr > kCPRLatLonMaxCount || n_lon_cpr > kCPRLatLonMaxCount) {
+        return false;  // counts out of bounds, don't parse
     }
-    return false;  // aircraft not found
-}
+    CPRPacket &complementary_packet = odd ? last_even_packet_ : last_odd_packet_;
+    uint32_t received_timestamp_delta_ms = received_timestamp_ms > complementary_packet.received_timestamp_ms
+                                               ? received_timestamp_ms - complementary_packet.received_timestamp_ms
+                                               : complementary_packet.received_timestamp_ms - received_timestamp_ms;
+    if (received_timestamp_delta_ms > GetMaxAllowedCPRTimeDeltaMs()) {
+        // Clear out old packet to avoid an invalid decode from packets that are too far apart in time.
+        ClearCPRPackets();
+    }
 
-bool AircraftDictionary::ContainsAircraft(uint32_t icao_address) const {
-    auto itr = dict.find(icao_address);
-    if (itr != dict.end()) {
-        return true;
-    }
-    return false;
-}
+    CPRPacket &packet = odd ? last_odd_packet_ : last_even_packet_;
+    packet.received_timestamp_ms = received_timestamp_ms;
+    packet.n_lat = n_lat_cpr;
+    packet.n_lon = n_lon_cpr;
+    // Equation 5.5
+    packet.lat_cpr = static_cast<float>(n_lat_cpr) / kCPRLatLonMaxCount;
+    packet.lon_cpr = static_cast<float>(n_lon_cpr) / kCPRLatLonMaxCount;
 
-Aircraft *AircraftDictionary::GetAircraftPtr(uint32_t icao_address) {
-    auto itr = dict.find(icao_address);
-    if (itr != dict.end()) {
-        return &(itr->second);  // return address of existing aircraft
-    } else if (dict.size() < kMaxNumAircraft) {
-        Aircraft new_aircraft = Aircraft(icao_address);
-        dict[icao_address] = new_aircraft;
-        return &(dict[icao_address]);  // insert new aircraft and return its address
-    }
-    return nullptr;  // can't find the aircraft or insert a new one
+    return true;
 }
 
 /**
@@ -677,8 +687,12 @@ bool AircraftDictionary::ApplyAirbornePositionMessage(Aircraft &aircraft, ADSBPa
     bool odd = packet.GetNBitWordFromMessage(1, 21);
 
     // ME[32-?]
-    aircraft.SetCPRLatLon(packet.GetNBitWordFromMessage(17, 22), packet.GetNBitWordFromMessage(17, 39), odd);
-    if (aircraft.CanDecodePosition()) {
+    if (!aircraft.SetCPRLatLon(packet.GetNBitWordFromMessage(17, 22), packet.GetNBitWordFromMessage(17, 39), odd,
+                               packet.GetTimestampMs())) {
+        CONSOLE_WARNING("AircraftDictionary::ApplyAirbornePositionMessage",
+                        "Failed to set CPR Lat/Lon for aircraft 0x%lx.", aircraft.icao_address);
+        decode_successful = false;
+    } else if (aircraft.CanDecodePosition()) {
         if (!aircraft.DecodePosition()) {
             CONSOLE_WARNING("ApplyAirbornePositionMessage", "DecodePosition failed for aircraft 0x%lx.\r\n",
                             aircraft.icao_address);

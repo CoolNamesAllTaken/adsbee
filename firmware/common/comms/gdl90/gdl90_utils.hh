@@ -9,9 +9,9 @@
 
 class GDL90Reporter {
    public:
-    static const uint16_t kGDL90MessageMaxLenBytes = 436;
-    static const uint8_t kGDL90FlagByte = 0x7E;
-    static const uint8_t kGDL90ControlEscapeChar = 0x7D;
+    static constexpr uint16_t kGDL90MessageMaxLenBytes = 436;
+    static constexpr uint8_t kGDL90FlagByte = 0x7E;
+    static constexpr uint8_t kGDL90ControlEscapeChar = 0x7D;
 
     static const uint16_t kGDL90CRC16Table[256];
 

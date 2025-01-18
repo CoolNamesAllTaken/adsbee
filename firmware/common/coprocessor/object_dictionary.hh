@@ -16,9 +16,9 @@ class ObjectDictionary {
     static const uint8_t kFirmwareVersionPatch;
     static const uint32_t kFirmwareVersion;
 
-    static const uint16_t kMACAddrLenBytes = 6;
+    static constexpr uint16_t kMACAddrLenBytes = 6;
 
-    static const uint16_t kNetworkConsoleMessageMaxLenBytes = 4000;
+    static constexpr uint16_t kNetworkConsoleMessageMaxLenBytes = 4000;
 
     enum Address : uint8_t {
         kAddrInvalid = 0,             // Default value.

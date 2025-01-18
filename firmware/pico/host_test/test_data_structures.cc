@@ -21,7 +21,7 @@ void FillAndEmptyQueue(PFBQueue<T> &queue, uint16_t queue_max_length) {
         ASSERT_EQ(queue.Length(), queue_max_length);
     }
     // Pop everything.
-    for (uint16_t i = 0; i < queue_max_length; i++) {
+    for (uint32_t i = 0; i < queue_max_length; i++) {
         uint32_t pop_buffer = UINT32_MAX;
         ASSERT_TRUE(queue.Pop(pop_buffer));
         ASSERT_EQ(pop_buffer, queue_max_length + i);

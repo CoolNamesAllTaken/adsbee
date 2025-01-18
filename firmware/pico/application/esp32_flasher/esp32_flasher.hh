@@ -10,8 +10,8 @@
 
 class ESP32SerialFlasher {
    public:
-    static const uint32_t kSerialFlasherResetHoldTimeMs = 100;
-    static const uint32_t kSerialFlasherBootHoldTimeMs = 50;
+    static constexpr uint32_t kSerialFlasherResetHoldTimeMs = 100;
+    static constexpr uint32_t kSerialFlasherBootHoldTimeMs = 50;
 
     struct ESP32SerialFlasherConfig {
         uart_inst_t *esp32_uart_handle = uart0;

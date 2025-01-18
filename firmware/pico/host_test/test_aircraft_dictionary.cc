@@ -156,37 +156,37 @@ TEST(Aircraft, SetCPRLatLon) {
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
 
     // Send n_lat_cpr out of bounds (bigger than 2^17 bits max value).
-    EXPECT_FALSE(aircraft.SetCPRLatLon(0xFFFFFF, 53663, true));
-    EXPECT_FALSE(aircraft.SetCPRLatLon(0xFFFFFF, 53663, false));
+    EXPECT_FALSE(aircraft.SetCPRLatLon(0xFFFFFF, 53663, true, get_time_since_boot_ms()));
+    EXPECT_FALSE(aircraft.SetCPRLatLon(0xFFFFFF, 53663, false, get_time_since_boot_ms()));
     // Send n_lon_cpr out of bounds (bigger than 2^17 bits max value).
-    EXPECT_FALSE(aircraft.SetCPRLatLon(52455, 0xFFFFFF, false));
-    EXPECT_FALSE(aircraft.SetCPRLatLon(52455, 0xFFFFFF, true));
+    EXPECT_FALSE(aircraft.SetCPRLatLon(52455, 0xFFFFFF, false, get_time_since_boot_ms()));
+    EXPECT_FALSE(aircraft.SetCPRLatLon(52455, 0xFFFFFF, true, get_time_since_boot_ms()));
 
     // Send two even packets at startup, no odd packets.
     aircraft = Aircraft();  // clear everything
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedPosition));
     inc_time_since_boot_ms();
-    EXPECT_TRUE(aircraft.SetCPRLatLon(578, 13425, false));
+    EXPECT_TRUE(aircraft.SetCPRLatLon(578, 13425, false, get_time_since_boot_ms()));
     inc_time_since_boot_ms();
-    EXPECT_TRUE(aircraft.SetCPRLatLon(578, 4651, false));
+    EXPECT_TRUE(aircraft.SetCPRLatLon(578, 4651, false, get_time_since_boot_ms()));
     EXPECT_FALSE(aircraft.DecodePosition());
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
 
     // Send two odd packets at startup, no even packets.
     aircraft = Aircraft();  // clear everything
     inc_time_since_boot_ms();
-    EXPECT_TRUE(aircraft.SetCPRLatLon(236, 13425, true));
+    EXPECT_TRUE(aircraft.SetCPRLatLon(236, 13425, true, get_time_since_boot_ms()));
     inc_time_since_boot_ms();
-    EXPECT_TRUE(aircraft.SetCPRLatLon(236, 857, true));
+    EXPECT_TRUE(aircraft.SetCPRLatLon(236, 857, true, get_time_since_boot_ms()));
     EXPECT_FALSE(aircraft.DecodePosition());
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
 
     // Send one odd packet and one even packet at startup.
     aircraft = Aircraft();  // clear everything
     inc_time_since_boot_ms();
-    EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true));
+    EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true, get_time_since_boot_ms()));
     inc_time_since_boot_ms();
-    EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
+    EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false, get_time_since_boot_ms()));
     EXPECT_TRUE(aircraft.DecodePosition());
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
     EXPECT_NEAR(aircraft.latitude_deg, 52.25720f, 1e-4);  // even latitude
@@ -195,9 +195,9 @@ TEST(Aircraft, SetCPRLatLon) {
     // Send one even packet and one odd packet at startup.
     aircraft = Aircraft();  // clear everything
     inc_time_since_boot_ms();
-    EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
+    EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false, get_time_since_boot_ms()));
     inc_time_since_boot_ms();
-    EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true));
+    EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true, get_time_since_boot_ms()));
     EXPECT_TRUE(aircraft.DecodePosition());
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
     EXPECT_NEAR(aircraft.latitude_deg, 52.26578f, 1e-4);  // odd latitude
@@ -205,14 +205,14 @@ TEST(Aircraft, SetCPRLatLon) {
 
     // Straddle two position packets between different latitude
     aircraft = Aircraft();  // clear everything
-    EXPECT_TRUE(aircraft.SetCPRLatLon(93006, 50194, true));
+    EXPECT_TRUE(aircraft.SetCPRLatLon(93006, 50194, true, get_time_since_boot_ms()));
     inc_time_since_boot_ms();
-    EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
+    EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false, get_time_since_boot_ms()));
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.DecodePosition());
     inc_time_since_boot_ms();
     // Position established, now send the curveball.
-    EXPECT_TRUE(aircraft.SetCPRLatLon(93000 - 5000, 50194, true));
+    EXPECT_TRUE(aircraft.SetCPRLatLon(93000 - 5000, 50194, true, get_time_since_boot_ms()));
     inc_time_since_boot_ms();
     EXPECT_FALSE(aircraft.DecodePosition());
 
@@ -222,9 +222,9 @@ TEST(Aircraft, SetCPRLatLon) {
     // Another test message.
     // aircraft = Aircraft(); // clear everything
     // inc_time_since_boot_ms();
-    // EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true));
+    // EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true, get_time_since_boot_ms()));
     // inc_time_since_boot_ms();
-    // EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false));
+    // EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false, get_time_since_boot_ms()));
     // EXPECT_TRUE(aircraft.position_valid);
     // EXPECT_FLOAT_EQ(aircraft.latitude, 52.25720f);
     // EXPECT_FLOAT_EQ(aircraft.longitude, 3.91937f);
@@ -245,6 +245,7 @@ TEST(AircraftDictionary, ApplyAirbornePositionMessage) {
 
     // Set time since boot to something positive so packet ingestion time looks legit.
     set_time_since_boot_ms(1e3);
+    even_tpacket.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms()*48e3;
 
     // Ingest even packet.
     ASSERT_TRUE(dictionary.IngestDecoded1090Packet(even_tpacket));
@@ -263,6 +264,7 @@ TEST(AircraftDictionary, ApplyAirbornePositionMessage) {
     EXPECT_EQ(aircraft.baro_altitude_ft, 16975);
 
     inc_time_since_boot_ms(1e3);  // Simulate time passing between odd and even packet ingestion.
+    odd_tpacket.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms()*48e3;
 
     // Ingest odd packet.
     ASSERT_TRUE(dictionary.IngestDecoded1090Packet(odd_tpacket));
@@ -278,13 +280,81 @@ TEST(AircraftDictionary, ApplyAirbornePositionMessage) {
     EXPECT_EQ(aircraft.baro_altitude_ft, 17000);
 }
 
+TEST(Aircraft, CalculateMaxAllowedCPRTimeDelta) {
+    Aircraft aircraft;
+    // CPR time delta should be enforced at lower limit when aircraft is not initialized.
+    EXPECT_EQ(aircraft.GetMaxAllowedCPRTimeDeltaMs(), Aircraft::kMinCPRTimeDeltaMs);
+
+    // Setting velocity source to something other than kVelocitySourceNotAvailable or kVelocitySourceNotSet should
+    // return CPR time delta as a calculated function of aircraft velocity.
+    aircraft.velocity_source = Aircraft::VelocitySource::kVelocitySourceGroundSpeed;
+
+    // Stationary aircraft = maximum allowed CPR time delta.
+    aircraft.velocity_kts = 0;
+    EXPECT_EQ(aircraft.GetMaxAllowedCPRTimeDeltaMs(), Aircraft::kMaxCPRTimeDeltaMs);
+
+    // Mid-speed aircraft = calculated CPR time delta between max and min allowed.
+    aircraft.velocity_kts = 400;
+    EXPECT_EQ(aircraft.GetMaxAllowedCPRTimeDeltaMs(), Aircraft::kRefCPRTimeDeltaMs * 500 / aircraft.velocity_kts);
+
+    // Very fast aircraft = minimum allowed CPR time delta.
+    aircraft.velocity_kts = 1000;
+    EXPECT_EQ(aircraft.GetMaxAllowedCPRTimeDeltaMs(), Aircraft::kMinCPRTimeDeltaMs);
+}
+
+// bool VerifyCPRTimeDeltaThresholdWithOddPacket(uint32_t time_delta_threshold_sec, AircraftDictionary &dictionary,
+//                                               Aircraft &aircraft, uint64_t even_packet_mlat_48mhz_64bit_counts = 0) {
+//     Raw1090Packet odd_tpacket = Raw1090Packet((char *)"8da6147f585b05533e2ba73e43cb");
+
+//     // Packet with time delta less than threshold should be accepted.
+//     odd_tpacket.mlat_48mhz_64bit_counts = even_packet_mlat_48mhz_64bit_counts + time_delta_threshold_sec * 48e6 - 1;
+//     Decoded1090Packet odd_packet = Decoded1090Packet(odd_tpacket);
+//     EXPECT_TRUE(dictionary.IngestDecoded1090Packet(odd_packet));
+//     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
+//     aircraft
+//         .
+
+//         // Clean up and reset.
+//         dictionary.RemoveAircraft(aircraft.icao_address);
+
+//     // Packet with time delta greater than threshould should be rejected.
+// }
+
 // This test case verifies that you can't ingest airborne position messages that are too far apart in time, which could
 // lead to an invalid decode.
 TEST(AircraftDictionary, TimeFilterAirbornePositionMessages) {
     AircraftDictionary dictionary = AircraftDictionary();
     Raw1090Packet even_tpacket = Raw1090Packet((char *)"8da6147f5859f18cdf4d244ac6fa");
     Raw1090Packet odd_tpacket = Raw1090Packet((char *)"8da6147f585b05533e2ba73e43cb");
-    // even_tpacket.
+
+    even_tpacket.mlat_48mhz_64bit_counts = 0;
+    Decoded1090Packet even_packet = Decoded1090Packet(even_tpacket);
+
+    // Ingest the even position packet. This should add the aircraft to the dictionary but not provide a valid
+    // position.
+    ASSERT_TRUE(dictionary.IngestDecoded1090Packet(even_packet));
+    ASSERT_EQ(dictionary.GetNumAircraft(), 1);
+    auto aircraft = dictionary.dict.begin()->second;
+    ASSERT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
+
+    // Case 1: Aircraft has no speed data. Minimum packet valid interval should be used.
+    ASSERT_EQ(aircraft.velocity_source, Aircraft::VelocitySource::kVelocitySourceNotSet);
+    ASSERT_EQ(aircraft.GetMaxAllowedCPRTimeDeltaMs(), Aircraft::kMinCPRTimeDeltaMs);
+    // Ingest the odd position packet. This should be rejected since the timestamp is too far apart from the even
+    // packet. Ingestion will succeed, and the packet will be retained, but the aircraft will still not have a valid
+    // location.
+    odd_tpacket.mlat_48mhz_64bit_counts = even_tpacket.mlat_48mhz_64bit_counts + Aircraft::kMinCPRTimeDeltaMs * 48e9;
+    Decoded1090Packet odd_packet = Decoded1090Packet(odd_tpacket);
+    ASSERT_TRUE(dictionary.IngestDecoded1090Packet(odd_packet));
+    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
+
+    // Reset by ingesting even packet again.
+    ASSERT_TRUE(dictionary.IngestDecoded1090Packet(even_packet));
+
+    // Case 2: Aircraft has speed data and is traveling at 1000 knots. Minimum packet valid interval should be used.
+    aircraft.velocity_kts = 1000;
+    aircraft.velocity_source = Aircraft::VelocitySource::kVelocitySourceGroundSpeed;
+    ASSERT_EQ(aircraft.GetMaxAllowedCPRTimeDeltaMs(), Aircraft::kMinCPRTimeDeltaMs);
 }
 
 // TODO: Add test case for ingesting Airborne Position message with GNSS altitude.

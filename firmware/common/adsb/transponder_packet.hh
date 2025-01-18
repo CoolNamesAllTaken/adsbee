@@ -26,6 +26,13 @@ class Raw1090Packet {
         }
     }
 
+    /**
+     * Helper function that returns the timestamp in seconds. Used to abstract the MLAT timestamp resolution for
+     * functions that don't care about it.
+     * @return Timestamp in seconds.
+     */
+    uint64_t GetTimestampMs() { return mlat_48mhz_64bit_counts / 48e3; }
+
     uint32_t buffer[kMaxPacketLenWords32];
     uint16_t buffer_len_bits = 0;
     int16_t source = -1;                   // Source of the ADS-B packet (PIO state machine number).
@@ -110,12 +117,14 @@ class Decoded1090Packet {
     int GetBufferLenBits() const { return raw_.buffer_len_bits; }
     int GetRSSIdBm() const { return raw_.sigs_dbm; }
     uint64_t GetMLAT12MHzCounter() const { return (raw_.mlat_48mhz_64bit_counts >> 2) & 0xFFFFFFFFFFFF; }
+    uint64_t GetTimestampMs() { return raw_.GetTimestampMs(); }
     uint16_t GetDownlinkFormat() const { return downlink_format_; }
     uint16_t GetDownlinkFormatString(char str_buf[kMaxDFStrLen]) const;
     DownlinkFormat GetDownlinkFormatEnum();
     uint32_t GetICAOAddress() const { return icao_address_; }
     uint16_t GetPacketBufferLenBits() const { return raw_.buffer_len_bits; }
     Raw1090Packet GetRaw() const { return raw_; }
+    Raw1090Packet *GetRawPtr() { return &raw_; }
 
     /**
      * Dumps the internal packet buffer to a destination and returns the number of bytes written.
