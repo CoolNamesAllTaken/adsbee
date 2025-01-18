@@ -28,8 +28,8 @@ class FirmwareUpdateManager {
     static constexpr uint32_t kFlashHeaderLenBytes = 4 * 1024;  // 4 kBytes
     static constexpr uint32_t kFlashAppLenBytes = 8096 * 1024;  // 8096 kBytes
 
-    static constexpr uint32_t kFlashHeaderStartAddrs[kNumPartitions];
-    static constexpr uint32_t kFlashAppStartAddrs[kNumPartitions];
+    static const uint32_t kFlashHeaderStartAddrs[kNumPartitions];
+    static const uint32_t kFlashAppStartAddrs[kNumPartitions];
 
     static constexpr uint32_t kFlashHeaderMagicWord = 0xAD5BEEE;
     static constexpr uint32_t kFlashHeaderVersion = 0;
@@ -408,8 +408,8 @@ class FirmwareUpdateManager {
         return true;
     }
 
-    static constexpr FlashPartitionHeader *flash_partition_headers[kNumPartitions];
-    static constexpr uint8_t *flash_partition_apps[kNumPartitions];
+    static const FlashPartitionHeader *flash_partition_headers[kNumPartitions];
+    static const uint8_t *flash_partition_apps[kNumPartitions];
 
    private:
     /**

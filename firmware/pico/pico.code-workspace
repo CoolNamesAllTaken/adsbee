@@ -198,7 +198,7 @@
 				"type": "cppdbg",
 				"request": "launch",
 				"cwd": "/ads_bee/pico",
-				"program": "/ads_bee/pico/build/host_test/host_test",
+				"program": "/ads_bee/pico/host_build/host_test/host_test",
 				"args": [],
 				"stopAtEntry": false,
 				"cwd": "${fileDirname}",
