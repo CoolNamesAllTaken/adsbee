@@ -734,7 +734,17 @@ CPP_AT_CALLBACK(CommsManager::ATSettingsCallback) {
             CPP_AT_ERROR("No arguments provided.");
             break;
         case '?':
-            settings_manager.Print();
+            if (CPP_AT_HAS_ARG(0)) {
+                if (args[0].compare("DUMP") == 0) {
+                    // Print settings in AT format.
+                    settings_manager.PrintAT();
+                } else {
+                    CPP_AT_ERROR("Invalid argument %s.", args[0].data());
+                }
+            } else {
+                // Print settings in human readable format.
+                settings_manager.Print();
+            }
             CPP_AT_SUCCESS();
             break;
     }
@@ -1002,7 +1012,8 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .min_args = 0,
      .max_args = 3,
      .help_string_buf = "Load, save, or reset nonvolatile settings.\r\n\tAT+SETTINGS=<op [LOAD SAVE RESET]>\r\n\t"
-                        "Display nonvolatile settings.\r\n\tAT+SETTINGS?\r\n\t+SETTINGS=...\r\n\t",
+                        "Display nonvolatile settings.\r\n\tAT+SETTINGS?\r\n\t+SETTINGS=...\r\n\tDump settings in AT "
+                        "command format.\r\n\tAT+SETTINGS?DUMP\r\n\t+SETTINGS=...",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSettingsCallback, comms_manager)},
 #ifdef HARDWARE_UNIT_TESTS
     {.command_buf = "+TEST",
