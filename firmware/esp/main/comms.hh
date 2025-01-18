@@ -55,7 +55,7 @@ class CommsManager {
     CommsManager(CommsManagerConfig config_in) : config_(config_in) {
         wifi_clients_list_mutex_ = xSemaphoreCreateMutex();
         wifi_ap_message_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(NetworkMessage));
-        ip_wan_decoded_transponder_packet_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(DecodedTransponderPacket));
+        ip_wan_decoded_transponder_packet_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(Decoded1090Packet));
     }
 
     ~CommsManager() {
@@ -240,10 +240,10 @@ class CommsManager {
     /**
      * Sends a raw transponder packet to feeds via the external WiFi network that the ESP32 is a station on. It's
      * recommended to only call this function if WiFiStationHasIP() returns true, otherwise it will throw a warning.
-     * @param[in] decoded_packet DecodedTransponderPacket to send.
+     * @param[in] decoded_packet Decoded1090Packet to send.
      * @retval True if packet was successfully sent, false otherwise.
      */
-    bool IPWANSendDecodedTransponderPacket(DecodedTransponderPacket& decoded_packet);
+    bool IPWANSendDecoded1090Packet(Decoded1090Packet& decoded_packet);
 
     // Network hostname.
     char hostname[SettingsManager::Settings::kHostnameMaxLen + 1] = {0};
