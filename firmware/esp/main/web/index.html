@@ -31,11 +31,19 @@
             </div>
         </div>
 
-        <div class="upload-container column-element">
-            <button id="uploadButton" class="upload-button">
+        <div class="tools-container column-element">
+            <button id="uploadButton" class="tools-button">
                 Upload Firmware
             </button>
             <input type="file" id="fileInput" accept=".ota" style="display: none;">
+
+            <button id="downloadSettings" class="tools-button">
+                Download Settings
+            </button>
+            <button id="restoreSettings" class="tools-button">
+                Restore Settings
+            </button>
+            <input type="file" id="settingsFile" accept=".settings" style="display: none;">
 
             <div id="progressContainer" class="progress-container">
                 <div class="progress-bar">
@@ -54,7 +62,7 @@
 
     <script>
         const HOST_URI = `${window.location.hostname}`;
-        // const HOST_URI = "192.168.1.134";
+        // const HOST_URI = "192.168.4.1";
         const WS_CONFIG = {
             console_ws_url: `ws://${HOST_URI}/console`,
             metrics_ws_url: `ws://${HOST_URI}/metrics`,
@@ -405,12 +413,12 @@
                             const dictionaryMetrics = Object.fromEntries(
                                 Object.entries(data['aircraft_dictionary_metrics']).filter(([key, value]) => !Array.isArray(value))
                             );
-                            console.log('Dictionary Metrics:', dictionaryMetrics);
+                            // console.log('Dictionary Metrics:', dictionaryMetrics);
                             this.updateMetricsCards('receiver', dictionaryMetrics);
                         }
                         if (data.hasOwnProperty('server_metrics')) {
                             const serverMetrics = data['server_metrics'];
-                            console.log('Server Metrics:', serverMetrics);
+                            // console.log('Server Metrics:', serverMetrics);
                             const feedMetrics = {};
                             for (let i = 0; i < serverMetrics['feed_uri'].length; i++) {
                                 if (serverMetrics['feed_uri'][i] === '') {
@@ -418,7 +426,7 @@
                                 }
                                 feedMetrics[serverMetrics['feed_uri'][i]] = serverMetrics['feed_mps'][i];
                             }
-                            console.log('Feed Metrics:', feedMetrics);
+                            // console.log('Feed Metrics:', feedMetrics);
                             this.updateMetricsCards('feed', feedMetrics);
                             // Update labels count
                             this.feedsCountEl.textContent = `Feeds: ${Object.keys(feedMetrics).length}`;
@@ -571,17 +579,32 @@
                 return await this.receiveResponse(printResponse, waitForOkOrError);
             }
 
+            /**
+             * Send raw bytes to the ADSBee device.
+             * @param {Uint8Array} data The data to send.
+             * @param {boolean} printResponse Whether to print the response to the console.
+             * @return A promise that resolves with the decoded response lines.
+             */
             async sendBytes(data, printResponse = false, waitForOkOrError = false) {
                 await this.flushInputBuffer();
                 this.ws.send(data);
                 return await this.receiveResponse(printResponse, waitForOkOrError);
             }
 
+            /**
+             * Silence the console by silencing logs and turning off any output protocols. Call this before sending data
+             * for firmware updates.
+             */
             async silenceConsole() {
                 await this.sendCmd("AT+LOG_LEVEL=SILENT\r\n", 0, true, true);
                 await this.sendCmd("AT+PROTOCOL=CONSOLE,NONE\r\n", 0, true, true);
             }
 
+            /**
+             * Get the flash partition that can currently be read from / written to (e.g. the flash partition that is
+             * not currently being executed from).
+             * @return The current OTA flash partition.
+             */
             async otaGetFlashPartition() {
                 const decodedResponse = await this.sendCmd("AT+OTA=GET_PARTITION\r\n", 0, true, true);
 
@@ -594,12 +617,22 @@
                 return null;
             }
 
+            /**
+             * Write bytes to the current OTA flash partition.
+             * @param {number} offset The offset in bytes to write to.
+             * @param {Uint8Array} data The data to write.
+             */
             async otaWriteBytes(offset, data) {
                 const crc32 = this.calculateCRC32(data);
                 await this.sendCmd(`AT+OTA=WRITE,${offset.toString(16)},${data.length},${crc32.toString(16)}\r\n`, 10, true, false);
                 await this.sendBytes(data, true, true);
             }
 
+            /**
+             * Erase bytes from the current OTA flash partition.
+             * @param {number} offsetBytes The offset in bytes to erase from.
+             * @param {number} lenBytes The length in bytes to erase.
+             */
             async otaErase(offsetBytes = NaN, lenBytes = NaN) {
                 if (!isNaN(offsetBytes) && !isNaN(lenBytes)) {
                     await this.sendCmd(`AT+OTA=ERASE,${offsetBytes.toString(16)},${lenBytes}\r\n`, 100, true, true);
@@ -608,6 +641,10 @@
                 }
             }
 
+            /**
+             * Write a file to the current OTA flash partition.
+             * @param {File} file The file to write.
+             */
             async otaWriteFile(file) {
                 const HEADER_SIZE_BYTES = 5 * 4;
                 const APP_OFFSET_BYTES = 4 * 1024;
@@ -657,11 +694,18 @@
                 await this.sendCmd("AT+OTA=VERIFY\r\n", 0, true, true);
             }
 
+            /**
+             * Boot the current OTA flash partition.
+             */
             async otaBoot() {
                 await this.sendCmd("AT+OTA=BOOT\r\n", 0, true);
             }
 
-            // Helper function to read file in browser
+            /**
+             * Read a file as an ArrayBuffer.
+             * @param {File} file The file to read.
+             * @return {Promise<Uint8Array>} A promise that resolves with the file data as an ArrayBuffer.
+             */
             async readFile(file) {
                 return new Promise((resolve, reject) => {
                     const reader = new FileReader();
@@ -671,7 +715,11 @@
                 });
             }
 
-            // CRC32 calculation
+            /**
+             * Calculate the CRC32 checksum of a Uint8Array.
+             * @param {Uint8Array} data The data to calculate the CRC32 checksum for.
+             * @return {number} The CRC32 checksum.
+             */
             calculateCRC32(data) {
                 let crc = 0xFFFFFFFF;
                 for (let i = 0; i < data.length; i++) {
@@ -804,9 +852,72 @@
             }
         }
 
+        class SettingsManager {
+            constructor(adsbeeUrl) {
+                this.adsbeeUrl = adsbeeUrl;
+                this.downloadButton = document.getElementById('downloadSettings');
+                this.restoreButton = document.getElementById('restoreSettings');
+                this.settingsFileInput = document.getElementById('settingsFile');
+
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
+                this.downloadButton.addEventListener('click', () => {
+                    this.downloadSettings();
+                });
+
+                this.restoreButton.addEventListener('click', () => {
+                    this.settingsFileInput.click();
+                });
+
+                this.settingsFileInput.addEventListener('change', async (event) => {
+                    const file = event.target.files[0];
+                    if (file) {
+                        await this.restoreSettings(file);
+                    }
+                    this.settingsFileInput.value = '';
+                });
+            }
+
+            async downloadSettings() {
+                const adsbee = new ADSBeeAT(this.adsbeeUrl);
+                await adsbee.connect();
+                const response = await adsbee.sendCmd('AT+SETTINGS?DUMP\r\n', 0, true, true);
+
+                // Only keep lines starting with AT+ 
+                const settingsLines = response.filter(line => line.startsWith('AT+'));
+
+                const blob = new Blob([settingsLines.join('\n')], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `adsbee_${new Date().toISOString().replace(/[:.]/g, '-')}.settings`;
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+
+            async restoreSettings(file) {
+                const adsbee = new ADSBeeAT(this.adsbeeUrl);
+                await adsbee.connect();
+
+                const text = await file.text();
+                const commands = text.split('\n').filter(line => line.trim());
+
+                for (const command of commands) {
+                    try {
+                        await adsbee.sendCmd(command + '\r\n', 0, true, true);
+                    } catch (error) {
+                        throw new Error(`Failed executing command: ${command} - ${error.message}`);
+                    }
+                }
+            }
+        }
+
         // Initialize the uploader when the page loads
         document.addEventListener('DOMContentLoaded', () => {
             const uploader = new FirmwareUploader(HOST_URI);
+            const settingsManager = new SettingsManager(HOST_URI);
         });
     </script>
 </body>

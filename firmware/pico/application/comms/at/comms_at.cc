@@ -925,11 +925,11 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiSTACallback) {
 }
 
 const CppAT::ATCommandDef_t at_command_list[] = {
-    {.command_buf = "+BAUDRATE",
+    {.command_buf = "+BAUD_RATE",
      .min_args = 0,
      .max_args = 2,
-     .help_string_buf = "AT+BAUDRATE=<iface>,<baudrate>\r\n\tSet the baud rate of a serial "
-                        "interface.\r\n\tAT_BAUDRATE?\r\n\tQuery the baud rate of all serial interfaces.",
+     .help_string_buf = "AT+BAUD_RATE=<iface>,<baud_rate>\r\n\tSet the baud rate of a serial "
+                        "interface.\r\n\tAT+BAUD_RATE?\r\n\tQuery the baud rate of all serial interfaces.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBaudrateCallback, comms_manager)},
     {.command_buf = "+BIAS_TEE_ENABLE",
      .min_args = 0,

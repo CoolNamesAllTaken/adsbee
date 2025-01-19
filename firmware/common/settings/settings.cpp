@@ -63,10 +63,9 @@ void SettingsManager::Print() {
 }
 
 void SettingsManager::PrintAT() {
-    CONSOLE_PRINTF("AT+SETTINGS=RESET\r\n");
-
     // AT+BAUD_RATE
-    for (uint16_t i = 0; i < SerialInterface::kNumSerialInterfaces; i++) {
+    // Note: Baud rate cannot be changed for CONSOLE since it is a virtual COM port. Don't print its baud rate.
+    for (uint16_t i = SerialInterface::kCommsUART; i < SerialInterface::kNumSerialInterfaces; i++) {
         CONSOLE_PRINTF("AT+BAUD_RATE=%s,%lu\r\n", kSerialInterfaceStrs[i], settings.comms_uart_baud_rate);
     }
 
