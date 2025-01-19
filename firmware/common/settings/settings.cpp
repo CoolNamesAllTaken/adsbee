@@ -61,3 +61,51 @@ void SettingsManager::Print() {
         CONSOLE_PRINTF("\r\n");
     }
 }
+
+void SettingsManager::PrintAT() {
+    // AT+BAUD_RATE
+    // Note: Baud rate cannot be changed for CONSOLE since it is a virtual COM port. Don't print its baud rate.
+    for (uint16_t i = SerialInterface::kCommsUART; i < SerialInterface::kNumSerialInterfaces; i++) {
+        CONSOLE_PRINTF("AT+BAUD_RATE=%s,%lu\r\n", kSerialInterfaceStrs[i], settings.comms_uart_baud_rate);
+    }
+
+    // AT+BIAS_TEE_ENABLE
+    CONSOLE_PRINTF("AT+BIAS_TEE_ENABLE=%d\r\n", settings.bias_tee_enabled);
+
+    // AT+DEVICE_INFO: Don't store this.
+
+    // AT+ESP32_ENABLE
+    CONSOLE_PRINTF("AT+ESP32_ENABLE=%d\r\n", settings.esp32_enabled);
+
+    // AT+FEED
+    for (uint16_t i = 0; i < Settings::kMaxNumFeeds; i++) {
+        CONSOLE_PRINTF("AT+FEED=%d,%s,%u,%d,%s\r\n", i, settings.feed_uris[i], settings.feed_ports[i],
+                       settings.feed_is_active[i], kReportingProtocolStrs[settings.feed_protocols[i]]);
+    }
+
+    // AT+LOG_LEVEL
+    CONSOLE_PRINTF("AT+LOG_LEVEL=%s\r\n", kConsoleLogLevelStrs[settings.log_level]);
+
+    // AT+PROTOCOL
+    for (uint16_t i = 0; i < SerialInterface::kGNSSUART; i++) {
+        CONSOLE_PRINTF("AT+PROTOCOL=%s,%s\r\n", kSerialInterfaceStrs[i],
+                       kReportingProtocolStrs[settings.reporting_protocols[i]]);
+    }
+
+    // AT+RX_ENABLE
+    CONSOLE_PRINTF("AT+RX_ENABLE=%d\r\n", settings.receiver_enabled);
+
+    // AT+TL_SET
+    CONSOLE_PRINTF("AT+TL_SET=%u\r\n", settings.tl_mv);
+
+    // AT+WATCHDOG
+    CONSOLE_PRINTF("AT+WATCHDOG=%lu\r\n", settings.watchdog_timeout_sec);
+
+    // AT+WIFI_AP
+    CONSOLE_PRINTF("AT+WIFI_AP=%d,%s,%s,%d\r\n", settings.wifi_ap_enabled, settings.wifi_ap_ssid,
+                   settings.wifi_ap_password, settings.wifi_ap_channel);
+
+    // AT+WIFI_STA
+    CONSOLE_PRINTF("AT+WIFI_STA=%d,%s,%s\r\n", settings.wifi_sta_enabled, settings.wifi_sta_ssid,
+                   settings.wifi_sta_password);
+}

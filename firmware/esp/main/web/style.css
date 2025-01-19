@@ -157,15 +157,21 @@
 }
 
 /* Upload button styling */
-.upload-container {
-    max-width: 400px;
+.tools-container {
+    max-width: 100%;
     margin: 20px auto;
     font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
 }
 
-.upload-button {
+.tools-button {
     width: 100%;
     padding: 12px;
+    margin: 12px;
+    max-width: 200px;
     background-color: #ffcb00;
     color: black;
     border: none;
@@ -177,7 +183,7 @@
     gap: 8px;
 }
 
-.upload-button:disabled {
+.tools-button:disabled {
     background-color: #ccc;
     cursor: not-allowed;
 }

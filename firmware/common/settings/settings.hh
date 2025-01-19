@@ -213,7 +213,15 @@ class SettingsManager {
      */
     bool Load();
 
+    /**
+     * Print the settings in human-readable format.
+     */
     void Print();
+
+    /**
+     * Print the settings in AT command format. Used for dumping settings before a firmware update.
+     */
+    void PrintAT();
 
     /**
      * Takes a password as a string and fills a buffer with the corresponding number of asterix.
