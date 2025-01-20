@@ -239,6 +239,36 @@ void CommsManager::IPWANTask(void* pvParameters) {
                 CONSOLE_INFO("CommsManager::IPWANTask", "Successfully connected to %s",
                              settings_manager.settings.feed_uris[i]);
                 feed_sock_is_connected[i] = true;
+
+                // Perform beginning-of-connection actions here.
+                switch (settings_manager.settings.feed_protocols[i]) {
+                    case SettingsManager::ReportingProtocol::kBeast:
+                        [[fallthrough]];
+                    case SettingsManager::ReportingProtocol::kBeastRaw: {
+                        uint8_t beast_message_buf[2 * SettingsManager::Settings::kFeedReceiverIDNumBytes +
+                                                  kBeastFrameMaxLenBytes];
+                        uint16_t beast_message_len_bytes =
+                            BuildFeedStartFrame(beast_message_buf, settings_manager.settings.feed_receiver_ids[i]);
+                        int err = send(feed_sock[i], beast_message_buf, beast_message_len_bytes, 0);
+                        if (err < 0) {
+                            CONSOLE_ERROR("CommsManager::IPWANTask",
+                                          "Error occurred while sending %d Byte Beast start of feed message to feed %d "
+                                          "with URI %s "
+                                          "on port %d: "
+                                          "errno %d.",
+                                          beast_message_len_bytes, i, settings_manager.settings.feed_uris[i],
+                                          settings_manager.settings.feed_ports[i], errno);
+                            // Mark socket as disconnected and try reconnecting in next reporting interval.
+                            close(feed_sock[i]);
+                            feed_sock_is_connected[i] = false;
+                            continue;
+                        }
+                        break;
+                    }
+                    default:
+                        // No start of connections actions required for other protocols.
+                        break;
+                }
             }
 
             // Send packet!
@@ -255,9 +285,7 @@ void CommsManager::IPWANTask(void* pvParameters) {
                     // Double the length as a hack to make room for the escaped UUID.
                     uint8_t beast_message_buf[2 * SettingsManager::Settings::kFeedReceiverIDNumBytes +
                                               kBeastFrameMaxLenBytes];
-                    uint16_t beast_message_len_bytes = TransponderPacketToBeastFramePrependReceiverID(
-                        decoded_packet, beast_message_buf, settings_manager.settings.feed_receiver_ids[i],
-                        SettingsManager::Settings::kFeedReceiverIDNumBytes);
+                    uint16_t beast_message_len_bytes = Build1090BeastFrame(decoded_packet, beast_message_buf);
 
                     int err = send(feed_sock[i], beast_message_buf, beast_message_len_bytes, 0);
                     if (err < 0) {

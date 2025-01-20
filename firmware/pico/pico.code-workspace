@@ -140,7 +140,7 @@
 				"name": "Bootloader Debug",
 				"type": "cortex-debug",
 				"cwd": "/ads_bee/pico",
-				"executable": "/ads_bee/pico/build/bootloader/bootloader.elf",
+				"executable": "/ads_bee/pico/build/Debug/bootloader/bootloader.elf",
 				"request": "attach",
 				"servertype": "external",
 				// "gdbPath": "arm-none-eabi-gdb",
@@ -148,7 +148,7 @@
 				"showDevDebugOutput": "raw",
 				"svdFile": "/usr/local/pico-sdk/src/rp2040/hardware_regs/RP2040.svd",
 				"preRestartCommands": [
-					"file /ads_bee/pico/build/bootloader/bootloader.elf",
+					"file /ads_bee/pico/build/Debug/bootloader/bootloader.elf",
 					"load",
 					"monitor reset"
 				],
@@ -159,7 +159,7 @@
 				"name": "Application Debug",
 				"type": "cortex-debug",
 				"cwd": "/ads_bee/pico",
-				"executable": "/ads_bee/pico/build/application/application.elf",
+				"executable": "/ads_bee/pico/build/Debug/application/application.elf",
 				"request": "attach",
 				"servertype": "external",
 				// "gdbPath": "arm-none-eabi-gdb",
@@ -167,7 +167,7 @@
 				"showDevDebugOutput": "raw",
 				"svdFile": "/usr/local/pico-sdk/src/rp2040/hardware_regs/RP2040.svd",
 				"preRestartCommands": [
-					"file /ads_bee/pico/build/application/application.elf",
+					"file /ads_bee/pico/build/Debug/application/application.elf",
 					"load",
 					"monitor reset"
 				],
@@ -178,7 +178,7 @@
 				"name": "Combined Debug",
 				"type": "cortex-debug",
 				"cwd": "/ads_bee/pico",
-				"executable": "/ads_bee/pico/build/application/combined.elf",
+				"executable": "/ads_bee/pico/build/Debug/application/combined.elf",
 				"request": "attach",
 				"servertype": "external",
 				// "gdbPath": "arm-none-eabi-gdb",
@@ -186,7 +186,7 @@
 				"showDevDebugOutput": "raw",
 				"svdFile": "/usr/local/pico-sdk/src/rp2040/hardware_regs/RP2040.svd",
 				"preRestartCommands": [
-					"file /ads_bee/pico/build/application/combined.elf",
+					"file /ads_bee/pico/build/Debug/application/combined.elf",
 					"load",
 					"monitor reset"
 				],
@@ -198,7 +198,7 @@
 				"type": "cppdbg",
 				"request": "launch",
 				"cwd": "/ads_bee/pico",
-				"program": "/ads_bee/pico/host_build/host_test/host_test",
+				"program": "/ads_bee/pico/build/Test/host_test/host_test",
 				"args": [],
 				"stopAtEntry": false,
 				"cwd": "${fileDirname}",
