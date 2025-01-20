@@ -8,6 +8,7 @@
 #include "lwip/netdb.h"
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
+#include "mdns.h"
 #include "task_priorities.hh"
 
 static const uint32_t kWiFiTCPSocketReconnectIntervalMs = 5000;
@@ -59,6 +60,25 @@ bool CommsManager::IPInit() {
 
     xTaskCreatePinnedToCore(ip_wan_task, "ip_wan_task", 4096, &ip_wan_task_handle, kIPWANTaskPriority, NULL,
                             kIPWANTaskCore);
+
+    // Initialize mDNS service.
+    esp_err_t err = mdns_init();
+    if (err) {
+        CONSOLE_ERROR("CommsManager::IPInit", "MDNS Init failed: %d\n", err);
+        return false;
+    }
+
+    // Set hostname.
+    err = mdns_hostname_set(settings_manager.settings.hostname);
+    if (err) {
+        CONSOLE_ERROR("CommsManager::IPInit", "Failed setting MDNS hostname to %s: %d\n",
+                      settings_manager.settings.hostname, err);
+        return false;
+    }
+    // Set default instance.
+    mdns_instance_name_set("ADSBee 1090");
+
+    CONSOLE_INFO("CommsManager::IPInit", "MDNS initialized with hostname %s.\n", settings_manager.settings.hostname);
     return true;
 }
 
