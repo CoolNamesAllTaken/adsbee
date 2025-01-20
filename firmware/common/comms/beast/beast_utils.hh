@@ -1,6 +1,8 @@
 #ifndef BEAST_UTILS_HH_
 #define BEAST_UTILS_HH_
 
+#include "stdio.h"
+#include "string.h"
 #include "transponder_packet.hh"
 
 // Mode S Beast Protocol Spec: https://github.com/firestuff/adsb-tools/blob/master/protocols/beast.md
@@ -15,13 +17,17 @@ const uint16_t kBeastMLATTimestampNumBytes = 6;
 // 6-12 Byte MLAT Timestamp (may need 6x escape Bytes).
 // Mode-S data (2 bytes + escapes for Mode A/C, 7 bytes + escapes for squitter, 14 bytes + escapes for extended
 // squitter)
-uint16_t kBeastFrameMaxLenBytes = 1 /* Frame Type */ + 2 * 6 /* MLAT timestamp + escapes */ + 2 /* RSSI + escape */ +
-                                  2 * 14 /* Longest Mode S data + escapes */;  // [Bytes]
+const uint16_t kBeastFrameMaxLenBytes = 1 /* Frame Type */ + 2 * 6 /* MLAT timestamp + escapes */ +
+                                        2 /* RSSI + escape */ + 2 * 14 /* Longest Mode S data + escapes */;  // [Bytes]
+
+const uint16_t kUuidNumChars = 36;
+const uint16_t kReceiverIDLenBytes = 8;
 
 enum BeastFrameType {
     kBeastFrameTypeInvalid = 0x0,
-    kBeastFrameTypeId = 0xe3,
-    kBeastFrameTypeModeAC = 0x31,  // Note: This is not used, since I'm assuming it does NOT refer to DF 4,5.
+    kBeastFrameTypeIngestId = 0xe3,  // Used by readsb for forwarding messages internally.
+    kBeastFrameTypeFeedId = 0xe4,    // Used by readsb for establishing a feed with a UUID.
+    kBeastFrameTypeModeAC = 0x31,    // Note: This is not used, since I'm assuming it does NOT refer to DF 4,5.
     kBeastFrameTypeModeSShort = 0x32,
     kBeastFrameTypeModeSLong = 0x33
 };
@@ -74,13 +80,34 @@ uint16_t WriteBufferWithBeastEscapes(uint8_t to_buf[], const uint8_t from_buf[],
     return to_buf_num_bytes;
 }
 
+uint16_t BuildFeedStartFrame(uint8_t *beast_frame_buf, uint8_t *receiver_id) {
+    uint16_t bytes_written = 0;
+    beast_frame_buf[bytes_written++] = kBeastEscapeChar;
+    beast_frame_buf[bytes_written++] = BeastFrameType::kBeastFrameTypeFeedId;
+
+    // Send UUID as ASCII (will not contain 0x1A, since it's just hex characters and dashes).
+    // UUID must imitate the form that's output by `cat /proc/sys/kernel/random/uuid` on Linux (e.g.
+    // 38366a5c-c54f-4256-bd0a-1557961f5ad0).
+    // ADSBee UUID Format: 00ad5bee-1090-0000-NNNN-NNNNNNNNNNNN, where N's represent printed hex digits of the
+    // internally stored 64-bit UUID (e.g. 0bee00038172d18c) Example ADSBee UUID: 00ad5bee-1090-0000-0bee-00038172d18c
+    char uuid[kUuidNumChars + 1] = "00ad5bee-1090-0000-ffff-ffffffffffff";  // Leave space for null terminator.
+    sprintf(uuid + (kUuidNumChars - 2 * kReceiverIDLenBytes - 1), "%02x%02x-%02x%02x%02x%02x%02x%02x", receiver_id[0],
+            receiver_id[1], receiver_id[2], receiver_id[3], receiver_id[4], receiver_id[5], receiver_id[6],
+            receiver_id[7]);
+
+    // Write receiver ID string to buffer.
+    strncpy((char *)(beast_frame_buf + bytes_written), uuid, kUuidNumChars);
+    bytes_written += kUuidNumChars;
+    return bytes_written;
+}
+
 /**
  * Converts a Decoded1090Packet payload to a data buffer in Mode S Beast output format.
  * @param[in] packet Reference to Decoded1090Packet to convert.
  * @param[out] beast_frame_buf Pointer to byte buffer to fill with payload.
  * @retval Number of bytes written to beast_frame_buf.
  */
-uint16_t TransponderPacketToBeastFrame(const Decoded1090Packet &packet, uint8_t *beast_frame_buf) {
+uint16_t Build1090BeastFrame(const Decoded1090Packet &packet, uint8_t *beast_frame_buf) {
     uint8_t packet_buf[Decoded1090Packet::kMaxPacketLenWords32 * kBytesPerWord];
     uint16_t data_num_bytes = packet.DumpPacketBuffer(packet_buf);
 
@@ -117,13 +144,21 @@ uint16_t TransponderPacketToBeastFrame(const Decoded1090Packet &packet, uint8_t 
     return bytes_written;
 }
 
-uint16_t TransponderPacketToBeastFramePrependReceiverID(const Decoded1090Packet &packet, uint8_t *beast_frame_buf,
-                                                        const uint8_t *receiver_id, uint16_t receiver_id_len_bytes) {
+/**
+ * Sends an Ingest Beast frame (0xe3) with a 16-Byte receiver ID prepended. This type of frame is used by readsb when
+ * forwarding messages internally. For feeding, see Build1090BeastFrame.
+ * @param[in] packet Reference to Decoded1090Packet to convert.
+ * @param[out] beast_frame_buf Pointer to byte buffer to fill with payload.
+ * @param[in] receiver_id Pointer to 16-Byte receiver ID.
+ * @retval Number of bytes written to beast_frame_buf.
+ */
+uint16_t Build1090IngestBeastFrame(const Decoded1090Packet &packet, uint8_t *beast_frame_buf,
+                                   const uint8_t *receiver_id) {
     uint16_t bytes_written = 0;
     beast_frame_buf[bytes_written++] = kBeastEscapeChar;
-    beast_frame_buf[bytes_written++] = 0xe3;  // Message Type Receiver ID
-    bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, receiver_id, receiver_id_len_bytes);
-    bytes_written += TransponderPacketToBeastFrame(packet, beast_frame_buf + bytes_written);
+    beast_frame_buf[bytes_written++] = BeastFrameType::kBeastFrameTypeIngestId;
+    bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, receiver_id, kReceiverIDLenBytes);
+    bytes_written += Build1090BeastFrame(packet, beast_frame_buf + bytes_written);
     return bytes_written;
 }
 
