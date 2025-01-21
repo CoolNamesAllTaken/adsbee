@@ -453,6 +453,10 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     uint32_t timestamp_ms = get_time_since_boot_ms();
                     uint32_t data_read_start_timestamp_ms = timestamp_ms;
                     uint32_t last_ota_heartbeat_timestamp_ms = timestamp_ms;
+
+                    // Send OK to indicate that we're ready to receive data.
+                    CPP_AT_PRINTF("OK\r\n");
+
                     // Read len_bytes from stdio and network console. Timeout after kOTAWriteTimeoutMs.
                     while (buf_len_bytes < len_bytes) {
                         // Priority 1: Check STDIO for data.

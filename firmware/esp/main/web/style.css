@@ -162,9 +162,16 @@
     margin: 20px auto;
     font-family: Arial, sans-serif;
     display: flex;
-    flex-direction: row;
     justify-content: center;
     align-items: center;
+    flex-direction: column;
+}
+
+.tools-container .button-row {
+    width: 100%;
+    justify-content: center;
+    display: flex;
+    flex-direction: row;
 }
 
 .tools-button {
@@ -191,10 +198,14 @@
 .progress-container {
     margin-top: 16px;
     display: none;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
 }
 
 .progress-bar {
-    width: 100%;
+    min-width: 200px;
+    margin: auto 15%;
     height: 20px;
     background-color: #f0f0f0;
     border-radius: 4px;
