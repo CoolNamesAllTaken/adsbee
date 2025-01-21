@@ -32,17 +32,20 @@
         </div>
 
         <div class="tools-container column-element">
-            <button id="uploadButton" class="tools-button">
-                Upload Firmware
-            </button>
-            <input type="file" id="fileInput" accept=".ota" style="display: none;">
+            <div class="button-row">
+                <button id="uploadButton" class="tools-button">
+                    Upload Firmware
+                </button>
+                <input type="file" id="fileInput" accept=".ota" style="display: none;">
 
-            <button id="downloadSettings" class="tools-button">
-                Download Settings
-            </button>
-            <button id="restoreSettings" class="tools-button">
-                Restore Settings
-            </button>
+                <button id="downloadSettings" class="tools-button">
+                    Download Settings
+                </button>
+                <button id="restoreSettings" class="tools-button">
+                    Restore Settings
+                </button>
+            </div>
+
             <input type="file" id="settingsFile" accept=".settings" style="display: none;">
 
             <div id="progressContainer" class="progress-container">
@@ -62,7 +65,7 @@
 
     <script>
         const HOST_URI = `${window.location.hostname}`;
-        // const HOST_URI = "192.168.4.1";
+        // const HOST_URI = "192.168.1.182";
         const WS_CONFIG = {
             console_ws_url: `ws://${HOST_URI}/console`,
             metrics_ws_url: `ws://${HOST_URI}/metrics`,
@@ -502,7 +505,7 @@
                 const decodedResponse = [];
 
                 const cumulativeTimeout = Date.now() + MAX_CUMULATIVE_TIMEOUT_MS;
-                while (true) {
+                while (waitForOkOrError) {
                     if (Date.now() > cumulativeTimeout) {
                         throw new Error(`Response timeout after ${MAX_CUMULATIVE_TIMEOUT_MS} ms.`);
                     }
@@ -552,7 +555,6 @@
                     if (printResponse && logStr) {
                         console.log(logStr);
                     }
-
                 }
 
                 return decodedResponse;
@@ -624,8 +626,20 @@
              */
             async otaWriteBytes(offset, data) {
                 const crc32 = this.calculateCRC32(data);
-                await this.sendCmd(`AT+OTA=WRITE,${offset.toString(16)},${data.length},${crc32.toString(16)}\r\n`, 10, true, false);
-                await this.sendBytes(data, true, true);
+                const cmdResponse = await this.sendCmd(`AT+OTA=WRITE,${offset.toString(16)},${data.length},${crc32.toString(16)}\r\n`, 0, true, true);
+                for (const line of cmdResponse) {
+                    if (line.includes('ERROR')) {
+                        throw new Error(`Command failed with error: ${line}`);
+                    }
+                }
+                const dataResponse = await this.sendBytes(data, true, true);
+                for (const line of dataResponse) {
+                    if (line.includes('ERROR')) {
+                        throw new Error(`Data transfer failed with error: ${line}`);
+                    }
+                }
+                const delay_ms = 20;
+                await new Promise(resolve => setTimeout(resolve, delay_ms));
             }
 
             /**
@@ -635,9 +649,9 @@
              */
             async otaErase(offsetBytes = NaN, lenBytes = NaN) {
                 if (!isNaN(offsetBytes) && !isNaN(lenBytes)) {
-                    await this.sendCmd(`AT+OTA=ERASE,${offsetBytes.toString(16)},${lenBytes}\r\n`, 100, true, true);
+                    await this.sendCmd(`AT+OTA=ERASE,${offsetBytes.toString(16)},${lenBytes}\r\n`, 0, true, true);
                 } else {
-                    await this.sendCmd("AT+OTA=ERASE\r\n", 100, true, true);
+                    await this.sendCmd("AT+OTA=ERASE\r\n", 0, true, true);
                 }
             }
 
@@ -649,7 +663,7 @@
                 const HEADER_SIZE_BYTES = 5 * 4;
                 const APP_OFFSET_BYTES = 4 * 1024;
                 // Going larger than this can cause the heap to explode on the ESP32.
-                const WRITE_CHUNK_BYTES = 0x1000 * 4;
+                const WRITE_CHUNK_BYTES = 0x1000 * 3;
 
                 const partition = await this.otaGetFlashPartition();
 

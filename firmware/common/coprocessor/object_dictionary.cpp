@@ -7,7 +7,7 @@
 
 const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
 const uint8_t ObjectDictionary::kFirmwareVersionMinor = 7;
-const uint8_t ObjectDictionary::kFirmwareVersionPatch = 0;
+const uint8_t ObjectDictionary::kFirmwareVersionPatch = 1;
 
 const uint32_t ObjectDictionary::kFirmwareVersion =
     (kFirmwareVersionMajor) << 16 | (kFirmwareVersionMinor) << 8 | (kFirmwareVersionPatch);
@@ -54,8 +54,7 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             uint8_t num_packets = buf[0];
             Raw1090Packet tpacket;
             for (uint16_t i = 0; i < num_packets && i * sizeof(Raw1090Packet) + sizeof(uint8_t) < buf_len; i++) {
-                memcpy(&tpacket, buf + sizeof(uint8_t) + i * sizeof(Raw1090Packet),
-                       sizeof(Raw1090Packet));
+                memcpy(&tpacket, buf + sizeof(uint8_t) + i * sizeof(Raw1090Packet), sizeof(Raw1090Packet));
                 adsbee_server.HandleRaw1090Packet(tpacket);
             }
             break;

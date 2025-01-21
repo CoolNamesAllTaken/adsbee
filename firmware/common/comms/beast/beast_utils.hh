@@ -91,7 +91,7 @@ uint16_t BuildFeedStartFrame(uint8_t *beast_frame_buf, uint8_t *receiver_id) {
     // 38366a5c-c54f-4256-bd0a-1557961f5ad0).
     // ADSBee UUID Format: MMMMMMMM-MMMM-MMMM-NNNN-NNNNNNNNNNNN, where M's and N's represent printed hex digits of the
     // internally stored 64-bit UUID (e.g. 0bee00038172d18c) Example ADSBee UUID: 0bee0003-8172-d18c-0bee-00038172d18c
-    char uuid[kUuidNumChars + 1] = "00ad5bee-1090-0000-ffff-ffffffffffff";  // Leave space for null terminator.
+    char uuid[kUuidNumChars + 1] = "eeeeeeee-eeee-eeee-ffff-ffffffffffff";  // Leave space for null terminator.
     sprintf(uuid, "%02x%02x%02x%02x-%02x%02x-%02x%02x-", receiver_id[0], receiver_id[1], receiver_id[2], receiver_id[3],
             receiver_id[4], receiver_id[5], receiver_id[6], receiver_id[7]);
     sprintf(uuid + (kUuidNumChars - 2 * kReceiverIDLenBytes - 1), "%02x%02x-%02x%02x%02x%02x%02x%02x", receiver_id[0],

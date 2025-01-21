@@ -96,14 +96,13 @@ int CommsManager::iface_printf(SettingsManager::SerialInterface iface, const cha
 int CommsManager::iface_vprintf(SettingsManager::SerialInterface iface, const char *format, va_list args) {
     char buf[kPrintfBufferMaxSize];
 
+    // Formatted print to buffer.
     int res = vsnprintf(buf, kPrintfBufferMaxSize, format, args);
-    // Need to manually push messages here, otherwise they only pop out when the buffer gets full.
-    comms_manager.UpdateNetworkConsole();
-
     if (res <= 0) {
         return res;  // vsnprintf failed.
     }
-    if (iface_puts(iface, buf)) {
+    // Send buffer to interface, then manually push messages (otherwise they only pop out when the buffer gets full).
+    if (iface_puts(iface, buf) && comms_manager.UpdateNetworkConsole()) {
         return res;  // Return number of characters written.
     }
 
