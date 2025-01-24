@@ -93,11 +93,11 @@ void PrintBinary32(uint32_t value) {
  */
 uint16_t swap16(uint16_t value) { return (value << 8) | (value >> 8); }
 
-uint16_t CalculateCRC16(const uint8_t *data_p, int32_t length) {
+uint16_t CalculateCRC16(const uint8_t *buf, int32_t buf_len_bytes) {
     uint8_t x;
     uint16_t crc = 0xFFFF;
-    while (length--) {
-        x = crc >> 8 ^ *data_p++;
+    while (buf_len_bytes--) {
+        x = crc >> 8 ^ *buf++;
         x ^= x >> 4;
         crc = (crc << 8) ^ ((uint16_t)(x << 12)) ^ ((uint16_t)(x << 5)) ^ ((uint16_t)x);
     }
