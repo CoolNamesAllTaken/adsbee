@@ -98,7 +98,8 @@
 			"valarray": "cpp",
 			"cpp_at.hh": "c",
 			"uart.h": "c",
-			"settings.hh": "c"
+			"settings.hh": "c",
+			"span": "cpp"
 		},
 		"cortex-debug.variableUseNaturalFormat": true,
 		// "cortex-debug.variableUseNaturalFormat": true,

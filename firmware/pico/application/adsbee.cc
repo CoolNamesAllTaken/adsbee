@@ -254,7 +254,7 @@ bool ADSBee::Update() {
 
     // Ingest new packets into the dictionary.
     Raw1090Packet raw_packet;
-    while (transponder_packet_queue.Pop(raw_packet)) {
+    while (raw_1090_packet_queue.Pop(raw_packet)) {
         if (raw_packet.buffer_len_bits == Decoded1090Packet::kExtendedSquitterPacketLenBits) {
             CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%08x|%08x|%04x SRC=%d SIGS=%ddBm SIGQ=%ddB MLAT=%u",
                          raw_packet.buffer[0], raw_packet.buffer[1], raw_packet.buffer[2],
@@ -415,12 +415,12 @@ void ADSBee::OnDemodComplete() {
                     case Decoded1090Packet::kSquitterPacketNumWords32:
                         rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFFFF) << 8;
                         rx_packet_[sm_index].buffer_len_bits = Decoded1090Packet::kSquitterPacketLenBits;
-                        transponder_packet_queue.Push(rx_packet_[sm_index]);
+                        raw_1090_packet_queue.Push(rx_packet_[sm_index]);
                         break;
                     case Decoded1090Packet::kExtendedSquitterPacketNumWords32:
                         rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFF) << 16;
                         rx_packet_[sm_index].buffer_len_bits = Decoded1090Packet::kExtendedSquitterPacketLenBits;
-                        transponder_packet_queue.Push(rx_packet_[sm_index]);
+                        raw_1090_packet_queue.Push(rx_packet_[sm_index]);
                         break;
                     default:
                         // Don't push partial packets.

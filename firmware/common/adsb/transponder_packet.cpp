@@ -27,8 +27,13 @@ const uint32_t kExtendedSquitterLastWordPopCount = 16;
 const uint32_t kSquitterLastWordIngestionMask = 0xFFFFFF00;
 const uint32_t kSquitterLastWordPopCount = 24;
 
+#define CRC24_USE_TABLE
+#ifndef CRC24_USE_TABLE
 const uint32_t kCRC24Generator = 0x1FFF409;
 const uint16_t kCRC24GeneratorNumBits = 25;
+#else
+#include "crc.hh"
+#endif
 
 /** Decoded1090Packet **/
 
@@ -160,6 +165,7 @@ uint16_t Decoded1090Packet::DumpPacketBuffer(uint8_t to_buffer[kMaxPacketLenWord
 }
 
 uint32_t Decoded1090Packet::CalculateCRC24(uint16_t packet_len_bits) const {
+#ifndef CRC24_USE_TABLE
     // CRC calculation algorithm from https://mode-s.org/decode/book-the_1090mhz_riddle-junzi_sun.pdf pg. 91.
     // Must be called on buffer that does not have extra bit ingested at end and has all words left-aligned.
     uint32_t crc_buffer[kMaxPacketLenWords32];
@@ -180,6 +186,25 @@ uint32_t Decoded1090Packet::CalculateCRC24(uint16_t packet_len_bits) const {
     }
 
     return GetNBitWordFromBuffer(BITS_PER_WORD_24, packet_len_bits - BITS_PER_WORD_24, crc_buffer);
+#else
+    // Digest the 32-bit word packet buffer into a byte buffer.
+    uint16_t packet_len_bytes = packet_len_bits / kBitsPerByte;
+    uint16_t packet_num_words = packet_len_bytes / kBytesPerWord + (packet_len_bytes % kBytesPerWord != 0);
+    uint8_t raw_buffer[packet_len_bytes];
+    for (uint16_t i = 0; i < packet_num_words; i++) {
+        uint16_t bytes_remaining = packet_len_bytes - i * kBytesPerWord;
+
+        raw_buffer[i * kBytesPerWord] = raw_.buffer[i] >> 24;
+        if (--bytes_remaining == 0) break;
+        raw_buffer[i * kBytesPerWord + 1] = (raw_.buffer[i] >> 16) & 0xFF;
+        if (--bytes_remaining == 0) break;
+        raw_buffer[i * kBytesPerWord + 2] = (raw_.buffer[i] >> 8) & 0xFF;
+        if (--bytes_remaining == 0) break;
+        raw_buffer[i * kBytesPerWord + 3] = raw_.buffer[i] & 0xFF;
+    }
+    // Feed the byte buffer to the table-based CRC calculator.
+    return crc24(raw_buffer, packet_len_bytes - 3);  // Don't include the CRC itself.
+#endif
 }
 
 void Decoded1090Packet::ConstructTransponderPacket() {

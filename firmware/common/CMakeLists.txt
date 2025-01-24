@@ -7,6 +7,7 @@ if (TARGET application)
         comms/gdl90/gdl90_utils.cpp
         utils/buffer_utils.cpp
         utils/data_structures.cpp
+        utils/crc/crc.cpp
         adsb/transponder_packet.cpp
         adsb/aircraft_dictionary.cpp
         adsb/decode_utils.cpp
@@ -18,6 +19,7 @@ if (TARGET application)
         .
         adsb
         utils
+        utils/crc
         comms
         comms/beast
         comms/csbee
@@ -47,6 +49,7 @@ elseif (TARGET host_test)
         settings/settings.cpp
         utils/buffer_utils.cpp
         utils/data_structures.cpp
+        utils/crc/crc.cpp
     )
     target_include_directories(host_test PRIVATE
         adsb
@@ -56,6 +59,7 @@ elseif (TARGET host_test)
         comms/json
         coprocessor
         utils
+        utils/crc
         settings
     )
 endif()
