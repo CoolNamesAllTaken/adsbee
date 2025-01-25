@@ -214,7 +214,7 @@ TEST(Aircraft, SetCPRLatLon) {
     // Position established, now send the curveball.
     EXPECT_TRUE(aircraft.SetCPRLatLon(93000 - 5000, 50194, true, get_time_since_boot_ms()));
     inc_time_since_boot_ms();
-    EXPECT_FALSE(aircraft.DecodePosition());
+    EXPECT_TRUE(aircraft.DecodePosition());  // Re-decode the previous even CPR packet with the new zone.
 
     // EXPECT_NEAR(aircraft.latitude, 52.25720f, 1e-4);
     // EXPECT_NEAR(aircraft.longitude, 3.91937f, 1e-4);
@@ -245,7 +245,7 @@ TEST(AircraftDictionary, ApplyAirbornePositionMessage) {
 
     // Set time since boot to something positive so packet ingestion time looks legit.
     set_time_since_boot_ms(1e3);
-    even_tpacket.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms()*48e3;
+    even_tpacket.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48e3;
 
     // Ingest even packet.
     ASSERT_TRUE(dictionary.IngestDecoded1090Packet(even_tpacket));
@@ -264,7 +264,7 @@ TEST(AircraftDictionary, ApplyAirbornePositionMessage) {
     EXPECT_EQ(aircraft.baro_altitude_ft, 16975);
 
     inc_time_since_boot_ms(1e3);  // Simulate time passing between odd and even packet ingestion.
-    odd_tpacket.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms()*48e3;
+    odd_tpacket.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48e3;
 
     // Ingest odd packet.
     ASSERT_TRUE(dictionary.IngestDecoded1090Packet(odd_tpacket));
@@ -282,8 +282,8 @@ TEST(AircraftDictionary, ApplyAirbornePositionMessage) {
 
 TEST(Aircraft, CalculateMaxAllowedCPRTimeDelta) {
     Aircraft aircraft;
-    // CPR time delta should be enforced at lower limit when aircraft is not initialized.
-    EXPECT_EQ(aircraft.GetMaxAllowedCPRTimeDeltaMs(), Aircraft::kMinCPRTimeDeltaMs);
+    // CPR time delta generously enforced at max limit when aircraft is not initialized.
+    EXPECT_EQ(aircraft.GetMaxAllowedCPRTimeDeltaMs(), Aircraft::kMaxCPRTimeDeltaMs);
 
     // Setting velocity source to something other than kVelocitySourceNotAvailable or kVelocitySourceNotSet should
     // return CPR time delta as a calculated function of aircraft velocity.
@@ -337,9 +337,9 @@ TEST(AircraftDictionary, TimeFilterAirbornePositionMessages) {
     auto aircraft = dictionary.dict.begin()->second;
     ASSERT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
 
-    // Case 1: Aircraft has no speed data. Minimum packet valid interval should be used.
+    // Case 1: Aircraft has no speed data. Maximum packet valid interval should be used.
     ASSERT_EQ(aircraft.velocity_source, Aircraft::VelocitySource::kVelocitySourceNotSet);
-    ASSERT_EQ(aircraft.GetMaxAllowedCPRTimeDeltaMs(), Aircraft::kMinCPRTimeDeltaMs);
+    ASSERT_EQ(aircraft.GetMaxAllowedCPRTimeDeltaMs(), Aircraft::kMaxCPRTimeDeltaMs);
     // Ingest the odd position packet. This should be rejected since the timestamp is too far apart from the even
     // packet. Ingestion will succeed, and the packet will be retained, but the aircraft will still not have a valid
     // location.
