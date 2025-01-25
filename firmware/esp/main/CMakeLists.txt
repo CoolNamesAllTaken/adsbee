@@ -6,6 +6,7 @@ idf_component_register(
         # "../../common/comms" # Currently no src files in here.
         "../../common/coprocessor"
         "../../common/utils"
+        "../../common/utils/crc"
         "../../common/comms/gdl90"
         "../../common/comms/json"
         "../../common/settings"
@@ -18,6 +19,7 @@ idf_component_register(
         "../../common/comms/json"
         "../../common/coprocessor"
         "../../common/utils"
+        "../../common/utils/crc"
         "../../common/settings"
         "target_test"
     EMBED_TXTFILES

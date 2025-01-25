@@ -5,6 +5,7 @@
 #include <cstring>
 #include <unordered_map>
 
+#include "hal.hh"
 #include "json_utils.hh"
 #include "macros.hh"
 #include "transponder_packet.hh"
@@ -14,10 +15,10 @@ class Aircraft {
     static constexpr uint16_t kCallSignMaxNumChars = 7;
     // These variables define filter bounds for time between CPR packets. If the time between packets is greater than
     // the time delta limit, the old CPR packet is discarded and the CPR packet pair is not used for position decoding.
-    static constexpr uint32_t kMinCPRTimeDeltaMs = 10e3;  // Never reject CPR packet pairs less than 10 seconds apart.
-    static constexpr uint32_t kRefCPRTimeDeltaMs =
-        19e3;  // Reference time threshold for rejecting CPR packet pairs, used in calculations.
-    static constexpr uint32_t kMaxCPRTimeDeltaMs = 30e3;  // Never accept CPR packet pairs more than 30 seconds apart.
+    static constexpr uint32_t kDefaultCPRIntervalMs = 10e3;  // CPR interval when starting from scratch or stale track.
+    static constexpr uint32_t kRefCPRIntervalMs = 19e3;      // Reference interval for rejecting CPR packet pairs.
+    static constexpr uint32_t kMaxCPRIntervalMs = 30e3;  // Never accept CPR packet pairs more than 30 seconds apart.
+    static constexpr uint32_t kMaxTrackUpdateIntervalMs = 20e3;  // Tracks older than this are considered stale.
 
     enum Category : uint8_t {
         kCategoryInvalid = 0,
@@ -203,13 +204,14 @@ class Aircraft {
      * Returns the maximum time delta between CPR packets that will be accepted for decoding.
      * @retval Maximum allowed time delta between CPR packets.
      */
-    uint32_t GetMaxAllowedCPRTimeDeltaMs() const {
-        if (velocity_source == kVelocitySourceNotSet || velocity_source == kVelocitySourceNotAvailable) {
-            return kMaxCPRTimeDeltaMs;
+    uint32_t GetMaxAllowedCPRIntervalMs() const {
+        if (velocity_source == kVelocitySourceNotSet || velocity_source == kVelocitySourceNotAvailable ||
+            get_time_since_boot_ms() - last_track_update_timestamp_ms > kMaxTrackUpdateIntervalMs) {
+            return kDefaultCPRIntervalMs;
         }
         // Scale time delta threshold based on the velocity of the aircraft relative to 500kts, but clamp the result to
-        // the min and max time delta thresholds.
-        return MIN(MAX(kRefCPRTimeDeltaMs * 500 / velocity_kts, kMinCPRTimeDeltaMs), kMaxCPRTimeDeltaMs);
+        // the max time delta thresholds.
+        return MIN(kRefCPRIntervalMs * 500 / velocity_kts, kMaxCPRIntervalMs);
     }
 
     /**
@@ -288,6 +290,7 @@ class Aircraft {
     uint32_t last_message_timestamp_ms = 0;
     int16_t last_message_signal_strength_dbm = 0;  // Voltage of RSSI signal during message receipt.
     int16_t last_message_signal_quality_db = 0;    // Ratio of RSSI to noise floor during message receipt.
+    uint32_t last_track_update_timestamp_ms = 0;   // Timestamp of the last time that the position was updated.
     Metrics metrics;
 
     uint16_t transponder_capability = 0;

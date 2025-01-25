@@ -31,6 +31,9 @@ bool Aircraft::DecodePosition() {
         return false;  // need both an even and an odd packet to be able to decode position
     }
 
+    // WARNING: There are two separate timebases in play here! The timebase for CPR packet timestamps is the MLAT
+    // timebase, while higher level aircraft dictionary info is in system time.
+
     // Equation 5.6
     int32_t lat_zone_index = floorf(59.0f * last_even_packet_.lat_cpr - 60.0f * last_odd_packet_.lat_cpr + 0.5f);
 
@@ -88,6 +91,8 @@ bool Aircraft::DecodePosition() {
     // Equation 5.13 (calc longitude), 5.15 (wrap longitude to between -180 and +180 degrees)
     longitude_deg = WrapCPRDecodeLongitude(d_lon * ((lon_zone_index % num_lon_zones) + last_packet.lon_cpr));
     WriteBitFlag(BitFlag::kBitFlagPositionValid, true);  // TODO: Add "reasonable validation" that position is valid.
+
+    last_track_update_timestamp_ms = get_time_since_boot_ms();  // Update last track update timestamp.
     return true;
 }
 
@@ -375,7 +380,7 @@ bool Aircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, ui
     uint32_t received_timestamp_delta_ms = received_timestamp_ms > complementary_packet.received_timestamp_ms
                                                ? received_timestamp_ms - complementary_packet.received_timestamp_ms
                                                : complementary_packet.received_timestamp_ms - received_timestamp_ms;
-    if (received_timestamp_delta_ms > GetMaxAllowedCPRTimeDeltaMs()) {
+    if (received_timestamp_delta_ms > GetMaxAllowedCPRIntervalMs()) {
         // Clear out old packet to avoid an invalid decode from packets that are too far apart in time.
         ClearCPRPackets();
     }
