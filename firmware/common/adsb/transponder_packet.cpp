@@ -224,7 +224,6 @@ void Decoded1090Packet::ConstructTransponderPacket() {
         case kDownlinkFormatShortRangeAirToAirSurveillance:  // DF = 0
         case kDownlinkFormatAltitudeReply:                   // DF = 4
         case kDownlinkFormatIdentityReply:                   // DF = 5
-        case kDownlinkFormatAllCallReply:                    // DF = 11
         {
             // Process a 56-bit message.
             is_valid_ = false;  // Calculated checksum is XORed with the ICAO address. See ADS-B Decoding Guide pg. 22.
@@ -232,6 +231,20 @@ void Decoded1090Packet::ConstructTransponderPacket() {
             icao_address_ = parity_value ^ calculated_checksum;
             break;
         }
+        case kDownlinkFormatAllCallReply:  // DF = 11
+        {
+            uint16_t interrogator_id = parity_value ^ calculated_checksum;
+            if (interrogator_id == 0) {
+                // Reply to a spontaneous acquisition squitter.
+                is_valid_ = true;
+                icao_address_ = Get24BitWordFromBuffer(8, raw_.buffer);
+            } else {
+                // Don't know the interrogator ID, so can't tell if it's valid.
+                is_valid_ = false;
+            }
+            break;
+        }
+
         default:  // All other DFs. Note: DF=17-19 for ADS-B.
         {
             // Process a 112-bit message.
@@ -314,7 +327,7 @@ ADSBPacket::TypeCode ADSBPacket::GetTypeCodeEnum() const {
     }
 }
 
-ModeCPacket::ModeCPacket(const Decoded1090Packet &decoded_packet) : Decoded1090Packet(decoded_packet) {
+AltitudeReplyPacket::AltitudeReplyPacket(const Decoded1090Packet &decoded_packet) : Decoded1090Packet(decoded_packet) {
     uint8_t flight_status = GetNBitWordFromBuffer(3, 5, raw_.buffer);  // FS = Bits 5-7.
     switch (flight_status) {
         case 0b000:  // No alert, no SPI, aircraft is airborne.
@@ -360,7 +373,7 @@ ModeCPacket::ModeCPacket(const Decoded1090Packet &decoded_packet) : Decoded1090P
     altitude_ft_ = AltitudeCodeToAltitudeFt(GetNBitWordFromBuffer(13, 19, raw_.buffer));
 };
 
-ModeAPacket::ModeAPacket(const Decoded1090Packet &decoded_packet) : Decoded1090Packet(decoded_packet) {
+IdentityReplyPacket::IdentityReplyPacket(const Decoded1090Packet &decoded_packet) : Decoded1090Packet(decoded_packet) {
     uint8_t flight_status = GetNBitWordFromBuffer(3, 5, raw_.buffer);  // FS = Bits 5-7.
     switch (flight_status) {
         case 0b000:  // No alert, no SPI, aircraft is airborne.

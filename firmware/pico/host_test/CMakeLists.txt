@@ -38,7 +38,7 @@ target_sources(host_test PRIVATE
     test_reporting_csbee.cc
     test_reporting_gdl90.cc
     test_decode_utils.cc
-    test_mode_a_c_packets.cc
+    test_squitter_packets.cc
 )
 
 target_include_directories(host_test PRIVATE

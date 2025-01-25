@@ -475,24 +475,33 @@ class AircraftDictionary {
     bool IngestDecoded1090Packet(Decoded1090Packet &packet);
 
     /**
-     * Ingests a Mode A (Identity Surveillance Reply) packet and uses it to update the relevant aircraft. Exposed for
+     * Ingests an Identity Surveillance Reply packet and uses it to update the relevant aircraft. Exposed for
      * testing, but usually called by IngestDecoded1090Packet.
      * Note: this function requires that the packet be marked as valid using the ForceValid() function. If the packet is
      * valid and does not match an ICAO in the aircraft dictionary, a new aircraft will be inserted.
-     * @param[in] packet ModeAPacket to ingest.
+     * @param[in] packet IdentityReplyPacket to ingest.
      * @retval True if successful, false if something broke.
      */
-    bool IngestModeAPacket(ModeAPacket packet);
+    bool IngestIdentityReplyPacket(IdentityReplyPacket packet);
 
     /**
-     * Ingests a Mode C (Altitude Surveillance Reply) packet and uses it to update the relevant aircraft. Exposed for
+     * Ingests an Altitude Surveillance Reply packet and uses it to update the relevant aircraft. Exposed for
      * testing, but usually called by IngestDecoded1090Packet.
      * Note: this function requires that the packet be marked as valid using the ForceValid() function. If the packet is
      * valid and does not match an ICAO in the aircraft dictionary, a new aircraft will be inserted.
-     * @param[in] packet ModeCPacket to ingest.
+     * @param[in] packet AltitudeReplyPacket to ingest.
      * @retval True if successful, false if something broke.
      */
-    bool IngestModeCPacket(ModeCPacket packet);
+    bool IngestAltitudeReplyPacket(AltitudeReplyPacket packet);
+
+    /**
+     * Ingests an All Call Reply packet and uses it to update the relevant aircraft. Exposed for testing, but usually
+     * called by IngestDecoded1090Packet.
+     *
+     * Currently, we only accept all call reply packets with an interrogator ID of 0 (replies to spontaneous acquisition
+     * squitters), since we don't have a way to know the interrogator ID of ground based surveillance stations.
+     */
+    bool IngestAllCallReplyPacket(AllCallReplyPacket packet);
 
     /**
      * Ingests an ADSBPacket directly. Exposed for testing, but usually this gets called by

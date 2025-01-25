@@ -159,17 +159,26 @@ bool AircraftDictionary::IngestDecoded1090Packet(Decoded1090Packet &packet) {
             if (source > 0) {
                 metrics_counter_.raw_squitter_frames_by_source[source]++;
             }
+
+            // Validate packet against ICAO addresses in dictionary, or allow it in if it's a DF=11 all call reply
+            // packet tha validated itself (e.g. it's a response to a spontaneous acquisition squitter with interrogator
+            // ID=0, making the checksum useable).
             if (ContainsAircraft(packet.GetICAOAddress())) {
+                // DF=4-5
                 // Packet is a 56-bit Squitter packet that is incapable of validating itself, and its CRC was validated
                 // against the ICAO addresses in the aircraft dictionary.
-                metrics_counter_.valid_squitter_frames++;
-                if (source > 0) {
-                    metrics_counter_.valid_squitter_frames_by_source[source]++;
-                }
                 packet.ForceValid();
-                // Continue to add packet to dictionary.
-            } else {
-                return false;  // Squitter frame could not be validated against ICAOs in dictionary.
+            }
+
+            if (!packet.IsValid()) {
+                // Squitter frame could not validate itself, or could not be validated against ICAOs in dictionary.
+                return false;
+            }
+
+            // Record a valid squitter packet.
+            metrics_counter_.valid_squitter_frames++;
+            if (source > 0) {
+                metrics_counter_.valid_squitter_frames_by_source[source]++;
             }
             break;
         case Decoded1090Packet::kExtendedSquitterPacketLenBits:
@@ -197,13 +206,16 @@ bool AircraftDictionary::IngestDecoded1090Packet(Decoded1090Packet &packet) {
 
     uint16_t downlink_format = packet.GetDownlinkFormat();
     switch (downlink_format) {
-        // Mode C Packet.
+        // Altitude Reply Packet.
         case Decoded1090Packet::DownlinkFormat::kDownlinkFormatAltitudeReply:
-            IngestModeCPacket(ModeCPacket(packet));
+            IngestAltitudeReplyPacket(AltitudeReplyPacket(packet));
             break;
-        // Mode C Packet.
+        // Identity Reply Packet.
         case Decoded1090Packet::DownlinkFormat::kDownlinkFormatIdentityReply:
-            IngestModeAPacket(ModeAPacket(packet));
+            IngestIdentityReplyPacket(IdentityReplyPacket(packet));
+            break;
+        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatAllCallReply:  // DF = 11
+            IngestAllCallReplyPacket(AllCallReplyPacket(packet));
             break;
         // ADS-B Packets.
         case Decoded1090Packet::DownlinkFormat::kDownlinkFormatExtendedSquitter:                // DF = 17
@@ -228,15 +240,15 @@ bool AircraftDictionary::IngestDecoded1090Packet(Decoded1090Packet &packet) {
     return true;
 }
 
-bool AircraftDictionary::IngestModeAPacket(ModeAPacket packet) {
-    if (!packet.IsValid() || packet.GetDownlinkFormat() != ModeAPacket::kDownlinkFormatIdentityReply) {
+bool AircraftDictionary::IngestIdentityReplyPacket(IdentityReplyPacket packet) {
+    if (!packet.IsValid() || packet.GetDownlinkFormat() != IdentityReplyPacket::kDownlinkFormatIdentityReply) {
         return false;
     }
 
     uint32_t icao_address = packet.GetICAOAddress();
     Aircraft *aircraft_ptr = GetAircraftPtr(icao_address);
     if (aircraft_ptr == nullptr) {
-        CONSOLE_WARNING("AircraftDictionary::IngestModeAPacket",
+        CONSOLE_WARNING("AircraftDictionary::IngestIdentityReplyPacket",
                         "Unable to find or create new aircraft with ICAO address 0x%lx in dictionary.\r\n",
                         icao_address);
         return false;  // unable to find or create new aircraft in dictionary
@@ -250,15 +262,15 @@ bool AircraftDictionary::IngestModeAPacket(ModeAPacket packet) {
     return true;
 }
 
-bool AircraftDictionary::IngestModeCPacket(ModeCPacket packet) {
-    if (!packet.IsValid() || packet.GetDownlinkFormat() != ModeCPacket::kDownlinkFormatAltitudeReply) {
+bool AircraftDictionary::IngestAltitudeReplyPacket(AltitudeReplyPacket packet) {
+    if (!packet.IsValid() || packet.GetDownlinkFormat() != AltitudeReplyPacket::kDownlinkFormatAltitudeReply) {
         return false;
     }
 
     uint32_t icao_address = packet.GetICAOAddress();
     Aircraft *aircraft_ptr = GetAircraftPtr(icao_address);
     if (aircraft_ptr == nullptr) {
-        CONSOLE_WARNING("AircraftDictionary::IngestModeCPacket",
+        CONSOLE_WARNING("AircraftDictionary::IngestAltitudeReplyPacket",
                         "Unable to find or create new aircraft with ICAO address 0x%lx in dictionary.\r\n",
                         icao_address);
         return false;  // unable to find or create new aircraft in dictionary
@@ -268,6 +280,28 @@ bool AircraftDictionary::IngestModeCPacket(ModeCPacket packet) {
     aircraft_ptr->WriteBitFlag(Aircraft::BitFlag::kBitFlagIdent, packet.HasIdent());
     aircraft_ptr->baro_altitude_ft = packet.GetAltitudeFt();
     aircraft_ptr->IncrementNumFramesReceived(false);
+
+    return true;
+}
+
+bool AircraftDictionary::IngestAllCallReplyPacket(AllCallReplyPacket packet) {
+    if (!packet.IsValid() || packet.GetDownlinkFormat() != Decoded1090Packet::kDownlinkFormatAllCallReply) {
+        return false;
+    }
+
+    // Populate the dictionary with the aircraft, or look it up if the ICAO doesn't yet exist.
+    uint32_t icao_address = packet.GetICAOAddress();
+    Aircraft *aircraft_ptr = GetAircraftPtr(icao_address);
+    if (aircraft_ptr == nullptr) {
+        CONSOLE_WARNING("AircraftDictionary::IngestAllCallReplyPacket",
+                        "Unable to find or create new aircraft with ICAO address 0x%lx in dictionary.\r\n",
+                        icao_address);
+        return false;  // unable to find or create new aircraft in dictionary
+    }
+    aircraft_ptr->last_message_timestamp_ms = get_time_since_boot_ms();
+
+    // Update aircaft transponder capability.
+    aircraft_ptr->transponder_capability = packet.GetCapability();
 
     return true;
 }
@@ -836,7 +870,7 @@ bool AircraftDictionary::ApplyAircraftOperationStatusMessage(Aircraft &aircraft,
     aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagHas1090ESIn, packet.GetNBitWordFromMessage(1, 11));
     // Other fields handled in switch statement.
 
-    // ME[24-39] - Operational Mode Code
+    // ME[24-39] - Operational Altitude Replyode
     // ME[26] - TCAS RA Active
     aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagTCASRA, packet.GetNBitWordFromMessage(1, 26));
     // ME[27] - IDENT Switch Active

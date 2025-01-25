@@ -436,8 +436,8 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     EXPECT_NEAR(aircraft.velocity_kts, 375.0f, 0.01);
 }
 
-TEST(AircraftDictionary, IngestModeC) {
-    // Try ingesting a Mode C packet that's marked as valid so that it doesn't require a cross-check with the
+TEST(AircraftDictionary, IngestAltitudeReply) {
+    // Try ingesting a altitude reply packet that's marked as valid so that it doesn't require a cross-check with the
     // dictionary.
     AircraftDictionary dictionary = AircraftDictionary();
     Decoded1090Packet tpacket = Decoded1090Packet((char *)"200006A2DE8B1C");
@@ -455,7 +455,7 @@ TEST(AircraftDictionary, IngestModeC) {
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
 
-    // Ingest a Mode C packet with an alert and ident.
+    // Ingest a altitude reply packet with an alert and ident.
     tpacket = Decoded1090Packet((char *)"24000E3956BBA1");
     // Add aircraft to dictioanry so packet can be ingested.
     dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
@@ -466,7 +466,7 @@ TEST(AircraftDictionary, IngestModeC) {
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
 
-    // Ingest a Mode C packet with aircraft on the ground.
+    // Ingest a altitude reply packet with aircraft on the ground.
     tpacket = Decoded1090Packet((char *)"210000992F8C48");
     // Add aircraft to dictioanry so packet can be ingested.
     dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
@@ -478,8 +478,8 @@ TEST(AircraftDictionary, IngestModeC) {
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
 }
 
-TEST(AircraftDictionary, IngestModeA) {
-    // Ingest a Mode A packet with an alert and ident.
+TEST(AircraftDictionary, IngestIdentityReply) {
+    // Ingest a identity reply packet with an alert and ident.
     AircraftDictionary dictionary = AircraftDictionary();
     Decoded1090Packet tpacket = Decoded1090Packet((char *)"2C0006A2DEE500");
     // Add aircraft to dictioanry so packet can be ingested.
@@ -491,7 +491,7 @@ TEST(AircraftDictionary, IngestModeA) {
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
 
-    // Ingest a Mode A packet with an ident but no alert.
+    // Ingest a identity reply packet with an ident but no alert.
     tpacket = Decoded1090Packet((char *)"2D0006A2DEE500");
     // Add aircraft to dictioanry so packet can be ingested.
     dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
@@ -501,7 +501,7 @@ TEST(AircraftDictionary, IngestModeA) {
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
 
-    // Ingest a Mode A packet with no ident and no alert. Aircraft is airborne.
+    // Ingest a identity reply packet with no ident and no alert. Aircraft is airborne.
     tpacket = Decoded1090Packet((char *)"28000D08CEE4C5");
     // Add aircraft to dictioanry so packet can be ingested.
     dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
@@ -512,7 +512,7 @@ TEST(AircraftDictionary, IngestModeA) {
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne));
 
-    // Ingest a Mode A packet with no ident and no alert. Aircraft is on ground.
+    // Ingest a identity reply packet with no ident and no alert. Aircraft is on ground.
     tpacket = Decoded1090Packet((char *)"29001E0D3CB4BF");
     // Add aircraft to dictioanry so packet can be ingested.
     dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
@@ -522,6 +522,16 @@ TEST(AircraftDictionary, IngestModeA) {
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne));
+}
+
+TEST(AircraftDictionary, IngestAllCallReply) {
+    AircraftDictionary dictionary = AircraftDictionary();
+    Decoded1090Packet tpacket = Decoded1090Packet((char *)"5D7C0B6DB05076");
+    ASSERT_TRUE(tpacket.IsValid());
+    EXPECT_TRUE(dictionary.IngestDecoded1090Packet(tpacket));
+    Aircraft aircraft;
+    EXPECT_TRUE(dictionary.GetAircraft(0x7C0B6Du, aircraft));
+    EXPECT_EQ(aircraft.transponder_capability, 5);
 }
 
 TEST(AircraftDictionary, MetricsToJSON) {
