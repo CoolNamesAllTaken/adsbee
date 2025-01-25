@@ -205,7 +205,7 @@ class Aircraft {
      */
     uint32_t GetMaxAllowedCPRTimeDeltaMs() const {
         if (velocity_source == kVelocitySourceNotSet || velocity_source == kVelocitySourceNotAvailable) {
-            return kMinCPRTimeDeltaMs;
+            return kMaxCPRTimeDeltaMs;
         }
         // Scale time delta threshold based on the velocity of the aircraft relative to 500kts, but clamp the result to
         // the min and max time delta thresholds.
@@ -347,7 +347,6 @@ class Aircraft {
         uint32_t n_lon = 0;                  // 17-bit longitude count
 
         // DecodePosition values.
-        uint32_t calculated_timestamp_ms = 0;  // [ms] time since boot when packet was calculated
         float lat_cpr = 0.0f;
         float lon_cpr = 0.0f;
         uint16_t nl_cpr = 0;  // number of longitude cells in latitude band

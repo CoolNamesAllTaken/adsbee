@@ -34,30 +34,19 @@ bool Aircraft::DecodePosition() {
     // Equation 5.6
     int32_t lat_zone_index = floorf(59.0f * last_even_packet_.lat_cpr - 60.0f * last_odd_packet_.lat_cpr + 0.5f);
 
-    bool calculate_odd =
-        last_odd_packet_.calculated_timestamp_ms > last_odd_packet_.received_timestamp_ms ? false : true;
-    bool calculate_even =
-        last_even_packet_.calculated_timestamp_ms > last_even_packet_.received_timestamp_ms ? false : true;
+    // Equation 5.7
+    last_odd_packet_.lat = kCPRdLatOdd * ((lat_zone_index % 59) + last_odd_packet_.lat_cpr);
+    // Equation 5.8: wrap latitude to between -90 and +90 degrees.
+    last_odd_packet_.lat = WrapCPRDecodeLatitude(last_odd_packet_.lat);
+    // Calculate NL, which will be used later to calculate the number of longitude zones in this latitude band.
+    last_odd_packet_.nl_cpr = CalcNLCPRFromLat(last_odd_packet_.lat);
 
-    if (calculate_odd) {
-        // Equation 5.7
-        last_odd_packet_.lat = kCPRdLatOdd * ((lat_zone_index % 59) + last_odd_packet_.lat_cpr);
-        // Equation 5.8: wrap latitude to between -90 and +90 degrees.
-        last_odd_packet_.lat = WrapCPRDecodeLatitude(last_odd_packet_.lat);
-        // Calculate NL, which will be used later to calculate the number of longitude zones in this latitude band.
-        last_odd_packet_.nl_cpr = CalcNLCPRFromLat(last_odd_packet_.lat);
-        last_odd_packet_.calculated_timestamp_ms = get_time_since_boot_ms();
-    }
-
-    if (calculate_even) {
-        // Equation 5.7
-        last_even_packet_.lat = kCPRdLatEven * ((lat_zone_index % 60) + last_even_packet_.lat_cpr);
-        // Equation 5.8: wrap latitude to between -90 and +90 degrees.
-        last_even_packet_.lat = WrapCPRDecodeLatitude(last_even_packet_.lat);
-        // Calculate NL, which will be used later to calculate the number of longitude zones in this latitude band.
-        last_even_packet_.nl_cpr = CalcNLCPRFromLat(last_even_packet_.lat);
-        last_even_packet_.calculated_timestamp_ms = get_time_since_boot_ms();
-    }
+    // Equation 5.7
+    last_even_packet_.lat = kCPRdLatEven * ((lat_zone_index % 60) + last_even_packet_.lat_cpr);
+    // Equation 5.8: wrap latitude to between -90 and +90 degrees.
+    last_even_packet_.lat = WrapCPRDecodeLatitude(last_even_packet_.lat);
+    // Calculate NL, which will be used later to calculate the number of longitude zones in this latitude band.
+    last_even_packet_.nl_cpr = CalcNLCPRFromLat(last_even_packet_.lat);
 
     /**
      * Unhandled edge case:
@@ -392,6 +381,7 @@ bool Aircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, ui
     }
 
     CPRPacket &packet = odd ? last_odd_packet_ : last_even_packet_;
+    // NOTE: Packet received timestamps are from the MLAT timer.
     packet.received_timestamp_ms = received_timestamp_ms;
     packet.n_lat = n_lat_cpr;
     packet.n_lon = n_lon_cpr;
