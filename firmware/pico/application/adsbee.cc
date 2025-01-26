@@ -1,7 +1,6 @@
 #include "adsbee.hh"
 
 #include <hardware/structs/systick.h>
-#include <stdio.h>  // for printing
 
 #include "hardware/adc.h"
 #include "hardware/clocks.h"
@@ -12,10 +11,12 @@
 #include "pico/rand.h"
 #include "pico/stdlib.h"
 #include "pico/time.h"
+#include "stdio.h"  // for printing
 // #include "hardware/dma.h"
 #include "capture.pio.h"
 #include "hal.hh"
 #include "hardware/irq.h"
+#include "packet_decoder.hh"
 #include "pico/binary_info.h"
 #include "spi_coprocessor.hh"
 
@@ -253,20 +254,22 @@ bool ADSBee::Update() {
     }
 
     // Ingest new packets into the dictionary.
-    Raw1090Packet raw_packet;
-    while (raw_1090_packet_queue.Pop(raw_packet)) {
-        if (raw_packet.buffer_len_bits == Decoded1090Packet::kExtendedSquitterPacketLenBits) {
-            CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%08x|%08x|%04x SRC=%d SIGS=%ddBm SIGQ=%ddB MLAT=%u",
-                         raw_packet.buffer[0], raw_packet.buffer[1], raw_packet.buffer[2],
-                         (raw_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_packet.source, raw_packet.sigs_dbm,
-                         raw_packet.sigq_db, raw_packet.mlat_48mhz_64bit_counts);
-        } else {
-            CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%06x SRC=%d SIGS=%ddBm SIGQ=%ddB MLAT=%u",
-                         raw_packet.buffer[0], (raw_packet.buffer[1]) >> (2 * kBitsPerNibble), raw_packet.source,
-                         raw_packet.sigs_dbm, raw_packet.sigq_db, raw_packet.mlat_48mhz_64bit_counts);
-        }
+    // Raw1090Packet raw_packet;
+    Decoded1090Packet decoded_packet;
+    while (decoder.decoded_1090_packet_out_queue.Pop(decoded_packet) /*raw_1090_packet_queue.Pop(raw_packet)*/) {
+        // if (raw_packet.buffer_len_bits == Decoded1090Packet::kExtendedSquitterPacketLenBits) {
+        //     CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%08x|%08x|%04x SRC=%d SIGS=%ddBm SIGQ=%ddB MLAT=%u",
+        //                  raw_packet.buffer[0], raw_packet.buffer[1], raw_packet.buffer[2],
+        //                  (raw_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_packet.source, raw_packet.sigs_dbm,
+        //                  raw_packet.sigq_db, raw_packet.mlat_48mhz_64bit_counts);
+        // } else {
+        //     CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%06x SRC=%d SIGS=%ddBm SIGQ=%ddB MLAT=%u",
+        //                  raw_packet.buffer[0], (raw_packet.buffer[1]) >> (2 * kBitsPerNibble), raw_packet.source,
+        //                  raw_packet.sigs_dbm, raw_packet.sigq_db, raw_packet.mlat_48mhz_64bit_counts);
+        // }
 
-        Decoded1090Packet decoded_packet = Decoded1090Packet(raw_packet);
+        // Decoded1090Packet decoded_packet = Decoded1090Packet(raw_packet);
+
         CONSOLE_INFO("ADSBee::Update", "\tdf=%d icao_address=0x%06x", decoded_packet.GetDownlinkFormat(),
                      decoded_packet.GetICAOAddress());
 
@@ -415,12 +418,14 @@ void ADSBee::OnDemodComplete() {
                     case Decoded1090Packet::kSquitterPacketNumWords32:
                         rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFFFF) << 8;
                         rx_packet_[sm_index].buffer_len_bits = Decoded1090Packet::kSquitterPacketLenBits;
-                        raw_1090_packet_queue.Push(rx_packet_[sm_index]);
+                        // raw_1090_packet_queue.Push(rx_packet_[sm_index]);
+                        decoder.raw_1090_packet_in_queue.Push(rx_packet_[sm_index]);
                         break;
                     case Decoded1090Packet::kExtendedSquitterPacketNumWords32:
                         rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFF) << 16;
                         rx_packet_[sm_index].buffer_len_bits = Decoded1090Packet::kExtendedSquitterPacketLenBits;
-                        raw_1090_packet_queue.Push(rx_packet_[sm_index]);
+                        // raw_1090_packet_queue.Push(rx_packet_[sm_index]);
+                        decoder.raw_1090_packet_in_queue.Push(rx_packet_[sm_index]);
                         break;
                     default:
                         // Don't push partial packets.

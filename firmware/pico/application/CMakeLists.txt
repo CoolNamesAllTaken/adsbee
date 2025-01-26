@@ -2,23 +2,6 @@ if (ON_EMBEDDED_DEVICE)
     ## Building for target.
     add_executable(application main.cc)
 
-    # application is Position Independent Code (PIC) since it could be loaded in either partition. combined is not PIC
-    # since it only runs in partition 0 as loaded by the debugger.
-    # Enable position independent code
-    # set_target_properties(application PROPERTIES
-    #     POSITION_INDEPENDENT_CODE ON
-    # )
-    # # Add extra compiler flags for PIC
-    # target_compile_options(application PRIVATE
-    #     -fPIC
-    #     -msingle-pic-base
-    #     -mno-pic-data-is-text-relative
-    # )
-    # # Additional PIC-related linker flags
-    # target_link_options(application PRIVATE
-    #     -Wl,--pic-executable
-    # )
-
     add_subdirectory(${ADSBEE_COMMON_DIR} ${CMAKE_BINARY_DIR}/application/adsbee_common)
 
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -36,6 +19,7 @@ if (ON_EMBEDDED_DEVICE)
         pico_stdlib
         pico_float # for math functions
         pico_rand # for generating random numbers
+        pico_multicore
         hardware_pio
         hardware_pwm
         hardware_adc
@@ -178,6 +162,7 @@ if (ON_EMBEDDED_DEVICE)
     target_include_directories(combined PRIVATE $<TARGET_PROPERTY:application,INCLUDE_DIRECTORIES>)
     target_link_libraries(combined $<TARGET_PROPERTY:application,LINK_LIBRARIES>)
     target_link_options(combined PUBLIC "-Wl,-Map=combined.map")
+    target_compile_options(combined PRIVATE -fstack-usage) # Adds stack usage files in Debug/application/CMakeFiles/combined.dir/... as .su files.
     add_dependencies(combined
         bootloader
         application

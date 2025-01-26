@@ -61,7 +61,9 @@ class PacketDecoder {
     Raw1090Packet raw_1090_packet_in_queue_buffer_[kPacketQueueLen];
     Decoded1090Packet decoded_1090_packet_out_queue_buffer_[kPacketQueueLen];
     uint16_t decoded_1090_packet_bit_flip_locations_out_queue_buffer_[kPacketQueueLen];
-    DebugMessage debug_message_out_queue_buffer_[kPacketQueueLen];
+    DebugMessage debug_message_out_queue_buffer_[kDebugMessageQueueLen];
 };
+
+extern PacketDecoder decoder;
 
 #endif /* PACKET_DECODER_HH_ */

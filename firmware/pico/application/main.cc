@@ -1,3 +1,5 @@
+#include <mutex>
+
 #include "adsbee.hh"
 #include "comms.hh"
 #include "eeprom.hh"
@@ -5,7 +7,10 @@
 #include "firmware_update.hh"  // For figuring out which flash partition we're in.
 #include "hal.hh"
 #include "hardware_unit_tests.hh"  // For testing only!
+#include "packet_decoder.hh"
 #include "pico/binary_info.h"
+#include "pico/multicore.h"
+#include "pico/stdlib.h"
 #include "spi_coprocessor.hh"
 #include "transponder_packet.hh"
 #include "unit_conversions.hh"
@@ -17,6 +22,8 @@ const uint16_t kStatusLEDBootupBlinkPeriodMs = 200;
 const uint32_t kESP32BootupTimeoutMs = 10000;
 const uint32_t kESP32BootupCommsRetryMs = 500;
 
+const uint32_t kMultiCoreStartHandshake = 0x12345678;
+
 // Override default config params here.
 ADSBee adsbee = ADSBee({});
 CommsManager comms_manager = CommsManager({});
@@ -25,6 +32,17 @@ EEPROM eeprom = EEPROM({});
 SettingsManager settings_manager;
 ObjectDictionary object_dictionary;
 SPICoprocessor esp32 = SPICoprocessor({});
+PacketDecoder decoder = PacketDecoder({.enable_1090_error_correction = true});
+
+void main_core1() {
+    while (true) {
+        decoder.UpdateDecoderLoop();
+        // decoder.debug_message_out_queue.Push(PacketDecoder::DebugMessage{
+        //     .message = "Core 1 is running.",
+        //     .log_level = SettingsManager::LogLevel::kInfo,
+        // });
+    }
+}
 
 int main() {
     bi_decl(bi_program_description("ADSBee 1090 ADSB Receiver"));
@@ -37,6 +55,18 @@ int main() {
                                  object_dictionary.kFirmwareVersionPatch);
 
     settings_manager.Load();
+
+    // decoder.debug_message_out_queue.Push(PacketDecoder::DebugMessage{
+    //     .message = "Testing from core 0.",
+    //     .log_level = SettingsManager::LogLevel::kInfo,
+    // });
+
+    // if (multicore_fifo_pop_blocking() != kMultiCoreStartHandshake) {
+    //     CONSOLE_ERROR("main", "Failed to handshake with core 1.");
+    //     return 1;
+    // }
+    // multicore_fifo_push_blocking(kMultiCoreStartHandshake);
+    // CONSOLE_INFO("main", "Core 1 is running.");
 
     uint16_t num_status_led_blinks = FirmwareUpdateManager::AmWithinFlashPartition(0) ? 1 : 2;
     // Blink the LED a few times to indicate a successful startup.
@@ -95,6 +125,15 @@ int main() {
         }
     }
 
+    multicore_reset_core1();
+    // sleep_ms(100);
+    multicore_launch_core1(main_core1);
+    // adsbee.DisableWatchdog();
+    // while (true) {
+    //     printf("yo\r\n");
+    //     sleep_ms(1000);
+    // }
+
     // Add a test aircraft to start.
     // Aircraft test_aircraft;
     // test_aircraft.category = Aircraft::Category::kCategorySpaceTransatmosphericVehicle;
@@ -113,9 +152,9 @@ int main() {
 
     while (true) {
         // Loop forever.
-
         comms_manager.Update();
         adsbee.Update();
+        decoder.UpdateLogLoop();
 
         bool esp32_heartbeat_was_acked = false;
         if (esp32.IsEnabled()) {
