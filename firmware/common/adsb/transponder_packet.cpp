@@ -189,19 +189,8 @@ uint32_t Decoded1090Packet::CalculateCRC24(uint16_t packet_len_bits) const {
 #else
     // Digest the 32-bit word packet buffer into a byte buffer.
     uint16_t packet_len_bytes = packet_len_bits / kBitsPerByte;
-    uint16_t packet_num_words = packet_len_bytes / kBytesPerWord + (packet_len_bytes % kBytesPerWord != 0);
     uint8_t raw_buffer[packet_len_bytes];
-    for (uint16_t i = 0; i < packet_num_words; i++) {
-        uint16_t bytes_remaining = packet_len_bytes - i * kBytesPerWord;
-
-        raw_buffer[i * kBytesPerWord] = raw_.buffer[i] >> 24;
-        if (--bytes_remaining == 0) break;
-        raw_buffer[i * kBytesPerWord + 1] = (raw_.buffer[i] >> 16) & 0xFF;
-        if (--bytes_remaining == 0) break;
-        raw_buffer[i * kBytesPerWord + 2] = (raw_.buffer[i] >> 8) & 0xFF;
-        if (--bytes_remaining == 0) break;
-        raw_buffer[i * kBytesPerWord + 3] = raw_.buffer[i] & 0xFF;
-    }
+    WordBufferToByteBuffer(raw_.buffer, raw_buffer, packet_len_bytes);
     // Feed the byte buffer to the table-based CRC calculator.
     return crc24(raw_buffer, packet_len_bytes - 3);  // Don't include the CRC itself.
 #endif

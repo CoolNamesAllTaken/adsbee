@@ -32,8 +32,13 @@ uint32_t crc24_syndrome(uint8_t *buffer, uint16_t buffer_len_bytes, uint32_t ini
 int16_t crc24_find_single_bit_error(uint32_t syndrome, uint16_t message_len_bits);
 
 /**
- * Flips a single bit in a message at a given index.
+ * Flips a single bit in a message at a given index in a Byte array.
  */
 void flip_bit(uint8_t *message, uint16_t index);
+
+/**
+ * Flips a single bit in a message at a given index in a Word array.
+ */
+void flip_bit(uint32_t *message, uint16_t index);
 
 #endif /* CRC_HH_ */

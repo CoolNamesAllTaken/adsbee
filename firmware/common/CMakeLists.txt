@@ -11,6 +11,7 @@ if (TARGET application)
         adsb/transponder_packet.cpp
         adsb/aircraft_dictionary.cpp
         adsb/decode_utils.cpp
+        adsb/packet_decoder.cc
         coprocessor/spi_coprocessor.cpp
         coprocessor/object_dictionary.cpp
         firmware_update/firmware_update.cc
@@ -42,6 +43,7 @@ elseif (TARGET host_test)
         adsb/transponder_packet.cpp
         adsb/aircraft_dictionary.cpp
         adsb/decode_utils.cpp
+        adsb/packet_decoder.cc
         comms/gdl90/gdl90_utils.cpp
         coprocessor/spi_coprocessor.cpp
         coprocessor/object_dictionary.cpp

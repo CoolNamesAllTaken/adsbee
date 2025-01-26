@@ -48,3 +48,8 @@ int16_t crc24_find_single_bit_error(uint32_t syndrome, uint16_t message_len_bits
 void flip_bit(uint8_t *message, uint16_t index) {
     message[index / kBitsPerByte] ^= (1 << ((kBitsPerByte - 1) - (index & (kBitsPerByte - 1))));
 }
+
+void flip_bit(uint32_t *message, uint16_t index) {
+    message[index / (kBitsPerByte * kBytesPerWord)] ^=
+        (1 << ((kBitsPerByte * kBytesPerWord - 1) - (index & (kBitsPerByte * kBytesPerWord - 1))));
+}
