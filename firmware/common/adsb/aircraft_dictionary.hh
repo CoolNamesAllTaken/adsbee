@@ -459,10 +459,34 @@ class AircraftDictionary {
      * Log an attempted demodulation on 1090MHz. Used to record performance statistics. Note that the increment won't be
      * visible until the next dictionary update occurs.
      */
-    void RecordDemod1090(int16_t source = -1) {
+    inline void Record1090Demod(int16_t source = -1) {
         metrics_counter_.demods_1090++;
         if (source >= 0 && source < kMaxNumSources) {
             metrics_counter_.demods_1090_by_source[source]++;
+        }
+    }
+
+    /**
+     * Log a received 56-bit squitter frame. Used to record performance statistics. Valid frames are automatically
+     * recorded during ingestion, this function is broken out so that raw frames with no ingestion attempted can stil be
+     * recorded. Note that the increment won't be visible until the next dictionary update occurs.
+     */
+    inline void Record1090RawSquitterFrame(int16_t source = -1) {
+        metrics_counter_.raw_squitter_frames++;
+        if (source > 0) {
+            metrics_counter_.raw_squitter_frames_by_source[source]++;
+        }
+    }
+
+    /**
+     * Log a received 112-bit extended squitter frame. Used to record performance statistics. Valid frames are
+     * automatically recorded during ingestion, this function is broken out so that raw frames with no ingestion
+     * attempted can stil be recorded. Note that the increment won't be visible until the next dictionary update occurs.
+     */
+    inline void Record1090RawExtendedSquitterFrame(int16_t source = -1) {
+        metrics_counter_.raw_extended_squitter_frames++;
+        if (source > 0) {
+            metrics_counter_.raw_extended_squitter_frames_by_source[source]++;
         }
     }
 

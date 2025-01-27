@@ -37,10 +37,6 @@ PacketDecoder decoder = PacketDecoder({.enable_1090_error_correction = true});
 void main_core1() {
     while (true) {
         decoder.UpdateDecoderLoop();
-        // decoder.debug_message_out_queue.Push(PacketDecoder::DebugMessage{
-        //     .message = "Core 1 is running.",
-        //     .log_level = SettingsManager::LogLevel::kInfo,
-        // });
     }
 }
 
@@ -55,18 +51,6 @@ int main() {
                                  object_dictionary.kFirmwareVersionPatch);
 
     settings_manager.Load();
-
-    // decoder.debug_message_out_queue.Push(PacketDecoder::DebugMessage{
-    //     .message = "Testing from core 0.",
-    //     .log_level = SettingsManager::LogLevel::kInfo,
-    // });
-
-    // if (multicore_fifo_pop_blocking() != kMultiCoreStartHandshake) {
-    //     CONSOLE_ERROR("main", "Failed to handshake with core 1.");
-    //     return 1;
-    // }
-    // multicore_fifo_push_blocking(kMultiCoreStartHandshake);
-    // CONSOLE_INFO("main", "Core 1 is running.");
 
     uint16_t num_status_led_blinks = FirmwareUpdateManager::AmWithinFlashPartition(0) ? 1 : 2;
     // Blink the LED a few times to indicate a successful startup.
@@ -126,13 +110,7 @@ int main() {
     }
 
     multicore_reset_core1();
-    // sleep_ms(100);
     multicore_launch_core1(main_core1);
-    // adsbee.DisableWatchdog();
-    // while (true) {
-    //     printf("yo\r\n");
-    //     sleep_ms(1000);
-    // }
 
     // Add a test aircraft to start.
     // Aircraft test_aircraft;
@@ -152,9 +130,10 @@ int main() {
 
     while (true) {
         // Loop forever.
+        // decoder.UpdateDecoderLoop();
+        decoder.UpdateLogLoop();
         comms_manager.Update();
         adsbee.Update();
-        decoder.UpdateLogLoop();
 
         bool esp32_heartbeat_was_acked = false;
         if (esp32.IsEnabled()) {

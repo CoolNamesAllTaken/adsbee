@@ -22,6 +22,10 @@ bool PacketDecoder::UpdateLogLoop() {
                 break;  // Don't do anything when logs are silent.
         }
     }
+    uint16_t bit_flip_index;
+    while (decoded_1090_packet_bit_flip_locations_out_queue.Pop(bit_flip_index)) {
+        CONSOLE_WARNING("PacketDecoder::DecoderLoop", "Corrected single bit error at bit index %d.", bit_flip_index);
+    }
     return true;
 }
 

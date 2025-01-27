@@ -222,11 +222,11 @@ void Decoded1090Packet::ConstructTransponderPacket() {
         }
         case kDownlinkFormatAllCallReply:  // DF = 11
         {
+            icao_address_ = Get24BitWordFromBuffer(8, raw_.buffer);
             uint16_t interrogator_id = parity_value ^ calculated_checksum;
             if (interrogator_id == 0) {
                 // Reply to a spontaneous acquisition squitter.
                 is_valid_ = true;
-                icao_address_ = Get24BitWordFromBuffer(8, raw_.buffer);
             } else {
                 // Don't know the interrogator ID, so can't tell if it's valid.
                 is_valid_ = false;

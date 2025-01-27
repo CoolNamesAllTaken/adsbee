@@ -405,7 +405,7 @@ void ADSBee::OnDemodComplete() {
             packet_num_words = Raw1090Packet::kMaxPacketLenWords32;
         }
         // Track that we attempted to demodulate something.
-        aircraft_dictionary.RecordDemod1090();
+        aircraft_dictionary.Record1090Demod();
         // Create a Raw1090Packet and push it onto the queue.
         for (uint16_t i = 0; i < packet_num_words; i++) {
             rx_packet_[sm_index].buffer[i] =
@@ -416,12 +416,14 @@ void ADSBee::OnDemodComplete() {
                 // Mask and left align final word based on bit length.
                 switch (packet_num_words) {
                     case Decoded1090Packet::kSquitterPacketNumWords32:
+                        aircraft_dictionary.Record1090RawSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFFFF) << 8;
                         rx_packet_[sm_index].buffer_len_bits = Decoded1090Packet::kSquitterPacketLenBits;
                         // raw_1090_packet_queue.Push(rx_packet_[sm_index]);
                         decoder.raw_1090_packet_in_queue.Push(rx_packet_[sm_index]);
                         break;
                     case Decoded1090Packet::kExtendedSquitterPacketNumWords32:
+                        aircraft_dictionary.Record1090RawExtendedSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFF) << 16;
                         rx_packet_[sm_index].buffer_len_bits = Decoded1090Packet::kExtendedSquitterPacketLenBits;
                         // raw_1090_packet_queue.Push(rx_packet_[sm_index]);

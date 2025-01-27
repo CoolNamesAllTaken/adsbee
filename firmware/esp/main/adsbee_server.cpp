@@ -107,12 +107,27 @@ bool ADSBeeServer::Update() {
                      aircraft_dictionary.metrics.valid_squitter_frames,
                      aircraft_dictionary.metrics.valid_extended_squitter_frames);
 
-        // ESP32 can't see number of attempted demodulations, so steal that from RP2040 metrics dictionary.
+        // ESP32 can't see number of attempted demodulations or raw packets, so steal that from RP2040 metrics
+        // dictionary.
         AircraftDictionary::Metrics combined_metrics = aircraft_dictionary.metrics;
+        // Steal demods_1090.
         combined_metrics.demods_1090 = adsbee_server.rp2040_aircraft_dictionary_metrics.demods_1090;
         for (uint16_t i = 0; i < AircraftDictionary::kMaxNumSources; i++) {
             combined_metrics.demods_1090_by_source[i] +=
                 adsbee_server.rp2040_aircraft_dictionary_metrics.demods_1090_by_source[i];
+        }
+        // Steal raw_squitter_frames.
+        combined_metrics.raw_squitter_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.raw_squitter_frames;
+        for (uint16_t i = 0; i < AircraftDictionary::kMaxNumSources; i++) {
+            combined_metrics.raw_squitter_frames_by_source[i] +=
+                adsbee_server.rp2040_aircraft_dictionary_metrics.raw_squitter_frames_by_source[i];
+        }
+        // Steal raw_extended_squitter_frames.
+        combined_metrics.raw_extended_squitter_frames =
+            adsbee_server.rp2040_aircraft_dictionary_metrics.raw_extended_squitter_frames;
+        for (uint16_t i = 0; i < AircraftDictionary::kMaxNumSources; i++) {
+            combined_metrics.raw_extended_squitter_frames_by_source[i] +=
+                adsbee_server.rp2040_aircraft_dictionary_metrics.raw_extended_squitter_frames_by_source[i];
         }
         // Broadcast dictionary metrics over the metrics Websocket.
         char metrics_message[AircraftDictionary::Metrics::kMetricsJSONMaxLen];

@@ -155,18 +155,15 @@ bool AircraftDictionary::IngestDecoded1090Packet(Decoded1090Packet &packet) {
     int16_t source = packet.GetRaw().source;
     switch (packet.GetBufferLenBits()) {
         case Decoded1090Packet::kSquitterPacketLenBits:
-            metrics_counter_.raw_squitter_frames++;
-            if (source > 0) {
-                metrics_counter_.raw_squitter_frames_by_source[source]++;
-            }
-
             // Validate packet against ICAO addresses in dictionary, or allow it in if it's a DF=11 all call reply
             // packet tha validated itself (e.g. it's a response to a spontaneous acquisition squitter with interrogator
             // ID=0, making the checksum useable).
-            if (ContainsAircraft(packet.GetICAOAddress())) {
-                // DF=4-5
-                // Packet is a 56-bit Squitter packet that is incapable of validating itself, and its CRC was validated
-                // against the ICAO addresses in the aircraft dictionary.
+            if (packet.GetDownlinkFormat() != Decoded1090Packet::kDownlinkFormatAllCallReply &&
+                ContainsAircraft(packet.GetICAOAddress())) {
+                // DF=0,4-5 (DF=11 doesn't work with this since the interrogator ID may be overlaid with the ICAO
+                // address--we expect spontaneous acquisition DF=11's to come in pre-marked as valid).
+                // Packet is a 56-bit Squitter packet that is incapable of validating itself, and its CRC was
+                // validated against the ICAO addresses in the aircraft dictionary.
                 packet.ForceValid();
             }
 
@@ -182,10 +179,6 @@ bool AircraftDictionary::IngestDecoded1090Packet(Decoded1090Packet &packet) {
             }
             break;
         case Decoded1090Packet::kExtendedSquitterPacketLenBits:
-            metrics_counter_.raw_extended_squitter_frames++;
-            if (source > 0) {
-                metrics_counter_.raw_extended_squitter_frames_by_source[source]++;
-            }
             if (packet.IsValid()) {
                 metrics_counter_.valid_extended_squitter_frames++;
                 if (source > 0) {
@@ -198,7 +191,7 @@ bool AircraftDictionary::IngestDecoded1090Packet(Decoded1090Packet &packet) {
         default:
             CONSOLE_ERROR(
                 "AircraftDictionary::IngestDecoded1090Packet",
-                "Received packet with unrecognized bitlength %d, expected %d (Squiter) or %d (Extended Squitter).",
+                "Received packet with unrecognized bitlength %d, expected %d (Squitter) or %d (Extended Squitter).",
                 packet.GetBufferLenBits(), Decoded1090Packet::kSquitterPacketLenBits,
                 Decoded1090Packet::kExtendedSquitterPacketLenBits);
             return false;
