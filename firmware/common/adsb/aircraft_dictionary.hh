@@ -5,6 +5,7 @@
 #include <cstring>
 #include <unordered_map>
 
+#include "hal.hh"
 #include "json_utils.hh"
 #include "macros.hh"
 #include "transponder_packet.hh"
@@ -14,10 +15,10 @@ class Aircraft {
     static constexpr uint16_t kCallSignMaxNumChars = 7;
     // These variables define filter bounds for time between CPR packets. If the time between packets is greater than
     // the time delta limit, the old CPR packet is discarded and the CPR packet pair is not used for position decoding.
-    static constexpr uint32_t kMinCPRTimeDeltaMs = 10e3;  // Never reject CPR packet pairs less than 10 seconds apart.
-    static constexpr uint32_t kRefCPRTimeDeltaMs =
-        19e3;  // Reference time threshold for rejecting CPR packet pairs, used in calculations.
-    static constexpr uint32_t kMaxCPRTimeDeltaMs = 30e3;  // Never accept CPR packet pairs more than 30 seconds apart.
+    static constexpr uint32_t kDefaultCPRIntervalMs = 10e3;  // CPR interval when starting from scratch or stale track.
+    static constexpr uint32_t kRefCPRIntervalMs = 19e3;      // Reference interval for rejecting CPR packet pairs.
+    static constexpr uint32_t kMaxCPRIntervalMs = 30e3;  // Never accept CPR packet pairs more than 30 seconds apart.
+    static constexpr uint32_t kMaxTrackUpdateIntervalMs = 20e3;  // Tracks older than this are considered stale.
 
     enum Category : uint8_t {
         kCategoryInvalid = 0,
@@ -203,13 +204,14 @@ class Aircraft {
      * Returns the maximum time delta between CPR packets that will be accepted for decoding.
      * @retval Maximum allowed time delta between CPR packets.
      */
-    uint32_t GetMaxAllowedCPRTimeDeltaMs() const {
-        if (velocity_source == kVelocitySourceNotSet || velocity_source == kVelocitySourceNotAvailable) {
-            return kMinCPRTimeDeltaMs;
+    uint32_t GetMaxAllowedCPRIntervalMs() const {
+        if (velocity_source == kVelocitySourceNotSet || velocity_source == kVelocitySourceNotAvailable ||
+            get_time_since_boot_ms() - last_track_update_timestamp_ms > kMaxTrackUpdateIntervalMs) {
+            return kDefaultCPRIntervalMs;
         }
         // Scale time delta threshold based on the velocity of the aircraft relative to 500kts, but clamp the result to
-        // the min and max time delta thresholds.
-        return MIN(MAX(kRefCPRTimeDeltaMs * 500 / velocity_kts, kMinCPRTimeDeltaMs), kMaxCPRTimeDeltaMs);
+        // the max time delta thresholds.
+        return MIN(kRefCPRIntervalMs * 500 / velocity_kts, kMaxCPRIntervalMs);
     }
 
     /**
@@ -288,6 +290,7 @@ class Aircraft {
     uint32_t last_message_timestamp_ms = 0;
     int16_t last_message_signal_strength_dbm = 0;  // Voltage of RSSI signal during message receipt.
     int16_t last_message_signal_quality_db = 0;    // Ratio of RSSI to noise floor during message receipt.
+    uint32_t last_track_update_timestamp_ms = 0;   // Timestamp of the last time that the position was updated.
     Metrics metrics;
 
     uint16_t transponder_capability = 0;
@@ -347,7 +350,6 @@ class Aircraft {
         uint32_t n_lon = 0;                  // 17-bit longitude count
 
         // DecodePosition values.
-        uint32_t calculated_timestamp_ms = 0;  // [ms] time since boot when packet was calculated
         float lat_cpr = 0.0f;
         float lon_cpr = 0.0f;
         uint16_t nl_cpr = 0;  // number of longitude cells in latitude band
@@ -457,10 +459,34 @@ class AircraftDictionary {
      * Log an attempted demodulation on 1090MHz. Used to record performance statistics. Note that the increment won't be
      * visible until the next dictionary update occurs.
      */
-    void RecordDemod1090(int16_t source = -1) {
+    inline void Record1090Demod(int16_t source = -1) {
         metrics_counter_.demods_1090++;
         if (source >= 0 && source < kMaxNumSources) {
             metrics_counter_.demods_1090_by_source[source]++;
+        }
+    }
+
+    /**
+     * Log a received 56-bit squitter frame. Used to record performance statistics. Valid frames are automatically
+     * recorded during ingestion, this function is broken out so that raw frames with no ingestion attempted can stil be
+     * recorded. Note that the increment won't be visible until the next dictionary update occurs.
+     */
+    inline void Record1090RawSquitterFrame(int16_t source = -1) {
+        metrics_counter_.raw_squitter_frames++;
+        if (source > 0) {
+            metrics_counter_.raw_squitter_frames_by_source[source]++;
+        }
+    }
+
+    /**
+     * Log a received 112-bit extended squitter frame. Used to record performance statistics. Valid frames are
+     * automatically recorded during ingestion, this function is broken out so that raw frames with no ingestion
+     * attempted can stil be recorded. Note that the increment won't be visible until the next dictionary update occurs.
+     */
+    inline void Record1090RawExtendedSquitterFrame(int16_t source = -1) {
+        metrics_counter_.raw_extended_squitter_frames++;
+        if (source > 0) {
+            metrics_counter_.raw_extended_squitter_frames_by_source[source]++;
         }
     }
 
@@ -473,24 +499,33 @@ class AircraftDictionary {
     bool IngestDecoded1090Packet(Decoded1090Packet &packet);
 
     /**
-     * Ingests a Mode A (Identity Surveillance Reply) packet and uses it to update the relevant aircraft. Exposed for
+     * Ingests an Identity Surveillance Reply packet and uses it to update the relevant aircraft. Exposed for
      * testing, but usually called by IngestDecoded1090Packet.
      * Note: this function requires that the packet be marked as valid using the ForceValid() function. If the packet is
      * valid and does not match an ICAO in the aircraft dictionary, a new aircraft will be inserted.
-     * @param[in] packet ModeAPacket to ingest.
+     * @param[in] packet IdentityReplyPacket to ingest.
      * @retval True if successful, false if something broke.
      */
-    bool IngestModeAPacket(ModeAPacket packet);
+    bool IngestIdentityReplyPacket(IdentityReplyPacket packet);
 
     /**
-     * Ingests a Mode C (Altitude Surveillance Reply) packet and uses it to update the relevant aircraft. Exposed for
+     * Ingests an Altitude Surveillance Reply packet and uses it to update the relevant aircraft. Exposed for
      * testing, but usually called by IngestDecoded1090Packet.
      * Note: this function requires that the packet be marked as valid using the ForceValid() function. If the packet is
      * valid and does not match an ICAO in the aircraft dictionary, a new aircraft will be inserted.
-     * @param[in] packet ModeCPacket to ingest.
+     * @param[in] packet AltitudeReplyPacket to ingest.
      * @retval True if successful, false if something broke.
      */
-    bool IngestModeCPacket(ModeCPacket packet);
+    bool IngestAltitudeReplyPacket(AltitudeReplyPacket packet);
+
+    /**
+     * Ingests an All Call Reply packet and uses it to update the relevant aircraft. Exposed for testing, but usually
+     * called by IngestDecoded1090Packet.
+     *
+     * Currently, we only accept all call reply packets with an interrogator ID of 0 (replies to spontaneous acquisition
+     * squitters), since we don't have a way to know the interrogator ID of ground based surveillance stations.
+     */
+    bool IngestAllCallReplyPacket(AllCallReplyPacket packet);
 
     /**
      * Ingests an ADSBPacket directly. Exposed for testing, but usually this gets called by

@@ -98,9 +98,10 @@
 			"valarray": "cpp",
 			"cpp_at.hh": "c",
 			"uart.h": "c",
-			"settings.hh": "c"
+			"settings.hh": "c",
+			"span": "cpp"
 		},
-		"cortex-debug.variableUseNaturalFormat": true,
+		"cortex-debug.variableUseNaturalFormat": false,
 		// "cortex-debug.variableUseNaturalFormat": true,
 	},
 	"launch": {
@@ -118,7 +119,7 @@
 			// 	"servertype": "jlink"
 			// },
 			{
-				"name": "Remote Debug",
+				"name": "Core0 Debug",
 				"type": "cortex-debug",
 				"cwd": "/ads_bee/pico",
 				"executable": "${command:cmake.launchTargetPath}",
@@ -126,6 +127,25 @@
 				"servertype": "external",
 				// "gdbPath": "arm-none-eabi-gdb",
 				"gdbTarget": "host.docker.internal:2331",
+				"showDevDebugOutput": "raw",
+				"svdFile": "/usr/local/pico-sdk/src/rp2040/hardware_regs/RP2040.svd",
+				"preRestartCommands": [
+					"file ${command:cmake.launchTargetPath}",
+					"load",
+					"monitor reset"
+				],
+				"armToolchainPath": "/usr/bin",
+				"device": "RP2040",
+			},
+			{
+				"name": "Core1 Debug",
+				"type": "cortex-debug",
+				"cwd": "/ads_bee/pico",
+				"executable": "${command:cmake.launchTargetPath}",
+				"request": "attach",
+				"servertype": "external",
+				// "gdbPath": "arm-none-eabi-gdb",
+				"gdbTarget": "host.docker.internal:2431",
 				"showDevDebugOutput": "raw",
 				"svdFile": "/usr/local/pico-sdk/src/rp2040/hardware_regs/RP2040.svd",
 				"preRestartCommands": [

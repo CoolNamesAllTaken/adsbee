@@ -27,8 +27,13 @@ const uint32_t kExtendedSquitterLastWordPopCount = 16;
 const uint32_t kSquitterLastWordIngestionMask = 0xFFFFFF00;
 const uint32_t kSquitterLastWordPopCount = 24;
 
+#define CRC24_USE_TABLE
+#ifndef CRC24_USE_TABLE
 const uint32_t kCRC24Generator = 0x1FFF409;
 const uint16_t kCRC24GeneratorNumBits = 25;
+#else
+#include "crc.hh"
+#endif
 
 /** Decoded1090Packet **/
 
@@ -160,6 +165,7 @@ uint16_t Decoded1090Packet::DumpPacketBuffer(uint8_t to_buffer[kMaxPacketLenWord
 }
 
 uint32_t Decoded1090Packet::CalculateCRC24(uint16_t packet_len_bits) const {
+#ifndef CRC24_USE_TABLE
     // CRC calculation algorithm from https://mode-s.org/decode/book-the_1090mhz_riddle-junzi_sun.pdf pg. 91.
     // Must be called on buffer that does not have extra bit ingested at end and has all words left-aligned.
     uint32_t crc_buffer[kMaxPacketLenWords32];
@@ -180,6 +186,14 @@ uint32_t Decoded1090Packet::CalculateCRC24(uint16_t packet_len_bits) const {
     }
 
     return GetNBitWordFromBuffer(BITS_PER_WORD_24, packet_len_bits - BITS_PER_WORD_24, crc_buffer);
+#else
+    // Digest the 32-bit word packet buffer into a byte buffer.
+    uint16_t packet_len_bytes = packet_len_bits / kBitsPerByte;
+    uint8_t raw_buffer[packet_len_bytes];
+    WordBufferToByteBuffer(raw_.buffer, raw_buffer, packet_len_bytes);
+    // Feed the byte buffer to the table-based CRC calculator.
+    return crc24(raw_buffer, packet_len_bytes - 3);  // Don't include the CRC itself.
+#endif
 }
 
 void Decoded1090Packet::ConstructTransponderPacket() {
@@ -199,7 +213,6 @@ void Decoded1090Packet::ConstructTransponderPacket() {
         case kDownlinkFormatShortRangeAirToAirSurveillance:  // DF = 0
         case kDownlinkFormatAltitudeReply:                   // DF = 4
         case kDownlinkFormatIdentityReply:                   // DF = 5
-        case kDownlinkFormatAllCallReply:                    // DF = 11
         {
             // Process a 56-bit message.
             is_valid_ = false;  // Calculated checksum is XORed with the ICAO address. See ADS-B Decoding Guide pg. 22.
@@ -207,6 +220,20 @@ void Decoded1090Packet::ConstructTransponderPacket() {
             icao_address_ = parity_value ^ calculated_checksum;
             break;
         }
+        case kDownlinkFormatAllCallReply:  // DF = 11
+        {
+            icao_address_ = Get24BitWordFromBuffer(8, raw_.buffer);
+            uint16_t interrogator_id = parity_value ^ calculated_checksum;
+            if (interrogator_id == 0) {
+                // Reply to a spontaneous acquisition squitter.
+                is_valid_ = true;
+            } else {
+                // Don't know the interrogator ID, so can't tell if it's valid.
+                is_valid_ = false;
+            }
+            break;
+        }
+
         default:  // All other DFs. Note: DF=17-19 for ADS-B.
         {
             // Process a 112-bit message.
@@ -289,7 +316,7 @@ ADSBPacket::TypeCode ADSBPacket::GetTypeCodeEnum() const {
     }
 }
 
-ModeCPacket::ModeCPacket(const Decoded1090Packet &decoded_packet) : Decoded1090Packet(decoded_packet) {
+AltitudeReplyPacket::AltitudeReplyPacket(const Decoded1090Packet &decoded_packet) : Decoded1090Packet(decoded_packet) {
     uint8_t flight_status = GetNBitWordFromBuffer(3, 5, raw_.buffer);  // FS = Bits 5-7.
     switch (flight_status) {
         case 0b000:  // No alert, no SPI, aircraft is airborne.
@@ -335,7 +362,7 @@ ModeCPacket::ModeCPacket(const Decoded1090Packet &decoded_packet) : Decoded1090P
     altitude_ft_ = AltitudeCodeToAltitudeFt(GetNBitWordFromBuffer(13, 19, raw_.buffer));
 };
 
-ModeAPacket::ModeAPacket(const Decoded1090Packet &decoded_packet) : Decoded1090Packet(decoded_packet) {
+IdentityReplyPacket::IdentityReplyPacket(const Decoded1090Packet &decoded_packet) : Decoded1090Packet(decoded_packet) {
     uint8_t flight_status = GetNBitWordFromBuffer(3, 5, raw_.buffer);  // FS = Bits 5-7.
     switch (flight_status) {
         case 0b000:  // No alert, no SPI, aircraft is airborne.

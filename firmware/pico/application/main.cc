@@ -1,3 +1,5 @@
+#include <mutex>
+
 #include "adsbee.hh"
 #include "comms.hh"
 #include "eeprom.hh"
@@ -5,7 +7,10 @@
 #include "firmware_update.hh"  // For figuring out which flash partition we're in.
 #include "hal.hh"
 #include "hardware_unit_tests.hh"  // For testing only!
+#include "packet_decoder.hh"
 #include "pico/binary_info.h"
+#include "pico/multicore.h"
+#include "pico/stdlib.h"
 #include "spi_coprocessor.hh"
 #include "transponder_packet.hh"
 #include "unit_conversions.hh"
@@ -17,6 +22,8 @@ const uint16_t kStatusLEDBootupBlinkPeriodMs = 200;
 const uint32_t kESP32BootupTimeoutMs = 10000;
 const uint32_t kESP32BootupCommsRetryMs = 500;
 
+const uint32_t kMultiCoreStartHandshake = 0x12345678;
+
 // Override default config params here.
 ADSBee adsbee = ADSBee({});
 CommsManager comms_manager = CommsManager({});
@@ -25,6 +32,13 @@ EEPROM eeprom = EEPROM({});
 SettingsManager settings_manager;
 ObjectDictionary object_dictionary;
 SPICoprocessor esp32 = SPICoprocessor({});
+PacketDecoder decoder = PacketDecoder({.enable_1090_error_correction = true});
+
+void main_core1() {
+    while (true) {
+        decoder.UpdateDecoderLoop();
+    }
+}
 
 int main() {
     bi_decl(bi_program_description("ADSBee 1090 ADSB Receiver"));
@@ -95,6 +109,9 @@ int main() {
         }
     }
 
+    multicore_reset_core1();
+    multicore_launch_core1(main_core1);
+
     // Add a test aircraft to start.
     // Aircraft test_aircraft;
     // test_aircraft.category = Aircraft::Category::kCategorySpaceTransatmosphericVehicle;
@@ -113,7 +130,8 @@ int main() {
 
     while (true) {
         // Loop forever.
-
+        // decoder.UpdateDecoderLoop();
+        decoder.UpdateLogLoop();
         comms_manager.Update();
         adsbee.Update();
 

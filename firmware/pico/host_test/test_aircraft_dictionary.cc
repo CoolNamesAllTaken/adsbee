@@ -214,7 +214,7 @@ TEST(Aircraft, SetCPRLatLon) {
     // Position established, now send the curveball.
     EXPECT_TRUE(aircraft.SetCPRLatLon(93000 - 5000, 50194, true, get_time_since_boot_ms()));
     inc_time_since_boot_ms();
-    EXPECT_FALSE(aircraft.DecodePosition());
+    EXPECT_TRUE(aircraft.DecodePosition());  // Re-decode the previous even CPR packet with the new zone.
 
     // EXPECT_NEAR(aircraft.latitude, 52.25720f, 1e-4);
     // EXPECT_NEAR(aircraft.longitude, 3.91937f, 1e-4);
@@ -245,7 +245,7 @@ TEST(AircraftDictionary, ApplyAirbornePositionMessage) {
 
     // Set time since boot to something positive so packet ingestion time looks legit.
     set_time_since_boot_ms(1e3);
-    even_tpacket.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms()*48e3;
+    even_tpacket.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48e3;
 
     // Ingest even packet.
     ASSERT_TRUE(dictionary.IngestDecoded1090Packet(even_tpacket));
@@ -264,7 +264,7 @@ TEST(AircraftDictionary, ApplyAirbornePositionMessage) {
     EXPECT_EQ(aircraft.baro_altitude_ft, 16975);
 
     inc_time_since_boot_ms(1e3);  // Simulate time passing between odd and even packet ingestion.
-    odd_tpacket.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms()*48e3;
+    odd_tpacket.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48e3;
 
     // Ingest odd packet.
     ASSERT_TRUE(dictionary.IngestDecoded1090Packet(odd_tpacket));
@@ -280,45 +280,35 @@ TEST(AircraftDictionary, ApplyAirbornePositionMessage) {
     EXPECT_EQ(aircraft.baro_altitude_ft, 17000);
 }
 
-TEST(Aircraft, CalculateMaxAllowedCPRTimeDelta) {
+TEST(Aircraft, CalculateMaxAllowedCPRInterval) {
     Aircraft aircraft;
-    // CPR time delta should be enforced at lower limit when aircraft is not initialized.
-    EXPECT_EQ(aircraft.GetMaxAllowedCPRTimeDeltaMs(), Aircraft::kMinCPRTimeDeltaMs);
+    // CPR interval enforced at reference limit when aircraft is not initialized.
+    EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), Aircraft::kDefaultCPRIntervalMs);
 
     // Setting velocity source to something other than kVelocitySourceNotAvailable or kVelocitySourceNotSet should
-    // return CPR time delta as a calculated function of aircraft velocity.
+    // return CPR interval as a calculated function of aircraft velocity.
     aircraft.velocity_source = Aircraft::VelocitySource::kVelocitySourceGroundSpeed;
 
-    // Stationary aircraft = maximum allowed CPR time delta.
+    // Stale track enforces default CPR interval.
+    set_time_since_boot_ms(100e3);
+    aircraft.last_track_update_timestamp_ms = 100e3 - Aircraft::kMaxTrackUpdateIntervalMs - 1;
+    EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), Aircraft::kDefaultCPRIntervalMs);
+
+    // Set track to be fresh.
+    aircraft.last_track_update_timestamp_ms = 100e3;
+
+    // Stationary aircraft = maximum allowed CPR interval.
     aircraft.velocity_kts = 0;
-    EXPECT_EQ(aircraft.GetMaxAllowedCPRTimeDeltaMs(), Aircraft::kMaxCPRTimeDeltaMs);
+    EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), Aircraft::kMaxCPRIntervalMs);
 
-    // Mid-speed aircraft = calculated CPR time delta between max and min allowed.
+    // Mid-speed aircraft = calculated CPR interval between max and min allowed.
     aircraft.velocity_kts = 400;
-    EXPECT_EQ(aircraft.GetMaxAllowedCPRTimeDeltaMs(), Aircraft::kRefCPRTimeDeltaMs * 500 / aircraft.velocity_kts);
+    EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), Aircraft::kRefCPRIntervalMs * 500 / aircraft.velocity_kts);
 
-    // Very fast aircraft = minimum allowed CPR time delta.
+    // Very fast aircraft = same equation, no minimum interval enforced.
     aircraft.velocity_kts = 1000;
-    EXPECT_EQ(aircraft.GetMaxAllowedCPRTimeDeltaMs(), Aircraft::kMinCPRTimeDeltaMs);
+    EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), Aircraft::kRefCPRIntervalMs * 500 / aircraft.velocity_kts);
 }
-
-// bool VerifyCPRTimeDeltaThresholdWithOddPacket(uint32_t time_delta_threshold_sec, AircraftDictionary &dictionary,
-//                                               Aircraft &aircraft, uint64_t even_packet_mlat_48mhz_64bit_counts = 0) {
-//     Raw1090Packet odd_tpacket = Raw1090Packet((char *)"8da6147f585b05533e2ba73e43cb");
-
-//     // Packet with time delta less than threshold should be accepted.
-//     odd_tpacket.mlat_48mhz_64bit_counts = even_packet_mlat_48mhz_64bit_counts + time_delta_threshold_sec * 48e6 - 1;
-//     Decoded1090Packet odd_packet = Decoded1090Packet(odd_tpacket);
-//     EXPECT_TRUE(dictionary.IngestDecoded1090Packet(odd_packet));
-//     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
-//     aircraft
-//         .
-
-//         // Clean up and reset.
-//         dictionary.RemoveAircraft(aircraft.icao_address);
-
-//     // Packet with time delta greater than threshould should be rejected.
-// }
 
 // This test case verifies that you can't ingest airborne position messages that are too far apart in time, which could
 // lead to an invalid decode.
@@ -337,13 +327,17 @@ TEST(AircraftDictionary, TimeFilterAirbornePositionMessages) {
     auto aircraft = dictionary.dict.begin()->second;
     ASSERT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
 
-    // Case 1: Aircraft has no speed data. Minimum packet valid interval should be used.
+    // Ensure that the system timer and aircraft track updated timestamp are in sync and won't get in the way.
+    set_time_since_boot_ms(100e3);
+    aircraft.last_track_update_timestamp_ms = 99e3;
+
+    // Case 1: Aircraft has no speed data. Default packet valid interval should be used.
     ASSERT_EQ(aircraft.velocity_source, Aircraft::VelocitySource::kVelocitySourceNotSet);
-    ASSERT_EQ(aircraft.GetMaxAllowedCPRTimeDeltaMs(), Aircraft::kMinCPRTimeDeltaMs);
+    EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), Aircraft::kDefaultCPRIntervalMs);
     // Ingest the odd position packet. This should be rejected since the timestamp is too far apart from the even
     // packet. Ingestion will succeed, and the packet will be retained, but the aircraft will still not have a valid
     // location.
-    odd_tpacket.mlat_48mhz_64bit_counts = even_tpacket.mlat_48mhz_64bit_counts + Aircraft::kMinCPRTimeDeltaMs * 48e9;
+    odd_tpacket.mlat_48mhz_64bit_counts = even_tpacket.mlat_48mhz_64bit_counts + Aircraft::kDefaultCPRIntervalMs * 48e9;
     Decoded1090Packet odd_packet = Decoded1090Packet(odd_tpacket);
     ASSERT_TRUE(dictionary.IngestDecoded1090Packet(odd_packet));
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid));
@@ -351,10 +345,19 @@ TEST(AircraftDictionary, TimeFilterAirbornePositionMessages) {
     // Reset by ingesting even packet again.
     ASSERT_TRUE(dictionary.IngestDecoded1090Packet(even_packet));
 
-    // Case 2: Aircraft has speed data and is traveling at 1000 knots. Minimum packet valid interval should be used.
+    // Case 2: Aircraft has speed data and is traveling at 1000 knots.
     aircraft.velocity_kts = 1000;
     aircraft.velocity_source = Aircraft::VelocitySource::kVelocitySourceGroundSpeed;
-    ASSERT_EQ(aircraft.GetMaxAllowedCPRTimeDeltaMs(), Aircraft::kMinCPRTimeDeltaMs);
+    EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), Aircraft::kRefCPRIntervalMs * 500 / aircraft.velocity_kts);
+
+    // Case 3: Aircraft is flying slowly but has a stale track.
+    aircraft.velocity_kts = 0;
+    aircraft.velocity_source = Aircraft::VelocitySource::kVelocitySourceGroundSpeed;
+    // Stationary aircraft should get the max interval.
+    EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), Aircraft::kMaxCPRIntervalMs);
+    // Set the track update timestamp to be too old. This should enforce the default CPR interval.
+    aircraft.last_track_update_timestamp_ms = get_time_since_boot_ms() - Aircraft::kMaxTrackUpdateIntervalMs - 1;
+    EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), Aircraft::kDefaultCPRIntervalMs);
 }
 
 // TODO: Add test case for ingesting Airborne Position message with GNSS altitude.
@@ -433,8 +436,8 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     EXPECT_NEAR(aircraft.velocity_kts, 375.0f, 0.01);
 }
 
-TEST(AircraftDictionary, IngestModeC) {
-    // Try ingesting a Mode C packet that's marked as valid so that it doesn't require a cross-check with the
+TEST(AircraftDictionary, IngestAltitudeReply) {
+    // Try ingesting a altitude reply packet that's marked as valid so that it doesn't require a cross-check with the
     // dictionary.
     AircraftDictionary dictionary = AircraftDictionary();
     Decoded1090Packet tpacket = Decoded1090Packet((char *)"200006A2DE8B1C");
@@ -452,7 +455,7 @@ TEST(AircraftDictionary, IngestModeC) {
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
 
-    // Ingest a Mode C packet with an alert and ident.
+    // Ingest a altitude reply packet with an alert and ident.
     tpacket = Decoded1090Packet((char *)"24000E3956BBA1");
     // Add aircraft to dictioanry so packet can be ingested.
     dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
@@ -463,7 +466,7 @@ TEST(AircraftDictionary, IngestModeC) {
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
 
-    // Ingest a Mode C packet with aircraft on the ground.
+    // Ingest a altitude reply packet with aircraft on the ground.
     tpacket = Decoded1090Packet((char *)"210000992F8C48");
     // Add aircraft to dictioanry so packet can be ingested.
     dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
@@ -475,8 +478,8 @@ TEST(AircraftDictionary, IngestModeC) {
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
 }
 
-TEST(AircraftDictionary, IngestModeA) {
-    // Ingest a Mode A packet with an alert and ident.
+TEST(AircraftDictionary, IngestIdentityReply) {
+    // Ingest a identity reply packet with an alert and ident.
     AircraftDictionary dictionary = AircraftDictionary();
     Decoded1090Packet tpacket = Decoded1090Packet((char *)"2C0006A2DEE500");
     // Add aircraft to dictioanry so packet can be ingested.
@@ -488,7 +491,7 @@ TEST(AircraftDictionary, IngestModeA) {
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
 
-    // Ingest a Mode A packet with an ident but no alert.
+    // Ingest a identity reply packet with an ident but no alert.
     tpacket = Decoded1090Packet((char *)"2D0006A2DEE500");
     // Add aircraft to dictioanry so packet can be ingested.
     dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
@@ -498,7 +501,7 @@ TEST(AircraftDictionary, IngestModeA) {
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
 
-    // Ingest a Mode A packet with no ident and no alert. Aircraft is airborne.
+    // Ingest a identity reply packet with no ident and no alert. Aircraft is airborne.
     tpacket = Decoded1090Packet((char *)"28000D08CEE4C5");
     // Add aircraft to dictioanry so packet can be ingested.
     dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
@@ -509,7 +512,7 @@ TEST(AircraftDictionary, IngestModeA) {
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne));
 
-    // Ingest a Mode A packet with no ident and no alert. Aircraft is on ground.
+    // Ingest a identity reply packet with no ident and no alert. Aircraft is on ground.
     tpacket = Decoded1090Packet((char *)"29001E0D3CB4BF");
     // Add aircraft to dictioanry so packet can be ingested.
     dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
@@ -519,6 +522,16 @@ TEST(AircraftDictionary, IngestModeA) {
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
     EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne));
+}
+
+TEST(AircraftDictionary, IngestAllCallReply) {
+    AircraftDictionary dictionary = AircraftDictionary();
+    Decoded1090Packet tpacket = Decoded1090Packet((char *)"5D7C0B6DB05076");
+    ASSERT_TRUE(tpacket.IsValid());
+    EXPECT_TRUE(dictionary.IngestDecoded1090Packet(tpacket));
+    Aircraft aircraft;
+    EXPECT_TRUE(dictionary.GetAircraft(0x7C0B6Du, aircraft));
+    EXPECT_EQ(aircraft.transponder_capability, 5);
 }
 
 TEST(AircraftDictionary, MetricsToJSON) {

@@ -72,6 +72,16 @@ class Decoded1090Packet {
         // DF 1-3, 6-10, 11-15, 22-23 not used
     };
 
+    // Bits 6-8 in DF=11 and DF=17-18: Transponder Capability (CA)
+    enum Capability : uint8_t {
+        kCALevel1Transponder = 0,
+        // CA = 1-3 reserved for backwards compatibility.
+        kCALevel2PlusTransponderOnSurfaceCanSetCA7 = 4,
+        kCALevel2PlusTransponderAirborneCanSetCA7 = 5,
+        kCALevel2PlusTransponderOnSurfaceOrAirborneCanSetCA7 = 6,
+        kCADRNot0OrFSEquals2345OnSurfaceOrAirborne = 7  // Indicates aircraft is under enhanced surveillance by ATC.
+    };
+
     // Constructors
     /**
      * Decoded1090Packet constructor.
@@ -182,15 +192,6 @@ class ADSBPacket : public Decoded1090Packet {
     ADSBPacket(const Decoded1090Packet &decoded_packet) : Decoded1090Packet(decoded_packet) { ConstructADSBPacket(); };
 
     // Bits 6-8 [3]: Capability (CA)
-    enum Capability : uint8_t {
-        kCALevel1Transponder = 0,
-        // CA = 1-3 reserved for backwards compatibility.
-        kCALevel2PlusTransponderOnSurfaceCanSetCA7 = 4,
-        kCALevel2PlusTransponderAirborneCanSetCA7 = 5,
-        kCALevel2PlusTransponderOnSurfaceOrAirborneCanSetCA7 = 6,
-        kCADRNot0OrFSEquals2345OnSurfaceOrAirborne = 7  // Indicates aircraft is under enhanced surveillance by ATC.
-
-    };
     // Bits 9-32 [24]: ICAO Aircraft Address (ICAO)
     // Bits 33-88 [56]: Message, Extended Squitter (ME)
     // (Bits 33-37 [5]): Type code (TC)
@@ -237,7 +238,19 @@ class ADSBPacket : public Decoded1090Packet {
     void ConstructADSBPacket();
 };
 
-class ModeCPacket : public Decoded1090Packet {
+class AllCallReplyPacket : public Decoded1090Packet {
+   public:
+    AllCallReplyPacket(const Decoded1090Packet &decoded_packet) : Decoded1090Packet(decoded_packet) {
+        capability_ = static_cast<Capability>(GetNBitWordFromBuffer(3, 5, raw_.buffer));
+    }
+
+    Capability GetCapability() const { return capability_; }
+
+   private:
+    Capability capability_ = kCALevel1Transponder;  // Default to most basic capability.
+};
+
+class AltitudeReplyPacket : public Decoded1090Packet {
    public:
     enum DownlinkRequest : uint8_t {
         kDownlinkRequestNone = 0b00000,
@@ -253,7 +266,7 @@ class ModeCPacket : public Decoded1090Packet {
         kUtilityMessageCommDInterrogatorIdentifierCode = 0b11
     };
 
-    ModeCPacket(const Decoded1090Packet &decoded_packet);
+    AltitudeReplyPacket(const Decoded1090Packet &decoded_packet);
 
     bool IsAirborne() const { return is_airborne_; }
     bool HasAlert() const { return has_alert_; }
@@ -274,7 +287,7 @@ class ModeCPacket : public Decoded1090Packet {
     int32_t altitude_ft_ = -1;
 };
 
-class ModeAPacket : public Decoded1090Packet {
+class IdentityReplyPacket : public Decoded1090Packet {
    public:
     enum DownlinkRequest : uint8_t {
         kDownlinkRequestNone = 0b00000,
@@ -290,7 +303,7 @@ class ModeAPacket : public Decoded1090Packet {
         kUtilityMessageCommDInterrogatorIdentifierCode = 0b11
     };
 
-    ModeAPacket(const Decoded1090Packet &decoded_packet);
+    IdentityReplyPacket(const Decoded1090Packet &decoded_packet);
 
     bool IsAirborne() const { return is_airborne_; }
     bool HasAlert() const { return has_alert_; }

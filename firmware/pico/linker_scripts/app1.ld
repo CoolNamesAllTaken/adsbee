@@ -220,23 +220,28 @@ SECTIONS
     /* by default we put core 0 stack at the end of scratch Y, so that if core 1
      * stack is not used then all of SCRATCH_X is free.
      */
+    /*
+     * NOTE: This has been modified by John to move Core 0 to scratch X and Core 1 to scratch Y to accommodate heavy
+     * stack use on Core 0 (allows it to overflow into Heap instead of Core 1's stack).
+     * See this post for more details: https://petewarden.com/2024/01/16/understanding-the-raspberry-pi-picos-memory-layout/
+     */
     .stack1_dummy (COPY):
     {
         *(.stack1*)
-    } > SCRATCH_X
+    } > SCRATCH_Y
     .stack_dummy (COPY):
     {
         *(.stack*)
-    } > SCRATCH_Y
+    } > SCRATCH_X
 
     .flash_end : {
         __flash_binary_end = .;
-    } > FLASH_APP1
+    } > FLASH_APP0
 
     /* stack limit is poorly named, but historically is maximum heap ptr */
     __StackLimit = ORIGIN(RAM) + LENGTH(RAM);
-    __StackOneTop = ORIGIN(SCRATCH_X) + LENGTH(SCRATCH_X);
-    __StackTop = ORIGIN(SCRATCH_Y) + LENGTH(SCRATCH_Y);
+    __StackOneTop = ORIGIN(SCRATCH_Y) + LENGTH(SCRATCH_Y);
+    __StackTop = ORIGIN(SCRATCH_X) + LENGTH(SCRATCH_X);
     __StackOneBottom = __StackOneTop - SIZEOF(.stack1_dummy);
     __StackBottom = __StackTop - SIZEOF(.stack_dummy);
     PROVIDE(__stack = __StackTop);
