@@ -297,7 +297,7 @@ class Aircraft {
     uint32_t icao_address = 0;
     char callsign[kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
     uint16_t squawk = 0;
-    Category category = kCategoryInvalid;
+    Category category = kCategoryNoCategoryInfo;
     uint8_t category_raw = 0;  // Non-enum category in case we want the value without a many to one mapping.
 
     int32_t baro_altitude_ft = 0;

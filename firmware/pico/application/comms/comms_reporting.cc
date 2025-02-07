@@ -154,8 +154,8 @@ bool CommsManager::ReportCSBee(SettingsManager::SerialInterface iface) {
 uint8_t AircraftCategoryToMAVLINKEmitterType(Aircraft::Category category) {
     switch (category) {
         case Aircraft::Category::kCategoryInvalid:
-            // CONSOLE_WARNING("comms_reporting.cc::AircraftCategoryToMAVLINKEmitterType",
-            //                 "Encountered airframe type kCategoryInvalid.");
+            CONSOLE_WARNING("comms_reporting.cc::AircraftCategoryToMAVLINKEmitterType",
+                            "Encountered airframe type kCategoryInvalid.");
             return UINT8_MAX;
         case Aircraft::Category::kCategoryNoCategoryInfo:
             return 0;  // ADSB_EMITTER_TYPE_NO_INFO
@@ -207,6 +207,7 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
     uint16_t mavlink_version = reporting_protocols_[iface] == SettingsManager::kMAVLINK1 ? 1 : 2;
     mavlink_set_proto_version(SettingsManager::SerialInterface::kCommsUART, mavlink_version);
 
+    // Send an ADSB_VEHICLE message for each aircraft in the dictionary.
     for (auto &itr : adsbee.aircraft_dictionary.dict) {
         const Aircraft &aircraft = itr.second;
 
