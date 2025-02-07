@@ -29,7 +29,7 @@
 
 #include "version.h"
 
-// Begin modified by John McNelly 2024-06-06
+// Begin modified by John McNelly 2025-02-07
 #include <cstdint>
 #include <cstring>
 
@@ -37,12 +37,14 @@
 
 #ifndef MAVLINK_MESSAGE_LENGTHS
 #define MAVLINK_MESSAGE_LENGTHS \
-    {}
+    {                           \
+    }
 #endif
 
 #include "mavlink_msg_adsb_vehicle.h"
+#include "mavlink_msg_heartbeat.h"
 #include "mavlink_msg_message_interval.h"
 #include "mavlink_msg_request_data_stream.h"
 
-// End modified by John McNelly 2024-06-06
+// End modified by John McNelly 2025-02-07
 #endif /*MAVLINK_H*/
