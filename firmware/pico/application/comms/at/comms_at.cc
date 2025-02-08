@@ -805,6 +805,17 @@ CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATUptimeCallback) {
+    switch (op) {
+        case '?':
+            // Query uptime.
+            CPP_AT_CMD_PRINTF("=%u", get_time_since_boot_ms() / kMsPerSec);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATWatchdogCallback) {
     switch (op) {
         case '?': {
@@ -1039,6 +1050,11 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string_buf = "Set minimum trigger level threshold for RF power detector.\r\n\tAT+TLSet=<tl_mv>"
                         "\tQuery trigger level.\r\n\tAT+TL_SET?\r\n\t+TLSet=<tl_mv>.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLSetCallback, comms_manager)},
+    {.command_buf = "+UPTIME",
+     .min_args = 0,
+     .max_args = 0,
+     .help_string_buf = "Get the uptime of the ADSBee 1090 in seconds.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATUptimeCallback, comms_manager)},
     {.command_buf = "+WATCHDOG",
      .min_args = 0,
      .max_args = 1,
