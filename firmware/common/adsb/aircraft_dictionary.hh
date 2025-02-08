@@ -372,7 +372,7 @@ class Aircraft {
 
 class AircraftDictionary {
    public:
-    static const uint16_t kMaxNumAircraft = 100;
+    static const uint16_t kMaxNumAircraft = 400;
     static const uint16_t kMaxNumSources = 3;
 
     struct AircraftDictionaryConfig_t {
@@ -442,7 +442,11 @@ class AircraftDictionary {
     /**
      * Default constructor. Uses default config values.
      */
-    AircraftDictionary() {};
+    AircraftDictionary() {
+        // Avoid reallocation of the hash map to prevent fragmentation.
+        dict.max_load_factor(1.0);
+        dict.reserve(kMaxNumAircraft);
+    };
 
     /**
      * Constructor with config values specified.
