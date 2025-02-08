@@ -204,12 +204,44 @@ uint8_t AircraftCategoryToMAVLINKEmitterType(Aircraft::Category category) {
 }
 
 bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
-    uint16_t mavlink_version = reporting_protocols_[iface] == SettingsManager::kMAVLINK1 ? 1 : 2;
+    uint8_t mavlink_version = reporting_protocols_[iface] == SettingsManager::kMAVLINK1 ? 1 : 2;
     mavlink_set_proto_version(SettingsManager::SerialInterface::kCommsUART, mavlink_version);
+
+    // Send a HEARTBEAT message.
+    mavlink_heartbeat_t heartbeat_msg = {.type = MAV_TYPE_ADSB,
+                                         .autopilot = MAV_AUTOPILOT_INVALID,
+                                         .base_mode = 0,
+                                         .system_status = MAV_STATE_ACTIVE,
+                                         .mavlink_version = mavlink_version};
+    mavlink_msg_heartbeat_send_struct(static_cast<mavlink_channel_t>(iface), &heartbeat_msg);
 
     // Send an ADSB_VEHICLE message for each aircraft in the dictionary.
     for (auto &itr : adsbee.aircraft_dictionary.dict) {
         const Aircraft &aircraft = itr.second;
+
+        // Set MAVLINK flags.
+        uint16_t flags = 0;
+        if (aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid)) {
+            flags |= ADSB_FLAGS_VALID_COORDS;
+        }
+        if (aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagBaroAltitudeValid)) {
+            // Aircraft is reporting barometric altitude.
+            flags |= ADSB_FLAGS_BARO_VALID;
+            flags |= ADSB_FLAGS_VALID_ALTITUDE;
+        } else if (aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagGNSSAltitudeValid)) {
+            // Aircraft is reporting GNSS altitude.
+            flags |= ADSB_FLAGS_VALID_ALTITUDE;
+        }
+        if (strlen(aircraft.callsign) > Aircraft::kCallSignMinNumChars) {
+            flags |= ADSB_FLAGS_VALID_CALLSIGN;
+        }
+        if (aircraft.squawk > 0) {
+            flags |= ADSB_FLAGS_VALID_SQUAWK;
+        }
+        if (aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagVerticalVelocityValid)) {
+            flags |= ADSB_FLAGS_VERTICAL_VELOCITY_VALID;
+        }
+        // TODO: Set SOURCE_UAT when adding dual band support.
 
         // Initialize the message
         mavlink_adsb_vehicle_t adsb_vehicle_msg = {

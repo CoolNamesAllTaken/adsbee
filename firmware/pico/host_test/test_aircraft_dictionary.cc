@@ -375,8 +375,12 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     auto itr = dictionary.dict.begin();
     auto &aircraft = itr->second;  // NOTE: Aircraft is a mutable reference until we get to Message A!
 
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagDirectionValid));
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagHorizontalVelocityValid));
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagVerticalVelocityValid));
+
     // Aircraft should now have velocities populated.
-    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedTrack));
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedDirection));
     EXPECT_NEAR(aircraft.direction_deg, 304.2157021324374, kFloatCloseEnough);
     // Velocity should actually evaluate to 120 when evaluated with doubles, but there is some float error with the sqrt
     // that I think gets pretty nasty.
@@ -400,7 +404,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     // Check values for Message A
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedVerticalVelocity));
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity));
-    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedTrack));
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedDirection));
     EXPECT_EQ(aircraft.vertical_rate_fpm, -832);
     EXPECT_EQ(aircraft.velocity_source, Aircraft::VelocitySource::kVelocitySourceGroundSpeed);
     EXPECT_NEAR(aircraft.direction_deg, 182.88f, 0.01);
@@ -429,7 +433,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     // Check values for Message B
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedVerticalVelocity));
     EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity));
-    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedTrack));
+    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedDirection));
     EXPECT_EQ(aircraft.vertical_rate_fpm, -2304);
     EXPECT_EQ(aircraft.velocity_source, Aircraft::VelocitySource::kVelocitySourceAirspeedTrue);
     EXPECT_NEAR(aircraft.direction_deg, 243.98f, 0.01);
@@ -437,45 +441,52 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
 }
 
 TEST(AircraftDictionary, IngestAltitudeReply) {
+    Aircraft *aircraft_ptr;
     // Try ingesting a altitude reply packet that's marked as valid so that it doesn't require a cross-check with the
     // dictionary.
     AircraftDictionary dictionary = AircraftDictionary();
     Decoded1090Packet tpacket = Decoded1090Packet((char *)"200006A2DE8B1C");
     EXPECT_EQ(tpacket.GetICAOAddress(), 0x7C1B28u);
     dictionary.InsertAircraft(Aircraft(0x7C1B28u));  // Put aircraft in the dictionary so the packet can be ingested.
+    aircraft_ptr = dictionary.GetAircraftPtr(0x7C1B28u);
+    ASSERT_TRUE(aircraft_ptr);
+    EXPECT_FALSE(aircraft_ptr->HasBitFlag(Aircraft::BitFlag::kBitFlagBaroAltitudeValid));
+    EXPECT_FALSE(aircraft_ptr->HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedBaroAltitude));
     EXPECT_TRUE(dictionary.IngestDecoded1090Packet(tpacket));
-    EXPECT_TRUE(dictionary.ContainsAircraft(0x7C1B28u));
 
     // Check that the aircraft has the right altitude.
-    Aircraft aircraft;
-    EXPECT_TRUE(dictionary.GetAircraft(0x7C1B28u, aircraft));
-    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
-    EXPECT_EQ(aircraft.baro_altitude_ft, 10000);
-    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne));
-    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
-    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
+    EXPECT_FALSE(aircraft_ptr->HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
+    EXPECT_EQ(aircraft_ptr->baro_altitude_ft, 10000);
+    EXPECT_TRUE(aircraft_ptr->HasBitFlag(Aircraft::BitFlag::kBitFlagBaroAltitudeValid));
+    EXPECT_TRUE(aircraft_ptr->HasBitFlag(Aircraft::BitFlag::kBitFlagUpdatedBaroAltitude));
+    EXPECT_TRUE(aircraft_ptr->HasBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne));
+    EXPECT_FALSE(aircraft_ptr->HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
+    EXPECT_FALSE(aircraft_ptr->HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
 
     // Ingest a altitude reply packet with an alert and ident.
     tpacket = Decoded1090Packet((char *)"24000E3956BBA1");
-    // Add aircraft to dictioanry so packet can be ingested.
+    // Add aircraft to dictionary so packet can be ingested.
     dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
+    aircraft_ptr = dictionary.GetAircraftPtr(0xD3CCBFu);
+    EXPECT_FALSE(aircraft_ptr->HasBitFlag(Aircraft::BitFlag::kBitFlagBaroAltitudeValid));
     EXPECT_TRUE(dictionary.IngestDecoded1090Packet(tpacket));
-    EXPECT_TRUE(dictionary.GetAircraft(0xD3CCBFu, aircraft));
-    EXPECT_EQ(aircraft.baro_altitude_ft, 22025);
-    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne));
-    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
-    EXPECT_TRUE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
+    EXPECT_EQ(aircraft_ptr->baro_altitude_ft, 22025);
+    EXPECT_FALSE(aircraft_ptr->HasBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne));
+    EXPECT_TRUE(aircraft_ptr->HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
+    EXPECT_TRUE(aircraft_ptr->HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
 
     // Ingest a altitude reply packet with aircraft on the ground.
     tpacket = Decoded1090Packet((char *)"210000992F8C48");
-    // Add aircraft to dictioanry so packet can be ingested.
+    // Add aircraft to dictionary so packet can be ingested.
     dictionary.InsertAircraft(Aircraft(tpacket.GetICAOAddress()));
+    aircraft_ptr = dictionary.GetAircraftPtr(0x7C7539u);
+    EXPECT_FALSE(aircraft_ptr->HasBitFlag(Aircraft::BitFlag::kBitFlagBaroAltitudeValid));
     EXPECT_TRUE(dictionary.IngestDecoded1090Packet(tpacket));
-    EXPECT_TRUE(dictionary.GetAircraft(0x7C7539u, aircraft));
-    EXPECT_EQ(aircraft.baro_altitude_ft, 25);
-    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne));
-    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
-    EXPECT_FALSE(aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
+    EXPECT_EQ(aircraft_ptr->baro_altitude_ft, 25);
+    EXPECT_FALSE(aircraft_ptr->HasBitFlag(Aircraft::BitFlag::kBitFlagIsAirborne));
+    EXPECT_FALSE(aircraft_ptr->HasBitFlag(Aircraft::BitFlag::kBitFlagIdent));
+    EXPECT_FALSE(aircraft_ptr->HasBitFlag(Aircraft::BitFlag::kBitFlagAlert));
+    EXPECT_TRUE(aircraft_ptr->HasBitFlag(Aircraft::BitFlag::kBitFlagBaroAltitudeValid));
 }
 
 TEST(AircraftDictionary, IngestIdentityReply) {
