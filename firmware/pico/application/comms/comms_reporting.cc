@@ -261,8 +261,8 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
             .hor_velocity = static_cast<uint16_t>(KtsToMps(static_cast<int>(aircraft.velocity_kts)) * 100),
             // Vertical Velocity [cm/s]
             .ver_velocity = static_cast<int16_t>(FpmToMps(aircraft.vertical_rate_fpm) * 100),
-            .flags = 0,   // TODO: fix this!
-            .squawk = 0,  // TODO: fix this!
+            .flags = flags,
+            .squawk = aircraft.squawk,
             .altitude_type =
                 static_cast<uint8_t>(aircraft.altitude_source == Aircraft::AltitudeSource::kAltitudeSourceBaro ? 0 : 1),
             // Fill out callsign later.
