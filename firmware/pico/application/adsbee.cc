@@ -258,7 +258,7 @@ bool ADSBee::Update() {
     // Raw1090Packet raw_packet;
     Decoded1090Packet decoded_packet;
     while (decoder.decoded_1090_packet_out_queue.Pop(decoded_packet) /*raw_1090_packet_queue.Pop(raw_packet)*/) {
-        // if (raw_packet.buffer_len_bits == Decoded1090Packet::kExtendedSquitterPacketLenBits) {
+        // if (raw_packet.buffer_len_bits == Raw1090Packet::kExtendedSquitterPacketLenBits) {
         //     CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%08x|%08x|%04x SRC=%d SIGS=%ddBm SIGQ=%ddB MLAT=%u",
         //                  raw_packet.buffer[0], raw_packet.buffer[1], raw_packet.buffer[2],
         //                  (raw_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_packet.source, raw_packet.sigs_dbm,
@@ -401,7 +401,7 @@ void ADSBee::OnDemodComplete() {
             // Only enable this print for debugging! Printing from the interrupt causes the USB library to crash.
             // CONSOLE_WARNING("ADSBee::OnDemodComplete", "Received a packet with %d 32-bit words, expected maximum of
             // %d.",
-            //                 packet_num_words, Decoded1090Packet::kExtendedSquitterPacketNumWords32);
+            //                 packet_num_words, Raw1090Packet::kExtendedSquitterPacketNumWords32);
             // pio_sm_clear_fifos(config_.message_demodulator_pio, message_demodulator_sm_);
             packet_num_words = Raw1090Packet::kMaxPacketLenWords32;
         }
@@ -416,17 +416,17 @@ void ADSBee::OnDemodComplete() {
                 // word  = word >> 1;
                 // Mask and left align final word based on bit length.
                 switch (packet_num_words) {
-                    case Decoded1090Packet::kSquitterPacketNumWords32:
+                    case Raw1090Packet::kSquitterPacketNumWords32:
                         aircraft_dictionary.Record1090RawSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFFFF) << 8;
-                        rx_packet_[sm_index].buffer_len_bits = Decoded1090Packet::kSquitterPacketLenBits;
+                        rx_packet_[sm_index].buffer_len_bits = Raw1090Packet::kSquitterPacketLenBits;
                         // raw_1090_packet_queue.Push(rx_packet_[sm_index]);
                         decoder.raw_1090_packet_in_queue.Push(rx_packet_[sm_index]);
                         break;
-                    case Decoded1090Packet::kExtendedSquitterPacketNumWords32:
+                    case Raw1090Packet::kExtendedSquitterPacketNumWords32:
                         aircraft_dictionary.Record1090RawExtendedSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFF) << 16;
-                        rx_packet_[sm_index].buffer_len_bits = Decoded1090Packet::kExtendedSquitterPacketLenBits;
+                        rx_packet_[sm_index].buffer_len_bits = Raw1090Packet::kExtendedSquitterPacketLenBits;
                         // raw_1090_packet_queue.Push(rx_packet_[sm_index]);
                         decoder.raw_1090_packet_in_queue.Push(rx_packet_[sm_index]);
                         break;
