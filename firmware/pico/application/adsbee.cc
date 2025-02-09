@@ -412,8 +412,8 @@ void ADSBee::OnDemodComplete() {
             rx_packet_[sm_index].buffer[i] =
                 pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);
             if (i == packet_num_words - 1) {
-                // // Trim off extra ingested bit from last word in the packet.
-                // word  = word >> 1;
+                // Trim off extra ingested bit from last word in the packet.
+                rx_packet_[sm_index].buffer[i] >>= 1;
                 // Mask and left align final word based on bit length.
                 switch (packet_num_words) {
                     case Raw1090Packet::kSquitterPacketNumWords32:

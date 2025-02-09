@@ -92,10 +92,10 @@ uint16_t Raw1090Packet::PrintBuffer(char *buf, uint16_t buf_len_bytes) const {
     uint16_t len = 0;
     switch (buffer_len_bits) {
         case kSquitterPacketLenBits:
-            len = snprintf(buf, buf_len_bytes, "0x%08x%06x", buffer[0], buffer[1] >> (2 * kBitsPerNibble));
+            len = snprintf(buf, buf_len_bytes, "0x%08lx%06lx", buffer[0], buffer[1] >> (2 * kBitsPerNibble));
             break;
         case kExtendedSquitterPacketLenBits:
-            len = snprintf(buf, buf_len_bytes, "0x%08x%08x%08x%04x", buffer[0], buffer[1], buffer[2],
+            len = snprintf(buf, buf_len_bytes, "0x%08lx%08lx%08lx%04lx", buffer[0], buffer[1], buffer[2],
                            buffer[3] >> (4 * kBitsPerNibble));
             break;
     }

@@ -80,9 +80,12 @@ bool PacketDecoder::UpdateDecoderLoop() {
         }
 
         // Append packet contents to debug message.
-        uint16_t prefix_len = strlen(decode_debug_message.message);
+        uint16_t message_len = strlen(decode_debug_message.message);
+        message_len +=
+            snprintf(decode_debug_message.message + message_len, DebugMessage::kMessageMaxLen - message_len,
+                     "df=%02d icao=0x%06x ", decoded_packet.GetDownlinkFormat(), decoded_packet.GetICAOAddress());
         // Append a print of the packet contents.
-        raw_packet.PrintBuffer(decode_debug_message.message + prefix_len, DebugMessage::kMessageMaxLen - prefix_len);
+        raw_packet.PrintBuffer(decode_debug_message.message + message_len, DebugMessage::kMessageMaxLen - message_len);
         debug_message_out_queue.Push(decode_debug_message);
     }
 
