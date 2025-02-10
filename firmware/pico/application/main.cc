@@ -80,14 +80,17 @@ int main() {
             // Try reading the firmware version from the ESP32. If the read succeeds, confirm that the firmware
             // version matches ours.
             if (!esp32.Read(ObjectDictionary::Address::kAddrFirmwareVersion, esp32_firmware_version)) {
+                // Couldn't read firmware version from ESP32. Try again later.
                 CONSOLE_ERROR("main", "Unable to read firmware version from ESP32.");
             } else if (esp32_firmware_version != object_dictionary.kFirmwareVersion) {
+                // ESP32 firmware version doesn't match ours. Flash the ESP32.
                 CONSOLE_ERROR("main",
                               "Incorrect firmware version detected on ESP32. Pico is running %d.%d.%d but ESP32 is "
                               "running %d.%d.%d",
                               object_dictionary.kFirmwareVersionMajor, object_dictionary.kFirmwareVersionMinor,
                               object_dictionary.kFirmwareVersionPatch, esp32_firmware_version >> 16,
                               (esp32_firmware_version >> 8) & 0xFF, esp32_firmware_version & 0xFF);
+                break;
             } else {
                 // Firmware checks out, all good! Don't flash the ESP32.
                 flash_esp32 = false;
