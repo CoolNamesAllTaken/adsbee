@@ -1,5 +1,6 @@
 
 if (TARGET application)
+    add_subdirectory(adsb/nasa_cpr)
     target_sources(application PRIVATE
         # NOTE: Annoyingly, all source files need to end with .c or .cpp to be seen by the ESP IDF.
         settings/settings_strs.cpp
@@ -39,6 +40,7 @@ elseif (TARGET bootloader)
         firmware_update
     )
 elseif (TARGET host_test)
+    add_subdirectory(adsb/nasa_cpr)
     target_sources(host_test PRIVATE
         adsb/transponder_packet.cpp
         adsb/aircraft_dictionary.cpp

@@ -10,6 +10,8 @@
 #include "macros.hh"
 #include "transponder_packet.hh"
 
+#define USE_NASA_CPR
+
 class Aircraft {
    public:
     static constexpr uint16_t kCallSignMaxNumChars = 7;
@@ -181,15 +183,6 @@ class Aircraft {
     Aircraft();
 
     /**
-     * Simple helper that checks to see whether a packet decode can be attempted (does not guarantee it will succeed,
-     * for instance an odd and even packet may have been received, but from different CPR zones).
-     * @retval True if decode can be attempted, false otherwise.
-     */
-    bool CanDecodePosition() {
-        return last_odd_packet_.received_timestamp_ms > 0 && last_even_packet_.received_timestamp_ms > 0;
-    }
-
-    /**
      * Clears the CPR packet cache. Used when too much time has elapsed since the last CPR packet was received, to avoid
      * decoding CPR location with invalid packet pairings.
      */
@@ -355,13 +348,15 @@ class Aircraft {
         uint32_t n_lat = 0;                  // 17-bit latitude count
         uint32_t n_lon = 0;                  // 17-bit longitude count
 
+#ifndef USE_NASA_CPR
         // DecodePosition values.
         float lat_cpr = 0.0f;
         float lon_cpr = 0.0f;
         uint16_t nl_cpr = 0;  // number of longitude cells in latitude band
         float lat =
             0.0f;  // only keep latitude since it's reused in cooperative calculations between odd and even packets
-        // float lon = 0.0f; // longitude
+// float lon = 0.0f; // longitude
+#endif
     };
 
     CPRPacket last_odd_packet_;

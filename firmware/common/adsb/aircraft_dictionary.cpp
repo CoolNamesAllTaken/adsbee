@@ -8,6 +8,10 @@
 #include "macros.hh"
 #include "unit_conversions.hh"
 
+#ifdef USE_NASA_CPR
+#include "nasa_cpr.hh"
+#endif
+
 const float kRadiansToDegrees = 360.0f / (2.0f * M_PI);
 
 /**
@@ -30,10 +34,20 @@ bool Aircraft::DecodePosition() {
                         "Unable to decode position without receiving an odd and even packet pair.\r\n");
         return false;  // need both an even and an odd packet to be able to decode position
     }
+    uint32_t cpr_interval_ms = MIN(last_odd_packet_.received_timestamp_ms - last_even_packet_.received_timestamp_ms,
+                                   last_even_packet_.received_timestamp_ms - last_odd_packet_.received_timestamp_ms);
+    if (cpr_interval_ms > GetMaxAllowedCPRIntervalMs()) {
+        // Reject CPR packet pairings that are too far apart in time.
+        WriteBitFlag(BitFlag::kBitFlagPositionValid, false);  // keep last known good coordinates, but mark as invalid
+        CONSOLE_WARNING("Aircraft::DecodePosition",
+                        "CPR packet pair too far apart in time (%d ms). Can't decode position.\r\n", cpr_interval_ms);
+        return false;
+    }
 
     // WARNING: There are two separate timebases in play here! The timebase for CPR packet timestamps is the MLAT
     // timebase, while higher level aircraft dictionary info is in system time.
 
+#ifndef USE_NASA_CPR
     // Equation 5.6
     int32_t lat_zone_index = floorf(59.0f * last_even_packet_.lat_cpr - 60.0f * last_odd_packet_.lat_cpr + 0.5f);
 
@@ -66,7 +80,8 @@ bool Aircraft::DecodePosition() {
 
     if (last_odd_packet_.nl_cpr != last_even_packet_.nl_cpr) {
         // Invalidate position if position pair is split across different latitude bands.
-        WriteBitFlag(BitFlag::kBitFlagPositionValid, false);  // keep last known good coordinates, but mark as invalid
+        // WriteBitFlag(BitFlag::kBitFlagPositionValid, false);  // keep last known good coordinates, but mark as
+        // invalid
         CONSOLE_WARNING("Aircraft::DecodePosition",
                         "NL_cpr disagrees between odd (%d) and even (%d) packets. Can't decode "
                         "position.\r\n",
@@ -94,6 +109,23 @@ bool Aircraft::DecodePosition() {
 
     last_track_update_timestamp_ms = get_time_since_boot_ms();  // Update last track update timestamp.
     return true;
+#else
+    bool received_odd_last = last_odd_packet_.received_timestamp_ms > last_even_packet_.received_timestamp_ms;
+    CPRPacket &new_packet = received_odd_last ? last_odd_packet_ : last_even_packet_;
+    CPRPacket &old_packet = received_odd_last ? last_even_packet_ : last_odd_packet_;
+    NASACPRDecoder::DecodedPosition result;
+    bool result_valid = NASACPRDecoder::DecodeAirborneGlobalCPR(
+        {.odd = !received_odd_last, .lat_cpr = old_packet.n_lat, .lon_cpr = old_packet.n_lon},
+        {.odd = received_odd_last, .lat_cpr = new_packet.n_lat, .lon_cpr = new_packet.n_lon}, result);
+
+    if (result_valid) {
+        WriteBitFlag(BitFlag::kBitFlagPositionValid, true);
+        latitude_deg = result.lat_deg;
+        longitude_deg = result.lon_deg;
+        last_track_update_timestamp_ms = get_time_since_boot_ms();  // Update last track update timestamp.
+    }
+    return result_valid;
+#endif
 }
 
 /**
@@ -403,6 +435,8 @@ bool AircraftDictionary::RemoveAircraft(uint32_t icao_address) {
 
 bool Aircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, uint32_t received_timestamp_ms) {
     if (n_lat_cpr > kCPRLatLonMaxCount || n_lon_cpr > kCPRLatLonMaxCount) {
+        CONSOLE_ERROR("Aircraft::SetCPRLatLon", "Received CPR packet with out of bounds lat/lon values (%d, %d).",
+                      n_lat_cpr, n_lon_cpr);
         return false;  // counts out of bounds, don't parse
     }
     CPRPacket &complementary_packet = odd ? last_even_packet_ : last_odd_packet_;
@@ -419,10 +453,11 @@ bool Aircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, ui
     packet.received_timestamp_ms = received_timestamp_ms;
     packet.n_lat = n_lat_cpr;
     packet.n_lon = n_lon_cpr;
+#ifndef USE_NASA_CPR
     // Equation 5.5
     packet.lat_cpr = static_cast<float>(n_lat_cpr) / kCPRLatLonMaxCount;
     packet.lon_cpr = static_cast<float>(n_lon_cpr) / kCPRLatLonMaxCount;
-
+#endif
     return true;
 }
 
@@ -676,7 +711,7 @@ bool AircraftDictionary::ApplyAirbornePositionMessage(Aircraft &aircraft, ADSBPa
             uint16_t encoded_altitude_ft_with_q_bit = static_cast<uint16_t>(packet.GetNBitWordFromMessage(12, 8));
             if (encoded_altitude_ft_with_q_bit == 0) {
                 aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeNotAvailable;
-                CONSOLE_WARNING("AIrcraftDictionary::ApplyAirbornePositionMessage",
+                CONSOLE_WARNING("AircraftDictionary::ApplyAirbornePositionMessage",
                                 "Altitude information not available for aircraft 0x%lx.", aircraft.icao_address);
                 decode_successful = false;
             } else {
@@ -686,7 +721,7 @@ bool AircraftDictionary::ApplyAirbornePositionMessage(Aircraft &aircraft, ADSBPa
                 uint16_t encoded_altitude_ft = ((encoded_altitude_ft_with_q_bit & 0b111111100000) >> 1) |
                                                (encoded_altitude_ft_with_q_bit & 0b1111);
                 aircraft.baro_altitude_ft = q_bit ? (encoded_altitude_ft * 25) - 1000 : 25 * encoded_altitude_ft;
-                // FIXME: Does not currently support baro altitudes above 50175ft. Something about grey codes?
+                // FIXME: Does not currently support baro altitudes above 50175ft. Something about gray codes?
                 aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagBaroAltitudeValid, true);
                 aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedBaroAltitude, true);
             }
@@ -713,19 +748,14 @@ bool AircraftDictionary::ApplyAirbornePositionMessage(Aircraft &aircraft, ADSBPa
     bool odd = packet.GetNBitWordFromMessage(1, 21);
 
     // ME[32-?]
-    if (!aircraft.SetCPRLatLon(packet.GetNBitWordFromMessage(17, 22), packet.GetNBitWordFromMessage(17, 39), odd,
-                               packet.GetTimestampMs())) {
-        CONSOLE_WARNING("AircraftDictionary::ApplyAirbornePositionMessage",
-                        "Failed to set CPR Lat/Lon for aircraft 0x%lx.", aircraft.icao_address);
+    aircraft.SetCPRLatLon(packet.GetNBitWordFromMessage(17, 22), packet.GetNBitWordFromMessage(17, 39), odd,
+                          packet.GetTimestampMs());
+    if (aircraft.DecodePosition()) {
+        // Position decode succeeded.
+        aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedPosition, true);
+    } else {
+        // Position decode failed.
         decode_successful = false;
-    } else if (aircraft.CanDecodePosition()) {
-        if (!aircraft.DecodePosition()) {
-            CONSOLE_WARNING("ApplyAirbornePositionMessage", "DecodePosition failed for aircraft 0x%lx.\r\n",
-                            aircraft.icao_address);
-            decode_successful = false;
-        } else {
-            aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedPosition, true);
-        }
     }
 
     return decode_successful;
