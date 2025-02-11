@@ -1,5 +1,6 @@
 #include "airborne/cpr.h"
 #include "awb_utils.h"
+#include "comms.hh"
 #include "nasa_cpr.hh"
 
 bool NASACPRDecoder::DecodeAirborneLocalCPR(const DecodedPosition &reference_position, const CPRMessage &message,
@@ -16,8 +17,13 @@ bool NASACPRDecoder::DecodeAirborneLocalCPR(const DecodedPosition &reference_pos
 
 bool NASACPRDecoder::DecodeAirborneGlobalCPR(const CPRMessage &message0, const CPRMessage &message1,
                                              DecodedPosition &decoded_position) {
+    if (message0.odd == message1.odd) {
+        CONSOLE_ERROR("NASACPRDecoder::DecodeAirborneGlobalCPR", "Can't perform CPR decode with two %s messages.",
+                      message0.odd ? "odd" : "even");
+        return false;  // Both messages must be one odd and one even.
+    }
     struct recovered_position result =
-        global_dec(message1.odd, {.format = message0.odd, .yz = message0.lat_cpr, .xz = message0.lon_cpr},
+        global_dec(message0.odd, {.format = message0.odd, .yz = message0.lat_cpr, .xz = message0.lon_cpr},
                    {.format = message1.odd, .yz = message1.lat_cpr, .xz = message1.lon_cpr});
     decoded_position.lat_deg = awb2lat(result.lat_awb);
     decoded_position.lon_deg = awb2lon(result.lon_awb);

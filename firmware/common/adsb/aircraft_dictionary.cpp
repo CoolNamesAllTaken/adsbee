@@ -110,13 +110,10 @@ bool Aircraft::DecodePosition() {
     last_track_update_timestamp_ms = get_time_since_boot_ms();  // Update last track update timestamp.
     return true;
 #else
-    bool received_odd_last = last_odd_packet_.received_timestamp_ms > last_even_packet_.received_timestamp_ms;
-    CPRPacket &new_packet = received_odd_last ? last_odd_packet_ : last_even_packet_;
-    CPRPacket &old_packet = received_odd_last ? last_even_packet_ : last_odd_packet_;
     NASACPRDecoder::DecodedPosition result;
     bool result_valid = NASACPRDecoder::DecodeAirborneGlobalCPR(
-        {.odd = !received_odd_last, .lat_cpr = old_packet.n_lat, .lon_cpr = old_packet.n_lon},
-        {.odd = received_odd_last, .lat_cpr = new_packet.n_lat, .lon_cpr = new_packet.n_lon}, result);
+        {.odd = false, .lat_cpr = last_odd_packet_.n_lat, .lon_cpr = last_odd_packet_.n_lon},
+        {.odd = true, .lat_cpr = last_even_packet_.n_lat, .lon_cpr = last_even_packet_.n_lon}, result);
 
     if (result_valid) {
         WriteBitFlag(BitFlag::kBitFlagPositionValid, true);

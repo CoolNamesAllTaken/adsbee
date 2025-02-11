@@ -32,6 +32,7 @@ target_sources(host_test PRIVATE
     test_crc.cc
     test_data_structures.cc
     test_decode_utils.cc
+    test_nasa_cpr.cc
     test_packet_decoder.cc
     test_platform.cc
     test_reporting_beast.cc
