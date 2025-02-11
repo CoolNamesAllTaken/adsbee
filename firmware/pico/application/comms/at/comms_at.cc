@@ -805,6 +805,17 @@ CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATUptimeCallback) {
+    switch (op) {
+        case '?':
+            // Query uptime.
+            CPP_AT_CMD_PRINTF("=%u", get_time_since_boot_ms() / kMsPerSec);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATWatchdogCallback) {
     switch (op) {
         case '?': {
@@ -1039,6 +1050,11 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string_buf = "Set minimum trigger level threshold for RF power detector.\r\n\tAT+TLSet=<tl_mv>"
                         "\tQuery trigger level.\r\n\tAT+TL_SET?\r\n\t+TLSet=<tl_mv>.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLSetCallback, comms_manager)},
+    {.command_buf = "+UPTIME",
+     .min_args = 0,
+     .max_args = 0,
+     .help_string_buf = "Get the uptime of the ADSBee 1090 in seconds.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATUptimeCallback, comms_manager)},
     {.command_buf = "+WATCHDOG",
      .min_args = 0,
      .max_args = 1,
@@ -1063,7 +1079,7 @@ const CppAT::ATCommandDef_t at_command_list[] = {
 const uint16_t at_command_list_num_commands = sizeof(at_command_list) / sizeof(at_command_list[0]);
 
 bool CommsManager::UpdateAT() {
-    static char stdio_at_command_buf[kATCommandBufMaxLen];
+    static char stdio_at_command_buf[kATCommandBufMaxLen + 1];
     static uint16_t stdio_at_command_buf_len = 0;
     // Check for new AT commands from STDIO. Process up to one line per loop.
     char c = static_cast<char>(getchar_timeout_us(0));
@@ -1071,6 +1087,11 @@ bool CommsManager::UpdateAT() {
         stdio_at_command_buf[stdio_at_command_buf_len] = c;
         stdio_at_command_buf_len++;
         stdio_at_command_buf[stdio_at_command_buf_len] = '\0';
+        if (stdio_at_command_buf_len >= kATCommandBufMaxLen) {
+            CONSOLE_ERROR("CommsManager::UpdateAT", "AT command buffer overflow.");
+            stdio_at_command_buf_len = 0;
+            stdio_at_command_buf[stdio_at_command_buf_len] = '\0';  // clear command buffer
+        }
         if (c == '\n') {
             at_parser_.ParseMessage(std::string_view(stdio_at_command_buf));
             stdio_at_command_buf_len = 0;
@@ -1081,12 +1102,17 @@ bool CommsManager::UpdateAT() {
 
     if (esp32.IsEnabled()) {
         // Receive incoming network console characters.
-        static char esp32_console_rx_buf[kATCommandBufMaxLen];
+        static char esp32_console_rx_buf[kATCommandBufMaxLen + 1];
         static uint16_t esp32_console_rx_buf_len = 0;
         while (esp32_console_rx_queue.Pop(c)) {
             esp32_console_rx_buf[esp32_console_rx_buf_len] = c;
             esp32_console_rx_buf_len++;
             esp32_console_rx_buf[esp32_console_rx_buf_len] = '\0';
+            if (esp32_console_rx_buf_len >= kATCommandBufMaxLen) {
+                CONSOLE_ERROR("CommsManager::UpdateAT", "Network console buffer overflow.");
+                esp32_console_rx_buf_len = 0;
+                esp32_console_rx_buf[esp32_console_rx_buf_len] = '\0';  // clear command buffer
+            }
             if (c == '\n') {
                 CONSOLE_INFO("CommsManager::UpdateAT", "Received network console message: %s\r\n",
                              esp32_console_rx_buf);

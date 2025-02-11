@@ -154,7 +154,7 @@ uint16_t AircraftDictionary::GetNumAircraft() { return dict.size(); }
 bool AircraftDictionary::IngestDecoded1090Packet(Decoded1090Packet &packet) {
     int16_t source = packet.GetRaw().source;
     switch (packet.GetBufferLenBits()) {
-        case Decoded1090Packet::kSquitterPacketLenBits:
+        case Raw1090Packet::kSquitterPacketLenBits:
             // Validate packet against ICAO addresses in dictionary, or allow it in if it's a DF=11 all call reply
             // packet tha validated itself (e.g. it's a response to a spontaneous acquisition squitter with interrogator
             // ID=0, making the checksum useable).
@@ -178,7 +178,7 @@ bool AircraftDictionary::IngestDecoded1090Packet(Decoded1090Packet &packet) {
                 metrics_counter_.valid_squitter_frames_by_source[source]++;
             }
             break;
-        case Decoded1090Packet::kExtendedSquitterPacketLenBits:
+        case Raw1090Packet::kExtendedSquitterPacketLenBits:
             if (packet.IsValid()) {
                 metrics_counter_.valid_extended_squitter_frames++;
                 if (source > 0) {
@@ -192,8 +192,8 @@ bool AircraftDictionary::IngestDecoded1090Packet(Decoded1090Packet &packet) {
             CONSOLE_ERROR(
                 "AircraftDictionary::IngestDecoded1090Packet",
                 "Received packet with unrecognized bitlength %d, expected %d (Squitter) or %d (Extended Squitter).",
-                packet.GetBufferLenBits(), Decoded1090Packet::kSquitterPacketLenBits,
-                Decoded1090Packet::kExtendedSquitterPacketLenBits);
+                packet.GetBufferLenBits(), Raw1090Packet::kSquitterPacketLenBits,
+                Raw1090Packet::kExtendedSquitterPacketLenBits);
             return false;
     }
 
@@ -272,6 +272,8 @@ bool AircraftDictionary::IngestAltitudeReplyPacket(AltitudeReplyPacket packet) {
     aircraft_ptr->WriteBitFlag(Aircraft::BitFlag::kBitFlagAlert, packet.HasAlert());
     aircraft_ptr->WriteBitFlag(Aircraft::BitFlag::kBitFlagIdent, packet.HasIdent());
     aircraft_ptr->baro_altitude_ft = packet.GetAltitudeFt();
+    aircraft_ptr->WriteBitFlag(Aircraft::BitFlag::kBitFlagBaroAltitudeValid, true);
+    aircraft_ptr->WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedBaroAltitude, true);
     aircraft_ptr->IncrementNumFramesReceived(false);
 
     return true;
@@ -685,6 +687,7 @@ bool AircraftDictionary::ApplyAirbornePositionMessage(Aircraft &aircraft, ADSBPa
                                                (encoded_altitude_ft_with_q_bit & 0b1111);
                 aircraft.baro_altitude_ft = q_bit ? (encoded_altitude_ft * 25) - 1000 : 25 * encoded_altitude_ft;
                 // FIXME: Does not currently support baro altitudes above 50175ft. Something about grey codes?
+                aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagBaroAltitudeValid, true);
                 aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedBaroAltitude, true);
             }
             break;
@@ -693,6 +696,7 @@ bool AircraftDictionary::ApplyAirbornePositionMessage(Aircraft &aircraft, ADSBPa
             aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeSourceGNSS;
             uint16_t gnss_altitude_m = static_cast<uint16_t>(packet.GetNBitWordFromMessage(12, 8));
             aircraft.gnss_altitude_ft = MetersToFeet(gnss_altitude_m);
+            aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagGNSSAltitudeValid, true);
             aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedGNSSAltitude, true);
             break;
         }
@@ -795,7 +799,11 @@ bool AircraftDictionary::ApplyAirborneVelocitiesMessage(Aircraft &aircraft, ADSB
                           subtype);
             return false;  // Don't attempt vertical rate decode if message type is invalid.
     }
-    aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedTrack, true);
+    // Latching bit flags.
+    aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagDirectionValid, true);
+    aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagHorizontalVelocityValid, true);
+    // Non-latching bit flags.
+    aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedDirection, true);
     aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity, true);
 
     // Decode vertical rate.
@@ -813,6 +821,7 @@ bool AircraftDictionary::ApplyAirborneVelocitiesMessage(Aircraft &aircraft, ADSB
         } else {
             aircraft.vertical_rate_fpm = (vertical_rate_magnitude_fpm - 1) * 64;
         }
+        aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagVerticalVelocityValid, true);
         aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedVerticalVelocity, true);
     }
 
@@ -830,10 +839,12 @@ bool AircraftDictionary::ApplyAirborneVelocitiesMessage(Aircraft &aircraft, ADSB
         switch (aircraft.altitude_source) {
             case Aircraft::AltitudeSource::kAltitudeSourceBaro:
                 aircraft.gnss_altitude_ft = aircraft.baro_altitude_ft + gnss_alt_baro_alt_difference_ft;
+                aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagGNSSAltitudeValid, true);
                 aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedGNSSAltitude, true);
                 break;
             case Aircraft::AltitudeSource::kAltitudeSourceGNSS:
                 aircraft.baro_altitude_ft = aircraft.gnss_altitude_ft - gnss_alt_baro_alt_difference_ft;
+                aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagBaroAltitudeValid, true);
                 aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedBaroAltitude, true);
                 break;
             default:

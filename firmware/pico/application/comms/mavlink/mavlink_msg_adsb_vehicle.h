@@ -415,6 +415,7 @@ static inline void mavlink_msg_adsb_vehicle_send_struct(mavlink_channel_t chan,
 #endif
 }
 
+#ifndef ON_PICO
 #if MAVLINK_MSG_ID_ADSB_VEHICLE_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
   This variant of _send() can be used to save stack space by re-using
@@ -469,6 +470,7 @@ static inline void mavlink_msg_adsb_vehicle_send_buf(mavlink_message_t* msgbuf, 
 #endif
 
 #endif
+#endif /* ON_PICO */
 
 // MESSAGE ADSB_VEHICLE UNPACKING
 

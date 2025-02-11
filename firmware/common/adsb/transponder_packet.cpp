@@ -88,6 +88,20 @@ Raw1090Packet::Raw1090Packet(char *rx_string, int16_t source_in, int32_t sigs_db
     }
 }
 
+uint16_t Raw1090Packet::PrintBuffer(char *buf, uint16_t buf_len_bytes) const {
+    uint16_t len = 0;
+    switch (buffer_len_bits) {
+        case kSquitterPacketLenBits:
+            len = snprintf(buf, buf_len_bytes, "0x%08lx%06lx", buffer[0], buffer[1] >> (2 * kBitsPerNibble));
+            break;
+        case kExtendedSquitterPacketLenBits:
+            len = snprintf(buf, buf_len_bytes, "0x%08lx%08lx%08lx%04lx", buffer[0], buffer[1], buffer[2],
+                           buffer[3] >> (4 * kBitsPerNibble));
+            break;
+    }
+    return len;
+}
+
 Decoded1090Packet::Decoded1090Packet(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32,
                                      int16_t source, int32_t sigs_dbm, int32_t sigq_db,
                                      uint64_t mlat_48mhz_64bit_counts)
@@ -197,10 +211,11 @@ uint32_t Decoded1090Packet::CalculateCRC24(uint16_t packet_len_bits) const {
 }
 
 void Decoded1090Packet::ConstructTransponderPacket() {
-    if (raw_.buffer_len_bits != kExtendedSquitterPacketLenBits && raw_.buffer_len_bits != kSquitterPacketLenBits) {
-        snprintf(debug_string, kDebugStrLen,
-                 "Bit number mismatch while decoding packet. Expected %d or %d but got %d!\r\n",
-                 kExtendedSquitterPacketLenBits, kSquitterPacketLenBits, raw_.buffer_len_bits);
+    if (raw_.buffer_len_bits != Raw1090Packet::kExtendedSquitterPacketLenBits &&
+        raw_.buffer_len_bits != Raw1090Packet::kSquitterPacketLenBits) {
+        snprintf(
+            debug_string, kDebugStrLen, "Bit number mismatch while decoding packet. Expected %d or %d but got %d!\r\n",
+            Raw1090Packet::kExtendedSquitterPacketLenBits, Raw1090Packet::kSquitterPacketLenBits, raw_.buffer_len_bits);
 
         return;  // leave is_valid_ as false
     }

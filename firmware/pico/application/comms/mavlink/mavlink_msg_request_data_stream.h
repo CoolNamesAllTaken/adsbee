@@ -337,6 +337,7 @@ static inline void mavlink_msg_request_data_stream_send_struct(
 #endif
 }
 
+#ifndef ON_PICO
 #if MAVLINK_MSG_ID_REQUEST_DATA_STREAM_LEN <= MAVLINK_MAX_PAYLOAD_LEN
 /*
   This variant of _send() can be used to save stack space by re-using
@@ -376,6 +377,7 @@ static inline void mavlink_msg_request_data_stream_send_buf(mavlink_message_t* m
 #endif
 
 #endif
+#endif /* ON_PICO */
 
 // MESSAGE REQUEST_DATA_STREAM UNPACKING
 

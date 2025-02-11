@@ -13,6 +13,7 @@
 class Aircraft {
    public:
     static constexpr uint16_t kCallSignMaxNumChars = 7;
+    static constexpr uint16_t kCallSignMinNumChars = 3;  // Callsigns must be at this long to be valid.
     // These variables define filter bounds for time between CPR packets. If the time between packets is greater than
     // the time delta limit, the old CPR packet is discarded and the CPR packet pair is not used for position decoding.
     static constexpr uint32_t kDefaultCPRIntervalMs = 10e3;  // CPR interval when starting from scratch or stale track.
@@ -66,7 +67,12 @@ class Aircraft {
 
     enum BitFlag : uint32_t {
         kBitFlagIsAirborne = 0,  // Received messages or flags indicating the aircraft is airborne.
+        kBitFlagBaroAltitudeValid,
+        kBitFlagGNSSAltitudeValid,
         kBitFlagPositionValid,
+        kBitFlagDirectionValid,
+        kBitFlagHorizontalVelocityValid,
+        kBitFlagVerticalVelocityValid,
         kBitFlagIsMilitary,              // Received at least one military ES message from the aircraft.
         kBitFlagIsClassB2GroundVehicle,  // Is a class B2 ground vehicle transmitting at <70W.
         kBitFlagHas1090ESIn,             // Aircraft is equipped with 1090MHz Extended Squitter receive capability.
@@ -88,7 +94,7 @@ class Aircraft {
         kBitFlagUpdatedBaroAltitude,
         kBitFlagUpdatedGNSSAltitude,
         kBitFlagUpdatedPosition,
-        kBitFlagUpdatedTrack,
+        kBitFlagUpdatedDirection,
         kBitFlagUpdatedHorizontalVelocity,
         kBitFlagUpdatedVerticalVelocity,
         kBitFlagNumFlagBits
@@ -297,7 +303,7 @@ class Aircraft {
     uint32_t icao_address = 0;
     char callsign[kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
     uint16_t squawk = 0;
-    Category category = kCategoryInvalid;
+    Category category = kCategoryNoCategoryInfo;
     uint8_t category_raw = 0;  // Non-enum category in case we want the value without a many to one mapping.
 
     int32_t baro_altitude_ft = 0;
@@ -366,7 +372,7 @@ class Aircraft {
 
 class AircraftDictionary {
    public:
-    static const uint16_t kMaxNumAircraft = 100;
+    static const uint16_t kMaxNumAircraft = 400;
     static const uint16_t kMaxNumSources = 3;
 
     struct AircraftDictionaryConfig_t {
@@ -436,7 +442,11 @@ class AircraftDictionary {
     /**
      * Default constructor. Uses default config values.
      */
-    AircraftDictionary() {};
+    AircraftDictionary() {
+        // Avoid reallocation of the hash map to prevent fragmentation.
+        dict.max_load_factor(1.0);
+        dict.reserve(kMaxNumAircraft);
+    };
 
     /**
      * Constructor with config values specified.

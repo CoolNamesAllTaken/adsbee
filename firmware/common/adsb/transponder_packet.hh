@@ -11,6 +11,10 @@
 class Raw1090Packet {
    public:
     static const uint16_t kMaxPacketLenWords32 = 4;
+    static const uint16_t kSquitterPacketLenBits = 56;
+    static const uint16_t kSquitterPacketNumWords32 = 2;  // 56 bits = 1.75 words, round up to 2.
+    static const uint16_t kExtendedSquitterPacketLenBits = 112;
+    static const uint16_t kExtendedSquitterPacketNumWords32 = 4;  // 112 bits = 3.5 words, round up to 4.
 
     Raw1090Packet(char *rx_string, int16_t source_in = -1, int32_t sigs_dbm_in = INT32_MIN,
                   int32_t sigq_db_in = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
@@ -33,6 +37,14 @@ class Raw1090Packet {
      */
     uint64_t GetTimestampMs() { return mlat_48mhz_64bit_counts / 48e3; }
 
+    /**
+     * Print the buffer to a string.
+     * @param[in] buf Buffer to print to.
+     * @param[in] buf_len_bytes Length of the buffer, in characters.
+     * @return Number of characters written to the buffer.
+     */
+    uint16_t PrintBuffer(char *buf, uint16_t buf_len_bytes) const;
+
     uint32_t buffer[kMaxPacketLenWords32];
     uint16_t buffer_len_bits = 0;
     int16_t source = -1;                   // Source of the ADS-B packet (PIO state machine number).
@@ -47,10 +59,6 @@ class Decoded1090Packet {
     static const uint16_t kDFNUmBits = 5;     // [1-5] Downlink Format bitlength.
     static const uint16_t kMaxDFStrLen = 50;  // Max length of TypeCode string.
     static const uint16_t kDebugStrLen = 200;
-    static const uint16_t kSquitterPacketLenBits = 56;
-    static const uint16_t kSquitterPacketNumWords32 = 2;  // 56 bits = 1.75 words, round up to 2.
-    static const uint16_t kExtendedSquitterPacketLenBits = 112;
-    static const uint16_t kExtendedSquitterPacketNumWords32 = 4;  // 112 bits = 3.5 words, round up to 4.
 
     // Bits 1-5: Downlink Format (DF)
     enum DownlinkFormat {
@@ -154,7 +162,7 @@ class Decoded1090Packet {
      * value should match the last 24-bits in the 112-bit ADS-B packet if the packet is valid.
      * @retval CRC checksum.
      */
-    uint32_t CalculateCRC24(uint16_t packet_len_bits = kExtendedSquitterPacketLenBits) const;
+    uint32_t CalculateCRC24(uint16_t packet_len_bits = Raw1090Packet::kExtendedSquitterPacketLenBits) const;
 
     char debug_string[kDebugStrLen] = "";
 

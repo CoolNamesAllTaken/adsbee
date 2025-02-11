@@ -149,7 +149,7 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const Air
                                      aircraft.HasBitFlag(Aircraft::kBitFlagUpdatedHorizontalVelocity) ||
                                      aircraft.HasBitFlag(Aircraft::kBitFlagUpdatedVerticalVelocity) ||
                                      aircraft.HasBitFlag(Aircraft::kBitFlagUpdatedPosition) ||
-                                     aircraft.HasBitFlag(Aircraft::kBitFlagUpdatedTrack);
+                                     aircraft.HasBitFlag(Aircraft::kBitFlagUpdatedDirection);
     data.SetMiscIndicator(track_heading_value,
                           aircraft_updated_position,                         // Aircraft report updated?
                           aircraft.HasBitFlag(Aircraft::kBitFlagIsAirborne)  // Aircraft is airborne?
