@@ -26,7 +26,7 @@ Aircraft::Aircraft() {
     // memset(callsign, '\0', kCallSignMaxNumChars + 1);  // clear out callsign string, including extra EOS character
 }
 
-bool Aircraft::DecodePosition() {
+bool Aircraft::CanDecodePosition() {
     // TODO: There could be a condition here where we temporarily lose packets when the MLAT counter wraps around and
     // the packet timestamps all get seen as 0ms, but this probably is not a big deal.
     if (!(last_odd_packet_.received_timestamp_ms > 0 && last_even_packet_.received_timestamp_ms > 0)) {
@@ -38,14 +38,24 @@ bool Aircraft::DecodePosition() {
                                    last_even_packet_.received_timestamp_ms - last_odd_packet_.received_timestamp_ms);
     if (cpr_interval_ms > GetMaxAllowedCPRIntervalMs()) {
         // Reject CPR packet pairings that are too far apart in time.
-        WriteBitFlag(BitFlag::kBitFlagPositionValid, false);  // keep last known good coordinates, but mark as invalid
+        WriteBitFlag(BitFlag::kBitFlagPositionValid,
+                     false);  // keep last known good coordinates, but mark as invalid
         CONSOLE_WARNING("Aircraft::DecodePosition",
                         "CPR packet pair too far apart in time (%d ms). Can't decode position.\r\n", cpr_interval_ms);
         return false;
     }
+    return true;
+}
 
+bool Aircraft::DecodePosition() {
     // WARNING: There are two separate timebases in play here! The timebase for CPR packet timestamps is the MLAT
     // timebase, while higher level aircraft dictionary info is in system time.
+
+    if (!CanDecodePosition()) {
+        // Can't try forcing a decode and seeing if it's valid, since we'll end up using a stale even or odd packet
+        // pairing.
+        return false;
+    }
 
 #ifndef USE_NASA_CPR
     // Equation 5.6
@@ -112,8 +122,8 @@ bool Aircraft::DecodePosition() {
 #else
     NASACPRDecoder::DecodedPosition result;
     bool result_valid = NASACPRDecoder::DecodeAirborneGlobalCPR(
-        {.odd = false, .lat_cpr = last_odd_packet_.n_lat, .lon_cpr = last_odd_packet_.n_lon},
-        {.odd = true, .lat_cpr = last_even_packet_.n_lat, .lon_cpr = last_even_packet_.n_lon}, result);
+        {.odd = true, .lat_cpr = last_odd_packet_.n_lat, .lon_cpr = last_odd_packet_.n_lon},
+        {.odd = false, .lat_cpr = last_even_packet_.n_lat, .lon_cpr = last_even_packet_.n_lon}, result);
 
     if (result_valid) {
         WriteBitFlag(BitFlag::kBitFlagPositionValid, true);
@@ -747,6 +757,11 @@ bool AircraftDictionary::ApplyAirbornePositionMessage(Aircraft &aircraft, ADSBPa
     // ME[32-?]
     aircraft.SetCPRLatLon(packet.GetNBitWordFromMessage(17, 22), packet.GetNBitWordFromMessage(17, 39), odd,
                           packet.GetTimestampMs());
+    if (!aircraft.CanDecodePosition()) {
+        // Can't decode aircraft position, but this is not an error. Return decode_successful in case there were other
+        // errors.
+        return decode_successful;
+    }
     if (aircraft.DecodePosition()) {
         // Position decode succeeded.
         aircraft.WriteBitFlag(Aircraft::BitFlag::kBitFlagUpdatedPosition, true);

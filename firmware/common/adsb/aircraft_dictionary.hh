@@ -183,10 +183,17 @@ class Aircraft {
     Aircraft();
 
     /**
+     * Checks to see if the aircraft position can be decoded. Requires that both an odd and an even packet have been
+     * received, and they aren't separated by too large of a time interval.
+     * @retval True if the aircraft position can be decoded, false otherwise.
+     */
+    bool CanDecodePosition();
+
+    /**
      * Clears the CPR packet cache. Used when too much time has elapsed since the last CPR packet was received, to avoid
      * decoding CPR location with invalid packet pairings.
      */
-    void ClearCPRPackets() {
+    inline void ClearCPRPackets() {
         // Clearng received timestamps causes the packet pair to be rejected during the decoding stage, so it's as good
         // as wiping all of the received packet contents.
         last_odd_packet_.received_timestamp_ms = 0;

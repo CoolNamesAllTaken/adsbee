@@ -21,7 +21,7 @@
  * @return The floating point representation of the latitude, in degrees.
  */
 inline float awb2lat(uint32_t awb_lat) {
-    if (awb_lat <= 107374182u)  // 2^30
+    if (awb_lat <= 1'073'741'824u)  // 2^30
         return awb_lat * RESOLUTION;
     else
         return awb_lat * RESOLUTION - 360.0f;
