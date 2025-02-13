@@ -15,16 +15,18 @@ bool NASACPRDecoder::DecodeAirborneLocalCPR(const DecodedPosition &reference_pos
     return result.valid;
 };
 
-bool NASACPRDecoder::DecodeAirborneGlobalCPR(const CPRMessage &message0, const CPRMessage &message1,
+bool NASACPRDecoder::DecodeAirborneGlobalCPR(const CPRMessage &even_message, const CPRMessage &odd_message,
                                              DecodedPosition &decoded_position) {
-    if (message0.odd == message1.odd) {
+    if (even_message.odd == odd_message.odd) {
         CONSOLE_ERROR("NASACPRDecoder::DecodeAirborneGlobalCPR", "Can't perform CPR decode with two %s messages.",
-                      message0.odd ? "odd" : "even");
+                      even_message.odd ? "odd" : "even");
         return false;  // Both messages must be one odd and one even.
     }
+
     struct recovered_position result =
-        global_dec(message0.odd, {.format = message0.odd, .yz = message0.lat_cpr, .xz = message0.lon_cpr},
-                   {.format = message1.odd, .yz = message1.lat_cpr, .xz = message1.lon_cpr});
+        global_dec(odd_message.received_timestamp_ms > even_message.received_timestamp_ms,
+                   {.format = even_message.odd, .yz = even_message.lat_cpr, .xz = even_message.lon_cpr},
+                   {.format = odd_message.odd, .yz = odd_message.lat_cpr, .xz = odd_message.lon_cpr});
     decoded_position.lat_deg = awb2lat(result.lat_awb);
     decoded_position.lon_deg = awb2lon(result.lon_awb);
     return result.valid;

@@ -8,8 +8,8 @@
 #include "math.h"
 #include "stdint.h"
 
-#define RESOLUTION        360.0f / 4294967296.0f  // = 360/2^32
-#define INV_RESOLUTION    4294967296.0f / 360.0f  // = 2^32/360
+#define RESOLUTION        360.0 / 4294967296.0  // = 360/2^32
+#define INV_RESOLUTION    4294967296.0 / 360.0  // = 2^32/360
 // simple in-line abs(X-Y)
 #define __diffabs__(X, Y) (X >= Y ? X - Y : Y - X)
 // simple modulus operation (correct for X in [-359,(2*360-1)])

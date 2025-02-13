@@ -121,14 +121,21 @@ bool Aircraft::DecodePosition() {
     return true;
 #else
     NASACPRDecoder::DecodedPosition result;
-    bool result_valid = NASACPRDecoder::DecodeAirborneGlobalCPR(
-        {.odd = true, .lat_cpr = last_odd_packet_.n_lat, .lon_cpr = last_odd_packet_.n_lon},
-        {.odd = false, .lat_cpr = last_even_packet_.n_lat, .lon_cpr = last_even_packet_.n_lon}, result);
+    bool result_valid =
+        NASACPRDecoder::DecodeAirborneGlobalCPR({.odd = false,
+                                                 .lat_cpr = last_even_packet_.n_lat,
+                                                 .lon_cpr = last_even_packet_.n_lon,
+                                                 .received_timestamp_ms = last_even_packet_.received_timestamp_ms},
+                                                {.odd = true,
+                                                 .lat_cpr = last_odd_packet_.n_lat,
+                                                 .lon_cpr = last_odd_packet_.n_lon,
+                                                 .received_timestamp_ms = last_odd_packet_.received_timestamp_ms},
+                                                result);
 
     if (result_valid) {
         WriteBitFlag(BitFlag::kBitFlagPositionValid, true);
-        latitude_deg = result.lat_deg;
-        longitude_deg = result.lon_deg;
+        latitude_deg = WrapCPRDecodeLatitude(result.lat_deg);
+        longitude_deg = WrapCPRDecodeLongitude(result.lon_deg);
         last_track_update_timestamp_ms = get_time_since_boot_ms();  // Update last track update timestamp.
     }
     return result_valid;

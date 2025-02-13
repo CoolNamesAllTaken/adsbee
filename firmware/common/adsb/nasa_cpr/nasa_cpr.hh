@@ -12,6 +12,7 @@ class NASACPRDecoder {
         bool odd;
         uint32_t lat_cpr;
         uint32_t lon_cpr;
+        uint32_t received_timestamp_ms = 0;
     };
 
     /**
@@ -25,13 +26,13 @@ class NASACPRDecoder {
                                        DecodedPosition &decoded_position);
 
     /**
-     * Decodes a CPR location for an airborne position using two CPR messages. Note that message1 is considered the more
-     * recent message.
-     * @param[in] message0 The first CPR message.
-     * @param[in] message1 The second CPR message.
+     * Decodes a CPR location for an airborne position using two CPR messages. The decoded location is returned based on
+     * the most recent message, sorted by received_timestamp_ms.
+     * @param[in] even_message The last even CPR message.
+     * @param[in] odd_message The last odd CPR message.
      * @param[out] decoded_position The decoded location.
      * @return True if the decode succeeded (recovered_position is valid), false otherwise.
      */
-    static bool DecodeAirborneGlobalCPR(const CPRMessage &message0, const CPRMessage &message1,
+    static bool DecodeAirborneGlobalCPR(const CPRMessage &even_message, const CPRMessage &odd_message,
                                         DecodedPosition &decoded_position);
 };
