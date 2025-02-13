@@ -43,11 +43,11 @@ struct recovered_position local_dec(int i, int_type reference_lat, int_type refe
 
 struct recovered_position global_dec(int i, struct message msg0, struct message msg1) {
     int_type r_lat = global_decode(60, msg0.yz, msg1.yz, i);  // Recovered latitude.
-    // Number of longitude cells assuming incoming packet is odd.
+    // Number of longitude cells assuming msg0 is most recent.
     int_type nl0 = nl_awb(global_decode(60, msg0.yz, msg1.yz, 0));
-    // Number of longitude cells assuming incoming packet is even.
+    // Number of longitude cells assuming msg1 is most recent.
     int_type nl1 = nl_awb(global_decode(60, msg0.yz, msg1.yz, 1));
-    // Check if input messages had same number of longitude cells.
+    // Check if the number of longitude cells is the same regardless of message received order.
     int valid = (nl0 == nl1) ? 1 : 0;
     int_type r_lon = global_decode(nl0, msg0.xz, msg1.xz, i);  // Recovered longitude.
     struct recovered_position result = {valid, r_lat, r_lon};

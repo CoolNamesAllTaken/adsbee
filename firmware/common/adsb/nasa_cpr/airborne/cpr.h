@@ -37,6 +37,14 @@ struct recovered_position {
 
 struct message encode(int i, int_type awb_lat, int_type awb_lon);
 struct recovered_position local_dec(int i, int_type reference_lat, int_type reference_longitude, struct message msg);
+
+/**
+ * Decode a global position from an evn and odd CPR message.
+ * @param[in] i 0 if msg0 is most recent, 1 if msg1 is most recent.
+ * @param[in] msg0 Even CPR message.
+ * @param[in] msg1 Odd CPR message.
+ * @return Recovered position.
+ */
 struct recovered_position global_dec(int i, struct message msg0, struct message msg1);
 
 #ifdef __cplusplus

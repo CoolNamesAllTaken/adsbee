@@ -17,12 +17,13 @@
 #define CPR_INT__H
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 // Changed to uppercase to avoid breaking stdlib stuff. John 2025-02-10.
 #define MAX(X, Y)       (X > Y ? X : Y)
-
-#define int_type        unsigned int
+// Added stdint.h and changed to uint32_t for compilation on arm-none-eabi. John 2025-02-13.
+#define int_type        uint32_t
 
 #define times(X, Y)     ((X) * (Y))
 #define plus(X, Y)      ((X) + (Y))
