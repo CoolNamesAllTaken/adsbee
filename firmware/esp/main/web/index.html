@@ -65,7 +65,7 @@
 
     <script>
         const HOST_URI = `${window.location.hostname}`;
-        // const HOST_URI = "192.168.1.182";
+        // const HOST_URI = "192.168.1.134";
         const WS_CONFIG = {
             console_ws_url: `ws://${HOST_URI}/console`,
             metrics_ws_url: `ws://${HOST_URI}/metrics`,
@@ -486,6 +486,17 @@
                 return Math.floor((Date.now() - this.connectTimestamp));
             }
 
+            async getUptimeSec() {
+                const response = await this.sendCmd('AT+UPTIME?\r\n', 0, true, true, '+UPTIME');
+                for (const line of response) {
+                    const match = line.match(/\+UPTIME=(\d+)/);
+                    if (match) {
+                        return parseInt(match[1]);
+                    }
+                }
+                return null;
+            }
+
             async flushInputBuffer(flushTimeoutMs = 10) {
                 const originalOnmessage = this.ws.onmessage;
 
@@ -500,12 +511,12 @@
                 this.ws.onmessage = originalOnmessage;
             }
 
-            async receiveResponse(printResponse = false, waitForOkOrError = false) {
+            async receiveResponse(printResponse = false, waitForResponse = false, responseToWaitFor = 'OK') {
                 const MAX_CUMULATIVE_TIMEOUT_MS = 10000;
                 const decodedResponse = [];
 
                 const cumulativeTimeout = Date.now() + MAX_CUMULATIVE_TIMEOUT_MS;
-                while (waitForOkOrError) {
+                while (waitForResponse) {
                     if (Date.now() > cumulativeTimeout) {
                         throw new Error(`Response timeout after ${MAX_CUMULATIVE_TIMEOUT_MS} ms.`);
                     }
@@ -521,15 +532,15 @@
                     } catch (e) {
                         // Catch timeouts.
                         // Break out of loop on timeout if not waiting for OK or error.
-                        if (!waitForOkOrError) break;
+                        if (!waitForResponse) break;
                         else continue;
                     }
 
-                    if (waitForOkOrError) {
+                    if (waitForResponse) {
                         const decoded = new TextDecoder('utf-8').decode(raw);
-                        if (decoded.includes('OK')) {
-                            waitForOkOrError = false;
-                        } else if (decoded.includes('ERROR')) {
+                        if (decoded.includes(responseToWaitFor)) {
+                            waitForResponse = false;
+                        } else if (decoded.match(/\bERROR\b/)) {
                             // Catch AT command errors.
                             this.flushInputBuffer();
                             throw new Error(`ERROR response: ${decoded}`);
@@ -568,7 +579,7 @@
              * @param[in] waitForOkOrError Whether to wait for an OK or ERROR response before returning.
              * @return A promise that resolves with the decoded response lines.
              */
-            async sendCmd(cmdStr, delay_ms = 10, printResponse = false, waitForOkOrError = false) {
+            async sendCmd(cmdStr, delay_ms = 10, printResponse = false, waitForResponse = false, responseToWaitFor = 'OK') {
                 await this.flushInputBuffer();
                 this.lastCmdTimestamp = this.getMsTimestamp();
 
@@ -578,7 +589,7 @@
 
                 this.ws.send(new TextEncoder().encode(cmdStr));
                 await new Promise(resolve => setTimeout(resolve, delay_ms));
-                return await this.receiveResponse(printResponse, waitForOkOrError);
+                return await this.receiveResponse(printResponse, waitForResponse, responseToWaitFor);
             }
 
             /**

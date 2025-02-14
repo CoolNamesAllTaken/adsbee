@@ -2,6 +2,7 @@
 
 #include "adsbee.hh"
 #include "comms.hh"
+#include "core1.hh"  // Functions for runningon core1.
 #include "eeprom.hh"
 #include "esp32_flasher.hh"
 #include "firmware_update.hh"  // For figuring out which flash partition we're in.
@@ -9,7 +10,6 @@
 #include "hardware_unit_tests.hh"  // For testing only!
 #include "packet_decoder.hh"
 #include "pico/binary_info.h"
-#include "pico/multicore.h"
 #include "pico/stdlib.h"
 #include "spi_coprocessor.hh"
 #include "transponder_packet.hh"
@@ -33,12 +33,6 @@ SettingsManager settings_manager;
 ObjectDictionary object_dictionary;
 SPICoprocessor esp32 = SPICoprocessor({});
 PacketDecoder decoder = PacketDecoder({.enable_1090_error_correction = true});
-
-void main_core1() {
-    while (true) {
-        decoder.UpdateDecoderLoop();
-    }
-}
 
 int main() {
     bi_decl(bi_program_description("ADSBee 1090 ADSB Receiver"));
