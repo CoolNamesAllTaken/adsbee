@@ -41,7 +41,7 @@ bool Aircraft::CanDecodePosition() {
         WriteBitFlag(BitFlag::kBitFlagPositionValid,
                      false);  // keep last known good coordinates, but mark as invalid
         CONSOLE_WARNING("Aircraft::DecodePosition",
-                        "CPR packet pair too far apart in time (%d ms). Can't decode position.\r\n", cpr_interval_ms);
+                        "CPR packet pair too far apart in time (%lu ms). Can't decode position.\r\n", cpr_interval_ms);
         return false;
     }
     return true;
@@ -449,7 +449,7 @@ bool AircraftDictionary::RemoveAircraft(uint32_t icao_address) {
 
 bool Aircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, uint32_t received_timestamp_ms) {
     if (n_lat_cpr > kCPRLatLonMaxCount || n_lon_cpr > kCPRLatLonMaxCount) {
-        CONSOLE_ERROR("Aircraft::SetCPRLatLon", "Received CPR packet with out of bounds lat/lon values (%d, %d).",
+        CONSOLE_ERROR("Aircraft::SetCPRLatLon", "Received CPR packet with out of bounds lat/lon values (%lu, %lu).",
                       n_lat_cpr, n_lon_cpr);
         return false;  // counts out of bounds, don't parse
     }

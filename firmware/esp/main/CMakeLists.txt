@@ -1,13 +1,13 @@
 idf_component_register(
     SRC_DIRS
         "."
-        "../../common"
+        # "../../common"
         "../../common/adsb"
-        "../../common/nasa_cpr"
-        "../../common/nasa_cpr/airborne"
-        "../../common/nasa_cpr/coarse"
-        "../../common/nasa_cpr/surface"
-        "../../common/nasa_cpr/intention"
+        "../../common/adsb/nasa_cpr"
+        "../../common/adsb/nasa_cpr/airborne"
+        "../../common/adsb/nasa_cpr/coarse"
+        "../../common/adsb/nasa_cpr/surface"
+        "../../common/adsb/nasa_cpr/intent"
         # "../../common/comms" # Currently no src files in here.
         "../../common/coprocessor"
         "../../common/utils"
@@ -20,7 +20,7 @@ idf_component_register(
         "."
         "../../common"
         "../../common/adsb"
-        "../../common/nasa_cpr"
+        "../../common/adsb/nasa_cpr"
         "../../common/comms"
         "../../common/comms/json"
         "../../common/coprocessor"

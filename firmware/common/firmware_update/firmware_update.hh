@@ -464,8 +464,8 @@ class FirmwareUpdateManager {
 
     /**
      * Modifies the header status word of a flash partition header by re-writing the full header. Note that not all
-     * values are possible for the status word, since bits can only be flipped from 1->0 and not the other way around,
-     * without erasing the full sector.
+     * values are possible for the status word, since bits can only be flipped from 1->0 and not the other way
+     * around, without erasing the full sector.
      * @param[in] partition Index of the partition to modify the header of.
      * @param[in] status New status word to write.
      */
