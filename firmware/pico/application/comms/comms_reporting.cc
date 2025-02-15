@@ -235,6 +235,9 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
         if (aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagDirectionValid)) {
             flags |= ADSB_FLAGS_VALID_HEADING;
         }
+        if (aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagHorizontalVelocityValid)) {
+            flags |= ADSB_FLAGS_VALID_VELOCITY;
+        }
         if (strlen(aircraft.callsign) > Aircraft::kCallSignMinNumChars) {
             flags |= ADSB_FLAGS_VALID_CALLSIGN;
         }
