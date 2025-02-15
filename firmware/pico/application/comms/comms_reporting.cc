@@ -232,6 +232,9 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
             // Aircraft is reporting GNSS altitude.
             flags |= ADSB_FLAGS_VALID_ALTITUDE;
         }
+        if (aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagDirectionValid)) {
+            flags |= ADSB_FLAGS_VALID_HEADING;
+        }
         if (strlen(aircraft.callsign) > Aircraft::kCallSignMinNumChars) {
             flags |= ADSB_FLAGS_VALID_CALLSIGN;
         }
