@@ -232,6 +232,12 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
             // Aircraft is reporting GNSS altitude.
             flags |= ADSB_FLAGS_VALID_ALTITUDE;
         }
+        if (aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagDirectionValid)) {
+            flags |= ADSB_FLAGS_VALID_HEADING;
+        }
+        if (aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagHorizontalVelocityValid)) {
+            flags |= ADSB_FLAGS_VALID_VELOCITY;
+        }
         if (strlen(aircraft.callsign) > Aircraft::kCallSignMinNumChars) {
             flags |= ADSB_FLAGS_VALID_CALLSIGN;
         }
@@ -269,7 +275,8 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
             .emitter_type = AircraftCategoryToMAVLINKEmitterType(aircraft.category),
             // Time Since Last Contact [s]
             .tslc = static_cast<uint8_t>((get_time_since_boot_ms() - aircraft.last_message_timestamp_ms) / 1000)};
-        strncpy(adsb_vehicle_msg.callsign, aircraft.callsign, Aircraft::kCallSignMaxNumChars);
+        // MAVLINK callsign field is 9 chars, so there's room to copy over the full 8 char callsign + null terminator.
+        strncpy(adsb_vehicle_msg.callsign, aircraft.callsign, Aircraft::kCallSignMaxNumChars + 1);
 
         // Send the message.
         mavlink_msg_adsb_vehicle_send_struct(static_cast<mavlink_channel_t>(iface), &adsb_vehicle_msg);
