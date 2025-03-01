@@ -159,8 +159,8 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const Air
     data.vertical_rate_fpm = aircraft.vertical_rate_fpm;
     data.direction_deg = aircraft.direction_deg;
     data.emitter_category = aircraft.category_raw;
-    // GDL90 includes space for EOS character, since it wants 8 Bytes and the callsign is a maximum of 7 characters.
-    memcpy(data.callsign, aircraft.callsign, Aircraft::kCallSignMaxNumChars + 1);
+    // GDL90 does not provide space for an EOS character, since it only provides 8 Bytes for the callsign.
+    memcpy(data.callsign, aircraft.callsign, Aircraft::kCallSignMaxNumChars);
     // NOTE: Emergency Priority code currently not used.
 
     return WriteGDL90TargetReportMessage(to_buf, data, ownship);

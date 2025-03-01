@@ -275,7 +275,7 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
             .emitter_type = AircraftCategoryToMAVLINKEmitterType(aircraft.category),
             // Time Since Last Contact [s]
             .tslc = static_cast<uint8_t>((get_time_since_boot_ms() - aircraft.last_message_timestamp_ms) / 1000)};
-        // MAVLINK callsign field is 9 chars, so there's room to copy over the full 7 char callsign + null terminator.
+        // MAVLINK callsign field is 9 chars, so there's room to copy over the full 8 char callsign + null terminator.
         strncpy(adsb_vehicle_msg.callsign, aircraft.callsign, Aircraft::kCallSignMaxNumChars + 1);
 
         // Send the message.

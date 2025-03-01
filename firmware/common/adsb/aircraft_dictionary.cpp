@@ -582,7 +582,6 @@ bool AircraftDictionary::ApplyAircraftIDMessage(Aircraft &aircraft, ADSBPacket p
     aircraft.transponder_capability = packet.GetCapability();
     for (uint16_t i = 0; i < Aircraft::kCallSignMaxNumChars; i++) {
         char callsign_char = LookupCallsignChar(packet.GetNBitWordFromMessage(6, 8 + (6 * i)));
-        if (callsign_char == ' ') break;  // ignore trailing spaces
         aircraft.callsign[i] = callsign_char;
     }
 

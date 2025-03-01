@@ -14,7 +14,7 @@
 
 class Aircraft {
    public:
-    static constexpr uint16_t kCallSignMaxNumChars = 7;
+    static constexpr uint16_t kCallSignMaxNumChars = 8;
     static constexpr uint16_t kCallSignMinNumChars = 3;  // Callsigns must be at this long to be valid.
     // These variables define filter bounds for time between CPR packets. If the time between packets is greater than
     // the time delta limit, the old CPR packet is discarded and the CPR packet pair is not used for position decoding.

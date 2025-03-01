@@ -97,7 +97,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_EQ(aircraft.icao_address, 0x76CE88u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
     EXPECT_EQ(aircraft.category, Aircraft::kCategoryNoCategoryInfo);
-    EXPECT_STREQ(aircraft.callsign, "SIA224");
+    EXPECT_STREQ(aircraft.callsign, "SIA224  ");
 
     tpacket = Decoded1090Packet((char *)"8D7C7181215D01A08208204D8BF1");
     EXPECT_TRUE(dictionary.IngestDecoded1090Packet(tpacket));
@@ -106,7 +106,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_EQ(aircraft.icao_address, 0x7C7181u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
     EXPECT_EQ(aircraft.category, Aircraft::kCategoryLight);
-    EXPECT_STREQ(aircraft.callsign, "WPF");
+    EXPECT_STREQ(aircraft.callsign, "WPF     ");
 
     tpacket = Decoded1090Packet((char *)"8D7C7745226151A08208205CE9C2");
     EXPECT_TRUE(dictionary.IngestDecoded1090Packet(tpacket));
@@ -115,7 +115,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_EQ(aircraft.icao_address, 0x7C7745u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
     EXPECT_EQ(aircraft.category, Aircraft::kCategoryMedium1);
-    EXPECT_STREQ(aircraft.callsign, "XUF");
+    EXPECT_STREQ(aircraft.callsign, "XUF     ");
 
     tpacket = Decoded1090Packet((char *)"8D7C80AD2358F6B1E35C60FF1925");
     EXPECT_TRUE(dictionary.IngestDecoded1090Packet(tpacket));
@@ -124,7 +124,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_EQ(aircraft.icao_address, 0x7C80ADu);
     EXPECT_EQ(aircraft.transponder_capability, 5);
     EXPECT_EQ(aircraft.category, Aircraft::kCategoryMedium2);
-    EXPECT_STREQ(aircraft.callsign, "VOZ1851");
+    EXPECT_STREQ(aircraft.callsign, "VOZ1851 ");
 
     tpacket = Decoded1090Packet((char *)"8D7C146525446074DF5820738E90");
     EXPECT_TRUE(dictionary.IngestDecoded1090Packet(tpacket));
@@ -133,7 +133,12 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_EQ(aircraft.icao_address, 0x7C1465u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
     EXPECT_EQ(aircraft.category, Aircraft::kCategoryHeavy);
-    EXPECT_STREQ(aircraft.callsign, "QFA475");
+    EXPECT_STREQ(aircraft.callsign, "QFA475  ");
+
+    tpacket = Decoded1090Packet((char *)"8D4840D6202CC371C32CE0576098");
+    EXPECT_TRUE(dictionary.IngestDecoded1090Packet(tpacket));
+    EXPECT_TRUE(dictionary.GetAircraft(0x4840D6, aircraft));
+    EXPECT_STREQ(aircraft.callsign, "KLM1023 ");
 }
 
 TEST(AircraftDictionary, IngestInvalidAircrfaftIDMessage) {
