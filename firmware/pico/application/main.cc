@@ -25,10 +25,13 @@ const uint32_t kESP32BootupCommsRetryMs = 500;
 const uint32_t kMultiCoreStartHandshake = 0x12345678;
 
 // Override default config params here.
+EEPROM eeprom = EEPROM({});
+BSP bsp = BSP(eeprom.Init());
+
 ADSBee adsbee = ADSBee({});
 CommsManager comms_manager = CommsManager({});
 ESP32SerialFlasher esp32_flasher = ESP32SerialFlasher({});
-EEPROM eeprom = EEPROM({});
+
 SettingsManager settings_manager;
 ObjectDictionary object_dictionary;
 SPICoprocessor esp32 = SPICoprocessor({});
@@ -37,7 +40,7 @@ PacketDecoder decoder = PacketDecoder({.enable_1090_error_correction = true});
 int main() {
     bi_decl(bi_program_description("ADSBee 1090 ADSB Receiver"));
 
-    eeprom.Init();
+    // eeprom.Init();
     adsbee.Init();
     comms_manager.Init();
     comms_manager.console_printf("ADSBee 1090\r\nSoftware Version %d.%d.%d\r\n",

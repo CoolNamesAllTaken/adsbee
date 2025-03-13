@@ -2,6 +2,7 @@
 #define ESP32_SERIAL_FLASHER_HH_
 
 #include "adsbee.hh"
+#include "bsp.hh"
 #include "comms.hh"
 #include "hal.hh"  // For system time stuff.
 #include "hardware/uart.h"
@@ -14,11 +15,11 @@ class ESP32SerialFlasher {
     static constexpr uint32_t kSerialFlasherBootHoldTimeMs = 50;
 
     struct ESP32SerialFlasherConfig {
-        uart_inst_t *esp32_uart_handle = uart0;
-        uint16_t esp32_uart_tx_pin = 16;
-        uint16_t esp32_uart_rx_pin = 17;
-        uint16_t esp32_enable_pin = 14;
-        uint16_t esp32_gpio0_boot_pin = 13;
+        uart_inst_t *esp32_uart_handle = bsp.esp32_uart_handle;
+        uint16_t esp32_uart_tx_pin = bsp.esp32_uart_tx_pin;
+        uint16_t esp32_uart_rx_pin = bsp.esp32_uart_rx_pin;
+        uint16_t esp32_enable_pin = bsp.esp32_enable_pin;
+        uint16_t esp32_gpio0_boot_pin = bsp.esp32_spi_handshake_pin;
         uint32_t esp32_baudrate = 115200;         // Previously 115200
         uint32_t esp32_higher_baudrate = 921600;  // Previously 230400
         bool enable_md5_check = true;             // Enable MD5 checksum check after flashing.
