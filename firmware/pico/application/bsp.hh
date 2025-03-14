@@ -17,6 +17,20 @@ class BSP {
 
             gnss_pps_pin = 2;
             gnss_enable_pin = 3;
+
+            r1090_num_demod_state_machines = 3;
+            for (uint16_t i = 0; i < r1090_num_demod_state_machines; i++) {
+                r1090_pulses_pins[i] = 19;
+                r1090_demod_pins[i] = 20 + i;
+                r1090_recovered_clk_pins[i] = 24;
+            }
+            r1090_tl_pwm_pin = 26;
+            r1090_tl_adc_pin = 27;
+            r1090_tl_adc_input = 1;
+            r1090_rssi_adc_pin = 28;
+            r1090_rssi_adc_input = 2;
+
+            r978_led_pin = 25;
         }
     }
 
@@ -43,16 +57,12 @@ class BSP {
     uint16_t esp32_uart_tx_pin = 16;
     uint16_t esp32_uart_rx_pin = 17;
 
-    uint16_t r978_enable_pin = 6;
-    uint16_t r978_irq_pin = 7;
-    uint16_t r978_cs_pin = 8;
-
     PIO preamble_detector_pio = pio0;
     uint preamble_detector_demod_pin_irq = IO_IRQ_BANK0;
     PIO message_demodulator_pio = pio1;
     uint preamble_detector_demod_complete_irq = PIO0_IRQ_0;
 
-    uint16_t status_led_pin = 15;
+    uint16_t r1090_led_pin = 15;
     uint16_t r1090_num_demod_state_machines = 3;
     uint16_t r1090_high_power_demod_state_machine_index = 2;
     uint16_t r1090_pulses_pins[kMaxNumDemodStateMachines] = {19, 22, 19};
@@ -66,6 +76,11 @@ class BSP {
     uint16_t r1090_rssi_adc_pin = 28;   // Pin for reading RSSI.
     uint16_t r1090_rssi_adc_input = 2;  // ADC input for reading RSSI.
     uint16_t r1090_bias_tee_enable_pin = 18;
+
+    uint16_t r978_led_pin = UINT16_MAX;  // Set to UINT16_MAX to indicate not connected.
+    uint16_t r978_enable_pin = 6;
+    uint16_t r978_irq_pin = 7;
+    uint16_t r978_cs_pin = 8;
 
     i2c_inst_t* onboard_i2c = i2c1;            // I2C peripheral used to talk to EEPROM (if supported).
     uint16_t onboard_i2c_sda_pin = 2;          // SDA pin for I2C.

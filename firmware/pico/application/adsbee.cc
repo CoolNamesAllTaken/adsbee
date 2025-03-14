@@ -74,9 +74,9 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
 }
 
 bool ADSBee::Init() {
-    gpio_init(config_.status_led_pin);
-    gpio_set_dir(config_.status_led_pin, GPIO_OUT);
-    gpio_put(config_.status_led_pin, 0);
+    gpio_init(config_.r1090_led_pin);
+    gpio_set_dir(config_.r1090_led_pin, GPIO_OUT);
+    gpio_put(config_.r1090_led_pin, 0);
 
     // Initialize the TL bias PWM output.
     gpio_set_function(config_.tl_pwm_pin, GPIO_FUNC_PWM);
@@ -234,7 +234,7 @@ bool ADSBee::Update() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
     // Turn off the demod LED if it's been on for long enough.
     if (timestamp_ms - led_on_timestamp_ms_ > kStatusLEDOnMs) {
-        gpio_put(config_.status_led_pin, 0);
+        gpio_put(config_.r1090_led_pin, 0);
     }
 
     // Prune aircraft dictionary. Need to do this up front so that we don't end up with a negative timestamp delta

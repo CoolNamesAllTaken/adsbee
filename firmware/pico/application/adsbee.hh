@@ -43,7 +43,7 @@ class ADSBee {
         PIO message_demodulator_pio = pio1;
         uint preamble_detector_demod_complete_irq = PIO0_IRQ_0;
 
-        uint16_t status_led_pin = 15;
+        uint16_t r1090_led_pin = 15;
         // Reading ADS-B on GPIO19. Will look for DEMOD signal on GPIO20.
         uint16_t* pulses_pins = bsp.r1090_pulses_pins;
         uint16_t* demod_pins = bsp.r1090_demod_pins;
@@ -231,7 +231,7 @@ class ADSBee {
      * Sets the status LED to a given state. Does not record timestamps for turning off the LED.
      * @param[in] on True to turn on the LED, false to turn it off.
      */
-    inline void SetStatusLED(bool on) { gpio_put(config_.status_led_pin, on ? 1 : 0); }
+    inline void SetStatusLED(bool on) { gpio_put(config_.r1090_led_pin, on ? 1 : 0); }
 
     /**
      * Set the Minimum Trigger Level (TL) at the AD8314 output in milliVolts.

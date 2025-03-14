@@ -2,24 +2,52 @@
 
 #include "adsbee.hh"
 #include "comms.hh"
+#include "core1.hh"
 #include "eeprom.hh"
+#include "firmware_update.hh"
+#include "hardware/flash.h"
 #include "spi_coprocessor.hh"
 
+/* Original flash length: 16384k Bytes.
+   FLASH MAP
+       0x10000000	(176k)	FLASH_BL	Bootloader
+       0x1002C000	(4k)	FLASH_HDR0	    Application 0 Header
+       0x1002D000	(8096k)	FLASH_APP0	    Application 0 Data
+       0x10815000	(4k)	FLASH_HDR1	    Application 1 Header
+       0x10816000	(8096k)	FLASH_APP1	    Application 1 Data
+       0x10FFE000	(8k)	FLASH_SETTINGS	Settings
+*/
+
 const uint16_t kDeviceInfoMaxSizeBytes = sizeof(SettingsManager::DeviceInfo);
-const uint16_t kDeviceInfoEEPROMAddress = 8e3 - kDeviceInfoMaxSizeBytes;
+const uint32_t kFlashSettingsStartAddr = 0x10FFE000;
+const uint16_t kDeviceInfoOffset = 8e3 - kDeviceInfoMaxSizeBytes;
 
 bool SettingsManager::Load() {
-    if (!eeprom.Load(settings)) {
-        CONSOLE_ERROR("settings.cc::Load", "Failed load settings from EEPROM.");
-        return false;
-    };
+    if (bsp.has_eeprom) {
+        // Load settings from external EEPROM.
+        if (!eeprom.Load(settings)) {
+            CONSOLE_ERROR("settings.cc::Load", "Failed load settings from EEPROM.");
+            return false;
+        };
+    } else {
+        // Load settings from flash.
+        settings = *(Settings *)kFlashSettingsStartAddr;
+    }
 
     // Reset to defaults if loading from a blank EEPROM.
     if (settings.settings_version != kSettingsVersion) {
         ResetToDefaults();
-        if (!eeprom.Save(settings)) {
+        if (bsp.has_eeprom && !eeprom.Save(settings)) {
             CONSOLE_ERROR("settings.cc::Load", "Failed to save default settings.");
             return false;
+        } else {
+            StopCore1();
+            adsbee.DisableWatchdog();
+            flash_range_erase(FirmwareUpdateManager::FlashAddrToOffset(kFlashSettingsStartAddr), sizeof(settings));
+            flash_range_program(FirmwareUpdateManager::FlashAddrToOffset(kFlashSettingsStartAddr), (uint8_t *)&settings,
+                                sizeof(settings));
+            adsbee.EnableWatchdog();
+            StartCore1();
         }
     }
 
@@ -67,7 +95,18 @@ bool SettingsManager::Save() {
         esp32.Write(ObjectDictionary::kAddrSettingsData, settings, true);  // Require ACK.
     }
 
-    return eeprom.Save(settings);
+    if (bsp.has_eeprom) {
+        return eeprom.Save(settings);
+    } else {
+        StopCore1();
+        adsbee.DisableWatchdog();
+        flash_range_erase(FirmwareUpdateManager::FlashAddrToOffset(kFlashSettingsStartAddr), sizeof(settings));
+        flash_range_program(FirmwareUpdateManager::FlashAddrToOffset(kFlashSettingsStartAddr), (uint8_t *)&settings,
+                            sizeof(settings));
+        adsbee.EnableWatchdog();
+        StartCore1();
+        return true;
+    }
 }
 
 void SettingsManager::ResetToDefaults() {
@@ -77,13 +116,34 @@ void SettingsManager::ResetToDefaults() {
 }
 
 bool SettingsManager::SetDeviceInfo(const DeviceInfo &device_info) {
-    if (eeprom.RequiresInit()) return false;
-    return eeprom.Save(device_info, kDeviceInfoEEPROMAddress);
+    if (bsp.has_eeprom) {
+        // Device Info is stored on external EEPROM.
+        if (eeprom.RequiresInit()) return false;
+        return eeprom.Save(device_info, kDeviceInfoOffset);
+    } else {
+        // Device Info is stored in flash.
+        StopCore1();
+        adsbee.DisableWatchdog();
+        flash_range_erase(FirmwareUpdateManager::FlashAddrToOffset(kFlashSettingsStartAddr + kDeviceInfoOffset),
+                          sizeof(device_info));
+        flash_range_program(FirmwareUpdateManager::FlashAddrToOffset(kFlashSettingsStartAddr + kDeviceInfoOffset),
+                            (uint8_t *)&device_info, sizeof(device_info));
+        adsbee.EnableWatchdog();
+        StartCore1();
+        return true;
+    }
 }
 
 bool SettingsManager::GetDeviceInfo(DeviceInfo &device_info) {
-    if (eeprom.RequiresInit()) return false;
-    return eeprom.Load(device_info, kDeviceInfoEEPROMAddress);
+    if (bsp.has_eeprom) {
+        // Device Info is stored on external EEPROM.
+        if (eeprom.RequiresInit()) return false;
+        return eeprom.Load(device_info, kDeviceInfoOffset);
+    } else {
+        // Device Info is stored in flash.
+        device_info = *(DeviceInfo *)(kFlashSettingsStartAddr + kDeviceInfoOffset);
+        return true;
+    }
 }
 
 bool SettingsManager::Apply() {
