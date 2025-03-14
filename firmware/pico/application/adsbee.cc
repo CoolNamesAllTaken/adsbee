@@ -78,6 +78,11 @@ bool ADSBee::Init() {
     gpio_set_dir(config_.r1090_led_pin, GPIO_OUT);
     gpio_put(config_.r1090_led_pin, 0);
 
+    // Disable the 978MHz SPI bus output.
+    gpio_init(bsp.r978_cs_pin);
+    gpio_set_dir(bsp.r978_cs_pin, GPIO_OUT);
+    gpio_put(bsp.r978_cs_pin, 1);  // Disable is active LO.
+
     // Initialize the TL bias PWM output.
     gpio_set_function(config_.tl_pwm_pin, GPIO_FUNC_PWM);
     pwm_set_wrap(tl_pwm_slice_, kTLMaxPWMCount);

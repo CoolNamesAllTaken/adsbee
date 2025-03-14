@@ -96,6 +96,7 @@ int main() {
         }
         adsbee.EnableWatchdog();  // Restore watchdog.
         // If we never read from the ESP32, or read a different firmware version, try writing to it.
+        flash_esp32 = false;  // Disable flashing for testing.
         if (flash_esp32) {
             adsbee.DisableWatchdog();  // Disable watchdog while flashing.
             if (!esp32.DeInit()) {
