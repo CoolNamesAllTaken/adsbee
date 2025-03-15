@@ -5,6 +5,7 @@
 #include "core1.hh"
 #include "eeprom.hh"
 #include "firmware_update.hh"
+#include "flash_utils.hh"
 #include "hardware/flash.h"
 #include "spi_coprocessor.hh"
 
@@ -41,13 +42,11 @@ bool SettingsManager::Load() {
             CONSOLE_ERROR("settings.cc::Load", "Failed to save default settings.");
             return false;
         } else {
-            StopCore1();
-            adsbee.DisableWatchdog();
+            FlashUtils::FlashSafe();
             flash_range_erase(FirmwareUpdateManager::FlashAddrToOffset(kFlashSettingsStartAddr), sizeof(settings));
             flash_range_program(FirmwareUpdateManager::FlashAddrToOffset(kFlashSettingsStartAddr), (uint8_t *)&settings,
                                 sizeof(settings));
-            adsbee.EnableWatchdog();
-            StartCore1();
+            FlashUtils::FlashUnsafe();
         }
     }
 
@@ -98,13 +97,11 @@ bool SettingsManager::Save() {
     if (bsp.has_eeprom) {
         return eeprom.Save(settings);
     } else {
-        StopCore1();
-        adsbee.DisableWatchdog();
+        FlashUtils::FlashSafe();
         flash_range_erase(FirmwareUpdateManager::FlashAddrToOffset(kFlashSettingsStartAddr), sizeof(settings));
         flash_range_program(FirmwareUpdateManager::FlashAddrToOffset(kFlashSettingsStartAddr), (uint8_t *)&settings,
                             sizeof(settings));
-        adsbee.EnableWatchdog();
-        StartCore1();
+        FlashUtils::FlashUnsafe();
         return true;
     }
 }
@@ -122,14 +119,12 @@ bool SettingsManager::SetDeviceInfo(const DeviceInfo &device_info) {
         return eeprom.Save(device_info, kDeviceInfoOffset);
     } else {
         // Device Info is stored in flash.
-        StopCore1();
-        adsbee.DisableWatchdog();
+        FlashUtils::FlashSafe();
         flash_range_erase(FirmwareUpdateManager::FlashAddrToOffset(kFlashSettingsStartAddr + kDeviceInfoOffset),
                           sizeof(device_info));
         flash_range_program(FirmwareUpdateManager::FlashAddrToOffset(kFlashSettingsStartAddr + kDeviceInfoOffset),
                             (uint8_t *)&device_info, sizeof(device_info));
-        adsbee.EnableWatchdog();
-        StartCore1();
+        FlashUtils::FlashUnsafe();
         return true;
     }
 }
