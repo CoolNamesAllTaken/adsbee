@@ -65,7 +65,7 @@ class SPICoprocessor {
     static constexpr uint16_t kSPIMutexTimeoutTicks = kSPIMutexTimeoutMs / portTICK_PERIOD_MS;
 #endif
     struct SPICoprocessorConfig {
-        uint32_t clk_rate_hz = 40e6;  // 40 MHz
+        uint32_t clk_rate_hz = 20e6;  // 20 MHz
 #ifdef ON_PICO
         uint16_t esp32_enable_pin = bsp.esp32_enable_pin;  // Pin to enable the ESP32.
         spi_inst_t *spi_handle = bsp.copro_spi_handle;
