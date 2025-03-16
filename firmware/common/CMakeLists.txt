@@ -6,6 +6,7 @@ if (TARGET application)
         settings/settings_strs.cpp
         settings/settings.cpp
         comms/gdl90/gdl90_utils.cpp
+        comms/mavlink/mavlink_utils.cpp
         utils/buffer_utils.cpp
         utils/data_structures.cpp
         utils/crc/crc.cpp
@@ -27,6 +28,7 @@ if (TARGET application)
         comms/csbee
         comms/gdl90
         comms/json
+        comms/mavlink
         coprocessor
         firmware_update
         settings
