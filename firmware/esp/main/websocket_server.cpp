@@ -55,16 +55,6 @@ bool WebSocketServer::Update() {
 esp_err_t WebSocketServer::Handler(httpd_req_t *req) {
     int client_fd = httpd_req_to_sockfd(req);
 
-    // Check if this client_fd is already connected
-    for (int i = 0; i < config_.num_clients_allowed; i++) {
-        if (clients_[i].in_use && clients_[i].client_fd == client_fd) {
-            CONSOLE_WARNING("WebSocketServer::Handler",
-                            "[%s] Client fd %d is already connected to client %d. Original connection will be removed.",
-                            config_.label, client_fd, i);
-            RemoveClient(client_fd);
-        }
-    }
-
     if (req->method == HTTP_GET) {
         CONSOLE_INFO("WebSocketServer::Handler", " [%s] Handshake done, new connection was opened.", config_.label);
         if (!AddClient(client_fd)) {

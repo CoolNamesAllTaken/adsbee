@@ -15,6 +15,8 @@
 #include "transponder_packet.hh"
 #include "unit_conversions.hh"
 
+// #define DEBUG_DISABLE_ESP32_FLASH  // Uncomment this to stop the RP2040 from flashing the ESP32.
+
 // For testing only
 #include "hardware/gpio.h"
 
@@ -95,8 +97,8 @@ int main() {
             }
         }
         adsbee.EnableWatchdog();  // Restore watchdog.
+#ifndef DEBUG_DISABLE_ESP32_FLASH
         // If we never read from the ESP32, or read a different firmware version, try writing to it.
-        flash_esp32 = false;  // Disable flashing for testing.
         if (flash_esp32) {
             adsbee.DisableWatchdog();  // Disable watchdog while flashing.
             if (!esp32.DeInit()) {
@@ -108,6 +110,7 @@ int main() {
             }
             adsbee.EnableWatchdog();  // Restore watchdog after flashing.
         }
+#endif
     }
 
     multicore_reset_core1();

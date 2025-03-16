@@ -6,6 +6,8 @@
 
 class FlashUtils {
    public:
+    static const uint32_t kFlashSectorSizeBytes = 4096;
+
     /**
      * Makes it safe to modify flash memory by disable interrupts and anything else that could screw with it.
      */
