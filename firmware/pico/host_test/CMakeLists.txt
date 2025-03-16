@@ -25,7 +25,6 @@ target_sources(host_test PRIVATE
     main.cc
     settings.cc
     # test_ads_b_decoder.cc
-    test_ads_b_packet.cc
     test_aircraft_dictionary.cc
     test_buffer_utils.cc
     # test_adsbee.cc
@@ -41,6 +40,7 @@ target_sources(host_test PRIVATE
     test_settings.cc
     test_spi_coprocessor.cc
     test_squitter_packets.cc
+    test_transponder_packet.cc
     test_unit_conversions.cc
 )
 
