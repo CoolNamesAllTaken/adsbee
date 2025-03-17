@@ -16,10 +16,10 @@ class Raw1090Packet {
     static const uint16_t kExtendedSquitterPacketLenBits = 112;
     static const uint16_t kExtendedSquitterPacketNumWords32 = 4;  // 112 bits = 3.5 words, round up to 4.
 
-    Raw1090Packet(char *rx_string, int16_t source_in = -1, int32_t sigs_dbm_in = INT32_MIN,
-                  int32_t sigq_db_in = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
+    Raw1090Packet(char *rx_string, int16_t source_in = -1, int16_t sigs_dbm_in = INT16_MIN,
+                  int16_t sigq_db_in = INT16_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
     Raw1090Packet(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32, int16_t source_in = -1,
-                  int32_t sigs_dbm_in = INT32_MIN, int32_t sigq_db_in = INT32_MIN,
+                  int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_db_in = INT16_MIN,
                   uint64_t mlat_48mhz_64bit_counts = 0);
     /**
      * Default constructor.
@@ -45,7 +45,7 @@ class Raw1090Packet {
      */
     uint16_t PrintBuffer(char *buf, uint16_t buf_len_bytes) const;
 
-    uint32_t buffer[kMaxPacketLenWords32];
+    uint32_t buffer[kMaxPacketLenWords32] = {0};
     uint16_t buffer_len_bits = 0;
     int8_t source = -1;                    // Source of the ADS-B packet (PIO state machine number).
     int16_t sigs_dbm = INT16_MIN;          // Signal strength, in dBm.
