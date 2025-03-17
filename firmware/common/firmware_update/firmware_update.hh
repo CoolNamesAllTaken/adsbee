@@ -415,6 +415,8 @@ class FirmwareUpdateManager {
     /**
      * Disable interrupts and store them for use in a restore command. Call this for TEMPORARILY disabling interrupts,
      * like during flash operations.
+     *
+     * NOTE: This function is only used in the bootloader. Things get more complicated in the main application.
      */
     static inline void DisableInterrupts(void) { stored_interrupts_ = save_and_disable_interrupts(); }
 
@@ -459,6 +461,8 @@ class FirmwareUpdateManager {
 
     /**
      * Restore interrupts from stored values. Call this after erasing flash or performing a boot jump.
+     *
+     * * NOTE: This function is only used in the bootloader. Things get more complicated in the main application.
      */
     static inline void RestoreInterrupts(void) { restore_interrupts(stored_interrupts_); }
 

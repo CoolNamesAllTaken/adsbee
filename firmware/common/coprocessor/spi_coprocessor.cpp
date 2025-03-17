@@ -39,9 +39,13 @@ bool SPICoprocessor::Init() {
     // gpio_set_slew_rate(config_.spi_clk_pin, config_.spi_gpio_slew_rate);
     // gpio_set_slew_rate(config_.spi_mosi_pin, config_.spi_gpio_slew_rate);
     // gpio_set_slew_rate(config_.spi_cs_pin, config_.spi_gpio_slew_rate);
-    // gpio_set_drive_strength(config_.spi_clk_pin, config_.spi_gpio_drive_strength);
-    // gpio_set_drive_strength(config_.spi_mosi_pin, config_.spi_gpio_drive_strength);
-    // gpio_set_drive_strength(config_.spi_cs_pin, config_.spi_gpio_drive_strength);
+    gpio_set_drive_strength(config_.spi_clk_pin, GPIO_DRIVE_STRENGTH_12MA);
+    gpio_set_drive_strength(config_.spi_mosi_pin, GPIO_DRIVE_STRENGTH_12MA);
+    gpio_set_drive_strength(config_.spi_cs_pin, GPIO_DRIVE_STRENGTH_12MA);
+    gpio_set_pulls(config_.spi_clk_pin, false, true);   // Clock pin is pulled down.
+    gpio_set_pulls(config_.spi_mosi_pin, false, true);  // MOSI pin is pulled down.
+    gpio_set_pulls(config_.spi_cs_pin, false, true);    // CS pin is pulled down.
+    gpio_set_pulls(config_.spi_miso_pin, false, true);  // MISO pin is pulled down.
 
     // Initialize SPI Peripheral.
     spi_init(config_.spi_handle, config_.clk_rate_hz);
@@ -85,9 +89,13 @@ bool SPICoprocessor::Init() {
         .intr_type = GPIO_INTR_DISABLE,
     };
     gpio_config(&handshake_io_conf);
-    gpio_set_pull_mode(config_.spi_mosi_pin, GPIO_PULLUP_ONLY);
-    gpio_set_pull_mode(config_.spi_miso_pin, GPIO_PULLUP_ONLY);
+    gpio_set_pull_mode(config_.spi_mosi_pin, GPIO_PULLDOWN_ONLY);
+    gpio_set_pull_mode(config_.spi_miso_pin, GPIO_PULLDOWN_ONLY);
+    gpio_set_pull_mode(config_.spi_clk_pin, GPIO_PULLDOWN_ONLY);
     gpio_set_pull_mode(config_.spi_cs_pin, GPIO_PULLUP_ONLY);
+
+    // Adjust drive strength on MISO pin.
+    gpio_set_drive_capability(config_.spi_miso_pin, GPIO_DRIVE_CAP_MAX);
 
     esp_err_t status = spi_slave_initialize(config_.spi_handle, &spi_buscfg, &spi_slvcfg, SPI_DMA_CH_AUTO);
     if (status != ESP_OK) {

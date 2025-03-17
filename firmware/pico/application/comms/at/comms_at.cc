@@ -9,6 +9,7 @@
 #include "eeprom.hh"
 #include "esp32_flasher.hh"
 #include "firmware_update.hh"
+#include "flash_utils.hh"
 #include "main.hh"
 #include "pico/multicore.h"
 #include "pico/stdlib.h"  // for getchar etc
@@ -338,11 +339,9 @@ CPP_AT_CALLBACK(CommsManager::ATFlashESP32Callback) {
     if (!esp32.DeInit()) {
         CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while de-initializing ESP32 before flashing.");
     }
-    StopCore1();
-    adsbee.DisableWatchdog();
+    FlashUtils::FlashSafe();
     bool flashed_successfully = esp32_flasher.FlashESP32();
-    adsbee.EnableWatchdog();
-    StartCore1();
+    FlashUtils::FlashUnsafe();
     if (!flashed_successfully) {
         CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while flashing ESP32.");
     }
@@ -413,12 +412,10 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         CPP_AT_TRY_ARG2NUM_BASE(2, len_bytes, 10);
                         CPP_AT_PRINTF("Erasing %u Bytes at offset 0x%x in partition %u.\r\n", len_bytes, offset,
                                       complementary_partition);
-                        StopCore1();               // Reset core 1 to prevent it from executing while we erase flash.
-                        adsbee.DisableWatchdog();  // Flash erase can take a while, prevent watchdog from rebooting us.
+                        FlashUtils::FlashSafe();
                         bool flash_erase_succeeded =
                             FirmwareUpdateManager::EraseFlashParition(complementary_partition, offset, len_bytes);
-                        adsbee.EnableWatchdog();
-                        StartCore1();
+                        FlashUtils::FlashUnsafe();
                         if (!flash_erase_succeeded) {
                             CPP_AT_ERROR("Failed partial erase of complementary flash partition.");
                         }
@@ -426,12 +423,9 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     } else {
                         // Performing a full partition erase with AT+OTA=ERASE.
                         CPP_AT_PRINTF("Erasing partition %d.\r\n", complementary_partition);
-                        StopCore1();  // Reset core 1 to prevent it from executing while we erase flash.
-                        // Flash erase can take a while, prevent watchdog from rebooting us during erase!
-                        adsbee.DisableWatchdog();
+                        FlashUtils::FlashSafe();
                         bool flash_erase_succeeded = FirmwareUpdateManager::EraseFlashParition(complementary_partition);
-                        adsbee.EnableWatchdog();
-                        StartCore1();
+                        FlashUtils::FlashUnsafe();
                         if (!flash_erase_succeeded) {
                             CPP_AT_ERROR("Failed full erase of complementary flash partition.");
                         }
@@ -511,13 +505,10 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     }
                     CPP_AT_PRINTF("Writing %u Bytes to partition %u at offset 0x%x.\r\n", len_bytes,
                                   complementary_partition, offset);
-                    StopCore1();               // Reset core 1 to prevent it from executing while we write to flash.
-                    adsbee.DisableWatchdog();  // Flash write can take a while, prevent watchdog from rebooting us
-                    // during write!
+                    FlashUtils::FlashSafe();
                     bool flash_write_succeeded = FirmwareUpdateManager::PartialWriteFlashPartition(
                         complementary_partition, offset, len_bytes, buf);
-                    adsbee.EnableWatchdog();
-                    StartCore1();
+                    FlashUtils::FlashUnsafe();
                     if (!flash_write_succeeded) {
                         adsbee.SetReceiverEnable(receiver_was_enabled);  // Re-enable receiver before exit.
                         CPP_AT_ERROR("Partial %u Byte write failed in partition %u at offset 0x%x.", len_bytes,
@@ -547,22 +538,20 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         FirmwareUpdateManager::flash_partition_headers[complementary_partition]->status,
                         FirmwareUpdateManager::flash_partition_headers[complementary_partition]->app_crc);
                     // Modify the partition header.
-                    StopCore1();  // Disable core 1 to avoid problems while modifying the header.
-                    if (FirmwareUpdateManager::VerifyFlashPartition(complementary_partition, true)) {
-                        StartCore1();
+                    FlashUtils::FlashSafe();
+                    bool ret = FirmwareUpdateManager::VerifyFlashPartition(complementary_partition, true);
+                    FlashUtils::FlashUnsafe();
+                    if (ret) {
                         CPP_AT_SUCCESS();
                     } else {
-                        StartCore1();
                         CPP_AT_ERROR("Partition %u failed verification.", complementary_partition);
                     }
                 } else if (args[0].compare("BOOT") == 0) {
                     // Boot the complementary flash partition.
                     CPP_AT_PRINTF("Booting partition %u...", complementary_partition);
-                    StopCore1();  // Reset core 1 to prevent it from messing with us.
-                    adsbee.DisableWatchdog();
+                    FlashUtils::FlashSafe();
                     FirmwareUpdateManager::BootPartition(complementary_partition);
-                    adsbee.EnableWatchdog();
-                    StartCore1();
+                    FlashUtils::FlashUnsafe();
                     CPP_AT_ERROR("Failed to boot partition %u.", complementary_partition);
                 }
             }

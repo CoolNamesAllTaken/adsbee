@@ -15,6 +15,8 @@
 #include "transponder_packet.hh"
 #include "unit_conversions.hh"
 
+// #define DEBUG_DISABLE_ESP32_FLASH  // Uncomment this to stop the RP2040 from flashing the ESP32.
+
 // For testing only
 #include "hardware/gpio.h"
 
@@ -25,10 +27,13 @@ const uint32_t kESP32BootupCommsRetryMs = 500;
 const uint32_t kMultiCoreStartHandshake = 0x12345678;
 
 // Override default config params here.
+EEPROM eeprom = EEPROM({});
+BSP bsp = BSP(eeprom.Init());
+
 ADSBee adsbee = ADSBee({});
 CommsManager comms_manager = CommsManager({});
 ESP32SerialFlasher esp32_flasher = ESP32SerialFlasher({});
-EEPROM eeprom = EEPROM({});
+
 SettingsManager settings_manager;
 ObjectDictionary object_dictionary;
 SPICoprocessor esp32 = SPICoprocessor({});
@@ -37,7 +42,7 @@ PacketDecoder decoder = PacketDecoder({.enable_1090_error_correction = true});
 int main() {
     bi_decl(bi_program_description("ADSBee 1090 ADSB Receiver"));
 
-    eeprom.Init();
+    // eeprom.Init();
     adsbee.Init();
     comms_manager.Init();
     comms_manager.console_printf("ADSBee 1090\r\nSoftware Version %d.%d.%d\r\n",
@@ -92,6 +97,7 @@ int main() {
             }
         }
         adsbee.EnableWatchdog();  // Restore watchdog.
+#ifndef DEBUG_DISABLE_ESP32_FLASH
         // If we never read from the ESP32, or read a different firmware version, try writing to it.
         if (flash_esp32) {
             adsbee.DisableWatchdog();  // Disable watchdog while flashing.
@@ -104,6 +110,7 @@ int main() {
             }
             adsbee.EnableWatchdog();  // Restore watchdog after flashing.
         }
+#endif
     }
 
     multicore_reset_core1();

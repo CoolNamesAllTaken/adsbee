@@ -10,6 +10,7 @@
 #include "transponder_packet.hh"
 
 #ifdef ON_PICO
+#include "bsp.hh"
 #include "hardware/gpio.h"
 #include "hardware/spi.h"
 #elif ON_ESP32
@@ -64,15 +65,15 @@ class SPICoprocessor {
     static constexpr uint16_t kSPIMutexTimeoutTicks = kSPIMutexTimeoutMs / portTICK_PERIOD_MS;
 #endif
     struct SPICoprocessorConfig {
-        uint32_t clk_rate_hz = 40e6;  // 40 MHz
+        uint32_t clk_rate_hz = 20e6;  // 20 MHz
 #ifdef ON_PICO
-        uint16_t esp32_enable_pin = 14;
-        spi_inst_t *spi_handle = spi1;
-        uint16_t spi_clk_pin = 10;
-        uint16_t spi_mosi_pin = 11;
-        uint16_t spi_miso_pin = 12;
-        uint16_t spi_cs_pin = 9;
-        uint16_t spi_handshake_pin = 13;
+        uint16_t esp32_enable_pin = bsp.esp32_enable_pin;  // Pin to enable the ESP32.
+        spi_inst_t *spi_handle = bsp.copro_spi_handle;
+        uint16_t spi_clk_pin = bsp.copro_spi_clk_pin;  // Pin for SPI clock (SCK).
+        uint16_t spi_mosi_pin = bsp.copro_spi_mosi_pin;
+        uint16_t spi_miso_pin = bsp.copro_spi_miso_pin;
+        uint16_t spi_cs_pin = bsp.esp32_spi_cs_pin;  // Pin for SPI chip select (CS).
+        uint16_t spi_handshake_pin = bsp.esp32_spi_handshake_pin;
         // gpio_slew_rate spi_gpio_slew_rate = GPIO_SLEW_RATE_SLOW;
         // gpio_drive_strength spi_gpio_drive_strength = GPIO_DRIVE_STRENGTH_2MA;
 #elif ON_ESP32
