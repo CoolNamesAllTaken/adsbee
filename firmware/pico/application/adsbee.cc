@@ -25,6 +25,10 @@
 
 #include "comms.hh"  // For debug prints.
 
+#define MLAT_SYSTEM_CLOCK_RATIO 48 / 125
+// Scales 125MHz system clock into a 48MHz counter.
+static const uint32_t kMLATWrapCounterIncrement = (1 << 24) * MLAT_SYSTEM_CLOCK_RATIO;
+
 constexpr float kPreambleDetectorFreq = 48e6;    // Running at 48MHz (24 clock cycles per half bit).
 constexpr float kMessageDemodulatorFreq = 48e6;  // Run at 48 MHz to demodulate bits at 1Mbps.
 
@@ -355,7 +359,8 @@ void ADSBee::FlashStatusLED(uint32_t led_on_ms) {
 uint64_t ADSBee::GetMLAT48MHzCounts(uint16_t num_bits) {
     // Combine the wrap counter with the current value of the SysTick register and mask to 48 bits.
     // Note: 24-bit SysTick value is subtracted from UINT_24_MAX to make it count up instead of down.
-    return (mlat_counter_1s_wraps_ << 24 | (0xFFFFFF - systick_hw->cvr)) & (UINT64_MAX >> (64 - num_bits));
+    return (mlat_counter_wraps_ + ((0xFFFFFF - systick_hw->cvr) * MLAT_SYSTEM_CLOCK_RATIO)) &
+           (UINT64_MAX >> (64 - num_bits));
 }
 
 uint64_t ADSBee::GetMLAT12MHzCounts(uint16_t num_bits) {
@@ -492,7 +497,7 @@ void ADSBee::OnDemodComplete() {
     }
 }
 
-void ADSBee::OnSysTickWrap() { mlat_counter_1s_wraps_++; }
+void ADSBee::OnSysTickWrap() { mlat_counter_wraps_ += kMLATWrapCounterIncrement; }
 
 int ADSBee::ReadSignalStrengthMilliVolts() {
     adc_select_input(config_.rssi_adc_input);

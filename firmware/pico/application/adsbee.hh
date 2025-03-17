@@ -315,7 +315,7 @@ class ADSBee {
     int16_t tl_learning_prev_num_valid_packets_ = 1;  // Set to 1 to avoid dividing by 0.
     uint16_t tl_learning_prev_tl_mv_ = tl_mv_;
 
-    uint64_t mlat_counter_1s_wraps_ = 0;
+    uint64_t mlat_counter_wraps_ = 0;
 
     Raw1090Packet rx_packet_[BSP::kMaxNumDemodStateMachines];
     Raw1090Packet raw_1090_packet_queue_buffer_[kMaxNumTransponderPackets];
