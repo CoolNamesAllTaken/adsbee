@@ -109,7 +109,7 @@ bool ADSBee::Init() {
 
     // Enable the MLAT timer using the 24-bit SysTick timer connected to the 125MHz processor clock.
     // SysTick Control and Status Register
-    systick_hw->csr = 0b110;  // Source = External Reference Clock, TickInt = Enabled, Counter = Disabled.
+    systick_hw->csr = 0b110;  // Source = Processor Clock, TickInt = Enabled, Counter = Disabled.
     // SysTick Reload Value Register
     systick_hw->rvr = 0xFFFFFF;  // Use the full 24 bit span of the timer value register.
     // 0xFFFFFF = 16777215 counts @ 125MHz = approx. 0.134 seconds.
