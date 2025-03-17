@@ -47,9 +47,9 @@ class Raw1090Packet {
 
     uint32_t buffer[kMaxPacketLenWords32];
     uint16_t buffer_len_bits = 0;
-    int16_t source = -1;                   // Source of the ADS-B packet (PIO state machine number).
-    int32_t sigs_dbm = INT32_MIN;          // Signal strength, in dBm.
-    int32_t sigq_db = INT32_MIN;           // Signal quality (dB above noise floor), in dB.
+    int8_t source = -1;                    // Source of the ADS-B packet (PIO state machine number).
+    int16_t sigs_dbm = INT16_MIN;          // Signal strength, in dBm.
+    int16_t sigq_db = INT16_MIN;           // Signal quality (dB above noise floor), in dB.
     uint64_t mlat_48mhz_64bit_counts = 0;  // High resolution MLAT counter.
 };
 

@@ -156,7 +156,8 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
     mavlink_set_proto_version(SettingsManager::SerialInterface::kCommsUART, mavlink_version);
 
     // Send a HEARTBEAT message.
-    mavlink_heartbeat_t heartbeat_msg = {.type = MAV_TYPE_ADSB,
+    mavlink_heartbeat_t heartbeat_msg = {.custom_mode = 0,
+                                         .type = MAV_TYPE_ADSB,
                                          .autopilot = MAV_AUTOPILOT_INVALID,
                                          .base_mode = 0,
                                          .system_status = MAV_STATE_ACTIVE,
@@ -175,7 +176,7 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
     // Send delimiter message.
     switch (mavlink_version) {
         case 1: {
-            mavlink_request_data_stream_t request_data_stream_msg = {};
+            mavlink_request_data_stream_t request_data_stream_msg = {0};
             mavlink_msg_request_data_stream_send_struct(static_cast<mavlink_channel_t>(iface),
                                                         &request_data_stream_msg);
             break;
