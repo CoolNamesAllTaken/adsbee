@@ -5,6 +5,7 @@
 #include "gdl90_utils.hh"
 #include "hal.hh"  // For timestamping.
 #include "mavlink_utils.hh"
+#include "raw_utils.hh"
 #include "spi_coprocessor.hh"
 #include "unit_conversions.hh"
 
@@ -98,16 +99,22 @@ bool CommsManager::UpdateReporting() {
     return ret;
 }
 
-bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface, const Decoded1090Packet packets_to_report[],
+bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface, const Decoded1090Packet packets_to_report_1090[],
                              uint16_t num_packets_to_report) {
+    for (uint16_t i = 0; i < num_packets_to_report; i++) {
+        char raw_frame_buf[kRaw1090FrameMaxNumChars];
+        uint16_t num_bytes_in_frame = BuildRaw1090Frame(packets_to_report_1090[i].GetRaw(), raw_frame_buf);
+        SendBuf(iface, (char *)raw_frame_buf, num_bytes_in_frame);
+        comms_manager.iface_puts(iface, (char *)"\r\n");  // Send delimiter.
+    }
     return true;
 }
 
-bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface, const Decoded1090Packet packets_to_report[],
+bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface, const Decoded1090Packet packets_to_report_1090[],
                                uint16_t num_packets_to_report) {
     for (uint16_t i = 0; i < num_packets_to_report; i++) {
         uint8_t beast_frame_buf[kBeastFrameMaxLenBytes];
-        uint16_t num_bytes_in_frame = Build1090BeastFrame(packets_to_report[i], beast_frame_buf);
+        uint16_t num_bytes_in_frame = Build1090BeastFrame(packets_to_report_1090[i], beast_frame_buf);
         comms_manager.iface_putc(iface, char(0x1a));  // Send beast escape char to denote beginning of frame.
         SendBuf(iface, (char *)beast_frame_buf, num_bytes_in_frame);
     }

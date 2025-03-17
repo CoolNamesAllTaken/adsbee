@@ -7,6 +7,7 @@ if (TARGET application)
         settings/settings.cpp
         comms/gdl90/gdl90_utils.cpp
         comms/mavlink/mavlink_utils.cpp
+        comms/raw/raw_utils.cpp
         utils/buffer_utils.cpp
         utils/data_structures.cpp
         utils/crc/crc.cpp
