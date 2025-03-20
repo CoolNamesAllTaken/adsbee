@@ -373,6 +373,8 @@ int ADSBee::GetNoiseFloordBm() { return AD8313MilliVoltsTodBm(noise_floor_mv_); 
 uint16_t ADSBee::GetTLLearningTemperatureMV() { return tl_learning_temperature_mv_; }
 
 void ADSBee::OnDemodBegin(uint gpio) {
+    // Read MLAT counter at the beginning to reduce jitter after interrupt.
+    uint64_t mlat_48mhz_64bit_counts = GetMLAT48MHzCounts();
     uint16_t sm_index;
     for (sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         if (config_.demod_pins[sm_index] == gpio) {
@@ -381,9 +383,8 @@ void ADSBee::OnDemodBegin(uint gpio) {
     }
     if (sm_index >= bsp.r1090_num_demod_state_machines)
         return;  // Ignore; wasn't the start of a demod interval for a known SM.
-    // Demodulation period is beginning!
-    // Store the MLAT counter.
-    rx_packet_[sm_index].mlat_48mhz_64bit_counts = GetMLAT48MHzCounts();  // TODO: have separate RX packets
+    // Demodulation period is beginning! Store the MLAT counter.
+    rx_packet_[sm_index].mlat_48mhz_64bit_counts = mlat_48mhz_64bit_counts;
 }
 
 void ADSBee::OnDemodComplete() {

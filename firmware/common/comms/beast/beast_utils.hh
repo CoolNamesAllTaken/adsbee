@@ -138,9 +138,11 @@ uint16_t Build1090BeastFrame(const Decoded1090Packet &packet, uint8_t *beast_fra
     }
     bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, mlat_12mhz_counter_buf, 6);
 
-    // Write RSSI Byte as linear value that correlates with log power detector output voltage. 255 = 0dBm, 0 = -100dBm.
-    uint8_t rssi_byte_dbfs = (255 + packet.GetRSSIdBm() * 255 / 100);
-    bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, &rssi_byte_dbfs, 1);
+    // Write RSSI Byte. 255 = 0dBm, 0 = -96dBm.
+    // Note: Divide power level by 2 since beast power level gets logged, then squared. Divide by 10 to convert from dB
+    // (power) to log value.
+    uint8_t rssi_byte = static_cast<uint8_t>(255.0f * powf(10.0f, (packet.GetRSSIdBm() / 2 / 10)));
+    bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, &rssi_byte, 1);
 
     // Write packet buffer with escape characters.
     bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, packet_buf, data_num_bytes);
