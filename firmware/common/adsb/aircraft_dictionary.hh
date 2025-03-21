@@ -354,16 +354,6 @@ class Aircraft {
         uint32_t received_timestamp_ms = 0;  // [ms] time since boot when packet was recorded
         uint32_t n_lat = 0;                  // 17-bit latitude count
         uint32_t n_lon = 0;                  // 17-bit longitude count
-
-#ifndef USE_NASA_CPR
-        // DecodePosition values.
-        float lat_cpr = 0.0f;
-        float lon_cpr = 0.0f;
-        uint16_t nl_cpr = 0;  // number of longitude cells in latitude band
-        float lat =
-            0.0f;  // only keep latitude since it's reused in cooperative calculations between odd and even packets
-// float lon = 0.0f; // longitude
-#endif
     };
 
     CPRPacket last_odd_packet_;

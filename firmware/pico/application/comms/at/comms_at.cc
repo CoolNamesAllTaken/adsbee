@@ -359,9 +359,13 @@ CPP_AT_CALLBACK(CommsManager::ATFlashESP32Callback) {
     if (!esp32.DeInit()) {
         CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while de-initializing ESP32 before flashing.");
     }
-    FlashUtils::FlashSafe();
+    // Manually stop and start core 1 and watchdog instead of using FlashSafe() and FlashUnsafe() since we aren't
+    // actually writing to RP2040 flash memory and we want printouts to work over the USB console.
+    StopCore1();
+    adsbee.DisableWatchdog();
     bool flashed_successfully = esp32_flasher.FlashESP32();
-    FlashUtils::FlashUnsafe();
+    adsbee.EnableWatchdog();
+    StartCore1();
     if (!flashed_successfully) {
         CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while flashing ESP32.");
     }

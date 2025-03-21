@@ -593,3 +593,73 @@ TEST(Aircraft, AircraftStats) {
     EXPECT_EQ(aircraft.metrics.valid_extended_squitter_frames, 1);
     EXPECT_EQ(aircraft.metrics.valid_squitter_frames, 1);
 }
+
+TEST(AircraftDictionary, FilterCPRLocations) {
+    AircraftDictionary dictionary;
+
+    /**  Test Case 0 **/
+    Decoded1090Packet packet = Decoded1090Packet((char *)"8D48922358C387D91DF354DCCCB8");  // even
+    uint32_t icao = packet.GetICAOAddress();
+    inc_time_since_boot_ms(1000);
+    packet.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
+    bool decode_result = dictionary.IngestDecoded1090Packet(packet);
+    EXPECT_TRUE(decode_result);
+
+    // Aircraft should now exist in the dictionary.
+    Aircraft *aircraft = dictionary.GetAircraftPtr(icao);
+    ASSERT_TRUE(aircraft);
+
+    // Send another valid position packet and ensure a valid location decode.
+    packet = Decoded1090Packet((char *)"8D48922358C38066020D8401D571");  // odd
+    inc_time_since_boot_ms(1000);
+    packet.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
+    EXPECT_TRUE(dictionary.IngestDecoded1090Packet(packet));
+    EXPECT_TRUE(aircraft->CanDecodePosition());
+    EXPECT_TRUE(aircraft->DecodePosition());
+    EXPECT_NEAR(aircraft->latitude_deg, 48.5977f, 0.0001f);
+    EXPECT_NEAR(aircraft->longitude_deg, 18.70521f, 0.001f);
+
+    // Ingest a packet pair that causes an invalid decode.
+    packet = Decoded1090Packet((char *)"8D48922358C3806C3E0C8BC657BB");  // even
+    inc_time_since_boot_ms(1000);
+    packet.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
+    EXPECT_FALSE(dictionary.IngestDecoded1090Packet(packet));
+    // Aircraft has all the ingredients to decode its location, but the decoded location is not valid.
+    EXPECT_TRUE(aircraft->CanDecodePosition());
+    EXPECT_FALSE(aircraft->DecodePosition());
+
+    // Previous position is persisted.
+    EXPECT_NEAR(aircraft->latitude_deg, 48.5977f, 0.0001f);
+    EXPECT_NEAR(aircraft->longitude_deg, 18.70521f, 0.001f);
+
+    /**  Test Case 1 **/
+    // Valid position pair.
+    packet = Decoded1090Packet((char *)"8D48C22D60AB00DEABC5DB78FCD6");  // odd
+    icao = packet.GetICAOAddress();
+    inc_time_since_boot_ms(1000);
+    packet.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
+    EXPECT_TRUE(dictionary.IngestDecoded1090Packet(packet));
+    aircraft = dictionary.GetAircraftPtr(icao);
+    packet = Decoded1090Packet((char *)"8D48C22D60AB0452BFAD19A695E0");  // even
+    inc_time_since_boot_ms(1000);
+    packet.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
+    EXPECT_TRUE(dictionary.IngestDecoded1090Packet(packet));
+    EXPECT_TRUE(aircraft->CanDecodePosition());
+    EXPECT_TRUE(aircraft->DecodePosition());
+    EXPECT_NEAR(aircraft->latitude_deg, 49.30659f, 0.0001f);
+    EXPECT_NEAR(aircraft->longitude_deg, 17.4134f, 0.001f);
+
+    // Invalid position pair.
+    packet = Decoded1090Packet((char *)"8D48C22D60AB00E705C60B37E092");  // even
+    inc_time_since_boot_ms(1000);
+    packet.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
+    dictionary.IngestDecoded1090Packet(packet);
+    packet = Decoded1090Packet((char *)"8D48C22D60B104710F94F963E8B6");  // odd
+    inc_time_since_boot_ms(1000);
+    packet.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
+    dictionary.IngestDecoded1090Packet(packet);
+    EXPECT_TRUE(aircraft->CanDecodePosition());
+    EXPECT_FALSE(aircraft->DecodePosition());
+
+    /** Test Case 2 **/
+}
