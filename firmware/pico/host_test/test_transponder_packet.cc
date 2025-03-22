@@ -149,3 +149,15 @@ TEST(Decoded1090Packet, DumpPacketBufferBytes) {
         EXPECT_EQ(packet_buffer_words[i] & 0xFF, check_buffer_bytes[i * kBytesPerWord + 3]);
     }
 }
+
+TEST(Raw1090Packet, GetTimestampMs) {
+    // Check that the divide logic within Raw1090Packet works OK.
+    Raw1090Packet raw_packet = Raw1090Packet((char *)"dedbef");
+    raw_packet.mlat_48mhz_64bit_counts = 48'000;
+    EXPECT_EQ(raw_packet.GetTimestampMs(), 1u);
+    raw_packet.mlat_48mhz_64bit_counts = 97'325;
+    EXPECT_EQ(raw_packet.GetTimestampMs(), 2u);
+    raw_packet.mlat_48mhz_64bit_counts = 0xEAD'BEEF'DEAD'BEEFu;
+    // raw_packet.mlat_48mhz_64bit_counts = 1'057'711'424'944'324'335u;
+    EXPECT_EQ(raw_packet.GetTimestampMs(), 0x140A'935E'B684u);
+}

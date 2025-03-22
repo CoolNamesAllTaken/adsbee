@@ -123,7 +123,7 @@ class ADSBee {
      * @param[in] num_bits Number of bits to mask the counter value to. Defaults to full resolution.
      * @retval 48MHz counter value.
      */
-    inline uint64_t GetMLAT48MHzCounts(uint16_t num_bits = 64);
+    uint64_t GetMLAT48MHzCounts(uint16_t num_bits = 64);
 
     /**
      * Creates a composite timestamp using the current value of the SysTick timer (running at 125MHz) and the SysTick
@@ -133,7 +133,7 @@ class ADSBee {
      * Beast protocol.
      * @retval 48MHz counter value.
      */
-    inline uint64_t GetMLAT12MHzCounts(uint16_t num_bits = 48);
+    uint64_t GetMLAT12MHzCounts(uint16_t num_bits = 48);
 
     /**
      * Returns the power level of the noise floor (signal strength sampled mostly during non-decode intervals and then
@@ -315,7 +315,7 @@ class ADSBee {
     int16_t tl_learning_prev_num_valid_packets_ = 1;  // Set to 1 to avoid dividing by 0.
     uint16_t tl_learning_prev_tl_mv_ = tl_mv_;
 
-    uint32_t mlat_counter_1s_wraps_ = 0;
+    uint64_t mlat_counter_wraps_ = 0;
 
     Raw1090Packet rx_packet_[BSP::kMaxNumDemodStateMachines];
     Raw1090Packet raw_1090_packet_queue_buffer_[kMaxNumTransponderPackets];

@@ -38,7 +38,7 @@ const uint16_t kCRC24GeneratorNumBits = 25;
 /** Decoded1090Packet **/
 
 Raw1090Packet::Raw1090Packet(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32,
-                             int16_t source_in, int32_t sigs_dbm_in, int32_t sigq_db_in,
+                             int16_t source_in, int16_t sigs_dbm_in, int16_t sigq_db_in,
                              uint64_t mlat_48mhz_64bit_counts_in)
     : source(source_in),
       sigs_dbm(sigs_dbm_in),
@@ -68,7 +68,7 @@ Raw1090Packet::Raw1090Packet(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t 
     }
 }
 
-Raw1090Packet::Raw1090Packet(char *rx_string, int16_t source_in, int32_t sigs_dbm_in, int32_t sigq_db_in,
+Raw1090Packet::Raw1090Packet(char *rx_string, int16_t source_in, int16_t sigs_dbm_in, int16_t sigq_db_in,
                              uint64_t mlat_48mhz_64bit_counts_in)
     : source(source_in),
       sigs_dbm(sigs_dbm_in),
@@ -92,12 +92,13 @@ uint16_t Raw1090Packet::PrintBuffer(char *buf, uint16_t buf_len_bytes) const {
     uint16_t len = 0;
     switch (buffer_len_bits) {
         case kSquitterPacketLenBits:
-            len = snprintf(buf, buf_len_bytes, "0x%08lx%06lx", buffer[0], buffer[1] >> (2 * kBitsPerNibble));
+            len = snprintf(buf, buf_len_bytes, "%08lX%06lX", buffer[0], buffer[1] >> (2 * kBitsPerNibble));
             break;
         case kExtendedSquitterPacketLenBits:
-            len = snprintf(buf, buf_len_bytes, "0x%08lx%08lx%08lx%04lx", buffer[0], buffer[1], buffer[2],
+            len = snprintf(buf, buf_len_bytes, "%08lX%08lX%08lX%04lX", buffer[0], buffer[1], buffer[2],
                            buffer[3] >> (4 * kBitsPerNibble));
             break;
+            // Don't print anything if the buffer is an invalid length.
     }
     return len;
 }

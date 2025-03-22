@@ -117,14 +117,14 @@ int main() {
     multicore_launch_core1(main_core1);
 
     // Add a test aircraft to start.
-    // Aircraft test_aircraft;
-    // test_aircraft.category = Aircraft::Category::kCategorySpaceTransatmosphericVehicle;
+    // Aircraft1090 test_aircraft;
+    // test_aircraft.category = Aircraft1090::Category::kCategorySpaceTransatmosphericVehicle;
     // strcpy(test_aircraft.callsign, "TST1234");
     // test_aircraft.latitude_deg = 20;
     // test_aircraft.longitude_deg = -140;
     // test_aircraft.baro_altitude_ft = 10000;
     // test_aircraft.vertical_rate_fpm = -5;
-    // test_aircraft.altitude_source = Aircraft::AltitudeSource::kAltitudeSourceBaro;
+    // test_aircraft.altitude_source = Aircraft1090::AltitudeSource::kAltitudeSourceBaro;
     // test_aircraft.direction_deg = 100;
     // test_aircraft.velocity_kts = 200;
     // adsbee.aircraft_dictionary.InsertAircraft(test_aircraft);

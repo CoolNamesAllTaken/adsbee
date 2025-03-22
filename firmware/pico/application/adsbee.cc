@@ -25,6 +25,10 @@
 
 #include "comms.hh"  // For debug prints.
 
+#define MLAT_SYSTEM_CLOCK_RATIO 48 / 125
+// Scales 125MHz system clock into a 48MHz counter.
+static const uint32_t kMLATWrapCounterIncrement = (1 << 24) * MLAT_SYSTEM_CLOCK_RATIO;
+
 constexpr float kPreambleDetectorFreq = 48e6;    // Running at 48MHz (24 clock cycles per half bit).
 constexpr float kMessageDemodulatorFreq = 48e6;  // Run at 48 MHz to demodulate bits at 1Mbps.
 
@@ -109,7 +113,7 @@ bool ADSBee::Init() {
 
     // Enable the MLAT timer using the 24-bit SysTick timer connected to the 125MHz processor clock.
     // SysTick Control and Status Register
-    systick_hw->csr = 0b110;  // Source = External Reference Clock, TickInt = Enabled, Counter = Disabled.
+    systick_hw->csr = 0b110;  // Source = Processor Clock, TickInt = Enabled, Counter = Disabled.
     // SysTick Reload Value Register
     systick_hw->rvr = 0xFFFFFF;  // Use the full 24 bit span of the timer value register.
     // 0xFFFFFF = 16777215 counts @ 125MHz = approx. 0.134 seconds.
@@ -355,7 +359,8 @@ void ADSBee::FlashStatusLED(uint32_t led_on_ms) {
 uint64_t ADSBee::GetMLAT48MHzCounts(uint16_t num_bits) {
     // Combine the wrap counter with the current value of the SysTick register and mask to 48 bits.
     // Note: 24-bit SysTick value is subtracted from UINT_24_MAX to make it count up instead of down.
-    return (mlat_counter_1s_wraps_ << 24 | (0xFFFFFF - systick_hw->cvr)) & (UINT64_MAX >> (64 - num_bits));
+    return (mlat_counter_wraps_ + ((0xFFFFFF - systick_hw->cvr) * MLAT_SYSTEM_CLOCK_RATIO)) &
+           (UINT64_MAX >> (64 - num_bits));
 }
 
 uint64_t ADSBee::GetMLAT12MHzCounts(uint16_t num_bits) {
@@ -368,6 +373,8 @@ int ADSBee::GetNoiseFloordBm() { return AD8313MilliVoltsTodBm(noise_floor_mv_); 
 uint16_t ADSBee::GetTLLearningTemperatureMV() { return tl_learning_temperature_mv_; }
 
 void ADSBee::OnDemodBegin(uint gpio) {
+    // Read MLAT counter at the beginning to reduce jitter after interrupt.
+    uint64_t mlat_48mhz_64bit_counts = GetMLAT48MHzCounts();
     uint16_t sm_index;
     for (sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         if (config_.demod_pins[sm_index] == gpio) {
@@ -376,9 +383,8 @@ void ADSBee::OnDemodBegin(uint gpio) {
     }
     if (sm_index >= bsp.r1090_num_demod_state_machines)
         return;  // Ignore; wasn't the start of a demod interval for a known SM.
-    // Demodulation period is beginning!
-    // Store the MLAT counter.
-    rx_packet_[sm_index].mlat_48mhz_64bit_counts = GetMLAT48MHzCounts();  // TODO: have separate RX packets
+    // Demodulation period is beginning! Store the MLAT counter.
+    rx_packet_[sm_index].mlat_48mhz_64bit_counts = mlat_48mhz_64bit_counts;
 }
 
 void ADSBee::OnDemodComplete() {
@@ -492,7 +498,7 @@ void ADSBee::OnDemodComplete() {
     }
 }
 
-void ADSBee::OnSysTickWrap() { mlat_counter_1s_wraps_++; }
+void ADSBee::OnSysTickWrap() { mlat_counter_wraps_ += kMLATWrapCounterIncrement; }
 
 int ADSBee::ReadSignalStrengthMilliVolts() {
     adc_select_input(config_.rssi_adc_input);

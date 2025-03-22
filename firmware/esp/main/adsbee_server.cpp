@@ -376,15 +376,29 @@ esp_err_t favicon_handler(httpd_req_t *req) {
 
 void NetworkConsolePostConnectCallback(WebSocketServer *ws_server, int client_fd) {
     char welcome_message[kNetworkConsoleWelcomeMessageMaxLen];
-    snprintf(welcome_message, kNetworkConsoleWelcomeMessageMaxLen,
-             "\r\n █████  ██████  ███████ ██████  ███████ ███████      ██  ██████   █████   ██████  "
-             "\r\n██   ██ ██   ██ ██      ██   ██ ██      ██          ███ ██  ████ ██   ██ ██  ████ "
-             "\r\n███████ ██   ██ ███████ ██████  █████   █████        ██ ██ ██ ██  ██████ ██ ██ ██ "
-             "\r\n██   ██ ██   ██      ██ ██   ██ ██      ██           ██ ████  ██      ██ ████  ██ "
-             "\r\n██   ██ ██████  ███████ ██████  ███████ ███████      ██  ██████   █████   ██████  "
-             "\r\n\r\nFirmware Version: %d.%d.%d\r\nAP SSID: %s\r\n",
-             object_dictionary.kFirmwareVersionMajor, object_dictionary.kFirmwareVersionMinor,
-             object_dictionary.kFirmwareVersionPatch, settings_manager.settings.wifi_ap_ssid);
+    if (object_dictionary.kFirmwareVersionReleaseCandidate == 0) {
+        snprintf(welcome_message, kNetworkConsoleWelcomeMessageMaxLen,
+                 "\r\n █████  ██████  ███████ ██████  ███████ ███████      ██  ██████   █████   ██████  "
+                 "\r\n██   ██ ██   ██ ██      ██   ██ ██      ██          ███ ██  ████ ██   ██ ██  ████ "
+                 "\r\n███████ ██   ██ ███████ ██████  █████   █████        ██ ██ ██ ██  ██████ ██ ██ ██ "
+                 "\r\n██   ██ ██   ██      ██ ██   ██ ██      ██           ██ ████  ██      ██ ████  ██ "
+                 "\r\n██   ██ ██████  ███████ ██████  ███████ ███████      ██  ██████   █████   ██████  "
+                 "\r\n\r\nFirmware Version: %d.%d.%d\r\nAP SSID: %s\r\n",
+                 object_dictionary.kFirmwareVersionMajor, object_dictionary.kFirmwareVersionMinor,
+                 object_dictionary.kFirmwareVersionPatch, settings_manager.settings.wifi_ap_ssid);
+    } else {
+        snprintf(welcome_message, kNetworkConsoleWelcomeMessageMaxLen,
+                 "\r\n █████  ██████  ███████ ██████  ███████ ███████      ██  ██████   █████   ██████  "
+                 "\r\n██   ██ ██   ██ ██      ██   ██ ██      ██          ███ ██  ████ ██   ██ ██  ████ "
+                 "\r\n███████ ██   ██ ███████ ██████  █████   █████        ██ ██ ██ ██  ██████ ██ ██ ██ "
+                 "\r\n██   ██ ██   ██      ██ ██   ██ ██      ██           ██ ████  ██      ██ ████  ██ "
+                 "\r\n██   ██ ██████  ███████ ██████  ███████ ███████      ██  ██████   █████   ██████  "
+                 "\r\n\r\nFirmware Version: %d.%d.%d-rc%d\r\nAP SSID: %s\r\n",
+                 object_dictionary.kFirmwareVersionMajor, object_dictionary.kFirmwareVersionMinor,
+                 object_dictionary.kFirmwareVersionPatch, object_dictionary.kFirmwareVersionReleaseCandidate,
+                 settings_manager.settings.wifi_ap_ssid);
+    }
+
     welcome_message[kNetworkConsoleWelcomeMessageMaxLen] = '\0';  // Null terminate for safety.
     ws_server->SendMessage(client_fd, welcome_message);
 }

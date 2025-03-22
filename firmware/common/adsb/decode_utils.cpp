@@ -123,24 +123,3 @@ uint16_t IdentityCodeToSquawk(uint16_t identity_code) {
     return (a4 << 11) | (a2 << 10) | (a1 << 9) | (b4 << 8) | (b2 << 7) | (b1 << 6) | (c4 << 5) | (c2 << 4) | (c1 << 3) |
            (d4 << 2) | (d2 << 1) | d1;
 }
-
-uint16_t CalcNLCPRFromLat(float lat) {
-    lat = floorf(lat);
-
-    // Special cases.
-    if (lat == 0) {
-        return 59;  // On the equator.
-    } else if (lat == 87) {
-        return 2;  // Near the north pole.
-    } else if (lat == -87) {
-        return 2;  // Near the south pole.
-    } else if (lat > 87) {
-        return 1;  // In the north pole bin.
-    } else if (lat < -87) {
-        return 1;  // In the south pole bin.
-    }
-
-    // Equation 5.3
-    return floorf(2.0f * (float)M_PI /
-                  acosf(1 - (1 - cosf((float)M_PI / (2.0f * kCPRNz))) / powf(cosf((float)M_PI / 180.0f * lat), 2)));
-}

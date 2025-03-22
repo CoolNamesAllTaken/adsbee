@@ -72,13 +72,6 @@ int32_t AltitudeCodeToAltitudeFt(uint16_t altitude_code);
 uint16_t IdentityCodeToSquawk(uint16_t identity_code);
 
 /**
- * Calculate the number of longituide zones (between 1 and 59) at a given latitude.
- * @param[in] lat Latitude to calculate NL (number of longitude zones) at.
- * @retval NL (number of longitude zones) in the Compact Position Reporting (CPR) representation at the given latitude.
- */
-uint16_t CalcNLCPRFromLat(float lat);
-
-/**
  * Wrap southern hemisphere latitudes resulting from CPR decode. Transforms latitude from [270, 360] to [-90, 90].
  * @param[in] latitude Latitude in degrees.
  * @retval Wrapped latitude.

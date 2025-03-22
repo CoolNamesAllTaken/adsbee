@@ -6,6 +6,8 @@ if (TARGET application)
         settings/settings_strs.cpp
         settings/settings.cpp
         comms/gdl90/gdl90_utils.cpp
+        comms/mavlink/mavlink_utils.cpp
+        comms/raw/raw_utils.cpp
         utils/buffer_utils.cpp
         utils/data_structures.cpp
         utils/crc/crc.cpp
@@ -27,6 +29,8 @@ if (TARGET application)
         comms/csbee
         comms/gdl90
         comms/json
+        comms/mavlink
+        comms/raw
         coprocessor
         firmware_update
         settings
@@ -47,6 +51,7 @@ elseif (TARGET host_test)
         adsb/decode_utils.cpp
         adsb/packet_decoder.cc
         comms/gdl90/gdl90_utils.cpp
+        comms/raw/raw_utils.cpp
         coprocessor/spi_coprocessor.cpp
         coprocessor/object_dictionary.cpp
         settings/settings_strs.cpp
@@ -61,6 +66,7 @@ elseif (TARGET host_test)
         comms/csbee
         comms/gdl90
         comms/json
+        comms/raw
         coprocessor
         utils
         utils/crc
