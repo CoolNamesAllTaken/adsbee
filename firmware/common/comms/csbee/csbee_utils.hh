@@ -16,7 +16,7 @@ const uint16_t kEOLNumChars = 2;
  * @param[in] aircraft Aircraft object to dump the contents of.
  * @retval Number of characters written to the string buffer, or a negative value if something went wrong.
  */
-inline int16_t WriteCSBeeAircraftMessageStr(char message_buf[], const Aircraft &aircraft) {
+inline int16_t WriteCSBeeAircraftMessageStr(char message_buf[], const Aircraft1090 &aircraft) {
     // #A:ICAO,FLAGS,CALL,SQ,LAT,LON,ALT_BARO,TRACK,VELH,VELV,SIGS,SIGQ,FPS,NICNAC,ALT_GEO,ECAT,CRC\r\n
 
     // Build up SYSINFO bitfield.
@@ -38,40 +38,40 @@ inline int16_t WriteCSBeeAircraftMessageStr(char message_buf[], const Aircraft &
 
     int16_t num_chars =  // Print everything except CRC into string buffer.
         snprintf(message_buf, kCSBeeMessageStrMaxLen - kCRCMaxNumChars - 1,
-                 "#A:%06X,"                                      // ICAO, e.g. 3C65AC
-                 "%X,"                                           // FLAGS, e.g. 123F35648
-                 "%s,"                                           // CALL, e.g. N61ZP
-                 "%04o,"                                         // SQUAWK, e.g. 7232
-                 "%d,"                                           // ECAT, e.g. 14
-                 "%.5f,"                                         // LAT, e.g. 57.57634
-                 "%.5f,"                                         // LON, e.g. 17.59554
-                 "%d,"                                           // ALT_BARO, e.g. 5000
-                 "%d,"                                           // ALT_GEO, e.g. 5000
-                 "%.0f,"                                         // TRACK, e.g. 35
-                 "%.0f,"                                         // VELH, e.g. 464
-                 "%d,"                                           // VELV, e.g. -1344
-                 "%d,"                                           // SIGS, e.g. -92
-                 "%d,"                                           // SIGQ, e.g. 2
-                 "%d,"                                           // FPSAC, e.g. 3
-                 "%d,"                                           // FPSS, e.g. 5
-                 "%X,",                                          // SYSINFO, e.g. 31BE89F2
-                 aircraft.icao_address,                          // ICAO
-                 aircraft.flags,                                 // FLAGS
-                 aircraft.callsign,                              // CALL
-                 aircraft.squawk,                                // SQUAWK
-                 aircraft.category,                              // ECAT
-                 aircraft.latitude_deg,                          // LAT
-                 aircraft.longitude_deg,                         // LON
-                 aircraft.baro_altitude_ft,                      // ALT_BARO
-                 aircraft.gnss_altitude_ft,                      // ALT_GEO
-                 aircraft.direction_deg,                         // TRACK
-                 aircraft.velocity_kts,                          // VELH
-                 aircraft.vertical_rate_fpm,                     // VELV
-                 aircraft.last_message_signal_strength_dbm,      // SIGS
-                 aircraft.last_message_signal_quality_db,        // SIGQ
+                 "#A:%06X,"                                        // ICAO, e.g. 3C65AC
+                 "%X,"                                             // FLAGS, e.g. 123F35648
+                 "%s,"                                             // CALL, e.g. N61ZP
+                 "%04o,"                                           // SQUAWK, e.g. 7232
+                 "%d,"                                             // ECAT, e.g. 14
+                 "%.5f,"                                           // LAT, e.g. 57.57634
+                 "%.5f,"                                           // LON, e.g. 17.59554
+                 "%d,"                                             // ALT_BARO, e.g. 5000
+                 "%d,"                                             // ALT_GEO, e.g. 5000
+                 "%.0f,"                                           // TRACK, e.g. 35
+                 "%.0f,"                                           // VELH, e.g. 464
+                 "%d,"                                             // VELV, e.g. -1344
+                 "%d,"                                             // SIGS, e.g. -92
+                 "%d,"                                             // SIGQ, e.g. 2
+                 "%d,"                                             // FPSAC, e.g. 3
+                 "%d,"                                             // FPSS, e.g. 5
+                 "%X,",                                            // SYSINFO, e.g. 31BE89F2
+                 aircraft.icao_address,                            // ICAO
+                 aircraft.flags,                                   // FLAGS
+                 aircraft.callsign,                                // CALL
+                 aircraft.squawk,                                  // SQUAWK
+                 aircraft.category,                                // ECAT
+                 aircraft.latitude_deg,                            // LAT
+                 aircraft.longitude_deg,                           // LON
+                 aircraft.baro_altitude_ft,                        // ALT_BARO
+                 aircraft.gnss_altitude_ft,                        // ALT_GEO
+                 aircraft.direction_deg,                           // TRACK
+                 aircraft.velocity_kts,                            // VELH
+                 aircraft.vertical_rate_fpm,                       // VELV
+                 aircraft.last_message_signal_strength_dbm,        // SIGS
+                 aircraft.last_message_signal_quality_db,          // SIGQ
                  aircraft.metrics.valid_squitter_frames,           // SFPS
                  aircraft.metrics.valid_extended_squitter_frames,  // ESFPS
-                 sysinfo                                         // SYSINFO
+                 sysinfo                                           // SYSINFO
         );
     if (num_chars < 0) return num_chars;  // Check if snprintf call got busted.
 

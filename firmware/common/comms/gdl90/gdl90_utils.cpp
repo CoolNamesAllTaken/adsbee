@@ -118,7 +118,7 @@ uint16_t GDL90Reporter::WriteGDL90UplinkDataMessage(uint8_t *to_buf, uint8_t *up
     return WriteGDL90Message(to_buf, message_buf, kMessageBufLenBytes);
 }
 
-uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const Aircraft &aircraft, bool ownship) {
+uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const Aircraft1090 &aircraft, bool ownship) {
     GDL90TargetReportData data;
 
     // NOTE: Traffic Alert Status currently not used.
@@ -129,14 +129,14 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const Air
     data.direction_deg = aircraft.direction_deg;
 
     GDL90TargetReportData::MiscIndicatorTrackOrHeadingValue track_heading_value;
-    if (!aircraft.HasBitFlag(Aircraft::kBitFlagPositionValid)) {
+    if (!aircraft.HasBitFlag(Aircraft1090::kBitFlagPositionValid)) {
         // No valid position.
         track_heading_value = GDL90TargetReportData::kMiscIndicatorTTNotValid;
     } else {
         // Valid position: indicate what kind of value the track angle / heading field is.
-        if (aircraft.HasBitFlag(Aircraft::kBitFlagDirectionIsHeading)) {
+        if (aircraft.HasBitFlag(Aircraft1090::kBitFlagDirectionIsHeading)) {
             // Aircraft is reporting heading instead of track.
-            track_heading_value = aircraft.HasBitFlag(Aircraft::kBitFlagHeadingUsesMagneticNorth)
+            track_heading_value = aircraft.HasBitFlag(Aircraft1090::kBitFlagHeadingUsesMagneticNorth)
                                       ? GDL90TargetReportData::kMiscIndicatorTTIsMagneticHeading
                                       : GDL90TargetReportData::kMiscIndicatorTTIsTrueHeading;
         } else {
@@ -144,15 +144,15 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const Air
             track_heading_value = GDL90TargetReportData::kMiscIndicatorTTIsTrueTrackAngle;
         }
     }
-    bool aircraft_updated_position = aircraft.HasBitFlag(Aircraft::kBitFlagUpdatedBaroAltitude) ||
-                                     aircraft.HasBitFlag(Aircraft::kBitFlagUpdatedGNSSAltitude) ||
-                                     aircraft.HasBitFlag(Aircraft::kBitFlagUpdatedHorizontalVelocity) ||
-                                     aircraft.HasBitFlag(Aircraft::kBitFlagUpdatedVerticalVelocity) ||
-                                     aircraft.HasBitFlag(Aircraft::kBitFlagUpdatedPosition) ||
-                                     aircraft.HasBitFlag(Aircraft::kBitFlagUpdatedDirection);
+    bool aircraft_updated_position = aircraft.HasBitFlag(Aircraft1090::kBitFlagUpdatedBaroAltitude) ||
+                                     aircraft.HasBitFlag(Aircraft1090::kBitFlagUpdatedGNSSAltitude) ||
+                                     aircraft.HasBitFlag(Aircraft1090::kBitFlagUpdatedHorizontalVelocity) ||
+                                     aircraft.HasBitFlag(Aircraft1090::kBitFlagUpdatedVerticalVelocity) ||
+                                     aircraft.HasBitFlag(Aircraft1090::kBitFlagUpdatedPosition) ||
+                                     aircraft.HasBitFlag(Aircraft1090::kBitFlagUpdatedDirection);
     data.SetMiscIndicator(track_heading_value,
-                          aircraft_updated_position,                         // Aircraft report updated?
-                          aircraft.HasBitFlag(Aircraft::kBitFlagIsAirborne)  // Aircraft is airborne?
+                          aircraft_updated_position,                             // Aircraft report updated?
+                          aircraft.HasBitFlag(Aircraft1090::kBitFlagIsAirborne)  // Aircraft is airborne?
     );
     data.navigation_integrity_category = aircraft.navigation_integrity_category;
     data.velocity_kts = aircraft.velocity_kts;
@@ -160,7 +160,7 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const Air
     data.direction_deg = aircraft.direction_deg;
     data.emitter_category = aircraft.category_raw;
     // GDL90 does not provide space for an EOS character, since it only provides 8 Bytes for the callsign.
-    memcpy(data.callsign, aircraft.callsign, Aircraft::kCallSignMaxNumChars);
+    memcpy(data.callsign, aircraft.callsign, Aircraft1090::kCallSignMaxNumChars);
     // NOTE: Emergency Priority code currently not used.
 
     return WriteGDL90TargetReportMessage(to_buf, data, ownship);

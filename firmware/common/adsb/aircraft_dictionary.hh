@@ -10,9 +10,9 @@
 #include "macros.hh"
 #include "transponder_packet.hh"
 
-#define USE_NASA_CPR
+#define FILTER_CPR_POSITIONS
 
-class Aircraft {
+class Aircraft1090 {
    public:
     static constexpr uint16_t kCallSignMaxNumChars = 8;
     static constexpr uint16_t kCallSignMinNumChars = 3;  // Callsigns must be at this long to be valid.
@@ -179,8 +179,8 @@ class Aircraft {
         uint16_t valid_extended_squitter_frames = 0;
     };
 
-    Aircraft(uint32_t icao_address_in);
-    Aircraft();
+    Aircraft1090(uint32_t icao_address_in);
+    Aircraft1090();
 
     /**
      * Checks to see if the aircraft position can be decoded. Requires that both an odd and an even packet have been
@@ -548,7 +548,7 @@ class AircraftDictionary {
      * @param[in] aircraft Aircraft to insert.
      * @retval True if insertaion succeeded, false if failed.
      */
-    bool InsertAircraft(const Aircraft &aircraft);
+    bool InsertAircraft(const Aircraft1090 &aircraft);
 
     /**
      * Remove an aircraft from the dictionary, by ICAO address.
@@ -563,7 +563,7 @@ class AircraftDictionary {
      * @param[out] aircraft_out Aircraft reference to put the retrieved aircraft into if successful.
      * @retval True if aircraft was found and retrieved, false if aircraft was not in the dictionary.
      */
-    bool GetAircraft(uint32_t icao_address, Aircraft &aircraft_out) const;
+    bool GetAircraft(uint32_t icao_address, Aircraft1090 &aircraft_out) const;
 
     /**
      * Check if an aircraft is contained in the dictionary.
@@ -577,9 +577,9 @@ class AircraftDictionary {
      * @param[in] icao_address ICAO address of the aircraft to find.
      * @retval Pointer to the aircraft if it exists, or NULL if it wasn't in the dictionary.
      */
-    Aircraft *GetAircraftPtr(uint32_t icao_address);
+    Aircraft1090 *GetAircraftPtr(uint32_t icao_address);
 
-    std::unordered_map<uint32_t, Aircraft> dict;  // index Aircraft objects by their ICAO identifier
+    std::unordered_map<uint32_t, Aircraft1090> dict;  // index Aircraft objects by their ICAO identifier
 
     Metrics metrics;
 
@@ -595,13 +595,13 @@ class AircraftDictionary {
      * @retval True if message was ingested successfully, false otherwise.
      */
 
-    bool ApplyAircraftIDMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool ApplySurfacePositionMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool ApplyAirbornePositionMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool ApplyAirborneVelocitiesMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool ApplyAircraftStatusMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool ApplyTargetStateAndStatusInfoMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool ApplyAircraftOperationStatusMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool ApplyAircraftIDMessage(Aircraft1090 &aircraft, ADSBPacket packet);
+    bool ApplySurfacePositionMessage(Aircraft1090 &aircraft, ADSBPacket packet);
+    bool ApplyAirbornePositionMessage(Aircraft1090 &aircraft, ADSBPacket packet);
+    bool ApplyAirborneVelocitiesMessage(Aircraft1090 &aircraft, ADSBPacket packet);
+    bool ApplyAircraftStatusMessage(Aircraft1090 &aircraft, ADSBPacket packet);
+    bool ApplyTargetStateAndStatusInfoMessage(Aircraft1090 &aircraft, ADSBPacket packet);
+    bool ApplyAircraftOperationStatusMessage(Aircraft1090 &aircraft, ADSBPacket packet);
 
     AircraftDictionaryConfig_t config_;
     // Counters in metrics_counter_ are incremented, then metrics_counter_ is swapped into metrics during the dictionary

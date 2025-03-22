@@ -515,7 +515,7 @@ TEST(NASACPR, AircraftDictionary) {
 
     for (uint16_t i = 0; i < sizeof(global_decode_tests) / sizeof(GlobalDecodeTest); i++) {
         GlobalDecodeTest& test = global_decode_tests[i];
-        Aircraft* aircraft_ptr = dictionary.GetAircraftPtr(i);
+        Aircraft1090* aircraft_ptr = dictionary.GetAircraftPtr(i);
         // Set odd message to most recent so that we read rpos1 for the expected result.
         aircraft_ptr->SetCPRLatLon(test.enc_evn_lat, test.enc_evn_lon, false, 1);
         aircraft_ptr->SetCPRLatLon(test.enc_odd_lat, test.enc_odd_lon, true, 2);
