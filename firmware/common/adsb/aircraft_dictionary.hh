@@ -359,6 +359,14 @@ class Aircraft1090 {
     CPRPacket last_odd_packet_;
     CPRPacket last_even_packet_;
 
+#ifdef FILTER_CPR_POSITIONS
+    // Position in Alternative Weighted Binary. This gets set to a candidate position which may not match the actual
+    // displayed latitude_deg and logitude_deg. Format is in AWB to enable fast fixed point operations for screening
+    // candidate positions.
+    uint32_t lat_awb_ = 0;
+    uint32_t lon_awb_ = 0;
+#endif
+
     Metrics metrics_counter_;
 };
 

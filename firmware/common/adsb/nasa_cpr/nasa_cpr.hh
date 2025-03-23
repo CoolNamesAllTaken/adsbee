@@ -6,6 +6,10 @@ class NASACPRDecoder {
     struct DecodedPosition {
         float lat_deg;
         float lon_deg;
+        // Also provide position result in Alternative Weighted Binary format for use in additional fixed point
+        // operations.
+        uint32_t lat_awb;
+        uint32_t lon_awb;
     };
 
     struct CPRMessage {
