@@ -1,6 +1,6 @@
 import math
 
-HAV_TABLE_NUM_STEPS = 1000
+HAV_TABLE_NUM_STEPS = 50000 # Haversine table uses about 200kB of flash.
 ASIN_TABLE_NUM_STEPS = 1000
 GEO_TABLES_FILENAME = "geo_tables.hh"
 
@@ -78,7 +78,7 @@ def add_hav_table_to_file():
     """
     hav_values = []
     for i in range(HAV_TABLE_NUM_STEPS):
-        theta_deg = i * (180.0 / HAV_TABLE_NUM_STEPS)
+        theta_deg = i * (180.0 / (HAV_TABLE_NUM_STEPS-1))
         hav_values.append((math.sin(theta_deg * (math.pi / 360.0)))**2)
     
     with open(GEO_TABLES_FILENAME, "a") as f:

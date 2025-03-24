@@ -11,6 +11,7 @@ if (TARGET application)
         utils/buffer_utils.cpp
         utils/data_structures.cpp
         utils/crc/crc.cpp
+        utils/geo_utils.cpp
         adsb/transponder_packet.cpp
         adsb/aircraft_dictionary.cpp
         adsb/decode_utils.cpp
@@ -24,6 +25,7 @@ if (TARGET application)
         adsb
         utils
         utils/crc
+        utils/gep
         comms
         comms/beast
         comms/csbee
@@ -59,6 +61,7 @@ elseif (TARGET host_test)
         utils/buffer_utils.cpp
         utils/data_structures.cpp
         utils/crc/crc.cpp
+        utils/geo/geo_utils.cpp
     )
     target_include_directories(host_test PRIVATE
         adsb
@@ -70,6 +73,7 @@ elseif (TARGET host_test)
         coprocessor
         utils
         utils/crc
+        utils/geo
         settings
     )
 endif()
