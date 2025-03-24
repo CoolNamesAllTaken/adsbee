@@ -124,7 +124,7 @@ bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface, const Dec
 bool CommsManager::ReportCSBee(SettingsManager::SerialInterface iface) {
     // Write out a CSBee Aircraft message for each aircraft in the aircraft dictionary.
     for (auto &itr : adsbee.aircraft_dictionary.dict) {
-        const Aircraft &aircraft = itr.second;
+        const Aircraft1090 &aircraft = itr.second;
 
         char message[kCSBeeMessageStrMaxLen];
         int16_t message_len_bytes = WriteCSBeeAircraftMessageStr(message, aircraft);
@@ -173,7 +173,7 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
 
     // Send an ADSB_VEHICLE message for each aircraft in the dictionary.
     for (auto &itr : adsbee.aircraft_dictionary.dict) {
-        const Aircraft &aircraft = itr.second;
+        const Aircraft1090 &aircraft = itr.second;
 
         mavlink_adsb_vehicle_t adsb_vehicle_msg = AircraftToMAVLINKADSBVehicleMessage(aircraft);
 
@@ -220,7 +220,7 @@ bool CommsManager::ReportGDL90(SettingsManager::SerialInterface iface) {
 
     // Traffic Reports
     for (auto &itr : adsbee.aircraft_dictionary.dict) {
-        const Aircraft &aircraft = itr.second;
+        const Aircraft1090 &aircraft = itr.second;
         msg_len = gdl90.WriteGDL90TargetReportMessage(buf, aircraft, false);
         SendBuf(iface, (char *)buf, msg_len);
     }

@@ -255,7 +255,7 @@ bool ADSBeeServer::ReportGDL90() {
     // Traffic Reports
     uint16_t aircraft_index = 0;  // Just used for error reporting.
     for (auto &itr : aircraft_dictionary.dict) {
-        const Aircraft &aircraft = itr.second;
+        const Aircraft1090 &aircraft = itr.second;
         printf("\t%s: %.5f %.5f %ld\r\n", aircraft.callsign, aircraft.latitude_deg, aircraft.longitude_deg,
                aircraft.baro_altitude_ft);
         message.len = gdl90.WriteGDL90TargetReportMessage(message.data, aircraft, false);

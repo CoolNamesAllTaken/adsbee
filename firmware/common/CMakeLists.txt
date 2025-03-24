@@ -11,7 +11,7 @@ if (TARGET application)
         utils/buffer_utils.cpp
         utils/data_structures.cpp
         utils/crc/crc.cpp
-        utils/geo_utils.cpp
+        utils/geo/geo_utils.cpp
         adsb/transponder_packet.cpp
         adsb/aircraft_dictionary.cpp
         adsb/decode_utils.cpp
