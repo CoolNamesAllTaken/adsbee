@@ -1,7 +1,7 @@
 import math
 
-HAV_TABLE_NUM_STEPS = 50000 # Haversine table uses about 200kB of flash.
-ASIN_TABLE_NUM_STEPS = 1000
+HAV_TABLE_NUM_STEPS = 10000 # Haversine table uses about 40kB of flash.
+HAVDIFF_TO_M_TABLE_NUM_STEPS = 50000 # Havdiff to meters table uses about 200kB of flash.
 GEO_TABLES_FILENAME = "geo_tables.hh"
 
 def deg2rad(deg):
@@ -55,7 +55,7 @@ def append_table_to_file(filename, table_name, element_type, elements):
             if element_type == "uint32_t":
                 item = f"0x{value:06X}"
             else:
-                item = f"{value:f}"
+                item = f"{value:f}f"
 
             # Add 2 for ", " except for the last item
             if current_length + len(item) + 2 > CHARS_PER_LINE:
@@ -72,7 +72,7 @@ def append_table_to_file(filename, table_name, element_type, elements):
         f.write("    " + ",\n    ".join(chunks) + "\n")
         f.write("};\n\n")
 
-def add_hav_table_to_file():
+def add_hav_awb_table_to_file():
     """
      Function: hav(theta) = (sin(theta * 0.5f))^2
     """
@@ -80,6 +80,7 @@ def add_hav_table_to_file():
     for i in range(HAV_TABLE_NUM_STEPS):
         theta_deg = i * (180.0 / (HAV_TABLE_NUM_STEPS-1))
         hav_values.append((math.sin(theta_deg * (math.pi / 360.0)))**2)
+    hav_values.append(1.0) # Add 1.0f to the end to allow linear interpolation for theta = 180 degrees.
     
     with open(GEO_TABLES_FILENAME, "a") as f:
         f.write(f"static const uint16_t kDeg180ToHavNumSteps = {HAV_TABLE_NUM_STEPS};\n\n")
@@ -87,6 +88,20 @@ def add_hav_table_to_file():
         f.write(f"// hav(theta) = (sin(theta * 0.5f))^2\n")
     append_table_to_file(GEO_TABLES_FILENAME, "kDeg180ToHav", "float", hav_values)
 
+def add_havdiff_to_m_table_to_file():
+    """
+    2 * kEarthMeanRadius * asin(sqrt(x))
+    """
+    EARTH_MEAN_RADIUS_M = 6372797.560856 # Quadratic mean radius for WS-84
+    values = []
+    for i in range(HAVDIFF_TO_M_TABLE_NUM_STEPS):
+        values.append(round(2 * EARTH_MEAN_RADIUS_M * math.asin(math.sqrt(i / (HAVDIFF_TO_M_TABLE_NUM_STEPS-1)))))
+    values.append(round(2 * EARTH_MEAN_RADIUS_M * math.asin(math.sqrt(1)))) # Add extra value to the end to allow interpolation.
+    with open(GEO_TABLES_FILENAME, "a") as f:
+        f.write(f"static const uint16_t kHavdiffToMetersNumSteps = {HAVDIFF_TO_M_TABLE_NUM_STEPS};\n\n")
+        f.write(f"// Table that maps {HAVDIFF_TO_M_TABLE_NUM_STEPS} havdiff expression values to meters.\n")
+        f.write(f"// 2 * kEarthMeanRadius * asin(sqrt(x))\n")
+        append_table_to_file(GEO_TABLES_FILENAME, "kHavdiffToMeters", "uint32_t", values)
 
 def generate_geo_tables_hh():
     """
@@ -95,7 +110,8 @@ def generate_geo_tables_hh():
 
     start_file()
 
-    add_hav_table_to_file()
+    add_hav_awb_table_to_file()
+    add_havdiff_to_m_table_to_file()
     
     end_file()
 
