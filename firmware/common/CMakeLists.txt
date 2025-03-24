@@ -25,7 +25,7 @@ if (TARGET application)
         adsb
         utils
         utils/crc
-        utils/gep
+        utils/geo
         comms
         comms/beast
         comms/csbee

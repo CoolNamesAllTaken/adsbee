@@ -200,35 +200,23 @@ TEST(Aircraft1090, SetCPRLatLon) {
     EXPECT_NEAR(aircraft.latitude_deg, 52.26578f, 1e-4);  // odd latitude
     // don't have a test value available for the longitude calculated from odd latitude
 
-    // Straddle two position packets between different latitude
+    // Straddle two position packets between different latitude bands.
     aircraft = Aircraft1090();  // clear everything
     EXPECT_TRUE(aircraft.SetCPRLatLon(93006, 50194, true, get_time_since_boot_ms()));
-    inc_time_since_boot_ms();
+    inc_time_since_boot_ms(1000);
     EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false, get_time_since_boot_ms()));
-    inc_time_since_boot_ms();
+    inc_time_since_boot_ms(1000);
     EXPECT_TRUE(aircraft.DecodePosition());
-    inc_time_since_boot_ms();
+    inc_time_since_boot_ms(1000);
     // Position established, now send the curveball.
     EXPECT_TRUE(aircraft.SetCPRLatLon(93000 - 5000, 50194, true, get_time_since_boot_ms()));
-    inc_time_since_boot_ms();
-    EXPECT_TRUE(aircraft.DecodePosition());  // Re-decode the previous even CPR packet with the new zone.
-
-    // EXPECT_NEAR(aircraft.latitude, 52.25720f, 1e-4);
-    // EXPECT_NEAR(aircraft.longitude, 3.91937f, 1e-4);
-
-    // Another test message.
-    // aircraft = Aircraft1090(); // clear everything
-    // inc_time_since_boot_ms();
-    // EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true, get_time_since_boot_ms()));
-    // inc_time_since_boot_ms();
-    // EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false, get_time_since_boot_ms()));
-    // EXPECT_TRUE(aircraft.position_valid);
-    // EXPECT_FLOAT_EQ(aircraft.latitude, 52.25720f);
-    // EXPECT_FLOAT_EQ(aircraft.longitude, 3.91937f);
-
-    // Send even / odd latitude pair
-
-    /** Test Longitude **/
+    inc_time_since_boot_ms(1000);
+// Re-decode the previous even CPR packet with the new zone.
+#ifdef FILTER_CPR_POSITIONS
+    EXPECT_FALSE(aircraft.DecodePosition());  // This should fail due to the CPR filter.
+#else
+    EXPECT_TRUE(aircraft.DecodePosition());
+#endif
 }
 
 TEST(AircraftDictionary, ApplyAirbornePositionMessage) {
@@ -634,6 +622,8 @@ TEST(AircraftDictionary, FilterCPRLocations) {
     packet.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
     EXPECT_TRUE(dictionary.IngestDecoded1090Packet(packet));
     aircraft = dictionary.GetAircraftPtr(icao);
+    // Activate the CPR filter.
+    aircraft->WriteBitFlag(Aircraft1090::BitFlag::kBitFlagPositionValid, true);
     packet = Decoded1090Packet((char *)"8D48C22D60AB0452BFAD19A695E0");  // even
     inc_time_since_boot_ms(1000);
     packet.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;

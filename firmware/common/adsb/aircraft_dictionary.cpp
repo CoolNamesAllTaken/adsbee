@@ -4,12 +4,19 @@
 
 #include "comms.hh"  // For debug logging.
 #include "decode_utils.hh"
+#include "geo_utils.hh"
 #include "hal.hh"
 #include "macros.hh"
 #include "nasa_cpr.hh"
 #include "unit_conversions.hh"
 
 const float kDegreesPerRadian = 360.0f / (2.0f * M_PI);
+
+// This velocity determines the maximum distance an aircraft can jump between position updates without its new position
+// needing a second sample to confirm it. This catches position reports that return as valid from the CPR decoder but
+// are for an obviously incorrect position.
+const uint32_t kCPRPositionFilterVelocityMps =
+    1000;  // This is faster than the SR-71, so we're just catching really big jumps for now.
 
 /**
  * Aircraft1090
@@ -55,6 +62,9 @@ bool Aircraft1090::DecodePosition() {
         return false;
     }
 
+    uint32_t most_recent_received_timestamp_ms =
+        MAX(last_even_packet_.received_timestamp_ms, last_odd_packet_.received_timestamp_ms);
+
     NASACPRDecoder::DecodedPosition result;
     bool result_valid =
         NASACPRDecoder::DecodeAirborneGlobalCPR({.odd = false,
@@ -74,13 +84,37 @@ bool Aircraft1090::DecodePosition() {
     }
 
 #ifdef FILTER_CPR_POSITIONS
+    // Calculate how far the aircraft has jumped since its last position update, and goof check it against a maximum
+    // velocity value. Could use the aircraft's known velocity, but just using a very large value for now.
+    uint32_t ms_since_last_track_update = most_recent_received_timestamp_ms - last_track_update_timestamp_ms;
+    uint32_t max_distance_meters = kCPRPositionFilterVelocityMps * ms_since_last_track_update / 1000;  // mps to meters
+    uint32_t distance_meters = CalculateGeoidalDistanceMetersAWB(lat_awb_, lon_awb_, result.lat_awb, result.lon_awb);
 
+    if (most_recent_received_timestamp_ms > last_filter_received_timestamp_ms_) {
+        // Don't allow calling DecodePosition() twice without a new packet to override the filter.
+        last_filter_received_timestamp_ms_ = most_recent_received_timestamp_ms;
+
+        // Store the updated position. A location jump can be "confirmed" with a subsequent update from near the new
+        // candidate position. Thus, sudden jumps in position, take two subsequent position updates that are relatively
+        // close together in order to be reflected in the aircraft's position.
+        lat_awb_ = result.lat_awb;
+        lon_awb_ = result.lon_awb;
+    }
+
+    // Note: Ignore position check during first position update, to allow recording aircraft position upon receiving the
+    // first packet.
+    if (HasBitFlag(BitFlag::kBitFlagPositionValid) && distance_meters > max_distance_meters) {
+        CONSOLE_WARNING("Aircraft1090::DecodePosition",
+                        "Filtered CPR position update for ICAO 0x%lx, distance %u m exceeds max %u m.", icao_address,
+                        distance_meters, max_distance_meters);
+        return false;  // Filter out CPR positions that are too far from the last known position.
+    }
 #endif
 
     WriteBitFlag(BitFlag::kBitFlagPositionValid, true);
     latitude_deg = WrapCPRDecodeLatitude(result.lat_deg);
     longitude_deg = WrapCPRDecodeLongitude(result.lon_deg);
-    last_track_update_timestamp_ms = get_time_since_boot_ms();  // Update last track update timestamp.
+    last_track_update_timestamp_ms = most_recent_received_timestamp_ms;  // Update last track update timestamp.
 
     return true;
 }
@@ -541,7 +575,8 @@ bool AircraftDictionary::ApplyAircraftIDMessage(Aircraft1090 &aircraft, ADSBPack
 bool AircraftDictionary::ApplySurfacePositionMessage(Aircraft1090 &aircraft, ADSBPacket packet) {
     aircraft.WriteBitFlag(Aircraft1090::BitFlag::kBitFlagIsAirborne, false);
 
-    if (aircraft.NICBitIsValid(Aircraft1090::NICBit::kNICBitA) && aircraft.NICBitIsValid(Aircraft1090::NICBit::kNICBitC)) {
+    if (aircraft.NICBitIsValid(Aircraft1090::NICBit::kNICBitA) &&
+        aircraft.NICBitIsValid(Aircraft1090::NICBit::kNICBitC)) {
         // Assign NIC based on NIC supplement bits A and C and received TypeCode.
         switch ((packet.GetTypeCode() << 3) | (aircraft.nic_bits & 0b101)) {
             case (5 << 3) | 0b000:
@@ -554,17 +589,21 @@ bool AircraftDictionary::ApplySurfacePositionMessage(Aircraft1090 &aircraft, ADS
                 aircraft.navigation_integrity_category = Aircraft1090::NICRadiusOfContainment::kROCLessThan75Meters;
                 break;
             case (7 << 3) | 0b000:
-                aircraft.navigation_integrity_category = Aircraft1090::NICRadiusOfContainment::kROCLessThan0p1NauticalMiles;
+                aircraft.navigation_integrity_category =
+                    Aircraft1090::NICRadiusOfContainment::kROCLessThan0p1NauticalMiles;
                 break;
             case (8 << 3) | 0b101:
-                aircraft.navigation_integrity_category = Aircraft1090::NICRadiusOfContainment::kROCLessThan0p2NauticalMiles;
+                aircraft.navigation_integrity_category =
+                    Aircraft1090::NICRadiusOfContainment::kROCLessThan0p2NauticalMiles;
                 break;
             case (8 << 3) | 0b100:
                 // Should be <0.3NM, but NIC value is shared with <0.6NM.
-                aircraft.navigation_integrity_category = Aircraft1090::NICRadiusOfContainment::kROCLessThan0p6NauticalMiles;
+                aircraft.navigation_integrity_category =
+                    Aircraft1090::NICRadiusOfContainment::kROCLessThan0p6NauticalMiles;
                 break;
             case (8 << 3) | 0b001:
-                aircraft.navigation_integrity_category = Aircraft1090::NICRadiusOfContainment::kROCLessThan0p6NauticalMiles;
+                aircraft.navigation_integrity_category =
+                    Aircraft1090::NICRadiusOfContainment::kROCLessThan0p6NauticalMiles;
                 break;
             case (8 << 3) | 0b000:
                 aircraft.navigation_integrity_category = Aircraft1090::NICRadiusOfContainment::kROCUnknown;
@@ -609,7 +648,8 @@ bool AircraftDictionary::ApplyAirbornePositionMessage(Aircraft1090 &aircraft, AD
     // ME[7] - NIC B Supplement (Formerly Single Antenna Flag)
     aircraft.WriteNICBit(Aircraft1090::NICBit::kNICBitB, packet.GetNBitWordFromMessage(1, 7));
 
-    if (aircraft.NICBitIsValid(Aircraft1090::NICBit::kNICBitA) && aircraft.NICBitIsValid(Aircraft1090::NICBit::kNICBitB)) {
+    if (aircraft.NICBitIsValid(Aircraft1090::NICBit::kNICBitA) &&
+        aircraft.NICBitIsValid(Aircraft1090::NICBit::kNICBitB)) {
         // Assign NIC based on NIC supplement bits A and B and received TypeCode.
         switch ((typecode << 3) | (aircraft.nic_bits & 0b101)) {
             case (9 << 3) | 0b000:
@@ -622,30 +662,38 @@ bool AircraftDictionary::ApplyAirbornePositionMessage(Aircraft1090 &aircraft, AD
                 aircraft.navigation_integrity_category = Aircraft1090::NICRadiusOfContainment::kROCLessThan75Meters;
                 break;
             case (11 << 3) | 0b000:
-                aircraft.navigation_integrity_category = Aircraft1090::NICRadiusOfContainment::kROCLessThan0p1NauticalMiles;
+                aircraft.navigation_integrity_category =
+                    Aircraft1090::NICRadiusOfContainment::kROCLessThan0p1NauticalMiles;
                 break;
             case (12 << 3) | 0b000:
-                aircraft.navigation_integrity_category = Aircraft1090::NICRadiusOfContainment::kROCLessThan0p2NauticalMiles;
+                aircraft.navigation_integrity_category =
+                    Aircraft1090::NICRadiusOfContainment::kROCLessThan0p2NauticalMiles;
                 break;
             case (13 << 3) | 0b010:  // Should be <0.3NM, but NIC value is shared with <0.6NM.
             case (13 << 3) | 0b000:  // Should be <0.5NM, but NIC value is shared with <0.6NM.
             case (13 << 3) | 0b110:
-                aircraft.navigation_integrity_category = Aircraft1090::NICRadiusOfContainment::kROCLessThan0p6NauticalMiles;
+                aircraft.navigation_integrity_category =
+                    Aircraft1090::NICRadiusOfContainment::kROCLessThan0p6NauticalMiles;
                 break;
             case (14 << 3) | 0b000:
-                aircraft.navigation_integrity_category = Aircraft1090::NICRadiusOfContainment::kROCLessThan1NauticalMile;
+                aircraft.navigation_integrity_category =
+                    Aircraft1090::NICRadiusOfContainment::kROCLessThan1NauticalMile;
                 break;
             case (15 << 3) | 0b000:
-                aircraft.navigation_integrity_category = Aircraft1090::NICRadiusOfContainment::kROCLessThan2NauticalMiles;
+                aircraft.navigation_integrity_category =
+                    Aircraft1090::NICRadiusOfContainment::kROCLessThan2NauticalMiles;
                 break;
             case (16 << 3) | 0b110:
-                aircraft.navigation_integrity_category = Aircraft1090::NICRadiusOfContainment::kROCLessThan4NauticalMiles;
+                aircraft.navigation_integrity_category =
+                    Aircraft1090::NICRadiusOfContainment::kROCLessThan4NauticalMiles;
                 break;
             case (16 << 3) | 0b000:
-                aircraft.navigation_integrity_category = Aircraft1090::NICRadiusOfContainment::kROCLessThan8NauticalMiles;
+                aircraft.navigation_integrity_category =
+                    Aircraft1090::NICRadiusOfContainment::kROCLessThan8NauticalMiles;
                 break;
             case (17 << 3) | 0b000:
-                aircraft.navigation_integrity_category = Aircraft1090::NICRadiusOfContainment::kROCLessThan20NauticalMiles;
+                aircraft.navigation_integrity_category =
+                    Aircraft1090::NICRadiusOfContainment::kROCLessThan20NauticalMiles;
                 break;
             case (18 << 3) | 0b000:
                 aircraft.navigation_integrity_category = Aircraft1090::NICRadiusOfContainment::kROCUnknown;
@@ -658,7 +706,8 @@ bool AircraftDictionary::ApplyAirbornePositionMessage(Aircraft1090 &aircraft, AD
                             Aircraft1090::NICRadiusOfContainment::kROCLessThan7p5Meters;
                         break;
                     case 21:
-                        aircraft.navigation_integrity_category = Aircraft1090::NICRadiusOfContainment::kROCLessThan25Meters;
+                        aircraft.navigation_integrity_category =
+                            Aircraft1090::NICRadiusOfContainment::kROCLessThan25Meters;
                         break;
                     case 22:
                         aircraft.navigation_integrity_category = Aircraft1090::NICRadiusOfContainment::kROCUnknown;
@@ -820,7 +869,8 @@ bool AircraftDictionary::ApplyAirborneVelocitiesMessage(Aircraft1090 &aircraft, 
                         "Vertical rate not available for ICAO 0x%lx.", aircraft.icao_address);
         decode_successful = false;
     } else {
-        aircraft.vertical_rate_source = static_cast<Aircraft1090::VerticalRateSource>(packet.GetNBitWordFromMessage(1, 35));
+        aircraft.vertical_rate_source =
+            static_cast<Aircraft1090::VerticalRateSource>(packet.GetNBitWordFromMessage(1, 35));
         bool vertical_rate_sign_is_negative = packet.GetNBitWordFromMessage(1, 36);
         if (vertical_rate_sign_is_negative) {
             aircraft.vertical_rate_fpm = -(vertical_rate_magnitude_fpm - 1) * 64;
@@ -864,7 +914,9 @@ bool AircraftDictionary::ApplyAirborneVelocitiesMessage(Aircraft1090 &aircraft, 
 
 bool AircraftDictionary::ApplyAircraftStatusMessage(Aircraft1090 &aircraft, ADSBPacket packet) { return false; }
 
-bool AircraftDictionary::ApplyTargetStateAndStatusInfoMessage(Aircraft1090 &aircraft, ADSBPacket packet) { return false; }
+bool AircraftDictionary::ApplyTargetStateAndStatusInfoMessage(Aircraft1090 &aircraft, ADSBPacket packet) {
+    return false;
+}
 
 bool AircraftDictionary::ApplyAircraftOperationStatusMessage(Aircraft1090 &aircraft, ADSBPacket packet) {
     // TODO: get nac/navigation_integrity_category, and supplement airborne status from here.
@@ -904,7 +956,8 @@ bool AircraftDictionary::ApplyAircraftOperationStatusMessage(Aircraft1090 &aircr
     // ME[50-51] - Source Integrity Level (SIL)
     uint8_t source_integrity_level = packet.GetNBitWordFromMessage(2, 50);
     // ME[53] - Horizontal Reference Direction (HRD)
-    aircraft.WriteBitFlag(Aircraft1090::BitFlag::kBitFlagHeadingUsesMagneticNorth, packet.GetNBitWordFromMessage(1, 53));
+    aircraft.WriteBitFlag(Aircraft1090::BitFlag::kBitFlagHeadingUsesMagneticNorth,
+                          packet.GetNBitWordFromMessage(1, 53));
     // ME[54] - SIL Supplement
     uint8_t sil_supplement = packet.GetNBitWordFromMessage(1, 54);
     aircraft.source_integrity_level = static_cast<Aircraft1090::SILProbabilityOfExceedingNICRadiusOfContainmnent>(
@@ -1042,7 +1095,8 @@ bool AircraftDictionary::ApplyAircraftOperationStatusMessage(Aircraft1090 &aircr
             }
 
             // ME[52] Track Angle / Heading for Surface Position Messages
-            aircraft.WriteBitFlag(Aircraft1090::BitFlag::kBitFlagDirectionIsHeading, packet.GetNBitWordFromMessage(1, 52));
+            aircraft.WriteBitFlag(Aircraft1090::BitFlag::kBitFlagDirectionIsHeading,
+                                  packet.GetNBitWordFromMessage(1, 52));
 
             break;
         }

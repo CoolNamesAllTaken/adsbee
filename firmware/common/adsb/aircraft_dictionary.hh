@@ -363,6 +363,8 @@ class Aircraft1090 {
     // Position in Alternative Weighted Binary. This gets set to a candidate position which may not match the actual
     // displayed latitude_deg and logitude_deg. Format is in AWB to enable fast fixed point operations for screening
     // candidate positions.
+    uint32_t last_filter_received_timestamp_ms_ =
+        0;  // received_timestamp_ms for the last packet that was fed to the filter.
     uint32_t lat_awb_ = 0;
     uint32_t lon_awb_ = 0;
 #endif

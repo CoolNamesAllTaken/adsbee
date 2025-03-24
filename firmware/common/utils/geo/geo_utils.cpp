@@ -24,7 +24,7 @@ float hav_awb(uint32_t theta_awb) {
     if (theta_awb > UINT32_MAX / 2) {
         theta_awb = UINT32_MAX - theta_awb;
     }
-// TODO: wrap the end case
+
 #ifndef INTERPOLATE_HAV_AWB
     // Simple lookup to floored index, no interpolation.
     uint32_t hav_index = theta_awb / kAWBPerHavSteps;
