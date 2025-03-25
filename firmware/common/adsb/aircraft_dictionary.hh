@@ -202,9 +202,10 @@ class Aircraft1090 {
 
     /**
      * Decodes the aircraft position using last_odd_packet_ and last_even_packet_.
+     * @param[in] filter_cpr_position True if the CPR position filter should be run (defaults to true).
      * @retval True if position was decoded successfully, false otherwise.
      */
-    bool DecodePosition();
+    bool DecodePosition(bool filter_cpr_position = true);
 
     /**
      * Returns the maximum time delta between CPR packets that will be accepted for decoding.
@@ -379,6 +380,12 @@ class AircraftDictionary {
 
     struct AircraftDictionaryConfig_t {
         uint32_t aircraft_prune_interval_ms = 60e3;
+#ifdef FILTER_CPR_POSITIONS
+        // CPR position filter checks each new aircraft location against the previous location and requires two
+        // consecutive packets within a geographic radius to confirm large jumps in aircraft location. This reduces the
+        // likelihood that an aircraft might "jump" but increases CPU load.
+        bool enable_cpr_position_filter = true;
+#endif
     };
 
     struct Metrics {
@@ -588,6 +595,18 @@ class AircraftDictionary {
      * @retval Pointer to the aircraft if it exists, or NULL if it wasn't in the dictionary.
      */
     Aircraft1090 *GetAircraftPtr(uint32_t icao_address);
+
+    /**
+     * Used to enable or disable the CPR position filter.
+     * @param[in] enabled True to enable the filter, false to disable it.
+     */
+    inline void SetCPRPositionFilterEnabled(bool enabled) { config_.enable_cpr_position_filter = enabled; }
+
+    /**
+     * Check if the CPR position filter is enabled.
+     * @retval True if the filter is enabled, false if it is disabled.
+     */
+    inline bool CPRPositionFilterIsEnabled() { return config_.enable_cpr_position_filter; }
 
     std::unordered_map<uint32_t, Aircraft1090> dict;  // index Aircraft objects by their ICAO identifier
 

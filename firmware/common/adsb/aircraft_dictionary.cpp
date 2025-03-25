@@ -52,7 +52,7 @@ bool Aircraft1090::CanDecodePosition() {
     return true;
 }
 
-bool Aircraft1090::DecodePosition() {
+bool Aircraft1090::DecodePosition(bool filter_cpr_position) {
     // WARNING: There are two separate timebases in play here! The timebase for CPR packet timestamps is the MLAT
     // timebase, while higher level aircraft dictionary info is in system time.
 
@@ -84,36 +84,40 @@ bool Aircraft1090::DecodePosition() {
     }
 
 #ifdef FILTER_CPR_POSITIONS
-    // Calculate how far the aircraft has jumped since its last position update, and goof check it against a maximum
-    // velocity value. Could use the aircraft's known velocity, but just using a very large value for now.
-    uint32_t ms_since_last_track_update = most_recent_received_timestamp_ms - last_track_update_timestamp_ms;
-    uint32_t max_distance_meters = kCPRPositionFilterVelocityMps * ms_since_last_track_update / 1000;  // mps to meters
-    uint32_t distance_meters = CalculateGeoidalDistanceMetersAWB(lat_awb_, lon_awb_, result.lat_awb, result.lon_awb);
+    if (filter_cpr_position) {
+        // Calculate how far the aircraft has jumped since its last position update, and goof check it against a maximum
+        // velocity value. Could use the aircraft's known velocity, but just using a very large value for now.
+        uint32_t ms_since_last_track_update = most_recent_received_timestamp_ms - last_track_update_timestamp_ms;
+        uint32_t max_distance_meters =
+            kCPRPositionFilterVelocityMps * ms_since_last_track_update / 1000;  // mps to meters
+        uint32_t distance_meters =
+            CalculateGeoidalDistanceMetersAWB(lat_awb_, lon_awb_, result.lat_awb, result.lon_awb);
 
-    if (most_recent_received_timestamp_ms <= last_filter_received_timestamp_ms_) {
-        // Don't allow calling DecodePosition() twice without a new packet to override the filter.
-        CONSOLE_WARNING("Aircraft1090::DecodePosition",
-                        "Received CPR position update for ICAO 0x%lx, but timestamp %lu ms is not newer than last "
-                        "filter received timestamp %lu ms.",
-                        icao_address, most_recent_received_timestamp_ms, last_filter_received_timestamp_ms_);
-        return false;
-    }
+        if (most_recent_received_timestamp_ms <= last_filter_received_timestamp_ms_) {
+            // Don't allow calling DecodePosition() twice without a new packet to override the filter.
+            CONSOLE_WARNING("Aircraft1090::DecodePosition",
+                            "Received CPR position update for ICAO 0x%lx, but timestamp %lu ms is not newer than last "
+                            "filter received timestamp %lu ms.",
+                            icao_address, most_recent_received_timestamp_ms, last_filter_received_timestamp_ms_);
+            return false;
+        }
 
-    last_filter_received_timestamp_ms_ = most_recent_received_timestamp_ms;
+        last_filter_received_timestamp_ms_ = most_recent_received_timestamp_ms;
 
-    // Store the updated position. A location jump can be "confirmed" with a subsequent update from near the new
-    // candidate position. Thus, sudden jumps in position, take two subsequent position updates that are relatively
-    // close together in order to be reflected in the aircraft's position.
-    lat_awb_ = result.lat_awb;
-    lon_awb_ = result.lon_awb;
+        // Store the updated position. A location jump can be "confirmed" with a subsequent update from near the new
+        // candidate position. Thus, sudden jumps in position, take two subsequent position updates that are relatively
+        // close together in order to be reflected in the aircraft's position.
+        lat_awb_ = result.lat_awb;
+        lon_awb_ = result.lon_awb;
 
-    // Note: Ignore position check during first position update, to allow recording aircraft position upon receiving the
-    // first packet.
-    if (HasBitFlag(BitFlag::kBitFlagPositionValid) && distance_meters > max_distance_meters) {
-        CONSOLE_WARNING("Aircraft1090::DecodePosition",
-                        "Filtered CPR position update for ICAO 0x%lx, distance %lu m exceeds max %lu m.", icao_address,
-                        distance_meters, max_distance_meters);
-        return false;  // Filter out CPR positions that are too far from the last known position.
+        // Note: Ignore position check during first position update, to allow recording aircraft position upon receiving
+        // the first packet.
+        if (HasBitFlag(BitFlag::kBitFlagPositionValid) && distance_meters > max_distance_meters) {
+            CONSOLE_WARNING("Aircraft1090::DecodePosition",
+                            "Filtered CPR position update for ICAO 0x%lx, distance %lu m exceeds max %lu m.",
+                            icao_address, distance_meters, max_distance_meters);
+            return false;  // Filter out CPR positions that are too far from the last known position.
+        }
     }
 #endif
 
@@ -777,7 +781,7 @@ bool AircraftDictionary::ApplyAirbornePositionMessage(Aircraft1090 &aircraft, AD
         // other errors.
         return decode_successful;
     }
-    if (aircraft.DecodePosition()) {
+    if (aircraft.DecodePosition(config_.enable_cpr_position_filter)) {
         // Position decode succeeded.
         aircraft.WriteBitFlag(Aircraft1090::BitFlag::kBitFlagUpdatedPosition, true);
     } else {
