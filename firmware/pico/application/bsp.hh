@@ -45,9 +45,13 @@ class BSP {
     uint16_t comms_uart_rx_pin = 5;
 
     spi_inst_t* copro_spi_handle = spi1;
+    uint32_t copro_spi_clk_freq_hz = 20e6;  // 20 MHz (originally 40MHz, but turned down to work with flex adapter PCB).
     uint16_t copro_spi_clk_pin = 10;
     uint16_t copro_spi_mosi_pin = 11;
     uint16_t copro_spi_miso_pin = 12;
+    gpio_drive_strength copro_spi_drive_strength = GPIO_DRIVE_STRENGTH_12MA;
+    bool copro_spi_pullup = false;
+    bool copro_spi_pulldown = true;
 
     uint16_t esp32_enable_pin = 14;
     uint16_t esp32_spi_cs_pin = 9;

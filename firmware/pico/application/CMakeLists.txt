@@ -85,7 +85,6 @@ if (ON_EMBEDDED_DEVICE)
         main.cc # Don't include main for testing.
         adsbee.cc
         settings.cc
-        eeprom.cc
         flash_utils.cc
     )
 
@@ -185,4 +184,5 @@ else()
 endif()
 
 add_subdirectory(comms)
+add_subdirectory(peripherals)
 add_subdirectory(target_test)

@@ -65,7 +65,7 @@ class SPICoprocessor {
     static constexpr uint16_t kSPIMutexTimeoutTicks = kSPIMutexTimeoutMs / portTICK_PERIOD_MS;
 #endif
     struct SPICoprocessorConfig {
-        uint32_t clk_rate_hz = 20e6;  // 20 MHz
+        uint32_t spi_clk_freq_hz = bsp.copro_spi_clk_freq_hz;
 #ifdef ON_PICO
         uint16_t esp32_enable_pin = bsp.esp32_enable_pin;  // Pin to enable the ESP32.
         spi_inst_t *spi_handle = bsp.copro_spi_handle;
@@ -74,8 +74,9 @@ class SPICoprocessor {
         uint16_t spi_miso_pin = bsp.copro_spi_miso_pin;
         uint16_t spi_cs_pin = bsp.esp32_spi_cs_pin;  // Pin for SPI chip select (CS).
         uint16_t spi_handshake_pin = bsp.esp32_spi_handshake_pin;
-        // gpio_slew_rate spi_gpio_slew_rate = GPIO_SLEW_RATE_SLOW;
-        // gpio_drive_strength spi_gpio_drive_strength = GPIO_DRIVE_STRENGTH_2MA;
+        gpio_drive_strength spi_drive_strength = bsp.copro_spi_drive_strength;
+        bool spi_pullup = bsp.copro_spi_pullup;
+        bool spi_pulldown = bsp.copro_spi_pulldown;
 #elif ON_ESP32
         spi_host_device_t spi_handle = SPI2_HOST;
         gpio_num_t spi_mosi_pin = GPIO_NUM_41;

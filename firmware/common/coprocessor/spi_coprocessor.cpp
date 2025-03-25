@@ -36,19 +36,16 @@ bool SPICoprocessor::Init() {
     gpio_set_function(config_.spi_clk_pin, GPIO_FUNC_SPI);
     gpio_set_function(config_.spi_mosi_pin, GPIO_FUNC_SPI);
     gpio_set_function(config_.spi_miso_pin, GPIO_FUNC_SPI);
-    // gpio_set_slew_rate(config_.spi_clk_pin, config_.spi_gpio_slew_rate);
-    // gpio_set_slew_rate(config_.spi_mosi_pin, config_.spi_gpio_slew_rate);
-    // gpio_set_slew_rate(config_.spi_cs_pin, config_.spi_gpio_slew_rate);
-    gpio_set_drive_strength(config_.spi_clk_pin, GPIO_DRIVE_STRENGTH_12MA);
-    gpio_set_drive_strength(config_.spi_mosi_pin, GPIO_DRIVE_STRENGTH_12MA);
-    gpio_set_drive_strength(config_.spi_cs_pin, GPIO_DRIVE_STRENGTH_12MA);
-    gpio_set_pulls(config_.spi_clk_pin, false, true);   // Clock pin is pulled down.
-    gpio_set_pulls(config_.spi_mosi_pin, false, true);  // MOSI pin is pulled down.
-    gpio_set_pulls(config_.spi_cs_pin, false, true);    // CS pin is pulled down.
-    gpio_set_pulls(config_.spi_miso_pin, false, true);  // MISO pin is pulled down.
+    gpio_set_drive_strength(config_.spi_clk_pin, config_.spi_drive_strength);
+    gpio_set_drive_strength(config_.spi_mosi_pin, config_.spi_drive_strength);
+    gpio_set_drive_strength(config_.spi_cs_pin, config_.spi_drive_strength);
+    gpio_set_pulls(config_.spi_clk_pin, config_.spi_pullup, config_.spi_pulldown);   // Clock pin pulls.
+    gpio_set_pulls(config_.spi_mosi_pin, config_.spi_pullup, config_.spi_pulldown);  // MOSI pin pulls.
+    gpio_set_pulls(config_.spi_cs_pin, config_.spi_pullup, config_.spi_pulldown);    // CS pin pulls.
+    gpio_set_pulls(config_.spi_miso_pin, config_.spi_pullup, config_.spi_pulldown);  // MISO pin pulls.
 
     // Initialize SPI Peripheral.
-    spi_init(config_.spi_handle, config_.clk_rate_hz);
+    spi_init(config_.spi_handle, config_.spi_clk_freq_hz);
     spi_set_format(config_.spi_handle,
                    8,           // Bits per transfer.
                    SPI_CPOL_0,  // Polarity (CPOL).
