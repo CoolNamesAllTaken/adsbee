@@ -90,16 +90,22 @@ bool Aircraft1090::DecodePosition() {
     uint32_t max_distance_meters = kCPRPositionFilterVelocityMps * ms_since_last_track_update / 1000;  // mps to meters
     uint32_t distance_meters = CalculateGeoidalDistanceMetersAWB(lat_awb_, lon_awb_, result.lat_awb, result.lon_awb);
 
-    if (most_recent_received_timestamp_ms > last_filter_received_timestamp_ms_) {
+    if (most_recent_received_timestamp_ms <= last_filter_received_timestamp_ms_) {
         // Don't allow calling DecodePosition() twice without a new packet to override the filter.
-        last_filter_received_timestamp_ms_ = most_recent_received_timestamp_ms;
-
-        // Store the updated position. A location jump can be "confirmed" with a subsequent update from near the new
-        // candidate position. Thus, sudden jumps in position, take two subsequent position updates that are relatively
-        // close together in order to be reflected in the aircraft's position.
-        lat_awb_ = result.lat_awb;
-        lon_awb_ = result.lon_awb;
+        CONSOLE_WARNING("Aircraft1090::DecodePosition",
+                        "Received CPR position update for ICAO 0x%lx, but timestamp %lu ms is not newer than last "
+                        "filter received timestamp %lu ms.",
+                        icao_address, most_recent_received_timestamp_ms, last_filter_received_timestamp_ms_);
+        return false;
     }
+
+    last_filter_received_timestamp_ms_ = most_recent_received_timestamp_ms;
+
+    // Store the updated position. A location jump can be "confirmed" with a subsequent update from near the new
+    // candidate position. Thus, sudden jumps in position, take two subsequent position updates that are relatively
+    // close together in order to be reflected in the aircraft's position.
+    lat_awb_ = result.lat_awb;
+    lon_awb_ = result.lon_awb;
 
     // Note: Ignore position check during first position update, to allow recording aircraft position upon receiving the
     // first packet.

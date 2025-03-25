@@ -597,9 +597,12 @@ TEST(AircraftDictionary, FilterCPRLocations) {
     packet.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
     EXPECT_TRUE(dictionary.IngestDecoded1090Packet(packet));
     EXPECT_TRUE(aircraft->CanDecodePosition());
-    EXPECT_TRUE(aircraft->DecodePosition());
+    EXPECT_FALSE(aircraft->DecodePosition());  // Double decode fails without a new packet fails.
     EXPECT_NEAR(aircraft->latitude_deg, 48.5977f, 0.0001f);
     EXPECT_NEAR(aircraft->longitude_deg, 18.70521f, 0.001f);
+
+    // Make it look like the aircraft already has a valid location so that the CPR filter is active.
+    aircraft->WriteBitFlag(Aircraft1090::BitFlag::kBitFlagPositionValid, true);
 
     // Ingest a packet pair that causes an invalid decode.
     packet = Decoded1090Packet((char *)"8D48922358C3806C3E0C8BC657BB");  // even
@@ -622,14 +625,12 @@ TEST(AircraftDictionary, FilterCPRLocations) {
     packet.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
     EXPECT_TRUE(dictionary.IngestDecoded1090Packet(packet));
     aircraft = dictionary.GetAircraftPtr(icao);
-    // Activate the CPR filter.
-    aircraft->WriteBitFlag(Aircraft1090::BitFlag::kBitFlagPositionValid, true);
     packet = Decoded1090Packet((char *)"8D48C22D60AB0452BFAD19A695E0");  // even
     inc_time_since_boot_ms(1000);
     packet.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
     EXPECT_TRUE(dictionary.IngestDecoded1090Packet(packet));
     EXPECT_TRUE(aircraft->CanDecodePosition());
-    EXPECT_TRUE(aircraft->DecodePosition());
+    EXPECT_FALSE(aircraft->DecodePosition());  // Double decode fails without new packet.
     EXPECT_NEAR(aircraft->latitude_deg, 49.30659f, 0.0001f);
     EXPECT_NEAR(aircraft->longitude_deg, 17.4134f, 0.001f);
 
