@@ -632,19 +632,21 @@ TEST(AircraftDictionary, FilterCPRLocations) {
     EXPECT_TRUE(aircraft->CanDecodePosition());
     EXPECT_FALSE(aircraft->DecodePosition());  // Double decode fails without new packet.
     EXPECT_NEAR(aircraft->latitude_deg, 49.30659f, 0.0001f);
-    EXPECT_NEAR(aircraft->longitude_deg, 17.4134f, 0.001f);
+    EXPECT_NEAR(aircraft->longitude_deg, 17.4134f, 0.0001f);
 
     // Invalid position pair.
     packet = Decoded1090Packet((char *)"8D48C22D60AB00E705C60B37E092");  // even
     inc_time_since_boot_ms(1000);
     packet.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
-    dictionary.IngestDecoded1090Packet(packet);
+    EXPECT_TRUE(dictionary.IngestDecoded1090Packet(packet));
     packet = Decoded1090Packet((char *)"8D48C22D60B104710F94F963E8B6");  // odd
     inc_time_since_boot_ms(1000);
     packet.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
-    dictionary.IngestDecoded1090Packet(packet);
-    EXPECT_TRUE(aircraft->CanDecodePosition());
-    EXPECT_FALSE(aircraft->DecodePosition());
+    EXPECT_FALSE(dictionary.IngestDecoded1090Packet(packet));
 
-    /** Test Case 2 **/
+    // Confirm new location by re-receiving the even packet.
+    inc_time_since_boot_ms(1000);
+    packet = Decoded1090Packet((char *)"8D48C22D60AB00E705C60B37E092");  // even
+    packet.GetRawPtr()->mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
+    EXPECT_TRUE(dictionary.IngestDecoded1090Packet(packet));
 }
