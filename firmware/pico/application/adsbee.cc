@@ -226,6 +226,14 @@ bool ADSBee::Init() {
     pio_sm_set_enabled(config_.preamble_detector_pio,
                        preamble_detector_sm_[bsp.r1090_high_power_demod_state_machine_index], true);
 
+    // Initialize 978MHz radio.
+    if (r978.Init(false)) {
+        r978_enabled_ = true;
+        CONSOLE_INFO("ADSBee::Init", "978MHz radio initialized.");
+    } else {
+        CONSOLE_ERROR("ADSBee::Init", "Failed to initialize 978MHz radio.");
+    }
+
     // Throw a fit if the watchdog caused a reboot.
     if (watchdog_caused_reboot()) {
         CONSOLE_WARNING("ADSBee::Init", "Watchdog caused reboot.");

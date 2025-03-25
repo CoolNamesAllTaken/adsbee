@@ -10,6 +10,7 @@
 #include "hardware/watchdog.h"
 #include "macros.hh"  // For MAX / MIN.
 #include "settings.hh"
+#include "si4362.hh"
 #include "stdint.h"
 #include "transponder_packet.hh"
 
@@ -282,6 +283,7 @@ class ADSBee {
         {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = raw_1090_packet_queue_buffer_});
 
     AircraftDictionary aircraft_dictionary;
+    Si4362 r978 = Si4362({});
 
    private:
     ADSBeeConfig config_;
@@ -328,6 +330,9 @@ class ADSBee {
 
     int32_t noise_floor_mv_;
     uint32_t noise_floor_last_sample_timestamp_ms_ = 0;
+
+    /** 978MHz Receiver Parameters **/
+    bool r978_enabled_ = false;
 };
 
 extern ADSBee adsbee;
