@@ -111,7 +111,7 @@ bool Aircraft1090::DecodePosition() {
     // first packet.
     if (HasBitFlag(BitFlag::kBitFlagPositionValid) && distance_meters > max_distance_meters) {
         CONSOLE_WARNING("Aircraft1090::DecodePosition",
-                        "Filtered CPR position update for ICAO 0x%lx, distance %u m exceeds max %u m.", icao_address,
+                        "Filtered CPR position update for ICAO 0x%lx, distance %lu m exceeds max %lu m.", icao_address,
                         distance_meters, max_distance_meters);
         return false;  // Filter out CPR positions that are too far from the last known position.
     }
