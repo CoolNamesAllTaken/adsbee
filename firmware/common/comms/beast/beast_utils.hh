@@ -138,10 +138,29 @@ uint16_t Build1090BeastFrame(const Decoded1090Packet &packet, uint8_t *beast_fra
     }
     bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, mlat_12mhz_counter_buf, 6);
 
-    // Write RSSI Byte. 255 = 0dBm, 0 = -96dBm.
-    // Note: Divide power level by 2 since beast power level gets logged, then squared. Divide by 10 to convert from dB
-    // (power) to log value.
-    uint8_t rssi_byte = static_cast<uint8_t>(255.0f * powf(10.0f, (packet.GetRSSIdBm() / 2 / 10)));
+    // Write beast signal level Byte. 1: -48.2 dBFS 128: -6.0 dBFS 255: 0 dBFS
+    // RSSI in dBFS = 10 * log10( (rssi_byte(0-255) / 255.0) ** 2 )
+    // Typical dBm values for this device are topping out at -45 dBm
+    // Due to the limited dynamic range representable in the beast signal level we need to scale it
+    // to make it work, but this is just a signal strength indicator so that should be ok.
+    // Expected levels:
+    // -120 dBm and lower: map to -45 dBFS
+    // -30 dBm and higher: map to 0 dBFS
+    // this is a somewhat arbitrary mapping, but it's nice because it comes down to:
+    // add 30, divide by 2
+    // this is very easy to convert back to dBm in the head
+    // multiply by 2, subtract 30
+    // low values have bad granularity anyhow, so it's good to avoid -48 to -40 a bit
+    float min = -120.0f;
+    float max = -30.0f;
+    float new_min = -45.0f;
+    float new_max = 0.0f;
+    static constexpr float scale_factor = ((new_max - new_min) / (max - min));
+    // divide by 10 for dB -> B
+    // divide by 2 for sqrt(powf(10.0f, ..))
+    // add log10(255) to multiply the powf result by 255
+    static constexpr float factor = scale_factor / 10.0f / 2.0f + log10f(255.0f);
+    uint8_t rssi_byte = static_cast<uint8_t>(powf(10.0f, (packet.GetRSSIdBm() - (int) max) * factor));
     bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, &rssi_byte, 1);
 
     // Write packet buffer with escape characters.
