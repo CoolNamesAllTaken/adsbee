@@ -25,10 +25,9 @@ TEST(BeastUtils, Build1090BeastFrame) {
     EXPECT_EQ(beast_frame_buf[6], 0xFF);
     EXPECT_EQ(beast_frame_buf[7], 0xFF);
     EXPECT_EQ(beast_frame_buf[8], 0x1A);
-    EXPECT_EQ(beast_frame_buf[9], 0x1A);  // escape
-    EXPECT_TRUE(false);
-    EXPECT_EQ(beast_frame_buf[10], 14);  // RSSI is -80dBm.
-    EXPECT_EQ(beast_frame_buf[11], 0x8D);                                                           // Mode S Data Begin
+    EXPECT_EQ(beast_frame_buf[9], 0x1A);   // escape
+    EXPECT_EQ(beast_frame_buf[10], 14);    // RSSI is -80dBm.
+    EXPECT_EQ(beast_frame_buf[11], 0x8D);  // Mode S Data Begin
     EXPECT_EQ(beast_frame_buf[12], 0x49);
     EXPECT_EQ(beast_frame_buf[13], 0x50);
     EXPECT_EQ(beast_frame_buf[14], 0x66);
@@ -86,8 +85,8 @@ TEST(BeastUtils, Build1090IngestBeastFrame) {
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0xFF);
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0x1A);
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0x1A);  // escape
-    EXPECT_EQ(beast_frame_buf[bytes_compared++], 14);  // RSSI is -80dBm.
-    EXPECT_EQ(beast_frame_buf[bytes_compared++], 0x8D);                        // Mode S Data Begin
+    EXPECT_EQ(beast_frame_buf[bytes_compared++], 14);    // RSSI is -80dBm.
+    EXPECT_EQ(beast_frame_buf[bytes_compared++], 0x8D);  // Mode S Data Begin
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0x49);
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0x50);
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0x66);
