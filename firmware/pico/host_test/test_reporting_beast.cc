@@ -25,7 +25,8 @@ TEST(BeastUtils, Build1090BeastFrame) {
     EXPECT_EQ(beast_frame_buf[6], 0xFF);
     EXPECT_EQ(beast_frame_buf[7], 0xFF);
     EXPECT_EQ(beast_frame_buf[8], 0x1A);
-    EXPECT_EQ(beast_frame_buf[9], 0x1A);                                                            // escape
+    EXPECT_EQ(beast_frame_buf[9], 0x1A);  // escape
+    EXPECT_TRUE(false);
     EXPECT_EQ(beast_frame_buf[10], static_cast<uint8_t>(255.0f * powf(10.0f, (-80.0f / 2 / 10))));  // RSSI is -80dBm.
     EXPECT_EQ(beast_frame_buf[11], 0x8D);                                                           // Mode S Data Begin
     EXPECT_EQ(beast_frame_buf[12], 0x49);
@@ -39,7 +40,7 @@ TEST(BeastUtils, Build1090BeastFrame) {
     EXPECT_EQ(beast_frame_buf[20], 0x26);
     EXPECT_EQ(beast_frame_buf[21], 0xD2);
     EXPECT_EQ(beast_frame_buf[22], 0x1A);
-    EXPECT_EQ(beast_frame_buf[23], 0x1A);  // Escape
+    EXPECT_EQ(beast_frame_buf[23], 0x1A);  // escape
     EXPECT_EQ(beast_frame_buf[24], 0xD7);
     EXPECT_EQ(beast_frame_buf[25], 0x67);
 }
