@@ -138,6 +138,7 @@ uint16_t Build1090BeastFrame(const Decoded1090Packet &packet, uint8_t *beast_fra
     }
     bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, mlat_12mhz_counter_buf, 6);
 
+    /*
     // Write beast signal level Byte. 1: -48.2 dBFS 128: -6.0 dBFS 255: 0 dBFS
     // RSSI in dBFS = 10 * log10( (rssi_byte(0-255) / 255.0) ** 2 )
     // Typical dBm values for this device are topping out at -45 dBm
@@ -168,6 +169,22 @@ uint16_t Build1090BeastFrame(const Decoded1090Packet &packet, uint8_t *beast_fra
         value = 255;
     }
     uint8_t rssi_byte = static_cast<uint8_t>(value);
+    */
+
+    // the above code as a lookup table is more performant
+
+    int dbm = packet.GetRSSIdBm();
+    int ix = dbm + 120;
+    if (ix > 90) {
+        ix = 90;
+    }
+    if (ix < 0) {
+        ix = 0;
+    }
+    // -120 to -30 inclusive
+    static constexpr uint8_t beast_signal_lut[91] = { 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 12, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 27, 28, 30, 32, 34, 36, 38, 40, 42, 45, 48, 50, 53, 57, 60, 64, 67, 71, 76, 80, 85, 90, 95, 101, 107, 113, 120, 127, 135, 143, 151, 160, 170, 180, 191, 202, 214, 227, 240, 254 };
+    uint8_t rssi_byte = beast_signal_lut[ix];
+
     bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, &rssi_byte, 1);
 
     // Write packet buffer with escape characters.
