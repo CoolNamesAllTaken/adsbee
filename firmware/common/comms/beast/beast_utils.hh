@@ -151,16 +151,23 @@ uint16_t Build1090BeastFrame(const Decoded1090Packet &packet, uint8_t *beast_fra
     // this is very easy to convert back to dBm in the head
     // multiply by 2, subtract 30
     // low values have bad granularity anyhow, so it's good to avoid -48 to -40 a bit
-    static constexpr float kMinRSSIDbm = -120.0f;
-    static constexpr float kMaxRSSIDbm = -30.0f;
-    static constexpr float kMinRSSIDbfs = -45.0f;
-    static constexpr float kMaxRSSIDbfs = 0.0f;
-    static constexpr float kRSSIDbmToRSSIDbfs = ((kMaxRSSIDbfs - kMinRSSIDbfs) / (kMaxRSSIDbm - kMinRSSIDbm));
+    static constexpr float min = -120.0f;
+    static constexpr float max = -30.0f;
+    static constexpr int max_as_int = max;
+    static constexpr float new_min = -45.0f;
+    static constexpr float new_max = 0.0f;
+    static constexpr float scale_factor = ((new_max - new_min) / (max - min));
     // divide by 10 for dB -> B
     // divide by 2 for sqrt(powf(10.0f, ..))
+    static constexpr float factor = scale_factor / 10.0f / 2.0f;
     // add log10(255) to multiply the powf result by 255
-    static constexpr float kRSSIScaleFactor = kRSSIDbmToRSSIDbfs / 10.0f / 2.0f + log10f(255.0f);
-    uint8_t rssi_byte = static_cast<uint8_t>(powf(10.0f, (packet.GetRSSIdBm() - (int)kMaxRSSIDbm) * kRSSIScaleFactor));
+    static constexpr float mult255 = log10f(255.0f);
+    float exponent = (packet.GetRSSIdBm() - max_as_int) * factor + mult255;
+    uint32_t value = static_cast<uint32_t>(powf(10.0f, exponent));
+    if (value > 255) {
+        value = 255;
+    }
+    uint8_t rssi_byte = static_cast<uint8_t>(value);
     bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, &rssi_byte, 1);
 
     // Write packet buffer with escape characters.
