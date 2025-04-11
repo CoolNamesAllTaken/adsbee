@@ -50,7 +50,7 @@ TEST(BeastUtils, Build1090IngestBeastFrame) {
     // desired result.
     Decoded1090Packet tpacket = Decoded1090Packet((char *)"8d495066587f469bb826d21ad767",  // string
                                                   0,                                       // source
-                                                  -80,                                     // sigs
+                                                  0,                                       // sigs
                                                   50,                                      // sigq
                                                   0xABABFF1AFFFFFF1A << 2);
 
@@ -85,7 +85,7 @@ TEST(BeastUtils, Build1090IngestBeastFrame) {
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0xFF);
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0x1A);
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0x1A);  // escape
-    EXPECT_EQ(beast_frame_buf[bytes_compared++], 14);    // RSSI is -80dBm.
+    EXPECT_EQ(beast_frame_buf[bytes_compared++], 255);   // RSSI is 0dBm.
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0x8D);  // Mode S Data Begin
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0x49);
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0x50);

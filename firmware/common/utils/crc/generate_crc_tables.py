@@ -100,7 +100,7 @@ def add_table_to_file(table_name, table):
     CHARS_PER_LINE = 120
 
     with open("crc_tables.hh", "a") as f:
-        f.write(f"static const uint32_t {table_name}[{len(table)}] =" + "{\n")
+        f.write(f"static const uint32_t {table_name}[{len(table)}] = " + "{\n")
 
         # Split the table into chunks of appropriate size to stay within CHARS_PER_LINE chars per line
         chunks = []
@@ -108,7 +108,7 @@ def add_table_to_file(table_name, table):
         current_length = 4  # Account for initial spaces
         
         for value in table:
-            item = f"0x{value:06X}"
+            item = f"0x{value:08X}"
             # Add 2 for ", " except for the last item
             if current_length + len(item) + 2 > CHARS_PER_LINE:
                 chunks.append(", ".join(current_chunk))

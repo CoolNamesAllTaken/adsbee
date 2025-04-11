@@ -1,6 +1,8 @@
 #ifndef BEAST_UTILS_HH_
 #define BEAST_UTILS_HH_
 
+#include "beast_tables.hh"
+#include "macros.hh"
 #include "math.h"
 #include "stdio.h"
 #include "string.h"
@@ -138,36 +140,10 @@ uint16_t Build1090BeastFrame(const Decoded1090Packet &packet, uint8_t *beast_fra
     }
     bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, mlat_12mhz_counter_buf, 6);
 
-    // Write beast signal level Byte. 1: -48.2 dBFS 128: -6.0 dBFS 255: 0 dBFS
-    // RSSI in dBFS = 10 * log10( (rssi_byte(0-255) / 255.0) ** 2 )
-    // Typical dBm values for this device are topping out at -45 dBm
-    // Due to the limited dynamic range representable in the beast signal level we need to scale it
-    // to make it work, but this is just a signal strength indicator so that should be ok.
-    // Expected levels:
-    // -120 dBm and lower: map to -45 dBFS
-    // -30 dBm and higher: map to 0 dBFS
-    // this is a somewhat arbitrary mapping, but it's nice because it comes down to:
-    // add 30, divide by 2
-    // this is very easy to convert back to dBm in the head
-    // multiply by 2, subtract 30
-    // low values have bad granularity anyhow, so it's good to avoid -48 to -40 a bit
-    static constexpr float min = -120.0f;
-    static constexpr float max = -30.0f;
-    static constexpr int max_as_int = max;
-    static constexpr float new_min = -45.0f;
-    static constexpr float new_max = 0.0f;
-    static constexpr float scale_factor = ((new_max - new_min) / (max - min));
-    // divide by 10 for dB -> B
-    // divide by 2 for sqrt(powf(10.0f, ..))
-    static constexpr float factor = scale_factor / 10.0f / 2.0f;
-    // add log10(255) to multiply the powf result by 255
-    static constexpr float mult255 = log10f(255.0f);
-    float exponent = (packet.GetRSSIdBm() - max_as_int) * factor + mult255;
-    uint32_t value = static_cast<uint32_t>(powf(10.0f, exponent));
-    if (value > 255) {
-        value = 255;
-    }
-    uint8_t rssi_byte = static_cast<uint8_t>(value);
+    // Use lookup table to convert RSSI from dBm to Beast power level (sqrt of un-logged dBFS, mutliplied by 255).
+    uint16_t rssi_lut_index =
+        MIN(MAX(packet.GetRSSIdBm() - kMinRSSIdBm, 0), static_cast<int>(sizeof(kRSSIdBmToRSSIdBFS) - 1));
+    uint8_t rssi_byte = static_cast<uint8_t>(kRSSIdBmToRSSIdBFS[rssi_lut_index]);
     bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, &rssi_byte, 1);
 
     // Write packet buffer with escape characters.
