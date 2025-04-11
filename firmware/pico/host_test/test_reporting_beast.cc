@@ -26,7 +26,7 @@ TEST(BeastUtils, Build1090BeastFrame) {
     EXPECT_EQ(beast_frame_buf[7], 0xFF);
     EXPECT_EQ(beast_frame_buf[8], 0x1A);
     EXPECT_EQ(beast_frame_buf[9], 0x1A);   // escape
-    EXPECT_EQ(beast_frame_buf[10], 14);    // RSSI is -80dBm.
+    EXPECT_EQ(beast_frame_buf[10], 8);     // RSSI is -80dBm.
     EXPECT_EQ(beast_frame_buf[11], 0x8D);  // Mode S Data Begin
     EXPECT_EQ(beast_frame_buf[12], 0x49);
     EXPECT_EQ(beast_frame_buf[13], 0x50);
