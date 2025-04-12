@@ -10,9 +10,12 @@
 #include "macros.hh"
 #include "transponder_packet.hh"
 
-class Aircraft {
+#define FILTER_CPR_POSITIONS
+
+class Aircraft1090 {
    public:
-    static constexpr uint16_t kCallSignMaxNumChars = 7;
+    static constexpr uint16_t kCallSignMaxNumChars = 8;
+    static constexpr uint16_t kCallSignMinNumChars = 3;  // Callsigns must be at this long to be valid.
     // These variables define filter bounds for time between CPR packets. If the time between packets is greater than
     // the time delta limit, the old CPR packet is discarded and the CPR packet pair is not used for position decoding.
     static constexpr uint32_t kDefaultCPRIntervalMs = 10e3;  // CPR interval when starting from scratch or stale track.
@@ -66,7 +69,12 @@ class Aircraft {
 
     enum BitFlag : uint32_t {
         kBitFlagIsAirborne = 0,  // Received messages or flags indicating the aircraft is airborne.
+        kBitFlagBaroAltitudeValid,
+        kBitFlagGNSSAltitudeValid,
         kBitFlagPositionValid,
+        kBitFlagDirectionValid,
+        kBitFlagHorizontalVelocityValid,
+        kBitFlagVerticalVelocityValid,
         kBitFlagIsMilitary,              // Received at least one military ES message from the aircraft.
         kBitFlagIsClassB2GroundVehicle,  // Is a class B2 ground vehicle transmitting at <70W.
         kBitFlagHas1090ESIn,             // Aircraft is equipped with 1090MHz Extended Squitter receive capability.
@@ -88,7 +96,7 @@ class Aircraft {
         kBitFlagUpdatedBaroAltitude,
         kBitFlagUpdatedGNSSAltitude,
         kBitFlagUpdatedPosition,
-        kBitFlagUpdatedTrack,
+        kBitFlagUpdatedDirection,
         kBitFlagUpdatedHorizontalVelocity,
         kBitFlagUpdatedVerticalVelocity,
         kBitFlagNumFlagBits
@@ -171,23 +179,21 @@ class Aircraft {
         uint16_t valid_extended_squitter_frames = 0;
     };
 
-    Aircraft(uint32_t icao_address_in);
-    Aircraft();
+    Aircraft1090(uint32_t icao_address_in);
+    Aircraft1090();
 
     /**
-     * Simple helper that checks to see whether a packet decode can be attempted (does not guarantee it will succeed,
-     * for instance an odd and even packet may have been received, but from different CPR zones).
-     * @retval True if decode can be attempted, false otherwise.
+     * Checks to see if the aircraft position can be decoded. Requires that both an odd and an even packet have been
+     * received, and they aren't separated by too large of a time interval.
+     * @retval True if the aircraft position can be decoded, false otherwise.
      */
-    bool CanDecodePosition() {
-        return last_odd_packet_.received_timestamp_ms > 0 && last_even_packet_.received_timestamp_ms > 0;
-    }
+    bool CanDecodePosition();
 
     /**
      * Clears the CPR packet cache. Used when too much time has elapsed since the last CPR packet was received, to avoid
      * decoding CPR location with invalid packet pairings.
      */
-    void ClearCPRPackets() {
+    inline void ClearCPRPackets() {
         // Clearng received timestamps causes the packet pair to be rejected during the decoding stage, so it's as good
         // as wiping all of the received packet contents.
         last_odd_packet_.received_timestamp_ms = 0;
@@ -196,9 +202,10 @@ class Aircraft {
 
     /**
      * Decodes the aircraft position using last_odd_packet_ and last_even_packet_.
+     * @param[in] filter_cpr_position True if the CPR position filter should be run (defaults to true).
      * @retval True if position was decoded successfully, false otherwise.
      */
-    bool DecodePosition();
+    bool DecodePosition(bool filter_cpr_position = true);
 
     /**
      * Returns the maximum time delta between CPR packets that will be accepted for decoding.
@@ -297,7 +304,7 @@ class Aircraft {
     uint32_t icao_address = 0;
     char callsign[kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
     uint16_t squawk = 0;
-    Category category = kCategoryInvalid;
+    Category category = kCategoryNoCategoryInfo;
     uint8_t category_raw = 0;  // Non-enum category in case we want the value without a many to one mapping.
 
     int32_t baro_altitude_ft = 0;
@@ -348,29 +355,37 @@ class Aircraft {
         uint32_t received_timestamp_ms = 0;  // [ms] time since boot when packet was recorded
         uint32_t n_lat = 0;                  // 17-bit latitude count
         uint32_t n_lon = 0;                  // 17-bit longitude count
-
-        // DecodePosition values.
-        float lat_cpr = 0.0f;
-        float lon_cpr = 0.0f;
-        uint16_t nl_cpr = 0;  // number of longitude cells in latitude band
-        float lat =
-            0.0f;  // only keep latitude since it's reused in cooperative calculations between odd and even packets
-        // float lon = 0.0f; // longitude
     };
 
     CPRPacket last_odd_packet_;
     CPRPacket last_even_packet_;
+
+#ifdef FILTER_CPR_POSITIONS
+    // Position in Alternative Weighted Binary. This gets set to a candidate position which may not match the actual
+    // displayed latitude_deg and logitude_deg. Format is in AWB to enable fast fixed point operations for screening
+    // candidate positions.
+    uint32_t last_filter_received_timestamp_ms_ =
+        0;  // received_timestamp_ms for the last packet that was fed to the filter.
+    uint32_t lat_awb_ = 0;
+    uint32_t lon_awb_ = 0;
+#endif
 
     Metrics metrics_counter_;
 };
 
 class AircraftDictionary {
    public:
-    static const uint16_t kMaxNumAircraft = 100;
+    static const uint16_t kMaxNumAircraft = 400;
     static const uint16_t kMaxNumSources = 3;
 
     struct AircraftDictionaryConfig_t {
         uint32_t aircraft_prune_interval_ms = 60e3;
+#ifdef FILTER_CPR_POSITIONS
+        // CPR position filter checks each new aircraft location against the previous location and requires two
+        // consecutive packets within a geographic radius to confirm large jumps in aircraft location. This reduces the
+        // likelihood that an aircraft might "jump" but increases CPU load.
+        bool enable_cpr_position_filter = true;
+#endif
     };
 
     struct Metrics {
@@ -436,7 +451,11 @@ class AircraftDictionary {
     /**
      * Default constructor. Uses default config values.
      */
-    AircraftDictionary() {};
+    AircraftDictionary() {
+        // Avoid reallocation of the hash map to prevent fragmentation.
+        dict.max_load_factor(1.0);
+        dict.reserve(kMaxNumAircraft);
+    };
 
     /**
      * Constructor with config values specified.
@@ -546,7 +565,7 @@ class AircraftDictionary {
      * @param[in] aircraft Aircraft to insert.
      * @retval True if insertaion succeeded, false if failed.
      */
-    bool InsertAircraft(const Aircraft &aircraft);
+    bool InsertAircraft(const Aircraft1090 &aircraft);
 
     /**
      * Remove an aircraft from the dictionary, by ICAO address.
@@ -561,7 +580,7 @@ class AircraftDictionary {
      * @param[out] aircraft_out Aircraft reference to put the retrieved aircraft into if successful.
      * @retval True if aircraft was found and retrieved, false if aircraft was not in the dictionary.
      */
-    bool GetAircraft(uint32_t icao_address, Aircraft &aircraft_out) const;
+    bool GetAircraft(uint32_t icao_address, Aircraft1090 &aircraft_out) const;
 
     /**
      * Check if an aircraft is contained in the dictionary.
@@ -575,9 +594,21 @@ class AircraftDictionary {
      * @param[in] icao_address ICAO address of the aircraft to find.
      * @retval Pointer to the aircraft if it exists, or NULL if it wasn't in the dictionary.
      */
-    Aircraft *GetAircraftPtr(uint32_t icao_address);
+    Aircraft1090 *GetAircraftPtr(uint32_t icao_address);
 
-    std::unordered_map<uint32_t, Aircraft> dict;  // index Aircraft objects by their ICAO identifier
+    /**
+     * Used to enable or disable the CPR position filter.
+     * @param[in] enabled True to enable the filter, false to disable it.
+     */
+    inline void SetCPRPositionFilterEnabled(bool enabled) { config_.enable_cpr_position_filter = enabled; }
+
+    /**
+     * Check if the CPR position filter is enabled.
+     * @retval True if the filter is enabled, false if it is disabled.
+     */
+    inline bool CPRPositionFilterIsEnabled() { return config_.enable_cpr_position_filter; }
+
+    std::unordered_map<uint32_t, Aircraft1090> dict;  // index Aircraft objects by their ICAO identifier
 
     Metrics metrics;
 
@@ -593,13 +624,13 @@ class AircraftDictionary {
      * @retval True if message was ingested successfully, false otherwise.
      */
 
-    bool ApplyAircraftIDMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool ApplySurfacePositionMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool ApplyAirbornePositionMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool ApplyAirborneVelocitiesMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool ApplyAircraftStatusMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool ApplyTargetStateAndStatusInfoMessage(Aircraft &aircraft, ADSBPacket packet);
-    bool ApplyAircraftOperationStatusMessage(Aircraft &aircraft, ADSBPacket packet);
+    bool ApplyAircraftIDMessage(Aircraft1090 &aircraft, ADSBPacket packet);
+    bool ApplySurfacePositionMessage(Aircraft1090 &aircraft, ADSBPacket packet);
+    bool ApplyAirbornePositionMessage(Aircraft1090 &aircraft, ADSBPacket packet);
+    bool ApplyAirborneVelocitiesMessage(Aircraft1090 &aircraft, ADSBPacket packet);
+    bool ApplyAircraftStatusMessage(Aircraft1090 &aircraft, ADSBPacket packet);
+    bool ApplyTargetStateAndStatusInfoMessage(Aircraft1090 &aircraft, ADSBPacket packet);
+    bool ApplyAircraftOperationStatusMessage(Aircraft1090 &aircraft, ADSBPacket packet);
 
     AircraftDictionaryConfig_t config_;
     // Counters in metrics_counter_ are incremented, then metrics_counter_ is swapped into metrics during the dictionary

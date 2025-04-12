@@ -57,8 +57,8 @@ void irq_wrapper_program_init(
 .wrap_target
 public waiting_for_first_edge:
     irq set 6                       ; -4 | Spam resetting the high power preamble detector.
-    mov osr isr                     ; -3 | OSR = 0b00000000000000000101000010100000
-    out null 17                     ; -2 | OSR = 0b101000010100000
+    mov osr isr                     ; -3 | OSR = 0b00000000000000000010100001010000
+    out null 18                     ; -2 | OSR = 0b10100001010000
     mov x null                      ; -1 | Clear out x from last sampling adventure.
 ; Grab a new bit every 24 cycles.
 ;   6 cycles: Get bit.
@@ -239,10 +239,7 @@ sample_hi:
 sample_wrap:
     jmp x-- sample_wrap_target side 0 ; 10+3n
     mov x, pins ; 17 | read pulses and demod bit into x
-    jmp !x initial_entry   ; 18 | bail into idle state if demod bit is 0 (also requires pulses to be 0 but hopefully that's ok)
-    ; Note: jumping to initial entry results in perpetual wait: well-formed preamble detector doesn't have DEMOD go high
-    ; until the next demod interval, and high power preamble detector doesn't have a valid GPIO at the regular demod pin
-    ; index.
+    wait 1 pin demod_in_pin_index ; 18 | bail into idle state if demod bit is 0
     jmp !osre sample_net_lo ; 19 | used to have no delay
 
 sample_net_hi:
@@ -258,13 +255,13 @@ sample_return:
     jmp end_of_1  ; 23 | End of 1
 
 public initial_entry:
-    wait 1 pin demod_in_pin_index side 0   ; -16 | Wait to enter DEMOD interval.
+    wait 1 pin demod_in_pin_index [6] side 0   ; -16 | Wait to enter DEMOD interval.
     ; Preamble ends LO, so imitate the end of a 1 with its HI->LO transition.
-    jmp initial_entry_cut_in [1]            ; -15:-14 | wait adjusted here
+    jmp initial_entry_cut_in [6]            ; -15:-14 | wait adjusted here
 
 public high_power_initial_entry:
-    wait 1 pin high_power_demod_in_pin_index side 0
-    jmp initial_entry_cut_in [1]
+    wait 1 pin high_power_demod_in_pin_index [6] side 0
+    jmp initial_entry_cut_in [6]
 
 start_of_1:
     wait 0 pin pulses_pin_index ; 0 | Wait for the 1->0 transition - at this point we are 0.5 into the bit.

@@ -46,10 +46,16 @@ bool PacketDecoder::UpdateDecoderLoop() {
         }
 
         Decoded1090Packet decoded_packet = Decoded1090Packet(raw_packet);
+        DebugMessage decode_debug_message = DebugMessage{
+            .message = "",
+            .log_level = SettingsManager::LogLevel::kInfo,
+        };
         if (decoded_packet.IsValid()) {
             decoded_1090_packet_out_queue.Push(decoded_packet);
+
+            strncpy(decode_debug_message.message, "[VALID     ] ", DebugMessage::kMessageMaxLen);
         } else if (config_.enable_1090_error_correction &&
-                   decoded_packet.GetBufferLenBits() == Decoded1090Packet::kExtendedSquitterPacketLenBits) {
+                   decoded_packet.GetBufferLenBits() == Raw1090Packet::kExtendedSquitterPacketLenBits) {
             // Checksum correction is enabled, and we have a packet worth correcting.
             Raw1090Packet* raw_packet_ptr = decoded_packet.GetRawPtr();
             uint16_t packet_len_bytes = raw_packet_ptr->buffer_len_bits / kBitsPerByte;
@@ -62,8 +68,25 @@ bool PacketDecoder::UpdateDecoderLoop() {
                 flip_bit(raw_packet_ptr->buffer, bit_flip_index);
                 decoded_1090_packet_bit_flip_locations_out_queue.Push(bit_flip_index);
                 decoded_1090_packet_out_queue.Push(Decoded1090Packet(*raw_packet_ptr));
-            }  // Else: Don't make any noise if we can't fix it.
+
+                strncpy(decode_debug_message.message, "[1FIXD     ] ", DebugMessage::kMessageMaxLen);
+            } else {
+                // Checksum correction failed.
+                strncpy(decode_debug_message.message, "[     NOFIX] ", DebugMessage::kMessageMaxLen);
+            }
+        } else {
+            // Invalid and not worth correcting.
+            strncpy(decode_debug_message.message, "[     INVLD] ", DebugMessage::kMessageMaxLen);
         }
+
+        // Append packet contents to debug message.
+        uint16_t message_len = strlen(decode_debug_message.message);
+        message_len +=
+            snprintf(decode_debug_message.message + message_len, DebugMessage::kMessageMaxLen - message_len,
+                     "df=%02d icao=0x%06x 0x", decoded_packet.GetDownlinkFormat(), decoded_packet.GetICAOAddress());
+        // Append a print of the packet contents.
+        raw_packet.PrintBuffer(decode_debug_message.message + message_len, DebugMessage::kMessageMaxLen - message_len);
+        debug_message_out_queue.Push(decode_debug_message);
     }
 
     return true;

@@ -128,7 +128,7 @@ class GDL90Reporter {
      * @param[in] aircraft Reference to Aircraft object to report.
      * @param[in] ownship Set to true if this message is an ownship report, false if it's a traffic report.
      */
-    uint16_t WriteGDL90TargetReportMessage(uint8_t *to_buf, const Aircraft &aircraft, bool ownship = false);
+    uint16_t WriteGDL90TargetReportMessage(uint8_t *to_buf, const Aircraft1090 &aircraft, bool ownship = false);
 
     // uint16_t AircraftToGDL90Frame(const Aircraft &aircraft) {}
 

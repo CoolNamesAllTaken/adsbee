@@ -25,6 +25,10 @@
 
 #include "comms.hh"  // For debug prints.
 
+#define MLAT_SYSTEM_CLOCK_RATIO 48 / 125
+// Scales 125MHz system clock into a 48MHz counter.
+static const uint32_t kMLATWrapCounterIncrement = (1 << 24) * MLAT_SYSTEM_CLOCK_RATIO;
+
 constexpr float kPreambleDetectorFreq = 48e6;    // Running at 48MHz (24 clock cycles per half bit).
 constexpr float kMessageDemodulatorFreq = 48e6;  // Run at 48 MHz to demodulate bits at 1Mbps.
 
@@ -55,7 +59,7 @@ void on_demod_complete() { isr_access->OnDemodComplete(); }
 ADSBee::ADSBee(ADSBeeConfig config_in) {
     config_ = config_in;
 
-    for (uint16_t sm_index = 0; sm_index < kNumDemodStateMachines; sm_index++) {
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         preamble_detector_sm_[sm_index] = pio_claim_unused_sm(config_.preamble_detector_pio, true);
         message_demodulator_sm_[sm_index] = pio_claim_unused_sm(config_.message_demodulator_pio, true);
     }
@@ -74,9 +78,14 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
 }
 
 bool ADSBee::Init() {
-    gpio_init(config_.status_led_pin);
-    gpio_set_dir(config_.status_led_pin, GPIO_OUT);
-    gpio_put(config_.status_led_pin, 0);
+    gpio_init(config_.r1090_led_pin);
+    gpio_set_dir(config_.r1090_led_pin, GPIO_OUT);
+    gpio_put(config_.r1090_led_pin, 0);
+
+    // Disable the 978MHz SPI bus output.
+    gpio_init(bsp.r978_cs_pin);
+    gpio_set_dir(bsp.r978_cs_pin, GPIO_OUT);
+    gpio_put(bsp.r978_cs_pin, 1);  // Disable is active LO.
 
     // Initialize the TL bias PWM output.
     gpio_set_function(config_.tl_pwm_pin, GPIO_FUNC_PWM);
@@ -104,7 +113,7 @@ bool ADSBee::Init() {
 
     // Enable the MLAT timer using the 24-bit SysTick timer connected to the 125MHz processor clock.
     // SysTick Control and Status Register
-    systick_hw->csr = 0b110;  // Source = External Reference Clock, TickInt = Enabled, Counter = Disabled.
+    systick_hw->csr = 0b110;  // Source = Processor Clock, TickInt = Enabled, Counter = Disabled.
     // SysTick Reload Value Register
     systick_hw->rvr = 0xFFFFFF;  // Use the full 24 bit span of the timer value register.
     // 0xFFFFFF = 16777215 counts @ 125MHz = approx. 0.134 seconds.
@@ -116,12 +125,12 @@ bool ADSBee::Init() {
     /** PREAMBLE DETECTOR PIO **/
     // Calculate the PIO clock divider.
     float preamble_detector_div = (float)clock_get_hz(clk_sys) / kPreambleDetectorFreq;
-    irq_wrapper_program_init(config_.preamble_detector_pio, kNumDemodStateMachines, irq_wrapper_offset_,
+    irq_wrapper_program_init(config_.preamble_detector_pio, bsp.r1090_num_demod_state_machines, irq_wrapper_offset_,
                              preamble_detector_div);
-    for (uint16_t sm_index = 0; sm_index < kNumDemodStateMachines; sm_index++) {
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         // Only make the state machine wait to start if it's part of the round-robin group of well formed preamble
         // detectors.
-        bool make_sm_wait = sm_index > 0 && sm_index < kHighPowerDemodStateMachineIndex;
+        bool make_sm_wait = sm_index > 0 && sm_index < bsp.r1090_high_power_demod_state_machine_index;
         // Initialize the program using the .pio file helper function
         preamble_detector_program_init(config_.preamble_detector_pio,                     // Use PIO block 0.
                                        preamble_detector_sm_[sm_index],                   // State machines 0-2
@@ -142,7 +151,7 @@ bool ADSBee::Init() {
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_isr, pio_null));
         // Fill start of preamble pattern with different bits if the state machine is intended to sense high power
         // preambles.
-        if (sm_index == kHighPowerDemodStateMachineIndex) {
+        if (sm_index == bsp.r1090_high_power_demod_state_machine_index) {
             // High power preamble.
             // set x 0b111  ; ISR = 0b00000000000000000000000000000000
             pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b111));
@@ -161,8 +170,9 @@ bool ADSBee::Init() {
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 4));
         // in x 3       ; ISR = 0b00000000000000000000001?10000101
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
-        // in null 5    ; ISR = 0b000000000000000001?1000010100000
-        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 5));
+        // in null 4    ; ISR = 0b0000000000000000001?100001010000
+        // Note: this is shorter than the real tail but we need extra time for the demodulator to start up.
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 4));
         // mov x null   ; Clear scratch x.
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_x, pio_null));
 
@@ -181,7 +191,7 @@ bool ADSBee::Init() {
 
     /** MESSAGE DEMODULATOR PIO **/
     float message_demodulator_div = (float)clock_get_hz(clk_sys) / kMessageDemodulatorFreq;
-    for (uint16_t sm_index = 0; sm_index < kNumDemodStateMachines; sm_index++) {
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         message_demodulator_program_init(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
                                          message_demodulator_offset_, config_.pulses_pins[sm_index],
                                          config_.demod_pins[sm_index], config_.recovered_clk_pins[sm_index],
@@ -201,7 +211,7 @@ bool ADSBee::Init() {
     pio_sm_set_enabled(config_.preamble_detector_pio, irq_wrapper_sm_, true);
     // Need to enable the demodulator SMs first, since if the preamble detector trips the IRQ but the demodulator isn't
     // enabled, we end up in a deadlock (I think, this maybe should be verified again).
-    for (uint16_t sm_index = 0; sm_index < kNumDemodStateMachines; sm_index++) {
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         // pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], true);
         pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], true);
     }
@@ -209,11 +219,12 @@ bool ADSBee::Init() {
     // NOTE: These need to be enable to allow the high power preamble detector to run, since they reset the IRQ that the
     // high power preamble detector relies on. This is a vestige of the fact that the high power preamble detector uses
     // the same PIO code that does round-robin for the well formed preamble detectors.
-    for (uint16_t sm_index = 0; sm_index < kHighPowerDemodStateMachineIndex; sm_index++) {
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_high_power_demod_state_machine_index; sm_index++) {
         pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], true);
     }
     // Enable high power preamble detector.
-    pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[kHighPowerDemodStateMachineIndex], true);
+    pio_sm_set_enabled(config_.preamble_detector_pio,
+                       preamble_detector_sm_[bsp.r1090_high_power_demod_state_machine_index], true);
 
     // Throw a fit if the watchdog caused a reboot.
     if (watchdog_caused_reboot()) {
@@ -232,7 +243,7 @@ bool ADSBee::Update() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
     // Turn off the demod LED if it's been on for long enough.
     if (timestamp_ms - led_on_timestamp_ms_ > kStatusLEDOnMs) {
-        gpio_put(config_.status_led_pin, 0);
+        gpio_put(config_.r1090_led_pin, 0);
     }
 
     // Prune aircraft dictionary. Need to do this up front so that we don't end up with a negative timestamp delta
@@ -257,7 +268,7 @@ bool ADSBee::Update() {
     // Raw1090Packet raw_packet;
     Decoded1090Packet decoded_packet;
     while (decoder.decoded_1090_packet_out_queue.Pop(decoded_packet) /*raw_1090_packet_queue.Pop(raw_packet)*/) {
-        // if (raw_packet.buffer_len_bits == Decoded1090Packet::kExtendedSquitterPacketLenBits) {
+        // if (raw_packet.buffer_len_bits == Raw1090Packet::kExtendedSquitterPacketLenBits) {
         //     CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%08x|%08x|%04x SRC=%d SIGS=%ddBm SIGQ=%ddB MLAT=%u",
         //                  raw_packet.buffer[0], raw_packet.buffer[1], raw_packet.buffer[2],
         //                  (raw_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_packet.source, raw_packet.sigs_dbm,
@@ -348,7 +359,8 @@ void ADSBee::FlashStatusLED(uint32_t led_on_ms) {
 uint64_t ADSBee::GetMLAT48MHzCounts(uint16_t num_bits) {
     // Combine the wrap counter with the current value of the SysTick register and mask to 48 bits.
     // Note: 24-bit SysTick value is subtracted from UINT_24_MAX to make it count up instead of down.
-    return (mlat_counter_1s_wraps_ << 24 | (0xFFFFFF - systick_hw->cvr)) & (UINT64_MAX >> (64 - num_bits));
+    return (mlat_counter_wraps_ + ((0xFFFFFF - systick_hw->cvr) * MLAT_SYSTEM_CLOCK_RATIO)) &
+           (UINT64_MAX >> (64 - num_bits));
 }
 
 uint64_t ADSBee::GetMLAT12MHzCounts(uint16_t num_bits) {
@@ -361,20 +373,22 @@ int ADSBee::GetNoiseFloordBm() { return AD8313MilliVoltsTodBm(noise_floor_mv_); 
 uint16_t ADSBee::GetTLLearningTemperatureMV() { return tl_learning_temperature_mv_; }
 
 void ADSBee::OnDemodBegin(uint gpio) {
+    // Read MLAT counter at the beginning to reduce jitter after interrupt.
+    uint64_t mlat_48mhz_64bit_counts = GetMLAT48MHzCounts();
     uint16_t sm_index;
-    for (sm_index = 0; sm_index < kNumDemodStateMachines; sm_index++) {
+    for (sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         if (config_.demod_pins[sm_index] == gpio) {
             break;
         }
     }
-    if (sm_index >= kNumDemodStateMachines) return;  // Ignore; wasn't the start of a demod interval for a known SM.
-    // Demodulation period is beginning!
-    // Store the MLAT counter.
-    rx_packet_[sm_index].mlat_48mhz_64bit_counts = GetMLAT48MHzCounts();  // TODO: have separate RX packets
+    if (sm_index >= bsp.r1090_num_demod_state_machines)
+        return;  // Ignore; wasn't the start of a demod interval for a known SM.
+    // Demodulation period is beginning! Store the MLAT counter.
+    rx_packet_[sm_index].mlat_48mhz_64bit_counts = mlat_48mhz_64bit_counts;
 }
 
 void ADSBee::OnDemodComplete() {
-    for (uint16_t sm_index = 0; sm_index < kNumDemodStateMachines; sm_index++) {
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         if (!pio_interrupt_get(config_.preamble_detector_pio, sm_index)) {
             continue;
         }
@@ -400,7 +414,7 @@ void ADSBee::OnDemodComplete() {
             // Only enable this print for debugging! Printing from the interrupt causes the USB library to crash.
             // CONSOLE_WARNING("ADSBee::OnDemodComplete", "Received a packet with %d 32-bit words, expected maximum of
             // %d.",
-            //                 packet_num_words, Decoded1090Packet::kExtendedSquitterPacketNumWords32);
+            //                 packet_num_words, Raw1090Packet::kExtendedSquitterPacketNumWords32);
             // pio_sm_clear_fifos(config_.message_demodulator_pio, message_demodulator_sm_);
             packet_num_words = Raw1090Packet::kMaxPacketLenWords32;
         }
@@ -411,21 +425,21 @@ void ADSBee::OnDemodComplete() {
             rx_packet_[sm_index].buffer[i] =
                 pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);
             if (i == packet_num_words - 1) {
-                // // Trim off extra ingested bit from last word in the packet.
-                // word  = word >> 1;
+                // Trim off extra ingested bit from last word in the packet.
+                rx_packet_[sm_index].buffer[i] >>= 1;
                 // Mask and left align final word based on bit length.
                 switch (packet_num_words) {
-                    case Decoded1090Packet::kSquitterPacketNumWords32:
+                    case Raw1090Packet::kSquitterPacketNumWords32:
                         aircraft_dictionary.Record1090RawSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFFFF) << 8;
-                        rx_packet_[sm_index].buffer_len_bits = Decoded1090Packet::kSquitterPacketLenBits;
+                        rx_packet_[sm_index].buffer_len_bits = Raw1090Packet::kSquitterPacketLenBits;
                         // raw_1090_packet_queue.Push(rx_packet_[sm_index]);
                         decoder.raw_1090_packet_in_queue.Push(rx_packet_[sm_index]);
                         break;
-                    case Decoded1090Packet::kExtendedSquitterPacketNumWords32:
+                    case Raw1090Packet::kExtendedSquitterPacketNumWords32:
                         aircraft_dictionary.Record1090RawExtendedSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFF) << 16;
-                        rx_packet_[sm_index].buffer_len_bits = Decoded1090Packet::kExtendedSquitterPacketLenBits;
+                        rx_packet_[sm_index].buffer_len_bits = Raw1090Packet::kExtendedSquitterPacketLenBits;
                         // raw_1090_packet_queue.Push(rx_packet_[sm_index]);
                         decoder.raw_1090_packet_in_queue.Push(rx_packet_[sm_index]);
                         break;
@@ -454,7 +468,7 @@ void ADSBee::OnDemodComplete() {
         // pin is different. This only matters for the initial program wait, subsequent demod checks are done on the
         // full GPIO input register.
         uint demodulator_program_start =
-            sm_index == kHighPowerDemodStateMachineIndex
+            sm_index == bsp.r1090_high_power_demod_state_machine_index
                 ? message_demodulator_offset_ + message_demodulator_offset_high_power_initial_entry
                 : message_demodulator_offset_ + message_demodulator_offset_initial_entry;
         pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
@@ -462,7 +476,7 @@ void ADSBee::OnDemodComplete() {
         pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], true);
 
         // Release the preamble detector from its wait state.
-        if (sm_index == kHighPowerDemodStateMachineIndex) {
+        if (sm_index == bsp.r1090_high_power_demod_state_machine_index) {
             // High power state machine operates alone and doesn't need to wait for any other SM to complete. It would
             // normally be enabled by one of the interleaved well formed preamble detector state machines refreshin, but
             // doing it here brings it up a little quicker and allows it to catch a subsequent high power packet if it
@@ -484,7 +498,7 @@ void ADSBee::OnDemodComplete() {
     }
 }
 
-void ADSBee::OnSysTickWrap() { mlat_counter_1s_wraps_++; }
+void ADSBee::OnSysTickWrap() { mlat_counter_wraps_ += kMLATWrapCounterIncrement; }
 
 int ADSBee::ReadSignalStrengthMilliVolts() {
     adc_select_input(config_.rssi_adc_input);

@@ -86,6 +86,7 @@ if (ON_EMBEDDED_DEVICE)
         adsbee.cc
         settings.cc
         eeprom.cc
+        flash_utils.cc
     )
 
     pico_set_linker_script(application ${APPLICATION_LINKER_SCRIPT})

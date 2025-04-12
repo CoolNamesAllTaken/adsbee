@@ -44,8 +44,8 @@ bool WebSocketServer::Update() {
         if (clients_[i].in_use && time_since_last_message_ms > config_.inactivity_timeout_ms) {
             // Client is in use and has timed out.
             int client_fd = clients_[i].client_fd;
-            CONSOLE_WARNING("ADSBeeServer::Update", "Network console client with fd %d timed out after %lu ms.",
-                            client_fd, time_since_last_message_ms);
+            CONSOLE_WARNING("ADSBeeServer::Update", "[%s] Network console client %d with fd %d timed out after %lu ms.",
+                            config_.label, i, client_fd, time_since_last_message_ms);
             RemoveClient(client_fd);
         }
     }
@@ -137,12 +137,14 @@ bool WebSocketServer::RemoveClient(int client_fd) {
     for (int i = 0; i < config_.num_clients_allowed; i++) {
         if (clients_[i].in_use && clients_[i].client_fd == client_fd) {
             clients_[i].in_use = false;
+            CONSOLE_INFO("WebSocketServer::RemoveClient", "[%s] Client %d with fd %d removed.", config_.label, i,
+                         client_fd);
             clients_[i].client_fd = -1;
-            CONSOLE_INFO("WebSocketServer::RemoveClient", "[%s] Client removed from index %d", config_.label, i);
             return true;
         }
     }
-    CONSOLE_ERROR("WebSocketServer::RemoveClient", "[%s] Client with fd %d not found.", config_.label, client_fd);
+    CONSOLE_WARNING("WebSocketServer::RemoveClient",
+                    "[%s] Client with fd %d not found; it may have already been removed.", config_.label, client_fd);
     return false;
 }
 
@@ -151,8 +153,9 @@ void WebSocketServer::BroadcastMessage(const char *message, int16_t len_bytes) {
         if (clients_[i].in_use) {
             esp_err_t ret = SendMessage(clients_[i].client_fd, message, len_bytes);
             if (ret != ESP_OK) {
-                CONSOLE_ERROR("WebSocketServer::BroadcastMessage", "[%s] Failed to send message to client %d: %d",
-                              config_.label, i, ret);
+                CONSOLE_ERROR("WebSocketServer::BroadcastMessage",
+                              "[%s] Failed to send message to client %d due to error %s.", config_.label, i,
+                              esp_err_to_name(ret));
                 // If send failed, assume client disconnected
                 RemoveClient(clients_[i].client_fd);
             }

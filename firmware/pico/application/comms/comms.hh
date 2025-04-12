@@ -71,6 +71,7 @@ class CommsManager {
     CPP_AT_CALLBACK(ATSettingsCallback);
     CPP_AT_CALLBACK(ATTLReadCallback);
     CPP_AT_CALLBACK(ATTLSetCallback);
+    CPP_AT_CALLBACK(ATUptimeCallback);
     CPP_AT_CALLBACK(ATWatchdogCallback);
     CPP_AT_CALLBACK(ATWiFiAPCallback);
     CPP_AT_CALLBACK(ATWiFiSTACallback);
@@ -197,7 +198,7 @@ class CommsManager {
     bool InitReporting();
     bool UpdateReporting();
 
-    bool ReportRaw(SettingsManager::SerialInterface iface, const Decoded1090Packet packets_to_report[],
+    bool ReportRaw(SettingsManager::SerialInterface iface, const Decoded1090Packet packets_to_report_1090[],
                    uint16_t num_packets_to_report);
 
     /**
@@ -209,7 +210,7 @@ class CommsManager {
      * @param[in] num_packets_to_report Number of packets to report from the packets_to_report array.
      * @retval True if successful, false if something broke.
      */
-    bool ReportBeast(SettingsManager::SerialInterface iface, const Decoded1090Packet packets_to_report[],
+    bool ReportBeast(SettingsManager::SerialInterface iface, const Decoded1090Packet packets_to_report_1090[],
                      uint16_t num_packets_to_report);
 
     /**

@@ -5,10 +5,13 @@
 
 #include "adsbee.hh"
 #include "comms.hh"
+#include "core1.hh"  // For turning multiprocessor on / off during firmware flashing.
 #include "eeprom.hh"
 #include "esp32_flasher.hh"
 #include "firmware_update.hh"
+#include "flash_utils.hh"
 #include "main.hh"
+#include "pico/multicore.h"
 #include "pico/stdlib.h"  // for getchar etc
 #include "settings.hh"
 #include "spi_coprocessor.hh"  // For init / de-init before and after flashing ESP32.
@@ -125,8 +128,17 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
             device_info.part_code[SettingsManager::DeviceInfo::kPartCodeLen] =
                 '\0';  // Use caution in case part code is invalid.
             CPP_AT_PRINTF("Part Code: %s\r\n", device_info.part_code);
-            CPP_AT_PRINTF("RP2040 Firmware Version: %d.%d.%d\r\n", object_dictionary.kFirmwareVersionMajor,
-                          object_dictionary.kFirmwareVersionMinor, object_dictionary.kFirmwareVersionPatch);
+            if (object_dictionary.kFirmwareVersionReleaseCandidate == 0) {
+                // Indicates a finalized release; no need to print release candidate number.
+                CPP_AT_PRINTF("RP2040 Firmware Version: %d.%d.%d\r\n", object_dictionary.kFirmwareVersionMajor,
+                              object_dictionary.kFirmwareVersionMinor, object_dictionary.kFirmwareVersionPatch);
+            } else {
+                // Print release candidate number.
+                CPP_AT_PRINTF("RP2040 Firmware Version: %d.%d.%d-rc%d\r\n", object_dictionary.kFirmwareVersionMajor,
+                              object_dictionary.kFirmwareVersionMinor, object_dictionary.kFirmwareVersionPatch,
+                              object_dictionary.kFirmwareVersionReleaseCandidate);
+            }
+
             for (uint16_t i = 0; i < SettingsManager::DeviceInfo::kNumOTAKeys; i++) {
                 CPP_AT_PRINTF("OTA Key %d: %s\r\n", i, device_info.ota_keys[i]);
             }
@@ -137,8 +149,19 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
                 if (!esp32.Read(ObjectDictionary::kAddrFirmwareVersion, esp32_firmware_version)) {
                     CPP_AT_ERROR("ESP32 firmware version read failed!");
                 }
-                CPP_AT_PRINTF("ESP32 Firmware Version: %d.%d.%d\r\n", esp32_firmware_version >> 16,
-                              (esp32_firmware_version >> 8) & 0xFF, esp32_firmware_version & 0xFF);
+                uint8_t esp32_fwv_major = (esp32_firmware_version >> 24) & 0xFF;
+                uint8_t esp32_fwv_minor = (esp32_firmware_version >> 16) & 0xFF;
+                uint8_t esp32_fwv_patch = (esp32_firmware_version >> 8) & 0xFF;
+                uint8_t esp32_fwv_rc = esp32_firmware_version & 0xFF;
+                if (esp32_fwv_rc == 0) {
+                    // Finalized release version. No need to print release candidate number.
+                    CPP_AT_PRINTF("ESP32 Firmware Version: %d.%d.%d\r\n", esp32_fwv_major, esp32_fwv_minor,
+                                  esp32_fwv_patch);
+                } else {
+                    // Print with release candidiate number.
+                    CPP_AT_PRINTF("ESP32 Firmware Version: %d.%d.%d-rc%d\r\n", esp32_fwv_major, esp32_fwv_minor,
+                                  esp32_fwv_patch, esp32_fwv_rc);
+                }
 
                 ObjectDictionary::ESP32DeviceInfo esp32_device_info;
                 if (!esp32.Read(ObjectDictionary::kAddrDeviceInfo, esp32_device_info, sizeof(esp32_device_info))) {
@@ -336,9 +359,13 @@ CPP_AT_CALLBACK(CommsManager::ATFlashESP32Callback) {
     if (!esp32.DeInit()) {
         CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while de-initializing ESP32 before flashing.");
     }
+    // Manually stop and start core 1 and watchdog instead of using FlashSafe() and FlashUnsafe() since we aren't
+    // actually writing to RP2040 flash memory and we want printouts to work over the USB console.
+    StopCore1();
     adsbee.DisableWatchdog();
     bool flashed_successfully = esp32_flasher.FlashESP32();
     adsbee.EnableWatchdog();
+    StartCore1();
     if (!flashed_successfully) {
         CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while flashing ESP32.");
     }
@@ -409,10 +436,10 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         CPP_AT_TRY_ARG2NUM_BASE(2, len_bytes, 10);
                         CPP_AT_PRINTF("Erasing %u Bytes at offset 0x%x in partition %u.\r\n", len_bytes, offset,
                                       complementary_partition);
-                        adsbee.DisableWatchdog();  // Flash erase can take a while, prevent watchdog from rebooting us.
+                        FlashUtils::FlashSafe();
                         bool flash_erase_succeeded =
                             FirmwareUpdateManager::EraseFlashParition(complementary_partition, offset, len_bytes);
-                        adsbee.EnableWatchdog();
+                        FlashUtils::FlashUnsafe();
                         if (!flash_erase_succeeded) {
                             CPP_AT_ERROR("Failed partial erase of complementary flash partition.");
                         }
@@ -420,10 +447,9 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     } else {
                         // Performing a full partition erase with AT+OTA=ERASE.
                         CPP_AT_PRINTF("Erasing partition %d.\r\n", complementary_partition);
-                        // Flash erase can take a while, prevent watchdog from rebooting us during erase!
-                        adsbee.DisableWatchdog();
+                        FlashUtils::FlashSafe();
                         bool flash_erase_succeeded = FirmwareUpdateManager::EraseFlashParition(complementary_partition);
-                        adsbee.EnableWatchdog();
+                        FlashUtils::FlashUnsafe();
                         if (!flash_erase_succeeded) {
                             CPP_AT_ERROR("Failed full erase of complementary flash partition.");
                         }
@@ -503,11 +529,10 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     }
                     CPP_AT_PRINTF("Writing %u Bytes to partition %u at offset 0x%x.\r\n", len_bytes,
                                   complementary_partition, offset);
-                    adsbee.DisableWatchdog();  // Flash write can take a while, prevent watchdog from rebooting us
-                    // during write!
+                    FlashUtils::FlashSafe();
                     bool flash_write_succeeded = FirmwareUpdateManager::PartialWriteFlashPartition(
                         complementary_partition, offset, len_bytes, buf);
-                    adsbee.EnableWatchdog();
+                    FlashUtils::FlashUnsafe();
                     if (!flash_write_succeeded) {
                         adsbee.SetReceiverEnable(receiver_was_enabled);  // Re-enable receiver before exit.
                         CPP_AT_ERROR("Partial %u Byte write failed in partition %u at offset 0x%x.", len_bytes,
@@ -537,7 +562,10 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         FirmwareUpdateManager::flash_partition_headers[complementary_partition]->status,
                         FirmwareUpdateManager::flash_partition_headers[complementary_partition]->app_crc);
                     // Modify the partition header.
-                    if (FirmwareUpdateManager::VerifyFlashPartition(complementary_partition, true)) {
+                    FlashUtils::FlashSafe();
+                    bool ret = FirmwareUpdateManager::VerifyFlashPartition(complementary_partition, true);
+                    FlashUtils::FlashUnsafe();
+                    if (ret) {
                         CPP_AT_SUCCESS();
                     } else {
                         CPP_AT_ERROR("Partition %u failed verification.", complementary_partition);
@@ -545,9 +573,9 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                 } else if (args[0].compare("BOOT") == 0) {
                     // Boot the complementary flash partition.
                     CPP_AT_PRINTF("Booting partition %u...", complementary_partition);
-                    adsbee.DisableWatchdog();
+                    FlashUtils::FlashSafe();
                     FirmwareUpdateManager::BootPartition(complementary_partition);
-                    adsbee.EnableWatchdog();
+                    FlashUtils::FlashUnsafe();
                     CPP_AT_ERROR("Failed to boot partition %u.", complementary_partition);
                 }
             }
@@ -805,6 +833,17 @@ CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATUptimeCallback) {
+    switch (op) {
+        case '?':
+            // Query uptime.
+            CPP_AT_CMD_PRINTF("=%u", get_time_since_boot_ms() / kMsPerSec);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATWatchdogCallback) {
     switch (op) {
         case '?': {
@@ -1039,6 +1078,11 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string_buf = "Set minimum trigger level threshold for RF power detector.\r\n\tAT+TLSet=<tl_mv>"
                         "\tQuery trigger level.\r\n\tAT+TL_SET?\r\n\t+TLSet=<tl_mv>.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLSetCallback, comms_manager)},
+    {.command_buf = "+UPTIME",
+     .min_args = 0,
+     .max_args = 0,
+     .help_string_buf = "Get the uptime of the ADSBee 1090 in seconds.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATUptimeCallback, comms_manager)},
     {.command_buf = "+WATCHDOG",
      .min_args = 0,
      .max_args = 1,
@@ -1063,7 +1107,7 @@ const CppAT::ATCommandDef_t at_command_list[] = {
 const uint16_t at_command_list_num_commands = sizeof(at_command_list) / sizeof(at_command_list[0]);
 
 bool CommsManager::UpdateAT() {
-    static char stdio_at_command_buf[kATCommandBufMaxLen];
+    static char stdio_at_command_buf[kATCommandBufMaxLen + 1];
     static uint16_t stdio_at_command_buf_len = 0;
     // Check for new AT commands from STDIO. Process up to one line per loop.
     char c = static_cast<char>(getchar_timeout_us(0));
@@ -1071,6 +1115,11 @@ bool CommsManager::UpdateAT() {
         stdio_at_command_buf[stdio_at_command_buf_len] = c;
         stdio_at_command_buf_len++;
         stdio_at_command_buf[stdio_at_command_buf_len] = '\0';
+        if (stdio_at_command_buf_len >= kATCommandBufMaxLen) {
+            CONSOLE_ERROR("CommsManager::UpdateAT", "AT command buffer overflow.");
+            stdio_at_command_buf_len = 0;
+            stdio_at_command_buf[stdio_at_command_buf_len] = '\0';  // clear command buffer
+        }
         if (c == '\n') {
             at_parser_.ParseMessage(std::string_view(stdio_at_command_buf));
             stdio_at_command_buf_len = 0;
@@ -1081,12 +1130,17 @@ bool CommsManager::UpdateAT() {
 
     if (esp32.IsEnabled()) {
         // Receive incoming network console characters.
-        static char esp32_console_rx_buf[kATCommandBufMaxLen];
+        static char esp32_console_rx_buf[kATCommandBufMaxLen + 1];
         static uint16_t esp32_console_rx_buf_len = 0;
         while (esp32_console_rx_queue.Pop(c)) {
             esp32_console_rx_buf[esp32_console_rx_buf_len] = c;
             esp32_console_rx_buf_len++;
             esp32_console_rx_buf[esp32_console_rx_buf_len] = '\0';
+            if (esp32_console_rx_buf_len >= kATCommandBufMaxLen) {
+                CONSOLE_ERROR("CommsManager::UpdateAT", "Network console buffer overflow.");
+                esp32_console_rx_buf_len = 0;
+                esp32_console_rx_buf[esp32_console_rx_buf_len] = '\0';  // clear command buffer
+            }
             if (c == '\n') {
                 CONSOLE_INFO("CommsManager::UpdateAT", "Received network console message: %s\r\n",
                              esp32_console_rx_buf);

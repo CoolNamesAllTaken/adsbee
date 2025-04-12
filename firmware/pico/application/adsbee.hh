@@ -2,6 +2,7 @@
 #define _ADS_BEE_HH_
 
 #include "aircraft_dictionary.hh"
+#include "bsp.hh"
 #include "cpp_at.hh"
 #include "data_structures.hh"  // For PFBQueue.
 #include "hardware/i2c.h"
@@ -21,8 +22,6 @@ class ADSBee {
     static constexpr uint16_t kMaxNumTransponderPackets =
         100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
     static constexpr uint32_t kStatusLEDOnMs = 10;
-    static constexpr uint16_t kNumDemodStateMachines = 3;  // 2x well-formed preamble, 1x high power preamble
-    static constexpr uint16_t kHighPowerDemodStateMachineIndex = 2;
 
     static constexpr uint32_t kTLLearningIntervalMs =
         10000;  // [ms] Length of Simulated Annealing interval for learning trigger level.
@@ -44,32 +43,29 @@ class ADSBee {
         PIO message_demodulator_pio = pio1;
         uint preamble_detector_demod_complete_irq = PIO0_IRQ_0;
 
-        uint16_t status_led_pin = 15;
+        uint16_t r1090_led_pin = 15;
         // Reading ADS-B on GPIO19. Will look for DEMOD signal on GPIO20.
-        uint16_t pulses_pins[kNumDemodStateMachines] = {19, 22, 19};
-        uint16_t demod_pins[kNumDemodStateMachines] = {20, 23, 29};
+        uint16_t* pulses_pins = bsp.r1090_pulses_pins;
+        uint16_t* demod_pins = bsp.r1090_demod_pins;
         // Use GPIO22 for the decode PIO program to output its recovered clock (for debugging only).
-        uint16_t recovered_clk_pins[kNumDemodStateMachines] = {
-            21, 24, 26};  // Set RECOVERED_CLK to fake pin for high power preamble detector. Will be overridden by
-                          // higher priority (lower index) SM.
+        uint16_t* recovered_clk_pins =
+            bsp.r1090_recovered_clk_pins;  // Set RECOVERED_CLK to fake pin for high power preamble detector. Will be
+                                           // overridden by higher priority (lower index) SM.
         // GPIO 24-25 used as PWM outputs for setting analog comparator threshold voltages.
-        uint16_t tl_pwm_pin = 25;
+        uint16_t tl_pwm_pin = bsp.r1090_tl_pwm_pin;
         // GPIO 26-27 used as ADC inputs for reading analog comparator threshold voltages after RF filer.
-        uint16_t tl_adc_pin = 27;
-        uint16_t tl_adc_input = 1;
+        uint16_t tl_adc_pin = bsp.r1090_tl_adc_pin;
+        uint16_t tl_adc_input = bsp.r1090_tl_adc_input;
         // GPIO 28 used as ADC input for the power level of the last decoded packet.
-        uint16_t rssi_adc_pin = 28;
-        uint16_t rssi_adc_input = 2;
+        uint16_t rssi_adc_pin = bsp.r1090_rssi_adc_pin;
+        uint16_t rssi_adc_input = bsp.r1090_rssi_adc_input;
         // GPIO 2-3 are used for the EEPROM and rx gain digipot I2C bus via I2C1.
-        i2c_inst_t* onboard_i2c = i2c1;
-        uint16_t onboard_i2c_sda_pin = 2;
-        uint16_t onboard_i2c_scl_pin = 3;
-        uint32_t onboard_i2c_clk_freq_hz = 400e3;  // 400kHz
+        i2c_inst_t* onboard_i2c = bsp.onboard_i2c;
+        uint16_t onboard_i2c_sda_pin = bsp.onboard_i2c_sda_pin;
+        uint16_t onboard_i2c_scl_pin = bsp.onboard_i2c_scl_pin;
+        uint32_t onboard_i2c_clk_freq_hz = bsp.onboard_i2c_clk_freq_hz;  // 400kHz
         bool onboard_i2c_requires_init =
-            false;  // In case I2c is shared with something else that already initializes it.
-
-        uint16_t uart_tx_pin = 4;
-        uint16_t uart_rx_pin = 5;
+            bsp.onboard_i2c_requires_init;  // In case I2c is shared with something else that already initializes it.
 
         uint16_t bias_tee_enable_pin = 18;
 
@@ -127,7 +123,7 @@ class ADSBee {
      * @param[in] num_bits Number of bits to mask the counter value to. Defaults to full resolution.
      * @retval 48MHz counter value.
      */
-    inline uint64_t GetMLAT48MHzCounts(uint16_t num_bits = 64);
+    uint64_t GetMLAT48MHzCounts(uint16_t num_bits = 64);
 
     /**
      * Creates a composite timestamp using the current value of the SysTick timer (running at 125MHz) and the SysTick
@@ -137,7 +133,7 @@ class ADSBee {
      * Beast protocol.
      * @retval 48MHz counter value.
      */
-    inline uint64_t GetMLAT12MHzCounts(uint16_t num_bits = 48);
+    uint64_t GetMLAT12MHzCounts(uint16_t num_bits = 48);
 
     /**
      * Returns the power level of the noise floor (signal strength sampled mostly during non-decode intervals and then
@@ -235,7 +231,7 @@ class ADSBee {
      * Sets the status LED to a given state. Does not record timestamps for turning off the LED.
      * @param[in] on True to turn on the LED, false to turn it off.
      */
-    inline void SetStatusLED(bool on) { gpio_put(config_.status_led_pin, on ? 1 : 0); }
+    inline void SetStatusLED(bool on) { gpio_put(config_.r1090_led_pin, on ? 1 : 0); }
 
     /**
      * Set the Minimum Trigger Level (TL) at the AD8314 output in milliVolts.
@@ -292,12 +288,12 @@ class ADSBee {
     CppAT parser_;
 
     uint32_t irq_wrapper_sm_ = 0;
-    uint32_t preamble_detector_sm_[kNumDemodStateMachines];
+    uint32_t preamble_detector_sm_[BSP::kMaxNumDemodStateMachines];
     uint32_t preamble_detector_offset_ = 0;
 
     uint32_t irq_wrapper_offset_ = 0;
 
-    uint32_t message_demodulator_sm_[kNumDemodStateMachines];
+    uint32_t message_demodulator_sm_[BSP::kMaxNumDemodStateMachines];
     uint32_t message_demodulator_offset_ = 0;
 
     uint32_t led_on_timestamp_ms_ = 0;
@@ -319,9 +315,9 @@ class ADSBee {
     int16_t tl_learning_prev_num_valid_packets_ = 1;  // Set to 1 to avoid dividing by 0.
     uint16_t tl_learning_prev_tl_mv_ = tl_mv_;
 
-    uint32_t mlat_counter_1s_wraps_ = 0;
+    uint64_t mlat_counter_wraps_ = 0;
 
-    Raw1090Packet rx_packet_[kNumDemodStateMachines];
+    Raw1090Packet rx_packet_[BSP::kMaxNumDemodStateMachines];
     Raw1090Packet raw_1090_packet_queue_buffer_[kMaxNumTransponderPackets];
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
