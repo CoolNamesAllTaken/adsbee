@@ -42,7 +42,7 @@ def append_table_to_file(filename, table_name, element_type, elements):
         raise Exception(f"Unrecognized type. \"{element_type}\" is not in f{ALLOWED_ELEMENT_TYPES}.")
 
     with open(filename, "a") as f:
-        f.write(f"static const {element_type} {table_name}[{len(elements)}] =" + "{\n")
+        f.write(f"static const {element_type} {table_name}[{len(elements)}] = " + "{\n")
 
         # Split the table into chunks of appropriate size to stay within CHARS_PER_LINE chars per line
         chunks = []
@@ -53,7 +53,7 @@ def append_table_to_file(filename, table_name, element_type, elements):
             
             item = ""
             if element_type == "uint32_t":
-                item = f"0x{value:06X}"
+                item = f"0x{value:08X}"
             else:
                 item = f"{value:f}f"
 
