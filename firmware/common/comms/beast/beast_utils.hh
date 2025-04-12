@@ -1,6 +1,8 @@
 #ifndef BEAST_UTILS_HH_
 #define BEAST_UTILS_HH_
 
+#include "beast_tables.hh"
+#include "macros.hh"
 #include "math.h"
 #include "stdio.h"
 #include "string.h"
@@ -138,9 +140,11 @@ uint16_t Build1090BeastFrame(const Decoded1090Packet &packet, uint8_t *beast_fra
     }
     bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, mlat_12mhz_counter_buf, 6);
 
-    // Write RSSI Byte. 255 = 0dBm, 0 = -96dBm.
-    uint8_t rssi_byte_dbm = static_cast<uint8_t>(255 * pow(10.0f, 0.05f * (packet.GetRSSIdBm() / 2)));
-    bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, &rssi_byte_dbm, 1);
+    // Use lookup table to convert RSSI from dBm to Beast power level (sqrt of un-logged dBFS, mutliplied by 255).
+    uint16_t rssi_lut_index =
+        MIN(MAX(packet.GetRSSIdBm() - kMinRSSIdBm, 0), static_cast<int>(sizeof(kRSSIdBmToRSSIdBFS) - 1));
+    uint8_t rssi_byte = static_cast<uint8_t>(kRSSIdBmToRSSIdBFS[rssi_lut_index]);
+    bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, &rssi_byte, 1);
 
     // Write packet buffer with escape characters.
     bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, packet_buf, data_num_bytes);

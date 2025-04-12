@@ -6,4 +6,5 @@
         "board/esp32s3-builtin.cfg"
     ],
     "idf.flashType": "JTAG",
+    "idf.pythonInstallPath": "/usr/bin/python3",
 }

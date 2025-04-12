@@ -14,6 +14,7 @@ class ObjectDictionary {
     static const uint8_t kFirmwareVersionMajor;
     static const uint8_t kFirmwareVersionMinor;
     static const uint8_t kFirmwareVersionPatch;
+    static const uint8_t kFirmwareVersionReleaseCandidate;
     static const uint32_t kFirmwareVersion;
 
     static constexpr uint16_t kMACAddrLenBytes = 6;

@@ -1,7 +1,7 @@
 #pragma once
 
 /**
- * Utilities ripped from the NASA CPR verification code in otder to allow conversion from floating point representation
+ * Utilities ripped from the NASA CPR verification code in order to allow conversion from floating point representation
  * of postiions to Alternative Weighted Binary, the fixed point representation used by the CPR decoder library.
  */
 

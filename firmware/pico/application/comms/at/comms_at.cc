@@ -128,8 +128,17 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
             device_info.part_code[SettingsManager::DeviceInfo::kPartCodeLen] =
                 '\0';  // Use caution in case part code is invalid.
             CPP_AT_PRINTF("Part Code: %s\r\n", device_info.part_code);
-            CPP_AT_PRINTF("RP2040 Firmware Version: %d.%d.%d\r\n", object_dictionary.kFirmwareVersionMajor,
-                          object_dictionary.kFirmwareVersionMinor, object_dictionary.kFirmwareVersionPatch);
+            if (object_dictionary.kFirmwareVersionReleaseCandidate == 0) {
+                // Indicates a finalized release; no need to print release candidate number.
+                CPP_AT_PRINTF("RP2040 Firmware Version: %d.%d.%d\r\n", object_dictionary.kFirmwareVersionMajor,
+                              object_dictionary.kFirmwareVersionMinor, object_dictionary.kFirmwareVersionPatch);
+            } else {
+                // Print release candidate number.
+                CPP_AT_PRINTF("RP2040 Firmware Version: %d.%d.%d-rc%d\r\n", object_dictionary.kFirmwareVersionMajor,
+                              object_dictionary.kFirmwareVersionMinor, object_dictionary.kFirmwareVersionPatch,
+                              object_dictionary.kFirmwareVersionReleaseCandidate);
+            }
+
             for (uint16_t i = 0; i < SettingsManager::DeviceInfo::kNumOTAKeys; i++) {
                 CPP_AT_PRINTF("OTA Key %d: %s\r\n", i, device_info.ota_keys[i]);
             }
@@ -140,8 +149,19 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
                 if (!esp32.Read(ObjectDictionary::kAddrFirmwareVersion, esp32_firmware_version)) {
                     CPP_AT_ERROR("ESP32 firmware version read failed!");
                 }
-                CPP_AT_PRINTF("ESP32 Firmware Version: %d.%d.%d\r\n", esp32_firmware_version >> 16,
-                              (esp32_firmware_version >> 8) & 0xFF, esp32_firmware_version & 0xFF);
+                uint8_t esp32_fwv_major = (esp32_firmware_version >> 24) & 0xFF;
+                uint8_t esp32_fwv_minor = (esp32_firmware_version >> 16) & 0xFF;
+                uint8_t esp32_fwv_patch = (esp32_firmware_version >> 8) & 0xFF;
+                uint8_t esp32_fwv_rc = esp32_firmware_version & 0xFF;
+                if (esp32_fwv_rc == 0) {
+                    // Finalized release version. No need to print release candidate number.
+                    CPP_AT_PRINTF("ESP32 Firmware Version: %d.%d.%d\r\n", esp32_fwv_major, esp32_fwv_minor,
+                                  esp32_fwv_patch);
+                } else {
+                    // Print with release candidiate number.
+                    CPP_AT_PRINTF("ESP32 Firmware Version: %d.%d.%d-rc%d\r\n", esp32_fwv_major, esp32_fwv_minor,
+                                  esp32_fwv_patch, esp32_fwv_rc);
+                }
 
                 ObjectDictionary::ESP32DeviceInfo esp32_device_info;
                 if (!esp32.Read(ObjectDictionary::kAddrDeviceInfo, esp32_device_info, sizeof(esp32_device_info))) {
@@ -339,9 +359,13 @@ CPP_AT_CALLBACK(CommsManager::ATFlashESP32Callback) {
     if (!esp32.DeInit()) {
         CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while de-initializing ESP32 before flashing.");
     }
-    FlashUtils::FlashSafe();
+    // Manually stop and start core 1 and watchdog instead of using FlashSafe() and FlashUnsafe() since we aren't
+    // actually writing to RP2040 flash memory and we want printouts to work over the USB console.
+    StopCore1();
+    adsbee.DisableWatchdog();
     bool flashed_successfully = esp32_flasher.FlashESP32();
-    FlashUtils::FlashUnsafe();
+    adsbee.EnableWatchdog();
+    StartCore1();
     if (!flashed_successfully) {
         CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while flashing ESP32.");
     }

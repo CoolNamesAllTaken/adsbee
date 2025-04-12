@@ -12,6 +12,7 @@ idf_component_register(
         "../../common/coprocessor"
         "../../common/utils"
         "../../common/utils/crc"
+        "../../common/utils/geo"
         "../../common/comms/gdl90"
         "../../common/comms/json"
         "../../common/settings"
@@ -26,6 +27,7 @@ idf_component_register(
         "../../common/coprocessor"
         "../../common/utils"
         "../../common/utils/crc"
+        "../../common/utils/geo"
         "../../common/settings"
         "target_test"
     EMBED_TXTFILES

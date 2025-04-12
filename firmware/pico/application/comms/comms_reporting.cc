@@ -4,7 +4,8 @@
 #include "csbee_utils.hh"
 #include "gdl90_utils.hh"
 #include "hal.hh"  // For timestamping.
-#include "mavlink/mavlink.h"
+#include "mavlink_utils.hh"
+#include "raw_utils.hh"
 #include "spi_coprocessor.hh"
 #include "unit_conversions.hh"
 
@@ -98,16 +99,22 @@ bool CommsManager::UpdateReporting() {
     return ret;
 }
 
-bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface, const Decoded1090Packet packets_to_report[],
+bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface, const Decoded1090Packet packets_to_report_1090[],
                              uint16_t num_packets_to_report) {
+    for (uint16_t i = 0; i < num_packets_to_report; i++) {
+        char raw_frame_buf[kRaw1090FrameMaxNumChars];
+        uint16_t num_bytes_in_frame = BuildRaw1090Frame(packets_to_report_1090[i].GetRaw(), raw_frame_buf);
+        SendBuf(iface, (char *)raw_frame_buf, num_bytes_in_frame);
+        comms_manager.iface_puts(iface, (char *)"\r\n");  // Send delimiter.
+    }
     return true;
 }
 
-bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface, const Decoded1090Packet packets_to_report[],
+bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface, const Decoded1090Packet packets_to_report_1090[],
                                uint16_t num_packets_to_report) {
     for (uint16_t i = 0; i < num_packets_to_report; i++) {
         uint8_t beast_frame_buf[kBeastFrameMaxLenBytes];
-        uint16_t num_bytes_in_frame = Build1090BeastFrame(packets_to_report[i], beast_frame_buf);
+        uint16_t num_bytes_in_frame = Build1090BeastFrame(packets_to_report_1090[i], beast_frame_buf);
         comms_manager.iface_putc(iface, char(0x1a));  // Send beast escape char to denote beginning of frame.
         SendBuf(iface, (char *)beast_frame_buf, num_bytes_in_frame);
     }
@@ -117,7 +124,7 @@ bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface, const Dec
 bool CommsManager::ReportCSBee(SettingsManager::SerialInterface iface) {
     // Write out a CSBee Aircraft message for each aircraft in the aircraft dictionary.
     for (auto &itr : adsbee.aircraft_dictionary.dict) {
-        const Aircraft &aircraft = itr.second;
+        const Aircraft1090 &aircraft = itr.second;
 
         char message[kCSBeeMessageStrMaxLen];
         int16_t message_len_bytes = WriteCSBeeAircraftMessageStr(message, aircraft);
@@ -151,64 +158,13 @@ bool CommsManager::ReportCSBee(SettingsManager::SerialInterface iface) {
     return true;
 }
 
-uint8_t AircraftCategoryToMAVLINKEmitterType(Aircraft::Category category) {
-    switch (category) {
-        case Aircraft::Category::kCategoryInvalid:
-            CONSOLE_WARNING("comms_reporting.cc::AircraftCategoryToMAVLINKEmitterType",
-                            "Encountered airframe type kCategoryInvalid.");
-            return UINT8_MAX;
-        case Aircraft::Category::kCategoryNoCategoryInfo:
-            return 0;  // ADSB_EMITTER_TYPE_NO_INFO
-        case Aircraft::Category::kCategoryLight:
-            return 1;  // ADSB_EMITTER_TYPE_LIGHT
-        case Aircraft::Category::kCategoryMedium1:
-            return 2;  // ADSB_EMITTER_TYPE_SMALL
-        case Aircraft::Category::kCategoryMedium2:
-            return 3;  // ADSB_EMITTER_TYPE_LARGE
-        case Aircraft::Category::kCategoryHighVortexAircraft:
-            return 4;  // ADSB_EMITTER_TYPE_HIGH_VORTEX_LARGE
-        case Aircraft::Category::kCategoryHeavy:
-            return 5;  // ADSB_EMITTER_TYPE_HEAVY
-        case Aircraft::Category::kCategoryHighPerformance:
-            return 6;  // ADSB_EMITTER_TYPE_HIGHLY_MANUV
-        case Aircraft::Category::kCategoryRotorcraft:
-            return 7;  // ADSB_EMITTER_TYPE_ROTORCRAFT
-        case Aircraft::Category::kCategoryReserved:
-            return 8;  // ADSB_EMITTER_TYPE_UNASSIGNED
-        case Aircraft::Category::kCategoryGliderSailplane:
-            return 9;  // ADSB_EMITTER_TYPE_GLIDER
-        case Aircraft::Category::kCategoryLighterThanAir:
-            return 10;  // ADSB_EMITTER_TYPE_LIGHTER_AIR
-        case Aircraft::Category::kCategoryParachutistSkydiver:
-            return 11;  // ADSB_EMITTER_TYPE_PARACHUTE
-        case Aircraft::Category::kCategoryUltralightHangGliderParaglider:
-            return 12;  // ADSB_EMITTER_TYPE_ULTRA_LIGHT
-        // NOTE: no case for 13 = ADSB_EMITTER_TYPE_UNASSIGNED2
-        case Aircraft::Category::kCategoryUnmannedAerialVehicle:
-            return 14;  // ADSB_EMITTER_TYPE_UAV
-        case Aircraft::Category::kCategorySpaceTransatmosphericVehicle:
-            return 15;  // ADSB_EMITTER_TYPE_SPACE
-        // NOTE: no case for 16 = ADSB_EMITTER_TYPE_UNASSIGNED3
-        case Aircraft::Category::kCategorySurfaceEmergencyVehicle:
-            return 17;  // ADSB_EMITTER_TYPE_EMERGENCY_SURFACE
-        case Aircraft::Category::kCategorySurfaceServiceVehicle:
-            return 18;  // ADSB_EMITTER_TYPE_SERVICE_SURFACE
-        case Aircraft::Category::kCategoryGroundObstruction:
-            return 19;  // ADSB_EMITTER_TYPE_POINT_OBSTACLE
-        default:
-            CONSOLE_WARNING("comms_reporting.cc::AircraftCategoryToMAVLINKEmitterType",
-                            "Encountered unknown airframe type %d.", category);
-            return UINT8_MAX;
-    }
-    return UINT8_MAX;
-}
-
 bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
     uint8_t mavlink_version = reporting_protocols_[iface] == SettingsManager::kMAVLINK1 ? 1 : 2;
     mavlink_set_proto_version(SettingsManager::SerialInterface::kCommsUART, mavlink_version);
 
     // Send a HEARTBEAT message.
-    mavlink_heartbeat_t heartbeat_msg = {.type = MAV_TYPE_ADSB,
+    mavlink_heartbeat_t heartbeat_msg = {.custom_mode = 0,
+                                         .type = MAV_TYPE_ADSB,
                                          .autopilot = MAV_AUTOPILOT_INVALID,
                                          .base_mode = 0,
                                          .system_status = MAV_STATE_ACTIVE,
@@ -217,66 +173,9 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
 
     // Send an ADSB_VEHICLE message for each aircraft in the dictionary.
     for (auto &itr : adsbee.aircraft_dictionary.dict) {
-        const Aircraft &aircraft = itr.second;
+        const Aircraft1090 &aircraft = itr.second;
 
-        // Set MAVLINK flags.
-        uint16_t flags = 0;
-        if (aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagPositionValid)) {
-            flags |= ADSB_FLAGS_VALID_COORDS;
-        }
-        if (aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagBaroAltitudeValid)) {
-            // Aircraft is reporting barometric altitude.
-            flags |= ADSB_FLAGS_BARO_VALID;
-            flags |= ADSB_FLAGS_VALID_ALTITUDE;
-        } else if (aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagGNSSAltitudeValid)) {
-            // Aircraft is reporting GNSS altitude.
-            flags |= ADSB_FLAGS_VALID_ALTITUDE;
-        }
-        if (aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagDirectionValid)) {
-            flags |= ADSB_FLAGS_VALID_HEADING;
-        }
-        if (aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagHorizontalVelocityValid)) {
-            flags |= ADSB_FLAGS_VALID_VELOCITY;
-        }
-        if (strlen(aircraft.callsign) > Aircraft::kCallSignMinNumChars) {
-            flags |= ADSB_FLAGS_VALID_CALLSIGN;
-        }
-        if (aircraft.squawk > 0) {
-            flags |= ADSB_FLAGS_VALID_SQUAWK;
-        }
-        if (aircraft.HasBitFlag(Aircraft::BitFlag::kBitFlagVerticalVelocityValid)) {
-            flags |= ADSB_FLAGS_VERTICAL_VELOCITY_VALID;
-        }
-        // TODO: Set SOURCE_UAT when adding dual band support.
-
-        // Initialize the message
-        mavlink_adsb_vehicle_t adsb_vehicle_msg = {
-            .ICAO_address = aircraft.icao_address,
-            // Latitude [degE7]
-            .lat = static_cast<int32_t>(aircraft.latitude_deg * 1e7f),
-            // Longitude [degE7]
-            .lon = static_cast<int32_t>(aircraft.longitude_deg * 1e7f),
-            // Altitude [mm]
-            .altitude = FeetToMeters(aircraft.altitude_source == Aircraft::AltitudeSource::kAltitudeSourceBaro
-                                         ? aircraft.baro_altitude_ft
-                                         : aircraft.gnss_altitude_ft) *
-                        1000,
-            // Heding [cdeg]
-            .heading = static_cast<uint16_t>(aircraft.direction_deg * 100.0f),
-            // Horizontal Velocity [cm/s]
-            .hor_velocity = static_cast<uint16_t>(KtsToMps(static_cast<int>(aircraft.velocity_kts)) * 100),
-            // Vertical Velocity [cm/s]
-            .ver_velocity = static_cast<int16_t>(FpmToMps(aircraft.vertical_rate_fpm) * 100),
-            .flags = flags,
-            .squawk = aircraft.squawk,
-            .altitude_type =
-                static_cast<uint8_t>(aircraft.altitude_source == Aircraft::AltitudeSource::kAltitudeSourceBaro ? 0 : 1),
-            // Fill out callsign later.
-            .emitter_type = AircraftCategoryToMAVLINKEmitterType(aircraft.category),
-            // Time Since Last Contact [s]
-            .tslc = static_cast<uint8_t>((get_time_since_boot_ms() - aircraft.last_message_timestamp_ms) / 1000)};
-        // MAVLINK callsign field is 9 chars, so there's room to copy over the full 8 char callsign + null terminator.
-        strncpy(adsb_vehicle_msg.callsign, aircraft.callsign, Aircraft::kCallSignMaxNumChars + 1);
+        mavlink_adsb_vehicle_t adsb_vehicle_msg = AircraftToMAVLINKADSBVehicleMessage(aircraft);
 
         // Send the message.
         mavlink_msg_adsb_vehicle_send_struct(static_cast<mavlink_channel_t>(iface), &adsb_vehicle_msg);
@@ -284,7 +183,7 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
     // Send delimiter message.
     switch (mavlink_version) {
         case 1: {
-            mavlink_request_data_stream_t request_data_stream_msg = {};
+            mavlink_request_data_stream_t request_data_stream_msg = {0};
             mavlink_msg_request_data_stream_send_struct(static_cast<mavlink_channel_t>(iface),
                                                         &request_data_stream_msg);
             break;
@@ -321,7 +220,7 @@ bool CommsManager::ReportGDL90(SettingsManager::SerialInterface iface) {
 
     // Traffic Reports
     for (auto &itr : adsbee.aircraft_dictionary.dict) {
-        const Aircraft &aircraft = itr.second;
+        const Aircraft1090 &aircraft = itr.second;
         msg_len = gdl90.WriteGDL90TargetReportMessage(buf, aircraft, false);
         SendBuf(iface, (char *)buf, msg_len);
     }
