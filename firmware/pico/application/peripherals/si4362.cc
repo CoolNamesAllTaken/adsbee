@@ -6,6 +6,15 @@
 static const uint32_t kBootupDelayMs = 10;
 static const uint32_t kSendCommandTimeoutMs = 1000;
 
+static const uint64_t kUATADSBSyncWord = 0b111010101100110111011010010011100010;
+static const uint64_t kUATGroundUplinkSyncWord = 0b000101010011001000100101101100011101;
+static const uint16_t kUATSyncWordLenBits = 36;
+// Basic ADS-B message RS parity is RS(30,18) code with 12 Bytes of parity capable of correcting up to 6 symbol errors
+// per block.
+
+// Long ADS-B message RS parity is RS(48, 34) code with 14 Bytes of parity capable of correcting up to 7 symbol errors
+// per block.
+
 bool Si4362::Init(bool spi_already_initialized) {
     // Si4362 enable pin.
     gpio_init(config_.enable_pin);
