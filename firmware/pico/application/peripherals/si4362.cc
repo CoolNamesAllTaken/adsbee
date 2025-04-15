@@ -102,7 +102,15 @@ int Si4362::SPIWriteReadBlocking(uint8_t* tx_buf, uint8_t* rx_buf, uint16_t len_
     return bytes_written;
 }
 
-bool Si4362::ClearToSend() {
+bool Si4362::ClearToSend(bool end_transaction) {
+    // Truth table
+    // end_transaction | CTS | Chip Select at end of Transaction
+    // ----------------|-----|----------------------------------
+    // true            | 1   | 1
+    // true            | 0   | 1
+    // false           | 1   | 0
+    // false           | 0   | 1
+
     // Don't use SendCommand() here since this is called by SendCommand() and we don't want a circular recursion loop.
     uint8_t tx_buf[2] = {
         Command::kCmdReadCmdBuff,
@@ -110,14 +118,25 @@ bool Si4362::ClearToSend() {
     };
     uint8_t rx_buf[2] = {0};
 
-    if (SPIWriteReadBlocking(tx_buf, rx_buf, sizeof(tx_buf), true) < 0) {
+    int ret = SPIWriteReadBlocking(tx_buf, rx_buf, sizeof(tx_buf), end_transaction);
+    if (ret < 0) {
         CONSOLE_ERROR("Si4362::ClearToSend", "Failed to read command buffer.");
         return false;
+    } else if (ret < sizeof(tx_buf)) {
+        CONSOLE_ERROR("Si4362::ClearToSend", "Failed to read command buffer, only %d bytes written.", ret);
+        return false;
     }
-    return rx_buf[1] == 0xFF;
+    if (rx_buf[1] == 0xFF) {
+        // CTS == 1
+        return true;
+    } else {
+        // CTS == 0
+        gpio_put(config_.spi_cs_pin, true); // Didn't want to end the transaction, but not Clear to Send; end it anyways.
+        return false;
+    }
 }
 
-bool Si4362::SendCommand(Command cmd, uint8_t* param_buf, uint16_t param_buf_len, bool block_until_complete) {
+bool Si4362::SendCommand(Command cmd, uint8_t* param_buf, uint16_t param_buf_len, bool block_until_complete, bool end_transaction) {
     uint8_t tx_buf[sizeof(cmd) + param_buf_len];
     tx_buf[0] = cmd;
     memcpy(tx_buf + sizeof(cmd), param_buf, param_buf_len);
@@ -126,10 +145,13 @@ bool Si4362::SendCommand(Command cmd, uint8_t* param_buf, uint16_t param_buf_len
     if (ret < 0) {
         CONSOLE_ERROR("Si4362::SendCommand", "Failed to send command with error code 0x%lx.", ret);
         return false;
+    } else if (ret < sizeof(tx_buf)) {
+        CONSOLE_ERROR("Si4362::SendCommand", "Failed to send command, only %d bytes written.", ret);
+        return false;
     }
     uint32_t cmd_sent_timestamp_ms = get_time_since_boot_ms();
     if (block_until_complete) {
-        while (!ClearToSend()) {
+        while (!ClearToSend(end_transaction)) {
             // Wait for the Si4362 to process the command.
             if (get_time_since_boot_ms() - cmd_sent_timestamp_ms > kSendCommandTimeoutMs) {
                 CONSOLE_ERROR("Si4362::SendCommand", "Timed out after waiting %lu ms for command to complete.",
@@ -137,6 +159,25 @@ bool Si4362::SendCommand(Command cmd, uint8_t* param_buf, uint16_t param_buf_len
                 return false;
             }
         }
+    }
+    return true;
+}
+
+bool Si4362::ReadCommand(Command cmd, uint8_t* param_buf, uint16_t param_buf_len) {
+    // Send the read command and wait for a CTS signal to read the result.
+    // Block until receiving a CTS, and don't de-assert chip select in order to allow clocking out the result in the same transaction.
+    if (!SendCommand(cmd, nullptr, 0, true, false)) {
+        CONSOLE_ERROR("Si4362::ReadCommand", "Failed to send read command.");
+        return false;
+    }
+    // Read the command buffer.
+    int ret = SPIReadBlocking(param_buf, param_buf_len, true);
+    if (ret < 0) {
+        CONSOLE_ERROR("Si4362::ReadCommand", "Failed to read command buffer with error code 0x%lx.", ret);
+        return false;
+    } else if (ret < param_buf_len) {
+        CONSOLE_ERROR("Si4362::ReadCommand", "Failed to read command buffer, only %d bytes read.", ret);
+        return false;
     }
     return true;
 }

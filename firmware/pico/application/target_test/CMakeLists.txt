@@ -5,8 +5,10 @@ if(ON_EMBEDDED_DEVICE)
         test_aircraft_dictionary.cc
         test_clocks.cc
         test_eeprom.cc
-        test_spi_coprocessor.cc
         test_flash.cc
+        test_si4362.cc
+        test_spi_coprocessor.cc
+        
     )
     target_include_directories(application PRIVATE
         .

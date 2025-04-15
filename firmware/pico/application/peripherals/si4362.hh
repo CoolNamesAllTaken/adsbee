@@ -77,10 +77,12 @@ class Si4362 {
 
     /**
      * Helper function that checks whether the radio has processed its previous command and is ready to receive another.
+     * @param[in] end_transaction Set to true to end the SPI transaction after checking. If false, SPI transaction will only be ended if the CTS value is not 0xFF.
      */
-    bool ClearToSend();
+    bool ClearToSend(bool end_transaction = true);
     bool SendCommand(Command cmd, uint8_t* param_buf = nullptr, uint16_t param_buf_len = 0,
-                     bool block_until_complete = true);
+                     bool block_until_complete = true, bool end_transaction = true);
+    bool ReadCommand(Command cmd, uint8_t* param_buf, uint16_t param_buf_len);
 
     Si4362(Si4362Config config_in) : config_(config_in) {};
     ~Si4362();
