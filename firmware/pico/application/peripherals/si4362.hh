@@ -5,6 +5,8 @@
 
 class Si4362 {
    public:
+    static const uint16_t kMaxNumPropertiesAtOnce = 12;
+
     struct Si4362Config {
         // This clock frequency is used to talk to the Si4362.
         uint32_t spi_clk_freq_hz = bsp.r978_spi_clk_freq_hz;
@@ -67,6 +69,22 @@ class Si4362 {
         kCmdGetChipStatus = 0x23,  // Returns the interrupt status of the Chip Interrupt Group.
     };
 
+    enum Group : uint8_t {
+        kGroupGlobal = 0x00,
+        kGroupInterrupt = 0x01,
+        kGroupFastResponseRegister = 0x02,
+        kGroupPreamble = 0x10,
+        kGroupSync = 0x11,
+        kGroupPacket = 0x12,
+        kGroupModem = 0x20,
+        kGroupModemChannelFilter = 0x21,
+        kGroupSynthesizer = 0x23,
+        kGroupMatch = 0x30,
+        kGroupFrequencyControl = 0x40,
+        kGroupReceiverHop = 0x50,
+        kGroupPacketTraceInterface = 0xf0
+    };
+
     int SPIWriteReadBlocking(uint8_t* tx_buf, uint8_t* rx_buf, uint16_t len_bytes = 0, bool end_transaction = true);
     inline int SPIWriteBlocking(uint8_t* tx_buf, uint16_t len_bytes = 0, bool end_transaction = true) {
         return SPIWriteReadBlocking(tx_buf, nullptr, len_bytes, end_transaction);
@@ -77,14 +95,67 @@ class Si4362 {
 
     /**
      * Helper function that checks whether the radio has processed its previous command and is ready to receive another.
-     * @param[in] end_transaction Set to true to end the SPI transaction after checking. If false, SPI transaction will only be ended if the CTS value is not 0xFF.
+     * @param[in] end_transaction Set to true to end the SPI transaction after checking. If false, SPI transaction will
+     * only be ended if the CTS value is not 0xFF.
      */
     bool ClearToSend(bool end_transaction = true);
+
+    /**
+     * Get a property or group of properties from the Si4362. Can get up to 12 properties at once.
+     * @param[in] group Property group to get.
+     * @param[in] num_props Number of properties to get.
+     * @param[in] start_prop First property to get.
+     * @param[out] data Pointer to the data to get.
+     * @retval True if the properties were got successfully, false otherwise.
+     */
+    bool GetProperty(Group group, uint8_t num_props, uint8_t start_prop, uint8_t* data);
+
+    /**
+     * Send a command to the Si4362.
+     * @param[in] cmd Command to send.
+     * @param[in] param_buf Optional parameter buffer to send with the command. Can be null.
+     * @param[in] param_buf_len Length of the parameter buffer.
+     * @param[in] block_until_complete Set to true to block until the command is complete. If false, the command will be
+     * sent and the function will return immediately.
+     * @param[in] end_transaction Set to true to end the SPI transaction after sending the command. If false, SPI
+     * transaction will only be ended if the CTS value is not 0xFF.
+     * @retval True if the command was sent successfully, false otherwise.
+     */
     bool SendCommand(Command cmd, uint8_t* param_buf = nullptr, uint16_t param_buf_len = 0,
                      bool block_until_complete = true, bool end_transaction = true);
-    bool ReadCommand(Command cmd, uint8_t* param_buf, uint16_t param_buf_len);
 
+    /**
+     * Sets a property or group of properties on the Si4362. Can set up to 12 properties at onece. Length of data must
+     * match value of num_props.
+     * @param[in] group Property group to set.
+     * @param[in] num_props Number of properties to set.
+     * @param[in] start_prop First property to set.
+     * @param[in] data Pointer to the data to set.
+     * @retval True if the properties were set successfully, false otherwise.
+     */
+    bool SetProperty(Group group, uint8_t num_props, uint8_t start_prop, uint8_t* data);
+
+    /**
+     * Read a command from the Si4362.
+     * @param[in] cmd Command to read.
+     * @param[in] response_buf Buffer to store the command response.
+     * @param[in] response_buf_len Length of the parameter buffer.
+     * @param[in] command_buf Optional command buffer to send with the command. Can be null.
+     * @param[in] command_buf_len Length of the command buffer.
+     * @retval True if the command was read successfully, false otherwise.
+     */
+    bool ReadCommand(Command cmd, uint8_t* response_buf, uint16_t response_buf_len, uint8_t* command_buf = nullptr,
+                     uint16_t command_buf_len = 0);
+
+    /**
+     * Constructor for Si4362.
+     * @param[in] config_in Configuration struct for the Si4362.
+     */
     Si4362(Si4362Config config_in) : config_(config_in) {};
+
+    /**
+     * Destructor for Si4362.
+     */
     ~Si4362();
 
     /**
@@ -103,6 +174,7 @@ class Si4362 {
         gpio_put(config_.enable_pin, !enabled);
         enabled_ = enabled;
     }
+
     /**
      * Returns whether the Si4362 is currently enabled.
      * @retval True if enabled, false otherwise.
