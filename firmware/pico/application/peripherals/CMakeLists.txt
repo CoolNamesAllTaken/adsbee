@@ -10,9 +10,10 @@ else()
     # Build for embedded target
     target_sources(application PRIVATE
         eeprom.cc
-        si4362.cc
+        si4362/si4362.cc
     )
     target_include_directories(application PRIVATE
         .
+        si4362
     )
 endif()

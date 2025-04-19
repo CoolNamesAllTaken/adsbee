@@ -1,17 +1,36 @@
 #include "si4362.hh"
 
 #include "comms.hh"
+#include "generated/radio_config_Si4362.h"
 #include "hal.hh"
 
-static const uint32_t kBootupDelayMs = 10;
-static const uint32_t kSendCommandTimeoutMs = 1000;
+static const uint8_t kConfigDataArray[] = RADIO_CONFIGURATION_DATA_ARRAY;
+static const uint8_t kPowerUpDataArray[] = {RF_POWER_UP};
 
-static const uint64_t kUATADSBSyncWord = 0b111010101100110111011010010011100010;
-static const uint64_t kUATGroundUplinkSyncWord = 0b000101010011001000100101101100011101;
+static const uint32_t kBootupDelayMs = 10;
+static const uint32_t kSendCommandTimeoutMs = 1;
+
+// Full sync words, MSb is first received bit, LSb is last received bit.
+// First 12 bits are used as an "any transitions" preamble, followed by a 4 Byte sync word.
+static const uint64_t kUATADSBSyncWord = 0b1110'10101100'11011101'10100100'11100010;
+static const uint64_t kUATGroundUplinkSyncWord = 0b0001'01010011'00100010'01011011'00011101;
 static const uint16_t kUATSyncWordLenBits = 36;
+
+// Sync words formatted for Si4362 registers. LSb of MSB is received first.
+static constexpr uint8_t kUATADSBSyncBytes[3] = {0b10111011, 0b00100101, 0b01000111};
+// Make sure that the values entered into WDS are correct.
+static_assert(kUATADSBSyncBytes[0] == 0xBB);
+static_assert(kUATADSBSyncBytes[1] == 0x25);
+static_assert(kUATADSBSyncBytes[2] == 0x47);
+
+static constexpr uint8_t kUATGroundUplinkSyncBytes[3] = {0b01000100, 0b11011010, 0b10111000};
+// Make sure that the values entered into WDS are correct.
+static_assert(kUATGroundUplinkSyncBytes[0] == 0x44);
+static_assert(kUATGroundUplinkSyncBytes[1] == 0xDA);
+static_assert(kUATGroundUplinkSyncBytes[2] == 0xB8);
+
 // Basic ADS-B message RS parity is RS(30,18) code with 12 Bytes of parity capable of correcting up to 6 symbol errors
 // per block.
-
 // Long ADS-B message RS parity is RS(48, 34) code with 14 Bytes of parity capable of correcting up to 7 symbol errors
 // per block.
 
@@ -25,7 +44,7 @@ bool Si4362::Init(bool spi_already_initialized) {
     // Si4362 chip select pin.
     gpio_init(config_.spi_cs_pin);
     gpio_set_dir(config_.spi_cs_pin, GPIO_OUT);
-    gpio_put(config_.spi_cs_pin, 0);
+    gpio_put(config_.spi_cs_pin, 1);  // Deselect the Si4362.
     // Si4362 IRQ pin.
     gpio_init(config_.irq_pin);
     gpio_set_dir(config_.irq_pin, GPIO_IN);
@@ -62,14 +81,27 @@ bool Si4362::Init(bool spi_already_initialized) {
     }
 
     while (get_time_since_boot_ms() - enable_timestamp_ms < kBootupDelayMs) {
-        // Busy wait until bootup timeout has elapsed.
     }
 
-    // Attempt to read the Si4362!
-    if (!SendCommand(Command::kCmdPowerUp)) {
-        CONSOLE_ERROR("Si4362::Init", "Failed to power up Si4362.");
+    // Send powerup command with no parameters, no pre-block on CTS, with post-block on CTS.
+    if (!SendCommand(kCmdPowerUp, nullptr, 0, false, true)) {
+        CONSOLE_ERROR("Si4362::Init", "Failed to power up the Si4362.");
         return false;
     }
+
+    // Busy wait until bootup timeout has elapsed. Don't wait for CTS before (chip isn't powered on yet and won't
+    // talk), but do wait for CTS after (chip replies to confirm power up).
+    if (!SendCommand(static_cast<Command>(kPowerUpDataArray[0]), kPowerUpDataArray + 1, sizeof(kPowerUpDataArray) - 1,
+                     false, true)) {
+        CONSOLE_ERROR("Si4362::Init", "Failed to get CTS after waiting %lu ms.", kBootupDelayMs);
+        return false;
+    }
+
+    if (!SendDataArray(kConfigDataArray, sizeof(kConfigDataArray))) {
+        CONSOLE_ERROR("Si4362::Init", "Failed to send configuration data.");
+        return false;
+    }
+
     return true;
 }
 
@@ -118,6 +150,12 @@ bool Si4362::ClearToSend(bool end_transaction) {
     };
     uint8_t rx_buf[2] = {0};
 
+    // Block here to avoid spamming the Si4362 to death.
+    while (get_time_since_boot_us() - last_cts_check_us_ < kCTSCheckIntervalUs) {
+        // Wait for the CTS check interval to pass before checking CTS again.
+    }
+    last_cts_check_us_ = get_time_since_boot_us();
+
     int ret = SPIWriteReadBlocking(tx_buf, rx_buf, sizeof(tx_buf), end_transaction);
     if (ret < 0) {
         CONSOLE_ERROR("Si4362::ClearToSend", "Failed to read command buffer.");
@@ -153,16 +191,18 @@ bool Si4362::GetProperty(Group group, uint8_t num_props, uint8_t start_prop, uin
     return true;
 }
 
-bool Si4362::SendCommand(Command cmd, uint8_t* param_buf, uint16_t param_buf_len, bool block_until_cts,
-                         bool end_transaction) {
+bool Si4362::SendCommand(Command cmd, const uint8_t* param_buf, uint16_t param_buf_len, bool pre_block_until_cts,
+                         bool post_block_until_cts, bool end_transaction) {
     // Wait until CTS before sending a packet.
-    uint32_t begin_wait_timestamp_ms = get_time_since_boot_ms();
-    while (!ClearToSend()) {
-        // Wait for the Si4362 to process the command.
-        if (get_time_since_boot_ms() - begin_wait_timestamp_ms > kSendCommandTimeoutMs) {
-            CONSOLE_ERROR("Si4362::SendCommand", "Timed out after waiting %lu ms for command to complete.",
-                          kSendCommandTimeoutMs);
-            return false;
+    if (pre_block_until_cts) {
+        uint32_t begin_wait_timestamp_ms = get_time_since_boot_ms();
+        while (!ClearToSend()) {
+            // Wait for the Si4362 to process the command.
+            if (get_time_since_boot_ms() - begin_wait_timestamp_ms > kSendCommandTimeoutMs) {
+                CONSOLE_ERROR("Si4362::SendCommand", "Timed out after waiting %lu ms for CTS before sending command.",
+                              kSendCommandTimeoutMs);
+                return false;
+            }
         }
     }
 
@@ -179,17 +219,41 @@ bool Si4362::SendCommand(Command cmd, uint8_t* param_buf, uint16_t param_buf_len
         return false;
     }
 
-    // If block_until_cts is true, wait for the Si4362 to process the command and assert CTS.
-    begin_wait_timestamp_ms = get_time_since_boot_ms();
-    if (block_until_cts) {
+    // If post_block_until_cts is true, wait for the Si4362 to process the command and assert CTS.
+    if (post_block_until_cts) {
+        uint32_t begin_wait_timestamp_ms = get_time_since_boot_ms();
         while (!ClearToSend(end_transaction)) {
             // Wait for the Si4362 to process the command.
             if (get_time_since_boot_ms() - begin_wait_timestamp_ms > kSendCommandTimeoutMs) {
-                CONSOLE_ERROR("Si4362::SendCommand", "Timed out after waiting %lu ms for command to complete.",
+                CONSOLE_ERROR("Si4362::SendCommand", "Timed out after waiting %lu ms for CTS after sending command.",
                               kSendCommandTimeoutMs);
                 return false;
             }
         }
+    }
+    return true;
+}
+
+bool Si4362::SendDataArray(const uint8_t* data, uint16_t len_bytes) {
+    uint16_t data_array_line = 0;  // Keep track of the line number for debugging purposes.
+    for (uint16_t index = 0; index < len_bytes;) {
+        // num_bytes_to_send is the number of bytes to send in this sub-array, including the command byte.
+        uint16_t num_bytes_to_send = data[index];
+        if (num_bytes_to_send == 0) {
+            return true;  // Exiting early, found 0 length subarray.
+        } else if (num_bytes_to_send > len_bytes - index) {
+            CONSOLE_ERROR("Si4362::SendDataArray", "Invalid data array length %d.", num_bytes_to_send);
+            return false;
+        }
+
+        Command cmd = static_cast<Command>(data[index + 1]);
+        if (!SendCommand(cmd, data + index + 2, num_bytes_to_send - 1)) {
+            CONSOLE_ERROR("Si4362::SendDataArray", "Failed to send cmd=0x%X at data array line %d.", cmd,
+                          data_array_line);
+            return false;
+        }
+        index += num_bytes_to_send + 1;
+        data_array_line++;
     }
     return true;
 }
@@ -218,9 +282,9 @@ bool Si4362::SetProperty(Group group, uint8_t num_props, uint8_t start_prop, uin
 bool Si4362::ReadCommand(Command cmd, uint8_t* response_buf, uint16_t response_buf_len, uint8_t* command_buf,
                          uint16_t command_buf_len) {
     // Send the read command and wait for a CTS signal to read the result.
-    // Block until receiving a CTS, and don't de-assert chip select in order to allow clocking out the result in the
-    // same transaction.
-    if (!SendCommand(cmd, command_buf, command_buf_len, true, false)) {
+    // Block until receiving a CTS before and after the read command, and don't de-assert chip select in order to allow
+    // clocking out the result in the same transaction.
+    if (!SendCommand(cmd, command_buf, command_buf_len, true, true, false)) {
         CONSOLE_ERROR("Si4362::ReadCommand", "Failed to send read command.");
         return false;
     }
