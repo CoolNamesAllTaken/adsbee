@@ -3,12 +3,10 @@
 #include "comms.hh"
 #include "generated/radio_config_Si4362.h"
 #include "hal.hh"
+#include "unit_conversions.hh"
 
 static const uint8_t kConfigDataArray[] = RADIO_CONFIGURATION_DATA_ARRAY;
 static const uint8_t kPowerUpDataArray[] = {RF_POWER_UP};
-
-static const uint32_t kBootupDelayMs = 10;
-static const uint32_t kSendCommandTimeoutMs = 1;
 
 // Full sync words, MSb is first received bit, LSb is last received bit.
 // First 12 bits are used as an "any transitions" preamble, followed by a 4 Byte sync word.
@@ -28,6 +26,14 @@ static constexpr uint8_t kUATGroundUplinkSyncBytes[3] = {0b01000100, 0b11011010,
 static_assert(kUATGroundUplinkSyncBytes[0] == 0x44);
 static_assert(kUATGroundUplinkSyncBytes[1] == 0xDA);
 static_assert(kUATGroundUplinkSyncBytes[2] == 0xB8);
+
+// Define message lengths and amke sure they are Byte aligned.
+static const uint16_t kUATADSBLongMessageLenBits = 272;
+static const uint16_t kUATADSBLongMessageLenBytes = kUATADSBLongMessageLenBits / kBitsPerByte;
+static_assert(kUATADSBLongMessageLenBytes * kBitsPerByte == kUATADSBLongMessageLenBits);
+static const uint16_t kUATADSBShortMessageLenBits = 144;
+static const uint16_t kUATADSBShortMessageLenBytes = kUATADSBShortMessageLenBits / kBitsPerByte;
+static_assert(kUATADSBShortMessageLenBytes * kBitsPerByte == kUATADSBShortMessageLenBits);
 
 // Basic ADS-B message RS parity is RS(30,18) code with 12 Bytes of parity capable of correcting up to 6 symbol errors
 // per block.
@@ -123,6 +129,13 @@ bool Si4362::Init(bool spi_already_initialized) {
     }
 
     // Override the data rate to 1.041667.
+    ModemConfig modem_config = {};
+    GetModemConfig(modem_config);
+    // Original rxosr = 60;
+    // 60*500 = rxosr*1041
+    // rxosr = 60*500/1041 = 28.8
+    modem_config.rxosr = 29;
+    SetModemConfig(modem_config);
 
     return true;
 }
@@ -154,6 +167,26 @@ int Si4362::SPIWriteReadBlocking(uint8_t* tx_buf, uint8_t* rx_buf, uint16_t len_
 
     spi_set_clk(standby_clk_config_);  // Restore clock config.
     return bytes_written;
+}
+
+bool Si4362::SetDeviceState(DeviceState state, bool verify) {
+    if (!SendCommand(kCmdChangeState, (uint8_t*)&state, sizeof(state))) {
+        CONSOLE_ERROR("Si4362::SetDeviceState", "SendCommand failed while setting device state to %s.",
+                      DeviceStateToString(state));
+        return false;
+    }
+    if (!verify) {
+        return true;
+    }
+    // Verify that the device state was set correctly.
+    DeviceState verify_state = DeviceState::kStateInvalid;
+    uint8_t channel = UINT8_MAX;
+    if (!GetDeviceState(verify_state, channel)) {
+        CONSOLE_ERROR("Si4362::SetDeviceState", "Failed to verify new device state; wanted %s but received %s.",
+                      DeviceStateToString(state), DeviceStateToString(verify_state));
+        return false;
+    }
+    return true;
 }
 
 bool Si4362::GetModemConfig(Si4362::ModemConfig& modem_config) {
@@ -315,6 +348,11 @@ bool Si4362::SendDataArray(const uint8_t* data, uint16_t len_bytes) {
 bool Si4362::SetModemConfig(const ModemConfig& modem_config) {
     bool ret = true;
     uint8_t data[kMaxNumPropertiesAtOnce] = {0};
+
+    // MODEM_BCR_OSR
+    data[0] = (modem_config.rxosr >> 8) & 0xF;
+    data[1] = modem_config.rxosr & 0xFF;
+    ret &= SetProperty(kGroupModem, 2, 0x22, data);
 
     return ret;
 }

@@ -37,7 +37,7 @@ class ESP32SerialFlasher {
         gpio_deinit(config_.esp32_uart_rx_pin);
 
         // Re-enable receiver after update if it was previously enabled.
-        adsbee.SetReceiverEnable(receiver_was_enabled_before_update_);
+        adsbee.SetReceiver1090Enable(receiver_was_enabled_before_update_);
         return true;
     }
 
@@ -57,8 +57,8 @@ class ESP32SerialFlasher {
         gpio_init(config_.esp32_gpio0_boot_pin);
         gpio_set_dir(config_.esp32_gpio0_boot_pin, GPIO_OUT);
 
-        receiver_was_enabled_before_update_ = adsbee.ReceiverIsEnabled();
-        adsbee.SetReceiverEnable(false);  // Disable receiver to avoid interrupts during update.
+        receiver_was_enabled_before_update_ = adsbee.Receiver1090IsEnabled();
+        adsbee.SetReceiver1090Enable(false);  // Disable receiver to avoid interrupts during update.
 
         return true;
     }

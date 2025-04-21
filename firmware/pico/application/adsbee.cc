@@ -227,11 +227,17 @@ bool ADSBee::Init() {
                        preamble_detector_sm_[bsp.r1090_high_power_demod_state_machine_index], true);
 
     // Initialize 978MHz radio.
-    if (r978.Init(false)) {
-        r978_enabled_ = true;
-        CONSOLE_INFO("ADSBee::Init", "978MHz radio initialized.");
-    } else {
-        CONSOLE_ERROR("ADSBee::Init", "Failed to initialize 978MHz radio.");
+    if (config_.has_r978) {
+        if (r978.Init(false)) {
+            CONSOLE_INFO("ADSBee::Init", "978MHz radio initialized.");
+        } else {
+            r978.SetEnable(false);
+            CONSOLE_ERROR("ADSBee::Init", "Failed to initialize 978MHz radio.");
+        }
+    }
+
+    if (r978.IsEnabled()) {
+        r978.SetDeviceState(Si4362::DeviceState::kStateRx, true);
     }
 
     // Throw a fit if the watchdog caused a reboot.

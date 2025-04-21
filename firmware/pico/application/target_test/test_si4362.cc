@@ -23,6 +23,14 @@ UTEST(Si4362, SetGetProperty) {
     EXPECT_EQ(memcmp(preamble_config, read_buf, sizeof(preamble_config)), 0);
 }
 
+UTEST(Si4362, GetDeviceState) {
+    Si4362::DeviceState state = Si4362::DeviceState::kStateInvalid;
+    uint8_t channel = UINT8_MAX;
+    EXPECT_TRUE(adsbee.r978.GetDeviceState(state, channel));
+    printf("Device state: %s\r\n", adsbee.r978.DeviceStateToString(state));
+    printf("Channel: %d\r\n", channel);
+}
+
 UTEST(Si4362, GetModemDataRate) {
     uint8_t read_buf[10] = {0};
     // MODEM_DATA_RATE

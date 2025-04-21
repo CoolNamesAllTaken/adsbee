@@ -464,13 +464,13 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                 } else if (args[0].compare("WRITE") == 0) {
                     // Write a section of the complementary flash partition.
                     // AT+OTA=WRITE,<offset (base 16)>,<len_bytes (base 10)>,<crc (base 16)>
-                    bool receiver_was_enabled = adsbee.ReceiverIsEnabled();
-                    adsbee.SetReceiverEnable(0);  // Stop ADSB packets from mucking up the SPI bus.
+                    bool receiver_was_enabled = adsbee.Receiver1090IsEnabled();
+                    adsbee.SetReceiver1090Enable(0);  // Stop ADSB packets from mucking up the SPI bus.
                     uint32_t offset, len_bytes, crc;
                     CPP_AT_TRY_ARG2NUM_BASE(1, offset, 16);
                     CPP_AT_TRY_ARG2NUM_BASE(2, len_bytes, 10);
                     if (len_bytes > FirmwareUpdateManager::kFlashWriteBufMaxLenBytes) {
-                        adsbee.SetReceiverEnable(receiver_was_enabled);  // Re-enable receiver before exit.
+                        adsbee.SetReceiver1090Enable(receiver_was_enabled);  // Re-enable receiver before exit.
                         CPP_AT_ERROR("Write length %u exceeds maximum %u Bytes.", len_bytes,
                                      FirmwareUpdateManager::kFlashWriteBufMaxLenBytes);
                     }
@@ -522,7 +522,7 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
 
                         timestamp_ms = get_time_since_boot_ms();
                         if (timestamp_ms - data_read_start_timestamp_ms > kOTAWriteTimeoutMs) {
-                            adsbee.SetReceiverEnable(receiver_was_enabled);  // Re-enable receiver before exit.
+                            adsbee.SetReceiver1090Enable(receiver_was_enabled);  // Re-enable receiver before exit.
                             CPP_AT_ERROR("Timed out after %u ms. Received %u Bytes.",
                                          timestamp_ms - data_read_start_timestamp_ms, buf_len_bytes);
                         }
@@ -534,7 +534,7 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         complementary_partition, offset, len_bytes, buf);
                     FlashUtils::FlashUnsafe();
                     if (!flash_write_succeeded) {
-                        adsbee.SetReceiverEnable(receiver_was_enabled);  // Re-enable receiver before exit.
+                        adsbee.SetReceiver1090Enable(receiver_was_enabled);  // Re-enable receiver before exit.
                         CPP_AT_ERROR("Partial %u Byte write failed in partition %u at offset 0x%x.", len_bytes,
                                      complementary_partition, offset);
                     }
@@ -547,11 +547,11 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                                 offset,
                             len_bytes);
                         if (calculated_crc != crc) {
-                            adsbee.SetReceiverEnable(receiver_was_enabled);  // Re-enable receiver before exit.
+                            adsbee.SetReceiver1090Enable(receiver_was_enabled);  // Re-enable receiver before exit.
                             CPP_AT_ERROR("Calculated CRC 0x%x did not match provided CRC 0x%x.", calculated_crc, crc);
                         }
                     }
-                    adsbee.SetReceiverEnable(receiver_was_enabled);  // Re-enable receiver before exit.
+                    adsbee.SetReceiver1090Enable(receiver_was_enabled);  // Re-enable receiver before exit.
                     CPP_AT_SUCCESS();
                 } else if (args[0].compare("VERIFY") == 0) {
                     // Verify the complementary flash partition.
@@ -729,14 +729,19 @@ CPP_AT_CALLBACK(CommsManager::ATRxEnableCallback) {
     switch (op) {
         case '=':
             if (CPP_AT_HAS_ARG(0)) {
-                bool receiver_enabled;
-                CPP_AT_TRY_ARG2NUM(0, receiver_enabled);
-                adsbee.SetReceiverEnable(receiver_enabled);
-                CPP_AT_SUCCESS();
+                bool r1090_enabled;
+                CPP_AT_TRY_ARG2NUM(0, r1090_enabled);
+                adsbee.SetReceiver1090Enable(r1090_enabled);
             }
+            if (CPP_AT_HAS_ARG(1)) {
+                bool r978_enabled;
+                CPP_AT_TRY_ARG2NUM(1, r978_enabled);
+                adsbee.SetReceiver978Enable(r978_enabled);
+            }
+            CPP_AT_SUCCESS();
             break;
         case '?':
-            CPP_AT_CMD_PRINTF("=%d", adsbee.ReceiverIsEnabled());
+            CPP_AT_CMD_PRINTF("=%d,%d", adsbee.Receiver1090IsEnabled(), adsbee.Receiver978IsEnabled());
             CPP_AT_SILENT_SUCCESS();
             break;
     }
@@ -1044,10 +1049,11 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRebootCallback, comms_manager)},
     {.command_buf = "+RX_ENABLE",
      .min_args = 0,
-     .max_args = 1,
-     .help_string_buf = "RX_ENABLE=<enabled [1,0]>\r\n\tOK\r\n\tEnables or disables the receiver from receiving "
-                        "messages.\r\n\tAT+RX_ENABLE?\r\n\t+RX_ENABLE=<enabled [1,0]>\r\n\tQuery whether the "
-                        "recevier is enabled.",
+     .max_args = 2,
+     .help_string_buf = "RX_ENABLE=<1090_enabled [1,0]>,<978_enabled [1,0]>\r\n\tOK\r\n\tEnables or disables the "
+                        "receiver(s) from receiving messages.\r\n\tAT+RX_ENABLE?\r\n\t+RX_ENABLE=<enabled "
+                        "[1,0]>\r\n\tQuery whether the "
+                        "recevier(s) are enabled.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxEnableCallback, comms_manager)
 
     },

@@ -70,6 +70,8 @@ class ADSBee {
 
         uint16_t bias_tee_enable_pin = 18;
 
+        bool has_r978 = bsp.has_r978;
+
         uint32_t aircraft_dictionary_update_interval_ms = 1000;
     };
 
@@ -208,7 +210,13 @@ class ADSBee {
      * Returns whether ADS-B receiving is currently enabled.
      * @retval True if enabled, false otherwise.
      */
-    bool ReceiverIsEnabled() { return receiver_enabled_; }
+    bool Receiver1090IsEnabled() { return r1090_enabled_; }
+
+    /**
+     * Returns whether the 978MHz receiver is enabled.
+     * @retval True if enabled, false otherwise.
+     */
+    bool Receiver978IsEnabled() { return r978.IsEnabled(); }
 
     /**
      * Enable or disable the bias tee to inject 3.3V at the RF IN connector.
@@ -223,9 +231,23 @@ class ADSBee {
      * Enables or disables the ADS-B receiver by hogging the demodulation completed interrupt.
      * @param[in] is_enabled True if ADS-B receiver should be enabled, false otherwise.
      */
-    inline void SetReceiverEnable(bool is_enabled) {
-        receiver_enabled_ = is_enabled;
-        irq_set_enabled(config_.preamble_detector_demod_complete_irq, receiver_enabled_);
+    inline void SetReceiver1090Enable(bool is_enabled) {
+        r1090_enabled_ = is_enabled;
+        irq_set_enabled(config_.preamble_detector_demod_complete_irq, r1090_enabled_);
+    }
+
+    /**
+     * Enables or disables the 978MHz receiver by powering the receiver chip on or off. Re-initializes the receiver chip
+     * if it's being powered on from a previous off state.
+     * @param[in] is_enabled True if 978MHz receiver should be enabled, false otherwise.
+     */
+    inline void SetReceiver978Enable(bool is_enabled) {
+        bool old_enabled = r978.IsEnabled();
+        r978.SetEnable(is_enabled);
+        if (old_enabled == false && is_enabled == true) {
+            // Re-initialize the receiver.
+            r978.Init(true);
+        }
     }
 
     /**
@@ -324,7 +346,7 @@ class ADSBee {
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
 
-    bool receiver_enabled_ = true;
+    bool r1090_enabled_ = true;
     bool bias_tee_enabled_ = false;
     uint32_t watchdog_timeout_sec_ = SettingsManager::Settings::kDefaultWatchdogTimeoutSec * kMsPerSec;
 
@@ -332,7 +354,6 @@ class ADSBee {
     uint32_t noise_floor_last_sample_timestamp_ms_ = 0;
 
     /** 978MHz Receiver Parameters **/
-    bool r978_enabled_ = false;
 };
 
 extern ADSBee adsbee;

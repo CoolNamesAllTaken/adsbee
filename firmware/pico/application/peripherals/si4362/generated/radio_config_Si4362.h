@@ -20,7 +20,7 @@
 // INPUT DATA
 /*
 // Crys_freq(Hz): 30000000    Crys_tol(ppm): 20    IF_mode: 2    High_perf_Ch_Fil: 1    OSRtune: 0    Ch_Fil_Bw_AFC: 0
-ANT_DIV: 0    PM_pattern: 0
+ANT_DIV: 0    PM_pattern: 15
 // MOD_type: 2    Rsymb(sps): 500000    Fdev(Hz): 300000    RXBW(Hz): 600000    Manchester: 0    AFC_en: 3 Rsymb_error:
 0.1    Chip-Version: 2
 // RF Freq.(MHz): 978    API_TC: 29    fhst: 250000    inputBW: 1    BERT: 0    RAW_dout: 0    D_source: 0 Hi_pfm_div: 1
@@ -122,7 +122,7 @@ pattern.
 //   PREAMBLE_PATTERN_15_8 - Configuration of the bit values describing a Non-Standard Preamble pattern.
 //   PREAMBLE_PATTERN_7_0 - Configuration of the bit values describing a Non-Standard Preamble pattern.
 */
-#define RF_PREAMBLE_TX_LENGTH_9 0x11, 0x10, 0x09, 0x00, 0x08, 0x14, 0x00, 0x0F, 0xB1, 0x00, 0x00, 0x00, 0x00
+#define RF_PREAMBLE_TX_LENGTH_9 0x11, 0x10, 0x09, 0x00, 0x08, 0x14, 0x00, 0x0F, 0x31, 0x00, 0x00, 0x00, 0x00
 
 /*
 // Set properties:           RF_SYNC_CONFIG_6
@@ -184,7 +184,7 @@ variety of methods of defining total packet length).
 //   PKT_FIELD_3_CONFIG - General data processing and packet configuration bits for Field 3.
 */
 #define RF_PKT_RX_THRESHOLD_12 \
-    0x11, 0x12, 0x0C, 0x0C, 0x30, 0x00, 0x22, 0x04, 0x00, 0x00, 0x0E, 0x00, 0x00, 0x00, 0x00, 0x00
+    0x11, 0x12, 0x0C, 0x0C, 0x30, 0x00, 0x22, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 
 /*
 // Set properties:           RF_PKT_FIELD_3_CRC_CONFIG_12
@@ -307,7 +307,7 @@ Oscillator (NCO) modulus.
 //   MODEM_BCR_NCO_OFFSET_2 - RX BCR NCO offset value (an unsigned 22-bit number).
 */
 #define RF_MODEM_MDM_CTRL_12 \
-    0x11, 0x20, 0x0C, 0x19, 0x00, 0x08, 0x03, 0xC0, 0x00, 0x00, 0x30, 0x00, 0xE8, 0x00, 0x3C, 0x08
+    0x11, 0x20, 0x0C, 0x19, 0x80, 0x08, 0x03, 0xC0, 0x00, 0x00, 0x30, 0x00, 0xE8, 0x00, 0x3C, 0x08
 
 /*
 // Set properties:           RF_MODEM_BCR_NCO_OFFSET_1_12
@@ -332,7 +332,7 @@ AFC functionality.
 //   MODEM_AFC_LIMITER_1 - Set the AFC limiter value.
 */
 #define RF_MODEM_BCR_NCO_OFFSET_1_12 \
-    0x11, 0x20, 0x0C, 0x25, 0x88, 0x89, 0x07, 0x1C, 0x00, 0x11, 0x00, 0x00, 0x23, 0x84, 0x44, 0x04
+    0x11, 0x20, 0x0C, 0x25, 0x88, 0x89, 0x04, 0x44, 0x00, 0xC3, 0x00, 0x54, 0x34, 0x81, 0x55, 0x0D
 
 /*
 // Set properties:           RF_MODEM_AFC_LIMITER_0_2
@@ -344,7 +344,7 @@ AFC functionality.
 //   MODEM_AFC_LIMITER_0 - Set the AFC limiter value.
 //   MODEM_AFC_MISC - Specifies miscellaneous AFC control bits.
 */
-#define RF_MODEM_AFC_LIMITER_0_2 0x11, 0x20, 0x02, 0x31, 0x3B, 0xA0
+#define RF_MODEM_AFC_LIMITER_0_2 0x11, 0x20, 0x02, 0x31, 0x8D, 0x80
 
 /*
 // Set properties:           RF_MODEM_AGC_CONTROL_1
@@ -379,7 +379,7 @@ AFC functionality.
 signal when using the asynchronous demodulator.
 */
 #define RF_MODEM_AGC_WINDOW_SIZE_12 \
-    0x11, 0x20, 0x0C, 0x38, 0x22, 0x07, 0x07, 0x80, 0x02, 0x4C, 0xCD, 0x00, 0x27, 0x0C, 0xA4, 0x23
+    0x11, 0x20, 0x0C, 0x38, 0x22, 0x07, 0x07, 0x80, 0x02, 0x4C, 0xCD, 0x00, 0x27, 0x0C, 0x84, 0x23
 
 /*
 // Set properties:           RF_MODEM_RAW_CONTROL_10
@@ -399,7 +399,7 @@ signal when using the asynchronous demodulator.
 //   MODEM_RSSI_CONTROL2 - RSSI Jump Detection control.
 //   MODEM_RSSI_COMP - RSSI compensation value.
 */
-#define RF_MODEM_RAW_CONTROL_10 0x11, 0x20, 0x0A, 0x45, 0x83, 0x02, 0x7F, 0x01, 0x00, 0xFF, 0x08, 0x08, 0x1A, 0x40
+#define RF_MODEM_RAW_CONTROL_10 0x11, 0x20, 0x0A, 0x45, 0x8F, 0x02, 0x7F, 0x01, 0x00, 0xFF, 0x08, 0x08, 0x1A, 0x40
 
 /*
 // Set properties:           RF_MODEM_RAW_SEARCH2_2
@@ -411,7 +411,7 @@ signal when using the asynchronous demodulator.
 //   MODEM_RAW_SEARCH2 - Defines and controls the search period length for the Moving Average and Min-Max detectors.
 //   MODEM_CLKGEN_BAND - Select PLL Synthesizer output divider ratio as a function of frequency band.
 */
-#define RF_MODEM_RAW_SEARCH2_2  0x11, 0x20, 0x02, 0x50, 0x84, 0x08
+#define RF_MODEM_RAW_SEARCH2_2  0x11, 0x20, 0x02, 0x50, 0x94, 0x08
 
 /*
 // Set properties:           RF_MODEM_SPIKE_DET_2
@@ -423,7 +423,7 @@ signal when using the asynchronous demodulator.
 //   MODEM_SPIKE_DET - Configures the threshold for (G)FSK Spike Detection.
 //   MODEM_ONE_SHOT_AFC - Configures parameters for th e One Shot AFC function and for BCR timing/acquisition.
 */
-#define RF_MODEM_SPIKE_DET_2    0x11, 0x20, 0x02, 0x54, 0x88, 0xE3
+#define RF_MODEM_SPIKE_DET_2    0x11, 0x20, 0x02, 0x54, 0x88, 0xA7
 
 /*
 // Set properties:           RF_MODEM_RSSI_MUTE_1
@@ -450,7 +450,7 @@ algorithm.
 //   MODEM_DSA_RSSI - Signal Arrival Detect RSSI Qualifier Config
 //   MODEM_DSA_MISC - Miscellaneous detection of signal arrival bits.
 */
-#define RF_MODEM_DSA_CTRL1_5    0x11, 0x20, 0x05, 0x5B, 0x61, 0x25, 0x13, 0x78, 0x20
+#define RF_MODEM_DSA_CTRL1_5    0x11, 0x20, 0x05, 0x5B, 0x61, 0x44, 0x13, 0x78, 0x20
 
 /*
 // Set properties:           RF_MODEM_CHFLT_RX1_CHFLT_COE13_7_0_12

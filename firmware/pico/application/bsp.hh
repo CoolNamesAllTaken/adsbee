@@ -30,6 +30,7 @@ class BSP {
             r1090_rssi_adc_pin = 28;
             r1090_rssi_adc_input = 2;
 
+            has_r978 = true;
             r978_led_pin = 25;
         }
     }
@@ -81,6 +82,7 @@ class BSP {
     uint16_t r1090_rssi_adc_input = 2;  // ADC input for reading RSSI.
     uint16_t r1090_bias_tee_enable_pin = 18;
 
+    bool has_r978 = false;                 // Set to true if the 978MHz receiver is present.
     uint32_t r978_spi_clk_freq_hz = 10e6;  // Si4362 has slower clock frequency (10MHz) than ESP32.
     uint16_t r978_led_pin = UINT16_MAX;    // Set to UINT16_MAX to indicate not connected.
     uint16_t r978_enable_pin = 6;
