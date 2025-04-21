@@ -1,5 +1,6 @@
 #include "adsbee.hh"
 #include "hardware_unit_tests.hh"
+#include "unit_conversions.hh"
 
 // NOTE: These tests need to be run after the Si4362 is already initialized.
 
@@ -31,16 +32,42 @@ UTEST(Si4362, GetDeviceState) {
     printf("Channel: %d\r\n", channel);
 }
 
-UTEST(Si4362, GetModemDataRate) {
-    uint8_t read_buf[10] = {0};
-    // MODEM_DATA_RATE
-    EXPECT_TRUE(adsbee.r978.GetProperty(Si4362::kGroupModem, 3, 0x03, read_buf));
-    printf("MODEM_DATA_RATE=%d\r\n", (read_buf[0] << 16) | (read_buf[1] << 8) | read_buf[0]);
-    // MODEM_TX_NCO_MODE
-    EXPECT_TRUE(adsbee.r978.GetProperty(Si4362::kGroupModem, 4, 0x06, read_buf));
-    printf("TX_OSR=%d NCOMOD=%d\r\n", (read_buf[0] >> 2) & 0b11,
-           (read_buf[0] & 0b11) << 24 | (read_buf[1] << 16) | (read_buf[2] << 8) | read_buf[3]);
+/**
+ * Helper function used for reversing bytes in Sync Word, which are transmitted Big Endian in Bytes but Little Endian in
+ * bits (smallest bit transmitted first, biggest Byte transmitted first).
+ */
+uint8_t reverse_byte(uint8_t byte) {
+    uint8_t reversed = 0;
+    for (int i = 0; i < 8; i++) {
+        reversed |= ((byte >> i) & 0x1) << (7 - i);
+    }
+    return reversed;
+}
 
+void print_binary(uint8_t byte) {
+    for (int i = 7; i >= 0; i--) {
+        printf("%d", (byte >> i) & 0x1);
+    }
+}
+
+UTEST(Si4362, GetSyncWord) {
+    uint8_t data[6] = {0};
+    EXPECT_TRUE(adsbee.r978.GetProperty(Si4362::kGroupSync, sizeof(data), 0x00, data));
+    printf("Sync Word Configuration\r\n");
+    printf("\tRX_ERRORS=%u\r\n", (data[0] >> 4) & 0b111);
+    uint8_t sync_word_length_bytes = (data[0] & 0b11) + 1;
+    printf("\tLENGTH=%u\r\n", sync_word_length_bytes);
+    printf("\tBITS=");
+    uint8_t sync_word[sync_word_length_bytes] = {0};
+    for (uint8_t i = 0; i < sync_word_length_bytes; i++) {
+        sync_word[i] = reverse_byte(data[i + 1]);
+        print_binary(sync_word[i]);
+    }
+    printf("\r\n");
+    printf("\tSYNC_ERROR_ONLY_BEGIN=%u\r\n", (data[5] >> 7) & 0b1);
+}
+
+UTEST(Si4362, GetModemDataRate) {
     Si4362::ModemConfig modem_config;
     EXPECT_TRUE(adsbee.r978.GetModemConfig(modem_config));
     modem_config.print();

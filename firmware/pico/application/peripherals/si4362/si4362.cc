@@ -378,6 +378,23 @@ bool Si4362::SetProperty(Group group, uint8_t num_props, uint8_t start_prop, uin
     return true;
 }
 
+bool Si4362::StartRx(uint8_t channel, bool update, bool start, uint16_t rx_len, RxTimeoutState rxtimeout_state,
+                     PostRxState rxvalid_state, PostRxState rxinvalid_state) {
+    uint8_t params_buf[7] = {0};
+    params_buf[0] = channel;
+    params_buf[1] = ((update & 0b1) << 3) | (start & 0b11);  // Not sure why start is 2 bits if it's a boolean.
+    params_buf[2] = (rx_len >> 8) & 0x1F;
+    params_buf[3] = rx_len & 0xFF;
+    params_buf[4] = rxtimeout_state & 0xF;
+    params_buf[5] = rxvalid_state & 0xF;
+    params_buf[6] = rxinvalid_state & 0xF;
+    if (!SendCommand(kCmdStartRx, params_buf, sizeof(params_buf))) {
+        CONSOLE_ERROR("Si4362::StartRx", "Failed to send start RX command.");
+        return false;
+    }
+    return true;
+}
+
 bool Si4362::ReadCommand(Command cmd, uint8_t* response_buf, uint16_t response_buf_len, uint8_t* command_buf,
                          uint16_t command_buf_len) {
     // Send the read command and wait for a CTS signal to read the result.

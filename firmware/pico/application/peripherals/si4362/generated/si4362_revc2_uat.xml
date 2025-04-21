@@ -10,7 +10,7 @@
           <Value>978</Value>
         </DataItem>
         <DataItem Type="System.Windows.Forms.NumericUpDown" Name="nudChannelSpacing">
-          <Value>250</Value>
+          <Value>1200</Value>
         </DataItem>
       </grbFequencyControl>
       <grbCrystalControl Type="System.Windows.Forms.GroupBox">
@@ -54,7 +54,7 @@
           <Checked>True</Checked>
         </DataItem>
         <DataItem Type="NewWDS.Applications.App_Common.CustomContols.NumericUpDownExtended" Name="nudBandwidth">
-          <Value>600</Value>
+          <Value>850</Value>
         </DataItem>
         <DataItem Type="System.Windows.Forms.ComboBox" Name="cbbIfMode">
           <SelectedIndex>0</SelectedIndex>
@@ -215,14 +215,14 @@
                 <Value>2</Value>
               </DataItem>
               <DataItem Type="System.Windows.Forms.NumericUpDown" Name="nudSyncWordAllowedBitError">
-                <Value>0</Value>
+                <Value>2</Value>
               </DataItem>
               <DataItem Type="System.Windows.Forms.NumericUpDown" Name="nudSyncWordLengthSubtract">
                 <Value>0</Value>
               </DataItem>
               <swcSyncWord Type="NewWDS.Applications.App_Common.PacketConfigControl.SyncWordInputControl">
                 <DataItem Type="System.Windows.Forms.MaskedTextBox" Name="mtbSyncWord">
-                  <Text>BB 25</Text>
+                  <Text>A4 E2</Text>
                 </DataItem>
               </swcSyncWord>
               <DataItem Type="System.Windows.Forms.CheckBox" Name="chbSyncWordManchesterEncoded">

@@ -238,6 +238,8 @@ bool ADSBee::Init() {
 
     if (r978.IsEnabled()) {
         r978.SetDeviceState(Si4362::DeviceState::kStateRx, true);
+        r978.StartRx();
+        CONSOLE_INFO("ADSBee::Init", "978MHz radio started RX.");
     }
 
     // Throw a fit if the watchdog caused a reboot.
