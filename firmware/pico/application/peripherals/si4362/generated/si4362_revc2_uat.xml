@@ -17,6 +17,12 @@
         <DataItem Type="System.Windows.Forms.CheckBox" Name="chbUseExternalTCXO">
           <Checked>False</Checked>
         </DataItem>
+        <DataItem Type="System.Windows.Forms.NumericUpDown" Name="nudCrystalToleranceTX">
+          <Value>20</Value>
+        </DataItem>
+        <DataItem Type="System.Windows.Forms.NumericUpDown" Name="nudCrystalToleranceRX">
+          <Value>20</Value>
+        </DataItem>
         <DataItem Type="System.Windows.Forms.NumericUpDown" Name="nudCrystalFrequency">
           <Value>30</Value>
         </DataItem>
@@ -93,15 +99,12 @@
         <DataItem Type="System.Windows.Forms.CheckBox" Name="chbEnableIqCalibration">
           <Checked>False</Checked>
         </DataItem>
-        <DataItem Type="System.Windows.Forms.CheckBox" Name="chbEnablePllAFC">
-          <Checked>False</Checked>
-        </DataItem>
       </grbRfParameters>
     </tbpRfParameters>
     <tbpPacketHandler Type="System.Windows.Forms.TabPage">
       <pccPacketHandlerConfigurator Type="NewWDS.PacketConfigControl">
         <DataItem Type="System.Windows.Forms.ComboBox" Name="cbbPacketStructure">
-          <SelectedIndex>3</SelectedIndex>
+          <SelectedIndex>0</SelectedIndex>
         </DataItem>
         <tabGeneralConfig Type="System.Windows.Forms.TabControl">
           <tbpGeneralPacketConfig Type="System.Windows.Forms.TabPage">
@@ -195,14 +198,11 @@
             <grbPreamble Type="System.Windows.Forms.GroupBox">
               <grbPreambleType Type="System.Windows.Forms.GroupBox">
                 <DataItem Type="System.Windows.Forms.ComboBox" Name="cbbPreamblePattern">
-                  <SelectedIndex>0</SelectedIndex>
+                  <SelectedIndex>6</SelectedIndex>
                 </DataItem>
               </grbPreambleType>
               <DataItem Type="System.Windows.Forms.TrackBar" Name="trbPreambleTimeot">
                 <Value>15</Value>
-              </DataItem>
-              <DataItem Type="System.Windows.Forms.NumericUpDown" Name="nudPreambleRXThreshold">
-                <Value>20</Value>
               </DataItem>
             </grbPreamble>
           </tbpPreamble>
@@ -233,32 +233,6 @@
               </DataItem>
             </grbSyncWord>
           </tbpSyncWord>
-          <tbpField2 Type="System.Windows.Forms.TabPage">
-            <grbField2 Type="System.Windows.Forms.GroupBox">
-              <DataItem Type="System.Windows.Forms.NumericUpDown" Name="nudField2Length">
-                <Value>14</Value>
-              </DataItem>
-              <haiField2Content Type="NewWDS.Applications.App_Common.PacketConfigControl.HexAsciiInputControl">
-                <DataItem Type="System.Windows.Forms.RadioButton" Name="rdbASCII">
-                  <Checked>False</Checked>
-                </DataItem>
-                <DataItem Type="System.Windows.Forms.RadioButton" Name="rdbHEX">
-                  <Checked>True</Checked>
-                </DataItem>
-                <pnlInput Type="System.Windows.Forms.Panel">
-                  <DataItem Type="System.Windows.Forms.MaskedTextBox" Name="mtbInput">
-                    <Text>C5 C5 C5 C5 C5 C5 C5 C5 C5 C5 C5 C5 C5 C5</Text>
-                  </DataItem>
-                </pnlInput>
-              </haiField2Content>
-              <DataItem Type="System.Windows.Forms.CheckBox" Name="chbField2DataWhitening">
-                <Checked>False</Checked>
-              </DataItem>
-              <DataItem Type="System.Windows.Forms.CheckBox" Name="chbField2ManchesterEncoding">
-                <Checked>False</Checked>
-              </DataItem>
-            </grbField2>
-          </tbpField2>
           <tbpField5 Type="System.Windows.Forms.TabPage">
             <grbField5 Type="System.Windows.Forms.GroupBox">
               <DataItem Type="System.Windows.Forms.NumericUpDown" Name="nudField5Length">
@@ -298,6 +272,32 @@
               </DataItem>
             </grbField3>
           </tbpField3>
+          <tbpField2 Type="System.Windows.Forms.TabPage">
+            <grbField2 Type="System.Windows.Forms.GroupBox">
+              <DataItem Type="System.Windows.Forms.NumericUpDown" Name="nudField2Length">
+                <Value>14</Value>
+              </DataItem>
+              <haiField2Content Type="NewWDS.Applications.App_Common.PacketConfigControl.HexAsciiInputControl">
+                <DataItem Type="System.Windows.Forms.RadioButton" Name="rdbASCII">
+                  <Checked>False</Checked>
+                </DataItem>
+                <DataItem Type="System.Windows.Forms.RadioButton" Name="rdbHEX">
+                  <Checked>True</Checked>
+                </DataItem>
+                <pnlInput Type="System.Windows.Forms.Panel">
+                  <DataItem Type="System.Windows.Forms.MaskedTextBox" Name="mtbInput">
+                    <Text>C5 C5 C5 C5 C5 C5 C5 C5 C5 C5 C5 C5 C5 C5</Text>
+                  </DataItem>
+                </pnlInput>
+              </haiField2Content>
+              <DataItem Type="System.Windows.Forms.CheckBox" Name="chbField2DataWhitening">
+                <Checked>False</Checked>
+              </DataItem>
+              <DataItem Type="System.Windows.Forms.CheckBox" Name="chbField2ManchesterEncoding">
+                <Checked>False</Checked>
+              </DataItem>
+            </grbField2>
+          </tbpField2>
           <tbpField1 Type="System.Windows.Forms.TabPage">
             <grbField1 Type="System.Windows.Forms.GroupBox">
               <DataItem Type="System.Windows.Forms.NumericUpDown" Name="nudField1Length">
@@ -398,10 +398,10 @@
           <SelectedIndex>DONOTHING</SelectedIndex>
         </DataItem>
         <DataItem Type="System.Windows.Forms.CheckBox" Name="chbNirqPullup">
-          <Checked>False</Checked>
+          <Checked>True</Checked>
         </DataItem>
         <DataItem Type="System.Windows.Forms.ComboBox" Name="cbbNirq">
-          <SelectedIndex>DONOTHING</SelectedIndex>
+          <SelectedIndex>SYNC_WORD_DETECT</SelectedIndex>
         </DataItem>
         <DataItem Type="System.Windows.Forms.CheckBox" Name="chbSdoPullup">
           <Checked>False</Checked>

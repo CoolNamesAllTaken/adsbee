@@ -34,6 +34,25 @@ static_assert(kUATGroundUplinkSyncBytes[2] == 0xB8);
 // Long ADS-B message RS parity is RS(48, 34) code with 14 Bytes of parity capable of correcting up to 7 symbol errors
 // per block.
 
+void Si4362::ModemConfig::print() {
+    printf("Si4362 Modem Configuration\r\n");
+    printf("\tMODEM_DECIMATION_CFG1\r\n");
+    printf("\t\tndec2=%u\r\n", ndec2);
+    printf("\t\tndec1=%u\r\n", ndec1);
+    printf("\t\tndec0=%u\r\n", ndec0);
+    printf("\tMODEM_DECIMATION_CFG0\r\n");
+    printf("\t\tdwn3byp=%u\r\n", dwn3byp);
+    printf("\t\tdwn2byp=%u\r\n", dwn2byp);
+    printf("\tMODEM_DECIMATION_CFG2\r\n");
+    printf("\t\tndec3=%u\r\n", ndec3);
+    printf("\t\tndec2gain=%u\r\n", ndec2gain);
+    printf("\t\tndec2agc=%u\r\n", ndec2agc);
+    printf("\tMODEM_BCR_OSR\r\n");
+    printf("\t\trxosr=%u\r\n", rxosr);
+    printf("\tMODEM_BCR_NCO_OFFSET\r\n");
+    printf("\t\tncoff=%u\r\n", ncoff);
+}
+
 bool Si4362::Init(bool spi_already_initialized) {
     // Si4362 enable pin.
     gpio_init(config_.enable_pin);
@@ -97,10 +116,13 @@ bool Si4362::Init(bool spi_already_initialized) {
         return false;
     }
 
+    // Send the generated data array from WDS.
     if (!SendDataArray(kConfigDataArray, sizeof(kConfigDataArray))) {
         CONSOLE_ERROR("Si4362::Init", "Failed to send configuration data.");
         return false;
     }
+
+    // Override the data rate to 1.041667.
 
     return true;
 }
@@ -132,6 +154,38 @@ int Si4362::SPIWriteReadBlocking(uint8_t* tx_buf, uint8_t* rx_buf, uint16_t len_
 
     spi_set_clk(standby_clk_config_);  // Restore clock config.
     return bytes_written;
+}
+
+bool Si4362::GetModemConfig(Si4362::ModemConfig& modem_config) {
+    uint8_t data[kMaxNumPropertiesAtOnce] = {0};
+    bool ret = true;
+
+    // Get MODEM_DECIMATION_CFG1, MODEM_DECIMATION_CFG0
+    ret &= GetProperty(kGroupModem, 3, 0x1e, data);
+
+    // MODEM_DECIMATION_CFG1
+    modem_config.ndec2 = data[0] >> 6;
+    modem_config.ndec1 = (data[0] >> 4) & 0b11;
+    modem_config.ndec0 = (data[0] >> 1) & 0b111;
+
+    // MODEM_DECIMATION_CFG0
+    modem_config.dwn3byp = (data[1] >> 5) & 0b1;
+    modem_config.dwn2byp = (data[1] >> 4) & 0b1;
+
+    // MODEM_DECIMATION_CFG2
+    modem_config.ndec3 = (data[2] >> 5) & 0b11;
+    modem_config.ndec2gain = (data[2] >> 3) & 0b11;
+    modem_config.ndec2agc = (data[2] >> 2) & 0b1;
+
+    // MODEM_BCR_OSR
+    ret &= GetProperty(kGroupModem, 2, 0x22, data);
+    modem_config.rxosr = ((data[0] & 0xF) << 8) | data[1];
+
+    // MODEM_BCR_NCO_OFFSET
+    ret &= GetProperty(kGroupModem, 3, 0x24, data);
+    modem_config.ncoff = ((data[0] & 0xb111111) << 16) | (data[1] << 8) | data[2];
+
+    return ret;
 }
 
 bool Si4362::ClearToSend(bool end_transaction) {
@@ -256,6 +310,13 @@ bool Si4362::SendDataArray(const uint8_t* data, uint16_t len_bytes) {
         data_array_line++;
     }
     return true;
+}
+
+bool Si4362::SetModemConfig(const ModemConfig& modem_config) {
+    bool ret = true;
+    uint8_t data[kMaxNumPropertiesAtOnce] = {0};
+
+    return ret;
 }
 
 bool Si4362::SetProperty(Group group, uint8_t num_props, uint8_t start_prop, uint8_t* data) {

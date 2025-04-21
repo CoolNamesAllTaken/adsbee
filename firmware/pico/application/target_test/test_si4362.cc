@@ -22,3 +22,18 @@ UTEST(Si4362, SetGetProperty) {
     EXPECT_TRUE(adsbee.r978.GetProperty(Si4362::kGroupPreamble, 4, 0x05, read_buf));
     EXPECT_EQ(memcmp(preamble_config, read_buf, sizeof(preamble_config)), 0);
 }
+
+UTEST(Si4362, GetModemDataRate) {
+    uint8_t read_buf[10] = {0};
+    // MODEM_DATA_RATE
+    EXPECT_TRUE(adsbee.r978.GetProperty(Si4362::kGroupModem, 3, 0x03, read_buf));
+    printf("MODEM_DATA_RATE=%d\r\n", (read_buf[0] << 16) | (read_buf[1] << 8) | read_buf[0]);
+    // MODEM_TX_NCO_MODE
+    EXPECT_TRUE(adsbee.r978.GetProperty(Si4362::kGroupModem, 4, 0x06, read_buf));
+    printf("TX_OSR=%d NCOMOD=%d\r\n", (read_buf[0] >> 2) & 0b11,
+           (read_buf[0] & 0b11) << 24 | (read_buf[1] << 16) | (read_buf[2] << 8) | read_buf[3]);
+
+    Si4362::ModemConfig modem_config;
+    EXPECT_TRUE(adsbee.r978.GetModemConfig(modem_config));
+    modem_config.print();
+}
