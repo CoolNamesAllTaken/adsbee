@@ -21,14 +21,14 @@
 /*
 // Crys_freq(Hz): 30000000    Crys_tol(ppm): 20    IF_mode: 2    High_perf_Ch_Fil: 1    OSRtune: 0    Ch_Fil_Bw_AFC: 0
 ANT_DIV: 0    PM_pattern: 15
-// MOD_type: 2    Rsymb(sps): 500000    Fdev(Hz): 300000    RXBW(Hz): 850000    Manchester: 0    AFC_en: 3 Rsymb_error:
+// MOD_type: 2    Rsymb(sps): 500000    Fdev(Hz): 300000    RXBW(Hz): 100000    Manchester: 0    AFC_en: 3 Rsymb_error:
 0.1    Chip-Version: 2
 // RF Freq.(MHz): 978    API_TC: 29    fhst: 1200000    inputBW: 1    BERT: 0    RAW_dout: 0    D_source: 0 Hi_pfm_div:
 1
 // API_ARR_Det_en: 1    Fdev_error: 0    API_ETSI: 0
 //
 // # RX IF frequency is  -468750 Hz
-// # WB filter 1 (BW = 915.70 kHz);  NB-filter 1 (BW = 915.70 kHz)
+// # WB filter 15 (BW = 207.50 kHz);  NB-filter 15 (BW = 207.50 kHz)
 //
 // Modulation index: 1.2
 */
@@ -40,7 +40,7 @@ ANT_DIV: 0    PM_pattern: 15
 #define RADIO_CONFIGURATION_DATA_RADIO_STATE_AFTER_POWER_UP  0x03
 #define RADIO_CONFIGURATION_DATA_RADIO_DELAY_CNT_AFTER_RESET 0xF000
 
-#include "si446x_patch.h"
+#include "..\drivers\radio\Si446x\si446x_patch.h"
 
 // CONFIGURATION COMMANDS
 
@@ -54,7 +54,7 @@ ANT_DIV: 0    PM_pattern: 15
 // Command:                  RF_GPIO_PIN_CFG
 // Description:              Configures the GPIO pins.
 */
-#define RF_GPIO_PIN_CFG         0x13, 0x00, 0x00, 0x00, 0x00, 0x58, 0x00, 0x00
+#define RF_GPIO_PIN_CFG         0x13, 0x00, 0x00, 0x00, 0x00, 0x5A, 0x00, 0x00
 
 /*
 // Set properties:           RF_GLOBAL_XO_TUNE_2
@@ -139,7 +139,7 @@ pattern.
 //   SYNC_BITS_7_0 - Sync word.
 //   SYNC_CONFIG2 - Sync Word configuration bits.
 */
-#define RF_SYNC_CONFIG_6        0x11, 0x11, 0x06, 0x00, 0x11, 0xBB, 0x25, 0x00, 0x00, 0x80
+#define RF_SYNC_CONFIG_6        0x11, 0x11, 0x06, 0x00, 0x11, 0x25, 0x47, 0x00, 0x00, 0x00
 
 /*
 // Set properties:           RF_PKT_CRC_CONFIG_11
@@ -333,7 +333,7 @@ AFC functionality.
 //   MODEM_AFC_LIMITER_1 - Set the AFC limiter value.
 */
 #define RF_MODEM_BCR_NCO_OFFSET_1_12 \
-    0x11, 0x20, 0x0C, 0x25, 0x88, 0x89, 0x04, 0x44, 0x00, 0xC3, 0x00, 0x54, 0x34, 0x81, 0x55, 0x12
+    0x11, 0x20, 0x0C, 0x25, 0x88, 0x89, 0x04, 0x44, 0x00, 0xC3, 0x00, 0x54, 0x34, 0x81, 0x55, 0x04
 
 /*
 // Set properties:           RF_MODEM_AFC_LIMITER_0_2
@@ -345,7 +345,7 @@ AFC functionality.
 //   MODEM_AFC_LIMITER_0 - Set the AFC limiter value.
 //   MODEM_AFC_MISC - Specifies miscellaneous AFC control bits.
 */
-#define RF_MODEM_AFC_LIMITER_0_2 0x11, 0x20, 0x02, 0x31, 0xC6, 0x80
+#define RF_MODEM_AFC_LIMITER_0_2 0x11, 0x20, 0x02, 0x31, 0x41, 0x80
 
 /*
 // Set properties:           RF_MODEM_AGC_CONTROL_1
@@ -356,7 +356,7 @@ AFC functionality.
 // Descriptions:
 //   MODEM_AGC_CONTROL - Miscellaneous control bits for the Automatic Gain Control (AGC) function in the RX Chain.
 */
-#define RF_MODEM_AGC_CONTROL_1   0x11, 0x20, 0x01, 0x35, 0xE2
+#define RF_MODEM_AGC_CONTROL_1   0x11, 0x20, 0x01, 0x35, 0xE0
 
 /*
 // Set properties:           RF_MODEM_AGC_WINDOW_SIZE_12
@@ -400,7 +400,7 @@ signal when using the asynchronous demodulator.
 //   MODEM_RSSI_CONTROL2 - RSSI Jump Detection control.
 //   MODEM_RSSI_COMP - RSSI compensation value.
 */
-#define RF_MODEM_RAW_CONTROL_10 0x11, 0x20, 0x0A, 0x45, 0x8F, 0x02, 0x7F, 0x01, 0x00, 0xFF, 0x08, 0x08, 0x1A, 0x40
+#define RF_MODEM_RAW_CONTROL_10 0x11, 0x20, 0x0A, 0x45, 0x8F, 0x02, 0x7F, 0x01, 0x00, 0xFF, 0x06, 0x08, 0x1A, 0x40
 
 /*
 // Set properties:           RF_MODEM_RAW_SEARCH2_2
@@ -474,7 +474,7 @@ algorithm.
 //   MODEM_CHFLT_RX1_CHFLT_COE2_7_0 - Filter coefficients for the first set of RX filter coefficients.
 */
 #define RF_MODEM_CHFLT_RX1_CHFLT_COE13_7_0_12 \
-    0x11, 0x21, 0x0C, 0x00, 0xFF, 0xBA, 0x0F, 0x51, 0xCF, 0xA9, 0xC9, 0xFC, 0x1B, 0x1E, 0x0F, 0x01
+    0x11, 0x21, 0x0C, 0x00, 0xA2, 0xA0, 0x97, 0x8A, 0x79, 0x66, 0x52, 0x3F, 0x2E, 0x1F, 0x14, 0x0B
 
 /*
 // Set properties:           RF_MODEM_CHFLT_RX1_CHFLT_COE1_7_0_12
@@ -497,7 +497,7 @@ algorithm.
 //   MODEM_CHFLT_RX2_CHFLT_COE8_7_0 - Filter coefficients for the second set of RX filter coefficients.
 */
 #define RF_MODEM_CHFLT_RX1_CHFLT_COE1_7_0_12 \
-    0x11, 0x21, 0x0C, 0x0C, 0xFC, 0xFD, 0x15, 0xFF, 0x00, 0x0F, 0xFF, 0xBA, 0x0F, 0x51, 0xCF, 0xA9
+    0x11, 0x21, 0x0C, 0x0C, 0x06, 0x02, 0x00, 0x00, 0x00, 0x00, 0xA2, 0xA0, 0x97, 0x8A, 0x79, 0x66
 
 /*
 // Set properties:           RF_MODEM_CHFLT_RX2_CHFLT_COE7_7_0_12
@@ -520,7 +520,7 @@ algorithm.
 //   MODEM_CHFLT_RX2_CHFLT_COEM3 - Filter coefficients for the second set of RX filter coefficients.
 */
 #define RF_MODEM_CHFLT_RX2_CHFLT_COE7_7_0_12 \
-    0x11, 0x21, 0x0C, 0x18, 0xC9, 0xFC, 0x1B, 0x1E, 0x0F, 0x01, 0xFC, 0xFD, 0x15, 0xFF, 0x00, 0x0F
+    0x11, 0x21, 0x0C, 0x18, 0x52, 0x3F, 0x2E, 0x1F, 0x14, 0x0B, 0x06, 0x02, 0x00, 0x00, 0x00, 0x00
 
 /*
 // Set properties:           RF_SYNTH_PFDCP_CPFF_7

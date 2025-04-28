@@ -576,7 +576,8 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     FlashUtils::FlashSafe();
                     FirmwareUpdateManager::BootPartition(complementary_partition);
                     FlashUtils::FlashUnsafe();
-                    CPP_AT_ERROR("Failed to boot partition %u.", complementary_partition);
+                    // Don't return an error here - the boot process will handle any errors
+                    CPP_AT_SUCCESS();
                 }
             }
             break;

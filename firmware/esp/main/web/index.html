@@ -14,7 +14,6 @@
             <div class="input-line">
                 <span class="prompt">&gt;</span>
                 <span id="current-line"></span>
-                <span id="cursor"></span>
             </div>
             <input type="text" class="hidden-input" id="hidden-input" autocomplete="off">
         </div>
@@ -80,7 +79,6 @@
         const terminalContent = document.getElementById('terminal-content');
         const currentLine = document.getElementById('current-line');
         const hiddenInput = document.getElementById('hidden-input');
-        const cursor = document.getElementById('cursor');
 
         let socket = null;
         let commandHistory = [];

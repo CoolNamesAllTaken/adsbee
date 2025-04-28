@@ -47,6 +47,8 @@ void Si4362::ModemConfig::print() {
     printf("\t\tndec1=%u\r\n", ndec1);
     printf("\t\tndec0=%u\r\n", ndec0);
     printf("\tMODEM_DECIMATION_CFG0\r\n");
+    printf("\t\tchflt_lopw=%u\r\n", chflt_lopw);
+    printf("\t\tdroopfltbyp=%u\r\n", droopfltbyp);
     printf("\t\tdwn3byp=%u\r\n", dwn3byp);
     printf("\t\tdwn2byp=%u\r\n", dwn2byp);
     printf("\tMODEM_DECIMATION_CFG2\r\n");
@@ -135,6 +137,7 @@ bool Si4362::Init(bool spi_already_initialized) {
     // 60*500 = rxosr*1041
     // rxosr = 60*500/1041 = 28.8
     modem_config.rxosr = 29;
+    // modem_config.chflt_lopw = true;  // Reduce the low pass filter performance by changing to 15 taps.
     SetModemConfig(modem_config);
 
     return true;
@@ -202,8 +205,11 @@ bool Si4362::GetModemConfig(Si4362::ModemConfig& modem_config) {
     modem_config.ndec0 = (data[0] >> 1) & 0b111;
 
     // MODEM_DECIMATION_CFG0
+    modem_config.chflt_lopw = (data[1] >> 7) & 0b1;
+    modem_config.droopfltbyp = (data[1] >> 6) & 0b1;
     modem_config.dwn3byp = (data[1] >> 5) & 0b1;
     modem_config.dwn2byp = (data[1] >> 4) & 0b1;
+    modem_config.rxgain2 = data[1] & 0b1;
 
     // MODEM_DECIMATION_CFG2
     modem_config.ndec3 = (data[2] >> 5) & 0b11;
@@ -348,6 +354,11 @@ bool Si4362::SendDataArray(const uint8_t* data, uint16_t len_bytes) {
 bool Si4362::SetModemConfig(const ModemConfig& modem_config) {
     bool ret = true;
     uint8_t data[kMaxNumPropertiesAtOnce] = {0};
+
+    // MODEM_DECIMATION_CFG0
+    data[0] = (modem_config.chflt_lopw << 7) | (modem_config.droopfltbyp << 6) | (modem_config.dwn3byp << 5) |
+              (modem_config.dwn2byp << 4) | modem_config.rxgain2;
+    ret &= SetProperty(kGroupModem, 1, 0x1f, data);
 
     // MODEM_BCR_OSR
     data[0] = (modem_config.rxosr >> 8) & 0xF;

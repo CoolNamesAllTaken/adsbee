@@ -128,8 +128,11 @@ class Si4362 {
         uint8_t ndec1;  // 2 bits
         uint8_t ndec0;  // 3 bits
         // MODEM_DECIMATION_CFG0: 0x20 [0x1f]
-        bool dwn3byp;  // Bypass additional 2x decimator.
-        bool dwn2byp;  // Bypass additional 2x decimator.
+        bool chflt_lopw;   // Reduce power and reduce digital filter from 27 taps to 15 taps (wider bandwidth).
+        bool droopfltbyp;  // Bypass the droop compensation filter.
+        bool dwn3byp;      // Bypass additional 2x decimator.
+        bool dwn2byp;      // Bypass additional 2x decimator.
+        bool rxgain2;      // Double the decimate-by-8 filter gain.
         // MODEM_DECIMATION_CFG2
         uint8_t ndec3;      // 3 bits
         uint8_t ndec2gain;  // 2 bits

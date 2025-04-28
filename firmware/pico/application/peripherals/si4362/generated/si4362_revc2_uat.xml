@@ -209,13 +209,13 @@
           <tbpSyncWord Type="System.Windows.Forms.TabPage">
             <grbSyncWord Type="System.Windows.Forms.GroupBox">
               <DataItem Type="System.Windows.Forms.CheckBox" Name="chbSyncWordErrorAtBeginningOnly">
-                <Checked>False</Checked>
+                <Checked>True</Checked>
               </DataItem>
               <DataItem Type="System.Windows.Forms.NumericUpDown" Name="nudSyncWordLength">
                 <Value>2</Value>
               </DataItem>
               <DataItem Type="System.Windows.Forms.NumericUpDown" Name="nudSyncWordAllowedBitError">
-                <Value>2</Value>
+                <Value>1</Value>
               </DataItem>
               <DataItem Type="System.Windows.Forms.NumericUpDown" Name="nudSyncWordLengthSubtract">
                 <Value>0</Value>

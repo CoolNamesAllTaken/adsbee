@@ -63,7 +63,11 @@ UTEST(Si4362, GetSyncWord) {
         sync_word[i] = reverse_byte(data[i + 1]);
         print_binary(sync_word[i]);
     }
-    printf("\r\n");
+    printf("(0x");
+    for (uint8_t i = 0; i < sync_word_length_bytes; i++) {
+        printf(" %02X", sync_word[i]);
+    }
+    printf(")\r\n");
     printf("\tSYNC_ERROR_ONLY_BEGIN=%u\r\n", (data[5] >> 7) & 0b1);
 }
 
