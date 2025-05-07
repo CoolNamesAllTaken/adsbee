@@ -1,0 +1,7 @@
+{ "expected-missing-functions":
+  [
+
+  ],
+  "proof-name": "Cellular_ATIsPrefixPresent",
+  "proof-root": "tools/cbmc/proofs"
+}

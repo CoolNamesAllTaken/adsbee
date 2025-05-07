@@ -1,0 +1,35 @@
+@startuml
+
+Title FreeRTOS Cellular Library interaction with cellular module porting APIs
+
+participant Application
+participant "FreeRTOS Cellular Library"
+participant Cellular_common
+participant Cellular_modules_porting
+
+Application ->"FreeRTOS Cellular Library" : Cellular_Init()
+
+"FreeRTOS Cellular Library" -> Cellular_common : Cellular_CommonInit()
+
+Cellular_common -> Cellular_modules_porting : Cellular_moduleInit()
+
+Cellular_common -> Cellular_modules_porting : Cellular_moduleEnableUE()
+
+Cellular_common -> Cellular_modules_porting : Cellular_moduleEnableUrc
+
+Cellular_common --> "FreeRTOS Cellular Library" :
+
+"FreeRTOS Cellular Library" --> Application :
+
+
+Application ->"FreeRTOS Cellular Library" : Cellular_CleanUp()
+
+"FreeRTOS Cellular Library" -> Cellular_common : Cellular_CommonCleanUp()
+
+Cellular_common -> Cellular_modules_porting : Cellular_moduleCleanUp()
+
+Cellular_common --> "FreeRTOS Cellular Library" :
+
+"FreeRTOS Cellular Library" --> Application :
+
+@enduml

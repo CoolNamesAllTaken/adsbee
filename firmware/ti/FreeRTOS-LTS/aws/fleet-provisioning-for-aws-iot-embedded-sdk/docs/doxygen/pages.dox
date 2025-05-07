@@ -1,0 +1,101 @@
+/**
+@mainpage Overview
+@anchor fleet_provisioning
+@brief AWS IoT Fleet Provisioning Library
+
+> By using AWS IoT fleet provisioning, AWS IoT can generate and securely deliver device certificates and private keys to your devices when they connect to AWS IoT for the first time. AWS IoT provides client certificates that are signed by the Amazon Root certificate authority (CA).
+<span style="float:right;margin-right:4em"> &mdash; <i>Description of Fleet Provisioning from AWS IoT documentation <https://docs.aws.amazon.com/iot/latest/developerguide/provision-wo-cert.html></i></span><br>
+
+For an overview of device provisioning options available with AWS IoT, see
+[Device Provisioning](https://docs.aws.amazon.com/iot/latest/developerguide/provision-wo-cert.html).
+
+AWS IoT Fleet Provisioning allows you to provision devices without
+pre-installed unique client certificates. There are two ways to use Fleet
+Provisioning: by claim, or by trusted user. If provisioning by claim, devices
+used a provisioning claim certificate and private key registered with AWS IoT
+to obtain unique device certificates. If provisioning by trusted user, a
+trusted user, such as an end user or installation technician, uses a mobile
+app to configure the device in its deployed location.
+
+There are two options for obtaining unique client certificates with AWS IoT
+Fleet Provisioning: CreateCertificateFromCsr and CreateKeysAndCertificate.
+CreateCertificateFromCsr allows the device to obtain a certificate by providing
+a certificate signing request, keeping the private key secure on the device.
+CreateKeysAndCertificate provides a new certificate and corresponding private
+key.
+
+@section fleet_provisioning_memory_requirements Memory Requirements
+@brief Memory requirements of the AWS IoT Fleet Provisioning Library.
+
+@include{doc} size_table.md
+ */
+
+/**
+@page fleet_provisioning_design Design
+AWS IoT Fleet Provisioning Library Design
+
+The AWS IoT Fleet Provisioning library provides macros and functions to
+assemble and parse MQTT topic strings reserved for the Fleet Provisioning
+feature of AWS IoT core. Applications can use this library in conjunction with
+any MQTT library to interact with the AWS IoT Fleet Provisioning APIs.
+
+The diagram below demonstrates the happy path an application can take to use
+the Fleet Provisioning library, a MQTT library, and a JSON or CBOR library to
+interact with the AWS IoT Fleet Provisioning APIs.
+
+\image html fleet_provisioning_operations.png "Fleet Provisioning Library example operation diagram" width=90%
+*/
+
+/**
+@page fleet_provisioning_config Configurations
+@brief Configurations of the AWS IoT Fleet Provisioning Library.
+<!-- @par configpagestyle allows the @section titles to be styled according to
+     style.css -->
+@par configpagestyle
+
+Configuration settings are C pre-processor constants. They can be set with a
+`\#define` in the config file (`fleet_provisioning_config.h`) or by using a
+compiler option such as -D in gcc.
+
+@section FLEET_PROVISIONING_DO_NOT_USE_CUSTOM_CONFIG
+@copydoc FLEET_PROVISIONING_DO_NOT_USE_CUSTOM_CONFIG
+
+@section fleet_provisioning_logerror LogError
+@copydoc LogError
+
+@section fleet_provisioning_logwarn LogWarn
+@copydoc LogWarn
+
+@section fleet_provisioning_loginfo LogInfo
+@copydoc LogInfo
+
+@section fleet_provisioning_logdebug LogDebug
+@copydoc LogDebug
+*/
+
+/**
+@page fleet_provisioning_functions Functions
+@brief Primary functions of the AWS IoT Fleet Provisioning Library:<br><br>
+@subpage fleet_provisioning_getregisterthingtopic_function <br>
+@subpage fleet_provisioning_matchtopic_function <br>
+
+@page fleet_provisioning_getregisterthingtopic_function FleetProvisioning_GetRegisterThingTopic
+@snippet fleet_provisioning.h declare_fleet_provisioning_getregisterthingtopic
+@copydoc FleetProvisioning_GetRegisterThingTopic
+
+@page fleet_provisioning_matchtopic_function FleetProvisioning_MatchTopic
+@snippet fleet_provisioning.h declare_fleet_provisioning_matchtopic
+@copydoc FleetProvisioning_MatchTopic
+*/
+
+<!-- We do not use doxygen ALIASes here because there have been issues in the
+     past versions with "^^" newlines within the alias definition. -->
+/**
+@defgroup fleet_provisioning_enum_types Enumerated Types
+@brief Enumerated types of the AWS IoT Fleet Provisioning Library
+*/
+
+/**
+@defgroup fleet_provisioning_constants Constants
+@brief Constants defined in the AWS IoT Fleet Provisioning Library
+*/

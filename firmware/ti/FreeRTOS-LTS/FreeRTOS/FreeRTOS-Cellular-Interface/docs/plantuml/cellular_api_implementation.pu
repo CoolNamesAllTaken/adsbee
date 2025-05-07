@@ -1,0 +1,31 @@
+@startuml
+
+Title FreeRTOS Cellular Library API implementation
+
+participant Application
+participant "FreeRTOS Cellular Library"
+participant Cellular_modules_porting
+participant Cellular_common
+participant Cellular_modem
+
+Application ->"FreeRTOS Cellular Library" : Cellular_GetSimCardStatus()
+
+"FreeRTOS Cellular Library"->Cellular_modules_porting :Cellular_GetSimCardStatus()
+
+Cellular_modules_porting->Cellular_common:Get module context passed in Cellular_ModuleInt() :\n_Cellular_GetModuleContext()
+
+Cellular_modules_porting->Cellular_modules_porting:Setup AT commnand request:\nCellularAtReq_t = \n{\n    pAtCmd = "AT+QSIMSTAT?"\n    atCmdType = CELLULAR_AT_WITH_PREFIX\n    pAtRspPrefix = "+QSIMSTAT"\n    respCallback = _Cellular_RecvFuncGetSimCardStatus\n    pData = &simCardState\n    dataLen = sizeof( CellularSimCardState_t )\n};\n
+
+Cellular_modules_porting->Cellular_common:Send AT command with cellular common APIs:\n _Cellular_AtcmdRequestWithCallback( CellularAtReq_t )
+
+Cellular_common ->Cellular_modem : AT+QSIMSTAT?
+
+Cellular_modem -> Cellular_common : +QSIMSTAT: ....
+
+Cellular_modem -> Cellular_common : OK
+
+Cellular_common ->Cellular_modules_porting : Call the callback function with corresponding data field \n_Cellular_RecvFuncGetSimCardStatus( pData, dataLen )
+
+Cellular_modules_porting ->Application : Return parsing status and data
+
+@enduml

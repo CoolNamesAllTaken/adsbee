@@ -1,0 +1,19 @@
+/**
+@page shadow_porting Porting Guide
+@brief Guide for porting Shadow to a new platform.
+
+@section shadow_porting_config Configuration Macros
+@brief Settings that can be set as macros in the config header `shadow_config.h`, or passed in as compiler options.
+
+The following optional logging macros are used throughout the library:
+ - @ref LogError
+ - @ref LogWarn
+ - @ref LogInfo
+ - @ref LogDebug
+
+@see [Configurations](@ref shadow_config) for more information.
+
+@note Regardless of whether the following macros are defined in `shadow_config.h` or passed as compiler options,
+the `shadow_config.h` file must be included to build the Shadow library. To disable this requirement
+and build the library with default configuration values, provide `SHADOW_DO_NOT_USE_CUSTOM_CONFIG` as a compile time preprocessor macro.
+ */

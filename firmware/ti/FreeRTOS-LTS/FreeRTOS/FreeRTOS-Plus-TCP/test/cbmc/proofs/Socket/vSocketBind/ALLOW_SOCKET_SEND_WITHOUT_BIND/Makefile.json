@@ -1,0 +1,30 @@
+{
+  "ENTRY": "vSocketBind",
+  "ALLOW_SEND_WITHOUT_BIND":"1",
+  "CBMCFLAGS":
+  [
+    "--unwind 1",
+    "--unwindset FreeRTOS_FindEndPointOnIP_IPv4.0:3"
+  ],
+  "OBJS":
+  [
+    "$(FREERTOS_PLUS_TCP)/test/FreeRTOS-Kernel/list.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_Routing.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_Sockets.goto",
+    "$(ENTRY)_harness.goto"
+  ],
+  "INSTFLAGS":
+  [
+  ],
+  "DEF":
+  [
+    "ipconfigALLOW_SOCKET_SEND_WITHOUT_BIND={ALLOW_SEND_WITHOUT_BIND}",
+    "ipconfigUSE_TCP=1"
+  ],
+  "INC":
+  [
+    "$(FREERTOS_PLUS_TCP)/test/cbmc/include",
+    "$(FREERTOS_PLUS_TCP)/test/cbmc/proofs/utility"
+  ]
+}
+

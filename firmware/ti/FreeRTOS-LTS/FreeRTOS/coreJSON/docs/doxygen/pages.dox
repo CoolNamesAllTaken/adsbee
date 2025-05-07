@@ -1,0 +1,79 @@
+/**
+@mainpage Overview
+@anchor json
+@brief coreJSON Library
+
+<p>
+A parser that supports key lookups while also strictly enforcing the ECMA-404 JSON standard.
+The library is written in C and designed to be compliant with ISO C90 and MISRA C. It has proven safe memory use
+and no heap allocation, making it suitable for IoT microcontrollers, but also fully portable to other platforms.
+</p>
+
+@section json_memory_requirements Memory Requirements
+@brief Memory requirements of the JSON library.
+
+@include{doc} size_table.md
+
+@section json_design Design
+@brief JSON Library Design
+
+<h3>Memory Usage</h3>
+<p>
+All functions in the JSON library operate only on the buffers provided and use only
+local variables on the stack. In order to support static-only usage, we made a
+trade-off to re-parse as necessary so that we would not need to keep state.
+</p>
+
+<h3>Parsing Strictness</h3>
+<p>
+Input validation is necessary for strong security posture. As such, the parser
+strictly enforces the ECMA-404 JSON standard. Additionally, JSON documents are
+checked for illegal UTF-8 sequences, and strings have unicode hex escapes validated.
+</p>
+
+<h3>Compliance & Coverage</h3>
+<p>
+The JSON library is designed to be compliant with ISO C90 and MISRA C:2012.
+All functions are written to have minimal complexity. Unit tests and CBMC proofs
+are written to cover every path of execution and achieve 100% branch coverage.
+</p>
+*/
+
+/**
+@page json_functions Functions
+@brief Primary functions of the JSON library:<br><br>
+@subpage json_validate_function <br>
+@subpage json_search_function <br>
+@subpage json_searcht_function <br>
+@subpage json_searchconst_function <br>
+@subpage json_iterate_function <br>
+
+@page json_validate_function JSON_Validate
+@snippet core_json.h declare_json_validate
+@copydoc JSON_Validate
+
+@page json_search_function JSON_Search
+@snippet core_json.h declare_json_search
+@copydoc JSON_Search
+
+@page json_searcht_function JSON_SearchT
+@snippet core_json.h declare_json_searcht
+@copydoc JSON_SearchT
+
+@page json_searchconst_function JSON_SearchConst
+@snippet core_json.h declare_json_searchconst
+@copydoc JSON_SearchConst
+
+@page json_iterate_function JSON_Iterate
+@snippet core_json.h declare_json_iterate
+@copydoc JSON_Iterate
+*/
+
+<!-- We do not use doxygen ALIASes here because there have been issues in the past versions with "^^" newlines within the alias definition. -->
+/**
+@defgroup json_enum_types Enumerated Types
+@brief Enumerated types of the JSON library
+
+@defgroup json_struct_types Struct Types
+@brief Struct types of the JSON library
+*/

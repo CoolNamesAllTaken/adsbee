@@ -1,0 +1,202 @@
+diff --git a/source/core_json.c b/source/core_json.c
+index 901b2e1..8bdd89c 100644
+--- a/source/core_json.c
++++ b/source/core_json.c
+@@ -62,6 +62,21 @@ typedef union
+ #define isSquareOpen_( x )            ( ( x ) == '[' )
+ #define isSquareClose_( x )           ( ( x ) == ']' )
+ 
++/**
++ * Renaming all loop-contract clauses from CBMC for readability.
++ * For more information about loop contracts in CBMC, see
++ * https://diffblue.github.io/cbmc/contracts-user.html.
++ */
++#ifdef CBMC
++#define loopInvariant(...)            __CPROVER_loop_invariant(__VA_ARGS__)
++#define decreases(...)             __CPROVER_decreases(__VA_ARGS__)
++#define assigns(...)             __CPROVER_assigns(__VA_ARGS__)
++#else
++#define loopInvariant(...)
++#define decreases(...)
++#define assigns(...)
++#endif
++
+ /**
+  * @brief Advance buffer index beyond whitespace.
+  *
+@@ -78,6 +93,9 @@ static void skipSpace( const char * buf,
+     coreJSON_ASSERT( ( buf != NULL ) && ( start != NULL ) && ( max > 0U ) );
+ 
+     for( i = *start; i < max; i++ )
++    assigns( i )
++    loopInvariant( *start <= i && i <= max )
++    decreases( max - i )
+     {
+         if( !isspace_( buf[ i ] ) )
+         {
+@@ -102,6 +120,13 @@ static size_t countHighBits( uint8_t c )
+     size_t i = 0;
+ 
+     while( ( n & 0x80U ) != 0U )
++    assigns( i, n )
++    loopInvariant (
++        ( 0U <= i ) && ( i <= 8U )
++        && ( n == ( c & ( 0xFF >> i ) ) << i )
++        && ( ( ( c >> ( 8U - i ) ) + 1U ) == ( 1U << i ) )
++    )
++    decreases( 8U - i )
+     {
+         i++;
+         n = ( n & 0x7FU ) << 1U;
+@@ -210,6 +235,13 @@ static bool skipUTF8MultiByte( const char * buf,
+         /* The bit count is 1 greater than the number of bytes,
+          * e.g., when j is 2, we skip one more byte. */
+         for( j = bitCount - 1U; j > 0U; j-- )
++        assigns( j, i, value, c.c )
++        loopInvariant(
++            ( 0 <= j ) && ( j <= bitCount - 1 )
++            && ( *start <= i ) && ( i <= max )
++            && ( ( i == max ) ==> ( j > 0 ) )
++        )
++        decreases( j )
+         {
+             i++;
+ 
+@@ -345,6 +377,12 @@ static bool skipOneHexEscape( const char * buf,
+     if( ( end < max ) && ( buf[ i ] == '\\' ) && ( buf[ i + 1U ] == 'u' ) )
+     {
+         for( i += 2U; i < end; i++ )
++        assigns( value, i )
++        loopInvariant(
++            ( *start + 2U <= i ) && ( i <= end ) &&
++            ( 0U <= value ) && ( value < ( 1U << ( 4U * ( i - ( 2U + *start ) ) ) ) )
++        )
++        decreases( end - i )
+         {
+             uint8_t n = hexToInt( buf[ i ] );
+ 
+@@ -522,6 +560,9 @@ static bool skipString( const char * buf,
+         i++;
+ 
+         while( i < max )
++        assigns( i )
++        loopInvariant( *start + 1U <= i && i <= max )
++        decreases( max - i )
+         {
+             if( buf[ i ] == '"' )
+             {
+@@ -580,6 +621,9 @@ static bool strnEq( const char * a,
+     coreJSON_ASSERT( ( a != NULL ) && ( b != NULL ) );
+ 
+     for( i = 0; i < n; i++ )
++    assigns( i )
++    loopInvariant( i <= n )
++    decreases( n - i )
+     {
+         if( a[ i ] != b[ i ] )
+         {
+@@ -681,6 +725,7 @@ static bool skipAnyLiteral( const char * buf,
+  * false otherwise.
+  */
+ #define MAX_FACTOR    ( MAX_INDEX_VALUE / 10 )
++
+ static bool skipDigits( const char * buf,
+                         size_t * start,
+                         size_t max,
+@@ -695,6 +740,9 @@ static bool skipDigits( const char * buf,
+     saveStart = *start;
+ 
+     for( i = *start; i < max; i++ )
++    assigns( value, i )
++    loopInvariant( *start <= i && i <= max )
++    decreases( max - i )
+     {
+         if( !isdigit_( buf[ i ] ) )
+         {
+@@ -944,6 +992,9 @@ static void skipArrayScalars( const char * buf,
+     i = *start;
+ 
+     while( i < max )
++    assigns( i )
++    loopInvariant( *start <= i && i <= max )
++    decreases( max - i )
+     {
+         if( skipAnyScalar( buf, &i, max ) != true )
+         {
+@@ -986,6 +1037,13 @@ static void skipObjectScalars( const char * buf,
+     i = *start;
+ 
+     while( i < max )
++    assigns( i, *start, comma )
++    loopInvariant(
++        i >= *start
++        && __CPROVER_loop_entry( i ) <= i && i <= max
++        && __CPROVER_loop_entry( *start ) <= *start && *start <= max
++    )
++    decreases( max - i )
+     {
+         if( skipString( buf, &i, max ) != true )
+         {
+@@ -1082,6 +1140,14 @@ static JSONStatus_t skipCollection( const char * buf,
+     i = *start;
+ 
+     while( i < max )
++    assigns( i, depth, c, __CPROVER_object_whole( stack ), ret )
++    loopInvariant(
++        -1 <= depth && depth <= JSON_MAX_DEPTH
++        && *start <= i && i <= max
++        && ( ( ret == JSONSuccess ) ==> i >= *start + 2U )
++        && ( ret == JSONSuccess || ret == JSONPartial || ret == JSONIllegalDocument || ret == JSONMaxDepthExceeded )
++    )
++    decreases( max - i )
+     {
+         c = buf[ i ];
+         i++;
+@@ -1363,6 +1429,9 @@ static bool objectSearch( const char * buf,
+         skipSpace( buf, &i, max );
+ 
+         while( i < max )
++        assigns( i, key, keyLength, value, valueLength )
++        loopInvariant( __CPROVER_loop_entry( i ) <= i && i <= max )
++        decreases( max - i )
+         {
+             if( nextKeyValuePair( buf, &i, max, &key, &keyLength,
+                                   &value, &valueLength ) != true )
+@@ -1430,6 +1499,9 @@ static bool arraySearch( const char * buf,
+         skipSpace( buf, &i, max );
+ 
+         while( i < max )
++        assigns( i, currentIndex, value, valueLength )
++        loopInvariant( __CPROVER_loop_entry( i ) <= i && i <= max && currentIndex < i )
++        decreases( max - i )
+         {
+             if( nextValue( buf, &i, max, &value, &valueLength ) != true )
+             {
+@@ -1495,6 +1567,9 @@ static bool skipQueryPart( const char * buf,
+     while( ( i < max ) &&
+            !isSeparator_( buf[ i ] ) &&
+            !isSquareOpen_( buf[ i ] ) )
++    assigns( i )
++    loopInvariant( i  <= max )
++    decreases( max - i )
+     {
+         i++;
+     }
+@@ -1541,6 +1616,17 @@ static JSONStatus_t multiSearch( const char * buf,
+     coreJSON_ASSERT( ( max > 0U ) && ( queryLength > 0U ) );
+ 
+     while( i < queryLength )
++    assigns( i, start, queryStart, value, length )
++    loopInvariant(
++           0U <= start && start < max
++        && 0U < length && length <= max
++        && start + length <= max
++        && ( ( i == queryLength && ret == JSONSuccess && buf[ start ] == '"' ) ==> length >= 2U )
++        && 0U <= value && value < max
++        && 0U <= i && i <= queryLength
++        && 0U <= queryStart && queryStart <= queryLength
++    )
++    decreases( queryLength - i )
+     {
+         bool found = false;
+ 

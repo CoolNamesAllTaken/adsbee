@@ -1,0 +1,343 @@
+/**
+@mainpage Overview
+@anchor http
+@brief HTTP Client library
+
+This HTTP Client library implements a subset of the HTTP/1.1 protocol. Features
+of this library include:
+- Fully synchronous API, to allow applications to completely manage their concurrency and multi-threading.
+- Operations on user supplied buffers, so that applications have complete control of their memory allocation strategy.
+- Integration with [llhttp](https://github.com/nodejs/llhttp) to handle chunked encoding.
+
+Feature of HTTP/1.1 not supported in this library:
+- Streaming uploads and downloads. Range requests for partial content responses are highly encouraged with this API.
+- Pipelining requests. There may be only one request outgoing and one response incoming, at a time, on a connection.
+- Automatic redirection. The user application owns their connection and must handle redirection status codes.
+
+@section http_memory_requirements Memory Requirements
+@brief Memory requirements of the HTTP Client library.
+
+@include{doc} size_table.md
+ */
+
+/**
+@page http_design Design
+HTTP Client Library Architecture and Design
+
+This HTTP client library implements a subset of the HTTP/1.1 protocol. It is
+optimized for resource constrained devices and does not dynamically allocate any
+memory.
+
+@section http_transport_interface_blurb Transport Interface
+
+For decoupling from the user platform, the HTTP client library uses a
+transport interface. The transport interface allows the HTTP client library to
+send and receive data over the user's transport layer. The user platform must
+implement a @ref TransportInterface_t to use in @ref HTTPClient_Send.
+
+@see The [transport interface documentation](@ref http_transport_interface) for
+more information.
+
+@section http_request_serialization Building an HTTP Request
+
+The HTTP client library provides the following API to serialize request headers.
+- @ref HTTPClient_InitializeRequestHeaders
+- @ref HTTPClient_AddHeader
+- @ref HTTPClient_AddRangeHeader
+
+An application is expected to create and populate an @ref HTTPRequestInfo_t and
+set a buffer to use for the headers in @ref HTTPRequestHeaders_t.pBuffer. The
+application may first call @ref HTTPClient_InitializeRequestHeaders to populate
+the @ref HTTPRequestHeaders_t with the method, the path, and the host. The
+HTTP request will be serialized to the following when HTTPRequestInfo_t.reqFlags
+is zero.
+
+@code
+<METHOD> <PATH> HTTP/1.1\r\n
+User-Agent: <MY-PLATFORM>\r\n
+Host: <SERVER-URL>\r\n\r\n
+@endcode
+
+When the @ref HTTPRequestInfo_t.reqFlags has @ref HTTP_REQUEST_KEEP_ALIVE_FLAG
+set, then the HTTP request will be serialized to the following:
+
+@code
+<METHOD> <PATH> HTTP/1.1\r\n
+User-Agent: <MY-PLATFORM>\r\n
+Host: <SERVER-URL>\r\n
+Connection: keep-alive\r\n\r\n
+@endcode
+
+The user application may add more headers using @ref HTTPClient_AddHeader or
+@ref HTTPClient_AddRangeHeader. New headers will be appended to the end of the
+existing headers. Please see the following example:
+
+@code
+<METHOD> <PATH> HTTP/1.1\r\n
+User-Agent: <MY-PLATFORM>\r\n
+Host: <SERVER-URL>\r\n
+Connection: keep-alive\r\n
+Another-Header1: another-value1\r\n
+Another-Header2: another-value2\r\n
+Another-Header3: another-value3\r\n\r\n
+@endcode
+
+The user application may pass a request body into the @ref HTTPClient_Send
+function when the request is ready to be sent.
+
+@section http_range_support HTTP Range Requests and Partial Content Responses
+
+Range Requests are strongly encouraged for downloading a large file. Large is
+defined here to be a file whose total size cannot fit into the space currently
+available in RAM. By downloading a large file using range requests the user
+application can spend time processing that part of the file (for example writing
+to flash), then request the next part of the file. If the user application were
+to request the entire file at once and process it in sections from the network,
+the system is at a high risk for dropping packets. Dropped packets cause
+retransmissions in the system's transport layer. With many, there can be a
+negative impact on the overall system throughput, network bandwidth, and battery
+life of the device.
+
+Range requests are supported using @ref HTTPClient_AddRangeHeader. Please see
+the function documentation for more information.
+
+@section http_response_deserialization Receiving and Parsing an HTTP Response
+
+After the request headers are serialized, the user application must set a buffer
+to receive the HTTP response in @ref HTTPResponse_t.pBuffer.
+@ref HTTPClient_Send is then used to send the request and receive the response.
+If the request has a body it is passed as a parameter to @ref HTTPClient_Send.
+As soon as the response is received from the network it is parsed. The final
+parsed response is represented by the @ref HTTPResponse_t returned from
+@ref HTTPClient_Send. Parsing the HTTP response is done using
+[llhttp](https://github.com/nodejs/llhttp). llhttp invokes
+callbacks for each section in the HTTP response it finds. Using these callbacks
+the HTTP client library sets the members of @ref HTTPResponse_t to return from
+@ref HTTPClient_Send. The overall flow of @ref HTTPClient_Send is
+shown in the activity diagram below:
+
+@image html httpclient_send_activity_diagram.png width=50%
+
+@section http_response_headers Reading the HTTP Response Headers
+
+Upon a successful return from @ref HTTPClient_Send, the HTTP Response headers
+can be read from the headers found in @ref HTTPResponse_t.pHeaders. The function
+@ref HTTPClient_ReadHeader reads the headers from an @ref HTTPResponse_t.
+@ref HTTPClient_ReadHeader will re-parse the response in
+@ref HTTPResponse_t.pBuffer, looking for the header field of interest.
+Re-parsing involves using llhttp to look at each character starting from
+the beginning of @ref HTTPResponse_t.pBuffer until the header field of interest
+is found.
+
+If the user application wants to avoid re-parsing @ref HTTPResponse_t.pBuffer,
+then the user application may register a callback in
+@ref HTTPResponse_t.pHeaderParsingCallback. When the HTTP response message is
+first received from the network, in @ref HTTPClient_Send, llhttp is invoked
+to parse the response. This first parsing in @ref HTTPClient_Send will invoke
+@ref HTTPResponse_t.pHeaderParsingCallback for each header that is found
+in response. Please see the sequence diagram below for an illustration of when
+@ref HTTPClient_ResponseHeaderParsingCallback_t.onHeaderCallback is invoked
+during the operation of @ref HTTPClient_Send.
+
+@image html httpclient_send_sequence_diagram.png width=50%
+*/
+
+/**
+@page http_porting Porting Guide
+@brief Guide for porting the HTTP client library to a new platform.
+
+To use the HTTP client library, a platform must implement the following
+components:
+1. [Configuration Macros](@ref http_porting_config)
+2. [Transport Interface](@ref http_porting_transport)
+
+@section http_porting_config Configuration Macros
+@brief Settings that can be set as macros in the config header
+`core_http_config.h`, or passed in as compiler options.
+
+@note If the custom configuration header `core_http_config.h` is not provided,
+then the @ref HTTP_DO_NOT_USE_CUSTOM_CONFIG macro must be defined.
+
+@see [Configurations](@ref http_config)
+
+The following macros can be configured for this library:
+ - @ref HTTP_USER_AGENT_VALUE
+ - @ref HTTP_SEND_RETRY_TIMEOUT_MS
+ - @ref HTTP_RECV_RETRY_TIMEOUT_MS
+
+In addition, the following logging macros are used throughout this library:
+ - @ref LogError
+ - @ref LogWarn
+ - @ref LogInfo
+ - @ref LogDebug
+
+@section http_porting_transport Transport Interface
+@brief The HTTP client library relies on transport interface callbacks
+that must be implemented in order to send and receive packets on a network.
+
+@see The [Transport Interface](@ref http_transport_interface) documentation for
+more information.
+
+The transport interface API used by the HTTP client is defined in
+@ref transport_interface.h. A port must implement functions corresponding to the
+following functions pointers:
+ - [Transport Receive](@ref TransportRecv_t): A function to receive bytes from a network.
+ @code
+ int32_t (* TransportRecv_t )(
+     NetworkContext_t * pNetworkContext, void * pBuffer, size_t bytesToRecv
+ );
+ @endcode
+ - [Transport Send](@ref TransportSend_t): A function to send bytes over a network.
+ @code
+ int32_t (* TransportSend_t )(
+     NetworkContext_t * pNetworkContext, const void * pBuffer, size_t bytesToSend
+ );
+ @endcode
+
+The above two functions take in a pointer to a @ref NetworkContext_t, the type
+name of a `struct NetworkContext`. The NetworkContext struct must also be
+defined by the user's implementation, and ought to contain any information
+necessary to send and receive data with the @ref TransportSend_t and
+@ref TransportRecv_t implementations, respectively:
+
+@code
+struct NetworkContext {
+    // Fields necessary for the transport implementations, e.g. a TCP socket descriptor.
+};
+@endcode
+
+@section http_porting_time Time Function
+@brief The HTTP library optionally relies on a function to generate millisecond
+timestamps, for the purpose of calculating the elapsed time when no data has
+been sent or received.
+
+@see @ref HTTPClient_GetCurrentTimeFunc_t
+
+Applications can supply their platform-specific function capable of generating
+32-bit timestamps of millisecond resolution. These timestamps need not correspond
+with any real world clock; the only requirement is that the difference between two
+timestamps must be an accurate representation of the duration between them, in
+milliseconds.
+
+This function is used in conjunction with macros @ref HTTP_SEND_RETRY_TIMEOUT_MS
+and @ref HTTP_RECV_RETRY_TIMEOUT_MS.
+*/
+
+/**
+@page http_config Configurations
+@brief Configurations of the HTTP Client library.
+<!-- @par configpagestyle allows the @section titles to be styled according to style.css -->
+@par configpagestyle
+
+Configuration settings are C pre-processor constants. They can be set with a \#define in the config file (core_http_config.h) or by using a compiler option such as -D in gcc.
+
+
+@section HTTP_DO_NOT_USE_CUSTOM_CONFIG
+@brief Define this macro to build the HTTP client library without the custom
+config file core_http_config.h.
+
+Without the custom config, the HTTP client library builds with default values of
+config macros defined in core_http_config_defaults.h file.
+
+If a custom config is provided, then HTTP_DO_NOT_USE_CUSTOM_CONFIG should not be
+defined.
+
+@section HTTP_USER_AGENT_VALUE
+@copydoc HTTP_USER_AGENT_VALUE
+
+@section HTTP_SEND_RETRY_TIMEOUT_MS
+@copydoc HTTP_SEND_RETRY_TIMEOUT_MS
+
+@section HTTP_RECV_RETRY_TIMEOUT_MS
+@copydoc HTTP_RECV_RETRY_TIMEOUT_MS
+
+@section http_logerror LogError
+@copydoc LogError
+
+@section http_logwarn LogWarn
+@copydoc LogWarn
+
+@section http_loginfo LogInfo
+@copydoc LogInfo
+
+@section http_logdebug LogDebug
+@copydoc LogDebug
+*/
+
+/**
+@page http_functions Functions
+@brief Primary functions of the HTTP Client library:<br><br>
+@subpage httpclient_initializerequestheaders_function <br>
+@subpage httpclient_addheader_function <br>
+@subpage httpclient_addrangeheader_function <br>
+@subpage httpclient_sendhttpheaders_function <br>
+@subpage httpclient_sendhttpdata_function <br>
+@subpage httpclient_send_function <br>
+@subpage httpclient_receiveandparsehttpresponse_function <br>
+@subpage httpclient_readheader_function <br>
+@subpage httpclient_strerror_function <br>
+
+@page httpclient_initializerequestheaders_function HTTPClient_InitializeRequestHeaders
+@snippet core_http_client.h declare_httpclient_initializerequestheaders
+@copydoc HTTPClient_InitializeRequestHeaders
+
+@page httpclient_addheader_function HTTPClient_AddHeader
+@snippet core_http_client.h declare_httpclient_addheader
+@copydoc HTTPClient_AddHeader
+
+@page httpclient_addrangeheader_function HTTPClient_AddRangeHeader
+@snippet core_http_client.h declare_httpclient_addrangeheader
+@copydoc HTTPClient_AddRangeHeader
+
+@page httpclient_sendhttpheaders_function HTTPClient_SendHttpHeaders
+@snippet core_http_client.h declare_httpclient_sendhttpheaders
+@copydoc HTTPClient_SendHttpHeaders
+
+@page httpclient_sendhttpdata_function HTTPClient_SendHttpData
+@snippet core_http_client.h declare_httpclient_sendhttpdata
+@copydoc HTTPClient_SendHttpData
+
+@page httpclient_send_function HTTPClient_Send
+@snippet core_http_client.h declare_httpclient_send
+@copydoc HTTPClient_Send
+
+@page httpclient_receiveandparsehttpresponse_function HTTPClient_ReceiveAndParseHttpResponse
+@snippet core_http_client.h declare_httpclient_receiveandparsehttpresponse
+@copydoc HTTPClient_ReceiveAndParseHttpResponse
+
+@page httpclient_readheader_function HTTPClient_ReadHeader
+@snippet core_http_client.h declare_httpclient_readheader
+@copydoc HTTPClient_ReadHeader
+
+@page httpclient_strerror_function HTTPClient_strerror
+@snippet core_http_client.h declare_httpclient_strerror
+@copydoc HTTPClient_strerror
+*/
+
+<!-- We do not use doxygen ALIASes here because there have been issues in the past versions with "^^" newlines within the alias definition. -->
+/**
+@defgroup http_enum_types Enumerated Types
+@brief Enumerated types of the HTTP Client library
+*/
+
+/**
+@defgroup http_callback_types Callback Types
+@brief Callback function pointer types of the HTTP Client library
+*/
+
+/**
+@defgroup http_struct_types Parameter Structures
+@brief Structures passed as parameters to [HTTP Client library functions](@ref http_functions)
+
+These structures are passed as parameters to library functions. Documentation for these structures will state the functions associated with each parameter structure and the purpose of each member.
+*/
+
+/**
+@defgroup http_basic_types Basic Types
+@brief Primitive types of the HTTP Client library.
+*/
+
+/**
+@defgroup http_constants Constants
+@brief Constants defined in the HTTP Client library
+*/

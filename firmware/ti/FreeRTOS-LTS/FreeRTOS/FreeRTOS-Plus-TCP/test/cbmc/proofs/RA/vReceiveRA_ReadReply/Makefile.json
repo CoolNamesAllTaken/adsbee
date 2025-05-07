@@ -1,0 +1,22 @@
+{
+  "ENTRY": "ReceiveRA_ReadReply",
+  "CBMCFLAGS":
+  [
+    "--unwind 3",
+    "--nondet-static"
+  ],
+  "OPT":
+  [
+      "--export-file-local-symbols"
+  ],
+  "OBJS":
+  [
+    "$(ENTRY)_harness.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_RA.goto"
+
+  ],
+  "INC":
+  [
+    "$(FREERTOS_PLUS_TCP)/test/cbmc/include"
+  ]
+}

@@ -1,0 +1,158 @@
+/**
+@mainpage Overview
+@anchor jobs
+@brief AWS IoT Jobs client library, part of the AWS IoT Device SDK for Embedded C
+
+<p>
+AWS IoT jobs can be used to define a set of remote operations that are sent to and executed on one or more devices connected to AWS IoT.
+For documentation of the service, please see the [AWS IoT Developer Guide](https://docs.aws.amazon.com/iot/latest/developerguide/iot-jobs.html).
+Interactions with the jobs service use MQTT, a lightweight publish-subscribe protocol.
+This library provides a convenience API to compose and recognize the MQTT topic strings used by the jobs service.
+The library is written in C and designed to be compliant with ISO C99 and MISRA C:2012.
+It has proofs showing safe memory use and no heap allocation, making it suitable for IoT microcontrollers, but also fully portable to other platforms.
+</p>
+
+<p>
+AWS IoT OTA Job Parser can be used to Parse out the fields of an incoming Job Document sent to a device from AWS IoT.
+The library is written in C and designed to be compliant with ISO C99 and MISRA C:2012.
+It has proofs showing safe memory use and no heap allocation, making it suitable for IoT microcontrollers, but also fully portable to other platforms.
+</p>
+
+> **NOTE**:
+> If your application uses both AWS IoT Jobs library and [OTA library](https://github.com/aws/ota-for-aws-iot-embedded-sdk) to communicate with AWS IoT through a shared MQTT connection, we suggest that you keep the application logic that uses these libraries within a single task/thread.
+> As the OTA agent also makes calls to the AWS IoT Jobs service, keeping the use of libraries within the same thread context will avoid complexity of synchronizing communication with AWS IoT Jobs topics between multiple tasks/threads.
+> However, if you choose to use different tasks/threads for calling these libraries, please be aware that the OTA library will subscribe and configurably, unsubscribe from AWS IoT Jobs topics, and also attempt to send status updates for incoming non-OTA jobs, if your application configures the OTA library to handle custom jobs.
+
+@section jobs_memory_requirements Memory Requirements
+@brief Memory requirements of the jobs library.
+
+@include{doc} size_table.md
+ */
+
+/**
+@page jobs_features Features
+Jobs Library Features
+
+<h3>Memory Usage</h3>
+<p>
+All functions in the jobs library operate only on the buffers provided, and use only
+local variables on the stack.
+</p>
+
+<h3>Compliance & Coverage</h3>
+<p>
+The jobs library is designed to be compliant with ISO C90 and MISRA C:2012.
+All functions are written to have minimal complexity.
+Unit tests and [CBMC](https://www.cprover.org/cbmc/) proofs are written to cover every path of execution and achieve 100% branch coverage.
+</p>
+*/
+
+/**
+@page jobs_config Configurations
+@brief Configurations of the Jobs Library.
+<!-- @par configpagestyle allows the @section titles to be styled according to style.css -->
+@par configpagestyle
+
+These configuration settings are C pre-processor constants they are set using a compiler option such as -D in gcc.
+
+@section THINGNAME_MAX_LENGTH
+@copydoc THINGNAME_MAX_LENGTH
+
+@section JOBID_MAX_LENGTH
+@copydoc JOBID_MAX_LENGTH
+*/
+
+/**
+@page jobs_functions Jobs Functions
+@brief Primary functions of the Jobs library:<br><br>
+@subpage jobs_gettopic_function <br>
+@subpage jobs_matchtopic_function <br>
+@subpage jobs_getpending_function <br>
+@subpage jobs_startnext_function <br>
+@subpage jobs_startnextmsg_function <br>
+@subpage jobs_describe_function <br>
+@subpage jobs_update_function <br>
+@subpage jobs_updatemsg_function <br>
+@subpage jobs_getjobid_function <br>
+@subpage jobs_getjobdocument_function <br>
+@subpage jobs_isstartnextaccepted_function <br>
+@subpage jobs_isjobupdatestatus_function <br>
+
+@page jobs_gettopic_function Jobs_GetTopic
+@snippet jobs.h declare_jobs_gettopic
+@copydoc Jobs_GetTopic
+
+@page jobs_matchtopic_function Jobs_MatchTopic
+@snippet jobs.h declare_jobs_matchtopic
+@copydoc Jobs_MatchTopic
+
+@page jobs_getpending_function Jobs_GetPending
+@snippet jobs.h declare_jobs_getpending
+@copydoc Jobs_GetPending
+
+@page jobs_startnext_function Jobs_StartNext
+@snippet jobs.h declare_jobs_startnext
+@copydoc Jobs_StartNext
+
+@page jobs_startnextmsg_function Jobs_StartNextMsg
+@snippet jobs.h declare_jobs_startnextmsg
+@copydoc Jobs_StartNextMsg
+
+@page jobs_describe_function Jobs_Describe
+@snippet jobs.h declare_jobs_describe
+@copydoc Jobs_Describe
+
+@page jobs_update_function Jobs_Update
+@snippet jobs.h declare_jobs_update
+@copydoc Jobs_Update
+
+@page jobs_updatemsg_function Jobs_UpdateMsg
+@snippet jobs.h declare_jobs_updatemsg
+@copydoc Jobs_UpdateMsg
+
+@page jobs_getjobid_function Jobs_GetJobId
+@snippet jobs.h declare_jobs_getjobid
+@copydoc Jobs_GetJobId
+
+@page jobs_getjobdocument_function Jobs_GetJobDocument
+@snippet jobs.h declare_jobs_getjobdocument
+@copydoc Jobs_GetJobDocument
+
+@page jobs_isstartnextaccepted_function Jobs_IsStartNextAccepted
+@snippet jobs.h declare_jobs_isstartnextaccepted
+@copydoc Jobs_IsStartNextAccepted
+
+@page jobs_isjobupdatestatus_function Jobs_IsJobUpdateStatus
+@snippet jobs.h declare_jobs_isjobupdatestatus
+@copydoc Jobs_IsJobUpdateStatus
+*/
+
+/**
+@page ota_parser_functions OTA Job Parser Functions
+@brief Primary Functions of the OTA Job Parser library:<br><br>
+@subpage populatejobdocfields_function <br>
+@subpage otaparser_parsejobdocfile_function <br>
+
+@page populatejobdocfields_function populateJobDocFields
+@snippet job_parser.h declare_populatejobdocfields
+@copydoc populateJobDocFields
+
+@page otaparser_parsejobdocfile_function otaParser_parseJobDocFile
+@snippet ota_job_processor.h declare_otaparser_parsejobdocfile
+@copydoc otaParser_parseJobDocFile
+*/
+
+/**
+@defgroup jobs_enum_types Enumerated Types
+@brief Enumerated types of the Jobs library
+*/
+
+/**
+@defgroup jobs_constants Constants
+@brief Constants defined in the Jobs library
+*/
+
+/**
+@defgroup jobs_structs Structs
+@brief Structs defined in the Jobs Library
+*/

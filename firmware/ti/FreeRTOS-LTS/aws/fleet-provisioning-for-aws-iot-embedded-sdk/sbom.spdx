@@ -1,0 +1,31 @@
+SPDXVersion: SPDX-2.2
+DataLicense: CC0-1.0
+SPDXID: SPDXRef-DOCUMENT
+DocumentName: Fleet-Provisioning-for-AWS-IoT-embedded-sdk
+DocumentNamespace: https://github.com/FreeRTOS/Fleet-Provisioning-for-AWS-IoT-embedded-sdk/blob/v1.2.1/sbom.spdx
+Creator: Organization:Amazon Web Services
+Created: 2024-06-18T08:40:36Z
+CreatorComment: NOASSERTION
+DocumentComment: NOASSERTION
+
+PackageName: Fleet-Provisioning-for-AWS-IoT-embedded-sdk
+SPDXID: SPDXRef-Package-Fleet-Provisioning-for-AWS-IoT-embedded-sdk
+PackageVersion: v1.2.1
+PackageDownloadLocation: https://github.com/aws/Fleet-Provisioning-for-AWS-IoT-embedded-sdk/tree/v1.2.1
+PackageLicenseDeclared: MIT
+PackageLicenseConcluded: MIT
+PackageLicenseInfoFromFiles: NOASSERTION
+FilesAnalyzed: true
+PackageVerificationCode: adfa9ec22f35d4d235f02d1ecff7c2c7f4965766
+PackageCopyrightText: NOASSERTION
+PackageSummary: NOASSERTION
+PackageDescription: "Library for using the Fleet Provisioning feature of AWS IoT Core on embedded devices.\n"
+
+
+FileName: ./fleet_provisioning.c
+SPDXID: SPDXRef-File-fleetprovisioning.c
+FileChecksum: SHA1: 46925ce87f9d5533afd81b1cee3327bb36cb7418
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+

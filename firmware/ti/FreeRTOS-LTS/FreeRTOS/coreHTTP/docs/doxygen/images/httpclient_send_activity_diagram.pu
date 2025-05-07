@@ -1,0 +1,35 @@
+@startuml
+skinparam dpi 300
+skinparam ArrowFontSize 18
+
+start
+#lightblue: **Send request on the Network**;
+#lightgreen:if( Network error ) then (yes)
+	#lightgray: Return ERROR;
+	stop
+else (no)
+    repeat
+        #lightblue: **Read response on the Network**;
+        #lightgreen:if( Network error ) then (yes)
+        	#lightgray: Return ERROR;
+        	stop
+        else (no)
+        endif
+        : Parse HTTP response;
+        note left: Parsing is done with\nthird-party //http-parser//
+    repeat while (Response buffer is NOT full &&
+                  Response message is NOT complete &&
+                  No errors found in parsing) is (   yes)
+    -> no;
+    #lightgreen:if (Errors found in parsing) then (yes)
+    	#lightgray: Return ERROR;
+    	stop
+    #lightgreen:(no   ) elseif (Response message could not fit in response buffer) then (yes)
+    	#lightgray: Return ERROR;
+    	stop
+    else (no)
+    endif
+    : Return response;
+    stop
+
+@enduml

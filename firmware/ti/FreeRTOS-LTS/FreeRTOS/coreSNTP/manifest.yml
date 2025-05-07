@@ -1,0 +1,14 @@
+name : "coreSNTP"
+version: "v1.3.1"
+description: |
+  "SNTP client library to allow embedded devices to synchronize time with time servers.\n"
+license: "MIT"
+
+dependencies:
+  - name: "CMock"
+    version: v2.5.3
+    license: "MIT"
+    repository:
+      type: "git"
+      url: "https://github.com/ThrowTheSwitch/CMock.git"
+      path: test/unit-test/CMock

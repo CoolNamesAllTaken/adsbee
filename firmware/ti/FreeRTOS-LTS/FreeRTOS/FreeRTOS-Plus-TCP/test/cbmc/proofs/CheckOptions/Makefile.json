@@ -1,0 +1,28 @@
+{
+  "ENTRY": "CheckOptions",
+  "CBMCFLAGS":
+  [
+    "--unwind 1",
+    "--unwindset prvCheckOptions.0:41"
+  ],
+  "OPT":
+  [
+      "--export-file-local-symbols"
+  ],
+  "OBJS":
+  [
+    "$(ENTRY)_harness.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_IP.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_TCP_Reception.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_TCP_WIN.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_TCP_IP.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_Stream_Buffer.goto",
+    "$(FREERTOS_PLUS_TCP)/test/FreeRTOS-Kernel/tasks.goto",
+    "$(FREERTOS_PLUS_TCP)/test/FreeRTOS-Kernel/list.goto"
+  ],
+  "BUFFER_SIZE": 100,
+  "DEF":
+  [
+    "BUFFER_SIZE={BUFFER_SIZE}"
+  ]
+}

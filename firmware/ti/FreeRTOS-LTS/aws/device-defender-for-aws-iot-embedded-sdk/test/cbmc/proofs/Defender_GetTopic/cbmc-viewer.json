@@ -1,0 +1,7 @@
+{ "expected-missing-functions":
+  [
+
+  ],
+  "proof-name": "Defender_GetTopic",
+  "proof-root": "test/cbmc/proofs"
+}

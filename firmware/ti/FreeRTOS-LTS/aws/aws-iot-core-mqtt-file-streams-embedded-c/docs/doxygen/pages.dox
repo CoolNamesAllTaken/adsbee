@@ -1,0 +1,62 @@
+/**
+@mainpage Overview
+@anchor MQTT-File-Streams
+@brief MQTT File Streams library.
+
+In AWS IoT, a stream is a publicly addressable resource that is an abstraction for a list of files that can be transferred to an IoT device.
+Using MQTT file streams library, files from a stream can be transfer to an IoT device. The file are transfered using MQTT protocol.
+It supports both JSON and CBOR format to send requests and receive data.
+
+This library uses GetStream API so that a device can receive stream files in small data blocks, so it can be used by those devices that have constraints
+on processing large block sizes. To receive an entire data file, a device needs to send or receive multiple requests and responses
+until all data blocks are received and processed.
+
+This library provides functionality to initalize the file streams downloader, create the request for file blocks and decode the received file blocks.
+
+@section ota_dependencies Workflow
+@brief MQTT file streaming Workflow
+
+@image html MqttStreams_flowChart.jpg
+
+@section mqtt_streaming_dependencies Library Dependencies
+
+Currently, the MQTT files streams library has the following direct dependencies:
+    - [coreJSON](https://github.com/FreeRTOS/coreJSON)
+    - [tinyCBOR](https://github.com/intel/tinycbor.git)
+*/
+
+/**
+@page mqtt_stream_functions Functions
+@brief API functions of the MQTT File Streams library:<br><br>
+@subpage mqttDownloader_init_function <br>
+@subpage mqttDownloader_createGetDataBlockRequest_function <br>
+@subpage mqttDownloader_isDataBlockReceived_function <br>
+@subpage mqttDownloader_processReceivedDataBlock_function <br>
+
+@page mqttDownloader_init_function MQTTDownloader_Init
+@snippet MQTTFileDownloader.h declare_mqttDownloader_init
+@copydoc mqttDownloader_init
+
+@page mqttDownloader_createGetDataBlockRequest_function MQTTDownloader_createGetDataBlockRequest
+@snippet MQTTFileDownloader.h declare_mqttDownloader_createGetDataBlockRequest
+@copydoc mqttDownloader_createGetDataBlockRequest
+
+@page mqttDownloader_isDataBlockReceived_function MQTTDownloader_isDataBlockReceived
+@snippet MQTTFileDownloader.h declare_mqttDownloader_isDataBlockReceived
+@copydoc mqttDownloader_isDataBlockReceived
+
+@page mqttDownloader_processReceivedDataBlock_function MQTTDownloader_processReceivedDataBlock
+@snippet MQTTFileDownloader.h declare_mqttDownloader_processReceivedDataBlock
+@copydoc mqttDownloader_processReceivedDataBlock
+
+*/
+
+/**
+@defgroup mqtt_file_downloader_enum_types Enumerated Types
+@brief Enumerated types of the MQTT file streams downloader library.
+*/
+
+/**
+@defgroup mqtt_file_downloader_struct_types Struct Types
+@brief Struct Types defined in the MQTT file streams downloader library.
+*/

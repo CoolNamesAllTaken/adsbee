@@ -1,0 +1,7 @@
+{ "expected-missing-functions":
+  [
+
+  ],
+  "proof-name": "_Cellular_GetCurrentRat",
+  "proof-root": "tools/cbmc/proofs"
+}

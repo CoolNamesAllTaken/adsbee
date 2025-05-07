@@ -21,13 +21,13 @@ docker build -t pico-dev-image .
 Starting an interactive docker container on Linux or Mac. Mounts the `firmware` directory to `/root/firmware`.
 
 ```bash
-docker run --name ads-bee-dev -it --mount type=bind,source="$(pwd)",target=/root/ads_bee pico-dev-image
+docker run --name ads-bee-dev -it --mount type=bind,source="$(pwd)",target=/root/adsbee pico-dev-image
 ```
 
 Starting an interactive docker container on Windows. Mounts the `firmware` directory to `/root/firmware`.
 
 ```bash
-winpty docker run --name ads-bee-dev -it --mount type=bind,source="$(pwd)",target=/root/ads_bee pico-dev-image
+winpty docker run --name ads-bee-dev -it --mount type=bind,source="$(pwd)",target=/root/adsbee pico-dev-image
 ```
 
 ### Remove the Docker Image
@@ -64,7 +64,7 @@ Create a folder called `test/build` and open a terminal there.
 ```bash
 cmake ..
 make
-./ads_bee_test
+./adsbee_test
 ```
 
 ## Initializing Submodules
@@ -73,7 +73,7 @@ From the `modules` directory, run `git submodule update --init --recursive`.
 
 Build googletest:
 ```bash
-cd /ads_bee/modules/googletest
+cd /adsbee/modules/googletest
 mkdir build
 cd build
 cmake cmake -DBUILD_SHARED_LIBS=ON ..

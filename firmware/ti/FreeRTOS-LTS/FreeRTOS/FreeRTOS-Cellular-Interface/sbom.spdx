@@ -1,0 +1,73 @@
+SPDXVersion: SPDX-2.2
+DataLicense: CC0-1.0
+SPDXID: SPDXRef-DOCUMENT
+DocumentName: FreeRTOS-Cellular-Interface
+DocumentNamespace: https://github.com/FreeRTOS/FreeRTOS-Cellular-Interface/blob/v1.4.0/sbom.spdx
+Creator: Organization:Amazon Web Services
+Created: 2024-06-11T02:25:13Z
+CreatorComment: NOASSERTION
+DocumentComment: NOASSERTION
+
+PackageName: FreeRTOS-Cellular-Interface
+SPDXID: SPDXRef-Package-FreeRTOS-Cellular-Interface
+PackageVersion: v1.4.0
+PackageDownloadLocation: https://github.com/FreeRTOS/FreeRTOS-Cellular-Interface/tree/v1.4.0
+PackageLicenseDeclared: MIT
+PackageLicenseConcluded: MIT
+PackageLicenseInfoFromFiles: NOASSERTION
+FilesAnalyzed: true
+PackageVerificationCode: 8875abf240f556cd59b74a94fe48ea4eafe5520f
+PackageCopyrightText: NOASSERTION
+PackageSummary: NOASSERTION
+PackageDescription: "FreeRTOS Cellular Interface implementation of the 3GPP TS v27.007 standard..\n"
+
+
+FileName: ./cellular_common.c
+SPDXID: SPDXRef-File-cellularcommon.c
+FileChecksum: SHA1: c4a4f55f7ed16cd664696a21bb48b25eb45ab503
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+
+FileName: ./cellular_common_api.c
+SPDXID: SPDXRef-File-cellularcommonapi.c
+FileChecksum: SHA1: 42044f7bb634ff2b789abb163d6cd052818541d0
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+
+FileName: ./cellular_3gpp_urc_handler.c
+SPDXID: SPDXRef-File-cellular3gppurchandler.c
+FileChecksum: SHA1: 7b0f0346070263982e7d9797682c6f249abc32bf
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+
+FileName: ./cellular_at_core.c
+SPDXID: SPDXRef-File-cellularatcore.c
+FileChecksum: SHA1: 2d664e328af110c38d7fc906f406fcc09518d67e
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+
+FileName: ./cellular_3gpp_api.c
+SPDXID: SPDXRef-File-cellular3gppapi.c
+FileChecksum: SHA1: 3f252974bd582c1a0871c5f0ed6a4563d84a9aaa
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+
+FileName: ./cellular_pkthandler.c
+SPDXID: SPDXRef-File-cellularpkthandler.c
+FileChecksum: SHA1: ee54808c53f20612aeb69ff11ad917a668ee861c
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+
+FileName: ./cellular_pktio.c
+SPDXID: SPDXRef-File-cellularpktio.c
+FileChecksum: SHA1: 37df5360c777ab55e06f062d8aebc78d5a1487da
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+

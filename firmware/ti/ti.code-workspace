@@ -1,0 +1,47 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../common"
+		},
+		{
+			"path": "../modules"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"rfqueue.h": "c",
+			"devicefamily.h": "c",
+			"clockp.h": "c"
+		},
+		"C_Cpp.default.defines": [
+			"ON_TI"
+		],
+	},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			{
+				"name": "Sub GHz Radio Debug",
+				"type": "cortex-debug",
+				"cwd": "/adsbee/ti",
+				"executable": "/adsbee/ti/build/sub_ghz_radio",
+				"request": "attach",
+				"servertype": "external",
+				"gdbPath": "arm-none-eabi-gdb",
+				"gdbTarget": "host.docker.internal:2331",
+				"showDevDebugOutput": "raw",
+				// "svdFile": "/usr/local/pico-sdk/src/rp2040/hardware_regs/RP2040.svd",
+				"preRestartCommands": [
+					"file ${command:cmake.launchTargetPath}",
+					"load",
+					"monitor reset"
+				],
+				"armToolchainPath": "/usr/bin",
+				"device": "CC1312R7",
+			},
+		],
+	}
+}

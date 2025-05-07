@@ -1,0 +1,50 @@
+<table>
+    <tr>
+        <td colspan="3"><center><b>Code Size of AWS IOT Core MQTT File Stream Embedded C (example generated with GCC for ARM Cortex-M)</b></center></td>
+    </tr>
+    <tr>
+        <td><b>File</b></td>
+        <td><b><center>With -O1 Optimization</center></b></td>
+        <td><b><center>With -Os Optimization</center></b></td>
+    </tr>
+    <tr>
+        <td>MQTTFileDownloader.c</td>
+        <td><center>1.1K</center></td>
+        <td><center>1.0K</center></td>
+    </tr>
+    <tr>
+        <td>MQTTFileDownloader_cbor.c</td>
+        <td><center>0.8K</center></td>
+        <td><center>0.6K</center></td>
+    </tr>
+    <tr>
+        <td>MQTTFileDownloader_base64.c</td>
+        <td><center>0.6K</center></td>
+        <td><center>0.6K</center></td>
+    </tr>
+    <tr>
+        <td>core_json.c</td>
+        <td><center>2.9K</center></td>
+        <td><center>2.4K</center></td>
+    </tr>
+    <tr>
+        <td>cborparser.c</td>
+        <td><center>2.8K</center></td>
+        <td><center>2.2K</center></td>
+    </tr>
+    <tr>
+        <td>cborencoder.c</td>
+        <td><center>2.0K</center></td>
+        <td><center>0.7K</center></td>
+    </tr>
+    <tr>
+        <td>cborencoder_close_container_checked.c</td>
+        <td><center>0.1K</center></td>
+        <td><center>0.1K</center></td>
+    </tr>
+    <tr>
+        <td><b>Total estimates</b></td>
+        <td><b><center>10.3K</center></b></td>
+        <td><b><center>7.6K</center></b></td>
+    </tr>
+</table>

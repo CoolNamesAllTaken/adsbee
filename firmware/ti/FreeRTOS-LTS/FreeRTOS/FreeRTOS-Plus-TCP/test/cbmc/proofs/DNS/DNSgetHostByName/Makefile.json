@@ -1,0 +1,47 @@
+{
+  "ENTRY": "DNSgetHostByName",
+
+  ################################################################
+  # This configuration sets callback to 0.
+  # It also sets MAX_HOSTNAME_LEN to 10 to bound strcmp.
+  # According to the specification MAX_HOST_NAME is upto 255.
+
+  "callback": 0,
+  "MAX_HOSTNAME_LEN": 10,
+  "ENDPOINT_DNS_ADDRESS_COUNT": 5,
+  "HOSTNAME_UNWIND": "__eval {MAX_HOSTNAME_LEN} + 1",
+  "ENDPOINT_DNS_ADDRESS_COUNT_UNWIND": "__eval {ENDPOINT_DNS_ADDRESS_COUNT} + 1",
+
+  "CBMCFLAGS":
+  [
+    "--unwind 1",
+    "--unwindset strchr.0:{HOSTNAME_UNWIND}",
+    "--unwindset __CPROVER_file_local_FreeRTOS_DNS_c_prvIncreaseDNS4Index.0:{ENDPOINT_DNS_ADDRESS_COUNT_UNWIND}",
+    "--unwindset __CPROVER_file_local_FreeRTOS_DNS_c_prvIncreaseDNS6Index.0:{ENDPOINT_DNS_ADDRESS_COUNT_UNWIND}",
+    "--unwindset __CPROVER_file_local_FreeRTOS_DNS_c_prvFillSockAddress.0:2,__CPROVER_file_local_FreeRTOS_DNS_c_prvFillSockAddress.1:2",
+    "--unwindset __CPROVER_file_local_FreeRTOS_DNS_c_prvCreateDNSMessage.0:{HOSTNAME_UNWIND},__CPROVER_file_local_FreeRTOS_DNS_c_prvCreateDNSMessage.1:{HOSTNAME_UNWIND},strlen.0:{HOSTNAME_UNWIND},__builtin___strcpy_chk.0:{HOSTNAME_UNWIND},strcmp.0:{HOSTNAME_UNWIND},strcpy.0:{HOSTNAME_UNWIND}",
+    "--unwindset __CPROVER_file_local_FreeRTOS_DNS_c_prvGetHostByNameOp_WithRetry.0:{HOSTNAME_UNWIND}",
+    "--nondet-static"
+  ],
+  "OPT":
+  [
+      "--export-file-local-symbols"
+  ],
+  "OBJS":
+  [
+    "$(ENTRY)_harness.goto",
+    "$(FREERTOS_PLUS_TCP)/test/cbmc/stubs/cbmc.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_Routing.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_DNS.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_Routing.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_DNS_Parser.goto"
+  ],
+
+  "DEF":
+  [
+    "ipconfigUSE_IPv6=1",
+    "ipconfigDNS_USE_CALLBACKS={callback}",
+    "MAX_HOSTNAME_LEN={MAX_HOSTNAME_LEN}",
+    "ipconfigENDPOINT_DNS_ADDRESS_COUNT={ENDPOINT_DNS_ADDRESS_COUNT}"
+  ]
+}

@@ -1,0 +1,7 @@
+{ "expected-missing-functions":
+  [
+
+  ],
+  "proof-name": "Cellular_CommonGetRegisteredNetwork",
+  "proof-root": "tools/cbmc/proofs"
+}

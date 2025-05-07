@@ -1,0 +1,7 @@
+{ "expected-missing-functions":
+  [
+
+  ],
+  "proof-name": "_Cellular_RemoveSocketData",
+  "proof-root": "tools/cbmc/proofs"
+}

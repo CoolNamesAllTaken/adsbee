@@ -1,0 +1,7 @@
+{ "expected-missing-functions":
+  [
+
+  ],
+  "proof-name": "SigV4_GenerateHTTPAuthorization",
+  "proof-root": "test/cbmc/proofs"
+}

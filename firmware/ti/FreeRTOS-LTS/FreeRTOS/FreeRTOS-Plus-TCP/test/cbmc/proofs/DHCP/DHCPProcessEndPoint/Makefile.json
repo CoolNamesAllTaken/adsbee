@@ -1,0 +1,37 @@
+{
+  "ENTRY": "DHCPProcessEndPoint",
+
+  # Minimal buffer size for maximum coverage, see harness for details.
+  "BUFFER_SIZE": 299,
+  "ENDPOINT_DNS_ADDRESS_COUNT": 5,
+
+  # The number of times GetNetworkBufferWithDescriptor can be allowed to fail
+  # (plus 1).
+  "FAILURE_BOUND": 2,
+
+  "CBMCFLAGS": [
+    "--unwind 4",
+    "--unwindset strlen.0:11,memcmp.0:7",
+    "--nondet-static --flush"
+  ],
+  "OPT":
+  [
+    "--export-file-local-symbols"
+  ],
+  "OBJS":
+  [
+    "$(ENTRY)_harness.goto",
+    "$(FREERTOS_PLUS_TCP)/test/cbmc/stubs/cbmc.goto",
+    "$(FREERTOS_PLUS_TCP)/test/cbmc/stubs/freertos_api.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_DHCP.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_IP.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_ARP.goto"
+  ],
+  "DEF":
+  [
+    "BUFFER_SIZE={BUFFER_SIZE}",
+    "ipconfigDHCP_REGISTER_HOSTNAME=1",
+    "CBMC_REQUIRE_NETWORKBUFFER_ETHERNETBUFFER_NONNULL=1",
+    "CBMC_GETNETWORKBUFFER_FAILURE_BOUND={FAILURE_BOUND}"
+  ]
+}

@@ -1,0 +1,7 @@
+{ "expected-missing-functions":
+  [
+
+  ],
+  "proof-name": "FleetProvisioning_GetRegisterThingTopic",
+  "proof-root": "test/cbmc/proofs"
+}

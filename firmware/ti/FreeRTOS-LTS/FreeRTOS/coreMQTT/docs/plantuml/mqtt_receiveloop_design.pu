@@ -1,0 +1,30 @@
+@startuml
+skinparam dpi 300
+skinparam ArrowFontSize 18
+
+start
+
+repeat
+	: Receive single byte;
+    if( read successful? ) then (yes)
+    	repeat
+     		: Get rest of packet;
+            note left: Retry zero byte reads for maximum period \nof **MQTT_RECV_POLLING_TIMEOUT_MS**
+        repeat while( Received complete packet? ) is ( no )
+    	: Deserialize packet;
+        if ( Need to send ACK response? ) then (yes)
+            repeat
+            	: Send ACK packet;
+                note left: Retry zero byte sends for maximum period \nof **MQTT_SEND_RETRY_TIMEOUT_MS**
+            repeat while( Sent complete packet? ) is ( no )
+        else (no)
+        endif
+    else (no)
+    endif
+
+repeat while (**timeout** reached) is (no)
+-> yes or timeout == 0;
+
+stop
+
+@enduml

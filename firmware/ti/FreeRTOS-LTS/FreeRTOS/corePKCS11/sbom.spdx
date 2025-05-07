@@ -1,0 +1,90 @@
+SPDXVersion: SPDX-2.2
+DataLicense: CC0-1.0
+SPDXID: SPDXRef-DOCUMENT
+DocumentName: corePKCS11
+DocumentNamespace: https://github.com/FreeRTOS/corePKCS11/blob/v3.6.1/sbom.spdx
+Creator: Organization:Amazon Web Services
+Created: 2024-06-18T07:55:02Z
+CreatorComment: NOASSERTION
+DocumentComment: NOASSERTION
+
+PackageName: corePKCS11
+SPDXID: SPDXRef-Package-corePKCS11
+PackageVersion: v3.6.1
+PackageDownloadLocation: https://github.com/FreeRTOS/corePKCS11/tree/v3.6.1
+PackageLicenseDeclared: MIT
+PackageLicenseConcluded: MIT
+PackageLicenseInfoFromFiles: NOASSERTION
+FilesAnalyzed: true
+PackageVerificationCode: bae52d28c10c100ad773cb35954d89cf2e63106d
+PackageCopyrightText: NOASSERTION
+PackageSummary: NOASSERTION
+PackageDescription: Software implementation of the PKCS #11 standard.
+
+FileName: ./core_pkcs11.c
+SPDXID: SPDXRef-File-corepkcs11.c
+FileChecksum: SHA1: 0012346d3d08d7a95f0fb907188311b17a02c53b
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+
+FileName: ./core_pki_utils.c
+SPDXID: SPDXRef-File-corepkiutils.c
+FileChecksum: SHA1: 776ab4798f18469540a061fd0cd688e59f00e5ec
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+
+FileName: ./portable/mbedtls/core_pkcs11_mbedtls.c
+SPDXID: SPDXRef-File-portable-mbedtls-corepkcs11mbedtls.c
+FileChecksum: SHA1: 4057fb4b7b668f23a39b1e419d5bc33773fd011d
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+
+FileName: ./portable/os/core_pkcs11_pal_utils.c
+SPDXID: SPDXRef-File-portable-os-corepkcs11palutils.c
+FileChecksum: SHA1: 6b6be70a96e97fbf929283876eaf8e04fa4ad28c
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+
+FileName: ./portable/os/posix/core_pkcs11_pal.c
+SPDXID: SPDXRef-File-portable-os-posix-corepkcs11pal.c
+FileChecksum: SHA1: 6f607202e7c87b62b8ead9a46f6d5b63ac09423f
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+
+FileName: ./portable/os/freertos_winsim/core_pkcs11_pal.c
+SPDXID: SPDXRef-File-portable-os-freertoswinsim-corepkcs11pal.c
+FileChecksum: SHA1: e90edff26e7426b485d2fd6a84ac97de569c51fb
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+
+FileName: ./dependency/3rdparty/mbedtls_utils/mbedtls_utils.c
+SPDXID: SPDXRef-File-dependency-3rdparty-mbedtlsutils-mbedtlsutils.c
+FileChecksum: SHA1: ae1a26bf36d750929eb9f7469a16c82783504183
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+
+PackageName: pkcs11
+SPDXID: SPDXRef-Package-pkcs11
+PackageVersion: 2-40-errata-1
+PackageDownloadLocation: https://github.com/oasis-tcs/pkcs11.git
+PackageLicenseDeclared: LicenseRef-OASIS-IPR
+PackageLicenseConcluded: LicenseRef-OASIS-IPR
+PackageLicenseInfoFromFiles: NOASSERTION
+FilesAnalyzed: true
+PackageVerificationCode: da39a3ee5e6b4b0d3255bfef95601890afd80709
+PackageCopyrightText: NOASSERTION
+PackageSummary: NOASSERTION
+PackageDescription: NOASSERTION
+
+Relationship: SPDXRef-Package-corePKCS11 DEPENDS_ON SPDXRef-Package-pkcs11
+
+LicenseID: LicenseRef-OASIS-IPR
+LicenseName: OASIS-IPR
+ExtractedText: <text>OASIS-IPR</text>

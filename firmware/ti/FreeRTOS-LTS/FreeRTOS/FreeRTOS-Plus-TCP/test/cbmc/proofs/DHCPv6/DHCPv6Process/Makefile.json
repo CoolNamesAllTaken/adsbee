@@ -1,0 +1,24 @@
+{
+    "ENTRY": "DHCPv6Process",
+    "LOOP_UNWIND_COUNT": 4,
+    "CBMCFLAGS":
+    [
+      "--unwind {LOOP_UNWIND_COUNT}",
+      "--nondet-static --flush"
+    ],
+    "OPT":
+    [
+      "--export-file-local-symbols"
+    ],
+    "DEF":
+    [
+      "ipconfigUSE_DHCPv6=1",
+      "FR_RECV_FROM_SUCCESS_COUNT={LOOP_UNWIND_COUNT}"
+    ],
+    "OBJS":
+    [
+      "$(ENTRY)_harness.goto",
+      "$(FREERTOS_PLUS_TCP)/test/cbmc/stubs/cbmc.goto",
+      "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_DHCPv6.goto"
+    ]
+}

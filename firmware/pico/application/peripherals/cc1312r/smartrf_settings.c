@@ -13,7 +13,7 @@
 // RX Address Mode: No address check 
 // Frequency: 978.00000 MHz
 // Data Format: Serial mode disable 
-// Deviation: 625.000 kHz
+// Deviation: 113.000 kHz
 // Packet Length Config: Variable 
 // Max Packet Length: 255 
 // Packet Length: 20 
@@ -130,6 +130,29 @@ rfc_CMD_FS_t RF_cmdFs =
     .__dummy1 = 0x00,
     .__dummy2 = 0x00,
     .__dummy3 = 0x0000
+};
+
+
+// CMD_PROP_TX
+// Proprietary Mode Transmit Command
+rfc_CMD_PROP_TX_t RF_cmdPropTx =
+{
+    .commandNo = 0x3801,
+    .status = 0x0000,
+    .pNextOp = 0, // INSERT APPLICABLE POINTER: (uint8_t*)&xxx
+    .startTime = 0x00000000,
+    .startTrigger.triggerType = 0x0,
+    .startTrigger.bEnaCmd = 0x0,
+    .startTrigger.triggerNo = 0x0,
+    .startTrigger.pastTrig = 0x0,
+    .condition.rule = 0x1,
+    .condition.nSkip = 0x0,
+    .pktConf.bFsOff = 0x0,
+    .pktConf.bUseCrc = 0x1,
+    .pktConf.bVarLen = 0x1,
+    .pktLen = 0x14,
+    .syncWord = 0xACDDA4E2,
+    .pPkt = 0 // INSERT APPLICABLE POINTER: (uint8_t*)&xxx
 };
 
 

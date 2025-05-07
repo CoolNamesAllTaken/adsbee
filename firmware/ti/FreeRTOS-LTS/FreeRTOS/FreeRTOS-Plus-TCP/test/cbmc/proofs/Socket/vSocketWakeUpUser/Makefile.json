@@ -1,0 +1,26 @@
+{
+  "ENTRY": "vSocketWakeUpUser",
+
+  "CBMCFLAGS":
+  [
+    "--unwind 1"
+  ],
+  "OBJS":
+  [
+    "$(FREERTOS_PLUS_TCP)/test/FreeRTOS-Kernel/list.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_Sockets.goto",
+    "$(ENTRY)_harness.goto"
+  ],
+  "DEF":
+  [
+    "ipconfigSOCKET_HAS_USER_SEMAPHORE=1",
+    "ipconfigSOCKET_HAS_USER_WAKE_CALLBACK=1",
+    "ipconfigSUPPORT_SELECT_FUNCTION=1",
+    "configUSE_16_BIT_TICKS=0"
+  ],
+  "INC":
+  [
+    "$(FREERTOS_PLUS_TCP)/test/cbmc/include",
+    "$(FREERTOS_PLUS_TCP)/test/cbmc/proofs/utility"
+  ]
+}

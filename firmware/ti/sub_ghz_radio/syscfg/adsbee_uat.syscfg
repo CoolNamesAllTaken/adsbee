@@ -1,0 +1,49 @@
+/**
+ * These arguments were used when this file was generated. They will be automatically applied on subsequent loads
+ * via the GUI or CLI. Run CLI with '--help' for additional information on how to override these arguments.
+ * @cliArgs --device "CC1312R1F3RGZ" --part "Default" --package "RGZ" --rtos "freertos" --product "simplelink_cc13xx_cc26xx_sdk@8.30.01.01"
+ * @v2CliArgs --device "CC1312R" --package "VQFN (RGZ)" --rtos "freertos" --product "simplelink_cc13xx_cc26xx_sdk@8.30.01.01"
+ * @versions {"tool":"1.23.1+4034"}
+ */
+
+/**
+ * Import the modules used in this configuration.
+ */
+const custom   = scripting.addModule("/ti/devices/radioconfig/custom");
+const rfdesign = scripting.addModule("/ti/devices/radioconfig/rfdesign");
+const SPI      = scripting.addModule("/ti/drivers/SPI", {}, false);
+const SPI1     = SPI.addInstance();
+
+/**
+ * Write custom configuration values to the imported modules.
+ */
+custom.prop8                                       = ["custom868"];
+custom.radioConfigcustom868.$name                  = "ti_devices_radioconfig_settings_prop0";
+custom.radioConfigcustom868.symbolRate             = 1000.000;
+custom.radioConfigcustom868.deviation              = 350.0;
+custom.radioConfigcustom868.rxFilterBw             = "2486.5";
+custom.radioConfigcustom868.carrierFrequency       = 930.0000;
+custom.radioConfigcustom868.codeExportConfig.$name = "ti_devices_radioconfig_code_export_param0";
+
+const CCFG              = scripting.addModule("/ti/devices/CCFG", {}, false);
+CCFG.ccfgTemplate.$name = "ti_devices_CCFG_CCFGCC26XXTemplate0";
+
+SPI1.$name                = "CONFIG_SPI_0";
+SPI1.mode                 = "Four Pin CS Active Low";
+SPI1.sclkPinInstance.mode = "Input";
+SPI1.pociPinInstance.mode = "Output";
+SPI1.picoPinInstance.mode = "Input";
+SPI1.spi.sclkPin.$assign  = "DIO_10";
+SPI1.spi.pociPin.$assign  = "DIO_8";
+SPI1.spi.picoPin.$assign  = "DIO_9";
+SPI1.spi.csnPin.$assign   = "DIO_11";
+SPI1.csnPinInstance.mode  = "Input";
+
+/**
+ * Pinmux solution for unlocked pins/peripherals. This ensures that minor changes to the automatic solver in a future
+ * version of the tool will not impact the pinmux you originally saw.  These lines can be completely deleted in order to
+ * re-solve from scratch.
+ */
+SPI1.spi.$suggestSolution              = "SSI1";
+SPI1.spi.dmaRxChannel.$suggestSolution = "DMA_CH16";
+SPI1.spi.dmaTxChannel.$suggestSolution = "DMA_CH17";

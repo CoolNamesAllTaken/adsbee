@@ -9,6 +9,8 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#elif ON_TI
+#include <ti/drivers/dpl/ClockP.h>
 #else
 #include "hal_god_powers.hh"
 extern uint64_t time_since_boot_us;

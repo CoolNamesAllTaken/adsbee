@@ -1,0 +1,14 @@
+name : "coreJSON"
+version: "v3.3.0"
+description: |
+  "A parser strictly enforcing the ECMA-404 JSON standard, suitable for microcontrollers. \n"
+license: "MIT"
+
+dependencies:
+  - name: "Unity"
+    version: v2.6.0
+    license: "MIT"
+    repository:
+      type: "git"
+      url: "https://github.com/ThrowTheSwitch/Unity.git"
+      path: test/unit-test/Unity

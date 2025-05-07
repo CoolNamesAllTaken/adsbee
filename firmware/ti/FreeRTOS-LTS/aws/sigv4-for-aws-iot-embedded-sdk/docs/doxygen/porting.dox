@@ -1,0 +1,72 @@
+/**
+ * @page sigv4_porting Porting Guide
+ * @brief Guide for porting the AWS SigV4 Library to a new
+ * platform.
+ *
+ * To use the AWS SigV4 library, a platform must implement the following
+ * components:
+ * 1. [Configuration Macros](@ref sigv4_config_macros)
+ * 2. [Crypto Interface](@ref sigv4_porting_cryptointerface)
+ *
+ * @section sigv4_config_macros Configuration Macros
+ * @brief Configuration macros that can be set in the config header
+ * `sigv4_config.h`, or passed in as compiler options.
+ *
+ * The following optional logging macros are used throughout the library:
+ * - @ref LogError
+ * - @ref LogWarn
+ * - @ref LogInfo
+ * - @ref LogDebug
+ *
+ * @see [Configurations](@ref sigv4_config) for more information.
+ *
+ * @note Regardless of whether the above macros are defined in
+ * `sigv4_config.h` or passed as compiler options, by default the
+ * `sigv4_config.h` file is needed to build the AWS SigV4 Library. To disable this requirement and build the library with
+ * default configuration values, provide
+ * `SIGV4_DO_NOT_USE_CUSTOM_CONFIG` as a compile time preprocessor
+ * macro.
+ *
+ * @section sigv4_porting_cryptointerface Crypto Interface
+ * @brief The AWS SigV4 library relies on the implementation of crypto interface
+ * to provide hash functions used in generating the Authorization header by the library.
+ *
+ * A port must implement functions corresponding to the
+ * following functions pointers:
+ * - [Hash Initialize]: A function to initialize the Hash Context.
+ * @code
+ * int32_t ( * hashInit )( void * pHashContext );
+ * @endcode
+ * - [Hash Update]: A function to update the hash to be calculated with more input data.
+ * @code
+ * int32_t ( * hashUpdate )( void * pHashContext,
+ *                            const uint8_t * pInput,
+ *                            size_t inputLen );
+ * @endcode
+ * - [Hash Final]: A function to calculate the final binary digest of the hash from the context.
+ * @code
+ * int32_t ( * hashFinal )( void * pHashContext,
+ *                           uint8_t * pOutput,
+ *                           size_t outputLen );
+ * @endcode
+ *
+ * The above three functions take in a pointer to pHashContext which defines the context used
+ * by the above function in calculating the hash. The HashContext must also be
+ * defined by the user's implementation and ought to contain any information
+ * necessary to calculate the hash.
+ * @code
+ * void * pHashContext;
+ * @endcode
+ *
+ * A port must also define the following:
+ * - [Hash Block Length]: The block length of the hash function implemented by the user.
+ * @code
+ * size_t hashBlockLen;
+ * @endcode
+ *
+ * - [Hash Digest Length]: The digest length of the hash function implemented by the user.
+ * @code
+ * size_t hashDigestLen;
+ * @endcode
+ *
+ */

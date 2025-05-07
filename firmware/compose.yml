@@ -2,19 +2,26 @@ services:
   # Pico SDK container for compiling main firmware project.
   pico-docker:
     image: coolnamesalltaken/pico-docker:2.0.0-v1
+    platform: "linux/amd64" # Make sure we run the AMD64 image so that installed utilities work.
     network_mode: host
     volumes:
-      - ./pico:/ads_bee/pico
-      - ./common:/ads_bee/common
-      - ./modules:/ads_bee/modules
-      - ./esp:/ads_bee/esp # Bind the ESP32 directory so that its firmwawre can be packaged into the RP2040 image.
-      - .vscode:/ads_bee/.vscode
+      - ./pico:/adsbee/pico
+      - ./common:/adsbee/common
+      - ./modules:/adsbee/modules
+      - ./esp:/adsbee/esp # Bind the ESP32 directory so that its firmware can be packaged into the RP2040 image.
+      - ./ti:/adsbee/ti # Bind the TI directory so that its firmware can be packaged into the RP2040 image.
+      - .vscode:/adsbee/.vscode
 
     command: tail -f /dev/null # keep the container running forever
-  # ESP IDF container for compiling custom ESP-AT firmware.
-  # esp-docker:
-  #   # image: espressif/idf:release-v4.4
-  #   build: ./esp_at
-  #   volumes:
-  #     - .:/ads_bee # Bind mount ./esp_at as a folder for generated output from the configurator.
-  #   entrypoint: /bin/bash -c "/project/entrypoint.sh && tail -f /dev/null"
+
+  ti-lpf2:
+    image: coolnamesalltaken/ti-lpf2:latest
+    platform: "linux/amd64" # Make sure we run the AMD64 image so that installed utilities work.
+    network_mode: host
+    volumes:
+      - ./ti:/adsbee/ti
+      - ./common:/adsbee/common
+      - ./modules:/adsbee/modules
+      - .vscode:/adsbee/.vscode
+
+    command: tail -f /dev/null # keep the container running forever

@@ -1,0 +1,31 @@
+{
+    "ENTRY": "DHCPv6Analyse",
+    "DHCPv6_SUBOPTION_NUM": 25,
+    "CBMCFLAGS":
+    [
+      "--nondet-static --flush",
+      "--unwind 1",
+      "--unwindset __CPROVER_file_local_FreeRTOS_DHCPv6_c_prvDHCPv6Analyse.0:{DHCPv6_SUBOPTION_NUM}"
+    ],
+    "INSTFLAGS":
+    [
+        "--remove-function-body __CPROVER_file_local_FreeRTOS_DHCPv6_c_prvDHCPv6_handleOption",
+        "--malloc-may-fail"
+    ],
+    "OPT":
+    [
+      "--export-file-local-symbols"
+    ],
+    "DEF":
+    [
+      "ipconfigUSE_DHCPv6=1",
+      "ipconfigNETWORK_MTU=586"
+    ],
+    "OBJS":
+    [
+      "$(ENTRY)_harness.goto",
+      "$(FREERTOS_PLUS_TCP)/test/cbmc/stubs/cbmc.goto",
+      "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_BitConfig.goto",
+      "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_DHCPv6.goto"
+    ]
+}

@@ -20,6 +20,7 @@ extern RF_Mode RF_prop;
 // RF Core API Commands
 extern rfc_CMD_PROP_RADIO_DIV_SETUP_t RF_cmdPropRadioDivSetup;
 extern rfc_CMD_FS_t RF_cmdFs;
+extern rfc_CMD_PROP_TX_t RF_cmdPropTx;
 extern rfc_CMD_PROP_RX_t RF_cmdPropRx;
 
 // RF Core API Overrides

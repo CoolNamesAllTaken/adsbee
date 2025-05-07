@@ -1,0 +1,7 @@
+{ "expected-missing-functions":
+  [
+
+  ],
+  "proof-name": "SigV4_AwsIotDateToIso8601",
+  "proof-root": "test/cbmc/proofs"
+}

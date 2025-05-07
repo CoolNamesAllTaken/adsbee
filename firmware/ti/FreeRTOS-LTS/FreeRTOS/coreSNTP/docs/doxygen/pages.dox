@@ -1,0 +1,157 @@
+/**
+@mainpage Overview
+@anchor sntp
+@brief <b>coreSNTP Library</b>
+
+The coreSNTP library provides a client for the <b>Simple Network Time Protocol (SNTP)</b> to allow devices to synchronize their system clocks with internet time. This library implements the SNTPv4 specification defined in [RFC 4330](https://tools.ietf.org/html/rfc4330).
+<p>
+An SNTP client can request time from both NTP and SNTP servers. According to the SNTPv4 specification,
+> <i>To an NTP or SNTP server, NTP and SNTP clients are indistinguishable; to an NTP or SNTP client, NTP and SNTP servers are indistinguishable.</i>
+<span style="float:right;margin-right:4em"> &mdash; <i>[RFC4330](https://tools.ietf.org/html/rfc4330)</i></span><br>
+
+This library is optimized for resource constrained embedded devices. Features of this library include:
+- Fully synchronous API, to allow applications to completely manage their concurrency and multi-threading method.
+- Operations on fixed buffers, so that applications may control their memory allocation strategy.
+- Flexibility to develop an application with either:
+    - The <b>serializer/de-serializer API</b> which allows complete control over the operations of the SNTP client.
+    OR
+    - The <b>client API</b> that handles operations of communicating over the network, performing authentication, and handling rejected server responses.
+</p>
+
+@section sntp_memory_requirements Memory Requirements
+@brief Memory requirements of the coreSNTP library.
+
+@include{doc} size_table.md
+
+@section sntp_design Design
+@brief <b>coreSNTP Library Design</b>
+
+<p>
+
+The coreSNTP library provides 2 API layers:
+ 1. <b>Serializer/Deserializer and Utilities</b> - This layer provides functionality for serializing SNTP time requests and deserializing SNTP response packets, as well as some utility functions helpful in setting up an SNTP client in an application.
+ 2. <b>Client</b> - This layer provides **managed** functionality for network operations including DNS resolution, sending and receiving SNTP packets over UDP, authenticating servers for security (if enabled), and handling of
+server rejection of time requests.
+**Note**: This <b>client API</b> layer performs network and authentication operations through user-defined implementation of interfaces exposed by the library.
+
+Following is the architecture diagram of the library. It showcases the 2 tiers of the library and the interfaces on which the **Managed Client** layer depends on.
+
+\image html Dependency_Architecture_Diagram.png
+
+@section mqtt_interfaces Interfaces and Callbacks
+
+As visible in the above architecture diagram, the <b>Managed Client</b> API layer depends on the following interfaces that are user-defined for platform-specific operations:
+- <b>[DNS Resolve Interface](@ref SntpResolveDns_t) </b> - This allows library to resolve DNS addresses of time servers by the application.
+- <b>[UDP Transport Interface](@ref UdpTransportInterface_t) </b> - This allows library to send and receive SNTP packets over network UDP layer to communicate with SNTP/NTP servers.
+- <b>[Get Time Interface](@ref SntpGetTime_t)</b> - This allows library to obtain system time for tracking timeouts as well as creating SNTP time requests.
+- <b>[Set Time Interface](@ref SntpSetTime_t)</b> - This allows library to notify application about updating system time with the latest time provided by server as well as the system clock drift calculated by library.
+- <b>[Authentication Interface](@ref SntpAuthenticationInterface_t) (Optional)</b> - This allows library to perform mutual authentication in communicating with time servers for security. It is RECOMMENDED that applications enable authentication when communicating with time servers.
+
+</p>
+*/
+
+/**
+@page core_sntp_config Configurations
+@brief Configurations of the coreSNTP Library.
+<!-- @par configpagestyle allows the @section titles to be styled according to style.css -->
+@par configpagestyle
+
+All the configurations settings for the coreSNTP library are function-like macros for logging. They can be set with a `\#define` in the config file (`core_sntp_config.h`) or by using a compiler option such as -D in gcc.
+
+@section SNTP_DO_NOT_USE_CUSTOM_CONFIG
+@copydoc SNTP_DO_NOT_USE_CUSTOM_CONFIG
+
+@section sntp_logerror LogError
+@copydoc LogError
+
+@section sntp_logwarn LogWarn
+@copydoc LogWarn
+
+@section sntp_loginfo LogInfo
+@copydoc LogInfo
+
+@section sntp_logdebug LogDebug
+@copydoc LogDebug
+*/
+
+/**
+@page sntp_functions Functions
+@brief Primary functions of the SNTP library:<br><br>
+@subpage sntp_init_function <br>
+@subpage sntp_sendtimerequest_function <br>
+@subpage sntp_receivetimeresponse_function <br>
+@subpage sntp_serializerequest_function <br>
+@subpage sntp_deserializeresponse_function <br>
+@subpage sntp_calculatepollinterval_function <br>
+@subpage sntp_converttounixtime_function <br>
+
+@page sntp_init_function Sntp_Init
+@snippet core_sntp_client.h define_sntp_init
+@copydoc Sntp_Init
+
+For an example POSIX application of using the coreSNTP library APIs to create an SNTP client, refer to @ref code_example.
+Below is the part of the code example relevant to the @ref Sntp_Init API.
+@snippet example_sntp_client_posix.c code_example_sntp_init
+
+@page sntp_sendtimerequest_function Sntp_SendTimeRequest
+@copydoc Sntp_SendTimeRequest
+
+For an example POSIX application of using the coreSNTP library APIs to create an SNTP client, refer to @ref code_example.
+Below is the part of the code example relevant to the @ref Sntp_ReceiveTimeResponse API.
+@snippet example_sntp_client_posix.c code_example_sntp_send_receive
+
+@page sntp_receivetimeresponse_function Sntp_ReceiveTimeResponse
+@copydoc Sntp_ReceiveTimeResponse
+
+For an example POSIX application of the coreSNTP library APIs to create an SNTP client, refer to @ref code_example.
+Below is the part of the example application relevant to the @ref Sntp_ReceiveTimeResponse API.
+@snippet example_sntp_client_posix.c code_example_sntp_send_receive
+
+@page sntp_serializerequest_function Sntp_SerializeRequest
+@copydoc Sntp_SerializeRequest
+
+@page sntp_deserializeresponse_function Sntp_DeserializeResponse
+@copydoc Sntp_DeserializeResponse
+
+@page sntp_calculatepollinterval_function Sntp_CalculatePollInterval
+@copydoc Sntp_CalculatePollInterval
+
+Here is a code example of using the API.
+@snippet example_sntp_client_posix.c code_example_sntp_calculatepollinterval
+
+@page sntp_converttounixtime_function Sntp_ConvertToUnixTime
+@copydoc Sntp_ConvertToUnixTime
+
+Here is a code example of using the API.
+@snippet example_sntp_client_posix.c code_example_sntp_converttounixtime
+*/
+
+/**
+@page code_example Example application of using coreSNTP APIs
+@brief Example application of setting up an SNTP client with coreSNTP Library on POSIX platforms.
+
+This code ONLY showcases how coreSNTP library APIs can be used. For best practices on running an SNTP client,
+refer to the [FreeRTOS Demo on GitHub](https://github.com/FreeRTOS/FreeRTOS/tree/main/FreeRTOS-Plus/Demo/coreSNTP_Windows_Simulator).<br>
+@include example_sntp_client_posix.c
+*/
+
+<!-- We do not use doxygen ALIASes here because there have been issues in the past versions with "^^" newlines within the alias definition. -->
+/**
+@defgroup sntp_enum_types Enumerated Types
+@brief Enumerated types of the coreSNTP library
+*/
+
+/**
+@defgroup sntp_callback_types Callback Types
+@brief Callback function pointer types of the coreSNTP library
+*/
+
+/**
+@defgroup sntp_struct_types Struct Types
+@brief Struct types of the coreSNTP library
+*/
+
+/**
+@defgroup sntp_constants Constants
+@brief Constants defined in the coreSNTP library
+*/

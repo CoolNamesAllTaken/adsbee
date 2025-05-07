@@ -1,0 +1,13 @@
+name: "corePKCS11"
+version: "v3.6.1"
+description: "Software implementation of the PKCS #11 standard."
+license: "MIT"
+
+dependencies:
+  - name: "pkcs11"
+    version: "2-40-errata-1"
+    license: "OASIS-IPR"
+    repository:
+      type: "git"
+      url: "https://github.com/oasis-tcs/pkcs11.git"
+      path: "source/dependency/3rdparty/pkcs11"

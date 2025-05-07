@@ -1,0 +1,74 @@
+@startuml
+
+Title FreeRTOS Cellular Library interaction with com interface
+
+participant Application
+participant "FreeRTOS Cellular Library"
+participant cellular_comm_interface
+participant cellular_modem
+
+note over Application : Application needs cellular connecitvity.\nCellular_Init() is called to open FreeRTOS \nCellular Library. Communication interface\n, pCommInterface, is provided by\napplication to "FreeRTOS Cellular Library".
+
+Application -> "FreeRTOS Cellular Library" : Cellular_Init( pCommInterface )
+
+activate Application
+
+"FreeRTOS Cellular Library" ->cellular_comm_interface : pCommInterface->Open( receiveCallback )
+
+cellular_comm_interface->cellular_modem : Register receive callback\nOpen and setup communication device driver\nPower on and enable device
+
+cellular_comm_interface-->"FreeRTOS Cellular Library":
+
+"FreeRTOS Cellular Library"-->Application:
+
+deactivate Application
+
+note over Application : "FreeRTOS Cellular Library" APIs ready.\nApplication get network time with\nCellular_GetNetworkTime() function
+
+Application -> "FreeRTOS Cellular Library" : Cellular_GetNetworkTime()
+
+activate Application
+
+"FreeRTOS Cellular Library"->cellular_comm_interface : pCommInterface->Send()
+
+cellular_comm_interface->cellular_modem : AT+CCLK?
+
+cellular_modem->cellular_comm_interface : +CCLK: "20/06/09,12:06:33+32"
+
+cellular_comm_interface->cellular_comm_interface : Store `+CCLK: "20/06/09,12:06:33+32"` in buffer
+
+cellular_comm_interface->"FreeRTOS Cellular Library" : receiveCallback
+
+"FreeRTOS Cellular Library"->cellular_comm_interface : pCommInterface->recv()
+
+cellular_comm_interface-->"FreeRTOS Cellular Library" : Return data in buffer
+
+cellular_modem->cellular_comm_interface : OK
+
+cellular_comm_interface->cellular_comm_interface : Store `OK` in buffer
+
+cellular_comm_interface->"FreeRTOS Cellular Library" : receiveCallback
+
+cellular_comm_interface-->"FreeRTOS Cellular Library" : Return data in buffer
+
+"FreeRTOS Cellular Library"->Application : Return network time
+
+deactivate Application
+
+note over Application : Applicaton no longer need cellular\nconnectivity. Cellular_Cleanup() is \ncalled to close FreeRTOS Cellular Library.
+
+Application -> "FreeRTOS Cellular Library" : Cellular_Cleanup()
+
+activate Application
+
+"FreeRTOS Cellular Library"->cellular_comm_interface : pCommInterface->Close()
+
+cellular_comm_interface->cellular_modem : Power off device\nClose communication device driver\n
+
+cellular_comm_interface-->"FreeRTOS Cellular Library":
+
+"FreeRTOS Cellular Library"-->Application:
+
+deactivate Application
+
+@enduml

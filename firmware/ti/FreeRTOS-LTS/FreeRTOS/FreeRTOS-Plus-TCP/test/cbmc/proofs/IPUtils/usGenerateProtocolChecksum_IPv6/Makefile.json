@@ -1,0 +1,34 @@
+{
+  "ENTRY": "usGenerateProtocolChecksum_IPv6",
+  "MAX_EXT_HEADER_NUM": 21,
+  "CBMCFLAGS":
+  [
+    "--unwind 1",
+    "--nondet-static",
+    "--unwindset usGetExtensionHeaderLength.3:{MAX_EXT_HEADER_NUM}",
+    "--unwindset prvPrepareExtensionHeaders.0:{MAX_EXT_HEADER_NUM}"
+  ],
+  "INSTFLAGS":
+  [
+    "--remove-function-body prvChecksumIPv4Checks"
+  ],
+  "OBJS":
+  [
+    "$(ENTRY)_harness.goto",
+    "$(FREERTOS_PLUS_TCP)/test/cbmc/stubs/cbmc.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_IP_Utils.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_IPv6_Utils.goto"
+  ],
+  "DEF":
+  [
+    "FREERTOS_TCP_ENABLE_VERIFICATION",
+    "ipconfigUSE_TCP=1",
+    "ipconfigNETWORK_MTU=200",
+    "ipconfigTCP_MSS=586",
+    "ipconfigUSE_DHCP=0"
+  ],
+  "INC":
+  [
+    "$(FREERTOS_PLUS_TCP)/test/cbmc/include"
+  ]
+}

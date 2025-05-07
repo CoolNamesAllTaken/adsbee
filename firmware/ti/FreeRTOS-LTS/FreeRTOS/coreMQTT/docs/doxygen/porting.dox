@@ -1,0 +1,75 @@
+/**
+@page mqtt_porting Porting Guide
+@brief Guide for porting MQTT to a new platform.
+
+A port to a new platform must provide the following components:
+1. [Configuration Macros](@ref mqtt_porting_config)
+2. [Transport Interface](@ref mqtt_porting_transport)
+3. [Time Function](@ref mqtt_porting_time)
+
+@section mqtt_porting_config Configuration Macros
+@brief Settings that must be set as macros in the config header `core_mqtt_config.h`, or passed in as compiler options.
+
+@note If a custom configuration header `core_mqtt_config.h` is not provided, then the @ref MQTT_DO_NOT_USE_CUSTOM_CONFIG macro must be defined.
+
+@see [Configurations](@ref core_mqtt_config)
+
+The following macros can be configured for the managed MQTT library:
+ - @ref MQTT_PINGRESP_TIMEOUT_MS <br>
+ - @ref MQTT_MAX_CONNACK_RECEIVE_RETRY_COUNT
+
+In addition, the following logging macros are used throughout the library:
+ - @ref LogError
+ - @ref LogWarn
+ - @ref LogInfo
+ - @ref LogDebug
+
+@section mqtt_porting_transport Transport Interface
+@brief The MQTT library relies on an underlying transport interface API that must be implemented
+in order to send and receive packets on a network.
+
+@see [Transport Interface](@ref mqtt_transport_interface)
+
+The transport interface API used by MQTT is defined in @ref transport_interface.h.
+A port must implement functions corresponding to the following functions pointers:
+ - [Transport Receive](@ref TransportRecv_t): A function to receive bytes from a network.
+ @code
+ int32_t (* TransportRecv_t )(
+     NetworkContext_t * pNetworkContext, void * pBuffer, size_t bytesToRecv
+ );
+ @endcode
+ - [Transport Send](@ref TransportSend_t): A function to send bytes over a network.
+ @code
+ int32_t (* TransportSend_t )(
+     NetworkContext_t * pNetworkContext, const void * pBuffer, size_t bytesToSend
+ );
+ @endcode
+
+The above two functions take in a pointer to a @ref NetworkContext_t, the typename of a
+`struct NetworkContext`. The NetworkContext struct must also be defined by the port, and
+ought to contain any information necessary to send and receive data with the @ref TransportSend_t
+and @ref TransportRecv_t implementations, respectively:
+@code
+struct NetworkContext {
+    // Fields necessary for the transport implementations, e.g. a TCP socket descriptor.
+};
+@endcode
+
+@section mqtt_porting_time Time Function
+@brief The MQTT library relies on a function to generate millisecond timestamps, for the
+purpose of calculating durations and timeouts, as well as maintaining the keep-alive mechanism
+of the MQTT protocol.
+
+@see @ref MQTTGetCurrentTimeFunc_t
+
+Platforms must supply a function capable of generating 32 bit timestamps of millisecond resolution.
+These timestamps need not correspond with any real world clock; the only requirement is that the
+difference between two timestamps must be an accurate representation of the duration between them,
+in milliseconds.
+
+@note Should the platform be incapable of providing millisecond timestamps, the port may instead
+provide a function that always returns 0, or a strictly non-decreasing sequence. In this case, the
+timeout values in all library calls to @ref MQTT_Connect, @ref MQTT_ProcessLoop, or @ref MQTT_ReceiveLoop
+MUST be set to 0, resulting in loop functions running for a single iteration, and @ref MQTT_Connect
+relying on @ref MQTT_MAX_CONNACK_RECEIVE_RETRY_COUNT to receive the CONNACK packet.
+*/
