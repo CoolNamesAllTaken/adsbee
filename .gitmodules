@@ -1,6 +1,3 @@
 [submodule "firmware/modules/cppAT"]
 	path = firmware/modules/cppAT
 	url = git@github.com:CoolNamesAllTaken/cppAT.git
-[submodule "firmware/ti/setup/simplelink-lowpower-f2-sdk"]
-	path = firmware/ti/setup/simplelink-lowpower-f2-sdk
-	url = git@github.com:TexasInstruments/simplelink-lowpower-f2-sdk.git
