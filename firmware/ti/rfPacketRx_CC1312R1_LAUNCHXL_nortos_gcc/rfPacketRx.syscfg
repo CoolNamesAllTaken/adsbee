@@ -1,0 +1,112 @@
+/*
+ * Copyright (c) 2018, Texas Instruments Incorporated
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ * *  Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *
+ * *  Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * *  Neither the name of Texas Instruments Incorporated nor the names of
+ *    its contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+ * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+ * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+// @cliArgs --board /ti/boards/CC1312R1_LAUNCHXL --rtos nortos
+
+/*
+ *  rfPacketRx.syscfg
+ */
+
+/* ======== RF ======== */
+var RF = scripting.addModule("/ti/drivers/RF");
+
+/* if an antenna component exists, assign it to the rf instance */
+if (system.deviceData.board && system.deviceData.board.components.RF) {
+    RF.$hardware = system.deviceData.board.components.RF;
+}
+
+/* ======== LED Red ======== */
+var GPIO = scripting.addModule("/ti/drivers/GPIO");  // Add a GPIO module for use by LEDs
+var LED_R = GPIO.addInstance();                      // Add an a GPIO module instance for LED_R
+
+/* if a red LED component exists, assign it to the LED_R instance */
+if (system.deviceData.board && system.deviceData.board.components.LED_RED) {
+    LED_R.$hardware = system.deviceData.board.components.LED_RED;
+}
+else
+{
+    LED_R.mode = "Output";  // Set the LED pin to output
+}
+
+LED_R.$name = "CONFIG_GPIO_RLED";                     // Descriptive name for the LED_R GPIO
+
+if (system.deviceData.deviceId === "CC2674R10RGZ"){
+    /* ======== GPIO ======== */
+    /* Enable GPIO for tracer */
+    const GPIO2 = GPIO.addInstance();
+    GPIO2.$name             = "GPIO_RFC_TRACE";
+    GPIO2.mode              = "Output";
+    GPIO2.gpioPin.$assign   = "DIO_4";
+
+    /* Wired mode for FPGA */
+    const GPIO3 = GPIO.addInstance();
+    GPIO3.$name             = "GPIO_RFC_WIRED_OUT";
+    GPIO3.mode              = "Output";
+    GPIO3.gpioPin.$assign   = "DIO_29";
+
+    const GPIO4 = GPIO.addInstance();
+    GPIO4.$name             = "GPIO_RFC_WIRED_IN";
+    GPIO4.gpioPin.$assign   = "DIO_30";
+}
+
+/* ======== Radio Configuration ======== */
+const commonRf = system.getScript("/ti/prop_rf/prop_rf_common.js");
+const boardName = commonRf.getDeviceOrLaunchPadName(true);
+const phyFilePath = "/ti/prop_rf/rf_config/" + boardName + "_rf_defaults.js";
+ 
+// Get the supported proprietary phy for this board as defined by Prop RF
+const defaultPhy = system.getScript(phyFilePath).defaultPropPhyList[0];
+ 
+// Add an instance of the "Custom" RF Stack
+const customStack = scripting.addModule("/ti/devices/radioconfig/custom");
+ 
+// Add the default phy instance
+const phyInst = commonRf.addPropPhy(customStack, defaultPhy, true);
+phyInst.$name = "RF_Custom_Setting";
+ 
+// // Disable multi-protocol patch
+phyInst.codeExportConfig.useMulti = false;
+
+/* ======== RF Design ======== */
+var rfDesign = scripting.addModule("ti/devices/radioconfig/rfdesign");
+const rfDesignSettings = system.getScript("/ti/common/lprf_rf_design_settings.js").rfDesignSettings;
+for(var setting in rfDesignSettings)
+{
+    rfDesign[setting] = rfDesignSettings[setting];
+}
+
+/* ======== Device ======== */
+var device = scripting.addModule("ti/devices/CCFG");
+const ccfgSettings = system.getScript("/ti/common/lprf_ccfg_settings.js").ccfgSettings;
+for(var setting in ccfgSettings)
+{
+    device[setting] = ccfgSettings[setting];
+}

@@ -1,14 +1,4 @@
-# cmake_minimum_required(VERSION 3.13)
-
-# set(CMAKE_C_STANDARD 17)
-# set(CMAKE_CXX_STANDARD 20)
-
-# project(adsbee_uat C CXX ASM)
-
-# add_executable(adsbee_uat main.cc)
-
-# # Pull in SDK (must be before project)
-# add_subdirectory(${TI_LPF2_SDK_PATH})
+# Based on this Makefile: https://github.com/TexasInstruments/simplelink-prop_rf-examples/blob/main/examples/nortos/CC1312R1_LAUNCHXL/prop_rf/rfPacketRx/gcc/makefile
 
 cmake_minimum_required(VERSION 3.16)
 
@@ -22,34 +12,31 @@ message(STATUS "Current source directory: ${CMAKE_CURRENT_SOURCE_DIR}")
 # Set the SimpleLink SDK path
 set(SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR "$ENV{TI_LPF2_SDK_PATH}")
 set(SYSCFG_OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/syscfg")
-
-# # SysConfig setup
-# set(SYSCONFIG_TOOL "$ENV{SYSCONFIG_TOOL}" CACHE FILEPATH "Path to SysConfig tool")
-# get_filename_component(SYSCONFIG_DIR ${SYSCONFIG_TOOL} DIRECTORY)
-# set(SYSCONFIG_GUI_TOOL "${SYSCONFIG_DIR}/sysconfig_gui${CMAKE_EXECUTABLE_SUFFIX}" CACHE FILEPATH "Path to SysConfig GUI tool")
-
-# # Generate SysConfig files
-# set(SYSCFG_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/../rfPacketRx.syscfg)
-# set(SYSCFG_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/syscfg)
-# add_custom_command(
-#     OUTPUT ${SYSCFG_OUTPUT_DIR}/ti_devices_config.c ${SYSCFG_OUTPUT_DIR}/ti_drivers_config.c
-#     COMMAND ${SYSCONFIG_TOOL} --compiler gcc --product ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/.metadata/product.json --output ${SYSCFG_OUTPUT_DIR} ${SYSCFG_SOURCE}
-#     DEPENDS ${SYSCFG_SOURCE}
-#     COMMENT "Generating SysConfig files"
-# )
-
-# Set source files
-# set(SOURCE_FILES
-    
-# )
+# Find ARM GCC compiler directory in /usr/local/
+file(GLOB GCC_ARM_PATHS "/usr/local/gcc-arm-none-eabi-*")
+if(GCC_ARM_PATHS)
+    list(GET GCC_ARM_PATHS 0 GCC_ARMCOMPILER)
+    message(STATUS "Found ARM GCC compiler: ${GCC_ARMCOMPILER}")
+else()
+    message(FATAL_ERROR "ARM GCC compiler not found in /usr/local/")
+endif()
 
 message(STATUS "SimpleLink SDK path: ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}")
 
 # Create executable
-add_executable(${PROJECT_NAME} main.cc)
+add_executable(${PROJECT_NAME} main.cpp)
 
 add_compile_definitions(DeviceFamily_CC13X2)
 add_compile_definitions(ON_TI)
+
+# Libraries to link
+target_link_libraries(${PROJECT_NAME}
+    PRIVATE
+    # stdc++
+    gcc # GCC runtime library
+    c # C standard library
+    m # Math library
+)
 
 # Include directories
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -58,17 +45,22 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/posix
+    $(GCC_ARMCOMPILER)/arm-none-eabi/include/newlib-nano
+    $(GCC_ARMCOMPILER)/arm-none-eabi/include
+    "/usr/local/gcc-arm-none-eabi-13.3.1/lib/gcc/arm-none-eabi/13.3.1/include"
 )
 
 target_sources(${PROJECT_NAME} PRIVATE
     # ${CMAKE_CURRENT_SOURCE_DIR}/rfPacketRx.c
     # ${CMAKE_CURRENT_SOURCE_DIR}/RFQueue.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/main.cc
-    # ${SYSCFG_OUTPUT_DIR}/ti_devices_config.c
-    # ${SYSCFG_OUTPUT_DIR}/ti_drivers_config.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
+    ${SYSCFG_OUTPUT_DIR}/ti_devices_config.c
+    ${SYSCFG_OUTPUT_DIR}/ti_drivers_config.c
+    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/startup/startup_cc13x2_cc26x2_gcc.c 
 )
 
 add_subdirectory("/adsbee/common" ${CMAKE_BINARY_DIR}/adsbee_common)
+add_subdirectory(${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR} ${CMAKE_BINARY_DIR}/ti_lpf2_sdk)
 
 # Compiler flags
 target_compile_options(${PROJECT_NAME} PRIVATE
@@ -82,6 +74,7 @@ target_compile_options(${PROJECT_NAME} PRIVATE
     -g
     -gstrict-dwarf
     -Wall
+    # -O0
 )
 
 # Linker script
@@ -91,7 +84,7 @@ set(LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/cc13x2_cc26x2_nortos.lds")
 target_link_options(${PROJECT_NAME} PRIVATE
     -T${LINKER_SCRIPT}
     -Wl,-Map=${PROJECT_NAME}.map
-    # -eresetISR
+    -eresetISR
     -march=armv7e-m
     -mthumb
     -mfloat-abi=hard
@@ -99,22 +92,16 @@ target_link_options(${PROJECT_NAME} PRIVATE
     -nostartfiles
     -static
     -Wl,--gc-sections
-    # --specs=nano.specs
-    # --specs=nosys.specs
+    --specs=nano.specs
+    --specs=nosys.specs
 )
 
 # Add SimpleLink SDK libraries
 target_link_directories(${PROJECT_NAME} PRIVATE
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos
+    # "/usr/local/gcc-arm-none-eabi-13.3.1/lib/gcc/arm-none-eabi/13.3.1/thumb/v7e-m+fp/hard"
 )
-
-# # Libraries to link
-# target_link_libraries(${PROJECT_NAME}
-#     gcc
-#     c
-#     m
-# )
 
 # # Custom command to create hex file
 # add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD

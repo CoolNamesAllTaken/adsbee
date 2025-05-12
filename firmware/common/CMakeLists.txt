@@ -50,7 +50,7 @@ elseif (TARGET bootloader)
 elseif (TARGET sub_ghz_radio)
     # TI CC1312R sub-GHz radio.
     target_sources(${PROJECT_NAME} PRIVATE
-        utils/data_structures.cpp
+        # utils/data_structures.cpp
         # coprocessor/spi_coprocessor.cpp
         # coprocessor/object_dictionary.cpp
     )
