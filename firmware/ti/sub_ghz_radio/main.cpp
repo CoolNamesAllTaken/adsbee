@@ -30,9 +30,9 @@ int main(void)
     while (true)
     {
         GPIO_write(bsp.kStatusLEDPin, 1);
-        ClockP_usleep(500'000);
+        ClockP_usleep(500000);
         GPIO_write(bsp.kStatusLEDPin, 0);
-        ClockP_usleep(500'000);
+        ClockP_usleep(500000);
     }
 
     // /* Call mainThread function */

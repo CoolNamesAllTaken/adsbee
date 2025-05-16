@@ -1,17 +1,16 @@
 # Based on this Makefile: https://github.com/TexasInstruments/simplelink-prop_rf-examples/blob/main/examples/nortos/CC1312R1_LAUNCHXL/prop_rf/rfPacketRx/gcc/makefile
 
 cmake_minimum_required(VERSION 3.16)
-
-# Skip compiler checks.
-set(CMAKE_C_COMPILER_WORKS 1)
-set(CMAKE_CXX_COMPILER_WORKS 1)
-
-project(sub_ghz_radio C CXX ASM)
+set(TI_MIN_CMAKE_VERSION 3.16)
 
 message(STATUS "Current source directory: ${CMAKE_CURRENT_SOURCE_DIR}")
 # Set the SimpleLink SDK path
-set(SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR "$ENV{TI_LPF2_SDK_PATH}")
-set(SYSCFG_OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/syscfg")
+set(SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR "$ENV{TI_LPF2_SDK_PATH}" CACHE PATH "ti-lpf2 SDK install dir.")
+set(SYSCFG_OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/syscfg" CACHE PATH "dir where all the sysconfig output goes.")
+set(CMAKE_COMMON_INSTALL_DIR ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/cmake/scripts/cmake-common CACHE PATH "cmake-common scripts dir from the LPF2 SDK.")
+set(CMAKE_TOOLCHAIN_FILE ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/cmake/toolchains/gcc.cmake)
+message(STATUS "SimpleLink SDK path: ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}")
+
 # Find ARM GCC compiler directory in /usr/local/
 file(GLOB GCC_ARM_PATHS "/usr/local/gcc-arm-none-eabi-*")
 if(GCC_ARM_PATHS)
@@ -20,47 +19,79 @@ if(GCC_ARM_PATHS)
 else()
     message(FATAL_ERROR "ARM GCC compiler not found in /usr/local/")
 endif()
+# Extract the GCC ARM compiler version from the path
+string(REGEX MATCH "gcc-arm-none-eabi-([0-9]+\\.[0-9]+\\.[0-9]+)" _ ${GCC_ARMCOMPILER})
+set(GCC_ARM_VERSION ${CMAKE_MATCH_1})
+message(STATUS "ARM GCC compiler version: ${GCC_ARM_VERSION}")
 
-message(STATUS "SimpleLink SDK path: ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}")
+# Skip compiler checks.
+# set(CMAKE_C_COMPILER_WORKS 1)
+# set(CMAKE_CXX_COMPILER_WORKS 1)
 
-# Create executable
-add_executable(${PROJECT_NAME} main.cpp)
-
+# Compile definitions need to be defined before the target!
 add_compile_definitions(DeviceFamily_CC13X2)
 add_compile_definitions(ON_TI)
+
+project(sub_ghz_radio C CXX ASM)
+
+
+
+# Create executable
+add_executable(${PROJECT_NAME}
+    main.cpp
+    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/startup/startup_cc13x2_cc26x2_gcc.c
+)
+
+
+
+
+
+# Link against the M4 hard float toolchain
+# target_link_libraries(your_app PRIVATE CMakeCommon::gcc_m4f)
+
+# Include directories
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/posix
+    # $(GCC_ARMCOMPILER)/arm-none-eabi/include/newlib-nano
+    # $(GCC_ARMCOMPILER)/arm-none-eabi/include # For syscalls (reent.h)
+    $(GCC_ARMCOMPILER)/lib/gcc/arm-none-eabi/${GCC_ARM_VERSION}/include # For arm_acle.h
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/syscfg
+)
 
 # Libraries to link
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
     # stdc++
-    gcc # GCC runtime library
-    c # C standard library
-    m # Math library
+    # gcc # GCC runtime library
+    # c # C standard library
+    # m # Math library
+    CMakeCommon::gcc_m4f # Use TI gcc toolchain for ARM M4 with hardware floating point.
+    # Assume default library install locations (within /usr/local/ti-lpf2-sdk).
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/lib/gcc/m4f/nortos_cc13x2.a
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/log/lib/gcc/m4f/log_cc13x2/log_cc13x2.a
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/drivers/lib/gcc/m4f/drivers_cc13x2/drivers_cc13x2.a
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/devices/cc13x2_cc26x2/lib/gcc/m4f/driverlib/driverlib.lib
+
 )
 
-# Include directories
-target_include_directories(${PROJECT_NAME} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/syscfg
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/posix
-    $(GCC_ARMCOMPILER)/arm-none-eabi/include/newlib-nano
-    $(GCC_ARMCOMPILER)/arm-none-eabi/include
-    "/usr/local/gcc-arm-none-eabi-13.3.1/lib/gcc/arm-none-eabi/13.3.1/include"
-)
+set(TI_LINKER_COMMAND_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cc13x2_cc26x2_nortos.lds")
 
 target_sources(${PROJECT_NAME} PRIVATE
-    # ${CMAKE_CURRENT_SOURCE_DIR}/rfPacketRx.c
-    # ${CMAKE_CURRENT_SOURCE_DIR}/RFQueue.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
+    syscalls_stub.c
+    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/NoRTOS.c
+    NoRTOS.cpp
+#     # ${CMAKE_CURRENT_SOURCE_DIR}/rfPacketRx.c
+#     # ${CMAKE_CURRENT_SOURCE_DIR}/RFQueue.c
     ${SYSCFG_OUTPUT_DIR}/ti_devices_config.c
     ${SYSCFG_OUTPUT_DIR}/ti_drivers_config.c
-    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/startup/startup_cc13x2_cc26x2_gcc.c 
+     
 )
 
 add_subdirectory("/adsbee/common" ${CMAKE_BINARY_DIR}/adsbee_common)
-add_subdirectory(${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR} ${CMAKE_BINARY_DIR}/ti_lpf2_sdk)
+# Do NOT add the SDK itself as a subdirectory or else it will assume you are building the SDK and take over a bunch of important variables like CMAKE_COMMON_INSTALL_DIR.
 
 # Compiler flags
 target_compile_options(${PROJECT_NAME} PRIVATE
@@ -92,16 +123,16 @@ target_link_options(${PROJECT_NAME} PRIVATE
     -nostartfiles
     -static
     -Wl,--gc-sections
-    --specs=nano.specs
+    # --specs=nano.specs
     --specs=nosys.specs
 )
 
 # Add SimpleLink SDK libraries
-target_link_directories(${PROJECT_NAME} PRIVATE
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos
-    # "/usr/local/gcc-arm-none-eabi-13.3.1/lib/gcc/arm-none-eabi/13.3.1/thumb/v7e-m+fp/hard"
-)
+# target_link_directories(${PROJECT_NAME} PRIVATE
+#     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source
+#     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos
+#     "/usr/local/gcc-arm-none-eabi-13.3.1/lib/gcc/arm-none-eabi/13.3.1/thumb/v7e-m+fp/hard"
+# )
 
 # # Custom command to create hex file
 # add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
