@@ -80,6 +80,61 @@ class CC1312 {
         }
     }
 
+    // CCFG field IDs used to set CCFG values via memory mapped CCFG registers.
+    enum BootloaderCCFGFieldID : uint32_t {
+        kCCFGFieldIDSectorProt = 0,  // Flash sector number of sector to protect from program and erase.
+        kCCFGFieldIDImageValid = 1,  // Address of flash image vector table to allow jump to application.
+        kCCFGFieldIDTestTAPOLck = 2,
+        kCCFGFieldIDPwrprofTAPLck = 3,
+        kCCFGFieldIDCPUDAPLck = 4,
+        kCCFGFieldIDAONTAPLck = 5,
+        kCCFGFieldIDPBIST1TAPLck = 6,
+        kCCFGFieldIDPBIST2TAPLck = 7,
+        kCCFGFieldIDIDBankEraseDis = 8,  // Set to 0 to disable bank erase from bootloader using COMMAND_BANK_ERASE.
+        kCCFGFieldIDChipEraseDis = 9,    // Set to 0 to disable any chip erase operation.
+        kCCFGFieldIDTIFAEnable = 10,     // Set to non-0x5 value to disable TI FA in following boot.
+        kCCFGFieldIDBLBackdoorEn = 11,   // Set to non-0x5 to disable bootloader backdoor in following boot.
+        kCCFGFieldIDBLBackdoorPin = 12,  // Set to DIO pin number to use for bootloader backdoor. Must be in Bit[7:0].
+        kCCFGFieldIDBackdoorLevel = 13,  // Set to the active level of the bootloader backdoor pin. Must be in Bit[0].
+        kCCFGFieldIDBLEnable = 14        // Set to non-0x5 to disable the bootloader.
+    };
+
+    struct BootloaderCCFGConfig {
+        // Note: Struct only includes the CCFG fields that we are interested in.
+        bool bank_erase_disabled = false;
+        bool chip_erase_disabled = false;
+        bool bl_backdoor_enabled = true;
+        uint8_t bl_backdoor_pin = bsp.subg_bootloader_backdoor_pin;
+        bool bl_backdoor_level = true;  // Active high.
+        bool bl_enabled = true;         // Bootloader enabled.
+    };
+
+    // Register offsets used to read CCFG values from memory.
+    enum BootloaderCCFGRegisterOffset : uint16_t {
+        kCCFGRegOffExtLFClk = 0x1FA8,         // External LF clock configuration
+        kCCFGRegOffModeConf1 = 0x1FAC,        // Mode Configuration 1
+        kCCFGRegOffSizeAndDisFlags = 0x1FB0,  // CCFG Size and Disable Flags
+        kCCFGRegOffModeConf = 0x1FB4,         // Mode Configuration 0
+        kCCFGRegOffVoltLoad0 = 0x1FB8,        // Voltage Load 0
+        kCCFGRegOffVoltLoad1 = 0x1FBC,        // Voltage Load 1
+        kCCFGRegOffRTCOffset = 0x1FC0,        // Real Time Clock Offset
+        kCCFGRegOffFreqOffset = 0x1FC4,       // Frequency Offset
+        kCCFGRegOffIEEEMac0 = 0x1FC8,         // IEEE MAC Address 0
+        kCCFGRegOffIEEEMac1 = 0x1FCC,         // IEEE MAC Address 1
+        kCCFGRegOffIEEEBLE0 = 0x1FD0,         // IEEE BLE Address 0
+        kCCFGRegOffIEEEBLE1 = 0x1FD4,         // IEEE BLE Address 1
+        kCCFGRegOffBLConfig = 0x1FD8,         // Bootloader Configuration
+        kCCFGRegOffEraseConf = 0x1FDC,        // Erase Configuration
+        kCCFGRegOffTIOptions = 0x1FE0,        // TI Options
+        kCCFGRegOffTapDap0 = 0x1FE4,          // Test Access Points Enable 0
+        kCCFGRegOffTapDap1 = 0x1FE8,          // Test Access Points Enable 1
+        kCCFGRegOffImageValidConf = 0x1FEC,   // Image Valid
+        kCCFGRegOffProt31_0 = 0x1FF0,         // Protect Sectors 0-31
+        kCCFGRegOffProt63_32 = 0x1FF4,        // Protect Sectors 32-63
+        kCCFGRegOffProt95_64 = 0x1FF8,        // Protect Sectors 64-95
+        kCCFGRegOffProt127_96 = 0x1FFC        // Protect Sectors 96-127
+    };
+
     /**
      * Adjusts the SPI peripheral to be able to talk to the CC1312. Nominally adjusts clock rate, but also adjusts CPHA
      * and CPOL if the bootloader is active.
@@ -128,8 +183,12 @@ class CC1312 {
      */
     bool BootloaderPing();
 
+    bool BootloaderWriteCCFGConfig(const BootloaderCCFGConfig& ccfg_config);
+    bool BootloaderReadCCFGConfig(BootloaderCCFGConfig& ccfg_config);
+
     bool BootloaderReceiveBuffer(uint8_t* buf, uint16_t buf_len_bytes);
     bool BootloaderSendBuffer(uint8_t* buf, uint16_t buf_len_bytes);
+    bool BootloaderSendBufferCheckSuccess(uint8_t* buf, uint16_t buf_len_bytes);
 
     /**
      * Brings the CC1312 into bootloader mode and sets the SPI peripheral to be able to communicate with the CC1312.

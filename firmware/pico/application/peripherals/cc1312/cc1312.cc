@@ -87,13 +87,9 @@ bool CC1312::BootloaderLastCommandSucceeded() {
 
 bool CC1312::BootloaderPing() {
     uint8_t cmd_buf[1] = {kCmdPing};
-    bool ping_acked = BootloaderSendBuffer(cmd_buf, sizeof(cmd_buf));
+    bool ping_acked = BootloaderSendBufferCheckSuccess(cmd_buf, sizeof(cmd_buf));
     if (!ping_acked) {
-        CONSOLE_ERROR("CC1312::BootloaderPing", "Ping command not acked.");
-        return false;
-    }
-    if (!BootloaderLastCommandSucceeded()) {
-        CONSOLE_ERROR("CC1312::BootloaderPing", "Ping command return status not successful.");
+        CONSOLE_ERROR("CC1312::BootloaderPing", "Ping command failed.");
         return false;
     }
     return true;
@@ -219,15 +215,26 @@ bool CC1312::BootloaderSendBuffer(uint8_t* buf, uint16_t buf_len_bytes) {
     }
 
     // Interpret the response.
-    if (rx_byte == ProtocolByte::kProtocolByteAck) {
-        return true;
-    } else if (rx_byte == ProtocolByte::kProtocolByteNack) {
+    if (rx_byte == ProtocolByte::kProtocolByteNack) {
         CONSOLE_ERROR("CC1312::BootloaderSendBuffer", "Received NACK from CC1312.");
         return false;
-    } else {
+    } else if (rx_byte != kProtocolByteAck) {
         CONSOLE_ERROR("CC1312::BootloaderSendBuffer", "Received unknown response from CC1312: 0x%x.", rx_byte);
         return false;
     }
+    return true;
+}
+
+bool CC1312::BootloaderSendBufferCheckSuccess(uint8_t* buf, uint16_t buf_len_bytes) {
+    if (!BootloaderSendBuffer(buf, buf_len_bytes)) {
+        CONSOLE_ERROR("CC1312::BootloaderSendBufferCheckSuccess", "Failed to send command.");
+        return false;
+    }
+    if (!BootloaderLastCommandSucceeded()) {
+        CONSOLE_ERROR("CC1312::BootloaderSendBufferCheckSuccess", "Command was sent but was unsuccessful.");
+        return false;
+    }
+    return true;
 }
 
 bool CC1312::EnterBootloader() {

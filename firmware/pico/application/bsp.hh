@@ -94,6 +94,9 @@ class BSP {
     uint16_t onboard_i2c_scl_pin = 3;          // SCL pin for I2C.
     uint32_t onboard_i2c_clk_freq_hz = 400e3;  // 400kHz
     bool onboard_i2c_requires_init = false;    // In case I2c is shared with something else that already initializes it.
+
+    uint16_t subg_bootloader_backdoor_pin =
+        5;  // Pin for CC1312 bootloader backdoor (CC1312 DIO number, NOT RP2040 GPIO number).
 };
 
 extern BSP bsp;
