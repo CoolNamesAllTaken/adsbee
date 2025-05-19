@@ -56,15 +56,18 @@ class CC1312 {
     };
 
     enum CommandReturnStatus : uint8_t {
-        kCmdRetSuccess = 0x40,     // Status for successful command.
-        kCmdRetUnknownCmd = 0x41,  // Status for unknown command.
-        kCmdRetInvalidCmd = 0x42,  // Status for invlaid command (in other words, incorrect packet size).
-        kCmdRetInvalidAdr = 0x43,  // Status for invalid input address.
-        kCmdRetFlashFail = 0x44    // Status for failing flash erase or program operation.
+        kCmdRetDriverError = 0x00,  // Made up (non-TI status) for indicating a generic error in our code.
+        kCmdRetSuccess = 0x40,      // Status for successful command.
+        kCmdRetUnknownCmd = 0x41,   // Status for unknown command.
+        kCmdRetInvalidCmd = 0x42,   // Status for invlaid command (in other words, incorrect packet size).
+        kCmdRetInvalidAdr = 0x43,   // Status for invalid input address.
+        kCmdRetFlashFail = 0x44     // Status for failing flash erase or program operation.
     };
 
     const char* CommandReturnStatusToString(CommandReturnStatus status) {
         switch (status) {
+            case kCmdRetDriverError:
+                return "Driver error";
             case kCmdRetSuccess:
                 return "Success";
             case kCmdRetUnknownCmd:
@@ -175,16 +178,16 @@ class CC1312 {
      * Verifies that the last command sent to the CC1312 bootloader was successful by sending a COMMAND_GET_STATUS
      * command and checking that the value returned is COMMAND_RET_SUCCESS.
      */
-    bool BootloaderLastCommandSucceeded();
+    CommandReturnStatus BootloaderCommandGetStatus();
 
     /**
      * Sends a COMMAND_PING to the CC1312 in bootloader mode, and returns true if an ACK is received.
      * @retval True if the CC1312 is in bootloader mode, false otherwise.
      */
-    bool BootloaderPing();
+    bool BootloaderCommandPing();
 
-    bool BootloaderWriteCCFGConfig(const BootloaderCCFGConfig& ccfg_config);
     bool BootloaderReadCCFGConfig(BootloaderCCFGConfig& ccfg_config);
+    bool BootloaderWriteCCFGConfig(const BootloaderCCFGConfig& ccfg_config);
 
     bool BootloaderReceiveBuffer(uint8_t* buf, uint16_t buf_len_bytes);
     bool BootloaderSendBuffer(uint8_t* buf, uint16_t buf_len_bytes);

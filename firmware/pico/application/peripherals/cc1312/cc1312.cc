@@ -64,32 +64,32 @@ bool CC1312::Init(bool spi_already_initialized) {
     return true;
 }
 
-bool CC1312::BootloaderLastCommandSucceeded() {
+CC1312::CommandReturnStatus CC1312::BootloaderCommandGetStatus() {
     uint8_t cmd_buf[1] = {kCmdGetStatus};
     if (!BootloaderSendBuffer(cmd_buf, sizeof(cmd_buf))) {
-        CONSOLE_ERROR("CC1312::BootloaderLastCommandSucceeded", "Failed to send command.");
-        return false;
+        CONSOLE_ERROR("CC1312::BootloaderCommandGetStatus", "Failed to send command.");
+        return kCmdRetDriverError;
     }
     uint8_t status_buf[1] = {0};
     if (!BootloaderReceiveBuffer(status_buf, sizeof(status_buf))) {
-        CONSOLE_ERROR("CC1312::BootloaderLastCommandSucceeded", "Failed to receive command status.");
-        return false;
+        CONSOLE_ERROR("CC1312::BootloaderCommandGetStatus", "Failed to receive command status.");
+        return kCmdRetDriverError;
     }
     CommandReturnStatus return_status = static_cast<CommandReturnStatus>(status_buf[0]);
     if (return_status != kCmdRetSuccess) {
-        CONSOLE_ERROR("CC1312::BootloaderLastCommandSucceeded", "Command failed with status 0x%x. (%s).", return_status,
+        CONSOLE_ERROR("CC1312::BootloaderCommandGetStatus", "Command failed with status 0x%x. (%s).", return_status,
                       CommandReturnStatusToString(return_status));
-        return false;
+        return return_status;
     }
 
-    return true;
+    return return_status;
 }
 
-bool CC1312::BootloaderPing() {
+bool CC1312::BootloaderCommandPing() {
     uint8_t cmd_buf[1] = {kCmdPing};
     bool ping_acked = BootloaderSendBufferCheckSuccess(cmd_buf, sizeof(cmd_buf));
     if (!ping_acked) {
-        CONSOLE_ERROR("CC1312::BootloaderPing", "Ping command failed.");
+        CONSOLE_ERROR("CC1312::BootloaderCommandPing", "Ping command failed.");
         return false;
     }
     return true;
@@ -230,7 +230,7 @@ bool CC1312::BootloaderSendBufferCheckSuccess(uint8_t* buf, uint16_t buf_len_byt
         CONSOLE_ERROR("CC1312::BootloaderSendBufferCheckSuccess", "Failed to send command.");
         return false;
     }
-    if (!BootloaderLastCommandSucceeded()) {
+    if (BootloaderCommandGetStatus() != kCmdRetSuccess) {
         CONSOLE_ERROR("CC1312::BootloaderSendBufferCheckSuccess", "Command was sent but was unsuccessful.");
         return false;
     }
@@ -244,7 +244,7 @@ bool CC1312::EnterBootloader() {
     in_bootloader_ = true;
     sleep_ms(kBootupDelayMs);  // Wait for the CC1312 to boot up.
 
-    return BootloaderPing();
+    return BootloaderCommandPing();
 }
 
 bool CC1312::ExitBootloader() {
