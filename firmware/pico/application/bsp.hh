@@ -30,8 +30,8 @@ class BSP {
             r1090_rssi_adc_pin = 28;
             r1090_rssi_adc_input = 2;
 
-            has_r978 = true;
-            r978_led_pin = 25;
+            has_subg = true;
+            sync_pin = 25;  // Used for sync and CC1312 bootloader backdoor.
         }
     }
 
@@ -82,12 +82,12 @@ class BSP {
     uint16_t r1090_rssi_adc_input = 2;  // ADC input for reading RSSI.
     uint16_t r1090_bias_tee_enable_pin = 18;
 
-    bool has_r978 = false;                 // Set to true if the 978MHz receiver is present.
-    uint32_t r978_spi_clk_freq_hz = 10e6;  // Si4362 has slower clock frequency (10MHz) than ESP32.
-    uint16_t r978_led_pin = UINT16_MAX;    // Set to UINT16_MAX to indicate not connected.
-    uint16_t r978_enable_pin = 6;
-    uint16_t r978_irq_pin = 7;
-    uint16_t r978_cs_pin = 8;
+    bool has_subg = false;                // Set to true if the sub-GHz receiver is present.
+    uint32_t subg_spi_clk_freq_hz = 4e6;  // CC1312 has SPI clk limited to 1/12 its clock frequency. 48MHz / 12 = 4MHz.
+    uint16_t sync_pin = UINT16_MAX;       // Set to UINT16_MAX to indicate not connected.
+    uint16_t subg_enable_pin = 6;
+    uint16_t subg_irq_pin = 7;
+    uint16_t subg_cs_pin = 8;
 
     i2c_inst_t* onboard_i2c = i2c1;            // I2C peripheral used to talk to EEPROM (if supported).
     uint16_t onboard_i2c_sda_pin = 2;          // SDA pin for I2C.

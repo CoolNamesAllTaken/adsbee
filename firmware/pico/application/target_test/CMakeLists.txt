@@ -3,10 +3,10 @@ if(ON_EMBEDDED_DEVICE)
     target_sources(application PRIVATE
         hardware_unit_tests.cc
         test_aircraft_dictionary.cc
+        test_cc1312.cc
         test_clocks.cc
         test_eeprom.cc
         test_flash.cc
-        test_si4362.cc
         test_spi_coprocessor.cc
         
     )

@@ -3,6 +3,7 @@
 
 #include "aircraft_dictionary.hh"
 #include "bsp.hh"
+#include "cc1312.hh"
 #include "cpp_at.hh"
 #include "data_structures.hh"  // For PFBQueue.
 #include "hardware/i2c.h"
@@ -10,7 +11,6 @@
 #include "hardware/watchdog.h"
 #include "macros.hh"  // For MAX / MIN.
 #include "settings.hh"
-#include "si4362.hh"
 #include "stdint.h"
 #include "transponder_packet.hh"
 
@@ -70,7 +70,7 @@ class ADSBee {
 
         uint16_t bias_tee_enable_pin = 18;
 
-        bool has_r978 = bsp.has_r978;
+        bool has_subg = bsp.has_subg;
 
         uint32_t aircraft_dictionary_update_interval_ms = 1000;
     };
@@ -216,7 +216,7 @@ class ADSBee {
      * Returns whether the 978MHz receiver is enabled.
      * @retval True if enabled, false otherwise.
      */
-    bool Receiver978IsEnabled() { return r978.IsEnabled(); }
+    bool Receiver978IsEnabled() { return subg_radio.IsEnabled(); }
 
     /**
      * Enable or disable the bias tee to inject 3.3V at the RF IN connector.
@@ -242,11 +242,11 @@ class ADSBee {
      * @param[in] is_enabled True if 978MHz receiver should be enabled, false otherwise.
      */
     inline void SetReceiver978Enable(bool is_enabled) {
-        bool old_enabled = r978.IsEnabled();
-        r978.SetEnable(is_enabled);
+        bool old_enabled = subg_radio.IsEnabled();
+        subg_radio.SetEnable(is_enabled);
         if (old_enabled == false && is_enabled == true) {
             // Re-initialize the receiver.
-            r978.Init(true);
+            subg_radio.Init(true);
         }
     }
 
@@ -305,7 +305,7 @@ class ADSBee {
         {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = raw_1090_packet_queue_buffer_});
 
     AircraftDictionary aircraft_dictionary;
-    Si4362 r978 = Si4362({});
+    CC1312 subg_radio = CC1312({});
 
    private:
     ADSBeeConfig config_;

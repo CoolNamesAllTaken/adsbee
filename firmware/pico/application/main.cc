@@ -24,8 +24,6 @@ const uint16_t kStatusLEDBootupBlinkPeriodMs = 200;
 const uint32_t kESP32BootupTimeoutMs = 10000;
 const uint32_t kESP32BootupCommsRetryMs = 500;
 
-const uint32_t kMultiCoreStartHandshake = 0x12345678;
-
 // Override default config params here.
 EEPROM eeprom = EEPROM({});
 // BSP gets configured differently if there is or isn't an EEPROM attached. Attempt to initialize the EEPROM to figure
