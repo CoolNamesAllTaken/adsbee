@@ -85,6 +85,43 @@ CC1312::CommandReturnStatus CC1312::BootloaderCommandGetStatus() {
     return return_status;
 }
 
+bool CC1312::BootloaderCommandMemoryRead(uint32_t address, uint32_t* buf, uint8_t buf_len, bool is_32bit) {
+    if ((is_32bit && buf_len > 63) || (is_32bit && buf_len > 253)) {
+        CONSOLE_ERROR("CC1312::BootloaderCommandMemoryRead", "Buffer length too large, max is %d.",
+                      is_32bit ? 63 : 253);
+        return false;
+    }
+    uint8_t cmd_buf[] = {kCmdMemoryRead,
+                         static_cast<uint8_t>((address >> 24) & 0xFFu),
+                         static_cast<uint8_t>((address >> 16) & 0xFFu),
+                         static_cast<uint8_t>((address >> 8) & 0xFFu),
+                         static_cast<uint8_t>(address & 0xFFu),
+                         static_cast<uint8_t>(is_32bit ? 0x01u : 0x00u),  // 1 for 32-bit, 0 for 8-bit.
+                         buf_len};
+
+    if (!BootloaderSendBuffer(cmd_buf, sizeof(cmd_buf))) {
+        CONSOLE_ERROR("CC1312::BootloaderCommandMemoryRead", "Failed to send memory read command.");
+        return false;
+    }
+
+    uint8_t data_buf[is_32bit ? 4 * buf_len : buf_len] = {0};
+    if (!BootloaderReceiveBuffer(data_buf, sizeof(data_buf))) {
+        CONSOLE_ERROR("CC1312::BootloaderCommandMemoryRead", "Failed to receive reply to memory read command.");
+        return false;
+    }
+    if (is_32bit) {
+        for (uint8_t i = 0; i < buf_len; i++) {
+            buf[i] = (data_buf[4 * i] << 24) | (data_buf[4 * i + 1] << 16) | (data_buf[4 * i + 2] << 8) |
+                     data_buf[4 * i + 3];
+        }
+    } else {
+        for (uint8_t i = 0; i < buf_len; i++) {
+            buf[i] = data_buf[i];
+        }
+    }
+    return true;
+}
+
 bool CC1312::BootloaderCommandPing() {
     uint8_t cmd_buf[1] = {kCmdPing};
     bool ping_acked = BootloaderSendBufferCheckSuccess(cmd_buf, sizeof(cmd_buf));
@@ -94,6 +131,18 @@ bool CC1312::BootloaderCommandPing() {
     }
     return true;
 }
+
+bool CC1312::BootloaderCommandReset() {
+    uint8_t cmd_buf[1] = {kCmdReset};
+    bool reset_acked = BootloaderSendBuffer(cmd_buf, sizeof(cmd_buf));
+    if (!reset_acked) {
+        CONSOLE_ERROR("CC1312::BootloaderCommandReset", "Reset command failed.");
+        return false;
+    }
+    return true;
+}
+
+bool CC1312::BootloaderReadCCFGConfig(BootloaderCCFGConfig& ccfg_config) { return true; }
 
 bool CC1312::BootloaderReceiveBuffer(uint8_t* buf, uint16_t buf_len_bytes) {
     uint8_t rx_buf[buf_len_bytes + 2] = {0};  // Includes size Byte and checksum Byte.
@@ -127,24 +176,31 @@ bool CC1312::BootloaderReceiveBuffer(uint8_t* buf, uint16_t buf_len_bytes) {
     uint8_t calculated_checksum = 0;
 
     int16_t bytes_read =
-        SPIReadBlocking(rx_buf + 1, rx_len_bytes - 1, true);  // End transaction after reading the buffer.
+        SPIReadBlocking(rx_buf + 1, rx_len_bytes - 1, false);  // End transaction after reading the buffer.
+    bool read_success = true;
     if (bytes_read < 0) {
         CONSOLE_ERROR("CC1312::BootloaderReceiveBuffer",
                       "Failed to read response, SPI write read call returned error code 0x%x.", bytes_read);
-        return false;
+        read_success = false;
     } else if (bytes_read != rx_len_bytes - 1) {
         CONSOLE_ERROR("CC1312::BootloaderReceiveBuffer", "Failed to read response, expected %d Bytes but read %d.",
                       rx_len_bytes - 1, bytes_read);
-        return false;
+        read_success = false;
+    } else {
+        // Verify received checksum.
+        uint16_t received_checksum = rx_buf[1];
+        for (uint16_t i = 2; i < rx_len_bytes; i++) {
+            calculated_checksum += rx_buf[i];
+        }
+        if (calculated_checksum != received_checksum) {
+            CONSOLE_ERROR("CC1312::BootloaderReceiveBuffer", "Checksum mismatch, expected 0x%x but got 0x%x.",
+                          received_checksum, calculated_checksum);
+            read_success = false;
+        }
     }
-    // Verify received checksum.
-    uint16_t received_checksum = rx_buf[1];
-    for (uint16_t i = 2; i < rx_len_bytes; i++) {
-        calculated_checksum += rx_buf[i];
-    }
-    if (calculated_checksum != received_checksum) {
-        CONSOLE_ERROR("CC1312::BootloaderReceiveBuffer", "Checksum mismatch, expected 0x%x but got 0x%x.",
-                      received_checksum, calculated_checksum);
+    uint8_t ack_nack_byte = read_success ? ProtocolByte::kProtocolByteAck : ProtocolByte::kProtocolByteNack;
+    SPIWriteBlocking(&ack_nack_byte, 1, true);  // Send ACK or NACK back to the CC1312, then end the transaction.
+    if (!read_success) {
         return false;
     }
 

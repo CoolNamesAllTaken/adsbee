@@ -180,11 +180,19 @@ class CC1312 {
      */
     CommandReturnStatus BootloaderCommandGetStatus();
 
+    bool BootloaderCommandMemoryRead(uint32_t address, uint32_t* buf, uint8_t buf_len, bool is_32bit = true);
+
     /**
      * Sends a COMMAND_PING to the CC1312 in bootloader mode, and returns true if an ACK is received.
      * @retval True if the CC1312 is in bootloader mode, false otherwise.
      */
     bool BootloaderCommandPing();
+
+    /**
+     * Initiates a reset of the CC1312. Used t boot into a new app after flashing.
+     * @retval True if the command was ACKed (no get status check), false otherwise.
+     */
+    bool BootloaderCommandReset();
 
     bool BootloaderReadCCFGConfig(BootloaderCCFGConfig& ccfg_config);
     bool BootloaderWriteCCFGConfig(const BootloaderCCFGConfig& ccfg_config);
