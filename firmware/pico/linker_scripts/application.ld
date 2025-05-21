@@ -238,7 +238,7 @@ SECTIONS
 
     .flash_end : {
         __flash_binary_end = .;
-    } > FLASH_APP0
+    } > FLASH
 
     /* stack limit is poorly named, but historically is maximum heap ptr */
     __StackLimit = ORIGIN(RAM) + LENGTH(RAM);

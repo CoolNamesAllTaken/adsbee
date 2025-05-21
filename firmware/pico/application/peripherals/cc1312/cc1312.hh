@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bsp.hh"
+#include "comms.hh"
 #include "hardware/spi.h"
 
 class CC1312 {
@@ -180,7 +181,55 @@ class CC1312 {
      */
     CommandReturnStatus BootloaderCommandGetStatus();
 
-    bool BootloaderCommandMemoryRead(uint32_t address, uint32_t* buf, uint8_t buf_len, bool is_32bit = true);
+    template <typename T>
+    bool BootloaderCommandMemoryRead(uint32_t address, T* buf, uint8_t buf_len) {
+        static_assert(std::is_same<T, uint32_t>::value || std::is_same<T, uint8_t>::value,
+                      "T must be either uint32_t or uint8_t");
+
+        bool is_32bit = sizeof(T) == 4;
+        // If explicit is_32bit doesn't match the template type, show a warning but respect the explicit parameter
+        if (is_32bit != is_32bit) {
+            CONSOLE_ERROR("CC1312::BootloaderCommandMemoryRead",
+                          "Warning: is_32bit parameter (%d) doesn't match template type size (%d bytes)",
+                          is_32bit ? 1 : 0, sizeof(T));
+        }
+
+        if ((is_32bit && buf_len > 63) || (!is_32bit && buf_len > 253)) {
+            CONSOLE_ERROR("CC1312::BootloaderCommandMemoryRead", "Buffer length too large, max is %d.",
+                          is_32bit ? 63 : 253);
+            return false;
+        }
+        uint8_t cmd_buf[] = {kCmdMemoryRead,
+                             static_cast<uint8_t>((address >> 24) & 0xFFu),
+                             static_cast<uint8_t>((address >> 16) & 0xFFu),
+                             static_cast<uint8_t>((address >> 8) & 0xFFu),
+                             static_cast<uint8_t>(address & 0xFFu),
+                             static_cast<uint8_t>(is_32bit ? 0x01u : 0x00u),  // 1 for 32-bit, 0 for 8-bit.
+                             buf_len};
+
+        if (!BootloaderSendBuffer(cmd_buf, sizeof(cmd_buf))) {
+            CONSOLE_ERROR("CC1312::BootloaderCommandMemoryRead", "Failed to send memory read command.");
+            return false;
+        }
+
+        uint8_t data_buf[is_32bit ? 4 * buf_len : buf_len] = {0};
+        if (!BootloaderReceiveBuffer(data_buf, sizeof(data_buf))) {
+            CONSOLE_ERROR("CC1312::BootloaderCommandMemoryRead", "Failed to receive reply to memory read command.");
+            return false;
+        }
+
+        if (is_32bit) {
+            for (uint8_t i = 0; i < buf_len; i++) {
+                buf[i] = static_cast<T>((data_buf[4 * i] << 24) | (data_buf[4 * i + 1] << 16) |
+                                        (data_buf[4 * i + 2] << 8) | data_buf[4 * i + 3]);
+            }
+        } else {
+            for (uint8_t i = 0; i < buf_len; i++) {
+                buf[i] = static_cast<T>(data_buf[i]);
+            }
+        }
+        return true;
+    }
 
     /**
      * Sends a COMMAND_PING to the CC1312 in bootloader mode, and returns true if an ACK is received.

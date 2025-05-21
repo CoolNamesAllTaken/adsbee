@@ -25,18 +25,18 @@ bool CommsManager::UpdateReporting() {
     // Proceed with update and record timestamp.
     last_raw_report_timestamp_ms_ = timestamp_ms;
 
-    Decoded1090Packet packets_to_report[ADSBee::kMaxNumTransponderPackets];
+    Decoded1090Packet packets_to_report[SettingsManager::Settings::kMaxNumTransponderPackets];
     /**
      * Raw packet reporting buffer used to transfer multiple packets at once over SPI.
      * [<uint8_t num_packets to report> <packet 1> <packet 2> ...]
      */
-    uint8_t spi_raw_packet_reporting_buffer[sizeof(uint8_t) + ADSBee::kMaxNumTransponderPackets];
+    uint8_t spi_raw_packet_reporting_buffer[sizeof(uint8_t) + SettingsManager::Settings::kMaxNumTransponderPackets];
 
     // Fill up the array of Decoded1090Packets for internal functions, and the buffer of Raw1090Packets to
     // send to the ESP32 over SPI. Raw1090Packets are used instead of Decoded1090Packets over the SPI link
     // in order to preserve bandwidth.
     uint16_t num_packets_to_report = 0;
-    for (; num_packets_to_report < ADSBee::kMaxNumTransponderPackets &&
+    for (; num_packets_to_report < SettingsManager::Settings::kMaxNumTransponderPackets &&
            transponder_packet_reporting_queue.Pop(packets_to_report[num_packets_to_report]);
          num_packets_to_report++) {
         if (esp32.IsEnabled()) {

@@ -20,8 +20,6 @@ class ADSBee {
     static constexpr int kVDDMV = 3300;               // [mV] Voltage of positive supply rail.
     static constexpr int kTLMaxMV = 3300;             // [mV]
     static constexpr int kTLMinMV = 0;                // [mV]
-    static constexpr uint16_t kMaxNumTransponderPackets =
-        100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
     static constexpr uint32_t kStatusLEDOnMs = 10;
 
     static constexpr uint32_t kTLLearningIntervalMs =
@@ -301,8 +299,9 @@ class ADSBee {
                          uint16_t tl_learning_start_temperature_mv = kTLLearningStartTemperatureMV,
                          uint16_t tl_min_mv = kTLMinMV, uint16_t tl_max_mv = kTLMaxMV);
 
-    PFBQueue<Raw1090Packet> raw_1090_packet_queue = PFBQueue<Raw1090Packet>(
-        {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = raw_1090_packet_queue_buffer_});
+    PFBQueue<Raw1090Packet> raw_1090_packet_queue =
+        PFBQueue<Raw1090Packet>({.buf_len_num_elements = SettingsManager::Settings::kMaxNumTransponderPackets,
+                                 .buffer = raw_1090_packet_queue_buffer_});
 
     AircraftDictionary aircraft_dictionary;
     CC1312 subg_radio = CC1312({});
@@ -342,7 +341,7 @@ class ADSBee {
     uint64_t mlat_counter_wraps_ = 0;
 
     Raw1090Packet rx_packet_[BSP::kMaxNumDemodStateMachines];
-    Raw1090Packet raw_1090_packet_queue_buffer_[kMaxNumTransponderPackets];
+    Raw1090Packet raw_1090_packet_queue_buffer_[SettingsManager::Settings::kMaxNumTransponderPackets];
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
 

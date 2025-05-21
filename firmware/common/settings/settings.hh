@@ -46,6 +46,8 @@ class SettingsManager {
     // firmware upgrade if the format of the settings struct changes.
     struct Settings {
         static constexpr int kDefaultTLMV = 1300;  // [mV]
+        static constexpr uint16_t kMaxNumTransponderPackets =
+            100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
         static constexpr uint32_t kDefaultWatchdogTimeoutSec = 10;
         // NOTE: Lengths do not include null terminator.
         static constexpr uint16_t kHostnameMaxLen = 32;

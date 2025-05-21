@@ -1,6 +1,6 @@
 #include "cc1312.hh"
 
-#include "comms.hh"
+#include "hal.hh"
 
 const CC1312::SPIPeripheralConfig kDefaultSPIPeripheralConfig;  // use defaults
 const CC1312::SPIPeripheralConfig kBootloaderSPIPeripheralConfig = {
@@ -83,43 +83,6 @@ CC1312::CommandReturnStatus CC1312::BootloaderCommandGetStatus() {
     }
 
     return return_status;
-}
-
-bool CC1312::BootloaderCommandMemoryRead(uint32_t address, uint32_t* buf, uint8_t buf_len, bool is_32bit) {
-    if ((is_32bit && buf_len > 63) || (is_32bit && buf_len > 253)) {
-        CONSOLE_ERROR("CC1312::BootloaderCommandMemoryRead", "Buffer length too large, max is %d.",
-                      is_32bit ? 63 : 253);
-        return false;
-    }
-    uint8_t cmd_buf[] = {kCmdMemoryRead,
-                         static_cast<uint8_t>((address >> 24) & 0xFFu),
-                         static_cast<uint8_t>((address >> 16) & 0xFFu),
-                         static_cast<uint8_t>((address >> 8) & 0xFFu),
-                         static_cast<uint8_t>(address & 0xFFu),
-                         static_cast<uint8_t>(is_32bit ? 0x01u : 0x00u),  // 1 for 32-bit, 0 for 8-bit.
-                         buf_len};
-
-    if (!BootloaderSendBuffer(cmd_buf, sizeof(cmd_buf))) {
-        CONSOLE_ERROR("CC1312::BootloaderCommandMemoryRead", "Failed to send memory read command.");
-        return false;
-    }
-
-    uint8_t data_buf[is_32bit ? 4 * buf_len : buf_len] = {0};
-    if (!BootloaderReceiveBuffer(data_buf, sizeof(data_buf))) {
-        CONSOLE_ERROR("CC1312::BootloaderCommandMemoryRead", "Failed to receive reply to memory read command.");
-        return false;
-    }
-    if (is_32bit) {
-        for (uint8_t i = 0; i < buf_len; i++) {
-            buf[i] = (data_buf[4 * i] << 24) | (data_buf[4 * i + 1] << 16) | (data_buf[4 * i + 2] << 8) |
-                     data_buf[4 * i + 3];
-        }
-    } else {
-        for (uint8_t i = 0; i < buf_len; i++) {
-            buf[i] = data_buf[i];
-        }
-    }
-    return true;
 }
 
 bool CC1312::BootloaderCommandPing() {
