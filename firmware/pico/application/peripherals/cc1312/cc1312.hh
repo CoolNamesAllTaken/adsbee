@@ -113,31 +113,37 @@ class CC1312 {
         bool bl_enabled = true;         // Bootloader enabled.
     };
 
+    // Register base addresses from datasheet table 3-1.
+    static const uint32_t kBaseAddrFlashMem = 0x0000000;  // Program Flash Memory
+    static const uint32_t kBaseAddrFCFG1 = 0x50001000;    // Factory Configuration
+    static const uint32_t kBaseAddrCCFG = 0x50003000;     // Customer COnfiguration
+
+    // Register offsets used to read FCFG values from memory.
+    static const uint16_t kFCFG1RegOffUserID = 0x0294;
+
     // Register offsets used to read CCFG values from memory.
-    enum BootloaderCCFGRegisterOffset : uint16_t {
-        kCCFGRegOffExtLFClk = 0x1FA8,         // External LF clock configuration
-        kCCFGRegOffModeConf1 = 0x1FAC,        // Mode Configuration 1
-        kCCFGRegOffSizeAndDisFlags = 0x1FB0,  // CCFG Size and Disable Flags
-        kCCFGRegOffModeConf = 0x1FB4,         // Mode Configuration 0
-        kCCFGRegOffVoltLoad0 = 0x1FB8,        // Voltage Load 0
-        kCCFGRegOffVoltLoad1 = 0x1FBC,        // Voltage Load 1
-        kCCFGRegOffRTCOffset = 0x1FC0,        // Real Time Clock Offset
-        kCCFGRegOffFreqOffset = 0x1FC4,       // Frequency Offset
-        kCCFGRegOffIEEEMac0 = 0x1FC8,         // IEEE MAC Address 0
-        kCCFGRegOffIEEEMac1 = 0x1FCC,         // IEEE MAC Address 1
-        kCCFGRegOffIEEEBLE0 = 0x1FD0,         // IEEE BLE Address 0
-        kCCFGRegOffIEEEBLE1 = 0x1FD4,         // IEEE BLE Address 1
-        kCCFGRegOffBLConfig = 0x1FD8,         // Bootloader Configuration
-        kCCFGRegOffEraseConf = 0x1FDC,        // Erase Configuration
-        kCCFGRegOffTIOptions = 0x1FE0,        // TI Options
-        kCCFGRegOffTapDap0 = 0x1FE4,          // Test Access Points Enable 0
-        kCCFGRegOffTapDap1 = 0x1FE8,          // Test Access Points Enable 1
-        kCCFGRegOffImageValidConf = 0x1FEC,   // Image Valid
-        kCCFGRegOffProt31_0 = 0x1FF0,         // Protect Sectors 0-31
-        kCCFGRegOffProt63_32 = 0x1FF4,        // Protect Sectors 32-63
-        kCCFGRegOffProt95_64 = 0x1FF8,        // Protect Sectors 64-95
-        kCCFGRegOffProt127_96 = 0x1FFC        // Protect Sectors 96-127
-    };
+    static const uint32_t kCCFGRegOffExtLFClk = 0x1FA8;         // External LF clock configuration
+    static const uint32_t kCCFGRegOffModeConf1 = 0x1FAC;        // Mode Configuration 1
+    static const uint32_t kCCFGRegOffSizeAndDisFlags = 0x1FB0;  // CCFG Size and Disable Flags
+    static const uint32_t kCCFGRegOffModeConf = 0x1FB4;         // Mode Configuration 0
+    static const uint32_t kCCFGRegOffVoltLoad0 = 0x1FB8;        // Voltage Load 0
+    static const uint32_t kCCFGRegOffVoltLoad1 = 0x1FBC;        // Voltage Load 1
+    static const uint32_t kCCFGRegOffRTCOffset = 0x1FC0;        // Real Time Clock Offset
+    static const uint32_t kCCFGRegOffFreqOffset = 0x1FC4;       // Frequency Offset
+    static const uint32_t kCCFGRegOffIEEEMac0 = 0x1FC8;         // IEEE MAC Address 0
+    static const uint32_t kCCFGRegOffIEEEMac1 = 0x1FCC;         // IEEE MAC Address 1
+    static const uint32_t kCCFGRegOffIEEEBLE0 = 0x1FD0;         // IEEE BLE Address 0
+    static const uint32_t kCCFGRegOffIEEEBLE1 = 0x1FD4;         // IEEE BLE Address 1
+    static const uint32_t kCCFGRegOffBLConfig = 0x1FD8;         // Bootloader Configuration
+    static const uint32_t kCCFGRegOffEraseConf = 0x1FDC;        // Erase Configuration
+    static const uint32_t kCCFGRegOffTIOptions = 0x1FE0;        // TI Options
+    static const uint32_t kCCFGRegOffTapDap0 = 0x1FE4;          // Test Access Points Enable 0
+    static const uint32_t kCCFGRegOffTapDap1 = 0x1FE8;          // Test Access Points Enable 1
+    static const uint32_t kCCFGRegOffImageValidConf = 0x1FEC;   // Image Valid
+    static const uint32_t kCCFGRegOffProt31_0 = 0x1FF0;         // Protect Sectors 0-31
+    static const uint32_t kCCFGRegOffProt63_32 = 0x1FF4;        // Protect Sectors 32-63
+    static const uint32_t kCCFGRegOffProt95_64 = 0x1FF8;        // Protect Sectors 64-95
+    static const uint32_t kCCFGRegOffProt127_96 = 0x1FFC;       // Protect Sectors 96-127
 
     /**
      * Adjusts the SPI peripheral to be able to talk to the CC1312. Nominally adjusts clock rate, but also adjusts CPHA

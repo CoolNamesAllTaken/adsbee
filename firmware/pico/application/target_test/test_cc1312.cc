@@ -13,10 +13,13 @@ UTEST(CC1312, BootloaderCommandReset) {
 }
 
 UTEST(CC1312, BootloaderCommandMemoryReadSingleWord) {
-    static const uint32_t kRegOffsetUserID = 0x294;
     uint32_t read_buf_32[1] = {0};
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(kRegOffsetUserID, read_buf_32, 1));
-    uint32_t read_buf_8[4] = {0};
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(kRegOffsetUserID, read_buf_8, 4));
+    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + CC1312::kFCFG1RegOffUserID,
+                                                              read_buf_32, 1));
+    printf("User ID (32 bit read): 0x%08X\n", read_buf_32[0]);
+    uint8_t read_buf_8[4] = {0};
+    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + CC1312::kFCFG1RegOffUserID,
+                                                              read_buf_8, 4));
+    printf("User ID (8 bit read): 0x%02X%02X%02X%02X\n", read_buf_8[0], read_buf_8[1], read_buf_8[2], read_buf_8[3]);
     EXPECT_EQ(read_buf_32[0], read_buf_8[0] << 24 | read_buf_8[1] << 16 | read_buf_8[2] << 8 | read_buf_8[3]);
 }
