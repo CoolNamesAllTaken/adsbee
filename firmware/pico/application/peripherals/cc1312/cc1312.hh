@@ -11,6 +11,16 @@ class CC1312 {
     static const uint32_t kBootupDelayMs = 100;
     static const uint32_t kSendCommandTimeoutMs = 100;
 
+    struct BootloaderCCFGConfig {
+        // Note: Struct only includes the CCFG fields that we are interested in.
+        bool bank_erase_disabled = false;
+        bool chip_erase_disabled = false;
+        bool bl_backdoor_enabled = true;
+        uint8_t bl_backdoor_pin = bsp.subg_bootloader_backdoor_pin;
+        bool bl_backdoor_level = true;  // Active high.
+        bool bl_enabled = true;         // Bootloader enabled.
+    };
+
     struct CC1312Config {
         // This clock frequency is used to talk to the CC1312.
         uint32_t spi_clk_freq_hz = bsp.subg_spi_clk_freq_hz;
@@ -25,6 +35,8 @@ class CC1312 {
         uint16_t enable_pin = bsp.subg_enable_pin;  // Pin to enable the CC1312.
         uint16_t irq_pin = bsp.subg_irq_pin;        // Pin for CC1312 IRQ.
         uint16_t sync_pin = bsp.sync_pin;           // Pin for sync and CC1312 bootloader backdoor.
+
+        BootloaderCCFGConfig ccfg_config = {};  // CCFG configuration for the bootloader (use default values).
     };
 
     // The bootloader has a weird SPI configuration, so we need a struct to keep track of it.
@@ -101,16 +113,6 @@ class CC1312 {
         kCCFGFieldIDBLBackdoorPin = 12,  // Set to DIO pin number to use for bootloader backdoor. Must be in Bit[7:0].
         kCCFGFieldIDBackdoorLevel = 13,  // Set to the active level of the bootloader backdoor pin. Must be in Bit[0].
         kCCFGFieldIDBLEnable = 14        // Set to non-0x5 to disable the bootloader.
-    };
-
-    struct BootloaderCCFGConfig {
-        // Note: Struct only includes the CCFG fields that we are interested in.
-        bool bank_erase_disabled = false;
-        bool chip_erase_disabled = false;
-        bool bl_backdoor_enabled = true;
-        uint8_t bl_backdoor_pin = bsp.subg_bootloader_backdoor_pin;
-        bool bl_backdoor_level = true;  // Active high.
-        bool bl_enabled = true;         // Bootloader enabled.
     };
 
     // Register base addresses from datasheet table 3-1.
@@ -319,17 +321,32 @@ class CC1312 {
     bool BootloaderCommandReset();
 
     /**
+     * Sets values in CCFG registers using COMMAND_SET_CCFG. Used by the BootloaderWriteCCFGConfig function.
+     * @param[in] field_id CCFG field ID to set.
+     * @param[in] value Value to set the CCFG field to.
+     * @retval True if the command was successful, false otherwise.
+     */
+    bool BootloaderCommandSetCCFG(BootloaderCCFGFieldID field_id, uint32_t value);
+
+    /**
      * Reads the CCFG configuration from the CC1312.
      * @param[out] ccfg_config Struct to read the CCFG configuration into.
      * @retval True if the command was successful, false otherwise.
      */
     bool BootloaderReadCCFGConfig(BootloaderCCFGConfig& ccfg_config);
 
-    bool BootloaderWriteCCFGConfig(const BootloaderCCFGConfig& ccfg_config);
-
     bool BootloaderReceiveBuffer(uint8_t* buf, uint16_t buf_len_bytes);
     bool BootloaderSendBuffer(uint8_t* buf, uint16_t buf_len_bytes);
     bool BootloaderSendBufferCheckSuccess(uint8_t* buf, uint16_t buf_len_bytes);
+
+    /**
+     * Writes a CCFG configuration to the CC1312. Note that under the hood, this function can only change bits in flash
+     * from 1 to 0. In order to override CCFG values from an arbitrary state, the CCFG flash region needs to be cleared
+     * first.
+     * @param[in] ccfg_config CCFG configuration to write.
+     * @retval True if the command was successful, false otherwise.
+     */
+    bool BootloaderWriteCCFGConfig(const BootloaderCCFGConfig& ccfg_config);
 
     /**
      * Brings the CC1312 into bootloader mode and sets the SPI peripheral to be able to communicate with the CC1312.

@@ -23,7 +23,8 @@
 			"clockp.h": "c"
 		},
 		"C_Cpp.default.defines": [
-			"ON_TI"
+			"ON_TI",
+			"DeviceFamily_CC13X2"
 		],
 	},
 	"launch": {
@@ -37,7 +38,7 @@
 				"request": "attach",
 				"servertype": "external",
 				"gdbPath": "arm-none-eabi-gdb",
-				"gdbTarget": "host.docker.internal:2331",
+				"gdbTarget": "host.docker.internal:2337",
 				"showDevDebugOutput": "raw",
 				// "svdFile": "/usr/local/pico-sdk/src/rp2040/hardware_regs/RP2040.svd",
 				// "preRestartCommands": [
@@ -45,6 +46,7 @@
 				// 	"load",
 				// 	"monitor reset"
 				// ],
+				"runToEntryPoint": "main",
 				"armToolchainPath": "/usr/bin",
 				"device": "CC1312R1F3",
 			},

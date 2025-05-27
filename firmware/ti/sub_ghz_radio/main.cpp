@@ -11,7 +11,7 @@ BSP bsp;
 /* Example/Board Header files */
 #include "ti_drivers_config.h"
 
-// extern void *mainThread(void *arg0);
+extern void *mainThread(void *arg0);
 
 /*
  *  ======== main ========
@@ -27,7 +27,8 @@ int main(void)
 
     GPIO_setConfig(bsp.kSubGLEDPin, GPIO_CFG_OUT_STD);
 
-    while (true)
+    static const uint16_t kNumBlinks = 2;
+    for (uint16_t i = 0; i < kNumBlinks; ++i)
     {
         GPIO_write(bsp.kSubGLEDPin, 1);
         ClockP_usleep(500000);
@@ -36,8 +37,8 @@ int main(void)
     }
 
     // /* Call mainThread function */
-    // mainThread(NULL);
+    mainThread(NULL);
 
-    // while (1)
-    //     ;
+    while (1)
+        ;
 }

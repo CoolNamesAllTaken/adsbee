@@ -61,6 +61,27 @@ bool CC1312::Init(bool spi_already_initialized) {
     while (get_time_since_boot_ms() - enable_timestamp_ms < kBootupDelayMs) {
     }
 
+    // TODO: Attempt communication before entering the bootloader.
+    CONSOLE_ERROR("CC1312::Init", "Unable to communicate with CC1312. Entering bootloader mode.");
+    if (!EnterBootloader() || !BootloaderCommandPing()) {
+        CONSOLE_ERROR("CC1312::Init", "Failed to enter bootloader mode.");
+        return false;
+    }
+    CONSOLE_INFO("CC1312::Init", "Applying default bootloader CCFG configuration to CC1312.");
+    if (!BootloaderWriteCCFGConfig(config_.ccfg_config)) {
+        CONSOLE_ERROR("CC1312::Init", "Failed to write default bootloader CCFG configuration.");
+        return false;
+    }
+    // TODO: Attempt to flash firmware to the CC1312.
+    CONSOLE_INFO("CC1312::Init", "Exiting bootloader mode.");
+    if (!ExitBootloader()) {
+        CONSOLE_ERROR("CC1312::Init", "Failed to exit bootloader mode.");
+        return false;
+    }
+
+    // TODO: Check that the CC1312 can be communicated with successfully.
+    CONSOLE_INFO("CC1312::Init", "CC1312 initialized successfully.");
+
     return true;
 }
 
@@ -100,6 +121,24 @@ bool CC1312::BootloaderCommandReset() {
     bool reset_acked = BootloaderSendBuffer(cmd_buf, sizeof(cmd_buf));
     if (!reset_acked) {
         CONSOLE_ERROR("CC1312::BootloaderCommandReset", "Reset command failed.");
+        return false;
+    }
+    return true;
+}
+
+bool CC1312::BootloaderCommandSetCCFG(BootloaderCCFGFieldID field_id, uint32_t value) {
+    uint8_t cmd_buf[9] = {kCmdSetCCFG,
+                          static_cast<uint8_t>((field_id >> 24) & 0xFFu),
+                          static_cast<uint8_t>((field_id >> 16) & 0xFFu),
+                          static_cast<uint8_t>((field_id >> 8) & 0xFFu),
+                          static_cast<uint8_t>(field_id & 0xFFu),
+                          static_cast<uint8_t>((value >> 24) & 0xFFu),
+                          static_cast<uint8_t>((value >> 16) & 0xFFu),
+                          static_cast<uint8_t>((value >> 8) & 0xFFu),
+                          static_cast<uint8_t>(value & 0xFFu)};
+
+    if (!BootloaderSendBufferCheckSuccess(cmd_buf, sizeof(cmd_buf))) {
+        CONSOLE_ERROR("CC1312::BootloaderCommandSetCCFG", "Failed to send CCFG set command.");
         return false;
     }
     return true;
@@ -276,6 +315,35 @@ bool CC1312::BootloaderSendBufferCheckSuccess(uint8_t* buf, uint16_t buf_len_byt
         CONSOLE_ERROR("CC1312::BootloaderSendBufferCheckSuccess", "Command was sent but was unsuccessful.");
         return false;
     }
+    return true;
+}
+
+bool CC1312::BootloaderWriteCCFGConfig(const BootloaderCCFGConfig& ccfg_config) {
+    if (!BootloaderCommandSetCCFG(kCCFGFieldIDIDBankEraseDis, ccfg_config.bank_erase_disabled ? 0 : 1)) {
+        CONSOLE_ERROR("CC1312::BootloaderWriteCCFGConfig", "Failed to set bank erase disabled CCFG field.");
+        return false;
+    }
+    if (!BootloaderCommandSetCCFG(kCCFGFieldIDChipEraseDis, ccfg_config.chip_erase_disabled ? 0 : 1)) {
+        CONSOLE_ERROR("CC1312::BootloaderWriteCCFGConfig", "Failed to set chip erase disabled CCFG field.");
+        return false;
+    }
+    if (!BootloaderCommandSetCCFG(kCCFGFieldIDBLBackdoorEn, ccfg_config.bl_backdoor_enabled ? 0xC5 : 0xFF)) {
+        CONSOLE_ERROR("CC1312::BootloaderWriteCCFGConfig", "Failed to set bootloader backdoor enabled CCFG field.");
+        return false;
+    }
+    if (!BootloaderCommandSetCCFG(kCCFGFieldIDBLBackdoorPin, ccfg_config.bl_backdoor_pin)) {
+        CONSOLE_ERROR("CC1312::BootloaderWriteCCFGConfig", "Failed to set bootloader backdoor pin CCFG field.");
+        return false;
+    }
+    if (!BootloaderCommandSetCCFG(kCCFGFieldIDBackdoorLevel, ccfg_config.bl_backdoor_level ? 1 : 0)) {
+        CONSOLE_ERROR("CC1312::BootloaderWriteCCFGConfig", "Failed to set bootloader backdoor level CCFG field.");
+        return false;
+    }
+    if (!BootloaderCommandSetCCFG(kCCFGFieldIDBLEnable, ccfg_config.bl_enabled ? 0xC5 : 0xFF)) {
+        CONSOLE_ERROR("CC1312::BootloaderWriteCCFGConfig", "Failed to set bootloader enabled CCFG field.");
+        return false;
+    }
+
     return true;
 }
 

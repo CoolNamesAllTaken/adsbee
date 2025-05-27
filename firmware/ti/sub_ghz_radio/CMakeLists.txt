@@ -30,6 +30,7 @@ message(STATUS "ARM GCC compiler version: ${GCC_ARM_VERSION}")
 
 # Compile definitions need to be defined before the target!
 add_compile_definitions(DeviceFamily_CC13X2)
+# add_compile_definitions(DeviceFamily_CC13X2_CC26X2)
 add_compile_definitions(ON_TI)
 
 project(sub_ghz_radio C CXX ASM)
@@ -74,6 +75,7 @@ target_link_libraries(${PROJECT_NAME}
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/log/lib/gcc/m4f/log_cc13x2/log_cc13x2.a
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/drivers/lib/gcc/m4f/drivers_cc13x2/drivers_cc13x2.a
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/devices/cc13x2_cc26x2/lib/gcc/m4f/driverlib/driverlib.lib
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/devices/cc13x2_cc26x2/lib/gcc/m4f/driverlib/driverlib.a
 
 )
 
@@ -83,8 +85,8 @@ target_sources(${PROJECT_NAME} PRIVATE
     syscalls_stub.c
     # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/NoRTOS.c
     NoRTOS.cpp
-#     # ${CMAKE_CURRENT_SOURCE_DIR}/rfPacketRx.c
-#     # ${CMAKE_CURRENT_SOURCE_DIR}/RFQueue.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rfPacketRx.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/RFQueue.c
     ${SYSCFG_OUTPUT_DIR}/ti_devices_config.c
     ${SYSCFG_OUTPUT_DIR}/ti_drivers_config.c
      
