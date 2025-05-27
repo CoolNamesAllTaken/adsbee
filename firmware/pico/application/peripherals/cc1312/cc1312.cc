@@ -105,7 +105,30 @@ bool CC1312::BootloaderCommandReset() {
     return true;
 }
 
-bool CC1312::BootloaderReadCCFGConfig(BootloaderCCFGConfig& ccfg_config) { return true; }
+bool CC1312::BootloaderReadCCFGConfig(BootloaderCCFGConfig& ccfg_config) {
+    uint32_t bl_config = 0;
+
+    if (!BootloaderCommandMemoryRead(kBaseAddrCCFG + kCCFGRegOffBLConfig, &bl_config, 1)) {
+        CONSOLE_ERROR("CC1312::BootloaderReadCCFGConfig", "Failed to read CCFG configuration.");
+        return false;
+    }
+
+    ccfg_config.bl_enabled = ((bl_config >> 24) & 0xFF) == 0xC5;
+    ccfg_config.bl_backdoor_level = (bl_config >> 16) & 0x01;       // Bit[16] is the backdoor level.
+    ccfg_config.bl_backdoor_pin = (bl_config >> 8) & 0xFF;          // Bits[15:8] are the backdoor pin.
+    ccfg_config.bl_backdoor_enabled = (bl_config & 0x0FF) == 0xC5;  // Bits[7:0] are the backdoor enabled flag.
+
+    uint32_t erase_conf = 0;
+    if (!BootloaderCommandMemoryRead(kBaseAddrCCFG + kCCFGRegOffEraseConf, &erase_conf, 1)) {
+        CONSOLE_ERROR("CC1312::BootloaderReadCCFGConfig", "Failed to read CCFG erase configuration.");
+        return false;
+    }
+
+    ccfg_config.chip_erase_disabled = ((erase_conf >> 8) & 0b1) == 0;  // Bit[8] is the chip erase disabled flag.
+    ccfg_config.bank_erase_disabled = (erase_conf & 0b1) == 0;         // Bit[0] is the bank erase disabled flag.
+
+    return true;
+}
 
 bool CC1312::BootloaderReceiveBuffer(uint8_t* buf, uint16_t buf_len_bytes) {
     uint8_t rx_buf[buf_len_bytes + 2] = {0};  // Includes size Byte and checksum Byte.

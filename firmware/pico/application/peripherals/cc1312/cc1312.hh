@@ -50,7 +50,7 @@ class CC1312 {
         kCmdCRC32 = 0x27,
         kCmdGetChipID = 0x26,
         kCmdMemoryRead = 0x2A,
-        kCmdMemoryWrite = 0x28,
+        kCmdMemoryWrite = 0x2B,
         kCmdBankErase = 0x2C,
         kCmdSetCCFG = 0x2D,
         kCmdDownloadCRC = 0x2F
@@ -115,6 +115,7 @@ class CC1312 {
 
     // Register base addresses from datasheet table 3-1.
     static const uint32_t kBaseAddrFlashMem = 0x0000000;  // Program Flash Memory
+    static const uint32_t kBaseAddrSRAM = 0x20000000;     // SRAM
     static const uint32_t kBaseAddrFCFG1 = 0x50001000;    // Factory Configuration
     static const uint32_t kBaseAddrCCFG = 0x50003000;     // Customer COnfiguration
 
@@ -130,8 +131,8 @@ class CC1312 {
     static const uint32_t kCCFGRegOffVoltLoad1 = 0x1FBC;        // Voltage Load 1
     static const uint32_t kCCFGRegOffRTCOffset = 0x1FC0;        // Real Time Clock Offset
     static const uint32_t kCCFGRegOffFreqOffset = 0x1FC4;       // Frequency Offset
-    static const uint32_t kCCFGRegOffIEEEMac0 = 0x1FC8;         // IEEE MAC Address 0
-    static const uint32_t kCCFGRegOffIEEEMac1 = 0x1FCC;         // IEEE MAC Address 1
+    static const uint32_t kCCFGRegOffIEEEMAC0 = 0x1FC8;         // IEEE MAC Address 0
+    static const uint32_t kCCFGRegOffIEEEMAC1 = 0x1FCC;         // IEEE MAC Address 1
     static const uint32_t kCCFGRegOffIEEEBLE0 = 0x1FD0;         // IEEE BLE Address 0
     static const uint32_t kCCFGRegOffIEEEBLE1 = 0x1FD4;         // IEEE BLE Address 1
     static const uint32_t kCCFGRegOffBLConfig = 0x1FD8;         // Bootloader Configuration
@@ -187,22 +188,29 @@ class CC1312 {
      */
     CommandReturnStatus BootloaderCommandGetStatus();
 
+    /**
+     * Sends a COMMAND_MEMORY_READ to the CC1312 bootloader and reads the requested memory into the provided buffer.
+     * Works automatically with buffers of type uint32_t or uint8_t. If the buffer is of type uint8_t, note that words
+     * are written into the buffer LSB first.
+     * @param[in] address Address to read from.
+     * @param[out] buf Buffer to read into.
+     * @param[in] buf_len Length of the buffer to read into (in number of elements, not bytes).
+     * @retval True if the command was successful, false otherwise.
+     */
     template <typename T>
     bool BootloaderCommandMemoryRead(uint32_t address, T* buf, uint8_t buf_len) {
+        static const uint16_t kMemoryReadUint8MaxNumBytes = 253;
+        static const uint16_t kMemoryReadUint32MaxNumBytes = 63;
+
         static_assert(std::is_same<T, uint32_t>::value || std::is_same<T, uint8_t>::value,
                       "T must be either uint32_t or uint8_t");
 
         bool is_32bit = sizeof(T) == 4;
-        // If explicit is_32bit doesn't match the template type, show a warning but respect the explicit parameter
-        if (is_32bit != is_32bit) {
-            CONSOLE_ERROR("CC1312::BootloaderCommandMemoryRead",
-                          "Warning: is_32bit parameter (%d) doesn't match template type size (%d bytes)",
-                          is_32bit ? 1 : 0, sizeof(T));
-        }
 
-        if ((is_32bit && buf_len > 63) || (!is_32bit && buf_len > 253)) {
+        if ((is_32bit && buf_len > kMemoryReadUint32MaxNumBytes) ||
+            (!is_32bit && buf_len > kMemoryReadUint8MaxNumBytes)) {
             CONSOLE_ERROR("CC1312::BootloaderCommandMemoryRead", "Buffer length too large, max is %d.",
-                          is_32bit ? 63 : 253);
+                          is_32bit ? kMemoryReadUint32MaxNumBytes : kMemoryReadUint8MaxNumBytes);
             return false;
         }
         uint8_t cmd_buf[] = {kCmdMemoryRead,
@@ -225,15 +233,76 @@ class CC1312 {
         }
 
         if (is_32bit) {
+            // Memory buffer is given as LSB first, so we need to reverse the order of the bytes.
             for (uint8_t i = 0; i < buf_len; i++) {
-                buf[i] = static_cast<T>((data_buf[4 * i] << 24) | (data_buf[4 * i + 1] << 16) |
-                                        (data_buf[4 * i + 2] << 8) | data_buf[4 * i + 3]);
+                buf[i] = static_cast<T>((data_buf[4 * i + 3] << 24) | (data_buf[4 * i + 2] << 16) |
+                                        (data_buf[4 * i + 1] << 8) | data_buf[4 * i]);
             }
         } else {
             for (uint8_t i = 0; i < buf_len; i++) {
-                buf[i] = static_cast<T>(data_buf[i]);
+                buf[i] = data_buf[i];
             }
         }
+        return true;
+    }
+
+    /**
+     * Writes to an arbitrary memory address on the CC1312 using COMMAND_MEMORY_WRITE via the bootloader. The buffer can
+     * be of type uint8_t or uint32_t. If the buffer is of tpe uint8_t, it is assumed to be in LSB format, meaning that
+     * the first byte is the least significant byte of the first word to write to (assuming word-aligned access). If the
+     * bfufer is of type uint32_t, each element is a full word that will automatically be transposed to LSB format
+     * before writing to memory.
+     * NOTE: This function cannot be used to write to flash memory, and will cause issues if writing to the lower 4kB of
+     * SRAM (0x20000000 to 0x20000FFF) or to the hardware register controllign the fucntionality of the serial interface
+     * being used by the bootloader.
+     * @param[in] address Address to write to.
+     * @param[in] buf Buffer to write from.
+     * @param[in] buf_len Length of the buffer to write from (in number of elements, not bytes).
+     * @retval True if the command was successful, false otherwise.
+     */
+    template <typename T>
+    bool BootloaderCommandMemoryWrite(uint32_t address, T* buf, uint8_t buf_len) {
+        static const uint16_t kMemoryWriteUint8MaxNumBytes = 247;
+        static const uint16_t kMemoryWriteUint32MaxNumBytes = 244;
+
+        static_assert(std::is_same<T, uint32_t>::value || std::is_same<T, uint8_t>::value,
+                      "T must be either uint32_t or uint8_t");
+
+        bool is_32bit = sizeof(T) == 4;
+
+        if ((is_32bit && buf_len > kMemoryWriteUint32MaxNumBytes) ||
+            (!is_32bit && buf_len > kMemoryWriteUint8MaxNumBytes)) {
+            CONSOLE_ERROR("CC1312::BootloaderCommandMemoryWrite", "Buffer length too large, max is %d.",
+                          is_32bit ? kMemoryWriteUint32MaxNumBytes : kMemoryWriteUint8MaxNumBytes);
+            return false;
+        }
+
+        uint8_t cmd_buf[buf_len * sizeof(T) + 6];
+        cmd_buf[0] = kCmdMemoryWrite;
+        cmd_buf[1] = static_cast<uint8_t>((address >> 24) & 0xFFu);
+        cmd_buf[2] = static_cast<uint8_t>((address >> 16) & 0xFFu);
+        cmd_buf[3] = static_cast<uint8_t>((address >> 8) & 0xFFu);
+        cmd_buf[4] = static_cast<uint8_t>(address & 0xFFu);
+        cmd_buf[5] = static_cast<uint8_t>(is_32bit ? 0x01u : 0x00u);  // 1 for 32-bit, 0 for 8-bit.
+
+        if (is_32bit) {
+            for (uint16_t i = 0; i < buf_len; i++) {
+                // Reshuffle 32-bit words into LSB formatted bytes.
+                cmd_buf[6 + 4 * i] = static_cast<uint8_t>(buf[i] & 0xFFu);
+                cmd_buf[6 + 4 * i + 1] = static_cast<uint8_t>((buf[i] >> 8) & 0xFFu);
+                cmd_buf[6 + 4 * i + 2] = static_cast<uint8_t>((buf[i] >> 16) & 0xFFu);
+                cmd_buf[6 + 4 * i + 3] = static_cast<uint8_t>((buf[i] >> 24) & 0xFFu);
+            }
+        } else {
+            // 8-bit incoming buffer is assumed to already be in LSB format.
+            memcpy(cmd_buf + 6, buf, buf_len);  // Copy the buffer to the command buffer.
+        }
+
+        if (!BootloaderSendBufferCheckSuccess(cmd_buf, sizeof(cmd_buf))) {
+            CONSOLE_ERROR("CC1312::BootloaderCommandMemoryWrite", "Failed to send memory write command.");
+            return false;
+        }
+
         return true;
     }
 
@@ -249,7 +318,13 @@ class CC1312 {
      */
     bool BootloaderCommandReset();
 
+    /**
+     * Reads the CCFG configuration from the CC1312.
+     * @param[out] ccfg_config Struct to read the CCFG configuration into.
+     * @retval True if the command was successful, false otherwise.
+     */
     bool BootloaderReadCCFGConfig(BootloaderCCFGConfig& ccfg_config);
+
     bool BootloaderWriteCCFGConfig(const BootloaderCCFGConfig& ccfg_config);
 
     bool BootloaderReceiveBuffer(uint8_t* buf, uint16_t buf_len_bytes);
