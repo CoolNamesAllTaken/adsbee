@@ -14,8 +14,8 @@ const uint32_t kSPITransactionTImeoutMs = 100;  // Timeout for SPI transactions.
 
 bool CC1312::Init(bool spi_already_initialized) {
     // CC1312 enable pin.
-    SetEnableUsesPulls(false);
-    SetEnable(true);  // Enable the CC1312.
+    gpio_init(config_.enable_pin);
+    SetEnable(SettingsManager::kEnableStateEnabled);  // Enable the CC1312.
     uint32_t enable_timestamp_ms = get_time_since_boot_ms();
 
     // CC1312 chip select pin.
@@ -347,9 +347,9 @@ bool CC1312::BootloaderWriteCCFGConfig(const BootloaderCCFGConfig& ccfg_config) 
 }
 
 bool CC1312::EnterBootloader() {
-    SetEnable(false);
+    SetEnable(SettingsManager::kEnableStateDisabled);
     gpio_put(config_.sync_pin, 1);
-    SetEnable(true);
+    SetEnable(SettingsManager::kEnableStateEnabled);
     in_bootloader_ = true;
     sleep_ms(kBootupDelayMs);  // Wait for the CC1312 to boot up.
 
@@ -358,9 +358,9 @@ bool CC1312::EnterBootloader() {
 
 bool CC1312::ExitBootloader() {
     in_bootloader_ = false;
-    SetEnable(false);
+    SetEnable(SettingsManager::kEnableStateDisabled);
     gpio_put(config_.sync_pin, 0);
-    SetEnable(true);
+    SetEnable(SettingsManager::kEnableStateEnabled);
 
     return true;
 }

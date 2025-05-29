@@ -735,9 +735,10 @@ CPP_AT_CALLBACK(CommsManager::ATRxEnableCallback) {
                 adsbee.SetReceiver1090Enable(r1090_enabled);
             }
             if (CPP_AT_HAS_ARG(1)) {
-                bool r978_enabled;
-                CPP_AT_TRY_ARG2NUM(1, r978_enabled);
-                adsbee.SetReceiver978Enable(r978_enabled);
+                bool subg_radio_enabled;
+                CPP_AT_TRY_ARG2NUM(1, subg_radio_enabled);
+                adsbee.SetSubGRadioEnable(subg_radio_enabled ? SettingsManager::kEnableStateEnabled
+                                                             : SettingsManager::kEnableStateDisabled);
             }
             CPP_AT_SUCCESS();
             break;
@@ -793,19 +794,19 @@ CPP_AT_CALLBACK(CommsManager::ATSubGEnableCallback) {
     switch (op) {
         case '=':
             if (CPP_AT_HAS_ARG(0)) {
-                bool subg_enabled;
-                CPP_AT_TRY_ARG2NUM(0, subg_enabled);
-                adsbee.subg_radio.SetEnable(subg_enabled);
-            }
-            if (CPP_AT_HAS_ARG(1)) {
-                bool subg_enable_uses_pulls;
-                CPP_AT_TRY_ARG2NUM(1, subg_enable_uses_pulls);
-                adsbee.subg_radio.SetEnableUsesPulls(subg_enable_uses_pulls);
+                if (args[0].compare("EXTERNAL") == 0) {
+                    adsbee.subg_radio.SetEnable(SettingsManager::kEnableStateExternal);
+                } else {
+                    bool subg_enabled;
+                    CPP_AT_TRY_ARG2NUM(0, subg_enabled);
+                    adsbee.subg_radio.SetEnable(subg_enabled ? SettingsManager::kEnableStateEnabled
+                                                             : SettingsManager::kEnableStateDisabled);
+                }
             }
             CPP_AT_SUCCESS();
             break;
         case '?':
-            CPP_AT_CMD_PRINTF("=%d,%d\r\n", adsbee.subg_radio.IsEnabled(), adsbee.subg_radio.EnableUsesPulls());
+            CPP_AT_CMD_PRINTF("=%s\r\n", SettingsManager::EnableStateToATValueStr(adsbee.subg_radio.IsEnabled()));
             CPP_AT_SILENT_SUCCESS();
             break;
     }
@@ -1074,7 +1075,7 @@ const CppAT::ATCommandDef_t at_command_list[] = {
     {.command_buf = "+RX_ENABLE",
      .min_args = 0,
      .max_args = 2,
-     .help_string_buf = "RX_ENABLE=<1090_enabled [1,0]>,<978_enabled [1,0]>\r\n\tOK\r\n\tEnables or disables the "
+     .help_string_buf = "RX_ENABLE=<1090_enabled [1,0]>,<subg_enabled [1,0]>\r\n\tOK\r\n\tEnables or disables the "
                         "receiver(s) from receiving messages.\r\n\tAT+RX_ENABLE?\r\n\t+RX_ENABLE=<enabled "
                         "[1,0]>\r\n\tQuery whether the "
                         "recevier(s) are enabled.",
@@ -1091,8 +1092,9 @@ const CppAT::ATCommandDef_t at_command_list[] = {
     {.command_buf = "+SUBG_ENABLE",
      .min_args = 0,
      .max_args = 2,
-     .help_string_buf = "AT+SUBG_ENABLE=<enabled>,<use_pulls>\r\n\tEnable or disable the sub-GHz receiver (hard drive "
-                        "or pullup / pulldown).\r\n\tAT+SUBG_ENABLE?\r\n\t"
+     .help_string_buf = "AT+SUBG_ENABLE=<enabled [1,0,EXTERNAL]>\r\n\tEnable or disable the sub-GHz receiver. Receiver "
+                        "enable line can be driven with a low impedance GPIO output or left high impedance (with "
+                        "pulldown) for control via an external device.\r\n\tAT+SUBG_ENABLE?\r\n\t"
                         "Query the status of the sub-GHz receiver.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSubGEnableCallback, comms_manager)},
 #ifdef HARDWARE_UNIT_TESTS

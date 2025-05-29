@@ -239,10 +239,12 @@ class ADSBee {
      * if it's being powered on from a previous off state.
      * @param[in] is_enabled True if 978MHz receiver should be enabled, false otherwise.
      */
-    inline void SetReceiver978Enable(bool is_enabled) {
-        bool old_enabled = subg_radio.IsEnabled();
+    inline void SetSubGRadioEnable(SettingsManager::EnableState is_enabled) {
+        SettingsManager::EnableState old_enabled = subg_radio.IsEnabled();
         subg_radio.SetEnable(is_enabled);
-        if (old_enabled == false && is_enabled == true) {
+        if ((old_enabled == SettingsManager::EnableState::kEnableStateDisabled ||
+             old_enabled == SettingsManager::EnableState::kEnableStateExternal) &&
+            is_enabled == SettingsManager::EnableState::kEnableStateEnabled) {
             // Re-initialize the receiver.
             subg_radio.Init(true);
         }

@@ -236,7 +236,7 @@ bool ADSBee::Init() {
         if (subg_radio.Init(false)) {
             CONSOLE_INFO("ADSBee::Init", "978MHz radio initialized.");
         } else {
-            subg_radio.SetEnable(false);
+            subg_radio.SetEnable(SettingsManager::EnableState::kEnableStateDisabled);
             CONSOLE_ERROR("ADSBee::Init", "Failed to initialize 978MHz radio.");
         }
     }

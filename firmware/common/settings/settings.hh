@@ -42,6 +42,12 @@ class SettingsManager {
 
     static constexpr uint8_t kWiFiAPChannelMax = 11;  // Operation in channels 12-14 avoided in USA.
 
+    enum EnableState : int8_t {
+        kEnableStateExternal = -1,  // Enable GPIO pin is high impedance.
+        kEnableStateDisabled = 0,
+        kEnableStateEnabled = 1
+    };
+
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a
     // firmware upgrade if the format of the settings struct changes.
     struct Settings {
@@ -82,9 +88,7 @@ class SettingsManager {
         bool esp32_enabled = true;
 
         // Sub-GHz settings
-        bool subg_enabled = true;
-        bool subg_enable_use_pulls =
-            false;  // Use pull-up or pull-down resistors on the CC1312 enable pin instead of driving it high or low.
+        EnableState subg_enabled = EnableState::kEnableStateExternal;  // High impedance state by default.
 
         char hostname[kHostnameMaxLen + 1] =
             "ADSBee1090";  // Will be overwritten by the default SSID when device info is set.
@@ -227,6 +231,30 @@ class SettingsManager {
     };
 
     /**
+     * Applies internal settings to the relevant objects. This is only used after the settings struct has been updated
+     * by loading it from EEPROM or by overwriting it via the coprocessor SPI bus.
+     */
+    bool Apply();
+
+    /**
+     * Helper function for reconstructing an AT command value for a given EnableState.
+     * @param[in] state EnableState to convert to a string.
+     * @retval String representation of the EnableState, as it would be used in an AT command.
+     */
+    static inline const char *EnableStateToATValueStr(EnableState state) {
+        switch (state) {
+            case kEnableStateExternal:
+                return "EXTERNAL";
+            case kEnableStateEnabled:
+                return "1";
+            case kEnableStateDisabled:
+                return "0";
+            default:
+                return "?";
+        }
+    }
+
+    /**
      * Loads settings from EEPROM. Assumes settings are stored at address 0x0 and doesn't do any integrity check.
      * @retval True if succeeded, false otherwise.
      */
@@ -255,13 +283,7 @@ class SettingsManager {
         redacted_password_buf[password_len] = '\0';
     }
 
-    /**
-     * Applies internal settings to the relevant objects. This is only used after the settings struct has been updated
-     * by loading it from EEPROM or by overwriting it via the coprocessor SPI bus.
-     */
-    bool Apply();
-
-    /**
+        /**
      * Saves settings to EEPROM. Stores settings at address 0x0 and performs no integrity check.
      * @retval True if succeeded, false otherwise.
      */

@@ -99,7 +99,7 @@ void SettingsManager::PrintAT() {
     CONSOLE_PRINTF("AT+RX_ENABLE=%d\r\n", settings.receiver_enabled);
 
     // AT+SUBG_ENABLE
-    CONSOLE_PRINTF("AT+SUBG_ENABLE=%d,%d\r\n", settings.subg_enabled, settings.subg_enable_use_pulls);
+    CONSOLE_PRINTF("AT+SUBG_ENABLE=%s\r\n", SettingsManager::EnableStateToATValueStr(settings.subg_enabled));
 
     // AT+TL_SET
     CONSOLE_PRINTF("AT+TL_SET=%u\r\n", settings.tl_mv);

@@ -360,51 +360,29 @@ class CC1312 {
      * Set the enable pin.
      * @param[in] enabled True to enable the CC1312, false to disable.
      */
-    inline void SetEnable(bool enabled) {
-        if (enable_uses_pulls_) {
+    inline void SetEnable(SettingsManager::EnableState enabled) {
+        if (enabled == SettingsManager::EnableState::kEnableStateExternal) {
             gpio_set_dir(config_.enable_pin, GPIO_IN);
-            gpio_set_pulls(config_.enable_pin, enabled, !enabled);
+            // Use external pulldown on PCB.
         } else {
             // Drive GPIO pin with low impedance output.
             // Enable is active HI
             gpio_set_dir(config_.enable_pin, GPIO_OUT);
-            gpio_put(config_.enable_pin, enabled);
+            gpio_put(config_.enable_pin, enabled == SettingsManager::EnableState::kEnableStateEnabled ? 1 : 0);
         }
         enabled_ = enabled;
     }
 
     /**
-     * Controls whether the CC1312 enable pin works via a low impedance output or pull-up/pull-down resistors (pull-up /
-     * pull-down resistors can be used to allow an external debugger to override the device enable state for
-     * programming). Re-initializes the enable pin if the new enable_uses_pulls value is different from the existing
-     * value.
-     * @param[in] enable_uses_pulls True to use pull-up/pull-down resistors, false to use low impedance output.
-     */
-    inline void SetEnableUsesPulls(bool enable_uses_pulls) {
-        bool reapply_enable = enable_uses_pulls_ != enable_uses_pulls;
-        enable_uses_pulls_ = enable_uses_pulls;
-        if (reapply_enable) {
-            SetEnable(enabled_);
-        }
-    }
-
-    /**
      * Returns whether the CC1312 is currently enabled.
-     * @retval True if enabled, false otherwise.
+     * @retval True if enabled, false if disabled or set to external.
      */
-    inline bool IsEnabled() { return enabled_; }
-
-    /**
-     * Returns whether the CC1312 enable line is asserted / deasserted using a low impedance GPIO output or a high
-     * impedance pull-up / pull-down.
-     * @retval True if the enable line uses pull-up / pull-down resistors, false if it uses a low impedance output.
-     */
-    inline bool EnableUsesPulls() { return enable_uses_pulls_; }
+    inline SettingsManager::EnableState IsEnabled() { return enabled_; }
 
    private:
     CC1312Config config_;
-    bool enabled_ = false;
-    bool enable_uses_pulls_ = false;
+    SettingsManager::EnableState enabled_ = SettingsManager::EnableState::kEnableStateDisabled;
+    bool enable_is_external_ = false;
     bool in_bootloader_ = false;
 
     // Clock config struct used to set the SPI peripheral to the correct clock rate.
