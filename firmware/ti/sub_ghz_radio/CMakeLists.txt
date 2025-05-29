@@ -40,12 +40,7 @@ project(sub_ghz_radio C CXX ASM)
 # Create executable
 add_executable(${PROJECT_NAME}
     main.cpp
-    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/startup/startup_cc13x2_cc26x2_gcc.c
 )
-
-
-
-
 
 # Link against the M4 hard float toolchain
 # target_link_libraries(your_app PRIVATE CMakeCommon::gcc_m4f)
@@ -55,11 +50,10 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/posix
-    # $(GCC_ARMCOMPILER)/arm-none-eabi/include/newlib-nano
-    # $(GCC_ARMCOMPILER)/arm-none-eabi/include # For syscalls (reent.h)
     $(GCC_ARMCOMPILER)/lib/gcc/arm-none-eabi/${GCC_ARM_VERSION}/include # For arm_acle.h
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/syscfg
+    ${CMAKE_CURRENT_SOURCE_DIR}/smartrf
 )
 
 # Libraries to link
@@ -75,8 +69,8 @@ target_link_libraries(${PROJECT_NAME}
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/log/lib/gcc/m4f/log_cc13x2/log_cc13x2.a
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/drivers/lib/gcc/m4f/drivers_cc13x2/drivers_cc13x2.a
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/devices/cc13x2_cc26x2/lib/gcc/m4f/driverlib/driverlib.lib
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/devices/cc13x2_cc26x2/lib/gcc/m4f/driverlib/driverlib.a
-
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/ti/drivers/rf/lib/gcc/m4f/rf_multiMode_cc13x2.a
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/ti/grlib/lib/gcc/m4f/grlib.a
 )
 
 set(TI_LINKER_COMMAND_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cc13x2_cc26x2_nortos.lds")
@@ -86,10 +80,10 @@ target_sources(${PROJECT_NAME} PRIVATE
     # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/NoRTOS.c
     NoRTOS.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/rfPacketRx.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/RFQueue.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/RFQueue.cpp
     ${SYSCFG_OUTPUT_DIR}/ti_devices_config.c
     ${SYSCFG_OUTPUT_DIR}/ti_drivers_config.c
-     
+    ${CMAKE_CURRENT_SOURCE_DIR}/smartrf/smartrf_settings.c
 )
 
 add_subdirectory("/adsbee/common" ${CMAKE_BINARY_DIR}/adsbee_common)
@@ -125,16 +119,8 @@ target_link_options(${PROJECT_NAME} PRIVATE
     -nostartfiles
     -static
     -Wl,--gc-sections
-    # --specs=nano.specs
     --specs=nosys.specs
 )
-
-# Add SimpleLink SDK libraries
-# target_link_directories(${PROJECT_NAME} PRIVATE
-#     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source
-#     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos
-#     "/usr/local/gcc-arm-none-eabi-13.3.1/lib/gcc/arm-none-eabi/13.3.1/thumb/v7e-m+fp/hard"
-# )
 
 # # Custom command to create hex file
 # add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD

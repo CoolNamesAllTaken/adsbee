@@ -41,11 +41,11 @@
 				"gdbTarget": "host.docker.internal:2337",
 				"showDevDebugOutput": "raw",
 				// "svdFile": "/usr/local/pico-sdk/src/rp2040/hardware_regs/RP2040.svd",
-				// "preRestartCommands": [
-				// 	"file /adsbee/ti/build/sub_ghz_radio",
-				// 	"load",
-				// 	"monitor reset"
-				// ],
+				"preRestartCommands": [
+					"file /adsbee/ti/build/sub_ghz_radio",
+					"load",
+					"monitor reset"
+				],
 				"runToEntryPoint": "main",
 				"armToolchainPath": "/usr/bin",
 				"device": "CC1312R1F3",

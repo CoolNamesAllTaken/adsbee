@@ -67,6 +67,7 @@ class CommsManager {
     CPP_AT_CALLBACK(ATRebootCallback);
     CPP_AT_CALLBACK(ATRxEnableCallback);
     CPP_AT_CALLBACK(ATSettingsCallback);
+    CPP_AT_CALLBACK(ATSubGEnableCallback);
     CPP_AT_CALLBACK(ATTLReadCallback);
     CPP_AT_CALLBACK(ATTLSetCallback);
     CPP_AT_CALLBACK(ATUptimeCallback);

@@ -253,7 +253,7 @@ CPP_AT_CALLBACK(CommsManager::ATEthernetCallback) {
             break;
         case '=':
             if (!CPP_AT_HAS_ARG(0)) {
-                CPP_AT_ERROR("Requires an argument (0 or 1). AT+ETHERNET_ENABLED=<enabled>");
+                CPP_AT_ERROR("Requires an argument (0 or 1). AT+ETHERNET=<enabled>");
             }
             bool enabled;
             CPP_AT_TRY_ARG2NUM(0, settings_manager.settings.ethernet_enabled);
@@ -789,6 +789,29 @@ CPP_AT_CALLBACK(CommsManager::ATSettingsCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATSubGEnableCallback) {
+    switch (op) {
+        case '=':
+            if (CPP_AT_HAS_ARG(0)) {
+                bool subg_enabled;
+                CPP_AT_TRY_ARG2NUM(0, subg_enabled);
+                adsbee.subg_radio.SetEnable(subg_enabled);
+            }
+            if (CPP_AT_HAS_ARG(1)) {
+                bool subg_enable_uses_pulls;
+                CPP_AT_TRY_ARG2NUM(1, subg_enable_uses_pulls);
+                adsbee.subg_radio.SetEnableUsesPulls(subg_enable_uses_pulls);
+            }
+            CPP_AT_SUCCESS();
+            break;
+        case '?':
+            CPP_AT_CMD_PRINTF("=%d,%d\r\n", adsbee.subg_radio.IsEnabled(), adsbee.subg_radio.EnableUsesPulls());
+            CPP_AT_SILENT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATTLReadCallback) {
     switch (op) {
         case '?':
@@ -1065,6 +1088,13 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                         "Display nonvolatile settings.\r\n\tAT+SETTINGS?\r\n\t+SETTINGS=...\r\n\tDump settings in AT "
                         "command format.\r\n\tAT+SETTINGS?DUMP\r\n\t+SETTINGS=...",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSettingsCallback, comms_manager)},
+    {.command_buf = "+SUBG_ENABLE",
+     .min_args = 0,
+     .max_args = 2,
+     .help_string_buf = "AT+SUBG_ENABLE=<enabled>,<use_pulls>\r\n\tEnable or disable the sub-GHz receiver (hard drive "
+                        "or pullup / pulldown).\r\n\tAT+SUBG_ENABLE?\r\n\t"
+                        "Query the status of the sub-GHz receiver.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSubGEnableCallback, comms_manager)},
 #ifdef HARDWARE_UNIT_TESTS
     {.command_buf = "+TEST",
      .min_args = 0,

@@ -18,9 +18,9 @@
             <Field name="startTrigger">0x00000000</Field>
             <Field name="condition">0x00000001</Field>
             <Field name="config">0x0000000a</Field>
-            <Field name="txWord">0x0000aaaa</Field>
+            <Field name="txWord">0x0000abcd</Field>
             <Field name="endTrigger">0x00000001</Field>
-            <Field name="syncWord">0x930b51de</Field>
+            <Field name="syncWord">0x0eacda4e</Field>
             <Field name="endTime">0x00000000</Field>
         </Command>
         <Command name="CMD_SYNC_STOP_RAT">
@@ -63,7 +63,7 @@
             <Field name="condition">0x00000001</Field>
             <Field name="config">0x00000004</Field>
             <Field name="endTrigger">0x00000001</Field>
-            <Field name="syncWord">0x930b51de</Field>
+            <Field name="syncWord">0x0eacda4e</Field>
             <Field name="endTime">0x00000000</Field>
         </Command>
         <Command name="CMD_RESYNC_RAT">
@@ -101,7 +101,7 @@
             <Field name="startConf">0x00000000</Field>
             <Field name="preTrigger">0x00000000</Field>
             <Field name="preTime">0x00000000</Field>
-            <Field name="syncWord">0x930b51de</Field>
+            <Field name="syncWord">0x0eacda4e</Field>
             <Field name="pPkt">0x00000000</Field>
         </Command>
         <Command name="CMD_PROP_TX">
@@ -113,7 +113,7 @@
             <Field name="condition">0x00000001</Field>
             <Field name="pktConf">0x00000018</Field>
             <Field name="pktLen">0x00000014</Field>
-            <Field name="syncWord">0x930b51de</Field>
+            <Field name="syncWord">0x0eacda4e</Field>
             <Field name="pPkt">0x00000000</Field>
         </Command>
         <Command name="CMD_PROP_RX_SNIFF">
@@ -180,7 +180,7 @@
             <Field name="condition">0x00000001</Field>
             <Field name="pktConf">0x00000000</Field>
             <Field name="rxConf">0x00000000</Field>
-            <Field name="syncWord0">0x930b51de</Field>
+            <Field name="syncWord0">0x0eacda4e</Field>
             <Field name="syncWord1">0x00000000</Field>
             <Field name="maxPktLen">0x000000ff</Field>
             <Field name="hdrConf">0x00000000</Field>
@@ -201,7 +201,7 @@
             <Field name="condition">0x00000001</Field>
             <Field name="pktConf">0x00000018</Field>
             <Field name="rxConf">0x00000088</Field>
-            <Field name="syncWord">0x930b51de</Field>
+            <Field name="syncWord">0x0eacda4e</Field>
             <Field name="maxPktLen">0x000000ff</Field>
             <Field name="address0">0x000000aa</Field>
             <Field name="address1">0x000000bb</Field>
@@ -387,7 +387,7 @@
     <packettx>
         <Property role="42" name="m_edtPacketCount">100</Property>
         <Property role="42" name="m_edtFixedPktLength">20</Property>
-        <Property role="42" name="m_edtPacketData">75 fd 80 d8 9c 9a b0 6a bf e8 e2 c4 22 ab 16 f4 6c 7d </Property>
+        <Property role="42" name="m_edtPacketData">95 68 48 0a 4e d9 67 a1 f5 dd a5 41 47 95 b9 97 c9 bd </Property>
         <Property role="42" name="m_edtAccessAddress"></Property>
         <Property role="44" name="m_chkAddSeqNbr">2</Property>
         <Property role="44" name="m_chkInfinite">0</Property>
@@ -410,14 +410,14 @@
     <packetview>
         <Property role="42" name="m_edtPktLength">20</Property>
         <Property role="42" name="m_edtAddress"></Property>
-        <Property role="41" name="m_lblFrmPayload">75 fd 80 d8 9c 9a b0 6a bf e8 e2 c4 22 ab 16 f4 6c 7d </Property>
+        <Property role="41" name="m_lblFrmPayload">95 68 48 0a 4e d9 67 a1 f5 dd a5 41 47 95 b9 97 c9 bd </Property>
     </packetview>
     <packetrx>
         <Property role="42" name="m_edtPacketCount">100</Property>
-        <Property role="42" name="m_edtAccessAddress">0x930b51de</Property>
-        <Property role="44" name="m_chkInfinite">0</Property>
+        <Property role="42" name="m_edtAccessAddress">0xEACDA4E</Property>
+        <Property role="44" name="m_chkInfinite">2</Property>
         <Property role="46" name="m_cmbViewFormat">0</Property>
-        <Property role="44" name="m_chkSeqNbrIncluded">2</Property>
+        <Property role="44" name="m_chkSeqNbrIncluded">0</Property>
         <Property role="42" name="m_edtDumpFile"></Property>
         <Property role="44" name="m_chkAdvanced">0</Property>
         <Property role="44" name="m_chk802154gMode">0</Property>

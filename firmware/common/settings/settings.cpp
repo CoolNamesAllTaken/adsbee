@@ -77,6 +77,9 @@ void SettingsManager::PrintAT() {
     // AT+ESP32_ENABLE
     CONSOLE_PRINTF("AT+ESP32_ENABLE=%d\r\n", settings.esp32_enabled);
 
+    // AT+ETHERNET
+    CONSOLE_PRINTF("AT+ETHERNET=%d\r\n", settings.ethernet_enabled);
+
     // AT+FEED
     for (uint16_t i = 0; i < Settings::kMaxNumFeeds; i++) {
         CONSOLE_PRINTF("AT+FEED=%d,%s,%u,%d,%s\r\n", i, settings.feed_uris[i], settings.feed_ports[i],
@@ -94,6 +97,9 @@ void SettingsManager::PrintAT() {
 
     // AT+RX_ENABLE
     CONSOLE_PRINTF("AT+RX_ENABLE=%d\r\n", settings.receiver_enabled);
+
+    // AT+SUBG_ENABLE
+    CONSOLE_PRINTF("AT+SUBG_ENABLE=%d,%d\r\n", settings.subg_enabled, settings.subg_enable_use_pulls);
 
     // AT+TL_SET
     CONSOLE_PRINTF("AT+TL_SET=%u\r\n", settings.tl_mv);

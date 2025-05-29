@@ -14,8 +14,7 @@ const uint32_t kSPITransactionTImeoutMs = 100;  // Timeout for SPI transactions.
 
 bool CC1312::Init(bool spi_already_initialized) {
     // CC1312 enable pin.
-    gpio_init(config_.enable_pin);
-    gpio_set_dir(config_.enable_pin, GPIO_OUT);
+    SetEnableUsesPulls(false);
     SetEnable(true);  // Enable the CC1312.
     uint32_t enable_timestamp_ms = get_time_since_boot_ms();
 

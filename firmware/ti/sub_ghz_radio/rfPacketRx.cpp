@@ -48,9 +48,10 @@
 #include "ti_drivers_config.h"
 
 /* Application Header files */
-#include "RFQueue.h"
+#include "RFQueue.hh"
 #include <ti_radio_config.h>
 #include "bsp.hh"
+#include "smartrf_settings.h"
 
 /***** Defines *****/
 

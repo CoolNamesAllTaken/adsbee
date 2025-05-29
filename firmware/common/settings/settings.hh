@@ -11,7 +11,7 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 0x6;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 0x7;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 0x2;
 
 class SettingsManager {
@@ -56,7 +56,7 @@ class SettingsManager {
         static constexpr uint16_t kWiFiMaxNumClients = 6;
         static constexpr uint32_t kDefaultCommsUARTBaudrate = 115200;
         static constexpr uint32_t kDefaultGNSSUARTBaudrate = 9600;
-        static constexpr uint16_t kMaxNumFeeds = 6;
+        static constexpr uint16_t kMaxNumFeeds = 10;
         static constexpr uint16_t kFeedURIMaxNumChars = 63;
         static constexpr uint16_t kFeedReceiverIDNumBytes = 8;
         static constexpr uint16_t kIPAddrStrLen = 16;   // XXX.XXX.XXX.XXX (does not include null terminator)
@@ -80,6 +80,11 @@ class SettingsManager {
 
         // ESP32 settings
         bool esp32_enabled = true;
+
+        // Sub-GHz settings
+        bool subg_enabled = true;
+        bool subg_enable_use_pulls =
+            false;  // Use pull-up or pull-down resistors on the CC1312 enable pin instead of driving it high or low.
 
         char hostname[kHostnameMaxLen + 1] =
             "ADSBee1090";  // Will be overwritten by the default SSID when device info is set.
@@ -146,6 +151,18 @@ class SettingsManager {
             feed_ports[kMaxNumFeeds - 2] = 30004;
             feed_is_active[kMaxNumFeeds - 2] = true;
             feed_protocols[kMaxNumFeeds - 2] = kBeast;
+            // adsb.lol: feed.adsb.lol:30004, Beast
+            strncpy(feed_uris[kMaxNumFeeds - 3], "feed.adsb.lol", kFeedURIMaxNumChars);
+            feed_uris[kMaxNumFeeds - 3][kFeedURIMaxNumChars] = '\0';
+            feed_ports[kMaxNumFeeds - 3] = 30004;
+            feed_is_active[kMaxNumFeeds - 3] = true;
+            feed_protocols[kMaxNumFeeds - 3] = kBeast;
+            // whereplane.xyz: feed.whereplane.xyz:30004, Beast
+            strncpy(feed_uris[kMaxNumFeeds - 4], "feed.whereplane.xyz", kFeedURIMaxNumChars);
+            feed_uris[kMaxNumFeeds - 4][kFeedURIMaxNumChars] = '\0';
+            feed_ports[kMaxNumFeeds - 4] = 30004;
+            feed_is_active[kMaxNumFeeds - 4] = false;  // Not active by default.
+            feed_protocols[kMaxNumFeeds - 4] = kBeast;
         }
     };
 
