@@ -363,7 +363,7 @@ class CC1312 {
     inline void SetEnable(SettingsManager::EnableState enabled) {
         if (enabled == SettingsManager::EnableState::kEnableStateExternal) {
             gpio_set_dir(config_.enable_pin, GPIO_IN);
-            // Use external pulldown on PCB.
+            gpio_set_pulls(config_.enable_pin, true, false);  // Enable pull-up on the enable pin.
         } else {
             // Drive GPIO pin with low impedance output.
             // Enable is active HI
