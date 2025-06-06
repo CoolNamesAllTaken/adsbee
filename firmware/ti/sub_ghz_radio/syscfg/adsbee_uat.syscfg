@@ -9,6 +9,7 @@
 /**
  * Import the modules used in this configuration.
  */
+const CCFG     = scripting.addModule("/ti/devices/CCFG");
 const custom   = scripting.addModule("/ti/devices/radioconfig/custom");
 const rfdesign = scripting.addModule("/ti/devices/radioconfig/rfdesign");
 const SPI      = scripting.addModule("/ti/drivers/SPI", {}, false);
@@ -17,6 +18,11 @@ const SPI1     = SPI.addInstance();
 /**
  * Write custom configuration values to the imported modules.
  */
+CCFG.enableBootloader         = true;
+CCFG.enableBootloaderBackdoor = true;
+CCFG.dioBootloaderBackdoor    = 5;
+CCFG.ccfgTemplate.$name       = "ti_devices_CCFG_CCFGCC26XXTemplate0";
+
 custom.prop8                                       = ["custom868"];
 custom.radioConfigcustom868.$name                  = "ti_devices_radioconfig_settings_prop0";
 custom.radioConfigcustom868.symbolRate             = 1000.000;
@@ -24,9 +30,6 @@ custom.radioConfigcustom868.deviation              = 350.0;
 custom.radioConfigcustom868.rxFilterBw             = "2486.5";
 custom.radioConfigcustom868.carrierFrequency       = 930.0000;
 custom.radioConfigcustom868.codeExportConfig.$name = "ti_devices_radioconfig_code_export_param0";
-
-const CCFG              = scripting.addModule("/ti/devices/CCFG", {}, false);
-CCFG.ccfgTemplate.$name = "ti_devices_CCFG_CCFGCC26XXTemplate0";
 
 SPI1.$name                = "CONFIG_SPI_0";
 SPI1.mode                 = "Four Pin CS Active Low";
