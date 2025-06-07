@@ -153,3 +153,14 @@ UTEST(CC1312, BootloaderCRC32SingleWord) {
     printf("Device-Based CRC32 of FLASH_OTP_DATA4: 0x%08X\n", device_crc);
     EXPECT_EQ(table_crc, device_crc);
 }
+
+UTEST(CC1312, BootloaderCRC32MultipleWords) {
+    uint32_t read_address = CC1312::kBaseAddrFCFG1 + 0x170;  // FLASH_E_P register.
+    uint32_t read_num_bytes = 56;
+    uint8_t read_buf[read_num_bytes] = {0};
+    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(read_address, read_buf, read_num_bytes));
+    uint32_t table_crc = crc32_ieee_802_3(read_buf, read_num_bytes);
+    uint32_t device_crc = 0x0;
+    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandCRC32(device_crc, read_address, read_num_bytes));
+    EXPECT_EQ(table_crc, device_crc);
+}
