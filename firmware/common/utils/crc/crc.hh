@@ -11,7 +11,7 @@
  * @param[in] initial_value Initial value of the CRC.
  * @retval 24-bit CRC.
  */
-uint32_t crc24(uint8_t *buffer, uint16_t buffer_len_bytes, uint32_t initial_value = 0x0);
+uint32_t crc24(const uint8_t *buffer, uint16_t buffer_len_bytes, uint32_t initial_value = 0x0);
 
 /**
  * Calculates the CRC24 syndrome of a buffer. This will return 0 if the calculated CRC matches the CRC contained in the
@@ -21,7 +21,7 @@ uint32_t crc24(uint8_t *buffer, uint16_t buffer_len_bytes, uint32_t initial_valu
  * @param[in] initial_value Initial value of the CRC.
  * @retval CRC24 syndrome.
  */
-uint32_t crc24_syndrome(uint8_t *buffer, uint16_t buffer_len_bytes, uint32_t initial_value = 0x0);
+uint32_t crc24_syndrome(const uint8_t *buffer, uint16_t buffer_len_bytes, uint32_t initial_value = 0x0);
 
 /**
  * Finds the index of a single-bit error in a CRC24 message.
@@ -50,6 +50,6 @@ void flip_bit(uint32_t *message, uint16_t index);
  * @param[in] initial_value Initial value of the CRC.
  * @retval 32-bit CRC.
  */
-uint32_t crc32_ieee_802_3(uint8_t *buffer, uint16_t buffer_len_bytes, uint32_t initial_value = 0xFFFFFFFF);
+uint32_t crc32_ieee_802_3(const uint8_t *buffer, uint32_t buffer_len_bytes, uint32_t initial_value = 0xFFFFFFFF);
 
 #endif /* CRC_HH_ */

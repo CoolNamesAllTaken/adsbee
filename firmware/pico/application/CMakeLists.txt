@@ -61,22 +61,30 @@ if (ON_EMBEDDED_DEVICE)
     # Create a file dependency that copies over the most recently built ESP32 firmware binary to the bin directory used by
     # esp32_flasher. Re-runs cmake if the file gets changed.
     configure_file(${CMAKE_SOURCE_DIR}/../esp/build/adsbee_esp.bin
-        ${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin/adsbee_esp.bin
+        ${CMAKE_CURRENT_LIST_DIR}/peripherals/esp32/bin/adsbee_esp.bin
         COPYONLY
     )
     # For some reason putting binaries.c in the build folder never works out. Put it in the esp32_flasher bin directory
-    # instead.
-    create_resources(${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin
-        ${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin/binaries.c
+    # instead. NOTE: create_resources is a function defined in bin2array.cmake.
+    create_resources(${CMAKE_CURRENT_LIST_DIR}/peripherals/esp32/bin
+        ${CMAKE_CURRENT_LIST_DIR}/peripherals/esp32/bin/binaries.c
     )
-    set_property(SOURCE ${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin/binaries.c PROPERTY GENERATED 1)
-    target_sources(application PRIVATE ${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin/binaries.c)
+    set_property(SOURCE ${CMAKE_CURRENT_LIST_DIR}/peripherals/esp32/bin/binaries.c PROPERTY GENERATED 1)
+    target_sources(application PRIVATE ${CMAKE_CURRENT_LIST_DIR}/peripherals/esp32/bin/binaries.c)
 
     ## Embed TI CC1312 binary into the app.
-
+    configure_file(${CMAKE_SOURCE_DIR}/../ti/build/sub_ghz_radio.bin
+        ${CMAKE_CURRENT_LIST_DIR}/peripherals/cc1312/bin/sub_ghz_radio.bin
+        COPYONLY
+    )
+    # Embed files in the cc1312 bin directory into an array of bytes in peripherals/cc1312/bin/binaries.c.
+    create_resources(${CMAKE_CURRENT_LIST_DIR}/peripherals/cc1312/bin
+        ${CMAKE_CURRENT_LIST_DIR}/peripherals/cc1312/bin/binaries.c
+    )
+    set_property(SOURCE ${CMAKE_CURRENT_LIST_DIR}/peripherals/cc1312/bin/binaries.c PROPERTY GENERATED 1)
+    target_sources(application PRIVATE ${CMAKE_CURRENT_LIST_DIR}/peripherals/cc1312/bin/binaries.c)
     
     ## Build for embedded target
-    add_subdirectory(esp32_flasher)
     MESSAGE("CppAT settings: ${ADSBEE_MODULES_DIR}/cppAT/settings")
     target_include_directories(application PRIVATE
         # ${ADSBEE_MODULES_DIR}/cppAT/settings # No longer need this since it's being overridden.

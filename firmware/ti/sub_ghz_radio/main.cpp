@@ -27,7 +27,7 @@ int main(void)
 
     GPIO_setConfig(bsp.kSubGLEDPin, GPIO_CFG_OUT_STD);
 
-    static const uint16_t kNumBlinks = 2;
+    static const uint16_t kNumBlinks = 20;
     for (uint16_t i = 0; i < kNumBlinks; ++i)
     {
         GPIO_write(bsp.kSubGLEDPin, 1);

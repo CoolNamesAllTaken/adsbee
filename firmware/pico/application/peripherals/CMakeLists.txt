@@ -8,6 +8,7 @@ if(NOT ON_EMBEDDED_DEVICE)
     )
 else()
     # Build for embedded target
+    add_subdirectory(esp32)
     target_sources(application PRIVATE
         eeprom.cc
         # si4362/si4362.cc

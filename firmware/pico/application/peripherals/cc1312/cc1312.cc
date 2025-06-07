@@ -1,5 +1,8 @@
 #include "cc1312.hh"
 
+// Get access to raw application binary for flashing.
+#include "bin/binaries.c"
+#include "crc.hh"  // For IEEE 802.3 CRC32 calculation.
 #include "hal.hh"
 
 const CC1312::SPIPeripheralConfig kDefaultSPIPeripheralConfig;  // use defaults
@@ -9,8 +12,6 @@ const CC1312::SPIPeripheralConfig kBootloaderSPIPeripheralConfig = {
     .cpha = SPI_CPHA_1,
     .order = SPI_MSB_FIRST,
 };
-
-const uint32_t kSPITransactionTImeoutMs = 100;  // Timeout for SPI transactions.
 
 bool CC1312::Init(bool spi_already_initialized) {
     // CC1312 enable pin.
@@ -121,6 +122,25 @@ bool CC1312::BootloaderCommandCRC32(uint32_t& crc, uint32_t address, uint32_t nu
     return true;
 }
 
+bool CC1312::BootloaderCommandDownload(uint32_t address, uint32_t num_bytes) {
+    uint8_t cmd_buf[9]{kCmdDownload,
+                       static_cast<uint8_t>((address >> 24) & 0xFFu),
+                       static_cast<uint8_t>((address >> 16) & 0xFFu),
+                       static_cast<uint8_t>((address >> 8) & 0xFFu),
+                       static_cast<uint8_t>(address & 0xFFu),
+                       static_cast<uint8_t>((num_bytes >> 24) & 0xFFu),
+                       static_cast<uint8_t>((num_bytes >> 16) & 0xFFu),
+                       static_cast<uint8_t>((num_bytes >> 8) & 0xFFu),
+                       static_cast<uint8_t>(num_bytes & 0xFFu)};
+    if (!BootloaderSendBufferCheckSuccess(cmd_buf, sizeof(cmd_buf))) {
+        CONSOLE_ERROR("CC1312::BootloaderCommandDownload",
+                      "Failed to send download command. Firmware size or address might be invalid, or something else "
+                      "went wrong.");
+        return false;
+    }
+    return true;
+}
+
 CC1312::CommandReturnStatus CC1312::BootloaderCommandGetStatus() {
     uint8_t cmd_buf[1] = {kCmdGetStatus};
     if (!BootloaderSendBuffer(cmd_buf, sizeof(cmd_buf))) {
@@ -157,6 +177,23 @@ bool CC1312::BootloaderCommandReset() {
     bool reset_acked = BootloaderSendBuffer(cmd_buf, sizeof(cmd_buf));
     if (!reset_acked) {
         CONSOLE_ERROR("CC1312::BootloaderCommandReset", "Reset command failed.");
+        return false;
+    }
+    return true;
+}
+
+bool CC1312::BootloaderCommandSendData(const uint8_t* data, uint32_t data_len) {
+    static const uint32_t kMaxDataLength = 255 - 3;  // Max packet length minus command, size, checksum Bytes.
+    if (data_len > kMaxDataLength) {
+        CONSOLE_ERROR("CC1312::BootloaderCommandSendData", "Data length %d exceeds maximum allowed length of %d bytes.",
+                      data_len, kMaxDataLength);
+        return false;
+    }
+    uint8_t cmd_buf[1 + data_len] = {0x0};
+    cmd_buf[0] = kCmdSendData;
+    memcpy(cmd_buf + 1, data, data_len);  // Copy the data to the command buffer.
+    if (!BootloaderSendBufferCheckSuccess(cmd_buf, sizeof(cmd_buf))) {
+        CONSOLE_ERROR("CC1312::BootloaderCommandSendData", "Programming failed.");
         return false;
     }
     return true;
@@ -205,12 +242,60 @@ bool CC1312::BootloaderReadCCFGConfig(BootloaderCCFGConfig& ccfg_config) {
     return true;
 }
 
+bool CC1312::BootloaderWriteCCFGConfig(const BootloaderCCFGConfig& ccfg_config) {
+    if (!BootloaderCommandSetCCFG(kCCFGFieldIDIDBankEraseDis, ccfg_config.bank_erase_disabled ? 0 : 1)) {
+        CONSOLE_ERROR("CC1312::BootloaderWriteCCFGConfig", "Failed to set bank erase disabled CCFG field.");
+        return false;
+    }
+    if (!BootloaderCommandSetCCFG(kCCFGFieldIDChipEraseDis, ccfg_config.chip_erase_disabled ? 0 : 1)) {
+        CONSOLE_ERROR("CC1312::BootloaderWriteCCFGConfig", "Failed to set chip erase disabled CCFG field.");
+        return false;
+    }
+    if (!BootloaderCommandSetCCFG(kCCFGFieldIDBLBackdoorEn, ccfg_config.bl_backdoor_enabled ? 0xC5 : 0xFF)) {
+        CONSOLE_ERROR("CC1312::BootloaderWriteCCFGConfig", "Failed to set bootloader backdoor enabled CCFG field.");
+        return false;
+    }
+    if (!BootloaderCommandSetCCFG(kCCFGFieldIDBLBackdoorPin, ccfg_config.bl_backdoor_pin)) {
+        CONSOLE_ERROR("CC1312::BootloaderWriteCCFGConfig", "Failed to set bootloader backdoor pin CCFG field.");
+        return false;
+    }
+    if (!BootloaderCommandSetCCFG(kCCFGFieldIDBackdoorLevel, ccfg_config.bl_backdoor_level ? 1 : 0)) {
+        CONSOLE_ERROR("CC1312::BootloaderWriteCCFGConfig", "Failed to set bootloader backdoor level CCFG field.");
+        return false;
+    }
+    if (!BootloaderCommandSetCCFG(kCCFGFieldIDBLEnable, ccfg_config.bl_enabled ? 0xC5 : 0xFF)) {
+        CONSOLE_ERROR("CC1312::BootloaderWriteCCFGConfig", "Failed to set bootloader enabled CCFG field.");
+        return false;
+    }
+
+    return true;
+}
+
+bool CC1312::EnterBootloader() {
+    SetEnable(SettingsManager::kEnableStateDisabled);
+    gpio_put(config_.sync_pin, 1);
+    SetEnable(SettingsManager::kEnableStateEnabled);
+    in_bootloader_ = true;
+    sleep_ms(kBootupDelayMs);  // Wait for the CC1312 to boot up.
+
+    return BootloaderCommandPing();
+}
+
+bool CC1312::ExitBootloader() {
+    in_bootloader_ = false;
+    SetEnable(SettingsManager::kEnableStateDisabled);
+    gpio_put(config_.sync_pin, 0);
+    SetEnable(SettingsManager::kEnableStateEnabled);
+
+    return true;
+}
+
 bool CC1312::BootloaderReceiveBuffer(uint8_t* buf, uint16_t buf_len_bytes) {
     uint8_t rx_buf[buf_len_bytes + 2] = {0};  // Includes size Byte and checksum Byte.
     uint32_t start_time_ms = get_time_since_boot_ms();
     bool received_response = false;
     while (!received_response) {
-        if (get_time_since_boot_ms() - start_time_ms > kSPITransactionTImeoutMs) {
+        if (get_time_since_boot_ms() - start_time_ms > kSPITransactionTimeoutMs) {
             SPIEndTransaction();  // End transaction after error.
             CONSOLE_ERROR("CC1312::BootloaderReceiveBuffer", "Timed out waiting for response from CC1312.");
             return false;
@@ -308,7 +393,7 @@ bool CC1312::BootloaderSendBuffer(uint8_t* buf, uint16_t buf_len_bytes) {
     bool got_response = false;
     uint8_t rx_byte;
     while (!got_response) {
-        if (get_time_since_boot_ms() - start_time_ms > kSPITransactionTImeoutMs) {
+        if (get_time_since_boot_ms() - start_time_ms > kSPITransactionTimeoutMs) {
             SPIEndTransaction();  // End transaction after error.
             CONSOLE_ERROR("CC1312::BootloaderSendBuffer", "Timed out waiting for response from CC1312.");
             return false;
@@ -354,54 +439,6 @@ bool CC1312::BootloaderSendBufferCheckSuccess(uint8_t* buf, uint16_t buf_len_byt
     return true;
 }
 
-bool CC1312::BootloaderWriteCCFGConfig(const BootloaderCCFGConfig& ccfg_config) {
-    if (!BootloaderCommandSetCCFG(kCCFGFieldIDIDBankEraseDis, ccfg_config.bank_erase_disabled ? 0 : 1)) {
-        CONSOLE_ERROR("CC1312::BootloaderWriteCCFGConfig", "Failed to set bank erase disabled CCFG field.");
-        return false;
-    }
-    if (!BootloaderCommandSetCCFG(kCCFGFieldIDChipEraseDis, ccfg_config.chip_erase_disabled ? 0 : 1)) {
-        CONSOLE_ERROR("CC1312::BootloaderWriteCCFGConfig", "Failed to set chip erase disabled CCFG field.");
-        return false;
-    }
-    if (!BootloaderCommandSetCCFG(kCCFGFieldIDBLBackdoorEn, ccfg_config.bl_backdoor_enabled ? 0xC5 : 0xFF)) {
-        CONSOLE_ERROR("CC1312::BootloaderWriteCCFGConfig", "Failed to set bootloader backdoor enabled CCFG field.");
-        return false;
-    }
-    if (!BootloaderCommandSetCCFG(kCCFGFieldIDBLBackdoorPin, ccfg_config.bl_backdoor_pin)) {
-        CONSOLE_ERROR("CC1312::BootloaderWriteCCFGConfig", "Failed to set bootloader backdoor pin CCFG field.");
-        return false;
-    }
-    if (!BootloaderCommandSetCCFG(kCCFGFieldIDBackdoorLevel, ccfg_config.bl_backdoor_level ? 1 : 0)) {
-        CONSOLE_ERROR("CC1312::BootloaderWriteCCFGConfig", "Failed to set bootloader backdoor level CCFG field.");
-        return false;
-    }
-    if (!BootloaderCommandSetCCFG(kCCFGFieldIDBLEnable, ccfg_config.bl_enabled ? 0xC5 : 0xFF)) {
-        CONSOLE_ERROR("CC1312::BootloaderWriteCCFGConfig", "Failed to set bootloader enabled CCFG field.");
-        return false;
-    }
-
-    return true;
-}
-
-bool CC1312::EnterBootloader() {
-    SetEnable(SettingsManager::kEnableStateDisabled);
-    gpio_put(config_.sync_pin, 1);
-    SetEnable(SettingsManager::kEnableStateEnabled);
-    in_bootloader_ = true;
-    sleep_ms(kBootupDelayMs);  // Wait for the CC1312 to boot up.
-
-    return BootloaderCommandPing();
-}
-
-bool CC1312::ExitBootloader() {
-    in_bootloader_ = false;
-    SetEnable(SettingsManager::kEnableStateDisabled);
-    gpio_put(config_.sync_pin, 0);
-    SetEnable(SettingsManager::kEnableStateEnabled);
-
-    return true;
-}
-
 bool CC1312::Flash() {
     CONSOLE_PRINTF("CC1312::Flash: Entering bootloader.\r\n");
     if (!EnterBootloader()) {
@@ -442,7 +479,50 @@ bool CC1312::Flash() {
     }
     CONSOLE_PRINTF("CC1312::Flash: CCFG configuration written and verified successfully.\r\n");
 
-    // TODO: Flash the application image on here.
+    CONSOLE_PRINTF("CC1312::Flash: Beginning flash programming. Application is %d Bytes\r\n", sub_ghz_radio_bin_size);
+
+    // Send the download command.
+    if (!BootloaderCommandDownload(kBaseAddrFlashMem, sub_ghz_radio_bin_size)) {
+        CONSOLE_ERROR("CC1312::Flash", "Failed to send download command.");
+        return false;
+    }
+    CONSOLE_PRINTF("CC1312::Flash: Download command sent successfully.\r\n");
+
+    // Send the application binary data.
+    uint32_t flash_offset = 0;
+    uint32_t num_chunks = sub_ghz_radio_bin_size / kBootloaderCommandSendDataMaxLenBytes +
+                          (sub_ghz_radio_bin_size % kBootloaderCommandSendDataMaxLenBytes != 0 ? 1 : 0);
+    uint32_t current_chunk = 0;
+    while (flash_offset < sub_ghz_radio_bin_size) {
+        uint32_t bytes_to_send = MIN(sub_ghz_radio_bin_size - flash_offset, kBootloaderCommandSendDataMaxLenBytes);
+        if (!BootloaderCommandSendData(sub_ghz_radio_bin + flash_offset, bytes_to_send)) {
+            CONSOLE_ERROR("CC1312::Flash", "Failed to send application data at offset %d.", flash_offset);
+            // TODO: Attempt a retry here?
+            return false;
+        }
+        flash_offset += bytes_to_send;
+        current_chunk++;
+        CONSOLE_PRINTF("CC1312::Flash: Sent %d Bytes, total sent: %d Bytes [%d / %d chunks].\r\n", bytes_to_send,
+                       flash_offset, current_chunk, num_chunks);
+    }
+    CONSOLE_PRINTF("CC1312::Flash: Application data sent successfully.\r\n");
+
+    // Verify application binary.
+    uint32_t table_crc = crc32_ieee_802_3(sub_ghz_radio_bin, sub_ghz_radio_bin_size);
+    uint32_t device_crc = 0;
+    if (!BootloaderCommandCRC32(device_crc, kBaseAddrFlashMem, sub_ghz_radio_bin_size)) {
+        CONSOLE_ERROR("CC1312::Flash", "Failed to calculate CRC32 of the application binary.");
+        return false;
+    }
+    if (table_crc != device_crc) {
+        CONSOLE_ERROR("CC1312::Flash", "CRC32 mismatch after flashing application binary. Expected 0x%x, got 0x%x.",
+                      table_crc, device_crc);
+        return false;
+    }
+    CONSOLE_PRINTF("CC1312::Flash: Application binary flashed successfully, CRC32 matches: 0x%x.\r\n", table_crc);
+
+    // TODO: Prepare CC1312 to run the application binary.
+
     return true;
 }
 

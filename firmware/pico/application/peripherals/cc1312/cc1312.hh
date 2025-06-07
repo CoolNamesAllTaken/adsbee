@@ -9,7 +9,8 @@ class CC1312 {
     static const uint16_t kMaxNumPropertiesAtOnce = 12;
     static const uint32_t kCTSCheckIntervalUs = 40;
     static const uint32_t kBootupDelayMs = 100;
-    static const uint32_t kSendCommandTimeoutMs = 100;
+    static const uint32_t kSPITransactionTimeoutMs =
+        500;  // Set to be quite long to allow CRC calculation time for full app image after flashing.
 
     struct BootloaderCCFGConfig {
         // Note: Struct only includes the CCFG fields that we are interested in.
@@ -170,6 +171,12 @@ class CC1312 {
     static const uint32_t kCCFGRegOffProt95_64 = 0x1FF8;        // Protect Sectors 64-95
     static const uint32_t kCCFGRegOffProt127_96 = 0x1FFC;       // Protect Sectors 96-127
 
+    // Max packet write lengths.
+    static const uint32_t kBootloaderCommandSendDataMaxLenBytes =
+        255 - 3;  // 255 bytes total, minus 3 for the command byte, length byte, and checksum byte.
+    static const uint16_t kBootloaderCommandMemoryWriteUint8MaxNumBytes = 247;
+    static const uint16_t kBootloaderCommandMemoryWriteUint32MaxNumBytes = 244;
+
     /**
      * Adjusts the SPI peripheral to be able to talk to the CC1312. Nominally adjusts clock rate, but also adjusts CPHA
      * and CPOL if the bootloader is active.
@@ -226,6 +233,15 @@ class CC1312 {
      * @retval True if the command was successful, false otherwise.
      */
     bool BootloaderCommandCRC32(uint32_t& crc, uint32_t address, uint32_t num_bytes, uint32_t read_repeat_count = 0);
+
+    /**
+     * Initiates a firmware download and checks to make sure that the firmware image and flash location are valid for
+     * the device. Does not perform any erase or flashing operation, needs to be followed up with CommandSendData.
+     * @param[in] address Address to start downloading the firmware to.
+     * @param[in] num_bytes Number of bytes to download.
+     * @retval True if the command was successful, false otherwise.
+     */
+    bool BootloaderCommandDownload(uint32_t address, uint32_t num_bytes);
 
     /**
      * Verifies that the last command sent to the CC1312 bootloader was successful by sending a COMMAND_GET_STATUS
@@ -307,18 +323,16 @@ class CC1312 {
      */
     template <typename T>
     bool BootloaderCommandMemoryWrite(uint32_t address, T* buf, uint8_t buf_len) {
-        static const uint16_t kMemoryWriteUint8MaxNumBytes = 247;
-        static const uint16_t kMemoryWriteUint32MaxNumBytes = 244;
-
         static_assert(std::is_same<T, uint32_t>::value || std::is_same<T, uint8_t>::value,
                       "T must be either uint32_t or uint8_t");
 
         bool is_32bit = sizeof(T) == 4;
 
-        if ((is_32bit && buf_len > kMemoryWriteUint32MaxNumBytes) ||
-            (!is_32bit && buf_len > kMemoryWriteUint8MaxNumBytes)) {
+        if ((is_32bit && buf_len > kBootloaderCommandMemoryWriteUint32MaxNumBytes) ||
+            (!is_32bit && buf_len > kBootloaderCommandMemoryWriteUint8MaxNumBytes)) {
             CONSOLE_ERROR("CC1312::BootloaderCommandMemoryWrite", "Buffer length too large, max is %d.",
-                          is_32bit ? kMemoryWriteUint32MaxNumBytes : kMemoryWriteUint8MaxNumBytes);
+                          is_32bit ? kBootloaderCommandMemoryWriteUint32MaxNumBytes
+                                   : kBootloaderCommandMemoryWriteUint8MaxNumBytes);
             return false;
         }
 
@@ -364,6 +378,16 @@ class CC1312 {
     bool BootloaderCommandReset();
 
     /**
+     * Sends data to be programmed following a COMMAND_DOWNLOAD command. Verifies by checking for ACK and a get status
+     * success code after programming. If the programming was successful, returns true. If the programming failed,
+     * returns false. Programming address only needs to be incremented if programming was successful.
+     * @param[in] data_buf Pointer to the data buffer to program, least significant Byte first.
+     * @param[in] data_len_bytes Length of the data buffer in bytes.
+     * @retval True if the programming was successful, false otherwise.
+     */
+    bool BootloaderCommandSendData(const uint8_t* data_buf, uint32_t data_len_bytes);
+
+    /**
      * Sets values in CCFG registers using COMMAND_SET_CCFG. Used by the BootloaderWriteCCFGConfig function.
      * @param[in] field_id CCFG field ID to set.
      * @param[in] value Value to set the CCFG field to.
@@ -377,10 +401,6 @@ class CC1312 {
      * @retval True if the command was successful, false otherwise.
      */
     bool BootloaderReadCCFGConfig(BootloaderCCFGConfig& ccfg_config);
-
-    bool BootloaderReceiveBuffer(uint8_t* buf, uint16_t buf_len_bytes);
-    bool BootloaderSendBuffer(uint8_t* buf, uint16_t buf_len_bytes);
-    bool BootloaderSendBufferCheckSuccess(uint8_t* buf, uint16_t buf_len_bytes);
 
     /**
      * Writes a CCFG configuration to the CC1312. Note that under the hood, this function can only change bits in flash
@@ -398,6 +418,11 @@ class CC1312 {
     bool EnterBootloader();
 
     bool ExitBootloader();
+
+    // Low-level bootloader functions.
+    bool BootloaderReceiveBuffer(uint8_t* buf, uint16_t buf_len_bytes);
+    bool BootloaderSendBuffer(uint8_t* buf, uint16_t buf_len_bytes);
+    bool BootloaderSendBufferCheckSuccess(uint8_t* buf, uint16_t buf_len_bytes);
 
     /**
      * Erases the chip, re-writes its CCFG register, and flashes the application image.

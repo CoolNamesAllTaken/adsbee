@@ -4,7 +4,7 @@
 #include "crc_tables.hh"
 #include "unit_conversions.hh"
 
-uint32_t crc24(uint8_t *buffer, uint16_t buffer_len_bytes, uint32_t initial_value) {
+uint32_t crc24(const uint8_t *buffer, uint16_t buffer_len_bytes, uint32_t initial_value) {
     uint32_t crc = initial_value;
     for (uint16_t i = 0; i < buffer_len_bytes; i++) {
         uint8_t byte = buffer[i];
@@ -13,7 +13,7 @@ uint32_t crc24(uint8_t *buffer, uint16_t buffer_len_bytes, uint32_t initial_valu
     return crc;
 }
 
-uint32_t crc24_syndrome(uint8_t *buffer, uint16_t buffer_len_bytes, uint32_t initial_value) {
+uint32_t crc24_syndrome(const uint8_t *buffer, uint16_t buffer_len_bytes, uint32_t initial_value) {
     uint32_t calculated_crc = crc24(buffer, buffer_len_bytes - 3, initial_value);
     uint32_t buffer_crc =
         (buffer[buffer_len_bytes - 3] << 16) | (buffer[buffer_len_bytes - 2] << 8) | buffer[buffer_len_bytes - 1];
@@ -54,9 +54,9 @@ void flip_bit(uint32_t *message, uint16_t index) {
         (1 << ((kBitsPerByte * kBytesPerWord - 1) - (index & (kBitsPerByte * kBytesPerWord - 1))));
 }
 
-uint32_t crc32_ieee_802_3(uint8_t *buffer, uint16_t buffer_len_bytes, uint32_t initial_value) {
+uint32_t crc32_ieee_802_3(const uint8_t *buffer, uint32_t buffer_len_bytes, uint32_t initial_value) {
     uint32_t crc = initial_value;
-    for (uint16_t i = 0; i < buffer_len_bytes; i++) {
+    for (uint32_t i = 0; i < buffer_len_bytes; i++) {
         uint8_t byte = byte_reflection_table[buffer[i]];
         crc = (crc << 8) ^ crc32_table[((crc >> 24) ^ byte)];
     }

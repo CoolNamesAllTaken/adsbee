@@ -814,7 +814,14 @@ CPP_AT_CALLBACK(CommsManager::ATSubGEnableCallback) {
 }
 
 CPP_AT_CALLBACK(CommsManager::ATSubGFlashCallback) {
-    if (!adsbee.subg_radio.Flash()) {
+    // Disable other core and watchdog, since flashing and verification operations take a while and might trigger a
+    // watchdog reboot.
+    StopCore1();
+    adsbee.DisableWatchdog();
+    bool flash_success = adsbee.subg_radio.Flash();
+    adsbee.EnableWatchdog();
+    StartCore1();
+    if (!flash_success) {
         CPP_AT_ERROR("Error while flashing SubG radio.");
     }
     CPP_AT_SUCCESS();
