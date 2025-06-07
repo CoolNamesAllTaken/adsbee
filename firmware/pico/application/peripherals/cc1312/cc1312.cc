@@ -61,27 +61,48 @@ bool CC1312::Init(bool spi_already_initialized) {
     while (get_time_since_boot_ms() - enable_timestamp_ms < kBootupDelayMs) {
     }
 
-    // TODO: Attempt communication before entering the bootloader.
-    CONSOLE_ERROR("CC1312::Init", "Unable to communicate with CC1312. Entering bootloader mode.");
-    if (!EnterBootloader() || !BootloaderCommandPing()) {
+    CONSOLE_INFO("CC1312::Init", "Unable to communicate with CC1312. Entering bootloader mode.");
+    if (!EnterBootloader()) {
         CONSOLE_ERROR("CC1312::Init", "Failed to enter bootloader mode.");
         return false;
     }
-    CONSOLE_INFO("CC1312::Init", "Applying default bootloader CCFG configuration to CC1312.");
-    if (!BootloaderWriteCCFGConfig(config_.ccfg_config)) {
-        CONSOLE_ERROR("CC1312::Init", "Failed to write default bootloader CCFG configuration.");
-        return false;
+    if (!ApplicationIsUpToDate()) {
+        CONSOLE_INFO("CC1312::Init", "Application is not up to date. Attempting to flash application binary.");
+        if (!Flash()) {
+            CONSOLE_ERROR("CC1312::Init", "Failed to flash application binary.");
+            return false;
+        }
+        CONSOLE_INFO("CC1312::Init", "Application binary flashed successfully.");
+        // Flash automatically exits bootloader mode.
+    } else {
+        CONSOLE_INFO("CC1312::Init", "Application is up to date. No need to flash.");
+        if (!ExitBootloader()) {
+            CONSOLE_ERROR("CC1312::Init", "Failed to exit bootloader mode.");
+            return false;
+        }
     }
-    // TODO: Attempt to flash firmware to the CC1312.
-    CONSOLE_INFO("CC1312::Init", "Exiting bootloader mode.");
-    if (!ExitBootloader()) {
-        CONSOLE_ERROR("CC1312::Init", "Failed to exit bootloader mode.");
-        return false;
-    }
-
     // TODO: Check that the CC1312 can be communicated with successfully.
     CONSOLE_INFO("CC1312::Init", "CC1312 initialized successfully.");
 
+    return true;
+}
+
+bool CC1312::ApplicationIsUpToDate() {
+    // Verify application binary.
+    uint32_t table_crc = crc32_ieee_802_3(sub_ghz_radio_bin, sub_ghz_radio_bin_size);
+    uint32_t device_crc = 0;
+    if (!BootloaderCommandCRC32(device_crc, kBaseAddrFlashMem, sub_ghz_radio_bin_size)) {
+        CONSOLE_ERROR("CC1312::ApplicationIsUpToDate", "Failed to calculate CRC32 of the application binary.");
+        return false;
+    }
+    if (table_crc != device_crc) {
+        CONSOLE_ERROR("CC1312::ApplicationIsUpToDate",
+                      "CRC32 mismatch after flashing application binary. Expected 0x%x, got 0x%x.", table_crc,
+                      device_crc);
+        return false;
+    }
+    CONSOLE_PRINTF("CC1312::ApplicationIsUpToDate: Application binary flashed successfully, CRC32 matches: 0x%x.\r\n",
+                   table_crc);
     return true;
 }
 
@@ -507,21 +528,17 @@ bool CC1312::Flash() {
     }
     CONSOLE_PRINTF("CC1312::Flash: Application data sent successfully.\r\n");
 
-    // Verify application binary.
-    uint32_t table_crc = crc32_ieee_802_3(sub_ghz_radio_bin, sub_ghz_radio_bin_size);
-    uint32_t device_crc = 0;
-    if (!BootloaderCommandCRC32(device_crc, kBaseAddrFlashMem, sub_ghz_radio_bin_size)) {
-        CONSOLE_ERROR("CC1312::Flash", "Failed to calculate CRC32 of the application binary.");
+    if (!ApplicationIsUpToDate()) {
+        CONSOLE_ERROR("CC1312::Flash", "Application is not up to date after flashing.");
         return false;
     }
-    if (table_crc != device_crc) {
-        CONSOLE_ERROR("CC1312::Flash", "CRC32 mismatch after flashing application binary. Expected 0x%x, got 0x%x.",
-                      table_crc, device_crc);
-        return false;
-    }
-    CONSOLE_PRINTF("CC1312::Flash: Application binary flashed successfully, CRC32 matches: 0x%x.\r\n", table_crc);
+    CONSOLE_PRINTF("CC1312::Flash: Application is up to date.\r\n");
 
-    // TODO: Prepare CC1312 to run the application binary.
+    if (!ExitBootloader()) {
+        CONSOLE_ERROR("CC1312::Flash", "Failed to exit bootloader mode.");
+        return false;
+    }
+    CONSOLE_PRINTF("CC1312::Flash: Exited bootloader mode successfully.\r\n");
 
     return true;
 }

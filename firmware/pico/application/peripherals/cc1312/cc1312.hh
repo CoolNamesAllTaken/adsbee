@@ -214,6 +214,13 @@ class CC1312 {
     bool Init(bool spi_already_initialized = false);
 
     /**
+     * Checks to see if the IEEE 802.3 CRC32 of the application on the CC1312 matches the CRC32 of the CC1312
+     * application binary stored within the RP2040 firmware. MUST be called from within bootloader mode!
+     * @retval True if the application is up to date, false otherwise.
+     */
+    bool ApplicationIsUpToDate();
+
+    /**
      * Erases all user-accessible flash memory on the CC1312 using the bootloader COMMAND_BANK_ERASE command, including
      * the CCFG registers. CCFG values will need to be re-written after running this command.BootloaderCCFGConfig
      *

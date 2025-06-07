@@ -53,11 +53,39 @@ jobs:
         name: adsbee_esp.bin
         path: firmware/esp/build/adsbee_esp.bin
         retention-days: 1
+  
+  ti_target_build:
+    runs-on: ubuntu-latest
+    container: coolnamesalltaken/ti-lpf2
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+    - name: Create TI build directory
+      working-directory: firmware/ti/sub_ghz_radio
+      run: mkdir -p build
+    - name: Run cmake with build type "Release"
+      working-directory: firmware/ti/sub_ghz_radio/build
+      run: cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=/usr/bin/arm-none-eabi-gcc -DCMAKE_CXX_COMPILER=/usr/bin/arm-none-eabi-g++ ..
+    - name: Build
+      working-directory: firmware/ti/sub_ghz_radio/build
+      run: cmake --build . --config Release --target all -j 22
+    - name: upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: firmware
+        path: |
+          firmware/ti/sub_ghz_radio/build/sub_ghz_radio.elf
+          firmware/ti/sub_ghz_radio/build/sub_ghz_radio.bin
 
   pico_target_build:
     runs-on: ubuntu-latest
     container: coolnamesalltaken/pico-docker
-    needs: esp_target_build
+    needs:
+      - esp_target_build
+      - ti_target_build
 
     steps:
     - name: Checkout repository
@@ -72,6 +100,11 @@ jobs:
       with:
         name: adsbee_esp.bin
         path: firmware/esp/build
+    - name: Download TI firmware
+      uses: actions/download-artifact@v4
+      with:
+        name: sub_ghz_radio.bin
+        path: firmware/ti/build
     - name: Create Pico build directory
       working-directory: firmware/pico
       run: mkdir -p build
@@ -80,7 +113,7 @@ jobs:
       run: cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=/usr/bin/arm-none-eabi-gcc -DCMAKE_CXX_COMPILER=/usr/bin/arm-none-eabi-g++ ..
     - name: Build
       working-directory: firmware/pico/build
-      run: cmake --build . --config Debug --target all -j 22
+      run: cmake --build . --config Release --target all -j 22
     - name: upload artifacts
       uses: actions/upload-artifact@v4
       with:
