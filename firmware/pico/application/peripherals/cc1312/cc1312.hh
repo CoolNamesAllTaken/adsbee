@@ -216,6 +216,18 @@ class CC1312 {
     bool BootloaderCommandBankErase();
 
     /**
+     * Reads the CC1312 flash memory starting from the specified address, and calculates a CRC32 across num_bytes bytes.
+     * If read_repeat_count is 0 (default), each data location will only be read once.
+     * @param[out] crc Reference to a uint32_t variable where the calculated CRC32 will be stored.
+     * @param[in] address Address to start reading from.
+     * @param[in] num_bytes Number of bytes to read and calculate CRC32 over.
+     * @param[in] read_repeat_count Number of times to read each data location. Default is 0, meaning each location is
+     * read once.
+     * @retval True if the command was successful, false otherwise.
+     */
+    bool BootloaderCommandCRC32(uint32_t& crc, uint32_t address, uint32_t num_bytes, uint32_t read_repeat_count = 0);
+
+    /**
      * Verifies that the last command sent to the CC1312 bootloader was successful by sending a COMMAND_GET_STATUS
      * command and checking that the value returned is COMMAND_RET_SUCCESS.
      */

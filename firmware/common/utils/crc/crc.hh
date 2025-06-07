@@ -41,4 +41,15 @@ void flip_bit(uint8_t *message, uint16_t index);
  */
 void flip_bit(uint32_t *message, uint16_t index);
 
+/**
+ * Calculates a CRC32 of a buffer. Uses the tables in crc_tables.hh, which are seeded with the IEEE 802.3 generator
+ * polynomial (same as zlib default implementation). Note that this CRC function uses an initial value of 0xFFFFFFFF to
+ * comply with the IEEE 802.3 standard, and also includes a final XOR with 0xFFFFFFFF.
+ * @param[in] buffer Pointer to the buffer to calculate a CRC for.
+ * @param[in] buffer_len_bytes Number of bytes to calculate the CRC over.
+ * @param[in] initial_value Initial value of the CRC.
+ * @retval 32-bit CRC.
+ */
+uint32_t crc32_ieee_802_3(uint8_t *buffer, uint16_t buffer_len_bytes, uint32_t initial_value = 0xFFFFFFFF);
+
 #endif /* CRC_HH_ */

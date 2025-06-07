@@ -41,6 +41,9 @@ project(sub_ghz_radio C CXX ASM)
 add_executable(${PROJECT_NAME}
     main.cpp
 )
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    OUTPUT_NAME "${PROJECT_NAME}.elf"
+)
 
 # Link against the M4 hard float toolchain
 # target_link_libraries(your_app PRIVATE CMakeCommon::gcc_m4f)
@@ -122,26 +125,11 @@ target_link_options(${PROJECT_NAME} PRIVATE
     --specs=nosys.specs
 )
 
-# # Custom command to create hex file
-# add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-#     COMMAND ${CMAKE_OBJCOPY} -O ihex 
-#     --remove-section .vtable 
-#     --remove-section .dmaSpi0RxControlTableEntry 
-#     --remove-section .dmaSpi0TxControlTableEntry 
-#     --remove-section .dmaSpi1RxControlTableEntry 
-#     --remove-section .dmaSpi1TxControlTableEntry 
-#     --remove-section .dmaSpi0RxAltControlTableEntry 
-#     --remove-section .dmaSpi0TxAltControlTableEntry 
-#     --remove-section .dmaSpi1RxAltControlTableEntry 
-#     --remove-section .dmaSpi1TxAltControlTableEntry 
-#     --gap-fill 0xff 
-#     ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME} ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.hex
-#     COMMENT "Creating hex file"
-# )
-
-# # GUI target
-# add_custom_target(syscfg-gui
-#     COMMAND ${SYSCONFIG_GUI_TOOL} ${SYSCFG_SOURCE}
-#     COMMENT "Opening SysConfig GUI"
-# )
+# Custom command to create binary file
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND arm-none-eabi-objcopy -O binary 
+    --gap-fill 0xff 
+    ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.elf ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.bin
+    COMMENT "Creating binary file"
+)
 

@@ -93,6 +93,34 @@ bool CC1312::BootloaderCommandBankErase() {
     return true;
 }
 
+bool CC1312::BootloaderCommandCRC32(uint32_t& crc, uint32_t address, uint32_t num_bytes, uint32_t read_repeat_count) {
+    uint8_t cmd_buf[13] = {kCmdCRC32,
+                           static_cast<uint8_t>((address >> 24) & 0xFFu),
+                           static_cast<uint8_t>((address >> 16) & 0xFFu),
+                           static_cast<uint8_t>((address >> 8) & 0xFFu),
+                           static_cast<uint8_t>(address & 0xFFu),
+                           static_cast<uint8_t>((num_bytes >> 24) & 0xFFu),
+                           static_cast<uint8_t>((num_bytes >> 16) & 0xFFu),
+                           static_cast<uint8_t>((num_bytes >> 8) & 0xFFu),
+                           static_cast<uint8_t>(num_bytes & 0xFFu),
+                           static_cast<uint8_t>((read_repeat_count >> 24) & 0xFFu),
+                           static_cast<uint8_t>((read_repeat_count >> 16) & 0xFFu),
+                           static_cast<uint8_t>((read_repeat_count >> 8) & 0xFFu),
+                           static_cast<uint8_t>(read_repeat_count & 0xFFu)};
+    if (!BootloaderSendBuffer(cmd_buf, sizeof(cmd_buf))) {
+        CONSOLE_ERROR("CC1312::BootloaderCommandCRC32", "Failed to send CRC32 command.");
+        return false;
+    }
+    uint8_t crc_buf[4] = {0};
+    if (!BootloaderReceiveBuffer(crc_buf, sizeof(crc_buf))) {
+        CONSOLE_ERROR("CC1312::BootloaderCommandCRC32", "Failed to receive CRC32 result.");
+        return false;
+    }
+    crc = (static_cast<uint32_t>(crc_buf[0]) << 24) | (static_cast<uint32_t>(crc_buf[1]) << 16) |
+          (static_cast<uint32_t>(crc_buf[2]) << 8) | static_cast<uint32_t>(crc_buf[3]);
+    return true;
+}
+
 CC1312::CommandReturnStatus CC1312::BootloaderCommandGetStatus() {
     uint8_t cmd_buf[1] = {kCmdGetStatus};
     if (!BootloaderSendBuffer(cmd_buf, sizeof(cmd_buf))) {

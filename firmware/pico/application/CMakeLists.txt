@@ -54,10 +54,10 @@ if (ON_EMBEDDED_DEVICE)
         SERIAL_FLASHER_WRITE_BLOCK_RETRIES=3
     )
 
-    # Embed binaries into the app.
+    ## Embed ESP32 binaries into the app.
     # In ESP-IDF this can also be done using EMBED_FILES option of idf_component_register.
     # Here an external tool is used to make file embedding similar with other ports.
-    include(${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin2array.cmake)
+    include(${CMAKE_CURRENT_LIST_DIR}/cmake_scripts/bin2array.cmake)
     # Create a file dependency that copies over the most recently built ESP32 firmware binary to the bin directory used by
     # esp32_flasher. Re-runs cmake if the file gets changed.
     configure_file(${CMAKE_SOURCE_DIR}/../esp/build/adsbee_esp.bin
@@ -71,8 +71,11 @@ if (ON_EMBEDDED_DEVICE)
     )
     set_property(SOURCE ${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin/binaries.c PROPERTY GENERATED 1)
     target_sources(application PRIVATE ${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin/binaries.c)
+
+    ## Embed TI CC1312 binary into the app.
+
     
-    # Build for embedded target
+    ## Build for embedded target
     add_subdirectory(esp32_flasher)
     MESSAGE("CppAT settings: ${ADSBEE_MODULES_DIR}/cppAT/settings")
     target_include_directories(application PRIVATE

@@ -53,3 +53,15 @@ void flip_bit(uint32_t *message, uint16_t index) {
     message[index / (kBitsPerByte * kBytesPerWord)] ^=
         (1 << ((kBitsPerByte * kBytesPerWord - 1) - (index & (kBitsPerByte * kBytesPerWord - 1))));
 }
+
+uint32_t crc32_ieee_802_3(uint8_t *buffer, uint16_t buffer_len_bytes, uint32_t initial_value) {
+    uint32_t crc = initial_value;
+    for (uint16_t i = 0; i < buffer_len_bytes; i++) {
+        uint8_t byte = byte_reflection_table[buffer[i]];
+        crc = (crc << 8) ^ crc32_table[((crc >> 24) ^ byte)];
+    }
+    uint32_t reflected_crc =
+        byte_reflection_table[crc & 0xFF] << 24 | (byte_reflection_table[(crc >> 8) & 0xFF] << 16) |
+        (byte_reflection_table[(crc >> 16) & 0xFF] << 8) | (byte_reflection_table[(crc >> 24) & 0xFF]);
+    return reflected_crc ^ 0xFFFFFFFF;
+}

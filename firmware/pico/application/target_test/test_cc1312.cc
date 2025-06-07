@@ -1,4 +1,5 @@
 #include "adsbee.hh"
+#include "crc.hh"
 #include "hardware_unit_tests.hh"
 #include "unit_conversions.hh"
 
@@ -137,4 +138,18 @@ UTEST(CC1312, BootloaderReadCCFGConfig) {
     printf("  Bootloader backdoor pin: %d\n", ccfg_config.bl_backdoor_pin);
     printf("  Bootloader backdoor level: %s\n", ccfg_config.bl_backdoor_level ? "high" : "low");
     printf("  Bootloader enabled: %s\n", ccfg_config.bl_enabled ? "true" : "false");
+}
+
+UTEST(CC1312, BootloaderCRC32SingleWord) {
+    uint8_t buf[4] = {0x0};
+    // Read FLASH_OTP_DATA4 register to get the reset value, which is 0x98989F9F.
+    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + 0x308, buf, 4));
+    uint32_t num_bytes_to_crc = 1;
+    uint32_t table_crc = crc32_ieee_802_3(buf, num_bytes_to_crc);
+    printf("FLASH_OTP_DATA4: 0x%02X%02X%02X%02X\n", buf[3], buf[2], buf[1], buf[0]);
+    printf("Table-Based CRC32 of FLASH_OTP_DATA4: 0x%08X\n", table_crc);
+    uint32_t device_crc = 0x0;
+    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandCRC32(device_crc, CC1312::kBaseAddrFCFG1 + 0x308, num_bytes_to_crc));
+    printf("Device-Based CRC32 of FLASH_OTP_DATA4: 0x%08X\n", device_crc);
+    EXPECT_EQ(table_crc, device_crc);
 }
