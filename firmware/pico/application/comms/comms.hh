@@ -53,10 +53,10 @@ class CommsManager {
     CPP_AT_CALLBACK(ATBaudrateCallback);
     CPP_AT_CALLBACK(ATBiasTeeEnableCallback);
     CPP_AT_CALLBACK(ATDeviceInfoCallback);
-    CPP_AT_CALLBACK(ATEthernetCallback);
     CPP_AT_CALLBACK(ATESP32EnableCallback);
+    CPP_AT_CALLBACK(ATESP32FlashCallback);
+    CPP_AT_CALLBACK(ATEthernetCallback);
     CPP_AT_CALLBACK(ATFeedCallback);
-    CPP_AT_CALLBACK(ATFlashESP32Callback);
     CPP_AT_CALLBACK(ATHostnameCallback);
     CPP_AT_CALLBACK(ATOTACallback);
     CPP_AT_HELP_CALLBACK(ATOTAHelpCallback);
@@ -68,6 +68,7 @@ class CommsManager {
     CPP_AT_CALLBACK(ATRxEnableCallback);
     CPP_AT_CALLBACK(ATSettingsCallback);
     CPP_AT_CALLBACK(ATSubGEnableCallback);
+    CPP_AT_CALLBACK(ATSubGFlashCallback);
     CPP_AT_CALLBACK(ATTLReadCallback);
     CPP_AT_CALLBACK(ATTLSetCallback);
     CPP_AT_CALLBACK(ATUptimeCallback);

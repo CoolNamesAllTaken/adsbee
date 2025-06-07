@@ -94,30 +94,6 @@ CPP_AT_CALLBACK(CommsManager::ATBiasTeeEnableCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
-CPP_AT_CALLBACK(CommsManager::ATESP32EnableCallback) {
-    switch (op) {
-        case '?':
-            CPP_AT_CMD_PRINTF("=%d", esp32.IsEnabled());
-            CPP_AT_SILENT_SUCCESS();
-            break;
-        case '=':
-            if (!CPP_AT_HAS_ARG(0)) {
-                CPP_AT_ERROR("Requires an argument (0 or 1). AT+ESP32_ENABLED=<enabled>");
-            }
-            bool enabled;
-            bool already_enabled = esp32.IsEnabled();
-            CPP_AT_TRY_ARG2NUM(0, enabled);
-            if (enabled && !already_enabled) {
-                esp32.Init();
-            } else if (!enabled && already_enabled) {
-                esp32.DeInit();
-            }
-            CPP_AT_SUCCESS();
-            break;
-    }
-    CPP_AT_ERROR("Operator '%c' not supported.", op);
-}
-
 CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
     switch (op) {
         case '?': {
@@ -245,6 +221,53 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATESP32EnableCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%d", esp32.IsEnabled());
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (!CPP_AT_HAS_ARG(0)) {
+                CPP_AT_ERROR("Requires an argument (0 or 1). AT+ESP32_ENABLED=<enabled>");
+            }
+            bool enabled;
+            bool already_enabled = esp32.IsEnabled();
+            CPP_AT_TRY_ARG2NUM(0, enabled);
+            if (enabled && !already_enabled) {
+                esp32.Init();
+            } else if (!enabled && already_enabled) {
+                esp32.DeInit();
+            }
+            CPP_AT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATESP32FlashCallback) {
+    if (!esp32.DeInit()) {
+        CPP_AT_ERROR("CommsManager::ATESP32FlashCallback", "Error while de-initializing ESP32 before flashing.");
+    }
+    // Manually stop and start core 1 and watchdog instead of using FlashSafe() and FlashUnsafe() since we aren't
+    // actually writing to RP2040 flash memory and we want printouts to work over the USB console.
+    StopCore1();
+    adsbee.DisableWatchdog();
+    bool flashed_successfully = esp32_flasher.FlashESP32();
+    adsbee.EnableWatchdog();
+    StartCore1();
+    if (!flashed_successfully) {
+        CPP_AT_ERROR("CommsManager::ATESP32FlashCallback", "Error while flashing ESP32.");
+    }
+
+    if (!esp32.Init()) {
+        CPP_AT_ERROR("CommsManager::ATESP32FlashCallback", "Error while re-initializing ESP32 after flashing.");
+    }
+
+    CONSOLE_INFO("CommsManager::ATESP32FlashCallback", "ESP32 successfully flashed.");
+    CPP_AT_SUCCESS();
+}
+
 CPP_AT_CALLBACK(CommsManager::ATEthernetCallback) {
     switch (op) {
         case '?':
@@ -353,29 +376,6 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
             break;
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);
-}
-
-CPP_AT_CALLBACK(CommsManager::ATFlashESP32Callback) {
-    if (!esp32.DeInit()) {
-        CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while de-initializing ESP32 before flashing.");
-    }
-    // Manually stop and start core 1 and watchdog instead of using FlashSafe() and FlashUnsafe() since we aren't
-    // actually writing to RP2040 flash memory and we want printouts to work over the USB console.
-    StopCore1();
-    adsbee.DisableWatchdog();
-    bool flashed_successfully = esp32_flasher.FlashESP32();
-    adsbee.EnableWatchdog();
-    StartCore1();
-    if (!flashed_successfully) {
-        CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while flashing ESP32.");
-    }
-
-    if (!esp32.Init()) {
-        CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while re-initializing ESP32 after flashing.");
-    }
-
-    CONSOLE_INFO("CommsManager::ATFlashESP32Callback", "ESP32 successfully flashed.");
-    CPP_AT_SUCCESS();
 }
 
 CPP_AT_CALLBACK(CommsManager::ATHostnameCallback) {
@@ -813,6 +813,13 @@ CPP_AT_CALLBACK(CommsManager::ATSubGEnableCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATSubGFlashCallback) {
+    if (!adsbee.subg_radio.Flash()) {
+        CPP_AT_ERROR("Error while flashing SubG radio.");
+    }
+    CPP_AT_SUCCESS();
+}
+
 CPP_AT_CALLBACK(CommsManager::ATTLReadCallback) {
     switch (op) {
         case '?':
@@ -1027,17 +1034,17 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string_buf = "AT+ESP32_ENABLE=<enabled>\r\n\tEnable or disable the ESP32.\r\n\tAT+ESP32_ENABLE?\r\n\tQuery "
                         "the enable status of the ESP32.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATESP32EnableCallback, comms_manager)},
+    {.command_buf = "+ESP32_FLASH",
+     .min_args = 0,
+     .max_args = 0,
+     .help_string_buf = "AT+ESP32_FLASH\r\n\tTriggers a firmware update of the ESP32 from the firmware image stored in "
+                        "the RP2040's flash memory.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATESP32FlashCallback, comms_manager)},
     {.command_buf = "+FEED",
      .min_args = 0,
      .max_args = 5,
      .help_callback = ATFeedHelpCallback,
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFeedCallback, comms_manager)},
-    {.command_buf = "+FLASH_ESP32",
-     .min_args = 0,
-     .max_args = 0,
-     .help_string_buf = "AT+FLASH_ESP32\r\n\tTriggers a firmware update of the ESP32 from the firmware image stored in "
-                        "the RP2040's flash memory.",
-     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFlashESP32Callback, comms_manager)},
     {.command_buf = "+HOSTNAME",
      .min_args = 0,
      .max_args = 1,
@@ -1097,6 +1104,12 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                         "pulldown) for control via an external device.\r\n\tAT+SUBG_ENABLE?\r\n\t"
                         "Query the status of the sub-GHz receiver.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSubGEnableCallback, comms_manager)},
+    {.command_buf = "+SUBG_FLASH",
+     .min_args = 0,
+     .max_args = 0,
+     .help_string_buf = "AT+SUBG_FLASH\r\n\tTriggers a firmware update of the sub-GHz radio from the firmware image "
+                        "stored in the RP2040's flash memory.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSubGFlashCallback, comms_manager)},
 #ifdef HARDWARE_UNIT_TESTS
     {.command_buf = "+TEST",
      .min_args = 0,

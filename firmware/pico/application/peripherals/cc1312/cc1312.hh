@@ -19,6 +19,28 @@ class CC1312 {
         uint8_t bl_backdoor_pin = bsp.subg_bootloader_backdoor_pin;
         bool bl_backdoor_level = true;  // Active high.
         bool bl_enabled = true;         // Bootloader enabled.
+
+        // Equality comparison operator for BootloaderCCFGConfig
+        bool operator==(const BootloaderCCFGConfig& other) const {
+            return bank_erase_disabled == other.bank_erase_disabled &&
+                   chip_erase_disabled == other.chip_erase_disabled &&
+                   bl_backdoor_enabled == other.bl_backdoor_enabled && bl_backdoor_pin == other.bl_backdoor_pin &&
+                   bl_backdoor_level == other.bl_backdoor_level && bl_enabled == other.bl_enabled;
+        }
+
+        // Not-equal operator based on equality operator
+        bool operator!=(const BootloaderCCFGConfig& other) const { return !(*this == other); }
+
+        // Print values to buffer for debuging.
+        void print_to_buffer(char* buffer, size_t buffer_size) const {
+            snprintf(buffer, buffer_size,
+                     "\tBank Erase Disabled: %s\t\n\tChip Erase Disabled: %s\t\n\t"
+                     "Bootloader Backdoor Enabled: %s\r\n\tBackdoor Pin: %d\r\n\tBackdoor Level: %s\r\n\t"
+                     "Bootloader Enabled: %s\r\n",
+                     bank_erase_disabled ? "true" : "false", chip_erase_disabled ? "true" : "false",
+                     bl_backdoor_enabled ? "true" : "false", bl_backdoor_pin, bl_backdoor_level ? "high" : "low",
+                     bl_enabled ? "true" : "false");
+        }
     };
 
     struct CC1312Config {
@@ -183,6 +205,15 @@ class CC1312 {
      * initialized.
      */
     bool Init(bool spi_already_initialized = false);
+
+    /**
+     * Erases all user-accessible flash memory on the CC1312 using the bootloader COMMAND_BANK_ERASE command, including
+     * the CCFG registers. CCFG values will need to be re-written after running this command.BootloaderCCFGConfig
+     *
+     * NOTE: This command will only work if bank_erase_disabled is set to false in the CCFG configuration.
+     * @retval True if the command was successful, false otherwise.
+     */
+    bool BootloaderCommandBankErase();
 
     /**
      * Verifies that the last command sent to the CC1312 bootloader was successful by sending a COMMAND_GET_STATUS
@@ -355,6 +386,11 @@ class CC1312 {
     bool EnterBootloader();
 
     bool ExitBootloader();
+
+    /**
+     * Erases the chip, re-writes its CCFG register, and flashes the application image.
+     */
+    bool Flash();
 
     /**
      * Set the enable pin.

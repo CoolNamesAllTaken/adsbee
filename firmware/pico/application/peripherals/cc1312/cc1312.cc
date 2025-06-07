@@ -84,6 +84,15 @@ bool CC1312::Init(bool spi_already_initialized) {
     return true;
 }
 
+bool CC1312::BootloaderCommandBankErase() {
+    uint8_t cmd_buf[1] = {kCmdBankErase};
+    if (!BootloaderSendBufferCheckSuccess(cmd_buf, sizeof(cmd_buf))) {
+        CONSOLE_ERROR("CC1312::BootloaderCommandBankErase", "Failed to send bank erase command.");
+        return false;
+    }
+    return true;
+}
+
 CC1312::CommandReturnStatus CC1312::BootloaderCommandGetStatus() {
     uint8_t cmd_buf[1] = {kCmdGetStatus};
     if (!BootloaderSendBuffer(cmd_buf, sizeof(cmd_buf))) {
@@ -362,6 +371,50 @@ bool CC1312::ExitBootloader() {
     gpio_put(config_.sync_pin, 0);
     SetEnable(SettingsManager::kEnableStateEnabled);
 
+    return true;
+}
+
+bool CC1312::Flash() {
+    CONSOLE_PRINTF("CC1312::Flash: Entering bootloader.\r\n");
+    if (!EnterBootloader()) {
+        CONSOLE_ERROR("CC1312::Flash", "Failed to enter bootloader mode.");
+        return false;
+    }
+
+    // Erase the chip.
+    CONSOLE_PRINTF("CC1312::Flash: Beginning flash erase.\r\n");
+    if (!BootloaderCommandBankErase()) {
+        CONSOLE_ERROR("CC1312::Flash", "Failed to erase the chip.");
+        return false;
+    }
+    CONSOLE_PRINTF("CC1312::Flash: Flash erase complete.\r\n");
+    // Re-write the CCFG configuration.
+    CONSOLE_PRINTF("CC1312::Flash: Writing CCFG configuration.\r\n");
+    if (!BootloaderWriteCCFGConfig(config_.ccfg_config)) {
+        CONSOLE_ERROR("CC1312::Flash", "Failed to write CCFG configuration.");
+        return false;
+    }
+    CONSOLE_PRINTF("CC1312::Flash: Verifying CCFG configuration.\r\n");
+    BootloaderCCFGConfig ccfg_config;
+    if (!BootloaderReadCCFGConfig(ccfg_config)) {
+        CONSOLE_ERROR("CC1312::Flash", "Failed to read CCFG configuration.");
+        return false;
+    }
+    char ccfg_config_str[256];
+    ccfg_config.print_to_buffer(ccfg_config_str, sizeof(ccfg_config_str));
+    CONSOLE_PRINTF("CC1312::Flash: CCFG configuration read:\r\n%s", ccfg_config_str);
+    if (ccfg_config != config_.ccfg_config) {
+        char expected_ccfg_config_str[256];
+        config_.ccfg_config.print_to_buffer(expected_ccfg_config_str, sizeof(expected_ccfg_config_str));
+        CONSOLE_ERROR("CC1312::Flash",
+                      "CCFG configuration does not match expected values after writing. Expected:\r\n%s, "
+                      "Got:\r\n%s",
+                      expected_ccfg_config_str, ccfg_config_str);
+        return false;
+    }
+    CONSOLE_PRINTF("CC1312::Flash: CCFG configuration written and verified successfully.\r\n");
+
+    // TODO: Flash the application image on here.
     return true;
 }
 
