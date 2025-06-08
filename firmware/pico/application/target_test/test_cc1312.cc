@@ -6,9 +6,19 @@
 // Enable this define to run tests that muck with CC1312 settings and SRAM. This is only for use during development!
 #define RUN_DISRUPTIVE_TESTS
 
-UTEST(CC1312, EnterBootloader) { EXPECT_TRUE(adsbee.subg_radio.EnterBootloader()); }
+#define NO_CC1312_EXIT_GUARD                                                   \
+    if (bsp.sync_pin == UINT16_MAX) {                                          \
+        CONSOLE_ERROR("CC1312", "No CC1312 sync pin defined, skipping test."); \
+        return;                                                                \
+    }
+
+UTEST(CC1312, EnterBootloader) {
+    NO_CC1312_EXIT_GUARD
+    EXPECT_TRUE(adsbee.subg_radio.EnterBootloader());
+}
 
 UTEST(CC1312, BootloaderCommandReset) {
+    NO_CC1312_EXIT_GUARD
     EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandPing());
     EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandReset());
     EXPECT_FALSE(adsbee.subg_radio.BootloaderCommandPing());
@@ -17,6 +27,7 @@ UTEST(CC1312, BootloaderCommandReset) {
 }
 
 UTEST(CC1312, BootloaderCommandMemoryReadSingleWord) {
+    NO_CC1312_EXIT_GUARD
     uint32_t read_buf_32[1] = {0};
     EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + CC1312::kFCFG1RegOffUserID,
                                                               read_buf_32, 1));
@@ -29,6 +40,7 @@ UTEST(CC1312, BootloaderCommandMemoryReadSingleWord) {
 }
 
 UTEST(CC1312, BootloaderCommandMemoryReadMultipleWords) {
+    NO_CC1312_EXIT_GUARD
     // Read the following 3-word reset values sequence from the following registers in FCFG1.
     // Datasheet Table 11-25
     // 0x170 FLASH_E_P: 0x4C644C64
@@ -54,6 +66,7 @@ UTEST(CC1312, BootloaderCommandMemoryReadMultipleWords) {
 }
 
 UTEST(CC1312, BootloaderCommandMemoryReadSingleWordMatchResetValue) {
+    NO_CC1312_EXIT_GUARD
     uint32_t flash_otp_data4_reg = 0x0;
     EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + 0x308, &flash_otp_data4_reg, 1));
     printf("FLASH_OTP_DATA4: 0x%08X\n", flash_otp_data4_reg);
@@ -61,6 +74,7 @@ UTEST(CC1312, BootloaderCommandMemoryReadSingleWordMatchResetValue) {
 }
 
 UTEST(CC1312, BootloaderCommandMemoryReadUnaligned) {
+    NO_CC1312_EXIT_GUARD
     uint8_t read_buf;
     EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + 0x308 + 0, &read_buf, 1));
     EXPECT_EQ(read_buf, 0x9F);
@@ -74,6 +88,7 @@ UTEST(CC1312, BootloaderCommandMemoryReadUnaligned) {
 
 #ifdef RUN_DISRUPTIVE_TESTS
 UTEST(CC1312, BootloaderCommandMemoryWriteSingleWord) {
+    NO_CC1312_EXIT_GUARD
     // Read and write with 32-bit word.
     uint32_t program_address =
         CC1312::kBaseAddrSRAM + 5e3;  // Arbitrary address in SRAM outside of lower 4kB (80kB total).
@@ -102,6 +117,7 @@ UTEST(CC1312, BootloaderCommandMemoryWriteSingleWord) {
 }
 
 UTEST(CC1312, BootloaderCommandMemoryWriteMultipleWords) {
+    NO_CC1312_EXIT_GUARD
     // Read and write with 32-bit word.
     uint32_t program_address =
         CC1312::kBaseAddrSRAM + 5e3;  // Arbitrary address in SRAM outside of lower 4kB (80kB total).
@@ -129,6 +145,7 @@ UTEST(CC1312, BootloaderCommandMemoryWriteMultipleWords) {
 #endif  // RUN_DISRUPTIVE_TESTS
 
 UTEST(CC1312, BootloaderReadCCFGConfig) {
+    NO_CC1312_EXIT_GUARD
     CC1312::BootloaderCCFGConfig ccfg_config = {0};
     EXPECT_TRUE(adsbee.subg_radio.BootloaderReadCCFGConfig(ccfg_config));
     printf("CCFG Config:\n");
@@ -141,6 +158,7 @@ UTEST(CC1312, BootloaderReadCCFGConfig) {
 }
 
 UTEST(CC1312, BootloaderCRC32SingleWord) {
+    NO_CC1312_EXIT_GUARD
     uint8_t buf[4] = {0x0};
     // Read FLASH_OTP_DATA4 register to get the reset value, which is 0x98989F9F.
     EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + 0x308, buf, 4));
@@ -155,6 +173,7 @@ UTEST(CC1312, BootloaderCRC32SingleWord) {
 }
 
 UTEST(CC1312, BootloaderCRC32MultipleWords) {
+    NO_CC1312_EXIT_GUARD
     uint32_t read_address = CC1312::kBaseAddrFCFG1 + 0x170;  // FLASH_E_P register.
     uint32_t read_num_bytes = 56;
     uint8_t read_buf[read_num_bytes] = {0};

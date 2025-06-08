@@ -32,25 +32,10 @@ bool SPICoprocessor::Init() {
     gpio_init(config_.spi_handshake_pin);
     gpio_set_dir(config_.spi_handshake_pin, GPIO_IN);
     gpio_set_pulls(config_.spi_handshake_pin, true, false);  // Handshake pin is pulled up.
-    // ESP32 SPI pins.
-    gpio_set_function(config_.spi_clk_pin, GPIO_FUNC_SPI);
-    gpio_set_function(config_.spi_mosi_pin, GPIO_FUNC_SPI);
-    gpio_set_function(config_.spi_miso_pin, GPIO_FUNC_SPI);
-    gpio_set_drive_strength(config_.spi_clk_pin, config_.spi_drive_strength);
-    gpio_set_drive_strength(config_.spi_mosi_pin, config_.spi_drive_strength);
-    gpio_set_drive_strength(config_.spi_cs_pin, config_.spi_drive_strength);
-    gpio_set_pulls(config_.spi_clk_pin, config_.spi_pullup, config_.spi_pulldown);   // Clock pin pulls.
-    gpio_set_pulls(config_.spi_mosi_pin, config_.spi_pullup, config_.spi_pulldown);  // MOSI pin pulls.
-    gpio_set_pulls(config_.spi_cs_pin, config_.spi_pullup, config_.spi_pulldown);    // CS pin pulls.
-    gpio_set_pulls(config_.spi_miso_pin, config_.spi_pullup, config_.spi_pulldown);  // MISO pin pulls.
 
-    // Initialize SPI Peripheral.
-    spi_init(config_.spi_handle, config_.spi_clk_freq_hz);
-    spi_set_format(config_.spi_handle,
-                   8,           // Bits per transfer.
-                   SPI_CPOL_0,  // Polarity (CPOL).
-                   SPI_CPHA_0,  // Phase (CPHA).
-                   SPI_MSB_FIRST);
+    // Require SPI pins to be initialized before this function is called, since they get shared.
+    gpio_set_drive_strength(config_.spi_cs_pin, config_.spi_drive_strength);
+    gpio_set_pulls(config_.spi_cs_pin, config_.spi_pullup, config_.spi_pulldown);  // CS pin pulls.
 
     // Wait for a bit for the ESP32 to boot up.
     uint32_t boot_delay_finished_timestamp_ms = get_time_since_boot_ms() + kESP32EnableBootupDelayMs;
@@ -110,15 +95,10 @@ bool SPICoprocessor::DeInit() {
 #ifdef ON_PICO
     // ESP32 enable pin.
     gpio_put(config_.esp32_enable_pin, 0);
-    gpio_deinit(config_.esp32_enable_pin);
     is_enabled_ = false;
-    // ESP32 chip select pin.
-    gpio_deinit(config_.spi_cs_pin);
-    // ESP32 handshake pin.
-    gpio_deinit(config_.spi_handshake_pin);
 
-    // De-initialize SPI Peripheral.
-    spi_deinit(config_.spi_handle);
+    // Don't deinit pins or SPI peripheral since some are shared by other peripherals.
+
 #elif ON_ESP32
     spi_receive_task_should_exit_ = true;
 #endif

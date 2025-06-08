@@ -1,7 +1,0 @@
-{ "expected-missing-functions":
-  [
-
-  ],
-  "proof-name": "FleetProvisioning_MatchTopic",
-  "proof-root": "test/cbmc/proofs"
-}

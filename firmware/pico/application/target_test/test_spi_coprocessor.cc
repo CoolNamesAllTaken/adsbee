@@ -1,7 +1,14 @@
 #include "hardware_unit_tests.hh"
 #include "spi_coprocessor.hh"
 
+#define NO_ESP32_EXIT_GUARD                                                                       \
+    if (!bsp.has_esp32 || !esp32.IsEnabled()) {                                                   \
+        CONSOLE_ERROR("test_spi_coprocessor", "ESP32 not installed or disabled, skipping test."); \
+        return;                                                                                   \
+    }
+
 UTEST(SpiCoprocessor, WriteReadScratchNoAck) {
+    NO_ESP32_EXIT_GUARD
     uint32_t scratch_out = 0xDEADBEEF;
     ASSERT_TRUE(esp32.Write(ObjectDictionary::Address::kAddrScratch, scratch_out));
     uint32_t scratch_in = 0x0;
@@ -10,6 +17,7 @@ UTEST(SpiCoprocessor, WriteReadScratchNoAck) {
 }
 
 UTEST(SpiCoprocessor, WriteReadScratchWithAck) {
+    NO_ESP32_EXIT_GUARD
     uint32_t scratch_out = 0xDEADBEEF;
     // Write requires an ack.
     ASSERT_TRUE(esp32.Write(ObjectDictionary::Address::kAddrScratch, scratch_out, true));
@@ -19,6 +27,7 @@ UTEST(SpiCoprocessor, WriteReadScratchWithAck) {
 }
 
 UTEST(SPICoprocessor, ReadWriteReadRewriteRereadBigNoAck) {
+    NO_ESP32_EXIT_GUARD
     SettingsManager::Settings settings_in_original;
     memset(&settings_in_original, 0x0, sizeof(settings_in_original));
     ASSERT_TRUE(esp32.Read(ObjectDictionary::Address::kAddrSettingsData, settings_in_original));
@@ -41,6 +50,7 @@ UTEST(SPICoprocessor, ReadWriteReadRewriteRereadBigNoAck) {
 }
 
 UTEST(SPICoprocessor, ReadWriteReadRewriteRereadBigWithAck) {
+    NO_ESP32_EXIT_GUARD
     SettingsManager::Settings settings_in_original;
     memset(&settings_in_original, 0x0, sizeof(settings_in_original));
     ASSERT_TRUE(esp32.Read(ObjectDictionary::Address::kAddrSettingsData, settings_in_original));

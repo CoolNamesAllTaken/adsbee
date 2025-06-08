@@ -1,7 +1,0 @@
-{ "expected-missing-functions":
-  [
-
-  ],
-  "proof-name": "C_DigestFinal",
-  "proof-root": "test/cbmc/proofs"
-}

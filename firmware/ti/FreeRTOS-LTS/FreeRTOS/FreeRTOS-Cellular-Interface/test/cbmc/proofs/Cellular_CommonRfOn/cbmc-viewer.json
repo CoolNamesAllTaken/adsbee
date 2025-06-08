@@ -1,7 +1,0 @@
-{ "expected-missing-functions":
-  [
-
-  ],
-  "proof-name": "Cellular_CommonRfOn",
-  "proof-root": "tools/cbmc/proofs"
-}

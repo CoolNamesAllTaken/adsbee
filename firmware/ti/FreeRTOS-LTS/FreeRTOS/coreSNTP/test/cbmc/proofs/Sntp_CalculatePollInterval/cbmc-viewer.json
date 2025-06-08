@@ -1,7 +1,0 @@
-{ "expected-missing-functions":
-  [
-
-  ],
-  "proof-name": "Sntp_CalculatePollInterval",
-  "proof-root": "test/cbmc/proofs"
-}

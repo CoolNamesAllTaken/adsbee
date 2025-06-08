@@ -1,7 +1,0 @@
-{ "expected-missing-functions":
-  [
-
-  ],
-  "proof-name": "_Cellular_GetSocketData",
-  "proof-root": "tools/cbmc/proofs"
-}

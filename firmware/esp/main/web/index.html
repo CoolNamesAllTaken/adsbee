@@ -510,7 +510,7 @@
             }
 
             async receiveResponse(printResponse = false, waitForResponse = false, responseToWaitFor = 'OK') {
-                const MAX_CUMULATIVE_TIMEOUT_MS = 10000;
+                const MAX_CUMULATIVE_TIMEOUT_MS = 20000; // Upped from 10s to account for slow OTA flash erase operations.
                 const decodedResponse = [];
 
                 const cumulativeTimeout = Date.now() + MAX_CUMULATIVE_TIMEOUT_MS;

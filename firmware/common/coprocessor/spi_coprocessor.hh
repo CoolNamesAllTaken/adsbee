@@ -69,9 +69,6 @@ class SPICoprocessor {
         uint16_t esp32_enable_pin = bsp.esp32_enable_pin;  // Pin to enable the ESP32.
         uint32_t spi_clk_freq_hz = bsp.copro_spi_clk_freq_hz;
         spi_inst_t *spi_handle = bsp.copro_spi_handle;
-        uint16_t spi_clk_pin = bsp.copro_spi_clk_pin;  // Pin for SPI clock (SCK).
-        uint16_t spi_mosi_pin = bsp.copro_spi_mosi_pin;
-        uint16_t spi_miso_pin = bsp.copro_spi_miso_pin;
         uint16_t spi_cs_pin = bsp.esp32_spi_cs_pin;  // Pin for SPI chip select (CS).
         uint16_t spi_handshake_pin = bsp.esp32_spi_handshake_pin;
         gpio_drive_strength spi_drive_strength = bsp.copro_spi_drive_strength;

@@ -50,6 +50,24 @@ int main() {
 
     settings_manager.Load();
 
+    // Initialize coprocessor SPI bus.
+    // ESP32 SPI pins.
+    gpio_set_function(bsp.copro_spi_clk_pin, GPIO_FUNC_SPI);
+    gpio_set_function(bsp.copro_spi_mosi_pin, GPIO_FUNC_SPI);
+    gpio_set_function(bsp.copro_spi_miso_pin, GPIO_FUNC_SPI);
+    gpio_set_drive_strength(bsp.copro_spi_clk_pin, bsp.copro_spi_drive_strength);
+    gpio_set_drive_strength(bsp.copro_spi_mosi_pin, bsp.copro_spi_drive_strength);
+    gpio_set_pulls(bsp.copro_spi_clk_pin, bsp.copro_spi_pullup, bsp.copro_spi_pulldown);   // Clock pin pulls.
+    gpio_set_pulls(bsp.copro_spi_mosi_pin, bsp.copro_spi_pullup, bsp.copro_spi_pulldown);  // MOSI pin pulls.
+    gpio_set_pulls(bsp.copro_spi_miso_pin, bsp.copro_spi_pullup, bsp.copro_spi_pulldown);  // MISO pin pulls.
+    // Initialize SPI Peripheral.
+    spi_init(bsp.copro_spi_handle, bsp.copro_spi_clk_freq_hz);
+    spi_set_format(bsp.copro_spi_handle,
+                   8,           // Bits per transfer.
+                   SPI_CPOL_0,  // Polarity (CPOL).
+                   SPI_CPHA_0,  // Phase (CPHA).
+                   SPI_MSB_FIRST);
+
     uint16_t num_status_led_blinks = FirmwareUpdateManager::AmWithinFlashPartition(0) ? 1 : 2;
     // Blink the LED a few times to indicate a successful startup.
     for (uint16_t i = 0; i < num_status_led_blinks; i++) {

@@ -573,9 +573,9 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                 } else if (args[0].compare("BOOT") == 0) {
                     // Boot the complementary flash partition.
                     CPP_AT_PRINTF("Booting partition %u...", complementary_partition);
-                    FlashUtils::FlashSafe();
+                    // Do NOT safe / unsafe flash here! We aren't writing to flash, and calling FlashSafe() will screw
+                    // up the boot sequence.
                     FirmwareUpdateManager::BootPartition(complementary_partition);
-                    FlashUtils::FlashUnsafe();
                     // Don't return an error here - the boot process will handle any errors
                     CPP_AT_SUCCESS();
                 }
