@@ -75,10 +75,9 @@ jobs:
     - name: upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: firmware
-        path: |
-          firmware/ti/sub_ghz_radio/build/sub_ghz_radio.elf
-          firmware/ti/sub_ghz_radio/build/sub_ghz_radio.bin
+        name: sub_ghz_radio.bin
+        path: firmware/ti/sub_ghz_radio/build/sub_ghz_radio.bin
+        retention-days: 1
 
   pico_target_build:
     runs-on: ubuntu-latest
@@ -104,7 +103,7 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: sub_ghz_radio.bin
-        path: firmware/ti/build
+        path: firmware/ti/sub_ghz_radio/build
     - name: Create Pico build directory
       working-directory: firmware/pico
       run: mkdir -p build
