@@ -72,7 +72,7 @@ bool SettingsManager::Load() {
 }
 
 bool SettingsManager::Save() {
-    settings.receiver_enabled = adsbee.ReceiverIsEnabled();
+    settings.receiver_enabled = adsbee.Receiver1090IsEnabled();
     settings.tl_mv = adsbee.GetTLMilliVolts();
     settings.bias_tee_enabled = adsbee.BiasTeeIsEnabled();
     settings.watchdog_timeout_sec = adsbee.GetWatchdogTimeoutSec();
@@ -161,7 +161,7 @@ bool SettingsManager::GetDeviceInfo(DeviceInfo &device_info) {
 }
 
 bool SettingsManager::Apply() {
-    adsbee.SetReceiverEnable(settings.receiver_enabled);
+    adsbee.SetReceiver1090Enable(settings.receiver_enabled);
     adsbee.SetTLMilliVolts(settings.tl_mv);
     adsbee.SetBiasTeeEnable(settings.bias_tee_enabled);
     adsbee.SetWatchdogTimeoutSec(settings.watchdog_timeout_sec);

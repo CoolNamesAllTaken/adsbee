@@ -1,0 +1,23 @@
+{
+  "ENTRY": "ARPAgeCache",
+  "CBMCFLAGS":
+  [
+      "--unwind 1",
+      "--unwindset vARPAgeCache.0:7",
+      "--unwindset FreeRTOS_OutputARPRequest.0:3",
+      "--unwindset FreeRTOS_InterfaceEndPointOnNetMask.0:3",
+      "--unwindset vARPAgeCache.1:3",
+      "--nondet-static"
+  ],
+  "OBJS":
+  [
+    "$(ENTRY)_harness.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_IP.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_Routing.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_ARP.goto",
+    "$(FREERTOS_PLUS_TCP)/test/FreeRTOS-Kernel/tasks.goto"
+  ],
+  "DEF":
+  [
+  ]
+}

@@ -1,0 +1,14 @@
+name : "FreeRTOS-Cellular-Interface"
+version: "v1.4.0"
+description: |
+  "FreeRTOS Cellular Interface implementation of the 3GPP TS v27.007 standard..\n"
+license: "MIT"
+
+dependencies:
+  - name: "CMock"
+    version: "v2.5.3"
+    license: "MIT"
+    repository:
+      type: "git"
+      url: "https://github.com/ThrowTheSwitch/CMock.git"
+      path: test/unit-test/CMock

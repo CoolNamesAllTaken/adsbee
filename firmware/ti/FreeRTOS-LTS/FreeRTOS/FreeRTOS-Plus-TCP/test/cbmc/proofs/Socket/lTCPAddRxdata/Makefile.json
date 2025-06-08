@@ -1,0 +1,22 @@
+{
+  "ENTRY": "TCPAddRxdata",
+  "CBMCFLAGS":
+  [
+    "--unwind 1"
+  ],
+  "OBJS":
+  [
+    "$(ENTRY)_harness.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_Sockets.goto"
+  ],
+  "OPT":
+  [
+    "--export-file-local-symbols"
+  ],
+  "INC":
+  [
+    "$(FREERTOS_PLUS_TCP)/test/cbmc/include",
+    "$(FREERTOS_PLUS_TCP)/test/cbmc/proofs/utility"
+  ]
+}
+

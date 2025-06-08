@@ -1,0 +1,11 @@
+"./RFQueue.o"
+"./main_nortos.o"
+"./rfPacketRx.o"
+"./syscfg/ti_devices_config.o"
+"./syscfg/ti_radio_config.o"
+"./syscfg/ti_drivers_config.o"
+-Wl,-T"../cc13x2_cc26x2_nortos.lds"
+-l:ti_utils_build_linker.cmd.genlibs
+-lgcc
+-lc
+-lm

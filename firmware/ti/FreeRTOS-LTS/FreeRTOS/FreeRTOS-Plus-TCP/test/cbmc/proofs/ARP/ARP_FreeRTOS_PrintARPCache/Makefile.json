@@ -1,0 +1,18 @@
+{
+  "ENTRY": "FreeRTOS_PrintARPCache",
+  "CBMCFLAGS":
+  [
+      "--unwind 7",
+      "--nondet-static"
+  ],
+  "OBJS":
+  [
+    "$(ENTRY)_harness.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_ARP.goto"
+  ],
+  "DEF":
+  [
+    "ipconfigARP_CACHE_ENTRIES=6",
+    "ipconfigHAS_PRINTF=1"
+  ]
+}

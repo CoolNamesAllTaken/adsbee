@@ -1,0 +1,45 @@
+SPDXVersion: SPDX-2.2
+DataLicense: CC0-1.0
+SPDXID: SPDXRef-DOCUMENT
+DocumentName: AWS-IoT-Core-MQTT-File-Streams-Embedded-C
+DocumentNamespace: https://github.com/FreeRTOS/AWS-IoT-Core-MQTT-File-Streams-Embedded-C/blob/v1.1.0/sbom.spdx
+Creator: Organization:Amazon Web Services
+Created: 2024-06-18T09:58:50Z
+CreatorComment: NOASSERTION
+DocumentComment: NOASSERTION
+
+PackageName: AWS-IoT-Core-MQTT-File-Streams-Embedded-C
+SPDXID: SPDXRef-Package-AWS-IoT-Core-MQTT-File-Streams-Embedded-C
+PackageVersion: v1.1.0
+PackageDownloadLocation: https://github.com/aws/aws-iot-core-mqtt-file-streams-embedded-c/tree/v1.1.0
+PackageLicenseDeclared: MIT
+PackageLicenseConcluded: MIT
+PackageLicenseInfoFromFiles: NOASSERTION
+FilesAnalyzed: true
+PackageVerificationCode: 093480a7359f014a10d61fb6c784d39f536e450c
+PackageCopyrightText: NOASSERTION
+PackageSummary: NOASSERTION
+PackageDescription: "Library for transferring files to IoT devices via MQTT Streams .\n"
+
+
+FileName: ./MQTTFileDownloader_base64.c
+SPDXID: SPDXRef-File-MQTTFileDownloaderbase64.c
+FileChecksum: SHA1: b7a6e2f5c280439ce65b6cab6a09bf7b36c62be5
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+
+FileName: ./MQTTFileDownloader.c
+SPDXID: SPDXRef-File-MQTTFileDownloader.c
+FileChecksum: SHA1: 28aecd14cf507875fd09a72cb6e90955d0b01d78
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+
+FileName: ./MQTTFileDownloader_cbor.c
+SPDXID: SPDXRef-File-MQTTFileDownloadercbor.c
+FileChecksum: SHA1: 407aba114806acf8b0b5e7adf05df5a9a0188633
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+

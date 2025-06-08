@@ -1,0 +1,25 @@
+/**
+@page fleet_provisioning_porting Porting Guide
+@brief Guide for porting the AWS IoT Fleet Provisioning Library to a new
+platform.
+
+@section fleet_provisioning_porting_config Configuration Macros
+@brief Configuration macros that can be set in the config header
+`fleet_provisioning_config.h`, or passed in as compiler options.
+
+The following optional logging macros are used throughout the library:
+ - @ref LogError
+ - @ref LogWarn
+ - @ref LogInfo
+ - @ref LogDebug
+
+@see [Configurations](@ref fleet_provisioning_config) for more information.
+
+@note Regardless of whether the above macros are defined in
+`fleet_provisioning_config.h` or passed as compiler options, by default the
+`fleet_provisioning_config.h` file is needed to build the AWS IoT Fleet
+Provisioning Library. To disable this requirement and build the library with
+default configuration values, provide
+`FLEET_PROVISIONING_DO_NOT_USE_CUSTOM_CONFIG` as a compile time preprocessor
+macro.
+ */

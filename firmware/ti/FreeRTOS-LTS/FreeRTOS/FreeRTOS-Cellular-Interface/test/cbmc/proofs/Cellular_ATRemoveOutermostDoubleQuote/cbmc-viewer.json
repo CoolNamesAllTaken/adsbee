@@ -1,0 +1,7 @@
+{ "expected-missing-functions":
+  [
+
+  ],
+  "proof-name": "Cellular_ATRemoveOutermostDoubleQuote",
+  "proof-root": "tools/cbmc/proofs"
+}

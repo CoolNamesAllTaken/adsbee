@@ -1,0 +1,46 @@
+{
+  "ENTRY": "ARPGetCacheEntry",
+  "CBMCFLAGS":
+  [
+      "--unwind 1",
+      "--unwindset prvCacheLookup.0:7",
+      "--unwindset FreeRTOS_FindEndPointOnIP_IPv4.0:3",
+      "--unwindset FreeRTOS_InterfaceEndPointOnNetMask.0:3",
+      "--unwindset eARPGetCacheEntry.0:3",
+      "--unwindset FreeRTOS_FindGateWay.0:3",
+      "--nondet-static"
+  ],
+  "OBJS":
+  [
+    "$(ENTRY)_harness.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_Routing.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_ARP.goto"
+  ],
+  "DEF":
+  [
+    {
+      "ARPGetCacheEntry_default":[
+        "ipconfigARP_STORES_REMOTE_ADDRESSES=0",
+        "ipconfigUSE_LLMNR=0"
+      ]
+    },
+    {
+      "ARPGetCacheEntry_LLMNR": [
+        "ipconfigARP_STORES_REMOTE_ADDRESSES=0",
+        "ipconfigUSE_LLMNR=1"
+      ]
+    },
+    {
+      "ARPGetCacheEntry_STORE_REMOTE": [
+        "ipconfigARP_STORES_REMOTE_ADDRESSES=1",
+        "ipconfigUSE_LLMNR=0"
+      ]
+    },
+    {
+      "ARPGetCacheEntry_REMOTE_LLMNR": [
+        "ipconfigARP_STORES_REMOTE_ADDRESSES=1",
+        "ipconfigUSE_LLMNR=1"
+      ]
+    }
+  ]
+}

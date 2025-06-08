@@ -1,0 +1,13 @@
+black
+check-manifest
+cookiecutter
+flake8
+mypy
+nox
+pre-commit
+pybind11
+pylint
+pytest
+pyyaml
+setuptools
+setuptools-rust

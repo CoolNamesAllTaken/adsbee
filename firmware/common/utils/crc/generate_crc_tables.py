@@ -1,5 +1,19 @@
 BITS_PER_BYTE = 8
 
+def generate_byte_reflection_table():
+    """
+    Generate a byte reflection table.
+    @retval The byte reflection table as a list of integers.
+    """
+    table = []
+    for i in range(256):
+        reflected = 0
+        for j in range(BITS_PER_BYTE):
+            if i & (1 << j):
+                reflected |= (1 << (BITS_PER_BYTE - 1 - j))
+        table.append(reflected)
+    return table
+
 def generate_crc_table(generator, crc_len_bits):
     """
     Generate a CRC table for a given generator polynomial and bit length.
@@ -108,7 +122,7 @@ def add_table_to_file(table_name, table):
         current_length = 4  # Account for initial spaces
         
         for value in table:
-            item = f"0x{value:08X}"
+            item = f"0x{value:X}"
             # Add 2 for ", " except for the last item
             if current_length + len(item) + 2 > CHARS_PER_LINE:
                 chunks.append(", ".join(current_chunk))
@@ -131,9 +145,11 @@ def generate_crc_tables_hh():
 
     CRC24_GENERATOR = 0xFFF409 # Mode S CRC-24 generator.
     CRC24_INITIAL_VALUE = 0
-    # CRC24_GENERATOR = 0x864cfb
 
     start_file()
+
+    byte_reflection_table = generate_byte_reflection_table()
+    add_table_to_file("byte_reflection_table", byte_reflection_table)
 
     crc24_table = generate_crc_table(CRC24_GENERATOR, 24)
     add_generator_to_file("crc24_generator", CRC24_GENERATOR)
@@ -148,6 +164,12 @@ def generate_crc_tables_hh():
     crc24_single_bit_syndrome_56 = generate_single_bit_error_syndrome_table(
         CRC24_GENERATOR, CRC24_INITIAL_VALUE, 24, crc24_table, 56//BITS_PER_BYTE)
     add_table_to_file("crc24_single_bit_syndrome_56", crc24_single_bit_syndrome_56)
+
+    # Add CRC32 table and generator for calculating firmware CRCs for the CC1312.
+    CRC32_GENERATOR = 0x04C11DB7 # Standard CRC-32 generator polynomial.
+    crc32_table = generate_crc_table(CRC32_GENERATOR, 32)
+    add_generator_to_file("crc32_generator", CRC32_GENERATOR)
+    add_table_to_file("crc32_table", crc32_table)
     
     end_file()
 

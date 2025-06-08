@@ -1,0 +1,31 @@
+SPDXVersion: SPDX-2.2
+DataLicense: CC0-1.0
+SPDXID: SPDXRef-DOCUMENT
+DocumentName: Device-Defender-for-AWS-IoT-embedded-sdk
+DocumentNamespace: https://github.com/FreeRTOS/Device-Defender-for-AWS-IoT-embedded-sdk/blob/v1.4.0/sbom.spdx
+Creator: Organization:Amazon Web Services
+Created: 2024-05-09T10:27:01Z
+CreatorComment: NOASSERTION
+DocumentComment: NOASSERTION
+
+PackageName: Device-Defender-for-AWS-IoT-embedded-sdk
+SPDXID: SPDXRef-Package-Device-Defender-for-AWS-IoT-embedded-sdk
+PackageVersion: v1.4.0
+PackageDownloadLocation: https://github.com/aws/Device-Defender-for-AWS-IoT-embedded-sdk/tree/v1.4.0
+PackageLicenseDeclared: MIT
+PackageLicenseConcluded: MIT
+PackageLicenseInfoFromFiles: NOASSERTION
+FilesAnalyzed: true
+PackageVerificationCode: 45e12583a655fe8aacc48b4daeecb2f6ac1b3eaf
+PackageCopyrightText: NOASSERTION
+PackageSummary: NOASSERTION
+PackageDescription: "Client library for using the AWS IoT Device Defender service on embedded devices.\n"
+
+
+FileName: ./defender.c
+SPDXID: SPDXRef-File-defender.c
+FileChecksum: SHA1: e1de139aa01ce02b095bf239763a093b69f01834
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+

@@ -1,0 +1,5 @@
+name : "Device-Defender-for-AWS-IoT-embedded-sdk"
+version: "v1.4.0"
+description: |
+  "Client library for using the AWS IoT Device Defender service on embedded devices.\n"
+license: "MIT"

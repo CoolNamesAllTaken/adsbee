@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<?ccsproject version="1.0"?>
+<projectOptions>
+	<ccsVariant value="50:Theia-based"/>
+	<ccsVersion value="70.1.1"/>
+	<deviceFamily value="TMS470"/>
+	<connection value="common/targetdb/connections/TIXDS110_Connection.xml"/>
+	<executableActions value=""/>
+	<createSlaveProjects value=""/>
+	<ignoreDefaultDeviceSettings value="true"/>
+	<ignoreDefaultCCSSettings value="true"/>
+	<templateProperties value="id=rfPacketRx_CC1312R1_LAUNCHXL_nortos_gcc.projectspec.rfPacketRx_CC1312R1_LAUNCHXL_nortos_gcc,buildProfile=release,isHybrid=true"/>
+	<activeTargetConfiguration value="targetConfigs/CC1312R1F3.ccxml"/>
+	<isTargetConfigurationManual value="false"/>
+	<origin value="/Users/jmcnelly/ti/simplelink_cc13xx_cc26xx_sdk_8_30_01_01/examples/nortos/CC1312R1_LAUNCHXL/prop_rf/rfPacketRx/gcc/rfPacketRx_CC1312R1_LAUNCHXL_nortos_gcc.projectspec"/>
+	<filesToOpen value=""/>
+</projectOptions>

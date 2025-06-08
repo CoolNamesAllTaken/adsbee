@@ -26,6 +26,6 @@ In the docker container, navigate to `modules/setup-scripts` and re-run `sudo ba
 
 Delete the adsbee firmware build folder, then build and flash the RP2040 again!
 
-### Building unit tests for host fails with `No rule to make target '/ads_bee/modules/googletest/build/lib/libgtest.so', needed by 'ads_bee_test'.  Stop.`
+### Building unit tests for host fails with `No rule to make target '/adsbee/modules/googletest/build/lib/libgtest.so', needed by 'adsbee_test'.  Stop.`
 
 Need to build googletest. See the firmware README.

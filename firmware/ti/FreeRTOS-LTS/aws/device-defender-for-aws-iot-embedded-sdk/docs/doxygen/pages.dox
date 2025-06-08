@@ -1,0 +1,83 @@
+/**
+@mainpage Overview
+@anchor defender
+@brief AWS IoT Device Defender Client Library
+
+> AWS IoT Device Defender is a security service that allows you to audit the configuration of your devices, monitor connected devices to detect abnormal behavior, and mitigate security risks. It gives you the ability to enforce consistent security policies across your AWS IoT device fleet and respond quickly when devices are compromised.
+<span style="float:right;margin-right:4em"> &mdash; <i>Description of Device Defender from AWS IoT documentation [https://docs.aws.amazon.com/iot/latest/developerguide/device-defender.html](https://docs.aws.amazon.com/iot/latest/developerguide/device-defender.html)</i></span><br>
+
+AWS IoT Device Defender lets you continuously monitor security metrics from devices for deviations from what you have defined as appropriate behavior for each device. If something doesn’t look right, AWS IoT Device Defender sends out an alert so you can take action to remediate the issue.
+
+ The AWS IoT Device Defender Client Library provides a convenience API for interacting with AWS IoT Device Defender service. This library is independent of the MQTT library. Applications can use this library to assemble and parse the Device Defender MQTT topics, then use any MQTT library to publish/subscribe to those topics. Features of this library include:
+- It is stateless.  It does not use any global/static memory.
+- It depends on the standard C library only.
+
+@section defender_memory_requirements Memory Requirements
+@brief Memory requirements of the AWS IoT Device Defender Client Library.
+
+@include{doc} size_table.md
+ */
+
+/**
+@page defender_design Design
+AWS IoT Device Defender Client Library Design
+
+The AWS IoT Device Defender Client Library provides macros and functions to assemble and parse MQTT topic strings reserved for the Device Defender. Applications can use this library in conjunction with any MQTT library to interact with the AWS IoT Device Defender service.
+
+The diagram below demonstrates how an application uses the Device Defender Client Library, an MQTT library, and a JSON library to interact with the AWS IoT Device Defender service.
+
+\image html defender_design_operations.png "Device Defender Client Library Demo Operation Diagram" width=1000px
+*/
+
+/**
+@page defender_config Configurations
+@brief Configurations of the AWS IoT Device Defender Client Library.
+<!-- @par configpagestyle allows the @section titles to be styled according to style.css -->
+@par configpagestyle
+
+Configuration settings are C pre-processor constants. They can be set with a `\#define` in the config file (`defender_config.h`) or by using a compiler option such as -D in gcc.
+
+@section DEFENDER_DO_NOT_USE_CUSTOM_CONFIG
+@copydoc DEFENDER_DO_NOT_USE_CUSTOM_CONFIG
+
+@section DEFENDER_USE_LONG_KEYS
+@copydoc DEFENDER_USE_LONG_KEYS
+
+@section defender_logerror LogError
+@copydoc LogError
+
+@section defender_logwarn LogWarn
+@copydoc LogWarn
+
+@section defender_loginfo LogInfo
+@copydoc LogInfo
+
+@section defender_logdebug LogDebug
+@copydoc LogDebug
+*/
+
+/**
+@page defender_functions Functions
+@brief Primary functions of the AWS IoT Device Defender Client Library:<br><br>
+@subpage defender_gettopic_function <br>
+@subpage defender_matchtopic_function <br>
+
+@page defender_gettopic_function Defender_GetTopic
+@snippet defender.h declare_defender_gettopic
+@copydoc Defender_GetTopic
+
+@page defender_matchtopic_function Defender_MatchTopic
+@snippet defender.h declare_defender_matchtopic
+@copydoc Defender_MatchTopic
+*/
+
+<!-- We do not use doxygen ALIASes here because there have been issues in the past versions with "^^" newlines within the alias definition. -->
+/**
+@defgroup defender_enum_types Enumerated Types
+@brief Enumerated types of the AWS IoT Device Defender Client Library
+*/
+
+/**
+@defgroup defender_constants Constants
+@brief Constants defined in the AWS IoT Device Defender Client Library
+*/

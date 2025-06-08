@@ -11,7 +11,7 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 0x6;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 0x7;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 0x2;
 
 class SettingsManager {
@@ -42,10 +42,18 @@ class SettingsManager {
 
     static constexpr uint8_t kWiFiAPChannelMax = 11;  // Operation in channels 12-14 avoided in USA.
 
+    enum EnableState : int8_t {
+        kEnableStateExternal = -1,  // Enable GPIO pin is high impedance.
+        kEnableStateDisabled = 0,
+        kEnableStateEnabled = 1
+    };
+
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a
     // firmware upgrade if the format of the settings struct changes.
     struct Settings {
         static constexpr int kDefaultTLMV = 1300;  // [mV]
+        static constexpr uint16_t kMaxNumTransponderPackets =
+            100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
         static constexpr uint32_t kDefaultWatchdogTimeoutSec = 10;
         // NOTE: Lengths do not include null terminator.
         static constexpr uint16_t kHostnameMaxLen = 32;
@@ -54,7 +62,7 @@ class SettingsManager {
         static constexpr uint16_t kWiFiMaxNumClients = 6;
         static constexpr uint32_t kDefaultCommsUARTBaudrate = 115200;
         static constexpr uint32_t kDefaultGNSSUARTBaudrate = 9600;
-        static constexpr uint16_t kMaxNumFeeds = 6;
+        static constexpr uint16_t kMaxNumFeeds = 10;
         static constexpr uint16_t kFeedURIMaxNumChars = 63;
         static constexpr uint16_t kFeedReceiverIDNumBytes = 8;
         static constexpr uint16_t kIPAddrStrLen = 16;   // XXX.XXX.XXX.XXX (does not include null terminator)
@@ -78,6 +86,9 @@ class SettingsManager {
 
         // ESP32 settings
         bool esp32_enabled = true;
+
+        // Sub-GHz settings
+        EnableState subg_enabled = EnableState::kEnableStateExternal;  // High impedance state by default.
 
         char hostname[kHostnameMaxLen + 1] =
             "ADSBee1090";  // Will be overwritten by the default SSID when device info is set.
@@ -144,6 +155,18 @@ class SettingsManager {
             feed_ports[kMaxNumFeeds - 2] = 30004;
             feed_is_active[kMaxNumFeeds - 2] = true;
             feed_protocols[kMaxNumFeeds - 2] = kBeast;
+            // adsb.lol: feed.adsb.lol:30004, Beast
+            strncpy(feed_uris[kMaxNumFeeds - 3], "feed.adsb.lol", kFeedURIMaxNumChars);
+            feed_uris[kMaxNumFeeds - 3][kFeedURIMaxNumChars] = '\0';
+            feed_ports[kMaxNumFeeds - 3] = 30004;
+            feed_is_active[kMaxNumFeeds - 3] = true;
+            feed_protocols[kMaxNumFeeds - 3] = kBeast;
+            // whereplane.xyz: feed.whereplane.xyz:30004, Beast
+            strncpy(feed_uris[kMaxNumFeeds - 4], "feed.whereplane.xyz", kFeedURIMaxNumChars);
+            feed_uris[kMaxNumFeeds - 4][kFeedURIMaxNumChars] = '\0';
+            feed_ports[kMaxNumFeeds - 4] = 30004;
+            feed_is_active[kMaxNumFeeds - 4] = false;  // Not active by default.
+            feed_protocols[kMaxNumFeeds - 4] = kBeast;
         }
     };
 
@@ -208,6 +231,30 @@ class SettingsManager {
     };
 
     /**
+     * Applies internal settings to the relevant objects. This is only used after the settings struct has been updated
+     * by loading it from EEPROM or by overwriting it via the coprocessor SPI bus.
+     */
+    bool Apply();
+
+    /**
+     * Helper function for reconstructing an AT command value for a given EnableState.
+     * @param[in] state EnableState to convert to a string.
+     * @retval String representation of the EnableState, as it would be used in an AT command.
+     */
+    static inline const char *EnableStateToATValueStr(EnableState state) {
+        switch (state) {
+            case kEnableStateExternal:
+                return "EXTERNAL";
+            case kEnableStateEnabled:
+                return "1";
+            case kEnableStateDisabled:
+                return "0";
+            default:
+                return "?";
+        }
+    }
+
+    /**
      * Loads settings from EEPROM. Assumes settings are stored at address 0x0 and doesn't do any integrity check.
      * @retval True if succeeded, false otherwise.
      */
@@ -236,13 +283,7 @@ class SettingsManager {
         redacted_password_buf[password_len] = '\0';
     }
 
-    /**
-     * Applies internal settings to the relevant objects. This is only used after the settings struct has been updated
-     * by loading it from EEPROM or by overwriting it via the coprocessor SPI bus.
-     */
-    bool Apply();
-
-    /**
+        /**
      * Saves settings to EEPROM. Stores settings at address 0x0 and performs no integrity check.
      * @retval True if succeeded, false otherwise.
      */

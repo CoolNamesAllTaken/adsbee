@@ -1,0 +1,24 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
+HARNESS_ENTRY=harness
+
+INCLUDES += -I$(CBMC_ROOT)/include
+
+PROOF_SOURCES += $(PROOFDIR)/$(HARNESS_FILE).c
+PROOF_SOURCES += $(PROOF_SOURCE)/core_json_contracts.c
+
+PROJECT_SOURCES += $(PROOFDIR)/core_json.c
+
+CHECKFLAGS += --pointer-primitive-check
+
+CBMCFLAGS += --slice-formula
+
+include ../Makefile.common
+
+cleanclean: veryclean
+	-$(RM) $(PROOFDIR)/core_json.c
+
+# Substitution command to pass to sed for patching core_json.c. The
+# characters " and # must be escaped with backslash.
+CORE_JSON_SED_EXPR = s/^static //

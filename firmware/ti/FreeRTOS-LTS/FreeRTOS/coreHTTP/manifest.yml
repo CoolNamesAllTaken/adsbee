@@ -1,0 +1,22 @@
+name: "coreHTTP"
+version: "v3.1.1"
+description:
+  "Client implementation of the HTTP/1.1 specification for embedded devices."
+license: "MIT"
+
+dependencies:
+  - name: "llhttp"
+    version: "release/v6.1.1"
+    license: "MIT"
+    repository:
+      type: "git"
+      url: "https://github.com/nodejs/llhttp.git"
+      path: source/dependency/3rdparty/llhttp
+
+  - name: "CMock"
+    version: "v2.5.3"
+    license: "MIT"
+    repository:
+      type: "git"
+      url: "https://github.com/ThrowTheSwitch/CMock.git"
+      path: test/unit-test/CMock

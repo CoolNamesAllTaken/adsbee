@@ -1,0 +1,55 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../common"
+		},
+		{
+			"path": "../modules"
+		},
+		{
+			"path": "../../usr/local/ti-lpf2-sdk"
+		},
+		{
+			"path": "../../usr/local/gcc-arm-none-eabi-13.3.1"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"rfqueue.h": "c",
+			"devicefamily.h": "c",
+			"clockp.h": "c"
+		},
+		"C_Cpp.default.defines": [
+			"ON_TI",
+			"DeviceFamily_CC13X2"
+		],
+	},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			{
+				"name": "Sub GHz Radio Debug",
+				"type": "cortex-debug",
+				"cwd": "/adsbee/ti",
+				"executable": "/adsbee/ti/sub_ghz_radio/build/sub_ghz_radio",
+				"request": "attach",
+				"servertype": "external",
+				"gdbPath": "arm-none-eabi-gdb",
+				"gdbTarget": "host.docker.internal:2337",
+				"showDevDebugOutput": "raw",
+				// "svdFile": "/usr/local/pico-sdk/src/rp2040/hardware_regs/RP2040.svd",
+				"preRestartCommands": [
+					"file /adsbee/ti/sub_ghz_radio/build/sub_ghz_radio",
+					"load",
+					"monitor reset"
+				],
+				"runToEntryPoint": "main",
+				"armToolchainPath": "/usr/bin",
+				"device": "CC1312R1F3",
+			},
+		],
+	}
+}

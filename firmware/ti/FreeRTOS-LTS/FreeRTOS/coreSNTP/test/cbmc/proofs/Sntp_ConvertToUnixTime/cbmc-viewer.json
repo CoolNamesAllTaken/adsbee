@@ -1,0 +1,7 @@
+{ "expected-missing-functions":
+  [
+
+  ],
+  "proof-name": "Sntp_ConvertToUnixTime",
+  "proof-root": "test/cbmc/proofs"
+}

@@ -1,0 +1,17 @@
+{
+    "ENTRY": "SendData",
+    "CBMCFLAGS":
+    [
+      "--unwind 1",
+      "--nondet-static"
+    ],
+    "OBJS":
+    [
+      "$(ENTRY)_harness.goto",
+      "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_TCP_Transmission.goto"
+    ],
+    "INC":
+    [
+      "$(FREERTOS_PLUS_TCP)/test/cbmc/include"
+    ]
+  }

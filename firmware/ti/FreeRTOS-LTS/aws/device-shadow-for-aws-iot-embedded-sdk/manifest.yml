@@ -1,0 +1,5 @@
+name : "Device-Shadow-for-AWS-IoT-embedded-sdk"
+version: "v1.4.1"
+description: |
+  "Client library for using the AWS IoT Device Shadow service on embedded devices.\n"
+license: "MIT"

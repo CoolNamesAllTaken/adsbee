@@ -36,19 +36,16 @@ bool SPICoprocessor::Init() {
     gpio_set_function(config_.spi_clk_pin, GPIO_FUNC_SPI);
     gpio_set_function(config_.spi_mosi_pin, GPIO_FUNC_SPI);
     gpio_set_function(config_.spi_miso_pin, GPIO_FUNC_SPI);
-    // gpio_set_slew_rate(config_.spi_clk_pin, config_.spi_gpio_slew_rate);
-    // gpio_set_slew_rate(config_.spi_mosi_pin, config_.spi_gpio_slew_rate);
-    // gpio_set_slew_rate(config_.spi_cs_pin, config_.spi_gpio_slew_rate);
-    gpio_set_drive_strength(config_.spi_clk_pin, GPIO_DRIVE_STRENGTH_12MA);
-    gpio_set_drive_strength(config_.spi_mosi_pin, GPIO_DRIVE_STRENGTH_12MA);
-    gpio_set_drive_strength(config_.spi_cs_pin, GPIO_DRIVE_STRENGTH_12MA);
-    gpio_set_pulls(config_.spi_clk_pin, false, true);   // Clock pin is pulled down.
-    gpio_set_pulls(config_.spi_mosi_pin, false, true);  // MOSI pin is pulled down.
-    gpio_set_pulls(config_.spi_cs_pin, false, true);    // CS pin is pulled down.
-    gpio_set_pulls(config_.spi_miso_pin, false, true);  // MISO pin is pulled down.
+    gpio_set_drive_strength(config_.spi_clk_pin, config_.spi_drive_strength);
+    gpio_set_drive_strength(config_.spi_mosi_pin, config_.spi_drive_strength);
+    gpio_set_drive_strength(config_.spi_cs_pin, config_.spi_drive_strength);
+    gpio_set_pulls(config_.spi_clk_pin, config_.spi_pullup, config_.spi_pulldown);   // Clock pin pulls.
+    gpio_set_pulls(config_.spi_mosi_pin, config_.spi_pullup, config_.spi_pulldown);  // MOSI pin pulls.
+    gpio_set_pulls(config_.spi_cs_pin, config_.spi_pullup, config_.spi_pulldown);    // CS pin pulls.
+    gpio_set_pulls(config_.spi_miso_pin, config_.spi_pullup, config_.spi_pulldown);  // MISO pin pulls.
 
     // Initialize SPI Peripheral.
-    spi_init(config_.spi_handle, config_.clk_rate_hz);
+    spi_init(config_.spi_handle, config_.spi_clk_freq_hz);
     spi_set_format(config_.spi_handle,
                    8,           // Bits per transfer.
                    SPI_CPOL_0,  // Polarity (CPOL).
@@ -284,6 +281,54 @@ bool SPICoprocessor::Update(bool blocking) {
     return SPISlaveLoopReturnHelper(ret);
 }
 
+#ifdef ON_PICO
+bool SPICoprocessor::GetSPIHandshakePinLevel(bool blocking) {
+    if (blocking) {
+        // Blocking wait before pre-assert interval.
+        while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ <
+               kSPIMinTransmitIntervalUs - kSPIUpdateCSPreAssertIntervalUs) {
+            // Check for Handshake pin going high after post transmit lockout period.
+            if (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ > kSPIPostTransmitLockoutUs &&
+                gpio_get(config_.spi_handshake_pin)) {
+                // Allowed to exit blocking early if ESP32 asserts the HANDSHAKE pin.
+                volatile bool early_exit = true;  // Just for debugging, allows breakpoint here.
+                return true;
+            }
+        }
+        // Put CS pin LO during pre-assert interval to stop ESP32 from initiating a transaction with HANDSHAKE pin.
+        BeginSPITransaction();
+        // Enforce CS pre-assert interval with blocking wait.
+        uint32_t pre_assert_interval_start = get_time_since_boot_us();
+        while (get_time_since_boot_us() - pre_assert_interval_start < kSPIUpdateCSPreAssertIntervalUs) {
+            // Assert the CS line before the ESP32 has a chance to handshake.
+            if (gpio_get(config_.spi_handshake_pin)) {
+                // Allowed to exit blocking early if ESP32 asserts the HANDSHAKE pin.
+                return true;
+            }
+        }
+        return false;
+    } else if (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
+        // Don't actually read the handshake pin if it might overlap with an existing transaction, since we could
+        // try reading the slave when nothing is here (slave hasn't yet had time to de-assert handshake pin).
+        return false;
+    }
+    return gpio_get(config_.spi_handshake_pin);
+}
+
+bool SPICoprocessor::SPIWaitForHandshake() {
+    uint32_t wait_begin_timestamp_ms = get_time_since_boot_ms();
+    while (true) {
+        if (gpio_get(config_.spi_handshake_pin)) {
+            break;
+        }
+        if (get_time_since_boot_ms() - wait_begin_timestamp_ms >= kSPIHandshakeTimeoutMs) {
+            return false;
+        }
+    }
+    return true;
+}
+#endif
+
 /** Begin Private Functions **/
 
 bool SPICoprocessor::SPISendAck(bool success) {
@@ -393,4 +438,209 @@ int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint1
     }
 #endif
     return bytes_written;
+}
+
+bool SPICoprocessor::PartialWrite(ObjectDictionary::Address addr, uint8_t *object_buf, uint16_t len, uint16_t offset,
+                                  bool require_ack) {
+    SCWritePacket write_packet;
+#ifdef ON_PICO
+    write_packet.cmd = require_ack ? kCmdWriteToSlaveRequireAck : kCmdWriteToSlave;
+#elif ON_ESP32
+    write_packet.cmd = require_ack ? kCmdWriteToMasterRequireAck : kCmdWriteToMaster;
+#else
+    return false;  // Not supported on other platforms.
+#endif
+    write_packet.addr = addr;
+    memcpy(write_packet.data, object_buf + offset, len);
+    write_packet.len = len;
+    write_packet.offset = offset;
+    write_packet.PopulateCRC();
+
+#ifdef ON_ESP32
+    if (xSemaphoreTake(spi_mutex_, kSPIMutexTimeoutTicks) != pdTRUE) {
+        CONSOLE_ERROR("SPICoprocessor::PartialWrite", "Failed to acquire coprocessor SPI mutex after waiting %d ms.",
+                      kSPIMutexTimeoutMs);
+        return false;
+    }
+#endif
+    int num_attempts = 0;
+    char error_message[kErrorMessageMaxLen + 1] = "No error.";
+    error_message[kErrorMessageMaxLen] = '\0';
+    bool ret = true;
+    while (num_attempts < kSPITransactionMaxNumRetries) {
+#ifdef ON_PICO
+        // Call Update with blocking to flush ESP32 of messages before write (block to make sure it has a chance to
+        // talk if it needs to).
+        Update(true);  // Check to see if handshake line is raised before blasting a packet into the ESP32.
+#elif ON_ESP32
+        // Handshake pin gets set LO by SPIWaitForAck(), so we need to re-assert it here for retries to bring it HI.
+        use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
+#endif
+        int bytes_written = SPIWriteBlocking(write_packet.GetBuf(), write_packet.GetBufLenBytes());
+
+        if (bytes_written < 0) {
+            snprintf(error_message, kErrorMessageMaxLen, "Error code %d while writing object over SPI.", bytes_written);
+            goto PARTIAL_WRITE_FAILED;
+        }
+        if (require_ack && !SPIWaitForAck()) {
+            snprintf(error_message, kErrorMessageMaxLen, "Timed out or received bad ack after writing to coprocessor.");
+            goto PARTIAL_WRITE_FAILED;
+        }
+        // Completed successfully!
+        ret = true;
+        break;
+    PARTIAL_WRITE_FAILED:
+        CONSOLE_WARNING("SPICoprocessor::PartialWrite", "%s", error_message);
+        num_attempts++;
+        ret = false;
+        continue;
+    }
+#ifdef ON_ESP32
+    xSemaphoreGive(spi_mutex_);  // Allow other tasks to access the SPI peripheral.
+#endif
+    if (!ret) {
+        CONSOLE_ERROR("SPICoprocessor::PartialWrite", "Failed after %d tries: %s", num_attempts, error_message);
+    }
+    return ret;
+}
+
+bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t *object_buf, uint16_t len, uint16_t offset) {
+    SCReadRequestPacket read_request_packet;
+#ifdef ON_PICO
+    read_request_packet.cmd = kCmdReadFromSlave;
+#elif ON_ESP32
+    read_request_packet.cmd = kCmdReadFromMaster;
+#else
+    return false;  // Not supported on other platforms.
+#endif
+    read_request_packet.addr = addr;
+    read_request_packet.offset = offset;
+    read_request_packet.len = len;
+    read_request_packet.PopulateCRC();
+
+    uint8_t rx_buf[kSPITransactionMaxLenBytes];
+
+    uint16_t read_request_bytes = read_request_packet.GetBufLenBytes();
+
+#ifdef ON_ESP32
+    if (xSemaphoreTake(spi_mutex_, kSPIMutexTimeoutTicks) != pdTRUE) {
+        CONSOLE_ERROR("SPICoprocessor::PartialRead", "Failed to acquire coprocessor SPI mutex after waiting %d ms.",
+                      kSPIMutexTimeoutMs);
+        return false;
+    }
+#endif
+
+    int num_attempts = 0;
+    char error_message[kErrorMessageMaxLen + 1] = "No error.";
+    error_message[kErrorMessageMaxLen] = '\0';
+    bool ret = true;
+    while (num_attempts < kSPITransactionMaxNumRetries) {
+#ifdef ON_PICO
+        // On the master, reading from the slave is two transactions: The read request is sent, then we wait on the
+        // handshake line to read the reply.
+        SCResponsePacket response_packet;  // Declare this up here so the goto's don't cross it.
+        // Call Update with blocking to flush ESP32 of messages before write (block to make sure it has a chance to
+        // talk
+        // if it needs to).
+        Update(true);  // Check to see if handshake line is raised before blasting a packet into the ESP32.
+        int bytes_written = SPIWriteBlocking(read_request_packet.GetBuf(), read_request_bytes);
+        int bytes_read = 0;
+        if (bytes_written < 0) {
+            snprintf(error_message, kErrorMessageMaxLen, "Error code %d while writing read request over SPI.",
+                     bytes_written);
+            goto PARTIAL_READ_FAILED;
+        }
+        if (!SPIWaitForHandshake()) {
+            snprintf(error_message, kErrorMessageMaxLen,
+                     "Timed out while waiting for handshake after sending read request.");
+            goto PARTIAL_READ_FAILED;
+        }
+
+        response_packet.data_len_bytes =
+            len;  // We need to set this manually since we are using the default constructor.
+        bytes_read = SPIReadBlocking(response_packet.GetBuf(), SCResponsePacket::GetBufLenForPayloadLenBytes(len));
+        if (bytes_read < 0) {
+            snprintf(error_message, kErrorMessageMaxLen, "Error code %d while reading read response over SPI.",
+                     bytes_read);
+            goto PARTIAL_READ_FAILED;
+        }
+#elif ON_ESP32
+        // On the slave, reading from the master is a single transaction. We preload the beginning of the message
+        // with the read request, and the master populates the remainder of the message with the reply.
+        use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
+        // Need to request the max transaction size. If we request something smaller, like read_request_bytes (which
+        // doesn't include the response bytes), the SPI transmit function won't write the additional reply into our
+        // buffer.
+        int bytes_exchanged = SPIWriteReadBlocking(read_request_packet.GetBuf(), rx_buf, SCPacket::kPacketMaxLenBytes);
+
+        if (bytes_exchanged < 0) {
+            snprintf(error_message, kErrorMessageMaxLen, "Error code %d during read from master SPI transaction.",
+                     bytes_exchanged);
+            // Can't use the goto shortcut here because it would cross over response_packet initialization.
+            CONSOLE_WARNING("SPICoprocessor::PartialRead", "%s", error_message);
+            num_attempts++;
+            ret = false;
+            // Mutex can be given back immediately because we don't ever wait for an ACK.
+            xSemaphoreGive(spi_mutex_);  // Allow other tasks to access the SPI peripheral.
+            continue;
+        }
+        if (bytes_exchanged <= read_request_bytes) {
+            snprintf(error_message, kErrorMessageMaxLen,
+                     "SPI transaction was too short, request was %d Bytes, only exchanged %d Bytes including "
+                     "request and response.",
+                     read_request_bytes, bytes_exchanged);
+            // Can't use the goto shortcut here because it would cross over response_packet initialization.
+            CONSOLE_WARNING("SPICoprocessor::PartialRead", "%s", error_message);
+            num_attempts++;
+            ret = false;
+            // Mutex can be given back immediately because we don't ever wait for an ACK.
+            xSemaphoreGive(spi_mutex_);  // Allow other tasks to access the SPI peripheral.
+            continue;
+        }
+        SCResponsePacket response_packet =
+            SCResponsePacket(rx_buf + read_request_bytes, bytes_exchanged - read_request_bytes);
+#else
+        SCResponsePacket response_packet;  // Dummy to stop compile errors.
+        // Total BS used to suppress a compile warning during host unit tests.
+        rx_buf[read_request_bytes] = '\0';
+        printf("%s", rx_buf);
+#endif
+        if (!response_packet.IsValid()) {
+            snprintf(error_message, kErrorMessageMaxLen,
+                     "Received response packet of length %d Bytes with an invalid CRC.",
+                     response_packet.GetBufLenBytes());
+            goto PARTIAL_READ_FAILED;
+        }
+        if (response_packet.cmd != SCCommand::kCmdDataBlock) {
+            snprintf(error_message, kErrorMessageMaxLen,
+                     "Received invalid response with cmd=0x%x to requested read at address 0x%x of length %d with "
+                     "offset %d Bytes.",
+                     response_packet.cmd, read_request_packet.addr, read_request_packet.len,
+                     read_request_packet.offset);
+            goto PARTIAL_READ_FAILED;
+        }
+        if (response_packet.data_len_bytes != len) {
+            snprintf(error_message, kErrorMessageMaxLen,
+                     "Received incorrect number of Bytes while reading object at address 0x%x with offset %d "
+                     "Bytes. Requested %d Bytes but received %d.",
+                     addr, offset, read_request_packet.len, response_packet.data_len_bytes);
+            goto PARTIAL_READ_FAILED;
+        }
+        // Completed successfully!
+        ret = true;
+        memcpy(object_buf + offset, response_packet.data, response_packet.data_len_bytes);
+        break;
+    PARTIAL_READ_FAILED:
+        CONSOLE_WARNING("SPICoprocessor::PartialRead", "%s", error_message);
+        num_attempts++;
+        ret = false;
+        continue;
+    }
+#ifdef ON_ESP32
+    xSemaphoreGive(spi_mutex_);  // Allow other tasks to access the SPI peripheral.
+#endif
+    if (!ret) {
+        CONSOLE_ERROR("SPICoprocessor::PartialRead", "Failed after %d tries: %s", num_attempts, error_message);
+    }
+    return ret;
 }

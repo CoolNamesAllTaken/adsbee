@@ -28,22 +28,6 @@
     word-wrap: break-word;
 }
 
-#cursor {
-    display: inline-block;
-    width: 8px;
-    height: 15px;
-    background: #ffffff;
-    animation: blink 1s step-end infinite;
-    vertical-align: middle;
-    margin-left: 1px;
-}
-
-@keyframes blink {
-    50% {
-        opacity: 0;
-    }
-}
-
 .input-line {
     display: flex;
     align-items: center;

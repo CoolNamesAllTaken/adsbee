@@ -1,5 +1,6 @@
 
 if (TARGET application)
+    # Primary RP2040 application.
     add_subdirectory(adsb/nasa_cpr)
     target_sources(application PRIVATE
         # NOTE: Annoyingly, all source files need to end with .c or .cpp to be seen by the ESP IDF.
@@ -38,6 +39,7 @@ if (TARGET application)
         settings
     )
 elseif (TARGET bootloader)
+    # RP2040 bootloader.
     target_sources(bootloader PRIVATE
         firmware_update/firmware_update.cc
     )
@@ -45,7 +47,20 @@ elseif (TARGET bootloader)
         utils # We just want hal.hh for now.
         firmware_update
     )
+elseif (TARGET sub_ghz_radio)
+    # TI CC1312R sub-GHz radio.
+    target_sources(${PROJECT_NAME} PRIVATE
+        # utils/data_structures.cpp
+        # coprocessor/spi_coprocessor.cpp
+        # coprocessor/object_dictionary.cpp
+    )
+    target_include_directories(${PROJECT_NAME} PRIVATE
+        .
+        utils
+        coprocessor
+    )
 elseif (TARGET host_test)
+    # Off-target unit testing.
     add_subdirectory(adsb/nasa_cpr)
     target_sources(host_test PRIVATE
         adsb/transponder_packet.cpp

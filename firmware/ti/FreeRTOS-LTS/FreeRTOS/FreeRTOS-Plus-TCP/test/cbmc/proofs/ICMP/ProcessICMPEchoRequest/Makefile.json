@@ -1,0 +1,19 @@
+{
+  "ENTRY": "ProcessICMPEchoRequest",
+  "CBMCFLAGS": [
+  	"--unwind 1",
+  	"--nondet-static"
+  ],
+  "OPT":
+  [
+    "--export-file-local-symbols"
+  ],
+  "OBJS":
+  [
+    "$(ENTRY)_harness.goto",
+    "$(FREERTOS_PLUS_TCP)/test/cbmc/stubs/cbmc.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_IP.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_ICMP.goto",
+    "$(FREERTOS_PLUS_TCP)/test/FreeRTOS-Kernel/tasks.goto"
+  ]
+}

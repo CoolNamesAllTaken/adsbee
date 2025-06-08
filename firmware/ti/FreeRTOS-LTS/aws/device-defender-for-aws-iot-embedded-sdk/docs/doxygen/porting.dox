@@ -1,0 +1,22 @@
+/**
+@page defender_porting Porting Guide
+@brief Guide for porting the AWS IoT Device Defender Client Library to a new platform.
+
+@section defender_porting_config Configuration Macros
+@brief Configuration macros that can be set the config header `defender_config.h`, or passed in as compiler options.
+
+The following optional logging macros are used throughout the library:
+ - @ref LogError
+ - @ref LogWarn
+ - @ref LogInfo
+ - @ref LogDebug
+
+@see [Configurations](@ref defender_config) for more information.
+
+@note Regardless of whether the above macros are defined in
+`defender_config.h` or passed as compiler options, by default the
+`defender_config.h` file is needed to build the AWS IoT Device Defender Client
+Library. To disable this requirement and build the library with default
+configuration values, provide `DEFENDER_DO_NOT_USE_CUSTOM_CONFIG` as a compile
+time preprocessor macro.
+ */

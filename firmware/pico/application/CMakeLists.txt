@@ -54,26 +54,37 @@ if (ON_EMBEDDED_DEVICE)
         SERIAL_FLASHER_WRITE_BLOCK_RETRIES=3
     )
 
-    # Embed binaries into the app.
+    ## Embed ESP32 binaries into the app.
     # In ESP-IDF this can also be done using EMBED_FILES option of idf_component_register.
     # Here an external tool is used to make file embedding similar with other ports.
-    include(${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin2array.cmake)
+    include(${CMAKE_CURRENT_LIST_DIR}/cmake_scripts/bin2array.cmake)
     # Create a file dependency that copies over the most recently built ESP32 firmware binary to the bin directory used by
     # esp32_flasher. Re-runs cmake if the file gets changed.
     configure_file(${CMAKE_SOURCE_DIR}/../esp/build/adsbee_esp.bin
-        ${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin/adsbee_esp.bin
+        ${CMAKE_CURRENT_LIST_DIR}/peripherals/esp32/bin/adsbee_esp.bin
         COPYONLY
     )
     # For some reason putting binaries.c in the build folder never works out. Put it in the esp32_flasher bin directory
-    # instead.
-    create_resources(${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin
-        ${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin/binaries.c
+    # instead. NOTE: create_resources is a function defined in bin2array.cmake.
+    create_resources(${CMAKE_CURRENT_LIST_DIR}/peripherals/esp32/bin
+        ${CMAKE_CURRENT_LIST_DIR}/peripherals/esp32/bin/binaries.c
     )
-    set_property(SOURCE ${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin/binaries.c PROPERTY GENERATED 1)
-    target_sources(application PRIVATE ${CMAKE_CURRENT_LIST_DIR}/esp32_flasher/bin/binaries.c)
+    set_property(SOURCE ${CMAKE_CURRENT_LIST_DIR}/peripherals/esp32/bin/binaries.c PROPERTY GENERATED 1)
+    target_sources(application PRIVATE ${CMAKE_CURRENT_LIST_DIR}/peripherals/esp32/bin/binaries.c)
+
+    ## Embed TI CC1312 binary into the app.
+    configure_file(${CMAKE_SOURCE_DIR}/../ti/sub_ghz_radio/build/sub_ghz_radio.bin
+        ${CMAKE_CURRENT_LIST_DIR}/peripherals/cc1312/bin/sub_ghz_radio.bin
+        COPYONLY
+    )
+    # Embed files in the cc1312 bin directory into an array of bytes in peripherals/cc1312/bin/binaries.c.
+    create_resources(${CMAKE_CURRENT_LIST_DIR}/peripherals/cc1312/bin
+        ${CMAKE_CURRENT_LIST_DIR}/peripherals/cc1312/bin/binaries.c
+    )
+    set_property(SOURCE ${CMAKE_CURRENT_LIST_DIR}/peripherals/cc1312/bin/binaries.c PROPERTY GENERATED 1)
+    target_sources(application PRIVATE ${CMAKE_CURRENT_LIST_DIR}/peripherals/cc1312/bin/binaries.c)
     
-    # Build for embedded target
-    add_subdirectory(esp32_flasher)
+    ## Build for embedded target
     MESSAGE("CppAT settings: ${ADSBEE_MODULES_DIR}/cppAT/settings")
     target_include_directories(application PRIVATE
         # ${ADSBEE_MODULES_DIR}/cppAT/settings # No longer need this since it's being overridden.
@@ -85,7 +96,6 @@ if (ON_EMBEDDED_DEVICE)
         main.cc # Don't include main for testing.
         adsbee.cc
         settings.cc
-        eeprom.cc
         flash_utils.cc
     )
 
@@ -185,4 +195,5 @@ else()
 endif()
 
 add_subdirectory(comms)
+add_subdirectory(peripherals)
 add_subdirectory(target_test)

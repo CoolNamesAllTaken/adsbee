@@ -6,5 +6,10 @@
         "board/esp32s3-builtin.cfg"
     ],
     "idf.flashType": "JTAG",
-    "idf.pythonInstallPath": "/usr/bin/python3",
+    "idf.pythonInstallPath": "/opt/homebrew/bin/python3",
+    "idf.espIdfPath": "/Users/jmcnelly/esp/v5.4.1/esp-idf",
+    "idf.toolsPath": "/Users/jmcnelly/.espressif",
+    "idf.customExtraVars": {
+        "IDF_TARGET": "esp32s3"
+    },
 }

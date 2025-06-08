@@ -3,6 +3,7 @@
 
 #include "aircraft_dictionary.hh"
 #include "bsp.hh"
+#include "cc1312.hh"
 #include "cpp_at.hh"
 #include "data_structures.hh"  // For PFBQueue.
 #include "hardware/i2c.h"
@@ -19,8 +20,6 @@ class ADSBee {
     static constexpr int kVDDMV = 3300;               // [mV] Voltage of positive supply rail.
     static constexpr int kTLMaxMV = 3300;             // [mV]
     static constexpr int kTLMinMV = 0;                // [mV]
-    static constexpr uint16_t kMaxNumTransponderPackets =
-        100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
     static constexpr uint32_t kStatusLEDOnMs = 10;
 
     static constexpr uint32_t kTLLearningIntervalMs =
@@ -68,6 +67,8 @@ class ADSBee {
             bsp.onboard_i2c_requires_init;  // In case I2c is shared with something else that already initializes it.
 
         uint16_t bias_tee_enable_pin = 18;
+
+        bool has_subg = bsp.has_subg;
 
         uint32_t aircraft_dictionary_update_interval_ms = 1000;
     };
@@ -207,7 +208,13 @@ class ADSBee {
      * Returns whether ADS-B receiving is currently enabled.
      * @retval True if enabled, false otherwise.
      */
-    bool ReceiverIsEnabled() { return receiver_enabled_; }
+    bool Receiver1090IsEnabled() { return r1090_enabled_; }
+
+    /**
+     * Returns whether the 978MHz receiver is enabled.
+     * @retval True if enabled, false otherwise.
+     */
+    bool Receiver978IsEnabled() { return subg_radio.IsEnabled(); }
 
     /**
      * Enable or disable the bias tee to inject 3.3V at the RF IN connector.
@@ -222,9 +229,25 @@ class ADSBee {
      * Enables or disables the ADS-B receiver by hogging the demodulation completed interrupt.
      * @param[in] is_enabled True if ADS-B receiver should be enabled, false otherwise.
      */
-    inline void SetReceiverEnable(bool is_enabled) {
-        receiver_enabled_ = is_enabled;
-        irq_set_enabled(config_.preamble_detector_demod_complete_irq, receiver_enabled_);
+    inline void SetReceiver1090Enable(bool is_enabled) {
+        r1090_enabled_ = is_enabled;
+        irq_set_enabled(config_.preamble_detector_demod_complete_irq, r1090_enabled_);
+    }
+
+    /**
+     * Enables or disables the 978MHz receiver by powering the receiver chip on or off. Re-initializes the receiver chip
+     * if it's being powered on from a previous off state.
+     * @param[in] is_enabled True if 978MHz receiver should be enabled, false otherwise.
+     */
+    inline void SetSubGRadioEnable(SettingsManager::EnableState is_enabled) {
+        SettingsManager::EnableState old_enabled = subg_radio.IsEnabled();
+        subg_radio.SetEnable(is_enabled);
+        if ((old_enabled == SettingsManager::EnableState::kEnableStateDisabled ||
+             old_enabled == SettingsManager::EnableState::kEnableStateExternal) &&
+            is_enabled == SettingsManager::EnableState::kEnableStateEnabled) {
+            // Re-initialize the receiver.
+            subg_radio.Init(true);
+        }
     }
 
     /**
@@ -278,10 +301,12 @@ class ADSBee {
                          uint16_t tl_learning_start_temperature_mv = kTLLearningStartTemperatureMV,
                          uint16_t tl_min_mv = kTLMinMV, uint16_t tl_max_mv = kTLMaxMV);
 
-    PFBQueue<Raw1090Packet> raw_1090_packet_queue = PFBQueue<Raw1090Packet>(
-        {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = raw_1090_packet_queue_buffer_});
+    PFBQueue<Raw1090Packet> raw_1090_packet_queue =
+        PFBQueue<Raw1090Packet>({.buf_len_num_elements = SettingsManager::Settings::kMaxNumTransponderPackets,
+                                 .buffer = raw_1090_packet_queue_buffer_});
 
     AircraftDictionary aircraft_dictionary;
+    CC1312 subg_radio = CC1312({});
 
    private:
     ADSBeeConfig config_;
@@ -318,16 +343,18 @@ class ADSBee {
     uint64_t mlat_counter_wraps_ = 0;
 
     Raw1090Packet rx_packet_[BSP::kMaxNumDemodStateMachines];
-    Raw1090Packet raw_1090_packet_queue_buffer_[kMaxNumTransponderPackets];
+    Raw1090Packet raw_1090_packet_queue_buffer_[SettingsManager::Settings::kMaxNumTransponderPackets];
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
 
-    bool receiver_enabled_ = true;
+    bool r1090_enabled_ = true;
     bool bias_tee_enabled_ = false;
     uint32_t watchdog_timeout_sec_ = SettingsManager::Settings::kDefaultWatchdogTimeoutSec * kMsPerSec;
 
     int32_t noise_floor_mv_;
     uint32_t noise_floor_last_sample_timestamp_ms_ = 0;
+
+    /** 978MHz Receiver Parameters **/
 };
 
 extern ADSBee adsbee;

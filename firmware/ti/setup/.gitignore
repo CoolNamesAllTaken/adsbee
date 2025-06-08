@@ -1,0 +1,2 @@
+# Ignore the setup file that's too big as a hack for now. This should eventually get downloaded temporarily during docker image construction.
+sysconfig-*-setup.run

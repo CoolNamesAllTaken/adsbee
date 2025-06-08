@@ -1,0 +1,31 @@
+SPDXVersion: SPDX-2.2
+DataLicense: CC0-1.0
+SPDXID: SPDXRef-DOCUMENT
+DocumentName: Device-Shadow-for-AWS-IoT-embedded-sdk
+DocumentNamespace: https://github.com/FreeRTOS/Device-Shadow-for-AWS-IoT-embedded-sdk/blob/v1.4.1/sbom.spdx
+Creator: Organization:Amazon Web Services
+Created: 2024-06-18T08:15:54Z
+CreatorComment: NOASSERTION
+DocumentComment: NOASSERTION
+
+PackageName: Device-Shadow-for-AWS-IoT-embedded-sdk
+SPDXID: SPDXRef-Package-Device-Shadow-for-AWS-IoT-embedded-sdk
+PackageVersion: v1.4.1
+PackageDownloadLocation: https://github.com/aws/Device-Shadow-for-AWS-IoT-embedded-sdk/tree/v1.4.1
+PackageLicenseDeclared: MIT
+PackageLicenseConcluded: MIT
+PackageLicenseInfoFromFiles: NOASSERTION
+FilesAnalyzed: true
+PackageVerificationCode: 63a0bc83564e1401a0dbe5102d37f041ecd8a05a
+PackageCopyrightText: NOASSERTION
+PackageSummary: NOASSERTION
+PackageDescription: "Client library for using the AWS IoT Device Shadow service on embedded devices.\n"
+
+
+FileName: ./shadow.c
+SPDXID: SPDXRef-File-shadow.c
+FileChecksum: SHA1: 67caded0bb92d54b58c95373688bb1090c9e2eb2
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+

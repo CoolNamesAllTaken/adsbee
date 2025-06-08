@@ -1,0 +1,38 @@
+# -*- mode: makefile -*-
+# The first line sets the emacs major mode to Makefile
+
+################################################################
+# Use this file to give project-specific definitions of the command
+# line arguments to pass to CBMC tools like goto-cc to build the goto
+# binaries and cbmc to do the property and coverage checking.
+#
+# Use this file to override most default definitions of variables in
+# Makefile.common.
+################################################################
+
+# Flags to pass to goto-cc for compilation (typically those passed to gcc -c)
+COMPILE_FLAGS += -fPIC
+COMPILE_FLAGS += -std=gnu90
+
+# Path to litani executable, used for running proofs and displaying report
+LITANI ?= litani
+PROJECT_NAME = "FreeRTOS coreMQTT"
+
+
+# Flags to pass to goto-cc for linking (typically those passed to gcc)
+LINK_FLAGS =
+
+# Preprocessor include paths -I...
+INCLUDES += -I$(SRCDIR)/test/cbmc/include
+INCLUDES += -I$(SRCDIR)/source/include
+INCLUDES += -I$(SRCDIR)/source/src
+INCLUDES += -I$(SRCDIR)/source/interface
+
+# Preprocessor definitions -D...
+DEFINES += -Dmqtt_EXPORTS
+
+# Use the external solver kissat for property checking if it is available,
+# because it is much faster than the default solver minisat on MQTT.
+ifneq ($(shell which kissat),)
+  EXTERNAL_SAT_SOLVER ?= kissat
+endif

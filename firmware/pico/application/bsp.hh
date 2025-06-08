@@ -30,7 +30,8 @@ class BSP {
             r1090_rssi_adc_pin = 28;
             r1090_rssi_adc_input = 2;
 
-            r978_led_pin = 25;
+            has_subg = true;
+            sync_pin = 25;  // Used for sync and CC1312 bootloader backdoor.
         }
     }
 
@@ -45,9 +46,13 @@ class BSP {
     uint16_t comms_uart_rx_pin = 5;
 
     spi_inst_t* copro_spi_handle = spi1;
+    uint32_t copro_spi_clk_freq_hz = 20e6;  // 20 MHz (originally 40MHz, but turned down to work with flex adapter PCB).
     uint16_t copro_spi_clk_pin = 10;
     uint16_t copro_spi_mosi_pin = 11;
     uint16_t copro_spi_miso_pin = 12;
+    gpio_drive_strength copro_spi_drive_strength = GPIO_DRIVE_STRENGTH_12MA;
+    bool copro_spi_pullup = false;
+    bool copro_spi_pulldown = true;
 
     uint16_t esp32_enable_pin = 14;
     uint16_t esp32_spi_cs_pin = 9;
@@ -77,16 +82,21 @@ class BSP {
     uint16_t r1090_rssi_adc_input = 2;  // ADC input for reading RSSI.
     uint16_t r1090_bias_tee_enable_pin = 18;
 
-    uint16_t r978_led_pin = UINT16_MAX;  // Set to UINT16_MAX to indicate not connected.
-    uint16_t r978_enable_pin = 6;
-    uint16_t r978_irq_pin = 7;
-    uint16_t r978_cs_pin = 8;
+    bool has_subg = false;                // Set to true if the sub-GHz receiver is present.
+    uint32_t subg_spi_clk_freq_hz = 4e6;  // CC1312 has SPI clk limited to 1/12 its clock frequency. 48MHz / 12 = 4MHz.
+    uint16_t sync_pin = UINT16_MAX;       // Set to UINT16_MAX to indicate not connected.
+    uint16_t subg_enable_pin = 6;
+    uint16_t subg_irq_pin = 7;
+    uint16_t subg_cs_pin = 8;
 
     i2c_inst_t* onboard_i2c = i2c1;            // I2C peripheral used to talk to EEPROM (if supported).
     uint16_t onboard_i2c_sda_pin = 2;          // SDA pin for I2C.
     uint16_t onboard_i2c_scl_pin = 3;          // SCL pin for I2C.
     uint32_t onboard_i2c_clk_freq_hz = 400e3;  // 400kHz
     bool onboard_i2c_requires_init = false;    // In case I2c is shared with something else that already initializes it.
+
+    uint16_t subg_bootloader_backdoor_pin =
+        5;  // Pin for CC1312 bootloader backdoor (CC1312 DIO number, NOT RP2040 GPIO number).
 };
 
 extern BSP bsp;

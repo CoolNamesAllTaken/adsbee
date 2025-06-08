@@ -1,0 +1,9 @@
+{ "expected-missing-functions":
+  [
+    "MQTT_Ping",
+    "MQTT_SerializeAck",
+    "MQTT_DeserializeAck"
+  ],
+  "proof-name": "MQTT_ProcessLoop",
+  "proof-root": "test/cbmc/proofs"
+}

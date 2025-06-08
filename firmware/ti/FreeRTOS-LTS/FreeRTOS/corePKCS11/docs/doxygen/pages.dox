@@ -1,0 +1,425 @@
+/**
+@mainpage Overview
+@anchor core_pkcs11
+@brief PKCS #11 Crypto Abstraction Library.
+
+> PKCS #11 is a standard maintained by OASIS for interacting with cryptographic hardware.
+
+<span style="float:right;margin-right:4em"> &mdash; <i>Official documentation of PKCS #11 from [oasis](http://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/os/pkcs11-base-v2.40-os.html)</i></span><br>
+
+This corePKCS11 library implements a subset of the PKCS #11 API required to establish a secure connection to AWS IoT:
+- Verifying the signature of the contents of a message.
+- Signing a message.
+- Managing certificates and keys.
+- Generating random numbers.
+
+@section pkcs11_memory_requirements Memory Requirements
+@brief Memory requirements of the PKCS #11 library.
+
+@include{doc} size_table.md
+*/
+
+/**
+@page pkcs11_design Design
+@section PKCS11_Wrapper Dependencies of the corePKCS11 Wrapper for the PKCS #11 standard
+Currently, the corePKCS11 library provides a wrapper header around the [PKCS #11 standard](http://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/os/pkcs11-base-v2.40-os.html). It has dependencies on:
+- `stdint.h` from the C standard library
+- PKCS #11 standard.
+
+Note: "core_pkcs11.h" should always be included first as it defines the macros that are needed by the standard PKCS #11 header files.
+
+@dot "PKCS #11 wrapper direct dependencies"
+digraph pkcs11_wrapper_dependencies
+{
+    node[shape=box, fontname=Helvetica, fontsize=10, style=filled];
+    edge[fontname=Helvetica, fontsize=10];
+    subgraph
+    {
+        pkcs11_wrapper[label="PKCS #11 Wrapper", fillcolor="#cc00ccff"];
+    }
+    subgraph
+    {
+        node[fillcolor="#aed8a9ff"];
+        rank = same;
+        pkcs11[label="PKCS #11"];
+    }
+
+    pkcs11_wrapper -> pkcs11;
+}
+@enddot
+
+@section PKCS11_implementation corePKCS11 Software Implementation Dependencies
+
+The corePKCS11 library provides one implementation of the PKCS #11 standard, and it can easily be swapped out for other implementations. The corePKCS11 library documented here
+is a software based implementation of the PKCS #11 standard, to allow for writing libraries and code that can easily interface with Hardware Security Modules (HSM).
+
+Currently, the software based corePKCS11 library has the following dependencies:
+- The API defined by the PKCS #11 specification. The headers used can be found [here](https://github.com/amazon-freertos/pkcs11/tree/v2.40_errata01).
+- The PKCS #11 PAL layer. This is used for writing PKCS #11 objects to flash.
+- [Mbed TLS](https://github.com/ARMmbed/mbedtls/tree/v2.28.0). This library uses Mbed TLS for the cryptographic logic. Some examples include parsing key and certificate objects, signing operations, and creating digests.
+- The standard C library `string.h`, for memory manipulation.
+
+@dot "PKCS #11 implementation direct dependencies"
+digraph pkcs11_software_implementation_dependencies
+{
+    node[shape=box, fontname=Helvetica, fontsize=10, style=filled];
+    edge[fontname=Helvetica, fontsize=10];
+    subgraph
+    {
+        pkcs11_software_implementation[label="PKCS #11 Software Implementation", fillcolor="#cc00ccff"];
+    }
+    subgraph
+    {
+        node[fillcolor="#aed8a9ff"];
+        rank = same;
+        pkcs11_wrapper[label="PKCS #11"];
+        mbedtls[label="Mbed TLS"];
+        pkcs11_pal[label="PKCS #11 PAL"];
+    }
+
+    pkcs11_software_implementation -> pkcs11_wrapper;
+    pkcs11_software_implementation -> mbedtls;
+    pkcs11_software_implementation -> pkcs11_pal;
+}
+@enddot
+
+@section PKCS11_utilities corePKCS11 Utilities Dependencies
+
+The PKI utils module is a forked version of the PKI utilities provided by Mbed TLS. They provide helper utilities to convert the format of ECDSA P-256 signatures.
+The conversions provided are:
+- DER format to PKCS #11 format.
+- PKCS #11 format to ASN.1 format.
+
+Currently, the module has a dependency only on the C standard library.
+
+@dot "PKCS #11 Utilities Dependencies"
+digraph pkcs11_utils_dependencies
+{
+    node[shape=box, fontname=Helvetica, fontsize=10, style=filled];
+    edge[fontname=Helvetica, fontsize=10];
+    subgraph
+    {
+        pkcs11_utils[label="PKCS #11 Utilities", fillcolor="#cc00ccff"];
+    }
+    subgraph
+    {
+        node[fillcolor="#aed8a9ff"];
+        rank = same;
+        stdlib[label="string.h"];
+    }
+
+    pkcs11_utils -> stdlib;
+}
+@enddot
+*/
+
+/**
+@page pkcs11_seq PKCS #11 Sequence Diagrams
+@brief The following are sequence diagrams for common PKCS #11 operations.
+
+@subpage pkcs11_rng_seq <br>
+@subpage pkcs11_dig_seq <br>
+@subpage pkcs11_obj_imp_seq <br>
+@subpage pkcs11_obj_gen_seq <br>
+@subpage pkcs11_sign_verify_seq <br>
+
+@page pkcs11_rng_seq PKCS #11 RNG Sequence Diagram
+@brief Sequence diagram illustrating how to generate random bytes from PKCS #11.
+@image html pkcs11_rng.png "PKCS #11 RNG Sequence" width=50%
+
+@page pkcs11_dig_seq PKCS #11 Digest Sequence Diagram
+@brief Sequence diagram illustrating how to create a message digest with PKCS #11.
+@image html pkcs11_digest.png "PKCS #11 Digest Sequence" width=50%
+
+@page pkcs11_obj_imp_seq PKCS #11 Object Import Sequence Diagram
+@brief Sequence diagram illustrating how to import an object with PKCS #11.
+@image html pkcs11_object_import.png "PKCS #11 Object Import Sequence" width=50%
+
+@page pkcs11_obj_gen_seq PKCS #11 Generate Key Pair Sequence Diagram
+@brief Sequence diagram illustrating how to generate a key pair with PKCS #11.
+@image html pkcs11_object_generate.png "PKCS #11 Generate Key Pair Sequence" width=50%
+
+@page pkcs11_sign_verify_seq PKCS #11 Sign and Verify Sequence Diagram
+@brief Sequence diagram illustrating how to sign a hash and verify a signature with PKCS #11.
+@image html pkcs11_sign_verify.png "PKCS #11 Sign and Verify Sequence" width=50%
+*/
+
+/**
+@page pkcs11_config PKCS #11 Configuration Macros
+@brief These are the configuration macros used by the corePKCS11 Library.
+
+@section pkcs11configPKCS11_MALLOC
+@copydoc pkcs11configPKCS11_MALLOC
+
+@section pkcs11configPKCS11_FREE
+@copydoc pkcs11configPKCS11_FREE
+
+@section pkcs11configPKCS11_DEFAULT_USER_PIN
+@copydoc pkcs11configPKCS11_DEFAULT_USER_PIN
+
+@section pkcs11configMAX_LABEL_LENGTH
+@copydoc pkcs11configMAX_LABEL_LENGTH
+
+@section pkcs11configMAX_NUM_OBJECTS
+@copydoc pkcs11configMAX_NUM_OBJECTS
+
+@section pkcs11configMAX_SESSIONS
+@copydoc pkcs11configMAX_SESSIONS
+
+@section pkcs11configPAL_DESTROY_SUPPORTED
+@copydoc pkcs11configPAL_DESTROY_SUPPORTED
+
+@section pkcs11configOTA_SUPPORTED
+@copydoc pkcs11configOTA_SUPPORTED
+
+@section pkcs11configJITP_CODEVERIFY_ROOT_CERT_SUPPORTED
+@copydoc pkcs11configJITP_CODEVERIFY_ROOT_CERT_SUPPORTED
+
+@section pkcs11configLABEL_DEVICE_PRIVATE_KEY_FOR_TLS
+@copydoc pkcs11configLABEL_DEVICE_PRIVATE_KEY_FOR_TLS
+
+@section pkcs11configLABEL_DEVICE_PUBLIC_KEY_FOR_TLS
+@copydoc pkcs11configLABEL_DEVICE_PUBLIC_KEY_FOR_TLS
+
+@section pkcs11configLABEL_DEVICE_CERTIFICATE_FOR_TLS
+@copydoc pkcs11configLABEL_DEVICE_CERTIFICATE_FOR_TLS
+
+@section pkcs11configLABEL_ROOT_CERTIFICATE
+@copydoc pkcs11configLABEL_ROOT_CERTIFICATE
+
+@section pkcs11configLABEL_HMAC_KEY
+@copydoc pkcs11configLABEL_HMAC_KEY
+
+@section pkcs11configLABEL_CMAC_KEY
+@copydoc pkcs11configLABEL_CMAC_KEY
+
+@section pkcs11configLABEL_CODE_VERIFICATION_KEY
+@copydoc pkcs11configLABEL_CODE_VERIFICATION_KEY
+
+@section pkcs11configLABEL_JITP_CERTIFICATE
+@copydoc pkcs11configLABEL_JITP_CERTIFICATE
+
+@section LogError
+@copydoc LogError
+
+@section LogWarn
+@copydoc LogWarn
+
+@section LogInfo
+@copydoc LogInfo
+
+@section LogDebug
+@copydoc LogDebug
+
+*/
+
+/**
+@page pkcs11_core_mbedtls_function PKCS #11 Mbed TLS Implementation Functions
+@brief Primary functions of the PKCS #11 Mbed TLS based Implementation Library:<br><br>
+@subpage pkcs11_mbedtls_function_c_initialize <br>
+@subpage pkcs11_mbedtls_function_c_finalize <br>
+@subpage pkcs11_mbedtls_function_c_getfunctionlist <br>
+@subpage pkcs11_mbedtls_function_c_getslotlist <br>
+@subpage pkcs11_mbedtls_function_c_gettokeninfo <br>
+@subpage pkcs11_mbedtls_function_c_getmechanisminfo <br>
+@subpage pkcs11_mbedtls_function_c_inittoken <br>
+@subpage pkcs11_mbedtls_function_c_opensession <br>
+@subpage pkcs11_mbedtls_function_c_closesession <br>
+@subpage pkcs11_mbedtls_function_c_login <br>
+@subpage pkcs11_mbedtls_function_c_createobject <br>
+@subpage pkcs11_mbedtls_function_c_destroyobject <br>
+@subpage pkcs11_mbedtls_function_c_getattributevalue <br>
+@subpage pkcs11_mbedtls_function_c_findobjectsinit <br>
+@subpage pkcs11_mbedtls_function_c_findobjects <br>
+@subpage pkcs11_mbedtls_function_c_findobjectsfinal <br>
+@subpage pkcs11_mbedtls_function_c_digestinit <br>
+@subpage pkcs11_mbedtls_function_c_digestupdate <br>
+@subpage pkcs11_mbedtls_function_c_digestfinal <br>
+@subpage pkcs11_mbedtls_function_c_signinit <br>
+@subpage pkcs11_mbedtls_function_c_verifyinit <br>
+@subpage pkcs11_mbedtls_function_c_verify <br>
+@subpage pkcs11_mbedtls_function_c_generatekeypair <br>
+@subpage pkcs11_mbedtls_function_c_generate_random <br>
+
+@page pkcs11_mbedtls_function_c_initialize C_Initialize
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_initialize
+@copydoc C_Initialize
+
+@page pkcs11_mbedtls_function_c_finalize C_Finalize
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_finalize
+@copydoc C_Finalize
+
+@page pkcs11_mbedtls_function_c_getfunctionlist C_GetFunctionList
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_getfunctionlist
+@copydoc C_GetFunctionList
+
+@page pkcs11_mbedtls_function_c_getslotlist C_GetSlotList
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_getslotlist
+@copydoc C_GetSlotList
+
+@page pkcs11_mbedtls_function_c_gettokeninfo C_GetTokenInfo
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_gettokeninfo
+@copydoc C_GetTokenInfo
+
+@page pkcs11_mbedtls_function_c_getmechanisminfo C_GetMechanismInfo
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_getmechanisminfo
+@copydoc C_GetMechanismInfo
+
+@page pkcs11_mbedtls_function_c_inittoken C_InitToken
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_inittoken
+@copydoc C_InitToken
+
+@page pkcs11_mbedtls_function_c_opensession C_OpenSession
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_opensession
+@copydoc C_OpenSession
+
+@page pkcs11_mbedtls_function_c_closesession C_CloseSession
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_closesession
+@copydoc C_CloseSession
+
+@page pkcs11_mbedtls_function_c_login C_Login
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_login
+@copydoc C_Login
+
+@page pkcs11_mbedtls_function_c_createobject C_CreateObject
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_createobject
+@copydoc C_CreateObject
+
+@page pkcs11_mbedtls_function_c_destroyobject C_DestroyObject
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_destroyobject
+@copydoc C_DestroyObject
+
+@page pkcs11_mbedtls_function_c_getattributevalue C_GetAttributeValue
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_getattributevalue
+@copydoc C_GetAttributeValue
+
+@page pkcs11_mbedtls_function_c_findobjectsinit C_FindObjectsInit
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_findobjectsinit
+@copydoc C_FindObjectsInit
+
+@page pkcs11_mbedtls_function_c_findobjects C_FindObjects
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_findobjects
+@copydoc C_FindObjects
+
+@page pkcs11_mbedtls_function_c_findobjectsfinal C_FindObjectsFinal
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_findobjectsfinal
+@copydoc C_FindObjectsFinal
+
+@page pkcs11_mbedtls_function_c_digestinit C_DigestInit
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_digestinit
+@copydoc C_DigestInit
+
+@page pkcs11_mbedtls_function_c_digestupdate C_DigestUpdate
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_digestupdate
+@copydoc C_DigestUpdate
+
+@page pkcs11_mbedtls_function_c_digestfinal C_DigestFinal
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_digestfinal
+@copydoc C_DigestFinal
+
+@page pkcs11_mbedtls_function_c_signinit C_SignInit
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_signinit
+@copydoc C_SignInit
+
+@page pkcs11_mbedtls_function_c_verifyinit C_VerifyInit
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_verifyinit
+@copydoc C_VerifyInit
+
+@page pkcs11_mbedtls_function_c_verify C_Verify
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_verify
+@copydoc C_Verify
+
+@page pkcs11_mbedtls_function_c_generatekeypair C_GenerateKeyPair
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_generatekeypair
+@copydoc C_GenerateKeyPair
+
+@page pkcs11_mbedtls_function_c_generate_random C_GenerateRandom
+@snippet core_pkcs11_mbedtls.c declare_pkcs11_mbedtls_c_generate_random
+@copydoc C_GenerateRandom
+
+*/
+
+/**
+@page pkcs11_core_wrapper_function PKCS #11 Wrapper Functions
+@brief Primary functions of the PKCS #11 wrapper Library:<br><br>
+@subpage pkcs11_core_xinitializepkcs11 <br>
+@subpage pkcs11_core_xgetslotlist <br>
+@subpage pkcs11_core_xinitializepkcs11token <br>
+@subpage pkcs11_core_xinitializepkcs11session <br>
+@subpage pkcs11_core_xfindobjectwithlabelandclass <br>
+@subpage pkcs11_core_vappendsha256algorithmidentifiersequence <br>
+
+@page pkcs11_core_xinitializepkcs11 xInitializePKCS11
+@snippet core_pkcs11.h declare_pkcs11_core_xinitializepkcs11
+@copydoc xInitializePKCS11
+
+@page pkcs11_core_xgetslotlist xGetSlotList
+@snippet core_pkcs11.h declare_pkcs11_core_xgetslotlist
+@copydoc xGetSlotList
+
+@page pkcs11_core_xinitializepkcs11token xInitializePkcs11Token
+@snippet core_pkcs11.h declare_pkcs11_core_xinitializepkcs11token
+@copydoc xInitializePkcs11Token
+
+@page pkcs11_core_xinitializepkcs11session  xInitializePkcs11Session
+@snippet core_pkcs11.h declare_pkcs11_core_xinitializepkcs11session
+@copydoc xInitializePkcs11Session
+
+@page pkcs11_core_xfindobjectwithlabelandclass  xFindObjectWithLabelAndClass
+@snippet core_pkcs11.h declare_pkcs11_core_xfindobjectwithlabelandclass
+@copydoc xFindObjectWithLabelAndClass
+
+@page pkcs11_core_vappendsha256algorithmidentifiersequence  vAppendSHA256AlgorithmIdentifierSequence
+@snippet core_pkcs11.h declare_pkcs11_core_vappendsha256algorithmidentifiersequence
+@copydoc vAppendSHA256AlgorithmIdentifierSequence
+*/
+
+/**
+@page pkcs11_core_pal_function PKCS #11 PAL Functions
+@brief Primary functions of the PKCS #11 Platform Abstraction Layer Library:<br><br>
+@subpage pkcs11_pal_initialize <br>
+@subpage pkcs11_pal_saveobject <br>
+@subpage pkcs11_pal_destroyobject <br>
+@subpage pkcs11_pal_findobject <br>
+@subpage pkcs11_pal_getobjectvalue <br>
+@subpage pkcs11_pal_getobjectvaluecleanup <br>
+
+@page pkcs11_pal_initialize PKCS11_PAL_Initialize
+@snippet core_pkcs11_pal.h declare_pkcs11_pal_initialize
+@copydoc PKCS11_PAL_Initialize
+
+@page pkcs11_pal_saveobject PKCS11_PAL_SaveObject
+@snippet core_pkcs11_pal.h declare_pkcs11_pal_saveobject
+@copydoc PKCS11_PAL_SaveObject
+
+@page pkcs11_pal_destroyobject PKCS11_PAL_DestroyObject
+@snippet core_pkcs11_pal.h declare_pkcs11_pal_destroyobject
+@copydoc PKCS11_PAL_DestroyObject
+
+@page pkcs11_pal_findobject PKCS11_PAL_FindObject
+@snippet core_pkcs11_pal.h declare_pkcs11_pal_findobject
+@copydoc PKCS11_PAL_FindObject
+
+@page pkcs11_pal_getobjectvalue PKCS11_PAL_GetObjectValue
+@snippet core_pkcs11_pal.h declare_pkcs11_pal_getobjectvalue
+@copydoc PKCS11_PAL_GetObjectValue
+
+@page pkcs11_pal_getobjectvaluecleanup PKCS11_PAL_GetObjectValueCleanup
+@snippet core_pkcs11_pal.h declare_pkcs11_pal_getobjectvaluecleanup
+@copydoc PKCS11_PAL_GetObjectValueCleanup
+*/
+
+/**
+@page pkcs11_core_utils_function PKCS #11 Utils Functions
+@brief Primary functions of the PKCS #11 Utils Library:<br><br>
+@subpage pkcs11_utils_pkipkcs11signaturetombedtlssignature <br>
+@subpage pkcs11_utils_pkimbedtlssignaturetopkcs11signature <br>
+
+@page pkcs11_utils_pkipkcs11signaturetombedtlssignature PKI_mbedTLSSignatureToPkcs11Signature
+@snippet core_pki_utils.h declare_pkcs11_utils_pkipkcs11signaturetombedtlssignature
+@copydoc PKI_mbedTLSSignatureToPkcs11Signature
+
+@page pkcs11_utils_pkimbedtlssignaturetopkcs11signature PKI_pkcs11SignatureTombedTLSSignature
+@snippet core_pki_utils.h declare_pkcs11_utils_pkimbedtlssignaturetopkcs11signature
+@copydoc PKI_pkcs11SignatureTombedTLSSignature
+*/

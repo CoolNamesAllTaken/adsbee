@@ -1,0 +1,62 @@
+# -*- mode: makefile -*-
+# The first line sets the emacs major mode to Makefile
+
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
+################################################################
+# Use this file to give project-specific definitions of the command
+# line arguments to pass to CBMC tools like goto-cc to build the goto
+# binaries and cbmc to do the property and coverage checking.
+#
+# Use this file to override most default definitions of variables in
+# Makefile.common.
+################################################################
+
+# Name of this proof project, displayed in proof reports. For example,
+# "s2n" or "Amazon FreeRTOS". For projects with multiple proof roots,
+# this may be overridden on the command-line to Make, for example
+#
+# 	  make PROJECT_NAME="FreeRTOS MQTT" report
+#
+PROJECT_NAME = "FreeRTOS Device Defender"
+
+# Path to litani executable, relative to the root of the repository.
+# This applies even for projects with multiple proof roots.
+LITANI ?= litani
+
+# Flags to pass to goto-cc for compilation (typically those passed to gcc -c)
+COMPILE_FLAGS += -fPIC
+COMPILE_FLAGS += -std=gnu90
+
+# Flags to pass to goto-cc for linking (typically those passed to gcc)
+# LINK_FLAGS =
+
+# Preprocessor include paths -I...
+# Consider adding
+#     INCLUDES += -I$(CBMC_ROOT)/include
+# You will want to decide what order that comes in relative to the other
+# include directories in your project.
+#
+INCLUDES += -I$(SRCDIR)/test/cbmc/include
+INCLUDES += -I$(SRCDIR)/source/include
+INCLUDES += -I$(SRCDIR)/source
+INCLUDES += -I$(SRCDIR)/test/include
+
+# Preprocessor definitions -D...
+DEFINES += -Ddefender_EXPORTS
+
+# Path to arpa executable
+# ARPA =
+
+# Flags to pass to cmake for building the project
+# ARPA_CMAKE_FLAGS =
+
+# Additional CBMC flags used for property checking
+# TODO - Remove these once they are in the starter kit.
+CHECKFLAGS += --pointer-primitive-check
+CHECKFLAGS += --malloc-may-fail
+CHECKFLAGS += --malloc-fail-null
+
+COVERFLAGS += --malloc-may-fail
+COVERFLAGS += --malloc-fail-null

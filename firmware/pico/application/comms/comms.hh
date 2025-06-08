@@ -1,12 +1,10 @@
-#ifndef COMMS_HH_
-#define COMMS_HH_
+#pragma once
 
-// #include "transponder_packet.hh"  // For Decoded1090Packet.
-#include "adsbee.hh"
 #include "cpp_at.hh"
 #include "data_structures.hh"  // For PFBQueue.
 #include "hardware/uart.h"
 #include "settings.hh"
+#include "transponder_packet.hh"
 
 class CommsManager {
    public:
@@ -55,10 +53,10 @@ class CommsManager {
     CPP_AT_CALLBACK(ATBaudrateCallback);
     CPP_AT_CALLBACK(ATBiasTeeEnableCallback);
     CPP_AT_CALLBACK(ATDeviceInfoCallback);
-    CPP_AT_CALLBACK(ATEthernetCallback);
     CPP_AT_CALLBACK(ATESP32EnableCallback);
+    CPP_AT_CALLBACK(ATESP32FlashCallback);
+    CPP_AT_CALLBACK(ATEthernetCallback);
     CPP_AT_CALLBACK(ATFeedCallback);
-    CPP_AT_CALLBACK(ATFlashESP32Callback);
     CPP_AT_CALLBACK(ATHostnameCallback);
     CPP_AT_CALLBACK(ATOTACallback);
     CPP_AT_HELP_CALLBACK(ATOTAHelpCallback);
@@ -69,6 +67,8 @@ class CommsManager {
     CPP_AT_CALLBACK(ATRebootCallback);
     CPP_AT_CALLBACK(ATRxEnableCallback);
     CPP_AT_CALLBACK(ATSettingsCallback);
+    CPP_AT_CALLBACK(ATSubGEnableCallback);
+    CPP_AT_CALLBACK(ATSubGFlashCallback);
     CPP_AT_CALLBACK(ATTLReadCallback);
     CPP_AT_CALLBACK(ATTLSetCallback);
     CPP_AT_CALLBACK(ATUptimeCallback);
@@ -168,7 +168,7 @@ class CommsManager {
 
     // Queue for storing transponder packets before they get reported.
     PFBQueue<Decoded1090Packet> transponder_packet_reporting_queue =
-        PFBQueue<Decoded1090Packet>({.buf_len_num_elements = ADSBee::kMaxNumTransponderPackets,
+        PFBQueue<Decoded1090Packet>({.buf_len_num_elements = SettingsManager::Settings::kMaxNumTransponderPackets,
                                      .buffer = transponder_packet_reporting_queue_buffer_});
 
     // Queues for incoming / outgoing network characters.
@@ -246,7 +246,7 @@ class CommsManager {
     char esp32_console_tx_queue_buffer_[kNetworkConsoleBufMaxLen];
 
     // Queue for holding new transponder packets before they get reported.
-    Decoded1090Packet transponder_packet_reporting_queue_buffer_[ADSBee::kMaxNumTransponderPackets];
+    Decoded1090Packet transponder_packet_reporting_queue_buffer_[SettingsManager::Settings::kMaxNumTransponderPackets];
 
     // Reporting Settings
     uint32_t comms_uart_baudrate_ = SettingsManager::Settings::kDefaultCommsUARTBaudrate;
@@ -301,5 +301,3 @@ extern const uint16_t at_command_list_num_commands;
 #define CONSOLE_ERROR(tag, format, ...)                                        \
     comms_manager.console_level_printf(SettingsManager::LogLevel::kErrors, tag \
                                        ": " TEXT_COLOR_RED format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) __VA_ARGS__);
-
-#endif /* COMMS_HH_ */

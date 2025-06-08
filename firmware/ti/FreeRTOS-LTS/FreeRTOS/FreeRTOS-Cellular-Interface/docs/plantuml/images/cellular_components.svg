@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="9in" height="7in" class="slides-canvas" viewBox="0 0 648 504">
+  <defs>
+    <linearGradient id="lg_b1cbe9_I0a3c1e5_92b9e4_90_4a_740a2" x1="0" y1="33" x2="0" y2="91" spreadMethod="reflect" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#B1CBE9" />
+      <stop offset="0.5" stop-color="#A3C1E5" />
+      <stop offset="1" stop-color="#92B9E4" />
+    </linearGradient>
+    <linearGradient id="lg_b1cbe9_I0a3c1e5_92b9e4_90_65_798b5" x1="0" y1="47" x2="0" y2="107" spreadMethod="reflect" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#B1CBE9" />
+      <stop offset="0.5" stop-color="#A3C1E5" />
+      <stop offset="1" stop-color="#92B9E4" />
+    </linearGradient>
+    <linearGradient id="lg_ffdd9c_I0ffd78e_ffd479_90_f9_d0275" x1="0" y1="202" x2="0" y2="306" spreadMethod="reflect" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFDD9C" />
+      <stop offset="0.5" stop-color="#FFD78E" />
+      <stop offset="1" stop-color="#FFD479" />
+    </linearGradient>
+    <marker id="ah1" markerUnits="userSpaceOnUse" markerWidth="36" markerHeight="21" viewBox="-18 -10.5 36 21" orient="auto">
+      <path d="M-9 5.25L0 0-9-5.25" fill="none" stroke="#000000" stroke-width="3" stroke-linecap="round" />
+    </marker>
+  </defs>
+  <g text-rendering="geometricPrecision" transform="scale(1, 1)">
+    <rect x="0" y="0" width="648" height="504" fill="#FFFFFF" />
+    <path fill="url(#lg_b1cbe9_I0a3c1e5_92b9e4_90_4a_740a2)" d="M13.75 381.88L623.4 381.88 623.4 439.9 13.75 439.9z" />
+    <path stroke-width="0.5" stroke="#5B9BD5" fill="none" d="M13.75 381.88L623.4 381.88 623.4 439.9 13.75 439.9z" />
+    <g transform="matrix(1, 0, 0, 1, 20.952362, 385.47693)"><text font-family="Noto Sans" font-style="normal" font-weight="normal" font-stretch="normal" font-size="18pt" fill="#000000" x="206.31061" y="33.614155"><tspan x="206.80165" y="34.1052" id="tp_0_shadow" fill="#000000" fill-opacity="0.27">Comm Interface</tspan><tspan x="206.31061" y="33.614155" id="tp_0">Comm Interface</tspan></text></g>
+    <path fill="url(#lg_b1cbe9_I0a3c1e5_92b9e4_90_65_798b5)" d="M13.75 48.12L623.4 48.12 623.4 108.89 13.75 108.89z" />
+    <path stroke-width="0.5" stroke="#5B9BD5" fill="none" d="M13.75 48.12L623.4 48.12 623.4 108.89 13.75 108.89z" />
+    <g transform="matrix(1, 0, 0, 1, 20.952362, 51.7163)"><text font-family="Noto Sans" font-style="normal" font-weight="normal" font-stretch="normal" font-size="18pt" fill="#000000" x="234.31061" y="34.990295"><tspan x="234.80165" y="35.481342" id="tp_1_shadow" fill="#000000" fill-opacity="0.27">Application</tspan><tspan x="234.31061" y="34.990295" id="tp_1">Application</tspan></text></g>
+    <g transform="matrix(1, 0, 0, 1, 338.37567, 109.73605)"><text font-family="Noto Sans" font-style="normal" font-weight="normal" font-stretch="normal" font-size="15pt" fill="#000000" x="0" y="42.83686"><tspan x="0" y="18.836859">FreeRTOS Cellular Interface</tspan><tspan xml:space="preserve" x="257.48438" y="18.836859"> </tspan><tspan x="0" y="42.83686">APIs request</tspan></text></g>
+    <path fill="#FFE699" fill-opacity="0.5" d="M13.75 161.67L623.4 161.67 623.4 349.85 13.75 349.85z" />
+    <path fill="url(#lg_ffdd9c_I0ffd78e_ffd479_90_f9_d0275)" d="M59.93 202.83L299.01 202.83 299.01 306.91 59.93 306.91z" />
+    <path stroke-width="0.5" stroke="#FFC000" fill="none" d="M59.93 202.83L299.01 202.83 299.01 306.91 59.93 306.91z" />
+    <g transform="matrix(1, 0, 0, 1, 67.13109, 206.43106)"><text font-family="Noto Sans" font-style="normal" font-weight="normal" font-stretch="normal" font-size="18pt" fill="#000000" x="22.080612" y="71.0426"><tspan x="7.376346" y="42.733643" id="tp_2_shadow" fill="#000000" fill-opacity="0.27">FreeRTOS-Cellular-</tspan><tspan x="6.8852997" y="42.242596" id="tp_2">FreeRTOS-Cellular-</tspan><tspan x="22.57166" y="71.533646" id="tp_3_shadow" fill="#000000" fill-opacity="0.27">Interface library</tspan><tspan x="22.080612" y="71.0426" id="tp_3">Interface library</tspan></text></g>
+    <path fill="url(#lg_ffdd9c_I0ffd78e_ffd479_90_f9_d0275)" d="M348.12 202.83L587.19 202.83 587.19 306.91 348.12 306.91z" />
+    <path stroke-width="0.5" stroke="#FFC000" fill="none" d="M348.12 202.83L587.19 202.83 587.19 306.91 348.12 306.91z" />
+    <g transform="matrix(1, 0, 0, 1, 355.31573, 206.43106)"><text font-family="Noto Sans" font-style="normal" font-weight="normal" font-stretch="normal" font-size="18pt" fill="#000000" x="22.088425" y="71.0426"><tspan x="24.079472" y="42.733643" id="tp_4_shadow" fill="#000000" fill-opacity="0.27">Cellular Module</tspan><tspan x="23.588425" y="42.242596" id="tp_4">Cellular Module</tspan><tspan xml:space="preserve" x="201.08842" y="42.242596"> </tspan><tspan x="22.579472" y="71.533646" id="tp_5_shadow" fill="#000000" fill-opacity="0.27">implementation</tspan><tspan x="22.088425" y="71.0426" id="tp_5">implementation</tspan></text></g>
+    <path marker-end="url(#ah1)" stroke-width="3" stroke="#000000" fill="none" d="M318.58 108.89L318.58 156.09 318.58 157.59" />
+    <path marker-end="url(#ah1)" stroke-width="3" stroke="#000000" fill="none" d="M318.58 349.85L318.58 376.29 318.58 377.79" />
+  </g>
+</svg>

@@ -1,0 +1,44 @@
+@startuml
+
+skinparam dpi 300
+
+Application -> HTTP_Client_Lib: HTTPClient_Send(<font color=red>Request Headers</font>, <font color=blue>Request Body</font>, <font color=green>Response</font>)
+activate HTTP_Client_Lib #lightgreen
+
+HTTP_Client_Lib -> Application: transport send(<font color=red>Request Headers</font>)
+activate Application #lightblue
+Application -> Application: Send <font color=red>Request Headers</font> over the network.
+Application --> HTTP_Client_Lib: Return SUCCESS
+deactivate Application
+note right: **transport send** is repeated if\nfewer bytes than requested to\nsend are sent.\nFor the sake of simplicity this\nexample returns successfully\nfrom the transport interface.
+
+HTTP_Client_Lib -> Application: transport send(<font color=blue>Request Body</font>)
+activate Application #lightblue
+Application -> Application: Send <font color=blue>Request Body</font> over the network.
+Application --> HTTP_Client_Lib: Return SUCCESS
+deactivate Application
+
+loop While <font color=darkgreen>response buffer</font> is NOT full &&\nResponse message is NOT complete &&\nNo errors found in parsing
+    HTTP_Client_Lib -> Application: transport read(<font color=darkgreen>Response buffer</font>)
+    activate Application #lightblue
+    Application -> Application: Receive network data into the <font color=darkgreen>Response buffer</font>.
+    Application --> HTTP_Client_Lib: Return SUCCESS
+    deactivate Application
+
+    HTTP_Client_Lib -> HTTP_Client_Lib: Parse <font color=green>Response</font>
+    activate HTTP_Client_Lib #darkgreen
+
+        loop for each response header found in parsing
+            HTTP_Client_Lib -> Application: __**onHeaderCallback**__(<font color=green>Response Header Field</font>,\n                                <font color=green>Response Header Value</font>,\n                                <font color=green>Response Status</font>)
+            activate Application #lightblue
+            Application -> Application: Do stuff with the Header
+            Application --> HTTP_Client_Lib: Return
+            deactivate Application
+        end
+    deactivate HTTP_Client_Lib
+end
+
+
+HTTP_Client_Lib --> Application: Return HTTP_RETURN_CODE
+deactivate HTTP_Client_Lib
+@enduml

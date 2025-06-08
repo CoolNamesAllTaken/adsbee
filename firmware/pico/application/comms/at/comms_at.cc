@@ -94,30 +94,6 @@ CPP_AT_CALLBACK(CommsManager::ATBiasTeeEnableCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
-CPP_AT_CALLBACK(CommsManager::ATESP32EnableCallback) {
-    switch (op) {
-        case '?':
-            CPP_AT_CMD_PRINTF("=%d", esp32.IsEnabled());
-            CPP_AT_SILENT_SUCCESS();
-            break;
-        case '=':
-            if (!CPP_AT_HAS_ARG(0)) {
-                CPP_AT_ERROR("Requires an argument (0 or 1). AT+ESP32_ENABLED=<enabled>");
-            }
-            bool enabled;
-            bool already_enabled = esp32.IsEnabled();
-            CPP_AT_TRY_ARG2NUM(0, enabled);
-            if (enabled && !already_enabled) {
-                esp32.Init();
-            } else if (!enabled && already_enabled) {
-                esp32.DeInit();
-            }
-            CPP_AT_SUCCESS();
-            break;
-    }
-    CPP_AT_ERROR("Operator '%c' not supported.", op);
-}
-
 CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
     switch (op) {
         case '?': {
@@ -245,6 +221,53 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATESP32EnableCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%d", esp32.IsEnabled());
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (!CPP_AT_HAS_ARG(0)) {
+                CPP_AT_ERROR("Requires an argument (0 or 1). AT+ESP32_ENABLED=<enabled>");
+            }
+            bool enabled;
+            bool already_enabled = esp32.IsEnabled();
+            CPP_AT_TRY_ARG2NUM(0, enabled);
+            if (enabled && !already_enabled) {
+                esp32.Init();
+            } else if (!enabled && already_enabled) {
+                esp32.DeInit();
+            }
+            CPP_AT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATESP32FlashCallback) {
+    if (!esp32.DeInit()) {
+        CPP_AT_ERROR("CommsManager::ATESP32FlashCallback", "Error while de-initializing ESP32 before flashing.");
+    }
+    // Manually stop and start core 1 and watchdog instead of using FlashSafe() and FlashUnsafe() since we aren't
+    // actually writing to RP2040 flash memory and we want printouts to work over the USB console.
+    StopCore1();
+    adsbee.DisableWatchdog();
+    bool flashed_successfully = esp32_flasher.FlashESP32();
+    adsbee.EnableWatchdog();
+    StartCore1();
+    if (!flashed_successfully) {
+        CPP_AT_ERROR("CommsManager::ATESP32FlashCallback", "Error while flashing ESP32.");
+    }
+
+    if (!esp32.Init()) {
+        CPP_AT_ERROR("CommsManager::ATESP32FlashCallback", "Error while re-initializing ESP32 after flashing.");
+    }
+
+    CONSOLE_INFO("CommsManager::ATESP32FlashCallback", "ESP32 successfully flashed.");
+    CPP_AT_SUCCESS();
+}
+
 CPP_AT_CALLBACK(CommsManager::ATEthernetCallback) {
     switch (op) {
         case '?':
@@ -253,7 +276,7 @@ CPP_AT_CALLBACK(CommsManager::ATEthernetCallback) {
             break;
         case '=':
             if (!CPP_AT_HAS_ARG(0)) {
-                CPP_AT_ERROR("Requires an argument (0 or 1). AT+ETHERNET_ENABLED=<enabled>");
+                CPP_AT_ERROR("Requires an argument (0 or 1). AT+ETHERNET=<enabled>");
             }
             bool enabled;
             CPP_AT_TRY_ARG2NUM(0, settings_manager.settings.ethernet_enabled);
@@ -355,29 +378,6 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
-CPP_AT_CALLBACK(CommsManager::ATFlashESP32Callback) {
-    if (!esp32.DeInit()) {
-        CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while de-initializing ESP32 before flashing.");
-    }
-    // Manually stop and start core 1 and watchdog instead of using FlashSafe() and FlashUnsafe() since we aren't
-    // actually writing to RP2040 flash memory and we want printouts to work over the USB console.
-    StopCore1();
-    adsbee.DisableWatchdog();
-    bool flashed_successfully = esp32_flasher.FlashESP32();
-    adsbee.EnableWatchdog();
-    StartCore1();
-    if (!flashed_successfully) {
-        CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while flashing ESP32.");
-    }
-
-    if (!esp32.Init()) {
-        CPP_AT_ERROR("CommsManager::ATFlashESP32Callback", "Error while re-initializing ESP32 after flashing.");
-    }
-
-    CONSOLE_INFO("CommsManager::ATFlashESP32Callback", "ESP32 successfully flashed.");
-    CPP_AT_SUCCESS();
-}
-
 CPP_AT_CALLBACK(CommsManager::ATHostnameCallback) {
     switch (op) {
         case '?':
@@ -464,13 +464,13 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                 } else if (args[0].compare("WRITE") == 0) {
                     // Write a section of the complementary flash partition.
                     // AT+OTA=WRITE,<offset (base 16)>,<len_bytes (base 10)>,<crc (base 16)>
-                    bool receiver_was_enabled = adsbee.ReceiverIsEnabled();
-                    adsbee.SetReceiverEnable(0);  // Stop ADSB packets from mucking up the SPI bus.
+                    bool receiver_was_enabled = adsbee.Receiver1090IsEnabled();
+                    adsbee.SetReceiver1090Enable(0);  // Stop ADSB packets from mucking up the SPI bus.
                     uint32_t offset, len_bytes, crc;
                     CPP_AT_TRY_ARG2NUM_BASE(1, offset, 16);
                     CPP_AT_TRY_ARG2NUM_BASE(2, len_bytes, 10);
                     if (len_bytes > FirmwareUpdateManager::kFlashWriteBufMaxLenBytes) {
-                        adsbee.SetReceiverEnable(receiver_was_enabled);  // Re-enable receiver before exit.
+                        adsbee.SetReceiver1090Enable(receiver_was_enabled);  // Re-enable receiver before exit.
                         CPP_AT_ERROR("Write length %u exceeds maximum %u Bytes.", len_bytes,
                                      FirmwareUpdateManager::kFlashWriteBufMaxLenBytes);
                     }
@@ -522,7 +522,7 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
 
                         timestamp_ms = get_time_since_boot_ms();
                         if (timestamp_ms - data_read_start_timestamp_ms > kOTAWriteTimeoutMs) {
-                            adsbee.SetReceiverEnable(receiver_was_enabled);  // Re-enable receiver before exit.
+                            adsbee.SetReceiver1090Enable(receiver_was_enabled);  // Re-enable receiver before exit.
                             CPP_AT_ERROR("Timed out after %u ms. Received %u Bytes.",
                                          timestamp_ms - data_read_start_timestamp_ms, buf_len_bytes);
                         }
@@ -534,7 +534,7 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         complementary_partition, offset, len_bytes, buf);
                     FlashUtils::FlashUnsafe();
                     if (!flash_write_succeeded) {
-                        adsbee.SetReceiverEnable(receiver_was_enabled);  // Re-enable receiver before exit.
+                        adsbee.SetReceiver1090Enable(receiver_was_enabled);  // Re-enable receiver before exit.
                         CPP_AT_ERROR("Partial %u Byte write failed in partition %u at offset 0x%x.", len_bytes,
                                      complementary_partition, offset);
                     }
@@ -547,11 +547,11 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                                 offset,
                             len_bytes);
                         if (calculated_crc != crc) {
-                            adsbee.SetReceiverEnable(receiver_was_enabled);  // Re-enable receiver before exit.
+                            adsbee.SetReceiver1090Enable(receiver_was_enabled);  // Re-enable receiver before exit.
                             CPP_AT_ERROR("Calculated CRC 0x%x did not match provided CRC 0x%x.", calculated_crc, crc);
                         }
                     }
-                    adsbee.SetReceiverEnable(receiver_was_enabled);  // Re-enable receiver before exit.
+                    adsbee.SetReceiver1090Enable(receiver_was_enabled);  // Re-enable receiver before exit.
                     CPP_AT_SUCCESS();
                 } else if (args[0].compare("VERIFY") == 0) {
                     // Verify the complementary flash partition.
@@ -576,7 +576,8 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     FlashUtils::FlashSafe();
                     FirmwareUpdateManager::BootPartition(complementary_partition);
                     FlashUtils::FlashUnsafe();
-                    CPP_AT_ERROR("Failed to boot partition %u.", complementary_partition);
+                    // Don't return an error here - the boot process will handle any errors
+                    CPP_AT_SUCCESS();
                 }
             }
             break;
@@ -729,14 +730,20 @@ CPP_AT_CALLBACK(CommsManager::ATRxEnableCallback) {
     switch (op) {
         case '=':
             if (CPP_AT_HAS_ARG(0)) {
-                bool receiver_enabled;
-                CPP_AT_TRY_ARG2NUM(0, receiver_enabled);
-                adsbee.SetReceiverEnable(receiver_enabled);
-                CPP_AT_SUCCESS();
+                bool r1090_enabled;
+                CPP_AT_TRY_ARG2NUM(0, r1090_enabled);
+                adsbee.SetReceiver1090Enable(r1090_enabled);
             }
+            if (CPP_AT_HAS_ARG(1)) {
+                bool subg_radio_enabled;
+                CPP_AT_TRY_ARG2NUM(1, subg_radio_enabled);
+                adsbee.SetSubGRadioEnable(subg_radio_enabled ? SettingsManager::kEnableStateEnabled
+                                                             : SettingsManager::kEnableStateDisabled);
+            }
+            CPP_AT_SUCCESS();
             break;
         case '?':
-            CPP_AT_CMD_PRINTF("=%d", adsbee.ReceiverIsEnabled());
+            CPP_AT_CMD_PRINTF("=%d,%d", adsbee.Receiver1090IsEnabled(), adsbee.Receiver978IsEnabled());
             CPP_AT_SILENT_SUCCESS();
             break;
     }
@@ -781,6 +788,43 @@ CPP_AT_CALLBACK(CommsManager::ATSettingsCallback) {
             break;
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATSubGEnableCallback) {
+    switch (op) {
+        case '=':
+            if (CPP_AT_HAS_ARG(0)) {
+                if (args[0].compare("EXTERNAL") == 0) {
+                    adsbee.subg_radio.SetEnable(SettingsManager::kEnableStateExternal);
+                } else {
+                    bool subg_enabled;
+                    CPP_AT_TRY_ARG2NUM(0, subg_enabled);
+                    adsbee.subg_radio.SetEnable(subg_enabled ? SettingsManager::kEnableStateEnabled
+                                                             : SettingsManager::kEnableStateDisabled);
+                }
+            }
+            CPP_AT_SUCCESS();
+            break;
+        case '?':
+            CPP_AT_CMD_PRINTF("=%s\r\n", SettingsManager::EnableStateToATValueStr(adsbee.subg_radio.IsEnabled()));
+            CPP_AT_SILENT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATSubGFlashCallback) {
+    // Disable other core and watchdog, since flashing and verification operations take a while and might trigger a
+    // watchdog reboot.
+    StopCore1();
+    adsbee.DisableWatchdog();
+    bool flash_success = adsbee.subg_radio.Flash();
+    adsbee.EnableWatchdog();
+    StartCore1();
+    if (!flash_success) {
+        CPP_AT_ERROR("Error while flashing SubG radio.");
+    }
+    CPP_AT_SUCCESS();
 }
 
 CPP_AT_CALLBACK(CommsManager::ATTLReadCallback) {
@@ -997,17 +1041,17 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string_buf = "AT+ESP32_ENABLE=<enabled>\r\n\tEnable or disable the ESP32.\r\n\tAT+ESP32_ENABLE?\r\n\tQuery "
                         "the enable status of the ESP32.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATESP32EnableCallback, comms_manager)},
+    {.command_buf = "+ESP32_FLASH",
+     .min_args = 0,
+     .max_args = 0,
+     .help_string_buf = "AT+ESP32_FLASH\r\n\tTriggers a firmware update of the ESP32 from the firmware image stored in "
+                        "the RP2040's flash memory.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATESP32FlashCallback, comms_manager)},
     {.command_buf = "+FEED",
      .min_args = 0,
      .max_args = 5,
      .help_callback = ATFeedHelpCallback,
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFeedCallback, comms_manager)},
-    {.command_buf = "+FLASH_ESP32",
-     .min_args = 0,
-     .max_args = 0,
-     .help_string_buf = "AT+FLASH_ESP32\r\n\tTriggers a firmware update of the ESP32 from the firmware image stored in "
-                        "the RP2040's flash memory.",
-     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFlashESP32Callback, comms_manager)},
     {.command_buf = "+HOSTNAME",
      .min_args = 0,
      .max_args = 1,
@@ -1044,10 +1088,11 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRebootCallback, comms_manager)},
     {.command_buf = "+RX_ENABLE",
      .min_args = 0,
-     .max_args = 1,
-     .help_string_buf = "RX_ENABLE=<enabled [1,0]>\r\n\tOK\r\n\tEnables or disables the receiver from receiving "
-                        "messages.\r\n\tAT+RX_ENABLE?\r\n\t+RX_ENABLE=<enabled [1,0]>\r\n\tQuery whether the "
-                        "recevier is enabled.",
+     .max_args = 2,
+     .help_string_buf = "RX_ENABLE=<1090_enabled [1,0]>,<subg_enabled [1,0]>\r\n\tOK\r\n\tEnables or disables the "
+                        "receiver(s) from receiving messages.\r\n\tAT+RX_ENABLE?\r\n\t+RX_ENABLE=<enabled "
+                        "[1,0]>\r\n\tQuery whether the "
+                        "recevier(s) are enabled.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxEnableCallback, comms_manager)
 
     },
@@ -1058,6 +1103,20 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                         "Display nonvolatile settings.\r\n\tAT+SETTINGS?\r\n\t+SETTINGS=...\r\n\tDump settings in AT "
                         "command format.\r\n\tAT+SETTINGS?DUMP\r\n\t+SETTINGS=...",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSettingsCallback, comms_manager)},
+    {.command_buf = "+SUBG_ENABLE",
+     .min_args = 0,
+     .max_args = 2,
+     .help_string_buf = "AT+SUBG_ENABLE=<enabled [1,0,EXTERNAL]>\r\n\tEnable or disable the sub-GHz receiver. Receiver "
+                        "enable line can be driven with a low impedance GPIO output or left high impedance (with "
+                        "pulldown) for control via an external device.\r\n\tAT+SUBG_ENABLE?\r\n\t"
+                        "Query the status of the sub-GHz receiver.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSubGEnableCallback, comms_manager)},
+    {.command_buf = "+SUBG_FLASH",
+     .min_args = 0,
+     .max_args = 0,
+     .help_string_buf = "AT+SUBG_FLASH\r\n\tTriggers a firmware update of the sub-GHz radio from the firmware image "
+                        "stored in the RP2040's flash memory.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSubGFlashCallback, comms_manager)},
 #ifdef HARDWARE_UNIT_TESTS
     {.command_buf = "+TEST",
      .min_args = 0,

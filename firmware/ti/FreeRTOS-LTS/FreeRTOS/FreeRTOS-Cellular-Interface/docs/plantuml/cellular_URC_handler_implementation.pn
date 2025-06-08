@@ -1,0 +1,22 @@
+@startuml
+
+Title FreeRTOS Cellular Library URC handler implementation
+
+participant Application
+participant Cellular_modules_porting
+participant Cellular_common
+participant Cellular_modem
+
+note over Cellular_modules_porting : Create variable CellularUrcHandlerTable\n\nCellularAtParseTokenMap_t CellularUrcHandlerTable[] =\n{\n    { "CEREG",             Cellular_CommonUrcProcessCereg },\n    { "CGREG",             Cellular_CommonUrcProcessCgreg },\n    { "CREG",              Cellular_CommonUrcProcessCreg  },\n    { "NORMAL POWER DOWN", _Cellular_ProcessPowerDown     }\n}\nuint32_t CellularUrcHandlerTableSize = 4;
+
+Cellular_modem ->Cellular_common : "NORMAL POWER DOWN"
+
+Cellular_common -> Cellular_modules_porting : Call the callback function\n_Cellular_ProcessPowerDown(  pContext, "NORMAL POWER DOWN" )
+
+Cellular_modules_porting ->Application : Call the callback function registered in\nCellular_RegisterModemEventCallback()
+
+Cellular_modem ->Cellular_common : "+CREG: 2,0"
+Cellular_common -> Cellular_common : Call the callback function\nCellular_CommonUrcProcessCreg(  pContext, "+CREG: 2,0" )
+Cellular_common->Application : callback function registered in\nCellular_RegisterUrcNetworkRegistrationEventCallback()
+
+@enduml

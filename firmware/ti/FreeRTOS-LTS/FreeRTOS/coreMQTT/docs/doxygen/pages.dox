@@ -1,0 +1,358 @@
+/**
+@mainpage Overview
+@anchor mqtt
+@brief MQTT 3.1.1 client library
+
+> MQTT stands for MQ Telemetry Transport. It is a publish/subscribe, extremely simple and lightweight messaging protocol, designed for constrained devices and low-bandwidth, high-latency or unreliable networks. The design principles are to minimise network bandwidth and device resource requirements whilst also attempting to ensure reliability and some degree of assurance of delivery. These principles also turn out to make the protocol ideal of the emerging "machine-to-machine" (M2M) or "Internet of Things" world of connected devices, and for mobile applications where bandwidth and battery power are at a premium.
+<span style="float:right;margin-right:4em"> &mdash; <i>Official description of MQTT from [mqtt.org](https://mqtt.org)</i></span><br>
+
+This MQTT library implements the client side of the MQTT 3.1.1 protocol. This library is optimized for resource constrained embedded devices. Features of this library include:
+- Fully synchronous API, to allow applications to completely manage their concurrency and multi-threading method.
+- Operations on fixed buffers, so that applications may control their memory allocation strategy.
+- Scalable performance and footprint. The [configuration settings](@ref core_mqtt_config) allow this library to be tailored to a system's resources.
+
+Please see https://github.com/aws/aws-iot-device-sdk-embedded-C/tree/main/demos/mqtt for example code demonstrating integration with TLS.
+
+@section mqtt_memory_requirements Memory Requirements
+@brief Memory requirements of the MQTT library.
+
+@include{doc} size_table.md
+ */
+
+/**
+@page mqtt_design Design
+@brief Architecture of the MQTT library.
+
+This MQTT client library provides an implementation of the [MQTT 3.1.1 specification](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html). It is optimized for resource constrained devices and does not allocate any memory.
+
+@section mqtt_interfaces Interfaces and Callbacks
+
+The MQTT library relies on interfaces to dissociate itself from platform specific functionality,
+such as the transport layer or maintaining time. Interfaces used by MQTT are simply function pointers
+with expectations of behavior.
+
+The MQTT library expects the application to provide implementations for the following interfaces:
+
+<table>
+    <tr>
+        <td><b>Function Pointer</b></td>
+        <td><b>Use</b></td>
+    </tr>
+    <tr>
+        <td>@ref TransportRecv_t</td>
+        <td>Receiving data from an established network connection.</td>
+    </tr>
+    <tr>
+        <td>@ref TransportSend_t</td>
+        <td>Sending data over an established network connection.</td>
+    </tr>
+    <tr>
+        <td>@ref MQTTGetCurrentTimeFunc_t</td>
+        <td>Obtaining timestamps for complying with user-specified timeouts and the MQTT keep-alive mechanism.</td>
+    </tr>
+    <tr>
+        <td>@ref MQTTEventCallback_t</td>
+        <td>Returning packets received from the network to the user application after deserialization.</td>
+    </tr>
+</table>
+
+@section mqtt_serializers Serializers and Deserializers
+
+The managed MQTT API in @ref core_mqtt.h uses a set of serialization and deserialization functions
+declared in @ref core_mqtt_serializer.h. If a user does not want to use the functionality provided by the managed API,
+these low-level functions can be used directly:
+
+- @ref mqtt_getconnectpacketsize_function <br>
+- @ref mqtt_serializeconnect_function <br>
+- @ref mqtt_getsubscribepacketsize_function <br>
+- @ref mqtt_serializesubscribe_function <br>
+- @ref mqtt_getunsubscribepacketsize_function <br>
+- @ref mqtt_serializeunsubscribe_function <br>
+- @ref mqtt_getpublishpacketsize_function <br>
+- @ref mqtt_serializepublish_function <br>
+- @ref mqtt_serializepublishheader_function <br>
+- @ref mqtt_serializeack_function <br>
+- @ref mqtt_getdisconnectpacketsize_function <br>
+- @ref mqtt_serializedisconnect_function <br>
+- @ref mqtt_getpingreqpacketsize_function <br>
+- @ref mqtt_serializepingreq_function <br>
+- @ref mqtt_deserializepublish_function <br>
+- @ref mqtt_deserializeack_function <br>
+- @ref mqtt_getincomingpackettypeandlength_function <br>
+
+@section mqtt_sessions Sessions and State
+
+The MQTT 3.1.1 protocol allows for a client and server to maintain persistent sessions, which
+can be resumed after a reconnect. The elements of a session stored by this client library consist
+of the states of incomplete publishes with Quality of Service levels of 1 (at least once), or 2 (exactly once).
+These states are stored in the pointers pointed to by @ref MQTTContext_t.outgoingPublishRecords and @ref MQTTContext_t.incomingPublishRecords;
+This library does not store any subscription information, nor any information for QoS 0 publishes.
+
+When resuming a persistent session, the client library will resend PUBRELs for all PUBRECs that had been received
+for incomplete outgoing QoS 2 publishes. If the broker does not resume the session, then all state information
+in the client will be reset.
+
+@note The library stores only the <i>state</i> of incomplete publishes and not the publish payloads. It is the responsibility of the user application to save publish payloads until the publish is complete.
+If a persistent session is resumed, then @ref mqtt_publishtoresend_function should be called to obtain the
+packet identifiers of incomplete publishes, followed by a call to @ref mqtt_publish_function to resend the
+unacknowledged publish.
+
+@section mqtt_receivepackets Packet Reception
+
+MQTT Packets are received from the network with calls to @ref mqtt_processloop_function or @ref mqtt_receiveloop_function. These functions are mostly identical,
+with the exception of keep-alive; the former sends ping requests and processes ping responses to ensure the MQTT session does not remain idle for more than the keep-alive interval, while the latter does not.
+Since calls to @ref mqtt_publish_function, @ref mqtt_subscribe_function, and @ref mqtt_unsubscribe_function only send packets and do not
+wait for acknowledgments, a call to @ref mqtt_processloop_function or @ref mqtt_receiveloop_function must follow in order to receive any expected acknowledgment.
+The exception is @ref mqtt_connect_function; since a MQTT session cannot be considered established until the server acknowledges a CONNECT packet with a CONNACK,
+the function waits until the CONNACK is received.
+
+@subsection mqtt_receivetimeout Runtime Timeouts passed to MQTT library
+@ref mqtt_connect_function, @ref mqtt_processloop_function, and @ref mqtt_receiveloop_function all accept a timeout parameter for packet reception.<br>
+For the @ref mqtt_connect_function, if this value is set to 0, then instead of a time-based loop, it will attempt to call the transport receive function up to a maximum number of retries,
+which is defined by @ref MQTT_MAX_CONNACK_RECEIVE_RETRY_COUNT.
+
+For @ref mqtt_processloop_function and @ref mqtt_receiveloop_function, the timeout value represents the <i>minimum</i> duration that will be spent in the function, provided there are no network errors.
+Should the timeout be set to 0, then the loop will run for a single iteration. A single iteration of a loop consists of an attempt to receive a single byte from the network, and
+if the single byte receive was successful, then attempt(s) to receive the rest of the packet (with retry attempts governed by @ref MQTT_RECV_POLLING_TIMEOUT_MS), followed by sending acknowledgement response, if needed
+(with retry attempts governed by @ref MQTT_SEND_TIMEOUT_MS), and then, finally deserialization of the packet received and a call to the application callback.
+If the first read did not succeed, then instead the library checks if a ping request needs to be sent (only for the process loop).
+
+See the below diagrams for a representation of the above flows:
+| MQTT Connect Diagram | MQTT ProcessLoop Diagram | MQTT ReceiveLoop Diagram |
+| :--: | :--: | :--: |
+|<img src="mqtt_connect_design.png" alt="MQTT Connect" width=100% /> |<img src="mqtt_processloop_design.png" alt="MQTT Process Loop" width=100% /> |<img src="mqtt_receiveloop_design.png" alt="MQTT Receive Loop" width=100% /> |
+
+@section mqtt_keepalive Keep-Alive
+
+The MQTT standard specifies a keep-alive mechanism to detect half-open or otherwise unusable network connections.
+An MQTT client will send periodic ping requests (PINGREQ) to the server if the connection is idle. The MQTT server must respond to ping requests with a ping response (PINGRESP).
+
+In this library, @ref mqtt_processloop_function handles sending of PINGREQs and processing corresponding PINGRESPs to comply with the keep-alive interval set in @ref MQTTContext_t.keepAliveIntervalSec.
+
+The standard does not specify the time duration within which the server has to respond to a ping request, noting only a "reasonable amount of time". If the response to a ping request is not received within @ref MQTT_PINGRESP_TIMEOUT_MS, this library assumes that the connection is dead.
+
+If @ref mqtt_receiveloop_function is used instead of @ref mqtt_processloop_function, then no ping requests are sent. The application must ensure the connection does not remain idle for more than the keep-alive interval by calling @ref mqtt_ping_function to send ping requests.
+The timestamp in @ref MQTTContext_t.lastPacketTxTime indicates when a packet was last sent by the library.
+
+Sending any ping request sets the @ref MQTTContext_t.waitingForPingResp flag. This flag is cleared by @ref mqtt_processloop_function when a ping response is received. If @ref mqtt_receiveloop_function is used instead, then this flag must be cleared manually by the application's callback.
+*/
+
+/**
+@page core_mqtt_config Configurations
+@brief Configurations of the MQTT Library.
+<!-- @par configpagestyle allows the @section titles to be styled according to style.css -->
+@par configpagestyle
+
+Some configuration settings are C pre-processor constants, and some are function-like macros for logging. They can be set with a `#define` in the config file (**core_mqtt_config.h**) or by using a compiler option such as -D in gcc.
+
+@section MQTT_DO_NOT_USE_CUSTOM_CONFIG
+@copydoc MQTT_DO_NOT_USE_CUSTOM_CONFIG
+
+@section MQTT_PINGRESP_TIMEOUT_MS
+@copydoc MQTT_PINGRESP_TIMEOUT_MS
+
+@section MQTT_RECV_POLLING_TIMEOUT_MS
+@copydoc MQTT_RECV_POLLING_TIMEOUT_MS
+
+@section MQTT_SEND_TIMEOUT_MS
+@copydoc MQTT_SEND_TIMEOUT_MS
+
+@section MQTT_MAX_CONNACK_RECEIVE_RETRY_COUNT
+@copydoc MQTT_MAX_CONNACK_RECEIVE_RETRY_COUNT
+
+@section mqtt_logerror LogError
+@copydoc LogError
+
+@section mqtt_logwarn LogWarn
+@copydoc LogWarn
+
+@section mqtt_loginfo LogInfo
+@copydoc LogInfo
+
+@section mqtt_logdebug LogDebug
+@copydoc LogDebug
+*/
+
+/**
+@page mqtt_functions Functions
+@brief Primary functions of the MQTT library:<br><br>
+@subpage mqtt_init_function <br>
+@subpage mqtt_connect_function <br>
+@subpage mqtt_subscribe_function <br>
+@subpage mqtt_publish_function <br>
+@subpage mqtt_ping_function <br>
+@subpage mqtt_unsubscribe_function <br>
+@subpage mqtt_disconnect_function <br>
+@subpage mqtt_processloop_function <br>
+@subpage mqtt_receiveloop_function <br>
+@subpage mqtt_getpacketid_function <br>
+@subpage mqtt_getsubackstatuscodes_function <br>
+@subpage mqtt_status_strerror_function <br>
+@subpage mqtt_publishtoresend_function <br><br>
+
+Serializer functions of the MQTT library:<br><br>
+@subpage mqtt_getconnectpacketsize_function <br>
+@subpage mqtt_serializeconnect_function <br>
+@subpage mqtt_getsubscribepacketsize_function <br>
+@subpage mqtt_serializesubscribe_function <br>
+@subpage mqtt_getunsubscribepacketsize_function <br>
+@subpage mqtt_serializeunsubscribe_function <br>
+@subpage mqtt_getpublishpacketsize_function <br>
+@subpage mqtt_serializepublish_function <br>
+@subpage mqtt_serializepublishheader_function <br>
+@subpage mqtt_serializeack_function <br>
+@subpage mqtt_getdisconnectpacketsize_function <br>
+@subpage mqtt_serializedisconnect_function <br>
+@subpage mqtt_getpingreqpacketsize_function <br>
+@subpage mqtt_serializepingreq_function <br>
+@subpage mqtt_deserializepublish_function <br>
+@subpage mqtt_deserializeack_function <br>
+@subpage mqtt_getincomingpackettypeandlength_function <br>
+
+@page mqtt_init_function MQTT_Init
+@snippet core_mqtt.h declare_mqtt_init
+@copydoc MQTT_Init
+
+@page mqtt_connect_function MQTT_Connect
+@snippet core_mqtt.h declare_mqtt_connect
+@copydoc MQTT_Connect
+
+@page mqtt_subscribe_function MQTT_Subscribe
+@snippet core_mqtt.h declare_mqtt_subscribe
+@copydoc MQTT_Subscribe
+
+@page mqtt_publish_function MQTT_Publish
+@snippet core_mqtt.h declare_mqtt_publish
+@copydoc MQTT_Publish
+
+@page mqtt_ping_function MQTT_Ping
+@snippet core_mqtt.h declare_mqtt_ping
+@copydoc MQTT_Ping
+
+@page mqtt_unsubscribe_function MQTT_Unsubscribe
+@snippet core_mqtt.h declare_mqtt_unsubscribe
+@copydoc MQTT_Unsubscribe
+
+@page mqtt_disconnect_function MQTT_Disconnect
+@snippet core_mqtt.h declare_mqtt_disconnect
+@copydoc MQTT_Disconnect
+
+@page mqtt_processloop_function MQTT_ProcessLoop
+@snippet core_mqtt.h declare_mqtt_processloop
+@copydoc MQTT_ProcessLoop
+
+@page mqtt_receiveloop_function MQTT_ReceiveLoop
+@snippet core_mqtt.h declare_mqtt_receiveloop
+@copydoc MQTT_ReceiveLoop
+
+@page mqtt_getpacketid_function MQTT_GetPacketId
+@snippet core_mqtt.h declare_mqtt_getpacketid
+@copydoc MQTT_GetPacketId
+
+@page mqtt_getsubackstatuscodes_function MQTT_GetSubAckStatusCodes
+@snippet core_mqtt.h declare_mqtt_getsubackstatuscodes
+@copydoc MQTT_GetSubAckStatusCodes
+
+@page mqtt_status_strerror_function MQTT_Status_strerror
+@snippet core_mqtt.h declare_mqtt_status_strerror
+@copydoc MQTT_Status_strerror
+
+@page mqtt_publishtoresend_function MQTT_PublishToResend
+@snippet core_mqtt_state.h declare_mqtt_publishtoresend
+@copydoc MQTT_PublishToResend
+
+@page mqtt_getconnectpacketsize_function MQTT_GetConnectPacketSize
+@snippet core_mqtt_serializer.h declare_mqtt_getconnectpacketsize
+@copydoc MQTT_GetConnectPacketSize
+
+@page mqtt_serializeconnect_function MQTT_SerializeConnect
+@snippet core_mqtt_serializer.h declare_mqtt_serializeconnect
+@copydoc MQTT_SerializeConnect
+
+@page mqtt_getsubscribepacketsize_function MQTT_GetSubscribePacketSize
+@snippet core_mqtt_serializer.h declare_mqtt_getsubscribepacketsize
+@copydoc MQTT_GetSubscribePacketSize
+
+@page mqtt_serializesubscribe_function MQTT_SerializeSubscribe
+@snippet core_mqtt_serializer.h declare_mqtt_serializesubscribe
+@copydoc MQTT_SerializeSubscribe
+
+@page mqtt_getunsubscribepacketsize_function MQTT_GetUnsubscribePacketSize
+@snippet core_mqtt_serializer.h declare_mqtt_getunsubscribepacketsize
+@copydoc MQTT_GetUnsubscribePacketSize
+
+@page mqtt_serializeunsubscribe_function MQTT_SerializeUnsubscribe
+@snippet core_mqtt_serializer.h declare_mqtt_serializeunsubscribe
+@copydoc MQTT_SerializeUnsubscribe
+
+@page mqtt_getpublishpacketsize_function MQTT_GetPublishPacketSize
+@snippet core_mqtt_serializer.h declare_mqtt_getpublishpacketsize
+@copydoc MQTT_GetPublishPacketSize
+
+@page mqtt_serializepublish_function MQTT_SerializePublish
+@snippet core_mqtt_serializer.h declare_mqtt_serializepublish
+@copydoc MQTT_SerializePublish
+
+@page mqtt_serializepublishheader_function MQTT_SerializePublishHeader
+@snippet core_mqtt_serializer.h declare_mqtt_serializepublishheader
+@copydoc MQTT_SerializePublishHeader
+
+@page mqtt_serializeack_function MQTT_SerializeAck
+@snippet core_mqtt_serializer.h declare_mqtt_serializeack
+@copydoc MQTT_SerializeAck
+
+@page mqtt_getdisconnectpacketsize_function MQTT_GetDisconnectPacketSize
+@snippet core_mqtt_serializer.h declare_mqtt_getdisconnectpacketsize
+@copydoc MQTT_GetDisconnectPacketSize
+
+@page mqtt_serializedisconnect_function MQTT_SerializeDisconnect
+@snippet core_mqtt_serializer.h declare_mqtt_serializedisconnect
+@copydoc MQTT_SerializeDisconnect
+
+@page mqtt_getpingreqpacketsize_function MQTT_GetPingreqPacketSize
+@snippet core_mqtt_serializer.h declare_mqtt_getpingreqpacketsize
+@copydoc MQTT_GetPingreqPacketSize
+
+@page mqtt_serializepingreq_function MQTT_SerializePingreq
+@snippet core_mqtt_serializer.h declare_mqtt_serializepingreq
+@copydoc MQTT_SerializePingreq
+
+@page mqtt_deserializepublish_function MQTT_DeserializePublish
+@snippet core_mqtt_serializer.h declare_mqtt_deserializepublish
+@copydoc MQTT_DeserializePublish
+
+@page mqtt_deserializeack_function MQTT_DeserializeAck
+@snippet core_mqtt_serializer.h declare_mqtt_deserializeack
+@copydoc MQTT_DeserializeAck
+
+@page mqtt_getincomingpackettypeandlength_function MQTT_GetIncomingPacketTypeAndLength
+@snippet core_mqtt_serializer.h declare_mqtt_getincomingpackettypeandlength
+@copydoc MQTT_GetIncomingPacketTypeAndLength
+*/
+
+/**
+@defgroup mqtt_enum_types Enumerated Types
+@brief Enumerated types of the MQTT library
+*/
+
+/**
+@defgroup mqtt_callback_types Callback Types
+@brief Callback function pointer types of the MQTT library
+*/
+
+/**
+@defgroup mqtt_struct_types Parameter Structures
+@brief Structures passed as parameters to [MQTT library functions](@ref mqtt_functions)
+
+These structures are passed as parameters to library functions. Documentation for these structures will state the functions associated with each parameter structure and the purpose of each member.
+*/
+
+/**
+@defgroup mqtt_basic_types Basic Types
+@brief Primitive types of the MQTT library.
+*/
+
+/**
+@defgroup mqtt_constants Constants
+@brief Constants defined in the MQTT library
+*/

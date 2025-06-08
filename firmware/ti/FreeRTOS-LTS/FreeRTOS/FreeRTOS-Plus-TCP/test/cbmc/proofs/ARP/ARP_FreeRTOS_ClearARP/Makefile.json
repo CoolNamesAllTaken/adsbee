@@ -1,0 +1,16 @@
+{
+  "ENTRY": "ClearARP",
+  "CBMCFLAGS":
+  [
+      "--unwind 1",
+      "--unwindset FreeRTOS_ClearARP.0:7"
+  ],
+  "OBJS":
+  [
+    "$(ENTRY)_harness.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_ARP.goto"
+  ],
+  "DEF":
+  [
+  ]
+}

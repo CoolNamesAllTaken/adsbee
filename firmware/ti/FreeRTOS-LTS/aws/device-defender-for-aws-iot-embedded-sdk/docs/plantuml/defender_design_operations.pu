@@ -1,0 +1,66 @@
+@startuml
+skinparam dpi 300
+skinparam classFontSize 8
+skinparam classFontName Helvetica
+autonumber
+
+participant "User Application" as App
+participant "Defender Library" as Defender
+participant "MQTT Client" as MQTT
+participant "TCP Stack" as TCP
+participant "JSON Library" as JSON
+
+activate App
+App -> Defender : Generate Accepted and Rejected Topic Strings
+
+activate Defender
+Defender -> App : Accepted and Rejected Topic Strings
+deactivate Defender
+
+App -> MQTT : Subscribe to Accepted and Rejected Topics
+
+activate MQTT
+MQTT -> App : Subscription Successful
+deactivate MQTT
+
+loop Forever
+    App -> TCP : Get Metrics
+
+    activate TCP
+    TCP -> App : Metrics
+    deactivate TCP
+
+    App -> JSON : Generate Report
+
+    activate JSON
+    JSON -> App : Report
+    deactivate JSON
+
+    App -> Defender : Generate Publish Topic String
+
+    activate Defender
+    Defender -> App : Publish Topic String
+    deactivate Defender
+
+    App -> MQTT : Publish Report
+
+    activate MQTT
+    MQTT -> App : Published
+    MQTT -> App : Incoming Publish Message Received
+    deactivate MQTT
+
+    App -> Defender : Is this a Defender Message?
+
+    activate Defender
+    Defender -> App : Yes/No
+        note right
+            The Defender library also tells if the report was accepted by
+
+            the service or not.
+        endnote
+    deactivate Defender
+end
+
+deactivate App
+
+@enduml

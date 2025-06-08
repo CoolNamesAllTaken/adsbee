@@ -5,7 +5,6 @@ set(CMAKE_CXX_STANDARD 20)
 
 # Directories
 set(LINKER_SCRIPTS_DIR "${CMAKE_SOURCE_DIR}/linker_scripts")
-set(PICO_COMMON_DIR "${CMAKE_SOURCE_DIR}/pico_common") # Used for code shared among bootloader and application on RP2040.
 set(ADSBEE_COMMON_DIR "${CMAKE_SOURCE_DIR}/../common") # Used for code shared between ESP32 and RP2040.
 set(ADSBEE_MODULES_DIR "${CMAKE_SOURCE_DIR}/../modules")
 

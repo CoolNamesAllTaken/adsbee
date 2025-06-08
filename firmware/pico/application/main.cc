@@ -24,10 +24,10 @@ const uint16_t kStatusLEDBootupBlinkPeriodMs = 200;
 const uint32_t kESP32BootupTimeoutMs = 10000;
 const uint32_t kESP32BootupCommsRetryMs = 500;
 
-const uint32_t kMultiCoreStartHandshake = 0x12345678;
-
 // Override default config params here.
 EEPROM eeprom = EEPROM({});
+// BSP gets configured differently if there is or isn't an EEPROM attached. Attempt to initialize the EEPROM to figure
+// out which board configuration we should load (settings in flash, or settings in EEPROM).
 BSP bsp = BSP(eeprom.Init());
 
 ADSBee adsbee = ADSBee({});
@@ -42,7 +42,6 @@ PacketDecoder decoder = PacketDecoder({.enable_1090_error_correction = true});
 int main() {
     bi_decl(bi_program_description("ADSBee 1090 ADSB Receiver"));
 
-    // eeprom.Init();
     adsbee.Init();
     comms_manager.Init();
     comms_manager.console_printf("ADSBee 1090\r\nSoftware Version %d.%d.%d\r\n",

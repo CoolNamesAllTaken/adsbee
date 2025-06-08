@@ -1,0 +1,27 @@
+{
+  "ENTRY": "TCPReturnPacket_IPv6",
+  "RX_MESSAGES":1,
+  "CBMCFLAGS":
+  [
+    "--unwind 1",
+    "--nondet-static"
+  ],
+  "OBJS":
+  [
+    "$(ENTRY)_harness.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_Stream_Buffer.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_IP.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_TCP_IP.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_TCP_Transmission_IPv6.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_TCP_Transmission.goto"
+  ],
+  "DEF":
+  [
+    "ipconfigUSE_LINKED_RX_MESSAGES={RX_MESSAGES}",
+    "FREERTOS_TCP_ENABLE_VERIFICATION"
+  ],
+  "INC":
+  [
+    "$(FREERTOS_PLUS_TCP)/test/cbmc/include"
+  ]
+}

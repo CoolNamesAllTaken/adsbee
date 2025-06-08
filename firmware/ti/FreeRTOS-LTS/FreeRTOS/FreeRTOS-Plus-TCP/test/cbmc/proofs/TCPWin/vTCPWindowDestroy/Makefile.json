@@ -1,0 +1,22 @@
+{
+  "ENTRY": "vTCPWindowDestroy",
+  "CBMCFLAGS":
+  [
+      "--unwind 5",
+      "--nondet-static"
+  ],
+  "OBJS":
+  [
+    "$(ENTRY)_harness.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_TCP_WIN.goto",
+    "$(FREERTOS_PLUS_TCP)/test/FreeRTOS-Kernel/list.goto"
+  ],
+  "OPT":
+  [
+    "--export-file-local-symbols"
+  ],
+  "DEF":
+  [
+   "ipconfigUSE_TCP_WIN=1"
+  ]
+}

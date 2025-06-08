@@ -1,0 +1,39 @@
+{
+  "ENTRY": "vSocketClose",
+
+  "CBMCFLAGS":
+  [
+    "--unwind 2"
+  ],
+  "OBJS":
+  [
+    "$(FREERTOS_PLUS_TCP)/test/FreeRTOS-Kernel/list.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_Sockets.goto",
+    "$(ENTRY)_harness.goto"
+  ],
+  "DEF":
+  [
+    {
+      "UDP_Only":[
+        "PROTOCOL=FREERTOS_IPPROTO_UDP",
+        "ipconfigUSE_TCP=1",
+        "ipconfigUSE_TCP_WIN=1",
+        "ipconfigHAS_DEBUG_PRINTF=0"
+      ]
+    },
+    {
+      "TCP_Only":[
+        "PROTOCOL=FREERTOS_IPPROTO_TCP",
+        "ipconfigUSE_TCP=1",
+        "ipconfigUSE_TCP_WIN=1",
+        "ipconfigHAS_DEBUG_PRINTF=0"
+      ]
+    }
+  ],
+  "INC":
+  [
+    "$(FREERTOS_PLUS_TCP)/test/cbmc/include",
+    "$(FREERTOS_PLUS_TCP)/test/cbmc/proofs/utility",
+    "$(FREERTOS_PLUS_TCP)/test/cbmc/stubs"
+  ]
+}

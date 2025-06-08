@@ -1,0 +1,45 @@
+SPDXVersion: SPDX-2.2
+DataLicense: CC0-1.0
+SPDXID: SPDXRef-DOCUMENT
+DocumentName: Jobs-for-AWS-IoT-embedded-sdk
+DocumentNamespace: https://github.com/FreeRTOS/Jobs-for-AWS-IoT-embedded-sdk/blob/v1.5.1/sbom.spdx
+Creator: Organization:Amazon Web Services
+Created: 2024-06-18T08:24:42Z
+CreatorComment: NOASSERTION
+DocumentComment: NOASSERTION
+
+PackageName: Jobs-for-AWS-IoT-embedded-sdk
+SPDXID: SPDXRef-Package-Jobs-for-AWS-IoT-embedded-sdk
+PackageVersion: v1.5.1
+PackageDownloadLocation: https://github.com/aws/Jobs-for-AWS-IoT-embedded-sdk/tree/v1.5.1
+PackageLicenseDeclared: MIT
+PackageLicenseConcluded: MIT
+PackageLicenseInfoFromFiles: NOASSERTION
+FilesAnalyzed: true
+PackageVerificationCode: b5f1f021a564a59934a3b236180d5f42d10f91be
+PackageCopyrightText: NOASSERTION
+PackageSummary: NOASSERTION
+PackageDescription: "Library for using the AWS IoT Jobs service on embedded devices.\n"
+
+
+FileName: ./jobs.c
+SPDXID: SPDXRef-File-jobs.c
+FileChecksum: SHA1: c0eec9194525bb4bf9b6d23c930f885668e22833
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+
+FileName: ./otaJobParser/ota_job_handler.c
+SPDXID: SPDXRef-File-otaJobParser-otajobhandler.c
+FileChecksum: SHA1: 097a1e5596c7177bca6070261b0651c634849348
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+
+FileName: ./otaJobParser/job_parser.c
+SPDXID: SPDXRef-File-otaJobParser-jobparser.c
+FileChecksum: SHA1: 27fc99945cf64ac5e6fd33132a88915ca4a1fbe6
+LicenseConcluded: MIT
+FileCopyrightText: NOASSERTION
+FileComment: NOASSERTION
+

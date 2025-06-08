@@ -1,0 +1,109 @@
+/**
+@mainpage Overview
+@anchor BackOff Algorithm
+@brief backoffAlgorithm Library
+
+<p>
+A library that calculates the back-off period for a retry attempt using exponential back-off with jitter algorithm.
+This library uses the "Full Jitter" strategy for the exponential back-off with jitter algorithm.
+
+More information about the algorithm can be seen in the [Exponential Backoff and Jitter](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/) AWS blog.
+
+Exponential backoff with jitter is typically used when retrying a failed network
+connection or operation request with the server. An exponential backoff with jitter helps to
+mitigate failed network operations with servers, that are caused due to network congestion or high request load on
+the server, by spreading out retry requests across multiple devices attempting network operations.
+Besides, in an environment with poor connectivity, a client can get disconnected at any time.
+A backoff strategy helps the client to conserve battery by not repeatedly attempting reconnections when they are
+unlikely to succeed.
+
+Before retrying the failed communication to the server, there is a delay period.
+In this delay period, the task that is retrying must sleep for some random amount
+of milliseconds between 0 and the lesser of the backoff window (related to the retry attempt)
+and a predefined maximum delay value. The backoff window is doubled with each retry
+attempt until the maximum delay value is reached.<br>
+
+> sleep_ms = random_between( 0, min( 2<sup>attempts_count</sup> * base_ms, maximum_ms ) )
+
+The library is written in C and designed to be compliant with ISO C90 and MISRA C:2012.
+
+For a reference example of using the library, refer to the related README section in the repository [here](https://github.com/FreeRTOS/backoffAlgorithm#reference-example).
+
+</p>
+
+@section backoff_algorithm_memory_requirements Memory Requirements
+@brief Memory requirements of the backoffAlgorithm library.
+
+@include{doc} size_table.md
+
+@section backoff_algorithm_design Design
+@brief backoffAlgorithm Library Design
+
+<h3>Memory Usage</h3>
+<p>
+All functions in the backoffAlgorithm library operate only on the buffer provided and use only
+local variables on the stack.
+</p>
+
+<h3>Random Number Generation</h3>
+<p>
+The library takes a random number each time it calculates the backoff period value for the
+retry attempt. To avoid calculation of the same random numbers across your fleet of devices
+attempting retry of network operations, it is RECOMMENDED to generate the random number with
+a random number generator that is seeded with an entropy source unique to the device.
+</p>
+
+<h3>Compliance & Coverage</h3>
+<p>
+The backoffAlgorithm library is designed to be compliant with ISO C90 and MISRA C:2012.
+All functions are written to have minimal complexity. Unit tests are written to cover
+every path of execution and achieve 100% branch coverage.
+</p>
+*/
+
+/**
+@page backoff_algorithm_example Code Example for backoffAlgorithm API
+@brief Example POSIX application that retries DNS resolution operation with exponential backoff-and-jitter using the backoffAlgorithm library.
+
+@include backoff_algorithm_posix.c
+ */
+
+/**
+@page backoff_algorithm_functions Functions
+@brief Primary functions of the backoffAlgorithm library:<br><br>
+@subpage define_backoffalgorithm_initializeparams <br>
+@subpage define_backoffalgorithm_getnextbackoff <br>
+
+<b>For a code example </b> of using backoffAlgorithm library for retrying operations with exponential back-off and jitter, refer to @ref backoff_algorithm_example.
+
+@page define_backoffalgorithm_initializeparams BackoffAlgorithm_InitializeParams
+@snippet backoff_algorithm.h define_backoffalgorithm_initializeparams
+@copydoc BackoffAlgorithm_InitializeParams
+
+From the @ref backoff_algorithm_example, following is the part relevant to the @ref BackoffAlgorithm_InitializeParams API.
+@snippet backoff_algorithm_posix.c code_example_backoffalgorithm_initializeparams
+
+@page define_backoffalgorithm_getnextbackoff BackoffAlgorithm_GetNextBackoff
+@copydoc BackoffAlgorithm_GetNextBackoff
+
+From the @ref backoff_algorithm_example, following is the part relevant to the @ref BackoffAlgorithm_GetNextBackoff API.
+@snippet backoff_algorithm_posix.c code_example_backoffalgorithm_getnextbackoff
+
+*/
+
+<!-- We do not use doxygen ALIASes here because there have been issues in the past versions with "^^" newlines within the alias definition. -->
+
+/**
+@defgroup backoff_algorithm_struct_types Parameter Structure
+@brief Structure passed as parameter to [backoffAlgorithm library functions](@ref backoff_algorithm_functions)
+*/
+
+/**
+@defgroup backoff_algorithm_enum_types Enumerated Types
+@brief Enumerated types of the backoffAlgorithm library
+*/
+
+/**
+@defgroup backoff_algorithm_constants Constants
+@brief Constants defined in the backoffAlgorithm library
+*/

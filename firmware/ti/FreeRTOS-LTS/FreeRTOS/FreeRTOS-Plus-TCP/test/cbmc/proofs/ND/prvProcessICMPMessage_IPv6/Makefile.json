@@ -1,0 +1,22 @@
+{
+  "ENTRY": "ProcessICMPMessage_IPv6",
+  "CBMCFLAGS":
+  [
+    "--unwindset vNDRefreshCacheEntry.0:25",
+    "--nondet-static"
+  ],
+  "OBJS":
+  [
+    "$(ENTRY)_harness.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_ND.goto"
+
+  ],
+  "DEF":
+  [
+    "FREERTOS_TCP_ENABLE_VERIFICATION"
+  ],
+  "INC":
+  [
+    "$(FREERTOS_PLUS_TCP)/test/cbmc/include"
+  ]
+}

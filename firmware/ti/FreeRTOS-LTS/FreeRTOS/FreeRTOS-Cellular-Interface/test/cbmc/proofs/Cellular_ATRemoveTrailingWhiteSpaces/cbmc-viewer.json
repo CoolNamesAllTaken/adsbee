@@ -1,0 +1,7 @@
+{ "expected-missing-functions":
+  [
+
+  ],
+  "proof-name": "Cellular_ATRemoveTrailingWhiteSpaces",
+  "proof-root": "tools/cbmc/proofs"
+}

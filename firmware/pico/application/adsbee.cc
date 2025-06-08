@@ -82,10 +82,15 @@ bool ADSBee::Init() {
     gpio_set_dir(config_.r1090_led_pin, GPIO_OUT);
     gpio_put(config_.r1090_led_pin, 0);
 
+    // Initialize the sync pin.
+    gpio_init(bsp.sync_pin);
+    gpio_set_dir(bsp.sync_pin, GPIO_OUT);
+    gpio_put(bsp.sync_pin, 0);  // Set to low.
+
     // Disable the 978MHz SPI bus output.
-    gpio_init(bsp.r978_cs_pin);
-    gpio_set_dir(bsp.r978_cs_pin, GPIO_OUT);
-    gpio_put(bsp.r978_cs_pin, 1);  // Disable is active LO.
+    gpio_init(bsp.subg_cs_pin);
+    gpio_set_dir(bsp.subg_cs_pin, GPIO_OUT);
+    gpio_put(bsp.subg_cs_pin, 1);  // Disable is active LO.
 
     // Initialize the TL bias PWM output.
     gpio_set_function(config_.tl_pwm_pin, GPIO_FUNC_PWM);
@@ -225,6 +230,22 @@ bool ADSBee::Init() {
     // Enable high power preamble detector.
     pio_sm_set_enabled(config_.preamble_detector_pio,
                        preamble_detector_sm_[bsp.r1090_high_power_demod_state_machine_index], true);
+
+    // Initialize 978MHz radio.
+    if (config_.has_subg) {
+        if (subg_radio.Init(false)) {
+            CONSOLE_INFO("ADSBee::Init", "978MHz radio initialized.");
+        } else {
+            subg_radio.SetEnable(SettingsManager::EnableState::kEnableStateDisabled);
+            CONSOLE_ERROR("ADSBee::Init", "Failed to initialize 978MHz radio.");
+        }
+    }
+
+    if (subg_radio.IsEnabled()) {
+        // subg_radio.SetDeviceState(Si4362::DeviceState::kStateRx, true);
+        // subg_radio.StartRx();
+        CONSOLE_INFO("ADSBee::Init", "978MHz radio started RX.");
+    }
 
     // Throw a fit if the watchdog caused a reboot.
     if (watchdog_caused_reboot()) {

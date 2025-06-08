@@ -1,0 +1,5 @@
+name: "AWS-IoT-Core-MQTT-File-Streams-Embedded-C"
+version: "v1.1.0"
+description: |
+  "Library for transferring files to IoT devices via MQTT Streams .\n"
+license: "MIT"

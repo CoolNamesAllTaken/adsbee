@@ -1,0 +1,25 @@
+path_classifiers:
+  library:
+    - exclude: /
+extraction:
+  cpp:
+    index:
+      build_command:
+        - export 'CFLAGS=-Iinclude -ansi -Wall -Wextra -Wpedantic -Werror'
+        - make -C source core_json.o
+
+  csharp:
+    after_prepare:
+      - false
+  go:
+    after_prepare:
+      - false
+  java:
+    after_prepare:
+      - false
+  javascript:
+    after_prepare:
+      - false
+  python:
+    after_prepare:
+      - false

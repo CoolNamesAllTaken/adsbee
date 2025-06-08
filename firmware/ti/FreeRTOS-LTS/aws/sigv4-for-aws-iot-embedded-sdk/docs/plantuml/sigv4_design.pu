@@ -1,0 +1,53 @@
+@startuml
+skinparam dpi 100
+skinparam classFontSize 8
+skinparam classFontName Helvetica
+autonumber
+
+box "Application" #LightGreen
+    participant "Application" as application
+end box
+
+box "Library" #LightBlue
+    participant "SigV4 Library" as sigv4
+end box
+
+box "IoT Server" #Yellow
+    participant "IoT Server" as server
+end box
+
+box "AWS Server" #Orange
+    participant "AWS Server" as aws
+end box
+activate application
+
+application -> server : Connect to AWS IOT Credential provider to fetch the temporary credentials
+server -> application : Connected and retrieved credentials
+
+application -> application: Parse the temporary credentials
+
+application -> server : Disconnect from server
+
+application -> application: Implement crypto interface hash functions.
+
+application -> sigv4 : Convert the AWS IoT date retrieved from AWS IoT Credential Provider\n to ISO8601 format using (SigV4_AwsIotDateToIso8601) API
+
+sigv4-> application : Date Converted and written to provided buffer
+
+application-> aws : Connect to AWS Server for sending the HTTP request
+
+aws->application : Connected
+
+application -> sigv4 : Generate Authorization header using (Sigv4_GenerateHTTPAuthorization) API
+
+
+application->application : Add the Authorization Header to the HTTP request to AWS Server.
+
+application-> aws : Send the HTTP request to AWS Server to perform the desired action
+
+aws-> application : Receive HTTP Response from AWS Server
+application -> aws: Disconnect from AWS server
+
+deactivate application
+@enduml
+

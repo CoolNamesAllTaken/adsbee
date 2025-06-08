@@ -1,0 +1,26 @@
+{
+    "ENTRY": "DHCPv6Process_PassReplyToEndPoint",
+    "MAX_CLIENT_SERVER_ID_LENGTH": 128,
+    "MAX_CLIENT_SERVER_ID_LENGTH_UNWIND": "__eval {MAX_CLIENT_SERVER_ID_LENGTH} + 1",
+    "CBMCFLAGS":
+    [
+      "--nondet-static",
+      "--unwind 1",
+      "--unwindset memcmp.0:{MAX_CLIENT_SERVER_ID_LENGTH_UNWIND}",
+      "--unwindset __CPROVER_file_local_FreeRTOS_DHCPv6_c_xDHCPv6Process_PassReplyToEndPoint.0:3"
+    ],
+    "OPT":
+    [
+      "--export-file-local-symbols"
+    ],
+    "DEF":
+    [
+      "ipconfigUSE_DHCPv6=1"
+    ],
+    "OBJS":
+    [
+      "$(ENTRY)_harness.goto",
+      "$(FREERTOS_PLUS_TCP)/test/cbmc/stubs/cbmc.goto",
+      "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_DHCPv6.goto"
+    ]
+}

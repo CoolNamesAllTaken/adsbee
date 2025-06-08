@@ -1,0 +1,26 @@
+{
+  "ENTRY": "CheckOptionsInner",
+  "CBMCFLAGS": [
+      "--unwind 1",
+      "--unwindset __CPROVER_file_local_FreeRTOS_TCP_WIN_c_prvTCPWindowTxCheckAck.0:2",
+      "--unwindset __CPROVER_file_local_FreeRTOS_TCP_WIN_c_prvTCPWindowFastRetransmit.0:2"
+  ],
+  "OPT":
+  [
+      "--export-file-local-symbols"
+  ],
+  "OBJS":
+  [
+    "$(ENTRY)_harness.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_TCP_Reception.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_TCP_IP.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_TCP_WIN.goto",
+    "$(FREERTOS_PLUS_TCP)/source/FreeRTOS_Stream_Buffer.goto",
+    "$(FREERTOS_PLUS_TCP)/test/FreeRTOS-Kernel/tasks.goto",
+    "$(FREERTOS_PLUS_TCP)/test/FreeRTOS-Kernel/list.goto"
+  ],
+  "DEF":
+  [
+    "ipconfigUSE_TCP=1"
+  ]
+}

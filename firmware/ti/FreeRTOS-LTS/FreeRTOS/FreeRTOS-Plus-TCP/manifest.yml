@@ -1,0 +1,22 @@
+name: "FreeRTOS-Plus-TCP"
+version: "V4.2.2"
+description:
+  "Thread safe FreeRTOS TCP/IP stack working on top of the FreeRTOS-Kernel to
+  implement the TCP/IP protocol. Suitable for microcontrollers."
+license: "MIT"
+dependencies:
+  - name: "FreeRTOS-Kernel"
+    version: "V11.1.0"
+    license: "MIT"
+    repository:
+      type: "git"
+      url: "https://github.com/FreeRTOS/FreeRTOS-Kernel.git"
+      path: "test/FreeRTOS-Kernel"
+      branch: "main"
+
+  - name: "CMock"
+    version: "afa2949"
+    repository:
+        type: "git"
+        url: " https://github.com/ThrowTheSwitch/CMock.git"
+        path: "tools/CMock"
