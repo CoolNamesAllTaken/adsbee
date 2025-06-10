@@ -13,6 +13,11 @@
 
 static const uint32_t kWiFiTCPSocketReconnectIntervalMs = 5000;
 
+static const uint32_t kTCPKeepAliveEnable = 1;
+static const uint32_t kTCPKeepAliveIdleSecondsBeforeStartingProbe = 120;
+static const uint32_t kTCPKeepAliveIntervalSecondsBetweenProbes = 30;
+static const uint32_t kTCPKeepAliveMaxFailedProbesBeforeDisconnect = 3;
+
 /** "Pass-Through" functions used to access member functions in callbacks. **/
 void ip_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
     comms_manager.IPEventHandler(arg, event_base, event_id, event_data);
@@ -225,6 +230,17 @@ void CommsManager::IPWANTask(void* pvParameters) {
                 }
                 CONSOLE_INFO("CommsManager::IPWANTask", "Socket for feed %d created, connecting to %s:%d", i,
                              settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i]);
+
+                // Enable TCP keepalive
+                setsockopt(feed_sock[i], SOL_SOCKET, SO_KEEPALIVE, &kTCPKeepAliveEnable, sizeof(kTCPKeepAliveEnable));
+                setsockopt(feed_sock[i], IPPROTO_TCP, TCP_KEEPIDLE, &kTCPKeepAliveIdleSecondsBeforeStartingProbe,
+                           sizeof(kTCPKeepAliveIdleSecondsBeforeStartingProbe));
+                setsockopt(feed_sock[i], IPPROTO_TCP, TCP_KEEPINTVL, &kTCPKeepAliveIntervalSecondsBetweenProbes,
+                           sizeof(kTCPKeepAliveIntervalSecondsBetweenProbes));
+                setsockopt(feed_sock[i], IPPROTO_TCP, TCP_KEEPCNT, &kTCPKeepAliveMaxFailedProbesBeforeDisconnect,
+                           sizeof(kTCPKeepAliveMaxFailedProbesBeforeDisconnect));
+                // Allow reuse of local addresses.
+                setsockopt(feed_sock[i], SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
 
                 struct sockaddr_in dest_addr;
                 // If the URI contains letters, resolve it to an IP address
