@@ -64,7 +64,7 @@
 
     <script>
         const HOST_URI = `${window.location.hostname}`;
-        // const HOST_URI = "192.168.1.134";
+        // const HOST_URI = "maui-bee.local";
         const WS_CONFIG = {
             console_ws_url: `ws://${HOST_URI}/console`,
             metrics_ws_url: `ws://${HOST_URI}/metrics`,
@@ -453,6 +453,7 @@
          */
         class ADSBeeAT {
             static MS_PER_SEC = 1000;
+            static ERROR_BUFFER_FLUSH_INTERVAL_MS = 1000; // How long to wait after a parse error to let the error message print.
 
             constructor(url = HOST_URI) {
                 if (!url) {
@@ -496,27 +497,31 @@
             }
 
             async flushInputBuffer(flushTimeoutMs = 10) {
-                const originalOnmessage = this.ws.onmessage;
+                const originalOnMessage = this.ws.onmessage;
 
-                await new Promise(resolve => {
-                    const timeout = setTimeout(resolve, flushTimeoutMs);
-                    this.ws.onmessage = () => {
-                        clearTimeout(timeout);
-                        setTimeout(resolve, flushTimeoutMs);
-                    };
-                });
+                // Wait for flushTimeoutMs to elapse in increments of 10 ms.
+                const startTime = Date.now();
+                while (Date.now() - startTime < flushTimeoutMs) {
+                    await new Promise(resolve => {
+                        const timeout = setTimeout(resolve, 10);
+                        this.ws.onmessage = () => {
+                            clearTimeout(timeout);
+                            setTimeout(resolve, 10);
+                        };
+                    });
+                }
 
-                this.ws.onmessage = originalOnmessage;
+                this.ws.onmessage = originalOnMessage;
             }
 
-            async receiveResponse(printResponse = false, waitForResponse = false, responseToWaitFor = 'OK') {
-                const MAX_CUMULATIVE_TIMEOUT_MS = 20000; // Upped from 10s to account for slow OTA flash erase operations.
+            async receiveResponse(printResponse = false, waitForResponse = false, responseToWaitFor = 'OK', maxCumulativeTimeoutMs = 20000) {
+                const CPP_AT_PARSE_ERROR_FLUSH_INTERVAL_MS = 1000; // How long to wait after a parse error to let the error message print.
                 const decodedResponse = [];
 
-                const cumulativeTimeout = Date.now() + MAX_CUMULATIVE_TIMEOUT_MS;
+                const cumulativeTimeout = Date.now() + maxCumulativeTimeoutMs;
                 while (waitForResponse) {
                     if (Date.now() > cumulativeTimeout) {
-                        throw new Error(`Response timeout after ${MAX_CUMULATIVE_TIMEOUT_MS} ms.`);
+                        throw new Error(`Response timeout after ${maxCumulativeTimeoutMs} ms.`);
                     }
                     let raw;
                     try {
@@ -540,12 +545,12 @@
                             waitForResponse = false;
                         } else if (decoded.match(/\bERROR\b/)) {
                             // Catch AT command errors.
-                            this.flushInputBuffer();
+                            this.flushInputBuffer(ADSBeeAT.ERROR_BUFFER_FLUSH_INTERVAL_MS);
                             throw new Error(`ERROR response: ${decoded}`);
                         } else if (decoded.includes('CppAT::')) {
                             // Catch CppAT parse errors.
-                            await new Promise(resolve => setTimeout(resolve, 1000));
-                            this.flushInputBuffer(); // These can get ugly.
+                            await new Promise(resolve => setTimeout(resolve, CPP_AT_PARSE_ERROR_FLUSH_INTERVAL_MS));
+                            this.flushInputBuffer(ADSBeeAT.ERROR_BUFFER_FLUSH_INTERVAL_MS); // These can get ugly.
                             throw new Error(`CppAT parse error: ${decoded}`);
                         }
                     }
@@ -578,7 +583,7 @@
              * @return A promise that resolves with the decoded response lines.
              */
             async sendCmd(cmdStr, delay_ms = 10, printResponse = false, waitForResponse = false, responseToWaitFor = 'OK') {
-                await this.flushInputBuffer();
+                const RESPONSE_TIMEOUT_MS = 20000; // Long timeout to allow for multi-sector flash erase.
                 this.lastCmdTimestamp = this.getMsTimestamp();
 
                 if (printResponse) {
@@ -586,8 +591,7 @@
                 }
 
                 this.ws.send(new TextEncoder().encode(cmdStr));
-                await new Promise(resolve => setTimeout(resolve, delay_ms));
-                return await this.receiveResponse(printResponse, waitForResponse, responseToWaitFor);
+                return await this.receiveResponse(printResponse, waitForResponse, responseToWaitFor, RESPONSE_TIMEOUT_MS);
             }
 
             /**
@@ -597,9 +601,10 @@
              * @return A promise that resolves with the decoded response lines.
              */
             async sendBytes(data, printResponse = false, waitForOkOrError = false) {
-                await this.flushInputBuffer();
+                const RESPONSE_TO_WAIT_FOR = 'OK';
+                const RESPONSE_TIMEOUT_MS = 5000;
                 this.ws.send(data);
-                return await this.receiveResponse(printResponse, waitForOkOrError);
+                return await this.receiveResponse(printResponse, waitForOkOrError, RESPONSE_TO_WAIT_FOR, RESPONSE_TIMEOUT_MS);
             }
 
             /**
@@ -638,17 +643,19 @@
                 const cmdResponse = await this.sendCmd(`AT+OTA=WRITE,${offset.toString(16)},${data.length},${crc32.toString(16)}\r\n`, 0, true, true);
                 for (const line of cmdResponse) {
                     if (line.includes('ERROR')) {
+                        // Flush remaining lines then throw the error.
+                        await this.flushInputBuffer(ADSBeeAT.ERROR_BUFFER_FLUSH_INTERVAL_MS);
                         throw new Error(`Command failed with error: ${line}`);
                     }
                 }
                 const dataResponse = await this.sendBytes(data, true, true);
                 for (const line of dataResponse) {
                     if (line.includes('ERROR')) {
+                        // Flush remaining lines then throw the error.
+                        await this.flushInputBuffer(ADSBeeAT.ERROR_BUFFER_FLUSH_INTERVAL_MS);
                         throw new Error(`Data transfer failed with error: ${line}`);
                     }
                 }
-                const delay_ms = 20;
-                await new Promise(resolve => setTimeout(resolve, delay_ms));
             }
 
             /**
@@ -850,6 +857,7 @@
                         this.updateProgress(progress);
                     };
 
+                    await adsbee.flushInputBuffer();
                     await adsbee.silenceConsole();
                     await adsbee.flushInputBuffer();
 

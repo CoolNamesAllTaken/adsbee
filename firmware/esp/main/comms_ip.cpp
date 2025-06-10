@@ -17,6 +17,8 @@ static const uint32_t kTCPKeepAliveEnable = 1;
 static const uint32_t kTCPKeepAliveIdleSecondsBeforeStartingProbe = 120;
 static const uint32_t kTCPKeepAliveIntervalSecondsBetweenProbes = 30;
 static const uint32_t kTCPKeepAliveMaxFailedProbesBeforeDisconnect = 3;
+static const uint32_t kTCPReuseAddrEnable =
+    1;  // Allow reuse of local addresses and sockets that are in the TIME_WAIT state.
 
 /** "Pass-Through" functions used to access member functions in callbacks. **/
 void ip_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
@@ -240,7 +242,7 @@ void CommsManager::IPWANTask(void* pvParameters) {
                 setsockopt(feed_sock[i], IPPROTO_TCP, TCP_KEEPCNT, &kTCPKeepAliveMaxFailedProbesBeforeDisconnect,
                            sizeof(kTCPKeepAliveMaxFailedProbesBeforeDisconnect));
                 // Allow reuse of local addresses.
-                setsockopt(feed_sock[i], SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
+                setsockopt(feed_sock[i], SOL_SOCKET, SO_REUSEADDR, &kTCPReuseAddrEnable, sizeof(kTCPReuseAddrEnable));
 
                 struct sockaddr_in dest_addr;
                 // If the URI contains letters, resolve it to an IP address
