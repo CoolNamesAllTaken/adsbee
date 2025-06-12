@@ -7,6 +7,7 @@ if(ON_EMBEDDED_DEVICE)
         ${SRC_FILES}
         bin/binaries.c
         esp32_flasher.cc
+        esp32.cc
     )
 
     # Don't deal with any of this for unit testing on the host.

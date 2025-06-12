@@ -33,6 +33,8 @@ class BSP {
             has_subg = true;
             sync_pin = 25;  // Used for sync and CC1312 bootloader backdoor.
         }
+
+        // TODO: override has_subg and has_esp32 based on the board type.
     }
 
     bool has_eeprom = false;
@@ -54,10 +56,10 @@ class BSP {
     bool copro_spi_pullup = false;
     bool copro_spi_pulldown = true;
 
+    bool has_esp32 = true;
     uint16_t esp32_enable_pin = 14;
     uint16_t esp32_spi_cs_pin = 9;
     uint16_t esp32_spi_handshake_pin = 13;
-
     uart_inst_t* esp32_uart_handle = uart0;
     uint16_t esp32_uart_tx_pin = 16;
     uint16_t esp32_uart_rx_pin = 17;

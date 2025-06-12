@@ -1,7 +1,0 @@
-{ "expected-missing-functions":
-  [
-
-  ],
-  "proof-name": "PKI_mbedTLSSignatureToPkcs11Signature",
-  "proof-root": "test/cbmc/proofs"
-}

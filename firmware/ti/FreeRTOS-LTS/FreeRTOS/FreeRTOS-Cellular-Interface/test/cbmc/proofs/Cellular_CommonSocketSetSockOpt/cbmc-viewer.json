@@ -1,7 +1,0 @@
-{ "expected-missing-functions":
-  [
-
-  ],
-  "proof-name": "Cellular_CommonSocketSetSockOpt",
-  "proof-root": "tools/cbmc/proofs"
-}

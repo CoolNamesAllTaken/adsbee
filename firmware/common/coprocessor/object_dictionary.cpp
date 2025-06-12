@@ -7,9 +7,9 @@
 
 const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
 const uint8_t ObjectDictionary::kFirmwareVersionMinor = 8;
-const uint8_t ObjectDictionary::kFirmwareVersionPatch = 1;
+const uint8_t ObjectDictionary::kFirmwareVersionPatch = 0;
 // NOTE: Indicate a final release with RC = 0.
-const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 0;
+const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 3;
 
 const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24) | (kFirmwareVersionMinor << 16) |
                                                     (kFirmwareVersionPatch << 8) | kFirmwareVersionReleaseCandidate;
@@ -33,7 +33,7 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                 }
             }
             break;
-#elif ON_ESP32
+#elif defined(ON_ESP32)
         case kAddrConsole: {
             // RP2040 writing to the ESP32's network console interface.
             char message[kNetworkConsoleMessageMaxLenBytes + 1] = {'\0'};

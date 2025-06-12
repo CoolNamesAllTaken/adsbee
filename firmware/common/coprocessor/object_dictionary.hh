@@ -51,7 +51,6 @@ class ObjectDictionary {
     /**
      * Struct used to retrieve network information from the ESP32.
      */
-    // TODO: Move all consts to SettingsManager so it compiles on RP2040.
     struct ESP32NetworkInfo {
         bool ethernet_enabled = false;
         bool ethernet_has_ip = false;

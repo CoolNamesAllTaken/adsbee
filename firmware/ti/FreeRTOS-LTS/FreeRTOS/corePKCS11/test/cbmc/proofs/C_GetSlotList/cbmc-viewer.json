@@ -1,7 +1,0 @@
-{ "expected-missing-functions":
-  [
-
-  ],
-  "proof-name": "C_GetSlotList",
-  "proof-root": "test/cbmc/proofs"
-}

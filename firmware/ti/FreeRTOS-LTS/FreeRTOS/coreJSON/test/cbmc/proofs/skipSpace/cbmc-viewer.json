@@ -1,7 +1,0 @@
-{ "expected-missing-functions":
-  [
-
-  ],
-  "proof-name": "skipSpace",
-  "proof-root": "test/cbmc/proofs"
-}
