@@ -14,27 +14,27 @@
 
 UTEST(CC1312, EnterBootloader) {
     NO_CC1312_EXIT_GUARD
-    EXPECT_TRUE(adsbee.subg_radio.EnterBootloader());
+    EXPECT_TRUE(adsbee.subg_radio_ll.EnterBootloader());
 }
 
 UTEST(CC1312, BootloaderCommandReset) {
     NO_CC1312_EXIT_GUARD
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandPing());
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandReset());
-    EXPECT_FALSE(adsbee.subg_radio.BootloaderCommandPing());
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandPing());
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandReset());
+    EXPECT_FALSE(adsbee.subg_radio_ll.BootloaderCommandPing());
     sleep_ms(100);
-    EXPECT_TRUE(adsbee.subg_radio.EnterBootloader());
+    EXPECT_TRUE(adsbee.subg_radio_ll.EnterBootloader());
 }
 
 UTEST(CC1312, BootloaderCommandMemoryReadSingleWord) {
     NO_CC1312_EXIT_GUARD
     uint32_t read_buf_32[1] = {0};
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + CC1312::kFCFG1RegOffUserID,
-                                                              read_buf_32, 1));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + CC1312::kFCFG1RegOffUserID,
+                                                                 read_buf_32, 1));
     printf("User ID (32 bit read): 0x%08X\n", read_buf_32[0]);
     uint8_t read_buf_8[4] = {0};
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + CC1312::kFCFG1RegOffUserID,
-                                                              read_buf_8, 4));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + CC1312::kFCFG1RegOffUserID,
+                                                                 read_buf_8, 4));
     printf("User ID (8 bit read): 0x%02X%02X%02X%02X\n", read_buf_8[3], read_buf_8[2], read_buf_8[1], read_buf_8[0]);
     EXPECT_EQ(read_buf_32[0], read_buf_8[3] << 24 | read_buf_8[2] << 16 | read_buf_8[1] << 8 | read_buf_8[0]);
 }
@@ -47,7 +47,7 @@ UTEST(CC1312, BootloaderCommandMemoryReadMultipleWords) {
     // 0x174 FLASH_C_E_P_R: 0x0A0A2000
     // 0x178 FLASH_P_R_PV: 0x02C10200
     uint32_t read_buf_32[3] = {0};
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + 0x170, read_buf_32, 3));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + 0x170, read_buf_32, 3));
     printf("FLASH_E_P: 0x%08X\n", read_buf_32[0]);
     printf("FLASH_C_E_P_R: 0x%08X\n", read_buf_32[1]);
     printf("FLASH_P_R_PV: 0x%08X\n", read_buf_32[2]);
@@ -56,7 +56,7 @@ UTEST(CC1312, BootloaderCommandMemoryReadMultipleWords) {
     // EXPECT_EQ(read_buf_32[1], 0x0A0A2000);
     // EXPECT_EQ(read_buf_32[2], 0x02C10200);
     uint8_t read_buf_8[12] = {0};
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + 0x170, read_buf_8, 12));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + 0x170, read_buf_8, 12));
     printf("FLASH_E_P: 0x%02X%02X%02X%02X\n", read_buf_8[3], read_buf_8[2], read_buf_8[1], read_buf_8[0]);
     printf("FLASH_C_E_P_R: 0x%02X%02X%02X%02X\n", read_buf_8[7], read_buf_8[6], read_buf_8[5], read_buf_8[4]);
     printf("FLASH_P_R_PV: 0x%02X%02X%02X%02X\n", read_buf_8[11], read_buf_8[10], read_buf_8[9], read_buf_8[8]);
@@ -68,7 +68,8 @@ UTEST(CC1312, BootloaderCommandMemoryReadMultipleWords) {
 UTEST(CC1312, BootloaderCommandMemoryReadSingleWordMatchResetValue) {
     NO_CC1312_EXIT_GUARD
     uint32_t flash_otp_data4_reg = 0x0;
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + 0x308, &flash_otp_data4_reg, 1));
+    EXPECT_TRUE(
+        adsbee.subg_radio_ll.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + 0x308, &flash_otp_data4_reg, 1));
     printf("FLASH_OTP_DATA4: 0x%08X\n", flash_otp_data4_reg);
     EXPECT_EQ(flash_otp_data4_reg, 0x98989F9F);  // Reset value from datasheet.
 }
@@ -76,13 +77,13 @@ UTEST(CC1312, BootloaderCommandMemoryReadSingleWordMatchResetValue) {
 UTEST(CC1312, BootloaderCommandMemoryReadUnaligned) {
     NO_CC1312_EXIT_GUARD
     uint8_t read_buf;
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + 0x308 + 0, &read_buf, 1));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + 0x308 + 0, &read_buf, 1));
     EXPECT_EQ(read_buf, 0x9F);
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + 0x308 + 1, &read_buf, 1));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + 0x308 + 1, &read_buf, 1));
     EXPECT_EQ(read_buf, 0x9F);
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + 0x308 + 2, &read_buf, 1));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + 0x308 + 2, &read_buf, 1));
     EXPECT_EQ(read_buf, 0x98);
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + 0x308 + 3, &read_buf, 1));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + 0x308 + 3, &read_buf, 1));
     EXPECT_EQ(read_buf, 0x98);
 }
 
@@ -93,18 +94,18 @@ UTEST(CC1312, BootloaderCommandMemoryWriteSingleWord) {
     uint32_t program_address =
         CC1312::kBaseAddrSRAM + 5e3;  // Arbitrary address in SRAM outside of lower 4kB (80kB total).
     uint32_t write_val = 0xDEADBEEF;
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryWrite(program_address, &write_val, 1));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandMemoryWrite(program_address, &write_val, 1));
 
     uint32_t read_val = 0x0;
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(program_address, &read_val, 1));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandMemoryRead(program_address, &read_val, 1));
     printf("SRAM Test Word: 0x%08X\n", read_val);
     EXPECT_EQ(read_val, write_val);
 
     // Read and write with 8-bit buffer.
     uint8_t write_buf[4] = {0xFE, 0xED, 0xBE, 0xEF};
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryWrite(program_address, write_buf, 4));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandMemoryWrite(program_address, write_buf, 4));
     uint8_t read_buf[4] = {0};
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(program_address, read_buf, 4));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandMemoryRead(program_address, read_buf, 4));
     printf("SRAM Test Word: 0x%02X%02X%02X%02X\n", read_buf[3], read_buf[2], read_buf[1], read_buf[0]);
     EXPECT_EQ(read_buf[0], 0xFE);
     EXPECT_EQ(read_buf[1], 0xED);
@@ -112,7 +113,7 @@ UTEST(CC1312, BootloaderCommandMemoryWriteSingleWord) {
     EXPECT_EQ(read_buf[3], 0xEF);
 
     // Read 8-bit buffer value back as 32-bit word.
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(program_address, &read_val, 1));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandMemoryRead(program_address, &read_val, 1));
     EXPECT_EQ(read_val, 0xEFBEEDFE);
 }
 
@@ -122,19 +123,19 @@ UTEST(CC1312, BootloaderCommandMemoryWriteMultipleWords) {
     uint32_t program_address =
         CC1312::kBaseAddrSRAM + 5e3;  // Arbitrary address in SRAM outside of lower 4kB (80kB total).
     uint32_t write_buf[3] = {0xDEADBEEF, 0xCAFEBABE, 0xFEEDFACE};
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryWrite(program_address, write_buf, 3));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandMemoryWrite(program_address, write_buf, 3));
 
     uint32_t read_buf[3] = {0};
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(program_address, read_buf, 3));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandMemoryRead(program_address, read_buf, 3));
     EXPECT_EQ(read_buf[0], write_buf[0]);
     EXPECT_EQ(read_buf[1], write_buf[1]);
     EXPECT_EQ(read_buf[2], write_buf[2]);
 
     // Read and write with 8-bit buffer.
     uint8_t write_buf_8[12] = {0xFE, 0xED, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE, 0xFE, 0xED, 0xFA, 0xCE};
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryWrite(program_address, write_buf_8, 12));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandMemoryWrite(program_address, write_buf_8, 12));
     uint8_t read_buf_8[12] = {0};
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(program_address, read_buf_8, 12));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandMemoryRead(program_address, read_buf_8, 12));
     printf("SRAM Test Words: 0x%02X%02X%02X%02X 0x%02X%02X%02X%02X 0x%02X%02X%02X%02X\n", read_buf_8[3], read_buf_8[2],
            read_buf_8[1], read_buf_8[0], read_buf_8[7], read_buf_8[6], read_buf_8[5], read_buf_8[4], read_buf_8[11],
            read_buf_8[10], read_buf_8[9], read_buf_8[8]);
@@ -147,7 +148,7 @@ UTEST(CC1312, BootloaderCommandMemoryWriteMultipleWords) {
 UTEST(CC1312, BootloaderReadCCFGConfig) {
     NO_CC1312_EXIT_GUARD
     CC1312::BootloaderCCFGConfig ccfg_config = {0};
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderReadCCFGConfig(ccfg_config));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderReadCCFGConfig(ccfg_config));
     printf("CCFG Config:\n");
     printf("  Bank erase disabled: %s\n", ccfg_config.bank_erase_disabled ? "true" : "false");
     printf("  Chip erase disabled: %s\n", ccfg_config.chip_erase_disabled ? "true" : "false");
@@ -161,13 +162,14 @@ UTEST(CC1312, BootloaderCRC32SingleWord) {
     NO_CC1312_EXIT_GUARD
     uint8_t buf[4] = {0x0};
     // Read FLASH_OTP_DATA4 register to get the reset value, which is 0x98989F9F.
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + 0x308, buf, 4));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandMemoryRead(CC1312::kBaseAddrFCFG1 + 0x308, buf, 4));
     uint32_t num_bytes_to_crc = 1;
     uint32_t table_crc = crc32_ieee_802_3(buf, num_bytes_to_crc);
     printf("FLASH_OTP_DATA4: 0x%02X%02X%02X%02X\n", buf[3], buf[2], buf[1], buf[0]);
     printf("Table-Based CRC32 of FLASH_OTP_DATA4: 0x%08X\n", table_crc);
     uint32_t device_crc = 0x0;
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandCRC32(device_crc, CC1312::kBaseAddrFCFG1 + 0x308, num_bytes_to_crc));
+    EXPECT_TRUE(
+        adsbee.subg_radio_ll.BootloaderCommandCRC32(device_crc, CC1312::kBaseAddrFCFG1 + 0x308, num_bytes_to_crc));
     printf("Device-Based CRC32 of FLASH_OTP_DATA4: 0x%08X\n", device_crc);
     EXPECT_EQ(table_crc, device_crc);
 }
@@ -177,9 +179,9 @@ UTEST(CC1312, BootloaderCRC32MultipleWords) {
     uint32_t read_address = CC1312::kBaseAddrFCFG1 + 0x170;  // FLASH_E_P register.
     uint32_t read_num_bytes = 56;
     uint8_t read_buf[read_num_bytes] = {0};
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandMemoryRead(read_address, read_buf, read_num_bytes));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandMemoryRead(read_address, read_buf, read_num_bytes));
     uint32_t table_crc = crc32_ieee_802_3(read_buf, read_num_bytes);
     uint32_t device_crc = 0x0;
-    EXPECT_TRUE(adsbee.subg_radio.BootloaderCommandCRC32(device_crc, read_address, read_num_bytes));
+    EXPECT_TRUE(adsbee.subg_radio_ll.BootloaderCommandCRC32(device_crc, read_address, read_num_bytes));
     EXPECT_EQ(table_crc, device_crc);
 }

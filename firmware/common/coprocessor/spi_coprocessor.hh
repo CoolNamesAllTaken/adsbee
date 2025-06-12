@@ -10,10 +10,12 @@
 #include "transponder_packet.hh"
 
 #ifdef ON_PICO
+#include <functional>  // For std::function.
+
 #include "bsp.hh"
 #include "hardware/gpio.h"
 #include "hardware/spi.h"
-#elif ON_ESP32
+#elif defined(ON_ESP32)
 #include "data_structures.hh"
 #include "driver/gpio.h"
 #include "driver/spi_slave.h"
@@ -50,7 +52,7 @@ class SPICoprocessor {
     static constexpr uint16_t kSPITransactionTimeoutMs = 20;
     // How long a blocking wait for a handshake can last.
     static constexpr uint16_t kSPIHandshakeTimeoutMs = 20;
-#elif ON_ESP32
+#elif defined(ON_ESP32)
     static constexpr uint32_t kNetworkLEDBlinkDurationMs = 10;
     static constexpr uint32_t kNetworkLEDBlinkDurationTicks = kNetworkLEDBlinkDurationMs / portTICK_PERIOD_MS;
     // Since the transaction timeout value is used by threads waiting to use the SPI peripheral, and the SPI update task
@@ -66,15 +68,21 @@ class SPICoprocessor {
 #endif
     struct SPICoprocessorConfig {
 #ifdef ON_PICO
-        uint16_t esp32_enable_pin = bsp.esp32_enable_pin;  // Pin to enable the ESP32.
-        uint32_t spi_clk_freq_hz = bsp.copro_spi_clk_freq_hz;
         spi_inst_t *spi_handle = bsp.copro_spi_handle;
-        uint16_t spi_cs_pin = bsp.esp32_spi_cs_pin;  // Pin for SPI chip select (CS).
-        uint16_t spi_handshake_pin = bsp.esp32_spi_handshake_pin;
+        uint16_t spi_cs_pin = UINT16_MAX;  // Pin for SPI chip select (CS).
+        uint16_t spi_handshake_pin = UINT16_MAX;
         gpio_drive_strength spi_drive_strength = bsp.copro_spi_drive_strength;
         bool spi_pullup = bsp.copro_spi_pullup;
         bool spi_pulldown = bsp.copro_spi_pulldown;
-#elif ON_ESP32
+
+        // Callback allow functionality to be overridden for different underlying devices.
+        std::function<bool()> init_callback = nullptr;
+        std::function<bool()> deinit_callback = nullptr;
+        std::function<bool()> is_enabled_callback = nullptr;
+        std::function<void(bool)> set_enable_callback = nullptr;
+        std::function<void()> spi_begin_transaction_callback = nullptr;
+        std::function<void()> spi_end_transaction_callback = nullptr;
+#elif defined(ON_ESP32)
         spi_host_device_t spi_handle = SPI2_HOST;
         gpio_num_t spi_mosi_pin = GPIO_NUM_41;
         gpio_num_t spi_miso_pin = GPIO_NUM_42;
@@ -287,7 +295,17 @@ class SPICoprocessor {
      * Constructor
      */
     SPICoprocessor(SPICoprocessorConfig config_in) : config_(config_in) {
-#ifdef ON_ESP32
+#ifdef ON_PICO
+        // Make sure that override functions and values are defined.
+        assert(config_.spi_cs_pin != UINT16_MAX);
+        assert(config_.spi_handshake_pin != UINT16_MAX);
+        assert(config_.spi_begin_transaction_callback);
+        assert(config_.spi_end_transaction_callback);
+        assert(config_.is_enabled_callback);
+        assert(config_.set_enable_callback);
+
+        // Init and deinit callbacks are optional.
+#elif defined(ON_ESP32)
         spi_rx_buf_ = static_cast<uint8_t *>(heap_caps_malloc(kSPITransactionMaxLenBytes, MALLOC_CAP_DMA));
         spi_tx_buf_ = static_cast<uint8_t *>(heap_caps_malloc(kSPITransactionMaxLenBytes, MALLOC_CAP_DMA));
 
@@ -312,7 +330,8 @@ class SPICoprocessor {
     bool Init();
     bool DeInit();
 #ifdef ON_PICO
-    bool IsEnabled() { return is_enabled_; }
+    bool IsEnabled() { return config_.is_enabled_callback(); }
+    void SetEnable(bool enabled) { config_.set_enable_callback(enabled); }
 #endif
     /**
      *
@@ -379,14 +398,14 @@ class SPICoprocessor {
         if (len_bytes == 0) {
             len_bytes = sizeof(object);
         }
-#ifdef ON_ESP32
+#ifdef ON_PICO
+#elif defined(ON_ESP32)
         if (xSemaphoreTake(spi_next_transaction_mutex_, kSPIMutexTimeoutTicks) != pdTRUE) {
             CONSOLE_ERROR("SPICoprocessor::PartialRead", "Failed to take SPI context mutex after waiting for %d ms.",
                           kSPIMutexTimeoutMs);
             return false;
         }
-#elif ON_PICO
-
+#elif defined(ON_TI)
 #else
         return false;  // Not supported on other platforms.
 #endif
@@ -399,7 +418,7 @@ class SPICoprocessor {
 #ifdef ON_PICO
             // Write and read are separate transactions.
             uint16_t max_chunk_size_bytes = SCResponsePacket::kDataMaxLenBytes;
-#elif ON_ESP32
+#elif defined(ON_ESP32) || defined(ON_TI)
             // Write and read are a single transaction.
             uint16_t max_chunk_size_bytes = SCResponsePacket::kDataMaxLenBytes - SCReadRequestPacket::kBufLenBytes;
 #else
@@ -444,14 +463,14 @@ class SPICoprocessor {
      * @retval True if handshake line went high before timeout, false otherwise.
      */
     bool SPIWaitForHandshake();
-#elif ON_ESP32
+#elif defined(ON_ESP32)
     /**
      * Helper function used by callbacks to set the handshake pin high or low on the ESP32.
      * Located in IRAM for performance improvements when called from ISR.
      */
     inline void IRAM_ATTR SetSPIHandshakePinLevel(bool level) {
         // Only set the handshake pin HI when we know we want to solicit a response and not block + wait.
-        // Handshake pin can always be set low.
+        // Handshake pin can always be set LO.
         gpio_set_level(config_.spi_handshake_pin, level && use_handshake_pin_);
     }
 
@@ -481,6 +500,20 @@ class SPICoprocessor {
             network_led_on = false;
         }
     }
+#elif defined(ON_TI)
+    /**
+     * Helper function used by callbacks to set the handshake pin high or low on the CC1312.
+     */
+    inline void SetSPIHandshakePinLevel(bool level) {
+        // Only set the handshake pin HI when we know we want to solicit a response and not block + wait.
+        // Handshake pin can always be set LO.
+        gpio_set_level(config_.spi_handshake_pin, level && use_handshake_pin_);
+    }
+
+    /**
+     * Function called from the task spawned during Init().
+     */
+    void SPIReceiveTask();
 #endif
 
    private:
@@ -488,17 +521,30 @@ class SPICoprocessor {
     enum ReturnCode : int { kOk = 0, kErrorGeneric = -1, kErrorTimeout = -2 };
 
 #ifdef ON_PICO
-    void BeginSPITransaction() { gpio_put(config_.spi_cs_pin, 0); }
+    void SPIBeginTransaction() {
+        if (config_.spi_begin_transaction_callback) {
+            // Use the overriden begin transaction callback for targets that need special settings changed.
+            config_.spi_begin_transaction_callback();
+        } else {
+            gpio_put(config_.spi_cs_pin, 0);
+        }
+    }
 
-    void EndSPITransaction() {
-        gpio_put(config_.spi_cs_pin, 1);
+    void SPIEndTransaction() {
+        if (config_.spi_end_transaction_callback) {
+            // Use the overriden end transaction callback for targets that need special settings changed.
+            config_.spi_end_transaction_callback();
+        } else {
+            gpio_put(config_.spi_cs_pin, 1);
+        }
         spi_last_transmit_timestamp_us_ = get_time_since_boot_us();
     }
 
-#elif ON_ESP32
+#elif defined(ON_ESP32)
     SemaphoreHandle_t spi_mutex_;  // Low level mutex used to guard the SPI peripheral (don't let multiple
                                    // threads queue packets at the same time).
     SemaphoreHandle_t spi_next_transaction_mutex_;  // High level mutex used to claim the next transaction interval.
+#elif defined(ON_TI)
 #endif
 
     inline bool SPISlaveLoopReturnHelper(bool ret) {
@@ -520,6 +566,7 @@ class SPICoprocessor {
         if (ret) {
             BlinkNetworkLED();
         }
+#elif defined(ON_TI)
 #endif
         return ret;
     }
@@ -534,6 +581,7 @@ class SPICoprocessor {
         if (ret) {
             BlinkNetworkLED();
         }
+#elif defined(ON_TI)
 #endif
         return ret;
     }
@@ -584,8 +632,7 @@ class SPICoprocessor {
 
 #ifdef ON_PICO
     uint64_t spi_last_transmit_timestamp_us_ = 0;
-    bool is_enabled_ = false;
-#elif ON_ESP32
+#elif defined(ON_ESP32)
     // SPI peripheral needs to operate on special buffers that are 32-bit word aligned and in DMA accessible memory.
     uint8_t *spi_rx_buf_ = nullptr;
     uint8_t *spi_tx_buf_ = nullptr;
@@ -600,7 +647,8 @@ class SPICoprocessor {
 
 #ifdef ON_PICO
 extern SPICoprocessor esp32;
-#elif ON_ESP32
+extern SPICoprocessor cc1312;
+#elif defined(ON_ESP32) || defined(ON_TI)
 extern SPICoprocessor pico;
 #endif
 

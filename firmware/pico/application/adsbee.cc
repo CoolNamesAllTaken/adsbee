@@ -236,7 +236,7 @@ bool ADSBee::Init() {
     // Initialize sub-GHz radio.
     if (config_.has_subg) {
         // Initialize subg radio on previously-initialized coprocessor SPI bus.
-        if (subg_radio.Init(true)) {
+        if (subg_radio.Init()) {
             CONSOLE_INFO("ADSBee::Init", "Sub-GHz radio initialized.");
         } else {
             subg_radio.SetEnable(SettingsManager::EnableState::kEnableStateDisabled);

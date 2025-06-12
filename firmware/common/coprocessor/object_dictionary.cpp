@@ -33,7 +33,7 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                 }
             }
             break;
-#elif ON_ESP32
+#elif defined(ON_ESP32)
         case kAddrConsole: {
             // RP2040 writing to the ESP32's network console interface.
             char message[kNetworkConsoleMessageMaxLenBytes + 1] = {'\0'};

@@ -4,9 +4,7 @@
 
 #ifdef ON_PICO
 #include "hal.hh"
-
-static const uint32_t kESP32EnableBootupDelayMs = 500;
-#elif ON_ESP32
+#elif defined(ON_ESP32)
 #include "adsbee_server.hh"
 
 // Called after a transaction is queued and ready for pickup by master. We use this to set the handshake line high.
@@ -19,29 +17,11 @@ void IRAM_ATTR esp_spi_post_trans_cb(spi_slave_transaction_t *trans) { pico.SetS
 
 bool SPICoprocessor::Init() {
 #ifdef ON_PICO
-    // ESP32 enable pin.
-    gpio_init(config_.esp32_enable_pin);
-    gpio_set_dir(config_.esp32_enable_pin, GPIO_OUT);
-    gpio_put(config_.esp32_enable_pin, 1);
-    is_enabled_ = true;
-    // ESP32 chip select pin.
-    gpio_init(config_.spi_cs_pin);
-    gpio_set_dir(config_.spi_cs_pin, GPIO_OUT);
-    gpio_put(config_.spi_cs_pin, 0);
-    // ESP32 handshake pin.
-    gpio_init(config_.spi_handshake_pin);
-    gpio_set_dir(config_.spi_handshake_pin, GPIO_IN);
-    gpio_set_pulls(config_.spi_handshake_pin, true, false);  // Handshake pin is pulled up.
-
-    // Require SPI pins to be initialized before this function is called, since they get shared.
-    gpio_set_drive_strength(config_.spi_cs_pin, config_.spi_drive_strength);
-    gpio_set_pulls(config_.spi_cs_pin, config_.spi_pullup, config_.spi_pulldown);  // CS pin pulls.
-
-    // Wait for a bit for the ESP32 to boot up.
-    uint32_t boot_delay_finished_timestamp_ms = get_time_since_boot_ms() + kESP32EnableBootupDelayMs;
-    while (get_time_since_boot_ms() < boot_delay_finished_timestamp_ms) {
+    if (config_.init_callback) {
+        config_.init_callback();
     }
-#elif ON_ESP32
+
+#elif defined(ON_ESP32)
     gpio_set_direction(config_.network_led_pin, GPIO_MODE_OUTPUT);
     spi_bus_config_t spi_buscfg = {.mosi_io_num = config_.spi_mosi_pin,
                                    .miso_io_num = config_.spi_miso_pin,
@@ -93,13 +73,13 @@ bool SPICoprocessor::Init() {
 
 bool SPICoprocessor::DeInit() {
 #ifdef ON_PICO
-    // ESP32 enable pin.
-    gpio_put(config_.esp32_enable_pin, 0);
-    is_enabled_ = false;
+    if (config_.deinit_callback) {
+        config_.deinit_callback();
+    }
 
     // Don't deinit pins or SPI peripheral since some are shared by other peripherals.
 
-#elif ON_ESP32
+#elif defined(ON_ESP32)
     spi_receive_task_should_exit_ = true;
 #endif
     return true;
@@ -156,7 +136,7 @@ bool SPICoprocessor::Update(bool blocking) {
             SPIReadBlocking(rx_buf + sizeof(SCCommand), SCReadRequestPacket::kBufLenBytes - sizeof(SCCommand), false);
             SCReadRequestPacket read_request_packet = SCReadRequestPacket(rx_buf, SCReadRequestPacket::kBufLenBytes);
             if (!read_request_packet.IsValid()) {
-                EndSPITransaction();
+                SPIEndTransaction();
                 CONSOLE_ERROR("SPICoprocessor::Update", "Received unsolicited read from master with bad checksum.");
                 return false;
             }
@@ -175,12 +155,12 @@ bool SPICoprocessor::Update(bool blocking) {
             break;
         }
         default:
-            EndSPITransaction();
+            SPIEndTransaction();
             CONSOLE_ERROR("SPICoprocessor::Update", "Received unsolicited packet from ESP32 with unsupported cmd=%d.",
                           cmd);
             return false;
     }
-#elif ON_ESP32
+#elif defined(ON_ESP32)
     uint8_t rx_buf[kSPITransactionMaxLenBytes];
     memset(rx_buf, 0, kSPITransactionMaxLenBytes);
 
@@ -276,7 +256,7 @@ bool SPICoprocessor::GetSPIHandshakePinLevel(bool blocking) {
             }
         }
         // Put CS pin LO during pre-assert interval to stop ESP32 from initiating a transaction with HANDSHAKE pin.
-        BeginSPITransaction();
+        SPIBeginTransaction();
         // Enforce CS pre-assert interval with blocking wait.
         uint32_t pre_assert_interval_start = get_time_since_boot_us();
         while (get_time_since_boot_us() - pre_assert_interval_start < kSPIUpdateCSPreAssertIntervalUs) {
@@ -330,7 +310,7 @@ bool SPICoprocessor::SPIWaitForAck() {
         CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "Timed out while waiting for ack: never received handshake.");
         return false;
     }
-#elif ON_ESP32
+#elif defined(ON_ESP32)
     use_handshake_pin_ = false;  // Don't solicit an ack when waiting for one.
 #endif
     int bytes_read = SPIReadBlocking(response_packet.GetBuf(), SCResponsePacket::kAckLenBytes);
@@ -365,7 +345,7 @@ int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint1
         }
     }
 
-    BeginSPITransaction();
+    SPIBeginTransaction();
     // Pico SDK doesn't have nice nullptr behavior for tx_buf and rx_buf, so we have to do this.
     if (tx_buf == nullptr) {
         // Transmit 0's when reading.
@@ -377,7 +357,7 @@ int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint1
     }
 
     if (end_transaction) {
-        EndSPITransaction();
+        SPIEndTransaction();
         // Only the last transfer chunk of the transaction is used to record the last transmission timestamp. This stops
         // transactions from getting too long as earlier chunks reset the lockout timer for later chungs, e.g. if we
         // only read one byte we don't want to wait for the timeout before conducting the rest of the transaction.
@@ -386,7 +366,7 @@ int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint1
         CONSOLE_ERROR("SPICoprocessor::SPIWriteReadBlocking", "SPI write read call returned error code 0x%x.",
                       bytes_written);
     }
-#elif ON_ESP32
+#elif defined(ON_ESP32)
     spi_slave_transaction_t t;
     memset(&t, 0, sizeof(t));
 
@@ -425,7 +405,7 @@ bool SPICoprocessor::PartialWrite(ObjectDictionary::Address addr, uint8_t *objec
     SCWritePacket write_packet;
 #ifdef ON_PICO
     write_packet.cmd = require_ack ? kCmdWriteToSlaveRequireAck : kCmdWriteToSlave;
-#elif ON_ESP32
+#elif defined(ON_ESP32)
     write_packet.cmd = require_ack ? kCmdWriteToMasterRequireAck : kCmdWriteToMaster;
 #else
     return false;  // Not supported on other platforms.
@@ -452,7 +432,7 @@ bool SPICoprocessor::PartialWrite(ObjectDictionary::Address addr, uint8_t *objec
         // Call Update with blocking to flush ESP32 of messages before write (block to make sure it has a chance to
         // talk if it needs to).
         Update(true);  // Check to see if handshake line is raised before blasting a packet into the ESP32.
-#elif ON_ESP32
+#elif defined(ON_ESP32)
         // Handshake pin gets set LO by SPIWaitForAck(), so we need to re-assert it here for retries to bring it HI.
         use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.
 #endif
@@ -488,7 +468,7 @@ bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t *object
     SCReadRequestPacket read_request_packet;
 #ifdef ON_PICO
     read_request_packet.cmd = kCmdReadFromSlave;
-#elif ON_ESP32
+#elif defined(ON_ESP32)
     read_request_packet.cmd = kCmdReadFromMaster;
 #else
     return false;  // Not supported on other platforms.
@@ -544,7 +524,7 @@ bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t *object
                      bytes_read);
             goto PARTIAL_READ_FAILED;
         }
-#elif ON_ESP32
+#elif defined(ON_ESP32)
         // On the slave, reading from the master is a single transaction. We preload the beginning of the message
         // with the read request, and the master populates the remainder of the message with the reply.
         use_handshake_pin_ = true;  // Set handshake pin to solicit a transaction with the RP2040.

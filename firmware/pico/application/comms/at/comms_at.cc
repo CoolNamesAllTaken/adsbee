@@ -743,7 +743,7 @@ CPP_AT_CALLBACK(CommsManager::ATRxEnableCallback) {
             CPP_AT_SUCCESS();
             break;
         case '?':
-            CPP_AT_CMD_PRINTF("=%d,%d", adsbee.Receiver1090IsEnabled(), adsbee.Receiver978IsEnabled());
+            CPP_AT_CMD_PRINTF("=%d,%d", adsbee.Receiver1090IsEnabled(), adsbee.ReceiverSubGIsEnabled());
             CPP_AT_SILENT_SUCCESS();
             break;
     }
@@ -795,18 +795,18 @@ CPP_AT_CALLBACK(CommsManager::ATSubGEnableCallback) {
         case '=':
             if (CPP_AT_HAS_ARG(0)) {
                 if (args[0].compare("EXTERNAL") == 0) {
-                    adsbee.subg_radio.SetEnable(SettingsManager::kEnableStateExternal);
+                    adsbee.SetSubGRadioEnable(SettingsManager::kEnableStateExternal);
                 } else {
                     bool subg_enabled;
                     CPP_AT_TRY_ARG2NUM(0, subg_enabled);
-                    adsbee.subg_radio.SetEnable(subg_enabled ? SettingsManager::kEnableStateEnabled
-                                                             : SettingsManager::kEnableStateDisabled);
+                    adsbee.SetSubGRadioEnable(subg_enabled ? SettingsManager::kEnableStateEnabled
+                                                           : SettingsManager::kEnableStateDisabled);
                 }
             }
             CPP_AT_SUCCESS();
             break;
         case '?':
-            CPP_AT_CMD_PRINTF("=%s\r\n", SettingsManager::EnableStateToATValueStr(adsbee.subg_radio.IsEnabled()));
+            CPP_AT_CMD_PRINTF("=%s\r\n", SettingsManager::EnableStateToATValueStr(adsbee.subg_radio_ll.IsEnabled()));
             CPP_AT_SILENT_SUCCESS();
             break;
     }
@@ -818,7 +818,7 @@ CPP_AT_CALLBACK(CommsManager::ATSubGFlashCallback) {
     // watchdog reboot.
     StopCore1();
     adsbee.DisableWatchdog();
-    bool flash_success = adsbee.subg_radio.Flash();
+    bool flash_success = adsbee.subg_radio_ll.Flash();
     adsbee.EnableWatchdog();
     StartCore1();
     if (!flash_success) {

@@ -11,6 +11,7 @@
 #include "hardware/watchdog.h"
 #include "macros.hh"  // For MAX / MIN.
 #include "settings.hh"
+#include "spi_coprocessor.hh"
 #include "stdint.h"
 #include "transponder_packet.hh"
 
@@ -214,7 +215,7 @@ class ADSBee {
      * Returns whether the 978MHz receiver is enabled.
      * @retval True if enabled, false otherwise.
      */
-    bool Receiver978IsEnabled() { return subg_radio.IsEnabled(); }
+    bool ReceiverSubGIsEnabled() { return subg_radio.IsEnabled(); }
 
     /**
      * Enable or disable the bias tee to inject 3.3V at the RF IN connector.
@@ -240,13 +241,13 @@ class ADSBee {
      * @param[in] is_enabled True if 978MHz receiver should be enabled, false otherwise.
      */
     inline void SetSubGRadioEnable(SettingsManager::EnableState is_enabled) {
-        SettingsManager::EnableState old_enabled = subg_radio.IsEnabled();
-        subg_radio.SetEnable(is_enabled);
+        SettingsManager::EnableState old_enabled = subg_radio_ll.IsEnabled();
+        subg_radio_ll.SetEnable(is_enabled);
         if ((old_enabled == SettingsManager::EnableState::kEnableStateDisabled ||
              old_enabled == SettingsManager::EnableState::kEnableStateExternal) &&
             is_enabled == SettingsManager::EnableState::kEnableStateEnabled) {
             // Re-initialize the receiver.
-            subg_radio.Init(true);
+            subg_radio.Init();
         }
     }
 
@@ -306,7 +307,24 @@ class ADSBee {
                                  .buffer = raw_1090_packet_queue_buffer_});
 
     AircraftDictionary aircraft_dictionary;
-    CC1312 subg_radio = CC1312({});
+    CC1312 subg_radio_ll = CC1312({});
+    SPICoprocessor subg_radio = SPICoprocessor(SPICoprocessor::SPICoprocessorConfig{
+        .spi_cs_pin = bsp.subg_cs_pin,
+        .spi_handshake_pin = bsp.subg_irq_pin,
+        .init_callback =
+            [this]() {
+                return subg_radio_ll.Init(true); /* SPI bus already initialized. */
+            },
+        .deinit_callback = std::bind(&CC1312::DeInit, &subg_radio_ll),
+        .is_enabled_callback = std::bind(&CC1312::IsEnabled, &subg_radio_ll),
+        .set_enable_callback =
+            [this](bool enable) {
+                // Convert from binary to tri-state values.
+                subg_radio_ll.SetEnable(enable ? SettingsManager::EnableState::kEnableStateEnabled
+                                               : SettingsManager::EnableState::kEnableStateDisabled);
+            },
+        .spi_begin_transaction_callback = std::bind(&CC1312::SPIBeginTransaction, &subg_radio_ll),
+        .spi_end_transaction_callback = std::bind(&CC1312::SPIEndTransaction, &subg_radio_ll)});
 
    private:
     ADSBeeConfig config_;

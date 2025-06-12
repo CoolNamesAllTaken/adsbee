@@ -419,6 +419,11 @@ class CC1312 {
     bool BootloaderWriteCCFGConfig(const BootloaderCCFGConfig& ccfg_config);
 
     /**
+     * De-initialization function. Currently unused.
+     */
+    inline bool DeInit() {return true;};
+
+    /**
      * Brings the CC1312 into bootloader mode and sets the SPI peripheral to be able to communicate with the CC1312.
      * NOTE: SPI peripheral uses CPOL=1, CPHA=1 in bootloader mode, CPOL=0, CPHA=0 in normal mode.
      */
@@ -458,6 +463,11 @@ class CC1312 {
      * @retval True if enabled, false if disabled or set to external.
      */
     inline SettingsManager::EnableState IsEnabled() { return enabled_; }
+
+    inline bool IsEnabledBool() {
+        return enabled_ == SettingsManager::EnableState::kEnableStateEnabled ||
+               enabled_ == SettingsManager::EnableState::kEnableStateExternal;
+    }
 
    private:
     CC1312Config config_;

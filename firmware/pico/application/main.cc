@@ -4,6 +4,7 @@
 #include "comms.hh"
 #include "core1.hh"  // Functions for runningon core1.
 #include "eeprom.hh"
+#include "esp32.hh"
 #include "esp32_flasher.hh"
 #include "firmware_update.hh"  // For figuring out which flash partition we're in.
 #include "hal.hh"
@@ -36,7 +37,17 @@ ESP32SerialFlasher esp32_flasher = ESP32SerialFlasher({});
 
 SettingsManager settings_manager;
 ObjectDictionary object_dictionary;
-SPICoprocessor esp32 = SPICoprocessor({});
+
+// Define low-level coprocessor devices with overrides for things like GPIO and init functions.
+ESP32 esp32_ll = ESP32({});
+
+// Provide high-level coprocessor objects for interacting with coprocessor devices via low level class definitions.
+SPICoprocessor esp32 = SPICoprocessor({.spi_cs_pin = bsp.esp32_spi_cs_pin,
+                                       .spi_handshake_pin = bsp.esp32_spi_handshake_pin,
+                                       .init_callback = std::bind(&ESP32::Init, &esp32_ll),
+                                       .deinit_callback = std::bind(&ESP32::DeInit, &esp32_ll),
+                                       .spi_begin_transaction_callback = nullptr,
+                                       .spi_end_transaction_callback = nullptr});
 PacketDecoder decoder = PacketDecoder({.enable_1090_error_correction = true});
 
 int main() {
@@ -132,19 +143,6 @@ int main() {
 
     multicore_reset_core1();
     multicore_launch_core1(main_core1);
-
-    // Add a test aircraft to start.
-    // Aircraft1090 test_aircraft;
-    // test_aircraft.category = Aircraft1090::Category::kCategorySpaceTransatmosphericVehicle;
-    // strcpy(test_aircraft.callsign, "TST1234");
-    // test_aircraft.latitude_deg = 20;
-    // test_aircraft.longitude_deg = -140;
-    // test_aircraft.baro_altitude_ft = 10000;
-    // test_aircraft.vertical_rate_fpm = -5;
-    // test_aircraft.altitude_source = Aircraft1090::AltitudeSource::kAltitudeSourceBaro;
-    // test_aircraft.direction_deg = 100;
-    // test_aircraft.velocity_kts = 200;
-    // adsbee.aircraft_dictionary.InsertAircraft(test_aircraft);
 
     uint16_t esp32_heartbeat_interval_ms = 200;  // Set to 5Hz to make network terminal commands pass less laggy.
     uint32_t esp32_heartbeat_last_sent_timestamp_ms = get_time_since_boot_ms();
