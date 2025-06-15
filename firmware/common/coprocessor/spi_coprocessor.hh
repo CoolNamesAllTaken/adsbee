@@ -297,10 +297,9 @@ class SPICoprocessor {
     SPICoprocessor(SPICoprocessorConfig config_in) : config_(config_in) {
 #ifdef ON_PICO
         // Make sure that override functions and values are defined.
+        assert(config_.spi_handle);
         assert(config_.spi_cs_pin != UINT16_MAX);
         assert(config_.spi_handshake_pin != UINT16_MAX);
-        assert(config_.spi_begin_transaction_callback);
-        assert(config_.spi_end_transaction_callback);
         assert(config_.is_enabled_callback);
         assert(config_.set_enable_callback);
 

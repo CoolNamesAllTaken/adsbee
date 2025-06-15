@@ -8,8 +8,7 @@ bool ESP32::Init() {
     // ESP32 enable pin.
     gpio_init(config_.enable_pin);
     gpio_set_dir(config_.enable_pin, GPIO_OUT);
-    gpio_put(config_.enable_pin, 1);
-    enabled_ = true;
+    SetEnable(true);
     // ESP32 chip select pin.
     gpio_init(config_.spi_cs_pin);
     gpio_set_dir(config_.spi_cs_pin, GPIO_OUT);
@@ -27,10 +26,12 @@ bool ESP32::Init() {
     uint32_t boot_delay_finished_timestamp_ms = get_time_since_boot_ms() + kEnableBootupDelayMs;
     while (get_time_since_boot_ms() < boot_delay_finished_timestamp_ms) {
     }
+
+    return true;
 };
 
 bool ESP32::DeInit() {
     // ESP32 enable pin.
-    gpio_put(config_.enable_pin, 0);
-    enabled_ = false;
+    SetEnable(false);
+    return true;
 };

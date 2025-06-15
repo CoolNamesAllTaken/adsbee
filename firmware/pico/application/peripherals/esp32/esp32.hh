@@ -23,7 +23,10 @@ class ESP32 {
     bool DeInit();
 
     inline bool IsEnabled() { return enabled_; }
-    void SetEnable(bool enabled);
+    inline void SetEnable(bool enabled) {
+        gpio_put(config_.enable_pin, enabled);
+        enabled_ = enabled;
+    }
 
     // No overrides for SPI begin or end transaction, since we don't do anything special.
 

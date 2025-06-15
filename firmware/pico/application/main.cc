@@ -42,24 +42,19 @@ ObjectDictionary object_dictionary;
 ESP32 esp32_ll = ESP32({});
 
 // Provide high-level coprocessor objects for interacting with coprocessor devices via low level class definitions.
-SPICoprocessor esp32 = SPICoprocessor({.spi_cs_pin = bsp.esp32_spi_cs_pin,
-                                       .spi_handshake_pin = bsp.esp32_spi_handshake_pin,
-                                       .init_callback = std::bind(&ESP32::Init, &esp32_ll),
-                                       .deinit_callback = std::bind(&ESP32::DeInit, &esp32_ll),
-                                       .spi_begin_transaction_callback = nullptr,
-                                       .spi_end_transaction_callback = nullptr});
+SPICoprocessor esp32 =
+    SPICoprocessor({.spi_cs_pin = bsp.esp32_spi_cs_pin,
+                    .spi_handshake_pin = bsp.esp32_spi_handshake_pin,
+                    .init_callback = std::bind(&ESP32::Init, &esp32_ll),
+                    .deinit_callback = std::bind(&ESP32::DeInit, &esp32_ll),
+                    .is_enabled_callback = std::bind(&ESP32::IsEnabled, &esp32_ll),
+                    .set_enable_callback = std::bind(&ESP32::SetEnable, &esp32_ll, std::placeholders::_1),
+                    .spi_begin_transaction_callback = nullptr,
+                    .spi_end_transaction_callback = nullptr});
 PacketDecoder decoder = PacketDecoder({.enable_1090_error_correction = true});
 
 int main() {
     bi_decl(bi_program_description("ADSBee 1090 ADSB Receiver"));
-
-    adsbee.Init();
-    comms_manager.Init();
-    comms_manager.console_printf("ADSBee 1090\r\nSoftware Version %d.%d.%d\r\n",
-                                 object_dictionary.kFirmwareVersionMajor, object_dictionary.kFirmwareVersionMinor,
-                                 object_dictionary.kFirmwareVersionPatch);
-
-    settings_manager.Load();
 
     // Initialize coprocessor SPI bus.
     // ESP32 SPI pins.
@@ -78,6 +73,14 @@ int main() {
                    SPI_CPOL_0,  // Polarity (CPOL).
                    SPI_CPHA_0,  // Phase (CPHA).
                    SPI_MSB_FIRST);
+
+    adsbee.Init();
+    comms_manager.Init();
+    comms_manager.console_printf("ADSBee 1090\r\nSoftware Version %d.%d.%d\r\n",
+                                 object_dictionary.kFirmwareVersionMajor, object_dictionary.kFirmwareVersionMinor,
+                                 object_dictionary.kFirmwareVersionPatch);
+
+    settings_manager.Load();
 
     uint16_t num_status_led_blinks = FirmwareUpdateManager::AmWithinFlashPartition(0) ? 1 : 2;
     // Blink the LED a few times to indicate a successful startup.
