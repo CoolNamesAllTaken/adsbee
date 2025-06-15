@@ -9,7 +9,7 @@ const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
 const uint8_t ObjectDictionary::kFirmwareVersionMinor = 8;
 const uint8_t ObjectDictionary::kFirmwareVersionPatch = 0;
 // NOTE: Indicate a final release with RC = 0.
-const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 3;
+const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 4;
 
 const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24) | (kFirmwareVersionMinor << 16) |
                                                     (kFirmwareVersionPatch << 8) | kFirmwareVersionReleaseCandidate;
@@ -33,6 +33,18 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                 }
             }
             break;
+        case kAddrLogMessage: {
+            // Copy over log message to ensure word alignment.
+            LogMessage log_message;
+            memcpy(&log_message, buf, sizeof(LogMessage));
+            if (log_message.num_chars > 0 && log_message.num_chars <= kLogMessageMaxNumChars) {
+                log_message.message[log_message.num_chars] = '\0';  // Null terminate for safety.
+                comms_manager.console_level_printf(log_message.log_level, "%s", log_message.message);
+            } else {
+                CONSOLE_ERROR("ObjectDictionary::SetBytes", "Invalid log message length: %d", log_message.num_chars);
+            }
+            break;
+        }
 #elif defined(ON_ESP32)
         case kAddrConsole: {
             // RP2040 writing to the ESP32's network console interface.

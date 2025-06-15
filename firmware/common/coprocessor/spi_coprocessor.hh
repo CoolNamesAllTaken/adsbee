@@ -444,6 +444,17 @@ class SPICoprocessor {
         return SPIIndependentLoopReturnHelper(false);
     }
 
+#ifndef ON_PICO
+    /**
+     * Log a message to the coprocessor. Not available on RP2040 since it's the master (other stuff logs to it).
+     * @param[in] log_level Log level of the message.
+     * @param[in] tag Tag to prepend to the message.
+     * @param[in] format Format string for the message.
+     * @param[in] ... Variable arguments for the format string.
+     */
+    bool LogMessage(SettingsManager::LogLevel log_level, const char *tag, const char *format, ...);
+#endif
+
 #ifdef ON_PICO
     /**
      * Checks the level of the HANDSHAKE pin used to initiate communication from the ESP32 to RP2040.

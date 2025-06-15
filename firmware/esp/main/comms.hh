@@ -16,11 +16,6 @@
 #include "object_dictionary.hh"
 #include "settings.hh"
 
-#define CONSOLE_ERROR(tag, ...)   ESP_LOGE(tag, __VA_ARGS__)
-#define CONSOLE_WARNING(tag, ...) ESP_LOGW(tag, __VA_ARGS__)
-#define CONSOLE_INFO(tag, ...)    ESP_LOGI(tag, __VA_ARGS__)
-#define CONSOLE_PRINTF(...)       printf(__VA_ARGS__);
-
 class CommsManager {
    public:
     static const uint16_t kMaxNetworkMessageLenBytes = 256;
@@ -100,25 +95,7 @@ class CommsManager {
     /**
      * Initialize prerequisites for WiFi and Ethernet.
      */
-    bool Init() {
-        // Initialize Non Volatile Storage Flash, used by WiFi library.
-        esp_err_t ret = nvs_flash_init();
-        if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-            ESP_ERROR_CHECK(nvs_flash_erase());
-            ret = nvs_flash_init();
-        }
-        ESP_ERROR_CHECK(ret);
-
-        if (esp_netif_init() != ESP_OK) {
-            CONSOLE_ERROR("CommsManager::Init", "Failed to initialize esp_netif.");
-            return false;
-        }
-        if (esp_event_loop_create_default() != ESP_OK) {
-            CONSOLE_ERROR("CommsManager::Init", "Failed to create default event loop.");
-            return false;
-        }
-        return true;
-    }
+    bool Init();
 
     /**
      * Connect to an external network via Ethernet. Used during ethernet restarts to acquire new IP address. For some
@@ -148,46 +125,11 @@ class CommsManager {
      * Handle Ethernet hardware level events.
      */
     void EthernetEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
+
     /**
      * Get the current status of ESP32 network interfaces as an ESP32NetworkInfo struct.
      */
-    ObjectDictionary::ESP32NetworkInfo GetNetworkInfo() {
-        ObjectDictionary::ESP32NetworkInfo network_info;
-
-        // Ethernet network info.
-        network_info.ethernet_enabled = ethernet_enabled;
-        network_info.ethernet_has_ip = ethernet_has_ip_;
-        memcpy(network_info.ethernet_ip, ethernet_ip, SettingsManager::Settings::kIPAddrStrLen + 1);
-        memcpy(network_info.ethernet_netmask, ethernet_netmask, SettingsManager::Settings::kIPAddrStrLen + 1);
-        memcpy(network_info.ethernet_gateway, ethernet_gateway, SettingsManager::Settings::kIPAddrStrLen + 1);
-
-        // WiFi station network info.
-        network_info.wifi_sta_enabled = wifi_sta_enabled;
-        memcpy(network_info.wifi_sta_ssid, wifi_sta_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
-        network_info.wifi_sta_has_ip = wifi_sta_has_ip_;
-        memcpy(network_info.wifi_sta_ip, wifi_sta_ip, SettingsManager::Settings::kIPAddrStrLen + 1);
-        memcpy(network_info.wifi_sta_netmask, wifi_sta_netmask, SettingsManager::Settings::kIPAddrStrLen + 1);
-        memcpy(network_info.wifi_sta_gateway, wifi_sta_gateway, SettingsManager::Settings::kIPAddrStrLen + 1);
-
-        // WiFi access point network info.
-        network_info.wifi_ap_enabled = wifi_ap_enabled;
-        network_info.wifi_ap_num_clients = num_wifi_clients_;
-        for (uint16_t i = 0; i < SettingsManager::Settings::kWiFiMaxNumClients; i++) {
-            // Turn client IP address into a string.
-            esp_ip4_addr_t ip = wifi_clients_list_[i].ip;
-            snprintf(network_info.wifi_ap_client_ips[i], SettingsManager::Settings::kIPAddrStrLen, IPSTR, IP2STR(&ip));
-            network_info.wifi_ap_client_ips[i][SettingsManager::Settings::kIPAddrStrLen] = '\0';
-
-            // Turn client MAC address into a string.
-            uint8_t mac[SettingsManager::Settings::kMACAddrNumBytes];
-            wifi_clients_list_[i].GetMAC(mac);
-            snprintf(network_info.wifi_ap_client_macs[i], SettingsManager::Settings::kMACAddrStrLen, MACSTR,
-                     MAC2STR(mac));
-            network_info.wifi_ap_client_macs[i][SettingsManager::Settings::kMACAddrStrLen] = '\0';
-        }
-
-        return network_info;
-    }
+    ObjectDictionary::ESP32NetworkInfo GetNetworkInfo();
 
     inline uint16_t GetNumWiFiClients() { return num_wifi_clients_; }
 
@@ -195,6 +137,8 @@ class CommsManager {
      * Handler for IP events associated with ethernet and WiFi. Public so that pass through functions can access it.
      */
     void IPEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
+
+    bool LogMessageToCoprocessor(SettingsManager::LogLevel log_level, const char* tag, const char* format, ...);
 
     /**
      * Initialize the WiFi peripheral (access point and station). WiFiDeInit() and WiFiInit() should be called every
@@ -290,37 +234,14 @@ class CommsManager {
      * @param[in] client_ip IP address of the new client.
      * @param[in] client_mac MAC address of the new client.
      */
-    void WiFiAddClient(esp_ip4_addr_t client_ip, uint8_t* client_mac) {
-        xSemaphoreTake(wifi_clients_list_mutex_, portMAX_DELAY);
-        for (int i = 0; i < SettingsManager::Settings::kWiFiMaxNumClients; i++) {
-            if (!wifi_clients_list_[i].active) {
-                wifi_clients_list_[i].ip = client_ip;
-                wifi_clients_list_[i].SetMAC(client_mac);
-                wifi_clients_list_[i].active = true;
-                num_wifi_clients_++;
-                break;
-            }
-        }
-        xSemaphoreGive(wifi_clients_list_mutex_);
-    }
+    void WiFiAddClient(esp_ip4_addr_t client_ip, uint8_t* client_mac);
 
     /**
      * Removes a WiFi client from the WiFi client list. Takes a MAC address since disconnection events don't come with
      * an IP.
      * @param[in] mac_buf_in 6-Byte buffer containing the MAC address of the client that disconnected.
      */
-    void WiFiRemoveClient(uint8_t* mac_buf_in) {
-        uint64_t client_mac = MACToUint64(mac_buf_in);
-        xSemaphoreTake(wifi_clients_list_mutex_, portMAX_DELAY);
-        for (int i = 0; i < SettingsManager::Settings::kWiFiMaxNumClients; i++) {
-            if (wifi_clients_list_[i].active && (wifi_clients_list_[i].mac == client_mac)) {
-                wifi_clients_list_[i].active = false;
-                num_wifi_clients_--;
-                break;
-            }
-        }
-        xSemaphoreGive(wifi_clients_list_mutex_);
-    }
+    void WiFiRemoveClient(uint8_t* mac_buf_in);
 
     CommsManagerConfig config_;
 
@@ -356,5 +277,16 @@ class CommsManager {
 };
 
 extern CommsManager comms_manager;
+
+#define CONSOLE_ERROR(tag, ...) \
+    ESP_LOGE(tag, __VA_ARGS__); \
+    comms_manager.LogMessageToCoprocessor(SettingsManager::LogLevel::kErrors, tag, __VA_ARGS__);
+#define CONSOLE_WARNING(tag, ...) \
+    ESP_LOGW(tag, __VA_ARGS__);   \
+    comms_manager.LogMessageToCoprocessor(SettingsManager::LogLevel::kWarnings, tag, __VA_ARGS__);
+#define CONSOLE_INFO(tag, ...)  \
+    ESP_LOGI(tag, __VA_ARGS__); \
+    comms_manager.LogMessageToCoprocessor(SettingsManager::LogLevel::kInfo, tag, __VA_ARGS__);
+#define CONSOLE_PRINTF(...) printf(__VA_ARGS__);
 
 #endif /* COMMS_HH_ */

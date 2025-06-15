@@ -20,6 +20,7 @@ class ObjectDictionary {
     static constexpr uint16_t kMACAddrLenBytes = 6;
 
     static constexpr uint16_t kNetworkConsoleMessageMaxLenBytes = 4000;
+    static constexpr uint16_t kLogMessageMaxNumChars = 1000;
 
     enum Address : uint8_t {
         kAddrInvalid = 0,             // Default value.
@@ -34,6 +35,7 @@ class ObjectDictionary {
         kAddrDeviceInfo = 0x09,                 // ESP32 MAC addresses.
         kAddrConsole = 0xA,                     // Pipe for console characters.
         kAddrNetworkInfo = 0xB,                 // Network information for ESP32.
+        kAddrLogMessage = 0xC,                  // Debug message.
         kNumAddrs
     };
 
@@ -81,6 +83,15 @@ class ObjectDictionary {
     };
 
     /**
+     * Struct used to pass debug messages between devices.
+     */
+    struct LogMessage {
+        SettingsManager::LogLevel log_level;
+        uint32_t num_chars;
+        char message[kLogMessageMaxNumChars + 1] = {'\0'};
+    };
+
+    /**
      * Setter for writing data to the address space.
      * @param[in] addr Address to write to.
      * @param[in] buf Buffer to read from.
@@ -88,7 +99,7 @@ class ObjectDictionary {
      * @param[in] offset Byte offset from beginning of object. Used for partial reads.
      * @retval Returns true if successfully wrote, false if address was invalid or something else borked.
      */
-    bool SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, uint16_t offset = 0);
+    bool SetBytes(Address addr, uint8_t* buf, uint16_t buf_len, uint16_t offset = 0);
 
     /**
      * Getter for reading data from the address space.
@@ -98,7 +109,9 @@ class ObjectDictionary {
      * @param[in] offset Byte offset from beginning of object. Used for partial reads.
      * @retval Returns true if successfully read, false if address was invalid or something else borked.
      */
-    bool GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, uint16_t offset = 0);
+    bool GetBytes(Address addr, uint8_t* buf, uint16_t buf_len, uint16_t offset = 0);
+
+    bool LogMessageToCoprocessor(SettingsManager::LogLevel log_level, const char* tag, const char* format, ...);
 
    private:
     uint32_t scratch_ = 0x0;  // Scratch register used for testing.

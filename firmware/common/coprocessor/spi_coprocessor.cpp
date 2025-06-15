@@ -241,6 +241,21 @@ bool SPICoprocessor::Update(bool blocking) {
     return SPISlaveLoopReturnHelper(ret);
 }
 
+#ifndef ON_PICO
+bool SPICoprocessor::LogMessage(SettingsManager::LogLevel log_level, const char *tag, const char *format, ...) {
+    ObjectDictionary::LogMessage log_message;
+    log_message.log_level = log_level;
+    va_list args;
+    va_start(args, format);
+    log_message.num_chars += snprintf(log_message.message, ObjectDictionary::kLogMessageMaxNumChars, "[%s] ", tag);
+    log_message.num_chars += vsnprintf(log_message.message + log_message.num_chars,
+                                       ObjectDictionary::kLogMessageMaxNumChars - log_message.num_chars, format, args);
+    va_end(args);
+
+    return Write(ObjectDictionary::kAddrLogMessage, log_message);
+}
+#endif
+
 #ifdef ON_PICO
 bool SPICoprocessor::GetSPIHandshakePinLevel(bool blocking) {
     if (blocking) {
