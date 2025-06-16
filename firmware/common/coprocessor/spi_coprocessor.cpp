@@ -250,7 +250,7 @@ bool SPICoprocessor::Update(bool blocking) {
     return SPISlaveLoopReturnHelper(ret);
 }
 
-#ifndef ON_PICO
+#if defined(ON_ESP32) || defined(ON_TI)
 bool SPICoprocessor::LogMessage(SettingsManager::LogLevel log_level, const char *tag, const char *format,
                                 va_list args) {
     // Make the scratch LogMessage static so that we don't need to allocate it all the time.

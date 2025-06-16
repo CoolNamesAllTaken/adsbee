@@ -119,7 +119,7 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             // offset);
             memcpy(buf, (uint8_t *)&(settings_manager.settings) + offset, buf_len);
             break;
-#ifndef ON_PICO
+#if defined(ON_ESP32) || defined(ON_TI)
         case kAddrDeviceStatus: {
             uint16_t num_log_messages = log_message_queue.Length();
             DeviceStatus device_status = {.timestamp_ms = get_time_since_boot_ms(),

@@ -62,7 +62,6 @@
         "typeinfo": "cpp"
     },
     "cmake.sourceDirectory": "/adsbee/pico",
-    // "cmake.buildDirectory": "/adsbee/pico/build",
     "cmake.buildDirectory": "/adsbee/pico/build/${buildType}",
     "cmake.ignoreCMakeListsMissing": true,
 }

@@ -446,7 +446,7 @@ class SPICoprocessor {
         return SPIIndependentLoopReturnHelper(false);
     }
 
-#ifndef ON_PICO
+#if defined(ON_ESP32) || defined(ON_TI)
     /**
      * Log a message to the coprocessor. Not available on RP2040 since it's the master (other stuff logs to it).
      * @param[in] log_level Log level of the message.
