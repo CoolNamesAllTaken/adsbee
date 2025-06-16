@@ -16,16 +16,17 @@ bool ESP32::Init() {
     // ESP32 handshake pin.
     gpio_init(config_.spi_handshake_pin);
     gpio_set_dir(config_.spi_handshake_pin, GPIO_IN);
-    gpio_set_pulls(config_.spi_handshake_pin, true, false);  // Handshake pin is pulled up.
+    gpio_set_pulls(config_.spi_handshake_pin, true,
+                   false);  // Handshake pin is pulled up to not enter bootloader on startup.
+    // Handshake line being pulled up results in false positive handshakes during startup, but this only happens during
+    // bootup.
 
     // Require SPI pins to be initialized before this function is called, since they get shared.
     gpio_set_drive_strength(config_.spi_cs_pin, config_.spi_drive_strength);
     gpio_set_pulls(config_.spi_cs_pin, config_.spi_pullup, config_.spi_pulldown);  // CS pin pulls.
 
-    // Wait for a bit for the ESP32 to boot up.
-    uint32_t boot_delay_finished_timestamp_ms = get_time_since_boot_ms() + kEnableBootupDelayMs;
-    while (get_time_since_boot_ms() < boot_delay_finished_timestamp_ms) {
-    }
+    // Don't add a bootup delay here, since the ESP32 needs to query for settings on startup and we don't want to block
+    // that.
 
     return true;
 };

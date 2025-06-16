@@ -49,9 +49,11 @@ class SPICoprocessor {
     static constexpr uint32_t kSPIUpdateCSPreAssertIntervalUs = 100;
     // NOTE: Max transmission time is ~10ms with a 4kB packet at 40MHz.
     // How long to wait once a transaction is started before timing out.
-    static constexpr uint16_t kSPITransactionTimeoutMs = 20;
+    static constexpr uint32_t kSPITransactionTimeoutMs = 20;
     // How long a blocking wait for a handshake can last.
-    static constexpr uint16_t kSPIHandshakeTimeoutMs = 20;
+    static constexpr uint32_t kSPIHandshakeTimeoutMs = 20;
+    // How long to loop in Update() for after initializing the device in order to allow it to query for settings data.
+    static constexpr uint32_t kBootupDelayMs = 500;
 #elif defined(ON_ESP32)
     static constexpr uint32_t kNetworkLEDBlinkDurationMs = 10;
     static constexpr uint32_t kNetworkLEDBlinkDurationTicks = kNetworkLEDBlinkDurationMs / portTICK_PERIOD_MS;

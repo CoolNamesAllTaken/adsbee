@@ -20,6 +20,12 @@ bool SPICoprocessor::Init() {
     if (config_.init_callback) {
         config_.init_callback();
     }
+    // Loop for a period of time to allow the device to query for settings data.
+    uint32_t bootup_start_timestamp_ms = get_time_since_boot_ms();
+    while (get_time_since_boot_ms() - bootup_start_timestamp_ms < kBootupDelayMs) {
+        // Loop here to service the ESP32's query for settings information when it starts up.
+        Update();
+    }
 
 #elif defined(ON_ESP32)
     gpio_set_direction(config_.network_led_pin, GPIO_MODE_OUTPUT);

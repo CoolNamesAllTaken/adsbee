@@ -5,8 +5,6 @@
 
 class ESP32 {
    public:
-    static const uint32_t kEnableBootupDelayMs = 1000;
-
     struct ESP32Config {
         uint16_t enable_pin = bsp.esp32_enable_pin;
         spi_inst_t* spi_handle = bsp.copro_spi_handle;
