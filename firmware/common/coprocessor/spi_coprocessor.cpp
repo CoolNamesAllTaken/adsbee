@@ -88,6 +88,9 @@ bool SPICoprocessor::DeInit() {
 bool SPICoprocessor::Update(bool blocking) {
     bool ret = false;
 #ifdef ON_PICO
+    if (!IsEnabled()) {
+        return false;  // Nothing to do.
+    }
     // Do a blocking check of the HANDSHAKE pin to make sure that the ESP32 can have its say.
     if (!GetSPIHandshakePinLevel(blocking)) {
         return true;  // Nothing to do.
@@ -242,17 +245,20 @@ bool SPICoprocessor::Update(bool blocking) {
 }
 
 #ifndef ON_PICO
-bool SPICoprocessor::LogMessage(SettingsManager::LogLevel log_level, const char *tag, const char *format, ...) {
-    ObjectDictionary::LogMessage log_message;
+bool SPICoprocessor::LogMessage(SettingsManager::LogLevel log_level, const char *tag, const char *format,
+                                va_list args) {
+    // Make the scratch LogMessage static so that we don't need to allocate it all the time.
+    // Allocating a LogMessage buffer on the stack can cause overflows in some limited resource event handlers.
+    static ObjectDictionary::LogMessage log_message;
     log_message.log_level = log_level;
-    va_list args;
-    va_start(args, format);
+    log_message.num_chars = 0;
+    log_message.message[0] = '\0';  // Initialize to empty string.
+
     log_message.num_chars += snprintf(log_message.message, ObjectDictionary::kLogMessageMaxNumChars, "[%s] ", tag);
     log_message.num_chars += vsnprintf(log_message.message + log_message.num_chars,
                                        ObjectDictionary::kLogMessageMaxNumChars - log_message.num_chars, format, args);
-    va_end(args);
 
-    return Write(ObjectDictionary::kAddrLogMessage, log_message);
+    return object_dictionary.log_message_queue.Push(log_message);
 }
 #endif
 

@@ -1,6 +1,7 @@
 #ifndef OBJECT_DICTIONARY_HH_
 #define OBJECT_DICTIONARY_HH_
 
+#include "data_structures.hh"
 #include "settings.hh"
 #include "stdint.h"
 #ifdef ON_ESP32
@@ -20,7 +21,8 @@ class ObjectDictionary {
     static constexpr uint16_t kMACAddrLenBytes = 6;
 
     static constexpr uint16_t kNetworkConsoleMessageMaxLenBytes = 4000;
-    static constexpr uint16_t kLogMessageMaxNumChars = 1000;
+    static constexpr uint16_t kLogMessageMaxNumChars = 500;
+    static constexpr uint16_t kLogMessageQueueDepth = 10;
 
     enum Address : uint8_t {
         kAddrInvalid = 0,             // Default value.
@@ -35,8 +37,15 @@ class ObjectDictionary {
         kAddrDeviceInfo = 0x09,                 // ESP32 MAC addresses.
         kAddrConsole = 0xA,                     // Pipe for console characters.
         kAddrNetworkInfo = 0xB,                 // Network information for ESP32.
-        kAddrLogMessage = 0xC,                  // Debug message.
+        kAddrDeviceStatus = 0xC,  // Struct containing number of pending log messages and current timestamp.
+        kAddrLogMessages = 0xD,   // Used to retrieve log messages from ESP32 and CC1312.
         kNumAddrs
+    };
+
+    struct DeviceStatus {
+        uint32_t timestamp_ms = 0;
+        uint16_t num_pending_log_messages = 0;
+        uint32_t pending_log_messages_packed_size_bytes = 0;
     };
 
     /**
@@ -86,8 +95,9 @@ class ObjectDictionary {
      * Struct used to pass debug messages between devices.
      */
     struct LogMessage {
+        static const uint16_t kHeaderSize = sizeof(SettingsManager::LogLevel) + sizeof(uint16_t);
         SettingsManager::LogLevel log_level;
-        uint32_t num_chars;
+        uint16_t num_chars;
         char message[kLogMessageMaxNumChars + 1] = {'\0'};
     };
 
@@ -111,10 +121,40 @@ class ObjectDictionary {
      */
     bool GetBytes(Address addr, uint8_t* buf, uint16_t buf_len, uint16_t offset = 0);
 
-    bool LogMessageToCoprocessor(SettingsManager::LogLevel log_level, const char* tag, const char* format, ...);
+    /**
+     * Builds a buffer of log messages with empty space removed.
+     * @param[out] buf Buffer to write the log messages to.
+     * @param[in] buf_len Length of the buffer.
+     * @param[in] log_message_queue Queue of log messages to pack.
+     * @param[in] num_messages Number of log messages in the array.
+     * @retval Number of bytes written to the buffer.
+     */
+    uint16_t PackLogMessages(uint8_t* buf, uint16_t buf_len, PFBQueue<ObjectDictionary::LogMessage>& log_message_queue,
+                             uint16_t num_messages);
+
+    /**
+     * Unpacks a buffer of log messages into an array.
+     * @param[in] buf Buffer to read the log messages from.
+     * @param[in] buf_len Length of the buffer.
+     * @param[out] log_message_queue Queue to store the unpacked log messages.
+     * @param[in] max_num_messages Maximum number of log messages to unpack.
+     * @retval Number of log messages unpacked.
+     */
+    uint16_t UnpackLogMessages(uint8_t* buf, uint16_t buf_len,
+                               PFBQueue<ObjectDictionary::LogMessage>& log_message_queue, uint16_t max_num_messages);
+
+    PFBQueue<LogMessage> log_message_queue = PFBQueue<LogMessage>({
+        .buf_len_num_elements = kLogMessageQueueDepth,
+        .buffer = log_message_queue_buffer_,
+        .overwrite_when_full = true  // Some of you may die, but that is a sacrifice I am willing to make.
+    });
 
    private:
     uint32_t scratch_ = 0x0;  // Scratch register used for testing.
+
+    // On Pico, this is a queue of log messages gathered from other devices. On other devices, this is a queue of log
+    // messages waiting to be slurped up by the RP2040.
+    LogMessage log_message_queue_buffer_[kLogMessageQueueDepth] = {};
 };
 
 extern ObjectDictionary object_dictionary;

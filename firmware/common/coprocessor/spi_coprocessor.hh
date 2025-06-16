@@ -452,7 +452,7 @@ class SPICoprocessor {
      * @param[in] format Format string for the message.
      * @param[in] ... Variable arguments for the format string.
      */
-    bool LogMessage(SettingsManager::LogLevel log_level, const char *tag, const char *format, ...);
+    bool LogMessage(SettingsManager::LogLevel log_level, const char *tag, const char *format, va_list args);
 #endif
 
 #ifdef ON_PICO
