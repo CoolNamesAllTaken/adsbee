@@ -1,7 +1,0 @@
-{ "expected-missing-functions":
-  [
-
-  ],
-  "proof-name": "Cellular_ATStrDup",
-  "proof-root": "tools/cbmc/proofs"
-}

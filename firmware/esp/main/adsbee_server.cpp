@@ -80,9 +80,7 @@ bool ADSBeeServer::Init() {
         }
     }
 
-    TCPServerInit();
-
-    return true;
+    return TCPServerInit();
 }
 
 bool ADSBeeServer::Update() {
