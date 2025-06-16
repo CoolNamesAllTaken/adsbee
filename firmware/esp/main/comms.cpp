@@ -61,6 +61,9 @@ ObjectDictionary::ESP32NetworkInfo CommsManager::GetNetworkInfo() {
 
 bool CommsManager::LogMessageToCoprocessor(SettingsManager::LogLevel log_level, const char* tag, const char* format,
                                            ...) {
+    if (log_level > settings_manager.settings.log_level) {
+        return true;  // Skip logging messages that aren't necessary.
+    }
     va_list args;
     va_start(args, format);
     bool ret = pico.LogMessage(log_level, tag, format, args);

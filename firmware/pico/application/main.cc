@@ -21,6 +21,9 @@
 // For testing only
 #include "hardware/gpio.h"
 
+// Uncomment this to forward log messages overs SPI from the ESP32.
+#define PULL_ESP32_LOG_MESSAGES
+
 const uint16_t kStatusLEDBootupBlinkPeriodMs = 200;
 const uint32_t kESP32BootupTimeoutMs = 10000;
 const uint32_t kESP32BootupCommsRetryMs = 500;
@@ -167,6 +170,7 @@ int main() {
                 } else {
                     CONSOLE_ERROR("main", "Unable to read ESP32 status.");
                 }
+#ifdef PULL_ESP32_LOG_MESSAGES
                 if (esp32_status.num_pending_log_messages > 0) {
                     // Read log messages from ESP32.
                     uint8_t log_messages_buffer[ObjectDictionary::kLogMessageMaxNumChars *
@@ -200,11 +204,13 @@ int main() {
                         CONSOLE_ERROR("main", "Unable to read log messages from ESP32.");
                     }
                 }
-                // if (!esp32.Write(ObjectDictionary::kAddrScratch, esp32_heartbeat_timestamp_ms, true)) {
-                //     CONSOLE_ERROR("main", "ESP32 heartbeat failed.");
-                // } else {
-                //     esp32_heartbeat_was_acked = true;
-                // }
+#else
+                if (!esp32.Write(ObjectDictionary::kAddrScratch, esp32_heartbeat_timestamp_ms, true)) {
+                    CONSOLE_ERROR("main", "ESP32 heartbeat failed.");
+                } else {
+                    esp32_heartbeat_was_acked = true;
+                }
+#endif
 
                 esp32_heartbeat_last_sent_timestamp_ms = esp32_heartbeat_timestamp_ms;
             }

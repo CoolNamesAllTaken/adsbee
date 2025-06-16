@@ -420,7 +420,8 @@ bool ADSBeeServer::TCPServerInit() {
     config.stack_size = kHTTPServerStackSizeBytes;
     config.close_fn = console_ws_close_fd;
 
-    if (httpd_start(&server, &config) == ESP_OK) {
+    esp_err_t ret = httpd_start(&server, &config);
+    if (ret == ESP_OK) {
         // Root URI handler (HTML)
         httpd_uri_t root = {.uri = "/", .method = HTTP_GET, .handler = root_handler, .user_ctx = NULL};
         ESP_ERROR_CHECK(httpd_register_uri_handler(server, &root));
@@ -449,6 +450,10 @@ bool ADSBeeServer::TCPServerInit() {
                                            .post_connect_callback = nullptr,
                                            .message_received_callback = nullptr});
         network_metrics.Init();
+    } else {
+        CONSOLE_ERROR("ADSBeeServer::TCPServerInit", "Failed to start HTTP server: %s, remaining stack %u Bytes.",
+                      esp_err_to_name(ret), uxTaskGetStackHighWaterMark(NULL));
+        return false;
     }
 
     // xTaskCreatePinnedToCore(tcp_server_task, "tcp_server", kTCPServerTaskStackSizeBytes, NULL,
