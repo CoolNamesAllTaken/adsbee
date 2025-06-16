@@ -1,7 +1,8 @@
 #include "object_dictionary.hh"
+
+#include "hal.hh"  // for timestamping
 #ifdef ON_ESP32
 #include "device_info.hh"
-#include "hal.hh"  // for timestamping
 #endif
 
 #include "comms.hh"
@@ -196,7 +197,8 @@ uint16_t ObjectDictionary::UnpackLogMessages(uint8_t *buf, uint16_t buf_len,
         if (buf_len - bytes_read < LogMessage::kHeaderSize) {
             break;  // Not enough data for header.
         }
-        memcpy(&log_message, buf + bytes_read, LogMessage::kHeaderSize);
+        // Cast to a Byte array to avoid warnings about memcpy not writing the full LogMessage object.
+        memcpy((uint8_t *)(&log_message), buf + bytes_read, LogMessage::kHeaderSize);
 
         if (log_message.num_chars > kLogMessageMaxNumChars) {
             CONSOLE_ERROR("ObjectDictionary::UnpackLogMessages", "Invalid log message length: %d",

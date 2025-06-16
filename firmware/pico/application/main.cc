@@ -220,26 +220,6 @@ int main() {
             // if no heartbeat packet was sent.
             esp32.Update();
         }
-        // if (esp32.IsEnabled()) {
-        //     // Send ESP32 heartbeat.
-        //     uint32_t esp32_heartbeat_timestamp_ms = get_time_since_boot_ms();
-        //     if (esp32_heartbeat_timestamp_ms - esp32_heartbeat_last_sent_timestamp_ms > esp32_heartbeat_interval_ms)
-        //     {
-        //         if (!esp32.Write(ObjectDictionary::kAddrScratch, esp32_heartbeat_timestamp_ms, true)) {
-        //             CONSOLE_ERROR("main", "ESP32 heartbeat failed.");
-        //         } else {
-        //             esp32_heartbeat_was_acked = true;
-        //         }
-
-        //         esp32_heartbeat_last_sent_timestamp_ms = esp32_heartbeat_timestamp_ms;
-        //     } else {
-        //         // The heartbeat write calls Update() if the handshake line is pending, so only call Update()
-        //         manually
-        //         // if no heartbeat packet was sent.
-        //         esp32.Update();
-        //     }
-        // }
-
         if (!esp32.IsEnabled() || esp32_heartbeat_was_acked) {
             // Don't need to talk to the ESP32, or it acknowledged a heartbeat just now: poke the watchdog since nothing
             // seems amiss.
