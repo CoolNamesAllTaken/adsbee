@@ -71,9 +71,9 @@ void CommsManager::WiFiEventHandler(void* arg, esp_event_base_t event_base, int3
         case WIFI_EVENT_STA_DISCONNECTED: {
             // The ADSBee has disconnected from an external network.
             wifi_event_sta_disconnected_t* event = (wifi_event_sta_disconnected_t*)event_data;
-            ESP_LOGW("CommsManager::WiFiEventHandler",
-                     "Disconnected from (or failed to connect to) ap SSID:%s password:%s - Disconnect reason : %d",
-                     wifi_sta_ssid, wifi_sta_password, event->reason);
+            CONSOLE_ERROR("CommsManager::WiFiEventHandler",
+                          "Disconnected from (or failed to connect to) ap SSID:%s password:%s - Disconnect reason : %d",
+                          wifi_sta_ssid, wifi_sta_password, event->reason);
             wifi_sta_connected_ = false;
             wifi_sta_has_ip_ = false;
             if (wifi_sta_enabled) {

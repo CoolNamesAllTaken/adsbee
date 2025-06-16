@@ -1,7 +1,0 @@
-{ "expected-missing-functions":
-  [
-
-  ],
-  "proof-name": "Cellular_CommonSocketRegisterClosedCallback",
-  "proof-root": "tools/cbmc/proofs"
-}

@@ -1,7 +1,0 @@
-{ "expected-missing-functions":
-  [
-
-  ],
-  "proof-name": "MQTT_Init",
-  "proof-root": "test/cbmc/proofs"
-}

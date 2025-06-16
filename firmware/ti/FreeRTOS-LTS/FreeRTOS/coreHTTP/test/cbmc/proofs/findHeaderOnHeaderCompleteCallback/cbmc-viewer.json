@@ -1,7 +1,0 @@
-{ "expected-missing-functions":
-  [
-
-  ],
-  "proof-name": "findHeaderOnHeaderCompleteCallback",
-  "proof-root": "cbmc/proofs"
-}

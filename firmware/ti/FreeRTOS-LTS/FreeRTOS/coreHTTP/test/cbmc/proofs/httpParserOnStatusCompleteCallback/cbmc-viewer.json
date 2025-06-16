@@ -1,7 +1,0 @@
-{ "expected-missing-functions":
-  [
-
-  ],
-  "proof-name": "httpParserOnStatusCompleteCallback",
-  "proof-root": "cbmc/proofs"
-}
