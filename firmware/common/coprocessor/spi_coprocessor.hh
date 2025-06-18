@@ -32,8 +32,16 @@ class SPICoprocessor {
         4096;  // Default max is 4096 Bytes on ESP32 (with DMA) and 4096 Bytes on RP2040.
     static_assert(kSPITransactionMaxLenBytes % 4 == 0);  // Make sure it's word-aligned.
     static constexpr uint16_t kSPITransactionQueueLenTransactions = 3;
+
+// Set number of retries differently for different platforms. Let ESP32 win since RP2040 can more easily handle an
+// unsolicited packet.
+#ifdef ON_PICO
     static constexpr uint16_t kSPITransactionMaxNumRetries =
-        3;  // Max num retries per block in a multi-transfer transaction.
+        2;  // Max num retries per block in a multi-transfer transaction.
+#else
+    static constexpr uint16_t kSPITransactionMaxNumRetries =
+        5;  // Max num retries per block in a multi-transfer transaction.
+#endif
 
 #ifdef ON_PICO
     // Make sure that we don't talk to the slave before it has a chance to get ready for the next message.

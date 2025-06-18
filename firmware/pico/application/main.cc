@@ -22,7 +22,7 @@
 #include "hardware/gpio.h"
 
 // Uncomment this to forward log messages overs SPI from the ESP32.
-#define PULL_ESP32_LOG_MESSAGES
+// #define PULL_ESP32_LOG_MESSAGES
 
 const uint16_t kStatusLEDBootupBlinkPeriodMs = 200;
 const uint32_t kESP32BootupTimeoutMs = 10000;

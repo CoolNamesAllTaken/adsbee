@@ -527,6 +527,17 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                                          timestamp_ms - data_read_start_timestamp_ms, buf_len_bytes);
                         }
                     }
+                    bool has_crc = CPP_AT_HAS_ARG(3);
+                    CPP_AT_TRY_ARG2NUM_BASE(3, crc, 16);
+                    if (has_crc) {
+                        // CRC provided: use it to verify the data before writing.
+                        CPP_AT_PRINTF("Verifying data with CRC 0x%x.\r\n", crc);
+                        uint32_t calculated_crc = FirmwareUpdateManager::CalculateCRC32(buf, len_bytes);
+                        if (calculated_crc != crc) {
+                            adsbee.SetReceiver1090Enable(receiver_was_enabled);  // Re-enable receiver before exit.
+                            CPP_AT_ERROR("Calculated CRC 0x%x did not match provided CRC 0x%x.", calculated_crc, crc);
+                        }
+                    }
                     CPP_AT_PRINTF("Writing %u Bytes to partition %u at offset 0x%x.\r\n", len_bytes,
                                   complementary_partition, offset);
                     FlashUtils::FlashSafe();
@@ -538,10 +549,9 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         CPP_AT_ERROR("Partial %u Byte write failed in partition %u at offset 0x%x.", len_bytes,
                                      complementary_partition, offset);
                     }
-                    if (CPP_AT_HAS_ARG(3)) {
-                        // CRC provided.
-                        CPP_AT_TRY_ARG2NUM_BASE(3, crc, 16);
-                        CPP_AT_PRINTF("Verifying with CRC 0x%x.\r\n", crc);
+                    if (has_crc) {
+                        // CRC provided: verify the flash after writing.
+                        CPP_AT_PRINTF("Verifying flash with CRC 0x%x.\r\n", crc);
                         uint32_t calculated_crc = FirmwareUpdateManager::CalculateCRC32(
                             (uint8_t *)(FirmwareUpdateManager::flash_partition_headers[complementary_partition]) +
                                 offset,
@@ -573,6 +583,7 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                 } else if (args[0].compare("BOOT") == 0) {
                     // Boot the complementary flash partition.
                     CPP_AT_PRINTF("Booting partition %u...", complementary_partition);
+                    esp32.Update();  // Send out this last console message.
                     // Do NOT safe / unsafe flash here! We aren't writing to flash, and calling FlashSafe() will screw
                     // up the boot sequence.
                     FirmwareUpdateManager::BootPartition(complementary_partition);

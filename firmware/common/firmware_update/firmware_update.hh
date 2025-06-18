@@ -111,11 +111,17 @@ class FirmwareUpdateManager {
         }
 
         // Mark own partition as stale.
+        bool ret = true;
         if (AmWithinFlashPartition(0)) {
-            WriteHeaderStatusWord(0, kFlashPartitionStatusStale);
+            ret &= WriteHeaderStatusWord(0, kFlashPartitionStatusStale);
         } else if (AmWithinFlashPartition(1)) {
-            WriteHeaderStatusWord(1, kFlashPartitionStatusStale);
+            ret &= WriteHeaderStatusWord(1, kFlashPartitionStatusStale);
         }  // else: Don't do anything in the bootloader.
+        if (!ret) {
+            CONSOLE_ERROR("FirmwareUpdateManager::BootPartition",
+                          "Failed to mark own partition as stale before booting.");
+            return;
+        }
 
         DisableInterruptsForJump();
         ResetPeripherals();
@@ -403,7 +409,11 @@ class FirmwareUpdateManager {
 
         // Verification passed: mark flash partition as valid.
         if (modify_header) {
-            WriteHeaderStatusWord(partition, kFlashPartitionStatusValid);
+            if (!WriteHeaderStatusWord(partition, kFlashPartitionStatusValid)) {
+                CONSOLE_ERROR("FirmwareUpdateManager::VerifyFlashPartition",
+                              "Failed to write valid status word to flash partition %u.", partition);
+                return false;
+            }
         }
         return true;
     }
@@ -472,11 +482,12 @@ class FirmwareUpdateManager {
      * around, without erasing the full sector.
      * @param[in] partition Index of the partition to modify the header of.
      * @param[in] status New status word to write.
+     * @retval True if write successful, false if error.
      */
-    static inline void WriteHeaderStatusWord(uint16_t partition, FlashPartitionStatus status) {
+    static inline bool WriteHeaderStatusWord(uint16_t partition, FlashPartitionStatus status) {
         FlashPartitionHeader header = *(flash_partition_headers[partition]);  // Copy the existing header.
         header.status = status;
-        PartialWriteFlashPartition(partition, 0, sizeof(FlashPartitionHeader), (uint8_t *)&header);
+        return PartialWriteFlashPartition(partition, 0, sizeof(FlashPartitionHeader), (uint8_t *)&header);
     }
 
     static uint32_t stored_interrupts_;

@@ -25,6 +25,9 @@
 
 #include "comms.hh"  // For debug prints.
 
+// Uncomment this to hold the status LED on for 5 seconds if the watchdog commanded a reboot.
+// #define WATCHDOG_REBOOT_WARNING
+
 #define MLAT_SYSTEM_CLOCK_RATIO 48 / 125
 // Scales 125MHz system clock into a 48MHz counter.
 static const uint32_t kMLATWrapCounterIncrement = (1 << 24) * MLAT_SYSTEM_CLOCK_RATIO;
@@ -244,6 +247,7 @@ bool ADSBee::Init() {
         }
     }
 
+#ifdef WATCHDOG_REBOOT_WARNING
     // Throw a fit if the watchdog caused a reboot.
     if (watchdog_caused_reboot()) {
         CONSOLE_WARNING("ADSBee::Init", "Watchdog caused reboot.");
@@ -253,6 +257,7 @@ bool ADSBee::Init() {
         SetStatusLED(false);
         EnableWatchdog();
     }
+#endif  // WATCHDOG_REBOOT_WARNING
 
     return true;
 }
