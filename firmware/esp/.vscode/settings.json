@@ -1,7 +1,7 @@
 {
     "C_Cpp.default.compilerPath": "/home/jmcnelly/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20240530/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc",
     "idf.adapterTargetName": "esp32s3",
-    "idf.port": "/dev/ttyACM0",
+    "idf.port": "/dev/tty.usbmodem21401",
     "idf.openOcdConfigs": [
         "board/esp32s3-builtin.cfg"
     ],
@@ -12,5 +12,5 @@
     "idf.customExtraVars": {
         "IDF_TARGET": "esp32s3"
     },
-    "idf.monitorPort": "/dev/tty.usbmodem1401",
+    "idf.monitorPort": "/dev/tty.usbmodem21401",
 }

@@ -38,6 +38,8 @@ CommsManager comms_manager = CommsManager({});
 // Main application
 extern "C" void app_main(void) {
     ESP_LOGI("app_main", "Beginning ADSBee Server Application.");
+    ESP_LOGI("app_main", "Default task priority: %d", uxTaskPriorityGet(NULL));
+
     adsbee_server.Init();
 
 #ifdef HARDWARE_UNIT_TESTS

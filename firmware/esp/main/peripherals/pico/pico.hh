@@ -51,8 +51,8 @@ class Pico : public SPICoprocessorMasterInterface {
 
     inline bool SPIBeginTransaction() {
         if (xSemaphoreTake(spi_mutex_, kSPIMutexTimeoutTicks) != pdTRUE) {
-            CONSOLE_ERROR("SPICoprocessorMasterInterface::PartialWrite",
-                          "Failed to acquire coprocessor SPI mutex after waiting %d ms.", kSPIMutexTimeoutMs);
+            CONSOLE_ERROR("Pico::SPIBeginTransaction", "Failed to acquire coprocessor SPI mutex after waiting %d ms.",
+                          kSPIMutexTimeoutMs);
             return false;
         }
         last_bytes_transacted_ = 0;  // Reset the last bytes transacted counter.
@@ -66,8 +66,8 @@ class Pico : public SPICoprocessorMasterInterface {
     }
     inline bool SPIClaimNextTransaction() {
         if (xSemaphoreTake(spi_next_transaction_mutex_, kSPIMutexTimeoutTicks) != pdTRUE) {
-            CONSOLE_ERROR("SPICoprocessorMasterInterface::SPIClaimNextTransaction",
-                          "Failed to take SPI context mutex after waiting for %d ms.", kSPIMutexTimeoutMs);
+            CONSOLE_ERROR("Pico::SPIClaimNextTransaction", "Failed to take SPI context mutex after waiting for %d ms.",
+                          kSPIMutexTimeoutMs);
             return false;
         }
         return true;

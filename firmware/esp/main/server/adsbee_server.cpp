@@ -225,7 +225,7 @@ bool ADSBeeServer::HandleRaw1090Packet(Raw1090Packet &raw_packet) {
 }
 
 void ADSBeeServer::SPIReceiveTask() {
-    CONSOLE_INFO("SPICoprocessor::SPIReceiveTask", "Started SPI receive task.");
+    CONSOLE_INFO("ADSBeeServer::SPIReceiveTask", "Started SPI receive task.");
 
     while (!spi_receive_task_should_exit_) {
         // Wait for a transaction to complete. Allow this task to block if no SPI transaction is received by using
@@ -233,6 +233,8 @@ void ADSBeeServer::SPIReceiveTask() {
         pico.Update();
         if (pico_ll.SPIClaimNextTransaction()) {
             pico_ll.SPIReleaseNextTransaction();
+        } else {
+            CONSOLE_ERROR("ADSBeeServer::SPIReceiveTask", "Failed to bump SPI context mutex for lower priority tasks.");
         }
     }
 
