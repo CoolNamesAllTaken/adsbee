@@ -16,6 +16,9 @@ idf_component_register(
         "../../common/comms/gdl90"
         "../../common/comms/json"
         "../../common/settings"
+        "comms"
+        "peripherals/pico"
+        "server"
         "target_test"
     INCLUDE_DIRS
         "."
@@ -29,11 +32,14 @@ idf_component_register(
         "../../common/utils/crc"
         "../../common/utils/geo"
         "../../common/settings"
+        "comms"
+        "peripherals/pico"
+        "server"
         "target_test"
     EMBED_TXTFILES
-        "web/index.html"
-        "web/style.css"
-        "web/favicon.png"
+        "server/web/index.html"
+        "server/web/style.css"
+        "server/web/favicon.png"
 )
 
 message("PROJECT_SOURCE_DIR: ${PROJECT_SOURCE_DIR}")

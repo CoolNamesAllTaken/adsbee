@@ -224,7 +224,7 @@ class FirmwareUpdateManager {
             uint32_t num_bytes_to_erase = num_sectors_to_erase * FLASH_SECTOR_SIZE;
             CONSOLE_PRINTF("Erasing %u sector(s) starting at %u/%u (%u Bytes at 0x%x).\r\n", num_sectors_to_erase,
                            sector + 1, (kFlashHeaderLenBytes + kFlashAppLenBytes) / FLASH_SECTOR_SIZE,
-                           num_bytes_to_erase * num_sectors_to_erase, sector_start_addr);
+                           num_bytes_to_erase, sector_start_addr);
             DisableInterrupts();
             flash_range_erase(FlashAddrToOffset(sector_start_addr), num_bytes_to_erase);
             RestoreInterrupts();

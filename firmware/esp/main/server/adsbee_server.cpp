@@ -2,6 +2,7 @@
 
 #include "comms.hh"
 #include "json_utils.hh"
+#include "pico.hh"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
 #include "task_priorities.hh"
@@ -230,6 +231,8 @@ void ADSBeeServer::SPIReceiveTask() {
         // Wait for a transaction to complete. Allow this task to block if no SPI transaction is received by using
         // max delay.
         pico.Update();
+        pico_ll.SPIClaimNextTransaction();
+        pico_ll.SPIReleaseNextTransaction();
     }
 
     CONSOLE_INFO("esp_spi_receive_task", "Received exit signal, ending SPI receive task.");
