@@ -29,7 +29,33 @@ class SPICoprocessorInterface {
     static_assert(kSPITransactionMaxLenBytes % 4 == 0);  // Make sure it's word-aligned.
 
     static constexpr uint16_t kErrorMessageMaxLen = 500;
-    enum ReturnCode : int { kOk = 0, kErrorGeneric = -1, kErrorTimeout = -2 };
+    enum ReturnCode : int {
+        kOk = 0,  // All good.
+        kErrorGeneric = -1,
+        kErrorTimeout = -2,
+        kErrorHandshakeHigh = -3  // Used on the Master to indicate that a transaction was aborted because the slave was
+                                  // tryingto talk at the same time as the master.
+    };
+
+    /**
+     * Convert a ReturnCode to a human-readable string.
+     * @param[in] code The ReturnCode to convert.
+     * @retval String representation of the ReturnCode.
+     */
+    static const char *ReturnCodeToString(ReturnCode code) {
+        switch (code) {
+            case kOk:
+                return "OK";
+            case kErrorGeneric:
+                return "Generic Error";
+            case kErrorTimeout:
+                return "Timeout Error";
+            case kErrorHandshakeHigh:
+                return "Handshake High Error";
+            default:
+                return "Unknown Error";
+        }
+    }
 
     /** NOTE: Packets should not be used outside of the SPICoprocessorInterface class and its children, they are only
      * exposed for testing. **/
@@ -315,6 +341,7 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
      */
     inline bool SPIWaitForHandshake() {
         uint32_t wait_begin_timestamp_ms = get_time_since_boot_ms();
+        expecting_handshake_ = true;  // Set this so that we know we are expecting the handshake line to go high.
         while (true) {
             if (SPIGetHandshakePinLevel(false)) {
                 // Received handshake signal during non-blocking check.
@@ -322,6 +349,7 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
             }
             if (get_time_since_boot_ms() - wait_begin_timestamp_ms >= kSPIHandshakeTimeoutMs) {
                 // Timed out.
+                expecting_handshake_ = false;  // Reset this so that we don't think we are expecting a handshake.
                 return false;
             }
         }
@@ -337,4 +365,9 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     virtual inline void SPIReleaseNextTransaction() = 0;
     virtual int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len_bytes = kSPITransactionMaxLenBytes,
                                      bool end_transaction = true) = 0;
+
+   protected:
+    // Use this flag to indicate whether we are expecting the handshake line to go high. If it is high during a
+    // transaction when we aren't expecting it, that means that we are stomping on the slave! Not good.
+    bool expecting_handshake_ = false;
 };

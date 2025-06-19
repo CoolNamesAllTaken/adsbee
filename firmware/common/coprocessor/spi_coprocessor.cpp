@@ -374,8 +374,8 @@ bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t *object
         int bytes_written = SPIWriteBlocking(read_request_packet.GetBuf(), read_request_bytes);
         int bytes_read = 0;
         if (bytes_written < 0) {
-            snprintf(error_message, kErrorMessageMaxLen, "Error code %d while writing read request over SPI.",
-                     bytes_written);
+            snprintf(error_message, kErrorMessageMaxLen, "Error code %d (%s) while writing read request over SPI.",
+                     bytes_written, ReturnCodeToString(static_cast<ReturnCode>(bytes_written)));
             goto PARTIAL_READ_FAILED;
         }
         if (!config_.interface.SPIWaitForHandshake()) {
@@ -388,8 +388,8 @@ bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t *object
             len;  // We need to set this manually since we are using the default constructor.
         bytes_read = SPIReadBlocking(response_packet.GetBuf(), SCResponsePacket::GetBufLenForPayloadLenBytes(len));
         if (bytes_read < 0) {
-            snprintf(error_message, kErrorMessageMaxLen, "Error code %d while reading read response over SPI.",
-                     bytes_read);
+            snprintf(error_message, kErrorMessageMaxLen, "Error code %d (%s) while reading read response over SPI.",
+                     bytes_read, ReturnCodeToString(static_cast<ReturnCode>(bytes_written)));
             goto PARTIAL_READ_FAILED;
         }
 #elif defined(ON_COPRO_SLAVE)
@@ -402,15 +402,16 @@ bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t *object
         int bytes_exchanged = SPIWriteReadBlocking(read_request_packet.GetBuf(), rx_buf, SCPacket::kPacketMaxLenBytes);
 
         if (bytes_exchanged < 0) {
-            snprintf(error_message, kErrorMessageMaxLen, "Error code %d during read from master SPI transaction.",
-                     bytes_exchanged);
+            snprintf(error_message, kErrorMessageMaxLen, "Error code %d (%s) during read from master SPI transaction.",
+                     bytes_exchanged, ReturnCodeToString(static_cast<ReturnCode>(bytes_exchanged)));
             // Can't use the goto shortcut here because it would cross over response_packet initialization.
             CONSOLE_WARNING("SPICoprocessor::PartialRead", "%s", error_message);
             num_attempts++;
             ret = false;
             // Mutex can be given back immediately because we don't ever wait for an ACK.
+            config_.interface.SPIEndTransaction();
             if (!config_.interface.SPIBeginTransaction()) {
-                CONSOLE_ERROR("SPICoprocessor::PartialRead", "Failed to begin SPI transaction.");
+                CONSOLE_ERROR("SPICoprocessor::PartialRead", "Failed to begin SPI while retrying partial read.");
                 return false;  // Failed to begin transaction.
             }
             continue;
@@ -425,8 +426,9 @@ bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t *object
             num_attempts++;
             ret = false;
             // Mutex can be given back immediately because we don't ever wait for an ACK.
+            config_.interface.SPIEndTransaction();
             if (!config_.interface.SPIBeginTransaction()) {
-                CONSOLE_ERROR("SPICoprocessor::PartialRead", "Failed to begin SPI transaction.");
+                CONSOLE_ERROR("SPICoprocessor::PartialRead", "Failed to begin SPI while retrying partial read.");
                 return false;  // Failed to begin transaction.
             }
             continue;

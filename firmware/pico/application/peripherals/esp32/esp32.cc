@@ -66,13 +66,10 @@ int ESP32::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len_b
     int bytes_written = 0;
 #ifdef ON_PICO
 
-    // Wait for the next transmit interval (blocking) so that we don't overwhelm the slave with messages.
-    while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIMinTransmitIntervalUs) {
-        if (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ > kSPIPostTransmitLockoutUs &&
-            SPIGetHandshakePinLevel(false)) {
-            // Slave is requesting another write, and we're convinced it's properly processed the previous transaction.
-            break;
-        }
+    // Blocking check of handshake line. If we're expecting a handshake, it's OK for the line to be high. Otherwise, we
+    // need to bail out to not stomp on the ESP32's incoming message.
+    if (SPIGetHandshakePinLevel(true) && !expecting_handshake_) {
+        return ReturnCode::kErrorHandshakeHigh;
     }
 
     SPIBeginTransaction();
@@ -98,5 +95,6 @@ int ESP32::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len_b
 #elif defined(ON_ESP32)
     bytes_written = config_.interface.SPIWriteReadBlocking(tx_buf, rx_buf, len_bytes, end_transaction);
 #endif
+    expecting_handshake_ = false;  // Reset the handshake expectation after a transaction.
     return bytes_written;
 }

@@ -63,16 +63,11 @@ bool ADSBeeServer::Init() {
         return false;
     }
 
-    spi_receive_task_should_exit_ = false;
-    xTaskCreatePinnedToCore(esp_spi_receive_task, "spi_receive_task", kSPIReceiveTaskStackSizeBytes, NULL,
-                            kSPIReceiveTaskPriority, NULL, kSPIReceiveTaskCore);
-
-    comms_manager.Init();  // Initialize prerequisites for Ethernet and WiFi.
-
     while (true) {
         if (!pico.Read(ObjectDictionary::kAddrSettingsData, settings_manager.settings)) {
             CONSOLE_ERROR("ADSBeeServer::Init", "Failed to read settings from Pico on startup.");
             vTaskDelay(500 / portTICK_PERIOD_MS);  // Delay for 0.5s before retry.
+            // pico.Update();
             continue;
         } else {
             settings_manager.Print();
@@ -80,6 +75,12 @@ bool ADSBeeServer::Init() {
             break;
         }
     }
+
+    spi_receive_task_should_exit_ = false;
+    xTaskCreatePinnedToCore(esp_spi_receive_task, "spi_receive_task", kSPIReceiveTaskStackSizeBytes, NULL,
+                            kSPIReceiveTaskPriority, NULL, kSPIReceiveTaskCore);
+
+    comms_manager.Init();  // Initialize prerequisites for Ethernet and WiFi.
 
     return TCPServerInit();
 }
