@@ -266,6 +266,25 @@ class SPICoprocessorMasterInterface : public SPICoprocessorInterface {
 
 class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
    public:
+    // Make sure that we don't talk to the slave before it has a chance to get ready for the next message.
+    // Note that this value is ignored if the HANDSHAKE line is pulled high.
+    static constexpr uint32_t kSPIMinTransmitIntervalUs = 600;
+    // Wait this long after a transmission is complete before allowing the HANDSHAKE line to override the minimum
+    // transmit interval timeout. This ensures that we don't double-transmit to the slave before it has a chance to
+    // lower the HANDSHAKE line following a transaction.
+    static constexpr uint32_t kSPIPostTransmitLockoutUs = 10;
+    // How long before the end of kSPIMinTransmitIntervalUs to assert the CS line during a blocking update. This
+    // prevents the ESP32 from handshaking at the same instant that the Pico starts a transaction with the assumption
+    // that the Hanshake line was LO.
+    static constexpr uint32_t kSPIUpdateCSPreAssertIntervalUs = 100;
+    // NOTE: Max transmission time is ~10ms with a 4kB packet at 40MHz.
+    // How long to wait once a transaction is started before timing out.
+    static constexpr uint32_t kSPITransactionTimeoutMs = 20;
+    // How long a blocking wait for a handshake can last.
+    static constexpr uint32_t kSPIHandshakeTimeoutMs = 20;
+    // How long to loop in Update() for after initializing the device in order to allow it to query for settings data.
+    static constexpr uint32_t kBootupDelayMs = 500;
+
     /**
      * Initialize the SPI coprocessor slave interface.
      * @retval True if initialization was successful, false otherwise.
@@ -279,22 +298,43 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     virtual bool DeInit() = 0;
 
     /**
-     * Check the SPI handshake pin level.
-     * @param[in] blocking If true, block until the handshake pin level is read.
-     * @retval True if the handshake pin is high (slave trying to talk), false if it is low.
+     * Checks the level of the HANDSHAKE pin used to initiate communication from the ESP32 to RP2040.
+     * NOTE: There is some hysteresis! The ESP32 can request a transfer as soon as kSPIPostTransmitLockoutUs is up, but
+     * this function won't unblock and confidently state that the HANDSHAKE pin is not asserted unless
+     * kSPIMinTransmitIntervalUs has elapsed.
+     * @param[in] blocking If true, wait until the pin is readable before reading it (e.g. it's been long enough since
+     * the end of the last transaction that the ESP32 has been able to assert or de-assert the HANDSHAKE pin as
+     * necessary). If false, return false if kSPIPostTransmitLockoutUs has not elapsed, otherwise return the HANDSHAKE
+     * pin state.
      */
-    virtual bool GetSPIHandshakePinLevel(bool blocking = true) = 0;
+    virtual bool SPIGetHandshakePinLevel(bool blocking = true) = 0;
 
     /**
-     * Update the SPI coprocessor slave interface.
-     * @param[in] blocking If true, assert the chip select while checking for a handshake (do this if you intend to talk
-     * for sure).
-     * @retval True if the update was successful, false otherwise.
+     * Blocks on waiting for the handshake pin to go high, until a timeout is reached.
+     * @retval True if handshake line went high before timeout, false otherwise.
      */
-    virtual bool Update(bool blocking = false) = 0;
+    inline bool SPIWaitForHandshake() {
+        uint32_t wait_begin_timestamp_ms = get_time_since_boot_ms();
+        while (true) {
+            if (SPIGetHandshakePinLevel(false)) {
+                // Received handshake signal during non-blocking check.
+                break;
+            }
+            if (get_time_since_boot_ms() - wait_begin_timestamp_ms >= kSPIHandshakeTimeoutMs) {
+                // Timed out.
+                return false;
+            }
+        }
+        return true;
+    }
+
+    virtual bool IsEnabled() = 0;
+    virtual void SetEnable(bool enabled) = 0;
 
     virtual bool SPIBeginTransaction() = 0;
     virtual void SPIEndTransaction() = 0;
+    virtual inline bool SPIClaimNextTransaction() = 0;
+    virtual inline void SPIReleaseNextTransaction() = 0;
     virtual int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len_bytes = kSPITransactionMaxLenBytes,
                                      bool end_transaction = true) = 0;
 };

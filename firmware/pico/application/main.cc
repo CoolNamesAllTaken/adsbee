@@ -46,14 +46,7 @@ ESP32 esp32_ll = ESP32({});
 
 // Provide high-level coprocessor objects for interacting with coprocessor devices via low level class definitions.
 SPICoprocessor esp32 =
-    SPICoprocessor({.spi_cs_pin = bsp.esp32_spi_cs_pin,
-                    .spi_handshake_pin = bsp.esp32_spi_handshake_pin,
-                    .init_callback = std::bind(&ESP32::Init, &esp32_ll),
-                    .deinit_callback = std::bind(&ESP32::DeInit, &esp32_ll),
-                    .is_enabled_callback = std::bind(&ESP32::IsEnabled, &esp32_ll),
-                    .set_enable_callback = std::bind(&ESP32::SetEnable, &esp32_ll, std::placeholders::_1),
-                    .spi_begin_transaction_callback = nullptr,
-                    .spi_end_transaction_callback = nullptr});
+    SPICoprocessor({.interface = esp32_ll});  // Use the low-level ESP32 interface to communicate with the ESP32.
 PacketDecoder decoder = PacketDecoder({.enable_1090_error_correction = true});
 
 int main() {

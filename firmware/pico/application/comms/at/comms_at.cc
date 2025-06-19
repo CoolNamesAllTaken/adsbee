@@ -817,7 +817,8 @@ CPP_AT_CALLBACK(CommsManager::ATSubGEnableCallback) {
             CPP_AT_SUCCESS();
             break;
         case '?':
-            CPP_AT_CMD_PRINTF("=%s\r\n", SettingsManager::EnableStateToATValueStr(adsbee.subg_radio_ll.IsEnabled()));
+            CPP_AT_CMD_PRINTF("=%s\r\n",
+                              SettingsManager::EnableStateToATValueStr(adsbee.subg_radio_ll.IsEnabledState()));
             CPP_AT_SILENT_SUCCESS();
             break;
     }

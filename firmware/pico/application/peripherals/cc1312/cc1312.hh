@@ -3,8 +3,9 @@
 #include "bsp.hh"
 #include "comms.hh"
 #include "hardware/spi.h"
+#include "spi_coprocessor.hh"
 
-class CC1312 {
+class CC1312 : public SPICoprocessorSlaveInterface {
    public:
     static const uint16_t kMaxNumPropertiesAtOnce = 12;
     static const uint32_t kCTSCheckIntervalUs = 40;
@@ -178,15 +179,36 @@ class CC1312 {
     static const uint16_t kBootloaderCommandMemoryWriteUint32MaxNumBytes = 244;
 
     /**
+     * Initialization function. Currently unused.
+     * @retval True if the initialization was successful, false otherwise.
+     */
+    inline bool Init() { return true; }
+
+    /**
+     * De-initialization function. Currently unused.
+     * @retval True if the de-initialization was successful, false otherwise.
+     */
+    inline bool DeInit() { return true; };
+
+    /**
      * Adjusts the SPI peripheral to be able to talk to the CC1312. Nominally adjusts clock rate, but also adjusts CPHA
      * and CPOL if the bootloader is active.
      */
-    void SPIBeginTransaction();
+    bool SPIBeginTransaction();
     /**
      * Restores the SPI peripheral to its previous state. Nominally restores clock rate, but also restores CPHA and CPOL
      * if the bootloader is active.
      */
     void SPIEndTransaction();
+    inline bool SPIClaimNextTransaction() {
+        return true;  // Not multi-threaded, no need for this.
+    }
+    inline void SPIReleaseNextTransaction() {
+        // Not multi-threaded, no need for this.
+    }
+    inline bool SPIGetHandshakePinLevel(bool blocking = true) {
+        return gpio_get(config_.irq_pin);  // Return the level of the sync pin.
+    }
     int SPIWriteReadBlocking(uint8_t* tx_buf, uint8_t* rx_buf, uint16_t len_bytes = 0, bool end_transaction = true);
     inline int SPIWriteBlocking(uint8_t* tx_buf, uint16_t len_bytes = 0, bool end_transaction = true) {
         return SPIWriteReadBlocking(tx_buf, nullptr, len_bytes, end_transaction);
@@ -419,11 +441,6 @@ class CC1312 {
     bool BootloaderWriteCCFGConfig(const BootloaderCCFGConfig& ccfg_config);
 
     /**
-     * De-initialization function. Currently unused.
-     */
-    inline bool DeInit() {return true;};
-
-    /**
      * Brings the CC1312 into bootloader mode and sets the SPI peripheral to be able to communicate with the CC1312.
      * NOTE: SPI peripheral uses CPOL=1, CPHA=1 in bootloader mode, CPOL=0, CPHA=0 in normal mode.
      */
@@ -445,7 +462,7 @@ class CC1312 {
      * Set the enable pin.
      * @param[in] enabled True to enable the CC1312, false to disable.
      */
-    inline void SetEnable(SettingsManager::EnableState enabled) {
+    inline void SetEnableState(SettingsManager::EnableState enabled) {
         if (enabled == SettingsManager::EnableState::kEnableStateExternal) {
             gpio_set_dir(config_.enable_pin, GPIO_IN);
             gpio_set_pulls(config_.enable_pin, true, false);  // Enable pull-up on the enable pin.
@@ -459,10 +476,27 @@ class CC1312 {
     }
 
     /**
+     * Wrapper function that satisfies the parent class requirement for a boolean SetEnable function. Uses the
+     * three-state enable function under the hood.
+     * @param[in] enabled True to enable the CC1312, false to disable.
+     */
+    inline void SetEnable(bool enabled) {
+        SetEnableState(enabled ? SettingsManager::EnableState::kEnableStateEnabled
+                               : SettingsManager::EnableState::kEnableStateDisabled);
+    }
+
+    /**
      * Returns whether the CC1312 is currently enabled.
      * @retval True if enabled, false if disabled or set to external.
      */
-    inline SettingsManager::EnableState IsEnabled() { return enabled_; }
+    inline SettingsManager::EnableState IsEnabledState() { return enabled_; }
+
+    /**
+     * Wrapper function that checks if the CC1312 is enabled. Uses the three state IsEnabledState functio nunder the
+     * hood.
+     * @retval True if enabled, false if disabled or set to external.
+     */
+    inline bool IsEnabled() { return enabled_ == SettingsManager::EnableState::kEnableStateEnabled; }
 
     inline bool IsEnabledBool() {
         return enabled_ == SettingsManager::EnableState::kEnableStateEnabled ||

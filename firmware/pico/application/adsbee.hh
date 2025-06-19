@@ -241,8 +241,8 @@ class ADSBee {
      * @param[in] is_enabled True if 978MHz receiver should be enabled, false otherwise.
      */
     inline void SetSubGRadioEnable(SettingsManager::EnableState is_enabled) {
-        SettingsManager::EnableState old_enabled = subg_radio_ll.IsEnabled();
-        subg_radio_ll.SetEnable(is_enabled);
+        SettingsManager::EnableState old_enabled = subg_radio_ll.IsEnabledState();
+        subg_radio_ll.SetEnableState(is_enabled);
         if ((old_enabled == SettingsManager::EnableState::kEnableStateDisabled ||
              old_enabled == SettingsManager::EnableState::kEnableStateExternal) &&
             is_enabled == SettingsManager::EnableState::kEnableStateEnabled) {
@@ -308,23 +308,7 @@ class ADSBee {
 
     AircraftDictionary aircraft_dictionary;
     CC1312 subg_radio_ll = CC1312({});
-    SPICoprocessor subg_radio = SPICoprocessor(SPICoprocessor::SPICoprocessorConfig{
-        .spi_cs_pin = bsp.subg_cs_pin,
-        .spi_handshake_pin = bsp.subg_irq_pin,
-        .init_callback =
-            [this]() {
-                return subg_radio_ll.Init(true); /* SPI bus already initialized. */
-            },
-        .deinit_callback = std::bind(&CC1312::DeInit, &subg_radio_ll),
-        .is_enabled_callback = std::bind(&CC1312::IsEnabled, &subg_radio_ll),
-        .set_enable_callback =
-            [this](bool enable) {
-                // Convert from binary to tri-state values.
-                subg_radio_ll.SetEnable(enable ? SettingsManager::EnableState::kEnableStateEnabled
-                                               : SettingsManager::EnableState::kEnableStateDisabled);
-            },
-        .spi_begin_transaction_callback = std::bind(&CC1312::SPIBeginTransaction, &subg_radio_ll),
-        .spi_end_transaction_callback = std::bind(&CC1312::SPIEndTransaction, &subg_radio_ll)});
+    SPICoprocessor subg_radio = SPICoprocessor({.interface = subg_radio_ll});
 
    private:
     ADSBeeConfig config_;

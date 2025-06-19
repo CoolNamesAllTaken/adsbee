@@ -16,7 +16,7 @@ const CC1312::SPIPeripheralConfig kBootloaderSPIPeripheralConfig = {
 bool CC1312::Init(bool spi_already_initialized) {
     // CC1312 enable pin.
     gpio_init(config_.enable_pin);
-    SetEnable(SettingsManager::kEnableStateEnabled);  // Enable the CC1312.
+    SetEnableState(SettingsManager::kEnableStateEnabled);  // Enable the CC1312.
     uint32_t enable_timestamp_ms = get_time_since_boot_ms();
 
     // CC1312 chip select pin.
@@ -293,9 +293,9 @@ bool CC1312::BootloaderWriteCCFGConfig(const BootloaderCCFGConfig& ccfg_config) 
 }
 
 bool CC1312::EnterBootloader() {
-    SetEnable(SettingsManager::kEnableStateDisabled);
+    SetEnableState(SettingsManager::kEnableStateDisabled);
     gpio_put(config_.sync_pin, 1);
-    SetEnable(SettingsManager::kEnableStateEnabled);
+    SetEnableState(SettingsManager::kEnableStateEnabled);
     in_bootloader_ = true;
     sleep_ms(kBootupDelayMs);  // Wait for the CC1312 to boot up.
 
@@ -304,9 +304,9 @@ bool CC1312::EnterBootloader() {
 
 bool CC1312::ExitBootloader() {
     in_bootloader_ = false;
-    SetEnable(SettingsManager::kEnableStateDisabled);
+    SetEnableState(SettingsManager::kEnableStateDisabled);
     gpio_put(config_.sync_pin, 0);
-    SetEnable(SettingsManager::kEnableStateEnabled);
+    SetEnableState(SettingsManager::kEnableStateEnabled);
 
     return true;
 }
@@ -543,7 +543,7 @@ bool CC1312::Flash() {
     return true;
 }
 
-void CC1312::SPIBeginTransaction() {
+bool CC1312::SPIBeginTransaction() {
     if (in_bootloader_) {
         // Bootlaoder is active, override CPHA and CPOL.
         spi_set_format(config_.spi_handle, kBootloaderSPIPeripheralConfig.bits_per_transfer,
@@ -554,6 +554,8 @@ void CC1312::SPIBeginTransaction() {
     spi_set_clk(active_clk_config_);
 
     gpio_put(config_.spi_cs_pin, false);
+
+    return true;
 }
 
 void CC1312::SPIEndTransaction() {

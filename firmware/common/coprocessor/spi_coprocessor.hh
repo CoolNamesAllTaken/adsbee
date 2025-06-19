@@ -17,44 +17,8 @@ class SPICoprocessor : public SPICoprocessorInterface {
     static constexpr uint16_t kSPITransactionMaxNumRetries =
         3;  // Max num retries per block in a multi-transfer transaction.
 
-#ifdef ON_COPRO_MASTER
-    // Make sure that we don't talk to the slave before it has a chance to get ready for the next message.
-    // Note that this value is ignored if the HANDSHAKE line is pulled high.
-    static constexpr uint32_t kSPIMinTransmitIntervalUs = 600;
-    // Wait this long after a transmission is complete before allowing the HANDSHAKE line to override the minimum
-    // transmit interval timeout. This ensures that we don't double-transmit to the slave before it has a chance to
-    // lower the HANDSHAKE line following a transaction.
-    static constexpr uint32_t kSPIPostTransmitLockoutUs = 10;
-    // How long before the end of kSPIMinTransmitIntervalUs to assert the CS line during a blocking update. This
-    // prevents the ESP32 from handshaking at the same instant that the Pico starts a transaction with the assumption
-    // that the Hanshake line was LO.
-    static constexpr uint32_t kSPIUpdateCSPreAssertIntervalUs = 100;
-    // NOTE: Max transmission time is ~10ms with a 4kB packet at 40MHz.
-    // How long to wait once a transaction is started before timing out.
-    static constexpr uint32_t kSPITransactionTimeoutMs = 20;
-    // How long a blocking wait for a handshake can last.
-    static constexpr uint32_t kSPIHandshakeTimeoutMs = 20;
-    // How long to loop in Update() for after initializing the device in order to allow it to query for settings data.
-    static constexpr uint32_t kBootupDelayMs = 500;
-#elif defined(ON_COPRO_SLAVE)
-#endif
     struct SPICoprocessorConfig {
 #ifdef ON_COPRO_MASTER
-        spi_inst_t *spi_handle = bsp.copro_spi_handle;
-        uint16_t spi_cs_pin = UINT16_MAX;  // Pin for SPI chip select (CS).
-        uint16_t spi_handshake_pin = UINT16_MAX;
-        gpio_drive_strength spi_drive_strength = bsp.copro_spi_drive_strength;
-        bool spi_pullup = bsp.copro_spi_pullup;
-        bool spi_pulldown = bsp.copro_spi_pulldown;
-
-        // Callback allow functionality to be overridden for different underlying devices.
-        std::function<bool()> init_callback = nullptr;
-        std::function<bool()> deinit_callback = nullptr;
-        std::function<bool()> is_enabled_callback = nullptr;
-        std::function<void(bool)> set_enable_callback = nullptr;
-        std::function<void()> spi_begin_transaction_callback = nullptr;
-        std::function<void()> spi_end_transaction_callback = nullptr;
-
         SPICoprocessorSlaveInterface &interface;  // Reference to the slave interface.
 #elif defined(ON_COPRO_SLAVE)
         SPICoprocessorMasterInterface &interface;  // Reference to the master interface.
@@ -73,8 +37,8 @@ class SPICoprocessor : public SPICoprocessorInterface {
     bool DeInit();
 
 #ifdef ON_COPRO_MASTER
-    bool IsEnabled() { return config_.is_enabled_callback(); }
-    void SetEnable(bool enabled) { config_.set_enable_callback(enabled); }
+    bool IsEnabled() { return config_.interface.IsEnabled(); }
+    void SetEnable(bool enabled) { config_.interface.SetEnable(enabled); }
 #endif
     /**
      *
@@ -205,52 +169,7 @@ class SPICoprocessor : public SPICoprocessorInterface {
     bool LogMessage(SettingsManager::LogLevel log_level, const char *tag, const char *format, va_list args);
 #endif
 
-#ifdef ON_COPRO_MASTER
-    /**
-     * Checks the level of the HANDSHAKE pin used to initiate communication from the ESP32 to RP2040.
-     * NOTE: There is some hysteresis! The ESP32 can request a transfer as soon as kSPIPostTransmitLockoutUs is up, but
-     * this function won't unblock and confidently state that the HANDSHAKE pin is not asserted unless
-     * kSPIMinTransmitIntervalUs has elapsed.
-     * @param[in] blocking If true, wait until the pin is readable before reading it (e.g. it's been long enough since
-     * the end of the last transaction that the ESP32 has been able to assert or de-assert the HANDSHAKE pin as
-     * necessary). If false, return false if kSPIPostTransmitLockoutUs has not elapsed, otherwise return the HANDSHAKE
-     * pin state.
-     */
-    bool GetSPIHandshakePinLevel(bool blocking = false);
-
-    /**
-     * Blocks on waiting for the handshake pin to go high, until a timeout is reached.
-     * @retval True if handshake line went high before timeout, false otherwise.
-     */
-    bool SPIWaitForHandshake();
-#elif defined(ON_COPRO_SLAVE)
-
-#endif
-
    protected:
-#ifdef ON_COPRO_MASTER
-    void SPIBeginTransaction() {
-        if (config_.spi_begin_transaction_callback) {
-            // Use the overriden begin transaction callback for targets that need special settings changed.
-            config_.spi_begin_transaction_callback();
-        } else {
-            gpio_put(config_.spi_cs_pin, 0);
-        }
-    }
-
-    void SPIEndTransaction() {
-        if (config_.spi_end_transaction_callback) {
-            // Use the overriden end transaction callback for targets that need special settings changed.
-            config_.spi_end_transaction_callback();
-        } else {
-            gpio_put(config_.spi_cs_pin, 1);
-        }
-        spi_last_transmit_timestamp_us_ = get_time_since_boot_us();
-    }
-
-#elif defined(ON_COPRO_SLAVE)
-#endif
-
     bool PartialWrite(ObjectDictionary::Address addr, uint8_t *object_buf, uint16_t len, uint16_t offset = 0,
                       bool require_ack = false);
 
@@ -294,10 +213,6 @@ class SPICoprocessor : public SPICoprocessorInterface {
     }
 
     SPICoprocessorConfig config_;
-
-#ifdef ON_COPRO_MASTER
-    uint64_t spi_last_transmit_timestamp_us_ = 0;  // Timestamp of the end of the last SPI transaction.
-#endif
 };
 
 #ifdef ON_COPRO_MASTER

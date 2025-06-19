@@ -36,3 +36,67 @@ bool ESP32::DeInit() {
     SetEnable(false);
     return true;
 };
+
+bool ESP32::SPIGetHandshakePinLevel(bool blocking) {
+    if (blocking) {
+        // Make sure the ESP32 has time to lower the handshake pin after the last transaction.
+        while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
+        }
+        // Put CS pin LO during pre-assert interval to stop ESP32 from initiating a transaction with HANDSHAKE pin.
+        SPIBeginTransaction();
+        // Enforce CS pre-assert interval with blocking wait.
+        uint32_t pre_assert_interval_start = get_time_since_boot_us();
+        while (get_time_since_boot_us() - pre_assert_interval_start < kSPIUpdateCSPreAssertIntervalUs) {
+            // Assert the CS line before the ESP32 has a chance to handshake.
+            if (gpio_get(config_.spi_handshake_pin)) {
+                // Allowed to exit blocking early if ESP32 asserts the HANDSHAKE pin.
+                return true;
+            }
+        }
+        return false;
+    } else if (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
+        // Don't actually read the handshake pin if it might overlap with an existing transaction, since we could
+        // try reading the slave when nothing is here (slave hasn't yet had time to de-assert handshake pin).
+        return false;
+    }
+    return gpio_get(config_.spi_handshake_pin);
+}
+
+int ESP32::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len_bytes, bool end_transaction) {
+    int bytes_written = 0;
+#ifdef ON_PICO
+
+    // Wait for the next transmit interval (blocking) so that we don't overwhelm the slave with messages.
+    while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIMinTransmitIntervalUs) {
+        if (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ > kSPIPostTransmitLockoutUs &&
+            SPIGetHandshakePinLevel(false)) {
+            // Slave is requesting another write, and we're convinced it's properly processed the previous transaction.
+            break;
+        }
+    }
+
+    SPIBeginTransaction();
+    // Pico SDK doesn't have nice nullptr behavior for tx_buf and rx_buf, so we have to do this.
+    if (tx_buf == nullptr) {
+        // Transmit 0's when reading.
+        bytes_written = spi_read_blocking(config_.spi_handle, 0x0, rx_buf, len_bytes);
+    } else if (rx_buf == nullptr) {
+        bytes_written = spi_write_blocking(config_.spi_handle, tx_buf, len_bytes);
+    } else {
+        bytes_written = spi_write_read_blocking(config_.spi_handle, tx_buf, rx_buf, len_bytes);
+    }
+
+    if (end_transaction) {
+        SPIEndTransaction();
+        // Only the last transfer chunk of the transaction is used to record the last transmission timestamp. This stops
+        // transactions from getting too long as earlier chunks reset the lockout timer for later chungs, e.g. if we
+        // only read one byte we don't want to wait for the timeout before conducting the rest of the transaction.
+    }
+    if (bytes_written < 0) {
+        CONSOLE_ERROR("ESP32::SPIWriteReadBlocking", "SPI write read call returned error code 0x%x.", bytes_written);
+    }
+#elif defined(ON_ESP32)
+    bytes_written = config_.interface.SPIWriteReadBlocking(tx_buf, rx_buf, len_bytes, end_transaction);
+#endif
+    return bytes_written;
+}

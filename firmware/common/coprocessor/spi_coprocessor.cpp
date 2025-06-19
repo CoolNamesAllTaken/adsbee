@@ -17,7 +17,7 @@ bool SPICoprocessor::Init() {
 #ifdef ON_COPRO_MASTER
     // Loop for a period of time to allow the device to query for settings data.
     uint32_t bootup_start_timestamp_ms = get_time_since_boot_ms();
-    while (get_time_since_boot_ms() - bootup_start_timestamp_ms < kBootupDelayMs) {
+    while (get_time_since_boot_ms() - bootup_start_timestamp_ms < SPICoprocessorSlaveInterface::kBootupDelayMs) {
         // Loop here to service the ESP32's query for settings information when it starts up.
         Update();
     }
@@ -42,7 +42,7 @@ bool SPICoprocessor::Update(bool blocking) {
         return false;  // Nothing to do.
     }
     // Do a blocking check of the HANDSHAKE pin to make sure that the ESP32 can have its say.
-    if (!GetSPIHandshakePinLevel(blocking)) {
+    if (!config_.interface.SPIGetHandshakePinLevel(blocking)) {
         return true;  // Nothing to do.
     }
 
@@ -89,7 +89,7 @@ bool SPICoprocessor::Update(bool blocking) {
             SPIReadBlocking(rx_buf + sizeof(SCCommand), SCReadRequestPacket::kBufLenBytes - sizeof(SCCommand), false);
             SCReadRequestPacket read_request_packet = SCReadRequestPacket(rx_buf, SCReadRequestPacket::kBufLenBytes);
             if (!read_request_packet.IsValid()) {
-                SPIEndTransaction();
+                config_.interface.SPIEndTransaction();
                 CONSOLE_ERROR("SPICoprocessor::Update", "Received unsolicited read from master with bad checksum.");
                 return false;
             }
@@ -108,7 +108,7 @@ bool SPICoprocessor::Update(bool blocking) {
             break;
         }
         default:
-            SPIEndTransaction();
+            config_.interface.SPIEndTransaction();
             CONSOLE_ERROR("SPICoprocessor::Update", "Received unsolicited packet from ESP32 with unsupported cmd=%d.",
                           cmd);
             return false;
@@ -223,46 +223,6 @@ bool SPICoprocessor::LogMessage(SettingsManager::LogLevel log_level, const char 
 }
 #endif
 
-#ifdef ON_PICO
-bool SPICoprocessor::GetSPIHandshakePinLevel(bool blocking) {
-    if (blocking) {
-        // Make sure the ESP32 has time to lower the handshake pin after the last transaction.
-        while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
-        }
-        // Put CS pin LO during pre-assert interval to stop ESP32 from initiating a transaction with HANDSHAKE pin.
-        SPIBeginTransaction();
-        // Enforce CS pre-assert interval with blocking wait.
-        uint32_t pre_assert_interval_start = get_time_since_boot_us();
-        while (get_time_since_boot_us() - pre_assert_interval_start < kSPIUpdateCSPreAssertIntervalUs) {
-            // Assert the CS line before the ESP32 has a chance to handshake.
-            if (gpio_get(config_.spi_handshake_pin)) {
-                // Allowed to exit blocking early if ESP32 asserts the HANDSHAKE pin.
-                return true;
-            }
-        }
-        return false;
-    } else if (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
-        // Don't actually read the handshake pin if it might overlap with an existing transaction, since we could
-        // try reading the slave when nothing is here (slave hasn't yet had time to de-assert handshake pin).
-        return false;
-    }
-    return gpio_get(config_.spi_handshake_pin);
-}
-
-bool SPICoprocessor::SPIWaitForHandshake() {
-    uint32_t wait_begin_timestamp_ms = get_time_since_boot_ms();
-    while (true) {
-        if (gpio_get(config_.spi_handshake_pin)) {
-            break;
-        }
-        if (get_time_since_boot_ms() - wait_begin_timestamp_ms >= kSPIHandshakeTimeoutMs) {
-            return false;
-        }
-    }
-    return true;
-}
-#endif
-
 /** Begin Private Functions **/
 
 bool SPICoprocessor::SPISendAck(bool success) {
@@ -280,7 +240,7 @@ bool SPICoprocessor::SPISendAck(bool success) {
 bool SPICoprocessor::SPIWaitForAck() {
     SCResponsePacket response_packet;
 #ifdef ON_PICO
-    if (!SPIWaitForHandshake()) {
+    if (!config_.interface.SPIWaitForHandshake()) {
         CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "Timed out while waiting for ack: never received handshake.");
         return false;
     }
@@ -307,43 +267,7 @@ bool SPICoprocessor::SPIWaitForAck() {
 }
 
 int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len_bytes, bool end_transaction) {
-    int bytes_written = 0;
-#ifdef ON_PICO
-
-    // Wait for the next transmit interval (blocking) so that we don't overwhelm the slave with messages.
-    while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIMinTransmitIntervalUs) {
-        if (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ > kSPIPostTransmitLockoutUs &&
-            gpio_get(config_.spi_handshake_pin)) {
-            // Slave is requesting another write, and we're convinced it's properly processed the previous transaction.
-            break;
-        }
-    }
-
-    SPIBeginTransaction();
-    // Pico SDK doesn't have nice nullptr behavior for tx_buf and rx_buf, so we have to do this.
-    if (tx_buf == nullptr) {
-        // Transmit 0's when reading.
-        bytes_written = spi_read_blocking(config_.spi_handle, 0x0, rx_buf, len_bytes);
-    } else if (rx_buf == nullptr) {
-        bytes_written = spi_write_blocking(config_.spi_handle, tx_buf, len_bytes);
-    } else {
-        bytes_written = spi_write_read_blocking(config_.spi_handle, tx_buf, rx_buf, len_bytes);
-    }
-
-    if (end_transaction) {
-        SPIEndTransaction();
-        // Only the last transfer chunk of the transaction is used to record the last transmission timestamp. This stops
-        // transactions from getting too long as earlier chunks reset the lockout timer for later chungs, e.g. if we
-        // only read one byte we don't want to wait for the timeout before conducting the rest of the transaction.
-    }
-    if (bytes_written < 0) {
-        CONSOLE_ERROR("SPICoprocessor::SPIWriteReadBlocking", "SPI write read call returned error code 0x%x.",
-                      bytes_written);
-    }
-#elif defined(ON_ESP32)
-    bytes_written = config_.interface.SPIWriteReadBlocking(tx_buf, rx_buf, len_bytes, end_transaction);
-#endif
-    return bytes_written;
+    return config_.interface.SPIWriteReadBlocking(tx_buf, rx_buf, len_bytes, end_transaction);
 }
 
 bool SPICoprocessor::PartialWrite(ObjectDictionary::Address addr, uint8_t *object_buf, uint16_t len, uint16_t offset,
@@ -454,7 +378,7 @@ bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t *object
                      bytes_written);
             goto PARTIAL_READ_FAILED;
         }
-        if (!SPIWaitForHandshake()) {
+        if (!config_.interface.SPIWaitForHandshake()) {
             snprintf(error_message, kErrorMessageMaxLen,
                      "Timed out while waiting for handshake after sending read request.");
             goto PARTIAL_READ_FAILED;
