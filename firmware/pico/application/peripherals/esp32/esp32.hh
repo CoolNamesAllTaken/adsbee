@@ -33,6 +33,7 @@ class ESP32 : public SPICoprocessorSlaveInterface {
     }
 
     inline void SPIEndTransaction() {
+        expecting_handshake_ = false;  // Reset the handshake expectation after a transaction.
         gpio_put(config_.spi_cs_pin, 1);
         spi_last_transmit_timestamp_us_ = get_time_since_boot_us();
     }

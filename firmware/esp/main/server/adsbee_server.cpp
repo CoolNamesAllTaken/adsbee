@@ -63,6 +63,15 @@ bool ADSBeeServer::Init() {
         return false;
     }
 
+    // Initialize SPI receive task before requesting settings so that we can tend to messages from the RP2040 and stop
+    // it from freaking out.
+    spi_receive_task_should_exit_ = false;
+    xTaskCreatePinnedToCore(esp_spi_receive_task, "spi_receive_task", kSPIReceiveTaskStackSizeBytes, NULL,
+                            kSPIReceiveTaskPriority, NULL, kSPIReceiveTaskCore);
+
+    comms_manager
+        .Init();  // Initialize prerequisites for Ethernet and WiFi. Needs to be done before settings are applied.
+
     while (true) {
         if (!pico.Read(ObjectDictionary::kAddrSettingsData, settings_manager.settings)) {
             CONSOLE_ERROR("ADSBeeServer::Init", "Failed to read settings from Pico on startup.");
@@ -75,12 +84,6 @@ bool ADSBeeServer::Init() {
             break;
         }
     }
-
-    spi_receive_task_should_exit_ = false;
-    xTaskCreatePinnedToCore(esp_spi_receive_task, "spi_receive_task", kSPIReceiveTaskStackSizeBytes, NULL,
-                            kSPIReceiveTaskPriority, NULL, kSPIReceiveTaskCore);
-
-    comms_manager.Init();  // Initialize prerequisites for Ethernet and WiFi.
 
     return TCPServerInit();
 }

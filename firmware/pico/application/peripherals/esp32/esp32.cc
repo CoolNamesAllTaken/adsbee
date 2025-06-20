@@ -95,6 +95,5 @@ int ESP32::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len_b
 #elif defined(ON_ESP32)
     bytes_written = config_.interface.SPIWriteReadBlocking(tx_buf, rx_buf, len_bytes, end_transaction);
 #endif
-    expecting_handshake_ = false;  // Reset the handshake expectation after a transaction.
     return bytes_written;
 }

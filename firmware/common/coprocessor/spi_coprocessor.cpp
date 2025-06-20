@@ -26,7 +26,7 @@ bool SPICoprocessor::Init() {
 }
 
 bool SPICoprocessor::DeInit() {
-    if (config_.interface.DeInit()) {
+    if (!config_.interface.DeInit()) {
         CONSOLE_ERROR("SPICoprocessor::DeInit", "Failed to deinitialize SPI coprocessor.");
         return false;  // Deinitialization failed.
     }
@@ -129,7 +129,8 @@ bool SPICoprocessor::Update(bool blocking) {
         bool ret = false;
         if (bytes_read != kErrorTimeout) {
             // Non-timeout errors are worth complaining about.
-            CONSOLE_ERROR("SPICoprocessor::Update", "SPI read received non-timeout error code 0x%x.", bytes_read);
+            CONSOLE_ERROR("SPICoprocessor::Update", "SPI read received non-timeout error code %d (%s).", bytes_read,
+                          ReturnCodeToString(static_cast<ReturnCode>(bytes_read)));
         } else {
             // Timeout errors are OK and expected.
             ret = true;
@@ -247,16 +248,29 @@ bool SPICoprocessor::SPIWaitForAck() {
 #elif defined(ON_ESP32)
     config_.interface.SPIUseHandshakePin(false);  // Don't solicit an ack when waiting for one.
 #endif
-    int bytes_read = SPIReadBlocking(response_packet.GetBuf(), SCResponsePacket::kAckLenBytes);
+    // We need to call SPIReadBlocking without ending the transaction in case we want to recover a kErrorHandshakeHigh
+    // error.
+    int bytes_read = SPIReadBlocking(response_packet.GetBuf(), SCResponsePacket::kAckLenBytes, false);
     response_packet.data_len_bytes = SCResponsePacket::kAckLenBytes;
+#ifdef ON_COPRO_MASTER
+    if (bytes_read == kErrorHandshakeHigh) {
+        // If we stepped on the slave while trying to talk, our transaction is moot but at least we can avoid
+        // wasting the packet from the slave.
+        // Get the slave interface to expect a handshake high.
+        config_.interface.SPIWaitForHandshake();
+        Update(true);
+    }
+#endif
+    config_.interface.SPIEndTransaction();
+    if (bytes_read < 0) {
+        CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "SPI read failed with code %d (%s).", bytes_read,
+                      ReturnCodeToString(static_cast<ReturnCode>(bytes_read)));
+        return false;
+    }
     if (response_packet.cmd != kCmdAck) {
         CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck",
                       "Received a message that was not an ack (cmd=0x%x, expected 0x%x).", response_packet.cmd,
                       kCmdAck);
-        return false;
-    }
-    if (bytes_read < 0) {
-        CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "SPI read failed with code 0x%x.", bytes_read);
         return false;
     }
     if (!response_packet.IsValid()) {
@@ -305,10 +319,21 @@ bool SPICoprocessor::PartialWrite(ObjectDictionary::Address addr, uint8_t *objec
         // Handshake pin gets set LO by SPIWaitForAck(), so we need to re-assert it here for retries to bring it HI.
         config_.interface.SPIUseHandshakePin(true);  // Set handshake pin to solicit a transaction with the RP2040.
 #endif
-        int bytes_written = SPIWriteBlocking(write_packet.GetBuf(), write_packet.GetBufLenBytes());
-
+        // Don't end the transaction yet to allow recovery of packets from kErrorHandshakeHigh.
+        int bytes_written = SPIWriteBlocking(write_packet.GetBuf(), write_packet.GetBufLenBytes(), false);
+#ifdef ON_COPRO_MASTER
+        if (bytes_written == ReturnCode::kErrorHandshakeHigh) {
+            // Oops, didn't see you there! Go ahead and say what you wanted to.
+            // Get the slave interface to expect a handshake high.
+            config_.interface.SPIWaitForHandshake();
+            Update(true);
+        }
+#endif
+        config_.interface.SPIEndTransaction();
         if (bytes_written < 0) {
-            snprintf(error_message, kErrorMessageMaxLen, "Error code %d while writing object over SPI.", bytes_written);
+            snprintf(error_message, kErrorMessageMaxLen, "Error code %d (%s) while writing object over SPI.",
+                     bytes_written, ReturnCodeToString(static_cast<ReturnCode>(bytes_written)));
+
             goto PARTIAL_WRITE_FAILED;
         }
         if (require_ack && !SPIWaitForAck()) {
@@ -371,7 +396,15 @@ bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t *object
         // talk
         // if it needs to).
         Update(true);  // Check to see if handshake line is raised before blasting a packet into the ESP32.
-        int bytes_written = SPIWriteBlocking(read_request_packet.GetBuf(), read_request_bytes);
+        // Don't end transaction in order to allow recovery from kErrorHandshakeHigh error.
+        int bytes_written = SPIWriteBlocking(read_request_packet.GetBuf(), read_request_bytes, false);
+        if (bytes_written == ReturnCode::kErrorHandshakeHigh) {
+            // Oops, didn't see you there! Go ahead and say what you wanted to.
+            // Get the slave interface to expect a handshake high.
+            config_.interface.SPIWaitForHandshake();
+            Update(true);
+        }
+        config_.interface.SPIEndTransaction();
         int bytes_read = 0;
         if (bytes_written < 0) {
             snprintf(error_message, kErrorMessageMaxLen, "Error code %d (%s) while writing read request over SPI.",
