@@ -182,7 +182,9 @@ class CC1312 : public SPICoprocessorSlaveInterface {
      * Initialization function. Currently unused.
      * @retval True if the initialization was successful, false otherwise.
      */
-    inline bool Init() { return true; }
+    inline bool Init() {
+        return Init(true);  // Assume SPI bus already initialize.
+    }
 
     /**
      * De-initialization function. Currently unused.
