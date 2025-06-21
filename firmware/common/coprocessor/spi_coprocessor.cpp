@@ -48,70 +48,82 @@ bool SPICoprocessor::Update(bool blocking) {
 
     // Incoming unsolicited transmission from ESP32.
     uint8_t rx_buf[kSPITransactionMaxLenBytes];
-    SPIReadBlocking(rx_buf, 1, false);  // Peek the command first, keep chip select asserted.
-    SCCommand cmd = static_cast<SCCommand>(rx_buf[0]);
-    switch (cmd) {
-        case kCmdWriteToMaster:
-        case kCmdWriteToMasterRequireAck: {
-            // Figure out how long the write packet is, then read in the rest of it.
-            SPIReadBlocking(rx_buf + sizeof(SCCommand), SCWritePacket::kDataOffsetBytes - sizeof(SCCommand),
-                            false);  // Read addr, offset, and len.
-            uint16_t len;
-            memcpy(&len, rx_buf + SCWritePacket::kDataOffsetBytes - sizeof(uint16_t), sizeof(uint16_t));
-            // Read the rest of the write packet and complete the transaction. Guard to not run off end if invalid
-            // len is received.
-            SPIReadBlocking(rx_buf + SCWritePacket::kDataOffsetBytes,
-                            MIN(len, SCWritePacket::kDataMaxLenBytes) + SCPacket::kCRCLenBytes, true);
-            SCWritePacket write_packet =
-                SCWritePacket(rx_buf, SCWritePacket::kDataOffsetBytes + len + SCPacket::kCRCLenBytes);
-            if (!write_packet.IsValid()) {
-                CONSOLE_ERROR("SPICoprocessor::Update", "Received unsolicited write to master with bad checksum.");
-                return false;
+    config_.interface.SPIWaitForHandshake();                  // Call this to get expect_handshake_ set to true.
+    uint16_t bytes_read = SPIReadBlocking(rx_buf, 1, false);  // Peek the command first, keep chip select asserted.
+    if (bytes_read < 0) {
+        CONSOLE_ERROR("SPICoprocessor::Update", "SPI command read received non-timeout error code %d (%s).", bytes_read,
+                      ReturnCodeToString(static_cast<ReturnCode>(bytes_read)));
+        ret = false;
+    } else if (bytes_read == 0) {
+        CONSOLE_ERROR("SPICoprocessor::Update", "SPI command read received 0 Bytes, no command received.");
+        ret = false;
+    } else {
+        SCCommand cmd = static_cast<SCCommand>(rx_buf[0]);
+        switch (cmd) {
+            case kCmdWriteToMaster:
+            case kCmdWriteToMasterRequireAck: {
+                // Figure out how long the write packet is, then read in the rest of it.
+                SPIReadBlocking(rx_buf + sizeof(SCCommand), SCWritePacket::kDataOffsetBytes - sizeof(SCCommand),
+                                false);  // Read addr, offset, and len.
+                uint16_t len;
+                memcpy(&len, rx_buf + SCWritePacket::kDataOffsetBytes - sizeof(uint16_t), sizeof(uint16_t));
+                // Read the rest of the write packet and complete the transaction. Guard to not run off end if invalid
+                // len is received.
+                SPIReadBlocking(rx_buf + SCWritePacket::kDataOffsetBytes,
+                                MIN(len, SCWritePacket::kDataMaxLenBytes) + SCPacket::kCRCLenBytes, true);
+                SCWritePacket write_packet =
+                    SCWritePacket(rx_buf, SCWritePacket::kDataOffsetBytes + len + SCPacket::kCRCLenBytes);
+                if (!write_packet.IsValid()) {
+                    CONSOLE_ERROR("SPICoprocessor::Update", "Received unsolicited write to master with bad checksum.");
+                    return false;
+                }
+                ret = object_dictionary.SetBytes(write_packet.addr, write_packet.data, write_packet.len,
+                                                 write_packet.offset);
+                bool ack = true;
+                if (!ret) {
+                    CONSOLE_ERROR(
+                        "SPICoprocessor::Update",
+                        "Failed to write data for write to slave at address 0x%x with offset %d and length %d Bytes.",
+                        write_packet.addr, write_packet.offset, write_packet.len);
+                    ack = false;
+                }
+                if (write_packet.cmd == kCmdWriteToMasterRequireAck) {
+                    SPISendAck(ack);
+                }
+                break;
             }
-            ret =
-                object_dictionary.SetBytes(write_packet.addr, write_packet.data, write_packet.len, write_packet.offset);
-            bool ack = true;
-            if (!ret) {
-                CONSOLE_ERROR(
-                    "SPICoprocessor::Update",
-                    "Failed to write data for write to slave at address 0x%x with offset %d and length %d Bytes.",
-                    write_packet.addr, write_packet.offset, write_packet.len);
-                ack = false;
+            case kCmdReadFromMaster: {
+                // NOTE: If an Object lager than SCResponsePacket::kDataMaxLenBytes - SCReadRequestPacket::kBufLenBytes,
+                // the slave must request multiple reads with offsets to read the full object.
+                SPIReadBlocking(rx_buf + sizeof(SCCommand), SCReadRequestPacket::kBufLenBytes - sizeof(SCCommand),
+                                false);
+                SCReadRequestPacket read_request_packet =
+                    SCReadRequestPacket(rx_buf, SCReadRequestPacket::kBufLenBytes);
+                if (!read_request_packet.IsValid()) {
+                    config_.interface.SPIEndTransaction();
+                    CONSOLE_ERROR("SPICoprocessor::Update", "Received unsolicited read from master with bad checksum.");
+                    return false;
+                }
+                SCResponsePacket response_packet;
+                response_packet.cmd = kCmdDataBlock;
+                ret = object_dictionary.GetBytes(read_request_packet.addr, response_packet.data,
+                                                 read_request_packet.len, read_request_packet.offset);
+                if (!ret) {
+                    CONSOLE_ERROR("SPICoprocessor::Update",
+                                  "Failed to retrieve data for read from master at address 0x%x with length %d Bytes.",
+                                  read_request_packet.addr, read_request_packet.len);
+                }
+                response_packet.data_len_bytes = read_request_packet.len;
+                response_packet.PopulateCRC();
+                SPIWriteBlocking(response_packet.GetBuf(), response_packet.GetBufLenBytes());
+                break;
             }
-            if (write_packet.cmd == kCmdWriteToMasterRequireAck) {
-                SPISendAck(ack);
-            }
-            break;
-        }
-        case kCmdReadFromMaster: {
-            // NOTE: If an Object lager than SCResponsePacket::kDataMaxLenBytes - SCReadRequestPacket::kBufLenBytes,
-            // the slave must request multiple reads with offsets to read the full object.
-            SPIReadBlocking(rx_buf + sizeof(SCCommand), SCReadRequestPacket::kBufLenBytes - sizeof(SCCommand), false);
-            SCReadRequestPacket read_request_packet = SCReadRequestPacket(rx_buf, SCReadRequestPacket::kBufLenBytes);
-            if (!read_request_packet.IsValid()) {
+            default:
                 config_.interface.SPIEndTransaction();
-                CONSOLE_ERROR("SPICoprocessor::Update", "Received unsolicited read from master with bad checksum.");
-                return false;
-            }
-            SCResponsePacket response_packet;
-            response_packet.cmd = kCmdDataBlock;
-            ret = object_dictionary.GetBytes(read_request_packet.addr, response_packet.data, read_request_packet.len,
-                                             read_request_packet.offset);
-            if (!ret) {
                 CONSOLE_ERROR("SPICoprocessor::Update",
-                              "Failed to retrieve data for read from master at address 0x%x with length %d Bytes.",
-                              read_request_packet.addr, read_request_packet.len);
-            }
-            response_packet.data_len_bytes = read_request_packet.len;
-            response_packet.PopulateCRC();
-            SPIWriteBlocking(response_packet.GetBuf(), response_packet.GetBufLenBytes());
-            break;
+                              "Received unsolicited packet from ESP32 with unsupported cmd=%d.", cmd);
+                return false;
         }
-        default:
-            config_.interface.SPIEndTransaction();
-            CONSOLE_ERROR("SPICoprocessor::Update", "Received unsolicited packet from ESP32 with unsupported cmd=%d.",
-                          cmd);
-            return false;
     }
 #elif defined(ON_COPRO_SLAVE)
     // TODO: Return if not blocking and no transaction is pending.
@@ -432,7 +444,8 @@ bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t *object
         // Need to request the max transaction size. If we request something smaller, like read_request_bytes (which
         // doesn't include the response bytes), the SPI transmit function won't write the additional reply into our
         // buffer.
-        int bytes_exchanged = SPIWriteReadBlocking(read_request_packet.GetBuf(), rx_buf, SCPacket::kPacketMaxLenBytes);
+        int bytes_exchanged =
+            SPIWriteReadBlocking(read_request_packet.GetBuf(), rx_buf, SCPacket::kPacketMaxLenBytes, false);
 
         if (bytes_exchanged < 0) {
             snprintf(error_message, kErrorMessageMaxLen, "Error code %d (%s) during read from master SPI transaction.",
