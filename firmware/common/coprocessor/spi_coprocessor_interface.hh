@@ -254,6 +254,25 @@ class SPICoprocessorInterface {
         inline uint8_t *GetBuf() override { return (uint8_t *)(&cmd); }
         inline uint8_t *GetCRCPtr() override { return data + data_len_bytes; }
     };
+
+    /**
+     * Initialize the SPI coprocessor interface.
+     * @retval True if initialization was successful, false otherwise.
+     */
+    virtual bool Init() = 0;
+
+    /**
+     * Deinitialize the SPI coprocessor interface.
+     * @retval True if deinitialization was successful, false otherwise.
+     */
+    virtual bool DeInit() = 0;
+
+    virtual bool SPIBeginTransaction() = 0;
+    virtual void SPIEndTransaction() = 0;
+    virtual inline bool SPIClaimNextTransaction() = 0;
+    virtual inline void SPIReleaseNextTransaction() = 0;
+    virtual int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len_bytes = kSPITransactionMaxLenBytes,
+                                     bool end_transaction = true) = 0;
 };
 
 /**
@@ -263,29 +282,10 @@ class SPICoprocessorInterface {
 class SPICoprocessorMasterInterface : public SPICoprocessorInterface {
    public:
     /**
-     * Initialize the SPI coprocessor master interface.
-     * @retval True if initialization was successful, false otherwise.
-     */
-    virtual bool Init() = 0;
-
-    /**
-     * Deinitialize the SPI coprocessor master interface.
-     * @retval True if deinitialization was successful, false otherwise.
-     */
-    virtual bool DeInit() = 0;
-
-    /**
      * Determine whether the handshake pin will be used during the next SPI transaction to solicit a response.
      * @param[in] level True to set pin high once SPI peripheral is loaded up, false to set pin low.
      */
     virtual inline void SPIUseHandshakePin(bool level) = 0;
-
-    virtual inline bool SPIBeginTransaction() = 0;
-    virtual inline void SPIEndTransaction() = 0;
-    virtual inline bool SPIClaimNextTransaction() = 0;
-    virtual inline void SPIReleaseNextTransaction() = 0;
-    virtual int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len_bytes = kSPITransactionMaxLenBytes,
-                                     bool end_transaction = true) = 0;
 
     virtual inline void UpdateNetworkLED() = 0;
 };
@@ -310,18 +310,6 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     static constexpr uint32_t kSPIHandshakeTimeoutMs = 20;
     // How long to loop in Update() for after initializing the device in order to allow it to query for settings data.
     static constexpr uint32_t kBootupDelayMs = 500;
-
-    /**
-     * Initialize the SPI coprocessor slave interface.
-     * @retval True if initialization was successful, false otherwise.
-     */
-    virtual bool Init() = 0;
-
-    /**
-     * Deinitialize the SPI coprocessor slave interface.
-     * @retval True if deinitialization was successful, false otherwise.
-     */
-    virtual bool DeInit() = 0;
 
     /**
      * Checks the level of the HANDSHAKE pin used to initiate communication from the ESP32 to RP2040.
@@ -358,13 +346,6 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
 
     virtual bool IsEnabled() = 0;
     virtual void SetEnable(bool enabled) = 0;
-
-    virtual bool SPIBeginTransaction() = 0;
-    virtual void SPIEndTransaction() = 0;
-    virtual inline bool SPIClaimNextTransaction() = 0;
-    virtual inline void SPIReleaseNextTransaction() = 0;
-    virtual int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len_bytes = kSPITransactionMaxLenBytes,
-                                     bool end_transaction = true) = 0;
 
    protected:
     // Use this flag to indicate whether we are expecting the handshake line to go high. If it is high during a

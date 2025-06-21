@@ -19,7 +19,7 @@ class PFBQueue {
      * NOTE: Copy and move constructors are not implemented! Pass by reference only to avoid creating a "double free"
      * error, which is caused by two PFBQueues sharing the same buffer, and both trying to free it when they are
      * destroyed.
-     * @param[in] config_in Defines length of the buffer, and points to the buffer of size buf_len_num_elements+1 if
+     * @param[in] config_in Defines length of the buffer, and points to the buffer of size buf_len_num_elements if
      * PFBQueue should work with a pre-allocated buffer. If config_in.buffer is left as nullptr, a buffer will be
      * dynamically allocated of size buf_len_num_elements * sizeof(T).
      * @retval PFBQueue object.
@@ -47,18 +47,22 @@ class PFBQueue {
      * @retval True if succeeded, false if the buffer is full.
      */
     bool Push(T element) {
-        uint16_t next_tail = IncrementIndex(tail_);
-        if (next_tail == head_) {
-            if (config_.overwrite_when_full) {
-                // Overwriting allowed; nudge the head to overwrite the first enqueued element.
-                head_++;
-            } else {
-                // Overwriting not allowed; this push will result in an error.
+        if (is_full_) {
+            if (!config_.overwrite_when_full) {
+                // Buffer is full and not overwriting; cannot push.
                 return false;
+            } else {
+                head_ = IncrementIndex(head_);  // Move head forward to overwrite the oldest element.
             }
         }
+
         config_.buffer[tail_] = element;
-        tail_ = next_tail;
+        tail_ = IncrementIndex(tail_);
+
+        if (tail_ == head_) {
+            is_full_ = true;
+        }
+
         return true;
     }
 
@@ -68,11 +72,12 @@ class PFBQueue {
      * @retval True if successful, false if the buffer is empty.
      */
     bool Pop(T &element) {
-        if (head_ == tail_) {
+        if (head_ == tail_ && !is_full_) {
             return false;
         }
         element = config_.buffer[head_];
         head_ = IncrementIndex(head_);
+        is_full_ = false;
         return true;
     }
 
@@ -91,11 +96,29 @@ class PFBQueue {
     }
 
     /**
+     * Discards a specified number of elements from the front of the buffer.
+     * @param[in] num_elements Number of elements to discard from the front of the buffer.
+     * @retval True if successful, false if there are not enough elements to discard.
+     */
+    inline bool Discard(uint16_t num_elements) {
+        if (num_elements > Length()) {
+            return false;  // Not enough elements to discard.
+        }
+        head_ = IncrementIndex(head_, num_elements);
+        if (num_elements > 0) {
+            is_full_ = false;
+        }
+        return true;
+    }
+
+    /**
      * Returns the number of elements currently in the buffer.
      * @retval Number of elements in the buffer.
      */
-    uint16_t Length() {
-        if (head_ == tail_) {
+    inline uint16_t Length() {
+        if (is_full_) {
+            return buffer_length_;
+        } else if (head_ == tail_) {
             return 0;  // Empty.
         } else if (head_ > tail_) {
             return buffer_length_ - (head_ - tail_);  // Wrapped.
@@ -105,20 +128,22 @@ class PFBQueue {
     }
 
     /**
-     * Return the maximum number of elements that can be stored in the queue. This is one less than the length of the
-     * buffer.
+     * Return the maximum number of elements that can be stored in the queue.
      * @retval Number of elements that can be stored in the queue.
      */
-    inline uint16_t MaxNumElements() { return config_.buf_len_num_elements - 1; }
+    inline uint16_t MaxNumElements() { return config_.buf_len_num_elements; }
 
     /**
      * Empty out the buffer by setting the head equal to the tail.
      */
-    void Clear() { head_ = tail_; }
+    void Clear() {
+        head_ = tail_ = 0;
+        is_full_ = false;
+    }
 
    private:
     /**
-     * Increments and wraps a buffer index. Index must be < 2*(config_.buf_len_num_elements+1)!
+     * Increments and wraps a buffer index.
      * @param[in] index Value to increment and wrap.
      * @param[in] increment Value to increment the index by. Defaults to 1.
      * @retval Incremented and wrapped value.
@@ -130,6 +155,7 @@ class PFBQueue {
 
     PFBQueueConfig config_;
     bool buffer_was_dynamically_allocated_ = false;
+    bool is_full_ = false;  // New flag to distinguish full from empty when head == tail
     uint16_t buffer_length_;
     uint16_t head_ = 0;
     uint16_t tail_ = 0;

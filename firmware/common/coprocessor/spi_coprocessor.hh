@@ -22,6 +22,8 @@ class SPICoprocessor : public SPICoprocessorInterface {
         SPICoprocessorSlaveInterface &interface;  // Reference to the slave interface.
 #elif defined(ON_COPRO_SLAVE)
         SPICoprocessorMasterInterface &interface;  // Reference to the master interface.
+#else
+        SPICoprocessorInterface &interface;  // Reference to the interface. Not used on other platforms.
 #endif
     };
 
