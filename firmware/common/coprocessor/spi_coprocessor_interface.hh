@@ -108,6 +108,8 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     // How long to loop in Update() for after initializing the device in order to allow it to query for settings data.
     static constexpr uint32_t kBootupDelayMs = 500;
 
+    virtual bool Update();
+
     /**
      * Checks the level of the HANDSHAKE pin used to initiate communication from the ESP32 to RP2040.
      * NOTE: There is some hysteresis! The ESP32 can request a transfer as soon as kSPIPostTransmitLockoutUs is up, but

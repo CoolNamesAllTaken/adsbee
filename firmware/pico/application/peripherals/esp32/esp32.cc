@@ -29,13 +29,127 @@ bool ESP32::Init() {
     // that.
 
     return true;
-};
+}
 
 bool ESP32::DeInit() {
     // ESP32 enable pin.
     SetEnable(false);
     return true;
-};
+}
+
+bool ESP32::Update() {
+    // IsEnabled() check happens at the higher level Update() function in SPICoprocessor, so don't repeat it here.
+
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+
+    if (timestamp_ms - last_device_status_update_timestamp_ms_ > device_status_update_interval_ms) {
+        // Query ESP32's device status.
+        ObjectDictionary::DeviceStatus device_status;
+        if (esp32.Read(ObjectDictionary::Address::kAddrDeviceStatus, device_status)) {
+            last_device_status_update_timestamp_ms_ = timestamp_ms;
+        } else {
+            CONSOLE_ERROR("ESP32::Update", "Unable to read ESP32 status.");
+            return false;
+        }
+
+        if (device_status.num_queued_sc_command_requests > 0) {
+            uint16_t num_requests_processed = 0;
+            while (num_requests_processed < device_status.num_queued_sc_command_requests &&
+                   num_requests_processed < kMaxNumSCCommandRequestsPerUpdate) {
+                // Read SCCommand request from ESP32.
+                ObjectDictionary::SCCommandRequest sc_command_request;
+                if (!esp32.Read(ObjectDictionary::Address::kAddrSCCommandRequest, sc_command_request)) {
+                    CONSOLE_ERROR("ESP32::Update", "Unable to read SCCommand request %d/%d from ESP32.",
+                                  num_requests_processed + 1, device_status.num_queued_sc_command_requests);
+                    return false;
+                }
+                // Execute the request.
+
+                // Roll the requests queue.
+                ObjectDictionary::RollQueueRequest roll_request = {
+                    .queue_id = ObjectDictionary::QueueID::kQueueIDSCCommandRequests,
+                    .num_items = 1,
+                };
+                if (!esp32.Write(ObjectDictionary::Address::kAddrRollQueue, roll_request, true)) {
+                    // Require the roll request to be acknowledged.
+                    CONSOLE_ERROR("ESP32::Update", "Unable to roll SCCommand request queue on ESP32.");
+                    return false;
+                }
+                num_requests_processed++;
+            }
+        }
+
+#ifdef PULL_ESP32_LOG_MESSAGES
+        if (device_status.num_pending_log_messages > 0) {
+            // Read log messages from ESP32.
+            uint8_t
+                log_messages_buffer[ObjectDictionary::kLogMessageMaxNumChars * ObjectDictionary::kLogMessageQueueDepth];
+            if (esp32.Read(ObjectDictionary::Address::kAddrLogMessages, log_messages_buffer,
+                           device_status.pending_log_messages_packed_size_bytes)) {
+                object_dictionary.UnpackLogMessages(log_messages_buffer, sizeof(log_messages_buffer),
+                                                    object_dictionary.log_message_queue,
+                                                    device_status.num_pending_log_messages);
+
+                while (object_dictionary.log_message_queue.Length() > 0) {
+                    ObjectDictionary::LogMessage log_message;
+                    if (object_dictionary.log_message_queue.Pop(log_message)) {
+                        switch (log_message.log_level) {
+                            case SettingsManager::LogLevel::kInfo:
+                                CONSOLE_INFO("ESP32 >>", "%.*s", log_message.num_chars, log_message.message);
+                                break;
+                            case SettingsManager::LogLevel::kWarnings:
+                                CONSOLE_WARNING("ESP32 >>", "%.*s", log_message.num_chars, log_message.message);
+                                break;
+                            case SettingsManager::LogLevel::kErrors:
+                                CONSOLE_ERROR("ESP32 >>", "%.*s", log_message.num_chars, log_message.message);
+                                break;
+                            default:
+                                CONSOLE_PRINTF("ESP32 >>", "%s", log_message.num_chars, log_message.message);
+                                break;
+                        }
+                    }
+                }
+            } else {
+                CONSOLE_ERROR("main", "Unable to read log messages from ESP32.");
+            }
+        }
+#else
+        
+    }
+    return true;
+}
+
+bool ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRequest &request) {
+    switch (request.command) {
+        case ObjectDictionary::SCCommand::kCmdWriteToSlaveRequireAck:
+        [[fallthrough]];
+        case ObjectDictionary::SCCommand::kCmdWriteToSlave: {
+            switch (request.addr) {
+                default:
+                    CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest", "No implementation defined for writing to address 0x%x on slave.",
+                                  request.addr);
+                    return false;
+            }
+            break;
+        }
+
+
+        case ObjectDictionary::SCCommand::kCmdReadFromSlave: {
+            switch (request.addr) {
+
+                default:
+                    CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest", "No implementation defined for reading from address 0x%x for on slave.",
+                                  request.addr);
+                    return false;
+            }
+            break;
+        }
+        default:
+            CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest", "Unsupported SCCommand received from ESP32: %d.",
+                          request.command);
+            return false;
+    }
+}
 
 bool ESP32::SPIGetHandshakePinLevel(bool blocking) {
     if (blocking) {

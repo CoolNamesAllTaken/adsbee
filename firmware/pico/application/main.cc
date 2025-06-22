@@ -21,9 +21,6 @@
 // For testing only
 #include "hardware/gpio.h"
 
-// Uncomment this to forward log messages overs SPI from the ESP32.
-// #define PULL_ESP32_LOG_MESSAGES
-
 const uint16_t kStatusLEDBootupBlinkPeriodMs = 200;
 const uint32_t kESP32BootupTimeoutMs = 10000;
 const uint32_t kESP32BootupCommsRetryMs = 500;
@@ -143,8 +140,7 @@ int main() {
     multicore_reset_core1();
     multicore_launch_core1(main_core1);
 
-    uint16_t esp32_heartbeat_interval_ms = 200;  // Set to 5Hz to make network terminal commands pass less laggy.
-    uint32_t esp32_heartbeat_last_sent_timestamp_ms = get_time_since_boot_ms();
+    uint32_t esp32_last_heartbeat_timestamp_ms = 0;
 
     while (true) {
         // Loop forever.
@@ -152,68 +148,12 @@ int main() {
         comms_manager.Update();
         adsbee.Update();
 
-        bool esp32_heartbeat_was_acked = false;
-        if (esp32.IsEnabled()) {
-            // Send ESP32 heartbeat.
-            uint32_t esp32_heartbeat_timestamp_ms = get_time_since_boot_ms();
-            if (esp32_heartbeat_timestamp_ms - esp32_heartbeat_last_sent_timestamp_ms > esp32_heartbeat_interval_ms) {
-                ObjectDictionary::DeviceStatus esp32_status;
-                if (esp32.Read(ObjectDictionary::Address::kAddrDeviceStatus, esp32_status)) {
-                    esp32_heartbeat_was_acked = true;
-                } else {
-                    CONSOLE_ERROR("main", "Unable to read ESP32 status.");
-                }
-#ifdef PULL_ESP32_LOG_MESSAGES
-                if (esp32_status.num_pending_log_messages > 0) {
-                    // Read log messages from ESP32.
-                    uint8_t log_messages_buffer[ObjectDictionary::kLogMessageMaxNumChars *
-                                                ObjectDictionary::kLogMessageQueueDepth];
-                    if (esp32.Read(ObjectDictionary::Address::kAddrLogMessages, log_messages_buffer,
-                                   esp32_status.pending_log_messages_packed_size_bytes)) {
-                        object_dictionary.UnpackLogMessages(log_messages_buffer, sizeof(log_messages_buffer),
-                                                            object_dictionary.log_message_queue,
-                                                            esp32_status.num_pending_log_messages);
+        esp32.Update();
 
-                        while (object_dictionary.log_message_queue.Length() > 0) {
-                            ObjectDictionary::LogMessage log_message;
-                            if (object_dictionary.log_message_queue.Pop(log_message)) {
-                                switch (log_message.log_level) {
-                                    case SettingsManager::LogLevel::kInfo:
-                                        CONSOLE_INFO("ESP32 >>", "%.*s", log_message.num_chars, log_message.message);
-                                        break;
-                                    case SettingsManager::LogLevel::kWarnings:
-                                        CONSOLE_WARNING("ESP32 >>", "%.*s", log_message.num_chars, log_message.message);
-                                        break;
-                                    case SettingsManager::LogLevel::kErrors:
-                                        CONSOLE_ERROR("ESP32 >>", "%.*s", log_message.num_chars, log_message.message);
-                                        break;
-                                    default:
-                                        CONSOLE_PRINTF("ESP32 >>", "%s", log_message.num_chars, log_message.message);
-                                        break;
-                                }
-                            }
-                        }
-                    } else {
-                        CONSOLE_ERROR("main", "Unable to read log messages from ESP32.");
-                    }
-                }
-#else
-                if (!esp32.Write(ObjectDictionary::kAddrScratch, esp32_heartbeat_timestamp_ms, true)) {
-                    CONSOLE_ERROR("main", "ESP32 heartbeat failed.");
-                } else {
-                    esp32_heartbeat_was_acked = true;
-                }
-#endif
-
-                esp32_heartbeat_last_sent_timestamp_ms = esp32_heartbeat_timestamp_ms;
-            }
-
-        } else {
-            // The heartbeat write calls Update() if the handshake line is pending, so only call Update() manually
-            // if no heartbeat packet was sent.
-            esp32.Update();
-        }
-        if (!esp32.IsEnabled() || esp32_heartbeat_was_acked) {
+        // Poke the watchdog to keep things alive if the ESP32 is responding or if it's disabled.
+        uint32_t old_esp32_last_heartbeat_timestamp_ms = esp32_last_heartbeat_timestamp_ms;
+        esp32_last_heartbeat_timestamp_ms = esp32.GetLastHeartbeatTimestampMs();
+        if (esp32_last_heartbeat_timestamp_ms != old_esp32_last_heartbeat_timestamp_ms || !esp32.IsEnabled()) {
             // Don't need to talk to the ESP32, or it acknowledged a heartbeat just now: poke the watchdog since nothing
             // seems amiss.
             adsbee.PokeWatchdog();

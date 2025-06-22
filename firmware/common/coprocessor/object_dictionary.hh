@@ -97,11 +97,7 @@ class ObjectDictionary {
         uint16_t num_pending_log_messages = 0;
         uint32_t pending_log_messages_packed_size_bytes = 0;
 
-        // Fields for the slave to request a command to be performed by the master.
-        uint8_t requested_command = 0x00;
-        Address requested_command_addr = kAddrInvalid;
-        uint16_t requested_command_offset = 0;
-        uint16_t requested_command_len = 0;  // Length of the data to read/write in the requested command.
+        uint16_t num_queued_sc_command_requests = 0;  // Number of SCCommand requests queued for the master.
     };
 
     /**
