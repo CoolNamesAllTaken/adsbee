@@ -45,7 +45,6 @@ class ADSBeeServer {
      */
     ADSBeeServer() {
         network_console_rx_queue = xQueueCreate(kNetworkConsoleQueueLen, sizeof(NetworkConsoleMessage));
-        network_console_tx_queue = xQueueCreate(kNetworkConsoleQueueLen, sizeof(NetworkConsoleMessage));
         rp2040_aircraft_dictionary_metrics_queue = xQueueCreate(1, sizeof(AircraftDictionary::Metrics));
     };
 
@@ -54,7 +53,6 @@ class ADSBeeServer {
      */
     ~ADSBeeServer() {
         vQueueDelete(network_console_rx_queue);
-        vQueueDelete(network_console_tx_queue);
         vQueueDelete(rp2040_aircraft_dictionary_metrics_queue);
     }
 
@@ -84,7 +82,6 @@ class ADSBeeServer {
     AircraftDictionary aircraft_dictionary;
 
     QueueHandle_t network_console_rx_queue;
-    QueueHandle_t network_console_tx_queue;
     httpd_handle_t server = nullptr;
     WebSocketServer network_console;
     WebSocketServer network_metrics;

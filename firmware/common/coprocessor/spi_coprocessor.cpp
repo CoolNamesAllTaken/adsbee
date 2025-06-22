@@ -234,7 +234,7 @@ bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t *object
     read_request_packet.len = len;
     read_request_packet.PopulateCRC();
 
-    uint8_t rx_buf[kSPITransactionMaxLenBytes];
+    uint8_t rx_buf[SPICoprocessorPacket::kSPITransactionMaxLenBytes];
 
     uint16_t read_request_bytes = read_request_packet.GetBufLenBytes();
 

@@ -64,7 +64,8 @@ class ESP32 : public SPICoprocessorSlaveInterface {
     }
     bool SPIGetHandshakePinLevel(bool blocking = true);
 
-    int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len_bytes = kSPITransactionMaxLenBytes,
+    int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf,
+                             uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
                              bool end_transaction = true);
 
     uint32_t device_status_update_interval_ms =

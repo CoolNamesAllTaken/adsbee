@@ -192,6 +192,11 @@ class CC1312 : public SPICoprocessorSlaveInterface {
      */
     inline bool DeInit() { return true; };
 
+    inline uint32_t GetLastHeartbeatTimestampMs() {
+        // TODO: Fill this out.
+        return 0;
+    }
+
     /**
      * Adjusts the SPI peripheral to be able to talk to the CC1312. Nominally adjusts clock rate, but also adjusts CPHA
      * and CPOL if the bootloader is active.

@@ -244,19 +244,32 @@ bool ADSBeeServer::Update() {
 
     // Receive incoming network console messages from the console websocket.
     NetworkConsoleMessage message;
-    while (xQueueReceive(network_console_rx_queue, &message, 0) == pdTRUE) {
-        // Non-blocking receive of network console messages.
-        // Write message contents to Pico console.
-        object_dictionary.RequestSCCommand(ObjectDictionary::SCCommandRequest{
-            .command = ObjectDictionary::SCCommand::kCmdReadFromSlave,
-            .addr = ObjectDictionary::Address::kAddrConsole,
-            .offset = 0,
-            .len = message.buf_len,
-            .complete_callback =
-                []() { CONSOLE_INFO("ADSBeeServer::Update", "Network console message written to Pico successfully."); },
-        });
-        message.Destroy();  // Free the message buffer to prevent memory leaks.
+    uint16_t num_chars_added = 0;
+    while (!object_dictionary.network_console_tx_queue.IsFull() &&
+           object_dictionary.network_console_tx_queue.MaxNumElements() -
+                   object_dictionary.network_console_tx_queue.Length() <
+               ObjectDictionary::kNetworkConsoleMessageMaxLenBytes &&
+           xQueueReceive(network_console_rx_queue, &message, 0) == pdTRUE) {
+        // Dequeue network messages one by one.
+        for (uint16_t i = 0; i < message.buf_len; i++) {
+            // Feed characters in message into the TX queue.
+            if (!object_dictionary.network_console_tx_queue.Push(message.buf[i])) {
+                CONSOLE_ERROR("ADSBeeServer::Update", "Push to network console TX queue failed. May have overflowed?");
+                object_dictionary.network_console_tx_queue.Clear();
+                ret = false;
+                break;
+            }
+            num_chars_added++;
+        }
+        message.Destroy();  // Free up the message buffer now that it's been pushed to the TX queue.
     }
+    // Tell Pico to come fetch the newly added console characters.
+    object_dictionary.RequestSCCommand(
+        ObjectDictionary::SCCommandRequest{.command = ObjectDictionary::SCCommand::kCmdReadFromSlave,
+                                           .addr = ObjectDictionary::Address::kAddrConsole,
+                                           .offset = 0,
+                                           .len = num_chars_added,
+                                           .complete_callback = nullptr});
 
     // Prune inactive WebSocket clients and other housekeeping.
     network_console.Update();

@@ -58,7 +58,7 @@ bool ESP32::Update() {
                    num_requests_processed < kMaxNumSCCommandRequestsPerUpdate) {
                 // Read SCCommand request from ESP32.
                 ObjectDictionary::SCCommandRequest sc_command_request;
-                if (!esp32.Read(ObjectDictionary::Address::kAddrSCCommandRequest, sc_command_request)) {
+                if (!esp32.Read(ObjectDictionary::Address::kAddrSCCommandRequests, sc_command_request)) {
                     CONSOLE_ERROR("ESP32::Update", "Unable to read SCCommand request %d/%d from ESP32.",
                                   num_requests_processed + 1, device_status.num_queued_sc_command_requests);
                     return false;
@@ -113,32 +113,74 @@ bool ESP32::Update() {
                 CONSOLE_ERROR("main", "Unable to read log messages from ESP32.");
             }
         }
-#else
-        
+#endif
     }
     return true;
 }
 
 bool ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRequest &request) {
+    bool write_requires_ack = false;
     switch (request.command) {
         case ObjectDictionary::SCCommand::kCmdWriteToSlaveRequireAck:
-        [[fallthrough]];
+            write_requires_ack = true;
+            [[fallthrough]];
         case ObjectDictionary::SCCommand::kCmdWriteToSlave: {
             switch (request.addr) {
+                /** These are the addresses that the ESP32 can request a write to. **/
+                case ObjectDictionary::Address::kAddrSettingsData: {
+                    if (request.offset != 0) {
+                        CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest",
+                                      "Settings data write with non-zero offset (%d) not supported.", request.offset);
+                        return false;
+                    }
+                    // Write settings data to ESP32.
+                    if (request.len != sizeof(settings_manager.settings)) {
+                        CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest",
+                                      "Settings data write with invalid length (%d). Expected %d.", request.len,
+                                      sizeof(settings_manager.settings));
+                        return false;
+                    }
+                    if (!esp32.Write(request.addr, settings_manager.settings, write_requires_ack)) {
+                        CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest", "Unable to write settings data to ESP32.");
+                        return false;
+                    }
+                    break;  // Successfully wrote settings data to ESP32.
+                }
                 default:
-                    CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest", "No implementation defined for writing to address 0x%x on slave.",
-                                  request.addr);
+                    CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest",
+                                  "No implementation defined for writing to address 0x%x on slave.", request.addr);
                     return false;
             }
             break;
         }
 
-
         case ObjectDictionary::SCCommand::kCmdReadFromSlave: {
             switch (request.addr) {
+                /**  These are the addresses the ESP32 can request a read from. **/
+                case ObjectDictionary::Address::kAddrConsole: {
+                    // Read console message from ESP32.
 
+                    char buf[request.len + 1] = {0};
+                    if (!esp32.Read(ObjectDictionary::Address::kAddrConsole, buf, request.len)) {
+                        CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest", "Unable to read console message from ESP32.");
+                        return false;
+                    }
+                    for (uint16_t i = 0; i < request.len; i++) {
+                        char c = (char)buf[i];
+                        if (!comms_manager.esp32_console_rx_queue.Push(c)) {
+                            CONSOLE_ERROR("ObjectDictionary::SetBytes",
+                                          "ESP32 overflowed RP2040's network console queue.");
+                            comms_manager.esp32_console_rx_queue.Clear();
+                            return false;
+                        }
+                    }
+                    // Successfully read console message from ESP32.
+
+                    break;
+                }
                 default:
-                    CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest", "No implementation defined for reading from address 0x%x for on slave.",
+                    CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest",
+                                  "No implementation defined for reading from address 0x%x for on slave.",
                                   request.addr);
                     return false;
             }
@@ -149,6 +191,7 @@ bool ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRequest &request) 
                           request.command);
             return false;
     }
+    return true;
 }
 
 bool ESP32::SPIGetHandshakePinLevel(bool blocking) {

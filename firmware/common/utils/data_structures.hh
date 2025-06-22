@@ -41,6 +41,9 @@ class PFBQueue {
         }
     }
 
+    inline bool IsFull() { return is_full_; }
+    inline bool IsEmpty() { return (!is_full_ && (head_ == tail_)); }
+
     /**
      * Pushes an element onto the buffer.
      * @param[in] element Object to push onto the back of the buffer.

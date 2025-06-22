@@ -31,6 +31,7 @@ class ObjectDictionary {
 
 #ifdef ON_COPRO_SLAVE
     static constexpr uint16_t kSCCommandRequestQueueDepth = 10;
+    static constexpr uint16_t kNetworkConsoleTxQueueDepth = kNetworkConsoleMessageMaxLenBytes * 2;
 #endif
 
     enum Address : uint8_t {
@@ -49,6 +50,7 @@ class ObjectDictionary {
         kAddrDeviceStatus = 0x0C,  // Struct containing number of pending log messages and current timestamp.
         kAddrLogMessages = 0x0D,   // Used to retrieve log messages from ESP32 and CC1312.
         kAddrRollQueue = 0x0E,     // Used to roll various queues on coprocessor slaves to confirm they have been read.
+        kAddrSCCommandRequests = 0x0F,  // Used by slave to request commands from master.
         kNumAddrs
     };
 
@@ -72,6 +74,7 @@ class ObjectDictionary {
         kQueueIDInvalid = 0,        // Default value.
         kQueueIDLogMessages,        // Queue for log messages.
         kQueueIDSCCommandRequests,  // Queue for SCCommand requests from slave to master.
+        kQueueIDConsole,            // Queue for network console messages.
         kNumQueueIDs
     };
 
@@ -82,6 +85,7 @@ class ObjectDictionary {
 
     /**
      * Struct used by the slave to request a command to be performed by the master.
+     * Can't use packed attribute because of std::function member (not Plain Old Data aka. POD type).
      */
     struct SCCommandRequest {
         SCCommand command = SCCommand::kCmdInvalid;
@@ -89,7 +93,7 @@ class ObjectDictionary {
         uint16_t offset = 0;
         uint16_t len = 0;  // Length of the data to read/write in the requested command.
         // Callback function to execute when requested command is complete.
-        std::function<void()> complete_callback;
+        std::function<void()> complete_callback = nullptr;
     };
 
     struct __attribute__((__packed__)) DeviceStatus {
@@ -220,6 +224,12 @@ class ObjectDictionary {
             .buffer = sc_command_request_queue_buffer_,
             .overwrite_when_full = false  // We don't want to overwrite command requests, since they could be important.
         });
+    PFBQueue<char> network_console_tx_queue = PFBQueue<char>({
+        .buf_len_num_elements = kNetworkConsoleTxQueueDepth,
+        .buffer = network_console_message_buffer_,
+        .overwrite_when_full =
+            false  // We don't want to overwrite network console messages, since they could be importatnt.
+    });
 #endif
 
    private:
@@ -229,8 +239,11 @@ class ObjectDictionary {
     // messages waiting to be slurped up by the RP2040.
     LogMessage log_message_queue_buffer_[kLogMessageQueueDepth] = {};
 
+#ifdef ON_COPRO_SLAVE
     ObjectDictionary::SCCommandRequest sc_command_request_queue_buffer_[ObjectDictionary::kSCCommandRequestQueueDepth] =
         {};
+    char network_console_message_buffer_[kNetworkConsoleTxQueueDepth] = {};
+#endif
 };
 
 extern ObjectDictionary object_dictionary;

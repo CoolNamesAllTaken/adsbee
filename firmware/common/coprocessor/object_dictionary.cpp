@@ -2,6 +2,7 @@
 
 #include "hal.hh"  // for timestamping
 #ifdef ON_ESP32
+#include "adsbee_server.hh"
 #include "device_info.hh"
 #endif
 
@@ -46,9 +47,8 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                     log_message_queue.Discard(roll_request.num_items);
                     break;
                 case kQueueIDSCCommandRequests:
-                    // Roll the SCCommand request queue by popping each completed request and calling its callback.
                     for (uint16_t i = 0; i < roll_request.num_items; i++) {
-                        // Pop the request from the queue.
+                        // Pop requests one by one so that we can call their callbacks.
                         SCCommandRequest request;
                         if (!sc_command_request_queue.Pop(request)) {
                             CONSOLE_ERROR("ObjectDictionary::SetBytes",
@@ -58,6 +58,14 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                         if (request.complete_callback) {
                             request.complete_callback();  // Call the callback if it exists.
                         }
+                    }
+                    break;
+                case kQueueIDConsole:
+                    if (!network_console_tx_queue.Discard(roll_request.num_items)) {
+                        CONSOLE_ERROR("ObjectDictionary::SetBytes",
+                                      "Failed to discard %d chars from the network console TX queue.",
+                                      roll_request.num_items);
+                        return false;
                     }
                     break;
                 default:
@@ -76,7 +84,7 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             // Don't print here to avoid print of print doom loop explosion.
             // CONSOLE_INFO("ObjectDictionary::SetBytes", "Forwarding message to network console: %s",
             // message);
-            adsbee_server.network_console.BroadcastMessage(message);
+            adsbee_server.network_console.BroadcastMessage(message, buf_len);
             break;
         }
         case kAddrRaw1090Packet: {
@@ -151,17 +159,22 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             PackLogMessages(buf, buf_len, log_message_queue, kLogMessageQueueDepth);
             break;
         }
-#ifdef ON_ESP32
-        case kAddrConsole:
-            // ESP32 writing to the RP2040's network console interface.
-            for (uint16_t i = 0; i < buf_len; i++) {
-                char c = (char)buf[i];
-                if (!comms_manager.esp32_console_rx_queue.Push(c)) {
-                    CONSOLE_ERROR("ObjectDictionary::SetBytes", "ESP32 overflowed RP2040's network console queue.");
-                    comms_manager.esp32_console_rx_queue.Clear();
-                }
+        case kAddrSCCommandRequests: {
+            SCCommandRequest request;
+            if (!sc_command_request_queue.Peek(request)) {
+                CONSOLE_ERROR("ObjectDictionary::GetBytes", "No SCCommand requests available to read.");
+                return false;
             }
+            if (offset + buf_len > sizeof(SCCommandRequest)) {
+                CONSOLE_ERROR("ObjectDictionary::GetBytes",
+                              "Requested read of SCCommandRequest with offset %d and length %d exceeds max size %d.",
+                              offset, buf_len, sizeof(SCCommandRequest));
+                return false;
+            }
+            memcpy(buf, &request + offset, buf_len);
             break;
+        }
+#ifdef ON_ESP32
         case kAddrESP32DeviceInfo: {
             ESP32DeviceInfo esp32_device_info = GetESP32DeviceInfo();
             memcpy(buf, &esp32_device_info + offset, buf_len);
@@ -170,6 +183,24 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
         case kAddrESP32NetworkInfo: {
             ESP32NetworkInfo network_info = comms_manager.GetNetworkInfo();
             memcpy(buf, &network_info + offset, buf_len);
+            break;
+        }
+        case kAddrConsole: {
+            if (network_console_tx_queue.Length() < buf_len) {
+                CONSOLE_ERROR("ObjectDictionary::GetBytes",
+                              "Buffer length %d of network console message to read is larger than TX queue length %d.",
+                              buf_len, network_console_tx_queue.Length());
+                return false;
+            }
+            for (uint16_t i = 0; i < buf_len; i++) {
+                char ch;
+                if (!network_console_tx_queue.Pop(ch)) {
+                    CONSOLE_ERROR("ObjectDictionary::GetBytes",
+                                  "Failed to pop character %d from network console TX queue.", i);
+                    return false;
+                }
+                buf[i] = static_cast<uint8_t>(ch);
+            }
             break;
         }
 #elif defined(ON_TI)
@@ -237,7 +268,7 @@ uint16_t ObjectDictionary::PackLogMessages(uint8_t *buf, uint16_t buf_len,
         buf[bytes_written + log_message_packed_size - 1] = '\0';  // Null terminate the message.
         bytes_written += log_message_packed_size;
         log_message_queue.Pop(
-            log_message);  // Remove the message from the queue. Use log_message as a throwaray buffer.
+            log_message);  // Remove the message from the queue. Use log_message as a throwaway buffer.
     }
     return bytes_written;
 }

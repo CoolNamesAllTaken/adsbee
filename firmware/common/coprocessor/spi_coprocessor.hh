@@ -53,31 +53,28 @@ class SPICoprocessor : public SPICoprocessorInterface {
         if (len_bytes == 0) {
             len_bytes = sizeof(object);
         }
-        if (len_bytes < SCWritePacket::kDataMaxLenBytes) {
+        if (len_bytes < SPICoprocessorPacket::SCWritePacket::kDataMaxLenBytes) {
             // Single write. Write the full object at once, no offset, require ack if necessary.
             bool ret = PartialWrite(addr, (uint8_t *)&object, len_bytes, 0, require_ack);
-            config_.interface.SPIReleaseNextTransaction();
             return ret;
         }
         // Multi write.
         int16_t bytes_remaining = len_bytes;
         while (bytes_remaining > 0) {
-            if (!PartialWrite(addr,                                                   // addr
-                              (uint8_t *)(&object),                                   // object
-                              MIN(SCWritePacket::kDataMaxLenBytes, bytes_remaining),  // len
-                              len_bytes - bytes_remaining,                            // offset
-                              require_ack)                                            // require_ack
+            if (!PartialWrite(addr,                                                                         // addr
+                              (uint8_t *)(&object),                                                         // object
+                              MIN(SPICoprocessorPacket::SCWritePacket::kDataMaxLenBytes, bytes_remaining),  // len
+                              len_bytes - bytes_remaining,                                                  // offset
+                              require_ack)  // require_ack
             ) {
                 CONSOLE_ERROR("SPICoprocessor::Write",
                               "Multi-transfer %d Byte write of object at address 0x%x failed with %d Bytes remaining.",
                               len_bytes, addr, bytes_remaining);
-                config_.interface.SPIReleaseNextTransaction();
                 return false;
             }
-            bytes_remaining -= SCWritePacket::kDataMaxLenBytes;
+            bytes_remaining -= SPICoprocessorPacket::SCWritePacket::kDataMaxLenBytes;
         }
         // No bytes remaining.
-        config_.interface.SPIReleaseNextTransaction();
         return true;
     }
 
@@ -91,15 +88,14 @@ class SPICoprocessor : public SPICoprocessorInterface {
         if (len_bytes == 0) {
             len_bytes = sizeof(object);
         }
-        if (len_bytes < SCResponsePacket::kDataMaxLenBytes) {
+        if (len_bytes < SPICoprocessorPacket::SCResponsePacket::kDataMaxLenBytes) {
             // Single read.
             bool ret = PartialRead(addr, (uint8_t *)&object, len_bytes);
-            config_.interface.SPIReleaseNextTransaction();
             return ret;
         }
         // Multi-read.
         // Write and read are separate transactions.
-        uint16_t max_chunk_size_bytes = SCResponsePacket::kDataMaxLenBytes;
+        uint16_t max_chunk_size_bytes = SPICoprocessorPacket::SCResponsePacket::kDataMaxLenBytes;
 
         int16_t bytes_remaining = len_bytes;
         while (bytes_remaining > 0) {
@@ -111,14 +107,12 @@ class SPICoprocessor : public SPICoprocessorInterface {
                 CONSOLE_ERROR("SPICoprocessor::Read",
                               "Multi-transfer %d Byte read of object at address 0x%x failed with %d Bytes remaining.",
                               len_bytes, addr, bytes_remaining);
-                config_.interface.SPIReleaseNextTransaction();
                 return false;
             }
             bytes_remaining -=
                 max_chunk_size_bytes;  // Overshoot on purpose on the last chunk. Bytes remaining will go negative.
         }
         // No bytes remaining.
-        config_.interface.SPIReleaseNextTransaction();
         return true;
     }
 #endif

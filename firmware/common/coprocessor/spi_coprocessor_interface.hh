@@ -62,8 +62,6 @@ class SPICoprocessorInterface {
      */
     virtual bool DeInit() = 0;
 
-    virtual bool SPIBeginTransaction() = 0;
-    virtual void SPIEndTransaction() = 0;
     virtual int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf,
                                      uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
                                      bool end_transaction = true) = 0;
@@ -145,6 +143,12 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
 
     virtual bool IsEnabled() = 0;
     virtual void SetEnable(bool enabled) = 0;
+
+    /**
+     * Gets the timestamp of the last successful device status query from the ESP32.
+     * @retval Timestamp in milliseconds since boot.
+     */
+    virtual uint32_t GetLastHeartbeatTimestampMs() = 0;
 
     virtual bool SPIBeginTransaction() = 0;
     virtual void SPIEndTransaction() = 0;
