@@ -75,6 +75,10 @@ class ADSBee {
     };
 
     ADSBee(ADSBeeConfig config_in);
+    ~ADSBee() {
+        subg_radio.~SPICoprocessor();
+        subg_radio_ll.~CC1312();
+    }
     bool Init();
     bool Update();
 

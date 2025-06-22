@@ -40,8 +40,14 @@ class SPICoprocessor : public SPICoprocessorInterface {
     bool DeInit();
 
 #ifdef ON_COPRO_MASTER
-    bool IsEnabled() { return config_.interface.IsEnabled(); }
-    void SetEnable(bool enabled) { config_.interface.SetEnable(enabled); }
+    inline bool IsEnabled() { return config_.interface.IsEnabled(); }
+    inline void SetEnable(bool enabled) { config_.interface.SetEnable(enabled); }
+
+    /**
+     * Gets the timestamp of the last successful device status query from the ESP32.
+     * @retval Timestamp in milliseconds since boot.
+     */
+    inline uint32_t GetLastHeartbeatTimestampMs() { return config_.interface.GetLastHeartbeatTimestampMs(); }
 
     /**
      * Top level function that translates a write to an object (with associated address) into SPI transaction(s).

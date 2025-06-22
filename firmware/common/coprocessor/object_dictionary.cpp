@@ -49,14 +49,14 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                 case kQueueIDSCCommandRequests:
                     for (uint16_t i = 0; i < roll_request.num_items; i++) {
                         // Pop requests one by one so that we can call their callbacks.
-                        SCCommandRequest request;
-                        if (!sc_command_request_queue.Pop(request)) {
+                        SCCommandRequestWithCallback request_with_callback;
+                        if (!sc_command_request_queue.Pop(request_with_callback)) {
                             CONSOLE_ERROR("ObjectDictionary::SetBytes",
                                           "Failed to pop SCCommand request from queue during roll.");
                             return false;
                         }
-                        if (request.complete_callback) {
-                            request.complete_callback();  // Call the callback if it exists.
+                        if (request_with_callback.complete_callback) {
+                            request_with_callback.complete_callback();  // Call the callback if it exists.
                         }
                     }
                     break;
@@ -142,7 +142,8 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             DeviceStatus device_status = {.timestamp_ms = get_time_since_boot_ms(),
                                           .num_pending_log_messages = num_log_messages,
                                           .pending_log_messages_packed_size_bytes =
-                                              static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize)};
+                                              static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),
+                                          .num_queued_sc_command_requests = sc_command_request_queue.Length()};
             for (uint16_t i = 0; i < log_message_queue.Length(); i++) {
                 LogMessage log_message;
                 if (log_message_queue.Peek(log_message, i)) {
@@ -160,11 +161,12 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             break;
         }
         case kAddrSCCommandRequests: {
-            SCCommandRequest request;
-            if (!sc_command_request_queue.Peek(request)) {
+            SCCommandRequestWithCallback request_with_callback;
+            if (!sc_command_request_queue.Peek(request_with_callback)) {
                 CONSOLE_ERROR("ObjectDictionary::GetBytes", "No SCCommand requests available to read.");
                 return false;
             }
+            SCCommandRequest &request = request_with_callback.request;
             if (offset + buf_len > sizeof(SCCommandRequest)) {
                 CONSOLE_ERROR("ObjectDictionary::GetBytes",
                               "Requested read of SCCommandRequest with offset %d and length %d exceeds max size %d.",
@@ -212,8 +214,8 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
     return true;
 }
 
-bool ObjectDictionary::RequestSCCommand(const SCCommandRequest &request) {
-    if (sc_command_request_queue.Push(request)) {
+bool ObjectDictionary::RequestSCCommand(const SCCommandRequestWithCallback &request_with_callback) {
+    if (sc_command_request_queue.Push(request_with_callback)) {
         return true;
     } else {
         CONSOLE_ERROR("ObjectDictionary::RequestSCCommand", "Failed to push SCCommandRequest to queue, queue is full.");
@@ -221,22 +223,19 @@ bool ObjectDictionary::RequestSCCommand(const SCCommandRequest &request) {
     }
 }
 
-bool ObjectDictionary::RequestSCCommandBlocking(const SCCommandRequest &request) {
+bool ObjectDictionary::RequestSCCommandBlocking(const SCCommandRequestWithCallback &request_with_callback) {
     SemaphoreHandle_t command_complete_semaphore = xSemaphoreCreateBinary();
     if (command_complete_semaphore == NULL) {
         CONSOLE_ERROR("ADSBeeServer::Init", "Failed to create settings read semaphore.");
         return false;
     }
 
-    bool ret = object_dictionary.RequestSCCommand(ObjectDictionary::SCCommandRequest{
-        .command = request.command,
-        .addr = request.addr,
-        .offset = request.offset,
-        .len = request.len,
+    bool ret = object_dictionary.RequestSCCommand(ObjectDictionary::SCCommandRequestWithCallback{
+        .request = request_with_callback.request,
         .complete_callback =
-            [command_complete_semaphore, request]() {
-                if (request.complete_callback) {
-                    request.complete_callback();  // Call the existing callback if it exists.
+            [command_complete_semaphore, request_with_callback]() {
+                if (request_with_callback.complete_callback) {
+                    request_with_callback.complete_callback();  // Call the existing callback if it exists.
                 }
                 xSemaphoreGive(command_complete_semaphore);
             },

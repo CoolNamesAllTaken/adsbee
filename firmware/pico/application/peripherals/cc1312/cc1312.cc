@@ -87,6 +87,8 @@ bool CC1312::Init(bool spi_already_initialized) {
     return true;
 }
 
+bool CC1312::Update() { return true; }
+
 bool CC1312::ApplicationIsUpToDate() {
     // Verify application binary.
     uint32_t table_crc = crc32_ieee_802_3(sub_ghz_radio_bin, sub_ghz_radio_bin_size);

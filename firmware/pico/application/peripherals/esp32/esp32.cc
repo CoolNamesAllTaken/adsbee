@@ -64,6 +64,11 @@ bool ESP32::Update() {
                     return false;
                 }
                 // Execute the request.
+                if (!ExecuteSCCommandRequest(sc_command_request)) {
+                    CONSOLE_ERROR("ESP32::Update", "Failed to execute SCCommand request %d/%d from ESP32.",
+                                  num_requests_processed + 1, device_status.num_queued_sc_command_requests);
+                    return false;
+                }
 
                 // Roll the requests queue.
                 ObjectDictionary::RollQueueRequest roll_request = {
@@ -118,7 +123,7 @@ bool ESP32::Update() {
     return true;
 }
 
-bool ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRequest &request) {
+bool ESP32::ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRequest &request) {
     bool write_requires_ack = false;
     switch (request.command) {
         case ObjectDictionary::SCCommand::kCmdWriteToSlaveRequireAck:
@@ -159,8 +164,13 @@ bool ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRequest &request) 
                 /**  These are the addresses the ESP32 can request a read from. **/
                 case ObjectDictionary::Address::kAddrConsole: {
                     // Read console message from ESP32.
-
-                    char buf[request.len + 1] = {0};
+                    if (request.len > ObjectDictionary::kNetworkConsoleMessageMaxLenBytes) {
+                        CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest",
+                                      "Console message read with invalid length (%d). Max is %d.", request.len,
+                                      ObjectDictionary::kNetworkConsoleMessageMaxLenBytes);
+                        return false;
+                    }
+                    char buf[ObjectDictionary::kNetworkConsoleMessageMaxLenBytes] = {0};
                     if (!esp32.Read(ObjectDictionary::Address::kAddrConsole, buf, request.len)) {
                         CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest", "Unable to read console message from ESP32.");
                         return false;

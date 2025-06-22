@@ -92,7 +92,10 @@ class ObjectDictionary {
         ObjectDictionary::Address addr = ObjectDictionary::Address::kAddrInvalid;
         uint16_t offset = 0;
         uint16_t len = 0;  // Length of the data to read/write in the requested command.
-        // Callback function to execute when requested command is complete.
+    };
+
+    struct SCCommandRequestWithCallback {
+        SCCommandRequest request;
         std::function<void()> complete_callback = nullptr;
     };
 
@@ -184,9 +187,25 @@ class ObjectDictionary {
      * @retval True if the request was successfully queued, false if the queue is full.
      * @note The master will execute the command and call the callback function when it is done
      */
-    bool RequestSCCommand(const SCCommandRequest& request);
+    bool RequestSCCommand(const SCCommandRequestWithCallback& request);
 
-    bool RequestSCCommandBlocking(const SCCommandRequest& request);
+    bool RequestSCCommandBlocking(const SCCommandRequestWithCallback& request);
+
+    /**
+     * Helper functions for requests with no callback.
+     */
+    bool RequestSCCommand(const SCCommandRequest& request) {
+        return RequestSCCommand(SCCommandRequestWithCallback{
+            .request = request,
+            .complete_callback = nullptr,
+        });
+    }
+    bool RequestSCCommandBlocking(const SCCommandRequest& request) {
+        return RequestSCCommandBlocking(SCCommandRequestWithCallback{
+            .request = request,
+            .complete_callback = nullptr,
+        });
+    }
 #endif
 
     /**
@@ -218,8 +237,8 @@ class ObjectDictionary {
     });
 
 #ifdef ON_COPRO_SLAVE
-    PFBQueue<ObjectDictionary::SCCommandRequest> sc_command_request_queue =
-        PFBQueue<ObjectDictionary::SCCommandRequest>({
+    PFBQueue<ObjectDictionary::SCCommandRequestWithCallback> sc_command_request_queue =
+        PFBQueue<ObjectDictionary::SCCommandRequestWithCallback>({
             .buf_len_num_elements = ObjectDictionary::kSCCommandRequestQueueDepth,
             .buffer = sc_command_request_queue_buffer_,
             .overwrite_when_full = false  // We don't want to overwrite command requests, since they could be important.
@@ -240,8 +259,8 @@ class ObjectDictionary {
     LogMessage log_message_queue_buffer_[kLogMessageQueueDepth] = {};
 
 #ifdef ON_COPRO_SLAVE
-    ObjectDictionary::SCCommandRequest sc_command_request_queue_buffer_[ObjectDictionary::kSCCommandRequestQueueDepth] =
-        {};
+    ObjectDictionary::SCCommandRequestWithCallback
+        sc_command_request_queue_buffer_[ObjectDictionary::kSCCommandRequestQueueDepth] = {};
     char network_console_message_buffer_[kNetworkConsoleTxQueueDepth] = {};
 #endif
 };

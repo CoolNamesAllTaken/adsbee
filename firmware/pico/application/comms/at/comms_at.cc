@@ -122,7 +122,7 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
             if (esp32.IsEnabled()) {
                 // Read ESP32 firmware verison.
                 uint32_t esp32_firmware_version;
-                if (!esp32.Read(ObjectDictionary::kAddrFirmwareVersion, esp32_firmware_version)) {
+                if (!esp32.Read(ObjectDictionary::Address::kAddrFirmwareVersion, esp32_firmware_version)) {
                     CPP_AT_ERROR("ESP32 firmware version read failed!");
                 }
                 uint8_t esp32_fwv_major = (esp32_firmware_version >> 24) & 0xFF;
@@ -140,7 +140,7 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
                 }
 
                 ObjectDictionary::ESP32DeviceInfo esp32_device_info;
-                if (!esp32.Read(ObjectDictionary::SCCommand::kAddrDeviceInfo, esp32_device_info,
+                if (!esp32.Read(ObjectDictionary::Address::kAddrESP32DeviceInfo, esp32_device_info,
                                 sizeof(esp32_device_info))) {
                     CPP_AT_ERROR("ESP32 device info read failed!");
                 }
@@ -515,7 +515,7 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                                     // Don't call update manually here, it gets taken care of in the Write function.
                                     // Calling Update twice will result in the network console buffer overflowing if two
                                     // blobs of characters are ready to be transmitted sequentially!
-                                    esp32.Write(ObjectDictionary::kAddrScratch, timestamp_ms, false);
+                                    esp32.Write(ObjectDictionary::Address::kAddrScratch, timestamp_ms, false);
                                     last_ota_heartbeat_timestamp_ms = timestamp_ms;
                                 }
                             }
@@ -635,7 +635,7 @@ CPP_AT_CALLBACK(CommsManager::ATNetworkInfoCallback) {
     switch (op) {
         case '?':
             ObjectDictionary::ESP32NetworkInfo network_info;
-            if (!esp32.Read(ObjectDictionary::kAddrNetworkInfo, network_info, sizeof(network_info))) {
+            if (!esp32.Read(ObjectDictionary::Address::kAddrESP32NetworkInfo, network_info, sizeof(network_info))) {
                 CPP_AT_ERROR("Error while reading network info from ESP32.");
             }
 

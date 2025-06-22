@@ -192,6 +192,8 @@ class CC1312 : public SPICoprocessorSlaveInterface {
      */
     inline bool DeInit() { return true; };
 
+    bool Update();
+
     inline uint32_t GetLastHeartbeatTimestampMs() {
         // TODO: Fill this out.
         return 0;
@@ -233,7 +235,7 @@ class CC1312 : public SPICoprocessorSlaveInterface {
     /**
      * Destructor for CC1312.
      */
-    ~CC1312();
+    ~CC1312() {};
 
     /**
      * Initialize CC1312.

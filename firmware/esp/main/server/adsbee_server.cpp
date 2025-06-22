@@ -78,11 +78,12 @@ bool ADSBeeServer::Init() {
         return false;
     }
 
-    object_dictionary.RequestSCCommand(ObjectDictionary::SCCommandRequest{
-        .command = ObjectDictionary::SCCommand::kCmdWriteToSlaveRequireAck,
-        .addr = ObjectDictionary::Address::kAddrSettingsData,
-        .offset = 0,
-        .len = sizeof(SettingsManager::Settings),
+    object_dictionary.RequestSCCommand(ObjectDictionary::SCCommandRequestWithCallback{
+        .request =
+            ObjectDictionary::SCCommandRequest{.command = ObjectDictionary::SCCommand::kCmdWriteToSlaveRequireAck,
+                                               .addr = ObjectDictionary::Address::kAddrSettingsData,
+                                               .offset = 0,
+                                               .len = sizeof(SettingsManager::Settings)},
         .complete_callback =
             [settings_read_semaphore]() {
                 CONSOLE_INFO("ADSBeeServer::Init", "Settings data read from Pico.");
@@ -264,12 +265,12 @@ bool ADSBeeServer::Update() {
         message.Destroy();  // Free up the message buffer now that it's been pushed to the TX queue.
     }
     // Tell Pico to come fetch the newly added console characters.
-    object_dictionary.RequestSCCommand(
-        ObjectDictionary::SCCommandRequest{.command = ObjectDictionary::SCCommand::kCmdReadFromSlave,
-                                           .addr = ObjectDictionary::Address::kAddrConsole,
-                                           .offset = 0,
-                                           .len = num_chars_added,
-                                           .complete_callback = nullptr});
+    object_dictionary.RequestSCCommand(ObjectDictionary::SCCommandRequest{
+        .command = ObjectDictionary::SCCommand::kCmdReadFromSlave,
+        .addr = ObjectDictionary::Address::kAddrConsole,
+        .offset = 0,
+        .len = num_chars_added,
+    });
 
     // Prune inactive WebSocket clients and other housekeeping.
     network_console.Update();
