@@ -1,5 +1,10 @@
-#ifndef OBJECT_DICTIONARY_HH_
-#define OBJECT_DICTIONARY_HH_
+#pragma once
+
+#ifdef ON_PICO
+#define ON_COPRO_MASTER
+#elif defined(ON_ESP32) || defined(ON_TI)
+#define ON_COPRO_SLAVE
+#endif
 
 #include "data_structures.hh"
 #include "settings.hh"
@@ -24,6 +29,10 @@ class ObjectDictionary {
     static constexpr uint16_t kLogMessageMaxNumChars = 500;
     static constexpr uint16_t kLogMessageQueueDepth = 10;
 
+#ifdef ON_COPRO_SLAVE
+    static constexpr uint16_t kSCCommandRequestQueueDepth = 10;
+#endif
+
     enum Address : uint8_t {
         kAddrInvalid = 0,             // Default value.
         kAddrFirmwareVersion = 0x01,  // Firmware version as a uint32_t.
@@ -34,24 +43,71 @@ class ObjectDictionary {
         kAddrRaw1090PacketArray = 0x06,
         kAddrDecoded1090PacketArray = 0x07,
         kAddrAircraftDictionaryMetrics = 0x08,  // For forwarding dictionary metrics from RP2040 to ESP32.
-        kAddrDeviceInfo = 0x09,                 // ESP32 MAC addresses.
-        kAddrConsole = 0xA,                     // Pipe for console characters.
-        kAddrNetworkInfo = 0xB,                 // Network information for ESP32.
-        kAddrDeviceStatus = 0xC,  // Struct containing number of pending log messages and current timestamp.
-        kAddrLogMessages = 0xD,   // Used to retrieve log messages from ESP32 and CC1312.
+        kAddrESP32DeviceInfo = 0x09,            // ESP32 MAC addresses.
+        kAddrConsole = 0x0A,                    // Pipe for console characters.
+        kAddrESP32NetworkInfo = 0x0B,           // Network information for ESP32.
+        kAddrDeviceStatus = 0x0C,  // Struct containing number of pending log messages and current timestamp.
+        kAddrLogMessages = 0x0D,   // Used to retrieve log messages from ESP32 and CC1312.
+        kAddrRollQueue = 0x0E,     // Used to roll various queues on coprocessor slaves to confirm they have been read.
         kNumAddrs
     };
 
-    struct DeviceStatus {
+    // Commands are written from Master to Slave.
+    enum SCCommand : uint8_t {
+        kCmdInvalid = 0x00,
+        kCmdWriteToSlave = 0x01,            // No response expected.
+        kCmdWriteToSlaveRequireAck = 0x02,  // Expects a response to continue to the next block.
+        kCmdReadFromSlave = 0x03,
+        // kCmdWriteToMaster = 0x04,            // No response expected.
+        // kCmdWriteToMasterRequireAck = 0x05,  // Expects a response to continue to the next block.
+        // kCmdReadFromMaster = 0x06,
+        kCmdDataBlock = 0x07,
+        kCmdAck = 0x08
+    };
+
+    // Queues are read by peeking, then a separate command to "roll" the queue by discarding the elements that were
+    // read. This way we don't lose items if a queue is read from but the data gets corrupted.
+    // QueueID is the enum value used to determine which queue to roll.
+    enum QueueID : uint8_t {
+        kQueueIDInvalid = 0,        // Default value.
+        kQueueIDLogMessages,        // Queue for log messages.
+        kQueueIDSCCommandRequests,  // Queue for SCCommand requests from slave to master.
+        kNumQueueIDs
+    };
+
+    struct __attribute__((__packed__)) RollQueueRequest {
+        QueueID queue_id = kQueueIDInvalid;  // Queue to roll.
+        uint16_t num_items = 0;              // Number of items in the queue to discard.
+    };
+
+    /**
+     * Struct used by the slave to request a command to be performed by the master.
+     */
+    struct SCCommandRequest {
+        SCCommand command = SCCommand::kCmdInvalid;
+        ObjectDictionary::Address addr = ObjectDictionary::Address::kAddrInvalid;
+        uint16_t offset = 0;
+        uint16_t len = 0;  // Length of the data to read/write in the requested command.
+        // Callback function to execute when requested command is complete.
+        std::function<void()> complete_callback;
+    };
+
+    struct __attribute__((__packed__)) DeviceStatus {
         uint32_t timestamp_ms = 0;
         uint16_t num_pending_log_messages = 0;
         uint32_t pending_log_messages_packed_size_bytes = 0;
+
+        // Fields for the slave to request a command to be performed by the master.
+        uint8_t requested_command = 0x00;
+        Address requested_command_addr = kAddrInvalid;
+        uint16_t requested_command_offset = 0;
+        uint16_t requested_command_len = 0;  // Length of the data to read/write in the requested command.
     };
 
     /**
      * Struct used to retrieve device information from the ESP32.
      */
-    struct ESP32DeviceInfo {
+    struct __attribute__((__packed__)) ESP32DeviceInfo {
         uint8_t base_mac[kMACAddrLenBytes];
         uint8_t wifi_station_mac[kMACAddrLenBytes];
         uint8_t wifi_ap_mac[kMACAddrLenBytes];
@@ -62,7 +118,7 @@ class ObjectDictionary {
     /**
      * Struct used to retrieve network information from the ESP32.
      */
-    struct ESP32NetworkInfo {
+    struct __attribute__((__packed__)) ESP32NetworkInfo {
         bool ethernet_enabled = false;
         bool ethernet_has_ip = false;
         char ethernet_ip[SettingsManager::Settings::kIPAddrStrLen + 1] = {0};
@@ -101,6 +157,7 @@ class ObjectDictionary {
         char message[kLogMessageMaxNumChars + 1] = {'\0'};
     };
 
+#ifdef ON_COPRO_SLAVE
     /**
      * Setter for writing data to the address space.
      * @param[in] addr Address to write to.
@@ -120,6 +177,17 @@ class ObjectDictionary {
      * @retval Returns true if successfully read, false if address was invalid or something else borked.
      */
     bool GetBytes(Address addr, uint8_t* buf, uint16_t buf_len, uint16_t offset = 0);
+
+    /**
+     * Request that a command be performed by the master. Non-blocking.
+     * @param[in] request Command request to send to the master.
+     * @retval True if the request was successfully queued, false if the queue is full.
+     * @note The master will execute the command and call the callback function when it is done
+     */
+    bool RequestSCCommand(const SCCommandRequest& request);
+
+    bool RequestSCCommandBlocking(const SCCommandRequest& request);
+#endif
 
     /**
      * Builds a buffer of log messages with empty space removed.
@@ -149,14 +217,24 @@ class ObjectDictionary {
         .overwrite_when_full = true  // Some of you may die, but that is a sacrifice I am willing to make.
     });
 
+#ifdef ON_COPRO_SLAVE
+    PFBQueue<ObjectDictionary::SCCommandRequest> sc_command_request_queue =
+        PFBQueue<ObjectDictionary::SCCommandRequest>({
+            .buf_len_num_elements = ObjectDictionary::kSCCommandRequestQueueDepth,
+            .buffer = sc_command_request_queue_buffer_,
+            .overwrite_when_full = false  // We don't want to overwrite command requests, since they could be important.
+        });
+#endif
+
    private:
     uint32_t scratch_ = 0x0;  // Scratch register used for testing.
 
     // On Pico, this is a queue of log messages gathered from other devices. On other devices, this is a queue of log
     // messages waiting to be slurped up by the RP2040.
     LogMessage log_message_queue_buffer_[kLogMessageQueueDepth] = {};
+
+    ObjectDictionary::SCCommandRequest sc_command_request_queue_buffer_[ObjectDictionary::kSCCommandRequestQueueDepth] =
+        {};
 };
 
 extern ObjectDictionary object_dictionary;
-
-#endif /* OBJECT_DICTIONARY_HH_ */

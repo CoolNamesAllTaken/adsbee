@@ -69,21 +69,67 @@ bool ADSBeeServer::Init() {
     xTaskCreatePinnedToCore(esp_spi_receive_task, "spi_receive_task", kSPIReceiveTaskStackSizeBytes, NULL,
                             kSPIReceiveTaskPriority, NULL, kSPIReceiveTaskCore);
 
-    comms_manager
-        .Init();  // Initialize prerequisites for Ethernet and WiFi. Needs to be done before settings are applied.
+    // Initialize prerequisites for Ethernet and WiFi. Needs to be done before settings are applied.
+    comms_manager.Init();
 
-    while (true) {
-        if (!pico.Read(ObjectDictionary::kAddrSettingsData, settings_manager.settings)) {
-            CONSOLE_ERROR("ADSBeeServer::Init", "Failed to read settings from Pico on startup.");
-            vTaskDelay(500 / portTICK_PERIOD_MS);  // Delay for 0.5s before retry.
-            // pico.Update();
-            continue;
-        } else {
-            settings_manager.Print();
-            settings_manager.Apply();
-            break;
-        }
+    SemaphoreHandle_t settings_read_semaphore = xSemaphoreCreateBinary();
+    if (settings_read_semaphore == NULL) {
+        CONSOLE_ERROR("ADSBeeServer::Init", "Failed to create settings read semaphore.");
+        return false;
     }
+
+    object_dictionary.RequestSCCommand(ObjectDictionary::SCCommandRequest{
+        .command = ObjectDictionary::SCCommand::kCmdWriteToSlaveRequireAck,
+        .addr = ObjectDictionary::Address::kAddrSettingsData,
+        .offset = 0,
+        .len = sizeof(SettingsManager::Settings),
+        .complete_callback =
+            [settings_read_semaphore]() {
+                CONSOLE_INFO("ADSBeeServer::Init", "Settings data read from Pico.");
+                xSemaphoreGive(settings_read_semaphore);
+            },
+    });  // Require ack.
+
+    // Wait for the callback to complete
+    xSemaphoreTake(settings_read_semaphore, portMAX_DELAY);
+    vSemaphoreDelete(settings_read_semaphore);
+    settings_manager.Print();
+    settings_manager.Apply();
+
+    // while (true) {
+    //     SemaphoreHandle_t settings_read_semaphore = xSemaphoreCreateBinary();
+    //     if (settings_read_semaphore == NULL) {
+    //         CONSOLE_ERROR("ADSBeeServer::Init", "Failed to create settings read semaphore.");
+    //         return false;
+    //     }
+
+    //     object_dictionary.RequestSCCommand(ObjectDictionary::SCCommandRequest{
+    //         .command = ObjectDictionary::SCCommand::kCmdWriteToSlaveRequireAck,
+    //         .addr = ObjectDictionary::Address::kAddrSettingsData,
+    //         .offset = 0,
+    //         .len = sizeof(SettingsManager::Settings),
+    //         .complete_callback =
+    //             [settings_read_semaphore]() {
+    //                 CONSOLE_INFO("ADSBeeServer::Init", "Settings data read from Pico.");
+    //                 xSemaphoreGive(settings_read_semaphore);
+    //             },
+    //     });  // Require ack.
+
+    //     // Wait for the callback to complete
+    //     xSemaphoreTake(settings_read_semaphore, portMAX_DELAY);
+    //     vSemaphoreDelete(settings_read_semaphore);
+
+    //     if (!pico.Read(ObjectDictionary::kAddrSettingsData, settings_manager.settings)) {
+    //         CONSOLE_ERROR("ADSBeeServer::Init", "Failed to read settings from Pico on startup.");
+    //         vTaskDelay(500 / portTICK_PERIOD_MS);  // Delay for 0.5s before retry.
+    //         // pico.Update();
+    //         continue;
+    //     } else {
+    //         settings_manager.Print();
+    //         settings_manager.Apply();
+    //         break;
+    //     }
+    // }
 
     return TCPServerInit();
 }
@@ -200,11 +246,15 @@ bool ADSBeeServer::Update() {
     NetworkConsoleMessage message;
     while (xQueueReceive(network_console_rx_queue, &message, 0) == pdTRUE) {
         // Non-blocking receive of network console messages.
-        // Write message contents to Pico console, requiring ack.
-        if (!pico.Write(ObjectDictionary::kAddrConsole, *(message.buf), true, message.buf_len)) {
-            CONSOLE_ERROR("ADSBeeServer::Update", "Failed to write network console message to Pico with contents: %s.",
-                          message.buf);
-        }
+        // Write message contents to Pico console.
+        object_dictionary.RequestSCCommand(ObjectDictionary::SCCommandRequest{
+            .command = ObjectDictionary::SCCommand::kCmdReadFromSlave,
+            .addr = ObjectDictionary::Address::kAddrConsole,
+            .offset = 0,
+            .len = message.buf_len,
+            .complete_callback =
+                []() { CONSOLE_INFO("ADSBeeServer::Update", "Network console message written to Pico successfully."); },
+        });
         message.Destroy();  // Free the message buffer to prevent memory leaks.
     }
 

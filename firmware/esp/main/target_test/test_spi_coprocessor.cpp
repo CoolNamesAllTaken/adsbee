@@ -3,22 +3,22 @@
 
 // #define TEST_LARGE_TRANSFER
 
-UTEST(SPICoprocessor, WriteReadScratchNoAck) {
-    uint32_t scratch_out = 0xDEADBEEF;
-    ASSERT_TRUE(pico.Write(ObjectDictionary::Address::kAddrScratch, scratch_out));
-    uint32_t scratch_in = 0x0;
-    ASSERT_TRUE(pico.Read(ObjectDictionary::Address::kAddrScratch, scratch_in));
-    EXPECT_EQ(scratch_out, scratch_in);
-}
+// UTEST(SPICoprocessor, WriteReadScratchNoAck) {
+//     uint32_t scratch_out = 0xDEADBEEF;
+//     ASSERT_TRUE(pico.Write(ObjectDictionary::Address::kAddrScratch, scratch_out));
+//     uint32_t scratch_in = 0x0;
+//     ASSERT_TRUE(pico.Read(ObjectDictionary::Address::kAddrScratch, scratch_in));
+//     EXPECT_EQ(scratch_out, scratch_in);
+// }
 
-UTEST(SPICoprocessor, WriteReadScratchWithAck) {
-    uint32_t scratch_out = 0xDEADBEEF;
-    // Write requires an ack.
-    ASSERT_TRUE(pico.Write(ObjectDictionary::Address::kAddrScratch, scratch_out, true));
-    uint32_t scratch_in = 0x0;
-    ASSERT_TRUE(pico.Read(ObjectDictionary::Address::kAddrScratch, scratch_in));
-    EXPECT_EQ(scratch_out, scratch_in);
-}
+// UTEST(SPICoprocessor, WriteReadScratchWithAck) {
+//     uint32_t scratch_out = 0xDEADBEEF;
+//     // Write requires an ack.
+//     ASSERT_TRUE(pico.Write(ObjectDictionary::Address::kAddrScratch, scratch_out, true));
+//     uint32_t scratch_in = 0x0;
+//     ASSERT_TRUE(pico.Read(ObjectDictionary::Address::kAddrScratch, scratch_in));
+//     EXPECT_EQ(scratch_out, scratch_in);
+// }
 
 #ifdef TEST_LARGE_TRANSFER
 

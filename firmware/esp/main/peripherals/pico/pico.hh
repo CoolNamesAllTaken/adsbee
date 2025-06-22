@@ -73,7 +73,8 @@ class Pico : public SPICoprocessorMasterInterface {
         return true;
     }
     inline void SPIReleaseNextTransaction() { xSemaphoreGive(spi_next_transaction_mutex_); }
-    int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len_bytes = kSPITransactionMaxLenBytes,
+    int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf,
+                             uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
                              bool end_transaction = true);
 
     /**

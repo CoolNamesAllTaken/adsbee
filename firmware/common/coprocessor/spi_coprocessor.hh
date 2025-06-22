@@ -8,6 +8,7 @@
 #include "object_dictionary.hh"
 #include "settings.hh"
 #include "spi_coprocessor_interface.hh"
+#include "spi_coprocessor_packet.hh"
 #include "transponder_packet.hh"
 
 class SPICoprocessor : public SPICoprocessorInterface {
@@ -41,20 +42,6 @@ class SPICoprocessor : public SPICoprocessorInterface {
 #ifdef ON_COPRO_MASTER
     bool IsEnabled() { return config_.interface.IsEnabled(); }
     void SetEnable(bool enabled) { config_.interface.SetEnable(enabled); }
-#endif
-    /**
-     *
-     * @param[in] blocking On RP2040, blocks until kSPIMinTransactionIntervalUs after the previous transaction to check
-     * to see if the ESP32 has anything to say. Set to true if using this as a way to flush the ESP32 of messages before
-     * writing to it. On ESP32, has no effect.
-     */
-    bool Update(bool blocking = false);
-
-    void UpdateNetworkLED() {
-#ifdef ON_COPRO_SLAVE
-        config_.interface.UpdateNetworkLED();
-#endif
-    }
 
     /**
      * Top level function that translates a write to an object (with associated address) into SPI transaction(s).
@@ -66,16 +53,6 @@ class SPICoprocessor : public SPICoprocessorInterface {
         if (len_bytes == 0) {
             len_bytes = sizeof(object);
         }
-#ifdef ON_COPRO_SLAVE
-        if (!config_.interface.SPIClaimNextTransaction()) {
-            CONSOLE_ERROR("SPICoprocessor::Write", "Failed to claim SPI transaction mutex.");
-            return false;
-        }
-#elif ON_PICO
-
-#else
-        return false;  // Not supported on other platforms.
-#endif
         if (len_bytes < SCWritePacket::kDataMaxLenBytes) {
             // Single write. Write the full object at once, no offset, require ack if necessary.
             bool ret = PartialWrite(addr, (uint8_t *)&object, len_bytes, 0, require_ack);
@@ -114,15 +91,6 @@ class SPICoprocessor : public SPICoprocessorInterface {
         if (len_bytes == 0) {
             len_bytes = sizeof(object);
         }
-#ifdef ON_COPRO_MASTER
-#elif defined(ON_COPRO_SLAVE)
-        if (!config_.interface.SPIClaimNextTransaction()) {
-            CONSOLE_ERROR("SPICoprocessor::Read", "Failed to claim SPI transaction mutex.");
-            return false;
-        }
-#else
-        return false;  // Not supported on other platforms.
-#endif
         if (len_bytes < SCResponsePacket::kDataMaxLenBytes) {
             // Single read.
             bool ret = PartialRead(addr, (uint8_t *)&object, len_bytes);
@@ -130,15 +98,9 @@ class SPICoprocessor : public SPICoprocessorInterface {
             return ret;
         }
         // Multi-read.
-#ifdef ON_COPRO_MASTER
         // Write and read are separate transactions.
         uint16_t max_chunk_size_bytes = SCResponsePacket::kDataMaxLenBytes;
-#elif defined(ON_COPRO_SLAVE)
-        // Write and read are a single transaction.
-        uint16_t max_chunk_size_bytes = SCResponsePacket::kDataMaxLenBytes - SCReadRequestPacket::kBufLenBytes;
-#else
-        uint16_t max_chunk_size_bytes = 0;  // Dummy to stop compile errors.
-#endif
+
         int16_t bytes_remaining = len_bytes;
         while (bytes_remaining > 0) {
             if (!PartialRead(addr,                                        // address
@@ -159,8 +121,19 @@ class SPICoprocessor : public SPICoprocessorInterface {
         config_.interface.SPIReleaseNextTransaction();
         return true;
     }
+#endif
+    /**
+     *
+     * @param[in] blocking On RP2040, blocks until kSPIMinTransactionIntervalUs after the previous transaction to check
+     * to see if the ESP32 has anything to say. Set to true if using this as a way to flush the ESP32 of messages before
+     * writing to it. On ESP32, has no effect.
+     */
+    bool Update(bool blocking = false);
 
 #ifdef ON_COPRO_SLAVE
+
+    void UpdateNetworkLED() { config_.interface.UpdateNetworkLED(); }
+
     /**
      * Log a message to the coprocessor. Not available on RP2040 since it's the master (other stuff logs to it).
      * @param[in] log_level Log level of the message.
@@ -172,10 +145,18 @@ class SPICoprocessor : public SPICoprocessorInterface {
 #endif
 
    protected:
+#ifdef ON_COPRO_MASTER
     bool PartialWrite(ObjectDictionary::Address addr, uint8_t *object_buf, uint16_t len, uint16_t offset = 0,
                       bool require_ack = false);
 
     bool PartialRead(ObjectDictionary::Address addr, uint8_t *object_buf, uint16_t len, uint16_t offset = 0);
+
+    /**
+     * Blocks until an ACK is received or a timeout is reached.
+     * @retval True if received an ACK, false if received NACK or timed out.
+     */
+    bool SPIWaitForAck();
+#endif
 
     /**
      * Send an SCResponse packet with a single byte ACK payload.
@@ -185,14 +166,8 @@ class SPICoprocessor : public SPICoprocessorInterface {
     bool SPISendAck(bool success);
 
     /**
-     * Blocks until an ACK is received or a timeout is reached.
-     * @retval True if received an ACK, false if received NACK or timed out.
-     */
-    bool SPIWaitForAck();
-
-    /**
      * Low level HAL for SPI Write Read call. Transmits the contents of tx_buf and receives into rx_buf.
-     * Both buffers MUST be at least kSPITransactionMaxLenBytes Bytes long.
+     * Both buffers MUST be at least SPICoprocessorPacket::kSPITransactionMaxLenBytes Bytes long.
      * @param[in] tx_buf Buffer with data to transmit.
      * @param[in] rx_buf Buffer to fill with data that is received.
      * @param[in] len_bytes Number of bytes to transmit. Only has an effect when this function is being called on the
@@ -201,15 +176,16 @@ class SPICoprocessor : public SPICoprocessorInterface {
      * when this function is being called on the master.
      * @retval Number of bytes that were written and read, or a negative value if something broke.
      */
-    int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len_bytes = kSPITransactionMaxLenBytes,
+    int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf,
+                             uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
                              bool end_transaction = true);
 
     // Write / Read aliases for SPIWriteReadBlocking.
-    inline int SPIWriteBlocking(uint8_t *tx_buf, uint16_t len_bytes = kSPITransactionMaxLenBytes,
+    inline int SPIWriteBlocking(uint8_t *tx_buf, uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
                                 bool end_transaction = true) {
         return SPIWriteReadBlocking(tx_buf, nullptr, len_bytes, end_transaction);
     }
-    inline int SPIReadBlocking(uint8_t *rx_buf, uint16_t len_bytes = kSPITransactionMaxLenBytes,
+    inline int SPIReadBlocking(uint8_t *rx_buf, uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
                                bool end_transaction = true) {
         return SPIWriteReadBlocking(nullptr, rx_buf, len_bytes, end_transaction);
     }

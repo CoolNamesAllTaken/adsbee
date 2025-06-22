@@ -16,6 +16,7 @@ const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 4;
 const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24) | (kFirmwareVersionMinor << 16) |
                                                     (kFirmwareVersionPatch << 8) | kFirmwareVersionReleaseCandidate;
 
+#ifdef ON_COPRO_SLAVE
 bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, uint16_t offset) {
     switch (addr) {
         case kAddrScratch:
@@ -24,25 +25,57 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             // offset);
             memcpy((uint8_t *)&scratch_ + offset, buf, buf_len);
             break;
-#ifdef ON_PICO
-        case kAddrConsole:
-            // ESP32 writing to the RP2040's network console interface.
-            for (uint16_t i = 0; i < buf_len; i++) {
-                char c = (char)buf[i];
-                if (!comms_manager.esp32_console_rx_queue.Push(c)) {
-                    CONSOLE_ERROR("ObjectDictionary::SetBytes", "ESP32 overflowed RP2040's network console queue.");
-                    comms_manager.esp32_console_rx_queue.Clear();
-                }
+        case kAddrSettingsData:
+            // Warning: printing here will cause a timeout and tests will fail.
+            // CONSOLE_INFO("ObjectDictionary::SetBytes", "Setting %d settings Bytes at offset %d.", buf_len,
+            // offset);
+            memcpy((uint8_t *)&(settings_manager.settings) + offset, buf, buf_len);
+            if (offset + buf_len == sizeof(SettingsManager::Settings)) {
+                CONSOLE_INFO("SPICoprocessor::SetBytes", "Wrote last chunk of settings data. Applying new values.");
+                settings_manager.Apply();
+                settings_manager.Print();
             }
             break;
-#elif defined(ON_ESP32)
+        case kAddrRollQueue: {
+            // Ignore offset since we only allow full writes for this command.
+            RollQueueRequest roll_request;
+            memcpy(&roll_request, buf, sizeof(RollQueueRequest));
+            switch (roll_request.queue_id) {
+                case kQueueIDLogMessages:
+                    // Roll the log message queue.
+                    log_message_queue.Discard(roll_request.num_items);
+                    break;
+                case kQueueIDSCCommandRequests:
+                    // Roll the SCCommand request queue by popping each completed request and calling its callback.
+                    for (uint16_t i = 0; i < roll_request.num_items; i++) {
+                        // Pop the request from the queue.
+                        SCCommandRequest request;
+                        if (!sc_command_request_queue.Pop(request)) {
+                            CONSOLE_ERROR("ObjectDictionary::SetBytes",
+                                          "Failed to pop SCCommand request from queue during roll.");
+                            return false;
+                        }
+                        if (request.complete_callback) {
+                            request.complete_callback();  // Call the callback if it exists.
+                        }
+                    }
+                    break;
+                default:
+                    CONSOLE_ERROR("ObjectDictionary::SetBytes",
+                                  "Received roll queue request for nonexistent queue ID %d.", roll_request.queue_id);
+                    return false;
+            }
+            break;
+        }
+#ifdef ON_ESP32
         case kAddrConsole: {
             // RP2040 writing to the ESP32's network console interface.
             char message[kNetworkConsoleMessageMaxLenBytes + 1] = {'\0'};
             strncpy(message, (char *)buf, buf_len);
             message[kNetworkConsoleMessageMaxLenBytes] = '\0';  // Null terminate for safety.
             // Don't print here to avoid print of print doom loop explosion.
-            // CONSOLE_INFO("ObjectDictionary::SetBytes", "Forwarding message to network console: %s", message);
+            // CONSOLE_INFO("ObjectDictionary::SetBytes", "Forwarding message to network console: %s",
+            // message);
             adsbee_server.network_console.BroadcastMessage(message);
             break;
         }
@@ -70,18 +103,8 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             xQueueSend(adsbee_server.rp2040_aircraft_dictionary_metrics_queue, &rp2040_metrics, 0);
             break;
         }
+#elif defined(ON_TI)
 #endif
-        case kAddrSettingsData:
-            // Warning: printing here will cause a timeout and tests will fail.
-            // CONSOLE_INFO("ObjectDictionary::SetBytes", "Setting %d settings Bytes at offset %d.", buf_len,
-            // offset);
-            memcpy((uint8_t *)&(settings_manager.settings) + offset, buf, buf_len);
-            if (offset + buf_len == sizeof(SettingsManager::Settings)) {
-                CONSOLE_INFO("SPICoprocessor::SetBytes", "Wrote last chunk of settings data. Applying new values.");
-                settings_manager.Apply();
-                settings_manager.Print();
-            }
-            break;
         default:
             CONSOLE_ERROR("SPICoprocessor::SetBytes", "No behavior implemented for writing to address 0x%x.", addr);
             return false;
@@ -102,11 +125,10 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             break;
         case kAddrSettingsData:
             // Warning: printing here will cause a timeout and tests will fail.
-            // CONSOLE_INFO("ObjectDictionary::GetBytes", "Getting %d settings Bytes at offset %d.", buf_len,
-            // offset);
+            // CONSOLE_INFO("ObjectDictionary::GetBytes", "Getting %d settings Bytes at offset %d.",
+            // buf_len, offset);
             memcpy(buf, (uint8_t *)&(settings_manager.settings) + offset, buf_len);
             break;
-#if defined(ON_ESP32) || defined(ON_TI)
         case kAddrDeviceStatus: {
             uint16_t num_log_messages = log_message_queue.Length();
             DeviceStatus device_status = {.timestamp_ms = get_time_since_boot_ms(),
@@ -129,18 +151,28 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             PackLogMessages(buf, buf_len, log_message_queue, kLogMessageQueueDepth);
             break;
         }
-#endif
 #ifdef ON_ESP32
-        case kAddrDeviceInfo: {
+        case kAddrConsole:
+            // ESP32 writing to the RP2040's network console interface.
+            for (uint16_t i = 0; i < buf_len; i++) {
+                char c = (char)buf[i];
+                if (!comms_manager.esp32_console_rx_queue.Push(c)) {
+                    CONSOLE_ERROR("ObjectDictionary::SetBytes", "ESP32 overflowed RP2040's network console queue.");
+                    comms_manager.esp32_console_rx_queue.Clear();
+                }
+            }
+            break;
+        case kAddrESP32DeviceInfo: {
             ESP32DeviceInfo esp32_device_info = GetESP32DeviceInfo();
             memcpy(buf, &esp32_device_info + offset, buf_len);
             break;
         }
-        case kAddrNetworkInfo: {
+        case kAddrESP32NetworkInfo: {
             ESP32NetworkInfo network_info = comms_manager.GetNetworkInfo();
             memcpy(buf, &network_info + offset, buf_len);
             break;
         }
+#elif defined(ON_TI)
 #endif
         default:
             CONSOLE_ERROR("SPICoprocessor::SetBytes", "No behavior implemented for reading from address 0x%x.", addr);
@@ -148,6 +180,43 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
     }
     return true;
 }
+
+bool ObjectDictionary::RequestSCCommand(const SCCommandRequest &request) {
+    if (sc_command_request_queue.Push(request)) {
+        return true;
+    } else {
+        CONSOLE_ERROR("ObjectDictionary::RequestSCCommand", "Failed to push SCCommandRequest to queue, queue is full.");
+        return false;
+    }
+}
+
+bool ObjectDictionary::RequestSCCommandBlocking(const SCCommandRequest &request) {
+    SemaphoreHandle_t command_complete_semaphore = xSemaphoreCreateBinary();
+    if (command_complete_semaphore == NULL) {
+        CONSOLE_ERROR("ADSBeeServer::Init", "Failed to create settings read semaphore.");
+        return false;
+    }
+
+    bool ret = object_dictionary.RequestSCCommand(ObjectDictionary::SCCommandRequest{
+        .command = request.command,
+        .addr = request.addr,
+        .offset = request.offset,
+        .len = request.len,
+        .complete_callback =
+            [command_complete_semaphore, request]() {
+                if (request.complete_callback) {
+                    request.complete_callback();  // Call the existing callback if it exists.
+                }
+                xSemaphoreGive(command_complete_semaphore);
+            },
+    });  // Require ack.
+
+    // Wait for the callback to complete
+    xSemaphoreTake(command_complete_semaphore, portMAX_DELAY);
+    vSemaphoreDelete(command_complete_semaphore);
+    return ret;
+}
+#endif
 
 uint16_t ObjectDictionary::PackLogMessages(uint8_t *buf, uint16_t buf_len,
                                            PFBQueue<ObjectDictionary::LogMessage> &log_message_queue,

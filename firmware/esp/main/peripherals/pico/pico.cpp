@@ -7,14 +7,16 @@ void IRAM_ATTR esp_spi_post_setup_cb(spi_slave_transaction_t *trans) { pico_ll.S
 void IRAM_ATTR esp_spi_post_trans_cb(spi_slave_transaction_t *trans) { pico_ll.SetSPIHandshakePinLevel(0); }
 
 Pico::Pico(PicoConfig config_in) : config_(config_in) {
-    spi_rx_buf_ = static_cast<uint8_t *>(heap_caps_malloc(kSPITransactionMaxLenBytes, MALLOC_CAP_DMA));
-    spi_tx_buf_ = static_cast<uint8_t *>(heap_caps_malloc(kSPITransactionMaxLenBytes, MALLOC_CAP_DMA));
+    spi_rx_buf_ =
+        static_cast<uint8_t *>(heap_caps_malloc(SPICoprocessorPacket::kSPITransactionMaxLenBytes, MALLOC_CAP_DMA));
+    spi_tx_buf_ =
+        static_cast<uint8_t *>(heap_caps_malloc(SPICoprocessorPacket::kSPITransactionMaxLenBytes, MALLOC_CAP_DMA));
 
     if (!spi_rx_buf_ || !spi_tx_buf_) {
         CONSOLE_ERROR("Pico::Pico", "Failed to allocate SPI tx/rx buffers.");
     }
-    memset(spi_rx_buf_, 0x0, kSPITransactionMaxLenBytes);
-    memset(spi_tx_buf_, 0x0, kSPITransactionMaxLenBytes);
+    memset(spi_rx_buf_, 0x0, SPICoprocessorPacket::kSPITransactionMaxLenBytes);
+    memset(spi_tx_buf_, 0x0, SPICoprocessorPacket::kSPITransactionMaxLenBytes);
 }
 
 Pico::~Pico() {
@@ -36,7 +38,7 @@ bool Pico::Init() {
                                    .data6_io_num = -1,
                                    .data7_io_num = -1,
                                    .data_io_default_level = false,  // keep lines LO when not in use
-                                   .max_transfer_sz = SPICoprocessor::kSPITransactionMaxLenBytes,
+                                   .max_transfer_sz = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
                                    .flags = 0,
                                    .isr_cpu_id = ESP_INTR_CPU_AFFINITY_AUTO,
                                    .intr_flags = 0};

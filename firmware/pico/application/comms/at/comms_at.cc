@@ -140,7 +140,8 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
                 }
 
                 ObjectDictionary::ESP32DeviceInfo esp32_device_info;
-                if (!esp32.Read(ObjectDictionary::kAddrDeviceInfo, esp32_device_info, sizeof(esp32_device_info))) {
+                if (!esp32.Read(ObjectDictionary::SCCommand::kAddrDeviceInfo, esp32_device_info,
+                                sizeof(esp32_device_info))) {
                     CPP_AT_ERROR("ESP32 device info read failed!");
                 }
                 CPP_AT_PRINTF("ESP32 Base MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\r\n",
