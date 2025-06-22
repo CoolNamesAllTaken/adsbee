@@ -161,19 +161,24 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             break;
         }
         case kAddrSCCommandRequests: {
+            if (offset != 0) {
+                CONSOLE_ERROR("ObjectDictionary::GetBytes",
+                              "Offset %d for reading SCCommandRequest not supported, must be 0.", offset);
+                return false;
+            }
+            if (buf_len != sizeof(SCCommandRequest)) {
+                CONSOLE_ERROR("ObjectDictionary::GetBytes",
+                              "Buffer length %d for reading SCCommandRequest must be exactly %d.", buf_len,
+                              sizeof(SCCommandRequest));
+                return false;
+            }
             SCCommandRequestWithCallback request_with_callback;
             if (!sc_command_request_queue.Peek(request_with_callback)) {
                 CONSOLE_ERROR("ObjectDictionary::GetBytes", "No SCCommand requests available to read.");
                 return false;
             }
             SCCommandRequest &request = request_with_callback.request;
-            if (offset + buf_len > sizeof(SCCommandRequest)) {
-                CONSOLE_ERROR("ObjectDictionary::GetBytes",
-                              "Requested read of SCCommandRequest with offset %d and length %d exceeds max size %d.",
-                              offset, buf_len, sizeof(SCCommandRequest));
-                return false;
-            }
-            memcpy(buf, &request + offset, buf_len);
+            memcpy(buf, &request, sizeof(SCCommandRequest));
             break;
         }
 #ifdef ON_ESP32

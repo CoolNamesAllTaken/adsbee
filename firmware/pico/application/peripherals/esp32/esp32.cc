@@ -130,6 +130,11 @@ bool ESP32::ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRequest &re
             write_requires_ack = true;
             [[fallthrough]];
         case ObjectDictionary::SCCommand::kCmdWriteToSlave: {
+            if (request.len == 0) {
+                CONSOLE_WARNING("ESP32::ExecuteSCCommandRequest",
+                                "Skipping write request to address 0x%x with zero length.", request.addr);
+                return true;
+            }
             switch (request.addr) {
                 /** These are the addresses that the ESP32 can request a write to. **/
                 case ObjectDictionary::Address::kAddrSettingsData: {
@@ -160,6 +165,11 @@ bool ESP32::ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRequest &re
         }
 
         case ObjectDictionary::SCCommand::kCmdReadFromSlave: {
+            if (request.len == 0) {
+                CONSOLE_WARNING("ESP32::ExecuteSCCommandRequest",
+                                "Skipping read request to address 0x%x with zero length.", request.addr);
+                return true;
+            }
             switch (request.addr) {
                 /**  These are the addresses the ESP32 can request a read from. **/
                 case ObjectDictionary::Address::kAddrConsole: {

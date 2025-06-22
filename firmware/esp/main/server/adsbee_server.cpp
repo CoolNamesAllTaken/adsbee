@@ -248,7 +248,7 @@ bool ADSBeeServer::Update() {
     uint16_t num_chars_added = 0;
     while (!object_dictionary.network_console_tx_queue.IsFull() &&
            object_dictionary.network_console_tx_queue.MaxNumElements() -
-                   object_dictionary.network_console_tx_queue.Length() <
+                   object_dictionary.network_console_tx_queue.Length() >=
                ObjectDictionary::kNetworkConsoleMessageMaxLenBytes &&
            xQueueReceive(network_console_rx_queue, &message, 0) == pdTRUE) {
         // Dequeue network messages one by one.
@@ -264,13 +264,15 @@ bool ADSBeeServer::Update() {
         }
         message.Destroy();  // Free up the message buffer now that it's been pushed to the TX queue.
     }
-    // Tell Pico to come fetch the newly added console characters.
-    object_dictionary.RequestSCCommand(ObjectDictionary::SCCommandRequest{
-        .command = ObjectDictionary::SCCommand::kCmdReadFromSlave,
-        .addr = ObjectDictionary::Address::kAddrConsole,
-        .offset = 0,
-        .len = num_chars_added,
-    });
+    if (num_chars_added > 0) {
+        // Tell Pico to come fetch the newly added console characters.
+        object_dictionary.RequestSCCommand(ObjectDictionary::SCCommandRequest{
+            .command = ObjectDictionary::SCCommand::kCmdReadFromSlave,
+            .addr = ObjectDictionary::Address::kAddrConsole,
+            .offset = 0,
+            .len = num_chars_added,
+        });
+    }
 
     // Prune inactive WebSocket clients and other housekeeping.
     network_console.Update();
