@@ -197,15 +197,15 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
         case kAddrConsole: {
             if (network_console_rx_queue.Length() < buf_len) {
                 CONSOLE_ERROR("ObjectDictionary::GetBytes",
-                              "Buffer length %d of network console message to read is larger than TX queue length %d.",
+                              "Buffer length %d of network console message to read is larger than RX queue length %d.",
                               buf_len, network_console_rx_queue.Length());
                 return false;
             }
             for (uint16_t i = 0; i < buf_len; i++) {
                 char ch;
-                if (!network_console_rx_queue.Pop(ch)) {
+                if (!network_console_rx_queue.Peek(ch, i)) {
                     CONSOLE_ERROR("ObjectDictionary::GetBytes",
-                                  "Failed to pop character %d from network console TX queue.", i);
+                                  "Failed to peek character %d from network console RX queue.", i);
                     return false;
                 }
                 buf[i] = static_cast<uint8_t>(ch);

@@ -251,7 +251,7 @@ bool ADSBeeServer::Update() {
     while (num_console_messages_processed < kMaxConsoleMessagesPerUpdate &&
            !object_dictionary.network_console_rx_queue.IsFull() &&
            xQueueReceive(network_console_message_rx_queue, &message, 0) == pdTRUE) {
-        while (!object_dictionary.network_console_rx_queue.IsFull()) {
+        while (!object_dictionary.network_console_rx_queue.IsFull() && message.bytes_processed < message.buf_len) {
             if (!object_dictionary.network_console_rx_queue.Push(message.buf[message.bytes_processed])) {
                 CONSOLE_ERROR("ADSBeeServer::Update",
                               "Push to network console TX queue failed. May have overflowed? Was pushing character %d "

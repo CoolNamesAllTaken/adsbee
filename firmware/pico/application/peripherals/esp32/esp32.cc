@@ -111,6 +111,16 @@ bool ESP32::Update() {
                     return false;
                 }
             }
+            ObjectDictionary::RollQueueRequest roll_request = {
+                .queue_id = ObjectDictionary::QueueID::kQueueIDConsole,
+                .num_items = (uint16_t)bytes_to_read,
+            };
+            if (!esp32.Write(ObjectDictionary::Address::kAddrRollQueue, roll_request, true)) {
+                // Require the roll request to be acknowledged.
+                CONSOLE_ERROR("ESP32::Update", "Unable to roll console queue after reading by %d bytes on ESP32.",
+                              bytes_to_read);
+                return false;
+            }
             if (!esp32.Read(ObjectDictionary::Address::kAddrDeviceStatus, device_status)) {
                 CONSOLE_ERROR("ESP32::Update", "Failed to re-read ESP32 device status on console read %d/%d.",
                               console_read_num + 1, kMaxNumConsoleReadsPerUpdate);
