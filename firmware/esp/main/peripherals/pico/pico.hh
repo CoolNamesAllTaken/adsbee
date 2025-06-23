@@ -7,7 +7,7 @@
 
 class Pico : public SPICoprocessorMasterInterface {
    public:
-    static constexpr uint32_t kNetworkLEDBlinkDurationMs = 10;
+    static constexpr uint32_t kNetworkLEDBlinkDurationMs = 1;
     static constexpr uint32_t kNetworkLEDBlinkDurationTicks = kNetworkLEDBlinkDurationMs / portTICK_PERIOD_MS;
     // Since the transaction timeout value is used by threads waiting to use the SPI peripheral, and the SPI update task
     // blocks the copro_spi_mutex_ until it receives a transfer from the master, this timeout needs to be set to the

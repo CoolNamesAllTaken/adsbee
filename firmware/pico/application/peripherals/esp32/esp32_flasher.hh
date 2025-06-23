@@ -6,6 +6,7 @@
 #include "comms.hh"
 #include "hal.hh"  // For system time stuff.
 #include "hardware/uart.h"
+#include "led_flasher.hh"
 #include "pico/stdlib.h"
 #include "unit_conversions.hh"
 
@@ -60,6 +61,9 @@ class ESP32SerialFlasher {
         receiver_was_enabled_before_update_ = adsbee.Receiver1090IsEnabled();
         adsbee.SetReceiver1090Enable(false);  // Disable receiver to avoid interrupts during update.
 
+        // Set up LED flasher with unique pattern to indicate ESP32 firmware is updating.
+        led_flasher_.SetFlashPattern(0b101000000000, 12, 50);  // Flash pattern 10100000, 8 bits long, 100ms per bit.
+
         return true;
     }
 
@@ -69,6 +73,8 @@ class ESP32SerialFlasher {
 
     ESP32SerialFlasherStatus SerialWrite(const uint8_t *src, size_t len, uint32_t timeout_ms) {
         uint32_t start_timestamp_ms = get_time_since_boot_ms();
+        // Cheeky LED update.
+        led_flasher_.Update();
         // Block until the UART is writeable.
         while (!uart_is_writable(config_.esp32_uart_handle)) {
             if (get_time_since_boot_ms() - start_timestamp_ms > timeout_ms) return kESP32FlasherErrorTimeout;
@@ -126,6 +132,7 @@ class ESP32SerialFlasher {
    private:
     ESP32SerialFlasherConfig config_;
     bool receiver_was_enabled_before_update_;
+    LEDFlasher led_flasher_{LEDFlasher::LEDFlasherConfig{}};
 };
 
 extern ESP32SerialFlasher esp32_flasher;

@@ -31,7 +31,7 @@ class ObjectDictionary {
 
 #ifdef ON_COPRO_SLAVE
     static constexpr uint16_t kSCCommandRequestQueueDepth = 10;
-    static constexpr uint16_t kNetworkConsoleTxQueueDepth = kNetworkConsoleMessageMaxLenBytes * 2;
+    static constexpr uint16_t kNetworkConsoleRxQueueDepth = kNetworkConsoleMessageMaxLenBytes * 2;
 #endif
 
     enum Address : uint8_t {
@@ -99,12 +99,14 @@ class ObjectDictionary {
         std::function<void()> complete_callback = nullptr;
     };
 
-    struct __attribute__((__packed__)) DeviceStatus {
+    struct __attribute__((__packed__)) ESP32DeviceStatus {
         uint32_t timestamp_ms = 0;
-        uint16_t num_pending_log_messages = 0;
+        uint16_t num_queued_log_messages = 0;
         uint32_t pending_log_messages_packed_size_bytes = 0;
 
         uint16_t num_queued_sc_command_requests = 0;  // Number of SCCommand requests queued for the master.
+        uint32_t num_queued_network_console_rx_chars =
+            0;  // Number incoming of characters waiting to be read by the RP2040 from the ESP32's network console.
     };
 
     /**
@@ -243,8 +245,8 @@ class ObjectDictionary {
             .buffer = sc_command_request_queue_buffer_,
             .overwrite_when_full = false  // We don't want to overwrite command requests, since they could be important.
         });
-    PFBQueue<char> network_console_tx_queue = PFBQueue<char>({
-        .buf_len_num_elements = kNetworkConsoleTxQueueDepth,
+    PFBQueue<char> network_console_rx_queue = PFBQueue<char>({
+        .buf_len_num_elements = kNetworkConsoleRxQueueDepth,
         .buffer = network_console_message_buffer_,
         .overwrite_when_full =
             false  // We don't want to overwrite network console messages, since they could be importatnt.
@@ -261,7 +263,7 @@ class ObjectDictionary {
 #ifdef ON_COPRO_SLAVE
     ObjectDictionary::SCCommandRequestWithCallback
         sc_command_request_queue_buffer_[ObjectDictionary::kSCCommandRequestQueueDepth] = {};
-    char network_console_message_buffer_[kNetworkConsoleTxQueueDepth] = {};
+    char network_console_message_buffer_[kNetworkConsoleRxQueueDepth] = {};
 #endif
 };
 

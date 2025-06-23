@@ -7,6 +7,7 @@
 #include "comms.hh"
 #include "core1.hh"  // For turning multiprocessor on / off during firmware flashing.
 #include "eeprom.hh"
+#include "esp32.hh"  // Access to ESP32 low level SPICoprocessorSlaveInterface.
 #include "esp32_flasher.hh"
 #include "firmware_update.hh"
 #include "flash_utils.hh"
@@ -485,6 +486,8 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     CPP_AT_PRINTF("OK\r\n");
 
                     // Read len_bytes from stdio and network console. Timeout after kOTAWriteTimeoutMs.
+                    uint32_t old_esp32_heartbeat_ms = esp32_ll.device_status_update_interval_ms;
+                    esp32_ll.device_status_update_interval_ms = kOTAHeartbeatMs;  // Faster heartbeat during OTA.
                     while (buf_len_bytes < len_bytes) {
                         // Priority 1: Check STDIO for data.
                         int stdio_console_getchar_reply = getchar_timeout_us(0);
@@ -506,28 +509,21 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                                 }
                             } else {
                                 // Didn't receive any Bytes. Refresh network console and update timeout timestamp.
-                                // esp32.Update();
-                                // Poll the ESP32 by sending a heartbeat message (no ACK required) get the ESP32
-                                // firmware to release the SPI mutex to the task that's forwarding data from the network
-                                // console.
-                                timestamp_ms = get_time_since_boot_ms();
-                                if (timestamp_ms - last_ota_heartbeat_timestamp_ms > kOTAHeartbeatMs) {
-                                    // Don't call update manually here, it gets taken care of in the Write function.
-                                    // Calling Update twice will result in the network console buffer overflowing if two
-                                    // blobs of characters are ready to be transmitted sequentially!
-                                    esp32.Write(ObjectDictionary::Address::kAddrScratch, timestamp_ms, false);
-                                    last_ota_heartbeat_timestamp_ms = timestamp_ms;
-                                }
+                                esp32.Update();
                             }
                         }
 
                         timestamp_ms = get_time_since_boot_ms();
                         if (timestamp_ms - data_read_start_timestamp_ms > kOTAWriteTimeoutMs) {
                             adsbee.SetReceiver1090Enable(receiver_was_enabled);  // Re-enable receiver before exit.
+                            esp32_ll.device_status_update_interval_ms =
+                                old_esp32_heartbeat_ms;  // Restore old heartbeat.
                             CPP_AT_ERROR("Timed out after %u ms. Received %u Bytes.",
                                          timestamp_ms - data_read_start_timestamp_ms, buf_len_bytes);
                         }
                     }
+                    esp32_ll.device_status_update_interval_ms = old_esp32_heartbeat_ms;  // Restore old heartbeat.
+
                     bool has_crc = CPP_AT_HAS_ARG(3);
                     CPP_AT_TRY_ARG2NUM_BASE(3, crc, 16);
                     if (has_crc) {

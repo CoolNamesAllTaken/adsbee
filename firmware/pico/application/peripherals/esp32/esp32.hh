@@ -11,6 +11,7 @@ class ESP32 : public SPICoprocessorSlaveInterface {
    public:
     static const uint16_t kDeviceStatusUpdateDefaultIntervalMs = 200;  // 5Hz updates by default.
     static const uint16_t kMaxNumSCCommandRequestsPerUpdate = 5;
+    static const uint32_t kBootupDelayMs = 500;  // Delay after enabling the ESP32 before starting comms.
 
     struct ESP32Config {
         uint16_t enable_pin = bsp.esp32_enable_pin;
@@ -78,3 +79,5 @@ class ESP32 : public SPICoprocessorSlaveInterface {
 
     uint32_t last_device_status_update_timestamp_ms_ = 0;  // Timestamp of the last device status update.
 };
+
+extern ESP32 esp32_ll;

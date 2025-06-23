@@ -3,6 +3,7 @@
 #include "bsp.hh"
 #include "comms.hh"
 #include "hardware/spi.h"
+#include "led_flasher.hh"
 #include "spi_coprocessor.hh"
 
 class CC1312 : public SPICoprocessorSlaveInterface {
@@ -545,4 +546,6 @@ class CC1312 : public SPICoprocessorSlaveInterface {
         hw_write_masked(&spi_get_hw(config_.spi_handle)->cr0, (clk_config.postdiv - 1) << SPI_SSPCR0_SCR_LSB,
                         SPI_SSPCR0_SCR_BITS);
     }
+
+    LEDFlasher led_flasher_ = LEDFlasher({});
 };

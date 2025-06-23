@@ -397,6 +397,9 @@ bool CC1312::BootloaderSendBuffer(uint8_t* buf, uint16_t buf_len_bytes) {
     memcpy(tx_buf + 2, buf, buf_len_bytes);
     uint32_t start_time_ms = get_time_since_boot_ms();
 
+    // Cheeky LED update.
+    led_flasher_.Update();
+
     // Send the buffer.
     int16_t bytes_written =
         SPIWriteBlocking(tx_buf, tx_len_bytes,
@@ -464,6 +467,8 @@ bool CC1312::BootloaderSendBufferCheckSuccess(uint8_t* buf, uint16_t buf_len_byt
 
 bool CC1312::Flash() {
     CONSOLE_PRINTF("CC1312::Flash: Entering bootloader.\r\n");
+    // Set up LED flasher for pretty blinks.
+    led_flasher_.SetFlashPattern(0b101010000000, 12, 50);  // Triple flash.
     if (!EnterBootloader()) {
         CONSOLE_ERROR("CC1312::Flash", "Failed to enter bootloader mode.");
         return false;

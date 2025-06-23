@@ -25,8 +25,10 @@ bool ESP32::Init() {
     gpio_set_drive_strength(config_.spi_cs_pin, config_.spi_drive_strength);
     gpio_set_pulls(config_.spi_cs_pin, config_.spi_pullup, config_.spi_pulldown);  // CS pin pulls.
 
-    // Don't add a bootup delay here, since the ESP32 needs to query for settings on startup and we don't want to block
-    // that.
+    // Delay for kBootupDelayMs to avoid a bunch of failed transactions while the ESP32 wakes up.
+    uint32_t boot_start_timestamp_ms = get_time_since_boot_ms();
+    while (get_time_since_boot_ms() - boot_start_timestamp_ms < kBootupDelayMs) {
+    }
 
     return true;
 }
@@ -44,7 +46,7 @@ bool ESP32::Update() {
 
     if (timestamp_ms - last_device_status_update_timestamp_ms_ > device_status_update_interval_ms) {
         // Query ESP32's device status.
-        ObjectDictionary::DeviceStatus device_status;
+        ObjectDictionary::ESP32DeviceStatus device_status;
         if (esp32.Read(ObjectDictionary::Address::kAddrDeviceStatus, device_status)) {
             last_device_status_update_timestamp_ms_ = timestamp_ms;
         } else {
@@ -82,6 +84,39 @@ bool ESP32::Update() {
                 }
                 num_requests_processed++;
             }
+        }
+
+        static const uint16_t kMaxNumConsoleReadsPerUpdate = 5;
+        for (uint16_t console_read_num = 0;
+             console_read_num < kMaxNumConsoleReadsPerUpdate && device_status.num_queued_network_console_rx_chars > 0;
+             console_read_num++) {
+            // Read console message from ESP32.
+            char buf[ObjectDictionary::kNetworkConsoleMessageMaxLenBytes] = {0};
+
+            // Read as many bytes as we can without overflowing the RX queue or exceeding our buffer size or max SPI
+            // transaction size.
+            uint16_t bytes_to_read = MIN(
+                comms_manager.esp32_console_rx_queue.MaxNumElements() - comms_manager.esp32_console_rx_queue.Length(),
+                MIN(device_status.num_queued_network_console_rx_chars, sizeof(buf)));
+
+            if (!esp32.Read(ObjectDictionary::Address::kAddrConsole, buf, bytes_to_read)) {
+                CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest", "Unable to read console message from ESP32.");
+                return false;
+            }
+            for (uint16_t i = 0; i < bytes_to_read; i++) {
+                char c = (char)buf[i];
+                if (!comms_manager.esp32_console_rx_queue.Push(c)) {
+                    CONSOLE_ERROR("ObjectDictionary::SetBytes", "ESP32 overflowed RP2040's network console queue.");
+                    comms_manager.esp32_console_rx_queue.Clear();
+                    return false;
+                }
+            }
+            if (!esp32.Read(ObjectDictionary::Address::kAddrDeviceStatus, device_status)) {
+                CONSOLE_ERROR("ESP32::Update", "Failed to re-read ESP32 device status on console read %d/%d.",
+                              console_read_num + 1, kMaxNumConsoleReadsPerUpdate);
+                return false;
+            }
+            // Successfully read console message from ESP32.
         }
 
 #ifdef PULL_ESP32_LOG_MESSAGES
@@ -172,32 +207,6 @@ bool ESP32::ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRequest &re
             }
             switch (request.addr) {
                 /**  These are the addresses the ESP32 can request a read from. **/
-                case ObjectDictionary::Address::kAddrConsole: {
-                    // Read console message from ESP32.
-                    if (request.len > ObjectDictionary::kNetworkConsoleMessageMaxLenBytes) {
-                        CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest",
-                                      "Console message read with invalid length (%d). Max is %d.", request.len,
-                                      ObjectDictionary::kNetworkConsoleMessageMaxLenBytes);
-                        return false;
-                    }
-                    char buf[ObjectDictionary::kNetworkConsoleMessageMaxLenBytes] = {0};
-                    if (!esp32.Read(ObjectDictionary::Address::kAddrConsole, buf, request.len)) {
-                        CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest", "Unable to read console message from ESP32.");
-                        return false;
-                    }
-                    for (uint16_t i = 0; i < request.len; i++) {
-                        char c = (char)buf[i];
-                        if (!comms_manager.esp32_console_rx_queue.Push(c)) {
-                            CONSOLE_ERROR("ObjectDictionary::SetBytes",
-                                          "ESP32 overflowed RP2040's network console queue.");
-                            comms_manager.esp32_console_rx_queue.Clear();
-                            return false;
-                        }
-                    }
-                    // Successfully read console message from ESP32.
-
-                    break;
-                }
                 default:
                     CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest",
                                   "No implementation defined for reading from address 0x%x for on slave.",
@@ -246,6 +255,7 @@ int ESP32::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len_b
     // Blocking check of handshake line. If we're expecting a handshake, it's OK for the line to be high. Otherwise, we
     // need to bail out to not stomp on the ESP32's incoming message.
     if (SPIGetHandshakePinLevel(true) && !expecting_handshake_) {
+        SPIEndTransaction();  // End transaction to purge the handshake error.
         return ReturnCode::kErrorHandshakeHigh;
     }
 

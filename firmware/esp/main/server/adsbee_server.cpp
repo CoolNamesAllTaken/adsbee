@@ -245,33 +245,51 @@ bool ADSBeeServer::Update() {
 
     // Receive incoming network console messages from the console websocket.
     NetworkConsoleMessage message;
-    uint16_t num_chars_added = 0;
-    while (!object_dictionary.network_console_tx_queue.IsFull() &&
-           object_dictionary.network_console_tx_queue.MaxNumElements() -
-                   object_dictionary.network_console_tx_queue.Length() >=
-               ObjectDictionary::kNetworkConsoleMessageMaxLenBytes &&
-           xQueueReceive(network_console_rx_queue, &message, 0) == pdTRUE) {
+    while (!object_dictionary.network_console_rx_queue.IsFull() &&
+           xQueuePeek(network_console_rx_queue, &message, 0) == pdTRUE) {
+        if (message.buf_len > ObjectDictionary::kNetworkConsoleRxQueueDepth) {
+            CONSOLE_ERROR("ADSBeeServer::Update",
+                          "Network console message length %d exceeds maximum tx queue depth %d. Dropping message.",
+                          message.buf_len, ObjectDictionary::kNetworkConsoleRxQueueDepth);
+            // Drop the message.
+            if (!xQueueReceive(network_console_rx_queue, &message, 0)) {
+                CONSOLE_ERROR("ADSBeeServer::Update", "Failed to dequeue network console message after peeking it.");
+                ret = false;
+                break;  // Don't dequeue additional messages, but forward the characters we already added.
+            } else {
+                message.Destroy();  // Free up the message buffer now that it's been dropped.
+                ret = false;
+                continue;  // Try to read the next message.
+            }
+        } else if (object_dictionary.network_console_rx_queue.MaxNumElements() -
+                       object_dictionary.network_console_rx_queue.Length() <
+                   message.buf_len) {
+            // Not enough space in TX queue to push this message. This is OK, save it for next time.
+            break;
+        }
         // Dequeue network messages one by one.
         for (uint16_t i = 0; i < message.buf_len; i++) {
             // Feed characters in message into the TX queue.
-            if (!object_dictionary.network_console_tx_queue.Push(message.buf[i])) {
-                CONSOLE_ERROR("ADSBeeServer::Update", "Push to network console TX queue failed. May have overflowed?");
-                object_dictionary.network_console_tx_queue.Clear();
+            if (!object_dictionary.network_console_rx_queue.Push(message.buf[i])) {
+                CONSOLE_ERROR("ADSBeeServer::Update",
+                              "Push to network console TX queue failed. May have overflowed? Was pushing character %d "
+                              "of a message with %d chars. Queue length is %d/%d.",
+                              i + 1, message.buf_len, object_dictionary.network_console_rx_queue.Length(),
+                              object_dictionary.network_console_rx_queue.MaxNumElements());
+                object_dictionary.network_console_rx_queue.Clear();
                 ret = false;
-                break;
+                break;  // Don't read the rest of this message or any additional messages, but forward the characters we
+                        // already added.
             }
-            num_chars_added++;
         }
-        message.Destroy();  // Free up the message buffer now that it's been pushed to the TX queue.
-    }
-    if (num_chars_added > 0) {
-        // Tell Pico to come fetch the newly added console characters.
-        object_dictionary.RequestSCCommand(ObjectDictionary::SCCommandRequest{
-            .command = ObjectDictionary::SCCommand::kCmdReadFromSlave,
-            .addr = ObjectDictionary::Address::kAddrConsole,
-            .offset = 0,
-            .len = num_chars_added,
-        });
+        // Destroy messages that were dequeued successfully.
+        if (!xQueueReceive(network_console_rx_queue, &message, 0)) {
+            CONSOLE_ERROR("ADSBeeServer::Update", "Failed to dequeue network console message after peeking it.");
+            ret = false;
+            break;  // Don't dequeue additional messages, but forward the characters we already added.
+        } else {
+            message.Destroy();  // Free up the message buffer now that it's been pushed to the TX queue.
+        }
     }
 
     // Prune inactive WebSocket clients and other housekeeping.

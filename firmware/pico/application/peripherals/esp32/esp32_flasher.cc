@@ -205,6 +205,7 @@ esp_loader_error_t flash_binary(const uint8_t *bin, size_t size, size_t address)
     size_t binary_size = size;
     size_t written = 0;
 
+    int last_progress = -1;
     while (size > 0) {
         size_t to_read = MIN(size, sizeof(payload));
         memcpy(payload, bin_addr, to_read);
@@ -222,8 +223,10 @@ esp_loader_error_t flash_binary(const uint8_t *bin, size_t size, size_t address)
         written += to_read;
 
         int progress = (int)(((float)written / binary_size) * 100);
-        CONSOLE_PRINTF("\rProgress: %d%%\r\n", progress);
-        // fflush(stdout);
+        if (progress != last_progress) {
+            last_progress = progress;
+            CONSOLE_PRINTF("Progress: %d%%\r\n", progress);
+        }
     };
 
     CONSOLE_PRINTF("\r\nFinished programming\r\n");

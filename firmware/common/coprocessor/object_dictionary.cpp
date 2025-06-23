@@ -61,7 +61,7 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                     }
                     break;
                 case kQueueIDConsole:
-                    if (!network_console_tx_queue.Discard(roll_request.num_items)) {
+                    if (!network_console_rx_queue.Discard(roll_request.num_items)) {
                         CONSOLE_ERROR("ObjectDictionary::SetBytes",
                                       "Failed to discard %d chars from the network console TX queue.",
                                       roll_request.num_items);
@@ -139,11 +139,13 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             break;
         case kAddrDeviceStatus: {
             uint16_t num_log_messages = log_message_queue.Length();
-            DeviceStatus device_status = {.timestamp_ms = get_time_since_boot_ms(),
-                                          .num_pending_log_messages = num_log_messages,
-                                          .pending_log_messages_packed_size_bytes =
-                                              static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),
-                                          .num_queued_sc_command_requests = sc_command_request_queue.Length()};
+            ESP32DeviceStatus device_status = {
+                .timestamp_ms = get_time_since_boot_ms(),
+                .num_queued_log_messages = num_log_messages,
+                .pending_log_messages_packed_size_bytes =
+                    static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),
+                .num_queued_sc_command_requests = sc_command_request_queue.Length(),
+                .num_queued_network_console_rx_chars = network_console_rx_queue.Length()};
             for (uint16_t i = 0; i < log_message_queue.Length(); i++) {
                 LogMessage log_message;
                 if (log_message_queue.Peek(log_message, i)) {
@@ -193,15 +195,15 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             break;
         }
         case kAddrConsole: {
-            if (network_console_tx_queue.Length() < buf_len) {
+            if (network_console_rx_queue.Length() < buf_len) {
                 CONSOLE_ERROR("ObjectDictionary::GetBytes",
                               "Buffer length %d of network console message to read is larger than TX queue length %d.",
-                              buf_len, network_console_tx_queue.Length());
+                              buf_len, network_console_rx_queue.Length());
                 return false;
             }
             for (uint16_t i = 0; i < buf_len; i++) {
                 char ch;
-                if (!network_console_tx_queue.Pop(ch)) {
+                if (!network_console_rx_queue.Pop(ch)) {
                     CONSOLE_ERROR("ObjectDictionary::GetBytes",
                                   "Failed to pop character %d from network console TX queue.", i);
                     return false;
