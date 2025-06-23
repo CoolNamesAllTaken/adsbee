@@ -679,7 +679,7 @@
                 const HEADER_SIZE_BYTES = 5 * 4;
                 const APP_OFFSET_BYTES = 4 * 1024;
                 // Going larger than this can cause the heap to explode on the ESP32.
-                const WRITE_CHUNK_BYTES = 0x1000;
+                const WRITE_CHUNK_BYTES = 0x1000 * 3;
 
                 const partition = await this.otaGetFlashPartition();
 

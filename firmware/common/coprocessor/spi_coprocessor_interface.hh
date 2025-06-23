@@ -87,16 +87,12 @@ class SPICoprocessorMasterInterface : public SPICoprocessorInterface {
 
 class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
    public:
-    // Make sure that we don't talk to the slave before it has a chance to get ready for the next message.
-    // Note that this value is ignored if the HANDSHAKE line is pulled high.
-    static constexpr uint32_t kSPIMinTransmitIntervalUs = 600;
     // Wait this long after a transmission is complete before allowing the HANDSHAKE line to override the minimum
     // transmit interval timeout. This ensures that we don't double-transmit to the slave before it has a chance to
     // lower the HANDSHAKE line following a transaction.
     static constexpr uint32_t kSPIPostTransmitLockoutUs = 10;
-    // How long before the end of kSPIMinTransmitIntervalUs to assert the CS line during a blocking update. This
-    // prevents the ESP32 from handshaking at the same instant that the Pico starts a transaction with the assumption
-    // that the Hanshake line was LO.
+    // How long we pull the CS line LO before transmitting. If the handshake line goes high during this interval, we can
+    // begin transmitting immediately.
     static constexpr uint32_t kSPIUpdateCSPreAssertIntervalUs = 100;
     // NOTE: Max transmission time is ~10ms with a 4kB packet at 40MHz.
     // How long to wait once a transaction is started before timing out.

@@ -245,51 +245,42 @@ bool ADSBeeServer::Update() {
 
     // Receive incoming network console messages from the console websocket.
     NetworkConsoleMessage message;
-    while (!object_dictionary.network_console_rx_queue.IsFull() &&
-           xQueuePeek(network_console_rx_queue, &message, 0) == pdTRUE) {
-        if (message.buf_len > ObjectDictionary::kNetworkConsoleRxQueueDepth) {
-            CONSOLE_ERROR("ADSBeeServer::Update",
-                          "Network console message length %d exceeds maximum tx queue depth %d. Dropping message.",
-                          message.buf_len, ObjectDictionary::kNetworkConsoleRxQueueDepth);
-            // Drop the message.
-            if (!xQueueReceive(network_console_rx_queue, &message, 0)) {
-                CONSOLE_ERROR("ADSBeeServer::Update", "Failed to dequeue network console message after peeking it.");
-                ret = false;
-                break;  // Don't dequeue additional messages, but forward the characters we already added.
-            } else {
-                message.Destroy();  // Free up the message buffer now that it's been dropped.
-                ret = false;
-                continue;  // Try to read the next message.
-            }
-        } else if (object_dictionary.network_console_rx_queue.MaxNumElements() -
-                       object_dictionary.network_console_rx_queue.Length() <
-                   message.buf_len) {
-            // Not enough space in TX queue to push this message. This is OK, save it for next time.
-            break;
-        }
-        // Dequeue network messages one by one.
-        for (uint16_t i = 0; i < message.buf_len; i++) {
-            // Feed characters in message into the TX queue.
-            if (!object_dictionary.network_console_rx_queue.Push(message.buf[i])) {
+
+    static const uint16_t kMaxConsoleMessagesPerUpdate = 5;
+    uint16_t num_console_messages_processed = 0;
+    while (num_console_messages_processed < kMaxConsoleMessagesPerUpdate &&
+           !object_dictionary.network_console_rx_queue.IsFull() &&
+           xQueueReceive(network_console_message_rx_queue, &message, 0) == pdTRUE) {
+        while (!object_dictionary.network_console_rx_queue.IsFull()) {
+            if (!object_dictionary.network_console_rx_queue.Push(message.buf[message.bytes_processed])) {
                 CONSOLE_ERROR("ADSBeeServer::Update",
                               "Push to network console TX queue failed. May have overflowed? Was pushing character %d "
                               "of a message with %d chars. Queue length is %d/%d.",
-                              i + 1, message.buf_len, object_dictionary.network_console_rx_queue.Length(),
+                              message.bytes_processed + 1, message.buf_len,
+                              object_dictionary.network_console_rx_queue.Length(),
                               object_dictionary.network_console_rx_queue.MaxNumElements());
                 object_dictionary.network_console_rx_queue.Clear();
                 ret = false;
                 break;  // Don't read the rest of this message or any additional messages, but forward the characters we
                         // already added.
             }
+
+            message.bytes_processed++;
         }
-        // Destroy messages that were dequeued successfully.
-        if (!xQueueReceive(network_console_rx_queue, &message, 0)) {
-            CONSOLE_ERROR("ADSBeeServer::Update", "Failed to dequeue network console message after peeking it.");
-            ret = false;
-            break;  // Don't dequeue additional messages, but forward the characters we already added.
+        if (message.bytes_processed < message.buf_len) {
+            // Message was only partially processed, re-queue it for later.
+            if (xQueueSendToFront(network_console_message_rx_queue, &message, 0) != pdTRUE) {
+                CONSOLE_ERROR("ADSBeeServer::Update",
+                              "Re-queue of partially processed network console message failed. May have overflowed?");
+                message.Destroy();
+                ret = false;
+                break;  // Don't read any additional messages, but forward the characters we already added.
+            }
         } else {
-            message.Destroy();  // Free up the message buffer now that it's been pushed to the TX queue.
+            // Message was fully processed, destroy it.
+            message.Destroy();
         }
+        num_console_messages_processed++;
     }
 
     // Prune inactive WebSocket clients and other housekeeping.
@@ -499,10 +490,10 @@ void NetworkConsoleMessageReceivedCallback(WebSocketServer *ws_server, int clien
     // Forward the network console message to the RP2040.
     ADSBeeServer::NetworkConsoleMessage message =
         ADSBeeServer::NetworkConsoleMessage((char *)ws_pkt.payload, (uint16_t)ws_pkt.len);
-    int err = xQueueSend(adsbee_server.network_console_rx_queue, &message, 0);
+    int err = xQueueSend(adsbee_server.network_console_message_rx_queue, &message, 0);
     if (err == errQUEUE_FULL) {
         CONSOLE_WARNING("NetworkConsoleMessageReceivedCallback", "Overflowed network console rx queue.");
-        xQueueReset(adsbee_server.network_console_rx_queue);
+        xQueueReset(adsbee_server.network_console_message_rx_queue);
     } else if (err != pdTRUE) {
         CONSOLE_WARNING("NetworkConsoleMessageReceivedCallback",
                         "Pushing network console message to network console rx queue resulted in error %d.", err);

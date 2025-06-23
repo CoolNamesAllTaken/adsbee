@@ -22,6 +22,8 @@ class ADSBeeServer {
     struct NetworkConsoleMessage {
         char* buf = nullptr;
         uint16_t buf_len = 0;
+        uint16_t bytes_processed =
+            0;  // How many bytes have been chewed off of buf, so we can process with multiple passes if needed.
 
         /**
          * Default constructor.
@@ -44,7 +46,7 @@ class ADSBeeServer {
      * Constructor.
      */
     ADSBeeServer() {
-        network_console_rx_queue = xQueueCreate(kNetworkConsoleQueueLen, sizeof(NetworkConsoleMessage));
+        network_console_message_rx_queue = xQueueCreate(kNetworkConsoleQueueLen, sizeof(NetworkConsoleMessage));
         rp2040_aircraft_dictionary_metrics_queue = xQueueCreate(1, sizeof(AircraftDictionary::Metrics));
     };
 
@@ -52,7 +54,7 @@ class ADSBeeServer {
      * Destructor.
      */
     ~ADSBeeServer() {
-        vQueueDelete(network_console_rx_queue);
+        vQueueDelete(network_console_message_rx_queue);
         vQueueDelete(rp2040_aircraft_dictionary_metrics_queue);
     }
 
@@ -81,7 +83,7 @@ class ADSBeeServer {
 
     AircraftDictionary aircraft_dictionary;
 
-    QueueHandle_t network_console_rx_queue;
+    QueueHandle_t network_console_message_rx_queue;
     httpd_handle_t server = nullptr;
     WebSocketServer network_console;
     WebSocketServer network_metrics;
