@@ -31,7 +31,7 @@ class ObjectDictionary {
 
 #ifdef ON_COPRO_SLAVE
     static constexpr uint16_t kSCCommandRequestQueueDepth = 10;
-    static constexpr uint16_t kNetworkConsoleRxQueueDepth = kNetworkConsoleMessageMaxLenBytes * 2;
+    static constexpr uint16_t kNetworkConsoleRxQueueDepth = kNetworkConsoleMessageMaxLenBytes * 4;
 #endif
 
     enum Address : uint8_t {
@@ -245,6 +245,7 @@ class ObjectDictionary {
             .buffer = sc_command_request_queue_buffer_,
             .overwrite_when_full = false  // We don't want to overwrite command requests, since they could be important.
         });
+    SemaphoreHandle_t network_console_rx_queue_mutex = xSemaphoreCreateMutex();
     PFBQueue<char> network_console_rx_queue = PFBQueue<char>({
         .buf_len_num_elements = kNetworkConsoleRxQueueDepth,
         .buffer = network_console_message_buffer_,
@@ -263,7 +264,7 @@ class ObjectDictionary {
 #ifdef ON_COPRO_SLAVE
     ObjectDictionary::SCCommandRequestWithCallback
         sc_command_request_queue_buffer_[ObjectDictionary::kSCCommandRequestQueueDepth] = {};
-    char network_console_message_buffer_[kNetworkConsoleRxQueueDepth] = {};
+    char* network_console_message_buffer_ = (char*)heap_caps_malloc(kNetworkConsoleRxQueueDepth, 0);
 #endif
 };
 

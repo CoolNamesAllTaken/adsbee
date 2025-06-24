@@ -612,7 +612,7 @@
              * for firmware updates.
              */
             async silenceConsole() {
-                await this.sendCmd("AT+LOG_LEVEL=SILENT\r\n", 0, true, true);
+                await this.sendCmd("AT+LOG_LEVEL=ERRORS\r\n", 0, true, true);
                 await this.sendCmd("AT+PROTOCOL=CONSOLE,NONE\r\n", 0, true, true);
             }
 

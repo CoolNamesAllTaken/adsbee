@@ -243,46 +243,6 @@ bool ADSBeeServer::Update() {
         }
     }
 
-    // Receive incoming network console messages from the console websocket.
-    NetworkConsoleMessage message;
-
-    static const uint16_t kMaxConsoleMessagesPerUpdate = 5;
-    uint16_t num_console_messages_processed = 0;
-    while (num_console_messages_processed < kMaxConsoleMessagesPerUpdate &&
-           !object_dictionary.network_console_rx_queue.IsFull() &&
-           xQueueReceive(network_console_message_rx_queue, &message, 0) == pdTRUE) {
-        while (!object_dictionary.network_console_rx_queue.IsFull() && message.bytes_processed < message.buf_len) {
-            if (!object_dictionary.network_console_rx_queue.Push(message.buf[message.bytes_processed])) {
-                CONSOLE_ERROR("ADSBeeServer::Update",
-                              "Push to network console TX queue failed. May have overflowed? Was pushing character %d "
-                              "of a message with %d chars. Queue length is %d/%d.",
-                              message.bytes_processed + 1, message.buf_len,
-                              object_dictionary.network_console_rx_queue.Length(),
-                              object_dictionary.network_console_rx_queue.MaxNumElements());
-                object_dictionary.network_console_rx_queue.Clear();
-                ret = false;
-                break;  // Don't read the rest of this message or any additional messages, but forward the characters we
-                        // already added.
-            }
-
-            message.bytes_processed++;
-        }
-        if (message.bytes_processed < message.buf_len) {
-            // Message was only partially processed, re-queue it for later.
-            if (xQueueSendToFront(network_console_message_rx_queue, &message, 0) != pdTRUE) {
-                CONSOLE_ERROR("ADSBeeServer::Update",
-                              "Re-queue of partially processed network console message failed. May have overflowed?");
-                message.Destroy();
-                ret = false;
-                break;  // Don't read any additional messages, but forward the characters we already added.
-            }
-        } else {
-            // Message was fully processed, destroy it.
-            message.Destroy();
-        }
-        num_console_messages_processed++;
-    }
-
     // Prune inactive WebSocket clients and other housekeeping.
     network_console.Update();
 
@@ -488,16 +448,26 @@ void NetworkConsolePostConnectCallback(WebSocketServer *ws_server, int client_fd
 
 void NetworkConsoleMessageReceivedCallback(WebSocketServer *ws_server, int client_fd, httpd_ws_frame_t &ws_pkt) {
     // Forward the network console message to the RP2040.
-    ADSBeeServer::NetworkConsoleMessage message =
-        ADSBeeServer::NetworkConsoleMessage((char *)ws_pkt.payload, (uint16_t)ws_pkt.len);
-    int err = xQueueSend(adsbee_server.network_console_message_rx_queue, &message, 0);
-    if (err == errQUEUE_FULL) {
-        CONSOLE_WARNING("NetworkConsoleMessageReceivedCallback", "Overflowed network console rx queue.");
-        xQueueReset(adsbee_server.network_console_message_rx_queue);
-    } else if (err != pdTRUE) {
-        CONSOLE_WARNING("NetworkConsoleMessageReceivedCallback",
-                        "Pushing network console message to network console rx queue resulted in error %d.", err);
+    char *message = (char *)ws_pkt.payload;
+    uint16_t message_len = (uint16_t)ws_pkt.len;
+    xSemaphoreTake(object_dictionary.network_console_rx_queue_mutex, portMAX_DELAY);
+    if (object_dictionary.network_console_rx_queue.MaxNumElements() -
+            object_dictionary.network_console_rx_queue.Length() <
+        message_len) {
+        CONSOLE_ERROR("NetworkConsoleMessageReceivedCallback",
+                      "Network console tx queue is full, dropping message of length %d.", message_len);
+        xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
+        return;
     }
+    for (uint16_t i = 0; i < ws_pkt.len; i++) {
+        if (!object_dictionary.network_console_rx_queue.Push(message[i])) {
+            CONSOLE_ERROR("NetworkConsoleMessageReceivedCallback",
+                          "Failed to push character %d of network console message to tx queue.", i + 1);
+            xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
+            return;
+        }
+    }
+    xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
 }
 
 bool ADSBeeServer::TCPServerInit() {

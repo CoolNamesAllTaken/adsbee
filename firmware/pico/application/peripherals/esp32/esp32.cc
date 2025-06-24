@@ -268,8 +268,6 @@ int ESP32::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len_b
         SPIEndTransaction();  // End transaction to purge the handshake error.
         return ReturnCode::kErrorHandshakeHigh;
     }
-
-    SPIBeginTransaction();
     // Pico SDK doesn't have nice nullptr behavior for tx_buf and rx_buf, so we have to do this.
     if (tx_buf == nullptr) {
         // Transmit 0's when reading.

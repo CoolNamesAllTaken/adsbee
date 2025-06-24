@@ -16,47 +16,14 @@ class ADSBeeServer {
     static const uint16_t kNetworkConsoleQueueLen = 10;
 
     /**
-     * Data structure used to pass netowrk console messages between threads (SPI <-> WebSocket server). Needs to be
-     * manually destroyed when it's popped out of the network console packet queue.
-     */
-    struct NetworkConsoleMessage {
-        char* buf = nullptr;
-        uint16_t buf_len = 0;
-        uint16_t bytes_processed =
-            0;  // How many bytes have been chewed off of buf, so we can process with multiple passes if needed.
-
-        /**
-         * Default constructor.
-         */
-        NetworkConsoleMessage() {}
-
-        /**
-         * Constructor for ingesting a pre-existing buffer. Allocates new memory and copies over the buffer contents.
-         */
-        NetworkConsoleMessage(const char* buf_in, uint16_t buf_in_len) : buf_len(buf_in_len) {
-            buf = (char*)heap_caps_malloc(buf_len + 1, MALLOC_CAP_DMA);  // Leave room for extra null terminator.
-            buf[buf_len] = '\0';                                         // Null terminate for safety.
-            memcpy(buf, buf_in, buf_len);
-        }
-
-        void Destroy() { heap_caps_free(buf); }
-    };
-
-    /**
      * Constructor.
      */
-    ADSBeeServer() {
-        network_console_message_rx_queue = xQueueCreate(kNetworkConsoleQueueLen, sizeof(NetworkConsoleMessage));
-        rp2040_aircraft_dictionary_metrics_queue = xQueueCreate(1, sizeof(AircraftDictionary::Metrics));
-    };
+    ADSBeeServer() { rp2040_aircraft_dictionary_metrics_queue = xQueueCreate(1, sizeof(AircraftDictionary::Metrics)); };
 
     /**
      * Destructor.
      */
-    ~ADSBeeServer() {
-        vQueueDelete(network_console_message_rx_queue);
-        vQueueDelete(rp2040_aircraft_dictionary_metrics_queue);
-    }
+    ~ADSBeeServer() { vQueueDelete(rp2040_aircraft_dictionary_metrics_queue); }
 
     bool Init();
     bool Update();
@@ -83,7 +50,6 @@ class ADSBeeServer {
 
     AircraftDictionary aircraft_dictionary;
 
-    QueueHandle_t network_console_message_rx_queue;
     httpd_handle_t server = nullptr;
     WebSocketServer network_console;
     WebSocketServer network_metrics;

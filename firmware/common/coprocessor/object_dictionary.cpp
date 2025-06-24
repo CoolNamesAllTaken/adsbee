@@ -61,12 +61,15 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                     }
                     break;
                 case kQueueIDConsole:
+                    xSemaphoreTake(object_dictionary.network_console_rx_queue_mutex, portMAX_DELAY);
                     if (!network_console_rx_queue.Discard(roll_request.num_items)) {
                         CONSOLE_ERROR("ObjectDictionary::SetBytes",
                                       "Failed to discard %d chars from the network console TX queue.",
                                       roll_request.num_items);
+                        xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
                         return false;
                     }
+                    xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
                     break;
                 default:
                     CONSOLE_ERROR("ObjectDictionary::SetBytes",
@@ -139,13 +142,15 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             break;
         case kAddrDeviceStatus: {
             uint16_t num_log_messages = log_message_queue.Length();
-            ESP32DeviceStatus device_status = {
-                .timestamp_ms = get_time_since_boot_ms(),
-                .num_queued_log_messages = num_log_messages,
-                .pending_log_messages_packed_size_bytes =
-                    static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),
-                .num_queued_sc_command_requests = sc_command_request_queue.Length(),
-                .num_queued_network_console_rx_chars = network_console_rx_queue.Length()};
+            xSemaphoreTake(object_dictionary.network_console_rx_queue_mutex, portMAX_DELAY);
+            uint16_t num_network_console_rx_chars = network_console_rx_queue.Length();
+            xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
+            ESP32DeviceStatus device_status = {.timestamp_ms = get_time_since_boot_ms(),
+                                               .num_queued_log_messages = num_log_messages,
+                                               .pending_log_messages_packed_size_bytes =
+                                                   static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),
+                                               .num_queued_sc_command_requests = sc_command_request_queue.Length(),
+                                               .num_queued_network_console_rx_chars = num_network_console_rx_chars};
             for (uint16_t i = 0; i < log_message_queue.Length(); i++) {
                 LogMessage log_message;
                 if (log_message_queue.Peek(log_message, i)) {
@@ -195,10 +200,12 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             break;
         }
         case kAddrConsole: {
+            xSemaphoreTake(object_dictionary.network_console_rx_queue_mutex, portMAX_DELAY);
             if (network_console_rx_queue.Length() < buf_len) {
                 CONSOLE_ERROR("ObjectDictionary::GetBytes",
                               "Buffer length %d of network console message to read is larger than RX queue length %d.",
                               buf_len, network_console_rx_queue.Length());
+                xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
                 return false;
             }
             for (uint16_t i = 0; i < buf_len; i++) {
@@ -206,10 +213,12 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                 if (!network_console_rx_queue.Peek(ch, i)) {
                     CONSOLE_ERROR("ObjectDictionary::GetBytes",
                                   "Failed to peek character %d from network console RX queue.", i);
+                    xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
                     return false;
                 }
                 buf[i] = static_cast<uint8_t>(ch);
             }
+            xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
             break;
         }
 #elif defined(ON_TI)
