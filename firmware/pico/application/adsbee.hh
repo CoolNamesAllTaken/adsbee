@@ -21,7 +21,7 @@ class ADSBee {
     static constexpr int kVDDMV = 3300;               // [mV] Voltage of positive supply rail.
     static constexpr int kTLMaxMV = 3300;             // [mV]
     static constexpr int kTLMinMV = 0;                // [mV]
-    static constexpr uint32_t kStatusLEDOnMs = 10;
+    static constexpr uint32_t kStatusLEDOnMs = 1;
 
     static constexpr uint32_t kTLLearningIntervalMs =
         10000;  // [ms] Length of Simulated Annealing interval for learning trigger level.
