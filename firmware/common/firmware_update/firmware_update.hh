@@ -200,9 +200,10 @@ class FirmwareUpdateManager {
             return false;
         }
         if (len_bytes > kFlashHeaderLenBytes + kFlashAppLenBytes - offset) {
-            CONSOLE_ERROR("FirmwareUpdateManager::EraseFlashPartition",
-                          "Length %u is larger than maximum partition size %u Bytes.", len_bytes,
-                          kFlashHeaderLenBytes + kFlashAppLenBytes);
+            CONSOLE_ERROR(
+                "FirmwareUpdateManager::EraseFlashPartition",
+                "Erase length %u bytes starting at offset 0x%x erases flash outside partition of size %u Bytes.",
+                len_bytes, offset, kFlashHeaderLenBytes + kFlashAppLenBytes);
             return false;
         }
         if (offset % FLASH_SECTOR_SIZE != 0) {
@@ -210,7 +211,15 @@ class FirmwareUpdateManager {
                           "Offset 0x%x is not a multiple of the sector size 0x%x Bytes.", offset, FLASH_SECTOR_SIZE);
             return false;
         }
-        uint16_t total_sectors_to_erase = len_bytes / FLASH_SECTOR_SIZE + (len_bytes % FLASH_SECTOR_SIZE ? 1 : 0);
+        // Calculate the actual start and end addresses
+        uint32_t start_addr = offset;
+        uint32_t end_addr = offset + len_bytes;
+
+        // Calculate sector boundaries
+        uint32_t start_sector = start_addr / FLASH_SECTOR_SIZE;
+        uint32_t end_sector = (end_addr + FLASH_SECTOR_SIZE - 1) / FLASH_SECTOR_SIZE;  // Round up
+
+        uint16_t total_sectors_to_erase = end_sector - start_sector;
         if (total_sectors_to_erase == 0) {
             CONSOLE_PRINTF("No sectors to erase.\r\n");
             return true;

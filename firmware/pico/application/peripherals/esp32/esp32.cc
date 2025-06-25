@@ -98,6 +98,11 @@ bool ESP32::Update() {
             uint16_t bytes_to_read = MIN(
                 comms_manager.esp32_console_rx_queue.MaxNumElements() - comms_manager.esp32_console_rx_queue.Length(),
                 MIN(device_status.num_queued_network_console_rx_chars, sizeof(buf)));
+            if (bytes_to_read == 0) {
+                // Nasty failure mode: If you request a write with buf length zero, the Read() function defaults to the
+                // size of the object passed in, so you could be reading for a quite a while! Catch it here.
+                break;  // No more console messages to read.
+            }
 
             if (!esp32.Read(ObjectDictionary::Address::kAddrConsole, buf, bytes_to_read)) {
                 CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest", "Unable to read console message from ESP32.");

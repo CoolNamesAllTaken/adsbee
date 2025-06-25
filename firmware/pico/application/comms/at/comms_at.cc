@@ -483,7 +483,7 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     uint32_t last_ota_heartbeat_timestamp_ms = timestamp_ms;
 
                     // Send OK to indicate that we're ready to receive data.
-                    CPP_AT_PRINTF("OK\r\n");
+                    CPP_AT_PRINTF("READY\r\n");
 
                     // Read len_bytes from stdio and network console. Timeout after kOTAWriteTimeoutMs.
                     uint32_t old_esp32_heartbeat_ms = esp32_ll.device_status_update_interval_ms;

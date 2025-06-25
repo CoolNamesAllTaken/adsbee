@@ -516,6 +516,7 @@
 
             async receiveResponse(printResponse = false, waitForResponse = false, responseToWaitFor = 'OK', maxCumulativeTimeoutMs = 20000) {
                 const CPP_AT_PARSE_ERROR_FLUSH_INTERVAL_MS = 1000; // How long to wait after a parse error to let the error message print.
+                const RECEIVE_LOOP_PERIOD_MS = 1000; // How often to check for new messages.
                 const decodedResponse = [];
 
                 const cumulativeTimeout = Date.now() + maxCumulativeTimeoutMs;
@@ -526,7 +527,7 @@
                     let raw;
                     try {
                         raw = await new Promise((resolve, reject) => {
-                            const timeout = setTimeout(() => reject('timeout'), 100);
+                            const timeout = setTimeout(() => reject('timeout'), RECEIVE_LOOP_PERIOD_MS);
                             this.ws.onmessage = (event) => {
                                 clearTimeout(timeout);
                                 resolve(event.data);
@@ -640,7 +641,7 @@
              */
             async otaWriteBytes(offset, data) {
                 const crc32 = this.calculateCRC32(data);
-                const cmdResponse = await this.sendCmd(`AT+OTA=WRITE,${offset.toString(16)},${data.length},${crc32.toString(16)}\r\n`, 0, true, true);
+                const cmdResponse = await this.sendCmd(`AT+OTA=WRITE,${offset.toString(16)},${data.length},${crc32.toString(16)}\r\n`, 0, true, true, "READY");
                 for (const line of cmdResponse) {
                     if (line.includes('ERROR')) {
                         // Flush remaining lines then throw the error.
@@ -706,12 +707,13 @@
                 await this.otaWriteBytes(0, headerContents);
 
                 // Write the application in chunks
-                for (let i = HEADER_SIZE_BYTES; i < appLenBytes; i += WRITE_CHUNK_BYTES) {
+                for (let i = HEADER_SIZE_BYTES; i < HEADER_SIZE_BYTES + appLenBytes; i += WRITE_CHUNK_BYTES) {
                     const offsetBytes = (i - HEADER_SIZE_BYTES) + APP_OFFSET_BYTES;
                     let success = false;
                     while (!success) {
                         try {
-                            await this.otaWriteBytes(offsetBytes, contents.slice(i, i + WRITE_CHUNK_BYTES));
+                            const chunk = contents.slice(i, Math.min(i + WRITE_CHUNK_BYTES, HEADER_SIZE_BYTES + appLenBytes));
+                            await this.otaWriteBytes(offsetBytes, chunk);
                             success = true;
                         } catch (error) {
                             console.error(`Failed to write chunk at offset ${offsetBytes}. Retrying...`, error);
