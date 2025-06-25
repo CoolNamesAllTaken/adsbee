@@ -33,13 +33,13 @@ TEST(PFBQueue, BasicConstruction) {
     // Dynamically allocate buffer.
     uint16_t buf_len_num_elements = 5;
     PFBQueue<uint32_t> queue = PFBQueue<uint32_t>({.buf_len_num_elements = buf_len_num_elements, .buffer = nullptr});
-    FillAndEmptyQueue(queue, buf_len_num_elements - 1);
+    FillAndEmptyQueue(queue, buf_len_num_elements);
 
     // Statically allocate buffer.
     uint32_t buffer[buf_len_num_elements];
     PFBQueue<uint32_t> static_queue =
         PFBQueue<uint32_t>({.buf_len_num_elements = buf_len_num_elements, .buffer = buffer});
-    FillAndEmptyQueue(static_queue, buf_len_num_elements - 1);
+    FillAndEmptyQueue(static_queue, buf_len_num_elements);
 }
 
 TEST(PFBQueue, Peek) {
@@ -52,7 +52,7 @@ TEST(PFBQueue, Peek) {
     queue.Push(0);
     queue.Pop(peek_buffer);
 
-    for (uint16_t i = 0; i < buf_len_num_elements - 1; i++) {
+    for (uint16_t i = 0; i < buf_len_num_elements; i++) {
         queue.Push(i);
         ASSERT_TRUE(queue.Peek(peek_buffer));
         ASSERT_EQ(peek_buffer, 0u);
@@ -66,7 +66,7 @@ TEST(PFBQueue, Clear) {
     PFBQueue<uint32_t> queue = PFBQueue<uint32_t>({.buf_len_num_elements = buf_len_num_elements, .buffer = nullptr});
 
     uint16_t num_pushes_each_time = 10;
-    for (uint16_t i = 0; i < buf_len_num_elements - 1; i++) {
+    for (uint16_t i = 0; i < buf_len_num_elements; i++) {
         ASSERT_EQ(queue.Length(), 0);
         for (uint16_t j = 0; j < num_pushes_each_time; j++) {
             queue.Push(i);
@@ -104,4 +104,36 @@ TEST(PFBQueue, OverwriteWhenFull) {
         EXPECT_TRUE(queue.Pop(out));
         EXPECT_EQ(out, i);
     }
+}
+
+TEST(PFBQueue, Discard) {
+    uint16_t buf_len_num_elements = 4;
+    PFBQueue<uint32_t> queue = PFBQueue<uint32_t>(
+        {.buf_len_num_elements = buf_len_num_elements, .buffer = nullptr, .overwrite_when_full = false});
+
+    EXPECT_EQ(queue.MaxNumElements(), buf_len_num_elements);
+
+    // Load the queue with uint32_t's that have their MSB set to 0xF0.
+    for (uint16_t i = 0; i < queue.MaxNumElements(); i++) {
+        EXPECT_TRUE(queue.Push(0xF0000000 | i));
+    }
+    // Not allowed to discard more elements than the queue length.
+    EXPECT_FALSE(queue.Discard(5));
+    // Discard 0 elements and check that the queue length is unchanged.
+    EXPECT_TRUE(queue.Discard(0));
+    EXPECT_EQ(queue.Length(), queue.MaxNumElements());
+    // Discard 3 elements and check that the queue length is 1 and the remaining element is the last one pushed.
+    EXPECT_TRUE(queue.Discard(3));
+    EXPECT_EQ(queue.Length(), 1);
+    uint32_t out;
+    EXPECT_TRUE(queue.Peek(out));
+    EXPECT_EQ(out, 0xF0000000 | (queue.MaxNumElements() - 1));
+    // Discard the last element and check that the queue is empty.
+    EXPECT_TRUE(queue.Discard(1));
+    EXPECT_EQ(queue.Length(), 0);
+
+    // Discarding from an empty queue should return false.
+    EXPECT_FALSE(queue.Discard(1));
+    // Discarding 0 elements from an empty queue should return true.
+    EXPECT_TRUE(queue.Discard(0));
 }

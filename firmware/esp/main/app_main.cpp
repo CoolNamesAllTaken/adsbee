@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "adsbee_server.hh"
+#include "bsp.hh"
 #include "comms.hh"
 #include "driver/gpio.h"
 #include "driver/spi_slave.h"
@@ -20,13 +21,16 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "hardware_unit_tests.hh"
+#include "pico.hh"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
 
 #define HARDWARE_UNIT_TESTS
 
+BSP bsp = BSP();
 ObjectDictionary object_dictionary;
-SPICoprocessor pico = SPICoprocessor({});
+Pico pico_ll = Pico({});
+SPICoprocessor pico = SPICoprocessor({.interface = pico_ll});
 ADSBeeServer adsbee_server = ADSBeeServer();
 SettingsManager settings_manager = SettingsManager();
 CommsManager comms_manager = CommsManager({});
@@ -34,6 +38,8 @@ CommsManager comms_manager = CommsManager({});
 // Main application
 extern "C" void app_main(void) {
     ESP_LOGI("app_main", "Beginning ADSBee Server Application.");
+    ESP_LOGI("app_main", "Default task priority: %d", uxTaskPriorityGet(NULL));
+
     adsbee_server.Init();
 
 #ifdef HARDWARE_UNIT_TESTS

@@ -1,7 +1,0 @@
-{ "expected-missing-functions":
-  [
-
-  ],
-  "proof-name": "_Cellular_SignalStrengthChangedCallback",
-  "proof-root": "tools/cbmc/proofs"
-}

@@ -20,7 +20,8 @@
 		"files.associations": {
 			"rfqueue.h": "c",
 			"devicefamily.h": "c",
-			"clockp.h": "c"
+			"clockp.h": "c",
+			"functional": "cpp"
 		},
 		"C_Cpp.default.defines": [
 			"ON_TI",

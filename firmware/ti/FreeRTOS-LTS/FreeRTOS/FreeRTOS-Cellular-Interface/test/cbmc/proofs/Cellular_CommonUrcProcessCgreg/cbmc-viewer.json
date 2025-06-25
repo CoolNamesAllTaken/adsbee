@@ -1,7 +1,0 @@
-{ "expected-missing-functions":
-  [
-
-  ],
-  "proof-name": "Cellular_CommonUrcProcessCgreg",
-  "proof-root": "tools/cbmc/proofs"
-}

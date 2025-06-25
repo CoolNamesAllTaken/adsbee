@@ -79,7 +79,19 @@
 			"streambuf": "cpp",
 			"thread": "cpp",
 			"cinttypes": "cpp",
-			"typeinfo": "cpp"
+			"typeinfo": "cpp",
+			"__bit_reference": "cpp",
+			"__hash_table": "cpp",
+			"__node_handle": "cpp",
+			"__split_buffer": "cpp",
+			"__verbose_abort": "cpp",
+			"execution": "cpp",
+			"locale": "cpp",
+			"bitset": "cpp",
+			"complex": "cpp",
+			"forward_list": "cpp",
+			"print": "cpp",
+			"text_encoding": "cpp"
 		},
 	},
 	"launch": {

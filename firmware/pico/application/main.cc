@@ -4,6 +4,7 @@
 #include "comms.hh"
 #include "core1.hh"  // Functions for runningon core1.
 #include "eeprom.hh"
+#include "esp32.hh"
 #include "esp32_flasher.hh"
 #include "firmware_update.hh"  // For figuring out which flash partition we're in.
 #include "hal.hh"
@@ -36,11 +37,35 @@ ESP32SerialFlasher esp32_flasher = ESP32SerialFlasher({});
 
 SettingsManager settings_manager;
 ObjectDictionary object_dictionary;
-SPICoprocessor esp32 = SPICoprocessor({});
+
+// Define low-level coprocessor devices with overrides for things like GPIO and init functions.
+ESP32 esp32_ll = ESP32({});
+
+// Provide high-level coprocessor objects for interacting with coprocessor devices via low level class definitions.
+SPICoprocessor esp32 =
+    SPICoprocessor({.interface = esp32_ll});  // Use the low-level ESP32 interface to communicate with the ESP32.
 PacketDecoder decoder = PacketDecoder({.enable_1090_error_correction = true});
 
 int main() {
     bi_decl(bi_program_description("ADSBee 1090 ADSB Receiver"));
+
+    // Initialize coprocessor SPI bus.
+    // ESP32 SPI pins.
+    gpio_set_function(bsp.copro_spi_clk_pin, GPIO_FUNC_SPI);
+    gpio_set_function(bsp.copro_spi_mosi_pin, GPIO_FUNC_SPI);
+    gpio_set_function(bsp.copro_spi_miso_pin, GPIO_FUNC_SPI);
+    gpio_set_drive_strength(bsp.copro_spi_clk_pin, bsp.copro_spi_drive_strength);
+    gpio_set_drive_strength(bsp.copro_spi_mosi_pin, bsp.copro_spi_drive_strength);
+    gpio_set_pulls(bsp.copro_spi_clk_pin, bsp.copro_spi_pullup, bsp.copro_spi_pulldown);   // Clock pin pulls.
+    gpio_set_pulls(bsp.copro_spi_mosi_pin, bsp.copro_spi_pullup, bsp.copro_spi_pulldown);  // MOSI pin pulls.
+    gpio_set_pulls(bsp.copro_spi_miso_pin, bsp.copro_spi_pullup, bsp.copro_spi_pulldown);  // MISO pin pulls.
+    // Initialize SPI Peripheral.
+    spi_init(bsp.copro_spi_handle, bsp.copro_spi_clk_freq_hz);
+    spi_set_format(bsp.copro_spi_handle,
+                   8,           // Bits per transfer.
+                   SPI_CPOL_0,  // Polarity (CPOL).
+                   SPI_CPHA_0,  // Phase (CPHA).
+                   SPI_MSB_FIRST);
 
     adsbee.Init();
     comms_manager.Init();
@@ -115,49 +140,20 @@ int main() {
     multicore_reset_core1();
     multicore_launch_core1(main_core1);
 
-    // Add a test aircraft to start.
-    // Aircraft1090 test_aircraft;
-    // test_aircraft.category = Aircraft1090::Category::kCategorySpaceTransatmosphericVehicle;
-    // strcpy(test_aircraft.callsign, "TST1234");
-    // test_aircraft.latitude_deg = 20;
-    // test_aircraft.longitude_deg = -140;
-    // test_aircraft.baro_altitude_ft = 10000;
-    // test_aircraft.vertical_rate_fpm = -5;
-    // test_aircraft.altitude_source = Aircraft1090::AltitudeSource::kAltitudeSourceBaro;
-    // test_aircraft.direction_deg = 100;
-    // test_aircraft.velocity_kts = 200;
-    // adsbee.aircraft_dictionary.InsertAircraft(test_aircraft);
-
-    uint16_t esp32_heartbeat_interval_ms = 200;  // Set to 5Hz to make network terminal commands pass less laggy.
-    uint32_t esp32_heartbeat_last_sent_timestamp_ms = get_time_since_boot_ms();
+    uint32_t esp32_last_heartbeat_timestamp_ms = 0;
 
     while (true) {
         // Loop forever.
-        // decoder.UpdateDecoderLoop();
         decoder.UpdateLogLoop();
         comms_manager.Update();
         adsbee.Update();
 
-        bool esp32_heartbeat_was_acked = false;
-        if (esp32.IsEnabled()) {
-            // Send ESP32 heartbeat.
-            uint32_t esp32_heartbeat_timestamp_ms = get_time_since_boot_ms();
-            if (esp32_heartbeat_timestamp_ms - esp32_heartbeat_last_sent_timestamp_ms > esp32_heartbeat_interval_ms) {
-                if (!esp32.Write(ObjectDictionary::kAddrScratch, esp32_heartbeat_timestamp_ms, true)) {
-                    CONSOLE_ERROR("main", "ESP32 heartbeat failed.");
-                } else {
-                    esp32_heartbeat_was_acked = true;
-                }
+        esp32.Update();
 
-                esp32_heartbeat_last_sent_timestamp_ms = esp32_heartbeat_timestamp_ms;
-            } else {
-                // The heartbeat write calls Update() if the handshake line is pending, so only call Update() manually
-                // if no heartbeat packet was sent.
-                esp32.Update();
-            }
-        }
-
-        if (!esp32.IsEnabled() || esp32_heartbeat_was_acked) {
+        // Poke the watchdog to keep things alive if the ESP32 is responding or if it's disabled.
+        uint32_t old_esp32_last_heartbeat_timestamp_ms = esp32_last_heartbeat_timestamp_ms;
+        esp32_last_heartbeat_timestamp_ms = esp32.GetLastHeartbeatTimestampMs();
+        if (esp32_last_heartbeat_timestamp_ms != old_esp32_last_heartbeat_timestamp_ms || !esp32.IsEnabled()) {
             // Don't need to talk to the ESP32, or it acknowledged a heartbeat just now: poke the watchdog since nothing
             // seems amiss.
             adsbee.PokeWatchdog();

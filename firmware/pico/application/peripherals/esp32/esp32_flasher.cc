@@ -94,7 +94,7 @@ static void transfer_debug_print(const uint8_t *data, uint16_t size, bool write)
 
     if (write_prev != write) {
         write_prev = write;
-        CONSOLE_PRINTF("\n--- %s ---\n", write ? "WRITE" : "READ");
+        CONSOLE_PRINTF("\r\n--- %s ---\r\n", write ? "WRITE" : "READ");
     }
 
     for (uint32_t i = 0; i < size; i++) {
@@ -160,10 +160,10 @@ esp_loader_error_t connect_to_target(uint32_t higher_transmission_rate) {
 
     esp_loader_error_t err = esp_loader_connect(&connect_config);
     if (err != ESP_LOADER_SUCCESS) {
-        CONSOLE_PRINTF("Cannot connect to target. Error: %u\n", err);
+        CONSOLE_PRINTF("Cannot connect to target. Error: %u\r\n", err);
         return err;
     }
-    CONSOLE_PRINTF("Connected to target\n");
+    CONSOLE_PRINTF("Connected to target\r\n");
 
 #if (defined SERIAL_FLASHER_INTERFACE_UART) || (defined SERIAL_FLASHER_INTERFACE_USB)
     if (higher_transmission_rate && esp_loader_get_target() != ESP8266_CHIP) {
@@ -180,7 +180,7 @@ esp_loader_error_t connect_to_target(uint32_t higher_transmission_rate) {
                 CONSOLE_PRINTF("Unable to change transmission rate.");
                 return err;
             }
-            CONSOLE_PRINTF("Transmission rate changed to %d baud.\n", higher_transmission_rate);
+            CONSOLE_PRINTF("Transmission rate changed to %d baud.\r\n", higher_transmission_rate);
         }
     }
 #endif /* SERIAL_FLASHER_INTERFACE_UART || SERIAL_FLASHER_INTERFACE_USB */
@@ -194,25 +194,27 @@ esp_loader_error_t flash_binary(const uint8_t *bin, size_t size, size_t address)
     static uint8_t payload[1024];
     const uint8_t *bin_addr = bin;
 
-    CONSOLE_PRINTF("Erasing flash (this may take a while)...\n");
+    CONSOLE_PRINTF("Erasing flash (this may take a while)...\r\n");
     err = esp_loader_flash_start(address, size, sizeof(payload));
     if (err != ESP_LOADER_SUCCESS) {
-        CONSOLE_PRINTF("Erasing flash failed with error %d.\n", err);
+        CONSOLE_PRINTF("Erasing flash failed with error %d.\r\n", err);
         return err;
     }
-    CONSOLE_PRINTF("Start programming\n");
+    CONSOLE_PRINTF("Start programming\r\n");
 
     size_t binary_size = size;
     size_t written = 0;
 
+    int last_progress = -1;
     while (size > 0) {
         size_t to_read = MIN(size, sizeof(payload));
         memcpy(payload, bin_addr, to_read);
 
-        CONSOLE_PRINTF("\nAttempting to write %d Bytes to address 0x%x.", to_read, address + binary_size - size);
+        // CONSOLE_PRINTF("\r\nAttempting to write %d Bytes to address 0x%x.\r\n", to_read, address + binary_size -
+        // size);
         err = esp_loader_flash_write(payload, to_read);
         if (err != ESP_LOADER_SUCCESS) {
-            CONSOLE_PRINTF("\nPacket could not be written! Error %d.\n", err);
+            CONSOLE_PRINTF("\r\nPacket could not be written! Error %d.\r\n", err);
             return err;
         }
 
@@ -221,11 +223,13 @@ esp_loader_error_t flash_binary(const uint8_t *bin, size_t size, size_t address)
         written += to_read;
 
         int progress = (int)(((float)written / binary_size) * 100);
-        CONSOLE_PRINTF("\rProgress: %d %%", progress);
-        // fflush(stdout);
+        if (progress != last_progress) {
+            last_progress = progress;
+            CONSOLE_PRINTF("Progress: %d%%\r\n", progress);
+        }
     };
 
-    CONSOLE_PRINTF("\nFinished programming\n");
+    CONSOLE_PRINTF("\r\nFinished programming\r\n");
 
 #if MD5_ENABLED
     err = esp_loader_flash_verify();
@@ -233,10 +237,10 @@ esp_loader_error_t flash_binary(const uint8_t *bin, size_t size, size_t address)
         CONSOLE_PRINTF("ESP8266 does not support flash verify command.");
         return err;
     } else if (err != ESP_LOADER_SUCCESS) {
-        CONSOLE_PRINTF("MD5 does not match. err: %d\n", err);
+        CONSOLE_PRINTF("MD5 does not match. err: %d\r\n", err);
         return err;
     }
-    CONSOLE_PRINTF("Flash verified\n");
+    CONSOLE_PRINTF("Flash verified\r\n");
 #endif
 
     return ESP_LOADER_SUCCESS;
@@ -244,7 +248,7 @@ esp_loader_error_t flash_binary(const uint8_t *bin, size_t size, size_t address)
 #endif /* SERIAL_FLASHER_INTERFACE_UART || SERIAL_FLASHER_INTERFACE_USB */
 
 esp_loader_error_t load_ram_binary(const uint8_t *bin) {
-    CONSOLE_PRINTF("Start loading\n");
+    CONSOLE_PRINTF("Start loading\r\n");
     esp_loader_error_t err;
     const esp_loader_bin_header_t *header = (const esp_loader_bin_header_t *)bin;
     esp_loader_bin_segment_t segments[header->segments];
@@ -261,11 +265,12 @@ esp_loader_error_t load_ram_binary(const uint8_t *bin) {
 
     // Download segments
     for (seg = 0; seg < header->segments; seg++) {
-        CONSOLE_PRINTF("Downloading %" PRIu32 " bytes at 0x%08" PRIx32 "...\n", segments[seg].size, segments[seg].addr);
+        CONSOLE_PRINTF("Downloading %" PRIu32 " bytes at 0x%08" PRIx32 "...\r\n", segments[seg].size,
+                       segments[seg].addr);
 
         err = esp_loader_mem_start(segments[seg].addr, segments[seg].size, ESP_RAM_BLOCK);
         if (err != ESP_LOADER_SUCCESS) {
-            CONSOLE_PRINTF("Loading ram start with error %d.\n", err);
+            CONSOLE_PRINTF("Loading ram start with error %d.\r\n", err);
             return err;
         }
 
@@ -275,7 +280,7 @@ esp_loader_error_t load_ram_binary(const uint8_t *bin) {
             size_t data_size = MIN(ESP_RAM_BLOCK, remain_size);
             err = esp_loader_mem_write(data_pos, data_size);
             if (err != ESP_LOADER_SUCCESS) {
-                CONSOLE_PRINTF("\nPacket could not be written! Error %d.\n", err);
+                CONSOLE_PRINTF("\r\nPacket could not be written! Error %d.\r\n", err);
                 return err;
             }
             data_pos += data_size;
@@ -285,10 +290,10 @@ esp_loader_error_t load_ram_binary(const uint8_t *bin) {
 
     err = esp_loader_mem_finish(header->entrypoint);
     if (err != ESP_LOADER_SUCCESS) {
-        CONSOLE_PRINTF("\nLoad ram finish with Error %d.\n", err);
+        CONSOLE_PRINTF("\r\nLoad ram finish with Error %d.\r\n", err);
         return err;
     }
-    CONSOLE_PRINTF("\nFinished loading\n");
+    CONSOLE_PRINTF("\r\nFinished loading\r\n");
 
     return ESP_LOADER_SUCCESS;
 }

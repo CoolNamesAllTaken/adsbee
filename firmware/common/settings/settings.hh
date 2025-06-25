@@ -11,7 +11,7 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 0x7;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 0x8;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 0x2;
 
 class SettingsManager {
@@ -70,6 +70,7 @@ class SettingsManager {
         static constexpr uint16_t kMACAddrNumBytes = 6;
 
         uint32_t settings_version = kSettingsVersion;
+        // Timestamp on the Pico when the settings were last saved. Milliseconds since boot.
 
         // ADSBee settings
         bool receiver_enabled = true;
@@ -283,7 +284,7 @@ class SettingsManager {
         redacted_password_buf[password_len] = '\0';
     }
 
-        /**
+    /**
      * Saves settings to EEPROM. Stores settings at address 0x0 and performs no integrity check.
      * @retval True if succeeded, false otherwise.
      */

@@ -7,6 +7,7 @@
 #include "comms.hh"
 #include "core1.hh"  // For turning multiprocessor on / off during firmware flashing.
 #include "eeprom.hh"
+#include "esp32.hh"  // Access to ESP32 low level SPICoprocessorSlaveInterface.
 #include "esp32_flasher.hh"
 #include "firmware_update.hh"
 #include "flash_utils.hh"
@@ -122,7 +123,7 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
             if (esp32.IsEnabled()) {
                 // Read ESP32 firmware verison.
                 uint32_t esp32_firmware_version;
-                if (!esp32.Read(ObjectDictionary::kAddrFirmwareVersion, esp32_firmware_version)) {
+                if (!esp32.Read(ObjectDictionary::Address::kAddrFirmwareVersion, esp32_firmware_version)) {
                     CPP_AT_ERROR("ESP32 firmware version read failed!");
                 }
                 uint8_t esp32_fwv_major = (esp32_firmware_version >> 24) & 0xFF;
@@ -140,7 +141,8 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
                 }
 
                 ObjectDictionary::ESP32DeviceInfo esp32_device_info;
-                if (!esp32.Read(ObjectDictionary::kAddrDeviceInfo, esp32_device_info, sizeof(esp32_device_info))) {
+                if (!esp32.Read(ObjectDictionary::Address::kAddrESP32DeviceInfo, esp32_device_info,
+                                sizeof(esp32_device_info))) {
                     CPP_AT_ERROR("ESP32 device info read failed!");
                 }
                 CPP_AT_PRINTF("ESP32 Base MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\r\n",
@@ -481,9 +483,11 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     uint32_t last_ota_heartbeat_timestamp_ms = timestamp_ms;
 
                     // Send OK to indicate that we're ready to receive data.
-                    CPP_AT_PRINTF("OK\r\n");
+                    CPP_AT_PRINTF("READY\r\n");
 
                     // Read len_bytes from stdio and network console. Timeout after kOTAWriteTimeoutMs.
+                    uint32_t old_esp32_heartbeat_ms = esp32_ll.device_status_update_interval_ms;
+                    esp32_ll.device_status_update_interval_ms = kOTAHeartbeatMs;  // Faster heartbeat during OTA.
                     while (buf_len_bytes < len_bytes) {
                         // Priority 1: Check STDIO for data.
                         int stdio_console_getchar_reply = getchar_timeout_us(0);
@@ -505,26 +509,30 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                                 }
                             } else {
                                 // Didn't receive any Bytes. Refresh network console and update timeout timestamp.
-                                // esp32.Update();
-                                // Poll the ESP32 by sending a heartbeat message (no ACK required) get the ESP32
-                                // firmware to release the SPI mutex to the task that's forwarding data from the network
-                                // console.
-                                timestamp_ms = get_time_since_boot_ms();
-                                if (timestamp_ms - last_ota_heartbeat_timestamp_ms > kOTAHeartbeatMs) {
-                                    // Don't call update manually here, it gets taken care of in the Write function.
-                                    // Calling Update twice will result in the network console buffer overflowing if two
-                                    // blobs of characters are ready to be transmitted sequentially!
-                                    esp32.Write(ObjectDictionary::kAddrScratch, timestamp_ms, false);
-                                    last_ota_heartbeat_timestamp_ms = timestamp_ms;
-                                }
+                                esp32.Update();
                             }
                         }
 
                         timestamp_ms = get_time_since_boot_ms();
                         if (timestamp_ms - data_read_start_timestamp_ms > kOTAWriteTimeoutMs) {
                             adsbee.SetReceiver1090Enable(receiver_was_enabled);  // Re-enable receiver before exit.
+                            esp32_ll.device_status_update_interval_ms =
+                                old_esp32_heartbeat_ms;  // Restore old heartbeat.
                             CPP_AT_ERROR("Timed out after %u ms. Received %u Bytes.",
                                          timestamp_ms - data_read_start_timestamp_ms, buf_len_bytes);
+                        }
+                    }
+                    esp32_ll.device_status_update_interval_ms = old_esp32_heartbeat_ms;  // Restore old heartbeat.
+
+                    bool has_crc = CPP_AT_HAS_ARG(3);
+                    CPP_AT_TRY_ARG2NUM_BASE(3, crc, 16);
+                    if (has_crc) {
+                        // CRC provided: use it to verify the data before writing.
+                        CPP_AT_PRINTF("Verifying data with CRC 0x%x.\r\n", crc);
+                        uint32_t calculated_crc = FirmwareUpdateManager::CalculateCRC32(buf, len_bytes);
+                        if (calculated_crc != crc) {
+                            adsbee.SetReceiver1090Enable(receiver_was_enabled);  // Re-enable receiver before exit.
+                            CPP_AT_ERROR("Calculated CRC 0x%x did not match provided CRC 0x%x.", calculated_crc, crc);
                         }
                     }
                     CPP_AT_PRINTF("Writing %u Bytes to partition %u at offset 0x%x.\r\n", len_bytes,
@@ -538,10 +546,9 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         CPP_AT_ERROR("Partial %u Byte write failed in partition %u at offset 0x%x.", len_bytes,
                                      complementary_partition, offset);
                     }
-                    if (CPP_AT_HAS_ARG(3)) {
-                        // CRC provided.
-                        CPP_AT_TRY_ARG2NUM_BASE(3, crc, 16);
-                        CPP_AT_PRINTF("Verifying with CRC 0x%x.\r\n", crc);
+                    if (has_crc) {
+                        // CRC provided: verify the flash after writing.
+                        CPP_AT_PRINTF("Verifying flash with CRC 0x%x.\r\n", crc);
                         uint32_t calculated_crc = FirmwareUpdateManager::CalculateCRC32(
                             (uint8_t *)(FirmwareUpdateManager::flash_partition_headers[complementary_partition]) +
                                 offset,
@@ -573,9 +580,10 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                 } else if (args[0].compare("BOOT") == 0) {
                     // Boot the complementary flash partition.
                     CPP_AT_PRINTF("Booting partition %u...", complementary_partition);
-                    FlashUtils::FlashSafe();
+                    esp32.Update();  // Send out this last console message.
+                    // Do NOT safe / unsafe flash here! We aren't writing to flash, and calling FlashSafe() will screw
+                    // up the boot sequence.
                     FirmwareUpdateManager::BootPartition(complementary_partition);
-                    FlashUtils::FlashUnsafe();
                     // Don't return an error here - the boot process will handle any errors
                     CPP_AT_SUCCESS();
                 }
@@ -623,7 +631,7 @@ CPP_AT_CALLBACK(CommsManager::ATNetworkInfoCallback) {
     switch (op) {
         case '?':
             ObjectDictionary::ESP32NetworkInfo network_info;
-            if (!esp32.Read(ObjectDictionary::kAddrNetworkInfo, network_info, sizeof(network_info))) {
+            if (!esp32.Read(ObjectDictionary::Address::kAddrESP32NetworkInfo, network_info, sizeof(network_info))) {
                 CPP_AT_ERROR("Error while reading network info from ESP32.");
             }
 
@@ -743,7 +751,7 @@ CPP_AT_CALLBACK(CommsManager::ATRxEnableCallback) {
             CPP_AT_SUCCESS();
             break;
         case '?':
-            CPP_AT_CMD_PRINTF("=%d,%d", adsbee.Receiver1090IsEnabled(), adsbee.Receiver978IsEnabled());
+            CPP_AT_CMD_PRINTF("=%d,%d", adsbee.Receiver1090IsEnabled(), adsbee.ReceiverSubGIsEnabled());
             CPP_AT_SILENT_SUCCESS();
             break;
     }
@@ -795,18 +803,19 @@ CPP_AT_CALLBACK(CommsManager::ATSubGEnableCallback) {
         case '=':
             if (CPP_AT_HAS_ARG(0)) {
                 if (args[0].compare("EXTERNAL") == 0) {
-                    adsbee.subg_radio.SetEnable(SettingsManager::kEnableStateExternal);
+                    adsbee.SetSubGRadioEnable(SettingsManager::kEnableStateExternal);
                 } else {
                     bool subg_enabled;
                     CPP_AT_TRY_ARG2NUM(0, subg_enabled);
-                    adsbee.subg_radio.SetEnable(subg_enabled ? SettingsManager::kEnableStateEnabled
-                                                             : SettingsManager::kEnableStateDisabled);
+                    adsbee.SetSubGRadioEnable(subg_enabled ? SettingsManager::kEnableStateEnabled
+                                                           : SettingsManager::kEnableStateDisabled);
                 }
             }
             CPP_AT_SUCCESS();
             break;
         case '?':
-            CPP_AT_CMD_PRINTF("=%s\r\n", SettingsManager::EnableStateToATValueStr(adsbee.subg_radio.IsEnabled()));
+            CPP_AT_CMD_PRINTF("=%s\r\n",
+                              SettingsManager::EnableStateToATValueStr(adsbee.subg_radio_ll.IsEnabledState()));
             CPP_AT_SILENT_SUCCESS();
             break;
     }
@@ -818,7 +827,7 @@ CPP_AT_CALLBACK(CommsManager::ATSubGFlashCallback) {
     // watchdog reboot.
     StopCore1();
     adsbee.DisableWatchdog();
-    bool flash_success = adsbee.subg_radio.Flash();
+    bool flash_success = adsbee.subg_radio_ll.Flash();
     adsbee.EnableWatchdog();
     StartCore1();
     if (!flash_success) {

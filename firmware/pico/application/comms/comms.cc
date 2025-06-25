@@ -46,11 +46,11 @@ bool CommsManager::UpdateNetworkConsole() {
     if (esp32.IsEnabled()) {
         recursion_alert = true;
         // Send outgoing network console characters.
-        char esp32_console_tx_buf[SPICoprocessor::SCWritePacket::kDataMaxLenBytes];
+        char esp32_console_tx_buf[SPICoprocessorPacket::SCWritePacket::kDataMaxLenBytes];
         char c = '\0';
         while (esp32_console_tx_queue.Length() > 0) {
             uint16_t message_len = 0;
-            for (; message_len < SPICoprocessor::SCWritePacket::kDataMaxLenBytes && esp32_console_tx_queue.Pop(c);
+            for (; message_len < SPICoprocessorPacket::SCWritePacket::kDataMaxLenBytes && esp32_console_tx_queue.Pop(c);
                  message_len++) {
                 esp32_console_tx_buf[message_len] = c;
             }

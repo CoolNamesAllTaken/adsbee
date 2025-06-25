@@ -25,6 +25,9 @@
 
 #include "comms.hh"  // For debug prints.
 
+// Uncomment this to hold the status LED on for 5 seconds if the watchdog commanded a reboot.
+// #define WATCHDOG_REBOOT_WARNING
+
 #define MLAT_SYSTEM_CLOCK_RATIO 48 / 125
 // Scales 125MHz system clock into a 48MHz counter.
 static const uint32_t kMLATWrapCounterIncrement = (1 << 24) * MLAT_SYSTEM_CLOCK_RATIO;
@@ -82,12 +85,14 @@ bool ADSBee::Init() {
     gpio_set_dir(config_.r1090_led_pin, GPIO_OUT);
     gpio_put(config_.r1090_led_pin, 0);
 
-    // Initialize the sync pin.
-    gpio_init(bsp.sync_pin);
-    gpio_set_dir(bsp.sync_pin, GPIO_OUT);
-    gpio_put(bsp.sync_pin, 0);  // Set to low.
+    // Initialize the sync pin if it is defined.
+    if (bsp.sync_pin != UINT16_MAX) {
+        gpio_init(bsp.sync_pin);
+        gpio_set_dir(bsp.sync_pin, GPIO_OUT);
+        gpio_put(bsp.sync_pin, 0);  // Set to low.
+    }
 
-    // Disable the 978MHz SPI bus output.
+    // Disable the Sub-GHz SPI bus output.
     gpio_init(bsp.subg_cs_pin);
     gpio_set_dir(bsp.subg_cs_pin, GPIO_OUT);
     gpio_put(bsp.subg_cs_pin, 1);  // Disable is active LO.
@@ -231,22 +236,18 @@ bool ADSBee::Init() {
     pio_sm_set_enabled(config_.preamble_detector_pio,
                        preamble_detector_sm_[bsp.r1090_high_power_demod_state_machine_index], true);
 
-    // Initialize 978MHz radio.
+    // Initialize sub-GHz radio.
     if (config_.has_subg) {
-        if (subg_radio.Init(false)) {
-            CONSOLE_INFO("ADSBee::Init", "978MHz radio initialized.");
+        // Initialize subg radio on previously-initialized coprocessor SPI bus.
+        if (subg_radio.Init()) {
+            CONSOLE_INFO("ADSBee::Init", "Sub-GHz radio initialized.");
         } else {
             subg_radio.SetEnable(SettingsManager::EnableState::kEnableStateDisabled);
-            CONSOLE_ERROR("ADSBee::Init", "Failed to initialize 978MHz radio.");
+            CONSOLE_ERROR("ADSBee::Init", "Failed to initialize sub-GHz radio.");
         }
     }
 
-    if (subg_radio.IsEnabled()) {
-        // subg_radio.SetDeviceState(Si4362::DeviceState::kStateRx, true);
-        // subg_radio.StartRx();
-        CONSOLE_INFO("ADSBee::Init", "978MHz radio started RX.");
-    }
-
+#ifdef WATCHDOG_REBOOT_WARNING
     // Throw a fit if the watchdog caused a reboot.
     if (watchdog_caused_reboot()) {
         CONSOLE_WARNING("ADSBee::Init", "Watchdog caused reboot.");
@@ -256,6 +257,7 @@ bool ADSBee::Init() {
         SetStatusLED(false);
         EnableWatchdog();
     }
+#endif  // WATCHDOG_REBOOT_WARNING
 
     return true;
 }

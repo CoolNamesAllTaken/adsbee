@@ -3,8 +3,10 @@
 #include "bsp.hh"
 #include "comms.hh"
 #include "hardware/spi.h"
+#include "led_flasher.hh"
+#include "spi_coprocessor.hh"
 
-class CC1312 {
+class CC1312 : public SPICoprocessorSlaveInterface {
    public:
     static const uint16_t kMaxNumPropertiesAtOnce = 12;
     static const uint32_t kCTSCheckIntervalUs = 40;
@@ -178,15 +180,45 @@ class CC1312 {
     static const uint16_t kBootloaderCommandMemoryWriteUint32MaxNumBytes = 244;
 
     /**
+     * Initialization function. Currently unused.
+     * @retval True if the initialization was successful, false otherwise.
+     */
+    inline bool Init() {
+        return Init(true);  // Assume SPI bus already initialize.
+    }
+
+    /**
+     * De-initialization function. Currently unused.
+     * @retval True if the de-initialization was successful, false otherwise.
+     */
+    inline bool DeInit() { return true; };
+
+    bool Update();
+
+    inline uint32_t GetLastHeartbeatTimestampMs() {
+        // TODO: Fill this out.
+        return 0;
+    }
+
+    /**
      * Adjusts the SPI peripheral to be able to talk to the CC1312. Nominally adjusts clock rate, but also adjusts CPHA
      * and CPOL if the bootloader is active.
      */
-    void SPIBeginTransaction();
+    bool SPIBeginTransaction();
     /**
      * Restores the SPI peripheral to its previous state. Nominally restores clock rate, but also restores CPHA and CPOL
      * if the bootloader is active.
      */
     void SPIEndTransaction();
+    inline bool SPIClaimNextTransaction() {
+        return true;  // Not multi-threaded, no need for this.
+    }
+    inline void SPIReleaseNextTransaction() {
+        // Not multi-threaded, no need for this.
+    }
+    inline bool SPIGetHandshakePinLevel(bool blocking = true) {
+        return gpio_get(config_.irq_pin);  // Return the level of the sync pin.
+    }
     int SPIWriteReadBlocking(uint8_t* tx_buf, uint8_t* rx_buf, uint16_t len_bytes = 0, bool end_transaction = true);
     inline int SPIWriteBlocking(uint8_t* tx_buf, uint16_t len_bytes = 0, bool end_transaction = true) {
         return SPIWriteReadBlocking(tx_buf, nullptr, len_bytes, end_transaction);
@@ -204,7 +236,7 @@ class CC1312 {
     /**
      * Destructor for CC1312.
      */
-    ~CC1312();
+    ~CC1312() {};
 
     /**
      * Initialize CC1312.
@@ -440,7 +472,7 @@ class CC1312 {
      * Set the enable pin.
      * @param[in] enabled True to enable the CC1312, false to disable.
      */
-    inline void SetEnable(SettingsManager::EnableState enabled) {
+    inline void SetEnableState(SettingsManager::EnableState enabled) {
         if (enabled == SettingsManager::EnableState::kEnableStateExternal) {
             gpio_set_dir(config_.enable_pin, GPIO_IN);
             gpio_set_pulls(config_.enable_pin, true, false);  // Enable pull-up on the enable pin.
@@ -454,10 +486,32 @@ class CC1312 {
     }
 
     /**
+     * Wrapper function that satisfies the parent class requirement for a boolean SetEnable function. Uses the
+     * three-state enable function under the hood.
+     * @param[in] enabled True to enable the CC1312, false to disable.
+     */
+    inline void SetEnable(bool enabled) {
+        SetEnableState(enabled ? SettingsManager::EnableState::kEnableStateEnabled
+                               : SettingsManager::EnableState::kEnableStateDisabled);
+    }
+
+    /**
      * Returns whether the CC1312 is currently enabled.
      * @retval True if enabled, false if disabled or set to external.
      */
-    inline SettingsManager::EnableState IsEnabled() { return enabled_; }
+    inline SettingsManager::EnableState IsEnabledState() { return enabled_; }
+
+    /**
+     * Wrapper function that checks if the CC1312 is enabled. Uses the three state IsEnabledState functio nunder the
+     * hood.
+     * @retval True if enabled, false if disabled or set to external.
+     */
+    inline bool IsEnabled() { return enabled_ == SettingsManager::EnableState::kEnableStateEnabled; }
+
+    inline bool IsEnabledBool() {
+        return enabled_ == SettingsManager::EnableState::kEnableStateEnabled ||
+               enabled_ == SettingsManager::EnableState::kEnableStateExternal;
+    }
 
    private:
     CC1312Config config_;
@@ -492,4 +546,6 @@ class CC1312 {
         hw_write_masked(&spi_get_hw(config_.spi_handle)->cr0, (clk_config.postdiv - 1) << SPI_SSPCR0_SCR_LSB,
                         SPI_SSPCR0_SCR_BITS);
     }
+
+    LEDFlasher led_flasher_ = LEDFlasher({});
 };

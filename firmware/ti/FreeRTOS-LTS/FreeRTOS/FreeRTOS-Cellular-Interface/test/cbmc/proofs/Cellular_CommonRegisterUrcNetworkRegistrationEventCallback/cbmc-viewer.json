@@ -1,7 +1,0 @@
-{ "expected-missing-functions":
-  [
-
-  ],
-  "proof-name": "Cellular_CommonRegisterUrcNetworkRegistrationEventCallback",
-  "proof-root": "tools/cbmc/proofs"
-}

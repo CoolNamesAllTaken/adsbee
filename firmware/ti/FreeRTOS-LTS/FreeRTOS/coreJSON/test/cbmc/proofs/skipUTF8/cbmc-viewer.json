@@ -1,7 +1,0 @@
-{ "expected-missing-functions":
-  [
-
-  ],
-  "proof-name": "skipUTF8",
-  "proof-root": "test/cbmc/proofs"
-}

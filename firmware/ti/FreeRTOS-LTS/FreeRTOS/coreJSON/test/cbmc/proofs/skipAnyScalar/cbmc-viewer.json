@@ -1,7 +1,0 @@
-{ "expected-missing-functions":
-  [
-
-  ],
-  "proof-name": "skipAnyLiteral",
-  "proof-root": "test/cbmc/proofs"
-}

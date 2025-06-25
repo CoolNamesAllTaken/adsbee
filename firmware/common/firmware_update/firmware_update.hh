@@ -111,11 +111,17 @@ class FirmwareUpdateManager {
         }
 
         // Mark own partition as stale.
+        bool ret = true;
         if (AmWithinFlashPartition(0)) {
-            WriteHeaderStatusWord(0, kFlashPartitionStatusStale);
+            ret &= WriteHeaderStatusWord(0, kFlashPartitionStatusStale);
         } else if (AmWithinFlashPartition(1)) {
-            WriteHeaderStatusWord(1, kFlashPartitionStatusStale);
+            ret &= WriteHeaderStatusWord(1, kFlashPartitionStatusStale);
         }  // else: Don't do anything in the bootloader.
+        if (!ret) {
+            CONSOLE_ERROR("FirmwareUpdateManager::BootPartition",
+                          "Failed to mark own partition as stale before booting.");
+            return;
+        }
 
         DisableInterruptsForJump();
         ResetPeripherals();
@@ -194,9 +200,10 @@ class FirmwareUpdateManager {
             return false;
         }
         if (len_bytes > kFlashHeaderLenBytes + kFlashAppLenBytes - offset) {
-            CONSOLE_ERROR("FirmwareUpdateManager::EraseFlashPartition",
-                          "Length %u is larger than maximum partition size %u Bytes.", len_bytes,
-                          kFlashHeaderLenBytes + kFlashAppLenBytes);
+            CONSOLE_ERROR(
+                "FirmwareUpdateManager::EraseFlashPartition",
+                "Erase length %u bytes starting at offset 0x%x erases flash outside partition of size %u Bytes.",
+                len_bytes, offset, kFlashHeaderLenBytes + kFlashAppLenBytes);
             return false;
         }
         if (offset % FLASH_SECTOR_SIZE != 0) {
@@ -204,7 +211,15 @@ class FirmwareUpdateManager {
                           "Offset 0x%x is not a multiple of the sector size 0x%x Bytes.", offset, FLASH_SECTOR_SIZE);
             return false;
         }
-        uint16_t total_sectors_to_erase = len_bytes / FLASH_SECTOR_SIZE + (len_bytes % FLASH_SECTOR_SIZE ? 1 : 0);
+        // Calculate the actual start and end addresses
+        uint32_t start_addr = offset;
+        uint32_t end_addr = offset + len_bytes;
+
+        // Calculate sector boundaries
+        uint32_t start_sector = start_addr / FLASH_SECTOR_SIZE;
+        uint32_t end_sector = (end_addr + FLASH_SECTOR_SIZE - 1) / FLASH_SECTOR_SIZE;  // Round up
+
+        uint16_t total_sectors_to_erase = end_sector - start_sector;
         if (total_sectors_to_erase == 0) {
             CONSOLE_PRINTF("No sectors to erase.\r\n");
             return true;
@@ -218,7 +233,7 @@ class FirmwareUpdateManager {
             uint32_t num_bytes_to_erase = num_sectors_to_erase * FLASH_SECTOR_SIZE;
             CONSOLE_PRINTF("Erasing %u sector(s) starting at %u/%u (%u Bytes at 0x%x).\r\n", num_sectors_to_erase,
                            sector + 1, (kFlashHeaderLenBytes + kFlashAppLenBytes) / FLASH_SECTOR_SIZE,
-                           num_bytes_to_erase * num_sectors_to_erase, sector_start_addr);
+                           num_bytes_to_erase, sector_start_addr);
             DisableInterrupts();
             flash_range_erase(FlashAddrToOffset(sector_start_addr), num_bytes_to_erase);
             RestoreInterrupts();
@@ -403,7 +418,11 @@ class FirmwareUpdateManager {
 
         // Verification passed: mark flash partition as valid.
         if (modify_header) {
-            WriteHeaderStatusWord(partition, kFlashPartitionStatusValid);
+            if (!WriteHeaderStatusWord(partition, kFlashPartitionStatusValid)) {
+                CONSOLE_ERROR("FirmwareUpdateManager::VerifyFlashPartition",
+                              "Failed to write valid status word to flash partition %u.", partition);
+                return false;
+            }
         }
         return true;
     }
@@ -472,11 +491,12 @@ class FirmwareUpdateManager {
      * around, without erasing the full sector.
      * @param[in] partition Index of the partition to modify the header of.
      * @param[in] status New status word to write.
+     * @retval True if write successful, false if error.
      */
-    static inline void WriteHeaderStatusWord(uint16_t partition, FlashPartitionStatus status) {
+    static inline bool WriteHeaderStatusWord(uint16_t partition, FlashPartitionStatus status) {
         FlashPartitionHeader header = *(flash_partition_headers[partition]);  // Copy the existing header.
         header.status = status;
-        PartialWriteFlashPartition(partition, 0, sizeof(FlashPartitionHeader), (uint8_t *)&header);
+        return PartialWriteFlashPartition(partition, 0, sizeof(FlashPartitionHeader), (uint8_t *)&header);
     }
 
     static uint32_t stored_interrupts_;
