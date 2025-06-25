@@ -48,6 +48,7 @@ bool SPICoprocessor::Update(bool blocking) {
         return false;  // Update failed.
     }
 
+    config_.interface.SPIEndTransaction();
 #elif defined(ON_COPRO_SLAVE)
     // TODO: Return if not blocking and no transaction is pending.
     uint8_t rx_buf[SPICoprocessorPacket::kSPITransactionMaxLenBytes];
@@ -136,9 +137,8 @@ bool SPICoprocessor::Update(bool blocking) {
             return false;
     }
 
-#endif
-
     config_.interface.SPIEndTransaction();
+#endif
     return ret;
 }
 
