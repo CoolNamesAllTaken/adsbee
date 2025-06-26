@@ -55,6 +55,9 @@ class ESP32 : public SPICoprocessorSlaveInterface {
     }
 
     inline bool SPIBeginTransaction() {
+        while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
+            // Wait for the lockout period to expire before starting a new transaction.
+        }
         gpio_put(config_.spi_cs_pin, 0);
         return true;
     }
@@ -63,7 +66,7 @@ class ESP32 : public SPICoprocessorSlaveInterface {
         gpio_put(config_.spi_cs_pin, 1);
         spi_last_transmit_timestamp_us_ = get_time_since_boot_us();
     }
-    bool SPIGetHandshakePinLevel(bool blocking = true);
+    bool SPIGetHandshakePinLevel();
 
     int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf,
                              uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
@@ -75,7 +78,6 @@ class ESP32 : public SPICoprocessorSlaveInterface {
    private:
     ESP32Config config_;
     bool enabled_ = false;
-    uint64_t spi_last_transmit_timestamp_us_ = 0;  // Timestamp of the end of the last SPI transaction.
 
     uint32_t last_device_status_update_timestamp_ms_ = 0;  // Timestamp of the last device status update.
 };

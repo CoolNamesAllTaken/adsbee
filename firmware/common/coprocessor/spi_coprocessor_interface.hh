@@ -90,13 +90,10 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     // Wait this long after a transmission is complete before allowing the HANDSHAKE line to override the minimum
     // transmit interval timeout. This ensures that we don't double-transmit to the slave before it has a chance to
     // lower the HANDSHAKE line following a transaction.
-    static constexpr uint32_t kSPIPostTransmitLockoutUs = 10;
-    // How long we pull the CS line LO before transmitting. If the handshake line goes high during this interval, we can
-    // begin transmitting immediately.
-    static constexpr uint32_t kSPIUpdateCSPreAssertIntervalUs = 100;
-    // NOTE: Max transmission time is ~10ms with a 4kB packet at 40MHz.
-    // How long to wait once a transaction is started before timing out.
-    static constexpr uint32_t kSPITransactionTimeoutMs = 20;
+    static constexpr uint32_t kSPIHandshakeLockoutUs = 10;
+    // How long we wait to start a transaction after the last one is completed. Can be overridden if the handshake line
+    // goes high after kSPIHandshakeLockoutUs.
+    static constexpr uint32_t kSPIPostTransmitLockoutUs = 600;
     // How long a blocking wait for a handshake can last.
     static constexpr uint32_t kSPIHandshakeTimeoutMs = 20;
     // How long to loop in Update() for after initializing the device in order to allow it to query for settings data.
@@ -114,7 +111,7 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
      * necessary). If false, return false if kSPIPostTransmitLockoutUs has not elapsed, otherwise return the HANDSHAKE
      * pin state.
      */
-    virtual bool SPIGetHandshakePinLevel(bool blocking = true) = 0;
+    virtual bool SPIGetHandshakePinLevel() = 0;
 
     /**
      * Blocks on waiting for the handshake pin to go high, until a timeout is reached.
@@ -122,19 +119,22 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
      */
     inline bool SPIWaitForHandshake() {
         uint32_t wait_begin_timestamp_ms = get_time_since_boot_ms();
-        expecting_handshake_ = true;  // Set this so that we know we are expecting the handshake line to go high.
-        while (true) {
-            if (SPIGetHandshakePinLevel(false)) {
-                // Received handshake signal during non-blocking check.
-                break;
-            }
-            if (get_time_since_boot_ms() - wait_begin_timestamp_ms >= kSPIHandshakeTimeoutMs) {
-                // Timed out.
-                expecting_handshake_ = false;  // Reset this so that we don't think we are expecting a handshake.
-                return false;
+        expecting_handshake_ =
+            true;  // Set this so that we know we are expecting the handshake line to go high.
+                   // Make sure the ESP32 has time to lower the handshake pin after the last transaction.
+        while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIHandshakeLockoutUs) {
+            // Wait for the lockout period to expire before checking the handshake pin.
+            // This handshake lockout interval is too short to check for a handshake timeout during.
+        }
+        while (get_time_since_boot_ms() - wait_begin_timestamp_ms < kSPIHandshakeTimeoutMs) {
+            // Exit early if handshake goes high. Otherwise check for timeout.
+            if (SPIGetHandshakePinLevel()) {
+                // Allowed to exit blocking early if ESP32 asserts the HANDSHAKE pin.
+                return true;
             }
         }
-        return true;
+        expecting_handshake_ = false;  // Reset this so that we don't think we are expecting a handshake.
+        return false;                  // Timed out waiting for the handshake pin to go high.
     }
 
     virtual bool IsEnabled() = 0;
@@ -153,4 +153,5 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     // Use this flag to indicate whether we are expecting the handshake line to go high. If it is high during a
     // transaction when we aren't expecting it, that means that we are stomping on the slave! Not good.
     bool expecting_handshake_ = false;
+    uint64_t spi_last_transmit_timestamp_us_ = 0;  // Timestamp of the end of the last SPI transaction.
 };

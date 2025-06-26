@@ -216,7 +216,7 @@ class CC1312 : public SPICoprocessorSlaveInterface {
     inline void SPIReleaseNextTransaction() {
         // Not multi-threaded, no need for this.
     }
-    inline bool SPIGetHandshakePinLevel(bool blocking = true) {
+    inline bool SPIGetHandshakePinLevel() {
         return gpio_get(config_.irq_pin);  // Return the level of the sync pin.
     }
     int SPIWriteReadBlocking(uint8_t* tx_buf, uint8_t* rx_buf, uint16_t len_bytes = 0, bool end_transaction = true);
