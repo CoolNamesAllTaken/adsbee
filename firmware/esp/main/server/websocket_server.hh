@@ -12,15 +12,17 @@ class WebSocketServer {
     static const uint16_t kMaxNumClients =
         20;  // For sizing arrays etc. See config_.num_clients_allowed for settable limit.
     static const uint16_t kURIMaxLen = 200;
+    static const uint32_t kInactivityTimeoutMsDefault =
+        60 * 60e3;  // 1 hour default inactivity timeout for network console clients.
 
     struct WebSocketServerConfig {
         char label[kWebSocketLabelMaxLen] = "Untitled";
         httpd_handle_t server;
         char uri[kURIMaxLen] = "/your-websocket-uri";
-        uint16_t num_clients_allowed = 3;
+        uint16_t num_clients_allowed = kMaxNumClients;
         bool send_as_binary = false;  // Set to true if sending anything other than ASCII.
         // Time without a message before a network console client is disconnected.
-        uint32_t inactivity_timeout_ms = 10 * 60e3;
+        uint32_t inactivity_timeout_ms = kInactivityTimeoutMsDefault;
         // Callback function that gets executed when the websocket connects.
         std::function<void(WebSocketServer *ws_server, int client_fd)> post_connect_callback = nullptr;
         // Callback function that gets executed when the websocket disconnects.
