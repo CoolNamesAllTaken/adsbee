@@ -2,6 +2,7 @@
 #ifdef ON_PICO
 #include "RP2040.h"
 #include "comms.hh"  // For errors.
+#include "flash_utils.hh"
 #include "hal.hh"
 #include "hardware/dma.h"  // for CRC32 calculation
 #include "hardware/flash.h"
@@ -235,7 +236,9 @@ class FirmwareUpdateManager {
                            sector + 1, (kFlashHeaderLenBytes + kFlashAppLenBytes) / FLASH_SECTOR_SIZE,
                            num_bytes_to_erase, sector_start_addr);
             DisableInterrupts();
+            FlashUtils::FlashSafe();  // Ensure flash is safe to write to.
             flash_range_erase(FlashAddrToOffset(sector_start_addr), num_bytes_to_erase);
+            FlashUtils::FlashUnsafe();  // Restore flash state.
             RestoreInterrupts();
             remaining_sectors_to_erase -= num_sectors_to_erase;
         }
@@ -329,6 +332,7 @@ class FirmwareUpdateManager {
         }
         uint32_t padded_len_bytes = len_bytes + FLASH_PAGE_SIZE - (len_bytes % FLASH_PAGE_SIZE);
         DisableInterrupts();
+        FlashUtils::FlashSafe();  // Ensure flash is safe to write to.
         if (padded_len_bytes != len_bytes) {
             CONSOLE_WARNING("FirmwareUpdateManager::PartialWriteFlashPartition",
                             "Length %u is not a multiple of flash sector size %u Bytes.", len_bytes, FLASH_PAGE_SIZE);
@@ -342,6 +346,7 @@ class FirmwareUpdateManager {
             // Buffer was already sector-aligned.
             flash_range_program(FlashAddrToOffset(kFlashHeaderStartAddrs[partition]) + offset, buf, len_bytes);
         }
+        FlashUtils::FlashUnsafe();  // Restore flash state.
         RestoreInterrupts();
         return true;
     }
@@ -454,7 +459,7 @@ class FirmwareUpdateManager {
      * @param[in] vtor Address to jump to. Should be set to the beginning of a flash application sector (not a
      * header).
      */
-    static inline void JumpToVTOR(uint32_t vtor) {
+    __attribute__((optimize("O0"))) static inline void JumpToVTOR(uint32_t vtor) {
         // Derived from the Leaf Labs Cortex-M3 bootloader.
         // Copyright (c) 2010 LeafLabs LLC.
         // Modified 2021 Brian Starkey <stark3y@gmail.com>

@@ -64,7 +64,7 @@
 
     <script>
         const HOST_URI = `${window.location.hostname}`;
-        // const HOST_URI = "maui-bee.local";
+        // const HOST_URI = "testbee.local";
         const WS_CONFIG = {
             console_ws_url: `ws://${HOST_URI}/console`,
             metrics_ws_url: `ws://${HOST_URI}/metrics`,
@@ -108,13 +108,13 @@
                 // Listen for messages
                 this.ws.addEventListener('message', (event) => {
                     if (typeof event.data === 'string') {
-                        console.log('Received message:', event.data);
+                        // console.log('Received message:', event.data);
                         appendToTerminal(event.data);
                     } else if (event.data instanceof Blob) {
                         const reader = new FileReader();
                         reader.onload = () => {
                             const text = reader.result;
-                            console.log('Received binary message:', text);
+                            // console.log('Received binary message:', text);
                             appendToTerminal(text);
                         };
                         reader.readAsText(event.data);
@@ -455,6 +455,8 @@
             static MS_PER_SEC = 1000;
             static ERROR_BUFFER_FLUSH_INTERVAL_MS = 1000; // How long to wait after a parse error to let the error message print.
 
+            messageQueue = [];
+
             constructor(url = HOST_URI) {
                 if (!url) {
                     throw new Error('URL is required');
@@ -462,6 +464,8 @@
                 this.url = url;
                 this.ws = null;
                 this.lastCmdTimestamp = Date.now();
+
+                this.decoder = new TextDecoder('utf-8');
             }
 
             async connect() {
@@ -469,7 +473,18 @@
                     this.connectTimestamp = Date.now();
                     this.ws = new WebSocket(`ws://${this.url}/console`);
                     this.ws.binaryType = 'arraybuffer';
-                    this.ws.onopen = () => resolve();
+
+                    this.ws.onmessage = (event) => {
+                        const decoded_message = this.decoder.decode(event.data);
+                        console.log("ADSBeeAT received message:", decoded_message);
+                        this.messageQueue.push(decoded_message);
+                        resolve();
+                    };
+
+                    this.ws.onopen = () => {
+                        // Don't resolve immediately, wait for first message
+                    };
+
                     this.ws.onerror = (error) => reject(error);
                 });
             }
@@ -497,79 +512,57 @@
             }
 
             async flushInputBuffer(flushTimeoutMs = 10) {
-                const originalOnMessage = this.ws.onmessage;
-
-                // Wait for flushTimeoutMs to elapse in increments of 10 ms.
-                const startTime = Date.now();
-                while (Date.now() - startTime < flushTimeoutMs) {
-                    await new Promise(resolve => {
-                        const timeout = setTimeout(resolve, 10);
-                        this.ws.onmessage = () => {
-                            clearTimeout(timeout);
-                            setTimeout(resolve, 10);
-                        };
-                    });
-                }
-
-                this.ws.onmessage = originalOnMessage;
+                await new Promise(resolve => setTimeout(resolve, flushTimeoutMs));
+                this.messageQueue = [];
             }
 
             async receiveResponse(printResponse = false, waitForResponse = false, responseToWaitFor = 'OK', maxCumulativeTimeoutMs = 20000) {
                 const CPP_AT_PARSE_ERROR_FLUSH_INTERVAL_MS = 1000; // How long to wait after a parse error to let the error message print.
-                const RECEIVE_LOOP_PERIOD_MS = 1000; // How often to check for new messages.
+                const RECEIVE_LOOP_PERIOD_MS = 10; // How often to check for new messages.
                 const decodedResponse = [];
 
                 const cumulativeTimeout = Date.now() + maxCumulativeTimeoutMs;
+
                 while (waitForResponse) {
                     if (Date.now() > cumulativeTimeout) {
                         throw new Error(`Response timeout after ${maxCumulativeTimeoutMs} ms.`);
                     }
-                    let raw;
-                    try {
-                        raw = await new Promise((resolve, reject) => {
-                            const timeout = setTimeout(() => reject('timeout'), RECEIVE_LOOP_PERIOD_MS);
-                            this.ws.onmessage = (event) => {
-                                clearTimeout(timeout);
-                                resolve(event.data);
-                            };
-                        });
-                    } catch (e) {
-                        // Catch timeouts.
-                        // Break out of loop on timeout if not waiting for OK or error.
-                        if (!waitForResponse) break;
-                        else continue;
-                    }
 
-                    if (waitForResponse) {
-                        const decoded = new TextDecoder('utf-8').decode(raw);
-                        if (decoded.includes(responseToWaitFor)) {
+                    if (waitForResponse && this.messageQueue.length > 0) {
+                        const decoded_message = this.messageQueue.shift();
+                        if (decoded_message.includes(responseToWaitFor)) {
                             waitForResponse = false;
-                        } else if (decoded.match(/\bERROR\b/)) {
+                        } else if (decoded_message.match(/\bERROR\b/)) {
                             // Catch AT command errors.
                             this.flushInputBuffer(ADSBeeAT.ERROR_BUFFER_FLUSH_INTERVAL_MS);
-                            throw new Error(`ERROR response: ${decoded}`);
-                        } else if (decoded.includes('CppAT::')) {
+                            throw new Error(`ERROR response: ${decoded_message}`);
+                        } else if (decoded_message.includes('CppAT::')) {
                             // Catch CppAT parse errors.
                             await new Promise(resolve => setTimeout(resolve, CPP_AT_PARSE_ERROR_FLUSH_INTERVAL_MS));
                             this.flushInputBuffer(ADSBeeAT.ERROR_BUFFER_FLUSH_INTERVAL_MS); // These can get ugly.
-                            throw new Error(`CppAT parse error: ${decoded}`);
+                            throw new Error(`CppAT parse error: ${decoded_message}`);
+                        }
+
+                        // Received a decoded message without errors.
+                        let logStr = '';
+                        try {
+                            decodedResponse.push(decoded_message);
+                            logStr = `Response (+${this.getMsTimestamp() - this.lastCmdTimestamp} ms): \t\t${decoded_message}`;
+                        } catch {
+                            logStr = `Non-ASCII response (+${this.getMsTimestamp() - this.lastCmdTimestamp} ms): \t${raw}`;
+                        }
+
+                        if (printResponse && logStr) {
+                            console.log(logStr);
                         }
                     }
 
-                    let logStr = '';
-                    try {
-                        const decoded = new TextDecoder('utf-8').decode(raw).trim();
-                        if (decoded) {
-                            decodedResponse.push(decoded);
-                            logStr = `Response (+${this.getMsTimestamp() - this.lastCmdTimestamp} ms): \t\t${decoded}`;
-                        }
-                    } catch {
-                        logStr = `Non-ASCII response (+${this.getMsTimestamp() - this.lastCmdTimestamp} ms): \t${raw}`;
+                    // Wait for a timeout so that we don't block the event loop.
+                    if (this.messageQueue.length > 0) {
+                        continue; // If we have messages, don't wait.
                     }
+                    await new Promise(resolve => setTimeout(resolve, RECEIVE_LOOP_PERIOD_MS));
 
-                    if (printResponse && logStr) {
-                        console.log(logStr);
-                    }
                 }
 
                 return decodedResponse;
@@ -581,7 +574,7 @@
              * @param[in] delay_ms Delay in milliseconds after sending the command.
              * @param[in] printResponse Whether to print the response to the console.
              * @param[in] waitForOkOrError Whether to wait for an OK or ERROR response before returning.
-             * @return A promise that resolves with the decoded response lines.
+             * @return A promise that resolves with the decoded_message response lines.
              */
             async sendCmd(cmdStr, delay_ms = 10, printResponse = false, waitForResponse = false, responseToWaitFor = 'OK') {
                 const RESPONSE_TIMEOUT_MS = 20000; // Long timeout to allow for multi-sector flash erase.
@@ -599,7 +592,7 @@
              * Send raw bytes to the ADSBee device.
              * @param {Uint8Array} data The data to send.
              * @param {boolean} printResponse Whether to print the response to the console.
-             * @return A promise that resolves with the decoded response lines.
+             * @return A promise that resolves with the decoded_message response lines.
              */
             async sendBytes(data, printResponse = false, waitForOkOrError = false) {
                 const RESPONSE_TO_WAIT_FOR = 'OK';

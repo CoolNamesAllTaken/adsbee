@@ -20,6 +20,7 @@ if (TARGET application)
         coprocessor/spi_coprocessor.cpp
         coprocessor/object_dictionary.cpp
         firmware_update/firmware_update.cc
+        firmware_update/flash_utils.cc
     )
     target_include_directories(application PRIVATE
         .
@@ -42,6 +43,7 @@ elseif (TARGET bootloader)
     # RP2040 bootloader.
     target_sources(bootloader PRIVATE
         firmware_update/firmware_update.cc
+        firmware_update/flash_utils.cc
     )
     target_include_directories(bootloader PRIVATE
         utils # We just want hal.hh for now.
