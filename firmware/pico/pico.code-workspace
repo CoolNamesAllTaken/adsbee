@@ -89,6 +89,9 @@
 			"valarray": "cpp",
 			"variant": "cpp"
 		},
+		"C_Cpp.default.defines": [
+			"ON_PICO"
+		],
 		// "cortex-debug.variableUseNaturalFormat": true,
 	},
 	"launch": {

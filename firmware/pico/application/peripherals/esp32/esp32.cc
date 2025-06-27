@@ -238,38 +238,15 @@ bool ESP32::ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRequest &re
     return true;
 }
 
-bool ESP32::SPIGetHandshakePinLevel(bool blocking) {
-    if (blocking) {
-        // Make sure the ESP32 has time to lower the handshake pin after the last transaction.
-        while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
-        }
-        // Put CS pin LO during pre-assert interval to stop ESP32 from initiating a transaction with HANDSHAKE pin.
-        SPIBeginTransaction();
-        // Enforce CS pre-assert interval with blocking wait.
-        uint32_t pre_assert_interval_start = get_time_since_boot_us();
-        while (get_time_since_boot_us() - pre_assert_interval_start < kSPIUpdateCSPreAssertIntervalUs) {
-            // Assert the CS line before the ESP32 has a chance to handshake.
-            if (gpio_get(config_.spi_handshake_pin)) {
-                // Allowed to exit blocking early if ESP32 asserts the HANDSHAKE pin.
-                return true;
-            }
-        }
-        return false;
-    } else if (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
-        // Don't actually read the handshake pin if it might overlap with an existing transaction, since we could
-        // try reading the slave when nothing is here (slave hasn't yet had time to de-assert handshake pin).
-        return false;
-    }
-    return gpio_get(config_.spi_handshake_pin);
-}
+bool ESP32::SPIGetHandshakePinLevel() { return gpio_get(config_.spi_handshake_pin); }
 
 int ESP32::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len_bytes, bool end_transaction) {
     int bytes_written = 0;
 #ifdef ON_PICO
-
+    SPIBeginTransaction();  // Begin SPI transaction, which sets the CS pin low.
     // Blocking check of handshake line. If we're expecting a handshake, it's OK for the line to be high. Otherwise, we
     // need to bail out to not stomp on the ESP32's incoming message.
-    if (SPIGetHandshakePinLevel(true) && !expecting_handshake_) {
+    if (SPIGetHandshakePinLevel() && !expecting_handshake_) {
         SPIEndTransaction();  // End transaction to purge the handshake error.
         return ReturnCode::kErrorHandshakeHigh;
     }

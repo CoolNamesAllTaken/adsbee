@@ -438,10 +438,8 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         CPP_AT_TRY_ARG2NUM_BASE(2, len_bytes, 10);
                         CPP_AT_PRINTF("Erasing %u Bytes at offset 0x%x in partition %u.\r\n", len_bytes, offset,
                                       complementary_partition);
-                        FlashUtils::FlashSafe();
                         bool flash_erase_succeeded =
                             FirmwareUpdateManager::EraseFlashParition(complementary_partition, offset, len_bytes);
-                        FlashUtils::FlashUnsafe();
                         if (!flash_erase_succeeded) {
                             CPP_AT_ERROR("Failed partial erase of complementary flash partition.");
                         }
@@ -449,9 +447,7 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     } else {
                         // Performing a full partition erase with AT+OTA=ERASE.
                         CPP_AT_PRINTF("Erasing partition %d.\r\n", complementary_partition);
-                        FlashUtils::FlashSafe();
                         bool flash_erase_succeeded = FirmwareUpdateManager::EraseFlashParition(complementary_partition);
-                        FlashUtils::FlashUnsafe();
                         if (!flash_erase_succeeded) {
                             CPP_AT_ERROR("Failed full erase of complementary flash partition.");
                         }
@@ -537,10 +533,8 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     }
                     CPP_AT_PRINTF("Writing %u Bytes to partition %u at offset 0x%x.\r\n", len_bytes,
                                   complementary_partition, offset);
-                    FlashUtils::FlashSafe();
                     bool flash_write_succeeded = FirmwareUpdateManager::PartialWriteFlashPartition(
                         complementary_partition, offset, len_bytes, buf);
-                    FlashUtils::FlashUnsafe();
                     if (!flash_write_succeeded) {
                         adsbee.SetReceiver1090Enable(receiver_was_enabled);  // Re-enable receiver before exit.
                         CPP_AT_ERROR("Partial %u Byte write failed in partition %u at offset 0x%x.", len_bytes,
@@ -569,9 +563,7 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         FirmwareUpdateManager::flash_partition_headers[complementary_partition]->status,
                         FirmwareUpdateManager::flash_partition_headers[complementary_partition]->app_crc);
                     // Modify the partition header.
-                    FlashUtils::FlashSafe();
                     bool ret = FirmwareUpdateManager::VerifyFlashPartition(complementary_partition, true);
-                    FlashUtils::FlashUnsafe();
                     if (ret) {
                         CPP_AT_SUCCESS();
                     } else {
@@ -579,10 +571,8 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     }
                 } else if (args[0].compare("BOOT") == 0) {
                     // Boot the complementary flash partition.
-                    CPP_AT_PRINTF("Booting partition %u...", complementary_partition);
+                    CPP_AT_PRINTF("Booting partition %u...\r\n", complementary_partition);
                     esp32.Update();  // Send out this last console message.
-                    // Do NOT safe / unsafe flash here! We aren't writing to flash, and calling FlashSafe() will screw
-                    // up the boot sequence.
                     FirmwareUpdateManager::BootPartition(complementary_partition);
                     // Don't return an error here - the boot process will handle any errors
                     CPP_AT_SUCCESS();

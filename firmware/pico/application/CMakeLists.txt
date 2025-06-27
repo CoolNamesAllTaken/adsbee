@@ -96,7 +96,6 @@ if (ON_EMBEDDED_DEVICE)
         main.cc # Don't include main for testing.
         adsbee.cc
         settings.cc
-        flash_utils.cc
     )
 
     pico_set_linker_script(application ${APPLICATION_LINKER_SCRIPT})

@@ -35,6 +35,7 @@ if (ON_EMBEDDED_DEVICE)
     )
 
     pico_add_bin_output(bootloader)
+    add_compile_definitions(ON_PICO_BOOTLOADER)
 
     # Set up debug USB
     pico_enable_stdio_usb(bootloader 1) # use USB for standard printing
