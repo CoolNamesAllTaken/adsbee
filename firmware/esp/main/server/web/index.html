@@ -518,7 +518,7 @@
                 this.messageQueue = [];
             }
 
-            async receiveResponse(printResponse = false, waitForResponse = false, responseToWaitFor = 'OK', maxCumulativeTimeoutMs = 20000) {
+            async receiveResponse(printResponse = false, waitForResponse = false, responseToWaitFor = 'OK', maxCumulativeTimeoutMs = 6000) {
                 const CPP_AT_PARSE_ERROR_FLUSH_INTERVAL_MS = 1000; // How long to wait after a parse error to let the error message print.
                 const RECEIVE_LOOP_PERIOD_MS = 10; // How often to check for new messages.
                 const decodedResponse = [];
@@ -576,10 +576,10 @@
              * @param[in] delay_ms Delay in milliseconds after sending the command.
              * @param[in] printResponse Whether to print the response to the console.
              * @param[in] waitForOkOrError Whether to wait for an OK or ERROR response before returning.
+             * @param[in] maxCumulativeTimeoutMs Maximum cumulative timeout in milliseconds.
              * @return A promise that resolves with the decoded_message response lines.
              */
-            async sendCmd(cmdStr, delay_ms = 10, printResponse = false, waitForResponse = false, responseToWaitFor = 'OK') {
-                const RESPONSE_TIMEOUT_MS = 20000; // Long timeout to allow for multi-sector flash erase.
+            async sendCmd(cmdStr, delay_ms = 10, printResponse = false, waitForResponse = false, responseToWaitFor = 'OK', maxCumulativeTimeoutMs = 6000) {
                 this.lastCmdTimestamp = this.getMsTimestamp();
 
                 if (printResponse) {
@@ -587,7 +587,30 @@
                 }
 
                 this.ws.send(new TextEncoder().encode(cmdStr));
-                return await this.receiveResponse(printResponse, waitForResponse, responseToWaitFor, RESPONSE_TIMEOUT_MS);
+
+                let attempts = 0;
+                const maxAttempts = 3;
+
+                while (attempts < maxAttempts) {
+                    attempts++;
+                    try {
+                        return await this.receiveResponse(printResponse, waitForResponse, responseToWaitFor, maxCumulativeTimeoutMs);
+                    } catch (error) {
+                        if (error.message.includes('Response timeout')) {
+                            console.log(`Response timeout detected (attempt ${attempts}/${maxAttempts}), reconnecting...`);
+                            await this.disconnect();
+                            await this.connect();
+
+                            if (attempts >= maxAttempts) {
+                                throw error;
+                            }
+                            // Retry the send operation
+                            this.ws.send(new TextEncoder().encode(cmdStr));
+                        } else {
+                            throw error;
+                        }
+                    }
+                }
             }
 
             /**
@@ -598,7 +621,7 @@
              */
             async sendBytes(data, printResponse = false, waitForOkOrError = false) {
                 const RESPONSE_TO_WAIT_FOR = 'OK';
-                const RESPONSE_TIMEOUT_MS = 5000;
+                const RESPONSE_TIMEOUT_MS = 6000;
                 this.ws.send(data);
                 return await this.receiveResponse(printResponse, waitForOkOrError, RESPONSE_TO_WAIT_FOR, RESPONSE_TIMEOUT_MS);
             }
@@ -660,10 +683,12 @@
              * @param {number} lenBytes The length in bytes to erase.
              */
             async otaErase(offsetBytes = NaN, lenBytes = NaN) {
+                const ERASE_TIMEOUT_MS = 20000; // Allow 20 seconds for flash erase to complete.
                 if (!isNaN(offsetBytes) && !isNaN(lenBytes)) {
-                    await this.sendCmd(`AT+OTA=ERASE,${offsetBytes.toString(16)},${lenBytes}\r\n`, 0, true, true);
+                    await this.sendCmd(`AT+OTA=ERASE,${offsetBytes.toString(16)},${lenBytes}\r\n`, 0, true, true, "OK", ERASE_TIMEOUT_MS);
                 } else {
-                    await this.sendCmd("AT+OTA=ERASE\r\n", 0, true, true);
+                    // Allow 20 seconds for flash erase to complete.
+                    await this.sendCmd("AT+OTA=ERASE\r\n", 0, true, true, "OK", ERASE_TIMEOUT_MS);
                 }
             }
 

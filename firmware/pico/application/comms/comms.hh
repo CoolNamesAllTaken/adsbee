@@ -10,8 +10,13 @@ class CommsManager {
    public:
     static constexpr uint16_t kATCommandBufMaxLen = 1000;
     static constexpr uint16_t kNetworkConsoleBufMaxLen = 4096;
+    static constexpr uint16_t kNetworkConsoleReportingIntervalOverrideNumChars =
+        kNetworkConsoleBufMaxLen * 3 /
+        4;  // Drain the network console queue immediately if it has more than this many characters.
+    static constexpr uint32_t kNetworkConsoleMinReportingIntervalMs =
+        50;  // Report messages to nextwork console at minimum rate of 20Hz.
     static constexpr uint16_t kPrintfBufferMaxSize = 500;
-    static constexpr uint32_t kRawReportingIntervalMs = 100;  // Report packets internally at 00Hz.
+    static constexpr uint32_t kRawReportingIntervalMs = 100;  // Report packets internally at 10Hz.
     static constexpr uint32_t kMAVLINKReportingIntervalMs = 1000;
     static constexpr uint32_t kCSBeeReportingIntervalMs = 1000;
     static constexpr uint32_t kGDL90ReportingIntervalMs = 1000;
@@ -244,6 +249,7 @@ class CommsManager {
     // Queues for incoming / outgoing network console characters.
     char esp32_console_rx_queue_buffer_[kNetworkConsoleBufMaxLen];
     char esp32_console_tx_queue_buffer_[kNetworkConsoleBufMaxLen];
+    uint32_t last_esp32_console_tx_timestamp_ms_ = 0;  // Timestamp of last network console TX.
 
     // Queue for holding new transponder packets before they get reported.
     Decoded1090Packet transponder_packet_reporting_queue_buffer_[SettingsManager::Settings::kMaxNumTransponderPackets];
