@@ -35,7 +35,7 @@ class Raw1090Packet {
      * functions that don't care about it.
      * @return Timestamp in seconds.
      */
-    uint64_t GetTimestampMs() { return mlat_48mhz_64bit_counts / 48'000; }
+    uint64_t GetTimestampMs() const { return mlat_48mhz_64bit_counts / 48'000; }
 
     /**
      * Print the buffer to a string.
@@ -135,7 +135,7 @@ class Decoded1090Packet {
     int GetBufferLenBits() const { return raw_.buffer_len_bits; }
     int GetRSSIdBm() const { return raw_.sigs_dbm; }
     uint64_t GetMLAT12MHzCounter() const { return (raw_.mlat_48mhz_64bit_counts >> 2) & 0xFFFFFFFFFFFF; }
-    uint64_t GetTimestampMs() { return raw_.GetTimestampMs(); }
+    uint64_t GetTimestampMs() const { return raw_.GetTimestampMs(); }
     uint16_t GetDownlinkFormat() const { return downlink_format_; }
     uint16_t GetDownlinkFormatString(char str_buf[kMaxDFStrLen]) const;
     DownlinkFormat GetDownlinkFormatEnum();

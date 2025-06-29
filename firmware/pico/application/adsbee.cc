@@ -290,20 +290,7 @@ bool ADSBee::Update() {
     // Ingest new packets into the dictionary.
     // Raw1090Packet raw_packet;
     Decoded1090Packet decoded_packet;
-    while (decoder.decoded_1090_packet_out_queue.Pop(decoded_packet) /*raw_1090_packet_queue.Pop(raw_packet)*/) {
-        // if (raw_packet.buffer_len_bits == Raw1090Packet::kExtendedSquitterPacketLenBits) {
-        //     CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%08x|%08x|%04x SRC=%d SIGS=%ddBm SIGQ=%ddB MLAT=%u",
-        //                  raw_packet.buffer[0], raw_packet.buffer[1], raw_packet.buffer[2],
-        //                  (raw_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_packet.source, raw_packet.sigs_dbm,
-        //                  raw_packet.sigq_db, raw_packet.mlat_48mhz_64bit_counts);
-        // } else {
-        //     CONSOLE_INFO("ADSBee::Update", "New message: 0x%08x|%06x SRC=%d SIGS=%ddBm SIGQ=%ddB MLAT=%u",
-        //                  raw_packet.buffer[0], (raw_packet.buffer[1]) >> (2 * kBitsPerNibble), raw_packet.source,
-        //                  raw_packet.sigs_dbm, raw_packet.sigq_db, raw_packet.mlat_48mhz_64bit_counts);
-        // }
-
-        // Decoded1090Packet decoded_packet = Decoded1090Packet(raw_packet);
-
+    while (decoder.decoded_1090_packet_out_queue.Pop(decoded_packet)) {
         CONSOLE_INFO("ADSBee::Update", "\tdf=%d icao_address=0x%06x", decoded_packet.GetDownlinkFormat(),
                      decoded_packet.GetICAOAddress());
 
