@@ -43,6 +43,7 @@ TEST(PacketDecoder, RejectDuplicateMessages) {
     EXPECT_EQ(decoder.decoded_1090_packet_out_queue.Length(), 1);
     Decoded1090Packet decoded_packet;
     EXPECT_TRUE(decoder.decoded_1090_packet_out_queue.Pop(decoded_packet));
+    EXPECT_EQ(decoder.decoded_1090_packet_out_queue.Length(), 0);
     EXPECT_EQ(decoded_packet.GetICAOAddress(), 0x40621Du);
 
     // Push the same packet again within 2ms, it should not be re-processed.

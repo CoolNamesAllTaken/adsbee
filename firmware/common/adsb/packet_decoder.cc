@@ -117,7 +117,7 @@ bool PacketDecoder::PushPacketIfNotDuplicate(const Decoded1090Packet& decoded_pa
 
     decoded_1090_packet_out_queue.Push(decoded_packet);
 
-    if (packet_source > 0 && packet_source < kMaxNumSources) {
+    if (packet_source >= 0 && packet_source < kMaxNumSources) {
         // Only update packet cache if the source is valid.
         last_demod_icao_[packet_source] = icao;
         last_demod_timestamp_ms_[packet_source] = timestamp_ms;
