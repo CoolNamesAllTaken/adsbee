@@ -128,7 +128,8 @@ int main() {
             if (!esp32.DeInit()) {
                 CONSOLE_ERROR("main", "Error while de-initializing ESP32 before flashing.");
             } else if (!esp32_flasher.FlashESP32()) {
-                CONSOLE_ERROR("main", "Error while flashing ESP32.");
+                CONSOLE_ERROR("main", "Error while flashing ESP32. Disabling.");
+                esp32.SetEnable(false);  // Disable ESP32 if flashing failed.
             } else if (!esp32.Init()) {
                 CONSOLE_ERROR("main", "Error while re-initializing ESP32 after flashing.");
             }

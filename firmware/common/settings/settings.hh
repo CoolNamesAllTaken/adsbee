@@ -7,6 +7,7 @@
 
 #include "macros.hh"
 #include "stdio.h"
+#include "stdlib.h"  // for strtoull
 #ifdef ON_PICO
 #include "pico/rand.h"
 #endif

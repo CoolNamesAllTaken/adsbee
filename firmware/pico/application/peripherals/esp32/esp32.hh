@@ -57,6 +57,10 @@ class ESP32 : public SPICoprocessorSlaveInterface {
     inline bool SPIBeginTransaction() {
         while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
             // Wait for the lockout period to expire before starting a new transaction.
+            if (expecting_handshake_ && SPIGetHandshakePinLevel()) {
+                // If we are expecting a handshake and the pin is high, we can proceed with the transaction.
+                break;
+            }
         }
         gpio_put(config_.spi_cs_pin, 0);
         return true;
