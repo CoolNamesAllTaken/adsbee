@@ -701,6 +701,7 @@
                 const APP_OFFSET_BYTES = 4 * 1024;
                 // Going larger than this can cause the heap to explode on the ESP32.
                 const WRITE_CHUNK_BYTES = 0x1000 * 3;
+                const MAX_ATTEMPTS_PER_CHUNK = 3;
 
                 const partition = await this.otaGetFlashPartition();
 
@@ -730,14 +731,16 @@
                 for (let i = HEADER_SIZE_BYTES; i < HEADER_SIZE_BYTES + appLenBytes; i += WRITE_CHUNK_BYTES) {
                     const offsetBytes = (i - HEADER_SIZE_BYTES) + APP_OFFSET_BYTES;
                     let success = false;
-                    while (!success) {
+                    let attempts = 0;
+                    while (!success && attempts < MAX_ATTEMPTS_PER_CHUNK) {
                         try {
                             const chunk = contents.slice(i, Math.min(i + WRITE_CHUNK_BYTES, HEADER_SIZE_BYTES + appLenBytes));
                             await this.otaWriteBytes(offsetBytes, chunk);
                             success = true;
                         } catch (error) {
-                            console.error(`Failed to write chunk at offset ${offsetBytes}. Retrying...`, error);
+                            console.error(`Failed to write chunk at offset ${offsetBytes}. Retrying (${attempts + 1}/${MAX_ATTEMPTS_PER_CHUNK})...`, error);
                             await this.otaErase(offsetBytes, WRITE_CHUNK_BYTES);
+                            attempts++;
                         }
                     }
                 }
