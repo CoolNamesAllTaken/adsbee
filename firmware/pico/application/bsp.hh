@@ -12,27 +12,31 @@ class BSP {
     static const uint16_t kMaxNumDemodStateMachines = 4;
 
     BSP(bool has_eeprom_in) : has_eeprom(has_eeprom_in) {
-        if (!has_eeprom) {
-            // Overrides for non-EEPROM version of ADSBee.
-
-            gnss_pps_pin = 2;
-            gnss_enable_pin = 3;
-
-            r1090_num_demod_state_machines = 3;
-            for (uint16_t i = 0; i < r1090_num_demod_state_machines; i++) {
-                r1090_pulses_pins[i] = 19;
-                r1090_demod_pins[i] = 20 + i;
-                r1090_recovered_clk_pins[i] = 24;
-            }
-            r1090_tl_pwm_pin = 26;
-            r1090_tl_adc_pin = 27;
-            r1090_tl_adc_input = 1;
-            r1090_rssi_adc_pin = 28;
-            r1090_rssi_adc_input = 2;
-
-            has_subg = true;
-            sync_pin = 25;  // Used for sync and CC1312 bootloader backdoor.
+        if (has_eeprom) {
+            return;  // Use default values from ADSBee 1090.
         }
+
+        // Overrides for non-EEPROM version of ADSBee: ADSBee 1090U, ADSBee m1090.
+
+        gnss_pps_pin = 2;
+        gnss_enable_pin = 3;
+
+        r1090_num_demod_state_machines = 3;
+        for (uint16_t i = 0; i < r1090_num_demod_state_machines; i++) {
+            r1090_pulses_pins[i] = 19;
+            r1090_demod_pins[i] = 20 + i;
+            r1090_recovered_clk_pins[i] = 24;
+        }
+        r1090_tl_pwm_pin = 26;
+        r1090_tl_adc_pin = 27;
+        r1090_tl_adc_input = 1;
+        r1090_rssi_adc_pin = 28;
+        r1090_rssi_adc_input = 2;
+
+        sync_pin = 25;  // Used for sync and CC1312 bootloader backdoor.
+
+        // Get device info from flash to see if we are capable of having a sub-GHz receiver installed.
+        has_subg = true;
 
         // TODO: override has_subg and has_esp32 based on the board type.
     }
