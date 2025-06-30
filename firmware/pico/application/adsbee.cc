@@ -40,12 +40,13 @@ constexpr float kInt16MaxRecip = 1.0f / INT16_MAX;
 ADSBee *isr_access = nullptr;
 
 /** Begin pass-through functions for public access **/
-void on_systick_exception() { isr_access->OnSysTickWrap(); }
+void __time_critical_func(on_systick_exception)() { isr_access->OnSysTickWrap(); }
 
-void on_demod_pin_change(uint gpio, uint32_t event_mask) {
+void __time_critical_func(on_demod_pin_change)(uint gpio, uint32_t event_mask) {
+    uint64_t mlat_48mhz_64bit_counts = isr_access->GetMLAT48MHzCounts();
     switch (event_mask) {
         case GPIO_IRQ_EDGE_RISE:
-            isr_access->OnDemodBegin(gpio);
+            isr_access->OnDemodBegin(gpio, mlat_48mhz_64bit_counts);
             break;
         case GPIO_IRQ_EDGE_FALL:
             break;
@@ -366,7 +367,7 @@ void ADSBee::FlashStatusLED(uint32_t led_on_ms) {
     led_on_timestamp_ms_ = get_time_since_boot_ms();
 }
 
-uint64_t ADSBee::GetMLAT48MHzCounts(uint16_t num_bits) {
+uint64_t __time_critical_func(ADSBee::GetMLAT48MHzCounts)(uint16_t num_bits) {
     // Combine the wrap counter with the current value of the SysTick register and mask to 48 bits.
     // Note: 24-bit SysTick value is subtracted from UINT_24_MAX to make it count up instead of down.
     return (mlat_counter_wraps_ + ((0xFFFFFF - systick_hw->cvr) * MLAT_SYSTEM_CLOCK_RATIO)) &
@@ -382,9 +383,8 @@ int ADSBee::GetNoiseFloordBm() { return AD8313MilliVoltsTodBm(noise_floor_mv_); 
 
 uint16_t ADSBee::GetTLLearningTemperatureMV() { return tl_learning_temperature_mv_; }
 
-void ADSBee::OnDemodBegin(uint gpio) {
+void __time_critical_func(ADSBee::OnDemodBegin)(uint gpio, uint64_t mlat_48mhz_64bit_counts) {
     // Read MLAT counter at the beginning to reduce jitter after interrupt.
-    uint64_t mlat_48mhz_64bit_counts = GetMLAT48MHzCounts();
     uint16_t sm_index;
     for (sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         if (config_.demod_pins[sm_index] == gpio) {
@@ -508,7 +508,7 @@ void ADSBee::OnDemodComplete() {
     }
 }
 
-void ADSBee::OnSysTickWrap() { mlat_counter_wraps_ += kMLATWrapCounterIncrement; }
+void __time_critical_func(ADSBee::OnSysTickWrap)() { mlat_counter_wraps_ += kMLATWrapCounterIncrement; }
 
 int ADSBee::ReadSignalStrengthMilliVolts() {
     adc_select_input(config_.rssi_adc_input);

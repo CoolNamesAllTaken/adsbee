@@ -166,7 +166,7 @@ class ADSBee {
     /**
      * ISR for GPIO interrupts.
      */
-    void OnDemodBegin(uint gpio);
+    void OnDemodBegin(uint gpio, uint64_t mlat_48mhz_64bit_counts);
 
     /**
      * ISR triggered by DECODE completing, via PIO0 IRQ0.
