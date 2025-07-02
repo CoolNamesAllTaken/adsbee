@@ -152,6 +152,8 @@ void WebSocketServer::BroadcastMessage(const char *message, int16_t len_bytes) {
     for (int i = 0; i < config_.num_clients_allowed; i++) {
         if (clients_[i].in_use) {
             esp_err_t ret = SendMessage(clients_[i].client_fd, message, len_bytes);
+            CONSOLE_INFO("WebSocketServer::BroadcastMessage", "[%s] Message sent to client %d with fd %d: %s",
+                         config_.label, i, clients_[i].client_fd, message);
             if (ret != ESP_OK) {
                 CONSOLE_ERROR("WebSocketServer::BroadcastMessage",
                               "[%s] Failed to send message to client %d due to error %s.", config_.label, i,

@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "../modules"
+		},
+		{
+			"path": "../../usr/local/pico-sdk"
 		}
 	],
 	"settings": {

@@ -32,8 +32,8 @@
 // Scales 125MHz system clock into a 48MHz counter.
 static const uint32_t kMLATWrapCounterIncrement = (1 << 24) * MLAT_SYSTEM_CLOCK_RATIO;
 
-constexpr float kPreambleDetectorFreq = 48e6;    // Running at 48MHz (24 clock cycles per half bit).
-constexpr float kMessageDemodulatorFreq = 48e6;  // Run at 48 MHz to demodulate bits at 1Mbps.
+constexpr float kPreambleDetectorFreqHz = 48e6;    // Running at 48MHz (24 clock cycles per half bit).
+constexpr float kMessageDemodulatorFreqHz = 48e6;  // Run at 48 MHz to demodulate bits at 1Mbps.
 
 constexpr float kInt16MaxRecip = 1.0f / INT16_MAX;
 
@@ -43,10 +43,9 @@ ADSBee *isr_access = nullptr;
 void __time_critical_func(on_systick_exception)() { isr_access->OnSysTickWrap(); }
 
 void __time_critical_func(on_demod_pin_change)(uint gpio, uint32_t event_mask) {
-    uint64_t mlat_48mhz_64bit_counts = isr_access->GetMLAT48MHzCounts();
     switch (event_mask) {
         case GPIO_IRQ_EDGE_RISE:
-            isr_access->OnDemodBegin(gpio, mlat_48mhz_64bit_counts);
+            isr_access->OnDemodBegin(gpio);
             break;
         case GPIO_IRQ_EDGE_FALL:
             break;
@@ -122,120 +121,15 @@ bool ADSBee::Init() {
     gpio_put(config_.bias_tee_enable_pin, 1);  // Enable is active LO.
     gpio_set_dir(config_.bias_tee_enable_pin, GPIO_OUT);
 
-    // Enable the MLAT timer using the 24-bit SysTick timer connected to the 125MHz processor clock.
-    // SysTick Control and Status Register
-    systick_hw->csr = 0b110;  // Source = Processor Clock, TickInt = Enabled, Counter = Disabled.
-    // SysTick Reload Value Register
-    systick_hw->rvr = 0xFFFFFF;  // Use the full 24 bit span of the timer value register.
-    // 0xFFFFFF = 16777215 counts @ 125MHz = approx. 0.134 seconds.
-    // Call the OnSysTickWrap function every time the SysTick timer hits 0.
-    exception_set_exclusive_handler(SYSTICK_EXCEPTION, on_systick_exception);
-    // Let the games begin!
-    systick_hw->csr |= 0b1;  // Enable the counter.
-
-    /** PREAMBLE DETECTOR PIO **/
-    // Calculate the PIO clock divider.
-    float preamble_detector_div = (float)clock_get_hz(clk_sys) / kPreambleDetectorFreq;
-    irq_wrapper_program_init(config_.preamble_detector_pio, bsp.r1090_num_demod_state_machines, irq_wrapper_offset_,
-                             preamble_detector_div);
-    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
-        // Only make the state machine wait to start if it's part of the round-robin group of well formed preamble
-        // detectors.
-        bool make_sm_wait = sm_index > 0 && sm_index < bsp.r1090_high_power_demod_state_machine_index;
-        // Initialize the program using the .pio file helper function
-        preamble_detector_program_init(config_.preamble_detector_pio,                     // Use PIO block 0.
-                                       preamble_detector_sm_[sm_index],                   // State machines 0-2
-                                       preamble_detector_offset_ /* + starting_offset*/,  // Program startin offset.
-                                       config_.pulses_pins[sm_index],                     // Pulses pin (input).
-                                       config_.demod_pins[sm_index],                      // Demod pin (output).
-                                       preamble_detector_div,                             // Clock divisor (for 48MHz).
-                                       make_sm_wait  // Whether state machine should wait for an IRQ to begin.
-        );
-
-        // Handle GPIO interrupts (for marking beginning of demod interval).
-        gpio_set_irq_enabled_with_callback(config_.demod_pins[sm_index], GPIO_IRQ_EDGE_RISE /* | GPIO_IRQ_EDGE_FALL */,
-                                           true, on_demod_pin_change);
-
-        // Set the preamble sequnence into the ISR: ISR: 0b101000010100000(0)
-        // Last 0 removed from preamble sequence to allow the demodulator more time to start up.
-        // mov isr null ; Clear ISR.
-        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_isr, pio_null));
-        // Fill start of preamble pattern with different bits if the state machine is intended to sense high power
-        // preambles.
-        if (sm_index == bsp.r1090_high_power_demod_state_machine_index) {
-            // High power preamble.
-            // set x 0b111  ; ISR = 0b00000000000000000000000000000000
-            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b111));
-            // in x 3       ; ISR = 0b00000000000000000000000000000111
-            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
-            // set x 0b101  ; ISR = 0b00000000000000000000000000000000
-            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b101));
-        } else {
-            // Well formed preamble.
-            // set x 0b101  ; ISR = 0b00000000000000000000000000000000
-            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b101));
-            // in x 3       ; ISR = 0b00000000000000000000000000000101
-            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
-        }
-        // in null 4    ; ISR = 0b00000000000000000000000001?10000
-        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 4));
-        // in x 3       ; ISR = 0b00000000000000000000001?10000101
-        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
-        // in null 4    ; ISR = 0b0000000000000000001?100001010000
-        // Note: this is shorter than the real tail but we need extra time for the demodulator to start up.
-        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 4));
-        // mov x null   ; Clear scratch x.
-        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_x, pio_null));
-
-        // Use this instruction to verify preamble was formed correctly (pushes ISR to RX FIFO).
-        // pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_push(false, true));
-    }
-
-    // Enable the DEMOD interrupt on PIO1_IRQ_0.
-    pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt0, true);  // PIO0 state machine 0
-    pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt1, true);  // PIO0 state machine 1
-    pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt2, true);  // PIO0 state machine 2
-
-    // Handle PIO0 IRQ0.
-    irq_set_exclusive_handler(config_.preamble_detector_demod_complete_irq, on_demod_complete);
-    irq_set_enabled(config_.preamble_detector_demod_complete_irq, true);
-
-    /** MESSAGE DEMODULATOR PIO **/
-    float message_demodulator_div = (float)clock_get_hz(clk_sys) / kMessageDemodulatorFreq;
-    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
-        message_demodulator_program_init(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
-                                         message_demodulator_offset_, config_.pulses_pins[sm_index],
-                                         config_.demod_pins[sm_index], config_.recovered_clk_pins[sm_index],
-                                         message_demodulator_div);
-    }
-
-    // Set GPIO interrupts to be higher priority than the DEMOD interrupt to allow RSSI measurement.
-    // irq_set_priority(config_.preamble_detector_demod_complete_irq, 1);
-    irq_set_priority(config_.preamble_detector_demod_pin_irq, 0);
-
+    PIOInit();
     CONSOLE_INFO("ADSBee::Init", "PIOs initialized.");
+    MLATCounterInit();
+    CONSOLE_INFO("ADSBee::Init", "MLAT counter initialized.");
 
     // Set the last dictionary update timestamp.
     last_aircraft_dictionary_update_timestamp_ms_ = get_time_since_boot_ms();
 
-    // Enable the state machines.
-    pio_sm_set_enabled(config_.preamble_detector_pio, irq_wrapper_sm_, true);
-    // Need to enable the demodulator SMs first, since if the preamble detector trips the IRQ but the demodulator isn't
-    // enabled, we end up in a deadlock (I think, this maybe should be verified again).
-    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
-        // pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], true);
-        pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], true);
-    }
-    // Enable round robin well formed preamble detectors.
-    // NOTE: These need to be enable to allow the high power preamble detector to run, since they reset the IRQ that the
-    // high power preamble detector relies on. This is a vestige of the fact that the high power preamble detector uses
-    // the same PIO code that does round-robin for the well formed preamble detectors.
-    for (uint16_t sm_index = 0; sm_index < bsp.r1090_high_power_demod_state_machine_index; sm_index++) {
-        pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], true);
-    }
-    // Enable high power preamble detector.
-    pio_sm_set_enabled(config_.preamble_detector_pio,
-                       preamble_detector_sm_[bsp.r1090_high_power_demod_state_machine_index], true);
+    PIOEnable();
 
     // Initialize sub-GHz radio.
     if (config_.has_subg) {
@@ -383,9 +277,12 @@ int ADSBee::GetNoiseFloordBm() { return AD8313MilliVoltsTodBm(noise_floor_mv_); 
 
 uint16_t ADSBee::GetTLLearningTemperatureMV() { return tl_learning_temperature_mv_; }
 
-void __time_critical_func(ADSBee::OnDemodBegin)(uint gpio, uint64_t mlat_48mhz_64bit_counts) {
+void __time_critical_func(ADSBee::OnDemodBegin)(uint gpio) {
     // Read MLAT counter at the beginning to reduce jitter after interrupt.
-    uint16_t sm_index;
+    uint64_t mlat_48mhz_64bit_counts = isr_access->GetMLAT48MHzCounts();
+    uint16_t mlat_jitter_counts_now = pwm_hw->slice[mlat_jitter_counter_pwm_slice_].ctr;
+
+    uint16_t sm_index = UINT16_MAX;
     for (sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         if (config_.demod_pins[sm_index] == gpio) {
             break;
@@ -394,7 +291,14 @@ void __time_critical_func(ADSBee::OnDemodBegin)(uint gpio, uint64_t mlat_48mhz_6
     if (sm_index >= bsp.r1090_num_demod_state_machines)
         return;  // Ignore; wasn't the start of a demod interval for a known SM.
     // Demodulation period is beginning! Store the MLAT counter.
-    rx_packet_[sm_index].mlat_48mhz_64bit_counts = mlat_48mhz_64bit_counts;
+    uint16_t mlat_jitter_counts_on_first_word_push_ = mlat_jitter_counter_counts_[sm_index];
+    // Correct the MLAT timestamp for jitter. This works as long as this interrupt executes within one timer wrap of the
+    // first FIFO push happening, which triggers the DMA capture.
+    // The 16-bit jitter counter runs at 48MHz, so it will wrap every 0xFFFF / 48'000 = 1.36ms. This is OK since we
+    // expect the interrupt to fire within a few microseconds of the DMA triggering (which is the jitter we are trying
+    // to correct).
+    rx_packet_[sm_index].mlat_48mhz_64bit_counts =
+        mlat_48mhz_64bit_counts - (mlat_jitter_counts_now - mlat_jitter_counts_on_first_word_push_);
 }
 
 void ADSBee::OnDemodComplete() {
@@ -422,8 +326,8 @@ void ADSBee::OnDemodComplete() {
         if (packet_num_words > Raw1090Packet::kMaxPacketLenWords32) {
             // Packet length is invalid; dump everything and try again next time.
             // Only enable this print for debugging! Printing from the interrupt causes the USB library to crash.
-            // CONSOLE_WARNING("ADSBee::OnDemodComplete", "Received a packet with %d 32-bit words, expected maximum of
-            // %d.",
+            // CONSOLE_WARNING("ADSBee::OnDemodComplete", "Received a packet with %d 32-bit words, expected maximum
+            // of %d.",
             //                 packet_num_words, Raw1090Packet::kExtendedSquitterPacketNumWords32);
             // pio_sm_clear_fifos(config_.message_demodulator_pio, message_demodulator_sm_);
             packet_num_words = Raw1090Packet::kMaxPacketLenWords32;
@@ -465,7 +369,8 @@ void ADSBee::OnDemodComplete() {
             }
         }
 
-        // Clear the FIFO by pushing partial word from ISR, not bothering to block if FIFO is full (it shouldn't be).
+        // Clear the FIFO by pushing partial word from ISR, not bothering to block if FIFO is full (it shouldn't
+        // be).
         pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
                                   pio_encode_push(false, false));
         while (!pio_sm_is_rx_fifo_empty(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
@@ -473,10 +378,11 @@ void ADSBee::OnDemodComplete() {
         }
 
         // Reset the demodulator state machine to wait for the next decode interval, then enable it.
-        pio_sm_restart(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);  // Reset FIFOs, ISRs, etc.
-        // The high power demodulator has a different start address to account for the fact that the index of its DEMOD
-        // pin is different. This only matters for the initial program wait, subsequent demod checks are done on the
-        // full GPIO input register.
+        pio_sm_restart(config_.message_demodulator_pio,
+                       message_demodulator_sm_[sm_index]);  // Reset FIFOs, ISRs, etc.
+        // The high power demodulator has a different start address to account for the fact that the index of its
+        // DEMOD pin is different. This only matters for the initial program wait, subsequent demod checks are done
+        // on the full GPIO input register.
         uint demodulator_program_start =
             sm_index == bsp.r1090_high_power_demod_state_machine_index
                 ? message_demodulator_offset_ + message_demodulator_offset_high_power_initial_entry
@@ -485,26 +391,21 @@ void ADSBee::OnDemodComplete() {
                                   pio_encode_jmp(demodulator_program_start));  // Jump to beginning of program.
         pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], true);
 
+        // Re-enable the MLAT jitter counter for this state machine.
+        dma_channel_start(mlat_jitter_counter_dma_channel_[sm_index]);
+
         // Release the preamble detector from its wait state.
         if (sm_index == bsp.r1090_high_power_demod_state_machine_index) {
-            // High power state machine operates alone and doesn't need to wait for any other SM to complete. It would
-            // normally be enabled by one of the interleaved well formed preamble detector state machines refreshin, but
-            // doing it here brings it up a little quicker and allows it to catch a subsequent high power packet if it
-            // comes in quickly.
+            // High power state machine operates alone and doesn't need to wait for any other SM to complete. It
+            // would normally be enabled by one of the interleaved well formed preamble detector state machines
+            // refreshing, but doing it here brings it up a little quicker and allows it to catch a subsequent high
+            // power packet if it comes in quickly.
             pio_sm_exec_wait_blocking(
                 config_.preamble_detector_pio, preamble_detector_sm_[sm_index],
                 pio_encode_jmp(preamble_detector_offset_ + preamble_detector_offset_waiting_for_first_edge));
         }
 
         pio_interrupt_clear(config_.preamble_detector_pio, sm_index);
-
-        // Reset the preamble detector state machine so that it starts looking for a new message.
-        // pio_sm_restart(config_.preamble_detector_pio, preamble_detector_sm_[sm_index]);  // Reset FIFOs, ISRs, etc.
-        // pio_sm_exec_wait_blocking(config_.preamble_detector_pio, preamble_detector_sm_[sm_index],
-        //                           pio_encode_jmp(preamble_detector_offset_ +
-        //                                          preamble_detector_offset_follow_irq));  // Jump to beginning of
-        //                                          program.
-        // pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], true);
     }
 }
 
@@ -542,4 +443,164 @@ void ADSBee::StartTLLearning(uint16_t tl_learning_num_cycles, uint16_t tl_learni
     tl_learning_temperature_mv_ = tl_learning_start_temperature_mv;
     tl_learning_temperature_step_mv_ = tl_learning_start_temperature_mv / tl_learning_num_cycles;
     tl_learning_cycle_start_timestamp_ms_ = get_time_since_boot_ms();
+}
+
+/** Private Functions **/
+
+void ADSBee::PIOInit() {
+    /** PREAMBLE DETECTOR PIO **/
+    // Calculate the PIO clock divider.
+    float preamble_detector_div = (float)clock_get_hz(clk_sys) / kPreambleDetectorFreqHz;
+    irq_wrapper_program_init(config_.preamble_detector_pio, bsp.r1090_num_demod_state_machines, irq_wrapper_offset_,
+                             preamble_detector_div);
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
+        // Only make the state machine wait to start if it's part of the round-robin group of well formed preamble
+        // detectors.
+        bool make_sm_wait = sm_index > 0 && sm_index < bsp.r1090_high_power_demod_state_machine_index;
+        // Initialize the program using the .pio file helper function
+        preamble_detector_program_init(config_.preamble_detector_pio,                     // Use PIO block 0.
+                                       preamble_detector_sm_[sm_index],                   // State machines 0-2
+                                       preamble_detector_offset_ /* + starting_offset*/,  // Program startin offset.
+                                       config_.pulses_pins[sm_index],                     // Pulses pin (input).
+                                       config_.demod_pins[sm_index],                      // Demod pin (output).
+                                       preamble_detector_div,                             // Clock divisor (for 48MHz).
+                                       make_sm_wait  // Whether state machine should wait for an IRQ to begin.
+        );
+
+        // Handle GPIO interrupts (for marking beginning of demod interval).
+        gpio_set_irq_enabled_with_callback(config_.demod_pins[sm_index], GPIO_IRQ_EDGE_RISE /* | GPIO_IRQ_EDGE_FALL */,
+                                           true, on_demod_pin_change);
+
+        // Set the preamble sequnence into the ISR: ISR: 0b101000010100000(0)
+        // Last 0 removed from preamble sequence to allow the demodulator more time to start up.
+        // mov isr null ; Clear ISR.
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_isr, pio_null));
+        // Fill start of preamble pattern with different bits if the state machine is intended to sense high power
+        // preambles.
+        if (sm_index == bsp.r1090_high_power_demod_state_machine_index) {
+            // High power preamble.
+            // set x 0b111  ; ISR = 0b00000000000000000000000000000000
+            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b111));
+            // in x 3       ; ISR = 0b00000000000000000000000000000111
+            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
+            // set x 0b101  ; ISR = 0b00000000000000000000000000000000
+            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b101));
+        } else {
+            // Well formed preamble.
+            // set x 0b101  ; ISR = 0b00000000000000000000000000000000
+            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b101));
+            // in x 3       ; ISR = 0b00000000000000000000000000000101
+            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
+        }
+        // in null 4    ; ISR = 0b00000000000000000000000001?10000
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 4));
+        // in x 3       ; ISR = 0b00000000000000000000001?10000101
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
+        // in null 4    ; ISR = 0b0000000000000000001?100001010000
+        // Note: this is shorter than the real tail but we need extra time for the demodulator to start up.
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 4));
+        // mov x null   ; Clear scratch x.
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_x, pio_null));
+
+        // Use this instruction to verify preamble was formed correctly (pushes ISR to RX FIFO).
+        // pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_push(false,
+        // true));
+    }
+
+    // Enable the DEMOD interrupt on PIO1_IRQ_0.
+    pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt0, true);  // PIO0 state machine 0
+    pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt1, true);  // PIO0 state machine 1
+    pio_set_irq0_source_enabled(config_.preamble_detector_pio, pis_interrupt2, true);  // PIO0 state machine 2
+
+    // Handle PIO0 IRQ0.
+    irq_set_exclusive_handler(config_.preamble_detector_demod_complete_irq, on_demod_complete);
+    irq_set_enabled(config_.preamble_detector_demod_complete_irq, true);
+
+    /** MESSAGE DEMODULATOR PIO **/
+    float message_demodulator_div = (float)clock_get_hz(clk_sys) / kMessageDemodulatorFreqHz;
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
+        message_demodulator_program_init(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
+                                         message_demodulator_offset_, config_.pulses_pins[sm_index],
+                                         config_.demod_pins[sm_index], config_.recovered_clk_pins[sm_index],
+                                         message_demodulator_div);
+    }
+
+    // Set GPIO interrupts to be higher priority than the DEMOD complete interrupt to allow RSSI measurement.
+    irq_set_priority(config_.preamble_detector_demod_pin_irq, kGPIOInterruptPriority);
+}
+
+void ADSBee::PIOEnable() {
+    // Enable the MLAT jitter counter DMA transfers.
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
+        dma_channel_start(mlat_jitter_counter_dma_channel_[sm_index]);
+    }
+
+    // Enable the state machines.
+    pio_sm_set_enabled(config_.preamble_detector_pio, irq_wrapper_sm_, true);
+    // Need to enable the demodulator SMs first, since if the preamble detector trips the IRQ but the demodulator
+    // isn't enabled, we end up in a deadlock (I think, this maybe should be verified again).
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
+        // pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], true);
+        pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], true);
+    }
+    // Enable round robin well formed preamble detectors.
+    // NOTE: These need to be enable to allow the high power preamble detector to run, since they reset the IRQ that
+    // the high power preamble detector relies on. This is a vestige of the fact that the high power preamble
+    // detector uses the same PIO code that does round-robin for the well formed preamble detectors.
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_high_power_demod_state_machine_index; sm_index++) {
+        pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], true);
+    }
+    // Enable high power preamble detector.
+    pio_sm_set_enabled(config_.preamble_detector_pio,
+                       preamble_detector_sm_[bsp.r1090_high_power_demod_state_machine_index], true);
+}
+
+void ADSBee::MLATCounterInit() {
+    /**
+     * MLAT Counter
+     * A 48-MHz MLAT counter is synthesized from the 125MHz system clock using a the 24-bit SysTick timer.
+     */
+    /** MLAT Counter **/
+    // Enable the MLAT timer using the 24-bit SysTick timer connected to the 125MHz processor clock.
+    // SysTick Control and Status Register
+    systick_hw->csr = 0b110;  // Source = Processor Clock, TickInt = Enabled, Counter = Disabled.
+    // SysTick Reload Value Register
+    systick_hw->rvr = 0xFFFFFF;  // Use the full 24 bit span of the timer value register.
+    // 0xFFFFFF = 16777215 counts @ 125MHz = approx. 0.134 seconds.
+    // Call the OnSysTickWrap function every time the SysTick timer hits 0.
+    exception_set_exclusive_handler(SYSTICK_EXCEPTION, on_systick_exception);
+    // Let the games begin!
+    systick_hw->csr |= 0b1;  // Enable the counter.
+    // Set the priority of the Systick exception to kMLATCounterWrapInterruptPriority.
+    exception_set_priority(SYSTICK_EXCEPTION, kMLATCounterWrapInterruptPriority);
+
+    /**
+     * MLAT Jitter Offset Counter
+     * There is timing jitter between the beginning of a message decode and the OnDemodBegin() interrupt firing. The
+     * DMA peripheral is used to capture the timestamp of a PIO state machines first push onto its TX FIFO, allowing
+     * the full 24-bit timestamp captured during the OnDemodBegin() interval to be de-jittered. a PIO state machine.
+     */
+
+    // PWM slice 5 is used for LEVEL_PWM, anything else is fine to use for the MLAT jitter counter.
+    mlat_jitter_counter_pwm_slice_ = pwm_gpio_to_slice_num(bsp.r1090_pulses_pins[0]);  // Use pulses pin for slice 1.
+    pwm_config config = pwm_get_default_config();
+    pwm_config_set_clkdiv(&config, MLAT_SYSTEM_CLOCK_RATIO);
+    pwm_config_set_wrap(&config, 0xFFFF);                     // Use the full 16-bit span.
+    pwm_init(mlat_jitter_counter_pwm_slice_, &config, true);  // Start immediately.
+
+    // Enable a DMA DREQ for each demodulator PIO TX FIFO. This is used to capture the IRQ jitter offset counter
+    // when a decode interval begins (32 bits into a message).
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
+        mlat_jitter_counter_dma_channel_[sm_index] =
+            dma_claim_unused_channel(true);  // Claim a DMA channel for each state machine.
+        dma_channel_config config = dma_channel_get_default_config(mlat_jitter_counter_dma_channel_[sm_index]);
+        channel_config_set_read_increment(&config, false);            // Don't increment the read address.
+        channel_config_set_write_increment(&config, false);           // Increment the write address.
+        channel_config_set_transfer_data_size(&config, DMA_SIZE_16);  // Transfer 16 bits (width of PWM timer).
+        // Transfer 16 bits once from the PWM counter to the jitter counter counts for the given state machine.
+        channel_config_set_dreq(&config, DREQ_PIO1_RX0 + sm_index);  // Use the PIO0 RX FIFO DREQ for each SM.
+        dma_channel_configure(mlat_jitter_counter_dma_channel_[sm_index], &config,
+                              &mlat_jitter_counter_counts_[sm_index],
+                              &pwm_hw->slice[mlat_jitter_counter_pwm_slice_].ctr, 1, false);
+    }
 }

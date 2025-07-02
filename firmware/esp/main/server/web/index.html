@@ -734,13 +734,17 @@
                     let attempts = 0;
                     while (!success && attempts < MAX_ATTEMPTS_PER_CHUNK) {
                         try {
+                            if (attempts > 0) {
+                                // We are here on a retry, so erase the chunk first.
+                                await this.otaErase(offsetBytes, WRITE_CHUNK_BYTES);
+                            }
                             const chunk = contents.slice(i, Math.min(i + WRITE_CHUNK_BYTES, HEADER_SIZE_BYTES + appLenBytes));
                             await this.otaWriteBytes(offsetBytes, chunk);
                             success = true;
                         } catch (error) {
-                            console.error(`Failed to write chunk at offset ${offsetBytes}. Retrying (${attempts + 1}/${MAX_ATTEMPTS_PER_CHUNK})...`, error);
-                            await this.otaErase(offsetBytes, WRITE_CHUNK_BYTES);
-                            attempts++;
+                            console.error(error);
+                            console.error(`Failed to write chunk at offset ${offsetBytes}. Retrying (${attempts + 1}/${MAX_ATTEMPTS_PER_CHUNK})... `);
+                            attempts++; // Wait to erase until the next loop so that we can re-use the try-catch and don't erase before final failure if the first few retry attempts also fail.
                         }
                     }
                 }
