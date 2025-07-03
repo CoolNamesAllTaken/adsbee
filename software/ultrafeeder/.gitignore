@@ -1,0 +1,5 @@
+.env
+.ultrafeeder
+
+# State files
+ultra/*

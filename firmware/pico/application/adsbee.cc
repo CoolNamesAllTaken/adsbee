@@ -31,9 +31,12 @@
 #define MLAT_SYSTEM_CLOCK_RATIO 48 / 125
 // Scales 125MHz system clock into a 48MHz counter.
 static const uint32_t kMLATWrapCounterIncrement = (1 << 24) * MLAT_SYSTEM_CLOCK_RATIO;
+static constexpr float kMLATSystemClockDiv = 125.0f / 48.0f;  // Ratio of 48MHz MLAT clock to 125MHz system clock.
 
 constexpr float kPreambleDetectorFreqHz = 48e6;    // Running at 48MHz (24 clock cycles per half bit).
 constexpr float kMessageDemodulatorFreqHz = 48e6;  // Run at 48 MHz to demodulate bits at 1Mbps.
+
+static const uint16_t kPreambleDetectorFIFODepthWords = 4;
 
 constexpr float kInt16MaxRecip = 1.0f / INT16_MAX;
 
@@ -273,14 +276,19 @@ uint64_t ADSBee::GetMLAT12MHzCounts(uint16_t num_bits) {
     return GetMLAT48MHzCounts(50) >> 2;  // Divide 48MHz counter by 4, widen the mask by 2 bits to compensate.
 }
 
+uint16_t ADSBee::GetMLATJitterPWMSliceCounts() {
+    // Returns the current value of the MLAT jitter counter PWM slice.
+    return pwm_hw->slice[mlat_jitter_pwm_slice_].ctr;
+}
+
 int ADSBee::GetNoiseFloordBm() { return AD8313MilliVoltsTodBm(noise_floor_mv_); }
 
 uint16_t ADSBee::GetTLLearningTemperatureMV() { return tl_learning_temperature_mv_; }
 
 void __time_critical_func(ADSBee::OnDemodBegin)(uint gpio) {
     // Read MLAT counter at the beginning to reduce jitter after interrupt.
+    uint16_t mlat_jitter_counts_now = GetMLATJitterPWMSliceCounts();
     uint64_t mlat_48mhz_64bit_counts = isr_access->GetMLAT48MHzCounts();
-    uint16_t mlat_jitter_counts_now = pwm_hw->slice[mlat_jitter_counter_pwm_slice_].ctr;
 
     uint16_t sm_index = UINT16_MAX;
     for (sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
@@ -291,14 +299,8 @@ void __time_critical_func(ADSBee::OnDemodBegin)(uint gpio) {
     if (sm_index >= bsp.r1090_num_demod_state_machines)
         return;  // Ignore; wasn't the start of a demod interval for a known SM.
     // Demodulation period is beginning! Store the MLAT counter.
-    uint16_t mlat_jitter_counts_on_first_word_push_ = mlat_jitter_counter_counts_[sm_index];
-    // Correct the MLAT timestamp for jitter. This works as long as this interrupt executes within one timer wrap of the
-    // first FIFO push happening, which triggers the DMA capture.
-    // The 16-bit jitter counter runs at 48MHz, so it will wrap every 0xFFFF / 48'000 = 1.36ms. This is OK since we
-    // expect the interrupt to fire within a few microseconds of the DMA triggering (which is the jitter we are trying
-    // to correct).
-    rx_packet_[sm_index].mlat_48mhz_64bit_counts =
-        mlat_48mhz_64bit_counts - (mlat_jitter_counts_now - mlat_jitter_counts_on_first_word_push_);
+    mlat_jitter_counts_on_demod_begin_[sm_index] = mlat_jitter_counts_now;
+    rx_packet_[sm_index].mlat_48mhz_64bit_counts = mlat_48mhz_64bit_counts;  // Save this to modify later.
 }
 
 void ADSBee::OnDemodComplete() {
@@ -311,6 +313,13 @@ void ADSBee::OnDemodComplete() {
         rx_packet_[sm_index].sigs_dbm = ReadSignalStrengthdBm();
         rx_packet_[sm_index].sigq_db = rx_packet_[sm_index].sigs_dbm - GetNoiseFloordBm();
         rx_packet_[sm_index].source = sm_index;  // Record this state machine as the source of the packet.
+        // Get the difference between the beginning of the demodulation period and the first FIFO push. The FIFO push
+        // does not have jitter relative to the preamble but needs to be anchored to a full 24-bit timer value, since
+        // it's from a 60-bit PWM peripheral.
+        uint16_t &a = mlat_jitter_counts_on_fifo_push_[sm_index][0];
+        uint16_t &b = mlat_jitter_counts_on_demod_begin_[sm_index];
+        uint16_t mlat_jitter_correction = b >= a ? b - a : (0xFFFF - a) + b;
+        rx_packet_[sm_index].mlat_48mhz_64bit_counts -= mlat_jitter_correction;
         if (!pio_sm_is_rx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
             // Push any partially complete 32-bit word onto the RX FIFO.
             pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
@@ -391,8 +400,18 @@ void ADSBee::OnDemodComplete() {
                                   pio_encode_jmp(demodulator_program_start));  // Jump to beginning of program.
         pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], true);
 
+        // Stuff the preamble detector TX FIFO full of garbage so that the preamble detector can use a pull to signal
+        // the demod interval beginning.
+        while (!pio_sm_is_tx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
+            pio_sm_put(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
+                       0xFFFFFFFF);  // Non-blocking put.
+        }
+
         // Re-enable the MLAT jitter counter for this state machine.
-        dma_channel_start(mlat_jitter_counter_dma_channel_[sm_index]);
+        // Reset the write address but don't start the DMA channel yet.
+        dma_channel_set_write_addr(mlat_jitter_dma_channel_[sm_index], &mlat_jitter_counts_on_fifo_push_[sm_index],
+                                   false);
+        dma_channel_start(mlat_jitter_dma_channel_[sm_index]);
 
         // Release the preamble detector from its wait state.
         if (sm_index == bsp.r1090_high_power_demod_state_machine_index) {
@@ -471,7 +490,7 @@ void ADSBee::PIOInit() {
         gpio_set_irq_enabled_with_callback(config_.demod_pins[sm_index], GPIO_IRQ_EDGE_RISE /* | GPIO_IRQ_EDGE_FALL */,
                                            true, on_demod_pin_change);
 
-        // Set the preamble sequnence into the ISR: ISR: 0b101000010100000(0)
+        // Set the preamble sequence into the ISR: ISR: 0b101000010100000(0)
         // Last 0 removed from preamble sequence to allow the demodulator more time to start up.
         // mov isr null ; Clear ISR.
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_isr, pio_null));
@@ -505,6 +524,13 @@ void ADSBee::PIOInit() {
         // Use this instruction to verify preamble was formed correctly (pushes ISR to RX FIFO).
         // pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_push(false,
         // true));
+
+        // Stuff the preamble detector TX FIFO full of garbage so that the preamble detector can use a pull to signal
+        // the demod interval beginning.
+        while (!pio_sm_is_tx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
+            pio_sm_put(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
+                       0xFFFFFFFF);  // Non-blocking put.
+        }
     }
 
     // Enable the DEMOD interrupt on PIO1_IRQ_0.
@@ -532,7 +558,7 @@ void ADSBee::PIOInit() {
 void ADSBee::PIOEnable() {
     // Enable the MLAT jitter counter DMA transfers.
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
-        dma_channel_start(mlat_jitter_counter_dma_channel_[sm_index]);
+        dma_channel_start(mlat_jitter_dma_channel_[sm_index]);
     }
 
     // Enable the state machines.
@@ -582,25 +608,24 @@ void ADSBee::MLATCounterInit() {
      */
 
     // PWM slice 5 is used for LEVEL_PWM, anything else is fine to use for the MLAT jitter counter.
-    mlat_jitter_counter_pwm_slice_ = pwm_gpio_to_slice_num(bsp.r1090_pulses_pins[0]);  // Use pulses pin for slice 1.
+    mlat_jitter_pwm_slice_ = pwm_gpio_to_slice_num(bsp.r1090_pulses_pins[0]);  // Use pulses pin for slice 1.
     pwm_config config = pwm_get_default_config();
-    pwm_config_set_clkdiv(&config, MLAT_SYSTEM_CLOCK_RATIO);
-    pwm_config_set_wrap(&config, 0xFFFF);                     // Use the full 16-bit span.
-    pwm_init(mlat_jitter_counter_pwm_slice_, &config, true);  // Start immediately.
+    pwm_config_set_clkdiv(&config, kMLATSystemClockDiv);
+    pwm_config_set_wrap(&config, 0xFFFF);             // Use the full 16-bit span.
+    pwm_init(mlat_jitter_pwm_slice_, &config, true);  // Start immediately.
 
     // Enable a DMA DREQ for each demodulator PIO TX FIFO. This is used to capture the IRQ jitter offset counter
     // when a decode interval begins (32 bits into a message).
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
-        mlat_jitter_counter_dma_channel_[sm_index] =
+        mlat_jitter_dma_channel_[sm_index] =
             dma_claim_unused_channel(true);  // Claim a DMA channel for each state machine.
-        dma_channel_config config = dma_channel_get_default_config(mlat_jitter_counter_dma_channel_[sm_index]);
+        dma_channel_config config = dma_channel_get_default_config(mlat_jitter_dma_channel_[sm_index]);
         channel_config_set_read_increment(&config, false);            // Don't increment the read address.
-        channel_config_set_write_increment(&config, false);           // Increment the write address.
+        channel_config_set_write_increment(&config, true);            // Increment the write address.
         channel_config_set_transfer_data_size(&config, DMA_SIZE_16);  // Transfer 16 bits (width of PWM timer).
         // Transfer 16 bits once from the PWM counter to the jitter counter counts for the given state machine.
-        channel_config_set_dreq(&config, DREQ_PIO1_RX0 + sm_index);  // Use the PIO0 RX FIFO DREQ for each SM.
-        dma_channel_configure(mlat_jitter_counter_dma_channel_[sm_index], &config,
-                              &mlat_jitter_counter_counts_[sm_index],
-                              &pwm_hw->slice[mlat_jitter_counter_pwm_slice_].ctr, 1, false);
+        channel_config_set_dreq(&config, DREQ_PIO1_TX0 + sm_index);  // Use the PIO1 TX FIFO DREQ for each SM.
+        dma_channel_configure(mlat_jitter_dma_channel_[sm_index], &config, &mlat_jitter_counts_on_fifo_push_[sm_index],
+                              &pwm_hw->slice[mlat_jitter_pwm_slice_].ctr, 1, false);
     }
 }

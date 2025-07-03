@@ -41,6 +41,8 @@ class ADSBee {
     static constexpr uint32_t kNoiseFloorADCSampleIntervalMs =
         1;  // [ms] Interval between ADC samples to approximate noise floor value.
 
+    static constexpr uint16_t kNumFIFOPushTimestampsToRecord = 10;
+
     /**
      * Interrupt priorities
      * MLAT counter wrap is highest priority because we don't want to capture an MLAT timestamp where a wrap is pending
@@ -155,6 +157,13 @@ class ADSBee {
      * @retval 48MHz counter value.
      */
     uint64_t GetMLAT12MHzCounts(uint16_t num_bits = 48);
+
+    /**
+     * Returns the current value of the MLAT jitter PWM slice's internal counter.
+     * This is only used for testing, since the actual value is usually accessed directly or through DMA.
+     * @retval Current value of the MLAT jitter PWM slice counter.
+     */
+    uint16_t GetMLATJitterPWMSliceCounts();
 
     /**
      * Returns the power level of the noise floor (signal strength sampled mostly during non-decode intervals and then
@@ -345,9 +354,10 @@ class ADSBee {
     uint32_t message_demodulator_sm_[BSP::kMaxNumDemodStateMachines];
     uint32_t message_demodulator_offset_ = 0;
 
-    uint32_t mlat_jitter_counter_dma_channel_[BSP::kMaxNumDemodStateMachines];
-    uint32_t mlat_jitter_counter_pwm_slice_ = 0;
-    uint16_t mlat_jitter_counter_counts_[BSP::kMaxNumDemodStateMachines] = {0};
+    uint32_t mlat_jitter_dma_channel_[BSP::kMaxNumDemodStateMachines];
+    uint32_t mlat_jitter_pwm_slice_ = 0;
+    uint16_t mlat_jitter_counts_on_demod_begin_[BSP::kMaxNumDemodStateMachines] = {0};
+    uint16_t mlat_jitter_counts_on_fifo_push_[BSP::kMaxNumDemodStateMachines][kNumFIFOPushTimestampsToRecord] = {0};
 
     uint32_t led_on_timestamp_ms_ = 0;
 
