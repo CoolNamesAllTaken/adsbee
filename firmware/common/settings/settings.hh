@@ -5,6 +5,7 @@
 #include <cstring>     // for memset
 #include <functional>  // for strtoull
 
+#include "crc.hh"
 #include "macros.hh"
 #include "stdio.h"
 #include "stdlib.h"  // for strtoull
@@ -94,9 +95,21 @@ class SettingsManager {
 
             bool ethernet_enabled = false;
 
-            uint16_t crc16 = 0;
+            uint16_t crc32 = 0;
 
-            bool IsValid() { return true; }
+            /**
+             * Updates the CRC32. Should be called before saving.
+             */
+            void UpdateCRC32() { crc32 = crc32_ieee_802_3((uint8_t *)this, sizeof(CoreNetworkSettings)); }
+
+            /**
+             * Checks whether the calculated CRC32 matches the value that was stored. Should be used to check whether
+             * the core network settings can be applied.
+             */
+            bool IsValid() {
+                uint32_t calculated_crc32 = crc32_ieee_802_3((uint8_t *)this, sizeof(CoreNetworkSettings));
+                return calculated_crc32 == crc32;
+            }
         };
 
         uint32_t settings_version = kSettingsVersion;

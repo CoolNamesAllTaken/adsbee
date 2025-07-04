@@ -54,7 +54,19 @@ bool SettingsManager::Load() {
 
     // Reset to defaults if loading from a blank EEPROM.
     if (settings.settings_version != kSettingsVersion) {
+        // Attempt to load the core network settings anyways.
+        bool found_valid_cns = false;
+        Settings::CoreNetworkSettings cns_backup;
+        if (settings.core_network_settings.IsValid()) {
+            found_valid_cns = true;
+            cns_backup = settings.core_network_settings;
+        }
+
         ResetToDefaults();
+        // Restore the core network settings if they were valid.
+        if (found_valid_cns) {
+            settings.core_network_settings = cns_backup;
+        }
         if (bsp.has_eeprom && !eeprom.Save(settings)) {
             CONSOLE_ERROR("settings.cc::Load", "Failed to save default settings.");
             return false;
@@ -74,6 +86,8 @@ bool SettingsManager::Load() {
 }
 
 bool SettingsManager::Save() {
+    settings.core_network_settings.UpdateCRC32();
+
     settings.receiver_enabled = adsbee.Receiver1090IsEnabled();
     settings.tl_mv = adsbee.GetTLMilliVolts();
     settings.bias_tee_enabled = adsbee.BiasTeeIsEnabled();
