@@ -58,7 +58,7 @@ bool CommsManager::UpdateReporting() {
 
     for (uint16_t i = 0; i < SettingsManager::SerialInterface::kGNSSUART; i++) {
         SettingsManager::SerialInterface iface = static_cast<SettingsManager::SerialInterface>(i);
-        switch (reporting_protocols_[i]) {
+        switch (settings_manager.settings.reporting_protocols[i]) {
             case SettingsManager::kNoReports:
                 break;
             case SettingsManager::kRaw:
@@ -89,8 +89,8 @@ bool CommsManager::UpdateReporting() {
             case SettingsManager::kNumProtocols:
             default:
                 CONSOLE_WARNING("CommsManager::UpdateReporting",
-                                "Invalid reporting protocol %d specified for interface %d.", reporting_protocols_[i],
-                                i);
+                                "Invalid reporting protocol %d specified for interface %d.",
+                                settings_manager.settings.reporting_protocols[i], i);
                 ret = false;
                 break;
         }
@@ -159,7 +159,8 @@ bool CommsManager::ReportCSBee(SettingsManager::SerialInterface iface) {
 }
 
 bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
-    uint8_t mavlink_version = reporting_protocols_[iface] == SettingsManager::kMAVLINK1 ? 1 : 2;
+    uint8_t mavlink_version =
+        settings_manager.settings.reporting_protocols[iface] == SettingsManager::kMAVLINK1 ? 1 : 2;
     mavlink_set_proto_version(SettingsManager::SerialInterface::kCommsUART, mavlink_version);
 
     // Send a HEARTBEAT message.

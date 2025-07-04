@@ -31,6 +31,8 @@ static_assert(kFlashEndAddr % kBytesPerWord == 0);  // Must be word aligned.
 const uint32_t kFlashDeviceInfoStartAddr = kFlashSettingsStartAddr + FlashUtils::kFlashSectorSizeBytes;
 // Must be word aligned to enable direct pointer casting without memcpy.
 static_assert(kFlashDeviceInfoStartAddr % kBytesPerWord == 0);
+// Make sure that setting struct doesn't run into device info.
+static_assert(sizeof(SettingsManager::Settings) < kFlashDeviceInfoStartAddr - kFlashSettingsStartAddr);
 
 // Device info is stored at the very end of EEPROM for backwards compatibility.
 const uint32_t kEEPROMSizeBytes = 8e3;  // 8000 Bytes for backwards compatibility.
@@ -77,9 +79,6 @@ bool SettingsManager::Save() {
     settings.bias_tee_enabled = adsbee.BiasTeeIsEnabled();
     settings.watchdog_timeout_sec = adsbee.GetWatchdogTimeoutSec();
 
-    // Save log level.
-    settings.log_level = comms_manager.log_level;
-
     // Save reporting protocols.
     comms_manager.GetReportingProtocol(SerialInterface::kCommsUART,
                                        settings.reporting_protocols[SerialInterface::kCommsUART]);
@@ -87,23 +86,10 @@ bool SettingsManager::Save() {
                                        settings.reporting_protocols[SerialInterface::kConsole]);
 
     // Save baud rates.
-    comms_manager.GetBaudrate(SerialInterface::kCommsUART, settings.comms_uart_baud_rate);
-    comms_manager.GetBaudrate(SerialInterface::kGNSSUART, settings.gnss_uart_baud_rate);
+    comms_manager.GetBaudRate(SerialInterface::kCommsUART, settings.comms_uart_baud_rate);
+    comms_manager.GetBaudRate(SerialInterface::kGNSSUART, settings.gnss_uart_baud_rate);
 
-    settings.esp32_enabled = esp32.IsEnabled();
-    // Save WiFi configuration.
-    settings.wifi_ap_enabled = comms_manager.wifi_ap_enabled;
-    settings.wifi_ap_channel = comms_manager.wifi_ap_channel;
-    strncpy(settings.wifi_ap_ssid, comms_manager.wifi_ap_ssid, Settings::kWiFiSSIDMaxLen);
-    settings.wifi_ap_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
-    strncpy(settings.wifi_ap_password, comms_manager.wifi_ap_password, Settings::kWiFiPasswordMaxLen);
-    settings.wifi_ap_password[Settings::kWiFiPasswordMaxLen] = '\0';
-
-    settings.wifi_sta_enabled = comms_manager.wifi_sta_enabled;
-    strncpy(settings.wifi_sta_ssid, comms_manager.wifi_sta_ssid, Settings::kWiFiSSIDMaxLen);
-    settings.wifi_sta_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
-    strncpy(settings.wifi_sta_password, comms_manager.wifi_sta_password, Settings::kWiFiPasswordMaxLen);
-    settings.wifi_sta_password[Settings::kWiFiPasswordMaxLen] = '\0';
+    settings.core_network_settings.esp32_enabled = esp32.IsEnabled();
 
     // Sync settings from RP2040 -> ESP32.
     if (esp32.IsEnabled()) {
@@ -166,35 +152,7 @@ bool SettingsManager::Apply() {
     adsbee.SetBiasTeeEnable(settings.bias_tee_enabled);
     adsbee.SetWatchdogTimeoutSec(settings.watchdog_timeout_sec);
 
-    // Apply log level.
-    comms_manager.log_level = settings.log_level;
-
-    // Apply reporting protocols.
-    comms_manager.SetReportingProtocol(SerialInterface::kCommsUART,
-                                       settings.reporting_protocols[SerialInterface::kCommsUART]);
-    comms_manager.SetReportingProtocol(SerialInterface::kConsole,
-                                       settings.reporting_protocols[SerialInterface::kConsole]);
-
-    // Apply baud rates.
-    comms_manager.SetBaudrate(SerialInterface::kCommsUART, settings.comms_uart_baud_rate);
-    comms_manager.SetBaudrate(SerialInterface::kGNSSUART, settings.gnss_uart_baud_rate);
-
-    settings.esp32_enabled ? esp32.Init() : esp32.DeInit();
-
-    // Apply WiFi configurations.
-    // Access Point settings
-    comms_manager.wifi_ap_enabled = settings.wifi_ap_enabled;
-    comms_manager.wifi_ap_channel = settings.wifi_ap_channel;
-    strncpy(comms_manager.wifi_ap_ssid, settings.wifi_ap_ssid, Settings::kWiFiSSIDMaxLen);
-    comms_manager.wifi_ap_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
-    strncpy(comms_manager.wifi_ap_password, settings.wifi_ap_password, Settings::kWiFiPasswordMaxLen);
-    comms_manager.wifi_ap_password[Settings::kWiFiPasswordMaxLen] = '\0';
-    // Station settings
-    comms_manager.wifi_sta_enabled = settings.wifi_sta_enabled;
-    strncpy(comms_manager.wifi_sta_ssid, settings.wifi_sta_ssid, Settings::kWiFiSSIDMaxLen);
-    comms_manager.wifi_sta_ssid[Settings::kWiFiSSIDMaxLen] = '\0';
-    strncpy(comms_manager.wifi_sta_password, settings.wifi_sta_password, Settings::kWiFiPasswordMaxLen);
-    comms_manager.wifi_sta_password[Settings::kWiFiPasswordMaxLen] = '\0';
+    // All other parameters are stored directly in the global setting struct and don't need to be applied.
 
     return true;  // Not currently doing any error checking here, relying on AT commands to limit parameters to
                   // allowable ranges. Could be a problem if loading from corrupted EEPROM.

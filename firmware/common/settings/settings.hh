@@ -70,8 +70,38 @@ class SettingsManager {
         static constexpr uint16_t kMACAddrStrLen = 18;  // XX:XX:XX:XX:XX:XX (does not include null terminator)
         static constexpr uint16_t kMACAddrNumBytes = 6;
 
+        /**
+         * Core Network Settings struct is used for storing network settings that should remain unchanged through most
+         * firmware updates. This allows re-establishing network connectivity with an ADSBee to restore remaining
+         * settings via AT commands after a software upgrade changes other parts of the settings struct or associated
+         * code.
+         */
+        struct CoreNetworkSettings {
+            // ESP32 settings
+            bool esp32_enabled = true;
+
+            char hostname[kHostnameMaxLen + 1] =
+                "ADSBee1090";  // Will be overwritten by the default SSID when device info is set.
+
+            bool wifi_ap_enabled = true;
+            uint8_t wifi_ap_channel = 1;
+            char wifi_ap_ssid[kWiFiSSIDMaxLen + 1] = "";
+            char wifi_ap_password[kWiFiPasswordMaxLen + 1] = "";
+
+            bool wifi_sta_enabled = false;
+            char wifi_sta_ssid[kWiFiSSIDMaxLen + 1] = "";
+            char wifi_sta_password[kWiFiPasswordMaxLen + 1] = "";
+
+            bool ethernet_enabled = false;
+
+            uint16_t crc16 = 0;
+
+            bool IsValid() { return true; }
+        };
+
         uint32_t settings_version = kSettingsVersion;
-        // Timestamp on the Pico when the settings were last saved. Milliseconds since boot.
+
+        CoreNetworkSettings core_network_settings;
 
         // ADSBee settings
         bool receiver_enabled = true;
@@ -86,25 +116,8 @@ class SettingsManager {
         uint32_t comms_uart_baud_rate = 115200;
         uint32_t gnss_uart_baud_rate = 9600;
 
-        // ESP32 settings
-        bool esp32_enabled = true;
-
         // Sub-GHz settings
         EnableState subg_enabled = EnableState::kEnableStateExternal;  // High impedance state by default.
-
-        char hostname[kHostnameMaxLen + 1] =
-            "ADSBee1090";  // Will be overwritten by the default SSID when device info is set.
-
-        bool wifi_ap_enabled = true;
-        uint8_t wifi_ap_channel = 1;
-        char wifi_ap_ssid[kWiFiSSIDMaxLen + 1] = "";
-        char wifi_ap_password[kWiFiPasswordMaxLen + 1] = "";
-
-        bool wifi_sta_enabled = false;
-        char wifi_sta_ssid[kWiFiSSIDMaxLen + 1] = "";
-        char wifi_sta_password[kWiFiPasswordMaxLen + 1] = "";
-
-        bool ethernet_enabled = false;
 
         char feed_uris[kMaxNumFeeds][kFeedURIMaxNumChars + 1];
         uint16_t feed_ports[kMaxNumFeeds];
@@ -121,13 +134,14 @@ class SettingsManager {
             if (GetDeviceInfo(device_info)) {
                 // If able to load device info from EEPROM, use the last 16 characters in the part code as part of the
                 // WiFi SSID.
-                device_info.GetDefaultSSID(wifi_ap_ssid);
+                device_info.GetDefaultSSID(core_network_settings.wifi_ap_ssid);
                 // Reuse the WiFi SSID as the hostname.
-                strncpy(hostname, wifi_ap_ssid, 32);
-                snprintf(wifi_ap_password, kWiFiPasswordMaxLen, "yummyflowers");
+                strncpy(core_network_settings.hostname, core_network_settings.wifi_ap_ssid, 32);
+                snprintf(core_network_settings.wifi_ap_password, kWiFiPasswordMaxLen, "yummyflowers");
             }
 
-            wifi_ap_channel = get_rand_32() % kWiFiAPChannelMax + 1;  // Randomly select channel 1-11.
+            core_network_settings.wifi_ap_channel =
+                get_rand_32() % kWiFiAPChannelMax + 1;  // Randomly select channel 1-11.
 #endif
 
             for (uint16_t i = 0; i < kMaxNumFeeds; i++) {

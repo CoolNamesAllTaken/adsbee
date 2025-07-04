@@ -27,27 +27,28 @@ void SettingsManager::Print() {
     }
     CONSOLE_PRINTF("\tComms UART Baud Rate: %lu baud\r\n", settings.comms_uart_baud_rate);
     CONSOLE_PRINTF("\tGNSS UART Baud Rate: %lu baud\r\n", settings.gnss_uart_baud_rate);
-    CONSOLE_PRINTF("\tESP32: %s\r\n", settings.esp32_enabled ? "ENABLED" : "DISABLED");
+    CONSOLE_PRINTF("\tESP32: %s\r\n", settings.core_network_settings.esp32_enabled ? "ENABLED" : "DISABLED");
 
     // Print WiFi AP settings.
-    CONSOLE_PRINTF("\tWiFi AP: %s\r\n", settings.wifi_ap_enabled ? "ENABLED" : "DISABLED");
-    if (settings.wifi_ap_enabled) {
+    CONSOLE_PRINTF("\tWiFi AP: %s\r\n", settings.core_network_settings.wifi_ap_enabled ? "ENABLED" : "DISABLED");
+    if (settings.core_network_settings.wifi_ap_enabled) {
         // Access Point settings. Don't censor password.
-        CONSOLE_PRINTF("\t\tChannel: %d\r\n", settings.wifi_ap_channel);
-        CONSOLE_PRINTF("\t\tSSID: %s\r\n", settings.wifi_ap_ssid);
-        CONSOLE_PRINTF("\t\tPassword: %s\r\n", settings.wifi_ap_password);
+        CONSOLE_PRINTF("\t\tChannel: %d\r\n", settings.core_network_settings.wifi_ap_channel);
+        CONSOLE_PRINTF("\t\tSSID: %s\r\n", settings.core_network_settings.wifi_ap_ssid);
+        CONSOLE_PRINTF("\t\tPassword: %s\r\n", settings.core_network_settings.wifi_ap_password);
     }
     // Print WiFi Station settings.
-    CONSOLE_PRINTF("\tWiFi STA: %s\r\n", settings.wifi_sta_enabled ? "ENABLED" : "DISABLED");
-    if (settings.wifi_sta_enabled) {
+    CONSOLE_PRINTF("\tWiFi STA: %s\r\n", settings.core_network_settings.wifi_sta_enabled ? "ENABLED" : "DISABLED");
+    if (settings.core_network_settings.wifi_sta_enabled) {
         // Station settings. Censor password.
-        CONSOLE_PRINTF("\t\tSSID: %s\r\n", settings.wifi_sta_ssid);
+        CONSOLE_PRINTF("\t\tSSID: %s\r\n", settings.core_network_settings.wifi_sta_ssid);
         char redacted_wifi_sta_password[Settings::kWiFiPasswordMaxLen];
-        RedactPassword(settings.wifi_sta_password, redacted_wifi_sta_password, strlen(settings.wifi_sta_password));
+        RedactPassword(settings.core_network_settings.wifi_sta_password, redacted_wifi_sta_password,
+                       strlen(settings.core_network_settings.wifi_sta_password));
         CONSOLE_PRINTF("\t\tPassword: %s\r\n", redacted_wifi_sta_password);
     }
     // Print Ethernet settings.
-    CONSOLE_PRINTF("\tEthernet: %s\r\n", settings.ethernet_enabled ? "ENABLED" : "DISABLED");
+    CONSOLE_PRINTF("\tEthernet: %s\r\n", settings.core_network_settings.ethernet_enabled ? "ENABLED" : "DISABLED");
 
     CONSOLE_PRINTF("\tFeed URIs:\r\n");
     for (uint16_t i = 0; i < Settings::kMaxNumFeeds; i++) {
@@ -75,10 +76,10 @@ void SettingsManager::PrintAT() {
     // AT+DEVICE_INFO: Don't store this.
 
     // AT+ESP32_ENABLE
-    CONSOLE_PRINTF("AT+ESP32_ENABLE=%d\r\n", settings.esp32_enabled);
+    CONSOLE_PRINTF("AT+ESP32_ENABLE=%d\r\n", settings.core_network_settings.esp32_enabled);
 
     // AT+ETHERNET
-    CONSOLE_PRINTF("AT+ETHERNET=%d\r\n", settings.ethernet_enabled);
+    CONSOLE_PRINTF("AT+ETHERNET=%d\r\n", settings.core_network_settings.ethernet_enabled);
 
     // AT+FEED
     for (uint16_t i = 0; i < Settings::kMaxNumFeeds; i++) {
@@ -108,10 +109,11 @@ void SettingsManager::PrintAT() {
     CONSOLE_PRINTF("AT+WATCHDOG=%lu\r\n", settings.watchdog_timeout_sec);
 
     // AT+WIFI_AP
-    CONSOLE_PRINTF("AT+WIFI_AP=%d,%s,%s,%d\r\n", settings.wifi_ap_enabled, settings.wifi_ap_ssid,
-                   settings.wifi_ap_password, settings.wifi_ap_channel);
+    CONSOLE_PRINTF("AT+WIFI_AP=%d,%s,%s,%d\r\n", settings.core_network_settings.wifi_ap_enabled,
+                   settings.core_network_settings.wifi_ap_ssid, settings.core_network_settings.wifi_ap_password,
+                   settings.core_network_settings.wifi_ap_channel);
 
     // AT+WIFI_STA
-    CONSOLE_PRINTF("AT+WIFI_STA=%d,%s,%s\r\n", settings.wifi_sta_enabled, settings.wifi_sta_ssid,
-                   settings.wifi_sta_password);
+    CONSOLE_PRINTF("AT+WIFI_STA=%d,%s,%s\r\n", settings.core_network_settings.wifi_sta_enabled,
+                   settings.core_network_settings.wifi_sta_ssid, settings.core_network_settings.wifi_sta_password);
 }

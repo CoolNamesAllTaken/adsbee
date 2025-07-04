@@ -45,16 +45,17 @@ int CppAT::cpp_at_printf(const char *format, ...) {
 
 /** AT Command Callback Functions **/
 
-CPP_AT_CALLBACK(CommsManager::ATBaudrateCallback) {
+CPP_AT_CALLBACK(CommsManager::ATBaudRateCallback) {
     switch (op) {
         case '?':
-            CPP_AT_CMD_PRINTF("=%d(COMMS_UART),%d(GNSS_UART)", comms_uart_baudrate_, gnss_uart_baudrate_);
+            CPP_AT_CMD_PRINTF("=%d(COMMS_UART),%d(GNSS_UART)", settings_manager.settings.comms_uart_baud_rate,
+                              settings_manager.settings.gnss_uart_baud_rate);
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
             if (!(CPP_AT_HAS_ARG(0) && CPP_AT_HAS_ARG(1))) {
                 CPP_AT_ERROR(
-                    "Requires two arguments: AT+BAUDRATE=<iface>,<baudrate> where <iface> can be one of [COMMS_UART, "
+                    "Requires two arguments: AT+BAUD_RATE=<iface>,<baud_rate> where <iface> can be one of [COMMS_UART, "
                     "GNSS_UART].");
             }
             SettingsManager::SerialInterface iface;
@@ -65,10 +66,10 @@ CPP_AT_CALLBACK(CommsManager::ATBaudrateCallback) {
             } else {
                 CPP_AT_ERROR("Invalid interface. Must be one of [COMMS_UART, GNSS_UART].");
             }
-            uint32_t baudrate;
-            CPP_AT_TRY_ARG2NUM(1, baudrate);
-            if (!SetBaudrate(iface, baudrate)) {
-                CPP_AT_ERROR("Unable to set baudrate %d on interface %d.", baudrate, iface);
+            uint32_t baud_rate;
+            CPP_AT_TRY_ARG2NUM(1, baud_rate);
+            if (!SetBaudRate(iface, baud_rate)) {
+                CPP_AT_ERROR("Unable to set baud rate %d on interface %d.", baud_rate, iface);
             }
             CPP_AT_SUCCESS();
             break;
@@ -279,7 +280,7 @@ CPP_AT_CALLBACK(CommsManager::ATESP32FlashCallback) {
 CPP_AT_CALLBACK(CommsManager::ATEthernetCallback) {
     switch (op) {
         case '?':
-            CPP_AT_CMD_PRINTF("=%d", settings_manager.settings.ethernet_enabled);
+            CPP_AT_CMD_PRINTF("=%d", settings_manager.settings.core_network_settings.ethernet_enabled);
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
@@ -287,8 +288,9 @@ CPP_AT_CALLBACK(CommsManager::ATEthernetCallback) {
                 CPP_AT_ERROR("Requires an argument (0 or 1). AT+ETHERNET=<enabled>");
             }
             bool enabled;
-            CPP_AT_TRY_ARG2NUM(0, settings_manager.settings.ethernet_enabled);
-            CPP_AT_CMD_PRINTF(": ethernet_enabled: %d\r\n", settings_manager.settings.ethernet_enabled);
+            CPP_AT_TRY_ARG2NUM(0, settings_manager.settings.core_network_settings.ethernet_enabled);
+            CPP_AT_CMD_PRINTF(": ethernet_enabled: %d\r\n",
+                              settings_manager.settings.core_network_settings.ethernet_enabled);
             CPP_AT_SUCCESS();
             break;
     }
@@ -387,17 +389,18 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
 }
 
 CPP_AT_CALLBACK(CommsManager::ATHostnameCallback) {
+    SettingsManager::Settings::CoreNetworkSettings &cns = settings_manager.settings.core_network_settings;
     switch (op) {
         case '?':
-            CPP_AT_CMD_PRINTF("=%s", settings_manager.settings.hostname);
+            CPP_AT_CMD_PRINTF("=%s", cns.hostname);
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
             if (!CPP_AT_HAS_ARG(0)) {
                 CPP_AT_ERROR("Requires an argument. AT+HOSTNAME=<hostname>");
             }
-            strncpy(settings_manager.settings.hostname, args[0].data(), SettingsManager::Settings::kHostnameMaxLen);
-            settings_manager.settings.hostname[SettingsManager::Settings::kHostnameMaxLen] = '\0';
+            strncpy(cns.hostname, args[0].data(), SettingsManager::Settings::kHostnameMaxLen);
+            cns.hostname[SettingsManager::Settings::kHostnameMaxLen] = '\0';
             CPP_AT_SUCCESS();
             break;
     }
@@ -603,7 +606,7 @@ CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
     switch (op) {
         case '?':
             // AT+CONFIG mode query.
-            CPP_AT_CMD_PRINTF("=%s", SettingsManager::kConsoleLogLevelStrs[log_level]);
+            CPP_AT_CMD_PRINTF("=%s", SettingsManager::kConsoleLogLevelStrs[settings_manager.settings.log_level]);
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
@@ -613,7 +616,7 @@ CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
             }
             for (uint16_t i = 0; i < SettingsManager::kNumLogLevels; i++) {
                 if (args[0].compare(SettingsManager::kConsoleLogLevelStrs[i]) == 0) {
-                    log_level = static_cast<SettingsManager::LogLevel>(i);
+                    settings_manager.settings.log_level = static_cast<SettingsManager::LogLevel>(i);
                     CPP_AT_SUCCESS();
                 }
             }
@@ -667,8 +670,9 @@ CPP_AT_CALLBACK(CommsManager::ATProtocolCallback) {
         case '?':
             // Print out reporting protocols for CONSOLE and COMMS_UART.
             for (uint16_t iface = 0; iface < SettingsManager::SerialInterface::kGNSSUART; iface++) {
-                CPP_AT_CMD_PRINTF("=%s,%s", SettingsManager::kSerialInterfaceStrs[iface],
-                                  SettingsManager::kReportingProtocolStrs[reporting_protocols_[iface]]);
+                CPP_AT_CMD_PRINTF(
+                    "=%s,%s", SettingsManager::kSerialInterfaceStrs[iface],
+                    SettingsManager::kReportingProtocolStrs[settings_manager.settings.reporting_protocols[iface]]);
             }
             CPP_AT_SILENT_SUCCESS();
             break;
@@ -703,7 +707,7 @@ CPP_AT_CALLBACK(CommsManager::ATProtocolCallback) {
             }
 
             // Assign the selected protocol to the selected interface.
-            reporting_protocols_[selected_iface] = selected_protocol;
+            settings_manager.settings.reporting_protocols[selected_iface] = selected_protocol;
             CPP_AT_SUCCESS();
             break;
     }
@@ -936,27 +940,29 @@ CPP_AT_CALLBACK(CommsManager::ATWatchdogCallback) {
 }
 
 CPP_AT_CALLBACK(CommsManager::ATWiFiAPCallback) {
+    SettingsManager::Settings::CoreNetworkSettings &cns = settings_manager.settings.core_network_settings;
     switch (op) {
         case '?': {
             char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];
-            CPP_AT_CMD_PRINTF("=%d,%s,%s,%d\r\n", wifi_ap_enabled, wifi_ap_ssid, wifi_ap_password, wifi_ap_channel);
+            CPP_AT_CMD_PRINTF("=%d,%s,%s,%d\r\n", cns.wifi_ap_enabled, cns.wifi_ap_ssid, cns.wifi_ap_password,
+                              cns.wifi_ap_channel);
             CPP_AT_SILENT_SUCCESS();
             break;
         }
         case '=': {
             if (CPP_AT_HAS_ARG(0)) {
-                CPP_AT_TRY_ARG2NUM(0, wifi_ap_enabled);
-                CPP_AT_CMD_PRINTF(": wifi_ap_enabled=%d\r\n", wifi_ap_enabled);
+                CPP_AT_TRY_ARG2NUM(0, cns.wifi_ap_enabled);
+                CPP_AT_CMD_PRINTF(": wifi_ap_enabled=%d\r\n", cns.wifi_ap_enabled);
             }
             if (CPP_AT_HAS_ARG(1)) {
-                strncpy(wifi_ap_ssid, args[1].data(), SettingsManager::Settings::kWiFiSSIDMaxLen);
-                wifi_ap_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen] = '\0';
-                CPP_AT_CMD_PRINTF(": wifi_ap_ssid=%s\r\n", wifi_ap_ssid);
+                strncpy(cns.wifi_ap_ssid, args[1].data(), SettingsManager::Settings::kWiFiSSIDMaxLen);
+                cns.wifi_ap_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen] = '\0';
+                CPP_AT_CMD_PRINTF(": wifi_ap_ssid=%s\r\n", cns.wifi_ap_ssid);
             }
             if (CPP_AT_HAS_ARG(2)) {
-                strncpy(wifi_ap_password, args[2].data(), SettingsManager::Settings::kWiFiPasswordMaxLen);
-                wifi_ap_password[SettingsManager::Settings::kWiFiPasswordMaxLen] = '\0';
-                CPP_AT_CMD_PRINTF(": wifi_ap_password=%s\r\n", wifi_ap_password);
+                strncpy(cns.wifi_ap_password, args[2].data(), SettingsManager::Settings::kWiFiPasswordMaxLen);
+                cns.wifi_ap_password[SettingsManager::Settings::kWiFiPasswordMaxLen] = '\0';
+                CPP_AT_CMD_PRINTF(": wifi_ap_password=%s\r\n", cns.wifi_ap_password);
             }
             if (CPP_AT_HAS_ARG(3)) {
                 uint8_t channel;
@@ -964,8 +970,8 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiAPCallback) {
                 if (channel == 0 || channel > SettingsManager::kWiFiAPChannelMax) {
                     CPP_AT_ERROR("WiFi channel out of range, must be >0 and <=%d.", SettingsManager::kWiFiAPChannelMax);
                 }
-                wifi_ap_channel = channel;
-                CPP_AT_CMD_PRINTF(": wifi_ap_channel = %d\r\n", wifi_ap_channel);
+                cns.wifi_ap_channel = channel;
+                CPP_AT_CMD_PRINTF(": wifi_ap_channel = %d\r\n", cns.wifi_ap_channel);
             }
             CPP_AT_SUCCESS();
             break;
@@ -978,30 +984,31 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiAPCallback) {
 }
 
 CPP_AT_CALLBACK(CommsManager::ATWiFiSTACallback) {
+    SettingsManager::Settings::CoreNetworkSettings &cns = settings_manager.settings.core_network_settings;
     switch (op) {
         case '?': {
             char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];
-            SettingsManager::RedactPassword(wifi_sta_password, redacted_password,
+            SettingsManager::RedactPassword(cns.wifi_sta_password, redacted_password,
                                             SettingsManager::Settings::kWiFiPasswordMaxLen);
-            CPP_AT_CMD_PRINTF("=%d,%s,%s\r\n", wifi_sta_enabled, wifi_sta_ssid, redacted_password);
+            CPP_AT_CMD_PRINTF("=%d,%s,%s\r\n", cns.wifi_sta_enabled, cns.wifi_sta_ssid, redacted_password);
             CPP_AT_SILENT_SUCCESS();
             break;
         }
         case '=': {
             if (CPP_AT_HAS_ARG(0)) {
-                CPP_AT_TRY_ARG2NUM(0, wifi_sta_enabled);
-                CPP_AT_CMD_PRINTF(": wifi_sta_enabled=%d\r\n", wifi_sta_enabled);
+                CPP_AT_TRY_ARG2NUM(0, cns.wifi_sta_enabled);
+                CPP_AT_CMD_PRINTF(": wifi_sta_enabled=%d\r\n", cns.wifi_sta_enabled);
             }
             if (CPP_AT_HAS_ARG(1)) {
-                strncpy(wifi_sta_ssid, args[1].data(), SettingsManager::Settings::kWiFiSSIDMaxLen);
-                wifi_sta_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen] = '\0';
-                CPP_AT_CMD_PRINTF(": sta_ssid=%s\r\n", wifi_sta_ssid);
+                strncpy(cns.wifi_sta_ssid, args[1].data(), SettingsManager::Settings::kWiFiSSIDMaxLen);
+                cns.wifi_sta_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen] = '\0';
+                CPP_AT_CMD_PRINTF(": sta_ssid=%s\r\n", cns.wifi_sta_ssid);
             }
             if (CPP_AT_HAS_ARG(2)) {
-                strncpy(wifi_sta_password, args[2].data(), SettingsManager::Settings::kWiFiPasswordMaxLen);
-                wifi_sta_password[SettingsManager::Settings::kWiFiPasswordMaxLen] = '\0';
+                strncpy(cns.wifi_sta_password, args[2].data(), SettingsManager::Settings::kWiFiPasswordMaxLen);
+                cns.wifi_sta_password[SettingsManager::Settings::kWiFiPasswordMaxLen] = '\0';
                 char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen];
-                SettingsManager::RedactPassword(wifi_sta_password, redacted_password,
+                SettingsManager::RedactPassword(cns.wifi_sta_password, redacted_password,
                                                 SettingsManager::Settings::kWiFiPasswordMaxLen);
                 CPP_AT_CMD_PRINTF(": sta_password=%s\r\n", redacted_password);
             }
@@ -1022,7 +1029,7 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .max_args = 2,
      .help_string_buf = "AT+BAUD_RATE=<iface>,<baud_rate>\r\n\tSet the baud rate of a serial "
                         "interface.\r\n\tAT+BAUD_RATE?\r\n\tQuery the baud rate of all serial interfaces.",
-     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBaudrateCallback, comms_manager)},
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBaudRateCallback, comms_manager)},
     {.command_buf = "+BIAS_TEE_ENABLE",
      .min_args = 0,
      .max_args = 1,
