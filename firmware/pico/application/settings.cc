@@ -54,6 +54,9 @@ bool SettingsManager::Load() {
 
     // Reset to defaults if loading from a blank EEPROM.
     if (settings.settings_version != kSettingsVersion) {
+        CONSOLE_ERROR("settingsManager::Settings::Load",
+                      "Settings version mismatch. Expected %d, got %d. Resetting to defaults.", kSettingsVersion,
+                      settings.settings_version);
         // Attempt to load the core network settings anyways.
         bool found_valid_cns = false;
         Settings::CoreNetworkSettings cns_backup;
@@ -65,6 +68,8 @@ bool SettingsManager::Load() {
         ResetToDefaults();
         // Restore the core network settings if they were valid.
         if (found_valid_cns) {
+            CONSOLE_INFO("SettingsManager::Settings::Load",
+                         "Restoring core network settings from backup with checksum 0x%x.", cns_backup.crc32);
             settings.core_network_settings = cns_backup;
         }
         if (bsp.has_eeprom && !eeprom.Save(settings)) {

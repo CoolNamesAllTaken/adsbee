@@ -76,16 +76,17 @@ bool CommsManager::IPInit() {
     }
 
     // Set hostname.
-    err = mdns_hostname_set(settings_manager.settings.hostname);
+    err = mdns_hostname_set(settings_manager.settings.core_network_settings.hostname);
     if (err) {
         CONSOLE_ERROR("CommsManager::IPInit", "Failed setting MDNS hostname to %s: %d\n",
-                      settings_manager.settings.hostname, err);
+                      settings_manager.settings.core_network_settings.hostname, err);
         return false;
     }
     // Set default instance.
     mdns_instance_name_set("ADSBee 1090");
 
-    CONSOLE_INFO("CommsManager::IPInit", "MDNS initialized with hostname %s.\n", settings_manager.settings.hostname);
+    CONSOLE_INFO("CommsManager::IPInit", "MDNS initialized with hostname %s.\n",
+                 settings_manager.settings.core_network_settings.hostname);
     return true;
 }
 

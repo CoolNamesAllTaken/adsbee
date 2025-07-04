@@ -13,8 +13,8 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 0x8;  // Change this when settings format changes!
-static constexpr uint32_t kDeviceInfoVersion = 0x2;
+static constexpr uint32_t kSettingsVersion = 9;  // Change this when settings format changes!
+static constexpr uint32_t kDeviceInfoVersion = 2;
 
 class SettingsManager {
    public:
@@ -26,6 +26,8 @@ class SettingsManager {
     enum LogLevel : uint16_t { kSilent = 0, kErrors, kWarnings, kInfo, kNumLogLevels };
     static constexpr uint16_t kConsoleLogLevelStrMaxLen = 30;
     static const char kConsoleLogLevelStrs[LogLevel::kNumLogLevels][kConsoleLogLevelStrMaxLen];
+
+    static const uint16_t kSubGHzModeStrMaxLen = 30;  // Length of Sub-GHz mode strings.
 
     // Reporting Protocol enum and string conversion array.
     enum ReportingProtocol : uint16_t {
@@ -49,6 +51,13 @@ class SettingsManager {
         kEnableStateDisabled = 0,
         kEnableStateEnabled = 1
     };
+
+    // Mode setting for the Sub-GHz radio.
+    enum SubGHzRadioMode : uint8_t {
+        kSubGHzRadioModeUATRx = 0,  // UAT mode (978MHz receiver).
+        kNumSubGHzRadioModes
+    };
+    static const char kSubGHzModeStrs[kNumSubGHzRadioModes][kSubGHzModeStrMaxLen];
 
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a
     // firmware upgrade if the format of the settings struct changes.
@@ -146,7 +155,8 @@ class SettingsManager {
         uint32_t gnss_uart_baud_rate = 9600;
 
         // Sub-GHz settings
-        EnableState subg_enabled = EnableState::kEnableStateExternal;  // High impedance state by default.
+        EnableState subg_enabled = EnableState::kEnableStateExternal;        // High impedance state by default.
+        SubGHzRadioMode subg_mode = SubGHzRadioMode::kSubGHzRadioModeUATRx;  // Default to UAT mode (978MHz receiver
 
         char feed_uris[kMaxNumFeeds][kFeedURIMaxNumChars + 1];
         uint16_t feed_ports[kMaxNumFeeds];
@@ -166,7 +176,8 @@ class SettingsManager {
                 device_info.GetDefaultSSID(core_network_settings.wifi_ap_ssid);
                 // Reuse the WiFi SSID as the hostname.
                 strncpy(core_network_settings.hostname, core_network_settings.wifi_ap_ssid, 32);
-                snprintf(core_network_settings.wifi_ap_password, kWiFiPasswordMaxLen, "yummyflowers");
+                snprintf(core_network_settings.core_network_settings.wifi_ap_password, kWiFiPasswordMaxLen,
+                         "yummyflowers");
             }
 
             core_network_settings.wifi_ap_channel =
@@ -210,7 +221,7 @@ class SettingsManager {
             strncpy(feed_uris[kMaxNumFeeds - 4], "feed.whereplane.xyz", kFeedURIMaxNumChars);
             feed_uris[kMaxNumFeeds - 4][kFeedURIMaxNumChars] = '\0';
             feed_ports[kMaxNumFeeds - 4] = 30004;
-            feed_is_active[kMaxNumFeeds - 4] = false;  // Not active by default.
+            feed_is_active[kMaxNumFeeds - 4] = true;
             feed_protocols[kMaxNumFeeds - 4] = kBeast;
         }
     };
