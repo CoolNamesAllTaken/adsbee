@@ -166,13 +166,27 @@ bool SettingsManager::GetDeviceInfo(DeviceInfo &device_info) {
 }
 
 bool SettingsManager::Apply() {
+    bool success = true;
+
     adsbee.SetReceiver1090Enable(settings.receiver_enabled);
     adsbee.SetTLMilliVolts(settings.tl_mv);
     adsbee.SetBiasTeeEnable(settings.bias_tee_enabled);
     adsbee.SetWatchdogTimeoutSec(settings.watchdog_timeout_sec);
 
+    if (settings.core_network_settings.esp32_enabled) {
+        if (!esp32.IsEnabled()) {
+            CONSOLE_INFO("SettingsManager::Apply", "Enabling ESP32.");
+            success &= esp32.Init();
+        }
+    } else {
+        if (esp32.IsEnabled()) {
+            CONSOLE_INFO("SettingsManager::Apply", "Disabling ESP32.");
+            success &= esp32.DeInit();
+        }
+    }
+
     // All other parameters are stored directly in the global setting struct and don't need to be applied.
 
-    return true;  // Not currently doing any error checking here, relying on AT commands to limit parameters to
-                  // allowable ranges. Could be a problem if loading from corrupted EEPROM.
+    return success;  // Not currently doing any error checking here, relying on AT commands to limit parameters to
+                     // allowable ranges. Could be a problem if loading from corrupted EEPROM.
 }
