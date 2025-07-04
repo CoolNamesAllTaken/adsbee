@@ -41,8 +41,6 @@ class ADSBee {
     static constexpr uint32_t kNoiseFloorADCSampleIntervalMs =
         1;  // [ms] Interval between ADC samples to approximate noise floor value.
 
-    static constexpr uint16_t kNumFIFOPushTimestampsToRecord = 10;
-
     /**
      * Interrupt priorities
      * MLAT counter wrap is highest priority because we don't want to capture an MLAT timestamp where a wrap is pending
@@ -357,7 +355,7 @@ class ADSBee {
     uint32_t mlat_jitter_dma_channel_[BSP::kMaxNumDemodStateMachines];
     uint32_t mlat_jitter_pwm_slice_ = 0;
     uint16_t mlat_jitter_counts_on_demod_begin_[BSP::kMaxNumDemodStateMachines] = {0};
-    uint16_t mlat_jitter_counts_on_fifo_push_[BSP::kMaxNumDemodStateMachines][kNumFIFOPushTimestampsToRecord] = {0};
+    uint16_t mlat_jitter_counts_on_fifo_pull_[BSP::kMaxNumDemodStateMachines] = {0};
 
     uint32_t led_on_timestamp_ms_ = 0;
 

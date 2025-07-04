@@ -315,8 +315,8 @@ void ADSBee::OnDemodComplete() {
         rx_packet_[sm_index].source = sm_index;  // Record this state machine as the source of the packet.
         // Get the difference between the beginning of the demodulation period and the first FIFO push. The FIFO push
         // does not have jitter relative to the preamble but needs to be anchored to a full 24-bit timer value, since
-        // it's from a 60-bit PWM peripheral.
-        uint16_t &a = mlat_jitter_counts_on_fifo_push_[sm_index][0];
+        // it's from a 16-bit PWM peripheral.
+        uint16_t &a = mlat_jitter_counts_on_fifo_pull_[sm_index];
         uint16_t &b = mlat_jitter_counts_on_demod_begin_[sm_index];
         uint16_t mlat_jitter_correction = b >= a ? b - a : (0xFFFF - a) + b;
         rx_packet_[sm_index].mlat_48mhz_64bit_counts -= mlat_jitter_correction;
@@ -409,7 +409,7 @@ void ADSBee::OnDemodComplete() {
 
         // Re-enable the MLAT jitter counter for this state machine.
         // Reset the write address but don't start the DMA channel yet.
-        dma_channel_set_write_addr(mlat_jitter_dma_channel_[sm_index], &mlat_jitter_counts_on_fifo_push_[sm_index],
+        dma_channel_set_write_addr(mlat_jitter_dma_channel_[sm_index], &mlat_jitter_counts_on_fifo_pull_[sm_index],
                                    false);
         dma_channel_start(mlat_jitter_dma_channel_[sm_index]);
 
@@ -621,11 +621,11 @@ void ADSBee::MLATCounterInit() {
             dma_claim_unused_channel(true);  // Claim a DMA channel for each state machine.
         dma_channel_config config = dma_channel_get_default_config(mlat_jitter_dma_channel_[sm_index]);
         channel_config_set_read_increment(&config, false);            // Don't increment the read address.
-        channel_config_set_write_increment(&config, true);            // Increment the write address.
+        channel_config_set_write_increment(&config, false);           // Don't increment the write address.
         channel_config_set_transfer_data_size(&config, DMA_SIZE_16);  // Transfer 16 bits (width of PWM timer).
         // Transfer 16 bits once from the PWM counter to the jitter counter counts for the given state machine.
         channel_config_set_dreq(&config, DREQ_PIO1_TX0 + sm_index);  // Use the PIO1 TX FIFO DREQ for each SM.
-        dma_channel_configure(mlat_jitter_dma_channel_[sm_index], &config, &mlat_jitter_counts_on_fifo_push_[sm_index],
+        dma_channel_configure(mlat_jitter_dma_channel_[sm_index], &config, &mlat_jitter_counts_on_fifo_pull_[sm_index],
                               &pwm_hw->slice[mlat_jitter_pwm_slice_].ctr, 1, false);
     }
 }
