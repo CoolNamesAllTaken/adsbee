@@ -176,8 +176,7 @@ class SettingsManager {
                 device_info.GetDefaultSSID(core_network_settings.wifi_ap_ssid);
                 // Reuse the WiFi SSID as the hostname.
                 strncpy(core_network_settings.hostname, core_network_settings.wifi_ap_ssid, 32);
-                snprintf(core_network_settings.core_network_settings.wifi_ap_password, kWiFiPasswordMaxLen,
-                         "yummyflowers");
+                snprintf(core_network_settings.wifi_ap_password, kWiFiPasswordMaxLen, "yummyflowers");
             }
 
             core_network_settings.wifi_ap_channel =
