@@ -81,33 +81,49 @@ class SettingsManager {
             // ESP32 settings
             bool esp32_enabled = true;
 
-            char hostname[kHostnameMaxLen + 1] =
-                "ADSBee1090";  // Will be overwritten by the default SSID when device info is set.
+            char hostname[kHostnameMaxLen + 1];
 
             bool wifi_ap_enabled = true;
             uint8_t wifi_ap_channel = 1;
-            char wifi_ap_ssid[kWiFiSSIDMaxLen + 1] = "";
-            char wifi_ap_password[kWiFiPasswordMaxLen + 1] = "";
+            char wifi_ap_ssid[kWiFiSSIDMaxLen + 1];
+            char wifi_ap_password[kWiFiPasswordMaxLen + 1];
 
             bool wifi_sta_enabled = false;
-            char wifi_sta_ssid[kWiFiSSIDMaxLen + 1] = "";
-            char wifi_sta_password[kWiFiPasswordMaxLen + 1] = "";
+            char wifi_sta_ssid[kWiFiSSIDMaxLen + 1];
+            char wifi_sta_password[kWiFiPasswordMaxLen + 1];
 
             bool ethernet_enabled = false;
 
-            uint16_t crc32 = 0;
+            uint32_t crc32 = 0;
+
+            CoreNetworkSettings() {
+                // Clear out the strings so that checksum calculation is consistent.
+                memset(hostname, '\0', sizeof(hostname));
+                memset(wifi_ap_ssid, '\0', sizeof(wifi_ap_ssid));
+                memset(wifi_ap_password, '\0', sizeof(wifi_ap_password));
+                memset(wifi_sta_ssid, '\0', sizeof(wifi_sta_ssid));
+                memset(wifi_sta_password, '\0', sizeof(wifi_sta_password));
+
+                strncpy(hostname, "ADSBee1090",
+                        sizeof(hostname));  // Default hostname, will be overridden when DeviceInfo is set.
+            }
+
+            uint32_t CalculateCRC32() {
+                // Don't calculate checksum including the crc32 field itself, silly.
+                return crc32_ieee_802_3((uint8_t *)this, sizeof(CoreNetworkSettings) - sizeof(crc32));
+            }
 
             /**
              * Updates the CRC32. Should be called before saving.
              */
-            void UpdateCRC32() { crc32 = crc32_ieee_802_3((uint8_t *)this, sizeof(CoreNetworkSettings)); }
+            void UpdateCRC32() { crc32 = CalculateCRC32(); }
 
             /**
              * Checks whether the calculated CRC32 matches the value that was stored. Should be used to check whether
              * the core network settings can be applied.
              */
             bool IsValid() {
-                uint32_t calculated_crc32 = crc32_ieee_802_3((uint8_t *)this, sizeof(CoreNetworkSettings));
+                uint32_t calculated_crc32 = CalculateCRC32();
                 return calculated_crc32 == crc32;
             }
         };
