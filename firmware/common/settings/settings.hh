@@ -5,14 +5,16 @@
 #include <cstring>     // for memset
 #include <functional>  // for strtoull
 
+#include "crc.hh"
 #include "macros.hh"
 #include "stdio.h"
+#include "stdlib.h"  // for strtoull
 #ifdef ON_PICO
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 0x8;  // Change this when settings format changes!
-static constexpr uint32_t kDeviceInfoVersion = 0x2;
+static constexpr uint32_t kSettingsVersion = 9;  // Change this when settings format changes!
+static constexpr uint32_t kDeviceInfoVersion = 2;
 
 class SettingsManager {
    public:
@@ -24,6 +26,8 @@ class SettingsManager {
     enum LogLevel : uint16_t { kSilent = 0, kErrors, kWarnings, kInfo, kNumLogLevels };
     static constexpr uint16_t kConsoleLogLevelStrMaxLen = 30;
     static const char kConsoleLogLevelStrs[LogLevel::kNumLogLevels][kConsoleLogLevelStrMaxLen];
+
+    static const uint16_t kSubGHzModeStrMaxLen = 30;  // Length of Sub-GHz mode strings.
 
     // Reporting Protocol enum and string conversion array.
     enum ReportingProtocol : uint16_t {
@@ -48,6 +52,13 @@ class SettingsManager {
         kEnableStateEnabled = 1
     };
 
+    // Mode setting for the Sub-GHz radio.
+    enum SubGHzRadioMode : uint8_t {
+        kSubGHzRadioModeUATRx = 0,  // UAT mode (978MHz receiver).
+        kNumSubGHzRadioModes
+    };
+    static const char kSubGHzModeStrs[kNumSubGHzRadioModes][kSubGHzModeStrMaxLen];
+
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a
     // firmware upgrade if the format of the settings struct changes.
     struct Settings {
@@ -69,8 +80,66 @@ class SettingsManager {
         static constexpr uint16_t kMACAddrStrLen = 18;  // XX:XX:XX:XX:XX:XX (does not include null terminator)
         static constexpr uint16_t kMACAddrNumBytes = 6;
 
+        /**
+         * Core Network Settings struct is used for storing network settings that should remain unchanged through most
+         * firmware updates. This allows re-establishing network connectivity with an ADSBee to restore remaining
+         * settings via AT commands after a software upgrade changes other parts of the settings struct or associated
+         * code.
+         */
+        struct CoreNetworkSettings {
+            // ESP32 settings
+            bool esp32_enabled = true;
+
+            char hostname[kHostnameMaxLen + 1];
+
+            bool wifi_ap_enabled = true;
+            uint8_t wifi_ap_channel = 1;
+            char wifi_ap_ssid[kWiFiSSIDMaxLen + 1];
+            char wifi_ap_password[kWiFiPasswordMaxLen + 1];
+
+            bool wifi_sta_enabled = false;
+            char wifi_sta_ssid[kWiFiSSIDMaxLen + 1];
+            char wifi_sta_password[kWiFiPasswordMaxLen + 1];
+
+            bool ethernet_enabled = false;
+
+            uint32_t crc32 = 0;
+
+            CoreNetworkSettings() {
+                // Clear out the strings so that checksum calculation is consistent.
+                memset(hostname, '\0', sizeof(hostname));
+                memset(wifi_ap_ssid, '\0', sizeof(wifi_ap_ssid));
+                memset(wifi_ap_password, '\0', sizeof(wifi_ap_password));
+                memset(wifi_sta_ssid, '\0', sizeof(wifi_sta_ssid));
+                memset(wifi_sta_password, '\0', sizeof(wifi_sta_password));
+
+                strncpy(hostname, "ADSBee1090",
+                        sizeof(hostname));  // Default hostname, will be overridden when DeviceInfo is set.
+            }
+
+            uint32_t CalculateCRC32() {
+                // Don't calculate checksum including the crc32 field itself, silly.
+                return crc32_ieee_802_3((uint8_t *)this, sizeof(CoreNetworkSettings) - sizeof(crc32));
+            }
+
+            /**
+             * Updates the CRC32. Should be called before saving.
+             */
+            void UpdateCRC32() { crc32 = CalculateCRC32(); }
+
+            /**
+             * Checks whether the calculated CRC32 matches the value that was stored. Should be used to check whether
+             * the core network settings can be applied.
+             */
+            bool IsValid() {
+                uint32_t calculated_crc32 = CalculateCRC32();
+                return calculated_crc32 == crc32;
+            }
+        };
+
         uint32_t settings_version = kSettingsVersion;
-        // Timestamp on the Pico when the settings were last saved. Milliseconds since boot.
+
+        CoreNetworkSettings core_network_settings;
 
         // ADSBee settings
         bool receiver_enabled = true;
@@ -85,25 +154,9 @@ class SettingsManager {
         uint32_t comms_uart_baud_rate = 115200;
         uint32_t gnss_uart_baud_rate = 9600;
 
-        // ESP32 settings
-        bool esp32_enabled = true;
-
         // Sub-GHz settings
-        EnableState subg_enabled = EnableState::kEnableStateExternal;  // High impedance state by default.
-
-        char hostname[kHostnameMaxLen + 1] =
-            "ADSBee1090";  // Will be overwritten by the default SSID when device info is set.
-
-        bool wifi_ap_enabled = true;
-        uint8_t wifi_ap_channel = 1;
-        char wifi_ap_ssid[kWiFiSSIDMaxLen + 1] = "";
-        char wifi_ap_password[kWiFiPasswordMaxLen + 1] = "";
-
-        bool wifi_sta_enabled = false;
-        char wifi_sta_ssid[kWiFiSSIDMaxLen + 1] = "";
-        char wifi_sta_password[kWiFiPasswordMaxLen + 1] = "";
-
-        bool ethernet_enabled = false;
+        EnableState subg_enabled = EnableState::kEnableStateExternal;        // High impedance state by default.
+        SubGHzRadioMode subg_mode = SubGHzRadioMode::kSubGHzRadioModeUATRx;  // Default to UAT mode (978MHz receiver
 
         char feed_uris[kMaxNumFeeds][kFeedURIMaxNumChars + 1];
         uint16_t feed_ports[kMaxNumFeeds];
@@ -120,13 +173,14 @@ class SettingsManager {
             if (GetDeviceInfo(device_info)) {
                 // If able to load device info from EEPROM, use the last 16 characters in the part code as part of the
                 // WiFi SSID.
-                device_info.GetDefaultSSID(wifi_ap_ssid);
+                device_info.GetDefaultSSID(core_network_settings.wifi_ap_ssid);
                 // Reuse the WiFi SSID as the hostname.
-                strncpy(hostname, wifi_ap_ssid, 32);
-                snprintf(wifi_ap_password, kWiFiPasswordMaxLen, "yummyflowers");
+                strncpy(core_network_settings.hostname, core_network_settings.wifi_ap_ssid, 32);
+                snprintf(core_network_settings.wifi_ap_password, kWiFiPasswordMaxLen, "yummyflowers");
             }
 
-            wifi_ap_channel = get_rand_32() % kWiFiAPChannelMax + 1;  // Randomly select channel 1-11.
+            core_network_settings.wifi_ap_channel =
+                get_rand_32() % kWiFiAPChannelMax + 1;  // Randomly select channel 1-11.
 #endif
 
             for (uint16_t i = 0; i < kMaxNumFeeds; i++) {
@@ -166,7 +220,7 @@ class SettingsManager {
             strncpy(feed_uris[kMaxNumFeeds - 4], "feed.whereplane.xyz", kFeedURIMaxNumChars);
             feed_uris[kMaxNumFeeds - 4][kFeedURIMaxNumChars] = '\0';
             feed_ports[kMaxNumFeeds - 4] = 30004;
-            feed_is_active[kMaxNumFeeds - 4] = false;  // Not active by default.
+            feed_is_active[kMaxNumFeeds - 4] = true;
             feed_protocols[kMaxNumFeeds - 4] = kBeast;
         }
     };

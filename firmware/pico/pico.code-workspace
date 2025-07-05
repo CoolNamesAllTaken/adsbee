@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "../modules"
+		},
+		{
+			"path": "../../usr/local/pico-sdk"
 		}
 	],
 	"settings": {
@@ -211,23 +214,22 @@
 				"program": "/adsbee/pico/build/Test/host_test/host_test",
 				"args": [],
 				"stopAtEntry": false,
-				"cwd": "${fileDirname}",
 				"environment": [],
 				"externalConsole": false,
-				"MIMode": "gdb",
-				"setupCommands": [
-					{
-						"description": "Enable pretty-printing for gdb",
-						"text": "-enable-pretty-printing",
-						"ignoreFailures": true
-					},
-					// Print values as hex.
-					{
-						"text": "set output-radix 16"
-					}
-				],
-				"miDebuggerPath": "/usr/bin/gdb",
-			}
-		]
+				// "MIMode": "gdb",
+				// "setupCommands": [
+				// 	{
+				// 		"description": "Enable pretty-printing for gdb",
+				// 		"text": "-enable-pretty-printing",
+				// 		"ignoreFailures": true
+				// 	},
+				// 	// Print values as hex.
+				// 	{
+				// 		"text": "set output-radix 16"
+				// 	},
+				// ],
+				// "miDebuggerPath": "/usr/bin/gdb",
+			},
+		],
 	},
 }

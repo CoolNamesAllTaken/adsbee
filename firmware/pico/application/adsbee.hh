@@ -6,6 +6,7 @@
 #include "cc1312.hh"
 #include "cpp_at.hh"
 #include "data_structures.hh"  // For PFBQueue.
+#include "hardware/dma.h"
 #include "hardware/i2c.h"
 #include "hardware/pio.h"
 #include "hardware/watchdog.h"
@@ -32,10 +33,24 @@ class ADSBee {
                // to the maximum value that the trigger level could be moved (up or down) when exploring a neighbor
                // state.
 
+    static constexpr uint32_t kMLATCounterWrapIntervalMs =
+        0xFFFFFF / 48'000;  // [ms] How often a 48MHz 24-bit counter wraps (period in ms).
+
     static constexpr int32_t kNoiseFloorExpoFilterPercent =
         50;  // [%] Weight to use for low pass expo filter of noise floor ADC counts. 0 = no filter, 100 = hold value.
     static constexpr uint32_t kNoiseFloorADCSampleIntervalMs =
         1;  // [ms] Interval between ADC samples to approximate noise floor value.
+
+    /**
+     * Interrupt priorities
+     * MLAT counter wrap is highest priority because we don't want to capture an MLAT timestamp where a wrap is pending
+     * but hasn't happened yet (will result in non-monotonic timestamps). GPIO interrupt is next priority because we
+     * want to capture the demodulation start time and RSSI pretty promptly. Demod complete interrupt is lowest priority
+     * because a filled state machine can wait a little before being digested.
+     */
+    static constexpr uint kMLATCounterWrapInterruptPriority = 0;
+    static constexpr uint kGPIOInterruptPriority = 1;
+    static constexpr uint kDemodCompleteInterruptPriority = 2;
 
     struct ADSBeeConfig {
         PIO preamble_detector_pio = pio0;
@@ -140,6 +155,13 @@ class ADSBee {
      * @retval 48MHz counter value.
      */
     uint64_t GetMLAT12MHzCounts(uint16_t num_bits = 48);
+
+    /**
+     * Returns the current value of the MLAT jitter PWM slice's internal counter.
+     * This is only used for testing, since the actual value is usually accessed directly or through DMA.
+     * @retval Current value of the MLAT jitter PWM slice counter.
+     */
+    uint16_t GetMLATJitterPWMSliceCounts();
 
     /**
      * Returns the power level of the noise floor (signal strength sampled mostly during non-decode intervals and then
@@ -315,17 +337,25 @@ class ADSBee {
     SPICoprocessor subg_radio = SPICoprocessor({.interface = subg_radio_ll});
 
    private:
+    void PIOInit();
+    void PIOEnable();
+    void MLATCounterInit();
+
     ADSBeeConfig config_;
     CppAT parser_;
 
     uint32_t irq_wrapper_sm_ = 0;
     uint32_t preamble_detector_sm_[BSP::kMaxNumDemodStateMachines];
     uint32_t preamble_detector_offset_ = 0;
-
     uint32_t irq_wrapper_offset_ = 0;
 
     uint32_t message_demodulator_sm_[BSP::kMaxNumDemodStateMachines];
     uint32_t message_demodulator_offset_ = 0;
+
+    uint32_t mlat_jitter_dma_channel_[BSP::kMaxNumDemodStateMachines];
+    uint32_t mlat_jitter_pwm_slice_ = 0;
+    uint16_t mlat_jitter_counts_on_demod_begin_[BSP::kMaxNumDemodStateMachines] = {0};
+    uint16_t mlat_jitter_counts_on_fifo_pull_[BSP::kMaxNumDemodStateMachines] = {0};
 
     uint32_t led_on_timestamp_ms_ = 0;
 

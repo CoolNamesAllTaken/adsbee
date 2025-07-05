@@ -43,8 +43,16 @@ bool CommsManager::UpdateNetworkConsole() {
     if (recursion_alert) {
         return false;
     }
+    recursion_alert = true;
     if (esp32.IsEnabled()) {
-        recursion_alert = true;
+        // Limit the max reporting rate.
+        if (esp32_console_tx_queue.Length() < kNetworkConsoleReportingIntervalOverrideNumChars &&
+            (get_time_since_boot_ms() - last_esp32_console_tx_timestamp_ms_) < kNetworkConsoleMinReportingIntervalMs) {
+            // If the queue is too long, or if enough time has passed since the last TX, send the characters.
+            recursion_alert = false;
+            return true;  // Don't send anything if we don't need to.
+        }
+
         // Send outgoing network console characters.
         char esp32_console_tx_buf[SPICoprocessorPacket::SCWritePacket::kDataMaxLenBytes];
         char c = '\0';
@@ -60,11 +68,14 @@ bool CommsManager::UpdateNetworkConsole() {
                 if (!esp32.Write(ObjectDictionary::kAddrConsole, esp32_console_tx_buf, true, message_len)) {
                     // Don't enter infinite loop of error messages if writing to the ESP32 isn't working.
                     break;
+                } else {
+                    // Successfully sent characters to ESP32.
+                    last_esp32_console_tx_timestamp_ms_ = get_time_since_boot_ms();
                 }
             }
         }
-        recursion_alert = false;
     }
+    recursion_alert = false;
     return true;
 }
 
@@ -77,7 +88,7 @@ int CommsManager::console_printf(const char *format, ...) {
 }
 
 int CommsManager::console_level_printf(SettingsManager::LogLevel level, const char *format, ...) {
-    if (log_level < level) return 0;
+    if (settings_manager.settings.log_level < level) return 0;
     va_list args;
     va_start(args, format);
     int res = iface_vprintf(SettingsManager::SerialInterface::kConsole, format, args);
@@ -197,6 +208,7 @@ bool CommsManager::network_console_putc(char c) {
     if (!comms_manager.esp32_console_tx_queue.Push(c)) {
         // Try flushing the buffer before dumping it.
         comms_manager.UpdateAT();
+        comms_manager.UpdateNetworkConsole();
         if (comms_manager.esp32_console_tx_queue.Push(c)) {
             recursion_alert = false;
             return true;  // Crisis averted! Phew.

@@ -22,3 +22,16 @@ TEST(Settings, DeviceInfoGetDefaultSSIDAndUID) {
     EXPECT_EQ(uid_buf[6], (uid_val >> (8 * 1)) & 0xFF);
     EXPECT_EQ(uid_buf[7], uid_val & 0xFF);
 }
+
+TEST(Settings, CoreNetworkSettings) {
+    SettingsManager::Settings test_settings;
+    EXPECT_FALSE(test_settings.core_network_settings.IsValid());
+    test_settings.core_network_settings.UpdateCRC32();
+    EXPECT_EQ(test_settings.core_network_settings.crc32, test_settings.core_network_settings.CalculateCRC32());
+    EXPECT_TRUE(test_settings.core_network_settings.IsValid());
+
+    test_settings.core_network_settings.wifi_ap_enabled = !test_settings.core_network_settings.wifi_ap_enabled;
+    EXPECT_FALSE(test_settings.core_network_settings.IsValid());
+    test_settings.core_network_settings.UpdateCRC32();
+    EXPECT_TRUE(test_settings.core_network_settings.IsValid());
+}

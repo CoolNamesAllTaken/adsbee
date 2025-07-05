@@ -18,7 +18,7 @@ static const float kGeoDistanceToleranceFrac = 0.01f;
 /** Test the haversine lookup table function. **/
 void expect_near_hav(float theta_deg) {
     float slow_hav_result = SQ(sin(theta_deg * M_PI / 360.0));
-    EXPECT_NEAR(slow_hav_result, hav_awb(static_cast<uint32_t>(theta_deg * INV_RESOLUTION)),
+    EXPECT_NEAR(slow_hav_result, hav_awb(safe_cast_float_to_uint32(theta_deg * INV_RESOLUTION)),
                 MAX(kHaversineToleranceFrac * slow_hav_result, kHaversineToleranceFloor))
         << "Failed with theta_deg=" << theta_deg;
 }

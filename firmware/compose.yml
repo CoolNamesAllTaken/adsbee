@@ -1,8 +1,7 @@
 services:
   # Pico SDK container for compiling main firmware project.
   pico-docker:
-    image: coolnamesalltaken/pico-docker:2.0.0-v1
-    platform: "linux/amd64" # Make sure we run the AMD64 image so that installed utilities work.
+    image: coolnamesalltaken/pico-docker:latest
     network_mode: host
     volumes:
       - ./pico:/adsbee/pico

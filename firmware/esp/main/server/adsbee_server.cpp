@@ -302,7 +302,7 @@ bool ADSBeeServer::ReportGDL90() {
         printf("\t%s: %.5f %.5f %ld\r\n", aircraft.callsign, aircraft.latitude_deg, aircraft.longitude_deg,
                aircraft.baro_altitude_ft);
         message.len = gdl90.WriteGDL90TargetReportMessage(message.data, aircraft, false);
-        if (settings_manager.settings.wifi_ap_enabled &&
+        if (settings_manager.settings.core_network_settings.wifi_ap_enabled &&
             !comms_manager.WiFiAccessPointSendMessageToAllStations(message)) {
             CONSOLE_ERROR("ADSBeeServer::ReportGDL90", "Failed to send info about aircraft %d to all clients.",
                           aircraft_index);
@@ -428,7 +428,7 @@ void NetworkConsolePostConnectCallback(WebSocketServer *ws_server, int client_fd
                  "\r\n██   ██ ██████  ███████ ██████  ███████ ███████      ██  ██████   █████   ██████  "
                  "\r\n\r\nFirmware Version: %d.%d.%d\r\nAP SSID: %s\r\n",
                  object_dictionary.kFirmwareVersionMajor, object_dictionary.kFirmwareVersionMinor,
-                 object_dictionary.kFirmwareVersionPatch, settings_manager.settings.wifi_ap_ssid);
+                 object_dictionary.kFirmwareVersionPatch, settings_manager.settings.core_network_settings.wifi_ap_ssid);
     } else {
         snprintf(welcome_message, kNetworkConsoleWelcomeMessageMaxLen,
                  "\r\n █████  ██████  ███████ ██████  ███████ ███████      ██  ██████   █████   ██████  "
@@ -439,7 +439,7 @@ void NetworkConsolePostConnectCallback(WebSocketServer *ws_server, int client_fd
                  "\r\n\r\nFirmware Version: %d.%d.%d-rc%d\r\nAP SSID: %s\r\n",
                  object_dictionary.kFirmwareVersionMajor, object_dictionary.kFirmwareVersionMinor,
                  object_dictionary.kFirmwareVersionPatch, object_dictionary.kFirmwareVersionReleaseCandidate,
-                 settings_manager.settings.wifi_ap_ssid);
+                 settings_manager.settings.core_network_settings.wifi_ap_ssid);
     }
 
     welcome_message[kNetworkConsoleWelcomeMessageMaxLen] = '\0';  // Null terminate for safety.

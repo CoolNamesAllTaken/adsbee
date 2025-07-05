@@ -10,8 +10,13 @@ class CommsManager {
    public:
     static constexpr uint16_t kATCommandBufMaxLen = 1000;
     static constexpr uint16_t kNetworkConsoleBufMaxLen = 4096;
+    static constexpr uint16_t kNetworkConsoleReportingIntervalOverrideNumChars =
+        kNetworkConsoleBufMaxLen * 3 /
+        4;  // Drain the network console queue immediately if it has more than this many characters.
+    static constexpr uint32_t kNetworkConsoleMinReportingIntervalMs =
+        50;  // Report messages to nextwork console at minimum rate of 20Hz.
     static constexpr uint16_t kPrintfBufferMaxSize = 500;
-    static constexpr uint32_t kRawReportingIntervalMs = 100;  // Report packets internally at 00Hz.
+    static constexpr uint32_t kRawReportingIntervalMs = 100;  // Report packets internally at 10Hz.
     static constexpr uint32_t kMAVLINKReportingIntervalMs = 1000;
     static constexpr uint32_t kCSBeeReportingIntervalMs = 1000;
     static constexpr uint32_t kGDL90ReportingIntervalMs = 1000;
@@ -50,7 +55,7 @@ class CommsManager {
      */
     bool UpdateNetworkConsole();
 
-    CPP_AT_CALLBACK(ATBaudrateCallback);
+    CPP_AT_CALLBACK(ATBaudRateCallback);
     CPP_AT_CALLBACK(ATBiasTeeEnableCallback);
     CPP_AT_CALLBACK(ATDeviceInfoCallback);
     CPP_AT_CALLBACK(ATESP32EnableCallback);
@@ -99,16 +104,16 @@ class CommsManager {
      * @param[in] baudrate Baudrate to set.
      * @retval True if the baudrate could be set, false if the interface specified does not support a baudrate.
      */
-    bool SetBaudrate(SettingsManager::SerialInterface iface, uint32_t baudrate) {
+    bool SetBaudRate(SettingsManager::SerialInterface iface, uint32_t baudrate) {
         switch (iface) {
             case SettingsManager::kCommsUART:
                 // Save the actual set value as comms_uart_baudrate_.
-                comms_uart_baudrate_ = uart_set_baudrate(config_.comms_uart_handle, baudrate);
+                settings_manager.settings.comms_uart_baud_rate = uart_set_baudrate(config_.comms_uart_handle, baudrate);
                 return true;
                 break;
             case SettingsManager::kGNSSUART:
                 // Save the actual set value as gnss_uart_baudrate_.
-                gnss_uart_baudrate_ = uart_set_baudrate(config_.gnss_uart_handle, baudrate);
+                settings_manager.settings.gnss_uart_baud_rate = uart_set_baudrate(config_.gnss_uart_handle, baudrate);
                 return true;
                 break;
             default:
@@ -123,16 +128,16 @@ class CommsManager {
      * @param[out] baudrate Reference to uint32_t to fill with retrieved value.
      * @retval True if baudrate retrieval succeeded, false if iface does not support a baudrate.
      */
-    bool GetBaudrate(SettingsManager::SerialInterface iface, uint32_t &baudrate) {
+    bool GetBaudRate(SettingsManager::SerialInterface iface, uint32_t &baudrate) {
         switch (iface) {
             case SettingsManager::kCommsUART:
                 // Save the actual set value as comms_uart_baudrate_.
-                baudrate = comms_uart_baudrate_;
+                baudrate = settings_manager.settings.comms_uart_baud_rate;
                 return true;
                 break;
             case SettingsManager::kGNSSUART:
                 // Save the actual set value as gnss_uart_baudrate_.
-                baudrate = gnss_uart_baudrate_;
+                baudrate = settings_manager.settings.gnss_uart_baud_rate;
                 return true;
                 break;
             default:
@@ -148,7 +153,7 @@ class CommsManager {
      * @retval True if succeeded, false otherwise.
      */
     bool SetReportingProtocol(SettingsManager::SerialInterface iface, SettingsManager::ReportingProtocol protocol) {
-        reporting_protocols_[iface] = protocol;
+        settings_manager.settings.reporting_protocols[iface] = protocol;
         return true;
     }
 
@@ -159,12 +164,9 @@ class CommsManager {
      * @retval True if reportig protocol could be retrieved, false otherwise.
      */
     bool GetReportingProtocol(SettingsManager::SerialInterface iface, SettingsManager::ReportingProtocol &protocol) {
-        protocol = reporting_protocols_[iface];
+        protocol = settings_manager.settings.reporting_protocols[iface];
         return true;
     }
-
-    // Public console settings.
-    SettingsManager::LogLevel log_level = SettingsManager::LogLevel::kInfo;  // Start with highest verbosity by default.
 
     // Queue for storing transponder packets before they get reported.
     PFBQueue<Decoded1090Packet> transponder_packet_reporting_queue =
@@ -176,14 +178,6 @@ class CommsManager {
         PFBQueue<char>({.buf_len_num_elements = kNetworkConsoleBufMaxLen, .buffer = esp32_console_rx_queue_buffer_});
     PFBQueue<char> esp32_console_tx_queue =
         PFBQueue<char>({.buf_len_num_elements = kNetworkConsoleBufMaxLen, .buffer = esp32_console_tx_queue_buffer_});
-
-    // Public WiFi Settings
-    bool wifi_ap_enabled, wifi_sta_enabled;
-    char wifi_ap_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
-    char wifi_ap_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
-    uint8_t wifi_ap_channel = 1;
-    char wifi_sta_ssid[SettingsManager::Settings::kWiFiSSIDMaxLen + 1];          // Add space for null terminator.
-    char wifi_sta_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];  // Add space for null terminator.
 
     // MAVLINK settings.
     uint8_t mavlink_system_id = 0;
@@ -244,17 +238,10 @@ class CommsManager {
     // Queues for incoming / outgoing network console characters.
     char esp32_console_rx_queue_buffer_[kNetworkConsoleBufMaxLen];
     char esp32_console_tx_queue_buffer_[kNetworkConsoleBufMaxLen];
+    uint32_t last_esp32_console_tx_timestamp_ms_ = 0;  // Timestamp of last network console TX.
 
     // Queue for holding new transponder packets before they get reported.
     Decoded1090Packet transponder_packet_reporting_queue_buffer_[SettingsManager::Settings::kMaxNumTransponderPackets];
-
-    // Reporting Settings
-    uint32_t comms_uart_baudrate_ = SettingsManager::Settings::kDefaultCommsUARTBaudrate;
-    uint32_t gnss_uart_baudrate_ = SettingsManager::Settings::kDefaultGNSSUARTBaudrate;
-    SettingsManager::ReportingProtocol
-        reporting_protocols_[SettingsManager::SerialInterface::kNumSerialInterfaces - 1] = {
-            SettingsManager::ReportingProtocol::kNoReports,
-            SettingsManager::ReportingProtocol::kMAVLINK1};  // GNSS_UART not included.
 
     // Reporting protocol timestamps
     // NOTE: Raw reporting interval used for RAW and BEAST protocols as well as internal functions.

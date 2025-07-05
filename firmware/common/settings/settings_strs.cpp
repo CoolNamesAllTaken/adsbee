@@ -12,3 +12,8 @@ const char SettingsManager::kReportingProtocolStrs[SettingsManager::ReportingPro
                                                   [SettingsManager::kReportingProtocolStrMaxLen] = {
                                                       "NONE",  "RAW",      "BEAST",    "BEAST_RAW",
                                                       "CSBEE", "MAVLINK1", "MAVLINK2", "GDL90"};
+
+const char SettingsManager::kSubGHzModeStrs[SettingsManager::kNumSubGHzRadioModes]
+                                           [SettingsManager::kSubGHzModeStrMaxLen] = {
+                                               "UAT_RX",  // UAT mode (978MHz receiver).
+};

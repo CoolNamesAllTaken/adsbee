@@ -93,7 +93,7 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     static constexpr uint32_t kSPIHandshakeLockoutUs = 10;
     // How long we wait to start a transaction after the last one is completed. Can be overridden if the handshake line
     // goes high after kSPIHandshakeLockoutUs.
-    static constexpr uint32_t kSPIPostTransmitLockoutUs = 600;
+    static constexpr uint32_t kSPIPostTransmitLockoutUs = 1000;
     // How long a blocking wait for a handshake can last.
     static constexpr uint32_t kSPIHandshakeTimeoutMs = 20;
     // How long to loop in Update() for after initializing the device in order to allow it to query for settings data.

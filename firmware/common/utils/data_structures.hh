@@ -121,8 +121,6 @@ class PFBQueue {
     inline uint16_t Length() {
         if (is_full_) {
             return buffer_length_;
-        } else if (head_ == tail_) {
-            return 0;  // Empty.
         } else if (head_ > tail_) {
             return buffer_length_ - (head_ - tail_);  // Wrapped.
         } else {

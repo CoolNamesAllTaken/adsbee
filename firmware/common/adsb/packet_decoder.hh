@@ -9,6 +9,9 @@ class PacketDecoder {
    public:
     static constexpr uint16_t kPacketQueueLen = 100;
     static constexpr uint16_t kDebugMessageQueueLen = 20;
+    static constexpr uint16_t kMinSameAircraftMessageIntervalMs =
+        10;  // Minimum time between messages from the same aircraft.
+    static constexpr uint16_t kMaxNumSources = 4;
 
     struct PacketDecoderConfig {
         bool enable_1090_error_correction = true;
@@ -57,11 +60,18 @@ class PacketDecoder {
     });
 
    private:
+    bool PushPacketIfNotDuplicate(const Decoded1090Packet &decoded_packet);
+
     PacketDecoderConfig config_;
     Raw1090Packet raw_1090_packet_in_queue_buffer_[kPacketQueueLen];
     Decoded1090Packet decoded_1090_packet_out_queue_buffer_[kPacketQueueLen];
     uint16_t decoded_1090_packet_bit_flip_locations_out_queue_buffer_[kPacketQueueLen];
     DebugMessage debug_message_out_queue_buffer_[kDebugMessageQueueLen];
+
+    // Arrays used for keeping track of last decoded message so that we don't re-process the same message if it's caught
+    // by multiple state machines.
+    uint32_t last_demod_icao_[kMaxNumSources] = {0, 0, 0, 0};
+    uint32_t last_demod_timestamp_ms_[kMaxNumSources] = {0, 0, 0, 0};
 };
 
 extern PacketDecoder decoder;

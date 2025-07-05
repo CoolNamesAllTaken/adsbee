@@ -3,6 +3,7 @@
 #include "awb_utils.h"
 #include "comms.hh"
 #include "geo_tables.hh"
+#include "macros.hh"
 
 // Interpolation increases execution time but decreases the size of the tables required to be stored in flash to achieve
 // a given precision.
@@ -49,6 +50,7 @@ float havdiff_to_m(float x) {
 #else
     // Interpolate between the two closest values in the lookup table.
     float havdiff_index_float = x * (kHavdiffToMetersNumSteps - 1);
+    // Casting float to unsigned int is safe here because havdiff_index_float is always >= 0.0f.
     uint32_t havdiff_index_rounded = static_cast<uint32_t>(havdiff_index_float);
     float havdiff_overshoot_frac = fmodf(havdiff_index_float, 1.0f);
     return kHavdiffToMeters[havdiff_index_rounded] * (1.0f - havdiff_overshoot_frac) +
@@ -67,10 +69,11 @@ uint32_t CalculateGeoidalDistanceMetersAWB(uint32_t lat_a_awb, uint32_t lon_a_aw
 
 uint32_t CalculateGeoidalDistanceMetersDeg(float lat_a_deg, float lon_a_deg, float lat_b_deg, float lon_b_deg) {
     // Convert degrees to Alternative Weighted Binary format.
-    uint32_t lat_a_awb = static_cast<uint32_t>(INV_RESOLUTION * lat_a_deg);
-    uint32_t lon_a_awb = static_cast<uint32_t>(INV_RESOLUTION * lon_a_deg);
-    uint32_t lat_b_awb = static_cast<uint32_t>(INV_RESOLUTION * lat_b_deg);
-    uint32_t lon_b_awb = static_cast<uint32_t>(INV_RESOLUTION * lon_b_deg);
+    // Cast floats to signed ints, then to unsigned ints, to avoid undefined behavior with negative floats.
+    uint32_t lat_a_awb = safe_cast_float_to_uint32(INV_RESOLUTION * lat_a_deg);
+    uint32_t lon_a_awb = safe_cast_float_to_uint32(INV_RESOLUTION * lon_a_deg);
+    uint32_t lat_b_awb = safe_cast_float_to_uint32(INV_RESOLUTION * lat_b_deg);
+    uint32_t lon_b_awb = safe_cast_float_to_uint32(INV_RESOLUTION * lon_b_deg);
 
     return CalculateGeoidalDistanceMetersAWB(lat_a_awb, lon_a_awb, lat_b_awb, lon_b_awb);
 }

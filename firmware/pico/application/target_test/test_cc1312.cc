@@ -6,10 +6,13 @@
 // Enable this define to run tests that muck with CC1312 settings and SRAM. This is only for use during development!
 #define RUN_DISRUPTIVE_TESTS
 
-#define NO_CC1312_EXIT_GUARD                                                   \
-    if (bsp.sync_pin == UINT16_MAX) {                                          \
-        CONSOLE_ERROR("CC1312", "No CC1312 sync pin defined, skipping test."); \
-        return;                                                                \
+#define NO_CC1312_EXIT_GUARD                                                      \
+    if (!bsp.has_subg) {                                                          \
+        CONSOLE_ERROR("CC1312", "No sub-GHz receiver installed. Skipping test."); \
+        return;                                                                   \
+    } else if (!adsbee.subg_radio.IsEnabled()) {                                  \
+        CONSOLE_ERROR("CC1312", "CC1312 not enabled. Skipping test.");            \
+        return;                                                                   \
     }
 
 UTEST(CC1312, EnterBootloader) {

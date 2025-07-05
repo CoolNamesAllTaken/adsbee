@@ -51,7 +51,7 @@ bool PacketDecoder::UpdateDecoderLoop() {
             .log_level = SettingsManager::LogLevel::kInfo,
         };
         if (decoded_packet.IsValid()) {
-            decoded_1090_packet_out_queue.Push(decoded_packet);
+            PushPacketIfNotDuplicate(decoded_packet);
 
             strncpy(decode_debug_message.message, "[VALID     ] ", DebugMessage::kMessageMaxLen);
         } else if (config_.enable_1090_error_correction &&
@@ -67,7 +67,7 @@ bool PacketDecoder::UpdateDecoderLoop() {
                 // Found a single bit error: flip it and push the corrected packet to the output queue.
                 flip_bit(raw_packet_ptr->buffer, bit_flip_index);
                 decoded_1090_packet_bit_flip_locations_out_queue.Push(bit_flip_index);
-                decoded_1090_packet_out_queue.Push(Decoded1090Packet(*raw_packet_ptr));
+                PushPacketIfNotDuplicate(Decoded1090Packet(*raw_packet_ptr));
 
                 strncpy(decode_debug_message.message, "[1FIXD     ] ", DebugMessage::kMessageMaxLen);
             } else {
@@ -87,6 +87,40 @@ bool PacketDecoder::UpdateDecoderLoop() {
         // Append a print of the packet contents.
         raw_packet.PrintBuffer(decode_debug_message.message + message_len, DebugMessage::kMessageMaxLen - message_len);
         debug_message_out_queue.Push(decode_debug_message);
+    }
+
+    return true;
+}
+
+bool PacketDecoder::PushPacketIfNotDuplicate(const Decoded1090Packet& decoded_packet) {
+    uint32_t icao = decoded_packet.GetICAOAddress();
+    uint32_t timestamp_ms = decoded_packet.GetTimestampMs();
+    uint16_t packet_source = decoded_packet.GetRaw().source;
+
+    // Check if we have already seen this packet from another source (got caught by multiple state machines
+    // simultaneously).
+    for (uint16_t i = 0; i < kMaxNumSources; i++) {
+        if (last_demod_icao_[i] == icao &&
+            (timestamp_ms - last_demod_timestamp_ms_[i]) < kMinSameAircraftMessageIntervalMs) {
+            // Already seen this packet from the same aircraft within the minimum interval.
+            DebugMessage debug_message = DebugMessage{
+                .log_level = SettingsManager::LogLevel::kWarnings,
+            };
+            snprintf(debug_message.message, DebugMessage::kMessageMaxLen,
+                     "PacketDecoder::PushPacketIfNotDuplicate: Skipped duplicate packet with icao=0x%x src=%d "
+                     "timestamp_ms=%d.",
+                     icao, packet_source, timestamp_ms);
+            debug_message_out_queue.Push(debug_message);
+            return false;
+        }
+    }
+
+    decoded_1090_packet_out_queue.Push(decoded_packet);
+
+    if (packet_source >= 0 && packet_source < kMaxNumSources) {
+        // Only update packet cache if the source is valid.
+        last_demod_icao_[packet_source] = icao;
+        last_demod_timestamp_ms_[packet_source] = timestamp_ms;
     }
 
     return true;

@@ -1,0 +1,173 @@
+services:
+  # ultrafeeder:
+  #   image: ghcr.io/sdr-enthusiasts/docker-adsb-ultrafeeder
+  #   # Note - if you want to enable telegraf for use with InfluxDB/Prometheus and Grafana,
+  #   # use the following image instead:
+  #   # image: ghcr.io/sdr-enthusiasts/docker-adsb-ultrafeeder:telegraf
+  #   container_name: ultrafeeder
+  #   hostname: ultrafeeder
+  #   restart: unless-stopped
+  #   device_cgroup_rules:
+  #     - "c 189:* rwm"
+  #   ports:
+  #     - 8080:80 # to expose the web interface
+  #     - 9273-9274:9273-9274 # to expose the statistics interface to Prometheus
+  #   environment:
+  #     # --------------------------------------------------
+  #     # general parameters:
+  #     - LOGLEVEL=error
+  #     - TZ=${FEEDER_TZ}
+  #     # --------------------------------------------------
+  #     # SDR related parameters:
+  #     - READSB_DEVICE_TYPE=rtlsdr
+  #     - READSB_GAIN=auto
+  #     - READSB_RTLSDR_DEVICE=${ADSB_SDR_SERIAL}
+  #     - READSB_RTLSDR_PPM=${ADSB_SDR_PPM}
+  #     #
+  #     # --------------------------------------------------
+  #     # readsb/decoder parameters:
+  #     - READSB_LAT=${FEEDER_LAT}
+  #     - READSB_LON=${FEEDER_LONG}
+  #     - READSB_ALT=${FEEDER_ALT_M}m
+  #     - READSB_RX_LOCATION_ACCURACY=2
+  #     - READSB_STATS_RANGE=true
+  #     #
+  #     # --------------------------------------------------
+  #     # Sources and Aggregator connections:
+  #     # Notes - remove the ones you are not using / feeding
+  #     #       - remove "adsb,dump978,30978,uat_in;" if you don't have dump978 and a UAT dongle connected to your station
+  #     #       - !!! make sure that each line ends with a semicolon ";",  with the exception of the last line which shouldn't have a ";" !!!
+  #     - ULTRAFEEDER_CONFIG=
+  #       adsb,dump978,30978,uat_in;
+  #       adsb,feed.adsb.fi,30004,beast_reduce_plus_out;
+  #       adsb,in.adsb.lol,30004,beast_reduce_plus_out;
+  #       adsb,feed.airplanes.live,30004,beast_reduce_plus_out;
+  #       adsb,feed.planespotters.net,30004,beast_reduce_plus_out;
+  #       adsb,feed.theairtraffic.com,30004,beast_reduce_plus_out;
+  #       adsb,data.avdelphi.com,24999,beast_reduce_plus_out;
+  #       adsb,skyfeed.hpradar.com,30004,beast_reduce_plus_out;
+  #       adsb,dati.flyitalyadsb.com,4905,beast_reduce_plus_out;
+  #       mlat,feed.adsb.fi,31090,39000;
+  #       mlat,in.adsb.lol,31090,39001;
+  #       mlat,feed.airplanes.live,31090,39002;
+  #       mlat,mlat.planespotters.net,31090,39003;
+  #       mlat,feed.theairtraffic.com,31090,39004;
+  #       mlat,skyfeed.hpradar.com,31090,39005;
+  #       mlat,feed.radarplane.com,31090,39006;
+  #       mlat,dati.flyitalyadsb.com,30100,39007;
+  #       mlathub,piaware,30105,beast_in;
+  #       mlathub,rbfeeder,30105,beast_in;
+  #       mlathub,radarvirtuel,30105,beast_in;
+  #       mlathub,planewatch,30105,beast_in
+  #     # If you really want to feed ADSBExchange, you can do so by adding this above:
+  #     #        adsb,feed1.adsbexchange.com,30004,beast_reduce_plus_out,uuid=${ADSBX_UUID};
+  #     #        mlat,feed.adsbexchange.com,31090,39008,uuid=${ADSBX_UUID}
+  #     #
+  #     # --------------------------------------------------
+  #     - UUID=${MULTIFEEDER_UUID}
+  #     - MLAT_USER=${FEEDER_NAME}
+  #     #
+  #     # --------------------------------------------------
+  #     # TAR1090 (Map Web Page) parameters:
+  #     - UPDATE_TAR1090=true
+  #     - TAR1090_DEFAULTCENTERLAT=${FEEDER_LAT}
+  #     - TAR1090_DEFAULTCENTERLON=${FEEDER_LONG}
+  #     - TAR1090_MESSAGERATEINTITLE=true
+  #     - TAR1090_PAGETITLE=${FEEDER_NAME}
+  #     - TAR1090_PLANECOUNTINTITLE=true
+  #     - TAR1090_ENABLE_AC_DB=true
+  #     - TAR1090_FLIGHTAWARELINKS=true
+  #     - HEYWHATSTHAT_PANORAMA_ID=${FEEDER_HEYWHATSTHAT_ID}
+  #     - HEYWHATSTHAT_ALTS=${FEEDER_HEYWHATSTHAT_ALTS}
+  #     - TAR1090_SITESHOW=true
+  #     - TAR1090_RANGE_OUTLINE_COLORED_BY_ALTITUDE=true
+  #     - TAR1090_RANGE_OUTLINE_WIDTH=2.0
+  #     - TAR1090_RANGERINGSDISTANCES=50,100,150,200
+  #     - TAR1090_RANGERINGSCOLORS='#1A237E','#0D47A1','#42A5F5','#64B5F6'
+  #     - TAR1090_USEROUTEAPI=true
+  #     #
+  #     # --------------------------------------------------
+  #     # GRAPHS1090 (Decoder and System Status Web Page) parameters:
+  #     # The two 978 related parameters should only be included if you are running dump978 for UAT reception (USA only)
+  #     - GRAPHS1090_DARKMODE=true
+  #     # - ENABLE_978=yes
+  #     # - URL_978=http://dump978/skyaware978
+  #     #
+  #     # --------------------------------------------------
+  #     # Prometheus and InfluxDB connection parameters:
+  #     # (See above for the correct image tag you must use to enable this)
+  #     - INFLUXDBV2_URL=${INFLUX_URL}
+  #     - INFLUXDBV2_TOKEN=${INFLUX_TOKEN}
+  #     - INFLUXDBV2_BUCKET=${INFLUX_BUCKET}
+  #     - PROMETHEUS_ENABLE=true
+  #   volumes:
+  #     - /opt/adsb/ultrafeeder/globe_history:/var/globe_history
+  #     - /opt/adsb/ultrafeeder/graphs1090:/var/lib/collectd
+  #     - /proc/diskstats:/proc/diskstats:ro
+  #     - /dev/bus/usb:/dev/bus/usb
+  #   tmpfs:
+  #     - /run:exec,size=256M
+  #     - /tmp:size=128M
+  #     - /var/log:size=32M
+  ultrafeeder:
+    image: ghcr.io/sdr-enthusiasts/docker-adsb-ultrafeeder:latest
+    #image: tar1090
+    container_name: ultra
+    hostname: ultra
+    environment:
+      # ----------
+      # adf
+      #
+      # --------------------------------------------------
+      #- LOGLEVEL=error
+      - GRAPHS1090_OTHER_TEMP1=/sys/class/thermal/thermal_zone1/temp
+      - GRAPHS1090_CPU_TEMP=/sys/class/thermal/thermal_zone2/temp
+      - S6_KILL_GRACETIME=100
+      - MLAT_STATS_INTERVAL=60
+      - TZ=UTC
+      - LAT=37.293271
+      - LONG=-121.955817
+      - ALT=56m
+      - READSB_RX_LOCATION_ACCURACY=1
+      - TAR1090_JAEROLABEL=HFDL
+      - TAR1090_HISTORY_DISABLE=true
+      - HISTORY_SIZE=50
+      #- READSB_ENABLE_API=true
+      - MLAT_USER="u3wnot"
+      - MLAT_STARTUP_STAGGER=1
+      # - BEASTHOST=host.docker.internal
+      - UPDATE_TAR1090=true
+      - UPDATE_TAR1090_DAYS=1
+      - TAR1090_ENABLE_AC_DB=true
+      - READSB_ENABLE_TRACES=true
+      - GRAPHS1090_REDUCE_IO=true
+      - GRAPHS1090_DARKMODE=true
+      - UUID=4efdfae9-1928-4040-b4bf-256d70e252ce
+      # Sources and Aggregator connections:
+      # (Note - remove the ones you are not using / feeding)
+      #- READSB_NET_RAW_OUTPUT_INTERVAL=0.02
+      #- READSB_NET_RO_INTERVAL_BEAST_REDUCE=0.18
+      #mlathub,host.docker.internal,43027,sbs_out;
+      - ULTRAFEEDER_CONFIG=
+      - ULTRAFEEDER_CONFIG=
+        adsb,feed.airplanes.live,30004,beast_reduce_plus_out;
+        mlat,feed.airplanes.live,31090;
+        adsb,in.adsb.lol,30004,beast_reduce_plus_out;
+        mlat,in.adsb.lol,31090,39001;
+      #adsb,feed.adsb.fi,30004,beast_reduce_plus_out;
+      #mlat,feed.adsb.fi,31090;
+      #   adsb,feed.adsbexchange.com,30004,beast_reduce_plus_out;
+      #   mlat,feed.adsbexchange.com,31090,39008;
+      #- ADSBX_STATS=1
+      #- READSB_NET_CONNECTOR=127.0.0.1,1234,beast_out
+      - READSB_EXTRA_ARGS= --debug=Sn --json-trace-interval 0.1 --write-json-every 0.5 --json-reliable=1
+    # --------------------------------------------------
+    volumes:
+      - ./ultra/globe_history:/var/globe_history
+      - ./ultra/graphs1090:/var/lib/collectd
+    ports:
+      - 8080:80
+      - 48004:30004
+      - 48005:30005
+    tmpfs:
+      - /run:exec,size=1024M
