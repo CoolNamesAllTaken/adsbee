@@ -245,7 +245,9 @@ class ObjectDictionary {
             .buffer = sc_command_request_queue_buffer_,
             .overwrite_when_full = false  // We don't want to overwrite command requests, since they could be important.
         });
+#ifdef ON_ESP32
     SemaphoreHandle_t network_console_rx_queue_mutex = xSemaphoreCreateMutex();
+#endif
     PFBQueue<char> network_console_rx_queue = PFBQueue<char>({
         .buf_len_num_elements = kNetworkConsoleRxQueueDepth,
         .buffer = network_console_message_buffer_,

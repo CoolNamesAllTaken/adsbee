@@ -12,6 +12,13 @@
 const CCFG     = scripting.addModule("/ti/devices/CCFG");
 const custom   = scripting.addModule("/ti/devices/radioconfig/custom");
 const rfdesign = scripting.addModule("/ti/devices/radioconfig/rfdesign");
+const Board    = scripting.addModule("/ti/drivers/Board");
+const DMA      = scripting.addModule("/ti/drivers/DMA");
+const GPIO     = scripting.addModule("/ti/drivers/GPIO", {}, false);
+const GPIO5    = GPIO.addInstance();
+const GPIO6    = GPIO.addInstance();
+const GPIO7    = GPIO.addInstance();
+const GPIO8    = GPIO.addInstance();
 const SPI      = scripting.addModule("/ti/drivers/SPI", {}, false);
 const SPI1     = SPI.addInstance();
 
@@ -31,8 +38,30 @@ custom.radioConfigcustom868.rxFilterBw             = "2486.5";
 custom.radioConfigcustom868.carrierFrequency       = 930.0000;
 custom.radioConfigcustom868.codeExportConfig.$name = "ti_devices_radioconfig_code_export_param0";
 
-SPI1.$name                = "CONFIG_SPI_0";
+Board.generateInitializationFunctions = false;
+
+DMA.interruptPriority = "3";
+
+GPIO5.mode            = "Output";
+GPIO5.$name           = "SUBG_LED_PIN";
+GPIO5.gpioPin.$assign = "DIO_6";
+
+GPIO6.mode               = "Output";
+GPIO6.outputType         = "Open Drain";
+GPIO6.pull               = "Pull Up";
+GPIO6.initialOutputState = "High";
+GPIO6.$name              = "SUBG_IRQ_PIN";
+GPIO6.gpioPin.$assign    = "DIO_18";
+
+GPIO7.$name           = "SYNC_PIN";
+GPIO7.gpioPin.$assign = "DIO_5";
+
+GPIO8.mode            = "Output";
+GPIO8.$name           = "SUBG_BIAS_TEE_ENABLE_PIN";
+GPIO8.gpioPin.$assign = "DIO_7";
+
 SPI1.mode                 = "Four Pin CS Active Low";
+SPI1.$name                = "COPRO_SPI";
 SPI1.sclkPinInstance.mode = "Input";
 SPI1.pociPinInstance.mode = "Output";
 SPI1.picoPinInstance.mode = "Input";

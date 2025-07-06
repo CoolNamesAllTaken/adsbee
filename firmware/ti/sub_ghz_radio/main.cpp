@@ -19,13 +19,12 @@ extern void *mainThread(void *arg0);
 int main(void)
 {
     /* Call driver init functions */
-    Board_initGeneral();
-    GPIO_init();
+    Board_init();
 
     /* Start NoRTOS */
     NoRTOS_start();
 
-    GPIO_setConfig(bsp.kSubGLEDPin, GPIO_CFG_OUT_STD);
+    // GPIO_setConfig(bsp.kSubGLEDPin, GPIO_CFG_OUT_STD);
 
     static const uint16_t kNumBlinks = 5;
     for (uint16_t i = 0; i < kNumBlinks; ++i)

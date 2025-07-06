@@ -249,10 +249,6 @@ class CommsManager {
     uint32_t last_csbee_report_timestamp_ms_ = 0;
     uint32_t last_mavlink_report_timestamp_ms_ = 0;
     uint32_t last_gdl90_report_timestamp_ms_ = 0;
-
-    // OTA configuration. Used to ignore incoming UART commands while processing OTA data.
-    uint32_t ota_transfer_begin_timestamp_ms_ = 0;
-    uint32_t ota_transfer_bytes_remaining_ = 0;
 };
 
 extern CommsManager comms_manager;

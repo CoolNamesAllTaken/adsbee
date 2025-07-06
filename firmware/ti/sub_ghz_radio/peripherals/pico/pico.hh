@@ -1,27 +1,30 @@
 #pragma once
 
 #include "bsp.hh"
-#include "freertos/semphr.h"
-#include "freertos/task.h"
 #include "spi_coprocessor.hh"
+#include "spi_coprocessor_packet.hh"
+#include "ti/drivers/SPI.h"
+#include "ti/drivers/GPIO.h"
 
-class Pico : public SPICoprocessorMasterInterface {
-   public:
+class Pico : public SPICoprocessorMasterInterface
+{
+public:
     static constexpr uint32_t kNetworkLEDBlinkDurationMs = 1;
-    static constexpr uint32_t kNetworkLEDBlinkDurationTicks = kNetworkLEDBlinkDurationMs / portTICK_PERIOD_MS;
+
     // Since the transaction timeout value is used by threads waiting to use the SPI peripheral, and the SPI update task
     // blocks the copro_spi_mutex_ until it receives a transfer from the master, this timeout needs to be set to the
     // maximum delay between unsolicited packets from the master (heartbeat) to avoid threads giving up while the SPI
     // update task is hogging the mutex.
     // How long to wait once a transaction is started before timing out.
     static constexpr uint16_t kSPITransactionTimeoutMs = 200;
-    static constexpr uint16_t kSPITransactionTimeoutTicks = kSPITransactionTimeoutMs / portTICK_PERIOD_MS;
-    static constexpr uint16_t kSPIMutexTimeoutMs =
-        1200;  // How long to wait for the transaction mutex before timing out.
-    static constexpr uint16_t kSPIMutexTimeoutTicks = kSPIMutexTimeoutMs / portTICK_PERIOD_MS;
+    // Clock_tickPeriod is us per tick.
+    static constexpr uint32_t kSPITransactionTimeoutTicks = kSPITransactionTimeoutMs * 1000 * Clock_tickPeriod;
 
-    struct PicoConfig {
-        spi_host_device_t spi_handle = bsp.copro_spi_handle;
+    static constexpr uint16_t kSPIMutexTimeoutMs =
+        1200; // How long to wait for the transaction mutex before timing out.
+
+    struct PicoConfig
+    {
         gpio_num_t spi_mosi_pin = bsp.copro_spi_mosi_pin;
         gpio_num_t spi_miso_pin = bsp.copro_spi_miso_pin;
         gpio_num_t spi_clk_pin = bsp.copro_spi_clk_pin;
@@ -41,7 +44,8 @@ class Pico : public SPICoprocessorMasterInterface {
      * Helper function used by callbacks to set the handshake pin high or low on the ESP32.
      * Located in IRAM for performance improvements when called from ISR.
      */
-    inline void IRAM_ATTR SetSPIHandshakePinLevel(bool level) {
+    inline void IRAM_ATTR SetSPIHandshakePinLevel(bool level)
+    {
         // Only set the handshake pin HI when we know we want to solicit a response and not block + wait.
         // Handshake pin can always be set LO.
         gpio_set_level(config_.spi_handshake_pin, level && use_handshake_pin_);
@@ -49,30 +53,36 @@ class Pico : public SPICoprocessorMasterInterface {
 
     inline void SPIUseHandshakePin(bool level) { use_handshake_pin_ = level; }
 
-    inline bool SPIBeginTransaction() {
-        if (xSemaphoreTake(spi_mutex_, kSPIMutexTimeoutTicks) != pdTRUE) {
+    inline bool SPIBeginTransaction()
+    {
+        if (xSemaphoreTake(spi_mutex_, kSPIMutexTimeoutTicks) != pdTRUE)
+        {
             CONSOLE_ERROR("Pico::SPIBeginTransaction", "Failed to acquire coprocessor SPI mutex after waiting %d ms.",
                           kSPIMutexTimeoutMs);
             return false;
         }
-        last_bytes_transacted_ = 0;  // Reset the last bytes transacted counter.
+        last_bytes_transacted_ = 0; // Reset the last bytes transacted counter.
         return true;
     }
-    inline void SPIEndTransaction() {
+    inline void SPIEndTransaction()
+    {
         xSemaphoreGive(spi_mutex_);
-        if (last_bytes_transacted_ > 0) {
-            BlinkNetworkLED();  // Blink the network LED to indicate a successful transaction.
+        if (last_bytes_transacted_ > 0)
+        {
+            BlinkNetworkLED(); // Blink the network LED to indicate a successful transaction.
         }
     }
-    inline bool SPIClaimNextTransaction() {
-        if (xSemaphoreTake(spi_next_transaction_mutex_, kSPIMutexTimeoutTicks) != pdTRUE) {
-            CONSOLE_ERROR("Pico::SPIClaimNextTransaction", "Failed to take SPI context mutex after waiting for %d ms.",
-                          kSPIMutexTimeoutMs);
-            return false;
-        }
-        return true;
-    }
-    inline void SPIReleaseNextTransaction() { xSemaphoreGive(spi_next_transaction_mutex_); }
+    // inline bool SPIClaimNextTransaction()
+    // {
+    //     if (xSemaphoreTake(spi_next_transaction_mutex_, kSPIMutexTimeoutTicks) != pdTRUE)
+    //     {
+    //         CONSOLE_ERROR("Pico::SPIClaimNextTransaction", "Failed to take SPI context mutex after waiting for %d ms.",
+    //                       kSPIMutexTimeoutMs);
+    //         return false;
+    //     }
+    //     return true;
+    // }
+    // inline void SPIReleaseNextTransaction() { xSemaphoreGive(spi_next_transaction_mutex_); }
     int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf,
                              uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
                              bool end_transaction = true);
@@ -87,7 +97,8 @@ class Pico : public SPICoprocessorMasterInterface {
      * turn the lED off.
      * @param[in] blink_duration_ms Number of milliseconds that the LED should stay on for.
      */
-    inline void BlinkNetworkLED(uint16_t blink_duration_ms = kNetworkLEDBlinkDurationMs) {
+    inline void BlinkNetworkLED(uint16_t blink_duration_ms = kNetworkLEDBlinkDurationMs)
+    {
         gpio_set_level(config_.network_led_pin, 1);
         network_led_turn_on_timestamp_ticks_ = xTaskGetTickCount();
         network_led_on = true;
@@ -96,30 +107,35 @@ class Pico : public SPICoprocessorMasterInterface {
     /**
      * Turns off the network LED if necessary.
      */
-    inline void UpdateNetworkLED() {
+    inline void UpdateNetworkLED()
+    {
         if (network_led_on &&
-            xTaskGetTickCount() - network_led_turn_on_timestamp_ticks_ > kNetworkLEDBlinkDurationTicks) {
+            xTaskGetTickCount() - network_led_turn_on_timestamp_ticks_ > kNetworkLEDBlinkDurationTicks)
+        {
             gpio_set_level(config_.network_led_pin, 0);
             network_led_on = false;
         }
     }
 
-   private:
-    PicoConfig config_;            // Configuration for the RP2040 SPI coprocessor master interface.
-    SemaphoreHandle_t spi_mutex_;  // Low level mutex used to guard the SPI peripheral (don't let multiple
-                                   // threads queue packets at the same time).
-    SemaphoreHandle_t spi_next_transaction_mutex_;  // High level mutex used to claim the next transaction interval.
+private:
+    PicoConfig config_; // Configuration for the RP2040 SPI coprocessor master interface.
+    // SemaphoreHandle_t spi_mutex_;                  // Low level mutex used to guard the SPI peripheral (don't let multiple
+    //                                                // threads queue packets at the same time).
+    // SemaphoreHandle_t spi_next_transaction_mutex_; // High level mutex used to claim the next transaction interval.
 
     // SPI peripheral needs to operate on special buffers that are 32-bit word aligned and in DMA accessible memory.
-    uint8_t *spi_rx_buf_ = nullptr;
-    uint8_t *spi_tx_buf_ = nullptr;
+    uint8_t spi_rx_buf_[SPICoprocessorPacket::kSPITransactionMaxLenBytes] = {0};
+    uint8_t spi_tx_buf_[SPICoprocessorPacket::kSPITransactionMaxLenBytes] = {0};
 
-    bool spi_receive_task_should_exit_ = false;  // Flag used to tell SPI receive task to exit.
+    SPI_Handle spi_handle_ = nullptr; // Handle to the SPI peripheral used by the RP2040 SPI coprocessor master interface.
+    SPI_Transaction spi_transaction_; // SPI transaction used to send and receive data from the SPI peripheral.
+
+    bool spi_receive_task_should_exit_ = false; // Flag used to tell SPI receive task to exit.
     TickType_t network_led_turn_on_timestamp_ticks_ = 0;
     bool network_led_on = false;
     bool use_handshake_pin_ =
-        false;  // Allow handshake pin toggle to be skipped if waiting for a mesage and not writing to master.
-    int last_bytes_transacted_ = 0;  // Used to determine whether the last transaction was successful.
+        false;                      // Allow handshake pin toggle to be skipped if waiting for a mesage and not writing to master.
+    int last_bytes_transacted_ = 0; // Used to determine whether the last transaction was successful.
 };
 
-extern Pico pico_ll;  // Global instance of the RP2040 SPI coprocessor master interface.
+extern Pico pico_ll; // Global instance of the RP2040 SPI coprocessor master interface.

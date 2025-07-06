@@ -48,18 +48,32 @@ elseif (TARGET bootloader)
     target_include_directories(bootloader PRIVATE
         utils # We just want hal.hh for now.
         firmware_update
+        
     )
 elseif (TARGET sub_ghz_radio)
     # TI CC1312R sub-GHz radio.
     target_sources(${PROJECT_NAME} PRIVATE
-        # utils/data_structures.cpp
-        # coprocessor/spi_coprocessor.cpp
-        # coprocessor/object_dictionary.cpp
+        settings/settings_strs.cpp
+        settings/settings.cpp
+        utils/buffer_utils.cpp
+        utils/data_structures.cpp
+        utils/crc/crc.cpp
+        adsb/transponder_packet.cpp
+        adsb/aircraft_dictionary.cpp
+        adsb/decode_utils.cpp
+        coprocessor/spi_coprocessor.cpp
+        coprocessor/object_dictionary.cpp
     )
     target_include_directories(${PROJECT_NAME} PRIVATE
         .
-        utils
+        adsb
+        comms
+        comms/json # Not actually used, but added to avoid compile errors.
         coprocessor
+        settings
+        utils
+        utils/crc
+        utils/rs
     )
 elseif (TARGET host_test)
     # Off-target unit testing.
