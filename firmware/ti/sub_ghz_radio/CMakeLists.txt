@@ -8,7 +8,8 @@ message(STATUS "Current source directory: ${CMAKE_CURRENT_SOURCE_DIR}")
 set(SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR "$ENV{TI_LPF2_SDK_PATH}" CACHE PATH "ti-lpf2 SDK install dir.")
 set(SYSCFG_OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/syscfg" CACHE PATH "dir where all the sysconfig output goes.")
 set(CMAKE_COMMON_INSTALL_DIR ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/cmake/scripts/cmake-common CACHE PATH "cmake-common scripts dir from the LPF2 SDK.")
-set(CMAKE_TOOLCHAIN_FILE ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/cmake/toolchains/gcc.cmake)
+# set(CMAKE_TOOLCHAIN_FILE ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/cmake/toolchains/gcc.cmake)
+set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/custom_toolchain/gcc.cmake")
 message(STATUS "SimpleLink SDK path: ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}")
 
 # Find ARM GCC compiler directory in /usr/local/
@@ -125,7 +126,15 @@ target_link_options(${PROJECT_NAME} PRIVATE
     -nostartfiles
     -static
     -Wl,--gc-sections
-    --specs=nosys.specs
+    -specs=nano.specs       # Use the nano.specs for smaller binaries
+    -specs=nosys.specs          # Added by John: Add this for embedded systems
+    -lstdc++                    # Added by John: Link C++ standard library
+    -lc
+    -lm
+    -lnosys
+    -fno-exceptions             # If you don't need exceptions (saves space)
+    -fno-rtti                   # If you don't need RTTI (saves space)
+    -fno-threadsafe-statics # Disable thread-safe statics (saves space)
 )
 
 # Custom command to create binary file

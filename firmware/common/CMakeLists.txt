@@ -52,27 +52,28 @@ elseif (TARGET bootloader)
     )
 elseif (TARGET sub_ghz_radio)
     # TI CC1312R sub-GHz radio.
+    add_subdirectory(adsb/nasa_cpr)
     target_sources(${PROJECT_NAME} PRIVATE
         settings/settings_strs.cpp
         settings/settings.cpp
         utils/buffer_utils.cpp
         utils/data_structures.cpp
         utils/crc/crc.cpp
-        adsb/transponder_packet.cpp
-        adsb/aircraft_dictionary.cpp
+        # adsb/transponder_packet.cpp
+        # adsb/aircraft_dictionary.cpp
         adsb/decode_utils.cpp
         coprocessor/spi_coprocessor.cpp
         coprocessor/object_dictionary.cpp
     )
     target_include_directories(${PROJECT_NAME} PRIVATE
-        .
-        adsb
+        # adsb
         comms
         comms/json # Not actually used, but added to avoid compile errors.
         coprocessor
         settings
         utils
         utils/crc
+        utils/geo
         utils/rs
     )
 elseif (TARGET host_test)

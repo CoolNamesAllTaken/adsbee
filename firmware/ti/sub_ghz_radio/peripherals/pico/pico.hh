@@ -17,21 +17,15 @@ public:
     // update task is hogging the mutex.
     // How long to wait once a transaction is started before timing out.
     static constexpr uint16_t kSPITransactionTimeoutMs = 200;
-    // Clock_tickPeriod is us per tick.
-    static constexpr uint32_t kSPITransactionTimeoutTicks = kSPITransactionTimeoutMs * 1000 * Clock_tickPeriod;
 
     static constexpr uint16_t kSPIMutexTimeoutMs =
         1200; // How long to wait for the transaction mutex before timing out.
 
     struct PicoConfig
     {
-        gpio_num_t spi_mosi_pin = bsp.copro_spi_mosi_pin;
-        gpio_num_t spi_miso_pin = bsp.copro_spi_miso_pin;
-        gpio_num_t spi_clk_pin = bsp.copro_spi_clk_pin;
-        gpio_num_t spi_cs_pin = bsp.copro_spi_cs_pin;
-        gpio_num_t spi_handshake_pin = bsp.copro_spi_handshake_pin;
+        uint16_t spi_handshake_pin = bsp.kSubGIRQPin; // Pin used to signal the ESP32 that a transaction is ready.
 
-        gpio_num_t network_led_pin = bsp.network_led_pin;
+        uint16_t network_led_pin = bsp.kSubGLEDPin; // Pin used to blink the network LED on successful transactions.
     };
 
     Pico(PicoConfig config_in);
@@ -44,29 +38,29 @@ public:
      * Helper function used by callbacks to set the handshake pin high or low on the ESP32.
      * Located in IRAM for performance improvements when called from ISR.
      */
-    inline void IRAM_ATTR SetSPIHandshakePinLevel(bool level)
+    inline void SetSPIHandshakePinLevel(bool level)
     {
         // Only set the handshake pin HI when we know we want to solicit a response and not block + wait.
         // Handshake pin can always be set LO.
-        gpio_set_level(config_.spi_handshake_pin, level && use_handshake_pin_);
+        GPIO_write(config_.spi_handshake_pin, level && use_handshake_pin_);
     }
 
     inline void SPIUseHandshakePin(bool level) { use_handshake_pin_ = level; }
 
     inline bool SPIBeginTransaction()
     {
-        if (xSemaphoreTake(spi_mutex_, kSPIMutexTimeoutTicks) != pdTRUE)
-        {
-            CONSOLE_ERROR("Pico::SPIBeginTransaction", "Failed to acquire coprocessor SPI mutex after waiting %d ms.",
-                          kSPIMutexTimeoutMs);
-            return false;
-        }
+        // if (xSemaphoreTake(spi_mutex_, kSPIMutexTimeoutTicks) != pdTRUE)
+        // {
+        //     CONSOLE_ERROR("Pico::SPIBeginTransaction", "Failed to acquire coprocessor SPI mutex after waiting %d ms.",
+        //                   kSPIMutexTimeoutMs);
+        //     return false;
+        // }
         last_bytes_transacted_ = 0; // Reset the last bytes transacted counter.
         return true;
     }
     inline void SPIEndTransaction()
     {
-        xSemaphoreGive(spi_mutex_);
+        // xSemaphoreGive(spi_mutex_);
         if (last_bytes_transacted_ > 0)
         {
             BlinkNetworkLED(); // Blink the network LED to indicate a successful transaction.
@@ -99,8 +93,8 @@ public:
      */
     inline void BlinkNetworkLED(uint16_t blink_duration_ms = kNetworkLEDBlinkDurationMs)
     {
-        gpio_set_level(config_.network_led_pin, 1);
-        network_led_turn_on_timestamp_ticks_ = xTaskGetTickCount();
+        GPIO_write(config_.network_led_pin, 1);
+        network_led_turn_on_timestamp_ms_ = get_time_since_boot_ms();
         network_led_on = true;
     }
 
@@ -110,9 +104,9 @@ public:
     inline void UpdateNetworkLED()
     {
         if (network_led_on &&
-            xTaskGetTickCount() - network_led_turn_on_timestamp_ticks_ > kNetworkLEDBlinkDurationTicks)
+            get_time_since_boot_ms() - network_led_turn_on_timestamp_ms_ > kNetworkLEDBlinkDurationMs)
         {
-            gpio_set_level(config_.network_led_pin, 0);
+            GPIO_write(config_.network_led_pin, 0);
             network_led_on = false;
         }
     }
@@ -131,7 +125,7 @@ private:
     SPI_Transaction spi_transaction_; // SPI transaction used to send and receive data from the SPI peripheral.
 
     bool spi_receive_task_should_exit_ = false; // Flag used to tell SPI receive task to exit.
-    TickType_t network_led_turn_on_timestamp_ticks_ = 0;
+    uint32_t network_led_turn_on_timestamp_ms_ = 0;
     bool network_led_on = false;
     bool use_handshake_pin_ =
         false;                      // Allow handshake pin toggle to be skipped if waiting for a mesage and not writing to master.

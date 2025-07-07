@@ -61,15 +61,21 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                     }
                     break;
                 case kQueueIDConsole:
+#ifdef ON_ESP32
                     xSemaphoreTake(object_dictionary.network_console_rx_queue_mutex, portMAX_DELAY);
+#endif
                     if (!network_console_rx_queue.Discard(roll_request.num_items)) {
                         CONSOLE_ERROR("ObjectDictionary::SetBytes",
                                       "Failed to discard %d chars from the network console TX queue.",
                                       roll_request.num_items);
+#ifdef ON_ESP32
                         xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
+#endif
                         return false;
                     }
+#ifdef ON_ESP32
                     xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
+#endif
                     break;
                 default:
                     CONSOLE_ERROR("ObjectDictionary::SetBytes",
@@ -142,6 +148,7 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             break;
         case kAddrDeviceStatus: {
             uint16_t num_log_messages = log_message_queue.Length();
+#ifdef ON_ESP32
             xSemaphoreTake(object_dictionary.network_console_rx_queue_mutex, portMAX_DELAY);
             uint16_t num_network_console_rx_chars = network_console_rx_queue.Length();
             xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
@@ -151,6 +158,13 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                                                    static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),
                                                .num_queued_sc_command_requests = sc_command_request_queue.Length(),
                                                .num_queued_network_console_rx_chars = num_network_console_rx_chars};
+#elif defined(ON_TI)
+            TIDeviceStatus device_status = {.timestamp_ms = get_time_since_boot_ms(),
+                                            .num_queued_log_messages = num_log_messages,
+                                            .pending_log_messages_packed_size_bytes =
+                                                static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),
+                                            .num_queued_sc_command_requests = sc_command_request_queue.Length()};
+#endif
             for (uint16_t i = 0; i < log_message_queue.Length(); i++) {
                 LogMessage log_message;
                 if (log_message_queue.Peek(log_message, i)) {
@@ -240,26 +254,36 @@ bool ObjectDictionary::RequestSCCommand(const SCCommandRequestWithCallback &requ
 }
 
 bool ObjectDictionary::RequestSCCommandBlocking(const SCCommandRequestWithCallback &request_with_callback) {
+#ifdef ON_ESP32
     SemaphoreHandle_t command_complete_semaphore = xSemaphoreCreateBinary();
     if (command_complete_semaphore == NULL) {
         CONSOLE_ERROR("ADSBeeServer::Init", "Failed to create settings read semaphore.");
         return false;
     }
+#endif
 
-    bool ret = object_dictionary.RequestSCCommand(ObjectDictionary::SCCommandRequestWithCallback{
+    bool ret = object_dictionary.RequestSCCommand(ObjectDictionary::SCCommandRequestWithCallback {
         .request = request_with_callback.request,
         .complete_callback =
+#ifdef ON_ESP32
             [command_complete_semaphore, request_with_callback]() {
+#else
+            [request_with_callback]() {
+#endif
                 if (request_with_callback.complete_callback) {
                     request_with_callback.complete_callback();  // Call the existing callback if it exists.
                 }
+#ifdef ON_ESP32
                 xSemaphoreGive(command_complete_semaphore);
+#endif
             },
     });  // Require ack.
 
+#ifdef ON_ESP32
     // Wait for the callback to complete
     xSemaphoreTake(command_complete_semaphore, portMAX_DELAY);
     vSemaphoreDelete(command_complete_semaphore);
+#endif
     return ret;
 }
 #endif

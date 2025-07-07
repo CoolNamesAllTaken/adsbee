@@ -3,7 +3,6 @@
 #include <cstdarg> // For debug printf.
 #include <cstdio>  // Regular pico/stdio.h doesn't support vprint functions.
 
-#include "pico/stdlib.h"
 #include "spi_coprocessor.hh"
 
 CommsManager::CommsManager(CommsManagerConfig config_in)

@@ -5,11 +5,21 @@
 #include <ti/drivers/GPIO.h>
 #include <ti/drivers/dpl/ClockP.h>
 #include "bsp.hh"
-
-BSP bsp;
+#include "spi_coprocessor.hh"
+#include "pico.hh"
+#include "settings.hh"
+#include "comms.hh"
+#include "object_dictionary.hh"
 
 /* Example/Board Header files */
 #include "ti_drivers_config.h"
+
+BSP bsp;
+ObjectDictionary object_dictionary;
+Pico pico_ll = Pico({});
+SPICoprocessor pico = SPICoprocessor({.interface = pico_ll});
+CommsManager comms_manager = CommsManager({});
+SettingsManager settings_manager = SettingsManager();
 
 extern void *mainThread(void *arg0);
 

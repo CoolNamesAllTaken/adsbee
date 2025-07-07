@@ -244,9 +244,6 @@ void callback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e)
     if (e & RF_EventRxEntryDone)
     {
         /* Toggle pin to indicate RX */
-        // PIN_setOutputValue(ledPinHandle, bsp.kSubGLEDPin,
-        //                    !PIN_getOutputValue(bsp.kSubGLEDPin));
-
         GPIO_toggle(bsp.kSubGLEDPin);
 
         /* Get current unhandled data entry */

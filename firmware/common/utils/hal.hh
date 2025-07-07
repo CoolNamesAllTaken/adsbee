@@ -22,7 +22,7 @@ inline uint64_t get_time_since_boot_us() {
 #elif ON_ESP32
     return esp_timer_get_time();
 #elif ON_TI
-    return ClockP_getSystemTicks() * ClockP_tickPeriod;
+    return ClockP_getSystemTicks() * ClockP_getSystemTickPeriod();
 #else
     return time_since_boot_us;
 #endif
@@ -33,19 +33,19 @@ inline uint32_t get_time_since_boot_ms() {
 #elif ON_ESP32
     return xTaskGetTickCount() * portTICK_PERIOD_MS;
 #elif ON_TI
-    return ClockP_getSystemTicks() * ClockP_tickPeriod * 1000;  // tickPeriod is in us.
+    return ClockP_getSystemTicks() * ClockP_getSystemTickPeriod() * 1000;  // tickPeriod is in us.
 #else
     return time_since_boot_us / 1e3;
 #endif
 }
 
-void sleep_us_blocking(uint64_t us) {
+inline void sleep_us_blocking(uint64_t us) {
     uint64_t timestamp_us = get_time_since_boot_us();
     while (get_time_since_boot_us() - timestamp_us < us) {
     }
 }
 
-void sleep_ms_blocking(uint32_t ms) {
+inline void sleep_ms_blocking(uint32_t ms) {
     uint64_t timestamp_ms = get_time_since_boot_ms();
     while (get_time_since_boot_ms() - timestamp_ms < ms) {
     }

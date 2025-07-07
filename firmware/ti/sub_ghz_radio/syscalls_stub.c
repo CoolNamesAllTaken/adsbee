@@ -45,3 +45,16 @@ __attribute__((weak)) void _read(void)
 __attribute__((weak)) void _write(void)
 {
 }
+
+// In syscalls_stub.c
+__attribute__((weak)) void _exit(int status)
+{
+    while (1)
+        ; // Infinite loop for embedded systems
+}
+
+__attribute__((weak)) void *_sbrk(int incr)
+{
+    // Simple heap implementation or return error
+    return (void *)-1;
+}

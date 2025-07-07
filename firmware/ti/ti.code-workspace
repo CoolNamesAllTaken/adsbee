@@ -21,7 +21,11 @@
 			"rfqueue.h": "c",
 			"devicefamily.h": "c",
 			"clockp.h": "c",
-			"functional": "cpp"
+			"functional": "cpp",
+			"cmath": "cpp",
+			"compare": "cpp",
+			"cstdint": "cpp",
+			"format": "cpp"
 		},
 		"C_Cpp.default.defines": [
 			"ON_TI",

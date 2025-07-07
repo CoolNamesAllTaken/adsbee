@@ -152,6 +152,14 @@ class ObjectDictionary {
         }
     };
 
+    struct __attribute__((__packed__)) TIDeviceStatus {
+        uint32_t timestamp_ms = 0;  // Timestamp in milliseconds since boot.
+        uint16_t num_queued_log_messages = 0;
+        uint32_t pending_log_messages_packed_size_bytes = 0;
+
+        uint16_t num_queued_sc_command_requests = 0;  // Number of SCCommand requests queued for the master.
+    };
+
     /**
      * Struct used to pass debug messages between devices.
      */
@@ -266,7 +274,11 @@ class ObjectDictionary {
 #ifdef ON_COPRO_SLAVE
     ObjectDictionary::SCCommandRequestWithCallback
         sc_command_request_queue_buffer_[ObjectDictionary::kSCCommandRequestQueueDepth] = {};
+#ifdef ON_ESP32
     char* network_console_message_buffer_ = (char*)heap_caps_malloc(kNetworkConsoleRxQueueDepth, 0);
+#else
+    char network_console_message_buffer_[kNetworkConsoleRxQueueDepth] = {};
+#endif
 #endif
 };
 

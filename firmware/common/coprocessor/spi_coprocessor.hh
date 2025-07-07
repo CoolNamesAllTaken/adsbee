@@ -1,7 +1,12 @@
 #ifndef SPI_COPROCESSOR_HH_
 #define SPI_COPROCESSOR_HH_
 
+#include <cstdarg>  // For va_list.
+
+#ifndef ON_TI
 #include "aircraft_dictionary.hh"
+#include "transponder_packet.hh"
+#endif
 #include "comms.hh"
 #include "hal.hh"
 #include "macros.hh"
@@ -9,7 +14,6 @@
 #include "settings.hh"
 #include "spi_coprocessor_interface.hh"
 #include "spi_coprocessor_packet.hh"
-#include "transponder_packet.hh"
 
 class SPICoprocessor : public SPICoprocessorInterface {
    public:
@@ -141,7 +145,7 @@ class SPICoprocessor : public SPICoprocessorInterface {
      * @param[in] format Format string for the message.
      * @param[in] ... Variable arguments for the format string.
      */
-    bool LogMessage(SettingsManager::LogLevel log_level, const char *tag, const char *format, va_list args);
+    bool LogMessage(SettingsManager::LogLevel log_level, const char *tag, const char *format, std::va_list args);
 #endif
 
    protected:
