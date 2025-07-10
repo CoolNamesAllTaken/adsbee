@@ -323,6 +323,12 @@ bool CC1312::EnterBootloader() {
     in_bootloader_ = true;
     sleep_ms(kBootupDelayMs);  // Wait for the CC1312 to boot up.
 
+    // Bootlaoder is active, override CPHA and CPOL.
+    // WARNING: Other devices on the bus can't be used while CC1312 is in bootloader mode.
+    spi_set_format(config_.spi_handle, kBootloaderSPIPeripheralConfig.bits_per_transfer,
+                   kBootloaderSPIPeripheralConfig.cpol, kBootloaderSPIPeripheralConfig.cpha,
+                   kBootloaderSPIPeripheralConfig.order);
+
     return BootloaderCommandPing();
 }
 
@@ -331,6 +337,9 @@ bool CC1312::ExitBootloader() {
     SetEnableState(SettingsManager::kEnableStateDisabled);
     gpio_put(config_.sync_pin, 0);
     SetEnableState(SettingsManager::kEnableStateEnabled);
+
+    spi_set_format(config_.spi_handle, kDefaultSPIPeripheralConfig.bits_per_transfer, kDefaultSPIPeripheralConfig.cpol,
+                   kDefaultSPIPeripheralConfig.cpha, kDefaultSPIPeripheralConfig.order);
 
     return true;
 }
@@ -577,13 +586,6 @@ bool CC1312::SPIBeginTransaction() {
         return true;  // Already in a transaction, no need to start a new one.
     }
 
-    if (in_bootloader_) {
-        // Bootlaoder is active, override CPHA and CPOL.
-        spi_set_format(config_.spi_handle, kBootloaderSPIPeripheralConfig.bits_per_transfer,
-                       kBootloaderSPIPeripheralConfig.cpol, kBootloaderSPIPeripheralConfig.cpha,
-                       kBootloaderSPIPeripheralConfig.order);
-    }
-
     standby_clk_config_ = spi_get_clk();  // Save existing clock config.
     spi_set_clk(active_clk_config_);
 
@@ -599,12 +601,10 @@ void CC1312::SPIEndTransaction() {
     }
 
     spi_set_clk(standby_clk_config_);  // Restore clock config.
-    if (in_bootloader_) {
-        // Bootlaoder is active, restore CPHA and CPOL.
-        spi_set_format(config_.spi_handle, kDefaultSPIPeripheralConfig.bits_per_transfer,
-                       kDefaultSPIPeripheralConfig.cpol, kDefaultSPIPeripheralConfig.cpha,
-                       kDefaultSPIPeripheralConfig.order);
-    }
+    // NOTE: For some reason changing the SPI format here caused a hardfault, intermittently. My best guess is that the
+    // SPI format registers didn't like being hammered on every transaction for some reason. Format change has been
+    // moved to the EnterBootlaoder and ExitBootloader functions. This removed the hardfault but means other peripherals
+    // on the SPI bus can't be accessed while the CC1312 is simultaneously in bootloader mode.
 
     gpio_put(config_.spi_cs_pin, true);
     in_transaction_ = false;  // Mark transaction as ended.

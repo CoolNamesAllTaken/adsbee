@@ -259,7 +259,12 @@ bool ADSBee::Update() {
 
     // Update sub-GHz radio.
     // TODO: Check if enabled before updating.
-    // subg_radio.Update();
+    if (config_.has_subg && subg_radio.IsEnabled()) {
+        if (!subg_radio.Update()) {
+            CONSOLE_ERROR("ADSBee::Update", "Failed to update sub-GHz radio.");
+            return false;
+        }
+    }
     return true;
 }
 
