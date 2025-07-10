@@ -330,6 +330,7 @@ bool SPICoprocessor::SPIWaitForAck() {
 }
 #endif
 
+#ifdef ON_COPRO_SLAVE
 bool SPICoprocessor::SPISendAck(bool success) {
     SPICoprocessorPacket::SCResponsePacket response_packet;
     response_packet.cmd = ObjectDictionary::ObjectDictionary::SCCommand::kCmdAck;
@@ -341,5 +342,5 @@ bool SPICoprocessor::SPISendAck(bool success) {
     return SPIWriteBlocking(response_packet.GetBuf(), SPICoprocessorPacket::SCResponsePacket::kAckLenBytes) > 0;
 #else
     return SPIWriteNonBlocking(response_packet.GetBuf(), SPICoprocessorPacket::SCResponsePacket::kAckLenBytes) > 0;
-#endif
-}
+#endif  // ON_TI
+#endif  // ON_COPRO_SLAVE

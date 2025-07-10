@@ -256,6 +256,9 @@ bool ADSBee::Update() {
                           100;
         noise_floor_last_sample_timestamp_ms_ = timestamp_ms;
     }
+
+    // Update sub-GHz radio.
+    subg_radio.Update();
     return true;
 }
 
