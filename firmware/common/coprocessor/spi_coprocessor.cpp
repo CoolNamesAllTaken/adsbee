@@ -35,7 +35,7 @@ bool SPICoprocessor::DeInit() {
     return true;
 }
 
-bool SPICoprocessor::Update(bool blocking) {
+bool SPICoprocessor::Update() {
     bool ret = false;
 #ifdef ON_COPRO_MASTER
     if (!IsEnabled()) {
@@ -49,8 +49,7 @@ bool SPICoprocessor::Update(bool blocking) {
     }
 
     config_.interface.SPIEndTransaction();
-#elif defined(ON_COPRO_SLAVE)
-    // TODO: Return if not blocking and no transaction is pending.
+#elif defined(ON_COPRO_SLAVE) && !defined(ON_TI)
     uint8_t rx_buf[SPICoprocessorPacket::kSPITransactionMaxLenBytes];
     memset(rx_buf, 0, SPICoprocessorPacket::kSPITransactionMaxLenBytes);
 
@@ -138,6 +137,9 @@ bool SPICoprocessor::Update(bool blocking) {
     }
 
     config_.interface.SPIEndTransaction();
+#else
+    // TI platform doesn't have an RTOS, so we can't block without stalling the processor. Utilize SPI callback updates
+    // instead.
 #endif
     return ret;
 }
@@ -334,12 +336,10 @@ bool SPICoprocessor::SPISendAck(bool success) {
     response_packet.data[0] = success;
     response_packet.data_len_bytes = 1;
     response_packet.PopulateCRC();
-#ifdef ON_ESP32
     config_.interface.SPIUseHandshakePin(true);  // Solicit a transfer to send the ack.
-#endif
+#ifndef ON_TI
     return SPIWriteBlocking(response_packet.GetBuf(), SPICoprocessorPacket::SCResponsePacket::kAckLenBytes) > 0;
-}
-
-int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len_bytes, bool end_transaction) {
-    return config_.interface.SPIWriteReadBlocking(tx_buf, rx_buf, len_bytes, end_transaction);
+#else
+    return SPIWriteNonBlocking(response_packet.GetBuf(), SPICoprocessorPacket::SCResponsePacket::kAckLenBytes) > 0;
+#endif
 }

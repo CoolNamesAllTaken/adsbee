@@ -62,9 +62,24 @@ class SPICoprocessorInterface {
      */
     virtual bool DeInit() = 0;
 
+#ifndef ON_TI
+    /**
+     * On Pico and ESP32, we can block while writing and ensure that we return the bytes that were read.
+     */
     virtual int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf,
                                      uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
                                      bool end_transaction = true) = 0;
+#else
+    /**
+     * On CC1312, we can only write and then let the callback complete function read the result. We don't know the
+     * number of bytes transmitted until the callback, so all we can return is a bool.
+     * @param[in] tx_buf Bytes to transmit.
+     * @param[in] len_bytes Number of bytes to transmit.
+     * @retval True if transfer was queued successfully, false otherwise.
+     */
+    virtual bool SPIWriteNonBlocking(uint8_t *tx_buf,
+                                     uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes) = 0;
+#endif
 };
 
 /**
@@ -80,6 +95,12 @@ class SPICoprocessorMasterInterface : public SPICoprocessorInterface {
     virtual inline void SPIUseHandshakePin(bool level) = 0;
 
     virtual inline void UpdateNetworkLED() = 0;
+
+#ifdef ON_TI
+    // The TI processor does not use an RTOS, so we need a callback-based update system that has access to low-level
+    // transaction parameters. I considered overloading the UpdateNetworkLED() function, but this seems cleaner.
+    virtual bool SPIPostTransactionCallback() = 0;
+#endif
 
     virtual bool SPIBeginTransaction() = 0;
     virtual void SPIEndTransaction() = 0;

@@ -6,6 +6,7 @@
 #include <ti/drivers/dpl/ClockP.h>
 #include "bsp.hh"
 #include "spi_coprocessor.hh"
+#include "spi_coprocessor_interface.hh"
 #include "pico.hh"
 #include "settings.hh"
 #include "comms.hh"

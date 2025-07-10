@@ -127,12 +127,11 @@ class SPICoprocessor : public SPICoprocessorInterface {
     }
 #endif
     /**
-     *
-     * @param[in] blocking On RP2040, blocks until kSPIMinTransactionIntervalUs after the previous transaction to check
-     * to see if the ESP32 has anything to say. Set to true if using this as a way to flush the ESP32 of messages before
-     * writing to it. On ESP32, has no effect.
+     * Updates the SPI coprocessor interface. On the master, this will read from the slave and process any requests the
+     * slave has queued. On the slave, this will process incoming transactions from the master and reply if necessary
+     * (the slave does not initiate any unsolicited transactions).
      */
-    bool Update(bool blocking = false);
+    bool Update();
 
 #ifdef ON_COPRO_SLAVE
 
@@ -146,6 +145,13 @@ class SPICoprocessor : public SPICoprocessorInterface {
      * @param[in] ... Variable arguments for the format string.
      */
     bool LogMessage(SettingsManager::LogLevel log_level, const char *tag, const char *format, std::va_list args);
+
+    /**
+     * Send an SCResponse packet with a single byte ACK payload.
+     * @param[in] success True if sending an ACK, false if sending a NACK.
+     * @retval True if ACK was transmitted successfully, false if something went wrong.
+     */
+    bool SPISendAck(bool success);
 #endif
 
    protected:
@@ -162,13 +168,7 @@ class SPICoprocessor : public SPICoprocessorInterface {
     bool SPIWaitForAck();
 #endif
 
-    /**
-     * Send an SCResponse packet with a single byte ACK payload.
-     * @param[in] success True if sending an ACK, false if sending a NACK.
-     * @retval True if ACK was transmitted successfully, false if something went wrong.
-     */
-    bool SPISendAck(bool success);
-
+#ifndef ON_TI
     /**
      * Low level HAL for SPI Write Read call. Transmits the contents of tx_buf and receives into rx_buf.
      * Both buffers MUST be at least SPICoprocessorPacket::kSPITransactionMaxLenBytes Bytes long.
@@ -182,7 +182,9 @@ class SPICoprocessor : public SPICoprocessorInterface {
      */
     int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf,
                              uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
-                             bool end_transaction = true);
+                             bool end_transaction = true) {
+        return config_.interface.SPIWriteReadBlocking(tx_buf, rx_buf, len_bytes, end_transaction);
+    }
 
     // Write / Read aliases for SPIWriteReadBlocking.
     inline int SPIWriteBlocking(uint8_t *tx_buf, uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
@@ -193,6 +195,12 @@ class SPICoprocessor : public SPICoprocessorInterface {
                                bool end_transaction = true) {
         return SPIWriteReadBlocking(nullptr, rx_buf, len_bytes, end_transaction);
     }
+#else
+    // On the CC1312, we can only queue up a write and let the callback handle the bytes that were read.
+    bool SPIWriteNonBlocking(uint8_t *tx_buf, uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes) {
+        return config_.interface.SPIWriteNonBlocking(tx_buf, len_bytes);
+    }
+#endif
 
     SPICoprocessorConfig config_;
 };

@@ -21,6 +21,12 @@ public:
     static constexpr uint16_t kSPIMutexTimeoutMs =
         1200; // How long to wait for the transaction mutex before timing out.
 
+    enum SPITransactionError : int
+    {
+        kSPITransactionErrorReturnedFalse = -1,
+        kSPITransactionErrorLengthIncorrect = -2
+    };
+
     struct PicoConfig
     {
         uint16_t spi_handshake_pin = bsp.kSubGIRQPin; // Pin used to signal the ESP32 that a transaction is ready.
@@ -49,12 +55,6 @@ public:
 
     inline bool SPIBeginTransaction()
     {
-        // if (xSemaphoreTake(spi_mutex_, kSPIMutexTimeoutTicks) != pdTRUE)
-        // {
-        //     CONSOLE_ERROR("Pico::SPIBeginTransaction", "Failed to acquire coprocessor SPI mutex after waiting %d ms.",
-        //                   kSPIMutexTimeoutMs);
-        //     return false;
-        // }
         last_bytes_transacted_ = 0; // Reset the last bytes transacted counter.
         return true;
     }
@@ -66,20 +66,9 @@ public:
             BlinkNetworkLED(); // Blink the network LED to indicate a successful transaction.
         }
     }
-    // inline bool SPIClaimNextTransaction()
-    // {
-    //     if (xSemaphoreTake(spi_next_transaction_mutex_, kSPIMutexTimeoutTicks) != pdTRUE)
-    //     {
-    //         CONSOLE_ERROR("Pico::SPIClaimNextTransaction", "Failed to take SPI context mutex after waiting for %d ms.",
-    //                       kSPIMutexTimeoutMs);
-    //         return false;
-    //     }
-    //     return true;
-    // }
-    // inline void SPIReleaseNextTransaction() { xSemaphoreGive(spi_next_transaction_mutex_); }
-    int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf,
-                             uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
-                             bool end_transaction = true);
+
+    bool SPIWriteNonBlocking(uint8_t *tx_buf,
+                             uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes);
 
     /**
      * Function called from the task spawned during Init().
@@ -111,7 +100,11 @@ public:
         }
     }
 
+    bool SPIPostTransactionCallback();
+
 private:
+    void SPIResetTransaction();
+
     PicoConfig config_; // Configuration for the RP2040 SPI coprocessor master interface.
     // SemaphoreHandle_t spi_mutex_;                  // Low level mutex used to guard the SPI peripheral (don't let multiple
     //                                                // threads queue packets at the same time).
@@ -121,8 +114,9 @@ private:
     uint8_t spi_rx_buf_[SPICoprocessorPacket::kSPITransactionMaxLenBytes] = {0};
     uint8_t spi_tx_buf_[SPICoprocessorPacket::kSPITransactionMaxLenBytes] = {0};
 
-    SPI_Handle spi_handle_ = nullptr; // Handle to the SPI peripheral used by the RP2040 SPI coprocessor master interface.
-    SPI_Transaction spi_transaction_; // SPI transaction used to send and receive data from the SPI peripheral.
+    SPI_Handle spi_handle_ = nullptr;        // Handle to the SPI peripheral used by the RP2040 SPI coprocessor master interface.
+    SPI_Transaction spi_transaction_;        // SPI transaction used to send and receive data from the SPI peripheral.
+    uint16_t spi_transaction_len_bytes_ = 0; // Length of the pending SPI transaction in bytes. Allows the callback function to figure out how long the transaction was supposed to be.
 
     bool spi_receive_task_should_exit_ = false; // Flag used to tell SPI receive task to exit.
     uint32_t network_led_turn_on_timestamp_ms_ = 0;

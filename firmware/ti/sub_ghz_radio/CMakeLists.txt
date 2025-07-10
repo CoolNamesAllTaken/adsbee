@@ -88,6 +88,8 @@ target_sources(${PROJECT_NAME} PRIVATE
     ${SYSCFG_OUTPUT_DIR}/ti_devices_config.c
     ${SYSCFG_OUTPUT_DIR}/ti_drivers_config.c
     ${CMAKE_CURRENT_SOURCE_DIR}/smartrf/smartrf_settings.c
+
+    settings.cpp
 )
 
 # Do NOT add the SDK itself as a subdirectory or else it will assume you are building the SDK and take over a bunch of important variables like CMAKE_COMMON_INSTALL_DIR.
