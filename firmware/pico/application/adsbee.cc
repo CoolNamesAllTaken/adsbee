@@ -258,7 +258,8 @@ bool ADSBee::Update() {
     }
 
     // Update sub-GHz radio.
-    subg_radio.Update();
+    // TODO: Check if enabled before updating.
+    // subg_radio.Update();
     return true;
 }
 

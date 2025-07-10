@@ -1,6 +1,7 @@
 #include "cc1312.hh"
 
 // Get access to raw application binary for flashing.
+#include "adsbee.hh"  // Get access to subg radio for calling higher level interaction functions.
 #include "bin/binaries.c"
 #include "crc.hh"  // For IEEE 802.3 CRC32 calculation.
 #include "hal.hh"
@@ -87,7 +88,28 @@ bool CC1312::Init(bool spi_already_initialized) {
     return true;
 }
 
-bool CC1312::Update() { return true; }
+bool CC1312::Update() {
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+
+    if (timestamp_ms - last_device_status_update_timestamp_ms_ > device_status_update_interval_ms) {
+        // Query ESP32's device status.
+        ObjectDictionary::ESP32DeviceStatus device_status;
+        if (adsbee.subg_radio.Read(ObjectDictionary::Address::kAddrDeviceStatus, device_status)) {
+            last_device_status_update_timestamp_ms_ = timestamp_ms;
+
+            // We only update the device_status vars exposed publicly here. Other reads of device_status are for
+            // internal use only.
+            num_queued_log_messages = device_status.num_queued_log_messages;
+            queued_log_messages_packed_size_bytes = device_status.queued_log_messages_packed_size_bytes;
+            num_queued_sc_command_requests = device_status.num_queued_sc_command_requests;
+        } else {
+            CONSOLE_ERROR("CC1312::Update", "Unable to read CC1312 status.");
+            return false;
+        }
+    }
+
+    return true;
+}
 
 bool CC1312::ApplicationIsUpToDate() {
     // Verify application binary.
@@ -551,22 +573,30 @@ bool CC1312::Flash() {
 }
 
 bool CC1312::SPIBeginTransaction() {
+    if (in_transaction_) {
+        return true;  // Already in a transaction, no need to start a new one.
+    }
+
     if (in_bootloader_) {
         // Bootlaoder is active, override CPHA and CPOL.
         spi_set_format(config_.spi_handle, kBootloaderSPIPeripheralConfig.bits_per_transfer,
                        kBootloaderSPIPeripheralConfig.cpol, kBootloaderSPIPeripheralConfig.cpha,
                        kBootloaderSPIPeripheralConfig.order);
     }
+
     standby_clk_config_ = spi_get_clk();  // Save existing clock config.
     spi_set_clk(active_clk_config_);
 
+    in_transaction_ = true;
     gpio_put(config_.spi_cs_pin, false);
 
     return true;
 }
 
 void CC1312::SPIEndTransaction() {
-    gpio_put(config_.spi_cs_pin, true);
+    if (!in_transaction_) {
+        return;  // Not in a transaction, nothing to do.
+    }
 
     spi_set_clk(standby_clk_config_);  // Restore clock config.
     if (in_bootloader_) {
@@ -575,6 +605,9 @@ void CC1312::SPIEndTransaction() {
                        kDefaultSPIPeripheralConfig.cpol, kDefaultSPIPeripheralConfig.cpha,
                        kDefaultSPIPeripheralConfig.order);
     }
+
+    gpio_put(config_.spi_cs_pin, true);
+    in_transaction_ = false;  // Mark transaction as ended.
 }
 
 int CC1312::SPIWriteReadBlocking(uint8_t* tx_buf, uint8_t* rx_buf, uint16_t len_bytes, bool end_transaction) {

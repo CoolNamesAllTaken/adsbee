@@ -19,12 +19,16 @@ class SPICoprocessor : public SPICoprocessorInterface {
    public:
     static constexpr uint16_t kSPITransactionQueueLenTransactions = 3;
 
-    static constexpr uint16_t kSPITransactionMaxNumRetries =
-        3;  // Max num retries per block in a multi-transfer transaction.
+    // Max num retries per block in a multi-transfer transaction.
+    static constexpr uint16_t kSPITransactionMaxNumRetries = 3;
+    static const uint16_t kTagStrMaxLen = 32;
+    static const uint16_t kMaxNumSCCommandRequestsPerUpdate = 5;
 
     struct SPICoprocessorConfig {
 #ifdef ON_COPRO_MASTER
         SPICoprocessorSlaveInterface &interface;  // Reference to the slave interface.
+        char tag_str[kTagStrMaxLen] = {0};        // Tag to prepend to console messages.
+        bool pull_log_messages = false;           // Whether to pull log messages from the slave.
 #elif defined(ON_COPRO_SLAVE)
         SPICoprocessorMasterInterface &interface;  // Reference to the master interface.
 #else
@@ -156,6 +160,13 @@ class SPICoprocessor : public SPICoprocessorInterface {
 
    protected:
 #ifdef ON_COPRO_MASTER
+    /**
+     * Executes a single SCCommand request received from the coprocessor.
+     * @param[in] request The SCCommandRequest to execute.
+     * @retval True if the command was executed successfully, false otherwise.
+     */
+    bool ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRequest &request);
+
     bool PartialWrite(ObjectDictionary::Address addr, uint8_t *object_buf, uint16_t len, uint16_t offset = 0,
                       bool require_ack = false);
 
@@ -166,7 +177,7 @@ class SPICoprocessor : public SPICoprocessorInterface {
      * @retval True if received an ACK, false if received NACK or timed out.
      */
     bool SPIWaitForAck();
-#endif
+#endif  // ON_COPRO_MASTER
 
 #ifndef ON_TI
     /**
@@ -200,7 +211,7 @@ class SPICoprocessor : public SPICoprocessorInterface {
     bool SPIWriteNonBlocking(uint8_t *tx_buf, uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes) {
         return config_.interface.SPIWriteNonBlocking(tx_buf, len_bytes);
     }
-#endif
+#endif  // ON_TI
 
     SPICoprocessorConfig config_;
 };

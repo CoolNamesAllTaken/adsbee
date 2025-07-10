@@ -102,7 +102,7 @@ class ObjectDictionary {
     struct __attribute__((__packed__)) ESP32DeviceStatus {
         uint32_t timestamp_ms = 0;
         uint16_t num_queued_log_messages = 0;
-        uint32_t pending_log_messages_packed_size_bytes = 0;
+        uint32_t queued_log_messages_packed_size_bytes = 0;
 
         uint16_t num_queued_sc_command_requests = 0;  // Number of SCCommand requests queued for the master.
         uint32_t num_queued_network_console_rx_chars =
@@ -155,7 +155,7 @@ class ObjectDictionary {
     struct __attribute__((__packed__)) TIDeviceStatus {
         uint32_t timestamp_ms = 0;  // Timestamp in milliseconds since boot.
         uint16_t num_queued_log_messages = 0;
-        uint32_t pending_log_messages_packed_size_bytes = 0;
+        uint32_t queued_log_messages_packed_size_bytes = 0;
 
         uint16_t num_queued_sc_command_requests = 0;  // Number of SCCommand requests queued for the master.
     };

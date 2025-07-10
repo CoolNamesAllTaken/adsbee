@@ -518,6 +518,8 @@ class CC1312 : public SPICoprocessorSlaveInterface {
     SettingsManager::EnableState enabled_ = SettingsManager::EnableState::kEnableStateDisabled;
     bool enable_is_external_ = false;
     bool in_bootloader_ = false;
+    // Keep track of whether we are in a transaction since we need special SPI settings.
+    bool in_transaction_ = false;  // True if the SPI peripheral is currently in a transaction.
 
     // Clock config struct used to set the SPI peripheral to the correct clock rate.
     struct SPIClkConfig {

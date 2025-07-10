@@ -154,21 +154,21 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
             ESP32DeviceStatus device_status = {.timestamp_ms = get_time_since_boot_ms(),
                                                .num_queued_log_messages = num_log_messages,
-                                               .pending_log_messages_packed_size_bytes =
+                                               .queued_log_messages_packed_size_bytes =
                                                    static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),
                                                .num_queued_sc_command_requests = sc_command_request_queue.Length(),
                                                .num_queued_network_console_rx_chars = num_network_console_rx_chars};
 #elif defined(ON_TI)
             TIDeviceStatus device_status = {.timestamp_ms = get_time_since_boot_ms(),
                                             .num_queued_log_messages = num_log_messages,
-                                            .pending_log_messages_packed_size_bytes =
+                                            .queued_log_messages_packed_size_bytes =
                                                 static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),
                                             .num_queued_sc_command_requests = sc_command_request_queue.Length()};
 #endif
             for (uint16_t i = 0; i < log_message_queue.Length(); i++) {
                 LogMessage log_message;
                 if (log_message_queue.Peek(log_message, i)) {
-                    device_status.pending_log_messages_packed_size_bytes +=
+                    device_status.queued_log_messages_packed_size_bytes +=
                         log_message.num_chars + 1;  // +1 for null terminator
                 }
             }

@@ -334,7 +334,7 @@ class ADSBee {
 
     AircraftDictionary aircraft_dictionary;
     CC1312 subg_radio_ll = CC1312({});
-    SPICoprocessor subg_radio = SPICoprocessor({.interface = subg_radio_ll});
+    SPICoprocessor subg_radio = SPICoprocessor({.interface = subg_radio_ll, .tag_str = "CC1312"});
 
    private:
     void PIOInit();

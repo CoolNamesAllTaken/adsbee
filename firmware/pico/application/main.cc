@@ -42,8 +42,8 @@ ObjectDictionary object_dictionary;
 ESP32 esp32_ll = ESP32({});
 
 // Provide high-level coprocessor objects for interacting with coprocessor devices via low level class definitions.
-SPICoprocessor esp32 =
-    SPICoprocessor({.interface = esp32_ll});  // Use the low-level ESP32 interface to communicate with the ESP32.
+SPICoprocessor esp32 = SPICoprocessor(
+    {.interface = esp32_ll, .tag_str = "ESP32"});  // Use the low-level ESP32 interface to communicate with the ESP32.
 PacketDecoder decoder = PacketDecoder({.enable_1090_error_correction = true});
 
 int main() {

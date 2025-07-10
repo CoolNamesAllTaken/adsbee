@@ -9,8 +9,6 @@
 
 class ESP32 : public SPICoprocessorSlaveInterface {
    public:
-    static const uint16_t kDeviceStatusUpdateDefaultIntervalMs = 200;  // 5Hz updates by default.
-    static const uint16_t kMaxNumSCCommandRequestsPerUpdate = 5;
     static const uint32_t kBootupDelayMs = 500;  // Delay after enabling the ESP32 before starting comms.
 
     struct ESP32Config {
@@ -34,13 +32,6 @@ class ESP32 : public SPICoprocessorSlaveInterface {
      * @retval True if successful, false if there was an error.
      */
     bool Update();
-
-    /**
-     * Executes a single SCCommand request received from the ESP32.
-     * @param[in] request The SCCommandRequest to execute.
-     * @retval True if the command was executed successfully, false otherwise.
-     */
-    bool ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRequest &request);
 
     /**
      * Gets the timestamp of the last successful device status query from the ESP32.
@@ -76,14 +67,9 @@ class ESP32 : public SPICoprocessorSlaveInterface {
                              uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
                              bool end_transaction = true);
 
-    uint32_t device_status_update_interval_ms =
-        kDeviceStatusUpdateDefaultIntervalMs;  // Interval for device status updates.
-
    private:
     ESP32Config config_;
     bool enabled_ = false;
-
-    uint32_t last_device_status_update_timestamp_ms_ = 0;  // Timestamp of the last device status update.
 };
 
 extern ESP32 esp32_ll;

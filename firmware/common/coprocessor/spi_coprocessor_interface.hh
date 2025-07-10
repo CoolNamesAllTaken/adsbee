@@ -119,6 +119,7 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     static constexpr uint32_t kSPIHandshakeTimeoutMs = 20;
     // How long to loop in Update() for after initializing the device in order to allow it to query for settings data.
     static constexpr uint32_t kBootupDelayMs = 500;
+    static const uint16_t kDeviceStatusUpdateDefaultIntervalMs = 200;  // 5Hz updates by default.
 
     virtual bool Update() = 0;
 
@@ -170,9 +171,18 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     virtual bool SPIBeginTransaction() = 0;
     virtual void SPIEndTransaction() = 0;
 
+    // Interval for device status updates.
+    uint32_t device_status_update_interval_ms = kDeviceStatusUpdateDefaultIntervalMs;
+
+    uint16_t num_queued_log_messages = 0;                // Number of log messages queued to be read from the slave.
+    uint16_t queued_log_messages_packed_size_bytes = 0;  // Size of the pending log messages in bytes.
+    uint16_t num_queued_sc_command_requests = 0;         // Number of SCCommand requests queued on the slave.
+
    protected:
     // Use this flag to indicate whether we are expecting the handshake line to go high. If it is high during a
     // transaction when we aren't expecting it, that means that we are stomping on the slave! Not good.
     bool expecting_handshake_ = false;
     uint64_t spi_last_transmit_timestamp_us_ = 0;  // Timestamp of the end of the last SPI transaction.
+
+    uint32_t last_device_status_update_timestamp_ms_ = 0;  // Timestamp of the last device status update.
 };

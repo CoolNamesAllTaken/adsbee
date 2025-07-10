@@ -49,41 +49,15 @@ bool ESP32::Update() {
         ObjectDictionary::ESP32DeviceStatus device_status;
         if (esp32.Read(ObjectDictionary::Address::kAddrDeviceStatus, device_status)) {
             last_device_status_update_timestamp_ms_ = timestamp_ms;
+
+            // We only update the device_status vars exposed publicly here. Other reads of device_status are for
+            // internal use only.
+            num_queued_log_messages = device_status.num_queued_log_messages;
+            queued_log_messages_packed_size_bytes = device_status.queued_log_messages_packed_size_bytes;
+            num_queued_sc_command_requests = device_status.num_queued_sc_command_requests;
         } else {
             CONSOLE_ERROR("ESP32::Update", "Unable to read ESP32 status.");
             return false;
-        }
-
-        if (device_status.num_queued_sc_command_requests > 0) {
-            uint16_t num_requests_processed = 0;
-            while (num_requests_processed < device_status.num_queued_sc_command_requests &&
-                   num_requests_processed < kMaxNumSCCommandRequestsPerUpdate) {
-                // Read SCCommand request from ESP32.
-                ObjectDictionary::SCCommandRequest sc_command_request;
-                if (!esp32.Read(ObjectDictionary::Address::kAddrSCCommandRequests, sc_command_request)) {
-                    CONSOLE_ERROR("ESP32::Update", "Unable to read SCCommand request %d/%d from ESP32.",
-                                  num_requests_processed + 1, device_status.num_queued_sc_command_requests);
-                    return false;
-                }
-                // Execute the request.
-                if (!ExecuteSCCommandRequest(sc_command_request)) {
-                    CONSOLE_ERROR("ESP32::Update", "Failed to execute SCCommand request %d/%d from ESP32.",
-                                  num_requests_processed + 1, device_status.num_queued_sc_command_requests);
-                    return false;
-                }
-
-                // Roll the requests queue.
-                ObjectDictionary::RollQueueRequest roll_request = {
-                    .queue_id = ObjectDictionary::QueueID::kQueueIDSCCommandRequests,
-                    .num_items = 1,
-                };
-                if (!esp32.Write(ObjectDictionary::Address::kAddrRollQueue, roll_request, true)) {
-                    // Require the roll request to be acknowledged.
-                    CONSOLE_ERROR("ESP32::Update", "Unable to roll SCCommand request queue on ESP32.");
-                    return false;
-                }
-                num_requests_processed++;
-            }
         }
 
         static const uint16_t kMaxNumConsoleReadsPerUpdate = 5;
@@ -133,107 +107,6 @@ bool ESP32::Update() {
             }
             // Successfully read console message from ESP32.
         }
-
-#ifdef PULL_ESP32_LOG_MESSAGES
-        if (device_status.num_pending_log_messages > 0) {
-            // Read log messages from ESP32.
-            uint8_t
-                log_messages_buffer[ObjectDictionary::kLogMessageMaxNumChars * ObjectDictionary::kLogMessageQueueDepth];
-            if (esp32.Read(ObjectDictionary::Address::kAddrLogMessages, log_messages_buffer,
-                           device_status.pending_log_messages_packed_size_bytes)) {
-                object_dictionary.UnpackLogMessages(log_messages_buffer, sizeof(log_messages_buffer),
-                                                    object_dictionary.log_message_queue,
-                                                    device_status.num_pending_log_messages);
-
-                while (object_dictionary.log_message_queue.Length() > 0) {
-                    ObjectDictionary::LogMessage log_message;
-                    if (object_dictionary.log_message_queue.Pop(log_message)) {
-                        switch (log_message.log_level) {
-                            case SettingsManager::LogLevel::kInfo:
-                                CONSOLE_INFO("ESP32 >>", "%.*s", log_message.num_chars, log_message.message);
-                                break;
-                            case SettingsManager::LogLevel::kWarnings:
-                                CONSOLE_WARNING("ESP32 >>", "%.*s", log_message.num_chars, log_message.message);
-                                break;
-                            case SettingsManager::LogLevel::kErrors:
-                                CONSOLE_ERROR("ESP32 >>", "%.*s", log_message.num_chars, log_message.message);
-                                break;
-                            default:
-                                CONSOLE_PRINTF("ESP32 >>", "%s", log_message.num_chars, log_message.message);
-                                break;
-                        }
-                    }
-                }
-            } else {
-                CONSOLE_ERROR("main", "Unable to read log messages from ESP32.");
-            }
-        }
-#endif
-    }
-    return true;
-}
-
-bool ESP32::ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRequest &request) {
-    bool write_requires_ack = false;
-    switch (request.command) {
-        case ObjectDictionary::SCCommand::kCmdWriteToSlaveRequireAck:
-            write_requires_ack = true;
-            [[fallthrough]];
-        case ObjectDictionary::SCCommand::kCmdWriteToSlave: {
-            if (request.len == 0) {
-                CONSOLE_WARNING("ESP32::ExecuteSCCommandRequest",
-                                "Skipping write request to address 0x%x with zero length.", request.addr);
-                return true;
-            }
-            switch (request.addr) {
-                /** These are the addresses that the ESP32 can request a write to. **/
-                case ObjectDictionary::Address::kAddrSettingsData: {
-                    if (request.offset != 0) {
-                        CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest",
-                                      "Settings data write with non-zero offset (%d) not supported.", request.offset);
-                        return false;
-                    }
-                    // Write settings data to ESP32.
-                    if (request.len != sizeof(settings_manager.settings)) {
-                        CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest",
-                                      "Settings data write with invalid length (%d). Expected %d.", request.len,
-                                      sizeof(settings_manager.settings));
-                        return false;
-                    }
-                    if (!esp32.Write(request.addr, settings_manager.settings, write_requires_ack)) {
-                        CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest", "Unable to write settings data to ESP32.");
-                        return false;
-                    }
-                    break;  // Successfully wrote settings data to ESP32.
-                }
-                default:
-                    CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest",
-                                  "No implementation defined for writing to address 0x%x on slave.", request.addr);
-                    return false;
-            }
-            break;
-        }
-
-        case ObjectDictionary::SCCommand::kCmdReadFromSlave: {
-            if (request.len == 0) {
-                CONSOLE_WARNING("ESP32::ExecuteSCCommandRequest",
-                                "Skipping read request to address 0x%x with zero length.", request.addr);
-                return true;
-            }
-            switch (request.addr) {
-                /**  These are the addresses the ESP32 can request a read from. **/
-                default:
-                    CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest",
-                                  "No implementation defined for reading from address 0x%x for on slave.",
-                                  request.addr);
-                    return false;
-            }
-            break;
-        }
-        default:
-            CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest", "Unsupported SCCommand received from ESP32: %d.",
-                          request.command);
-            return false;
     }
     return true;
 }
