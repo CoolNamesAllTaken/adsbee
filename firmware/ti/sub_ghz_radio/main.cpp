@@ -41,9 +41,24 @@ int main(void)
     for (uint16_t i = 0; i < kNumBlinks; ++i)
     {
         GPIO_write(bsp.kSubGLEDPin, 1);
-        ClockP_usleep(500000);
+        ClockP_usleep(50000);
         GPIO_write(bsp.kSubGLEDPin, 0);
-        ClockP_usleep(500000);
+        ClockP_usleep(50000);
+    }
+
+    // Initialize the SPI coprocessor.
+    if (!pico.Init())
+    {
+        CONSOLE_ERROR("main", "Failed to initialize SPI coprocessor.");
+        return -1;
+    }
+
+    while (true)
+    {
+        GPIO_write(bsp.kSubGLEDPin, 1);
+        ClockP_usleep(50000);
+        GPIO_write(bsp.kSubGLEDPin, 0);
+        ClockP_usleep(50000);
     }
 
     // /* Call mainThread function */

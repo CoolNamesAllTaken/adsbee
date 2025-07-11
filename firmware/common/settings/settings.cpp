@@ -28,6 +28,11 @@ void SettingsManager::Print() {
     CONSOLE_PRINTF("\tComms UART Baud Rate: %lu baud\r\n", settings.comms_uart_baud_rate);
     CONSOLE_PRINTF("\tGNSS UART Baud Rate: %lu baud\r\n", settings.gnss_uart_baud_rate);
     CONSOLE_PRINTF("\tESP32: %s\r\n", settings.core_network_settings.esp32_enabled ? "ENABLED" : "DISABLED");
+    CONSOLE_PRINTF(
+        "\tSub-GHz Radio: %s\r\n",
+        settings.subg_enabled == SettingsManager::EnableState::kEnableStateEnabled
+            ? "ENABLED"
+            : (settings.subg_enabled == SettingsManager::EnableState::kEnableStateExternal ? "EXTERNAL" : "DISABLED"));
 
     // Print WiFi AP settings.
     CONSOLE_PRINTF("\tWiFi AP: %s\r\n", settings.core_network_settings.wifi_ap_enabled ? "ENABLED" : "DISABLED");

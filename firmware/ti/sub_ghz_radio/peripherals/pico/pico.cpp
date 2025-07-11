@@ -26,17 +26,20 @@ bool Pico::Init()
     bool ret = true;
     ret &= GPIO_setConfig(bsp.kSubGIRQPin, GPIO_CFG_OUT_OD_PU) == GPIO_STATUS_SUCCESS;
 
+    SPI_init();
     SPI_Params spi_params = {
         .transferMode = SPI_MODE_CALLBACK,
         .transferTimeout = kSPITransactionTimeoutMs * kUsPerMs * ClockP_getSystemTickPeriod(), // Convert ms to system ticks.
         .transferCallbackFxn = spi_transfer_complete_callback,
         .mode = SPI_PERIPHERAL,
-        .bitRate = 0,
-        .dataSize = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
+        .bitRate = 4'000'000, // Not used in slave mode but needs to be reasonable since it's used to set a clock.
+        .dataSize = kBitsPerByte,
         .frameFormat = SPI_POL0_PHA0,
         .custom = nullptr};
     spi_handle_ = SPI_open(bsp.kCoProSPIIndex, &spi_params);
     ret &= spi_handle_ != nullptr;
+
+    SPIResetTransaction();
     return ret;
 }
 
@@ -221,7 +224,7 @@ bool Pico::SPIWriteNonBlocking(uint8_t *tx_buf, uint16_t len_bytes)
     }
     else
     {
-        memset(spi_transaction_.txBuf, 0x00, len_bytes);
+        memset(spi_transaction_.txBuf, 0xBE, len_bytes);
     }
     memset(spi_transaction_.rxBuf, 0x00, len_bytes);
     SPIBeginTransaction();

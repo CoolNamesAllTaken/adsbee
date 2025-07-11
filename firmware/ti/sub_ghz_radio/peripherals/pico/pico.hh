@@ -114,8 +114,12 @@ private:
     uint8_t spi_rx_buf_[SPICoprocessorPacket::kSPITransactionMaxLenBytes] = {0};
     uint8_t spi_tx_buf_[SPICoprocessorPacket::kSPITransactionMaxLenBytes] = {0};
 
-    SPI_Handle spi_handle_ = nullptr;        // Handle to the SPI peripheral used by the RP2040 SPI coprocessor master interface.
-    SPI_Transaction spi_transaction_;        // SPI transaction used to send and receive data from the SPI peripheral.
+    SPI_Handle spi_handle_ = nullptr; // Handle to the SPI peripheral used by the RP2040 SPI coprocessor master interface.
+    SPI_Transaction spi_transaction_ = {
+        .count = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
+        .txBuf = &spi_tx_buf_,
+        .rxBuf = &spi_rx_buf_,
+        .arg = nullptr}; // SPI transaction used to send and receive data from the SPI peripheral.
     uint16_t spi_transaction_len_bytes_ = 0; // Length of the pending SPI transaction in bytes. Allows the callback function to figure out how long the transaction was supposed to be.
 
     bool spi_receive_task_should_exit_ = false; // Flag used to tell SPI receive task to exit.

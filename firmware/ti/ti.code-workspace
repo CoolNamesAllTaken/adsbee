@@ -39,15 +39,15 @@
 				"name": "Sub GHz Radio Debug",
 				"type": "cortex-debug",
 				"cwd": "/adsbee/ti",
-				"executable": "/adsbee/ti/sub_ghz_radio/build/sub_ghz_radio",
+				"executable": "/adsbee/ti/sub_ghz_radio/build/sub_ghz_radio.elf",
 				"request": "attach",
 				"servertype": "external",
 				"gdbPath": "arm-none-eabi-gdb",
 				"gdbTarget": "host.docker.internal:2337",
 				"showDevDebugOutput": "raw",
-				// "svdFile": "/usr/local/pico-sdk/src/rp2040/hardware_regs/RP2040.svd",
+				"svdFile": "/adsbee/ti/cc13x2_26x2.svd",
 				"preRestartCommands": [
-					"file /adsbee/ti/sub_ghz_radio/build/sub_ghz_radio",
+					"file /adsbee/ti/sub_ghz_radio/build/sub_ghz_radio.elf",
 					"load",
 					"monitor reset"
 				],

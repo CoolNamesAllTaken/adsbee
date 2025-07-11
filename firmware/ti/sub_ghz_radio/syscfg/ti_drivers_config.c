@@ -190,10 +190,10 @@ SPICC26X2DMA_Object spiCC26X2DMAObjects[CONFIG_SPI_COUNT];
 /*
  * ======== spiCC26X2DMA uDMA Table Entries  ========
  */
-        ALLOCATE_CONTROL_TABLE_ENTRY(dmaSpi1TxControlTableEntry, UDMA_CHAN_SSI1_TX);
-        ALLOCATE_CONTROL_TABLE_ENTRY(dmaSpi1RxControlTableEntry, UDMA_CHAN_SSI1_RX);
-        ALLOCATE_CONTROL_TABLE_ENTRY(dmaSpi1TxAltControlTableEntry, (UDMA_CHAN_SSI1_TX | UDMA_ALT_SELECT));
-        ALLOCATE_CONTROL_TABLE_ENTRY(dmaSpi1RxAltControlTableEntry, (UDMA_CHAN_SSI1_RX | UDMA_ALT_SELECT));
+        ALLOCATE_CONTROL_TABLE_ENTRY(dmaSpi0TxControlTableEntry, UDMA_CHAN_SSI0_TX);
+        ALLOCATE_CONTROL_TABLE_ENTRY(dmaSpi0RxControlTableEntry, UDMA_CHAN_SSI0_RX);
+        ALLOCATE_CONTROL_TABLE_ENTRY(dmaSpi0TxAltControlTableEntry, (UDMA_CHAN_SSI0_TX | UDMA_ALT_SELECT));
+        ALLOCATE_CONTROL_TABLE_ENTRY(dmaSpi0RxAltControlTableEntry, (UDMA_CHAN_SSI0_RX | UDMA_ALT_SELECT));
 
 /*
  *  ======== spiCC26X2DMAHWAttrs ========
@@ -201,23 +201,23 @@ SPICC26X2DMA_Object spiCC26X2DMAObjects[CONFIG_SPI_COUNT];
 const SPICC26X2DMA_HWAttrs spiCC26X2DMAHWAttrs[CONFIG_SPI_COUNT] = {
     /* COPRO_SPI */
     {
-        .baseAddr = SSI1_BASE,
-        .intNum = INT_SSI1_COMB,
-        .intPriority = (~0),
+        .baseAddr = SSI0_BASE,
+        .intNum = INT_SSI0_COMB,
+        .intPriority = 0x20,
         .swiPriority = 0,
-        .powerMngrId = PowerCC26XX_PERIPH_SSI1,
+        .powerMngrId = PowerCC26XX_PERIPH_SSI0,
         .defaultTxBufValue = ~0,
-        .rxChannelBitMask = 1<<UDMA_CHAN_SSI1_RX,
-        .txChannelBitMask = 1<<UDMA_CHAN_SSI1_TX,
-        .dmaTxTableEntryPri = &dmaSpi1TxControlTableEntry,
-        .dmaRxTableEntryPri = &dmaSpi1RxControlTableEntry,
-        .dmaTxTableEntryAlt = &dmaSpi1TxAltControlTableEntry,
-        .dmaRxTableEntryAlt = &dmaSpi1RxAltControlTableEntry,
+        .rxChannelBitMask = 1<<UDMA_CHAN_SSI0_RX,
+        .txChannelBitMask = 1<<UDMA_CHAN_SSI0_TX,
+        .dmaTxTableEntryPri = &dmaSpi0TxControlTableEntry,
+        .dmaRxTableEntryPri = &dmaSpi0RxControlTableEntry,
+        .dmaTxTableEntryAlt = &dmaSpi0TxAltControlTableEntry,
+        .dmaRxTableEntryAlt = &dmaSpi0RxAltControlTableEntry,
         .minDmaTransferSize = 10,
-        .txPinMux    = IOC_PORT_MCU_SSI1_TX,
-        .rxPinMux    = IOC_PORT_MCU_SSI1_RX,
-        .clkPinMux   = IOC_PORT_MCU_SSI1_CLK,
-        .csnPinMux   = IOC_PORT_MCU_SSI1_FSS,
+        .txPinMux    = IOC_PORT_MCU_SSI0_TX,
+        .rxPinMux    = IOC_PORT_MCU_SSI0_RX,
+        .clkPinMux   = IOC_PORT_MCU_SSI0_CLK,
+        .csnPinMux   = IOC_PORT_MCU_SSI0_FSS,
         .picoPin = CONFIG_GPIO_COPRO_SPI_PICO,
         .pociPin = CONFIG_GPIO_COPRO_SPI_POCI,
         .clkPin  = CONFIG_GPIO_COPRO_SPI_SCLK,

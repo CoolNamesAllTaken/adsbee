@@ -18,7 +18,7 @@ public:
     static const uint16_t kCoProSPICSPin = CONFIG_GPIO_COPRO_SPI_CSN;
 
     // Coprocessor SPI index is used to select which SPI peripheral to use.
-    static const uint8_t kCoProSPIIndex = COPRO_SPI;
+    static const uint_least8_t kCoProSPIIndex = COPRO_SPI;
 };
 
 extern BSP bsp;

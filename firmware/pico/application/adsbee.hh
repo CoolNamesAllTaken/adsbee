@@ -241,7 +241,7 @@ class ADSBee {
      * Returns whether the 978MHz receiver is enabled.
      * @retval True if enabled, false otherwise.
      */
-    bool ReceiverSubGIsEnabled() { return subg_radio.IsEnabled(); }
+    bool SubGRadioIsEnabled() { return subg_radio.IsEnabled(); }
 
     /**
      * Enable or disable the bias tee to inject 3.3V at the RF IN connector.

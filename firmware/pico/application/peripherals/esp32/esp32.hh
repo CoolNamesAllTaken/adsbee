@@ -10,6 +10,9 @@
 class ESP32 : public SPICoprocessorSlaveInterface {
    public:
     static const uint32_t kBootupDelayMs = 500;  // Delay after enabling the ESP32 before starting comms.
+    // How long we wait to start a transaction after the last one is completed. Can be overridden if the handshake line
+    // goes high after kSPIHandshakeLockoutUs.
+    static constexpr uint32_t kSPIPostTransmitLockoutUs = 1000;
 
     struct ESP32Config {
         uint16_t enable_pin = bsp.esp32_enable_pin;

@@ -751,7 +751,7 @@ CPP_AT_CALLBACK(CommsManager::ATRxEnableCallback) {
             CPP_AT_SUCCESS();
             break;
         case '?':
-            CPP_AT_CMD_PRINTF("=%d,%d", adsbee.Receiver1090IsEnabled(), adsbee.ReceiverSubGIsEnabled());
+            CPP_AT_CMD_PRINTF("=%d,%d", adsbee.Receiver1090IsEnabled(), adsbee.SubGRadioIsEnabled());
             CPP_AT_SILENT_SUCCESS();
             break;
     }

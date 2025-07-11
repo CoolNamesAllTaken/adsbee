@@ -13,6 +13,9 @@ class CC1312 : public SPICoprocessorSlaveInterface {
     static const uint32_t kBootupDelayMs = 100;
     static const uint32_t kSPITransactionTimeoutMs =
         500;  // Set to be quite long to allow CRC calculation time for full app image after flashing.
+    // How long we wait to start a transaction after the last one is completed. Can be overridden if the handshake line
+    // goes high after kSPIHandshakeLockoutUs.
+    static constexpr uint32_t kSPIPostTransmitLockoutUs = 1000;
 
     struct BootloaderCCFGConfig {
         // Note: Struct only includes the CCFG fields that we are interested in.
@@ -475,7 +478,7 @@ class CC1312 : public SPICoprocessorSlaveInterface {
     inline void SetEnableState(SettingsManager::EnableState enabled) {
         if (enabled == SettingsManager::EnableState::kEnableStateExternal) {
             gpio_set_dir(config_.enable_pin, GPIO_IN);
-            gpio_set_pulls(config_.enable_pin, true, false);  // Enable pull-up on the enable pin.
+            gpio_set_pulls(config_.enable_pin, true, false);  // Pull pin up.
         } else {
             // Drive GPIO pin with low impedance output.
             // Enable is active HI
@@ -506,7 +509,10 @@ class CC1312 : public SPICoprocessorSlaveInterface {
      * hood.
      * @retval True if enabled, false if disabled or set to external.
      */
-    inline bool IsEnabled() { return enabled_ == SettingsManager::EnableState::kEnableStateEnabled; }
+    inline bool IsEnabled() {
+        return enabled_ == SettingsManager::EnableState::kEnableStateEnabled ||
+               enabled_ == SettingsManager::EnableState::kEnableStateExternal;
+    }
 
     inline bool IsEnabledBool() {
         return enabled_ == SettingsManager::EnableState::kEnableStateEnabled ||

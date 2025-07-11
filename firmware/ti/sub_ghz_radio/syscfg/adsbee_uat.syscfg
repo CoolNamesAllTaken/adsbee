@@ -62,9 +62,11 @@ GPIO8.gpioPin.$assign = "DIO_7";
 
 SPI1.mode                 = "Four Pin CS Active Low";
 SPI1.$name                = "COPRO_SPI";
+SPI1.dmaInterruptPriority = "1";
 SPI1.sclkPinInstance.mode = "Input";
 SPI1.pociPinInstance.mode = "Output";
 SPI1.picoPinInstance.mode = "Input";
+SPI1.spi.$assign          = "SSI0";
 SPI1.spi.sclkPin.$assign  = "DIO_10";
 SPI1.spi.pociPin.$assign  = "DIO_8";
 SPI1.spi.picoPin.$assign  = "DIO_9";
@@ -76,6 +78,5 @@ SPI1.csnPinInstance.mode  = "Input";
  * version of the tool will not impact the pinmux you originally saw.  These lines can be completely deleted in order to
  * re-solve from scratch.
  */
-SPI1.spi.$suggestSolution              = "SSI1";
-SPI1.spi.dmaRxChannel.$suggestSolution = "DMA_CH16";
-SPI1.spi.dmaTxChannel.$suggestSolution = "DMA_CH17";
+SPI1.spi.dmaRxChannel.$suggestSolution = "DMA_CH3";
+SPI1.spi.dmaTxChannel.$suggestSolution = "DMA_CH4";

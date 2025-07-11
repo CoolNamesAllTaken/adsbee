@@ -586,6 +586,14 @@ bool CC1312::SPIBeginTransaction() {
         return true;  // Already in a transaction, no need to start a new one.
     }
 
+    while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
+        // Wait for the lockout period to expire before starting a new transaction.
+        if (expecting_handshake_ && SPIGetHandshakePinLevel()) {
+            // If we are expecting a handshake and the pin is high, we can proceed with the transaction.
+            break;
+        }
+    }
+
     standby_clk_config_ = spi_get_clk();  // Save existing clock config.
     spi_set_clk(active_clk_config_);
 
@@ -607,7 +615,8 @@ void CC1312::SPIEndTransaction() {
     // on the SPI bus can't be accessed while the CC1312 is simultaneously in bootloader mode.
 
     gpio_put(config_.spi_cs_pin, true);
-    in_transaction_ = false;  // Mark transaction as ended.
+    spi_last_transmit_timestamp_us_ = get_time_since_boot_us();  // Update the last transmit timestamp.
+    in_transaction_ = false;                                     // Mark transaction as ended.
 }
 
 int CC1312::SPIWriteReadBlocking(uint8_t* tx_buf, uint8_t* rx_buf, uint16_t len_bytes, bool end_transaction) {
