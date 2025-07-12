@@ -31,7 +31,7 @@ const UDMACC26XX_HWAttrs udmaCC26XXHWAttrs = {
     .baseAddr        = UDMA0_BASE,
     .powerMngrId     = PowerCC26XX_PERIPH_UDMA,
     .intNum          = INT_DMA_ERR,
-    .intPriority     = 0x60
+    .intPriority     = 0x40
 };
 
 const UDMACC26XX_Config UDMACC26XX_config[1] = {
@@ -109,14 +109,14 @@ GPIO_CallbackFxn gpioCallbackFunctions[31];
  */
 void* gpioUserArgs[31];
 
-const uint_least8_t CONFIG_GPIO_COPRO_SPI_SCLK_CONST = CONFIG_GPIO_COPRO_SPI_SCLK;
-const uint_least8_t CONFIG_GPIO_COPRO_SPI_POCI_CONST = CONFIG_GPIO_COPRO_SPI_POCI;
-const uint_least8_t CONFIG_GPIO_COPRO_SPI_PICO_CONST = CONFIG_GPIO_COPRO_SPI_PICO;
-const uint_least8_t CONFIG_GPIO_COPRO_SPI_CSN_CONST = CONFIG_GPIO_COPRO_SPI_CSN;
 const uint_least8_t SUBG_LED_PIN_CONST = SUBG_LED_PIN;
 const uint_least8_t SUBG_IRQ_PIN_CONST = SUBG_IRQ_PIN;
 const uint_least8_t SYNC_PIN_CONST = SYNC_PIN;
 const uint_least8_t SUBG_BIAS_TEE_ENABLE_PIN_CONST = SUBG_BIAS_TEE_ENABLE_PIN;
+const uint_least8_t CONFIG_GPIO_COPRO_SPI_SCLK_CONST = CONFIG_GPIO_COPRO_SPI_SCLK;
+const uint_least8_t CONFIG_GPIO_COPRO_SPI_POCI_CONST = CONFIG_GPIO_COPRO_SPI_POCI;
+const uint_least8_t CONFIG_GPIO_COPRO_SPI_PICO_CONST = CONFIG_GPIO_COPRO_SPI_PICO;
+const uint_least8_t CONFIG_GPIO_COPRO_SPI_CSN_CONST = CONFIG_GPIO_COPRO_SPI_CSN;
 
 /*
  *  ======== GPIO_config ========
@@ -203,8 +203,8 @@ const SPICC26X2DMA_HWAttrs spiCC26X2DMAHWAttrs[CONFIG_SPI_COUNT] = {
     {
         .baseAddr = SSI0_BASE,
         .intNum = INT_SSI0_COMB,
-        .intPriority = 0x20,
-        .swiPriority = 0,
+        .intPriority = 0x40,
+        .swiPriority = 13,
         .powerMngrId = PowerCC26XX_PERIPH_SSI0,
         .defaultTxBufValue = ~0,
         .rxChannelBitMask = 1<<UDMA_CHAN_SSI0_RX,
@@ -213,7 +213,7 @@ const SPICC26X2DMA_HWAttrs spiCC26X2DMAHWAttrs[CONFIG_SPI_COUNT] = {
         .dmaRxTableEntryPri = &dmaSpi0RxControlTableEntry,
         .dmaTxTableEntryAlt = &dmaSpi0TxAltControlTableEntry,
         .dmaRxTableEntryAlt = &dmaSpi0RxAltControlTableEntry,
-        .minDmaTransferSize = 10,
+        .minDmaTransferSize = 10000,
         .txPinMux    = IOC_PORT_MCU_SSI0_TX,
         .rxPinMux    = IOC_PORT_MCU_SSI0_RX,
         .clkPinMux   = IOC_PORT_MCU_SSI0_CLK,

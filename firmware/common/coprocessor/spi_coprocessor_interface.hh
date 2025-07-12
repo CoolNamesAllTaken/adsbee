@@ -17,6 +17,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#elif defined(ON_TI)
+#include "ti/drivers/SPI.h"
 #endif
 
 class SPICoprocessorInterface {
@@ -99,7 +101,7 @@ class SPICoprocessorMasterInterface : public SPICoprocessorInterface {
 #ifdef ON_TI
     // The TI processor does not use an RTOS, so we need a callback-based update system that has access to low-level
     // transaction parameters. I considered overloading the UpdateNetworkLED() function, but this seems cleaner.
-    virtual bool SPIPostTransactionCallback() = 0;
+    virtual void SPIPostTransactionCallback(SPI_Handle handle, SPI_Transaction *transaction) = 0;
 #endif
 
     virtual bool SPIBeginTransaction() = 0;

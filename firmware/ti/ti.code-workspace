@@ -25,12 +25,15 @@
 			"cmath": "cpp",
 			"compare": "cpp",
 			"cstdint": "cpp",
-			"format": "cpp"
+			"format": "cpp",
+			"hwip.h": "c",
+			"swip.h": "c"
 		},
 		"C_Cpp.default.defines": [
 			"ON_TI",
 			"DeviceFamily_CC13X2"
 		],
+		"cortex-debug.variableUseNaturalFormat": false,
 	},
 	"launch": {
 		"version": "0.2.0",

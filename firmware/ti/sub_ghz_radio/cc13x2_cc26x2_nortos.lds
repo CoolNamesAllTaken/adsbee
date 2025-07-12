@@ -80,6 +80,7 @@ SECTIONS {
      * by ti/drivers/dma/UDMACC26XX.h
      * The user is allowed to change UDMACC26XX_CONFIG_BASE to move it away from
      * the default address 0x2000_1800, but remember it must be 1024 bytes aligned.
+     * Caitlin changed it from 0x20001800 to 0x20000400
      */
     UDMACC26XX_CONFIG_BASE = 0x20001800;
 

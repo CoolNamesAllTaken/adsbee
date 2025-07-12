@@ -6,6 +6,9 @@
 #include "ti/drivers/SPI.h"
 #include "ti/drivers/GPIO.h"
 
+// // Include TI's memory utilities
+// #include "ti/drivers/dma/UDMACC26XX.h"
+
 class Pico : public SPICoprocessorMasterInterface
 {
 public:
@@ -20,6 +23,8 @@ public:
 
     static constexpr uint16_t kSPIMutexTimeoutMs =
         1200; // How long to wait for the transaction mutex before timing out.
+
+    static const uint16_t kSPITransactionMaxLenBytes = 100; // Normally set to SPICoprocessorPacket::kSPITransactionMaxLenBytes, but can be set to a lower value for testing purposes.
 
     enum SPITransactionError : int
     {
@@ -39,6 +44,8 @@ public:
 
     bool Init();
     bool DeInit();
+
+    bool Update();
 
     /**
      * Helper function used by callbacks to set the handshake pin high or low on the ESP32.
@@ -100,26 +107,22 @@ public:
         }
     }
 
-    bool SPIPostTransactionCallback();
+    void SPIPostTransactionCallback(SPI_Handle handle, SPI_Transaction *transaction);
 
 private:
     void SPIResetTransaction();
+    bool SPIProcessTransaction();
 
     PicoConfig config_; // Configuration for the RP2040 SPI coprocessor master interface.
-    // SemaphoreHandle_t spi_mutex_;                  // Low level mutex used to guard the SPI peripheral (don't let multiple
-    //                                                // threads queue packets at the same time).
-    // SemaphoreHandle_t spi_next_transaction_mutex_; // High level mutex used to claim the next transaction interval.
+                        // SemaphoreHandle_t spi_mutex_;                  // Low level mutex used to guard the SPI peripheral (don't let multiple
+                        //                                                // threads queue packets at the same time).
+                        // SemaphoreHandle_t spi_next_transaction_mutex_; // High level mutex used to claim the next transaction interval.
 
-    // SPI peripheral needs to operate on special buffers that are 32-bit word aligned and in DMA accessible memory.
-    uint8_t spi_rx_buf_[SPICoprocessorPacket::kSPITransactionMaxLenBytes] = {0};
-    uint8_t spi_tx_buf_[SPICoprocessorPacket::kSPITransactionMaxLenBytes] = {0};
+    // static uint8_t spi_rx_buf_[kSPITransactionMaxLenBytes] __attribute__((section(".data")));
+    // static uint8_t spi_tx_buf_[kSPITransactionMaxLenBytes] __attribute__((section(".data")));
 
     SPI_Handle spi_handle_ = nullptr; // Handle to the SPI peripheral used by the RP2040 SPI coprocessor master interface.
-    SPI_Transaction spi_transaction_ = {
-        .count = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
-        .txBuf = &spi_tx_buf_,
-        .rxBuf = &spi_rx_buf_,
-        .arg = nullptr}; // SPI transaction used to send and receive data from the SPI peripheral.
+    // static SPI_Transaction spi_transaction_; // SPI transaction used to send and receive data from the SPI peripheral.
     uint16_t spi_transaction_len_bytes_ = 0; // Length of the pending SPI transaction in bytes. Allows the callback function to figure out how long the transaction was supposed to be.
 
     bool spi_receive_task_should_exit_ = false; // Flag used to tell SPI receive task to exit.

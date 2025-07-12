@@ -41,6 +41,18 @@ extern "C" {
 /*
  *  ======== GPIO ========
  */
+extern const uint_least8_t SUBG_LED_PIN_CONST;
+#define SUBG_LED_PIN 6
+
+extern const uint_least8_t SUBG_IRQ_PIN_CONST;
+#define SUBG_IRQ_PIN 18
+
+extern const uint_least8_t SYNC_PIN_CONST;
+#define SYNC_PIN 5
+
+extern const uint_least8_t SUBG_BIAS_TEE_ENABLE_PIN_CONST;
+#define SUBG_BIAS_TEE_ENABLE_PIN 7
+
 /* Owned by COPRO_SPI as  */
 extern const uint_least8_t CONFIG_GPIO_COPRO_SPI_SCLK_CONST;
 #define CONFIG_GPIO_COPRO_SPI_SCLK 10
@@ -56,18 +68,6 @@ extern const uint_least8_t CONFIG_GPIO_COPRO_SPI_PICO_CONST;
 /* Owned by COPRO_SPI as  */
 extern const uint_least8_t CONFIG_GPIO_COPRO_SPI_CSN_CONST;
 #define CONFIG_GPIO_COPRO_SPI_CSN 11
-
-extern const uint_least8_t SUBG_LED_PIN_CONST;
-#define SUBG_LED_PIN 6
-
-extern const uint_least8_t SUBG_IRQ_PIN_CONST;
-#define SUBG_IRQ_PIN 18
-
-extern const uint_least8_t SYNC_PIN_CONST;
-#define SYNC_PIN 5
-
-extern const uint_least8_t SUBG_BIAS_TEE_ENABLE_PIN_CONST;
-#define SUBG_BIAS_TEE_ENABLE_PIN 7
 
 /* The range of pins available on this device */
 extern const uint_least8_t GPIO_pinLowerBound;

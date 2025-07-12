@@ -21,6 +21,7 @@ bool CommsManager::Update()
 bool CommsManager::LogMessageToCoprocessor(SettingsManager::LogLevel log_level, const char *tag, const char *format,
                                            ...)
 {
+    return true; // FIXME: remove this.
     if (log_level > settings_manager.settings.log_level)
     {
         return true; // Skip logging messages that aren't necessary.

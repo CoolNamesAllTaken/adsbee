@@ -586,7 +586,8 @@ bool CC1312::SPIBeginTransaction() {
         return true;  // Already in a transaction, no need to start a new one.
     }
 
-    while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
+    // Don't need to wait for processing time in bootloader, since we wait for acks.
+    while (!in_bootloader_ && get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
         // Wait for the lockout period to expire before starting a new transaction.
         if (expecting_handshake_ && SPIGetHandshakePinLevel()) {
             // If we are expecting a handshake and the pin is high, we can proceed with the transaction.

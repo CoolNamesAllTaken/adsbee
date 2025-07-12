@@ -128,15 +128,15 @@ target_link_options(${PROJECT_NAME} PRIVATE
     -nostartfiles
     -static
     -Wl,--gc-sections
-    -specs=nano.specs       # Use the nano.specs for smaller binaries
-    -specs=nosys.specs          # Added by John: Add this for embedded systems
-    -lstdc++                    # Added by John: Link C++ standard library
-    -lc
-    -lm
-    -lnosys
-    -fno-exceptions             # If you don't need exceptions (saves space)
-    -fno-rtti                   # If you don't need RTTI (saves space)
-    -fno-threadsafe-statics # Disable thread-safe statics (saves space)
+    # -specs=nano.specs       # Use the nano.specs for smaller binaries
+    # -specs=nosys.specs          # Added by John: Add this for embedded systems
+    # -lstdc++                    # Added by John: Link C++ standard library
+    # -lc
+    # -lm
+    # -lnosys
+    # -fno-exceptions             # If you don't need exceptions (saves space)
+    # -fno-rtti                   # If you don't need RTTI (saves space)
+    # -fno-threadsafe-statics # Disable thread-safe statics (saves space)
 )
 
 # Custom command to create binary file

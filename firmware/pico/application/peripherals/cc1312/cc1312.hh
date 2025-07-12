@@ -14,7 +14,7 @@ class CC1312 : public SPICoprocessorSlaveInterface {
     static const uint32_t kSPITransactionTimeoutMs =
         500;  // Set to be quite long to allow CRC calculation time for full app image after flashing.
     // How long we wait to start a transaction after the last one is completed. Can be overridden if the handshake line
-    // goes high after kSPIHandshakeLockoutUs.
+    // goes high after kSPIHandshakeLockoutUs. Does not apply in bootloader mode, since we wait for acks.
     static constexpr uint32_t kSPIPostTransmitLockoutUs = 1000;
 
     struct BootloaderCCFGConfig {
