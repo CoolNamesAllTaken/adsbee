@@ -9,6 +9,7 @@
 /**
  * Import the modules used in this configuration.
  */
+const FreeRTOS = scripting.addModule("/freertos/FreeRTOS");
 const CCFG     = scripting.addModule("/ti/devices/CCFG");
 const custom   = scripting.addModule("/ti/devices/radioconfig/custom");
 const rfdesign = scripting.addModule("/ti/devices/radioconfig/rfdesign");

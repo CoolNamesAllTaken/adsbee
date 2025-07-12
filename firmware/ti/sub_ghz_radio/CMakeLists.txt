@@ -46,30 +46,56 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     OUTPUT_NAME "${PROJECT_NAME}.elf"
 )
 
-# Link against the M4 hard float toolchain
-# target_link_libraries(your_app PRIVATE CMakeCommon::gcc_m4f)
-
 # Include directories
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/posix
-    $(GCC_ARMCOMPILER)/lib/gcc/arm-none-eabi/${GCC_ARM_VERSION}/include # For arm_acle.h
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/freertos/dpl # added the dpl
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/ti/posix/gcc
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/third_party/freertos/include
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/third_party/freertos/portable/GCC/ARM_CM4F
+    
+    
+    
+   
+    $(GCC_ARMCOMPILER)/arm-none-eabi/include/newlib-nano
+    $(GCC_ARMCOMPILER)/arm-none-eabi/include
+   
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/syscfg
     ${CMAKE_CURRENT_SOURCE_DIR}/smartrf
+
+     # /usr/local/gcc-arm-none-eabi-13.3.1/arm-none-eabi/include/pthread.h
+     # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/freertos/posix
+      # $(GCC_ARMCOMPILER)/lib/gcc/arm-none-eabi/${GCC_ARM_VERSION}/include # For arm_acle.h
+)
+
+target_link_directories(${PROJECT_NAME} PRIVATE
+    CMakeCommon::gcc_m4f # Use TI gcc toolchain for ARM M4 with hardware floating point.
+
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source
+    $(GCC_ARMCOMPILER)/arm-none-eabi/lib/thumb/v7e-m+fp/hard
+    
+
+    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/freertos/lib/gcc/m4f
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/log/lib/gcc/m4f/log_cc13x2
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/drivers/lib/gcc/m4f/drivers_cc13x2
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/devices/cc13x2_cc26x2/lib/gcc/m4f/driverlib
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/ti/drivers/rf/lib/gcc/m4f
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/ti/grlib/lib/gcc/m4f
 )
 
 # Libraries to link
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
-    # stdc++
-    # gcc # GCC runtime library
-    # c # C standard library
-    # m # Math library
+#     # stdc++
+    gcc # GCC runtime library
+    c # C standard library
+    m # Math library
+    nosys
     CMakeCommon::gcc_m4f # Use TI gcc toolchain for ARM M4 with hardware floating point.
+
     # Assume default library install locations (within /usr/local/ti-lpf2-sdk).
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/lib/gcc/m4f/nortos_cc13x2.a
+    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/freertos/lib/gcc/m4f/freertos_cc13x2.a
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/log/lib/gcc/m4f/log_cc13x2/log_cc13x2.a
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/drivers/lib/gcc/m4f/drivers_cc13x2/drivers_cc13x2.a
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/devices/cc13x2_cc26x2/lib/gcc/m4f/driverlib/driverlib.lib
@@ -77,12 +103,20 @@ target_link_libraries(${PROJECT_NAME}
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/ti/grlib/lib/gcc/m4f/grlib.a
 )
 
-set(TI_LINKER_COMMAND_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cc13x2_cc26x2_nortos.lds")
+set(TI_LINKER_COMMAND_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cc13x2_cc26x2_freertos.lds")
+
+file(GLOB FREERTOS_SOURCES "${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/third_party/freertos/*.c")
+file(GLOB FREERTOS_DPL_SOURCES "${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/freertos/dpl/*.c")
+list(REMOVE_ITEM FREERTOS_DPL_SOURCES "${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/freertos/dpl/ClockP_freertos.c")
 
 target_sources(${PROJECT_NAME} PRIVATE
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/freertos/startup/startup_cc13x2_cc26x2_gcc.c # Get the resetISR and stuff.
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/third_party/freertos/portable/GCC/ARM_CM4F/port.c
     syscalls_stub.c
+    ${FREERTOS_SOURCES}
+    ${FREERTOS_DPL_SOURCES}
     # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/NoRTOS.c
-    NoRTOS.cpp
+    # NoRTOS.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/rfPacketRx.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/RFQueue.cpp
     ${SYSCFG_OUTPUT_DIR}/ti_devices_config.c
@@ -103,6 +137,8 @@ target_compile_options(${PROJECT_NAME} PRIVATE
     -mcpu=cortex-m4
     -march=armv7e-m
     -mthumb
+    $<$<COMPILE_LANGUAGE:C>:-std=c17> # Suppress POSIX files from GCC to allow TI POSIX library to work (old versions of GCC included them).
+    $<$<COMPILE_LANGUAGE:CXX>:-std=c++23> # Suppress POSIX files from GCC to allow TI POSIX library to work (old versions of GCC included them).
     -mfloat-abi=hard
     -mfpu=fpv4-sp-d16
     -ffunction-sections
@@ -113,30 +149,19 @@ target_compile_options(${PROJECT_NAME} PRIVATE
     # -O0
 )
 
-# Linker script
-set(LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/cc13x2_cc26x2_nortos.lds")
-
 # Linker flags
 target_link_options(${PROJECT_NAME} PRIVATE
-    -T${LINKER_SCRIPT}
+    -T${TI_LINKER_COMMAND_FILE}
     -Wl,-Map=${PROJECT_NAME}.map
     -eresetISR
-    -march=armv7e-m
+    -march=armv7e-m+fp
     -mthumb
     -mfloat-abi=hard
     -mfpu=fpv4-sp-d16
     -nostartfiles
     -static
     -Wl,--gc-sections
-    # -specs=nano.specs       # Use the nano.specs for smaller binaries
-    # -specs=nosys.specs          # Added by John: Add this for embedded systems
-    # -lstdc++                    # Added by John: Link C++ standard library
-    # -lc
-    # -lm
-    # -lnosys
-    # -fno-exceptions             # If you don't need exceptions (saves space)
-    # -fno-rtti                   # If you don't need RTTI (saves space)
-    # -fno-threadsafe-statics # Disable thread-safe statics (saves space)
+    -specs=nano.specs
 )
 
 # Custom command to create binary file
