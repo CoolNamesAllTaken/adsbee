@@ -586,6 +586,9 @@ bool CC1312::SPIBeginTransaction() {
         return true;  // Already in a transaction, no need to start a new one.
     }
 
+    standby_clk_config_ = spi_get_clk();  // Save existing clock config.
+    spi_set_clk(active_clk_config_);
+
     // Don't need to wait for processing time in bootloader, since we wait for acks.
     while (!in_bootloader_ && get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
         // Wait for the lockout period to expire before starting a new transaction.
@@ -594,9 +597,6 @@ bool CC1312::SPIBeginTransaction() {
             break;
         }
     }
-
-    standby_clk_config_ = spi_get_clk();  // Save existing clock config.
-    spi_set_clk(active_clk_config_);
 
     in_transaction_ = true;
     gpio_put(config_.spi_cs_pin, false);
@@ -610,10 +610,12 @@ void CC1312::SPIEndTransaction() {
     }
 
     spi_set_clk(standby_clk_config_);  // Restore clock config.
+
     // NOTE: For some reason changing the SPI format here caused a hardfault, intermittently. My best guess is that the
     // SPI format registers didn't like being hammered on every transaction for some reason. Format change has been
-    // moved to the EnterBootlaoder and ExitBootloader functions. This removed the hardfault but means other peripherals
+    // moved to the EnterBootloader and ExitBootloader functions. This removed the hardfault but means other peripherals
     // on the SPI bus can't be accessed while the CC1312 is simultaneously in bootloader mode.
+    // Update: Transitioned all peripherals to use the same SPI polarity and phase as the CC1312 bootloader.
 
     gpio_put(config_.spi_cs_pin, true);
     spi_last_transmit_timestamp_us_ = get_time_since_boot_us();  // Update the last transmit timestamp.

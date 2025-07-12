@@ -67,7 +67,6 @@ SPI1.mode                      = "Four Pin CS Active Low";
 SPI1.$name                     = "COPRO_SPI";
 SPI1.softwareInterruptPriority = "13";
 SPI1.dmaInterruptPriority      = "2";
-SPI1.minDmaTransferSize        = 10000;
 SPI1.sclkPinInstance.mode      = "Input";
 SPI1.pociPinInstance.mode      = "Output";
 SPI1.picoPinInstance.mode      = "Input";

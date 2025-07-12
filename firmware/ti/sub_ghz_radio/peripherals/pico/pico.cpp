@@ -53,7 +53,7 @@ bool Pico::Init()
     spi_params.mode = SPI_PERIPHERAL;
     spi_params.bitRate = 4'000'000; // Not used in slave mode but needs to be reasonable since it's used to set a clock.
     spi_params.dataSize = kBitsPerByte;
-    spi_params.frameFormat = SPI_POL0_PHA0;
+    spi_params.frameFormat = SPI_POL1_PHA1;
     spi_handle_ = SPI_open(bsp.kCoProSPIIndex, &spi_params);
 
     ret &= spi_handle_ != nullptr;
