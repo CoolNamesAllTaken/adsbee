@@ -3,8 +3,12 @@
 #include "bsp.hh"
 #include "spi_coprocessor.hh"
 #include "spi_coprocessor_packet.hh"
+
+extern "C"
+{
 #include "ti/drivers/SPI.h"
 #include "ti/drivers/GPIO.h"
+}
 
 // // Include TI's memory utilities
 // #include "ti/drivers/dma/UDMACC26XX.h"
@@ -60,19 +64,8 @@ public:
 
     inline void SPIUseHandshakePin(bool level) { use_handshake_pin_ = level; }
 
-    inline bool SPIBeginTransaction()
-    {
-        last_bytes_transacted_ = 0; // Reset the last bytes transacted counter.
-        return true;
-    }
-    inline void SPIEndTransaction()
-    {
-        // xSemaphoreGive(spi_mutex_);
-        if (last_bytes_transacted_ > 0)
-        {
-            BlinkNetworkLED(); // Blink the network LED to indicate a successful transaction.
-        }
-    }
+    bool SPIBeginTransaction();
+    void SPIEndTransaction();
 
     bool SPIWriteNonBlocking(uint8_t *tx_buf,
                              uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes);
@@ -107,7 +100,7 @@ public:
         }
     }
 
-    void SPIPostTransactionCallback(SPI_Handle handle, SPI_Transaction *transaction);
+    void SPIPostTransactionCallback();
 
 private:
     void SPIResetTransaction();
@@ -118,9 +111,16 @@ private:
                         //                                                // threads queue packets at the same time).
                         // SemaphoreHandle_t spi_next_transaction_mutex_; // High level mutex used to claim the next transaction interval.
 
-    // static uint8_t spi_rx_buf_[kSPITransactionMaxLenBytes] __attribute__((section(".data")));
-    // static uint8_t spi_tx_buf_[kSPITransactionMaxLenBytes] __attribute__((section(".data")));
+    volatile uint8_t spi_rx_buf_[kSPITransactionMaxLenBytes];
+    volatile uint8_t spi_tx_buf_[kSPITransactionMaxLenBytes];
+    volatile SPI_Transaction spi_transaction_ = {
+        // SPI transaction used to send and receive data from the SPI peripheral.
+        .count = 0,
+        .txBuf = (void *)spi_tx_buf_,
+        .rxBuf = (void *)spi_rx_buf_,
+        .arg = nullptr};
 
+    SPI_Params spi_params_;
     SPI_Handle spi_handle_ = nullptr; // Handle to the SPI peripheral used by the RP2040 SPI coprocessor master interface.
     // static SPI_Transaction spi_transaction_; // SPI transaction used to send and receive data from the SPI peripheral.
     uint16_t spi_transaction_len_bytes_ = 0; // Length of the pending SPI transaction in bytes. Allows the callback function to figure out how long the transaction was supposed to be.

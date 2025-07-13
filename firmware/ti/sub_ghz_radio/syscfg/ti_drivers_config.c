@@ -31,7 +31,7 @@ const UDMACC26XX_HWAttrs udmaCC26XXHWAttrs = {
     .baseAddr        = UDMA0_BASE,
     .powerMngrId     = PowerCC26XX_PERIPH_UDMA,
     .intNum          = INT_DMA_ERR,
-    .intPriority     = 0x40
+    .intPriority     = (~0)
 };
 
 const UDMACC26XX_Config UDMACC26XX_config[1] = {
@@ -72,7 +72,7 @@ GPIO_PinConfig gpioPinConfigs[31] = {
     /* Owned by COPRO_SPI as SCLK */
     GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_NONE | GPIO_CFG_PULL_NONE_INTERNAL, /* CONFIG_GPIO_COPRO_SPI_SCLK */
     /* Owned by COPRO_SPI as CSN */
-    GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_NONE | GPIO_CFG_PULL_NONE_INTERNAL, /* CONFIG_GPIO_COPRO_SPI_CSN */
+    GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_RISING | GPIO_CFG_PULL_NONE_INTERNAL, /* CONFIG_GPIO_COPRO_SPI_CSN */
     GPIO_CFG_NO_DIR, /* DIO_12 */
     GPIO_CFG_NO_DIR, /* DIO_13 */
     GPIO_CFG_NO_DIR, /* DIO_14 */
@@ -125,7 +125,7 @@ const GPIO_Config GPIO_config = {
     .configs = (GPIO_PinConfig *)gpioPinConfigs,
     .callbacks = (GPIO_CallbackFxn *)gpioCallbackFunctions,
     .userArgs = gpioUserArgs,
-    .intPriority = (~0)
+    .intPriority = 0x80
 };
 
 /*
@@ -203,8 +203,8 @@ const SPICC26X2DMA_HWAttrs spiCC26X2DMAHWAttrs[CONFIG_SPI_COUNT] = {
     {
         .baseAddr = SSI0_BASE,
         .intNum = INT_SSI0_COMB,
-        .intPriority = 0x40,
-        .swiPriority = 13,
+        .intPriority = 0xa0,
+        .swiPriority = 0,
         .powerMngrId = PowerCC26XX_PERIPH_SSI0,
         .defaultTxBufValue = ~0,
         .rxChannelBitMask = 1<<UDMA_CHAN_SSI0_RX,
@@ -213,7 +213,7 @@ const SPICC26X2DMA_HWAttrs spiCC26X2DMAHWAttrs[CONFIG_SPI_COUNT] = {
         .dmaRxTableEntryPri = &dmaSpi0RxControlTableEntry,
         .dmaTxTableEntryAlt = &dmaSpi0TxAltControlTableEntry,
         .dmaRxTableEntryAlt = &dmaSpi0RxAltControlTableEntry,
-        .minDmaTransferSize = 10,
+        .minDmaTransferSize = 10000,
         .txPinMux    = IOC_PORT_MCU_SSI0_TX,
         .rxPinMux    = IOC_PORT_MCU_SSI0_RX,
         .clkPinMux   = IOC_PORT_MCU_SSI0_CLK,

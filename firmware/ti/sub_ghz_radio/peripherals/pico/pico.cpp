@@ -6,22 +6,42 @@
 #include "spi_coprocessor.hh"
 #include "object_dictionary.hh"
 #include <cassert>
+#include <ti/drivers/dpl/HwiP.h>
 
-unsigned char spi_tx_buf_[Pico::kSPITransactionMaxLenBytes];
-unsigned char spi_rx_buf_[Pico::kSPITransactionMaxLenBytes];
-SPI_Transaction spi_transaction_ = {
-    .count = Pico::kSPITransactionMaxLenBytes,
-    .txBuf = (void *)spi_tx_buf_,
-    .rxBuf = (void *)spi_rx_buf_,
-    .arg = nullptr};
+// volatile __attribute__((aligned(4))) unsigned char spi_tx_buf_[Pico::kSPITransactionMaxLenBytes];
+// volatile __attribute__((aligned(4))) unsigned char spi_rx_buf_[Pico::kSPITransactionMaxLenBytes];
+// volatile SPI_Transaction spi_transaction_ = {
+//     .count = Pico::kSPITransactionMaxLenBytes,
+//     .txBuf = (void *)spi_tx_buf_,
+//     .rxBuf = (void *)spi_rx_buf_,
+//     .arg = nullptr};
 
 void spi_transfer_complete_callback(SPI_Handle handle, SPI_Transaction *transaction)
 {
-    ((Pico *)(transaction->arg))->SPIPostTransactionCallback(handle, transaction);
+    GPIO_toggle(bsp.kSubGLEDPin); // Toggle the LED to indicate a CS rising edge.
+    pico_ll.SPIPostTransactionCallback();
+}
+
+void spi_cs_rising_edge_callback(uint_least8_t index)
+{
+    uintptr_t hwiKey = HwiP_disable();
+    GPIO_toggle(bsp.kSubGLEDPin); // Toggle the LED to indicate a CS rising edge.
+    pico_ll.SPIPostTransactionCallback();
+    HwiP_restore(hwiKey);
 }
 
 Pico::Pico(PicoConfig config_in) : config_(config_in)
 {
+    SPI_Params_init(&spi_params_);
+    // spi_params_.transferMode = SPI_MODE_CALLBACK; // was commented before Caitlin
+    spi_params_.transferMode = SPI_MODE_CALLBACK;                          // SPI_MODE_CALLBACK; // was commented before Caitlin
+    spi_params_.transferTimeout = SPI_WAIT_FOREVER;                        // was commented before Caitlin
+    /*kSPITransactionTimeoutMs * kUsPerMs * ClockP_getSystemTickPeriod()*/ // Convert ms to system ticks.
+    spi_params_.transferCallbackFxn = spi_transfer_complete_callback;      // was commented before Caitlin
+    spi_params_.mode = SPI_PERIPHERAL;
+    spi_params_.bitRate = 4'000'000; // Not used in slave mode but needs to be reasonable since it's used to set a clock.
+    spi_params_.dataSize = kBitsPerByte;
+    spi_params_.frameFormat = SPI_POL1_PHA1;
     // spi_rx_buf_ = (uint8_t *)malloc(100); // SPICoprocessorPacket::kSPITransactionMaxLenBytes);
     // spi_tx_buf_ = (uint8_t *)malloc(100); // SPICoprocessorPacket::kSPITransactionMaxLenBytes);
     // assert(spi_rx_buf_ != nullptr);
@@ -40,23 +60,23 @@ Pico::~Pico()
 bool Pico::Init()
 {
     bool ret = true;
-    ret &= GPIO_setConfig(bsp.kSubGIRQPin, GPIO_CFG_OUT_OD_PU) == GPIO_STATUS_SUCCESS;
+    // ret &= GPIO_setConfig(bsp.kSubGIRQPin, GPIO_CFG_OUT_OD_PU) == GPIO_STATUS_SUCCESS;
 
-    // SPI_init is called during peripheral initialization before this function is invoked.
-    SPI_Params spi_params;
-    SPI_Params_init(&spi_params); // Fill spi_params with default settings.
-    // spi_params.transferMode = SPI_MODE_CALLBACK; // was commented before Caitlin
-    spi_params.transferMode = SPI_MODE_BLOCKING;                           // SPI_MODE_CALLBACK; // was commented before Caitlin
-    spi_params.transferTimeout = SPI_WAIT_FOREVER;                         // was commented before Caitlin
-    /*kSPITransactionTimeoutMs * kUsPerMs * ClockP_getSystemTickPeriod()*/ // Convert ms to system ticks.
-    // spi_params.transferCallbackFxn = spi_transfer_complete_callback;       // was commented before Caitlin
-    spi_params.mode = SPI_PERIPHERAL;
-    spi_params.bitRate = 4'000'000; // Not used in slave mode but needs to be reasonable since it's used to set a clock.
-    spi_params.dataSize = kBitsPerByte;
-    spi_params.frameFormat = SPI_POL1_PHA1;
-    spi_handle_ = SPI_open(bsp.kCoProSPIIndex, &spi_params);
+    spi_handle_ = SPI_open(bsp.kCoProSPIIndex, &spi_params_);
+    if (spi_handle_ == nullptr)
+    {
+        CONSOLE_ERROR("Pico::SPIBeginTransaction", "Failed to open SPI handle.");
+        return false;
+    }
 
-    ret &= spi_handle_ != nullptr;
+    // Set up interrupt service routine for SPI CS pin
+    GPIO_setConfig(bsp.kCoProSPICSPin, GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_RISING | GPIO_CFG_PULL_NONE_INTERNAL);
+    GPIO_setCallback(bsp.kCoProSPICSPin, spi_cs_rising_edge_callback);
+    GPIO_enableInt(bsp.kCoProSPICSPin);
+
+    while (true)
+    {
+    }
 
     // Start the callback chain by kicking off the first transaction.
     SPIResetTransaction();
@@ -70,6 +90,7 @@ bool Pico::DeInit()
         SPI_close(spi_handle_);
         spi_handle_ = nullptr;
     }
+
     return true;
 }
 
@@ -84,14 +105,32 @@ bool Pico::Update()
     return ret;
 }
 
-void Pico::SPIPostTransactionCallback(SPI_Handle spi_handle, SPI_Transaction *transaction)
+void Pico::SPIPostTransactionCallback()
 {
     SPIEndTransaction();
+    SPIResetTransaction();
+}
+
+bool Pico::SPIBeginTransaction()
+{
+
+    last_bytes_transacted_ = 0; // Reset the last bytes transacted counter.
+    return true;
+}
+
+void Pico::SPIEndTransaction()
+{
+    SPI_transferCancel(spi_handle_);
+    spi_transaction_.count = 0;
+    // if (last_bytes_transacted_ > 0)
+    // {
+    //     BlinkNetworkLED(); // Blink the network LED to indicate a successful transaction.
+    // }
 }
 
 bool Pico::SPIWriteNonBlocking(uint8_t *tx_buf, uint16_t len_bytes)
 {
-    spi_transaction_.count = len_bytes;
+    spi_transaction_.count = 1; // We want the transaction callback to be called as soon as chip select goes high.
     spi_transaction_len_bytes_ = len_bytes;
     spi_transaction_.txBuf = (void *)tx_buf;
     spi_transaction_.rxBuf = (void *)spi_rx_buf_;
@@ -108,7 +147,7 @@ bool Pico::SPIWriteNonBlocking(uint8_t *tx_buf, uint16_t len_bytes)
     // }
     // memset(spi_transaction_.rxBuf, 0x00, len_bytes);
     SPIBeginTransaction();
-    return SPI_transfer(spi_handle_, &spi_transaction_);
+    return SPI_transfer(spi_handle_, (SPI_Transaction *)&spi_transaction_);
 }
 
 void Pico::SPIResetTransaction()
@@ -117,7 +156,7 @@ void Pico::SPIResetTransaction()
     SPIUseHandshakePin(false);
     // Queue up a read of the maximum packet length and let it roll based on what shows up next.
     // Sending tx_buf as nullptr means we send all 0x00's.
-    SPIWriteNonBlocking(spi_tx_buf_, 10); // FIXME: Remove length.
+    SPIWriteNonBlocking((uint8_t *)spi_tx_buf_, kSPITransactionMaxLenBytes); // FIXME: Remove length.
 }
 
 bool Pico::SPIProcessTransaction()
@@ -149,7 +188,7 @@ bool Pico::SPIProcessTransaction()
     bool ret = true;
     uint8_t cmd = spi_rx_buf_[0];
     uint8_t *rx_buf = (uint8_t *)spi_transaction_.rxBuf;
-    size_t &bytes_read = spi_transaction_.count;
+    size_t &bytes_read = (size_t &)spi_transaction_.count;
     switch (cmd)
     {
     case ObjectDictionary::SCCommand::kCmdWriteToSlave:

@@ -28,7 +28,8 @@
 			"format": "cpp",
 			"hwip.h": "c",
 			"swip.h": "c",
-			"freertos.h": "c"
+			"freertos.h": "c",
+			"stdint.h": "c"
 		},
 		"C_Cpp.default.defines": [
 			"ON_TI",

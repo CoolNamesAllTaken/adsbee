@@ -31,7 +31,6 @@ message(STATUS "ARM GCC compiler version: ${GCC_ARM_VERSION}")
 
 # Compile definitions need to be defined before the target!
 add_compile_definitions(DeviceFamily_CC13X2)
-# add_compile_definitions(DeviceFamily_CC13X2_CC26X2)
 add_compile_definitions(ON_TI)
 
 project(sub_ghz_radio C CXX ASM)
@@ -49,10 +48,9 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 # Include directories
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/freertos/dpl # added the dpl
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/ti/posix/gcc
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/third_party/freertos/include
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/third_party/freertos/portable/GCC/ARM_CM4F
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/posix
+    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/ti/posix/gcc
     
     
     
@@ -73,15 +71,17 @@ target_link_directories(${PROJECT_NAME} PRIVATE
     CMakeCommon::gcc_m4f # Use TI gcc toolchain for ARM M4 with hardware floating point.
 
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos
+    ${CMAKE_CURRENT_SOURCE_DIR}/syscfg
     $(GCC_ARMCOMPILER)/arm-none-eabi/lib/thumb/v7e-m+fp/hard
     
 
     # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/freertos/lib/gcc/m4f
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/log/lib/gcc/m4f/log_cc13x2
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/drivers/lib/gcc/m4f/drivers_cc13x2
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/devices/cc13x2_cc26x2/lib/gcc/m4f/driverlib
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/ti/drivers/rf/lib/gcc/m4f
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/ti/grlib/lib/gcc/m4f
+    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/log/lib/gcc/m4f/log_cc13x2
+    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/drivers/lib/gcc/m4f/drivers_cc13x2
+    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/devices/cc13x2_cc26x2/lib/gcc/m4f/driverlib
+    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/ti/drivers/rf/lib/gcc/m4f
+    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/ti/grlib/lib/gcc/m4f
 )
 
 # Libraries to link
@@ -95,27 +95,39 @@ target_link_libraries(${PROJECT_NAME}
     CMakeCommon::gcc_m4f # Use TI gcc toolchain for ARM M4 with hardware floating point.
 
     # Assume default library install locations (within /usr/local/ti-lpf2-sdk).
-    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/freertos/lib/gcc/m4f/freertos_cc13x2.a
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/log/lib/gcc/m4f/log_cc13x2/log_cc13x2.a
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/drivers/lib/gcc/m4f/drivers_cc13x2/drivers_cc13x2.a
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/devices/cc13x2_cc26x2/lib/gcc/m4f/driverlib/driverlib.lib
+    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/lib/gcc/m4f/nortos_cc13x2.a
+    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/log/lib/gcc/m4f/log_cc13x2/log_cc13x2.a
+    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/drivers/lib/gcc/m4f/drivers_cc13x2/drivers_cc13x2.a
+    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/devices/cc13x2_cc26x2/lib/gcc/m4f/driverlib/driverlib.lib
+    # 
+    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/ti/grlib/lib/gcc/m4f/grlib.a
+
+    ## Manually bring in the libraries from syscfg/ti_utils_build_linker.cmd.genlibs here!
+    # Note: need to change "ccs" to "gcc" in the paths.
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/ti/drivers/rf/lib/gcc/m4f/rf_multiMode_cc13x2.a
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/ti/drivers/lib/gcc/m4f/drivers_cc13x2.a
+    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/ti/devices/cc13x2_cc26x2/driverlib/bin/gcc/driverlib.lib
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/ti/grlib/lib/gcc/m4f/grlib.a
+
+    # I added this.
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/lib/gcc/m4f/nortos_cc13x2.a
+    # Added this since the driverlib.lib from the genlibs file did not include HWiP_destruct and HWiP_construct.
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/build/gcc/source/ti/devices/cc13x2_cc26x2/lib/gcc/m4f/driverlib/driverlib.lib
 )
 
-set(TI_LINKER_COMMAND_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cc13x2_cc26x2_freertos.lds")
+set(TI_LINKER_COMMAND_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cc13x2_cc26x2_nortos.lds")
 
-file(GLOB FREERTOS_SOURCES "${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/third_party/freertos/*.c")
-file(GLOB FREERTOS_DPL_SOURCES "${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/freertos/dpl/*.c")
-list(REMOVE_ITEM FREERTOS_DPL_SOURCES "${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/freertos/dpl/ClockP_freertos.c")
+# file(GLOB FREERTOS_SOURCES "${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/third_party/freertos/*.c")
+# file(GLOB NORTOS_DPL_SOURCES "${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/dpl/*.c")
+# list(REMOVE_ITEM FREERTOS_DPL_SOURCES "${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/freertos/dpl/ClockP_freertos.c")
 
 target_sources(${PROJECT_NAME} PRIVATE
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/freertos/startup/startup_cc13x2_cc26x2_gcc.c # Get the resetISR and stuff.
-    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/third_party/freertos/portable/GCC/ARM_CM4F/port.c
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/startup/startup_cc13x2_cc26x2_gcc.c # Get the resetISR and stuff.
+    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/third_party/freertos/portable/GCC/ARM_CM4F/port.c
     syscalls_stub.c
-    ${FREERTOS_SOURCES}
-    ${FREERTOS_DPL_SOURCES}
-    # ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/NoRTOS.c
+    # ${FREERTOS_SOURCES}
+    # ${NORTOS_DPL_SOURCES}
+    ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/NoRTOS.c
     # NoRTOS.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/rfPacketRx.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/RFQueue.cpp
@@ -162,6 +174,8 @@ target_link_options(${PROJECT_NAME} PRIVATE
     -static
     -Wl,--gc-sections
     -specs=nano.specs
+    -specs=nosys.specs
+    # ${CMAKE_CURRENT_SOURCE_DIR}/syscfg/ti_utils_build_linker.cmd.genlibs
 )
 
 # Custom command to create binary file

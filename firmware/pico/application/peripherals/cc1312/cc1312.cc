@@ -325,9 +325,9 @@ bool CC1312::EnterBootloader() {
 
     // Bootlaoder is active, override CPHA and CPOL.
     // WARNING: Other devices on the bus can't be used while CC1312 is in bootloader mode.
-    spi_set_format(config_.spi_handle, kBootloaderSPIPeripheralConfig.bits_per_transfer,
-                   kBootloaderSPIPeripheralConfig.cpol, kBootloaderSPIPeripheralConfig.cpha,
-                   kBootloaderSPIPeripheralConfig.order);
+    // spi_set_format(config_.spi_handle, kBootloaderSPIPeripheralConfig.bits_per_transfer,
+    //                kBootloaderSPIPeripheralConfig.cpol, kBootloaderSPIPeripheralConfig.cpha,
+    //                kBootloaderSPIPeripheralConfig.order);
 
     return BootloaderCommandPing();
 }
@@ -338,8 +338,9 @@ bool CC1312::ExitBootloader() {
     gpio_put(config_.sync_pin, 0);
     SetEnableState(SettingsManager::kEnableStateEnabled);
 
-    spi_set_format(config_.spi_handle, kDefaultSPIPeripheralConfig.bits_per_transfer, kDefaultSPIPeripheralConfig.cpol,
-                   kDefaultSPIPeripheralConfig.cpha, kDefaultSPIPeripheralConfig.order);
+    // spi_set_format(config_.spi_handle, kDefaultSPIPeripheralConfig.bits_per_transfer,
+    // kDefaultSPIPeripheralConfig.cpol,
+    //                kDefaultSPIPeripheralConfig.cpha, kDefaultSPIPeripheralConfig.order);
 
     return true;
 }

@@ -9,20 +9,18 @@
 /**
  * Import the modules used in this configuration.
  */
-const FreeRTOS = scripting.addModule("/freertos/FreeRTOS");
 const CCFG     = scripting.addModule("/ti/devices/CCFG");
 const custom   = scripting.addModule("/ti/devices/radioconfig/custom");
 const rfdesign = scripting.addModule("/ti/devices/radioconfig/rfdesign");
 const Board    = scripting.addModule("/ti/drivers/Board");
 const DMA      = scripting.addModule("/ti/drivers/DMA");
-const GPIO     = scripting.addModule("/ti/drivers/GPIO", {}, false);
+const GPIO     = scripting.addModule("/ti/drivers/GPIO");
 const GPIO1    = GPIO.addInstance();
 const GPIO2    = GPIO.addInstance();
 const GPIO3    = GPIO.addInstance();
 const GPIO4    = GPIO.addInstance();
 const SPI      = scripting.addModule("/ti/drivers/SPI", {}, false);
 const SPI1     = SPI.addInstance();
-const Settings = scripting.addModule("/ti/posix/freertos/Settings");
 
 /**
  * Write custom configuration values to the imported modules.
@@ -44,7 +42,7 @@ custom.radioConfigcustom868.codeExportConfig.$name = "ti_devices_radioconfig_cod
 
 Board.generateInitializationFunctions = false;
 
-DMA.interruptPriority = "2";
+GPIO.interruptPriority = "4";
 
 GPIO1.mode            = "Output";
 GPIO1.$name           = "SUBG_LED_PIN";
@@ -53,8 +51,8 @@ GPIO1.gpioPin.$assign = "DIO_6";
 GPIO2.mode               = "Output";
 GPIO2.outputType         = "Open Drain";
 GPIO2.pull               = "Pull Up";
-GPIO2.initialOutputState = "High";
 GPIO2.$name              = "SUBG_IRQ_PIN";
+GPIO2.initialOutputState = "High";
 GPIO2.gpioPin.$assign    = "DIO_18";
 
 GPIO3.$name           = "SYNC_PIN";
@@ -64,20 +62,19 @@ GPIO4.mode            = "Output";
 GPIO4.$name           = "SUBG_BIAS_TEE_ENABLE_PIN";
 GPIO4.gpioPin.$assign = "DIO_7";
 
-SPI1.mode                      = "Four Pin CS Active Low";
-SPI1.$name                     = "COPRO_SPI";
-SPI1.softwareInterruptPriority = "13";
-SPI1.dmaInterruptPriority      = "2";
-SPI1.sclkPinInstance.mode      = "Input";
-SPI1.pociPinInstance.mode      = "Output";
-SPI1.picoPinInstance.mode      = "Input";
-SPI1.spi.$assign               = "SSI0";
-SPI1.spi.sclkPin.$assign       = "DIO_10";
-SPI1.spi.pociPin.$assign       = "DIO_8";
-SPI1.spi.picoPin.$assign       = "DIO_9";
-SPI1.spi.csnPin.$assign        = "DIO_11";
-SPI1.spi.dmaRxChannel.$assign  = "DMA_CH3";
-SPI1.spi.dmaTxChannel.$assign  = "DMA_CH4";
-SPI1.csnPinInstance.mode       = "Input";
-
-Settings.enableAdvMem = false;
+SPI1.mode                            = "Four Pin CS Active Low";
+SPI1.$name                           = "COPRO_SPI";
+SPI1.dmaInterruptPriority            = "5";
+SPI1.minDmaTransferSize              = 10000;
+SPI1.sclkPinInstance.mode            = "Input";
+SPI1.pociPinInstance.mode            = "Output";
+SPI1.picoPinInstance.mode            = "Input";
+SPI1.spi.$assign                     = "SSI0";
+SPI1.spi.sclkPin.$assign             = "DIO_10";
+SPI1.spi.pociPin.$assign             = "DIO_8";
+SPI1.spi.picoPin.$assign             = "DIO_9";
+SPI1.spi.csnPin.$assign              = "DIO_11";
+SPI1.spi.dmaRxChannel.$assign        = "DMA_CH3";
+SPI1.spi.dmaTxChannel.$assign        = "DMA_CH4";
+SPI1.csnPinInstance.mode             = "Input";
+SPI1.csnPinInstance.interruptTrigger = "Rising Edge";
