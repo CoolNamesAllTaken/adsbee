@@ -8,26 +8,10 @@
 #include <cassert>
 #include <ti/drivers/dpl/HwiP.h>
 
-// volatile __attribute__((aligned(4))) unsigned char spi_tx_buf_[Pico::kSPITransactionMaxLenBytes];
-// volatile __attribute__((aligned(4))) unsigned char spi_rx_buf_[Pico::kSPITransactionMaxLenBytes];
-// volatile SPI_Transaction spi_transaction_ = {
-//     .count = Pico::kSPITransactionMaxLenBytes,
-//     .txBuf = (void *)spi_tx_buf_,
-//     .rxBuf = (void *)spi_rx_buf_,
-//     .arg = nullptr};
-
 void spi_transfer_complete_callback(SPI_Handle handle, SPI_Transaction *transaction)
 {
     GPIO_toggle(bsp.kSubGLEDPin); // Toggle the LED to indicate a CS rising edge.
     pico_ll.SPIPostTransactionCallback();
-}
-
-void spi_cs_rising_edge_callback(uint_least8_t index)
-{
-    uintptr_t hwiKey = HwiP_disable();
-    GPIO_toggle(bsp.kSubGLEDPin); // Toggle the LED to indicate a CS rising edge.
-    pico_ll.SPIPostTransactionCallback();
-    HwiP_restore(hwiKey);
 }
 
 Pico::Pico(PicoConfig config_in) : config_(config_in)
@@ -42,10 +26,6 @@ Pico::Pico(PicoConfig config_in) : config_(config_in)
     spi_params_.bitRate = 4'000'000; // Not used in slave mode but needs to be reasonable since it's used to set a clock.
     spi_params_.dataSize = kBitsPerByte;
     spi_params_.frameFormat = SPI_POL1_PHA1;
-    // spi_rx_buf_ = (uint8_t *)malloc(100); // SPICoprocessorPacket::kSPITransactionMaxLenBytes);
-    // spi_tx_buf_ = (uint8_t *)malloc(100); // SPICoprocessorPacket::kSPITransactionMaxLenBytes);
-    // assert(spi_rx_buf_ != nullptr);
-    // assert(spi_tx_buf_ != nullptr);
 
     memset((void *)spi_rx_buf_, 0x0, kSPITransactionMaxLenBytes);
     memset((void *)spi_tx_buf_, 0xBE, kSPITransactionMaxLenBytes);
@@ -53,8 +33,6 @@ Pico::Pico(PicoConfig config_in) : config_(config_in)
 
 Pico::~Pico()
 {
-    // free(spi_rx_buf_);
-    // free(spi_tx_buf_);
 }
 
 bool Pico::Init()
@@ -67,15 +45,6 @@ bool Pico::Init()
     {
         CONSOLE_ERROR("Pico::SPIBeginTransaction", "Failed to open SPI handle.");
         return false;
-    }
-
-    // Set up interrupt service routine for SPI CS pin
-    GPIO_setConfig(bsp.kCoProSPICSPin, GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_RISING | GPIO_CFG_PULL_NONE_INTERNAL);
-    GPIO_setCallback(bsp.kCoProSPICSPin, spi_cs_rising_edge_callback);
-    GPIO_enableInt(bsp.kCoProSPICSPin);
-
-    while (true)
-    {
     }
 
     // Start the callback chain by kicking off the first transaction.
@@ -134,18 +103,7 @@ bool Pico::SPIWriteNonBlocking(uint8_t *tx_buf, uint16_t len_bytes)
     spi_transaction_len_bytes_ = len_bytes;
     spi_transaction_.txBuf = (void *)tx_buf;
     spi_transaction_.rxBuf = (void *)spi_rx_buf_;
-    // spi_transaction_.txBuf = nullptr;
-    // spi_transaction_.rxBuf = nullptr;
-    // spi_transaction_.arg = this;
-    // if (tx_buf != nullptr)
-    // {
-    //     memcpy(spi_transaction_.txBuf, tx_buf, len_bytes);
-    // }
-    // else
-    // {
-    //     memset(spi_transaction_.txBuf, 0xBE, len_bytes);
-    // }
-    // memset(spi_transaction_.rxBuf, 0x00, len_bytes);
+
     SPIBeginTransaction();
     return SPI_transfer(spi_handle_, (SPI_Transaction *)&spi_transaction_);
 }

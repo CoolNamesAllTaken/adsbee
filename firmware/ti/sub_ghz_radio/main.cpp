@@ -40,7 +40,7 @@ void exception_handler()
 /*
  *  ======== main ========
  */
-extern "C" int main(void)
+int main(void)
 {
     // NoRTOS_Config cfg;
     // NoRTOS_getConfig(&cfg);
@@ -63,32 +63,6 @@ extern "C" int main(void)
         GPIO_write(bsp.kSubGLEDPin, 0);
         usleep(50000); // 50ms
     }
-
-    // unsigned char spi_rx_buf[Pico::kSPITransactionMaxLenBytes] = {0};
-    // unsigned char spi_tx_buf[Pico::kSPITransactionMaxLenBytes] = {0};
-    // memset((void *)spi_tx_buf, 0xBE, Pico::kSPITransactionMaxLenBytes);
-    // SPI_Transaction spi_transaction = {
-    //     .count = Pico::kSPITransactionMaxLenBytes,
-    //     .txBuf = (void *)spi_tx_buf,
-    //     .rxBuf = (void *)spi_rx_buf,
-    //     .arg = nullptr};
-    // SPI_Params spi_params;
-    // SPI_Params_init(&spi_params);
-    // spi_params.transferMode = SPI_MODE_BLOCKING; // SPI_MODE_CALLBACK; // was commented
-
-    // spi_params.transferTimeout = SPI_WAIT_FOREVER; // was commented before Caitlin
-    // spi_params.mode = SPI_PERIPHERAL;
-    // spi_params.bitRate = 4'000'000; // Not used in slave mode but needs to be reasonable since it's used to set a clock.
-    // spi_params.dataSize = kBitsPerByte;
-    // spi_params.frameFormat = SPI_POL1_PHA1;
-
-    // SPI_Handle spi_handle = SPI_open(bsp.kCoProSPIIndex, &spi_params);
-    // while (true)
-    // {
-    //     SPI_transfer(spi_handle, &spi_transaction);
-    //     // usleep(50000); // 50ms
-    //     GPIO_toggle(bsp.kSubGLEDPin);
-    // }
 
     // Initialize the SPI coprocessor.
     if (!pico.Init())
