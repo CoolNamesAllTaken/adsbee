@@ -36,12 +36,6 @@ class ESP32 : public SPICoprocessorSlaveInterface {
      */
     bool Update();
 
-    /**
-     * Gets the timestamp of the last successful device status query from the ESP32.
-     * @retval Timestamp in milliseconds since boot.
-     */
-    inline uint32_t GetLastHeartbeatTimestampMs() { return last_device_status_update_timestamp_ms_; }
-
     inline bool IsEnabled() { return enabled_; }
     inline void SetEnable(bool enabled) {
         gpio_put(config_.enable_pin, enabled);
@@ -49,6 +43,10 @@ class ESP32 : public SPICoprocessorSlaveInterface {
     }
 
     inline bool SPIBeginTransaction() {
+        while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < spi_handshake_lockout_us_) {
+            // Wait for the lockout period to expire before checking the handshake pin.
+            // This handshake lockout interval is too short to check for a handshake timeout during.
+        }
         while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
             // Wait for the lockout period to expire before starting a new transaction.
             if (expecting_handshake_ && SPIGetHandshakePinLevel()) {

@@ -89,23 +89,17 @@ bool CC1312::Init(bool spi_already_initialized) {
 }
 
 bool CC1312::Update() {
-    uint32_t timestamp_ms = get_time_since_boot_ms();
-
-    if (timestamp_ms - last_device_status_update_timestamp_ms_ > device_status_update_interval_ms) {
-        // Query CC1312's device status.
-        ObjectDictionary::SubGHzDeviceStatus device_status;
-        if (adsbee.subg_radio.Read(ObjectDictionary::Address::kAddrDeviceStatus, device_status)) {
-            last_device_status_update_timestamp_ms_ = timestamp_ms;
-
-            // We only update the device_status vars exposed publicly here. Other reads of device_status are for
-            // internal use only.
-            num_queued_log_messages = device_status.num_queued_log_messages;
-            queued_log_messages_packed_size_bytes = device_status.queued_log_messages_packed_size_bytes;
-            num_queued_sc_command_requests = device_status.num_queued_sc_command_requests;
-        } else {
-            CONSOLE_ERROR("CC1312::Update", "Unable to read CC1312 status.");
-            return false;
-        }
+    // Query CC1312's device status.
+    ObjectDictionary::SubGHzDeviceStatus device_status;
+    if (adsbee.subg_radio.Read(ObjectDictionary::Address::kAddrDeviceStatus, device_status)) {
+        // We only update the device_status vars exposed publicly here. Other reads of device_status are for
+        // internal use only.
+        num_queued_log_messages = device_status.num_queued_log_messages;
+        queued_log_messages_packed_size_bytes = device_status.queued_log_messages_packed_size_bytes;
+        num_queued_sc_command_requests = device_status.num_queued_sc_command_requests;
+    } else {
+        CONSOLE_ERROR("CC1312::Update", "Unable to read CC1312 status.");
+        return false;
     }
 
     return true;
@@ -587,13 +581,20 @@ bool CC1312::SPIBeginTransaction() {
     spi_set_clk(active_clk_config_);
 
     // Don't need to wait for processing time in bootloader, since we wait for acks.
-    while (!in_bootloader_ && get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
-        // Wait for the lockout period to expire before starting a new transaction.
-        if (expecting_handshake_ && SPIGetHandshakePinLevel()) {
-            // If we are expecting a handshake and the pin is high, we can proceed with the transaction.
-            break;
+    if (!in_bootloader_) {
+        while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < spi_handshake_lockout_us_) {
+            // Wait for the lockout period to expire before checking the handshake pin.
+            // This handshake lockout interval is too short to check for a handshake timeout during.
+        }
+        while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
+            // Wait for the lockout period to expire before starting a new transaction.
+            if (expecting_handshake_ && SPIGetHandshakePinLevel()) {
+                // If we are expecting a handshake and the pin is high, we can proceed with the transaction.
+                break;
+            }
         }
     }
+
     gpio_put(config_.spi_cs_pin, false);
 
     return true;

@@ -42,6 +42,13 @@ bool SPICoprocessor::Update() {
         return false;  // Nothing to do.
     }
 
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+
+    if (timestamp_ms - last_update_timestamp_ms_ <= update_interval_ms) {
+        return true;  // No need to update yet.
+    }
+    last_update_timestamp_ms_ = timestamp_ms;
+
     // Rely on the slave interface to query device status and process SCCommand requests, since behavior varies by
     // device.
     if (!config_.interface.Update()) {
@@ -96,34 +103,34 @@ bool SPICoprocessor::Update() {
 
             ObjectDictionary::RollQueueRequest roll_request = {
                 .queue_id = ObjectDictionary::QueueID::kQueueIDLogMessages, .num_items = num_messages_pulled};
-            Write(ObjectDictionary::Address::kAddrRollQueue, roll_request,
-                  true);  // Require the roll request to be acknowledged.
+            if (!Write(ObjectDictionary::Address::kAddrRollQueue, roll_request,
+                       true)) {  // Require the roll request to be acknowledged.
+                CONSOLE_ERROR("SPICoprocessor::Update", "Failed to roll log messages queue after reading %d messages.",
+                              num_messages_pulled);
+                return false;
+            }
 
-            while (object_dictionary.log_message_queue.Length() > 0) {
-                ObjectDictionary::LogMessage log_message;
-                if (object_dictionary.log_message_queue.Pop(log_message)) {
-                    switch (log_message.log_level) {
-                        case SettingsManager::LogLevel::kInfo:
-                            CONSOLE_INFO("CoProcessor", "%s >> %s", config_.tag_str, log_message.message);
-                            break;
-                        case SettingsManager::LogLevel::kWarnings:
-                            CONSOLE_WARNING("CoProcessor", "%s >> %s", config_.tag_str, log_message.message);
-                            break;
-                        case SettingsManager::LogLevel::kErrors:
-                            CONSOLE_ERROR("CoProcessor", "%s >> %s", config_.tag_str, log_message.message);
-                            break;
-                        default:
-                            CONSOLE_PRINTF("CoProcessor %s >> %s", config_.tag_str, log_message.message);
-                            break;
-                    }
+            ObjectDictionary::LogMessage log_message;
+            while (object_dictionary.log_message_queue.Pop(log_message)) {
+                switch (log_message.log_level) {
+                    case SettingsManager::LogLevel::kInfo:
+                        CONSOLE_INFO("CoProcessor", "%s >> %s", config_.tag_str, log_message.message);
+                        break;
+                    case SettingsManager::LogLevel::kWarnings:
+                        CONSOLE_WARNING("CoProcessor", "%s >> %s", config_.tag_str, log_message.message);
+                        break;
+                    case SettingsManager::LogLevel::kErrors:
+                        CONSOLE_ERROR("CoProcessor", "%s >> %s", config_.tag_str, log_message.message);
+                        break;
+                    default:
+                        CONSOLE_PRINTF("CoProcessor %s >> %s", config_.tag_str, log_message.message);
+                        break;
                 }
             }
         } else {
             CONSOLE_ERROR("main", "Unable to read log messages from %s.", config_.tag_str);
         }
     }
-
-    config_.interface.SPIEndTransaction();
 #elif defined(ON_COPRO_SLAVE) && !defined(ON_TI)
     uint8_t rx_buf[SPICoprocessorPacket::kSPITransactionMaxLenBytes];
     memset(rx_buf, 0, SPICoprocessorPacket::kSPITransactionMaxLenBytes);

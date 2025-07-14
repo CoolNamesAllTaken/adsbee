@@ -23,6 +23,7 @@ class SPICoprocessor : public SPICoprocessorInterface {
     static constexpr uint16_t kSPITransactionMaxNumRetries = 3;
     static const uint16_t kTagStrMaxLen = 32;
     static const uint16_t kMaxNumSCCommandRequestsPerUpdate = 5;
+    static const uint16_t kDefaultUpdateIntervalMs = 200;  // 5Hz updates by default.
 
     struct SPICoprocessorConfig {
 #ifdef ON_COPRO_MASTER
@@ -55,7 +56,7 @@ class SPICoprocessor : public SPICoprocessorInterface {
      * Gets the timestamp of the last successful device status query from the ESP32.
      * @retval Timestamp in milliseconds since boot.
      */
-    inline uint32_t GetLastHeartbeatTimestampMs() { return config_.interface.GetLastHeartbeatTimestampMs(); }
+    inline uint32_t GetLastHeartbeatTimestampMs() { return last_update_timestamp_ms_; }
 
     /**
      * Top level function that translates a write to an object (with associated address) into SPI transaction(s).
@@ -137,6 +138,9 @@ class SPICoprocessor : public SPICoprocessorInterface {
      */
     bool Update();
 
+    // Interval for device status updates.
+    uint32_t update_interval_ms = kDefaultUpdateIntervalMs;
+
 #ifdef ON_COPRO_SLAVE
 
     void UpdateNetworkLED() { config_.interface.UpdateNetworkLED(); }
@@ -177,7 +181,9 @@ class SPICoprocessor : public SPICoprocessorInterface {
      * @retval True if received an ACK, false if received NACK or timed out.
      */
     bool SPIWaitForAck();
-#endif  // ON_COPRO_MASTER
+
+    uint32_t last_update_timestamp_ms_ = 0;  // Timestamp of the last device status update.
+#endif                                       // ON_COPRO_MASTER
 
 #ifndef ON_TI
     /**

@@ -112,7 +112,6 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     static constexpr uint32_t kSPIHandshakeTimeoutMs = 20;
     // How long to loop in Update() for after initializing the device in order to allow it to query for settings data.
     static constexpr uint32_t kBootupDelayMs = 500;
-    static const uint16_t kDeviceStatusUpdateDefaultIntervalMs = 200;  // 5Hz updates by default.
 
     virtual bool Update() = 0;
 
@@ -155,17 +154,8 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     virtual bool IsEnabled() = 0;
     virtual void SetEnable(bool enabled) = 0;
 
-    /**
-     * Gets the timestamp of the last successful device status query from the ESP32.
-     * @retval Timestamp in milliseconds since boot.
-     */
-    virtual uint32_t GetLastHeartbeatTimestampMs() = 0;
-
     virtual bool SPIBeginTransaction() = 0;
     virtual void SPIEndTransaction() = 0;
-
-    // Interval for device status updates.
-    uint32_t device_status_update_interval_ms = kDeviceStatusUpdateDefaultIntervalMs;
 
     uint16_t num_queued_log_messages = 0;                // Number of log messages queued to be read from the slave.
     uint16_t queued_log_messages_packed_size_bytes = 0;  // Size of the pending log messages in bytes.
@@ -177,7 +167,6 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     bool expecting_handshake_ = false;
     uint64_t spi_last_transmit_timestamp_us_ = 0;  // Timestamp of the end of the last SPI transaction.
 
-    uint32_t last_device_status_update_timestamp_ms_ = 0;                // Timestamp of the last device status update.
     uint32_t spi_handshake_lockout_us_ = kDefaultSPIHandshakeLockoutUs;  // How long to wait after a transaction before
                                                                          // allowing the handshake pin to be asserted.
 };

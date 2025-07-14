@@ -42,71 +42,65 @@ bool ESP32::DeInit() {
 bool ESP32::Update() {
     // IsEnabled() check happens at the higher level Update() function in SPICoprocessor, so don't repeat it here.
 
-    uint32_t timestamp_ms = get_time_since_boot_ms();
+    // Query ESP32's device status.
+    ObjectDictionary::ESP32DeviceStatus device_status;
+    if (esp32.Read(ObjectDictionary::Address::kAddrDeviceStatus, device_status)) {
+        // We only update the device_status vars exposed publicly here. Other reads of device_status are for
+        // internal use only.
+        num_queued_log_messages = device_status.num_queued_log_messages;
+        queued_log_messages_packed_size_bytes = device_status.queued_log_messages_packed_size_bytes;
+        num_queued_sc_command_requests = device_status.num_queued_sc_command_requests;
+    } else {
+        CONSOLE_ERROR("ESP32::Update", "Unable to read ESP32 status.");
+        return false;
+    }
 
-    if (timestamp_ms - last_device_status_update_timestamp_ms_ > device_status_update_interval_ms) {
-        // Query ESP32's device status.
-        ObjectDictionary::ESP32DeviceStatus device_status;
-        if (esp32.Read(ObjectDictionary::Address::kAddrDeviceStatus, device_status)) {
-            last_device_status_update_timestamp_ms_ = timestamp_ms;
+    static const uint16_t kMaxNumConsoleReadsPerUpdate = 5;
+    for (uint16_t console_read_num = 0;
+         console_read_num < kMaxNumConsoleReadsPerUpdate && device_status.num_queued_network_console_rx_chars > 0;
+         console_read_num++) {
+        // Read console message from ESP32.
+        char buf[ObjectDictionary::kNetworkConsoleMessageMaxLenBytes] = {0};
 
-            // We only update the device_status vars exposed publicly here. Other reads of device_status are for
-            // internal use only.
-            num_queued_log_messages = device_status.num_queued_log_messages;
-            queued_log_messages_packed_size_bytes = device_status.queued_log_messages_packed_size_bytes;
-            num_queued_sc_command_requests = device_status.num_queued_sc_command_requests;
-        } else {
-            CONSOLE_ERROR("ESP32::Update", "Unable to read ESP32 status.");
+        // Read as many bytes as we can without overflowing the RX queue or exceeding our buffer size or max SPI
+        // transaction size.
+        uint16_t bytes_to_read =
+            MIN(comms_manager.esp32_console_rx_queue.MaxNumElements() - comms_manager.esp32_console_rx_queue.Length(),
+                MIN(device_status.num_queued_network_console_rx_chars, sizeof(buf)));
+        if (bytes_to_read == 0) {
+            // Nasty failure mode: If you request a write with buf length zero, the Read() function defaults to the
+            // size of the object passed in, so you could be reading for a quite a while! Catch it here.
+            break;  // No more console messages to read.
+        }
+
+        if (!esp32.Read(ObjectDictionary::Address::kAddrConsole, buf, bytes_to_read)) {
+            CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest", "Unable to read console message from ESP32.");
             return false;
         }
-
-        static const uint16_t kMaxNumConsoleReadsPerUpdate = 5;
-        for (uint16_t console_read_num = 0;
-             console_read_num < kMaxNumConsoleReadsPerUpdate && device_status.num_queued_network_console_rx_chars > 0;
-             console_read_num++) {
-            // Read console message from ESP32.
-            char buf[ObjectDictionary::kNetworkConsoleMessageMaxLenBytes] = {0};
-
-            // Read as many bytes as we can without overflowing the RX queue or exceeding our buffer size or max SPI
-            // transaction size.
-            uint16_t bytes_to_read = MIN(
-                comms_manager.esp32_console_rx_queue.MaxNumElements() - comms_manager.esp32_console_rx_queue.Length(),
-                MIN(device_status.num_queued_network_console_rx_chars, sizeof(buf)));
-            if (bytes_to_read == 0) {
-                // Nasty failure mode: If you request a write with buf length zero, the Read() function defaults to the
-                // size of the object passed in, so you could be reading for a quite a while! Catch it here.
-                break;  // No more console messages to read.
-            }
-
-            if (!esp32.Read(ObjectDictionary::Address::kAddrConsole, buf, bytes_to_read)) {
-                CONSOLE_ERROR("ESP32::ExecuteSCCommandRequest", "Unable to read console message from ESP32.");
+        for (uint16_t i = 0; i < bytes_to_read; i++) {
+            char c = (char)buf[i];
+            if (!comms_manager.esp32_console_rx_queue.Push(c)) {
+                CONSOLE_ERROR("ObjectDictionary::SetBytes", "ESP32 overflowed RP2040's network console queue.");
+                comms_manager.esp32_console_rx_queue.Clear();
                 return false;
             }
-            for (uint16_t i = 0; i < bytes_to_read; i++) {
-                char c = (char)buf[i];
-                if (!comms_manager.esp32_console_rx_queue.Push(c)) {
-                    CONSOLE_ERROR("ObjectDictionary::SetBytes", "ESP32 overflowed RP2040's network console queue.");
-                    comms_manager.esp32_console_rx_queue.Clear();
-                    return false;
-                }
-            }
-            ObjectDictionary::RollQueueRequest roll_request = {
-                .queue_id = ObjectDictionary::QueueID::kQueueIDConsole,
-                .num_items = (uint16_t)bytes_to_read,
-            };
-            if (!esp32.Write(ObjectDictionary::Address::kAddrRollQueue, roll_request, true)) {
-                // Require the roll request to be acknowledged.
-                CONSOLE_ERROR("ESP32::Update", "Unable to roll console queue after reading by %d bytes on ESP32.",
-                              bytes_to_read);
-                return false;
-            }
-            if (!esp32.Read(ObjectDictionary::Address::kAddrDeviceStatus, device_status)) {
-                CONSOLE_ERROR("ESP32::Update", "Failed to re-read ESP32 device status on console read %d/%d.",
-                              console_read_num + 1, kMaxNumConsoleReadsPerUpdate);
-                return false;
-            }
-            // Successfully read console message from ESP32.
         }
+        ObjectDictionary::RollQueueRequest roll_request = {
+            .queue_id = ObjectDictionary::QueueID::kQueueIDConsole,
+            .num_items = (uint16_t)bytes_to_read,
+        };
+        if (!esp32.Write(ObjectDictionary::Address::kAddrRollQueue, roll_request, true)) {
+            // Require the roll request to be acknowledged.
+            CONSOLE_ERROR("ESP32::Update", "Unable to roll console queue after reading by %d bytes on ESP32.",
+                          bytes_to_read);
+            return false;
+        }
+        if (!esp32.Read(ObjectDictionary::Address::kAddrDeviceStatus, device_status)) {
+            CONSOLE_ERROR("ESP32::Update", "Failed to re-read ESP32 device status on console read %d/%d.",
+                          console_read_num + 1, kMaxNumConsoleReadsPerUpdate);
+            return false;
+        }
+        // Successfully read console message from ESP32.
     }
     return true;
 }

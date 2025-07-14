@@ -491,8 +491,8 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     CPP_AT_PRINTF("READY\r\n");
 
                     // Read len_bytes from stdio and network console. Timeout after kOTAWriteTimeoutMs.
-                    uint32_t old_esp32_heartbeat_ms = esp32_ll.device_status_update_interval_ms;
-                    esp32_ll.device_status_update_interval_ms = kOTAHeartbeatMs;  // Faster heartbeat during OTA.
+                    uint32_t old_esp32_heartbeat_ms = esp32.update_interval_ms;
+                    esp32.update_interval_ms = kOTAHeartbeatMs;  // Faster heartbeat during OTA.
                     while (buf_len_bytes < len_bytes) {
                         // Priority 1: Check STDIO for data.
                         int stdio_console_getchar_reply = getchar_timeout_us(0);
@@ -521,13 +521,12 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         timestamp_ms = get_time_since_boot_ms();
                         if (timestamp_ms - data_read_start_timestamp_ms > kOTAWriteTimeoutMs) {
                             adsbee.SetReceiver1090Enable(receiver_was_enabled);  // Re-enable receiver before exit.
-                            esp32_ll.device_status_update_interval_ms =
-                                old_esp32_heartbeat_ms;  // Restore old heartbeat.
+                            esp32.update_interval_ms = old_esp32_heartbeat_ms;   // Restore old heartbeat.
                             CPP_AT_ERROR("Timed out after %u ms. Received %u Bytes.",
                                          timestamp_ms - data_read_start_timestamp_ms, buf_len_bytes);
                         }
                     }
-                    esp32_ll.device_status_update_interval_ms = old_esp32_heartbeat_ms;  // Restore old heartbeat.
+                    esp32.update_interval_ms = old_esp32_heartbeat_ms;  // Restore old heartbeat.
 
                     bool has_crc = CPP_AT_HAS_ARG(3);
                     CPP_AT_TRY_ARG2NUM_BASE(3, crc, 16);
