@@ -88,29 +88,32 @@ bool SPICoprocessor::Update() {
         uint8_t log_messages_buffer[ObjectDictionary::kLogMessageMaxNumChars * ObjectDictionary::kLogMessageQueueDepth];
         if (Read(ObjectDictionary::Address::kAddrLogMessages, log_messages_buffer,
                  config_.interface.queued_log_messages_packed_size_bytes)) {
-            object_dictionary.UnpackLogMessages(log_messages_buffer, sizeof(log_messages_buffer),
-                                                object_dictionary.log_message_queue,
-                                                config_.interface.num_queued_log_messages);
+            // Acknowledge the log messages to clear the queue.
+
+            uint16_t num_messages_pulled = object_dictionary.UnpackLogMessages(
+                log_messages_buffer, sizeof(log_messages_buffer), object_dictionary.log_message_queue,
+                config_.interface.num_queued_log_messages);
+
+            ObjectDictionary::RollQueueRequest roll_request = {
+                .queue_id = ObjectDictionary::QueueID::kQueueIDLogMessages, .num_items = num_messages_pulled};
+            Write(ObjectDictionary::Address::kAddrRollQueue, roll_request,
+                  true);  // Require the roll request to be acknowledged.
 
             while (object_dictionary.log_message_queue.Length() > 0) {
                 ObjectDictionary::LogMessage log_message;
                 if (object_dictionary.log_message_queue.Pop(log_message)) {
                     switch (log_message.log_level) {
                         case SettingsManager::LogLevel::kInfo:
-                            CONSOLE_INFO("CoProcessor", "%s >> %.*s", "TAG" /*config_.tag_str*/, log_message.num_chars,
-                                         log_message.message);
+                            CONSOLE_INFO("CoProcessor", "%s >> %s", config_.tag_str, log_message.message);
                             break;
                         case SettingsManager::LogLevel::kWarnings:
-                            CONSOLE_WARNING("CoProcessor", "%s >> %.*s", "TAG" /*config_.tag_str*/,
-                                            log_message.num_chars, log_message.message);
+                            CONSOLE_WARNING("CoProcessor", "%s >> %s", config_.tag_str, log_message.message);
                             break;
                         case SettingsManager::LogLevel::kErrors:
-                            CONSOLE_ERROR("CoProcessor", "%s >> %.*s", "TAG" /*config_.tag_str*/, log_message.num_chars,
-                                          log_message.message);
+                            CONSOLE_ERROR("CoProcessor", "%s >> %s", config_.tag_str, log_message.message);
                             break;
                         default:
-                            CONSOLE_PRINTF("CoProcessor", "%s >> %.*s", "TAG" /*config_.tag_str*/,
-                                           log_message.num_chars, log_message.message);
+                            CONSOLE_PRINTF("CoProcessor %s >> %s", config_.tag_str, log_message.message);
                             break;
                     }
                 }
@@ -226,7 +229,10 @@ bool SPICoprocessor::LogMessage(SettingsManager::LogLevel log_level, const char 
     log_message.num_chars = 0;
     log_message.message[0] = '\0';  // Initialize to empty string.
 
-    log_message.num_chars += snprintf(log_message.message, ObjectDictionary::kLogMessageMaxNumChars, "[%s] ", tag);
+    if (strlen(tag) > 0) {
+        log_message.num_chars += snprintf(log_message.message, ObjectDictionary::kLogMessageMaxNumChars, "[%s] ", tag);
+    }
+
     log_message.num_chars += vsnprintf(log_message.message + log_message.num_chars,
                                        ObjectDictionary::kLogMessageMaxNumChars - log_message.num_chars, format, args);
 
@@ -441,8 +447,8 @@ bool SPICoprocessor::SPIWaitForAck() {
         return false;
     }
 
-    // We need to call SPIReadBlocking without ending the transaction in case we want to recover a kErrorHandshakeHigh
-    // error.
+    // We need to call SPIReadBlocking without ending the transaction in case we want to recover a
+    // kErrorHandshakeHigh error.
     int bytes_read =
         SPIReadBlocking(response_packet.GetBuf(), SPICoprocessorPacket::SCResponsePacket::kAckLenBytes, true);
     response_packet.data_len_bytes = SPICoprocessorPacket::SCResponsePacket::kAckLenBytes;

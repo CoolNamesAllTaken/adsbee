@@ -160,10 +160,10 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                                                .num_queued_network_console_rx_chars = num_network_console_rx_chars};
 #elif defined(ON_TI)
             SubGHzDeviceStatus device_status = {.timestamp_ms = get_time_since_boot_ms(),
-                                            .num_queued_log_messages = num_log_messages,
-                                            .queued_log_messages_packed_size_bytes =
-                                                static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),
-                                            .num_queued_sc_command_requests = sc_command_request_queue.Length()};
+                                                .num_queued_log_messages = num_log_messages,
+                                                .queued_log_messages_packed_size_bytes =
+                                                    static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),
+                                                .num_queued_sc_command_requests = sc_command_request_queue.Length()};
 #endif
             for (uint16_t i = 0; i < log_message_queue.Length(); i++) {
                 LogMessage log_message;
@@ -306,8 +306,7 @@ uint16_t ObjectDictionary::PackLogMessages(uint8_t *buf, uint16_t buf_len,
         memcpy(buf + bytes_written, &log_message, log_message_packed_size - 1);
         buf[bytes_written + log_message_packed_size - 1] = '\0';  // Null terminate the message.
         bytes_written += log_message_packed_size;
-        log_message_queue.Pop(
-            log_message);  // Remove the message from the queue. Use log_message as a throwaway buffer.
+        // Don't pop log messages here, wait for the roll request to do that.
     }
     return bytes_written;
 }
@@ -339,6 +338,10 @@ uint16_t ObjectDictionary::UnpackLogMessages(uint8_t *buf, uint16_t buf_len,
         memcpy(log_message.message, buf + bytes_read + LogMessage::kHeaderSize, log_message.num_chars);
         log_message.message[log_message.num_chars] = '\0';  // Null terminate the message.
 
+        if (log_message_queue.IsFull()) {
+            log_message_queue.Clear();
+            CONSOLE_ERROR("ObjectDictionary::UnpackLogMessages", "Log message queue is full, clearing it.");
+        }
         log_message_queue.Push(log_message);
 
         bytes_read += LogMessage::kHeaderSize + log_message.num_chars + 1;  // Move past header and message.

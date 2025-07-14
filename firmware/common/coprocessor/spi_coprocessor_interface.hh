@@ -107,7 +107,7 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     // Wait this long after a transmission is complete before allowing the HANDSHAKE line to override the minimum
     // transmit interval timeout. This ensures that we don't double-transmit to the slave before it has a chance to
     // lower the HANDSHAKE line following a transaction.
-    static constexpr uint32_t kSPIHandshakeLockoutUs = 10;
+    static constexpr uint32_t kDefaultSPIHandshakeLockoutUs = 10;
     // How long a blocking wait for a handshake can last.
     static constexpr uint32_t kSPIHandshakeTimeoutMs = 20;
     // How long to loop in Update() for after initializing the device in order to allow it to query for settings data.
@@ -137,7 +137,7 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
         expecting_handshake_ =
             true;  // Set this so that we know we are expecting the handshake line to go high.
                    // Make sure the ESP32 has time to lower the handshake pin after the last transaction.
-        while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIHandshakeLockoutUs) {
+        while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < spi_handshake_lockout_us_) {
             // Wait for the lockout period to expire before checking the handshake pin.
             // This handshake lockout interval is too short to check for a handshake timeout during.
         }
@@ -177,5 +177,7 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     bool expecting_handshake_ = false;
     uint64_t spi_last_transmit_timestamp_us_ = 0;  // Timestamp of the end of the last SPI transaction.
 
-    uint32_t last_device_status_update_timestamp_ms_ = 0;  // Timestamp of the last device status update.
+    uint32_t last_device_status_update_timestamp_ms_ = 0;                // Timestamp of the last device status update.
+    uint32_t spi_handshake_lockout_us_ = kDefaultSPIHandshakeLockoutUs;  // How long to wait after a transaction before
+                                                                         // allowing the handshake pin to be asserted.
 };

@@ -82,8 +82,9 @@ int main(void)
     {
         pico_ll.Update();
         GPIO_write(bsp.kSubGLEDPin, 1);
-        usleep(50000); // 50ms
+        usleep(500000); // 500ms
         GPIO_write(bsp.kSubGLEDPin, 0);
-        usleep(50000); // 50ms
+        usleep(500000); // 500ms
+        CONSOLE_PRINTF("hello\r\n");
     }
 }

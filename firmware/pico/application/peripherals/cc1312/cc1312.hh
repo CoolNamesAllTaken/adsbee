@@ -16,6 +16,9 @@ class CC1312 : public SPICoprocessorSlaveInterface {
     // How long we wait to start a transaction after the last one is completed. Can be overridden if the handshake line
     // goes high after kSPIHandshakeLockoutUs. Does not apply in bootloader mode, since we wait for acks.
     static constexpr uint32_t kSPIPostTransmitLockoutUs = 1000;
+    static constexpr uint32_t kSPIHandshakeLockoutUs =
+        200;  // How long to wait after a transaction to allow the handshake pin to override the post transmit lockout.
+              // Used to override the stock value since the CC1312 is slow.
 
     struct BootloaderCCFGConfig {
         // Note: Struct only includes the CCFG fields that we are interested in.
@@ -234,7 +237,10 @@ class CC1312 : public SPICoprocessorSlaveInterface {
      * Constructor for CC1312.
      * @param[in] config_in Configuration struct for the CC1312.
      */
-    CC1312(CC1312Config config_in) : config_(config_in) {};
+    CC1312(CC1312Config config_in) : config_(config_in) {
+        // Override the default SPI handshake lockout since the CC1312 is a slow boi.
+        spi_handshake_lockout_us_ = kSPIHandshakeLockoutUs;
+    };
 
     /**
      * Destructor for CC1312.
@@ -524,8 +530,6 @@ class CC1312 : public SPICoprocessorSlaveInterface {
     SettingsManager::EnableState enabled_ = SettingsManager::EnableState::kEnableStateDisabled;
     bool enable_is_external_ = false;
     bool in_bootloader_ = false;
-    // Keep track of whether we are in a transaction since we need special SPI settings.
-    bool in_transaction_ = false;  // True if the SPI peripheral is currently in a transaction.
 
     // Clock config struct used to set the SPI peripheral to the correct clock rate.
     struct SPIClkConfig {

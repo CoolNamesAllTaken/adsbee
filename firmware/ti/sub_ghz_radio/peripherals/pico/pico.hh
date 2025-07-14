@@ -53,6 +53,7 @@ public:
     }
 
     inline void SPIUseHandshakePin(bool level) { use_handshake_pin_ = level; }
+    inline bool SPIIsUsingHandshakePin() const { return use_handshake_pin_; }
 
     bool SPIBeginTransaction();
     void SPIEndTransaction();

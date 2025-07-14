@@ -583,10 +583,6 @@ bool CC1312::Flash() {
 }
 
 bool CC1312::SPIBeginTransaction() {
-    if (in_transaction_) {
-        return true;  // Already in a transaction, no need to start a new one.
-    }
-
     standby_clk_config_ = spi_get_clk();  // Save existing clock config.
     spi_set_clk(active_clk_config_);
 
@@ -598,18 +594,12 @@ bool CC1312::SPIBeginTransaction() {
             break;
         }
     }
-
-    in_transaction_ = true;
     gpio_put(config_.spi_cs_pin, false);
 
     return true;
 }
 
 void CC1312::SPIEndTransaction() {
-    if (!in_transaction_) {
-        return;  // Not in a transaction, nothing to do.
-    }
-
     spi_set_clk(standby_clk_config_);  // Restore clock config.
 
     // NOTE: For some reason changing the SPI format here caused a hardfault, intermittently. My best guess is that the
@@ -620,7 +610,6 @@ void CC1312::SPIEndTransaction() {
 
     gpio_put(config_.spi_cs_pin, true);
     spi_last_transmit_timestamp_us_ = get_time_since_boot_us();  // Update the last transmit timestamp.
-    in_transaction_ = false;                                     // Mark transaction as ended.
 }
 
 int CC1312::SPIWriteReadBlocking(uint8_t* tx_buf, uint8_t* rx_buf, uint16_t len_bytes, bool end_transaction) {

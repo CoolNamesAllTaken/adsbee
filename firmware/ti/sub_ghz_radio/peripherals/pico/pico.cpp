@@ -10,11 +10,16 @@
 
 void spi_transfer_complete_callback(SPI_Handle handle, SPI_Transaction *transaction)
 {
-    // GPIO_toggle(bsp.kSubGLEDPin); // Toggle the LED to indicate a CS rising edge.
-    // pico_ll.SPIPostTransactionCallback();
+    bool parse_message = !pico_ll.SPIIsUsingHandshakePin(); // Don't parse garbage sent by the RP2040 when it's reading our reply.
     pico_ll.SPIEndTransaction();
-    // pico_ll.SPIResetTransaction();
-    pico_ll.SPIProcessTransaction(); // Process the transaction in the main thread.
+    if (parse_message)
+    {
+        pico_ll.SPIProcessTransaction(); // Parse message and reset the transaction.
+    }
+    else
+    {
+        pico_ll.SPIResetTransaction(); // Reset the transaction if we're not parsing the message.
+    }
 }
 
 void spi_cs_rising_edge_callback(uint_least8_t index)
@@ -168,26 +173,16 @@ void Pico::SPIResetTransaction()
 
 bool Pico::SPIProcessTransaction()
 {
-    // SPIResetTransaction();
-    // return true;
-    // // End test
-
     if (spi_transaction_.status != SPI_STATUS_SUCCESS && spi_transaction_.status != SPI_TRANSFER_CSN_DEASSERT)
     {
         CONSOLE_ERROR("Pico::SPIPostTransactionCallback", "SPI transaction status is not success: %d.", spi_transaction_.status);
         SPIResetTransaction();
         return false;
     }
-    // if (spi_transaction_.count != spi_transaction_len_bytes_)
-    // {
-    //     CONSOLE_ERROR("Pico::SPIPostTransactionCallback", "SPI transaction length mismatch: expected %d, got %d.",
-    //                   spi_transaction_len_bytes_, spi_transaction_.count);
-    //     SPIResetTransaction();
-    //     return false;
-    // }
+
     if (spi_transaction_.count == 0)
     {
-        CONSOLE_ERROR("Pico::SPIPostTransactionCallback", "SPI transaction transferred zero bytes..");
+        CONSOLE_ERROR("Pico::SPIPostTransactionCallback", "SPI transaction transferred zero bytes.");
         SPIResetTransaction();
         return false;
     }

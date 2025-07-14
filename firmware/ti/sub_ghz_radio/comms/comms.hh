@@ -65,4 +65,4 @@ extern CommsManager comms_manager;
 #define CONSOLE_INFO(tag, ...) \
     comms_manager.LogMessageToCoprocessor(SettingsManager::LogLevel::kInfo, tag, __VA_ARGS__);
 #define CONSOLE_PRINTF(...) \
-    comms_manager.LogMessageToCoprocessor(SettingsManager::LogLevel::kSilent, "print", __VA_ARGS__);
+    comms_manager.LogMessageToCoprocessor(SettingsManager::LogLevel::kSilent, "", __VA_ARGS__);

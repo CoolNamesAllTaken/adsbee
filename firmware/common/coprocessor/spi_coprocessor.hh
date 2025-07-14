@@ -28,7 +28,7 @@ class SPICoprocessor : public SPICoprocessorInterface {
 #ifdef ON_COPRO_MASTER
         SPICoprocessorSlaveInterface &interface;  // Reference to the slave interface.
         char tag_str[kTagStrMaxLen] = {0};        // Tag to prepend to console messages.
-        bool pull_log_messages = false;           // Whether to pull log messages from the slave.
+        bool pull_log_messages = true;            // Whether to pull log messages from the slave.
 #elif defined(ON_COPRO_SLAVE)
         SPICoprocessorMasterInterface &interface;  // Reference to the master interface.
 #else
