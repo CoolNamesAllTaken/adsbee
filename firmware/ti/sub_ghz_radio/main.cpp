@@ -28,7 +28,14 @@ SPICoprocessor pico = SPICoprocessor({.interface = pico_ll});
 CommsManager comms_manager = CommsManager({});
 SettingsManager settings_manager = SettingsManager();
 
-extern void app_main(void);
+/**
+ * A note on interrupt priorities (configured via Sysconfig):
+ *
+ * SPI peripheral:
+ *  Hardware priority: Must be HIGHER than DMA.
+ *  Software priority: Must be very low, not sure why. Hardfaults will occur otherwise.
+ * DMA: Must be LOWER than SPI hardware interrupt priority.
+ */
 
 void exception_handler()
 {
@@ -55,7 +62,7 @@ int main(void)
     // Start NoRTOS AFTER system initialization.
     NoRTOS_start();
 
-    static const uint16_t kNumBlinks = 5;
+    static const uint16_t kNumBlinks = 2;
     for (uint16_t i = 0; i < kNumBlinks; ++i)
     {
         GPIO_write(bsp.kSubGLEDPin, 1);
@@ -73,16 +80,10 @@ int main(void)
 
     while (true)
     {
-        pico.Update();
+        pico_ll.Update();
         GPIO_write(bsp.kSubGLEDPin, 1);
         usleep(50000); // 50ms
         GPIO_write(bsp.kSubGLEDPin, 0);
         usleep(50000); // 50ms
     }
-
-    // app_main();
-}
-
-void app_main()
-{
 }

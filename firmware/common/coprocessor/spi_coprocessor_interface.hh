@@ -98,12 +98,6 @@ class SPICoprocessorMasterInterface : public SPICoprocessorInterface {
 
     virtual inline void UpdateNetworkLED() = 0;
 
-#ifdef ON_TI
-    // The TI processor does not use an RTOS, so we need a callback-based update system that has access to low-level
-    // transaction parameters. I considered overloading the UpdateNetworkLED() function, but this seems cleaner.
-    virtual void SPIPostTransactionCallback() = 0;
-#endif
-
     virtual bool SPIBeginTransaction() = 0;
     virtual void SPIEndTransaction() = 0;
 };

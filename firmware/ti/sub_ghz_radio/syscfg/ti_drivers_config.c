@@ -72,7 +72,7 @@ GPIO_PinConfig gpioPinConfigs[31] = {
     /* Owned by COPRO_SPI as SCLK */
     GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_NONE | GPIO_CFG_PULL_NONE_INTERNAL, /* CONFIG_GPIO_COPRO_SPI_SCLK */
     /* Owned by COPRO_SPI as CSN */
-    GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_RISING | GPIO_CFG_PULL_NONE_INTERNAL, /* CONFIG_GPIO_COPRO_SPI_CSN */
+    GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_NONE | GPIO_CFG_PULL_NONE_INTERNAL, /* CONFIG_GPIO_COPRO_SPI_CSN */
     GPIO_CFG_NO_DIR, /* DIO_12 */
     GPIO_CFG_NO_DIR, /* DIO_13 */
     GPIO_CFG_NO_DIR, /* DIO_14 */
@@ -125,7 +125,7 @@ const GPIO_Config GPIO_config = {
     .configs = (GPIO_PinConfig *)gpioPinConfigs,
     .callbacks = (GPIO_CallbackFxn *)gpioCallbackFunctions,
     .userArgs = gpioUserArgs,
-    .intPriority = 0x80
+    .intPriority = (~0)
 };
 
 /*
@@ -213,7 +213,7 @@ const SPICC26X2DMA_HWAttrs spiCC26X2DMAHWAttrs[CONFIG_SPI_COUNT] = {
         .dmaRxTableEntryPri = &dmaSpi0RxControlTableEntry,
         .dmaTxTableEntryAlt = &dmaSpi0TxAltControlTableEntry,
         .dmaRxTableEntryAlt = &dmaSpi0RxAltControlTableEntry,
-        .minDmaTransferSize = 10000,
+        .minDmaTransferSize = 10,
         .txPinMux    = IOC_PORT_MCU_SSI0_TX,
         .rxPinMux    = IOC_PORT_MCU_SSI0_RX,
         .clkPinMux   = IOC_PORT_MCU_SSI0_CLK,

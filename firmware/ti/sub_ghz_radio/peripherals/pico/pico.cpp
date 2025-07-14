@@ -6,24 +6,32 @@
 #include "spi_coprocessor.hh"
 #include "object_dictionary.hh"
 #include <cassert>
-#include <ti/drivers/dpl/HwiP.h>
+#include "ti/drivers/spi/SPICC26X2DMA.h" // Get access to partial return define.
 
 void spi_transfer_complete_callback(SPI_Handle handle, SPI_Transaction *transaction)
 {
-    GPIO_toggle(bsp.kSubGLEDPin); // Toggle the LED to indicate a CS rising edge.
-    pico_ll.SPIPostTransactionCallback();
+    // GPIO_toggle(bsp.kSubGLEDPin); // Toggle the LED to indicate a CS rising edge.
+    // pico_ll.SPIPostTransactionCallback();
+    pico_ll.SPIEndTransaction();
+    // pico_ll.SPIResetTransaction();
+    pico_ll.SPIProcessTransaction(); // Process the transaction in the main thread.
+}
+
+void spi_cs_rising_edge_callback(uint_least8_t index)
+{
+    // Cancel the transfer, which then will call spi_transfer_complete_callback() to process the transaction.
+    // pico_ll.SPIEndTransaction();
 }
 
 Pico::Pico(PicoConfig config_in) : config_(config_in)
 {
     SPI_Params_init(&spi_params_);
-    // spi_params_.transferMode = SPI_MODE_CALLBACK; // was commented before Caitlin
-    spi_params_.transferMode = SPI_MODE_CALLBACK;                          // SPI_MODE_CALLBACK; // was commented before Caitlin
-    spi_params_.transferTimeout = SPI_WAIT_FOREVER;                        // was commented before Caitlin
+    spi_params_.transferMode = SPI_MODE_CALLBACK;
+    spi_params_.transferTimeout = SPI_WAIT_FOREVER;
     /*kSPITransactionTimeoutMs * kUsPerMs * ClockP_getSystemTickPeriod()*/ // Convert ms to system ticks.
-    spi_params_.transferCallbackFxn = spi_transfer_complete_callback;      // was commented before Caitlin
+    spi_params_.transferCallbackFxn = spi_transfer_complete_callback;
     spi_params_.mode = SPI_PERIPHERAL;
-    spi_params_.bitRate = 4'000'000; // Not used in slave mode but needs to be reasonable since it's used to set a clock.
+    // spi_params_.bitRate = 4'000'000; // Not used in slave mode but needs to be reasonable since it's used to set a clock.
     spi_params_.dataSize = kBitsPerByte;
     spi_params_.frameFormat = SPI_POL1_PHA1;
 
@@ -46,6 +54,13 @@ bool Pico::Init()
         CONSOLE_ERROR("Pico::SPIBeginTransaction", "Failed to open SPI handle.");
         return false;
     }
+    SPI_control(spi_handle_, SPICC26X2DMA_RETURN_PARTIAL_ENABLE, NULL);
+
+    // Set up interrupt service routine for SPI CS pin. Need to explicitly set the config here since it doesn't seem to take from the SYSCFG tool.
+    // GPIO_setConfig(bsp.kCoProSPICSPin, GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_RISING | GPIO_CFG_PULL_NONE_INTERNAL);
+    // GPIO_setCallback(bsp.kCoProSPICSPin, spi_cs_rising_edge_callback);
+    // // Enable this interrupt AFTER the SPI peripheral is opened so that we don't die.
+    // GPIO_enableInt(bsp.kCoProSPICSPin);
 
     // Start the callback chain by kicking off the first transaction.
     SPIResetTransaction();
@@ -66,31 +81,47 @@ bool Pico::DeInit()
 bool Pico::Update()
 {
     bool ret = true;
-    if (spi_transaction_.status != SPI_TRANSFER_QUEUED)
-    {
-        ret &= SPIProcessTransaction();
-    }
+    // if (last_bytes_transacted_ > 0)
+    // {
+    //     ret &= SPIProcessTransaction();
+    // }
+    // else if (last_bytes_transacted_ < 0)
+    // {
+    //     CONSOLE_ERROR("Pico::Update", "SPI transaction failed with error code %d.", last_bytes_transacted_);
+    //     SPIResetTransaction();
+    //     ret = false;
+    // } // else no transaction is pending
+
     UpdateNetworkLED();
     return ret;
 }
 
-void Pico::SPIPostTransactionCallback()
-{
-    SPIEndTransaction();
-    SPIResetTransaction();
-}
-
 bool Pico::SPIBeginTransaction()
 {
-
+    if (use_handshake_pin_)
+    {
+        // Set the handshake pin high to signal the ESP32 that a transaction is ready.
+        SetSPIHandshakePinLevel(true);
+    }
     last_bytes_transacted_ = 0; // Reset the last bytes transacted counter.
     return true;
 }
 
 void Pico::SPIEndTransaction()
 {
-    SPI_transferCancel(spi_handle_);
-    spi_transaction_.count = 0;
+    // Set spi_bytes_transacted_ to get the transaction processed in the main thread.
+    // if (spi_transaction_.status == SPI_TRANSFER_COMPLETED)
+    // {
+    //     last_bytes_transacted_ = spi_transaction_.count;
+    // }
+    // else
+    // {
+    //     last_bytes_transacted_ = -1; // Indicate an error.
+    // }
+
+    SetSPIHandshakePinLevel(false); // Reset the handshake pin level to low.
+    // SPI_transferCancel(spi_handle_);
+    // spi_transaction_.count = 0;
     // if (last_bytes_transacted_ > 0)
     // {
     //     BlinkNetworkLED(); // Blink the network LED to indicate a successful transaction.
@@ -99,43 +130,61 @@ void Pico::SPIEndTransaction()
 
 bool Pico::SPIWriteNonBlocking(uint8_t *tx_buf, uint16_t len_bytes)
 {
-    spi_transaction_.count = 1; // We want the transaction callback to be called as soon as chip select goes high.
+    spi_transaction_.count = kSPITransactionMaxLenBytes; // We want the transaction callback to be called as soon as chip select goes high. Set the max length we might see so the transaction doesn't terminate early.
     spi_transaction_len_bytes_ = len_bytes;
-    spi_transaction_.txBuf = (void *)tx_buf;
+    spi_transaction_.status = SPI_TRANSFER_QUEUED; // Set the status to queued so that the SPI transfer can be started.
+    if (tx_buf != nullptr)
+    {
+        // Copy contents into txBuf in case tx_buf goes out of scope and gets overwritten.
+        memcpy((void *)spi_tx_buf_, (void *)tx_buf, len_bytes);
+        spi_transaction_.txBuf = (void *)spi_tx_buf_;
+    }
+    else
+    {
+        spi_transaction_.txBuf = nullptr; // Use the default tx value from syscfg.
+    }
+    memset((void *)spi_rx_buf_, 0x0, kSPITransactionMaxLenBytes);
     spi_transaction_.rxBuf = (void *)spi_rx_buf_;
 
+    // Tee up the callback transaction, then wiggle the handshake line, since the transfer setup takes a while.
+    if (!SPI_transfer(spi_handle_, (SPI_Transaction *)&spi_transaction_))
+    {
+        CONSOLE_ERROR("Pico::SPIWriteNonBlocking", "Failed to queue SPI transaction.");
+        return false;
+    }
     SPIBeginTransaction();
-    return SPI_transfer(spi_handle_, (SPI_Transaction *)&spi_transaction_);
+    return true;
 }
 
 void Pico::SPIResetTransaction()
 {
     // Not sending a reply, don't solicit a transfer.
     SPIUseHandshakePin(false);
+
     // Queue up a read of the maximum packet length and let it roll based on what shows up next.
-    // Sending tx_buf as nullptr means we send all 0x00's.
-    SPIWriteNonBlocking((uint8_t *)spi_tx_buf_, kSPITransactionMaxLenBytes); // FIXME: Remove length.
+    // Sending tx_buf as nullptr means we send all 0xFF's.
+    SPIWriteNonBlocking(nullptr, kSPITransactionMaxLenBytes); // FIXME: Remove length.
 }
 
 bool Pico::SPIProcessTransaction()
 {
-    SPIResetTransaction();
-    return true;
-    // End test
+    // SPIResetTransaction();
+    // return true;
+    // // End test
 
-    if (spi_transaction_.status != SPI_STATUS_SUCCESS)
+    if (spi_transaction_.status != SPI_STATUS_SUCCESS && spi_transaction_.status != SPI_TRANSFER_CSN_DEASSERT)
     {
         CONSOLE_ERROR("Pico::SPIPostTransactionCallback", "SPI transaction status is not success: %d.", spi_transaction_.status);
         SPIResetTransaction();
         return false;
     }
-    if (spi_transaction_.count != spi_transaction_len_bytes_)
-    {
-        CONSOLE_ERROR("Pico::SPIPostTransactionCallback", "SPI transaction length mismatch: expected %d, got %d.",
-                      spi_transaction_len_bytes_, spi_transaction_.count);
-        SPIResetTransaction();
-        return false;
-    }
+    // if (spi_transaction_.count != spi_transaction_len_bytes_)
+    // {
+    //     CONSOLE_ERROR("Pico::SPIPostTransactionCallback", "SPI transaction length mismatch: expected %d, got %d.",
+    //                   spi_transaction_len_bytes_, spi_transaction_.count);
+    //     SPIResetTransaction();
+    //     return false;
+    // }
     if (spi_transaction_.count == 0)
     {
         CONSOLE_ERROR("Pico::SPIPostTransactionCallback", "SPI transaction transferred zero bytes..");

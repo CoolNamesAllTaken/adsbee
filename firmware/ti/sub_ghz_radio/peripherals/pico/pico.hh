@@ -18,17 +18,7 @@ class Pico : public SPICoprocessorMasterInterface
 public:
     static constexpr uint32_t kNetworkLEDBlinkDurationMs = 1;
 
-    // Since the transaction timeout value is used by threads waiting to use the SPI peripheral, and the SPI update task
-    // blocks the copro_spi_mutex_ until it receives a transfer from the master, this timeout needs to be set to the
-    // maximum delay between unsolicited packets from the master (heartbeat) to avoid threads giving up while the SPI
-    // update task is hogging the mutex.
-    // How long to wait once a transaction is started before timing out.
-    static constexpr uint16_t kSPITransactionTimeoutMs = 200;
-
-    static constexpr uint16_t kSPIMutexTimeoutMs =
-        1200; // How long to wait for the transaction mutex before timing out.
-
-    static const uint16_t kSPITransactionMaxLenBytes = 100; // Normally set to SPICoprocessorPacket::kSPITransactionMaxLenBytes, but can be set to a lower value for testing purposes.
+    static const uint16_t kSPITransactionMaxLenBytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes; // Normally set to SPICoprocessorPacket::kSPITransactionMaxLenBytes, but can be set to a lower value for testing purposes.
 
     enum SPITransactionError : int
     {
@@ -52,14 +42,14 @@ public:
     bool Update();
 
     /**
-     * Helper function used by callbacks to set the handshake pin high or low on the ESP32.
-     * Located in IRAM for performance improvements when called from ISR.
+     * Helper function used by callbacks to set the handshake pin high or low.
      */
     inline void SetSPIHandshakePinLevel(bool level)
     {
         // Only set the handshake pin HI when we know we want to solicit a response and not block + wait.
-        // Handshake pin can always be set LO.
-        GPIO_write(config_.spi_handshake_pin, level && use_handshake_pin_);
+        // Handshake pin is active LO.
+
+        GPIO_write(config_.spi_handshake_pin, !level);
     }
 
     inline void SPIUseHandshakePin(bool level) { use_handshake_pin_ = level; }
@@ -70,10 +60,15 @@ public:
     bool SPIWriteNonBlocking(uint8_t *tx_buf,
                              uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes);
 
+    bool SPIProcessTransaction();
+    void SPIResetTransaction();
+
+#ifndef ON_TI
     /**
      * Function called from the task spawned during Init().
      */
     void SPIReceiveTask();
+#endif // ON_TI
 
     /**
      * Turns on the network LED for a specified number of milliseconds. Relies on the UpdateNetowrkLED() function to
@@ -100,12 +95,7 @@ public:
         }
     }
 
-    void SPIPostTransactionCallback();
-
 private:
-    void SPIResetTransaction();
-    bool SPIProcessTransaction();
-
     PicoConfig config_; // Configuration for the RP2040 SPI coprocessor master interface.
                         // SemaphoreHandle_t spi_mutex_;                  // Low level mutex used to guard the SPI peripheral (don't let multiple
                         //                                                // threads queue packets at the same time).

@@ -210,8 +210,8 @@ bool SPICoprocessor::Update() {
 
     config_.interface.SPIEndTransaction();
 #else
-    // TI platform doesn't have an RTOS, so we can't block without stalling the processor. Utilize SPI callback updates
-    // instead.
+    // TI platform doesn't have an RTOS, so we can't block without stalling the processor. Utilize SPI callbacks and run
+    // pico_ll.Update() instead.
 #endif
     return ret;
 }

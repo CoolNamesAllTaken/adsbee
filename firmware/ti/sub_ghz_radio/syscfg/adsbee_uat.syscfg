@@ -42,8 +42,6 @@ custom.radioConfigcustom868.codeExportConfig.$name = "ti_devices_radioconfig_cod
 
 Board.generateInitializationFunctions = false;
 
-GPIO.interruptPriority = "4";
-
 GPIO1.mode            = "Output";
 GPIO1.$name           = "SUBG_LED_PIN";
 GPIO1.gpioPin.$assign = "DIO_6";
@@ -62,19 +60,17 @@ GPIO4.mode            = "Output";
 GPIO4.$name           = "SUBG_BIAS_TEE_ENABLE_PIN";
 GPIO4.gpioPin.$assign = "DIO_7";
 
-SPI1.mode                            = "Four Pin CS Active Low";
-SPI1.$name                           = "COPRO_SPI";
-SPI1.dmaInterruptPriority            = "5";
-SPI1.minDmaTransferSize              = 10000;
-SPI1.sclkPinInstance.mode            = "Input";
-SPI1.pociPinInstance.mode            = "Output";
-SPI1.picoPinInstance.mode            = "Input";
-SPI1.spi.$assign                     = "SSI0";
-SPI1.spi.sclkPin.$assign             = "DIO_10";
-SPI1.spi.pociPin.$assign             = "DIO_8";
-SPI1.spi.picoPin.$assign             = "DIO_9";
-SPI1.spi.csnPin.$assign              = "DIO_11";
-SPI1.spi.dmaRxChannel.$assign        = "DMA_CH3";
-SPI1.spi.dmaTxChannel.$assign        = "DMA_CH4";
-SPI1.csnPinInstance.mode             = "Input";
-SPI1.csnPinInstance.interruptTrigger = "Rising Edge";
+SPI1.mode                     = "Four Pin CS Active Low";
+SPI1.$name                    = "COPRO_SPI";
+SPI1.dmaInterruptPriority     = "5";
+SPI1.sclkPinInstance.mode     = "Input";
+SPI1.pociPinInstance.mode     = "Output";
+SPI1.picoPinInstance.mode     = "Input";
+SPI1.spi.$assign              = "SSI0";
+SPI1.spi.sclkPin.$assign      = "DIO_10";
+SPI1.spi.pociPin.$assign      = "DIO_8";
+SPI1.spi.picoPin.$assign      = "DIO_9";
+SPI1.spi.csnPin.$assign       = "DIO_11";
+SPI1.spi.dmaRxChannel.$assign = "DMA_CH3";
+SPI1.spi.dmaTxChannel.$assign = "DMA_CH4";
+SPI1.csnPinInstance.mode      = "Input";
