@@ -159,7 +159,7 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                                                .num_queued_sc_command_requests = sc_command_request_queue.Length(),
                                                .num_queued_network_console_rx_chars = num_network_console_rx_chars};
 #elif defined(ON_TI)
-            TIDeviceStatus device_status = {.timestamp_ms = get_time_since_boot_ms(),
+            SubGHzDeviceStatus device_status = {.timestamp_ms = get_time_since_boot_ms(),
                                             .num_queued_log_messages = num_log_messages,
                                             .queued_log_messages_packed_size_bytes =
                                                 static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),

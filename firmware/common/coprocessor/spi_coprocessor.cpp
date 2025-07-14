@@ -36,7 +36,7 @@ bool SPICoprocessor::DeInit() {
 }
 
 bool SPICoprocessor::Update() {
-    bool ret = false;
+    bool ret = true;
 #ifdef ON_COPRO_MASTER
     if (!IsEnabled()) {
         return false;  // Nothing to do.

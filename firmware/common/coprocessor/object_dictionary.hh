@@ -152,7 +152,7 @@ class ObjectDictionary {
         }
     };
 
-    struct __attribute__((__packed__)) TIDeviceStatus {
+    struct __attribute__((__packed__)) SubGHzDeviceStatus {
         uint32_t timestamp_ms = 0;  // Timestamp in milliseconds since boot.
         uint16_t num_queued_log_messages = 0;
         uint32_t queued_log_messages_packed_size_bytes = 0;

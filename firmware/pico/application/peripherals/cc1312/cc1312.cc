@@ -92,8 +92,8 @@ bool CC1312::Update() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
 
     if (timestamp_ms - last_device_status_update_timestamp_ms_ > device_status_update_interval_ms) {
-        // Query ESP32's device status.
-        ObjectDictionary::ESP32DeviceStatus device_status;
+        // Query CC1312's device status.
+        ObjectDictionary::SubGHzDeviceStatus device_status;
         if (adsbee.subg_radio.Read(ObjectDictionary::Address::kAddrDeviceStatus, device_status)) {
             last_device_status_update_timestamp_ms_ = timestamp_ms;
 
