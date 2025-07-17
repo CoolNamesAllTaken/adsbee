@@ -29,7 +29,8 @@
 			"hwip.h": "c",
 			"swip.h": "c",
 			"freertos.h": "c",
-			"stdint.h": "c"
+			"stdint.h": "c",
+			"smartrf_settings.h": "c"
 		},
 		"C_Cpp.default.defines": [
 			"ON_TI",

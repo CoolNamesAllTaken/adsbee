@@ -112,9 +112,9 @@ int main(void)
     {
         pico.UpdateLED();
         // CONSOLE_INFO("main", "Main loop running...");
-        GPIO_write(bsp.kSubGLEDPin, 1);
-        usleep(50000); // 50ms
-        GPIO_write(bsp.kSubGLEDPin, 0);
-        usleep(50000); // 50ms
+        // GPIO_write(bsp.kSubGLEDPin, 1);
+        // usleep(50000); // 50ms
+        // GPIO_write(bsp.kSubGLEDPin, 0);
+        // usleep(50000); // 50ms
     }
 }

@@ -1,10 +1,12 @@
 #include "sub_ghz_radio.hh"
+#include "pico.hh" // For LED blinks.
 
 static void rf_cmd_complete_callback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e)
 {
     CONSOLE_INFO("SubGHzRadio", "RF command completed with handle %p, command handle %d, event mask %u", h, ch, e);
     if (e & RF_EventRxEntryDone)
     {
+        pico_ll.BlinkSubGLED();
         CONSOLE_INFO("SubGHzRadio", "Received a new packet.");
         // Handle the received packet here.
     }
