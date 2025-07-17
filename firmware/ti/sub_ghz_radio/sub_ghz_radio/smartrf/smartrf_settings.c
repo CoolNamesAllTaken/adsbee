@@ -13,7 +13,7 @@
 // RX Address Mode: No address check 
 // Frequency: 978.00000 MHz
 // Data Format: Serial mode disable 
-// Deviation: 350.000 kHz
+// Deviation: 312.500 kHz
 // Packet Length Config: Variable 
 // Max Packet Length: 255 
 // Packet Length: 20 
@@ -21,7 +21,7 @@
 // Preamble Count: 1 Bit 
 // Preamble Mode: Send 0 as the first preamble bit 
 // RX Filter BW: 2185.1 kHz
-// Symbol Rate: 1.04218 kBaud
+// Symbol Rate: 1042.17987 kBaud
 // Sync Word: 0xacdda4e2 
 // Sync Word Length: 16 Bits 
 // TX Power: 13 dBm 
@@ -86,10 +86,10 @@ rfc_CMD_PROP_RADIO_DIV_SETUP_t RF_cmdPropRadioDivSetup =
     .condition.rule = 0x1,
     .condition.nSkip = 0x0,
     .modulation.modType = 0x1,
-    .modulation.deviation = 0x578,
+    .modulation.deviation = 0x4E2,
     .modulation.deviationStepSz = 0x0,
     .symbolRate.preScale = 0xF,
-    .symbolRate.rateWord = 0x2AB,
+    .symbolRate.rateWord = 0xA6BFB,
     .symbolRate.decimMode = 0x0,
     .rxBw = 0x64,
     .preamConf.nPreamBytes = 0x0,

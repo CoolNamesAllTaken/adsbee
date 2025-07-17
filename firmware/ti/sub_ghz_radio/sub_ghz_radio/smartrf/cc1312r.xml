@@ -233,8 +233,8 @@
             <Field name="startTime">0x00000000</Field>
             <Field name="startTrigger">0x00000000</Field>
             <Field name="condition">0x00000001</Field>
-            <Field name="modulation">0x00002bc1</Field>
-            <Field name="symbolRate">0x0002ab0f</Field>
+            <Field name="modulation">0x00002711</Field>
+            <Field name="symbolRate">0x0a6bfb0f</Field>
             <Field name="rxBw">0x00000064</Field>
             <Field name="preamConf">0x00000000</Field>
             <Field name="formatConf">0x00000090</Field>
