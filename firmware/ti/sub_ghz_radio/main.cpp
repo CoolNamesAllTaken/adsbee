@@ -63,6 +63,9 @@ int main(void)
     // Start NoRTOS AFTER system initialization.
     NoRTOS_start();
 
+    // Log everything until we hear otherwise.
+    settings_manager.settings.log_level = SettingsManager::LogLevel::kInfo;
+
     static const uint16_t kNumBlinks = 2;
     for (uint16_t i = 0; i < kNumBlinks; ++i)
     {

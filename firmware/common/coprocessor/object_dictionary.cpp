@@ -34,7 +34,6 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             if (offset + buf_len == sizeof(SettingsManager::Settings)) {
                 CONSOLE_INFO("SPICoprocessor::SetBytes", "Wrote last chunk of settings data. Applying new values.");
                 settings_manager.Apply();
-                settings_manager.Print();
             }
             break;
         case kAddrRollQueue: {
