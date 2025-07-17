@@ -139,7 +139,7 @@ bool ADSBeeServer::Update() {
     bool ret = true;
     // Do NOT call pico.Update() from here since that's already taken care of by the SPIReceiveTask.
     // Update the LED here so it has better time resolution than it would in the SPI task, which blocks frequently.
-    pico.UpdateNetworkLED();
+    pico.UpdateLED();
 
     uint32_t timestamp_ms = get_time_since_boot_ms();
     // Prune aircraft dictionary. Need to do this up front so that we don't end up with a negative timestamp delta

@@ -22,12 +22,6 @@ void spi_transfer_complete_callback(SPI_Handle handle, SPI_Transaction *transact
     }
 }
 
-void spi_cs_rising_edge_callback(uint_least8_t index)
-{
-    // Cancel the transfer, which then will call spi_transfer_complete_callback() to process the transaction.
-    // pico_ll.SPIEndTransaction();
-}
-
 Pico::Pico(PicoConfig config_in) : config_(config_in)
 {
     SPI_Params_init(&spi_params_);
@@ -61,14 +55,9 @@ bool Pico::Init()
     }
     SPI_control(spi_handle_, SPICC26X2DMA_RETURN_PARTIAL_ENABLE, NULL);
 
-    // Set up interrupt service routine for SPI CS pin. Need to explicitly set the config here since it doesn't seem to take from the SYSCFG tool.
-    // GPIO_setConfig(bsp.kCoProSPICSPin, GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_RISING | GPIO_CFG_PULL_NONE_INTERNAL);
-    // GPIO_setCallback(bsp.kCoProSPICSPin, spi_cs_rising_edge_callback);
-    // // Enable this interrupt AFTER the SPI peripheral is opened so that we don't die.
-    // GPIO_enableInt(bsp.kCoProSPICSPin);
-
     // Start the callback chain by kicking off the first transaction.
     SPIResetTransaction();
+
     return ret;
 }
 
@@ -81,24 +70,6 @@ bool Pico::DeInit()
     }
 
     return true;
-}
-
-bool Pico::Update()
-{
-    bool ret = true;
-    // if (last_bytes_transacted_ > 0)
-    // {
-    //     ret &= SPIProcessTransaction();
-    // }
-    // else if (last_bytes_transacted_ < 0)
-    // {
-    //     CONSOLE_ERROR("Pico::Update", "SPI transaction failed with error code %d.", last_bytes_transacted_);
-    //     SPIResetTransaction();
-    //     ret = false;
-    // } // else no transaction is pending
-
-    UpdateNetworkLED();
-    return ret;
 }
 
 bool Pico::SPIBeginTransaction()
@@ -114,23 +85,7 @@ bool Pico::SPIBeginTransaction()
 
 void Pico::SPIEndTransaction()
 {
-    // Set spi_bytes_transacted_ to get the transaction processed in the main thread.
-    // if (spi_transaction_.status == SPI_TRANSFER_COMPLETED)
-    // {
-    //     last_bytes_transacted_ = spi_transaction_.count;
-    // }
-    // else
-    // {
-    //     last_bytes_transacted_ = -1; // Indicate an error.
-    // }
-
     SetSPIHandshakePinLevel(false); // Reset the handshake pin level to low.
-    // SPI_transferCancel(spi_handle_);
-    // spi_transaction_.count = 0;
-    // if (last_bytes_transacted_ > 0)
-    // {
-    //     BlinkNetworkLED(); // Blink the network LED to indicate a successful transaction.
-    // }
 }
 
 bool Pico::SPIWriteNonBlocking(uint8_t *tx_buf, uint16_t len_bytes)

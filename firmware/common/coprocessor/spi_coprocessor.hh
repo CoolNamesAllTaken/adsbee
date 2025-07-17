@@ -143,7 +143,7 @@ class SPICoprocessor : public SPICoprocessorInterface {
 
 #ifdef ON_COPRO_SLAVE
 
-    void UpdateNetworkLED() { config_.interface.UpdateNetworkLED(); }
+    void UpdateLED() { config_.interface.UpdateLED(); }
 
     /**
      * Log a message to the coprocessor. Not available on RP2040 since it's the master (other stuff logs to it).

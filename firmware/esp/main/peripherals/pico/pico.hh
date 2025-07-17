@@ -96,7 +96,7 @@ class Pico : public SPICoprocessorMasterInterface {
     /**
      * Turns off the network LED if necessary.
      */
-    inline void UpdateNetworkLED() {
+    inline void UpdateLED() {
         if (network_led_on &&
             xTaskGetTickCount() - network_led_turn_on_timestamp_ticks_ > kNetworkLEDBlinkDurationTicks) {
             gpio_set_level(config_.network_led_pin, 0);

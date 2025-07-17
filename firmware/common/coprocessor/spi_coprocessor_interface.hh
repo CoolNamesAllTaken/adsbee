@@ -96,7 +96,7 @@ class SPICoprocessorMasterInterface : public SPICoprocessorInterface {
      */
     virtual inline void SPIUseHandshakePin(bool level) = 0;
 
-    virtual inline void UpdateNetworkLED() = 0;
+    virtual inline void UpdateLED() = 0;
 
     virtual bool SPIBeginTransaction() = 0;
     virtual void SPIEndTransaction() = 0;
@@ -109,7 +109,7 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     // lower the HANDSHAKE line following a transaction.
     static constexpr uint32_t kDefaultSPIHandshakeLockoutUs = 10;
     // How long a blocking wait for a handshake can last.
-    static constexpr uint32_t kSPIHandshakeTimeoutMs = 20;
+    static constexpr uint32_t kSPIHandshakeTimeoutMs = 200;
     // How long to loop in Update() for after initializing the device in order to allow it to query for settings data.
     static constexpr uint32_t kBootupDelayMs = 500;
 
@@ -157,6 +157,8 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     virtual bool SPIBeginTransaction() = 0;
     virtual void SPIEndTransaction() = 0;
 
+    uint32_t GetLastUpdateTimestampMs() const { return last_update_timestamp_ms_; }
+
     uint16_t num_queued_log_messages = 0;                // Number of log messages queued to be read from the slave.
     uint16_t queued_log_messages_packed_size_bytes = 0;  // Size of the pending log messages in bytes.
     uint16_t num_queued_sc_command_requests = 0;         // Number of SCCommand requests queued on the slave.
@@ -168,5 +170,7 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     uint64_t spi_last_transmit_timestamp_us_ = 0;  // Timestamp of the end of the last SPI transaction.
 
     uint32_t spi_handshake_lockout_us_ = kDefaultSPIHandshakeLockoutUs;  // How long to wait after a transaction before
-                                                                         // allowing the handshake pin to be asserted.
+    // allowing the handshake pin to be asserted.
+
+    uint32_t last_update_timestamp_ms_ = 0;  // Timestamp of the last device status update.
 };

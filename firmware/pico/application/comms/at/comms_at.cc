@@ -14,6 +14,7 @@
 #include "main.hh"
 #include "pico/multicore.h"
 #include "pico/stdlib.h"  // for getchar etc
+#include "pico/unique_id.h"
 #include "settings.hh"
 #include "spi_coprocessor.hh"  // For init / de-init before and after flashing ESP32.
 
@@ -107,11 +108,11 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
                 '\0';  // Use caution in case part code is invalid.
             CPP_AT_PRINTF("Part Code: %s\r\n", device_info.part_code);
             // Get 8-byte flash unique ID from RP2040 flash.
-            uint8_t flash_unique_id[FLASH_UNIQUE_ID_SIZE_BYTES] = {0};
-            flash_get_unique_id(flash_unique_id);
-            CPP_AT_PRINTF("RP2040 Flash Unique ID: %02X%02X%02X%02X%02X%02X%02X%02X\r\n", flash_unique_id[0],
-                          flash_unique_id[1], flash_unique_id[2], flash_unique_id[3], flash_unique_id[4],
-                          flash_unique_id[5], flash_unique_id[6], flash_unique_id[7]);
+            pico_unique_board_id_t unique_id;
+            pico_get_unique_board_id(&unique_id);
+            CPP_AT_PRINTF("RP2040 Flash Unique ID: %02X%02X%02X%02X%02X%02X%02X%02X\r\n", unique_id.id[0],
+                          unique_id.id[1], unique_id.id[2], unique_id.id[3], unique_id.id[4], unique_id.id[5],
+                          unique_id.id[6], unique_id.id[7]);
             if (object_dictionary.kFirmwareVersionReleaseCandidate == 0) {
                 // Indicates a finalized release; no need to print release candidate number.
                 CPP_AT_PRINTF("RP2040 Firmware Version: %d.%d.%d\r\n", object_dictionary.kFirmwareVersionMajor,

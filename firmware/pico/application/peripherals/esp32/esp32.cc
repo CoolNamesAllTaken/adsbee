@@ -102,6 +102,7 @@ bool ESP32::Update() {
         }
         // Successfully read console message from ESP32.
     }
+    last_update_timestamp_ms_ = get_time_since_boot_ms();
     return true;
 }
 

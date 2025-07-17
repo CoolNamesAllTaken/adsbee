@@ -20,6 +20,9 @@ class CC1312 : public SPICoprocessorSlaveInterface {
         200;  // How long to wait after a transaction to allow the handshake pin to override the post transmit lockout.
               // Used to override the stock value since the CC1312 is slow.
 
+    static const uint32_t kBootupMaxCommsWaitIntervalMs =
+        5000;  // How long to wait for the CC1312 to boot up and be ready for comms before giving up.
+
     struct BootloaderCCFGConfig {
         // Note: Struct only includes the CCFG fields that we are interested in.
         bool bank_erase_disabled = false;
@@ -487,6 +490,10 @@ class CC1312 : public SPICoprocessorSlaveInterface {
             gpio_put(config_.enable_pin, enabled == SettingsManager::EnableState::kEnableStateEnabled ? 1 : 0);
         }
         enabled_ = enabled;
+
+        if (IsEnabled()) {
+            sleep_ms(kBootupDelayMs);  // Wait for the CC1312 to boot up.
+        }
     }
 
     /**
@@ -511,11 +518,6 @@ class CC1312 : public SPICoprocessorSlaveInterface {
      * @retval True if enabled, false if disabled or set to external.
      */
     inline bool IsEnabled() {
-        return enabled_ == SettingsManager::EnableState::kEnableStateEnabled ||
-               enabled_ == SettingsManager::EnableState::kEnableStateExternal;
-    }
-
-    inline bool IsEnabledBool() {
         return enabled_ == SettingsManager::EnableState::kEnableStateEnabled ||
                enabled_ == SettingsManager::EnableState::kEnableStateExternal;
     }

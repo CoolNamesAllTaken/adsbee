@@ -82,7 +82,22 @@ bool CC1312::Init(bool spi_already_initialized) {
             return false;
         }
     }
-    // TODO: Check that the CC1312 can be communicated with successfully.
+
+    uint32_t bootup_comms_wait_begin_timestamp_ms = get_time_since_boot_ms();
+    bool established_comms = false;
+    while (get_time_since_boot_ms() - bootup_comms_wait_begin_timestamp_ms < kBootupMaxCommsWaitIntervalMs) {
+        // Wait for CC1312 to be ready for comms.
+        if (Update()) {
+            established_comms = true;
+            break;  // Successfully updated CC1312.
+        }
+    }
+    if (!established_comms) {
+        CONSOLE_ERROR("CC1312::Init", "Failed to establish communication with CC1312 after bootup within %d ms.",
+                      kBootupMaxCommsWaitIntervalMs);
+        return false;
+    }
+
     CONSOLE_INFO("CC1312::Init", "CC1312 initialized successfully.");
 
     return true;
@@ -102,6 +117,7 @@ bool CC1312::Update() {
         return false;
     }
 
+    last_update_timestamp_ms_ = get_time_since_boot_ms();
     return true;
 }
 
@@ -315,7 +331,6 @@ bool CC1312::EnterBootloader() {
     gpio_put(config_.sync_pin, 1);
     SetEnableState(SettingsManager::kEnableStateEnabled);
     in_bootloader_ = true;
-    sleep_ms(kBootupDelayMs);  // Wait for the CC1312 to boot up.
 
     // Bootlaoder is active, override CPHA and CPOL.
     // WARNING: Other devices on the bus can't be used while CC1312 is in bootloader mode.
