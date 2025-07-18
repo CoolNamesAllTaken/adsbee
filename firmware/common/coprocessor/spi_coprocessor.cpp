@@ -219,7 +219,7 @@ bool SPICoprocessor::Update() {
     }
 
     config_.interface.SPIEndTransaction();
-#else
+#elif defined(ON_TI)
     // TI platform doesn't have an RTOS, so we can't block without stalling the processor. Utilize SPI callbacks for
     // primary SPI driver updates. Just update the LED here.
     config_.interface.UpdateLED();
