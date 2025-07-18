@@ -23,7 +23,7 @@
 // RX Filter BW: 2185.1 kHz
 // Symbol Rate: 1042.17987 kBaud
 // Sync Word: 0xacdda4e2 
-// Sync Word Length: 16 Bits 
+// Sync Word Length: 32 Bits 
 // TX Power: 13 dBm 
 // Whitening: No whitening 
 
@@ -94,7 +94,7 @@ rfc_CMD_PROP_RADIO_DIV_SETUP_t RF_cmdPropRadioDivSetup =
     .rxBw = 0x64,
     .preamConf.nPreamBytes = 0x0,
     .preamConf.preamMode = 0x0,
-    .formatConf.nSwBits = 0x10,
+    .formatConf.nSwBits = 0x20,
     .formatConf.bBitReversal = 0x0,
     .formatConf.bMsbFirst = 0x1,
     .formatConf.fecMode = 0x0,

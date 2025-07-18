@@ -176,6 +176,16 @@ bool SettingsManager::Apply() {
     adsbee.SetWatchdogTimeoutSec(settings.watchdog_timeout_sec);
     adsbee.SetSubGRadioEnable(settings.subg_enabled);
 
+    // Apply reporting protocols.
+    comms_manager.SetReportingProtocol(SerialInterface::kCommsUART,
+                                       settings.reporting_protocols[SerialInterface::kCommsUART]);
+    comms_manager.SetReportingProtocol(SerialInterface::kConsole,
+                                       settings.reporting_protocols[SerialInterface::kConsole]);
+
+    // Apply baud rates.
+    comms_manager.SetBaudRate(SerialInterface::kCommsUART, settings.comms_uart_baud_rate);
+    comms_manager.SetBaudRate(SerialInterface::kGNSSUART, settings.gnss_uart_baud_rate);
+
     if (settings.core_network_settings.esp32_enabled) {
         if (!esp32.IsEnabled()) {
             CONSOLE_INFO("SettingsManager::Apply", "Enabling ESP32.");

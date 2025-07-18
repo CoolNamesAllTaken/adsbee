@@ -37,6 +37,8 @@ public:
     bool Init();
     void Deinit();
 
+    bool HandlePacketRx();
+
 private:
     SubGHzRadioConfig config_;
 
@@ -44,5 +46,8 @@ private:
     RF_Object rf_object_;
     dataQueue_t data_queue_;
 
+    rfc_dataEntryGeneral_t *current_data_entry_; // Pointer to the data entry being processed (not held by the RF core).
     uint8_t rx_data_entry_buffer_[RF_QUEUE_DATA_ENTRY_BUFFER_SIZE(kRxPacketQueueLen, kRxPacketMaxLenBytes, kRxPacketNumAppendedBytes)]; // Buffer for receiving data entries.
 };
+
+extern SubGHzRadio subg_radio;

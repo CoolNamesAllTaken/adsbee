@@ -3,12 +3,11 @@
 
 static void rf_cmd_complete_callback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e)
 {
-    CONSOLE_INFO("SubGHzRadio", "RF command completed with handle %p, command handle %d, event mask %u", h, ch, e);
-    pico_ll.BlinkSubGLED();
+    // CONSOLE_INFO("SubGHzRadio", "RF command completed with handle %p, command handle %d, event mask %u", h, ch, e);
+
     if (e & RF_EventRxEntryDone)
     {
-        CONSOLE_INFO("SubGHzRadio", "Received a new packet.");
-        // Handle the received packet here.
+        subg_radio.HandlePacketRx();
     }
     RF_postCmd(h, (RF_Op *)&RF_cmdPropRx, RF_PriorityNormal, rf_cmd_complete_callback, RF_EventRxEntryDone);
 }
@@ -53,5 +52,15 @@ bool SubGHzRadio::Init()
         RF_close(rf_handle_);
         return false; // Failed to post command PROP_RX.
     }
+    return true;
+}
+
+bool SubGHzRadio::HandlePacketRx()
+{
+    pico_ll.BlinkSubGLED();
+    CONSOLE_INFO("SubGHzRadio", "Received a new packet.");
+    current_data_entry_ = RFQueue_getDataEntry();
+
+    RFQueue_nextEntry();
     return true;
 }
