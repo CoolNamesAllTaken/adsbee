@@ -136,13 +136,9 @@ bool ADSBee::Init() {
 
     // Initialize sub-GHz radio.
     if (config_.has_subg) {
-        // Initialize subg radio on previously-initialized coprocessor SPI bus.
-        if (subg_radio.Init()) {
-            CONSOLE_INFO("ADSBee::Init", "Sub-GHz radio initialized.");
-        } else {
-            subg_radio.SetEnable(SettingsManager::EnableState::kEnableStateDisabled);
-            CONSOLE_ERROR("ADSBee::Init", "Failed to initialize sub-GHz radio.");
-        }
+        SetSubGRadioEnable(settings_manager.settings.subg_enabled);
+    } else {
+        SetSubGRadioEnable(SettingsManager::EnableState::kEnableStateDisabled);
     }
 
 #ifdef WATCHDOG_REBOOT_WARNING
@@ -258,7 +254,7 @@ bool ADSBee::Update() {
     }
 
     // Update sub-GHz radio.
-    if (subg_radio.IsEnabled() && !subg_radio.Update()) {
+    if (config_.has_subg && subg_radio.IsEnabled() && !subg_radio.Update()) {
         CONSOLE_ERROR("ADSBee::Update", "Failed to update sub-GHz radio.");
         return false;
     }
