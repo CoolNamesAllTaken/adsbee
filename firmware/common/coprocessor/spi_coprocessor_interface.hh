@@ -17,6 +17,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#elif defined(ON_TI)
+#include "ti/drivers/SPI.h"
 #endif
 
 class SPICoprocessorInterface {
@@ -62,9 +64,24 @@ class SPICoprocessorInterface {
      */
     virtual bool DeInit() = 0;
 
+#ifndef ON_TI
+    /**
+     * On Pico and ESP32, we can block while writing and ensure that we return the bytes that were read.
+     */
     virtual int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf,
                                      uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
                                      bool end_transaction = true) = 0;
+#else
+    /**
+     * On CC1312, we can only write and then let the callback complete function read the result. We don't know the
+     * number of bytes transmitted until the callback, so all we can return is a bool.
+     * @param[in] tx_buf Bytes to transmit.
+     * @param[in] len_bytes Number of bytes to transmit.
+     * @retval True if transfer was queued successfully, false otherwise.
+     */
+    virtual bool SPIWriteNonBlocking(uint8_t *tx_buf,
+                                     uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes) = 0;
+#endif
 };
 
 /**
@@ -79,7 +96,7 @@ class SPICoprocessorMasterInterface : public SPICoprocessorInterface {
      */
     virtual inline void SPIUseHandshakePin(bool level) = 0;
 
-    virtual inline void UpdateNetworkLED() = 0;
+    virtual inline void UpdateLED() = 0;
 
     virtual bool SPIBeginTransaction() = 0;
     virtual void SPIEndTransaction() = 0;
@@ -90,10 +107,7 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     // Wait this long after a transmission is complete before allowing the HANDSHAKE line to override the minimum
     // transmit interval timeout. This ensures that we don't double-transmit to the slave before it has a chance to
     // lower the HANDSHAKE line following a transaction.
-    static constexpr uint32_t kSPIHandshakeLockoutUs = 10;
-    // How long we wait to start a transaction after the last one is completed. Can be overridden if the handshake line
-    // goes high after kSPIHandshakeLockoutUs.
-    static constexpr uint32_t kSPIPostTransmitLockoutUs = 1000;
+    static constexpr uint32_t kDefaultSPIHandshakeLockoutUs = 10;
     // How long a blocking wait for a handshake can last.
     static constexpr uint32_t kSPIHandshakeTimeoutMs = 20;
     // How long to loop in Update() for after initializing the device in order to allow it to query for settings data.
@@ -122,7 +136,7 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
         expecting_handshake_ =
             true;  // Set this so that we know we are expecting the handshake line to go high.
                    // Make sure the ESP32 has time to lower the handshake pin after the last transaction.
-        while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIHandshakeLockoutUs) {
+        while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < spi_handshake_lockout_us_) {
             // Wait for the lockout period to expire before checking the handshake pin.
             // This handshake lockout interval is too short to check for a handshake timeout during.
         }
@@ -140,18 +154,23 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     virtual bool IsEnabled() = 0;
     virtual void SetEnable(bool enabled) = 0;
 
-    /**
-     * Gets the timestamp of the last successful device status query from the ESP32.
-     * @retval Timestamp in milliseconds since boot.
-     */
-    virtual uint32_t GetLastHeartbeatTimestampMs() = 0;
-
     virtual bool SPIBeginTransaction() = 0;
     virtual void SPIEndTransaction() = 0;
+
+    uint32_t GetLastUpdateTimestampMs() const { return last_update_timestamp_ms_; }
+
+    uint16_t num_queued_log_messages = 0;                // Number of log messages queued to be read from the slave.
+    uint16_t queued_log_messages_packed_size_bytes = 0;  // Size of the pending log messages in bytes.
+    uint16_t num_queued_sc_command_requests = 0;         // Number of SCCommand requests queued on the slave.
 
    protected:
     // Use this flag to indicate whether we are expecting the handshake line to go high. If it is high during a
     // transaction when we aren't expecting it, that means that we are stomping on the slave! Not good.
     bool expecting_handshake_ = false;
     uint64_t spi_last_transmit_timestamp_us_ = 0;  // Timestamp of the end of the last SPI transaction.
+
+    uint32_t spi_handshake_lockout_us_ = kDefaultSPIHandshakeLockoutUs;  // How long to wait after a transaction before
+    // allowing the handshake pin to be asserted.
+
+    uint32_t last_update_timestamp_ms_ = 0;  // Timestamp of the last device status update.
 };

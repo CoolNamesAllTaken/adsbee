@@ -102,7 +102,7 @@ class ObjectDictionary {
     struct __attribute__((__packed__)) ESP32DeviceStatus {
         uint32_t timestamp_ms = 0;
         uint16_t num_queued_log_messages = 0;
-        uint32_t pending_log_messages_packed_size_bytes = 0;
+        uint32_t queued_log_messages_packed_size_bytes = 0;
 
         uint16_t num_queued_sc_command_requests = 0;  // Number of SCCommand requests queued for the master.
         uint32_t num_queued_network_console_rx_chars =
@@ -150,6 +150,14 @@ class ObjectDictionary {
                 memset(wifi_ap_client_macs[i], 0x0, SettingsManager::Settings::kMACAddrNumBytes);
             }
         }
+    };
+
+    struct __attribute__((__packed__)) SubGHzDeviceStatus {
+        uint32_t timestamp_ms = 0;  // Timestamp in milliseconds since boot.
+        uint16_t num_queued_log_messages = 0;
+        uint32_t queued_log_messages_packed_size_bytes = 0;
+
+        uint16_t num_queued_sc_command_requests = 0;  // Number of SCCommand requests queued for the master.
     };
 
     /**
@@ -245,7 +253,9 @@ class ObjectDictionary {
             .buffer = sc_command_request_queue_buffer_,
             .overwrite_when_full = false  // We don't want to overwrite command requests, since they could be important.
         });
+#ifdef ON_ESP32
     SemaphoreHandle_t network_console_rx_queue_mutex = xSemaphoreCreateMutex();
+#endif
     PFBQueue<char> network_console_rx_queue = PFBQueue<char>({
         .buf_len_num_elements = kNetworkConsoleRxQueueDepth,
         .buffer = network_console_message_buffer_,
@@ -264,7 +274,11 @@ class ObjectDictionary {
 #ifdef ON_COPRO_SLAVE
     ObjectDictionary::SCCommandRequestWithCallback
         sc_command_request_queue_buffer_[ObjectDictionary::kSCCommandRequestQueueDepth] = {};
+#ifdef ON_ESP32
     char* network_console_message_buffer_ = (char*)heap_caps_malloc(kNetworkConsoleRxQueueDepth, 0);
+#else
+    char network_console_message_buffer_[kNetworkConsoleRxQueueDepth] = {};
+#endif
 #endif
 };
 

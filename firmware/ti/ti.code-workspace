@@ -21,12 +21,22 @@
 			"rfqueue.h": "c",
 			"devicefamily.h": "c",
 			"clockp.h": "c",
-			"functional": "cpp"
+			"functional": "cpp",
+			"cmath": "cpp",
+			"compare": "cpp",
+			"cstdint": "cpp",
+			"format": "cpp",
+			"hwip.h": "c",
+			"swip.h": "c",
+			"freertos.h": "c",
+			"stdint.h": "c",
+			"smartrf_settings.h": "c"
 		},
 		"C_Cpp.default.defines": [
 			"ON_TI",
 			"DeviceFamily_CC13X2"
 		],
+		"cortex-debug.variableUseNaturalFormat": false,
 	},
 	"launch": {
 		"version": "0.2.0",
@@ -35,15 +45,15 @@
 				"name": "Sub GHz Radio Debug",
 				"type": "cortex-debug",
 				"cwd": "/adsbee/ti",
-				"executable": "/adsbee/ti/sub_ghz_radio/build/sub_ghz_radio",
+				"executable": "/adsbee/ti/sub_ghz_radio/build/sub_ghz_radio.elf",
 				"request": "attach",
 				"servertype": "external",
 				"gdbPath": "arm-none-eabi-gdb",
 				"gdbTarget": "host.docker.internal:2337",
 				"showDevDebugOutput": "raw",
-				// "svdFile": "/usr/local/pico-sdk/src/rp2040/hardware_regs/RP2040.svd",
+				"svdFile": "/adsbee/ti/cc13x2_26x2.svd",
 				"preRestartCommands": [
-					"file /adsbee/ti/sub_ghz_radio/build/sub_ghz_radio",
+					"file /adsbee/ti/sub_ghz_radio/build/sub_ghz_radio.elf",
 					"load",
 					"monitor reset"
 				],

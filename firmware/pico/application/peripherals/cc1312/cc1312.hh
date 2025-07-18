@@ -13,6 +13,15 @@ class CC1312 : public SPICoprocessorSlaveInterface {
     static const uint32_t kBootupDelayMs = 100;
     static const uint32_t kSPITransactionTimeoutMs =
         500;  // Set to be quite long to allow CRC calculation time for full app image after flashing.
+    // How long we wait to start a transaction after the last one is completed. Can be overridden if the handshake line
+    // goes high after kSPIHandshakeLockoutUs. Does not apply in bootloader mode, since we wait for acks.
+    static constexpr uint32_t kSPIPostTransmitLockoutUs = 1000;
+    static constexpr uint32_t kSPIHandshakeLockoutUs =
+        200;  // How long to wait after a transaction to allow the handshake pin to override the post transmit lockout.
+              // Used to override the stock value since the CC1312 is slow.
+
+    static const uint32_t kBootupMaxCommsWaitIntervalMs =
+        5000;  // How long to wait for the CC1312 to boot up and be ready for comms before giving up.
 
     struct BootloaderCCFGConfig {
         // Note: Struct only includes the CCFG fields that we are interested in.
@@ -195,11 +204,6 @@ class CC1312 : public SPICoprocessorSlaveInterface {
 
     bool Update();
 
-    inline uint32_t GetLastHeartbeatTimestampMs() {
-        // TODO: Fill this out.
-        return 0;
-    }
-
     /**
      * Adjusts the SPI peripheral to be able to talk to the CC1312. Nominally adjusts clock rate, but also adjusts CPHA
      * and CPOL if the bootloader is active.
@@ -217,7 +221,7 @@ class CC1312 : public SPICoprocessorSlaveInterface {
         // Not multi-threaded, no need for this.
     }
     inline bool SPIGetHandshakePinLevel() {
-        return gpio_get(config_.irq_pin);  // Return the level of the sync pin.
+        return !gpio_get(config_.irq_pin);  // Return the level of the (active LOW).
     }
     int SPIWriteReadBlocking(uint8_t* tx_buf, uint8_t* rx_buf, uint16_t len_bytes = 0, bool end_transaction = true);
     inline int SPIWriteBlocking(uint8_t* tx_buf, uint16_t len_bytes = 0, bool end_transaction = true) {
@@ -231,7 +235,10 @@ class CC1312 : public SPICoprocessorSlaveInterface {
      * Constructor for CC1312.
      * @param[in] config_in Configuration struct for the CC1312.
      */
-    CC1312(CC1312Config config_in) : config_(config_in) {};
+    CC1312(CC1312Config config_in) : config_(config_in) {
+        // Override the default SPI handshake lockout since the CC1312 is a slow boi.
+        spi_handshake_lockout_us_ = kSPIHandshakeLockoutUs;
+    };
 
     /**
      * Destructor for CC1312.
@@ -475,7 +482,7 @@ class CC1312 : public SPICoprocessorSlaveInterface {
     inline void SetEnableState(SettingsManager::EnableState enabled) {
         if (enabled == SettingsManager::EnableState::kEnableStateExternal) {
             gpio_set_dir(config_.enable_pin, GPIO_IN);
-            gpio_set_pulls(config_.enable_pin, true, false);  // Enable pull-up on the enable pin.
+            gpio_set_pulls(config_.enable_pin, true, false);  // Pull pin up.
         } else {
             // Drive GPIO pin with low impedance output.
             // Enable is active HI
@@ -483,6 +490,10 @@ class CC1312 : public SPICoprocessorSlaveInterface {
             gpio_put(config_.enable_pin, enabled == SettingsManager::EnableState::kEnableStateEnabled ? 1 : 0);
         }
         enabled_ = enabled;
+
+        if (IsEnabled()) {
+            sleep_ms(kBootupDelayMs);  // Wait for the CC1312 to boot up.
+        }
     }
 
     /**
@@ -506,9 +517,7 @@ class CC1312 : public SPICoprocessorSlaveInterface {
      * hood.
      * @retval True if enabled, false if disabled or set to external.
      */
-    inline bool IsEnabled() { return enabled_ == SettingsManager::EnableState::kEnableStateEnabled; }
-
-    inline bool IsEnabledBool() {
+    inline bool IsEnabled() {
         return enabled_ == SettingsManager::EnableState::kEnableStateEnabled ||
                enabled_ == SettingsManager::EnableState::kEnableStateExternal;
     }

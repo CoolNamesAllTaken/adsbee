@@ -35,7 +35,7 @@ class Raw1090Packet {
      * functions that don't care about it.
      * @return Timestamp in seconds.
      */
-    uint64_t GetTimestampMs() const { return mlat_48mhz_64bit_counts / 48'000; }
+    uint64_t GetTimestampMs() const { return mlat_48mhz_64bit_counts / 48000; }
 
     /**
      * Print the buffer to a string.

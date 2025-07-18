@@ -12,6 +12,13 @@
 const CCFG     = scripting.addModule("/ti/devices/CCFG");
 const custom   = scripting.addModule("/ti/devices/radioconfig/custom");
 const rfdesign = scripting.addModule("/ti/devices/radioconfig/rfdesign");
+const Board    = scripting.addModule("/ti/drivers/Board");
+const DMA      = scripting.addModule("/ti/drivers/DMA");
+const GPIO     = scripting.addModule("/ti/drivers/GPIO");
+const GPIO1    = GPIO.addInstance();
+const GPIO2    = GPIO.addInstance();
+const GPIO3    = GPIO.addInstance();
+const GPIO4    = GPIO.addInstance();
 const SPI      = scripting.addModule("/ti/drivers/SPI", {}, false);
 const SPI1     = SPI.addInstance();
 
@@ -21,6 +28,8 @@ const SPI1     = SPI.addInstance();
 CCFG.enableBootloader         = true;
 CCFG.enableBootloaderBackdoor = true;
 CCFG.dioBootloaderBackdoor    = 5;
+CCFG.xoscCapArray             = true;
+CCFG.xoscCapArrayDelta        = 0xEC;
 CCFG.ccfgTemplate.$name       = "ti_devices_CCFG_CCFGCC26XXTemplate0";
 
 custom.prop8                                       = ["custom868"];
@@ -31,22 +40,37 @@ custom.radioConfigcustom868.rxFilterBw             = "2486.5";
 custom.radioConfigcustom868.carrierFrequency       = 930.0000;
 custom.radioConfigcustom868.codeExportConfig.$name = "ti_devices_radioconfig_code_export_param0";
 
-SPI1.$name                = "CONFIG_SPI_0";
-SPI1.mode                 = "Four Pin CS Active Low";
-SPI1.sclkPinInstance.mode = "Input";
-SPI1.pociPinInstance.mode = "Output";
-SPI1.picoPinInstance.mode = "Input";
-SPI1.spi.sclkPin.$assign  = "DIO_10";
-SPI1.spi.pociPin.$assign  = "DIO_8";
-SPI1.spi.picoPin.$assign  = "DIO_9";
-SPI1.spi.csnPin.$assign   = "DIO_11";
-SPI1.csnPinInstance.mode  = "Input";
+Board.generateInitializationFunctions = false;
 
-/**
- * Pinmux solution for unlocked pins/peripherals. This ensures that minor changes to the automatic solver in a future
- * version of the tool will not impact the pinmux you originally saw.  These lines can be completely deleted in order to
- * re-solve from scratch.
- */
-SPI1.spi.$suggestSolution              = "SSI1";
-SPI1.spi.dmaRxChannel.$suggestSolution = "DMA_CH16";
-SPI1.spi.dmaTxChannel.$suggestSolution = "DMA_CH17";
+GPIO1.mode            = "Output";
+GPIO1.$name           = "SUBG_LED_PIN";
+GPIO1.gpioPin.$assign = "DIO_6";
+
+GPIO2.mode               = "Output";
+GPIO2.outputType         = "Open Drain";
+GPIO2.pull               = "Pull Up";
+GPIO2.$name              = "SUBG_IRQ_PIN";
+GPIO2.initialOutputState = "High";
+GPIO2.gpioPin.$assign    = "DIO_18";
+
+GPIO3.$name           = "SYNC_PIN";
+GPIO3.gpioPin.$assign = "DIO_5";
+
+GPIO4.mode            = "Output";
+GPIO4.$name           = "SUBG_BIAS_TEE_ENABLE_PIN";
+GPIO4.gpioPin.$assign = "DIO_7";
+
+SPI1.mode                     = "Four Pin CS Active Low";
+SPI1.$name                    = "COPRO_SPI";
+SPI1.dmaInterruptPriority     = "5";
+SPI1.sclkPinInstance.mode     = "Input";
+SPI1.pociPinInstance.mode     = "Output";
+SPI1.picoPinInstance.mode     = "Input";
+SPI1.spi.$assign              = "SSI0";
+SPI1.spi.sclkPin.$assign      = "DIO_10";
+SPI1.spi.pociPin.$assign      = "DIO_8";
+SPI1.spi.picoPin.$assign      = "DIO_9";
+SPI1.spi.csnPin.$assign       = "DIO_11";
+SPI1.spi.dmaRxChannel.$assign = "DMA_CH3";
+SPI1.spi.dmaTxChannel.$assign = "DMA_CH4";
+SPI1.csnPinInstance.mode      = "Input";

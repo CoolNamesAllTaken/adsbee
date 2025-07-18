@@ -42,8 +42,8 @@ ObjectDictionary object_dictionary;
 ESP32 esp32_ll = ESP32({});
 
 // Provide high-level coprocessor objects for interacting with coprocessor devices via low level class definitions.
-SPICoprocessor esp32 =
-    SPICoprocessor({.interface = esp32_ll});  // Use the low-level ESP32 interface to communicate with the ESP32.
+SPICoprocessor esp32 = SPICoprocessor(
+    {.interface = esp32_ll, .tag_str = "ESP32"});  // Use the low-level ESP32 interface to communicate with the ESP32.
 PacketDecoder decoder = PacketDecoder({.enable_1090_error_correction = true});
 
 int main() {
@@ -61,10 +61,15 @@ int main() {
     gpio_set_pulls(bsp.copro_spi_miso_pin, bsp.copro_spi_pullup, bsp.copro_spi_pulldown);  // MISO pin pulls.
     // Initialize SPI Peripheral.
     spi_init(bsp.copro_spi_handle, bsp.copro_spi_clk_freq_hz);
+    // The CC1312 straight up does not work with CPOL = 0 and CPHA = 0 (only sends one Byte per transaction then
+    // explodes). The ESP32 doesn't seem to care either way (in fact it interprets CPOL = 1 CPHA = 1 as CPOL = 0 CPHA =
+    // 0 just fine), so we stick with CPOL = 1 CPHA = 1.
+    // I briefly tried switching the SPI format back and forth continutously in SPIBeginTransaction(), but this was
+    // causing crashes.
     spi_set_format(bsp.copro_spi_handle,
                    8,           // Bits per transfer.
-                   SPI_CPOL_0,  // Polarity (CPOL).
-                   SPI_CPHA_0,  // Phase (CPHA).
+                   SPI_CPOL_1,  // Polarity (CPOL).
+                   SPI_CPHA_1,  // Phase (CPHA).
                    SPI_MSB_FIRST);
 
     adsbee.Init();

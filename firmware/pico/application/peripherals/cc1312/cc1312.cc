@@ -1,6 +1,7 @@
 #include "cc1312.hh"
 
 // Get access to raw application binary for flashing.
+#include "adsbee.hh"  // Get access to subg radio for calling higher level interaction functions.
 #include "bin/binaries.c"
 #include "crc.hh"  // For IEEE 802.3 CRC32 calculation.
 #include "hal.hh"
@@ -81,13 +82,44 @@ bool CC1312::Init(bool spi_already_initialized) {
             return false;
         }
     }
-    // TODO: Check that the CC1312 can be communicated with successfully.
+
+    uint32_t bootup_comms_wait_begin_timestamp_ms = get_time_since_boot_ms();
+    bool established_comms = false;
+    while (get_time_since_boot_ms() - bootup_comms_wait_begin_timestamp_ms < kBootupMaxCommsWaitIntervalMs) {
+        // Wait for CC1312 to be ready for comms.
+        if (Update()) {
+            established_comms = true;
+            break;  // Successfully updated CC1312.
+        }
+    }
+    if (!established_comms) {
+        CONSOLE_ERROR("CC1312::Init", "Failed to establish communication with CC1312 after bootup within %d ms.",
+                      kBootupMaxCommsWaitIntervalMs);
+        return false;
+    }
+
     CONSOLE_INFO("CC1312::Init", "CC1312 initialized successfully.");
 
     return true;
 }
 
-bool CC1312::Update() { return true; }
+bool CC1312::Update() {
+    // Query CC1312's device status.
+    ObjectDictionary::SubGHzDeviceStatus device_status;
+    if (adsbee.subg_radio.Read(ObjectDictionary::Address::kAddrDeviceStatus, device_status)) {
+        // We only update the device_status vars exposed publicly here. Other reads of device_status are for
+        // internal use only.
+        num_queued_log_messages = device_status.num_queued_log_messages;
+        queued_log_messages_packed_size_bytes = device_status.queued_log_messages_packed_size_bytes;
+        num_queued_sc_command_requests = device_status.num_queued_sc_command_requests;
+    } else {
+        CONSOLE_ERROR("CC1312::Update", "Unable to read CC1312 status.");
+        return false;
+    }
+
+    last_update_timestamp_ms_ = get_time_since_boot_ms();
+    return true;
+}
 
 bool CC1312::ApplicationIsUpToDate() {
     // Verify application binary.
@@ -299,7 +331,12 @@ bool CC1312::EnterBootloader() {
     gpio_put(config_.sync_pin, 1);
     SetEnableState(SettingsManager::kEnableStateEnabled);
     in_bootloader_ = true;
-    sleep_ms(kBootupDelayMs);  // Wait for the CC1312 to boot up.
+
+    // Bootlaoder is active, override CPHA and CPOL.
+    // WARNING: Other devices on the bus can't be used while CC1312 is in bootloader mode.
+    // spi_set_format(config_.spi_handle, kBootloaderSPIPeripheralConfig.bits_per_transfer,
+    //                kBootloaderSPIPeripheralConfig.cpol, kBootloaderSPIPeripheralConfig.cpha,
+    //                kBootloaderSPIPeripheralConfig.order);
 
     return BootloaderCommandPing();
 }
@@ -309,6 +346,10 @@ bool CC1312::ExitBootloader() {
     SetEnableState(SettingsManager::kEnableStateDisabled);
     gpio_put(config_.sync_pin, 0);
     SetEnableState(SettingsManager::kEnableStateEnabled);
+
+    // spi_set_format(config_.spi_handle, kDefaultSPIPeripheralConfig.bits_per_transfer,
+    // kDefaultSPIPeripheralConfig.cpol,
+    //                kDefaultSPIPeripheralConfig.cpha, kDefaultSPIPeripheralConfig.order);
 
     return true;
 }
@@ -551,14 +592,23 @@ bool CC1312::Flash() {
 }
 
 bool CC1312::SPIBeginTransaction() {
-    if (in_bootloader_) {
-        // Bootlaoder is active, override CPHA and CPOL.
-        spi_set_format(config_.spi_handle, kBootloaderSPIPeripheralConfig.bits_per_transfer,
-                       kBootloaderSPIPeripheralConfig.cpol, kBootloaderSPIPeripheralConfig.cpha,
-                       kBootloaderSPIPeripheralConfig.order);
-    }
     standby_clk_config_ = spi_get_clk();  // Save existing clock config.
     spi_set_clk(active_clk_config_);
+
+    // Don't need to wait for processing time in bootloader, since we wait for acks.
+    if (!in_bootloader_) {
+        while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < spi_handshake_lockout_us_) {
+            // Wait for the lockout period to expire before checking the handshake pin.
+            // This handshake lockout interval is too short to check for a handshake timeout during.
+        }
+        while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
+            // Wait for the lockout period to expire before starting a new transaction.
+            if (expecting_handshake_ && SPIGetHandshakePinLevel()) {
+                // If we are expecting a handshake and the pin is high, we can proceed with the transaction.
+                break;
+            }
+        }
+    }
 
     gpio_put(config_.spi_cs_pin, false);
 
@@ -566,15 +616,16 @@ bool CC1312::SPIBeginTransaction() {
 }
 
 void CC1312::SPIEndTransaction() {
-    gpio_put(config_.spi_cs_pin, true);
-
     spi_set_clk(standby_clk_config_);  // Restore clock config.
-    if (in_bootloader_) {
-        // Bootlaoder is active, restore CPHA and CPOL.
-        spi_set_format(config_.spi_handle, kDefaultSPIPeripheralConfig.bits_per_transfer,
-                       kDefaultSPIPeripheralConfig.cpol, kDefaultSPIPeripheralConfig.cpha,
-                       kDefaultSPIPeripheralConfig.order);
-    }
+
+    // NOTE: For some reason changing the SPI format here caused a hardfault, intermittently. My best guess is that the
+    // SPI format registers didn't like being hammered on every transaction for some reason. Format change has been
+    // moved to the EnterBootloader and ExitBootloader functions. This removed the hardfault but means other peripherals
+    // on the SPI bus can't be accessed while the CC1312 is simultaneously in bootloader mode.
+    // Update: Transitioned all peripherals to use the same SPI polarity and phase as the CC1312 bootloader.
+
+    gpio_put(config_.spi_cs_pin, true);
+    spi_last_transmit_timestamp_us_ = get_time_since_boot_us();  // Update the last transmit timestamp.
 }
 
 int CC1312::SPIWriteReadBlocking(uint8_t* tx_buf, uint8_t* rx_buf, uint16_t len_bytes, bool end_transaction) {

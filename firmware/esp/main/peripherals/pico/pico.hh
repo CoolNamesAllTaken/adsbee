@@ -96,7 +96,7 @@ class Pico : public SPICoprocessorMasterInterface {
     /**
      * Turns off the network LED if necessary.
      */
-    inline void UpdateNetworkLED() {
+    inline void UpdateLED() {
         if (network_led_on &&
             xTaskGetTickCount() - network_led_turn_on_timestamp_ticks_ > kNetworkLEDBlinkDurationTicks) {
             gpio_set_level(config_.network_led_pin, 0);
@@ -105,46 +105,6 @@ class Pico : public SPICoprocessorMasterInterface {
     }
 
    private:
-    // /**
-    //  * Helper function that makes sure to return the next transaction mutex when returning from the indpendent loop
-    //  (low
-    //  * priority). Blinks the network LED to indicate a successful transaction.
-    //  */
-    // inline bool SPIIndependentLoopReturnHelper(bool ret) {
-    //     xSemaphoreGive(spi_next_transaction_mutex_);
-    //     if (ret) {
-    //         BlinkNetworkLED();
-    //     }
-    //     return ret;
-    // }
-
-    // /**
-    //  * Helper function that makes sure to return the SPI mutex when returning from the slave loop (high priority).
-    //  * Blinks the network LED to indicate a successful transaction.
-    //  */
-    // inline bool SPISlaveLoopReturnHelper(bool ret) {
-    //     xSemaphoreGive(spi_mutex_);  // Allow other tasks to access the SPI peripheral.
-
-    //     // Trying to take the next transaction mutex in the slave loop (higher priority) temporarily boosts the
-    //     priority
-    //     // of other loops (e.g. lower priority independent update loop) if they have already claimed it. The next
-    //     // transaction mutex is released before a SPI transmission so that it is available for other loops to claim
-    //     // while the slave loop is blocking with no pending transactions.
-    //     if (xSemaphoreTake(spi_next_transaction_mutex_, kSPIMutexTimeoutTicks) != pdTRUE) {
-    //         CONSOLE_ERROR("SPICoprocessor::SPISlaveLoopReturnHelper",
-    //                       "Other loops claiming the next SPI transaction didn't complete and return the next "
-    //                       "transaction mutex within %d ms.",
-    //                       kSPIMutexTimeoutMs);
-    //     } else {
-    //         xSemaphoreGive(spi_next_transaction_mutex_);
-    //     }
-    //     if (ret) {
-    //         BlinkNetworkLED();
-    //     }
-
-    //     return ret;
-    // }
-
     PicoConfig config_;            // Configuration for the RP2040 SPI coprocessor master interface.
     SemaphoreHandle_t spi_mutex_;  // Low level mutex used to guard the SPI peripheral (don't let multiple
                                    // threads queue packets at the same time).

@@ -10,7 +10,7 @@
 
 const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
 const uint8_t ObjectDictionary::kFirmwareVersionMinor = 8;
-const uint8_t ObjectDictionary::kFirmwareVersionPatch = 0;
+const uint8_t ObjectDictionary::kFirmwareVersionPatch = 1;
 // NOTE: Indicate a final release with RC = 0.
 const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 0;
 
@@ -34,7 +34,6 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             if (offset + buf_len == sizeof(SettingsManager::Settings)) {
                 CONSOLE_INFO("SPICoprocessor::SetBytes", "Wrote last chunk of settings data. Applying new values.");
                 settings_manager.Apply();
-                settings_manager.Print();
             }
             break;
         case kAddrRollQueue: {
@@ -61,15 +60,21 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                     }
                     break;
                 case kQueueIDConsole:
+#ifdef ON_ESP32
                     xSemaphoreTake(object_dictionary.network_console_rx_queue_mutex, portMAX_DELAY);
+#endif
                     if (!network_console_rx_queue.Discard(roll_request.num_items)) {
                         CONSOLE_ERROR("ObjectDictionary::SetBytes",
                                       "Failed to discard %d chars from the network console TX queue.",
                                       roll_request.num_items);
+#ifdef ON_ESP32
                         xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
+#endif
                         return false;
                     }
+#ifdef ON_ESP32
                     xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
+#endif
                     break;
                 default:
                     CONSOLE_ERROR("ObjectDictionary::SetBytes",
@@ -142,19 +147,27 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             break;
         case kAddrDeviceStatus: {
             uint16_t num_log_messages = log_message_queue.Length();
+#ifdef ON_ESP32
             xSemaphoreTake(object_dictionary.network_console_rx_queue_mutex, portMAX_DELAY);
             uint16_t num_network_console_rx_chars = network_console_rx_queue.Length();
             xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
             ESP32DeviceStatus device_status = {.timestamp_ms = get_time_since_boot_ms(),
                                                .num_queued_log_messages = num_log_messages,
-                                               .pending_log_messages_packed_size_bytes =
+                                               .queued_log_messages_packed_size_bytes =
                                                    static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),
                                                .num_queued_sc_command_requests = sc_command_request_queue.Length(),
                                                .num_queued_network_console_rx_chars = num_network_console_rx_chars};
+#elif defined(ON_TI)
+            SubGHzDeviceStatus device_status = {.timestamp_ms = get_time_since_boot_ms(),
+                                                .num_queued_log_messages = num_log_messages,
+                                                .queued_log_messages_packed_size_bytes =
+                                                    static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),
+                                                .num_queued_sc_command_requests = sc_command_request_queue.Length()};
+#endif
             for (uint16_t i = 0; i < log_message_queue.Length(); i++) {
                 LogMessage log_message;
                 if (log_message_queue.Peek(log_message, i)) {
-                    device_status.pending_log_messages_packed_size_bytes +=
+                    device_status.queued_log_messages_packed_size_bytes +=
                         log_message.num_chars + 1;  // +1 for null terminator
                 }
             }
@@ -240,26 +253,36 @@ bool ObjectDictionary::RequestSCCommand(const SCCommandRequestWithCallback &requ
 }
 
 bool ObjectDictionary::RequestSCCommandBlocking(const SCCommandRequestWithCallback &request_with_callback) {
+#ifdef ON_ESP32
     SemaphoreHandle_t command_complete_semaphore = xSemaphoreCreateBinary();
     if (command_complete_semaphore == NULL) {
         CONSOLE_ERROR("ADSBeeServer::Init", "Failed to create settings read semaphore.");
         return false;
     }
+#endif
 
-    bool ret = object_dictionary.RequestSCCommand(ObjectDictionary::SCCommandRequestWithCallback{
+    bool ret = object_dictionary.RequestSCCommand(ObjectDictionary::SCCommandRequestWithCallback {
         .request = request_with_callback.request,
         .complete_callback =
+#ifdef ON_ESP32
             [command_complete_semaphore, request_with_callback]() {
+#else
+            [request_with_callback]() {
+#endif
                 if (request_with_callback.complete_callback) {
                     request_with_callback.complete_callback();  // Call the existing callback if it exists.
                 }
+#ifdef ON_ESP32
                 xSemaphoreGive(command_complete_semaphore);
+#endif
             },
     });  // Require ack.
 
+#ifdef ON_ESP32
     // Wait for the callback to complete
     xSemaphoreTake(command_complete_semaphore, portMAX_DELAY);
     vSemaphoreDelete(command_complete_semaphore);
+#endif
     return ret;
 }
 #endif
@@ -282,8 +305,7 @@ uint16_t ObjectDictionary::PackLogMessages(uint8_t *buf, uint16_t buf_len,
         memcpy(buf + bytes_written, &log_message, log_message_packed_size - 1);
         buf[bytes_written + log_message_packed_size - 1] = '\0';  // Null terminate the message.
         bytes_written += log_message_packed_size;
-        log_message_queue.Pop(
-            log_message);  // Remove the message from the queue. Use log_message as a throwaway buffer.
+        // Don't pop log messages here, wait for the roll request to do that.
     }
     return bytes_written;
 }
@@ -315,6 +337,10 @@ uint16_t ObjectDictionary::UnpackLogMessages(uint8_t *buf, uint16_t buf_len,
         memcpy(log_message.message, buf + bytes_read + LogMessage::kHeaderSize, log_message.num_chars);
         log_message.message[log_message.num_chars] = '\0';  // Null terminate the message.
 
+        if (log_message_queue.IsFull()) {
+            log_message_queue.Clear();
+            CONSOLE_ERROR("ObjectDictionary::UnpackLogMessages", "Log message queue is full, clearing it.");
+        }
         log_message_queue.Push(log_message);
 
         bytes_read += LogMessage::kHeaderSize + log_message.num_chars + 1;  // Move past header and message.

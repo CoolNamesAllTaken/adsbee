@@ -35,22 +35,103 @@ bool SPICoprocessor::DeInit() {
     return true;
 }
 
-bool SPICoprocessor::Update(bool blocking) {
-    bool ret = false;
+bool SPICoprocessor::Update() {
+    bool ret = true;
 #ifdef ON_COPRO_MASTER
     if (!IsEnabled()) {
         return false;  // Nothing to do.
     }
 
-    // There are no unsolicited messages from the slave. Just make sure the underlying interface gets poked.
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+
+    if (timestamp_ms - last_update_timestamp_ms_ <= update_interval_ms) {
+        return true;  // No need to update yet.
+    }
+    last_update_timestamp_ms_ = timestamp_ms;
+
+    // Rely on the slave interface to query device status and process SCCommand requests, since behavior varies by
+    // device.
     if (!config_.interface.Update()) {
         CONSOLE_ERROR("SPICoprocessor::Update", "Failed to update SPI coprocessor interface.");
         return false;  // Update failed.
     }
 
-    config_.interface.SPIEndTransaction();
-#elif defined(ON_COPRO_SLAVE)
-    // TODO: Return if not blocking and no transaction is pending.
+    // Process pending SCCommand requests from the slave interface.
+    if (config_.interface.num_queued_sc_command_requests > 0) {
+        uint16_t num_requests_processed = 0;
+        while (num_requests_processed < config_.interface.num_queued_sc_command_requests &&
+               num_requests_processed < kMaxNumSCCommandRequestsPerUpdate) {
+            // Read SCCommand request from ESP32.
+            ObjectDictionary::SCCommandRequest sc_command_request;
+            if (!Read(ObjectDictionary::Address::kAddrSCCommandRequests, sc_command_request)) {
+                CONSOLE_ERROR("ESP32::Update", "Unable to read SCCommand request %d/%d from ESP32.",
+                              num_requests_processed + 1, config_.interface.num_queued_sc_command_requests);
+                return false;
+            }
+            // Execute the request.
+            if (!ExecuteSCCommandRequest(sc_command_request)) {
+                CONSOLE_ERROR("ESP32::Update", "Failed to execute SCCommand request %d/%d from ESP32.",
+                              num_requests_processed + 1, config_.interface.num_queued_sc_command_requests);
+                return false;
+            }
+
+            // Roll the requests queue.
+            ObjectDictionary::RollQueueRequest roll_request = {
+                .queue_id = ObjectDictionary::QueueID::kQueueIDSCCommandRequests,
+                .num_items = 1,
+            };
+            if (!Write(ObjectDictionary::Address::kAddrRollQueue, roll_request, true)) {
+                // Require the roll request to be acknowledged.
+                CONSOLE_ERROR("ESP32::Update", "Unable to roll SCCommand request queue on ESP32.");
+                return false;
+            }
+            num_requests_processed++;
+        }
+    }
+
+    // Pull pending log messages from the slave interface.
+    if (config_.pull_log_messages && config_.interface.num_queued_log_messages > 0) {
+        // Read log messages from ESP32.
+        uint8_t log_messages_buffer[ObjectDictionary::kLogMessageMaxNumChars * ObjectDictionary::kLogMessageQueueDepth];
+        if (Read(ObjectDictionary::Address::kAddrLogMessages, log_messages_buffer,
+                 config_.interface.queued_log_messages_packed_size_bytes)) {
+            // Acknowledge the log messages to clear the queue.
+
+            uint16_t num_messages_pulled = object_dictionary.UnpackLogMessages(
+                log_messages_buffer, sizeof(log_messages_buffer), object_dictionary.log_message_queue,
+                config_.interface.num_queued_log_messages);
+
+            ObjectDictionary::RollQueueRequest roll_request = {
+                .queue_id = ObjectDictionary::QueueID::kQueueIDLogMessages, .num_items = num_messages_pulled};
+            if (!Write(ObjectDictionary::Address::kAddrRollQueue, roll_request,
+                       true)) {  // Require the roll request to be acknowledged.
+                CONSOLE_ERROR("SPICoprocessor::Update", "Failed to roll log messages queue after reading %d messages.",
+                              num_messages_pulled);
+                return false;
+            }
+
+            ObjectDictionary::LogMessage log_message;
+            while (object_dictionary.log_message_queue.Pop(log_message)) {
+                switch (log_message.log_level) {
+                    case SettingsManager::LogLevel::kInfo:
+                        CONSOLE_INFO("CoProcessor", "%s >> %s", config_.tag_str, log_message.message);
+                        break;
+                    case SettingsManager::LogLevel::kWarnings:
+                        CONSOLE_WARNING("CoProcessor", "%s >> %s", config_.tag_str, log_message.message);
+                        break;
+                    case SettingsManager::LogLevel::kErrors:
+                        CONSOLE_ERROR("CoProcessor", "%s >> %s", config_.tag_str, log_message.message);
+                        break;
+                    default:
+                        CONSOLE_PRINTF("CoProcessor %s >> %s", config_.tag_str, log_message.message);
+                        break;
+                }
+            }
+        } else {
+            CONSOLE_ERROR("main", "Unable to read log messages from %s.", config_.tag_str);
+        }
+    }
+#elif defined(ON_COPRO_SLAVE) && !defined(ON_TI)
     uint8_t rx_buf[SPICoprocessorPacket::kSPITransactionMaxLenBytes];
     memset(rx_buf, 0, SPICoprocessorPacket::kSPITransactionMaxLenBytes);
 
@@ -138,6 +219,10 @@ bool SPICoprocessor::Update(bool blocking) {
     }
 
     config_.interface.SPIEndTransaction();
+#elif defined(ON_TI)
+    // TI platform doesn't have an RTOS, so we can't block without stalling the processor. Utilize SPI callbacks for
+    // primary SPI driver updates. Just update the LED here.
+    config_.interface.UpdateLED();
 #endif
     return ret;
 }
@@ -152,7 +237,10 @@ bool SPICoprocessor::LogMessage(SettingsManager::LogLevel log_level, const char 
     log_message.num_chars = 0;
     log_message.message[0] = '\0';  // Initialize to empty string.
 
-    log_message.num_chars += snprintf(log_message.message, ObjectDictionary::kLogMessageMaxNumChars, "[%s] ", tag);
+    if (strlen(tag) > 0) {
+        log_message.num_chars += snprintf(log_message.message, ObjectDictionary::kLogMessageMaxNumChars, "[%s] ", tag);
+    }
+
     log_message.num_chars += vsnprintf(log_message.message + log_message.num_chars,
                                        ObjectDictionary::kLogMessageMaxNumChars - log_message.num_chars, format, args);
 
@@ -160,9 +248,73 @@ bool SPICoprocessor::LogMessage(SettingsManager::LogLevel log_level, const char 
 }
 #endif
 
-/** Begin Protected Functions **/
-
 #ifdef ON_COPRO_MASTER
+
+bool SPICoprocessor::ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRequest &request) {
+    bool write_requires_ack = false;
+    switch (request.command) {
+        case ObjectDictionary::SCCommand::kCmdWriteToSlaveRequireAck:
+            write_requires_ack = true;
+            [[fallthrough]];
+        case ObjectDictionary::SCCommand::kCmdWriteToSlave: {
+            if (request.len == 0) {
+                CONSOLE_WARNING("SPICoprocessor::ExecuteSCCommandRequest",
+                                "Skipping write request to address 0x%x with zero length.", request.addr);
+                return true;
+            }
+            switch (request.addr) {
+                /** These are the addresses that the ESP32 can request a write to. **/
+                case ObjectDictionary::Address::kAddrSettingsData: {
+                    if (request.offset != 0) {
+                        CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest",
+                                      "Settings data write with non-zero offset (%d) not supported.", request.offset);
+                        return false;
+                    }
+                    // Write settings data to ESP32.
+                    if (request.len != sizeof(settings_manager.settings)) {
+                        CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest",
+                                      "Settings data write with invalid length (%d). Expected %d.", request.len,
+                                      sizeof(settings_manager.settings));
+                        return false;
+                    }
+                    if (!Write(request.addr, settings_manager.settings, write_requires_ack)) {
+                        CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest",
+                                      "Unable to write settings data to ESP32.");
+                        return false;
+                    }
+                    break;  // Successfully wrote settings data to ESP32.
+                }
+                default:
+                    CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest",
+                                  "No implementation defined for writing to address 0x%x on slave.", request.addr);
+                    return false;
+            }
+            break;
+        }
+
+        case ObjectDictionary::SCCommand::kCmdReadFromSlave: {
+            if (request.len == 0) {
+                CONSOLE_WARNING("SPICoprocessor::ExecuteSCCommandRequest",
+                                "Skipping read request to address 0x%x with zero length.", request.addr);
+                return true;
+            }
+            switch (request.addr) {
+                /**  These are the addresses the ESP32 can request a read from. **/
+                default:
+                    CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest",
+                                  "No implementation defined for reading from address 0x%x for on slave.",
+                                  request.addr);
+                    return false;
+            }
+            break;
+        }
+        default:
+            CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest", "Unsupported SCCommand received from ESP32: %d.",
+                          request.command);
+            return false;
+    }
+    return true;
+}
 
 bool SPICoprocessor::PartialWrite(ObjectDictionary::Address addr, uint8_t *object_buf, uint16_t len, uint16_t offset,
                                   bool require_ack) {
@@ -303,8 +455,8 @@ bool SPICoprocessor::SPIWaitForAck() {
         return false;
     }
 
-    // We need to call SPIReadBlocking without ending the transaction in case we want to recover a kErrorHandshakeHigh
-    // error.
+    // We need to call SPIReadBlocking without ending the transaction in case we want to recover a
+    // kErrorHandshakeHigh error.
     int bytes_read =
         SPIReadBlocking(response_packet.GetBuf(), SPICoprocessorPacket::SCResponsePacket::kAckLenBytes, true);
     response_packet.data_len_bytes = SPICoprocessorPacket::SCResponsePacket::kAckLenBytes;
@@ -326,20 +478,21 @@ bool SPICoprocessor::SPIWaitForAck() {
     }
     return response_packet.data[0];  // Return ACK / NACK value.
 }
+
 #endif
 
+#ifdef ON_COPRO_SLAVE
 bool SPICoprocessor::SPISendAck(bool success) {
     SPICoprocessorPacket::SCResponsePacket response_packet;
     response_packet.cmd = ObjectDictionary::ObjectDictionary::SCCommand::kCmdAck;
     response_packet.data[0] = success;
     response_packet.data_len_bytes = 1;
     response_packet.PopulateCRC();
-#ifdef ON_ESP32
     config_.interface.SPIUseHandshakePin(true);  // Solicit a transfer to send the ack.
-#endif
+#ifndef ON_TI
     return SPIWriteBlocking(response_packet.GetBuf(), SPICoprocessorPacket::SCResponsePacket::kAckLenBytes) > 0;
+#else
+    return SPIWriteNonBlocking(response_packet.GetBuf(), SPICoprocessorPacket::SCResponsePacket::kAckLenBytes) > 0;
+#endif  // ON_TI
 }
-
-int SPICoprocessor::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len_bytes, bool end_transaction) {
-    return config_.interface.SPIWriteReadBlocking(tx_buf, rx_buf, len_bytes, end_transaction);
-}
+#endif  // ON_COPRO_SLAVE

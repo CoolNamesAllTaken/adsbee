@@ -9,9 +9,10 @@
 
 class ESP32 : public SPICoprocessorSlaveInterface {
    public:
-    static const uint16_t kDeviceStatusUpdateDefaultIntervalMs = 200;  // 5Hz updates by default.
-    static const uint16_t kMaxNumSCCommandRequestsPerUpdate = 5;
     static const uint32_t kBootupDelayMs = 500;  // Delay after enabling the ESP32 before starting comms.
+    // How long we wait to start a transaction after the last one is completed. Can be overridden if the handshake line
+    // goes high after kSPIHandshakeLockoutUs.
+    static constexpr uint32_t kSPIPostTransmitLockoutUs = 1000;
 
     struct ESP32Config {
         uint16_t enable_pin = bsp.esp32_enable_pin;
@@ -35,19 +36,6 @@ class ESP32 : public SPICoprocessorSlaveInterface {
      */
     bool Update();
 
-    /**
-     * Executes a single SCCommand request received from the ESP32.
-     * @param[in] request The SCCommandRequest to execute.
-     * @retval True if the command was executed successfully, false otherwise.
-     */
-    bool ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRequest &request);
-
-    /**
-     * Gets the timestamp of the last successful device status query from the ESP32.
-     * @retval Timestamp in milliseconds since boot.
-     */
-    inline uint32_t GetLastHeartbeatTimestampMs() { return last_device_status_update_timestamp_ms_; }
-
     inline bool IsEnabled() { return enabled_; }
     inline void SetEnable(bool enabled) {
         gpio_put(config_.enable_pin, enabled);
@@ -55,6 +43,10 @@ class ESP32 : public SPICoprocessorSlaveInterface {
     }
 
     inline bool SPIBeginTransaction() {
+        while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < spi_handshake_lockout_us_) {
+            // Wait for the lockout period to expire before checking the handshake pin.
+            // This handshake lockout interval is too short to check for a handshake timeout during.
+        }
         while (get_time_since_boot_us() - spi_last_transmit_timestamp_us_ < kSPIPostTransmitLockoutUs) {
             // Wait for the lockout period to expire before starting a new transaction.
             if (expecting_handshake_ && SPIGetHandshakePinLevel()) {
@@ -76,14 +68,9 @@ class ESP32 : public SPICoprocessorSlaveInterface {
                              uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
                              bool end_transaction = true);
 
-    uint32_t device_status_update_interval_ms =
-        kDeviceStatusUpdateDefaultIntervalMs;  // Interval for device status updates.
-
    private:
     ESP32Config config_;
     bool enabled_ = false;
-
-    uint32_t last_device_status_update_timestamp_ms_ = 0;  // Timestamp of the last device status update.
 };
 
 extern ESP32 esp32_ll;

@@ -2,7 +2,7 @@
 
 #include "stdint.h"
 
-static const uint32_t kBoundingBoxDimensionMeters = 50'000;
+static const uint32_t kBoundingBoxDimensionMeters = 50000;
 
 bool IsWithinBoundingBox(uint32_t lat_a_awb, uint32_t lon_a_awb, uint32_t lat_b_awb, uint32_t lon_b_awb);
 

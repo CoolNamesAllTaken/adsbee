@@ -110,6 +110,8 @@ bool SettingsManager::Save() {
 
     settings.core_network_settings.esp32_enabled = esp32.IsEnabled();
 
+    settings.subg_enabled = adsbee.subg_radio_ll.IsEnabledState();
+
     // Sync settings from RP2040 -> ESP32.
     if (esp32.IsEnabled()) {
         esp32.Write(ObjectDictionary::kAddrSettingsData, settings, true);  // Require ACK.
@@ -172,6 +174,17 @@ bool SettingsManager::Apply() {
     adsbee.SetTLMilliVolts(settings.tl_mv);
     adsbee.SetBiasTeeEnable(settings.bias_tee_enabled);
     adsbee.SetWatchdogTimeoutSec(settings.watchdog_timeout_sec);
+    adsbee.SetSubGRadioEnable(settings.subg_enabled);
+
+    // Apply reporting protocols.
+    comms_manager.SetReportingProtocol(SerialInterface::kCommsUART,
+                                       settings.reporting_protocols[SerialInterface::kCommsUART]);
+    comms_manager.SetReportingProtocol(SerialInterface::kConsole,
+                                       settings.reporting_protocols[SerialInterface::kConsole]);
+
+    // Apply baud rates.
+    comms_manager.SetBaudRate(SerialInterface::kCommsUART, settings.comms_uart_baud_rate);
+    comms_manager.SetBaudRate(SerialInterface::kGNSSUART, settings.gnss_uart_baud_rate);
 
     if (settings.core_network_settings.esp32_enabled) {
         if (!esp32.IsEnabled()) {

@@ -41,21 +41,33 @@ extern "C" {
 /*
  *  ======== GPIO ========
  */
-/* Owned by CONFIG_SPI_0 as  */
-extern const uint_least8_t CONFIG_GPIO_SPI_0_SCLK_CONST;
-#define CONFIG_GPIO_SPI_0_SCLK 10
+extern const uint_least8_t SUBG_LED_PIN_CONST;
+#define SUBG_LED_PIN 6
 
-/* Owned by CONFIG_SPI_0 as  */
-extern const uint_least8_t CONFIG_GPIO_SPI_0_POCI_CONST;
-#define CONFIG_GPIO_SPI_0_POCI 8
+extern const uint_least8_t SUBG_IRQ_PIN_CONST;
+#define SUBG_IRQ_PIN 18
 
-/* Owned by CONFIG_SPI_0 as  */
-extern const uint_least8_t CONFIG_GPIO_SPI_0_PICO_CONST;
-#define CONFIG_GPIO_SPI_0_PICO 9
+extern const uint_least8_t SYNC_PIN_CONST;
+#define SYNC_PIN 5
 
-/* Owned by CONFIG_SPI_0 as  */
-extern const uint_least8_t CONFIG_GPIO_SPI_0_CSN_CONST;
-#define CONFIG_GPIO_SPI_0_CSN 11
+extern const uint_least8_t SUBG_BIAS_TEE_ENABLE_PIN_CONST;
+#define SUBG_BIAS_TEE_ENABLE_PIN 7
+
+/* Owned by COPRO_SPI as  */
+extern const uint_least8_t CONFIG_GPIO_COPRO_SPI_SCLK_CONST;
+#define CONFIG_GPIO_COPRO_SPI_SCLK 10
+
+/* Owned by COPRO_SPI as  */
+extern const uint_least8_t CONFIG_GPIO_COPRO_SPI_POCI_CONST;
+#define CONFIG_GPIO_COPRO_SPI_POCI 8
+
+/* Owned by COPRO_SPI as  */
+extern const uint_least8_t CONFIG_GPIO_COPRO_SPI_PICO_CONST;
+#define CONFIG_GPIO_COPRO_SPI_PICO 9
+
+/* Owned by COPRO_SPI as  */
+extern const uint_least8_t CONFIG_GPIO_COPRO_SPI_CSN_CONST;
+#define CONFIG_GPIO_COPRO_SPI_CSN 11
 
 /* The range of pins available on this device */
 extern const uint_least8_t GPIO_pinLowerBound;
@@ -81,8 +93,8 @@ extern const uint_least8_t GPIO_pinUpperBound;
  *  SCLK: DIO10
  *  CSN: DIO11
  */
-extern const uint_least8_t              CONFIG_SPI_0_CONST;
-#define CONFIG_SPI_0                    0
+extern const uint_least8_t              COPRO_SPI_CONST;
+#define COPRO_SPI                       0
 #define CONFIG_TI_DRIVERS_SPI_COUNT     1
 
 

@@ -62,24 +62,24 @@ GPIO_PinConfig gpioPinConfigs[31] = {
     GPIO_CFG_NO_DIR, /* DIO_2 */
     GPIO_CFG_NO_DIR, /* DIO_3 */
     GPIO_CFG_NO_DIR, /* DIO_4 */
-    GPIO_CFG_NO_DIR, /* DIO_5 */
-    GPIO_CFG_NO_DIR, /* DIO_6 */
-    GPIO_CFG_NO_DIR, /* DIO_7 */
-    /* Owned by CONFIG_SPI_0 as POCI */
-    GPIO_CFG_OUTPUT_INTERNAL | GPIO_CFG_OUT_STR_MED | GPIO_CFG_OUT_LOW, /* CONFIG_GPIO_SPI_0_POCI */
-    /* Owned by CONFIG_SPI_0 as PICO */
-    GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_NONE | GPIO_CFG_PULL_NONE_INTERNAL, /* CONFIG_GPIO_SPI_0_PICO */
-    /* Owned by CONFIG_SPI_0 as SCLK */
-    GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_NONE | GPIO_CFG_PULL_NONE_INTERNAL, /* CONFIG_GPIO_SPI_0_SCLK */
-    /* Owned by CONFIG_SPI_0 as CSN */
-    GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_NONE | GPIO_CFG_PULL_NONE_INTERNAL, /* CONFIG_GPIO_SPI_0_CSN */
+    GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_NONE | GPIO_CFG_PULL_NONE_INTERNAL, /* SYNC_PIN */
+    GPIO_CFG_OUTPUT_INTERNAL | GPIO_CFG_OUT_STR_MED | GPIO_CFG_OUT_LOW, /* SUBG_LED_PIN */
+    GPIO_CFG_OUTPUT_INTERNAL | GPIO_CFG_OUT_STR_MED | GPIO_CFG_OUT_LOW, /* SUBG_BIAS_TEE_ENABLE_PIN */
+    /* Owned by COPRO_SPI as POCI */
+    GPIO_CFG_OUTPUT_INTERNAL | GPIO_CFG_OUT_STR_MED | GPIO_CFG_OUT_LOW, /* CONFIG_GPIO_COPRO_SPI_POCI */
+    /* Owned by COPRO_SPI as PICO */
+    GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_NONE | GPIO_CFG_PULL_NONE_INTERNAL, /* CONFIG_GPIO_COPRO_SPI_PICO */
+    /* Owned by COPRO_SPI as SCLK */
+    GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_NONE | GPIO_CFG_PULL_NONE_INTERNAL, /* CONFIG_GPIO_COPRO_SPI_SCLK */
+    /* Owned by COPRO_SPI as CSN */
+    GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_NONE | GPIO_CFG_PULL_NONE_INTERNAL, /* CONFIG_GPIO_COPRO_SPI_CSN */
     GPIO_CFG_NO_DIR, /* DIO_12 */
     GPIO_CFG_NO_DIR, /* DIO_13 */
     GPIO_CFG_NO_DIR, /* DIO_14 */
     GPIO_CFG_NO_DIR, /* DIO_15 */
     GPIO_CFG_NO_DIR, /* DIO_16 */
     GPIO_CFG_NO_DIR, /* DIO_17 */
-    GPIO_CFG_NO_DIR, /* DIO_18 */
+    GPIO_CFG_OUTPUT_INTERNAL | GPIO_CFG_OUT_STR_MED | GPIO_CFG_OUTPUT_OPEN_DRAIN_INTERNAL | GPIO_CFG_OUT_HIGH, /* SUBG_IRQ_PIN */
     GPIO_CFG_NO_DIR, /* DIO_19 */
     GPIO_CFG_NO_DIR, /* DIO_20 */
     GPIO_CFG_NO_DIR, /* DIO_21 */
@@ -109,10 +109,14 @@ GPIO_CallbackFxn gpioCallbackFunctions[31];
  */
 void* gpioUserArgs[31];
 
-const uint_least8_t CONFIG_GPIO_SPI_0_SCLK_CONST = CONFIG_GPIO_SPI_0_SCLK;
-const uint_least8_t CONFIG_GPIO_SPI_0_POCI_CONST = CONFIG_GPIO_SPI_0_POCI;
-const uint_least8_t CONFIG_GPIO_SPI_0_PICO_CONST = CONFIG_GPIO_SPI_0_PICO;
-const uint_least8_t CONFIG_GPIO_SPI_0_CSN_CONST = CONFIG_GPIO_SPI_0_CSN;
+const uint_least8_t SUBG_LED_PIN_CONST = SUBG_LED_PIN;
+const uint_least8_t SUBG_IRQ_PIN_CONST = SUBG_IRQ_PIN;
+const uint_least8_t SYNC_PIN_CONST = SYNC_PIN;
+const uint_least8_t SUBG_BIAS_TEE_ENABLE_PIN_CONST = SUBG_BIAS_TEE_ENABLE_PIN;
+const uint_least8_t CONFIG_GPIO_COPRO_SPI_SCLK_CONST = CONFIG_GPIO_COPRO_SPI_SCLK;
+const uint_least8_t CONFIG_GPIO_COPRO_SPI_POCI_CONST = CONFIG_GPIO_COPRO_SPI_POCI;
+const uint_least8_t CONFIG_GPIO_COPRO_SPI_PICO_CONST = CONFIG_GPIO_COPRO_SPI_PICO;
+const uint_least8_t CONFIG_GPIO_COPRO_SPI_CSN_CONST = CONFIG_GPIO_COPRO_SPI_CSN;
 
 /*
  *  ======== GPIO_config ========
@@ -186,38 +190,38 @@ SPICC26X2DMA_Object spiCC26X2DMAObjects[CONFIG_SPI_COUNT];
 /*
  * ======== spiCC26X2DMA uDMA Table Entries  ========
  */
-        ALLOCATE_CONTROL_TABLE_ENTRY(dmaSpi1TxControlTableEntry, UDMA_CHAN_SSI1_TX);
-        ALLOCATE_CONTROL_TABLE_ENTRY(dmaSpi1RxControlTableEntry, UDMA_CHAN_SSI1_RX);
-        ALLOCATE_CONTROL_TABLE_ENTRY(dmaSpi1TxAltControlTableEntry, (UDMA_CHAN_SSI1_TX | UDMA_ALT_SELECT));
-        ALLOCATE_CONTROL_TABLE_ENTRY(dmaSpi1RxAltControlTableEntry, (UDMA_CHAN_SSI1_RX | UDMA_ALT_SELECT));
+        ALLOCATE_CONTROL_TABLE_ENTRY(dmaSpi0TxControlTableEntry, UDMA_CHAN_SSI0_TX);
+        ALLOCATE_CONTROL_TABLE_ENTRY(dmaSpi0RxControlTableEntry, UDMA_CHAN_SSI0_RX);
+        ALLOCATE_CONTROL_TABLE_ENTRY(dmaSpi0TxAltControlTableEntry, (UDMA_CHAN_SSI0_TX | UDMA_ALT_SELECT));
+        ALLOCATE_CONTROL_TABLE_ENTRY(dmaSpi0RxAltControlTableEntry, (UDMA_CHAN_SSI0_RX | UDMA_ALT_SELECT));
 
 /*
  *  ======== spiCC26X2DMAHWAttrs ========
  */
 const SPICC26X2DMA_HWAttrs spiCC26X2DMAHWAttrs[CONFIG_SPI_COUNT] = {
-    /* CONFIG_SPI_0 */
+    /* COPRO_SPI */
     {
-        .baseAddr = SSI1_BASE,
-        .intNum = INT_SSI1_COMB,
-        .intPriority = (~0),
+        .baseAddr = SSI0_BASE,
+        .intNum = INT_SSI0_COMB,
+        .intPriority = 0xa0,
         .swiPriority = 0,
-        .powerMngrId = PowerCC26XX_PERIPH_SSI1,
+        .powerMngrId = PowerCC26XX_PERIPH_SSI0,
         .defaultTxBufValue = ~0,
-        .rxChannelBitMask = 1<<UDMA_CHAN_SSI1_RX,
-        .txChannelBitMask = 1<<UDMA_CHAN_SSI1_TX,
-        .dmaTxTableEntryPri = &dmaSpi1TxControlTableEntry,
-        .dmaRxTableEntryPri = &dmaSpi1RxControlTableEntry,
-        .dmaTxTableEntryAlt = &dmaSpi1TxAltControlTableEntry,
-        .dmaRxTableEntryAlt = &dmaSpi1RxAltControlTableEntry,
+        .rxChannelBitMask = 1<<UDMA_CHAN_SSI0_RX,
+        .txChannelBitMask = 1<<UDMA_CHAN_SSI0_TX,
+        .dmaTxTableEntryPri = &dmaSpi0TxControlTableEntry,
+        .dmaRxTableEntryPri = &dmaSpi0RxControlTableEntry,
+        .dmaTxTableEntryAlt = &dmaSpi0TxAltControlTableEntry,
+        .dmaRxTableEntryAlt = &dmaSpi0RxAltControlTableEntry,
         .minDmaTransferSize = 10,
-        .txPinMux    = IOC_PORT_MCU_SSI1_TX,
-        .rxPinMux    = IOC_PORT_MCU_SSI1_RX,
-        .clkPinMux   = IOC_PORT_MCU_SSI1_CLK,
-        .csnPinMux   = IOC_PORT_MCU_SSI1_FSS,
-        .picoPin = CONFIG_GPIO_SPI_0_PICO,
-        .pociPin = CONFIG_GPIO_SPI_0_POCI,
-        .clkPin  = CONFIG_GPIO_SPI_0_SCLK,
-        .csnPin  = CONFIG_GPIO_SPI_0_CSN
+        .txPinMux    = IOC_PORT_MCU_SSI0_TX,
+        .rxPinMux    = IOC_PORT_MCU_SSI0_RX,
+        .clkPinMux   = IOC_PORT_MCU_SSI0_CLK,
+        .csnPinMux   = IOC_PORT_MCU_SSI0_FSS,
+        .picoPin = CONFIG_GPIO_COPRO_SPI_PICO,
+        .pociPin = CONFIG_GPIO_COPRO_SPI_POCI,
+        .clkPin  = CONFIG_GPIO_COPRO_SPI_SCLK,
+        .csnPin  = CONFIG_GPIO_COPRO_SPI_CSN
     },
 };
 
@@ -225,118 +229,16 @@ const SPICC26X2DMA_HWAttrs spiCC26X2DMAHWAttrs[CONFIG_SPI_COUNT] = {
  *  ======== SPI_config ========
  */
 const SPI_Config SPI_config[CONFIG_SPI_COUNT] = {
-    /* CONFIG_SPI_0 */
+    /* COPRO_SPI */
     {
         .fxnTablePtr = &SPICC26X2DMA_fxnTable,
-        .object = &spiCC26X2DMAObjects[CONFIG_SPI_0],
-        .hwAttrs = &spiCC26X2DMAHWAttrs[CONFIG_SPI_0]
+        .object = &spiCC26X2DMAObjects[COPRO_SPI],
+        .hwAttrs = &spiCC26X2DMAHWAttrs[COPRO_SPI]
     },
 };
 
-const uint_least8_t CONFIG_SPI_0_CONST = CONFIG_SPI_0;
+const uint_least8_t COPRO_SPI_CONST = COPRO_SPI;
 const uint_least8_t SPI_count = CONFIG_SPI_COUNT;
-
-#include <stdbool.h>
-
-#include <ti/devices/cc13x2_cc26x2/driverlib/ioc.h>
-#include <ti/devices/cc13x2_cc26x2/driverlib/cpu.h>
-
-#include <ti/drivers/GPIO.h>
-
-/* Board GPIO defines */
-#define BOARD_EXT_FLASH_SPI_CS      20
-#define BOARD_EXT_FLASH_SPI_CLK     10
-#define BOARD_EXT_FLASH_SPI_PICO    9
-#define BOARD_EXT_FLASH_SPI_POCI    8
-
-
-/*
- *  ======== Board_sendExtFlashByte ========
- */
-void Board_sendExtFlashByte(uint8_t byte)
-{
-    uint8_t i;
-
-    /* SPI Flash CS */
-    GPIO_write(BOARD_EXT_FLASH_SPI_CS, 0);
-
-    for (i = 0; i < 8; i++) {
-        GPIO_write(BOARD_EXT_FLASH_SPI_CLK, 0); /* SPI Flash CLK */
-
-        /* SPI Flash PICO */
-        GPIO_write(BOARD_EXT_FLASH_SPI_PICO, (byte >> (7 - i)) & 0x01);
-        GPIO_write(BOARD_EXT_FLASH_SPI_CLK, 1);  /* SPI Flash CLK */
-
-        /*
-         * Waste a few cycles to keep the CLK high for at
-         * least 45% of the period.
-         * 3 cycles per loop: 8 loops @ 48 Mhz = 0.5 us.
-         */
-        CPUdelay(8);
-    }
-
-    GPIO_write(BOARD_EXT_FLASH_SPI_CLK, 0);  /* CLK */
-    GPIO_write(BOARD_EXT_FLASH_SPI_CS, 1);  /* CS */
-
-    /*
-     * Keep CS high at least 40 us
-     * 3 cycles per loop: 700 loops @ 48 Mhz ~= 44 us
-     */
-    CPUdelay(700);
-}
-
-/*
- *  ======== Board_wakeUpExtFlash ========
- */
-void Board_wakeUpExtFlash(void)
-{
-    /* SPI Flash CS*/
-    GPIO_setConfig(BOARD_EXT_FLASH_SPI_CS, GPIO_CFG_OUTPUT | GPIO_CFG_OUT_HIGH | GPIO_CFG_OUT_STR_MED);
-
-    /*
-     *  To wake up we need to toggle the chip select at
-     *  least 20 ns and ten wait at least 35 us.
-     */
-
-    /* Toggle chip select for ~20ns to wake ext. flash */
-    GPIO_write(BOARD_EXT_FLASH_SPI_CS, 0);
-    /* 3 cycles per loop: 1 loop @ 48 Mhz ~= 62 ns */
-    CPUdelay(1);
-    GPIO_write(BOARD_EXT_FLASH_SPI_CS, 1);
-    /* 3 cycles per loop: 560 loops @ 48 Mhz ~= 35 us */
-    CPUdelay(560);
-}
-
-/*
- *  ======== Board_shutDownExtFlash ========
- */
-void Board_shutDownExtFlash(void)
-{
-    /*
-     *  To be sure we are putting the flash into sleep and not waking it,
-     *  we first have to make a wake up call
-     */
-    Board_wakeUpExtFlash();
-
-    /* SPI Flash CS*/
-    GPIO_setConfig(BOARD_EXT_FLASH_SPI_CS, GPIO_CFG_OUTPUT | GPIO_CFG_OUT_HIGH | GPIO_CFG_OUT_STR_MED);
-    /* SPI Flash CLK */
-    GPIO_setConfig(BOARD_EXT_FLASH_SPI_CLK, GPIO_CFG_OUTPUT | GPIO_CFG_OUT_LOW | GPIO_CFG_OUT_STR_MED);
-    /* SPI Flash PICO */
-    GPIO_setConfig(BOARD_EXT_FLASH_SPI_PICO, GPIO_CFG_OUTPUT | GPIO_CFG_OUT_LOW | GPIO_CFG_OUT_STR_MED);
-    /* SPI Flash POCI */
-    GPIO_setConfig(BOARD_EXT_FLASH_SPI_POCI, GPIO_CFG_IN_PD);
-
-    uint8_t extFlashShutdown = 0xB9;
-
-    Board_sendExtFlashByte(extFlashShutdown);
-
-    GPIO_resetConfig(BOARD_EXT_FLASH_SPI_CS);
-    GPIO_resetConfig(BOARD_EXT_FLASH_SPI_CLK);
-    GPIO_resetConfig(BOARD_EXT_FLASH_SPI_PICO);
-    GPIO_resetConfig(BOARD_EXT_FLASH_SPI_POCI);
-}
-
 
 #include <ti/drivers/Board.h>
 
@@ -366,8 +268,6 @@ void Board_init(void)
 
     /* ==== /ti/drivers/RF initialization ==== */
 
-
-    Board_shutDownExtFlash();
 
     Board_initHook();
 }

@@ -241,7 +241,7 @@ class ADSBee {
      * Returns whether the 978MHz receiver is enabled.
      * @retval True if enabled, false otherwise.
      */
-    bool ReceiverSubGIsEnabled() { return subg_radio.IsEnabled(); }
+    bool SubGRadioIsEnabled() { return subg_radio.IsEnabled(); }
 
     /**
      * Enable or disable the bias tee to inject 3.3V at the RF IN connector.
@@ -273,7 +273,11 @@ class ADSBee {
              old_enabled == SettingsManager::EnableState::kEnableStateExternal) &&
             is_enabled == SettingsManager::EnableState::kEnableStateEnabled) {
             // Re-initialize the receiver.
-            subg_radio.Init();
+            if (!subg_radio.Init()) {
+                CONSOLE_ERROR("ADSBee::SetSubGRadioEnable",
+                              "Failed to initialize sub-GHz radio after enabling. Disabling sub-GHz radio.");
+                subg_radio_ll.SetEnableState(SettingsManager::EnableState::kEnableStateDisabled);
+            }
         }
     }
 
@@ -334,7 +338,7 @@ class ADSBee {
 
     AircraftDictionary aircraft_dictionary;
     CC1312 subg_radio_ll = CC1312({});
-    SPICoprocessor subg_radio = SPICoprocessor({.interface = subg_radio_ll});
+    SPICoprocessor subg_radio = SPICoprocessor({.interface = subg_radio_ll, .tag_str = "CC1312"});
 
    private:
     void PIOInit();
