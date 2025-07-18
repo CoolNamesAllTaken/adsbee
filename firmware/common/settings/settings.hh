@@ -155,7 +155,7 @@ class SettingsManager {
         uint32_t gnss_uart_baud_rate = 9600;
 
         // Sub-GHz settings
-        EnableState subg_enabled = EnableState::kEnableStateExternal;        // High impedance state by default.
+        EnableState subg_enabled = EnableState::kEnableStateEnabled;         // High impedance state by default.
         SubGHzRadioMode subg_mode = SubGHzRadioMode::kSubGHzRadioModeUATRx;  // Default to UAT mode (978MHz receiver
 
         char feed_uris[kMaxNumFeeds][kFeedURIMaxNumChars + 1];

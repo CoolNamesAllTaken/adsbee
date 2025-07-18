@@ -271,8 +271,8 @@ class ADSBee {
         subg_radio_ll.SetEnableState(is_enabled);
         if ((old_enabled == SettingsManager::EnableState::kEnableStateDisabled ||
              old_enabled == SettingsManager::EnableState::kEnableStateExternal) &&
-            is_enabled == SettingsManager::EnableState::kEnableStateEnabled) {
-            // Re-initialize the receiver.
+            subg_radio_ll.IsEnabled()) {
+            // Re-initialize the receiver when in ENABLED and EXTERNAL states.
             if (!subg_radio.Init()) {
                 CONSOLE_ERROR("ADSBee::SetSubGRadioEnable",
                               "Failed to initialize sub-GHz radio after enabling. Disabling sub-GHz radio.");
