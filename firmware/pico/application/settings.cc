@@ -116,6 +116,10 @@ bool SettingsManager::Save() {
     if (esp32.IsEnabled()) {
         esp32.Write(ObjectDictionary::kAddrSettingsData, settings, true);  // Require ACK.
     }
+    // Sync settings from RP2040 -> CC1312.
+    if (adsbee.subg_radio.IsEnabled()) {
+        adsbee.subg_radio.Write(ObjectDictionary::kAddrSettingsData, settings, true);  // Require ACK.
+    }
 
     if (bsp.has_eeprom) {
         return eeprom.Save(settings);
