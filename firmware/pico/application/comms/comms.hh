@@ -3,8 +3,8 @@
 #include "cpp_at.hh"
 #include "data_structures.hh"  // For PFBQueue.
 #include "hardware/uart.h"
+#include "mode_s_packet.hh"
 #include "settings.hh"
-#include "transponder_packet.hh"
 
 class CommsManager {
    public:

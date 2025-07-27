@@ -1,5 +1,5 @@
 #include "gtest/gtest.h"
-#include "transponder_packet.hh"
+#include "mode_s_packet.hh"
 
 TEST(AltitudeReplyPacket, JasonPlaynePackets) {
     AltitudeReplyPacket packet = AltitudeReplyPacket(Decoded1090Packet((char *)"200006A2DE8B1C"));

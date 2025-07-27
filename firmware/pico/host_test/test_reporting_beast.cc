@@ -1,6 +1,6 @@
 #include "beast_utils.hh"
 #include "gtest/gtest.h"
-#include "transponder_packet.hh"
+#include "mode_s_packet.hh"
 
 TEST(BeastUtils, Build1090BeastFrame) {
     // Create packet with a single 0x1a that must be escaped in data, a typical RSSI value, and an unmasked MLAT

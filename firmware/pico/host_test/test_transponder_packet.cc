@@ -1,5 +1,5 @@
 #include "gtest/gtest.h"
-#include "transponder_packet.hh"
+#include "mode_s_packet.hh"
 
 // Example packets taken from http://jasonplayne.com:8080/. Thanks, Jason!
 

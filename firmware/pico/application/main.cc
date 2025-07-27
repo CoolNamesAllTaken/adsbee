@@ -9,11 +9,11 @@
 #include "firmware_update.hh"  // For figuring out which flash partition we're in.
 #include "hal.hh"
 #include "hardware_unit_tests.hh"  // For testing only!
+#include "mode_s_packet.hh"
 #include "packet_decoder.hh"
 #include "pico/binary_info.h"
 #include "pico/stdlib.h"
 #include "spi_coprocessor.hh"
-#include "transponder_packet.hh"
 #include "unit_conversions.hh"
 
 // #define DEBUG_DISABLE_ESP32_FLASH  // Uncomment this to stop the RP2040 from flashing the ESP32.

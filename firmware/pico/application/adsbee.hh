@@ -11,10 +11,10 @@
 #include "hardware/pio.h"
 #include "hardware/watchdog.h"
 #include "macros.hh"  // For MAX / MIN.
+#include "mode_s_packet.hh"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
 #include "stdint.h"
-#include "transponder_packet.hh"
 
 class ADSBee {
    public:

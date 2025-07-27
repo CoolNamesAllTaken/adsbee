@@ -2,8 +2,8 @@
 #define PACKET_DECODER_HH_
 
 #include "data_structures.hh"
+#include "mode_s_packet.hh"
 #include "settings.hh"
-#include "transponder_packet.hh"
 
 class PacketDecoder {
    public:

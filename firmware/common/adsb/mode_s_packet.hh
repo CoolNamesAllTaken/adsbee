@@ -56,8 +56,7 @@ class Raw1090Packet {
 class Decoded1090Packet {
    public:
     static const uint16_t kMaxPacketLenWords32 = Raw1090Packet::kMaxPacketLenWords32;
-    static const uint16_t kDFNUmBits = 5;     // [1-5] Downlink Format bitlength.
-    static const uint16_t kMaxDFStrLen = 50;  // Max length of TypeCode string.
+    static const uint16_t kDFNumBits = 5;  // [1-5] Downlink Format bitlength.
     static const uint16_t kDebugStrLen = 200;
 
     // Bits 1-5: Downlink Format (DF)
@@ -137,7 +136,6 @@ class Decoded1090Packet {
     uint64_t GetMLAT12MHzCounter() const { return (raw_.mlat_48mhz_64bit_counts >> 2) & 0xFFFFFFFFFFFF; }
     uint64_t GetTimestampMs() const { return raw_.GetTimestampMs(); }
     uint16_t GetDownlinkFormat() const { return downlink_format_; }
-    uint16_t GetDownlinkFormatString(char str_buf[kMaxDFStrLen]) const;
     DownlinkFormat GetDownlinkFormatEnum();
     uint32_t GetICAOAddress() const { return icao_address_; }
     uint16_t GetPacketBufferLenBits() const { return raw_.buffer_len_bits; }
@@ -190,7 +188,7 @@ class ADSBPacket : public Decoded1090Packet {
     static const uint16_t kTCNumBits = 5;     // [33-37] Type code bitlength. Not always included.
     static const uint16_t kPINumBits = 24;    // Parity / Interrogator ID bitlength.
 
-    static const uint16_t kMEFirstBitIndex = kDFNUmBits + kCANumBits + kICAONumBits;
+    static const uint16_t kMEFirstBitIndex = kDFNumBits + kCANumBits + kICAONumBits;
 
     /**
      * Constructor. Can only create an ADSBPacket from an existing Decoded1090Packet, which is is referenced as

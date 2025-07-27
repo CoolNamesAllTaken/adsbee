@@ -56,6 +56,8 @@ target_include_directories(host_test PRIVATE
     mocks
 )
 
+add_subdirectory(uat)
+
 # Make test runnable with "make test".
 enable_testing()
 add_test(NAME host_test COMMAND host_test)

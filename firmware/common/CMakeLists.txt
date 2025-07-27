@@ -13,7 +13,8 @@ if (TARGET application)
         utils/data_structures.cpp
         utils/crc/crc.cpp
         utils/geo/geo_utils.cpp
-        adsb/transponder_packet.cpp
+        adsb/mode_s_packet.cpp
+        adsb/uat_packet.cpp
         adsb/aircraft_dictionary.cpp
         adsb/decode_utils.cpp
         adsb/packet_decoder.cc
@@ -59,7 +60,8 @@ elseif (TARGET sub_ghz_radio)
         utils/buffer_utils.cpp
         utils/data_structures.cpp
         utils/crc/crc.cpp
-        # adsb/transponder_packet.cpp
+        # adsb/mode_s_packet.cpp
+        adsb/uat_packet.cpp
         # adsb/aircraft_dictionary.cpp
         adsb/decode_utils.cpp
         coprocessor/spi_coprocessor.cpp
@@ -80,7 +82,8 @@ elseif (TARGET host_test)
     # Off-target unit testing.
     add_subdirectory(adsb/nasa_cpr)
     target_sources(host_test PRIVATE
-        adsb/transponder_packet.cpp
+        adsb/mode_s_packet.cpp
+        adsb/uat_packet.cpp
         adsb/aircraft_dictionary.cpp
         adsb/decode_utils.cpp
         adsb/packet_decoder.cc

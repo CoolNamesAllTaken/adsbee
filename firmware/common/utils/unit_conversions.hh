@@ -6,6 +6,7 @@ static const int kMsPerSec = 1000;
 static const int kBytesPerWord = 4;
 static const int kBitsPerByte = 8;
 static const int kBitsPerNibble = 4;
+static const int kNibblesPerByte = 2;
 
 inline uint16_t CeilBitsToBytes(uint16_t bits) { return (bits + kBitsPerByte - 1) / kBitsPerByte; }
 

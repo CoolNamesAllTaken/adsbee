@@ -1,7 +1,7 @@
 #pragma once
 
+#include "mode_s_packet.hh"
 #include "stdint.h"
-#include "transponder_packet.hh"
 
 static const uint16_t kRaw1090FrameMaxNumChars = 100;
 

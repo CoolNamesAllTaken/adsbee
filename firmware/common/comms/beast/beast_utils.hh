@@ -4,9 +4,9 @@
 #include "beast_tables.hh"
 #include "macros.hh"
 #include "math.h"
+#include "mode_s_packet.hh"
 #include "stdio.h"
 #include "string.h"
-#include "transponder_packet.hh"
 
 // Mode S Beast Protocol Spec: https://github.com/firestuff/adsb-tools/blob/master/protocols/beast.md
 

@@ -2,7 +2,7 @@
 #include "decode_utils.hh"  // for location calculation utility functions
 #include "gtest/gtest.h"
 #include "hal_god_powers.hh"  // for changing timestamp
-#include "transponder_packet.hh"
+#include "mode_s_packet.hh"
 
 constexpr float kLatDegCloseEnough = 0.001f;
 constexpr float kLonDegCloseEnough = 0.0001f;

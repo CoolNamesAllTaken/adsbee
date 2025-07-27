@@ -8,7 +8,7 @@
 #include "hal.hh"
 #include "json_utils.hh"
 #include "macros.hh"
-#include "transponder_packet.hh"
+#include "mode_s_packet.hh"
 
 #define FILTER_CPR_POSITIONS
 
@@ -194,7 +194,7 @@ class Aircraft1090 {
      * decoding CPR location with invalid packet pairings.
      */
     inline void ClearCPRPackets() {
-        // Clearng received timestamps causes the packet pair to be rejected during the decoding stage, so it's as good
+        // Clearing received timestamps causes the packet pair to be rejected during the decoding stage, so it's as good
         // as wiping all of the received packet contents.
         last_odd_packet_.received_timestamp_ms = 0;
         last_even_packet_.received_timestamp_ms = 0;
