@@ -109,6 +109,7 @@ elseif (TARGET host_test)
         utils
         utils/crc
         utils/geo
+        utils/rs
         settings
     )
 endif()

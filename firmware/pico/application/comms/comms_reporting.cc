@@ -25,15 +25,15 @@ bool CommsManager::UpdateReporting() {
     // Proceed with update and record timestamp.
     last_raw_report_timestamp_ms_ = timestamp_ms;
 
-    Decoded1090Packet packets_to_report[SettingsManager::Settings::kMaxNumTransponderPackets];
+    DecodedModeSPacket packets_to_report[SettingsManager::Settings::kMaxNumTransponderPackets];
     /**
      * Raw packet reporting buffer used to transfer multiple packets at once over SPI.
      * [<uint8_t num_packets to report> <packet 1> <packet 2> ...]
      */
     uint8_t spi_raw_packet_reporting_buffer[sizeof(uint8_t) + SettingsManager::Settings::kMaxNumTransponderPackets];
 
-    // Fill up the array of Decoded1090Packets for internal functions, and the buffer of Raw1090Packets to
-    // send to the ESP32 over SPI. Raw1090Packets are used instead of Decoded1090Packets over the SPI link
+    // Fill up the array of DecodedModeSPackets for internal functions, and the buffer of RawModeSPackets to
+    // send to the ESP32 over SPI. RawModeSPackets are used instead of DecodedModeSPackets over the SPI link
     // in order to preserve bandwidth.
     uint16_t num_packets_to_report = 0;
     for (; num_packets_to_report < SettingsManager::Settings::kMaxNumTransponderPackets &&
@@ -41,18 +41,18 @@ bool CommsManager::UpdateReporting() {
          num_packets_to_report++) {
         if (esp32.IsEnabled()) {
             // Pop all the packets to report (up to max limit of the buffer).
-            Raw1090Packet raw_packet = packets_to_report[num_packets_to_report].GetRaw();
+            RawModeSPacket raw_packet = packets_to_report[num_packets_to_report].GetRaw();
             spi_raw_packet_reporting_buffer[0] = num_packets_to_report + 1;
-            memcpy(spi_raw_packet_reporting_buffer + sizeof(uint8_t) + sizeof(Raw1090Packet) * num_packets_to_report,
-                   &raw_packet, sizeof(Raw1090Packet));
+            memcpy(spi_raw_packet_reporting_buffer + sizeof(uint8_t) + sizeof(RawModeSPacket) * num_packets_to_report,
+                   &raw_packet, sizeof(RawModeSPacket));
         }
     }
     if (esp32.IsEnabled() && num_packets_to_report > 0) {
         // Write packet to ESP32 with a forced ACK.
-        esp32.Write(ObjectDictionary::kAddrRaw1090PacketArray,                       // addr
-                    spi_raw_packet_reporting_buffer,                                 // buf
-                    true,                                                            // require_ack
-                    sizeof(uint8_t) + num_packets_to_report * sizeof(Raw1090Packet)  // len
+        esp32.Write(ObjectDictionary::kAddrRawModeSPacketArray,                       // addr
+                    spi_raw_packet_reporting_buffer,                                  // buf
+                    true,                                                             // require_ack
+                    sizeof(uint8_t) + num_packets_to_report * sizeof(RawModeSPacket)  // len
         );
     }
 
@@ -99,7 +99,7 @@ bool CommsManager::UpdateReporting() {
     return ret;
 }
 
-bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface, const Decoded1090Packet packets_to_report_1090[],
+bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface, const DecodedModeSPacket packets_to_report_1090[],
                              uint16_t num_packets_to_report) {
     for (uint16_t i = 0; i < num_packets_to_report; i++) {
         char raw_frame_buf[kRaw1090FrameMaxNumChars];
@@ -110,8 +110,8 @@ bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface, const Decod
     return true;
 }
 
-bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface, const Decoded1090Packet packets_to_report_1090[],
-                               uint16_t num_packets_to_report) {
+bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface,
+                               const DecodedModeSPacket packets_to_report_1090[], uint16_t num_packets_to_report) {
     for (uint16_t i = 0; i < num_packets_to_report; i++) {
         uint8_t beast_frame_buf[kBeastFrameMaxLenBytes];
         uint16_t num_bytes_in_frame = Build1090BeastFrame(packets_to_report_1090[i], beast_frame_buf);

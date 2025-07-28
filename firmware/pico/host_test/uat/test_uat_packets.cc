@@ -25,6 +25,16 @@ TEST(RawUATPacket, StringConstructor) {
     ASSERT_EQ(packet.buffer[17], 0x00);
 }
 
+TEST(DecodedUATPacket, IsValid) {
+    const char *buf_str = "00a974f13536e352301a0899123219814f00";
+    DecodedUATPacket packet = DecodedUATPacket(buf_str);
+    ASSERT_TRUE(packet.IsValid());
+
+    const char *invalid_buf_str = "00a974f13536e352301a0899123219814f01";  // Invalid CRC.
+    DecodedUATPacket invalid_packet = DecodedUATPacket(invalid_buf_str);
+    ASSERT_FALSE(invalid_packet.IsValid());
+}
+
 TEST(DecodedUATPacket, AltitudeEncodedToAltitudeFt) {
     ASSERT_EQ(DecodedUATPacket::AltitudeEncodedToAltitudeFt(0), INT32_MIN);  // Invalid altitude.
     ASSERT_EQ(DecodedUATPacket::AltitudeEncodedToAltitudeFt(1), -1000);

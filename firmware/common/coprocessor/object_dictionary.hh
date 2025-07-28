@@ -39,10 +39,10 @@ class ObjectDictionary {
         kAddrFirmwareVersion = 0x01,  // Firmware version as a uint32_t.
         kAddrScratch = 0x02,          // Used for testing SPI communications.
         kAddrSettingsData = 0x03,     // Used to transfer settings information.
-        kAddrRaw1090Packet = 0x04,    // Used to forward raw packets from RP2040 to ESP32.
-        kAddrDecoded1090Packet = 0x05,
-        kAddrRaw1090PacketArray = 0x06,
-        kAddrDecoded1090PacketArray = 0x07,
+        kAddrRawModeSPacket = 0x04,   // Used to forward raw packets from RP2040 to ESP32.
+        kAddrDecodedModeSPacket = 0x05,
+        kAddrRawModeSPacketArray = 0x06,
+        kAddrDecodedModeSPacketArray = 0x07,
         kAddrAircraftDictionaryMetrics = 0x08,  // For forwarding dictionary metrics from RP2040 to ESP32.
         kAddrESP32DeviceInfo = 0x09,            // ESP32 MAC addresses.
         kAddrConsole = 0x0A,                    // Pipe for console characters.

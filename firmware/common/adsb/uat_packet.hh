@@ -42,6 +42,8 @@ class DecodedUATPacket {
 
     DecodedUATPacket(const RawUATPacket &packet_in);
     DecodedUATPacket() : raw_((char *)"") { debug_string[0] = '\0'; }
+    DecodedUATPacket(const char *rx_string, int16_t source = -1, int32_t sigs_dbm = INT32_MIN,
+                     int32_t sigq_db = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
 
     bool IsValid() const { return is_valid_; }
 
@@ -114,4 +116,7 @@ class DecodedUATPacket {
    protected:
     bool is_valid_ = false;
     RawUATPacket raw_;
+
+   private:
+    void ConstructUATPacket();
 };

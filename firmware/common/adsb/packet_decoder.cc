@@ -36,7 +36,7 @@ bool PacketDecoder::UpdateDecoderLoop() {
     }
 
     for (uint16_t i = 0; i < num_packets_to_process; i++) {
-        Raw1090Packet raw_packet;
+        RawModeSPacket raw_packet;
         if (!raw_1090_packet_in_queue.Pop(raw_packet)) {
             debug_message_out_queue.Push(DebugMessage{
                 .message = "Failed to pop raw packet from input queue.",
@@ -45,7 +45,7 @@ bool PacketDecoder::UpdateDecoderLoop() {
             return false;
         }
 
-        Decoded1090Packet decoded_packet = Decoded1090Packet(raw_packet);
+        DecodedModeSPacket decoded_packet = DecodedModeSPacket(raw_packet);
         DebugMessage decode_debug_message = DebugMessage{
             .message = "",
             .log_level = SettingsManager::LogLevel::kInfo,
@@ -55,9 +55,9 @@ bool PacketDecoder::UpdateDecoderLoop() {
 
             strncpy(decode_debug_message.message, "[VALID     ] ", DebugMessage::kMessageMaxLen);
         } else if (config_.enable_1090_error_correction &&
-                   decoded_packet.GetBufferLenBits() == Raw1090Packet::kExtendedSquitterPacketLenBits) {
+                   decoded_packet.GetBufferLenBits() == RawModeSPacket::kExtendedSquitterPacketLenBits) {
             // Checksum correction is enabled, and we have a packet worth correcting.
-            Raw1090Packet* raw_packet_ptr = decoded_packet.GetRawPtr();
+            RawModeSPacket* raw_packet_ptr = decoded_packet.GetRawPtr();
             uint16_t packet_len_bytes = raw_packet_ptr->buffer_len_bits / kBitsPerByte;
             uint8_t raw_buffer[packet_len_bytes];
             WordBufferToByteBuffer(raw_packet_ptr->buffer, raw_buffer, packet_len_bytes);
@@ -67,7 +67,7 @@ bool PacketDecoder::UpdateDecoderLoop() {
                 // Found a single bit error: flip it and push the corrected packet to the output queue.
                 flip_bit(raw_packet_ptr->buffer, bit_flip_index);
                 decoded_1090_packet_bit_flip_locations_out_queue.Push(bit_flip_index);
-                PushPacketIfNotDuplicate(Decoded1090Packet(*raw_packet_ptr));
+                PushPacketIfNotDuplicate(DecodedModeSPacket(*raw_packet_ptr));
 
                 strncpy(decode_debug_message.message, "[1FIXD     ] ", DebugMessage::kMessageMaxLen);
             } else {
@@ -92,7 +92,7 @@ bool PacketDecoder::UpdateDecoderLoop() {
     return true;
 }
 
-bool PacketDecoder::PushPacketIfNotDuplicate(const Decoded1090Packet& decoded_packet) {
+bool PacketDecoder::PushPacketIfNotDuplicate(const DecodedModeSPacket& decoded_packet) {
     uint32_t icao = decoded_packet.GetICAOAddress();
     uint32_t timestamp_ms = decoded_packet.GetTimestampMs();
     uint16_t packet_source = decoded_packet.GetRaw().source;

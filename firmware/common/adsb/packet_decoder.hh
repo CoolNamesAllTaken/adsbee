@@ -46,11 +46,11 @@ class PacketDecoder {
     bool UpdateDecoderLoop();
 
     // Input queues.
-    PFBQueue<Raw1090Packet> raw_1090_packet_in_queue =
-        PFBQueue<Raw1090Packet>({.buf_len_num_elements = kPacketQueueLen, .buffer = raw_1090_packet_in_queue_buffer_});
+    PFBQueue<RawModeSPacket> raw_1090_packet_in_queue =
+        PFBQueue<RawModeSPacket>({.buf_len_num_elements = kPacketQueueLen, .buffer = raw_1090_packet_in_queue_buffer_});
 
     // Output queues.
-    PFBQueue<Decoded1090Packet> decoded_1090_packet_out_queue = PFBQueue<Decoded1090Packet>(
+    PFBQueue<DecodedModeSPacket> decoded_1090_packet_out_queue = PFBQueue<DecodedModeSPacket>(
         {.buf_len_num_elements = kPacketQueueLen, .buffer = decoded_1090_packet_out_queue_buffer_});
     PFBQueue<uint16_t> decoded_1090_packet_bit_flip_locations_out_queue = PFBQueue<uint16_t>(
         {.buf_len_num_elements = kPacketQueueLen, .buffer = decoded_1090_packet_bit_flip_locations_out_queue_buffer_});
@@ -60,11 +60,11 @@ class PacketDecoder {
     });
 
    private:
-    bool PushPacketIfNotDuplicate(const Decoded1090Packet &decoded_packet);
+    bool PushPacketIfNotDuplicate(const DecodedModeSPacket &decoded_packet);
 
     PacketDecoderConfig config_;
-    Raw1090Packet raw_1090_packet_in_queue_buffer_[kPacketQueueLen];
-    Decoded1090Packet decoded_1090_packet_out_queue_buffer_[kPacketQueueLen];
+    RawModeSPacket raw_1090_packet_in_queue_buffer_[kPacketQueueLen];
+    DecodedModeSPacket decoded_1090_packet_out_queue_buffer_[kPacketQueueLen];
     uint16_t decoded_1090_packet_bit_flip_locations_out_queue_buffer_[kPacketQueueLen];
     DebugMessage debug_message_out_queue_buffer_[kDebugMessageQueueLen];
 

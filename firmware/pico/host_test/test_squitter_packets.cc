@@ -2,7 +2,7 @@
 #include "mode_s_packet.hh"
 
 TEST(AltitudeReplyPacket, JasonPlaynePackets) {
-    AltitudeReplyPacket packet = AltitudeReplyPacket(Decoded1090Packet((char *)"200006A2DE8B1C"));
+    AltitudeReplyPacket packet = AltitudeReplyPacket(DecodedModeSPacket((char *)"200006A2DE8B1C"));
     EXPECT_FALSE(packet.IsValid());
     packet.ForceValid();
     EXPECT_TRUE(packet.IsValid());
@@ -12,7 +12,7 @@ TEST(AltitudeReplyPacket, JasonPlaynePackets) {
     EXPECT_TRUE(packet.IsAirborne());
     EXPECT_EQ(packet.GetICAOAddress(), 0x7C1B28u);
 
-    packet = AltitudeReplyPacket(Decoded1090Packet((char *)"210000992F8C48"));
+    packet = AltitudeReplyPacket(DecodedModeSPacket((char *)"210000992F8C48"));
     EXPECT_FALSE(packet.IsValid());
     packet.ForceValid();
     EXPECT_TRUE(packet.IsValid());
@@ -24,7 +24,7 @@ TEST(AltitudeReplyPacket, JasonPlaynePackets) {
 }
 
 TEST(IdentityReplyPacket, JasonPlaynePackets) {
-    IdentityReplyPacket packet = IdentityReplyPacket(Decoded1090Packet((char *)"29001B3AF47E76"));
+    IdentityReplyPacket packet = IdentityReplyPacket(DecodedModeSPacket((char *)"29001B3AF47E76"));
     EXPECT_FALSE(packet.IsValid());
     packet.ForceValid();
     EXPECT_TRUE(packet.IsValid());
@@ -35,7 +35,7 @@ TEST(IdentityReplyPacket, JasonPlaynePackets) {
     EXPECT_EQ(packet.GetICAOAddress(), 0x7C1474u);
     EXPECT_FALSE(packet.HasIdent());
 
-    packet = IdentityReplyPacket(Decoded1090Packet((char *)"2820050BD0D698"));
+    packet = IdentityReplyPacket(DecodedModeSPacket((char *)"2820050BD0D698"));
     EXPECT_FALSE(packet.IsValid());
     packet.ForceValid();
     EXPECT_TRUE(packet.IsValid());
@@ -49,7 +49,7 @@ TEST(IdentityReplyPacket, JasonPlaynePackets) {
     EXPECT_FALSE(packet.HasIdent());
 
     // Edit the previous packet to force an ident.
-    packet = IdentityReplyPacket(Decoded1090Packet((char *)"2D20050BD0D698"));
+    packet = IdentityReplyPacket(DecodedModeSPacket((char *)"2D20050BD0D698"));
     EXPECT_EQ(packet.GetUtilityMessage(), IdentityReplyPacket::UtilityMessageType::kUtilityMessageNoInformation);
     EXPECT_EQ(packet.GetDownlinkRequest(),
               IdentityReplyPacket::DownlinkRequest::kDownlinkRequestCommBBroadcastMessage1Available);
@@ -59,7 +59,7 @@ TEST(IdentityReplyPacket, JasonPlaynePackets) {
     EXPECT_TRUE(packet.HasIdent());
 
     // Edit the previous packet to force an ident and alert.
-    packet = IdentityReplyPacket(Decoded1090Packet((char *)"2C20050BD0D698"));
+    packet = IdentityReplyPacket(DecodedModeSPacket((char *)"2C20050BD0D698"));
     EXPECT_EQ(packet.GetUtilityMessage(), IdentityReplyPacket::UtilityMessageType::kUtilityMessageNoInformation);
     EXPECT_EQ(packet.GetDownlinkRequest(),
               IdentityReplyPacket::DownlinkRequest::kDownlinkRequestCommBBroadcastMessage1Available);
@@ -70,12 +70,12 @@ TEST(IdentityReplyPacket, JasonPlaynePackets) {
 }
 
 TEST(AllCallReplyPacket, JasonPlaynePackets) {
-    AllCallReplyPacket packet = AllCallReplyPacket(Decoded1090Packet((char *)"5D7C0B6DB05076"));
+    AllCallReplyPacket packet = AllCallReplyPacket(DecodedModeSPacket((char *)"5D7C0B6DB05076"));
     EXPECT_TRUE(packet.IsValid());
     EXPECT_EQ(packet.GetCapability(), 5);
     EXPECT_EQ(packet.GetICAOAddress(), 0x7C0B6Du);
 
     // Flip one bit and watch it fail.
-    packet = AllCallReplyPacket(Decoded1090Packet((char *)"5D7C0B6DB05075"));
+    packet = AllCallReplyPacket(DecodedModeSPacket((char *)"5D7C0B6DB05075"));
     EXPECT_FALSE(packet.IsValid());
 }

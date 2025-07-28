@@ -35,11 +35,11 @@ const uint16_t kCRC24GeneratorNumBits = 25;
 #include "crc.hh"
 #endif
 
-/** Decoded1090Packet **/
+/** DecodedModeSPacket **/
 
-Raw1090Packet::Raw1090Packet(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32,
-                             int16_t source_in, int16_t sigs_dbm_in, int16_t sigq_db_in,
-                             uint64_t mlat_48mhz_64bit_counts_in)
+RawModeSPacket::RawModeSPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32,
+                               int16_t source_in, int16_t sigs_dbm_in, int16_t sigq_db_in,
+                               uint64_t mlat_48mhz_64bit_counts_in)
     : source(source_in),
       sigs_dbm(sigs_dbm_in),
       sigq_db(sigq_db_in),
@@ -68,8 +68,8 @@ Raw1090Packet::Raw1090Packet(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t 
     }
 }
 
-Raw1090Packet::Raw1090Packet(char *rx_string, int16_t source_in, int16_t sigs_dbm_in, int16_t sigq_db_in,
-                             uint64_t mlat_48mhz_64bit_counts_in)
+RawModeSPacket::RawModeSPacket(char *rx_string, int16_t source_in, int16_t sigs_dbm_in, int16_t sigq_db_in,
+                               uint64_t mlat_48mhz_64bit_counts_in)
     : source(source_in),
       sigs_dbm(sigs_dbm_in),
       sigq_db(sigq_db_in),
@@ -88,7 +88,7 @@ Raw1090Packet::Raw1090Packet(char *rx_string, int16_t source_in, int16_t sigs_db
     }
 }
 
-uint16_t Raw1090Packet::PrintBuffer(char *buf, uint16_t buf_len_bytes) const {
+uint16_t RawModeSPacket::PrintBuffer(char *buf, uint16_t buf_len_bytes) const {
     uint16_t len = 0;
     switch (buffer_len_bits) {
         case kSquitterPacketLenBits:
@@ -103,22 +103,22 @@ uint16_t Raw1090Packet::PrintBuffer(char *buf, uint16_t buf_len_bytes) const {
     return len;
 }
 
-Decoded1090Packet::Decoded1090Packet(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32,
-                                     int16_t source, int32_t sigs_dbm, int32_t sigq_db,
-                                     uint64_t mlat_48mhz_64bit_counts)
+DecodedModeSPacket::DecodedModeSPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32,
+                                       int16_t source, int32_t sigs_dbm, int32_t sigq_db,
+                                       uint64_t mlat_48mhz_64bit_counts)
     : raw_(rx_buffer, rx_buffer_len_words32, source, sigs_dbm, sigq_db, mlat_48mhz_64bit_counts) {
-    ConstructTransponderPacket();
+    ConstructModeSPacket();
 }
 
-Decoded1090Packet::Decoded1090Packet(char *rx_string, int16_t source, int32_t sigs_dbm, int32_t sigq_db,
-                                     uint64_t mlat_48mhz_64bit_counts)
+DecodedModeSPacket::DecodedModeSPacket(char *rx_string, int16_t source, int32_t sigs_dbm, int32_t sigq_db,
+                                       uint64_t mlat_48mhz_64bit_counts)
     : raw_(rx_string, source, sigs_dbm, sigq_db, mlat_48mhz_64bit_counts) {
-    ConstructTransponderPacket();
+    ConstructModeSPacket();
 }
 
-Decoded1090Packet::Decoded1090Packet(const Raw1090Packet &packet_in) : raw_(packet_in) { ConstructTransponderPacket(); }
+DecodedModeSPacket::DecodedModeSPacket(const RawModeSPacket &packet_in) : raw_(packet_in) { ConstructModeSPacket(); }
 
-Decoded1090Packet::DownlinkFormat Decoded1090Packet::GetDownlinkFormatEnum() {
+DecodedModeSPacket::DownlinkFormat DecodedModeSPacket::GetDownlinkFormatEnum() {
     switch (downlink_format_) {
         // DF 0-11 = short messages (56 bits)
         case DownlinkFormat::kDownlinkFormatShortRangeAirToAirSurveillance:
@@ -159,7 +159,7 @@ Decoded1090Packet::DownlinkFormat Decoded1090Packet::GetDownlinkFormatEnum() {
     };
 }
 
-uint16_t Decoded1090Packet::DumpPacketBuffer(uint32_t to_buffer[kMaxPacketLenWords32]) const {
+uint16_t DecodedModeSPacket::DumpPacketBuffer(uint32_t to_buffer[kMaxPacketLenWords32]) const {
     uint16_t bytes_written = raw_.buffer_len_bits / BITS_PER_BYTE;
     for (uint16_t i = 0; i < kMaxPacketLenWords32; i++) {
         to_buffer[i] = raw_.buffer[i];
@@ -167,7 +167,7 @@ uint16_t Decoded1090Packet::DumpPacketBuffer(uint32_t to_buffer[kMaxPacketLenWor
     return bytes_written;
 }
 
-uint16_t Decoded1090Packet::DumpPacketBuffer(uint8_t to_buffer[kMaxPacketLenWords32 * kBytesPerWord]) const {
+uint16_t DecodedModeSPacket::DumpPacketBuffer(uint8_t to_buffer[kMaxPacketLenWords32 * kBytesPerWord]) const {
     uint16_t bytes_written = raw_.buffer_len_bits / BITS_PER_BYTE;
     for (uint16_t i = 0; i < kMaxPacketLenWords32; i++) {
         // First received bit is MSb.
@@ -179,7 +179,7 @@ uint16_t Decoded1090Packet::DumpPacketBuffer(uint8_t to_buffer[kMaxPacketLenWord
     return bytes_written;
 }
 
-uint32_t Decoded1090Packet::CalculateCRC24(uint16_t packet_len_bits) const {
+uint32_t DecodedModeSPacket::CalculateCRC24(uint16_t packet_len_bits) const {
 #ifndef CRC24_USE_TABLE
     // CRC calculation algorithm from https://mode-s.org/decode/book-the_1090mhz_riddle-junzi_sun.pdf pg. 91.
     // Must be called on buffer that does not have extra bit ingested at end and has all words left-aligned.
@@ -211,12 +211,13 @@ uint32_t Decoded1090Packet::CalculateCRC24(uint16_t packet_len_bits) const {
 #endif
 }
 
-void Decoded1090Packet::ConstructTransponderPacket() {
-    if (raw_.buffer_len_bits != Raw1090Packet::kExtendedSquitterPacketLenBits &&
-        raw_.buffer_len_bits != Raw1090Packet::kSquitterPacketLenBits) {
-        snprintf(
-            debug_string, kDebugStrLen, "Bit number mismatch while decoding packet. Expected %d or %d but got %d!\r\n",
-            Raw1090Packet::kExtendedSquitterPacketLenBits, Raw1090Packet::kSquitterPacketLenBits, raw_.buffer_len_bits);
+void DecodedModeSPacket::ConstructModeSPacket() {
+    if (raw_.buffer_len_bits != RawModeSPacket::kExtendedSquitterPacketLenBits &&
+        raw_.buffer_len_bits != RawModeSPacket::kSquitterPacketLenBits) {
+        snprintf(debug_string, kDebugStrLen,
+                 "Bit number mismatch while decoding packet. Expected %d or %d but got %d!\r\n",
+                 RawModeSPacket::kExtendedSquitterPacketLenBits, RawModeSPacket::kSquitterPacketLenBits,
+                 raw_.buffer_len_bits);
 
         return;  // leave is_valid_ as false
     }
@@ -332,7 +333,8 @@ ADSBPacket::TypeCode ADSBPacket::GetTypeCodeEnum() const {
     }
 }
 
-AltitudeReplyPacket::AltitudeReplyPacket(const Decoded1090Packet &decoded_packet) : Decoded1090Packet(decoded_packet) {
+AltitudeReplyPacket::AltitudeReplyPacket(const DecodedModeSPacket &decoded_packet)
+    : DecodedModeSPacket(decoded_packet) {
     uint8_t flight_status = GetNBitWordFromBuffer(3, 5, raw_.buffer);  // FS = Bits 5-7.
     switch (flight_status) {
         case 0b000:  // No alert, no SPI, aircraft is airborne.
@@ -378,7 +380,8 @@ AltitudeReplyPacket::AltitudeReplyPacket(const Decoded1090Packet &decoded_packet
     altitude_ft_ = AltitudeCodeToAltitudeFt(GetNBitWordFromBuffer(13, 19, raw_.buffer));
 };
 
-IdentityReplyPacket::IdentityReplyPacket(const Decoded1090Packet &decoded_packet) : Decoded1090Packet(decoded_packet) {
+IdentityReplyPacket::IdentityReplyPacket(const DecodedModeSPacket &decoded_packet)
+    : DecodedModeSPacket(decoded_packet) {
     uint8_t flight_status = GetNBitWordFromBuffer(3, 5, raw_.buffer);  // FS = Bits 5-7.
     switch (flight_status) {
         case 0b000:  // No alert, no SPI, aircraft is airborne.

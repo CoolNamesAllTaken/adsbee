@@ -95,21 +95,21 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             adsbee_server.network_console.BroadcastMessage(message, buf_len);
             break;
         }
-        case kAddrRaw1090Packet: {
-            Raw1090Packet tpacket;
-            memcpy(&tpacket, buf, sizeof(Raw1090Packet));
+        case kAddrRawModeSPacket: {
+            RawModeSPacket tpacket;
+            memcpy(&tpacket, buf, sizeof(RawModeSPacket));
             // Warning: printing here will cause a timeout and tests will fail.
             // CONSOLE_INFO("SPICoprocessor::SetBytes", "Received a raw %d-bit transponder packet.",
             //              tpacket.buffer_len_bits);
-            adsbee_server.HandleRaw1090Packet(tpacket);
+            adsbee_server.HandleRawModeSPacket(tpacket);
             break;
         }
-        case kAddrRaw1090PacketArray: {
+        case kAddrRawModeSPacketArray: {
             uint8_t num_packets = buf[0];
-            Raw1090Packet tpacket;
-            for (uint16_t i = 0; i < num_packets && i * sizeof(Raw1090Packet) + sizeof(uint8_t) < buf_len; i++) {
-                memcpy(&tpacket, buf + sizeof(uint8_t) + i * sizeof(Raw1090Packet), sizeof(Raw1090Packet));
-                adsbee_server.HandleRaw1090Packet(tpacket);
+            RawModeSPacket tpacket;
+            for (uint16_t i = 0; i < num_packets && i * sizeof(RawModeSPacket) + sizeof(uint8_t) < buf_len; i++) {
+                memcpy(&tpacket, buf + sizeof(uint8_t) + i * sizeof(RawModeSPacket), sizeof(RawModeSPacket));
+                adsbee_server.HandleRawModeSPacket(tpacket);
             }
             break;
         }

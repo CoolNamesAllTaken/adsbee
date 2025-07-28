@@ -184,15 +184,15 @@ Aircraft1090 *AircraftDictionary::GetAircraftPtr(uint32_t icao_address) {
 
 uint16_t AircraftDictionary::GetNumAircraft() { return dict.size(); }
 
-bool AircraftDictionary::IngestDecoded1090Packet(Decoded1090Packet &packet) {
+bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket &packet) {
     // Check validity and record stats.
     int16_t source = packet.GetRaw().source;
     switch (packet.GetBufferLenBits()) {
-        case Raw1090Packet::kSquitterPacketLenBits:
+        case RawModeSPacket::kSquitterPacketLenBits:
             // Validate packet against ICAO addresses in dictionary, or allow it in if it's a DF=11 all call reply
             // packet tha validated itself (e.g. it's a response to a spontaneous acquisition squitter with interrogator
             // ID=0, making the checksum useable).
-            if (packet.GetDownlinkFormat() != Decoded1090Packet::kDownlinkFormatAllCallReply &&
+            if (packet.GetDownlinkFormat() != DecodedModeSPacket::kDownlinkFormatAllCallReply &&
                 ContainsAircraft(packet.GetICAOAddress())) {
                 // DF=0,4-5 (DF=11 doesn't work with this since the interrogator ID may be overlaid with the ICAO
                 // address--we expect spontaneous acquisition DF=11's to come in pre-marked as valid).
@@ -212,7 +212,7 @@ bool AircraftDictionary::IngestDecoded1090Packet(Decoded1090Packet &packet) {
                 metrics_counter_.valid_squitter_frames_by_source[source]++;
             }
             break;
-        case Raw1090Packet::kExtendedSquitterPacketLenBits:
+        case RawModeSPacket::kExtendedSquitterPacketLenBits:
             if (packet.IsValid()) {
                 metrics_counter_.valid_extended_squitter_frames++;
                 if (source > 0) {
@@ -224,10 +224,10 @@ bool AircraftDictionary::IngestDecoded1090Packet(Decoded1090Packet &packet) {
             break;
         default:
             CONSOLE_ERROR(
-                "AircraftDictionary::IngestDecoded1090Packet",
+                "AircraftDictionary::IngestDecodedModeSPacket",
                 "Received packet with unrecognized bitlength %d, expected %d (Squitter) or %d (Extended Squitter).",
-                packet.GetBufferLenBits(), Raw1090Packet::kSquitterPacketLenBits,
-                Raw1090Packet::kExtendedSquitterPacketLenBits);
+                packet.GetBufferLenBits(), RawModeSPacket::kSquitterPacketLenBits,
+                RawModeSPacket::kExtendedSquitterPacketLenBits);
             return false;
     }
 
@@ -236,34 +236,34 @@ bool AircraftDictionary::IngestDecoded1090Packet(Decoded1090Packet &packet) {
     uint16_t downlink_format = packet.GetDownlinkFormat();
     switch (downlink_format) {
         // Altitude Reply Packet.
-        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatAltitudeReply:
+        case DecodedModeSPacket::DownlinkFormat::kDownlinkFormatAltitudeReply:
             ingest_ret = IngestAltitudeReplyPacket(AltitudeReplyPacket(packet));
             break;
         // Identity Reply Packet.
-        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatIdentityReply:
+        case DecodedModeSPacket::DownlinkFormat::kDownlinkFormatIdentityReply:
             ingest_ret = IngestIdentityReplyPacket(IdentityReplyPacket(packet));
             break;
-        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatAllCallReply:  // DF = 11
+        case DecodedModeSPacket::DownlinkFormat::kDownlinkFormatAllCallReply:  // DF = 11
             ingest_ret = IngestAllCallReplyPacket(AllCallReplyPacket(packet));
             break;
         // ADS-B Packets.
-        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatExtendedSquitter:                // DF = 17
-        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatExtendedSquitterNonTransponder:  // DF = 18
-        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatMilitaryExtendedSquitter:        // DF = 19
+        case DecodedModeSPacket::DownlinkFormat::kDownlinkFormatExtendedSquitter:                // DF = 17
+        case DecodedModeSPacket::DownlinkFormat::kDownlinkFormatExtendedSquitterNonTransponder:  // DF = 18
+        case DecodedModeSPacket::DownlinkFormat::kDownlinkFormatMilitaryExtendedSquitter:        // DF = 19
             // Handle ADS-B Packets.
             ingest_ret = IngestADSBPacket(ADSBPacket(packet));
             break;
-        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatShortRangeAirToAirSurveillance:  // DF = 0
-        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatLongRangeAirToAirSurveillance:   // DF = 16
-        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatCommBAltitudeReply:              // DF = 20
-        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatCommBIdentityReply:              // DF = 21
-        case Decoded1090Packet::DownlinkFormat::kDownlinkFormatCommDExtendedLengthMessage:      // DF = 24
+        case DecodedModeSPacket::DownlinkFormat::kDownlinkFormatShortRangeAirToAirSurveillance:  // DF = 0
+        case DecodedModeSPacket::DownlinkFormat::kDownlinkFormatLongRangeAirToAirSurveillance:   // DF = 16
+        case DecodedModeSPacket::DownlinkFormat::kDownlinkFormatCommBAltitudeReply:              // DF = 20
+        case DecodedModeSPacket::DownlinkFormat::kDownlinkFormatCommBIdentityReply:              // DF = 21
+        case DecodedModeSPacket::DownlinkFormat::kDownlinkFormatCommDExtendedLengthMessage:      // DF = 24
             // Silently handle currently unsupported downlink formats.
             ingest_ret = true;
             break;
 
         default:
-            CONSOLE_WARNING("AircraftDictionary::IngestDecoded1090Packet",
+            CONSOLE_WARNING("AircraftDictionary::IngestDecodedModeSPacket",
                             "Encountered unexpected downlink format %d for ICAO 0x%lx.", downlink_format,
                             packet.GetICAOAddress());
             ingest_ret = false;
@@ -318,7 +318,7 @@ bool AircraftDictionary::IngestAltitudeReplyPacket(AltitudeReplyPacket packet) {
 }
 
 bool AircraftDictionary::IngestAllCallReplyPacket(AllCallReplyPacket packet) {
-    if (!packet.IsValid() || packet.GetDownlinkFormat() != Decoded1090Packet::kDownlinkFormatAllCallReply) {
+    if (!packet.IsValid() || packet.GetDownlinkFormat() != DecodedModeSPacket::kDownlinkFormatAllCallReply) {
         return false;
     }
 

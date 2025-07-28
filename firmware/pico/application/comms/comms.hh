@@ -169,9 +169,9 @@ class CommsManager {
     }
 
     // Queue for storing transponder packets before they get reported.
-    PFBQueue<Decoded1090Packet> transponder_packet_reporting_queue =
-        PFBQueue<Decoded1090Packet>({.buf_len_num_elements = SettingsManager::Settings::kMaxNumTransponderPackets,
-                                     .buffer = transponder_packet_reporting_queue_buffer_});
+    PFBQueue<DecodedModeSPacket> transponder_packet_reporting_queue =
+        PFBQueue<DecodedModeSPacket>({.buf_len_num_elements = SettingsManager::Settings::kMaxNumTransponderPackets,
+                                      .buffer = transponder_packet_reporting_queue_buffer_});
 
     // Queues for incoming / outgoing network characters.
     PFBQueue<char> esp32_console_rx_queue =
@@ -192,7 +192,7 @@ class CommsManager {
     bool InitReporting();
     bool UpdateReporting();
 
-    bool ReportRaw(SettingsManager::SerialInterface iface, const Decoded1090Packet packets_to_report_1090[],
+    bool ReportRaw(SettingsManager::SerialInterface iface, const DecodedModeSPacket packets_to_report_1090[],
                    uint16_t num_packets_to_report);
 
     /**
@@ -204,7 +204,7 @@ class CommsManager {
      * @param[in] num_packets_to_report Number of packets to report from the packets_to_report array.
      * @retval True if successful, false if something broke.
      */
-    bool ReportBeast(SettingsManager::SerialInterface iface, const Decoded1090Packet packets_to_report_1090[],
+    bool ReportBeast(SettingsManager::SerialInterface iface, const DecodedModeSPacket packets_to_report_1090[],
                      uint16_t num_packets_to_report);
 
     /**
@@ -241,7 +241,7 @@ class CommsManager {
     uint32_t last_esp32_console_tx_timestamp_ms_ = 0;  // Timestamp of last network console TX.
 
     // Queue for holding new transponder packets before they get reported.
-    Decoded1090Packet transponder_packet_reporting_queue_buffer_[SettingsManager::Settings::kMaxNumTransponderPackets];
+    DecodedModeSPacket transponder_packet_reporting_queue_buffer_[SettingsManager::Settings::kMaxNumTransponderPackets];
 
     // Reporting protocol timestamps
     // NOTE: Raw reporting interval used for RAW and BEAST protocols as well as internal functions.

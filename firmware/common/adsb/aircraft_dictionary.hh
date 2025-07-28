@@ -510,16 +510,16 @@ class AircraftDictionary {
     }
 
     /**
-     * Ingests a Decoded1090Packet and uses it to insert and update the relevant aircraft.
-     * @param[in] packet Decoded1090Packet to ingest. Can be 56-bit (Squitter) or 112-bit (Extended Squitter).
+     * Ingests a DecodedModeSPacket and uses it to insert and update the relevant aircraft.
+     * @param[in] packet DecodedModeSPacket to ingest. Can be 56-bit (Squitter) or 112-bit (Extended Squitter).
      * Passed as a reference, since packets can be marked as valid by this function.
      * @retval True if successful, false if something broke.
      */
-    bool IngestDecoded1090Packet(Decoded1090Packet &packet);
+    bool IngestDecodedModeSPacket(DecodedModeSPacket &packet);
 
     /**
      * Ingests an Identity Surveillance Reply packet and uses it to update the relevant aircraft. Exposed for
-     * testing, but usually called by IngestDecoded1090Packet.
+     * testing, but usually called by IngestDecodedModeSPacket.
      * Note: this function requires that the packet be marked as valid using the ForceValid() function. If the packet is
      * valid and does not match an ICAO in the aircraft dictionary, a new aircraft will be inserted.
      * @param[in] packet IdentityReplyPacket to ingest.
@@ -529,7 +529,7 @@ class AircraftDictionary {
 
     /**
      * Ingests an Altitude Surveillance Reply packet and uses it to update the relevant aircraft. Exposed for
-     * testing, but usually called by IngestDecoded1090Packet.
+     * testing, but usually called by IngestDecodedModeSPacket.
      * Note: this function requires that the packet be marked as valid using the ForceValid() function. If the packet is
      * valid and does not match an ICAO in the aircraft dictionary, a new aircraft will be inserted.
      * @param[in] packet AltitudeReplyPacket to ingest.
@@ -539,7 +539,7 @@ class AircraftDictionary {
 
     /**
      * Ingests an All Call Reply packet and uses it to update the relevant aircraft. Exposed for testing, but usually
-     * called by IngestDecoded1090Packet.
+     * called by IngestDecodedModeSPacket.
      *
      * Currently, we only accept all call reply packets with an interrogator ID of 0 (replies to spontaneous acquisition
      * squitters), since we don't have a way to know the interrogator ID of ground based surveillance stations.
@@ -548,8 +548,8 @@ class AircraftDictionary {
 
     /**
      * Ingests an ADSBPacket directly. Exposed for testing, but usually this gets called by
-     * IngestDecoded1090Packet and should not get touched directly.
-     * @param[in] packet ADSBPacket to ingest. Derived from a Decoded1090Packet with DF=17-19.
+     * IngestDecodedModeSPacket and should not get touched directly.
+     * @param[in] packet ADSBPacket to ingest. Derived from a DecodedModeSPacket with DF=17-19.
      * @retval True if successful, false if something broke.
      */
     bool IngestADSBPacket(ADSBPacket packet);
