@@ -54,6 +54,12 @@ class DecodedUATADSBPacket {
     static const uint16_t kMaxPacketLenBits = 420;  // 420 bits = 52.5 bytes, round up to 53 bytes.
     static const uint16_t kDebugStrLen = 200;
 
+    enum UATADSBMessageFormat : uint8_t {
+        kUATADSBMessageFormatInvalid = 0,
+        kUATADSBMessageFormatShort = 1,
+        kUATADSBMessageFormatLong = 2
+    };
+
     DecodedUATADSBPacket(const RawUATADSBPacket &packet_in);
     DecodedUATADSBPacket() : raw_((char *)"") { debug_string[0] = '\0'; }
     DecodedUATADSBPacket(const char *rx_string, int16_t source = -1, int32_t sigs_dbm = INT32_MIN,
@@ -125,6 +131,7 @@ class DecodedUATADSBPacket {
         };
     };
 
+    UATADSBMessageFormat message_format = kUATADSBMessageFormatInvalid;
     uint8_t decoded_payload[RawUATADSBPacket::kLongADSBMessagePayloadNumBytes] = {0};
 
     char debug_string[kDebugStrLen] = "";

@@ -29,23 +29,36 @@ DecodedUATADSBPacket::DecodedUATADSBPacket(const char *rx_string, int16_t source
 
 void DecodedUATADSBPacket::ConstructUATPacket() {
     // Check if the packet is valid by validating the Reed-Solomon code.
+    // We don't actually know the number of bits with high certainty. First interpret as a long ADS-B message, and if
+    // that doesn't work, try it as a short ADS-B message.
 
-    switch (raw_.encoded_message_len_bits) {
-        case RawUATADSBPacket::kShortADSBMessageNumBits:
-            if (uat_short_adsb_rs.Decode(raw_.encoded_message, decoded_payload) != 0) {
-                is_valid_ = false;
-                return;
-            }
-            break;
-        case RawUATADSBPacket::kLongADSBMessageNumBits:
-            if (uat_long_adsb_rs.Decode(raw_.encoded_message, decoded_payload) != 0) {
-                is_valid_ = false;
-                return;
-            }
-            break;
-        default:
-            is_valid_ = false;
-            return;  // Invalid packet length.
+    if (uat_long_adsb_rs.Decode(raw_.encoded_message, decoded_payload) == 0) {
+        message_format = kUATADSBMessageFormatLong;
+    } else if (uat_short_adsb_rs.Decode(raw_.encoded_message, decoded_payload) == 0) {
+        message_format = kUATADSBMessageFormatShort;
+    } else {
+        is_valid_ = false;  // Invalid packet.
+        return;
     }
+
+    // switch (raw_.encoded_message_len_bits) {
+    //     case RawUATADSBPacket::kShortADSBMessageNumBits:
+    //         if (uat_short_adsb_rs.Decode(raw_.encoded_message, decoded_payload) != 0) {
+    //             is_valid_ = false;
+    //             return;
+    //         }
+    //         message_format = kUATADSBMessageFormatShort;
+    //         break;
+    //     case RawUATADSBPacket::kLongADSBMessageNumBits:
+    //         if (uat_long_adsb_rs.Decode(raw_.encoded_message, decoded_payload) != 0) {
+    //             is_valid_ = false;
+    //             return;
+    //         }
+    //         message_format = kUATADSBMessageFormatLong;
+    //         break;
+    //     default:
+    //         is_valid_ = false;
+    //         return;  // Invalid packet length.
+    // }
     is_valid_ = true;
 }

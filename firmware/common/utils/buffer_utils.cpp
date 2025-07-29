@@ -1,11 +1,16 @@
 #include "buffer_utils.hh"
 
+#include <cstring>  // For strlen.
+
 #include "comms.hh"
 
 #define BITMASK_32_ALL   0xFFFFFFFF
 #define WORD_32_NUM_BITS 32
 
 bool ByteBufferMatchesString(const uint8_t *buffer, const char *str) {
+    if (buffer == nullptr || str == nullptr) {
+        return false;  // Invalid input.
+    }
     uint16_t len_nibbles = strlen(str);
     if (len_nibbles % kNibblesPerByte != 0) {
         return false;  // String length must be a multiple of 2.
@@ -13,7 +18,7 @@ bool ByteBufferMatchesString(const uint8_t *buffer, const char *str) {
     uint16_t len_bytes = strlen(str) / kNibblesPerByte;
 
     for (uint16_t i = 0; i < len_bytes; i++) {
-        if (buffer[i] != CHAR_TO_HEX(str[i * kNibblesPerByte]) << 4 | CHAR_TO_HEX(str[i * kNibblesPerByte + 1])) {
+        if (buffer[i] != (CHAR_TO_HEX(str[i * kNibblesPerByte]) << 4 | CHAR_TO_HEX(str[i * kNibblesPerByte + 1]))) {
             return false;
         }
     }
@@ -29,10 +34,10 @@ uint32_t Get24BitWordFromBuffer(uint32_t first_bit_index, const uint32_t buffer[
 uint32_t GetNBitWordFromBuffer(uint16_t n, uint32_t first_bit_index, const uint32_t buffer[]) {
     // NOTE: Bit 0 is the MSb in this format, since the input shift register shifts left (oldest bit is MSb).
     if (n > WORD_32_NUM_BITS || n < 1) {
-        CONSOLE_ERROR(
-            "GetNBitWordFromBuffer: Tried to get %d bit word from buffer, but word bitlength must be between 1 "
-            "and 32.\r\n",
-            n);
+        CONSOLE_ERROR("GetNBitWordFromBuffer",
+                      "Tried to get %d bit word from buffer, but word bitlength must be between 1 "
+                      "and 32.\r\n",
+                      n);
         return 0;
     }
     uint32_t first_word_index_32 = first_bit_index / WORD_32_NUM_BITS;
@@ -52,10 +57,10 @@ uint32_t GetNBitWordFromBuffer(uint16_t n, uint32_t first_bit_index, const uint3
 
 void SetNBitWordInBuffer(uint16_t n, uint32_t word, uint32_t first_bit_index, uint32_t buffer[]) {
     if (n > WORD_32_NUM_BITS || n < 1) {
-        CONSOLE_ERROR(
-            "SetNBitWordInBuffer: Tried to set %d-bit word in buffer, but word bitlength must be between 1 and "
-            "32.\r\n",
-            n);
+        CONSOLE_ERROR("SetNBitWordInBuffer",
+                      "Tried to set %d-bit word in buffer, but word bitlength must be between 1 and "
+                      "32.\r\n",
+                      n);
         return;
     }
 

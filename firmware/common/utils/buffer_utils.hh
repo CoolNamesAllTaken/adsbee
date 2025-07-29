@@ -14,7 +14,7 @@
  * Bytes).
  * @retval True if the buffer matches the string, false otherwise.
  */
-inline bool ByteBufferMatchesString(const uint8_t *buffer, const char *str);
+bool ByteBufferMatchesString(const uint8_t *buffer, const char *str);
 
 void PrintBinary32(uint32_t);  // for debugging
 
