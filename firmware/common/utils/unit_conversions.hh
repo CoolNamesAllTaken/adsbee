@@ -8,7 +8,7 @@ static const int kBitsPerByte = 8;
 static const int kBitsPerNibble = 4;
 static const int kNibblesPerByte = 2;
 
-inline uint16_t CeilBitsToBytes(uint16_t bits) { return (bits + kBitsPerByte - 1) / kBitsPerByte; }
+constexpr inline uint16_t CeilBitsToBytes(uint16_t bits) { return (bits + kBitsPerByte - 1) / kBitsPerByte; }
 
 inline int FeetToMeters(int feet) { return feet * 1000 / 3280; }
 

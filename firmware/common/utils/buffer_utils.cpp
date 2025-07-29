@@ -1,9 +1,24 @@
 #include "buffer_utils.hh"
 
-#include "stdio.h"
+#include "comms.hh"
 
 #define BITMASK_32_ALL   0xFFFFFFFF
 #define WORD_32_NUM_BITS 32
+
+bool ByteBufferMatchesString(const uint8_t *buffer, const char *str) {
+    uint16_t len_nibbles = strlen(str);
+    if (len_nibbles % kNibblesPerByte != 0) {
+        return false;  // String length must be a multiple of 2.
+    }
+    uint16_t len_bytes = strlen(str) / kNibblesPerByte;
+
+    for (uint16_t i = 0; i < len_bytes; i++) {
+        if (buffer[i] != CHAR_TO_HEX(str[i * kNibblesPerByte]) << 4 | CHAR_TO_HEX(str[i * kNibblesPerByte + 1])) {
+            return false;
+        }
+    }
+    return true;
+}
 
 // NOTE: Buffer operations are done big-endian (oldest bits are stored in the MSB), since input buffer shifts left.
 
@@ -11,19 +26,10 @@ uint32_t Get24BitWordFromBuffer(uint32_t first_bit_index, const uint32_t buffer[
     return GetNBitWordFromBuffer(24, first_bit_index, buffer);
 }
 
-/**
- * Extract an n-bit word from a big-endian buffer of 32-bit words. Does NOT guard against falling off the end of
- * the buffer, so be careful!
- * @param[in] n Bitlength of word to extract.
- * @param[in] first_bit_index Bit index begin reading from (index of MSb of word to read). MSb of first word in buffer
- * is bit 0.
- * @param[in] buffer Buffer to read from.
- * @retval Right-aligned n-bit word that was read from the buffer.
- */
 uint32_t GetNBitWordFromBuffer(uint16_t n, uint32_t first_bit_index, const uint32_t buffer[]) {
     // NOTE: Bit 0 is the MSb in this format, since the input shift register shifts left (oldest bit is MSb).
     if (n > WORD_32_NUM_BITS || n < 1) {
-        printf(
+        CONSOLE_ERROR(
             "GetNBitWordFromBuffer: Tried to get %d bit word from buffer, but word bitlength must be between 1 "
             "and 32.\r\n",
             n);
@@ -44,17 +50,9 @@ uint32_t GetNBitWordFromBuffer(uint16_t n, uint32_t first_bit_index, const uint3
     return word_n;
 }
 
-/**
- * Insert an n-bit word into a big-endian buffer of 32-bit words. Does NOT guard against falling off the end of
- * the buffer, so be careful!
- * @param[in] n Bitlength of word to insert.
- * @param[in] word Word to insert. Must be right-aligned.
- * @param[in] first_bit_index Bit index where the MSb of word should be inserted. MSb of first word in buffer is bit 0.
- * @param[in] buffer Buffer to insert into.
- */
 void SetNBitWordInBuffer(uint16_t n, uint32_t word, uint32_t first_bit_index, uint32_t buffer[]) {
     if (n > WORD_32_NUM_BITS || n < 1) {
-        printf(
+        CONSOLE_ERROR(
             "SetNBitWordInBuffer: Tried to set %d-bit word in buffer, but word bitlength must be between 1 and "
             "32.\r\n",
             n);
@@ -79,11 +77,11 @@ void SetNBitWordInBuffer(uint16_t n, uint32_t word, uint32_t first_bit_index, ui
 }
 
 void PrintBinary32(uint32_t value) {
-    printf("\t0b");
+    CONSOLE_PRINTF("\t0b");
     for (int j = 31; j >= 0; j--) {
-        printf(value & (0b1 << j) ? "1" : "0");
+        CONSOLE_PRINTF(value & (0b1 << j) ? "1" : "0");
     }
-    printf("\r\n");
+    CONSOLE_PRINTF("\r\n");
 }
 
 /**

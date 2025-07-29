@@ -20,8 +20,6 @@
 #define MASK_MSBIT_WORD25 (0b1 << BITS_PER_WORD_24)
 #define MASK_WORD24       0xFFFFFF
 
-#define CHAR_TO_HEX(c)    ((c >= 'A') ? (c >= 'a') ? (c - 'a' + 10) : (c - 'A' + 10) : (c - '0'))
-
 const uint32_t kExtendedSquitterLastWordIngestionMask = 0xFFFF0000;
 const uint32_t kExtendedSquitterLastWordPopCount = 16;
 const uint32_t kSquitterLastWordIngestionMask = 0xFFFFFF00;
