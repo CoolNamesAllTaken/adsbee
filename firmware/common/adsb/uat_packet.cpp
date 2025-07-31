@@ -2,7 +2,7 @@
 
 #include <cstring>  // for strlen
 
-#include "rs.hpp"
+#include "comms.hh"               // for CONSOLE_INFO, CONSOLE_ERROR
 #include "utils/buffer_utils.hh"  // for CHAR_TO_HEX
 
 RawUATADSBPacket::RawUATADSBPacket(const char *rx_string, int16_t source_in, int16_t sigs_dbm_in, int16_t sigq_db_in,
@@ -12,7 +12,7 @@ RawUATADSBPacket::RawUATADSBPacket(const char *rx_string, int16_t source_in, int
       sigq_db(sigq_db_in),
       mlat_48mhz_64bit_counts(mlat_48mhz_64bit_counts_in) {
     uint16_t rx_num_bytes = strlen(rx_string) / kNibblesPerByte;
-    for (uint16_t i = 0; i < rx_num_bytes && i < kADSBMessageMaxSizeBytes * kBytesPerWord; i++) {
+    for (uint16_t i = 0; i < rx_num_bytes && i < UATReedSolomon::kADSBMessageMaxSizeBytes * kBytesPerWord; i++) {
         uint8_t byte = (CHAR_TO_HEX(rx_string[i * kNibblesPerByte]) << kBitsPerNibble) |
                        CHAR_TO_HEX(rx_string[i * kNibblesPerByte + 1]);
         encoded_message[i] = byte;
@@ -32,33 +32,25 @@ void DecodedUATADSBPacket::ConstructUATPacket() {
     // We don't actually know the number of bits with high certainty. First interpret as a long ADS-B message, and if
     // that doesn't work, try it as a short ADS-B message.
 
-    if (uat_long_adsb_rs.Decode(raw_.encoded_message, decoded_payload) == 0) {
+    // Copy to the decoded_payload buffer and correct in place. If correction fails, the buffer will not be modified.
+    memcpy(decoded_payload, raw_.encoded_message, UATReedSolomon::kADSBMessageMaxSizeBytes);
+    int num_bytes_corrected = uat_rs.DecodeLongADSBMessage(decoded_payload);
+    if (num_bytes_corrected >= 0) {
+        CONSOLE_INFO("DecodedUATADSBPacket", "Decoded Long ADS-B message with %d bytes corrected.",
+                     num_bytes_corrected);
         message_format = kUATADSBMessageFormatLong;
-    } else if (uat_short_adsb_rs.Decode(raw_.encoded_message, decoded_payload) == 0) {
-        message_format = kUATADSBMessageFormatShort;
     } else {
-        is_valid_ = false;  // Invalid packet.
-        return;
+        num_bytes_corrected = uat_rs.DecodeShortADSBMessage(decoded_payload);
+        if (num_bytes_corrected >= 0) {
+            CONSOLE_INFO("DecodedUATADSBPacket", "Decoded Short ADS-B message with %d bytes corrected.",
+                         num_bytes_corrected);
+            message_format = kUATADSBMessageFormatShort;
+        } else {
+            CONSOLE_ERROR("DecodedUATADSBPacket", "Failed to decode UAT ADS-B message, invalid packet.");
+            is_valid_ = false;  // Invalid packet.
+            return;
+        }
     }
 
-    // switch (raw_.encoded_message_len_bits) {
-    //     case RawUATADSBPacket::kShortADSBMessageNumBits:
-    //         if (uat_short_adsb_rs.Decode(raw_.encoded_message, decoded_payload) != 0) {
-    //             is_valid_ = false;
-    //             return;
-    //         }
-    //         message_format = kUATADSBMessageFormatShort;
-    //         break;
-    //     case RawUATADSBPacket::kLongADSBMessageNumBits:
-    //         if (uat_long_adsb_rs.Decode(raw_.encoded_message, decoded_payload) != 0) {
-    //             is_valid_ = false;
-    //             return;
-    //         }
-    //         message_format = kUATADSBMessageFormatLong;
-    //         break;
-    //     default:
-    //         is_valid_ = false;
-    //         return;  // Invalid packet length.
-    // }
     is_valid_ = true;
 }

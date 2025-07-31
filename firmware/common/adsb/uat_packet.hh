@@ -2,36 +2,17 @@
 
 #include <cstdint>
 
-#include "rs.hpp"  // For Reed-Solomon encoding/decoding.
-#include "unit_conversions.hh"
+#include "fec.hh"  // For Reed-Solomon encoding/decoding.
 
 class RawUATADSBPacket {
    public:
     static const uint16_t kSyncNumBits = 36;
     static const uint16_t kSyncNumBytes = CeilBitsToBytes(kSyncNumBits);
 
-    static const uint16_t kShortADSBMessagePayloadNumBits = 144;
-    static const uint16_t kShortADSBMessagePayloadNumBytes = CeilBitsToBytes(kShortADSBMessagePayloadNumBits);
-    static const uint16_t kShortADSBMessageFECParityNumBits = 96;
-    static const uint16_t kShortADSBMessageFECParityNumBytes = CeilBitsToBytes(kShortADSBMessageFECParityNumBits);
-    static const uint16_t kShortADSBMessageNumBits =
-        kShortADSBMessagePayloadNumBits + kShortADSBMessageFECParityNumBits;
-    static const uint16_t kShortADSBMessageNumBytes = CeilBitsToBytes(kShortADSBMessageNumBits);
-
-    static const uint16_t kLongADSBMessagePayloadNumBits = 272;
-    static const uint16_t kLongADSBMessagePayloadNumBytes = CeilBitsToBytes(kLongADSBMessagePayloadNumBits);
-    static const uint16_t kLongADSBMessageFECParityNumBits = 112;
-    static const uint16_t kLongADSBMessageFECParityNumBytes = CeilBitsToBytes(kLongADSBMessageFECParityNumBits);
-    static const uint16_t kLongADSBMessageNumBits = kLongADSBMessagePayloadNumBits + kLongADSBMessageFECParityNumBits;
-    static const uint16_t kLongADSBMessageNumBytes = CeilBitsToBytes(kLongADSBMessageNumBits);
-
-    static const uint16_t kADSBMessageMaxSizeBytes =
-        kLongADSBMessagePayloadNumBytes + kLongADSBMessageFECParityNumBytes;  // For convenience.
-
     RawUATADSBPacket(const char *rx_string, int16_t source_in = -1, int16_t sigs_dbm_in = INT16_MIN,
                      int16_t sigq_db_in = INT16_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
-    RawUATADSBPacket(uint8_t rx_buffer[kADSBMessageMaxSizeBytes], uint16_t rx_buffer_len_bytes, int16_t source_in = -1,
-                     int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_db_in = INT16_MIN,
+    RawUATADSBPacket(uint8_t rx_buffer[UATReedSolomon::kADSBMessageMaxSizeBytes], uint16_t rx_buffer_len_bytes,
+                     int16_t source_in = -1, int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_db_in = INT16_MIN,
                      uint64_t mlat_48mhz_64bit_counts = 0);
 
     /**
@@ -39,7 +20,7 @@ class RawUATADSBPacket {
      */
     RawUATADSBPacket() {}
 
-    uint8_t encoded_message[kADSBMessageMaxSizeBytes] = {0};
+    uint8_t encoded_message[UATReedSolomon::kADSBMessageMaxSizeBytes] = {0};
     uint16_t encoded_message_len_bits = 0;
 
     int8_t source = -1;                    // Source of the ADS-B packet (PIO state machine number).
@@ -50,7 +31,7 @@ class RawUATADSBPacket {
 
 class DecodedUATADSBPacket {
    public:
-    static const uint16_t kMaxPacketSizeBytes = RawUATADSBPacket::kADSBMessageMaxSizeBytes;
+    static const uint16_t kMaxPacketSizeBytes = UATReedSolomon::kADSBMessageMaxSizeBytes;
     static const uint16_t kMaxPacketLenBits = 420;  // 420 bits = 52.5 bytes, round up to 53 bytes.
     static const uint16_t kDebugStrLen = 200;
 
@@ -132,7 +113,8 @@ class DecodedUATADSBPacket {
     };
 
     UATADSBMessageFormat message_format = kUATADSBMessageFormatInvalid;
-    uint8_t decoded_payload[RawUATADSBPacket::kLongADSBMessagePayloadNumBytes] = {0};
+    // Oversize the payload field since we copy the encoded message to it and correct / decode in place.
+    uint8_t decoded_payload[UATReedSolomon::kLongADSBMessageNumBytes] = {0};
 
     char debug_string[kDebugStrLen] = "";
 
@@ -144,12 +126,6 @@ class DecodedUATADSBPacket {
     void ConstructUATPacket();
 };
 
-/**
- * WARNING: The Reed-Solomon decoders below need to be initialized by an external function before they can be used.
- */
-extern RS::ReedSolomon<RawUATADSBPacket::kShortADSBMessagePayloadNumBytes,
-                       RawUATADSBPacket::kShortADSBMessageFECParityNumBytes>
-    uat_short_adsb_rs;
-extern RS::ReedSolomon<RawUATADSBPacket::kLongADSBMessagePayloadNumBytes,
-                       RawUATADSBPacket::kLongADSBMessageFECParityNumBytes>
-    uat_long_adsb_rs;
+class RawUATUplinkPacket {
+   public:
+};

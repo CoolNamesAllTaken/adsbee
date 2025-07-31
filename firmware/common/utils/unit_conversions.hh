@@ -1,6 +1,8 @@
 #ifndef UNIT_CONVERSIONS_HH_
 #define UNIT_CONVERSIONS_HH_
 
+#include <cstdint>
+
 static const int kUsPerMs = 1000;
 static const int kMsPerSec = 1000;
 static const int kBytesPerWord = 4;

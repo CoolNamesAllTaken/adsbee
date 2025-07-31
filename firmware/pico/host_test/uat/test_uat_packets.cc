@@ -3,11 +3,7 @@
 #include "uat_packet.hh"
 
 // Initialize global Reed-Solomon decoder instances.
-RS::ReedSolomon<RawUATADSBPacket::kShortADSBMessagePayloadNumBytes,
-                RawUATADSBPacket::kShortADSBMessageFECParityNumBytes>
-    uat_short_adsb_rs;
-RS::ReedSolomon<RawUATADSBPacket::kLongADSBMessagePayloadNumBytes, RawUATADSBPacket::kLongADSBMessageFECParityNumBytes>
-    uat_long_adsb_rs;
+UATReedSolomon uat_rs;
 
 TEST(RawUATADSBPacket, StringConstructor) {
     const char *buf_str = "00a66ef135445d525a0c0519119021204800";
@@ -404,24 +400,12 @@ TEST(DecodedUATPacket, DO282BDownlinkPacketsDecodeAndPacketType) {
                 : (test_case.expected_format == DecodedUATADSBPacket::kUATADSBMessageFormatShort ? "Short" : "Long"));
         DecodedUATADSBPacket packet = DecodedUATADSBPacket(test_case.raw_encoded_adsb_message);
         EXPECT_EQ(packet.message_format, test_case.expected_format);
+        EXPECT_EQ(test_case.expected_format != DecodedUATADSBPacket::kUATADSBMessageFormatInvalid, packet.IsValid());
         if (test_case.expected_decoded_payload) {
-            EXPECT_TRUE(packet.IsValid());
+            // Only check the buffer if the expected decoded payload is not nullptr.
             EXPECT_TRUE(ByteBufferMatchesString(packet.decoded_payload, test_case.expected_decoded_payload));
-        } else {
-            EXPECT_FALSE(packet.IsValid());
-            // Expected decoded message buffer is NULL, so no payload to check.
         }
     }
-}
-
-TEST(DecodedUATADSBPacket, IsValid) {
-    const char *buf_str = "00a974f13536e352301a0899123219814f00";
-    DecodedUATADSBPacket packet = DecodedUATADSBPacket(buf_str);
-    ASSERT_TRUE(packet.IsValid());
-
-    const char *invalid_buf_str = "00a974f13536e352301a0899123219814f01";  // Invalid CRC.
-    DecodedUATADSBPacket invalid_packet = DecodedUATADSBPacket(invalid_buf_str);
-    ASSERT_FALSE(invalid_packet.IsValid());
 }
 
 TEST(DecodedUATADSBPacket, AltitudeEncodedToAltitudeFt) {
