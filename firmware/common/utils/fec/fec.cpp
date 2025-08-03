@@ -63,7 +63,8 @@ int UATReedSolomon::DecodeUplinkMessage(
     for (int block = 0; block < kUplinkMessageNumBlocks; block++) {
         uint8_t *block_data = &(decoded_payload_buf[block * kUplinkMessageBlockPayloadNumBytes]);
         for (int byte_index = 0; byte_index < kUplinkMessageBlockPayloadNumBytes; byte_index++) {
-            block_data[byte_index] = encoded_message_buf[block * kUplinkMessageBlockNumBytes + byte_index];
+            // De-interleave per UAT tech manual Table 2-6.
+            block_data[byte_index] = encoded_message_buf[byte_index * kUplinkMessageBlockNumBytes + block];
         }
 
         int num_bytes_corrected = decode_rs_char(rs_uplink, block_data, nullptr, 0);
