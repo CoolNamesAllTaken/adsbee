@@ -25,8 +25,11 @@ class BSP {
         for (uint16_t i = 0; i < r1090_num_demod_state_machines; i++) {
             r1090_pulses_pins[i] = 19;
             r1090_demod_pins[i] = 20 + i;
-            r1090_recovered_clk_pins[i] = 24;
+            // Set RECOVERED_CLK to fake pin for high power preamble detector. Will be overridden by
+            // higher priority (lower index) SM.
+            r1090_recovered_clk_pins[i] = UINT16_MAX;  // Set to UINT16_MAX to indicate not connected.
         }
+        r1090_recovered_clk_pins[0] = 24;  // Connect SM0 to recovered_clk output for debugging.
         r1090_tl_pwm_pin = 26;
         r1090_tl_adc_pin = 27;
         r1090_tl_adc_input = 1;
@@ -78,11 +81,10 @@ class BSP {
     uint16_t r1090_high_power_demod_state_machine_index = 2;
     uint16_t r1090_pulses_pins[kMaxNumDemodStateMachines] = {19, 22, 19};
     uint16_t r1090_demod_pins[kMaxNumDemodStateMachines] = {20, 23, 29};
-    uint16_t r1090_recovered_clk_pins[kMaxNumDemodStateMachines] = {
-        21, 24, 26};  // Set RECOVERED_CLK to fake pin for high power preamble detector. Will be overridden by
-                      // higher priority (lower index) SM.
-    uint16_t r1090_tl_pwm_pin = 25;     // Pin for Trigger Level PWM output.
-    uint16_t r1090_tl_adc_pin = 27;     // Pin for reading filtered Trigger Level.
+    uint16_t r1090_recovered_clk_pins[kMaxNumDemodStateMachines] = {21, 24,
+                                                                    26};  // These pin values are only for old hardware.
+    uint16_t r1090_tl_pwm_pin = 25;                                       // Pin for Trigger Level PWM output.
+    uint16_t r1090_tl_adc_pin = 27;                                       // Pin for reading filtered Trigger Level.
     uint16_t r1090_tl_adc_input = 1;    // ADC input for reading filtered Trigger Level.
     uint16_t r1090_rssi_adc_pin = 28;   // Pin for reading RSSI.
     uint16_t r1090_rssi_adc_input = 2;  // ADC input for reading RSSI.

@@ -11,41 +11,6 @@ extern "C" {
 
 class UATReedSolomon {
    public:
-    /**
-     * UAT downlink message parameters.
-     */
-    static const uint16_t kShortADSBMessagePayloadNumBits = 144;
-    static const uint16_t kShortADSBMessagePayloadNumBytes = CeilBitsToBytes(kShortADSBMessagePayloadNumBits);
-    static const uint16_t kShortADSBMessageFECParityNumBits = 96;
-    static const uint16_t kShortADSBMessageFECParityNumBytes = CeilBitsToBytes(kShortADSBMessageFECParityNumBits);
-    static const uint16_t kShortADSBMessageNumBits =
-        kShortADSBMessagePayloadNumBits + kShortADSBMessageFECParityNumBits;
-    static const uint16_t kShortADSBMessageNumBytes = CeilBitsToBytes(kShortADSBMessageNumBits);
-
-    static const uint16_t kLongADSBMessagePayloadNumBits = 272;
-    static const uint16_t kLongADSBMessagePayloadNumBytes = CeilBitsToBytes(kLongADSBMessagePayloadNumBits);
-    static const uint16_t kLongADSBMessageFECParityNumBits = 112;
-    static const uint16_t kLongADSBMessageFECParityNumBytes = CeilBitsToBytes(kLongADSBMessageFECParityNumBits);
-    static const uint16_t kLongADSBMessageNumBits = kLongADSBMessagePayloadNumBits + kLongADSBMessageFECParityNumBits;
-    static const uint16_t kLongADSBMessageNumBytes = CeilBitsToBytes(kLongADSBMessageNumBits);
-
-    static const uint16_t kADSBMessageMaxSizeBytes =
-        kLongADSBMessagePayloadNumBytes + kLongADSBMessageFECParityNumBytes;  // For convenience.
-
-    /**
-     * UAT uplink message parameters.
-     */
-    static const uint16_t kUplinkMessageNumBlocks = 6;
-    static const uint16_t kUplinkMessageBlockPayloadNumBytes = 72;
-    static const uint16_t kUplinkMessageBlockFECParityNumBytes = 20;
-    static const uint16_t kUplinkMessageBlockNumBytes =
-        kUplinkMessageBlockPayloadNumBytes + kUplinkMessageBlockFECParityNumBytes;
-
-    static const uint16_t kUplinkMessagePayloadNumBytes = kUplinkMessageNumBlocks * kUplinkMessageBlockPayloadNumBytes;
-
-    static const uint16_t kUplinkMessageMaxSizeBytes =
-        kUplinkMessageNumBlocks * kUplinkMessageBlockNumBytes;  // Maximum size of a UAT uplink message.
-
     UATReedSolomon();
 
     /**
@@ -56,7 +21,7 @@ class UATReedSolomon {
      * @return Number of bits corrected. 0 if message had no errors, positive number if errors were corrected, -1 if
      * message was invalid and not correctable.
      */
-    int DecodeShortADSBMessage(uint8_t message_buf[kShortADSBMessageNumBytes]);
+    int DecodeShortADSBMessage(uint8_t message_buf[]);
 
     /**
      * Attempt decoding of a long ADS-B message.
@@ -66,7 +31,7 @@ class UATReedSolomon {
      * @return Number of bits corrected. 0 if message had no errors, positive number if errors were corrected, -1 if
      * message was invalid and not correctable.
      */
-    int DecodeLongADSBMessage(uint8_t message_buf[kLongADSBMessageNumBytes]);
+    int DecodeLongADSBMessage(uint8_t message_buf[]);
 
     /**
      * Attempt decoding of a UAT uplink message.
@@ -77,9 +42,7 @@ class UATReedSolomon {
      * @return Number of bits corrected. 0 if message had no errors, positive number if errors were corrected, -1 if
      * message was invalid and not correctable.
      */
-    int DecodeUplinkMessage(
-        uint8_t encoded_message_buf[kUplinkMessageMaxSizeBytes],
-        uint8_t decoded_payload_buf[kUplinkMessagePayloadNumBytes + kUplinkMessageBlockFECParityNumBytes]);
+    int DecodeUplinkMessage(uint8_t encoded_message_buf[], uint8_t decoded_payload_buf[]);
 
     void* rs_adsb_short = nullptr;
     void* rs_adsb_long = nullptr;

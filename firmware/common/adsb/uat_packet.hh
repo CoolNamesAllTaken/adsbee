@@ -2,17 +2,38 @@
 
 #include <cstdint>
 
-#include "fec.hh"  // For Reed-Solomon encoding/decoding.
+#include "buffer_utils.hh"
 
 class RawUATADSBPacket {
    public:
     static const uint16_t kSyncNumBits = 36;
     static const uint16_t kSyncNumBytes = CeilBitsToBytes(kSyncNumBits);
 
+    /**
+     * UAT downlink message parameters.
+     */
+    static const uint16_t kShortADSBMessagePayloadNumBits = 144;
+    static const uint16_t kShortADSBMessagePayloadNumBytes = CeilBitsToBytes(kShortADSBMessagePayloadNumBits);
+    static const uint16_t kShortADSBMessageFECParityNumBits = 96;
+    static const uint16_t kShortADSBMessageFECParityNumBytes = CeilBitsToBytes(kShortADSBMessageFECParityNumBits);
+    static const uint16_t kShortADSBMessageNumBits =
+        kShortADSBMessagePayloadNumBits + kShortADSBMessageFECParityNumBits;
+    static const uint16_t kShortADSBMessageNumBytes = CeilBitsToBytes(kShortADSBMessageNumBits);
+
+    static const uint16_t kLongADSBMessagePayloadNumBits = 272;
+    static const uint16_t kLongADSBMessagePayloadNumBytes = CeilBitsToBytes(kLongADSBMessagePayloadNumBits);
+    static const uint16_t kLongADSBMessageFECParityNumBits = 112;
+    static const uint16_t kLongADSBMessageFECParityNumBytes = CeilBitsToBytes(kLongADSBMessageFECParityNumBits);
+    static const uint16_t kLongADSBMessageNumBits = kLongADSBMessagePayloadNumBits + kLongADSBMessageFECParityNumBits;
+    static const uint16_t kLongADSBMessageNumBytes = CeilBitsToBytes(kLongADSBMessageNumBits);
+
+    static const uint16_t kADSBMessageMaxSizeBytes =
+        kLongADSBMessagePayloadNumBytes + kLongADSBMessageFECParityNumBytes;  // For convenience.
+
     RawUATADSBPacket(const char *rx_string, int16_t source_in = -1, int16_t sigs_dbm_in = INT16_MIN,
                      int16_t sigq_db_in = INT16_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
-    RawUATADSBPacket(uint8_t rx_buffer[UATReedSolomon::kADSBMessageMaxSizeBytes], uint16_t rx_buffer_len_bytes,
-                     int16_t source_in = -1, int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_db_in = INT16_MIN,
+    RawUATADSBPacket(uint8_t rx_buffer[kADSBMessageMaxSizeBytes], uint16_t rx_buffer_len_bytes, int16_t source_in = -1,
+                     int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_db_in = INT16_MIN,
                      uint64_t mlat_48mhz_64bit_counts = 0);
 
     /**
@@ -20,7 +41,7 @@ class RawUATADSBPacket {
      */
     RawUATADSBPacket() {}
 
-    uint8_t encoded_message[UATReedSolomon::kADSBMessageMaxSizeBytes] = {0};
+    uint8_t encoded_message[kADSBMessageMaxSizeBytes] = {0};
     uint16_t encoded_message_len_bits = 0;
 
     int8_t source = -1;                    // Source of the ADS-B packet (PIO state machine number).
@@ -31,7 +52,7 @@ class RawUATADSBPacket {
 
 class DecodedUATADSBPacket {
    public:
-    static const uint16_t kMaxPacketSizeBytes = UATReedSolomon::kADSBMessageMaxSizeBytes;
+    static const uint16_t kMaxPacketSizeBytes = RawUATADSBPacket::kADSBMessageMaxSizeBytes;
     static const uint16_t kMaxPacketLenBits = 420;  // 420 bits = 52.5 bytes, round up to 53 bytes.
     static const uint16_t kDebugStrLen = 200;
 
@@ -46,7 +67,16 @@ class DecodedUATADSBPacket {
     DecodedUATADSBPacket(const char *rx_string, int16_t source = -1, int32_t sigs_dbm = INT32_MIN,
                          int32_t sigq_db = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
 
+    /**
+     * Returns true if the packet is valid (FEC decoded successfully and packet has a recognized format).
+     * @return True if the packet is valid, false otherwise.
+     */
     bool IsValid() const { return is_valid_; }
+
+    /**
+     * Function used for testing, when we want to populate the payload but not the FEC parity bytes.
+     */
+    void ForceValid() { is_valid_ = true; }
 
     int GetBufferLenBits() const { return raw_.encoded_message_len_bits; }
     RawUATADSBPacket GetRaw() const { return raw_; }
@@ -114,7 +144,7 @@ class DecodedUATADSBPacket {
 
     UATADSBMessageFormat message_format = kUATADSBMessageFormatInvalid;
     // Oversize the payload field since we copy the encoded message to it and correct / decode in place.
-    uint8_t decoded_payload[UATReedSolomon::kLongADSBMessageNumBytes] = {0};
+    uint8_t decoded_payload[RawUATADSBPacket::kLongADSBMessageNumBytes] = {0};
 
     char debug_string[kDebugStrLen] = "";
 
@@ -123,9 +153,25 @@ class DecodedUATADSBPacket {
     RawUATADSBPacket raw_;
 
    private:
+    /**
+     * Helper function that consolidates constructor implementation for the various constructors.
+     */
     void ConstructUATPacket();
 };
 
 class RawUATUplinkPacket {
    public:
+    /**
+     * UAT uplink message parameters.
+     */
+    static const uint16_t kUplinkMessageNumBlocks = 6;
+    static const uint16_t kUplinkMessageBlockPayloadNumBytes = 72;
+    static const uint16_t kUplinkMessageBlockFECParityNumBytes = 20;
+    static const uint16_t kUplinkMessageBlockNumBytes =
+        kUplinkMessageBlockPayloadNumBytes + kUplinkMessageBlockFECParityNumBytes;
+
+    static const uint16_t kUplinkMessagePayloadNumBytes = kUplinkMessageNumBlocks * kUplinkMessageBlockPayloadNumBytes;
+
+    static const uint16_t kUplinkMessageMaxSizeBytes =
+        kUplinkMessageNumBlocks * kUplinkMessageBlockNumBytes;  // Maximum size of a UAT uplink message.
 };

@@ -53,7 +53,8 @@ bool PacketDecoder::UpdateDecoderLoop() {
         if (decoded_packet.IsValid()) {
             PushPacketIfNotDuplicate(decoded_packet);
 
-            strncpy(decode_debug_message.message, "[VALID     ] ", DebugMessage::kMessageMaxLen);
+            snprintf(decode_debug_message.message, DebugMessage::kMessageMaxLen, "src=%d [VALID     ] ",
+                     decoded_packet.GetRaw().source);
         } else if (config_.enable_1090_error_correction &&
                    decoded_packet.GetBufferLenBits() == RawModeSPacket::kExtendedSquitterPacketLenBits) {
             // Checksum correction is enabled, and we have a packet worth correcting.
@@ -69,14 +70,17 @@ bool PacketDecoder::UpdateDecoderLoop() {
                 decoded_1090_packet_bit_flip_locations_out_queue.Push(bit_flip_index);
                 PushPacketIfNotDuplicate(DecodedModeSPacket(*raw_packet_ptr));
 
-                strncpy(decode_debug_message.message, "[1FIXD     ] ", DebugMessage::kMessageMaxLen);
+                snprintf(decode_debug_message.message, DebugMessage::kMessageMaxLen, "src=%d [1FIXD     ] ",
+                         decoded_packet.GetRaw().source);
             } else {
                 // Checksum correction failed.
-                strncpy(decode_debug_message.message, "[     NOFIX] ", DebugMessage::kMessageMaxLen);
+                snprintf(decode_debug_message.message, DebugMessage::kMessageMaxLen, "src=%d [     NOFIX] ",
+                         decoded_packet.GetRaw().source);
             }
         } else {
             // Invalid and not worth correcting.
-            strncpy(decode_debug_message.message, "[     INVLD] ", DebugMessage::kMessageMaxLen);
+            snprintf(decode_debug_message.message, DebugMessage::kMessageMaxLen, "src=%d [     INVLD] ",
+                     decoded_packet.GetRaw().source);
         }
 
         // Append packet contents to debug message.

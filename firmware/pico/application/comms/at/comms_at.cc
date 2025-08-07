@@ -849,17 +849,17 @@ CPP_AT_CALLBACK(CommsManager::ATTLReadCallback) {
 }
 
 /**
- * AT+TL_SET Callback
- * AT+TL_SET=<tl_mv>
- *  tl_mv = Trigger Level, in milliVolts.
- * AT+TL_SET?
- * +TL_SET=
+ * AT+TL_OFFSET Callback
+ * AT+TL_OFFSET=<tl_offset_mv>
+ *  tl_offset_mv = Trigger Level Offset, in milliVolts.
+ * AT+TL_OFFSET?
+ * +TL_OFFSET=
  */
 CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
     switch (op) {
         case '?': {
             // AT+TL_SET value query.
-            int tl_mv = adsbee.GetTLMilliVolts();
+            int tl_mv = adsbee.GetTLOffsetMilliVolts();
             CPP_AT_CMD_PRINTF("=%dmV (%d dBm)\r\n", tl_mv, adsbee.AD8313MilliVoltsTodBm(tl_mv));
             CPP_AT_SILENT_SUCCESS();
             break;
@@ -872,10 +872,10 @@ CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
                     adsbee.StartTLLearning();
                 } else {
                     // Assigning trigger level manually.
-                    uint16_t new_tl_mv;
-                    CPP_AT_TRY_ARG2NUM(0, new_tl_mv);
-                    if (!adsbee.SetTLMilliVolts(new_tl_mv)) {
-                        CPP_AT_ERROR("Failed to set tl_mv.");
+                    uint16_t new_tl_offset_mv;
+                    CPP_AT_TRY_ARG2NUM(0, new_tl_offset_mv);
+                    if (!adsbee.SetTLOffsetMilliVolts(new_tl_offset_mv)) {
+                        CPP_AT_ERROR("Failed to set tl_offset_mv.");
                     }
                 }
             }
@@ -1141,13 +1141,14 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .max_args = 0,
      .help_string_buf =
          "Read ADC counts and mV value for the minimum trigger level threshold. Call with no ops nor arguments, "
-         "AT+TL_READ.",
+         "AT+TL_READ. Note this reads the trigger level, not the trigger level offset.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLReadCallback, comms_manager)},
-    {.command_buf = "+TL_SET",
+    {.command_buf = "+TL_OFFSET",
      .min_args = 0,
      .max_args = 1,
-     .help_string_buf = "Set minimum trigger level threshold for RF power detector.\r\n\tAT+TLSet=<tl_mv>"
-                        "\tQuery trigger level.\r\n\tAT+TL_SET?\r\n\t+TLSet=<tl_mv>.",
+     .help_string_buf = "Set minimum trigger level offset (trigger level distance above noise floor) for RF power "
+                        "detector.\r\n\tAT+TL_OFFSET=<tl_offset_mv>"
+                        "\tQuery trigger level offset.\r\n\tAT+TL_OFFSET?\r\n\t+TL_OFFSET=<tl_offset_mv>.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLSetCallback, comms_manager)},
     {.command_buf = "+UPTIME",
      .min_args = 0,

@@ -13,7 +13,7 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 9;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 10;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 class SettingsManager {
@@ -62,7 +62,7 @@ class SettingsManager {
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a
     // firmware upgrade if the format of the settings struct changes.
     struct Settings {
-        static constexpr int kDefaultTLMV = 1300;  // [mV]
+        static constexpr int kDefaultTLOffsetMV = 300;  // [mV]
         static constexpr uint16_t kMaxNumTransponderPackets =
             100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
         static constexpr uint32_t kDefaultWatchdogTimeoutSec = 10;
@@ -143,7 +143,7 @@ class SettingsManager {
 
         // ADSBee settings
         bool receiver_enabled = true;
-        int tl_mv = kDefaultTLMV;
+        int tl_offset_mv = kDefaultTLOffsetMV;
         bool bias_tee_enabled = false;
         uint32_t watchdog_timeout_sec = kDefaultWatchdogTimeoutSec;
 

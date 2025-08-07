@@ -222,7 +222,7 @@ void preamble_detector_program_init(
 ; SAMPLE SUBROUTINE
 ; Samples 3x and uses a majority vote to determine whether it's HI or LO.
 ; @param[in] y Goes back to end_of_0 if y = 0, goes back to end_of_1 otherwise.
-; @retval x x=1 if >=2/3 samples were LO, x=1 otherwise.
+; @retval x x=1 if >=2/3 samples were LO, x=0 otherwise.
 sample:
     pull noblock        ; -15 | Pull from TX FIFO to OSR in order to signal DMA to capture timestamp. We put this here since it needs to fire on demod begin on both high power and regular preambles.
     set x 2 [6]         ; -14:-7 | (x+1) = number of samples to take (added delay 7)
@@ -304,10 +304,6 @@ static inline void message_demodulator_program_init(
         // pio_sm_set_pindirs_with_mask(pio, sm, 0b0, (0b1 << demod_pin) | (0b1 << pulses_pin)); // Set demod and pulses pins as inputs (0).
     }
 
-    // Allow PIO to control recovered_clk_pin (as output for debugging).
-    pio_gpio_init(pio, recovered_clk_pin);
-    pio_sm_set_consecutive_pindirs(pio, sm, recovered_clk_pin, 1, true); // set one pin starting at out_pin to OUT
-
     pio_sm_config c = message_demodulator_program_get_default_config(offset);
     sm_config_set_in_pins(&c, pulses_pin); // WAIT pins: Utilize pulses_pin as GPIO base.
     sm_config_set_jmp_pin(&c, pulses_pin); // JMP based on the comparator output
@@ -316,9 +312,17 @@ static inline void message_demodulator_program_init(
     sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_NONE); // We expect max 112 bits, so 4 Byte RX FIFO is fine. We use the TX FIFO for DMA signaling.
     sm_config_set_clkdiv(&c, div);
 
-    // Connect out_pin to SET and SIDESET
-    sm_config_set_set_pins(&c, recovered_clk_pin, 1); // set one pin as SET output
-    sm_config_set_sideset_pins(&c, recovered_clk_pin); 
+    if (recovered_clk_pin != UINT16_MAX) {
+        // This is the chosen state machine to have a recovered_clk output!
+
+        // Allow PIO to control recovered_clk_pin (as output for debugging).
+        pio_gpio_init(pio, recovered_clk_pin);
+        pio_sm_set_consecutive_pindirs(pio, sm, recovered_clk_pin, 1, true); // set one pin starting at out_pin to OUT
+
+        // Connect out_pin to SET and SIDESET
+        sm_config_set_set_pins(&c, recovered_clk_pin, 1); // set one pin as SET output
+        sm_config_set_sideset_pins(&c, recovered_clk_pin); 
+    }
 
     pio_sm_init(pio, sm, offset, &c);
 }

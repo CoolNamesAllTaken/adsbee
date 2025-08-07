@@ -104,7 +104,7 @@ bool ADSBee::Init() {
     gpio_set_function(config_.tl_pwm_pin, GPIO_FUNC_PWM);
     pwm_set_wrap(tl_pwm_slice_, kTLMaxPWMCount);
 
-    SetTLMilliVolts(SettingsManager::Settings::kDefaultTLMV);
+    SetTLOffsetMilliVolts(SettingsManager::Settings::kDefaultTLOffsetMV);
     pwm_set_enabled(tl_pwm_slice_, true);
 
     // Initialize the trigger level bias ADC input.
@@ -209,20 +209,21 @@ bool ADSBee::Update() {
             static_cast<int16_t>(get_rand_32()) * kInt16MaxRecip * 0.25;  // Random value from [-0.25,0.25].
         if (valid_packet_ratio + random_weight > 0.0f) {
             // Transition to neighbor TL value.
-            tl_learning_prev_tl_mv_ = tl_mv_;
+            tl_learning_prev_tl_offset_mv_ = tl_offset_mv_;
             tl_learning_prev_num_valid_packets_ = tl_learning_num_valid_packets_;
         }
         // Else keep existing TL value in tl_learning_prev_tl_mv_.
 
         // DO STUFF HERE
         // Find a new neighbor by stepping trigger level with random value from [-1.0, 1.0] * temperature.
-        uint16_t new_tl_mv = tl_mv_ + static_cast<int16_t>(get_rand_32()) * tl_learning_temperature_mv_ / INT16_MAX;
-        if (new_tl_mv > tl_learning_max_mv_) {
-            tl_mv_ = tl_learning_max_mv_;
-        } else if (new_tl_mv < tl_learning_min_mv_) {
-            tl_mv_ = tl_learning_min_mv_;
+        uint16_t new_tl_offset_mv =
+            tl_offset_mv_ + static_cast<int16_t>(get_rand_32()) * tl_learning_temperature_mv_ / INT16_MAX;
+        if (new_tl_offset_mv > tl_learning_max_offset_mv_) {
+            tl_offset_mv_ = tl_learning_max_offset_mv_;
+        } else if (new_tl_offset_mv < tl_learning_min_offset_mv_) {
+            tl_offset_mv_ = tl_learning_min_offset_mv_;
         } else {
-            tl_mv_ = new_tl_mv;
+            tl_offset_mv_ = new_tl_offset_mv;
         }
 
         // Update learning temperature. Decrement by the annealing temperature step or set to 0
@@ -232,17 +233,14 @@ bool ADSBee::Update() {
             tl_learning_temperature_mv_ -= tl_learning_temperature_step_mv_;
         } else {
             // Done learning: take the current best trigger level and yeet outta here.
-            tl_learning_temperature_mv_ = 0;   // Set learning temperature to 0 to finish learnign trigger level.
-            tl_mv_ = tl_learning_prev_tl_mv_;  // Set trigger level to the best value we've seen so far.
+            tl_learning_temperature_mv_ = 0;  // Set learning temperature to 0 to finish learnign trigger level.
+            tl_offset_mv_ = tl_learning_prev_tl_offset_mv_;  // Set trigger level to the best value we've seen so far.
         }
 
         // Store timestamp as start of trigger learning cycle so we know when to come back.
         tl_learning_cycle_start_timestamp_ms_ = timestamp_ms;
         tl_learning_num_valid_packets_ = 0;  // Start the counter over.
     }
-
-    // Update PWM output duty cycle.
-    pwm_set_chan_level(tl_pwm_slice_, tl_pwm_chan_, tl_pwm_count_);
 
     // Occasionally sample the signal strength to approximate the noise floor.
     timestamp_ms = get_time_since_boot_ms();
@@ -251,6 +249,10 @@ bool ADSBee::Update() {
                            ReadSignalStrengthMilliVolts() * (100 - kNoiseFloorExpoFilterPercent)) /
                           100;
         noise_floor_last_sample_timestamp_ms_ = timestamp_ms;
+
+        // Use updated noise floor to set the trigger level PWM duty cycle.
+        tl_pwm_count_ = (noise_floor_mv_ + tl_offset_mv_) * kTLMaxPWMCount / kVDDMV;
+        pwm_set_chan_level(tl_pwm_slice_, tl_pwm_chan_, tl_pwm_count_);
     }
 
     // Update sub-GHz radio.
@@ -447,14 +449,14 @@ int ADSBee::ReadTLMilliVolts() {
     return ADCCountsToMilliVolts(tl_adc_counts_);
 }
 
-bool ADSBee::SetTLMilliVolts(int tl_mv) {
-    if (tl_mv > kTLMaxMV || tl_mv < kTLMinMV) {
-        CONSOLE_ERROR("ADSBee::SetTLMilliVolts", "Unable to set tl_mv_ to %d, outside of permissible range %d-%d.\r\n",
-                      tl_mv, kTLMinMV, kTLMaxMV);
+bool ADSBee::SetTLOffsetMilliVolts(int tl_offset_mv) {
+    if (tl_offset_mv > kTLOffsetMaxMV || tl_offset_mv < kTLOffsetMinMV) {
+        CONSOLE_ERROR("ADSBee::SetTLOffsetMilliVolts",
+                      "Unable to set tl_offset_mv_ to %d, outside of permissible range %d-%d.\r\n", tl_offset_mv,
+                      kTLOffsetMinMV, kTLOffsetMaxMV);
         return false;
     }
-    tl_mv_ = tl_mv;
-    tl_pwm_count_ = tl_mv_ * kTLMaxPWMCount / kVDDMV;
+    tl_offset_mv_ = tl_offset_mv;
 
     return true;
 }

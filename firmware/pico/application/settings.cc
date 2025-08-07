@@ -94,7 +94,7 @@ bool SettingsManager::Save() {
     settings.core_network_settings.UpdateCRC32();
 
     settings.receiver_enabled = adsbee.Receiver1090IsEnabled();
-    settings.tl_mv = adsbee.GetTLMilliVolts();
+    settings.tl_offset_mv = adsbee.GetTLOffsetMilliVolts();
     settings.bias_tee_enabled = adsbee.BiasTeeIsEnabled();
     settings.watchdog_timeout_sec = adsbee.GetWatchdogTimeoutSec();
 
@@ -175,7 +175,7 @@ bool SettingsManager::Apply() {
     bool success = true;
 
     adsbee.SetReceiver1090Enable(settings.receiver_enabled);
-    adsbee.SetTLMilliVolts(settings.tl_mv);
+    adsbee.SetTLOffsetMilliVolts(settings.tl_offset_mv);
     adsbee.SetBiasTeeEnable(settings.bias_tee_enabled);
     adsbee.SetWatchdogTimeoutSec(settings.watchdog_timeout_sec);
     adsbee.SetSubGRadioEnable(settings.subg_enabled);

@@ -12,7 +12,7 @@ RawUATADSBPacket::RawUATADSBPacket(const char *rx_string, int16_t source_in, int
       sigq_db(sigq_db_in),
       mlat_48mhz_64bit_counts(mlat_48mhz_64bit_counts_in) {
     uint16_t rx_num_bytes = strlen(rx_string) / kNibblesPerByte;
-    for (uint16_t i = 0; i < rx_num_bytes && i < UATReedSolomon::kADSBMessageMaxSizeBytes * kBytesPerWord; i++) {
+    for (uint16_t i = 0; i < rx_num_bytes && i < RawUATADSBPacket::kADSBMessageMaxSizeBytes * kBytesPerWord; i++) {
         uint8_t byte = (CHAR_TO_HEX(rx_string[i * kNibblesPerByte]) << kBitsPerNibble) |
                        CHAR_TO_HEX(rx_string[i * kNibblesPerByte + 1]);
         encoded_message[i] = byte;
@@ -32,8 +32,10 @@ void DecodedUATADSBPacket::ConstructUATPacket() {
     // We don't actually know the number of bits with high certainty. First interpret as a long ADS-B message, and if
     // that doesn't work, try it as a short ADS-B message.
 
+    // Decoding only available on CC1312 and in non-embedded unit tests.
+#if defined(ON_TI) || defined(ON_HOST)
     // Copy to the decoded_payload buffer and correct in place. If correction fails, the buffer will not be modified.
-    memcpy(decoded_payload, raw_.encoded_message, UATReedSolomon::kADSBMessageMaxSizeBytes);
+    memcpy(decoded_payload, raw_.encoded_message, RawUATADSBPacket::kADSBMessageMaxSizeBytes);
     int num_bytes_corrected = uat_rs.DecodeLongADSBMessage(decoded_payload);
     if (num_bytes_corrected >= 0) {
         CONSOLE_INFO("DecodedUATADSBPacket", "Decoded Long ADS-B message with %d bytes corrected.",
@@ -51,6 +53,7 @@ void DecodedUATADSBPacket::ConstructUATPacket() {
             return;
         }
     }
+#endif /* ON_PICO */
 
     is_valid_ = true;
 }

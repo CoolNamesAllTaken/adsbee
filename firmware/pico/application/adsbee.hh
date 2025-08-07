@@ -20,8 +20,8 @@ class ADSBee {
    public:
     static constexpr uint16_t kTLMaxPWMCount = 5000;  // Clock is 125MHz, shoot for 25kHz PWM.
     static constexpr int kVDDMV = 3300;               // [mV] Voltage of positive supply rail.
-    static constexpr int kTLMaxMV = 3300;             // [mV]
-    static constexpr int kTLMinMV = 0;                // [mV]
+    static constexpr int kTLOffsetMaxMV = 3300;       // [mV]
+    static constexpr int kTLOffsetMinMV = 0;          // [mV]
     static constexpr uint32_t kStatusLEDOnMs = 1;
 
     static constexpr uint32_t kTLLearningIntervalMs =
@@ -181,7 +181,7 @@ class ADSBee {
      * Return the value of the low Minimum Trigger Level threshold in milliVolts.
      * @retval TL in milliVolts.
      */
-    int GetTLMilliVolts() { return tl_mv_; }
+    int GetTLOffsetMilliVolts() { return tl_offset_mv_; }
 
     inline uint32_t GetWatchdogTimeoutSec() { return watchdog_timeout_sec_; }
 
@@ -288,12 +288,12 @@ class ADSBee {
     inline void SetStatusLED(bool on) { gpio_put(config_.r1090_led_pin, on ? 1 : 0); }
 
     /**
-     * Set the Minimum Trigger Level (TL) at the AD8314 output in milliVolts.
-     * @param[in] tl_mv Voltage in milliVolts at the top of the pullup for the LEVEL net in the data slicer. Pull higher
-     * to accommodate a higher noise floor without false triggers.
+     * Set the Minimum Trigger Level (TL) offset at the AD8313 output in milliVolts.
+     * @param[in] tl_offset_mv Trigger level offset from the noise floor in milliVolts. Must be positive. Use a larger
+     * value to decrease receiver sensitivity.
      * @retval True if succeeded, False if TL value was out of range.
      */
-    bool SetTLMilliVolts(int tl_mv);
+    bool SetTLOffsetMilliVolts(int tl_offset_mv);
 
     /**
      * Sets the watchdog timer and enables it.
@@ -330,7 +330,7 @@ class ADSBee {
      */
     void StartTLLearning(uint16_t tl_learning_num_cycles = kTLLearningNumCycles,
                          uint16_t tl_learning_start_temperature_mv = kTLLearningStartTemperatureMV,
-                         uint16_t tl_min_mv = kTLMinMV, uint16_t tl_max_mv = kTLMaxMV);
+                         uint16_t tl_min_mv = kTLOffsetMinMV, uint16_t tl_max_mv = kTLOffsetMaxMV);
 
     PFBQueue<RawModeSPacket> raw_1090_packet_queue =
         PFBQueue<RawModeSPacket>({.buf_len_num_elements = SettingsManager::Settings::kMaxNumTransponderPackets,
@@ -366,7 +366,7 @@ class ADSBee {
     uint16_t tl_pwm_slice_ = 0;
     uint16_t tl_pwm_chan_ = 0;
 
-    uint16_t tl_mv_ = SettingsManager::Settings::kDefaultTLMV;
+    uint16_t tl_offset_mv_ = SettingsManager::Settings::kDefaultTLOffsetMV;
     uint16_t tl_pwm_count_ = 0;  // out of kTLMaxPWMCount
 
     uint16_t tl_adc_counts_ = 0;
@@ -374,11 +374,11 @@ class ADSBee {
     uint32_t tl_learning_cycle_start_timestamp_ms_ = 0;
     uint16_t tl_learning_temperature_mv_ = 0;  // Don't learn automatically.
     int16_t tl_learning_temperature_step_mv_ = 0;
-    uint16_t tl_learning_max_mv_ = kTLMaxMV;
-    uint16_t tl_learning_min_mv_ = kTLMinMV;
+    uint16_t tl_learning_max_offset_mv_ = kTLOffsetMaxMV;
+    uint16_t tl_learning_min_offset_mv_ = kTLOffsetMinMV;
     int16_t tl_learning_num_valid_packets_ = 0;
     int16_t tl_learning_prev_num_valid_packets_ = 1;  // Set to 1 to avoid dividing by 0.
-    uint16_t tl_learning_prev_tl_mv_ = tl_mv_;
+    uint16_t tl_learning_prev_tl_offset_mv_ = tl_offset_mv_;
 
     uint64_t mlat_counter_wraps_ = 0;
 

@@ -80,7 +80,7 @@ else()
     # after the pico SDK is pulled in.
 
     set(CMAKE_BUILD_TYPE "Debug") # Now that we've identified we're running tests, revert to an actual build config.
-
+    add_compile_definitions(ON_HOST)
     add_compile_options(
         -Wall                # Include all warnings.
         -Wno-format          # int != int32_t as far as the compiler is concerned because gcc has int32_t as long int
