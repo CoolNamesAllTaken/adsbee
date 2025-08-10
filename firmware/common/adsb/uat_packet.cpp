@@ -2,7 +2,8 @@
 
 #include <cstring>  // for strlen
 
-#include "comms.hh"               // for CONSOLE_INFO, CONSOLE_ERROR
+#include "comms.hh"  // for CONSOLE_INFO, CONSOLE_ERROR
+#include "fec.hh"
 #include "utils/buffer_utils.hh"  // for CHAR_TO_HEX
 
 RawUATADSBPacket::RawUATADSBPacket(const char *rx_string, int16_t source_in, int16_t sigs_dbm_in, int16_t sigq_db_in,
