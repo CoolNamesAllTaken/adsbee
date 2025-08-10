@@ -6,6 +6,8 @@
 #include "fec.hh"
 #include "utils/buffer_utils.hh"  // for CHAR_TO_HEX
 
+static constexpr float kDegPerAWBTick = 360.0f / 16777216.0f;  // 360 degrees / 2^24
+
 RawUATADSBPacket::RawUATADSBPacket(const char *rx_string, int16_t source_in, int16_t sigs_dbm_in, int16_t sigq_db_in,
                                    uint64_t mlat_48mhz_64bit_counts_in)
     : source(source_in),
@@ -55,6 +57,21 @@ void DecodedUATADSBPacket::ConstructUATPacket() {
         }
     }
 #endif /* ON_PICO */
+
+    // Extract information from the decoded payload.
+    UATHeader *header = reinterpret_cast<UATHeader *>(decoded_payload);
+    UATStateVector *state_vector = reinterpret_cast<UATStateVector *>(decoded_payload + sizeof(UATHeader));
+
+    // Receiver-side processing of selected fields that we don't want to deal with on other platforms (e.g. ones with no
+    // FPU).
+    latitude_deg = static_cast<float>(state_vector->latitude_awb) * kDegPerAWBTick - 90.0f;  // Convert to degrees.
+    if (latitude_deg > 90) {
+        latitude_deg -= 180.0f;  // Convert to negative latitude if it exceeds 90 degrees.
+    }
+    longitude_deg = static_cast<float>(state_vector->longitude_awb) * kDegPerAWBTick - 90.0f;  // Convert to degrees.
+    if (longitude_deg > 180) {
+        longitude_deg -= 360.0f;  // Convert to negative longitude if it exceeds 180 degrees.
+    }
 
     is_valid_ = true;
 }

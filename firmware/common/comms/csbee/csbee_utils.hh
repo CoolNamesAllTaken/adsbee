@@ -16,7 +16,7 @@ const uint16_t kEOLNumChars = 2;
  * @param[in] aircraft Aircraft object to dump the contents of.
  * @retval Number of characters written to the string buffer, or a negative value if something went wrong.
  */
-inline int16_t WriteCSBeeAircraftMessageStr(char message_buf[], const Aircraft1090 &aircraft) {
+inline int16_t WriteCSBeeAircraftMessageStr(char message_buf[], const ModeSAircraft &aircraft) {
     // #A:ICAO,FLAGS,CALL,SQ,LAT,LON,ALT_BARO,TRACK,VELH,VELV,SIGS,SIGQ,FPS,NICNAC,ALT_GEO,ECAT,CRC\r\n
 
     // Build up SYSINFO bitfield.

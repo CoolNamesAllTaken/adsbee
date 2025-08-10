@@ -2,7 +2,7 @@
 
 /**
  * Utilities ripped from the NASA CPR verification code in order to allow conversion from floating point representation
- * of postiions to Alternative Weighted Binary, the fixed point representation used by the CPR decoder library.
+ * of postiions to Angular Weighted Binary, the fixed point representation used by the CPR decoder library.
  */
 
 #include "math.h"
@@ -16,8 +16,8 @@
 #define __mod360__(X)     (X >= 360 ? X - 360 : (X < 0 ? 360 + X : X))
 
 /**
- * Convert an Alternative Weighted Binary latitude to a floating point representation.
- * @param[in] awb_lat The Alternative Weighted Binary latitude to convert.
+ * Convert an Angular Weighted Binary latitude to a floating point representation.
+ * @param[in] awb_lat The Angular Weighted Binary latitude to convert.
  * @return The floating point representation of the latitude, in degrees.
  */
 inline float awb2lat(uint32_t awb_lat) {
@@ -28,22 +28,22 @@ inline float awb2lat(uint32_t awb_lat) {
 }
 
 /**
- * Convert an Alternative Weighted Binary longitude to a floating point representation.
- * @param[in] awb_lon The Alternative Weighted Binary longitude to convert.
+ * Convert an Angular Weighted Binary longitude to a floating point representation.
+ * @param[in] awb_lon The Angular Weighted Binary longitude to convert.
  * @return The floating point representation of the longitude, in degrees.
  */
 inline float awb2lon(uint32_t awb_lon) { return __mod360__(awb_lon * RESOLUTION); }
 
 /**
- * Convert a floating point latitude to an Alternative Weighted Binary representation.
+ * Convert a floating point latitude to an Angular Weighted Binary representation.
  * @param[in] lat The latitude to convert.
- * @return The Alternative Weighted Binary representation of the latitude.
+ * @return The Angular Weighted Binary representation of the latitude.
  */
 inline uint32_t lat2awb(float lat) { return (uint32_t)floor(INV_RESOLUTION * __mod360__(lat) + 0.5f); }
 
 /**
- * Convert an Alternative Weighted Binary longitude to a floating point representation.
- * @param[in] awb_lon The Alternative Weighted Binary longitude to convert.
+ * Convert an Angular Weighted Binary longitude to a floating point representation.
+ * @param[in] awb_lon The Angular Weighted Binary longitude to convert.
  * @return The floating point representation of the longitude.
  */
 inline uint32_t lon2awb(float lon) { return (uint32_t)floor(lon * INV_RESOLUTION + 0.5f); }

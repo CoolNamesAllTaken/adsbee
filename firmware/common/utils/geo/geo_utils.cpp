@@ -68,7 +68,7 @@ uint32_t CalculateGeoidalDistanceMetersAWB(uint32_t lat_a_awb, uint32_t lon_a_aw
 }
 
 uint32_t CalculateGeoidalDistanceMetersDeg(float lat_a_deg, float lon_a_deg, float lat_b_deg, float lon_b_deg) {
-    // Convert degrees to Alternative Weighted Binary format.
+    // Convert degrees to Angular Weighted Binary format.
     // Cast floats to signed ints, then to unsigned ints, to avoid undefined behavior with negative floats.
     uint32_t lat_a_awb = safe_cast_float_to_uint32(INV_RESOLUTION * lat_a_deg);
     uint32_t lon_a_awb = safe_cast_float_to_uint32(INV_RESOLUTION * lon_a_deg);

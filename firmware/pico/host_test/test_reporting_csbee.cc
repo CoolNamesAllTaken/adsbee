@@ -17,7 +17,7 @@ std::string_view GetNextToken(std::string_view* message_in = nullptr, char delim
 TEST(CSBeeUtils, AircraftToCSBeeString) {
     char message[kCSBeeMessageStrMaxLen];
 
-    Aircraft1090 aircraft;
+    ModeSAircraft aircraft;
     aircraft.flags = UINT32_MAX;  // Set allll the flags.
     aircraft.last_message_timestamp_ms = 1000;
     aircraft.last_message_signal_strength_dbm = -75;
@@ -28,25 +28,26 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
     aircraft.icao_address = 0x12345E;
     strcpy(aircraft.callsign, "ABCDEFG");
     aircraft.squawk = 01234;
-    aircraft.category = Aircraft1090::Category::kCategoryGliderSailplane;
+    aircraft.category = ModeSAircraft::Category::kCategoryGliderSailplane;
     aircraft.baro_altitude_ft = 1000;
     aircraft.gnss_altitude_ft = 997;
-    aircraft.altitude_source = Aircraft1090::AltitudeSource::kAltitudeSourceBaro;
+    aircraft.altitude_source = ModeSAircraft::AltitudeSource::kAltitudeSourceBaro;
     aircraft.latitude_deg = -120.654321;
     aircraft.longitude_deg = -80.123456;
     aircraft.direction_deg = 300.5678;
     aircraft.velocity_kts = 123.45;
-    aircraft.velocity_source = Aircraft1090::VelocitySource::kVelocitySourceAirspeedTrue;
+    aircraft.velocity_source = ModeSAircraft::VelocitySource::kVelocitySourceAirspeedTrue;
     aircraft.vertical_rate_fpm = -200;
-    aircraft.vertical_rate_source = Aircraft1090::VerticalRateSource::kVerticalRateSourceBaro;
-    aircraft.navigation_integrity_category = static_cast<Aircraft1090::NICRadiusOfContainment>(0b1011);
-    aircraft.navigation_integrity_category_baro = static_cast<Aircraft1090::NICBarometricAltitudeIntegrity>(0b1);
-    aircraft.navigation_accuracy_category_velocity = static_cast<Aircraft1090::NACHorizontalVelocityError>(0b101);
-    aircraft.navigation_accuracy_category_position = static_cast<Aircraft1090::NACEstimatedPositionUncertainty>(0b1101);
-    aircraft.geometric_vertical_accuracy = static_cast<Aircraft1090::GVA>(0b11);
-    aircraft.source_integrity_level = static_cast<Aircraft1090::SILProbabilityOfExceedingNICRadiusOfContainmnent>(
-        Aircraft1090::kPOERCLessThanOrEqualTo1em5PerFlightHour);
-    aircraft.system_design_assurance = static_cast<Aircraft1090::SystemDesignAssurance>(0b11);
+    aircraft.vertical_rate_source = ModeSAircraft::VerticalRateSource::kVerticalRateSourceBaro;
+    aircraft.navigation_integrity_category = static_cast<ModeSAircraft::NICRadiusOfContainment>(0b1011);
+    aircraft.navigation_integrity_category_baro = static_cast<ModeSAircraft::NICBarometricAltitudeIntegrity>(0b1);
+    aircraft.navigation_accuracy_category_velocity = static_cast<ModeSAircraft::NACHorizontalVelocityError>(0b101);
+    aircraft.navigation_accuracy_category_position =
+        static_cast<ModeSAircraft::NACEstimatedPositionUncertainty>(0b1101);
+    aircraft.geometric_vertical_accuracy = static_cast<ModeSAircraft::GVA>(0b11);
+    aircraft.source_integrity_level = static_cast<ModeSAircraft::SILProbabilityOfExceedingNICRadiusOfContainmnent>(
+        ModeSAircraft::kPOERCLessThanOrEqualTo1em5PerFlightHour);
+    aircraft.system_design_assurance = static_cast<ModeSAircraft::SystemDesignAssurance>(0b11);
     aircraft.gnss_antenna_offset_right_of_roll_axis_m = -6;
     aircraft.length_m = 10;
     aircraft.width_m = 20;

@@ -12,7 +12,7 @@
 
 #define FILTER_CPR_POSITIONS
 
-class Aircraft1090 {
+class ModeSAircraft {
    public:
     static constexpr uint16_t kCallSignMaxNumChars = 8;
     static constexpr uint16_t kCallSignMinNumChars = 3;  // Callsigns must be at this long to be valid.
@@ -179,8 +179,8 @@ class Aircraft1090 {
         uint16_t valid_extended_squitter_frames = 0;
     };
 
-    Aircraft1090(uint32_t icao_address_in);
-    Aircraft1090();
+    ModeSAircraft(uint32_t icao_address_in);
+    ModeSAircraft();
 
     /**
      * Checks to see if the aircraft position can be decoded. Requires that both an odd and an even packet have been
@@ -349,6 +349,23 @@ class Aircraft1090 {
 
     int8_t adsb_version = -1;
 
+    /**
+     * GENERIC COMMENT FOR ALL MESSAGE INGESTION HELPERS
+     * Ingests a <Message Type> ADS-B message. Called by IngestADSBPacket, which makes sure that the packet
+     * is valid and has the correct Downlink Format.
+     * @param[out] aircraft Reference to the Aircraft to populate with info pulled from packet.
+     * @param[in] packet ADSBPacket to ingest.
+     * @retval True if message was ingested successfully, false otherwise.
+     */
+
+    bool ApplyAircraftIDMessage(ADSBPacket packet);
+    bool ApplySurfacePositionMessage(ADSBPacket packet);
+    bool ApplyAirbornePositionMessage(ADSBPacket packet, bool filter_cpr_position = true);
+    bool ApplyAirborneVelocitiesMessage(ADSBPacket packet);
+    bool ApplyAircraftStatusMessage(ADSBPacket packet);
+    bool ApplyTargetStateAndStatusInfoMessage(ADSBPacket packet);
+    bool ApplyAircraftOperationStatusMessage(ADSBPacket packet);
+
    private:
     struct CPRPacket {
         // SetCPRLatLon values.
@@ -361,7 +378,7 @@ class Aircraft1090 {
     CPRPacket last_even_packet_;
 
 #ifdef FILTER_CPR_POSITIONS
-    // Position in Alternative Weighted Binary. This gets set to a candidate position which may not match the actual
+    // Position in Angular Weighted Binary. This gets set to a candidate position which may not match the actual
     // displayed latitude_deg and logitude_deg. Format is in AWB to enable fast fixed point operations for screening
     // candidate positions.
     uint32_t last_filter_received_timestamp_ms_ =
@@ -565,7 +582,7 @@ class AircraftDictionary {
      * @param[in] aircraft Aircraft to insert.
      * @retval True if insertaion succeeded, false if failed.
      */
-    bool InsertAircraft(const Aircraft1090 &aircraft);
+    bool InsertAircraft(const ModeSAircraft &aircraft);
 
     /**
      * Remove an aircraft from the dictionary, by ICAO address.
@@ -580,7 +597,7 @@ class AircraftDictionary {
      * @param[out] aircraft_out Aircraft reference to put the retrieved aircraft into if successful.
      * @retval True if aircraft was found and retrieved, false if aircraft was not in the dictionary.
      */
-    bool GetAircraft(uint32_t icao_address, Aircraft1090 &aircraft_out) const;
+    bool GetAircraft(uint32_t icao_address, ModeSAircraft &aircraft_out) const;
 
     /**
      * Check if an aircraft is contained in the dictionary.
@@ -594,7 +611,7 @@ class AircraftDictionary {
      * @param[in] icao_address ICAO address of the aircraft to find.
      * @retval Pointer to the aircraft if it exists, or NULL if it wasn't in the dictionary.
      */
-    Aircraft1090 *GetAircraftPtr(uint32_t icao_address);
+    ModeSAircraft *GetAircraftPtr(uint32_t icao_address);
 
     /**
      * Used to enable or disable the CPR position filter.
@@ -608,29 +625,12 @@ class AircraftDictionary {
      */
     inline bool CPRPositionFilterIsEnabled() { return config_.enable_cpr_position_filter; }
 
-    std::unordered_map<uint32_t, Aircraft1090> dict;  // index Aircraft objects by their ICAO identifier
+    std::unordered_map<uint32_t, ModeSAircraft> dict;  // index Aircraft objects by their ICAO identifier
 
     Metrics metrics;
 
    private:
     // Helper functions for ingesting specific ADS-B packet types, called by IngestADSBPacket.
-
-    /**
-     * GENERIC COMMENT FOR ALL MESSAGE INGESTION HELPERS
-     * Ingests a <Message Type> ADS-B message. Called by IngestADSBPacket, which makes sure that the packet
-     * is valid and has the correct Downlink Format.
-     * @param[out] aircraft Reference to the Aircraft to populate with info pulled from packet.
-     * @param[in] packet ADSBPacket to ingest.
-     * @retval True if message was ingested successfully, false otherwise.
-     */
-
-    bool ApplyAircraftIDMessage(Aircraft1090 &aircraft, ADSBPacket packet);
-    bool ApplySurfacePositionMessage(Aircraft1090 &aircraft, ADSBPacket packet);
-    bool ApplyAirbornePositionMessage(Aircraft1090 &aircraft, ADSBPacket packet);
-    bool ApplyAirborneVelocitiesMessage(Aircraft1090 &aircraft, ADSBPacket packet);
-    bool ApplyAircraftStatusMessage(Aircraft1090 &aircraft, ADSBPacket packet);
-    bool ApplyTargetStateAndStatusInfoMessage(Aircraft1090 &aircraft, ADSBPacket packet);
-    bool ApplyAircraftOperationStatusMessage(Aircraft1090 &aircraft, ADSBPacket packet);
 
     AircraftDictionaryConfig_t config_;
     // Counters in metrics_counter_ are incremented, then metrics_counter_ is swapped into metrics during the dictionary

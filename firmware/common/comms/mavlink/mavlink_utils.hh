@@ -4,6 +4,6 @@
 #include "mavlink.h"
 #include "stdint.h"
 
-uint8_t AircraftCategoryToMAVLINKEmitterType(Aircraft1090::Category category);
+uint8_t AircraftCategoryToMAVLINKEmitterType(ModeSAircraft::Category category);
 
-mavlink_adsb_vehicle_t AircraftToMAVLINKADSBVehicleMessage(const Aircraft1090 &aircraft);
+mavlink_adsb_vehicle_t AircraftToMAVLINKADSBVehicleMessage(const ModeSAircraft &aircraft);

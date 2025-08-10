@@ -123,13 +123,13 @@ class DecodedUATADSBPacket {
     };
 
     struct __attribute__((packed)) UATHeader {
-        uint8_t type_code                  : 5;
+        uint8_t mdb_type_code              : 5;  // Message Data Block (MDB) type code.
         AddressQualifier address_qualifier : 3;
     };
 
     struct __attribute__((packed)) UATStateVector {
-        uint32_t latitute_wgs84                              : 23;
-        uint32_t longitude_wgs84                             : 24;
+        uint32_t latitude_awb                                : 23;
+        uint32_t longitude_awb                               : 24;
         bool altitude_is_geometric_altitude                  : 1;
         uint16_t altitude_encoded                            : 12;
         NICRadiusOfContainment navigation_integrity_category : 4;
@@ -147,6 +147,17 @@ class DecodedUATADSBPacket {
     uint8_t decoded_payload[RawUATADSBPacket::kLongADSBMessageNumBytes] = {0};
 
     char debug_string[kDebugStrLen] = "";
+
+    // Everything is made available directly from the decoded buffer, except for items that require post-processing like
+    // lat/lon.
+
+    UATHeader *header = nullptr;             // Pointer to the UAT header.
+    UATStateVector *state_vector = nullptr;  // Pointer to the UAT state vector.
+
+    // Latitude and logitude are decoded on the receiver side as a courtesy, since it has access to an FPU. Everything
+    // else gets handled by the aircraft dictionary that is ingesting the packet.
+    float latitude_deg = 0.0f;   // Latitude in degrees.
+    float longitude_deg = 0.0f;  // Longitude in degrees.
 
    protected:
     bool is_valid_ = false;
