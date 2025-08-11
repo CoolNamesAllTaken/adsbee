@@ -25,24 +25,24 @@ class ModeSAircraft {
 
     enum Category : uint8_t {
         kCategoryInvalid = 0,
-        kCategoryReserved,
-        kCategoryNoCategoryInfo,
-        kCategorySurfaceEmergencyVehicle,
-        kCategorySurfaceServiceVehicle,
-        kCategoryGroundObstruction,
-        kCategoryGliderSailplane,
-        kCategoryLighterThanAir,
-        kCategoryParachutistSkydiver,
-        kCategoryUltralightHangGliderParaglider,
-        kCategoryUnmannedAerialVehicle,
-        kCategorySpaceTransatmosphericVehicle,
-        kCategoryLight,    // < 7000kg
-        kCategoryMedium1,  // 7000kg - 34000kg
-        kCategoryMedium2,  // 34000kg - 136000kg
-        kCategoryHighVortexAircraft,
-        kCategoryHeavy,            // > 136000kg
-        kCategoryHighPerformance,  // >5g acceleration and >400kt speed
-        kCategoryRotorcraft
+        kCategoryReserved = 1,
+        kCategoryNoCategoryInfo = 2,
+        kCategorySurfaceEmergencyVehicle = 3,
+        kCategorySurfaceServiceVehicle = 4,
+        kCategoryGroundObstruction = 5,
+        kCategoryGliderSailplane = 6,
+        kCategoryLighterThanAir = 7,
+        kCategoryParachutistSkydiver = 8,
+        kCategoryUltralightHangGliderParaglider = 9,
+        kCategoryUnmannedAerialVehicle = 10,
+        kCategorySpaceTransatmosphericVehicle = 11,
+        kCategoryLight = 12,    // < 7000kg
+        kCategoryMedium1 = 13,  // 7000kg - 34000kg
+        kCategoryMedium2 = 14,  // 34000kg - 136000kg
+        kCategoryHighVortexAircraft = 15,
+        kCategoryHeavy = 16,            // > 136000kg
+        kCategoryHighPerformance = 17,  // >5g acceleration and >400kt speed
+        kCategoryRotorcraft = 18
     };
 
     enum AltitudeSource : int16_t {
@@ -390,6 +390,121 @@ class ModeSAircraft {
     Metrics metrics_counter_;
 };
 
+class UATAircraft {
+   public:
+    enum AddressQualifier : int8_t {
+        kAddressQualifierNotSet = -1,  // Address qualifier has not been set.
+        kADSBTargetWithICAO24BitAddress = 0,
+        kADSBTargetWithSelfAssignedTemporaryAddress = 1,
+        kTISBTargetWithICAO24BitAddress = 2,
+        kTISBTargetWithTrackFileIdentifier = 3,
+        kSurfaceVehicle = 4,
+        kFixedADSBBeacon = 5
+    };
+
+    enum Category : uint8_t {
+        kCategoryNoCategoryInfo = 0,
+        kCategoryLight = 1,    // < 7000kg
+        kCategoryMedium1 = 2,  // 7000kg - 34000kg
+        kCategoryMedium2 = 3,  // 34000kg - 136000kg
+        kCategoryHighVortexAircraft = 4,
+        kCategoryHeavy = 5,            // > 136000kg
+        kCategoryHighPerformance = 6,  // >5g acceleration and high speed
+        kCategoryRotorcraft = 7,
+        kCategoryReserved1 = 8,
+        kCategoryGliderSailplane = 9,
+        kCategoryLighterThanAir = 10,
+        kCategoryParachutistSkydiver = 11,
+        kCategoryUltralightHangGliderParaglider = 12,
+        kCategoryReserved2 = 13,
+        kCategoryUnmannedAerialVehicle = 14,
+        kCategorySpaceTransatmosphericVehicle = 15,
+        kCategoryReserved3 = 16,  // Reserved for future use.
+        kCategorySurfaceEmergencyVehicle = 17,
+        kCategorySurfaceServiceVehicle = 18,
+        kCategoryPointObstacle = 19,
+        kCategoryClusterObstacle = 20,
+        kCategoryLineObstacle = 21
+    };
+
+    enum NICRadiusOfContainment : uint8_t {
+        kROCUnknown = 0,
+        kROCLessThan20NauticalMiles = 1,
+        kROCLessThan8NauticalMiles = 2,
+        kROCLessThan4NauticalMiles = 3,
+        kROCLessThan2NauticalMiles = 4,
+        kROCLessThan1NauticalMile = 5,
+        kROCLessThan0p6NauticalMiles = 6,  // Lump together with <0.5NM and <0.3NM since they share a NIC value.
+        kROCLessThan0p2NauticalMiles = 7,
+        kROCLessThan0p1NauticalMiles = 8,
+        kROCLessThan75Meters = 9,
+        kROCLessThan25Meters = 10,
+        kROCLessThan7p5Meters = 11
+    };
+
+    enum AirGroundState : uint8_t {
+        kAirGroundStateAirborneSubsonic = 0,
+        kAirGroundStateAirborneSupersonic = 1,
+        kAirGroundStateOnGround = 2,
+        kAirGroundStateTISBUplink = 3
+    };
+
+    struct Metrics {
+        uint16_t valid_frames = 0;  // Number of valid UAT frames received.
+    };
+
+    UATAircraft(uint32_t icao_address_in);
+    UATAircraft();
+
+    uint32_t flags = 0b0;
+
+    uint32_t last_message_timestamp_ms = 0;
+    int16_t last_message_signal_strength_dbm = 0;  // Voltage of RSSI signal during message receipt.
+    int16_t last_message_signal_quality_db = 0;    // Ratio of RSSI to noise floor during message receipt.
+    uint32_t last_track_update_timestamp_ms = 0;   // Timestamp of the last time that the position was updated.
+    Metrics metrics;
+
+    uint16_t transponder_capability = 0;
+    uint32_t icao_address = 0;
+    AddressQualifier address_qualifier = kAddressQualifierNotSet;
+    char callsign[ModeSAircraft::kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
+    uint16_t squawk = 0;
+    Category category = kCategoryNoCategoryInfo;
+
+    float latitude_deg = 0.0f;
+    float longitude_deg = 0.0f;
+};
+
+class Aircraft {
+   public:
+    static const uint8_t kAircraftTypeShiftBits = 24;
+
+    enum AircraftType : int8_t {
+        kInvalid = -1,
+        kAircraftTypeModeS = 0,
+        kAircraftTypeUAT = 1,
+        kAircraftTypeRemodeID = 2,
+    };
+
+    // UID consists of AircraftType (8 bits) | ICAO address (24 bits).
+    inline uint32_t ModeSICAOToUID(uint32_t icao_address) {
+        // Convert the ICAO address to a unique ID for hash map lookups.
+        return icao_address | (Aircraft::kAircraftTypeModeS << kAircraftTypeShiftBits);
+    }
+    inline uint32_t UATICAOToUID(uint32_t icao_address) {
+        // Convert the ICAO address to a unique ID for hash map lookups.
+        return icao_address | (Aircraft::kAircraftTypeUAT << kAircraftTypeShiftBits);
+    }
+    // Drone Remote ID can be 15 character serial number, CAA registation iD, or 128-bit UTM ID.
+
+    AircraftType type = kInvalid;
+    uint32_t uid = 0;  // Unique ID for the aircraft, used for hash map lookups.
+    union {
+        ModeSAircraft mode_s;
+        UATAircraft uat;
+    };
+};
+
 class AircraftDictionary {
    public:
     static const uint16_t kMaxNumAircraft = 400;
@@ -582,36 +697,36 @@ class AircraftDictionary {
      * @param[in] aircraft Aircraft to insert.
      * @retval True if insertaion succeeded, false if failed.
      */
-    bool InsertAircraft(const ModeSAircraft &aircraft);
+    bool InsertAircraft(const Aircraft &aircraft);
 
     /**
      * Remove an aircraft from the dictionary, by ICAO address.
-     * @param[in] icao_address ICAO address of the aircraft to remove from the dictionary.
+     * @param[in] uid UID of the aircraft to remove from the dictionary.
      * @retval True if removal succeeded, false if aircraft was not found.
      */
-    bool RemoveAircraft(uint32_t icao_address);
+    bool RemoveAircraft(uint32_t uid);
 
     /**
      * Retrieve an aircraft from the dictionary.
-     * @param[in] icao_address Address to use for looking up the aircraft.
+     * @param[in] uid Address to use for looking up the aircraft.
      * @param[out] aircraft_out Aircraft reference to put the retrieved aircraft into if successful.
      * @retval True if aircraft was found and retrieved, false if aircraft was not in the dictionary.
      */
-    bool GetAircraft(uint32_t icao_address, ModeSAircraft &aircraft_out) const;
+    bool GetAircraft(uint32_t uid, Aircraft &aircraft_out) const;
 
     /**
      * Check if an aircraft is contained in the dictionary.
-     * @param[in] icao_address Address to use for looking up the aircraft.
+     * @param[in] uid Address to use for looking up the aircraft.
      * @retval True if aircraft is in the dictionary, false if not.
      */
-    bool ContainsAircraft(uint32_t icao_address) const;
+    bool ContainsAircraft(uint32_t uid) const;
 
     /**
      * Return a pointer to an aircraft if it's in the aircraft dictionary.
-     * @param[in] icao_address ICAO address of the aircraft to find.
+     * @param[in] uid UID of the aircraft to find.
      * @retval Pointer to the aircraft if it exists, or NULL if it wasn't in the dictionary.
      */
-    ModeSAircraft *GetAircraftPtr(uint32_t icao_address);
+    ModeSAircraft *GetAircraftPtr(uint32_t uid);
 
     /**
      * Used to enable or disable the CPR position filter.
@@ -625,7 +740,7 @@ class AircraftDictionary {
      */
     inline bool CPRPositionFilterIsEnabled() { return config_.enable_cpr_position_filter; }
 
-    std::unordered_map<uint32_t, ModeSAircraft> dict;  // index Aircraft objects by their ICAO identifier
+    std::unordered_map<uint32_t, Aircraft> dict;  // index Aircraft objects by their ICAO identifier
 
     Metrics metrics;
 

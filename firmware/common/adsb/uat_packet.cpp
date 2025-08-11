@@ -59,8 +59,66 @@ void DecodedUATADSBPacket::ConstructUATPacket() {
 #endif /* ON_PICO */
 
     // Extract information from the decoded payload.
-    UATHeader *header = reinterpret_cast<UATHeader *>(decoded_payload);
-    UATStateVector *state_vector = reinterpret_cast<UATStateVector *>(decoded_payload + sizeof(UATHeader));
+    header = reinterpret_cast<UATHeader *>(decoded_payload);
+
+    // UAT Tech Manual Table 2-2: Composition of UAT ADS-B Message Data Block
+    // Interpret the message contents based on the MDB type code.
+    switch (header->mdb_type_code) {
+        case 0:  // Basic UAT ADS-B message. Just header and state vector, nothing else.
+            // HDR | SV | Reserved
+            state_vector = reinterpret_cast<UATStateVector *>(decoded_payload + sizeof(UATHeader));
+            break;
+        case 1:
+            // HDR | SV | MS | AUX SV
+            state_vector = reinterpret_cast<UATStateVector *>(decoded_payload + kStateVectorOffsetBytes);
+            mode_status = reinterpret_cast<UATModeStatus *>(decoded_payload + kModeStatusOffsetBytes);
+            auxiliary_state_vector =
+                reinterpret_cast<UATAuxiliaryStateVector *>(decoded_payload + kAuxiliaryStateVectorOffsetBytes);
+            break;
+        case 2:
+            // HDR | SV | Reserved | AUX SV
+            state_vector = reinterpret_cast<UATStateVector *>(decoded_payload + kStateVectorOffsetBytes);
+            auxiliary_state_vector =
+                reinterpret_cast<UATAuxiliaryStateVector *>(decoded_payload + kAuxiliaryStateVectorOffsetBytes);
+            break;
+        case 3:
+            // HDR | SV | MS | TS | Reserved Byte
+            state_vector = reinterpret_cast<UATStateVector *>(decoded_payload + kStateVectorOffsetBytes);
+            mode_status = reinterpret_cast<UATModeStatus *>(decoded_payload + kModeStatusOffsetBytes);
+            // Target state in this message is at the same offset as auxiliary state vector in other messages.
+            target_state = reinterpret_cast<UATTargetState *>(decoded_payload + kAuxiliaryStateVectorOffsetBytes);
+            break;
+        case 4:
+            // HDR | SV | Reserved for TC+0 | TS | Reserved Byte
+            state_vector = reinterpret_cast<UATStateVector *>(decoded_payload + kStateVectorOffsetBytes);
+            // Target state in this message is at the same offset as auxiliary state vector in other messages.
+            target_state = reinterpret_cast<UATTargetState *>(decoded_payload + kAuxiliaryStateVectorOffsetBytes);
+            break;
+        case 5:
+            // HDR | SV | Reserved for TC+1 | AUX SV
+            state_vector = reinterpret_cast<UATStateVector *>(decoded_payload + kStateVectorOffsetBytes);
+            auxiliary_state_vector =
+                reinterpret_cast<UATAuxiliaryStateVector *>(decoded_payload + kAuxiliaryStateVectorOffsetBytes);
+            break;
+        case 6:
+            // HDR | SV | Reserved | TS | Reserved Byte | AUX SV
+            state_vector = reinterpret_cast<UATStateVector *>(decoded_payload + kStateVectorOffsetBytes);
+            target_state = reinterpret_cast<UATTargetState *>(decoded_payload + 24);
+            auxiliary_state_vector =
+                reinterpret_cast<UATAuxiliaryStateVector *>(decoded_payload + kAuxiliaryStateVectorOffsetBytes);
+            break;
+        case 7:
+        case 8:
+        case 9:
+        case 10:
+            // HDR | SV | Reserved
+            state_vector = reinterpret_cast<UATStateVector *>(decoded_payload + kStateVectorOffsetBytes);
+            break;
+        default:
+            // All other MDB type codes are reserved for future revisions of the UAT ADS-B protocol or reserved for
+            // developmental use.
+            break;
+    }
 
     // Receiver-side processing of selected fields that we don't want to deal with on other platforms (e.g. ones with no
     // FPU).

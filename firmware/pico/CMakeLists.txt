@@ -86,6 +86,7 @@ else()
         -Wno-format          # int != int32_t as far as the compiler is concerned because gcc has int32_t as long int
         -Wno-unused-function # we have some for the docs that aren't called
         -Wno-maybe-uninitialized
+        -Wno-packed-bitfield-compat # Ignore the packed bitfield compatibility warning from GCC 4.4, since we never used GCC that old.
     )
 
     # Create the executable and bring in testing source files.

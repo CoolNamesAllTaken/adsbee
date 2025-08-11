@@ -56,6 +56,14 @@ class DecodedUATADSBPacket {
     static const uint16_t kMaxPacketLenBits = 420;  // 420 bits = 52.5 bytes, round up to 53 bytes.
     static const uint16_t kDebugStrLen = 200;
 
+    // Some data blocks are at the same offset in UAT ADS-B messages when they are present, regardless of MDB type code.
+    // These offsets are defined here for convenience. Note that some other message data block members have different
+    // offsets depending on the MDB type code, so they are not defined here.
+    static const uint16_t kHeaderOffsetBytes = 0;
+    static const uint16_t kStateVectorOffsetBytes = 4;
+    static const uint16_t kModeStatusOffsetBytes = 17;
+    static const uint16_t kAuxiliaryStateVectorOffsetBytes = 29;
+
     enum UATADSBMessageFormat : uint8_t {
         kUATADSBMessageFormatInvalid = 0,
         kUATADSBMessageFormatShort = 1,
@@ -91,55 +99,57 @@ class DecodedUATADSBPacket {
         return 25 * (altitude_encoded - 1) - 1000;  // Convert to feet.
     };
 
-    enum AddressQualifier : uint8_t {
-        kADSBTargetWithICAO24BitAddress = 0,
-        kADSBTargetWithSelfAssignedTemporaryAddress = 1,
-        kTISBTargetWithICAO24BitAddress = 2,
-        kTISBTargetWithTrackFileIdentifier = 3,
-        kSurfaceVehicle = 4,
-        kFixedADSBBeacon = 5
-    };
-
-    enum NICRadiusOfContainment : uint8_t {
-        kROCUnknown = 0,
-        kROCLessThan20NauticalMiles = 1,
-        kROCLessThan8NauticalMiles = 2,
-        kROCLessThan4NauticalMiles = 3,
-        kROCLessThan2NauticalMiles = 4,
-        kROCLessThan1NauticalMile = 5,
-        kROCLessThan0p6NauticalMiles = 6,  // Lump together with <0.5NM and <0.3NM since they share a NIC value.
-        kROCLessThan0p2NauticalMiles = 7,
-        kROCLessThan0p1NauticalMiles = 8,
-        kROCLessThan75Meters = 9,
-        kROCLessThan25Meters = 10,
-        kROCLessThan7p5Meters = 11
-    };
-
-    enum AirGroundState : uint8_t {
-        kAirGroundStateAirborneSubsonic = 0,
-        kAirGroundStateAirborneSupersonic = 1,
-        kAirGroundStateOnGround = 2,
-        kAirGroundStateTISBUplink = 3
-    };
-
     struct __attribute__((packed)) UATHeader {
-        uint8_t mdb_type_code              : 5;  // Message Data Block (MDB) type code.
-        AddressQualifier address_qualifier : 3;
+        uint8_t mdb_type_code     : 5;  // Message Data Block (MDB) type code.
+        uint8_t address_qualifier : 3;
     };
 
     struct __attribute__((packed)) UATStateVector {
-        uint32_t latitude_awb                                : 23;
-        uint32_t longitude_awb                               : 24;
-        bool altitude_is_geometric_altitude                  : 1;
-        uint16_t altitude_encoded                            : 12;
-        NICRadiusOfContainment navigation_integrity_category : 4;
-        AirGroundState air_ground_state                      : 2;
-        uint8_t reserved                                     : 1;
-        uint32_t horizontal_velocity                         : 20;
+        uint32_t latitude_awb               : 23;
+        uint32_t longitude_awb              : 24;
+        bool altitude_is_geometric_altitude : 1;
+        uint16_t altitude_encoded           : 12;
+        uint8_t nic                         : 4;
+        uint8_t air_ground_state            : 2;
+        uint8_t reserved                    : 1;
+        uint32_t horizontal_velocity        : 20;
         union {
             uint16_t vertical_velocity          : 11;
             uint16_t aircraft_length_width_code : 11;
         };
+    };
+
+    struct __attribute__((packed)) UATModeStatus {
+        uint8_t emitter_category_and_callsign_chars_1_2 : 8;  // Emitter category and first two characters of callsign.
+        uint8_t callsign_chars_3_4_5                    : 8;  // Next three characters of callsign.
+        uint8_t callsign_chars_6_7_8                    : 8;  // Last three characters of callsign.
+        uint8_t emergency_priority_status               : 3;  // Emergency / priority status.
+        uint8_t uat_version                             : 3;  // UAT protocol version.
+        uint8_t sil                                     : 2;  // Source Integrity Level (SIL).
+        uint8_t transmit_mso                            : 6;
+        uint8_t reserved1                               : 2;  // Reserved bits.
+        uint8_t nac_p                                   : 4;  // Navigation Accuracy Category Position (NACp).
+        uint8_t nac_v                                   : 3;  // Navigation Accuracy Category Velocity (NACv).
+        uint8_t nic_baro                    : 1;  // Navigation Integrity Category Barometric Altitude (NICbaro).
+        uint8_t capability_codes            : 2;  // Capability codes.
+        uint8_t operational_modes           : 3;  // Operational modes.
+        uint8_t heading_uses_magnetic_north : 1;  // True if heading uses magnetic north, false if true north.
+        uint8_t csid      : 1;  // 1 if callsign can be interpreted as usual. 0 for alternate national use.
+        uint8_t reserved2 : 8;
+    };
+
+    struct __attribute__((packed)) UATAuxiliaryStateVector {
+        uint16_t secondary_altitude_encoded : 12;
+        uint32_t reserved                   : 28;
+    };
+
+    struct __attribute__((packed)) UATTargetState {
+        uint16_t target_heading_or_track_angle_info : 15;
+        uint32_t target_altitude_info               : 17;
+    };
+
+    struct __attribute__((packed)) UATTrajectoryChange {
+        uint32_t reserved;  // Currently set to all 0's by transponders for 2005 version of tech manual.
     };
 
     UATADSBMessageFormat message_format = kUATADSBMessageFormatInvalid;
@@ -151,8 +161,12 @@ class DecodedUATADSBPacket {
     // Everything is made available directly from the decoded buffer, except for items that require post-processing like
     // lat/lon.
 
-    UATHeader *header = nullptr;             // Pointer to the UAT header.
-    UATStateVector *state_vector = nullptr;  // Pointer to the UAT state vector.
+    UATHeader *header = nullptr;                                // Pointer to the UAT header.
+    UATStateVector *state_vector = nullptr;                     // Pointer to the UAT state vector.
+    UATModeStatus *mode_status = nullptr;                       // Pointer to the UAT mode status.
+    UATAuxiliaryStateVector *auxiliary_state_vector = nullptr;  // Pointer to the UAT auxiliary state vector.
+    UATTargetState *target_state = nullptr;                     // Pointer to the UAT target state.
+    UATTrajectoryChange *trajectory_change = nullptr;           // Pointer to the UAT trajectory change.
 
     // Latitude and logitude are decoded on the receiver side as a courtesy, since it has access to an FPU. Everything
     // else gets handled by the aircraft dictionary that is ingesting the packet.
@@ -185,4 +199,17 @@ class RawUATUplinkPacket {
 
     static const uint16_t kUplinkMessageMaxSizeBytes =
         kUplinkMessageNumBlocks * kUplinkMessageBlockNumBytes;  // Maximum size of a UAT uplink message.
+
+    struct __attribute__((packed)) UATUplinkDataBlock {
+        uint32_t ground_station_latitude_awb  : 23;  // Ground station latitude in AWB format.
+        uint32_t ground_station_longitude_awb : 24;  // Ground station longitude in AWB format.
+        bool pos_valid                        : 1;   // Position validity flag.
+        bool utc_coupled                      : 1;
+        bool reserved1                        : 1;
+        bool app_data_valid                   : 1;
+        uint8_t slot_id                       : 5;
+        uint8_t tis_b_site_id                 : 4;
+        uint8_t reserved2                     : 4;
+        // Subsequent Bytes are application data.
+    };
 };

@@ -772,16 +772,16 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
     metrics_counter_ = Metrics();  // Use default constructor to clear all values.
 }
 
-bool AircraftDictionary::ContainsAircraft(uint32_t icao_address) const {
-    auto itr = dict.find(icao_address);
+bool AircraftDictionary::ContainsAircraft(uint32_t uid) const {
+    auto itr = dict.find(uid);
     if (itr != dict.end()) {
         return true;
     }
     return false;
 }
 
-bool AircraftDictionary::GetAircraft(uint32_t icao_address, ModeSAircraft &aircraft_out) const {
-    auto itr = dict.find(icao_address);
+bool AircraftDictionary::GetAircraft(uint32_t uid, Aircraft &aircraft_out) const {
+    auto itr = dict.find(uid);
     if (itr != dict.end()) {
         aircraft_out = itr->second;
         return true;
@@ -789,14 +789,14 @@ bool AircraftDictionary::GetAircraft(uint32_t icao_address, ModeSAircraft &aircr
     return false;  // aircraft not found
 }
 
-ModeSAircraft *AircraftDictionary::GetAircraftPtr(uint32_t icao_address) {
-    auto itr = dict.find(icao_address);
+ModeSAircraft *AircraftDictionary::GetAircraftPtr(uint32_t uid) {
+    auto itr = dict.find(uid);
     if (itr != dict.end()) {
         return &(itr->second);  // return address of existing aircraft
     } else if (dict.size() < kMaxNumAircraft) {
-        ModeSAircraft new_aircraft = ModeSAircraft(icao_address);
-        dict[icao_address] = new_aircraft;
-        return &(dict[icao_address]);  // insert new aircraft and return its address
+        ModeSAircraft new_aircraft = ModeSAircraft(uid);
+        dict[uid] = new_aircraft;
+        return &(dict[uid]);  // insert new aircraft and return its address
     }
     return nullptr;  // can't find the aircraft or insert a new one
 }
