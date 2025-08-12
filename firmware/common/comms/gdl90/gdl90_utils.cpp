@@ -118,54 +118,6 @@ uint16_t GDL90Reporter::WriteGDL90UplinkDataMessage(uint8_t *to_buf, uint8_t *up
     return WriteGDL90Message(to_buf, message_buf, kMessageBufLenBytes);
 }
 
-uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const ModeSAircraft &aircraft, bool ownship) {
-    GDL90TargetReportData data;
-
-    // NOTE: Traffic Alert Status currently not used.
-    data.participant_address = aircraft.icao_address;
-    data.latitude_deg = aircraft.latitude_deg;
-    data.longitude_deg = aircraft.longitude_deg;
-    data.altitude_ft = aircraft.baro_altitude_ft;
-    data.direction_deg = aircraft.direction_deg;
-
-    GDL90TargetReportData::MiscIndicatorTrackOrHeadingValue track_heading_value;
-    if (!aircraft.HasBitFlag(ModeSAircraft::kBitFlagPositionValid)) {
-        // No valid position.
-        track_heading_value = GDL90TargetReportData::kMiscIndicatorTTNotValid;
-    } else {
-        // Valid position: indicate what kind of value the track angle / heading field is.
-        if (aircraft.HasBitFlag(ModeSAircraft::kBitFlagDirectionIsHeading)) {
-            // Aircraft is reporting heading instead of track.
-            track_heading_value = aircraft.HasBitFlag(ModeSAircraft::kBitFlagHeadingUsesMagneticNorth)
-                                      ? GDL90TargetReportData::kMiscIndicatorTTIsMagneticHeading
-                                      : GDL90TargetReportData::kMiscIndicatorTTIsTrueHeading;
-        } else {
-            // Aircraft is reporting track angle.
-            track_heading_value = GDL90TargetReportData::kMiscIndicatorTTIsTrueTrackAngle;
-        }
-    }
-    bool aircraft_updated_position = aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedBaroAltitude) ||
-                                     aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedGNSSAltitude) ||
-                                     aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedHorizontalVelocity) ||
-                                     aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedVerticalVelocity) ||
-                                     aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedPosition) ||
-                                     aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedDirection);
-    data.SetMiscIndicator(track_heading_value,
-                          aircraft_updated_position,                              // Aircraft report updated?
-                          aircraft.HasBitFlag(ModeSAircraft::kBitFlagIsAirborne)  // Aircraft is airborne?
-    );
-    data.navigation_integrity_category = aircraft.navigation_integrity_category;
-    data.velocity_kts = aircraft.velocity_kts;
-    data.vertical_rate_fpm = aircraft.vertical_rate_fpm;
-    data.direction_deg = aircraft.direction_deg;
-    data.emitter_category = aircraft.category_raw;
-    // GDL90 does not provide space for an EOS character, since it only provides 8 Bytes for the callsign.
-    memcpy(data.callsign, aircraft.callsign, ModeSAircraft::kCallSignMaxNumChars);
-    // NOTE: Emergency Priority code currently not used.
-
-    return WriteGDL90TargetReportMessage(to_buf, data, ownship);
-}
-
 uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const GDL90TargetReportData &data,
                                                       bool ownship) {
     const uint16_t kMessageBufLenBytes = 28;

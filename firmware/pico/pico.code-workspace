@@ -90,7 +90,8 @@
 			"thread": "cpp",
 			"typeinfo": "cpp",
 			"valarray": "cpp",
-			"variant": "cpp"
+			"variant": "cpp",
+			"shared_mutex": "cpp"
 		},
 		"C_Cpp.default.defines": [
 			"ON_PICO"

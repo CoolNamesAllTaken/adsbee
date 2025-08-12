@@ -4,7 +4,9 @@
 #include <cstdio>
 #include <cstring>
 #include <unordered_map>
+#include <variant>
 
+#include "comms.hh"
 #include "hal.hh"
 #include "json_utils.hh"
 #include "macros.hh"
@@ -12,10 +14,59 @@
 
 #define FILTER_CPR_POSITIONS
 
-class ModeSAircraft {
+/**
+ * Virtual base class for aircraft.
+ * This class is used to define the common interface for aircraft types that can be stored in the aircraft dictionary.
+ *
+ * Everything that is common to child classes should be defined here. Ideally reporters that don't need differentiation
+ * between protocol types for contacts can access everything through this common base class.
+ */
+class Aircraft {
    public:
+    static const uint8_t kAircraftTypeShiftBits = 24;
+    static const uint32_t kAircraftTypeMask = 0xFF000000;  // Mask to extract the aircraft type from the UID.
+
+    enum AircraftType : int8_t {
+        kAircraftTypeInvalid = -1,
+        kAircraftTypeModeS = 0,
+        kAircraftTypeUAT = 1,
+        kAircraftTypeRemoteID = 2,
+    };
+
     static constexpr uint16_t kCallSignMaxNumChars = 8;
     static constexpr uint16_t kCallSignMinNumChars = 3;  // Callsigns must be at this long to be valid.
+
+    virtual ~Aircraft() = default;
+    virtual void UpdateMetrics() = 0;
+    virtual uint32_t ICAOToUID(uint32_t icao_address) const = 0;
+
+    /**
+     * Returns a unique identifier for the aircraft that can differentiate it from other aircraft of different types
+     * with the same ICAO address.
+     * @retval Unique identifier for the aircraft.
+     */
+    virtual inline uint32_t GetUID() const = 0;
+
+    /**
+     * Determine which type of aircraft a UID belongs to.
+     * @param uid Unique identifier for the aircraft.
+     * @retval AircraftType enum value indicating the type of aircraft.
+     */
+    static inline AircraftType UIDToAircraftAType(uint32_t uid) {
+        return static_cast<AircraftType>((uid & kAircraftTypeMask) >> kAircraftTypeShiftBits);
+    }
+
+    uint32_t last_message_timestamp_ms = 0;
+
+    float latitude_deg = 0.0f;
+    float longitude_deg = 0.0f;
+};
+
+/**
+ * Mode S aircraft class.
+ */
+class ModeSAircraft : public Aircraft {
+   public:
     // These variables define filter bounds for time between CPR packets. If the time between packets is greater than
     // the time delta limit, the old CPR packet is discarded and the CPR packet pair is not used for position decoding.
     static constexpr uint32_t kDefaultCPRIntervalMs = 10e3;  // CPR interval when starting from scratch or stale track.
@@ -183,6 +234,28 @@ class ModeSAircraft {
     ModeSAircraft();
 
     /**
+     * Override Functions
+     */
+
+    /**
+     * Returns a unique identifier for the aircraft that can differentiate it from other aircraft of different types
+     * with the same ICAO address.
+     * @retval Unique identifier for the aircraft.
+     */
+    inline uint32_t GetUID() const { return ICAOToUID(icao_address); }
+
+    /**
+     * Static helper that converts a Mode S ICAO to a unique identifier.
+     */
+    inline uint32_t ICAOToUID(uint32_t icao_address) const {
+        return (icao_address & ~kAircraftTypeMask) | (kAircraftTypeModeS << kAircraftTypeShiftBits);
+    }
+
+    /**
+     * Standard Functions
+     */
+
+    /**
      * Checks to see if the aircraft position can be decoded. Requires that both an odd and an even packet have been
      * received, and they aren't separated by too large of a time interval.
      * @retval True if the aircraft position can be decoded, false otherwise.
@@ -294,7 +367,6 @@ class ModeSAircraft {
 
     uint32_t flags = 0b0;
 
-    uint32_t last_message_timestamp_ms = 0;
     int16_t last_message_signal_strength_dbm = 0;  // Voltage of RSSI signal during message receipt.
     int16_t last_message_signal_quality_db = 0;    // Ratio of RSSI to noise floor during message receipt.
     uint32_t last_track_update_timestamp_ms = 0;   // Timestamp of the last time that the position was updated.
@@ -310,10 +382,6 @@ class ModeSAircraft {
     int32_t baro_altitude_ft = 0;
     int32_t gnss_altitude_ft = 0;
     AltitudeSource altitude_source = kAltitudeSourceNotSet;
-
-    // Airborne Position Message
-    float latitude_deg = 0.0f;
-    float longitude_deg = 0.0f;
 
     // Airborne Velocities Message
     float direction_deg = 0.0f;
@@ -390,7 +458,10 @@ class ModeSAircraft {
     Metrics metrics_counter_;
 };
 
-class UATAircraft {
+/**
+ * UAT aircraft class.
+ */
+class UATAircraft : public Aircraft {
    public:
     enum AddressQualifier : int8_t {
         kAddressQualifierNotSet = -1,  // Address qualifier has not been set.
@@ -454,11 +525,42 @@ class UATAircraft {
     };
 
     UATAircraft(uint32_t icao_address_in);
-    UATAircraft();
+    ~UATAircraft();
+
+    /**
+     * Override Functions
+     */
+
+    /**
+     * Returns a unique identifier for the aircraft that can differentiate it from other aircraft of different types
+     * with the same ICAO address.
+     * @retval Unique identifier for the aircraft.
+     */
+    inline uint32_t GetUID() const { return ICAOToUID(icao_address); }
+
+    /**
+     * Static helper that converts a UAT ICAO to a unique identifier.
+     * @param[in] icao ICAO address to convert.
+     * @retval Unique identifier for the aircraft.
+     */
+    inline uint32_t ICAOToUID(uint32_t icao) const {
+        return (icao & ~kAircraftTypeMask) | (kAircraftTypeUAT << kAircraftTypeShiftBits);
+    }
+
+    /**
+     * Standard Functions
+     */
+
+    /**
+     * Roll the metrics counter over to the public metrics field.
+     */
+    inline void UpdateMetrics() {
+        metrics = metrics_counter_;
+        metrics_counter_ = Metrics();
+    }
 
     uint32_t flags = 0b0;
 
-    uint32_t last_message_timestamp_ms = 0;
     int16_t last_message_signal_strength_dbm = 0;  // Voltage of RSSI signal during message receipt.
     int16_t last_message_signal_quality_db = 0;    // Ratio of RSSI to noise floor during message receipt.
     uint32_t last_track_update_timestamp_ms = 0;   // Timestamp of the last time that the position was updated.
@@ -473,42 +575,17 @@ class UATAircraft {
 
     float latitude_deg = 0.0f;
     float longitude_deg = 0.0f;
-};
 
-class Aircraft {
-   public:
-    static const uint8_t kAircraftTypeShiftBits = 24;
-
-    enum AircraftType : int8_t {
-        kInvalid = -1,
-        kAircraftTypeModeS = 0,
-        kAircraftTypeUAT = 1,
-        kAircraftTypeRemodeID = 2,
-    };
-
-    // UID consists of AircraftType (8 bits) | ICAO address (24 bits).
-    inline uint32_t ModeSICAOToUID(uint32_t icao_address) {
-        // Convert the ICAO address to a unique ID for hash map lookups.
-        return icao_address | (Aircraft::kAircraftTypeModeS << kAircraftTypeShiftBits);
-    }
-    inline uint32_t UATICAOToUID(uint32_t icao_address) {
-        // Convert the ICAO address to a unique ID for hash map lookups.
-        return icao_address | (Aircraft::kAircraftTypeUAT << kAircraftTypeShiftBits);
-    }
-    // Drone Remote ID can be 15 character serial number, CAA registation iD, or 128-bit UTM ID.
-
-    AircraftType type = kInvalid;
-    uint32_t uid = 0;  // Unique ID for the aircraft, used for hash map lookups.
-    union {
-        ModeSAircraft mode_s;
-        UATAircraft uat;
-    };
+   private:
+    Metrics metrics_counter_;
 };
 
 class AircraftDictionary {
    public:
     static const uint16_t kMaxNumAircraft = 400;
     static const uint16_t kMaxNumSources = 3;
+
+    typedef std::variant<ModeSAircraft, UATAircraft> AircraftEntry_t;
 
     struct AircraftDictionaryConfig_t {
         uint32_t aircraft_prune_interval_ms = 60e3;
@@ -690,14 +767,14 @@ class AircraftDictionary {
      * Returns the number of aircraft currently in the dictionary.
      * @retval Number of aircraaft that are currently in the dictionary.
      */
-    uint16_t GetNumAircraft();
+    inline uint16_t GetNumAircraft() { return dict.size(); }
 
     /**
      * Adds an Aircraft object to the aircraft dictionary, hashed by ICAO address.
      * @param[in] aircraft Aircraft to insert.
-     * @retval True if insertaion succeeded, false if failed.
+     * @retval True if insertion succeeded, false if failed.
      */
-    bool InsertAircraft(const Aircraft &aircraft);
+    bool InsertAircraft(AircraftEntry_t &aircraft);
 
     /**
      * Remove an aircraft from the dictionary, by ICAO address.
@@ -712,7 +789,7 @@ class AircraftDictionary {
      * @param[out] aircraft_out Aircraft reference to put the retrieved aircraft into if successful.
      * @retval True if aircraft was found and retrieved, false if aircraft was not in the dictionary.
      */
-    bool GetAircraft(uint32_t uid, Aircraft &aircraft_out) const;
+    bool GetAircraft(uint32_t uid, AircraftEntry_t &aircraft_out, bool insert_if_not_found = false);
 
     /**
      * Check if an aircraft is contained in the dictionary.
@@ -720,13 +797,6 @@ class AircraftDictionary {
      * @retval True if aircraft is in the dictionary, false if not.
      */
     bool ContainsAircraft(uint32_t uid) const;
-
-    /**
-     * Return a pointer to an aircraft if it's in the aircraft dictionary.
-     * @param[in] uid UID of the aircraft to find.
-     * @retval Pointer to the aircraft if it exists, or NULL if it wasn't in the dictionary.
-     */
-    ModeSAircraft *GetAircraftPtr(uint32_t uid);
 
     /**
      * Used to enable or disable the CPR position filter.
@@ -740,7 +810,7 @@ class AircraftDictionary {
      */
     inline bool CPRPositionFilterIsEnabled() { return config_.enable_cpr_position_filter; }
 
-    std::unordered_map<uint32_t, Aircraft> dict;  // index Aircraft objects by their ICAO identifier
+    std::unordered_map<uint32_t, AircraftEntry_t> dict;
 
     Metrics metrics;
 

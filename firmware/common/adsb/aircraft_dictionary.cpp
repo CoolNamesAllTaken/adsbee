@@ -749,7 +749,13 @@ bool ModeSAircraft::ApplyAircraftOperationStatusMessage(ADSBPacket packet) {
 }
 
 /**
- * ModeSAircraft Dictionary
+ * UATAircraft
+ */
+UATAircraft::UATAircraft(uint32_t icao_address_in) : icao_address(icao_address_in) {};
+UATAircraft::~UATAircraft() {};
+
+/**
+ * Aircraft Dictionary
  */
 
 void AircraftDictionary::Init() {
@@ -759,10 +765,21 @@ void AircraftDictionary::Init() {
 void AircraftDictionary::Update(uint32_t timestamp_ms) {
     // Iterate over each key-value pair in the unordered_map. Prune if stale, update metrics if still fresh.
     for (auto it = dict.begin(); it != dict.end(); /* No increment here */) {
-        if (timestamp_ms - it->second.last_message_timestamp_ms > config_.aircraft_prune_interval_ms) {
-            it = dict.erase(it);  // Remove stale aircraft entry.
+        uint32_t last_message_timestamp_ms =
+            std::visit([](auto &aircraft) -> uint32_t { return aircraft.last_message_timestamp_ms; }, it->second);
+
+        // Extract the last message timestamp of the underlying ModeSAircraft or UATAircraft.
+        if (timestamp_ms - last_message_timestamp_ms > config_.aircraft_prune_interval_ms) {
+            it = dict.erase(it);  // Remove stale aircraft entry. Iterator is incremented to the next element.
         } else {
-            it->second.UpdateMetrics();
+            // Call UpdateMetrics on the underlying aircraft type.
+            std::visit(
+                [](auto &aircraft) {
+                    // Update the metrics for the aircraft.
+                    UpdateMetrics();
+                },
+                it->second);
+
             it++;  // Move to the next aircraft entry.
         }
     }
@@ -779,29 +796,6 @@ bool AircraftDictionary::ContainsAircraft(uint32_t uid) const {
     }
     return false;
 }
-
-bool AircraftDictionary::GetAircraft(uint32_t uid, Aircraft &aircraft_out) const {
-    auto itr = dict.find(uid);
-    if (itr != dict.end()) {
-        aircraft_out = itr->second;
-        return true;
-    }
-    return false;  // aircraft not found
-}
-
-ModeSAircraft *AircraftDictionary::GetAircraftPtr(uint32_t uid) {
-    auto itr = dict.find(uid);
-    if (itr != dict.end()) {
-        return &(itr->second);  // return address of existing aircraft
-    } else if (dict.size() < kMaxNumAircraft) {
-        ModeSAircraft new_aircraft = ModeSAircraft(uid);
-        dict[uid] = new_aircraft;
-        return &(dict[uid]);  // insert new aircraft and return its address
-    }
-    return nullptr;  // can't find the aircraft or insert a new one
-}
-
-uint16_t AircraftDictionary::GetNumAircraft() { return dict.size(); }
 
 bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket &packet) {
     // Check validity and record stats.
@@ -1038,8 +1032,9 @@ bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
     return ret;
 }
 
-bool AircraftDictionary::InsertAircraft(const ModeSAircraft &aircraft) {
-    auto itr = dict.find(aircraft.icao_address);
+bool AircraftDictionary::InsertAircraft(AircraftEntry_t &aircraft) {
+    uint32_t uid = aircraft.GetUID();
+    auto itr = dict.find(uid);
     if (itr != dict.end()) {
         // Overwriting an existing aircraft
         itr->second = aircraft;
@@ -1047,12 +1042,12 @@ bool AircraftDictionary::InsertAircraft(const ModeSAircraft &aircraft) {
     }
 
     if (dict.size() >= kMaxNumAircraft) {
-        CONSOLE_INFO("AIrcraftDictionary::InsertAircraft",
-                     "Failed to add aircraft to dictionary, max number of aircraft is %d.", kMaxNumAircraft);
+        CONSOLE_INFO("AircraftDictionary::InsertAircraft",
+                     "Failed to add aircraft to dictionary, reached max number of aircraft (%d).", kMaxNumAircraft);
         return false;  // not enough room to add this aircraft
     }
 
-    dict[aircraft.icao_address] = aircraft;  // add the new aircraft to the dictionary
+    dict[uid] = aircraft;  // add the new aircraft to the dictionary
     return true;
 }
 
@@ -1063,6 +1058,45 @@ bool AircraftDictionary::RemoveAircraft(uint32_t icao_address) {
         return true;
     }
     return false;  // aircraft was not found in the dictionary
+}
+
+bool AircraftDictionary::GetAircraft(uint32_t uid, AircraftEntry_t &aircraft_out, bool insert_if_not_found) {
+    auto itr = dict.find(uid);
+    if (itr != dict.end()) {
+        // Found aircraft with UID in the dictionary.
+        aircraft_out = itr->second;
+        return true;
+    } else if (insert_if_not_found) {
+        // Aircraft not found, but requested to be inserted.
+        if (dict.size() >= kMaxNumAircraft) {
+            CONSOLE_INFO("AircraftDictionary::GetAircraft",
+                         "Failed to create new aircraft with UID 0x%lx, reached max number of aircraft (%d).", uid,
+                         kMaxNumAircraft);
+            return false;  // not enough room to add this aircraft
+        }
+        Aircraft::AircraftType type = Aircraft::UIDToAircraftAType(uid);
+        uint32_t icao_address = Aircraft::UIDToICAOAddress(uid);
+        switch (type) {
+            case Aircraft::kAircraftTypeModeSAircraft: {
+                dict[uid] = ModeSAircraft(icao_address);
+                aircraft_out = dict[uid];
+                break;
+            }
+            case Aircraft::kAircraftTypeUATAircraft: {
+                dict[uid] = UATAircraft(icao_address);
+                aircraft_out = dict[uid];
+                break;
+            }
+            default:
+                CONSOLE_ERROR("AircraftDictionary::GetAircraft",
+                              "Unable to create new aircraft with UID 0x%lx, unsupported aircraft type %d.", uid,
+                              static_cast<int>(type));
+                return false;  // Unsupported aircraft type, cannot create new aircraft.
+        }
+        return true;
+    }
+    // Aircraft not found and not requested to be inserted.
+    return false;
 }
 
 bool ModeSAircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, uint32_t received_timestamp_ms) {
