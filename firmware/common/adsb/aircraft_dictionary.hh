@@ -26,11 +26,12 @@ class Aircraft {
     static const uint8_t kAircraftTypeShiftBits = 24;
     static const uint32_t kAircraftTypeMask = 0xFF000000;  // Mask to extract the aircraft type from the UID.
 
+    // Note: these need to match the variant indices in AircraftEntry_t for all valid variants.
     enum AircraftType : int8_t {
         kAircraftTypeInvalid = -1,
         kAircraftTypeModeS = 0,
         kAircraftTypeUAT = 1,
-        kAircraftTypeRemoteID = 2,
+        // TODO: Add FLARM, ADS-L, Remote ID, etc.
     };
 
     static constexpr uint16_t kCallSignMaxNumChars = 8;
@@ -38,7 +39,18 @@ class Aircraft {
 
     virtual ~Aircraft() = default;
     virtual void UpdateMetrics() = 0;
-    virtual uint32_t ICAOToUID(uint32_t icao_address) const = 0;
+    static inline uint32_t ICAOToUID(uint32_t icao_address, AircraftType type) {
+        switch (type) {
+            case kAircraftTypeModeS:
+                return (icao_address & ~kAircraftTypeMask) | (kAircraftTypeModeS << kAircraftTypeShiftBits);
+            case kAircraftTypeUAT:
+                return (icao_address & ~kAircraftTypeMask) | (kAircraftTypeUAT << kAircraftTypeShiftBits);
+            default:
+                CONSOLE_ERROR("Aircraft::ICAOToUID", "Invalid aircraft type %d for ICAO address 0x%lx.", type,
+                              icao_address);
+                return 0;  // Invalid aircraft type.
+        }
+    }
 
     /**
      * Returns a unique identifier for the aircraft that can differentiate it from other aircraft of different types
@@ -52,8 +64,17 @@ class Aircraft {
      * @param uid Unique identifier for the aircraft.
      * @retval AircraftType enum value indicating the type of aircraft.
      */
-    static inline AircraftType UIDToAircraftAType(uint32_t uid) {
+    static inline AircraftType UIDToAircraftType(uint32_t uid) {
         return static_cast<AircraftType>((uid & kAircraftTypeMask) >> kAircraftTypeShiftBits);
+    }
+
+    /**
+     * Strips off the UID bits from the UID to get the ICAO address.
+     * @param uid Unique identifier for the aircraft.
+     * @retval ICAO address of the aircraft.
+     */
+    static inline uint32_t UIDToICAOAddress(uint32_t uid) {
+        return uid & ~kAircraftTypeMask;  // Clear the aircraft type bits to get the ICAO address.
     }
 
     uint32_t last_message_timestamp_ms = 0;
@@ -242,14 +263,7 @@ class ModeSAircraft : public Aircraft {
      * with the same ICAO address.
      * @retval Unique identifier for the aircraft.
      */
-    inline uint32_t GetUID() const { return ICAOToUID(icao_address); }
-
-    /**
-     * Static helper that converts a Mode S ICAO to a unique identifier.
-     */
-    inline uint32_t ICAOToUID(uint32_t icao_address) const {
-        return (icao_address & ~kAircraftTypeMask) | (kAircraftTypeModeS << kAircraftTypeShiftBits);
-    }
+    inline uint32_t GetUID() const { return ICAOToUID(icao_address, kAircraftTypeModeS); }
 
     /**
      * Standard Functions
@@ -536,16 +550,7 @@ class UATAircraft : public Aircraft {
      * with the same ICAO address.
      * @retval Unique identifier for the aircraft.
      */
-    inline uint32_t GetUID() const { return ICAOToUID(icao_address); }
-
-    /**
-     * Static helper that converts a UAT ICAO to a unique identifier.
-     * @param[in] icao ICAO address to convert.
-     * @retval Unique identifier for the aircraft.
-     */
-    inline uint32_t ICAOToUID(uint32_t icao) const {
-        return (icao & ~kAircraftTypeMask) | (kAircraftTypeUAT << kAircraftTypeShiftBits);
-    }
+    inline uint32_t GetUID() const { return ICAOToUID(icao_address, kAircraftTypeUAT); }
 
     /**
      * Standard Functions
@@ -586,6 +591,13 @@ class AircraftDictionary {
     static const uint16_t kMaxNumSources = 3;
 
     typedef std::variant<ModeSAircraft, UATAircraft> AircraftEntry_t;
+
+    // Ensure that valid variant indices matche the AircraftType enum value so that we can use them interchangeably.
+    static_assert(
+        std::is_same_v<std::variant_alternative_t<Aircraft::kAircraftTypeModeS, AircraftEntry_t>, ModeSAircraft>,
+        "ModeSAircraft variant index must match Aircraft::kAircraftTypeModeS");
+    static_assert(std::is_same_v<std::variant_alternative_t<Aircraft::kAircraftTypeUAT, AircraftEntry_t>, UATAircraft>,
+                  "UATAircraft variant index must match Aircraft::kAircraftTypeUAT");
 
     struct AircraftDictionaryConfig_t {
         uint32_t aircraft_prune_interval_ms = 60e3;
@@ -772,9 +784,30 @@ class AircraftDictionary {
     /**
      * Adds an Aircraft object to the aircraft dictionary, hashed by ICAO address.
      * @param[in] aircraft Aircraft to insert.
-     * @retval True if insertion succeeded, false if failed.
+     * @retval Pointer to the aircraft that was added, or nullptr if the aircraft could not be added. If the aircraft
+     * already exists in the dictionary, it will be overwritten and a pointer to the existing aircraft will be returned.
+     * @note The aircraft must be derived from the Aircraft class, since the UID function is used to hash the aircraft.
      */
-    bool InsertAircraft(AircraftEntry_t &aircraft);
+    template <typename T>
+    T *InsertAircraft(const T &aircraft) {
+        // Extract UID from the underlying Aircraft virtual class.
+        uint32_t uid = static_cast<const Aircraft &>(aircraft).GetUID();
+        auto itr = dict.find(uid);
+        if (itr != dict.end()) {
+            // Overwriting an existing aircraft
+            itr->second = aircraft;
+            return std::get_if<T>(&itr->second);
+        }
+
+        if (dict.size() >= kMaxNumAircraft) {
+            CONSOLE_INFO("AircraftDictionary::InsertAircraft",
+                         "Failed to add aircraft to dictionary, reached max number of aircraft (%d).", kMaxNumAircraft);
+            return nullptr;  // not enough room to add this aircraft
+        }
+
+        dict[uid] = aircraft;               // add the new aircraft to the dictionary
+        return std::get_if<T>(&dict[uid]);  // return a pointer to the aircraft that was added
+    }
 
     /**
      * Remove an aircraft from the dictionary, by ICAO address.
@@ -789,7 +822,41 @@ class AircraftDictionary {
      * @param[out] aircraft_out Aircraft reference to put the retrieved aircraft into if successful.
      * @retval True if aircraft was found and retrieved, false if aircraft was not in the dictionary.
      */
-    bool GetAircraft(uint32_t uid, AircraftEntry_t &aircraft_out, bool insert_if_not_found = false);
+    template <typename T>
+    bool GetAircraft(uint32_t uid, T &aircraft_out) {
+        // Don't create and insert the aircraft if it is not in the dictionary.
+        T *aircraft_ptr = GetAircraftPtr<T>(uid, false);
+        if (aircraft_ptr) {
+            aircraft_out = *aircraft_ptr;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Returns a pointer to an aircraft in the dictionary.
+     * @param[in] uid Address to use for looking up the aircraft.
+     * @param[in] insert_if_not_found If true, a new aircraft will be created and inserted into the dictionary if it is
+     * not found. If false, nullptr will be returned if the aircraft is not found.
+     * @retval Pointer to the aircraft if found or inserted, nullptr if not found.
+     */
+    template <typename T>
+    T *GetAircraftPtr(uint32_t uid, bool insert_if_not_found = true) {
+        auto itr = dict.find(uid);
+        if (itr != dict.end()) {
+            // Aircraft was found in the dictionary. Get a pointer to it if the type is correct.
+            T *aircraft_ptr = std::get_if<T>(&(itr->second));
+            if (aircraft_ptr) {
+                return aircraft_ptr;  // Found the aircraft, return it.
+            }
+        } else if (insert_if_not_found) {
+            // Aircraft was not found but should be inserted.
+            T new_aircraft(Aircraft::UIDToICAOAddress(uid));
+            return InsertAircraft(new_aircraft);
+        }
+        // Aircraft not found with the given UID.
+        return nullptr;
+    }
 
     /**
      * Check if an aircraft is contained in the dictionary.

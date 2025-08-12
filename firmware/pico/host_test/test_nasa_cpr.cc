@@ -515,7 +515,8 @@ TEST(NASACPR, AircraftDictionary) {
 
     for (uint16_t i = 0; i < sizeof(global_decode_tests) / sizeof(GlobalDecodeTest); i++) {
         GlobalDecodeTest& test = global_decode_tests[i];
-        ModeSAircraft* aircraft_ptr = dictionary.GetAircraftPtr(i);
+        ModeSAircraft* aircraft_ptr =
+            dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(i, Aircraft::kAircraftTypeModeS));
         // Set odd message to most recent so that we read rpos1 for the expected result.
         aircraft_ptr->SetCPRLatLon(test.enc_evn_lat, test.enc_evn_lon, false, 1);
         aircraft_ptr->SetCPRLatLon(test.enc_odd_lat, test.enc_odd_lon, true, 2);

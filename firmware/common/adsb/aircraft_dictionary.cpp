@@ -766,7 +766,7 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
     // Iterate over each key-value pair in the unordered_map. Prune if stale, update metrics if still fresh.
     for (auto it = dict.begin(); it != dict.end(); /* No increment here */) {
         uint32_t last_message_timestamp_ms =
-            std::visit([](auto &aircraft) -> uint32_t { return aircraft.last_message_timestamp_ms; }, it->second);
+            std::visit([](Aircraft &aircraft) -> uint32_t { return aircraft.last_message_timestamp_ms; }, it->second);
 
         // Extract the last message timestamp of the underlying ModeSAircraft or UATAircraft.
         if (timestamp_ms - last_message_timestamp_ms > config_.aircraft_prune_interval_ms) {
@@ -774,9 +774,9 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
         } else {
             // Call UpdateMetrics on the underlying aircraft type.
             std::visit(
-                [](auto &aircraft) {
+                [](Aircraft &aircraft) {
                     // Update the metrics for the aircraft.
-                    UpdateMetrics();
+                    aircraft.UpdateMetrics();
                 },
                 it->second);
 
@@ -890,7 +890,8 @@ bool AircraftDictionary::IngestIdentityReplyPacket(IdentityReplyPacket packet) {
     }
 
     uint32_t icao_address = packet.GetICAOAddress();
-    ModeSAircraft *aircraft_ptr = GetAircraftPtr(icao_address);
+    uint32_t uid = Aircraft::ICAOToUID(icao_address, Aircraft::kAircraftTypeModeS);
+    ModeSAircraft *aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
     if (aircraft_ptr == nullptr) {
         CONSOLE_WARNING("AircraftDictionary::IngestIdentityReplyPacket",
                         "Unable to find or create new aircraft with ICAO address 0x%lx in dictionary.\r\n",
@@ -912,7 +913,8 @@ bool AircraftDictionary::IngestAltitudeReplyPacket(AltitudeReplyPacket packet) {
     }
 
     uint32_t icao_address = packet.GetICAOAddress();
-    ModeSAircraft *aircraft_ptr = GetAircraftPtr(icao_address);
+    uint32_t uid = Aircraft::ICAOToUID(icao_address, Aircraft::kAircraftTypeModeS);
+    ModeSAircraft *aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
     if (aircraft_ptr == nullptr) {
         CONSOLE_WARNING("AircraftDictionary::IngestAltitudeReplyPacket",
                         "Unable to find or create new aircraft with ICAO address 0x%lx in dictionary.\r\n",
@@ -937,7 +939,8 @@ bool AircraftDictionary::IngestAllCallReplyPacket(AllCallReplyPacket packet) {
 
     // Populate the dictionary with the aircraft, or look it up if the ICAO doesn't yet exist.
     uint32_t icao_address = packet.GetICAOAddress();
-    ModeSAircraft *aircraft_ptr = GetAircraftPtr(icao_address);
+    uint32_t uid = Aircraft::ICAOToUID(icao_address, Aircraft::kAircraftTypeModeS);
+    ModeSAircraft *aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
     if (aircraft_ptr == nullptr) {
         CONSOLE_WARNING("AircraftDictionary::IngestAllCallReplyPacket",
                         "Unable to find or create new aircraft with ICAO address 0x%lx in dictionary.\r\n",
@@ -958,7 +961,8 @@ bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
     }
 
     uint32_t icao_address = packet.GetICAOAddress();
-    ModeSAircraft *aircraft_ptr = GetAircraftPtr(icao_address);
+    uint32_t uid = Aircraft::ICAOToUID(icao_address, Aircraft::kAircraftTypeModeS);
+    ModeSAircraft *aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
     if (aircraft_ptr == nullptr) {
         CONSOLE_WARNING("AircraftDictionary::IngestADSBPacket",
                         "Unable to find or create new aircraft with ICAO address 0x%lx in dictionary.\r\n",
@@ -1032,25 +1036,6 @@ bool AircraftDictionary::IngestADSBPacket(ADSBPacket packet) {
     return ret;
 }
 
-bool AircraftDictionary::InsertAircraft(AircraftEntry_t &aircraft) {
-    uint32_t uid = aircraft.GetUID();
-    auto itr = dict.find(uid);
-    if (itr != dict.end()) {
-        // Overwriting an existing aircraft
-        itr->second = aircraft;
-        return true;
-    }
-
-    if (dict.size() >= kMaxNumAircraft) {
-        CONSOLE_INFO("AircraftDictionary::InsertAircraft",
-                     "Failed to add aircraft to dictionary, reached max number of aircraft (%d).", kMaxNumAircraft);
-        return false;  // not enough room to add this aircraft
-    }
-
-    dict[uid] = aircraft;  // add the new aircraft to the dictionary
-    return true;
-}
-
 bool AircraftDictionary::RemoveAircraft(uint32_t icao_address) {
     auto itr = dict.find(icao_address);
     if (itr != dict.end()) {
@@ -1058,45 +1043,6 @@ bool AircraftDictionary::RemoveAircraft(uint32_t icao_address) {
         return true;
     }
     return false;  // aircraft was not found in the dictionary
-}
-
-bool AircraftDictionary::GetAircraft(uint32_t uid, AircraftEntry_t &aircraft_out, bool insert_if_not_found) {
-    auto itr = dict.find(uid);
-    if (itr != dict.end()) {
-        // Found aircraft with UID in the dictionary.
-        aircraft_out = itr->second;
-        return true;
-    } else if (insert_if_not_found) {
-        // Aircraft not found, but requested to be inserted.
-        if (dict.size() >= kMaxNumAircraft) {
-            CONSOLE_INFO("AircraftDictionary::GetAircraft",
-                         "Failed to create new aircraft with UID 0x%lx, reached max number of aircraft (%d).", uid,
-                         kMaxNumAircraft);
-            return false;  // not enough room to add this aircraft
-        }
-        Aircraft::AircraftType type = Aircraft::UIDToAircraftAType(uid);
-        uint32_t icao_address = Aircraft::UIDToICAOAddress(uid);
-        switch (type) {
-            case Aircraft::kAircraftTypeModeSAircraft: {
-                dict[uid] = ModeSAircraft(icao_address);
-                aircraft_out = dict[uid];
-                break;
-            }
-            case Aircraft::kAircraftTypeUATAircraft: {
-                dict[uid] = UATAircraft(icao_address);
-                aircraft_out = dict[uid];
-                break;
-            }
-            default:
-                CONSOLE_ERROR("AircraftDictionary::GetAircraft",
-                              "Unable to create new aircraft with UID 0x%lx, unsupported aircraft type %d.", uid,
-                              static_cast<int>(type));
-                return false;  // Unsupported aircraft type, cannot create new aircraft.
-        }
-        return true;
-    }
-    // Aircraft not found and not requested to be inserted.
-    return false;
 }
 
 bool ModeSAircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, uint32_t received_timestamp_ms) {

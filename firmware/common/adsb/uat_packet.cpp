@@ -122,13 +122,16 @@ void DecodedUATADSBPacket::ConstructUATPacket() {
 
     // Receiver-side processing of selected fields that we don't want to deal with on other platforms (e.g. ones with no
     // FPU).
-    latitude_deg = static_cast<float>(state_vector->latitude_awb) * kDegPerAWBTick - 90.0f;  // Convert to degrees.
-    if (latitude_deg > 90) {
-        latitude_deg -= 180.0f;  // Convert to negative latitude if it exceeds 90 degrees.
-    }
-    longitude_deg = static_cast<float>(state_vector->longitude_awb) * kDegPerAWBTick - 90.0f;  // Convert to degrees.
-    if (longitude_deg > 180) {
-        longitude_deg -= 360.0f;  // Convert to negative longitude if it exceeds 180 degrees.
+    if (state_vector) {
+        latitude_deg = static_cast<float>(state_vector->latitude_awb) * kDegPerAWBTick - 90.0f;  // Convert to degrees.
+        if (latitude_deg > 90) {
+            latitude_deg -= 180.0f;  // Convert to negative latitude if it exceeds 90 degrees.
+        }
+        longitude_deg =
+            static_cast<float>(state_vector->longitude_awb) * kDegPerAWBTick - 90.0f;  // Convert to degrees.
+        if (longitude_deg > 180) {
+            longitude_deg -= 360.0f;  // Convert to negative longitude if it exceeds 180 degrees.
+        }
     }
 
     is_valid_ = true;
