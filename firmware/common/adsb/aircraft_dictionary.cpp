@@ -754,6 +754,45 @@ bool ModeSAircraft::ApplyAircraftOperationStatusMessage(ModeSADSBPacket packet) 
 UATAircraft::UATAircraft(uint32_t icao_address_in) : icao_address(icao_address_in) {};
 UATAircraft::~UATAircraft() {};
 
+bool UATAircraft::ApplyUATADSBStateVector(DecodedUATADSBPacket::UATStateVector *state_vector) {
+    latitude_deg = static_cast<float>(state_vector->latitude_awb) * DecodedUATADSBPacket::kDegPerAWBTick -
+                   90.0f;  // Convert to degrees.
+    if (latitude_deg > 90) {
+        latitude_deg -= 180.0f;  // Convert to negative latitude if it exceeds 90 degrees.
+    }
+    longitude_deg = static_cast<float>(state_vector->longitude_awb) * DecodedUATADSBPacket::kDegPerAWBTick -
+                    90.0f;  // Convert to degrees.
+    if (longitude_deg > 180) {
+        longitude_deg -= 360.0f;  // Convert to negative longitude if it exceeds 180 degrees.
+    }
+
+    if (state_vector->altitude_is_geometric_altitude) {
+        altitude_source = AltitudeSource::kAltitudeSourceGNSS;
+        gnss_altitude_ft = DecodedUATADSBPacket::AltitudeEncodedToAltitudeFt(state_vector->altitude_encoded);
+    } else {
+        altitude_source = AltitudeSource::kAltitudeSourceBaro;
+        baro_altitude_ft = DecodedUATADSBPacket::AltitudeEncodedToAltitudeFt(state_vector->altitude_encoded);
+    }
+
+    navigation_integrity_category = static_cast<NICRadiusOfContainment>(state_vector->nic);
+
+    // AG state isn't stored directly, but is used to interpret other fields.
+    AirGroundState ag_state = static_cast<AirGroundState>(state_vector->air_ground_state);
+    if (ag_state == kAirGroundStateOnGround) {
+        WriteBitFlag(BitFlag::kBitFlagIsAirborne, false);
+    }
+    return false;
+}
+bool UATAircraft::ApplyUATADSBModeStatus(DecodedUATADSBPacket::UATModeStatus *mode_status) { return false; }
+bool UATAircraft::ApplyUATADSBTargetState(DecodedUATADSBPacket::UATTargetState *target_state) { return false; }
+bool UATAircraft::ApplyUATADSBTrajectoryChange(DecodedUATADSBPacket::UATTrajectoryChange *trajectory_change) {
+    return false;
+}
+bool UATAircraft::ApplyUATADSBAuxiliaryStateVector(
+    DecodedUATADSBPacket::UATAuxiliaryStateVector *auxiliary_state_vector) {
+    return false;
+}
+
 /**
  * Aircraft Dictionary
  */
@@ -1034,6 +1073,53 @@ bool AircraftDictionary::IngestModeSADSBPacket(ModeSADSBPacket packet) {
                         packet.GetICAOAddress());
     }
     return ret;
+}
+
+bool AircraftDictionary::IngestDecodedUATADSBPacket(DecodedUATADSBPacket &packet) {
+    // Check validity and record stats.
+    if (packet.IsValid()) {
+        metrics_counter_.valid_uat_adsb_frames++;
+    } else {
+        return false;
+    }
+
+    UATAircraft *aircraft_ptr = GetAircraftPtr<UATAircraft>(packet.GetICAOAddress());
+    if (aircraft_ptr == nullptr) {
+        CONSOLE_WARNING("AircraftDictionary::IngestDecodedUATADSBPacket",
+                        "Unable to find or create new UAT aircraft with ICAO address 0x%lx in dictionary.\r\n",
+                        packet.GetICAOAddress());
+        return false;  // unable to find or create new aircraft in dictionary
+    }
+    aircraft_ptr->last_message_timestamp_ms = get_time_since_boot_ms();
+
+    // Apply the packet header.
+
+    bool ingest_ret = true;
+    if (packet.state_vector) {
+        // Apply UAT state vector to aircraft.
+        ingest_ret &= aircraft_ptr->ApplyUATADSBStateVector(packet.state_vector);
+    }
+    if (packet.mode_status) {
+        // Apply UAT mode status to aircraft.
+        ingest_ret &= aircraft_ptr->ApplyUATADSBModeStatus(packet.mode_status);
+    }
+    if (packet.auxiliary_state_vector) {
+        // Apply UAT auxiliary state vector to aircraft.
+        ingest_ret &= aircraft_ptr->ApplyUATADSBAuxiliaryStateVector(packet.auxiliary_state_vector);
+    }
+    if (packet.target_state) {
+        // Apply UAT target state to aircraft.
+        ingest_ret &= aircraft_ptr->ApplyUATADSBTargetState(packet.target_state);
+    }
+    if (packet.trajectory_change) {
+        // Apply UAT trajectory change to aircraft.
+        ingest_ret &= aircraft_ptr->ApplyUATADSBTrajectoryChange(packet.trajectory_change);
+    }
+
+    if (ingest_ret) {
+        aircraft_ptr->IncrementNumFramesReceived();
+    }
+    return ingest_ret;
 }
 
 bool AircraftDictionary::RemoveAircraft(uint32_t icao_address) {

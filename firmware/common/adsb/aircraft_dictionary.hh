@@ -11,6 +11,7 @@
 #include "json_utils.hh"
 #include "macros.hh"
 #include "mode_s_packet.hh"
+#include "uat_packet.hh"
 
 #define FILTER_CPR_POSITIONS
 
@@ -23,15 +24,43 @@
  */
 class Aircraft {
    public:
-    static const uint8_t kAircraftTypeShiftBits = 24;
-    static const uint32_t kAircraftTypeMask = 0xFF000000;  // Mask to extract the aircraft type from the UID.
+    static const uint8_t kAircraftTypeShiftBits = 28;
+    static const uint32_t kAircraftTypeMask = 0xF0000000;  // Mask to extract the aircraft type from the UID.
+
+    // Aircraft can have an optional address qualifier that is used to differentiate between aircraft subtypes within
+    // the same aircraft type.
+    static const uint32_t kAddressQualifierMask = 0x0F000000;
+    static const uint8_t kAddressQualifierBitShift = 24;
 
     // Note: these need to match the variant indices in AircraftEntry_t for all valid variants.
+    // Aircraft types must be < 4 bits in length (16 in decimal).
     enum AircraftType : int8_t {
-        kAircraftTypeInvalid = -1,
+        kAircraftTypeInvalid = 0xF,
         kAircraftTypeModeS = 0,
         kAircraftTypeUAT = 1,
         // TODO: Add FLARM, ADS-L, Remote ID, etc.
+    };
+
+    enum AltitudeSource : int16_t {
+        kAltitudeNotAvailable = -2,
+        kAltitudeSourceNotSet = -1,
+        kAltitudeSourceBaro = 0,
+        kAltitudeSourceGNSS = 1
+    };
+
+    enum VerticalRateSource : int16_t {
+        kVerticalRateNotAvailable = -2,
+        kVerticalRateSourceNotSet = -1,
+        kVerticalRateSourceGNSS = 0,
+        kVerticalRateSourceBaro = 1
+    };
+
+    enum VelocitySource : int16_t {
+        kVelocitySourceNotAvailable = -2,
+        kVelocitySourceNotSet = -1,
+        kVelocitySourceGroundSpeed = 0,
+        kVelocitySourceAirspeedTrue = 1,
+        kVelocitySourceAirspeedIndicated = 2
     };
 
     static constexpr uint16_t kCallSignMaxNumChars = 8;
@@ -39,6 +68,11 @@ class Aircraft {
 
     virtual ~Aircraft() = default;
     virtual void UpdateMetrics() = 0;
+
+    /**
+     * Converts an ICAO address to a unique identifier for the aircraft.
+     * Note that the ICAO address is nominally 24 bits, but can be up to 28 bits including an address qualifier.
+     */
     static inline uint32_t ICAOToUID(uint32_t icao_address, AircraftType type) {
         switch (type) {
             case kAircraftTypeModeS:
@@ -77,10 +111,25 @@ class Aircraft {
         return uid & ~kAircraftTypeMask;  // Clear the aircraft type bits to get the ICAO address.
     }
 
+    // We store values that all aircraft are guaranteed to have (not protocol specific) in the base class. These values
+    // are critical for aircraft tracking. Enums for AltitudeSource, VelocitySource, and VerticalRateSource match
+    // encodings in Mode S and UAT standards (e.g. you can cast a binary value from a a packet directly to these enums).
+    // Values from other protocols will need to be translated.
+
     uint32_t last_message_timestamp_ms = 0;
 
     float latitude_deg = 0.0f;
     float longitude_deg = 0.0f;
+
+    int32_t baro_altitude_ft = 0;
+    int32_t gnss_altitude_ft = 0;
+    AltitudeSource altitude_source = kAltitudeSourceNotSet;
+
+    float direction_deg = 0.0f;
+    float velocity_kts = 0;
+    VelocitySource velocity_source = kVelocitySourceNotSet;
+    int vertical_rate_fpm = 0.0f;
+    VerticalRateSource vertical_rate_source = kVerticalRateSourceNotSet;
 };
 
 /**
@@ -115,28 +164,6 @@ class ModeSAircraft : public Aircraft {
         kCategoryHeavy = 16,            // > 136000kg
         kCategoryHighPerformance = 17,  // >5g acceleration and >400kt speed
         kCategoryRotorcraft = 18
-    };
-
-    enum AltitudeSource : int16_t {
-        kAltitudeNotAvailable = -2,
-        kAltitudeSourceNotSet = -1,
-        kAltitudeSourceBaro = 0,
-        kAltitudeSourceGNSS = 1
-    };
-
-    enum VerticalRateSource : int16_t {
-        kVerticalRateNotAvailable = -2,
-        kVerticalRateSourceNotSet = -1,
-        kVerticalRateSourceGNSS = 0,
-        kVerticalRateSourceBaro = 1
-    };
-
-    enum VelocitySource : int16_t {
-        kVelocitySourceNotAvailable = -2,
-        kVelocitySourceNotSet = -1,
-        kVelocitySourceGroundSpeed = 0,
-        kVelocitySourceAirspeedTrue = 1,
-        kVelocitySourceAirspeedIndicated = 2
     };
 
     enum BitFlag : uint32_t {
@@ -393,17 +420,6 @@ class ModeSAircraft : public Aircraft {
     Category category = kCategoryNoCategoryInfo;
     uint8_t category_raw = 0;  // Non-enum category in case we want the value without a many to one mapping.
 
-    int32_t baro_altitude_ft = 0;
-    int32_t gnss_altitude_ft = 0;
-    AltitudeSource altitude_source = kAltitudeSourceNotSet;
-
-    // Airborne Velocities Message
-    float direction_deg = 0.0f;
-    float velocity_kts = 0;
-    VelocitySource velocity_source = kVelocitySourceNotSet;
-    int vertical_rate_fpm = 0.0f;
-    VerticalRateSource vertical_rate_source = kVerticalRateSourceNotSet;
-
     // Aircraft Operation Status Message
     // Navigation Integrity Category (NIC)
     uint8_t nic_bits_valid = 0b000;  // MSb to LSb: nic_c_valid nic_b_valid nic_a_valid.
@@ -512,6 +528,50 @@ class UATAircraft : public Aircraft {
         kCategoryLineObstacle = 21
     };
 
+    enum BitFlag : uint32_t {
+        kBitFlagIsAirborne = 0,  // Received messages or flags indicating the aircraft is airborne.
+        kBitFlagBaroAltitudeValid,
+        kBitFlagGNSSAltitudeValid,
+        kBitFlagPositionValid,
+        kBitFlagDirectionValid,
+        kBitFlagHorizontalVelocityValid,
+        kBitFlagVerticalVelocityValid,
+        kBitFlagIsMilitary,              // Received at least one military ES message from the aircraft.
+        kBitFlagIsClassB2GroundVehicle,  // Is a class B2 ground vehicle transmitting at <70W.
+        kBitFlagHas1090ESIn,             // Aircraft is equipped with 1090MHz Extended Squitter receive capability.
+        kBitFlagHasUATIn,                // Aircraft can receive UAT.
+        kBitFlagTCASOperational,         // TCAS system on aircraft is functional.
+        kBitFlagSingleAntenna,           // Indicates that the aircraft is using a single antenna. Transmissions may be
+                                         // intermittent.
+        kBitFlagDirectionIsHeading,      // Direction is aircraft heading and not track angle.
+        kBitFlagHeadingUsesMagneticNorth,  // Heading in surface and airborne position messages is magnetic north, not
+                                           // true north.
+        kBitFlagIdent,                     // IDENT switch is currently active.
+        kBitFlagAlert,                     // Aircraft is indicating an alert.
+        kBitFlagTCASRA,                    // Indicates a TCAS resolution advisory is active.
+        kBitFlagReserved0,
+        kBitFlagReserved1,
+        kBitFlagReserved2,
+        kBitFlagReserved3,
+        // Flags after kBitFlagUpdatedBaroAltitude are cleared at the end of every reporting interval.
+        kBitFlagUpdatedBaroAltitude,
+        kBitFlagUpdatedGNSSAltitude,
+        kBitFlagUpdatedPosition,
+        kBitFlagUpdatedDirection,
+        kBitFlagUpdatedHorizontalVelocity,
+        kBitFlagUpdatedVerticalVelocity,
+        kBitFlagNumFlagBits
+    };
+
+    enum NICBit : uint16_t { kNICBitA = 0, kNICBitB = 1, kNICBitC = 2 };
+
+    enum SystemDesignAssurance : uint8_t {
+        kSDASupportedFailureUnknownOrNoSafetyEffect = 0b00,
+        kSDASupportedFailureMinor = 0b01,
+        kSDASupportedFailureMajor = 0b10,
+        kSDASupportedFailureHazardous = 0b11
+    };
+
     enum NICRadiusOfContainment : uint8_t {
         kROCUnknown = 0,
         kROCLessThan20NauticalMiles = 1,
@@ -525,6 +585,53 @@ class UATAircraft : public Aircraft {
         kROCLessThan75Meters = 9,
         kROCLessThan25Meters = 10,
         kROCLessThan7p5Meters = 11
+    };
+
+    enum NICBarometricAltitudeIntegrity : uint8_t {
+        kBAIGillhamInputNotCrossChecked = 0,
+        kBAIGillHamInputCrossCheckedOrNonGillhamSource = 1
+    };
+
+    enum NACHorizontalVelocityError : uint8_t {
+        kHVEUnknownOrGreaterThanOrEqualTo10MetersPerSecond = 0b000,
+        kHVELessThan10MetersPerSecond = 0b110,
+        kHVELessThan3MetersPerSecond = 0b010,
+        kHVELessThan1MeterPerSecond = 0b011,
+        kHVELessThan0p3MetersPerSecond = 0b100
+    };
+
+    enum NACEstimatedPositionUncertainty : uint8_t {
+        kEPUUnknownOrGreaterThanOrEqualTo10NauticalMiles = 0,
+        kEPULessThan10NauticalMiles = 1,
+        kEPULessThan4NauticalMiles = 2,
+        kEPULessThan2NauticalMiles = 3,
+        kEPULessThan1NauticalMile = 4,
+        kEPULessThan0p5NauticalMiles = 5,
+        kEPULessThan0p3NauticalMiles = 6,
+        kEPULessThan0p1NauticalMiles = 7,
+        kEPULessThan0p05NauticalMiles = 8,
+        kEPULessThan30Meters = 9,
+        kEPULessThan10Meters = 10,
+        kEPULessThan3Meters = 11
+    };
+
+    // This composite SIL value is SIL | (SIL_supplement << 2).
+    enum SILProbabilityOfExceedingNICRadiusOfContainmnent : uint8_t {
+        kPOERCUnknownOrGreaterThan1em3PerFlightHour = 0b000,
+        kPOERCLessThanOrEqualTo1em3PerFligthHour = 0b001,
+        kPOERCLessThanOrEqualTo1em5PerFlightHour = 0b010,
+        kPOERCLessThanOrEqualTo1em7PerFlightHour = 0b011,
+        kPOERCUnknownOrGreaterThan1em3PerSample = 0b100,
+        kPOERCLessThanOrEqualTo1em3PerSample = 0b101,
+        kPOERCLessThanOrEqualTo1em5PerSample = 0b110,
+        kPOERCLessThanOrEqualTo1em7PerSample = 0b111,
+    };
+
+    enum GVA : uint8_t {
+        kGVAUnknownOrGreaterThan150Meters = 0,
+        GVALessThanOrEqualTo150Meters = 1,
+        GVALessThanOrEqualTo45Meters = 2,
+        GVALessThan45Meters = 3
     };
 
     enum AirGroundState : uint8_t {
@@ -557,12 +664,42 @@ class UATAircraft : public Aircraft {
      */
 
     /**
+     * Checks whether a flag bit is set.
+     * @param[in] bit Position of bit to check.
+     * @retval True if bit has been set, false if bit has been cleared.
+     */
+    inline bool HasBitFlag(BitFlag bit) const { return flags & (0b1 << bit) ? true : false; }
+
+    /**
+     * Increments the number of valid frames received.
+     */
+    inline void IncrementNumFramesReceived() { metrics_counter_.valid_frames++; }
+
+    /**
+     * Resets just the flag bits that show that something updated within the last reporting interval.
+     */
+    inline void ResetUpdatedBitFlags() { flags &= ~(~0b0 << kBitFlagUpdatedBaroAltitude); }
+
+    /**
      * Roll the metrics counter over to the public metrics field.
      */
     inline void UpdateMetrics() {
         metrics = metrics_counter_;
         metrics_counter_ = Metrics();
     }
+
+    /**
+     * Set or clear a bit on the Aircraft.
+     */
+    inline void WriteBitFlag(BitFlag bit, bool value) { value ? flags |= (0b1 << bit) : flags &= ~(0b1 << bit); }
+
+    // Application functions use pointers to portions of the decoded UAT ADS-B message payload that can be directly
+    // interpreted.
+    bool ApplyUATADSBStateVector(DecodedUATADSBPacket::UATStateVector *state_vector);
+    bool ApplyUATADSBModeStatus(DecodedUATADSBPacket::UATModeStatus *mode_status);
+    bool ApplyUATADSBTargetState(DecodedUATADSBPacket::UATTargetState *target_state);
+    bool ApplyUATADSBTrajectoryChange(DecodedUATADSBPacket::UATTrajectoryChange *trajectory_change);
+    bool ApplyUATADSBAuxiliaryStateVector(DecodedUATADSBPacket::UATAuxiliaryStateVector *auxiliary_state_vector);
 
     uint32_t flags = 0b0;
 
@@ -578,8 +715,7 @@ class UATAircraft : public Aircraft {
     uint16_t squawk = 0;
     Category category = kCategoryNoCategoryInfo;
 
-    float latitude_deg = 0.0f;
-    float longitude_deg = 0.0f;
+    NICRadiusOfContainment navigation_integrity_category = kROCUnknown;
 
    private:
     Metrics metrics_counter_;
@@ -623,6 +759,12 @@ class AircraftDictionary {
         uint16_t raw_extended_squitter_frames_by_source[kMaxNumSources] = {0};
         uint16_t valid_extended_squitter_frames_by_source[kMaxNumSources] = {0};
         uint16_t demods_1090_by_source[kMaxNumSources] = {0};
+
+        uint16_t raw_uat_adsb_frames = 0;
+        uint16_t valid_uat_adsb_frames = 0;
+
+        uint16_t raw_uat_uplink_frames = 0;
+        uint16_t valid_uat_uplink_frames = 0;
 
         /**
          * Formats the metrics dictionary into a JSON packet with the following structure.
@@ -731,6 +873,20 @@ class AircraftDictionary {
     }
 
     /**
+     * Log reception of a UAT ADS-B frame, regardless of whether it was able to be decoded and validated.
+     */
+    inline void RecordUATRawADSBFrame() { metrics_counter_.raw_uat_adsb_frames++; }
+
+    /**
+     * Log reception of a valid UAT uplink frame, regardless of whether it was able to be decoded and validated.
+     */
+    inline void RecordUATValidADSBFrame() { metrics_counter_.raw_uat_uplink_frames++; }
+
+    /**
+     * Mode S Packet Decoding
+     */
+
+    /**
      * Ingests a DecodedModeSPacket and uses it to insert and update the relevant aircraft.
      * @param[in] packet DecodedModeSPacket to ingest. Can be 56-bit (Squitter) or 112-bit (Extended Squitter).
      * Passed as a reference, since packets can be marked as valid by this function.
@@ -774,6 +930,12 @@ class AircraftDictionary {
      * @retval True if successful, false if something broke.
      */
     bool IngestModeSADSBPacket(ModeSADSBPacket packet);
+
+    /**
+     * UAT Packet Decoding
+     */
+
+    bool IngestDecodedUATADSBPacket(DecodedUATADSBPacket &packet);
 
     /**
      * Returns the number of aircraft currently in the dictionary.

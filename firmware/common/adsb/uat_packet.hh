@@ -30,9 +30,9 @@ class RawUATADSBPacket {
     static const uint16_t kADSBMessageMaxSizeBytes =
         kLongADSBMessagePayloadNumBytes + kLongADSBMessageFECParityNumBytes;  // For convenience.
 
-    RawUATADSBPacket(const char *rx_string, int16_t source_in = -1, int16_t sigs_dbm_in = INT16_MIN,
-                     int16_t sigq_db_in = INT16_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
-    RawUATADSBPacket(uint8_t rx_buffer[kADSBMessageMaxSizeBytes], uint16_t rx_buffer_len_bytes, int16_t source_in = -1,
+    RawUATADSBPacket(const char *rx_string, int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_db_in = INT16_MIN,
+                     uint64_t mlat_48mhz_64bit_counts = 0);
+    RawUATADSBPacket(uint8_t rx_buffer[kADSBMessageMaxSizeBytes], uint16_t rx_buffer_len_bytes,
                      int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_db_in = INT16_MIN,
                      uint64_t mlat_48mhz_64bit_counts = 0);
 
@@ -44,7 +44,6 @@ class RawUATADSBPacket {
     uint8_t encoded_message[kADSBMessageMaxSizeBytes] = {0};
     uint16_t encoded_message_len_bits = 0;
 
-    int8_t source = -1;                    // Source of the ADS-B packet (PIO state machine number).
     int16_t sigs_dbm = INT16_MIN;          // Signal strength, in dBm.
     int16_t sigq_db = INT16_MIN;           // Signal quality (dB above noise floor), in dB.
     uint64_t mlat_48mhz_64bit_counts = 0;  // High resolution MLAT counter.
@@ -64,6 +63,8 @@ class DecodedUATADSBPacket {
     static const uint16_t kModeStatusOffsetBytes = 17;
     static const uint16_t kAuxiliaryStateVectorOffsetBytes = 29;
 
+    static constexpr float kDegPerAWBTick = 360.0f / 16777216.0f;  // 360 degrees / 2^24
+
     enum UATADSBMessageFormat : uint8_t {
         kUATADSBMessageFormatInvalid = 0,
         kUATADSBMessageFormatShort = 1,
@@ -72,8 +73,8 @@ class DecodedUATADSBPacket {
 
     DecodedUATADSBPacket(const RawUATADSBPacket &packet_in);
     DecodedUATADSBPacket() : raw_((char *)"") { debug_string[0] = '\0'; }
-    DecodedUATADSBPacket(const char *rx_string, int16_t source = -1, int32_t sigs_dbm = INT32_MIN,
-                         int32_t sigq_db = INT32_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
+    DecodedUATADSBPacket(const char *rx_string, int32_t sigs_dbm = INT32_MIN, int32_t sigq_db = INT32_MIN,
+                         uint64_t mlat_48mhz_64bit_counts = 0);
 
     /**
      * Returns true if the packet is valid (FEC decoded successfully and packet has a recognized format).
@@ -90,6 +91,11 @@ class DecodedUATADSBPacket {
     RawUATADSBPacket GetRaw() const { return raw_; }
     RawUATADSBPacket *GetRawPtr() { return &raw_; }
 
+    /**
+     * Returns the ICAO address of the aircraft if the packet is valid and has a header, otherwise returns 0.
+     */
+    uint32_t GetICAOAddress() const;
+
     static inline int32_t AltitudeEncodedToAltitudeFt(uint16_t altitude_encoded) {
         if (altitude_encoded == 0) {
             return INT32_MIN;  // Invalid altitude.
@@ -102,6 +108,7 @@ class DecodedUATADSBPacket {
     struct __attribute__((packed)) UATHeader {
         uint8_t mdb_type_code     : 5;  // Message Data Block (MDB) type code.
         uint8_t address_qualifier : 3;
+        uint32_t icao_address     : 24;  // ICAO address of the aircraft.
     };
 
     struct __attribute__((packed)) UATStateVector {
@@ -167,11 +174,6 @@ class DecodedUATADSBPacket {
     UATAuxiliaryStateVector *auxiliary_state_vector = nullptr;  // Pointer to the UAT auxiliary state vector.
     UATTargetState *target_state = nullptr;                     // Pointer to the UAT target state.
     UATTrajectoryChange *trajectory_change = nullptr;           // Pointer to the UAT trajectory change.
-
-    // Latitude and logitude are decoded on the receiver side as a courtesy, since it has access to an FPU. Everything
-    // else gets handled by the aircraft dictionary that is ingesting the packet.
-    float latitude_deg = 0.0f;   // Latitude in degrees.
-    float longitude_deg = 0.0f;  // Longitude in degrees.
 
    protected:
     bool is_valid_ = false;

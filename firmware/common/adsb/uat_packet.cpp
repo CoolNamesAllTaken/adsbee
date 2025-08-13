@@ -2,18 +2,14 @@
 
 #include <cstring>  // for strlen
 
-#include "comms.hh"  // for CONSOLE_INFO, CONSOLE_ERROR
+#include "aircraft_dictionary.hh"  // for Aircraft::kAddressQualifierBitShift
+#include "comms.hh"                // for CONSOLE_INFO, CONSOLE_ERROR
 #include "fec.hh"
 #include "utils/buffer_utils.hh"  // for CHAR_TO_HEX
 
-static constexpr float kDegPerAWBTick = 360.0f / 16777216.0f;  // 360 degrees / 2^24
-
-RawUATADSBPacket::RawUATADSBPacket(const char *rx_string, int16_t source_in, int16_t sigs_dbm_in, int16_t sigq_db_in,
+RawUATADSBPacket::RawUATADSBPacket(const char *rx_string, int16_t sigs_dbm_in, int16_t sigq_db_in,
                                    uint64_t mlat_48mhz_64bit_counts_in)
-    : source(source_in),
-      sigs_dbm(sigs_dbm_in),
-      sigq_db(sigq_db_in),
-      mlat_48mhz_64bit_counts(mlat_48mhz_64bit_counts_in) {
+    : sigs_dbm(sigs_dbm_in), sigq_db(sigq_db_in), mlat_48mhz_64bit_counts(mlat_48mhz_64bit_counts_in) {
     uint16_t rx_num_bytes = strlen(rx_string) / kNibblesPerByte;
     for (uint16_t i = 0; i < rx_num_bytes && i < RawUATADSBPacket::kADSBMessageMaxSizeBytes * kBytesPerWord; i++) {
         uint8_t byte = (CHAR_TO_HEX(rx_string[i * kNibblesPerByte]) << kBitsPerNibble) |
@@ -23,11 +19,18 @@ RawUATADSBPacket::RawUATADSBPacket(const char *rx_string, int16_t source_in, int
     }
 }
 
-DecodedUATADSBPacket::DecodedUATADSBPacket(const char *rx_string, int16_t source, int32_t sigs_dbm, int32_t sigq_db,
+DecodedUATADSBPacket::DecodedUATADSBPacket(const char *rx_string, int32_t sigs_dbm, int32_t sigq_db,
                                            uint64_t mlat_48mhz_64bit_counts)
-    : raw_(rx_string, source, sigs_dbm, sigq_db, mlat_48mhz_64bit_counts) {
+    : raw_(rx_string, sigs_dbm, sigq_db, mlat_48mhz_64bit_counts) {
     // Validate the packet.
     ConstructUATPacket();
+}
+
+uint32_t DecodedUATADSBPacket::GetICAOAddress() const {
+    if (!header) {
+        return 0;  // No header, no ICAO address.
+    }
+    return header->icao_address | (header->address_qualifier << Aircraft::kAddressQualifierBitShift);
 }
 
 void DecodedUATADSBPacket::ConstructUATPacket() {
@@ -118,20 +121,6 @@ void DecodedUATADSBPacket::ConstructUATPacket() {
             // All other MDB type codes are reserved for future revisions of the UAT ADS-B protocol or reserved for
             // developmental use.
             break;
-    }
-
-    // Receiver-side processing of selected fields that we don't want to deal with on other platforms (e.g. ones with no
-    // FPU).
-    if (state_vector) {
-        latitude_deg = static_cast<float>(state_vector->latitude_awb) * kDegPerAWBTick - 90.0f;  // Convert to degrees.
-        if (latitude_deg > 90) {
-            latitude_deg -= 180.0f;  // Convert to negative latitude if it exceeds 90 degrees.
-        }
-        longitude_deg =
-            static_cast<float>(state_vector->longitude_awb) * kDegPerAWBTick - 90.0f;  // Convert to degrees.
-        if (longitude_deg > 180) {
-            longitude_deg -= 360.0f;  // Convert to negative longitude if it exceeds 180 degrees.
-        }
     }
 
     is_valid_ = true;
