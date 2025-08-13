@@ -99,7 +99,7 @@ TEST(DecodedModeSPacket, PacketFields) {
     packet_buffer[3] = 0x504D0000u;
     DecodedModeSPacket tpacket = DecodedModeSPacket(packet_buffer, packet_buffer_used_len);
     EXPECT_TRUE(tpacket.IsValid());
-    ADSBPacket packet = ADSBPacket(tpacket);
+    ModeSADSBPacket packet = ModeSADSBPacket(tpacket);
 
     EXPECT_EQ(packet.GetDownlinkFormat(), static_cast<uint16_t>(DecodedModeSPacket::kDownlinkFormatExtendedSquitter));
     EXPECT_EQ(packet.GetCapability(), 5u);
@@ -108,9 +108,9 @@ TEST(DecodedModeSPacket, PacketFields) {
     EXPECT_EQ(packet.GetNBitWordFromMessage(3, 5), 0u);  // CAT = 0
 }
 
-TEST(ADSBPacket, ConstructFromTransponderPacket) {
+TEST(ModeSADSBPacket, ConstructFromTransponderPacket) {
     DecodedModeSPacket tpacket = DecodedModeSPacket((char *)"8D7C80AD2358F6B1E35C60FF1925");
-    ADSBPacket packet = ADSBPacket(tpacket);
+    ModeSADSBPacket packet = ModeSADSBPacket(tpacket);
     EXPECT_TRUE(packet.IsValid());
     EXPECT_EQ(packet.GetICAOAddress(), 0x7C80ADu);
     EXPECT_EQ(packet.GetTypeCode(), 4);

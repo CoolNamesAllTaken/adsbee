@@ -433,20 +433,20 @@ class ModeSAircraft : public Aircraft {
 
     /**
      * GENERIC COMMENT FOR ALL MESSAGE INGESTION HELPERS
-     * Ingests a <Message Type> ADS-B message. Called by IngestADSBPacket, which makes sure that the packet
+     * Ingests a <Message Type> ADS-B message. Called by IngestModeSADSBPacket, which makes sure that the packet
      * is valid and has the correct Downlink Format.
      * @param[out] aircraft Reference to the Aircraft to populate with info pulled from packet.
-     * @param[in] packet ADSBPacket to ingest.
+     * @param[in] packet ModeSADSBPacket to ingest.
      * @retval True if message was ingested successfully, false otherwise.
      */
 
-    bool ApplyAircraftIDMessage(ADSBPacket packet);
-    bool ApplySurfacePositionMessage(ADSBPacket packet);
-    bool ApplyAirbornePositionMessage(ADSBPacket packet, bool filter_cpr_position = true);
-    bool ApplyAirborneVelocitiesMessage(ADSBPacket packet);
-    bool ApplyAircraftStatusMessage(ADSBPacket packet);
-    bool ApplyTargetStateAndStatusInfoMessage(ADSBPacket packet);
-    bool ApplyAircraftOperationStatusMessage(ADSBPacket packet);
+    bool ApplyAircraftIDMessage(ModeSADSBPacket packet);
+    bool ApplySurfacePositionMessage(ModeSADSBPacket packet);
+    bool ApplyAirbornePositionMessage(ModeSADSBPacket packet, bool filter_cpr_position = true);
+    bool ApplyAirborneVelocitiesMessage(ModeSADSBPacket packet);
+    bool ApplyAircraftStatusMessage(ModeSADSBPacket packet);
+    bool ApplyTargetStateAndStatusInfoMessage(ModeSADSBPacket packet);
+    bool ApplyAircraftOperationStatusMessage(ModeSADSBPacket packet);
 
    private:
     struct CPRPacket {
@@ -743,20 +743,20 @@ class AircraftDictionary {
      * testing, but usually called by IngestDecodedModeSPacket.
      * Note: this function requires that the packet be marked as valid using the ForceValid() function. If the packet is
      * valid and does not match an ICAO in the aircraft dictionary, a new aircraft will be inserted.
-     * @param[in] packet IdentityReplyPacket to ingest.
+     * @param[in] packet ModeSIdentityReplyPacket to ingest.
      * @retval True if successful, false if something broke.
      */
-    bool IngestIdentityReplyPacket(IdentityReplyPacket packet);
+    bool IngestModeSIdentityReplyPacket(ModeSIdentityReplyPacket packet);
 
     /**
      * Ingests an Altitude Surveillance Reply packet and uses it to update the relevant aircraft. Exposed for
      * testing, but usually called by IngestDecodedModeSPacket.
      * Note: this function requires that the packet be marked as valid using the ForceValid() function. If the packet is
      * valid and does not match an ICAO in the aircraft dictionary, a new aircraft will be inserted.
-     * @param[in] packet AltitudeReplyPacket to ingest.
+     * @param[in] packet ModeSAltitudeReplyPacket to ingest.
      * @retval True if successful, false if something broke.
      */
-    bool IngestAltitudeReplyPacket(AltitudeReplyPacket packet);
+    bool IngestModeSAltitudeReplyPacket(ModeSAltitudeReplyPacket packet);
 
     /**
      * Ingests an All Call Reply packet and uses it to update the relevant aircraft. Exposed for testing, but usually
@@ -765,15 +765,15 @@ class AircraftDictionary {
      * Currently, we only accept all call reply packets with an interrogator ID of 0 (replies to spontaneous acquisition
      * squitters), since we don't have a way to know the interrogator ID of ground based surveillance stations.
      */
-    bool IngestAllCallReplyPacket(AllCallReplyPacket packet);
+    bool IngestModeSAllCallReplyPacket(ModeSAllCallReplyPacket packet);
 
     /**
-     * Ingests an ADSBPacket directly. Exposed for testing, but usually this gets called by
+     * Ingests an ModeSADSBPacket directly. Exposed for testing, but usually this gets called by
      * IngestDecodedModeSPacket and should not get touched directly.
-     * @param[in] packet ADSBPacket to ingest. Derived from a DecodedModeSPacket with DF=17-19.
+     * @param[in] packet ModeSADSBPacket to ingest. Derived from a DecodedModeSPacket with DF=17-19.
      * @retval True if successful, false if something broke.
      */
-    bool IngestADSBPacket(ADSBPacket packet);
+    bool IngestModeSADSBPacket(ModeSADSBPacket packet);
 
     /**
      * Returns the number of aircraft currently in the dictionary.
@@ -882,7 +882,7 @@ class AircraftDictionary {
     Metrics metrics;
 
    private:
-    // Helper functions for ingesting specific ADS-B packet types, called by IngestADSBPacket.
+    // Helper functions for ingesting specific ADS-B packet types, called by IngestModeSADSBPacket.
 
     AircraftDictionaryConfig_t config_;
     // Counters in metrics_counter_ are incremented, then metrics_counter_ is swapped into metrics during the dictionary

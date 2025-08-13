@@ -355,11 +355,11 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     AircraftDictionary dictionary = AircraftDictionary();
     DecodedModeSPacket tpacket = DecodedModeSPacket((char *)"8dae56bc99246508b8080b6c230f");
     ASSERT_TRUE(tpacket.IsValid());
-    ADSBPacket packet = ADSBPacket(tpacket);
-    ASSERT_EQ(packet.GetTypeCodeEnum(), ADSBPacket::TypeCode::kTypeCodeAirborneVelocities);
+    ModeSADSBPacket packet = ModeSADSBPacket(tpacket);
+    ASSERT_EQ(packet.GetTypeCodeEnum(), ModeSADSBPacket::TypeCode::kTypeCodeAirborneVelocities);
 
     // Ingest the airborne velocities packet.
-    ASSERT_TRUE(dictionary.IngestADSBPacket(packet));
+    ASSERT_TRUE(dictionary.IngestModeSADSBPacket(packet));
     ASSERT_EQ(dictionary.GetNumAircraft(), 1);
     auto itr = dictionary.dict.begin();
     auto &aircraft =
@@ -384,9 +384,9 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     // Test Message A from https://mode-s.org/decode/content/ads-b/5-airborne-velocity.html
     tpacket = DecodedModeSPacket((char *)"8D485020994409940838175B284F");
     ASSERT_TRUE(tpacket.IsValid());
-    packet = ADSBPacket(tpacket);
-    ASSERT_EQ(packet.GetTypeCodeEnum(), ADSBPacket::TypeCode::kTypeCodeAirborneVelocities);
-    ASSERT_TRUE(dictionary.IngestADSBPacket(packet));
+    packet = ModeSADSBPacket(tpacket);
+    ASSERT_EQ(packet.GetTypeCodeEnum(), ModeSADSBPacket::TypeCode::kTypeCodeAirborneVelocities);
+    ASSERT_TRUE(dictionary.IngestModeSADSBPacket(packet));
     uint32_t message_a_icao = 0x485020;
     ASSERT_TRUE(dictionary.ContainsAircraft(message_a_icao));
     ASSERT_TRUE(dictionary.GetAircraft(message_a_icao, aircraft));  // NOTE: Aircraft is read-only now!
@@ -406,7 +406,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     aircraft_ptr->baro_altitude_ft = 2000;
     aircraft_ptr->altitude_source = ModeSAircraft::AltitudeSource::kAltitudeSourceBaro;
     // Re-ingest message A to make sure the GNSS altitude gets corrected.
-    ASSERT_TRUE(dictionary.IngestADSBPacket(packet));
+    ASSERT_TRUE(dictionary.IngestModeSADSBPacket(packet));
     EXPECT_FALSE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroAltitude));
     EXPECT_TRUE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedGNSSAltitude));
     ASSERT_EQ(aircraft_ptr->gnss_altitude_ft, 2000 + 550);  // GNSS altitude is 550ft above baro altitude.
@@ -414,9 +414,9 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     // Test Message B from https://mode-s.org/decode/content/ads-b/5-airborne-velocity.html
     tpacket = DecodedModeSPacket((char *)"8DA05F219B06B6AF189400CBC33F");
     ASSERT_TRUE(tpacket.IsValid());
-    packet = ADSBPacket(tpacket);
-    ASSERT_EQ(packet.GetTypeCodeEnum(), ADSBPacket::TypeCode::kTypeCodeAirborneVelocities);
-    ASSERT_TRUE(dictionary.IngestADSBPacket(packet));
+    packet = ModeSADSBPacket(tpacket);
+    ASSERT_EQ(packet.GetTypeCodeEnum(), ModeSADSBPacket::TypeCode::kTypeCodeAirborneVelocities);
+    ASSERT_TRUE(dictionary.IngestModeSADSBPacket(packet));
     uint32_t message_b_icao = 0xA05F21;
     ASSERT_TRUE(dictionary.ContainsAircraft(message_b_icao));
     ASSERT_TRUE(dictionary.GetAircraft(message_b_icao, aircraft));

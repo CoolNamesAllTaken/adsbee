@@ -264,18 +264,18 @@ void DecodedModeSPacket::ConstructModeSPacket() {
     }
 }
 
-/** ADSBPacket **/
+/** ModeSADSBPacket **/
 
 /**
  * Helper function used by constructors.
  */
-void ADSBPacket::ConstructADSBPacket() {
-    capability_ = static_cast<ADSBPacket::Capability>((raw_.buffer[0] >> 24) & 0b111);
-    typecode_ = static_cast<ADSBPacket::TypeCode>(raw_.buffer[1] >> 27);
+void ModeSADSBPacket::ConstructADSBPacket() {
+    capability_ = static_cast<ModeSADSBPacket::Capability>((raw_.buffer[0] >> 24) & 0b111);
+    typecode_ = static_cast<ModeSADSBPacket::TypeCode>(raw_.buffer[1] >> 27);
     parity_interrogator_id = raw_.buffer[1] & 0xFFFFFF;
 }
 
-ADSBPacket::TypeCode ADSBPacket::GetTypeCodeEnum() const {
+ModeSADSBPacket::TypeCode ModeSADSBPacket::GetTypeCodeEnum() const {
     // Table 3.3 from The 1090Mhz Riddle (Junzi Sun), pg. 37.
     switch (static_cast<uint16_t>(typecode_)) {
         case 1:
@@ -331,7 +331,7 @@ ADSBPacket::TypeCode ADSBPacket::GetTypeCodeEnum() const {
     }
 }
 
-AltitudeReplyPacket::AltitudeReplyPacket(const DecodedModeSPacket &decoded_packet)
+ModeSAltitudeReplyPacket::ModeSAltitudeReplyPacket(const DecodedModeSPacket &decoded_packet)
     : DecodedModeSPacket(decoded_packet) {
     uint8_t flight_status = GetNBitWordFromBuffer(3, 5, raw_.buffer);  // FS = Bits 5-7.
     switch (flight_status) {
@@ -378,7 +378,7 @@ AltitudeReplyPacket::AltitudeReplyPacket(const DecodedModeSPacket &decoded_packe
     altitude_ft_ = AltitudeCodeToAltitudeFt(GetNBitWordFromBuffer(13, 19, raw_.buffer));
 };
 
-IdentityReplyPacket::IdentityReplyPacket(const DecodedModeSPacket &decoded_packet)
+ModeSIdentityReplyPacket::ModeSIdentityReplyPacket(const DecodedModeSPacket &decoded_packet)
     : DecodedModeSPacket(decoded_packet) {
     uint8_t flight_status = GetNBitWordFromBuffer(3, 5, raw_.buffer);  // FS = Bits 5-7.
     switch (flight_status) {

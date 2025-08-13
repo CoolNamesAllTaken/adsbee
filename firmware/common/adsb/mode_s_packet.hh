@@ -177,7 +177,7 @@ class DecodedModeSPacket {
     void ConstructModeSPacket();
 };
 
-class ADSBPacket : public DecodedModeSPacket {
+class ModeSADSBPacket : public DecodedModeSPacket {
    public:
     static const uint16_t kMaxTCStrLen = 50;
 
@@ -191,11 +191,11 @@ class ADSBPacket : public DecodedModeSPacket {
     static const uint16_t kMEFirstBitIndex = kDFNumBits + kCANumBits + kICAONumBits;
 
     /**
-     * Constructor. Can only create an ADSBPacket from an existing DecodedModeSPacket, which is is referenced as
-     * the parent of the ADSBPacket. Think of this as a way to use the ADSBPacket as a "window" into the contents of the
-     * parent DecodedModeSPacket. The ADSBPacket cannot exist without the parent DecodedModeSPacket!
+     * Constructor. Can only create an ModeSADSBPacket from an existing DecodedModeSPacket, which is is referenced as
+     * the parent of the ModeSADSBPacket. Think of this as a way to use the ModeSADSBPacket as a "window" into the contents of the
+     * parent DecodedModeSPacket. The ModeSADSBPacket cannot exist without the parent DecodedModeSPacket!
      */
-    ADSBPacket(const DecodedModeSPacket &decoded_packet) : DecodedModeSPacket(decoded_packet) {
+    ModeSADSBPacket(const DecodedModeSPacket &decoded_packet) : DecodedModeSPacket(decoded_packet) {
         ConstructADSBPacket();
     };
 
@@ -217,7 +217,7 @@ class ADSBPacket : public DecodedModeSPacket {
     };
     // Bits 89-112 [24]: Parity / Interrogator ID (PI)
 
-    // Subtype enums used for specific packet types (not instantiated as part of the ADSBPacket class).
+    // Subtype enums used for specific packet types (not instantiated as part of the ModeSADSBPacket class).
     // Airborne Velocitites (TC = 19)
     enum AirborneVelocitiesSubtype : uint8_t {
         kAirborneVelocitiesGroundSpeedSubsonic = 1,
@@ -246,9 +246,9 @@ class ADSBPacket : public DecodedModeSPacket {
     void ConstructADSBPacket();
 };
 
-class AllCallReplyPacket : public DecodedModeSPacket {
+class ModeSAllCallReplyPacket : public DecodedModeSPacket {
    public:
-    AllCallReplyPacket(const DecodedModeSPacket &decoded_packet) : DecodedModeSPacket(decoded_packet) {
+    ModeSAllCallReplyPacket(const DecodedModeSPacket &decoded_packet) : DecodedModeSPacket(decoded_packet) {
         capability_ = static_cast<Capability>(GetNBitWordFromBuffer(3, 5, raw_.buffer));
     }
 
@@ -258,7 +258,7 @@ class AllCallReplyPacket : public DecodedModeSPacket {
     Capability capability_ = kCALevel1Transponder;  // Default to most basic capability.
 };
 
-class AltitudeReplyPacket : public DecodedModeSPacket {
+class ModeSAltitudeReplyPacket : public DecodedModeSPacket {
    public:
     enum DownlinkRequest : uint8_t {
         kDownlinkRequestNone = 0b00000,
@@ -274,7 +274,7 @@ class AltitudeReplyPacket : public DecodedModeSPacket {
         kUtilityMessageCommDInterrogatorIdentifierCode = 0b11
     };
 
-    AltitudeReplyPacket(const DecodedModeSPacket &decoded_packet);
+    ModeSAltitudeReplyPacket(const DecodedModeSPacket &decoded_packet);
 
     bool IsAirborne() const { return is_airborne_; }
     bool HasAlert() const { return has_alert_; }
@@ -295,7 +295,7 @@ class AltitudeReplyPacket : public DecodedModeSPacket {
     int32_t altitude_ft_ = -1;
 };
 
-class IdentityReplyPacket : public DecodedModeSPacket {
+class ModeSIdentityReplyPacket : public DecodedModeSPacket {
    public:
     enum DownlinkRequest : uint8_t {
         kDownlinkRequestNone = 0b00000,
@@ -311,7 +311,7 @@ class IdentityReplyPacket : public DecodedModeSPacket {
         kUtilityMessageCommDInterrogatorIdentifierCode = 0b11
     };
 
-    IdentityReplyPacket(const DecodedModeSPacket &decoded_packet);
+    ModeSIdentityReplyPacket(const DecodedModeSPacket &decoded_packet);
 
     bool IsAirborne() const { return is_airborne_; }
     bool HasAlert() const { return has_alert_; }
