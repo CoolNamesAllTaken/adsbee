@@ -646,6 +646,7 @@ class UATAircraft : public Aircraft {
     };
 
     UATAircraft(uint32_t icao_address_in);
+    UATAircraft() {};
     ~UATAircraft();
 
     /**
@@ -695,11 +696,11 @@ class UATAircraft : public Aircraft {
 
     // Application functions use pointers to portions of the decoded UAT ADS-B message payload that can be directly
     // interpreted.
-    bool ApplyUATADSBStateVector(DecodedUATADSBPacket::UATStateVector *state_vector);
-    bool ApplyUATADSBModeStatus(DecodedUATADSBPacket::UATModeStatus *mode_status);
-    bool ApplyUATADSBTargetState(DecodedUATADSBPacket::UATTargetState *target_state);
-    bool ApplyUATADSBTrajectoryChange(DecodedUATADSBPacket::UATTrajectoryChange *trajectory_change);
-    bool ApplyUATADSBAuxiliaryStateVector(DecodedUATADSBPacket::UATAuxiliaryStateVector *auxiliary_state_vector);
+    bool ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVector &state_vector);
+    bool ApplyUATADSBModeStatus(const DecodedUATADSBPacket::UATModeStatus &mode_status);
+    bool ApplyUATADSBTargetState(const DecodedUATADSBPacket::UATTargetState &target_state);
+    bool ApplyUATADSBTrajectoryChange(const DecodedUATADSBPacket::UATTrajectoryChange &trajectory_change);
+    bool ApplyUATADSBAuxiliaryStateVector(const DecodedUATADSBPacket::UATAuxiliaryStateVector &auxiliary_state_vector);
 
     uint32_t flags = 0b0;
 

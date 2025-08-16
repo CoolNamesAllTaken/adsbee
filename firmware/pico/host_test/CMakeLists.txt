@@ -26,7 +26,7 @@ target_sources(host_test PRIVATE
     main.cc
     settings.cc
     # test_ads_b_decoder.cc
-    test_aircraft_dictionary.cc
+    test_aircraft_dictionary_mode_s.cc
     test_buffer_utils.cc
     # test_adsbee.cc
     test_crc.cc

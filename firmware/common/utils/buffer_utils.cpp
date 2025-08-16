@@ -3,6 +3,7 @@
 #include <cstring>  // For strlen.
 
 #include "comms.hh"
+#include "macros.hh"  // for MAX
 
 #define BITMASK_32_ALL   0xFFFFFFFF
 #define WORD_32_NUM_BITS 32
@@ -27,14 +28,14 @@ bool ByteBufferMatchesString(const uint8_t *buffer, const char *str) {
 
 // NOTE: Buffer operations are done big-endian (oldest bits are stored in the MSB), since input buffer shifts left.
 
-uint32_t Get24BitWordFromBuffer(uint32_t first_bit_index, const uint32_t buffer[]) {
-    return GetNBitWordFromBuffer(24, first_bit_index, buffer);
+uint32_t Get24BitsFromWordBuffer(uint32_t first_bit_index, const uint32_t buffer[]) {
+    return GetNBitsFromWordBuffer(24, first_bit_index, buffer);
 }
 
-uint32_t GetNBitWordFromBuffer(uint16_t n, uint32_t first_bit_index, const uint32_t buffer[]) {
+uint32_t GetNBitsFromWordBuffer(uint16_t n, uint32_t first_bit_index, const uint32_t buffer[]) {
     // NOTE: Bit 0 is the MSb in this format, since the input shift register shifts left (oldest bit is MSb).
     if (n > WORD_32_NUM_BITS || n < 1) {
-        CONSOLE_ERROR("GetNBitWordFromBuffer",
+        CONSOLE_ERROR("GetNBitsFromWordBuffer",
                       "Tried to get %d bit word from buffer, but word bitlength must be between 1 "
                       "and 32.\r\n",
                       n);
@@ -55,9 +56,37 @@ uint32_t GetNBitWordFromBuffer(uint16_t n, uint32_t first_bit_index, const uint3
     return word_n;
 }
 
-void SetNBitWordInBuffer(uint16_t n, uint32_t word, uint32_t first_bit_index, uint32_t buffer[]) {
+uint32_t GetNBitsFromByteBuffer(uint16_t n, uint32_t first_bit_index, const uint8_t buffer[]) {
+    // NOTE: Bit 0 is the MSb in this format, since the input shift register shifts left (oldest bit is MSb).
     if (n > WORD_32_NUM_BITS || n < 1) {
-        CONSOLE_ERROR("SetNBitWordInBuffer",
+        CONSOLE_ERROR("GetNBitsFromByteBuffer",
+                      "Tried to get %d bit word from buffer, but word bitlength must be between 1 "
+                      "and 32.\r\n",
+                      n);
+        return 0;
+    }
+
+    uint16_t byte_index = first_bit_index / kBitsPerByte;
+    uint16_t bit_offset_8 = first_bit_index % kBitsPerByte;
+    uint16_t chunk_len_bits = MIN(kBitsPerByte - bit_offset_8, n);
+    uint32_t chunk = buffer[byte_index] >> (kBitsPerByte - chunk_len_bits - bit_offset_8) &
+                     (0xFF >> (kBitsPerByte - chunk_len_bits));
+    int16_t bits_remaining = n - chunk_len_bits;
+    uint32_t word_n = chunk;
+
+    while (bits_remaining > 0) {
+        byte_index++;
+        chunk_len_bits = bits_remaining >= kBitsPerByte ? kBitsPerByte : bits_remaining;
+        chunk = buffer[byte_index] >> (kBitsPerByte - chunk_len_bits);
+        word_n = (word_n << chunk_len_bits) | chunk;
+        bits_remaining -= chunk_len_bits;
+    }
+    return word_n;
+}
+
+void SetNBitsInWordBuffer(uint16_t n, uint32_t word, uint32_t first_bit_index, uint32_t buffer[]) {
+    if (n > WORD_32_NUM_BITS || n < 1) {
+        CONSOLE_ERROR("SetNBitsInWordBuffer",
                       "Tried to set %d-bit word in buffer, but word bitlength must be between 1 and "
                       "32.\r\n",
                       n);

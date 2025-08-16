@@ -18,7 +18,7 @@ bool ByteBufferMatchesString(const uint8_t *buffer, const char *str);
 
 void PrintBinary32(uint32_t);  // for debugging
 
-uint32_t Get24BitWordFromBuffer(uint32_t first_bit_index, const uint32_t buffer[]);
+uint32_t Get24BitsFromWordBuffer(uint32_t first_bit_index, const uint32_t buffer[]);
 
 /**
  * Extract an n-bit word from a big-endian buffer of 32-bit words. Does NOT guard against falling off the end of
@@ -29,7 +29,18 @@ uint32_t Get24BitWordFromBuffer(uint32_t first_bit_index, const uint32_t buffer[
  * @param[in] buffer Buffer to read from.
  * @retval Right-aligned n-bit word that was read from the buffer.
  */
-uint32_t GetNBitWordFromBuffer(uint16_t n, uint32_t first_bit_index, const uint32_t buffer[]);
+uint32_t GetNBitsFromWordBuffer(uint16_t n, uint32_t first_bit_index, const uint32_t buffer[]);
+
+/**
+ * Extract an n-bit word from a big-endian buffer of bytes. Does NOT guard against falling off the end of
+ * the buffer, so be careful!
+ * @param[in] n Bitlength of word to extract.
+ * @param[in] first_bit_index Bit index begin reading from (index of MSb of word to read). MSb of first byte in buffer
+ * is bit 0.
+ * @param[in] buffer Buffer to read from.
+ * @retval Right-aligned n-bit word that was read from the buffer.
+ */
+uint32_t GetNBitsFromByteBuffer(uint16_t n, uint32_t first_bit_index, const uint8_t buffer[]);
 
 /**
  * Insert an n-bit word into a big-endian buffer of 32-bit words. Does NOT guard against falling off the end of
@@ -39,7 +50,7 @@ uint32_t GetNBitWordFromBuffer(uint16_t n, uint32_t first_bit_index, const uint3
  * @param[in] first_bit_index Bit index where the MSb of word should be inserted. MSb of first word in buffer is bit 0.
  * @param[in] buffer Buffer to insert into.
  */
-void SetNBitWordInBuffer(uint16_t n, uint32_t word, uint32_t first_bit_index, uint32_t buffer[]);
+void SetNBitsInWordBuffer(uint16_t n, uint32_t word, uint32_t first_bit_index, uint32_t buffer[]);
 
 inline void ByteBufferToWordBuffer(const uint8_t byte_buffer[], uint32_t word_buffer[], uint16_t num_bytes) {
     uint16_t num_words = num_bytes / kBytesPerWord + (num_bytes % kBytesPerWord ? 1 : 0);

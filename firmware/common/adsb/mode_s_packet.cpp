@@ -187,18 +187,18 @@ uint32_t DecodedModeSPacket::CalculateCRC24(uint16_t packet_len_bits) const {
     }
 
     // Overwrite 24-bit parity word with zeros.
-    SetNBitWordInBuffer(BITS_PER_WORD_24, 0x0, packet_len_bits - BITS_PER_WORD_24, crc_buffer);
+    SetNBitsInWordBuffer(BITS_PER_WORD_24, 0x0, packet_len_bits - BITS_PER_WORD_24, crc_buffer);
 
     // CRC is a conditional convolve operation using the 25-bit generator word.
     for (uint16_t i = 0; i < packet_len_bits - BITS_PER_WORD_24; i++) {
-        uint32_t word = GetNBitWordFromBuffer(BITS_PER_WORD_25, i, crc_buffer);
+        uint32_t word = GetNBitsFromWordBuffer(BITS_PER_WORD_25, i, crc_buffer);
         if (word & MASK_MSBIT_WORD25) {
             // Most significant bit is a 1. XOR with generator!
-            SetNBitWordInBuffer(BITS_PER_WORD_25, word ^ kCRC24Generator, i, crc_buffer);
+            SetNBitsInWordBuffer(BITS_PER_WORD_25, word ^ kCRC24Generator, i, crc_buffer);
         }
     }
 
-    return GetNBitWordFromBuffer(BITS_PER_WORD_24, packet_len_bits - BITS_PER_WORD_24, crc_buffer);
+    return GetNBitsFromWordBuffer(BITS_PER_WORD_24, packet_len_bits - BITS_PER_WORD_24, crc_buffer);
 #else
     // Digest the 32-bit word packet buffer into a byte buffer.
     uint16_t packet_len_bytes = packet_len_bits / kBitsPerByte;
@@ -222,7 +222,7 @@ void DecodedModeSPacket::ConstructModeSPacket() {
 
     downlink_format_ = raw_.buffer[0] >> 27;
     uint32_t calculated_checksum = CalculateCRC24(raw_.buffer_len_bits);
-    uint32_t parity_value = Get24BitWordFromBuffer(raw_.buffer_len_bits - BITS_PER_WORD_24, raw_.buffer);
+    uint32_t parity_value = Get24BitsFromWordBuffer(raw_.buffer_len_bits - BITS_PER_WORD_24, raw_.buffer);
 
     switch (static_cast<DownlinkFormat>(downlink_format_)) {
         case kDownlinkFormatShortRangeAirToAirSurveillance:  // DF = 0
@@ -237,7 +237,7 @@ void DecodedModeSPacket::ConstructModeSPacket() {
         }
         case kDownlinkFormatAllCallReply:  // DF = 11
         {
-            icao_address_ = Get24BitWordFromBuffer(8, raw_.buffer);
+            icao_address_ = Get24BitsFromWordBuffer(8, raw_.buffer);
             uint16_t interrogator_id = parity_value ^ calculated_checksum;
             if (interrogator_id == 0) {
                 // Reply to a spontaneous acquisition squitter.
@@ -333,7 +333,7 @@ ModeSADSBPacket::TypeCode ModeSADSBPacket::GetTypeCodeEnum() const {
 
 ModeSAltitudeReplyPacket::ModeSAltitudeReplyPacket(const DecodedModeSPacket &decoded_packet)
     : DecodedModeSPacket(decoded_packet) {
-    uint8_t flight_status = GetNBitWordFromBuffer(3, 5, raw_.buffer);  // FS = Bits 5-7.
+    uint8_t flight_status = GetNBitsFromWordBuffer(3, 5, raw_.buffer);  // FS = Bits 5-7.
     switch (flight_status) {
         case 0b000:  // No alert, no SPI, aircraft is airborne.
             has_alert_ = false;
@@ -372,15 +372,15 @@ ModeSAltitudeReplyPacket::ModeSAltitudeReplyPacket(const DecodedModeSPacket &dec
             break;
     }
 
-    downlink_request_ = static_cast<DownlinkRequest>(GetNBitWordFromBuffer(5, 8, raw_.buffer));
-    utility_message_ = GetNBitWordFromBuffer(4, 13, raw_.buffer);
-    utility_message_type_ = static_cast<UtilityMessageType>(GetNBitWordFromBuffer(2, 17, raw_.buffer));
-    altitude_ft_ = AltitudeCodeToAltitudeFt(GetNBitWordFromBuffer(13, 19, raw_.buffer));
+    downlink_request_ = static_cast<DownlinkRequest>(GetNBitsFromWordBuffer(5, 8, raw_.buffer));
+    utility_message_ = GetNBitsFromWordBuffer(4, 13, raw_.buffer);
+    utility_message_type_ = static_cast<UtilityMessageType>(GetNBitsFromWordBuffer(2, 17, raw_.buffer));
+    altitude_ft_ = AltitudeCodeToAltitudeFt(GetNBitsFromWordBuffer(13, 19, raw_.buffer));
 };
 
 ModeSIdentityReplyPacket::ModeSIdentityReplyPacket(const DecodedModeSPacket &decoded_packet)
     : DecodedModeSPacket(decoded_packet) {
-    uint8_t flight_status = GetNBitWordFromBuffer(3, 5, raw_.buffer);  // FS = Bits 5-7.
+    uint8_t flight_status = GetNBitsFromWordBuffer(3, 5, raw_.buffer);  // FS = Bits 5-7.
     switch (flight_status) {
         case 0b000:  // No alert, no SPI, aircraft is airborne.
             has_alert_ = false;
@@ -419,8 +419,8 @@ ModeSIdentityReplyPacket::ModeSIdentityReplyPacket(const DecodedModeSPacket &dec
             break;
     }
 
-    downlink_request_ = static_cast<DownlinkRequest>(GetNBitWordFromBuffer(5, 8, raw_.buffer));
-    utility_message_ = GetNBitWordFromBuffer(4, 13, raw_.buffer);
-    utility_message_type_ = static_cast<UtilityMessageType>(GetNBitWordFromBuffer(2, 17, raw_.buffer));
-    squawk_ = IdentityCodeToSquawk(GetNBitWordFromBuffer(13, 19, raw_.buffer));
+    downlink_request_ = static_cast<DownlinkRequest>(GetNBitsFromWordBuffer(5, 8, raw_.buffer));
+    utility_message_ = GetNBitsFromWordBuffer(4, 13, raw_.buffer);
+    utility_message_type_ = static_cast<UtilityMessageType>(GetNBitsFromWordBuffer(2, 17, raw_.buffer));
+    squawk_ = IdentityCodeToSquawk(GetNBitsFromWordBuffer(13, 19, raw_.buffer));
 };

@@ -152,7 +152,7 @@ class DecodedModeSPacket {
 
     // Exposed for testing only.
     uint32_t Get24BitWordFromPacketBuffer(uint16_t first_bit_index) const {
-        return GetNBitWordFromBuffer(24, first_bit_index, raw_.buffer);
+        return GetNBitsFromWordBuffer(24, first_bit_index, raw_.buffer);
     };
 
     /**
@@ -192,8 +192,9 @@ class ModeSADSBPacket : public DecodedModeSPacket {
 
     /**
      * Constructor. Can only create an ModeSADSBPacket from an existing DecodedModeSPacket, which is is referenced as
-     * the parent of the ModeSADSBPacket. Think of this as a way to use the ModeSADSBPacket as a "window" into the contents of the
-     * parent DecodedModeSPacket. The ModeSADSBPacket cannot exist without the parent DecodedModeSPacket!
+     * the parent of the ModeSADSBPacket. Think of this as a way to use the ModeSADSBPacket as a "window" into the
+     * contents of the parent DecodedModeSPacket. The ModeSADSBPacket cannot exist without the parent
+     * DecodedModeSPacket!
      */
     ModeSADSBPacket(const DecodedModeSPacket &decoded_packet) : DecodedModeSPacket(decoded_packet) {
         ConstructADSBPacket();
@@ -235,7 +236,7 @@ class ModeSADSBPacket : public DecodedModeSPacket {
 
     // Exposed for testing only.
     inline uint32_t GetNBitWordFromMessage(uint16_t n, uint16_t first_bit_index) const {
-        return GetNBitWordFromBuffer(n, kMEFirstBitIndex + first_bit_index, raw_.buffer);
+        return GetNBitsFromWordBuffer(n, kMEFirstBitIndex + first_bit_index, raw_.buffer);
     };
 
    private:
@@ -249,7 +250,7 @@ class ModeSADSBPacket : public DecodedModeSPacket {
 class ModeSAllCallReplyPacket : public DecodedModeSPacket {
    public:
     ModeSAllCallReplyPacket(const DecodedModeSPacket &decoded_packet) : DecodedModeSPacket(decoded_packet) {
-        capability_ = static_cast<Capability>(GetNBitWordFromBuffer(3, 5, raw_.buffer));
+        capability_ = static_cast<Capability>(GetNBitsFromWordBuffer(3, 5, raw_.buffer));
     }
 
     Capability GetCapability() const { return capability_; }

@@ -71,31 +71,16 @@ class DecodedUATADSBPacket {
         kUATADSBMessageFormatLong = 2
     };
 
-    DecodedUATADSBPacket(const RawUATADSBPacket &packet_in);
-    DecodedUATADSBPacket() : raw_((char *)"") { debug_string[0] = '\0'; }
-    DecodedUATADSBPacket(const char *rx_string, int32_t sigs_dbm = INT32_MIN, int32_t sigq_db = INT32_MIN,
-                         uint64_t mlat_48mhz_64bit_counts = 0);
+    enum AirGroundState : uint8_t {
+        kAirGroundStateAirborneSubsonic = 0,    // Ground state.
+        kAirGroundStateAirborneSupersonic = 1,  // Airborne state.
+        kAirGroundStateOnGround = 2,            // Reserved for future use.
+        kAirGroundStateReserved = 3             // Invalid state.
+    };
 
     /**
-     * Returns true if the packet is valid (FEC decoded successfully and packet has a recognized format).
-     * @return True if the packet is valid, false otherwise.
+     * Data Block Fields
      */
-    bool IsValid() const { return is_valid_; }
-
-    /**
-     * Function used for testing, when we want to populate the payload but not the FEC parity bytes.
-     */
-    void ForceValid() { is_valid_ = true; }
-
-    int GetBufferLenBits() const { return raw_.encoded_message_len_bits; }
-    RawUATADSBPacket GetRaw() const { return raw_; }
-    RawUATADSBPacket *GetRawPtr() { return &raw_; }
-
-    /**
-     * Returns the ICAO address of the aircraft if the packet is valid and has a header, otherwise returns 0.
-     */
-    uint32_t GetICAOAddress() const;
-
     static inline int32_t AltitudeEncodedToAltitudeFt(uint16_t altitude_encoded) {
         if (altitude_encoded == 0) {
             return INT32_MIN;  // Invalid altitude.
@@ -104,6 +89,54 @@ class DecodedUATADSBPacket {
         }
         return 25 * (altitude_encoded - 1) - 1000;  // Convert to feet.
     };
+
+    /**
+     * Checks if the air-ground state indicates that the aircraft is airborne.
+     * @param air_ground_state Air-ground state from the UAT state vector.
+     * @return True if the aircraft is airborne, false otherwise.
+     */
+    static inline bool AirGroundStateIsAirborne(AirGroundState air_ground_state) {
+        return (air_ground_state & 0b10) == 0;
+    }
+
+    /**
+     * Checks if the air-ground state indicates that the aircraft is supersonic.
+     * @param air_ground_state Air-ground state from the UAT state vector.
+     * @return True if the aircraft is supersonic, false otherwise.
+     */
+    static inline bool AirGroundStateIsSupersonic(AirGroundState air_ground_state) {
+        return (air_ground_state & 0b1) == 1;
+    }
+
+    /**
+     * Decode horizontal velocity in kts from the horizontal velocity field in the state vector.
+     * @param horizontal_velocity Horizontal velocity in the state vector, in kts.
+     * @param is_supersonic True if the aircraft is supersonic, false otherwise
+     * @return North velocity in kts, or INT32_MIN if N/S velocity is not available.
+     */
+    static inline int32_t HorizontalVelocityToNorthVelocityKts(uint32_t horizontal_velocity,
+                                                               AirGroundState air_ground_state) {
+        uint32_t data = horizontal_velocity >> 11;
+        uint32_t north_velocity = data & 0x3FF;  // Get the 10-bit north velocity.
+        if (north_velocity <= 0) {
+            return INT32_MIN;  // N/S velocity not available.
+        }
+        uint32_t multiplier = AirGroundStateIsSupersonic(air_ground_state) ? 4 : 1;
+        // Sign bit 1 is north, 0 is south.
+        return (north_velocity - 1) * ((data & (1 << 10)) == 0 ? 1 : -1) * multiplier;
+    }
+
+    static inline int32_t HorizontalVelocityToEastVelocityKts(uint32_t horizontal_velocity,
+                                                              AirGroundState air_ground_state) {
+        uint32_t data = horizontal_velocity & 0x7FF;  // Get the 11-bit east/west velocity.
+        uint32_t east_velocity = data & 0x3FF;        // Get the 10-bit east velocity.
+        if (east_velocity <= 0) {
+            return INT32_MIN;  // E/W velocity not available.
+        }
+        uint32_t multiplier = AirGroundStateIsSupersonic(air_ground_state) ? 4 : 1;
+        // Sign bit 1 is east, 0 is west.
+        return (east_velocity - 1) * ((data & (1 << 10)) == 0 ? 1 : -1) * multiplier;
+    }
 
     struct __attribute__((packed)) UATHeader {
         uint8_t mdb_type_code     : 5;  // Message Data Block (MDB) type code.
@@ -119,11 +152,12 @@ class DecodedUATADSBPacket {
         uint8_t nic                         : 4;
         uint8_t air_ground_state            : 2;
         uint8_t reserved                    : 1;
-        uint32_t horizontal_velocity        : 20;
+        uint32_t horizontal_velocity        : 22;
         union {
             uint16_t vertical_velocity          : 11;
             uint16_t aircraft_length_width_code : 11;
         };
+        bool utc_coupled : 1;  // True if UTC is coupled, false if not.
     };
 
     struct __attribute__((packed)) UATModeStatus {
@@ -159,21 +193,63 @@ class DecodedUATADSBPacket {
         uint32_t reserved;  // Currently set to all 0's by transponders for 2005 version of tech manual.
     };
 
+    DecodedUATADSBPacket(const RawUATADSBPacket &packet_in);
+    DecodedUATADSBPacket() : raw_((char *)"") { debug_string[0] = '\0'; }
+    DecodedUATADSBPacket(const char *rx_string, int32_t sigs_dbm = INT32_MIN, int32_t sigq_db = INT32_MIN,
+                         uint64_t mlat_48mhz_64bit_counts = 0);
+
+    /**
+     * Decoding functions for message data blocks.
+     */
+    void DecodeHeader(uint8_t *data, UATHeader &header_ref);
+    void DecodeStateVector(uint8_t *data, UATStateVector &state_vector_ref);
+    void DecodeModeStatus(uint8_t *data, UATModeStatus &mode_status_ref);
+    void DecodeAuxiliaryStateVector(uint8_t *data, UATAuxiliaryStateVector &aux_state_vector_ref);
+    void DecodeTargetState(uint8_t *data, UATTargetState &target_state_ref);
+
+    /**
+     * Returns true if the packet is valid (FEC decoded successfully and packet has a recognized format).
+     * @return True if the packet is valid, false otherwise.
+     */
+    inline bool IsValid() const { return is_valid_; }
+
+    /**
+     * Function used for testing, when we want to populate the payload but not the FEC parity bytes.
+     * @retval True if the valid was ingested successfully, false otherwise.
+     */
+    inline bool ReconstructWithoutFEC() {
+        ConstructUATPacket(false);  // Re-run packet digestion without FEC correction.
+        return is_valid_;
+    }
+
+    int GetBufferLenBits() const { return raw_.encoded_message_len_bits; }
+    RawUATADSBPacket GetRaw() const { return raw_; }
+    RawUATADSBPacket *GetRawPtr() { return &raw_; }
+
+    /**
+     * Returns the ICAO address of the aircraft if the packet is valid and has a header, otherwise returns 0.
+     */
+    uint32_t GetICAOAddress() const;
+
     UATADSBMessageFormat message_format = kUATADSBMessageFormatInvalid;
     // Oversize the payload field since we copy the encoded message to it and correct / decode in place.
     uint8_t decoded_payload[RawUATADSBPacket::kLongADSBMessageNumBytes] = {0};
 
+    // Always has header.
+    bool has_state_vector = false;            // True if the packet has a state vector.
+    bool has_mode_status = false;             // True if the packet has a mode status.
+    bool has_auxiliary_state_vector = false;  // True if the packet has an auxiliary
+    bool has_target_state = false;            // True if the packet has a target state.
+    bool has_trajectory_change = false;       // True if the packet has a trajectory change
+
+    UATHeader header = {0};                                // Pointer to the UAT header.
+    UATStateVector state_vector = {0};                     // Pointer to the UAT state vector.
+    UATModeStatus mode_status = {0};                       // Pointer to the UAT mode status.
+    UATAuxiliaryStateVector auxiliary_state_vector = {0};  // Pointer to the UAT auxiliary state vector.
+    UATTargetState target_state = {0};                     // Pointer to the UAT target state.
+    UATTrajectoryChange trajectory_change = {0};           // Pointer to the UAT trajectory change.
+
     char debug_string[kDebugStrLen] = "";
-
-    // Everything is made available directly from the decoded buffer, except for items that require post-processing like
-    // lat/lon.
-
-    UATHeader *header = nullptr;                                // Pointer to the UAT header.
-    UATStateVector *state_vector = nullptr;                     // Pointer to the UAT state vector.
-    UATModeStatus *mode_status = nullptr;                       // Pointer to the UAT mode status.
-    UATAuxiliaryStateVector *auxiliary_state_vector = nullptr;  // Pointer to the UAT auxiliary state vector.
-    UATTargetState *target_state = nullptr;                     // Pointer to the UAT target state.
-    UATTrajectoryChange *trajectory_change = nullptr;           // Pointer to the UAT trajectory change.
 
    protected:
     bool is_valid_ = false;
@@ -182,8 +258,11 @@ class DecodedUATADSBPacket {
    private:
     /**
      * Helper function that consolidates constructor implementation for the various constructors.
+     * @param[in] run_fec If true, runs Reed-Solomon FEC decoding on the received message. If false, does not run FEC.
+     *                    Used for testing purposes when we want to populate the payload but not the FEC parity bytes.
+     *                    Defaults to true (set run_fec to false to skip FEC decoding).
      */
-    void ConstructUATPacket();
+    void ConstructUATPacket(bool run_fec = true);
 };
 
 class RawUATUplinkPacket {
