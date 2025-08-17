@@ -1117,7 +1117,8 @@ bool AircraftDictionary::IngestDecodedUATADSBPacket(DecodedUATADSBPacket &packet
         return false;
     }
 
-    UATAircraft *aircraft_ptr = GetAircraftPtr<UATAircraft>(packet.GetICAOAddress());
+    UATAircraft *aircraft_ptr =
+        GetAircraftPtr<UATAircraft>(Aircraft::ICAOToUID(packet.GetICAOAddress(), Aircraft::kAircraftTypeUAT));
     if (aircraft_ptr == nullptr) {
         CONSOLE_WARNING("AircraftDictionary::IngestDecodedUATADSBPacket",
                         "Unable to find or create new UAT aircraft with ICAO address 0x%lx in dictionary.\r\n",
