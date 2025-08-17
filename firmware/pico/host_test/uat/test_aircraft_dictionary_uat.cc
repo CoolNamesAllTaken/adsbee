@@ -15,8 +15,9 @@ TEST(AircraftDictionary, IngestUATADSBPacket) {
     EXPECT_TRUE(tpacket.ReconstructWithoutFEC());
     EXPECT_TRUE(dictionary.IngestDecodedUATADSBPacket(tpacket));
     EXPECT_EQ(dictionary.GetNumAircraft(), 1);
-    EXPECT_TRUE(dictionary.ContainsAircraft(Aircraft::ICAOToUID(tpacket.GetICAOAddress(), Aircraft::kAircraftTypeUAT)));
+    uint32_t aircraft_uid = Aircraft::ICAOToUID(tpacket.GetICAOAddress(), Aircraft::kAircraftTypeUAT);
+    EXPECT_TRUE(dictionary.ContainsAircraft(aircraft_uid));
 
     UATAircraft aircraft;
-    EXPECT_TRUE(dictionary.GetAircraft(tpacket.GetICAOAddress(), aircraft));
+    EXPECT_TRUE(dictionary.GetAircraft(aircraft_uid, aircraft));
 }
