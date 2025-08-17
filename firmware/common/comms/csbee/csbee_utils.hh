@@ -48,8 +48,9 @@ inline int16_t WriteCSBeeAircraftMessageStr(char message_buf[], const ModeSAircr
                  "%d,"                                             // ALT_BARO, e.g. 5000
                  "%d,"                                             // ALT_GEO, e.g. 5000
                  "%.0f,"                                           // TRACK, e.g. 35
-                 "%.0f,"                                           // VELH, e.g. 464
-                 "%d,"                                             // VELV, e.g. -1344
+                 "%d,"                                             // VELH, e.g. 464
+                 "%d,"                                             // VELV_BARO, e.g. -1344
+                 "%d,"                                             // VELV_GNSS, e.g. -1344
                  "%d,"                                             // SIGS, e.g. -92
                  "%d,"                                             // SIGQ, e.g. 2
                  "%d,"                                             // FPSAC, e.g. 3
@@ -65,8 +66,9 @@ inline int16_t WriteCSBeeAircraftMessageStr(char message_buf[], const ModeSAircr
                  aircraft.baro_altitude_ft,                        // ALT_BARO
                  aircraft.gnss_altitude_ft,                        // ALT_GEO
                  aircraft.direction_deg,                           // TRACK
-                 aircraft.velocity_kts,                            // VELH
-                 aircraft.vertical_rate_fpm,                       // VELV
+                 aircraft.speed_kts,                               // VELH
+                 aircraft.baro_vertical_rate_fpm,                  // VELV_BARO
+                 aircraft.gnss_vertical_rate_fpm,                  // VELV_GNSS
                  aircraft.last_message_signal_strength_dbm,        // SIGS
                  aircraft.last_message_signal_quality_db,          // SIGQ
                  aircraft.metrics.valid_squitter_frames,           // SFPS

@@ -63,7 +63,7 @@ class DecodedUATADSBPacket {
     static const uint16_t kModeStatusOffsetBytes = 17;
     static const uint16_t kAuxiliaryStateVectorOffsetBytes = 29;
 
-    static constexpr float kDegPerAWBTick = 360.0f / 16777216.0f;  // 360 degrees / 2^24
+    static constexpr float kDegPerAWBTick = 360.0f / 16777216.0f;  // 360 degrees / 2^24, for lat/lon
 
     enum UATADSBMessageFormat : uint8_t {
         kUATADSBMessageFormatInvalid = 0,
@@ -76,6 +76,13 @@ class DecodedUATADSBPacket {
         kAirGroundStateAirborneSupersonic = 1,  // Airborne state.
         kAirGroundStateOnGround = 2,            // Reserved for future use.
         kAirGroundStateReserved = 3             // Invalid state.
+    };
+
+    enum DirectionType : uint8_t {
+        kDirectionTypeNotAvailable = 0,
+        kDirectionTypeTrueTrackAngle = 1,
+        kDirectionTypeMagneticHeading = 2,
+        kDirectionTypeTrueHeading = 3
     };
 
     /**
@@ -109,9 +116,10 @@ class DecodedUATADSBPacket {
     }
 
     /**
-     * Decode horizontal velocity in kts from the horizontal velocity field in the state vector.
-     * @param horizontal_velocity Horizontal velocity in the state vector, in kts.
-     * @param is_supersonic True if the aircraft is supersonic, false otherwise
+     * Decode North horizontal velocity in kts from the horizontal velocity field in the state vector. Helper function
+     * used by HorizontalVelocityToTrackAndSpeedKts when the aircraft is not on the ground.
+     * @param[in] horizontal_velocity Horizontal velocity in the state vector, in kts.
+     * @param[in] air_ground_state Air-ground state from the UAT state vector.
      * @return North velocity in kts, or INT32_MIN if N/S velocity is not available.
      */
     static inline int32_t HorizontalVelocityToNorthVelocityKts(uint32_t horizontal_velocity,
@@ -126,6 +134,13 @@ class DecodedUATADSBPacket {
         return (north_velocity - 1) * ((data & (1 << 10)) == 0 ? 1 : -1) * multiplier;
     }
 
+    /**
+     * Decode East horizontal velocity in kts from the horizontal velocity field in the state vector. Helper function
+     * used by HorizontalVelocityToTrackAndSpeedKts when the aircraft is not on the ground.
+     * @param[in] horizontal_velocity Horizontal velocity in the state vector, in kts.
+     * @param[in] air_ground_state Air-ground state from the UAT state vector.
+     * @return East velocity in kts, or INT32_MIN if E/W velocity is not available.
+     */
     static inline int32_t HorizontalVelocityToEastVelocityKts(uint32_t horizontal_velocity,
                                                               AirGroundState air_ground_state) {
         uint32_t data = horizontal_velocity & 0x7FF;  // Get the 11-bit east/west velocity.
@@ -137,6 +152,23 @@ class DecodedUATADSBPacket {
         // Sign bit 1 is east, 0 is west.
         return (east_velocity - 1) * ((data & (1 << 10)) == 0 ? 1 : -1) * multiplier;
     }
+
+    /**
+     * Calculates the aircraft track from north/east velocity contained in the horizontal_velocity and air_ground_state
+     * fields. If horizontal velocity info is not available, track is set to 0.0f, speed is set to INT32_MIN, and
+     * returned direction is set to kDirectionTypeNotAvailable.
+     * @param[in] horizontal_velocity Horizontal velocity in the state vector, in kts.
+     * @param[in] air_ground_state Air-ground state from the UAT state vector.
+     * @param[out] direction Output parameter for the calculated direction in degrees.
+     * @param[out] speed_kts Output parameter for the calculated speed in kts.
+     * @retval DirectionType indicating the type of direction calculated.
+     */
+    static DirectionType HorizontalVelocityToDirectionDegAndSpeedKts(uint32_t horizontal_velocity,
+                                                                     AirGroundState air_ground_state, float &direction,
+                                                                     int32_t &speed_kts);
+
+    static void VerticalVelocityToVerticalRateFpm(uint32_t vertical_velocity, AirGroundState air_ground_state,
+                                                  int32_t &vertical_rate_fpm);
 
     struct __attribute__((packed)) UATHeader {
         uint8_t mdb_type_code     : 5;  // Message Data Block (MDB) type code.
@@ -150,7 +182,7 @@ class DecodedUATADSBPacket {
         bool altitude_is_geometric_altitude : 1;
         uint16_t altitude_encoded           : 12;
         uint8_t nic                         : 4;
-        uint8_t air_ground_state            : 2;
+        AirGroundState air_ground_state     : 2;
         uint8_t reserved                    : 1;
         uint32_t horizontal_velocity        : 22;
         union {
@@ -201,11 +233,11 @@ class DecodedUATADSBPacket {
     /**
      * Decoding functions for message data blocks.
      */
-    void DecodeHeader(uint8_t *data, UATHeader &header_ref);
-    void DecodeStateVector(uint8_t *data, UATStateVector &state_vector_ref);
-    void DecodeModeStatus(uint8_t *data, UATModeStatus &mode_status_ref);
-    void DecodeAuxiliaryStateVector(uint8_t *data, UATAuxiliaryStateVector &aux_state_vector_ref);
-    void DecodeTargetState(uint8_t *data, UATTargetState &target_state_ref);
+    static void DecodeHeader(uint8_t *data, UATHeader &header_ref);
+    static void DecodeStateVector(uint8_t *data, UATStateVector &state_vector_ref);
+    static void DecodeModeStatus(uint8_t *data, UATModeStatus &mode_status_ref);
+    static void DecodeAuxiliaryStateVector(uint8_t *data, UATAuxiliaryStateVector &aux_state_vector_ref);
+    static void DecodeTargetState(uint8_t *data, UATTargetState &target_state_ref);
 
     /**
      * Returns true if the packet is valid (FEC decoded successfully and packet has a recognized format).

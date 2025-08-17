@@ -55,12 +55,12 @@ class Aircraft {
         kVerticalRateSourceBaro = 1
     };
 
-    enum VelocitySource : int16_t {
-        kVelocitySourceNotAvailable = -2,
-        kVelocitySourceNotSet = -1,
-        kVelocitySourceGroundSpeed = 0,
-        kVelocitySourceAirspeedTrue = 1,
-        kVelocitySourceAirspeedIndicated = 2
+    enum SpeedSource : int16_t {
+        kSpeedSourceNotAvailable = -2,
+        kSpeedSourceNotSet = -1,
+        kSpeedSourceGroundSpeed = 0,
+        kSpeedSourceAirspeedTrue = 1,
+        kSpeedSourceAirspeedIndicated = 2
     };
 
     static constexpr uint16_t kCallSignMaxNumChars = 8;
@@ -112,7 +112,7 @@ class Aircraft {
     }
 
     // We store values that all aircraft are guaranteed to have (not protocol specific) in the base class. These values
-    // are critical for aircraft tracking. Enums for AltitudeSource, VelocitySource, and VerticalRateSource match
+    // are critical for aircraft tracking. Enums for AltitudeSource, SpeedSource, and VerticalRateSource match
     // encodings in Mode S and UAT standards (e.g. you can cast a binary value from a a packet directly to these enums).
     // Values from other protocols will need to be translated.
 
@@ -126,10 +126,10 @@ class Aircraft {
     AltitudeSource altitude_source = kAltitudeSourceNotSet;
 
     float direction_deg = 0.0f;
-    float velocity_kts = 0;
-    VelocitySource velocity_source = kVelocitySourceNotSet;
-    int vertical_rate_fpm = 0.0f;
-    VerticalRateSource vertical_rate_source = kVerticalRateSourceNotSet;
+    int32_t speed_kts = 0;
+    SpeedSource speed_source = kSpeedSourceNotSet;
+    int32_t baro_vertical_rate_fpm = 0;
+    int32_t gnss_vertical_rate_fpm = 0;
 };
 
 /**
@@ -173,7 +173,8 @@ class ModeSAircraft : public Aircraft {
         kBitFlagPositionValid,
         kBitFlagDirectionValid,
         kBitFlagHorizontalVelocityValid,
-        kBitFlagVerticalVelocityValid,
+        kBitFlagBaroVerticalVelocityValid,
+        kBitFlagGNSSVerticalVelocityValid,
         kBitFlagIsMilitary,              // Received at least one military ES message from the aircraft.
         kBitFlagIsClassB2GroundVehicle,  // Is a class B2 ground vehicle transmitting at <70W.
         kBitFlagHas1090ESIn,             // Aircraft is equipped with 1090MHz Extended Squitter receive capability.
@@ -189,15 +190,14 @@ class ModeSAircraft : public Aircraft {
         kBitFlagTCASRA,                    // Indicates a TCAS resolution advisory is active.
         kBitFlagReserved0,
         kBitFlagReserved1,
-        kBitFlagReserved2,
-        kBitFlagReserved3,
         // Flags after kBitFlagUpdatedBaroAltitude are cleared at the end of every reporting interval.
         kBitFlagUpdatedBaroAltitude,
         kBitFlagUpdatedGNSSAltitude,
         kBitFlagUpdatedPosition,
         kBitFlagUpdatedDirection,
         kBitFlagUpdatedHorizontalVelocity,
-        kBitFlagUpdatedVerticalVelocity,
+        kBitFlagUpdatedBaroVerticalVelocity,
+        kBitFlagUpdatedGNSSVerticalVelocity,
         kBitFlagNumFlagBits
     };
 
@@ -326,13 +326,14 @@ class ModeSAircraft : public Aircraft {
      * @retval Maximum allowed time delta between CPR packets.
      */
     uint32_t GetMaxAllowedCPRIntervalMs() const {
-        if (velocity_source == kVelocitySourceNotSet || velocity_source == kVelocitySourceNotAvailable ||
+        if (speed_source == kSpeedSourceNotSet || speed_source == kSpeedSourceNotAvailable ||
             get_time_since_boot_ms() - last_track_update_timestamp_ms > kMaxTrackUpdateIntervalMs) {
             return kDefaultCPRIntervalMs;
         }
         // Scale time delta threshold based on the velocity of the aircraft relative to 500kts, but clamp the result to
         // the max time delta thresholds.
-        return MIN(kRefCPRIntervalMs * 500 / velocity_kts, kMaxCPRIntervalMs);
+        // Protext against divide by 0.
+        return speed_kts == 0 ? kMaxCPRIntervalMs : MIN(kRefCPRIntervalMs * 500 / speed_kts, kMaxCPRIntervalMs);
     }
 
     /**
@@ -535,7 +536,8 @@ class UATAircraft : public Aircraft {
         kBitFlagPositionValid,
         kBitFlagDirectionValid,
         kBitFlagHorizontalVelocityValid,
-        kBitFlagVerticalVelocityValid,
+        kBitFlagBaroVerticalVelocityValid,
+        kBitFlagGNSSVerticalVelocityValid,
         kBitFlagIsMilitary,              // Received at least one military ES message from the aircraft.
         kBitFlagIsClassB2GroundVehicle,  // Is a class B2 ground vehicle transmitting at <70W.
         kBitFlagHas1090ESIn,             // Aircraft is equipped with 1090MHz Extended Squitter receive capability.
@@ -551,15 +553,14 @@ class UATAircraft : public Aircraft {
         kBitFlagTCASRA,                    // Indicates a TCAS resolution advisory is active.
         kBitFlagReserved0,
         kBitFlagReserved1,
-        kBitFlagReserved2,
-        kBitFlagReserved3,
         // Flags after kBitFlagUpdatedBaroAltitude are cleared at the end of every reporting interval.
         kBitFlagUpdatedBaroAltitude,
         kBitFlagUpdatedGNSSAltitude,
         kBitFlagUpdatedPosition,
         kBitFlagUpdatedDirection,
         kBitFlagUpdatedHorizontalVelocity,
-        kBitFlagUpdatedVerticalVelocity,
+        kBitFlagUpdatedBaroVerticalVelocity,
+        kBitFlagUpdatedGNSSVerticalVelocity,
         kBitFlagNumFlagBits
     };
 
@@ -717,6 +718,12 @@ class UATAircraft : public Aircraft {
     Category category = kCategoryNoCategoryInfo;
 
     NICRadiusOfContainment navigation_integrity_category = kROCUnknown;
+
+    // Aircraft dimensions (on the ground).
+    uint16_t length_m = 0;
+    uint16_t width_m = 0;
+
+    int8_t uat_version = -1;
 
    private:
     Metrics metrics_counter_;

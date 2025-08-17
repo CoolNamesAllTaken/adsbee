@@ -273,9 +273,9 @@ TEST(ModeSAircraft, CalculateMaxAllowedCPRInterval) {
     // CPR interval enforced at reference limit when aircraft is not initialized.
     EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), ModeSAircraft::kDefaultCPRIntervalMs);
 
-    // Setting velocity source to something other than kVelocitySourceNotAvailable or kVelocitySourceNotSet should
+    // Setting velocity source to something other than kSpeedSourceNotAvailable or kSpeedSourceNotSet should
     // return CPR interval as a calculated function of aircraft velocity.
-    aircraft.velocity_source = ModeSAircraft::VelocitySource::kVelocitySourceGroundSpeed;
+    aircraft.speed_source = ModeSAircraft::SpeedSource::kSpeedSourceGroundSpeed;
 
     // Stale track enforces default CPR interval.
     set_time_since_boot_ms(100e3);
@@ -286,16 +286,16 @@ TEST(ModeSAircraft, CalculateMaxAllowedCPRInterval) {
     aircraft.last_track_update_timestamp_ms = 100e3;
 
     // Stationary aircraft = maximum allowed CPR interval.
-    aircraft.velocity_kts = 0;
+    aircraft.speed_kts = 0;
     EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), ModeSAircraft::kMaxCPRIntervalMs);
 
     // Mid-speed aircraft = calculated CPR interval between max and min allowed.
-    aircraft.velocity_kts = 400;
-    EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), ModeSAircraft::kRefCPRIntervalMs * 500 / aircraft.velocity_kts);
+    aircraft.speed_kts = 400;
+    EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), ModeSAircraft::kRefCPRIntervalMs * 500 / aircraft.speed_kts);
 
     // Very fast aircraft = same equation, no minimum interval enforced.
-    aircraft.velocity_kts = 1000;
-    EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), ModeSAircraft::kRefCPRIntervalMs * 500 / aircraft.velocity_kts);
+    aircraft.speed_kts = 1000;
+    EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), ModeSAircraft::kRefCPRIntervalMs * 500 / aircraft.speed_kts);
 }
 
 // This test case verifies that you can't ingest airborne position messages that are too far apart in time, which could
@@ -320,7 +320,7 @@ TEST(AircraftDictionary, TimeFilterAirbornePositionMessages) {
     aircraft.last_track_update_timestamp_ms = 99e3;
 
     // Case 1: Aircraft has no speed data. Default packet valid interval should be used.
-    ASSERT_EQ(aircraft.velocity_source, ModeSAircraft::VelocitySource::kVelocitySourceNotSet);
+    ASSERT_EQ(aircraft.speed_source, ModeSAircraft::SpeedSource::kSpeedSourceNotSet);
     EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), ModeSAircraft::kDefaultCPRIntervalMs);
     // Ingest the odd position packet. This should be rejected since the timestamp is too far apart from the even
     // packet. Ingestion will succeed, and the packet will be retained, but the aircraft will still not have a valid
@@ -335,13 +335,13 @@ TEST(AircraftDictionary, TimeFilterAirbornePositionMessages) {
     ASSERT_TRUE(dictionary.IngestDecodedModeSPacket(even_packet));
 
     // Case 2: Aircraft has speed data and is traveling at 1000 knots.
-    aircraft.velocity_kts = 1000;
-    aircraft.velocity_source = ModeSAircraft::VelocitySource::kVelocitySourceGroundSpeed;
-    EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), ModeSAircraft::kRefCPRIntervalMs * 500 / aircraft.velocity_kts);
+    aircraft.speed_kts = 1000;
+    aircraft.speed_source = ModeSAircraft::SpeedSource::kSpeedSourceGroundSpeed;
+    EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), ModeSAircraft::kRefCPRIntervalMs * 500 / aircraft.speed_kts);
 
     // Case 3: Aircraft is flying slowly but has a stale track.
-    aircraft.velocity_kts = 0;
-    aircraft.velocity_source = ModeSAircraft::VelocitySource::kVelocitySourceGroundSpeed;
+    aircraft.speed_kts = 0;
+    aircraft.speed_source = ModeSAircraft::SpeedSource::kSpeedSourceGroundSpeed;
     // Stationary aircraft should get the max interval.
     EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), ModeSAircraft::kMaxCPRIntervalMs);
     // Set the track update timestamp to be too old. This should enforce the default CPR interval.
@@ -367,19 +367,17 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
 
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagDirectionValid));
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagHorizontalVelocityValid));
-    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagVerticalVelocityValid));
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroVerticalVelocityValid));
 
     // Aircraft should now have velocities populated.
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedDirection));
     EXPECT_NEAR(aircraft.direction_deg, 304.2157021324374, kFloatCloseEnough);
-    // Velocity should actually evaluate to 120 when evaluated with doubles, but there is some float error with the sqrt
-    // that I think gets pretty nasty.
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity));
-    EXPECT_NEAR(aircraft.velocity_kts, 120.930, 0.01);
-    EXPECT_EQ(aircraft.velocity_source, ModeSAircraft::VelocitySource::kVelocitySourceGroundSpeed);
-    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedVerticalVelocity));
-    EXPECT_NEAR(aircraft.vertical_rate_fpm, -64.0f, kFloatCloseEnough);
-    EXPECT_EQ(aircraft.vertical_rate_source, ModeSAircraft::VerticalRateSource::kVerticalRateSourceBaro);
+    EXPECT_EQ(aircraft.speed_kts, 120);
+    EXPECT_EQ(aircraft.speed_source, ModeSAircraft::SpeedSource::kSpeedSourceGroundSpeed);
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroVerticalVelocity));
+    EXPECT_EQ(aircraft.baro_vertical_rate_fpm, -64);
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroVerticalVelocityValid));
 
     // Test Message A from https://mode-s.org/decode/content/ads-b/5-airborne-velocity.html
     tpacket = DecodedModeSPacket((char *)"8D485020994409940838175B284F");
@@ -392,13 +390,13 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     ASSERT_TRUE(dictionary.GetAircraft(message_a_icao, aircraft));  // NOTE: Aircraft is read-only now!
 
     // Check values for Message A
-    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedVerticalVelocity));
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedGNSSVerticalVelocity));
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity));
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedDirection));
-    EXPECT_EQ(aircraft.vertical_rate_fpm, -832);
-    EXPECT_EQ(aircraft.velocity_source, ModeSAircraft::VelocitySource::kVelocitySourceGroundSpeed);
+    EXPECT_EQ(aircraft.gnss_vertical_rate_fpm, -832);
+    EXPECT_EQ(aircraft.speed_source, ModeSAircraft::SpeedSource::kSpeedSourceGroundSpeed);
     EXPECT_NEAR(aircraft.direction_deg, 182.88f, 0.01);
-    EXPECT_NEAR(aircraft.velocity_kts, 159.20f, 0.01);
+    EXPECT_EQ(aircraft.speed_kts, 159);
 
     // Test altitude difference between baro and GNSS altitude for Message A by re-ingesting.
     ModeSAircraft *aircraft_ptr =
@@ -422,13 +420,13 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     ASSERT_TRUE(dictionary.GetAircraft(message_b_icao, aircraft));
 
     // Check values for Message B
-    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedVerticalVelocity));
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroVerticalVelocity));
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity));
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedDirection));
-    EXPECT_EQ(aircraft.vertical_rate_fpm, -2304);
-    EXPECT_EQ(aircraft.velocity_source, ModeSAircraft::VelocitySource::kVelocitySourceAirspeedTrue);
+    EXPECT_EQ(aircraft.baro_vertical_rate_fpm, -2304);
+    EXPECT_EQ(aircraft.speed_source, ModeSAircraft::SpeedSource::kSpeedSourceAirspeedTrue);
     EXPECT_NEAR(aircraft.direction_deg, 243.98f, 0.01);
-    EXPECT_NEAR(aircraft.velocity_kts, 375.0f, 0.01);
+    EXPECT_NEAR(aircraft.speed_kts, 375.0f, 0.01);
 }
 
 TEST(AircraftDictionary, IngestAltitudeReply) {

@@ -216,12 +216,59 @@ TEST(DecodedUATADSBPacket, HorizontalVelocityToEastVelocityKts) {
               -1022);
 }
 
+inline uint32_t EncodeOnGroundHorizontalVelocity(uint16_t ground_speed_encoded, uint16_t direction_encoded,
+                                                 DecodedUATADSBPacket::DirectionType direction_type) {
+    return (ground_speed_encoded << 11) | (direction_encoded | (direction_type << 9));
+}
+
+struct OnGroundHorizontalVelocityTestCase {
+    uint16_t direction_encoded;
+    float expected_direction_deg;
+    uint16_t ground_speed_encoded;
+    int32_t expected_speed_kts;
+    char *description;
+};
+
+const OnGroundHorizontalVelocityTestCase kOnGroundHorizontalVelocityTestCases[] = {
+    {0, 0.0f, 0, INT32_MIN, (char *)"0.0 degrees, speed not available"},
+    {1, 0.703125f, 1, 0, (char *)"0.703125 degrees, 0 kts"},
+    {1, 0.703125f, 0, INT32_MIN, (char *)"0.703125 degrees, 0 speed not available"},
+    {2, 1.40625f, 1, 0, (char *)"1.40625 degrees, 1 kts"},
+    {3, 2.109375f, 2, 1, (char *)"2.109375 degrees, 2 kts"},
+    {510, 358.593750f, 1022, 1021, (char *)"358.593750 degrees, 1022 kts"},
+    {511, 359.296875f, 1023, 1022, (char *)"359.196875 degrees, 1023 kts"}};
+
+TEST(DecodedUATADSBPacket, HorizontalVelocityToDirectionDegAndSpeedKtsOnGround) {
+    DecodedUATADSBPacket::AirGroundState air_ground_state = DecodedUATADSBPacket::kAirGroundStateOnGround;
+
+    for (const auto &test_case : kOnGroundHorizontalVelocityTestCases) {
+        uint16_t direction_encoded = test_case.direction_encoded;
+        float expected_direction_deg = test_case.expected_direction_deg;
+        uint16_t ground_speed_encoded = test_case.ground_speed_encoded;
+        int32_t expected_speed_kts = test_case.expected_speed_kts;
+
+        float direction;
+        int32_t speed;
+
+        uint32_t horizontal_velocity = EncodeOnGroundHorizontalVelocity(
+            ground_speed_encoded, direction_encoded, DecodedUATADSBPacket::kDirectionTypeTrueTrackAngle);
+
+        SCOPED_TRACE(test_case.description);
+        EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToDirectionDegAndSpeedKts(horizontal_velocity,
+                                                                                    air_ground_state, direction, speed),
+                  DecodedUATADSBPacket::kDirectionTypeTrueTrackAngle);
+        EXPECT_EQ(direction, expected_direction_deg);
+        EXPECT_EQ(speed, expected_speed_kts);
+    }
+}
+
 TEST(DecodedUATADSBPacket, UATHeader) {
     uint8_t buf[] = {0x15, 0xa6, 0x6e, 0xf1, 0x35};
-    DecodedUATADSBPacket::UATHeader *header = (DecodedUATADSBPacket::UATHeader *)buf;
-    EXPECT_EQ(header->mdb_type_code, 2);
-    EXPECT_EQ(header->address_qualifier, 5);
-    EXPECT_EQ(header->icao_address, 0xA66EF1u);
+    DecodedUATADSBPacket::UATHeader header;
+    DecodedUATADSBPacket::DecodeHeader(buf, header);
+    EXPECT_EQ(header.mdb_type_code, 2);
+    EXPECT_EQ(header.address_qualifier, 5);
+    EXPECT_EQ(header.icao_address, 0xA66EF1u);
 }
 
 // TEST(RawUATADSBPacket, ShortADSBPackets) {
@@ -241,5 +288,6 @@ TEST(DecodedUATADSBPacket, UATHeader) {
 TEST(DecodedUATADSBPacket, ICAOAddress) {
     // ICAO address is 0 if the packet is invalid or has no header.
     DecodedUATADSBPacket packet((char *)"");
+    packet.ReconstructWithoutFEC();
     EXPECT_EQ(packet.GetICAOAddress(), 0u);
 }

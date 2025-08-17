@@ -61,4 +61,11 @@ add_subdirectory(uat)
 
 # Make test runnable with "make test".
 enable_testing()
-add_test(NAME host_test COMMAND host_test)
+
+include(GoogleTest)
+gtest_discover_tests(host_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    PROPERTIES
+        TIMEOUT 30
+        DISCOVERY_TIMEOUT 10
+)

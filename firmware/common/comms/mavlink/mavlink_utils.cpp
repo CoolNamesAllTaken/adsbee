@@ -78,7 +78,8 @@ mavlink_adsb_vehicle_t AircraftToMAVLINKADSBVehicleMessage(const ModeSAircraft &
     if (aircraft.squawk > 0) {
         flags |= ADSB_FLAGS_VALID_SQUAWK;
     }
-    if (aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagVerticalVelocityValid)) {
+    if (aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroVerticalVelocityValid) ||
+        aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagGNSSVerticalVelocityValid)) {
         flags |= ADSB_FLAGS_VERTICAL_VELOCITY_VALID;
     }
     // TODO: Set SOURCE_UAT when adding dual band support.
@@ -98,9 +99,13 @@ mavlink_adsb_vehicle_t AircraftToMAVLINKADSBVehicleMessage(const ModeSAircraft &
         // Heding [cdeg]
         .heading = static_cast<uint16_t>(aircraft.direction_deg * 100.0f),
         // Horizontal Velocity [cm/s]
-        .hor_velocity = static_cast<uint16_t>(KtsToMps(static_cast<int>(aircraft.velocity_kts)) * 100),
+        .hor_velocity = static_cast<uint16_t>(KtsToMps(static_cast<int>(aircraft.speed_kts)) * 100),
         // Vertical Velocity [cm/s]
-        .ver_velocity = static_cast<int16_t>(FpmToMps(aircraft.vertical_rate_fpm) * 100),
+        .ver_velocity =
+            static_cast<int16_t>(FpmToMps(aircraft.HasBitFlag(ModeSAircraft::kBitFlagBaroVerticalVelocityValid)
+                                              ? aircraft.baro_vertical_rate_fpm
+                                              : aircraft.gnss_vertical_rate_fpm) *
+                                 100),
         .flags = flags,
         .squawk = aircraft.squawk,
         .altitude_type = static_cast<uint8_t>(

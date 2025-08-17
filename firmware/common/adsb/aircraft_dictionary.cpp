@@ -456,12 +456,12 @@ bool ModeSAircraft::ApplyAirborneVelocitiesMessage(ModeSADSBPacket packet) {
             int v_ew_kts_plus_1 = static_cast<int>(packet.GetNBitWordFromMessage(10, 14));
             int v_ns_kts_plus_1 = static_cast<int>(packet.GetNBitWordFromMessage(10, 25));
             if (v_ew_kts_plus_1 == 0 || v_ns_kts_plus_1 == 0) {
-                velocity_source = ModeSAircraft::VelocitySource::kVelocitySourceNotAvailable;
+                speed_source = ModeSAircraft::SpeedSource::kSpeedSourceNotAvailable;
                 CONSOLE_WARNING("AircraftDictionary::ApplyAirborneVelocitiesMessage",
                                 "Ground speed not available for ICAO 0x%lx.", icao_address);
                 decode_successful = false;
             } else {
-                velocity_source = ModeSAircraft::VelocitySource::kVelocitySourceGroundSpeed;
+                speed_source = ModeSAircraft::SpeedSource::kSpeedSourceGroundSpeed;
                 bool direction_is_east_to_west = static_cast<bool>(packet.GetNBitWordFromMessage(1, 13));
                 int v_x_kts = (v_ew_kts_plus_1 - 1) * (direction_is_east_to_west ? -1 : 1);
                 bool direction_is_north_to_south = static_cast<bool>(packet.GetNBitWordFromMessage(1, 24));
@@ -470,7 +470,8 @@ bool ModeSAircraft::ApplyAirborneVelocitiesMessage(ModeSADSBPacket packet) {
                     v_x_kts *= 4;
                     v_y_kts *= 4;
                 }
-                velocity_kts = sqrtf(v_x_kts * v_x_kts + v_y_kts * v_y_kts);
+                speed_kts = sqrt(v_x_kts * v_x_kts + v_y_kts * v_y_kts);
+                // TODO: convert to fixedmath atan2f
                 direction_deg = wrapped_atan2f(v_x_kts, v_y_kts) * kDegreesPerRadian;
             }
             break;
@@ -486,10 +487,10 @@ bool ModeSAircraft::ApplyAirborneVelocitiesMessage(ModeSADSBPacket packet) {
                                 "Airspeed not available for ICAO 0x%lx.", icao_address);
                 decode_successful = false;
             } else {
-                velocity_kts = (airspeed_kts_plus_1 - 1) * (is_supersonic ? 4 : 1);
+                speed_kts = (airspeed_kts_plus_1 - 1) * (is_supersonic ? 4 : 1);
                 bool is_true_airspeed = static_cast<bool>(packet.GetNBitWordFromMessage(1, 24));
-                velocity_source = is_true_airspeed ? ModeSAircraft::VelocitySource::kVelocitySourceAirspeedTrue
-                                                   : ModeSAircraft::VelocitySource::kVelocitySourceAirspeedIndicated;
+                speed_source = is_true_airspeed ? ModeSAircraft::SpeedSource::kSpeedSourceAirspeedTrue
+                                                : ModeSAircraft::SpeedSource::kSpeedSourceAirspeedIndicated;
                 direction_deg = static_cast<float>((packet.GetNBitWordFromMessage(10, 14) * 360) / 1024.0f);
             }
 
@@ -511,20 +512,32 @@ bool ModeSAircraft::ApplyAirborneVelocitiesMessage(ModeSADSBPacket packet) {
     // Decode vertical rate.
     int vertical_rate_magnitude_fpm = packet.GetNBitWordFromMessage(9, 37);
     if (vertical_rate_magnitude_fpm == 0) {
-        vertical_rate_source = ModeSAircraft::VerticalRateSource::kVerticalRateNotAvailable;
         CONSOLE_WARNING("AircraftDictionary::ApplyAirborneVelocitiesMessage",
                         "Vertical rate not available for ICAO 0x%lx.", icao_address);
         decode_successful = false;
     } else {
-        vertical_rate_source = static_cast<ModeSAircraft::VerticalRateSource>(packet.GetNBitWordFromMessage(1, 35));
+        ModeSAircraft::VerticalRateSource vertical_rate_source =
+            static_cast<ModeSAircraft::VerticalRateSource>(packet.GetNBitWordFromMessage(1, 35));
         bool vertical_rate_sign_is_negative = packet.GetNBitWordFromMessage(1, 36);
-        if (vertical_rate_sign_is_negative) {
-            vertical_rate_fpm = -(vertical_rate_magnitude_fpm - 1) * 64;
-        } else {
-            vertical_rate_fpm = (vertical_rate_magnitude_fpm - 1) * 64;
+        switch (vertical_rate_source) {
+            case ModeSAircraft::kVerticalRateSourceBaro:
+                WriteBitFlag(kBitFlagBaroVerticalVelocityValid, true);
+                WriteBitFlag(kBitFlagUpdatedBaroVerticalVelocity, true);
+                baro_vertical_rate_fpm =
+                    (vertical_rate_magnitude_fpm - 1) * 64 * (vertical_rate_sign_is_negative ? -1 : 1);
+                break;
+            case ModeSAircraft::kVerticalRateSourceGNSS:
+                WriteBitFlag(kBitFlagGNSSVerticalVelocityValid, true);
+                WriteBitFlag(kBitFlagUpdatedGNSSVerticalVelocity, true);
+                gnss_vertical_rate_fpm =
+                    (vertical_rate_magnitude_fpm - 1) * 64 * (vertical_rate_sign_is_negative ? -1 : 1);
+                break;
+            default:
+                // No vertical rate source specified.
+                CONSOLE_WARNING("AircraftDictionary::ApplyAirborneVelocitiesMessage",
+                                "Vertical rate source not specified for ICAO 0x%lx.", icao_address);
+                decode_successful = false;
         }
-        WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagVerticalVelocityValid, true);
-        WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedVerticalVelocity, true);
     }
 
     // Decode altitude difference between GNSS and barometric altitude.
@@ -781,7 +794,30 @@ bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVe
     if (ag_state == kAirGroundStateOnGround) {
         WriteBitFlag(BitFlag::kBitFlagIsAirborne, false);
     }
-    return false;
+    DecodedUATADSBPacket::DirectionType direction_type =
+        DecodedUATADSBPacket::HorizontalVelocityToDirectionDegAndSpeedKts(
+            state_vector.horizontal_velocity, state_vector.air_ground_state, direction_deg, speed_kts);
+
+    // Parse direction type and use it to set flags.
+    switch (direction_type) {
+        case DecodedUATADSBPacket::DirectionType::kDirectionTypeTrueTrackAngle:
+            WriteBitFlag(BitFlag::kBitFlagDirectionIsHeading, false);
+            WriteBitFlag(BitFlag::kBitFlagHeadingUsesMagneticNorth, false);
+            break;
+        case DecodedUATADSBPacket::DirectionType::kDirectionTypeMagneticHeading:
+            WriteBitFlag(BitFlag::kBitFlagDirectionIsHeading, true);
+            WriteBitFlag(BitFlag::kBitFlagHeadingUsesMagneticNorth, true);
+            break;
+        case DecodedUATADSBPacket::DirectionType::kDirectionTypeTrueHeading:
+            WriteBitFlag(BitFlag::kBitFlagDirectionIsHeading, true);
+            WriteBitFlag(BitFlag::kBitFlagHeadingUsesMagneticNorth, false);
+            break;
+        default:
+            // Heading not available.
+            WriteBitFlag(BitFlag::kBitFlagDirectionValid, false);
+    }
+
+    return true;
 }
 bool UATAircraft::ApplyUATADSBModeStatus(const DecodedUATADSBPacket::UATModeStatus &mode_status) { return false; }
 bool UATAircraft::ApplyUATADSBTargetState(const DecodedUATADSBPacket::UATTargetState &target_state) { return false; }

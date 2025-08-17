@@ -151,11 +151,11 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const GDL
         ((data.navigation_integrity_category & 0xF) << 4)      // i: Navigation Integrity Category (NIC).
         | (data.navigation_accuracy_category_position & 0xF);  // a: Navigation Accuracy Category for Position (NACp).
     // hhh: Horizontal Velocity. Resolution = 1kt.
-    uint32_t velocity_kts = static_cast<uint32_t>(data.velocity_kts) & 0x00000FFF;
+    uint32_t speed_kts = static_cast<uint32_t>(data.speed_kts) & 0x00000FFF;
     // vvv: Vertical Velocity. Signed Integer in units of 64fpm.
     int32_t vertical_rate_fpm = (data.vertical_rate_fpm / 64) & 0x000000FFF;
-    message_buf[14] = velocity_kts >> 4;           // hh: MSB of Horizontal Velocity.
-    message_buf[15] = (velocity_kts & 0xF)         // h: LS nibble of Horizontal Velocity.
+    message_buf[14] = speed_kts >> 4;              // hh: MSB of Horizontal Velocity.
+    message_buf[15] = (speed_kts & 0xF)            // h: LS nibble of Horizontal Velocity.
                       | (vertical_rate_fpm >> 8);  // v: MS nibble of Vertical Rate.
     message_buf[16] = vertical_rate_fpm & 0xFF;    // vv: LSB of Vertical Rate.
     // tt: Track / Heading. 8-bit angular weighted binary. Resolution = 360/256 degrees. 0 = North,

@@ -5,7 +5,11 @@
 #include "aircraft_dictionary.hh"  // for Aircraft::kAddressQualifierBitShift
 #include "comms.hh"                // for CONSOLE_INFO, CONSOLE_ERROR
 #include "fec.hh"
+#include "fixedmath/fixed_math.hpp"
 #include "utils/buffer_utils.hh"  // for CHAR_TO_HEX
+
+const fixedmath::fixed_t kDegPerTrackAngleHeadingTick =
+    fixedmath::fixed_t{360.0f / 512};  // Direction ticks for Track Angle / Heading field (UAT Tech Manual Table 3-24).
 
 RawUATADSBPacket::RawUATADSBPacket(const char *rx_string, int16_t sigs_dbm_in, int16_t sigq_db_in,
                                    uint64_t mlat_48mhz_64bit_counts_in)
@@ -26,12 +30,50 @@ DecodedUATADSBPacket::DecodedUATADSBPacket(const char *rx_string, int32_t sigs_d
     ConstructUATPacket();
 }
 
+DecodedUATADSBPacket::DirectionType DecodedUATADSBPacket::HorizontalVelocityToDirectionDegAndSpeedKts(
+    uint32_t horizontal_velocity, AirGroundState air_ground_state, float &direction, int32_t &speed_kts) {
+    switch (air_ground_state) {
+        case kAirGroundStateAirborneSubsonic:
+        case kAirGroundStateAirborneSupersonic: {
+            // When airborne, the horizontal velocity field includes north and east velocities which must be used to
+            // calculate a track angle and speed.
+            int32_t north_velocity_kts = HorizontalVelocityToNorthVelocityKts(horizontal_velocity, air_ground_state);
+            int32_t east_velocity_kts = HorizontalVelocityToEastVelocityKts(horizontal_velocity, air_ground_state);
+            if (north_velocity_kts == INT32_MIN || east_velocity_kts == INT32_MIN) {
+                direction = 0.0f;
+                speed_kts = INT32_MIN;
+                return kDirectionTypeNotAvailable;
+            }
+            direction = static_cast<float>(fixedmath::func::atan2(static_cast<fixedmath::fixed_t>(east_velocity_kts),
+                                                                  static_cast<fixedmath::fixed_t>(north_velocity_kts)));
+            speed_kts = static_cast<int32_t>(fixedmath::func::sqrt(static_cast<fixedmath::fixed_t>(
+                north_velocity_kts * north_velocity_kts + east_velocity_kts * east_velocity_kts)));
+            return kDirectionTypeTrueTrackAngle;
+        } break;
+        case kAirGroundStateOnGround: {
+            // When on the ground, the horizontal velocity field includes a direction and ground speed directly.
+            uint16_t speed_encoded = (horizontal_velocity >> 11) & 0b1111111111;
+            if (speed_encoded == 0) {
+                speed_kts = INT32_MIN;
+            } else {
+                speed_kts = speed_encoded - 1;
+            }
+            direction = static_cast<float>(fixedmath::fixed_t(horizontal_velocity & 0b111111111) *
+                                           kDegPerTrackAngleHeadingTick);  // Convert to degrees.
+            return static_cast<DirectionType>((horizontal_velocity >> 9) & 0b11);
+        } break;
+        default:
+            CONSOLE_ERROR("DecodedUATADSBPacket::HorizontalVelocityToDirectionDegAndSpeedKts",
+                          "Unrecognized air ground state %d", air_ground_state);
+    }
+    return kDirectionTypeNotAvailable;
+}
+
 uint32_t DecodedUATADSBPacket::GetICAOAddress() const {
-    return 0;
-    // if (!header) {
-    //     return 0;  // No header, no ICAO address.
-    // }
-    // return header->icao_address | (header->address_qualifier << Aircraft::kAddressQualifierBitShift);
+    if (!IsValid()) {
+        return 0;
+    }
+    return header.icao_address | (header.address_qualifier << Aircraft::kAddressQualifierBitShift);
 }
 
 void DecodedUATADSBPacket::ConstructUATPacket(bool run_fec) {
@@ -136,7 +178,7 @@ void DecodedUATADSBPacket::DecodeStateVector(uint8_t *data, UATStateVector &stat
     state_vector_ref.altitude_is_geometric_altitude = GetNBitsFromByteBuffer(1, 47, data);
     state_vector_ref.altitude_encoded = GetNBitsFromByteBuffer(12, 48, data);
     state_vector_ref.nic = GetNBitsFromByteBuffer(4, 60, data);
-    state_vector_ref.air_ground_state = GetNBitsFromByteBuffer(2, 64, data);
+    state_vector_ref.air_ground_state = static_cast<AirGroundState>(GetNBitsFromByteBuffer(2, 64, data));
     state_vector_ref.reserved = GetNBitsFromByteBuffer(1, 66, data);
     state_vector_ref.horizontal_velocity = GetNBitsFromByteBuffer(22, 67, data);
     state_vector_ref.vertical_velocity = GetNBitsFromByteBuffer(11, 89, data);

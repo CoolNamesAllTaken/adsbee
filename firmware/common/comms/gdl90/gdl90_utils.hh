@@ -74,7 +74,7 @@ class GDL90Reporter {
         uint8_t misc_indicators;
         uint8_t navigation_integrity_category = 0;      // Navigation Integrity Category (NIC).
         uint8_t navigation_accuracy_category_position;  // Navigation Accuracy Category for Postion (NACp).
-        float velocity_kts;
+        float speed_kts;
         int vertical_rate_fpm;
         float direction_deg;
         uint8_t emitter_category;
@@ -158,7 +158,8 @@ class GDL90Reporter {
         bool aircraft_updated_position = aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedBaroAltitude) ||
                                          aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedGNSSAltitude) ||
                                          aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedHorizontalVelocity) ||
-                                         aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedVerticalVelocity) ||
+                                         aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedBaroVerticalVelocity) ||
+                                         aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedGNSSVerticalVelocity) ||
                                          aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedPosition) ||
                                          aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedDirection);
         data.SetMiscIndicator(track_heading_value,
@@ -166,7 +167,7 @@ class GDL90Reporter {
                               aircraft.HasBitFlag(ModeSAircraft::kBitFlagIsAirborne)  // Aircraft is airborne?
         );
         data.navigation_integrity_category = aircraft.navigation_integrity_category;
-        data.velocity_kts = aircraft.velocity_kts;
+        data.speed_kts = aircraft.speed_kts;
         data.vertical_rate_fpm = aircraft.vertical_rate_fpm;
         data.direction_deg = aircraft.direction_deg;
         data.emitter_category = aircraft.category_raw;

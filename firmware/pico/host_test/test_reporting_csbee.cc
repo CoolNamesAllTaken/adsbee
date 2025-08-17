@@ -35,10 +35,10 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
     aircraft.latitude_deg = -120.654321;
     aircraft.longitude_deg = -80.123456;
     aircraft.direction_deg = 300.5678;
-    aircraft.velocity_kts = 123.45;
-    aircraft.velocity_source = ModeSAircraft::VelocitySource::kVelocitySourceAirspeedTrue;
-    aircraft.vertical_rate_fpm = -200;
-    aircraft.vertical_rate_source = ModeSAircraft::VerticalRateSource::kVerticalRateSourceBaro;
+    aircraft.speed_kts = 123.45;
+    aircraft.speed_source = ModeSAircraft::SpeedSource::kSpeedSourceAirspeedTrue;
+    aircraft.baro_vertical_rate_fpm = -200;
+    aircraft.gnss_vertical_rate_fpm = -205;
     aircraft.navigation_integrity_category = static_cast<ModeSAircraft::NICRadiusOfContainment>(0b1011);
     aircraft.navigation_integrity_category_baro = static_cast<ModeSAircraft::NICBarometricAltitudeIntegrity>(0b1);
     aircraft.navigation_accuracy_category_velocity = static_cast<ModeSAircraft::NACHorizontalVelocityError>(0b101);
@@ -69,7 +69,8 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
     EXPECT_EQ(GetNextToken().compare("997"), 0);         // GNSS Altitude [ft]
     EXPECT_EQ(GetNextToken().compare("301"), 0);         // Track [deg]
     EXPECT_EQ(GetNextToken().compare("123"), 0);         // Velocity [kts]
-    EXPECT_EQ(GetNextToken().compare("-200"), 0);        // Vertical Rate [fpm]
+    EXPECT_EQ(GetNextToken().compare("-200"), 0);        // Baro Vertical Rate [fpm]
+    EXPECT_EQ(GetNextToken().compare("-205"), 0);        // GNSS Vertical Rate [fpm]
     EXPECT_EQ(GetNextToken().compare("-75"), 0);         // Signal Strength [dBm]
     EXPECT_EQ(GetNextToken().compare("2"), 0);           // Signal Qualtiy [dB]
     EXPECT_EQ(GetNextToken().compare("1"), 0);           // Squitter Frames Per Second
