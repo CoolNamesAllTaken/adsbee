@@ -91,20 +91,20 @@ mavlink_adsb_vehicle_t AircraftToMAVLINKADSBVehicleMessage(const ModeSAircraft &
         .lat = static_cast<int32_t>(aircraft.latitude_deg * 1e7f),
         // Longitude [degE7]
         .lon = static_cast<int32_t>(aircraft.longitude_deg * 1e7f),
-        // Altitude [mm]
-        .altitude = FeetToMeters(aircraft.altitude_source == ModeSAircraft::AltitudeSource::kAltitudeSourceBaro
-                                     ? aircraft.baro_altitude_ft
-                                     : aircraft.gnss_altitude_ft) *
-                    1000,
+        // Altitude [mm]: Prefer GNSS altitude but fall back to baro altitude.
+        .altitude =
+            FeetToMeters(aircraft.HasBitFlag(ModeSAircraft::kBitFlagGNSSAltitudeValid) ? aircraft.gnss_altitude_ft
+                                                                                       : aircraft.baro_altitude_ft) *
+            1000,
         // Heding [cdeg]
         .heading = static_cast<uint16_t>(aircraft.direction_deg * 100.0f),
         // Horizontal Velocity [cm/s]
         .hor_velocity = static_cast<uint16_t>(KtsToMps(static_cast<int>(aircraft.speed_kts)) * 100),
-        // Vertical Velocity [cm/s]
+        // Vertical Velocity [cm/s]: Prefer GNSS vertical velocity but fall back to baro vertical velocity.
         .ver_velocity =
-            static_cast<int16_t>(FpmToMps(aircraft.HasBitFlag(ModeSAircraft::kBitFlagBaroVerticalVelocityValid)
-                                              ? aircraft.baro_vertical_rate_fpm
-                                              : aircraft.gnss_vertical_rate_fpm) *
+            static_cast<int16_t>(FpmToMps(aircraft.HasBitFlag(ModeSAircraft::kBitFlagGNSSVerticalVelocityValid)
+                                              ? aircraft.gnss_vertical_rate_fpm
+                                              : aircraft.baro_vertical_rate_fpm) *
                                  100),
         .flags = flags,
         .squawk = aircraft.squawk,

@@ -780,10 +780,8 @@ bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVe
     }
 
     if (state_vector.altitude_is_geometric_altitude) {
-        altitude_source = AltitudeSource::kAltitudeSourceGNSS;
         gnss_altitude_ft = DecodedUATADSBPacket::AltitudeEncodedToAltitudeFt(state_vector.altitude_encoded);
     } else {
-        altitude_source = AltitudeSource::kAltitudeSourceBaro;
         baro_altitude_ft = DecodedUATADSBPacket::AltitudeEncodedToAltitudeFt(state_vector.altitude_encoded);
     }
 

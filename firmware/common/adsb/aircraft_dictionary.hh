@@ -41,28 +41,6 @@ class Aircraft {
         // TODO: Add FLARM, ADS-L, Remote ID, etc.
     };
 
-    enum AltitudeSource : int16_t {
-        kAltitudeNotAvailable = -2,
-        kAltitudeSourceNotSet = -1,
-        kAltitudeSourceBaro = 0,
-        kAltitudeSourceGNSS = 1
-    };
-
-    enum VerticalRateSource : int16_t {
-        kVerticalRateNotAvailable = -2,
-        kVerticalRateSourceNotSet = -1,
-        kVerticalRateSourceGNSS = 0,
-        kVerticalRateSourceBaro = 1
-    };
-
-    enum SpeedSource : int16_t {
-        kSpeedSourceNotAvailable = -2,
-        kSpeedSourceNotSet = -1,
-        kSpeedSourceGroundSpeed = 0,
-        kSpeedSourceAirspeedTrue = 1,
-        kSpeedSourceAirspeedIndicated = 2
-    };
-
     static constexpr uint16_t kCallSignMaxNumChars = 8;
     static constexpr uint16_t kCallSignMinNumChars = 3;  // Callsigns must be at this long to be valid.
 
@@ -123,11 +101,10 @@ class Aircraft {
 
     int32_t baro_altitude_ft = 0;
     int32_t gnss_altitude_ft = 0;
-    AltitudeSource altitude_source = kAltitudeSourceNotSet;
 
     float direction_deg = 0.0f;
     int32_t speed_kts = 0;
-    SpeedSource speed_source = kSpeedSourceNotSet;
+
     int32_t baro_vertical_rate_fpm = 0;
     int32_t gnss_vertical_rate_fpm = 0;
 };
@@ -199,6 +176,28 @@ class ModeSAircraft : public Aircraft {
         kBitFlagUpdatedBaroVerticalVelocity,
         kBitFlagUpdatedGNSSVerticalVelocity,
         kBitFlagNumFlagBits
+    };
+
+    enum AltitudeSource : int16_t {
+        kAltitudeNotAvailable = -2,
+        kAltitudeSourceNotSet = -1,
+        kAltitudeSourceBaro = 0,
+        kAltitudeSourceGNSS = 1
+    };
+
+    enum VerticalRateSource : int16_t {
+        kVerticalRateNotAvailable = -2,
+        kVerticalRateSourceNotSet = -1,
+        kVerticalRateSourceGNSS = 0,
+        kVerticalRateSourceBaro = 1
+    };
+
+    enum SpeedSource : int16_t {
+        kSpeedSourceNotAvailable = -2,
+        kSpeedSourceNotSet = -1,
+        kSpeedSourceGroundSpeed = 0,
+        kSpeedSourceAirspeedTrue = 1,
+        kSpeedSourceAirspeedIndicated = 2
     };
 
     enum NICBit : uint16_t { kNICBitA = 0, kNICBitB = 1, kNICBitC = 2 };
@@ -421,6 +420,11 @@ class ModeSAircraft : public Aircraft {
     Category category = kCategoryNoCategoryInfo;
     uint8_t category_raw = 0;  // Non-enum category in case we want the value without a many to one mapping.
 
+    SpeedSource speed_source = kSpeedSourceNotSet;  // Most recent reported speed.
+    // Used to keep track of the most recently reported altitude, for use in adjusting the complementary altitude with
+    // an offset.
+    AltitudeSource altitude_source = kAltitudeSourceNotSet;
+
     // Aircraft Operation Status Message
     // Navigation Integrity Category (NIC)
     uint8_t nic_bits_valid = 0b000;  // MSb to LSb: nic_c_valid nic_b_valid nic_a_valid.
@@ -562,6 +566,28 @@ class UATAircraft : public Aircraft {
         kBitFlagUpdatedBaroVerticalVelocity,
         kBitFlagUpdatedGNSSVerticalVelocity,
         kBitFlagNumFlagBits
+    };
+
+    enum AltitudeSource : int16_t {
+        kAltitudeNotAvailable = -2,
+        kAltitudeSourceNotSet = -1,
+        kAltitudeSourceBaro = 0,
+        kAltitudeSourceGNSS = 1
+    };
+
+    enum VerticalRateSource : int16_t {
+        kVerticalRateNotAvailable = -2,
+        kVerticalRateSourceNotSet = -1,
+        kVerticalRateSourceGNSS = 0,
+        kVerticalRateSourceBaro = 1
+    };
+
+    enum SpeedSource : int16_t {
+        kSpeedSourceNotAvailable = -2,
+        kSpeedSourceNotSet = -1,
+        kSpeedSourceGroundSpeed = 0,
+        kSpeedSourceAirspeedTrue = 1,
+        kSpeedSourceAirspeedIndicated = 2
     };
 
     enum NICBit : uint16_t { kNICBitA = 0, kNICBitB = 1, kNICBitC = 2 };
