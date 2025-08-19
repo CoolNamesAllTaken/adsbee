@@ -9,27 +9,26 @@ TEST(UATDecoderTest, DownlinkFrames) {
     int count = get_uat_downlink_test_frames_count();
     for (int i = 0; i < count; i++) {
         const uat_downlink_test_frame_t* frame = get_uat_downlink_test_frame(i);
-        SCOPED_TRACE(frame->test_name);
+        char message[200] = {"\0"};
+        sprintf(message, "Test frame %d: %s, icao=%08X", i, frame->test_name, frame->address);
+        SCOPED_TRACE(message);
 
-        // Decode with your decoder
         AircraftDictionary dictionary;
+        UATAircraft aircraft;
 
+        // Create the packet, force it as valid (no FEC included in test data), ingest into dictionary.
         DecodedUATADSBPacket packet(frame->frame_data_hex);
         packet.ReconstructWithoutFEC();
         EXPECT_TRUE(dictionary.IngestDecodedUATADSBPacket(packet));
 
-        UATAircraft aircraft;
-        EXPECT_TRUE(dictionary.GetAircraft(Aircraft::ICAOToUID(frame->address, Aircraft::kAircraftTypeUAT), aircraft));
+        // Ensure the dictionary has a matching aircraft entry and extract it.
+        EXPECT_TRUE(dictionary.GetAircraft(
+            Aircraft::ICAOToUID(frame->address | (frame->address_qualifier << Aircraft::kAddressQualifierBitShift),
+                                Aircraft::kAircraftTypeUAT),
+            aircraft));
 
-        // // Compare against expected values
-        // EXPECT_EQ(result.mdb_type, frame->mdb_type);
-        // EXPECT_EQ(result.address, frame->address);
-        // if (frame->position_valid) {
-        //     EXPECT_NEAR(result.lat, frame->lat, 0.0001);
-        //     EXPECT_NEAR(result.lon, frame->lon, 0.0001);
-        // }
-        // // ... more assertions
-    }
+        // Compare fields in aircraft entry against fields in test data.
+        }
 }
 
 // Helper function to convert hex string to bytes:
