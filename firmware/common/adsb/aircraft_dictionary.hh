@@ -179,7 +179,7 @@ class ModeSAircraft : public Aircraft {
     };
 
     enum AltitudeSource : int16_t {
-        kAltitudeNotAvailable = -2,
+        kAltitudeSourceNotAvailable = -2,
         kAltitudeSourceNotSet = -1,
         kAltitudeSourceBaro = 0,
         kAltitudeSourceGNSS = 1
@@ -569,7 +569,7 @@ class UATAircraft : public Aircraft {
     };
 
     enum AltitudeSource : int16_t {
-        kAltitudeNotAvailable = -2,
+        kAltitudeSourceNotAvailable = -2,
         kAltitudeSourceNotSet = -1,
         kAltitudeSourceBaro = 0,
         kAltitudeSourceGNSS = 1
@@ -727,7 +727,8 @@ class UATAircraft : public Aircraft {
     bool ApplyUATADSBModeStatus(const DecodedUATADSBPacket::UATModeStatus &mode_status);
     bool ApplyUATADSBTargetState(const DecodedUATADSBPacket::UATTargetState &target_state);
     bool ApplyUATADSBTrajectoryChange(const DecodedUATADSBPacket::UATTrajectoryChange &trajectory_change);
-    bool ApplyUATADSBAuxiliaryStateVector(const DecodedUATADSBPacket::UATAuxiliaryStateVector &auxiliary_state_vector);
+    bool ApplyUATADSBAuxiliaryStateVector(const DecodedUATADSBPacket::UATStateVector &state_vector,
+                                          const DecodedUATADSBPacket::UATAuxiliaryStateVector &auxiliary_state_vector);
 
     uint32_t flags = 0b0;
 

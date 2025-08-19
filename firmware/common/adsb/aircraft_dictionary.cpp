@@ -374,7 +374,7 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(ModeSADSBPacket packet, bool fi
         case ModeSADSBPacket::TypeCode::kTypeCodeAirbornePositionBaroAlt: {
             uint16_t encoded_altitude_ft_with_q_bit = static_cast<uint16_t>(packet.GetNBitWordFromMessage(12, 8));
             if (encoded_altitude_ft_with_q_bit == 0) {
-                altitude_source = ModeSAircraft::AltitudeSource::kAltitudeNotAvailable;
+                altitude_source = ModeSAircraft::AltitudeSource::kAltitudeSourceNotAvailable;
                 CONSOLE_WARNING("AircraftDictionary::ApplyAirbornePositionMessage",
                                 "Altitude information not available for ICAO 0x%lx.", icao_address);
                 decode_successful = false;
@@ -768,24 +768,41 @@ UATAircraft::UATAircraft(uint32_t icao_address_in) : icao_address(icao_address_i
 UATAircraft::~UATAircraft() {};
 
 bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVector &state_vector) {
-    latitude_deg = static_cast<float>(state_vector.latitude_awb) * DecodedUATADSBPacket::kDegPerAWBTick -
-                   90.0f;  // Convert to degrees.
+    // Parse position.
+    latitude_deg = static_cast<float>(state_vector.latitude_awb) * DecodedUATADSBPacket::kDegPerAWBTick;
+    longitude_deg = static_cast<float>(state_vector.longitude_awb) * DecodedUATADSBPacket::kDegPerAWBTick;
+    navigation_integrity_category = static_cast<NICRadiusOfContainment>(state_vector.nic);
+    if (latitude_deg == 0 && longitude_deg == 0 && navigation_integrity_category == 0) {
+        // Position inforamtion not available.
+        WriteBitFlag(BitFlag::kBitFlagPositionValid, false);
+    }
     if (latitude_deg > 90) {
         latitude_deg -= 180.0f;  // Convert to negative latitude if it exceeds 90 degrees.
     }
-    longitude_deg = static_cast<float>(state_vector.longitude_awb) * DecodedUATADSBPacket::kDegPerAWBTick -
-                    90.0f;  // Convert to degrees.
     if (longitude_deg > 180) {
         longitude_deg -= 360.0f;  // Convert to negative longitude if it exceeds 180 degrees.
     }
 
+    // Parse altitue.
     if (state_vector.altitude_is_geometric_altitude) {
-        gnss_altitude_ft = DecodedUATADSBPacket::AltitudeEncodedToAltitudeFt(state_vector.altitude_encoded);
+        int32_t temp_gnss_altitude_ft =
+            DecodedUATADSBPacket::AltitudeEncodedToAltitudeFt(state_vector.altitude_encoded);
+        if (temp_gnss_altitude_ft == INT32_MIN) {
+            WriteBitFlag(BitFlag::kBitFlagGNSSAltitudeValid, false);
+        } else {
+            gnss_altitude_ft = temp_gnss_altitude_ft;
+            WriteBitFlag(BitFlag::kBitFlagGNSSAltitudeValid, true);
+        }
     } else {
-        baro_altitude_ft = DecodedUATADSBPacket::AltitudeEncodedToAltitudeFt(state_vector.altitude_encoded);
+        int32_t temp_baro_altitude_ft =
+            DecodedUATADSBPacket::AltitudeEncodedToAltitudeFt(state_vector.altitude_encoded);
+        if (temp_baro_altitude_ft == INT32_MIN) {
+            WriteBitFlag(BitFlag::kBitFlagBaroAltitudeValid, false);
+        } else {
+            baro_altitude_ft = temp_baro_altitude_ft;
+            WriteBitFlag(BitFlag::kBitFlagBaroAltitudeValid, true);
+        }
     }
-
-    navigation_integrity_category = static_cast<NICRadiusOfContainment>(state_vector.nic);
 
     // AG state isn't stored directly, but is used to interpret other fields.
     AirGroundState ag_state = static_cast<AirGroundState>(state_vector.air_ground_state);
@@ -817,14 +834,39 @@ bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVe
 
     return true;
 }
-bool UATAircraft::ApplyUATADSBModeStatus(const DecodedUATADSBPacket::UATModeStatus &mode_status) { return false; }
-bool UATAircraft::ApplyUATADSBTargetState(const DecodedUATADSBPacket::UATTargetState &target_state) { return false; }
+bool UATAircraft::ApplyUATADSBModeStatus(const DecodedUATADSBPacket::UATModeStatus &mode_status) { return true; }
+bool UATAircraft::ApplyUATADSBTargetState(const DecodedUATADSBPacket::UATTargetState &target_state) { return true; }
 bool UATAircraft::ApplyUATADSBTrajectoryChange(const DecodedUATADSBPacket::UATTrajectoryChange &trajectory_change) {
-    return false;
+    return true;
 }
 bool UATAircraft::ApplyUATADSBAuxiliaryStateVector(
+    const DecodedUATADSBPacket::UATStateVector &state_vector,
     const DecodedUATADSBPacket::UATAuxiliaryStateVector &auxiliary_state_vector) {
-    return false;
+    // Need to refer to the state vector in order to see what type of altitude the secondary altitude is.
+    if (state_vector.altitude_is_geometric_altitude) {
+        // Primary altitude is gnss, so secondary altitude must be baro.
+        int32_t temp_baro_altitude_ft =
+            DecodedUATADSBPacket::AltitudeEncodedToAltitudeFt(auxiliary_state_vector.secondary_altitude_encoded);
+        if (temp_baro_altitude_ft == INT32_MIN) {
+            WriteBitFlag(BitFlag::kBitFlagBaroAltitudeValid, false);
+        } else {
+            baro_altitude_ft = temp_baro_altitude_ft;
+            WriteBitFlag(BitFlag::kBitFlagBaroAltitudeValid, true);
+        }
+
+    } else {
+        // Primary altitude is baro, so secondary altitude must be gnss.
+        int32_t temp_gnss_altitude_ft =
+            DecodedUATADSBPacket::AltitudeEncodedToAltitudeFt(auxiliary_state_vector.secondary_altitude_encoded);
+        if (temp_gnss_altitude_ft == INT32_MIN) {
+            WriteBitFlag(BitFlag::kBitFlagGNSSAltitudeValid, false);
+        } else {
+            gnss_altitude_ft = temp_gnss_altitude_ft;
+            WriteBitFlag(BitFlag::kBitFlagGNSSAltitudeValid, true);
+        }
+    }
+
+    return true;
 }
 
 /**
@@ -1140,7 +1182,8 @@ bool AircraftDictionary::IngestDecodedUATADSBPacket(DecodedUATADSBPacket &packet
     }
     if (packet.has_auxiliary_state_vector) {
         // Apply UAT auxiliary state vector to aircraft.
-        ingest_ret &= aircraft_ptr->ApplyUATADSBAuxiliaryStateVector(packet.auxiliary_state_vector);
+        ingest_ret &=
+            aircraft_ptr->ApplyUATADSBAuxiliaryStateVector(packet.state_vector, packet.auxiliary_state_vector);
     }
     if (packet.has_target_state) {
         // Apply UAT target state to aircraft.

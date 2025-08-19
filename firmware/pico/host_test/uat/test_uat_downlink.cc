@@ -28,7 +28,40 @@ TEST(UATDecoderTest, DownlinkFrames) {
             aircraft));
 
         // Compare fields in aircraft entry against fields in test data.
+        if (frame->has_sv) {
+            EXPECT_FLOAT_EQ(aircraft.latitude_deg, frame->lat);
+            EXPECT_FLOAT_EQ(aircraft.longitude_deg, frame->lon);
+
+            // Subtract 1 from frame's altitude_type to convert to enum format.
+            UATAircraft::AltitudeSource altitude_source =
+                static_cast<UATAircraft::AltitudeSource>(frame->altitude_type - 1);
+            switch (altitude_source) {
+                case (UATAircraft::kAltitudeSourceBaro):
+                    EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagBaroAltitudeValid));
+                    EXPECT_EQ(frame->has_auxsv, aircraft.HasBitFlag(UATAircraft::kBitFlagGNSSAltitudeValid));
+
+                    EXPECT_EQ(aircraft.baro_altitude_ft, frame->altitude);
+
+                    if (frame->has_auxsv) {
+                        EXPECT_EQ(aircraft.gnss_altitude_ft, frame->sec_altitude);
+                    }
+                    break;
+                case (UATAircraft::kAltitudeSourceGNSS):
+                    EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagGNSSAltitudeValid));
+                    EXPECT_EQ(frame->has_auxsv, aircraft.HasBitFlag(UATAircraft::kBitFlagBaroAltitudeValid));
+
+                    EXPECT_EQ(aircraft.gnss_altitude_ft, frame->altitude);
+
+                    if (frame->has_auxsv) {
+                        EXPECT_EQ(aircraft.baro_altitude_ft, frame->sec_altitude);
+                    }
+                    break;
+                default:
+                    // Handle kAltitudeSOurceNotAvailable and kAltitudeSourceNotSet
+                    continue;
+            }
         }
+    }
 }
 
 // Helper function to convert hex string to bytes:

@@ -114,21 +114,30 @@ void DecodedUATADSBPacket::ConstructUATPacket(bool run_fec) {
     switch (header.mdb_type_code) {
         case 0:  // Basic UAT ADS-B message. Just header and state vector, nothing else.
             // HDR | SV | Reserved
+            has_state_vector = true;
             DecodeStateVector(decoded_payload + sizeof(UATHeader), state_vector);
             break;
         case 1:
             // HDR | SV | MS | AUX SV
+            has_state_vector = true;
+            has_mode_status = true;
+            has_auxiliary_state_vector = true;
             DecodeStateVector(decoded_payload + kStateVectorOffsetBytes, state_vector);
             DecodeModeStatus(decoded_payload + kModeStatusOffsetBytes, mode_status);
             DecodeAuxiliaryStateVector(decoded_payload + kAuxiliaryStateVectorOffsetBytes, auxiliary_state_vector);
             break;
         case 2:
             // HDR | SV | Reserved | AUX SV
+            has_state_vector = true;
+            has_auxiliary_state_vector = true;
             DecodeStateVector(decoded_payload + kStateVectorOffsetBytes, state_vector);
             DecodeAuxiliaryStateVector(decoded_payload + kAuxiliaryStateVectorOffsetBytes, auxiliary_state_vector);
             break;
         case 3:
             // HDR | SV | MS | TS | Reserved Byte
+            has_state_vector = true;
+            has_mode_status = true;
+            has_target_state = true;
             DecodeStateVector(decoded_payload + kStateVectorOffsetBytes, state_vector);
             DecodeModeStatus(decoded_payload + kModeStatusOffsetBytes, mode_status);
             // Target state in this message is at the same offset as auxiliary state vector in other messages.
@@ -136,17 +145,24 @@ void DecodedUATADSBPacket::ConstructUATPacket(bool run_fec) {
             break;
         case 4:
             // HDR | SV | Reserved for TC+0 | TS | Reserved Byte
+            has_state_vector = true;
+            has_target_state = true;
             DecodeStateVector(decoded_payload + kStateVectorOffsetBytes, state_vector);
             // Target state in this message is at the same offset as auxiliary state vector in other messages.
             DecodeTargetState(decoded_payload + kAuxiliaryStateVectorOffsetBytes, target_state);
             break;
         case 5:
             // HDR | SV | Reserved for TC+1 | AUX SV
+            has_state_vector = true;
+            has_auxiliary_state_vector = true;
             DecodeStateVector(decoded_payload + kStateVectorOffsetBytes, state_vector);
             DecodeAuxiliaryStateVector(decoded_payload + kAuxiliaryStateVectorOffsetBytes, auxiliary_state_vector);
             break;
         case 6:
             // HDR | SV | Reserved | TS | Reserved Byte | AUX SV
+            has_state_vector = true;
+            has_target_state = true;
+            has_auxiliary_state_vector = true;
             DecodeStateVector(decoded_payload + kStateVectorOffsetBytes, state_vector);
             DecodeTargetState(decoded_payload + 24, target_state);
             DecodeAuxiliaryStateVector(decoded_payload + kAuxiliaryStateVectorOffsetBytes, auxiliary_state_vector);
@@ -156,6 +172,7 @@ void DecodedUATADSBPacket::ConstructUATPacket(bool run_fec) {
         case 9:
         case 10:
             // HDR | SV | Reserved
+            has_state_vector = true;
             DecodeStateVector(decoded_payload + kStateVectorOffsetBytes, state_vector);
             break;
         default:
@@ -185,5 +202,8 @@ void DecodedUATADSBPacket::DecodeStateVector(uint8_t *data, UATStateVector &stat
     state_vector_ref.utc_coupled = GetNBitsFromByteBuffer(1, 100, data);
 };
 void DecodedUATADSBPacket::DecodeModeStatus(uint8_t *data, UATModeStatus &mode_status_ref) {};
-void DecodedUATADSBPacket::DecodeAuxiliaryStateVector(uint8_t *data, UATAuxiliaryStateVector &aux_state_vector_ref) {};
+
+void DecodedUATADSBPacket::DecodeAuxiliaryStateVector(uint8_t *data, UATAuxiliaryStateVector &aux_state_vector_ref) {
+    aux_state_vector_ref.secondary_altitude_encoded = GetNBitsFromByteBuffer(12, 0, data);
+};
 void DecodedUATADSBPacket::DecodeTargetState(uint8_t *data, UATTargetState &target_state_ref) {};
