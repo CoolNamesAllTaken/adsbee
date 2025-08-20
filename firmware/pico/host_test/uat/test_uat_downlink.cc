@@ -87,7 +87,7 @@ TEST(UATDecoderTest, DownlinkFrames) {
                 EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagDirectionIsHeading));
                 EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedDirection));
 
-                EXPECT_EQ(aircraft.direction_deg, frame->track);
+                EXPECT_NEAR(aircraft.direction_deg, frame->track, 0.5f);  // Test data is rounded.
             } else {
                 EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagHorizontalVelocityValid));
             }
