@@ -6,10 +6,13 @@
 #include "comms.hh"                // for CONSOLE_INFO, CONSOLE_ERROR
 #include "fec.hh"
 #include "fixedmath/fixed_math.hpp"
+#include "geo_utils.hh"
 #include "utils/buffer_utils.hh"  // for CHAR_TO_HEX
 
 const fixedmath::fixed_t kDegPerTrackAngleHeadingTick =
     fixedmath::fixed_t{360.0f / 512};  // Direction ticks for Track Angle / Heading field (UAT Tech Manual Table 3-24).
+const fixedmath::fixed_t kDegPerRadian =
+    fixedmath::fixed_t{180.0f / M_PI};  // Conversion factor from radians to degrees.
 
 RawUATADSBPacket::RawUATADSBPacket(const char *rx_string, int16_t sigs_dbm_in, int16_t sigq_db_in,
                                    uint64_t mlat_48mhz_64bit_counts_in)
@@ -31,7 +34,7 @@ DecodedUATADSBPacket::DecodedUATADSBPacket(const char *rx_string, int32_t sigs_d
 }
 
 DecodedUATADSBPacket::DirectionType DecodedUATADSBPacket::HorizontalVelocityToDirectionDegAndSpeedKts(
-    uint32_t horizontal_velocity, AirGroundState air_ground_state, float &direction, int32_t &speed_kts) {
+    uint32_t horizontal_velocity, AirGroundState air_ground_state, float &direction_deg_ref, int32_t &speed_kts_ref) {
     switch (air_ground_state) {
         case kAirGroundStateAirborneSubsonic:
         case kAirGroundStateAirborneSupersonic: {
@@ -40,26 +43,24 @@ DecodedUATADSBPacket::DirectionType DecodedUATADSBPacket::HorizontalVelocityToDi
             int32_t north_velocity_kts = HorizontalVelocityToNorthVelocityKts(horizontal_velocity, air_ground_state);
             int32_t east_velocity_kts = HorizontalVelocityToEastVelocityKts(horizontal_velocity, air_ground_state);
             if (north_velocity_kts == INT32_MIN || east_velocity_kts == INT32_MIN) {
-                direction = 0.0f;
-                speed_kts = INT32_MIN;
+                direction_deg_ref = 0.0f;
+                speed_kts_ref = INT32_MIN;
                 return kDirectionTypeNotAvailable;
             }
-            direction = static_cast<float>(fixedmath::func::atan2(static_cast<fixedmath::fixed_t>(east_velocity_kts),
-                                                                  static_cast<fixedmath::fixed_t>(north_velocity_kts)));
-            speed_kts = static_cast<int32_t>(fixedmath::func::sqrt(static_cast<fixedmath::fixed_t>(
-                north_velocity_kts * north_velocity_kts + east_velocity_kts * east_velocity_kts)));
+            CalculateTrackAndSpeedFromNEVelocities(north_velocity_kts, east_velocity_kts, direction_deg_ref,
+                                                   speed_kts_ref);
             return kDirectionTypeTrueTrackAngle;
         } break;
         case kAirGroundStateOnGround: {
             // When on the ground, the horizontal velocity field includes a direction and ground speed directly.
             uint16_t speed_encoded = (horizontal_velocity >> 11) & 0b1111111111;
             if (speed_encoded == 0) {
-                speed_kts = INT32_MIN;
+                speed_kts_ref = INT32_MIN;
             } else {
-                speed_kts = speed_encoded - 1;
+                speed_kts_ref = speed_encoded - 1;
             }
-            direction = static_cast<float>(fixedmath::fixed_t(horizontal_velocity & 0b111111111) *
-                                           kDegPerTrackAngleHeadingTick);  // Convert to degrees.
+            direction_deg_ref = static_cast<float>(fixedmath::fixed_t(horizontal_velocity & 0b111111111) *
+                                                   kDegPerTrackAngleHeadingTick);  // Convert to degrees.
             return static_cast<DirectionType>((horizontal_velocity >> 9) & 0b11);
         } break;
         default:

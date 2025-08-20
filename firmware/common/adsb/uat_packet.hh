@@ -159,13 +159,13 @@ class DecodedUATADSBPacket {
      * returned direction is set to kDirectionTypeNotAvailable.
      * @param[in] horizontal_velocity Horizontal velocity in the state vector, in kts.
      * @param[in] air_ground_state Air-ground state from the UAT state vector.
-     * @param[out] direction Output parameter for the calculated direction in degrees.
-     * @param[out] speed_kts Output parameter for the calculated speed in kts.
+     * @param[out] direction_deg_ref Output parameter for the calculated direction in degrees.
+     * @param[out] speed_kts_ref Output parameter for the calculated speed in kts.
      * @retval DirectionType indicating the type of direction calculated.
      */
     static DirectionType HorizontalVelocityToDirectionDegAndSpeedKts(uint32_t horizontal_velocity,
-                                                                     AirGroundState air_ground_state, float &direction,
-                                                                     int32_t &speed_kts);
+                                                                     AirGroundState air_ground_state,
+                                                                     float &direction_deg_ref, int32_t &speed_kts_ref);
 
     static void VerticalVelocityToVerticalRateFpm(uint32_t vertical_velocity, AirGroundState air_ground_state,
                                                   int32_t &vertical_rate_fpm);

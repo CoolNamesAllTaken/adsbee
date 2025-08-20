@@ -96,8 +96,8 @@ mavlink_adsb_vehicle_t AircraftToMAVLINKADSBVehicleMessage(const ModeSAircraft &
             FeetToMeters(aircraft.HasBitFlag(ModeSAircraft::kBitFlagGNSSAltitudeValid) ? aircraft.gnss_altitude_ft
                                                                                        : aircraft.baro_altitude_ft) *
             1000,
-        // Heding [cdeg]
-        .heading = static_cast<uint16_t>(aircraft.direction_deg * 100.0f),
+        // Heading [cdeg]
+        .heading = static_cast<uint16_t>(aircraft.direction_deg * 100),
         // Horizontal Velocity [cm/s]
         .hor_velocity = static_cast<uint16_t>(KtsToMps(static_cast<int>(aircraft.speed_kts)) * 100),
         // Vertical Velocity [cm/s]: Prefer GNSS vertical velocity but fall back to baro vertical velocity.

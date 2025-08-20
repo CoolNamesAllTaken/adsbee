@@ -2,6 +2,7 @@
 
 #include "awb_utils.h"
 #include "comms.hh"
+#include "fixedmath/fixed_math.hpp"
 #include "geo_tables.hh"
 #include "macros.hh"
 
@@ -17,6 +18,9 @@ static const uint32_t kBoundingBoxDeltaAWB =
 
 static const uint32_t kAWBPerHavSteps =
     (UINT32_MAX / 2) / (kDeg180ToHavNumSteps - 1);  // Number of AWB values per haversine table step
+
+const fixedmath::fixed_t kDegPerRadian =
+    fixedmath::fixed_t{180.0f / M_PI};  // Conversion factor from radians to degrees.
 
 float hav_awb(uint32_t theta_awb) {
     // Function: hav(theta) = (sin(theta * 0.5f))^2
@@ -76,4 +80,22 @@ uint32_t CalculateGeoidalDistanceMetersDeg(float lat_a_deg, float lon_a_deg, flo
     uint32_t lon_b_awb = safe_cast_float_to_uint32(INV_RESOLUTION * lon_b_deg);
 
     return CalculateGeoidalDistanceMetersAWB(lat_a_awb, lon_a_awb, lat_b_awb, lon_b_awb);
+}
+
+inline fixedmath::fixed_t wrapped_atan2(fixedmath::fixed_t y, fixedmath::fixed_t x) {
+    fixedmath::fixed_t val = fixedmath::func::atan2(y, x);
+    return val < fixedmath::fixed_t(0) ? (val + fixedmath::fixed_t(2.0f * M_PI)) : val;
+}
+
+void CalculateTrackAndSpeedFromNEVelocities(int n_vel_kts, int e_vel_kts, float &track_deg, int &speed_kts) {
+    track_deg = static_cast<float>(
+        wrapped_atan2(static_cast<fixedmath::fixed_t>(e_vel_kts), static_cast<fixedmath::fixed_t>(n_vel_kts)) *
+        kDegPerRadian);
+    fixedmath::fixed_t speed_kts_fixed =
+        fixedmath::func::sqrt(static_cast<fixedmath::fixed_t>(n_vel_kts * n_vel_kts + e_vel_kts * e_vel_kts));
+    // Round speed_kts_fixed.
+    if (speed_kts_fixed % fixedmath::fixed_t(1) >= fixedmath::fixed_t(0.5f)) {
+        speed_kts_fixed += fixedmath::fixed_t(1);
+    }
+    speed_kts = static_cast<int16_t>(speed_kts_fixed);
 }

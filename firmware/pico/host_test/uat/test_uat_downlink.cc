@@ -29,8 +29,15 @@ TEST(UATDecoderTest, DownlinkFrames) {
 
         // Compare fields in aircraft entry against fields in test data.
         if (frame->has_sv) {
-            EXPECT_FLOAT_EQ(aircraft.latitude_deg, frame->lat);
-            EXPECT_FLOAT_EQ(aircraft.longitude_deg, frame->lon);
+            if (frame->position_valid) {
+                EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagPositionValid));
+                EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedPosition));
+                EXPECT_FLOAT_EQ(aircraft.latitude_deg, frame->lat);
+                EXPECT_FLOAT_EQ(aircraft.longitude_deg, frame->lon);
+            } else {
+                EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagPositionValid));
+                EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedPosition));
+            }
 
             // Subtract 1 from frame's altitude_type to convert to enum format.
             UATAircraft::AltitudeSource altitude_source =
@@ -59,8 +66,51 @@ TEST(UATDecoderTest, DownlinkFrames) {
                     }
                     break;
                 default:
-                    // Handle kAltitudeSOurceNotAvailable and kAltitudeSourceNotSet
-                    continue;
+                    // Handle kAltitudeSourceNotAvailable and kAltitudeSourceNotSet.
+                    break;
+            }
+
+            // Check NIC
+            EXPECT_EQ(aircraft.navigation_integrity_category, frame->nic);
+
+            // Check Air/Ground State and Horizontal Velocity
+
+            EXPECT_EQ(aircraft.HasBitFlag(UATAircraft::kBitFlagIsAirborne), (frame->airground_state & 0b10) == 0);
+
+            if (frame->ns_vel_valid && frame->ew_vel_valid) {
+                EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagHorizontalVelocityValid));
+                EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedHorizontalVelocity));
+
+                EXPECT_EQ(aircraft.speed_kts, frame->speed);
+
+                EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagDirectionValid));
+                EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagDirectionIsHeading));
+                EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedDirection));
+
+                EXPECT_EQ(aircraft.direction_deg, frame->track);
+            } else {
+                EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagHorizontalVelocityValid));
+            }
+
+            switch (frame->track_type) {
+                case UAT_TT_TRACK:
+                    EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagDirectionValid));
+                    EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagDirectionIsHeading));
+                    break;
+                case UAT_TT_MAG_HEADING:
+                    EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagDirectionValid));
+                    EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagDirectionIsHeading));
+                    EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagHeadingUsesMagneticNorth));
+                    break;
+                case UAT_TT_TRUE_HEADING:
+                    EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagDirectionValid));
+                    EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagDirectionIsHeading));
+                    EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagHeadingUsesMagneticNorth));
+                    break;
+                default:
+                    // UAT_TT_INVALID and others.
+                    EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagDirectionValid));
+                    break;
             }
         }
     }

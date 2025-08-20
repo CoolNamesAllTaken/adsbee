@@ -257,7 +257,7 @@ TEST(DecodedUATADSBPacket, HorizontalVelocityToDirectionDegAndSpeedKtsOnGround) 
         EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToDirectionDegAndSpeedKts(horizontal_velocity,
                                                                                     air_ground_state, direction, speed),
                   DecodedUATADSBPacket::kDirectionTypeTrueTrackAngle);
-        EXPECT_EQ(direction, expected_direction_deg);
+        EXPECT_FLOAT_EQ(direction, expected_direction_deg);
         EXPECT_EQ(speed, expected_speed_kts);
     }
 }

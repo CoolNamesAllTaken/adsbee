@@ -371,9 +371,9 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
 
     // Aircraft should now have velocities populated.
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedDirection));
-    EXPECT_NEAR(aircraft.direction_deg, 304.2157021324374, kFloatCloseEnough);
+    EXPECT_NEAR(aircraft.direction_deg, 304.2157021324374, 0.001);
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity));
-    EXPECT_EQ(aircraft.speed_kts, 120);
+    EXPECT_EQ(aircraft.speed_kts, 121);
     EXPECT_EQ(aircraft.speed_source, ModeSAircraft::SpeedSource::kSpeedSourceGroundSpeed);
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroVerticalVelocity));
     EXPECT_EQ(aircraft.baro_vertical_rate_fpm, -64);

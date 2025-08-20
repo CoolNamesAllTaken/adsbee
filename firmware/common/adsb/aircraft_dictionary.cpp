@@ -4,6 +4,7 @@
 
 #include "comms.hh"  // For debug logging.
 #include "decode_utils.hh"
+#include "fixedmath/fixed_math.hpp"
 #include "geo_utils.hh"
 #include "hal.hh"
 #include "macros.hh"
@@ -434,11 +435,6 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(ModeSADSBPacket packet, bool fi
     return decode_successful;
 }
 
-inline float wrapped_atan2f(float y, float x) {
-    float val = atan2f(y, x);
-    return val < 0.0f ? (val + (2.0f * M_PI)) : val;
-}
-
 bool ModeSAircraft::ApplyAirborneVelocitiesMessage(ModeSADSBPacket packet) {
     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
     bool decode_successful = true;
@@ -470,9 +466,9 @@ bool ModeSAircraft::ApplyAirborneVelocitiesMessage(ModeSADSBPacket packet) {
                     v_x_kts *= 4;
                     v_y_kts *= 4;
                 }
-                speed_kts = sqrt(v_x_kts * v_x_kts + v_y_kts * v_y_kts);
+                // speed_kts = sqrt(v_x_kts * v_x_kts + v_y_kts * v_y_kts);
                 // TODO: convert to fixedmath atan2f
-                direction_deg = wrapped_atan2f(v_x_kts, v_y_kts) * kDegreesPerRadian;
+                CalculateTrackAndSpeedFromNEVelocities(v_y_kts, v_x_kts, direction_deg, speed_kts);
             }
             break;
         }
@@ -491,7 +487,8 @@ bool ModeSAircraft::ApplyAirborneVelocitiesMessage(ModeSADSBPacket packet) {
                 bool is_true_airspeed = static_cast<bool>(packet.GetNBitWordFromMessage(1, 24));
                 speed_source = is_true_airspeed ? ModeSAircraft::SpeedSource::kSpeedSourceAirspeedTrue
                                                 : ModeSAircraft::SpeedSource::kSpeedSourceAirspeedIndicated;
-                direction_deg = static_cast<float>((packet.GetNBitWordFromMessage(10, 14) * 360) / 1024.0f);
+                direction_deg = static_cast<float>(fixedmath::fixed_t(packet.GetNBitWordFromMessage(10, 14) * 360) /
+                                                   fixedmath::fixed_t(1024));
             }
 
             break;
@@ -769,13 +766,18 @@ UATAircraft::~UATAircraft() {};
 
 bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVector &state_vector) {
     // Parse position.
-    latitude_deg = static_cast<float>(state_vector.latitude_awb) * DecodedUATADSBPacket::kDegPerAWBTick;
-    longitude_deg = static_cast<float>(state_vector.longitude_awb) * DecodedUATADSBPacket::kDegPerAWBTick;
+
     navigation_integrity_category = static_cast<NICRadiusOfContainment>(state_vector.nic);
-    if (latitude_deg == 0 && longitude_deg == 0 && navigation_integrity_category == 0) {
-        // Position inforamtion not available.
+    if (state_vector.latitude_awb == 0 && state_vector.longitude_awb == 0 && navigation_integrity_category == 0) {
+        // Position information not available.
         WriteBitFlag(BitFlag::kBitFlagPositionValid, false);
+    } else {
+        latitude_deg = static_cast<float>(state_vector.latitude_awb) * DecodedUATADSBPacket::kDegPerAWBTick;
+        longitude_deg = static_cast<float>(state_vector.longitude_awb) * DecodedUATADSBPacket::kDegPerAWBTick;
+        WriteBitFlag(BitFlag::kBitFlagPositionValid, true);
+        WriteBitFlag(BitFlag::kBitFlagUpdatedPosition, true);
     }
+
     if (latitude_deg > 90) {
         latitude_deg -= 180.0f;  // Convert to negative latitude if it exceeds 90 degrees.
     }
@@ -793,6 +795,7 @@ bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVe
             gnss_altitude_ft = temp_gnss_altitude_ft;
             WriteBitFlag(BitFlag::kBitFlagGNSSAltitudeValid, true);
         }
+        WriteBitFlag(BitFlag::kBitFlagUpdatedGNSSAltitude, true);
     } else {
         int32_t temp_baro_altitude_ft =
             DecodedUATADSBPacket::AltitudeEncodedToAltitudeFt(state_vector.altitude_encoded);
@@ -802,35 +805,57 @@ bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVe
             baro_altitude_ft = temp_baro_altitude_ft;
             WriteBitFlag(BitFlag::kBitFlagBaroAltitudeValid, true);
         }
+        WriteBitFlag(BitFlag::kBitFlagUpdatedBaroAltitude, true);
     }
 
     // AG state isn't stored directly, but is used to interpret other fields.
     AirGroundState ag_state = static_cast<AirGroundState>(state_vector.air_ground_state);
-    if (ag_state == kAirGroundStateOnGround) {
-        WriteBitFlag(BitFlag::kBitFlagIsAirborne, false);
+    switch (ag_state) {
+        case AirGroundState::kAirGroundStateOnGround:
+            WriteBitFlag(BitFlag::kBitFlagIsAirborne, false);
+            break;
+        case AirGroundState::kAirGroundStateAirborneSubsonic:
+        case AirGroundState::kAirGroundStateAirborneSupersonic:
+        default:  // Put aircraft in the air by default.
+            WriteBitFlag(BitFlag::kBitFlagIsAirborne, true);
+            break;
     }
     DecodedUATADSBPacket::DirectionType direction_type =
         DecodedUATADSBPacket::HorizontalVelocityToDirectionDegAndSpeedKts(
             state_vector.horizontal_velocity, state_vector.air_ground_state, direction_deg, speed_kts);
+    WriteBitFlag(BitFlag::kBitFlagUpdatedDirection, true);
+    WriteBitFlag(BitFlag::kBitFlagUpdatedHorizontalVelocity, true);
 
     // Parse direction type and use it to set flags.
+    bool received_valid_hvel_data = false;
     switch (direction_type) {
         case DecodedUATADSBPacket::DirectionType::kDirectionTypeTrueTrackAngle:
             WriteBitFlag(BitFlag::kBitFlagDirectionIsHeading, false);
             WriteBitFlag(BitFlag::kBitFlagHeadingUsesMagneticNorth, false);
+
+            received_valid_hvel_data = true;
             break;
         case DecodedUATADSBPacket::DirectionType::kDirectionTypeMagneticHeading:
             WriteBitFlag(BitFlag::kBitFlagDirectionIsHeading, true);
             WriteBitFlag(BitFlag::kBitFlagHeadingUsesMagneticNorth, true);
+
+            received_valid_hvel_data = true;
             break;
         case DecodedUATADSBPacket::DirectionType::kDirectionTypeTrueHeading:
             WriteBitFlag(BitFlag::kBitFlagDirectionIsHeading, true);
             WriteBitFlag(BitFlag::kBitFlagHeadingUsesMagneticNorth, false);
+
+            received_valid_hvel_data = true;
             break;
         default:
             // Heading not available.
             WriteBitFlag(BitFlag::kBitFlagDirectionValid, false);
+            WriteBitFlag(BitFlag::kBitFlagDirectionValid, false);
+
+            received_valid_hvel_data = false;
     }
+    WriteBitFlag(BitFlag::kBitFlagDirectionValid, received_valid_hvel_data);
+    WriteBitFlag(BitFlag::kBitFlagHorizontalVelocityValid, received_valid_hvel_data);
 
     return true;
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fixedmath/fixed_math.hpp"
 #include "stdint.h"
 
 static const uint32_t kBoundingBoxDimensionMeters = 50000;
@@ -38,3 +39,5 @@ float hav_awb(uint32_t theta_awb);
  * @param[in] x Result of the haversine expression
  */
 float havdiff_to_m(float x);
+
+void CalculateTrackAndSpeedFromNEVelocities(int n_vel_kts, int e_vel_kts, float &track_deg, int &speed_kts);

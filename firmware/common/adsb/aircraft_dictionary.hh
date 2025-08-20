@@ -102,8 +102,8 @@ class Aircraft {
     int32_t baro_altitude_ft = 0;
     int32_t gnss_altitude_ft = 0;
 
-    float direction_deg = 0.0f;
-    int32_t speed_kts = 0;
+    float direction_deg = 0;
+    int32_t speed_kts = 0;  // Provide full 32 bit depth so we can square it without issues.
 
     int32_t baro_vertical_rate_fpm = 0;
     int32_t gnss_vertical_rate_fpm = 0;
