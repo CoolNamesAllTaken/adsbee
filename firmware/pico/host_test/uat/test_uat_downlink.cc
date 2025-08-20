@@ -38,7 +38,8 @@ TEST(UATDecoderTest, DownlinkFrames) {
             switch (altitude_source) {
                 case (UATAircraft::kAltitudeSourceBaro):
                     EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagBaroAltitudeValid));
-                    EXPECT_EQ(frame->has_auxsv, aircraft.HasBitFlag(UATAircraft::kBitFlagGNSSAltitudeValid));
+                    EXPECT_EQ(frame->has_auxsv && frame->sec_altitude != 0,
+                              aircraft.HasBitFlag(UATAircraft::kBitFlagGNSSAltitudeValid));
 
                     EXPECT_EQ(aircraft.baro_altitude_ft, frame->altitude);
 
@@ -48,7 +49,8 @@ TEST(UATDecoderTest, DownlinkFrames) {
                     break;
                 case (UATAircraft::kAltitudeSourceGNSS):
                     EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagGNSSAltitudeValid));
-                    EXPECT_EQ(frame->has_auxsv, aircraft.HasBitFlag(UATAircraft::kBitFlagBaroAltitudeValid));
+                    EXPECT_EQ(frame->has_auxsv && frame->sec_altitude != 0,
+                              aircraft.HasBitFlag(UATAircraft::kBitFlagBaroAltitudeValid));
 
                     EXPECT_EQ(aircraft.gnss_altitude_ft, frame->altitude);
 
