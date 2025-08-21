@@ -61,7 +61,7 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
     EXPECT_EQ(GetNextToken().compare("FFFFFFFF"), 0);    // Flags
     EXPECT_EQ(GetNextToken().compare("ABCDEFG"), 0);     // Callsign
     EXPECT_EQ(GetNextToken().compare("1234"), 0);        // Squawk
-    EXPECT_EQ(GetNextToken().compare("6"), 0);           // Emitter Category
+    EXPECT_EQ(GetNextToken().compare("9"), 0);           // Emitter Category
     EXPECT_EQ(GetNextToken().compare("-120.65432"), 0);  // Latitude [deg]
     EXPECT_EQ(GetNextToken().compare("-80.12346"), 0);   // Longitude [deg]
     EXPECT_EQ(GetNextToken().compare("1000"), 0);        // Baro Altitude [ft]

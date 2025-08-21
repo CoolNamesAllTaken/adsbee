@@ -122,28 +122,6 @@ class ModeSAircraft : public Aircraft {
     static constexpr uint32_t kMaxCPRIntervalMs = 30e3;  // Never accept CPR packet pairs more than 30 seconds apart.
     static constexpr uint32_t kMaxTrackUpdateIntervalMs = 20e3;  // Tracks older than this are considered stale.
 
-    // enum Category : uint8_t {
-    //     kCategoryInvalid = 0,
-    //     kCategoryReserved = 1,
-    //     kCategoryNoCategoryInfo = 2,
-    //     kCategorySurfaceEmergencyVehicle = 3,
-    //     kCategorySurfaceServiceVehicle = 4,
-    //     kCategoryGroundObstruction = 5,
-    //     kCategoryGliderSailplane = 6,
-    //     kCategoryLighterThanAir = 7,
-    //     kCategoryParachutistSkydiver = 8,
-    //     kCategoryUltralightHangGliderParaglider = 9,
-    //     kCategoryUnmannedAerialVehicle = 10,
-    //     kCategorySpaceTransatmosphericVehicle = 11,
-    //     kCategoryLight = 12,    // < 7000kg
-    //     kCategoryMedium1 = 13,  // 7000kg - 34000kg
-    //     kCategoryMedium2 = 14,  // 34000kg - 136000kg
-    //     kCategoryHighVortexAircraft = 15,
-    //     kCategoryHeavy = 16,            // > 136000kg
-    //     kCategoryHighPerformance = 17,  // >5g acceleration and >400kt speed
-    //     kCategoryRotorcraft = 18
-    // };
-
     enum BitFlag : uint32_t {
         kBitFlagIsAirborne = 0,  // Received messages or flags indicating the aircraft is airborne.
         kBitFlagBaroAltitudeValid,
