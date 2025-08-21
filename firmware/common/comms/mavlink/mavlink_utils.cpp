@@ -1,52 +1,54 @@
 #include "mavlink_utils.hh"
 
-uint8_t AircraftCategoryToMAVLINKEmitterType(ModeSAircraft::Category category) {
-    switch (category) {
-        case ModeSAircraft::Category::kCategoryInvalid:
+uint8_t AircraftCategoryToMAVLINKEmitterType(ADSBTypes emitter_category) {
+    switch (emitter_category) {
+        case ADSBTypes::kEmitterCategoryInvalid:
             CONSOLE_WARNING("comms_reporting.cc::AircraftCategoryToMAVLINKEmitterType",
-                            "Encountered airframe type kCategoryInvalid.");
+                            "Encountered airframe type kEmitterCategoryInvalid.");
             return UINT8_MAX;
-        case ModeSAircraft::Category::kCategoryNoCategoryInfo:
+        case ADSBTypes::kEmitterCategoryNoCategoryInfo:
             return 0;  // ADSB_EMITTER_TYPE_NO_INFO
-        case ModeSAircraft::Category::kCategoryLight:
+        case ADSBTypes::kEmitterCategoryLight:
             return 1;  // ADSB_EMITTER_TYPE_LIGHT
-        case ModeSAircraft::Category::kCategoryMedium1:
+        case ADSBTypes::kEmitterCategoryMedium1:
             return 2;  // ADSB_EMITTER_TYPE_SMALL
-        case ModeSAircraft::Category::kCategoryMedium2:
+        case ADSBTypes::kEmitterCategoryMedium2:
             return 3;  // ADSB_EMITTER_TYPE_LARGE
-        case ModeSAircraft::Category::kCategoryHighVortexAircraft:
+        case ADSBTypes::kEmitterCategoryHighVortexAircraft:
             return 4;  // ADSB_EMITTER_TYPE_HIGH_VORTEX_LARGE
-        case ModeSAircraft::Category::kCategoryHeavy:
+        case ADSBTypes::kEmitterCategoryHeavy:
             return 5;  // ADSB_EMITTER_TYPE_HEAVY
-        case ModeSAircraft::Category::kCategoryHighPerformance:
+        case ADSBTypes::kEmitterCategoryHighPerformance:
             return 6;  // ADSB_EMITTER_TYPE_HIGHLY_MANUV
-        case ModeSAircraft::Category::kCategoryRotorcraft:
+        case ADSBTypes::kEmitterCategoryRotorcraft:
             return 7;  // ADSB_EMITTER_TYPE_ROTORCRAFT
-        case ModeSAircraft::Category::kCategoryReserved:
+        case ADSBTypes::kEmitterCategoryReserved:
             return 8;  // ADSB_EMITTER_TYPE_UNASSIGNED
-        case ModeSAircraft::Category::kCategoryGliderSailplane:
+        case ADSBTypes::kEmitterCategoryGliderSailplane:
             return 9;  // ADSB_EMITTER_TYPE_GLIDER
-        case ModeSAircraft::Category::kCategoryLighterThanAir:
+        case ADSBTypes::kEmitterCategoryLighterThanAir:
             return 10;  // ADSB_EMITTER_TYPE_LIGHTER_AIR
-        case ModeSAircraft::Category::kCategoryParachutistSkydiver:
+        case ADSBTypes::kEmitterCategoryParachutistSkydiver:
             return 11;  // ADSB_EMITTER_TYPE_PARACHUTE
-        case ModeSAircraft::Category::kCategoryUltralightHangGliderParaglider:
+        case ADSBTypes::kEmitterCategoryUltralightHangGliderParaglider:
             return 12;  // ADSB_EMITTER_TYPE_ULTRA_LIGHT
         // NOTE: no case for 13 = ADSB_EMITTER_TYPE_UNASSIGNED2
-        case ModeSAircraft::Category::kCategoryUnmannedAerialVehicle:
+        case ADSBTypes::kEmitterCategoryUnmannedAerialVehicle:
             return 14;  // ADSB_EMITTER_TYPE_UAV
-        case ModeSAircraft::Category::kCategorySpaceTransatmosphericVehicle:
+        case ADSBTypes::kEmitterCategorySpaceTransatmosphericVehicle:
             return 15;  // ADSB_EMITTER_TYPE_SPACE
         // NOTE: no case for 16 = ADSB_EMITTER_TYPE_UNASSIGNED3
-        case ModeSAircraft::Category::kCategorySurfaceEmergencyVehicle:
+        case ADSBTypes::kEmitterCategorySurfaceEmergencyVehicle:
             return 17;  // ADSB_EMITTER_TYPE_EMERGENCY_SURFACE
-        case ModeSAircraft::Category::kCategorySurfaceServiceVehicle:
+        case ADSBTypes::kEmitterCategorySurfaceServiceVehicle:
             return 18;  // ADSB_EMITTER_TYPE_SERVICE_SURFACE
-        case ModeSAircraft::Category::kCategoryGroundObstruction:
+        case ADSBTypes::kEmitterCategoryPointObstacle:
+        case ADSBTypes::kEmitterCategoryClusterObstacle:
+        case ADSBTypes::kEmitterCategoryLineObstacle:
             return 19;  // ADSB_EMITTER_TYPE_POINT_OBSTACLE
         default:
             CONSOLE_WARNING("comms_reporting.cc::AircraftCategoryToMAVLINKEmitterType",
-                            "Encountered unknown airframe type %d.", category);
+                            "Encountered unknown airframe type %d.", emitter_category);
             return UINT8_MAX;
     }
     return UINT8_MAX;
@@ -110,7 +112,7 @@ mavlink_adsb_vehicle_t AircraftToMAVLINKADSBVehicleMessage(const ModeSAircraft &
         .altitude_type = static_cast<uint8_t>(
             aircraft.altitude_source == ModeSAircraft::AltitudeSource::kAltitudeSourceBaro ? 0 : 1),
         // Fill out callsign later.
-        .emitter_type = AircraftCategoryToMAVLINKEmitterType(aircraft.category),
+        .emitter_type = AircraftCategoryToMAVLINKEmitterType(aircraft.emitter_category),
         // Time Since Last Contact [s]
         .tslc = static_cast<uint8_t>((get_time_since_boot_ms() - aircraft.last_message_timestamp_ms) / 1000)};
     // MAVLINK callsign field is 9 chars, so there's room to copy over the full 8 char callsign + null terminator.

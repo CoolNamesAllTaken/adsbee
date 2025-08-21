@@ -29,6 +29,7 @@ TEST(UATDecoderTest, DownlinkFrames) {
 
         // Compare fields in aircraft entry against fields in test data.
         if (frame->has_sv) {
+            EXPECT_TRUE(packet.has_state_vector);
             if (frame->position_valid) {
                 EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagPositionValid));
                 EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedPosition));
@@ -162,6 +163,20 @@ TEST(UATDecoderTest, DownlinkFrames) {
                     EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagDirectionValid));
                     break;
             }
+        }
+
+        if (frame->has_ms) {
+            EXPECT_TRUE(packet.has_mode_status);
+
+            char callsign[UATAircraft::kCallSignMaxNumChars + 1];
+            strncpy(callsign, aircraft.callsign, UATAircraft::kCallSignMaxNumChars);
+            // Change aircraft callsign to trim off trailing spaces.
+            for (int j = 0; j < UATAircraft::kCallSignMaxNumChars; j++) {
+                if (callsign[j] == ' ') {
+                    callsign[j] = '\0';
+                }
+            }
+            EXPECT_STREQ(callsign, frame->callsign);
         }
     }
 }

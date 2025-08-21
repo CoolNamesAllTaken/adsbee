@@ -170,7 +170,7 @@ class GDL90Reporter {
         data.speed_kts = aircraft.speed_kts;
         data.vertical_rate_fpm = aircraft.vertical_rate_fpm;
         data.direction_deg = aircraft.direction_deg;
-        data.emitter_category = aircraft.category_raw;
+        data.emitter_category = aircraft.emitter_category_raw;
         // GDL90 does not provide space for an EOS character, since it only provides 8 Bytes for the callsign.
         memcpy(data.callsign, aircraft.callsign, ModeSAircraft::kCallSignMaxNumChars);
         // NOTE: Emergency Priority code currently not used.

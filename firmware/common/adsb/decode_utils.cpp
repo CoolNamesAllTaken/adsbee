@@ -4,14 +4,26 @@
 
 #include "unit_conversions.hh"
 
-const uint16_t callsign_char_array_len = 64;
-char callsign_char_array[] = "#ABCDEFGHIJKLMNOPQRSTUVWXYZ##### ###############0123456789######";
+const uint16_t kModeSCallsignCharArrayLen = 64;
+const char kModeSCallsignCharArray[] = "#ABCDEFGHIJKLMNOPQRSTUVWXYZ##### ###############0123456789######";
 
-char LookupCallsignChar(uint8_t value) {
-    if (value >= callsign_char_array_len) {
+char LookupModeSCallsignChar(uint8_t value) {
+    if (value >= kModeSCallsignCharArrayLen) {
         return '#';
     }
-    return callsign_char_array[value];
+    return kModeSCallsignCharArray[value];
+}
+
+const uint16_t kUATCallsignCharArrayLen = 40;
+const char kUATCallsignCharArray[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ ###";
+
+char LookupUATCallsignChar(uint8_t value) {
+    if (value >= kUATCallsignCharArrayLen) {
+        return '#';
+    } else if (value >= kUATCallsignCharArrayLen - 3) {
+        return '\0';  // Send reserved chars as end of string character.
+    }
+    return kUATCallsignCharArray[value];
 }
 
 int32_t GillhamToAltitudeFt(uint16_t gillham_value)

@@ -60,7 +60,7 @@ inline int16_t WriteCSBeeAircraftMessageStr(char message_buf[], const ModeSAircr
                  aircraft.flags,                                   // FLAGS
                  aircraft.callsign,                                // CALL
                  aircraft.squawk,                                  // SQUAWK
-                 aircraft.category,                                // ECAT
+                 aircraft.emitter_category,                        // ECAT
                  aircraft.latitude_deg,                            // LAT
                  aircraft.longitude_deg,                           // LON
                  aircraft.baro_altitude_ft,                        // ALT_BARO

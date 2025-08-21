@@ -28,7 +28,7 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
     aircraft.icao_address = 0x12345E;
     strcpy(aircraft.callsign, "ABCDEFG");
     aircraft.squawk = 01234;
-    aircraft.category = ADSBTypes::kCategoryGliderSailplane;
+    aircraft.emitter_category = ADSBTypes::kEmitterCategoryGliderSailplane;
     aircraft.baro_altitude_ft = 1000;
     aircraft.gnss_altitude_ft = 997;
     aircraft.altitude_source = ADSBTypes::kAltitudeSourceBaro;

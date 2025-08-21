@@ -22,30 +22,30 @@ class ADSBTypes {
 
     enum AVDimensionsType : uint8_t { kAVDimensionsTypeAVLengthWidth = 0, kAVDimensionsTypeGNSSSensorOffset = 1 };
 
-    enum Category : int8_t {
-        kCategoryInvalid = -1,
-        kCategoryNoCategoryInfo = 0,
-        kCategoryLight = 1,    // < 7000kg
-        kCategoryMedium1 = 2,  // 7000kg - 34000kg
-        kCategoryMedium2 = 3,  // 34000kg - 136000kg
-        kCategoryHighVortexAircraft = 4,
-        kCategoryHeavy = 5,            // > 136000kg
-        kCategoryHighPerformance = 6,  // >5g acceleration and high speed
-        kCategoryRotorcraft = 7,
-        kCategoryReserved = 8,
-        kCategoryGliderSailplane = 9,
-        kCategoryLighterThanAir = 10,
-        kCategoryParachutistSkydiver = 11,
-        kCategoryUltralightHangGliderParaglider = 12,
-        kCategoryReserved1 = 13,
-        kCategoryUnmannedAerialVehicle = 14,
-        kCategorySpaceTransatmosphericVehicle = 15,
-        kCategoryReserved2 = 16,  // Reserved for future use.
-        kCategorySurfaceEmergencyVehicle = 17,
-        kCategorySurfaceServiceVehicle = 18,
-        kCategoryPointObstacle = 19,
-        kCategoryClusterObstacle = 20,
-        kCategoryLineObstacle = 21
+    enum EmitterCategory : int8_t {
+        kEmitterCategoryInvalid = -1,
+        kEmitterCategoryNoCategoryInfo = 0,
+        kEmitterCategoryLight = 1,    // < 7000kg
+        kEmitterCategoryMedium1 = 2,  // 7000kg - 34000kg
+        kEmitterCategoryMedium2 = 3,  // 34000kg - 136000kg
+        kEmitterCategoryHighVortexAircraft = 4,
+        kEmitterCategoryHeavy = 5,            // > 136000kg
+        kEmitterCategoryHighPerformance = 6,  // >5g acceleration and high speed
+        kEmitterCategoryRotorcraft = 7,
+        kEmitterCategoryReserved = 8,
+        kEmitterCategoryGliderSailplane = 9,
+        kEmitterCategoryLighterThanAir = 10,
+        kEmitterCategoryParachutistSkydiver = 11,
+        kEmitterCategoryUltralightHangGliderParaglider = 12,
+        kEmitterCategoryReserved1 = 13,
+        kEmitterCategoryUnmannedAerialVehicle = 14,
+        kEmitterCategorySpaceTransatmosphericVehicle = 15,
+        kEmitterCategoryReserved2 = 16,  // Reserved for future use.
+        kEmitterCategorySurfaceEmergencyVehicle = 17,
+        kEmitterCategorySurfaceServiceVehicle = 18,
+        kEmitterCategoryPointObstacle = 19,
+        kEmitterCategoryClusterObstacle = 20,
+        kEmitterCategoryLineObstacle = 21
     };
 
     enum DirectionType : uint8_t {

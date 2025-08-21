@@ -133,117 +133,117 @@ bool ModeSAircraft::DecodePosition(bool filter_cpr_position) {
 /**
  * Returns the Wake Vortex category of the aircraft that sent a given ADS-B packet. Note that some categories have a
  * many to one mapping!
- * @param[in] packet ADS-B Packet to extract the Category value from. Must be
- * @retval Category that matches the combination of capability and typecode from the ADS-B packet, or
- * kCategoryInvalid if there is no matching wake vortex value.
+ * @param[in] packet ADS-B Packet to extract the EmitterCategory value from. Must be
+ * @retval EmitterCategory that matches the combination of capability and typecode from the ADS-B packet, or
+ * kEmitterCategoryInvalid if there is no matching wake vortex value.
  */
-ADSBTypes::Category ExtractCategory(const ModeSADSBPacket &packet) {
+ADSBTypes::EmitterCategory ExtractCategory(const ModeSADSBPacket &packet) {
     uint8_t typecode = packet.GetNBitWordFromMessage(5, 0);
     uint8_t capability = packet.GetNBitWordFromMessage(3, 5);
 
     // Table 4.1 from The 1090Mhz Riddle (Junzi Sun), pg. 42.
     if (capability == 0) {
-        return ADSBTypes::kCategoryNoCategoryInfo;
+        return ADSBTypes::kEmitterCategoryNoCategoryInfo;
     }
 
     switch (typecode) {
         case 1:
-            // Category Set D.
-            return ADSBTypes::kCategoryNoCategoryInfo;
+            // EmitterCategory Set D.
+            return ADSBTypes::kEmitterCategoryNoCategoryInfo;
             break;
         case 2:
-            // Category Set C.
+            // EmitterCategory Set C.
             switch (capability) {
                 case 1:
-                    return ADSBTypes::kCategorySurfaceEmergencyVehicle;
+                    return ADSBTypes::kEmitterCategorySurfaceEmergencyVehicle;
                     break;
                 case 2:
-                    return ADSBTypes::kCategorySurfaceServiceVehicle;
+                    return ADSBTypes::kEmitterCategorySurfaceServiceVehicle;
                     break;
                 case 3:
-                    return ADSBTypes::kCategoryPointObstacle;  // Includes tethered balloons.
+                    return ADSBTypes::kEmitterCategoryPointObstacle;  // Includes tethered balloons.
                     break;
                 case 4:
-                    return ADSBTypes::kCategoryClusterObstacle;
+                    return ADSBTypes::kEmitterCategoryClusterObstacle;
                     break;
                 case 5:
-                    return ADSBTypes::kCategoryLineObstacle;
+                    return ADSBTypes::kEmitterCategoryLineObstacle;
                     break;
                 case 6:
                 case 7:
-                    return ADSBTypes::kCategoryReserved;
+                    return ADSBTypes::kEmitterCategoryReserved;
                     break;
                 default:
-                    return ADSBTypes::kCategoryInvalid;
+                    return ADSBTypes::kEmitterCategoryInvalid;
             }
             break;
         case 3:
-            // Category set B.
+            // EmitterCategory set B.
             switch (capability) {
                 case 1:
-                    return ADSBTypes::kCategoryGliderSailplane;
+                    return ADSBTypes::kEmitterCategoryGliderSailplane;
                     break;
                 case 2:
-                    return ADSBTypes::kCategoryLighterThanAir;
+                    return ADSBTypes::kEmitterCategoryLighterThanAir;
                     break;
                 case 3:
-                    return ADSBTypes::kCategoryParachutistSkydiver;
+                    return ADSBTypes::kEmitterCategoryParachutistSkydiver;
                     break;
                 case 4:
-                    return ADSBTypes::kCategoryUltralightHangGliderParaglider;
+                    return ADSBTypes::kEmitterCategoryUltralightHangGliderParaglider;
                     break;
                 case 5:
-                    return ADSBTypes::kCategoryReserved;
+                    return ADSBTypes::kEmitterCategoryReserved;
                     break;
                 case 6:
-                    return ADSBTypes::kCategoryUnmannedAerialVehicle;
+                    return ADSBTypes::kEmitterCategoryUnmannedAerialVehicle;
                     break;
                 case 7:
-                    return ADSBTypes::kCategorySpaceTransatmosphericVehicle;
+                    return ADSBTypes::kEmitterCategorySpaceTransatmosphericVehicle;
                     break;
                 default:
-                    return ADSBTypes::kCategoryInvalid;
+                    return ADSBTypes::kEmitterCategoryInvalid;
             }
             break;
         case 4:
-            // Category set A.
+            // EmitterCategory set A.
             switch (capability) {
                 case 1:
-                    return ADSBTypes::kCategoryLight;
+                    return ADSBTypes::kEmitterCategoryLight;
                     break;
                 case 2:
-                    return ADSBTypes::kCategoryMedium1;
+                    return ADSBTypes::kEmitterCategoryMedium1;
                     break;
                 case 3:
-                    return ADSBTypes::kCategoryMedium2;
+                    return ADSBTypes::kEmitterCategoryMedium2;
                     break;
                 case 4:
-                    return ADSBTypes::kCategoryHighVortexAircraft;
+                    return ADSBTypes::kEmitterCategoryHighVortexAircraft;
                     break;
                 case 5:
-                    return ADSBTypes::kCategoryHeavy;
+                    return ADSBTypes::kEmitterCategoryHeavy;
                     break;
                 case 6:
-                    return ADSBTypes::kCategoryHighPerformance;
+                    return ADSBTypes::kEmitterCategoryHighPerformance;
                     break;
                 case 7:
-                    return ADSBTypes::kCategoryRotorcraft;
+                    return ADSBTypes::kEmitterCategoryRotorcraft;
                     break;
                 default:
-                    return ADSBTypes::kCategoryInvalid;
+                    return ADSBTypes::kEmitterCategoryInvalid;
             }
             break;
         default:
-            return ADSBTypes::kCategoryInvalid;
+            return ADSBTypes::kEmitterCategoryInvalid;
     }
 }
 
 bool ModeSAircraft::ApplyAircraftIDMessage(ModeSADSBPacket packet) {
-    category = ExtractCategory(packet);
-    category_raw = packet.GetNBitWordFromMessage(8, 0);
+    emitter_category = ExtractCategory(packet);
+    emitter_category_raw = packet.GetNBitWordFromMessage(8, 0);
     transponder_capability = packet.GetCapability();
     for (uint16_t i = 0; i < ModeSAircraft::kCallSignMaxNumChars; i++) {
-        char callsign_char = LookupCallsignChar(packet.GetNBitWordFromMessage(6, 8 + (6 * i)));
+        char callsign_char = LookupModeSCallsignChar(packet.GetNBitWordFromMessage(6, 8 + (6 * i)));
         callsign[i] = callsign_char;
     }
 
@@ -610,7 +610,7 @@ bool ModeSAircraft::ApplyAircraftOperationStatusMessage(ModeSADSBPacket packet) 
     // ME[43] - NIC Supplement A
     WriteNICBit(ADSBTypes::kNICBitC, packet.GetNBitWordFromMessage(1, 43));
 
-    // ME[44-47] - Navigational Accuracy Category, Position
+    // ME[44-47] - Navigational Accuracy EmitterCategory, Position
     navigation_accuracy_category_position =
         static_cast<ADSBTypes::NACEstimatedPositionUncertainty>(packet.GetNBitWordFromMessage(4, 44));
 
@@ -909,7 +909,30 @@ bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVe
 
     return true;
 }
-bool UATAircraft::ApplyUATADSBModeStatus(const DecodedUATADSBPacket::UATModeStatus &mode_status) { return true; }
+bool UATAircraft::ApplyUATADSBModeStatus(const DecodedUATADSBPacket::UATModeStatus &mode_status) {
+    uint16_t temp = mode_status.emitter_category_and_callsign_chars_1_2;
+    emitter_category = static_cast<ADSBTypes::EmitterCategory>(temp / 1600);
+    temp %= 1600;
+    callsign[0] = LookupUATCallsignChar(temp / 40);
+    temp %= 40;
+    callsign[1] = LookupUATCallsignChar(temp);
+
+    temp = mode_status.callsign_chars_3_4_5;
+    callsign[2] = LookupUATCallsignChar(temp / 1600);
+    temp %= 1600;
+    callsign[3] = LookupUATCallsignChar(temp / 40);
+    temp %= 40;
+    callsign[4] = LookupUATCallsignChar(temp);
+
+    temp = mode_status.callsign_chars_6_7_8;
+    callsign[5] = LookupUATCallsignChar(temp / 1600);
+    temp %= 1600;
+    callsign[6] = LookupUATCallsignChar(temp / 40);
+    temp %= 40;
+    callsign[7] = LookupUATCallsignChar(temp);
+
+    return true;
+}
 bool UATAircraft::ApplyUATADSBTargetState(const DecodedUATADSBPacket::UATTargetState &target_state) { return true; }
 bool UATAircraft::ApplyUATADSBTrajectoryChange(const DecodedUATADSBPacket::UATTrajectoryChange &trajectory_change) {
     return true;
@@ -1250,6 +1273,17 @@ bool AircraftDictionary::IngestDecodedUATADSBPacket(DecodedUATADSBPacket &packet
     if (packet.has_state_vector) {
         // Apply UAT state vector to aircraft.
         ingest_ret &= aircraft_ptr->ApplyUATADSBStateVector(packet.state_vector);
+
+        switch (aircraft_ptr->address_qualifier) {
+            case UATAircraft::kTISBTargetWithICAO24BitAddress:
+            case UATAircraft::kTISBTargetWithTrackFileIdentifier:
+                // TIS-B target. Extract TIS-B station information.
+                aircraft_ptr->tis_b_site_id = (packet.state_vector.utc_coupled_or_tis_b_site_id & 0b1111);
+                break;
+            default:
+                // ADS-B target. Has bit indicating UTC coupled condition.
+                aircraft_ptr->utc_coupled = ((packet.state_vector.utc_coupled_or_tis_b_site_id >> 3) & 0b1) != 0;
+        }
     }
     if (packet.has_mode_status) {
         // Apply UAT mode status to aircraft.

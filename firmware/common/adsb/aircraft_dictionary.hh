@@ -42,9 +42,6 @@ class Aircraft {
         // TODO: Add FLARM, ADS-L, Remote ID, etc.
     };
 
-    static constexpr uint16_t kCallSignMaxNumChars = 8;
-    static constexpr uint16_t kCallSignMinNumChars = 3;  // Callsigns must be at this long to be valid.
-
     virtual ~Aircraft() = default;
     virtual void UpdateMetrics() = 0;
 
@@ -121,6 +118,9 @@ class ModeSAircraft : public Aircraft {
     static constexpr uint32_t kRefCPRIntervalMs = 19e3;      // Reference interval for rejecting CPR packet pairs.
     static constexpr uint32_t kMaxCPRIntervalMs = 30e3;  // Never accept CPR packet pairs more than 30 seconds apart.
     static constexpr uint32_t kMaxTrackUpdateIntervalMs = 20e3;  // Tracks older than this are considered stale.
+
+    static constexpr uint16_t kCallSignMaxNumChars = 8;
+    static constexpr uint16_t kCallSignMinNumChars = 3;  // Callsigns must be at this long to be valid.
 
     enum BitFlag : uint32_t {
         kBitFlagIsAirborne = 0,  // Received messages or flags indicating the aircraft is airborne.
@@ -303,8 +303,8 @@ class ModeSAircraft : public Aircraft {
     uint32_t icao_address = 0;
     char callsign[kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
     uint16_t squawk = 0;
-    ADSBTypes::Category category = ADSBTypes::kCategoryNoCategoryInfo;
-    uint8_t category_raw = 0;  // Non-enum category in case we want the value without a many to one mapping.
+    ADSBTypes::EmitterCategory emitter_category = ADSBTypes::kEmitterCategoryNoCategoryInfo;
+    uint8_t emitter_category_raw = 0;  // Non-enum category in case we want the value without a many to one mapping.
 
     ADSBTypes::SpeedSource speed_source = ADSBTypes::kSpeedSourceNotSet;  // Most recent reported speed.
     // Used to keep track of the most recently reported altitude, for use in adjusting the complementary altitude with
@@ -385,6 +385,9 @@ class ModeSAircraft : public Aircraft {
  */
 class UATAircraft : public Aircraft {
    public:
+    static constexpr uint16_t kCallSignMaxNumChars = 8;
+    static constexpr uint16_t kCallSignMinNumChars = 3;  // Callsigns must be at this long to be valid.
+
     enum AddressQualifier : int8_t {
         kAddressQualifierNotSet = -1,  // Address qualifier has not been set.
         kADSBTargetWithICAO24BitAddress = 0,
@@ -428,6 +431,17 @@ class UATAircraft : public Aircraft {
         kBitFlagUpdatedBaroVerticalRate,
         kBitFlagUpdatedGNSSVerticalRate,
         kBitFlagNumFlagBits
+    };
+
+    enum EmergencyPriorityStatus : uint8_t {
+        kEmergencyPriorityStatusNone = 0,
+        kEmergencyStatusGeneralEmergency = 1,
+        kEmergencyStatusLifeguardMedicalEmergency = 2,
+        kEmergencyStatusMinimumFuel = 3,
+        kEmergencyStatusNoCommunications = 4,
+        kEmergencyStatusUnlawfulInterference = 5,
+        kEmergencyStatusDownedAircraft = 6,
+        kEmergencyStatusReserved = 7
     };
 
     struct Metrics {
@@ -504,7 +518,7 @@ class UATAircraft : public Aircraft {
     AddressQualifier address_qualifier = kAddressQualifierNotSet;
     char callsign[ModeSAircraft::kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
     uint16_t squawk = 0;
-    ADSBTypes::Category category = ADSBTypes::kCategoryNoCategoryInfo;
+    ADSBTypes::EmitterCategory emitter_category = ADSBTypes::kEmitterCategoryNoCategoryInfo;
 
     ADSBTypes::NICRadiusOfContainment navigation_integrity_category = ADSBTypes::kROCUnknown;
 
@@ -516,6 +530,8 @@ class UATAircraft : public Aircraft {
     int16_t gnss_antenna_offset_right_of_adsb_reference_point_m = 0;
     int16_t gnss_antenna_offset_forward_of_adsb_reference_point_m = 0;
 
+    int8_t tis_b_site_id = -1;
+    bool utc_coupled = false;
     int8_t uat_version = -1;
 
    private:

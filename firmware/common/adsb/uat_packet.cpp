@@ -301,9 +301,32 @@ void DecodedUATADSBPacket::DecodeStateVector(uint8_t *data, UATStateVector &stat
     state_vector_ref.reserved = GetNBitsFromByteBuffer(1, 66, data);
     state_vector_ref.horizontal_velocity = GetNBitsFromByteBuffer(22, 67, data);
     state_vector_ref.vertical_velocity = GetNBitsFromByteBuffer(11, 89, data);
-    state_vector_ref.utc_coupled = GetNBitsFromByteBuffer(1, 100, data);
+    state_vector_ref.utc_coupled_or_tis_b_site_id = GetNBitsFromByteBuffer(4, 100, data);
 };
-void DecodedUATADSBPacket::DecodeModeStatus(uint8_t *data, UATModeStatus &mode_status_ref) {};
+void DecodedUATADSBPacket::DecodeModeStatus(uint8_t *data, UATModeStatus &mode_status_ref) {
+    // Byte 18-19
+    mode_status_ref.emitter_category_and_callsign_chars_1_2 = GetNBitsFromByteBuffer(16, 0, data);
+    // Byte 20-21
+    mode_status_ref.callsign_chars_3_4_5 = GetNBitsFromByteBuffer(16, 16, data);
+    // Byte 22-23
+    mode_status_ref.callsign_chars_6_7_8 = GetNBitsFromByteBuffer(16, 32, data);
+    // Byte 24
+    mode_status_ref.emergency_priority_status = GetNBitsFromByteBuffer(3, 48, data);
+    mode_status_ref.uat_version = GetNBitsFromByteBuffer(3, 51, data);
+    mode_status_ref.sil = GetNBitsFromByteBuffer(2, 54, data);
+    // Byte 25
+    mode_status_ref.transmit_mso = GetNBitsFromByteBuffer(6, 56, data);
+    // 2 bits reserved.
+    // Byte 26
+    mode_status_ref.nac_p = GetNBitsFromByteBuffer(4, 64, data);
+    mode_status_ref.nac_v = GetNBitsFromByteBuffer(3, 68, data);
+    mode_status_ref.nic_baro = GetNBitsFromByteBuffer(1, 71, data);
+    // Byte 27
+    mode_status_ref.capability_codes = GetNBitsFromByteBuffer(2, 72, data);
+    mode_status_ref.operational_modes = GetNBitsFromByteBuffer(3, 74, data);
+    mode_status_ref.heading_uses_magnetic_north = GetNBitsFromByteBuffer(1, 77, data);
+    mode_status_ref.csid = GetNBitsFromByteBuffer(1, 78, data);
+};
 
 void DecodedUATADSBPacket::DecodeAuxiliaryStateVector(uint8_t *data, UATAuxiliaryStateVector &aux_state_vector_ref) {
     aux_state_vector_ref.secondary_altitude_encoded = GetNBitsFromByteBuffer(12, 0, data);

@@ -14,17 +14,17 @@ TEST(AircraftDictionary, BasicInsertRemove) {
     EXPECT_FALSE(dictionary.RemoveAircraft(12345));
 
     ModeSAircraft test_aircraft = ModeSAircraft(12345);
-    test_aircraft.category = ADSBTypes::kCategoryRotorcraft;
+    test_aircraft.emitter_category = ADSBTypes::kEmitterCategoryRotorcraft;
     dictionary.InsertAircraft(test_aircraft);
     EXPECT_EQ(dictionary.GetNumAircraft(), 1);
     EXPECT_TRUE(dictionary.ContainsAircraft(test_aircraft.icao_address));
 
     ModeSAircraft aircraft_out = ModeSAircraft(0);
     EXPECT_NE(aircraft_out.icao_address, test_aircraft.icao_address);
-    EXPECT_NE(aircraft_out.category, test_aircraft.category);
+    EXPECT_NE(aircraft_out.emitter_category, test_aircraft.emitter_category);
     EXPECT_TRUE(dictionary.GetAircraft(test_aircraft.icao_address, aircraft_out));
     EXPECT_EQ(aircraft_out.icao_address, test_aircraft.icao_address);
-    EXPECT_EQ(aircraft_out.category, test_aircraft.category);
+    EXPECT_EQ(aircraft_out.emitter_category, test_aircraft.emitter_category);
 
     EXPECT_TRUE(dictionary.RemoveAircraft(12345));
     EXPECT_EQ(dictionary.GetNumAircraft(), 0);
@@ -35,7 +35,7 @@ TEST(AircraftDictionary, InsertThenRemoveTooMany) {
     EXPECT_EQ(dictionary.GetNumAircraft(), 0);
 
     ModeSAircraft test_aircraft = ModeSAircraft(0);
-    test_aircraft.category = ADSBTypes::kCategoryGliderSailplane;
+    test_aircraft.emitter_category = ADSBTypes::kEmitterCategoryGliderSailplane;
 
     // Insert maximum number of aircraft.
     for (uint16_t i = 0; i < AircraftDictionary::kMaxNumAircraft; i++) {
@@ -73,13 +73,13 @@ TEST(AircraftDictionary, UseAircraftPtr) {
     ModeSAircraft *aircraft =
         dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(12345, Aircraft::kAircraftTypeModeS));
     EXPECT_TRUE(aircraft);  // aircraft should have been automatically inserted just fine
-    aircraft->category = ADSBTypes::kCategoryLineObstacle;
+    aircraft->emitter_category = ADSBTypes::kEmitterCategoryLineObstacle;
     ModeSAircraft aircraft_out;
     ASSERT_TRUE(dictionary.GetAircraft(12345, aircraft_out));
-    ASSERT_EQ(aircraft_out.category, ADSBTypes::kCategoryLineObstacle);
-    aircraft->category = ADSBTypes::kCategoryHeavy;
+    ASSERT_EQ(aircraft_out.emitter_category, ADSBTypes::kEmitterCategoryLineObstacle);
+    aircraft->emitter_category = ADSBTypes::kEmitterCategoryHeavy;
     ASSERT_TRUE(dictionary.GetAircraft(12345, aircraft_out));
-    ASSERT_EQ(aircraft_out.category, ADSBTypes::kCategoryHeavy);
+    ASSERT_EQ(aircraft_out.emitter_category, ADSBTypes::kEmitterCategoryHeavy);
 }
 
 TEST(AircraftDictionary, AccessFakeAircraft) {
@@ -99,7 +99,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_TRUE(dictionary.GetAircraft(0x76CE88, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x76CE88u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.category, ADSBTypes::kCategoryNoCategoryInfo);
+    EXPECT_EQ(aircraft.emitter_category, ADSBTypes::kEmitterCategoryNoCategoryInfo);
     EXPECT_STREQ(aircraft.callsign, "SIA224  ");
 
     tpacket = DecodedModeSPacket((char *)"8D7C7181215D01A08208204D8BF1");
@@ -108,7 +108,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_TRUE(dictionary.GetAircraft(0x7C7181, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x7C7181u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.category, ADSBTypes::kCategoryLight);
+    EXPECT_EQ(aircraft.emitter_category, ADSBTypes::kEmitterCategoryLight);
     EXPECT_STREQ(aircraft.callsign, "WPF     ");
 
     tpacket = DecodedModeSPacket((char *)"8D7C7745226151A08208205CE9C2");
@@ -117,7 +117,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_TRUE(dictionary.GetAircraft(0x7C7745, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x7C7745u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.category, ADSBTypes::kCategoryMedium1);
+    EXPECT_EQ(aircraft.emitter_category, ADSBTypes::kEmitterCategoryMedium1);
     EXPECT_STREQ(aircraft.callsign, "XUF     ");
 
     tpacket = DecodedModeSPacket((char *)"8D7C80AD2358F6B1E35C60FF1925");
@@ -126,7 +126,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_TRUE(dictionary.GetAircraft(0x7C80AD, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x7C80ADu);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.category, ADSBTypes::kCategoryMedium2);
+    EXPECT_EQ(aircraft.emitter_category, ADSBTypes::kEmitterCategoryMedium2);
     EXPECT_STREQ(aircraft.callsign, "VOZ1851 ");
 
     tpacket = DecodedModeSPacket((char *)"8D7C146525446074DF5820738E90");
@@ -135,7 +135,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_TRUE(dictionary.GetAircraft(0x7C1465, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x7C1465u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.category, ADSBTypes::kCategoryHeavy);
+    EXPECT_EQ(aircraft.emitter_category, ADSBTypes::kEmitterCategoryHeavy);
     EXPECT_STREQ(aircraft.callsign, "QFA475  ");
 
     tpacket = DecodedModeSPacket((char *)"8D4840D6202CC371C32CE0576098");

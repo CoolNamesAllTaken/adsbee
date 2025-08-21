@@ -181,20 +181,21 @@ class DecodedUATADSBPacket {
             uint16_t vertical_velocity          : 11;
             uint16_t aircraft_length_width_code : 11;
         };
-        bool utc_coupled : 1;  // True if UTC is coupled, false if not.
+        bool utc_coupled_or_tis_b_site_id : 5;  // True if UTC is coupled, false if not.
     };
 
     struct __attribute__((packed)) UATModeStatus {
-        uint8_t emitter_category_and_callsign_chars_1_2 : 8;  // Emitter category and first two characters of callsign.
-        uint8_t callsign_chars_3_4_5                    : 8;  // Next three characters of callsign.
-        uint8_t callsign_chars_6_7_8                    : 8;  // Last three characters of callsign.
-        uint8_t emergency_priority_status               : 3;  // Emergency / priority status.
-        uint8_t uat_version                             : 3;  // UAT protocol version.
-        uint8_t sil                                     : 2;  // Source Integrity Level (SIL).
-        uint8_t transmit_mso                            : 6;
-        uint8_t reserved1                               : 2;  // Reserved bits.
-        uint8_t nac_p                                   : 4;  // Navigation Accuracy Category Position (NACp).
-        uint8_t nac_v                                   : 3;  // Navigation Accuracy Category Velocity (NACv).
+        uint16_t
+            emitter_category_and_callsign_chars_1_2 : 16;  // Emitter category and first two characters of callsign.
+        uint16_t callsign_chars_3_4_5               : 16;  // Next three characters of callsign.
+        uint16_t callsign_chars_6_7_8               : 16;  // Last three characters of callsign.
+        uint8_t emergency_priority_status           : 3;   // Emergency / priority status.
+        uint8_t uat_version                         : 3;   // UAT protocol version.
+        uint8_t sil                                 : 2;   // Source Integrity Level (SIL).
+        uint8_t transmit_mso                        : 6;
+        uint8_t reserved1                           : 2;  // Reserved bits.
+        uint8_t nac_p                               : 4;  // Navigation Accuracy Category Position (NACp).
+        uint8_t nac_v                               : 3;  // Navigation Accuracy Category Velocity (NACv).
         uint8_t nic_baro                    : 1;  // Navigation Integrity Category Barometric Altitude (NICbaro).
         uint8_t capability_codes            : 2;  // Capability codes.
         uint8_t operational_modes           : 3;  // Operational modes.
