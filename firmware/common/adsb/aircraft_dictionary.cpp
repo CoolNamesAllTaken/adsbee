@@ -865,29 +865,46 @@ bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVe
     WriteBitFlag(BitFlag::kBitFlagDirectionValid, received_valid_hvel_data);
     WriteBitFlag(BitFlag::kBitFlagHorizontalSpeedValid, received_valid_hvel_data);
 
-    // Parse vertical rate.
-    int32_t vertical_rate_fpm_temp;
-    ADSBTypes::VerticalRateSource vertical_rate_source = DecodedUATADSBPacket::VerticalVelocityToVerticalRateFpm(
-        state_vector.vertical_velocity, state_vector.air_ground_state, vertical_rate_fpm_temp);
-    bool vertical_rate_valid = (vertical_rate_fpm_temp != INT32_MIN);
-    switch (vertical_rate_source) {
-        case ADSBTypes::kVerticalRateSourceBaro:
-            if (vertical_rate_valid) {
-                baro_vertical_rate_fpm = vertical_rate_fpm_temp;
-            }
-            WriteBitFlag(BitFlag::kBitFlagBaroVerticalRateValid, vertical_rate_valid);
-            WriteBitFlag(BitFlag::kBitFlagUpdatedBaroVerticalRate, vertical_rate_valid);
-            break;
-        case ADSBTypes::kVerticalRateSourceGNSS:
-            if (vertical_rate_valid) {
-                gnss_vertical_rate_fpm = vertical_rate_fpm_temp;
-            }
-            WriteBitFlag(BitFlag::kBitFlagGNSSVerticalRateValid, vertical_rate_valid);
-            WriteBitFlag(BitFlag::kBitFlagUpdatedGNSSVerticalRate, vertical_rate_valid);
-            break;
-        default:
-            // Vertical rate not available.
-            break;
+    if (ag_state == ADSBTypes::kAirGroundStateOnGround) {
+        // Parse AV dimensions.
+        int16_t width_m_temp;
+        int16_t length_m_temp;
+        switch (DecodedUATADSBPacket::DecodeAVDimensions(state_vector.aircraft_length_width_code, width_m_temp,
+                                                         length_m_temp)) {
+            case ADSBTypes::kAVDimensionsTypeAVLengthWidth:
+                width_m = width_m_temp;
+                length_m = length_m_temp;
+                break;
+            case ADSBTypes::kAVDimensionsTypeGNSSSensorOffset:
+                gnss_antenna_offset_forward_of_adsb_reference_point_m = length_m_temp;
+                gnss_antenna_offset_right_of_adsb_reference_point_m = width_m_temp;
+                break;
+        }
+    } else {
+        // Parse vertical rate.
+        int32_t vertical_rate_fpm_temp;
+        ADSBTypes::VerticalRateSource vertical_rate_source = DecodedUATADSBPacket::VerticalVelocityToVerticalRateFpm(
+            state_vector.vertical_velocity, state_vector.air_ground_state, vertical_rate_fpm_temp);
+        bool vertical_rate_valid = (vertical_rate_fpm_temp != INT32_MIN);
+        switch (vertical_rate_source) {
+            case ADSBTypes::kVerticalRateSourceBaro:
+                if (vertical_rate_valid) {
+                    baro_vertical_rate_fpm = vertical_rate_fpm_temp;
+                }
+                WriteBitFlag(BitFlag::kBitFlagBaroVerticalRateValid, vertical_rate_valid);
+                WriteBitFlag(BitFlag::kBitFlagUpdatedBaroVerticalRate, vertical_rate_valid);
+                break;
+            case ADSBTypes::kVerticalRateSourceGNSS:
+                if (vertical_rate_valid) {
+                    gnss_vertical_rate_fpm = vertical_rate_fpm_temp;
+                }
+                WriteBitFlag(BitFlag::kBitFlagGNSSVerticalRateValid, vertical_rate_valid);
+                WriteBitFlag(BitFlag::kBitFlagUpdatedGNSSVerticalRate, vertical_rate_valid);
+                break;
+            default:
+                // Vertical rate not available.
+                break;
+        }
     }
 
     return true;
