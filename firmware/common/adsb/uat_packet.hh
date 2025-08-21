@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include "adsb_types.hh"
 #include "buffer_utils.hh"
 
 class RawUATADSBPacket {
@@ -71,20 +72,6 @@ class DecodedUATADSBPacket {
         kUATADSBMessageFormatLong = 2
     };
 
-    enum AirGroundState : uint8_t {
-        kAirGroundStateAirborneSubsonic = 0,    // Ground state.
-        kAirGroundStateAirborneSupersonic = 1,  // Airborne state.
-        kAirGroundStateOnGround = 2,            // Reserved for future use.
-        kAirGroundStateReserved = 3             // Invalid state.
-    };
-
-    enum DirectionType : uint8_t {
-        kDirectionTypeNotAvailable = 0,
-        kDirectionTypeTrueTrackAngle = 1,
-        kDirectionTypeMagneticHeading = 2,
-        kDirectionTypeTrueHeading = 3
-    };
-
     /**
      * Data Block Fields
      */
@@ -98,24 +85,6 @@ class DecodedUATADSBPacket {
     };
 
     /**
-     * Checks if the air-ground state indicates that the aircraft is airborne.
-     * @param air_ground_state Air-ground state from the UAT state vector.
-     * @return True if the aircraft is airborne, false otherwise.
-     */
-    static inline bool AirGroundStateIsAirborne(AirGroundState air_ground_state) {
-        return (air_ground_state & 0b10) == 0;
-    }
-
-    /**
-     * Checks if the air-ground state indicates that the aircraft is supersonic.
-     * @param air_ground_state Air-ground state from the UAT state vector.
-     * @return True if the aircraft is supersonic, false otherwise.
-     */
-    static inline bool AirGroundStateIsSupersonic(AirGroundState air_ground_state) {
-        return (air_ground_state & 0b1) == 1;
-    }
-
-    /**
      * Decode North horizontal velocity in kts from the horizontal velocity field in the state vector. Helper function
      * used by HorizontalVelocityToTrackAndSpeedKts when the aircraft is not on the ground.
      * @param[in] horizontal_velocity Horizontal velocity in the state vector, in kts.
@@ -123,13 +92,13 @@ class DecodedUATADSBPacket {
      * @return North velocity in kts, or INT32_MIN if N/S velocity is not available.
      */
     static inline int32_t HorizontalVelocityToNorthVelocityKts(uint32_t horizontal_velocity,
-                                                               AirGroundState air_ground_state) {
+                                                               ADSBTypes::AirGroundState air_ground_state) {
         uint32_t data = horizontal_velocity >> 11;
         uint32_t north_velocity = data & 0x3FF;  // Get the 10-bit north velocity.
         if (north_velocity <= 0) {
             return INT32_MIN;  // N/S velocity not available.
         }
-        uint32_t multiplier = AirGroundStateIsSupersonic(air_ground_state) ? 4 : 1;
+        uint32_t multiplier = ADSBTypes::AirGroundStateIsSupersonic(air_ground_state) ? 4 : 1;
         // Sign bit 1 is north, 0 is south.
         return (north_velocity - 1) * ((data & (1 << 10)) == 0 ? 1 : -1) * multiplier;
     }
@@ -142,13 +111,13 @@ class DecodedUATADSBPacket {
      * @return East velocity in kts, or INT32_MIN if E/W velocity is not available.
      */
     static inline int32_t HorizontalVelocityToEastVelocityKts(uint32_t horizontal_velocity,
-                                                              AirGroundState air_ground_state) {
+                                                              ADSBTypes::AirGroundState air_ground_state) {
         uint32_t data = horizontal_velocity & 0x7FF;  // Get the 11-bit east/west velocity.
         uint32_t east_velocity = data & 0x3FF;        // Get the 10-bit east velocity.
         if (east_velocity <= 0) {
             return INT32_MIN;  // E/W velocity not available.
         }
-        uint32_t multiplier = AirGroundStateIsSupersonic(air_ground_state) ? 4 : 1;
+        uint32_t multiplier = ADSBTypes::AirGroundStateIsSupersonic(air_ground_state) ? 4 : 1;
         // Sign bit 1 is east, 0 is west.
         return (east_velocity - 1) * ((data & (1 << 10)) == 0 ? 1 : -1) * multiplier;
     }
@@ -163,12 +132,23 @@ class DecodedUATADSBPacket {
      * @param[out] speed_kts_ref Output parameter for the calculated speed in kts.
      * @retval DirectionType indicating the type of direction calculated.
      */
-    static DirectionType HorizontalVelocityToDirectionDegAndSpeedKts(uint32_t horizontal_velocity,
-                                                                     AirGroundState air_ground_state,
-                                                                     float &direction_deg_ref, int32_t &speed_kts_ref);
+    static ADSBTypes::DirectionType HorizontalVelocityToDirectionDegAndSpeedKts(
+        uint32_t horizontal_velocity, ADSBTypes::AirGroundState air_ground_state, float &direction_deg_ref,
+        int32_t &speed_kts_ref);
 
-    static void VerticalVelocityToVerticalRateFpm(uint32_t vertical_velocity, AirGroundState air_ground_state,
-                                                  int32_t &vertical_rate_fpm);
+    /**
+     * Decodes the vertical velocity field from a UAT ADS-B packet. Uses an AirGroundState to determine whether the
+     * field can be interpreted as a vertical velocity. Returns the vertical rate source used to measure the vertcial
+     * velcoity if it was decoded successfully, or returns kVerticalRateSourceNotAvailable while setting the vertical
+     * rate to INT32_MIN otherwise.
+     * @param[in] vertical_velocity Encoded vertical velocity field.
+     * @param[in] air_ground_state AirGroundState used to interpret the vertical velcoity field.
+     * @param[out] vertical_rate_fpm_ref Reference that gets set to the decoded vertical rate.
+     * @retval The source the vertical rate is from, or kVerticalRateSourceNotAvailable if decoding was unsuccessful.
+     */
+    ADSBTypes::VerticalRateSource VerticalVelocityToVerticalRateFpm(uint32_t vertical_velocity,
+                                                                    ADSBTypes::AirGroundState air_ground_state,
+                                                                    int32_t &vertical_rate_fpm_ref);
 
     struct __attribute__((packed)) UATHeader {
         uint8_t mdb_type_code     : 5;  // Message Data Block (MDB) type code.
@@ -177,14 +157,14 @@ class DecodedUATADSBPacket {
     };
 
     struct __attribute__((packed)) UATStateVector {
-        uint32_t latitude_awb               : 23;
-        uint32_t longitude_awb              : 24;
-        bool altitude_is_geometric_altitude : 1;
-        uint16_t altitude_encoded           : 12;
-        uint8_t nic                         : 4;
-        AirGroundState air_ground_state     : 2;
-        uint8_t reserved                    : 1;
-        uint32_t horizontal_velocity        : 22;
+        uint32_t latitude_awb                      : 23;
+        uint32_t longitude_awb                     : 24;
+        bool altitude_is_geometric_altitude        : 1;
+        uint16_t altitude_encoded                  : 12;
+        uint8_t nic                                : 4;
+        ADSBTypes::AirGroundState air_ground_state : 2;
+        uint8_t reserved                           : 1;
+        uint32_t horizontal_velocity               : 22;
         union {
             uint16_t vertical_velocity          : 11;
             uint16_t aircraft_length_width_code : 11;

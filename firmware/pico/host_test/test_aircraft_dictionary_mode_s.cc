@@ -14,7 +14,7 @@ TEST(AircraftDictionary, BasicInsertRemove) {
     EXPECT_FALSE(dictionary.RemoveAircraft(12345));
 
     ModeSAircraft test_aircraft = ModeSAircraft(12345);
-    test_aircraft.category = ModeSAircraft::kCategoryRotorcraft;
+    test_aircraft.category = ADSBTypes::kCategoryRotorcraft;
     dictionary.InsertAircraft(test_aircraft);
     EXPECT_EQ(dictionary.GetNumAircraft(), 1);
     EXPECT_TRUE(dictionary.ContainsAircraft(test_aircraft.icao_address));
@@ -35,7 +35,7 @@ TEST(AircraftDictionary, InsertThenRemoveTooMany) {
     EXPECT_EQ(dictionary.GetNumAircraft(), 0);
 
     ModeSAircraft test_aircraft = ModeSAircraft(0);
-    test_aircraft.category = ModeSAircraft::kCategoryGliderSailplane;
+    test_aircraft.category = ADSBTypes::kCategoryGliderSailplane;
 
     // Insert maximum number of aircraft.
     for (uint16_t i = 0; i < AircraftDictionary::kMaxNumAircraft; i++) {
@@ -73,13 +73,13 @@ TEST(AircraftDictionary, UseAircraftPtr) {
     ModeSAircraft *aircraft =
         dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(12345, Aircraft::kAircraftTypeModeS));
     EXPECT_TRUE(aircraft);  // aircraft should have been automatically inserted just fine
-    aircraft->category = ModeSAircraft::kCategoryGroundObstruction;
+    aircraft->category = ADSBTypes::kCategoryLineObstacle;
     ModeSAircraft aircraft_out;
     ASSERT_TRUE(dictionary.GetAircraft(12345, aircraft_out));
-    ASSERT_EQ(aircraft_out.category, ModeSAircraft::kCategoryGroundObstruction);
-    aircraft->category = ModeSAircraft::kCategoryHeavy;
+    ASSERT_EQ(aircraft_out.category, ADSBTypes::kCategoryLineObstacle);
+    aircraft->category = ADSBTypes::kCategoryHeavy;
     ASSERT_TRUE(dictionary.GetAircraft(12345, aircraft_out));
-    ASSERT_EQ(aircraft_out.category, ModeSAircraft::kCategoryHeavy);
+    ASSERT_EQ(aircraft_out.category, ADSBTypes::kCategoryHeavy);
 }
 
 TEST(AircraftDictionary, AccessFakeAircraft) {
@@ -99,7 +99,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_TRUE(dictionary.GetAircraft(0x76CE88, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x76CE88u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.category, ModeSAircraft::kCategoryNoCategoryInfo);
+    EXPECT_EQ(aircraft.category, ADSBTypes::kCategoryNoCategoryInfo);
     EXPECT_STREQ(aircraft.callsign, "SIA224  ");
 
     tpacket = DecodedModeSPacket((char *)"8D7C7181215D01A08208204D8BF1");
@@ -108,7 +108,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_TRUE(dictionary.GetAircraft(0x7C7181, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x7C7181u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.category, ModeSAircraft::kCategoryLight);
+    EXPECT_EQ(aircraft.category, ADSBTypes::kCategoryLight);
     EXPECT_STREQ(aircraft.callsign, "WPF     ");
 
     tpacket = DecodedModeSPacket((char *)"8D7C7745226151A08208205CE9C2");
@@ -117,7 +117,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_TRUE(dictionary.GetAircraft(0x7C7745, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x7C7745u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.category, ModeSAircraft::kCategoryMedium1);
+    EXPECT_EQ(aircraft.category, ADSBTypes::kCategoryMedium1);
     EXPECT_STREQ(aircraft.callsign, "XUF     ");
 
     tpacket = DecodedModeSPacket((char *)"8D7C80AD2358F6B1E35C60FF1925");
@@ -126,7 +126,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_TRUE(dictionary.GetAircraft(0x7C80AD, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x7C80ADu);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.category, ModeSAircraft::kCategoryMedium2);
+    EXPECT_EQ(aircraft.category, ADSBTypes::kCategoryMedium2);
     EXPECT_STREQ(aircraft.callsign, "VOZ1851 ");
 
     tpacket = DecodedModeSPacket((char *)"8D7C146525446074DF5820738E90");
@@ -135,7 +135,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_TRUE(dictionary.GetAircraft(0x7C1465, aircraft));
     EXPECT_EQ(aircraft.icao_address, 0x7C1465u);
     EXPECT_EQ(aircraft.transponder_capability, 5);
-    EXPECT_EQ(aircraft.category, ModeSAircraft::kCategoryHeavy);
+    EXPECT_EQ(aircraft.category, ADSBTypes::kCategoryHeavy);
     EXPECT_STREQ(aircraft.callsign, "QFA475  ");
 
     tpacket = DecodedModeSPacket((char *)"8D4840D6202CC371C32CE0576098");
@@ -248,7 +248,7 @@ TEST(AircraftDictionary, ApplyAirbornePositionMessage) {
     EXPECT_FLOAT_EQ(aircraft.latitude_deg, 0.0f);
     EXPECT_FLOAT_EQ(aircraft.longitude_deg, 0.0f);
     // Altitude should be filled out.
-    EXPECT_EQ(aircraft.altitude_source, ModeSAircraft::AltitudeSource::kAltitudeSourceBaro);
+    EXPECT_EQ(aircraft.altitude_source, ADSBTypes::kAltitudeSourceBaro);
     EXPECT_EQ(aircraft.baro_altitude_ft, 16975);
 
     inc_time_since_boot_ms(1e3);  // Simulate time passing between odd and even packet ingestion.
@@ -264,7 +264,7 @@ TEST(AircraftDictionary, ApplyAirbornePositionMessage) {
     EXPECT_NEAR(aircraft.longitude_deg, -156.5328535600142f, kLonDegCloseEnough);
     // Altitude should be filled out.
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroAltitude));
-    EXPECT_EQ(aircraft.altitude_source, ModeSAircraft::AltitudeSource::kAltitudeSourceBaro);
+    EXPECT_EQ(aircraft.altitude_source, ADSBTypes::kAltitudeSourceBaro);
     EXPECT_EQ(aircraft.baro_altitude_ft, 17000);
 }
 
@@ -275,7 +275,7 @@ TEST(ModeSAircraft, CalculateMaxAllowedCPRInterval) {
 
     // Setting velocity source to something other than kSpeedSourceNotAvailable or kSpeedSourceNotSet should
     // return CPR interval as a calculated function of aircraft velocity.
-    aircraft.speed_source = ModeSAircraft::SpeedSource::kSpeedSourceGroundSpeed;
+    aircraft.speed_source = ADSBTypes::kSpeedSourceGroundSpeed;
 
     // Stale track enforces default CPR interval.
     set_time_since_boot_ms(100e3);
@@ -320,7 +320,7 @@ TEST(AircraftDictionary, TimeFilterAirbornePositionMessages) {
     aircraft.last_track_update_timestamp_ms = 99e3;
 
     // Case 1: Aircraft has no speed data. Default packet valid interval should be used.
-    ASSERT_EQ(aircraft.speed_source, ModeSAircraft::SpeedSource::kSpeedSourceNotSet);
+    ASSERT_EQ(aircraft.speed_source, ADSBTypes::kSpeedSourceNotSet);
     EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), ModeSAircraft::kDefaultCPRIntervalMs);
     // Ingest the odd position packet. This should be rejected since the timestamp is too far apart from the even
     // packet. Ingestion will succeed, and the packet will be retained, but the aircraft will still not have a valid
@@ -336,12 +336,12 @@ TEST(AircraftDictionary, TimeFilterAirbornePositionMessages) {
 
     // Case 2: Aircraft has speed data and is traveling at 1000 knots.
     aircraft.speed_kts = 1000;
-    aircraft.speed_source = ModeSAircraft::SpeedSource::kSpeedSourceGroundSpeed;
+    aircraft.speed_source = ADSBTypes::kSpeedSourceGroundSpeed;
     EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), ModeSAircraft::kRefCPRIntervalMs * 500 / aircraft.speed_kts);
 
     // Case 3: Aircraft is flying slowly but has a stale track.
     aircraft.speed_kts = 0;
-    aircraft.speed_source = ModeSAircraft::SpeedSource::kSpeedSourceGroundSpeed;
+    aircraft.speed_source = ADSBTypes::kSpeedSourceGroundSpeed;
     // Stationary aircraft should get the max interval.
     EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), ModeSAircraft::kMaxCPRIntervalMs);
     // Set the track update timestamp to be too old. This should enforce the default CPR interval.
@@ -374,7 +374,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     EXPECT_NEAR(aircraft.direction_deg, 304.2157021324374, 0.001);
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity));
     EXPECT_EQ(aircraft.speed_kts, 121);
-    EXPECT_EQ(aircraft.speed_source, ModeSAircraft::SpeedSource::kSpeedSourceGroundSpeed);
+    EXPECT_EQ(aircraft.speed_source, ADSBTypes::kSpeedSourceGroundSpeed);
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroVerticalVelocity));
     EXPECT_EQ(aircraft.baro_vertical_rate_fpm, -64);
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroVerticalVelocityValid));
@@ -394,7 +394,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity));
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedDirection));
     EXPECT_EQ(aircraft.gnss_vertical_rate_fpm, -832);
-    EXPECT_EQ(aircraft.speed_source, ModeSAircraft::SpeedSource::kSpeedSourceGroundSpeed);
+    EXPECT_EQ(aircraft.speed_source, ADSBTypes::kSpeedSourceGroundSpeed);
     EXPECT_NEAR(aircraft.direction_deg, 182.88f, 0.01);
     EXPECT_EQ(aircraft.speed_kts, 159);
 
@@ -402,7 +402,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     ModeSAircraft *aircraft_ptr =
         dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(0x485020, Aircraft::kAircraftTypeModeS));
     aircraft_ptr->baro_altitude_ft = 2000;
-    aircraft_ptr->altitude_source = ModeSAircraft::AltitudeSource::kAltitudeSourceBaro;
+    aircraft_ptr->altitude_source = ADSBTypes::kAltitudeSourceBaro;
     // Re-ingest message A to make sure the GNSS altitude gets corrected.
     ASSERT_TRUE(dictionary.IngestModeSADSBPacket(packet));
     EXPECT_FALSE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroAltitude));
@@ -424,7 +424,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity));
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedDirection));
     EXPECT_EQ(aircraft.baro_vertical_rate_fpm, -2304);
-    EXPECT_EQ(aircraft.speed_source, ModeSAircraft::SpeedSource::kSpeedSourceAirspeedTrue);
+    EXPECT_EQ(aircraft.speed_source, ADSBTypes::kSpeedSourceAirspeedTrue);
     EXPECT_NEAR(aircraft.direction_deg, 243.98f, 0.01);
     EXPECT_NEAR(aircraft.speed_kts, 375.0f, 0.01);
 }

@@ -4,220 +4,205 @@
 #include "uat_packet.hh"
 
 TEST(DecodedUATADSBPacket, AirGroundState) {
-    EXPECT_TRUE(DecodedUATADSBPacket::AirGroundStateIsAirborne(static_cast<DecodedUATADSBPacket::AirGroundState>(0)));
-    EXPECT_FALSE(
-        DecodedUATADSBPacket::AirGroundStateIsSupersonic(static_cast<DecodedUATADSBPacket::AirGroundState>(0)));
+    EXPECT_TRUE(ADSBTypes::AirGroundStateIsAirborne(static_cast<ADSBTypes::AirGroundState>(0)));
+    EXPECT_FALSE(ADSBTypes::AirGroundStateIsSupersonic(static_cast<ADSBTypes::AirGroundState>(0)));
 
-    EXPECT_TRUE(DecodedUATADSBPacket::AirGroundStateIsAirborne(static_cast<DecodedUATADSBPacket::AirGroundState>(1)));
-    EXPECT_TRUE(DecodedUATADSBPacket::AirGroundStateIsSupersonic(static_cast<DecodedUATADSBPacket::AirGroundState>(1)));
+    EXPECT_TRUE(ADSBTypes::AirGroundStateIsAirborne(static_cast<ADSBTypes::AirGroundState>(1)));
+    EXPECT_TRUE(ADSBTypes::AirGroundStateIsSupersonic(static_cast<ADSBTypes::AirGroundState>(1)));
 
-    EXPECT_FALSE(DecodedUATADSBPacket::AirGroundStateIsAirborne(static_cast<DecodedUATADSBPacket::AirGroundState>(2)));
-    EXPECT_FALSE(
-        DecodedUATADSBPacket::AirGroundStateIsSupersonic(static_cast<DecodedUATADSBPacket::AirGroundState>(2)));
+    EXPECT_FALSE(ADSBTypes::AirGroundStateIsAirborne(static_cast<ADSBTypes::AirGroundState>(2)));
+    EXPECT_FALSE(ADSBTypes::AirGroundStateIsSupersonic(static_cast<ADSBTypes::AirGroundState>(2)));
 }
 
 TEST(DecodedUATADSBPacket, HorizontalVelocityToNorthVelocityKts) {
     // Test with A/G state airborne and supersonic.
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(
-                  0 << 11, DecodedUATADSBPacket::kAirGroundStateAirborneSupersonic),
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(0 << 11,
+                                                                         ADSBTypes::kAirGroundStateAirborneSupersonic),
               INT32_MIN);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(
-                  1 << 11, DecodedUATADSBPacket::kAirGroundStateAirborneSupersonic),
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(1 << 11,
+                                                                         ADSBTypes::kAirGroundStateAirborneSupersonic),
               0);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(
-                  2 << 11, DecodedUATADSBPacket::kAirGroundStateAirborneSupersonic),
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(2 << 11,
+                                                                         ADSBTypes::kAirGroundStateAirborneSupersonic),
               4);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(
-                  1022 << 11, DecodedUATADSBPacket::kAirGroundStateAirborneSupersonic),
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(1022 << 11,
+                                                                         ADSBTypes::kAirGroundStateAirborneSupersonic),
               4084);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(
-                  1023 << 11, DecodedUATADSBPacket::kAirGroundStateAirborneSupersonic),
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(1023 << 11,
+                                                                         ADSBTypes::kAirGroundStateAirborneSupersonic),
               4088);
 
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(
-                  (0b1 << 21) | (0 << 11), DecodedUATADSBPacket::kAirGroundStateAirborneSupersonic),
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts((0b1 << 21) | (0 << 11),
+                                                                         ADSBTypes::kAirGroundStateAirborneSupersonic),
               INT32_MIN);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(
-                  (0b1 << 21) | (1 << 11), DecodedUATADSBPacket::kAirGroundStateAirborneSupersonic),
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts((0b1 << 21) | (1 << 11),
+                                                                         ADSBTypes::kAirGroundStateAirborneSupersonic),
               0);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(
-                  (0b1 << 21) | (2 << 11), DecodedUATADSBPacket::kAirGroundStateAirborneSupersonic),
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts((0b1 << 21) | (2 << 11),
+                                                                         ADSBTypes::kAirGroundStateAirborneSupersonic),
               -4);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(
-                  (0b1 << 21) | (1022 << 11), DecodedUATADSBPacket::kAirGroundStateAirborneSupersonic),
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts((0b1 << 21) | (1022 << 11),
+                                                                         ADSBTypes::kAirGroundStateAirborneSupersonic),
               -4084);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(
-                  (0b1 << 21) | (1023 << 11), DecodedUATADSBPacket::kAirGroundStateAirborneSupersonic),
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts((0b1 << 21) | (1023 << 11),
+                                                                         ADSBTypes::kAirGroundStateAirborneSupersonic),
               -4088);
 
     // Test with A/G state airborne and subsonic.
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(
-                  0 << 11, DecodedUATADSBPacket::kAirGroundStateAirborneSubsonic),
-              INT32_MIN);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(
-                  1 << 11, DecodedUATADSBPacket::kAirGroundStateAirborneSubsonic),
-              0);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(
-                  2 << 11, DecodedUATADSBPacket::kAirGroundStateAirborneSubsonic),
-              1);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(
-                  1022 << 11, DecodedUATADSBPacket::kAirGroundStateAirborneSubsonic),
-              1021);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(
-                  1023 << 11, DecodedUATADSBPacket::kAirGroundStateAirborneSubsonic),
-              1022);
-
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(
-                  (0b1 << 21) | (0 << 11), DecodedUATADSBPacket::kAirGroundStateAirborneSubsonic),
-              INT32_MIN);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(
-                  (0b1 << 21) | (1 << 11), DecodedUATADSBPacket::kAirGroundStateAirborneSubsonic),
-              0);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(
-                  (0b1 << 21) | (2 << 11), DecodedUATADSBPacket::kAirGroundStateAirborneSubsonic),
-              -1);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(
-                  (0b1 << 21) | (1022 << 11), DecodedUATADSBPacket::kAirGroundStateAirborneSubsonic),
-              -1021);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(
-                  (0b1 << 21) | (1023 << 11), DecodedUATADSBPacket::kAirGroundStateAirborneSubsonic),
-              -1022);
-
-    // Test on ground.
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(0 << 11,
-                                                                         DecodedUATADSBPacket::kAirGroundStateOnGround),
-              INT32_MIN);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(1 << 11,
-                                                                         DecodedUATADSBPacket::kAirGroundStateOnGround),
-              0);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(2 << 11,
-                                                                         DecodedUATADSBPacket::kAirGroundStateOnGround),
-              1);
+    EXPECT_EQ(
+        DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(0 << 11, ADSBTypes::kAirGroundStateAirborneSubsonic),
+        INT32_MIN);
+    EXPECT_EQ(
+        DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(1 << 11, ADSBTypes::kAirGroundStateAirborneSubsonic),
+        0);
+    EXPECT_EQ(
+        DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(2 << 11, ADSBTypes::kAirGroundStateAirborneSubsonic),
+        1);
     EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(1022 << 11,
-                                                                         DecodedUATADSBPacket::kAirGroundStateOnGround),
+                                                                         ADSBTypes::kAirGroundStateAirborneSubsonic),
               1021);
     EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(1023 << 11,
-                                                                         DecodedUATADSBPacket::kAirGroundStateOnGround),
+                                                                         ADSBTypes::kAirGroundStateAirborneSubsonic),
               1022);
 
     EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts((0b1 << 21) | (0 << 11),
-                                                                         DecodedUATADSBPacket::kAirGroundStateOnGround),
+                                                                         ADSBTypes::kAirGroundStateAirborneSubsonic),
               INT32_MIN);
     EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts((0b1 << 21) | (1 << 11),
-                                                                         DecodedUATADSBPacket::kAirGroundStateOnGround),
+                                                                         ADSBTypes::kAirGroundStateAirborneSubsonic),
               0);
     EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts((0b1 << 21) | (2 << 11),
-                                                                         DecodedUATADSBPacket::kAirGroundStateOnGround),
+                                                                         ADSBTypes::kAirGroundStateAirborneSubsonic),
               -1);
     EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts((0b1 << 21) | (1022 << 11),
-                                                                         DecodedUATADSBPacket::kAirGroundStateOnGround),
+                                                                         ADSBTypes::kAirGroundStateAirborneSubsonic),
               -1021);
     EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts((0b1 << 21) | (1023 << 11),
-                                                                         DecodedUATADSBPacket::kAirGroundStateOnGround),
+                                                                         ADSBTypes::kAirGroundStateAirborneSubsonic),
+              -1022);
+
+    // Test on ground.
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(0 << 11, ADSBTypes::kAirGroundStateOnGround),
+              INT32_MIN);
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(1 << 11, ADSBTypes::kAirGroundStateOnGround),
+              0);
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(2 << 11, ADSBTypes::kAirGroundStateOnGround),
+              1);
+    EXPECT_EQ(
+        DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(1022 << 11, ADSBTypes::kAirGroundStateOnGround),
+        1021);
+    EXPECT_EQ(
+        DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts(1023 << 11, ADSBTypes::kAirGroundStateOnGround),
+        1022);
+
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts((0b1 << 21) | (0 << 11),
+                                                                         ADSBTypes::kAirGroundStateOnGround),
+              INT32_MIN);
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts((0b1 << 21) | (1 << 11),
+                                                                         ADSBTypes::kAirGroundStateOnGround),
+              0);
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts((0b1 << 21) | (2 << 11),
+                                                                         ADSBTypes::kAirGroundStateOnGround),
+              -1);
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts((0b1 << 21) | (1022 << 11),
+                                                                         ADSBTypes::kAirGroundStateOnGround),
+              -1021);
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToNorthVelocityKts((0b1 << 21) | (1023 << 11),
+                                                                         ADSBTypes::kAirGroundStateOnGround),
               -1022);
 }
 
 TEST(DecodedUATADSBPacket, HorizontalVelocityToEastVelocityKts) {
     // Test with A/G state airborne and supersonic.
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(
-                  0, DecodedUATADSBPacket::kAirGroundStateAirborneSupersonic),
-              INT32_MIN);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(
-                  1, DecodedUATADSBPacket::kAirGroundStateAirborneSupersonic),
-              0);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(
-                  2, DecodedUATADSBPacket::kAirGroundStateAirborneSupersonic),
-              4);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(
-                  1022, DecodedUATADSBPacket::kAirGroundStateAirborneSupersonic),
-              4084);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(
-                  1023, DecodedUATADSBPacket::kAirGroundStateAirborneSupersonic),
-              4088);
+    EXPECT_EQ(
+        DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(0, ADSBTypes::kAirGroundStateAirborneSupersonic),
+        INT32_MIN);
+    EXPECT_EQ(
+        DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(1, ADSBTypes::kAirGroundStateAirborneSupersonic), 0);
+    EXPECT_EQ(
+        DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(2, ADSBTypes::kAirGroundStateAirborneSupersonic), 4);
+    EXPECT_EQ(
+        DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(1022, ADSBTypes::kAirGroundStateAirborneSupersonic),
+        4084);
+    EXPECT_EQ(
+        DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(1023, ADSBTypes::kAirGroundStateAirborneSupersonic),
+        4088);
 
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(
-                  (0b1 << 10) | (0), DecodedUATADSBPacket::kAirGroundStateAirborneSupersonic),
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts((0b1 << 10) | (0),
+                                                                        ADSBTypes::kAirGroundStateAirborneSupersonic),
               INT32_MIN);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(
-                  (0b1 << 10) | (1), DecodedUATADSBPacket::kAirGroundStateAirborneSupersonic),
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts((0b1 << 10) | (1),
+                                                                        ADSBTypes::kAirGroundStateAirborneSupersonic),
               0);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(
-                  (0b1 << 10) | (2), DecodedUATADSBPacket::kAirGroundStateAirborneSupersonic),
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts((0b1 << 10) | (2),
+                                                                        ADSBTypes::kAirGroundStateAirborneSupersonic),
               -4);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(
-                  (0b1 << 10) | (1022), DecodedUATADSBPacket::kAirGroundStateAirborneSupersonic),
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts((0b1 << 10) | (1022),
+                                                                        ADSBTypes::kAirGroundStateAirborneSupersonic),
               -4084);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(
-                  (0b1 << 10) | (1023), DecodedUATADSBPacket::kAirGroundStateAirborneSupersonic),
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts((0b1 << 10) | (1023),
+                                                                        ADSBTypes::kAirGroundStateAirborneSupersonic),
               -4088);
 
     // Test with A/G state airborne and subsonic.
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(
-                  0, DecodedUATADSBPacket::kAirGroundStateAirborneSubsonic),
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(0, ADSBTypes::kAirGroundStateAirborneSubsonic),
               INT32_MIN);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(
-                  1, DecodedUATADSBPacket::kAirGroundStateAirborneSubsonic),
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(1, ADSBTypes::kAirGroundStateAirborneSubsonic),
               0);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(
-                  2, DecodedUATADSBPacket::kAirGroundStateAirborneSubsonic),
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(2, ADSBTypes::kAirGroundStateAirborneSubsonic),
               1);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(
-                  1022, DecodedUATADSBPacket::kAirGroundStateAirborneSubsonic),
-              1021);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(
-                  1023, DecodedUATADSBPacket::kAirGroundStateAirborneSubsonic),
-              1022);
-
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(
-                  (0b1 << 10) | (0), DecodedUATADSBPacket::kAirGroundStateAirborneSubsonic),
-              INT32_MIN);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(
-                  (0b1 << 10) | (1), DecodedUATADSBPacket::kAirGroundStateAirborneSubsonic),
-              0);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(
-                  (0b1 << 10) | (2), DecodedUATADSBPacket::kAirGroundStateAirborneSubsonic),
-              -1);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(
-                  (0b1 << 10) | (1022), DecodedUATADSBPacket::kAirGroundStateAirborneSubsonic),
-              -1021);
-    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(
-                  (0b1 << 10) | (1023), DecodedUATADSBPacket::kAirGroundStateAirborneSubsonic),
-              -1022);
-
-    // Test on ground.
     EXPECT_EQ(
-        DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(0, DecodedUATADSBPacket::kAirGroundStateOnGround),
-        INT32_MIN);
-    EXPECT_EQ(
-        DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(1, DecodedUATADSBPacket::kAirGroundStateOnGround), 0);
-    EXPECT_EQ(
-        DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(2, DecodedUATADSBPacket::kAirGroundStateOnGround), 1);
-    EXPECT_EQ(
-        DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(1022, DecodedUATADSBPacket::kAirGroundStateOnGround),
+        DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(1022, ADSBTypes::kAirGroundStateAirborneSubsonic),
         1021);
     EXPECT_EQ(
-        DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(1023, DecodedUATADSBPacket::kAirGroundStateOnGround),
+        DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(1023, ADSBTypes::kAirGroundStateAirborneSubsonic),
         1022);
 
     EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts((0b1 << 10) | (0),
-                                                                        DecodedUATADSBPacket::kAirGroundStateOnGround),
+                                                                        ADSBTypes::kAirGroundStateAirborneSubsonic),
               INT32_MIN);
     EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts((0b1 << 10) | (1),
-                                                                        DecodedUATADSBPacket::kAirGroundStateOnGround),
+                                                                        ADSBTypes::kAirGroundStateAirborneSubsonic),
               0);
     EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts((0b1 << 10) | (2),
-                                                                        DecodedUATADSBPacket::kAirGroundStateOnGround),
+                                                                        ADSBTypes::kAirGroundStateAirborneSubsonic),
               -1);
     EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts((0b1 << 10) | (1022),
-                                                                        DecodedUATADSBPacket::kAirGroundStateOnGround),
+                                                                        ADSBTypes::kAirGroundStateAirborneSubsonic),
               -1021);
     EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts((0b1 << 10) | (1023),
-                                                                        DecodedUATADSBPacket::kAirGroundStateOnGround),
+                                                                        ADSBTypes::kAirGroundStateAirborneSubsonic),
+              -1022);
+
+    // Test on ground.
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(0, ADSBTypes::kAirGroundStateOnGround),
+              INT32_MIN);
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(1, ADSBTypes::kAirGroundStateOnGround), 0);
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(2, ADSBTypes::kAirGroundStateOnGround), 1);
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(1022, ADSBTypes::kAirGroundStateOnGround),
+              1021);
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts(1023, ADSBTypes::kAirGroundStateOnGround),
+              1022);
+
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts((0b1 << 10) | (0),
+                                                                        ADSBTypes::kAirGroundStateOnGround),
+              INT32_MIN);
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts((0b1 << 10) | (1),
+                                                                        ADSBTypes::kAirGroundStateOnGround),
+              0);
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts((0b1 << 10) | (2),
+                                                                        ADSBTypes::kAirGroundStateOnGround),
+              -1);
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts((0b1 << 10) | (1022),
+                                                                        ADSBTypes::kAirGroundStateOnGround),
+              -1021);
+    EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToEastVelocityKts((0b1 << 10) | (1023),
+                                                                        ADSBTypes::kAirGroundStateOnGround),
               -1022);
 }
 
 inline uint32_t EncodeOnGroundHorizontalVelocity(uint16_t ground_speed_encoded, uint16_t direction_encoded,
-                                                 DecodedUATADSBPacket::DirectionType direction_type) {
+                                                 ADSBTypes::DirectionType direction_type) {
     return (ground_speed_encoded << 11) | (direction_encoded | (direction_type << 9));
 }
 
@@ -239,7 +224,7 @@ const OnGroundHorizontalVelocityTestCase kOnGroundHorizontalVelocityTestCases[] 
     {511, 359.296875f, 1023, 1022, (char *)"359.196875 degrees, 1023 kts"}};
 
 TEST(DecodedUATADSBPacket, HorizontalVelocityToDirectionDegAndSpeedKtsOnGround) {
-    DecodedUATADSBPacket::AirGroundState air_ground_state = DecodedUATADSBPacket::kAirGroundStateOnGround;
+    ADSBTypes::AirGroundState air_ground_state = ADSBTypes::kAirGroundStateOnGround;
 
     for (const auto &test_case : kOnGroundHorizontalVelocityTestCases) {
         uint16_t direction_encoded = test_case.direction_encoded;
@@ -250,13 +235,13 @@ TEST(DecodedUATADSBPacket, HorizontalVelocityToDirectionDegAndSpeedKtsOnGround) 
         float direction;
         int32_t speed;
 
-        uint32_t horizontal_velocity = EncodeOnGroundHorizontalVelocity(
-            ground_speed_encoded, direction_encoded, DecodedUATADSBPacket::kDirectionTypeTrueTrackAngle);
+        uint32_t horizontal_velocity = EncodeOnGroundHorizontalVelocity(ground_speed_encoded, direction_encoded,
+                                                                        ADSBTypes::kDirectionTypeTrueTrackAngle);
 
         SCOPED_TRACE(test_case.description);
         EXPECT_EQ(DecodedUATADSBPacket::HorizontalVelocityToDirectionDegAndSpeedKts(horizontal_velocity,
                                                                                     air_ground_state, direction, speed),
-                  DecodedUATADSBPacket::kDirectionTypeTrueTrackAngle);
+                  ADSBTypes::kDirectionTypeTrueTrackAngle);
         EXPECT_FLOAT_EQ(direction, expected_direction_deg);
         EXPECT_EQ(speed, expected_speed_kts);
     }
@@ -276,4 +261,59 @@ TEST(DecodedUATADSBPacket, ICAOAddress) {
     DecodedUATADSBPacket packet((char *)"");
     packet.ReconstructWithoutFEC();
     EXPECT_EQ(packet.GetICAOAddress(), 0u);
+}
+
+uint32_t EncodeVerticalVelocity(int vertical_velocity, bool is_geometric) {
+    uint32_t encoded_vertical_velocity = 0;
+    if (vertical_velocity < 0) {
+        encoded_vertical_velocity |= (1 << 10);
+        encoded_vertical_velocity |= (-vertical_velocity & 0b111111111);
+    } else {
+        encoded_vertical_velocity |= (vertical_velocity & 0b111111111);
+    }
+    encoded_vertical_velocity |= (is_geometric ? 0 : (1 << 10));
+    return encoded_vertical_velocity;
+}
+
+struct VerticalVelocityTestCase {
+    uint32_t vertical_velocity_encoded;
+    ADSBTypes::AirGroundState air_ground_state;
+
+    int32_t expected_vertical_rate_fpm;
+    ADSBTypes::VerticalRateSource expected_vertical_rate_source;
+    char *description;
+};
+
+const VerticalVelocityTestCase kVerticalVelocityTestCases[] = {
+    {0, ADSBTypes::AirGroundState::kAirGroundStateOnGround, INT32_MIN, ADSBTypes::kVerticalRateSourceNotAvailable,
+     (char *)"on ground, vertical rate not available"},
+    {1 << 10, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, INT32_MIN,
+     ADSBTypes::kVerticalRateSourceNotAvailable, (char *)"airborne supersonic, vertical rate not available"},
+    {1 << 9, ADSBTypes::AirGroundState::kAirGroundStateAirborneSubsonic, INT32_MIN,
+     ADSBTypes::kVerticalRateSourceNotAvailable, (char *)"airborne subsonic, vertical rate not available"},
+    {1, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, 0, ADSBTypes::kVerticalRateSourceBaro,
+     (char *)"0fpm baro"},
+    {(0b1 << 9) | 1, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, 0,
+     ADSBTypes::kVerticalRateSourceBaro, (char *)"-0fpm baro"},
+    {2, ADSBTypes::AirGroundState::kAirGroundStateAirborneSubsonic, 64, ADSBTypes::kVerticalRateSourceGNSS,
+     (char *)"64fpm gnss"},
+    {(0b1 << 9) | 2, ADSBTypes::AirGroundState::kAirGroundStateAirborneSubsonic, -64,
+     ADSBTypes::kVerticalRateSourceGNSS, (char *)"-64fpm gnss"},
+    {(0b11 << 9) | 3, ADSBTypes::AirGroundState::kAirGroundStateOnGround, -128,
+     ADSBTypes::kVerticalRateSourceNotAvailable, (char *)"-128fpm baro"},
+    // TODO: fix these.
+};
+
+TEST(DecodedUATADBPacket, VerticalVelocity) {
+    // Should refuse to decode when vertical rate not available based on AirGrounState.
+    // EXPECT_EQ(ADSBTypes::kVerticalRateSourceNotAvailable,
+    //           DecodedUATADSBPacket::VerticalVelocityToVerticalRateFpm(
+    //               vertical_velocity_encoded, ADSBTypes::AirGroundState::kAirGroundStateOnGround,
+    //               vertical_rate_fpm));
+    // EXPECT_EQ(vertical_rate_fpm, INT32_MIN);
+
+    // for (const auto VerticalVelocityTestCase &test_case : kVerticalVelocityTestCases) {
+    //     int vertical_velocity_fpm;
+    //     // EXPECT_EQ(test_case.expecte)
+    // }
 }

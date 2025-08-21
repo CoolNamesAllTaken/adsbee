@@ -28,26 +28,25 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
     aircraft.icao_address = 0x12345E;
     strcpy(aircraft.callsign, "ABCDEFG");
     aircraft.squawk = 01234;
-    aircraft.category = ModeSAircraft::Category::kCategoryGliderSailplane;
+    aircraft.category = ADSBTypes::kCategoryGliderSailplane;
     aircraft.baro_altitude_ft = 1000;
     aircraft.gnss_altitude_ft = 997;
-    aircraft.altitude_source = ModeSAircraft::AltitudeSource::kAltitudeSourceBaro;
+    aircraft.altitude_source = ADSBTypes::kAltitudeSourceBaro;
     aircraft.latitude_deg = -120.654321;
     aircraft.longitude_deg = -80.123456;
     aircraft.direction_deg = 300.5678;
     aircraft.speed_kts = 123.45;
-    aircraft.speed_source = ModeSAircraft::SpeedSource::kSpeedSourceAirspeedTrue;
+    aircraft.speed_source = ADSBTypes::kSpeedSourceAirspeedTrue;
     aircraft.baro_vertical_rate_fpm = -200;
     aircraft.gnss_vertical_rate_fpm = -205;
-    aircraft.navigation_integrity_category = static_cast<ModeSAircraft::NICRadiusOfContainment>(0b1011);
-    aircraft.navigation_integrity_category_baro = static_cast<ModeSAircraft::NICBarometricAltitudeIntegrity>(0b1);
-    aircraft.navigation_accuracy_category_velocity = static_cast<ModeSAircraft::NACHorizontalVelocityError>(0b101);
-    aircraft.navigation_accuracy_category_position =
-        static_cast<ModeSAircraft::NACEstimatedPositionUncertainty>(0b1101);
-    aircraft.geometric_vertical_accuracy = static_cast<ModeSAircraft::GVA>(0b11);
-    aircraft.source_integrity_level = static_cast<ModeSAircraft::SILProbabilityOfExceedingNICRadiusOfContainmnent>(
-        ModeSAircraft::kPOERCLessThanOrEqualTo1em5PerFlightHour);
-    aircraft.system_design_assurance = static_cast<ModeSAircraft::SystemDesignAssurance>(0b11);
+    aircraft.navigation_integrity_category = static_cast<ADSBTypes::NICRadiusOfContainment>(0b1011);
+    aircraft.navigation_integrity_category_baro = static_cast<ADSBTypes::NICBarometricAltitudeIntegrity>(0b1);
+    aircraft.navigation_accuracy_category_velocity = static_cast<ADSBTypes::NACHorizontalVelocityError>(0b101);
+    aircraft.navigation_accuracy_category_position = static_cast<ADSBTypes::NACEstimatedPositionUncertainty>(0b1101);
+    aircraft.geometric_vertical_accuracy = static_cast<ADSBTypes::GVA>(0b11);
+    aircraft.source_integrity_level = static_cast<ADSBTypes::SILProbabilityOfExceedingNICRadiusOfContainmnent>(
+        ADSBTypes::kPOERCLessThanOrEqualTo1em5PerFlightHour);
+    aircraft.system_design_assurance = static_cast<ADSBTypes::SystemDesignAssurance>(0b11);
     aircraft.gnss_antenna_offset_right_of_roll_axis_m = -6;
     aircraft.length_m = 10;
     aircraft.width_m = 20;
