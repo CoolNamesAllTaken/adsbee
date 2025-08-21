@@ -150,6 +150,18 @@ class DecodedUATADSBPacket {
                                                                            ADSBTypes::AirGroundState air_ground_state,
                                                                            int32_t &vertical_rate_fpm_ref);
 
+    /**
+     * Decodes either the Aircraft / Vehicle length and width or GNSS sensor position offset from the Aircraft/Vehicle
+     * field that is transmitted in place of vertical rate while the aircraft is on the ground.
+     * @param[in] av_dimensions_encoded Encoded Aircraft/Vehicle field.
+     * @param[out] width_m_ref Reference that gets set to the decoded width.
+     * @param[out] length_m_ref Reference that gets set to the decoded length.
+     * @retval AVDimensionsType that indicates whether the decoded dimensions were AV size or AV GNSS sensor offset
+     * position.
+     */
+    static ADSBTypes::AVDimensionsType DecodeAVDimensions(uint32_t av_dimensions_encoded, int16_t &width_m_ref,
+                                                          int16_t &length_m_ref);
+
     struct __attribute__((packed)) UATHeader {
         uint8_t mdb_type_code     : 5;  // Message Data Block (MDB) type code.
         uint8_t address_qualifier : 3;

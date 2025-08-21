@@ -309,13 +309,6 @@ const VerticalVelocityTestCase kVerticalVelocityTestCases[] = {
 };
 
 TEST(DecodedUATADBPacket, VerticalVelocity) {
-    // Should refuse to decode when vertical rate not available based on AirGrounState.
-    // EXPECT_EQ(ADSBTypes::kVerticalRateSourceNotAvailable,
-    //           DecodedUATADSBPacket::VerticalVelocityToVerticalRateFpm(
-    //               vertical_velocity_encoded, ADSBTypes::AirGroundState::kAirGroundStateOnGround,
-    //               vertical_rate_fpm));
-    // EXPECT_EQ(vertical_rate_fpm, INT32_MIN);
-
     for (const auto &test_case : kVerticalVelocityTestCases) {
         int vertical_velocity_fpm;
         SCOPED_TRACE(test_case.description);
@@ -323,5 +316,32 @@ TEST(DecodedUATADBPacket, VerticalVelocity) {
                   DecodedUATADSBPacket::VerticalVelocityToVerticalRateFpm(
                       test_case.vertical_velocity_encoded, test_case.air_ground_state, vertical_velocity_fpm));
         EXPECT_EQ(vertical_velocity_fpm, test_case.expected_vertical_rate_fpm);
+    }
+}
+
+// Test cases for AV dimensions decoding.
+struct AVDimensionTestCase {
+    uint32_t av_dimensions_encoded;
+    int16_t expected_width_m;
+    int16_t expected_length_m;
+    ADSBTypes::AVDimensionsType expected_dimensions_type;
+    const char *description;
+};
+
+const AVDimensionTestCase kAVDimensionTestCases[] = {
+    {0, 12, 15, ADSBTypes::kAVDimensionsTypeAVLengthWidth, "AV Length Width 0"},
+    {1 << 6, 12, 15, ADSBTypes::kAVDimensionsTypeGNSSSensorOffset, "GNSS sensor offset 0"},
+    {(1 << 6) | 12 << 7, 73, 75, ADSBTypes::kAVDimensionsTypeGNSSSensorOffset, "GNSS sensor offset 12"}
+
+};
+
+TEST(DecodedUATADSBPacket, AVDimensions) {
+    for (const auto &test_case : kAVDimensionTestCases) {
+        int16_t width_m, length_m;
+        SCOPED_TRACE(test_case.description);
+        EXPECT_EQ(test_case.expected_dimensions_type,
+                  DecodedUATADSBPacket::DecodeAVDimensions(test_case.av_dimensions_encoded, width_m, length_m));
+        EXPECT_EQ(width_m, test_case.expected_width_m);
+        EXPECT_EQ(length_m, test_case.expected_length_m);
     }
 }

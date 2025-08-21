@@ -512,6 +512,10 @@ class UATAircraft : public Aircraft {
     uint16_t length_m = 0;
     uint16_t width_m = 0;
 
+    // Aircraft GNSS sensor offset (transmitted on the ground).
+    int16_t gnss_antenna_offset_right_of_adsb_reference_point_m = 0;
+    int16_t gnss_antenna_offset_forward_of_adsb_reference_point_m = 0;
+
     int8_t uat_version = -1;
 
    private:

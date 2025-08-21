@@ -20,6 +20,8 @@ class ADSBTypes {
         kAltitudeSourceGNSS = 1
     };
 
+    enum AVDimensionsType : uint8_t { kAVDimensionsTypeAVLengthWidth = 0, kAVDimensionsTypeGNSSSensorOffset = 1 };
+
     enum Category : int8_t {
         kCategoryInvalid = -1,
         kCategoryNoCategoryInfo = 0,

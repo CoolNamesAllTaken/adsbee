@@ -96,6 +96,82 @@ ADSBTypes::VerticalRateSource DecodedUATADSBPacket::VerticalVelocityToVerticalRa
     }
 }
 
+ADSBTypes::AVDimensionsType DecodedUATADSBPacket::DecodeAVDimensions(uint32_t av_dimensions_encoded,
+                                                                     int16_t &width_m_ref, int16_t &length_m_ref) {
+    bool position_offset_applied = (av_dimensions_encoded >> 6) & 0b1;
+    uint16_t av_length_width_encoded = (av_dimensions_encoded >> 7) & 0b1111;
+
+    switch (av_length_width_encoded) {
+        case 0:
+            width_m_ref = 12;  // rounded up from 11.5
+            length_m_ref = 15;
+            break;
+        case 1:
+            width_m_ref = 23;
+            length_m_ref = 15;
+            break;
+        case 2:
+            width_m_ref = 29;  // rounded up from 28.5
+            length_m_ref = 25;
+            break;
+        case 3:
+            width_m_ref = 34;
+            length_m_ref = 25;
+            break;
+        case 4:
+            width_m_ref = 33;
+            length_m_ref = 35;
+            break;
+        case 5:
+            width_m_ref = 38;
+            length_m_ref = 35;
+            break;
+        case 6:
+            width_m_ref = 40;  // rounded up from 39.5
+            length_m_ref = 45;
+            break;
+        case 7:
+            width_m_ref = 45;
+            length_m_ref = 45;
+            break;
+        case 8:
+            width_m_ref = 45;
+            length_m_ref = 55;
+            break;
+        case 9:
+            width_m_ref = 52;
+            length_m_ref = 55;
+            break;
+        case 10:
+            width_m_ref = 60;  // rounded up from 59.5
+            length_m_ref = 65;
+            break;
+        case 11:
+            width_m_ref = 67;
+            length_m_ref = 65;
+            break;
+        case 12:
+            width_m_ref = 73;  // rounded up from 72.5
+            length_m_ref = 75;
+            break;
+        case 13:
+            width_m_ref = 80;
+            length_m_ref = 75;
+            break;
+        case 14:
+            width_m_ref = 80;
+            length_m_ref = 200;
+            break;
+        case 15:
+            width_m_ref = 81;  // W > 80, so using 81 as reference
+            length_m_ref = 200;
+            break;
+    }
+
+    return position_offset_applied ? ADSBTypes::kAVDimensionsTypeGNSSSensorOffset
+                                   : ADSBTypes::kAVDimensionsTypeAVLengthWidth;
+}
+
 uint32_t DecodedUATADSBPacket::GetICAOAddress() const {
     if (!IsValid()) {
         return 0;
