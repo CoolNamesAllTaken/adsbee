@@ -69,7 +69,7 @@ mavlink_adsb_vehicle_t AircraftToMAVLINKADSBVehicleMessage(const ModeSAircraft &
     if (aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagDirectionValid)) {
         flags |= ADSB_FLAGS_VALID_HEADING;
     }
-    if (aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagHorizontalVelocityValid)) {
+    if (aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagHorizontalSpeedValid)) {
         flags |= ADSB_FLAGS_VALID_VELOCITY;
     }
     if (strlen(aircraft.callsign) > ModeSAircraft::kCallSignMinNumChars) {
@@ -78,8 +78,8 @@ mavlink_adsb_vehicle_t AircraftToMAVLINKADSBVehicleMessage(const ModeSAircraft &
     if (aircraft.squawk > 0) {
         flags |= ADSB_FLAGS_VALID_SQUAWK;
     }
-    if (aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroVerticalVelocityValid) ||
-        aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagGNSSVerticalVelocityValid)) {
+    if (aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroVerticalRateValid) ||
+        aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagGNSSVerticalRateValid)) {
         flags |= ADSB_FLAGS_VERTICAL_VELOCITY_VALID;
     }
     // TODO: Set SOURCE_UAT when adding dual band support.
@@ -101,11 +101,10 @@ mavlink_adsb_vehicle_t AircraftToMAVLINKADSBVehicleMessage(const ModeSAircraft &
         // Horizontal Velocity [cm/s]
         .hor_velocity = static_cast<uint16_t>(KtsToMps(static_cast<int>(aircraft.speed_kts)) * 100),
         // Vertical Velocity [cm/s]: Prefer GNSS vertical velocity but fall back to baro vertical velocity.
-        .ver_velocity =
-            static_cast<int16_t>(FpmToMps(aircraft.HasBitFlag(ModeSAircraft::kBitFlagGNSSVerticalVelocityValid)
-                                              ? aircraft.gnss_vertical_rate_fpm
-                                              : aircraft.baro_vertical_rate_fpm) *
-                                 100),
+        .ver_velocity = static_cast<int16_t>(FpmToMps(aircraft.HasBitFlag(ModeSAircraft::kBitFlagGNSSVerticalRateValid)
+                                                          ? aircraft.gnss_vertical_rate_fpm
+                                                          : aircraft.baro_vertical_rate_fpm) *
+                                             100),
         .flags = flags,
         .squawk = aircraft.squawk,
         .altitude_type = static_cast<uint8_t>(

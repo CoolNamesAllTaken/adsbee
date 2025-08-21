@@ -84,8 +84,8 @@ TEST(UATDecoderTest, DownlinkFrames) {
                 EXPECT_TRUE(false);
 
                 // Ground speed and heading format (aircraft on ground).
-                EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagHorizontalVelocityValid));
-                EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedHorizontalVelocity));
+                EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagHorizontalSpeedValid));
+                EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedHorizontalSpeed));
 
                 EXPECT_EQ(aircraft.speed_kts, frame->speed);
 
@@ -98,8 +98,8 @@ TEST(UATDecoderTest, DownlinkFrames) {
 
             } else if (frame->ns_vel_valid && frame->ew_vel_valid) {
                 // Airborne. Track provided in North Velocity + East Velocity format.
-                EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagHorizontalVelocityValid));
-                EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedHorizontalVelocity));
+                EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagHorizontalSpeedValid));
+                EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedHorizontalSpeed));
 
                 EXPECT_EQ(aircraft.speed_kts, frame->speed);
 
@@ -112,32 +112,32 @@ TEST(UATDecoderTest, DownlinkFrames) {
                 // Vertical speed
                 switch (frame->vert_rate_source) {
                     case UAT_ALT_BARO:
-                        EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagBaroVerticalVelocityValid));
+                        EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagBaroVerticalRateValid));
                         EXPECT_EQ(aircraft.baro_vertical_rate_fpm, frame->vert_rate);
-                        EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedBaroVerticalVelocity));
-                        EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagGNSSVerticalVelocityValid));
-                        EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedGNSSVerticalVelocity));
+                        EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedBaroVerticalRate));
+                        EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagGNSSVerticalRateValid));
+                        EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedGNSSVerticalRate));
                         break;
                     case UAT_ALT_GEO:
-                        EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagGNSSVerticalVelocityValid));
+                        EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagGNSSVerticalRateValid));
                         EXPECT_EQ(aircraft.gnss_vertical_rate_fpm, frame->vert_rate);
-                        EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedGNSSVerticalVelocity));
-                        EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagBaroVerticalVelocityValid));
-                        EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedBaroVerticalVelocity));
+                        EXPECT_TRUE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedGNSSVerticalRate));
+                        EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagBaroVerticalRateValid));
+                        EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedBaroVerticalRate));
                         break;
                     default:
                         // No vertical speed information available.
-                        EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagBaroVerticalVelocityValid));
-                        EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagGNSSVerticalVelocityValid));
-                        EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedBaroVerticalVelocity));
-                        EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedGNSSVerticalVelocity));
+                        EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagBaroVerticalRateValid));
+                        EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagGNSSVerticalRateValid));
+                        EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedBaroVerticalRate));
+                        EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedGNSSVerticalRate));
                         break;
                 }
 
             } else {
                 // No horizontal velocity information available.
-                EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagHorizontalVelocityValid));
-                EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedHorizontalVelocity));
+                EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagHorizontalSpeedValid));
+                EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedHorizontalSpeed));
                 EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagDirectionValid));
                 EXPECT_FALSE(aircraft.HasBitFlag(UATAircraft::kBitFlagUpdatedDirection));
             }

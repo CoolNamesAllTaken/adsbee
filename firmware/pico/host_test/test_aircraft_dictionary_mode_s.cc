@@ -366,18 +366,18 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
         std::get<ModeSAircraft>(itr->second);  // NOTE: Aircraft is a mutable reference until we get to Message A!
 
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagDirectionValid));
-    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagHorizontalVelocityValid));
-    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroVerticalVelocityValid));
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagHorizontalSpeedValid));
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroVerticalRateValid));
 
     // Aircraft should now have velocities populated.
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedDirection));
     EXPECT_NEAR(aircraft.direction_deg, 304.2157021324374, 0.001);
-    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity));
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedHorizontalSpeed));
     EXPECT_EQ(aircraft.speed_kts, 121);
     EXPECT_EQ(aircraft.speed_source, ADSBTypes::kSpeedSourceGroundSpeed);
-    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroVerticalVelocity));
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroVerticalRate));
     EXPECT_EQ(aircraft.baro_vertical_rate_fpm, -64);
-    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroVerticalVelocityValid));
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroVerticalRateValid));
 
     // Test Message A from https://mode-s.org/decode/content/ads-b/5-airborne-velocity.html
     tpacket = DecodedModeSPacket((char *)"8D485020994409940838175B284F");
@@ -390,8 +390,8 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     ASSERT_TRUE(dictionary.GetAircraft(message_a_icao, aircraft));  // NOTE: Aircraft is read-only now!
 
     // Check values for Message A
-    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedGNSSVerticalVelocity));
-    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity));
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedGNSSVerticalRate));
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedHorizontalSpeed));
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedDirection));
     EXPECT_EQ(aircraft.gnss_vertical_rate_fpm, -832);
     EXPECT_EQ(aircraft.speed_source, ADSBTypes::kSpeedSourceGroundSpeed);
@@ -420,8 +420,8 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     ASSERT_TRUE(dictionary.GetAircraft(message_b_icao, aircraft));
 
     // Check values for Message B
-    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroVerticalVelocity));
-    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity));
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroVerticalRate));
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedHorizontalSpeed));
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedDirection));
     EXPECT_EQ(aircraft.baro_vertical_rate_fpm, -2304);
     EXPECT_EQ(aircraft.speed_source, ADSBTypes::kSpeedSourceAirspeedTrue);

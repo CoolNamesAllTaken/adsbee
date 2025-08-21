@@ -510,10 +510,10 @@ bool ModeSAircraft::ApplyAirborneVelocitiesMessage(ModeSADSBPacket packet) {
     }
     // Latching bit flags.
     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagDirectionValid, true);
-    WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHorizontalVelocityValid, true);
+    WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHorizontalSpeedValid, true);
     // Non-latching bit flags.
     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedDirection, true);
-    WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedHorizontalVelocity, true);
+    WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedHorizontalSpeed, true);
 
     // Decode vertical rate.
     int vertical_rate_magnitude_fpm = packet.GetNBitWordFromMessage(9, 37);
@@ -527,14 +527,14 @@ bool ModeSAircraft::ApplyAirborneVelocitiesMessage(ModeSADSBPacket packet) {
         bool vertical_rate_sign_is_negative = packet.GetNBitWordFromMessage(1, 36);
         switch (vertical_rate_source) {
             case ADSBTypes::kVerticalRateSourceBaro:
-                WriteBitFlag(kBitFlagBaroVerticalVelocityValid, true);
-                WriteBitFlag(kBitFlagUpdatedBaroVerticalVelocity, true);
+                WriteBitFlag(kBitFlagBaroVerticalRateValid, true);
+                WriteBitFlag(kBitFlagUpdatedBaroVerticalRate, true);
                 baro_vertical_rate_fpm =
                     (vertical_rate_magnitude_fpm - 1) * 64 * (vertical_rate_sign_is_negative ? -1 : 1);
                 break;
             case ADSBTypes::kVerticalRateSourceGNSS:
-                WriteBitFlag(kBitFlagGNSSVerticalVelocityValid, true);
-                WriteBitFlag(kBitFlagUpdatedGNSSVerticalVelocity, true);
+                WriteBitFlag(kBitFlagGNSSVerticalRateValid, true);
+                WriteBitFlag(kBitFlagUpdatedGNSSVerticalRate, true);
                 gnss_vertical_rate_fpm =
                     (vertical_rate_magnitude_fpm - 1) * 64 * (vertical_rate_sign_is_negative ? -1 : 1);
                 break;
@@ -832,7 +832,7 @@ bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVe
     ADSBTypes::DirectionType direction_type = DecodedUATADSBPacket::HorizontalVelocityToDirectionDegAndSpeedKts(
         state_vector.horizontal_velocity, state_vector.air_ground_state, direction_deg, speed_kts);
     WriteBitFlag(BitFlag::kBitFlagUpdatedDirection, true);
-    WriteBitFlag(BitFlag::kBitFlagUpdatedHorizontalVelocity, true);
+    WriteBitFlag(BitFlag::kBitFlagUpdatedHorizontalSpeed, true);
 
     // Parse direction type and use it to set flags.
     bool received_valid_hvel_data = false;
@@ -863,9 +863,32 @@ bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVe
             received_valid_hvel_data = false;
     }
     WriteBitFlag(BitFlag::kBitFlagDirectionValid, received_valid_hvel_data);
-    WriteBitFlag(BitFlag::kBitFlagHorizontalVelocityValid, received_valid_hvel_data);
+    WriteBitFlag(BitFlag::kBitFlagHorizontalSpeedValid, received_valid_hvel_data);
 
     // Parse vertical rate.
+    int32_t vertical_rate_fpm_temp;
+    ADSBTypes::VerticalRateSource vertical_rate_source = DecodedUATADSBPacket::VerticalVelocityToVerticalRateFpm(
+        state_vector.vertical_velocity, state_vector.air_ground_state, vertical_rate_fpm_temp);
+    bool vertical_rate_valid = (vertical_rate_fpm_temp != INT32_MIN);
+    switch (vertical_rate_source) {
+        case ADSBTypes::kVerticalRateSourceBaro:
+            if (vertical_rate_valid) {
+                baro_vertical_rate_fpm = vertical_rate_fpm_temp;
+            }
+            WriteBitFlag(BitFlag::kBitFlagBaroVerticalRateValid, vertical_rate_valid);
+            WriteBitFlag(BitFlag::kBitFlagUpdatedBaroVerticalRate, vertical_rate_valid);
+            break;
+        case ADSBTypes::kVerticalRateSourceGNSS:
+            if (vertical_rate_valid) {
+                gnss_vertical_rate_fpm = vertical_rate_fpm_temp;
+            }
+            WriteBitFlag(BitFlag::kBitFlagGNSSVerticalRateValid, vertical_rate_valid);
+            WriteBitFlag(BitFlag::kBitFlagUpdatedGNSSVerticalRate, vertical_rate_valid);
+            break;
+        default:
+            // Vertical rate not available.
+            break;
+    }
 
     return true;
 }

@@ -88,12 +88,11 @@ ADSBTypes::VerticalRateSource DecodedUATADSBPacket::VerticalVelocityToVerticalRa
     if (vertical_rate_encoded <= 0) {
         // No vertical rate information available.
         vertical_rate_fpm_ref = INT32_MIN;
-        return ADSBTypes::kVerticalRateSourceNotAvailable;
     } else {
         vertical_rate_fpm_ref =
             (vertical_rate_encoded - 1) * kFPMPerEncodedVerticalRateTick * (vertical_rate_is_positive ? 1 : -1);
-        return vertical_rate_is_geometric ? ADSBTypes::kVerticalRateSourceGNSS : ADSBTypes::kVerticalRateSourceBaro;
     }
+    return vertical_rate_is_geometric ? ADSBTypes::kVerticalRateSourceGNSS : ADSBTypes::kVerticalRateSourceBaro;
 }
 
 ADSBTypes::AVDimensionsType DecodedUATADSBPacket::DecodeAVDimensions(uint32_t av_dimensions_encoded,

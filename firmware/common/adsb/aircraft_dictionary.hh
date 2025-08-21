@@ -128,9 +128,9 @@ class ModeSAircraft : public Aircraft {
         kBitFlagGNSSAltitudeValid,
         kBitFlagPositionValid,
         kBitFlagDirectionValid,
-        kBitFlagHorizontalVelocityValid,
-        kBitFlagBaroVerticalVelocityValid,
-        kBitFlagGNSSVerticalVelocityValid,
+        kBitFlagHorizontalSpeedValid,
+        kBitFlagBaroVerticalRateValid,
+        kBitFlagGNSSVerticalRateValid,
         kBitFlagIsMilitary,              // Received at least one military ES message from the aircraft.
         kBitFlagIsClassB2GroundVehicle,  // Is a class B2 ground vehicle transmitting at <70W.
         kBitFlagHas1090ESIn,             // Aircraft is equipped with 1090MHz Extended Squitter receive capability.
@@ -151,9 +151,9 @@ class ModeSAircraft : public Aircraft {
         kBitFlagUpdatedGNSSAltitude,
         kBitFlagUpdatedPosition,
         kBitFlagUpdatedDirection,
-        kBitFlagUpdatedHorizontalVelocity,
-        kBitFlagUpdatedBaroVerticalVelocity,
-        kBitFlagUpdatedGNSSVerticalVelocity,
+        kBitFlagUpdatedHorizontalSpeed,
+        kBitFlagUpdatedBaroVerticalRate,
+        kBitFlagUpdatedGNSSVerticalRate,
         kBitFlagNumFlagBits
     };
 
@@ -401,9 +401,9 @@ class UATAircraft : public Aircraft {
         kBitFlagGNSSAltitudeValid,
         kBitFlagPositionValid,
         kBitFlagDirectionValid,
-        kBitFlagHorizontalVelocityValid,
-        kBitFlagBaroVerticalVelocityValid,
-        kBitFlagGNSSVerticalVelocityValid,
+        kBitFlagHorizontalSpeedValid,
+        kBitFlagBaroVerticalRateValid,
+        kBitFlagGNSSVerticalRateValid,
         kBitFlagIsMilitary,              // Received at least one military ES message from the aircraft.
         kBitFlagIsClassB2GroundVehicle,  // Is a class B2 ground vehicle transmitting at <70W.
         kBitFlagHas1090ESIn,             // Aircraft is equipped with 1090MHz Extended Squitter receive capability.
@@ -424,9 +424,9 @@ class UATAircraft : public Aircraft {
         kBitFlagUpdatedGNSSAltitude,
         kBitFlagUpdatedPosition,
         kBitFlagUpdatedDirection,
-        kBitFlagUpdatedHorizontalVelocity,
-        kBitFlagUpdatedBaroVerticalVelocity,
-        kBitFlagUpdatedGNSSVerticalVelocity,
+        kBitFlagUpdatedHorizontalSpeed,
+        kBitFlagUpdatedBaroVerticalRate,
+        kBitFlagUpdatedGNSSVerticalRate,
         kBitFlagNumFlagBits
     };
 

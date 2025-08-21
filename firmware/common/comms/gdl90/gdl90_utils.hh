@@ -157,9 +157,9 @@ class GDL90Reporter {
         }
         bool aircraft_updated_position = aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedBaroAltitude) ||
                                          aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedGNSSAltitude) ||
-                                         aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedHorizontalVelocity) ||
-                                         aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedBaroVerticalVelocity) ||
-                                         aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedGNSSVerticalVelocity) ||
+                                         aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedHorizontalSpeed) ||
+                                         aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedBaroVerticalRate) ||
+                                         aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedGNSSVerticalRate) ||
                                          aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedPosition) ||
                                          aircraft.HasBitFlag(ModeSAircraft::kBitFlagUpdatedDirection);
         data.SetMiscIndicator(track_heading_value,
