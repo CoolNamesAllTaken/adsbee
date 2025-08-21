@@ -146,9 +146,9 @@ class DecodedUATADSBPacket {
      * @param[out] vertical_rate_fpm_ref Reference that gets set to the decoded vertical rate.
      * @retval The source the vertical rate is from, or kVerticalRateSourceNotAvailable if decoding was unsuccessful.
      */
-    ADSBTypes::VerticalRateSource VerticalVelocityToVerticalRateFpm(uint32_t vertical_velocity,
-                                                                    ADSBTypes::AirGroundState air_ground_state,
-                                                                    int32_t &vertical_rate_fpm_ref);
+    static ADSBTypes::VerticalRateSource VerticalVelocityToVerticalRateFpm(uint32_t vertical_velocity,
+                                                                           ADSBTypes::AirGroundState air_ground_state,
+                                                                           int32_t &vertical_rate_fpm_ref);
 
     struct __attribute__((packed)) UATHeader {
         uint8_t mdb_type_code     : 5;  // Message Data Block (MDB) type code.

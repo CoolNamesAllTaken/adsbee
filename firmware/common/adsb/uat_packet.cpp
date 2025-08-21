@@ -85,13 +85,13 @@ ADSBTypes::VerticalRateSource DecodedUATADSBPacket::VerticalVelocityToVerticalRa
     bool vertical_rate_is_positive = ((vertical_velocity >> 9) & 0b1) == 0;
 
     uint16_t vertical_rate_encoded = vertical_velocity & 0b111111111;
-    if (vertical_rate_encoded == 0) {
+    if (vertical_rate_encoded <= 0) {
         // No vertical rate information available.
         vertical_rate_fpm_ref = INT32_MIN;
         return ADSBTypes::kVerticalRateSourceNotAvailable;
     } else {
         vertical_rate_fpm_ref =
-            vertical_rate_encoded * kFPMPerEncodedVerticalRateTick * (vertical_rate_is_positive ? 1 : -1);
+            (vertical_rate_encoded - 1) * kFPMPerEncodedVerticalRateTick * (vertical_rate_is_positive ? 1 : -1);
         return vertical_rate_is_geometric ? ADSBTypes::kVerticalRateSourceGNSS : ADSBTypes::kVerticalRateSourceBaro;
     }
 }

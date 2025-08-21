@@ -291,17 +291,21 @@ const VerticalVelocityTestCase kVerticalVelocityTestCases[] = {
      ADSBTypes::kVerticalRateSourceNotAvailable, (char *)"airborne supersonic, vertical rate not available"},
     {1 << 9, ADSBTypes::AirGroundState::kAirGroundStateAirborneSubsonic, INT32_MIN,
      ADSBTypes::kVerticalRateSourceNotAvailable, (char *)"airborne subsonic, vertical rate not available"},
-    {1, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, 0, ADSBTypes::kVerticalRateSourceBaro,
-     (char *)"0fpm baro"},
-    {(0b1 << 9) | 1, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, 0,
+    {1, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, 0, ADSBTypes::kVerticalRateSourceGNSS,
+     (char *)"0fpm gnss"},
+    {(0b11 << 9) | 1, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, 0,
      ADSBTypes::kVerticalRateSourceBaro, (char *)"-0fpm baro"},
     {2, ADSBTypes::AirGroundState::kAirGroundStateAirborneSubsonic, 64, ADSBTypes::kVerticalRateSourceGNSS,
      (char *)"64fpm gnss"},
     {(0b1 << 9) | 2, ADSBTypes::AirGroundState::kAirGroundStateAirborneSubsonic, -64,
      ADSBTypes::kVerticalRateSourceGNSS, (char *)"-64fpm gnss"},
-    {(0b11 << 9) | 3, ADSBTypes::AirGroundState::kAirGroundStateOnGround, -128,
-     ADSBTypes::kVerticalRateSourceNotAvailable, (char *)"-128fpm baro"},
-    // TODO: fix these.
+    {(0b1 << 10) | 3, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, 128,
+     ADSBTypes::kVerticalRateSourceBaro, (char *)"128fpm baro"},
+    {(0b11 << 9) | 510, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, -32576,
+     ADSBTypes::kVerticalRateSourceBaro, (char *)"-32576fpm baro"},
+    {510, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, 32576, ADSBTypes::kVerticalRateSourceGNSS,
+     (char *)"32576fpm gnss"},
+
 };
 
 TEST(DecodedUATADBPacket, VerticalVelocity) {
@@ -312,8 +316,12 @@ TEST(DecodedUATADBPacket, VerticalVelocity) {
     //               vertical_rate_fpm));
     // EXPECT_EQ(vertical_rate_fpm, INT32_MIN);
 
-    // for (const auto VerticalVelocityTestCase &test_case : kVerticalVelocityTestCases) {
-    //     int vertical_velocity_fpm;
-    //     // EXPECT_EQ(test_case.expecte)
-    // }
+    for (const auto &test_case : kVerticalVelocityTestCases) {
+        int vertical_velocity_fpm;
+        SCOPED_TRACE(test_case.description);
+        EXPECT_EQ(test_case.expected_vertical_rate_source,
+                  DecodedUATADSBPacket::VerticalVelocityToVerticalRateFpm(
+                      test_case.vertical_velocity_encoded, test_case.air_ground_state, vertical_velocity_fpm));
+        EXPECT_EQ(vertical_velocity_fpm, test_case.expected_vertical_rate_fpm);
+    }
 }
