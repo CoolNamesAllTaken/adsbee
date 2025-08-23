@@ -44,7 +44,7 @@ TEST(CSBeeUtils, AircraftToCSBeeString) {
     aircraft.navigation_accuracy_category_velocity = static_cast<ADSBTypes::NACHorizontalVelocityError>(0b101);
     aircraft.navigation_accuracy_category_position = static_cast<ADSBTypes::NACEstimatedPositionUncertainty>(0b1101);
     aircraft.geometric_vertical_accuracy = static_cast<ADSBTypes::GVA>(0b11);
-    aircraft.source_integrity_level = static_cast<ADSBTypes::SILProbabilityOfExceedingNICRadiusOfContainmnent>(
+    aircraft.surveillance_integrity_level = static_cast<ADSBTypes::SILProbabilityOfExceedingNICRadiusOfContainmnent>(
         ADSBTypes::kPOERCLessThanOrEqualTo1em5PerFlightHour);
     aircraft.system_design_assurance = static_cast<ADSBTypes::SystemDesignAssurance>(0b11);
     aircraft.gnss_antenna_offset_right_of_roll_axis_m = -6;

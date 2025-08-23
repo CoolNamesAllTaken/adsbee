@@ -29,7 +29,7 @@ inline int16_t WriteCSBeeAircraftMessageStr(char message_buf[], const ModeSAircr
         sysinfo |= (0b1 << 18);                                                                     // GAOK bitfield.
     }
     sysinfo |= ((aircraft.system_design_assurance & 0b11) << 16);                 // SDA bitfield.
-    sysinfo |= ((aircraft.source_integrity_level & 0b11) << 14);                  // SIL bitfield.
+    sysinfo |= ((aircraft.surveillance_integrity_level & 0b11) << 14);            // SIL bitfield.
     sysinfo |= ((aircraft.geometric_vertical_accuracy & 0b11) << 12);             // GVA bitfield
     sysinfo |= ((aircraft.navigation_accuracy_category_position & 0b1111) << 8);  // NAC_p bitfield.
     sysinfo |= ((aircraft.navigation_accuracy_category_velocity & 0b111) << 5);   // NAC_v bitfield.

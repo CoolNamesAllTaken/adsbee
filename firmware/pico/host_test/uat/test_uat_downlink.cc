@@ -177,6 +177,32 @@ TEST(UATDecoderTest, DownlinkFrames) {
                 }
             }
             EXPECT_STREQ(callsign, frame->callsign);
+
+            EXPECT_EQ(aircraft.emitter_category, frame->emitter_category);
+
+            EXPECT_EQ(aircraft.emergency_priority_status, frame->emergency_status);
+
+            EXPECT_EQ(aircraft.uat_version, frame->uat_version);
+
+            EXPECT_EQ(aircraft.surveillance_integrity_level, frame->sil);
+
+            EXPECT_EQ(aircraft.transmit_mso, frame->transmit_mso);
+
+            EXPECT_EQ(aircraft.navigation_accuracy_category_position, frame->nac_p);
+
+            EXPECT_EQ(aircraft.navigation_accuracy_category_velocity, frame->nac_v);
+
+            EXPECT_EQ(aircraft.navigation_integrity_category_baro, frame->nic_baro);
+
+            // Test data can have 1 or -1 in bitfield to indicate true.
+            EXPECT_EQ(aircraft.raw_capability_codes, (frame->has_cdti << 1) | frame->has_acas);
+
+            // Has CDTI capability.
+            EXPECT_EQ(aircraft.HasBitFlag(UATAircraft::kBitFlagHas1090ESIn), frame->has_cdti);
+            EXPECT_EQ(aircraft.HasBitFlag(UATAircraft::kBitFlagHasUATIn), frame->has_cdti);
+
+            // Has TCAS/ACAS operational and installed.
+            EXPECT_EQ(aircraft.HasBitFlag(UATAircraft::kBitFlagTCASOperational), frame->has_acas);
         }
     }
 }

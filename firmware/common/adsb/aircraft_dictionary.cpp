@@ -615,13 +615,13 @@ bool ModeSAircraft::ApplyAircraftOperationStatusMessage(ModeSADSBPacket packet) 
         static_cast<ADSBTypes::NACEstimatedPositionUncertainty>(packet.GetNBitWordFromMessage(4, 44));
 
     // ME[50-51] - Source Integrity Level (SIL)
-    uint8_t source_integrity_level = packet.GetNBitWordFromMessage(2, 50);
+    uint8_t surveillance_integrity_level = packet.GetNBitWordFromMessage(2, 50);
     // ME[53] - Horizontal Reference Direction (HRD)
     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHeadingUsesMagneticNorth, packet.GetNBitWordFromMessage(1, 53));
     // ME[54] - SIL Supplement
     uint8_t sil_supplement = packet.GetNBitWordFromMessage(1, 54);
-    source_integrity_level = static_cast<ADSBTypes::SILProbabilityOfExceedingNICRadiusOfContainmnent>(
-        (sil_supplement << 2) | source_integrity_level);
+    surveillance_integrity_level = static_cast<ADSBTypes::SILProbabilityOfExceedingNICRadiusOfContainmnent>(
+        (sil_supplement << 2) | surveillance_integrity_level);
 
     // Conditional fields (meaning depends on subtype).
     switch (subtype) {
@@ -910,6 +910,7 @@ bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVe
     return true;
 }
 bool UATAircraft::ApplyUATADSBModeStatus(const DecodedUATADSBPacket::UATModeStatus &mode_status) {
+    // Extract callsign and emitter category.
     uint16_t temp = mode_status.emitter_category_and_callsign_chars_1_2;
     emitter_category = static_cast<ADSBTypes::EmitterCategory>(temp / 1600);
     temp %= 1600;
@@ -931,6 +932,59 @@ bool UATAircraft::ApplyUATADSBModeStatus(const DecodedUATADSBPacket::UATModeStat
     temp %= 40;
     callsign[7] = LookupUATCallsignChar(temp);
 
+    // Emegency / Priority Status
+    emergency_priority_status =
+        static_cast<UATAircraft::EmergencyPriorityStatus>(mode_status.emergency_priority_status);
+    switch (emergency_priority_status) {
+        case UATAircraft::kEmergencyPriorityStatusNone:
+            // No emergency;
+            WriteBitFlag(UATAircraft::kBitFlagAlert, false);
+            break;
+        default:
+            // All other Emergency / Priority Status values should trigger an alert.
+            WriteBitFlag(UATAircraft::kBitFlagAlert, true);
+            break;
+    }
+
+    // UAT MOPs version.
+    uat_version = mode_status.uat_version;
+
+    // Surveillance Integrity Level
+    surveillance_integrity_level =
+        static_cast<ADSBTypes::SILProbabilityOfExceedingNICRadiusOfContainmnent>(mode_status.sil);
+
+    // Transmit Message Start Opportunity (MSO)
+    transmit_mso = mode_status.transmit_mso;
+
+    // NACp
+    navigation_accuracy_category_position = static_cast<ADSBTypes::NACEstimatedPositionUncertainty>(mode_status.nac_p);
+
+    // NACv
+    navigation_accuracy_category_velocity = static_cast<ADSBTypes::NACHorizontalVelocityError>(mode_status.nac_v);
+
+    // NICbaro
+    navigation_integrity_category_baro = static_cast<ADSBTypes::NICBarometricAltitudeIntegrity>(mode_status.nic_baro);
+
+    // Capability codes
+    raw_capability_codes = mode_status.capability_codes;
+    if (raw_capability_codes & 0b10) {
+        // Has CDTI traffic display capability.
+        // We assume that a UAT aircraft transmitting that it has Cockpit Display of Traffic Information also includes a
+        // 1090MHz Extended Squitter receiver.
+        WriteBitFlag(UATAircraft::kBitFlagHas1090ESIn, true);
+        WriteBitFlag(UATAircraft::kBitFlagHasUATIn, true);
+    } else {
+        // Does not have CDTI traffic display capability.
+        WriteBitFlag(UATAircraft::kBitFlagHas1090ESIn, false);
+        WriteBitFlag(UATAircraft::kBitFlagHasUATIn, false);
+    }
+    if (raw_capability_codes & 0b01) {
+        // Has TCAS/ACAS installed and operational.
+        WriteBitFlag(UATAircraft::kBitFlagTCASOperational, true);
+    } else {
+        // Does not have TCAS/ACAS installed and operational.
+        WriteBitFlag(UATAircraft::kBitFlagTCASOperational, false);
+    }
     return true;
 }
 bool UATAircraft::ApplyUATADSBTargetState(const DecodedUATADSBPacket::UATTargetState &target_state) { return true; }

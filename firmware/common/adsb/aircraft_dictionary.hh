@@ -325,7 +325,7 @@ class ModeSAircraft : public Aircraft {
         ADSBTypes::kEPUUnknownOrGreaterThanOrEqualTo10NauticalMiles;  // 4 bits.
     // Geometric Vertical Accuracy (GVA)
     ADSBTypes::GVA geometric_vertical_accuracy = ADSBTypes::kGVAUnknownOrGreaterThan150Meters;  // 2 bits.
-    ADSBTypes::SILProbabilityOfExceedingNICRadiusOfContainmnent source_integrity_level =
+    ADSBTypes::SILProbabilityOfExceedingNICRadiusOfContainmnent surveillance_integrity_level =
         ADSBTypes::kPOERCUnknownOrGreaterThan1em3PerFlightHour;  // 3 bits.
     // System Design Assurance
     ADSBTypes::SystemDesignAssurance system_design_assurance =
@@ -519,8 +519,29 @@ class UATAircraft : public Aircraft {
     char callsign[ModeSAircraft::kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
     uint16_t squawk = 0;
     ADSBTypes::EmitterCategory emitter_category = ADSBTypes::kEmitterCategoryNoCategoryInfo;
+    EmergencyPriorityStatus emergency_priority_status =
+        kEmergencyPriorityStatusNone;  // Emergency priority status of the aircraft.
 
-    ADSBTypes::NICRadiusOfContainment navigation_integrity_category = ADSBTypes::kROCUnknown;
+    ADSBTypes::NICRadiusOfContainment navigation_integrity_category = ADSBTypes::kROCUnknown;  // 4 bits.
+    ADSBTypes::NICBarometricAltitudeIntegrity navigation_integrity_category_baro =
+        ADSBTypes::kBAIGillhamInputNotCrossChecked;  // 1 bit. Default to worst case.
+    // Navigation Accuracy Category (NAC)
+    ADSBTypes::NACHorizontalVelocityError navigation_accuracy_category_velocity =
+        ADSBTypes::kHVEUnknownOrGreaterThanOrEqualTo10MetersPerSecond;  // 3 bits.
+    ADSBTypes::NACEstimatedPositionUncertainty navigation_accuracy_category_position =
+        ADSBTypes::kEPUUnknownOrGreaterThanOrEqualTo10NauticalMiles;  // 4 bits.
+    // Geometric Vertical Accuracy (GVA)
+    ADSBTypes::GVA geometric_vertical_accuracy = ADSBTypes::kGVAUnknownOrGreaterThan150Meters;  // 2 bits.
+    ADSBTypes::SILProbabilityOfExceedingNICRadiusOfContainmnent surveillance_integrity_level =
+        ADSBTypes::kPOERCUnknownOrGreaterThan1em3PerFlightHour;  // 3 bits.
+    // System Design Assurance
+    ADSBTypes::SystemDesignAssurance system_design_assurance =
+        ADSBTypes::kSDASupportedFailureUnknownOrNoSafetyEffect;  // 2 bits.
+
+    uint8_t raw_capability_codes = 0;
+
+    // 6 LSBs of Message Start Opportunity used for last transmission.
+    uint8_t transmit_mso = 0;
 
     // Aircraft dimensions (on the ground).
     uint16_t length_m = 0;

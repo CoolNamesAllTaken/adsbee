@@ -131,7 +131,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.453380, -122.096429, 1, 1000, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -99, 1, 65, 1, 147, 1, 118,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -144,7 +144,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.453015, -122.096128, 1, 1000, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -100, 1, 65, 1, 147, 1, 119,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -157,7 +157,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.449667, -122.093275, 1, 1000, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -101, 1, 71, 1, 145, 1, 123,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -170,7 +170,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.449281, -122.092931, 1, 1000, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -101, 1, 72, 1, 145, 1, 124,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -183,7 +183,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.447135, -122.090979, 1, 1000, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -100, 1, 74, 1, 143, 1, 124,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -196,9 +196,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.436385, -122.080550, 1, 975, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -97, 1, 84, 1, 139, 1, 128,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "N5130E", 1, 0, 2, 3, 56,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1200  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -209,7 +209,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.435141, -122.079155, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -96, 1, 86, 1, 138, 1, 129,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -222,7 +222,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.432952, -122.076623, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -93, 1, 89, 1, 136, 1, 129,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1200  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -235,7 +235,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.432523, -122.076108, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -92, 1, 89, 1, 136, 1, 128,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -248,9 +248,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.427373, -122.069993, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -94, 1, 86, 1, 138, 1, 127,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "0322", 2, 0, 2, 3, 46,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1200  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -261,7 +261,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.426751, -122.069306, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -95, 1, 86, 1, 138, 1, 128,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -274,7 +274,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.426236, -122.068706, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -95, 1, 86, 1, 138, 1, 128,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1175  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -287,7 +287,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.425957, -122.068405, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -95, 1, 86, 1, 138, 1, 128,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1175  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -300,7 +300,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.424734, -122.067010, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -95, 1, 86, 1, 138, 1, 128,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -313,7 +313,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.424219, -122.066410, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -94, 1, 86, 1, 138, 1, 127,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -326,7 +326,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.421858, -122.063770, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -94, 1, 82, 1, 139, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -339,7 +339,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.419283, -122.060938, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -93, 1, 80, 1, 139, 1, 123,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1200  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -352,7 +352,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.419112, -122.060766, 1, 975, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -93, 1, 80, 1, 139, 1, 123,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1200  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -365,9 +365,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.417974, -122.059565, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -93, 1, 80, 1, 139, 1, 123,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "N5130E", 1, 0, 2, 3, 19,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1200  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -378,7 +378,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.417545, -122.059093, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -93, 1, 80, 1, 139, 1, 123,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -391,9 +391,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.415850, -122.057204, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -91, 1, 82, 1, 138, 1, 122,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "0322", 2, 0, 2, 3, 60,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1200  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -404,9 +404,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.415421, -122.056732, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -91, 1, 82, 1, 138, 1, 122,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "N5130E", 1, 0, 2, 3, 21,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1200  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -417,7 +417,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.414670, -122.055874, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -92, 1, 82, 1, 138, 1, 123,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1200  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -430,7 +430,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.413125, -122.054179, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -92, 1, 81, 1, 139, 1, 123,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -443,7 +443,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.412438, -122.053428, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -92, 1, 81, 1, 139, 1, 123,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1200  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -456,7 +456,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.411859, -122.052763, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -92, 1, 80, 1, 139, 1, 122,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -469,7 +469,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.411001, -122.051840, 1, 975, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -92, 1, 80, 1, 139, 1, 122,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -482,7 +482,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.410572, -122.051368, 1, 975, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -92, 1, 80, 1, 139, 1, 122,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -495,7 +495,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.409713, -122.050445, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -92, 1, 79, 1, 139, 1, 121,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -508,9 +508,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.409284, -122.049994, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -92, 1, 79, 1, 139, 1, 121,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "0322", 2, 0, 2, 3, 60,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1200  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -521,9 +521,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.408855, -122.049522, 1, 975, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -92, 1, 79, 1, 139, 1, 121,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "N5130E", 1, 0, 2, 3, 35,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1200  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -534,7 +534,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.408426, -122.049072, 1, 975, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -92, 1, 79, 1, 139, 1, 121,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -547,7 +547,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.407761, -122.048321, 1, 975, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -92, 1, 80, 1, 139, 1, 122,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1200  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -560,7 +560,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.407331, -122.047870, 1, 975, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -91, 1, 80, 1, 139, 1, 121,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -573,7 +573,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.406902, -122.047398, 1, 975, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -91, 1, 81, 1, 138, 1, 122,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -586,9 +586,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.406580, -122.047012, 1, 975, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -90, 1, 82, 1, 138, 1, 122,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "0322", 2, 0, 2, 3, 48,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1200  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -599,7 +599,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.406237, -122.046626, 1, 975, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -90, 1, 82, 1, 138, 1, 122,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -612,7 +612,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.405508, -122.045767, 1, 975, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -88, 1, 84, 1, 136, 1, 122,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1200  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -625,7 +625,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.404928, -122.045059, 1, 975, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -87, 1, 85, 1, 136, 1, 122,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -638,7 +638,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.404220, -122.044158, 1, 975, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -86, 1, 87, 1, 135, 1, 122,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -651,7 +651,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.403491, -122.043257, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -85, 1, 88, 1, 134, 1, 122,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1200  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -664,7 +664,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.403040, -122.042634, 1, 950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -84, 1, 89, 1, 133, 1, 122,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -677,9 +677,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.402568, -122.041991, 1, 975, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -82, 1, 91, 1, 132, 1, 122,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "0322", 2, 0, 2, 3, 19,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1225  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -690,9 +690,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.402353, -122.041669, 1, 975, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -80, 1, 92, 1, 131, 1, 122,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "N5130E", 1, 0, 2, 3, 37,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1225  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -703,7 +703,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.401280, -122.040038, 1, 975, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -75, 1, 95, 1, 128, 1, 121,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 384, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 384, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -716,7 +716,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.400937, -122.039480, 1, 1000, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -72, 1, 96, 1, 127, 1, 120,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 320, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 320, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -729,9 +729,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.400615, -122.038922, 1, 1000, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -70, 1, 97, 1, 126, 1, 120,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 384, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 384, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "0322", 2, 0, 2, 3, 41,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1250  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -742,7 +742,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.400293, -122.038343, 1, 1000, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -68, 1, 98, 1, 125, 1, 119,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 448, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 448, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -755,7 +755,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.399929, -122.037678, 1, 1000, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -67, 1, 98, 1, 124, 1, 119,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 448, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 448, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1250  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -768,7 +768,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.399564, -122.036991, 1, 1025, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -66, 1, 98, 1, 124, 1, 118,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 384, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 384, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1275  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -781,7 +781,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.399263, -122.036412, 1, 1025, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -65, 1, 98, 1, 124, 1, 118,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 448, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 448, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -794,9 +794,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.399070, -122.036068, 1, 1025, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -64, 1, 98, 1, 123, 1, 117,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 384, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 384, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "N5130E", 1, 0, 2, 3, 14,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1275  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -807,7 +807,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.398727, -122.035382, 1, 1025, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -63, 1, 98, 1, 123, 1, 117,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 320, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 320, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -820,7 +820,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.398491, -122.034931, 1, 1025, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -62, 1, 98, 1, 122, 1, 116,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 320, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 320, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -833,7 +833,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.398083, -122.034116, 1, 1050, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -61, 1, 99, 1, 122, 1, 116,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1300  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -846,7 +846,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.397933, -122.033772, 1, 1050, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -60, 1, 99, 1, 121, 1, 116,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -859,9 +859,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.397590, -122.033086, 1, 1050, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -58, 1, 100, 1, 120, 1, 116,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "0322", 2, 0, 2, 3, 15,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1300  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -872,9 +872,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.397225, -122.032270, 1, 1050, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -58, 1, 100, 1, 120, 1, 116,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "N5130E", 1, 0, 2, 3, 53,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1300  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -885,7 +885,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.396967, -122.031691, 1, 1050, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -57, 1, 100, 1, 120, 1, 115,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -898,7 +898,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.396796, -122.031326, 1, 1050, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -56, 1, 101, 1, 119, 1, 115,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1300  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -911,7 +911,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.396431, -122.030511, 1, 1050, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -56, 1, 101, 1, 119, 1, 115,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -924,7 +924,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.396173, -122.029932, 1, 1050, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -55, 1, 101, 1, 119, 1, 115,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -937,9 +937,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.396023, -122.029567, 1, 1050, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -54, 1, 101, 1, 118, 1, 115,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "0322", 2, 0, 2, 3, 56,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1325  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -950,7 +950,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.395830, -122.029095, 1, 1050, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -54, 1, 101, 1, 118, 1, 115,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 320, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 320, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -963,7 +963,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.395573, -122.028515, 1, 1075, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -53, 1, 101, 1, 118, 1, 114,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1325  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -976,7 +976,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.395294, -122.027807, 1, 1100, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -54, 1, 101, 1, 118, 1, 115,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1325  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -989,7 +989,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.394993, -122.027099, 1, 1100, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -53, 1, 101, 1, 118, 1, 114,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -1002,9 +1002,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.394693, -122.026412, 1, 1075, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -53, 1, 101, 1, 118, 1, 114,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "N5130E", 1, 0, 2, 3, 51,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1350  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1015,7 +1015,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.394543, -122.026048, 1, 1075, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -53, 1, 101, 1, 118, 1, 114,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -1028,7 +1028,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.393963, -122.024632, 1, 1100, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -52, 1, 102, 1, 117, 1, 114,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1350  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -1041,7 +1041,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.393813, -122.024267, 1, 1100, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -51, 1, 102, 1, 117, 1, 114,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -1054,9 +1054,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.393491, -122.023430, 1, 1100, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -50, 1, 103, 1, 116, 1, 114,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "0322", 2, 0, 2, 3, 38,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1350  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1067,9 +1067,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.393255, -122.022829, 1, 1100, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -49, 1, 104, 1, 115, 1, 115,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "N5130E", 1, 0, 2, 3, 47,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1350  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1082,7 +1082,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -70, 1, 46, 1, 147, 1, 84,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 448, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 10,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1095,7 +1095,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 83, 1, -157, 1, 298, 1, 178,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -1024, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 14,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1106,7 +1106,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.393084, -122.022357, 1, 1100, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -49, 1, 104, 1, 115, 1, 115,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -1121,7 +1121,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -56, 1, 63, 1, 132, 1, 84,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 512, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 38,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1132,7 +1132,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.392826, -122.021627, 1, 1100, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -47, 1, 104, 1, 114, 1, 114,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1375  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -1147,7 +1147,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 62, 1, -102, 1, 301, 1, 119,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -704, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 52,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1158,7 +1158,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.392740, -122.021391, 1, 1100, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -47, 1, 104, 1, 114, 1, 114,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -1173,7 +1173,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -169, 1, -94, 1, 209, 1, 193,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -832, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 18,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1184,7 +1184,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.392483, -122.020662, 1, 1100, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -46, 1, 105, 1, 114, 1, 115,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -1199,7 +1199,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -227, 1, -37, 1, 189, 1, 230,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 192, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 50,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1400  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1210,9 +1210,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.392268, -122.020040, 1, 1125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -44, 1, 105, 1, 113, 1, 114,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "0322", 2, 0, 2, 3, 1,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1375  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1225,7 +1225,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -141, 1, -131, 1, 223, 1, 192,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -832, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 18,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1238,7 +1238,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 60, 1, -103, 1, 300, 1, 119,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -576, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 44,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1251,7 +1251,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -229, 1, -31, 1, 188, 1, 231,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 192, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 48,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1425  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1264,7 +1264,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -231, 1, -24, 1, 186, 1, 232,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 256, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 50,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1425  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1275,7 +1275,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.392075, -122.019439, 1, 1125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -44, 1, 105, 1, 113, 1, 114,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -1290,7 +1290,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 80, 1, -159, 1, 297, 1, 178,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -832, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 8,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1303,7 +1303,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -61, 1, 61, 1, 135, 1, 86,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 512, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 30,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1316,7 +1316,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -233, 1, -20, 1, 185, 1, 234,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 256, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 22,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1425  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1329,7 +1329,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -234, 1, -14, 1, 183, 1, 234,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 256, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 50,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1425  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1342,7 +1342,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -234, 1, -14, 1, 183, 1, 234,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 256, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 20,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1425  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1353,7 +1353,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.391860, -122.018816, 1, 1125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -43, 1, 105, 1, 112, 1, 113,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1375  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -1368,7 +1368,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -140, 1, -131, 1, 223, 1, 192,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -768, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 18,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1381,7 +1381,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 61, 1, -102, 1, 301, 1, 119,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -448, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 28,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1394,7 +1394,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -235, 1, -7, 1, 182, 1, 235,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 320, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 50,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1425  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1407,7 +1407,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -236, 1, 0, 1, 180, 1, 236,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 320, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 42,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1425  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1418,7 +1418,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.391667, -122.018216, 1, 1125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -43, 1, 105, 1, 112, 1, 113,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1375  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -1433,7 +1433,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -237, 1, 4, 1, 179, 1, 237,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 320, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 44,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1425  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1444,7 +1444,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.391496, -122.017722, 1, 1125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -43, 1, 105, 1, 112, 1, 113,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -1459,7 +1459,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -237, 1, 11, 1, 177, 1, 237,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 384, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 16,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1425  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1472,7 +1472,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -238, 1, 17, 1, 176, 1, 239,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 384, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 18,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 2, 1, 0, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 2, 1, 0, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1425  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1485,7 +1485,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 59, 1, -103, 1, 300, 1, 119,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -448, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 48,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1498,7 +1498,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -89, 1, -169, 1, 242, 1, 191,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -832, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 58,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1509,9 +1509,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.391303, -122.017100, 1, 1125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -44, 1, 105, 1, 113, 1, 114,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "N5130E", 1, 0, 2, 3, 34,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1400  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1524,7 +1524,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -238, 1, 22, 1, 175, 1, 239,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 512, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 46,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 2, 1, 0, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 2, 1, 0, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1425  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1537,7 +1537,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -238, 1, 29, 1, 173, 1, 240,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 512, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 22,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 2, 1, 0, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 2, 1, 0, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1450  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1550,7 +1550,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 80, 1, -159, 1, 297, 1, 178,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -896, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 60,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1563,7 +1563,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -62, 1, 61, 1, 135, 1, 87,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 512, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 4,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1576,7 +1576,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -237, 1, 36, 1, 171, 1, 240,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 640, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 52,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 2, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 2, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1450  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1587,7 +1587,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.391024, -122.016242, 1, 1125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -44, 1, 105, 1, 113, 1, 114,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -1602,7 +1602,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -237, 1, 40, 1, 170, 1, 240,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 768, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 50,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 2, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 2, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1475  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1615,7 +1615,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 60, 1, -102, 1, 300, 1, 118,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -512, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 40,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1628,7 +1628,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -236, 1, 47, 1, 169, 1, 241,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 832, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 52,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 2, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 2, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1475  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1641,7 +1641,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -72, 1, -177, 1, 248, 1, 191,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -1024, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 2,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1652,7 +1652,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.390766, -122.015512, 1, 1125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -44, 1, 106, 1, 113, 1, 115,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -1665,7 +1665,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.390702, -122.015254, 1, 1150, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -44, 1, 106, 1, 113, 1, 115,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1375  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -1680,7 +1680,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -235, 1, 53, 1, 167, 1, 241,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 896, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 50,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 2, 1, 0, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 2, 1, 0, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1475  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1693,7 +1693,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 82, 1, -158, 1, 297, 1, 178,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -896, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 8,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1706,7 +1706,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -60, 1, 64, 1, 133, 1, 88,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 576, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 48,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1719,7 +1719,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -233, 1, 62, 1, 165, 1, 241,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 832, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 12,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 2, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 2, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1500  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1732,7 +1732,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -233, 1, 62, 1, 165, 1, 241,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 832, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 20,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 2, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 2, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1500  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1743,7 +1743,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.390401, -122.014396, 1, 1125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -45, 1, 106, 1, 113, 1, 115,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -1758,7 +1758,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -233, 1, 62, 1, 165, 1, 241,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 832, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 14,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 2, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 2, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1500  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1771,7 +1771,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 58, 1, -104, 1, 299, 1, 119,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -512, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 10,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1784,7 +1784,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 18, 1, -190, 1, 275, 1, 191,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -1536, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 18,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1797,7 +1797,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -233, 1, 66, 1, 164, 1, 242,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 832, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 22,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 2, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 2, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1525  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1808,9 +1808,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.390251, -122.013903, 1, 1125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -45, 1, 106, 1, 113, 1, 115,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "0322", 2, 0, 2, 3, 58,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1375  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1823,7 +1823,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 82, 1, -158, 1, 297, 1, 178,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -832, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 6,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1836,7 +1836,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -62, 1, 61, 1, 135, 1, 87,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 576, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 46,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1849,7 +1849,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -232, 1, 68, 1, 164, 1, 242,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 832, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 50,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 2, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 2, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1525  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1862,7 +1862,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -232, 1, 71, 1, 163, 1, 243,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 960, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 26,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 2, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 2, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1525  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1873,9 +1873,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.390037, -122.013302, 1, 1125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -45, 1, 106, 1, 113, 1, 115,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "N5130E", 1, 0, 2, 3, 43,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1375  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1888,7 +1888,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -231, 1, 73, 1, 162, 1, 242,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 960, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 58,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1525  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1901,7 +1901,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 59, 1, -102, 1, 300, 1, 118,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -512, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 46,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1914,7 +1914,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 43, 1, -186, 1, 283, 1, 191,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -2112, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 50,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1925,7 +1925,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.389865, -122.012787, 1, 1125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -45, 1, 106, 1, 113, 1, 115,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -1940,7 +1940,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -231, 1, 74, 1, 162, 1, 243,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 1088, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 24,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1550  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1953,7 +1953,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -231, 1, 75, 1, 162, 1, 243,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 1152, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 24,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1550  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1964,7 +1964,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.389650, -122.012186, 1, 1125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -45, 1, 107, 1, 113, 1, 116,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1375  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -1979,7 +1979,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -231, 1, 76, 1, 162, 1, 243,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 1152, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 56,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1550  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -1992,7 +1992,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -231, 1, 76, 1, 162, 1, 243,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 1152, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 50,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1575  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2005,7 +2005,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 57, 1, -103, 1, 299, 1, 118,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -512, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 20,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2018,7 +2018,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 114, 1, -154, 1, 307, 1, 192,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -2432, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 44,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2031,7 +2031,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -232, 1, 75, 1, 162, 1, 244,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 1216, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 24,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1575  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2042,7 +2042,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.389350, -122.011306, 1, 1125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -45, 1, 107, 1, 113, 1, 116,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2057,7 +2057,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -232, 1, 75, 1, 162, 1, 244,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 1216, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 50,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1600  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2070,7 +2070,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -62, 1, 60, 1, 136, 1, 86,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 512, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 36,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2083,7 +2083,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 82, 1, -158, 1, 297, 1, 178,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -832, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 6,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2094,7 +2094,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.389200, -122.010813, 1, 1150, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -45, 1, 107, 1, 113, 1, 116,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2109,7 +2109,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -233, 1, 74, 1, 162, 1, 244,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 1280, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 28,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1600  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2122,7 +2122,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -233, 1, 73, 1, 163, 1, 244,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 1344, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 50,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1600  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2135,7 +2135,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 147, 1, -122, 1, 320, 1, 191,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -2432, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 62,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2148,7 +2148,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 58, 1, -102, 1, 300, 1, 117,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -576, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 22,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2159,9 +2159,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.388942, -122.010062, 1, 1150, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -45, 1, 107, 1, 113, 1, 116,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "0322", 2, 0, 2, 3, 3,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1375  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2174,7 +2174,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -233, 1, 73, 1, 163, 1, 244,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 1344, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 44,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1625  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2187,7 +2187,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 74, 1, -266, 1, 286, 1, 276,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -1920, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 58,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2200,7 +2200,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -234, 1, 72, 1, 163, 1, 245,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 1344, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 20,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1625  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2213,7 +2213,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -234, 1, 71, 1, 163, 1, 245,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 1344, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 60,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1650  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2224,7 +2224,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.388685, -122.009311, 1, 1150, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -45, 1, 107, 1, 113, 1, 116,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2239,7 +2239,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -235, 1, 71, 1, 163, 1, 245,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 1280, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 56,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1650  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2252,7 +2252,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -235, 1, 70, 1, 163, 1, 245,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 1216, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 24,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1675  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2265,7 +2265,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 69, 1, -267, 1, 284, 1, 276,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -1920, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 40,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2276,7 +2276,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.388492, -122.008688, 1, 1150, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -45, 1, 108, 1, 113, 1, 117,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1375  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2291,7 +2291,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 56, 1, -102, 1, 299, 1, 116,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -576, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 52,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2304,7 +2304,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 176, 1, -74, 1, 337, 1, 191,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -2304, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 62,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2317,7 +2317,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -235, 1, 70, 1, 163, 1, 245,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 1152, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 24,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1675  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2328,7 +2328,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.388363, -122.008324, 1, 1150, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -45, 1, 108, 1, 113, 1, 117,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1375  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2343,7 +2343,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -236, 1, 69, 1, 164, 1, 246,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 1024, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 22,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1700  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2356,7 +2356,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -62, 1, 62, 1, 135, 1, 88,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 512, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 58,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2369,7 +2369,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 66, 1, -268, 1, 284, 1, 276,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -1920, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 50,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2382,7 +2382,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 83, 1, -157, 1, 298, 1, 178,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -832, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 58,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2395,7 +2395,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -236, 1, 69, 1, 164, 1, 246,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 960, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 6,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1700  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2406,7 +2406,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.388148, -122.007680, 1, 1125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -45, 1, 108, 1, 113, 1, 117,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2421,7 +2421,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -237, 1, 69, 1, 164, 1, 247,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 896, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 24,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1700  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2434,7 +2434,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 58, 1, -102, 1, 300, 1, 117,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -576, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 52,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2447,7 +2447,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -237, 1, 69, 1, 164, 1, 247,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 896, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 56,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1725  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2460,7 +2460,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 189, 1, -22, 1, 353, 1, 190,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -2240, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 30,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2473,7 +2473,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -237, 1, 69, 1, 164, 1, 247,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 768, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 56,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1725  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2484,9 +2484,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.387912, -122.006929, 1, 1125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -46, 1, 108, 1, 113, 1, 117,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 2, "N5130E", 1, 0, 2, 3, 13,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1375  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2499,7 +2499,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 62, 1, -270, 1, 283, 1, 277,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -1856, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 14,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2512,7 +2512,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -237, 1, 70, 1, 164, 1, 247,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 704, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 50,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1725  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2523,7 +2523,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.387784, -122.006564, 1, 1125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -45, 1, 108, 1, 113, 1, 117,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2538,7 +2538,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -237, 1, 71, 1, 163, 1, 247,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 704, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 62,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1750  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2549,7 +2549,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.387569, -122.005920, 1, 1125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -45, 1, 109, 1, 112, 1, 118,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2564,7 +2564,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -237, 1, 72, 1, 163, 1, 248,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 640, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 62,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1750  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2577,7 +2577,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 59, 1, -271, 1, 282, 1, 277,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -1856, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 60,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2590,7 +2590,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -237, 1, 74, 1, 163, 1, 248,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 640, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 60,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1750  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2603,7 +2603,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 57, 1, -103, 1, 299, 1, 118,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -640, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 8,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2616,7 +2616,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 191, 1, -9, 1, 357, 1, 191,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -2048, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 40,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2629,7 +2629,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -237, 1, 76, 1, 162, 1, 249,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 640, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 50,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1750  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2640,7 +2640,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.387333, -122.005169, 1, 1125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -45, 1, 109, 1, 112, 1, 118,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1375  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2655,7 +2655,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -62, 1, 61, 1, 135, 1, 87,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 512, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 28,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2668,7 +2668,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 84, 1, -157, 1, 298, 1, 178,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -832, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 44,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2681,7 +2681,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -237, 1, 79, 1, 162, 1, 250,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 640, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 60,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1775  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2694,7 +2694,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 62, 1, -270, 1, 283, 1, 277,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -1792, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 52,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2707,7 +2707,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -237, 1, 79, 1, 162, 1, 250,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 640, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 48,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1775  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2718,7 +2718,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10907377,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.387075, -122.004397, 1, 1125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -45, 1, 109, 1, 112, 1, 118,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2733,7 +2733,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -235, 1, 84, 1, 160, 1, 250,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         2, 640, 0, 0.0, 0.0, 0, 0, 15,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "N70FC", 1, 0, 1, 0, 2,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        9, 3, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        9, 3, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1775  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2746,7 +2746,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 59, 1, -101, 1, 300, 1, 117,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -640, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 36,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2757,7 +2757,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.576504, -121.794047, 1, 4250, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -85, 1, 69, 1, 141, 1, 109,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2770,7 +2770,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.575409, -121.792910, 1, 4250, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -84, 1, 71, 1, 140, 1, 110,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2783,7 +2783,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.570753, -121.787374, 1, 4225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -78, 1, 73, 1, 137, 1, 107,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2796,7 +2796,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.569509, -121.786087, 1, 4225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -88, 1, 63, 1, 144, 1, 108,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2809,7 +2809,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.569251, -121.785872, 1, 4225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -90, 1, 61, 1, 146, 1, 109,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4425  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2822,9 +2822,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.567813, -121.784906, 1, 4225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -101, 1, 46, 1, 156, 1, 111,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "9658K", 1, 0, 2, 3, 40,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4425  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2835,7 +2835,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.567127, -121.784585, 1, 4225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -105, 1, 39, 1, 160, 1, 112,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2848,7 +2848,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.565818, -121.784091, 1, 4200, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -112, 1, 26, 1, 167, 1, 115,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2861,9 +2861,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.565410, -121.784005, 1, 4200, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -113, 1, 22, 1, 169, 1, 115,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "1200", 2, 0, 2, 3, 29,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4400  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2874,7 +2874,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.563779, -121.783791, 1, 4200, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -118, 1, 4, 1, 178, 1, 118,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4400  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2887,7 +2887,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.561612, -121.784070, 1, 4225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -116, 1, -23, 1, 191, 1, 118,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 320, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 320, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2900,7 +2900,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.560432, -121.784477, 1, 4225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -113, 1, -37, 1, 198, 1, 119,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4425  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2913,7 +2913,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.559724, -121.784842, 1, 4225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -109, 1, -48, 1, 204, 1, 119,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2926,7 +2926,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.558737, -121.785464, 1, 4225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -103, 1, -60, 1, 210, 1, 119,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2939,7 +2939,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.558286, -121.785851, 1, 4225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -99, 1, -66, 1, 214, 1, 119,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2952,7 +2952,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.558115, -121.786001, 1, 4225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -98, 1, -68, 1, 215, 1, 119,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4450  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2965,9 +2965,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.556784, -121.787503, 1, 4225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -81, 1, -88, 1, 227, 1, 120,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "9658K", 1, 0, 2, 3, 50,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4450  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -2978,7 +2978,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.556505, -121.787932, 1, 4250, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -76, 1, -92, 1, 230, 1, 119,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -2991,7 +2991,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.555604, -121.789670, 1, 4225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -56, 1, -105, 1, 242, 1, 119,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3004,9 +3004,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.555368, -121.790292, 1, 4225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -48, 1, -108, 1, 246, 1, 118,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "1200", 2, 0, 2, 3, 34,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4425  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3017,7 +3017,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.554896, -121.792266, 1, 4225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -26, 1, -115, 1, 257, 1, 118,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4425  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3030,7 +3030,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.554767, -121.793339, 1, 4225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -13, 1, -116, 1, 264, 1, 117,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3043,7 +3043,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.638710, -121.941612, 1, 3450, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 50, 1, -92, 1, 299, 1, 105,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -448, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -448, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3056,7 +3056,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10980330,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.563972, -121.970987, 1, 750, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 89, 1, -32, 1, 340, 1, 95,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        1, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        1, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3071,7 +3071,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -40, 1, 34, 1, 140, 1, 52,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 0, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 52,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3084,7 +3084,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 30, 1, 97, 1, 73, 1, 102,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 832, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 48,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3097,7 +3097,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -64, 1, 49, 1, 143, 1, 81,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 640, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 58,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3108,7 +3108,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.638988, -121.942255, 1, 3450, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 50, 1, -92, 1, 299, 1, 105,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -448, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -448, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3625  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3123,7 +3123,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 66, 1, -114, 1, 300, 1, 132,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -384, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 42,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3136,7 +3136,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -77, 1, 2, 1, 179, 1, 77,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -704, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 10,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3147,7 +3147,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.639267, -121.942899, 1, 3450, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 49, 1, -92, 1, 298, 1, 104,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -448, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -448, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3625  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3160,7 +3160,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10980330,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.564852, -121.971459, 1, 750, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 85, 1, -40, 1, 335, 1, 94,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        1, 64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        1, 64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 925  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3173,7 +3173,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10980330,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.565067, -121.971588, 1, 750, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 84, 1, -42, 1, 333, 1, 94,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        1, 64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        1, 64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3186,7 +3186,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.639546, -121.943521, 1, 3425, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 49, 1, -91, 1, 298, 1, 103,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -512, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -512, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3201,7 +3201,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 53, 1, 16, 1, 17, 1, 55,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 0, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 56,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        6, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        6, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3212,9 +3212,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.639632, -121.943736, 1, 3425, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 49, 1, -91, 1, 298, 1, 103,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -448, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -448, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "0325", 2, 0, 2, 3, 43,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3625  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3227,7 +3227,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 71, 1, -111, 1, 303, 1, 132,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -320, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 14,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3240,7 +3240,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -107, 1, 70, 1, 147, 1, 128,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 0, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 44,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3253,7 +3253,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 88, 1, -56, 1, 328, 1, 104,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 0, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 16,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3264,7 +3264,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.639954, -121.944487, 1, 3425, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 49, 1, -91, 1, 298, 1, 103,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -512, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -512, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3279,7 +3279,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -45, 1, 19, 1, 157, 1, 49,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 0, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 48,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3292,7 +3292,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -69, 1, 32, 1, 155, 1, 76,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 832, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 4,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3305,7 +3305,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -64, 1, 49, 1, 143, 1, 81,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 576, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 12,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3318,7 +3318,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 1, 108, 1, 90, 1, 108,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 832, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 24,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3331,7 +3331,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 69, 1, -113, 1, 301, 1, 132,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -384, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 62,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3344,7 +3344,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -106, 1, 68, 1, 147, 1, 126,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 0, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 50,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3357,7 +3357,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 89, 1, -54, 1, 329, 1, 104,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -448, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 60,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3368,7 +3368,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.640126, -121.944916, 1, 3400, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 49, 1, -91, 1, 298, 1, 103,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -512, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -512, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3381,7 +3381,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10980330,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.566268, -121.972511, 1, 750, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 79, 1, -54, 1, 326, 1, 96,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        1, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        1, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3394,7 +3394,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.640362, -121.945453, 1, 3400, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 49, 1, -91, 1, 298, 1, 103,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3575  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3407,7 +3407,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10980330,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.566912, -121.973112, 1, 750, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 77, 1, -59, 1, 323, 1, 97,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        1, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        1, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3420,7 +3420,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.640662, -121.946182, 1, 3400, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 48, 1, -91, 1, 298, 1, 103,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3433,9 +3433,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10980330,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.567685, -121.973906, 1, 750, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 76, 1, -62, 1, 321, 1, 98,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        1, -192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        1, -192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "0372", 2, 0, 2, 3, 42,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 1, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 1, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 875  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3446,7 +3446,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.641284, -121.947663, 1, 3350, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 48, 1, -91, 1, 298, 1, 103,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3459,7 +3459,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.641435, -121.947985, 1, 3350, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 48, 1, -91, 1, 298, 1, 103,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3525  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3472,7 +3472,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.641692, -121.948628, 1, 3350, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 49, 1, -90, 1, 299, 1, 102,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3485,7 +3485,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.641928, -121.949143, 1, 3325, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 49, 1, -90, 1, 299, 1, 102,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3500,7 +3500,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 67, 1, -111, 1, 301, 1, 130,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -384, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 62,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3513,7 +3513,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 93, 1, -37, 1, 338, 1, 100,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 0, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 52,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3526,7 +3526,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -66, 1, 50, 1, 143, 1, 83,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 640, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 6,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3539,7 +3539,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -65, 1, 52, 1, 141, 1, 83,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 768, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 14,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3552,7 +3552,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 67, 1, -112, 1, 301, 1, 131,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, -448, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 24,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        8, 1, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        8, 1, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3565,7 +3565,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, -23, 1, 68, 1, 109, 1, 72,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
         1, 0, 0, 0.0, 0.0, 0, 0, 1,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 0, "", 0, 0, 2, 2, 36,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        7, 0, 0, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        7, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3576,9 +3576,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10980330,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.571011, -121.977789, 1, 725, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 66, 1, -69, 1, 314, 1, 95,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        1, 64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        1, 64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "0372", 2, 0, 2, 3, 5,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 1, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 1, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 875  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3589,7 +3589,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.643538, -121.952813, 1, 3300, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 50, 1, -90, 1, 299, 1, 103,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -320, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -320, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3602,7 +3602,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.644181, -121.954293, 1, 3275, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 49, 1, -92, 1, 298, 1, 104,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -320, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -320, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3615,9 +3615,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.644503, -121.955044, 1, 3275, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 48, 1, -93, 1, 297, 1, 105,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -320, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -320, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "9658K", 1, 0, 2, 3, 7,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3450  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3628,9 +3628,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10980330,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.572920, -121.980429, 1, 725, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 63, 1, -74, 1, 310, 1, 97,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        1, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        1, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "0372", 2, 0, 2, 3, 35,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 1, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 1, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 850  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3641,7 +3641,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10980330,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.573199, -121.980879, 1, 725, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 62, 1, -75, 1, 310, 1, 97,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        1, -128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        1, -128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3654,7 +3654,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10980330,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.573371, -121.981137, 1, 700, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 62, 1, -76, 1, 309, 1, 98,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        1, -128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        1, -128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 850  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3667,7 +3667,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10980330,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.573607, -121.981502, 1, 700, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 62, 1, -77, 1, 309, 1, 99,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        1, -192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        1, -192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 825  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3680,7 +3680,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10980330,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.573950, -121.982038, 1, 700, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 62, 1, -77, 1, 309, 1, 99,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        1, -192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        1, -192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3693,7 +3693,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.645533, -121.957726, 1, 3250, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 45, 1, -97, 1, 295, 1, 107,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3706,9 +3706,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.645683, -121.958177, 1, 3250, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 45, 1, -97, 1, 295, 1, 107,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -320, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -320, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "9658K", 1, 0, 2, 3, 53,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3425  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3719,9 +3719,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10980330,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.574251, -121.982489, 1, 700, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 63, 1, -77, 1, 309, 1, 99,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        1, -256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        1, -256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "N824WP", 1, 0, 2, 3, 56,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 1, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 1, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 825  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3732,7 +3732,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.646327, -121.959872, 1, 3225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 46, 1, -97, 1, 295, 1, 107,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -448, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -448, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3400  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3745,7 +3745,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10980330,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.575130, -121.983819, 1, 675, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 64, 1, -76, 1, 310, 1, 99,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        1, -192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        1, -192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 825  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3758,7 +3758,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10980330,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.575495, -121.984355, 1, 675, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 64, 1, -76, 1, 310, 1, 99,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        1, -128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        1, -128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3771,7 +3771,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.646670, -121.960773, 1, 3225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 45, 1, -99, 1, 294, 1, 109,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -384, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -384, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3784,9 +3784,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10980330,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.575774, -121.984785, 1, 675, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 63, 1, -75, 1, 310, 1, 98,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        1, -128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        1, -128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "0372", 2, 0, 2, 3, 32,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 1, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 1, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 825  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3797,7 +3797,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.647400, -121.962898, 1, 3200, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 43, 1, -102, 1, 293, 1, 111,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -320, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -320, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3375  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3810,7 +3810,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.647593, -121.963499, 1, 3200, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 42, 1, -102, 1, 292, 1, 110,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3823,9 +3823,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.647872, -121.964335, 1, 3200, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 42, 1, -103, 1, 292, 1, 111,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "9658K", 1, 0, 2, 3, 15,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3350  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3836,9 +3836,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10980330,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.577555, -121.987445, 1, 700, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 62, 1, -73, 1, 310, 1, 96,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        1, 128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        1, 128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "0372", 2, 0, 2, 3, 45,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 1, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 1, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 875  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3849,9 +3849,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.648065, -121.964936, 1, 3200, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 42, 1, -103, 1, 292, 1, 111,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "0325", 2, 0, 2, 3, 3,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3350  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3862,7 +3862,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.648129, -121.965172, 1, 3200, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 42, 1, -103, 1, 292, 1, 111,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3875,7 +3875,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10980330,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.577684, -121.987617, 1, 700, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 62, 1, -72, 1, 311, 1, 95,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        1, 128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        1, 128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3888,7 +3888,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10980330,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.578027, -121.988111, 1, 700, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 62, 1, -72, 1, 311, 1, 95,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        1, 192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        1, 192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 875  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3901,7 +3901,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.648430, -121.966138, 1, 3200, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 40, 1, -104, 1, 291, 1, 111,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3350  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3914,7 +3914,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.648537, -121.966503, 1, 3200, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 40, 1, -104, 1, 291, 1, 111,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3927,7 +3927,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.648795, -121.967361, 1, 3200, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 39, 1, -105, 1, 290, 1, 112,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3940,9 +3940,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.648945, -121.967854, 1, 3175, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 39, 1, -105, 1, 290, 1, 112,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "9658K", 1, 0, 2, 3, 28,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3350  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -3953,7 +3953,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.649159, -121.968584, 1, 3175, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 39, 1, -104, 1, 291, 1, 111,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3966,7 +3966,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 15561267,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 3.899353, 56.668167, 1, 3175, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 39, 1, -105, 1, 290, 1, 112,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3350  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3979,7 +3979,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.649524, -121.969786, 1, 3175, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 39, 1, -105, 1, 290, 1, 112,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3350  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -3992,7 +3992,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.650125, -121.971889, 1, 3175, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 38, 1, -106, 1, 290, 1, 113,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4005,7 +4005,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.650340, -121.972618, 1, 3175, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 38, 1, -106, 1, 290, 1, 113,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3325  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4018,7 +4018,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.650597, -121.973498, 1, 3175, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 37, 1, -107, 1, 289, 1, 113,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4031,9 +4031,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.650855, -121.974485, 1, 3175, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 37, 1, -107, 1, 289, 1, 113,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "0325", 2, 0, 2, 3, 51,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3325  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -4044,7 +4044,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.651026, -121.975107, 1, 3175, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 36, 1, -107, 1, 289, 1, 113,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4057,7 +4057,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10638619,  // HDR: mdb_type, address_qualifier, address
         1, 10, 1, 37.330406, -121.841490, 1, 1000, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -63, 1, 50, 1, 142, 1, 80,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 448, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 448, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1150  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4070,7 +4070,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.299035, -122.048600, 1, 3400, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -124, 1, 33, 1, 165, 1, 128,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 512, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 512, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4083,9 +4083,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.298584, -122.048450, 1, 3400, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -124, 1, 33, 1, 165, 1, 128,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "N1164G", 1, 0, 2, 3, 31,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3600  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -4096,7 +4096,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10638619,  // HDR: mdb_type, address_qualifier, address
         1, 10, 1, 37.330127, -121.841190, 1, 1000, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -64, 1, 50, 1, 142, 1, 81,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 448, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 448, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1150  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4109,9 +4109,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.298005, -122.048256, 1, 3400, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -123, 1, 33, 1, 165, 1, 127,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 512, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 512, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "0332", 2, 0, 2, 3, 4,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3600  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -4122,7 +4122,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.297661, -122.048128, 1, 3400, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -123, 1, 33, 1, 165, 1, 127,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 512, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 512, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4135,7 +4135,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.296975, -122.047892, 1, 3400, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -123, 1, 33, 1, 165, 1, 127,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3625  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4148,7 +4148,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10638619,  // HDR: mdb_type, address_qualifier, address
         1, 10, 1, 37.329247, -121.840310, 1, 1000, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -64, 1, 51, 1, 141, 1, 82,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 448, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 448, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4161,7 +4161,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10638619,  // HDR: mdb_type, address_qualifier, address
         1, 10, 1, 37.328861, -121.839967, 1, 1025, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -64, 1, 51, 1, 141, 1, 82,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4174,7 +4174,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.296181, -122.047634, 1, 3425, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -123, 1, 33, 1, 165, 1, 127,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4187,7 +4187,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10638619,  // HDR: mdb_type, address_qualifier, address
         1, 10, 1, 37.328689, -121.839774, 1, 1025, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -64, 1, 51, 1, 141, 1, 82,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1175  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4200,7 +4200,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.295601, -122.047441, 1, 3450, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -123, 1, 34, 1, 165, 1, 128,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4213,9 +4213,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.295387, -122.047355, 1, 3450, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -123, 1, 34, 1, 165, 1, 128,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "N1164G", 1, 0, 2, 3, 3,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3650  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -4226,7 +4226,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10638619,  // HDR: mdb_type, address_qualifier, address
         1, 10, 1, 37.328260, -121.839366, 1, 1050, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -64, 1, 51, 1, 141, 1, 82,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4239,9 +4239,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10638619,  // HDR: mdb_type, address_qualifier, address
         1, 10, 1, 37.328174, -121.839259, 1, 1050, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -64, 1, 51, 1, 141, 1, 82,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "N24991", 1, 0, 2, 3, 12,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1200  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -4252,7 +4252,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.294807, -122.047162, 1, 3450, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -122, 1, 34, 1, 164, 1, 127,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4265,9 +4265,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10638619,  // HDR: mdb_type, address_qualifier, address
         1, 10, 1, 37.327874, -121.838958, 1, 1050, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -64, 1, 51, 1, 141, 1, 82,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "1200", 2, 0, 2, 3, 35,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1225  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -4278,7 +4278,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.294142, -122.046926, 1, 3450, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -122, 1, 34, 1, 164, 1, 127,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3675  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4291,7 +4291,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.293692, -122.046776, 1, 3475, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -122, 1, 34, 1, 164, 1, 127,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3675  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4304,7 +4304,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10638619,  // HDR: mdb_type, address_qualifier, address
         1, 10, 1, 37.327445, -121.838551, 1, 1075, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -63, 1, 51, 1, 141, 1, 81,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4317,7 +4317,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.293112, -122.046583, 1, 3475, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -122, 1, 34, 1, 164, 1, 127,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4330,9 +4330,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.292211, -122.046261, 1, 3500, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -122, 1, 33, 1, 165, 1, 126,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "0332", 2, 0, 2, 3, 55,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3700  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -4343,7 +4343,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.291996, -122.046175, 1, 3500, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -122, 1, 33, 1, 165, 1, 126,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4356,7 +4356,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.291203, -122.045918, 1, 3500, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -122, 1, 33, 1, 165, 1, 126,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4369,7 +4369,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.290516, -122.045681, 1, 3525, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -122, 1, 33, 1, 165, 1, 126,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3725  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4382,7 +4382,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.290065, -122.045531, 1, 3525, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -122, 1, 33, 1, 165, 1, 126,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4395,9 +4395,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.289507, -122.045338, 1, 3550, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -122, 1, 33, 1, 165, 1, 126,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "N1164G", 1, 0, 2, 3, 58,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3750  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -4408,7 +4408,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.743208, -122.209640, 1, 1500, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 36, 1, 58, 1, 58, 1, 68,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1152, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1152, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4421,9 +4421,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.289057, -122.045188, 1, 3550, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -121, 1, 33, 1, 165, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "0332", 2, 0, 2, 3, 24,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3775  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -4434,9 +4434,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.743402, -122.209210, 1, 1525, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, 34, 1, 60, 1, 60, 1, 69,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1280, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1280, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "9658K", 1, 0, 2, 3, 16,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1675  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -4447,7 +4447,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.288263, -122.044909, 1, 3550, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -121, 1, 34, 1, 164, 1, 126,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4460,7 +4460,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.288048, -122.044845, 1, 3575, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -121, 1, 34, 1, 164, 1, 126,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 704, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 704, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3775  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4473,7 +4473,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.287147, -122.044523, 1, 3575, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 34, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4486,7 +4486,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.286932, -122.044437, 1, 3600, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4499,9 +4499,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.286375, -122.044244, 1, 3600, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "N1164G", 1, 0, 2, 3, 37,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3825  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -4512,7 +4512,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.285581, -122.043943, 1, 3625, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4525,7 +4525,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.285151, -122.043793, 1, 3625, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3850  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4538,7 +4538,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.284594, -122.043579, 1, 3650, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3850  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4551,7 +4551,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.284036, -122.043386, 1, 3650, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4564,9 +4564,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.283263, -122.043107, 1, 3650, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "0332", 2, 0, 2, 3, 19,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3875  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -4577,7 +4577,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.282920, -122.042978, 1, 3675, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4590,7 +4590,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.282469, -122.042806, 1, 3675, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 704, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 704, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4603,7 +4603,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.281590, -122.042484, 1, 3700, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 704, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 704, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3900  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4616,7 +4616,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.281375, -122.042420, 1, 3700, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 704, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 704, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4629,9 +4629,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.280474, -122.042098, 1, 3700, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "N1164G", 1, 0, 2, 3, 39,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3925  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -4642,7 +4642,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.743080, -122.203374, 1, 1875, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -41, 1, 67, 1, 121, 1, 79,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1088, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1088, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4655,9 +4655,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.279916, -122.041883, 1, 3725, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "0332", 2, 0, 2, 3, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3950  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -4668,7 +4668,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.279594, -122.041755, 1, 3725, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4681,7 +4681,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.279143, -122.041605, 1, 3750, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3950  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4694,7 +4694,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.278585, -122.041390, 1, 3750, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4707,7 +4707,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.277813, -122.041111, 1, 3775, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 512, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 512, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4720,9 +4720,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.277255, -122.040918, 1, 3775, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 512, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 512, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "N1164G", 1, 0, 2, 3, 24,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3975  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -4733,7 +4733,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.276568, -122.040682, 1, 3775, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 512, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 512, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4746,7 +4746,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.276354, -122.040596, 1, 3775, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 512, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 512, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4000  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4759,7 +4759,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.275453, -122.040274, 1, 3800, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 512, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 512, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4000  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4772,7 +4772,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.275238, -122.040188, 1, 3800, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 35, 1, 164, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 512, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 512, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4785,7 +4785,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10638619,  // HDR: mdb_type, address_qualifier, address
         1, 10, 1, 37.316995, -121.827521, 1, 1225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -76, 1, 60, 1, 142, 1, 97,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4798,9 +4798,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.274680, -122.039974, 1, 3800, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 36, 1, 163, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 512, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 512, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "0332", 2, 0, 2, 3, 33,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4025  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -4811,7 +4811,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.274122, -122.039781, 1, 3825, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 36, 1, 163, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4824,7 +4824,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.273350, -122.039480, 1, 3850, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 36, 1, 163, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4837,7 +4837,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.273028, -122.039351, 1, 3850, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 36, 1, 163, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4050  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4850,7 +4850,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.272127, -122.039008, 1, 3850, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 37, 1, 163, 1, 126,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4863,9 +4863,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.271569, -122.038794, 1, 3850, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 37, 1, 163, 1, 126,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "N1164G", 1, 0, 2, 3, 57,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4075  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -4876,9 +4876,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.271354, -122.038708, 1, 3850, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 37, 1, 163, 1, 126,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "0332", 2, 0, 2, 3, 52,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4075  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -4889,7 +4889,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.270582, -122.038429, 1, 3875, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 36, 1, 163, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4902,7 +4902,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.270131, -122.038257, 1, 3875, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 36, 1, 163, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4100  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4915,7 +4915,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.269573, -122.038043, 1, 3900, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 36, 1, 163, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4928,7 +4928,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10638619,  // HDR: mdb_type, address_qualifier, address
         1, 10, 1, 37.313368, -121.824067, 1, 1250, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -71, 1, 59, 1, 140, 1, 92,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 384, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 384, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1400  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4941,7 +4941,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.268908, -122.037785, 1, 3925, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 36, 1, 163, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 704, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 704, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4954,7 +4954,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10638619,  // HDR: mdb_type, address_qualifier, address
         1, 10, 1, 37.312982, -121.823637, 1, 1250, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -68, 1, 60, 1, 139, 1, 91,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 384, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 384, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -4967,9 +4967,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.268243, -122.037528, 1, 3925, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 36, 1, 163, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "N1164G", 1, 0, 2, 3, 15,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4150  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -4980,9 +4980,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10638619,  // HDR: mdb_type, address_qualifier, address
         1, 10, 1, 37.312725, -121.823380, 1, 1275, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -67, 1, 61, 1, 138, 1, 91,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 320, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 320, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "N24991", 1, 0, 2, 3, 59,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 1, 0, 0, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 1, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1400  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -4993,7 +4993,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.267814, -122.037356, 1, 3950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -120, 1, 36, 1, 163, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5006,7 +5006,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.267256, -122.037141, 1, 3950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -119, 1, 37, 1, 163, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4175  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5019,7 +5019,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.266805, -122.036991, 1, 3950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -119, 1, 37, 1, 163, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4175  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5032,7 +5032,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10638619,  // HDR: mdb_type, address_qualifier, address
         1, 10, 1, 37.311802, -121.822264, 1, 1275, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -63, 1, 64, 1, 135, 1, 90,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1425  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5045,7 +5045,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.266033, -122.036691, 1, 3950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -119, 1, 37, 1, 163, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5058,9 +5058,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.265604, -122.036519, 1, 3975, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -119, 1, 37, 1, 163, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 640, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 640, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "0332", 2, 0, 2, 3, 15,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4200  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -5071,7 +5071,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.738016, -122.191980, 1, 2200, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -26, 1, 84, 1, 107, 1, 88,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 2325  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5084,7 +5084,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.265260, -122.036390, 1, 3975, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -119, 1, 37, 1, 163, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5097,7 +5097,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.737973, -122.191787, 1, 2200, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -25, 1, 84, 1, 107, 1, 88,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5110,7 +5110,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.264702, -122.036176, 1, 4000, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -119, 1, 37, 1, 163, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5123,9 +5123,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.737844, -122.191293, 1, 2200, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -25, 1, 85, 1, 106, 1, 89,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 512, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 512, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "0325", 2, 0, 2, 3, 16,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 2325  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -5136,7 +5136,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.737737, -122.190800, 1, 2225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -24, 1, 85, 1, 106, 1, 88,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 512, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 512, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5149,7 +5149,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10503528,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.264059, -122.035897, 1, 4000, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -119, 1, 37, 1, 163, 1, 125,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 576, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 576, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 4225  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5162,7 +5162,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.730892, -122.190864, 1, 2200, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -19, 1, 86, 1, 102, 1, 88,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5175,7 +5175,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.730784, -122.190349, 1, 2200, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -20, 1, 86, 1, 103, 1, 88,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5188,7 +5188,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.448509, -122.195413, 1, 1775, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -126, 1, -67, 1, 208, 1, 143,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5201,7 +5201,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.730613, -122.189469, 1, 2200, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -22, 1, 86, 1, 104, 1, 89,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -192, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -192, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5214,9 +5214,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.730527, -122.189062, 1, 2200, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -22, 1, 85, 1, 105, 1, 88,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "0325", 2, 0, 2, 3, 61,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 2325  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -5227,7 +5227,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.445676, -122.197216, 1, 1775, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -128, 1, -64, 1, 207, 1, 143,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5240,9 +5240,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.444968, -122.197666, 1, 1775, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -128, 1, -64, 1, 207, 1, 143,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "1200", 2, 0, 2, 3, 42,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1925  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -5253,7 +5253,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.730098, -122.186873, 1, 2175, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -22, 1, 85, 1, 105, 1, 88,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5266,7 +5266,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.730055, -122.186680, 1, 2175, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -22, 1, 84, 1, 105, 1, 87,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -320, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -320, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5279,7 +5279,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.443895, -122.198310, 1, 1800, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -128, 1, -62, 1, 206, 1, 142,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5292,7 +5292,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.443316, -122.198675, 1, 1800, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -128, 1, -61, 1, 205, 1, 142,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 1950  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5305,7 +5305,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.442951, -122.198889, 1, 1800, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -128, 1, -61, 1, 205, 1, 142,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 256, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 256, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5318,7 +5318,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10889556,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.912445, -121.994934, 1, 3425, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -95, 1, 52, 1, 151, 1, 108,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3600  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5331,7 +5331,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.442007, -122.199447, 1, 1800, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -128, 1, -61, 1, 205, 1, 142,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 320, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 320, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5344,7 +5344,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10889556,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.911372, -121.994183, 1, 3425, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -96, 1, 53, 1, 151, 1, 110,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5357,9 +5357,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 10889556,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.910922, -121.993883, 1, 3425, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -95, 1, 53, 1, 151, 1, 109,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, -64, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, -64, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "4261", 2, 0, 2, 3, 15,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3600  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -5370,7 +5370,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.439303, -122.201078, 1, 1825, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -125, 1, -61, 1, 206, 1, 139,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 384, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 384, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5383,7 +5383,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.433810, -122.204297, 1, 1925, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -128, 1, -55, 1, 203, 1, 139,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1088, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1088, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 2100  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5396,7 +5396,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.433209, -122.204597, 1, 1950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -129, 1, -54, 1, 203, 1, 140,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1088, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1088, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5409,7 +5409,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.432737, -122.204833, 1, 1950, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -130, 1, -51, 1, 201, 1, 140,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1088, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1088, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5422,9 +5422,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.432373, -122.205026, 1, 1975, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -131, 1, -51, 1, 201, 1, 141,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1024, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1024, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "1200", 2, 0, 2, 3, 21,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 2150  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -5435,7 +5435,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.431514, -122.205412, 1, 2000, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -132, 1, -48, 1, 200, 1, 140,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1024, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1024, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5448,7 +5448,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.430785, -122.205734, 1, 2025, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -133, 1, -47, 1, 199, 1, 141,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 960, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 960, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 2200  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5461,7 +5461,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.430291, -122.205970, 1, 2025, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -134, 1, -46, 1, 199, 1, 142,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 832, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 832, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 2200  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5474,7 +5474,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.429540, -122.206271, 1, 2050, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -135, 1, -45, 1, 198, 1, 142,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 768, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 768, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5487,7 +5487,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11366963,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.727866, -122.174363, 1, 2100, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -12, 1, 81, 1, 98, 1, 82,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 320, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 320, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5500,7 +5500,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.427652, -122.207043, 1, 2100, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -137, 1, -43, 1, 197, 1, 144,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 960, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 960, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5513,7 +5513,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.427008, -122.207301, 1, 2100, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -137, 1, -43, 1, 197, 1, 144,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1088, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1088, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 2275  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5526,7 +5526,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10889556,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.900794, -121.986952, 1, 3450, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -97, 1, 52, 1, 152, 1, 110,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 128, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 128, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5539,7 +5539,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.426643, -122.207451, 1, 2100, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -137, 1, -43, 1, 197, 1, 144,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1152, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1152, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5552,9 +5552,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.426000, -122.207687, 1, 2125, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -138, 1, -43, 1, 197, 1, 145,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1216, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1216, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "1200", 2, 0, 2, 3, 51,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 2325  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -5565,9 +5565,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.425485, -122.207880, 1, 2150, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -138, 1, -43, 1, 197, 1, 145,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1216, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1216, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "N7082N", 1, 0, 2, 3, 11,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 2325  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -5578,7 +5578,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.424583, -122.208245, 1, 2175, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -138, 1, -43, 1, 197, 1, 145,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1216, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1216, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5591,7 +5591,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.423832, -122.208545, 1, 2200, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -138, 1, -43, 1, 197, 1, 145,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1152, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1152, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 2375  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5604,7 +5604,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.423446, -122.208695, 1, 2200, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -138, 1, -43, 1, 197, 1, 145,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1152, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1152, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5617,7 +5617,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10889556,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.898262, -121.985257, 1, 3450, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -98, 1, 51, 1, 153, 1, 110,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5630,7 +5630,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.422931, -122.208889, 1, 2225, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -138, 1, -44, 1, 198, 1, 145,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1152, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1152, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5643,7 +5643,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 10889556,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.898004, -121.985085, 1, 3450, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -99, 1, 51, 1, 153, 1, 111,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 3625  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5656,7 +5656,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10889556,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.897360, -121.984677, 1, 3450, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -99, 1, 50, 1, 153, 1, 111,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5669,7 +5669,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10889556,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.897167, -121.984549, 1, 3450, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -100, 1, 50, 1, 153, 1, 112,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5682,7 +5682,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.421000, -122.209661, 1, 2300, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -139, 1, -45, 1, 198, 1, 146,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1088, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1088, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 2475  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5695,7 +5695,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.419970, -122.210090, 1, 2325, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -139, 1, -45, 1, 198, 1, 146,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1088, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1088, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 2500  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5708,7 +5708,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.419455, -122.210305, 1, 2325, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -139, 1, -46, 1, 198, 1, 146,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1024, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1024, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5721,9 +5721,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.418811, -122.210562, 1, 2350, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -139, 1, -47, 1, 199, 1, 147,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1024, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1024, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "N7082N", 1, 0, 2, 3, 3,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 2525  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -5734,7 +5734,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 10889556,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.894571, -121.982896, 1, 3450, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -101, 1, 51, 1, 153, 1, 113,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 0, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 0, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5747,7 +5747,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.418039, -122.210906, 1, 2350, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -139, 1, -48, 1, 199, 1, 147,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1088, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1088, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5760,7 +5760,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.417395, -122.211185, 1, 2375, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -139, 1, -49, 1, 199, 1, 147,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1152, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1152, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5773,7 +5773,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         2, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.417009, -122.211356, 1, 2400, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -139, 1, -49, 1, 199, 1, 147,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1152, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1152, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 2575  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5786,7 +5786,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.416365, -122.211635, 1, 2400, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -139, 1, -50, 1, 200, 1, 148,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1216, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1216, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5799,9 +5799,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.415850, -122.211871, 1, 2425, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -139, 1, -51, 1, 200, 1, 148,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1216, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1216, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "1200", 2, 0, 2, 3, 44,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 2625  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -5812,9 +5812,9 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         1, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.415206, -122.212172, 1, 2450, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -138, 1, -52, 1, 201, 1, 147,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1280, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1280, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         1, 1, "N7082N", 1, 0, 2, 3, 11,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
-        10, 2, 0, -1, -1, 0, 0, 0, 2,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
+        10, 2, 0, 1, 1, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         1, 2, 2650  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
     },
     {
@@ -5825,7 +5825,7 @@ static const uat_downlink_test_frame_t uat_downlink_test_frames[] = {
         0, 0, 11105521,  // HDR: mdb_type, address_qualifier, address
         1, 9, 1, 37.414434, -122.212558, 1, 2475, 0,  // SV: has_sv, nic, position_valid, lat, lon, altitude_type, altitude, airground_state
         1, -138, 1, -53, 1, 201, 1, 148,  // SV: ns_vel_valid, ns_vel, ew_vel_valid, ew_vel, track_type, track, speed_valid, speed
-        2, 1280, 0, 0.0, 0.0, 0, -1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
+        2, 1280, 0, 0.0, 0.0, 0, 1, 0,  // SV: vert_rate_source, vert_rate, dimensions_valid, length, width, position_offset, utc_coupled, tisb_site_id
         0, 0, "", 0, 0, 0, 0, 0,  // MS: has_ms, emitter_category, callsign, callsign_type, emergency_status, uat_version, sil, transmit_mso
         0, 0, 0, 0, 0, 0, 0, 0, 0,  // MS: nac_p, nac_v, nic_baro, has_cdti, has_acas, acas_ra_active, ident_active, atc_services, heading_type
         0, 0, 0  // AUXSV: has_auxsv, sec_altitude_type, sec_altitude
@@ -5846,8 +5846,8 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {43, 0, 1, 8, 0, 0, 0, 0, 16, 18, 9, 0, 1, 23, 1}, 
             {43, 0, 1, 8, 0, 0, 0, 0, 15, 0, 48, 0, 1, 26, 1}, 
             {79, 0, 1, 13, 0, 0, 0, 0, 14, 45, 1, 0, 1, 24, 1}, 
-            {81, 0, 1, 13, 0, 0, 0, 0, 14, 45, 232, 0, 1, 24, 1}, 
-            {90, 0, 1, 413, 0, 0, 0, 0, 2, 6, 13, 0, 1, 0, 0}, 
+            {81, 0, 1, 13, 0, 0, 0, 0, 14, 45, 136, 0, 1, 24, 1}, 
+            {90, 0, 1, 413, 0, 0, 0, 0, 2, 6, 13, 0, 2, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
@@ -5897,7 +5897,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {35, 0, 1, 8, 0, 0, 0, 0, 3, 24, 9, 0, 1, 23, 1}, 
             {99, 0, 1, 413, 0, 0, 0, 0, 2, 6, 48, 0, 1, 24, 0}, 
             {100, 0, 1, 413, 0, 0, 0, 0, 2, 6, 1, 0, 1, 24, 0}, 
-            {100, 0, 1, 413, 0, 0, 0, 0, 2, 6, 232, 0, 1, 24, 0}, 
+            {100, 0, 1, 413, 0, 0, 0, 0, 2, 6, 136, 0, 1, 24, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -5948,7 +5948,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {100, 0, 1, 413, 0, 0, 0, 0, 2, 6, 9, 0, 1, 23, 0}, 
             {100, 0, 1, 413, 0, 0, 0, 0, 2, 6, 48, 0, 1, 24, 0}, 
             {100, 0, 1, 413, 0, 0, 0, 0, 2, 6, 1, 0, 1, 24, 0}, 
-            {100, 0, 1, 413, 0, 0, 0, 0, 2, 6, 232, 0, 1, 24, 0}, 
+            {100, 0, 1, 413, 0, 0, 0, 0, 2, 6, 136, 0, 1, 24, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -5999,7 +5999,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {100, 0, 1, 413, 0, 0, 0, 0, 2, 6, 9, 0, 1, 23, 0}, 
             {102, 0, 1, 13, 0, 0, 0, 0, 16, 0, 48, 0, 1, 24, 1}, 
             {102, 0, 1, 13, 0, 0, 0, 0, 16, 0, 1, 0, 1, 24, 1}, 
-            {102, 0, 1, 13, 0, 0, 0, 0, 16, 0, 232, 0, 1, 24, 1}, 
+            {102, 0, 1, 13, 0, 0, 0, 0, 16, 0, 136, 0, 1, 24, 1}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -6152,9 +6152,9 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {52, 0, 1, 413, 0, 0, 0, 0, 3, 55, 9, 0, 1, 23, 0}, 
             {52, 0, 1, 413, 0, 0, 0, 0, 3, 55, 48, 0, 1, 24, 0}, 
             {52, 0, 1, 413, 0, 0, 0, 0, 3, 50, 1, 0, 1, 24, 0}, 
-            {52, 0, 1, 413, 0, 0, 0, 0, 3, 55, 232, 0, 1, 24, 0}, 
-            {52, 0, 1, 413, 0, 0, 0, 0, 3, 55, 13, 0, 1, 0, 0}, 
-            {52, 0, 1, 413, 0, 0, 0, 0, 3, 55, 240, 0, 2, 0, 0}, 
+            {52, 0, 1, 413, 0, 0, 0, 0, 3, 55, 136, 0, 1, 24, 0}, 
+            {52, 0, 1, 413, 0, 0, 0, 0, 3, 55, 13, 0, 2, 0, 0}, 
+            {52, 0, 1, 413, 0, 0, 0, 0, 3, 55, 144, 0, 2, 0, 0}, 
             {56, 0, 1, 413, 0, 0, 0, 0, 3, 55, 13, 0, 1, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
         }
@@ -6169,9 +6169,9 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {63, 0, 1, 413, 0, 0, 0, 0, 3, 54, 9, 0, 1, 23, 0}, 
             {64, 0, 1, 413, 0, 0, 0, 0, 3, 53, 48, 0, 1, 24, 0}, 
             {64, 0, 1, 413, 0, 0, 0, 0, 3, 53, 1, 0, 1, 24, 0}, 
-            {67, 0, 1, 413, 0, 0, 0, 0, 3, 53, 232, 0, 1, 24, 0}, 
-            {67, 0, 1, 413, 0, 0, 0, 0, 3, 54, 13, 0, 1, 0, 0}, 
-            {70, 0, 1, 413, 0, 0, 0, 0, 3, 51, 240, 0, 2, 0, 0}, 
+            {67, 0, 1, 413, 0, 0, 0, 0, 3, 53, 136, 0, 1, 24, 0}, 
+            {67, 0, 1, 413, 0, 0, 0, 0, 3, 54, 13, 0, 2, 0, 0}, 
+            {70, 0, 1, 413, 0, 0, 0, 0, 3, 51, 144, 0, 2, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
         }
@@ -6203,9 +6203,9 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {35, 0, 1, 8, 0, 0, 0, 0, 3, 24, 9, 0, 1, 23, 1}, 
             {39, 0, 1, 8, 0, 0, 0, 0, 16, 29, 48, 0, 1, 15, 1}, 
             {43, 0, 1, 8, 0, 0, 0, 0, 1, 25, 1, 0, 1, 23, 1}, 
-            {63, 0, 1, 413, 0, 0, 0, 0, 3, 54, 232, 0, 1, 24, 0}, 
-            {63, 0, 1, 413, 0, 0, 0, 0, 3, 53, 13, 0, 1, 0, 0}, 
-            {64, 0, 1, 413, 0, 0, 0, 0, 3, 53, 240, 0, 2, 0, 0}, 
+            {63, 0, 1, 413, 0, 0, 0, 0, 3, 54, 136, 0, 1, 24, 0}, 
+            {63, 0, 1, 413, 0, 0, 0, 0, 3, 53, 13, 0, 2, 0, 0}, 
+            {64, 0, 1, 413, 0, 0, 0, 0, 3, 53, 144, 0, 2, 0, 0}, 
             {65, 0, 1, 413, 0, 0, 0, 0, 3, 53, 13, 0, 1, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
         }
@@ -6220,9 +6220,9 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {66, 0, 1, 413, 0, 0, 0, 0, 3, 53, 9, 0, 1, 23, 0}, 
             {66, 0, 1, 413, 0, 0, 0, 0, 3, 53, 48, 0, 1, 15, 0}, 
             {67, 0, 1, 413, 0, 0, 0, 0, 3, 50, 1, 0, 1, 23, 0}, 
-            {67, 0, 1, 413, 0, 0, 0, 0, 3, 53, 232, 0, 1, 24, 0}, 
-            {67, 0, 1, 413, 0, 0, 0, 0, 3, 58, 13, 0, 1, 0, 0}, 
-            {67, 0, 1, 413, 0, 0, 0, 0, 3, 54, 240, 0, 2, 0, 0}, 
+            {67, 0, 1, 413, 0, 0, 0, 0, 3, 53, 136, 0, 1, 24, 0}, 
+            {67, 0, 1, 413, 0, 0, 0, 0, 3, 58, 13, 0, 2, 0, 0}, 
+            {67, 0, 1, 413, 0, 0, 0, 0, 3, 54, 144, 0, 2, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
         }
@@ -6305,7 +6305,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {67, 0, 1, 413, 0, 0, 0, 0, 3, 58, 9, 0, 1, 23, 0}, 
             {68, 0, 1, 413, 0, 0, 0, 0, 3, 58, 48, 0, 1, 15, 0}, 
             {111, 0, 1, 413, 0, 0, 0, 0, 2, 6, 1, 0, 1, 23, 0}, 
-            {111, 0, 1, 413, 0, 0, 0, 0, 2, 6, 232, 0, 1, 24, 0}, 
+            {111, 0, 1, 413, 0, 0, 0, 0, 2, 6, 136, 0, 1, 24, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -6356,7 +6356,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {63, 0, 1, 413, 0, 0, 0, 0, 3, 52, 9, 0, 1, 23, 0}, 
             {71, 0, 1, 413, 0, 0, 0, 0, 3, 53, 48, 0, 1, 15, 0}, 
             {79, 0, 1, 413, 0, 0, 0, 0, 3, 53, 1, 0, 1, 23, 0}, 
-            {111, 0, 1, 413, 0, 0, 0, 0, 2, 6, 232, 0, 1, 24, 0}, 
+            {111, 0, 1, 413, 0, 0, 0, 0, 2, 6, 136, 0, 1, 24, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -7087,11 +7087,11 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 9, 0, 1, 14, 0}, 
             {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 48, 0, 1, 23, 0}, 
             {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 1, 0, 1, 23, 0}, 
-            {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 232, 0, 1, 24, 0}, 
+            {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 136, 0, 1, 24, 0}, 
+            {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 13, 0, 2, 0, 0}, 
+            {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 144, 0, 2, 0, 0}, 
             {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 13, 0, 1, 0, 0}, 
-            {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 240, 0, 2, 0, 0}, 
-            {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 13, 0, 1, 0, 0}, 
-            {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 240, 0, 2, 0, 0}
+            {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 144, 0, 2, 0, 0}
         }
     },
     {
@@ -7104,11 +7104,11 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 9, 0, 1, 14, 0}, 
             {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 48, 0, 1, 23, 0}, 
             {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 1, 0, 1, 23, 0}, 
-            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 232, 0, 1, 24, 0}, 
+            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 136, 0, 1, 24, 0}, 
+            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 13, 0, 2, 0, 0}, 
+            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 144, 0, 2, 0, 0}, 
             {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 13, 0, 1, 0, 0}, 
-            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 240, 0, 2, 0, 0}, 
-            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 13, 0, 1, 0, 0}, 
-            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 240, 0, 2, 0, 0}
+            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 144, 0, 2, 0, 0}
         }
     },
     {
@@ -7121,11 +7121,11 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 9, 0, 1, 14, 0}, 
             {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 48, 0, 1, 23, 0}, 
             {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 1, 0, 1, 23, 0}, 
-            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 232, 0, 1, 24, 0}, 
+            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 136, 0, 1, 24, 0}, 
+            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 13, 0, 2, 0, 0}, 
+            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 144, 0, 2, 0, 0}, 
             {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 13, 0, 1, 0, 0}, 
-            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 240, 0, 2, 0, 0}, 
-            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 13, 0, 1, 0, 0}, 
-            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 240, 0, 2, 0, 0}
+            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 144, 0, 2, 0, 0}
         }
     },
     {
@@ -8124,9 +8124,9 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {43, 0, 1, 8, 0, 0, 0, 0, 23, 52, 9, 0, 1, 22, 1}, 
             {51, 0, 1, 413, 0, 0, 0, 0, 3, 55, 48, 0, 1, 24, 0}, 
             {53, 0, 1, 413, 0, 0, 0, 0, 3, 55, 1, 0, 1, 24, 0}, 
-            {53, 0, 1, 413, 0, 0, 0, 0, 3, 55, 232, 0, 1, 24, 0}, 
-            {61, 0, 1, 413, 0, 0, 0, 0, 3, 58, 13, 0, 1, 0, 0}, 
-            {63, 0, 1, 413, 0, 0, 0, 0, 3, 51, 240, 0, 2, 0, 0}, 
+            {53, 0, 1, 413, 0, 0, 0, 0, 3, 55, 136, 0, 1, 24, 0}, 
+            {61, 0, 1, 413, 0, 0, 0, 0, 3, 58, 13, 0, 2, 0, 0}, 
+            {63, 0, 1, 413, 0, 0, 0, 0, 3, 51, 144, 0, 2, 0, 0}, 
             {64, 0, 1, 413, 0, 0, 0, 0, 3, 56, 13, 0, 1, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
         }
@@ -8141,7 +8141,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {75, 0, 1, 413, 0, 0, 0, 0, 3, 53, 9, 0, 1, 22, 0}, 
             {82, 0, 1, 13, 0, 0, 0, 0, 15, 50, 48, 0, 1, 24, 1}, 
             {84, 0, 1, 13, 0, 0, 0, 0, 3, 0, 1, 0, 1, 24, 1}, 
-            {88, 0, 1, 13, 0, 0, 0, 0, 14, 0, 232, 0, 1, 24, 1}, 
+            {88, 0, 1, 13, 0, 0, 0, 0, 14, 0, 136, 0, 1, 24, 1}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -8175,7 +8175,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {62, 0, 1, 413, 0, 0, 0, 0, 3, 53, 9, 0, 1, 24, 0}, 
             {67, 0, 1, 413, 0, 0, 0, 0, 3, 47, 48, 0, 1, 24, 0}, 
             {67, 0, 1, 413, 0, 0, 0, 0, 3, 51, 1, 0, 1, 24, 0}, 
-            {69, 0, 1, 413, 0, 0, 0, 0, 3, 58, 232, 0, 1, 24, 0}, 
+            {69, 0, 1, 413, 0, 0, 0, 0, 3, 58, 136, 0, 1, 24, 0}, 
             {140, 0, 1, 8, 0, 0, 0, 0, 23, 52, 13, 0, 1, 22, 1}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -8226,7 +8226,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {64, 0, 1, 413, 0, 0, 0, 0, 3, 54, 9, 0, 1, 24, 0}, 
             {66, 0, 1, 413, 0, 0, 0, 0, 3, 51, 48, 0, 1, 24, 0}, 
             {66, 0, 1, 413, 0, 0, 0, 0, 3, 51, 1, 0, 1, 24, 0}, 
-            {67, 0, 1, 413, 0, 0, 0, 0, 3, 54, 232, 0, 1, 24, 0}, 
+            {67, 0, 1, 413, 0, 0, 0, 0, 3, 54, 136, 0, 1, 24, 0}, 
             {67, 0, 1, 413, 0, 0, 0, 0, 3, 52, 13, 0, 1, 22, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -8277,9 +8277,9 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {35, 0, 1, 8, 0, 0, 0, 0, 17, 34, 9, 0, 1, 16, 1}, 
             {43, 0, 1, 8, 0, 0, 0, 0, 18, 19, 48, 0, 12, 17, 1}, 
             {65, 0, 1, 413, 0, 0, 0, 0, 3, 53, 1, 0, 1, 24, 0}, 
-            {67, 0, 1, 413, 0, 0, 0, 0, 3, 51, 232, 0, 1, 24, 0}, 
+            {67, 0, 1, 413, 0, 0, 0, 0, 3, 51, 136, 0, 1, 24, 0}, 
             {68, 0, 1, 413, 0, 0, 0, 0, 3, 55, 13, 0, 1, 22, 0}, 
-            {70, 0, 1, 413, 0, 0, 0, 0, 3, 55, 240, 0, 2, 0, 0}, 
+            {70, 0, 1, 413, 0, 0, 0, 0, 3, 55, 144, 0, 2, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
         }
@@ -8532,7 +8532,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {64, 0, 1, 413, 0, 0, 0, 0, 3, 25, 9, 0, 1, 15, 0}, 
             {83, 0, 1, 13, 0, 0, 0, 0, 15, 0, 48, 0, 12, 29, 1}, 
             {85, 0, 1, 13, 0, 0, 0, 0, 11, 0, 1, 0, 1, 5, 1}, 
-            {85, 0, 1, 13, 0, 0, 0, 0, 11, 0, 232, 0, 1, 5, 1}, 
+            {85, 0, 1, 13, 0, 0, 0, 0, 11, 0, 136, 0, 1, 5, 1}, 
             {85, 0, 1, 13, 0, 0, 0, 0, 15, 0, 13, 0, 12, 29, 1}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -8549,7 +8549,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {85, 0, 1, 13, 0, 0, 0, 0, 11, 0, 9, 0, 1, 5, 1}, 
             {85, 0, 1, 413, 0, 0, 0, 0, 23, 20, 48, 0, 12, 29, 0}, 
             {88, 0, 1, 13, 0, 0, 0, 0, 15, 0, 1, 0, 12, 29, 1}, 
-            {88, 0, 1, 13, 0, 0, 0, 0, 15, 0, 232, 0, 12, 29, 1}, 
+            {88, 0, 1, 13, 0, 0, 0, 0, 15, 0, 136, 0, 12, 29, 1}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -8583,7 +8583,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {88, 0, 1, 13, 0, 0, 0, 0, 15, 0, 9, 0, 12, 29, 1}, 
             {89, 0, 1, 13, 0, 0, 0, 0, 15, 0, 48, 0, 12, 29, 1}, 
             {89, 0, 1, 13, 0, 0, 0, 0, 15, 0, 1, 0, 12, 29, 1}, 
-            {89, 0, 1, 13, 0, 0, 0, 0, 15, 0, 232, 0, 12, 29, 1}, 
+            {89, 0, 1, 13, 0, 0, 0, 0, 15, 0, 136, 0, 12, 29, 1}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -8685,7 +8685,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {85, 0, 1, 413, 0, 0, 0, 0, 23, 23, 9, 0, 12, 29, 0}, 
             {100, 0, 1, 13, 0, 0, 0, 0, 15, 0, 48, 0, 12, 29, 1}, 
             {100, 0, 1, 13, 0, 0, 0, 0, 15, 0, 1, 0, 12, 29, 1}, 
-            {100, 0, 1, 13, 0, 0, 0, 0, 15, 0, 232, 0, 12, 29, 1}, 
+            {100, 0, 1, 13, 0, 0, 0, 0, 15, 0, 136, 0, 12, 29, 1}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -8736,7 +8736,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {81, 0, 1, 413, 0, 0, 0, 0, 23, 20, 9, 0, 12, 29, 0}, 
             {83, 0, 1, 413, 0, 0, 0, 0, 23, 39, 48, 0, 12, 29, 0}, 
             {86, 0, 1, 413, 0, 0, 0, 0, 2, 47, 1, 0, 12, 29, 0}, 
-            {101, 0, 1, 8, 0, 0, 0, 0, 2, 13, 232, 0, 1, 15, 1}, 
+            {101, 0, 1, 8, 0, 0, 0, 0, 2, 13, 136, 0, 1, 15, 1}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -10487,7 +10487,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {43, 0, 1, 413, 0, 0, 0, 0, 3, 47, 9, 0, 1, 25, 0}, 
             {66, 0, 1, 12, 0, 0, 0, 0, 2, 23, 48, 0, 1, 24, 1}, 
             {82, 0, 1, 13, 0, 0, 0, 0, 16, 0, 1, 0, 1, 24, 1}, 
-            {84, 0, 1, 13, 0, 0, 0, 0, 16, 0, 232, 0, 1, 24, 1}, 
+            {84, 0, 1, 13, 0, 0, 0, 0, 16, 0, 136, 0, 1, 24, 1}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -10946,11 +10946,11 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {39, 0, 1, 8, 0, 0, 0, 0, 0, 37, 9, 0, 1, 16, 1}, 
             {39, 0, 1, 8, 0, 0, 0, 0, 17, 40, 48, 0, 11, 20, 1}, 
             {43, 0, 1, 8, 0, 0, 0, 0, 8, 0, 1, 0, 1, 24, 1}, 
-            {49, 0, 1, 413, 0, 0, 0, 0, 3, 45, 232, 0, 1, 24, 0}, 
+            {49, 0, 1, 413, 0, 0, 0, 0, 3, 45, 136, 0, 1, 24, 0}, 
             {51, 0, 1, 413, 0, 0, 0, 0, 3, 55, 13, 0, 12, 29, 0}, 
-            {52, 0, 1, 413, 0, 0, 0, 0, 3, 55, 240, 0, 2, 0, 0}, 
+            {52, 0, 1, 413, 0, 0, 0, 0, 3, 55, 144, 0, 2, 0, 0}, 
             {52, 0, 1, 413, 0, 0, 0, 0, 4, 2, 13, 0, 1, 0, 0}, 
-            {52, 0, 1, 413, 0, 0, 0, 0, 3, 55, 240, 0, 2, 0, 0}
+            {52, 0, 1, 413, 0, 0, 0, 0, 3, 55, 144, 0, 2, 0, 0}
         }
     },
     {
@@ -10963,7 +10963,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {55, 0, 1, 413, 0, 0, 0, 0, 3, 55, 9, 0, 1, 16, 0}, 
             {60, 0, 1, 413, 0, 0, 0, 0, 3, 52, 48, 0, 11, 20, 0}, 
             {62, 0, 1, 413, 0, 0, 0, 0, 3, 55, 1, 0, 1, 24, 0}, 
-            {63, 0, 1, 413, 0, 0, 0, 0, 3, 52, 232, 0, 1, 24, 0}, 
+            {63, 0, 1, 413, 0, 0, 0, 0, 3, 52, 136, 0, 1, 24, 0}, 
             {64, 0, 1, 413, 0, 0, 0, 0, 3, 56, 13, 0, 12, 29, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -10997,9 +10997,9 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {53, 0, 1, 413, 0, 0, 0, 0, 3, 57, 9, 0, 1, 16, 0}, 
             {63, 0, 1, 413, 0, 0, 0, 0, 3, 56, 48, 0, 11, 20, 0}, 
             {63, 0, 1, 413, 0, 0, 0, 0, 3, 56, 1, 0, 1, 24, 0}, 
-            {63, 0, 1, 413, 0, 0, 0, 0, 3, 55, 232, 0, 1, 24, 0}, 
+            {63, 0, 1, 413, 0, 0, 0, 0, 3, 55, 136, 0, 1, 24, 0}, 
             {64, 0, 1, 413, 0, 0, 0, 0, 3, 56, 13, 0, 12, 29, 0}, 
-            {64, 0, 1, 413, 0, 0, 0, 0, 3, 56, 240, 0, 2, 0, 0}, 
+            {64, 0, 1, 413, 0, 0, 0, 0, 3, 56, 144, 0, 2, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
         }
@@ -11048,9 +11048,9 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {43, 0, 1, 8, 0, 0, 0, 0, 15, 0, 9, 0, 1, 26, 1}, 
             {64, 0, 1, 413, 0, 0, 0, 0, 3, 56, 48, 0, 11, 20, 0}, 
             {66, 0, 1, 413, 0, 0, 0, 0, 3, 56, 1, 0, 1, 24, 0}, 
-            {68, 0, 1, 413, 0, 0, 0, 0, 3, 53, 232, 0, 1, 24, 0}, 
+            {68, 0, 1, 413, 0, 0, 0, 0, 3, 53, 136, 0, 1, 24, 0}, 
             {82, 0, 1, 413, 0, 0, 0, 0, 3, 52, 13, 0, 12, 29, 0}, 
-            {83, 0, 1, 413, 0, 0, 0, 0, 23, 39, 240, 0, 2, 0, 0}, 
+            {83, 0, 1, 413, 0, 0, 0, 0, 23, 39, 144, 0, 2, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
         }
@@ -11065,7 +11065,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {85, 0, 1, 413, 0, 0, 0, 0, 23, 23, 9, 0, 1, 26, 0}, 
             {85, 0, 1, 413, 0, 0, 0, 0, 23, 23, 48, 0, 11, 20, 0}, 
             {88, 0, 1, 8, 0, 0, 0, 0, 0, 37, 1, 0, 1, 16, 1}, 
-            {106, 0, 1, 413, 0, 0, 0, 0, 23, 23, 232, 0, 1, 24, 0}, 
+            {106, 0, 1, 413, 0, 0, 0, 0, 23, 23, 136, 0, 1, 24, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -11099,7 +11099,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {68, 0, 1, 413, 0, 0, 0, 0, 3, 53, 9, 0, 1, 26, 0}, 
             {70, 0, 1, 413, 0, 0, 0, 0, 3, 56, 48, 0, 11, 20, 0}, 
             {94, 0, 1, 8, 0, 0, 0, 0, 8, 0, 1, 0, 1, 24, 1}, 
-            {118, 0, 1, 413, 0, 0, 0, 0, 3, 5, 232, 0, 1, 24, 0}, 
+            {118, 0, 1, 413, 0, 0, 0, 0, 3, 5, 136, 0, 1, 24, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -11252,7 +11252,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {43, 0, 1, 8, 0, 0, 0, 0, 10, 30, 9, 0, 1, 26, 1}, 
             {67, 0, 1, 413, 0, 0, 0, 0, 3, 56, 48, 0, 11, 20, 0}, 
             {78, 0, 1, 8, 0, 0, 0, 0, 10, 30, 1, 0, 1, 26, 1}, 
-            {88, 0, 1, 413, 0, 0, 0, 0, 23, 39, 232, 0, 1, 24, 0}, 
+            {88, 0, 1, 413, 0, 0, 0, 0, 23, 39, 136, 0, 1, 24, 0}, 
             {107, 0, 1, 413, 0, 0, 0, 0, 3, 9, 13, 0, 12, 29, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -11303,9 +11303,9 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {52, 0, 1, 413, 0, 0, 0, 0, 3, 55, 9, 0, 11, 20, 0}, 
             {52, 0, 1, 413, 0, 0, 0, 0, 3, 55, 48, 0, 11, 20, 0}, 
             {64, 0, 1, 413, 0, 0, 0, 0, 3, 56, 1, 0, 1, 26, 0}, 
-            {67, 0, 1, 413, 0, 0, 0, 0, 3, 56, 232, 0, 1, 24, 0}, 
+            {67, 0, 1, 413, 0, 0, 0, 0, 3, 56, 136, 0, 1, 24, 0}, 
             {67, 0, 1, 413, 0, 0, 0, 0, 3, 52, 13, 0, 12, 29, 0}, 
-            {68, 0, 1, 413, 0, 0, 0, 0, 3, 56, 240, 0, 2, 0, 0}, 
+            {68, 0, 1, 413, 0, 0, 0, 0, 3, 56, 144, 0, 2, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
         }
@@ -11354,7 +11354,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {52, 0, 1, 413, 0, 0, 0, 0, 3, 55, 9, 0, 11, 20, 0}, 
             {61, 0, 1, 413, 0, 0, 0, 0, 3, 53, 48, 0, 11, 20, 0}, 
             {67, 0, 1, 413, 0, 0, 0, 0, 3, 56, 1, 0, 1, 26, 0}, 
-            {71, 0, 1, 413, 0, 0, 0, 0, 3, 52, 232, 0, 1, 24, 0}, 
+            {71, 0, 1, 413, 0, 0, 0, 0, 3, 52, 136, 0, 1, 24, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -13275,7 +13275,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {42, 0, 1, 413, 0, 0, 0, 0, 3, 47, 9, 0, 1, 24, 0}, 
             {52, 0, 1, 413, 0, 0, 0, 0, 3, 55, 48, 0, 1, 24, 0}, 
             {52, 0, 1, 413, 0, 0, 0, 0, 3, 55, 1, 0, 1, 24, 0}, 
-            {52, 0, 1, 413, 0, 0, 0, 0, 3, 55, 232, 0, 1, 24, 0}, 
+            {52, 0, 1, 413, 0, 0, 0, 0, 3, 55, 136, 0, 1, 24, 0}, 
             {60, 0, 1, 413, 0, 0, 0, 0, 3, 53, 13, 0, 12, 29, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -13326,11 +13326,11 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {35, 0, 1, 8, 0, 0, 0, 0, 20, 22, 9, 0, 1, 15, 1}, 
             {35, 0, 1, 8, 0, 0, 0, 0, 22, 53, 48, 0, 1, 20, 1}, 
             {39, 0, 1, 8, 0, 0, 0, 0, 15, 54, 1, 0, 8, 27, 1}, 
-            {51, 0, 1, 413, 0, 0, 0, 0, 3, 55, 232, 0, 1, 24, 0}, 
+            {51, 0, 1, 413, 0, 0, 0, 0, 3, 55, 136, 0, 1, 24, 0}, 
             {52, 0, 1, 413, 0, 0, 0, 0, 3, 55, 13, 0, 12, 29, 0}, 
-            {62, 0, 1, 413, 0, 0, 0, 0, 3, 58, 240, 0, 2, 0, 0}, 
+            {62, 0, 1, 413, 0, 0, 0, 0, 3, 58, 144, 0, 2, 0, 0}, 
             {63, 0, 1, 413, 0, 0, 0, 0, 3, 53, 13, 0, 1, 0, 0}, 
-            {63, 0, 1, 413, 0, 0, 0, 0, 3, 56, 240, 0, 2, 0, 0}
+            {63, 0, 1, 413, 0, 0, 0, 0, 3, 56, 144, 0, 2, 0, 0}
         }
     },
     {
@@ -13343,9 +13343,9 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {64, 0, 1, 413, 0, 0, 0, 0, 3, 56, 9, 0, 1, 15, 0}, 
             {66, 0, 1, 413, 0, 0, 0, 0, 3, 56, 48, 0, 1, 20, 0}, 
             {68, 0, 1, 413, 0, 0, 0, 0, 3, 58, 1, 0, 8, 27, 0}, 
-            {68, 0, 1, 413, 0, 0, 0, 0, 3, 56, 232, 0, 1, 24, 0}, 
+            {68, 0, 1, 413, 0, 0, 0, 0, 3, 56, 136, 0, 1, 24, 0}, 
             {70, 0, 1, 413, 0, 0, 0, 0, 3, 53, 13, 0, 12, 29, 0}, 
-            {70, 0, 1, 413, 0, 0, 0, 0, 3, 56, 240, 0, 2, 0, 0}, 
+            {70, 0, 1, 413, 0, 0, 0, 0, 3, 56, 144, 0, 2, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
         }
@@ -13428,7 +13428,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {63, 0, 1, 413, 0, 0, 0, 0, 3, 53, 9, 0, 1, 15, 0}, 
             {66, 0, 1, 413, 0, 0, 0, 0, 3, 53, 48, 0, 1, 20, 0}, 
             {68, 0, 1, 413, 0, 0, 0, 0, 3, 53, 1, 0, 8, 27, 0}, 
-            {68, 0, 1, 413, 0, 0, 0, 0, 3, 53, 232, 0, 1, 24, 0}, 
+            {68, 0, 1, 413, 0, 0, 0, 0, 3, 53, 136, 0, 1, 24, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -13734,9 +13734,9 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {63, 0, 1, 413, 0, 0, 0, 0, 3, 53, 9, 0, 1, 23, 0}, 
             {63, 0, 1, 413, 0, 0, 0, 0, 3, 53, 48, 0, 1, 23, 0}, 
             {64, 0, 1, 413, 0, 0, 0, 0, 3, 53, 1, 0, 1, 23, 0}, 
-            {67, 0, 1, 413, 0, 0, 0, 0, 3, 53, 232, 0, 1, 24, 0}, 
+            {67, 0, 1, 413, 0, 0, 0, 0, 3, 53, 136, 0, 1, 24, 0}, 
             {69, 0, 1, 413, 0, 0, 0, 0, 3, 56, 13, 0, 12, 29, 0}, 
-            {70, 0, 1, 413, 0, 0, 0, 0, 3, 53, 240, 0, 2, 0, 0}, 
+            {70, 0, 1, 413, 0, 0, 0, 0, 3, 53, 144, 0, 2, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
         }
@@ -13751,7 +13751,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {71, 0, 1, 413, 0, 0, 0, 0, 3, 55, 9, 0, 1, 23, 0}, 
             {73, 0, 1, 413, 0, 0, 0, 0, 3, 53, 48, 0, 1, 23, 0}, 
             {73, 0, 1, 413, 0, 0, 0, 0, 3, 53, 1, 0, 1, 23, 0}, 
-            {145, 0, 1, 8, 0, 0, 0, 0, 12, 52, 232, 0, 1, 15, 1}, 
+            {145, 0, 1, 8, 0, 0, 0, 0, 12, 52, 136, 0, 1, 15, 1}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -14295,11 +14295,11 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 9, 0, 1, 15, 0}, 
             {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 48, 0, 1, 15, 0}, 
             {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 1, 0, 1, 23, 0}, 
-            {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 232, 0, 1, 15, 0}, 
+            {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 136, 0, 1, 15, 0}, 
             {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 13, 0, 12, 29, 0}, 
-            {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 240, 0, 2, 0, 0}, 
+            {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 144, 0, 2, 0, 0}, 
             {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 13, 0, 1, 0, 0}, 
-            {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 240, 0, 2, 0, 0}
+            {8, 0, 1, 63, 0, 0, 0, 0, 4, 10, 144, 0, 2, 0, 0}
         }
     },
     {
@@ -14312,11 +14312,11 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 9, 0, 1, 15, 0}, 
             {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 48, 0, 1, 15, 0}, 
             {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 1, 0, 1, 23, 0}, 
-            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 232, 0, 1, 15, 0}, 
+            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 136, 0, 1, 15, 0}, 
             {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 13, 0, 12, 29, 0}, 
-            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 240, 0, 2, 0, 0}, 
+            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 144, 0, 2, 0, 0}, 
             {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 13, 0, 1, 0, 0}, 
-            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 240, 0, 2, 0, 0}
+            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 144, 0, 2, 0, 0}
         }
     },
     {
@@ -14329,11 +14329,11 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 9, 0, 1, 15, 0}, 
             {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 48, 0, 1, 15, 0}, 
             {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 1, 0, 1, 23, 0}, 
-            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 232, 0, 1, 15, 0}, 
+            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 136, 0, 1, 15, 0}, 
             {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 13, 0, 12, 29, 0}, 
-            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 240, 0, 2, 0, 0}, 
+            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 144, 0, 2, 0, 0}, 
             {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 13, 0, 1, 0, 0}, 
-            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 240, 0, 2, 0, 0}
+            {9, 0, 1, 63, 0, 0, 0, 0, 4, 10, 144, 0, 2, 0, 0}
         }
     },
     {
@@ -15060,7 +15060,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {44, 0, 1, 8, 0, 0, 0, 0, 21, 27, 9, 0, 1, 22, 1}, 
             {87, 0, 1, 13, 0, 0, 0, 0, 14, 0, 48, 0, 1, 24, 1}, 
             {88, 0, 1, 13, 0, 0, 0, 0, 0, 45, 1, 0, 1, 25, 1}, 
-            {88, 0, 1, 13, 0, 0, 0, 0, 0, 45, 232, 0, 1, 25, 1}, 
+            {88, 0, 1, 13, 0, 0, 0, 0, 0, 45, 136, 0, 1, 25, 1}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -15111,7 +15111,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {47, 0, 1, 413, 0, 0, 0, 0, 3, 45, 9, 0, 1, 22, 0}, 
             {79, 0, 1, 413, 0, 0, 0, 0, 1, 49, 48, 0, 1, 24, 0}, 
             {82, 0, 1, 13, 0, 0, 0, 0, 2, 45, 1, 0, 1, 24, 1}, 
-            {82, 0, 1, 13, 0, 0, 0, 0, 2, 45, 232, 0, 1, 24, 1}, 
+            {82, 0, 1, 13, 0, 0, 0, 0, 2, 45, 136, 0, 1, 24, 1}, 
             {82, 0, 1, 13, 0, 0, 0, 0, 2, 45, 13, 0, 1, 24, 1}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -15315,7 +15315,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {42, 0, 1, 413, 0, 0, 0, 0, 3, 47, 9, 0, 1, 18, 0}, 
             {52, 0, 1, 413, 0, 0, 0, 0, 4, 35, 48, 0, 1, 20, 0}, 
             {52, 0, 1, 413, 0, 0, 0, 0, 4, 15, 1, 0, 1, 23, 0}, 
-            {52, 0, 1, 413, 0, 0, 0, 0, 4, 15, 232, 0, 1, 24, 0}, 
+            {52, 0, 1, 413, 0, 0, 0, 0, 4, 15, 136, 0, 1, 24, 0}, 
             {60, 0, 1, 413, 0, 0, 0, 0, 3, 53, 13, 0, 1, 24, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -15417,7 +15417,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {63, 0, 1, 413, 0, 0, 0, 0, 3, 53, 9, 0, 1, 18, 0}, 
             {66, 0, 1, 413, 0, 0, 0, 0, 3, 53, 48, 0, 1, 20, 0}, 
             {68, 0, 1, 413, 0, 0, 0, 0, 3, 53, 1, 0, 1, 23, 0}, 
-            {68, 0, 1, 413, 0, 0, 0, 0, 3, 53, 232, 0, 1, 24, 0}, 
+            {68, 0, 1, 413, 0, 0, 0, 0, 3, 53, 136, 0, 1, 24, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
@@ -15723,9 +15723,9 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {43, 0, 1, 8, 0, 0, 0, 0, 20, 0, 9, 0, 1, 25, 1}, 
             {43, 0, 1, 8, 0, 0, 0, 0, 17, 0, 48, 0, 1, 24, 1}, 
             {61, 0, 1, 413, 0, 0, 0, 0, 4, 35, 1, 0, 1, 20, 0}, 
-            {63, 0, 1, 413, 0, 0, 0, 0, 3, 53, 232, 0, 1, 24, 0}, 
+            {63, 0, 1, 413, 0, 0, 0, 0, 3, 53, 136, 0, 1, 24, 0}, 
             {63, 0, 1, 413, 0, 0, 0, 0, 3, 53, 13, 0, 1, 24, 0}, 
-            {64, 0, 1, 413, 0, 0, 0, 0, 3, 53, 240, 0, 2, 0, 0}, 
+            {64, 0, 1, 413, 0, 0, 0, 0, 3, 53, 144, 0, 2, 0, 0}, 
             {65, 0, 1, 413, 0, 0, 0, 0, 4, 31, 13, 0, 1, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
         }
@@ -15740,7 +15740,7 @@ static const uat_uplink_test_frame_t uat_uplink_test_frames[] = {
             {67, 0, 1, 413, 0, 0, 0, 0, 3, 53, 9, 0, 1, 25, 0}, 
             {69, 0, 1, 413, 0, 0, 0, 0, 3, 56, 48, 0, 1, 24, 0}, 
             {71, 0, 1, 413, 0, 0, 0, 0, 3, 55, 1, 0, 1, 20, 0}, 
-            {73, 0, 1, 413, 0, 0, 0, 0, 3, 53, 232, 0, 1, 24, 0}, 
+            {73, 0, 1, 413, 0, 0, 0, 0, 3, 53, 136, 0, 1, 24, 0}, 
             {94, 0, 1, 8, 0, 0, 0, 0, 20, 0, 13, 0, 1, 25, 1}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
