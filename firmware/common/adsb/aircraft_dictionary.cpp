@@ -910,41 +910,47 @@ bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVe
     return true;
 }
 bool UATAircraft::ApplyUATADSBModeStatus(const DecodedUATADSBPacket::UATModeStatus &mode_status) {
+    // Callsign field: could be ID or squawk.
+    char callsign_temp[UATAircraft::kCallSignMaxNumChars + 1] = {0};
+
     // Extract callsign and emitter category.
     uint16_t temp = mode_status.emitter_category_and_callsign_chars_1_2;
     emitter_category = static_cast<ADSBTypes::EmitterCategory>(temp / 1600);
     temp %= 1600;
-    callsign[0] = LookupUATCallsignChar(temp / 40);
+    callsign_temp[0] = LookupUATCallsignChar(temp / 40);
     temp %= 40;
-    callsign[1] = LookupUATCallsignChar(temp);
+    callsign_temp[1] = LookupUATCallsignChar(temp);
 
     temp = mode_status.callsign_chars_3_4_5;
-    callsign[2] = LookupUATCallsignChar(temp / 1600);
+    callsign_temp[2] = LookupUATCallsignChar(temp / 1600);
     temp %= 1600;
-    callsign[3] = LookupUATCallsignChar(temp / 40);
+    callsign_temp[3] = LookupUATCallsignChar(temp / 40);
     temp %= 40;
-    callsign[4] = LookupUATCallsignChar(temp);
+    callsign_temp[4] = LookupUATCallsignChar(temp);
 
     temp = mode_status.callsign_chars_6_7_8;
-    callsign[5] = LookupUATCallsignChar(temp / 1600);
+    callsign_temp[5] = LookupUATCallsignChar(temp / 1600);
     temp %= 1600;
-    callsign[6] = LookupUATCallsignChar(temp / 40);
+    callsign_temp[6] = LookupUATCallsignChar(temp / 40);
     temp %= 40;
-    callsign[7] = LookupUATCallsignChar(temp);
+    callsign_temp[7] = LookupUATCallsignChar(temp);
 
-    // Emegency / Priority Status
+    if (mode_status.csid) {
+        // Callsign field encodes an ID (alphanumerica callsign).
+        strncpy(callsign, callsign_temp, UATAircraft::kCallSignMaxNumChars);
+        callsign[UATAircraft::kCallSignMaxNumChars] = '\0';
+    } else {
+        // Callsign field encodes a squawk code.
+        squawk = 0;
+        for (uint16_t i = 0; i < kSquawkNumDigits; i++) {
+            squawk *= 10;
+            squawk += (callsign_temp[i] - '0');
+        }
+    }
+
+    // Emergency / Priority Status
     emergency_priority_status =
         static_cast<UATAircraft::EmergencyPriorityStatus>(mode_status.emergency_priority_status);
-    switch (emergency_priority_status) {
-        case UATAircraft::kEmergencyPriorityStatusNone:
-            // No emergency;
-            WriteBitFlag(UATAircraft::kBitFlagAlert, false);
-            break;
-        default:
-            // All other Emergency / Priority Status values should trigger an alert.
-            WriteBitFlag(UATAircraft::kBitFlagAlert, true);
-            break;
-    }
 
     // UAT MOPs version.
     uat_version = mode_status.uat_version;
@@ -967,17 +973,8 @@ bool UATAircraft::ApplyUATADSBModeStatus(const DecodedUATADSBPacket::UATModeStat
 
     // Capability codes
     raw_capability_codes = mode_status.capability_codes;
-    if (raw_capability_codes & 0b10) {
-        // Has CDTI traffic display capability.
-        // We assume that a UAT aircraft transmitting that it has Cockpit Display of Traffic Information also includes a
-        // 1090MHz Extended Squitter receiver.
-        WriteBitFlag(UATAircraft::kBitFlagHas1090ESIn, true);
-        WriteBitFlag(UATAircraft::kBitFlagHasUATIn, true);
-    } else {
-        // Does not have CDTI traffic display capability.
-        WriteBitFlag(UATAircraft::kBitFlagHas1090ESIn, false);
-        WriteBitFlag(UATAircraft::kBitFlagHasUATIn, false);
-    }
+    // Has CDTI traffic display capability.
+    WriteBitFlag(UATAircraft::kBitFlagHasCDTI, raw_capability_codes & 0b10);
     if (raw_capability_codes & 0b01) {
         // Has TCAS/ACAS installed and operational.
         WriteBitFlag(UATAircraft::kBitFlagTCASOperational, true);
@@ -985,6 +982,16 @@ bool UATAircraft::ApplyUATADSBModeStatus(const DecodedUATADSBPacket::UATModeStat
         // Does not have TCAS/ACAS installed and operational.
         WriteBitFlag(UATAircraft::kBitFlagTCASOperational, false);
     }
+
+    // Operational modes
+    raw_operational_modes = mode_status.operational_modes;
+    WriteBitFlag(UATAircraft::kBitFlagTCASRA, raw_operational_modes & 0b100);
+    WriteBitFlag(UATAircraft::kBitFlagIdent, raw_operational_modes & 0b10);
+    WriteBitFlag(UATAircraft::kBitFlagReceivingATCServices, raw_operational_modes & 0b1);
+
+    // True / Magnetic Heading
+    WriteBitFlag(UATAircraft::kBitFlagHeadingUsesMagneticNorth, mode_status.heading_uses_magnetic_north);
+
     return true;
 }
 bool UATAircraft::ApplyUATADSBTargetState(const DecodedUATADSBPacket::UATTargetState &target_state) { return true; }

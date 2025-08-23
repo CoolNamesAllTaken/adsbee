@@ -168,15 +168,19 @@ TEST(UATDecoderTest, DownlinkFrames) {
         if (frame->has_ms) {
             EXPECT_TRUE(packet.has_mode_status);
 
-            char callsign[UATAircraft::kCallSignMaxNumChars + 1];
-            strncpy(callsign, aircraft.callsign, UATAircraft::kCallSignMaxNumChars);
-            // Change aircraft callsign to trim off trailing spaces.
-            for (int j = 0; j < UATAircraft::kCallSignMaxNumChars; j++) {
-                if (callsign[j] == ' ') {
-                    callsign[j] = '\0';
+            if (frame->callsign_type == UAT_CS_CALLSIGN) {
+                char callsign[UATAircraft::kCallSignMaxNumChars + 1];
+                strncpy(callsign, aircraft.callsign, UATAircraft::kCallSignMaxNumChars);
+                // Change aircraft callsign to trim off trailing spaces.
+                for (int j = 0; j < UATAircraft::kCallSignMaxNumChars; j++) {
+                    if (callsign[j] == ' ') {
+                        callsign[j] = '\0';
+                    }
                 }
+                EXPECT_STREQ(callsign, frame->callsign);
+            } else if (frame->callsign_type == UAT_CS_SQUAWK) {
+                EXPECT_EQ(aircraft.squawk, strtoul(frame->callsign, NULL, 10));
             }
-            EXPECT_STREQ(callsign, frame->callsign);
 
             EXPECT_EQ(aircraft.emitter_category, frame->emitter_category);
 
@@ -194,15 +198,24 @@ TEST(UATDecoderTest, DownlinkFrames) {
 
             EXPECT_EQ(aircraft.navigation_integrity_category_baro, frame->nic_baro);
 
+            // Capability Codes
             // Test data can have 1 or -1 in bitfield to indicate true.
             EXPECT_EQ(aircraft.raw_capability_codes, (frame->has_cdti << 1) | frame->has_acas);
-
             // Has CDTI capability.
-            EXPECT_EQ(aircraft.HasBitFlag(UATAircraft::kBitFlagHas1090ESIn), frame->has_cdti);
-            EXPECT_EQ(aircraft.HasBitFlag(UATAircraft::kBitFlagHasUATIn), frame->has_cdti);
-
+            EXPECT_EQ(aircraft.HasBitFlag(UATAircraft::kBitFlagHasCDTI), frame->has_cdti);
             // Has TCAS/ACAS operational and installed.
             EXPECT_EQ(aircraft.HasBitFlag(UATAircraft::kBitFlagTCASOperational), frame->has_acas);
+
+            // Operational Modes
+            EXPECT_EQ(aircraft.raw_operational_modes,
+                      (frame->acas_ra_active << 2) | (frame->ident_active << 1) | frame->atc_services);
+            EXPECT_EQ(aircraft.HasBitFlag(UATAircraft::kBitFlagTCASRA), frame->acas_ra_active);
+            EXPECT_EQ(aircraft.HasBitFlag(UATAircraft::kBitFlagIdent), frame->ident_active);
+            EXPECT_EQ(aircraft.HasBitFlag(UATAircraft::kBitFlagReceivingATCServices), frame->atc_services);
+
+            // True/Magnetic Heading
+            EXPECT_EQ(aircraft.HasBitFlag(UATAircraft::kBitFlagHeadingUsesMagneticNorth),
+                      frame->heading_type == UAT_HT_MAGNETIC);
         }
     }
 }

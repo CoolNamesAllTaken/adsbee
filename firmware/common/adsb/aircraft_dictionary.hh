@@ -124,38 +124,44 @@ class ModeSAircraft : public Aircraft {
 
     enum BitFlag : uint32_t {
         kBitFlagIsAirborne = 0,  // Received messages or flags indicating the aircraft is airborne.
-        kBitFlagBaroAltitudeValid,
-        kBitFlagGNSSAltitudeValid,
-        kBitFlagPositionValid,
-        kBitFlagDirectionValid,
-        kBitFlagHorizontalSpeedValid,
-        kBitFlagBaroVerticalRateValid,
-        kBitFlagGNSSVerticalRateValid,
-        kBitFlagIsMilitary,              // Received at least one military ES message from the aircraft.
-        kBitFlagIsClassB2GroundVehicle,  // Is a class B2 ground vehicle transmitting at <70W.
-        kBitFlagHas1090ESIn,             // Aircraft is equipped with 1090MHz Extended Squitter receive capability.
-        kBitFlagHasUATIn,                // Aircraft can receive UAT.
-        kBitFlagTCASOperational,         // TCAS system on aircraft is functional.
-        kBitFlagSingleAntenna,           // Indicates that the aircraft is using a single antenna. Transmissions may be
-                                         // intermittent.
-        kBitFlagDirectionIsHeading,      // Direction is aircraft heading and not track angle.
-        kBitFlagHeadingUsesMagneticNorth,  // Heading in surface and airborne position messages is magnetic north, not
-                                           // true north.
-        kBitFlagIdent,                     // IDENT switch is currently active.
-        kBitFlagAlert,                     // Aircraft is indicating an alert.
-        kBitFlagTCASRA,                    // Indicates a TCAS resolution advisory is active.
-        kBitFlagReserved0,
-        kBitFlagReserved1,
+        kBitFlagBaroAltitudeValid = 1,
+        kBitFlagGNSSAltitudeValid = 2,
+        kBitFlagPositionValid = 3,
+        kBitFlagDirectionValid = 4,
+        kBitFlagHorizontalSpeedValid = 5,
+        kBitFlagBaroVerticalRateValid = 6,
+        kBitFlagGNSSVerticalRateValid = 7,
+        kBitFlagIsMilitary = 8,              // Received at least one military ES message from the aircraft.
+        kBitFlagIsClassB2GroundVehicle = 9,  // Is a class B2 ground vehicle transmitting at <70W.
+        kBitFlagHas1090ESIn = 10,            // Aircraft is equipped with 1090MHz Extended Squitter receive capability.
+        kBitFlagHasUATIn = 11,               // Aircraft can receive UAT.
+        kBitFlagTCASOperational = 12,        // TCAS system on aircraft is functional.
+        kBitFlagSingleAntenna = 13,       // Indicates that the aircraft is using a single antenna. Transmissions may be
+                                          // intermittent.
+        kBitFlagDirectionIsHeading = 14,  // Direction is aircraft heading and not track angle.
+        kBitFlagHeadingUsesMagneticNorth = 15,  // Heading in surface and airborne position messages is magnetic north,
+                                                // not true north.
+        kBitFlagIdent = 16,                     // IDENT switch is currently active.
+        kBitFlagAlert = 17,                     // Aircraft is indicating an alert.
+        kBitFlagTCASRA = 18,                    // Indicates a TCAS resolution advisory is active.
+        kBitFlagReserved0 = 19,
+        kBitFlagReserved1 = 20,
+        kBitFlagReserved2 = 21,
+        kBitFlagReserved3 = 22,
         // Flags after kBitFlagUpdatedBaroAltitude are cleared at the end of every reporting interval.
-        kBitFlagUpdatedBaroAltitude,
-        kBitFlagUpdatedGNSSAltitude,
-        kBitFlagUpdatedPosition,
-        kBitFlagUpdatedDirection,
-        kBitFlagUpdatedHorizontalSpeed,
-        kBitFlagUpdatedBaroVerticalRate,
-        kBitFlagUpdatedGNSSVerticalRate,
+        kBitFlagUpdatedBaroAltitude = 23,
+        kBitFlagUpdatedGNSSAltitude = 24,
+        kBitFlagUpdatedPosition = 25,
+        kBitFlagUpdatedDirection = 26,
+        kBitFlagUpdatedHorizontalSpeed = 27,
+        kBitFlagUpdatedBaroVerticalRate = 28,
+        kBitFlagUpdatedGNSSVerticalRate = 29,
+        kBitFlagReserved4 = 30,
+        kBitFlagReserved5 = 31,
         kBitFlagNumFlagBits
     };
+
+    static const uint8_t kBitFlagEndOfPersistentFlags = kBitFlagUpdatedBaroAltitude;
 
     struct Metrics {
         // We can only confirm that valid frames came from this aircraft. Not sure who invalid frames are from.
@@ -248,7 +254,7 @@ class ModeSAircraft : public Aircraft {
     /**
      * Resets just the flag bits that show that something updated within the last reporting interval.
      */
-    inline void ResetUpdatedBitFlags() { flags &= ~(~0b0 << kBitFlagUpdatedBaroAltitude); }
+    inline void ResetUpdatedBitFlags() { flags &= ~(~0b0 << kBitFlagEndOfPersistentFlags); }
 
     /**
      * Set an aircraft's position in Compact Position Reporting (CPR) format. Takes either an even or odd set of lat/lon
@@ -387,6 +393,7 @@ class UATAircraft : public Aircraft {
    public:
     static constexpr uint16_t kCallSignMaxNumChars = 8;
     static constexpr uint16_t kCallSignMinNumChars = 3;  // Callsigns must be at this long to be valid.
+    static constexpr uint16_t kSquawkNumDigits = 4;
 
     enum AddressQualifier : int8_t {
         kAddressQualifierNotSet = -1,  // Address qualifier has not been set.
@@ -400,38 +407,43 @@ class UATAircraft : public Aircraft {
 
     enum BitFlag : uint32_t {
         kBitFlagIsAirborne = 0,  // Received messages or flags indicating the aircraft is airborne.
-        kBitFlagBaroAltitudeValid,
-        kBitFlagGNSSAltitudeValid,
-        kBitFlagPositionValid,
-        kBitFlagDirectionValid,
-        kBitFlagHorizontalSpeedValid,
-        kBitFlagBaroVerticalRateValid,
-        kBitFlagGNSSVerticalRateValid,
-        kBitFlagIsMilitary,              // Received at least one military ES message from the aircraft.
-        kBitFlagIsClassB2GroundVehicle,  // Is a class B2 ground vehicle transmitting at <70W.
-        kBitFlagHas1090ESIn,             // Aircraft is equipped with 1090MHz Extended Squitter receive capability.
-        kBitFlagHasUATIn,                // Aircraft can receive UAT.
-        kBitFlagTCASOperational,         // TCAS system on aircraft is functional.
-        kBitFlagSingleAntenna,           // Indicates that the aircraft is using a single antenna. Transmissions may be
-                                         // intermittent.
-        kBitFlagDirectionIsHeading,      // Direction is aircraft heading and not track angle.
-        kBitFlagHeadingUsesMagneticNorth,  // Heading in surface and airborne position messages is magnetic north, not
-                                           // true north.
-        kBitFlagIdent,                     // IDENT switch is currently active.
-        kBitFlagAlert,                     // Aircraft is indicating an alert.
-        kBitFlagTCASRA,                    // Indicates a TCAS resolution advisory is active.
-        kBitFlagReserved0,
-        kBitFlagReserved1,
+        kBitFlagBaroAltitudeValid = 1,
+        kBitFlagGNSSAltitudeValid = 2,
+        kBitFlagPositionValid = 3,
+        kBitFlagDirectionValid = 4,
+        kBitFlagHorizontalSpeedValid = 5,
+        kBitFlagBaroVerticalRateValid = 6,
+        kBitFlagGNSSVerticalRateValid = 7,
+        kBitFlagHasCDTI = 8,              // Aircraft is equipped with a Cockpit Display of Traffic Information (CDTI).
+        kBitFlagTCASOperational = 9,      // TCAS system on aircraft is functional.
+        kBitFlagDirectionIsHeading = 10,  // Direction is aircraft heading and not track angle.
+        kBitFlagHeadingUsesMagneticNorth = 11,  // Heading in surface and airborne position messages is magnetic north,
+                                                // not true north.
+        kBitFlagIdent = 12,                     // IDENT switch is currently active.
+        kBitFlagReserved0 = 13,
+        kBitFlagReserved1 = 14,
+        kBitFlagTCASRA = 15,                // Indicates a TCAS resolution advisory is active.
+        kBitFlagReceivingATCServices = 16,  // Aircraft is receiving ATC services.
+        kBitFlagReserved2 = 17,
+        kBitFlagReserved3 = 18,
+        kBitFlagReserved4 = 19,
+        kBitFlagReserved5 = 20,
+        kBitFlagReserved6 = 21,
+        kBitFlagReserved7 = 22,
         // Flags after kBitFlagUpdatedBaroAltitude are cleared at the end of every reporting interval.
-        kBitFlagUpdatedBaroAltitude,
-        kBitFlagUpdatedGNSSAltitude,
-        kBitFlagUpdatedPosition,
-        kBitFlagUpdatedDirection,
-        kBitFlagUpdatedHorizontalSpeed,
-        kBitFlagUpdatedBaroVerticalRate,
-        kBitFlagUpdatedGNSSVerticalRate,
+        kBitFlagUpdatedBaroAltitude = 23,
+        kBitFlagUpdatedGNSSAltitude = 24,
+        kBitFlagUpdatedPosition = 25,
+        kBitFlagUpdatedDirection = 26,
+        kBitFlagUpdatedHorizontalSpeed = 27,
+        kBitFlagUpdatedBaroVerticalRate = 28,
+        kBitFlagUpdatedGNSSVerticalRate = 29,
+        kBitFlagReserved8 = 30,
+        kBitFlagReserved9 = 31,
         kBitFlagNumFlagBits
     };
+
+    static const uint8_t kBitFlagEndOfPersistentFlags = kBitFlagUpdatedBaroAltitude;
 
     enum EmergencyPriorityStatus : uint8_t {
         kEmergencyPriorityStatusNone = 0,
@@ -482,7 +494,7 @@ class UATAircraft : public Aircraft {
     /**
      * Resets just the flag bits that show that something updated within the last reporting interval.
      */
-    inline void ResetUpdatedBitFlags() { flags &= ~(~0b0 << kBitFlagUpdatedBaroAltitude); }
+    inline void ResetUpdatedBitFlags() { flags &= ~(~0b0 << kBitFlagEndOfPersistentFlags); }
 
     /**
      * Roll the metrics counter over to the public metrics field.
@@ -539,6 +551,7 @@ class UATAircraft : public Aircraft {
         ADSBTypes::kSDASupportedFailureUnknownOrNoSafetyEffect;  // 2 bits.
 
     uint8_t raw_capability_codes = 0;
+    uint8_t raw_operational_modes = 0;
 
     // 6 LSBs of Message Start Opportunity used for last transmission.
     uint8_t transmit_mso = 0;
