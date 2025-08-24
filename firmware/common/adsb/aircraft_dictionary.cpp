@@ -731,25 +731,25 @@ bool ModeSAircraft::ApplyAircraftOperationStatusMessage(ModeSADSBPacket packet) 
                 case 0b000:  // No data.
                     break;
                 case 0b001:  // 2 meters left of roll axis.
-                    gnss_antenna_offset_right_of_roll_axis_m = -2;
+                    gnss_antenna_offset_right_of_reference_point_m = -2;
                     break;
                 case 0b010:  // 4 meters left of roll axis.
-                    gnss_antenna_offset_right_of_roll_axis_m = -4;
+                    gnss_antenna_offset_right_of_reference_point_m = -4;
                     break;
                 case 0b011:  // 6 meters left of roll axis.
-                    gnss_antenna_offset_right_of_roll_axis_m = -6;
+                    gnss_antenna_offset_right_of_reference_point_m = -6;
                     break;
                 case 0b100:  // Centered on roll axis.
-                    gnss_antenna_offset_right_of_roll_axis_m = 0;
+                    gnss_antenna_offset_right_of_reference_point_m = 0;
                     break;
                 case 0b101:  // 2 meters right of roll axis.
-                    gnss_antenna_offset_right_of_roll_axis_m = 2;
+                    gnss_antenna_offset_right_of_reference_point_m = 2;
                     break;
                 case 0b110:  // 4 meters right of roll axis.
-                    gnss_antenna_offset_right_of_roll_axis_m = 4;
+                    gnss_antenna_offset_right_of_reference_point_m = 4;
                     break;
                 case 0b111:  // 6 meters right of roll axis.
-                    gnss_antenna_offset_right_of_roll_axis_m = 6;
+                    gnss_antenna_offset_right_of_reference_point_m = 6;
                     break;
             }
 
@@ -876,8 +876,8 @@ bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVe
                 length_m = length_m_temp;
                 break;
             case ADSBTypes::kAVDimensionsTypeGNSSSensorOffset:
-                gnss_antenna_offset_forward_of_adsb_reference_point_m = length_m_temp;
-                gnss_antenna_offset_right_of_adsb_reference_point_m = width_m_temp;
+                gnss_antenna_offset_forward_of_reference_point_m = length_m_temp;
+                gnss_antenna_offset_right_of_reference_point_m = width_m_temp;
                 break;
         }
     } else {

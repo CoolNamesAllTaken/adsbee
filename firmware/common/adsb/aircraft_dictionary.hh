@@ -337,13 +337,13 @@ class ModeSAircraft : public Aircraft {
     ADSBTypes::SystemDesignAssurance system_design_assurance =
         ADSBTypes::kSDASupportedFailureUnknownOrNoSafetyEffect;  // 2 bits.
     // GPS Antenna Offset
-    int8_t gnss_antenna_offset_right_of_roll_axis_m =
+    int8_t gnss_antenna_offset_right_of_reference_point_m =
         INT8_MAX;  // Defaults to INT8_MAX to indicate it hasn't been read yet.
     // Aircraft dimensions (on the ground).
     uint16_t length_m = 0;
     uint16_t width_m = 0;
 
-    int8_t adsb_version = -1;
+    int8_t adsb_version = 0;
 
     /**
      * GENERIC COMMENT FOR ALL MESSAGE INGESTION HELPERS
@@ -520,8 +520,8 @@ class UATAircraft : public Aircraft {
 
     uint32_t flags = 0b0;
 
-    int16_t last_message_signal_strength_dbm = 0;  // Voltage of RSSI signal during message receipt.
-    int16_t last_message_signal_quality_db = 0;    // Ratio of RSSI to noise floor during message receipt.
+    int16_t last_message_signal_strength_dbm = 0;  // Voltage of RSSI signal during last message reception.
+    int16_t last_message_signal_quality_bits = 0;  // Number of bits corrected with FEC during last message reception.
     uint32_t last_track_update_timestamp_ms = 0;   // Timestamp of the last time that the position was updated.
     Metrics metrics;
 
@@ -561,8 +561,8 @@ class UATAircraft : public Aircraft {
     uint16_t width_m = 0;
 
     // Aircraft GNSS sensor offset (transmitted on the ground).
-    int16_t gnss_antenna_offset_right_of_adsb_reference_point_m = 0;
-    int16_t gnss_antenna_offset_forward_of_adsb_reference_point_m = 0;
+    int16_t gnss_antenna_offset_right_of_reference_point_m = 0;
+    int16_t gnss_antenna_offset_forward_of_reference_point_m = 0;
 
     int8_t tis_b_site_id = -1;
     bool utc_coupled = false;
