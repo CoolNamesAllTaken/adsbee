@@ -8,7 +8,6 @@ set(LINKER_SCRIPTS_DIR "${CMAKE_SOURCE_DIR}/linker_scripts")
 set(ADSBEE_COMMON_DIR "${CMAKE_SOURCE_DIR}/../common") # Used for code shared between ESP32 and RP2040.
 set(ADSBEE_MODULES_DIR "${CMAKE_SOURCE_DIR}/../modules")
 
-# TODO: Change these linker scripts as they get populated.
 set(BOOTLOADER_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/bootloader.ld")
 set(APPLICATION_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/application.ld")
 set(APP0_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/app0.ld")
@@ -20,6 +19,8 @@ set(APPLICATION_HEADER_SECTION_NAME hdr0)
 set(APPLICATION_SECTION_NAME app0)
 
 find_package (Python3 REQUIRED COMPONENTS Interpreter)
+
+add_compile_options(-Wno-packed-bitfield-compat) # Ignore the packed bitfield compatibility warning from GCC 4.4, since we never used GCC that old.
 
 # Function that converts a .bin file into a .S (assembly) file, allowing the .bin to be linked within a linker script
 # via its section name. Currently only used to create boot3.S in the bootloader folder.

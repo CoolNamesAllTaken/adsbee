@@ -87,7 +87,8 @@ inline fixedmath::fixed_t wrapped_atan2(fixedmath::fixed_t y, fixedmath::fixed_t
     return val < fixedmath::fixed_t(0) ? (val + fixedmath::fixed_t(2.0f * M_PI)) : val;
 }
 
-void CalculateTrackAndSpeedFromNEVelocities(int n_vel_kts, int e_vel_kts, float &track_deg, int &speed_kts) {
+void CalculateTrackAndSpeedFromNEVelocities(int32_t n_vel_kts, int32_t e_vel_kts, float &track_deg,
+                                            int32_t &speed_kts) {
     track_deg = static_cast<float>(
         wrapped_atan2(static_cast<fixedmath::fixed_t>(e_vel_kts), static_cast<fixedmath::fixed_t>(n_vel_kts)) *
         kDegPerRadian);

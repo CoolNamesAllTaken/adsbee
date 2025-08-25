@@ -40,4 +40,4 @@ float hav_awb(uint32_t theta_awb);
  */
 float havdiff_to_m(float x);
 
-void CalculateTrackAndSpeedFromNEVelocities(int n_vel_kts, int e_vel_kts, float &track_deg, int &speed_kts);
+void CalculateTrackAndSpeedFromNEVelocities(int32_t n_vel_kts, int32_t e_vel_kts, float &track_deg, int32_t &speed_kts);

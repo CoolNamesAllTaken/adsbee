@@ -531,6 +531,7 @@ class UATAircraft : public Aircraft {
     char callsign[ModeSAircraft::kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
     uint16_t squawk = 0;
     ADSBTypes::EmitterCategory emitter_category = ADSBTypes::kEmitterCategoryNoCategoryInfo;
+    uint8_t emitter_category_raw = 0;  // Non-enum category.
     EmergencyPriorityStatus emergency_priority_status =
         kEmergencyPriorityStatusNone;  // Emergency priority status of the aircraft.
 

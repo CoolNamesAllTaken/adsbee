@@ -16,7 +16,7 @@ uint64_t TimeDictionaryPacketIngestUs() {
     // Ingest the odd packet to initialize the aircraft.
     adsbee.aircraft_dictionary.IngestDecodedModeSPacket(odd_packet);
     adsbee.aircraft_dictionary.IngestDecodedModeSPacket(even_packet);
-    ModeSAircraft *aircraft = adsbee.aircraft_dictionary.GetAircraftPtr(icao);
+    ModeSAircraft *aircraft = adsbee.aircraft_dictionary.GetAircraftPtr<ModeSAircraft>(icao);
 
     // Increment the timestamp of the odd packet and ingest it again. Time how long it takes the CPR filter to run.
     odd_packet.GetRawPtr()->mlat_48mhz_64bit_counts += 3'000 * 48'000;

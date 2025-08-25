@@ -124,10 +124,19 @@ bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface,
 bool CommsManager::ReportCSBee(SettingsManager::SerialInterface iface) {
     // Write out a CSBee Aircraft message for each aircraft in the aircraft dictionary.
     for (auto &itr : adsbee.aircraft_dictionary.dict) {
-        const ModeSAircraft &aircraft = itr.second;
-
         char message[kCSBeeMessageStrMaxLen];
-        int16_t message_len_bytes = WriteCSBeeAircraftMessageStr(message, aircraft);
+        int message_len_bytes = -1;
+
+        if (ModeSAircraft *mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
+            message_len_bytes = WriteCSBeeModeSAircraftMessageStr(message, *mode_s_aircraft);
+        } else if (UATAircraft *uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
+            message_len_bytes = WriteCSBeeUATAircraftMessageStr(message, *uat_aircraft);
+        } else {
+            CONSOLE_WARNING("CommsManager::ReportCSBee", "Unknown aircraft type in dictionary for UID 0x%lx.",
+                            itr.first);
+            continue;
+        }
+
         if (message_len_bytes < 0) {
             CONSOLE_ERROR("CommsManager::ReportCSBee",
                           "Encountered an error in WriteCSBeeAircraftMessageStr, error code %d.", message_len_bytes);
@@ -145,6 +154,8 @@ bool CommsManager::ReportCSBee(SettingsManager::SerialInterface iface) {
                                        adsbee.aircraft_dictionary.metrics.valid_squitter_frames,           // SFPS
                                        adsbee.aircraft_dictionary.metrics.raw_extended_squitter_frames,    // RAW_ESFPS
                                        adsbee.aircraft_dictionary.metrics.valid_extended_squitter_frames,  // ESFPS
+                                       adsbee.aircraft_dictionary.metrics.raw_uat_adsb_frames,             // RAW_UAT
+                                       adsbee.aircraft_dictionary.metrics.valid_uat_adsb_frames,           // VALID_UAT
                                        adsbee.aircraft_dictionary.GetNumAircraft(),  // NUM_AIRCRAFT
                                        0u,                                           // TSCAL
                                        get_time_since_boot_ms() / 1000               // UPTIME
@@ -174,10 +185,16 @@ bool CommsManager::ReportMAVLINK(SettingsManager::SerialInterface iface) {
 
     // Send an ADSB_VEHICLE message for each aircraft in the dictionary.
     for (auto &itr : adsbee.aircraft_dictionary.dict) {
-        const ModeSAircraft &aircraft = itr.second;
-
-        mavlink_adsb_vehicle_t adsb_vehicle_msg = AircraftToMAVLINKADSBVehicleMessage(aircraft);
-
+        mavlink_adsb_vehicle_t adsb_vehicle_msg;
+        if (ModeSAircraft *mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
+            adsb_vehicle_msg = ModeSAircraftToMAVLINKADSBVehicleMessage(*mode_s_aircraft);
+        } else if (UATAircraft *uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
+            adsb_vehicle_msg = UATAircraftToMAVLINKADSBVehicleMessage(*uat_aircraft);
+        } else {
+            CONSOLE_WARNING("CommsManager::ReportMAVLINK", "Unknown aircraft type in dictionary for UID 0x%lx.",
+                            itr.first);
+            continue;
+        }
         // Send the message.
         mavlink_msg_adsb_vehicle_send_struct(static_cast<mavlink_channel_t>(iface), &adsb_vehicle_msg);
     }
@@ -221,8 +238,16 @@ bool CommsManager::ReportGDL90(SettingsManager::SerialInterface iface) {
 
     // Traffic Reports
     for (auto &itr : adsbee.aircraft_dictionary.dict) {
-        const ModeSAircraft &aircraft = itr.second;
-        msg_len = gdl90.WriteGDL90TargetReportMessage(buf, aircraft, false);
+        msg_len = 0;
+        if (ModeSAircraft *mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
+            msg_len = gdl90.WriteGDL90TargetReportMessage(buf, *mode_s_aircraft, false);
+        } else if (UATAircraft *uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
+            msg_len = gdl90.WriteGDL90TargetReportMessage(buf, *uat_aircraft, false);
+        } else {
+            CONSOLE_WARNING("CommsManager::ReportGDL90", "Unknown aircraft type in dictionary for UID 0x%lx.",
+                            itr.first);
+            continue;
+        }
         SendBuf(iface, (char *)buf, msg_len);
     }
     return true;

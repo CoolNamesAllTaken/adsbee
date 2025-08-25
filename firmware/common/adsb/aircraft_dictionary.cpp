@@ -470,9 +470,9 @@ bool ModeSAircraft::ApplyAirborneVelocitiesMessage(ModeSADSBPacket packet) {
             } else {
                 speed_source = ADSBTypes::kSpeedSourceGroundSpeed;
                 bool direction_is_east_to_west = static_cast<bool>(packet.GetNBitWordFromMessage(1, 13));
-                int v_x_kts = (v_ew_kts_plus_1 - 1) * (direction_is_east_to_west ? -1 : 1);
+                int32_t v_x_kts = (v_ew_kts_plus_1 - 1) * (direction_is_east_to_west ? -1 : 1);
                 bool direction_is_north_to_south = static_cast<bool>(packet.GetNBitWordFromMessage(1, 24));
-                int v_y_kts = (v_ns_kts_plus_1 - 1) * (direction_is_north_to_south ? -1 : 1);
+                int32_t v_y_kts = (v_ns_kts_plus_1 - 1) * (direction_is_north_to_south ? -1 : 1);
                 if (is_supersonic) {
                     v_x_kts *= 4;
                     v_y_kts *= 4;
@@ -915,7 +915,8 @@ bool UATAircraft::ApplyUATADSBModeStatus(const DecodedUATADSBPacket::UATModeStat
 
     // Extract callsign and emitter category.
     uint16_t temp = mode_status.emitter_category_and_callsign_chars_1_2;
-    emitter_category = static_cast<ADSBTypes::EmitterCategory>(temp / 1600);
+    emitter_category_raw = temp / 1600;
+    emitter_category = static_cast<ADSBTypes::EmitterCategory>(emitter_category_raw);
     temp %= 1600;
     callsign_temp[0] = LookupUATCallsignChar(temp / 40);
     temp %= 40;
