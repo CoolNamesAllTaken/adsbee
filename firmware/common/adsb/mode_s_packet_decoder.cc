@@ -1,35 +1,36 @@
-#include "packet_decoder.hh"
+#include "mode_s_packet_decoder.hh"
 
 #include "comms.hh"
 #include "crc.hh"
 
-bool PacketDecoder::UpdateLogLoop() {
+bool ModeSPacketDecoder::UpdateLogLoop() {
     uint16_t num_messages = debug_message_out_queue.Length();
     for (uint16_t i = 0; i < num_messages; i++) {
         DebugMessage message;
-        debug_message_out_queue.Pop(message);
+        debug_message_out_queue.Dequeue(message);
         switch (message.log_level) {
             case SettingsManager::LogLevel::kInfo:
-                CONSOLE_INFO("PacketDecoder::DecoderLoop", "%s", message.message);
+                CONSOLE_INFO("ModeSPacketDecoder::DecoderLoop", "%s", message.message);
                 break;
             case SettingsManager::LogLevel::kWarnings:
-                CONSOLE_WARNING("PacketDecoder::DecoderLoop", "%s", message.message);
+                CONSOLE_WARNING("ModeSPacketDecoder::DecoderLoop", "%s", message.message);
                 break;
             case SettingsManager::LogLevel::kErrors:
-                CONSOLE_ERROR("PacketDecoder::DecoderLoop", "%s", message.message);
+                CONSOLE_ERROR("ModeSPacketDecoder::DecoderLoop", "%s", message.message);
                 break;
             default:
                 break;  // Don't do anything when logs are silent.
         }
     }
     uint16_t bit_flip_index;
-    while (decoded_1090_packet_bit_flip_locations_out_queue.Pop(bit_flip_index)) {
-        CONSOLE_WARNING("PacketDecoder::DecoderLoop", "Corrected single bit error at bit index %d.", bit_flip_index);
+    while (decoded_1090_packet_bit_flip_locations_out_queue.Dequeue(bit_flip_index)) {
+        CONSOLE_WARNING("ModeSPacketDecoder::DecoderLoop", "Corrected single bit error at bit index %d.",
+                        bit_flip_index);
     }
     return true;
 }
 
-bool PacketDecoder::UpdateDecoderLoop() {
+bool ModeSPacketDecoder::UpdateDecoderLoop() {
     uint16_t num_packets_to_process = raw_1090_packet_in_queue.Length();
     if (num_packets_to_process == 0) {
         return true;  // Nothing to do.
@@ -37,8 +38,8 @@ bool PacketDecoder::UpdateDecoderLoop() {
 
     for (uint16_t i = 0; i < num_packets_to_process; i++) {
         RawModeSPacket raw_packet;
-        if (!raw_1090_packet_in_queue.Pop(raw_packet)) {
-            debug_message_out_queue.Push(DebugMessage{
+        if (!raw_1090_packet_in_queue.Dequeue(raw_packet)) {
+            debug_message_out_queue.Enqueue(DebugMessage{
                 .message = "Failed to pop raw packet from input queue.",
                 .log_level = SettingsManager::LogLevel::kErrors,
             });
@@ -67,7 +68,7 @@ bool PacketDecoder::UpdateDecoderLoop() {
             if (bit_flip_index > 0) {
                 // Found a single bit error: flip it and push the corrected packet to the output queue.
                 flip_bit(raw_packet_ptr->buffer, bit_flip_index);
-                decoded_1090_packet_bit_flip_locations_out_queue.Push(bit_flip_index);
+                decoded_1090_packet_bit_flip_locations_out_queue.Enqueue(bit_flip_index);
                 PushPacketIfNotDuplicate(DecodedModeSPacket(*raw_packet_ptr));
 
                 snprintf(decode_debug_message.message, DebugMessage::kMessageMaxLen, "src=%d [1FIXD     ] ",
@@ -90,13 +91,13 @@ bool PacketDecoder::UpdateDecoderLoop() {
                      "df=%02d icao=0x%06x 0x", decoded_packet.GetDownlinkFormat(), decoded_packet.GetICAOAddress());
         // Append a print of the packet contents.
         raw_packet.PrintBuffer(decode_debug_message.message + message_len, DebugMessage::kMessageMaxLen - message_len);
-        debug_message_out_queue.Push(decode_debug_message);
+        debug_message_out_queue.Enqueue(decode_debug_message);
     }
 
     return true;
 }
 
-bool PacketDecoder::PushPacketIfNotDuplicate(const DecodedModeSPacket& decoded_packet) {
+bool ModeSPacketDecoder::PushPacketIfNotDuplicate(const DecodedModeSPacket& decoded_packet) {
     uint32_t icao = decoded_packet.GetICAOAddress();
     uint32_t timestamp_ms = decoded_packet.GetTimestampMs();
     uint16_t packet_source = decoded_packet.GetRaw().source;
@@ -111,15 +112,15 @@ bool PacketDecoder::PushPacketIfNotDuplicate(const DecodedModeSPacket& decoded_p
                 .log_level = SettingsManager::LogLevel::kWarnings,
             };
             snprintf(debug_message.message, DebugMessage::kMessageMaxLen,
-                     "PacketDecoder::PushPacketIfNotDuplicate: Skipped duplicate packet with icao=0x%x src=%d "
+                     "ModeSPacketDecoder::PushPacketIfNotDuplicate: Skipped duplicate packet with icao=0x%x src=%d "
                      "timestamp_ms=%d.",
                      icao, packet_source, timestamp_ms);
-            debug_message_out_queue.Push(debug_message);
+            debug_message_out_queue.Enqueue(debug_message);
             return false;
         }
     }
 
-    decoded_1090_packet_out_queue.Push(decoded_packet);
+    decoded_1090_packet_out_queue.Enqueue(decoded_packet);
 
     if (packet_source >= 0 && packet_source < kMaxNumSources) {
         // Only update packet cache if the source is valid.

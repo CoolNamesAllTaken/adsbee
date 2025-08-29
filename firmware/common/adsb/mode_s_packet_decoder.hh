@@ -5,7 +5,7 @@
 #include "mode_s_packet.hh"
 #include "settings.hh"
 
-class PacketDecoder {
+class ModeSPacketDecoder {
    public:
     static constexpr uint16_t kPacketQueueLen = 100;
     static constexpr uint16_t kDebugMessageQueueLen = 20;
@@ -19,7 +19,7 @@ class PacketDecoder {
     };
 
     /**
-     * Struct used to send Debug messages to the main core, since PacketDecoder is made to run on multiple cores.
+     * Struct used to send Debug messages to the main core, since ModeSPacketDecoder is made to run on multiple cores.
      */
     struct DebugMessage {
         static const uint16_t kMessageMaxLen = 200;
@@ -28,7 +28,7 @@ class PacketDecoder {
         SettingsManager::LogLevel log_level = SettingsManager::LogLevel::kInfo;
     };
 
-    PacketDecoder(PacketDecoderConfig config_in) : config_(config_in) {};
+    ModeSPacketDecoder(PacketDecoderConfig config_in) : config_(config_in) {};
 
     bool Init() { return true; }
 
@@ -74,6 +74,6 @@ class PacketDecoder {
     uint32_t last_demod_timestamp_ms_[kMaxNumSources] = {0, 0, 0, 0};
 };
 
-extern PacketDecoder decoder;
+extern ModeSPacketDecoder decoder;
 
 #endif /* PACKET_DECODER_HH_ */

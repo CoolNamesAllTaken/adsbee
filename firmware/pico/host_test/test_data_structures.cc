@@ -6,24 +6,24 @@ void FillAndEmptyQueue(PFBQueue<T> &queue, uint16_t queue_max_length) {
     ASSERT_EQ(queue.Length(), 0);
     // Fill up the queue.
     for (uint16_t i = 0; i < queue_max_length; i++) {
-        ASSERT_TRUE(queue.Push(i));
+        ASSERT_TRUE(queue.Enqueue(i));
         ASSERT_EQ(queue.Length(), i + 1);
     }
     // Queue is full and can't take any more.
-    ASSERT_FALSE(queue.Push(queue_max_length + 1));
-    // Pop and push while wrapping around.
+    ASSERT_FALSE(queue.Enqueue(queue_max_length + 1));
+    // Dequeue and push while wrapping around.
     for (uint16_t i = 0; i < queue_max_length; i++) {
         uint32_t pop_buffer = UINT32_MAX;
-        ASSERT_TRUE(queue.Pop(pop_buffer));
+        ASSERT_TRUE(queue.Dequeue(pop_buffer));
         ASSERT_EQ(pop_buffer, i);
         ASSERT_EQ(queue.Length(), queue_max_length - 1);
-        ASSERT_TRUE(queue.Push(queue_max_length + i));
+        ASSERT_TRUE(queue.Enqueue(queue_max_length + i));
         ASSERT_EQ(queue.Length(), queue_max_length);
     }
-    // Pop everything.
+    // Dequeue everything.
     for (uint32_t i = 0; i < queue_max_length; i++) {
         uint32_t pop_buffer = UINT32_MAX;
-        ASSERT_TRUE(queue.Pop(pop_buffer));
+        ASSERT_TRUE(queue.Dequeue(pop_buffer));
         ASSERT_EQ(pop_buffer, queue_max_length + i);
         ASSERT_EQ(queue.Length(), queue_max_length - i - 1);
     }
@@ -49,11 +49,11 @@ TEST(PFBQueue, Peek) {
     ASSERT_FALSE(queue.Peek(peek_buffer));
 
     // One push and pop to force a wraparound while testing peek.
-    queue.Push(0);
-    queue.Pop(peek_buffer);
+    queue.Enqueue(0);
+    queue.Dequeue(peek_buffer);
 
     for (uint16_t i = 0; i < buf_len_num_elements; i++) {
-        queue.Push(i);
+        queue.Enqueue(i);
         ASSERT_TRUE(queue.Peek(peek_buffer));
         ASSERT_EQ(peek_buffer, 0u);
         ASSERT_TRUE(queue.Peek(peek_buffer, i));
@@ -69,7 +69,7 @@ TEST(PFBQueue, Clear) {
     for (uint16_t i = 0; i < buf_len_num_elements; i++) {
         ASSERT_EQ(queue.Length(), 0);
         for (uint16_t j = 0; j < num_pushes_each_time; j++) {
-            queue.Push(i);
+            queue.Enqueue(i);
         }
         ASSERT_EQ(queue.Length(), num_pushes_each_time);
         queue.Clear();
@@ -83,7 +83,7 @@ TEST(PFBQueue, OverwriteWhenFull) {
 
     // Load the queue with uint32_t's that have their MSB set to 0xF0.
     for (uint16_t i = 0; i < queue.MaxNumElements(); i++) {
-        EXPECT_TRUE(queue.Push(0xF0000000 | i));
+        EXPECT_TRUE(queue.Enqueue(0xF0000000 | i));
     }
     // Check that they loaded in ok.
     for (uint16_t i = 0; i < queue.MaxNumElements(); i++) {
@@ -95,13 +95,13 @@ TEST(PFBQueue, OverwriteWhenFull) {
     EXPECT_EQ(queue.Length(), queue.MaxNumElements());
     // Overwrite all the elements of the queue with uint32_t's with their MSB set to 0x00.
     for (uint16_t i = 0; i < queue.MaxNumElements(); i++) {
-        EXPECT_TRUE(queue.Push(i));
+        EXPECT_TRUE(queue.Enqueue(i));
         EXPECT_EQ(queue.Length(), queue.MaxNumElements());
     }
     // Make sure all elements were overwritten.
     for (uint16_t i = 0; i < queue.MaxNumElements(); i++) {
         uint32_t out;
-        EXPECT_TRUE(queue.Pop(out));
+        EXPECT_TRUE(queue.Dequeue(out));
         EXPECT_EQ(out, i);
     }
 }
@@ -115,7 +115,7 @@ TEST(PFBQueue, Discard) {
 
     // Load the queue with uint32_t's that have their MSB set to 0xF0.
     for (uint16_t i = 0; i < queue.MaxNumElements(); i++) {
-        EXPECT_TRUE(queue.Push(0xF0000000 | i));
+        EXPECT_TRUE(queue.Enqueue(0xF0000000 | i));
     }
     // Not allowed to discard more elements than the queue length.
     EXPECT_FALSE(queue.Discard(5));

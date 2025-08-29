@@ -79,7 +79,7 @@ bool ESP32::Update() {
         }
         for (uint16_t i = 0; i < bytes_to_read; i++) {
             char c = (char)buf[i];
-            if (!comms_manager.esp32_console_rx_queue.Push(c)) {
+            if (!comms_manager.esp32_console_rx_queue.Enqueue(c)) {
                 CONSOLE_ERROR("ObjectDictionary::SetBytes", "ESP32 overflowed RP2040's network console queue.");
                 comms_manager.esp32_console_rx_queue.Clear();
                 return false;

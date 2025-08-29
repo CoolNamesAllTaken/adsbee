@@ -111,7 +111,7 @@ bool SPICoprocessor::Update() {
             }
 
             ObjectDictionary::LogMessage log_message;
-            while (object_dictionary.log_message_queue.Pop(log_message)) {
+            while (object_dictionary.log_message_queue.Dequeue(log_message)) {
                 switch (log_message.log_level) {
                     case SettingsManager::LogLevel::kInfo:
                         CONSOLE_INFO("CoProcessor", "%s >> %s", config_.tag_str, log_message.message);
@@ -244,7 +244,7 @@ bool SPICoprocessor::LogMessage(SettingsManager::LogLevel log_level, const char 
     log_message.num_chars += vsnprintf(log_message.message + log_message.num_chars,
                                        ObjectDictionary::kLogMessageMaxNumChars - log_message.num_chars, format, args);
 
-    return object_dictionary.log_message_queue.Push(log_message);
+    return object_dictionary.log_message_queue.Enqueue(log_message);
 }
 #endif
 

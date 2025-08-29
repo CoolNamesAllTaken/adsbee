@@ -45,11 +45,11 @@ class PFBQueue {
     inline bool IsEmpty() { return (!is_full_ && (head_ == tail_)); }
 
     /**
-     * Pushes an element onto the buffer.
+     * Enqueues an element to the back of the buffer.
      * @param[in] element Object to push onto the back of the buffer.
      * @retval True if succeeded, false if the buffer is full.
      */
-    bool Push(T element) {
+    bool Enqueue(T element) {
         if (is_full_) {
             if (!config_.overwrite_when_full) {
                 // Buffer is full and not overwriting; cannot push.
@@ -70,11 +70,11 @@ class PFBQueue {
     }
 
     /**
-     * Pops an element from the front of the buffer.
+     * Dequeues an element from the front of the buffer.
      * @param[out] element Reference to an object that will be overwritten by the contents of the popped element.
      * @retval True if successful, false if the buffer is empty.
      */
-    bool Pop(T &element) {
+    bool Dequeue(T &element) {
         if (head_ == tail_ && !is_full_) {
             return false;
         }

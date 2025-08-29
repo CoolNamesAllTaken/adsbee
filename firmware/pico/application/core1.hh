@@ -1,6 +1,6 @@
 #pragma once
 
-#include "packet_decoder.hh"
+#include "mode_s_packet_decoder.hh"
 #include "pico/multicore.h"
 
 inline void main_core1() {

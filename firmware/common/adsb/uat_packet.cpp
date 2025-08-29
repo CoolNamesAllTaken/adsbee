@@ -1,6 +1,7 @@
 #include "uat_packet.hh"
 
 #include <cstring>  // for strlen
+#include <numbers>
 
 #include "aircraft_dictionary.hh"  // for Aircraft::kAddressQualifierBitShift
 #include "comms.hh"                // for CONSOLE_INFO, CONSOLE_ERROR
@@ -12,7 +13,7 @@
 const fixedmath::fixed_t kDegPerTrackAngleHeadingTick =
     fixedmath::fixed_t{360.0f / 512};  // Direction ticks for Track Angle / Heading field (UAT Tech Manual Table 3-24).
 const fixedmath::fixed_t kDegPerRadian =
-    fixedmath::fixed_t{180.0f / M_PI};  // Conversion factor from radians to degrees.
+    fixedmath::fixed_t{180.0f / std::numbers::pi};  // Conversion factor from radians to degrees.
 const int32_t kFPMPerEncodedVerticalRateTick = 64;
 
 RawUATADSBPacket::RawUATADSBPacket(const char *rx_string, int16_t sigs_dbm_in, int16_t sigq_db_in,

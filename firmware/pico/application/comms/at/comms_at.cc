@@ -508,7 +508,8 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         if (esp32.IsEnabled()) {
                             char network_console_byte;
                             if (esp32_console_rx_queue.Length() > 0) {
-                                while (buf_len_bytes < len_bytes && esp32_console_rx_queue.Pop(network_console_byte)) {
+                                while (buf_len_bytes < len_bytes &&
+                                       esp32_console_rx_queue.Dequeue(network_console_byte)) {
                                     // Was able to read a char from the network buffer.
                                     buf[buf_len_bytes] = network_console_byte;
                                     buf_len_bytes++;
@@ -1204,7 +1205,7 @@ bool CommsManager::UpdateAT() {
         // Receive incoming network console characters.
         static char esp32_console_rx_buf[kATCommandBufMaxLen + 1];
         static uint16_t esp32_console_rx_buf_len = 0;
-        while (esp32_console_rx_queue.Pop(c)) {
+        while (esp32_console_rx_queue.Dequeue(c)) {
             esp32_console_rx_buf[esp32_console_rx_buf_len] = c;
             esp32_console_rx_buf_len++;
             esp32_console_rx_buf[esp32_console_rx_buf_len] = '\0';

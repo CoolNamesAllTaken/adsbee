@@ -37,10 +37,10 @@ bool CommsManager::UpdateReporting() {
     // in order to preserve bandwidth.
     uint16_t num_packets_to_report = 0;
     for (; num_packets_to_report < SettingsManager::Settings::kMaxNumTransponderPackets &&
-           transponder_packet_reporting_queue.Pop(packets_to_report[num_packets_to_report]);
+           transponder_packet_reporting_queue.Dequeue(packets_to_report[num_packets_to_report]);
          num_packets_to_report++) {
         if (esp32.IsEnabled()) {
-            // Pop all the packets to report (up to max limit of the buffer).
+            // Dequeue all the packets to report (up to max limit of the buffer).
             RawModeSPacket raw_packet = packets_to_report[num_packets_to_report].GetRaw();
             spi_raw_packet_reporting_buffer[0] = num_packets_to_report + 1;
             memcpy(spi_raw_packet_reporting_buffer + sizeof(uint8_t) + sizeof(RawModeSPacket) * num_packets_to_report,

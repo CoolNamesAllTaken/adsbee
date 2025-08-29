@@ -14,6 +14,9 @@
 #include "esp_mac.h"   // For retrieving Base MAC address.
 #include "esp_wifi.h"  // For retrieving WiFi Station MAC address.
 #endif
+#ifdef ON_TI
+#include "uat_packet.hh"
+#endif
 
 class ObjectDictionary {
    public:
@@ -33,6 +36,9 @@ class ObjectDictionary {
     static constexpr uint16_t kSCCommandRequestQueueDepth = 10;
     static constexpr uint16_t kNetworkConsoleRxQueueDepth = kNetworkConsoleMessageMaxLenBytes * 4;
 #endif
+#ifdef ON_TI
+    static constexpr uint16_t kDecodedUATADSBPacketQueueDepth = 50;
+#endif
 
     enum Address : uint8_t {
         kAddrInvalid = 0,             // Default value.
@@ -50,7 +56,8 @@ class ObjectDictionary {
         kAddrDeviceStatus = 0x0C,  // Struct containing number of pending log messages and current timestamp.
         kAddrLogMessages = 0x0D,   // Used to retrieve log messages from ESP32 and CC1312.
         kAddrRollQueue = 0x0E,     // Used to roll various queues on coprocessor slaves to confirm they have been read.
-        kAddrSCCommandRequests = 0x0F,  // Used by slave to request commands from master.
+        kAddrSCCommandRequests = 0x0F,          // Used by slave to request commands from master.
+        kAddrDecodedUATADSBPacketArray = 0x10,  // UAT ADS-B packet array on CC1312.
         kNumAddrs
     };
 
@@ -247,21 +254,29 @@ class ObjectDictionary {
     });
 
 #ifdef ON_COPRO_SLAVE
+    // Stuff on ESP32 and CC1312.
     PFBQueue<ObjectDictionary::SCCommandRequestWithCallback> sc_command_request_queue =
         PFBQueue<ObjectDictionary::SCCommandRequestWithCallback>({
             .buf_len_num_elements = ObjectDictionary::kSCCommandRequestQueueDepth,
             .buffer = sc_command_request_queue_buffer_,
             .overwrite_when_full = false  // We don't want to overwrite command requests, since they could be important.
         });
-#ifdef ON_ESP32
-    SemaphoreHandle_t network_console_rx_queue_mutex = xSemaphoreCreateMutex();
-#endif
+
     PFBQueue<char> network_console_rx_queue = PFBQueue<char>({
         .buf_len_num_elements = kNetworkConsoleRxQueueDepth,
         .buffer = network_console_message_buffer_,
         .overwrite_when_full =
             false  // We don't want to overwrite network console messages, since they could be importatnt.
     });
+#endif
+
+#ifdef ON_ESP32
+    SemaphoreHandle_t network_console_rx_queue_mutex = xSemaphoreCreateMutex();
+#elif ON_TI
+    PFBQueue<DecodedUATADSBPacket> decoded_uat_adsb_packet_queue =
+        PFBQueue<DecodedUATADSBPacket>({.buf_len_num_elements = kDecodedUATADSBPacketQueueDepth,
+                                        .buffer = decoded_uat_adsb_packet_buffer_,
+                                        .overwrite_when_full = true});
 #endif
 
    private:
@@ -272,13 +287,18 @@ class ObjectDictionary {
     LogMessage log_message_queue_buffer_[kLogMessageQueueDepth] = {};
 
 #ifdef ON_COPRO_SLAVE
+    // Private stuff on ESP32 and CC1312.
     ObjectDictionary::SCCommandRequestWithCallback
         sc_command_request_queue_buffer_[ObjectDictionary::kSCCommandRequestQueueDepth] = {};
-#ifdef ON_ESP32
-    char* network_console_message_buffer_ = (char*)heap_caps_malloc(kNetworkConsoleRxQueueDepth, 0);
-#else
-    char network_console_message_buffer_[kNetworkConsoleRxQueueDepth] = {};
 #endif
+
+#ifdef ON_ESP32
+    // ESP32
+    char* network_console_message_buffer_ = (char*)heap_caps_malloc(kNetworkConsoleRxQueueDepth, 0);
+#elif ON_TI
+    // CC1312
+    char network_console_message_buffer_[kNetworkConsoleRxQueueDepth] = {};
+    DecodedUATADSBPacket decoded_uat_adsb_packet_buffer_[kDecodedUATADSBPacketQueueDepth] = {};
 #endif
 };
 

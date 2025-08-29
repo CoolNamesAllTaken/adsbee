@@ -31,6 +31,8 @@ add_compile_definitions(ON_TI)
 
 project(sub_ghz_radio C CXX ASM)
 
+add_compile_options(-Wno-packed-bitfield-compat) # Ignore the packed bitfield compatibility warning from GCC 4.4, since we never used GCC that old.
+
 # Create executable
 add_executable(${PROJECT_NAME}
     main.cpp
@@ -65,7 +67,7 @@ target_link_directories(${PROJECT_NAME} PRIVATE
 # Libraries to link
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
-#     # stdc++
+    # stdc++
     gcc # GCC runtime library
     c # C standard library
     m # Math library

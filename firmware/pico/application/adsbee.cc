@@ -16,7 +16,7 @@
 #include "capture.pio.h"
 #include "hal.hh"
 #include "hardware/irq.h"
-#include "packet_decoder.hh"
+#include "mode_s_packet_decoder.hh"
 #include "pico/binary_info.h"
 #include "spi_coprocessor.hh"
 
@@ -184,7 +184,7 @@ bool ADSBee::Update() {
     // Ingest new packets into the dictionary.
     // RawModeSPacket raw_packet;
     DecodedModeSPacket decoded_packet;
-    while (decoder.decoded_1090_packet_out_queue.Pop(decoded_packet)) {
+    while (decoder.decoded_1090_packet_out_queue.Dequeue(decoded_packet)) {
         CONSOLE_INFO("ADSBee::Update", "\tdf=%d icao_address=0x%06x", decoded_packet.GetDownlinkFormat(),
                      decoded_packet.GetICAOAddress());
 
@@ -192,10 +192,10 @@ bool ADSBee::Update() {
             // Packet was used to update the dictionary or was silently ignored (but presumed to be valid).
             FlashStatusLED();
             // NOTE: Pushing to the reporting queue here means that we only will report validated packets!
-            // comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
+            // comms_manager.transponder_packet_reporting_queue.Enqueue(decoded_packet);
             CONSOLE_INFO("ADSBee::Update", "\taircraft_dictionary: %d aircraft", aircraft_dictionary.GetNumAircraft());
         }
-        comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
+        comms_manager.transponder_packet_reporting_queue.Enqueue(decoded_packet);
     }
 
     // Update trigger level learning if it's active.
@@ -325,7 +325,7 @@ void ADSBee::OnDemodComplete() {
         uint16_t mlat_jitter_correction = b >= a ? b - a : (0xFFFF - a) + b;
         rx_packet_[sm_index].mlat_48mhz_64bit_counts -= mlat_jitter_correction;
         if (!pio_sm_is_rx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
-            // Push any partially complete 32-bit word onto the RX FIFO.
+            // Enqueue any partially complete 32-bit word onto the RX FIFO.
             pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
                                       pio_encode_push(false, true));
         }
@@ -360,15 +360,15 @@ void ADSBee::OnDemodComplete() {
                         aircraft_dictionary.Record1090RawSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFFFF) << 8;
                         rx_packet_[sm_index].buffer_len_bits = RawModeSPacket::kSquitterPacketLenBits;
-                        // raw_1090_packet_queue.Push(rx_packet_[sm_index]);
-                        decoder.raw_1090_packet_in_queue.Push(rx_packet_[sm_index]);
+                        // raw_1090_packet_queue.Enqueue(rx_packet_[sm_index]);
+                        decoder.raw_1090_packet_in_queue.Enqueue(rx_packet_[sm_index]);
                         break;
                     case RawModeSPacket::kExtendedSquitterPacketNumWords32:
                         aircraft_dictionary.Record1090RawExtendedSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFF) << 16;
                         rx_packet_[sm_index].buffer_len_bits = RawModeSPacket::kExtendedSquitterPacketLenBits;
-                        // raw_1090_packet_queue.Push(rx_packet_[sm_index]);
-                        decoder.raw_1090_packet_in_queue.Push(rx_packet_[sm_index]);
+                        // raw_1090_packet_queue.Enqueue(rx_packet_[sm_index]);
+                        decoder.raw_1090_packet_in_queue.Enqueue(rx_packet_[sm_index]);
                         break;
                     default:
                         // Don't push partial packets.

@@ -18,7 +18,7 @@ if (TARGET application)
         adsb/uat_packet.cpp
         adsb/aircraft_dictionary.cpp
         adsb/decode_utils.cpp
-        adsb/packet_decoder.cc
+        adsb/mode_s_packet_decoder.cc
         coprocessor/spi_coprocessor.cpp
         coprocessor/object_dictionary.cpp
         firmware_update/firmware_update.cc
@@ -56,7 +56,7 @@ elseif (TARGET sub_ghz_radio)
     # TI CC1312R sub-GHz radio.
     add_subdirectory(adsb/nasa_cpr)
     add_subdirectory(utils/fec)
-    target_sources(${PROJECT_NAME} PRIVATE
+    target_sources(sub_ghz_radio PRIVATE
         settings/settings_strs.cpp
         settings/settings.cpp
         utils/buffer_utils.cpp
@@ -69,8 +69,9 @@ elseif (TARGET sub_ghz_radio)
         coprocessor/spi_coprocessor.cpp
         coprocessor/object_dictionary.cpp
     )
-    target_include_directories(${PROJECT_NAME} PRIVATE
-        # adsb
+    target_include_directories(sub_ghz_radio PRIVATE
+        .
+        adsb
         comms
         comms/json # Not actually used, but added to avoid compile errors.
         coprocessor
@@ -89,7 +90,7 @@ elseif (TARGET host_test)
         adsb/uat_packet.cpp
         adsb/aircraft_dictionary.cpp
         adsb/decode_utils.cpp
-        adsb/packet_decoder.cc
+        adsb/mode_s_packet_decoder.cc
         comms/gdl90/gdl90_utils.cpp
         comms/raw/raw_utils.cpp
         coprocessor/spi_coprocessor.cpp

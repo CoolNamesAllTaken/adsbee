@@ -61,6 +61,15 @@ bool SubGHzRadio::HandlePacketRx()
     CONSOLE_INFO("SubGHzRadio", "Received a new packet.");
     current_data_entry_ = RFQueue_getDataEntry();
 
+    /* Handle the packet data, located at &currentDataEntry->data:
+     * - Length is the first byte with the current configuration
+     * - Data starts from the second byte */
+    uint8_t packet_len_bytes = *(uint8_t *)(&currentDataEntry->data);
+    uint8_t *packet_data = (uint8_t *)(&currentDataEntry->data + 1);
+
+    /* Copy the payload + the status byte to the packet variable */
+    memcpy(packet, packet_data, (packet_len_bytes + 1));
+
     RFQueue_nextEntry();
     return true;
 }

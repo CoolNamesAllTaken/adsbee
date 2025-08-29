@@ -47,9 +47,9 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                     break;
                 case kQueueIDSCCommandRequests:
                     for (uint16_t i = 0; i < roll_request.num_items; i++) {
-                        // Pop requests one by one so that we can call their callbacks.
+                        // Dequeue requests one by one so that we can call their callbacks.
                         SCCommandRequestWithCallback request_with_callback;
-                        if (!sc_command_request_queue.Pop(request_with_callback)) {
+                        if (!sc_command_request_queue.Dequeue(request_with_callback)) {
                             CONSOLE_ERROR("ObjectDictionary::SetBytes",
                                           "Failed to pop SCCommand request from queue during roll.");
                             return false;
@@ -244,7 +244,7 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
 }
 
 bool ObjectDictionary::RequestSCCommand(const SCCommandRequestWithCallback &request_with_callback) {
-    if (sc_command_request_queue.Push(request_with_callback)) {
+    if (sc_command_request_queue.Enqueue(request_with_callback)) {
         return true;
     } else {
         CONSOLE_ERROR("ObjectDictionary::RequestSCCommand", "Failed to push SCCommandRequest to queue, queue is full.");
@@ -341,7 +341,7 @@ uint16_t ObjectDictionary::UnpackLogMessages(uint8_t *buf, uint16_t buf_len,
             log_message_queue.Clear();
             CONSOLE_ERROR("ObjectDictionary::UnpackLogMessages", "Log message queue is full, clearing it.");
         }
-        log_message_queue.Push(log_message);
+        log_message_queue.Enqueue(log_message);
 
         bytes_read += LogMessage::kHeaderSize + log_message.num_chars + 1;  // Move past header and message.
         num_messages++;

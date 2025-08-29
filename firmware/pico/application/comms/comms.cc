@@ -58,7 +58,7 @@ bool CommsManager::UpdateNetworkConsole() {
         char c = '\0';
         while (esp32_console_tx_queue.Length() > 0) {
             uint16_t message_len = 0;
-            for (; message_len < SPICoprocessorPacket::SCWritePacket::kDataMaxLenBytes && esp32_console_tx_queue.Pop(c);
+            for (; message_len < SPICoprocessorPacket::SCWritePacket::kDataMaxLenBytes && esp32_console_tx_queue.Dequeue(c);
                  message_len++) {
                 esp32_console_tx_buf[message_len] = c;
             }
@@ -201,15 +201,15 @@ bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char
 bool CommsManager::network_console_putc(char c) {
     static bool recursion_alert = false;
     if (recursion_alert) {
-        return false;  // Don't get into infinite loops in case UpdateAT or Push() create error messages that would in
+        return false;  // Don't get into infinite loops in case UpdateAT or Enqueue() create error messages that would in
                        // turn create more network_console_putc calls.
     }
     recursion_alert = true;
-    if (!comms_manager.esp32_console_tx_queue.Push(c)) {
+    if (!comms_manager.esp32_console_tx_queue.Enqueue(c)) {
         // Try flushing the buffer before dumping it.
         comms_manager.UpdateAT();
         comms_manager.UpdateNetworkConsole();
-        if (comms_manager.esp32_console_tx_queue.Push(c)) {
+        if (comms_manager.esp32_console_tx_queue.Enqueue(c)) {
             recursion_alert = false;
             return true;  // Crisis averted! Phew.
         }
