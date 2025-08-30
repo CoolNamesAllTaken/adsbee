@@ -8,6 +8,7 @@ extern "C"
 #include "ti/drivers/Board.h"
 #include "ti/drivers/GPIO.h"
 #include "ti/drivers/SPI.h"
+#include "ti/drivers/Power.h"
 #include <posix/unistd.h>
 }
 
@@ -19,8 +20,10 @@ extern "C"
 #include "comms.hh"
 #include "object_dictionary.hh"
 #include "sub_ghz_radio.hh"
+#include "uat_packet_decoder.hh"
 
-#include "unistd.h" // For usleep.
+// #include "unistd.h" // For usleep.
+#include <cstring> // For malloc
 
 BSP bsp;
 ObjectDictionary object_dictionary;
@@ -29,6 +32,7 @@ SPICoprocessor pico = SPICoprocessor({.interface = pico_ll});
 CommsManager comms_manager = CommsManager({});
 SettingsManager settings_manager = SettingsManager();
 SubGHzRadio subg_radio = SubGHzRadio({});
+UATPacketDecoder uat_packet_decoder = UATPacketDecoder();
 
 /**
  * A note on interrupt priorities (configured via Sysconfig):
@@ -51,6 +55,8 @@ void exception_handler()
  */
 int main(void)
 {
+    Power_disablePolicy(); // Stop aggressive clock gating that messes with the debugger.
+
     NoRTOS_Config cfg;
     NoRTOS_getConfig(&cfg);
     cfg.clockTickPeriod = 100; // Set the system tick period to 10kHz (100us).
@@ -111,5 +117,6 @@ int main(void)
     while (true)
     {
         pico.UpdateLED();
+        uat_packet_decoder.Update();
     }
 }

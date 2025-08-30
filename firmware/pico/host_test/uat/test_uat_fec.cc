@@ -3,9 +3,6 @@
 #include "gtest/gtest.h"
 #include "uat_packet.hh"
 
-// Initialize global Reed-Solomon decoder instances.
-UATReedSolomon uat_rs;
-
 TEST(RawUATADSBPacket, StringConstructor) {
     const char *buf_str = "00a66ef135445d525a0c0519119021204800";
     RawUATADSBPacket packet = RawUATADSBPacket(buf_str);

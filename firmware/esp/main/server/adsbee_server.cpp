@@ -1,6 +1,7 @@
 #include "adsbee_server.hh"
 
 #include "comms.hh"
+#include "gdl90/gdl90_utils.hh"
 #include "json_utils.hh"
 #include "pico.hh"
 #include "settings.hh"
@@ -198,11 +199,11 @@ bool ADSBeeServer::Update() {
     }
 
     // Ingest new packets into the dictionary.
-    Raw1090Packet raw_packet;
-    while (raw_transponder_packet_queue.Pop(raw_packet)) {
-        Decoded1090Packet decoded_packet = Decoded1090Packet(raw_packet);
+    RawModeSPacket raw_packet;
+    while (raw_transponder_packet_queue.Dequeue(raw_packet)) {
+        DecodedModeSPacket decoded_packet = DecodedModeSPacket(raw_packet);
 #ifdef VERBOSE_DEBUG
-        if (raw_packet.buffer_len_bits == Decoded1090Packet::kExtendedSquitterPacketLenBits) {
+        if (raw_packet.buffer_len_bits == DecodedModeSPacket::kExtendedSquitterPacketLenBits) {
             CONSOLE_INFO("ADSBeeServer::Update", "New message: 0x%08lx|%08lx|%08lx|%04lx RSSI=%ddBm MLAT=%llu",
                          raw_packet.buffer[0], raw_packet.buffer[1], raw_packet.buffer[2],
                          (raw_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_packet.sigs_dbm,
@@ -216,7 +217,7 @@ bool ADSBeeServer::Update() {
                      decoded_packet.GetICAOAddress());
 #endif
 
-        if (aircraft_dictionary.IngestDecoded1090Packet(decoded_packet)) {
+        if (aircraft_dictionary.IngestDecodedModeSPacket(decoded_packet)) {
             // NOTE: Pushing to a queue here will only forward valid packets!
 #ifdef VERBOSE_DEBUG
             CONSOLE_INFO("ADSBeeServer::Update", "\taircraft_dictionary: %d aircraft",
@@ -226,7 +227,7 @@ bool ADSBeeServer::Update() {
 
         // Send decoded transponder packet to feeds.
         if ((comms_manager.WiFiStationHasIP() || comms_manager.EthernetHasIP()) &&
-            !comms_manager.IPWANSendDecoded1090Packet(decoded_packet)) {
+            !comms_manager.IPWANSendDecodedModeSPacket(decoded_packet)) {
             CONSOLE_ERROR(
                 "ADSBeeServer::Update",
                 "Encountered error while sending decoded transponder packet to feeds from ESP32 as WiFi station.");
@@ -252,10 +253,10 @@ bool ADSBeeServer::Update() {
     return ret;
 }
 
-bool ADSBeeServer::HandleRaw1090Packet(Raw1090Packet &raw_packet) {
+bool ADSBeeServer::HandleRawModeSPacket(RawModeSPacket &raw_packet) {
     bool ret = true;
-    if (!raw_transponder_packet_queue.Push(raw_packet)) {
-        CONSOLE_ERROR("ADSBeeServer::HandleRaw1090Packet",
+    if (!raw_transponder_packet_queue.Enqueue(raw_packet)) {
+        CONSOLE_ERROR("ADSBeeServer::HandleRawModeSPacket",
                       "Push to transponder packet queue failed. May have overflowed?");
         raw_transponder_packet_queue.Clear();
         ret = false;
@@ -298,17 +299,28 @@ bool ADSBeeServer::ReportGDL90() {
     // Traffic Reports
     uint16_t aircraft_index = 0;  // Just used for error reporting.
     for (auto &itr : aircraft_dictionary.dict) {
-        const Aircraft1090 &aircraft = itr.second;
-        printf("\t%s: %.5f %.5f %ld\r\n", aircraft.callsign, aircraft.latitude_deg, aircraft.longitude_deg,
-               aircraft.baro_altitude_ft);
-        message.len = gdl90.WriteGDL90TargetReportMessage(message.data, aircraft, false);
+        if (ModeSAircraft *mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
+            printf("\t#A %s: %.5f %.5f %ld\r\n", mode_s_aircraft->callsign, mode_s_aircraft->latitude_deg,
+                   mode_s_aircraft->longitude_deg, mode_s_aircraft->baro_altitude_ft);
+            message.len = gdl90.WriteGDL90TargetReportMessage(message.data, *mode_s_aircraft, false);
+        } else if (UATAircraft *uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
+            printf("\t#U %s: %.5f %.5f %ld\r\n", uat_aircraft->callsign, uat_aircraft->latitude_deg,
+                   uat_aircraft->longitude_deg, uat_aircraft->baro_altitude_ft);
+            message.len = gdl90.WriteGDL90TargetReportMessage(message.data, *uat_aircraft, false);
+
+        } else {
+            CONSOLE_WARNING("CommsManager::ReportCSBee", "Unknown aircraft type in dictionary for UID 0x%lx.",
+                            itr.first);
+            continue;
+        }
+
         if (settings_manager.settings.core_network_settings.wifi_ap_enabled &&
             !comms_manager.WiFiAccessPointSendMessageToAllStations(message)) {
             CONSOLE_ERROR("ADSBeeServer::ReportGDL90", "Failed to send info about aircraft %d to all clients.",
                           aircraft_index);
         }
-        aircraft_index++;
     }
+
     return true;
 }
 
@@ -460,7 +472,7 @@ void NetworkConsoleMessageReceivedCallback(WebSocketServer *ws_server, int clien
         return;
     }
     for (uint16_t i = 0; i < ws_pkt.len; i++) {
-        if (!object_dictionary.network_console_rx_queue.Push(message[i])) {
+        if (!object_dictionary.network_console_rx_queue.Enqueue(message[i])) {
             CONSOLE_ERROR("NetworkConsoleMessageReceivedCallback",
                           "Failed to push character %d of network console message to tx queue.", i + 1);
             xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);

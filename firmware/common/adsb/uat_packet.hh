@@ -31,10 +31,10 @@ class RawUATADSBPacket {
     static const uint16_t kADSBMessageMaxSizeBytes =
         kLongADSBMessagePayloadNumBytes + kLongADSBMessageFECParityNumBytes;  // For convenience.
 
-    RawUATADSBPacket(const char *rx_string, int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_db_in = INT16_MIN,
+    RawUATADSBPacket(const char *rx_string, int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_bits_in = INT16_MIN,
                      uint64_t mlat_48mhz_64bit_counts = 0);
     RawUATADSBPacket(uint8_t rx_buffer[kADSBMessageMaxSizeBytes], uint16_t rx_buffer_len_bytes,
-                     int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_db_in = INT16_MIN,
+                     int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_bits_in = INT16_MIN,
                      uint64_t mlat_48mhz_64bit_counts = 0);
 
     /**
@@ -46,7 +46,7 @@ class RawUATADSBPacket {
     uint16_t encoded_message_len_bits = 0;
 
     int16_t sigs_dbm = INT16_MIN;          // Signal strength, in dBm.
-    int16_t sigq_db = INT16_MIN;           // Signal quality (dB above noise floor), in dB.
+    int16_t sigq_bits = INT16_MIN;         // Signal quality (num bits corrected by FEC, 0 = best).
     uint64_t mlat_48mhz_64bit_counts = 0;  // High resolution MLAT counter.
 };
 
@@ -220,7 +220,7 @@ class DecodedUATADSBPacket {
 
     DecodedUATADSBPacket(const RawUATADSBPacket &packet_in);
     DecodedUATADSBPacket() : raw_((char *)"") { debug_string[0] = '\0'; }
-    DecodedUATADSBPacket(const char *rx_string, int32_t sigs_dbm = INT32_MIN, int32_t sigq_db = INT32_MIN,
+    DecodedUATADSBPacket(const char *rx_string, int32_t sigs_dbm = INT32_MIN, int32_t sigq_bits = INT32_MIN,
                          uint64_t mlat_48mhz_64bit_counts = 0);
 
     /**

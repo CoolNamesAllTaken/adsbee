@@ -155,7 +155,7 @@ void CommsManager::IPEventHandler(void* arg, esp_event_base_t event_base, int32_
 }
 
 void CommsManager::IPWANTask(void* pvParameters) {
-    Decoded1090Packet decoded_packet;
+    DecodedModeSPacket decoded_packet;
 
     int feed_sock[SettingsManager::Settings::kMaxNumFeeds] = {0};
     bool feed_sock_is_connected[SettingsManager::Settings::kMaxNumFeeds] = {false};

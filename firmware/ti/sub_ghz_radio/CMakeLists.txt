@@ -67,11 +67,11 @@ target_link_directories(${PROJECT_NAME} PRIVATE
 # Libraries to link
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
-    # stdc++
+    stdc++
     gcc # GCC runtime library
     c # C standard library
     m # Math library
-    nosys
+    # nosys
     CMakeCommon::gcc_m4f # Use TI gcc toolchain for ARM M4 with hardware floating point.
 
     ## Manually bring in the libraries from syscfg/ti_utils_build_linker.cmd.genlibs here!
@@ -139,7 +139,7 @@ target_link_options(${PROJECT_NAME} PRIVATE
     -static
     -Wl,--gc-sections
     -specs=nano.specs
-    -specs=nosys.specs
+    # -specs=nosys.specs
 )
 
 # Custom command to create binary file

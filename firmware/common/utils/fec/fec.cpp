@@ -1,5 +1,6 @@
 #include "fec.hh"
 
+#include "comms.hh"
 #include "rs.h"  // For init_rs_char, decode_rs_char
 #include "uat_packet.hh"
 
@@ -20,6 +21,8 @@ static const int kLongADSBMessageMaxNumByteCorrections = 7;
 
 static const int kUplinkMessageMaxNumByteCorrectionsPerBlock = 10;
 
+UATReedSolomon uat_rs;
+
 UATReedSolomon::UATReedSolomon() {
     rs_adsb_short = init_rs_char(kSymbolSizeBits, kADSBGaloisFieldPolynomial, kFirstCodeRoot, kPrimitive,
                                  kShortADSBMessageNumRoots, kShortADSBMessagePaddingBytes);
@@ -27,6 +30,12 @@ UATReedSolomon::UATReedSolomon() {
                                 kLongADSBMessageNumRoots, kLongADSBMessagePaddingBytes);
     rs_uplink = init_rs_char(kSymbolSizeBits, kUplinkGaloisFieldPolynomial, kFirstCodeRoot, kPrimitive,
                              kUplinkMessageNumRoots, kUplinkMessagePaddingBytes);
+    if (rs_adsb_short == nullptr || rs_adsb_long == nullptr || rs_uplink == nullptr) {
+        CONSOLE_ERROR("UATReedSolomon", "Failed to initialize Reed-Solomon decoders.");  // Maybe out of heap.
+        while (true) {
+            // Spin indefinitely
+        };
+    }
 }
 
 int UATReedSolomon::DecodeShortADSBMessage(uint8_t message_buf[RawUATADSBPacket::kShortADSBMessageNumBytes]) {

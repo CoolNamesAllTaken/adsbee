@@ -37,7 +37,7 @@ class ObjectDictionary {
     static constexpr uint16_t kNetworkConsoleRxQueueDepth = kNetworkConsoleMessageMaxLenBytes * 4;
 #endif
 #ifdef ON_TI
-    static constexpr uint16_t kDecodedUATADSBPacketQueueDepth = 50;
+    static constexpr uint16_t kDecodedUATADSBPacketQueueDepth = 10;
 #endif
 
     enum Address : uint8_t {
@@ -165,6 +165,8 @@ class ObjectDictionary {
         uint32_t queued_log_messages_packed_size_bytes = 0;
 
         uint16_t num_queued_sc_command_requests = 0;  // Number of SCCommand requests queued for the master.
+
+        uint16_t num_queued_decoded_uat_adsb_packets = 0;
     };
 
     /**
@@ -261,18 +263,17 @@ class ObjectDictionary {
             .buffer = sc_command_request_queue_buffer_,
             .overwrite_when_full = false  // We don't want to overwrite command requests, since they could be important.
         });
+#endif
 
+#ifdef ON_ESP32
     PFBQueue<char> network_console_rx_queue = PFBQueue<char>({
         .buf_len_num_elements = kNetworkConsoleRxQueueDepth,
         .buffer = network_console_message_buffer_,
         .overwrite_when_full =
             false  // We don't want to overwrite network console messages, since they could be importatnt.
     });
-#endif
-
-#ifdef ON_ESP32
     SemaphoreHandle_t network_console_rx_queue_mutex = xSemaphoreCreateMutex();
-#elif ON_TI
+#elif defined(ON_TI)
     PFBQueue<DecodedUATADSBPacket> decoded_uat_adsb_packet_queue =
         PFBQueue<DecodedUATADSBPacket>({.buf_len_num_elements = kDecodedUATADSBPacketQueueDepth,
                                         .buffer = decoded_uat_adsb_packet_buffer_,
@@ -295,9 +296,8 @@ class ObjectDictionary {
 #ifdef ON_ESP32
     // ESP32
     char* network_console_message_buffer_ = (char*)heap_caps_malloc(kNetworkConsoleRxQueueDepth, 0);
-#elif ON_TI
+#elif defined(ON_TI)
     // CC1312
-    char network_console_message_buffer_[kNetworkConsoleRxQueueDepth] = {};
     DecodedUATADSBPacket decoded_uat_adsb_packet_buffer_[kDecodedUATADSBPacketQueueDepth] = {};
 #endif
 };

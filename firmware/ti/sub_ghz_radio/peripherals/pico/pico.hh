@@ -16,7 +16,7 @@ extern "C"
 class Pico : public SPICoprocessorMasterInterface
 {
 public:
-    static constexpr uint32_t kSubGLEDBlinkDurationMs = 10;
+    static constexpr uint32_t kSubGLEDBlinkDurationMs = 1;
 
     static const uint16_t kSPITransactionMaxLenBytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes; // Normally set to SPICoprocessorPacket::kSPITransactionMaxLenBytes, but can be set to a lower value for testing purposes.
 

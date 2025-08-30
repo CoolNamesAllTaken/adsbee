@@ -14,7 +14,7 @@ void SettingsManager::Print() {
                    adsbee.AD8313MilliVoltsTodBm(settings.tl_offset_mv));
 #elif ON_ESP32
     // ESP32 doesn't have access to mV->dBm conversion via ADSBee class.
-    CONSOLE_PRINTF("\tTrigger Level: %d milliVolts\r\n", settings.tl_mv);
+    CONSOLE_PRINTF("\tTrigger Offset Level: %d milliVolts\r\n", settings.tl_offset_mv);
 #endif
     CONSOLE_PRINTF("\tBias Tee: %s\r\n", settings.bias_tee_enabled ? "ENABLED" : "DISABLED");
     CONSOLE_PRINTF("\tWatchdog Timeout: %lu seconds\r\n", settings.watchdog_timeout_sec);

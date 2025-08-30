@@ -1,3 +1,5 @@
+#pragma once
+
 #include "uat_packet.hh"
 #include "data_structures.hh"
 
@@ -13,6 +15,10 @@ public:
                                                                                        .buffer = raw_uat_adsb_packet_buffer_,
                                                                                        .overwrite_when_full = true});
 
+    bool Update();
+
 private:
     RawUATADSBPacket raw_uat_adsb_packet_buffer_[kRawUATADSBPacketQueueDepth] = {};
 };
+
+extern UATPacketDecoder uat_packet_decoder;

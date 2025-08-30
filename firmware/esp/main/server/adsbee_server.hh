@@ -1,10 +1,8 @@
-#ifndef ADSBEE_SERVER_HH_
-#define ADSBEE_SERVER_HH_
+#pragma once
 
 #include "aircraft_dictionary.hh"
 #include "data_structures.hh"
 #include "esp_http_server.h"
-#include "transponder_packet.hh"
 #include "websocket_server.hh"
 
 class ADSBeeServer {
@@ -29,11 +27,11 @@ class ADSBeeServer {
     bool Update();
 
     /**
-     * Ingest a Raw1090Packet written in over Coprocessor SPI.
-     * @param[in] raw_packet Raw1090Packet to ingest.
+     * Ingest a RawModeSPacket written in over Coprocessor SPI.
+     * @param[in] raw_packet RawModeSPacket to ingest.
      * @retval True if packet was handled successfully, false otherwise.
      */
-    bool HandleRaw1090Packet(Raw1090Packet& raw_packet);
+    bool HandleRawModeSPacket(RawModeSPacket& raw_packet);
 
     /**
      * Task that runs continuously to receive SPI messages.
@@ -45,7 +43,7 @@ class ADSBeeServer {
      */
     void TCPServerTask(void* pvParameters);
 
-    PFBQueue<Raw1090Packet> raw_transponder_packet_queue = PFBQueue<Raw1090Packet>(
+    PFBQueue<RawModeSPacket> raw_transponder_packet_queue = PFBQueue<RawModeSPacket>(
         {.buf_len_num_elements = kMaxNumTransponderPackets, .buffer = raw_transponder_packet_queue_buffer_});
 
     AircraftDictionary aircraft_dictionary;
@@ -74,11 +72,10 @@ class ADSBeeServer {
     bool spi_receive_task_should_exit_ = false;
 
     // Queue for raw packets from RP2040.
-    Raw1090Packet raw_transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
+    RawModeSPacket raw_transponder_packet_queue_buffer_[kMaxNumTransponderPackets];
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
 
     uint32_t last_gdl90_report_timestamp_ms_ = 0;
 };
 
 extern ADSBeeServer adsbee_server;
-#endif /* ADSBEE_SERVER_HH_ */

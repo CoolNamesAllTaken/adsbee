@@ -1,5 +1,4 @@
-#ifndef AIRCRAFT_DICTIONARY_HH_
-#define AIRCRAFT_DICTIONARY_HH_
+#pragma once
 
 #include <cstdio>
 #include <cstring>
@@ -7,7 +6,7 @@
 #include <variant>
 
 #include "adsb_types.hh"
-#include "comms.hh"
+// Can't include comms.hh or we will get a circular dependency.
 #include "hal.hh"
 #include "json_utils.hh"
 #include "macros.hh"
@@ -56,8 +55,9 @@ class Aircraft {
             case kAircraftTypeUAT:
                 return (icao_address & ~kAircraftTypeMask) | (kAircraftTypeUAT << kAircraftTypeShiftBits);
             default:
-                CONSOLE_ERROR("Aircraft::ICAOToUID", "Invalid aircraft type %d for ICAO address 0x%lx.", type,
-                              icao_address);
+                // We can't print here or else we cause a circular dependency with comms.hh.
+                // CONSOLE_ERROR("Aircraft::ICAOToUID", "Invalid aircraft type %d for ICAO address 0x%lx.", type,
+                //               icao_address);
                 return 0;  // Invalid aircraft type.
         }
     }
@@ -814,8 +814,10 @@ class AircraftDictionary {
         }
 
         if (dict.size() >= kMaxNumAircraft) {
-            CONSOLE_INFO("AircraftDictionary::InsertAircraft",
-                         "Failed to add aircraft to dictionary, reached max number of aircraft (%d).", kMaxNumAircraft);
+            // We can't print here or else we cause a circular dependency with comms.hh.
+            // CONSOLE_INFO("AircraftDictionary::InsertAircraft",
+            //              "Failed to add aircraft to dictionary, reached max number of aircraft (%d).",
+            //              kMaxNumAircraft);
             return nullptr;  // not enough room to add this aircraft
         }
 
@@ -903,5 +905,3 @@ class AircraftDictionary {
     // update. This ensures that the public metrics struct always has valid data.
     Metrics metrics_counter_;
 };
-
-#endif /* AIRCRAFT_DICTIONARY_HH_ */

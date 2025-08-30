@@ -1,5 +1,4 @@
-#ifndef COMMS_HH_
-#define COMMS_HH_
+#pragma once
 
 #include "data_structures.hh"
 #include "driver/gpio.h"
@@ -10,8 +9,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
-#include "gdl90/gdl90_utils.hh"
+// #include "gdl90/gdl90_utils.hh"
 #include "lwip/sockets.h"  // For port definition.
+#include "mode_s_packet.hh"
 #include "nvs_flash.h"
 #include "object_dictionary.hh"
 #include "settings.hh"
@@ -50,7 +50,7 @@ class CommsManager {
     CommsManager(CommsManagerConfig config_in) : config_(config_in) {
         wifi_clients_list_mutex_ = xSemaphoreCreateMutex();
         wifi_ap_message_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(NetworkMessage));
-        ip_wan_decoded_transponder_packet_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(Decoded1090Packet));
+        ip_wan_decoded_transponder_packet_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(DecodedModeSPacket));
     }
 
     ~CommsManager() {
@@ -184,10 +184,10 @@ class CommsManager {
     /**
      * Sends a raw transponder packet to feeds via the external WiFi network that the ESP32 is a station on. It's
      * recommended to only call this function if WiFiStationHasIP() returns true, otherwise it will throw a warning.
-     * @param[in] decoded_packet Decoded1090Packet to send.
+     * @param[in] decoded_packet DecodedModeSPacket to send.
      * @retval True if packet was successfully sent, false otherwise.
      */
-    bool IPWANSendDecoded1090Packet(Decoded1090Packet& decoded_packet);
+    bool IPWANSendDecodedModeSPacket(DecodedModeSPacket& decoded_packet);
 
     // Network hostname.
     char hostname[SettingsManager::Settings::kHostnameMaxLen + 1] = {0};
@@ -288,5 +288,3 @@ extern CommsManager comms_manager;
     ESP_LOGI(tag, __VA_ARGS__); \
     comms_manager.LogMessageToCoprocessor(SettingsManager::LogLevel::kInfo, tag, __VA_ARGS__);
 #define CONSOLE_PRINTF(...) printf(__VA_ARGS__);
-
-#endif /* COMMS_HH_ */

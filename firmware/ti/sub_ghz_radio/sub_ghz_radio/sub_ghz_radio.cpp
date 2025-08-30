@@ -1,5 +1,7 @@
 #include "sub_ghz_radio.hh"
 #include "pico.hh" // For LED blinks.
+#include "uat_packet.hh"
+#include "uat_packet_decoder.hh"
 
 static void rf_cmd_complete_callback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e)
 {
@@ -57,18 +59,17 @@ bool SubGHzRadio::Init()
 
 bool SubGHzRadio::HandlePacketRx()
 {
-    pico_ll.BlinkSubGLED();
-    CONSOLE_INFO("SubGHzRadio", "Received a new packet.");
+    // pico_ll.BlinkSubGLED();
     current_data_entry_ = RFQueue_getDataEntry();
 
     /* Handle the packet data, located at &currentDataEntry->data:
      * - Length is the first byte with the current configuration
      * - Data starts from the second byte */
-    uint8_t packet_len_bytes = *(uint8_t *)(&currentDataEntry->data);
-    uint8_t *packet_data = (uint8_t *)(&currentDataEntry->data + 1);
+    uint8_t packet_len_bytes = *(uint8_t *)(&current_data_entry_->data);
+    uint8_t *packet_data = (uint8_t *)(&current_data_entry_->data + 1);
 
-    /* Copy the payload + the status byte to the packet variable */
-    memcpy(packet, packet_data, (packet_len_bytes + 1));
+    RawUATADSBPacket raw_packet = RawUATADSBPacket(packet_data, packet_len_bytes);
+    uat_packet_decoder.raw_uat_adsb_packet_queue.Enqueue(raw_packet);
 
     RFQueue_nextEntry();
     return true;
