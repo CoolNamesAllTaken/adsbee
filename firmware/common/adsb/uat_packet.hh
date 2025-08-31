@@ -15,7 +15,7 @@ class RawUATADSBPacket {
     // Split the 36-bit sync word into 28 most-signfiicant bits (used as the Sync word by the MCU), and 8
     // least-significant bits that get ingested as the first Byte of the message, used to discriminate between uplink
     // and ADS-B packets.
-    static const uint32_t kSyncWordMS28 = kSyncWord >> 8;
+    static const uint32_t kSyncWordMS28 = (kSyncWord >> 8) & 0xFFFFFFF;
     static const uint8_t kSyncWordLS8 = kSyncWord & 0xFF;
 
     /**
@@ -305,7 +305,7 @@ class RawUATUplinkPacket {
     // Split the 36-bit sync word into 28 most-signfiicant bits (used as the Sync word by the MCU), and 8
     // least-significant bits that get ingested as the first Byte of the message, used to discriminate between uplink
     // and ADS-B packets.
-    static const uint32_t kSyncWordMS28 = kSyncWord >> 8;
+    static const uint32_t kSyncWordMS28 = (kSyncWord >> 8) & 0xFFFFFFF;
     static const uint8_t kSyncWordLS8 = kSyncWord & 0xFF;
 
     static const uint16_t kUplinkMessageNumBlocks = 6;
@@ -316,7 +316,7 @@ class RawUATUplinkPacket {
 
     static const uint16_t kUplinkMessagePayloadNumBytes = kUplinkMessageNumBlocks * kUplinkMessageBlockPayloadNumBytes;
 
-    static const uint16_t kUplinkMessageMaxSizeBytes =
+    static const uint16_t kUplinkMessageLenBytes =
         kUplinkMessageNumBlocks * kUplinkMessageBlockNumBytes;  // Maximum size of a UAT uplink message.
 
     struct __attribute__((packed)) UATUplinkDataBlock {

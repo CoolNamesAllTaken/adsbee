@@ -55,7 +55,7 @@ void exception_handler()
  */
 int main(void)
 {
-    // Power_disablePolicy(); // Stop aggressive clock gating that messes with the debugger.
+    Power_disablePolicy(); // Stop aggressive clock gating that messes with the debugger.
 
     NoRTOS_Config cfg;
     NoRTOS_getConfig(&cfg);
@@ -72,7 +72,7 @@ int main(void)
     // Log everything until we hear otherwise.
     settings_manager.settings.log_level = SettingsManager::LogLevel::kInfo;
 
-    static const uint16_t kNumBlinks = 2;
+    static const uint16_t kNumBlinks = 5;
     for (uint16_t i = 0; i < kNumBlinks; ++i)
     {
         GPIO_write(bsp.kSubGLEDPin, 1);

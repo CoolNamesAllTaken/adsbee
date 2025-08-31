@@ -2,6 +2,9 @@
 #include "pico.hh" // For LED blinks.
 #include "uat_packet_decoder.hh"
 #include "macros.hh"
+#include "hal.hh"
+
+static const uint32_t kRxRestartTimeoutMs = 5000;
 
 static const uint16_t kNumPartialDataEntries = SubGHzRadio::kRxPacketQueueLen;
 static const uint16_t kPartialDataEntryHeaderSizeBytes = 12;
@@ -37,6 +40,8 @@ static rfc_dataEntryPartial_t *partial_data_entry_ptrs[kNumPartialDataEntries] =
 
 static dataQueue_t rx_data_queue;
 static bool rx_data_length_written = false;
+
+static uint32_t last_rx_start_timestamp_ms = get_time_since_boot_ms();
 
 inline void RollDataQueue()
 {
@@ -78,7 +83,8 @@ void rf_cmd_callback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e)
     {
         RollDataQueue();
         subg_radio.HandlePacketRx();
-        RF_postCmd(h, (RF_Op *)&RF_cmdPropRx, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
+        last_rx_start_timestamp_ms = get_time_since_boot_ms();
+        RF_postCmd(h, (RF_Op *)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
     }
 
     // if ((e & RF_EventRxOk) /*e & RF_EventRxEntryDone*/)
@@ -115,16 +121,18 @@ bool SubGHzRadio::Init()
 
     // Override cmdPropRxAdv settings.
     // All other RF_cmdPropRx settings are from smartrf/smartrf_settings.h.
-    RF_cmdPropRx.pQueue = &rx_data_queue;
-    RF_cmdPropRx.pOutput = (uint8_t *)&rx_statistics_;
-    RF_cmdPropRx.rxConf.bIncludeHdr = 1; // Must be 1 to receive the first byte after sync in the data entry. For UAT this is the last byte of the full 36 bit sync word.
-    RF_cmdPropRx.maxPktLen = 33;         // Unlimited length
-    RF_cmdPropRx.rxConf.bAutoFlushCrcErr = 1;
-    // RF_cmdPropRx.pktConf.bRepeatOk = 1;  // Go back to sync search after receiving a packet correctly.
-    // RF_cmdPropRx.pktConf.bRepeatNok = 1; // Go back to sync search after receiving a packet incorrectly.
+    RF_cmdPropRxAdv.pQueue = &rx_data_queue;
+    RF_cmdPropRxAdv.pOutput = (uint8_t *)&rx_statistics_;
+    RF_cmdPropRxAdv.rxConf.bIncludeHdr = 1; // Must be 1 to receive the first byte after sync in the data entry. For UAT this is the last byte of the full 36 bit sync word.
+    RF_cmdPropRxAdv.maxPktLen = 33;         // Unlimited length
+    RF_cmdPropRxAdv.rxConf.bAutoFlushCrcErr = 1;
+    // RF_cmdPropRxAdv.pktConf.bRepeatOk = 1;  // Go back to sync search after receiving a packet correctly.
+    // RF_cmdPropRxAdv.pktConf.bRepeatNok = 1; // Go back to sync search after receiving a packet incorrectly.
     // Sync on the most significant 28 bits of the 36 bit sync word. Save the last 8 bits of sync for discrimination between uplink and ADSB packets in the payload.
+    // RF_cmdPropRx.syncWord = RawUATADSBPacket::kSyncWordMS28;
     RF_cmdPropRxAdv.syncWord0 = RawUATADSBPacket::kSyncWordMS28;
     RF_cmdPropRxAdv.syncWord1 = RawUATUplinkPacket::kSyncWordMS28;
+    RF_cmdPropRadioDivSetup.formatConf.nSwBits = 28; // Use a 28-bit sync word to allow the last byte of the sync to be used for format discrimination.
 
     // Set up the data queue.
     for (uint16_t i = 0; i < kNumPartialDataEntries; i++)
@@ -162,7 +170,8 @@ bool SubGHzRadio::Init()
         return false; // Failed to run command FS.
     }
 
-    RF_CmdHandle cmd = RF_runCmd(rf_handle_, (RF_Op *)&RF_cmdPropRx, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
+    last_rx_start_timestamp_ms = get_time_since_boot_ms();
+    RF_CmdHandle cmd = RF_runCmd(rf_handle_, (RF_Op *)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
     if (cmd < 0)
     {
         CONSOLE_ERROR("SubGHzRadio::Init", "Failed to post command PROP_RX: returned code %d.", cmd);
@@ -182,7 +191,12 @@ bool SubGHzRadio::HandlePacketRx()
      * - Data starts from the second byte */
     rfc_dataEntryPartial_t *filled_entry = (rfc_dataEntryPartial_t *)rx_data_queue.pLastEntry;
     uint8_t *buf = (uint8_t *)(&filled_entry->rxData);
-    uint16_t packet_len_bytes = (buf[0] << 8) | buf[1];
+    uint16_t packet_len_bytes = buf[0];
+
+    if (packet_len_bytes > kRxPacketMaxLenBytes || packet_len_bytes == 0)
+    {
+        return false;
+    }
     uint8_t *packet_data = buf + kPartialDataEntryPayloadLenSzBytes;
 
     RawUATADSBPacket raw_packet = RawUATADSBPacket(packet_data, packet_len_bytes);
@@ -197,6 +211,12 @@ bool SubGHzRadio::Update()
     // {
     //     rx_stopped = false;
     //     RF_postCmd(rf_handle_, (RF_Op *)&RF_cmdPropRx, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
+    // }
+
+    // if (get_time_since_boot_ms() - last_rx_start_timestamp_ms > kRxRestartTimeoutMs)
+    // {
+    //     last_rx_start_timestamp_ms = get_time_since_boot_ms();
+    //     RF_postCmd(rf_handle_, (RF_Op *)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
     // }
     return true;
 }
