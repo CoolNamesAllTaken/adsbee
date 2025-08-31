@@ -56,7 +56,7 @@
 				"svdFile": "/adsbee/ti/cc13x2_26x2.svd",
 				"preRestartCommands": [
 					"file /adsbee/ti/sub_ghz_radio/build/sub_ghz_radio.elf",
-					"load",
+					// "load",
 					"monitor reset"
 				],
 				"runToEntryPoint": "main",

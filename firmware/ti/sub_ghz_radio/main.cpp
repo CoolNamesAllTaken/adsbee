@@ -55,7 +55,7 @@ void exception_handler()
  */
 int main(void)
 {
-    Power_disablePolicy(); // Stop aggressive clock gating that messes with the debugger.
+    // Power_disablePolicy(); // Stop aggressive clock gating that messes with the debugger.
 
     NoRTOS_Config cfg;
     NoRTOS_getConfig(&cfg);
@@ -118,5 +118,6 @@ int main(void)
     {
         pico.UpdateLED();
         uat_packet_decoder.Update();
+        subg_radio.Update();
     }
 }

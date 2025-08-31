@@ -17,14 +17,13 @@ extern "C"
 // #include "buffer_utils.hh"
 #include "comms.hh"
 #include "unit_conversions.hh"
-#include "RFQueue.hh"
+#include "uat_packet.hh"
 
 class SubGHzRadio
 {
 public:
-    static const uint16_t kRxPacketQueueLen = 2;
-    static const uint16_t kRxPacketMaxLenBytes = 272 / kBitsPerByte; // 34 bytes (long UAT packet).
-    static const uint16_t kRxPacketNumAppendedBytes = 2; // 1 header byte + 1 status byte.
+    static const uint16_t kRxPacketQueueLen = 4;
+    static const uint16_t kRxPacketMaxLenBytes = RawUATUplinkPacket::kUplinkMessageMaxSizeBytes + 1; // +1 to account for last byte of sync word.
 
     struct SubGHzRadioConfig
     {
@@ -37,6 +36,8 @@ public:
     bool Init();
     void Deinit();
 
+    bool Update();
+
     bool HandlePacketRx();
 
 private:
@@ -44,10 +45,9 @@ private:
 
     RF_Handle rf_handle_;
     RF_Object rf_object_;
-    dataQueue_t data_queue_;
 
-    rfc_dataEntryGeneral_t *current_data_entry_; // Pointer to the data entry being processed (not held by the RF core).
-    uint8_t rx_data_entry_buffer_[RF_QUEUE_DATA_ENTRY_BUFFER_SIZE(kRxPacketQueueLen, kRxPacketMaxLenBytes, kRxPacketNumAppendedBytes)]; // Buffer for receiving data entries.
+    rfc_dataEntryPartial_t *current_data_entry_; // Pointer to the data entry being processed (not held by the RF core).
+    rfc_propRxOutput_t rx_statistics_;
 };
 
 extern SubGHzRadio subg_radio;

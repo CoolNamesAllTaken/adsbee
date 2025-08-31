@@ -104,7 +104,6 @@ target_sources(${PROJECT_NAME} PRIVATE
 
 # Do NOT add the SDK itself as a subdirectory or else it will assume you are building the SDK and take over a bunch of important variables like CMAKE_COMMON_INSTALL_DIR.
 add_subdirectory(${CMAKE_SOURCE_DIR}/../../common ${CMAKE_BINARY_DIR}/adsbee_common)
-add_subdirectory(uat)
 add_subdirectory(comms)
 add_subdirectory(peripherals)
 add_subdirectory(sub_ghz_radio)

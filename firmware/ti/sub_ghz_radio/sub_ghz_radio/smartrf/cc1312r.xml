@@ -179,7 +179,7 @@
             <Field name="startTrigger">0x00000000</Field>
             <Field name="condition">0x00000001</Field>
             <Field name="pktConf">0x00000000</Field>
-            <Field name="rxConf">0x00000000</Field>
+            <Field name="rxConf">0x000000f8</Field>
             <Field name="syncWord0">0xacdda4e2</Field>
             <Field name="syncWord1">0x53225b1d</Field>
             <Field name="maxPktLen">0x000000ff</Field>
