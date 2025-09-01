@@ -22,7 +22,7 @@ extern "C"
 class SubGHzRadio
 {
 public:
-    static const uint16_t kRxPacketQueueLen = 4;
+    static const uint16_t kRxPacketQueueLen = 2;
     static const uint16_t kRxPacketMaxLenBytes = RawUATUplinkPacket::kUplinkMessageLenBytes + 1; // +1 to account for last byte of sync word.
 
     struct SubGHzRadioConfig
@@ -38,7 +38,7 @@ public:
 
     bool Update();
 
-    bool HandlePacketRx();
+    bool HandlePacketRx(rfc_dataEntryPartial_t *filled_entry);
 
 private:
     SubGHzRadioConfig config_;

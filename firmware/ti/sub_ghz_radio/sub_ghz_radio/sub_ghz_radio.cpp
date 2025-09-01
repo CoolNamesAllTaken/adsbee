@@ -19,7 +19,7 @@ static const uint16_t kPartialDataEntryPayloadLenSzBytes = 2; // Length field si
 static const uint16_t kPartialDataEntrySizeBytes = sizeof(rfc_dataEntryPartial_t) + kPartialDataEntryPayloadLenSzBytes + kPartialDataEntryPayloadSizeBytes + kPartialDataEntryNumAppendedBytes;
 static_assert(kPartialDataEntryHeaderSizeBytes % 4 == 0, "Partial Data Entry Header Size must be word aligned.");
 
-static const RF_EventMask kRxEventMask = RF_EventRxEntryDone | RF_EventNDataWritten | RF_EventRxOk | RF_EventRxBufFull | RF_EventCmdAborted | RF_EventMdmSoft;
+static const RF_EventMask kRxEventMask = RF_EventMdmSoft | RF_EventNDataWritten | (RF_EventRxEntryDone | RF_EventRxOk | RF_EventRxNOk) | (RF_EventLastCmdDone | RF_EventCmdCancelled | RF_EventCmdAborted | RF_EventCmdStopped);
 
 static volatile uint16_t current_packet_len_bytes = 0;
 
@@ -38,19 +38,23 @@ volatile static bool rx_stopped = false;
 static uint8_t rx_data_entry_buf[kNumPartialDataEntries * kPartialDataEntrySizeBytes] __attribute__((aligned(4)));
 static rfc_dataEntryPartial_t *partial_data_entry_ptrs[kNumPartialDataEntries] = {0};
 
+// This is the entry that we are currently allowed to read from (not being used by the RF core).
+static rfc_dataEntryPartial_t *current_read_entry;
+
 static dataQueue_t rx_data_queue;
 static bool rx_data_length_written = false;
 
+static RF_CmdHandle rx_cmd_handle;
+static bool rx_canceled = false;
 static uint32_t last_rx_start_timestamp_ms = get_time_since_boot_ms();
 
 inline void RollDataQueue()
 {
-    // We read from pLastEntry, RF core writes to pCurrEntry.
-    ((rfc_dataEntryPartial_t *)rx_data_queue.pCurrEntry)->status = DATA_ENTRY_PENDING;
-    rx_data_queue.pLastEntry = rx_data_queue.pCurrEntry;
-    rx_data_queue.pCurrEntry = ((rfc_dataEntryPartial_t *)rx_data_queue.pCurrEntry)->pNextEntry;
+    current_read_entry->status = DATA_ENTRY_PENDING;
+    current_read_entry = (rfc_dataEntryPartial_t *)(((rfc_dataEntryPartial_t *)current_read_entry)->pNextEntry);
 }
 
+// Technical Reference Manual Section 23.7.5.4: https://www.ti.com/lit/ug/swcu117i/swcu117i.pdf
 void rf_cmd_callback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e)
 {
     // CONSOLE_INFO("SubGHzRadio", "RF command completed with handle %p, command handle %d, event mask %u", h, ch, e);
@@ -79,12 +83,22 @@ void rf_cmd_callback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e)
         }
     }
 
-    if (e & (RF_EventRxOk | RF_EventLastCmdDone | RF_EventCmdAborted | RF_EventRxBufFull))
+    if (e & (RF_EventRxEntryDone | RF_EventRxOk | RF_EventRxNOk))
     {
         RollDataQueue();
-        subg_radio.HandlePacketRx();
-        last_rx_start_timestamp_ms = get_time_since_boot_ms();
-        RF_postCmd(h, (RF_Op *)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
+        subg_radio.HandlePacketRx((rfc_dataEntryPartial_t *)(current_read_entry));
+        // last_rx_start_timestamp_ms = get_time_since_boot_ms();
+        // RF_postCmd(h, (RF_Op *)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
+    }
+
+    if (e & (RF_EventLastCmdDone | RF_EventCmdCancelled | RF_EventCmdAborted | RF_EventCmdStopped))
+    {
+        // subg_radio.HandlePacketRx((rfc_dataEntryPartial_t *)(rx_data_queue.pLastEntry));
+        if (!rx_canceled)
+        {
+            RF_cancelCmd(h, rx_cmd_handle, 0);
+            rx_canceled = true;
+        }
     }
 
     // if ((e & RF_EventRxOk) /*e & RF_EventRxEntryDone*/)
@@ -119,20 +133,39 @@ bool SubGHzRadio::Init()
     RF_Params rf_params;
     RF_Params_init(&rf_params);
 
-    // Override cmdPropRxAdv settings.
-    // All other RF_cmdPropRx settings are from smartrf/smartrf_settings.h.
+    // Overriding settings from smartrf/smartrf_settings.c.
+    /* RF_cmdPropRxAdv  - Advanced Rx command settings. */
     RF_cmdPropRxAdv.pQueue = &rx_data_queue;
     RF_cmdPropRxAdv.pOutput = (uint8_t *)&rx_statistics_;
-    RF_cmdPropRxAdv.rxConf.bIncludeHdr = 1; // Must be 1 to receive the first byte after sync in the data entry. For UAT this is the last byte of the full 36 bit sync word.
-    RF_cmdPropRxAdv.maxPktLen = 33;         // Unlimited length
-    RF_cmdPropRxAdv.rxConf.bAutoFlushCrcErr = 1;
-    // RF_cmdPropRxAdv.pktConf.bRepeatOk = 1;  // Go back to sync search after receiving a packet correctly.
-    // RF_cmdPropRxAdv.pktConf.bRepeatNok = 1; // Go back to sync search after receiving a packet incorrectly.
-    // Sync on the most significant 28 bits of the 36 bit sync word. Save the last 8 bits of sync for discrimination between uplink and ADSB packets in the payload.
-    // RF_cmdPropRx.syncWord = RawUATADSBPacket::kSyncWordMS28;
-    RF_cmdPropRxAdv.syncWord0 = RawUATADSBPacket::kSyncWordMS28;
-    RF_cmdPropRxAdv.syncWord1 = RawUATUplinkPacket::kSyncWordMS28;
-    RF_cmdPropRadioDivSetup.formatConf.nSwBits = 28; // Use a 28-bit sync word to allow the last byte of the sync to be used for format discrimination.
+    RF_cmdPropRxAdv.rxConf = {
+        .bAutoFlushIgnored = 0, // If 1, automatically discard ignored packets from RX queue.
+        .bAutoFlushCrcErr = 0,  // If 1, automatically discard packets with CRC error from RX queue.
+        // bIncludeHdr must be 1 to receive the first byte after sync in the data entry. For UAT this is the last byte of the full 36 bit sync word.
+        .bIncludeHdr = 1,      // If 1, include the received header or length byte in the stored packet; otherwise discard it.
+        .bIncludeCrc = 0,      // 2 bytes (if default CRC is used)
+        .bAppendRssi = 1,      // 1 byte
+        .bAppendTimestamp = 1, // 4 bytes
+        .bAppendStatus = 1     // 1 Byte
+    };
+    // RF_cmdPropRxAdv.pktConf.bRepeatOk = 0;  // Go back to sync search after receiving a packet correctly.
+    // RF_cmdPropRxAdv.pktConf.bRepeatNok = 0; // Go back to sync search after receiving a packet incorrectly.
+    // Sync on the most significant 32 bits of the 36 bit sync word. Save the last 4 bits of sync for discrimination between uplink and ADSB packets in the payload.
+    // RF_cmdPropRx.syncWord = RawUATADSBPacket::kSyncWordMS32;
+    RF_cmdPropRxAdv.syncWord0 = RawUATADSBPacket::kSyncWordMS32;
+    RF_cmdPropRxAdv.syncWord1 = RawUATUplinkPacket::kSyncWordMS32;
+    RF_cmdPropRxAdv.maxPktLen = 0; // Unlimited length
+
+    // The last 4 bits of the Sync word are interpreted as the header, so the rest of the packet stays byte-aligned.
+    RF_cmdPropRxAdv.hdrConf = {
+        .numHdrBits = 4,
+        .lenPos = 0,
+        .numLenBits = 0};
+
+    // No address field.
+    RF_cmdPropRxAdv.addrConf = {0};
+
+    /* RF_cmdPropRadioDivSetup - Radio setup command settings. */
+    RF_cmdPropRadioDivSetup.formatConf.nSwBits = 32; // Use a 32-bit sync word to allow the last 4 bits of the sync to be used for format discrimination.
 
     // Set up the data queue.
     for (uint16_t i = 0; i < kNumPartialDataEntries; i++)
@@ -154,6 +187,9 @@ bool SubGHzRadio::Init()
         memset(&(entry->rxData) + kPartialDataEntryPayloadLenSzBytes, 0xAA + i, kPartialDataEntryPayloadSizeBytes + kPartialDataEntryNumAppendedBytes);
     }
     rx_data_queue.pCurrEntry = (uint8_t *)partial_data_entry_ptrs[0];
+    rx_data_queue.pLastEntry = nullptr;
+
+    current_read_entry = (rfc_dataEntryPartial_t *)(rx_data_queue.pCurrEntry);
 
     rf_handle_ = RF_open(&rf_object_, &RF_prop, (RF_RadioSetup *)&RF_cmdPropRadioDivSetup, &rf_params);
     if (!rf_handle_)
@@ -171,17 +207,17 @@ bool SubGHzRadio::Init()
     }
 
     last_rx_start_timestamp_ms = get_time_since_boot_ms();
-    RF_CmdHandle cmd = RF_runCmd(rf_handle_, (RF_Op *)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
-    if (cmd < 0)
+    rx_cmd_handle = RF_postCmd(rf_handle_, (RF_Op *)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
+    if (rx_cmd_handle < 0)
     {
-        CONSOLE_ERROR("SubGHzRadio::Init", "Failed to post command PROP_RX: returned code %d.", cmd);
+        CONSOLE_ERROR("SubGHzRadio::Init", "Failed to post command PROP_RX: returned code %d.", rx_cmd_handle);
         RF_close(rf_handle_);
         return false; // Failed to post command PROP_RX.
     }
     return true;
 }
 
-bool SubGHzRadio::HandlePacketRx()
+bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t *filled_entry)
 {
     // pico_ll.BlinkSubGLED();
     // RollDataQueue();
@@ -189,7 +225,7 @@ bool SubGHzRadio::HandlePacketRx()
     /* Handle the packet data, located at &currentDataEntry->data:
      * - Length is the first two bytes with the current configuration
      * - Data starts from the second byte */
-    rfc_dataEntryPartial_t *filled_entry = (rfc_dataEntryPartial_t *)rx_data_queue.pLastEntry;
+    // rfc_dataEntryPartial_t *filled_entry = (rfc_dataEntryPartial_t *)rx_data_queue.pLastEntry;
     uint8_t *buf = (uint8_t *)(&filled_entry->rxData);
     uint16_t packet_len_bytes = buf[0];
 
@@ -213,10 +249,28 @@ bool SubGHzRadio::Update()
     //     RF_postCmd(rf_handle_, (RF_Op *)&RF_cmdPropRx, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
     // }
 
-    // if (get_time_since_boot_ms() - last_rx_start_timestamp_ms > kRxRestartTimeoutMs)
+    // Start at the entry after the one currently being filled, traverse until we run into an entry that is still pending.
+    // rfc_dataEntryPartial_t *entry = (rfc_dataEntryPartial_t *)(((rfc_dataEntryPartial_t *)rx_data_queue.pCurrEntry)->pNextEntry);
+    // for (uint16_t i = 0; i < kNumPartialDataEntries; i++)
     // {
-    //     last_rx_start_timestamp_ms = get_time_since_boot_ms();
-    //     RF_postCmd(rf_handle_, (RF_Op *)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
+    //     if (entry->status < DATA_ENTRY_FINISHED)
+    //     {
+    //         continue;
+    //     }
+    //     HandlePacketRx(entry);
+    //     entry->status = DATA_ENTRY_PENDING;
+    //     entry = (rfc_dataEntryPartial_t *)(entry->pNextEntry);
     // }
+    if (rx_canceled)
+    {
+        last_rx_start_timestamp_ms = get_time_since_boot_ms();
+        rx_cmd_handle = RF_postCmd(rf_handle_, (RF_Op *)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
+    }
+
+    if (get_time_since_boot_ms() - last_rx_start_timestamp_ms > kRxRestartTimeoutMs)
+    {
+        //     last_rx_start_timestamp_ms = get_time_since_boot_ms();
+        //     RF_postCmd(rf_handle_, (RF_Op *)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
+    }
     return true;
 }

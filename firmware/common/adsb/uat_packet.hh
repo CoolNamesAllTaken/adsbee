@@ -12,11 +12,11 @@ class RawUATADSBPacket {
    public:
     static const uint64_t kSyncWord = 0b1110'10101100'11011101'10100100'11100010;  // 0xEACDDA4E2
 
-    // Split the 36-bit sync word into 28 most-signfiicant bits (used as the Sync word by the MCU), and 8
+    // Split the 36-bit sync word into 32 most-significant bits (used as the Sync word by the MCU), and 4
     // least-significant bits that get ingested as the first Byte of the message, used to discriminate between uplink
     // and ADS-B packets.
-    static const uint32_t kSyncWordMS28 = (kSyncWord >> 8) & 0xFFFFFFF;
-    static const uint8_t kSyncWordLS8 = kSyncWord & 0xFF;
+    static const uint32_t kSyncWordMS32 = (kSyncWord >> 4) & 0xFFFFFFFF;
+    static const uint8_t kSyncWordLS4 = kSyncWord & 0xF;
 
     /**
      * UAT downlink message parameters.
@@ -302,11 +302,11 @@ class RawUATUplinkPacket {
    public:
     static const uint64_t kSyncWord = 0b0001'01010011'00100010'01011011'00011101;  // 0x153225B1D
 
-    // Split the 36-bit sync word into 28 most-signfiicant bits (used as the Sync word by the MCU), and 8
+    // Split the 36-bit sync word into 32 most-significant bits (used as the Sync word by the MCU), and 4
     // least-significant bits that get ingested as the first Byte of the message, used to discriminate between uplink
     // and ADS-B packets.
-    static const uint32_t kSyncWordMS28 = (kSyncWord >> 8) & 0xFFFFFFF;
-    static const uint8_t kSyncWordLS8 = kSyncWord & 0xFF;
+    static const uint32_t kSyncWordMS32 = (kSyncWord >> 4) & 0xFFFFFFFF;
+    static const uint8_t kSyncWordLS4 = kSyncWord & 0xF;
 
     static const uint16_t kUplinkMessageNumBlocks = 6;
     static const uint16_t kUplinkMessageBlockPayloadNumBytes = 72;

@@ -48,7 +48,7 @@
 				"type": "cortex-debug",
 				"cwd": "/adsbee/ti",
 				"executable": "/adsbee/ti/sub_ghz_radio/build/sub_ghz_radio.elf",
-				"request": "launch",
+				"request": "attach",
 				"servertype": "external",
 				"gdbPath": "arm-none-eabi-gdb",
 				"gdbTarget": "host.docker.internal:2337",

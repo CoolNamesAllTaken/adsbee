@@ -15,9 +15,9 @@ public:
                                                                                        .buffer = raw_uat_adsb_packet_buffer_,
                                                                                        .overwrite_when_full = true});
 
-    static inline uint16_t SyncWordLSBAndMDBTypeCodeToMessageLenBytes(uint8_t sync_word_lsb, uint8_t mdb_type_code)
+    static inline uint16_t SyncWordLSBAndMDBTypeCodeToMessageLenBytes(uint8_t sync_word_ls4, uint8_t mdb_type_code)
     {
-        if (sync_word_lsb == RawUATADSBPacket::kSyncWordLS8)
+        if (sync_word_ls4 == RawUATADSBPacket::kSyncWordLS4)
         {
             return mdb_type_code == 0 ? RawUATADSBPacket::kShortADSBMessageNumBytes : RawUATADSBPacket::kLongADSBMessageNumBytes;
         }
