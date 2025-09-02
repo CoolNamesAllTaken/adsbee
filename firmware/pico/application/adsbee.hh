@@ -262,7 +262,7 @@ class ADSBee {
     }
 
     /**
-     * Enables or disables the 978MHz receiver by powering the receiver chip on or off. Re-initializes the receiver chip
+     * Enables or disables the sub-GHz radio by powering the receiver chip on or off. Re-initializes the receiver chip
      * if it's being powered on from a previous off state.
      * @param[in] is_enabled True if 978MHz receiver should be enabled, false otherwise.
      */

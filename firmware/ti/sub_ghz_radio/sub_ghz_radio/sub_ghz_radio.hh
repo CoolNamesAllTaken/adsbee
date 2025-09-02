@@ -34,8 +34,10 @@ public:
     ~SubGHzRadio() {};
 
     bool Init();
+    bool DeInit();
     void Deinit();
 
+    bool StartPacketRx();
     bool Update();
 
     bool HandlePacketRx(rfc_dataEntryPartial_t *filled_entry);
@@ -48,6 +50,10 @@ private:
 
     rfc_dataEntryPartial_t *current_data_entry_; // Pointer to the data entry being processed (not held by the RF core).
     rfc_propRxOutput_t rx_statistics_;
+
+    RF_CmdHandle rx_cmd_handle_;
+
+    uint32_t last_rx_start_timestamp_ms_ = 0;
 };
 
 extern SubGHzRadio subg_radio;

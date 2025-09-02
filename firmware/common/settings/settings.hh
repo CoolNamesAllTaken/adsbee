@@ -142,7 +142,7 @@ class SettingsManager {
         CoreNetworkSettings core_network_settings;
 
         // ADSBee settings
-        bool receiver_enabled = true;
+        bool r1090_rx_enabled = true;
         int tl_offset_mv = kDefaultTLOffsetMV;
         bool bias_tee_enabled = false;
         uint32_t watchdog_timeout_sec = kDefaultWatchdogTimeoutSec;
@@ -155,8 +155,9 @@ class SettingsManager {
         uint32_t gnss_uart_baud_rate = 9600;
 
         // Sub-GHz settings
-        EnableState subg_enabled = EnableState::kEnableStateEnabled;         // High impedance state by default.
-        SubGHzRadioMode subg_mode = SubGHzRadioMode::kSubGHzRadioModeUATRx;  // Default to UAT mode (978MHz receiver
+        EnableState subg_enabled = EnableState::kEnableStateEnabled;  // High impedance state by default.
+        bool subg_rx_enabled = true;
+        SubGHzRadioMode subg_mode = SubGHzRadioMode::kSubGHzRadioModeUATRx;  // Default to UAT mode (978MHz receiver).
 
         char feed_uris[kMaxNumFeeds][kFeedURIMaxNumChars + 1];
         uint16_t feed_ports[kMaxNumFeeds];

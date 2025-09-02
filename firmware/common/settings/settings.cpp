@@ -8,7 +8,7 @@
 // NOTE: This function needs to be updated separately for ESP32.
 void SettingsManager::Print() {
     CONSOLE_PRINTF("Settings Struct\r\n");
-    CONSOLE_PRINTF("\tReceiver: %s\r\n", settings.receiver_enabled ? "ENABLED" : "DISABLED");
+    CONSOLE_PRINTF("\tReceiver: %s\r\n", settings.r1090_rx_enabled ? "ENABLED" : "DISABLED");
 #ifdef ON_PICO
     CONSOLE_PRINTF("\tTrigger Level: %d milliVolts (%d dBm)\r\n", settings.tl_offset_mv,
                    adsbee.AD8313MilliVoltsTodBm(settings.tl_offset_mv));
@@ -102,7 +102,7 @@ void SettingsManager::PrintAT() {
     }
 
     // AT+RX_ENABLE
-    CONSOLE_PRINTF("AT+RX_ENABLE=%d\r\n", settings.receiver_enabled);
+    CONSOLE_PRINTF("AT+RX_ENABLE=%d\r\n", settings.r1090_rx_enabled);
 
     // AT+SUBG_ENABLE
     CONSOLE_PRINTF("AT+SUBG_ENABLE=%s\r\n", SettingsManager::EnableStateToATValueStr(settings.subg_enabled));

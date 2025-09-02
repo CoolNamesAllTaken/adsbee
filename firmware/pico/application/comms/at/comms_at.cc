@@ -739,24 +739,41 @@ CPP_AT_CALLBACK(CommsManager::ATRxEnableCallback) {
     switch (op) {
         case '=':
             if (CPP_AT_HAS_ARG(0)) {
-                bool r1090_enabled;
-                CPP_AT_TRY_ARG2NUM(0, r1090_enabled);
-                adsbee.SetReceiver1090Enable(r1090_enabled);
-            }
-            if (CPP_AT_HAS_ARG(1)) {
-                bool subg_radio_enabled;
-                CPP_AT_TRY_ARG2NUM(1, subg_radio_enabled);
-                adsbee.SetSubGRadioEnable(subg_radio_enabled ? SettingsManager::kEnableStateEnabled
-                                                             : SettingsManager::kEnableStateDisabled);
+                // All enabled argument is present. Ignore subsequent args. This is useful so that all radios can be
+                // disabled or enabled with one argument.
+                bool all_enabled;
+                CPP_AT_TRY_ARG2NUM(0, all_enabled);
+                adsbee.SetReceiver1090Enable(all_enabled);
+                settings_manager.settings.subg_rx_enabled = all_enabled;
+            } else {
+                if (CPP_AT_HAS_ARG(1)) {
+                    bool r1090_enabled;
+                    CPP_AT_TRY_ARG2NUM(1, r1090_enabled);
+                    adsbee.SetReceiver1090Enable(r1090_enabled);
+                }
+                if (CPP_AT_HAS_ARG(2)) {
+                    CPP_AT_TRY_ARG2NUM(2, settings_manager.settings.subg_rx_enabled);
+                }
             }
             CPP_AT_SUCCESS();
             break;
         case '?':
-            CPP_AT_CMD_PRINTF("=%d,%d", adsbee.Receiver1090IsEnabled(), adsbee.SubGRadioIsEnabled());
+            CPP_AT_PRINTF("1090 Receiver: %s\r\nSubG Receiver: %s",
+                          adsbee.Receiver1090IsEnabled() ? "ENABLED" : "DISABLED",
+                          settings_manager.settings.subg_rx_enabled ? "ENABLED" : "DISABLED");
             CPP_AT_SILENT_SUCCESS();
             break;
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_HELP_CALLBACK(CommsManager::ATRxEnableHelpCallback) {
+    CPP_AT_PRINTF(
+        "RX_ENABLE=<all_enabled [1,0]>,<1090_enabled [1,0]>,<subg_enabled [1,0]>\r\n\tOK\r\n\tEnables or disables the "
+        "receiver(s) "
+        "from receiving messages. First arg overrides others if present.\r\n\tAT+RX_ENABLE?\r\n\t1090 Receiver: "
+        "<1090_enabled [ENABLED,DISABLED]>\r\n\tSubG Receiver: <subg_en> [ENABLED,DISABLED]>\r\n\tQuery whether the "
+        "recevier(s) are enabled.\r\n");
 }
 
 CPP_AT_CALLBACK(CommsManager::ATSettingsCallback) {
@@ -1101,11 +1118,8 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRebootCallback, comms_manager)},
     {.command_buf = "+RX_ENABLE",
      .min_args = 0,
-     .max_args = 2,
-     .help_string_buf = "RX_ENABLE=<1090_enabled [1,0]>,<subg_enabled [1,0]>\r\n\tOK\r\n\tEnables or disables the "
-                        "receiver(s) from receiving messages.\r\n\tAT+RX_ENABLE?\r\n\t+RX_ENABLE=<enabled "
-                        "[1,0]>\r\n\tQuery whether the "
-                        "recevier(s) are enabled.",
+     .max_args = 3,
+     .help_callback = CPP_AT_BIND_MEMBER_HELP_CALLBACK(CommsManager::ATRxEnableHelpCallback, comms_manager),
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxEnableCallback, comms_manager)
 
     },

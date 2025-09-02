@@ -44,9 +44,7 @@ static rfc_dataEntryPartial_t *current_read_entry;
 static dataQueue_t rx_data_queue;
 static bool rx_data_length_written = false;
 
-static RF_CmdHandle rx_cmd_handle;
-static bool rx_canceled = false;
-static uint32_t last_rx_start_timestamp_ms = get_time_since_boot_ms();
+static bool rx_ended = false;
 
 inline void RollDataQueue()
 {
@@ -83,22 +81,24 @@ void rf_cmd_callback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e)
         }
     }
 
-    if (e & (RF_EventRxEntryDone | RF_EventRxOk | RF_EventRxNOk))
+    if (e & RF_EventRxOk)
     {
         RollDataQueue();
         subg_radio.HandlePacketRx((rfc_dataEntryPartial_t *)(current_read_entry));
-        // last_rx_start_timestamp_ms = get_time_since_boot_ms();
+        // last_rx_start_timestamp_ms_ = get_time_since_boot_ms();
         // RF_postCmd(h, (RF_Op *)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
     }
 
-    if (e & (RF_EventLastCmdDone | RF_EventCmdCancelled | RF_EventCmdAborted | RF_EventCmdStopped))
+    if (e & (RF_EventLastCmdDone | RF_EventCmdAborted))
     {
         // subg_radio.HandlePacketRx((rfc_dataEntryPartial_t *)(rx_data_queue.pLastEntry));
-        if (!rx_canceled)
-        {
-            RF_cancelCmd(h, rx_cmd_handle, 0);
-            rx_canceled = true;
-        }
+        RollDataQueue();
+        rx_ended = true;
+    }
+
+    if (e & RF_EventRxBufFull)
+    {
+        RollDataQueue();
     }
 
     // if ((e & RF_EventRxOk) /*e & RF_EventRxEntryDone*/)
@@ -206,14 +206,12 @@ bool SubGHzRadio::Init()
         return false; // Failed to run command FS.
     }
 
-    last_rx_start_timestamp_ms = get_time_since_boot_ms();
-    rx_cmd_handle = RF_postCmd(rf_handle_, (RF_Op *)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
-    if (rx_cmd_handle < 0)
-    {
-        CONSOLE_ERROR("SubGHzRadio::Init", "Failed to post command PROP_RX: returned code %d.", rx_cmd_handle);
-        RF_close(rf_handle_);
-        return false; // Failed to post command PROP_RX.
-    }
+    return StartPacketRx();
+}
+
+bool SubGHzRadio::DeInit()
+{
+    RF_close(rf_handle_);
     return true;
 }
 
@@ -241,6 +239,18 @@ bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t *filled_entry)
     return true;
 }
 
+bool SubGHzRadio::StartPacketRx()
+{
+    last_rx_start_timestamp_ms_ = get_time_since_boot_ms();
+    rx_cmd_handle_ = RF_postCmd(rf_handle_, (RF_Op *)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
+    if (rx_cmd_handle_ < 0)
+    {
+        CONSOLE_ERROR("SubGHzRadio::Init", "Failed to post command PROP_RX: returned code %d.", rx_cmd_handle_);
+        return false; // Failed to post command PROP_RX.
+    }
+    return true;
+}
+
 bool SubGHzRadio::Update()
 {
     // if (rx_stopped)
@@ -261,15 +271,15 @@ bool SubGHzRadio::Update()
     //     entry->status = DATA_ENTRY_PENDING;
     //     entry = (rfc_dataEntryPartial_t *)(entry->pNextEntry);
     // }
-    if (rx_canceled)
+    if (rx_ended)
     {
-        last_rx_start_timestamp_ms = get_time_since_boot_ms();
-        rx_cmd_handle = RF_postCmd(rf_handle_, (RF_Op *)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
+        rx_ended = false;
+        StartPacketRx();
     }
 
-    if (get_time_since_boot_ms() - last_rx_start_timestamp_ms > kRxRestartTimeoutMs)
+    if (get_time_since_boot_ms() - last_rx_start_timestamp_ms_ > kRxRestartTimeoutMs)
     {
-        //     last_rx_start_timestamp_ms = get_time_since_boot_ms();
+        //     last_rx_start_timestamp_ms_ = get_time_since_boot_ms();
         //     RF_postCmd(rf_handle_, (RF_Op *)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
     }
     return true;
