@@ -3,6 +3,7 @@
 #include "uat_packet_decoder.hh"
 #include "macros.hh"
 #include "hal.hh"
+#include "unit_conversions.hh" // for CeilBitsToBytes
 
 extern "C"
 {
@@ -55,6 +56,7 @@ inline void RollDataQueue()
 {
     current_read_entry->status = DATA_ENTRY_PENDING;
     current_read_entry = (rfc_dataEntryPartial_t *)(((rfc_dataEntryPartial_t *)current_read_entry)->pNextEntry);
+    rx_data_queue.pCurrEntry = (uint8_t *)current_read_entry;
 }
 
 // Technical Reference Manual Section 23.7.5.4: https://www.ti.com/lit/ug/swcu117i/swcu117i.pdf
@@ -88,23 +90,30 @@ void rf_cmd_callback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e)
 
     if (e & RF_EventRxOk)
     {
-        RollDataQueue();
+        // RollDataQueue();
         subg_radio.HandlePacketRx((rfc_dataEntryPartial_t *)(current_read_entry));
         // last_rx_start_timestamp_ms_ = get_time_since_boot_ms();
         // RF_postCmd(h, (RF_Op *)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
     }
 
-    if (e & (RF_EventLastCmdDone | RF_EventCmdAborted))
+    if (e & (RF_EventLastCmdDone | RF_EventCmdAborted | RF_EventRxBufFull))
     {
         // subg_radio.HandlePacketRx((rfc_dataEntryPartial_t *)(rx_data_queue.pLastEntry));
         RollDataQueue();
-        rx_ended = true;
+        // rx_ended = true;
     }
 
-    if (e & RF_EventRxBufFull)
-    {
-        RollDataQueue();
-    }
+    // if (e & (RF_EventLastCmdDone | RF_EventCmdAborted))
+    // {
+    //     // subg_radio.HandlePacketRx((rfc_dataEntryPartial_t *)(rx_data_queue.pLastEntry));
+    //     RollDataQueue();
+    //     rx_ended = true;
+    // }
+
+    // if (e & RF_EventRxBufFull)
+    // {
+    //     RollDataQueue();
+    // }
 
     // if ((e & RF_EventRxOk) /*e & RF_EventRxEntryDone*/)
     // {
@@ -158,7 +167,9 @@ bool SubGHzRadio::Init()
     // RF_cmdPropRx.syncWord = RawUATADSBPacket::kSyncWordMS32;
     RF_cmdPropRxAdv.syncWord0 = RawUATADSBPacket::kSyncWordMS32;
     RF_cmdPropRxAdv.syncWord1 = RawUATUplinkPacket::kSyncWordMS32;
-    RF_cmdPropRxAdv.maxPktLen = 0; // Unlimited length
+
+    // FIXME: Setting maxPktLen to 0 for unlimited / unknown length mode leads to crashes.
+    RF_cmdPropRxAdv.maxPktLen = RawUATUplinkPacket::kUplinkMessageLenBytes; // Unlimited length
 
     // The last 4 bits of the Sync word are interpreted as the header, so the rest of the packet stays byte-aligned.
     RF_cmdPropRxAdv.hdrConf = {
@@ -178,11 +189,13 @@ bool SubGHzRadio::Init()
         // Fill out the addresses first so that our pNextEntry assignment works in the next loop.
         partial_data_entry_ptrs[i] = (rfc_dataEntryPartial_t *)&rx_data_entry_buf[i * kPartialDataEntrySizeBytes];
     }
+
+    uint16_t packet_header_size_bytes = CeilBitsToBytes(RF_cmdPropRxAdv.hdrConf.numHdrBits);
     for (uint16_t i = 0; i < kNumPartialDataEntries; i++)
     {
         rfc_dataEntryPartial_t *entry = partial_data_entry_ptrs[i];
-        entry->length = sizeof(rfc_dataEntryPartial_t::pktStatus) + sizeof(rfc_dataEntryPartial_t::nextIndex) + kPartialDataEntryPayloadSizeBytes + kPartialDataEntryNumAppendedBytes;
-        entry->config.irqIntv = 0; // Set interrupt interval to 16 bytes (getting towards end of short packet).
+        entry->length = kPartialDataEntryHeaderSizeBytes + sizeof(rfc_dataEntryPartial_t::pktStatus) + sizeof(rfc_dataEntryPartial_t::nextIndex) + kPartialDataEntryPayloadSizeBytes + kPartialDataEntryNumAppendedBytes;
+        entry->config.irqIntv = 4; // Set interrupt interval to 4 bytes (we only need 1 byte after the header, increase to 4 to reduce the number of interrupts).
         entry->config.type = DATA_ENTRY_TYPE_PARTIAL;
         entry->config.lenSz = kPartialDataEntryPayloadLenSzBytes;
         entry->status = DATA_ENTRY_PENDING;
@@ -222,7 +235,7 @@ bool SubGHzRadio::DeInit()
 
 bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t *filled_entry)
 {
-    // pico_ll.BlinkSubGLED();
+    pico_ll.BlinkSubGLED();
     // RollDataQueue();
 
     /* Handle the packet data, located at &currentDataEntry->data:
@@ -231,12 +244,11 @@ bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t *filled_entry)
     // rfc_dataEntryPartial_t *filled_entry = (rfc_dataEntryPartial_t *)rx_data_queue.pLastEntry;
     uint8_t *buf = (uint8_t *)(&filled_entry->rxData);
     uint16_t packet_len_bytes = buf[0];
-
+    uint8_t *packet_data = buf + kPartialDataEntryPayloadLenSzBytes;
     if (packet_len_bytes > kRxPacketMaxLenBytes || packet_len_bytes == 0)
     {
         return false;
     }
-    uint8_t *packet_data = buf + kPartialDataEntryPayloadLenSzBytes;
 
     RawUATADSBPacket raw_packet = RawUATADSBPacket(packet_data, packet_len_bytes);
     uat_packet_decoder.raw_uat_adsb_packet_queue.Enqueue(raw_packet);
@@ -246,6 +258,7 @@ bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t *filled_entry)
 
 bool SubGHzRadio::StartPacketRx()
 {
+    // RollDataQueue();
     last_rx_start_timestamp_ms_ = get_time_since_boot_ms();
     rx_cmd_handle_ = RF_postCmd(rf_handle_, (RF_Op *)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
     if (rx_cmd_handle_ < 0)
@@ -320,10 +333,5 @@ bool SubGHzRadio::Update()
         StartPacketRx();
     }
 
-    if (get_time_since_boot_ms() - last_rx_start_timestamp_ms_ > kRxRestartTimeoutMs)
-    {
-        //     last_rx_start_timestamp_ms_ = get_time_since_boot_ms();
-        //     RF_postCmd(rf_handle_, (RF_Op *)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
-    }
     return true;
 }

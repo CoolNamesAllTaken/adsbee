@@ -8,7 +8,7 @@ bool UATPacketDecoder::Update()
     // Process incoming UAT ADS-B packets.
     while (!raw_uat_adsb_packet_queue.IsEmpty())
     {
-        pico_ll.BlinkSubGLED();
+        // pico_ll.BlinkSubGLED();
 
         RawUATADSBPacket packet;
         raw_uat_adsb_packet_queue.Dequeue(packet);

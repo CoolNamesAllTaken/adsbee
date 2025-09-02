@@ -32,7 +32,8 @@
 			"stdint.h": "c",
 			"smartrf_settings.h": "c",
 			"init_rs.h": "c",
-			"rs-common.h": "c"
+			"rs-common.h": "c",
+			"semaphore.h": "c"
 		},
 		"C_Cpp.default.defines": [
 			"ON_TI",
