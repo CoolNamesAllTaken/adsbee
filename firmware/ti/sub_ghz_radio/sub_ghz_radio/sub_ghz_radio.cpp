@@ -182,7 +182,7 @@ bool SubGHzRadio::Init()
     {
         rfc_dataEntryPartial_t *entry = partial_data_entry_ptrs[i];
         entry->length = sizeof(rfc_dataEntryPartial_t::pktStatus) + sizeof(rfc_dataEntryPartial_t::nextIndex) + kPartialDataEntryPayloadSizeBytes + kPartialDataEntryNumAppendedBytes;
-        entry->config.irqIntv = 2; // Set interrupt interval to 2 bytes.
+        entry->config.irqIntv = 0; // Set interrupt interval to 16 bytes (getting towards end of short packet).
         entry->config.type = DATA_ENTRY_TYPE_PARTIAL;
         entry->config.lenSz = kPartialDataEntryPayloadLenSzBytes;
         entry->status = DATA_ENTRY_PENDING;

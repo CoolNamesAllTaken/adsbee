@@ -8,7 +8,7 @@ bool UATPacketDecoder::Update()
     // Process incoming UAT ADS-B packets.
     while (!raw_uat_adsb_packet_queue.IsEmpty())
     {
-        // pico_ll.BlinkSubGLED();
+        pico_ll.BlinkSubGLED();
 
         RawUATADSBPacket packet;
         raw_uat_adsb_packet_queue.Dequeue(packet);
@@ -25,7 +25,7 @@ bool UATPacketDecoder::Update()
 
         if (decoded_packet.IsValid())
         {
-            pico_ll.BlinkSubGLED();
+            // pico_ll.BlinkSubGLED();
             CONSOLE_INFO("UATPacketDecoder::Update", "[%dFIXD     ] mdb_tc=%d icao=0x%06x len=%d buf=%s", decoded_packet.GetRawPtr()->sigq_bits, decoded_packet.header.mdb_type_code, decoded_packet.header.icao_address, packet_len_bytes, raw_packet_buffer);
             if (!object_dictionary.decoded_uat_adsb_packet_queue.Enqueue(decoded_packet))
             {
