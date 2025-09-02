@@ -7,6 +7,10 @@
 
 [CC1312 Technical Reference Manual](https://www.ti.com/lit/ug/swcu185g/swcu185g.pdf)
 
+Helpful Threads
+* [Simplelink Partial Rx](https://e2e.ti.com/support/wireless-connectivity/sub-1-ghz-group/sub-1-ghz/f/sub-1-ghz-forum/1295007/cc1352p7-partial-entry-mode-with-repeats-setting-new-packet-length?tisearch=e2e-sitesearch&keymatch=partial%252520receive#)
+* [Checking status of PropRF RX Commands](https://e2e.ti.com/support/wireless-connectivity/sub-1-ghz-group/sub-1-ghz/f/sub-1-ghz-forum/942531/cc1310-how-do-i-use-rf_getinfo-to-find-out-if-the-command-issued-using-rf_postcmd-has-been-executed-or-in-queue)
+
 ## Helpful Info
 
 * Don't let the debugger make more than 4 breakpoints. For some reason JLink's attempts to store flash breakpoints wreaks havoc on the CC1312 and scrambles values in the watch panel on Cortex Debug.
