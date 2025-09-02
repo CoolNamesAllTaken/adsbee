@@ -4,6 +4,11 @@
 #include "macros.hh"
 #include "hal.hh"
 
+extern "C"
+{
+#include "ti/devices/cc13x2_cc26x2/driverlib/rf_prop_mailbox.h" // For status codes.
+}
+
 static const uint32_t kRxRestartTimeoutMs = 5000;
 
 static const uint16_t kNumPartialDataEntries = SubGHzRadio::kRxPacketQueueLen;
@@ -271,9 +276,47 @@ bool SubGHzRadio::Update()
     //     entry->status = DATA_ENTRY_PENDING;
     //     entry = (rfc_dataEntryPartial_t *)(entry->pNextEntry);
     // }
-    if (rx_ended)
+    // if (rx_ended)
+    // {
+    //     rx_ended = false;
+    //     StartPacketRx();
+    // }
+
+    volatile uint16_t rx_status = ((volatile RF_Op *)&RF_cmdPropRxAdv)->status;
+    if ((rx_status & 0xFF00) & PROP_DONE_OK)
     {
-        rx_ended = false;
+        StartPacketRx();
+    }
+    else if ((rx_status & 0xFF00) & PROP_ERROR_PAR)
+    {
+        char *error_str;
+        switch (rx_status)
+        {
+        case PROP_ERROR_PAR:
+            error_str = (char *)"Illegal parameter";
+            break;
+        case PROP_ERROR_RXBUF:
+            error_str = (char *)"No available Rx buffer at the start of a packet";
+            break;
+        case PROP_ERROR_RXFULL:
+            error_str = (char *)"Out of Rx buffer during reception in a partial read buffer";
+            break;
+        case PROP_ERROR_NO_SETUP:
+            error_str = (char *)"Radio was not set up in proprietary mode";
+            break;
+        case PROP_ERROR_NO_FS:
+            error_str = (char *)"Synth was not programmed when running Rx or Tx";
+            break;
+        case PROP_ERROR_RXOVF:
+            error_str = (char *)"Rx overflow observed during operation";
+            break;
+        case PROP_ERROR_TXUNF:
+            error_str = (char *)"Tx underflow observed during operation";
+            break;
+        default:
+            error_str = (char *)"Unknown error";
+        }
+        CONSOLE_ERROR("SubGHzRadio::Update", "PROP_RX threw error (0x%x): %s. Restarting.", rx_status, error_str);
         StartPacketRx();
     }
 

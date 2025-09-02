@@ -758,7 +758,7 @@ CPP_AT_CALLBACK(CommsManager::ATRxEnableCallback) {
             CPP_AT_SUCCESS();
             break;
         case '?':
-            CPP_AT_PRINTF("1090 Receiver: %s\r\nSubG Receiver: %s",
+            CPP_AT_PRINTF("1090 Receiver: %s\r\nSubG Receiver: %s\r\n",
                           adsbee.Receiver1090IsEnabled() ? "ENABLED" : "DISABLED",
                           settings_manager.settings.subg_rx_enabled ? "ENABLED" : "DISABLED");
             CPP_AT_SILENT_SUCCESS();
