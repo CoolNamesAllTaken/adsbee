@@ -162,8 +162,8 @@ const PowerCC26X2_Config PowerCC26X2_config = {
  * Platform-specific driver configuration
  */
 const RFCC26XX_HWAttrsV2 RFCC26XX_hwAttrs = {
-    .hwiPriority        = (~0),
-    .swiPriority        = (uint8_t)0,
+    .hwiPriority        = 0x80,
+    .swiPriority        = (uint8_t)1,
     .xoscHfAlwaysNeeded = true,
     .globalCallback     = NULL,
     .globalEventMask    = 0

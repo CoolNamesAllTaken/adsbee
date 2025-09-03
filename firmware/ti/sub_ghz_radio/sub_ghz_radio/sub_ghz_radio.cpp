@@ -18,12 +18,12 @@ static const uint16_t kPartialDataEntryNumAppendedBytes = 6;  // Appended Bytes 
 static const uint16_t kPartialDataEntryPayloadSizeBytes = SubGHzRadio::kRxPacketMaxLenBytes;
 static const uint16_t kPartialDataEntryPayloadLenSzBytes = 2;  // Length field size in bytes.
 
+static const uint16_t kPacketHeaderSizeBytes = 1;  // Equivalent to CeilBitsToBytes(RF_cmdPropRxAdv.hdrConf.numHdrBits);
+
 static const uint16_t kPartialDataEntrySizeBytes = sizeof(rfc_dataEntryPartial_t) + kPartialDataEntryPayloadLenSzBytes +
-                                                   kPartialDataEntryPayloadSizeBytes +
+                                                   kPacketHeaderSizeBytes + kPartialDataEntryPayloadSizeBytes +
                                                    kPartialDataEntryNumAppendedBytes;
 static_assert(kPartialDataEntryHeaderSizeBytes % 4 == 0, "Partial Data Entry Header Size must be word aligned.");
-
-static const uint16_t kPacketHeaderSizeBytes = 1;  // Equivalent to CeilBitsToBytes(RF_cmdPropRxAdv.hdrConf.numHdrBits);
 
 static const RF_EventMask kRxEventMask =
     RF_EventMdmSoft | RF_EventNDataWritten | (RF_EventRxEntryDone | RF_EventRxOk | RF_EventRxNOk) |
@@ -49,8 +49,6 @@ static rfc_dataEntryPartial_t *current_read_entry;
 static dataQueue_t rx_data_queue;
 static bool rx_data_length_written = false;
 
-static bool rx_ended = false;
-
 inline void RollDataQueue() {
     current_read_entry->status = DATA_ENTRY_PENDING;
     current_read_entry = (rfc_dataEntryPartial_t *)(((rfc_dataEntryPartial_t *)current_read_entry)->pNextEntry);
@@ -74,12 +72,8 @@ void rf_cmd_callback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e) {
             // TODO: Set this value based on bytes received so far.
             current_packet_len_bytes = 34;
 
-            rfc_CMD_PROP_SET_LEN_t RF_cmdPropSetLen = {
-                .commandNo = 0x3401,
-                .rxLen = (uint16_t)(current_packet_len_bytes -
-                                    1)  // Subtract 1 Byte to account for last Byte of sync (header byte) being
-                                        // automatically included in entry due to bIncludeHdr=1
-            };
+            rfc_CMD_PROP_SET_LEN_t RF_cmdPropSetLen = {.commandNo = CMD_PROP_SET_LEN,
+                                                       .rxLen = (uint16_t)(current_packet_len_bytes)};
             RF_runImmediateCmd(h, (uint32_t *)&RF_cmdPropSetLen);
         }
     }
@@ -113,7 +107,7 @@ bool SubGHzRadio::Init() {
         .bIncludeCrc = 0,       // 2 bytes (if default CRC is used)
         .bAppendRssi = 1,       // 1 byte
         .bAppendTimestamp = 1,  // 4 bytes
-        .bAppendStatus = 0      // 1 Byte
+        .bAppendStatus = 1      // 1 Byte
     };
     // RF_cmdPropRxAdv.pktConf.bRepeatOk = 0;  // Go back to sync search after receiving a packet correctly.
     // RF_cmdPropRxAdv.pktConf.bRepeatNok = 0; // Go back to sync search after receiving a packet incorrectly.
@@ -122,8 +116,15 @@ bool SubGHzRadio::Init() {
     RF_cmdPropRxAdv.syncWord0 = RawUATADSBPacket::kSyncWordMS32;
     RF_cmdPropRxAdv.syncWord1 = RawUATUplinkPacket::kSyncWordMS32;
 
-    // FIXME: Setting maxPktLen to 0 for unlimited / unknown length mode leads to crashes.
-    RF_cmdPropRxAdv.maxPktLen = RawUATUplinkPacket::kUplinkMessageLenBytes;  // Unlimited length
+    // This needs to be set to 0, or else the length can't be overridden dynamically.
+    // WARNING: Setting packet length via the RF command callback can get stomped by another interrupt context (e.g.
+    // SPI). This leads to the RF core writing infinitely into memory, causing a non-deterministic crash behavior. Make
+    // sure the software interrupt priority for the RF system is higher than the software interrupt priority for SPI (I
+    // set hardware interrupt priority higher too, but that doesn't seem to fix it on its own). Setting RF software
+    // interrupt priority 1 point higher than SPI interrupt priority seems to work well. Higher values for RF software
+    // interrupt priority lead to crashes. To sidestep this drama, just set the max expected packet length as maxPktLen
+    // and take the performance hit (more rx airtime wasted per packet received).
+    RF_cmdPropRxAdv.maxPktLen = 0;  // 0 = unlimited / unknown length packet mode
 
     // The last 4 bits of the Sync word are interpreted as the header, so the rest of the packet stays byte-aligned.
     RF_cmdPropRxAdv.hdrConf = {.numHdrBits = 4, .lenPos = 0, .numLenBits = 0};
@@ -143,11 +144,11 @@ bool SubGHzRadio::Init() {
 
     for (uint16_t i = 0; i < kNumPartialDataEntries; i++) {
         rfc_dataEntryPartial_t *entry = partial_data_entry_ptrs[i];
-        entry->length = kPacketHeaderSizeBytes + sizeof(rfc_dataEntryPartial_t::pktStatus) +
-                        sizeof(rfc_dataEntryPartial_t::nextIndex) + kPartialDataEntryPayloadSizeBytes +
-                        kPartialDataEntryNumAppendedBytes;
-        entry->config.irqIntv = 4;  // Set interrupt interval to 4 bytes (we only need 1 byte after the header, increase
-                                    // to 4 to reduce the number of interrupts).
+        entry->length = sizeof(rfc_dataEntryPartial_t::pktStatus) + sizeof(rfc_dataEntryPartial_t::nextIndex) +
+                        kPacketHeaderSizeBytes + kPartialDataEntryPayloadLenSzBytes +
+                        kPartialDataEntryPayloadSizeBytes + kPartialDataEntryNumAppendedBytes;
+        entry->config.irqIntv = 0;  // Set interrupt interval. We only need 1 byte after the header, increase to reduce
+                                    // interrupt frequency. 0=16
         entry->config.type = DATA_ENTRY_TYPE_PARTIAL;
         entry->config.lenSz = kPartialDataEntryPayloadLenSzBytes;
         entry->status = DATA_ENTRY_PENDING;
@@ -191,17 +192,29 @@ bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t *filled_entry) {
      * - Data starts from the second byte */
     // rfc_dataEntryPartial_t *filled_entry = (rfc_dataEntryPartial_t *)rx_data_queue.pLastEntry;
     uint8_t *buf = (uint8_t *)(&filled_entry->rxData);
-    uint16_t packet_len_bytes = buf[0];
-    uint8_t *packet_data = buf + kPartialDataEntryPayloadLenSzBytes;
+    uint16_t rxdata_bytes_after_len =
+        buf[0] | (buf[1] << 8);  // 2-Byte length is packaged LSB first (little endian). Includes appended bytes.
+    uint16_t packet_len_bytes = rxdata_bytes_after_len - kPartialDataEntryNumAppendedBytes - kPacketHeaderSizeBytes;
+    // Note that filled_entry->nextIndex should == packet_len_bytes + kPartialDataEntryNumAppendedBytes.
+    uint8_t packet_sync_ls4 = buf[2] & 0x0F;  // Last 4 bits of sync word are the first 4 bits of the payload.
+
     if (packet_len_bytes > kRxPacketMaxLenBytes || packet_len_bytes == 0) {
         return false;
     }
+    uint8_t *packet_data = buf + kPartialDataEntryPayloadLenSzBytes + kPacketHeaderSizeBytes;
+
+    // Appended Bytes (no CRC)
+    //------------------------------------------
+    // | RSSI | TS0 | TS1 | TS2 | TS3 | Status |
+    //------------------------------------------
 
     RawUATADSBPacket raw_packet = RawUATADSBPacket(packet_data, packet_len_bytes);
-    raw_packet.sigs_dbm = static_cast<int8_t>(packet_data[packet_len_bytes - 5]);
-    uint32_t timestamp = (packet_data[packet_len_bytes - 4] << 24) | (packet_data[packet_len_bytes - 3] << 16) |
-                         (packet_data[packet_len_bytes - 2] << 8) | packet_data[packet_len_bytes - 1];
+    raw_packet.sigs_dbm = static_cast<int8_t>(packet_data[packet_len_bytes]);
+    uint32_t timestamp = packet_data[packet_len_bytes + 1] | (packet_data[packet_len_bytes + 2] << 8) |
+                         (packet_data[packet_len_bytes + 3] << 16) | (packet_data[packet_len_bytes + 4] << 24);
     raw_packet.mlat_48mhz_64bit_counts = timestamp;
+    int8_t status = static_cast<int8_t>(packet_data[packet_len_bytes + kPartialDataEntryNumAppendedBytes - 1]);
+    static_assert(kPartialDataEntryNumAppendedBytes == 6);  // This section is hardcoded to match the appended bytes.
     uat_packet_decoder.raw_uat_adsb_packet_queue.Enqueue(raw_packet);
 
     return true;

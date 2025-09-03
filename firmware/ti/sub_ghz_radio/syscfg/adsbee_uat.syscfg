@@ -19,6 +19,7 @@ const GPIO1    = GPIO.addInstance();
 const GPIO2    = GPIO.addInstance();
 const GPIO3    = GPIO.addInstance();
 const GPIO4    = GPIO.addInstance();
+const RF       = scripting.addModule("/ti/drivers/RF");
 const SPI      = scripting.addModule("/ti/drivers/SPI", {}, false);
 const SPI1     = SPI.addInstance();
 
@@ -59,6 +60,9 @@ GPIO3.gpioPin.$assign = "DIO_5";
 GPIO4.mode            = "Output";
 GPIO4.$name           = "SUBG_BIAS_TEE_ENABLE_PIN";
 GPIO4.gpioPin.$assign = "DIO_7";
+
+RF.softwareInterruptPriority = "1";
+RF.interruptPriority         = "4";
 
 SPI1.mode                     = "Four Pin CS Active Low";
 SPI1.$name                    = "COPRO_SPI";

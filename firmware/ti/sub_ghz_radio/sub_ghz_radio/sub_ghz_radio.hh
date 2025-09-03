@@ -1,13 +1,13 @@
 #pragma once
 
-extern "C"
-{
-#include <ti/drivers/rf/RF.h>
+extern "C" {
 #include <ti/drivers/GPIO.h>
+#include <ti/drivers/rf/RF.h>
 #include <ti_radio_config.h>
+
 #include "smartrf/smartrf_settings.h"
 
-    /* clang-format off */
+/* clang-format off */
 #include <ti/devices/DeviceFamily.h>
 #include DeviceFamily_constructPath(driverlib/rf_data_entry.h)
 /** clang-format on */
@@ -23,7 +23,7 @@ class SubGHzRadio
 {
 public:
     static const uint16_t kRxPacketQueueLen = 2;
-    static const uint16_t kRxPacketMaxLenBytes = RawUATUplinkPacket::kUplinkMessageLenBytes + 1; // +1 to account for last byte of sync word.
+    static const uint16_t kRxPacketMaxLenBytes = RawUATUplinkPacket::kUplinkMessageLenBytes;
 
     struct SubGHzRadioConfig
     {
