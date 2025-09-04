@@ -349,6 +349,16 @@ class RawUATUplinkPacket {
     int16_t sigs_dbm = INT16_MIN;          // Signal strength, in dBm.
     int16_t sigq_bits = INT16_MIN;         // Signal quality (num bits corrected by FEC, 0 = best).
     uint64_t mlat_48mhz_64bit_counts = 0;  // High resolution MLAT counter.
+};
+
+class DecodedUATUplinkPacket {
+   public:
+    static const uint16_t kDebugStrLen = 200;
+
+    DecodedUATUplinkPacket(const RawUATUplinkPacket &packet_in);
+    DecodedUATUplinkPacket() : raw_((char *)"") { debug_string[0] = '\0'; }
+    DecodedUATUplinkPacket(const char *rx_string, int32_t sigs_dbm = INT32_MIN, int32_t sigq_bits = INT32_MIN,
+                           uint64_t mlat_48mhz_64bit_counts = 0);
 
     /**
      * Helper function that consolidates constructor implementation for the various constructors.
@@ -357,4 +367,13 @@ class RawUATUplinkPacket {
      *                    Defaults to true (set run_fec to false to skip FEC decoding).
      */
     void ConstructUATUplinkPacket(bool run_fec = true);
+
+    // Oversize the payload field since we copy the encoded message to it and correct / decode in place.
+    uint8_t decoded_payload[RawUATUplinkPacket::kUplinkMessageNumBytes] = {0};
+
+    char debug_string[kDebugStrLen] = "";
+
+   protected:
+    bool is_valid_ = false;
+    RawUATUplinkPacket raw_;
 };

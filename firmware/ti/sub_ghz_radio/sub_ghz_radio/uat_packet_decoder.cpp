@@ -35,5 +35,12 @@ bool UATPacketDecoder::Update() {
                          raw_packet_buffer, packet.sigs_dbm, packet.mlat_48mhz_64bit_counts);
         }
     }
+
+    while (!raw_uat_uplink_packet_queue.IsEmpty()) {
+        RawUATUplinkPacket packet;
+        raw_uat_uplink_packet_queue.Dequeue(packet);
+        // Decode the packet and enqueue the result.
+        DecodedUATUplinkPacket decoded_packet = DecodedUATUplinkPacket(packet);
+    }
     return true;
 }

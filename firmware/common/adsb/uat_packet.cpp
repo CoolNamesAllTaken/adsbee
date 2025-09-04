@@ -364,3 +364,40 @@ RawUATUplinkPacket::RawUATUplinkPacket(uint8_t rx_buffer[kUplinkMessageNumBytes]
     memcpy(encoded_message, rx_buffer, rx_buffer_len_bytes);
     encoded_message_len_bits = rx_buffer_len_bytes * 8;
 }
+
+DecodedUATUplinkPacket::DecodedUATUplinkPacket(const char *rx_string, int32_t sigs_dbm, int32_t sigq_bits,
+                                               uint64_t mlat_48mhz_64bit_counts)
+    : raw_(rx_string, sigs_dbm, sigq_bits, mlat_48mhz_64bit_counts) {
+    // Validate the packet.
+    ConstructUATUplinkPacket();
+}
+
+DecodedUATUplinkPacket::DecodedUATUplinkPacket(const RawUATUplinkPacket &packet) : raw_(packet) {
+    // Validate the packet.
+    ConstructUATUplinkPacket();
+}
+
+void DecodedUATUplinkPacket::ConstructUATUplinkPacket(bool run_fec) {
+    if (run_fec) {
+        // Check if the packet is valid by validating the Reed-Solomon code.
+        // We don't actually know the number of bits with high certainty. First interpret as a long ADS-B message,
+        // and if that doesn't work, try it as a short ADS-B message. Decoding only available on CC1312 and in
+        // non-embedded unit tests.
+#if defined(ON_TI) || defined(ON_HOST)
+        // Copy to the decoded_payload buffer and correct in place. If correction fails, the buffer will not be
+        // modified.
+        memcpy(decoded_payload, raw_.encoded_message, RawUATUplinkPacket::kUplinkMessageNumBytes);
+        raw_.sigq_bits = uat_rs.DecodeUplinkMessage(raw_.encoded_message, decoded_payload);
+        if (raw_.sigq_bits >= 0) {
+            CONSOLE_INFO("DecodedUATADSBPacket", "Decoded UAT uplink message with %d bytes corrected.", raw_.sigq_bits);
+        } else {
+            is_valid_ = false;
+            return;
+        }
+#endif /* ON_PICO */
+    }
+
+    // TODO: extract info.
+
+    is_valid_ = true;
+};

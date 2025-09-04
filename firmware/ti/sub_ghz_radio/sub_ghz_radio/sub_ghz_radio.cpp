@@ -232,7 +232,7 @@ bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t *filled_entry) {
             raw_packet.sigs_dbm = rssi_dbm;
             raw_packet.mlat_48mhz_64bit_counts = timestamp;
 
-            // uat_packet_decoder.raw_uat_uplink_packet_queue.Enqueue(raw_packet);
+            uat_packet_decoder.raw_uat_uplink_packet_queue.Enqueue(raw_packet);
             break;
         }
         default: {
