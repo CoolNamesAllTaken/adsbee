@@ -62,7 +62,7 @@ GPIO4.$name           = "SUBG_BIAS_TEE_ENABLE_PIN";
 GPIO4.gpioPin.$assign = "DIO_7";
 
 RF.softwareInterruptPriority = "1";
-RF.interruptPriority         = "4";
+RF.interruptPriority         = "5";
 
 SPI1.mode                     = "Four Pin CS Active Low";
 SPI1.$name                    = "COPRO_SPI";

@@ -23,7 +23,7 @@ class SubGHzRadio
 {
 public:
     static const uint16_t kRxPacketQueueLen = 2;
-    static const uint16_t kRxPacketMaxLenBytes = RawUATUplinkPacket::kUplinkMessageLenBytes;
+    static const uint16_t kRxPacketMaxLenBytes = RawUATUplinkPacket::kUplinkMessageNumBytes;
 
     struct SubGHzRadioConfig
     {

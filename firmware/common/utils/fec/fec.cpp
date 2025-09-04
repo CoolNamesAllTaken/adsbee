@@ -63,7 +63,7 @@ int UATReedSolomon::DecodeLongADSBMessage(uint8_t message_buf[RawUATADSBPacket::
 }
 
 int UATReedSolomon::DecodeUplinkMessage(
-    uint8_t encoded_message_buf[RawUATUplinkPacket::kUplinkMessageLenBytes],
+    uint8_t encoded_message_buf[RawUATUplinkPacket::kUplinkMessageNumBytes],
     uint8_t decoded_payload_buf[RawUATUplinkPacket::kUplinkMessagePayloadNumBytes +
                                 RawUATUplinkPacket::kUplinkMessageBlockFECParityNumBytes]) {
     if (encoded_message_buf == nullptr) {

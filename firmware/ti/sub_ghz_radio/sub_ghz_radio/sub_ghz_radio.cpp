@@ -29,7 +29,7 @@ static const RF_EventMask kRxEventMask =
     RF_EventMdmSoft | RF_EventNDataWritten | (RF_EventRxEntryDone | RF_EventRxOk | RF_EventRxNOk) |
     (RF_EventLastCmdDone | RF_EventCmdCancelled | RF_EventCmdAborted | RF_EventCmdStopped);
 
-static volatile uint16_t current_packet_len_bytes = 0;
+static volatile int16_t current_packet_len_bytes = INT16_MIN;
 
 // Packet RX Configuration
 //  ------------------------------------------------------------------------------------------------------------------------
@@ -47,7 +47,6 @@ static rfc_dataEntryPartial_t *partial_data_entry_ptrs[kNumPartialDataEntries] =
 static rfc_dataEntryPartial_t *current_read_entry;
 
 static dataQueue_t rx_data_queue;
-static bool rx_data_length_written = false;
 
 inline void RollDataQueue() {
     current_read_entry->status = DATA_ENTRY_PENDING;
@@ -61,16 +60,19 @@ void rf_cmd_callback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e) {
 
     if (e & RF_EventMdmSoft) {
         // Preamble detected. Get ready to figure out packet length!
-        rx_data_length_written = false;
+        current_packet_len_bytes = INT16_MIN;
     }
 
     if (e & RF_EventNDataWritten) {
-        if (!rx_data_length_written) {
+        if (current_packet_len_bytes < 0) {
             // Only set the length once, after receiving the first two bytes of the packet.
-            rx_data_length_written = true;
 
             // TODO: Set this value based on bytes received so far.
-            current_packet_len_bytes = 34;
+            uint8_t sync_word_ls4 = (&(current_read_entry->rxData))[kPartialDataEntryPayloadLenSzBytes] &
+                                    0x0F;  // Last 4 bits of sync word are the first 4 bits of the payload.
+            uint8_t mdb_type_code = (&(current_read_entry->rxData))[kPartialDataEntryPayloadLenSzBytes + 1] >> 3;
+            current_packet_len_bytes =
+                UATPacketDecoder::SyncWordLSBAndMDBTypeCodeToMessageLenBytes(sync_word_ls4, mdb_type_code);
 
             rfc_CMD_PROP_SET_LEN_t RF_cmdPropSetLen = {.commandNo = CMD_PROP_SET_LEN,
                                                        .rxLen = (uint16_t)(current_packet_len_bytes)};
@@ -79,7 +81,7 @@ void rf_cmd_callback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e) {
     }
 
     if (e & RF_EventRxOk) {
-        subg_radio.HandlePacketRx((rfc_dataEntryPartial_t *)(current_read_entry));
+        subg_radio.HandlePacketRx(current_read_entry);
     }
 
     if (e & (RF_EventLastCmdDone | RF_EventCmdAborted | RF_EventRxBufFull)) {
@@ -124,7 +126,7 @@ bool SubGHzRadio::Init() {
     // interrupt priority 1 point higher than SPI interrupt priority seems to work well. Higher values for RF software
     // interrupt priority lead to crashes. To sidestep this drama, just set the max expected packet length as maxPktLen
     // and take the performance hit (more rx airtime wasted per packet received).
-    RF_cmdPropRxAdv.maxPktLen = 0;  // 0 = unlimited / unknown length packet mode
+    RF_cmdPropRxAdv.maxPktLen = kRxPacketMaxLenBytes;  // 0 = unlimited / unknown length packet mode
 
     // The last 4 bits of the Sync word are interpreted as the header, so the rest of the packet stays byte-aligned.
     RF_cmdPropRxAdv.hdrConf = {.numHdrBits = 4, .lenPos = 0, .numLenBits = 0};
@@ -192,30 +194,52 @@ bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t *filled_entry) {
      * - Data starts from the second byte */
     // rfc_dataEntryPartial_t *filled_entry = (rfc_dataEntryPartial_t *)rx_data_queue.pLastEntry;
     uint8_t *buf = (uint8_t *)(&filled_entry->rxData);
-    uint16_t rxdata_bytes_after_len =
+    uint16_t rx_data_bytes_after_len =
         buf[0] | (buf[1] << 8);  // 2-Byte length is packaged LSB first (little endian). Includes appended bytes.
-    uint16_t packet_len_bytes = rxdata_bytes_after_len - kPartialDataEntryNumAppendedBytes - kPacketHeaderSizeBytes;
+    // uint16_t rx_data_bytes_after_len =
+    //     current_packet_len_bytes + kPartialDataEntryNumAppendedBytes + kPacketHeaderSizeBytes;
+    uint16_t packet_len_bytes = rx_data_bytes_after_len - kPartialDataEntryNumAppendedBytes - kPacketHeaderSizeBytes;
     // Note that filled_entry->nextIndex should == packet_len_bytes + kPartialDataEntryNumAppendedBytes.
     uint8_t packet_sync_ls4 = buf[2] & 0x0F;  // Last 4 bits of sync word are the first 4 bits of the payload.
+    uint8_t *packet_data = buf + kPartialDataEntryPayloadLenSzBytes + kPacketHeaderSizeBytes;
 
     if (packet_len_bytes > kRxPacketMaxLenBytes || packet_len_bytes == 0) {
         return false;
     }
-    uint8_t *packet_data = buf + kPartialDataEntryPayloadLenSzBytes + kPacketHeaderSizeBytes;
 
     // Appended Bytes (no CRC)
     //------------------------------------------
     // | RSSI | TS0 | TS1 | TS2 | TS3 | Status |
     //------------------------------------------
-
-    RawUATADSBPacket raw_packet = RawUATADSBPacket(packet_data, packet_len_bytes);
-    raw_packet.sigs_dbm = static_cast<int8_t>(packet_data[packet_len_bytes]);
+    int8_t rssi_dbm = static_cast<int8_t>(packet_data[packet_len_bytes]);
     uint32_t timestamp = packet_data[packet_len_bytes + 1] | (packet_data[packet_len_bytes + 2] << 8) |
                          (packet_data[packet_len_bytes + 3] << 16) | (packet_data[packet_len_bytes + 4] << 24);
-    raw_packet.mlat_48mhz_64bit_counts = timestamp;
     int8_t status = static_cast<int8_t>(packet_data[packet_len_bytes + kPartialDataEntryNumAppendedBytes - 1]);
     static_assert(kPartialDataEntryNumAppendedBytes == 6);  // This section is hardcoded to match the appended bytes.
-    uat_packet_decoder.raw_uat_adsb_packet_queue.Enqueue(raw_packet);
+
+    switch (current_packet_len_bytes) {
+        case RawUATADSBPacket::kShortADSBMessageNumBytes:
+        case RawUATADSBPacket::kLongADSBMessageNumBytes: {
+            RawUATADSBPacket raw_packet = RawUATADSBPacket(packet_data, current_packet_len_bytes);
+            raw_packet.sigs_dbm = rssi_dbm;
+            raw_packet.mlat_48mhz_64bit_counts = timestamp;
+
+            uat_packet_decoder.raw_uat_adsb_packet_queue.Enqueue(raw_packet);
+            break;
+        }
+        case RawUATUplinkPacket::kUplinkMessageNumBytes: {
+            RawUATUplinkPacket raw_packet = RawUATUplinkPacket(packet_data, current_packet_len_bytes);
+            raw_packet.sigs_dbm = rssi_dbm;
+            raw_packet.mlat_48mhz_64bit_counts = timestamp;
+
+            // uat_packet_decoder.raw_uat_uplink_packet_queue.Enqueue(raw_packet);
+            break;
+        }
+        default: {
+            // Unrecognized packet length, skip. Don't print here since it's in the interrupt context.
+            return false;
+        }
+    }
 
     return true;
 }

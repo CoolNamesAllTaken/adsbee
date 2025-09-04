@@ -251,7 +251,7 @@ class DecodedUATADSBPacket {
      * @retval True if the valid was ingested successfully, false otherwise.
      */
     inline bool ReconstructWithoutFEC() {
-        ConstructUATPacket(false);  // Re-run packet digestion without FEC correction.
+        ConstructUATADSBPacket(false);  // Re-run packet digestion without FEC correction.
         return is_valid_;
     }
 
@@ -295,7 +295,7 @@ class DecodedUATADSBPacket {
      *                    Used for testing purposes when we want to populate the payload but not the FEC parity bytes.
      *                    Defaults to true (set run_fec to false to skip FEC decoding).
      */
-    void ConstructUATPacket(bool run_fec = true);
+    void ConstructUATADSBPacket(bool run_fec = true);
 };
 
 class RawUATUplinkPacket {
@@ -316,7 +316,7 @@ class RawUATUplinkPacket {
 
     static const uint16_t kUplinkMessagePayloadNumBytes = kUplinkMessageNumBlocks * kUplinkMessageBlockPayloadNumBytes;
 
-    static const uint16_t kUplinkMessageLenBytes =
+    static const uint16_t kUplinkMessageNumBytes =
         kUplinkMessageNumBlocks * kUplinkMessageBlockNumBytes;  // Maximum size of a UAT uplink message.
 
     struct __attribute__((packed)) UATUplinkDataBlock {
@@ -331,4 +331,30 @@ class RawUATUplinkPacket {
         uint8_t reserved2                     : 4;
         // Subsequent Bytes are application data.
     };
+
+    RawUATUplinkPacket(const char *rx_string, int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_bits_in = INT16_MIN,
+                       uint64_t mlat_48mhz_64bit_counts = 0);
+    RawUATUplinkPacket(uint8_t rx_buffer[kUplinkMessageNumBytes], uint16_t rx_buffer_len_bytes,
+                       int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_bits_in = INT16_MIN,
+                       uint64_t mlat_48mhz_64bit_counts = 0);
+
+    /**
+     * Default constructor.
+     */
+    RawUATUplinkPacket() {}
+
+    uint8_t encoded_message[kUplinkMessageNumBytes] = {0};
+    uint16_t encoded_message_len_bits = 0;
+
+    int16_t sigs_dbm = INT16_MIN;          // Signal strength, in dBm.
+    int16_t sigq_bits = INT16_MIN;         // Signal quality (num bits corrected by FEC, 0 = best).
+    uint64_t mlat_48mhz_64bit_counts = 0;  // High resolution MLAT counter.
+
+    /**
+     * Helper function that consolidates constructor implementation for the various constructors.
+     * @param[in] run_fec If true, runs Reed-Solomon FEC decoding on the received message. If false, does not run FEC.
+     *                    Used for testing purposes when we want to populate the payload but not the FEC parity bytes.
+     *                    Defaults to true (set run_fec to false to skip FEC decoding).
+     */
+    void ConstructUATUplinkPacket(bool run_fec = true);
 };

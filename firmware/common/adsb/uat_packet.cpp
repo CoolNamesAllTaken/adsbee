@@ -39,12 +39,12 @@ DecodedUATADSBPacket::DecodedUATADSBPacket(const char *rx_string, int32_t sigs_d
                                            uint64_t mlat_48mhz_64bit_counts)
     : raw_(rx_string, sigs_dbm, sigq_bits, mlat_48mhz_64bit_counts) {
     // Validate the packet.
-    ConstructUATPacket();
+    ConstructUATADSBPacket();
 }
 
 DecodedUATADSBPacket::DecodedUATADSBPacket(const RawUATADSBPacket &packet) : raw_(packet) {
     // Validate the packet.
-    ConstructUATPacket();
+    ConstructUATADSBPacket();
 }
 
 ADSBTypes::DirectionType DecodedUATADSBPacket::HorizontalVelocityToDirectionDegAndSpeedKts(
@@ -191,7 +191,7 @@ uint32_t DecodedUATADSBPacket::GetICAOAddress() const {
     return header.icao_address | (header.address_qualifier << Aircraft::kAddressQualifierBitShift);
 }
 
-void DecodedUATADSBPacket::ConstructUATPacket(bool run_fec) {
+void DecodedUATADSBPacket::ConstructUATADSBPacket(bool run_fec) {
     if (run_fec) {
         // Check if the packet is valid by validating the Reed-Solomon code.
         // We don't actually know the number of bits with high certainty. First interpret as a long ADS-B message,
@@ -203,7 +203,8 @@ void DecodedUATADSBPacket::ConstructUATPacket(bool run_fec) {
         memcpy(decoded_payload, raw_.encoded_message, RawUATADSBPacket::kADSBMessageMaxSizeBytes);
         raw_.sigq_bits = uat_rs.DecodeLongADSBMessage(decoded_payload);
         if (raw_.sigq_bits >= 0) {
-            CONSOLE_INFO("DecodedUATADSBPacket", "Decoded Long ADS-B message with %d bytes corrected.", raw_.sigq_bits);
+            // CONSOLE_INFO("DecodedUATADSBPacket", "Decoded Long ADS-B message with %d bytes corrected.",
+            // raw_.sigq_bits);
             message_format = kUATADSBMessageFormatLong;
         } else {
             raw_.sigq_bits = uat_rs.DecodeShortADSBMessage(decoded_payload);
@@ -344,3 +345,22 @@ void DecodedUATADSBPacket::DecodeAuxiliaryStateVector(uint8_t *data, UATAuxiliar
     aux_state_vector_ref.secondary_altitude_encoded = GetNBitsFromByteBuffer(12, 0, data);
 };
 void DecodedUATADSBPacket::DecodeTargetState(uint8_t *data, UATTargetState &target_state_ref) {};
+
+RawUATUplinkPacket::RawUATUplinkPacket(const char *rx_string, int16_t sigs_dbm_in, int16_t sigq_bits_in,
+                                       uint64_t mlat_48mhz_64bit_counts_in)
+    : sigs_dbm(sigs_dbm_in), sigq_bits(sigq_bits_in), mlat_48mhz_64bit_counts(mlat_48mhz_64bit_counts_in) {
+    uint16_t rx_num_bytes = strlen(rx_string) / kNibblesPerByte;
+    for (uint16_t i = 0; i < rx_num_bytes && i < kUplinkMessageNumBytes * kBytesPerWord; i++) {
+        uint8_t byte = (CHAR_TO_HEX(rx_string[i * kNibblesPerByte]) << kBitsPerNibble) |
+                       CHAR_TO_HEX(rx_string[i * kNibblesPerByte + 1]);
+        encoded_message[i] = byte;
+        encoded_message_len_bits += kBitsPerByte;
+    }
+}
+
+RawUATUplinkPacket::RawUATUplinkPacket(uint8_t rx_buffer[kUplinkMessageNumBytes], uint16_t rx_buffer_len_bytes,
+                                       int16_t sigs_dbm_in, int16_t sigq_bits_in, uint64_t mlat_48mhz_64bit_counts_in)
+    : sigs_dbm(sigs_dbm_in), sigq_bits(sigq_bits_in), mlat_48mhz_64bit_counts(mlat_48mhz_64bit_counts_in) {
+    memcpy(encoded_message, rx_buffer, rx_buffer_len_bytes);
+    encoded_message_len_bits = rx_buffer_len_bytes * 8;
+}

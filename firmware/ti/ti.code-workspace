@@ -39,7 +39,7 @@
 			"ON_TI",
 			"DeviceFamily_CC13X2"
 		],
-		"cortex-debug.variableUseNaturalFormat": false,
+		"cortex-debug.variableUseNaturalFormat": true,
 	},
 	"launch": {
 		"version": "0.2.0",

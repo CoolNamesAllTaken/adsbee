@@ -23,7 +23,7 @@ bool UATPacketDecoder::Update() {
 
         if (decoded_packet.IsValid()) {
             // pico_ll.BlinkSubGLED();
-            CONSOLE_INFO("UATPacketDecoder::Update", "[%dFIXD     ] mdb_tc=%d icao=0x%06x len=%d buf=%s rssi=%d ts=%d",
+            CONSOLE_INFO("UATPacketDecoder::Update", "[%dFIXD     ] mdb_tc=%d icao=0x%06x len=%d buf=%s rssi=%d ts=%lu",
                          decoded_packet.GetRawPtr()->sigq_bits, decoded_packet.header.mdb_type_code,
                          decoded_packet.header.icao_address, packet_len_bytes, raw_packet_buffer, packet.sigs_dbm,
                          packet.mlat_48mhz_64bit_counts);
@@ -31,7 +31,7 @@ bool UATPacketDecoder::Update() {
                 CONSOLE_ERROR("UATPacketDecoder::Update", "Failed to enqueue decoded UAT ADS-B packet.");
             }
         } else {
-            CONSOLE_INFO("UATPacketDecoder::Update", "[     INVLD] len=%d buf=%s rssi=%d ts=%d", packet_len_bytes,
+            CONSOLE_INFO("UATPacketDecoder::Update", "[     INVLD] len=%d buf=%s rssi=%d ts=%lu", packet_len_bytes,
                          raw_packet_buffer, packet.sigs_dbm, packet.mlat_48mhz_64bit_counts);
         }
     }

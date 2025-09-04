@@ -16,7 +16,7 @@ class UATPacketDecoder {
                                     .buffer = raw_uat_adsb_packet_buffer_,
                                     .overwrite_when_full = true});
 
-    PFBQueue<RawUATUplinkPacket> raw_uplink_adsb_packet_queue =
+    PFBQueue<RawUATUplinkPacket> raw_uat_uplink_packet_queue =
         PFBQueue<RawUATUplinkPacket>({.buf_len_num_elements = kRawUATUplinkPacketQueueDepth,
                                       .buffer = raw_uat_uplink_packet_buffer_,
                                       .overwrite_when_full = true});
@@ -26,7 +26,7 @@ class UATPacketDecoder {
             return mdb_type_code == 0 ? RawUATADSBPacket::kShortADSBMessageNumBytes
                                       : RawUATADSBPacket::kLongADSBMessageNumBytes;
         } else {
-            return RawUATUplinkPacket::kUplinkMessageLenBytes;
+            return RawUATUplinkPacket::kUplinkMessageNumBytes;
         }
     }
     bool Update();
