@@ -7,6 +7,7 @@ if (TARGET application)
         # NOTE: Annoyingly, all source files need to end with .c or .cpp to be seen by the ESP IDF.
         settings/settings_strs.cpp
         settings/settings.cpp
+        comms/beast/beast_utils.cpp
         comms/gdl90/gdl90_utils.cpp
         comms/mavlink/mavlink_utils.cpp
         comms/raw/raw_utils.cpp
@@ -91,6 +92,7 @@ elseif (TARGET host_test)
         adsb/aircraft_dictionary.cpp
         adsb/decode_utils.cpp
         adsb/mode_s_packet_decoder.cc
+        comms/beast/beast_utils.cpp
         comms/gdl90/gdl90_utils.cpp
         comms/raw/raw_utils.cpp
         coprocessor/spi_coprocessor.cpp

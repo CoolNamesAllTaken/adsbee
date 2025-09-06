@@ -134,11 +134,11 @@ bool ModeSAircraft::DecodePosition(bool filter_cpr_position) {
  * Returns the Wake Vortex category of the aircraft that sent a given ADS-B packet. Note that some categories have a
  * many to one mapping!
  * @param[in] packet ADS-B Packet to extract the EmitterCategory value from. Must be
- * @retval EmitterCategory that matches the combination of capability and typecode from the ADS-B packet, or
+ * @retval EmitterCategory that matches the combination of capability and type_code from the ADS-B packet, or
  * kEmitterCategoryInvalid if there is no matching wake vortex value.
  */
 ADSBTypes::EmitterCategory ExtractCategory(const ModeSADSBPacket &packet) {
-    uint8_t typecode = packet.GetNBitWordFromMessage(5, 0);
+    uint8_t type_code = packet.GetNBitWordFromMessage(5, 0);
     uint8_t capability = packet.GetNBitWordFromMessage(3, 5);
 
     // Table 4.1 from The 1090Mhz Riddle (Junzi Sun), pg. 42.
@@ -146,7 +146,7 @@ ADSBTypes::EmitterCategory ExtractCategory(const ModeSADSBPacket &packet) {
         return ADSBTypes::kEmitterCategoryNoCategoryInfo;
     }
 
-    switch (typecode) {
+    switch (type_code) {
         case 1:
             // EmitterCategory Set D.
             return ADSBTypes::kEmitterCategoryNoCategoryInfo;
@@ -241,7 +241,7 @@ ADSBTypes::EmitterCategory ExtractCategory(const ModeSADSBPacket &packet) {
 bool ModeSAircraft::ApplyAircraftIDMessage(ModeSADSBPacket packet) {
     emitter_category = ExtractCategory(packet);
     emitter_category_raw = packet.GetNBitWordFromMessage(8, 0);
-    transponder_capability = packet.GetCapability();
+    transponder_capability = packet.capability;
     for (uint16_t i = 0; i < ModeSAircraft::kCallSignMaxNumChars; i++) {
         char callsign_char = LookupModeSCallsignChar(packet.GetNBitWordFromMessage(6, 8 + (6 * i)));
         callsign[i] = callsign_char;
@@ -255,7 +255,7 @@ bool ModeSAircraft::ApplySurfacePositionMessage(ModeSADSBPacket packet) {
 
     if (NICBitIsValid(ADSBTypes::kNICBitA) && NICBitIsValid(ADSBTypes::kNICBitC)) {
         // Assign NIC based on NIC supplement bits A and C and received TypeCode.
-        switch ((packet.GetTypeCode() << 3) | (nic_bits & 0b101)) {
+        switch ((packet.type_code << 3) | (nic_bits & 0b101)) {
             case (5 << 3) | 0b000:
                 navigation_integrity_category = ADSBTypes::kROCLessThan7p5Meters;
                 break;
@@ -283,8 +283,8 @@ bool ModeSAircraft::ApplySurfacePositionMessage(ModeSADSBPacket packet) {
                 break;
             default:
                 CONSOLE_WARNING("AircraftDictionary::ApplySurfacePositionMessage",
-                                "Unable to assign NIC with typecode %d and nic_bits %d for ICAO 0x%lx.",
-                                packet.GetTypeCode(), nic_bits, icao_address);
+                                "Unable to assign NIC with type_code %d and nic_bits %d for ICAO 0x%lx.",
+                                packet.type_code, nic_bits, icao_address);
         }
     }
 
@@ -295,7 +295,7 @@ bool ModeSAircraft::ApplySurfacePositionMessage(ModeSADSBPacket packet) {
 
 bool ModeSAircraft::ApplyAirbornePositionMessage(ModeSADSBPacket packet, bool filter_cpr_position) {
     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
-    uint16_t typecode = packet.GetTypeCode();
+    uint16_t type_code = packet.type_code;
 
     bool decode_successful = true;
     // ME[5-6] - Surveillance Status
@@ -322,7 +322,7 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(ModeSADSBPacket packet, bool fi
 
     if (NICBitIsValid(ADSBTypes::kNICBitA) && NICBitIsValid(ADSBTypes::kNICBitB)) {
         // Assign NIC based on NIC supplement bits A and B and received TypeCode.
-        switch ((typecode << 3) | (nic_bits & 0b101)) {
+        switch ((type_code << 3) | (nic_bits & 0b101)) {
             case (9 << 3) | 0b000:
                 navigation_integrity_category = ADSBTypes::kROCLessThan7p5Meters;
                 break;
@@ -363,7 +363,7 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(ModeSADSBPacket packet, bool fi
                 break;
             default:
                 // Check for TypeCodes that can determine a NIC without needing to consult NIC supplement bits.
-                switch (typecode) {
+                switch (type_code) {
                     case 20:
                         navigation_integrity_category = ADSBTypes::kROCLessThan7p5Meters;
                         break;
@@ -375,8 +375,8 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(ModeSADSBPacket packet, bool fi
                         break;
                     default:
                         CONSOLE_WARNING("AircraftDictionary::ApplyAirbornePositionMessage",
-                                        "Unable to assign NIC with typecode %d and nic_bits %d for ICAO 0x%lx.",
-                                        typecode, nic_bits, icao_address);
+                                        "Unable to assign NIC with type_code %d and nic_bits %d for ICAO 0x%lx.",
+                                        type_code, nic_bits, icao_address);
                 }
         }
     }
@@ -413,7 +413,7 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(ModeSADSBPacket packet, bool fi
         }
         default:
             CONSOLE_WARNING("AircraftDictionary::ApplyAirbornePositionMessage",
-                            "Received packet with unsupported typecode %d with ICAO 0x%lx.", packet.GetTypeCode(),
+                            "Received packet with unsupported type_code %d with ICAO 0x%lx.", packet.type_code,
                             icao_address);
             return false;
     }
@@ -1074,22 +1074,22 @@ bool AircraftDictionary::ContainsAircraft(uint32_t uid) const {
 
 bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket &packet) {
     // Check validity and record stats.
-    int16_t source = packet.GetRaw().source;
-    switch (packet.GetBufferLenBits()) {
-        case RawModeSPacket::kSquitterPacketLenBits:
+    int16_t source = packet.raw.source;
+    switch (packet.raw.buffer_len_bytes) {
+        case RawModeSPacket::kSquitterPacketLenBytes:
             // Validate packet against ICAO addresses in dictionary, or allow it in if it's a DF=11 all call reply
             // packet tha validated itself (e.g. it's a response to a spontaneous acquisition squitter with interrogator
             // ID=0, making the checksum useable).
-            if (packet.GetDownlinkFormat() != DecodedModeSPacket::kDownlinkFormatAllCallReply &&
-                ContainsAircraft(packet.GetICAOAddress())) {
+            if (packet.downlink_format != DecodedModeSPacket::kDownlinkFormatAllCallReply &&
+                ContainsAircraft(packet.icao_address)) {
                 // DF=0,4-5 (DF=11 doesn't work with this since the interrogator ID may be overlaid with the ICAO
                 // address--we expect spontaneous acquisition DF=11's to come in pre-marked as valid).
                 // Packet is a 56-bit Squitter packet that is incapable of validating itself, and its CRC was
                 // validated against the ICAO addresses in the aircraft dictionary.
-                packet.ForceValid();
+                packet.is_valid = true;
             }
 
-            if (!packet.IsValid()) {
+            if (!packet.is_valid) {
                 // Squitter frame could not validate itself, or could not be validated against ICAOs in dictionary.
                 return false;
             }
@@ -1100,8 +1100,8 @@ bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket &packet) {
                 metrics_counter_.valid_squitter_frames_by_source[source]++;
             }
             break;
-        case RawModeSPacket::kExtendedSquitterPacketLenBits:
-            if (packet.IsValid()) {
+        case RawModeSPacket::kExtendedSquitterPacketLenBytes:
+            if (packet.is_valid) {
                 metrics_counter_.valid_extended_squitter_frames++;
                 if (source > 0) {
                     metrics_counter_.valid_extended_squitter_frames_by_source[source]++;
@@ -1113,15 +1113,15 @@ bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket &packet) {
         default:
             CONSOLE_ERROR(
                 "AircraftDictionary::IngestDecodedModeSPacket",
-                "Received packet with unrecognized bitlength %d, expected %d (Squitter) or %d (Extended Squitter).",
-                packet.GetBufferLenBits(), RawModeSPacket::kSquitterPacketLenBits,
-                RawModeSPacket::kExtendedSquitterPacketLenBits);
+                "Received packet with unrecognized byte length %d, expected %d (Squitter) or %d (Extended Squitter).",
+                packet.raw.buffer_len_bytes, RawModeSPacket::kSquitterPacketLenBytes,
+                RawModeSPacket::kExtendedSquitterPacketLenBytes);
             return false;
     }
 
     // Ingest packet.
     bool ingest_ret = false;
-    uint16_t downlink_format = packet.GetDownlinkFormat();
+    uint16_t downlink_format = packet.downlink_format;
     switch (downlink_format) {
         // Altitude Reply Packet.
         case DecodedModeSPacket::DownlinkFormat::kDownlinkFormatAltitudeReply:
@@ -1153,18 +1153,18 @@ bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket &packet) {
         default:
             CONSOLE_WARNING("AircraftDictionary::IngestDecodedModeSPacket",
                             "Encountered unexpected downlink format %d for ICAO 0x%lx.", downlink_format,
-                            packet.GetICAOAddress());
+                            packet.icao_address);
             ingest_ret = false;
     }
     return ingest_ret;
 }
 
 bool AircraftDictionary::IngestModeSIdentityReplyPacket(ModeSIdentityReplyPacket packet) {
-    if (!packet.IsValid() || packet.GetDownlinkFormat() != ModeSIdentityReplyPacket::kDownlinkFormatIdentityReply) {
+    if (!packet.is_valid || packet.downlink_format != ModeSIdentityReplyPacket::kDownlinkFormatIdentityReply) {
         return false;
     }
 
-    uint32_t icao_address = packet.GetICAOAddress();
+    uint32_t icao_address = packet.icao_address;
     uint32_t uid = Aircraft::ICAOToUID(icao_address, Aircraft::kAircraftTypeModeS);
     ModeSAircraft *aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
     if (aircraft_ptr == nullptr) {
@@ -1173,21 +1173,21 @@ bool AircraftDictionary::IngestModeSIdentityReplyPacket(ModeSIdentityReplyPacket
                         icao_address);
         return false;  // unable to find or create new aircraft in dictionary
     }
-    aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, packet.IsAirborne());
-    aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagAlert, packet.HasAlert());
-    aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIdent, packet.HasIdent());
-    aircraft_ptr->squawk = packet.GetSquawk();
+    aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, packet.is_airborne);
+    aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagAlert, packet.has_alert);
+    aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIdent, packet.has_ident);
+    aircraft_ptr->squawk = packet.squawk;
     aircraft_ptr->IncrementNumFramesReceived(false);
 
     return true;
 }
 
 bool AircraftDictionary::IngestModeSAltitudeReplyPacket(ModeSAltitudeReplyPacket packet) {
-    if (!packet.IsValid() || packet.GetDownlinkFormat() != ModeSAltitudeReplyPacket::kDownlinkFormatAltitudeReply) {
+    if (!packet.is_valid || packet.downlink_format != ModeSAltitudeReplyPacket::kDownlinkFormatAltitudeReply) {
         return false;
     }
 
-    uint32_t icao_address = packet.GetICAOAddress();
+    uint32_t icao_address = packet.icao_address;
     uint32_t uid = Aircraft::ICAOToUID(icao_address, Aircraft::kAircraftTypeModeS);
     ModeSAircraft *aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
     if (aircraft_ptr == nullptr) {
@@ -1196,10 +1196,10 @@ bool AircraftDictionary::IngestModeSAltitudeReplyPacket(ModeSAltitudeReplyPacket
                         icao_address);
         return false;  // unable to find or create new aircraft in dictionary
     }
-    aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, packet.IsAirborne());
-    aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagAlert, packet.HasAlert());
-    aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIdent, packet.HasIdent());
-    aircraft_ptr->baro_altitude_ft = packet.GetAltitudeFt();
+    aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, packet.is_airborne);
+    aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagAlert, packet.has_alert);
+    aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIdent, packet.has_ident);
+    aircraft_ptr->baro_altitude_ft = packet.altitude_ft;
     aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid, true);
     aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroAltitude, true);
     aircraft_ptr->IncrementNumFramesReceived(false);
@@ -1208,12 +1208,12 @@ bool AircraftDictionary::IngestModeSAltitudeReplyPacket(ModeSAltitudeReplyPacket
 }
 
 bool AircraftDictionary::IngestModeSAllCallReplyPacket(ModeSAllCallReplyPacket packet) {
-    if (!packet.IsValid() || packet.GetDownlinkFormat() != DecodedModeSPacket::kDownlinkFormatAllCallReply) {
+    if (!packet.is_valid || packet.downlink_format != DecodedModeSPacket::kDownlinkFormatAllCallReply) {
         return false;
     }
 
     // Populate the dictionary with the aircraft, or look it up if the ICAO doesn't yet exist.
-    uint32_t icao_address = packet.GetICAOAddress();
+    uint32_t icao_address = packet.icao_address;
     uint32_t uid = Aircraft::ICAOToUID(icao_address, Aircraft::kAircraftTypeModeS);
     ModeSAircraft *aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
     if (aircraft_ptr == nullptr) {
@@ -1225,17 +1225,17 @@ bool AircraftDictionary::IngestModeSAllCallReplyPacket(ModeSAllCallReplyPacket p
     aircraft_ptr->last_message_timestamp_ms = get_time_since_boot_ms();
 
     // Update aircaft transponder capability.
-    aircraft_ptr->transponder_capability = packet.GetCapability();
+    aircraft_ptr->transponder_capability = packet.capability;
 
     return true;
 }
 
 bool AircraftDictionary::IngestModeSADSBPacket(ModeSADSBPacket packet) {
-    if (!packet.IsValid() || packet.GetDownlinkFormat() != ModeSADSBPacket::kDownlinkFormatExtendedSquitter) {
+    if (!packet.is_valid || packet.downlink_format != ModeSADSBPacket::kDownlinkFormatExtendedSquitter) {
         return false;  // Only allow valid DF17 packets.
     }
 
-    uint32_t icao_address = packet.GetICAOAddress();
+    uint32_t icao_address = packet.icao_address;
     uint32_t uid = Aircraft::ICAOToUID(icao_address, Aircraft::kAircraftTypeModeS);
     ModeSAircraft *aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
     if (aircraft_ptr == nullptr) {
@@ -1247,8 +1247,8 @@ bool AircraftDictionary::IngestModeSADSBPacket(ModeSADSBPacket packet) {
     aircraft_ptr->last_message_timestamp_ms = get_time_since_boot_ms();
 
     bool ret = false;
-    uint16_t typecode = packet.GetTypeCode();
-    switch (typecode) {
+    uint16_t type_code = packet.type_code;
+    switch (type_code) {
         case ModeSADSBPacket::kTypeCodeAircraftID:      // TC = 1 (Aircraft Identification)
         case ModeSADSBPacket::kTypeCodeAircraftID + 1:  // TC = 2 (Aircraft Identification)
         case ModeSADSBPacket::kTypeCodeAircraftID + 2:  // TC = 3 (Aircraft Identification)
@@ -1297,23 +1297,23 @@ bool AircraftDictionary::IngestModeSADSBPacket(ModeSADSBPacket packet) {
             break;
         default:
             CONSOLE_WARNING("AircraftDictionary::IngestModeSADSBPacket",
-                            "Received ADSB message with unsupported typecode %d for ICAO 0x%lx.", typecode,
-                            packet.GetICAOAddress());
+                            "Received ADSB message with unsupported type_code %d for ICAO 0x%lx.", type_code,
+                            packet.icao_address);
             ret = false;  // kTypeCodeInvalid, etc.
     }
     if (ret) {
         aircraft_ptr->IncrementNumFramesReceived(true);  // Count the received Mode S frame.
     } else {
         CONSOLE_WARNING("AircraftDictionary::IngestModeSADSBPacket",
-                        "Failed to apply ADSB message with typecode %d to ICAO 0x%lx.", typecode,
-                        packet.GetICAOAddress());
+                        "Failed to apply ADSB message with type_code %d to ICAO 0x%lx.", type_code,
+                        packet.icao_address);
     }
     return ret;
 }
 
 bool AircraftDictionary::IngestDecodedUATADSBPacket(DecodedUATADSBPacket &packet) {
     // Check validity and record stats.
-    if (packet.IsValid()) {
+    if (packet.is_valid) {
         metrics_counter_.valid_uat_adsb_frames++;
     } else {
         return false;

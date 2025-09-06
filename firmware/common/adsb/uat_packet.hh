@@ -51,7 +51,7 @@ class RawUATADSBPacket {
     RawUATADSBPacket() {}
 
     uint8_t encoded_message[kADSBMessageMaxSizeBytes] = {0};
-    uint16_t encoded_message_len_bits = 0;
+    uint16_t encoded_message_len_bytes = 0;
 
     int16_t sigs_dbm = INT16_MIN;          // Signal strength, in dBm.
     int16_t sigq_bits = INT16_MIN;         // Signal quality (num bits corrected by FEC, 0 = best).
@@ -227,7 +227,7 @@ class DecodedUATADSBPacket {
     };
 
     DecodedUATADSBPacket(const RawUATADSBPacket &packet_in);
-    DecodedUATADSBPacket() : raw_((char *)"") { debug_string[0] = '\0'; }
+    DecodedUATADSBPacket() : raw((char *)"") { debug_string[0] = '\0'; }
     DecodedUATADSBPacket(const char *rx_string, int32_t sigs_dbm = INT32_MIN, int32_t sigq_bits = INT32_MIN,
                          uint64_t mlat_48mhz_64bit_counts = 0);
 
@@ -244,7 +244,7 @@ class DecodedUATADSBPacket {
      * Returns true if the packet is valid (FEC decoded successfully and packet has a recognized format).
      * @return True if the packet is valid, false otherwise.
      */
-    inline bool IsValid() const { return is_valid_; }
+    inline bool IsValid() const { return is_valid; }
 
     /**
      * Function used for testing, when we want to populate the payload but not the FEC parity bytes.
@@ -252,12 +252,12 @@ class DecodedUATADSBPacket {
      */
     inline bool ReconstructWithoutFEC() {
         ConstructUATADSBPacket(false);  // Re-run packet digestion without FEC correction.
-        return is_valid_;
+        return is_valid;
     }
 
-    int GetBufferLenBits() const { return raw_.encoded_message_len_bits; }
-    RawUATADSBPacket GetRaw() const { return raw_; }
-    RawUATADSBPacket *GetRawPtr() { return &raw_; }
+    int GetBufferLenBytes() const { return raw.encoded_message_len_bytes; }
+    RawUATADSBPacket GetRaw() const { return raw; }
+    RawUATADSBPacket *GetRawPtr() { return &raw; }
 
     /**
      * Returns the ICAO address of the aircraft if the packet is valid and has a header, otherwise returns 0.
@@ -284,9 +284,8 @@ class DecodedUATADSBPacket {
 
     char debug_string[kDebugStrLen] = "";
 
-   protected:
-    bool is_valid_ = false;
-    RawUATADSBPacket raw_;
+    bool is_valid = false;
+    RawUATADSBPacket raw;
 
    private:
     /**
@@ -356,7 +355,7 @@ class DecodedUATUplinkPacket {
     static const uint16_t kDebugStrLen = 200;
 
     DecodedUATUplinkPacket(const RawUATUplinkPacket &packet_in);
-    DecodedUATUplinkPacket() : raw_((char *)"") { debug_string[0] = '\0'; }
+    DecodedUATUplinkPacket() : raw((char *)"") { debug_string[0] = '\0'; }
     DecodedUATUplinkPacket(const char *rx_string, int32_t sigs_dbm = INT32_MIN, int32_t sigq_bits = INT32_MIN,
                            uint64_t mlat_48mhz_64bit_counts = 0);
 
@@ -373,7 +372,6 @@ class DecodedUATUplinkPacket {
 
     char debug_string[kDebugStrLen] = "";
 
-   protected:
-    bool is_valid_ = false;
-    RawUATUplinkPacket raw_;
+    bool is_valid = false;
+    RawUATUplinkPacket raw;
 };

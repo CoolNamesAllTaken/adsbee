@@ -11,7 +11,7 @@ TEST(ModeSPacketDecoder, HandleNoBitErrors) {
 
     DecodedModeSPacket decoded_packet;
     EXPECT_TRUE(decoder.decoded_1090_packet_out_queue.Dequeue(decoded_packet));
-    EXPECT_EQ(decoded_packet.GetICAOAddress(), 0x40621Du);
+    EXPECT_EQ(decoded_packet.icao_address, 0x40621Du);
 }
 
 TEST(ModeSPacketDecoder, HandleSingleBitError) {
@@ -30,7 +30,7 @@ TEST(ModeSPacketDecoder, HandleSingleBitError) {
 
     DecodedModeSPacket decoded_packet;
     EXPECT_TRUE(decoder.decoded_1090_packet_out_queue.Dequeue(decoded_packet));
-    EXPECT_EQ(decoded_packet.GetICAOAddress(), 0x40621Du);
+    EXPECT_EQ(decoded_packet.icao_address, 0x40621Du);
 }
 
 TEST(ModeSPacketDecoder, RejectDuplicateMessages) {
@@ -45,7 +45,7 @@ TEST(ModeSPacketDecoder, RejectDuplicateMessages) {
     DecodedModeSPacket decoded_packet;
     EXPECT_TRUE(decoder.decoded_1090_packet_out_queue.Dequeue(decoded_packet));
     EXPECT_EQ(decoder.decoded_1090_packet_out_queue.Length(), 0);
-    EXPECT_EQ(decoded_packet.GetICAOAddress(), 0x40621Du);
+    EXPECT_EQ(decoded_packet.icao_address, 0x40621Du);
 
     // Enqueue the same packet again within 2ms, it should not be re-processed.
     raw_packet.source = 1;
@@ -60,6 +60,6 @@ TEST(ModeSPacketDecoder, RejectDuplicateMessages) {
     decoder.UpdateDecoderLoop();
     EXPECT_EQ(decoder.decoded_1090_packet_out_queue.Length(), 1);
     EXPECT_TRUE(decoder.decoded_1090_packet_out_queue.Dequeue(decoded_packet));
-    EXPECT_EQ(decoded_packet.GetICAOAddress(), 0x40621Du);
-    EXPECT_EQ(decoded_packet.GetRaw().source, 1);  // Should have the source.
+    EXPECT_EQ(decoded_packet.icao_address, 0x40621Du);
+    EXPECT_EQ(decoded_packet.raw.source, 1);  // Should have the source.
 }

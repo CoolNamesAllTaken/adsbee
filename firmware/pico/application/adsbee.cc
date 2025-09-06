@@ -359,14 +359,14 @@ void ADSBee::OnDemodComplete() {
                     case RawModeSPacket::kSquitterPacketNumWords32:
                         aircraft_dictionary.Record1090RawSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFFFF) << 8;
-                        rx_packet_[sm_index].buffer_len_bits = RawModeSPacket::kSquitterPacketLenBits;
+                        rx_packet_[sm_index].buffer_len_bytes = RawModeSPacket::kSquitterPacketLenBytes;
                         // raw_1090_packet_queue.Enqueue(rx_packet_[sm_index]);
                         decoder.raw_1090_packet_in_queue.Enqueue(rx_packet_[sm_index]);
                         break;
                     case RawModeSPacket::kExtendedSquitterPacketNumWords32:
                         aircraft_dictionary.Record1090RawExtendedSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFF) << 16;
-                        rx_packet_[sm_index].buffer_len_bits = RawModeSPacket::kExtendedSquitterPacketLenBits;
+                        rx_packet_[sm_index].buffer_len_bytes = RawModeSPacket::kExtendedSquitterPacketLenBytes;
                         // raw_1090_packet_queue.Enqueue(rx_packet_[sm_index]);
                         decoder.raw_1090_packet_in_queue.Enqueue(rx_packet_[sm_index]);
                         break;

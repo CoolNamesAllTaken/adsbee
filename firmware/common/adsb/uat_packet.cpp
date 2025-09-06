@@ -24,7 +24,7 @@ RawUATADSBPacket::RawUATADSBPacket(const char *rx_string, int16_t sigs_dbm_in, i
         uint8_t byte = (CHAR_TO_HEX(rx_string[i * kNibblesPerByte]) << kBitsPerNibble) |
                        CHAR_TO_HEX(rx_string[i * kNibblesPerByte + 1]);
         encoded_message[i] = byte;
-        encoded_message_len_bits += kBitsPerByte;
+        encoded_message_len_bytes++;
     }
 }
 
@@ -32,17 +32,17 @@ RawUATADSBPacket::RawUATADSBPacket(uint8_t rx_buffer[kADSBMessageMaxSizeBytes], 
                                    int16_t sigs_dbm_in, int16_t sigq_bits_in, uint64_t mlat_48mhz_64bit_counts_in)
     : sigs_dbm(sigs_dbm_in), sigq_bits(sigq_bits_in), mlat_48mhz_64bit_counts(mlat_48mhz_64bit_counts_in) {
     memcpy(encoded_message, rx_buffer, rx_buffer_len_bytes);
-    encoded_message_len_bits = rx_buffer_len_bytes * 8;
+    encoded_message_len_bytes = rx_buffer_len_bytes;
 }
 
 DecodedUATADSBPacket::DecodedUATADSBPacket(const char *rx_string, int32_t sigs_dbm, int32_t sigq_bits,
                                            uint64_t mlat_48mhz_64bit_counts)
-    : raw_(rx_string, sigs_dbm, sigq_bits, mlat_48mhz_64bit_counts) {
+    : raw(rx_string, sigs_dbm, sigq_bits, mlat_48mhz_64bit_counts) {
     // Validate the packet.
     ConstructUATADSBPacket();
 }
 
-DecodedUATADSBPacket::DecodedUATADSBPacket(const RawUATADSBPacket &packet) : raw_(packet) {
+DecodedUATADSBPacket::DecodedUATADSBPacket(const RawUATADSBPacket &packet) : raw(packet) {
     // Validate the packet.
     ConstructUATADSBPacket();
 }
@@ -200,21 +200,21 @@ void DecodedUATADSBPacket::ConstructUATADSBPacket(bool run_fec) {
 #if defined(ON_TI) || defined(ON_HOST)
         // Copy to the decoded_payload buffer and correct in place. If correction fails, the buffer will not be
         // modified.
-        memcpy(decoded_payload, raw_.encoded_message, RawUATADSBPacket::kADSBMessageMaxSizeBytes);
-        raw_.sigq_bits = uat_rs.DecodeLongADSBMessage(decoded_payload);
-        if (raw_.sigq_bits >= 0) {
+        memcpy(decoded_payload, raw.encoded_message, RawUATADSBPacket::kADSBMessageMaxSizeBytes);
+        raw.sigq_bits = uat_rs.DecodeLongADSBMessage(decoded_payload);
+        if (raw.sigq_bits >= 0) {
             // CONSOLE_INFO("DecodedUATADSBPacket", "Decoded Long ADS-B message with %d bytes corrected.",
-            // raw_.sigq_bits);
+            // raw.sigq_bits);
             message_format = kUATADSBMessageFormatLong;
         } else {
-            raw_.sigq_bits = uat_rs.DecodeShortADSBMessage(decoded_payload);
-            if (raw_.sigq_bits >= 0) {
+            raw.sigq_bits = uat_rs.DecodeShortADSBMessage(decoded_payload);
+            if (raw.sigq_bits >= 0) {
                 // CONSOLE_INFO("DecodedUATADSBPacket", "Decoded Short ADS-B message with %d bytes corrected.",
-                //  raw_.sigq_bits);
+                //  raw.sigq_bits);
                 message_format = kUATADSBMessageFormatShort;
             } else {
                 // CONSOLE_ERROR("DecodedUATADSBPacket", "Failed to decode UAT ADS-B message, invalid packet.");
-                is_valid_ = false;  // Invalid packet.
+                is_valid = false;  // Invalid packet.
                 return;
             }
         }
@@ -296,7 +296,7 @@ void DecodedUATADSBPacket::ConstructUATADSBPacket(bool run_fec) {
             break;
     }
 
-    is_valid_ = true;
+    is_valid = true;
 }
 
 void DecodedUATADSBPacket::DecodeHeader(uint8_t *data, UATHeader &header_ref) {
@@ -367,12 +367,12 @@ RawUATUplinkPacket::RawUATUplinkPacket(uint8_t rx_buffer[kUplinkMessageNumBytes]
 
 DecodedUATUplinkPacket::DecodedUATUplinkPacket(const char *rx_string, int32_t sigs_dbm, int32_t sigq_bits,
                                                uint64_t mlat_48mhz_64bit_counts)
-    : raw_(rx_string, sigs_dbm, sigq_bits, mlat_48mhz_64bit_counts) {
+    : raw(rx_string, sigs_dbm, sigq_bits, mlat_48mhz_64bit_counts) {
     // Validate the packet.
     ConstructUATUplinkPacket();
 }
 
-DecodedUATUplinkPacket::DecodedUATUplinkPacket(const RawUATUplinkPacket &packet) : raw_(packet) {
+DecodedUATUplinkPacket::DecodedUATUplinkPacket(const RawUATUplinkPacket &packet) : raw(packet) {
     // Validate the packet.
     ConstructUATUplinkPacket();
 }
@@ -386,12 +386,12 @@ void DecodedUATUplinkPacket::ConstructUATUplinkPacket(bool run_fec) {
 #if defined(ON_TI) || defined(ON_HOST)
         // Copy to the decoded_payload buffer and correct in place. If correction fails, the buffer will not be
         // modified.
-        memcpy(decoded_payload, raw_.encoded_message, RawUATUplinkPacket::kUplinkMessageNumBytes);
-        raw_.sigq_bits = uat_rs.DecodeUplinkMessage(raw_.encoded_message, decoded_payload);
-        if (raw_.sigq_bits >= 0) {
-            CONSOLE_INFO("DecodedUATADSBPacket", "Decoded UAT uplink message with %d bytes corrected.", raw_.sigq_bits);
+        memcpy(decoded_payload, raw.encoded_message, RawUATUplinkPacket::kUplinkMessageNumBytes);
+        raw.sigq_bits = uat_rs.DecodeUplinkMessage(raw.encoded_message, decoded_payload);
+        if (raw.sigq_bits >= 0) {
+            CONSOLE_INFO("DecodedUATADSBPacket", "Decoded UAT uplink message with %d bytes corrected.", raw.sigq_bits);
         } else {
-            is_valid_ = false;
+            is_valid = false;
             return;
         }
 #endif /* ON_PICO */
@@ -399,5 +399,5 @@ void DecodedUATUplinkPacket::ConstructUATUplinkPacket(bool run_fec) {
 
     // TODO: extract info.
 
-    is_valid_ = true;
+    is_valid = true;
 };

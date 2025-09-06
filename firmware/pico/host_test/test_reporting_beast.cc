@@ -2,7 +2,7 @@
 #include "gtest/gtest.h"
 #include "mode_s_packet.hh"
 
-TEST(BeastUtils, Build1090BeastFrame) {
+TEST(BeastUtils, BuildModeSBeastFrame) {
     // Create packet with a single 0x1a that must be escaped in data, a typical RSSI value, and an unmasked MLAT
     // counter. Note: MLAT counter is shifted left by 2 bits to simulate multiplying a 48MHz counter with a 12MHz
     // desired result.
@@ -13,12 +13,12 @@ TEST(BeastUtils, Build1090BeastFrame) {
                                                     0xABABFF1AFFFFFF1A << 2                  // mlat
     );
 
-    uint8_t beast_frame_buf[kBeastFrameMaxLenBytes];
+    uint8_t beast_frame_buf[BeastReporter::kBeastFrameMaxLenBytes];
     // 1 (frame) + 6 (mlat) + 2 (mlat escape) + 1 (rssi) + 14 (data) + 1 (data escape) = 25 Bytes.
-    EXPECT_EQ(Build1090BeastFrame(tpacket, beast_frame_buf), 26);
-    EXPECT_EQ(beast_frame_buf[0], kBeastEscapeChar);  // Packet begins with escape char.
-    EXPECT_EQ(beast_frame_buf[1], 0x33);              // Packet type is Mode S long frame.
-    EXPECT_EQ(beast_frame_buf[2], 0xFF);              // MLAT Counter Begin
+    EXPECT_EQ(BeastReporter::BuildModeSBeastFrame(tpacket, beast_frame_buf), 26);
+    EXPECT_EQ(beast_frame_buf[0], BeastReporter::kBeastEscapeChar);  // Packet begins with escape char.
+    EXPECT_EQ(beast_frame_buf[1], 0x33);                             // Packet type is Mode S long frame.
+    EXPECT_EQ(beast_frame_buf[2], 0xFF);                             // MLAT Counter Begin
     EXPECT_EQ(beast_frame_buf[3], 0x1A);
     EXPECT_EQ(beast_frame_buf[4], 0x1A);  // escape
     EXPECT_EQ(beast_frame_buf[5], 0xFF);
@@ -44,7 +44,7 @@ TEST(BeastUtils, Build1090BeastFrame) {
     EXPECT_EQ(beast_frame_buf[25], 0x67);
 }
 
-TEST(BeastUtils, Build1090IngestBeastFrame) {
+TEST(BeastUtils, BuildModeSIngestBeastFrame) {
     // Create packet with a single 0x1a that must be escaped in data, a typical RSSI value, and an unmasked MLAT
     // counter. Note: MLAT counter is shifted left by 2 bits to simulate multiplying a 48MHz counter with a 12MHz
     // desired result.
@@ -54,16 +54,16 @@ TEST(BeastUtils, Build1090IngestBeastFrame) {
                                                     50,                                      // sigq
                                                     0xABABFF1AFFFFFF1A << 2);
 
-    uint8_t beast_frame_buf[kBeastFrameMaxLenBytes];
+    uint8_t beast_frame_buf[BeastReporter::kBeastFrameMaxLenBytes];
     // 1 (frame) + 6 (mlat) + 2 (mlat escape) + 1 (rssi) + 14 (data) + 1 (data escape) = 25 Bytes.
-    uint8_t uid[kReceiverIDLenBytes] = {0xde, 0xad, 0xbe, 0x1a, 0xef, 0x1a, 0xaa, 0xbb};
+    uint8_t uid[BeastReporter::kReceiverIDLenBytes] = {0xde, 0xad, 0xbe, 0x1a, 0xef, 0x1a, 0xaa, 0xbb};
     uint uid_num_chars_to_escape = 2;
-    uint uid_escaped_length = kReceiverIDLenBytes + uid_num_chars_to_escape;
+    uint uid_escaped_length = BeastReporter::kReceiverIDLenBytes + uid_num_chars_to_escape;
 
-    EXPECT_EQ(Build1090IngestBeastFrame(tpacket, beast_frame_buf, uid), uid_escaped_length + 2 + 26);
+    EXPECT_EQ(BeastReporter::BuildModeSIngestBeastFrame(tpacket, beast_frame_buf, uid), uid_escaped_length + 2 + 26);
     uint bytes_compared = 0;
-    EXPECT_EQ(beast_frame_buf[bytes_compared++], kBeastEscapeChar);
-    EXPECT_EQ(beast_frame_buf[bytes_compared++], BeastFrameType::kBeastFrameTypeIngestId);
+    EXPECT_EQ(beast_frame_buf[bytes_compared++], BeastReporter::kBeastEscapeChar);
+    EXPECT_EQ(beast_frame_buf[bytes_compared++], BeastReporter::kBeastFrameTypeIngestId);
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0xde);  // uid[0]
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0xad);  // uid[1]
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0xbe);  // uid[2]
@@ -74,10 +74,10 @@ TEST(BeastUtils, Build1090IngestBeastFrame) {
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0x1a);  // uid[5]
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0xaa);  // uid[6]
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0xbb);  // uid[7]
-    EXPECT_EQ(beast_frame_buf[bytes_compared++], kBeastEscapeChar);
+    EXPECT_EQ(beast_frame_buf[bytes_compared++], BeastReporter::kBeastEscapeChar);
     EXPECT_EQ(beast_frame_buf[bytes_compared++],
-              BeastFrameType::kBeastFrameTypeModeSLong);  // Packet type is Mode S long frame.
-    EXPECT_EQ(beast_frame_buf[bytes_compared++], 0xFF);   // MLAT Counter Begin
+              BeastReporter::kBeastFrameTypeModeSLong);  // Packet type is Mode S long frame.
+    EXPECT_EQ(beast_frame_buf[bytes_compared++], 0xFF);  // MLAT Counter Begin
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0x1A);
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0x1A);  // escape
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 0xFF);
@@ -104,14 +104,14 @@ TEST(BeastUtils, Build1090IngestBeastFrame) {
 }
 
 TEST(BeastUtils, BuildFeedStartFrame) {
-    uint8_t beast_frame_buf[kBeastFrameMaxLenBytes];
+    uint8_t beast_frame_buf[BeastReporter::kBeastFrameMaxLenBytes];
 
-    uint8_t uid[kReceiverIDLenBytes] = {0xde, 0xad, 0xbe, 0x1a, 0xef, 0x1a, 0xaa, 0xbb};
-    EXPECT_EQ(BuildFeedStartFrame(beast_frame_buf, uid), 38);
+    uint8_t uid[BeastReporter::kReceiverIDLenBytes] = {0xde, 0xad, 0xbe, 0x1a, 0xef, 0x1a, 0xaa, 0xbb};
+    EXPECT_EQ(BeastReporter::BuildFeedStartFrame(beast_frame_buf, uid), 38);
     uint16_t bytes_compared = 0;
 
-    EXPECT_EQ(beast_frame_buf[bytes_compared++], kBeastEscapeChar);
-    EXPECT_EQ(beast_frame_buf[bytes_compared++], BeastFrameType::kBeastFrameTypeFeedId);
+    EXPECT_EQ(beast_frame_buf[bytes_compared++], BeastReporter::kBeastEscapeChar);
+    EXPECT_EQ(beast_frame_buf[bytes_compared++], BeastReporter::kBeastFrameTypeFeedId);
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 'd');
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 'e');
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 'a');

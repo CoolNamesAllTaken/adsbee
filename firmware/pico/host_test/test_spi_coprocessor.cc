@@ -28,7 +28,7 @@ TEST(SPICoprocessor, SCWritePacket) {
     EXPECT_EQ(packet.addr, packet_copy.addr);
     EXPECT_EQ(packet.IsValid(), packet_copy.IsValid());
     RawModeSPacket *tpacket_copy = (RawModeSPacket *)packet_copy.data;
-    EXPECT_EQ(tpacket.buffer_len_bits, tpacket_copy->buffer_len_bits);
+    EXPECT_EQ(tpacket.buffer_len_bytes, tpacket_copy->buffer_len_bytes);
     EXPECT_EQ(tpacket.buffer[0], tpacket_copy->buffer[0]);
     EXPECT_EQ(tpacket.buffer[1], tpacket_copy->buffer[1]);
     EXPECT_EQ(tpacket.buffer[2], tpacket_copy->buffer[2]);

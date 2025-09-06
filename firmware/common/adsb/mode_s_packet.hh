@@ -12,8 +12,10 @@ class RawModeSPacket {
    public:
     static const uint16_t kMaxPacketLenWords32 = 4;
     static const uint16_t kSquitterPacketLenBits = 56;
+    static const uint16_t kSquitterPacketLenBytes = kSquitterPacketLenBits / kBitsPerByte;
     static const uint16_t kSquitterPacketNumWords32 = 2;  // 56 bits = 1.75 words, round up to 2.
     static const uint16_t kExtendedSquitterPacketLenBits = 112;
+    static const uint16_t kExtendedSquitterPacketLenBytes = kExtendedSquitterPacketLenBits / kBitsPerByte;
     static const uint16_t kExtendedSquitterPacketNumWords32 = 4;  // 112 bits = 3.5 words, round up to 4.
 
     RawModeSPacket(char *rx_string, int16_t source_in = -1, int16_t sigs_dbm_in = INT16_MIN,
@@ -46,7 +48,7 @@ class RawModeSPacket {
     uint16_t PrintBuffer(char *buf, uint16_t buf_len_bytes) const;
 
     uint32_t buffer[kMaxPacketLenWords32] = {0};
-    uint16_t buffer_len_bits = 0;
+    uint16_t buffer_len_bytes = 0;
     int8_t source = -1;                    // Source of the ADS-B packet (PIO state machine number).
     int16_t sigs_dbm = INT16_MIN;          // Signal strength, in dBm.
     int16_t sigq_db = INT16_MIN;           // Signal quality (dB above noise floor), in dB.
@@ -120,27 +122,11 @@ class DecodedModeSPacket {
     /**
      * Default constructor.
      */
-    DecodedModeSPacket() : raw_((char *)"") { debug_string[0] = '\0'; };
+    DecodedModeSPacket() : raw((char *)"") { debug_string[0] = '\0'; };
 
-    bool IsValid() const { return is_valid_; };
-
-    /**
-     * Forces the validity of the packet to true. Used to mark 56-bit (Squitter) packets as valid after they have been
-     * externally verified against the aircraft dictionary, since they don't have a 0 CRC and are thus set as invalid
-     * upon construction.
-     */
-    void ForceValid() { is_valid_ = true; }
-
-    int GetBufferLenBits() const { return raw_.buffer_len_bits; }
-    int GetRSSIdBm() const { return raw_.sigs_dbm; }
-    uint64_t GetMLAT12MHzCounter() const { return (raw_.mlat_48mhz_64bit_counts >> 2) & 0xFFFFFFFFFFFF; }
-    uint64_t GetTimestampMs() const { return raw_.GetTimestampMs(); }
-    uint16_t GetDownlinkFormat() const { return downlink_format_; }
+    uint64_t GetMLAT12MHzCounter() const { return (raw.mlat_48mhz_64bit_counts >> 2) & 0xFFFFFFFFFFFF; }
+    uint64_t GetTimestampMs() const { return raw.GetTimestampMs(); }
     DownlinkFormat GetDownlinkFormatEnum();
-    uint32_t GetICAOAddress() const { return icao_address_; }
-    uint16_t GetPacketBufferLenBits() const { return raw_.buffer_len_bits; }
-    RawModeSPacket GetRaw() const { return raw_; }
-    RawModeSPacket *GetRawPtr() { return &raw_; }
 
     /**
      * Dumps the internal packet buffer to a destination and returns the number of bytes written.
@@ -152,7 +138,7 @@ class DecodedModeSPacket {
 
     // Exposed for testing only.
     uint32_t Get24BitWordFromPacketBuffer(uint16_t first_bit_index) const {
-        return GetNBitsFromWordBuffer(24, first_bit_index, raw_.buffer);
+        return GetNBitsFromWordBuffer(24, first_bit_index, raw.buffer);
     };
 
     /**
@@ -164,12 +150,11 @@ class DecodedModeSPacket {
 
     char debug_string[kDebugStrLen] = "";
 
-   protected:
-    bool is_valid_ = false;
-    RawModeSPacket raw_;
+    bool is_valid = false;
+    RawModeSPacket raw;
 
-    uint32_t icao_address_ = 0;
-    uint16_t downlink_format_ = static_cast<uint16_t>(kDownlinkFormatInvalid);
+    uint32_t icao_address = 0;
+    uint16_t downlink_format = static_cast<uint16_t>(kDownlinkFormatInvalid);
 
     uint32_t parity_interrogator_id = 0;
 
@@ -230,19 +215,15 @@ class ModeSADSBPacket : public DecodedModeSPacket {
     // Operation Status (TC = 31)
     enum OperationStatusSubtype : uint8_t { kOperationStatusSubtypeAirborne = 0, kOperationStatusSubtypeSurface = 1 };
 
-    inline Capability GetCapability() const { return capability_; };
-    inline TypeCode GetTypeCode() const { return typecode_; };
     TypeCode GetTypeCodeEnum() const;
 
     // Exposed for testing only.
     inline uint32_t GetNBitWordFromMessage(uint16_t n, uint16_t first_bit_index) const {
-        return GetNBitsFromWordBuffer(n, kMEFirstBitIndex + first_bit_index, raw_.buffer);
+        return GetNBitsFromWordBuffer(n, kMEFirstBitIndex + first_bit_index, raw.buffer);
     };
 
-   private:
-    Capability capability_ = kCALevel1Transponder;  // Default to most basic capability.
-
-    TypeCode typecode_ = kTypeCodeInvalid;
+    Capability capability = kCALevel1Transponder;  // Default to most basic capability.
+    TypeCode type_code = kTypeCodeInvalid;
 
     void ConstructADSBPacket();
 };
@@ -250,13 +231,10 @@ class ModeSADSBPacket : public DecodedModeSPacket {
 class ModeSAllCallReplyPacket : public DecodedModeSPacket {
    public:
     ModeSAllCallReplyPacket(const DecodedModeSPacket &decoded_packet) : DecodedModeSPacket(decoded_packet) {
-        capability_ = static_cast<Capability>(GetNBitsFromWordBuffer(3, 5, raw_.buffer));
+        capability = static_cast<Capability>(GetNBitsFromWordBuffer(3, 5, raw.buffer));
     }
 
-    Capability GetCapability() const { return capability_; }
-
-   private:
-    Capability capability_ = kCALevel1Transponder;  // Default to most basic capability.
+    Capability capability = kCALevel1Transponder;  // Default to most basic capability.
 };
 
 class ModeSAltitudeReplyPacket : public DecodedModeSPacket {
@@ -277,23 +255,15 @@ class ModeSAltitudeReplyPacket : public DecodedModeSPacket {
 
     ModeSAltitudeReplyPacket(const DecodedModeSPacket &decoded_packet);
 
-    bool IsAirborne() const { return is_airborne_; }
-    bool HasAlert() const { return has_alert_; }
-    bool HasIdent() const { return has_ident_; }
-    DownlinkRequest GetDownlinkRequest() const { return downlink_request_; }
-    uint8_t GetUtilityMessage() const { return utility_message_; }
-    int32_t GetAltitudeFt() const { return altitude_ft_; }
+    bool is_airborne = false;
+    bool has_alert = false;
+    bool has_ident = false;
 
-   private:
-    bool is_airborne_ = false;
-    bool has_alert_ = false;
-    bool has_ident_ = false;
+    DownlinkRequest downlink_request = kDownlinkRequestNone;
+    uint8_t utility_message = 0b0;
+    UtilityMessageType utility_message_type = kUtilityMessageNoInformation;
 
-    DownlinkRequest downlink_request_ = kDownlinkRequestNone;
-    uint8_t utility_message_ = 0b0;
-    UtilityMessageType utility_message_type_ = kUtilityMessageNoInformation;
-
-    int32_t altitude_ft_ = -1;
+    int32_t altitude_ft = -1;
 };
 
 class ModeSIdentityReplyPacket : public DecodedModeSPacket {
@@ -314,23 +284,15 @@ class ModeSIdentityReplyPacket : public DecodedModeSPacket {
 
     ModeSIdentityReplyPacket(const DecodedModeSPacket &decoded_packet);
 
-    bool IsAirborne() const { return is_airborne_; }
-    bool HasAlert() const { return has_alert_; }
-    bool HasIdent() const { return has_ident_; }
-    DownlinkRequest GetDownlinkRequest() const { return downlink_request_; }
-    uint8_t GetUtilityMessage() const { return utility_message_; }
-    uint16_t GetSquawk() const { return squawk_; }
+    bool is_airborne = false;
+    bool has_alert = false;
+    bool has_ident = false;
 
-   private:
-    bool is_airborne_ = false;
-    bool has_alert_ = false;
-    bool has_ident_ = false;
+    DownlinkRequest downlink_request = kDownlinkRequestNone;
+    uint8_t utility_message = 0b0;
+    UtilityMessageType utility_message_type = kUtilityMessageNoInformation;
 
-    DownlinkRequest downlink_request_ = kDownlinkRequestNone;
-    uint8_t utility_message_ = 0b0;
-    UtilityMessageType utility_message_type_ = kUtilityMessageNoInformation;
-
-    uint16_t squawk_ = 0xFFFF;
+    uint16_t squawk = 0xFFFF;
 };
 
 #endif /* _ADSB_PACKET_HH_ */

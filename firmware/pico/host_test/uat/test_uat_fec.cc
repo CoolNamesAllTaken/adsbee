@@ -6,7 +6,7 @@
 TEST(RawUATADSBPacket, StringConstructor) {
     const char *buf_str = "00a66ef135445d525a0c0519119021204800";
     RawUATADSBPacket packet = RawUATADSBPacket(buf_str);
-    ASSERT_EQ(packet.encoded_message_len_bits, 144);
+    ASSERT_EQ(packet.encoded_message_len_bytes, 144 / 8);
     ASSERT_EQ(packet.encoded_message[0], 0x00);
     ASSERT_EQ(packet.encoded_message[1], 0xa6);
     ASSERT_EQ(packet.encoded_message[2], 0x6e);

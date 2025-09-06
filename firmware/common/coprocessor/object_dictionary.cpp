@@ -107,8 +107,8 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             RawModeSPacket tpacket;
             memcpy(&tpacket, buf, sizeof(RawModeSPacket));
             // Warning: printing here will cause a timeout and tests will fail.
-            // CONSOLE_INFO("SPICoprocessor::SetBytes", "Received a raw %d-bit transponder packet.",
-            //              tpacket.buffer_len_bits);
+            // CONSOLE_INFO("SPICoprocessor::SetBytes", "Received a raw %d-byte transponder packet.",
+            //              tpacket.buffer_len_bytes);
             adsbee_server.HandleRawModeSPacket(tpacket);
             break;
         }

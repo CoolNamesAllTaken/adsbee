@@ -68,23 +68,23 @@ TEST(DecodedModeSPacket, CRC24Checksum) {
     packet_buffer[2] = 0xCB48209Au;
     packet_buffer[3] = 0x504D0000u;
     packet = DecodedModeSPacket(packet_buffer, packet_buffer_used_len);
-    EXPECT_TRUE(packet.IsValid());
+    EXPECT_TRUE(packet.is_valid);
 
     // Check CRC performance with error injection.
     packet_buffer[0] = 0x7D76CE88u;  // error at beginning
     packet = DecodedModeSPacket(packet_buffer, packet_buffer_used_len);
-    EXPECT_FALSE(packet.IsValid());
+    EXPECT_FALSE(packet.is_valid);
     packet_buffer[0] = 0x8D76CE88u;  // reset first word
 
     packet_buffer[3] = 0x504E0000u;  // error near end
     packet = DecodedModeSPacket(packet_buffer, packet_buffer_used_len);
-    EXPECT_FALSE(packet.IsValid());
+    EXPECT_FALSE(packet.is_valid);
     packet_buffer[3] = 0x504D0000u;  // reset last word
 
     // Extra bit ingestion (last word eats preamble from subsequent packet).
     packet_buffer[3] = 0x504D0001u;  // error where it should be ignored
     DecodedModeSPacket tpacket = DecodedModeSPacket(packet_buffer, packet_buffer_used_len);
-    EXPECT_TRUE(tpacket.IsValid());
+    EXPECT_TRUE(tpacket.is_valid);
     packet_buffer[3] = 0x504D0000u;  // reset last word
 }
 
@@ -98,35 +98,35 @@ TEST(DecodedModeSPacket, PacketFields) {
     packet_buffer[2] = 0xCB48209Au;
     packet_buffer[3] = 0x504D0000u;
     DecodedModeSPacket tpacket = DecodedModeSPacket(packet_buffer, packet_buffer_used_len);
-    EXPECT_TRUE(tpacket.IsValid());
+    EXPECT_TRUE(tpacket.is_valid);
     ModeSADSBPacket packet = ModeSADSBPacket(tpacket);
 
-    EXPECT_EQ(packet.GetDownlinkFormat(), static_cast<uint16_t>(DecodedModeSPacket::kDownlinkFormatExtendedSquitter));
-    EXPECT_EQ(packet.GetCapability(), 5u);
-    EXPECT_EQ(packet.GetICAOAddress(), 0x76CE88u);
-    EXPECT_EQ(packet.GetTypeCode(), 4u);
+    EXPECT_EQ(packet.downlink_format, static_cast<uint16_t>(DecodedModeSPacket::kDownlinkFormatExtendedSquitter));
+    EXPECT_EQ(packet.capability, 5u);
+    EXPECT_EQ(packet.icao_address, 0x76CE88u);
+    EXPECT_EQ(packet.type_code, 4u);
     EXPECT_EQ(packet.GetNBitWordFromMessage(3, 5), 0u);  // CAT = 0
 }
 
 TEST(ModeSADSBPacket, ConstructFromTransponderPacket) {
     DecodedModeSPacket tpacket = DecodedModeSPacket((char *)"8D7C80AD2358F6B1E35C60FF1925");
     ModeSADSBPacket packet = ModeSADSBPacket(tpacket);
-    EXPECT_TRUE(packet.IsValid());
-    EXPECT_EQ(packet.GetICAOAddress(), 0x7C80ADu);
-    EXPECT_EQ(packet.GetTypeCode(), 4);
+    EXPECT_TRUE(packet.is_valid);
+    EXPECT_EQ(packet.icao_address, 0x7C80ADu);
+    EXPECT_EQ(packet.type_code, 4u);
 }
 
 TEST(DecodedModeSPacket, ConstructValidShortFrame) {
     DecodedModeSPacket packet = DecodedModeSPacket((char *)"00050319AB8C22");
-    EXPECT_FALSE(packet.IsValid());  // Automatically marked as invalid since not confirmable with CRC.
-    EXPECT_EQ(packet.GetICAOAddress(), 0x7C7B5Au);
-    EXPECT_EQ(packet.GetDownlinkFormat(),
+    EXPECT_FALSE(packet.is_valid);  // Automatically marked as invalid since not confirmable with CRC.
+    EXPECT_EQ(packet.icao_address, 0x7C7B5Au);
+    EXPECT_EQ(packet.downlink_format,
               static_cast<uint16_t>(DecodedModeSPacket::kDownlinkFormatShortRangeAirToAirSurveillance));
 }
 
 TEST(DecodedModeSPacket, ConstructInvalidShortFrame) {
     DecodedModeSPacket packet = DecodedModeSPacket((char *)"00050219AB8C22");
-    EXPECT_FALSE(packet.IsValid());  // Automatically marking all 56-bit packets with unknown ICAO as invalid for now.
+    EXPECT_FALSE(packet.is_valid);  // Automatically marking all 56-bit packets with unknown ICAO as invalid for now.
 }
 
 TEST(DecodedModeSPacket, DumpPacketBufferBytes) {
