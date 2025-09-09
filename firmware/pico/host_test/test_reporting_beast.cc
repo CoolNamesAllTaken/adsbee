@@ -15,7 +15,7 @@ TEST(BeastUtils, BuildModeSBeastFrame) {
 
     uint8_t beast_frame_buf[BeastReporter::kBeastFrameMaxLenBytes];
     // 1 (frame) + 6 (mlat) + 2 (mlat escape) + 1 (rssi) + 14 (data) + 1 (data escape) = 25 Bytes.
-    EXPECT_EQ(BeastReporter::BuildModeSBeastFrame(tpacket, beast_frame_buf), 26);
+    EXPECT_EQ(BeastReporter::BuildModeSBeastFrame(beast_frame_buf, tpacket), 26);
     EXPECT_EQ(beast_frame_buf[0], BeastReporter::kBeastEscapeChar);  // Packet begins with escape char.
     EXPECT_EQ(beast_frame_buf[1], 0x33);                             // Packet type is Mode S long frame.
     EXPECT_EQ(beast_frame_buf[2], 0xFF);                             // MLAT Counter Begin
@@ -60,7 +60,7 @@ TEST(BeastUtils, BuildModeSIngestBeastFrame) {
     uint uid_num_chars_to_escape = 2;
     uint uid_escaped_length = BeastReporter::kReceiverIDLenBytes + uid_num_chars_to_escape;
 
-    EXPECT_EQ(BeastReporter::BuildModeSIngestBeastFrame(tpacket, beast_frame_buf, uid), uid_escaped_length + 2 + 26);
+    EXPECT_EQ(BeastReporter::BuildModeSIngestBeastFrame(beast_frame_buf, tpacket, uid), uid_escaped_length + 2 + 26);
     uint bytes_compared = 0;
     EXPECT_EQ(beast_frame_buf[bytes_compared++], BeastReporter::kBeastEscapeChar);
     EXPECT_EQ(beast_frame_buf[bytes_compared++], BeastReporter::kBeastFrameTypeIngestId);
@@ -149,3 +149,32 @@ TEST(BeastUtils, BuildFeedStartFrame) {
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 'b');
     EXPECT_EQ(beast_frame_buf[bytes_compared++], 'b');
 }
+
+struct UATADSBPacketBeastTest {
+    DecodedUATADSBPacket packet;
+    char beast_frame_buf[2 * BeastReporter::kBeastFrameMaxLenBytes];
+};
+
+UATADSBPacketBeastTest uat_adsb_tests[] = {
+    {.packet = DecodedUATADSBPacket("00a66ef135445d525a0c0519119021204800", 23, 0, 0x123456),
+     .beast_frame_buf = "1aec73123452300a66ef135445d525a0c0519119021204800"}};
+
+TEST(BeastUtils, BuildUATADSBFrame) {
+    for (const auto &test : uat_adsb_tests) {
+        uint8_t beast_frame_buf[BeastReporter::kBeastFrameMaxLenBytes];
+        EXPECT_EQ(BeastReporter::BuildUATADSBBeastFrame(beast_frame_buf, test.packet), sizeof(beast_frame_buf));
+        // Convert beast_frame_buf binary buffer to string buffer.
+        char beast_frame_buf_str[2 * BeastReporter::kBeastFrameMaxLenBytes + 1];
+        size_t i = 0;
+        for (; i < sizeof(beast_frame_buf); ++i) {
+            snprintf(beast_frame_buf_str + (i * 2), 3, "%02x", beast_frame_buf[i]);
+        }
+        beast_frame_buf_str[i] = '\0';
+        EXPECT_STREQ(beast_frame_buf_str, test.beast_frame_buf);
+    }
+}
+
+struct UATUplinkPacketBeastTest {
+    DecodedUATUplinkPacket packet;
+    uint8_t beast_frame_buf[BeastReporter::kBeastFrameMaxLenBytes];
+};

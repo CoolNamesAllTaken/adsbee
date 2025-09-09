@@ -96,7 +96,7 @@ bool ModeSPacketDecoder::UpdateDecoderLoop() {
 }
 
 bool ModeSPacketDecoder::PushPacketIfNotDuplicate(const DecodedModeSPacket& decoded_packet) {
-    uint32_t timestamp_ms = decoded_packet.GetTimestampMs();
+    uint32_t timestamp_ms = decoded_packet.raw.GetTimestampMs();
     uint16_t packet_source = decoded_packet.raw.source;
 
     // Check if we have already seen this packet from another source (got caught by multiple state machines

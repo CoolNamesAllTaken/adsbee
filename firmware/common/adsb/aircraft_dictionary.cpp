@@ -426,7 +426,7 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(ModeSADSBPacket packet, bool fi
 
     // ME[32-?]
     SetCPRLatLon(packet.GetNBitWordFromMessage(17, 22), packet.GetNBitWordFromMessage(17, 39), odd,
-                 packet.GetTimestampMs());
+                 packet.raw.GetTimestampMs());
     if (!CanDecodePosition()) {
         // Can't decode aircraft position, but this is not an error. Return decode_successful in case there were
         // other errors.

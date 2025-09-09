@@ -354,7 +354,7 @@ RawUATUplinkPacket::RawUATUplinkPacket(const char *rx_string, int16_t sigs_dbm_i
         uint8_t byte = (CHAR_TO_HEX(rx_string[i * kNibblesPerByte]) << kBitsPerNibble) |
                        CHAR_TO_HEX(rx_string[i * kNibblesPerByte + 1]);
         encoded_message[i] = byte;
-        encoded_message_len_bits += kBitsPerByte;
+        encoded_message_len_bytes++;
     }
 }
 
@@ -362,7 +362,7 @@ RawUATUplinkPacket::RawUATUplinkPacket(uint8_t rx_buffer[kUplinkMessageNumBytes]
                                        int16_t sigs_dbm_in, int16_t sigq_bits_in, uint64_t mlat_48mhz_64bit_counts_in)
     : sigs_dbm(sigs_dbm_in), sigq_bits(sigq_bits_in), mlat_48mhz_64bit_counts(mlat_48mhz_64bit_counts_in) {
     memcpy(encoded_message, rx_buffer, rx_buffer_len_bytes);
-    encoded_message_len_bits = rx_buffer_len_bytes * 8;
+    encoded_message_len_bytes = rx_buffer_len_bytes;
 }
 
 DecodedUATUplinkPacket::DecodedUATUplinkPacket(const char *rx_string, int32_t sigs_dbm, int32_t sigq_bits,

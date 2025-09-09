@@ -1,6 +1,7 @@
 #include "beast_utils.hh"
 
 #include "beast_tables.hh"
+#include "comms.hh"
 #include "macros.hh"
 #include "math.h"
 #include "stdio.h"
@@ -67,7 +68,36 @@ uint16_t BeastReporter::BuildFeedStartFrame(uint8_t *beast_frame_buf, uint8_t *r
     return bytes_written;
 }
 
-uint16_t BeastReporter::BuildModeSBeastFrame(const DecodedModeSPacket &packet, uint8_t *beast_frame_buf) {
+/**
+ * Write 12MHz MLAT timestamp to buffer.
+ * @param[in] buf Pointer to output buffer.
+ * @param[in] mlat_12mhz_counter MLAT timestamp value.
+ * @retval Number of bytes written to the output buffer, including escapes.
+ */
+uint16_t Write12MHzMLATTimestamp(uint8_t *buf, uint64_t mlat_12mhz_counter) {
+    uint8_t mlat_12mhz_counter_buf[6];
+    for (uint16_t i = 0; i < BeastReporter::kBeastMLATTimestampNumBytes; i++) {
+        mlat_12mhz_counter_buf[i] =
+            (mlat_12mhz_counter >> (BeastReporter::kBeastMLATTimestampNumBytes - i - 1) * kBitsPerByte) & 0xFF;
+    }
+    return BeastReporter::WriteBufferWithBeastEscapes(buf, mlat_12mhz_counter_buf,
+                                                      BeastReporter::kBeastMLATTimestampNumBytes);
+}
+
+/**
+ * Use lookup table to convert RSSI from dBm to Beast power level (sqrt of un-logged dBFS, mutliplied by 255).
+ * @param[out] buf Pointer to output buffer.
+ * @param[in] rssi_dbm RSSI value in dBm.
+ * @retval Number of bytes written to the output buffer, including escapes.
+ */
+uint16_t WriteRSSIdBmAsBeastPowerLevel(uint8_t *buf, int16_t rssi_dbm) {
+    // Convert RSSI from dBm to Beast power level (sqrt of un-logged dBFS, multiplied by 255).
+    uint16_t rssi_lut_index = MIN(MAX(rssi_dbm - kMinRSSIdBm, 0), static_cast<int>(sizeof(kRSSIdBmToRSSIdBFS) - 1));
+    uint8_t rssi_byte = static_cast<uint8_t>(kRSSIdBmToRSSIdBFS[rssi_lut_index]);
+    return BeastReporter::WriteBufferWithBeastEscapes(buf, &rssi_byte, 1);
+}
+
+uint16_t BeastReporter::BuildModeSBeastFrame(uint8_t *beast_frame_buf, const DecodedModeSPacket &packet) {
     uint8_t packet_buf[DecodedModeSPacket::kMaxPacketLenWords32 * kBytesPerWord];
     uint16_t data_num_bytes = packet.DumpPacketBuffer(packet_buf);
 
@@ -87,32 +117,21 @@ uint16_t BeastReporter::BuildModeSBeastFrame(const DecodedModeSPacket &packet, u
     }
     uint16_t bytes_written = 2;
 
-    // Write 6-Byte MLAT timestamp.
-    uint64_t mlat_12mhz_counter = packet.GetMLAT12MHzCounter();
-    uint8_t mlat_12mhz_counter_buf[6];
-    for (uint16_t i = 0; i < kBeastMLATTimestampNumBytes; i++) {
-        mlat_12mhz_counter_buf[i] = (mlat_12mhz_counter >> (kBeastMLATTimestampNumBytes - i - 1) * kBitsPerByte) & 0xFF;
-    }
-    bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, mlat_12mhz_counter_buf, 6);
-
-    // Use lookup table to convert RSSI from dBm to Beast power level (sqrt of un-logged dBFS, mutliplied by 255).
-    uint16_t rssi_lut_index =
-        MIN(MAX(packet.raw.sigs_dbm - kMinRSSIdBm, 0), static_cast<int>(sizeof(kRSSIdBmToRSSIdBFS) - 1));
-    uint8_t rssi_byte = static_cast<uint8_t>(kRSSIdBmToRSSIdBFS[rssi_lut_index]);
-    bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, &rssi_byte, 1);
+    bytes_written += Write12MHzMLATTimestamp(beast_frame_buf + bytes_written, packet.raw.GetMLAT12MHzCounter());
+    bytes_written += WriteRSSIdBmAsBeastPowerLevel(beast_frame_buf + bytes_written, packet.raw.sigs_dbm);
 
     // Write packet buffer with escape characters.
     bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, packet_buf, data_num_bytes);
     return bytes_written;
 }
 
-uint16_t BeastReporter::BuildModeSIngestBeastFrame(const DecodedModeSPacket &packet, uint8_t *beast_frame_buf,
+uint16_t BeastReporter::BuildModeSIngestBeastFrame(uint8_t *beast_frame_buf, const DecodedModeSPacket &packet,
                                                    const uint8_t *receiver_id) {
     uint16_t bytes_written = 0;
     beast_frame_buf[bytes_written++] = kBeastEscapeChar;
     beast_frame_buf[bytes_written++] = BeastFrameType::kBeastFrameTypeIngestId;
     bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, receiver_id, kReceiverIDLenBytes);
-    bytes_written += BuildModeSBeastFrame(packet, beast_frame_buf + bytes_written);
+    bytes_written += BuildModeSBeastFrame(beast_frame_buf + bytes_written, packet);
     return bytes_written;
 }
 
@@ -120,6 +139,9 @@ uint16_t BeastReporter::BuildModeSIngestBeastFrame(const DecodedModeSPacket &pac
  * @brief Writes a buffer as hexadecimal ASCII characters. Does not require beast escapes since no ASCII characters
  * overlap with the 0x1a beast escape character. Note that to_buf will need to be twice as long as from_buf, since each
  * byte takes two chars to be represented as hex ascii.
+ *
+ * This function is not currently used.
+ *
  * @param[out] to_buf Pointer to output buffer.
  * @param[in] from_buf Pointer to input buffer.
  * @param[in] from_buf_num_bytes Number of bytes in the input buffer.
@@ -134,21 +156,54 @@ uint16_t WriteBufferAsHexASCII(uint8_t *to_buf, const uint8_t *from_buf, uint16_
     return from_buf_num_bytes * 2;
 }
 
-/**
- * Write a UAT ADSB frame as an encapsulated UAT beast message. To buffer must be at least 2*34 + 5 = 73 Bytes long to
- * accommodate long UAT ADSB messages as hex ASCII.
- * @param[in] packet Reference to DecodedUATADSBPacket to write to the buffer.
- * @param[out] beast_frame_buf Pointer to byte buffer to fill with payload.
- * @retval Number of bytes written to beast_frame_buf.
- */
-uint16_t BeastReporter::BuildUATADSBBeastFrame(const DecodedUATADSBPacket &packet, uint8_t *beast_frame_buf) {
+uint16_t BeastReporter::BuildUATADSBBeastFrame(uint8_t *beast_frame_buf, const DecodedUATADSBPacket &packet) {
+    char uat_message_type_char = ' ';
+    switch (packet.raw.encoded_message_len_bytes) {
+        case RawUATADSBPacket::kShortADSBMessageNumBytes:
+            // Short UAT ADSB message.
+            uat_message_type_char = kUATMessageTypeADSBShort;
+            break;
+        case RawUATADSBPacket::kLongADSBMessageNumBytes:
+            // Long UAT ADSB message.
+            uat_message_type_char = kUATMessageTypeADSBLong;
+            break;
+        default:
+            CONSOLE_ERROR("BeastReporter::BuildUATADSBBeastFrame", "Invalid UAT ADSB message length %d bytes.",
+                          packet.raw.encoded_message_len_bytes);
+            return 0;  // Invalid length.
+    }
+
     uint16_t bytes_written = 0;
     beast_frame_buf[bytes_written++] = kBeastEscapeChar;
     beast_frame_buf[bytes_written++] = BeastFrameType::kBeastFrameTypeUAT;
-    beast_frame_buf[bytes_written++] = '-';  // Downlink message.
-    bytes_written += WriteBufferAsHexASCII(beast_frame_buf + bytes_written, packet.raw.encoded_message,
-                                           packet.raw.encoded_message_len_bytes);
-    bytes_written += sprintf((char *)(beast_frame_buf + bytes_written), "rs=%d", packet.raw.encoded_message_len_bytes);
+    beast_frame_buf[bytes_written++] = uat_message_type_char;
+
+    bytes_written += Write12MHzMLATTimestamp(beast_frame_buf + bytes_written, packet.raw.GetMLAT12MHzCounter());
+    bytes_written += WriteRSSIdBmAsBeastPowerLevel(beast_frame_buf + bytes_written, packet.raw.sigs_dbm);
+
+    bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, packet.raw.encoded_message,
+                                                 packet.raw.encoded_message_len_bytes);
+
+    return bytes_written;
+}
+
+uint16_t BeastReporter::BuildUATUplinkFrame(uint8_t *beast_frame_buf, const DecodedUATUplinkPacket &packet) {
+    if (packet.raw.encoded_message_len_bytes != RawUATUplinkPacket::kUplinkMessageNumBytes) {
+        CONSOLE_ERROR("BeastReporter::BuildUATUplinkFrame", "Invalid UAT Uplink message length %d bytes.",
+                      packet.raw.encoded_message_len_bytes);
+        return 0;  // Invalid length.
+    }
+
+    uint16_t bytes_written = 0;
+    beast_frame_buf[bytes_written++] = kBeastEscapeChar;
+    beast_frame_buf[bytes_written++] = BeastFrameType::kBeastFrameTypeUAT;
+    beast_frame_buf[bytes_written++] = kUATMessageTypeUplink;
+
+    bytes_written += Write12MHzMLATTimestamp(beast_frame_buf + bytes_written, packet.raw.GetMLAT12MHzCounter());
+    bytes_written += WriteRSSIdBmAsBeastPowerLevel(beast_frame_buf + bytes_written, packet.raw.sigs_dbm);
+
+    bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, packet.raw.encoded_message,
+                                                 packet.raw.encoded_message_len_bytes);
 
     return bytes_written;
 }

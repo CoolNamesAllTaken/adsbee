@@ -33,6 +33,12 @@ class RawModeSPacket {
     }
 
     /**
+     * Rescales the 48MHz timestamp to a 12MHz timestamp.
+     * @retval 12MHz timestamp.
+     */
+    uint64_t GetMLAT12MHzCounter() const { return (mlat_48mhz_64bit_counts >> 2) & 0xFFFFFFFFFFFF; }
+
+    /**
      * Helper function that returns the timestamp in seconds. Used to abstract the MLAT timestamp resolution for
      * functions that don't care about it.
      * @return Timestamp in seconds.
@@ -124,8 +130,6 @@ class DecodedModeSPacket {
      */
     DecodedModeSPacket() : raw((char *)"") { debug_string[0] = '\0'; };
 
-    uint64_t GetMLAT12MHzCounter() const { return (raw.mlat_48mhz_64bit_counts >> 2) & 0xFFFFFFFFFFFF; }
-    uint64_t GetTimestampMs() const { return raw.GetTimestampMs(); }
     DownlinkFormat GetDownlinkFormatEnum();
 
     /**

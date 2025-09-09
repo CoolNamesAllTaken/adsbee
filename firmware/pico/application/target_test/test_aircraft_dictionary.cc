@@ -5,10 +5,10 @@
 
 uint64_t TimeDictionaryPacketIngestUs() {
     DecodedModeSPacket odd_packet = DecodedModeSPacket((char *)"8D48C22D60AB00DEABC5DB78FCD6");  // odd
-    odd_packet.GetRawPtr()->mlat_48mhz_64bit_counts = 1'000 * 48'000;
+    odd_packet.raw.mlat_48mhz_64bit_counts = 1'000 * 48'000;
     DecodedModeSPacket even_packet = DecodedModeSPacket((char *)"8D48C22D60AB0452BFAD19A695E0");  // even
-    even_packet.GetRawPtr()->mlat_48mhz_64bit_counts = 2'000 * 48'000;
-    uint32_t icao = odd_packet.GetICAOAddress();
+    even_packet.raw.mlat_48mhz_64bit_counts = 2'000 * 48'000;
+    uint32_t icao = odd_packet.icao_address;
 
     // Clear the dictionary for a fresh start.
     adsbee.aircraft_dictionary.RemoveAircraft(icao);
@@ -19,7 +19,7 @@ uint64_t TimeDictionaryPacketIngestUs() {
     ModeSAircraft *aircraft = adsbee.aircraft_dictionary.GetAircraftPtr<ModeSAircraft>(icao);
 
     // Increment the timestamp of the odd packet and ingest it again. Time how long it takes the CPR filter to run.
-    odd_packet.GetRawPtr()->mlat_48mhz_64bit_counts += 3'000 * 48'000;
+    odd_packet.raw.mlat_48mhz_64bit_counts += 3'000 * 48'000;
     uint64_t start_timestamp_us = get_time_since_boot_us();
     adsbee.aircraft_dictionary.IngestDecodedModeSPacket(odd_packet);
     uint64_t end_timestamp_us = get_time_since_boot_us();

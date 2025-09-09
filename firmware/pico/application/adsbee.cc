@@ -158,7 +158,7 @@ bool ADSBee::Init() {
 
 bool ADSBee::Update() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
-    // Turn off the demod LED if it's been on for long enough.
+    // Turn off the 1090 LED if it's been on for long enough.
     if (timestamp_ms - led_on_timestamp_ms_ > kStatusLEDOnMs) {
         gpio_put(config_.r1090_led_pin, 0);
     }
@@ -185,8 +185,8 @@ bool ADSBee::Update() {
     // RawModeSPacket raw_packet;
     DecodedModeSPacket decoded_packet;
     while (decoder.decoded_1090_packet_out_queue.Dequeue(decoded_packet)) {
-        CONSOLE_INFO("ADSBee::Update", "\tdf=%d icao_address=0x%06x", decoded_packet.GetDownlinkFormat(),
-                     decoded_packet.GetICAOAddress());
+        CONSOLE_INFO("ADSBee::Update", "\tdf=%d icao_address=0x%06x", decoded_packet.downlink_format,
+                     decoded_packet.icao_address);
 
         if (aircraft_dictionary.IngestDecodedModeSPacket(decoded_packet)) {
             // Packet was used to update the dictionary or was silently ignored (but presumed to be valid).

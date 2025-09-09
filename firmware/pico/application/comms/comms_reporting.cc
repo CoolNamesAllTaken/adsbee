@@ -41,7 +41,7 @@ bool CommsManager::UpdateReporting() {
          num_packets_to_report++) {
         if (esp32.IsEnabled()) {
             // Dequeue all the packets to report (up to max limit of the buffer).
-            RawModeSPacket raw_packet = packets_to_report[num_packets_to_report].GetRaw();
+            RawModeSPacket raw_packet = packets_to_report[num_packets_to_report].raw;
             spi_raw_packet_reporting_buffer[0] = num_packets_to_report + 1;
             memcpy(spi_raw_packet_reporting_buffer + sizeof(uint8_t) + sizeof(RawModeSPacket) * num_packets_to_report,
                    &raw_packet, sizeof(RawModeSPacket));
@@ -103,7 +103,7 @@ bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface, const Decod
                              uint16_t num_packets_to_report) {
     for (uint16_t i = 0; i < num_packets_to_report; i++) {
         char raw_frame_buf[kRaw1090FrameMaxNumChars];
-        uint16_t num_bytes_in_frame = BuildRaw1090Frame(packets_to_report_1090[i].GetRaw(), raw_frame_buf);
+        uint16_t num_bytes_in_frame = BuildRaw1090Frame(packets_to_report_1090[i].raw, raw_frame_buf);
         SendBuf(iface, (char *)raw_frame_buf, num_bytes_in_frame);
         comms_manager.iface_puts(iface, (char *)"\r\n");  // Send delimiter.
     }
@@ -113,8 +113,8 @@ bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface, const Decod
 bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface,
                                const DecodedModeSPacket packets_to_report_1090[], uint16_t num_packets_to_report) {
     for (uint16_t i = 0; i < num_packets_to_report; i++) {
-        uint8_t beast_frame_buf[kBeastFrameMaxLenBytes];
-        uint16_t num_bytes_in_frame = BuildModeSBeastFrame(packets_to_report_1090[i], beast_frame_buf);
+        uint8_t beast_frame_buf[BeastReporter::kBeastFrameMaxLenBytes];
+        uint16_t num_bytes_in_frame = BeastReporter::BuildModeSBeastFrame(beast_frame_buf, packets_to_report_1090[i]);
         comms_manager.iface_putc(iface, char(0x1a));  // Send beast escape char to denote beginning of frame.
         SendBuf(iface, (char *)beast_frame_buf, num_bytes_in_frame);
     }

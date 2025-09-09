@@ -15,6 +15,19 @@ const uint16_t kBeastMLATTimestampNumBytes = 6;
 // 6-12 Byte MLAT Timestamp (may need 6x escape Bytes).
 // Mode-S data (2 bytes + escapes for Mode A/C, 7 bytes + escapes for squitter, 14 bytes + escapes for extended
 // squitter)
+
+/**
+ * Mode S Packet Format
+ *
+ * 0x1a | frame type byte (no escapes) | timestamp | rssi | payload
+ */
+
+/**
+ * UAT Packet Format
+ *
+ * 0x1a | 0xec (frame type UAT) | uat message type byte (no escapes) | timestamp | rssi | payload
+ */
+
 const uint16_t kBeastFrameMaxLenBytes = 1 /* Frame Type */ + 2 * 6 /* MLAT timestamp + escapes */ +
                                         2 /* RSSI + escape */ + 2 * 14 /* Longest Mode S data + escapes */;  // [Bytes]
 
@@ -30,6 +43,12 @@ enum BeastFrameType {
     kBeastFrameTypeModeAC = 0x31,  // Note: This is not used, since I'm assuming it does NOT refer to DF 4,5.
     kBeastFrameTypeModeSShort = 0x32,
     kBeastFrameTypeModeSLong = 0x33
+};
+
+enum UATMessageTypeChar : char {
+    kUATMessageTypeADSBShort = 's',
+    kUATMessageTypeADSBLong = 'l',
+    kUATMessageTypeUplink = 'u'
 };
 
 /**
@@ -53,30 +72,37 @@ uint16_t BuildFeedStartFrame(uint8_t *beast_frame_buf, uint8_t *receiver_id);
 
 /**
  * Converts a DecodedModeSPacket payload to a data buffer in Mode S Beast output format.
- * @param[in] packet Reference to DecodedModeSPacket to convert.
  * @param[out] beast_frame_buf Pointer to byte buffer to fill with payload.
+ * @param[in] packet Reference to DecodedModeSPacket to convert.
  * @retval Number of bytes written to beast_frame_buf.
  */
-uint16_t BuildModeSBeastFrame(const DecodedModeSPacket &packet, uint8_t *beast_frame_buf);
+uint16_t BuildModeSBeastFrame(uint8_t *beast_frame_buf, const DecodedModeSPacket &packet);
 
 /**
  * Sends an Ingest Beast frame (0xe3) with a 16-Byte receiver ID prepended. This type of frame is used by readsb when
  * forwarding messages internally. For feeding, see BuildModeSBeastFrame.
- * @param[in] packet Reference to DecodedModeSPacket to convert.
  * @param[out] beast_frame_buf Pointer to byte buffer to fill with payload.
+ * @param[in] packet Reference to DecodedModeSPacket to convert.
  * @param[in] receiver_id Pointer to 16-Byte receiver ID.
  * @retval Number of bytes written to beast_frame_buf.
  */
-uint16_t BuildModeSIngestBeastFrame(const DecodedModeSPacket &packet, uint8_t *beast_frame_buf,
+uint16_t BuildModeSIngestBeastFrame(uint8_t *beast_frame_buf, const DecodedModeSPacket &packet,
                                     const uint8_t *receiver_id);
 
 /**
- * Write a UAT ADSB frame as an encapsulated UAT beast message. To buffer must be at least 2*34 + 5 = 73 Bytes long to
- * accommodate long UAT ADSB messages as hex ASCII.
- * @param[in] packet Reference to DecodedUATADSBPacket to write to the buffer.
+ * Write a UAT ADSB frame.
  * @param[out] beast_frame_buf Pointer to byte buffer to fill with payload.
+ * @param[in] packet Reference to DecodedUATADSBPacket to write to the buffer.
  * @retval Number of bytes written to beast_frame_buf.
  */
-uint16_t BuildUATADSBBeastFrame(const DecodedUATADSBPacket &packet, uint8_t *beast_frame_buf);
+uint16_t BuildUATADSBBeastFrame(uint8_t *beast_frame_buf, const DecodedUATADSBPacket &packet);
+
+/**
+ * Write a UAT uplink frame.
+ * @param[out] beast_frame_buf Pointer to byte buffer to fill with payload.
+ * @param[in] packet Reference to DecodedUATUplinkPacket to write to the buffer.
+ * @retval Number of bytes written to beast_frame_buf.
+ */
+uint16_t BuildUATUplinkFrame(uint8_t *beast_frame_buf, const DecodedUATUplinkPacket &packet);
 
 }  // namespace BeastReporter
