@@ -44,6 +44,14 @@ class UATReedSolomon {
      */
     int DecodeUplinkMessage(uint8_t encoded_message_buf[], uint8_t decoded_payload_buf[]);
 
+    /**
+     * Test functions used to turning test messages (provided without FEC headers) into encoded messages similar to what
+     * would be found on the air.
+     */
+    bool EncodeShortADSBMessage(uint8_t message_buf[]);
+    bool EncodeLongADSBMessage(uint8_t message_buf[]);
+    bool EncodeUplinkMessage(uint8_t decoded_payload_buf[], uint8_t encoded_message_buf[]);
+
     void* rs_adsb_short = nullptr;
     void* rs_adsb_long = nullptr;
     void* rs_uplink = nullptr;
