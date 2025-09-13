@@ -1,11 +1,12 @@
-#ifndef _BUFFER_UTILS_HH_
-#define _BUFFER_UTILS_HH_
+#pragma once
 
 #include <cstdint>
 
 #include "unit_conversions.hh"
 
-#define CHAR_TO_HEX(c) ((c >= 'A') ? (c >= 'a') ? (c - 'a' + 10) : (c - 'A' + 10) : (c - '0'))
+#define CHAR_TO_HEX(c)       ((c >= 'A') ? (c >= 'a') ? (c - 'a' + 10) : (c - 'A' + 10) : (c - '0'))
+#define HEX_TO_CHAR_LOWER(h) ((h) < 10 ? ('0' + (h)) : ('a' + ((h) - 10)))
+#define HEX_TO_CHAR_UPPER(h) ((h) < 10 ? ('0' + (h)) : ('A' + ((h) - 10)))
 
 /**
  * Check that the contents of a byte buffer match a string of hex characters. Must use a string of full Bytes.
@@ -93,4 +94,20 @@ inline void WordBufferToByteBuffer(const uint32_t word_buffer[], uint8_t byte_bu
  */
 uint16_t CalculateCRC16(const uint8_t *buf, int32_t buf_len_bytes);
 
-#endif /* _BUFFER_UTILS_HH_ */
+/**
+ * Converts a hex string to a byte buffer. Writes till the end of the string or max_bytes, whichever is less.
+ * @param[out] byte_buffer Pointer to the output byte buffer.
+ * @param[in] hex_string Pointer to a string of hex characters. Must be an even number of nibbles (full Bytes).
+ * @param[in] max_bytes Maximum number of bytes to write to the output buffer.
+ * @retval Number of bytes written to the output buffer.
+ */
+uint16_t HexStringToByteBuffer(uint8_t *byte_buffer, const char *hex_string, uint16_t max_bytes);
+
+/**
+ * Converts a byte buffer to a hex string. Writes till max_bytes is reached.
+ * @param[out] hex_string Pointer to the output string buffer. Must be at least 2*max_bytes + 1 bytes long.
+ * @param[in] byte_buffer Pointer to the input byte buffer.
+ * @param[in] num_bytes Number of bytes to convert from the input buffer.
+ * @retval Number of characters written to the output string (not including null terminator).
+ */
+uint16_t ByteBufferToHexString(char *hex_string, const uint8_t *byte_buffer, uint16_t num_bytes);

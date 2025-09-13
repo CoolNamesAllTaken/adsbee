@@ -19,13 +19,8 @@ const int32_t kFPMPerEncodedVerticalRateTick = 64;
 RawUATADSBPacket::RawUATADSBPacket(const char *rx_string, int16_t sigs_dbm_in, int16_t sigq_bits_in,
                                    uint64_t mlat_48mhz_64bit_counts_in)
     : sigs_dbm(sigs_dbm_in), sigq_bits(sigq_bits_in), mlat_48mhz_64bit_counts(mlat_48mhz_64bit_counts_in) {
-    uint16_t rx_num_bytes = strlen(rx_string) / kNibblesPerByte;
-    for (uint16_t i = 0; i < rx_num_bytes && i < RawUATADSBPacket::kADSBMessageMaxSizeBytes * kBytesPerWord; i++) {
-        uint8_t byte = (CHAR_TO_HEX(rx_string[i * kNibblesPerByte]) << kBitsPerNibble) |
-                       CHAR_TO_HEX(rx_string[i * kNibblesPerByte + 1]);
-        encoded_message[i] = byte;
-        encoded_message_len_bytes++;
-    }
+    encoded_message_len_bytes =
+        HexStringToByteBuffer(encoded_message, rx_string, RawUATADSBPacket::kADSBMessageMaxSizeBytes);
 }
 
 RawUATADSBPacket::RawUATADSBPacket(uint8_t rx_buffer[kADSBMessageMaxSizeBytes], uint16_t rx_buffer_len_bytes,

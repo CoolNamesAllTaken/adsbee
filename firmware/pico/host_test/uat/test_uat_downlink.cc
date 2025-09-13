@@ -1,5 +1,6 @@
 #include "aircraft_dictionary.hh"
 #include "buffer_utils.hh"
+#include "fec.hh"
 #include "gtest/gtest.h"
 #include "uat_packet.hh"
 #include "uat_test_data.h"
@@ -16,9 +17,24 @@ TEST(UATDecoderTest, DownlinkFrames) {
         AircraftDictionary dictionary;
         UATAircraft aircraft;
 
+        // Create encoded data frame.
+        // uint8_t encoded_data_frame[RawUATADSBPacket::kADSBMessageMaxSizeBytes] = {0};
+        // memcpy(encoded_data_frame, frame->frame_data_hex, frame->frame_length);
+        // if (frame->frame_length == RawUATADSBPacket::kShortADSBMessageNumBytes) {
+        //     uat_rs.EncodeShortADSBMessage(encoded_data_frame);
+        // } else {
+        //     uat_rs.EncodeLongADSBMessage(encoded_data_frame);
+        // }
+        // int16_t sigs_dbm = -10;                // Dummy signal strength.
+        // int16_t sigq_bits = 0;                 // Dummy signal quality.
+        // uint64_t mlat_48mhz_64bit_counts = 0;  // Dummy timestamp.
+        // DecodedUATADSBPacket packet(
+        //     RawUATADSBPacket(encoded_data_frame, frame->frame_length, sigs_dbm, sigq_bits, mlat_48mhz_64bit_counts));
+
         // Create the packet, force it as valid (no FEC included in test data), ingest into dictionary.
         DecodedUATADSBPacket packet(frame->frame_data_hex);
         packet.ReconstructWithoutFEC();
+
         EXPECT_TRUE(dictionary.IngestDecodedUATADSBPacket(packet));
 
         // Ensure the dictionary has a matching aircraft entry and extract it.

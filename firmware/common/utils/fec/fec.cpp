@@ -1,7 +1,7 @@
 #include "fec.hh"
 
 #include "comms.hh"
-#include "rs.h"  // For init_rs_char, decode_rs_char
+#include "rs.h"  // For init_rs_char, decode_rs_char, encode_rs_char
 #include "uat_packet.hh"
 
 static const int kUplinkGaloisFieldPolynomial = 0x187;
@@ -94,9 +94,8 @@ bool UATReedSolomon::EncodeShortADSBMessage(uint8_t message_buf[]) {
     if (message_buf == nullptr) {
         return false;  // Invalid input.
     }
-    void num_bytes_corrected =
-        encode_rs_char(rs_adsb_short, (unsigned char *)message_buf,
-                       (unsigned char *)(message_buf + RawUATADSBPacket::kShortADSBMessagePayloadNumBytes));
+    encode_rs_char(rs_adsb_short, (unsigned char *)message_buf,
+                   (unsigned char *)(message_buf + RawUATADSBPacket::kShortADSBMessagePayloadNumBytes));
     return true;
 }
 
@@ -104,8 +103,8 @@ bool UATReedSolomon::EncodeLongADSBMessage(uint8_t message_buf[]) {
     if (message_buf == nullptr) {
         return false;  // Invalid input.
     }
-    int num_bytes_corrected = encode_rs_char(
-        rs_adsb_long, (unsigned char *)(message_buf + RawUATADSBPacket::kLongADSBMessagePayloadNumBytes));
+    encode_rs_char(rs_adsb_long, (unsigned char *)message_buf,
+                   (unsigned char *)(message_buf + RawUATADSBPacket::kLongADSBMessagePayloadNumBytes));
     return true;
 }
 
@@ -113,7 +112,6 @@ bool UATReedSolomon::EncodeUplinkMessage(uint8_t decoded_payload_buf[], uint8_t 
     if (encoded_message_buf == nullptr) {
         return false;  // Invalid input.
     }
-    int total_bytes_corrected = 0;
 
     for (int block = 0; block < RawUATUplinkPacket::kUplinkMessageNumBlocks; block++) {
         uint8_t *block_data = &(decoded_payload_buf[block * RawUATUplinkPacket::kUplinkMessageBlockPayloadNumBytes]);

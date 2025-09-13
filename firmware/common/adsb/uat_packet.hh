@@ -5,8 +5,8 @@
 #include "adsb_types.hh"
 #include "buffer_utils.hh"
 
-static const uint16_t kUATSyncNumBits = 36;
-static const uint16_t kUATSyncNumBytes = CeilBitsToBytes(kUATSyncNumBits);
+static constexpr uint16_t kUATSyncNumBits = 36;
+static constexpr uint16_t kUATSyncNumBytes = CeilBitsToBytes(kUATSyncNumBits);
 
 class RawUATADSBPacket {
    public:
@@ -21,22 +21,23 @@ class RawUATADSBPacket {
     /**
      * UAT downlink message parameters.
      */
-    static const uint16_t kShortADSBMessagePayloadNumBits = 144;
-    static const uint16_t kShortADSBMessagePayloadNumBytes = CeilBitsToBytes(kShortADSBMessagePayloadNumBits);
-    static const uint16_t kShortADSBMessageFECParityNumBits = 96;
-    static const uint16_t kShortADSBMessageFECParityNumBytes = CeilBitsToBytes(kShortADSBMessageFECParityNumBits);
-    static const uint16_t kShortADSBMessageNumBits =
+    static constexpr uint16_t kShortADSBMessagePayloadNumBits = 144;
+    static constexpr uint16_t kShortADSBMessagePayloadNumBytes = CeilBitsToBytes(kShortADSBMessagePayloadNumBits);
+    static constexpr uint16_t kShortADSBMessageFECParityNumBits = 96;
+    static constexpr uint16_t kShortADSBMessageFECParityNumBytes = CeilBitsToBytes(kShortADSBMessageFECParityNumBits);
+    static constexpr uint16_t kShortADSBMessageNumBits =
         kShortADSBMessagePayloadNumBits + kShortADSBMessageFECParityNumBits;
-    static const uint16_t kShortADSBMessageNumBytes = CeilBitsToBytes(kShortADSBMessageNumBits);
+    static constexpr uint16_t kShortADSBMessageNumBytes = CeilBitsToBytes(kShortADSBMessageNumBits);
 
-    static const uint16_t kLongADSBMessagePayloadNumBits = 272;
-    static const uint16_t kLongADSBMessagePayloadNumBytes = CeilBitsToBytes(kLongADSBMessagePayloadNumBits);
-    static const uint16_t kLongADSBMessageFECParityNumBits = 112;
-    static const uint16_t kLongADSBMessageFECParityNumBytes = CeilBitsToBytes(kLongADSBMessageFECParityNumBits);
-    static const uint16_t kLongADSBMessageNumBits = kLongADSBMessagePayloadNumBits + kLongADSBMessageFECParityNumBits;
-    static const uint16_t kLongADSBMessageNumBytes = CeilBitsToBytes(kLongADSBMessageNumBits);
+    static constexpr uint16_t kLongADSBMessagePayloadNumBits = 272;
+    static constexpr uint16_t kLongADSBMessagePayloadNumBytes = CeilBitsToBytes(kLongADSBMessagePayloadNumBits);
+    static constexpr uint16_t kLongADSBMessageFECParityNumBits = 112;
+    static constexpr uint16_t kLongADSBMessageFECParityNumBytes = CeilBitsToBytes(kLongADSBMessageFECParityNumBits);
+    static constexpr uint16_t kLongADSBMessageNumBits =
+        kLongADSBMessagePayloadNumBits + kLongADSBMessageFECParityNumBits;
+    static constexpr uint16_t kLongADSBMessageNumBytes = CeilBitsToBytes(kLongADSBMessageNumBits);
 
-    static const uint16_t kADSBMessageMaxSizeBytes =
+    static constexpr uint16_t kADSBMessageMaxSizeBytes =
         kLongADSBMessagePayloadNumBytes + kLongADSBMessageFECParityNumBytes;  // For convenience.
 
     RawUATADSBPacket(const char *rx_string, int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_bits_in = INT16_MIN,
@@ -73,17 +74,17 @@ class RawUATADSBPacket {
 
 class DecodedUATADSBPacket {
    public:
-    static const uint16_t kMaxPacketSizeBytes = RawUATADSBPacket::kADSBMessageMaxSizeBytes;
-    static const uint16_t kMaxPacketLenBits = 420;  // 420 bits = 52.5 bytes, round up to 53 bytes.
-    static const uint16_t kDebugStrLen = 200;
+    static constexpr uint16_t kMaxPacketSizeBytes = RawUATADSBPacket::kADSBMessageMaxSizeBytes;
+    static constexpr uint16_t kMaxPacketLenBits = 420;  // 420 bits = 52.5 bytes, round up to 53 bytes.
+    static constexpr uint16_t kDebugStrLen = 200;
 
     // Some data blocks are at the same offset in UAT ADS-B messages when they are present, regardless of MDB type code.
     // These offsets are defined here for convenience. Note that some other message data block members have different
     // offsets depending on the MDB type code, so they are not defined here.
-    static const uint16_t kHeaderOffsetBytes = 0;
-    static const uint16_t kStateVectorOffsetBytes = 4;
-    static const uint16_t kModeStatusOffsetBytes = 17;
-    static const uint16_t kAuxiliaryStateVectorOffsetBytes = 29;
+    static constexpr uint16_t kHeaderOffsetBytes = 0;
+    static constexpr uint16_t kStateVectorOffsetBytes = 4;
+    static constexpr uint16_t kModeStatusOffsetBytes = 17;
+    static constexpr uint16_t kAuxiliaryStateVectorOffsetBytes = 29;
 
     static constexpr float kDegPerAWBTick = 360.0f / 16777216.0f;  // 360 degrees / 2^24, for lat/lon
 
@@ -320,15 +321,16 @@ class RawUATUplinkPacket {
     static const uint32_t kSyncWordMS32 = (kSyncWord >> 4) & 0xFFFFFFFF;
     static const uint8_t kSyncWordLS4 = kSyncWord & 0xF;
 
-    static const uint16_t kUplinkMessageNumBlocks = 6;
-    static const uint16_t kUplinkMessageBlockPayloadNumBytes = 72;
-    static const uint16_t kUplinkMessageBlockFECParityNumBytes = 20;
-    static const uint16_t kUplinkMessageBlockNumBytes =
+    static constexpr uint16_t kUplinkMessageNumBlocks = 6;
+    static constexpr uint16_t kUplinkMessageBlockPayloadNumBytes = 72;
+    static constexpr uint16_t kUplinkMessageBlockFECParityNumBytes = 20;
+    static constexpr uint16_t kUplinkMessageBlockNumBytes =
         kUplinkMessageBlockPayloadNumBytes + kUplinkMessageBlockFECParityNumBytes;
 
-    static const uint16_t kUplinkMessagePayloadNumBytes = kUplinkMessageNumBlocks * kUplinkMessageBlockPayloadNumBytes;
+    static constexpr uint16_t kUplinkMessagePayloadNumBytes =
+        kUplinkMessageNumBlocks * kUplinkMessageBlockPayloadNumBytes;
 
-    static const uint16_t kUplinkMessageNumBytes =
+    static constexpr uint16_t kUplinkMessageNumBytes =
         kUplinkMessageNumBlocks * kUplinkMessageBlockNumBytes;  // Maximum size of a UAT uplink message.
 
     struct __attribute__((packed)) UATUplinkDataBlock {
@@ -378,7 +380,7 @@ class RawUATUplinkPacket {
 
 class DecodedUATUplinkPacket {
    public:
-    static const uint16_t kDebugStrLen = 200;
+    static constexpr uint16_t kDebugStrLen = 200;
 
     DecodedUATUplinkPacket(const RawUATUplinkPacket &packet_in);
     DecodedUATUplinkPacket() : raw((char *)"") { debug_string[0] = '\0'; }

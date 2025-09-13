@@ -2,6 +2,7 @@
 set(FEC_SOURCES
     fec.cpp
     decode_rs_char.c
+    encode_rs_char.c
     init_rs_char.c
 )
 

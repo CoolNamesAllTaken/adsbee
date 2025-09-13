@@ -135,3 +135,25 @@ uint16_t CalculateCRC16(const uint8_t *buf, int32_t buf_len_bytes) {
     }
     return swap16(crc);
 }
+
+uint16_t HexStringToByteBuffer(uint8_t *byte_buffer, const char *hex_string, uint16_t max_bytes) {
+    uint16_t bytes_written = 0;
+    for (uint16_t i = 0; i < max_bytes; i++) {
+        if (hex_string[i * kNibblesPerByte] == '\0' || hex_string[i * kNibblesPerByte + 1] == '\0') {
+            break;  // Stop if we hit the end of the string.
+        }
+        byte_buffer[i] = CHAR_TO_HEX(hex_string[i * kNibblesPerByte]) << 4;
+        byte_buffer[i] |= CHAR_TO_HEX(hex_string[i * kNibblesPerByte + 1]);
+        bytes_written++;
+    }
+    return bytes_written;
+}
+
+uint16_t ByteBufferToHexString(char *hex_string, const uint8_t *byte_buffer, uint16_t num_bytes) {
+    for (uint16_t i = 0; i < num_bytes; i++) {
+        hex_string[i * kNibblesPerByte] = HEX_TO_CHAR_LOWER((byte_buffer[i] >> 4) & 0x0F);
+        hex_string[i * kNibblesPerByte + 1] = HEX_TO_CHAR_LOWER(byte_buffer[i] & 0x0F);
+    }
+    hex_string[num_bytes * kNibblesPerByte] = '\0';  // Null-terminate the string.
+    return num_bytes * kNibblesPerByte;
+}

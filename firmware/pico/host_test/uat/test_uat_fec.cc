@@ -416,3 +416,67 @@ TEST(DecodedUATADSBPacket, AltitudeEncodedToAltitudeFt) {
     ASSERT_EQ(DecodedUATADSBPacket::AltitudeEncodedToAltitudeFt(4094), 101325);
     ASSERT_EQ(DecodedUATADSBPacket::AltitudeEncodedToAltitudeFt(4095), INT32_MAX);
 }
+
+TEST(UATFEC, EncodeLongUATADSBPacket) {
+    auto test_case = kUATDownlinkTests[5];  // DO-282B Table 2-104 #6
+
+    // Build expected encoded message with no errors by compositing expected payload and FEC.
+    uint8_t expected_encoded_message[RawUATADSBPacket::kLongADSBMessageNumBytes];
+    HexStringToByteBuffer(expected_encoded_message, test_case.expected_decoded_payload,
+                          RawUATADSBPacket::kLongADSBMessagePayloadNumBytes);
+    HexStringToByteBuffer(expected_encoded_message + RawUATADSBPacket::kLongADSBMessagePayloadNumBytes,
+                          test_case.raw_encoded_adsb_message + RawUATADSBPacket::kLongADSBMessagePayloadNumBytes,
+                          RawUATADSBPacket::kLongADSBMessageFECParityNumBytes);
+    char expected_encoded_message_hex[RawUATADSBPacket::kLongADSBMessageNumBytes * 2 + 1];
+    ByteBufferToHexString(expected_encoded_message_hex, expected_encoded_message,
+                          RawUATADSBPacket::kLongADSBMessageNumBytes);
+
+    uint8_t test_encoded_message[RawUATADSBPacket::kLongADSBMessageNumBytes];
+    // Copy in just the payload.
+    EXPECT_EQ(HexStringToByteBuffer(test_encoded_message, test_case.expected_decoded_payload,
+                                    RawUATADSBPacket::kLongADSBMessagePayloadNumBytes),
+              RawUATADSBPacket::kLongADSBMessagePayloadNumBytes);
+
+    // Encode the message.
+    uat_rs.EncodeLongADSBMessage(test_encoded_message);
+    char encoded_message_hex[RawUATADSBPacket::kLongADSBMessageNumBytes * 2 + 1];
+
+    EXPECT_EQ(
+        ByteBufferToHexString(encoded_message_hex, test_encoded_message, RawUATADSBPacket::kLongADSBMessageNumBytes),
+        RawUATADSBPacket::kLongADSBMessageNumBytes * 2);
+
+    // Check against the expected encoded message.
+    EXPECT_STREQ(encoded_message_hex, expected_encoded_message_hex);
+}
+
+TEST(UATFEC, EncodeShortUATADSBPacket) {
+    auto test_case = kUATDownlinkTests[5];  // DO-282B Table 2-104 #6
+
+    // Build expected encoded message with no errors by compositing expected payload and FEC.
+    uint8_t expected_encoded_message[RawUATADSBPacket::kShortADSBMessageNumBytes];
+    HexStringToByteBuffer(expected_encoded_message, test_case.expected_decoded_payload,
+                          RawUATADSBPacket::kShortADSBMessagePayloadNumBytes);
+    HexStringToByteBuffer(expected_encoded_message + RawUATADSBPacket::kShortADSBMessagePayloadNumBytes,
+                          test_case.raw_encoded_adsb_message + RawUATADSBPacket::kShortADSBMessagePayloadNumBytes,
+                          RawUATADSBPacket::kShortADSBMessageFECParityNumBytes);
+    char expected_encoded_message_hex[RawUATADSBPacket::kShortADSBMessageNumBytes * 2 + 1];
+    ByteBufferToHexString(expected_encoded_message_hex, expected_encoded_message,
+                          RawUATADSBPacket::kShortADSBMessageNumBytes);
+
+    uint8_t test_encoded_message[RawUATADSBPacket::kShortADSBMessageNumBytes];
+    // Copy in just the payload.
+    EXPECT_EQ(HexStringToByteBuffer(test_encoded_message, test_case.expected_decoded_payload,
+                                    RawUATADSBPacket::kShortADSBMessagePayloadNumBytes),
+              RawUATADSBPacket::kShortADSBMessagePayloadNumBytes);
+
+    // Encode the message.
+    uat_rs.EncodeShortADSBMessage(test_encoded_message);
+    char encoded_message_hex[RawUATADSBPacket::kShortADSBMessageNumBytes * 2 + 1];
+
+    EXPECT_EQ(
+        ByteBufferToHexString(encoded_message_hex, test_encoded_message, RawUATADSBPacket::kShortADSBMessageNumBytes),
+        RawUATADSBPacket::kShortADSBMessageNumBytes * 2);
+
+    // Check against the expected encoded message.
+    EXPECT_STREQ(encoded_message_hex, expected_encoded_message_hex);
+}
