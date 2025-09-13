@@ -5,6 +5,8 @@
 #include "uat_packet.hh"
 #include "uat_test_data.h"
 
+#define USE_FEC
+
 // Test downlink frames
 TEST(UATDecoderTest, DownlinkFrames) {
     int count = get_uat_downlink_test_frames_count();
@@ -17,23 +19,28 @@ TEST(UATDecoderTest, DownlinkFrames) {
         AircraftDictionary dictionary;
         UATAircraft aircraft;
 
+#ifdef USE_FEC
         // Create encoded data frame.
-        // uint8_t encoded_data_frame[RawUATADSBPacket::kADSBMessageMaxSizeBytes] = {0};
-        // memcpy(encoded_data_frame, frame->frame_data_hex, frame->frame_length);
-        // if (frame->frame_length == RawUATADSBPacket::kShortADSBMessageNumBytes) {
-        //     uat_rs.EncodeShortADSBMessage(encoded_data_frame);
-        // } else {
-        //     uat_rs.EncodeLongADSBMessage(encoded_data_frame);
-        // }
-        // int16_t sigs_dbm = -10;                // Dummy signal strength.
-        // int16_t sigq_bits = 0;                 // Dummy signal quality.
-        // uint64_t mlat_48mhz_64bit_counts = 0;  // Dummy timestamp.
-        // DecodedUATADSBPacket packet(
-        //     RawUATADSBPacket(encoded_data_frame, frame->frame_length, sigs_dbm, sigq_bits, mlat_48mhz_64bit_counts));
-
+        uint8_t encoded_data_frame[RawUATADSBPacket::kADSBMessageMaxSizeBytes] = {0};
+        HexStringToByteBuffer(encoded_data_frame, frame->frame_data_hex, frame->frame_length);
+        uint16_t frame_length_with_fec;
+        if (frame->frame_length == RawUATADSBPacket::kShortADSBMessagePayloadNumBytes) {
+            uat_rs.EncodeShortADSBMessage(encoded_data_frame);
+            frame_length_with_fec = RawUATADSBPacket::kShortADSBMessageNumBytes;
+        } else {
+            uat_rs.EncodeLongADSBMessage(encoded_data_frame);
+            frame_length_with_fec = RawUATADSBPacket::kLongADSBMessageNumBytes;
+        }
+        int16_t sigs_dbm = -10;                // Dummy signal strength.
+        int16_t sigq_bits = 0;                 // Dummy signal quality.
+        uint64_t mlat_48mhz_64bit_counts = 0;  // Dummy timestamp.
+        DecodedUATADSBPacket packet(
+            RawUATADSBPacket(encoded_data_frame, frame_length_with_fec, sigs_dbm, sigq_bits, mlat_48mhz_64bit_counts));
+#else
         // Create the packet, force it as valid (no FEC included in test data), ingest into dictionary.
         DecodedUATADSBPacket packet(frame->frame_data_hex);
         packet.ReconstructWithoutFEC();
+#endif
 
         EXPECT_TRUE(dictionary.IngestDecodedUATADSBPacket(packet));
 

@@ -421,13 +421,14 @@ TEST(UATFEC, EncodeLongUATADSBPacket) {
     auto test_case = kUATDownlinkTests[5];  // DO-282B Table 2-104 #6
 
     // Build expected encoded message with no errors by compositing expected payload and FEC.
-    uint8_t expected_encoded_message[RawUATADSBPacket::kLongADSBMessageNumBytes];
+    uint8_t expected_encoded_message[RawUATADSBPacket::kLongADSBMessageNumBytes] = {0};
     HexStringToByteBuffer(expected_encoded_message, test_case.expected_decoded_payload,
                           RawUATADSBPacket::kLongADSBMessagePayloadNumBytes);
-    HexStringToByteBuffer(expected_encoded_message + RawUATADSBPacket::kLongADSBMessagePayloadNumBytes,
-                          test_case.raw_encoded_adsb_message + RawUATADSBPacket::kLongADSBMessagePayloadNumBytes,
-                          RawUATADSBPacket::kLongADSBMessageFECParityNumBytes);
-    char expected_encoded_message_hex[RawUATADSBPacket::kLongADSBMessageNumBytes * 2 + 1];
+    HexStringToByteBuffer(
+        expected_encoded_message + RawUATADSBPacket::kLongADSBMessagePayloadNumBytes,
+        test_case.raw_encoded_adsb_message + (RawUATADSBPacket::kLongADSBMessagePayloadNumBytes * kNibblesPerByte),
+        RawUATADSBPacket::kLongADSBMessageFECParityNumBytes);
+    char expected_encoded_message_hex[RawUATADSBPacket::kLongADSBMessageNumBytes * 2 + 1] = {0};
     ByteBufferToHexString(expected_encoded_message_hex, expected_encoded_message,
                           RawUATADSBPacket::kLongADSBMessageNumBytes);
 
@@ -450,15 +451,16 @@ TEST(UATFEC, EncodeLongUATADSBPacket) {
 }
 
 TEST(UATFEC, EncodeShortUATADSBPacket) {
-    auto test_case = kUATDownlinkTests[5];  // DO-282B Table 2-104 #6
+    auto test_case = kUATDownlinkTests[0];  // DO-282B Table 2-104 #1
 
     // Build expected encoded message with no errors by compositing expected payload and FEC.
     uint8_t expected_encoded_message[RawUATADSBPacket::kShortADSBMessageNumBytes];
     HexStringToByteBuffer(expected_encoded_message, test_case.expected_decoded_payload,
                           RawUATADSBPacket::kShortADSBMessagePayloadNumBytes);
-    HexStringToByteBuffer(expected_encoded_message + RawUATADSBPacket::kShortADSBMessagePayloadNumBytes,
-                          test_case.raw_encoded_adsb_message + RawUATADSBPacket::kShortADSBMessagePayloadNumBytes,
-                          RawUATADSBPacket::kShortADSBMessageFECParityNumBytes);
+    HexStringToByteBuffer(
+        expected_encoded_message + RawUATADSBPacket::kShortADSBMessagePayloadNumBytes,
+        test_case.raw_encoded_adsb_message + (RawUATADSBPacket::kShortADSBMessagePayloadNumBytes * kNibblesPerByte),
+        RawUATADSBPacket::kShortADSBMessageFECParityNumBytes);
     char expected_encoded_message_hex[RawUATADSBPacket::kShortADSBMessageNumBytes * 2 + 1];
     ByteBufferToHexString(expected_encoded_message_hex, expected_encoded_message,
                           RawUATADSBPacket::kShortADSBMessageNumBytes);
