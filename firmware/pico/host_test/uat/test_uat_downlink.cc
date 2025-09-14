@@ -31,6 +31,7 @@ TEST(UATDecoderTest, DownlinkFrames) {
             uat_rs.EncodeLongADSBMessage(encoded_data_frame);
             frame_length_with_fec = RawUATADSBPacket::kLongADSBMessageNumBytes;
         }
+        PrintByteBuffer("Encoded downlink message:", encoded_data_frame, frame_length_with_fec);
         int16_t sigs_dbm = -10;                // Dummy signal strength.
         int16_t sigq_bits = 0;                 // Dummy signal quality.
         uint64_t mlat_48mhz_64bit_counts = 0;  // Dummy timestamp.

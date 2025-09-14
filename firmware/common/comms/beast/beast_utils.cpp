@@ -187,9 +187,9 @@ uint16_t BeastReporter::BuildUATADSBBeastFrame(uint8_t *beast_frame_buf, const D
     return bytes_written;
 }
 
-uint16_t BeastReporter::BuildUATUplinkFrame(uint8_t *beast_frame_buf, const DecodedUATUplinkPacket &packet) {
+uint16_t BeastReporter::BuildUATUplinkBeastFrame(uint8_t *beast_frame_buf, const DecodedUATUplinkPacket &packet) {
     if (packet.raw.encoded_message_len_bytes != RawUATUplinkPacket::kUplinkMessageNumBytes) {
-        CONSOLE_ERROR("BeastReporter::BuildUATUplinkFrame", "Invalid UAT Uplink message length %d bytes.",
+        CONSOLE_ERROR("BeastReporter::BuildUATUplinkBeastFrame", "Invalid UAT Uplink message length %d bytes.",
                       packet.raw.encoded_message_len_bytes);
         return 0;  // Invalid length.
     }

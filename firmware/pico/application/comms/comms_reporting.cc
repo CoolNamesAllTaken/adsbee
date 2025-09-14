@@ -113,7 +113,7 @@ bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface, const Decod
 bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface,
                                const DecodedModeSPacket packets_to_report_1090[], uint16_t num_packets_to_report) {
     for (uint16_t i = 0; i < num_packets_to_report; i++) {
-        uint8_t beast_frame_buf[BeastReporter::kBeastFrameMaxLenBytes];
+        uint8_t beast_frame_buf[BeastReporter::kModeSBeastFrameMaxLenBytes];
         uint16_t num_bytes_in_frame = BeastReporter::BuildModeSBeastFrame(beast_frame_buf, packets_to_report_1090[i]);
         comms_manager.iface_putc(iface, char(0x1a));  // Send beast escape char to denote beginning of frame.
         SendBuf(iface, (char *)beast_frame_buf, num_bytes_in_frame);

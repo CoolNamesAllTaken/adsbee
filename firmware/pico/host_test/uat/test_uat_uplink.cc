@@ -47,6 +47,7 @@ TEST(UATDecoderTest, UplinkFrames) {
         HexStringToByteBuffer(decoded_data_frame, frame->frame_data_hex, frame->frame_length);
         uint8_t encoded_data_frame[RawUATUplinkPacket::kUplinkMessageNumBytes] = {0};
         uat_rs.EncodeUplinkMessage(encoded_data_frame, decoded_data_frame);
+        PrintByteBuffer("Encoded uplink message:", encoded_data_frame, RawUATUplinkPacket::kUplinkMessageNumBytes);
         int16_t sigs_dbm = -10;                // Dummy signal strength.
         int16_t sigq_bits = 0;                 // Dummy signal quality.
         uint64_t mlat_48mhz_64bit_counts = 0;  // Dummy timestamp.

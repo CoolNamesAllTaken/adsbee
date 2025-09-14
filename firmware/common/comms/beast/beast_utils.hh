@@ -28,18 +28,25 @@ const uint16_t kBeastMLATTimestampNumBytes = 6;
  * 0x1a | 0xec (frame type UAT) | uat message type byte (no escapes) | timestamp | rssi | payload
  */
 
-const uint16_t kBeastFrameMaxLenBytes = 1 /* Frame Type */ + 2 * 6 /* MLAT timestamp + escapes */ +
-                                        2 /* RSSI + escape */ + 2 * 14 /* Longest Mode S data + escapes */;  // [Bytes]
+constexpr uint16_t kModeSBeastFrameMaxLenBytes =
+    1 /* Frame Type */ + 2 * 6 /* MLAT timestamp + escapes */ + 2 /* RSSI + escape */ +
+    2 * RawModeSPacket::kExtendedSquitterPacketLenBytes /* Longest Mode S data + escapes */;  // [Bytes]
+constexpr uint16_t kUATADSBBeastFrameMaxLenBytes = 1 /* Frame Type */ + 1 /* UAT Message Type */ +
+                                                   2 * 6 /* MLAT timestamp + escapes */ + 2 /* RSSI + escape */ +
+                                                   2 * RawUATADSBPacket::kADSBMessageMaxSizeBytes;  // [Bytes]
+constexpr uint16_t kUATUplinkBeastFrameMaxLenBytes = 1 /* Frame Type */ + 1 /* UAT Message Type */ +
+                                                     2 * 6 /* MLAT timestamp + escapes */ + 2 /* RSSI + escape */ +
+                                                     2 * RawUATUplinkPacket::kUplinkMessageNumBytes;  // [Bytes]
 
-const uint16_t kUuidNumChars = 36;
-const uint16_t kReceiverIDLenBytes = 8;
+constexpr uint16_t kUuidNumChars = 36;
+constexpr uint16_t kReceiverIDLenBytes = 8;
 
 enum BeastFrameType {
     kBeastFrameTypeInvalid = 0x0,
     kBeastFrameTypeIngestId = 0xe3,  // Used by readsb for forwarding messages internally.
     kBeastFrameTypeFeedId = 0xe4,    // Used by readsb for establishing a feed with a UUID.
     kBeastFrameTypeUAT =
-        0xeb,  // Used for encapsulated UAT ADSB short messages, UAT ADSB long messages, and UAT uplink messages.
+        0xec,  // Used for encapsulated UAT ADSB short messages, UAT ADSB long messages, and UAT uplink messages.
     kBeastFrameTypeModeAC = 0x31,  // Note: This is not used, since I'm assuming it does NOT refer to DF 4,5.
     kBeastFrameTypeModeSShort = 0x32,
     kBeastFrameTypeModeSLong = 0x33
@@ -103,6 +110,6 @@ uint16_t BuildUATADSBBeastFrame(uint8_t *beast_frame_buf, const DecodedUATADSBPa
  * @param[in] packet Reference to DecodedUATUplinkPacket to write to the buffer.
  * @retval Number of bytes written to beast_frame_buf.
  */
-uint16_t BuildUATUplinkFrame(uint8_t *beast_frame_buf, const DecodedUATUplinkPacket &packet);
+uint16_t BuildUATUplinkBeastFrame(uint8_t *beast_frame_buf, const DecodedUATUplinkPacket &packet);
 
 }  // namespace BeastReporter

@@ -89,8 +89,8 @@ int UATReedSolomon::DecodeUplinkMessage(
         int num_bytes_corrected = decode_rs_char(rs_uplink, block_data_and_parity, nullptr, 0);
         // PrintByteBuffer("\tBlock data after decode:", block_data_and_parity,
         //                 RawUATUplinkPacket::kUplinkMessageBlockNumBytes);
-        CONSOLE_INFO("UATReedSolomon", "\tDecoded UAT uplink message block %d with %d bytes corrected.", block,
-                     num_bytes_corrected);
+        // CONSOLE_INFO("UATReedSolomon", "\tDecoded UAT uplink message block %d with %d bytes corrected.", block,
+        //  num_bytes_corrected);
         if (num_bytes_corrected < 0 || num_bytes_corrected > kUplinkMessageMaxNumByteCorrectionsPerBlock) {
             return -1;  // Invalid message.
         }
