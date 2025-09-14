@@ -161,5 +161,5 @@ uint16_t ByteBufferToHexString(char *hex_string, const uint8_t *byte_buffer, uin
 void PrintByteBuffer(const char *prefix, const uint8_t *byte_buffer, uint16_t num_bytes) {
     char hex_string[num_bytes * kNibblesPerByte + 1];
     ByteBufferToHexString(hex_string, byte_buffer, num_bytes);
-    CONSOLE_INFO("PrintByteBuffer", "%s %s", prefix, hex_string);
+    CONSOLE_PRINTF("%s %s\r\n", prefix, hex_string);
 }

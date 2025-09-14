@@ -18,7 +18,7 @@ TEST(UATDecoderTest, UplinkEncodeDecode) {
     EXPECT_EQ(encoded_data_frame[12], 0x56);
     EXPECT_EQ(encoded_data_frame[18], 0x78);
     EXPECT_EQ(encoded_data_frame[24], 0x90);
-    DecodedUATUplinkPacket packet(RawUATUplinkPacket(decoded_data_frame, RawUATUplinkPacket::kUplinkMessageNumBytes,
+    DecodedUATUplinkPacket packet(RawUATUplinkPacket(encoded_data_frame, RawUATUplinkPacket::kUplinkMessageNumBytes,
                                                      sigs_dbm, sigq_bits, mlat_48mhz_64bit_counts));
     EXPECT_TRUE(packet.is_valid);
 
@@ -50,7 +50,7 @@ TEST(UATDecoderTest, UplinkFrames) {
         int16_t sigs_dbm = -10;                // Dummy signal strength.
         int16_t sigq_bits = 0;                 // Dummy signal quality.
         uint64_t mlat_48mhz_64bit_counts = 0;  // Dummy timestamp.
-        DecodedUATUplinkPacket packet(RawUATUplinkPacket(decoded_data_frame, RawUATUplinkPacket::kUplinkMessageNumBytes,
+        DecodedUATUplinkPacket packet(RawUATUplinkPacket(encoded_data_frame, RawUATUplinkPacket::kUplinkMessageNumBytes,
                                                          sigs_dbm, sigq_bits, mlat_48mhz_64bit_counts));
         EXPECT_TRUE(packet.is_valid);
     }

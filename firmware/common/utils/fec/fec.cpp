@@ -72,18 +72,23 @@ int UATReedSolomon::DecodeUplinkMessage(
     }
     int total_bytes_corrected = 0;
 
+    // PrintByteBuffer("DecodeUplinkMessage: Encoded message before decode:", encoded_message_buf,
+    //                 RawUATUplinkPacket::kUplinkMessageNumBytes);
     for (int block = 0; block < RawUATUplinkPacket::kUplinkMessageNumBlocks; block++) {
-        uint8_t *block_data = &(decoded_payload_buf[block * RawUATUplinkPacket::kUplinkMessageBlockPayloadNumBytes]);
+        uint8_t *block_data_and_parity =
+            &(decoded_payload_buf[block * RawUATUplinkPacket::kUplinkMessageBlockPayloadNumBytes]);
         for (int byte_index = 0; byte_index < RawUATUplinkPacket::kUplinkMessageBlockNumBytes; byte_index++) {
             // De-interleave per UAT tech manual Table 2-6.
-            block_data[byte_index] =
+            block_data_and_parity[byte_index] =
                 encoded_message_buf[byte_index * RawUATUplinkPacket::kUplinkMessageNumBlocks + block];
         }
 
         // Decode with 0 erasures (erasures list is nullptr).
-        PrintByteBuffer("\tBlock data before decode:", block_data, RawUATUplinkPacket::kUplinkMessageBlockNumBytes);
-        int num_bytes_corrected = decode_rs_char(rs_uplink, block_data, nullptr, 0);
-        PrintByteBuffer("\tBlock data after decode:", block_data, RawUATUplinkPacket::kUplinkMessageBlockNumBytes);
+        // PrintByteBuffer("\tBlock data before decode:", block_data_and_parity,
+        //                 RawUATUplinkPacket::kUplinkMessageBlockNumBytes);
+        int num_bytes_corrected = decode_rs_char(rs_uplink, block_data_and_parity, nullptr, 0);
+        // PrintByteBuffer("\tBlock data after decode:", block_data_and_parity,
+        //                 RawUATUplinkPacket::kUplinkMessageBlockNumBytes);
         CONSOLE_INFO("UATReedSolomon", "\tDecoded UAT uplink message block %d with %d bytes corrected.", block,
                      num_bytes_corrected);
         if (num_bytes_corrected < 0 || num_bytes_corrected > kUplinkMessageMaxNumByteCorrectionsPerBlock) {
@@ -119,10 +124,14 @@ bool UATReedSolomon::EncodeUplinkMessage(uint8_t encoded_message_buf[], uint8_t 
         return false;  // Invalid input.
     }
 
+    // PrintByteBuffer("EncodeUplinkMessage: Decoded payload before encode:", decoded_payload_buf,
+    //                 RawUATUplinkPacket::kUplinkMessagePayloadNumBytes);
     for (int block = 0; block < RawUATUplinkPacket::kUplinkMessageNumBlocks; block++) {
         uint8_t *block_data = &(decoded_payload_buf[block * RawUATUplinkPacket::kUplinkMessageBlockPayloadNumBytes]);
         uint8_t block_parity[RawUATUplinkPacket::kUplinkMessageBlockFECParityNumBytes];
         encode_rs_char(rs_uplink, block_data, block_parity);
+        // PrintByteBuffer("\tBlock Data:", block_data, RawUATUplinkPacket::kUplinkMessageBlockPayloadNumBytes);
+        // PrintByteBuffer("\tBlock Parity:", block_parity, RawUATUplinkPacket::kUplinkMessageBlockFECParityNumBytes);
         for (int byte_index = 0; byte_index < RawUATUplinkPacket::kUplinkMessageBlockPayloadNumBytes; byte_index++) {
             // Interleave payload per UAT tech manual Table 2-6.
             encoded_message_buf[byte_index * RawUATUplinkPacket::kUplinkMessageNumBlocks + block] =
@@ -130,11 +139,13 @@ bool UATReedSolomon::EncodeUplinkMessage(uint8_t encoded_message_buf[], uint8_t 
         }
         for (int byte_index = 0; byte_index < RawUATUplinkPacket::kUplinkMessageBlockFECParityNumBytes; byte_index++) {
             // Interleave parity per UAT tech manual Table 2-6.
-            encoded_message_buf[(byte_index + RawUATUplinkPacket::kUplinkMessageBlockPayloadNumBytes) *
-                                    RawUATUplinkPacket::kUplinkMessageNumBlocks +
-                                block] = block_parity[byte_index];
+            encoded_message_buf[(RawUATUplinkPacket::kUplinkMessageBlockPayloadNumBytes *
+                                 RawUATUplinkPacket::kUplinkMessageNumBlocks) +
+                                (byte_index * RawUATUplinkPacket::kUplinkMessageNumBlocks) + block] =
+                block_parity[byte_index];
         }
     }
+    // PrintByteBuffer("\tEncoded Message:", encoded_message_buf, RawUATUplinkPacket::kUplinkMessageNumBytes);
 
     return true;
 }
