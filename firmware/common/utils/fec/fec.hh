@@ -50,7 +50,7 @@ class UATReedSolomon {
      */
     bool EncodeShortADSBMessage(uint8_t message_buf[]);
     bool EncodeLongADSBMessage(uint8_t message_buf[]);
-    bool EncodeUplinkMessage(uint8_t decoded_payload_buf[], uint8_t encoded_message_buf[]);
+    bool EncodeUplinkMessage(uint8_t encoded_message_buf[], uint8_t decoded_payload_buf[]);
 
     void* rs_adsb_short = nullptr;
     void* rs_adsb_long = nullptr;

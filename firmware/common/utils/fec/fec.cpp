@@ -108,7 +108,7 @@ bool UATReedSolomon::EncodeLongADSBMessage(uint8_t message_buf[]) {
     return true;
 }
 
-bool UATReedSolomon::EncodeUplinkMessage(uint8_t decoded_payload_buf[], uint8_t encoded_message_buf[]) {
+bool UATReedSolomon::EncodeUplinkMessage(uint8_t encoded_message_buf[], uint8_t decoded_payload_buf[]) {
     if (encoded_message_buf == nullptr) {
         return false;  // Invalid input.
     }
@@ -125,7 +125,7 @@ bool UATReedSolomon::EncodeUplinkMessage(uint8_t decoded_payload_buf[], uint8_t 
         for (int byte_index = 0; byte_index < RawUATUplinkPacket::kUplinkMessageBlockFECParityNumBytes; byte_index++) {
             // Interleave parity per UAT tech manual Table 2-6.
             encoded_message_buf[(byte_index + RawUATUplinkPacket::kUplinkMessageBlockPayloadNumBytes) *
-                                    RawUATUplinkPacket::kUplinkMessageBlockNumBytes +
+                                    RawUATUplinkPacket::kUplinkMessageNumBlocks +
                                 block] = block_parity[byte_index];
         }
     }
