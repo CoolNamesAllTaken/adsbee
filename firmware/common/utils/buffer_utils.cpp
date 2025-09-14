@@ -157,3 +157,9 @@ uint16_t ByteBufferToHexString(char *hex_string, const uint8_t *byte_buffer, uin
     hex_string[num_bytes * kNibblesPerByte] = '\0';  // Null-terminate the string.
     return num_bytes * kNibblesPerByte;
 }
+
+void PrintByteBuffer(const char *prefix, const uint8_t *byte_buffer, uint16_t num_bytes) {
+    char hex_string[num_bytes * kNibblesPerByte + 1];
+    ByteBufferToHexString(hex_string, byte_buffer, num_bytes);
+    CONSOLE_INFO("PrintByteBuffer", "%s %s", prefix, hex_string);
+}

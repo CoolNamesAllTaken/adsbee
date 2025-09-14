@@ -1,5 +1,6 @@
 #include "fec.hh"
 
+#include "buffer_utils.hh"  // for PrintByteBuffer
 #include "comms.hh"
 #include "rs.h"  // For init_rs_char, decode_rs_char, encode_rs_char
 #include "uat_packet.hh"
@@ -63,9 +64,9 @@ int UATReedSolomon::DecodeLongADSBMessage(uint8_t message_buf[RawUATADSBPacket::
 }
 
 int UATReedSolomon::DecodeUplinkMessage(
-    uint8_t encoded_message_buf[RawUATUplinkPacket::kUplinkMessageNumBytes],
     uint8_t decoded_payload_buf[RawUATUplinkPacket::kUplinkMessagePayloadNumBytes +
-                                RawUATUplinkPacket::kUplinkMessageBlockFECParityNumBytes]) {
+                                RawUATUplinkPacket::kUplinkMessageBlockFECParityNumBytes],
+    uint8_t encoded_message_buf[RawUATUplinkPacket::kUplinkMessageNumBytes]) {
     if (encoded_message_buf == nullptr) {
         return -1;  // Invalid input.
     }
@@ -79,7 +80,12 @@ int UATReedSolomon::DecodeUplinkMessage(
                 encoded_message_buf[byte_index * RawUATUplinkPacket::kUplinkMessageNumBlocks + block];
         }
 
+        // Decode with 0 erasures (erasures list is nullptr).
+        PrintByteBuffer("\tBlock data before decode:", block_data, RawUATUplinkPacket::kUplinkMessageBlockNumBytes);
         int num_bytes_corrected = decode_rs_char(rs_uplink, block_data, nullptr, 0);
+        PrintByteBuffer("\tBlock data after decode:", block_data, RawUATUplinkPacket::kUplinkMessageBlockNumBytes);
+        CONSOLE_INFO("UATReedSolomon", "\tDecoded UAT uplink message block %d with %d bytes corrected.", block,
+                     num_bytes_corrected);
         if (num_bytes_corrected < 0 || num_bytes_corrected > kUplinkMessageMaxNumByteCorrectionsPerBlock) {
             return -1;  // Invalid message.
         }

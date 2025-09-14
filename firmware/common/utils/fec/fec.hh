@@ -35,14 +35,14 @@ class UATReedSolomon {
 
     /**
      * Attempt decoding of a UAT uplink message.
-     * @param encoded_message_buf Buffer with the encoded message to decode.
-     * @param decoded_payload_buf Buffer to store the decoded payload in. If decode is successful, buffer will be
+     * @param[out] decoded_payload_buf Buffer to store the decoded payload in. If decode is successful, buffer will be
      * modified. This buffer needs to be oversized by the number of FEC parity bytes in a UAT uplink message block since
      * blocks are processed in-place, and the last block needs a place to overflow to.
+     * @param[in] encoded_message_buf Buffer with the encoded message to decode.
      * @return Number of bits corrected. 0 if message had no errors, positive number if errors were corrected, -1 if
      * message was invalid and not correctable.
      */
-    int DecodeUplinkMessage(uint8_t encoded_message_buf[], uint8_t decoded_payload_buf[]);
+    int DecodeUplinkMessage(uint8_t decoded_payload_buf[], uint8_t encoded_message_buf[]);
 
     /**
      * Test functions used to turning test messages (provided without FEC headers) into encoded messages similar to what

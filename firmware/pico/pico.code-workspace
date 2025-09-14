@@ -93,7 +93,8 @@
 			"variant": "cpp",
 			"shared_mutex": "cpp",
 			"rs-common.h": "c",
-			"encode_rs.h": "c"
+			"encode_rs.h": "c",
+			"decode_rs.h": "c"
 		},
 		"C_Cpp.default.defines": [
 			"ON_PICO"

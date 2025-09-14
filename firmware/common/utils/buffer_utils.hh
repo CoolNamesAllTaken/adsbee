@@ -111,3 +111,12 @@ uint16_t HexStringToByteBuffer(uint8_t *byte_buffer, const char *hex_string, uin
  * @retval Number of characters written to the output string (not including null terminator).
  */
 uint16_t ByteBufferToHexString(char *hex_string, const uint8_t *byte_buffer, uint16_t num_bytes);
+
+/**
+ * Prints a byte buffer as a hex string to the console.
+ * @param[in] tag Tag to use for the console print.
+ * @param[in] prefix Prefix string to print before the hex string.
+ * @param[in] byte_buffer Pointer to the input byte buffer.
+ * @param[in] num_bytes Number of bytes to print from the input buffer.
+ */
+void PrintByteBuffer(const char *prefix, const uint8_t *byte_buffer, uint16_t num_bytes);
