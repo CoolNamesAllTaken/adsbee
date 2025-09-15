@@ -127,6 +127,51 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             xQueueSend(adsbee_server.rp2040_aircraft_dictionary_metrics_queue, &rp2040_metrics, 0);
             break;
         }
+        case kAddrCompositeArray::RawPackets: {
+            if (offset != 0) {
+                CONSOLE_ERROR("ObjectDictionary::SetBytes",
+                              "Offset %d for writing CompositeArray::RawPackets not supported, must be 0.", offset);
+                return false;
+            }
+            if (buf_len < sizeof(CompositeArray::RawPacketsHeader)) {
+                CONSOLE_ERROR("ObjectDictionary::SetBytes",
+                              "Buffer length %d for writing CompositeArray::RawPackets must be at least %d.", buf_len,
+                              sizeof(CompositeArray::RawPacketsHeader));
+                return false;
+            }
+            CompositeArray::RawPacketsHeader *header = (CompositeArray::RawPacketsHeader *)buf;
+            uint16_t expected_len = sizeof(CompositeArray::RawPacketsHeader) +
+                                    header->num_mode_s_packets * sizeof(RawModeSPacket) +
+                                    header->num_uat_adsb_packets * sizeof(RawUATADSBPacket) +
+                                    header->num_uat_uplink_packets * sizeof(RawUATUplinkPacket);
+            if (buf_len != expected_len) {
+                CONSOLE_ERROR("ObjectDictionary::SetBytes",
+                              "Buffer length %d for writing CompositeArray::RawPackets does not match expected "
+                              "length %d based on header values.",
+                              buf_len, expected_len);
+                return false;
+            }
+            uint16_t cursor = sizeof(CompositeArray::RawPacketsHeader);
+            RawModeSPacket mode_s_packet;
+            for (uint16_t i = 0; i < header->num_mode_s_packets; i++) {
+                memcpy(&mode_s_packet, buf + cursor, sizeof(RawModeSPacket));
+                cursor += sizeof(RawModeSPacket);
+                adsbee_server.HandleRawModeSPacket(mode_s_packet);
+            }
+            RawUATADSBPacket uat_adsb_packet;
+            for (uint16_t i = 0; i < header->num_uat_adsb_packets; i++) {
+                memcpy(&uat_adsb_packet, buf + cursor, sizeof(RawUATADSBPacket));
+                cursor += sizeof(RawUATADSBPacket);
+                adsbee_server.HandleRawUATADSBPacket(uat_adsb_packet);
+            }
+            RawUATUplinkPacket uat_uplink_packet;
+            for (uint16_t i = 0; i < header->num_uat_uplink_packets; i++) {
+                memcpy(&uat_uplink_packet, buf + cursor, sizeof(RawUATUplinkPacket));
+                cursor += sizeof(RawUATUplinkPacket);
+                adsbee_server.HandleRawUATUplinkPacket(uat_uplink_packet);
+            }
+            break;
+        }
 #elif defined(ON_TI)
 #endif
         default:
@@ -245,6 +290,40 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             break;
         }
 #elif defined(ON_TI)
+        case kAddrCompositeArray::RawPackets: {
+            if (offset != 0) {
+                CONSOLE_ERROR("ObjectDictionary::GetBytes",
+                              "Offset %d for reading CompositeArray::RawPackets not supported, must be 0.", offset);
+                return false;
+            }
+            if (buf_len < sizeof(CompositeArray::RawPacketsHeader)) {
+                CONSOLE_ERROR("ObjectDictionary::GetBytes",
+                              "Buffer length %d for reading CompositeArray::RawPackets must be at least %d.", buf_len,
+                              sizeof(CompositeArray::RawPacketsHeader));
+                return false;
+            }
+            CompositeArray::RawPacketsHeader header = {0};
+            uint16_t cursor = sizeof(CompositeArray::RawPacketsHeader);
+            // Ignore num_mode_s_packets since we don't have any on the CC1312.
+            // Fill the array with UAT ADSB packets.
+            while (cursor + sizeof(RawUATADSBPacket) <= buf_len && !decoded_uat_adsb_packet_queue.IsEmpty()) {
+                DecodedUATADSBPacket packet;
+                decoded_uat_adsb_packet_queue.Dequeue(packet);
+                memcpy(buf + cursor, &(packet.raw), sizeof(RawUATADSBPacket));
+                cursor += sizeof(RawUATADSBPacket);
+                header.num_uat_adsb_packets++;
+            }
+            // Fill the array with UAT Uplink packets.
+            while (cursor + sizeof(RawUATUplinkPacket) <= buf_len && !decoded_uat_uplink_packet_queue.IsEmpty()) {
+                DecodedUATUplinkPacket packet;
+                decoded_uat_uplink_packet_queue.Dequeue(packet);
+                memcpy(buf + cursor, &(packet.raw), sizeof(RawUATUplinkPacket));
+                cursor += sizeof(RawUATUplinkPacket);
+                header.num_uat_uplink_packets++;
+            }
+            // Fill in the composite array header.
+            memcpy(buf, &header, sizeof(CompositeArray::RawPacketsHeader));
+        }
 #endif
         default:
             CONSOLE_ERROR("SPICoprocessor::SetBytes", "No behavior implemented for reading from address 0x%x.", addr);

@@ -108,9 +108,11 @@ uint16_t HexStringToByteBuffer(uint8_t *byte_buffer, const char *hex_string, uin
  * @param[out] hex_string Pointer to the output string buffer. Must be at least 2*max_bytes + 1 bytes long.
  * @param[in] byte_buffer Pointer to the input byte buffer.
  * @param[in] num_bytes Number of bytes to convert from the input buffer.
+ * @param[in] uppercase Whether to use uppercase letters for hex digits. Defaults to false (lowercase).
  * @retval Number of characters written to the output string (not including null terminator).
  */
-uint16_t ByteBufferToHexString(char *hex_string, const uint8_t *byte_buffer, uint16_t num_bytes);
+uint16_t ByteBufferToHexString(char *hex_string, const uint8_t *byte_buffer, uint16_t num_bytes,
+                               bool uppercase = false);
 
 /**
  * Prints a byte buffer as a hex string to the console.

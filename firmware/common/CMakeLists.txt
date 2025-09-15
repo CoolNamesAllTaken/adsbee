@@ -20,6 +20,7 @@ if (TARGET application)
         adsb/aircraft_dictionary.cpp
         adsb/decode_utils.cpp
         adsb/mode_s_packet_decoder.cc
+        coprocessor/composite_array.cc
         coprocessor/spi_coprocessor.cpp
         coprocessor/object_dictionary.cpp
         firmware_update/firmware_update.cc
@@ -67,6 +68,7 @@ elseif (TARGET sub_ghz_radio)
         adsb/uat_packet.cpp
         # adsb/aircraft_dictionary.cpp
         adsb/decode_utils.cpp
+        coprocessor/composite_array.cpp
         coprocessor/spi_coprocessor.cpp
         coprocessor/object_dictionary.cpp
     )
@@ -95,6 +97,7 @@ elseif (TARGET host_test)
         comms/beast/beast_utils.cpp
         comms/gdl90/gdl90_utils.cpp
         comms/raw/raw_utils.cpp
+        coprocessor/composite_array.cpp
         coprocessor/spi_coprocessor.cpp
         coprocessor/object_dictionary.cpp
         settings/settings_strs.cpp

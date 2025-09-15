@@ -5,6 +5,7 @@
 #include "hardware/uart.h"
 #include "mode_s_packet.hh"
 #include "settings.hh"
+#include "uat_packet.hh"
 
 class CommsManager {
    public:
@@ -93,7 +94,7 @@ class CommsManager {
     bool network_console_putc(char c);
     bool network_console_puts(const char *buf, uint16_t len = UINT16_MAX);
 
-    void SendBuf(SettingsManager::SerialInterface iface, char *buf, uint16_t buf_len) {
+    inline void SendBuf(SettingsManager::SerialInterface iface, char *buf, uint16_t buf_len) {
         for (uint16_t i = 0; i < buf_len; i++) {
             iface_putc(iface, buf[i]);
         }
@@ -105,7 +106,7 @@ class CommsManager {
      * @param[in] baudrate Baudrate to set.
      * @retval True if the baudrate could be set, false if the interface specified does not support a baudrate.
      */
-    bool SetBaudRate(SettingsManager::SerialInterface iface, uint32_t baudrate) {
+    inline bool SetBaudRate(SettingsManager::SerialInterface iface, uint32_t baudrate) {
         switch (iface) {
             case SettingsManager::kCommsUART:
                 // Save the actual set value as comms_uart_baudrate_.
@@ -129,7 +130,7 @@ class CommsManager {
      * @param[out] baudrate Reference to uint32_t to fill with retrieved value.
      * @retval True if baudrate retrieval succeeded, false if iface does not support a baudrate.
      */
-    bool GetBaudRate(SettingsManager::SerialInterface iface, uint32_t &baudrate) {
+    inline bool GetBaudRate(SettingsManager::SerialInterface iface, uint32_t &baudrate) {
         switch (iface) {
             case SettingsManager::kCommsUART:
                 // Save the actual set value as comms_uart_baudrate_.
@@ -153,7 +154,8 @@ class CommsManager {
      * @param[in] protocol Reporting protocol to set on iface.
      * @retval True if succeeded, false otherwise.
      */
-    bool SetReportingProtocol(SettingsManager::SerialInterface iface, SettingsManager::ReportingProtocol protocol) {
+    inline bool SetReportingProtocol(SettingsManager::SerialInterface iface,
+                                     SettingsManager::ReportingProtocol protocol) {
         settings_manager.settings.reporting_protocols[iface] = protocol;
         return true;
     }
@@ -164,13 +166,14 @@ class CommsManager {
      * @param[out] protocol reference to ReportingProtocol to fill with result.
      * @retval True if reportig protocol could be retrieved, false otherwise.
      */
-    bool GetReportingProtocol(SettingsManager::SerialInterface iface, SettingsManager::ReportingProtocol &protocol) {
+    inline bool GetReportingProtocol(SettingsManager::SerialInterface iface,
+                                     SettingsManager::ReportingProtocol &protocol) {
         protocol = settings_manager.settings.reporting_protocols[iface];
         return true;
     }
 
     // Queue for storing transponder packets before they get reported.
-    PFBQueue<DecodedModeSPacket> transponder_packet_reporting_queue =
+    PFBQueue<DecodedModeSPacket> mode_s_packet_reporting_queue =
         PFBQueue<DecodedModeSPacket>({.buf_len_num_elements = SettingsManager::Settings::kMaxNumTransponderPackets,
                                       .buffer = transponder_packet_reporting_queue_buffer_});
 
@@ -193,20 +196,25 @@ class CommsManager {
     bool InitReporting();
     bool UpdateReporting();
 
-    bool ReportRaw(SettingsManager::SerialInterface iface, const DecodedModeSPacket packets_to_report_1090[],
-                   uint16_t num_packets_to_report);
+    /**
+     * Sends out RAW formatted transponder data on the selected serial interface.
+     * @param[in] iface SerialInterface to broadcast RAW messages on.
+     * @param[in] packets CompositeArray::RawPackets struct with counts and pointers to arrays of each kind of packet to
+     * report.
+     * @retval True if successful, false if something broke.
+     */
+    bool ReportRaw(SettingsManager::SerialInterface iface, const ObjectDictionary::CompositeArray::RawPackets &packets);
 
     /**
      * Sends out Mode S Beast formatted transponder data on the selected serial interface. Reports all transponder
      * packets in the provided packets_to_report array, which is used to allow printing arbitrary blocks of transponder
      * packets received via the CommsManager's built-in transponder_packet_reporting_queue_.
      * @param[in] iface SerialInterface to broadcast Mode S Beast messages on.
-     * @param[in] packets_to_report Array of transponder packets to report.
-     * @param[in] num_packets_to_report Number of packets to report from the packets_to_report array.
-     * @retval True if successful, false if something broke.
+     * @param[in] packets CompositeArray::RawPackets struct with counts and pointers to arrays of each kind of packet to
+     * report.
      */
-    bool ReportBeast(SettingsManager::SerialInterface iface, const DecodedModeSPacket packets_to_report_1090[],
-                     uint16_t num_packets_to_report);
+    bool ReportBeast(SettingsManager::SerialInterface iface,
+                     const ObjectDictionary::CompositeArray::RawPackets &packets);
 
     /**
      * Sends out comma separated aircraft information for each aircraft in the aircraft dictionary.
@@ -242,7 +250,7 @@ class CommsManager {
     uint32_t last_esp32_console_tx_timestamp_ms_ = 0;  // Timestamp of last network console TX.
 
     // Queue for holding new transponder packets before they get reported.
-    DecodedModeSPacket transponder_packet_reporting_queue_buffer_[SettingsManager::Settings::kMaxNumTransponderPackets];
+    DecodedModeSPacket mode_s_packet_reporting_queue_buffer_[SettingsManager::Settings::kMaxNumTransponderPackets];
 
     // Reporting protocol timestamps
     // NOTE: Raw reporting interval used for RAW and BEAST protocols as well as internal functions.

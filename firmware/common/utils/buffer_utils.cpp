@@ -149,10 +149,12 @@ uint16_t HexStringToByteBuffer(uint8_t *byte_buffer, const char *hex_string, uin
     return bytes_written;
 }
 
-uint16_t ByteBufferToHexString(char *hex_string, const uint8_t *byte_buffer, uint16_t num_bytes) {
+uint16_t ByteBufferToHexString(char *hex_string, const uint8_t *byte_buffer, uint16_t num_bytes, bool uppercase) {
     for (uint16_t i = 0; i < num_bytes; i++) {
-        hex_string[i * kNibblesPerByte] = HEX_TO_CHAR_LOWER((byte_buffer[i] >> 4) & 0x0F);
-        hex_string[i * kNibblesPerByte + 1] = HEX_TO_CHAR_LOWER(byte_buffer[i] & 0x0F);
+        hex_string[i * kNibblesPerByte] = uppercase ? HEX_TO_CHAR_UPPER((byte_buffer[i] >> 4) & 0x0F)
+                                                    : HEX_TO_CHAR_LOWER((byte_buffer[i] >> 4) & 0x0F);
+        hex_string[i * kNibblesPerByte + 1] =
+            uppercase ? HEX_TO_CHAR_UPPER(byte_buffer[i] & 0x0F) : HEX_TO_CHAR_LOWER(byte_buffer[i] & 0x0F);
     }
     hex_string[num_bytes * kNibblesPerByte] = '\0';  // Null-terminate the string.
     return num_bytes * kNibblesPerByte;

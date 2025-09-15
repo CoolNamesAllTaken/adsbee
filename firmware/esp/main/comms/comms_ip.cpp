@@ -285,7 +285,7 @@ void CommsManager::IPWANTask(void* pvParameters) {
                         [[fallthrough]];
                     case SettingsManager::ReportingProtocol::kBeastRaw: {
                         uint8_t beast_message_buf[2 * SettingsManager::Settings::kFeedReceiverIDNumBytes +
-                                                  kBeastFrameMaxLenBytes];
+                                                  BeastReporter::kModeSBeastFrameMaxLenBytes];
                         uint16_t beast_message_len_bytes =
                             BuildFeedStartFrame(beast_message_buf, settings_manager.settings.feed_receiver_ids[i]);
                         int err = send(feed_sock[i], beast_message_buf, beast_message_len_bytes, 0);
@@ -314,7 +314,7 @@ void CommsManager::IPWANTask(void* pvParameters) {
             // NOTE: Construct packets that are specific to a feed in case statements here!
             switch (settings_manager.settings.feed_protocols[i]) {
                 case SettingsManager::ReportingProtocol::kBeast:
-                    if (!decoded_packet.IsValid()) {
+                    if (!decoded_packet.is_valid) {
                         // Packet is invalid, don't send.
                         break;
                     }
@@ -323,8 +323,9 @@ void CommsManager::IPWANTask(void* pvParameters) {
                     // Send Beast packet.
                     // Double the length as a hack to make room for the escaped UUID.
                     uint8_t beast_message_buf[2 * SettingsManager::Settings::kFeedReceiverIDNumBytes +
-                                              kBeastFrameMaxLenBytes];
-                    uint16_t beast_message_len_bytes = Build1090BeastFrame(decoded_packet, beast_message_buf);
+                                              BeastReporter::kModeSBeastFrameMaxLenBytes];
+                    uint16_t beast_message_len_bytes =
+                        BeastReporter::BuildModeSBeastFrame(beast_message_buf, decoded_packet);
 
                     int err = send(feed_sock[i], beast_message_buf, beast_message_len_bytes, 0);
                     if (err < 0) {

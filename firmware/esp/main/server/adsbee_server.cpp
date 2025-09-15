@@ -200,7 +200,7 @@ bool ADSBeeServer::Update() {
 
     // Ingest new packets into the dictionary.
     RawModeSPacket raw_packet;
-    while (raw_transponder_packet_queue.Dequeue(raw_packet)) {
+    while (raw_mode_s_packet_queue.Dequeue(raw_packet)) {
         DecodedModeSPacket decoded_packet = DecodedModeSPacket(raw_packet);
 #ifdef VERBOSE_DEBUG
         if (raw_packet.buffer_len_bits == DecodedModeSPacket::kExtendedSquitterPacketLenBits) {
@@ -255,10 +255,32 @@ bool ADSBeeServer::Update() {
 
 bool ADSBeeServer::HandleRawModeSPacket(RawModeSPacket &raw_packet) {
     bool ret = true;
-    if (!raw_transponder_packet_queue.Enqueue(raw_packet)) {
+    if (!raw_mode_s_packet_queue.Enqueue(raw_packet)) {
         CONSOLE_ERROR("ADSBeeServer::HandleRawModeSPacket",
                       "Push to transponder packet queue failed. May have overflowed?");
-        raw_transponder_packet_queue.Clear();
+        raw_mode_s_packet_queue.Clear();
+        ret = false;
+    }
+    return ret;
+}
+
+bool ADSBeeServer::HandleRawUATADSBPacket(RawUATADSBPacket &raw_packet) {
+    bool ret = true;
+    if (!raw_uat_adsb_packet_queue.Enqueue(raw_packet)) {
+        CONSOLE_ERROR("ADSBeeServer::HandleRawUATADSBPacket",
+                      "Push to UAT ADS-B packet queue failed. May have overflowed?");
+        raw_uat_adsb_packet_queue.Clear();
+        ret = false;
+    }
+    return ret;
+}
+
+bool ADSBeeServer::HandleRawUATUplinkPacket(RawUATUplinkPacket &raw_packet) {
+    bool ret = true;
+    if (!raw_uat_uplink_packet_queue.Enqueue(raw_packet)) {
+        CONSOLE_ERROR("ADSBeeServer::HandleRawUATUplinkPacket",
+                      "Push to UAT uplink packet queue failed. May have overflowed?");
+        raw_uat_uplink_packet_queue.Clear();
         ret = false;
     }
     return ret;

@@ -6,16 +6,18 @@
 #define ON_COPRO_SLAVE
 #endif
 
+#include "composite_array.hh"
 #include "data_structures.hh"
+#include "mode_s_packet.hh"
 #include "settings.hh"
 #include "stdint.h"
+#include "uat_packet.hh"
 #ifdef ON_ESP32
 #include "adsbee_server.hh"
 #include "esp_mac.h"   // For retrieving Base MAC address.
 #include "esp_wifi.h"  // For retrieving WiFi Station MAC address.
 #endif
 #ifdef ON_TI
-#include "uat_packet.hh"
 #endif
 
 class ObjectDictionary {
@@ -38,6 +40,7 @@ class ObjectDictionary {
 #endif
 #ifdef ON_TI
     static constexpr uint16_t kDecodedUATADSBPacketQueueDepth = 10;
+    static constexpr uint16_t kDecodedUATUplinkPacketQueueDepth = 2;
 #endif
 
     enum Address : uint8_t {
@@ -56,8 +59,8 @@ class ObjectDictionary {
         kAddrDeviceStatus = 0x0C,  // Struct containing number of pending log messages and current timestamp.
         kAddrLogMessages = 0x0D,   // Used to retrieve log messages from ESP32 and CC1312.
         kAddrRollQueue = 0x0E,     // Used to roll various queues on coprocessor slaves to confirm they have been read.
-        kAddrSCCommandRequests = 0x0F,          // Used by slave to request commands from master.
-        kAddrDecodedUATADSBPacketArray = 0x10,  // UAT ADS-B packet array on CC1312.
+        kAddrSCCommandRequests = 0x0F,           // Used by slave to request commands from master.
+        kAddrCompositeArray::RawPackets = 0x10,  // Single endpoint for reading / writing raw ADSB and UAT packets.
         kNumAddrs
     };
 
@@ -166,7 +169,8 @@ class ObjectDictionary {
 
         uint16_t num_queued_sc_command_requests = 0;  // Number of SCCommand requests queued for the master.
 
-        uint16_t num_queued_decoded_uat_adsb_packets = 0;
+        uint16_t num_queued_raw_uat_adsb_packets = 0;
+        uint16_t num_queued_raw_uat_uplink_packets = 0;
     };
 
     /**
@@ -274,10 +278,14 @@ class ObjectDictionary {
     });
     SemaphoreHandle_t network_console_rx_queue_mutex = xSemaphoreCreateMutex();
 #elif defined(ON_TI)
-    PFBQueue<DecodedUATADSBPacket> decoded_uat_adsb_packet_queue =
-        PFBQueue<DecodedUATADSBPacket>({.buf_len_num_elements = kDecodedUATADSBPacketQueueDepth,
-                                        .buffer = decoded_uat_adsb_packet_buffer_,
-                                        .overwrite_when_full = true});
+    PFBQueue<RawUATADSBPacket> raw_uat_adsb_packet_queue =
+        PFBQueue<RawUATADSBPacket>({.buf_len_num_elements = kDecodedUATADSBPacketQueueDepth,
+                                    .buffer = raw_uat_adsb_packet_buffer_,
+                                    .overwrite_when_full = true});
+    PFBQueue<RawUATUplinkPacket> raw_uat_uplink_packet_queue =
+        PFBQueue<RawUATUplinkPacket>({.buf_len_num_elements = kDecodedUATUplinkPacketQueueDepth,
+                                      .buffer = raw_uat_uplink_packet_buffer_,
+                                      .overwrite_when_full = true});
 #endif
 
    private:
@@ -298,7 +306,8 @@ class ObjectDictionary {
     char* network_console_message_buffer_ = (char*)heap_caps_malloc(kNetworkConsoleRxQueueDepth, 0);
 #elif defined(ON_TI)
     // CC1312
-    DecodedUATADSBPacket decoded_uat_adsb_packet_buffer_[kDecodedUATADSBPacketQueueDepth] = {};
+    RawUATADSBPacket raw_uat_adsb_packet_buffer_[kDecodedUATADSBPacketQueueDepth] = {};
+    RawUATUplinkPacket raw_uat_uplink_packet_buffer_[kDecodedUATUplinkPacketQueueDepth] = {};
 #endif
 };
 
