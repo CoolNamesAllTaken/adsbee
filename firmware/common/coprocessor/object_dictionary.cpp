@@ -217,7 +217,8 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                 .queued_log_messages_packed_size_bytes =
                     static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),
                 .num_queued_sc_command_requests = sc_command_request_queue.Length(),
-                .num_queued_decoded_uat_adsb_packets = decoded_uat_adsb_packet_queue.Length()};
+                .num_queued_raw_uat_adsb_packets = raw_uat_adsb_packet_queue.Length(),
+                .num_queued_raw_uat_uplink_packets = raw_uat_uplink_packet_queue.Length()};
 #endif
             for (uint16_t i = 0; i < log_message_queue.Length(); i++) {
                 LogMessage log_message;
@@ -290,39 +291,21 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             break;
         }
 #elif defined(ON_TI)
-        case kAddrCompositeArray::RawPackets: {
+        case kAddrCompositeArrayRawPackets: {
             if (offset != 0) {
                 CONSOLE_ERROR("ObjectDictionary::GetBytes",
-                              "Offset %d for reading CompositeArray::RawPackets not supported, must be 0.", offset);
+                              "Offset %d for reading CompositeArrayRawPackets not supported, must be 0.", offset);
                 return false;
             }
-            if (buf_len < sizeof(CompositeArray::RawPacketsHeader)) {
+            if (buf_len < sizeof(CompositeArray::RawPackets::Header)) {
                 CONSOLE_ERROR("ObjectDictionary::GetBytes",
-                              "Buffer length %d for reading CompositeArray::RawPackets must be at least %d.", buf_len,
-                              sizeof(CompositeArray::RawPacketsHeader));
+                              "Buffer length %d for reading CompositeArrayRawPackets must be at least %d.", buf_len,
+                              sizeof(CompositeArray::RawPackets::Header));
                 return false;
             }
-            CompositeArray::RawPacketsHeader header = {0};
-            uint16_t cursor = sizeof(CompositeArray::RawPacketsHeader);
-            // Ignore num_mode_s_packets since we don't have any on the CC1312.
-            // Fill the array with UAT ADSB packets.
-            while (cursor + sizeof(RawUATADSBPacket) <= buf_len && !decoded_uat_adsb_packet_queue.IsEmpty()) {
-                DecodedUATADSBPacket packet;
-                decoded_uat_adsb_packet_queue.Dequeue(packet);
-                memcpy(buf + cursor, &(packet.raw), sizeof(RawUATADSBPacket));
-                cursor += sizeof(RawUATADSBPacket);
-                header.num_uat_adsb_packets++;
-            }
-            // Fill the array with UAT Uplink packets.
-            while (cursor + sizeof(RawUATUplinkPacket) <= buf_len && !decoded_uat_uplink_packet_queue.IsEmpty()) {
-                DecodedUATUplinkPacket packet;
-                decoded_uat_uplink_packet_queue.Dequeue(packet);
-                memcpy(buf + cursor, &(packet.raw), sizeof(RawUATUplinkPacket));
-                cursor += sizeof(RawUATUplinkPacket);
-                header.num_uat_uplink_packets++;
-            }
-            // Fill in the composite array header.
-            memcpy(buf, &header, sizeof(CompositeArray::RawPacketsHeader));
+
+            CompositeArray::PackRawPacketsBuffer(buf, buf_len, nullptr, &raw_uat_adsb_packet_queue,
+                                                 &raw_uat_uplink_packet_queue);
         }
 #endif
         default:

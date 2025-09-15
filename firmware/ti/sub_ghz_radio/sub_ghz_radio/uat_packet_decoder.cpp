@@ -25,7 +25,7 @@ bool UATPacketDecoder::Update() {
                 "UATPacketDecoder::Update", "-[%dFIXD     ] mdb_tc=%d icao=0x%06x len=%d buf=%s rssi=%d ts=%lu",
                 decoded_packet.raw.sigq_bits, decoded_packet.header.mdb_type_code, decoded_packet.header.icao_address,
                 packet_len_bytes, raw_packet_buffer, packet.sigs_dbm, packet.mlat_48mhz_64bit_counts);
-            if (!object_dictionary.decoded_uat_adsb_packet_queue.Enqueue(decoded_packet)) {
+            if (!object_dictionary.raw_uat_adsb_packet_queue.Enqueue(decoded_packet.raw)) {
                 CONSOLE_ERROR("UATPacketDecoder::Update", "Failed to enqueue decoded UAT ADS-B packet.");
             }
         } else {
@@ -45,7 +45,7 @@ bool UATPacketDecoder::Update() {
             CONSOLE_INFO("UATPacketDecoder::Update", "+[%02dFIXD     ] len=%d rssi=%d ts=%lu",
                          decoded_packet.raw.sigq_bits, RawUATUplinkPacket::kUplinkMessageNumBytes, packet.sigs_dbm,
                          packet.mlat_48mhz_64bit_counts);
-            if (!object_dictionary.decoded_uat_uplink_packet_queue.Enqueue(decoded_packet)) {
+            if (!object_dictionary.raw_uat_uplink_packet_queue.Enqueue(decoded_packet.raw)) {
                 CONSOLE_ERROR("UATPacketDecoder::Update", "Failed to enqueue decoded UAT Uplink packet.");
             }
         } else {
