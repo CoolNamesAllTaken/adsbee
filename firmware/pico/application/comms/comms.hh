@@ -1,5 +1,6 @@
 #pragma once
 
+#include "composite_array.hh"
 #include "cpp_at.hh"
 #include "data_structures.hh"  // For PFBQueue.
 #include "hardware/uart.h"
@@ -9,6 +10,10 @@
 
 class CommsManager {
    public:
+    static constexpr uint16_t kModeSPacketReportingQueueDepth = 100;
+    static constexpr uint16_t kUATADSBPacketReportingQueueDepth = 50;
+    static constexpr uint16_t kUATUplinkPacketReportingQueueDepth = 2;
+
     static constexpr uint16_t kATCommandBufMaxLen = 1000;
     static constexpr uint16_t kNetworkConsoleBufMaxLen = 4096;
     static constexpr uint16_t kNetworkConsoleReportingIntervalOverrideNumChars =
@@ -173,9 +178,13 @@ class CommsManager {
     }
 
     // Queue for storing transponder packets before they get reported.
-    PFBQueue<DecodedModeSPacket> mode_s_packet_reporting_queue =
-        PFBQueue<DecodedModeSPacket>({.buf_len_num_elements = SettingsManager::Settings::kMaxNumTransponderPackets,
-                                      .buffer = transponder_packet_reporting_queue_buffer_});
+    PFBQueue<RawModeSPacket> mode_s_packet_reporting_queue = PFBQueue<RawModeSPacket>(
+        {.buf_len_num_elements = kModeSPacketReportingQueueDepth, .buffer = mode_s_packet_reporting_queue_buffer_});
+    PFBQueue<RawUATADSBPacket> uat_adsb_packet_reporting_queue = PFBQueue<RawUATADSBPacket>(
+        {.buf_len_num_elements = kUATADSBPacketReportingQueueDepth, .buffer = uat_adsb_packet_reporting_queue_buffer_});
+    PFBQueue<RawUATUplinkPacket> uat_uplink_packet_reporting_queue =
+        PFBQueue<RawUATUplinkPacket>({.buf_len_num_elements = kUATUplinkPacketReportingQueueDepth,
+                                      .buffer = uat_uplink_packet_reporting_queue_buffer_});
 
     // Queues for incoming / outgoing network characters.
     PFBQueue<char> esp32_console_rx_queue =
@@ -203,7 +212,7 @@ class CommsManager {
      * report.
      * @retval True if successful, false if something broke.
      */
-    bool ReportRaw(SettingsManager::SerialInterface iface, const ObjectDictionary::CompositeArray::RawPackets &packets);
+    bool ReportRaw(SettingsManager::SerialInterface iface, const CompositeArray::RawPackets &packets);
 
     /**
      * Sends out Mode S Beast formatted transponder data on the selected serial interface. Reports all transponder
@@ -213,8 +222,7 @@ class CommsManager {
      * @param[in] packets CompositeArray::RawPackets struct with counts and pointers to arrays of each kind of packet to
      * report.
      */
-    bool ReportBeast(SettingsManager::SerialInterface iface,
-                     const ObjectDictionary::CompositeArray::RawPackets &packets);
+    bool ReportBeast(SettingsManager::SerialInterface iface, const CompositeArray::RawPackets &packets);
 
     /**
      * Sends out comma separated aircraft information for each aircraft in the aircraft dictionary.
@@ -250,7 +258,9 @@ class CommsManager {
     uint32_t last_esp32_console_tx_timestamp_ms_ = 0;  // Timestamp of last network console TX.
 
     // Queue for holding new transponder packets before they get reported.
-    DecodedModeSPacket mode_s_packet_reporting_queue_buffer_[SettingsManager::Settings::kMaxNumTransponderPackets];
+    RawModeSPacket mode_s_packet_reporting_queue_buffer_[kModeSPacketReportingQueueDepth];
+    RawUATADSBPacket uat_adsb_packet_reporting_queue_buffer_[kUATADSBPacketReportingQueueDepth];
+    RawUATUplinkPacket uat_uplink_packet_reporting_queue_buffer_[kUATUplinkPacketReportingQueueDepth];
 
     // Reporting protocol timestamps
     // NOTE: Raw reporting interval used for RAW and BEAST protocols as well as internal functions.

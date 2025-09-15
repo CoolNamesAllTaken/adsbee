@@ -116,24 +116,16 @@ bool CC1312::Update() {
         // Read packets from queues.
         uint8_t read_buf[SPICoprocessorPacket::SCResponsePacket::kDataMaxLenBytes] = {0};
         // Read with full size of array, let the CC1312 fill it out with as many packets as possible.
-        if (!adsbee.subg_radio.Read(ObjectDictionary::Address::kAddrCompositeArray::RawPackets, read_buf,
+        if (!adsbee.subg_radio.Read(ObjectDictionary::Address::kAddrCompositeArrayRawPackets, read_buf,
                                     sizeof(read_buf))) {
             CONSOLE_ERROR("CC1312::Update", "Unable to read CC1312 raw packet array.");
             return false;
         }
-        ObjectDictionary::CompositeArray::RawPacketsHeader* read_header =
-            (ObjectDictionary::CompositeArray::RawPacketsHeader*)read_buf;
-        uint16_t cursor = sizeof(*read_header);
-        for (uint16_t i = 0; i < read_header->num_uat_adsb_packets; i++) {
-            RawUATADSBPacket* packet = (RawUATADSBPacket*)(read_buf + cursor);
-            // Process UAT ADSB packet.
-
-            cursor += sizeof(RawUATADSBPacket);
-        }
-        for (uint16_t i = 0; i < read_header->num_uat_uplink_packets; i++) {
-            RawUATUplinkPacket* packet = (RawUATUplinkPacket*)(read_buf + cursor);
-            // Process UAT uplink packet.
-            cursor += sizeof(RawUATUplinkPacket);
+        if (!CompositeArray::UnpackRawPacketsBuffer(read_buf, sizeof(read_buf), nullptr,
+                                                    &adsbee.raw_uat_adsb_packet_queue,
+                                                    &adsbee.raw_uat_uplink_packet_queue)) {
+            CONSOLE_ERROR("CC1312::Update", "Failed to unpack raw packets from CC1312.");
+            return false;
         }
 
     } else {

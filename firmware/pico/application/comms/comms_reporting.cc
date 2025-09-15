@@ -1,6 +1,7 @@
 #include "adsbee.hh"
 #include "beast_utils.hh"
 #include "comms.hh"
+#include "composite_array.hh"
 #include "csbee_utils.hh"
 #include "gdl90_utils.hh"
 #include "hal.hh"  // For timestamping.
@@ -29,54 +30,21 @@ bool CommsManager::UpdateReporting() {
     // Proceed with update and record timestamp.
     last_raw_report_timestamp_ms_ = timestamp_ms;
 
-    uint8_t packet_array_buf[ObjectDictionary::CompositeArray::RawPackets::kMaxLenBytes] = {0};
-    ObjectDictionary::CompositeArray::RawPackets packets_to_report = {
-        .len_bytes = CompositeArray::RawPacketsHeader::kHeaderSize,
-        .header = reinterpret_cast<ObjectDictionary::CompositeArray::RawPacketsHeader *>(packet_array_buf),
-        .mode_s_packets = nullptr,
-        .uat_adsb_packets = nullptr,
-        .uat_uplink_packets = nullptr,
-    };
+    uint8_t packet_array_buf[SPICoprocessorPacket::SCResponsePacket::kDataMaxLenBytes] = {0};
+
+    CompositeArray::RawPackets packets_to_report =
+        CompositeArray::PackRawPacketsBuffer(packet_array_buf, sizeof(packet_array_buf), &mode_s_packet_reporting_queue,
+                                             &uat_adsb_packet_reporting_queue, &uat_uplink_packet_reporting_queue);
 
     // Forward the CompositeArray::RawPackets to the ESP32 if enabled.
-    if (esp32.IsEnabled() && packets_to_report.header->len_bytes > CompositeArray::RawPacketsHeader::kHeaderSize) {
+    if (esp32.IsEnabled() && packets_to_report.IsValid()) {
         // Write packet to ESP32 with a forced ACK.
-        esp32.Write(ObjectDictionary::kAddrCompositeArray::RawPackets,  // addr
-                    packet_array_buf,                                   // buf
-                    true,                                               // require_ack
-                    packets_to_report.len_bytes                         // len
+        esp32.Write(ObjectDictionary::kAddrCompositeArrayRawPackets,  // addr
+                    packet_array_buf,                                 // buf
+                    true,                                             // require_ack
+                    packets_to_report.len_bytes                       // len
         );
     }
-
-    // /**
-    //  * Raw packet reporting buffer used to transfer multiple packets at once over SPI.
-    //  * [<uint8_t num_packets to report> <packet 1> <packet 2> ...]
-    //  */
-    // uint8_t spi_raw_packet_reporting_buffer[sizeof(uint8_t) + SettingsManager::Settings::kMaxNumTransponderPackets];
-
-    // // Fill up the array of DecodedModeSPackets for internal functions, and the buffer of RawModeSPackets to
-    // // send to the ESP32 over SPI. RawModeSPackets are used instead of DecodedModeSPackets over the SPI link
-    // // in order to preserve bandwidth.
-    // uint16_t num_mode_s_packets = 0;
-    // for (; num_mode_s_packets < SettingsManager::Settings::kMaxNumTransponderPackets &&
-    //        mode_s_packet_reporting_queue.Dequeue(packets_to_report[num_mode_s_packets]);
-    //      num_mode_s_packets++) {
-    //     if (esp32.IsEnabled()) {
-    //         // Dequeue all the packets to report (up to max limit of the buffer).
-    //         RawModeSPacket raw_packet = packets_to_report[num_mode_s_packets].raw;
-    //         spi_raw_packet_reporting_buffer[0] = num_mode_s_packets + 1;
-    //         memcpy(spi_raw_packet_reporting_buffer + sizeof(uint8_t) + sizeof(RawModeSPacket) * num_mode_s_packets,
-    //                &raw_packet, sizeof(RawModeSPacket));
-    //     }
-    // }
-    // if (esp32.IsEnabled() && num_mode_s_packets > 0) {
-    //     // Write packet to ESP32 with a forced ACK.
-    //     esp32.Write(ObjectDictionary::kAddrRawModeSPacketArray,                    // addr
-    //                 spi_raw_packet_reporting_buffer,                               // buf
-    //                 true,                                                          // require_ack
-    //                 sizeof(uint8_t) + num_mode_s_packets * sizeof(RawModeSPacket)  // len
-    //     );
-    // }
 
     for (uint16_t i = 0; i < SettingsManager::SerialInterface::kGNSSUART; i++) {
         SettingsManager::SerialInterface iface = static_cast<SettingsManager::SerialInterface>(i);
@@ -84,10 +52,10 @@ bool CommsManager::UpdateReporting() {
             case SettingsManager::kNoReports:
                 break;
             case SettingsManager::kRaw:
-                ret = ReportRaw(iface, packets_to_report, num_mode_s_packets);
+                ret = ReportRaw(iface, packets_to_report);
                 break;
             case SettingsManager::kBeast:
-                ret = ReportBeast(iface, packets_to_report, num_mode_s_packets);
+                ret = ReportBeast(iface, packets_to_report);
                 break;
             case SettingsManager::kCSBee:
                 if (timestamp_ms - last_csbee_report_timestamp_ms_ >= kCSBeeReportingIntervalMs) {
@@ -121,31 +89,41 @@ bool CommsManager::UpdateReporting() {
     return ret;
 }
 
-bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface,
-                             const ObjectDictionary::CompositeArray::RawPackets &packets) {
+bool CommsManager::ReportRaw(SettingsManager::SerialInterface iface, const CompositeArray::RawPackets &packets) {
+    char error_msg[CompositeArray::RawPackets::kErrorMessageMaxLen];
+    if (!packets.IsValid(error_msg)) {
+        CONSOLE_ERROR("CommsManager::ReportRaw", "Invalid CompositeArray::RawPackets: %s", error_msg);
+        return false;
+    }
+
     for (uint16_t i = 0; i < packets.header->num_mode_s_packets; i++) {
         char raw_frame_buf[kRawModeSFrameMaxNumChars];
-        uint16_t num_bytes_in_frame = BuildRawModeSFrame(packets.mode_s_packets[i].raw, raw_frame_buf);
+        uint16_t num_bytes_in_frame = BuildRawModeSFrame(packets.mode_s_packets[i], raw_frame_buf);
         SendBuf(iface, (char *)raw_frame_buf, num_bytes_in_frame);
         comms_manager.iface_puts(iface, (char *)"\r\n");  // Send delimiter.
     }
     for (uint16_t i = 0; i < packets.header->num_uat_adsb_packets; i++) {
         char raw_frame_buf[kRawUATADSBFrameMaxNumChars];
-        uint16_t num_bytes_in_frame = BuildRawUATADSBFrame(packets.uat_adsb_packets[i].raw, raw_frame_buf);
+        uint16_t num_bytes_in_frame = BuildRawUATADSBFrame(packets.uat_adsb_packets[i], raw_frame_buf);
         SendBuf(iface, (char *)raw_frame_buf, num_bytes_in_frame);
         comms_manager.iface_puts(iface, (char *)"\r\n");  // Send delimiter.
     }
     for (uint16_t i = 0; i < packets.header->num_uat_uplink_packets; i++) {
         char raw_frame_buf[kRawUATUplinkFrameMaxNumChars];
-        uint16_t num_bytes_in_frame = BuildRawUATUplinkFrame(packets.uat_uplink_packets[i].raw, raw_frame_buf);
+        uint16_t num_bytes_in_frame = BuildRawUATUplinkFrame(packets.uat_uplink_packets[i], raw_frame_buf);
         SendBuf(iface, (char *)raw_frame_buf, num_bytes_in_frame);
         comms_manager.iface_puts(iface, (char *)"\r\n");  // Send delimiter.
     }
     return true;
 }
 
-bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface,
-                               const ObjectDictionary::CompositeArray::RawPackets &packets) {
+bool CommsManager::ReportBeast(SettingsManager::SerialInterface iface, const CompositeArray::RawPackets &packets) {
+    char error_msg[CompositeArray::RawPackets::kErrorMessageMaxLen];
+    if (!packets.IsValid(error_msg)) {
+        CONSOLE_ERROR("CommsManager::ReportBeast", "Invalid CompositeArray::RawPackets: %s", error_msg);
+        return false;
+    }
+
     for (uint16_t i = 0; i < packets.header->num_mode_s_packets; i++) {
         uint8_t beast_frame_buf[BeastReporter::kModeSBeastFrameMaxLenBytes];
         uint16_t num_bytes_in_frame = BeastReporter::BuildModeSBeastFrame(beast_frame_buf, packets.mode_s_packets[i]);

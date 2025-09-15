@@ -3,6 +3,7 @@
 #include "data_structures.hh"
 #include "mode_s_packet.hh"
 #include "stdint.h"
+#include "stdio.h"
 #include "uat_packet.hh"
 
 /**
@@ -18,6 +19,8 @@
 class CompositeArray {
    public:
     struct RawPackets {
+        static constexpr uint16_t kErrorMessageMaxLen = 256;
+
         // This header is used on the SPI bus to precede a packed buffer of packets.
         struct __attribute__((__packed__)) Header {
             uint16_t num_mode_s_packets = 0;
@@ -25,6 +28,43 @@ class CompositeArray {
             uint16_t num_uat_uplink_packets = 0;
             uint16_t padding = 0;  // Padding to make struct word-aligned (8 bytes total)
         };
+
+        /**
+         * Validates the CompositeArray::RawPackets struct to ensure that the header is present and that the length
+         * is sufficient to hold the declared number of packets. If an error_msg buffer is provided, it will be filled
+         * with a description of the error if the struct is invalid.
+         * @param[in,out] error_msg Optional buffer to fill with an error message if the struct is invalid.
+         * @retval True if the struct is valid, false otherwise.
+         */
+        bool IsValid(char* error_msg = nullptr) const {
+            if (header == nullptr) {
+                if (error_msg) {
+                    snprintf(error_msg, kErrorMessageMaxLen, "Invalid CompositeArray::RawPackets: null header.");
+                }
+                return false;
+            }
+            if (len_bytes < sizeof(Header)) {
+                if (error_msg) {
+                    snprintf(error_msg, kErrorMessageMaxLen,
+                             "Invalid CompositeArray::RawPackets: insufficient length for header.");
+                }
+                return false;
+            }
+            uint16_t expected_len_bytes = sizeof(Header) + header->num_mode_s_packets * sizeof(RawModeSPacket) +
+                                          header->num_uat_adsb_packets * sizeof(RawUATADSBPacket) +
+                                          header->num_uat_uplink_packets * sizeof(RawUATUplinkPacket);
+            if (len_bytes < expected_len_bytes) {
+                if (error_msg) {
+                    snprintf(error_msg, kErrorMessageMaxLen,
+                             "Invalid CompositeArray::RawPackets: insufficient length for %u Mode S packet(s), %u UAT "
+                             "ADSB packet(s), %u UAT Uplink packet(s) (expected %u bytes, got %u bytes).",
+                             header->num_mode_s_packets, header->num_uat_adsb_packets, header->num_uat_uplink_packets,
+                             expected_len_bytes, len_bytes);
+                }
+                return false;
+            }
+            return true;
+        }
 
         uint16_t len_bytes = 0;  // Total length of the entire array in bytes, including header.
 

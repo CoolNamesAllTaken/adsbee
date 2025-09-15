@@ -20,7 +20,7 @@ if (TARGET application)
         adsb/aircraft_dictionary.cpp
         adsb/decode_utils.cpp
         adsb/mode_s_packet_decoder.cc
-        coprocessor/composite_array.cc
+        coprocessor/composite_array.cpp
         coprocessor/spi_coprocessor.cpp
         coprocessor/object_dictionary.cpp
         firmware_update/firmware_update.cc

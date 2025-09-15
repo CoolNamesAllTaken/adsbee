@@ -18,6 +18,10 @@
 
 class ADSBee {
    public:
+    static constexpr uint16_t kModeSPacketQueueDepth = 200;
+    static constexpr uint16_t kRawUATADSBPacketQueueDepth = 50;
+    static constexpr uint16_t kRawUATUplinkPacketQueueDepth = 2;
+
     static constexpr uint16_t kTLMaxPWMCount = 5000;  // Clock is 125MHz, shoot for 25kHz PWM.
     static constexpr int kVDDMV = 3300;               // [mV] Voltage of positive supply rail.
     static constexpr int kTLOffsetMaxMV = 3300;       // [mV]
@@ -333,18 +337,27 @@ class ADSBee {
                          uint16_t tl_learning_start_temperature_mv = kTLLearningStartTemperatureMV,
                          uint16_t tl_min_mv = kTLOffsetMinMV, uint16_t tl_max_mv = kTLOffsetMaxMV);
 
-    PFBQueue<RawModeSPacket> raw_1090_packet_queue =
-        PFBQueue<RawModeSPacket>({.buf_len_num_elements = SettingsManager::Settings::kMaxNumTransponderPackets,
-                                  .buffer = raw_1090_packet_queue_buffer_});
+    // Raw packet intake queues.
+    PFBQueue<RawModeSPacket> raw_mode_s_packet_queue = PFBQueue<RawModeSPacket>(
+        {.buf_len_num_elements = kModeSPacketQueueDepth, .buffer = raw_mode_s_packet_queue_buffer_});
+    PFBQueue<RawUATADSBPacket> raw_uat_adsb_packet_queue = PFBQueue<RawUATADSBPacket>(
+        {.buf_len_num_elements = kRawUATADSBPacketQueueDepth, .buffer = raw_uat_adsb_packet_queue_buffer_});
+    PFBQueue<RawUATUplinkPacket> raw_uat_uplink_packet_queue = PFBQueue<RawUATUplinkPacket>(
+        {.buf_len_num_elements = kRawUATUplinkPacketQueueDepth, .buffer = raw_uat_uplink_packet_queue_buffer_});
 
     AircraftDictionary aircraft_dictionary;
     CC1312 subg_radio_ll = CC1312({});
     SPICoprocessor subg_radio = SPICoprocessor({.interface = subg_radio_ll, .tag_str = "CC1312"});
 
    private:
+    void IngestAndForwardPackets();
+    void MLATCounterInit();
     void PIOInit();
     void PIOEnable();
-    void MLATCounterInit();
+    void PruneAircraftDictionary();
+    void Update1090LED();
+    void UpdateNoiseFloor();
+    void UpdateTLLearning();
 
     ADSBeeConfig config_;
     CppAT parser_;
@@ -383,8 +396,14 @@ class ADSBee {
 
     uint64_t mlat_counter_wraps_ = 0;
 
+    // Buffer used to hold packets currently being received.
     RawModeSPacket rx_packet_[BSP::kMaxNumDemodStateMachines];
-    RawModeSPacket raw_1090_packet_queue_buffer_[SettingsManager::Settings::kMaxNumTransponderPackets];
+    // Buffer where packets are stored before being sent to the decoder.
+    RawModeSPacket raw_mode_s_packet_queue_buffer_[kModeSPacketQueueDepth];
+
+    // Buffer where packets are stored while incoming from the CC1312.
+    RawUATADSBPacket raw_uat_adsb_packet_queue_buffer_[kRawUATADSBPacketQueueDepth];
+    RawUATUplinkPacket raw_uat_uplink_packet_queue_buffer_[kRawUATUplinkPacketQueueDepth];
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
 

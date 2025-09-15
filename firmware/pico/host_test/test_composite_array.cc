@@ -176,3 +176,39 @@ TEST(CompositeArray, PackUnpackRawPacketsBufferMixedPackets) {
         EXPECT_EQ(dequeued_uat_uplink_packet.encoded_message[0], i);
     }
 }
+
+TEST(CompositeArray, RawPacketsHeaderIsValid) {
+    CompositeArray::RawPackets packets;
+    char error_msg[CompositeArray::RawPackets::kErrorMessageMaxLen];
+
+    // Null header
+    packets.header = nullptr;
+    EXPECT_FALSE(packets.IsValid(error_msg));
+    EXPECT_STREQ(error_msg, "Invalid CompositeArray::RawPackets: null header.");
+
+    // Insufficient length for header
+    CompositeArray::RawPackets::Header header = {};
+    packets.header = &header;
+    EXPECT_FALSE(packets.IsValid(error_msg));
+    EXPECT_STREQ(error_msg, "Invalid CompositeArray::RawPackets: insufficient length for header.");
+
+    // Insufficient length for packets
+    packets.header->num_mode_s_packets = 2;
+    packets.header->num_uat_adsb_packets = 1;
+    packets.header->num_uat_uplink_packets = 1;
+    packets.len_bytes = 8;  // Too small to hold the packets
+    // uint16_t expected_len_bytes = sizeof(CompositeArray::RawPackets::Header) +
+    //                               packets.header->num_mode_s_packets * sizeof(RawModeSPacket) +
+    //                               packets.header->num_uat_adsb_packets * sizeof(RawUATADSBPacket) +
+    //                               packets.header->num_uat_uplink_packets * sizeof(RawUATUplinkPacket);
+    EXPECT_FALSE(packets.IsValid(error_msg));
+    EXPECT_STREQ(
+        error_msg,
+        "Invalid CompositeArray::RawPackets: insufficient length for 2 Mode S packet(s), 1 UAT ADSB packet(s), 1 "
+        "UAT Uplink packet(s) (expected 704 bytes, got 8 bytes).");
+
+    // Valid case
+    packets.len_bytes = sizeof(CompositeArray::RawPackets::Header) + 2 * sizeof(RawModeSPacket) +
+                        1 * sizeof(RawUATADSBPacket) + 1 * sizeof(RawUATUplinkPacket);
+    EXPECT_TRUE(packets.IsValid());
+}
