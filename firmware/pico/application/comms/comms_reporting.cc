@@ -38,38 +38,6 @@ bool CommsManager::UpdateReporting() {
         .uat_uplink_packets = nullptr,
     };
 
-    // Fill up the CompositeArray::RawPackets header and associated buffers with as many packets as we can report.
-    DecodedModeSPacket mode_s_packet;
-    packets_to_report.mode_s_packets =
-        reinterpret_cast<RawModeSPacket *>(packet_array_buf + packets_to_report.len_bytes);
-    while (packets_to_report.len_bytes < ObjectDictionary::CompositeArray::RawPackets::kMaxLenBytes &&
-           mode_s_packet_reporting_queue.Dequeue(mode_s_packet) &&
-           packets_to_report.header->num_mode_s_packets < kMaxNumModeSPacketsToReport) {
-        packets_to_report.mode_s_packets[packets_to_report.header->num_mode_s_packets] = mode_s_packet.raw;
-        packets_to_report.header->num_mode_s_packets++;
-        packets_to_report.len_bytes += sizeof(RawModeSPacket);
-    }
-    DecodedUATADSBPacket uat_adsb_packet;
-    packets_to_report.uat_adsb_packets =
-        reinterpret_cast<RawUATADSBPacket *>(packet_array_buf + packets_to_report.len_bytes);
-    while (packets_to_report.len_bytes < ObjectDictionary::CompositeArray::RawPackets::kMaxLenBytes &&
-           uat_adsb_packet_reporting_queue.Dequeue(uat_adsb_packet) &&
-           packets_to_report.header->num_uat_adsb_packets < kMaxNumUATADSBPacketsToReport) {
-        packets_to_report.uat_adsb_packets[packets_to_report.header->num_uat_adsb_packets] = uat_adsb_packet.raw;
-        packets_to_report.header->num_uat_adsb_packets++;
-        packets_to_report.len_bytes += sizeof(RawUATADSBPacket);
-    }
-    DecodedUATUplinkPacket uat_uplink_packet;
-    packets_to_report.uat_uplink_packets =
-        reinterpret_cast<RawUATUplinkPacket *>(packet_array_buf + packets_to_report.len_bytes);
-    while (packets_to_report.len_bytes < ObjectDictionary::CompositeArray::RawPackets::kMaxLenBytes &&
-           uat_uplink_packet_reporting_queue.Dequeue(uat_uplink_packet) &&
-           packets_to_report.header->num_uat_uplink_packets < kMaxNumUATUplinkPacketsToReport) {
-        packets_to_report.uat_uplink_packets[packets_to_report.header->num_uat_uplink_packets] = uat_uplink_packet.raw;
-        packets_to_report.header->num_uat_uplink_packets++;
-        packets_to_report.len_bytes += sizeof(RawUATUplinkPacket);
-    }
-
     // Forward the CompositeArray::RawPackets to the ESP32 if enabled.
     if (esp32.IsEnabled() && packets_to_report.header->len_bytes > CompositeArray::RawPacketsHeader::kHeaderSize) {
         // Write packet to ESP32 with a forced ACK.

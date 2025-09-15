@@ -59,8 +59,8 @@ class ObjectDictionary {
         kAddrDeviceStatus = 0x0C,  // Struct containing number of pending log messages and current timestamp.
         kAddrLogMessages = 0x0D,   // Used to retrieve log messages from ESP32 and CC1312.
         kAddrRollQueue = 0x0E,     // Used to roll various queues on coprocessor slaves to confirm they have been read.
-        kAddrSCCommandRequests = 0x0F,           // Used by slave to request commands from master.
-        kAddrCompositeArray::RawPackets = 0x10,  // Single endpoint for reading / writing raw ADSB and UAT packets.
+        kAddrSCCommandRequests = 0x0F,         // Used by slave to request commands from master.
+        kAddrCompositeArrayRawPackets = 0x10,  // Single endpoint for reading / writing raw ADSB and UAT packets.
         kNumAddrs
     };
 
