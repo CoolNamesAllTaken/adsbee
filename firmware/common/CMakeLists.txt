@@ -7,6 +7,7 @@ if (TARGET application)
         # NOTE: Annoyingly, all source files need to end with .c or .cpp to be seen by the ESP IDF.
         settings/settings_strs.cpp
         settings/settings.cpp
+        comms/comms_reporting.cpp
         comms/beast/beast_utils.cpp
         comms/gdl90/gdl90_utils.cpp
         comms/mavlink/mavlink_utils.cpp

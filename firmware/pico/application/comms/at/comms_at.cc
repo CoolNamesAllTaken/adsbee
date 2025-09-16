@@ -627,6 +627,34 @@ CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATMAVLINKIDCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_PRINTF("System ID: %d\r\nComponent ID: %d\r\n", settings_manager.settings.mavlink_system_id,
+                          settings_manager.settings.mavlink_component_id);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (!(CPP_AT_HAS_ARG(0) && CPP_AT_HAS_ARG(1))) {
+                CPP_AT_ERROR("Requires two arguments: AT+MAVLINK_ID=<system_id>,<component_id>.");
+            }
+            uint16_t system_id, component_id;
+            CPP_AT_TRY_ARG2NUM(0, system_id);
+            CPP_AT_TRY_ARG2NUM(1, component_id);
+            if (system_id < 1 || system_id > 255) {
+                CPP_AT_ERROR("System ID must be between 1 and 255.");
+            }
+            if (component_id < 1 || component_id > 255) {
+                CPP_AT_ERROR("Component ID must be between 1 and 255.");
+            }
+            settings_manager.settings.mavlink_system_id = static_cast<uint8_t>(system_id);
+            settings_manager.settings.mavlink_component_id = static_cast<uint8_t>(component_id);
+            CPP_AT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATNetworkInfoCallback) {
     switch (op) {
         case '?':
@@ -1096,6 +1124,12 @@ const CppAT::ATCommandDef_t at_command_list[] = {
          "AT+LOG_LEVEL=<log_level [SILENT ERRORS WARNINGS LOGS]>\r\n\tSet how much stuff gets printed to the "
          "console.\r\n\t",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATLogLevelCallback, comms_manager)},
+    {.command_buf = "+MAVLINK_ID",
+     .min_args = 0,
+     .max_args = 2,
+     .help_string_buf = "AT+MAVLINK_ID=<system_id>,<component_id>\r\n\tSet the MAVLink system and component IDs.\r\n\t"
+                        "AT+MAVLINK_ID?\r\n\tQuery the MAVLink system and component IDs.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATMAVLINKIDCallback, comms_manager)},
     {.command_buf = "+NETWORK_INFO",
      .min_args = 0,
      .max_args = 0,

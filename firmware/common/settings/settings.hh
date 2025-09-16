@@ -156,11 +156,16 @@ class SettingsManager {
         bool subg_rx_enabled = true;
         SubGHzRadioMode subg_mode = SubGHzRadioMode::kSubGHzRadioModeUATRx;  // Default to UAT mode (978MHz receiver).
 
+        // Feed settings
         char feed_uris[kMaxNumFeeds][kFeedURIMaxNumChars + 1];
         uint16_t feed_ports[kMaxNumFeeds];
         bool feed_is_active[kMaxNumFeeds];
         ReportingProtocol feed_protocols[kMaxNumFeeds];
         uint8_t feed_receiver_ids[kMaxNumFeeds][kFeedReceiverIDNumBytes];
+
+        // MAVLINK settings
+        uint8_t mavlink_system_id = 1;
+        uint8_t mavlink_component_id = 156;  // Default to MAV_COMP_ID_ADSB (156).
 
         /**
          * Default constructor.

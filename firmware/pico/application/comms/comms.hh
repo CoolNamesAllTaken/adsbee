@@ -72,6 +72,7 @@ class CommsManager {
     CPP_AT_CALLBACK(ATOTACallback);
     CPP_AT_HELP_CALLBACK(ATOTAHelpCallback);
     CPP_AT_CALLBACK(ATLogLevelCallback);
+    CPP_AT_CALLBACK(ATMAVLINKIDCallback);
     CPP_AT_CALLBACK(ATNetworkInfoCallback);
     CPP_AT_CALLBACK(ATProtocolCallback);
     CPP_AT_HELP_CALLBACK(ATProtocolHelpCallback);
@@ -191,10 +192,6 @@ class CommsManager {
         PFBQueue<char>({.buf_len_num_elements = kNetworkConsoleBufMaxLen, .buffer = esp32_console_rx_queue_buffer_});
     PFBQueue<char> esp32_console_tx_queue =
         PFBQueue<char>({.buf_len_num_elements = kNetworkConsoleBufMaxLen, .buffer = esp32_console_tx_queue_buffer_});
-
-    // MAVLINK settings.
-    uint8_t mavlink_system_id = 0;
-    uint8_t mavlink_component_id = 0;
 
    private:
     // AT Functions

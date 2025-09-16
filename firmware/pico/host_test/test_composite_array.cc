@@ -114,6 +114,8 @@ TEST(CompositeArray, PackUnpackRawPacketsBufferMixedPackets) {
                    num_uat_adsb_packets_to_enqueue * sizeof(RawUATADSBPacket) +
                    (num_uat_uplink_packets_to_enqueue) * sizeof(RawUATUplinkPacket)] = {0};
 
+    SCOPED_TRACE("PackUnpackRawPacketsBufferMixedPackets");
+
     PFBQueue<RawModeSPacket>::PFBQueueConfig mode_s_queue_config = {
         .buf_len_num_elements = 10, .buffer = nullptr, .overwrite_when_full = false};
     PFBQueue<RawModeSPacket> mode_s_queue = PFBQueue<RawModeSPacket>(mode_s_queue_config);
@@ -147,15 +149,15 @@ TEST(CompositeArray, PackUnpackRawPacketsBufferMixedPackets) {
     EXPECT_TRUE(uat_uplink_queue.IsEmpty());
 
     // Make sure we get an error if we try to unpack without providing all queues.
-    EXPECT_FALSE(
-        CompositeArray::UnpackRawPacketsBuffer(buffer, packets.len_bytes, &mode_s_queue, &uat_adsb_queue, nullptr));
-    EXPECT_FALSE(
-        CompositeArray::UnpackRawPacketsBuffer(buffer, packets.len_bytes, nullptr, &uat_adsb_queue, &uat_uplink_queue));
-    EXPECT_FALSE(
-        CompositeArray::UnpackRawPacketsBuffer(buffer, packets.len_bytes, &mode_s_queue, nullptr, &uat_uplink_queue));
+    EXPECT_FALSE(CompositeArray::UnpackRawPacketsBufferToQueues(buffer, packets.len_bytes, &mode_s_queue,
+                                                                &uat_adsb_queue, nullptr));
+    EXPECT_FALSE(CompositeArray::UnpackRawPacketsBufferToQueues(buffer, packets.len_bytes, nullptr, &uat_adsb_queue,
+                                                                &uat_uplink_queue));
+    EXPECT_FALSE(CompositeArray::UnpackRawPacketsBufferToQueues(buffer, packets.len_bytes, &mode_s_queue, nullptr,
+                                                                &uat_uplink_queue));
 
-    EXPECT_TRUE(CompositeArray::UnpackRawPacketsBuffer(buffer, packets.len_bytes, &mode_s_queue, &uat_adsb_queue,
-                                                       &uat_uplink_queue));
+    EXPECT_TRUE(CompositeArray::UnpackRawPacketsBufferToQueues(buffer, packets.len_bytes, &mode_s_queue,
+                                                               &uat_adsb_queue, &uat_uplink_queue));
     EXPECT_EQ(mode_s_queue.Length(), num_mode_s_packets_to_enqueue);
     EXPECT_EQ(uat_adsb_queue.Length(), num_uat_adsb_packets_to_enqueue);
     EXPECT_EQ(uat_uplink_queue.Length(), num_uat_uplink_packets_to_enqueue);

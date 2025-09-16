@@ -6,13 +6,13 @@ TEST(RawUtils, BuildRawModeSFrame) {
     RawModeSPacket raw_packet = RawModeSPacket((char *)"2D0006A2DEE500", 3, -68, 9, 0xFEED'BEEF'BEFE'BEEB);
 
     char constructed_frame[kRawModeSFrameMaxNumChars];
-    char *expected_frame = (char *)"#MDS*2D0006A2DEE500;(3,-68,9,FEEDBEEFBEFEBEEB)";
+    char *expected_frame = (char *)"#MDS*2D0006A2DEE500;(3,-68,9,FEEDBEEFBEFEBEEB)\r\n";
     EXPECT_EQ(BuildRawModeSFrame(raw_packet, constructed_frame), strlen(expected_frame));
     EXPECT_STREQ(expected_frame, constructed_frame);
 
     // Test with extended squitter packet.
     raw_packet = RawModeSPacket((char *)"8D48C22D60AB00DEABC5DB78FCD6", 1, -90, 3, 0xDEAD);
-    expected_frame = (char *)"#MDS*8D48C22D60AB00DEABC5DB78FCD6;(1,-90,3,000000000000DEAD)";
+    expected_frame = (char *)"#MDS*8D48C22D60AB00DEABC5DB78FCD6;(1,-90,3,000000000000DEAD)\r\n";
     EXPECT_EQ(BuildRawModeSFrame(raw_packet, constructed_frame), strlen(expected_frame));
     EXPECT_STREQ(expected_frame, constructed_frame);
 }
@@ -24,7 +24,7 @@ TEST(RawUtils, BuildRawUATFrame) {
 
     char constructed_frame[kRawUATADSBFrameMaxNumChars];
     char *expected_frame =
-        (char *)"#UAT*-00A66EF135445D525A0C05191190212048006CB82BC4D53A5B2BB0A8EC6E;(-60,5,0000000000123456)";
+        (char *)"#UAT*-00A66EF135445D525A0C05191190212048006CB82BC4D53A5B2BB0A8EC6E;(-60,5,0000000000123456)\r\n";
     EXPECT_EQ(BuildRawUATADSBFrame(raw_packet, constructed_frame), strlen(expected_frame));
     EXPECT_STREQ(expected_frame, constructed_frame);
 }
@@ -56,7 +56,7 @@ TEST(RawUtils, BuildRawUATUplinkFrame) {
         "00000B47C00000000C71F000000004D5D0000000035F3000000007F5F000000001D5100000000705400000000C7940000000028C30700"
         "00006495B5000000B5A39A000000D06DF300000066D54D00000015E4E2000000FD19CA0000001534A70000007153D3000000AC0EA0000"
         "000C86953000000472843000000779764000000706F3B000000B006F30000009B356D0000000B0EE7000000FFC3CE00000049013F0000"
-        "00964DDB000000;(-60,0,000000431A123456)";
+        "00964DDB000000;(-60,0,000000431A123456)\r\n";
     EXPECT_EQ(BuildRawUATUplinkFrame(raw_packet, constructed_frame), strlen(expected_frame));
     EXPECT_STREQ(expected_frame, constructed_frame);
 }

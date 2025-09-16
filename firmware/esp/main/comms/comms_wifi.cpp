@@ -243,16 +243,16 @@ bool CommsManager::WiFiDeInit() {
 }
 
 bool CommsManager::IPWANSendDecodedModeSPacket(DecodedModeSPacket& decoded_packet) {
-    if (!wifi_sta_has_ip_ && !ethernet_has_ip_) {
+    if (!comms_manager.HasIP()) {
         CONSOLE_WARNING(
             "CommsManager::IPWANSendDecodedModeSPacket",
             "Can't push to WAN transponder packet queue if WiFi station is not running and Ethernet is disconnected.");
         return false;  // Task not started yet, queue not created yet. Pushing to queue would cause an abort.
     }
-    int err = xQueueSend(ip_wan_decoded_transponder_packet_queue_, &decoded_packet, 0);
+    int err = xQueueSend(ip_wan_reporting_composite_array_queue_, &decoded_packet, 0);
     if (err == errQUEUE_FULL) {
         CONSOLE_WARNING("CommsManager::IPWANSendDecodedModeSPacket", "Overflowed WAN transponder packet queue.");
-        xQueueReset(ip_wan_decoded_transponder_packet_queue_);
+        xQueueReset(ip_wan_reporting_composite_array_queue_);
         return false;
     } else if (err != pdTRUE) {
         CONSOLE_WARNING("CommsManager::IPWANSendDecodedModeSPacket",

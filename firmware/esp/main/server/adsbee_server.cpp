@@ -199,40 +199,64 @@ bool ADSBeeServer::Update() {
     }
 
     // Ingest new packets into the dictionary.
-    RawModeSPacket raw_packet;
-    while (raw_mode_s_packet_queue.Dequeue(raw_packet)) {
-        DecodedModeSPacket decoded_packet = DecodedModeSPacket(raw_packet);
+    RawModeSPacket raw_mode_s_packet;
+    while (raw_mode_s_packet_in_queue.Dequeue(raw_mode_s_packet)) {
+        DecodedModeSPacket decoded_packet = DecodedModeSPacket(raw_mode_s_packet);
+        if (!decoded_packet.is_valid) {
+            CONSOLE_ERROR("ADSBeeServer::Update", "Received invalid Mode S packet.");
+            continue;
+        }
 #ifdef VERBOSE_DEBUG
-        if (raw_packet.buffer_len_bits == DecodedModeSPacket::kExtendedSquitterPacketLenBits) {
+        if (raw_mode_s_packet.buffer_len_bits == DecodedModeSPacket::kExtendedSquitterPacketLenBits) {
             CONSOLE_INFO("ADSBeeServer::Update", "New message: 0x%08lx|%08lx|%08lx|%04lx RSSI=%ddBm MLAT=%llu",
-                         raw_packet.buffer[0], raw_packet.buffer[1], raw_packet.buffer[2],
-                         (raw_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_packet.sigs_dbm,
-                         raw_packet.mlat_48mhz_64bit_counts);
+                         raw_mode_s_packet.buffer[0], raw_mode_s_packet.buffer[1], raw_mode_s_packet.buffer[2],
+                         (raw_mode_s_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_mode_s_packet.sigs_dbm,
+                         raw_mode_s_packet.mlat_48mhz_64bit_counts);
         } else {
             CONSOLE_INFO("ADSBeeServer::Update", "New message: 0x%08lx|%06lx RSSI=%ddBm MLAT=%llu",
-                         raw_packet.buffer[0], (raw_packet.buffer[1]) >> (2 * kBitsPerNibble), raw_packet.sigs_dbm,
-                         raw_packet.mlat_48mhz_64bit_counts);
+                         raw_mode_s_packet.buffer[0], (raw_mode_s_packet.buffer[1]) >> (2 * kBitsPerNibble),
+                         raw_mode_s_packet.sigs_dbm, raw_mode_s_packet.mlat_48mhz_64bit_counts);
         }
         CONSOLE_INFO("ADSBeeServer::Update", "\tdf=%d icao_address=0x%06lx", decoded_packet.GetDownlinkFormat(),
                      decoded_packet.GetICAOAddress());
 #endif
 
-        if (aircraft_dictionary.IngestDecodedModeSPacket(decoded_packet)) {
+        if (!aircraft_dictionary.IngestDecodedModeSPacket(decoded_packet)) {
             // NOTE: Pushing to a queue here will only forward valid packets!
-#ifdef VERBOSE_DEBUG
-            CONSOLE_INFO("ADSBeeServer::Update", "\taircraft_dictionary: %d aircraft",
-                         aircraft_dictionary.GetNumAircraft());
-#endif
+            CONSOLE_ERROR("ADSBeeServer::Update", "Failed to ingest decoded Mode S packet into aircraft dictionary.");
         }
 
-        // Send decoded transponder packet to feeds.
-        if ((comms_manager.WiFiStationHasIP() || comms_manager.EthernetHasIP()) &&
-            !comms_manager.IPWANSendDecodedModeSPacket(decoded_packet)) {
-            CONSOLE_ERROR(
-                "ADSBeeServer::Update",
-                "Encountered error while sending decoded transponder packet to feeds from ESP32 as WiFi station.");
+        // Send decoded mode s packet to feeds.
+        if (comms_manager.HasIP() && !comms_manager.IPWANSendDecodedModeSPacket(decoded_packet)) {
+            CONSOLE_ERROR("ADSBeeServer::Update",
+                          "Encountered error while sending decoded Mode S packet to feeds from ESP32 as WiFi station.");
             ret = false;
         }
+    }
+
+    RawUATADSBPacket raw_uat_adsb_packet;
+    while (raw_uat_adsb_packet_in_queue.Dequeue(raw_uat_adsb_packet)) {
+        DecodedUATADSBPacket decoded_packet = DecodedUATADSBPacket(raw_uat_adsb_packet);
+        if (!decoded_packet.is_valid) {
+            CONSOLE_ERROR("ADSBeeServer::Update", "Received invalid UAT ADSB packet.");
+            continue;
+        }
+        if (aircraft_dictionary.IngestDecodedUATADSBPacket(decoded_packet)) {
+            CONSOLE_ERROR("ADSBeeServer::Update", "Failed to ingest decoded UAT ADSB packet into aircraft dictionary.");
+        }
+
+        // Send decoded uat adsb packet to feeds.
+        if (comms_manager.HasIP() && !comms_manager.IPWANSendDecodedUATADSBPacket(decoded_packet)) {
+            CONSOLE_ERROR(
+                "ADSBeeServer::Update",
+                "Encountered error while sending decoded UAT ADSB packet to feeds from ESP32 as WiFi station.");
+            ret = false;
+        }
+    }
+
+    RawUATUplinkPacket raw_uat_uplink_packet;
+    while (raw_uat_uplink_packet_in_queue.Dequeue(raw_uat_uplink_packet)) {
+        DecodedUATUplinkPacket decoded_packet = DecodedUATUplinkPacket(raw_uat_uplink_packet);
     }
 
     // Broadcast aircraft locations to connected WiFi clients over GDL90.
@@ -250,39 +274,6 @@ bool ADSBeeServer::Update() {
     // Check to see whether the RP2040 sent over new metrics.
     xQueueReceive(rp2040_aircraft_dictionary_metrics_queue, &rp2040_aircraft_dictionary_metrics, 0);
 
-    return ret;
-}
-
-bool ADSBeeServer::HandleRawModeSPacket(RawModeSPacket &raw_packet) {
-    bool ret = true;
-    if (!raw_mode_s_packet_queue.Enqueue(raw_packet)) {
-        CONSOLE_ERROR("ADSBeeServer::HandleRawModeSPacket",
-                      "Push to transponder packet queue failed. May have overflowed?");
-        raw_mode_s_packet_queue.Clear();
-        ret = false;
-    }
-    return ret;
-}
-
-bool ADSBeeServer::HandleRawUATADSBPacket(RawUATADSBPacket &raw_packet) {
-    bool ret = true;
-    if (!raw_uat_adsb_packet_queue.Enqueue(raw_packet)) {
-        CONSOLE_ERROR("ADSBeeServer::HandleRawUATADSBPacket",
-                      "Push to UAT ADS-B packet queue failed. May have overflowed?");
-        raw_uat_adsb_packet_queue.Clear();
-        ret = false;
-    }
-    return ret;
-}
-
-bool ADSBeeServer::HandleRawUATUplinkPacket(RawUATUplinkPacket &raw_packet) {
-    bool ret = true;
-    if (!raw_uat_uplink_packet_queue.Enqueue(raw_packet)) {
-        CONSOLE_ERROR("ADSBeeServer::HandleRawUATUplinkPacket",
-                      "Push to UAT uplink packet queue failed. May have overflowed?");
-        raw_uat_uplink_packet_queue.Clear();
-        ret = false;
-    }
     return ret;
 }
 

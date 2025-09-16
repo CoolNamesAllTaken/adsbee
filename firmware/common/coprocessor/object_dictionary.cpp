@@ -103,73 +103,39 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             adsbee_server.network_console.BroadcastMessage(message, buf_len);
             break;
         }
-        case kAddrRawModeSPacket: {
-            RawModeSPacket tpacket;
-            memcpy(&tpacket, buf, sizeof(RawModeSPacket));
-            // Warning: printing here will cause a timeout and tests will fail.
-            // CONSOLE_INFO("SPICoprocessor::SetBytes", "Received a raw %d-byte transponder packet.",
-            //              tpacket.buffer_len_bytes);
-            adsbee_server.HandleRawModeSPacket(tpacket);
-            break;
-        }
-        case kAddrRawModeSPacketArray: {
-            uint8_t num_packets = buf[0];
-            RawModeSPacket tpacket;
-            for (uint16_t i = 0; i < num_packets && i * sizeof(RawModeSPacket) + sizeof(uint8_t) < buf_len; i++) {
-                memcpy(&tpacket, buf + sizeof(uint8_t) + i * sizeof(RawModeSPacket), sizeof(RawModeSPacket));
-                adsbee_server.HandleRawModeSPacket(tpacket);
-            }
-            break;
-        }
+        // case kAddrRawModeSPacket: {
+        //     RawModeSPacket tpacket;
+        //     memcpy(&tpacket, buf, sizeof(RawModeSPacket));
+        //     // Warning: printing here will cause a timeout and tests will fail.
+        //     // CONSOLE_INFO("SPICoprocessor::SetBytes", "Received a raw %d-byte transponder packet.",
+        //     //              tpacket.buffer_len_bytes);
+        //     adsbee_server.raw_mode_s_packet_queue.Enqueue(tpacket);
+        //     break;
+        // }
+        // case kAddrRawModeSPacketArray: {
+        //     uint8_t num_packets = buf[0];
+        //     RawModeSPacket tpacket;
+        //     for (uint16_t i = 0; i < num_packets && i * sizeof(RawModeSPacket) + sizeof(uint8_t) < buf_len; i++) {
+        //         memcpy(&tpacket, buf + sizeof(uint8_t) + i * sizeof(RawModeSPacket), sizeof(RawModeSPacket));
+        //         adsbee_server.raw_mode_s_packet_queue.Enqueue(tpacket);
+        //     }
+        //     break;
+        // }
         case kAddrAircraftDictionaryMetrics: {
             AircraftDictionary::Metrics rp2040_metrics;
             memcpy(&rp2040_metrics, buf + offset, buf_len);
             xQueueSend(adsbee_server.rp2040_aircraft_dictionary_metrics_queue, &rp2040_metrics, 0);
             break;
         }
-        case kAddrCompositeArray::RawPackets: {
+        case kAddrCompositeArrayRawPackets: {
             if (offset != 0) {
                 CONSOLE_ERROR("ObjectDictionary::SetBytes",
                               "Offset %d for writing CompositeArray::RawPackets not supported, must be 0.", offset);
                 return false;
             }
-            if (buf_len < sizeof(CompositeArray::RawPacketsHeader)) {
-                CONSOLE_ERROR("ObjectDictionary::SetBytes",
-                              "Buffer length %d for writing CompositeArray::RawPackets must be at least %d.", buf_len,
-                              sizeof(CompositeArray::RawPacketsHeader));
-                return false;
-            }
-            CompositeArray::RawPacketsHeader *header = (CompositeArray::RawPacketsHeader *)buf;
-            uint16_t expected_len = sizeof(CompositeArray::RawPacketsHeader) +
-                                    header->num_mode_s_packets * sizeof(RawModeSPacket) +
-                                    header->num_uat_adsb_packets * sizeof(RawUATADSBPacket) +
-                                    header->num_uat_uplink_packets * sizeof(RawUATUplinkPacket);
-            if (buf_len != expected_len) {
-                CONSOLE_ERROR("ObjectDictionary::SetBytes",
-                              "Buffer length %d for writing CompositeArray::RawPackets does not match expected "
-                              "length %d based on header values.",
-                              buf_len, expected_len);
-                return false;
-            }
-            uint16_t cursor = sizeof(CompositeArray::RawPacketsHeader);
-            RawModeSPacket mode_s_packet;
-            for (uint16_t i = 0; i < header->num_mode_s_packets; i++) {
-                memcpy(&mode_s_packet, buf + cursor, sizeof(RawModeSPacket));
-                cursor += sizeof(RawModeSPacket);
-                adsbee_server.HandleRawModeSPacket(mode_s_packet);
-            }
-            RawUATADSBPacket uat_adsb_packet;
-            for (uint16_t i = 0; i < header->num_uat_adsb_packets; i++) {
-                memcpy(&uat_adsb_packet, buf + cursor, sizeof(RawUATADSBPacket));
-                cursor += sizeof(RawUATADSBPacket);
-                adsbee_server.HandleRawUATADSBPacket(uat_adsb_packet);
-            }
-            RawUATUplinkPacket uat_uplink_packet;
-            for (uint16_t i = 0; i < header->num_uat_uplink_packets; i++) {
-                memcpy(&uat_uplink_packet, buf + cursor, sizeof(RawUATUplinkPacket));
-                cursor += sizeof(RawUATUplinkPacket);
-                adsbee_server.HandleRawUATUplinkPacket(uat_uplink_packet);
-            }
+            CompositeArray::UnpackRawPacketsBufferToQueues(buf, buf_len, &(adsbee_server.raw_mode_s_packet_queue),
+                                                   &(adsbee_server.raw_uat_adsb_packet_queue),
+                                                   &(adsbee_server.raw_uat_uplink_packet_queue));
             break;
         }
 #elif defined(ON_TI)

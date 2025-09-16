@@ -97,6 +97,16 @@ class CompositeArray {
 
     /**
      * Unpacks a buffer containing a CompositeArray (RawPackets::Header) followed by arrays of raw packets of each kind,
+     * and returns a CompositeArray::RawPackets struct that describes the contents of the buffer.
+     * @param[out] packets Struct to fill with pointers to the arrays in the buffer.
+     * @param[in] buf Buffer containing header and packed packets.
+     * @param[in] buf_len_bytes Length of the buffer, in bytes.
+     * @retval CompositeArray::RawPackets struct that describes the contents of the buffer.
+     */
+    static bool UnpackRawPacketsBuffer(CompositeArray::RawPackets& packets, uint8_t* buf, uint16_t buf_len_bytes);
+
+    /**
+     * Unpacks a buffer containing a CompositeArray (RawPackets::Header) followed by arrays of raw packets of each kind,
      * and enqueues the packets into the provided queues. Any queues that are passed as a nullptr are skipped. Returns
      * true if every packet that was passed in found a home, false otherwise.
      * @param[in] buf Buffer containing header and packed packets.
@@ -107,7 +117,8 @@ class CompositeArray {
      * skip.
      * @retval True if all packets were successfully enqueued, false otherwise.
      */
-    static bool UnpackRawPacketsBuffer(uint8_t* buf, uint16_t buf_len_bytes, PFBQueue<RawModeSPacket>* mode_s_queue,
-                                       PFBQueue<RawUATADSBPacket>* uat_adsb_queue,
-                                       PFBQueue<RawUATUplinkPacket>* uat_uplink_queue);
+    static bool UnpackRawPacketsBufferToQueues(uint8_t* buf, uint16_t buf_len_bytes,
+                                               PFBQueue<RawModeSPacket>* mode_s_queue,
+                                               PFBQueue<RawUATADSBPacket>* uat_adsb_queue,
+                                               PFBQueue<RawUATUplinkPacket>* uat_uplink_queue);
 };

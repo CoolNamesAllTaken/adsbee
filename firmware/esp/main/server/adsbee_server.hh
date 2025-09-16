@@ -1,6 +1,7 @@
 #pragma once
 
 #include "aircraft_dictionary.hh"
+#include "composite_array.hh"
 #include "data_structures.hh"
 #include "esp_http_server.h"
 #include "websocket_server.hh"
@@ -29,15 +30,6 @@ class ADSBeeServer {
     bool Update();
 
     /**
-     * Ingest a RawModeSPacket written in over Coprocessor SPI.
-     * @param[in] raw_packet RawModeSPacket to ingest.
-     * @retval True if packet was handled successfully, false otherwise.
-     */
-    bool HandleRawModeSPacket(RawModeSPacket& raw_packet);
-    bool HandleRawUATADSBPacket(RawUATADSBPacket& raw_packet);
-    bool HandleRawUATUplinkPacket(RawUATUplinkPacket& raw_packet);
-
-    /**
      * Task that runs continuously to receive SPI messages.
      */
     void SPIReceiveTask();
@@ -47,12 +39,12 @@ class ADSBeeServer {
      */
     void TCPServerTask(void* pvParameters);
 
-    PFBQueue<RawModeSPacket> raw_mode_s_packet_queue = PFBQueue<RawModeSPacket>(
-        {.buf_len_num_elements = kMaxNumModeSPackets, .buffer = raw_transponder_packet_queue_buffer_});
-    PFBQueue<RawUATADSBPacket> raw_uat_adsb_packet_queue = PFBQueue<RawUATADSBPacket>(
-        {.buf_len_num_elements = kMaxNumUATADSBPackets, .buffer = raw_uat_adsb_packet_queue_buffer_});
-    PFBQueue<RawUATUplinkPacket> raw_uat_uplink_packet_queue = PFBQueue<RawUATUplinkPacket>(
-        {.buf_len_num_elements = kMaxNumUATUplinkPackets, .buffer = raw_uat_uplink_packet_queue_buffer_});
+    PFBQueue<RawModeSPacket> raw_mode_s_packet_in_queue = PFBQueue<RawModeSPacket>(
+        {.buf_len_num_elements = kMaxNumModeSPackets, .buffer = raw_mode_s_packet_in_queue_buffer_});
+    PFBQueue<RawUATADSBPacket> raw_uat_adsb_packet_in_queue = PFBQueue<RawUATADSBPacket>(
+        {.buf_len_num_elements = kMaxNumUATADSBPackets, .buffer = raw_uat_adsb_packet_in_queue_buffer_});
+    PFBQueue<RawUATUplinkPacket> raw_uat_uplink_packet_in_queue = PFBQueue<RawUATUplinkPacket>(
+        {.buf_len_num_elements = kMaxNumUATUplinkPackets, .buffer = raw_uat_uplink_packet_in_queue_buffer_});
 
     AircraftDictionary aircraft_dictionary;
 
@@ -80,11 +72,11 @@ class ADSBeeServer {
     bool spi_receive_task_should_exit_ = false;
 
     // Queue for raw packets from RP2040.
-    RawModeSPacket raw_transponder_packet_queue_buffer_[kMaxNumModeSPackets];
-    RawUATADSBPacket raw_uat_adsb_packet_queue_buffer_[kMaxNumUATADSBPackets];
-    RawUATUplinkPacket raw_uat_uplink_packet_queue_buffer_[kMaxNumUATUplinkPackets];
-    uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
+    RawModeSPacket raw_mode_s_packet_in_queue_buffer_[kMaxNumModeSPackets];
+    RawUATADSBPacket raw_uat_adsb_packet_in_queue_buffer_[kMaxNumUATADSBPackets];
+    RawUATUplinkPacket raw_uat_uplink_packet_in_queue_buffer_[kMaxNumUATUplinkPackets];
 
+    uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
     uint32_t last_gdl90_report_timestamp_ms_ = 0;
 };
 
