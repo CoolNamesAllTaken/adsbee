@@ -100,10 +100,15 @@ class CommsManager {
     bool network_console_putc(char c);
     bool network_console_puts(const char *buf, uint16_t len = UINT16_MAX);
 
-    inline void SendBuf(SettingsManager::SerialInterface iface, char *buf, uint16_t buf_len) {
+#include "comms_reporting.hh"
+
+    inline bool SendBuf(ReportSink sink, const char *buf, uint16_t buf_len) {
         for (uint16_t i = 0; i < buf_len; i++) {
-            iface_putc(iface, buf[i]);
+            if (!iface_putc(sink.as_serial_interface, buf[i])) {
+                return false;
+            }
         }
+        return true;
     }
 
     /**
@@ -197,52 +202,6 @@ class CommsManager {
     // AT Functions
     bool InitAT();
     bool UpdateAT();
-
-    // Reporting Functions
-    bool InitReporting();
-    bool UpdateReporting();
-
-    /**
-     * Sends out RAW formatted transponder data on the selected serial interface.
-     * @param[in] iface SerialInterface to broadcast RAW messages on.
-     * @param[in] packets CompositeArray::RawPackets struct with counts and pointers to arrays of each kind of packet to
-     * report.
-     * @retval True if successful, false if something broke.
-     */
-    bool ReportRaw(SettingsManager::SerialInterface iface, const CompositeArray::RawPackets &packets);
-
-    /**
-     * Sends out Mode S Beast formatted transponder data on the selected serial interface. Reports all transponder
-     * packets in the provided packets_to_report array, which is used to allow printing arbitrary blocks of transponder
-     * packets received via the CommsManager's built-in transponder_packet_reporting_queue_.
-     * @param[in] iface SerialInterface to broadcast Mode S Beast messages on.
-     * @param[in] packets CompositeArray::RawPackets struct with counts and pointers to arrays of each kind of packet to
-     * report.
-     */
-    bool ReportBeast(SettingsManager::SerialInterface iface, const CompositeArray::RawPackets &packets);
-
-    /**
-     * Sends out comma separated aircraft information for each aircraft in the aircraft dictionary.
-     * @param[in] iface SerialInterface to broadcast aircraft information on.
-     * @retval True if successful, false if something broke.
-     */
-    bool ReportCSBee(SettingsManager::SerialInterface iface);
-
-    /**
-     * Sends a series of MAVLINK ADSB_VEHICLE messages on the selected serial interface, one for each tracked aircraft
-     * in the aircraft dictionary, plus a MAVLINK MESSAGE_INTERVAL message used as a delimiter at the end of the train
-     * of ADSB_VEHICLE messages.
-     * @param[in] iface SerialInterface to broadcast MAVLINK messages on. Note that this gets cast to a MAVLINK channel
-     * as a bit of a dirty hack under the hood, then un-cast back into a SerialInterface in the UART send function
-     * within MAVLINK. Shhhhhhh it's fine for now.
-     * @retval True if successful, false if something went sideways.
-     */
-    bool ReportMAVLINK(SettingsManager::SerialInterface iface);
-
-    /**
-     * Reports the contents of the aircraft dictionary using the Garmin GDL90 protocol.
-     */
-    bool ReportGDL90(SettingsManager::SerialInterface iface);
 
     CommsManagerConfig config_;
 

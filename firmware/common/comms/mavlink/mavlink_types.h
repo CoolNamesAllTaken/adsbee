@@ -162,8 +162,8 @@ typedef struct __mavlink_message_info {
 #define mavlink_ck_b(msg)           *(((msg)->len + (uint16_t)1) + (uint8_t *)_MAV_PAYLOAD_NON_CONST(msg))
 
 #ifndef HAVE_MAVLINK_CHANNEL_T
-// Modified by John McNelly 2025-09-15: Changed enum base to uint32_t to allow reuse as a pointer.
-typedef enum : uint32_t { MAVLINK_COMM_0, MAVLINK_COMM_1, MAVLINK_COMM_2, MAVLINK_COMM_3 } mavlink_channel_t;
+// Modified by John McNelly 2025-09-15: Changed enum base to uint16_t to allow easy conversion from ReportSink union.
+typedef enum : uint16_t { MAVLINK_COMM_0, MAVLINK_COMM_1, MAVLINK_COMM_2, MAVLINK_COMM_3 } mavlink_channel_t;
 #endif
 
 /*

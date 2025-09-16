@@ -239,6 +239,8 @@ class CommsManager {
     PFBQueue<RawUATUplinkPacket> raw_uat_uplink_packet_reporting_queue = PFBQueue<RawUATUplinkPacket>(
         {.buf_len_num_elements = kMaxNumUATUplinkPackets, .buffer = raw_uat_uplink_packet_reporting_queue_buffer_});
 
+#include "comms_reporting.hh"
+
    private:
     bool ConnectFeedSocket(uint16_t feed_index);
     bool CloseFeedSocket(uint16_t feed_index);

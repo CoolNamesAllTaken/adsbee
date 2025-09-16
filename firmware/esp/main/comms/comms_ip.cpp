@@ -173,16 +173,11 @@ void CommsManager::IPWANTask(void* pvParameters) {
             // No packets available to send, wait and try again.
             continue;
         }
-        reporting_composite_array.header =
-            reinterpret_cast<CompositeArray::RawPackets::Header*>(reporting_composite_array_buf);
-        reporting_composite_array.mode_s_packets = reinterpret_cast<RawModeSPacket*>(
-            reporting_composite_array_buf + sizeof(CompositeArray::RawPackets::Header));
-        reporting_composite_array.uat_adsb_packets = reinterpret_cast<RawUATADSBPacket*>(
-            reporting_composite_array.mode_s_packets +
-            reporting_composite_array.header->num_mode_s_packets * sizeof(RawModeSPacket));
-        reporting_composite_array.uat_uplink_packets = reinterpret_cast<RawUATUplinkPacket*>(
-            reporting_composite_array.uat_adsb_packets +
-            reporting_composite_array.header->num_uat_adsb_packets * sizeof(RawUATADSBPacket));
+        if (!CompositeArray::UnpackRawPacketsBuffer(reporting_composite_array, reporting_composite_array_buf,
+                                                    kReportingCompositeArrayQueueElementSizeBytes)) {
+            CONSOLE_ERROR("CommsManager::IPWANTask", "Failed to unpack CompositeArray from buffer.");
+            continue;
+        }
 
         // NOTE: Construct packets that are shared between feeds here!
 
@@ -359,6 +354,7 @@ bool CommsManager::SendBuf(uint16_t iface, char* buf, uint16_t buf_len) {
                       "errno %d.",
                       buf_len, iface, settings_manager.settings.feed_uris[iface],
                       settings_manager.settings.feed_ports[iface], errno);
+        CloseFeedSocket(iface);
         return false;
     } else {
         // CONSOLE_INFO("CommsManager::IPWANTask", "Message sent to feed %d.", i);

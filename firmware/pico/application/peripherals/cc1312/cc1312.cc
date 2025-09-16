@@ -121,9 +121,9 @@ bool CC1312::Update() {
             CONSOLE_ERROR("CC1312::Update", "Unable to read CC1312 raw packet array.");
             return false;
         }
-        if (!CompositeArray::UnpackRawPacketsBuffer(read_buf, sizeof(read_buf), nullptr,
-                                                    &adsbee.raw_uat_adsb_packet_queue,
-                                                    &adsbee.raw_uat_uplink_packet_queue)) {
+        if (!CompositeArray::UnpackRawPacketsBufferToQueues(read_buf, sizeof(read_buf), nullptr,
+                                                            &adsbee.raw_uat_adsb_packet_queue,
+                                                            &adsbee.raw_uat_uplink_packet_queue)) {
             CONSOLE_ERROR("CC1312::Update", "Failed to unpack raw packets from CC1312.");
             return false;
         }
