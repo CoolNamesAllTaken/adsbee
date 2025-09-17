@@ -377,7 +377,8 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                 }
                 // Check that the selected prototcol is valid for use with feeders.
                 if (!(feed_protocol == SettingsManager::ReportingProtocol::kBeast ||
-                      feed_protocol == SettingsManager::ReportingProtocol::kNoReports)) {
+                      feed_protocol == SettingsManager::ReportingProtocol::kNoReports ||
+                      feed_protocol == SettingsManager::ReportingProtocol::kMQTT)) {
                     CPP_AT_ERROR("Protocol %s is not supported for network feeds.",
                                  SettingsManager::kReportingProtocolStrs[feed_protocol]);
                 }

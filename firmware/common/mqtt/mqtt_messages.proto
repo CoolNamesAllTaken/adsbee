@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package adsbee.mqtt.v1;
+
+// Enumerations
+enum Band {
+  BAND_UNSPECIFIED = 0;
+  BAND_1090 = 1;  // Mode S / ADS-B (1090 MHz)
+  BAND_UAT = 2;   // UAT (978 MHz)
+}
+
+enum FixType {
+  FIX_NONE = 0;
+  FIX_2D = 1;
+  FIX_3D = 2;
+}
+
+// Aircraft status message (JSON topic: {device_id}/adsb|uat/{ICAO}/status)
+message AircraftStatus {
+  string icao = 1;      // Uppercase hex (6 chars)
+  Band band = 2;        // 1090 vs UAT
+  string call = 3;      // Callsign
+  string cat = 4;       // ADS-B emitter category code (e.g., A3)
+  double lat = 5;       // Degrees
+  double lon = 6;       // Degrees
+  int32 alt_ft = 7;     // Baro altitude (feet)
+  float hdg_deg = 8;    // Degrees [0..359]
+  float spd_kts = 9;    // Knots
+  int32 vr_fpm = 10;    // Feet per minute
+  string sqk = 11;      // 4-digit squawk, zero-padded
+  bool on_ground = 12;  // True if on ground
+  uint64 t_ms = 13;     // Optional: timestamp (ms)
+}
+
+// Device telemetry (JSON topic: {device_id}/system/telemetry)
+message Telemetry {
+  uint32 uptime_sec = 1;
+  uint32 msgs_rx = 2;          // ADS-B messages received/processed per interval
+  uint32 msgs_tx = 3;          // MQTT messages sent (monotonic or per interval)
+  int32 cpu_temp_c = 4;
+  uint32 mem_free_kb = 5;
+  int32 noise_floor_dbm = 6;
+  bool rx_1090 = 7;
+  bool rx_978 = 8;
+  bool wifi = 9;
+  bool mqtt = 10;
+  string fw_version = 11;      // e.g., "1.2.3"
+  uint32 mps_total = 12;       // Optional: messages per second total
+  repeated uint32 mps_feeds = 13; // Optional: per-feed messages per second
+}
+
+// GPS position (JSON topic: {device_id}/system/gps)
+message GPS {
+  double lat = 1;
+  double lon = 2;
+  float alt_m = 3;
+  FixType fix = 4;
+  uint32 sats = 5;
+  float hdop = 6;
+  uint64 ts = 7;  // Seconds since epoch or device timestamp
+}
+
+// Optional raw message (JSON topic: {device_id}/adsb|uat/{ICAO}/raw) when enabled
+message RawPacket {
+  uint64 t_ms = 1;      // Timestamp in milliseconds
+  string icao = 2;      // Uppercase hex (6 chars)
+  Band band = 3;        // 1090 vs UAT
+  uint32 df = 4;        // Downlink format
+  int32 rssi_dbm = 5;   // Signal level in dBm
+  bytes bytes = 6;      // Raw packet bytes
+}
+
+// Online state for retained LWT (topic: {device_id}/system/online)
+message DeviceOnline {
+  bool online = 1;      // 1 when connected; broker will set to 0 via LWT on disconnect
+  uint64 ts_ms = 2;     // Timestamp when set
+}

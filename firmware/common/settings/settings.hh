@@ -13,7 +13,7 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 9;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 10;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 class SettingsManager {
@@ -39,6 +39,7 @@ class SettingsManager {
         kMAVLINK1,
         kMAVLINK2,
         kGDL90,
+        kMQTT,
         kNumProtocols
     };
     static constexpr uint16_t kReportingProtocolStrMaxLen = 30;
@@ -58,6 +59,18 @@ class SettingsManager {
         kNumSubGHzRadioModes
     };
     static const char kSubGHzModeStrs[kNumSubGHzRadioModes][kSubGHzModeStrMaxLen];
+
+    // MQTT-specific enums
+    enum MQTTFormat : uint8_t {
+        kMQTTFormatJSON = 0,
+        kMQTTFormatBinary = 1
+    };
+
+    enum MQTTReportMode : uint8_t {
+        kMQTTReportModeStatus = 0,
+        kMQTTReportModeRaw = 1,
+        kMQTTReportModeBoth = 2
+    };
 
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a
     // firmware upgrade if the format of the settings struct changes.
@@ -79,6 +92,12 @@ class SettingsManager {
         static constexpr uint16_t kIPAddrStrLen = 16;   // XXX.XXX.XXX.XXX (does not include null terminator)
         static constexpr uint16_t kMACAddrStrLen = 18;  // XX:XX:XX:XX:XX:XX (does not include null terminator)
         static constexpr uint16_t kMACAddrNumBytes = 6;
+
+        // MQTT-specific constants
+        static constexpr uint16_t kMQTTUsernameMaxLen = 32;
+        static constexpr uint16_t kMQTTPasswordMaxLen = 64;
+        static constexpr uint16_t kMQTTClientIDMaxLen = 32;
+        static constexpr uint16_t kMQTTDeviceIDMaxLen = 16;  // 16 hex chars
 
         /**
          * Core Network Settings struct is used for storing network settings that should remain unchanged through most
@@ -164,6 +183,20 @@ class SettingsManager {
         ReportingProtocol feed_protocols[kMaxNumFeeds];
         uint8_t feed_receiver_ids[kMaxNumFeeds][kFeedReceiverIDNumBytes];
 
+        // MQTT-specific settings (per feed)
+        char mqtt_usernames[kMaxNumFeeds][kMQTTUsernameMaxLen + 1];
+        char mqtt_passwords[kMaxNumFeeds][kMQTTPasswordMaxLen + 1];
+        char mqtt_client_ids[kMaxNumFeeds][kMQTTClientIDMaxLen + 1];
+        MQTTFormat mqtt_formats[kMaxNumFeeds];
+        MQTTReportMode mqtt_report_modes[kMaxNumFeeds];
+
+        // Global MQTT settings
+        bool mqtt_enabled = false;
+        char mqtt_device_id[kMQTTDeviceIDMaxLen + 1];  // Derived from receiver ID, cached here
+        uint16_t mqtt_telemetry_interval_sec = 60;  // Default 60s
+        uint16_t mqtt_gps_interval_sec = 60;  // Default 60s
+        uint8_t mqtt_status_rate_hz = 1;  // 1 Hz per aircraft by default
+
         /**
          * Default constructor.
          */
@@ -195,7 +228,24 @@ class SettingsManager {
                 // ESP32 will have to query for receiver ID later.
                 memset(feed_receiver_ids[i], 0, kFeedReceiverIDNumBytes);
 #endif
+                // Initialize MQTT settings
+                memset(mqtt_usernames[i], '\0', kMQTTUsernameMaxLen + 1);
+                memset(mqtt_passwords[i], '\0', kMQTTPasswordMaxLen + 1);
+                memset(mqtt_client_ids[i], '\0', kMQTTClientIDMaxLen + 1);
+                mqtt_formats[i] = kMQTTFormatJSON;
+                mqtt_report_modes[i] = kMQTTReportModeStatus;
             }
+
+            // Initialize global MQTT device ID from receiver ID
+            memset(mqtt_device_id, '\0', kMQTTDeviceIDMaxLen + 1);
+#ifdef ON_PICO
+            // Generate device ID from receiver ID (16 hex chars)
+            uint8_t default_receiver_id[kFeedReceiverIDNumBytes];
+            device_info.GetDefaultFeedReceiverID(default_receiver_id);
+            for (int i = 0; i < kFeedReceiverIDNumBytes && i < 8; i++) {
+                snprintf(&mqtt_device_id[i * 2], 3, "%02x", default_receiver_id[i]);
+            }
+#endif
 
             // Set default feed URIs.
             // adsb.fi: feed.adsb.fi:30004, Beast
