@@ -330,12 +330,13 @@ class FirmwareUpdateManager {
                           kFlashHeaderLenBytes + kFlashAppLenBytes);
             return false;
         }
-        uint32_t padded_len_bytes = len_bytes + FLASH_PAGE_SIZE - (len_bytes % FLASH_PAGE_SIZE);
+        // Properly calculate padding - only add if not already aligned
+        uint32_t padded_len_bytes = ((len_bytes + FLASH_PAGE_SIZE - 1) / FLASH_PAGE_SIZE) * FLASH_PAGE_SIZE;
         DisableInterrupts();
         FlashUtils::FlashSafe();  // Ensure flash is safe to write to.
         if (padded_len_bytes != len_bytes) {
             CONSOLE_WARNING("FirmwareUpdateManager::PartialWriteFlashPartition",
-                            "Length %u is not a multiple of flash sector size %u Bytes.", len_bytes, FLASH_PAGE_SIZE);
+                            "Length %u is not a multiple of flash page size %u Bytes.", len_bytes, FLASH_PAGE_SIZE);
             uint8_t padded_buf[padded_len_bytes];
             memcpy(padded_buf, buf, len_bytes);
             memset(padded_buf + len_bytes, 0xFF, padded_len_bytes - len_bytes);  // Pad the extra with 0xFF.
