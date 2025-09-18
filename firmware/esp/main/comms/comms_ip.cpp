@@ -163,7 +163,7 @@ void CommsManager::IPEventHandler(void* arg, esp_event_base_t event_base, int32_
 void CommsManager::IPWANTask(void* pvParameters) {
     CONSOLE_INFO("CommsManager::IPWANTask", "IP WAN Task started.");
 
-    uint8_t raw_packets_buf[CompositeArray::RawPackets::MaxLenBytes];
+    uint8_t raw_packets_buf[CompositeArray::RawPackets::kMaxLenBytes];
     while (true) {
         // Don't try establishing socket connections until the ESP32 has been assigned an IP address.
         while (!wifi_sta_has_ip_ && !ethernet_has_ip_) {

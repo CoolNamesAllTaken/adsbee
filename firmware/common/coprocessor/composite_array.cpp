@@ -50,11 +50,13 @@ CompositeArray::RawPackets CompositeArray::PackRawPacketsBuffer(uint8_t* buf, ui
 }
 
 bool CompositeArray::UnpackRawPacketsBuffer(CompositeArray::RawPackets& packets, uint8_t* buf, uint16_t buf_len_bytes) {
+#ifdef ON_PICO
     // Ensure that buf is word-aligned.
     if (reinterpret_cast<uintptr_t>(buf) % 4 != 0) {
         CONSOLE_ERROR("CompositeArray::UnpackRawPacketsBuffer", "Buffer is not word-aligned.");
         return false;  // Buffer must be word-aligned.
     }
+#endif
 
     if (buf_len_bytes < sizeof(RawPackets::Header)) {
         // Buffer too small to contain header.
@@ -76,7 +78,10 @@ bool CompositeArray::UnpackRawPacketsBuffer(CompositeArray::RawPackets& packets,
                         packets.header->num_uat_uplink_packets * sizeof(RawUATUplinkPacket);
 
     if (buf_len_bytes < packets.len_bytes) {
-        CONSOLE_ERROR("CompositeArray::UnpackRawPacketsBuffer", "Buffer too small for claimed number of packets.");
+        CONSOLE_ERROR(
+            "CompositeArray::UnpackRawPacketsBuffer",
+            "Buffer too small for claimed number of packets: expected %u bytes from header, buffer was %u bytes.",
+            packets.len_bytes, buf_len_bytes);
         return false;  // Buffer is too short to contain the claimed number of packets.
     }
 

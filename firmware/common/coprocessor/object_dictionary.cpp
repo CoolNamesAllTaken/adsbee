@@ -272,6 +272,8 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
 
             CompositeArray::PackRawPacketsBuffer(buf, buf_len, nullptr, &raw_uat_adsb_packet_queue,
                                                  &raw_uat_uplink_packet_queue);
+
+            break;
         }
 #endif
         default:

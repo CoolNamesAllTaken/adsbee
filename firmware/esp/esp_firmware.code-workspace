@@ -101,6 +101,7 @@
 				"type": "gdbtarget",
 				"request": "attach",
 				"name": "Eclipse CDT Remote",
+				"cwd": "${workspaceFolder:esp}",
 				"program": "${workspaceFolder:esp}/build/${command:espIdf.getProjectName}.elf",
 				"initCommands": [
 					"set remote hardware-watchpoint-limit {IDF_TARGET_CPU_WATCHPOINT_NUM}",

@@ -114,7 +114,7 @@ bool CC1312::Update() {
         num_queued_sc_command_requests = device_status.num_queued_sc_command_requests;
 
         // Read packets from queues.
-        uint8_t read_buf[SPICoprocessorPacket::SCResponsePacket::kDataMaxLenBytes] = {0};
+        uint8_t read_buf[CompositeArray::RawPackets::kMaxLenBytes] = {0};
         // Read with full size of array, let the CC1312 fill it out with as many packets as possible.
         if (!adsbee.subg_radio.Read(ObjectDictionary::Address::kAddrCompositeArrayRawPackets, read_buf,
                                     sizeof(read_buf))) {

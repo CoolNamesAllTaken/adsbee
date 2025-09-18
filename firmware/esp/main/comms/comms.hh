@@ -61,7 +61,7 @@ class CommsManager {
         wifi_clients_list_mutex_ = xSemaphoreCreateMutex();
         wifi_ap_message_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(NetworkMessage));
         ip_wan_reporting_composite_array_queue_ =
-            xQueueCreate(kReportingCompositeArrayQueueNumElements, CompositeArray::RawPackets::MaxLenBytes);
+            xQueueCreate(kReportingCompositeArrayQueueNumElements, CompositeArray::RawPackets::kMaxLenBytes);
     }
 
     ~CommsManager() {
@@ -201,7 +201,7 @@ class CommsManager {
      * Sends a composite array of raw packets to feeds via the external IP network that the ESP32 is a station on. It's
      * recommended to only call this function if HasIP() returns true, otherwise it will throw a warning.
      * @param[in] raw_packets_buf Buffer containing the CompositeArray::RawPackets to send. Assumed to be of size
-     * CompositeArray::RawPackets::MaxLenBytes.
+     * CompositeArray::RawPackets::kMaxLenBytes.
      * @retval True if packet was successfully sent, false otherwise.
      */
     bool IPWANSendRawPacketCompositeArray(uint8_t* raw_packets_buf);
