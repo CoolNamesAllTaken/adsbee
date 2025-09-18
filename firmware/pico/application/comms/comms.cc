@@ -6,12 +6,14 @@
 #include "pico/stdlib.h"
 #include "spi_coprocessor.hh"
 
+static const CommsManager::ReportSink kReportingSinks[] = {SettingsManager::SerialInterface::kCommsUART,
+                                                           SettingsManager::SerialInterface::kConsole};
+static const uint16_t kNumReportingSinks = sizeof(kReportingSinks) / sizeof(CommsManager::ReportSink);
+
 CommsManager::CommsManager(CommsManagerConfig config_in)
     : config_(config_in), at_parser_(CppAT(at_command_list, at_command_list_num_commands, true)) {}
 
 bool CommsManager::Init() {
-    InitReporting();
-
     gpio_set_function(config_.comms_uart_tx_pin, GPIO_FUNC_UART);
     gpio_set_function(config_.comms_uart_rx_pin, GPIO_FUNC_UART);
     uart_set_translate_crlf(config_.comms_uart_handle, false);
@@ -34,7 +36,24 @@ bool CommsManager::Init() {
 bool CommsManager::Update() {
     UpdateAT();
     UpdateNetworkConsole();
-    UpdateReporting();
+
+    uint8_t packets_to_report_buf[SPICoprocessorPacket::SCResponsePacket::kDataMaxLenBytes] = {0};
+    CompositeArray::RawPackets packets_to_report = CompositeArray::PackRawPacketsBuffer(
+        packets_to_report_buf, sizeof(packets_to_report_buf), &mode_s_packet_reporting_queue,
+        &uat_adsb_packet_reporting_queue, &uat_uplink_packet_reporting_queue);
+    // Forward the CompositeArray::RawPackets to the ESP32 if enabled.
+    if (esp32.IsEnabled() && packets_to_report.IsValid()) {
+        // Write packet to ESP32 with a forced ACK.
+        esp32.Write(ObjectDictionary::kAddrCompositeArrayRawPackets,  // addr
+                    packets_to_report_buf,                            // buf
+                    true,                                             // require_ack
+                    packets_to_report.len_bytes                       // len
+        );
+    }
+
+    // Interfaces to send reports on.
+    UpdateReporting(kReportingSinks, settings_manager.settings.reporting_protocols, kNumReportingSinks,
+                    &packets_to_report);
     return true;
 }
 
@@ -58,7 +77,8 @@ bool CommsManager::UpdateNetworkConsole() {
         char c = '\0';
         while (esp32_console_tx_queue.Length() > 0) {
             uint16_t message_len = 0;
-            for (; message_len < SPICoprocessorPacket::SCWritePacket::kDataMaxLenBytes && esp32_console_tx_queue.Dequeue(c);
+            for (; message_len < SPICoprocessorPacket::SCWritePacket::kDataMaxLenBytes &&
+                   esp32_console_tx_queue.Dequeue(c);
                  message_len++) {
                 esp32_console_tx_buf[message_len] = c;
             }
@@ -201,8 +221,8 @@ bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char
 bool CommsManager::network_console_putc(char c) {
     static bool recursion_alert = false;
     if (recursion_alert) {
-        return false;  // Don't get into infinite loops in case UpdateAT or Enqueue() create error messages that would in
-                       // turn create more network_console_putc calls.
+        return false;  // Don't get into infinite loops in case UpdateAT or Enqueue() create error messages that would
+                       // in turn create more network_console_putc calls.
     }
     recursion_alert = true;
     if (!comms_manager.esp32_console_tx_queue.Enqueue(c)) {

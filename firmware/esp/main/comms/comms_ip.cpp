@@ -181,6 +181,16 @@ void CommsManager::IPWANTask(void* pvParameters) {
 
         // NOTE: Construct packets that are shared between feeds here!
 
+        ReportSink csbee_sinks[SettingsManager::kNumSerialInterfaces];
+        ReportSink mavlink1_sinks[SettingsManager::kNumSerialInterfaces];
+        ReportSink mavlink2_sinks[SettingsManager::kNumSerialInterfaces];
+        ReportSink gdl90_sinks[SettingsManager::kNumSerialInterfaces];
+
+        uint16_t num_csbee_sinks = 0;
+        uint16_t num_mavlink1_sinks = 0;
+        uint16_t num_mavlink2_sinks = 0;
+        uint16_t num_gdl90_sinks = 0;
+
         for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
             // Iterate through feeds, open/close and send message as required.
             if (!settings_manager.settings.feed_is_active[i]) {
@@ -194,44 +204,6 @@ void CommsManager::IPWANTask(void* pvParameters) {
                 if (!ConnectFeedSocket(i)) {
                     continue;  // Failed to connect, try again later.
                 }
-            }
-
-            // Send packet!
-            // NOTE: Construct packets that are specific to a feed in case statements here!
-            switch (settings_manager.settings.feed_protocols[i]) {
-                case SettingsManager::ReportingProtocol::kBeast: {
-                    if (!decoded_packet.is_valid) {
-                        // Packet is invalid, don't send.
-                        break;
-                    }
-                    // Send Beast packet.
-                    // Double the length as a hack to make room for the escaped UUID.
-                    uint8_t beast_message_buf[2 * SettingsManager::Settings::kFeedReceiverIDNumBytes +
-                                              BeastReporter::kModeSBeastFrameMaxLenBytes];
-                    uint16_t beast_message_len_bytes =
-                        BeastReporter::BuildModeSBeastFrame(beast_message_buf, decoded_packet);
-
-                    int err = send(feed_sock_[i], beast_message_buf, beast_message_len_bytes, 0);
-                    if (err < 0) {
-                        CONSOLE_ERROR("CommsManager::IPWANTask",
-                                      "Error occurred during sending %d Byte beast message to feed %d with URI %s "
-                                      "on port %d: "
-                                      "errno %d.",
-                                      beast_message_len_bytes, i, settings_manager.settings.feed_uris[i],
-                                      settings_manager.settings.feed_ports[i], errno);
-                        // Mark socket as disconnected and try reconnecting in next reporting interval.
-                        close(feed_sock_[i]);
-                        feed_sock_is_connected_[i] = false;
-                    } else {
-                        // CONSOLE_INFO("CommsManager::IPWANTask", "Message sent to feed %d.", i);
-                        feed_mps_counter_[i]++;  // Log that a message was sent in statistics.
-                    }
-                    break;
-                }
-                // TODO: add other protocols here
-                default:
-                    // No reporting protocol or unsupported protocol: do nothing.
-                    break;
             }
         }
     }

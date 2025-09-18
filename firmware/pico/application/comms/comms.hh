@@ -104,7 +104,7 @@ class CommsManager {
 
     inline bool SendBuf(ReportSink sink, const char *buf, uint16_t buf_len) {
         for (uint16_t i = 0; i < buf_len; i++) {
-            if (!iface_putc(sink.as_serial_interface, buf[i])) {
+            if (!iface_putc(static_cast<SettingsManager::SerialInterface>(sink), buf[i])) {
                 return false;
             }
         }
