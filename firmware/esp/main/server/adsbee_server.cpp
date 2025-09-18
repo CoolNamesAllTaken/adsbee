@@ -41,7 +41,7 @@ extern const uint8_t style_css_end[] asm("_binary_style_css_end");
 extern const uint8_t favicon_png_start[] asm("_binary_favicon_png_start");
 extern const uint8_t favicon_png_end[] asm("_binary_favicon_png_end");
 
-GDL90Reporter gdl90;
+extern GDL90Reporter gdl90;
 
 /** "Pass-Through" functions used to access member functions in callbacks. **/
 
@@ -198,65 +198,67 @@ bool ADSBeeServer::Update() {
         network_metrics.BroadcastMessage(metrics_message, strlen(metrics_message));
     }
 
-    // Ingest new packets into the dictionary.
-    RawModeSPacket raw_mode_s_packet;
-    while (raw_mode_s_packet_in_queue.Dequeue(raw_mode_s_packet)) {
-        DecodedModeSPacket decoded_packet = DecodedModeSPacket(raw_mode_s_packet);
-        if (!decoded_packet.is_valid) {
-            CONSOLE_ERROR("ADSBeeServer::Update", "Received invalid Mode S packet.");
-            continue;
-        }
+    // Assemble a CompositeArray of transponder packets to report.
+    uint8_t raw_packets_buf[CompositeArray::RawPackets::MaxLenBytes];
+    CompositeArray::RawPackets raw_packets = CompositeArray::PackRawPacketsBuffer(
+        raw_packets_buf, sizeof(raw_packets_buf), &(adsbee_server.raw_mode_s_packet_in_queue),
+        &(adsbee_server.raw_uat_adsb_packet_in_queue), &(adsbee_server.raw_uat_uplink_packet_in_queue));
+
+    if (!raw_packets.IsValid()) {
+        CONSOLE_ERROR("ADSBeeServer::Update", "Failed to pack CompositeArray of transponder packets.");
+    } else {
+        // Add packets to aircraft dictionary and then report them.
+
+        // Mode S Packets
+        for (uint16_t i = 0; i < raw_packets.header->num_mode_s_packets; i++) {
+            RawModeSPacket &raw_mode_s_packet = raw_packets.mode_s_packets[i];
+            DecodedModeSPacket decoded_packet = DecodedModeSPacket(raw_mode_s_packet);
+            if (!decoded_packet.is_valid) {
+                CONSOLE_ERROR("ADSBeeServer::Update", "Received invalid Mode S packet.");
+                continue;
+            }
 #ifdef VERBOSE_DEBUG
-        if (raw_mode_s_packet.buffer_len_bits == DecodedModeSPacket::kExtendedSquitterPacketLenBits) {
-            CONSOLE_INFO("ADSBeeServer::Update", "New message: 0x%08lx|%08lx|%08lx|%04lx RSSI=%ddBm MLAT=%llu",
-                         raw_mode_s_packet.buffer[0], raw_mode_s_packet.buffer[1], raw_mode_s_packet.buffer[2],
-                         (raw_mode_s_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_mode_s_packet.sigs_dbm,
-                         raw_mode_s_packet.mlat_48mhz_64bit_counts);
-        } else {
-            CONSOLE_INFO("ADSBeeServer::Update", "New message: 0x%08lx|%06lx RSSI=%ddBm MLAT=%llu",
-                         raw_mode_s_packet.buffer[0], (raw_mode_s_packet.buffer[1]) >> (2 * kBitsPerNibble),
-                         raw_mode_s_packet.sigs_dbm, raw_mode_s_packet.mlat_48mhz_64bit_counts);
-        }
-        CONSOLE_INFO("ADSBeeServer::Update", "\tdf=%d icao_address=0x%06lx", decoded_packet.GetDownlinkFormat(),
-                     decoded_packet.GetICAOAddress());
+            if (raw_mode_s_packet.buffer_len_bits == DecodedModeSPacket::kExtendedSquitterPacketLenBits) {
+                CONSOLE_INFO("ADSBeeServer::Update", "New message: 0x%08lx|%08lx|%08lx|%04lx RSSI=%ddBm MLAT=%llu",
+                             raw_mode_s_packet.buffer[0], raw_mode_s_packet.buffer[1], raw_mode_s_packet.buffer[2],
+                             (raw_mode_s_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_mode_s_packet.sigs_dbm,
+                             raw_mode_s_packet.mlat_48mhz_64bit_counts);
+            } else {
+                CONSOLE_INFO("ADSBeeServer::Update", "New message: 0x%08lx|%06lx RSSI=%ddBm MLAT=%llu",
+                             raw_mode_s_packet.buffer[0], (raw_mode_s_packet.buffer[1]) >> (2 * kBitsPerNibble),
+                             raw_mode_s_packet.sigs_dbm, raw_mode_s_packet.mlat_48mhz_64bit_counts);
+            }
+            CONSOLE_INFO("ADSBeeServer::Update", "\tdf=%d icao_address=0x%06lx", decoded_packet.GetDownlinkFormat(),
+                         decoded_packet.GetICAOAddress());
 #endif
 
-        if (!aircraft_dictionary.IngestDecodedModeSPacket(decoded_packet)) {
-            // NOTE: Pushing to a queue here will only forward valid packets!
-            CONSOLE_ERROR("ADSBeeServer::Update", "Failed to ingest decoded Mode S packet into aircraft dictionary.");
+            if (!aircraft_dictionary.IngestDecodedModeSPacket(decoded_packet)) {
+                // NOTE: Pushing to a queue here will only forward valid packets!
+                CONSOLE_ERROR("ADSBeeServer::Update",
+                              "Failed to ingest decoded Mode S packet into aircraft dictionary.");
+            }
         }
 
-        // Send decoded mode s packet to feeds.
-        if (comms_manager.HasIP() && !comms_manager.IPWANSendDecodedModeSPacket(decoded_packet)) {
-            CONSOLE_ERROR("ADSBeeServer::Update",
-                          "Encountered error while sending decoded Mode S packet to feeds from ESP32 as WiFi station.");
-            ret = false;
-        }
-    }
-
-    RawUATADSBPacket raw_uat_adsb_packet;
-    while (raw_uat_adsb_packet_in_queue.Dequeue(raw_uat_adsb_packet)) {
-        DecodedUATADSBPacket decoded_packet = DecodedUATADSBPacket(raw_uat_adsb_packet);
-        if (!decoded_packet.is_valid) {
-            CONSOLE_ERROR("ADSBeeServer::Update", "Received invalid UAT ADSB packet.");
-            continue;
-        }
-        if (aircraft_dictionary.IngestDecodedUATADSBPacket(decoded_packet)) {
-            CONSOLE_ERROR("ADSBeeServer::Update", "Failed to ingest decoded UAT ADSB packet into aircraft dictionary.");
+        // UAT ADSB Packets
+        for (uint16_t i = 0; i < raw_packets.header->num_uat_adsb_packets; i++) {
+            RawUATADSBPacket &raw_uat_adsb_packet = raw_packets.uat_adsb_packets[i];
+            DecodedUATADSBPacket decoded_packet = DecodedUATADSBPacket(raw_uat_adsb_packet);
+            if (!decoded_packet.is_valid) {
+                CONSOLE_ERROR("ADSBeeServer::Update", "Received invalid UAT ADSB packet.");
+                continue;
+            }
+            if (aircraft_dictionary.IngestDecodedUATADSBPacket(decoded_packet)) {
+                CONSOLE_ERROR("ADSBeeServer::Update",
+                              "Failed to ingest decoded UAT ADSB packet into aircraft dictionary.");
+            }
         }
 
-        // Send decoded uat adsb packet to feeds.
-        if (comms_manager.HasIP() && !comms_manager.IPWANSendDecodedUATADSBPacket(decoded_packet)) {
-            CONSOLE_ERROR(
-                "ADSBeeServer::Update",
-                "Encountered error while sending decoded UAT ADSB packet to feeds from ESP32 as WiFi station.");
-            ret = false;
-        }
-    }
+        // UAT Uplink Packets
+        // We don't currently digest uplink packets, they just get forwarded.
+        // TODO: Add uplink packet forwarding via GDL90.
 
-    RawUATUplinkPacket raw_uat_uplink_packet;
-    while (raw_uat_uplink_packet_in_queue.Dequeue(raw_uat_uplink_packet)) {
-        DecodedUATUplinkPacket decoded_packet = DecodedUATUplinkPacket(raw_uat_uplink_packet);
+        // Forward packets to WAN.
+        comms_manager.IPWANSendRawPacketCompositeArray(raw_packets_buf);
     }
 
     // Broadcast aircraft locations to connected WiFi clients over GDL90.
@@ -503,15 +505,21 @@ bool ADSBeeServer::TCPServerInit() {
     esp_err_t ret = httpd_start(&server, &config);
     if (ret == ESP_OK) {
         // Root URI handler (HTML)
-        httpd_uri_t root = {.uri = "/", .method = HTTP_GET, .handler = root_handler, .user_ctx = NULL};
+        httpd_uri_t root = {
+            .uri = "/", .method = HTTP_GET, .handler = root_handler, .user_ctx = NULL, .is_websocket = false};
         ESP_ERROR_CHECK(httpd_register_uri_handler(server, &root));
 
         // CSS URI handler
-        httpd_uri_t css = {.uri = "/style.css", .method = HTTP_GET, .handler = css_handler, .user_ctx = NULL};
+        httpd_uri_t css = {
+            .uri = "/style.css", .method = HTTP_GET, .handler = css_handler, .user_ctx = NULL, .is_websocket = false};
         ESP_ERROR_CHECK(httpd_register_uri_handler(server, &css));
 
         // Favicon URI handler
-        httpd_uri_t favicon = {.uri = "/favicon.png", .method = HTTP_GET, .handler = favicon_handler, .user_ctx = NULL};
+        httpd_uri_t favicon = {.uri = "/favicon.png",
+                               .method = HTTP_GET,
+                               .handler = favicon_handler,
+                               .user_ctx = NULL,
+                               .is_websocket = false};
         ESP_ERROR_CHECK(httpd_register_uri_handler(server, &favicon));
 
         network_console = WebSocketServer({.label = "Network Console",

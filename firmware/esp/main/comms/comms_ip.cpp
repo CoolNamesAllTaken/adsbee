@@ -20,6 +20,12 @@ static const uint32_t kTCPKeepAliveMaxFailedProbesBeforeDisconnect = 3;
 static const uint32_t kTCPReuseAddrEnable =
     1;  // Allow reuse of local addresses and sockets that are in the TIME_WAIT state.
 
+// Feeds to iterate through when reporting.
+static const CommsManager::ReportSink kFeedReportSinks[SettingsManager::Settings::kMaxNumFeeds] = {1, 2, 3, 4, 5,
+                                                                                                   6, 7, 8, 9, 10};
+static const uint16_t kNumFeedReportSinks =
+    sizeof(kFeedReportSinks) / sizeof(kFeedReportSinks[0]);  // Should be SettingsManager::Settings::kMaxNumFeeds.
+
 /** "Pass-Through" functions used to access member functions in callbacks. **/
 void ip_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
     comms_manager.IPEventHandler(arg, event_base, event_id, event_data);
@@ -157,8 +163,7 @@ void CommsManager::IPEventHandler(void* arg, esp_event_base_t event_base, int32_
 void CommsManager::IPWANTask(void* pvParameters) {
     CONSOLE_INFO("CommsManager::IPWANTask", "IP WAN Task started.");
 
-    uint8_t reporting_composite_array_buf[kReportingCompositeArrayQueueElementSizeBytes];
-    CompositeArray::RawPackets reporting_composite_array;
+    uint8_t raw_packets_buf[CompositeArray::RawPackets::MaxLenBytes];
     while (true) {
         // Don't try establishing socket connections until the ESP32 has been assigned an IP address.
         while (!wifi_sta_has_ip_ && !ethernet_has_ip_) {
@@ -167,30 +172,7 @@ void CommsManager::IPWANTask(void* pvParameters) {
 
         UpdateFeedMetrics();
 
-        // Gather packet(s) to send.
-        if (xQueueReceive(ip_wan_reporting_composite_array_queue_, &reporting_composite_array_buf,
-                          kWiFiSTATaskUpdateIntervalTicks) != pdTRUE) {
-            // No packets available to send, wait and try again.
-            continue;
-        }
-        if (!CompositeArray::UnpackRawPacketsBuffer(reporting_composite_array, reporting_composite_array_buf,
-                                                    kReportingCompositeArrayQueueElementSizeBytes)) {
-            CONSOLE_ERROR("CommsManager::IPWANTask", "Failed to unpack CompositeArray from buffer.");
-            continue;
-        }
-
-        // NOTE: Construct packets that are shared between feeds here!
-
-        ReportSink csbee_sinks[SettingsManager::kNumSerialInterfaces];
-        ReportSink mavlink1_sinks[SettingsManager::kNumSerialInterfaces];
-        ReportSink mavlink2_sinks[SettingsManager::kNumSerialInterfaces];
-        ReportSink gdl90_sinks[SettingsManager::kNumSerialInterfaces];
-
-        uint16_t num_csbee_sinks = 0;
-        uint16_t num_mavlink1_sinks = 0;
-        uint16_t num_mavlink2_sinks = 0;
-        uint16_t num_gdl90_sinks = 0;
-
+        // Maintain socket connections.
         for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
             // Iterate through feeds, open/close and send message as required.
             if (!settings_manager.settings.feed_is_active[i]) {
@@ -206,6 +188,29 @@ void CommsManager::IPWANTask(void* pvParameters) {
                 }
             }
         }
+
+        // Gather packet(s) to send.
+        /**
+         * Architecture note: We send packets in the queue as a buffer, since the buffer in the other task gets
+         * deallocated. Here, we can unpack the buffer into a CompositeArray object with pointers because we know it
+         * won't go out of scope till we are done with it.
+         */
+        if (xQueueReceive(ip_wan_reporting_composite_array_queue_, &raw_packets_buf, kWiFiSTATaskUpdateIntervalTicks) !=
+            pdTRUE) {
+            // No packets available to send, wait and try again.
+            continue;
+        }
+        CompositeArray::RawPackets reporting_composite_array;
+        if (!CompositeArray::UnpackRawPacketsBuffer(reporting_composite_array, raw_packets_buf,
+                                                    sizeof(raw_packets_buf))) {
+            CONSOLE_ERROR("CommsManager::IPWANTask", "Failed to unpack CompositeArray from buffer.");
+            continue;
+        }
+        // Update feeds with raw and digested reports.
+        if (!UpdateReporting(kFeedReportSinks, settings_manager.settings.feed_protocols, kNumFeedReportSinks,
+                             &reporting_composite_array)) {
+            CONSOLE_ERROR("CommsManager::IPWANTask", "Error during UpdateReporting for feeds.");
+        }
     }
 
     // Close all sockets while exiting.
@@ -216,7 +221,7 @@ void CommsManager::IPWANTask(void* pvParameters) {
     CONSOLE_INFO("CommsManager::IPWANTask", "IP WAN Task exiting.");
 }
 
-bool CommsManager::CloseFeedSocket(uint16_t feed_index) {
+void CommsManager::CloseFeedSocket(uint16_t feed_index) {
     if (feed_sock_is_connected_[feed_index]) {
         // Need to close the socket connection.
         close(feed_sock_[feed_index]);
@@ -317,7 +322,7 @@ bool CommsManager::ConnectFeedSocket(uint16_t feed_index) {
     return true;
 }
 
-bool CommsManager::SendBuf(uint16_t iface, char* buf, uint16_t buf_len) {
+bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len) {
     int err = send(feed_sock_[iface], buf, buf_len, 0);
     if (err < 0) {
         CONSOLE_ERROR("CommsManager::IPWANTask",

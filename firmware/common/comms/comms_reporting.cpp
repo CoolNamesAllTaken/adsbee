@@ -1,4 +1,3 @@
-#include "adsbee.hh"  // For access to the aircraft dictionary.
 #include "comms.hh"
 #include "hal.hh"  // For timestamping.
 #include "settings.hh"
@@ -13,6 +12,7 @@
 #ifdef ON_ESP32
 AircraftDictionary &aircraft_dictionary = adsbee_server.aircraft_dictionary;
 #else
+#include "adsbee.hh"  // For access to the aircraft dictionary.
 AircraftDictionary &aircraft_dictionary = adsbee.aircraft_dictionary;
 #endif
 
@@ -61,7 +61,7 @@ bool CommsManager::UpdateReporting(const ReportSink *sinks, const SettingsManage
                 break;
             default:
                 CONSOLE_ERROR("CommsManager::UpdateReporting",
-                              "Unrecognized reporting protocol %d on interface %s, skipping.",
+                              "Unrecognized reporting protocol %s on interface %s, skipping.",
                               SettingsManager::kSerialInterfaceStrs[sinks[i]],
                               SettingsManager::kReportingProtocolStrs[sink_protocols[i]]);
                 break;  // Not a periodic report protocol.

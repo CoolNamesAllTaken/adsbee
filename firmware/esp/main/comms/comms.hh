@@ -19,9 +19,13 @@
 
 class CommsManager {
    public:
+    // Packet queue sizes used to stage packets for reporting.
+    static const uint16_t kMaxNumModeSPackets = 100;
+    static const uint16_t kMaxNumUATADSBPackets = 20;
+    static const uint16_t kMaxNumUATUplinkPackets = 20;
+
     // Reporting via the IP task is done by forwarding CompositeArray::RawPackets buffers from the ADSBeeServer task.
     // These buffers are put into a queue, which has its element size and number of elements set here.
-    static const uint16_t kReportingCompositeArrayQueueElementSizeBytes = 2000;
     static const uint16_t kReportingCompositeArrayQueueNumElements = 3;
 
     static const uint16_t kMaxNetworkMessageLenBytes = 256;
@@ -57,7 +61,7 @@ class CommsManager {
         wifi_clients_list_mutex_ = xSemaphoreCreateMutex();
         wifi_ap_message_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(NetworkMessage));
         ip_wan_reporting_composite_array_queue_ =
-            xQueueCreate(kReportingCompositeArrayQueueNumElements, kReportingCompositeArrayQueueElementSizeBytes);
+            xQueueCreate(kReportingCompositeArrayQueueNumElements, CompositeArray::RawPackets::MaxLenBytes);
     }
 
     ~CommsManager() {
@@ -194,12 +198,13 @@ class CommsManager {
     void IPWANTask(void* pvParameters);
 
     /**
-     * Sends a raw transponder packet to feeds via the external WiFi network that the ESP32 is a station on. It's
-     * recommended to only call this function if WiFiStationHasIP() returns true, otherwise it will throw a warning.
-     * @param[in] decoded_packet DecodedModeSPacket to send.
+     * Sends a composite array of raw packets to feeds via the external IP network that the ESP32 is a station on. It's
+     * recommended to only call this function if HasIP() returns true, otherwise it will throw a warning.
+     * @param[in] raw_packets_buf Buffer containing the CompositeArray::RawPackets to send. Assumed to be of size
+     * CompositeArray::RawPackets::MaxLenBytes.
      * @retval True if packet was successfully sent, false otherwise.
      */
-    bool IPWANSendDecodedModeSPacket(DecodedModeSPacket& decoded_packet);
+    bool IPWANSendRawPacketCompositeArray(uint8_t* raw_packets_buf);
 
     // Network hostname.
     char hostname[SettingsManager::Settings::kHostnameMaxLen + 1] = {0};
@@ -241,17 +246,6 @@ class CommsManager {
 
 #include "comms_reporting.hh"
 
-   private:
-    bool ConnectFeedSocket(uint16_t feed_index);
-    bool CloseFeedSocket(uint16_t feed_index);
-
-    /**
-     * Initializes the IP event handler that is common to both Ethernet and WiFi events. Automatically called by
-     * WiFiInit() and EthernetInit().
-     * @retval True if successfully initialized, false otherwise.
-     */
-    bool IPInit();
-
     /**
      * Sends a buffer to a given feed.
      * @param[in] iface Feed index.
@@ -259,7 +253,18 @@ class CommsManager {
      * @param[in] buf_len Number of bytes to send.
      * @retval True if bytes were sent successfully, false otherwise.
      */
-    bool SendBuf(uint16_t iface, char* buf, uint16_t buf_len);
+    bool SendBuf(uint16_t iface, const char* buf, uint16_t buf_len);
+
+   private:
+    bool ConnectFeedSocket(uint16_t feed_index);
+    void CloseFeedSocket(uint16_t feed_index);
+
+    /**
+     * Initializes the IP event handler that is common to both Ethernet and WiFi events. Automatically called by
+     * WiFiInit() and EthernetInit().
+     * @retval True if successfully initialized, false otherwise.
+     */
+    bool IPInit();
 
     /**
      * Updates the feed metrics values and prints a cute lil message.
@@ -320,6 +325,13 @@ class CommsManager {
     RawModeSPacket raw_mode_s_packet_reporting_queue_buffer_[kMaxNumModeSPackets];
     RawUATADSBPacket raw_uat_adsb_packet_reporting_queue_buffer_[kMaxNumUATADSBPackets];
     RawUATUplinkPacket raw_uat_uplink_packet_reporting_queue_buffer_[kMaxNumUATUplinkPackets];
+
+    // Reporting protocol timestamps
+    // NOTE: Raw reporting interval used for RAW and BEAST protocols as well as internal functions.
+    uint32_t last_raw_report_timestamp_ms_ = 0;
+    uint32_t last_csbee_report_timestamp_ms_ = 0;
+    uint32_t last_mavlink_report_timestamp_ms_ = 0;
+    uint32_t last_gdl90_report_timestamp_ms_ = 0;
 };
 
 extern CommsManager comms_manager;

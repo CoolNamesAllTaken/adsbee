@@ -242,20 +242,22 @@ bool CommsManager::WiFiDeInit() {
     return false;   // abort didn't work
 }
 
-bool CommsManager::IPWANSendDecodedModeSPacket(DecodedModeSPacket& decoded_packet) {
+bool CommsManager::IPWANSendRawPacketCompositeArray(uint8_t* raw_packets_buf) {
     if (!comms_manager.HasIP()) {
         CONSOLE_WARNING(
-            "CommsManager::IPWANSendDecodedModeSPacket",
-            "Can't push to WAN transponder packet queue if WiFi station is not running and Ethernet is disconnected.");
+            "CommsManager::IPWANSendRawPacketCompositeArray",
+            "Can't push to WAN raw packet composite array queue if WiFi station is not running and Ethernet is "
+            "disconnected.");
         return false;  // Task not started yet, queue not created yet. Pushing to queue would cause an abort.
     }
-    int err = xQueueSend(ip_wan_reporting_composite_array_queue_, &decoded_packet, 0);
+    int err = xQueueSend(ip_wan_reporting_composite_array_queue_, raw_packets_buf, 0);
     if (err == errQUEUE_FULL) {
-        CONSOLE_WARNING("CommsManager::IPWANSendDecodedModeSPacket", "Overflowed WAN transponder packet queue.");
+        CONSOLE_WARNING("CommsManager::IPWANSendRawPacketCompositeArray",
+                        "Overflowed WAN raw packet composite array queue.");
         xQueueReset(ip_wan_reporting_composite_array_queue_);
         return false;
     } else if (err != pdTRUE) {
-        CONSOLE_WARNING("CommsManager::IPWANSendDecodedModeSPacket",
+        CONSOLE_WARNING("CommsManager::IPWANSendRawPacketCompositeArray",
                         "Pushing transponder packet to WAN queue resulted in error code %d.", err);
         return false;
     }

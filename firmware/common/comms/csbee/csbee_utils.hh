@@ -39,21 +39,21 @@ inline int16_t WriteCSBeeModeSAircraftMessageStr(char message_buf[], const ModeS
 
     int16_t num_chars =  // Print everything except CRC into string buffer.
         snprintf(message_buf, kCSBeeMessageStrMaxLen - kCRCMaxNumChars - 1,
-                 "#A:%06X,"                                       // ICAO, e.g. 3C65AC
-                 "%X,"                                            // FLAGS, e.g. 123F35648
+                 "#A:%06lX,"                                      // ICAO, e.g. 3C65AC
+                 "%lX,"                                           // FLAGS, e.g. 123F35648
                  "%s,"                                            // CALL, e.g. N61ZP
                  "%04o,"                                          // SQUAWK, e.g. 7232
                  "%d,"                                            // ECAT, e.g. 14
                  "%.5f,"                                          // LAT, e.g. 57.57634
                  "%.5f,"                                          // LON, e.g. 17.59554
-                 "%d,"                                            // BARO_ALT, e.g. 5000
-                 "%d,"                                            // GNSS_ALT, e.g. 5000
+                 "%ld,"                                           // BARO_ALT, e.g. 5000
+                 "%ld,"                                           // GNSS_ALT, e.g. 5000
                  "%.0f,"                                          // DIR, e.g. 35
-                 "%d,"                                            // SPEED, e.g. 464
-                 "%d,"                                            // BARO_VRATE, e.g. -1344
-                 "%d,"                                            // GNSS_VRATE, e.g. -1344
+                 "%ld,"                                           // SPEED, e.g. 464
+                 "%ld,"                                           // BARO_VRATE, e.g. -1344
+                 "%ld,"                                           // GNSS_VRATE, e.g. -1344
                  "%X,"                                            // NICNAC, e.g. 31BE89F2
-                 "%X,"                                            // ACDIMS, e.g. 31BE89F2
+                 "%lX,"                                           // ACDIMS, e.g. 31BE89F2
                  "%d,"                                            // VERSION
                  "%d,"                                            // SIGS, e.g. -92
                  "%d,"                                            // SIGQ, e.g. 2
@@ -118,22 +118,22 @@ inline int16_t WriteCSBeeUATAircraftMessageStr(char message_buf[], const UATAirc
 
     int16_t num_chars =  // Print everything except CRC into string buffer.
         snprintf(message_buf, kCSBeeMessageStrMaxLen - kCRCMaxNumChars - 1,
-                 "#U:%06X,"                                  // ICAO, e.g. 3C65AC
-                 "%X,"                                       // UAT_FLAGS, e.g. 123F35648
+                 "#U:%06lX,"                                 // ICAO, e.g. 3C65AC
+                 "%lX,"                                      // UAT_FLAGS, e.g. 123F35648
                  "%s,"                                       // CALL, e.g. N61ZP
                  "%04o,"                                     // SQUAWK, e.g. 7232
                  "%d,"                                       // ECAT, e.g. 14
                  "%.5f,"                                     // LAT, e.g. 57.57634
                  "%.5f,"                                     // LON, e.g. 17.59554
-                 "%d,"                                       // BARO_ALT, e.g. 5000
-                 "%d,"                                       // GNSS_ALT, e.g. 5000
+                 "%ld,"                                      // BARO_ALT, e.g. 5000
+                 "%ld,"                                      // GNSS_ALT, e.g. 5000
                  "%.0f,"                                     // DIR, e.g. 35
-                 "%d,"                                       // SPEED, e.g. 464
-                 "%d,"                                       // BARO_VRATE, e.g. -1344
-                 "%d,"                                       // GNSS_VRATE, e.g. -1344
+                 "%ld,"                                      // SPEED, e.g. 464
+                 "%ld,"                                      // BARO_VRATE, e.g. -1344
+                 "%ld,"                                      // GNSS_VRATE, e.g. -1344
                  "%d,"                                       // UAT_EMERG
                  "%X,"                                       // NICNAC, e.g. 31BE89F2
-                 "%X,"                                       // ACDIMS, e.g. 31BE89F2
+                 "%lX,"                                      // ACDIMS, e.g. 31BE89F2
                  "%d,"                                       // VERSION
                  "%d,"                                       // SIGS, e.g. -92
                  "%d,"                                       // SIGQ, e.g. 2
@@ -183,8 +183,8 @@ inline int16_t WriteCSBeeStatisticsMessageStr(char message_buf[], uint16_t sdps,
                  "%d,"     // RAW_UATFPS, e.g. 5
                  "%d,"     // UATFPS, e.g. 4
                  "%d,"     // NUM_AIRCRAFT, e.g. 13
-                 "%d,"     // TSCAL, e.g. 13999415
-                 "%d,",    // UPTIME, e.g. 134
+                 "%ld,"    // TSCAL, e.g. 13999415
+                 "%ld,",   // UPTIME, e.g. 134
                  kCSBeeProtocolVersion, sdps, raw_sfps, sfps, raw_esfps, esfps, raw_uatfps, uatfps, num_aircraft, tscal,
                  uptime);
     if (num_chars < 0) return num_chars;  // Check if snprintf call got busted.

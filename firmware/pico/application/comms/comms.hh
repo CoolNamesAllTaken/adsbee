@@ -22,10 +22,6 @@ class CommsManager {
     static constexpr uint32_t kNetworkConsoleMinReportingIntervalMs =
         50;  // Report messages to nextwork console at minimum rate of 20Hz.
     static constexpr uint16_t kPrintfBufferMaxSize = 500;
-    static constexpr uint32_t kRawReportingIntervalMs = 100;  // Report packets internally at 10Hz.
-    static constexpr uint32_t kMAVLINKReportingIntervalMs = 1000;
-    static constexpr uint32_t kCSBeeReportingIntervalMs = 1000;
-    static constexpr uint32_t kGDL90ReportingIntervalMs = 1000;
 
     static constexpr uint32_t kOTAWriteTimeoutMs = 5000;  // ms until OTA write command exits if all bytes not received.
 

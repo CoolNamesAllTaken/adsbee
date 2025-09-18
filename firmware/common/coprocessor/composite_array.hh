@@ -20,6 +20,8 @@ class CompositeArray {
    public:
     struct RawPackets {
         static constexpr uint16_t kErrorMessageMaxLen = 256;
+        static constexpr uint16_t MaxLenBytes =
+            4000;  // Arbitrary maximum size, needs to fit within SCResponsePacket data bytes.
 
         // This header is used on the SPI bus to precede a packed buffer of packets.
         struct __attribute__((__packed__)) Header {

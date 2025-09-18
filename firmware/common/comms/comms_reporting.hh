@@ -3,6 +3,11 @@
  * comms.hh, allowing reporting function definitions to be used across platforms.
  */
 
+static constexpr uint32_t kRawReportingIntervalMs = 100;  // Report packets internally at 10Hz.
+static constexpr uint32_t kMAVLINKReportingIntervalMs = 1000;
+static constexpr uint32_t kCSBeeReportingIntervalMs = 1000;
+static constexpr uint32_t kGDL90ReportingIntervalMs = 1000;
+
 /**
  * Reporting interfaces are different on different platforms. This union allows passing either a SerialInterface enum
  * value or a feed index to the reporting functions, which will then interpret the value appropriately based on the
