@@ -71,8 +71,9 @@ bool CommsManager::IPInit() {
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, &ip_event_handler, NULL));
     ip_event_handler_was_initialized_ = true;
 
-    xTaskCreatePinnedToCore(ip_wan_task, "ip_wan_task", 4096, &ip_wan_task_handle, kIPWANTaskPriority, NULL,
-                            kIPWANTaskCore);
+    // IP WAN task needs extra stack space to allow it to dequeue CompositeArray::RawPackets buffers.
+    xTaskCreatePinnedToCore(ip_wan_task, "ip_wan_task", 4096 + CompositeArray::RawPackets::kMaxLenBytes,
+                            &ip_wan_task_handle, kIPWANTaskPriority, NULL, kIPWANTaskCore);
 
     // Initialize mDNS service.
     esp_err_t err = mdns_init();
@@ -163,7 +164,7 @@ void CommsManager::IPEventHandler(void* arg, esp_event_base_t event_base, int32_
 void CommsManager::IPWANTask(void* pvParameters) {
     CONSOLE_INFO("CommsManager::IPWANTask", "IP WAN Task started.");
 
-    uint8_t raw_packets_buf[CompositeArray::RawPackets::kMaxLenBytes];
+    alignas(uint32_t) uint8_t raw_packets_buf[CompositeArray::RawPackets::kMaxLenBytes];
     while (true) {
         // Don't try establishing socket connections until the ESP32 has been assigned an IP address.
         while (!wifi_sta_has_ip_ && !ethernet_has_ip_) {
@@ -200,6 +201,7 @@ void CommsManager::IPWANTask(void* pvParameters) {
             // No packets available to send, wait and try again.
             continue;
         }
+
         CompositeArray::RawPackets reporting_composite_array;
         if (!CompositeArray::UnpackRawPacketsBuffer(reporting_composite_array, raw_packets_buf,
                                                     sizeof(raw_packets_buf))) {
