@@ -113,20 +113,20 @@ bool CC1312::Update() {
         queued_log_messages_packed_size_bytes = device_status.queued_log_messages_packed_size_bytes;
         num_queued_sc_command_requests = device_status.num_queued_sc_command_requests;
 
-        // // Read packets from queues.
-        // uint8_t read_buf[CompositeArray::RawPackets::kMaxLenBytes] = {0};
-        // // Read with full size of array, let the CC1312 fill it out with as many packets as possible.
-        // if (!adsbee.subg_radio.Read(ObjectDictionary::Address::kAddrCompositeArrayRawPackets, read_buf,
-        //                             device_status.pending_raw_packets_len_bytes)) {
-        //     CONSOLE_ERROR("CC1312::Update", "Unable to read CC1312 raw packet array.");
-        //     return false;
-        // }
-        // if (!CompositeArray::UnpackRawPacketsBufferToQueues(read_buf, sizeof(read_buf), nullptr,
-        //                                                     &adsbee.raw_uat_adsb_packet_queue,
-        //                                                     &adsbee.raw_uat_uplink_packet_queue)) {
-        //     CONSOLE_ERROR("CC1312::Update", "Failed to unpack raw packets from CC1312.");
-        //     return false;
-        // }
+        // Read packets from queues.
+        uint8_t read_buf[CompositeArray::RawPackets::kMaxLenBytes] = {0};
+        // Read with full size of array, let the CC1312 fill it out with as many packets as possible.
+        if (!adsbee.subg_radio.Read(ObjectDictionary::Address::kAddrCompositeArrayRawPackets, read_buf,
+                                    device_status.pending_raw_packets_len_bytes)) {
+            CONSOLE_ERROR("CC1312::Update", "Unable to read CC1312 raw packet array.");
+            return false;
+        }
+        if (!CompositeArray::UnpackRawPacketsBufferToQueues(read_buf, sizeof(read_buf), nullptr,
+                                                            &adsbee.raw_uat_adsb_packet_queue,
+                                                            &adsbee.raw_uat_uplink_packet_queue)) {
+            CONSOLE_ERROR("CC1312::Update", "Failed to unpack raw packets from CC1312.");
+            return false;
+        }
 
     } else {
         CONSOLE_ERROR("CC1312::Update", "Unable to read CC1312 status.");

@@ -187,9 +187,7 @@ class SPICoprocessorPacket {
         /**
          * Default constructor.
          */
-        SCResponsePacket() {
-            // memset(data, 0x0, kDataMaxLenBytes);
-        }
+        SCResponsePacket() { memset(data, 0x0, kDataMaxLenBytes); }
 
         /**
          * Constructor from buffer. Used for creating an SCReadResponse packet from a SPI transaction.
