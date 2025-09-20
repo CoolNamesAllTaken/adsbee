@@ -86,9 +86,23 @@ class SPICoprocessorPacket {
             len = buf_in_len_bytes - kDataOffsetBytes - kCRCLenBytes;
         }
 
-        inline uint16_t GetBufLenBytes() override { return kDataOffsetBytes + len + kCRCLenBytes; }
+        inline uint16_t GetBufLenBytes() override {
+            uint16_t buf_len_bytes = kDataOffsetBytes + len + kCRCLenBytes;
+            if (buf_len_bytes > kPacketMaxLenBytes) {
+                CONSOLE_ERROR("SPICoprocessor::SCWritePacket::GetBufLenBytes",
+                              "Calculated buffer length %d bytes exceeds maximum packet length %d bytes!",
+                              buf_len_bytes, kPacketMaxLenBytes);
+            }
+            return MIN(buf_len_bytes, kPacketMaxLenBytes);
+        }
         inline uint8_t *GetBuf() override { return (uint8_t *)(&cmd); }
-        inline uint8_t *GetCRCPtr() override { return data + MIN(len, kDataMaxLenBytes); }
+        inline uint8_t *GetCRCPtr() override {
+            if (len > kDataMaxLenBytes) {
+                CONSOLE_ERROR("SPICoprocessor::SCWritePacket::GetCRCPtr",
+                              "Data length %d bytes exceeds maximum data length %d bytes!", len, kDataMaxLenBytes);
+            }
+            return data + MIN(len, kDataMaxLenBytes);
+        }
     };
 
     /**
@@ -194,8 +208,23 @@ class SPICoprocessorPacket {
             data_len_bytes = buf_in_len_bytes - kDataOffsetBytes - kCRCLenBytes;
         }
 
-        inline uint16_t GetBufLenBytes() override { return kDataOffsetBytes + data_len_bytes + kCRCLenBytes; }
+        inline uint16_t GetBufLenBytes() override {
+            uint16_t buf_len_bytes = kDataOffsetBytes + data_len_bytes + kCRCLenBytes;
+            if (buf_len_bytes > kPacketMaxLenBytes) {
+                CONSOLE_ERROR("SPICoprocessor::SCResponsePacket::GetBufLenBytes",
+                              "Calculated buffer length %d bytes exceeds maximum packet length %d bytes!",
+                              buf_len_bytes, kPacketMaxLenBytes);
+            }
+            return MIN(buf_len_bytes, kPacketMaxLenBytes);
+        }
         inline uint8_t *GetBuf() override { return (uint8_t *)(&cmd); }
-        inline uint8_t *GetCRCPtr() override { return data + data_len_bytes; }
+        inline uint8_t *GetCRCPtr() override {
+            if (data_len_bytes > kDataMaxLenBytes) {
+                CONSOLE_ERROR("SPICoprocessor::SCResponsePacket::GetCRCPtr",
+                              "Data length %d bytes exceeds maximum data length %d bytes!", data_len_bytes,
+                              kDataMaxLenBytes);
+            }
+            return MIN(data + data_len_bytes, data + kDataMaxLenBytes);
+        }
     };
 };

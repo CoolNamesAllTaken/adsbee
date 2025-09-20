@@ -126,6 +126,14 @@ void PrintBinary32(uint32_t value) {
 uint16_t swap16(uint16_t value) { return (value << 8) | (value >> 8); }
 
 uint16_t CalculateCRC16(const uint8_t *buf, int32_t buf_len_bytes) {
+    if (buf == nullptr) {
+        CONSOLE_ERROR("CalculateCRC16", "Attempted to calculate CRC on null buffer!");
+        return 0;
+    }
+    if (buf_len_bytes < 0) {
+        CONSOLE_ERROR("CalculateCRC16", "Attempted to calculate CRC on buffer with negative length!");
+        return 0;
+    }
     uint8_t x;
     uint16_t crc = 0xFFFF;
     while (buf_len_bytes--) {

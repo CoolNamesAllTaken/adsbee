@@ -4,7 +4,7 @@
 
 #ifdef ON_PICO
 #include "hal.hh"
-#elif defined(ON_ESP32)
+#elif defined(ON_coprocessor)
 #include "adsbee_server.hh"
 
 #endif
@@ -18,7 +18,7 @@ bool SPICoprocessor::Init() {
     // Loop for a period of time to allow the device to query for settings data.
     uint32_t bootup_start_timestamp_ms = get_time_since_boot_ms();
     while (get_time_since_boot_ms() - bootup_start_timestamp_ms < SPICoprocessorSlaveInterface::kBootupDelayMs) {
-        // Loop here to service the ESP32's query for settings information when it starts up.
+        // Loop here to service the coprocessor's query for settings information when it starts up.
         Update();
     }
 #endif
@@ -61,16 +61,16 @@ bool SPICoprocessor::Update() {
         uint16_t num_requests_processed = 0;
         while (num_requests_processed < config_.interface.num_queued_sc_command_requests &&
                num_requests_processed < kMaxNumSCCommandRequestsPerUpdate) {
-            // Read SCCommand request from ESP32.
+            // Read SCCommand request from coprocessor.
             ObjectDictionary::SCCommandRequest sc_command_request;
             if (!Read(ObjectDictionary::Address::kAddrSCCommandRequests, sc_command_request)) {
-                CONSOLE_ERROR("ESP32::Update", "Unable to read SCCommand request %d/%d from ESP32.",
+                CONSOLE_ERROR("SPICoprocessor::Update", "Unable to read SCCommand request %d/%d from coprocessor.",
                               num_requests_processed + 1, config_.interface.num_queued_sc_command_requests);
                 return false;
             }
             // Execute the request.
             if (!ExecuteSCCommandRequest(sc_command_request)) {
-                CONSOLE_ERROR("ESP32::Update", "Failed to execute SCCommand request %d/%d from ESP32.",
+                CONSOLE_ERROR("SPICoprocessor::Update", "Failed to execute SCCommand request %d/%d from coprocessor.",
                               num_requests_processed + 1, config_.interface.num_queued_sc_command_requests);
                 return false;
             }
@@ -82,7 +82,7 @@ bool SPICoprocessor::Update() {
             };
             if (!Write(ObjectDictionary::Address::kAddrRollQueue, roll_request, true)) {
                 // Require the roll request to be acknowledged.
-                CONSOLE_ERROR("ESP32::Update", "Unable to roll SCCommand request queue on ESP32.");
+                CONSOLE_ERROR("SPICoprocessor::Update", "Unable to roll SCCommand request queue on coprocessor.");
                 return false;
             }
             num_requests_processed++;
@@ -91,7 +91,7 @@ bool SPICoprocessor::Update() {
 
     // Pull pending log messages from the slave interface.
     if (config_.pull_log_messages && config_.interface.num_queued_log_messages > 0) {
-        // Read log messages from ESP32.
+        // Read log messages from coprocessor.
         uint8_t log_messages_buffer[ObjectDictionary::kLogMessageMaxNumChars * ObjectDictionary::kLogMessageQueueDepth];
         if (Read(ObjectDictionary::Address::kAddrLogMessages, log_messages_buffer,
                  config_.interface.queued_log_messages_packed_size_bytes)) {
@@ -263,14 +263,14 @@ bool SPICoprocessor::ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRe
                 return true;
             }
             switch (request.addr) {
-                /** These are the addresses that the ESP32 can request a write to. **/
+                /** These are the addresses that the coprocessor can request a write to. **/
                 case ObjectDictionary::Address::kAddrSettingsData: {
                     if (request.offset != 0) {
                         CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest",
                                       "Settings data write with non-zero offset (%d) not supported.", request.offset);
                         return false;
                     }
-                    // Write settings data to ESP32.
+                    // Write settings data to coprocessor.
                     if (request.len != sizeof(settings_manager.settings)) {
                         CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest",
                                       "Settings data write with invalid length (%d). Expected %d.", request.len,
@@ -279,10 +279,10 @@ bool SPICoprocessor::ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRe
                     }
                     if (!Write(request.addr, settings_manager.settings, write_requires_ack)) {
                         CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest",
-                                      "Unable to write settings data to ESP32.");
+                                      "Unable to write settings data to coprocessor.");
                         return false;
                     }
-                    break;  // Successfully wrote settings data to ESP32.
+                    break;  // Successfully wrote settings data to coprocessor.
                 }
                 default:
                     CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest",
@@ -299,18 +299,17 @@ bool SPICoprocessor::ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRe
                 return true;
             }
             switch (request.addr) {
-                /**  These are the addresses the ESP32 can request a read from. **/
+                /**  These are the addresses the coprocessor can request a read from. **/
                 default:
                     CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest",
-                                  "No implementation defined for reading from address 0x%x for on slave.",
-                                  request.addr);
+                                  "No implementation defined for reading from address 0x%x on slave.", request.addr);
                     return false;
             }
             break;
         }
         default:
-            CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest", "Unsupported SCCommand received from ESP32: %d.",
-                          request.command);
+            CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest",
+                          "Unsupported SCCommand received from coprocessor: %d.", request.command);
             return false;
     }
     return true;

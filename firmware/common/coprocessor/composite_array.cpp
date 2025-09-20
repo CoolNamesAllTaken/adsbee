@@ -14,6 +14,10 @@ CompositeArray::RawPackets CompositeArray::PackRawPacketsBuffer(uint8_t* buf, ui
         .uat_uplink_packets = nullptr,
     };
 
+    packets_to_report.header->num_mode_s_packets = 0;
+    packets_to_report.header->num_uat_adsb_packets = 0;
+    packets_to_report.header->num_uat_uplink_packets = 0;
+
     // Fill up the CompositeArray::RawPackets header and associated buffers with as many packets as we can report.
     if (mode_s_queue) {
         // Stuff with Mode S packets.

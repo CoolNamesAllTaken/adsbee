@@ -95,3 +95,33 @@ TEST(SPICoprocessor, SCResponsePacket) {
     // Make sure original packet was not affected.
     EXPECT_TRUE(packet.IsValid());
 }
+
+void BuildAckPacket(SPICoprocessorPacket::SCResponsePacket &packet, bool success) {
+    packet.cmd = ObjectDictionary::SCCommand::kCmdAck;
+    packet.data_len_bytes = 1;
+    packet.data[0] = success ? 1 : 0;
+    packet.PopulateCRC();
+
+    // Break up CRC calculation for debugging (is usually inlined).
+    // uint16_t buf_len_bytes = packet.GetBufLenBytes();
+    // uint8_t *buf = packet.GetBuf();
+    // uint16_t crc = CalculateCRC16(buf, buf_len_bytes - SPICoprocessorPacket::SCResponsePacket::kCRCLenBytes);
+    // packet.SetCRC(crc);
+}
+
+TEST(SPICoprocessor, SCResponsePacketScrambleBuf) {
+    // This test case addresses an issue that was discovered while removing the memset command that sets the data buffer
+    // of the SCResponsePacket to all zeros. The issue was that if the data buffer was not set to 0's, the CRC would be
+    // calculated as invalid.
+
+    SCOPED_TRACE("SCResponsePacketScrambleBuf");
+
+    SPICoprocessorPacket::SCResponsePacket packet;
+    BuildAckPacket(packet, true);
+    EXPECT_TRUE(packet.IsValid());
+
+    SPICoprocessorPacket::SCResponsePacket response_packet;
+    memset((uint8_t *)&response_packet.data, 0xFF, SPICoprocessorPacket::SCResponsePacket::kDataMaxLenBytes);
+    BuildAckPacket(response_packet, true);
+    EXPECT_TRUE(response_packet.IsValid());
+}

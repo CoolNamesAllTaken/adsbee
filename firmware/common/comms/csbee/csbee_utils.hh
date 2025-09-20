@@ -39,26 +39,50 @@ inline int16_t WriteCSBeeModeSAircraftMessageStr(char message_buf[], const ModeS
 
     int16_t num_chars =  // Print everything except CRC into string buffer.
         snprintf(message_buf, kCSBeeMessageStrMaxLen - kCRCMaxNumChars - 1,
-                 "#A:%06lX,"                                      // ICAO, e.g. 3C65AC
-                 "%lX,"                                           // FLAGS, e.g. 123F35648
-                 "%s,"                                            // CALL, e.g. N61ZP
-                 "%04o,"                                          // SQUAWK, e.g. 7232
-                 "%d,"                                            // ECAT, e.g. 14
-                 "%.5f,"                                          // LAT, e.g. 57.57634
-                 "%.5f,"                                          // LON, e.g. 17.59554
-                 "%ld,"                                           // BARO_ALT, e.g. 5000
-                 "%ld,"                                           // GNSS_ALT, e.g. 5000
-                 "%.0f,"                                          // DIR, e.g. 35
-                 "%ld,"                                           // SPEED, e.g. 464
-                 "%ld,"                                           // BARO_VRATE, e.g. -1344
-                 "%ld,"                                           // GNSS_VRATE, e.g. -1344
-                 "%X,"                                            // NICNAC, e.g. 31BE89F2
-                 "%lX,"                                           // ACDIMS, e.g. 31BE89F2
-                 "%d,"                                            // VERSION
-                 "%d,"                                            // SIGS, e.g. -92
-                 "%d,"                                            // SIGQ, e.g. 2
-                 "%d,"                                            // SFPS, e.g. 3
-                 "%d,",                                           // ESFPS, e.g. 5
+#ifndef ON_ESP32
+                 "#A:%06X,"  // ICAO, e.g. 3C65AC
+                 "%X,"       // FLAGS, e.g. 123F35648
+                 "%s,"       // CALL, e.g. N61ZP
+                 "%04o,"     // SQUAWK, e.g. 7232
+                 "%d,"       // ECAT, e.g. 14
+                 "%.5f,"     // LAT, e.g. 57.57634
+                 "%.5f,"     // LON, e.g. 17.59554
+                 "%d,"       // BARO_ALT, e.g. 5000
+                 "%d,"       // GNSS_ALT, e.g. 5000
+                 "%.0f,"     // DIR, e.g. 35
+                 "%d,"       // SPEED, e.g. 464
+                 "%d,"       // BARO_VRATE, e.g. -1344
+                 "%d,"       // GNSS_VRATE, e.g. -1344
+                 "%X,"       // NICNAC, e.g. 31BE89F2
+                 "%X,"       // ACDIMS, e.g. 31BE89F2
+                 "%d,"       // VERSION
+                 "%d,"       // SIGS, e.g. -92
+                 "%d,"       // SIGQ, e.g. 2
+                 "%d,"       // SFPS, e.g. 3
+                 "%d,",      // ESFPS, e.g. 5
+#else
+                 // ESP32 requires 32-bit values to be formatted as "long" types.
+                 "#A:%06lX,"  // ICAO, e.g. 3C65AC
+                 "%lX,"       // FLAGS, e.g. 123F35648
+                 "%s,"        // CALL, e.g. N61ZP
+                 "%04o,"      // SQUAWK, e.g. 7232
+                 "%d,"        // ECAT, e.g. 14
+                 "%.5f,"      // LAT, e.g. 57.57634
+                 "%.5f,"      // LON, e.g. 17.59554
+                 "%ld,"       // BARO_ALT, e.g. 5000
+                 "%ld,"       // GNSS_ALT, e.g. 5000
+                 "%.0f,"      // DIR, e.g. 35
+                 "%ld,"       // SPEED, e.g. 464
+                 "%ld,"       // BARO_VRATE, e.g. -1344
+                 "%ld,"       // GNSS_VRATE, e.g. -1344
+                 "%X,"        // NICNAC, e.g. 31BE89F2
+                 "%lX,"       // ACDIMS, e.g. 31BE89F2
+                 "%d,"        // VERSION
+                 "%d,"        // SIGS, e.g. -92
+                 "%d,"        // SIGQ, e.g. 2
+                 "%d,"        // SFPS, e.g. 3
+                 "%d,",       // ESFPS, e.g. 5
+#endif
                  aircraft.icao_address,                           // ICAO
                  aircraft.flags,                                  // FLAGS
                  aircraft.callsign,                               // CALL
@@ -118,26 +142,50 @@ inline int16_t WriteCSBeeUATAircraftMessageStr(char message_buf[], const UATAirc
 
     int16_t num_chars =  // Print everything except CRC into string buffer.
         snprintf(message_buf, kCSBeeMessageStrMaxLen - kCRCMaxNumChars - 1,
-                 "#U:%06lX,"                                 // ICAO, e.g. 3C65AC
-                 "%lX,"                                      // UAT_FLAGS, e.g. 123F35648
-                 "%s,"                                       // CALL, e.g. N61ZP
-                 "%04o,"                                     // SQUAWK, e.g. 7232
-                 "%d,"                                       // ECAT, e.g. 14
-                 "%.5f,"                                     // LAT, e.g. 57.57634
-                 "%.5f,"                                     // LON, e.g. 17.59554
-                 "%ld,"                                      // BARO_ALT, e.g. 5000
-                 "%ld,"                                      // GNSS_ALT, e.g. 5000
-                 "%.0f,"                                     // DIR, e.g. 35
-                 "%ld,"                                      // SPEED, e.g. 464
-                 "%ld,"                                      // BARO_VRATE, e.g. -1344
-                 "%ld,"                                      // GNSS_VRATE, e.g. -1344
-                 "%d,"                                       // UAT_EMERG
-                 "%X,"                                       // NICNAC, e.g. 31BE89F2
-                 "%lX,"                                      // ACDIMS, e.g. 31BE89F2
-                 "%d,"                                       // VERSION
-                 "%d,"                                       // SIGS, e.g. -92
-                 "%d,"                                       // SIGQ, e.g. 2
-                 "%d,",                                      // UATFPS, e.g. 1
+#ifndef ON_ESP32
+                 "#U:%06X,"  // ICAO, e.g. 3C65AC
+                 "%X,"       // UAT_FLAGS, e.g. 123F35648
+                 "%s,"       // CALL, e.g. N61ZP
+                 "%04o,"     // SQUAWK, e.g. 7232
+                 "%d,"       // ECAT, e.g. 14
+                 "%.5f,"     // LAT, e.g. 57.57634
+                 "%.5f,"     // LON, e.g. 17.59554
+                 "%d,"       // BARO_ALT, e.g. 5000
+                 "%d,"       // GNSS_ALT, e.g. 5000
+                 "%.0f,"     // DIR, e.g. 35
+                 "%d,"       // SPEED, e.g. 464
+                 "%d,"       // BARO_VRATE, e.g. -1344
+                 "%d,"       // GNSS_VRATE, e.g. -1344
+                 "%d,"       // UAT_EMERG
+                 "%X,"       // NICNAC, e.g. 31BE89F2
+                 "%X,"       // ACDIMS, e.g. 31BE89F2
+                 "%d,"       // VERSION
+                 "%d,"       // SIGS, e.g. -92
+                 "%d,"       // SIGQ, e.g. 2
+                 "%d,",      // UATFPS, e.g. 1
+#else
+                 // ESP32 requires 32-bit values to be formatted as "long" types.
+                 "#U:%06lX,"  // ICAO, e.g. 3C65AC
+                 "%lX,"       // UAT_FLAGS, e.g. 123F35648
+                 "%s,"        // CALL, e.g. N61ZP
+                 "%04o,"      // SQUAWK, e.g. 7232
+                 "%d,"        // ECAT, e.g. 14
+                 "%.5f,"      // LAT, e.g. 57.57634
+                 "%.5f,"      // LON, e.g. 17.59554
+                 "%ld,"       // BARO_ALT, e.g. 5000
+                 "%ld,"       // GNSS_ALT, e.g. 5000
+                 "%.0f,"      // DIR, e.g. 35
+                 "%ld,"       // SPEED, e.g. 464
+                 "%ld,"       // BARO_VRATE, e.g. -1344
+                 "%ld,"       // GNSS_VRATE, e.g. -1344
+                 "%d,"        // UAT_EMERG
+                 "%X,"        // NICNAC, e.g. 31BE89F2
+                 "%lX,"       // ACDIMS, e.g. 31BE89F2
+                 "%d,"        // VERSION
+                 "%d,"        // SIGS, e.g. -92
+                 "%d,"        // SIGQ, e.g. 2
+                 "%d,",       // UATFPS, e.g. 1
+#endif
                  aircraft.icao_address,                      // ICAO
                  aircraft.flags,                             // FLAGS
                  aircraft.callsign,                          // CALL
@@ -174,6 +222,20 @@ inline int16_t WriteCSBeeStatisticsMessageStr(char message_buf[], uint16_t sdps,
                                               uint16_t num_aircraft, uint32_t tscal, uint32_t uptime) {
     int16_t num_chars =  // Print everything except for CRC into string buffer.
         snprintf(message_buf, kCSBeeMessageStrMaxLen - kCRCMaxNumChars - 1,
+#ifndef ON_ESP32
+                 "#S:%d,"  // CSBee Protocol Version
+                 "%d,"     // SDPS, e.g. 106
+                 "%d,"     // RAW_SFPS e.g. 30
+                 "%d,"     // SFPS, e.g. 20
+                 "%d,"     // RAW_ESFPS e.g. 15
+                 "%d,"     // ESFPS, e.g. 13
+                 "%d,"     // RAW_UATFPS, e.g. 5
+                 "%d,"     // UATFPS, e.g. 4
+                 "%d,"     // NUM_AIRCRAFT, e.g. 13
+                 "%d,"     // TSCAL, e.g. 13999415
+                 "%d,",    // UPTIME, e.g. 134
+#else
+                 // ESP32 requires 32-bit values to be formatted as "long" types.
                  "#S:%d,"  // CSBee Protocol Version
                  "%d,"     // SDPS, e.g. 106
                  "%d,"     // RAW_SFPS e.g. 30
@@ -185,6 +247,7 @@ inline int16_t WriteCSBeeStatisticsMessageStr(char message_buf[], uint16_t sdps,
                  "%d,"     // NUM_AIRCRAFT, e.g. 13
                  "%ld,"    // TSCAL, e.g. 13999415
                  "%ld,",   // UPTIME, e.g. 134
+#endif
                  kCSBeeProtocolVersion, sdps, raw_sfps, sfps, raw_esfps, esfps, raw_uatfps, uatfps, num_aircraft, tscal,
                  uptime);
     if (num_chars < 0) return num_chars;  // Check if snprintf call got busted.
