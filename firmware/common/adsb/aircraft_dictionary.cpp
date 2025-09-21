@@ -1311,7 +1311,7 @@ bool AircraftDictionary::IngestModeSADSBPacket(ModeSADSBPacket packet) {
     return ret;
 }
 
-bool AircraftDictionary::IngestDecodedUATADSBPacket(DecodedUATADSBPacket &packet) {
+bool AircraftDictionary::IngestDecodedUATADSBPacket(DecodedUATADSBPacket packet) {
     // Check validity and record stats.
     if (packet.is_valid) {
         metrics_counter_.valid_uat_adsb_frames++;

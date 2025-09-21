@@ -187,15 +187,17 @@ uint32_t DecodedUATADSBPacket::GetICAOAddress() const {
 }
 
 void DecodedUATADSBPacket::ConstructUATADSBPacket(bool run_fec) {
+    // Copy over the message payload. Only attempt FEC correction on the CC1312 or in host-based unit tests, everyone
+    // else gets sent pre-corrected raw packets.
+    memcpy(decoded_payload, raw.encoded_message, RawUATADSBPacket::kADSBMessageMaxSizeBytes);
     if (run_fec) {
         // Check if the packet is valid by validating the Reed-Solomon code.
         // We don't actually know the number of bits with high certainty. First interpret as a long ADS-B message,
         // and if that doesn't work, try it as a short ADS-B message. Decoding only available on CC1312 and in
         // non-embedded unit tests.
 #if defined(ON_TI) || defined(ON_HOST)
-        // Copy to the decoded_payload buffer and correct in place. If correction fails, the buffer will not be
+        // Correct in place. If correction fails, the buffer will not be
         // modified.
-        memcpy(decoded_payload, raw.encoded_message, RawUATADSBPacket::kADSBMessageMaxSizeBytes);
         raw.sigq_bits = uat_rs.DecodeLongADSBMessage(decoded_payload);
         if (raw.sigq_bits >= 0) {
             // CONSOLE_INFO("DecodedUATADSBPacket", "Decoded Long ADS-B message with %d bytes corrected.",

@@ -787,7 +787,7 @@ class AircraftDictionary {
      * UAT Packet Decoding
      */
 
-    bool IngestDecodedUATADSBPacket(DecodedUATADSBPacket &packet);
+    bool IngestDecodedUATADSBPacket(DecodedUATADSBPacket packet);
 
     /**
      * Returns the number of aircraft currently in the dictionary.

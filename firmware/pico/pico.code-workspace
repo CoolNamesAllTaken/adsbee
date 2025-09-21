@@ -14,7 +14,7 @@
 		}
 	],
 	"settings": {
-		"cortex-debug.variableUseNaturalFormat": true,
+		"cortex-debug.variableUseNaturalFormat": false,
 		"files.associations": {
 			"cstdint": "cpp",
 			"type_traits": "cpp",
