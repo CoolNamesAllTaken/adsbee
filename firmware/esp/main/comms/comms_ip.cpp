@@ -1,5 +1,6 @@
 #include "beast/beast_utils.hh"  // For beast reporting.
 #include "comms.hh"
+#include "errno_strs.hh"
 #include "esp_event.h"
 #include "esp_mac.h"
 #include "hal.hh"
@@ -21,8 +22,8 @@ static const uint32_t kTCPReuseAddrEnable =
     1;  // Allow reuse of local addresses and sockets that are in the TIME_WAIT state.
 
 // Feeds to iterate through when reporting.
-static const CommsManager::ReportSink kFeedReportSinks[SettingsManager::Settings::kMaxNumFeeds] = {1, 2, 3, 4, 5,
-                                                                                                   6, 7, 8, 9, 10};
+static const CommsManager::ReportSink kFeedReportSinks[SettingsManager::Settings::kMaxNumFeeds] = {0, 1, 2, 3, 4,
+                                                                                                   5, 6, 7, 8, 9};
 static const uint16_t kNumFeedReportSinks =
     sizeof(kFeedReportSinks) / sizeof(kFeedReportSinks[0]);  // Should be SettingsManager::Settings::kMaxNumFeeds.
 
@@ -167,7 +168,7 @@ void CommsManager::IPWANTask(void* pvParameters) {
     alignas(uint32_t) uint8_t raw_packets_buf[CompositeArray::RawPackets::kMaxLenBytes];
     while (true) {
         // Don't try establishing socket connections until the ESP32 has been assigned an IP address.
-        while (!wifi_sta_has_ip_ && !ethernet_has_ip_) {
+        while (!HasIP()) {
             vTaskDelay(1);  // Delay for 1 tick.
         }
 
@@ -196,6 +197,7 @@ void CommsManager::IPWANTask(void* pvParameters) {
          * deallocated. Here, we can unpack the buffer into a CompositeArray object with pointers because we know it
          * won't go out of scope till we are done with it.
          */
+        continue;  // doot doot
         if (xQueueReceive(ip_wan_reporting_composite_array_queue_, &raw_packets_buf, kWiFiSTATaskUpdateIntervalTicks) !=
             pdTRUE) {
             // No packets available to send, wait and try again.
@@ -330,9 +332,9 @@ bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len) {
         CONSOLE_ERROR("CommsManager::IPWANTask",
                       "Error occurred during sending %d byte message to feed %d with URI %s "
                       "on port %d: "
-                      "errno %d.",
+                      "errno %d (%s).",
                       buf_len, iface, settings_manager.settings.feed_uris[iface],
-                      settings_manager.settings.feed_ports[iface], errno);
+                      settings_manager.settings.feed_ports[iface], errno, ErrNoToString(errno));
         CloseFeedSocket(iface);
         return false;
     } else {

@@ -91,7 +91,8 @@
 			"complex": "cpp",
 			"forward_list": "cpp",
 			"print": "cpp",
-			"text_encoding": "cpp"
+			"text_encoding": "cpp",
+			"errno.h": "c"
 		},
 	},
 	"launch": {

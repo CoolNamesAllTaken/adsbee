@@ -23,11 +23,6 @@ bool CommsManager::UpdateReporting(const ReportSink *sinks, const SettingsManage
     bool ret = true;
     uint32_t timestamp_ms = get_time_since_boot_ms();
 
-    if (timestamp_ms - last_raw_report_timestamp_ms_ > kRawReportingIntervalMs) {
-        return true;  // Nothing to update.
-    }
-    last_raw_report_timestamp_ms_ = timestamp_ms;  // Proceed with update and record timestamp.
-
     // Build lists of sinks for each reporting protocol.
     ReportSink raw_sinks[SettingsManager::kNumSerialInterfaces];
     ReportSink beast_sinks[SettingsManager::kNumSerialInterfaces];
@@ -41,6 +36,8 @@ bool CommsManager::UpdateReporting(const ReportSink *sinks, const SettingsManage
 
     for (uint16_t i = 0; i < num_sinks; i++) {
         switch (sink_protocols[i]) {
+            case SettingsManager::kNoReports:
+                break;  // Not a reporting protocol.
             case SettingsManager::kRaw:
                 raw_sinks[num_raw_sinks++] = sinks[i];
                 break;
@@ -69,13 +66,16 @@ bool CommsManager::UpdateReporting(const ReportSink *sinks, const SettingsManage
     }
 
     /**  Report Raw Packets **/
-    if (!ReportRaw(raw_sinks, num_raw_sinks, *packets_to_report)) {
-        CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportRaw.");
-        ret = false;
-    }
-    if (!ReportBeast(beast_sinks, num_beast_sinks, *packets_to_report)) {
-        CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportBeast.");
-        ret = false;
+    if (packets_to_report->len_bytes > sizeof(CompositeArray::RawPackets::Header)) {
+        // Only report raw packets if they are provided (still send locally decoded reports even if no raw packets).
+        if (!ReportRaw(raw_sinks, num_raw_sinks, *packets_to_report)) {
+            CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportRaw.");
+            ret = false;
+        }
+        if (!ReportBeast(beast_sinks, num_beast_sinks, *packets_to_report)) {
+            CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportBeast.");
+            ret = false;
+        }
     }
 
     /** Locally Decoded Reports **/
@@ -109,7 +109,7 @@ bool CommsManager::UpdateReporting(const ReportSink *sinks, const SettingsManage
 }
 
 bool CommsManager::ReportRaw(ReportSink *sinks, uint16_t num_sinks, const CompositeArray::RawPackets &packets) {
-    char error_msg[CompositeArray::RawPackets::kErrorMessageMaxLen];
+    char error_msg[CompositeArray::RawPackets::kErrorMessageMaxLen] = {0};
     if (!packets.IsValid(error_msg)) {
         CONSOLE_ERROR("CommsManager::ReportRaw", "Invalid CompositeArray::RawPackets: %s", error_msg);
         return false;
@@ -141,7 +141,7 @@ bool CommsManager::ReportRaw(ReportSink *sinks, uint16_t num_sinks, const Compos
 }
 
 bool CommsManager::ReportBeast(ReportSink *sinks, uint16_t num_sinks, const CompositeArray::RawPackets &packets) {
-    char error_msg[CompositeArray::RawPackets::kErrorMessageMaxLen];
+    char error_msg[CompositeArray::RawPackets::kErrorMessageMaxLen] = {0};
     if (!packets.IsValid(error_msg)) {
         CONSOLE_ERROR("CommsManager::ReportBeast", "Invalid CompositeArray::RawPackets: %s", error_msg);
         return false;

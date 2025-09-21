@@ -9,7 +9,7 @@
 #include "task_priorities.hh"
 #include "unit_conversions.hh"
 
-// #define VERBOSE_DEBUG
+#define VERBOSE_DEBUG
 
 static const uint16_t kGDL90Port = 4000;
 
@@ -146,11 +146,6 @@ bool ADSBeeServer::Update() {
     // Prune aircraft dictionary. Need to do this up front so that we don't end up with a negative timestamp delta
     // caused by packets being ingested more recently than the timestamp we take at the beginning of this function.
     if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > kAircraftDictionaryUpdateIntervalMs) {
-        // uint32_t scratch;
-        // if (!pico.Read(ObjectDictionary::Address::kAddrScratch, scratch)) {
-        //     CONSOLE_ERROR("ADSBeeServer::Update", "Read of Pico scratch failed.");
-        // }
-
         aircraft_dictionary.Update(timestamp_ms);
         last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
         CONSOLE_INFO("ADSBeeServer::Update", "\t %d clients, %d aircraft, %lu squitter, %lu extended squitter",
@@ -223,7 +218,7 @@ bool ADSBeeServer::Update() {
                 continue;
             }
 #ifdef VERBOSE_DEBUG
-            if (raw_mode_s_packet.buffer_len_bits == DecodedModeSPacket::kExtendedSquitterPacketLenBits) {
+            if (raw_mode_s_packet.buffer_len_bytes == RawModeSPacket::kExtendedSquitterPacketLenBytes) {
                 CONSOLE_INFO("ADSBeeServer::Update", "New message: 0x%08lx|%08lx|%08lx|%04lx RSSI=%ddBm MLAT=%llu",
                              raw_mode_s_packet.buffer[0], raw_mode_s_packet.buffer[1], raw_mode_s_packet.buffer[2],
                              (raw_mode_s_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_mode_s_packet.sigs_dbm,
@@ -233,8 +228,8 @@ bool ADSBeeServer::Update() {
                              raw_mode_s_packet.buffer[0], (raw_mode_s_packet.buffer[1]) >> (2 * kBitsPerNibble),
                              raw_mode_s_packet.sigs_dbm, raw_mode_s_packet.mlat_48mhz_64bit_counts);
             }
-            CONSOLE_INFO("ADSBeeServer::Update", "\tdf=%d icao_address=0x%06lx", decoded_packet.GetDownlinkFormat(),
-                         decoded_packet.GetICAOAddress());
+            CONSOLE_INFO("ADSBeeServer::Update", "\tdf=%d icao_address=0x%06lx", decoded_packet.downlink_format,
+                         decoded_packet.icao_address);
 #endif
 
             if (!aircraft_dictionary.IngestDecodedModeSPacket(decoded_packet)) {

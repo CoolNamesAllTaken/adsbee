@@ -23,7 +23,7 @@ bool ModeSPacketDecoder::UpdateLogLoop() {
         }
     }
     uint16_t bit_flip_index;
-    while (decoded_1090_packet_bit_flip_locations_out_queue.Dequeue(bit_flip_index)) {
+    while (decoded_mode_s_packet_bit_flip_locations_out_queue.Dequeue(bit_flip_index)) {
         CONSOLE_WARNING("ModeSPacketDecoder::DecoderLoop", "Corrected single bit error at bit index %d.",
                         bit_flip_index);
     }
@@ -31,14 +31,14 @@ bool ModeSPacketDecoder::UpdateLogLoop() {
 }
 
 bool ModeSPacketDecoder::UpdateDecoderLoop() {
-    uint16_t num_packets_to_process = raw_1090_packet_in_queue.Length();
+    uint16_t num_packets_to_process = raw_mode_s_packet_in_queue.Length();
     if (num_packets_to_process == 0) {
         return true;  // Nothing to do.
     }
 
     for (uint16_t i = 0; i < num_packets_to_process; i++) {
         RawModeSPacket raw_packet;
-        if (!raw_1090_packet_in_queue.Dequeue(raw_packet)) {
+        if (!raw_mode_s_packet_in_queue.Dequeue(raw_packet)) {
             debug_message_out_queue.Enqueue(DebugMessage{
                 .message = "Failed to pop raw packet from input queue.",
                 .log_level = SettingsManager::LogLevel::kErrors,
@@ -67,7 +67,7 @@ bool ModeSPacketDecoder::UpdateDecoderLoop() {
             if (bit_flip_index > 0) {
                 // Found a single bit error: flip it and push the corrected packet to the output queue.
                 flip_bit(decoded_packet.raw.buffer, bit_flip_index);
-                decoded_1090_packet_bit_flip_locations_out_queue.Enqueue(bit_flip_index);
+                decoded_mode_s_packet_bit_flip_locations_out_queue.Enqueue(bit_flip_index);
                 PushPacketIfNotDuplicate(DecodedModeSPacket(decoded_packet.raw));
 
                 snprintf(decode_debug_message.message, DebugMessage::kMessageMaxLen, "src=%d [1FIXD     ] ",
@@ -117,7 +117,7 @@ bool ModeSPacketDecoder::PushPacketIfNotDuplicate(const DecodedModeSPacket& deco
         }
     }
 
-    decoded_1090_packet_out_queue.Enqueue(decoded_packet);
+    decoded_mode_s_packet_out_queue.Enqueue(decoded_packet);
 
     if (packet_source >= 0 && packet_source < kMaxNumSources) {
         // Only update packet cache if the source is valid.

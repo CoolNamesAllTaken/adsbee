@@ -6,8 +6,8 @@
 #include "pico/stdlib.h"
 #include "spi_coprocessor.hh"
 
-static const CommsManager::ReportSink kReportingSinks[] = {SettingsManager::SerialInterface::kCommsUART,
-                                                           SettingsManager::SerialInterface::kConsole};
+static const CommsManager::ReportSink kReportingSinks[] = {SettingsManager::SerialInterface::kConsole,
+                                                           SettingsManager::SerialInterface::kCommsUART};
 static const uint16_t kNumReportingSinks = sizeof(kReportingSinks) / sizeof(CommsManager::ReportSink);
 
 CommsManager::CommsManager(CommsManagerConfig config_in)
@@ -37,23 +37,31 @@ bool CommsManager::Update() {
     UpdateAT();
     UpdateNetworkConsole();
 
-    uint8_t packets_to_report_buf[CompositeArray::RawPackets::kMaxLenBytes] = {0};
-    CompositeArray::RawPackets packets_to_report = CompositeArray::PackRawPacketsBuffer(
-        packets_to_report_buf, sizeof(packets_to_report_buf), &mode_s_packet_reporting_queue,
-        &uat_adsb_packet_reporting_queue, &uat_uplink_packet_reporting_queue);
-    // Forward the CompositeArray::RawPackets to the ESP32 if enabled.
-    if (esp32.IsEnabled() && packets_to_report.IsValid()) {
-        // Write packet to ESP32 with a forced ACK.
-        // esp32.Write(ObjectDictionary::kAddrCompositeArrayRawPackets,  // addr
-        //             packets_to_report_buf,                            // buf
-        //             true,                                             // require_ack
-        //             packets_to_report.len_bytes                       // len
-        // );
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+    if (timestamp_ms - last_raw_report_timestamp_ms_ > kRawReportingIntervalMs) {
+        last_raw_report_timestamp_ms_ = timestamp_ms;  // Proceed with update and record timestamp.
+
+        // Don't deplete the packet queues until we are ready to report!
+        uint8_t packets_to_report_buf[CompositeArray::RawPackets::kMaxLenBytes] = {0};
+        CompositeArray::RawPackets packets_to_report = CompositeArray::PackRawPacketsBuffer(
+            packets_to_report_buf, sizeof(packets_to_report_buf), &mode_s_packet_reporting_queue,
+            &uat_adsb_packet_reporting_queue, &uat_uplink_packet_reporting_queue);
+
+        // Forward the CompositeArray::RawPackets to the ESP32 if enabled.
+        if (esp32.IsEnabled() && packets_to_report.IsValid()) {
+            // Write packet to ESP32 with a forced ACK.
+            esp32.Write(ObjectDictionary::kAddrCompositeArrayRawPackets,  // addr
+                        packets_to_report_buf,                            // buf
+                        true,                                             // require_ack
+                        packets_to_report.len_bytes                       // len
+            );
+        }
+
+        // Interfaces to send reports on.
+        UpdateReporting(kReportingSinks, settings_manager.settings.reporting_protocols, kNumReportingSinks,
+                        &packets_to_report);
     }
 
-    // Interfaces to send reports on.
-    UpdateReporting(kReportingSinks, settings_manager.settings.reporting_protocols, kNumReportingSinks,
-                    &packets_to_report);
     return true;
 }
 

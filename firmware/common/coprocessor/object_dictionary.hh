@@ -269,7 +269,7 @@ class ObjectDictionary {
 #endif
 
 #ifdef ON_ESP32
-    PFBQueue<char> network_console_rx_queue = PFBQueue<char>({
+    PFBQueue<char> network_console_rx_queue = PFBQueue<char>(PFBQueue<char>::PFBQueueConfig{
         .buf_len_num_elements = kNetworkConsoleRxQueueDepth,
         .buffer = network_console_message_buffer_,
         .overwrite_when_full =
@@ -302,7 +302,8 @@ class ObjectDictionary {
 
 #ifdef ON_ESP32
     // ESP32
-    char* network_console_message_buffer_ = (char*)heap_caps_malloc(kNetworkConsoleRxQueueDepth, 0);
+    // char* network_console_message_buffer_ = (char*)heap_caps_malloc(kNetworkConsoleRxQueueDepth, 0);
+    char network_console_message_buffer_[kNetworkConsoleRxQueueDepth] = {};
 #elif defined(ON_TI)
     // CC1312
     RawUATADSBPacket raw_uat_adsb_packet_buffer_[kDecodedUATADSBPacketQueueDepth] = {};

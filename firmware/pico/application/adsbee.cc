@@ -273,14 +273,14 @@ void ADSBee::OnDemodComplete() {
                         rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFFFF) << 8;
                         rx_packet_[sm_index].buffer_len_bytes = RawModeSPacket::kSquitterPacketLenBytes;
                         // raw_mode_s_packet_queue.Enqueue(rx_packet_[sm_index]);
-                        decoder.raw_1090_packet_in_queue.Enqueue(rx_packet_[sm_index]);
+                        decoder.raw_mode_s_packet_in_queue.Enqueue(rx_packet_[sm_index]);
                         break;
                     case RawModeSPacket::kExtendedSquitterPacketNumWords32:
                         aircraft_dictionary.Record1090RawExtendedSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFF) << 16;
                         rx_packet_[sm_index].buffer_len_bytes = RawModeSPacket::kExtendedSquitterPacketLenBytes;
                         // raw_mode_s_packet_queue.Enqueue(rx_packet_[sm_index]);
-                        decoder.raw_1090_packet_in_queue.Enqueue(rx_packet_[sm_index]);
+                        decoder.raw_mode_s_packet_in_queue.Enqueue(rx_packet_[sm_index]);
                         break;
                     default:
                         // Don't push partial packets.
@@ -385,7 +385,11 @@ void ADSBee::StartTLLearning(uint16_t tl_learning_num_cycles, uint16_t tl_learni
 void ADSBee::IngestAndForwardPackets() {
     // Ingest new Mode S packets into dictionary and report them.
     DecodedModeSPacket decoded_packet;
-    while (decoder.decoded_1090_packet_out_queue.Dequeue(decoded_packet)) {
+    // Explicitly count the number of packets to process so that we don't get stuck in this loop if the decoder
+    // keeps outputting packets.
+    uint16_t num_decoded_mode_s_packets = decoder.decoded_mode_s_packet_out_queue.Length();
+    for (uint16_t i = 0;
+         i < num_decoded_mode_s_packets && decoder.decoded_mode_s_packet_out_queue.Dequeue(decoded_packet); i++) {
         CONSOLE_INFO("ADSBee::Update", "\tdf=%d icao_address=0x%06x", decoded_packet.downlink_format,
                      decoded_packet.icao_address);
 
@@ -398,6 +402,9 @@ void ADSBee::IngestAndForwardPackets() {
         // them.
         comms_manager.mode_s_packet_reporting_queue.Enqueue(decoded_packet.raw);
     }
+
+    // NOTE: The UAT packet queues are updated on this core, so we don't need to count the number of packets to process
+    // before dequeueing.
 
     // Ingest new UAT packets into the dictionary and report them.
     RawUATADSBPacket uat_adsb_packet;

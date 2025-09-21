@@ -46,14 +46,15 @@ class ModeSPacketDecoder {
     bool UpdateDecoderLoop();
 
     // Input queues.
-    PFBQueue<RawModeSPacket> raw_1090_packet_in_queue =
-        PFBQueue<RawModeSPacket>({.buf_len_num_elements = kPacketQueueLen, .buffer = raw_1090_packet_in_queue_buffer_});
+    PFBQueue<RawModeSPacket> raw_mode_s_packet_in_queue = PFBQueue<RawModeSPacket>(
+        {.buf_len_num_elements = kPacketQueueLen, .buffer = raw_mode_s_packet_in_queue_buffer_});
 
     // Output queues.
-    PFBQueue<DecodedModeSPacket> decoded_1090_packet_out_queue = PFBQueue<DecodedModeSPacket>(
-        {.buf_len_num_elements = kPacketQueueLen, .buffer = decoded_1090_packet_out_queue_buffer_});
-    PFBQueue<uint16_t> decoded_1090_packet_bit_flip_locations_out_queue = PFBQueue<uint16_t>(
-        {.buf_len_num_elements = kPacketQueueLen, .buffer = decoded_1090_packet_bit_flip_locations_out_queue_buffer_});
+    PFBQueue<DecodedModeSPacket> decoded_mode_s_packet_out_queue = PFBQueue<DecodedModeSPacket>(
+        {.buf_len_num_elements = kPacketQueueLen, .buffer = decoded_mode_s_packet_out_queue_buffer_});
+    PFBQueue<uint16_t> decoded_mode_s_packet_bit_flip_locations_out_queue =
+        PFBQueue<uint16_t>({.buf_len_num_elements = kPacketQueueLen,
+                            .buffer = decoded_mode_s_packet_bit_flip_locations_out_queue_buffer_});
     PFBQueue<DebugMessage> debug_message_out_queue = PFBQueue<DebugMessage>({
         .buf_len_num_elements = kDebugMessageQueueLen,
         .buffer = debug_message_out_queue_buffer_,
@@ -63,9 +64,9 @@ class ModeSPacketDecoder {
     bool PushPacketIfNotDuplicate(const DecodedModeSPacket &decoded_packet);
 
     PacketDecoderConfig config_;
-    RawModeSPacket raw_1090_packet_in_queue_buffer_[kPacketQueueLen];
-    DecodedModeSPacket decoded_1090_packet_out_queue_buffer_[kPacketQueueLen];
-    uint16_t decoded_1090_packet_bit_flip_locations_out_queue_buffer_[kPacketQueueLen];
+    RawModeSPacket raw_mode_s_packet_in_queue_buffer_[kPacketQueueLen];
+    DecodedModeSPacket decoded_mode_s_packet_out_queue_buffer_[kPacketQueueLen];
+    uint16_t decoded_mode_s_packet_bit_flip_locations_out_queue_buffer_[kPacketQueueLen];
     DebugMessage debug_message_out_queue_buffer_[kDebugMessageQueueLen];
 
     // Arrays used for keeping track of last decoded message so that we don't re-process the same message if it's caught

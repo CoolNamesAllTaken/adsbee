@@ -4,6 +4,7 @@
 
 #include "cc.h"  // For endiannness swapping.
 #include "comms.hh"
+#include "errno_strs.hh"
 #include "esp_event.h"
 #include "esp_mac.h"
 #include "hal.hh"
@@ -138,7 +139,8 @@ void CommsManager::WiFiAccessPointTask(void* pvParameters) {
                         // CONSOLE_ERROR("CommsManager::WiFiAccessPointTask", "Error occurred during sending:
                         // errno %d.", errno);
                         CONSOLE_ERROR("CommsManager::WiFiAccessPointTask",
-                                      "Error occurred during sending: errno %d. Tried %d times.", errno, num_tries);
+                                      "Error occurred during sending: errno %d (%s). Tried %d times.", errno,
+                                      ErrNoToString(errno), num_tries);
                     }
                 }
             }
