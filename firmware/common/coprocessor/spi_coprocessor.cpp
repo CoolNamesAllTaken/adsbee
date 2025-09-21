@@ -112,6 +112,9 @@ bool SPICoprocessor::Update() {
 
             ObjectDictionary::LogMessage log_message;
             while (object_dictionary.log_message_queue.Dequeue(log_message)) {
+                if (strlen(log_message.message) == 0) {
+                    continue;  // Skip empty messages.
+                }
                 switch (log_message.log_level) {
                     case SettingsManager::LogLevel::kInfo:
                         CONSOLE_INFO("CoProcessor", "%s >> %s", config_.tag_str, log_message.message);

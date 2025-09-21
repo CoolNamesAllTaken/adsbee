@@ -36,7 +36,7 @@ class ObjectDictionary {
 
 #ifdef ON_COPRO_SLAVE
     static constexpr uint16_t kSCCommandRequestQueueDepth = 10;
-    static constexpr uint16_t kNetworkConsoleRxQueueDepth = kNetworkConsoleMessageMaxLenBytes * 4;
+    static constexpr uint16_t kNetworkConsoleRxQueueDepth = kNetworkConsoleMessageMaxLenBytes * 2;
 #endif
 #ifdef ON_TI
     static constexpr uint16_t kDecodedUATADSBPacketQueueDepth = 10;

@@ -354,13 +354,13 @@ class ModeSAircraft : public Aircraft {
      * @retval True if message was ingested successfully, false otherwise.
      */
 
-    bool ApplyAircraftIDMessage(ModeSADSBPacket packet);
-    bool ApplySurfacePositionMessage(ModeSADSBPacket packet);
-    bool ApplyAirbornePositionMessage(ModeSADSBPacket packet, bool filter_cpr_position = true);
-    bool ApplyAirborneVelocitiesMessage(ModeSADSBPacket packet);
-    bool ApplyAircraftStatusMessage(ModeSADSBPacket packet);
-    bool ApplyTargetStateAndStatusInfoMessage(ModeSADSBPacket packet);
-    bool ApplyAircraftOperationStatusMessage(ModeSADSBPacket packet);
+    bool ApplyAircraftIDMessage(const ModeSADSBPacket &packet);
+    bool ApplySurfacePositionMessage(const ModeSADSBPacket &packet);
+    bool ApplyAirbornePositionMessage(const ModeSADSBPacket &packet, bool filter_cpr_position = true);
+    bool ApplyAirborneVelocitiesMessage(const ModeSADSBPacket &packet);
+    bool ApplyAircraftStatusMessage(const ModeSADSBPacket &packet);
+    bool ApplyTargetStateAndStatusInfoMessage(const ModeSADSBPacket &packet);
+    bool ApplyAircraftOperationStatusMessage(const ModeSADSBPacket &packet);
 
    private:
     struct CPRPacket {
@@ -759,7 +759,7 @@ class AircraftDictionary {
      * @param[in] packet ModeSIdentityReplyPacket to ingest.
      * @retval True if successful, false if something broke.
      */
-    bool IngestModeSIdentityReplyPacket(ModeSIdentityReplyPacket packet);
+    bool IngestModeSIdentityReplyPacket(const ModeSIdentityReplyPacket &packet);
 
     /**
      * Ingests an Altitude Surveillance Reply packet and uses it to update the relevant aircraft. Exposed for
@@ -769,7 +769,7 @@ class AircraftDictionary {
      * @param[in] packet ModeSAltitudeReplyPacket to ingest.
      * @retval True if successful, false if something broke.
      */
-    bool IngestModeSAltitudeReplyPacket(ModeSAltitudeReplyPacket packet);
+    bool IngestModeSAltitudeReplyPacket(const ModeSAltitudeReplyPacket &packet);
 
     /**
      * Ingests an All Call Reply packet and uses it to update the relevant aircraft. Exposed for testing, but usually
@@ -778,7 +778,7 @@ class AircraftDictionary {
      * Currently, we only accept all call reply packets with an interrogator ID of 0 (replies to spontaneous acquisition
      * squitters), since we don't have a way to know the interrogator ID of ground based surveillance stations.
      */
-    bool IngestModeSAllCallReplyPacket(ModeSAllCallReplyPacket packet);
+    bool IngestModeSAllCallReplyPacket(const ModeSAllCallReplyPacket &packet);
 
     /**
      * Ingests an ModeSADSBPacket directly. Exposed for testing, but usually this gets called by
@@ -786,13 +786,13 @@ class AircraftDictionary {
      * @param[in] packet ModeSADSBPacket to ingest. Derived from a DecodedModeSPacket with DF=17-19.
      * @retval True if successful, false if something broke.
      */
-    bool IngestModeSADSBPacket(ModeSADSBPacket packet);
+    bool IngestModeSADSBPacket(const ModeSADSBPacket &packet);
 
     /**
      * UAT Packet Decoding
      */
 
-    bool IngestDecodedUATADSBPacket(DecodedUATADSBPacket &packet);
+    bool IngestDecodedUATADSBPacket(const DecodedUATADSBPacket &packet);
 
     /**
      * Returns the number of aircraft currently in the dictionary.

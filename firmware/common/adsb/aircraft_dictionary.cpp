@@ -238,7 +238,7 @@ ADSBTypes::EmitterCategory ExtractCategory(const ModeSADSBPacket &packet) {
     }
 }
 
-bool ModeSAircraft::ApplyAircraftIDMessage(ModeSADSBPacket packet) {
+bool ModeSAircraft::ApplyAircraftIDMessage(const ModeSADSBPacket &packet) {
     emitter_category = ExtractCategory(packet);
     emitter_category_raw = packet.GetNBitWordFromMessage(8, 0);
     transponder_capability = packet.capability;
@@ -250,7 +250,7 @@ bool ModeSAircraft::ApplyAircraftIDMessage(ModeSADSBPacket packet) {
     return true;
 }
 
-bool ModeSAircraft::ApplySurfacePositionMessage(ModeSADSBPacket packet) {
+bool ModeSAircraft::ApplySurfacePositionMessage(const ModeSADSBPacket &packet) {
     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, false);
 
     if (NICBitIsValid(ADSBTypes::kNICBitA) && NICBitIsValid(ADSBTypes::kNICBitC)) {
@@ -293,7 +293,7 @@ bool ModeSAircraft::ApplySurfacePositionMessage(ModeSADSBPacket packet) {
     return false;
 }
 
-bool ModeSAircraft::ApplyAirbornePositionMessage(ModeSADSBPacket packet, bool filter_cpr_position) {
+bool ModeSAircraft::ApplyAirbornePositionMessage(const ModeSADSBPacket &packet, bool filter_cpr_position) {
     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
     uint16_t type_code = packet.type_code;
 
@@ -446,7 +446,7 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(ModeSADSBPacket packet, bool fi
     return decode_successful;
 }
 
-bool ModeSAircraft::ApplyAirborneVelocitiesMessage(ModeSADSBPacket packet) {
+bool ModeSAircraft::ApplyAirborneVelocitiesMessage(const ModeSADSBPacket &packet) {
     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
     bool decode_successful = true;
 
@@ -576,11 +576,17 @@ bool ModeSAircraft::ApplyAirborneVelocitiesMessage(ModeSADSBPacket packet) {
     return decode_successful;
 }
 
-bool ModeSAircraft::ApplyAircraftStatusMessage(ModeSADSBPacket packet) { return false; }
+bool ModeSAircraft::ApplyAircraftStatusMessage(const ModeSADSBPacket &packet) {
+    // TODO: Implement Airraft Status message decoding.
+    return true;
+}
 
-bool ModeSAircraft::ApplyTargetStateAndStatusInfoMessage(ModeSADSBPacket packet) { return false; }
+bool ModeSAircraft::ApplyTargetStateAndStatusInfoMessage(const ModeSADSBPacket &packet) {
+    // TODO: Implement Target State and Status Info message decoding.
+    return true;
+}
 
-bool ModeSAircraft::ApplyAircraftOperationStatusMessage(ModeSADSBPacket packet) {
+bool ModeSAircraft::ApplyAircraftOperationStatusMessage(const ModeSADSBPacket &packet) {
     // TODO: get nac/navigation_integrity_category, and supplement airborne status from here.
     // https://mode-s.org/decode/content/ads-b/6-operation-status.html
     // More about navigation_integrity_category/nac here: https://mode-s.org/decode/content/ads-b/7-uncertainty.html
@@ -1159,7 +1165,7 @@ bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket &packet) {
     return ingest_ret;
 }
 
-bool AircraftDictionary::IngestModeSIdentityReplyPacket(ModeSIdentityReplyPacket packet) {
+bool AircraftDictionary::IngestModeSIdentityReplyPacket(const ModeSIdentityReplyPacket &packet) {
     if (!packet.is_valid || packet.downlink_format != ModeSIdentityReplyPacket::kDownlinkFormatIdentityReply) {
         return false;
     }
@@ -1182,7 +1188,7 @@ bool AircraftDictionary::IngestModeSIdentityReplyPacket(ModeSIdentityReplyPacket
     return true;
 }
 
-bool AircraftDictionary::IngestModeSAltitudeReplyPacket(ModeSAltitudeReplyPacket packet) {
+bool AircraftDictionary::IngestModeSAltitudeReplyPacket(const ModeSAltitudeReplyPacket &packet) {
     if (!packet.is_valid || packet.downlink_format != ModeSAltitudeReplyPacket::kDownlinkFormatAltitudeReply) {
         return false;
     }
@@ -1207,7 +1213,7 @@ bool AircraftDictionary::IngestModeSAltitudeReplyPacket(ModeSAltitudeReplyPacket
     return true;
 }
 
-bool AircraftDictionary::IngestModeSAllCallReplyPacket(ModeSAllCallReplyPacket packet) {
+bool AircraftDictionary::IngestModeSAllCallReplyPacket(const ModeSAllCallReplyPacket &packet) {
     if (!packet.is_valid || packet.downlink_format != DecodedModeSPacket::kDownlinkFormatAllCallReply) {
         return false;
     }
@@ -1230,7 +1236,7 @@ bool AircraftDictionary::IngestModeSAllCallReplyPacket(ModeSAllCallReplyPacket p
     return true;
 }
 
-bool AircraftDictionary::IngestModeSADSBPacket(ModeSADSBPacket packet) {
+bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket &packet) {
     if (!packet.is_valid || packet.downlink_format != ModeSADSBPacket::kDownlinkFormatExtendedSquitter) {
         return false;  // Only allow valid DF17 packets.
     }
@@ -1284,7 +1290,7 @@ bool AircraftDictionary::IngestModeSADSBPacket(ModeSADSBPacket packet) {
         case ModeSADSBPacket::kTypeCodeReserved + 2:  // TC = 25 (Reserved)
         case ModeSADSBPacket::kTypeCodeReserved + 3:  // TC = 26 (Reserved)
         case ModeSADSBPacket::kTypeCodeReserved + 4:  // TC = 27 (Reserved)
-            ret = false;
+            ret = true;                               // Silently ignore reserved messages.
             break;
         case ModeSADSBPacket::kTypeCodeAircraftStatus:  // TC = 28 (Aircraft Status)
             ret = aircraft_ptr->ApplyAircraftStatusMessage(packet);
@@ -1311,7 +1317,7 @@ bool AircraftDictionary::IngestModeSADSBPacket(ModeSADSBPacket packet) {
     return ret;
 }
 
-bool AircraftDictionary::IngestDecodedUATADSBPacket(DecodedUATADSBPacket &packet) {
+bool AircraftDictionary::IngestDecodedUATADSBPacket(const DecodedUATADSBPacket &packet) {
     // Check validity and record stats.
     if (packet.is_valid) {
         metrics_counter_.valid_uat_adsb_frames++;

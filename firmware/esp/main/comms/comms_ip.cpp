@@ -21,12 +21,6 @@ static const uint32_t kTCPKeepAliveMaxFailedProbesBeforeDisconnect = 3;
 static const uint32_t kTCPReuseAddrEnable =
     1;  // Allow reuse of local addresses and sockets that are in the TIME_WAIT state.
 
-// Feeds to iterate through when reporting.
-static const CommsManager::ReportSink kFeedReportSinks[SettingsManager::Settings::kMaxNumFeeds] = {0, 1, 2, 3, 4,
-                                                                                                   5, 6, 7, 8, 9};
-static const uint16_t kNumFeedReportSinks =
-    sizeof(kFeedReportSinks) / sizeof(kFeedReportSinks[0]);  // Should be SettingsManager::Settings::kMaxNumFeeds.
-
 /** "Pass-Through" functions used to access member functions in callbacks. **/
 void ip_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
     comms_manager.IPEventHandler(arg, event_base, event_id, event_data);
@@ -73,7 +67,7 @@ bool CommsManager::IPInit() {
     ip_event_handler_was_initialized_ = true;
 
     // IP WAN task needs extra stack space to allow it to dequeue CompositeArray::RawPackets buffers.
-    xTaskCreatePinnedToCore(ip_wan_task, "ip_wan_task", 4096 + CompositeArray::RawPackets::kMaxLenBytes,
+    xTaskCreatePinnedToCore(ip_wan_task, "ip_wan_task", 2 * 4096 + CompositeArray::RawPackets::kMaxLenBytes,
                             &ip_wan_task_handle, kIPWANTaskPriority, NULL, kIPWANTaskCore);
 
     // Initialize mDNS service.
@@ -174,7 +168,12 @@ void CommsManager::IPWANTask(void* pvParameters) {
 
         UpdateFeedMetrics();
 
-        // Maintain socket connections.
+        uint16_t num_active_report_sinks = 0;
+        ReportSink active_report_sinks[SettingsManager::Settings::kMaxNumFeeds] = {0};
+        SettingsManager::ReportingProtocol active_reporting_protocols[SettingsManager::Settings::kMaxNumFeeds] = {
+            SettingsManager::ReportingProtocol::kNoReports};
+
+        // Maintain socket connections and build list of acive report sinks.
         for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
             // Iterate through feeds, open/close and send message as required.
             if (!settings_manager.settings.feed_is_active[i]) {
@@ -189,6 +188,11 @@ void CommsManager::IPWANTask(void* pvParameters) {
                     continue;  // Failed to connect, try again later.
                 }
             }
+
+            // Socket is connected, add to active sinks.
+            active_report_sinks[num_active_report_sinks] = i;
+            active_reporting_protocols[num_active_report_sinks] = settings_manager.settings.feed_protocols[i];
+            num_active_report_sinks++;
         }
 
         // Gather packet(s) to send.
@@ -197,7 +201,6 @@ void CommsManager::IPWANTask(void* pvParameters) {
          * deallocated. Here, we can unpack the buffer into a CompositeArray object with pointers because we know it
          * won't go out of scope till we are done with it.
          */
-        continue;  // doot doot
         if (xQueueReceive(ip_wan_reporting_composite_array_queue_, &raw_packets_buf, kWiFiSTATaskUpdateIntervalTicks) !=
             pdTRUE) {
             // No packets available to send, wait and try again.
@@ -210,8 +213,9 @@ void CommsManager::IPWANTask(void* pvParameters) {
             CONSOLE_ERROR("CommsManager::IPWANTask", "Failed to unpack CompositeArray from buffer.");
             continue;
         }
+
         // Update feeds with raw and digested reports.
-        if (!UpdateReporting(kFeedReportSinks, settings_manager.settings.feed_protocols, kNumFeedReportSinks,
+        if (!UpdateReporting(active_report_sinks, active_reporting_protocols, num_active_report_sinks,
                              &reporting_composite_array)) {
             CONSOLE_ERROR("CommsManager::IPWANTask", "Error during UpdateReporting for feeds.");
         }
@@ -327,6 +331,13 @@ bool CommsManager::ConnectFeedSocket(uint16_t feed_index) {
 }
 
 bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len) {
+    if (iface >= SettingsManager::Settings::kMaxNumFeeds) {
+        CONSOLE_ERROR("CommsManager::IPWANTask", "Invalid feed index %d for SendBuf.", iface);
+        return false;
+    }
+    if (!feed_sock_is_connected_[iface]) {
+        return false;
+    }
     int err = send(feed_sock_[iface], buf, buf_len, 0);
     if (err < 0) {
         CONSOLE_ERROR("CommsManager::IPWANTask",

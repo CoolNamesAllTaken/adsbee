@@ -12,12 +12,12 @@ static const unsigned int kSPIReceiveTaskCore = 1;
 static const unsigned int kWiFiAPTaskPriority = tskIDLE_PRIORITY;
 static const unsigned int kWiFiAPTaskCore = 0;
 static const unsigned int kIPWANTaskPriority = tskIDLE_PRIORITY;
-static const unsigned int kIPWANTaskCore = 0;
+static const unsigned int kIPWANTaskCore = 1;
 static const unsigned int kTCPServerTaskPriority = tskIDLE_PRIORITY;
 static const unsigned int kTCPServerTaskCore = 0;
 // Handles network console buffers but that happens in heap.
 static const unsigned int kTCPServerTaskStackSizeBytes = 4096;
 static const unsigned int kHTTPServerStackSizeBytes =
-    8 * 4096;  // Extra stack needed for calls to SPI peripheral and handling large files.
+    4 * 4096;  // Extra stack needed for calls to SPI peripheral and handling large files.
 
 #endif /* TASK_PRIORITIES_HH_ */

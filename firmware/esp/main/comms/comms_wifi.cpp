@@ -222,8 +222,8 @@ bool CommsManager::WiFiInit() {
 
     if (wifi_ap_enabled) {
         CONSOLE_INFO("CommsManager::WiFiInit", "WiFi AP started. SSID:%s password:%s", wifi_ap_ssid, wifi_ap_password);
-        xTaskCreatePinnedToCore(wifi_access_point_task, "wifi_ap_task", 4096, &wifi_ap_task_handle, kWiFiAPTaskPriority,
-                                NULL, kWiFiAPTaskCore);
+        xTaskCreatePinnedToCore(wifi_access_point_task, "wifi_ap_task", 2 * 4096, &wifi_ap_task_handle,
+                                kWiFiAPTaskPriority, NULL, kWiFiAPTaskCore);
     }
     if (wifi_sta_enabled) {
         char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen];
@@ -256,7 +256,7 @@ bool CommsManager::IPWANSendRawPacketCompositeArray(uint8_t* raw_packets_buf) {
     if (err == errQUEUE_FULL) {
         CONSOLE_WARNING("CommsManager::IPWANSendRawPacketCompositeArray",
                         "Overflowed WAN raw packet composite array queue.");
-        xQueueReset(ip_wan_reporting_composite_array_queue_);
+        // xQueueReset(ip_wan_reporting_composite_array_queue_);
         return false;
     } else if (err != pdTRUE) {
         CONSOLE_WARNING("CommsManager::IPWANSendRawPacketCompositeArray",
@@ -275,7 +275,7 @@ bool CommsManager::WiFiAccessPointSendMessageToAllStations(NetworkMessage& messa
     int err = xQueueSend(wifi_ap_message_queue_, &message, 0);
     if (err == errQUEUE_FULL) {
         CONSOLE_WARNING("CommsManager::WiFiAccessPointSendMessageToAllStations", "Overflowed WiFi AP message queue.");
-        xQueueReset(wifi_ap_message_queue_);
+        // xQueueReset(wifi_ap_message_queue_);
         return false;
     } else if (err != pdTRUE) {
         CONSOLE_WARNING("CommsManager::WiFiAccessPointSendMessageToAllStations",

@@ -12,6 +12,7 @@ class ADSBeeServer {
     static const uint16_t kMaxNumUATADSBPackets = 20;   // Depth of queue for incoming UAT ADS-B packets from RP2040.
     static const uint16_t kMaxNumUATUplinkPackets = 2;  // Depth of queue for incoming UAT uplink packets from RP2040.
     static const uint32_t kAircraftDictionaryUpdateIntervalMs = 1000;
+    static const uint32_t kRawPacketProcessingIntervalMs = 200;
     static const uint32_t kGDL90ReportingIntervalMs = 1000;
 
     static const uint16_t kNetworkConsoleQueueLen = 10;
@@ -76,6 +77,7 @@ class ADSBeeServer {
     RawUATADSBPacket raw_uat_adsb_packet_in_queue_buffer_[kMaxNumUATADSBPackets];
     RawUATUplinkPacket raw_uat_uplink_packet_in_queue_buffer_[kMaxNumUATUplinkPackets];
 
+    uint32_t last_raw_packet_process_timestamp_ms_ = 0;
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
     uint32_t last_gdl90_report_timestamp_ms_ = 0;
 };
