@@ -170,6 +170,12 @@ class ObjectDictionary {
         uint16_t num_queued_sc_command_requests = 0;  // Number of SCCommand requests queued for the master.
 
         uint16_t pending_raw_packets_len_bytes = 0;  // Number of bytes of raw packets waiting to be read by the master.
+
+        // Counters for number of packets received since the last time the device info struct was read.
+        uint16_t num_raw_uat_adsb_packets = 0;
+        uint16_t num_valid_uat_adsb_packets = 0;
+        uint16_t num_raw_uat_uplink_packets = 0;
+        uint16_t num_valid_uat_uplink_packets = 0;
     };
 
     /**
@@ -285,6 +291,14 @@ class ObjectDictionary {
         PFBQueue<RawUATUplinkPacket>({.buf_len_num_elements = kDecodedUATUplinkPacketQueueDepth,
                                       .buffer = raw_uat_uplink_packet_buffer_,
                                       .overwrite_when_full = true});
+
+    struct SubGHzRadioMetrics {
+        uint16_t num_raw_uat_adsb_packets = 0;
+        uint16_t num_valid_uat_adsb_packets = 0;
+        uint16_t num_raw_uat_uplink_packets = 0;
+        uint16_t num_valid_uat_uplink_packets = 0;
+    };
+    SubGHzRadioMetrics metrics = {0};
 #endif
 
    private:

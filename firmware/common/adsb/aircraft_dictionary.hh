@@ -725,14 +725,19 @@ class AircraftDictionary {
     }
 
     /**
-     * Log reception of a UAT ADS-B frame, regardless of whether it was able to be decoded and validated.
+     * Record receiver metrics from the SubGHz radio.
+     * @param[in] raw_uat_adsb_frames Number of raw UAT ADS-B frames received.
+     * @param[in] valid_uat_adsb_frames Number of UAT ADS-B frames that passed FEC.
+     * @param[in] raw_uat_uplink_frames Number of raw UAT Uplink frames received.
+     * @param[in] valid_uat_uplink_frames Number of UAT Uplink frames that passed FEC.
      */
-    inline void RecordUATRawADSBFrame() { metrics_counter_.raw_uat_adsb_frames++; }
-
-    /**
-     * Log reception of a valid UAT uplink frame, regardless of whether it was able to be decoded and validated.
-     */
-    inline void RecordUATValidADSBFrame() { metrics_counter_.raw_uat_uplink_frames++; }
+    inline void RecordSubGHzMetrics(uint16_t raw_uat_adsb_frames, uint16_t valid_uat_adsb_frames,
+                                    uint16_t raw_uat_uplink_frames, uint16_t valid_uat_uplink_frames) {
+        metrics_counter_.raw_uat_adsb_frames += raw_uat_adsb_frames;
+        metrics_counter_.valid_uat_adsb_frames += valid_uat_adsb_frames;
+        metrics_counter_.raw_uat_uplink_frames += raw_uat_uplink_frames;
+        metrics_counter_.valid_uat_uplink_frames += valid_uat_uplink_frames;
+    }
 
     /**
      * Mode S Packet Decoding
@@ -787,7 +792,7 @@ class AircraftDictionary {
      * UAT Packet Decoding
      */
 
-    bool IngestDecodedUATADSBPacket(DecodedUATADSBPacket packet);
+    bool IngestDecodedUATADSBPacket(DecodedUATADSBPacket &packet);
 
     /**
      * Returns the number of aircraft currently in the dictionary.

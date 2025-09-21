@@ -21,6 +21,7 @@ bool UATPacketDecoder::Update() {
 
         if (decoded_packet.is_valid) {
             // pico_ll.BlinkSubGLED();
+            object_dictionary.metrics.num_valid_uat_adsb_packets++;
             CONSOLE_INFO(
                 "UATPacketDecoder::Update", "-[%dFIXD     ] mdb_tc=%d icao=0x%06x len=%d buf=%s rssi=%d ts=%lu",
                 decoded_packet.raw.sigq_bits, decoded_packet.header.mdb_type_code, decoded_packet.header.icao_address,
@@ -42,6 +43,7 @@ bool UATPacketDecoder::Update() {
 
         if (decoded_packet.is_valid) {
             // pico_ll.BlinkSubGLED();
+            object_dictionary.metrics.num_valid_uat_uplink_packets++;
             CONSOLE_INFO("UATPacketDecoder::Update", "+[%02dFIXD     ] len=%d rssi=%d ts=%lu",
                          decoded_packet.raw.sigq_bits, RawUATUplinkPacket::kUplinkMessageNumBytes, packet.sigs_dbm,
                          packet.mlat_48mhz_64bit_counts);

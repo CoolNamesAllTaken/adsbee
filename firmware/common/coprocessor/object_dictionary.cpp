@@ -185,7 +185,13 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                                                 .pending_raw_packets_len_bytes = static_cast<uint16_t>(
                                                     raw_uat_adsb_packet_queue.Length() * sizeof(RawUATADSBPacket) +
                                                     raw_uat_uplink_packet_queue.Length() * sizeof(RawUATUplinkPacket) +
-                                                    sizeof(CompositeArray::RawPackets::Header))};
+                                                    sizeof(CompositeArray::RawPackets::Header)),
+                                                .num_raw_uat_adsb_packets = metrics.num_raw_uat_adsb_packets,
+                                                .num_valid_uat_adsb_packets = metrics.num_valid_uat_adsb_packets,
+                                                .num_raw_uat_uplink_packets = metrics.num_raw_uat_uplink_packets,
+                                                .num_valid_uat_uplink_packets = metrics.num_valid_uat_uplink_packets};
+            // Reset metrics after reading.
+            metrics = {0};
 #endif
             for (uint16_t i = 0; i < log_message_queue.Length(); i++) {
                 LogMessage log_message;

@@ -194,6 +194,8 @@ bool ADSBeeServer::Update() {
     }
 
     // Assemble a CompositeArray of transponder packets to report.
+    // NOTE: Rate metering of raw packets is done by upstream RP2040, which only forward packets on the raw packet
+    // reporting time interval.
     uint8_t raw_packets_buf[CompositeArray::RawPackets::kMaxLenBytes];
     CompositeArray::RawPackets raw_packets = CompositeArray::PackRawPacketsBuffer(
         raw_packets_buf, sizeof(raw_packets_buf), &(adsbee_server.raw_mode_s_packet_in_queue),

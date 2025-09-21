@@ -206,19 +206,20 @@ bool CommsManager::ReportCSBee(ReportSink *sinks, uint16_t num_sinks) {
 
     // Write a CSBee Statistics message.
     char message[kCSBeeMessageStrMaxLen];
-    int16_t message_len_bytes =
-        WriteCSBeeStatisticsMessageStr(message,                                            // Buffer to write into.
-                                       aircraft_dictionary.metrics.demods_1090,            // DPS
-                                       aircraft_dictionary.metrics.raw_squitter_frames,    // RAW_SFPS
-                                       aircraft_dictionary.metrics.valid_squitter_frames,  // SFPS
-                                       aircraft_dictionary.metrics.raw_extended_squitter_frames,    // RAW_ESFPS
-                                       aircraft_dictionary.metrics.valid_extended_squitter_frames,  // ESFPS
-                                       aircraft_dictionary.metrics.raw_uat_adsb_frames,             // RAW_UAT
-                                       aircraft_dictionary.metrics.valid_uat_adsb_frames,           // VALID_UAT
-                                       aircraft_dictionary.GetNumAircraft(),                        // NUM_AIRCRAFT
-                                       0u,                                                          // TSCAL
-                                       get_time_since_boot_ms() / 1000                              // UPTIME
-        );
+    int16_t message_len_bytes = WriteCSBeeStatisticsMessageStr(
+        message,                                                     // Buffer to write into.
+        aircraft_dictionary.metrics.demods_1090,                     // DPS
+        aircraft_dictionary.metrics.raw_squitter_frames,             // RAW_SFPS
+        aircraft_dictionary.metrics.valid_squitter_frames,           // SFPS
+        aircraft_dictionary.metrics.raw_extended_squitter_frames,    // RAW_ESFPS
+        aircraft_dictionary.metrics.valid_extended_squitter_frames,  // ESFPS
+        aircraft_dictionary.metrics.raw_uat_adsb_frames + aircraft_dictionary.metrics.raw_uat_uplink_frames,  // RAW_UAT
+        aircraft_dictionary.metrics.valid_uat_adsb_frames +
+            aircraft_dictionary.metrics.valid_uat_uplink_frames,  // VALID_UAT
+        aircraft_dictionary.GetNumAircraft(),                     // NUM_AIRCRAFT
+        0u,                                                       // TSCAL
+        get_time_since_boot_ms() / 1000                           // UPTIME
+    );
     if (message_len_bytes < 0) {
         CONSOLE_ERROR("CommsManager::ReportCSBee",
                       "Encountered an error in WriteCSBeeStatisticsMessageStr, error code %d.", message_len_bytes);
