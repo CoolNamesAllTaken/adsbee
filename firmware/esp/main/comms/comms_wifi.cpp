@@ -21,6 +21,7 @@ static const uint16_t kWiFiNumRetries = 3;
 static const uint16_t kWiFiRetryWaitTimeMs = 100;
 static const uint16_t kWiFiStaMaxNumReconnectAttempts = 5;
 static const uint16_t kWiFiScanDefaultListSize = 20;
+static const uint16_t kWiFiAPMessageQueueTimeout = 100;  // ms
 
 /* The event group allows multiple bits for each event, but we only care about two events:
  * - we are connected to the AP with an IP
@@ -272,7 +273,8 @@ bool CommsManager::WiFiAccessPointSendMessageToAllStations(NetworkMessage& messa
                         "Can't push to WiFi AP message queue if AP is not running.");
         return false;  // Task not started yet, pushing to queue could create an overflow.
     }
-    int err = xQueueSend(wifi_ap_message_queue_, &message, 0);
+    // If the queue is full, wait up to 10ms for it to have space.
+    int err = xQueueSend(wifi_ap_message_queue_, &message, pdMS_TO_TICKS(kWiFiAPMessageQueueTimeout));
     if (err == errQUEUE_FULL) {
         CONSOLE_WARNING("CommsManager::WiFiAccessPointSendMessageToAllStations", "Overflowed WiFi AP message queue.");
         // xQueueReset(wifi_ap_message_queue_);

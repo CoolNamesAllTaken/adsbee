@@ -312,6 +312,7 @@ bool ADSBeeServer::ReportGDL90() {
             CONSOLE_ERROR("ADSBeeServer::ReportGDL90", "Failed to send info about aircraft %d to all clients.",
                           aircraft_index);
         }
+        aircraft_index++;
     }
 
     return true;

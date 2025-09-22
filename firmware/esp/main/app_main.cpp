@@ -27,6 +27,9 @@
 #include "spi_coprocessor.hh"
 
 #define HARDWARE_UNIT_TESTS
+#define PRINT_HEAP_USAGE
+
+static const uint32_t kHeapUsagePrintIntervalMs = 100;
 
 BSP bsp = BSP();
 ObjectDictionary object_dictionary;
@@ -56,10 +59,21 @@ extern "C" void app_main(void) {
     RunHardwareUnitTests();
 #endif
 
+#ifdef PRINT_HEAP_USAGE
+    uint32_t last_heap_print_timestamp_ms = 0;
+#endif
     while (1) {
         adsbee_server.Update();
 
         // Yield to the idle task to avoid a watchdog trigger. Note: Delay must be >= 10ms since 100Hz tick is typical.
         vTaskDelay(1);  // Delay 1 tick (10ms).
+
+#ifdef PRINT_HEAP_USAGE
+        if (get_time_since_boot_ms() - last_heap_print_timestamp_ms > kHeapUsagePrintIntervalMs) {
+            CONSOLE_INFO("heap", "Free heap: %d, largest block: %d", heap_caps_get_free_size(MALLOC_CAP_8BIT),
+                         heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+            last_heap_print_timestamp_ms = get_time_since_boot_ms();
+        }
+#endif
     }
 }

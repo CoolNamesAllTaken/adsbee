@@ -1,5 +1,7 @@
 #include "composite_array.hh"
 
+#include <cstring>  // For memcpy.
+
 #include "comms.hh"
 
 CompositeArray::RawPackets CompositeArray::PackRawPacketsBuffer(uint8_t* buf, uint16_t buf_len_bytes,

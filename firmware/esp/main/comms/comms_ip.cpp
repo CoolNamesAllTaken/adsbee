@@ -275,8 +275,7 @@ bool CommsManager::ConnectFeedSocket(uint16_t feed_index) {
         if (!ResolveURIToIP(settings_manager.settings.feed_uris[feed_index], resolved_ip)) {
             CONSOLE_ERROR("CommsManager::IPWANTask", "Failed to resolve URL %s for feed %d",
                           settings_manager.settings.feed_uris[feed_index], feed_index);
-            close(feed_sock_[feed_index]);
-            feed_sock_is_connected_[feed_index] = false;
+            CloseFeedSocket(feed_index);
             return false;
         }
         inet_pton(AF_INET, resolved_ip, &dest_addr.sin_addr);
@@ -293,8 +292,7 @@ bool CommsManager::ConnectFeedSocket(uint16_t feed_index) {
         CONSOLE_ERROR("CommsManager::IPWANTask", "Socket unable to connect to URI %s:%d for feed %d: errno %d",
                       settings_manager.settings.feed_uris[feed_index], settings_manager.settings.feed_ports[feed_index],
                       feed_index, errno);
-        close(feed_sock_[feed_index]);
-        feed_sock_is_connected_[feed_index] = false;
+        CloseFeedSocket(feed_index);
         return false;
     }
     CONSOLE_INFO("CommsManager::IPWANTask", "Successfully connected to %s",
