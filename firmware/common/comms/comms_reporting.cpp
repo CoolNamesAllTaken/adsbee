@@ -26,13 +26,14 @@ bool CommsManager::UpdateReporting(const ReportSink *sinks, const SettingsManage
     // Build lists of sinks for each reporting protocol.
     ReportSink raw_sinks[SettingsManager::kNumSerialInterfaces];
     ReportSink beast_sinks[SettingsManager::kNumSerialInterfaces];
+    ReportSink beast_no_uat_sinks[SettingsManager::kNumSerialInterfaces];
     ReportSink csbee_sinks[SettingsManager::kNumSerialInterfaces];
     ReportSink mavlink1_sinks[SettingsManager::kNumSerialInterfaces];
     ReportSink mavlink2_sinks[SettingsManager::kNumSerialInterfaces];
     ReportSink gdl90_sinks[SettingsManager::kNumSerialInterfaces];
 
-    uint16_t num_raw_sinks = 0, num_beast_sinks = 0, num_csbee_sinks = 0, num_mavlink1_sinks = 0,
-             num_mavlink2_sinks = 0, num_gdl90_sinks = 0;
+    uint16_t num_raw_sinks = 0, num_beast_sinks = 0, num_beast_no_uat_sinks = 0, num_csbee_sinks = 0,
+             num_mavlink1_sinks = 0, num_mavlink2_sinks = 0, num_gdl90_sinks = 0;
 
     for (uint16_t i = 0; i < num_sinks; i++) {
         switch (sink_protocols[i]) {
@@ -43,6 +44,9 @@ bool CommsManager::UpdateReporting(const ReportSink *sinks, const SettingsManage
                 break;
             case SettingsManager::kBeast:
                 beast_sinks[num_beast_sinks++] = sinks[i];
+                break;
+            case SettingsManager::kBeastNoUAT:
+                beast_no_uat_sinks[num_beast_no_uat_sinks++] = sinks[i];
                 break;
             case SettingsManager::kCSBee:
                 csbee_sinks[num_csbee_sinks++] = sinks[i];
@@ -72,8 +76,14 @@ bool CommsManager::UpdateReporting(const ReportSink *sinks, const SettingsManage
             CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportRaw.");
             ret = false;
         }
+        // Send all inclusive Beast reports.
         if (!ReportBeast(beast_sinks, num_beast_sinks, *packets_to_report)) {
             CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportBeast.");
+            ret = false;
+        }
+        // Send No UAT Beast reports.
+        if (!ReportBeast(beast_no_uat_sinks, num_beast_no_uat_sinks, *packets_to_report, true)) {
+            CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportBeast with no UAT.");
             ret = false;
         }
     }
@@ -140,7 +150,8 @@ bool CommsManager::ReportRaw(ReportSink *sinks, uint16_t num_sinks, const Compos
     return ret;
 }
 
-bool CommsManager::ReportBeast(ReportSink *sinks, uint16_t num_sinks, const CompositeArray::RawPackets &packets) {
+bool CommsManager::ReportBeast(ReportSink *sinks, uint16_t num_sinks, const CompositeArray::RawPackets &packets,
+                               bool no_uat) {
     char error_msg[CompositeArray::RawPackets::kErrorMessageMaxLen] = {0};
     if (!packets.IsValid(error_msg)) {
         CONSOLE_ERROR("CommsManager::ReportBeast", "Invalid CompositeArray::RawPackets: %s", error_msg);
@@ -156,23 +167,26 @@ bool CommsManager::ReportBeast(ReportSink *sinks, uint16_t num_sinks, const Comp
             ret &= SendBuf(sinks[j], (char *)beast_frame_buf, num_bytes_in_frame);
         }
     }
-    for (uint16_t i = 0; i < packets.header->num_uat_adsb_packets; i++) {
-        uint8_t beast_frame_buf[BeastReporter::kUATADSBBeastFrameMaxLenBytes];
-        uint16_t num_bytes_in_frame =
-            BeastReporter::BuildUATADSBBeastFrame(beast_frame_buf, packets.uat_adsb_packets[i]);
+    if (!no_uat) {
+        for (uint16_t i = 0; i < packets.header->num_uat_adsb_packets; i++) {
+            uint8_t beast_frame_buf[BeastReporter::kUATADSBBeastFrameMaxLenBytes];
+            uint16_t num_bytes_in_frame =
+                BeastReporter::BuildUATADSBBeastFrame(beast_frame_buf, packets.uat_adsb_packets[i]);
 
-        for (uint16_t j = 0; j < num_sinks; j++) {
-            ret &= SendBuf(sinks[j], (char *)beast_frame_buf, num_bytes_in_frame);
+            for (uint16_t j = 0; j < num_sinks; j++) {
+                ret &= SendBuf(sinks[j], (char *)beast_frame_buf, num_bytes_in_frame);
+            }
+        }
+        for (uint16_t i = 0; i < packets.header->num_uat_uplink_packets; i++) {
+            uint8_t beast_frame_buf[BeastReporter::kUATUplinkBeastFrameMaxLenBytes];
+            uint16_t num_bytes_in_frame =
+                BeastReporter::BuildUATUplinkBeastFrame(beast_frame_buf, packets.uat_uplink_packets[i]);
+            for (uint16_t j = 0; j < num_sinks; j++) {
+                ret &= SendBuf(sinks[j], (char *)beast_frame_buf, num_bytes_in_frame);
+            }
         }
     }
-    for (uint16_t i = 0; i < packets.header->num_uat_uplink_packets; i++) {
-        uint8_t beast_frame_buf[BeastReporter::kUATUplinkBeastFrameMaxLenBytes];
-        uint16_t num_bytes_in_frame =
-            BeastReporter::BuildUATUplinkBeastFrame(beast_frame_buf, packets.uat_uplink_packets[i]);
-        for (uint16_t j = 0; j < num_sinks; j++) {
-            ret &= SendBuf(sinks[j], (char *)beast_frame_buf, num_bytes_in_frame);
-        }
-    }
+
     return ret;
 }
 

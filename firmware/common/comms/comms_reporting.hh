@@ -37,8 +37,10 @@ bool ReportRaw(ReportSink *sinks, uint16_t num_sinks, const CompositeArray::RawP
  * @param[in] num_sinks Number of ReportSinks in the sinks array.
  * @param[in] packets CompositeArray::RawPackets struct with counts and pointers to arrays of each kind of packet to
  * report.
+ * @param[in] no_uat If true, UAT packets will be excluded from the report (for use with the kBeastNoUAT protocol).
+ * @retval True if successful, false if something broke.
  */
-bool ReportBeast(ReportSink *sinks, uint16_t num_sinks, const CompositeArray::RawPackets &packets);
+bool ReportBeast(ReportSink *sinks, uint16_t num_sinks, const CompositeArray::RawPackets &packets, bool no_uat = false);
 
 /**
  * Sends out comma separated aircraft information for each aircraft in the aircraft dictionary.

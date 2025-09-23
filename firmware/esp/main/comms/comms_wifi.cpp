@@ -4,7 +4,6 @@
 
 #include "cc.h"  // For endiannness swapping.
 #include "comms.hh"
-#include "errno_strs.hh"
 #include "esp_event.h"
 #include "esp_mac.h"
 #include "hal.hh"
@@ -21,7 +20,8 @@ static const uint16_t kWiFiNumRetries = 3;
 static const uint16_t kWiFiRetryWaitTimeMs = 100;
 static const uint16_t kWiFiStaMaxNumReconnectAttempts = 5;
 static const uint16_t kWiFiScanDefaultListSize = 20;
-static const uint16_t kWiFiAPMessageQueueTimeout = 100;  // ms
+static const uint16_t kWiFiAPMessageQueueTimeout = 100;     // ms
+static const uint16_t kWiFiSTAMessageQueueTimeoutMs = 100;  // ms
 
 /* The event group allows multiple bits for each event, but we only care about two events:
  * - we are connected to the AP with an IP
@@ -79,7 +79,7 @@ void CommsManager::WiFiEventHandler(void* arg, esp_event_base_t event_base, int3
             wifi_sta_connected_ = false;
             wifi_sta_has_ip_ = false;
             if (wifi_sta_enabled) {
-                ScheduleDelayedFunctionCall(kWiFiStaReconnectIntervalMs, &connect_to_wifi);
+                ScheduleDelayedFunctionCall(kWiFiSTAReconnectIntervalMs, &connect_to_wifi);
             }
             break;
         }
@@ -141,7 +141,7 @@ void CommsManager::WiFiAccessPointTask(void* pvParameters) {
                         // errno %d.", errno);
                         CONSOLE_ERROR("CommsManager::WiFiAccessPointTask",
                                       "Error occurred during sending: errno %d (%s). Tried %d times.", errno,
-                                      ErrNoToString(errno), num_tries);
+                                      strerror(errno), num_tries);
                     }
                 }
             }
@@ -253,7 +253,8 @@ bool CommsManager::IPWANSendRawPacketCompositeArray(uint8_t* raw_packets_buf) {
             "disconnected.");
         return false;  // Task not started yet, queue not created yet. Pushing to queue would cause an abort.
     }
-    int err = xQueueSend(ip_wan_reporting_composite_array_queue_, raw_packets_buf, 0);
+    int err = xQueueSend(ip_wan_reporting_composite_array_queue_, raw_packets_buf,
+                         pdMS_TO_TICKS(kWiFiSTAMessageQueueTimeoutMs));
     if (err == errQUEUE_FULL) {
         CONSOLE_WARNING("CommsManager::IPWANSendRawPacketCompositeArray",
                         "Overflowed WAN raw packet composite array queue.");

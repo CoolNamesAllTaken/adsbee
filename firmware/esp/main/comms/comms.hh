@@ -26,14 +26,14 @@ class CommsManager {
 
     // Reporting via the IP task is done by forwarding CompositeArray::RawPackets buffers from the ADSBeeServer task.
     // These buffers are put into a queue, which has its element size and number of elements set here.
-    static const uint16_t kReportingCompositeArrayQueueNumElements = 3;
+    static const uint16_t kReportingCompositeArrayQueueNumElements = 2;
 
     static const uint16_t kMaxNetworkMessageLenBytes = 600;  // Needs to be big enough for UAT uplink packets.
     static const uint16_t kWiFiMessageQueueLen = 40;
     // Reconnect intervals must be long enough that we register an IP lost event before trying the reconnect, otherwise
     // we get stuck in limbo where we may attempt a reconnect but the new IP address is never looked for (not controlled
     // by our own flags, but by internal LwIP stuff).
-    static const uint32_t kWiFiStaReconnectIntervalMs = 10e3;
+    static const uint32_t kWiFiSTAReconnectIntervalMs = 10e3;
     static const uint32_t kEthernetReconnectIntervalMs = 10e3;
     static const uint32_t kWiFiSTATaskUpdateIntervalMs = 100;
     static const uint32_t kWiFiSTATaskUpdateIntervalTicks = kWiFiSTATaskUpdateIntervalMs / portTICK_PERIOD_MS;

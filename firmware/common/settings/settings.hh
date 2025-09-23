@@ -34,6 +34,7 @@ class SettingsManager {
         kNoReports = 0,
         kRaw,
         kBeast,
+        kBeastNoUAT,
         kCSBee,
         kMAVLINK1,
         kMAVLINK2,

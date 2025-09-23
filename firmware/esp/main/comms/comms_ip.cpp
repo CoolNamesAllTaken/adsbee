@@ -1,6 +1,5 @@
 #include "beast/beast_utils.hh"  // For beast reporting.
 #include "comms.hh"
-#include "errno_strs.hh"
 #include "esp_event.h"
 #include "esp_mac.h"
 #include "hal.hh"
@@ -12,7 +11,7 @@
 #include "mdns.h"
 #include "task_priorities.hh"
 
-static const uint32_t kWiFiTCPSocketReconnectIntervalMs = 5000;
+static const uint32_t kTCPSocketReconnectIntervalMs = 10000;
 
 static const uint32_t kTCPKeepAliveEnable = 1;
 static const uint32_t kTCPKeepAliveIdleSecondsBeforeStartingProbe = 120;
@@ -241,7 +240,7 @@ void CommsManager::CloseFeedSocket(uint16_t feed_index) {
 bool CommsManager::ConnectFeedSocket(uint16_t feed_index) {
     // Meter reconnect attempt interval.
     uint32_t timestamp_ms = get_time_since_boot_ms();
-    if (timestamp_ms - feed_sock_last_connect_timestamp_ms_[feed_index] <= kWiFiTCPSocketReconnectIntervalMs) {
+    if (timestamp_ms - feed_sock_last_connect_timestamp_ms_[feed_index] <= kTCPSocketReconnectIntervalMs) {
         return false;
     }
     feed_sock_last_connect_timestamp_ms_[feed_index] = timestamp_ms;
@@ -250,7 +249,8 @@ bool CommsManager::ConnectFeedSocket(uint16_t feed_index) {
     // IPv4, TCP
     feed_sock_[feed_index] = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
     if (feed_sock_[feed_index] <= 0) {
-        CONSOLE_ERROR("CommsManager::IPWANTask", "Unable to create socket for feed %d: errno %d", feed_index, errno);
+        CONSOLE_ERROR("CommsManager::IPWANTask", "Unable to create socket for feed %d: errno %d (%s)", feed_index,
+                      errno, strerror(errno));
         return false;
     }
     CONSOLE_INFO("CommsManager::IPWANTask", "Socket for feed %d created, connecting to %s:%d", feed_index,
@@ -343,7 +343,7 @@ bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len) {
                       "on port %d: "
                       "errno %d (%s).",
                       buf_len, iface, settings_manager.settings.feed_uris[iface],
-                      settings_manager.settings.feed_ports[iface], errno, ErrNoToString(errno));
+                      settings_manager.settings.feed_ports[iface], errno, strerror(errno));
         CloseFeedSocket(iface);
         return false;
     } else {
