@@ -25,7 +25,7 @@ CompositeArray::RawPackets CompositeArray::PackRawPacketsBuffer(uint8_t* buf, ui
         // Stuff with Mode S packets.
         RawModeSPacket mode_s_packet;
         packets_to_report.mode_s_packets = reinterpret_cast<RawModeSPacket*>(buf + packets_to_report.len_bytes);
-        while (packets_to_report.len_bytes + sizeof(RawModeSPacket) < buf_len_bytes &&
+        while (packets_to_report.len_bytes + sizeof(RawModeSPacket) <= buf_len_bytes &&
                mode_s_queue->Dequeue(mode_s_packet)) {
             memcpy(&packets_to_report.mode_s_packets[packets_to_report.header->num_mode_s_packets], &mode_s_packet,
                    sizeof(RawModeSPacket));
@@ -37,7 +37,7 @@ CompositeArray::RawPackets CompositeArray::PackRawPacketsBuffer(uint8_t* buf, ui
         // Stuff with UAT ADS-B packets.
         RawUATADSBPacket uat_adsb_packet;
         packets_to_report.uat_adsb_packets = reinterpret_cast<RawUATADSBPacket*>(buf + packets_to_report.len_bytes);
-        while (packets_to_report.len_bytes + sizeof(RawUATADSBPacket) < buf_len_bytes &&
+        while (packets_to_report.len_bytes + sizeof(RawUATADSBPacket) <= buf_len_bytes &&
                uat_adsb_queue->Dequeue(uat_adsb_packet)) {
             memcpy(&packets_to_report.uat_adsb_packets[packets_to_report.header->num_uat_adsb_packets],
                    &uat_adsb_packet, sizeof(RawUATADSBPacket));
@@ -49,7 +49,7 @@ CompositeArray::RawPackets CompositeArray::PackRawPacketsBuffer(uint8_t* buf, ui
         // Stuff with UAT Uplink packets.
         RawUATUplinkPacket uat_uplink_packet;
         packets_to_report.uat_uplink_packets = reinterpret_cast<RawUATUplinkPacket*>(buf + packets_to_report.len_bytes);
-        while (packets_to_report.len_bytes + sizeof(RawUATUplinkPacket) < buf_len_bytes &&
+        while (packets_to_report.len_bytes + sizeof(RawUATUplinkPacket) <= buf_len_bytes &&
                uat_uplink_queue->Dequeue(uat_uplink_packet)) {
             memcpy(&packets_to_report.uat_uplink_packets[packets_to_report.header->num_uat_uplink_packets],
                    &uat_uplink_packet, sizeof(RawUATUplinkPacket));
