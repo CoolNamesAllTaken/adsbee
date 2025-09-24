@@ -50,6 +50,7 @@ bool ResolveURIToIP(const char* url, char* ip) {
     err = getaddrinfo(url, NULL, &hints, &res);
     if (err != 0 || res == NULL) {
         CONSOLE_ERROR("ResolveURLToIP", "DNS lookup failed for %s: %d", url, err);
+        freeaddrinfo(res);
         return false;
     }
 
@@ -176,22 +177,23 @@ void CommsManager::IPWANTask(void* pvParameters) {
         for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
             // Iterate through feeds, open/close and send message as required.
             if (!settings_manager.settings.feed_is_active[i]) {
-                // Socket should not be fed.
-                CloseFeedSocket(i);
-                continue;  // Don't need to do anything else if socket should be closed and is closed.
-            }
-            // Socket should be open.
-            if (!feed_sock_is_connected_[i]) {
-                // Need to open the socket connection.
-                if (!ConnectFeedSocket(i)) {
+                // Feed is not active, ensure socket is closed.
+                if (feed_sock_is_connected_[i]) {
+                    // Need to close the socket connection.
+                    CloseFeedSocket(i);
+                }
+                continue;
+            } else {
+                // Feed is active, ensure socket is open and add to active sinks if connected.
+                if (!feed_sock_is_connected_[i] && !ConnectFeedSocket(i)) {
+                    // Need to open the socket connection, but failed to do so.
                     continue;  // Failed to connect, try again later.
                 }
+                // Socket is connected, add to active sinks.
+                active_report_sinks[num_active_report_sinks] = i;
+                active_reporting_protocols[num_active_report_sinks] = settings_manager.settings.feed_protocols[i];
+                num_active_report_sinks++;
             }
-
-            // Socket is connected, add to active sinks.
-            active_report_sinks[num_active_report_sinks] = i;
-            active_reporting_protocols[num_active_report_sinks] = settings_manager.settings.feed_protocols[i];
-            num_active_report_sinks++;
         }
 
         // Gather packet(s) to send.
@@ -229,12 +231,10 @@ void CommsManager::IPWANTask(void* pvParameters) {
 }
 
 void CommsManager::CloseFeedSocket(uint16_t feed_index) {
-    if (feed_sock_is_connected_[feed_index]) {
-        // Need to close the socket connection.
-        close(feed_sock_[feed_index]);
-        feed_sock_is_connected_[feed_index] = false;
-        CONSOLE_INFO("CommsManager::IPWANTask", "Closed socket for feed %d.", feed_index);
-    }
+    // Need to close the socket connection.
+    close(feed_sock_[feed_index]);
+    feed_sock_is_connected_[feed_index] = false;
+    CONSOLE_INFO("CommsManager::IPWANTask", "Closed socket for feed %d.", feed_index);
 }
 
 bool CommsManager::ConnectFeedSocket(uint16_t feed_index) {
@@ -251,6 +251,7 @@ bool CommsManager::ConnectFeedSocket(uint16_t feed_index) {
     if (feed_sock_[feed_index] <= 0) {
         CONSOLE_ERROR("CommsManager::IPWANTask", "Unable to create socket for feed %d: errno %d (%s)", feed_index,
                       errno, strerror(errno));
+        CloseFeedSocket(feed_index);
         return false;
     }
     CONSOLE_INFO("CommsManager::IPWANTask", "Socket for feed %d created, connecting to %s:%d", feed_index,
@@ -289,9 +290,9 @@ bool CommsManager::ConnectFeedSocket(uint16_t feed_index) {
 
     int err = connect(feed_sock_[feed_index], (struct sockaddr*)&dest_addr, sizeof(dest_addr));
     if (err != 0) {
-        CONSOLE_ERROR("CommsManager::IPWANTask", "Socket unable to connect to URI %s:%d for feed %d: errno %d",
+        CONSOLE_ERROR("CommsManager::IPWANTask", "Socket unable to connect to URI %s:%d for feed %d: errno %d (%s)",
                       settings_manager.settings.feed_uris[feed_index], settings_manager.settings.feed_ports[feed_index],
-                      feed_index, errno);
+                      feed_index, errno, strerror(errno));
         CloseFeedSocket(feed_index);
         return false;
     }
@@ -330,15 +331,16 @@ bool CommsManager::ConnectFeedSocket(uint16_t feed_index) {
 
 bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len) {
     if (iface >= SettingsManager::Settings::kMaxNumFeeds) {
-        CONSOLE_ERROR("CommsManager::IPWANTask", "Invalid feed index %d for SendBuf.", iface);
+        CONSOLE_ERROR("CommsManager::SendBuf", "Invalid feed index %d.", iface);
         return false;
     }
     if (!feed_sock_is_connected_[iface]) {
+        CONSOLE_ERROR("CommsManager::SendBuf", "Can't send to feed %d, socket not connected.", iface);
         return false;
     }
     int err = send(feed_sock_[iface], buf, buf_len, 0);
     if (err < 0) {
-        CONSOLE_ERROR("CommsManager::IPWANTask",
+        CONSOLE_ERROR("CommsManager::SendBuf",
                       "Error occurred during sending %d byte message to feed %d with URI %s "
                       "on port %d: "
                       "errno %d (%s).",

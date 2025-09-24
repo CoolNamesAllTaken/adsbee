@@ -142,7 +142,7 @@ class SettingsManager {
         // ADSBee settings
         bool r1090_rx_enabled = true;
         int tl_offset_mv = kDefaultTLOffsetMV;
-        bool bias_tee_enabled = false;
+        bool r1090_bias_tee_enabled = false;
         uint32_t watchdog_timeout_sec = kDefaultWatchdogTimeoutSec;
 
         // CommunicationsManager settings
@@ -155,6 +155,7 @@ class SettingsManager {
         // Sub-GHz settings
         EnableState subg_enabled = EnableState::kEnableStateEnabled;  // High impedance state by default.
         bool subg_rx_enabled = true;
+        bool subg_bias_tee_enabled = false;
         SubGHzRadioMode subg_mode = SubGHzRadioMode::kSubGHzRadioModeUATRx;  // Default to UAT mode (978MHz receiver).
 
         // Feed settings
@@ -314,6 +315,13 @@ class SettingsManager {
     }
 
     /**
+     * Used to retrieve device information, either directly from EEPROM or via interprocessor SPI bus.
+     * @param[in] device_info DeviceInfo struct to set.
+     * @retval True if device info was retrieved successfully, false otherwise.
+     */
+    static bool GetDeviceInfo(DeviceInfo &device_info);
+
+    /**
      * Loads settings from EEPROM. Assumes settings are stored at address 0x0 and doesn't do any integrity check.
      * @retval True if succeeded, false otherwise.
      */
@@ -374,13 +382,13 @@ class SettingsManager {
      * @retval True if device info was set successfully, false otherwise.
      */
     static bool SetDeviceInfo(const DeviceInfo &device_info);
-#endif
+
     /**
-     * Used to retrieve device information, either directly from EEPROM or via interprocessor SPI bus.
-     * @param[in] device_info DeviceInfo struct to set.
-     * @retval True if device info was retrieved successfully, false otherwise.
+     * Sends the settings struct to the ESP32 and CC1312 via SPI. Call this after changing values that need to be
+     * propagated to coprocessors, like log level or bias tee settings.
      */
-    static bool GetDeviceInfo(DeviceInfo &device_info);
+    bool SyncToCoprocessors();
+#endif
 
     Settings settings;
 

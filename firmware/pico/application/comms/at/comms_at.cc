@@ -81,16 +81,24 @@ CPP_AT_CALLBACK(CommsManager::ATBaudRateCallback) {
 CPP_AT_CALLBACK(CommsManager::ATBiasTeeEnableCallback) {
     switch (op) {
         case '?':
-            CPP_AT_CMD_PRINTF("=%d", adsbee.BiasTeeIsEnabled());
+            CPP_AT_CMD_PRINTF("=%d,%d", adsbee.BiasTeeIsEnabled(), settings_manager.settings.subg_bias_tee_enabled);
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
-            if (!(CPP_AT_HAS_ARG(0))) {
-                CPP_AT_ERROR("Requires an argument (0 or 1). AT+BIAS_TEE_ENABLED=<enabled>");
-            }
             bool enabled;
-            CPP_AT_TRY_ARG2NUM(0, enabled);
-            adsbee.SetBiasTeeEnable(enabled);
+            if (CPP_AT_HAS_ARG(0)) {
+                // The bias tee setting for the 1090 radio is applied directly, then scraped by the settings manager
+                // during a settings save.
+                CPP_AT_TRY_ARG2NUM(0, enabled);
+                adsbee.SetBiasTeeEnable(enabled);
+            }
+            if (CPP_AT_HAS_ARG(1)) {
+                // The bias tee setting for the sub-GHz radio is stored in the active settings struct, then synced to
+                // the CC1312.
+                CPP_AT_TRY_ARG2NUM(1, enabled);
+                settings_manager.settings.subg_bias_tee_enabled = enabled;
+                settings_manager.SyncToCoprocessors();
+            }
             CPP_AT_SUCCESS();
             break;
     }
@@ -612,6 +620,7 @@ CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
             for (uint16_t i = 0; i < SettingsManager::kNumLogLevels; i++) {
                 if (args[0].compare(SettingsManager::kConsoleLogLevelStrs[i]) == 0) {
                     settings_manager.settings.log_level = static_cast<SettingsManager::LogLevel>(i);
+                    settings_manager.SyncToCoprocessors();
                     CPP_AT_SUCCESS();
                 }
             }
@@ -688,7 +697,7 @@ CPP_AT_CALLBACK(CommsManager::ATNetworkInfoCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
-CPP_AT_CALLBACK(CommsManager::ATProtocolCallback) {
+CPP_AT_CALLBACK(CommsManager::ATProtocolOutCallback) {
     switch (op) {
         case '?':
             // Print out reporting protocols for CONSOLE and COMMS_UART.
@@ -737,9 +746,9 @@ CPP_AT_CALLBACK(CommsManager::ATProtocolCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
-CPP_AT_HELP_CALLBACK(CommsManager::ATProtocolHelpCallback) {
+CPP_AT_HELP_CALLBACK(CommsManager::ATProtocolOutHelpCallback) {
     CPP_AT_PRINTF("\tSet the reporting protocol used on a given serial interface:\r\n");
-    CPP_AT_PRINTF("\tAT+PROTOCOL=<iface>,<protocol>\r\n\t<iface> = ");
+    CPP_AT_PRINTF("\tAT+PROTOCOL_OUT=<iface>,<protocol>\r\n\t<iface> = ");
     for (uint16_t iface = 0; iface < SettingsManager::kGNSSUART; iface++) {
         CPP_AT_PRINTF("%s ", SettingsManager::kSerialInterfaceStrs[iface]);
     }
@@ -748,7 +757,7 @@ CPP_AT_HELP_CALLBACK(CommsManager::ATProtocolHelpCallback) {
         CPP_AT_PRINTF("\t\t%s ", SettingsManager::kReportingProtocolStrs[protocol]);
     }
     CPP_AT_PRINTF("\r\n\tQuery the reporting protocol used on all interfaces:\r\n");
-    CPP_AT_PRINTF("\tAT+PROTOCOL?\r\n\t+PROTOCOL=<iface>,<protocol>\r\n\t...\r\n");
+    CPP_AT_PRINTF("\tAT+PROTOCOL_OUT?\r\n\tPROTOCOL_OUT=<iface>,<protocol>\r\n\t...\r\n");
 }
 
 CPP_AT_CALLBACK(CommsManager::ATRebootCallback) {
@@ -777,6 +786,7 @@ CPP_AT_CALLBACK(CommsManager::ATRxEnableCallback) {
                     CPP_AT_TRY_ARG2NUM(2, settings_manager.settings.subg_rx_enabled);
                 }
             }
+            settings_manager.SyncToCoprocessors();
             CPP_AT_SUCCESS();
             break;
         case '?':
@@ -1064,101 +1074,101 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiSTACallback) {
 }
 
 const CppAT::ATCommandDef_t at_command_list[] = {
-    {.command_buf = "+BAUD_RATE",
+    {.command_buf = "BAUD_RATE",
      .min_args = 0,
      .max_args = 2,
      .help_string_buf = "AT+BAUD_RATE=<iface>,<baud_rate>\r\n\tSet the baud rate of a serial "
                         "interface.\r\n\tAT+BAUD_RATE?\r\n\tQuery the baud rate of all serial interfaces.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBaudRateCallback, comms_manager)},
-    {.command_buf = "+BIAS_TEE_ENABLE",
+    {.command_buf = "BIAS_TEE_ENABLE",
      .min_args = 0,
-     .max_args = 1,
-     .help_string_buf = "AT+BIAS_TEE_ENABLE=<enabled>\r\n\tEnable or disable the bias "
-                        "tee.\r\n\tBIAS_TEE_ENABLE?\r\n\tQuery the status of the bias tee.",
+     .max_args = 2,
+     .help_string_buf = "AT+BIAS_TEE_ENABLE=<1090_bt_enabled>,<subg_bt_enabled>\r\n\tEnable or disable the bias "
+                        "tees.\r\n\tBIAS_TEE_ENABLE?\r\n\tQuery the status of the bias tees.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBiasTeeEnableCallback, comms_manager)},
-    {.command_buf = "+DEVICE_INFO",
+    {.command_buf = "DEVICE_INFO",
      .min_args = 0,
      .max_args = 5,  // TODO: check this value.
      .help_string_buf = "AT+DEVICE_INFO?\r\n\tQuery device information.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATDeviceInfoCallback, comms_manager)},
-    {.command_buf = "+ETHERNET",
+    {.command_buf = "ETHERNET",
      .min_args = 0,
      .max_args = 1,
      .help_string_buf = "AT+ETHERNET=<enabled>\r\n\tEnable or disable the Ethernet "
                         "interface.\r\n\tETHERNET?\r\n\tQuery the status of the Ethernet interface.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATEthernetCallback, comms_manager)},
-    {.command_buf = "+ESP32_ENABLE",
+    {.command_buf = "ESP32_ENABLE",
      .min_args = 0,
      .max_args = 1,
      .help_string_buf = "AT+ESP32_ENABLE=<enabled>\r\n\tEnable or disable the ESP32.\r\n\tAT+ESP32_ENABLE?\r\n\tQuery "
                         "the enable status of the ESP32.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATESP32EnableCallback, comms_manager)},
-    {.command_buf = "+ESP32_FLASH",
+    {.command_buf = "ESP32_FLASH",
      .min_args = 0,
      .max_args = 0,
      .help_string_buf = "AT+ESP32_FLASH\r\n\tTriggers a firmware update of the ESP32 from the firmware image stored in "
                         "the RP2040's flash memory.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATESP32FlashCallback, comms_manager)},
-    {.command_buf = "+FEED",
+    {.command_buf = "FEED",
      .min_args = 0,
      .max_args = 5,
      .help_callback = ATFeedHelpCallback,
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFeedCallback, comms_manager)},
-    {.command_buf = "+HOSTNAME",
+    {.command_buf = "HOSTNAME",
      .min_args = 0,
      .max_args = 1,
      .help_string_buf = "AT+HOSTNAME=<hostname>\r\n\tSet the hostname for all network "
                         "interfaces.\r\n\tAT+HOSTNAME?\r\n\tQuery the "
                         "hostname used for all network interfaces.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATHostnameCallback, comms_manager)},
-    {.command_buf = "+LOG_LEVEL",
+    {.command_buf = "LOG_LEVEL",
      .min_args = 0,
      .max_args = 1,
      .help_string_buf =
          "AT+LOG_LEVEL=<log_level [SILENT ERRORS WARNINGS LOGS]>\r\n\tSet how much stuff gets printed to the "
          "console.\r\n\t",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATLogLevelCallback, comms_manager)},
-    {.command_buf = "+MAVLINK_ID",
+    {.command_buf = "MAVLINK_ID",
      .min_args = 0,
      .max_args = 2,
      .help_string_buf = "AT+MAVLINK_ID=<system_id>,<component_id>\r\n\tSet the MAVLink system and component IDs.\r\n\t"
                         "AT+MAVLINK_ID?\r\n\tQuery the MAVLink system and component IDs.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATMAVLINKIDCallback, comms_manager)},
-    {.command_buf = "+NETWORK_INFO",
+    {.command_buf = "NETWORK_INFO",
      .min_args = 0,
      .max_args = 0,
      .help_string_buf = "AT+NETWORK_INFO?\r\n\tQueries network information.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATNetworkInfoCallback, comms_manager)},
-    {.command_buf = "+OTA",
+    {.command_buf = "OTA",
      .min_args = 0,
      .max_args = 4,
      .help_callback = CPP_AT_BIND_MEMBER_HELP_CALLBACK(CommsManager::ATOTAHelpCallback, comms_manager),
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATOTACallback, comms_manager)},
-    {.command_buf = "+PROTOCOL",
+    {.command_buf = "PROTOCOL_OUT",
      .min_args = 0,
      .max_args = 2,
-     .help_callback = CPP_AT_BIND_MEMBER_HELP_CALLBACK(CommsManager::ATProtocolHelpCallback, comms_manager),
-     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATProtocolCallback, comms_manager)},
-    {.command_buf = "+REBOOT",
+     .help_callback = CPP_AT_BIND_MEMBER_HELP_CALLBACK(CommsManager::ATProtocolOutHelpCallback, comms_manager),
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATProtocolOutCallback, comms_manager)},
+    {.command_buf = "REBOOT",
      .min_args = 0,
      .max_args = 0,
      .help_string_buf = "REBOOT\r\n\tReboots the RP2040.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRebootCallback, comms_manager)},
-    {.command_buf = "+RX_ENABLE",
+    {.command_buf = "RX_ENABLE",
      .min_args = 0,
      .max_args = 3,
      .help_callback = CPP_AT_BIND_MEMBER_HELP_CALLBACK(CommsManager::ATRxEnableHelpCallback, comms_manager),
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxEnableCallback, comms_manager)
 
     },
-    {.command_buf = "+SETTINGS",
+    {.command_buf = "SETTINGS",
      .min_args = 0,
      .max_args = 3,
      .help_string_buf = "Load, save, or reset nonvolatile settings.\r\n\tAT+SETTINGS=<op [LOAD SAVE RESET]>\r\n\t"
                         "Display nonvolatile settings.\r\n\tAT+SETTINGS?\r\n\t+SETTINGS=...\r\n\tDump settings in AT "
                         "command format.\r\n\tAT+SETTINGS?DUMP\r\n\t+SETTINGS=...",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSettingsCallback, comms_manager)},
-    {.command_buf = "+SUBG_ENABLE",
+    {.command_buf = "SUBG_ENABLE",
      .min_args = 0,
      .max_args = 2,
      .help_string_buf = "AT+SUBG_ENABLE=<enabled [1,0,EXTERNAL]>\r\n\tEnable or disable the sub-GHz receiver. Receiver "
@@ -1166,53 +1176,53 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                         "pulldown) for control via an external device.\r\n\tAT+SUBG_ENABLE?\r\n\t"
                         "Query the status of the sub-GHz receiver.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSubGEnableCallback, comms_manager)},
-    {.command_buf = "+SUBG_FLASH",
+    {.command_buf = "SUBG_FLASH",
      .min_args = 0,
      .max_args = 0,
      .help_string_buf = "AT+SUBG_FLASH\r\n\tTriggers a firmware update of the sub-GHz radio from the firmware image "
                         "stored in the RP2040's flash memory.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSubGFlashCallback, comms_manager)},
 #ifdef HARDWARE_UNIT_TESTS
-    {.command_buf = "+TEST",
+    {.command_buf = "TEST",
      .min_args = 0,
      .max_args = 1,
      .help_string_buf = "Run hardware self-tests.",
      .callback = ATTestCallback},
 #endif
-    {.command_buf = "+TL_READ",
+    {.command_buf = "TL_READ",
      .min_args = 0,
      .max_args = 0,
      .help_string_buf =
          "Read ADC counts and mV value for the minimum trigger level threshold. Call with no ops nor arguments, "
          "AT+TL_READ. Note this reads the trigger level, not the trigger level offset.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLReadCallback, comms_manager)},
-    {.command_buf = "+TL_OFFSET",
+    {.command_buf = "TL_OFFSET",
      .min_args = 0,
      .max_args = 1,
      .help_string_buf = "Set minimum trigger level offset (trigger level distance above noise floor) for RF power "
                         "detector.\r\n\tAT+TL_OFFSET=<tl_offset_mv>"
                         "\tQuery trigger level offset.\r\n\tAT+TL_OFFSET?\r\n\t+TL_OFFSET=<tl_offset_mv>.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLSetCallback, comms_manager)},
-    {.command_buf = "+UPTIME",
+    {.command_buf = "UPTIME",
      .min_args = 0,
      .max_args = 0,
      .help_string_buf = "Get the uptime of the ADSBee 1090 in seconds.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATUptimeCallback, comms_manager)},
-    {.command_buf = "+WATCHDOG",
+    {.command_buf = "WATCHDOG",
      .min_args = 0,
      .max_args = 1,
      .help_string_buf = "Set the watchdog timeout, in seconds, 0-65535. 0 = watchdog disabled, 65535 = "
                         "18.2hrs.\r\n\tAT+WATCHDOG=<timeout_sec>\r\n\tTest watchdog by blocking for timeout_sec+1 "
                         "seconds.\r\n\tAT+WATCHDOG=TEST",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATWatchdogCallback, comms_manager)},
-    {.command_buf = "+WIFI_AP",
+    {.command_buf = "WIFI_AP",
      .min_args = 0,
      .max_args = 4,
      .help_string_buf =
          "Set WiFi access point params.\r\n\tAT+WIFI_AP=<enabled>,<ap_ssid>,<ap_pwd>,<ap_channel>\r\n\t"
          "Get WiFi access point params.\r\n\tAT+WIFI_AP?\r\n\t+WIFI_AP=<enabled>,<ap_ssid>,<ap_pwd>,<ap_channel>",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATWiFiAPCallback, comms_manager)},
-    {.command_buf = "+WIFI_STA",
+    {.command_buf = "WIFI_STA",
      .min_args = 0,
      .max_args = 3,
      .help_string_buf = "Set WiFi station params.\r\n\tAT+WIFI_STA=<enabled>,<sta_ssid>,<sta_pwd>\r\n\t"

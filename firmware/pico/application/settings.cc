@@ -38,6 +38,20 @@ static_assert(sizeof(SettingsManager::Settings) < kFlashDeviceInfoStartAddr - kF
 const uint32_t kEEPROMSizeBytes = 8e3;  // 8000 Bytes for backwards compatibility.
 const uint32_t kEEPROMDeviceInfoOffset = kEEPROMSizeBytes - kDeviceInfoMaxSizeBytes;
 
+bool SettingsManager::GetDeviceInfo(DeviceInfo &device_info) {
+    if (bsp.has_eeprom) {
+        // Device Info is stored on external EEPROM.
+        if (eeprom.RequiresInit()) return false;
+        return eeprom.Load(device_info, kEEPROMDeviceInfoOffset);
+    } else {
+        // Device Info is stored in flash.
+        // FlashUtils::FlashSafe();
+        device_info = *(DeviceInfo *)(kFlashDeviceInfoStartAddr);
+        // FlashUtils::FlashUnsafe();
+        return true;
+    }
+}
+
 bool SettingsManager::Load() {
     if (bsp.has_eeprom) {
         // Load settings from external EEPROM.
@@ -95,7 +109,7 @@ bool SettingsManager::Save() {
 
     settings.r1090_rx_enabled = adsbee.Receiver1090IsEnabled();
     settings.tl_offset_mv = adsbee.GetTLOffsetMilliVolts();
-    settings.bias_tee_enabled = adsbee.BiasTeeIsEnabled();
+    settings.r1090_bias_tee_enabled = adsbee.BiasTeeIsEnabled();
     settings.watchdog_timeout_sec = adsbee.GetWatchdogTimeoutSec();
 
     // Save reporting protocols.
@@ -113,13 +127,7 @@ bool SettingsManager::Save() {
     settings.subg_enabled = adsbee.subg_radio_ll.IsEnabledState();
 
     // Sync settings from RP2040 -> ESP32.
-    if (esp32.IsEnabled()) {
-        esp32.Write(ObjectDictionary::kAddrSettingsData, settings, true);  // Require ACK.
-    }
-    // Sync settings from RP2040 -> CC1312.
-    if (adsbee.subg_radio.IsEnabled()) {
-        adsbee.subg_radio.Write(ObjectDictionary::kAddrSettingsData, settings, true);  // Require ACK.
-    }
+    SyncToCoprocessors();
 
     if (bsp.has_eeprom) {
         return eeprom.Save(settings);
@@ -157,18 +165,16 @@ bool SettingsManager::SetDeviceInfo(const DeviceInfo &device_info) {
     }
 }
 
-bool SettingsManager::GetDeviceInfo(DeviceInfo &device_info) {
-    if (bsp.has_eeprom) {
-        // Device Info is stored on external EEPROM.
-        if (eeprom.RequiresInit()) return false;
-        return eeprom.Load(device_info, kEEPROMDeviceInfoOffset);
-    } else {
-        // Device Info is stored in flash.
-        // FlashUtils::FlashSafe();
-        device_info = *(DeviceInfo *)(kFlashDeviceInfoStartAddr);
-        // FlashUtils::FlashUnsafe();
-        return true;
+bool SettingsManager::SyncToCoprocessors() {
+    bool ret = true;
+    if (esp32.IsEnabled()) {
+        ret &= esp32.Write(ObjectDictionary::kAddrSettingsData, settings, true);  // Require ACK.
     }
+    // Sync settings from RP2040 -> CC1312.
+    if (adsbee.subg_radio.IsEnabled()) {
+        ret &= adsbee.subg_radio.Write(ObjectDictionary::kAddrSettingsData, settings, true);  // Require ACK.
+    }
+    return ret;
 }
 
 bool SettingsManager::Apply() {
@@ -176,7 +182,7 @@ bool SettingsManager::Apply() {
 
     adsbee.SetReceiver1090Enable(settings.r1090_rx_enabled);
     adsbee.SetTLOffsetMilliVolts(settings.tl_offset_mv);
-    adsbee.SetBiasTeeEnable(settings.bias_tee_enabled);
+    adsbee.SetBiasTeeEnable(settings.r1090_bias_tee_enabled);
     adsbee.SetWatchdogTimeoutSec(settings.watchdog_timeout_sec);
     adsbee.SetSubGRadioEnable(settings.subg_enabled);
 

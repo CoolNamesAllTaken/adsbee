@@ -258,7 +258,7 @@ bool CommsManager::IPWANSendRawPacketCompositeArray(uint8_t* raw_packets_buf) {
     if (err == errQUEUE_FULL) {
         CONSOLE_WARNING("CommsManager::IPWANSendRawPacketCompositeArray",
                         "Overflowed WAN raw packet composite array queue.");
-        // xQueueReset(ip_wan_reporting_composite_array_queue_);
+        xQueueReset(ip_wan_reporting_composite_array_queue_);
         return false;
     } else if (err != pdTRUE) {
         CONSOLE_WARNING("CommsManager::IPWANSendRawPacketCompositeArray",
@@ -278,7 +278,7 @@ bool CommsManager::WiFiAccessPointSendMessageToAllStations(NetworkMessage& messa
     int err = xQueueSend(wifi_ap_message_queue_, &message, pdMS_TO_TICKS(kWiFiAPMessageQueueTimeout));
     if (err == errQUEUE_FULL) {
         CONSOLE_WARNING("CommsManager::WiFiAccessPointSendMessageToAllStations", "Overflowed WiFi AP message queue.");
-        // xQueueReset(wifi_ap_message_queue_);
+        xQueueReset(wifi_ap_message_queue_);
         return false;
     } else if (err != pdTRUE) {
         CONSOLE_WARNING("CommsManager::WiFiAccessPointSendMessageToAllStations",

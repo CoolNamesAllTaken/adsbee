@@ -33,14 +33,31 @@ public:
     SubGHzRadio(SubGHzRadioConfig config_in): config_(config_in) {};
     ~SubGHzRadio() {};
 
+    /**
+     * Initializes the radio and begins packet reception.
+     */
     bool Init();
-    bool DeInit();
-    void Deinit();
 
+    /**
+     * De-initializes the radio.
+     */
+    bool DeInit();
+
+    /**
+     * Enables or disables the bias tee.
+     * @param enabled True to enable the bias tee, false to disable it.
+     */
+    inline void SetBiasTeeEnable(bool enabled) {
+        // Bias tee is active LO because it's a PMOS device.
+        CONSOLE_INFO("SubGHzRadio::SetBiasTeeEnable", "Bias tee %s", enabled ? "ENABLED" : "DISABLED");
+        GPIO_write(bsp.kSubGBiasTeeEnablePin, !enabled);
+    }
     bool StartPacketRx();
     bool Update();
 
     bool HandlePacketRx(rfc_dataEntryPartial_t *filled_entry);
+
+    bool rx_enabled = true;
 
 private:
     SubGHzRadioConfig config_;

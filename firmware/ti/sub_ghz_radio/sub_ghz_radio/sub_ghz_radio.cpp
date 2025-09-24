@@ -258,6 +258,10 @@ bool SubGHzRadio::StartPacketRx() {
 }
 
 bool SubGHzRadio::Update() {
+    if (!rx_enabled) {
+        return true;
+    }
+
     volatile uint16_t rx_status = ((volatile RF_Op *)&RF_cmdPropRxAdv)->status;
     if ((rx_status & 0xFF00) & PROP_DONE_OK) {
         StartPacketRx();

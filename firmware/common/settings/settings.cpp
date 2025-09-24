@@ -16,7 +16,7 @@ void SettingsManager::Print() {
     // ESP32 doesn't have access to mV->dBm conversion via ADSBee class.
     CONSOLE_PRINTF("\tTrigger Offset Level: %d milliVolts\r\n", settings.tl_offset_mv);
 #endif
-    CONSOLE_PRINTF("\tBias Tee: %s\r\n", settings.bias_tee_enabled ? "ENABLED" : "DISABLED");
+    CONSOLE_PRINTF("\tBias Tee: %s\r\n", settings.r1090_bias_tee_enabled ? "ENABLED" : "DISABLED");
     CONSOLE_PRINTF("\tWatchdog Timeout: %lu seconds\r\n", settings.watchdog_timeout_sec);
     CONSOLE_PRINTF("\tLog Level: %s\r\n", kConsoleLogLevelStrs[settings.log_level]);
     CONSOLE_PRINTF("\tReporting Protocols:\r\n");
@@ -76,7 +76,7 @@ void SettingsManager::PrintAT() {
     }
 
     // AT+BIAS_TEE_ENABLE
-    CONSOLE_PRINTF("AT+BIAS_TEE_ENABLE=%d\r\n", settings.bias_tee_enabled);
+    CONSOLE_PRINTF("AT+BIAS_TEE_ENABLE=%d\r\n", settings.r1090_bias_tee_enabled);
 
     // AT+DEVICE_INFO: Don't store this.
 

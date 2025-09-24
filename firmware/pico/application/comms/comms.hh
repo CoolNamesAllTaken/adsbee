@@ -70,8 +70,8 @@ class CommsManager {
     CPP_AT_CALLBACK(ATLogLevelCallback);
     CPP_AT_CALLBACK(ATMAVLINKIDCallback);
     CPP_AT_CALLBACK(ATNetworkInfoCallback);
-    CPP_AT_CALLBACK(ATProtocolCallback);
-    CPP_AT_HELP_CALLBACK(ATProtocolHelpCallback);
+    CPP_AT_CALLBACK(ATProtocolOutCallback);
+    CPP_AT_HELP_CALLBACK(ATProtocolOutHelpCallback);
     CPP_AT_CALLBACK(ATRebootCallback);
     CPP_AT_CALLBACK(ATRxEnableCallback);
     CPP_AT_HELP_CALLBACK(ATRxEnableHelpCallback);

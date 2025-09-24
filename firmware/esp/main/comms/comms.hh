@@ -22,7 +22,7 @@ class CommsManager {
     // Packet queue sizes used to stage packets for reporting.
     static const uint16_t kMaxNumModeSPackets = 100;
     static const uint16_t kMaxNumUATADSBPackets = 20;
-    static const uint16_t kMaxNumUATUplinkPackets = 20;
+    static const uint16_t kMaxNumUATUplinkPackets = 2;
 
     // Reporting via the IP task is done by forwarding CompositeArray::RawPackets buffers from the ADSBeeServer task.
     // These buffers are put into a queue, which has its element size and number of elements set here.
