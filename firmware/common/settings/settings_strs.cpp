@@ -8,12 +8,22 @@ const char SettingsManager::kConsoleLogLevelStrs[SettingsManager::LogLevel::kNum
 const char SettingsManager::kSerialInterfaceStrs[SettingsManager::SerialInterface::kNumSerialInterfaces]
                                                 [SettingsManager::kSerialInterfaceStrMaxLen] = {"CONSOLE", "COMMS_UART",
                                                                                                 "GNSS_UART"};
-const char SettingsManager::kReportingProtocolStrs[SettingsManager::ReportingProtocol::kNumProtocols]
-                                                  [SettingsManager::kReportingProtocolStrMaxLen] = {
-                                                      "NONE",  "RAW",      "BEAST",    "BEAST_NO_UAT",
-                                                      "CSBEE", "MAVLINK1", "MAVLINK2", "GDL90"};
+const char
+    SettingsManager::kReportingProtocolStrs[SettingsManager::ReportingProtocol::kNumProtocols]
+                                           [SettingsManager::kReportingProtocolStrMaxLen] = {
+                                               "NONE",  "RAW",      "BEAST",    "BEAST_NO_UAT", "BEAST_NO_UAT_UPLINK",
+                                               "CSBEE", "MAVLINK1", "MAVLINK2", "GDL90"};
 
 const char SettingsManager::kSubGHzModeStrs[SettingsManager::kNumSubGHzRadioModes]
                                            [SettingsManager::kSubGHzModeStrMaxLen] = {
                                                "UAT_RX",  // UAT mode (978MHz receiver).
+};
+
+const char SettingsManager::RxPosition::kPositionSourceStrs[SettingsManager::RxPosition::kNumPositionSources]
+                                                           [SettingsManager::RxPosition::kPositionSourceStrMaxLen] = {
+                                                               "NONE",
+                                                               "FIXED",
+                                                               "GNSS",
+                                                               "AUTO_AIRCRAFT_LOWEST",
+                                                               "AUTO_AIRCRAFT_ICAO",
 };

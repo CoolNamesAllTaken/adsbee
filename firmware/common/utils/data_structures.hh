@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include <algorithm>  // For std::copy.
+#include <cstring>    // For memcpy.
 
 template <class T>
 class PFBQueue {
@@ -59,7 +60,8 @@ class PFBQueue {
             }
         }
 
-        config_.buffer[tail_] = element;
+        // config_.buffer[tail_] = element;
+        memcpy(&config_.buffer[tail_], &element, sizeof(T));
         tail_ = IncrementIndex(tail_);
 
         if (tail_ == head_) {
@@ -78,7 +80,8 @@ class PFBQueue {
         if (head_ == tail_ && !is_full_) {
             return false;
         }
-        element = config_.buffer[head_];
+        // element = config_.buffer[head_];
+        memcpy(&element, &config_.buffer[head_], sizeof(T));
         head_ = IncrementIndex(head_);
         is_full_ = false;
         return true;

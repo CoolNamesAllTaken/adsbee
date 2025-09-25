@@ -13,6 +13,15 @@
 
 static const uint32_t kTCPSocketReconnectIntervalMs = 10000;
 
+#define ENABLE_TCP_SOCKET_RATE_LIMITING
+#ifdef ENABLE_TCP_SOCKET_RATE_LIMITING
+static const uint32_t kSendBufRateLimitBytesPerSecond = 100000;  // 100 kB/s
+static const uint32_t kSendBufRateLimitIntervalMs = 10;
+static const uint32_t kSendBufRateLimitBytesPerInterval =
+    kSendBufRateLimitBytesPerSecond / (1000 / kSendBufRateLimitIntervalMs);
+static const uint32_t kRateLimitDelayDurationMs = 1;
+#endif
+
 static const uint32_t kTCPKeepAliveEnable = 1;
 static const uint32_t kTCPKeepAliveIdleSecondsBeforeStartingProbe = 120;
 static const uint32_t kTCPKeepAliveIntervalSecondsBetweenProbes = 30;
@@ -329,6 +338,9 @@ bool CommsManager::ConnectFeedSocket(uint16_t feed_index) {
     return true;
 }
 
+// Rate limit the SendBuf function by keeping a running count of bytes sent in every 10ms interval.
+static uint32_t last_send_buf_counter_reset_timestamp_ms = 0;
+static uint32_t send_buf_counter_bytes = 0;
 bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len) {
     if (iface >= SettingsManager::Settings::kMaxNumFeeds) {
         CONSOLE_ERROR("CommsManager::SendBuf", "Invalid feed index %d.", iface);
@@ -338,7 +350,23 @@ bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len) {
         CONSOLE_ERROR("CommsManager::SendBuf", "Can't send to feed %d, socket not connected.", iface);
         return false;
     }
+
+#ifdef ENABLE_TCP_SOCKET_RATE_LIMITING
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+    if (timestamp_ms - last_send_buf_counter_reset_timestamp_ms > kSendBufRateLimitIntervalMs) {
+        // Reset the counter every 10ms.
+        last_send_buf_counter_reset_timestamp_ms = timestamp_ms;
+        send_buf_counter_bytes = 0;
+    }
+    if (send_buf_counter_bytes + buf_len > kSendBufRateLimitBytesPerInterval) {
+        vTaskDelay(
+            pdTICKS_TO_MS(kRateLimitDelayDurationMs));  // Delay to yield to other tasks and allow buffers to clear.
+    }
+    send_buf_counter_bytes += buf_len;
+#endif
+
     int err = send(feed_sock_[iface], buf, buf_len, 0);
+
     if (err < 0) {
         CONSOLE_ERROR("CommsManager::SendBuf",
                       "Error occurred during sending %d byte message to feed %d with URI %s "

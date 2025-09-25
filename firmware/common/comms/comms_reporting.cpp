@@ -27,13 +27,14 @@ bool CommsManager::UpdateReporting(const ReportSink *sinks, const SettingsManage
     ReportSink raw_sinks[SettingsManager::kNumSerialInterfaces];
     ReportSink beast_sinks[SettingsManager::kNumSerialInterfaces];
     ReportSink beast_no_uat_sinks[SettingsManager::kNumSerialInterfaces];
+    ReportSink beast_no_uat_uplink_sinks[SettingsManager::kNumSerialInterfaces];
     ReportSink csbee_sinks[SettingsManager::kNumSerialInterfaces];
     ReportSink mavlink1_sinks[SettingsManager::kNumSerialInterfaces];
     ReportSink mavlink2_sinks[SettingsManager::kNumSerialInterfaces];
     ReportSink gdl90_sinks[SettingsManager::kNumSerialInterfaces];
 
-    uint16_t num_raw_sinks = 0, num_beast_sinks = 0, num_beast_no_uat_sinks = 0, num_csbee_sinks = 0,
-             num_mavlink1_sinks = 0, num_mavlink2_sinks = 0, num_gdl90_sinks = 0;
+    uint16_t num_raw_sinks = 0, num_beast_sinks = 0, num_beast_no_uat_sinks = 0, num_beast_no_uat_uplink_sinks = 0,
+             num_csbee_sinks = 0, num_mavlink1_sinks = 0, num_mavlink2_sinks = 0, num_gdl90_sinks = 0;
 
     for (uint16_t i = 0; i < num_sinks; i++) {
         switch (sink_protocols[i]) {
@@ -47,6 +48,9 @@ bool CommsManager::UpdateReporting(const ReportSink *sinks, const SettingsManage
                 break;
             case SettingsManager::kBeastNoUAT:
                 beast_no_uat_sinks[num_beast_no_uat_sinks++] = sinks[i];
+                break;
+            case SettingsManager::kBeastNoUATUplink:
+                beast_no_uat_uplink_sinks[num_beast_no_uat_uplink_sinks++] = sinks[i];
                 break;
             case SettingsManager::kCSBee:
                 csbee_sinks[num_csbee_sinks++] = sinks[i];
@@ -82,8 +86,15 @@ bool CommsManager::UpdateReporting(const ReportSink *sinks, const SettingsManage
             ret = false;
         }
         // Send No UAT Beast reports.
-        if (!ReportBeast(beast_no_uat_sinks, num_beast_no_uat_sinks, *packets_to_report, true)) {
+        if (!ReportBeast(beast_no_uat_sinks, num_beast_no_uat_sinks, *packets_to_report,
+                         SettingsManager::kBeastNoUAT)) {
             CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportBeast with no UAT.");
+            ret = false;
+        }
+        // Send No UAT Uplink Beast reports.
+        if (!ReportBeast(beast_no_uat_uplink_sinks, num_beast_no_uat_uplink_sinks, *packets_to_report,
+                         SettingsManager::kBeastNoUATUplink)) {
+            CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportBeast with no UAT or Uplink.");
             ret = false;
         }
     }
@@ -151,7 +162,7 @@ bool CommsManager::ReportRaw(ReportSink *sinks, uint16_t num_sinks, const Compos
 }
 
 bool CommsManager::ReportBeast(ReportSink *sinks, uint16_t num_sinks, const CompositeArray::RawPackets &packets,
-                               bool no_uat) {
+                               SettingsManager::ReportingProtocol protocol) {
     char error_msg[CompositeArray::RawPackets::kErrorMessageMaxLen] = {0};
     if (!packets.IsValid(error_msg)) {
         CONSOLE_ERROR("CommsManager::ReportBeast", "Invalid CompositeArray::RawPackets: %s", error_msg);
@@ -167,7 +178,7 @@ bool CommsManager::ReportBeast(ReportSink *sinks, uint16_t num_sinks, const Comp
             ret &= SendBuf(sinks[j], (char *)beast_frame_buf, num_bytes_in_frame);
         }
     }
-    if (!no_uat) {
+    if (protocol != SettingsManager::kBeastNoUAT) {
         for (uint16_t i = 0; i < packets.header->num_uat_adsb_packets; i++) {
             uint8_t beast_frame_buf[BeastReporter::kUATADSBBeastFrameMaxLenBytes];
             uint16_t num_bytes_in_frame =
@@ -177,6 +188,8 @@ bool CommsManager::ReportBeast(ReportSink *sinks, uint16_t num_sinks, const Comp
                 ret &= SendBuf(sinks[j], (char *)beast_frame_buf, num_bytes_in_frame);
             }
         }
+    }
+    if (protocol != SettingsManager::kBeastNoUATUplink && protocol != SettingsManager::kBeastNoUAT) {
         for (uint16_t i = 0; i < packets.header->num_uat_uplink_packets; i++) {
             uint8_t beast_frame_buf[BeastReporter::kUATUplinkBeastFrameMaxLenBytes];
             uint16_t num_bytes_in_frame =

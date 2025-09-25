@@ -35,6 +35,7 @@ class SettingsManager {
         kRaw,
         kBeast,
         kBeastNoUAT,
+        kBeastNoUATUplink,
         kCSBee,
         kMAVLINK1,
         kMAVLINK2,
@@ -58,6 +59,29 @@ class SettingsManager {
         kNumSubGHzRadioModes
     };
     static const char kSubGHzModeStrs[kNumSubGHzRadioModes][kSubGHzModeStrMaxLen];
+
+    // Receiver position settings.
+    struct RxPosition {
+        enum PositionSource : uint8_t {
+            kPositionSourceNone = 0,
+            kPositionSourceFixed = 1,
+            kPositionSourceGNSS = 2,
+            kPositionSourceAutoAircraftLowest = 3,
+            kPositionSourceAutoAircraftICAO = 4,
+            kNumPositionSources
+        };
+
+        static const uint16_t kPositionSourceStrMaxLen = 30;
+        static const char kPositionSourceStrs[kNumPositionSources][kPositionSourceStrMaxLen];
+
+        PositionSource source = kPositionSourceNone;
+        float latitude_deg = 0.0;     // Degrees, WGS84
+        float longitude_deg = 0.0;    // Degrees, WGS84
+        float gnss_altitude_m = 0.0;  // Meters, WGS84
+        float baro_altitude_m = 0.0;  // Meters, AMSL
+        float heading_deg = 0.0;      // Degrees from true north
+        float speed_kts = 0.0;        // Speed over ground in knots
+    };
 
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a
     // firmware upgrade if the format of the settings struct changes.
@@ -169,6 +193,9 @@ class SettingsManager {
         uint8_t mavlink_system_id = 1;
         uint8_t mavlink_component_id = 156;  // Default to MAV_COMP_ID_ADSB (156).
 
+        // Receiver position settings
+        RxPosition rx_position;
+
         /**
          * Default constructor.
          */
@@ -208,25 +235,25 @@ class SettingsManager {
             feed_uris[kMaxNumFeeds - 1][kFeedURIMaxNumChars] = '\0';
             feed_ports[kMaxNumFeeds - 1] = 30004;
             feed_is_active[kMaxNumFeeds - 1] = true;
-            feed_protocols[kMaxNumFeeds - 1] = kBeast;
+            feed_protocols[kMaxNumFeeds - 1] = kBeastNoUAT;
             // airplanes.live: feed.airplanes.live:30004, Beast
             strncpy(feed_uris[kMaxNumFeeds - 2], "feed.airplanes.live", kFeedURIMaxNumChars);
             feed_uris[kMaxNumFeeds - 2][kFeedURIMaxNumChars] = '\0';
             feed_ports[kMaxNumFeeds - 2] = 30004;
             feed_is_active[kMaxNumFeeds - 2] = true;
-            feed_protocols[kMaxNumFeeds - 2] = kBeast;
+            feed_protocols[kMaxNumFeeds - 2] = kBeastNoUAT;
             // adsb.lol: feed.adsb.lol:30004, Beast
             strncpy(feed_uris[kMaxNumFeeds - 3], "feed.adsb.lol", kFeedURIMaxNumChars);
             feed_uris[kMaxNumFeeds - 3][kFeedURIMaxNumChars] = '\0';
             feed_ports[kMaxNumFeeds - 3] = 30004;
             feed_is_active[kMaxNumFeeds - 3] = true;
-            feed_protocols[kMaxNumFeeds - 3] = kBeast;
+            feed_protocols[kMaxNumFeeds - 3] = kBeastNoUAT;
             // whereplane.xyz: feed.whereplane.xyz:30004, Beast
             strncpy(feed_uris[kMaxNumFeeds - 4], "feed.whereplane.xyz", kFeedURIMaxNumChars);
             feed_uris[kMaxNumFeeds - 4][kFeedURIMaxNumChars] = '\0';
             feed_ports[kMaxNumFeeds - 4] = 30004;
             feed_is_active[kMaxNumFeeds - 4] = false;
-            feed_protocols[kMaxNumFeeds - 4] = kBeast;
+            feed_protocols[kMaxNumFeeds - 4] = kBeastNoUAT;
         }
     };
 

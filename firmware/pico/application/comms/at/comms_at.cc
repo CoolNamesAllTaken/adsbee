@@ -385,6 +385,7 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                 }
                 settings_manager.settings.feed_protocols[index] = feed_protocol;
             }
+            settings_manager.SyncToCoprocessors();
             CPP_AT_SUCCESS();
             break;
     }
@@ -808,6 +809,85 @@ CPP_AT_HELP_CALLBACK(CommsManager::ATRxEnableHelpCallback) {
         "recevier(s) are enabled.\r\n");
 }
 
+CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
+    switch (op) {
+        case '?': {
+            CPP_AT_PRINTF(
+                "Receiver Position:\r\n\tSource: %s\r\n\tLatitude [deg]: %.6f\r\n\tLongitude [deg]: %.6f\r\n\tGNSS "
+                "Altitude [m]: "
+                "%.1f\r\n\tBarometric Altitude [m]: %.1f\r\n\tHeading [deg]: %.1f\r\n\tSpeed [kts]: %.1f\r\n",
+                SettingsManager::RxPosition::kPositionSourceStrs[settings_manager.settings.rx_position.source],
+                settings_manager.settings.rx_position.latitude_deg, settings_manager.settings.rx_position.longitude_deg,
+                settings_manager.settings.rx_position.gnss_altitude_m,
+                settings_manager.settings.rx_position.baro_altitude_m,
+                settings_manager.settings.rx_position.heading_deg, settings_manager.settings.rx_position.speed_kts);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        }
+        case '=': {
+            if (CPP_AT_HAS_ARG(0)) {
+                // Set position source.
+                for (uint16_t i = 0; i < SettingsManager::RxPosition::kNumPositionSources; i++) {
+                    if (i == SettingsManager::RxPosition::PositionSource::kNumPositionSources) {
+                        CPP_AT_ERROR("Invalid position source %s.", args[0].data());
+                    }
+                    if (args[0].compare(SettingsManager::RxPosition::kPositionSourceStrs[i]) == 0) {
+                        settings_manager.settings.rx_position.source =
+                            static_cast<SettingsManager::RxPosition::PositionSource>(i);
+                        break;
+                    }
+                }
+            }
+        }
+            if (CPP_AT_HAS_ARG(1)) {
+                // Set latitude.
+                CPP_AT_TRY_ARG2NUM(1, settings_manager.settings.rx_position.latitude_deg);
+                if (settings_manager.settings.rx_position.latitude_deg < -90.0 ||
+                    settings_manager.settings.rx_position.latitude_deg > 90.0) {
+                    CPP_AT_ERROR("Latitude %.6f out of range (-90.0 to 90.0).",
+                                 settings_manager.settings.rx_position.latitude_deg);
+                }
+            }
+            if (CPP_AT_HAS_ARG(2)) {
+                // Set longitude.
+                CPP_AT_TRY_ARG2NUM(2, settings_manager.settings.rx_position.longitude_deg);
+                if (settings_manager.settings.rx_position.longitude_deg < -180.0 ||
+                    settings_manager.settings.rx_position.longitude_deg > 180.0) {
+                    CPP_AT_ERROR("Longitude %.6f out of range (-180.0 to 180.0).",
+                                 settings_manager.settings.rx_position.longitude_deg);
+                }
+            }
+            if (CPP_AT_HAS_ARG(3)) {
+                // Set GNSS altitude.
+                CPP_AT_TRY_ARG2NUM(3, settings_manager.settings.rx_position.gnss_altitude_m);
+            }
+            if (CPP_AT_HAS_ARG(4)) {
+                // Set barometric altitude.
+                CPP_AT_TRY_ARG2NUM(4, settings_manager.settings.rx_position.baro_altitude_m);
+            }
+            if (CPP_AT_HAS_ARG(5)) {
+                // Set heading.
+                CPP_AT_TRY_ARG2NUM(5, settings_manager.settings.rx_position.heading_deg);
+                if (settings_manager.settings.rx_position.heading_deg < 0.0 ||
+                    settings_manager.settings.rx_position.heading_deg >= 360.0) {
+                    CPP_AT_ERROR("Heading %.1f out of range [0.0 to 360.0).",
+                                 settings_manager.settings.rx_position.heading_deg);
+                }
+            }
+            if (CPP_AT_HAS_ARG(6)) {
+                // Set speed.
+                CPP_AT_TRY_ARG2NUM(6, settings_manager.settings.rx_position.speed_kts);
+                if (settings_manager.settings.rx_position.speed_kts < 0.0) {
+                    CPP_AT_ERROR("Speed %.1f out of range (>= 0.0).", settings_manager.settings.rx_position.speed_kts);
+                }
+            }
+            settings_manager.SyncToCoprocessors();
+            CPP_AT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATSettingsCallback) {
     switch (op) {
         case '=':
@@ -1161,6 +1241,12 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxEnableCallback, comms_manager)
 
     },
+    {.command_buf = "RX_POSITION",
+     .min_args = 0,
+     .max_args = 5,
+     .help_string_buf = "AT+RX_POSITION=<source>,<lat_deg>,<lon_deg>,<gnss_alt_m>,<baro_alt_m>"
+                        "\r\n\tSet the receiver's position.\r\n\tAT+RX_POSITION?\r\n\tQuery the receiver's position.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxPositionCallback, comms_manager)},
     {.command_buf = "SETTINGS",
      .min_args = 0,
      .max_args = 3,

@@ -24,8 +24,7 @@ bool ModeSPacketDecoder::UpdateLogLoop() {
     }
     uint16_t bit_flip_index;
     while (decoded_mode_s_packet_bit_flip_locations_out_queue.Dequeue(bit_flip_index)) {
-        CONSOLE_WARNING("ModeSPacketDecoder::DecoderLoop", "Corrected single bit error at bit index %d.",
-                        bit_flip_index);
+        CONSOLE_INFO("ModeSPacketDecoder::DecoderLoop", "Corrected single bit error at bit index %d.", bit_flip_index);
     }
     return true;
 }
@@ -106,7 +105,7 @@ bool ModeSPacketDecoder::PushPacketIfNotDuplicate(const DecodedModeSPacket& deco
             (timestamp_ms - last_demod_timestamp_ms_[i]) < kMinSameAircraftMessageIntervalMs) {
             // Already seen this packet from the same aircraft within the minimum interval.
             DebugMessage debug_message = DebugMessage{
-                .log_level = SettingsManager::LogLevel::kWarnings,
+                .log_level = SettingsManager::LogLevel::kInfo,
             };
             snprintf(debug_message.message, DebugMessage::kMessageMaxLen,
                      "ModeSPacketDecoder::PushPacketIfNotDuplicate: Skipped duplicate packet with icao=0x%x src=%d "
