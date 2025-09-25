@@ -618,6 +618,9 @@ class AircraftDictionary {
         uint16_t raw_uat_uplink_frames = 0;
         uint16_t valid_uat_uplink_frames = 0;
 
+        uint16_t num_mode_s_aircraft = 0;
+        uint16_t num_uat_aircraft = 0;
+
         /**
          * Formats the metrics dictionary into a JSON packet with the following structure.
          * {
@@ -637,13 +640,14 @@ class AircraftDictionary {
          */
         inline uint16_t ToJSON(char *buf, size_t buf_len) {
             uint16_t message_max_len = buf_len - 1;  // Leave space for null terminator.
-            snprintf(buf, message_max_len - strlen(buf),
-                     "{ \"raw_squitter_frames\": %lu, \"valid_squitter_frames\": %lu, "
-                     "\"raw_extended_squitter_frames\": %lu, "
-                     "\"valid_extended_squitter_frames\": %lu, \"demods_1090\": %lu, ",
-                     raw_squitter_frames, valid_squitter_frames, raw_extended_squitter_frames,
-                     valid_extended_squitter_frames, demods_1090);
-            uint16_t chars_written = strlen(buf);
+            // Add aggregate 1090 stats.
+            uint16_t chars_written = snprintf(buf, message_max_len - strlen(buf),
+                                              "{ \"raw_squitter_frames\": %lu, \"valid_squitter_frames\": %lu, "
+                                              "\"raw_extended_squitter_frames\": %lu, "
+                                              "\"valid_extended_squitter_frames\": %lu, \"demods_1090\": %lu, ",
+                                              raw_squitter_frames, valid_squitter_frames, raw_extended_squitter_frames,
+                                              valid_extended_squitter_frames, demods_1090);
+            // Add 1090 stats by source.
             chars_written += ArrayToJSON(buf + chars_written, buf_len - chars_written, "raw_squitter_frames_by_source",
                                          raw_squitter_frames_by_source, "%u", true);
             chars_written +=
@@ -658,6 +662,17 @@ class AircraftDictionary {
             chars_written += ArrayToJSON(buf + strlen(buf), buf_len - strlen(buf), "demods_1090_by_source",
                                          demods_1090_by_source, "%u",
                                          false);  // No trailing comma.
+            // Add UAT stats.
+            chars_written +=
+                snprintf(buf + chars_written, buf_len - chars_written,
+                         ", \"raw_uat_adsb_frames\": %u, \"valid_uat_adsb_frames\": %u"
+                         ", \"raw_uat_uplink_frames\": %u, \"valid_uat_uplink_frames\": %u",
+                         raw_uat_adsb_frames, valid_uat_adsb_frames, raw_uat_uplink_frames, valid_uat_uplink_frames);
+
+            // Add dictionary stats.
+            chars_written += snprintf(buf + chars_written, buf_len - chars_written,
+                                      ", \"num_mode_s_aircraft\": %u, \"num_uat_aircraft\": %u", num_mode_s_aircraft,
+                                      num_uat_aircraft);
             chars_written += snprintf(buf + chars_written, buf_len - chars_written, "}");
             return chars_written;
         }

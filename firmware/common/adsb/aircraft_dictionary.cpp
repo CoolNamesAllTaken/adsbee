@@ -1053,6 +1053,15 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
         if (timestamp_ms - last_message_timestamp_ms > config_.aircraft_prune_interval_ms) {
             it = dict.erase(it);  // Remove stale aircraft entry. Iterator is incremented to the next element.
         } else {
+            // Check the type of the aircraft and count it.
+            if (std::holds_alternative<ModeSAircraft>(it->second)) {
+                metrics_counter_.num_mode_s_aircraft++;
+            } else if (std::holds_alternative<UATAircraft>(it->second)) {
+                metrics_counter_.num_uat_aircraft++;
+            } else {
+                // This should never happen.
+                CONSOLE_ERROR("AircraftDictionary::Update", "Encountered aircraft entry with unknown type.");
+            }
             // Call UpdateMetrics on the underlying aircraft type.
             std::visit(
                 [](Aircraft &aircraft) {

@@ -140,6 +140,13 @@ bool ADSBeeServer::Update() {
             combined_metrics.raw_extended_squitter_frames_by_source[i] +=
                 adsbee_server.rp2040_aircraft_dictionary_metrics.raw_extended_squitter_frames_by_source[i];
         }
+        // Steal UAT metrics.
+        combined_metrics.raw_uat_adsb_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.raw_uat_adsb_frames;
+        combined_metrics.valid_uat_adsb_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.valid_uat_adsb_frames;
+        combined_metrics.raw_uat_uplink_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.raw_uat_uplink_frames;
+        combined_metrics.valid_uat_uplink_frames =
+            adsbee_server.rp2040_aircraft_dictionary_metrics.valid_uat_uplink_frames;
+
         // Broadcast dictionary metrics over the metrics Websocket.
         char metrics_message[AircraftDictionary::Metrics::kMetricsJSONMaxLen];
         snprintf(metrics_message, kNetworkMetricsMessageMaxLen, "{ \"aircraft_dictionary_metrics\": ");
