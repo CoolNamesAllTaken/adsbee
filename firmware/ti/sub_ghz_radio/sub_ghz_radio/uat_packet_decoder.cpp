@@ -20,7 +20,7 @@ bool UATPacketDecoder::Update() {
         ByteBufferToHexString(raw_packet_buffer, packet.encoded_message, packet_len_bytes);
 
         if (decoded_packet.is_valid) {
-            // pico_ll.BlinkSubGLED();
+            pico_ll.BlinkSubGLED();
             object_dictionary.metrics.num_valid_uat_adsb_packets++;
             CONSOLE_INFO(
                 "UATPacketDecoder::Update", "-[%dFIXD     ] mdb_tc=%d icao=0x%06x len=%d buf=%s rssi=%d ts=%lu",
@@ -42,7 +42,7 @@ bool UATPacketDecoder::Update() {
         DecodedUATUplinkPacket decoded_packet = DecodedUATUplinkPacket(packet);
 
         if (decoded_packet.is_valid) {
-            // pico_ll.BlinkSubGLED();
+            pico_ll.BlinkSubGLED();
             object_dictionary.metrics.num_valid_uat_uplink_packets++;
             CONSOLE_INFO("UATPacketDecoder::Update", "+[%02dFIXD     ] len=%d rssi=%d ts=%lu",
                          decoded_packet.raw.sigq_bits, RawUATUplinkPacket::kUplinkMessageNumBytes, packet.sigs_dbm,

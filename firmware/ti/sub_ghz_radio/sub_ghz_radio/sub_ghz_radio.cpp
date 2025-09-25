@@ -187,7 +187,7 @@ bool SubGHzRadio::DeInit() {
 }
 
 bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t *filled_entry) {
-    pico_ll.BlinkSubGLED();
+    // pico_ll.BlinkSubGLED();
 
     /* Handle the packet data, located at &currentDataEntry->data:
      * - Length is the first two bytes with the current configuration
