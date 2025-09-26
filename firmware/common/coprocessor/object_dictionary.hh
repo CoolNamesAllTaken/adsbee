@@ -31,13 +31,13 @@ class ObjectDictionary {
     static constexpr uint16_t kMACAddrLenBytes = 6;
 
     static constexpr uint16_t kNetworkConsoleMessageMaxLenBytes =
-        4096;  // Maximum size of SCWritePacket (actually is a bit smaller due to headers).
+        4000;  // Maximum size of SCWritePacket (actually is a bit smaller due to headers).
     static constexpr uint16_t kLogMessageMaxNumChars = 500;
     static constexpr uint16_t kLogMessageQueueDepth = 10;
 
 #ifdef ON_COPRO_SLAVE
     static constexpr uint16_t kSCCommandRequestQueueDepth = 10;
-    static constexpr uint16_t kNetworkConsoleRxQueueDepth = kNetworkConsoleMessageMaxLenBytes * 3;
+    static constexpr uint16_t kNetworkConsoleRxQueueDepth = kNetworkConsoleMessageMaxLenBytes * 4;
 #endif
 #ifdef ON_TI
     static constexpr uint16_t kDecodedUATADSBPacketQueueDepth = 10;

@@ -72,7 +72,7 @@ TEST(ModeSIdentityReplyPacket, JasonPlaynePackets) {
 TEST(ModeSAllCallReplyPacket, JasonPlaynePackets) {
     ModeSAllCallReplyPacket packet = ModeSAllCallReplyPacket(DecodedModeSPacket((char *)"5D7C0B6DB05076"));
     EXPECT_TRUE(packet.is_valid);
-    EXPECT_EQ(packet.capability, 5);
+    EXPECT_EQ(packet.ca_cf.capability, 5);
     EXPECT_EQ(packet.icao_address, 0x7C0B6Du);
 
     // Flip one bit and watch it fail.

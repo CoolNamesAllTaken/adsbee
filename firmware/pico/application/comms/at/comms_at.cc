@@ -537,7 +537,7 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     CPP_AT_TRY_ARG2NUM_BASE(3, crc, 16);
                     if (has_crc) {
                         // CRC provided: use it to verify the data before writing.
-                        CPP_AT_PRINTF("Verifying data with CRC 0x%x.\r\n", crc);
+                        CPP_AT_PRINTF("Verifying %d bytes of data with CRC 0x%x.\r\n", len_bytes, crc);
                         uint32_t calculated_crc = FirmwareUpdateManager::CalculateCRC32(buf, len_bytes);
                         if (calculated_crc != crc) {
                             adsbee.SetReceiver1090Enable(receiver_was_enabled);  // Re-enable receiver before exit.
