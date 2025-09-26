@@ -9,10 +9,10 @@
 #include "comms.hh"
 
 const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
-const uint8_t ObjectDictionary::kFirmwareVersionMinor = 8;
-const uint8_t ObjectDictionary::kFirmwareVersionPatch = 2;
+const uint8_t ObjectDictionary::kFirmwareVersionMinor = 9;
+const uint8_t ObjectDictionary::kFirmwareVersionPatch = 0;
 // NOTE: Indicate a final release with RC = 0.
-const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 0;
+const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 1;
 
 const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24) | (kFirmwareVersionMinor << 16) |
                                                     (kFirmwareVersionPatch << 8) | kFirmwareVersionReleaseCandidate;
@@ -47,9 +47,9 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                     break;
                 case kQueueIDSCCommandRequests:
                     for (uint16_t i = 0; i < roll_request.num_items; i++) {
-                        // Pop requests one by one so that we can call their callbacks.
+                        // Dequeue requests one by one so that we can call their callbacks.
                         SCCommandRequestWithCallback request_with_callback;
-                        if (!sc_command_request_queue.Pop(request_with_callback)) {
+                        if (!sc_command_request_queue.Dequeue(request_with_callback)) {
                             CONSOLE_ERROR("ObjectDictionary::SetBytes",
                                           "Failed to pop SCCommand request from queue during roll.");
                             return false;
@@ -62,18 +62,26 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                 case kQueueIDConsole:
 #ifdef ON_ESP32
                     xSemaphoreTake(object_dictionary.network_console_rx_queue_mutex, portMAX_DELAY);
-#endif
                     if (!network_console_rx_queue.Discard(roll_request.num_items)) {
                         CONSOLE_ERROR("ObjectDictionary::SetBytes",
                                       "Failed to discard %d chars from the network console TX queue.",
                                       roll_request.num_items);
-#ifdef ON_ESP32
                         xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
-#endif
                         return false;
                     }
-#ifdef ON_ESP32
                     xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
+#elif defined(ON_PICO)
+                    if (!network_console_rx_queue.Discard(roll_request.num_items)) {
+                        CONSOLE_ERROR("ObjectDictionary::SetBytes",
+                                      "Failed to discard %d chars from the network console TX queue.",
+                                      roll_request.num_items);
+
+                        return false;
+                    }
+#else
+                    CONSOLE_ERROR("ObjectDictionary::SetBytes",
+                                  "Received roll queue request for network console on unsupported device.");
+                    return false;
 #endif
                     break;
                 default:
@@ -85,38 +93,44 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
         }
 #ifdef ON_ESP32
         case kAddrConsole: {
-            // RP2040 writing to the ESP32's network console interface.
-            char message[kNetworkConsoleMessageMaxLenBytes + 1] = {'\0'};
-            strncpy(message, (char *)buf, buf_len);
-            message[kNetworkConsoleMessageMaxLenBytes] = '\0';  // Null terminate for safety.
             // Don't print here to avoid print of print doom loop explosion.
-            // CONSOLE_INFO("ObjectDictionary::SetBytes", "Forwarding message to network console: %s",
-            // message);
-            adsbee_server.network_console.BroadcastMessage(message, buf_len);
+            CONSOLE_INFO("ObjectDictionary::SetBytes", "Forwarding %d byte message to network console.", buf_len);
+            adsbee_server.network_console.BroadcastMessage(reinterpret_cast<const char *>(buf), buf_len);
             break;
         }
-        case kAddrRaw1090Packet: {
-            Raw1090Packet tpacket;
-            memcpy(&tpacket, buf, sizeof(Raw1090Packet));
-            // Warning: printing here will cause a timeout and tests will fail.
-            // CONSOLE_INFO("SPICoprocessor::SetBytes", "Received a raw %d-bit transponder packet.",
-            //              tpacket.buffer_len_bits);
-            adsbee_server.HandleRaw1090Packet(tpacket);
-            break;
-        }
-        case kAddrRaw1090PacketArray: {
-            uint8_t num_packets = buf[0];
-            Raw1090Packet tpacket;
-            for (uint16_t i = 0; i < num_packets && i * sizeof(Raw1090Packet) + sizeof(uint8_t) < buf_len; i++) {
-                memcpy(&tpacket, buf + sizeof(uint8_t) + i * sizeof(Raw1090Packet), sizeof(Raw1090Packet));
-                adsbee_server.HandleRaw1090Packet(tpacket);
-            }
-            break;
-        }
+        // case kAddrRawModeSPacket: {
+        //     RawModeSPacket tpacket;
+        //     memcpy(&tpacket, buf, sizeof(RawModeSPacket));
+        //     // Warning: printing here will cause a timeout and tests will fail.
+        //     // CONSOLE_INFO("SPICoprocessor::SetBytes", "Received a raw %d-byte transponder packet.",
+        //     //              tpacket.buffer_len_bytes);
+        //     adsbee_server.raw_mode_s_packet_queue.Enqueue(tpacket);
+        //     break;
+        // }
+        // case kAddrRawModeSPacketArray: {
+        //     uint8_t num_packets = buf[0];
+        //     RawModeSPacket tpacket;
+        //     for (uint16_t i = 0; i < num_packets && i * sizeof(RawModeSPacket) + sizeof(uint8_t) < buf_len; i++) {
+        //         memcpy(&tpacket, buf + sizeof(uint8_t) + i * sizeof(RawModeSPacket), sizeof(RawModeSPacket));
+        //         adsbee_server.raw_mode_s_packet_queue.Enqueue(tpacket);
+        //     }
+        //     break;
+        // }
         case kAddrAircraftDictionaryMetrics: {
             AircraftDictionary::Metrics rp2040_metrics;
             memcpy(&rp2040_metrics, buf + offset, buf_len);
             xQueueSend(adsbee_server.rp2040_aircraft_dictionary_metrics_queue, &rp2040_metrics, 0);
+            break;
+        }
+        case kAddrCompositeArrayRawPackets: {
+            if (offset != 0) {
+                CONSOLE_ERROR("ObjectDictionary::SetBytes",
+                              "Offset %d for writing CompositeArray::RawPackets not supported, must be 0.", offset);
+                return false;
+            }
+            CompositeArray::UnpackRawPacketsBufferToQueues(buf, buf_len, &(adsbee_server.raw_mode_s_packet_in_queue),
+                                                           &(adsbee_server.raw_uat_adsb_packet_in_queue),
+                                                           &(adsbee_server.raw_uat_uplink_packet_in_queue));
             break;
         }
 #elif defined(ON_TI)
@@ -162,7 +176,17 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                                                 .num_queued_log_messages = num_log_messages,
                                                 .queued_log_messages_packed_size_bytes =
                                                     static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),
-                                                .num_queued_sc_command_requests = sc_command_request_queue.Length()};
+                                                .num_queued_sc_command_requests = sc_command_request_queue.Length(),
+                                                .pending_raw_packets_len_bytes = static_cast<uint16_t>(
+                                                    raw_uat_adsb_packet_queue.Length() * sizeof(RawUATADSBPacket) +
+                                                    raw_uat_uplink_packet_queue.Length() * sizeof(RawUATUplinkPacket) +
+                                                    sizeof(CompositeArray::RawPackets::Header)),
+                                                .num_raw_uat_adsb_packets = metrics.num_raw_uat_adsb_packets,
+                                                .num_valid_uat_adsb_packets = metrics.num_valid_uat_adsb_packets,
+                                                .num_raw_uat_uplink_packets = metrics.num_raw_uat_uplink_packets,
+                                                .num_valid_uat_uplink_packets = metrics.num_valid_uat_uplink_packets};
+            // Reset metrics after reading.
+            metrics = {0};
 #endif
             for (uint16_t i = 0; i < log_message_queue.Length(); i++) {
                 LogMessage log_message;
@@ -235,6 +259,29 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             break;
         }
 #elif defined(ON_TI)
+        case kAddrCompositeArrayRawPackets: {
+            if (offset != 0) {
+                CONSOLE_ERROR("ObjectDictionary::GetBytes",
+                              "Offset %d for reading CompositeArrayRawPackets not supported, must be 0.", offset);
+                return false;
+            }
+            if (buf_len < sizeof(CompositeArray::RawPackets::Header)) {
+                CONSOLE_ERROR("ObjectDictionary::GetBytes",
+                              "Buffer length %d for reading CompositeArrayRawPackets must be at least %d.", buf_len,
+                              sizeof(CompositeArray::RawPackets::Header));
+                return false;
+            }
+
+            CompositeArray::RawPackets raw_packets = CompositeArray::PackRawPacketsBuffer(
+                buf, buf_len, nullptr, &raw_uat_adsb_packet_queue, &raw_uat_uplink_packet_queue);
+            if (raw_packets.IsValid() == false) {
+                CONSOLE_ERROR("ObjectDictionary::GetBytes",
+                              "Failed to pack CompositeArray::RawPackets into buffer for reading.");
+                return false;
+            }
+
+            break;
+        }
 #endif
         default:
             CONSOLE_ERROR("SPICoprocessor::SetBytes", "No behavior implemented for reading from address 0x%x.", addr);
@@ -244,7 +291,7 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
 }
 
 bool ObjectDictionary::RequestSCCommand(const SCCommandRequestWithCallback &request_with_callback) {
-    if (sc_command_request_queue.Push(request_with_callback)) {
+    if (sc_command_request_queue.Enqueue(request_with_callback)) {
         return true;
     } else {
         CONSOLE_ERROR("ObjectDictionary::RequestSCCommand", "Failed to push SCCommandRequest to queue, queue is full.");
@@ -341,7 +388,7 @@ uint16_t ObjectDictionary::UnpackLogMessages(uint8_t *buf, uint16_t buf_len,
             log_message_queue.Clear();
             CONSOLE_ERROR("ObjectDictionary::UnpackLogMessages", "Log message queue is full, clearing it.");
         }
-        log_message_queue.Push(log_message);
+        log_message_queue.Enqueue(log_message);
 
         bytes_read += LogMessage::kHeaderSize + log_message.num_chars + 1;  // Move past header and message.
         num_messages++;

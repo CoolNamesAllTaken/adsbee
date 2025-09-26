@@ -30,13 +30,16 @@
 			"swip.h": "c",
 			"freertos.h": "c",
 			"stdint.h": "c",
-			"smartrf_settings.h": "c"
+			"smartrf_settings.h": "c",
+			"init_rs.h": "c",
+			"rs-common.h": "c",
+			"semaphore.h": "c"
 		},
 		"C_Cpp.default.defines": [
 			"ON_TI",
 			"DeviceFamily_CC13X2"
 		],
-		"cortex-debug.variableUseNaturalFormat": false,
+		"cortex-debug.variableUseNaturalFormat": true,
 	},
 	"launch": {
 		"version": "0.2.0",
@@ -57,7 +60,7 @@
 					"load",
 					"monitor reset"
 				],
-				"runToEntryPoint": "main",
+				// "runToEntryPoint": "main",
 				"armToolchainPath": "/usr/bin",
 				"device": "CC1312R1F3",
 			},

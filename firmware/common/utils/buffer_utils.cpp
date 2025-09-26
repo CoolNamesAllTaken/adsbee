@@ -1,32 +1,44 @@
 #include "buffer_utils.hh"
 
-#include "stdio.h"
+#include <cstring>  // For strlen.
+
+#include "comms.hh"
+#include "macros.hh"  // for MAX
 
 #define BITMASK_32_ALL   0xFFFFFFFF
 #define WORD_32_NUM_BITS 32
 
-// NOTE: Buffer operations are done big-endian (oldest bits are stored in the MSB), since input buffer shifts left.
+bool ByteBufferMatchesString(const uint8_t *buffer, const char *str) {
+    if (buffer == nullptr || str == nullptr) {
+        return false;  // Invalid input.
+    }
+    uint16_t len_nibbles = strlen(str);
+    if (len_nibbles % kNibblesPerByte != 0) {
+        return false;  // String length must be a multiple of 2.
+    }
+    uint16_t len_bytes = strlen(str) / kNibblesPerByte;
 
-uint32_t Get24BitWordFromBuffer(uint32_t first_bit_index, const uint32_t buffer[]) {
-    return GetNBitWordFromBuffer(24, first_bit_index, buffer);
+    for (uint16_t i = 0; i < len_bytes; i++) {
+        if (buffer[i] != (CHAR_TO_HEX(str[i * kNibblesPerByte]) << 4 | CHAR_TO_HEX(str[i * kNibblesPerByte + 1]))) {
+            return false;
+        }
+    }
+    return true;
 }
 
-/**
- * Extract an n-bit word from a big-endian buffer of 32-bit words. Does NOT guard against falling off the end of
- * the buffer, so be careful!
- * @param[in] n Bitlength of word to extract.
- * @param[in] first_bit_index Bit index begin reading from (index of MSb of word to read). MSb of first word in buffer
- * is bit 0.
- * @param[in] buffer Buffer to read from.
- * @retval Right-aligned n-bit word that was read from the buffer.
- */
-uint32_t GetNBitWordFromBuffer(uint16_t n, uint32_t first_bit_index, const uint32_t buffer[]) {
+// NOTE: Buffer operations are done big-endian (oldest bits are stored in the MSB), since input buffer shifts left.
+
+uint32_t Get24BitsFromWordBuffer(uint32_t first_bit_index, const uint32_t buffer[]) {
+    return GetNBitsFromWordBuffer(24, first_bit_index, buffer);
+}
+
+uint32_t GetNBitsFromWordBuffer(uint16_t n, uint32_t first_bit_index, const uint32_t buffer[]) {
     // NOTE: Bit 0 is the MSb in this format, since the input shift register shifts left (oldest bit is MSb).
     if (n > WORD_32_NUM_BITS || n < 1) {
-        printf(
-            "GetNBitWordFromBuffer: Tried to get %d bit word from buffer, but word bitlength must be between 1 "
-            "and 32.\r\n",
-            n);
+        CONSOLE_ERROR("GetNBitsFromWordBuffer",
+                      "Tried to get %d bit word from buffer, but word bitlength must be between 1 "
+                      "and 32.\r\n",
+                      n);
         return 0;
     }
     uint32_t first_word_index_32 = first_bit_index / WORD_32_NUM_BITS;
@@ -44,20 +56,40 @@ uint32_t GetNBitWordFromBuffer(uint16_t n, uint32_t first_bit_index, const uint3
     return word_n;
 }
 
-/**
- * Insert an n-bit word into a big-endian buffer of 32-bit words. Does NOT guard against falling off the end of
- * the buffer, so be careful!
- * @param[in] n Bitlength of word to insert.
- * @param[in] word Word to insert. Must be right-aligned.
- * @param[in] first_bit_index Bit index where the MSb of word should be inserted. MSb of first word in buffer is bit 0.
- * @param[in] buffer Buffer to insert into.
- */
-void SetNBitWordInBuffer(uint16_t n, uint32_t word, uint32_t first_bit_index, uint32_t buffer[]) {
+uint32_t GetNBitsFromByteBuffer(uint16_t n, uint32_t first_bit_index, const uint8_t buffer[]) {
+    // NOTE: Bit 0 is the MSb in this format, since the input shift register shifts left (oldest bit is MSb).
     if (n > WORD_32_NUM_BITS || n < 1) {
-        printf(
-            "SetNBitWordInBuffer: Tried to set %d-bit word in buffer, but word bitlength must be between 1 and "
-            "32.\r\n",
-            n);
+        CONSOLE_ERROR("GetNBitsFromByteBuffer",
+                      "Tried to get %d bit word from buffer, but word bitlength must be between 1 "
+                      "and 32.\r\n",
+                      n);
+        return 0;
+    }
+
+    uint16_t byte_index = first_bit_index / kBitsPerByte;
+    uint16_t bit_offset_8 = first_bit_index % kBitsPerByte;
+    uint16_t chunk_len_bits = MIN(kBitsPerByte - bit_offset_8, n);
+    uint32_t chunk = buffer[byte_index] >> (kBitsPerByte - chunk_len_bits - bit_offset_8) &
+                     (0xFF >> (kBitsPerByte - chunk_len_bits));
+    int16_t bits_remaining = n - chunk_len_bits;
+    uint32_t word_n = chunk;
+
+    while (bits_remaining > 0) {
+        byte_index++;
+        chunk_len_bits = bits_remaining >= kBitsPerByte ? kBitsPerByte : bits_remaining;
+        chunk = buffer[byte_index] >> (kBitsPerByte - chunk_len_bits);
+        word_n = (word_n << chunk_len_bits) | chunk;
+        bits_remaining -= chunk_len_bits;
+    }
+    return word_n;
+}
+
+void SetNBitsInWordBuffer(uint16_t n, uint32_t word, uint32_t first_bit_index, uint32_t buffer[]) {
+    if (n > WORD_32_NUM_BITS || n < 1) {
+        CONSOLE_ERROR("SetNBitsInWordBuffer",
+                      "Tried to set %d-bit word in buffer, but word bitlength must be between 1 and "
+                      "32.\r\n",
+                      n);
         return;
     }
 
@@ -79,11 +111,11 @@ void SetNBitWordInBuffer(uint16_t n, uint32_t word, uint32_t first_bit_index, ui
 }
 
 void PrintBinary32(uint32_t value) {
-    printf("\t0b");
+    CONSOLE_PRINTF("\t0b");
     for (int j = 31; j >= 0; j--) {
-        printf(value & (0b1 << j) ? "1" : "0");
+        CONSOLE_PRINTF(value & (0b1 << j) ? "1" : "0");
     }
-    printf("\r\n");
+    CONSOLE_PRINTF("\r\n");
 }
 
 /**
@@ -94,6 +126,14 @@ void PrintBinary32(uint32_t value) {
 uint16_t swap16(uint16_t value) { return (value << 8) | (value >> 8); }
 
 uint16_t CalculateCRC16(const uint8_t *buf, int32_t buf_len_bytes) {
+    if (buf == nullptr) {
+        CONSOLE_ERROR("CalculateCRC16", "Attempted to calculate CRC on null buffer!");
+        return 0;
+    }
+    if (buf_len_bytes < 0) {
+        CONSOLE_ERROR("CalculateCRC16", "Attempted to calculate CRC on buffer with negative length!");
+        return 0;
+    }
     uint8_t x;
     uint16_t crc = 0xFFFF;
     while (buf_len_bytes--) {
@@ -102,4 +142,34 @@ uint16_t CalculateCRC16(const uint8_t *buf, int32_t buf_len_bytes) {
         crc = (crc << 8) ^ ((uint16_t)(x << 12)) ^ ((uint16_t)(x << 5)) ^ ((uint16_t)x);
     }
     return swap16(crc);
+}
+
+uint16_t HexStringToByteBuffer(uint8_t *byte_buffer, const char *hex_string, uint16_t max_bytes) {
+    uint16_t bytes_written = 0;
+    for (uint16_t i = 0; i < max_bytes; i++) {
+        if (hex_string[i * kNibblesPerByte] == '\0' || hex_string[i * kNibblesPerByte + 1] == '\0') {
+            break;  // Stop if we hit the end of the string.
+        }
+        byte_buffer[i] = CHAR_TO_HEX(hex_string[i * kNibblesPerByte]) << 4;
+        byte_buffer[i] |= CHAR_TO_HEX(hex_string[i * kNibblesPerByte + 1]);
+        bytes_written++;
+    }
+    return bytes_written;
+}
+
+uint16_t ByteBufferToHexString(char *hex_string, const uint8_t *byte_buffer, uint16_t num_bytes, bool uppercase) {
+    for (uint16_t i = 0; i < num_bytes; i++) {
+        hex_string[i * kNibblesPerByte] = uppercase ? HEX_TO_CHAR_UPPER((byte_buffer[i] >> 4) & 0x0F)
+                                                    : HEX_TO_CHAR_LOWER((byte_buffer[i] >> 4) & 0x0F);
+        hex_string[i * kNibblesPerByte + 1] =
+            uppercase ? HEX_TO_CHAR_UPPER(byte_buffer[i] & 0x0F) : HEX_TO_CHAR_LOWER(byte_buffer[i] & 0x0F);
+    }
+    hex_string[num_bytes * kNibblesPerByte] = '\0';  // Null-terminate the string.
+    return num_bytes * kNibblesPerByte;
+}
+
+void PrintByteBuffer(const char *prefix, const uint8_t *byte_buffer, uint16_t num_bytes) {
+    char hex_string[num_bytes * kNibblesPerByte + 1];
+    ByteBufferToHexString(hex_string, byte_buffer, num_bytes);
+    CONSOLE_PRINTF("%s %s\r\n", prefix, hex_string);
 }

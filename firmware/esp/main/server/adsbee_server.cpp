@@ -1,6 +1,7 @@
 #include "adsbee_server.hh"
 
 #include "comms.hh"
+#include "gdl90/gdl90_utils.hh"
 #include "json_utils.hh"
 #include "pico.hh"
 #include "settings.hh"
@@ -40,7 +41,7 @@ extern const uint8_t style_css_end[] asm("_binary_style_css_end");
 extern const uint8_t favicon_png_start[] asm("_binary_favicon_png_start");
 extern const uint8_t favicon_png_end[] asm("_binary_favicon_png_end");
 
-GDL90Reporter gdl90;
+extern GDL90Reporter gdl90;
 
 /** "Pass-Through" functions used to access member functions in callbacks. **/
 
@@ -97,41 +98,6 @@ bool ADSBeeServer::Init() {
     settings_manager.Print();
     settings_manager.Apply();
 
-    // while (true) {
-    //     SemaphoreHandle_t settings_read_semaphore = xSemaphoreCreateBinary();
-    //     if (settings_read_semaphore == NULL) {
-    //         CONSOLE_ERROR("ADSBeeServer::Init", "Failed to create settings read semaphore.");
-    //         return false;
-    //     }
-
-    //     object_dictionary.RequestSCCommand(ObjectDictionary::SCCommandRequest{
-    //         .command = ObjectDictionary::SCCommand::kCmdWriteToSlaveRequireAck,
-    //         .addr = ObjectDictionary::Address::kAddrSettingsData,
-    //         .offset = 0,
-    //         .len = sizeof(SettingsManager::Settings),
-    //         .complete_callback =
-    //             [settings_read_semaphore]() {
-    //                 CONSOLE_INFO("ADSBeeServer::Init", "Settings data read from Pico.");
-    //                 xSemaphoreGive(settings_read_semaphore);
-    //             },
-    //     });  // Require ack.
-
-    //     // Wait for the callback to complete
-    //     xSemaphoreTake(settings_read_semaphore, portMAX_DELAY);
-    //     vSemaphoreDelete(settings_read_semaphore);
-
-    //     if (!pico.Read(ObjectDictionary::kAddrSettingsData, settings_manager.settings)) {
-    //         CONSOLE_ERROR("ADSBeeServer::Init", "Failed to read settings from Pico on startup.");
-    //         vTaskDelay(500 / portTICK_PERIOD_MS);  // Delay for 0.5s before retry.
-    //         // pico.Update();
-    //         continue;
-    //     } else {
-    //         settings_manager.Print();
-    //         settings_manager.Apply();
-    //         break;
-    //     }
-    // }
-
     return TCPServerInit();
 }
 
@@ -145,11 +111,6 @@ bool ADSBeeServer::Update() {
     // Prune aircraft dictionary. Need to do this up front so that we don't end up with a negative timestamp delta
     // caused by packets being ingested more recently than the timestamp we take at the beginning of this function.
     if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > kAircraftDictionaryUpdateIntervalMs) {
-        // uint32_t scratch;
-        // if (!pico.Read(ObjectDictionary::Address::kAddrScratch, scratch)) {
-        //     CONSOLE_ERROR("ADSBeeServer::Update", "Read of Pico scratch failed.");
-        // }
-
         aircraft_dictionary.Update(timestamp_ms);
         last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
         CONSOLE_INFO("ADSBeeServer::Update", "\t %d clients, %d aircraft, %lu squitter, %lu extended squitter",
@@ -179,6 +140,13 @@ bool ADSBeeServer::Update() {
             combined_metrics.raw_extended_squitter_frames_by_source[i] +=
                 adsbee_server.rp2040_aircraft_dictionary_metrics.raw_extended_squitter_frames_by_source[i];
         }
+        // Steal UAT metrics.
+        combined_metrics.raw_uat_adsb_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.raw_uat_adsb_frames;
+        combined_metrics.valid_uat_adsb_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.valid_uat_adsb_frames;
+        combined_metrics.raw_uat_uplink_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.raw_uat_uplink_frames;
+        combined_metrics.valid_uat_uplink_frames =
+            adsbee_server.rp2040_aircraft_dictionary_metrics.valid_uat_uplink_frames;
+
         // Broadcast dictionary metrics over the metrics Websocket.
         char metrics_message[AircraftDictionary::Metrics::kMetricsJSONMaxLen];
         snprintf(metrics_message, kNetworkMetricsMessageMaxLen, "{ \"aircraft_dictionary_metrics\": ");
@@ -197,40 +165,84 @@ bool ADSBeeServer::Update() {
         network_metrics.BroadcastMessage(metrics_message, strlen(metrics_message));
     }
 
-    // Ingest new packets into the dictionary.
-    Raw1090Packet raw_packet;
-    while (raw_transponder_packet_queue.Pop(raw_packet)) {
-        Decoded1090Packet decoded_packet = Decoded1090Packet(raw_packet);
-#ifdef VERBOSE_DEBUG
-        if (raw_packet.buffer_len_bits == Decoded1090Packet::kExtendedSquitterPacketLenBits) {
-            CONSOLE_INFO("ADSBeeServer::Update", "New message: 0x%08lx|%08lx|%08lx|%04lx RSSI=%ddBm MLAT=%llu",
-                         raw_packet.buffer[0], raw_packet.buffer[1], raw_packet.buffer[2],
-                         (raw_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_packet.sigs_dbm,
-                         raw_packet.mlat_48mhz_64bit_counts);
+    // Run raw packet ingestion and reporting if queues are >50% full or every 200ms.
+    bool at_least_one_queue_half_full =
+        (raw_mode_s_packet_in_queue.Length() > raw_mode_s_packet_in_queue.MaxNumElements() / 2) ||
+        (raw_uat_adsb_packet_in_queue.Length() > raw_uat_adsb_packet_in_queue.MaxNumElements() / 2) ||
+        (raw_uat_uplink_packet_in_queue.Length() > raw_uat_uplink_packet_in_queue.MaxNumElements() / 2);
+
+    if (timestamp_ms - last_raw_packet_process_timestamp_ms_ > kRawPacketProcessingIntervalMs ||
+        at_least_one_queue_half_full) {
+        last_raw_packet_process_timestamp_ms_ = timestamp_ms;
+
+        // Assemble a CompositeArray of transponder packets to report.
+        // NOTE: Rate metering of raw packets is done by upstream RP2040, which only forward packets on the raw
+        // packet reporting time interval.
+        uint8_t raw_packets_buf[CompositeArray::RawPackets::kMaxLenBytes];
+        CompositeArray::RawPackets raw_packets = CompositeArray::PackRawPacketsBuffer(
+            raw_packets_buf, sizeof(raw_packets_buf), &(adsbee_server.raw_mode_s_packet_in_queue),
+            &(adsbee_server.raw_uat_adsb_packet_in_queue), &(adsbee_server.raw_uat_uplink_packet_in_queue));
+
+        if (!raw_packets.IsValid()) {
+            if (raw_packets.len_bytes > sizeof(CompositeArray::RawPackets::Header)) {
+                CONSOLE_ERROR("ADSBeeServer::Update",
+                              "Invalid CompositeArray of transponder packets (len_bytes = %u). Dropping packets.",
+                              raw_packets.len_bytes);
+            }
+            // Else it's OK to have no packets.
         } else {
-            CONSOLE_INFO("ADSBeeServer::Update", "New message: 0x%08lx|%06lx RSSI=%ddBm MLAT=%llu",
-                         raw_packet.buffer[0], (raw_packet.buffer[1]) >> (2 * kBitsPerNibble), raw_packet.sigs_dbm,
-                         raw_packet.mlat_48mhz_64bit_counts);
-        }
-        CONSOLE_INFO("ADSBeeServer::Update", "\tdf=%d icao_address=0x%06lx", decoded_packet.GetDownlinkFormat(),
-                     decoded_packet.GetICAOAddress());
-#endif
+            // Add packets to aircraft dictionary and then report them.
 
-        if (aircraft_dictionary.IngestDecoded1090Packet(decoded_packet)) {
-            // NOTE: Pushing to a queue here will only forward valid packets!
+            // Mode S Packets
+            for (uint16_t i = 0; i < raw_packets.header->num_mode_s_packets; i++) {
+                RawModeSPacket &raw_mode_s_packet = raw_packets.mode_s_packets[i];
+                DecodedModeSPacket decoded_packet = DecodedModeSPacket(raw_mode_s_packet);
+                if (!decoded_packet.is_valid) {
+                    CONSOLE_ERROR("ADSBeeServer::Update", "Received invalid Mode S packet.");
+                    continue;
+                }
 #ifdef VERBOSE_DEBUG
-            CONSOLE_INFO("ADSBeeServer::Update", "\taircraft_dictionary: %d aircraft",
-                         aircraft_dictionary.GetNumAircraft());
+                if (raw_mode_s_packet.buffer_len_bytes == RawModeSPacket::kExtendedSquitterPacketLenBytes) {
+                    CONSOLE_INFO("ADSBeeServer::Update", "New message: 0x%08lx|%08lx|%08lx|%04lx RSSI=%ddBm MLAT=%llu",
+                                 raw_mode_s_packet.buffer[0], raw_mode_s_packet.buffer[1], raw_mode_s_packet.buffer[2],
+                                 (raw_mode_s_packet.buffer[3]) >> (4 * kBitsPerNibble), raw_mode_s_packet.sigs_dbm,
+                                 raw_mode_s_packet.mlat_48mhz_64bit_counts);
+                } else {
+                    CONSOLE_INFO("ADSBeeServer::Update", "New message: 0x%08lx|%06lx RSSI=%ddBm MLAT=%llu",
+                                 raw_mode_s_packet.buffer[0], (raw_mode_s_packet.buffer[1]) >> (2 * kBitsPerNibble),
+                                 raw_mode_s_packet.sigs_dbm, raw_mode_s_packet.mlat_48mhz_64bit_counts);
+                }
+                CONSOLE_INFO("ADSBeeServer::Update", "\tdf=%d icao_address=0x%06lx", decoded_packet.downlink_format,
+                             decoded_packet.icao_address);
 #endif
-        }
 
-        // Send decoded transponder packet to feeds.
-        if ((comms_manager.WiFiStationHasIP() || comms_manager.EthernetHasIP()) &&
-            !comms_manager.IPWANSendDecoded1090Packet(decoded_packet)) {
-            CONSOLE_ERROR(
-                "ADSBeeServer::Update",
-                "Encountered error while sending decoded transponder packet to feeds from ESP32 as WiFi station.");
-            ret = false;
+                if (!aircraft_dictionary.IngestDecodedModeSPacket(decoded_packet)) {
+                    // NOTE: Pushing to a queue here will only forward valid packets!
+                    CONSOLE_ERROR("ADSBeeServer::Update",
+                                  "Failed to ingest decoded Mode S packet into aircraft dictionary.");
+                }
+            }
+
+            // UAT ADSB Packets
+            for (uint16_t i = 0; i < raw_packets.header->num_uat_adsb_packets; i++) {
+                RawUATADSBPacket &raw_uat_adsb_packet = raw_packets.uat_adsb_packets[i];
+                DecodedUATADSBPacket decoded_packet = DecodedUATADSBPacket(raw_uat_adsb_packet);
+                if (!decoded_packet.is_valid) {
+                    CONSOLE_ERROR("ADSBeeServer::Update", "Received invalid UAT ADSB packet.");
+                    continue;
+                }
+                if (!aircraft_dictionary.IngestDecodedUATADSBPacket(decoded_packet)) {
+                    CONSOLE_ERROR("ADSBeeServer::Update",
+                                  "Failed to ingest decoded UAT ADSB packet into aircraft dictionary.");
+                }
+            }
+
+            // UAT Uplink Packets
+            // We don't currently digest uplink packets, they just get forwarded.
+            // TODO: Add uplink packet forwarding via GDL90.
+
+            // Forward packets to WAN.
+            comms_manager.IPWANSendRawPacketCompositeArray(raw_packets_buf);
         }
     }
 
@@ -252,17 +264,6 @@ bool ADSBeeServer::Update() {
     return ret;
 }
 
-bool ADSBeeServer::HandleRaw1090Packet(Raw1090Packet &raw_packet) {
-    bool ret = true;
-    if (!raw_transponder_packet_queue.Push(raw_packet)) {
-        CONSOLE_ERROR("ADSBeeServer::HandleRaw1090Packet",
-                      "Push to transponder packet queue failed. May have overflowed?");
-        raw_transponder_packet_queue.Clear();
-        ret = false;
-    }
-    return ret;
-}
-
 void ADSBeeServer::SPIReceiveTask() {
     CONSOLE_INFO("ADSBeeServer::SPIReceiveTask", "Started SPI receive task.");
 
@@ -281,6 +282,10 @@ void ADSBeeServer::SPIReceiveTask() {
 }
 
 bool ADSBeeServer::ReportGDL90() {
+    if (!settings_manager.settings.core_network_settings.wifi_ap_enabled) {
+        return true;  // Nothing to do.
+    }
+
     CommsManager::NetworkMessage message;
     message.port = kGDL90Port;
 
@@ -296,19 +301,56 @@ bool ADSBeeServer::ReportGDL90() {
     comms_manager.WiFiAccessPointSendMessageToAllStations(message);
 
     // Traffic Reports
-    uint16_t aircraft_index = 0;  // Just used for error reporting.
+    int16_t aircraft_index = -1;  // Just used for error reporting.
+    uint8_t aircraft_msg_buf[CommsManager::NetworkMessage::kMaxLenBytes];
+    uint16_t aircraft_msg_buf_len = 0;
     for (auto &itr : aircraft_dictionary.dict) {
-        const Aircraft1090 &aircraft = itr.second;
-        printf("\t%s: %.5f %.5f %ld\r\n", aircraft.callsign, aircraft.latitude_deg, aircraft.longitude_deg,
-               aircraft.baro_altitude_ft);
-        message.len = gdl90.WriteGDL90TargetReportMessage(message.data, aircraft, false);
-        if (settings_manager.settings.core_network_settings.wifi_ap_enabled &&
-            !comms_manager.WiFiAccessPointSendMessageToAllStations(message)) {
-            CONSOLE_ERROR("ADSBeeServer::ReportGDL90", "Failed to send info about aircraft %d to all clients.",
-                          aircraft_index);
-        }
         aircraft_index++;
+
+        if (ModeSAircraft *mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
+            if (!mode_s_aircraft->HasBitFlag(ModeSAircraft::kBitFlagPositionValid)) {
+                // Don't report aircraft without a valid position.
+                continue;
+            }
+            printf("\t#A %s (0x%06lX): %.5f %.5f %ld\r\n", mode_s_aircraft->callsign, mode_s_aircraft->icao_address,
+                   mode_s_aircraft->latitude_deg, mode_s_aircraft->longitude_deg, mode_s_aircraft->baro_altitude_ft);
+            aircraft_msg_buf_len = gdl90.WriteGDL90TargetReportMessage(aircraft_msg_buf, *mode_s_aircraft, false);
+        } else if (UATAircraft *uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
+            if (!uat_aircraft->HasBitFlag(UATAircraft::kBitFlagPositionValid)) {
+                // Don't report aircraft without a valid position.
+                continue;
+            }
+            printf("\t#U %s (0x%06lX): %.5f %.5f %ld\r\n", uat_aircraft->callsign, uat_aircraft->icao_address,
+                   uat_aircraft->latitude_deg, uat_aircraft->longitude_deg, uat_aircraft->baro_altitude_ft);
+            aircraft_msg_buf_len = gdl90.WriteGDL90TargetReportMessage(aircraft_msg_buf, *uat_aircraft, false);
+        } else {
+            CONSOLE_WARNING("CommsManager::ReportCSBee", "Unknown aircraft type in dictionary for UID 0x%lx.",
+                            itr.first);
+            continue;
+        }
+
+        if (message.len + aircraft_msg_buf_len <= CommsManager::NetworkMessage::kMaxLenBytes) {
+            // We can tack this aircraft message onto the existing message to save space in the queue.
+            memcpy(message.data + message.len, aircraft_msg_buf, aircraft_msg_buf_len);
+            message.len += aircraft_msg_buf_len;
+        } else {
+            // Send the existing message and start a new one.
+            if (!comms_manager.WiFiAccessPointSendMessageToAllStations(message)) {
+                CONSOLE_ERROR("ADSBeeServer::ReportGDL90", "Failed to send info about aircraft %d to all clients.",
+                              aircraft_index);
+            }
+            memcpy(message.data, aircraft_msg_buf, aircraft_msg_buf_len);
+            message.len = aircraft_msg_buf_len;
+        }
     }
+
+    // Send any remaining message data.
+    if (message.len > 0) {
+        if (!comms_manager.WiFiAccessPointSendMessageToAllStations(message)) {
+            CONSOLE_ERROR("ADSBeeServer::ReportGDL90", "Failed to send final aircraft message to all clients.");
+        }
+    }
+
     return true;
 }
 
@@ -460,7 +502,7 @@ void NetworkConsoleMessageReceivedCallback(WebSocketServer *ws_server, int clien
         return;
     }
     for (uint16_t i = 0; i < ws_pkt.len; i++) {
-        if (!object_dictionary.network_console_rx_queue.Push(message[i])) {
+        if (!object_dictionary.network_console_rx_queue.Enqueue(message[i])) {
             CONSOLE_ERROR("NetworkConsoleMessageReceivedCallback",
                           "Failed to push character %d of network console message to tx queue.", i + 1);
             xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
@@ -478,15 +520,21 @@ bool ADSBeeServer::TCPServerInit() {
     esp_err_t ret = httpd_start(&server, &config);
     if (ret == ESP_OK) {
         // Root URI handler (HTML)
-        httpd_uri_t root = {.uri = "/", .method = HTTP_GET, .handler = root_handler, .user_ctx = NULL};
+        httpd_uri_t root = {
+            .uri = "/", .method = HTTP_GET, .handler = root_handler, .user_ctx = NULL, .is_websocket = false};
         ESP_ERROR_CHECK(httpd_register_uri_handler(server, &root));
 
         // CSS URI handler
-        httpd_uri_t css = {.uri = "/style.css", .method = HTTP_GET, .handler = css_handler, .user_ctx = NULL};
+        httpd_uri_t css = {
+            .uri = "/style.css", .method = HTTP_GET, .handler = css_handler, .user_ctx = NULL, .is_websocket = false};
         ESP_ERROR_CHECK(httpd_register_uri_handler(server, &css));
 
         // Favicon URI handler
-        httpd_uri_t favicon = {.uri = "/favicon.png", .method = HTTP_GET, .handler = favicon_handler, .user_ctx = NULL};
+        httpd_uri_t favicon = {.uri = "/favicon.png",
+                               .method = HTTP_GET,
+                               .handler = favicon_handler,
+                               .user_ctx = NULL,
+                               .is_websocket = false};
         ESP_ERROR_CHECK(httpd_register_uri_handler(server, &favicon));
 
         network_console = WebSocketServer({.label = "Network Console",

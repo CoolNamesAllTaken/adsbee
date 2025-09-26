@@ -1,5 +1,4 @@
-#ifndef COMMS_HH_
-#define COMMS_HH_
+#pragma once
 
 #include "data_structures.hh"
 #include "driver/gpio.h"
@@ -10,20 +9,30 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
-#include "gdl90/gdl90_utils.hh"
+// #include "gdl90/gdl90_utils.hh"
+#include "composite_array.hh"
 #include "lwip/sockets.h"  // For port definition.
+#include "mode_s_packet.hh"
 #include "nvs_flash.h"
 #include "object_dictionary.hh"
 #include "settings.hh"
 
 class CommsManager {
    public:
-    static const uint16_t kMaxNetworkMessageLenBytes = 256;
-    static const uint16_t kWiFiMessageQueueLen = 110;
+    // Packet queue sizes used to stage packets for reporting.
+    static const uint16_t kMaxNumModeSPackets = 100;
+    static const uint16_t kMaxNumUATADSBPackets = 20;
+    static const uint16_t kMaxNumUATUplinkPackets = 2;
+
+    // Reporting via the IP task is done by forwarding CompositeArray::RawPackets buffers from the ADSBeeServer task.
+    // These buffers are put into a queue, which has its element size and number of elements set here.
+    static const uint16_t kReportingCompositeArrayQueueNumElements = 2;
+
+    static const uint16_t kWiFiMessageQueueLen = 40;
     // Reconnect intervals must be long enough that we register an IP lost event before trying the reconnect, otherwise
     // we get stuck in limbo where we may attempt a reconnect but the new IP address is never looked for (not controlled
     // by our own flags, but by internal LwIP stuff).
-    static const uint32_t kWiFiStaReconnectIntervalMs = 10e3;
+    static const uint32_t kWiFiSTAReconnectIntervalMs = 10e3;
     static const uint32_t kEthernetReconnectIntervalMs = 10e3;
     static const uint32_t kWiFiSTATaskUpdateIntervalMs = 100;
     static const uint32_t kWiFiSTATaskUpdateIntervalTicks = kWiFiSTATaskUpdateIntervalMs / portTICK_PERIOD_MS;
@@ -40,23 +49,25 @@ class CommsManager {
     };
 
     struct NetworkMessage {
+        static const uint16_t kMaxLenBytes = 600;  // Needs to be big enough for UAT uplink packets.
         in_port_t port = 0;
         uint16_t len = 0;
-        uint8_t data[kMaxNetworkMessageLenBytes];
+        uint8_t data[kMaxLenBytes];
 
-        NetworkMessage() { memset(data, 0x0, kMaxNetworkMessageLenBytes); }
+        NetworkMessage() { memset(data, 0x0, kMaxLenBytes); }
     };
 
     CommsManager(CommsManagerConfig config_in) : config_(config_in) {
         wifi_clients_list_mutex_ = xSemaphoreCreateMutex();
         wifi_ap_message_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(NetworkMessage));
-        ip_wan_decoded_transponder_packet_queue_ = xQueueCreate(kWiFiMessageQueueLen, sizeof(Decoded1090Packet));
+        ip_wan_reporting_composite_array_queue_ =
+            xQueueCreate(kReportingCompositeArrayQueueNumElements, CompositeArray::RawPackets::kMaxLenBytes);
     }
 
     ~CommsManager() {
         vSemaphoreDelete(wifi_clients_list_mutex_);
         vQueueDelete(wifi_ap_message_queue_);
-        vQueueDelete(ip_wan_decoded_transponder_packet_queue_);
+        vQueueDelete(ip_wan_reporting_composite_array_queue_);
     }
 
     /**
@@ -109,7 +120,7 @@ class CommsManager {
      * Returns whether the ESP32 is connected to an external network via Ethernet.
      * @retval True if connected and assigned IP address, false otherwise.
      */
-    bool EthernetHasIP() { return ethernet_has_ip_; }
+    inline bool EthernetHasIP() { return ethernet_has_ip_; }
 
     /**
      * Initialize the Ethernet peripheral (WIZNet W5500).
@@ -132,6 +143,11 @@ class CommsManager {
     ObjectDictionary::ESP32NetworkInfo GetNetworkInfo();
 
     inline uint16_t GetNumWiFiClients() { return num_wifi_clients_; }
+
+    /**
+     * Returns whether the ESP32 is connected to an external network via either Ethernet or WiFi.
+     */
+    inline bool HasIP() { return wifi_sta_has_ip_ || ethernet_has_ip_; }
 
     /**
      * Handler for IP events associated with ethernet and WiFi. Public so that pass through functions can access it.
@@ -171,7 +187,7 @@ class CommsManager {
      * Returns whether the ESP32 is connected to an external WiFi network as a station.
      * @retval True if connected and assigned IP address, false otherwise.
      */
-    bool WiFiStationHasIP() { return wifi_sta_has_ip_; }
+    inline bool WiFiStationHasIP() { return wifi_sta_has_ip_; }
 
     // Public so that pass-through functions can access it.
     void WiFiEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
@@ -182,12 +198,13 @@ class CommsManager {
     void IPWANTask(void* pvParameters);
 
     /**
-     * Sends a raw transponder packet to feeds via the external WiFi network that the ESP32 is a station on. It's
-     * recommended to only call this function if WiFiStationHasIP() returns true, otherwise it will throw a warning.
-     * @param[in] decoded_packet Decoded1090Packet to send.
+     * Sends a composite array of raw packets to feeds via the external IP network that the ESP32 is a station on. It's
+     * recommended to only call this function if HasIP() returns true, otherwise it will throw a warning.
+     * @param[in] raw_packets_buf Buffer containing the CompositeArray::RawPackets to send. Assumed to be of size
+     * CompositeArray::RawPackets::kMaxLenBytes.
      * @retval True if packet was successfully sent, false otherwise.
      */
-    bool IPWANSendDecoded1090Packet(Decoded1090Packet& decoded_packet);
+    bool IPWANSendRawPacketCompositeArray(uint8_t* raw_packets_buf);
 
     // Network hostname.
     char hostname[SettingsManager::Settings::kHostnameMaxLen + 1] = {0};
@@ -200,8 +217,6 @@ class CommsManager {
         0};  // Netmask of the ESP32 Ethernet interface.
     char ethernet_gateway[SettingsManager::Settings::kIPAddrStrLen + 1] = {
         0};  // Gateway of the ESP32 Ethernet interface.
-
-    // Ethernet public variables.
 
     // WiFi AP public variables.
     bool wifi_ap_enabled = true;
@@ -220,13 +235,39 @@ class CommsManager {
     // Feed statistics (messages per second).
     uint16_t feed_mps[SettingsManager::Settings::kMaxNumFeeds] = {0};
 
+    PFBQueue<RawModeSPacket> raw_mode_s_packet_reporting_queue = PFBQueue<RawModeSPacket>(
+        {.buf_len_num_elements = kMaxNumModeSPackets, .buffer = raw_mode_s_packet_reporting_queue_buffer_});
+    PFBQueue<RawUATADSBPacket> raw_uat_adsb_packet_reporting_queue = PFBQueue<RawUATADSBPacket>(
+        {.buf_len_num_elements = kMaxNumUATADSBPackets, .buffer = raw_uat_adsb_packet_reporting_queue_buffer_});
+    PFBQueue<RawUATUplinkPacket> raw_uat_uplink_packet_reporting_queue = PFBQueue<RawUATUplinkPacket>(
+        {.buf_len_num_elements = kMaxNumUATUplinkPackets, .buffer = raw_uat_uplink_packet_reporting_queue_buffer_});
+
+#include "comms_reporting.hh"
+
+    /**
+     * Sends a buffer to a given feed.
+     * @param[in] iface Feed index.
+     * @param[in] buf Buffer to send.
+     * @param[in] buf_len Number of bytes to send.
+     * @retval True if bytes were sent successfully, false otherwise.
+     */
+    bool SendBuf(uint16_t iface, const char* buf, uint16_t buf_len);
+
    private:
+    bool ConnectFeedSocket(uint16_t feed_index);
+    void CloseFeedSocket(uint16_t feed_index);
+
     /**
      * Initializes the IP event handler that is common to both Ethernet and WiFi events. Automatically called by
      * WiFiInit() and EthernetInit().
      * @retval True if successfully initialized, false otherwise.
      */
     bool IPInit();
+
+    /**
+     * Updates the feed metrics values and prints a cute lil message.
+     */
+    void UpdateFeedMetrics();
 
     /**
      * Adds a WiFi client to the WiFi client list. Takes both an IP and a MAC address because this is when the IP
@@ -265,7 +306,7 @@ class CommsManager {
 
     // WiFi STA private variables.
     esp_netif_t* wifi_sta_netif_ = nullptr;
-    QueueHandle_t ip_wan_decoded_transponder_packet_queue_;
+    QueueHandle_t ip_wan_reporting_composite_array_queue_;
     TaskHandle_t wifi_ap_task_handle = nullptr;
     TaskHandle_t ip_wan_task_handle = nullptr;
     bool wifi_sta_connected_ = false;
@@ -274,6 +315,21 @@ class CommsManager {
 
     uint16_t feed_mps_counter_[SettingsManager::Settings::kMaxNumFeeds] = {0};
     uint32_t feed_mps_last_update_timestamp_ms_ = 0;
+    int feed_sock_[SettingsManager::Settings::kMaxNumFeeds] = {0};
+    bool feed_sock_is_connected_[SettingsManager::Settings::kMaxNumFeeds] = {false};
+    uint32_t feed_sock_last_connect_timestamp_ms_[SettingsManager::Settings::kMaxNumFeeds] = {0};
+
+    // Queue for raw packets staged for reporting via comms interfaces.
+    RawModeSPacket raw_mode_s_packet_reporting_queue_buffer_[kMaxNumModeSPackets];
+    RawUATADSBPacket raw_uat_adsb_packet_reporting_queue_buffer_[kMaxNumUATADSBPackets];
+    RawUATUplinkPacket raw_uat_uplink_packet_reporting_queue_buffer_[kMaxNumUATUplinkPackets];
+
+    // Reporting protocol timestamps
+    // NOTE: Raw reporting interval used for RAW and BEAST protocols as well as internal functions.
+    uint32_t last_raw_report_timestamp_ms_ = 0;
+    uint32_t last_csbee_report_timestamp_ms_ = 0;
+    uint32_t last_mavlink_report_timestamp_ms_ = 0;
+    uint32_t last_gdl90_report_timestamp_ms_ = 0;
 };
 
 extern CommsManager comms_manager;
@@ -288,5 +344,3 @@ extern CommsManager comms_manager;
     ESP_LOGI(tag, __VA_ARGS__); \
     comms_manager.LogMessageToCoprocessor(SettingsManager::LogLevel::kInfo, tag, __VA_ARGS__);
 #define CONSOLE_PRINTF(...) printf(__VA_ARGS__);
-
-#endif /* COMMS_HH_ */

@@ -13,7 +13,7 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 9;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 10;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 class SettingsManager {
@@ -34,7 +34,8 @@ class SettingsManager {
         kNoReports = 0,
         kRaw,
         kBeast,
-        kBeastRaw,
+        kBeastNoUAT,
+        kBeastNoUATUplink,
         kCSBee,
         kMAVLINK1,
         kMAVLINK2,
@@ -59,12 +60,33 @@ class SettingsManager {
     };
     static const char kSubGHzModeStrs[kNumSubGHzRadioModes][kSubGHzModeStrMaxLen];
 
+    // Receiver position settings.
+    struct RxPosition {
+        enum PositionSource : uint8_t {
+            kPositionSourceNone = 0,
+            kPositionSourceFixed = 1,
+            kPositionSourceGNSS = 2,
+            kPositionSourceAutoAircraftLowest = 3,
+            kPositionSourceAutoAircraftICAO = 4,
+            kNumPositionSources
+        };
+
+        static const uint16_t kPositionSourceStrMaxLen = 30;
+        static const char kPositionSourceStrs[kNumPositionSources][kPositionSourceStrMaxLen];
+
+        PositionSource source = kPositionSourceNone;
+        float latitude_deg = 0.0;     // Degrees, WGS84
+        float longitude_deg = 0.0;    // Degrees, WGS84
+        float gnss_altitude_m = 0.0;  // Meters, WGS84
+        float baro_altitude_m = 0.0;  // Meters, AMSL
+        float heading_deg = 0.0;      // Degrees from true north
+        float speed_kts = 0.0;        // Speed over ground in knots
+    };
+
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a
     // firmware upgrade if the format of the settings struct changes.
     struct Settings {
-        static constexpr int kDefaultTLMV = 1300;  // [mV]
-        static constexpr uint16_t kMaxNumTransponderPackets =
-            100;  // Defines size of ADSBPacket circular buffer (PFBQueue).
+        static constexpr int kDefaultTLOffsetMV = 300;  // [mV]
         static constexpr uint32_t kDefaultWatchdogTimeoutSec = 10;
         // NOTE: Lengths do not include null terminator.
         static constexpr uint16_t kHostnameMaxLen = 32;
@@ -142,27 +164,37 @@ class SettingsManager {
         CoreNetworkSettings core_network_settings;
 
         // ADSBee settings
-        bool receiver_enabled = true;
-        int tl_mv = kDefaultTLMV;
-        bool bias_tee_enabled = false;
+        bool r1090_rx_enabled = true;
+        int tl_offset_mv = kDefaultTLOffsetMV;
+        bool r1090_bias_tee_enabled = false;
         uint32_t watchdog_timeout_sec = kDefaultWatchdogTimeoutSec;
 
         // CommunicationsManager settings
         LogLevel log_level = LogLevel::kWarnings;
         ReportingProtocol reporting_protocols[SerialInterface::kNumSerialInterfaces - 1] = {
-            ReportingProtocol::kNoReports, ReportingProtocol::kMAVLINK1};
+            ReportingProtocol::kNoReports, ReportingProtocol::kNoReports};
         uint32_t comms_uart_baud_rate = 115200;
         uint32_t gnss_uart_baud_rate = 9600;
 
         // Sub-GHz settings
-        EnableState subg_enabled = EnableState::kEnableStateEnabled;         // High impedance state by default.
-        SubGHzRadioMode subg_mode = SubGHzRadioMode::kSubGHzRadioModeUATRx;  // Default to UAT mode (978MHz receiver
+        EnableState subg_enabled = EnableState::kEnableStateEnabled;  // High impedance state by default.
+        bool subg_rx_enabled = true;
+        bool subg_bias_tee_enabled = false;
+        SubGHzRadioMode subg_mode = SubGHzRadioMode::kSubGHzRadioModeUATRx;  // Default to UAT mode (978MHz receiver).
 
+        // Feed settings
         char feed_uris[kMaxNumFeeds][kFeedURIMaxNumChars + 1];
         uint16_t feed_ports[kMaxNumFeeds];
         bool feed_is_active[kMaxNumFeeds];
         ReportingProtocol feed_protocols[kMaxNumFeeds];
         uint8_t feed_receiver_ids[kMaxNumFeeds][kFeedReceiverIDNumBytes];
+
+        // MAVLINK settings
+        uint8_t mavlink_system_id = 1;
+        uint8_t mavlink_component_id = 156;  // Default to MAV_COMP_ID_ADSB (156).
+
+        // Receiver position settings
+        RxPosition rx_position;
 
         /**
          * Default constructor.
@@ -203,25 +235,25 @@ class SettingsManager {
             feed_uris[kMaxNumFeeds - 1][kFeedURIMaxNumChars] = '\0';
             feed_ports[kMaxNumFeeds - 1] = 30004;
             feed_is_active[kMaxNumFeeds - 1] = true;
-            feed_protocols[kMaxNumFeeds - 1] = kBeast;
+            feed_protocols[kMaxNumFeeds - 1] = kBeastNoUAT;
             // airplanes.live: feed.airplanes.live:30004, Beast
             strncpy(feed_uris[kMaxNumFeeds - 2], "feed.airplanes.live", kFeedURIMaxNumChars);
             feed_uris[kMaxNumFeeds - 2][kFeedURIMaxNumChars] = '\0';
             feed_ports[kMaxNumFeeds - 2] = 30004;
             feed_is_active[kMaxNumFeeds - 2] = true;
-            feed_protocols[kMaxNumFeeds - 2] = kBeast;
+            feed_protocols[kMaxNumFeeds - 2] = kBeastNoUAT;
             // adsb.lol: feed.adsb.lol:30004, Beast
             strncpy(feed_uris[kMaxNumFeeds - 3], "feed.adsb.lol", kFeedURIMaxNumChars);
             feed_uris[kMaxNumFeeds - 3][kFeedURIMaxNumChars] = '\0';
             feed_ports[kMaxNumFeeds - 3] = 30004;
             feed_is_active[kMaxNumFeeds - 3] = true;
-            feed_protocols[kMaxNumFeeds - 3] = kBeast;
+            feed_protocols[kMaxNumFeeds - 3] = kBeastNoUAT;
             // whereplane.xyz: feed.whereplane.xyz:30004, Beast
             strncpy(feed_uris[kMaxNumFeeds - 4], "feed.whereplane.xyz", kFeedURIMaxNumChars);
             feed_uris[kMaxNumFeeds - 4][kFeedURIMaxNumChars] = '\0';
             feed_ports[kMaxNumFeeds - 4] = 30004;
             feed_is_active[kMaxNumFeeds - 4] = false;
-            feed_protocols[kMaxNumFeeds - 4] = kBeast;
+            feed_protocols[kMaxNumFeeds - 4] = kBeastNoUAT;
         }
     };
 
@@ -310,6 +342,13 @@ class SettingsManager {
     }
 
     /**
+     * Used to retrieve device information, either directly from EEPROM or via interprocessor SPI bus.
+     * @param[in] device_info DeviceInfo struct to set.
+     * @retval True if device info was retrieved successfully, false otherwise.
+     */
+    static bool GetDeviceInfo(DeviceInfo &device_info);
+
+    /**
      * Loads settings from EEPROM. Assumes settings are stored at address 0x0 and doesn't do any integrity check.
      * @retval True if succeeded, false otherwise.
      */
@@ -370,13 +409,13 @@ class SettingsManager {
      * @retval True if device info was set successfully, false otherwise.
      */
     static bool SetDeviceInfo(const DeviceInfo &device_info);
-#endif
+
     /**
-     * Used to retrieve device information, either directly from EEPROM or via interprocessor SPI bus.
-     * @param[in] device_info DeviceInfo struct to set.
-     * @retval True if device info was retrieved successfully, false otherwise.
+     * Sends the settings struct to the ESP32 and CC1312 via SPI. Call this after changing values that need to be
+     * propagated to coprocessors, like log level or bias tee settings.
      */
-    static bool GetDeviceInfo(DeviceInfo &device_info);
+    bool SyncToCoprocessors();
+#endif
 
     Settings settings;
 

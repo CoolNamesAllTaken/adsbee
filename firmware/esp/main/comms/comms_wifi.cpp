@@ -20,6 +20,8 @@ static const uint16_t kWiFiNumRetries = 3;
 static const uint16_t kWiFiRetryWaitTimeMs = 100;
 static const uint16_t kWiFiStaMaxNumReconnectAttempts = 5;
 static const uint16_t kWiFiScanDefaultListSize = 20;
+static const uint16_t kWiFiAPMessageQueueTimeout = 100;     // ms
+static const uint16_t kWiFiSTAMessageQueueTimeoutMs = 100;  // ms
 
 /* The event group allows multiple bits for each event, but we only care about two events:
  * - we are connected to the AP with an IP
@@ -77,7 +79,7 @@ void CommsManager::WiFiEventHandler(void* arg, esp_event_base_t event_base, int3
             wifi_sta_connected_ = false;
             wifi_sta_has_ip_ = false;
             if (wifi_sta_enabled) {
-                ScheduleDelayedFunctionCall(kWiFiStaReconnectIntervalMs, &connect_to_wifi);
+                ScheduleDelayedFunctionCall(kWiFiSTAReconnectIntervalMs, &connect_to_wifi);
             }
             break;
         }
@@ -138,7 +140,8 @@ void CommsManager::WiFiAccessPointTask(void* pvParameters) {
                         // CONSOLE_ERROR("CommsManager::WiFiAccessPointTask", "Error occurred during sending:
                         // errno %d.", errno);
                         CONSOLE_ERROR("CommsManager::WiFiAccessPointTask",
-                                      "Error occurred during sending: errno %d. Tried %d times.", errno, num_tries);
+                                      "Error occurred during sending: errno %d (%s). Tried %d times.", errno,
+                                      strerror(errno), num_tries);
                     }
                 }
             }
@@ -220,8 +223,8 @@ bool CommsManager::WiFiInit() {
 
     if (wifi_ap_enabled) {
         CONSOLE_INFO("CommsManager::WiFiInit", "WiFi AP started. SSID:%s password:%s", wifi_ap_ssid, wifi_ap_password);
-        xTaskCreatePinnedToCore(wifi_access_point_task, "wifi_ap_task", 4096, &wifi_ap_task_handle, kWiFiAPTaskPriority,
-                                NULL, kWiFiAPTaskCore);
+        xTaskCreatePinnedToCore(wifi_access_point_task, "wifi_ap_task", 2 * 4096, &wifi_ap_task_handle,
+                                kWiFiAPTaskPriority, NULL, kWiFiAPTaskCore);
     }
     if (wifi_sta_enabled) {
         char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen];
@@ -242,20 +245,23 @@ bool CommsManager::WiFiDeInit() {
     return false;   // abort didn't work
 }
 
-bool CommsManager::IPWANSendDecoded1090Packet(Decoded1090Packet& decoded_packet) {
-    if (!wifi_sta_has_ip_ && !ethernet_has_ip_) {
+bool CommsManager::IPWANSendRawPacketCompositeArray(uint8_t* raw_packets_buf) {
+    if (!comms_manager.HasIP()) {
         CONSOLE_WARNING(
-            "CommsManager::IPWANSendDecoded1090Packet",
-            "Can't push to WAN transponder packet queue if WiFi station is not running and Ethernet is disconnected.");
+            "CommsManager::IPWANSendRawPacketCompositeArray",
+            "Can't push to WAN raw packet composite array queue if WiFi station is not running and Ethernet is "
+            "disconnected.");
         return false;  // Task not started yet, queue not created yet. Pushing to queue would cause an abort.
     }
-    int err = xQueueSend(ip_wan_decoded_transponder_packet_queue_, &decoded_packet, 0);
+    int err = xQueueSend(ip_wan_reporting_composite_array_queue_, raw_packets_buf,
+                         pdMS_TO_TICKS(kWiFiSTAMessageQueueTimeoutMs));
     if (err == errQUEUE_FULL) {
-        CONSOLE_WARNING("CommsManager::IPWANSendDecoded1090Packet", "Overflowed WAN transponder packet queue.");
-        xQueueReset(ip_wan_decoded_transponder_packet_queue_);
+        CONSOLE_WARNING("CommsManager::IPWANSendRawPacketCompositeArray",
+                        "Overflowed WAN raw packet composite array queue.");
+        xQueueReset(ip_wan_reporting_composite_array_queue_);
         return false;
     } else if (err != pdTRUE) {
-        CONSOLE_WARNING("CommsManager::IPWANSendDecoded1090Packet",
+        CONSOLE_WARNING("CommsManager::IPWANSendRawPacketCompositeArray",
                         "Pushing transponder packet to WAN queue resulted in error code %d.", err);
         return false;
     }
@@ -268,7 +274,8 @@ bool CommsManager::WiFiAccessPointSendMessageToAllStations(NetworkMessage& messa
                         "Can't push to WiFi AP message queue if AP is not running.");
         return false;  // Task not started yet, pushing to queue could create an overflow.
     }
-    int err = xQueueSend(wifi_ap_message_queue_, &message, 0);
+    // If the queue is full, wait up to 10ms for it to have space.
+    int err = xQueueSend(wifi_ap_message_queue_, &message, pdMS_TO_TICKS(kWiFiAPMessageQueueTimeout));
     if (err == errQUEUE_FULL) {
         CONSOLE_WARNING("CommsManager::WiFiAccessPointSendMessageToAllStations", "Overflowed WiFi AP message queue.");
         xQueueReset(wifi_ap_message_queue_);

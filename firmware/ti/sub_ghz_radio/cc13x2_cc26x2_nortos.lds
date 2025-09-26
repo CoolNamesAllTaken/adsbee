@@ -30,7 +30,8 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-STACKSIZE = 4096;
+/* Originally stack=4096 heap=16384. */
+STACKSIZE = 16384;
 HEAPSIZE = 16384; /* Size of heap buffer used by HeapMem */
 
 MEMORY

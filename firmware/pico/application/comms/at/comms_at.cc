@@ -81,16 +81,24 @@ CPP_AT_CALLBACK(CommsManager::ATBaudRateCallback) {
 CPP_AT_CALLBACK(CommsManager::ATBiasTeeEnableCallback) {
     switch (op) {
         case '?':
-            CPP_AT_CMD_PRINTF("=%d", adsbee.BiasTeeIsEnabled());
+            CPP_AT_CMD_PRINTF("=%d,%d", adsbee.BiasTeeIsEnabled(), settings_manager.settings.subg_bias_tee_enabled);
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
-            if (!(CPP_AT_HAS_ARG(0))) {
-                CPP_AT_ERROR("Requires an argument (0 or 1). AT+BIAS_TEE_ENABLED=<enabled>");
-            }
             bool enabled;
-            CPP_AT_TRY_ARG2NUM(0, enabled);
-            adsbee.SetBiasTeeEnable(enabled);
+            if (CPP_AT_HAS_ARG(0)) {
+                // The bias tee setting for the 1090 radio is applied directly, then scraped by the settings manager
+                // during a settings save.
+                CPP_AT_TRY_ARG2NUM(0, enabled);
+                adsbee.SetBiasTeeEnable(enabled);
+            }
+            if (CPP_AT_HAS_ARG(1)) {
+                // The bias tee setting for the sub-GHz radio is stored in the active settings struct, then synced to
+                // the CC1312.
+                CPP_AT_TRY_ARG2NUM(1, enabled);
+                settings_manager.settings.subg_bias_tee_enabled = enabled;
+                settings_manager.SyncToCoprocessors();
+            }
             CPP_AT_SUCCESS();
             break;
     }
@@ -375,14 +383,9 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                         feed_protocol = static_cast<SettingsManager::ReportingProtocol>(i);
                     }
                 }
-                // Check that the selected prototcol is valid for use with feeders.
-                if (!(feed_protocol == SettingsManager::ReportingProtocol::kBeast ||
-                      feed_protocol == SettingsManager::ReportingProtocol::kNoReports)) {
-                    CPP_AT_ERROR("Protocol %s is not supported for network feeds.",
-                                 SettingsManager::kReportingProtocolStrs[feed_protocol]);
-                }
                 settings_manager.settings.feed_protocols[index] = feed_protocol;
             }
+            settings_manager.SyncToCoprocessors();
             CPP_AT_SUCCESS();
             break;
     }
@@ -508,7 +511,8 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         if (esp32.IsEnabled()) {
                             char network_console_byte;
                             if (esp32_console_rx_queue.Length() > 0) {
-                                while (buf_len_bytes < len_bytes && esp32_console_rx_queue.Pop(network_console_byte)) {
+                                while (buf_len_bytes < len_bytes &&
+                                       esp32_console_rx_queue.Dequeue(network_console_byte)) {
                                     // Was able to read a char from the network buffer.
                                     buf[buf_len_bytes] = network_console_byte;
                                     buf_len_bytes++;
@@ -533,7 +537,7 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                     CPP_AT_TRY_ARG2NUM_BASE(3, crc, 16);
                     if (has_crc) {
                         // CRC provided: use it to verify the data before writing.
-                        CPP_AT_PRINTF("Verifying data with CRC 0x%x.\r\n", crc);
+                        CPP_AT_PRINTF("Verifying %d bytes of data with CRC 0x%x.\r\n", len_bytes, crc);
                         uint32_t calculated_crc = FirmwareUpdateManager::CalculateCRC32(buf, len_bytes);
                         if (calculated_crc != crc) {
                             adsbee.SetReceiver1090Enable(receiver_was_enabled);  // Re-enable receiver before exit.
@@ -617,10 +621,39 @@ CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
             for (uint16_t i = 0; i < SettingsManager::kNumLogLevels; i++) {
                 if (args[0].compare(SettingsManager::kConsoleLogLevelStrs[i]) == 0) {
                     settings_manager.settings.log_level = static_cast<SettingsManager::LogLevel>(i);
+                    settings_manager.SyncToCoprocessors();
                     CPP_AT_SUCCESS();
                 }
             }
             CPP_AT_ERROR("Verbosity level %s not recognized.", args[0].data());
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATMAVLINKIDCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_PRINTF("System ID: %d\r\nComponent ID: %d\r\n", settings_manager.settings.mavlink_system_id,
+                          settings_manager.settings.mavlink_component_id);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (!(CPP_AT_HAS_ARG(0) && CPP_AT_HAS_ARG(1))) {
+                CPP_AT_ERROR("Requires two arguments: AT+MAVLINK_ID=<system_id>,<component_id>.");
+            }
+            uint16_t system_id, component_id;
+            CPP_AT_TRY_ARG2NUM(0, system_id);
+            CPP_AT_TRY_ARG2NUM(1, component_id);
+            if (system_id < 1 || system_id > 255) {
+                CPP_AT_ERROR("System ID must be between 1 and 255.");
+            }
+            if (component_id < 1 || component_id > 255) {
+                CPP_AT_ERROR("Component ID must be between 1 and 255.");
+            }
+            settings_manager.settings.mavlink_system_id = static_cast<uint8_t>(system_id);
+            settings_manager.settings.mavlink_component_id = static_cast<uint8_t>(component_id);
+            CPP_AT_SUCCESS();
             break;
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);
@@ -665,7 +698,7 @@ CPP_AT_CALLBACK(CommsManager::ATNetworkInfoCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
-CPP_AT_CALLBACK(CommsManager::ATProtocolCallback) {
+CPP_AT_CALLBACK(CommsManager::ATProtocolOutCallback) {
     switch (op) {
         case '?':
             // Print out reporting protocols for CONSOLE and COMMS_UART.
@@ -714,9 +747,9 @@ CPP_AT_CALLBACK(CommsManager::ATProtocolCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
-CPP_AT_HELP_CALLBACK(CommsManager::ATProtocolHelpCallback) {
+CPP_AT_HELP_CALLBACK(CommsManager::ATProtocolOutHelpCallback) {
     CPP_AT_PRINTF("\tSet the reporting protocol used on a given serial interface:\r\n");
-    CPP_AT_PRINTF("\tAT+PROTOCOL=<iface>,<protocol>\r\n\t<iface> = ");
+    CPP_AT_PRINTF("\tAT+PROTOCOL_OUT=<iface>,<protocol>\r\n\t<iface> = ");
     for (uint16_t iface = 0; iface < SettingsManager::kGNSSUART; iface++) {
         CPP_AT_PRINTF("%s ", SettingsManager::kSerialInterfaceStrs[iface]);
     }
@@ -725,7 +758,7 @@ CPP_AT_HELP_CALLBACK(CommsManager::ATProtocolHelpCallback) {
         CPP_AT_PRINTF("\t\t%s ", SettingsManager::kReportingProtocolStrs[protocol]);
     }
     CPP_AT_PRINTF("\r\n\tQuery the reporting protocol used on all interfaces:\r\n");
-    CPP_AT_PRINTF("\tAT+PROTOCOL?\r\n\t+PROTOCOL=<iface>,<protocol>\r\n\t...\r\n");
+    CPP_AT_PRINTF("\tAT+PROTOCOL_OUT?\r\n\tPROTOCOL_OUT=<iface>,<protocol>\r\n\t...\r\n");
 }
 
 CPP_AT_CALLBACK(CommsManager::ATRebootCallback) {
@@ -738,21 +771,118 @@ CPP_AT_CALLBACK(CommsManager::ATRxEnableCallback) {
     switch (op) {
         case '=':
             if (CPP_AT_HAS_ARG(0)) {
-                bool r1090_enabled;
-                CPP_AT_TRY_ARG2NUM(0, r1090_enabled);
-                adsbee.SetReceiver1090Enable(r1090_enabled);
+                // All enabled argument is present. Ignore subsequent args. This is useful so that all radios can be
+                // disabled or enabled with one argument.
+                bool all_enabled;
+                CPP_AT_TRY_ARG2NUM(0, all_enabled);
+                adsbee.SetReceiver1090Enable(all_enabled);
+                settings_manager.settings.subg_rx_enabled = all_enabled;
+            } else {
+                if (CPP_AT_HAS_ARG(1)) {
+                    bool r1090_enabled;
+                    CPP_AT_TRY_ARG2NUM(1, r1090_enabled);
+                    adsbee.SetReceiver1090Enable(r1090_enabled);
+                }
+                if (CPP_AT_HAS_ARG(2)) {
+                    CPP_AT_TRY_ARG2NUM(2, settings_manager.settings.subg_rx_enabled);
+                }
             }
-            if (CPP_AT_HAS_ARG(1)) {
-                bool subg_radio_enabled;
-                CPP_AT_TRY_ARG2NUM(1, subg_radio_enabled);
-                adsbee.SetSubGRadioEnable(subg_radio_enabled ? SettingsManager::kEnableStateEnabled
-                                                             : SettingsManager::kEnableStateDisabled);
-            }
+            settings_manager.SyncToCoprocessors();
             CPP_AT_SUCCESS();
             break;
         case '?':
-            CPP_AT_CMD_PRINTF("=%d,%d", adsbee.Receiver1090IsEnabled(), adsbee.SubGRadioIsEnabled());
+            CPP_AT_PRINTF("1090 Receiver: %s\r\nSubG Receiver: %s\r\n",
+                          adsbee.Receiver1090IsEnabled() ? "ENABLED" : "DISABLED",
+                          settings_manager.settings.subg_rx_enabled ? "ENABLED" : "DISABLED");
             CPP_AT_SILENT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_HELP_CALLBACK(CommsManager::ATRxEnableHelpCallback) {
+    CPP_AT_PRINTF(
+        "RX_ENABLE=<all_enabled [1,0]>,<1090_enabled [1,0]>,<subg_enabled [1,0]>\r\n\tOK\r\n\tEnables or disables the "
+        "receiver(s) "
+        "from receiving messages. First arg overrides others if present.\r\n\tAT+RX_ENABLE?\r\n\t1090 Receiver: "
+        "<1090_enabled [ENABLED,DISABLED]>\r\n\tSubG Receiver: <subg_en> [ENABLED,DISABLED]>\r\n\tQuery whether the "
+        "recevier(s) are enabled.\r\n");
+}
+
+CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
+    switch (op) {
+        case '?': {
+            CPP_AT_PRINTF(
+                "Receiver Position:\r\n\tSource: %s\r\n\tLatitude [deg]: %.6f\r\n\tLongitude [deg]: %.6f\r\n\tGNSS "
+                "Altitude [m]: "
+                "%.1f\r\n\tBarometric Altitude [m]: %.1f\r\n\tHeading [deg]: %.1f\r\n\tSpeed [kts]: %.1f\r\n",
+                SettingsManager::RxPosition::kPositionSourceStrs[settings_manager.settings.rx_position.source],
+                settings_manager.settings.rx_position.latitude_deg, settings_manager.settings.rx_position.longitude_deg,
+                settings_manager.settings.rx_position.gnss_altitude_m,
+                settings_manager.settings.rx_position.baro_altitude_m,
+                settings_manager.settings.rx_position.heading_deg, settings_manager.settings.rx_position.speed_kts);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        }
+        case '=': {
+            if (CPP_AT_HAS_ARG(0)) {
+                // Set position source.
+                for (uint16_t i = 0; i < SettingsManager::RxPosition::kNumPositionSources; i++) {
+                    if (i == SettingsManager::RxPosition::PositionSource::kNumPositionSources) {
+                        CPP_AT_ERROR("Invalid position source %s.", args[0].data());
+                    }
+                    if (args[0].compare(SettingsManager::RxPosition::kPositionSourceStrs[i]) == 0) {
+                        settings_manager.settings.rx_position.source =
+                            static_cast<SettingsManager::RxPosition::PositionSource>(i);
+                        break;
+                    }
+                }
+            }
+        }
+            if (CPP_AT_HAS_ARG(1)) {
+                // Set latitude.
+                CPP_AT_TRY_ARG2NUM(1, settings_manager.settings.rx_position.latitude_deg);
+                if (settings_manager.settings.rx_position.latitude_deg < -90.0 ||
+                    settings_manager.settings.rx_position.latitude_deg > 90.0) {
+                    CPP_AT_ERROR("Latitude %.6f out of range (-90.0 to 90.0).",
+                                 settings_manager.settings.rx_position.latitude_deg);
+                }
+            }
+            if (CPP_AT_HAS_ARG(2)) {
+                // Set longitude.
+                CPP_AT_TRY_ARG2NUM(2, settings_manager.settings.rx_position.longitude_deg);
+                if (settings_manager.settings.rx_position.longitude_deg < -180.0 ||
+                    settings_manager.settings.rx_position.longitude_deg > 180.0) {
+                    CPP_AT_ERROR("Longitude %.6f out of range (-180.0 to 180.0).",
+                                 settings_manager.settings.rx_position.longitude_deg);
+                }
+            }
+            if (CPP_AT_HAS_ARG(3)) {
+                // Set GNSS altitude.
+                CPP_AT_TRY_ARG2NUM(3, settings_manager.settings.rx_position.gnss_altitude_m);
+            }
+            if (CPP_AT_HAS_ARG(4)) {
+                // Set barometric altitude.
+                CPP_AT_TRY_ARG2NUM(4, settings_manager.settings.rx_position.baro_altitude_m);
+            }
+            if (CPP_AT_HAS_ARG(5)) {
+                // Set heading.
+                CPP_AT_TRY_ARG2NUM(5, settings_manager.settings.rx_position.heading_deg);
+                if (settings_manager.settings.rx_position.heading_deg < 0.0 ||
+                    settings_manager.settings.rx_position.heading_deg >= 360.0) {
+                    CPP_AT_ERROR("Heading %.1f out of range [0.0 to 360.0).",
+                                 settings_manager.settings.rx_position.heading_deg);
+                }
+            }
+            if (CPP_AT_HAS_ARG(6)) {
+                // Set speed.
+                CPP_AT_TRY_ARG2NUM(6, settings_manager.settings.rx_position.speed_kts);
+                if (settings_manager.settings.rx_position.speed_kts < 0.0) {
+                    CPP_AT_ERROR("Speed %.1f out of range (>= 0.0).", settings_manager.settings.rx_position.speed_kts);
+                }
+            }
+            settings_manager.SyncToCoprocessors();
+            CPP_AT_SUCCESS();
             break;
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);
@@ -849,17 +979,17 @@ CPP_AT_CALLBACK(CommsManager::ATTLReadCallback) {
 }
 
 /**
- * AT+TL_SET Callback
- * AT+TL_SET=<tl_mv>
- *  tl_mv = Trigger Level, in milliVolts.
- * AT+TL_SET?
- * +TL_SET=
+ * AT+TL_OFFSET Callback
+ * AT+TL_OFFSET=<tl_offset_mv>
+ *  tl_offset_mv = Trigger Level Offset, in milliVolts.
+ * AT+TL_OFFSET?
+ * +TL_OFFSET=
  */
 CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
     switch (op) {
         case '?': {
             // AT+TL_SET value query.
-            int tl_mv = adsbee.GetTLMilliVolts();
+            int tl_mv = adsbee.GetTLOffsetMilliVolts();
             CPP_AT_CMD_PRINTF("=%dmV (%d dBm)\r\n", tl_mv, adsbee.AD8313MilliVoltsTodBm(tl_mv));
             CPP_AT_SILENT_SUCCESS();
             break;
@@ -872,10 +1002,10 @@ CPP_AT_CALLBACK(CommsManager::ATTLSetCallback) {
                     adsbee.StartTLLearning();
                 } else {
                     // Assigning trigger level manually.
-                    uint16_t new_tl_mv;
-                    CPP_AT_TRY_ARG2NUM(0, new_tl_mv);
-                    if (!adsbee.SetTLMilliVolts(new_tl_mv)) {
-                        CPP_AT_ERROR("Failed to set tl_mv.");
+                    uint16_t new_tl_offset_mv;
+                    CPP_AT_TRY_ARG2NUM(0, new_tl_offset_mv);
+                    if (!adsbee.SetTLOffsetMilliVolts(new_tl_offset_mv)) {
+                        CPP_AT_ERROR("Failed to set tl_offset_mv.");
                     }
                 }
             }
@@ -1024,98 +1154,107 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiSTACallback) {
 }
 
 const CppAT::ATCommandDef_t at_command_list[] = {
-    {.command_buf = "+BAUD_RATE",
+    {.command_buf = "BAUD_RATE",
      .min_args = 0,
      .max_args = 2,
      .help_string_buf = "AT+BAUD_RATE=<iface>,<baud_rate>\r\n\tSet the baud rate of a serial "
                         "interface.\r\n\tAT+BAUD_RATE?\r\n\tQuery the baud rate of all serial interfaces.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBaudRateCallback, comms_manager)},
-    {.command_buf = "+BIAS_TEE_ENABLE",
+    {.command_buf = "BIAS_TEE_ENABLE",
      .min_args = 0,
-     .max_args = 1,
-     .help_string_buf = "AT+BIAS_TEE_ENABLE=<enabled>\r\n\tEnable or disable the bias "
-                        "tee.\r\n\tBIAS_TEE_ENABLE?\r\n\tQuery the status of the bias tee.",
+     .max_args = 2,
+     .help_string_buf = "AT+BIAS_TEE_ENABLE=<1090_bt_enabled>,<subg_bt_enabled>\r\n\tEnable or disable the bias "
+                        "tees.\r\n\tBIAS_TEE_ENABLE?\r\n\tQuery the status of the bias tees.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBiasTeeEnableCallback, comms_manager)},
-    {.command_buf = "+DEVICE_INFO",
+    {.command_buf = "DEVICE_INFO",
      .min_args = 0,
      .max_args = 5,  // TODO: check this value.
      .help_string_buf = "AT+DEVICE_INFO?\r\n\tQuery device information.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATDeviceInfoCallback, comms_manager)},
-    {.command_buf = "+ETHERNET",
+    {.command_buf = "ETHERNET",
      .min_args = 0,
      .max_args = 1,
      .help_string_buf = "AT+ETHERNET=<enabled>\r\n\tEnable or disable the Ethernet "
                         "interface.\r\n\tETHERNET?\r\n\tQuery the status of the Ethernet interface.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATEthernetCallback, comms_manager)},
-    {.command_buf = "+ESP32_ENABLE",
+    {.command_buf = "ESP32_ENABLE",
      .min_args = 0,
      .max_args = 1,
      .help_string_buf = "AT+ESP32_ENABLE=<enabled>\r\n\tEnable or disable the ESP32.\r\n\tAT+ESP32_ENABLE?\r\n\tQuery "
                         "the enable status of the ESP32.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATESP32EnableCallback, comms_manager)},
-    {.command_buf = "+ESP32_FLASH",
+    {.command_buf = "ESP32_FLASH",
      .min_args = 0,
      .max_args = 0,
      .help_string_buf = "AT+ESP32_FLASH\r\n\tTriggers a firmware update of the ESP32 from the firmware image stored in "
                         "the RP2040's flash memory.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATESP32FlashCallback, comms_manager)},
-    {.command_buf = "+FEED",
+    {.command_buf = "FEED",
      .min_args = 0,
      .max_args = 5,
      .help_callback = ATFeedHelpCallback,
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFeedCallback, comms_manager)},
-    {.command_buf = "+HOSTNAME",
+    {.command_buf = "HOSTNAME",
      .min_args = 0,
      .max_args = 1,
      .help_string_buf = "AT+HOSTNAME=<hostname>\r\n\tSet the hostname for all network "
                         "interfaces.\r\n\tAT+HOSTNAME?\r\n\tQuery the "
                         "hostname used for all network interfaces.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATHostnameCallback, comms_manager)},
-    {.command_buf = "+LOG_LEVEL",
+    {.command_buf = "LOG_LEVEL",
      .min_args = 0,
      .max_args = 1,
      .help_string_buf =
          "AT+LOG_LEVEL=<log_level [SILENT ERRORS WARNINGS LOGS]>\r\n\tSet how much stuff gets printed to the "
          "console.\r\n\t",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATLogLevelCallback, comms_manager)},
-    {.command_buf = "+NETWORK_INFO",
+    {.command_buf = "MAVLINK_ID",
+     .min_args = 0,
+     .max_args = 2,
+     .help_string_buf = "AT+MAVLINK_ID=<system_id>,<component_id>\r\n\tSet the MAVLink system and component IDs.\r\n\t"
+                        "AT+MAVLINK_ID?\r\n\tQuery the MAVLink system and component IDs.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATMAVLINKIDCallback, comms_manager)},
+    {.command_buf = "NETWORK_INFO",
      .min_args = 0,
      .max_args = 0,
      .help_string_buf = "AT+NETWORK_INFO?\r\n\tQueries network information.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATNetworkInfoCallback, comms_manager)},
-    {.command_buf = "+OTA",
+    {.command_buf = "OTA",
      .min_args = 0,
      .max_args = 4,
      .help_callback = CPP_AT_BIND_MEMBER_HELP_CALLBACK(CommsManager::ATOTAHelpCallback, comms_manager),
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATOTACallback, comms_manager)},
-    {.command_buf = "+PROTOCOL",
+    {.command_buf = "PROTOCOL_OUT",
      .min_args = 0,
      .max_args = 2,
-     .help_callback = CPP_AT_BIND_MEMBER_HELP_CALLBACK(CommsManager::ATProtocolHelpCallback, comms_manager),
-     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATProtocolCallback, comms_manager)},
-    {.command_buf = "+REBOOT",
+     .help_callback = CPP_AT_BIND_MEMBER_HELP_CALLBACK(CommsManager::ATProtocolOutHelpCallback, comms_manager),
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATProtocolOutCallback, comms_manager)},
+    {.command_buf = "REBOOT",
      .min_args = 0,
      .max_args = 0,
      .help_string_buf = "REBOOT\r\n\tReboots the RP2040.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRebootCallback, comms_manager)},
-    {.command_buf = "+RX_ENABLE",
+    {.command_buf = "RX_ENABLE",
      .min_args = 0,
-     .max_args = 2,
-     .help_string_buf = "RX_ENABLE=<1090_enabled [1,0]>,<subg_enabled [1,0]>\r\n\tOK\r\n\tEnables or disables the "
-                        "receiver(s) from receiving messages.\r\n\tAT+RX_ENABLE?\r\n\t+RX_ENABLE=<enabled "
-                        "[1,0]>\r\n\tQuery whether the "
-                        "recevier(s) are enabled.",
+     .max_args = 3,
+     .help_callback = CPP_AT_BIND_MEMBER_HELP_CALLBACK(CommsManager::ATRxEnableHelpCallback, comms_manager),
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxEnableCallback, comms_manager)
 
     },
-    {.command_buf = "+SETTINGS",
+    {.command_buf = "RX_POSITION",
+     .min_args = 0,
+     .max_args = 5,
+     .help_string_buf = "AT+RX_POSITION=<source>,<lat_deg>,<lon_deg>,<gnss_alt_m>,<baro_alt_m>"
+                        "\r\n\tSet the receiver's position.\r\n\tAT+RX_POSITION?\r\n\tQuery the receiver's position.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxPositionCallback, comms_manager)},
+    {.command_buf = "SETTINGS",
      .min_args = 0,
      .max_args = 3,
      .help_string_buf = "Load, save, or reset nonvolatile settings.\r\n\tAT+SETTINGS=<op [LOAD SAVE RESET]>\r\n\t"
                         "Display nonvolatile settings.\r\n\tAT+SETTINGS?\r\n\t+SETTINGS=...\r\n\tDump settings in AT "
                         "command format.\r\n\tAT+SETTINGS?DUMP\r\n\t+SETTINGS=...",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSettingsCallback, comms_manager)},
-    {.command_buf = "+SUBG_ENABLE",
+    {.command_buf = "SUBG_ENABLE",
      .min_args = 0,
      .max_args = 2,
      .help_string_buf = "AT+SUBG_ENABLE=<enabled [1,0,EXTERNAL]>\r\n\tEnable or disable the sub-GHz receiver. Receiver "
@@ -1123,52 +1262,53 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                         "pulldown) for control via an external device.\r\n\tAT+SUBG_ENABLE?\r\n\t"
                         "Query the status of the sub-GHz receiver.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSubGEnableCallback, comms_manager)},
-    {.command_buf = "+SUBG_FLASH",
+    {.command_buf = "SUBG_FLASH",
      .min_args = 0,
      .max_args = 0,
      .help_string_buf = "AT+SUBG_FLASH\r\n\tTriggers a firmware update of the sub-GHz radio from the firmware image "
                         "stored in the RP2040's flash memory.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSubGFlashCallback, comms_manager)},
 #ifdef HARDWARE_UNIT_TESTS
-    {.command_buf = "+TEST",
+    {.command_buf = "TEST",
      .min_args = 0,
      .max_args = 1,
      .help_string_buf = "Run hardware self-tests.",
      .callback = ATTestCallback},
 #endif
-    {.command_buf = "+TL_READ",
+    {.command_buf = "TL_READ",
      .min_args = 0,
      .max_args = 0,
      .help_string_buf =
          "Read ADC counts and mV value for the minimum trigger level threshold. Call with no ops nor arguments, "
-         "AT+TL_READ.",
+         "AT+TL_READ. Note this reads the trigger level, not the trigger level offset.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLReadCallback, comms_manager)},
-    {.command_buf = "+TL_SET",
+    {.command_buf = "TL_OFFSET",
      .min_args = 0,
      .max_args = 1,
-     .help_string_buf = "Set minimum trigger level threshold for RF power detector.\r\n\tAT+TLSet=<tl_mv>"
-                        "\tQuery trigger level.\r\n\tAT+TL_SET?\r\n\t+TLSet=<tl_mv>.",
+     .help_string_buf = "Set minimum trigger level offset (trigger level distance above noise floor) for RF power "
+                        "detector.\r\n\tAT+TL_OFFSET=<tl_offset_mv>"
+                        "\tQuery trigger level offset.\r\n\tAT+TL_OFFSET?\r\n\t+TL_OFFSET=<tl_offset_mv>.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATTLSetCallback, comms_manager)},
-    {.command_buf = "+UPTIME",
+    {.command_buf = "UPTIME",
      .min_args = 0,
      .max_args = 0,
      .help_string_buf = "Get the uptime of the ADSBee 1090 in seconds.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATUptimeCallback, comms_manager)},
-    {.command_buf = "+WATCHDOG",
+    {.command_buf = "WATCHDOG",
      .min_args = 0,
      .max_args = 1,
      .help_string_buf = "Set the watchdog timeout, in seconds, 0-65535. 0 = watchdog disabled, 65535 = "
                         "18.2hrs.\r\n\tAT+WATCHDOG=<timeout_sec>\r\n\tTest watchdog by blocking for timeout_sec+1 "
                         "seconds.\r\n\tAT+WATCHDOG=TEST",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATWatchdogCallback, comms_manager)},
-    {.command_buf = "+WIFI_AP",
+    {.command_buf = "WIFI_AP",
      .min_args = 0,
      .max_args = 4,
      .help_string_buf =
          "Set WiFi access point params.\r\n\tAT+WIFI_AP=<enabled>,<ap_ssid>,<ap_pwd>,<ap_channel>\r\n\t"
          "Get WiFi access point params.\r\n\tAT+WIFI_AP?\r\n\t+WIFI_AP=<enabled>,<ap_ssid>,<ap_pwd>,<ap_channel>",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATWiFiAPCallback, comms_manager)},
-    {.command_buf = "+WIFI_STA",
+    {.command_buf = "WIFI_STA",
      .min_args = 0,
      .max_args = 3,
      .help_string_buf = "Set WiFi station params.\r\n\tAT+WIFI_STA=<enabled>,<sta_ssid>,<sta_pwd>\r\n\t"
@@ -1203,7 +1343,7 @@ bool CommsManager::UpdateAT() {
         // Receive incoming network console characters.
         static char esp32_console_rx_buf[kATCommandBufMaxLen + 1];
         static uint16_t esp32_console_rx_buf_len = 0;
-        while (esp32_console_rx_queue.Pop(c)) {
+        while (esp32_console_rx_queue.Dequeue(c)) {
             esp32_console_rx_buf[esp32_console_rx_buf_len] = c;
             esp32_console_rx_buf_len++;
             esp32_console_rx_buf[esp32_console_rx_buf_len] = '\0';

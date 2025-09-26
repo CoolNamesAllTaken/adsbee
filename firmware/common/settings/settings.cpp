@@ -8,15 +8,15 @@
 // NOTE: This function needs to be updated separately for ESP32.
 void SettingsManager::Print() {
     CONSOLE_PRINTF("Settings Struct\r\n");
-    CONSOLE_PRINTF("\tReceiver: %s\r\n", settings.receiver_enabled ? "ENABLED" : "DISABLED");
+    CONSOLE_PRINTF("\tReceiver: %s\r\n", settings.r1090_rx_enabled ? "ENABLED" : "DISABLED");
 #ifdef ON_PICO
-    CONSOLE_PRINTF("\tTrigger Level: %d milliVolts (%d dBm)\r\n", settings.tl_mv,
-                   adsbee.AD8313MilliVoltsTodBm(settings.tl_mv));
+    CONSOLE_PRINTF("\tTrigger Level: %d milliVolts (%d dBm)\r\n", settings.tl_offset_mv,
+                   adsbee.AD8313MilliVoltsTodBm(settings.tl_offset_mv));
 #elif ON_ESP32
     // ESP32 doesn't have access to mV->dBm conversion via ADSBee class.
-    CONSOLE_PRINTF("\tTrigger Level: %d milliVolts\r\n", settings.tl_mv);
+    CONSOLE_PRINTF("\tTrigger Offset Level: %d milliVolts\r\n", settings.tl_offset_mv);
 #endif
-    CONSOLE_PRINTF("\tBias Tee: %s\r\n", settings.bias_tee_enabled ? "ENABLED" : "DISABLED");
+    CONSOLE_PRINTF("\tBias Tee: %s\r\n", settings.r1090_bias_tee_enabled ? "ENABLED" : "DISABLED");
     CONSOLE_PRINTF("\tWatchdog Timeout: %lu seconds\r\n", settings.watchdog_timeout_sec);
     CONSOLE_PRINTF("\tLog Level: %s\r\n", kConsoleLogLevelStrs[settings.log_level]);
     CONSOLE_PRINTF("\tReporting Protocols:\r\n");
@@ -76,7 +76,7 @@ void SettingsManager::PrintAT() {
     }
 
     // AT+BIAS_TEE_ENABLE
-    CONSOLE_PRINTF("AT+BIAS_TEE_ENABLE=%d\r\n", settings.bias_tee_enabled);
+    CONSOLE_PRINTF("AT+BIAS_TEE_ENABLE=%d\r\n", settings.r1090_bias_tee_enabled);
 
     // AT+DEVICE_INFO: Don't store this.
 
@@ -102,13 +102,13 @@ void SettingsManager::PrintAT() {
     }
 
     // AT+RX_ENABLE
-    CONSOLE_PRINTF("AT+RX_ENABLE=%d\r\n", settings.receiver_enabled);
+    CONSOLE_PRINTF("AT+RX_ENABLE=%d\r\n", settings.r1090_rx_enabled);
 
     // AT+SUBG_ENABLE
     CONSOLE_PRINTF("AT+SUBG_ENABLE=%s\r\n", SettingsManager::EnableStateToATValueStr(settings.subg_enabled));
 
     // AT+TL_SET
-    CONSOLE_PRINTF("AT+TL_SET=%u\r\n", settings.tl_mv);
+    CONSOLE_PRINTF("AT+TL_SET=%u\r\n", settings.tl_offset_mv);
 
     // AT+WATCHDOG
     CONSOLE_PRINTF("AT+WATCHDOG=%lu\r\n", settings.watchdog_timeout_sec);

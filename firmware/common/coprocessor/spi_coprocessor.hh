@@ -5,7 +5,7 @@
 
 #ifndef ON_TI
 #include "aircraft_dictionary.hh"
-#include "transponder_packet.hh"
+#include "mode_s_packet.hh"
 #endif
 #include "comms.hh"
 #include "hal.hh"

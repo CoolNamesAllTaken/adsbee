@@ -1,26 +1,29 @@
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
-extern "C"
-{
+extern "C" {
 // Make sure these are linked in C.
+#include <posix/unistd.h>
+
 #include "NoRTOS.h"
 #include "ti/drivers/Board.h"
 #include "ti/drivers/GPIO.h"
+#include "ti/drivers/Power.h"
 #include "ti/drivers/SPI.h"
-#include <posix/unistd.h>
 }
 
 #include "bsp.hh"
-#include "spi_coprocessor.hh"
-#include "spi_coprocessor_interface.hh"
-#include "pico.hh"
-#include "settings.hh"
 #include "comms.hh"
 #include "object_dictionary.hh"
+#include "pico.hh"
+#include "settings.hh"
+#include "spi_coprocessor.hh"
+#include "spi_coprocessor_interface.hh"
 #include "sub_ghz_radio.hh"
+#include "uat_packet_decoder.hh"
 
-#include "unistd.h" // For usleep.
+// #include "unistd.h" // For usleep.
+#include <cstring>  // For malloc
 
 BSP bsp;
 ObjectDictionary object_dictionary;
@@ -29,6 +32,7 @@ SPICoprocessor pico = SPICoprocessor({.interface = pico_ll});
 CommsManager comms_manager = CommsManager({});
 SettingsManager settings_manager = SettingsManager();
 SubGHzRadio subg_radio = SubGHzRadio({});
+UATPacketDecoder uat_packet_decoder = UATPacketDecoder();
 
 /**
  * A note on interrupt priorities (configured via Sysconfig):
@@ -39,21 +43,20 @@ SubGHzRadio subg_radio = SubGHzRadio({});
  * DMA: Must be LOWER than SPI hardware interrupt priority.
  */
 
-void exception_handler()
-{
-    while (1)
-    {
+void exception_handler() {
+    while (1) {
     }
 }
 
 /*
  *  ======== main ========
  */
-int main(void)
-{
+int main(void) {
+    Power_disablePolicy();  // Stop aggressive clock gating that messes with the debugger.
+
     NoRTOS_Config cfg;
     NoRTOS_getConfig(&cfg);
-    cfg.clockTickPeriod = 100; // Set the system tick period to 10kHz (100us).
+    cfg.clockTickPeriod = 100;  // Set the system tick period to 10kHz (100us).
     NoRTOS_setConfig(&cfg);
 
     /* Call driver init functions */
@@ -66,18 +69,16 @@ int main(void)
     // Log everything until we hear otherwise.
     settings_manager.settings.log_level = SettingsManager::LogLevel::kInfo;
 
-    static const uint16_t kNumBlinks = 2;
-    for (uint16_t i = 0; i < kNumBlinks; ++i)
-    {
+    static const uint16_t kNumBlinks = 5;
+    for (uint16_t i = 0; i < kNumBlinks; ++i) {
         GPIO_write(bsp.kSubGLEDPin, 1);
-        usleep(50000); // 50ms
+        usleep(50000);  // 50ms
         GPIO_write(bsp.kSubGLEDPin, 0);
-        usleep(50000); // 50ms
+        usleep(50000);  // 50ms
     }
 
     // Initialize the SPI coprocessor.
-    if (!pico.Init())
-    {
+    if (!pico.Init()) {
         CONSOLE_ERROR("main", "Failed to initialize SPI coprocessor.");
         exception_handler();
     }
@@ -91,30 +92,25 @@ int main(void)
                                                .addr = ObjectDictionary::Address::kAddrSettingsData,
                                                .offset = 0,
                                                .len = sizeof(SettingsManager::Settings)},
-        .complete_callback =
-            []() {},
+        .complete_callback = []() {},
     });
     // Wait for settings data to be received.
-    while (settings_manager.settings.settings_version == UINT32_MAX)
-    {
+    GPIO_write(bsp.kSubGLEDPin, 1);
+    while (settings_manager.settings.settings_version == UINT32_MAX) {
     }
+    GPIO_write(bsp.kSubGLEDPin, 0);
     CONSOLE_INFO("ADSBeeServer::Init", "Settings data read from Pico.");
     // settings_manager.Print();
 
-    if (!subg_radio.Init())
-    {
+    if (!subg_radio.Init()) {
         CONSOLE_ERROR("main", "Failed to initialize SubGHz radio.");
         exception_handler();
     }
     CONSOLE_INFO("main", "SubGHz radio initialized successfully.");
 
-    while (true)
-    {
+    while (true) {
         pico.UpdateLED();
-        // CONSOLE_INFO("main", "Main loop running...");
-        // GPIO_write(bsp.kSubGLEDPin, 1);
-        // usleep(50000); // 50ms
-        // GPIO_write(bsp.kSubGLEDPin, 0);
-        // usleep(50000); // 50ms
+        uat_packet_decoder.Update();
+        subg_radio.Update();
     }
 }

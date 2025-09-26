@@ -9,11 +9,11 @@
 #include "firmware_update.hh"  // For figuring out which flash partition we're in.
 #include "hal.hh"
 #include "hardware_unit_tests.hh"  // For testing only!
-#include "packet_decoder.hh"
+#include "mode_s_packet.hh"
+#include "mode_s_packet_decoder.hh"
 #include "pico/binary_info.h"
 #include "pico/stdlib.h"
 #include "spi_coprocessor.hh"
-#include "transponder_packet.hh"
 #include "unit_conversions.hh"
 
 // #define DEBUG_DISABLE_ESP32_FLASH  // Uncomment this to stop the RP2040 from flashing the ESP32.
@@ -44,7 +44,7 @@ ESP32 esp32_ll = ESP32({});
 // Provide high-level coprocessor objects for interacting with coprocessor devices via low level class definitions.
 SPICoprocessor esp32 = SPICoprocessor(
     {.interface = esp32_ll, .tag_str = "ESP32"});  // Use the low-level ESP32 interface to communicate with the ESP32.
-PacketDecoder decoder = PacketDecoder({.enable_1090_error_correction = true});
+ModeSPacketDecoder decoder = ModeSPacketDecoder({.enable_1090_error_correction = true});
 
 int main() {
     bi_decl(bi_program_description("ADSBee 1090 ADSB Receiver"));

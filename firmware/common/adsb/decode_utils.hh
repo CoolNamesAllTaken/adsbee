@@ -18,7 +18,14 @@ enum kAltitudeDecodeError : int32_t {
  * @param[in] value 6-bit value to lookup.
  * @retval Character that matches the input value. If the input value is invalid or unused, returns '#'.
  */
-char LookupCallsignChar(uint8_t value);
+char LookupModeSCallsignChar(uint8_t value);
+
+/**
+ * Converts a numeric value into an ASCII character for use in decoding UAT callsigns.
+ * @param[in] value Value to lookup.
+ * @retval Character that matches the input value. If the input value is invalid or unused, returns '#'.
+ */
+char LookupUATCallsignChar(uint8_t value);
 
 /**
  * Converts a 16-bit gray code to binary. Credit to Kevin Stewart

@@ -1,13 +1,16 @@
 #ifndef UNIT_CONVERSIONS_HH_
 #define UNIT_CONVERSIONS_HH_
 
+#include <cstdint>
+
 static const int kUsPerMs = 1000;
 static const int kMsPerSec = 1000;
 static const int kBytesPerWord = 4;
 static const int kBitsPerByte = 8;
 static const int kBitsPerNibble = 4;
+static const int kNibblesPerByte = 2;
 
-inline uint16_t CeilBitsToBytes(uint16_t bits) { return (bits + kBitsPerByte - 1) / kBitsPerByte; }
+constexpr inline uint16_t CeilBitsToBytes(uint16_t bits) { return (bits + kBitsPerByte - 1) / kBitsPerByte; }
 
 inline int FeetToMeters(int feet) { return feet * 1000 / 3280; }
 

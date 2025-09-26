@@ -632,7 +632,7 @@
              */
             async silenceConsole() {
                 await this.sendCmd("AT+LOG_LEVEL=ERRORS\r\n", 0, true, true);
-                await this.sendCmd("AT+PROTOCOL=CONSOLE,NONE\r\n", 0, true, true);
+                await this.sendCmd("AT+PROTOCOL_OUT=CONSOLE,NONE\r\n", 0, true, true);
             }
 
             /**

@@ -11,7 +11,6 @@ else()
     target_sources(application PRIVATE
         at/comms_at.cc
         comms.cc
-        comms_reporting.cc
     )
     target_include_directories(application PRIVATE
         at

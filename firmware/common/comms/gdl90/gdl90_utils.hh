@@ -1,5 +1,4 @@
-#ifndef GDL90_UTILS_HH_
-#define GDL90_UTILS_HH_
+#pragma once
 
 #include "aircraft_dictionary.hh"
 #include "macros.hh"  // for MIN macro.
@@ -74,7 +73,7 @@ class GDL90Reporter {
         uint8_t misc_indicators;
         uint8_t navigation_integrity_category = 0;      // Navigation Integrity Category (NIC).
         uint8_t navigation_accuracy_category_position;  // Navigation Accuracy Category for Postion (NACp).
-        float velocity_kts;
+        float speed_kts;
         int vertical_rate_fpm;
         float direction_deg;
         uint8_t emitter_category;
@@ -128,7 +127,8 @@ class GDL90Reporter {
      * @param[in] aircraft Reference to Aircraft object to report.
      * @param[in] ownship Set to true if this message is an ownship report, false if it's a traffic report.
      */
-    uint16_t WriteGDL90TargetReportMessage(uint8_t *to_buf, const Aircraft1090 &aircraft, bool ownship = false);
+    uint16_t WriteGDL90TargetReportMessage(uint8_t *to_buf, const ModeSAircraft &aircraft, bool ownship = false);
+    uint16_t WriteGDL90TargetReportMessage(uint8_t *to_buf, const UATAircraft &aircraft, bool ownship = false);
 
     // uint16_t AircraftToGDL90Frame(const Aircraft &aircraft) {}
 
@@ -153,7 +153,7 @@ class GDL90Reporter {
      * @param[in] buf_len_bytes Payload length in bytes.
      * @retval Calculated 16-bit CRC value.
      */
-    uint16_t CalculateGDL90CRC16(uint8_t *buf, uint16_t buf_len_bytes) {
+    inline uint16_t CalculateGDL90CRC16(uint8_t *buf, uint16_t buf_len_bytes) {
         uint32_t i;
         uint16_t crc = 0;
         for (i = 0; i < buf_len_bytes; i++) {
@@ -162,5 +162,3 @@ class GDL90Reporter {
         return crc;
     }
 };
-
-#endif

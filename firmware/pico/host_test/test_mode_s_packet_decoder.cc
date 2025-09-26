@@ -1,0 +1,65 @@
+#include "gtest/gtest.h"
+#include "mode_s_packet_decoder.hh"
+
+TEST(ModeSPacketDecoder, HandleNoBitErrors) {
+    ModeSPacketDecoder decoder(ModeSPacketDecoder::PacketDecoderConfig{.enable_1090_error_correction = true});
+
+    RawModeSPacket raw_packet((char *)"8D40621D58C382D690C8AC2863A7");
+    decoder.raw_mode_s_packet_in_queue.Enqueue(raw_packet);
+    decoder.UpdateDecoderLoop();
+    EXPECT_EQ(decoder.decoded_mode_s_packet_out_queue.Length(), 1);
+
+    DecodedModeSPacket decoded_packet;
+    EXPECT_TRUE(decoder.decoded_mode_s_packet_out_queue.Dequeue(decoded_packet));
+    EXPECT_EQ(decoded_packet.icao_address, 0x40621Du);
+}
+
+TEST(ModeSPacketDecoder, HandleSingleBitError) {
+    ModeSPacketDecoder decoder_no_corrections(
+        ModeSPacketDecoder::PacketDecoderConfig{.enable_1090_error_correction = false});
+    ModeSPacketDecoder decoder(ModeSPacketDecoder::PacketDecoderConfig{.enable_1090_error_correction = true});
+
+    RawModeSPacket raw_packet((char *)"8D40621D58C382D690C8AC2863A6");
+    decoder_no_corrections.raw_mode_s_packet_in_queue.Enqueue(raw_packet);
+    decoder_no_corrections.UpdateDecoderLoop();
+    EXPECT_EQ(decoder_no_corrections.decoded_mode_s_packet_out_queue.Length(), 0);
+
+    decoder.raw_mode_s_packet_in_queue.Enqueue(raw_packet);
+    decoder.UpdateDecoderLoop();
+    EXPECT_EQ(decoder.decoded_mode_s_packet_out_queue.Length(), 1);
+
+    DecodedModeSPacket decoded_packet;
+    EXPECT_TRUE(decoder.decoded_mode_s_packet_out_queue.Dequeue(decoded_packet));
+    EXPECT_EQ(decoded_packet.icao_address, 0x40621Du);
+}
+
+TEST(ModeSPacketDecoder, RejectDuplicateMessages) {
+    // Packet decoder should not re-process the same message if it's caught by multiple state machines.
+    ModeSPacketDecoder decoder(ModeSPacketDecoder::PacketDecoderConfig{.enable_1090_error_correction = true});
+    RawModeSPacket raw_packet((char *)"8D40621D58C382D690C8AC2863A7");
+    raw_packet.source = 0;
+    raw_packet.mlat_48mhz_64bit_counts = 123456;
+    decoder.raw_mode_s_packet_in_queue.Enqueue(raw_packet);
+    decoder.UpdateDecoderLoop();
+    EXPECT_EQ(decoder.decoded_mode_s_packet_out_queue.Length(), 1);
+    DecodedModeSPacket decoded_packet;
+    EXPECT_TRUE(decoder.decoded_mode_s_packet_out_queue.Dequeue(decoded_packet));
+    EXPECT_EQ(decoder.decoded_mode_s_packet_out_queue.Length(), 0);
+    EXPECT_EQ(decoded_packet.icao_address, 0x40621Du);
+
+    // Enqueue the same packet again within 2ms, it should not be re-processed.
+    raw_packet.source = 1;
+    raw_packet.mlat_48mhz_64bit_counts = 123456 + 48000 * 2;  // Different timestamp.
+    decoder.raw_mode_s_packet_in_queue.Enqueue(raw_packet);
+    decoder.UpdateDecoderLoop();
+    EXPECT_EQ(decoder.decoded_mode_s_packet_out_queue.Length(), 0);
+
+    // Enqueue the same packet again after kMinSameAircraftMessageIntervalMs, it should be re-processed.
+    raw_packet.mlat_48mhz_64bit_counts += 48000 * ModeSPacketDecoder::kMinSameAircraftMessageIntervalMs;
+    decoder.raw_mode_s_packet_in_queue.Enqueue(raw_packet);
+    decoder.UpdateDecoderLoop();
+    EXPECT_EQ(decoder.decoded_mode_s_packet_out_queue.Length(), 1);
+    EXPECT_TRUE(decoder.decoded_mode_s_packet_out_queue.Dequeue(decoded_packet));
+    EXPECT_EQ(decoded_packet.icao_address, 0x40621Du);
+    EXPECT_EQ(decoded_packet.raw.source, 1);  // Should have the source.
+}

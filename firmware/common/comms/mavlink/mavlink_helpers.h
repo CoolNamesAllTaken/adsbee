@@ -328,8 +328,8 @@ MAVLINK_HELPER void _mav_finalize_message_chan_send(mavlink_channel_t chan, uint
         buf[0] = MAVLINK_STX_MAVLINK1;
         buf[1] = length;
         buf[2] = status->current_tx_seq;
-        buf[3] = comms_manager.mavlink_system_id;     // Modified by John McNelly 2024-06-08.
-        buf[4] = comms_manager.mavlink_component_id;  // Modified by John McNelly 2024-06-08.
+        buf[3] = settings_manager.settings.mavlink_system_id;     // Modified by John McNelly 2024-09-15.
+        buf[4] = settings_manager.settings.mavlink_component_id;  // Modified by John McNelly 2024-09-15.
         buf[5] = msgid & 0xFF;
     } else {
         uint8_t incompat_flags = 0;
@@ -342,8 +342,8 @@ MAVLINK_HELPER void _mav_finalize_message_chan_send(mavlink_channel_t chan, uint
         buf[2] = incompat_flags;
         buf[3] = 0;  // compat_flags
         buf[4] = status->current_tx_seq;
-        buf[5] = comms_manager.mavlink_system_id;     // Modified by John McNelly 2024-06-08.
-        buf[6] = comms_manager.mavlink_component_id;  // Modified by John McNelly 2024-06-08.
+        buf[5] = settings_manager.settings.mavlink_system_id;  // Modified by John McNelly 2024-09-15.
+        buf[6] = settings_manager.settings.mavlink_system_id;  // Modified by John McNelly 2024-09-15.
         buf[7] = msgid & 0xFF;
         buf[8] = (msgid >> 8) & 0xFF;
         buf[9] = (msgid >> 16) & 0xFF;
@@ -1083,20 +1083,7 @@ void comm_send_ch(mavlink_channel_t chan, uint8_t ch)
 
 // Begin modified by John McNelly 2024-06-08
 MAVLINK_HELPER void _mavlink_send_uart(mavlink_channel_t chan, const char *buf, uint16_t len) {
-    for (uint16_t i = 0; i < len; i++) {
-        comms_manager.iface_putc(static_cast<SettingsManager::SerialInterface>(chan), buf[i]);
-    }
-    // #ifdef MAVLINK_SEND_UART_BYTES
-    //     /* this is the more efficient approach, if the platform
-    //        defines it */
-    //     MAVLINK_SEND_UART_BYTES(chan, (const uint8_t *)buf, len);
-    // #else
-    //     /* fallback to one byte at a time */
-    //     uint16_t i;
-    //     for (i = 0; i < len; i++) {
-    //         comm_send_ch(chan, (uint8_t)buf[i]);
-    //     }
-    // #endif
+    comms_manager.SendBuf(CommsManager::ReportSink(static_cast<uint16_t>(chan)), buf, len);
 }
 
 // End modified by John McNelly 2024-06-08

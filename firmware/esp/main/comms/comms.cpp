@@ -72,6 +72,7 @@ bool CommsManager::LogMessageToCoprocessor(SettingsManager::LogLevel log_level, 
 }
 
 void CommsManager::WiFiAddClient(esp_ip4_addr_t client_ip, uint8_t* client_mac) {
+    int16_t new_client_index = -1;
     xSemaphoreTake(wifi_clients_list_mutex_, portMAX_DELAY);
     for (int i = 0; i < SettingsManager::Settings::kWiFiMaxNumClients; i++) {
         if (!wifi_clients_list_[i].active) {
@@ -79,10 +80,14 @@ void CommsManager::WiFiAddClient(esp_ip4_addr_t client_ip, uint8_t* client_mac) 
             wifi_clients_list_[i].SetMAC(client_mac);
             wifi_clients_list_[i].active = true;
             num_wifi_clients_++;
+            new_client_index = i;
             break;
         }
     }
     xSemaphoreGive(wifi_clients_list_mutex_);
+    if (new_client_index < 0) {
+        CONSOLE_ERROR("CommsManager::WiFiAddClient", "No space to add new client to list.");
+    }
 }
 
 void CommsManager::WiFiRemoveClient(uint8_t* mac_buf_in) {

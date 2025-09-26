@@ -31,6 +31,8 @@ add_compile_definitions(ON_TI)
 
 project(sub_ghz_radio C CXX ASM)
 
+add_compile_options(-Wno-packed-bitfield-compat) # Ignore the packed bitfield compatibility warning from GCC 4.4, since we never used GCC that old.
+
 # Create executable
 add_executable(${PROJECT_NAME}
     main.cpp
@@ -65,11 +67,11 @@ target_link_directories(${PROJECT_NAME} PRIVATE
 # Libraries to link
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
-#     # stdc++
+    stdc++
     gcc # GCC runtime library
     c # C standard library
     m # Math library
-    nosys
+    # nosys
     CMakeCommon::gcc_m4f # Use TI gcc toolchain for ARM M4 with hardware floating point.
 
     ## Manually bring in the libraries from syscfg/ti_utils_build_linker.cmd.genlibs here!
@@ -102,7 +104,6 @@ target_sources(${PROJECT_NAME} PRIVATE
 
 # Do NOT add the SDK itself as a subdirectory or else it will assume you are building the SDK and take over a bunch of important variables like CMAKE_COMMON_INSTALL_DIR.
 add_subdirectory(${CMAKE_SOURCE_DIR}/../../common ${CMAKE_BINARY_DIR}/adsbee_common)
-add_subdirectory(uat)
 add_subdirectory(comms)
 add_subdirectory(peripherals)
 add_subdirectory(sub_ghz_radio)
@@ -137,7 +138,7 @@ target_link_options(${PROJECT_NAME} PRIVATE
     -static
     -Wl,--gc-sections
     -specs=nano.specs
-    -specs=nosys.specs
+    # -specs=nosys.specs
 )
 
 # Custom command to create binary file

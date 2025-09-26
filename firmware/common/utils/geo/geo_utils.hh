@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fixedmath/fixed_math.hpp"
 #include "stdint.h"
 
 static const uint32_t kBoundingBoxDimensionMeters = 50000;
@@ -8,10 +9,10 @@ bool IsWithinBoundingBox(uint32_t lat_a_awb, uint32_t lon_a_awb, uint32_t lat_b_
 
 /**
  * @brief Calculates the great circle distance along the surface of the earth between two lat/long coordinate sets.
- * @param[in] lat_a_awb Latitude of coordinate A, in Alternative Weighted Binary format.
- * @param[in] lon_a_awb Longitude of coordinate A, in Alternative Weighted Binary format.
- * @param[in] lat_b_awb Latitude of coordinate B, in Alternative Weighted Binary format.
- * @param[in] lon_b_awb Longitude of coordinate B, in Alternative Weighted Binary format.
+ * @param[in] lat_a_awb Latitude of coordinate A, in Angular Weighted Binary format.
+ * @param[in] lon_a_awb Longitude of coordinate A, in Angular Weighted Binary format.
+ * @param[in] lat_b_awb Latitude of coordinate B, in Angular Weighted Binary format.
+ * @param[in] lon_b_awb Longitude of coordinate B, in Angular Weighted Binary format.
  * @retval Great circle distance between points A and B, in meters.
  */
 uint32_t CalculateGeoidalDistanceMetersAWB(uint32_t lat_a_awb, uint32_t lon_a_awb, uint32_t lat_b_awb,
@@ -21,7 +22,7 @@ uint32_t CalculateGeoidalDistanceMetersDeg(float lat_a_deg, float lon_a_deg, flo
 
 /**
  * @brief Calculates the haversine of an angle, in radians. Exposed for testing.
- * @param[in] theta_awb Angle from 0-360 degrees in Alternative Weighted Binary format, where 0 is 0 degrees and
+ * @param[in] theta_awb Angle from 0-360 degrees in Angular Weighted Binary format, where 0 is 0 degrees and
  * UINT32_MAX is 360 degrees.
  * @retval Haversine of theta.
  */
@@ -38,3 +39,5 @@ float hav_awb(uint32_t theta_awb);
  * @param[in] x Result of the haversine expression
  */
 float havdiff_to_m(float x);
+
+void CalculateTrackAndSpeedFromNEVelocities(int32_t n_vel_kts, int32_t e_vel_kts, float &track_deg, int32_t &speed_kts);

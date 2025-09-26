@@ -11,17 +11,21 @@
 #include "hardware/pio.h"
 #include "hardware/watchdog.h"
 #include "macros.hh"  // For MAX / MIN.
+#include "mode_s_packet.hh"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
 #include "stdint.h"
-#include "transponder_packet.hh"
 
 class ADSBee {
    public:
+    static constexpr uint16_t kModeSPacketQueueDepth = 200;
+    static constexpr uint16_t kRawUATADSBPacketQueueDepth = 50;
+    static constexpr uint16_t kRawUATUplinkPacketQueueDepth = 2;
+
     static constexpr uint16_t kTLMaxPWMCount = 5000;  // Clock is 125MHz, shoot for 25kHz PWM.
     static constexpr int kVDDMV = 3300;               // [mV] Voltage of positive supply rail.
-    static constexpr int kTLMaxMV = 3300;             // [mV]
-    static constexpr int kTLMinMV = 0;                // [mV]
+    static constexpr int kTLOffsetMaxMV = 3300;       // [mV]
+    static constexpr int kTLOffsetMinMV = 0;          // [mV]
     static constexpr uint32_t kStatusLEDOnMs = 1;
 
     static constexpr uint32_t kTLLearningIntervalMs =
@@ -181,7 +185,7 @@ class ADSBee {
      * Return the value of the low Minimum Trigger Level threshold in milliVolts.
      * @retval TL in milliVolts.
      */
-    int GetTLMilliVolts() { return tl_mv_; }
+    int GetTLOffsetMilliVolts() { return tl_offset_mv_; }
 
     inline uint32_t GetWatchdogTimeoutSec() { return watchdog_timeout_sec_; }
 
@@ -262,7 +266,7 @@ class ADSBee {
     }
 
     /**
-     * Enables or disables the 978MHz receiver by powering the receiver chip on or off. Re-initializes the receiver chip
+     * Enables or disables the sub-GHz radio by powering the receiver chip on or off. Re-initializes the receiver chip
      * if it's being powered on from a previous off state.
      * @param[in] is_enabled True if 978MHz receiver should be enabled, false otherwise.
      */
@@ -273,7 +277,8 @@ class ADSBee {
              old_enabled == SettingsManager::EnableState::kEnableStateExternal) &&
             subg_radio_ll.IsEnabled()) {
             // Re-initialize the receiver when in ENABLED and EXTERNAL states.
-            if (!subg_radio.Init()) {
+            if (!subg_radio.Init() && is_enabled != SettingsManager::EnableState::kEnableStateExternal) {
+                // If subg radio failed to initialize and it's not controlled by external debugger, disable it.
                 CONSOLE_ERROR("ADSBee::SetSubGRadioEnable",
                               "Failed to initialize sub-GHz radio after enabling. Disabling sub-GHz radio.");
                 subg_radio_ll.SetEnableState(SettingsManager::EnableState::kEnableStateDisabled);
@@ -288,12 +293,12 @@ class ADSBee {
     inline void SetStatusLED(bool on) { gpio_put(config_.r1090_led_pin, on ? 1 : 0); }
 
     /**
-     * Set the Minimum Trigger Level (TL) at the AD8314 output in milliVolts.
-     * @param[in] tl_mv Voltage in milliVolts at the top of the pullup for the LEVEL net in the data slicer. Pull higher
-     * to accommodate a higher noise floor without false triggers.
+     * Set the Minimum Trigger Level (TL) offset at the AD8313 output in milliVolts.
+     * @param[in] tl_offset_mv Trigger level offset from the noise floor in milliVolts. Must be positive. Use a larger
+     * value to decrease receiver sensitivity.
      * @retval True if succeeded, False if TL value was out of range.
      */
-    bool SetTLMilliVolts(int tl_mv);
+    bool SetTLOffsetMilliVolts(int tl_offset_mv);
 
     /**
      * Sets the watchdog timer and enables it.
@@ -330,20 +335,29 @@ class ADSBee {
      */
     void StartTLLearning(uint16_t tl_learning_num_cycles = kTLLearningNumCycles,
                          uint16_t tl_learning_start_temperature_mv = kTLLearningStartTemperatureMV,
-                         uint16_t tl_min_mv = kTLMinMV, uint16_t tl_max_mv = kTLMaxMV);
+                         uint16_t tl_min_mv = kTLOffsetMinMV, uint16_t tl_max_mv = kTLOffsetMaxMV);
 
-    PFBQueue<Raw1090Packet> raw_1090_packet_queue =
-        PFBQueue<Raw1090Packet>({.buf_len_num_elements = SettingsManager::Settings::kMaxNumTransponderPackets,
-                                 .buffer = raw_1090_packet_queue_buffer_});
+    // Raw packet intake queues.
+    PFBQueue<RawModeSPacket> raw_mode_s_packet_queue = PFBQueue<RawModeSPacket>(
+        {.buf_len_num_elements = kModeSPacketQueueDepth, .buffer = raw_mode_s_packet_queue_buffer_});
+    PFBQueue<RawUATADSBPacket> raw_uat_adsb_packet_queue = PFBQueue<RawUATADSBPacket>(
+        {.buf_len_num_elements = kRawUATADSBPacketQueueDepth, .buffer = raw_uat_adsb_packet_queue_buffer_});
+    PFBQueue<RawUATUplinkPacket> raw_uat_uplink_packet_queue = PFBQueue<RawUATUplinkPacket>(
+        {.buf_len_num_elements = kRawUATUplinkPacketQueueDepth, .buffer = raw_uat_uplink_packet_queue_buffer_});
 
     AircraftDictionary aircraft_dictionary;
     CC1312 subg_radio_ll = CC1312({});
     SPICoprocessor subg_radio = SPICoprocessor({.interface = subg_radio_ll, .tag_str = "CC1312"});
 
    private:
+    void IngestAndForwardPackets();
+    void MLATCounterInit();
     void PIOInit();
     void PIOEnable();
-    void MLATCounterInit();
+    void PruneAircraftDictionary();
+    void Update1090LED();
+    void UpdateNoiseFloor();
+    void UpdateTLLearning();
 
     ADSBeeConfig config_;
     CppAT parser_;
@@ -366,7 +380,7 @@ class ADSBee {
     uint16_t tl_pwm_slice_ = 0;
     uint16_t tl_pwm_chan_ = 0;
 
-    uint16_t tl_mv_ = SettingsManager::Settings::kDefaultTLMV;
+    uint16_t tl_offset_mv_ = SettingsManager::Settings::kDefaultTLOffsetMV;
     uint16_t tl_pwm_count_ = 0;  // out of kTLMaxPWMCount
 
     uint16_t tl_adc_counts_ = 0;
@@ -374,16 +388,22 @@ class ADSBee {
     uint32_t tl_learning_cycle_start_timestamp_ms_ = 0;
     uint16_t tl_learning_temperature_mv_ = 0;  // Don't learn automatically.
     int16_t tl_learning_temperature_step_mv_ = 0;
-    uint16_t tl_learning_max_mv_ = kTLMaxMV;
-    uint16_t tl_learning_min_mv_ = kTLMinMV;
+    uint16_t tl_learning_max_offset_mv_ = kTLOffsetMaxMV;
+    uint16_t tl_learning_min_offset_mv_ = kTLOffsetMinMV;
     int16_t tl_learning_num_valid_packets_ = 0;
     int16_t tl_learning_prev_num_valid_packets_ = 1;  // Set to 1 to avoid dividing by 0.
-    uint16_t tl_learning_prev_tl_mv_ = tl_mv_;
+    uint16_t tl_learning_prev_tl_offset_mv_ = tl_offset_mv_;
 
     uint64_t mlat_counter_wraps_ = 0;
 
-    Raw1090Packet rx_packet_[BSP::kMaxNumDemodStateMachines];
-    Raw1090Packet raw_1090_packet_queue_buffer_[SettingsManager::Settings::kMaxNumTransponderPackets];
+    // Buffer used to hold packets currently being received.
+    RawModeSPacket rx_packet_[BSP::kMaxNumDemodStateMachines];
+    // Buffer where packets are stored before being sent to the decoder.
+    RawModeSPacket raw_mode_s_packet_queue_buffer_[kModeSPacketQueueDepth];
+
+    // Buffer where packets are stored while incoming from the CC1312.
+    RawUATADSBPacket raw_uat_adsb_packet_queue_buffer_[kRawUATADSBPacketQueueDepth];
+    RawUATUplinkPacket raw_uat_uplink_packet_queue_buffer_[kRawUATUplinkPacketQueueDepth];
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
 

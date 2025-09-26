@@ -1,14 +1,13 @@
 cmake_minimum_required(VERSION 3.13)
 
 set(CMAKE_C_STANDARD 17)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 
 # Directories
 set(LINKER_SCRIPTS_DIR "${CMAKE_SOURCE_DIR}/linker_scripts")
 set(ADSBEE_COMMON_DIR "${CMAKE_SOURCE_DIR}/../common") # Used for code shared between ESP32 and RP2040.
 set(ADSBEE_MODULES_DIR "${CMAKE_SOURCE_DIR}/../modules")
 
-# TODO: Change these linker scripts as they get populated.
 set(BOOTLOADER_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/bootloader.ld")
 set(APPLICATION_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/application.ld")
 set(APP0_LINKER_SCRIPT "${LINKER_SCRIPTS_DIR}/app0.ld")
@@ -20,6 +19,8 @@ set(APPLICATION_HEADER_SECTION_NAME hdr0)
 set(APPLICATION_SECTION_NAME app0)
 
 find_package (Python3 REQUIRED COMPONENTS Interpreter)
+
+add_compile_options(-Wno-packed-bitfield-compat) # Ignore the packed bitfield compatibility warning from GCC 4.4, since we never used GCC that old.
 
 # Function that converts a .bin file into a .S (assembly) file, allowing the .bin to be linked within a linker script
 # via its section name. Currently only used to create boot3.S in the bootloader folder.
@@ -80,12 +81,13 @@ else()
     # after the pico SDK is pulled in.
 
     set(CMAKE_BUILD_TYPE "Debug") # Now that we've identified we're running tests, revert to an actual build config.
-
+    add_compile_definitions(ON_HOST)
     add_compile_options(
         -Wall                # Include all warnings.
         -Wno-format          # int != int32_t as far as the compiler is concerned because gcc has int32_t as long int
         -Wno-unused-function # we have some for the docs that aren't called
         -Wno-maybe-uninitialized
+        -Wno-packed-bitfield-compat # Ignore the packed bitfield compatibility warning from GCC 4.4, since we never used GCC that old.
     )
 
     # Create the executable and bring in testing source files.

@@ -14,9 +14,9 @@
 // Frequency: 978.00000 MHz
 // Data Format: Serial mode disable 
 // Deviation: 312.500 kHz
-// Packet Length Config: Variable 
-// Max Packet Length: 255 
-// Packet Length: 20 
+// Fixed Packet Length: 20 
+// Packet Length Config: Fixed 
+// Max Packet Length: 92 
 // Packet Data: 255 
 // Preamble Count: 1 Bit 
 // Preamble Mode: Send 0 as the first preamble bit 
@@ -154,8 +154,8 @@ rfc_CMD_PROP_RX_t RF_cmdPropRx =
     .pktConf.bFsOff = 0x0,
     .pktConf.bRepeatOk = 0x0,
     .pktConf.bRepeatNok = 0x0,
-    .pktConf.bUseCrc = 0x1,
-    .pktConf.bVarLen = 0x1,
+    .pktConf.bUseCrc = 0x0,
+    .pktConf.bVarLen = 0x0,
     .pktConf.bChkAddress = 0x0,
     .pktConf.endType = 0x0,
     .pktConf.filterOp = 0x0,
@@ -167,7 +167,7 @@ rfc_CMD_PROP_RX_t RF_cmdPropRx =
     .rxConf.bAppendTimestamp = 0x0,
     .rxConf.bAppendStatus = 0x1,
     .syncWord = 0xACDDA4E2,
-    .maxPktLen = 0xFF,
+    .maxPktLen = 0x5C,
     .address0 = 0xAA,
     .address1 = 0xBB,
     .endTrigger.triggerType = 0x1,
@@ -180,11 +180,11 @@ rfc_CMD_PROP_RX_t RF_cmdPropRx =
 };
 
 
-// CMD_PROP_TX
-// Proprietary Mode Transmit Command
-rfc_CMD_PROP_TX_t RF_cmdPropTx =
+// CMD_PROP_RX_ADV
+// Proprietary Mode Advanced Receive Command
+rfc_CMD_PROP_RX_ADV_t RF_cmdPropRxAdv =
 {
-    .commandNo = 0x3801,
+    .commandNo = 0x3804,
     .status = 0x0000,
     .pNextOp = 0, // INSERT APPLICABLE POINTER: (uint8_t*)&xxx
     .startTime = 0x00000000,
@@ -195,10 +195,38 @@ rfc_CMD_PROP_TX_t RF_cmdPropTx =
     .condition.rule = 0x1,
     .condition.nSkip = 0x0,
     .pktConf.bFsOff = 0x0,
-    .pktConf.bUseCrc = 0x1,
-    .pktConf.bVarLen = 0x1,
-    .pktLen = 0x14,
-    .syncWord = 0xACDDA4E2,
-    .pPkt = 0 // INSERT APPLICABLE POINTER: (uint8_t*)&xxx
+    .pktConf.bRepeatOk = 0x0,
+    .pktConf.bRepeatNok = 0x0,
+    .pktConf.bUseCrc = 0x0,
+    .pktConf.bCrcIncSw = 0x0,
+    .pktConf.bCrcIncHdr = 0x0,
+    .pktConf.endType = 0x0,
+    .pktConf.filterOp = 0x0,
+    .rxConf.bAutoFlushIgnored = 0x0,
+    .rxConf.bAutoFlushCrcErr = 0x0,
+    .rxConf.bIncludeHdr = 0x1,
+    .rxConf.bIncludeCrc = 0x1,
+    .rxConf.bAppendRssi = 0x1,
+    .rxConf.bAppendTimestamp = 0x1,
+    .rxConf.bAppendStatus = 0x1,
+    .syncWord0 = 0xACDDA4E2,
+    .syncWord1 = 0x53225B1D,
+    .maxPktLen = 0x00FF,
+    .hdrConf.numHdrBits = 0x0,
+    .hdrConf.lenPos = 0x0,
+    .hdrConf.numLenBits = 0x0,
+    .addrConf.addrType = 0x0,
+    .addrConf.addrSize = 0x0,
+    .addrConf.addrPos = 0x0,
+    .addrConf.numAddr = 0x0,
+    .lenOffset = 0x00,
+    .endTrigger.triggerType = 0x0,
+    .endTrigger.bEnaCmd = 0x0,
+    .endTrigger.triggerNo = 0x0,
+    .endTrigger.pastTrig = 0x0,
+    .endTime = 0x00000000,
+    .pAddr = 0, // INSERT APPLICABLE POINTER: (uint8_t*)&xxx
+    .pQueue = 0, // INSERT APPLICABLE POINTER: (dataQueue_t*)&xxx
+    .pOutput = 0 // INSERT APPLICABLE POINTER: (uint8_t*)&xxx
 };
 

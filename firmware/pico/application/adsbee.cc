@@ -16,7 +16,7 @@
 #include "capture.pio.h"
 #include "hal.hh"
 #include "hardware/irq.h"
-#include "packet_decoder.hh"
+#include "mode_s_packet_decoder.hh"
 #include "pico/binary_info.h"
 #include "spi_coprocessor.hh"
 
@@ -104,7 +104,7 @@ bool ADSBee::Init() {
     gpio_set_function(config_.tl_pwm_pin, GPIO_FUNC_PWM);
     pwm_set_wrap(tl_pwm_slice_, kTLMaxPWMCount);
 
-    SetTLMilliVolts(SettingsManager::Settings::kDefaultTLMV);
+    SetTLOffsetMilliVolts(SettingsManager::Settings::kDefaultTLOffsetMV);
     pwm_set_enabled(tl_pwm_slice_, true);
 
     // Initialize the trigger level bias ADC input.
@@ -157,101 +157,15 @@ bool ADSBee::Init() {
 }
 
 bool ADSBee::Update() {
-    uint32_t timestamp_ms = get_time_since_boot_ms();
-    // Turn off the demod LED if it's been on for long enough.
-    if (timestamp_ms - led_on_timestamp_ms_ > kStatusLEDOnMs) {
-        gpio_put(config_.r1090_led_pin, 0);
-    }
+    Update1090LED();
 
-    // Prune aircraft dictionary. Need to do this up front so that we don't end up with a negative timestamp delta
-    // caused by packets being ingested more recently than the timestamp we take at the beginning of this function.
-    if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > config_.aircraft_dictionary_update_interval_ms) {
-        aircraft_dictionary.Update(timestamp_ms);
-        if (esp32.IsEnabled()) {
-            // Send fresh aircraft dictionary stats to ESPS32.
-            esp32.Write(ObjectDictionary::kAddrAircraftDictionaryMetrics, aircraft_dictionary.metrics,
-                        true);  // require ACK.
-        }
-        // Add the fresh metrics values to the pile used for TL learning.
-        // If learning, add the number of valid packets received to the pile used for trigger level learning.
-        if (tl_learning_temperature_mv_ > 0) {
-            tl_learning_num_valid_packets_ += (aircraft_dictionary.metrics.valid_squitter_frames +
-                                               aircraft_dictionary.metrics.valid_extended_squitter_frames);
-        }
-        last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
-    }
+    PruneAircraftDictionary();
 
-    // Ingest new packets into the dictionary.
-    // Raw1090Packet raw_packet;
-    Decoded1090Packet decoded_packet;
-    while (decoder.decoded_1090_packet_out_queue.Pop(decoded_packet)) {
-        CONSOLE_INFO("ADSBee::Update", "\tdf=%d icao_address=0x%06x", decoded_packet.GetDownlinkFormat(),
-                     decoded_packet.GetICAOAddress());
+    IngestAndForwardPackets();
 
-        if (aircraft_dictionary.IngestDecoded1090Packet(decoded_packet)) {
-            // Packet was used to update the dictionary or was silently ignored (but presumed to be valid).
-            FlashStatusLED();
-            // NOTE: Pushing to the reporting queue here means that we only will report validated packets!
-            // comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
-            CONSOLE_INFO("ADSBee::Update", "\taircraft_dictionary: %d aircraft", aircraft_dictionary.GetNumAircraft());
-        }
-        comms_manager.transponder_packet_reporting_queue.Push(decoded_packet);
-    }
+    UpdateTLLearning();
 
-    // Update trigger level learning if it's active.
-    if (tl_learning_temperature_mv_ > 0 &&
-        timestamp_ms - tl_learning_cycle_start_timestamp_ms_ > kTLLearningIntervalMs) {
-        // Trigger level learning is active and due for an update.
-        // Is this neighbor (current value for tl_mv) worth traversing to?
-        float valid_packet_ratio = (tl_learning_num_valid_packets_ - tl_learning_prev_num_valid_packets_) /
-                                   MAX(tl_learning_prev_num_valid_packets_, 1);  // Avoid divide by zero.
-        float random_weight =
-            static_cast<int16_t>(get_rand_32()) * kInt16MaxRecip * 0.25;  // Random value from [-0.25,0.25].
-        if (valid_packet_ratio + random_weight > 0.0f) {
-            // Transition to neighbor TL value.
-            tl_learning_prev_tl_mv_ = tl_mv_;
-            tl_learning_prev_num_valid_packets_ = tl_learning_num_valid_packets_;
-        }
-        // Else keep existing TL value in tl_learning_prev_tl_mv_.
-
-        // DO STUFF HERE
-        // Find a new neighbor by stepping trigger level with random value from [-1.0, 1.0] * temperature.
-        uint16_t new_tl_mv = tl_mv_ + static_cast<int16_t>(get_rand_32()) * tl_learning_temperature_mv_ / INT16_MAX;
-        if (new_tl_mv > tl_learning_max_mv_) {
-            tl_mv_ = tl_learning_max_mv_;
-        } else if (new_tl_mv < tl_learning_min_mv_) {
-            tl_mv_ = tl_learning_min_mv_;
-        } else {
-            tl_mv_ = new_tl_mv;
-        }
-
-        // Update learning temperature. Decrement by the annealing temperature step or set to 0
-        // if learning is complete.
-        if (tl_learning_temperature_mv_ > tl_learning_temperature_step_mv_) {
-            // Not done learning: step the trigger level learning temperature.
-            tl_learning_temperature_mv_ -= tl_learning_temperature_step_mv_;
-        } else {
-            // Done learning: take the current best trigger level and yeet outta here.
-            tl_learning_temperature_mv_ = 0;   // Set learning temperature to 0 to finish learnign trigger level.
-            tl_mv_ = tl_learning_prev_tl_mv_;  // Set trigger level to the best value we've seen so far.
-        }
-
-        // Store timestamp as start of trigger learning cycle so we know when to come back.
-        tl_learning_cycle_start_timestamp_ms_ = timestamp_ms;
-        tl_learning_num_valid_packets_ = 0;  // Start the counter over.
-    }
-
-    // Update PWM output duty cycle.
-    pwm_set_chan_level(tl_pwm_slice_, tl_pwm_chan_, tl_pwm_count_);
-
-    // Occasionally sample the signal strength to approximate the noise floor.
-    timestamp_ms = get_time_since_boot_ms();
-    if (timestamp_ms - noise_floor_last_sample_timestamp_ms_ > kNoiseFloorADCSampleIntervalMs) {
-        noise_floor_mv_ = ((noise_floor_mv_ * kNoiseFloorExpoFilterPercent) +
-                           ReadSignalStrengthMilliVolts() * (100 - kNoiseFloorExpoFilterPercent)) /
-                          100;
-        noise_floor_last_sample_timestamp_ms_ = timestamp_ms;
-    }
+    UpdateNoiseFloor();
 
     // Update sub-GHz radio.
     if (config_.has_subg && subg_radio.IsEnabled() && !subg_radio.Update()) {
@@ -323,29 +237,29 @@ void ADSBee::OnDemodComplete() {
         uint16_t mlat_jitter_correction = b >= a ? b - a : (0xFFFF - a) + b;
         rx_packet_[sm_index].mlat_48mhz_64bit_counts -= mlat_jitter_correction;
         if (!pio_sm_is_rx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
-            // Push any partially complete 32-bit word onto the RX FIFO.
+            // Enqueue any partially complete 32-bit word onto the RX FIFO.
             pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
                                       pio_encode_push(false, true));
         }
 
         // Clear the transponder packet buffer.
-        memset((void *)rx_packet_[sm_index].buffer, 0x0, Raw1090Packet::kMaxPacketLenWords32);
+        memset((void *)rx_packet_[sm_index].buffer, 0x0, RawModeSPacket::kMaxPacketLenWords32);
 
         // Pull all words out of the RX FIFO.
         volatile uint16_t packet_num_words =
             pio_sm_get_rx_fifo_level(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);
-        if (packet_num_words > Raw1090Packet::kMaxPacketLenWords32) {
+        if (packet_num_words > RawModeSPacket::kMaxPacketLenWords32) {
             // Packet length is invalid; dump everything and try again next time.
             // Only enable this print for debugging! Printing from the interrupt causes the USB library to crash.
             // CONSOLE_WARNING("ADSBee::OnDemodComplete", "Received a packet with %d 32-bit words, expected maximum
             // of %d.",
-            //                 packet_num_words, Raw1090Packet::kExtendedSquitterPacketNumWords32);
+            //                 packet_num_words, RawModeSPacket::kExtendedSquitterPacketNumWords32);
             // pio_sm_clear_fifos(config_.message_demodulator_pio, message_demodulator_sm_);
-            packet_num_words = Raw1090Packet::kMaxPacketLenWords32;
+            packet_num_words = RawModeSPacket::kMaxPacketLenWords32;
         }
         // Track that we attempted to demodulate something.
         aircraft_dictionary.Record1090Demod();
-        // Create a Raw1090Packet and push it onto the queue.
+        // Create a RawModeSPacket and push it onto the queue.
         for (uint16_t i = 0; i < packet_num_words; i++) {
             rx_packet_[sm_index].buffer[i] =
                 pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);
@@ -354,26 +268,26 @@ void ADSBee::OnDemodComplete() {
                 rx_packet_[sm_index].buffer[i] >>= 1;
                 // Mask and left align final word based on bit length.
                 switch (packet_num_words) {
-                    case Raw1090Packet::kSquitterPacketNumWords32:
+                    case RawModeSPacket::kSquitterPacketNumWords32:
                         aircraft_dictionary.Record1090RawSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFFFF) << 8;
-                        rx_packet_[sm_index].buffer_len_bits = Raw1090Packet::kSquitterPacketLenBits;
-                        // raw_1090_packet_queue.Push(rx_packet_[sm_index]);
-                        decoder.raw_1090_packet_in_queue.Push(rx_packet_[sm_index]);
+                        rx_packet_[sm_index].buffer_len_bytes = RawModeSPacket::kSquitterPacketLenBytes;
+                        // raw_mode_s_packet_queue.Enqueue(rx_packet_[sm_index]);
+                        decoder.raw_mode_s_packet_in_queue.Enqueue(rx_packet_[sm_index]);
                         break;
-                    case Raw1090Packet::kExtendedSquitterPacketNumWords32:
+                    case RawModeSPacket::kExtendedSquitterPacketNumWords32:
                         aircraft_dictionary.Record1090RawExtendedSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFF) << 16;
-                        rx_packet_[sm_index].buffer_len_bits = Raw1090Packet::kExtendedSquitterPacketLenBits;
-                        // raw_1090_packet_queue.Push(rx_packet_[sm_index]);
-                        decoder.raw_1090_packet_in_queue.Push(rx_packet_[sm_index]);
+                        rx_packet_[sm_index].buffer_len_bytes = RawModeSPacket::kExtendedSquitterPacketLenBytes;
+                        // raw_mode_s_packet_queue.Enqueue(rx_packet_[sm_index]);
+                        decoder.raw_mode_s_packet_in_queue.Enqueue(rx_packet_[sm_index]);
                         break;
                     default:
                         // Don't push partial packets.
                         // Printing to tinyUSB from within an interrupt causes crashes! Don't do it.
                         // CONSOLE_WARNING(
                         //     "ADSBee::OnDemodComplete",
-                        //     "Unhandled case while creating Raw1090Packet, received packet with %d 32-bit
+                        //     "Unhandled case while creating RawModeSPacket, received packet with %d 32-bit
                         //     words.", packet_num_words);
                         break;
                 }
@@ -447,14 +361,14 @@ int ADSBee::ReadTLMilliVolts() {
     return ADCCountsToMilliVolts(tl_adc_counts_);
 }
 
-bool ADSBee::SetTLMilliVolts(int tl_mv) {
-    if (tl_mv > kTLMaxMV || tl_mv < kTLMinMV) {
-        CONSOLE_ERROR("ADSBee::SetTLMilliVolts", "Unable to set tl_mv_ to %d, outside of permissible range %d-%d.\r\n",
-                      tl_mv, kTLMinMV, kTLMaxMV);
+bool ADSBee::SetTLOffsetMilliVolts(int tl_offset_mv) {
+    if (tl_offset_mv > kTLOffsetMaxMV || tl_offset_mv < kTLOffsetMinMV) {
+        CONSOLE_ERROR("ADSBee::SetTLOffsetMilliVolts",
+                      "Unable to set tl_offset_mv_ to %d, outside of permissible range %d-%d.\r\n", tl_offset_mv,
+                      kTLOffsetMinMV, kTLOffsetMaxMV);
         return false;
     }
-    tl_mv_ = tl_mv;
-    tl_pwm_count_ = tl_mv_ * kTLMaxPWMCount / kVDDMV;
+    tl_offset_mv_ = tl_offset_mv;
 
     return true;
 }
@@ -467,6 +381,107 @@ void ADSBee::StartTLLearning(uint16_t tl_learning_num_cycles, uint16_t tl_learni
 }
 
 /** Private Functions **/
+
+void ADSBee::IngestAndForwardPackets() {
+    // Ingest new Mode S packets into dictionary and report them.
+    DecodedModeSPacket decoded_packet;
+    // Explicitly count the number of packets to process so that we don't get stuck in this loop if the decoder
+    // keeps outputting packets.
+    uint16_t num_decoded_mode_s_packets = decoder.decoded_mode_s_packet_out_queue.Length();
+    for (uint16_t i = 0;
+         i < num_decoded_mode_s_packets && decoder.decoded_mode_s_packet_out_queue.Dequeue(decoded_packet); i++) {
+        CONSOLE_INFO("ADSBee::Update", "\tdf=%d icao_address=0x%06x", decoded_packet.downlink_format,
+                     decoded_packet.icao_address);
+
+        if (aircraft_dictionary.IngestDecodedModeSPacket(decoded_packet)) {
+            // Packet was used to update the dictionary or was silently ignored (but presumed to be valid).
+            FlashStatusLED();
+            CONSOLE_INFO("ADSBee::Update", "\taircraft_dictionary: %d aircraft", aircraft_dictionary.GetNumAircraft());
+        }
+        // Push all decoded packets to the reporting queue, even if the aircraft dictionary didn't know what to do with
+        // them.
+        comms_manager.mode_s_packet_reporting_queue.Enqueue(decoded_packet.raw);
+    }
+
+    // NOTE: The UAT packet queues are updated on this core, so we don't need to count the number of packets to process
+    // before dequeueing.
+
+    // Ingest new UAT packets into the dictionary and report them.
+    RawUATADSBPacket uat_adsb_packet;
+    while (raw_uat_adsb_packet_queue.Dequeue(uat_adsb_packet)) {
+        DecodedUATADSBPacket decoded_uat_adsb_packet = DecodedUATADSBPacket(uat_adsb_packet);
+        if (!decoded_uat_adsb_packet.is_valid) {
+            CONSOLE_ERROR("ADSBee::Update", "Invalid UAT ADS-B packet received.");
+            continue;
+        }
+
+        if (aircraft_dictionary.IngestDecodedUATADSBPacket(decoded_uat_adsb_packet)) {
+            // Packet was used to update the dictionary or was silently ignored (but presumed to be valid).
+            // NOTE: Pushing to the reporting queue here means that we only will report validated packets!
+            // comms_manager.uat_adsb_packet_reporting_queue.Enqueue(uat_adsb_packet);
+            CONSOLE_INFO("ADSBee::Update", "\taircraft_dictionary: %d aircraft", aircraft_dictionary.GetNumAircraft());
+        }
+        // Push all decoded packets to the reporting queue, even if the aircraft dictionary didn't know what to do with
+        // them.
+        comms_manager.uat_adsb_packet_reporting_queue.Enqueue(uat_adsb_packet);
+    }
+
+    // Report all UAT uplink packets.
+    RawUATUplinkPacket uat_uplink_packet;
+    while (raw_uat_uplink_packet_queue.Dequeue(uat_uplink_packet)) {
+        // We don't do anything with uplink packets other than report them directly.
+        comms_manager.uat_uplink_packet_reporting_queue.Enqueue(uat_uplink_packet);
+    }
+}
+
+void ADSBee::MLATCounterInit() {
+    /**
+     * MLAT Counter
+     * A 48-MHz MLAT counter is synthesized from the 125MHz system clock using a the 24-bit SysTick timer.
+     */
+    /** MLAT Counter **/
+    // Enable the MLAT timer using the 24-bit SysTick timer connected to the 125MHz processor clock.
+    // SysTick Control and Status Register
+    systick_hw->csr = 0b110;  // Source = Processor Clock, TickInt = Enabled, Counter = Disabled.
+    // SysTick Reload Value Register
+    systick_hw->rvr = 0xFFFFFF;  // Use the full 24 bit span of the timer value register.
+    // 0xFFFFFF = 16777215 counts @ 125MHz = approx. 0.134 seconds.
+    // Call the OnSysTickWrap function every time the SysTick timer hits 0.
+    exception_set_exclusive_handler(SYSTICK_EXCEPTION, on_systick_exception);
+    // Let the games begin!
+    systick_hw->csr |= 0b1;  // Enable the counter.
+    // Set the priority of the Systick exception to kMLATCounterWrapInterruptPriority.
+    exception_set_priority(SYSTICK_EXCEPTION, kMLATCounterWrapInterruptPriority);
+
+    /**
+     * MLAT Jitter Offset Counter
+     * There is timing jitter between the beginning of a message decode and the OnDemodBegin() interrupt firing. The
+     * DMA peripheral is used to capture the timestamp of a PIO state machines first push onto its TX FIFO, allowing
+     * the full 24-bit timestamp captured during the OnDemodBegin() interval to be de-jittered. a PIO state machine.
+     */
+
+    // PWM slice 5 is used for LEVEL_PWM, anything else is fine to use for the MLAT jitter counter.
+    mlat_jitter_pwm_slice_ = pwm_gpio_to_slice_num(bsp.r1090_pulses_pins[0]);  // Use pulses pin for slice 1.
+    pwm_config config = pwm_get_default_config();
+    pwm_config_set_clkdiv(&config, kMLATSystemClockDiv);
+    pwm_config_set_wrap(&config, 0xFFFF);             // Use the full 16-bit span.
+    pwm_init(mlat_jitter_pwm_slice_, &config, true);  // Start immediately.
+
+    // Enable a DMA DREQ for each demodulator PIO TX FIFO. This is used to capture the IRQ jitter offset counter
+    // when a decode interval begins (32 bits into a message).
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
+        mlat_jitter_dma_channel_[sm_index] =
+            dma_claim_unused_channel(true);  // Claim a DMA channel for each state machine.
+        dma_channel_config config = dma_channel_get_default_config(mlat_jitter_dma_channel_[sm_index]);
+        channel_config_set_read_increment(&config, false);            // Don't increment the read address.
+        channel_config_set_write_increment(&config, false);           // Don't increment the write address.
+        channel_config_set_transfer_data_size(&config, DMA_SIZE_16);  // Transfer 16 bits (width of PWM timer).
+        // Transfer 16 bits once from the PWM counter to the jitter counter counts for the given state machine.
+        channel_config_set_dreq(&config, DREQ_PIO1_TX0 + sm_index);  // Use the PIO1 TX FIFO DREQ for each SM.
+        dma_channel_configure(mlat_jitter_dma_channel_[sm_index], &config, &mlat_jitter_counts_on_fifo_pull_[sm_index],
+                              &pwm_hw->slice[mlat_jitter_pwm_slice_].ctr, 1, false);
+    }
+}
 
 void ADSBee::PIOInit() {
     /** PREAMBLE DETECTOR PIO **/
@@ -583,51 +598,93 @@ void ADSBee::PIOEnable() {
                        preamble_detector_sm_[bsp.r1090_high_power_demod_state_machine_index], true);
 }
 
-void ADSBee::MLATCounterInit() {
-    /**
-     * MLAT Counter
-     * A 48-MHz MLAT counter is synthesized from the 125MHz system clock using a the 24-bit SysTick timer.
-     */
-    /** MLAT Counter **/
-    // Enable the MLAT timer using the 24-bit SysTick timer connected to the 125MHz processor clock.
-    // SysTick Control and Status Register
-    systick_hw->csr = 0b110;  // Source = Processor Clock, TickInt = Enabled, Counter = Disabled.
-    // SysTick Reload Value Register
-    systick_hw->rvr = 0xFFFFFF;  // Use the full 24 bit span of the timer value register.
-    // 0xFFFFFF = 16777215 counts @ 125MHz = approx. 0.134 seconds.
-    // Call the OnSysTickWrap function every time the SysTick timer hits 0.
-    exception_set_exclusive_handler(SYSTICK_EXCEPTION, on_systick_exception);
-    // Let the games begin!
-    systick_hw->csr |= 0b1;  // Enable the counter.
-    // Set the priority of the Systick exception to kMLATCounterWrapInterruptPriority.
-    exception_set_priority(SYSTICK_EXCEPTION, kMLATCounterWrapInterruptPriority);
+void ADSBee::PruneAircraftDictionary() {
+    // Prune aircraft dictionary. Need to do this up front so that we don't end up with a negative timestamp delta
+    // caused by packets being ingested more recently than the timestamp we take at the beginning of this function.
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+    if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > config_.aircraft_dictionary_update_interval_ms) {
+        aircraft_dictionary.Update(timestamp_ms);
+        if (esp32.IsEnabled()) {
+            // Send fresh aircraft dictionary stats to ESPS32.
+            esp32.Write(ObjectDictionary::kAddrAircraftDictionaryMetrics, aircraft_dictionary.metrics,
+                        true);  // require ACK.
+        }
+        // Add the fresh metrics values to the pile used for TL learning.
+        // If learning, add the number of valid packets received to the pile used for trigger level learning.
+        if (tl_learning_temperature_mv_ > 0) {
+            tl_learning_num_valid_packets_ += (aircraft_dictionary.metrics.valid_squitter_frames +
+                                               aircraft_dictionary.metrics.valid_extended_squitter_frames);
+        }
+        last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
+    }
+}
 
-    /**
-     * MLAT Jitter Offset Counter
-     * There is timing jitter between the beginning of a message decode and the OnDemodBegin() interrupt firing. The
-     * DMA peripheral is used to capture the timestamp of a PIO state machines first push onto its TX FIFO, allowing
-     * the full 24-bit timestamp captured during the OnDemodBegin() interval to be de-jittered. a PIO state machine.
-     */
+void ADSBee::Update1090LED() {
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+    // Turn off the 1090 LED if it's been on for long enough.
+    if (timestamp_ms - led_on_timestamp_ms_ > kStatusLEDOnMs) {
+        gpio_put(config_.r1090_led_pin, 0);
+    }
+}
 
-    // PWM slice 5 is used for LEVEL_PWM, anything else is fine to use for the MLAT jitter counter.
-    mlat_jitter_pwm_slice_ = pwm_gpio_to_slice_num(bsp.r1090_pulses_pins[0]);  // Use pulses pin for slice 1.
-    pwm_config config = pwm_get_default_config();
-    pwm_config_set_clkdiv(&config, kMLATSystemClockDiv);
-    pwm_config_set_wrap(&config, 0xFFFF);             // Use the full 16-bit span.
-    pwm_init(mlat_jitter_pwm_slice_, &config, true);  // Start immediately.
+void ADSBee::UpdateNoiseFloor() {
+    // Occasionally sample the signal strength to approximate the noise floor.
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+    if (timestamp_ms - noise_floor_last_sample_timestamp_ms_ > kNoiseFloorADCSampleIntervalMs) {
+        noise_floor_mv_ = ((noise_floor_mv_ * kNoiseFloorExpoFilterPercent) +
+                           ReadSignalStrengthMilliVolts() * (100 - kNoiseFloorExpoFilterPercent)) /
+                          100;
+        noise_floor_last_sample_timestamp_ms_ = timestamp_ms;
 
-    // Enable a DMA DREQ for each demodulator PIO TX FIFO. This is used to capture the IRQ jitter offset counter
-    // when a decode interval begins (32 bits into a message).
-    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
-        mlat_jitter_dma_channel_[sm_index] =
-            dma_claim_unused_channel(true);  // Claim a DMA channel for each state machine.
-        dma_channel_config config = dma_channel_get_default_config(mlat_jitter_dma_channel_[sm_index]);
-        channel_config_set_read_increment(&config, false);            // Don't increment the read address.
-        channel_config_set_write_increment(&config, false);           // Don't increment the write address.
-        channel_config_set_transfer_data_size(&config, DMA_SIZE_16);  // Transfer 16 bits (width of PWM timer).
-        // Transfer 16 bits once from the PWM counter to the jitter counter counts for the given state machine.
-        channel_config_set_dreq(&config, DREQ_PIO1_TX0 + sm_index);  // Use the PIO1 TX FIFO DREQ for each SM.
-        dma_channel_configure(mlat_jitter_dma_channel_[sm_index], &config, &mlat_jitter_counts_on_fifo_pull_[sm_index],
-                              &pwm_hw->slice[mlat_jitter_pwm_slice_].ctr, 1, false);
+        // Use updated noise floor to set the trigger level PWM duty cycle.
+        tl_pwm_count_ = (noise_floor_mv_ + tl_offset_mv_) * kTLMaxPWMCount / kVDDMV;
+        pwm_set_chan_level(tl_pwm_slice_, tl_pwm_chan_, tl_pwm_count_);
+    }
+}
+
+void ADSBee::UpdateTLLearning() {
+    // Update trigger level learning if it's active.
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+    if (tl_learning_temperature_mv_ > 0 &&
+        timestamp_ms - tl_learning_cycle_start_timestamp_ms_ > kTLLearningIntervalMs) {
+        // Trigger level learning is active and due for an update.
+        // Is this neighbor (current value for tl_mv) worth traversing to?
+        float valid_packet_ratio = (tl_learning_num_valid_packets_ - tl_learning_prev_num_valid_packets_) /
+                                   MAX(tl_learning_prev_num_valid_packets_, 1);  // Avoid divide by zero.
+        float random_weight =
+            static_cast<int16_t>(get_rand_32()) * kInt16MaxRecip * 0.25;  // Random value from [-0.25,0.25].
+        if (valid_packet_ratio + random_weight > 0.0f) {
+            // Transition to neighbor TL value.
+            tl_learning_prev_tl_offset_mv_ = tl_offset_mv_;
+            tl_learning_prev_num_valid_packets_ = tl_learning_num_valid_packets_;
+        }
+        // Else keep existing TL value in tl_learning_prev_tl_mv_.
+
+        // DO STUFF HERE
+        // Find a new neighbor by stepping trigger level with random value from [-1.0, 1.0] * temperature.
+        uint16_t new_tl_offset_mv =
+            tl_offset_mv_ + static_cast<int16_t>(get_rand_32()) * tl_learning_temperature_mv_ / INT16_MAX;
+        if (new_tl_offset_mv > tl_learning_max_offset_mv_) {
+            tl_offset_mv_ = tl_learning_max_offset_mv_;
+        } else if (new_tl_offset_mv < tl_learning_min_offset_mv_) {
+            tl_offset_mv_ = tl_learning_min_offset_mv_;
+        } else {
+            tl_offset_mv_ = new_tl_offset_mv;
+        }
+
+        // Update learning temperature. Decrement by the annealing temperature step or set to 0
+        // if learning is complete.
+        if (tl_learning_temperature_mv_ > tl_learning_temperature_step_mv_) {
+            // Not done learning: step the trigger level learning temperature.
+            tl_learning_temperature_mv_ -= tl_learning_temperature_step_mv_;
+        } else {
+            // Done learning: take the current best trigger level and yeet outta here.
+            tl_learning_temperature_mv_ = 0;  // Set learning temperature to 0 to finish learnign trigger level.
+            tl_offset_mv_ = tl_learning_prev_tl_offset_mv_;  // Set trigger level to the best value we've seen so far.
+        }
+
+        // Store timestamp as start of trigger learning cycle so we know when to come back.
+        tl_learning_cycle_start_timestamp_ms_ = timestamp_ms;
+        tl_learning_num_valid_packets_ = 0;  // Start the counter over.
     }
 }

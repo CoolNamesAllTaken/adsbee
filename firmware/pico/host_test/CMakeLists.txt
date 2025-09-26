@@ -26,15 +26,17 @@ target_sources(host_test PRIVATE
     main.cc
     settings.cc
     # test_ads_b_decoder.cc
-    test_aircraft_dictionary.cc
+    test_aircraft_dictionary_mode_s.cc
     test_buffer_utils.cc
     # test_adsbee.cc
+    test_composite_array.cc
     test_crc.cc
     test_data_structures.cc
     test_decode_utils.cc
+    test_fixedmath.cc
     test_geo_utils.cc
     test_nasa_cpr.cc
-    test_packet_decoder.cc
+    test_mode_s_packet_decoder.cc
     test_platform.cc
     test_reporting_beast.cc
     test_reporting_csbee.cc
@@ -56,6 +58,15 @@ target_include_directories(host_test PRIVATE
     mocks
 )
 
+add_subdirectory(uat)
+
 # Make test runnable with "make test".
 enable_testing()
-add_test(NAME host_test COMMAND host_test)
+
+include(GoogleTest)
+gtest_discover_tests(host_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    PROPERTIES
+        TIMEOUT 30
+        DISCOVERY_TIMEOUT 10
+)

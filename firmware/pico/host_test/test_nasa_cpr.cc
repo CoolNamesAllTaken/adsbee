@@ -464,7 +464,7 @@ GlobalDecodeTest global_decode_tests[] = {{0xD31CF9A3, 0x15780D81, 0xF595, 0x875
                                            0x10000, 0x1, 0xC2222222, 0x80000000, 0xC22222B6, 0x80000000}};
 
 TEST(NASACPR, LatLonToAWBAndBack) {
-    // Exercise Alternative Weighted Binary conversion utilities.
+    // Exercise Angular Weighted Binary conversion utilities.
     float lat_deg = -50.8591f;
     float lon_deg = 179.9999f;
 
@@ -515,7 +515,8 @@ TEST(NASACPR, AircraftDictionary) {
 
     for (uint16_t i = 0; i < sizeof(global_decode_tests) / sizeof(GlobalDecodeTest); i++) {
         GlobalDecodeTest& test = global_decode_tests[i];
-        Aircraft1090* aircraft_ptr = dictionary.GetAircraftPtr(i);
+        ModeSAircraft* aircraft_ptr =
+            dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(i, Aircraft::kAircraftTypeModeS));
         // Set odd message to most recent so that we read rpos1 for the expected result.
         aircraft_ptr->SetCPRLatLon(test.enc_evn_lat, test.enc_evn_lon, false, 1);
         aircraft_ptr->SetCPRLatLon(test.enc_odd_lat, test.enc_odd_lon, true, 2);
