@@ -28,7 +28,6 @@ class CommsManager {
     // These buffers are put into a queue, which has its element size and number of elements set here.
     static const uint16_t kReportingCompositeArrayQueueNumElements = 2;
 
-    static const uint16_t kMaxNetworkMessageLenBytes = 600;  // Needs to be big enough for UAT uplink packets.
     static const uint16_t kWiFiMessageQueueLen = 40;
     // Reconnect intervals must be long enough that we register an IP lost event before trying the reconnect, otherwise
     // we get stuck in limbo where we may attempt a reconnect but the new IP address is never looked for (not controlled
@@ -50,11 +49,12 @@ class CommsManager {
     };
 
     struct NetworkMessage {
+        static const uint16_t kMaxLenBytes = 600;  // Needs to be big enough for UAT uplink packets.
         in_port_t port = 0;
         uint16_t len = 0;
-        uint8_t data[kMaxNetworkMessageLenBytes];
+        uint8_t data[kMaxLenBytes];
 
-        NetworkMessage() { memset(data, 0x0, kMaxNetworkMessageLenBytes); }
+        NetworkMessage() { memset(data, 0x0, kMaxLenBytes); }
     };
 
     CommsManager(CommsManagerConfig config_in) : config_(config_in) {

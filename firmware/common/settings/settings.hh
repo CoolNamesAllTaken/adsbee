@@ -172,7 +172,7 @@ class SettingsManager {
         // CommunicationsManager settings
         LogLevel log_level = LogLevel::kWarnings;
         ReportingProtocol reporting_protocols[SerialInterface::kNumSerialInterfaces - 1] = {
-            ReportingProtocol::kNoReports, ReportingProtocol::kMAVLINK1};
+            ReportingProtocol::kNoReports, ReportingProtocol::kNoReports};
         uint32_t comms_uart_baud_rate = 115200;
         uint32_t gnss_uart_baud_rate = 9600;
 

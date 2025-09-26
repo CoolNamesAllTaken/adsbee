@@ -183,7 +183,8 @@ uint32_t DecodedUATADSBPacket::GetICAOAddress() const {
     if (!IsValid()) {
         return 0;
     }
-    return header.icao_address | (header.address_qualifier << Aircraft::kAddressQualifierBitShift);
+    // return header.icao_address | (header.address_qualifier << Aircraft::kAddressQualifierBitShift);
+    return header.icao_address;
 }
 
 void DecodedUATADSBPacket::ConstructUATADSBPacket(bool run_fec) {

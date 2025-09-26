@@ -271,7 +271,7 @@ void DecodedModeSPacket::ConstructModeSPacket() {
  * Helper function used by constructors.
  */
 void ModeSADSBPacket::ConstructADSBPacket() {
-    capability = static_cast<ModeSADSBPacket::Capability>((raw.buffer[0] >> 24) & 0b111);
+    ca_cf.capability = static_cast<ModeSADSBPacket::Capability>((raw.buffer[0] >> 24) & 0b111);
     type_code = static_cast<ModeSADSBPacket::TypeCode>(raw.buffer[1] >> 27);
     parity_interrogator_id = raw.buffer[1] & 0xFFFFFF;
 }

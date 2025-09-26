@@ -282,6 +282,10 @@ void ADSBeeServer::SPIReceiveTask() {
 }
 
 bool ADSBeeServer::ReportGDL90() {
+    if (!settings_manager.settings.core_network_settings.wifi_ap_enabled) {
+        return true;  // Nothing to do.
+    }
+
     CommsManager::NetworkMessage message;
     message.port = kGDL90Port;
 
@@ -297,29 +301,54 @@ bool ADSBeeServer::ReportGDL90() {
     comms_manager.WiFiAccessPointSendMessageToAllStations(message);
 
     // Traffic Reports
-    uint16_t aircraft_index = 0;  // Just used for error reporting.
+    int16_t aircraft_index = -1;  // Just used for error reporting.
+    uint8_t aircraft_msg_buf[CommsManager::NetworkMessage::kMaxLenBytes];
+    uint16_t aircraft_msg_buf_len = 0;
     for (auto &itr : aircraft_dictionary.dict) {
-        if (ModeSAircraft *mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
-            printf("\t#A %s: %.5f %.5f %ld\r\n", mode_s_aircraft->callsign, mode_s_aircraft->latitude_deg,
-                   mode_s_aircraft->longitude_deg, mode_s_aircraft->baro_altitude_ft);
-            message.len = gdl90.WriteGDL90TargetReportMessage(message.data, *mode_s_aircraft, false);
-        } else if (UATAircraft *uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
-            printf("\t#U %s: %.5f %.5f %ld\r\n", uat_aircraft->callsign, uat_aircraft->latitude_deg,
-                   uat_aircraft->longitude_deg, uat_aircraft->baro_altitude_ft);
-            message.len = gdl90.WriteGDL90TargetReportMessage(message.data, *uat_aircraft, false);
+        aircraft_index++;
 
+        if (ModeSAircraft *mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
+            if (!mode_s_aircraft->HasBitFlag(ModeSAircraft::kBitFlagPositionValid)) {
+                // Don't report aircraft without a valid position.
+                continue;
+            }
+            printf("\t#A %s (0x%06lX): %.5f %.5f %ld\r\n", mode_s_aircraft->callsign, mode_s_aircraft->icao_address,
+                   mode_s_aircraft->latitude_deg, mode_s_aircraft->longitude_deg, mode_s_aircraft->baro_altitude_ft);
+            aircraft_msg_buf_len = gdl90.WriteGDL90TargetReportMessage(aircraft_msg_buf, *mode_s_aircraft, false);
+        } else if (UATAircraft *uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
+            if (!uat_aircraft->HasBitFlag(UATAircraft::kBitFlagPositionValid)) {
+                // Don't report aircraft without a valid position.
+                continue;
+            }
+            printf("\t#U %s (0x%06lX): %.5f %.5f %ld\r\n", uat_aircraft->callsign, uat_aircraft->icao_address,
+                   uat_aircraft->latitude_deg, uat_aircraft->longitude_deg, uat_aircraft->baro_altitude_ft);
+            aircraft_msg_buf_len = gdl90.WriteGDL90TargetReportMessage(aircraft_msg_buf, *uat_aircraft, false);
         } else {
             CONSOLE_WARNING("CommsManager::ReportCSBee", "Unknown aircraft type in dictionary for UID 0x%lx.",
                             itr.first);
             continue;
         }
 
-        if (settings_manager.settings.core_network_settings.wifi_ap_enabled &&
-            !comms_manager.WiFiAccessPointSendMessageToAllStations(message)) {
-            CONSOLE_ERROR("ADSBeeServer::ReportGDL90", "Failed to send info about aircraft %d to all clients.",
-                          aircraft_index);
+        if (message.len + aircraft_msg_buf_len <= CommsManager::NetworkMessage::kMaxLenBytes) {
+            // We can tack this aircraft message onto the existing message to save space in the queue.
+            memcpy(message.data + message.len, aircraft_msg_buf, aircraft_msg_buf_len);
+            message.len += aircraft_msg_buf_len;
+        } else {
+            // Send the existing message and start a new one.
+            if (!comms_manager.WiFiAccessPointSendMessageToAllStations(message)) {
+                CONSOLE_ERROR("ADSBeeServer::ReportGDL90", "Failed to send info about aircraft %d to all clients.",
+                              aircraft_index);
+            }
+            memcpy(message.data, aircraft_msg_buf, aircraft_msg_buf_len);
+            message.len = aircraft_msg_buf_len;
         }
-        aircraft_index++;
+    }
+
+    // Send any remaining message data.
+    if (message.len > 0) {
+        if (!comms_manager.WiFiAccessPointSendMessageToAllStations(message)) {
+            CONSOLE_ERROR("ADSBeeServer::ReportGDL90", "Failed to send final aircraft message to all clients.");
+        }
     }
 
     return true;

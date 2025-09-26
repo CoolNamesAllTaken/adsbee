@@ -189,7 +189,7 @@ class ModeSADSBPacket : public DecodedModeSPacket {
         ConstructADSBPacket();
     };
 
-    // Bits 6-8 [3]: Capability (CA)
+    // Bits 6-8 [3]: Capability (CA) / Code Format (CF)
     // Bits 9-32 [24]: ICAO Aircraft Address (ICAO)
     // Bits 33-88 [56]: Message, Extended Squitter (ME)
     // (Bits 33-37 [5]): Type code (TC)
@@ -226,7 +226,12 @@ class ModeSADSBPacket : public DecodedModeSPacket {
         return GetNBitsFromWordBuffer(n, kMEFirstBitIndex + first_bit_index, raw.buffer);
     };
 
-    Capability capability = kCALevel1Transponder;  // Default to most basic capability.
+    union {
+        // Default to most basic capability.
+        Capability capability = kCALevel1Transponder;  // Capability (CA), when DF=17.
+        uint8_t code_format;                           // Code Format (CF), when DF=18.
+    } ca_cf;
+
     TypeCode type_code = kTypeCodeInvalid;
 
     void ConstructADSBPacket();

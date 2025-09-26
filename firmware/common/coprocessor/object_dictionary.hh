@@ -30,7 +30,8 @@ class ObjectDictionary {
 
     static constexpr uint16_t kMACAddrLenBytes = 6;
 
-    static constexpr uint16_t kNetworkConsoleMessageMaxLenBytes = 4000;
+    static constexpr uint16_t kNetworkConsoleMessageMaxLenBytes =
+        4096;  // Maximum size of SCWritePacket (actually is a bit smaller due to headers).
     static constexpr uint16_t kLogMessageMaxNumChars = 500;
     static constexpr uint16_t kLogMessageQueueDepth = 10;
 

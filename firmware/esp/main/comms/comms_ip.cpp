@@ -13,7 +13,7 @@
 
 static const uint32_t kTCPSocketReconnectIntervalMs = 10000;
 
-#define ENABLE_TCP_SOCKET_RATE_LIMITING
+// #define ENABLE_TCP_SOCKET_RATE_LIMITING
 #ifdef ENABLE_TCP_SOCKET_RATE_LIMITING
 static const uint32_t kSendBufRateLimitBytesPerSecond = 100000;  // 100 kB/s
 static const uint32_t kSendBufRateLimitIntervalMs = 10;

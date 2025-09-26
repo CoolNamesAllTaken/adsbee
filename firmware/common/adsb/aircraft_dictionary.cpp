@@ -241,7 +241,7 @@ ADSBTypes::EmitterCategory ExtractCategory(const ModeSADSBPacket &packet) {
 bool ModeSAircraft::ApplyAircraftIDMessage(const ModeSADSBPacket &packet) {
     emitter_category = ExtractCategory(packet);
     emitter_category_raw = packet.GetNBitWordFromMessage(8, 0);
-    transponder_capability = packet.capability;
+    transponder_capability = packet.ca_cf.capability;
     for (uint16_t i = 0; i < ModeSAircraft::kCallSignMaxNumChars; i++) {
         char callsign_char = LookupModeSCallsignChar(packet.GetNBitWordFromMessage(6, 8 + (6 * i)));
         callsign[i] = callsign_char;
@@ -1105,7 +1105,11 @@ bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket &packet) {
             }
 
             if (!packet.is_valid) {
-                // Squitter frame could not validate itself, or could not be validated against ICAOs in dictionary.
+// Squitter frame could not validate itself, or could not be validated against ICAOs in dictionary.
+#ifdef ON_ESP32
+                // ESP32 should only be receiving valid packets.
+                CONSOLE_ERROR("AircraftDictionary::IngestDecodedModeSPacket", "Squitter packet failed checksum.");
+#endif
                 return false;
             }
 
@@ -1122,6 +1126,11 @@ bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket &packet) {
                     metrics_counter_.valid_extended_squitter_frames_by_source[source]++;
                 }
             } else {
+#ifdef ON_ESP32
+                // ESP32 should only be receiving valid packets.
+                CONSOLE_ERROR("AircraftDictionary::IngestDecodedModeSPacket",
+                              "Extended squitter packet failed checksum.");
+#endif
                 return false;  // Extended squitter frame failed CRC.
             }
             break;
@@ -1175,7 +1184,14 @@ bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket &packet) {
 }
 
 bool AircraftDictionary::IngestModeSIdentityReplyPacket(const ModeSIdentityReplyPacket &packet) {
-    if (!packet.is_valid || packet.downlink_format != ModeSIdentityReplyPacket::kDownlinkFormatIdentityReply) {
+    if (!packet.is_valid) {
+        CONSOLE_WARNING("AircraftDictionary::IngestModeSIdentityReplyPacket", "Received invalid packet.");
+        return false;
+    }
+    if (packet.downlink_format != ModeSIdentityReplyPacket::kDownlinkFormatIdentityReply) {
+        CONSOLE_WARNING("AircraftDictionary::IngestModeSIdentityReplyPacket",
+                        "Received Mode S packet with invalid downlink format %d, expected %d (Identity Reply).",
+                        packet.downlink_format, ModeSIdentityReplyPacket::kDownlinkFormatIdentityReply);
         return false;
     }
 
@@ -1198,7 +1214,14 @@ bool AircraftDictionary::IngestModeSIdentityReplyPacket(const ModeSIdentityReply
 }
 
 bool AircraftDictionary::IngestModeSAltitudeReplyPacket(const ModeSAltitudeReplyPacket &packet) {
-    if (!packet.is_valid || packet.downlink_format != ModeSAltitudeReplyPacket::kDownlinkFormatAltitudeReply) {
+    if (!packet.is_valid) {
+        CONSOLE_WARNING("AircraftDictionary::IngestModeSAltitudeReplyPacket", "Received invalid packet.");
+        return false;
+    }
+    if (packet.downlink_format != ModeSAltitudeReplyPacket::kDownlinkFormatAltitudeReply) {
+        CONSOLE_WARNING("AircraftDictionary::IngestModeSAltitudeReplyPacket",
+                        "Received Mode S packet with invalid downlink format %d, expected %d (Altitude Reply).",
+                        packet.downlink_format, ModeSAltitudeReplyPacket::kDownlinkFormatAltitudeReply);
         return false;
     }
 
@@ -1223,7 +1246,14 @@ bool AircraftDictionary::IngestModeSAltitudeReplyPacket(const ModeSAltitudeReply
 }
 
 bool AircraftDictionary::IngestModeSAllCallReplyPacket(const ModeSAllCallReplyPacket &packet) {
-    if (!packet.is_valid || packet.downlink_format != DecodedModeSPacket::kDownlinkFormatAllCallReply) {
+    if (!packet.is_valid) {
+        CONSOLE_WARNING("AircraftDictionary::IngestModeSAllCallReplyPacket", "Received invalid packet.");
+        return false;
+    }
+    if (packet.downlink_format != DecodedModeSPacket::kDownlinkFormatAllCallReply) {
+        CONSOLE_WARNING("AircraftDictionary::IngestModeSAllCallReplyPacket",
+                        "Received Mode S packet with invalid downlink format %d, expected %d (All Call Reply).",
+                        packet.downlink_format, DecodedModeSPacket::kDownlinkFormatAllCallReply);
         return false;
     }
 
@@ -1246,8 +1276,28 @@ bool AircraftDictionary::IngestModeSAllCallReplyPacket(const ModeSAllCallReplyPa
 }
 
 bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket &packet) {
-    if (!packet.is_valid || packet.downlink_format != ModeSADSBPacket::kDownlinkFormatExtendedSquitter) {
-        return false;  // Only allow valid DF17 packets.
+    if (!packet.is_valid) {
+        CONSOLE_WARNING("AircraftDictionary::IngestModeSADSBPacket", "Received invalid packet.");
+        return false;
+    }
+    // We can accept DF=17 (Extended Squitter) and DF=18 (Extended Squitter Non-Transponder). Will need to check Code
+    // Format field for DF=18 to make sure we can accept it.
+    switch (packet.downlink_format) {
+        case ModeSADSBPacket::kDownlinkFormatExtendedSquitter:  // DF = 17
+            // Valid DF=17 packet.
+            break;
+        case ModeSADSBPacket::kDownlinkFormatExtendedSquitterNonTransponder:  // DF = 18
+            // Only accept DF=18 packets with Code Format = 0, 1, 2, 5, 6.
+            if (packet.ca_cf.code_format != 0 && packet.ca_cf.code_format != 1 && packet.ca_cf.code_format != 2 &&
+                packet.ca_cf.code_format != 5 && packet.ca_cf.code_format != 6) {
+                return true;  // Unsupported Code Format for DF=18 packet.
+            }
+            break;
+        default:
+            CONSOLE_WARNING("AircraftDictionary::IngestModeSADSBPacket",
+                            "Received Mode S packet with invalid downlink format %d, expected %d (Extended Squitter).",
+                            packet.downlink_format, ModeSADSBPacket::kDownlinkFormatExtendedSquitter);
+            return false;  // Only allow valid DF17, DF18 packets.
     }
 
     uint32_t icao_address = packet.icao_address;
@@ -1331,6 +1381,7 @@ bool AircraftDictionary::IngestDecodedUATADSBPacket(const DecodedUATADSBPacket &
     if (packet.is_valid) {
         metrics_counter_.valid_uat_adsb_frames++;
     } else {
+        CONSOLE_WARNING("AircraftDictionary::IngestDecodedUATADSBPacket", "Received invalid packet.");
         return false;
     }
 
@@ -1392,6 +1443,9 @@ bool AircraftDictionary::RemoveAircraft(uint32_t icao_address) {
         dict.erase(itr);
         return true;
     }
+    CONSOLE_WARNING("AircraftDictionary::RemoveAircraft",
+                    "Attempted to remove aircraft with ICAO address 0x%lx, but it was not found in the dictionary.",
+                    icao_address);
     return false;  // aircraft was not found in the dictionary
 }
 
