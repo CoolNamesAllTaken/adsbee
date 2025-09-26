@@ -35,9 +35,9 @@ bool ModeSAircraft::CanDecodePosition() {
     // TODO: There could be a condition here where we temporarily lose packets when the MLAT counter wraps around and
     // the packet timestamps all get seen as 0ms, but this probably is not a big deal.
     if (!(last_odd_packet_.received_timestamp_ms > 0 && last_even_packet_.received_timestamp_ms > 0)) {
-        CONSOLE_WARNING("ModeSAircraft::DecodePosition",
-                        "Unable to decode position without receiving an odd and even packet pair for ICAO 0x%lx.",
-                        icao_address);
+        CONSOLE_INFO("ModeSAircraft::DecodePosition",
+                     "Unable to decode position without receiving an odd and even packet pair for ICAO 0x%lx.",
+                     icao_address);
         return false;  // need both an even and an odd packet to be able to decode position
     }
     uint32_t cpr_interval_ms = MIN(last_odd_packet_.received_timestamp_ms - last_even_packet_.received_timestamp_ms,

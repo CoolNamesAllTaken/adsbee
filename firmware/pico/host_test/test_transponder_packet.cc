@@ -102,7 +102,7 @@ TEST(DecodedModeSPacket, PacketFields) {
     ModeSADSBPacket packet = ModeSADSBPacket(tpacket);
 
     EXPECT_EQ(packet.downlink_format, static_cast<uint16_t>(DecodedModeSPacket::kDownlinkFormatExtendedSquitter));
-    EXPECT_EQ(packet.capability, 5u);
+    EXPECT_EQ(packet.ca_cf.capability, 5u);
     EXPECT_EQ(packet.icao_address, 0x76CE88u);
     EXPECT_EQ(packet.type_code, 4u);
     EXPECT_EQ(packet.GetNBitWordFromMessage(3, 5), 0u);  // CAT = 0

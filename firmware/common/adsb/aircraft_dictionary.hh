@@ -659,13 +659,12 @@ class AircraftDictionary {
             chars_written +=
                 ArrayToJSON(buf + chars_written, buf_len - chars_written, "valid_extended_squitter_frames_by_source",
                             valid_extended_squitter_frames_by_source, "%u", true);
-            chars_written += ArrayToJSON(buf + strlen(buf), buf_len - strlen(buf), "demods_1090_by_source",
-                                         demods_1090_by_source, "%u",
-                                         false);  // No trailing comma.
+            chars_written += ArrayToJSON(buf + chars_written, buf_len - chars_written, "demods_1090_by_source",
+                                         demods_1090_by_source, "%u", true);
             // Add UAT stats.
             chars_written +=
                 snprintf(buf + chars_written, buf_len - chars_written,
-                         ", \"raw_uat_adsb_frames\": %u, \"valid_uat_adsb_frames\": %u"
+                         "\"raw_uat_adsb_frames\": %u, \"valid_uat_adsb_frames\": %u"
                          ", \"raw_uat_uplink_frames\": %u, \"valid_uat_uplink_frames\": %u",
                          raw_uat_adsb_frames, valid_uat_adsb_frames, raw_uat_uplink_frames, valid_uat_uplink_frames);
 

@@ -10,6 +10,9 @@
 #include "geo_utils.hh"
 #include "utils/buffer_utils.hh"  // for CHAR_TO_HEX
 
+// Enable address qualifier prepend to differentiate UAT targets from rebroadcasts.
+// #define UAT_PREPEND_ADDRESS_QUALIFIER_TO_ICAO_ADDRESS
+
 const fixedmath::fixed_t kDegPerTrackAngleHeadingTick =
     fixedmath::fixed_t{360.0f / 512};  // Direction ticks for Track Angle / Heading field (UAT Tech Manual Table 3-24).
 const fixedmath::fixed_t kDegPerRadian =
@@ -183,8 +186,11 @@ uint32_t DecodedUATADSBPacket::GetICAOAddress() const {
     if (!IsValid()) {
         return 0;
     }
-    // return header.icao_address | (header.address_qualifier << Aircraft::kAddressQualifierBitShift);
+#ifdef UAT_PREPEND_ADDRESS_QUALIFIER_TO_ICAO_ADDRESS
+    return header.icao_address | (header.address_qualifier << Aircraft::kAddressQualifierBitShift);
+#else
     return header.icao_address;
+#endif
 }
 
 void DecodedUATADSBPacket::ConstructUATADSBPacket(bool run_fec) {

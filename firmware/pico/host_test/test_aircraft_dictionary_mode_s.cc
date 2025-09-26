@@ -558,7 +558,10 @@ TEST(AircraftDictionary, MetricsToJSON) {
 \"valid_squitter_frames_by_source\": [1, 2, 4], \
 \"raw_extended_squitter_frames_by_source\": [10, 11, 9], \
 \"valid_extended_squitter_frames_by_source\": [3, 5, 8], \
-\"demods_1090_by_source\": [19, 10, 21] \
+\"demods_1090_by_source\": [19, 10, 21], \
+\"raw_uat_adsb_frames\": 0, \"valid_uat_adsb_frames\": 0, \
+\"raw_uat_uplink_frames\": 0, \"valid_uat_uplink_frames\": 0, \
+\"num_mode_s_aircraft\": 0, \"num_uat_aircraft\": 0\
 }";
     EXPECT_EQ(metrics.ToJSON(buf, AircraftDictionary::Metrics::kMetricsJSONMaxLen), strlen(expected_result));
     EXPECT_STREQ(buf, expected_result);

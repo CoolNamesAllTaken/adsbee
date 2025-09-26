@@ -46,10 +46,11 @@ TEST(UATDecoderTest, DownlinkFrames) {
         EXPECT_TRUE(dictionary.IngestDecodedUATADSBPacket(packet));
 
         // Ensure the dictionary has a matching aircraft entry and extract it.
-        EXPECT_TRUE(dictionary.GetAircraft(
-            Aircraft::ICAOToUID(frame->address | (frame->address_qualifier << Aircraft::kAddressQualifierBitShift),
-                                Aircraft::kAircraftTypeUAT),
-            aircraft));
+        uint32_t address = frame->address;
+#ifdef UAT_PREPEND_ADDRESS_QUALIFIER_TO_ICAO_ADDRESS
+        address |= (frame->address_qualifier << Aircraft::kAddressQualifierBitShift);
+#endif
+        EXPECT_TRUE(dictionary.GetAircraft(Aircraft::ICAOToUID(address, Aircraft::kAircraftTypeUAT), aircraft));
 
         // Compare fields in aircraft entry against fields in test data.
         if (frame->has_sv) {
