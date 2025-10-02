@@ -110,6 +110,13 @@ class ObjectDictionary {
         std::function<void()> complete_callback = nullptr;
     };
 
+    struct __attribute__((packed)) RP2040DeviceStatus {
+        uint32_t timestamp_ms = 0;
+        int8_t temperature_deg_c = 0;
+        uint8_t core_0_usage_percent = 0;
+        uint8_t core_1_usage_percent = 0;
+    };
+
     struct __attribute__((__packed__)) ESP32DeviceStatus {
         uint32_t timestamp_ms = 0;
         uint16_t num_queued_log_messages = 0;
@@ -165,6 +172,9 @@ class ObjectDictionary {
 
     struct __attribute__((__packed__)) SubGHzDeviceStatus {
         uint32_t timestamp_ms = 0;  // Timestamp in milliseconds since boot.
+        uint8_t temperature_deg_c = 0;
+        uint8_t cpu_usage_percent = 0;
+
         uint16_t num_queued_log_messages = 0;
         uint32_t queued_log_messages_packed_size_bytes = 0;
 

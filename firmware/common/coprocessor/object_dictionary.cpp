@@ -94,28 +94,10 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
 #ifdef ON_ESP32
         case kAddrConsole: {
             // Don't print here to avoid print of print doom loop explosion.
-            CONSOLE_INFO("ObjectDictionary::SetBytes", "Forwarding %d byte message to network console.", buf_len);
+            // CONSOLE_INFO("ObjectDictionary::SetBytes", "Forwarding %d byte message to network console.", buf_len);
             adsbee_server.network_console.BroadcastMessage(reinterpret_cast<const char *>(buf), buf_len);
             break;
         }
-        // case kAddrRawModeSPacket: {
-        //     RawModeSPacket tpacket;
-        //     memcpy(&tpacket, buf, sizeof(RawModeSPacket));
-        //     // Warning: printing here will cause a timeout and tests will fail.
-        //     // CONSOLE_INFO("SPICoprocessor::SetBytes", "Received a raw %d-byte transponder packet.",
-        //     //              tpacket.buffer_len_bytes);
-        //     adsbee_server.raw_mode_s_packet_queue.Enqueue(tpacket);
-        //     break;
-        // }
-        // case kAddrRawModeSPacketArray: {
-        //     uint8_t num_packets = buf[0];
-        //     RawModeSPacket tpacket;
-        //     for (uint16_t i = 0; i < num_packets && i * sizeof(RawModeSPacket) + sizeof(uint8_t) < buf_len; i++) {
-        //         memcpy(&tpacket, buf + sizeof(uint8_t) + i * sizeof(RawModeSPacket), sizeof(RawModeSPacket));
-        //         adsbee_server.raw_mode_s_packet_queue.Enqueue(tpacket);
-        //     }
-        //     break;
-        // }
         case kAddrAircraftDictionaryMetrics: {
             AircraftDictionary::Metrics rp2040_metrics;
             memcpy(&rp2040_metrics, buf + offset, buf_len);

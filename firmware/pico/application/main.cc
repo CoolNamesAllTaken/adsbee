@@ -3,6 +3,7 @@
 #include "adsbee.hh"
 #include "comms.hh"
 #include "core1.hh"  // Functions for runningon core1.
+#include "cpu_utils.hh"
 #include "eeprom.hh"
 #include "esp32.hh"
 #include "esp32_flasher.hh"
@@ -25,11 +26,19 @@ const uint16_t kStatusLEDBootupBlinkPeriodMs = 200;
 const uint32_t kESP32BootupTimeoutMs = 10000;
 const uint32_t kESP32BootupCommsRetryMs = 500;
 
+const uint32_t kRP2040MinLoopFreqHz = 5;  // Minimum main loop frequency used to calculate CPU utilization.
+const uint32_t kRP2040CPUMonitorUpdateIntervalMs = 5000;
+
 // Override default config params here.
 EEPROM eeprom = EEPROM({});
 // BSP gets configured differently if there is or isn't an EEPROM attached. Attempt to initialize the EEPROM to figure
 // out which board configuration we should load (settings in flash, or settings in EEPROM).
 BSP bsp = BSP(eeprom.Init());
+
+CPUMonitor core_0_monitor = CPUMonitor(
+    {.min_loop_frequency_hz = kRP2040MinLoopFreqHz, .update_interval_ms = kRP2040CPUMonitorUpdateIntervalMs});
+CPUMonitor core_1_monitor = CPUMonitor(
+    {.min_loop_frequency_hz = kRP2040MinLoopFreqHz, .update_interval_ms = kRP2040CPUMonitorUpdateIntervalMs});
 
 ADSBee adsbee = ADSBee({});
 CommsManager comms_manager = CommsManager({});
@@ -150,6 +159,10 @@ int main() {
 
     while (true) {
         // Loop forever.
+        core_0_monitor.Tick();
+        core_0_monitor.Update();
+        core_1_monitor.Update();
+
         decoder.UpdateLogLoop();
         comms_manager.Update();
         adsbee.Update();
@@ -163,6 +176,8 @@ int main() {
             // Don't need to talk to the ESP32, or it acknowledged a heartbeat just now: poke the watchdog since nothing
             // seems amiss.
             adsbee.PokeWatchdog();
+            CONSOLE_ERROR("main", "Core 0 CPU Usage: %d%%, Core 1 CPU Usage: %d%%", core_0_monitor.GetUsagePercent(),
+                          core_1_monitor.GetUsagePercent());
         }
     }
 }
