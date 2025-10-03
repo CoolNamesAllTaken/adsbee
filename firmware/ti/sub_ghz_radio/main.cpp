@@ -14,6 +14,7 @@ extern "C" {
 
 #include "bsp.hh"
 #include "comms.hh"
+#include "cpu_utils.hh"
 #include "object_dictionary.hh"
 #include "pico.hh"
 #include "settings.hh"
@@ -25,7 +26,16 @@ extern "C" {
 // #include "unistd.h" // For usleep.
 #include <cstring>  // For malloc
 
+TemperatureCC26X2_Config TemperatureCC26X2_config = {
+    .intPriority = (7 << 5)  // Lowest priority.
+};
+
 BSP bsp;
+CPUMonitor user_core_monitor = CPUMonitor({
+    .idle_ticks_per_update_interval = 24000,  // Wild-ass guess.
+    .full_usage_update_frequency_hz = 100,    // Minimum 100Hz update rate.
+    .update_interval_ms = 1000                // Update stats every second.
+});
 ObjectDictionary object_dictionary;
 Pico pico_ll = Pico({});
 SPICoprocessor pico = SPICoprocessor({.interface = pico_ll});
@@ -62,6 +72,9 @@ int main(void) {
     /* Call driver init functions */
     Board_init();
     SPI_init();
+
+    // Initialize temperature driver for CPU monitor.
+    CPUMonitor::Init();
 
     // Start NoRTOS AFTER system initialization.
     NoRTOS_start();
@@ -109,6 +122,9 @@ int main(void) {
     CONSOLE_INFO("main", "SubGHz radio initialized successfully.");
 
     while (true) {
+        user_core_monitor.Tick();
+        user_core_monitor.Update();
+
         pico.UpdateLED();
         uat_packet_decoder.Update();
         subg_radio.Update();

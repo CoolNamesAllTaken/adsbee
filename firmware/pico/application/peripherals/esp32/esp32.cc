@@ -1,6 +1,10 @@
 #include "esp32.hh"
 
+#include "cpu_utils.hh"
 #include "hal.hh"
+
+extern CPUMonitor core_0_monitor;
+extern CPUMonitor core_1_monitor;
 
 ESP32::ESP32(ESP32Config config_in) : config_(config_in) {}
 
@@ -54,6 +58,14 @@ bool ESP32::Update() {
         CONSOLE_ERROR("ESP32::Update", "Unable to read ESP32 status.");
         return false;
     }
+
+    // Send the RP2040's status to the ESP32.
+    ObjectDictionary::RP2040DeviceStatus rp2040_status = {
+        .timestamp_ms = get_time_since_boot_ms(),
+        .temperature_deg_c = (int8_t)(core_0_monitor.ReadTemperatureMilliC() / 1000),
+        .core_0_usage_percent = core_0_monitor.GetUsagePercent(),
+        .core_1_usage_percent = core_1_monitor.GetUsagePercent(),
+    };
 
     static const uint16_t kMaxNumConsoleReadsPerUpdate = 5;
     for (uint16_t console_read_num = 0;

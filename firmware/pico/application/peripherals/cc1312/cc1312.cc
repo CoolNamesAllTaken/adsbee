@@ -105,7 +105,6 @@ bool CC1312::Init(bool spi_already_initialized) {
 
 bool CC1312::Update() {
     // Query CC1312's device status.
-    ObjectDictionary::SubGHzDeviceStatus device_status;
     if (adsbee.subg_radio.Read(ObjectDictionary::Address::kAddrDeviceStatus, device_status)) {
         // We only update the device_status vars exposed publicly here. Other reads of device_status are for
         // internal use only.

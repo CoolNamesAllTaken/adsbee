@@ -26,8 +26,8 @@ const uint16_t kStatusLEDBootupBlinkPeriodMs = 200;
 const uint32_t kESP32BootupTimeoutMs = 10000;
 const uint32_t kESP32BootupCommsRetryMs = 500;
 
-const uint32_t kRP2040MinLoopFreqHz = 5;  // Minimum main loop frequency used to calculate CPU utilization.
-const uint32_t kRP2040CPUMonitorUpdateIntervalMs = 5000;
+const uint32_t kRP2040IdleTicksPerUpdateInterval = 60e3;  // Measured empirically.
+const uint32_t kRP2040CPUMonitorUpdateIntervalMs = 1000;
 
 // Override default config params here.
 EEPROM eeprom = EEPROM({});
@@ -35,10 +35,10 @@ EEPROM eeprom = EEPROM({});
 // out which board configuration we should load (settings in flash, or settings in EEPROM).
 BSP bsp = BSP(eeprom.Init());
 
-CPUMonitor core_0_monitor = CPUMonitor(
-    {.min_loop_frequency_hz = kRP2040MinLoopFreqHz, .update_interval_ms = kRP2040CPUMonitorUpdateIntervalMs});
-CPUMonitor core_1_monitor = CPUMonitor(
-    {.min_loop_frequency_hz = kRP2040MinLoopFreqHz, .update_interval_ms = kRP2040CPUMonitorUpdateIntervalMs});
+CPUMonitor core_0_monitor = CPUMonitor({.idle_ticks_per_update_interval = kRP2040IdleTicksPerUpdateInterval,
+                                        .update_interval_ms = kRP2040CPUMonitorUpdateIntervalMs});
+CPUMonitor core_1_monitor = CPUMonitor({.idle_ticks_per_update_interval = kRP2040IdleTicksPerUpdateInterval,
+                                        .update_interval_ms = kRP2040CPUMonitorUpdateIntervalMs});
 
 ADSBee adsbee = ADSBee({});
 CommsManager comms_manager = CommsManager({});
@@ -176,8 +176,12 @@ int main() {
             // Don't need to talk to the ESP32, or it acknowledged a heartbeat just now: poke the watchdog since nothing
             // seems amiss.
             adsbee.PokeWatchdog();
-            CONSOLE_ERROR("main", "Core 0 CPU Usage: %d%%, Core 1 CPU Usage: %d%%", core_0_monitor.GetUsagePercent(),
-                          core_1_monitor.GetUsagePercent());
+            CONSOLE_ERROR(
+                "main",
+                "CPU0 usage: %d%%, CPU1 usage: %d%%, SubG CPU usage: %d%%, SubG Temperature: %dC, SubG Uptime Ms: %d",
+                core_0_monitor.GetUsagePercent(), core_1_monitor.GetUsagePercent(),
+                adsbee.subg_radio_ll.device_status.cpu_usage_percent,
+                adsbee.subg_radio_ll.device_status.temperature_deg_c, adsbee.subg_radio_ll.device_status.timestamp_ms);
         }
     }
 }

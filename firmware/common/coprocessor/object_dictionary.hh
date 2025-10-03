@@ -293,6 +293,7 @@ class ObjectDictionary {
             false  // We don't want to overwrite network console messages, since they could be importatnt.
     });
     SemaphoreHandle_t network_console_rx_queue_mutex = xSemaphoreCreateMutex();
+    RP2040DeviceStatus rp2040_device_status = {};
 #elif defined(ON_TI)
     PFBQueue<RawUATADSBPacket> raw_uat_adsb_packet_queue =
         PFBQueue<RawUATADSBPacket>({.buf_len_num_elements = kDecodedUATADSBPacketQueueDepth,

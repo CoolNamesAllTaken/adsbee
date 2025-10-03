@@ -160,7 +160,18 @@ bool ADSBeeServer::Update() {
         ArrayToJSON(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
                     "feed_mps", comms_manager.feed_mps, "%u", false);  // Mo trailing comma.
         snprintf(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
-                 "}}");
+                 "}");
+        // Device Status
+        snprintf(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
+                 ", \"rp2040_device_status\": { uptime_ms: %lu, core_0_usage_percent: %u, "
+                 "core_1_usage_percent: %u, temperature_deg_c: %d }",
+                 object_dictionary.rp2040_device_status.timestamp_ms,
+                 object_dictionary.rp2040_device_status.core_0_usage_percent,
+                 object_dictionary.rp2040_device_status.core_1_usage_percent,
+                 object_dictionary.rp2040_device_status.temperature_deg_c / 1000);
+
+        snprintf(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
+                 " }\n");
 
         network_metrics.BroadcastMessage(metrics_message, strlen(metrics_message));
     }

@@ -4,6 +4,8 @@
 #ifdef ON_ESP32
 #include "adsbee_server.hh"
 #include "device_info.hh"
+#elif defined(ON_TI)
+#include "cpu_utils.hh"
 #endif
 
 #include "comms.hh"
@@ -16,6 +18,10 @@ const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 1;
 
 const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24) | (kFirmwareVersionMinor << 16) |
                                                     (kFirmwareVersionPatch << 8) | kFirmwareVersionReleaseCandidate;
+
+#ifdef ON_TI
+extern CPUMonitor user_core_monitor;
+#endif
 
 #ifdef ON_COPRO_SLAVE
 bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, uint16_t offset) {
@@ -115,6 +121,16 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                                                            &(adsbee_server.raw_uat_uplink_packet_in_queue));
             break;
         }
+        case kAddrDeviceStatus: {
+            if (buf_len != sizeof(RP2040DeviceStatus) || offset != 0) {
+                CONSOLE_ERROR("ObjectDictionary::SetBytes",
+                              "Buffer length %d and offset %d for writing RP2040DeviceStatus must be exactly %d and 0.",
+                              buf_len, offset, sizeof(RP2040DeviceStatus));
+                return false;
+            }
+            memcpy(&rp2040_device_status, buf, sizeof(RP2040DeviceStatus));
+            break;
+        }
 #elif defined(ON_TI)
 #endif
         default:
@@ -154,19 +170,22 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                                                .num_queued_sc_command_requests = sc_command_request_queue.Length(),
                                                .num_queued_network_console_rx_chars = num_network_console_rx_chars};
 #elif defined(ON_TI)
-            SubGHzDeviceStatus device_status = {.timestamp_ms = get_time_since_boot_ms(),
-                                                .num_queued_log_messages = num_log_messages,
-                                                .queued_log_messages_packed_size_bytes =
-                                                    static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),
-                                                .num_queued_sc_command_requests = sc_command_request_queue.Length(),
-                                                .pending_raw_packets_len_bytes = static_cast<uint16_t>(
-                                                    raw_uat_adsb_packet_queue.Length() * sizeof(RawUATADSBPacket) +
-                                                    raw_uat_uplink_packet_queue.Length() * sizeof(RawUATUplinkPacket) +
-                                                    sizeof(CompositeArray::RawPackets::Header)),
-                                                .num_raw_uat_adsb_packets = metrics.num_raw_uat_adsb_packets,
-                                                .num_valid_uat_adsb_packets = metrics.num_valid_uat_adsb_packets,
-                                                .num_raw_uat_uplink_packets = metrics.num_raw_uat_uplink_packets,
-                                                .num_valid_uat_uplink_packets = metrics.num_valid_uat_uplink_packets};
+            SubGHzDeviceStatus device_status = {
+                .timestamp_ms = get_time_since_boot_ms(),
+                .temperature_deg_c = static_cast<uint8_t>(user_core_monitor.ReadTemperatureMilliC() / 1000),
+                .cpu_usage_percent = user_core_monitor.GetUsagePercent(),
+                .num_queued_log_messages = num_log_messages,
+                .queued_log_messages_packed_size_bytes =
+                    static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),
+                .num_queued_sc_command_requests = sc_command_request_queue.Length(),
+                .pending_raw_packets_len_bytes =
+                    static_cast<uint16_t>(raw_uat_adsb_packet_queue.Length() * sizeof(RawUATADSBPacket) +
+                                          raw_uat_uplink_packet_queue.Length() * sizeof(RawUATUplinkPacket) +
+                                          sizeof(CompositeArray::RawPackets::Header)),
+                .num_raw_uat_adsb_packets = metrics.num_raw_uat_adsb_packets,
+                .num_valid_uat_adsb_packets = metrics.num_valid_uat_adsb_packets,
+                .num_raw_uat_uplink_packets = metrics.num_raw_uat_uplink_packets,
+                .num_valid_uat_uplink_packets = metrics.num_valid_uat_uplink_packets};
             // Reset metrics after reading.
             metrics = {0};
 #endif
