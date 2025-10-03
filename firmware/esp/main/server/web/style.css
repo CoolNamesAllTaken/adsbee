@@ -28,14 +28,6 @@
     word-wrap: break-word;
 }
 
-#terminal-content .warning {
-    color: yellow;
-}
-
-#terminal-content .error {
-    color: red;
-}
-
 #cursor {
     display: inline-block;
     background: #ffffff;
@@ -83,18 +75,9 @@
     width: 0;
 }
 
-/* Metrics cards styling */
-#feed-metrics {
-    width: 100%;
+.metrics {
     display: block;
-}
-
-.metrics-container {
-    display: flex;
     flex-wrap: wrap;
-    gap: 2rem;
-    padding: 2rem;
-    background: #f8fafc;
     border-radius: 8px;
     font-family: Arial;
 }
@@ -106,7 +89,6 @@
     border-radius: 6px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     display: inline-block;
-    font-family: Arial;
 }
 
 .metrics-title {
@@ -129,6 +111,26 @@
     font-size: 1.5rem;
     font-weight: 600;
     color: #0f172a;
+}
+
+.device-status {
+    text-align: left;
+    display: block;
+}
+
+.device-status-cards {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.device-card {
+    background: white;
+    margin: 1rem;
+    padding: 1rem;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    display: inline-block;
+    min-width: 200px;
 }
 
 .sparkline {

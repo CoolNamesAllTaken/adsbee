@@ -19,8 +19,8 @@
             <input type="text" class="hidden-input" id="hidden-input" autocomplete="off">
         </div>
 
-        <div id="metrics-container" class="column-element">
-            <div id="status" class="connection-status disconnected">Disconnected</div>
+        <div id="status" class="connection-status disconnected">Disconnected</div>
+        <div id="metrics-container" class="column-element metrics">
             <div id="receiver-metrics-container">
                 <div class="metrics-header">Receiver Metrics</div>
                 <!-- Cards will be dynamically inserted here -->
@@ -28,6 +28,12 @@
             <div id="feed-metrics-container">
                 <div id="feed-count" class="metrics-header">Feeds: 0</div>
                 <!-- Cards will be dynamically inserted here -->
+            </div>
+            <div id="device-status-container" class="device-status">
+                <div class="metrics-header">Device Status</div>
+                <div id="device-status-cards-container" class="device-status-cards">
+                    <!-- Device status cards will be dynamically inserted here -->
+                </div>
             </div>
         </div>
 
@@ -184,7 +190,43 @@
         }
 
         function appendToTerminal(text) {
-            terminalContent.textContent += text;
+            // Process ANSI escape sequences for colors
+            const ansiRegex = /\x1b\[([0-9;]*)m/g;
+            let processedText = text;
+            let lastIndex = 0;
+            let result = '';
+
+            let match;
+            while ((match = ansiRegex.exec(text)) !== null) {
+                // Add text before the escape sequence
+                result += text.slice(lastIndex, match.index);
+
+                const codes = match[1].split(';').map(code => parseInt(code) || 0);
+
+                // Handle color codes
+                for (const code of codes) {
+                    if (code === 0) {
+                        // Reset - close any open spans
+                        result += '</span>';
+                    } else if (code >= 30 && code <= 37) {
+                        // Foreground colors
+                        const colors = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'];
+                        result += `<span style="color: ${colors[code - 30]}">`;
+                    } else if (code >= 90 && code <= 97) {
+                        // Bright foreground colors
+                        const brightColors = ['gray', 'lightcoral', 'lightgreen', 'lightyellow', 'lightblue', 'lightpink', 'lightcyan', 'white'];
+                        result += `<span style="color: ${brightColors[code - 90]}">`;
+                    }
+                }
+
+                lastIndex = ansiRegex.lastIndex;
+            }
+
+            // Add remaining text
+            result += text.slice(lastIndex);
+            processedText = result;
+
+            terminalContent.innerHTML += processedText;
             terminal.scrollTop = terminal.scrollHeight;
         }
 
@@ -442,9 +484,51 @@
                 Object.entries(data).forEach(([label, value]) => {
                     if (!this.cards[parentLabel][label]) {
                         this.cards[parentLabel][label] = new MetricCard(document.getElementById(`${parentLabel}-metrics-container`), label);
-                        // this.createMetricCard(parentLabel, label);
                     }
                     this.cards[parentLabel][label].update(value);
+                });
+            }
+
+            updateDeviceStatus(deviceStatus) {
+                const container = document.getElementById('device-status-cards-container');
+
+                // Clear existing content
+                container.innerHTML = '';
+
+                // Create cards for each device
+                Object.entries(deviceStatus).forEach(([deviceName, status]) => {
+                    const card = document.createElement('div');
+                    card.className = 'device-status-card';
+
+                    let statusHtml = `<div class="device-card">
+                                        <div class="device-status-title">${deviceName.toUpperCase()}</div>`;
+
+                    // Add status information
+                    Object.entries(status).forEach(([key, value]) => {
+                        let displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                        let displayValue = value;
+
+                        // Format specific values
+                        if (key.includes('uptime_ms')) {
+                            displayKey = 'Uptime';
+                            displayValue = `${Math.floor(value / 1000)}s`;
+                        } else if (key.includes('temperature')) {
+                            displayKey = 'Temperature';
+                            displayValue = `${value}°C`;
+                        } else if (key.includes('usage_percent')) {
+                            displayKey = displayKey.replace(' Percent', '');
+                            displayValue = `${value}%`;
+                        }
+
+                        statusHtml += `<div class="status-item">
+                                            <span class="status-key">${displayKey}:</span>
+                                            <span class="status-value">${displayValue}</span>
+                                        </div>`;
+                    });
+                    statusHtml += `</div>`;
+
+                    card.innerHTML = statusHtml;
+                    container.appendChild(card);
                 });
             }
 
@@ -495,6 +579,11 @@
                             this.updateMetricsCards('feed', feedMetrics);
                             // Update labels count
                             this.feedsCountEl.textContent = `Feeds: ${Object.keys(feedMetrics).length}`;
+                        }
+                        if (data.hasOwnProperty('device_status')) {
+                            const deviceStatus = data['device_status'];
+                            // console.log('Device Status:', deviceStatus);
+                            this.updateDeviceStatus(deviceStatus);
                         }
                     } catch (error) {
                         console.error('Error parsing WebSocket message:', error);

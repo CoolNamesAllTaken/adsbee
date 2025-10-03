@@ -180,12 +180,6 @@ int main() {
             // Don't need to talk to the ESP32, or it acknowledged a heartbeat just now: poke the watchdog since nothing
             // seems amiss.
             adsbee.PokeWatchdog();
-            CONSOLE_ERROR(
-                "main",
-                "CPU0 usage: %d%%, CPU1 usage: %d%%, SubG CPU usage: %d%%, SubG Temperature: %dC, SubG Uptime Ms: %d",
-                core_0_monitor.GetUsagePercent(), core_1_monitor.GetUsagePercent(),
-                adsbee.subg_radio_ll.device_status.cpu_usage_percent,
-                adsbee.subg_radio_ll.device_status.temperature_deg_c, adsbee.subg_radio_ll.device_status.timestamp_ms);
         }
     }
 }

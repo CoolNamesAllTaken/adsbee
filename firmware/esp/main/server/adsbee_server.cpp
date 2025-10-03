@@ -160,24 +160,24 @@ bool ADSBeeServer::Update() {
         ArrayToJSON(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
                     "feed_mps", comms_manager.feed_mps, "%u", false);  // Mo trailing comma.
         snprintf(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
-                 "}");
+                 "}, \"device_status\": { ");
         // Device Status
         snprintf(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
-                 ", \"rp2040_device_status\": { \"uptime_ms\": %lu, \"core_0_usage_percent\": %u, "
+                 "\"rp2040\": { \"uptime_ms\": %lu, \"core_0_usage_percent\": %u, "
                  "\"core_1_usage_percent\": %u, \"temperature_deg_c\": %d }",
                  object_dictionary.composite_device_status.rp2040.timestamp_ms,
                  object_dictionary.composite_device_status.rp2040.core_0_usage_percent,
                  object_dictionary.composite_device_status.rp2040.core_1_usage_percent,
                  object_dictionary.composite_device_status.rp2040.temperature_deg_c);
         snprintf(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
-                 ", \"subg_device_status\": { \"uptime_ms\": %lu, \"user_core_usage_percent\": %u, "
+                 ", \"subg\": { \"uptime_ms\": %lu, \"user_core_usage_percent\": %u, "
                  "\"temperature_deg_c\": %u }",
                  object_dictionary.composite_device_status.subg.timestamp_ms,
                  object_dictionary.composite_device_status.subg.cpu_usage_percent,
                  object_dictionary.composite_device_status.subg.temperature_deg_c);
 
         snprintf(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
-                 " }\n");
+                 " }}\n");
 
         network_metrics.BroadcastMessage(metrics_message, strlen(metrics_message));
     }
