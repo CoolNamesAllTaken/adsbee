@@ -28,19 +28,41 @@
     word-wrap: break-word;
 }
 
+#terminal-content .warning {
+    color: yellow;
+}
+
+#terminal-content .error {
+    color: red;
+}
+
 #cursor {
     display: inline-block;
-    width: 8px;
-    height: 15px;
     background: #ffffff;
     animation: blink 1s step-end infinite;
+    color: #000000;
+    min-width: 0.6em;
+    min-height: 1.2em;
     vertical-align: middle;
-    margin-left: 1px;
+}
+
+#cursor:before {
+    content: attr(data-char);
+    color: #000000;
 }
 
 @keyframes blink {
+
+    0%,
     50% {
-        opacity: 0;
+        background: #ffffff;
+        color: #000000;
+    }
+
+    51%,
+    100% {
+        background: #000000;
+        color: #ffffff;
     }
 }
 

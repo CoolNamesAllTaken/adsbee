@@ -13,8 +13,8 @@
             <div id="terminal-content"></div>
             <div class="input-line">
                 <span class="prompt">&gt;</span>
-                <span id="current-line"></span>
-                <span id="cursor"></span>
+                <span id="current-line"><span id="cursor"> </span></span>
+                <!-- <span id="cursor"></span> -->
             </div>
             <input type="text" class="hidden-input" id="hidden-input" autocomplete="off">
         </div>
@@ -64,8 +64,8 @@
     </div>
 
     <script>
-        const HOST_URI = `${window.location.hostname}`;
-        // const HOST_URI = "testbee.local";
+        // const HOST_URI = `${window.location.hostname}`;
+        const HOST_URI = "testbee.local";
         const WS_CONFIG = {
             console_ws_url: `ws://${HOST_URI}/console`,
             metrics_ws_url: `ws://${HOST_URI}/metrics`,
@@ -86,6 +86,7 @@
         let commandHistory = [];
         let historyIndex = -1;
         let currentCommand = '';
+        let cursorPosition = 0;
 
         class ConsoleWebSocket {
             constructor(url) {
@@ -191,6 +192,16 @@
             hiddenInput.focus();
         }
 
+        function updateDisplay() {
+            const beforeCursor = currentCommand.substring(0, cursorPosition);
+            const afterCursor = currentCommand.substring(cursorPosition);
+            if (afterCursor.length > 0) {
+                currentLine.innerHTML = beforeCursor + '<span id="cursor">' + afterCursor[0] + '</span>' + afterCursor.slice(1);
+            } else {
+                currentLine.innerHTML = beforeCursor + '<span id="cursor"> </span>';
+            }
+        }
+
         function handleCommand(command) {
             if (command.trim()) {
                 commandHistory.push(command);
@@ -201,13 +212,31 @@
             }
             currentLine.textContent = '';
             currentCommand = '';
+            cursorPosition = 0;
             hiddenInput.value = '';
+            updateDisplay();
         }
 
         hiddenInput.addEventListener('input', (e) => {
-            currentCommand = hiddenInput.value;
-            currentLine.textContent = currentCommand;
+            const inputValue = hiddenInput.value;
+            const inputLength = inputValue.length;
+            const commandLength = currentCommand.length;
+
+            if (inputLength > commandLength) {
+                // Character was added
+                const newChar = inputValue[inputLength - 1];
+                currentCommand = currentCommand.substring(0, cursorPosition) + newChar + currentCommand.substring(cursorPosition);
+                cursorPosition++;
+            } else if (inputLength < commandLength) {
+                // Character was deleted (backspace)
+                if (cursorPosition > 0) {
+                    currentCommand = currentCommand.substring(0, cursorPosition - 1) + currentCommand.substring(cursorPosition);
+                    cursorPosition--;
+                }
+            }
+
             hiddenInput.value = currentCommand;
+            updateDisplay();
         });
 
         hiddenInput.addEventListener('keydown', (e) => {
@@ -221,8 +250,9 @@
                     if (historyIndex > 0) {
                         historyIndex--;
                         currentCommand = commandHistory[historyIndex];
-                        currentLine.textContent = currentCommand;
+                        cursorPosition = currentCommand.length;
                         hiddenInput.value = currentCommand;
+                        updateDisplay();
                     }
                     break;
                 case 'ArrowDown':
@@ -234,8 +264,41 @@
                         historyIndex = commandHistory.length;
                         currentCommand = '';
                     }
-                    currentLine.textContent = currentCommand;
+                    cursorPosition = currentCommand.length;
                     hiddenInput.value = currentCommand;
+                    updateDisplay();
+                    break;
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    if (cursorPosition > 0) {
+                        cursorPosition--;
+                        updateDisplay();
+                    }
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    if (cursorPosition < currentCommand.length) {
+                        cursorPosition++;
+                        updateDisplay();
+                    }
+                    break;
+                case 'Home':
+                    e.preventDefault();
+                    cursorPosition = 0;
+                    updateDisplay();
+                    break;
+                case 'End':
+                    e.preventDefault();
+                    cursorPosition = currentCommand.length;
+                    updateDisplay();
+                    break;
+                case 'Delete':
+                    e.preventDefault();
+                    if (cursorPosition < currentCommand.length) {
+                        currentCommand = currentCommand.substring(0, cursorPosition) + currentCommand.substring(cursorPosition + 1);
+                        hiddenInput.value = currentCommand;
+                        updateDisplay();
+                    }
                     break;
                 case 'Tab':
                     e.preventDefault();
@@ -256,9 +319,10 @@
         document.addEventListener('paste', (e) => {
             e.preventDefault();
             const paste = e.clipboardData.getData('text');
-            currentCommand += paste;
-            currentLine.textContent = currentCommand;
+            currentCommand = currentCommand.substring(0, cursorPosition) + paste + currentCommand.substring(cursorPosition);
+            cursorPosition += paste.length;
             hiddenInput.value = currentCommand;
+            updateDisplay();
         });
 
         // Keep cursor blinking when window is inactive
@@ -365,8 +429,6 @@
                 this.feedsCountEl = document.getElementById('feed-count');
                 this.container = document.getElementById('metrics-container');
             }
-
-
 
             updateMetricsCards(parentLabel, data) {
                 // Remove charts that are no longer in the data

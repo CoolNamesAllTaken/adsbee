@@ -14,7 +14,7 @@
 static const uint16_t kGDL90Port = 4000;
 
 static const uint16_t kNetworkConsoleWelcomeMessageMaxLen = 1000;
-static const uint16_t kNetworkMetricsMessageMaxLen = 1000;
+static const uint16_t kNetworkMetricsMessageMaxLen = 1500;
 static const uint16_t kNumTransponderPacketSources = 3;
 
 /* obsolete */
@@ -169,12 +169,12 @@ bool ADSBeeServer::Update() {
                  object_dictionary.composite_device_status.rp2040.core_0_usage_percent,
                  object_dictionary.composite_device_status.rp2040.core_1_usage_percent,
                  object_dictionary.composite_device_status.rp2040.temperature_deg_c);
-        snprintf(
-            metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
-            ", \"subg_device_status\": { \"uptime_ms\": %lu, \"cpu_usage_percent\": %u, \"temperature_deg_c\": %u }",
-            object_dictionary.composite_device_status.subg.timestamp_ms,
-            object_dictionary.composite_device_status.subg.cpu_usage_percent,
-            object_dictionary.composite_device_status.subg.temperature_deg_c);
+        snprintf(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
+                 ", \"subg_device_status\": { \"uptime_ms\": %lu, \"user_core_usage_percent\": %u, "
+                 "\"temperature_deg_c\": %u }",
+                 object_dictionary.composite_device_status.subg.timestamp_ms,
+                 object_dictionary.composite_device_status.subg.cpu_usage_percent,
+                 object_dictionary.composite_device_status.subg.temperature_deg_c);
 
         snprintf(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
                  " }\n");
