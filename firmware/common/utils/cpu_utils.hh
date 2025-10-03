@@ -33,9 +33,13 @@ class CPUMonitor {
             config_.update_interval_ms * config_.full_usage_update_frequency_hz / kMsPerSec;
     };
 
-#ifdef ON_TI
-    static void Init() { Temperature_init(); }
+    static void Init() {
+#ifdef ON_PICO
+        adc_set_temp_sensor_enabled(true);
+#elif defined(ON_TI)
+        Temperature_init();
 #endif
+    }
 
     /**
      * Records an idle tick. Call once per main loop iteration.
@@ -43,8 +47,8 @@ class CPUMonitor {
     inline void Tick() { ticks_since_last_update_++; }
 
     /**
-     * Updates the CPU usage percentage. Self-regulates to run only at the configured CPU usage update interval. Call
-     * frequently (at least once per CPU usage update interval).
+     * Updates the CPU usage percentage. Self-regulates to run only at the configured CPU usage update interval.
+     * Call frequently (at least once per CPU usage update interval).
      */
     inline void Update() {
         uint32_t current_timestamp_ms = get_time_since_boot_ms();
@@ -76,9 +80,9 @@ class CPUMonitor {
     }
 
     /**
-     * Returns the CPU usage as a percentage (0-100%). CPU usage is based on the number of idle ticks recorded vs the
-     * configured maximum number of idle ticks that could be recorded if the core was doing nothing interesting other
-     * than running the main loop. The maximum number of idle ticks is used to represent "0%" utilization. A
+     * Returns the CPU usage as a percentage (0-100%). CPU usage is based on the number of idle ticks recorded vs
+     * the configured maximum number of idle ticks that could be recorded if the core was doing nothing interesting
+     * other than running the main loop. The maximum number of idle ticks is used to represent "0%" utilization. A
      * configurable value for the minimum permisible loop frequency is used to calculate the number of ticks that
      * represents "100%" utilization. Utilization is calculated by finding the proportion of excess idle ticks (over
      * 100% utilization tick count) recorded by the CPU.
@@ -86,17 +90,20 @@ class CPUMonitor {
      */
     inline uint8_t GetUsagePercent() const { return cpu_usage_percent_; }
 
-    inline uint16_t ReadTemperatureMilliC() {
+    /**
+     * Reads the internal temperature sensor and returns the temperature in degrees Celsius.
+     * @retval Temperature in degrees Celsius.
+     */
+    inline int8_t ReadTemperatureDegC() {
 #ifdef ON_PICO
-        adc_select_input(kTempSensorADCChannel);  // Internal temperature sensor.
-        uint16_t raw = adc_read();
-        uint16_t temp_adc_mv = adc_read() * 3300 / (0xFFF);  // Convert 12-bit ADC reading to mV assuming VREF=3.3V.
+        adc_select_input(kTempSensorADCChannel);             // Internal temperature sensor.
+        uint32_t temp_adc_mv = adc_read() * 3300 / (0xFFF);  // Convert 12-bit ADC reading to mV assuming VREF=3.3V.
         // Convert the ADC reading to degrees C using the formula from the RP2040 datasheet.
         // See: https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf Section 4.9.5
-        return 27000 - (temp_adc_mv - 706) * 581;
+        return static_cast<int8_t>((27 - (temp_adc_mv - 706) * 581 / 1000));
 #elif defined(ON_TI)
         // NOTE: Temperature_init() must be called before using this function.
-        return Temperature_getTemperature() * 1000;  // Convert degrees C to milliC.
+        return Temperature_getTemperature();  // Convert degrees C to milliC.
 #else
         return 0;
 #endif

@@ -122,13 +122,14 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             break;
         }
         case kAddrDeviceStatus: {
-            if (buf_len != sizeof(RP2040DeviceStatus) || offset != 0) {
-                CONSOLE_ERROR("ObjectDictionary::SetBytes",
-                              "Buffer length %d and offset %d for writing RP2040DeviceStatus must be exactly %d and 0.",
-                              buf_len, offset, sizeof(RP2040DeviceStatus));
+            if (buf_len != sizeof(CompositeDeviceStatus) || offset != 0) {
+                CONSOLE_ERROR(
+                    "ObjectDictionary::SetBytes",
+                    "Buffer length %d and offset %d for writing CompositeDeviceStatus must be exactly %d and 0.",
+                    buf_len, offset, sizeof(CompositeDeviceStatus));
                 return false;
             }
-            memcpy(&rp2040_device_status, buf, sizeof(RP2040DeviceStatus));
+            memcpy(&composite_device_status, buf, sizeof(CompositeDeviceStatus));
             break;
         }
 #elif defined(ON_TI)
@@ -172,7 +173,7 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
 #elif defined(ON_TI)
             SubGHzDeviceStatus device_status = {
                 .timestamp_ms = get_time_since_boot_ms(),
-                .temperature_deg_c = static_cast<uint8_t>(user_core_monitor.ReadTemperatureMilliC() / 1000),
+                .temperature_deg_c = static_cast<uint8_t>(user_core_monitor.ReadTemperatureDegC()),
                 .cpu_usage_percent = user_core_monitor.GetUsagePercent(),
                 .num_queued_log_messages = num_log_messages,
                 .queued_log_messages_packed_size_bytes =

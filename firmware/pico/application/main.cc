@@ -26,7 +26,8 @@ const uint16_t kStatusLEDBootupBlinkPeriodMs = 200;
 const uint32_t kESP32BootupTimeoutMs = 10000;
 const uint32_t kESP32BootupCommsRetryMs = 500;
 
-const uint32_t kRP2040IdleTicksPerUpdateInterval = 60e3;  // Measured empirically.
+const uint32_t kRP2040IdleTicksPerUpdateInterval =
+    125e3;  // Arbitrary, assume 1000 instructions per idle loop at 125MHz.
 const uint32_t kRP2040CPUMonitorUpdateIntervalMs = 1000;
 
 // Override default config params here.
@@ -57,6 +58,9 @@ ModeSPacketDecoder decoder = ModeSPacketDecoder({.enable_1090_error_correction =
 
 int main() {
     bi_decl(bi_program_description("ADSBee 1090 ADSB Receiver"));
+
+    // Initialize the temperature sensor.
+    CPUMonitor::Init();
 
     // Initialize coprocessor SPI bus.
     // ESP32 SPI pins.
