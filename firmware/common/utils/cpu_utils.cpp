@@ -60,20 +60,12 @@ void CPUMonitor::ReadCPUUsage(uint8_t &core_0_usage_percent, uint8_t &core_1_usa
         }
 
         // 2. Calculate the utilization for each core.
-        // The total run time (ulTotalRunTime) is the *combined* run time of both cores.
-        // To get a per-core percentage, we divide by 2 to get the total time slice
-        // for a single core, or simply use 100 as the scaling factor since idle time
-        // is effectively the remaining percentage of 100%.
 
-        // The IDLE run time should be compared against the total system run time
-        // divided by the number of cores (2).
-        uint32_t ulTotalRunTimePerCore = ulTotalRunTime / configNUM_CORES;
-
-        if (ulTotalRunTimePerCore > 0) {
+        if (ulTotalRunTime > 0) {
             // Utilization = 100 - (Idle Time / Total Core Time) * 100
-            core_0_usage_percent = (uint32_t)(100 - (100 * idle_runtime_core0 / ulTotalRunTimePerCore));
+            core_0_usage_percent = static_cast<uint8_t>(100 - (100 * idle_runtime_core0 / ulTotalRunTime));
 
-            core_1_usage_percent = (uint32_t)(100 - (100 * idle_runtime_core1 / ulTotalRunTimePerCore));
+            core_1_usage_percent = static_cast<uint8_t>(100 - (100 * idle_runtime_core1 / ulTotalRunTime));
         }
     }
 

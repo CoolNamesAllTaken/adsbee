@@ -52,8 +52,8 @@ void heap_caps_alloc_failed_hook(size_t requested_size, uint32_t caps, const cha
 
 void device_status_update_task(void *pvParameters) {
     while (1) {
-        // cpu_monitor.ReadCPUUsage(object_dictionary.device_status.core_0_usage_percent,
-        //                          object_dictionary.device_status.core_1_usage_percent);
+        cpu_monitor.ReadCPUUsage(object_dictionary.device_status.core_0_usage_percent,
+                                 object_dictionary.device_status.core_1_usage_percent);
         // object_dictionary.device_status.temperature_deg_c = CPUMonitor::ReadTemperatureDegC();
         vTaskDelay(pdMS_TO_TICKS(kDeviceStatusUpdateIntervalMs));  // Delay 1 second.
     }
@@ -67,8 +67,8 @@ extern "C" void app_main(void) {
     ESP_LOGI("app_main", "Default task priority: %d", uxTaskPriorityGet(NULL));
 
     CPUMonitor::Init();
-    // xTaskCreate(device_status_update_task, "DeviceStatusUpdate", kDeviceStatusUpdateTaskStackSizeBytes, NULL,
-    //             kDeviceStatusUpdateTaskPriority, NULL);
+    xTaskCreate(device_status_update_task, "DeviceStatusUpdate", kDeviceStatusUpdateTaskStackSizeBytes, NULL,
+                kDeviceStatusUpdateTaskPriority, NULL);
     adsbee_server.Init();
 
 #ifdef HARDWARE_UNIT_TESTS

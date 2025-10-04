@@ -163,12 +163,6 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             break;
         case kAddrDeviceStatus: {
             UpdateDeviceStatus();
-            if (buf_len != sizeof(ESP32DeviceStatus) || offset != 0) {
-                CONSOLE_ERROR("ObjectDictionary::GetBytes",
-                              "Buffer length %d and offset %d for reading ESP32DeviceStatus must be exactly %d and 0.",
-                              buf_len, offset, sizeof(ESP32DeviceStatus));
-                return false;
-            }
             memcpy(buf, (uint8_t *)&device_status + offset, buf_len);
             break;
         }
@@ -323,8 +317,6 @@ void ObjectDictionary::UpdateDeviceStatus() {
     // We only read fast stuff here. Slow things like core usage calculations and temperature reads are done in
     // device_status_update_task.
     device_status.timestamp_ms = get_time_since_boot_ms();
-    device_status.core_0_usage_percent = 0;
-    device_status.core_1_usage_percent = 0;
     device_status.num_queued_log_messages = num_log_messages;
     device_status.queued_log_messages_packed_size_bytes =
         static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize);

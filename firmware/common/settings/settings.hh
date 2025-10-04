@@ -2,13 +2,13 @@
 #define SETTINGS_HH_
 
 #include <cstdint>
-#include <cstring>     // for memset
 #include <functional>  // for strtoull
 
 #include "crc.hh"
 #include "macros.hh"
 #include "stdio.h"
 #include "stdlib.h"  // for strtoull
+#include "string.h"  // for memset
 #ifdef ON_PICO
 #include "pico/rand.h"
 #endif

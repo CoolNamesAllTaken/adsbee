@@ -79,8 +79,9 @@ if(NOT TARGET TOOLCHAIN_gcc)
         INTERFACE
             $<$<STREQUAL:$<TARGET_PROPERTY:TI_CFLAGS_OVERRIDE>,>:
             # This part included if TI_CFLAGS_OVERRIDE not defined
-            $<$<COMPILE_LANGUAGE:C>:-std=c17>
-            $<$<COMPILE_LANGUAGE:CXX>:-std=c++23>
+            # Use GNU extensions to C and C++ to enable functions like strnlen.
+            $<$<COMPILE_LANGUAGE:C>:-std=gnu17>
+            $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++23>
             -mthumb
             $<$<OR:$<COMPILE_LANGUAGE:C>,$<COMPILE_LANGUAGE:CXX>>:-g
             -mabi=aapcs
