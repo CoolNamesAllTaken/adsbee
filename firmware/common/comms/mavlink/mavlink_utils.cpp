@@ -76,7 +76,7 @@ mavlink_adsb_vehicle_t ModeSAircraftToMAVLINKADSBVehicleMessage(const ModeSAircr
     if (aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagHorizontalSpeedValid)) {
         flags |= ADSB_FLAGS_VALID_VELOCITY;
     }
-    if (strlen(aircraft.callsign) > ModeSAircraft::kCallSignMinNumChars) {
+    if (strnlen(aircraft.callsign, ModeSAircraft::kCallSignMaxNumChars) > ModeSAircraft::kCallSignMinNumChars) {
         flags |= ADSB_FLAGS_VALID_CALLSIGN;
     }
     if (aircraft.squawk > 0) {
@@ -140,7 +140,7 @@ mavlink_adsb_vehicle_t UATAircraftToMAVLINKADSBVehicleMessage(const UATAircraft 
     if (aircraft.HasBitFlag(UATAircraft::BitFlag::kBitFlagHorizontalSpeedValid)) {
         flags |= ADSB_FLAGS_VALID_VELOCITY;
     }
-    if (strlen(aircraft.callsign) > UATAircraft::kCallSignMinNumChars) {
+    if (strnlen(aircraft.callsign, UATAircraft::kCallSignMaxNumChars) > UATAircraft::kCallSignMinNumChars) {
         flags |= ADSB_FLAGS_VALID_CALLSIGN;
     }
     if (aircraft.squawk > 0) {

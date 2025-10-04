@@ -83,7 +83,7 @@ bool ModeSPacketDecoder::UpdateDecoderLoop() {
         }
 
         // Append packet contents to debug message.
-        uint16_t message_len = strlen(decode_debug_message.message);
+        uint16_t message_len = strnlen(decode_debug_message.messagem, DebugMessage::kMessageMaxLen);
         message_len += snprintf(decode_debug_message.message + message_len, DebugMessage::kMessageMaxLen - message_len,
                                 "df=%02d icao=0x%06x", decoded_packet.downlink_format, decoded_packet.icao_address);
         // Append a print of the packet contents.

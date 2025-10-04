@@ -353,7 +353,7 @@ void DecodedUATADSBPacket::DecodeTargetState(uint8_t *data, UATTargetState &targ
 RawUATUplinkPacket::RawUATUplinkPacket(const char *rx_string, int16_t sigs_dbm_in, int16_t sigq_bits_in,
                                        uint64_t mlat_48mhz_64bit_counts_in)
     : sigs_dbm(sigs_dbm_in), sigq_bits(sigq_bits_in), mlat_48mhz_64bit_counts(mlat_48mhz_64bit_counts_in) {
-    uint16_t rx_num_bytes = strlen(rx_string) / kNibblesPerByte;
+    uint16_t rx_num_bytes = strnlen(rx_string, kUplinkMessageNumBytes * kBytesPerWord) / kNibblesPerByte;
     for (uint16_t i = 0; i < rx_num_bytes && i < kUplinkMessageNumBytes * kBytesPerWord; i++) {
         uint8_t byte = (CHAR_TO_HEX(rx_string[i * kNibblesPerByte]) << kBitsPerNibble) |
                        CHAR_TO_HEX(rx_string[i * kNibblesPerByte + 1]);

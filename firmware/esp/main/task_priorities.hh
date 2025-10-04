@@ -20,4 +20,7 @@ static const unsigned int kTCPServerTaskStackSizeBytes = 4096;
 static const unsigned int kHTTPServerStackSizeBytes =
     4 * 4096;  // Extra stack needed for calls to SPI peripheral and handling large files.
 
+static const unsigned int kDeviceStatusUpdateTaskStackSizeBytes = 2048;
+static const unsigned int kDeviceStatusUpdateTaskPriority = tskIDLE_PRIORITY;
+
 #endif /* TASK_PRIORITIES_HH_ */

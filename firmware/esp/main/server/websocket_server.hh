@@ -14,6 +14,7 @@ class WebSocketServer {
     static const uint16_t kURIMaxLen = 200;
     static const uint32_t kInactivityTimeoutMsDefault =
         60 * 60e3;  // 1 hour default inactivity timeout for network console clients.
+    static const uint16_t kWebSocketMessageMaxLen = 4000;  // Maximum size of a single websocket message.
 
     struct WebSocketServerConfig {
         char label[kWebSocketLabelMaxLen] = "Untitled";

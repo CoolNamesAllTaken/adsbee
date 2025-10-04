@@ -166,11 +166,17 @@ void WebSocketServer::BroadcastMessage(const char *message, int16_t len_bytes) {
 }
 
 esp_err_t WebSocketServer::SendMessage(int client_fd, const char *message, int16_t len_bytes) {
+    if (len_bytes > kWebSocketMessageMaxLen) {
+        CONSOLE_ERROR("WebSocketServer::SendMessage",
+                      "[%s] Message length %d exceeds maximum of %d, truncating message.", config_.label, len_bytes,
+                      kWebSocketMessageMaxLen);
+        len_bytes = kWebSocketMessageMaxLen;
+    }
     httpd_ws_frame_t ws_pkt = {.final = true,
                                .fragmented = false,
                                .type = config_.send_as_binary ? HTTPD_WS_TYPE_BINARY : HTTPD_WS_TYPE_TEXT,
                                .payload = (uint8_t *)message,
-                               .len = len_bytes > 0 ? len_bytes : strlen(message)};
+                               .len = len_bytes > 0 ? len_bytes : strnlen(message, kWebSocketMessageMaxLen)};
 
     return httpd_ws_send_frame_async(config_.server, client_fd, &ws_pkt);
 }

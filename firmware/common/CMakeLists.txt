@@ -13,6 +13,7 @@ if (TARGET application)
         comms/mavlink/mavlink_utils.cpp
         comms/raw/raw_utils.cpp
         utils/buffer_utils.cpp
+        utils/cpu_utils.cpp
         utils/data_structures.cpp
         utils/crc/crc.cpp
         utils/geo/geo_utils.cpp
@@ -63,6 +64,7 @@ elseif (TARGET sub_ghz_radio)
         settings/settings_strs.cpp
         settings/settings.cpp
         utils/buffer_utils.cpp
+        utils/cpu_utils.cpp
         utils/data_structures.cpp
         utils/crc/crc.cpp
         # adsb/mode_s_packet.cpp
@@ -104,6 +106,7 @@ elseif (TARGET host_test)
         settings/settings_strs.cpp
         settings/settings.cpp
         utils/buffer_utils.cpp
+        utils/cpu_utils.cpp
         utils/data_structures.cpp
         utils/crc/crc.cpp
         utils/geo/geo_utils.cpp

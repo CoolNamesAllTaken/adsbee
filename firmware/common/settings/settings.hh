@@ -372,7 +372,7 @@ class SettingsManager {
      * end of the string. Not used for actually finding ther number of asterix to print.
      */
     static inline void RedactPassword(char *password_buf, char *redacted_password_buf, uint16_t buf_len) {
-        uint16_t password_len = MIN(strlen(password_buf), buf_len);
+        uint16_t password_len = MIN(strnlen(password_buf, buf_len), buf_len);
         memset(redacted_password_buf, '*', password_len);
         redacted_password_buf[password_len] = '\0';
     }

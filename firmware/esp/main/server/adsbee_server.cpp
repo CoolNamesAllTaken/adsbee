@@ -118,68 +118,10 @@ bool ADSBeeServer::Update() {
                      aircraft_dictionary.metrics.valid_squitter_frames,
                      aircraft_dictionary.metrics.valid_extended_squitter_frames);
 
-        // ESP32 can't see number of attempted demodulations or raw packets, so steal that from RP2040 metrics
-        // dictionary.
-        AircraftDictionary::Metrics combined_metrics = aircraft_dictionary.metrics;
-        // Steal demods_1090.
-        combined_metrics.demods_1090 = adsbee_server.rp2040_aircraft_dictionary_metrics.demods_1090;
-        for (uint16_t i = 0; i < AircraftDictionary::kMaxNumSources; i++) {
-            combined_metrics.demods_1090_by_source[i] +=
-                adsbee_server.rp2040_aircraft_dictionary_metrics.demods_1090_by_source[i];
-        }
-        // Steal raw_squitter_frames.
-        combined_metrics.raw_squitter_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.raw_squitter_frames;
-        for (uint16_t i = 0; i < AircraftDictionary::kMaxNumSources; i++) {
-            combined_metrics.raw_squitter_frames_by_source[i] +=
-                adsbee_server.rp2040_aircraft_dictionary_metrics.raw_squitter_frames_by_source[i];
-        }
-        // Steal raw_extended_squitter_frames.
-        combined_metrics.raw_extended_squitter_frames =
-            adsbee_server.rp2040_aircraft_dictionary_metrics.raw_extended_squitter_frames;
-        for (uint16_t i = 0; i < AircraftDictionary::kMaxNumSources; i++) {
-            combined_metrics.raw_extended_squitter_frames_by_source[i] +=
-                adsbee_server.rp2040_aircraft_dictionary_metrics.raw_extended_squitter_frames_by_source[i];
-        }
-        // Steal UAT metrics.
-        combined_metrics.raw_uat_adsb_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.raw_uat_adsb_frames;
-        combined_metrics.valid_uat_adsb_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.valid_uat_adsb_frames;
-        combined_metrics.raw_uat_uplink_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.raw_uat_uplink_frames;
-        combined_metrics.valid_uat_uplink_frames =
-            adsbee_server.rp2040_aircraft_dictionary_metrics.valid_uat_uplink_frames;
-
-        // Broadcast dictionary metrics over the metrics Websocket.
-        char metrics_message[AircraftDictionary::Metrics::kMetricsJSONMaxLen];
-        snprintf(metrics_message, kNetworkMetricsMessageMaxLen, "{ \"aircraft_dictionary_metrics\": ");
-        combined_metrics.ToJSON(metrics_message + strlen(metrics_message),
-                                kNetworkMetricsMessageMaxLen - strlen(metrics_message));
-        snprintf(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
-                 ", \"server_metrics\": { ");
-        // ADSBee Server Metrics
-        ArrayToJSON(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
-                    "feed_uri", settings_manager.settings.feed_uris, "\"%s\"", true);
-        ArrayToJSON(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
-                    "feed_mps", comms_manager.feed_mps, "%u", false);  // Mo trailing comma.
-        snprintf(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
-                 "}, \"device_status\": { ");
-        // Device Status
-        snprintf(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
-                 "\"rp2040\": { \"uptime_ms\": %lu, \"core_0_usage_percent\": %u, "
-                 "\"core_1_usage_percent\": %u, \"temperature_deg_c\": %d }",
-                 object_dictionary.composite_device_status.rp2040.timestamp_ms,
-                 object_dictionary.composite_device_status.rp2040.core_0_usage_percent,
-                 object_dictionary.composite_device_status.rp2040.core_1_usage_percent,
-                 object_dictionary.composite_device_status.rp2040.temperature_deg_c);
-        snprintf(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
-                 ", \"subg\": { \"uptime_ms\": %lu, \"user_core_usage_percent\": %u, "
-                 "\"temperature_deg_c\": %u }",
-                 object_dictionary.composite_device_status.subg.timestamp_ms,
-                 object_dictionary.composite_device_status.subg.cpu_usage_percent,
-                 object_dictionary.composite_device_status.subg.temperature_deg_c);
-
-        snprintf(metrics_message + strlen(metrics_message), kNetworkMetricsMessageMaxLen - strlen(metrics_message),
-                 " }}\n");
-
-        network_metrics.BroadcastMessage(metrics_message, strlen(metrics_message));
+        object_dictionary.UpdateDeviceStatus();  // Get newest values for ESP32 status.
+        // RP2040 and SubG status are updated by the RP2040 writing to the object dictionary periodically. Nothing to do
+        // here.
+        SendNetworkMetricsMessage();
     }
 
     // Run raw packet ingestion and reporting if queues are >50% full or every 200ms.
@@ -527,6 +469,81 @@ void NetworkConsoleMessageReceivedCallback(WebSocketServer *ws_server, int clien
         }
     }
     xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
+}
+
+void ADSBeeServer::SendNetworkMetricsMessage() {
+    // ESP32 can't see number of attempted demodulations or raw packets, so steal that from RP2040 metrics
+    // dictionary.
+    AircraftDictionary::Metrics combined_metrics = aircraft_dictionary.metrics;
+    // Steal demods_1090.
+    combined_metrics.demods_1090 = adsbee_server.rp2040_aircraft_dictionary_metrics.demods_1090;
+    for (uint16_t i = 0; i < AircraftDictionary::kMaxNumSources; i++) {
+        combined_metrics.demods_1090_by_source[i] +=
+            adsbee_server.rp2040_aircraft_dictionary_metrics.demods_1090_by_source[i];
+    }
+    // Steal raw_squitter_frames.
+    combined_metrics.raw_squitter_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.raw_squitter_frames;
+    for (uint16_t i = 0; i < AircraftDictionary::kMaxNumSources; i++) {
+        combined_metrics.raw_squitter_frames_by_source[i] +=
+            adsbee_server.rp2040_aircraft_dictionary_metrics.raw_squitter_frames_by_source[i];
+    }
+    // Steal raw_extended_squitter_frames.
+    combined_metrics.raw_extended_squitter_frames =
+        adsbee_server.rp2040_aircraft_dictionary_metrics.raw_extended_squitter_frames;
+    for (uint16_t i = 0; i < AircraftDictionary::kMaxNumSources; i++) {
+        combined_metrics.raw_extended_squitter_frames_by_source[i] +=
+            adsbee_server.rp2040_aircraft_dictionary_metrics.raw_extended_squitter_frames_by_source[i];
+    }
+    // Steal UAT metrics.
+    combined_metrics.raw_uat_adsb_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.raw_uat_adsb_frames;
+    combined_metrics.valid_uat_adsb_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.valid_uat_adsb_frames;
+    combined_metrics.raw_uat_uplink_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.raw_uat_uplink_frames;
+    combined_metrics.valid_uat_uplink_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.valid_uat_uplink_frames;
+
+    // Broadcast dictionary metrics over the metrics Websocket.
+    char metrics_message[kNetworkMetricsMessageMaxLen];
+    snprintf(metrics_message, kNetworkMetricsMessageMaxLen, "{ \"aircraft_dictionary_metrics\": ");
+    combined_metrics.ToJSON(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+                            kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen));
+    snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             ", \"server_metrics\": { ");
+    // ADSBee Server Metrics
+    ArrayToJSON(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+                kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen), "feed_uri",
+                settings_manager.settings.feed_uris, "\"%s\"", true);
+    ArrayToJSON(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+                kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen), "feed_mps",
+                comms_manager.feed_mps, "%u", false);  // Mo trailing comma.
+    snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             "}, \"device_status\": { ");
+    // Device Status
+    snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             "\"rp2040\": { \"uptime_ms\": %lu, \"core_0_usage_percent\": %u, "
+             "\"core_1_usage_percent\": %u, \"temperature_deg_c\": %d }",
+             object_dictionary.composite_device_status.rp2040.timestamp_ms,
+             object_dictionary.composite_device_status.rp2040.core_0_usage_percent,
+             object_dictionary.composite_device_status.rp2040.core_1_usage_percent,
+             object_dictionary.composite_device_status.rp2040.temperature_deg_c);
+    snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             ", \"subg\": { \"uptime_ms\": %lu, \"user_core_usage_percent\": %u, "
+             "\"temperature_deg_c\": %u }",
+             object_dictionary.composite_device_status.subg.timestamp_ms,
+             object_dictionary.composite_device_status.subg.cpu_usage_percent,
+             object_dictionary.composite_device_status.subg.temperature_deg_c);
+    snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             ", \"esp32\": { \"uptime_ms\": %lu, \"core_0_usage_percent\": %u, "
+             "\"core_1_usage_percent\": %u, \"temperature_deg_c\": %d }",
+             object_dictionary.device_status.timestamp_ms, object_dictionary.device_status.core_0_usage_percent,
+             object_dictionary.device_status.core_1_usage_percent, object_dictionary.device_status.temperature_deg_c);
+    snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen), " }}\n");
+
+    network_metrics.BroadcastMessage(metrics_message, strnlen(metrics_message, kNetworkMetricsMessageMaxLen));
 }
 
 bool ADSBeeServer::TCPServerInit() {

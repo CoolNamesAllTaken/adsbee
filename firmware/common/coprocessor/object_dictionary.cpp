@@ -3,6 +3,7 @@
 #include "hal.hh"  // for timestamping
 #ifdef ON_ESP32
 #include "adsbee_server.hh"
+#include "cpu_utils.hh"
 #include "device_info.hh"
 #elif defined(ON_TI)
 #include "cpu_utils.hh"
@@ -21,6 +22,8 @@ const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24
 
 #ifdef ON_TI
 extern CPUMonitor user_core_monitor;
+#elif defined(ON_ESP32)
+extern CPUMonitor cpu_monitor;
 #endif
 
 #ifdef ON_COPRO_SLAVE
@@ -159,45 +162,14 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
             memcpy(buf, (uint8_t *)&(settings_manager.settings) + offset, buf_len);
             break;
         case kAddrDeviceStatus: {
-            uint16_t num_log_messages = log_message_queue.Length();
-#ifdef ON_ESP32
-            xSemaphoreTake(object_dictionary.network_console_rx_queue_mutex, portMAX_DELAY);
-            uint16_t num_network_console_rx_chars = network_console_rx_queue.Length();
-            xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
-            ESP32DeviceStatus device_status = {.timestamp_ms = get_time_since_boot_ms(),
-                                               .num_queued_log_messages = num_log_messages,
-                                               .queued_log_messages_packed_size_bytes =
-                                                   static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),
-                                               .num_queued_sc_command_requests = sc_command_request_queue.Length(),
-                                               .num_queued_network_console_rx_chars = num_network_console_rx_chars};
-#elif defined(ON_TI)
-            SubGHzDeviceStatus device_status = {
-                .timestamp_ms = get_time_since_boot_ms(),
-                .temperature_deg_c = static_cast<uint8_t>(user_core_monitor.ReadTemperatureDegC()),
-                .cpu_usage_percent = user_core_monitor.GetUsagePercent(),
-                .num_queued_log_messages = num_log_messages,
-                .queued_log_messages_packed_size_bytes =
-                    static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),
-                .num_queued_sc_command_requests = sc_command_request_queue.Length(),
-                .pending_raw_packets_len_bytes =
-                    static_cast<uint16_t>(raw_uat_adsb_packet_queue.Length() * sizeof(RawUATADSBPacket) +
-                                          raw_uat_uplink_packet_queue.Length() * sizeof(RawUATUplinkPacket) +
-                                          sizeof(CompositeArray::RawPackets::Header)),
-                .num_raw_uat_adsb_packets = metrics.num_raw_uat_adsb_packets,
-                .num_valid_uat_adsb_packets = metrics.num_valid_uat_adsb_packets,
-                .num_raw_uat_uplink_packets = metrics.num_raw_uat_uplink_packets,
-                .num_valid_uat_uplink_packets = metrics.num_valid_uat_uplink_packets};
-            // Reset metrics after reading.
-            metrics = {0};
-#endif
-            for (uint16_t i = 0; i < log_message_queue.Length(); i++) {
-                LogMessage log_message;
-                if (log_message_queue.Peek(log_message, i)) {
-                    device_status.queued_log_messages_packed_size_bytes +=
-                        log_message.num_chars + 1;  // +1 for null terminator
-                }
+            UpdateDeviceStatus();
+            if (buf_len != sizeof(ESP32DeviceStatus) || offset != 0) {
+                CONSOLE_ERROR("ObjectDictionary::GetBytes",
+                              "Buffer length %d and offset %d for reading ESP32DeviceStatus must be exactly %d and 0.",
+                              buf_len, offset, sizeof(ESP32DeviceStatus));
+                return false;
             }
-            memcpy(buf, &device_status + offset, buf_len);
+            memcpy(buf, (uint8_t *)&device_status + offset, buf_len);
             break;
         }
         case kAddrLogMessages: {
@@ -333,6 +305,57 @@ bool ObjectDictionary::RequestSCCommandBlocking(const SCCommandRequestWithCallba
     vSemaphoreDelete(command_complete_semaphore);
 #endif
     return ret;
+}
+#endif
+
+#ifdef ON_COPRO_SLAVE
+/**
+ * Updates the device status struct with the latest information. Called when the object dictionary is read from at
+ * kAddrDeviceStatus, or when other functions want to refresh the device status before borrowing it for other uses.
+ */
+void ObjectDictionary::UpdateDeviceStatus() {
+    uint16_t num_log_messages = log_message_queue.Length();
+#ifdef ON_ESP32
+    xSemaphoreTake(network_console_rx_queue_mutex, portMAX_DELAY);
+    uint16_t num_network_console_rx_chars = network_console_rx_queue.Length();
+    xSemaphoreGive(network_console_rx_queue_mutex);
+
+    // We only read fast stuff here. Slow things like core usage calculations and temperature reads are done in
+    // device_status_update_task.
+    device_status.timestamp_ms = get_time_since_boot_ms();
+    device_status.core_0_usage_percent = 0;
+    device_status.core_1_usage_percent = 0;
+    device_status.num_queued_log_messages = num_log_messages;
+    device_status.queued_log_messages_packed_size_bytes =
+        static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize);
+    device_status.num_queued_sc_command_requests = sc_command_request_queue.Length();
+    device_status.num_queued_network_console_rx_chars = num_network_console_rx_chars;
+
+#elif defined(ON_TI)
+    device_status = {
+        .timestamp_ms = get_time_since_boot_ms(),
+        .temperature_deg_c = static_cast<uint8_t>(CPUMonitor::ReadTemperatureDegC()),
+        .cpu_usage_percent = user_core_monitor.GetUsagePercent(),
+        .num_queued_log_messages = num_log_messages,
+        .queued_log_messages_packed_size_bytes = static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize),
+        .num_queued_sc_command_requests = sc_command_request_queue.Length(),
+        .pending_raw_packets_len_bytes =
+            static_cast<uint16_t>(raw_uat_adsb_packet_queue.Length() * sizeof(RawUATADSBPacket) +
+                                  raw_uat_uplink_packet_queue.Length() * sizeof(RawUATUplinkPacket) +
+                                  sizeof(CompositeArray::RawPackets::Header)),
+        .num_raw_uat_adsb_packets = metrics.num_raw_uat_adsb_packets,
+        .num_valid_uat_adsb_packets = metrics.num_valid_uat_adsb_packets,
+        .num_raw_uat_uplink_packets = metrics.num_raw_uat_uplink_packets,
+        .num_valid_uat_uplink_packets = metrics.num_valid_uat_uplink_packets};
+    // Reset metrics after reading.
+    metrics = {0};
+#endif
+    for (uint16_t i = 0; i < log_message_queue.Length(); i++) {
+        LogMessage log_message;
+        if (log_message_queue.Peek(log_message, i)) {
+            device_status.queued_log_messages_packed_size_bytes += log_message.num_chars + 1;  // +1 for null terminator
+        }
+    }
 }
 #endif
 

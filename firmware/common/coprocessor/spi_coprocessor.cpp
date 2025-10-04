@@ -112,7 +112,7 @@ bool SPICoprocessor::Update() {
 
             ObjectDictionary::LogMessage log_message;
             while (object_dictionary.log_message_queue.Dequeue(log_message)) {
-                if (strlen(log_message.message) == 0) {
+                if (strnlen(log_message.message, sizeof(log_message.message)) == 0) {
                     continue;  // Skip empty messages.
                 }
                 switch (log_message.log_level) {
@@ -240,7 +240,7 @@ bool SPICoprocessor::LogMessage(SettingsManager::LogLevel log_level, const char 
     log_message.num_chars = 0;
     log_message.message[0] = '\0';  // Initialize to empty string.
 
-    if (strlen(tag) > 0) {
+    if (strnlen(tag, ObjectDictionary::kLogMessageTagMaxNumChars) > 0) {
         log_message.num_chars += snprintf(log_message.message, ObjectDictionary::kLogMessageMaxNumChars, "[%s] ", tag);
     }
 

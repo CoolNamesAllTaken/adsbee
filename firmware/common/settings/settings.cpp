@@ -49,7 +49,7 @@ void SettingsManager::Print() {
         CONSOLE_PRINTF("\t\tSSID: %s\r\n", settings.core_network_settings.wifi_sta_ssid);
         char redacted_wifi_sta_password[Settings::kWiFiPasswordMaxLen];
         RedactPassword(settings.core_network_settings.wifi_sta_password, redacted_wifi_sta_password,
-                       strlen(settings.core_network_settings.wifi_sta_password));
+                       strnlen(settings.core_network_settings.wifi_sta_password, Settings::kWiFiPasswordMaxLen));
         CONSOLE_PRINTF("\t\tPassword: %s\r\n", redacted_wifi_sta_password);
     }
     // Print Ethernet settings.

@@ -192,7 +192,7 @@ bool CommsManager::WiFiInit() {
                 SettingsManager::Settings::kWiFiPasswordMaxLen + 1);
         wifi_config_ap.ap.channel = wifi_ap_channel;
         wifi_config_ap.ap.ssid_len = (uint8_t)strlen(wifi_ap_ssid);
-        if (strlen(wifi_ap_password) == 0) {
+        if (strnlen(wifi_ap_password, SettingsManager::Settings::kWiFiPasswordMaxLen) == 0) {
             wifi_config_ap.ap.authmode = WIFI_AUTH_OPEN;
         } else {
             wifi_config_ap.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
