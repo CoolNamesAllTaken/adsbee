@@ -522,6 +522,8 @@ class CC1312 : public SPICoprocessorSlaveInterface {
                enabled_ == SettingsManager::EnableState::kEnableStateExternal;
     }
 
+    ObjectDictionary::SubGHzDeviceStatus device_status;
+
    private:
     CC1312Config config_;
     SettingsManager::EnableState enabled_ = SettingsManager::EnableState::kEnableStateDisabled;

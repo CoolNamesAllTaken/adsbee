@@ -113,8 +113,8 @@ target_compile_options(${PROJECT_NAME} PRIVATE
     -mcpu=cortex-m4
     -march=armv7e-m
     -mthumb
-    $<$<COMPILE_LANGUAGE:C>:-std=c17> # Suppress POSIX files from GCC to allow TI POSIX library to work (old versions of GCC included them).
-    $<$<COMPILE_LANGUAGE:CXX>:-std=c++23> # Suppress POSIX files from GCC to allow TI POSIX library to work (old versions of GCC included them).
+    $<$<COMPILE_LANGUAGE:C>:-std=gnu17> # Suppress POSIX files from GCC to allow TI POSIX library to work (old versions of GCC included them).
+    $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++23> # Suppress POSIX files from GCC to allow TI POSIX library to work (old versions of GCC included them).
     -mfloat-abi=hard
     -mfpu=fpv4-sp-d16
     -ffunction-sections

@@ -61,7 +61,7 @@ class PFBQueue {
         }
 
         // config_.buffer[tail_] = element;
-        memcpy(&config_.buffer[tail_], &element, sizeof(T));
+        memcpy((uint8_t *)(&config_.buffer[tail_]), (uint8_t *)(&element), sizeof(T));
         tail_ = IncrementIndex(tail_);
 
         if (tail_ == head_) {
@@ -81,7 +81,7 @@ class PFBQueue {
             return false;
         }
         // element = config_.buffer[head_];
-        memcpy(&element, &config_.buffer[head_], sizeof(T));
+        memcpy((uint8_t *)(&element), (uint8_t *)(&config_.buffer[head_]), sizeof(T));
         head_ = IncrementIndex(head_);
         is_full_ = false;
         return true;

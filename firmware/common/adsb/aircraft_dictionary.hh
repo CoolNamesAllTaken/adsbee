@@ -641,7 +641,7 @@ class AircraftDictionary {
         inline uint16_t ToJSON(char *buf, size_t buf_len) {
             uint16_t message_max_len = buf_len - 1;  // Leave space for null terminator.
             // Add aggregate 1090 stats.
-            uint16_t chars_written = snprintf(buf, message_max_len - strlen(buf),
+            uint16_t chars_written = snprintf(buf, message_max_len - strnlen(buf, kMetricsJSONMaxLen),
                                               "{ \"raw_squitter_frames\": %lu, \"valid_squitter_frames\": %lu, "
                                               "\"raw_extended_squitter_frames\": %lu, "
                                               "\"valid_extended_squitter_frames\": %lu, \"demods_1090\": %lu, ",

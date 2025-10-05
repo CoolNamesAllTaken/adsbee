@@ -246,9 +246,10 @@ extern const uint16_t at_command_list_num_commands;
 #define TEXT_COLOR_RESET            "\033[0m"
 
 #define CONSOLE_PRINTF(format, ...) comms_manager.console_printf(format __VA_OPT__(, ) __VA_ARGS__);
-#define CONSOLE_INFO(tag, format, ...)                                   \
-    comms_manager.console_level_printf(SettingsManager::LogLevel::kInfo, \
-                                       tag ": " format "\r\n" __VA_OPT__(, ) __VA_ARGS__);
+#define CONSOLE_INFO(tag, format, ...)                                                                         \
+    comms_manager.console_level_printf(SettingsManager::LogLevel::kInfo,                                       \
+                                       tag ": " TEXT_COLOR_GREEN format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) \
+                                           __VA_ARGS__);
 #define CONSOLE_WARNING(tag, format, ...)                                                                       \
     comms_manager.console_level_printf(SettingsManager::LogLevel::kWarnings,                                    \
                                        tag ": " TEXT_COLOR_YELLOW format TEXT_COLOR_RESET "\r\n" __VA_OPT__(, ) \

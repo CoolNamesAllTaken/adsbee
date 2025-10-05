@@ -33,7 +33,9 @@
 			"smartrf_settings.h": "c",
 			"init_rs.h": "c",
 			"rs-common.h": "c",
-			"semaphore.h": "c"
+			"semaphore.h": "c",
+			"temperature.h": "c",
+			"cstring": "cpp"
 		},
 		"C_Cpp.default.defines": [
 			"ON_TI",

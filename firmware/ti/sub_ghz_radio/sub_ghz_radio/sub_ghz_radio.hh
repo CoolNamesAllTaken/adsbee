@@ -52,9 +52,23 @@ public:
         CONSOLE_INFO("SubGHzRadio::SetBiasTeeEnable", "Bias tee %s", enabled ? "ENABLED" : "DISABLED");
         GPIO_write(bsp.kSubGBiasTeeEnablePin, !enabled);
     }
+    /**
+     * Begin the proprietary RF receive command.
+     * @retval True if command was posted successfully, false otherwise.
+     */
     bool StartPacketRx();
+
+    /**
+     * Starts a packet Rx if it hasn't been started and we are currently supposed to be receiving, plus some other housekeeping.
+     * @retval True if update succeeded, false otherwise.
+     */
     bool Update();
 
+    /**
+     * Handles a received packet from the RF core.
+     * @param filled_entry Pointer to the filled data entry from the RF core.
+     * @retval True if packet was handled successfully, false otherwise.
+     */
     bool HandlePacketRx(rfc_dataEntryPartial_t *filled_entry);
 
     bool rx_enabled = true;

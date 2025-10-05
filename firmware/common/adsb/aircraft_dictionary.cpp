@@ -283,7 +283,7 @@ bool ModeSAircraft::ApplySurfacePositionMessage(const ModeSADSBPacket &packet) {
                 break;
             default:
                 CONSOLE_WARNING("AircraftDictionary::ApplySurfacePositionMessage",
-                                "Unable to assign NIC with type_code %d and nic_bits %d for ICAO 0x%lx.",
+                                "Unable to assign NIC with type code %d and nic bits %d for ICAO 0x%lx.",
                                 packet.type_code, nic_bits, icao_address);
         }
     }
@@ -375,7 +375,7 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(const ModeSADSBPacket &packet, 
                         break;
                     default:
                         CONSOLE_WARNING("AircraftDictionary::ApplyAirbornePositionMessage",
-                                        "Unable to assign NIC with type_code %d and nic_bits %d for ICAO 0x%lx.",
+                                        "Unable to assign NIC with type code %d and nic bits %d for ICAO 0x%lx.",
                                         type_code, nic_bits, icao_address);
                 }
         }
@@ -1362,7 +1362,7 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket &packet) {
             break;
         default:
             CONSOLE_WARNING("AircraftDictionary::IngestModeSADSBPacket",
-                            "Received ADSB message with unsupported type_code %d for ICAO 0x%lx.", type_code,
+                            "Received ADSB message with unsupported type code %d for ICAO 0x%lx.", type_code,
                             packet.icao_address);
             ret = false;  // kTypeCodeInvalid, etc.
     }
@@ -1370,17 +1370,15 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket &packet) {
         aircraft_ptr->IncrementNumFramesReceived(true);  // Count the received Mode S frame.
     } else {
         CONSOLE_WARNING("AircraftDictionary::IngestModeSADSBPacket",
-                        "Failed to apply ADSB message with type_code %d to ICAO 0x%lx.", type_code,
+                        "Failed to apply ADSB message with type code %d to ICAO 0x%lx.", type_code,
                         packet.icao_address);
     }
     return ret;
 }
 
 bool AircraftDictionary::IngestDecodedUATADSBPacket(const DecodedUATADSBPacket &packet) {
-    // Check validity and record stats.
-    if (packet.is_valid) {
-        metrics_counter_.valid_uat_adsb_frames++;
-    } else {
+    // Check validity. We don't record stats since those are pulled from the Sub GHz radio device status directly.
+    if (!packet.is_valid) {
         CONSOLE_WARNING("AircraftDictionary::IngestDecodedUATADSBPacket", "Received invalid packet.");
         return false;
     }

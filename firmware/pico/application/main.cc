@@ -3,6 +3,7 @@
 #include "adsbee.hh"
 #include "comms.hh"
 #include "core1.hh"  // Functions for runningon core1.
+#include "cpu_utils.hh"
 #include "eeprom.hh"
 #include "esp32.hh"
 #include "esp32_flasher.hh"
@@ -25,11 +26,20 @@ const uint16_t kStatusLEDBootupBlinkPeriodMs = 200;
 const uint32_t kESP32BootupTimeoutMs = 10000;
 const uint32_t kESP32BootupCommsRetryMs = 500;
 
+const uint32_t kRP2040IdleTicksPerUpdateInterval =
+    125e3;  // Arbitrary, assume 1000 instructions per idle loop at 125MHz.
+const uint32_t kRP2040CPUMonitorUpdateIntervalMs = 1000;
+
 // Override default config params here.
 EEPROM eeprom = EEPROM({});
 // BSP gets configured differently if there is or isn't an EEPROM attached. Attempt to initialize the EEPROM to figure
 // out which board configuration we should load (settings in flash, or settings in EEPROM).
 BSP bsp = BSP(eeprom.Init());
+
+CPUMonitor core_0_monitor = CPUMonitor({.idle_ticks_per_update_interval = kRP2040IdleTicksPerUpdateInterval,
+                                        .update_interval_ms = kRP2040CPUMonitorUpdateIntervalMs});
+CPUMonitor core_1_monitor = CPUMonitor({.idle_ticks_per_update_interval = kRP2040IdleTicksPerUpdateInterval,
+                                        .update_interval_ms = kRP2040CPUMonitorUpdateIntervalMs});
 
 ADSBee adsbee = ADSBee({});
 CommsManager comms_manager = CommsManager({});
@@ -48,6 +58,9 @@ ModeSPacketDecoder decoder = ModeSPacketDecoder({.enable_1090_error_correction =
 
 int main() {
     bi_decl(bi_program_description("ADSBee 1090 ADSB Receiver"));
+
+    // Initialize the temperature sensor.
+    CPUMonitor::Init();
 
     // Initialize coprocessor SPI bus.
     // ESP32 SPI pins.
@@ -150,6 +163,10 @@ int main() {
 
     while (true) {
         // Loop forever.
+        core_0_monitor.Tick();
+        core_0_monitor.Update();
+        core_1_monitor.Update();
+
         decoder.UpdateLogLoop();
         comms_manager.Update();
         adsbee.Update();

@@ -30,17 +30,31 @@
 
 #cursor {
     display: inline-block;
-    width: 8px;
-    height: 15px;
     background: #ffffff;
     animation: blink 1s step-end infinite;
+    color: #000000;
+    min-width: 0.6em;
+    min-height: 1.2em;
     vertical-align: middle;
-    margin-left: 1px;
+}
+
+#cursor:before {
+    content: attr(data-char);
+    color: #000000;
 }
 
 @keyframes blink {
+
+    0%,
     50% {
-        opacity: 0;
+        background: #ffffff;
+        color: #000000;
+    }
+
+    51%,
+    100% {
+        background: #000000;
+        color: #ffffff;
     }
 }
 
@@ -61,18 +75,9 @@
     width: 0;
 }
 
-/* Metrics cards styling */
-#feed-metrics {
-    width: 100%;
+.metrics {
     display: block;
-}
-
-.metrics-container {
-    display: flex;
     flex-wrap: wrap;
-    gap: 2rem;
-    padding: 2rem;
-    background: #f8fafc;
     border-radius: 8px;
     font-family: Arial;
 }
@@ -84,7 +89,6 @@
     border-radius: 6px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     display: inline-block;
-    font-family: Arial;
 }
 
 .metrics-title {
@@ -107,6 +111,26 @@
     font-size: 1.5rem;
     font-weight: 600;
     color: #0f172a;
+}
+
+.device-status {
+    text-align: left;
+    display: block;
+}
+
+.device-status-cards {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.device-card {
+    background: white;
+    margin: 1rem;
+    padding: 1rem;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    display: inline-block;
+    min-width: 200px;
 }
 
 .sparkline {

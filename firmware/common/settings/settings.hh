@@ -2,13 +2,13 @@
 #define SETTINGS_HH_
 
 #include <cstdint>
-#include <cstring>     // for memset
 #include <functional>  // for strtoull
 
 #include "crc.hh"
 #include "macros.hh"
 #include "stdio.h"
 #include "stdlib.h"  // for strtoull
+#include "string.h"  // for memset
 #ifdef ON_PICO
 #include "pico/rand.h"
 #endif
@@ -86,7 +86,7 @@ class SettingsManager {
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a
     // firmware upgrade if the format of the settings struct changes.
     struct Settings {
-        static constexpr int kDefaultTLOffsetMV = 300;  // [mV]
+        static constexpr int kDefaultTLOffsetMV = 600;  // [mV]
         static constexpr uint32_t kDefaultWatchdogTimeoutSec = 10;
         // NOTE: Lengths do not include null terminator.
         static constexpr uint16_t kHostnameMaxLen = 32;
@@ -252,8 +252,8 @@ class SettingsManager {
             strncpy(feed_uris[kMaxNumFeeds - 4], "feed.whereplane.xyz", kFeedURIMaxNumChars);
             feed_uris[kMaxNumFeeds - 4][kFeedURIMaxNumChars] = '\0';
             feed_ports[kMaxNumFeeds - 4] = 30004;
-            feed_is_active[kMaxNumFeeds - 4] = false;
-            feed_protocols[kMaxNumFeeds - 4] = kBeastNoUAT;
+            feed_is_active[kMaxNumFeeds - 4] = true;
+            feed_protocols[kMaxNumFeeds - 4] = kBeast;
         }
     };
 
@@ -372,7 +372,7 @@ class SettingsManager {
      * end of the string. Not used for actually finding ther number of asterix to print.
      */
     static inline void RedactPassword(char *password_buf, char *redacted_password_buf, uint16_t buf_len) {
-        uint16_t password_len = MIN(strlen(password_buf), buf_len);
+        uint16_t password_len = MIN(strnlen(password_buf, buf_len), buf_len);
         memset(redacted_password_buf, '*', password_len);
         redacted_password_buf[password_len] = '\0';
     }

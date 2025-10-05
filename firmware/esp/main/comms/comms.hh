@@ -26,7 +26,7 @@ class CommsManager {
 
     // Reporting via the IP task is done by forwarding CompositeArray::RawPackets buffers from the ADSBeeServer task.
     // These buffers are put into a queue, which has its element size and number of elements set here.
-    static const uint16_t kReportingCompositeArrayQueueNumElements = 2;
+    static const uint16_t kReportingCompositeArrayQueueNumElements = 3;
 
     static const uint16_t kWiFiMessageQueueLen = 40;
     // Reconnect intervals must be long enough that we register an IP lost event before trying the reconnect, otherwise

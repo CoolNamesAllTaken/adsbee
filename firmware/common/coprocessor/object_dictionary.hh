@@ -8,6 +8,7 @@
 
 #include "composite_array.hh"
 #include "data_structures.hh"
+#include "hal.hh"
 #include "mode_s_packet.hh"
 #include "settings.hh"
 #include "stdint.h"
@@ -33,6 +34,7 @@ class ObjectDictionary {
     static constexpr uint16_t kNetworkConsoleMessageMaxLenBytes =
         4000;  // Maximum size of SCWritePacket (actually is a bit smaller due to headers).
     static constexpr uint16_t kLogMessageMaxNumChars = 500;
+    static constexpr uint16_t kLogMessageTagMaxNumChars = 20;
     static constexpr uint16_t kLogMessageQueueDepth = 10;
 
 #ifdef ON_COPRO_SLAVE
@@ -110,8 +112,21 @@ class ObjectDictionary {
         std::function<void()> complete_callback = nullptr;
     };
 
+    struct __attribute__((packed)) RP2040DeviceStatus {
+        uint32_t timestamp_ms = 0;
+        int8_t temperature_deg_c = 0;
+        uint8_t core_0_usage_percent = 0;
+        uint8_t core_1_usage_percent = 0;
+    };
+
     struct __attribute__((__packed__)) ESP32DeviceStatus {
         uint32_t timestamp_ms = 0;
+        int8_t temperature_deg_c = 0;
+        uint8_t core_0_usage_percent = 0;
+        uint8_t core_1_usage_percent = 0;
+        uint32_t heap_free_bytes = 0;
+        uint32_t heap_largest_free_block_bytes = 0;
+
         uint16_t num_queued_log_messages = 0;
         uint32_t queued_log_messages_packed_size_bytes = 0;
 
@@ -165,6 +180,9 @@ class ObjectDictionary {
 
     struct __attribute__((__packed__)) SubGHzDeviceStatus {
         uint32_t timestamp_ms = 0;  // Timestamp in milliseconds since boot.
+        uint8_t temperature_deg_c = 0;
+        uint8_t cpu_usage_percent = 0;
+
         uint16_t num_queued_log_messages = 0;
         uint32_t queued_log_messages_packed_size_bytes = 0;
 
@@ -177,6 +195,15 @@ class ObjectDictionary {
         uint16_t num_valid_uat_adsb_packets = 0;
         uint16_t num_raw_uat_uplink_packets = 0;
         uint16_t num_valid_uat_uplink_packets = 0;
+    };
+
+    /**
+     * Combination device status struct that allows the RP2040 device status and Sub-GHz device status to be written to
+     * the ESP32 simultaneously.
+     */
+    struct __attribute__((__packed__)) CompositeDeviceStatus {
+        RP2040DeviceStatus rp2040;
+        SubGHzDeviceStatus subg;
     };
 
     /**
@@ -235,6 +262,12 @@ class ObjectDictionary {
             .complete_callback = nullptr,
         });
     }
+
+    /**
+     * Updates the device status struct with the latest information. Called when the object dictionary is read from at
+     * kAddrDeviceStatus, or when other functions want to refresh the device status before borrowing it for other uses.
+     */
+    void UpdateDeviceStatus();
 #endif
 
     /**
@@ -283,6 +316,8 @@ class ObjectDictionary {
             false  // We don't want to overwrite network console messages, since they could be importatnt.
     });
     SemaphoreHandle_t network_console_rx_queue_mutex = xSemaphoreCreateMutex();
+    CompositeDeviceStatus composite_device_status = {};
+    ESP32DeviceStatus device_status = {};
 #elif defined(ON_TI)
     PFBQueue<RawUATADSBPacket> raw_uat_adsb_packet_queue =
         PFBQueue<RawUATADSBPacket>({.buf_len_num_elements = kDecodedUATADSBPacketQueueDepth,
@@ -300,6 +335,7 @@ class ObjectDictionary {
         uint16_t num_valid_uat_uplink_packets = 0;
     };
     SubGHzRadioMetrics metrics = {0};
+    SubGHzDeviceStatus device_status = {};
 #endif
 
    private:

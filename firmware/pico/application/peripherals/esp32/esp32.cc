@@ -1,6 +1,11 @@
 #include "esp32.hh"
 
+#include "adsbee.hh"  // Get access to the Sub-GHz radio for its status.
+#include "cpu_utils.hh"
 #include "hal.hh"
+
+extern CPUMonitor core_0_monitor;
+extern CPUMonitor core_1_monitor;
 
 ESP32::ESP32(ESP32Config config_in) : config_(config_in) {}
 
@@ -102,6 +107,23 @@ bool ESP32::Update() {
         }
         // Successfully read console message from ESP32.
     }
+
+    // Send the RP2040's status to the ESP32.
+    ObjectDictionary::CompositeDeviceStatus composite_status = {
+        .rp2040 =
+            {
+                .timestamp_ms = get_time_since_boot_ms(),
+                .temperature_deg_c = (int8_t)(core_0_monitor.ReadTemperatureDegC()),
+                .core_0_usage_percent = core_0_monitor.GetUsagePercent(),
+                .core_1_usage_percent = core_1_monitor.GetUsagePercent(),
+            },
+        .subg = adsbee.subg_radio_ll.device_status,
+    };
+    if (!esp32.Write(ObjectDictionary::Address::kAddrDeviceStatus, composite_status, true)) {
+        CONSOLE_ERROR("ESP32::Update", "Unable to write RP2040 and SubGHz radio device status to ESP32.");
+        return false;
+    }
+
     last_update_timestamp_ms_ = get_time_since_boot_ms();
     return true;
 }

@@ -72,7 +72,8 @@ RawModeSPacket::RawModeSPacket(char *rx_string, int16_t source_in, int16_t sigs_
       sigs_dbm(sigs_dbm_in),
       sigq_db(sigq_db_in),
       mlat_48mhz_64bit_counts(mlat_48mhz_64bit_counts_in) {
-    uint16_t rx_num_bytes = strlen(rx_string) / NIBBLES_PER_BYTE;
+    uint16_t rx_num_bytes =
+        strnlen(rx_string, kMaxPacketLenWords32 * BYTES_PER_WORD_32 * kNibblesPerByte) / NIBBLES_PER_BYTE;
     for (uint16_t i = 0; i < rx_num_bytes && i < kMaxPacketLenWords32 * BYTES_PER_WORD_32; i++) {
         uint8_t byte = (CHAR_TO_HEX(rx_string[i * NIBBLES_PER_BYTE]) << BITS_PER_NIBBLE) |
                        CHAR_TO_HEX(rx_string[i * NIBBLES_PER_BYTE + 1]);

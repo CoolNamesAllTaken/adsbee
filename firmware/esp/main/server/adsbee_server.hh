@@ -66,6 +66,11 @@ class ADSBeeServer {
     bool ReportGDL90();
 
     /**
+     * Broadcasts metrics message to all connected network metrics websocket clients.
+     */
+    void SendNetworkMetricsMessage();
+
+    /**
      * Sets up the TCPServerTask as well as the WebSocket handlers and HTTP server.
      */
     bool TCPServerInit();

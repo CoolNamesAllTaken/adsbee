@@ -2,6 +2,7 @@
 <html>
 
 <head>
+    <meta charset="UTF-8">
     <title>ADSBee Web Terminal</title>
     <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/png" href="favicon.png">
@@ -13,14 +14,14 @@
             <div id="terminal-content"></div>
             <div class="input-line">
                 <span class="prompt">&gt;</span>
-                <span id="current-line"></span>
-                <span id="cursor"></span>
+                <span id="current-line"><span id="cursor"> </span></span>
+                <!-- <span id="cursor"></span> -->
             </div>
             <input type="text" class="hidden-input" id="hidden-input" autocomplete="off">
         </div>
 
-        <div id="metrics-container" class="column-element">
-            <div id="status" class="connection-status disconnected">Disconnected</div>
+        <div id="status" class="connection-status disconnected">Disconnected</div>
+        <div id="metrics-container" class="column-element metrics">
             <div id="receiver-metrics-container">
                 <div class="metrics-header">Receiver Metrics</div>
                 <!-- Cards will be dynamically inserted here -->
@@ -28,6 +29,12 @@
             <div id="feed-metrics-container">
                 <div id="feed-count" class="metrics-header">Feeds: 0</div>
                 <!-- Cards will be dynamically inserted here -->
+            </div>
+            <div id="device-status-container" class="device-status">
+                <div class="metrics-header">Device Status</div>
+                <div id="device-status-cards-container" class="device-status-cards">
+                    <!-- Device status cards will be dynamically inserted here -->
+                </div>
             </div>
         </div>
 
@@ -86,6 +93,7 @@
         let commandHistory = [];
         let historyIndex = -1;
         let currentCommand = '';
+        let cursorPosition = 0;
 
         class ConsoleWebSocket {
             constructor(url) {
@@ -183,12 +191,58 @@
         }
 
         function appendToTerminal(text) {
-            terminalContent.textContent += text;
+            // Process ANSI escape sequences for colors
+            const ansiRegex = /\x1b\[([0-9;]*)m/g;
+            let processedText = text;
+            let lastIndex = 0;
+            let result = '';
+
+            let match;
+            while ((match = ansiRegex.exec(text)) !== null) {
+                // Add text before the escape sequence
+                result += text.slice(lastIndex, match.index);
+
+                const codes = match[1].split(';').map(code => parseInt(code) || 0);
+
+                // Handle color codes
+                for (const code of codes) {
+                    if (code === 0) {
+                        // Reset - close any open spans
+                        result += '</span>';
+                    } else if (code >= 30 && code <= 37) {
+                        // Foreground colors
+                        const colors = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'];
+                        result += `<span style="color: ${colors[code - 30]}">`;
+                    } else if (code >= 90 && code <= 97) {
+                        // Bright foreground colors
+                        const brightColors = ['gray', 'lightcoral', 'lightgreen', 'lightyellow', 'lightblue', 'lightpink', 'lightcyan', 'white'];
+                        result += `<span style="color: ${brightColors[code - 90]}">`;
+                    }
+                }
+
+                lastIndex = ansiRegex.lastIndex;
+            }
+
+            // Add remaining text
+            result += text.slice(lastIndex);
+            processedText = result;
+
+            terminalContent.innerHTML += processedText;
             terminal.scrollTop = terminal.scrollHeight;
         }
 
         function focusTerminal() {
             hiddenInput.focus();
+        }
+
+        function updateDisplay() {
+            const beforeCursor = currentCommand.substring(0, cursorPosition);
+            const afterCursor = currentCommand.substring(cursorPosition);
+            if (afterCursor.length > 0) {
+                currentLine.innerHTML = beforeCursor + '<span id="cursor">' + afterCursor[0] + '</span>' + afterCursor.slice(1);
+            } else {
+                currentLine.innerHTML = beforeCursor + '<span id="cursor"> </span>';
+            }
         }
 
         function handleCommand(command) {
@@ -201,13 +255,31 @@
             }
             currentLine.textContent = '';
             currentCommand = '';
+            cursorPosition = 0;
             hiddenInput.value = '';
+            updateDisplay();
         }
 
         hiddenInput.addEventListener('input', (e) => {
-            currentCommand = hiddenInput.value;
-            currentLine.textContent = currentCommand;
+            const inputValue = hiddenInput.value;
+            const inputLength = inputValue.length;
+            const commandLength = currentCommand.length;
+
+            if (inputLength > commandLength) {
+                // Character was added
+                const newChar = inputValue[inputLength - 1];
+                currentCommand = currentCommand.substring(0, cursorPosition) + newChar + currentCommand.substring(cursorPosition);
+                cursorPosition++;
+            } else if (inputLength < commandLength) {
+                // Character was deleted (backspace)
+                if (cursorPosition > 0) {
+                    currentCommand = currentCommand.substring(0, cursorPosition - 1) + currentCommand.substring(cursorPosition);
+                    cursorPosition--;
+                }
+            }
+
             hiddenInput.value = currentCommand;
+            updateDisplay();
         });
 
         hiddenInput.addEventListener('keydown', (e) => {
@@ -221,8 +293,9 @@
                     if (historyIndex > 0) {
                         historyIndex--;
                         currentCommand = commandHistory[historyIndex];
-                        currentLine.textContent = currentCommand;
+                        cursorPosition = currentCommand.length;
                         hiddenInput.value = currentCommand;
+                        updateDisplay();
                     }
                     break;
                 case 'ArrowDown':
@@ -234,8 +307,41 @@
                         historyIndex = commandHistory.length;
                         currentCommand = '';
                     }
-                    currentLine.textContent = currentCommand;
+                    cursorPosition = currentCommand.length;
                     hiddenInput.value = currentCommand;
+                    updateDisplay();
+                    break;
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    if (cursorPosition > 0) {
+                        cursorPosition--;
+                        updateDisplay();
+                    }
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    if (cursorPosition < currentCommand.length) {
+                        cursorPosition++;
+                        updateDisplay();
+                    }
+                    break;
+                case 'Home':
+                    e.preventDefault();
+                    cursorPosition = 0;
+                    updateDisplay();
+                    break;
+                case 'End':
+                    e.preventDefault();
+                    cursorPosition = currentCommand.length;
+                    updateDisplay();
+                    break;
+                case 'Delete':
+                    e.preventDefault();
+                    if (cursorPosition < currentCommand.length) {
+                        currentCommand = currentCommand.substring(0, cursorPosition) + currentCommand.substring(cursorPosition + 1);
+                        hiddenInput.value = currentCommand;
+                        updateDisplay();
+                    }
                     break;
                 case 'Tab':
                     e.preventDefault();
@@ -256,9 +362,10 @@
         document.addEventListener('paste', (e) => {
             e.preventDefault();
             const paste = e.clipboardData.getData('text');
-            currentCommand += paste;
-            currentLine.textContent = currentCommand;
+            currentCommand = currentCommand.substring(0, cursorPosition) + paste + currentCommand.substring(cursorPosition);
+            cursorPosition += paste.length;
             hiddenInput.value = currentCommand;
+            updateDisplay();
         });
 
         // Keep cursor blinking when window is inactive
@@ -366,8 +473,6 @@
                 this.container = document.getElementById('metrics-container');
             }
 
-
-
             updateMetricsCards(parentLabel, data) {
                 // Remove charts that are no longer in the data
                 Object.keys(this.cards[parentLabel]).forEach(label => {
@@ -380,9 +485,57 @@
                 Object.entries(data).forEach(([label, value]) => {
                     if (!this.cards[parentLabel][label]) {
                         this.cards[parentLabel][label] = new MetricCard(document.getElementById(`${parentLabel}-metrics-container`), label);
-                        // this.createMetricCard(parentLabel, label);
                     }
                     this.cards[parentLabel][label].update(value);
+                });
+            }
+
+            updateDeviceStatus(deviceStatus) {
+                const container = document.getElementById('device-status-cards-container');
+
+                // Clear existing content
+                container.innerHTML = '';
+
+                // Create cards for each device
+                Object.entries(deviceStatus).forEach(([deviceName, status]) => {
+                    const card = document.createElement('div');
+                    card.className = 'device-status-card';
+
+                    let statusHtml = `<div class="device-card">
+                                        <div class="device-status-title">${deviceName.toUpperCase()}</div>`;
+
+                    // Add status information
+                    Object.entries(status).forEach(([key, value]) => {
+                        let displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                        let displayValue = value;
+
+                        // Format specific values
+                        if (key.includes('uptime_ms')) {
+                            displayKey = 'Uptime';
+                            displayValue = `${Math.floor(value / 1000)}s`;
+                        } else if (key.includes('temperature')) {
+                            displayKey = 'Temperature';
+                            displayValue = `${value}°C`;
+                        } else if (key.includes('usage_percent')) {
+                            displayKey = displayKey.replace(' Percent', '');
+                            displayValue = `${value}%`;
+                        } else if (key.includes('heap_free_bytes')) {
+                            displayKey = 'Free Heap';
+                            displayValue = `${value} B`;
+                        } else if (key.includes('heap_largest_free_block_bytes')) {
+                            displayKey = 'Largest Free Block';
+                            displayValue = `${value} B`;
+                        }
+
+                        statusHtml += `<div class="status-item">
+                                            <span class="status-key">${displayKey}:</span>
+                                            <span class="status-value">${displayValue}</span>
+                                        </div>`;
+                    });
+                    statusHtml += `</div>`;
+
+                    card.innerHTML = statusHtml;
+                    container.appendChild(card);
                 });
             }
 
@@ -433,6 +586,11 @@
                             this.updateMetricsCards('feed', feedMetrics);
                             // Update labels count
                             this.feedsCountEl.textContent = `Feeds: ${Object.keys(feedMetrics).length}`;
+                        }
+                        if (data.hasOwnProperty('device_status')) {
+                            const deviceStatus = data['device_status'];
+                            // console.log('Device Status:', deviceStatus);
+                            this.updateDeviceStatus(deviceStatus);
                         }
                     } catch (error) {
                         console.error('Error parsing WebSocket message:', error);
