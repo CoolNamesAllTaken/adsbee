@@ -29,7 +29,7 @@
 #include "task_priorities.hh"
 
 #define HARDWARE_UNIT_TESTS
-#define PRINT_HEAP_USAGE
+// #define PRINT_HEAP_USAGE
 
 static const uint32_t kHeapUsagePrintIntervalMs = 100;
 static const uint32_t kDeviceStatusUpdateIntervalMs = 1000;
@@ -54,7 +54,11 @@ void device_status_update_task(void *pvParameters) {
     while (1) {
         cpu_monitor.ReadCPUUsage(object_dictionary.device_status.core_0_usage_percent,
                                  object_dictionary.device_status.core_1_usage_percent);
-        // object_dictionary.device_status.temperature_deg_c = CPUMonitor::ReadTemperatureDegC();
+        object_dictionary.device_status.temperature_deg_c = CPUMonitor::ReadTemperatureDegC();
+        object_dictionary.device_status.heap_free_bytes = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+        object_dictionary.device_status.heap_largest_free_block_bytes =
+            heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+
         vTaskDelay(pdMS_TO_TICKS(kDeviceStatusUpdateIntervalMs));  // Delay 1 second.
     }
 }

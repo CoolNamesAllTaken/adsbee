@@ -124,7 +124,8 @@ class ObjectDictionary {
         int8_t temperature_deg_c = 0;
         uint8_t core_0_usage_percent = 0;
         uint8_t core_1_usage_percent = 0;
-        uint32_t free_heap_bytes = 0;
+        uint32_t heap_free_bytes = 0;
+        uint32_t heap_largest_free_block_bytes = 0;
 
         uint16_t num_queued_log_messages = 0;
         uint32_t queued_log_messages_packed_size_bytes = 0;

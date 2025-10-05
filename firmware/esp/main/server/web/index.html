@@ -2,6 +2,7 @@
 <html>
 
 <head>
+    <meta charset="UTF-8">
     <title>ADSBee Web Terminal</title>
     <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/png" href="favicon.png">
@@ -70,8 +71,8 @@
     </div>
 
     <script>
-        // const HOST_URI = `${window.location.hostname}`;
-        const HOST_URI = "testbee.local";
+        const HOST_URI = `${window.location.hostname}`;
+        // const HOST_URI = "testbee.local";
         const WS_CONFIG = {
             console_ws_url: `ws://${HOST_URI}/console`,
             metrics_ws_url: `ws://${HOST_URI}/metrics`,
@@ -518,6 +519,12 @@
                         } else if (key.includes('usage_percent')) {
                             displayKey = displayKey.replace(' Percent', '');
                             displayValue = `${value}%`;
+                        } else if (key.includes('heap_free_bytes')) {
+                            displayKey = 'Free Heap';
+                            displayValue = `${value} B`;
+                        } else if (key.includes('heap_largest_free_block_bytes')) {
+                            displayKey = 'Largest Free Block';
+                            displayValue = `${value} B`;
                         }
 
                         statusHtml += `<div class="status-item">

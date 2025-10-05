@@ -12,7 +12,7 @@ void CPUMonitor::Init() {
     Temperature_init();
 #elif defined(ON_ESP32)
     temperature_sensor_config_t temp_sensor_config = {
-        .range_min = -40, .range_max = 125, .clk_src = TEMPERATURE_SENSOR_CLK_SRC_DEFAULT, .flags = {.allow_pd = 0}
+        .range_min = 50, .range_max = 125, .clk_src = TEMPERATURE_SENSOR_CLK_SRC_DEFAULT, .flags = {.allow_pd = 0}
         // Do not allow power down in light sleep.
     };
     if (temperature_sensor_install(&temp_sensor_config, &temp_sensor_handle_) == ESP_OK) {

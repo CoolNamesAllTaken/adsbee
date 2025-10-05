@@ -32,9 +32,9 @@ TemperatureCC26X2_Config TemperatureCC26X2_config = {
 
 BSP bsp;
 CPUMonitor user_core_monitor = CPUMonitor({
-    .idle_ticks_per_update_interval = 48000,  // Arbitrary, assume 1000 instructions per idle loop at 48MHz.
-    .full_usage_update_frequency_hz = 100,    // Minimum 100Hz update rate.
-    .update_interval_ms = 1000                // Update stats every second.
+    .idle_ticks_per_update_interval = 480000,  // Arbitrary, assume 100 instructions per idle loop at 48MHz.
+    .full_usage_update_frequency_hz = 100,     // Minimum 100Hz update rate.
+    .update_interval_ms = 1000                 // Update stats every second.
 });
 ObjectDictionary object_dictionary;
 Pico pico_ll = Pico({});

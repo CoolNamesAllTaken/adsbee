@@ -247,10 +247,10 @@ bool CommsManager::WiFiDeInit() {
 
 bool CommsManager::IPWANSendRawPacketCompositeArray(uint8_t* raw_packets_buf) {
     if (!comms_manager.HasIP()) {
-        CONSOLE_WARNING(
-            "CommsManager::IPWANSendRawPacketCompositeArray",
-            "Can't push to WAN raw packet composite array queue if WiFi station is not running and Ethernet is "
-            "disconnected.");
+        // CONSOLE_WARNING(
+        //     "CommsManager::IPWANSendRawPacketCompositeArray",
+        //     "Can't push to WAN raw packet composite array queue if WiFi station is not running and Ethernet is "
+        //     "disconnected.");
         return false;  // Task not started yet, queue not created yet. Pushing to queue would cause an abort.
     }
     int err = xQueueSend(ip_wan_reporting_composite_array_queue_, raw_packets_buf,

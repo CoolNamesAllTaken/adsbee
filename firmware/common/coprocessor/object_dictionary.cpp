@@ -15,7 +15,7 @@ const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
 const uint8_t ObjectDictionary::kFirmwareVersionMinor = 9;
 const uint8_t ObjectDictionary::kFirmwareVersionPatch = 0;
 // NOTE: Indicate a final release with RC = 0.
-const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 1;
+const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 2;
 
 const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24) | (kFirmwareVersionMinor << 16) |
                                                     (kFirmwareVersionPatch << 8) | kFirmwareVersionReleaseCandidate;
@@ -322,7 +322,6 @@ void ObjectDictionary::UpdateDeviceStatus() {
         static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize);
     device_status.num_queued_sc_command_requests = sc_command_request_queue.Length();
     device_status.num_queued_network_console_rx_chars = num_network_console_rx_chars;
-
 #elif defined(ON_TI)
     device_status = {
         .timestamp_ms = get_time_since_boot_ms(),

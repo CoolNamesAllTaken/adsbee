@@ -15,7 +15,6 @@ static const uint16_t kGDL90Port = 4000;
 
 static const uint16_t kNetworkConsoleWelcomeMessageMaxLen = 1000;
 static const uint16_t kNetworkMetricsMessageMaxLen = 1500;
-static const uint16_t kNumTransponderPacketSources = 3;
 
 /* obsolete */
 static const uint16_t kNetworkControlPort = 3333;  // NOTE: This must match the port number used in index.html!
@@ -537,9 +536,12 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              ", \"esp32\": { \"uptime_ms\": %lu, \"core_0_usage_percent\": %u, "
-             "\"core_1_usage_percent\": %u, \"temperature_deg_c\": %d }",
+             "\"core_1_usage_percent\": %u, \"temperature_deg_c\": %d, \"heap_free_bytes\": %lu, "
+             "\"heap_largest_free_block_bytes\": %lu }",
              object_dictionary.device_status.timestamp_ms, object_dictionary.device_status.core_0_usage_percent,
-             object_dictionary.device_status.core_1_usage_percent, object_dictionary.device_status.temperature_deg_c);
+             object_dictionary.device_status.core_1_usage_percent, object_dictionary.device_status.temperature_deg_c,
+             object_dictionary.device_status.heap_free_bytes,
+             object_dictionary.device_status.heap_largest_free_block_bytes);
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen), " }}\n");
 
