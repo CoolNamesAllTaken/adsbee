@@ -1377,10 +1377,8 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket &packet) {
 }
 
 bool AircraftDictionary::IngestDecodedUATADSBPacket(const DecodedUATADSBPacket &packet) {
-    // Check validity and record stats.
-    if (packet.is_valid) {
-        metrics_counter_.valid_uat_adsb_frames++;
-    } else {
+    // Check validity. We don't record stats since those are pulled from the Sub GHz radio device status directly.
+    if (!packet.is_valid) {
         CONSOLE_WARNING("AircraftDictionary::IngestDecodedUATADSBPacket", "Received invalid packet.");
         return false;
     }
