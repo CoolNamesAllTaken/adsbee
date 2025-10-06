@@ -191,7 +191,7 @@ bool CommsManager::WiFiInit() {
         strncpy((char*)(wifi_config_ap.ap.password), wifi_ap_password,
                 SettingsManager::Settings::kWiFiPasswordMaxLen + 1);
         wifi_config_ap.ap.channel = wifi_ap_channel;
-        wifi_config_ap.ap.ssid_len = (uint8_t)strlen(wifi_ap_ssid);
+        wifi_config_ap.ap.ssid_len = (uint8_t)strnlen(wifi_ap_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen);
         if (strnlen(wifi_ap_password, SettingsManager::Settings::kWiFiPasswordMaxLen) == 0) {
             wifi_config_ap.ap.authmode = WIFI_AUTH_OPEN;
         } else {
