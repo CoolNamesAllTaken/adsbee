@@ -95,9 +95,9 @@ void SettingsManager::PrintAT() {
     // AT+LOG_LEVEL
     CONSOLE_PRINTF("AT+LOG_LEVEL=%s\r\n", kConsoleLogLevelStrs[settings.log_level]);
 
-    // AT+PROTOCOL
+    // AT+PROTOCOL_OUT
     for (uint16_t i = 0; i < SerialInterface::kGNSSUART; i++) {
-        CONSOLE_PRINTF("AT+PROTOCOL=%s,%s\r\n", kSerialInterfaceStrs[i],
+        CONSOLE_PRINTF("AT+PROTOCOL_OUT=%s,%s\r\n", kSerialInterfaceStrs[i],
                        kReportingProtocolStrs[settings.reporting_protocols[i]]);
     }
 
@@ -107,8 +107,8 @@ void SettingsManager::PrintAT() {
     // AT+SUBG_ENABLE
     CONSOLE_PRINTF("AT+SUBG_ENABLE=%s\r\n", SettingsManager::EnableStateToATValueStr(settings.subg_enabled));
 
-    // AT+TL_SET
-    CONSOLE_PRINTF("AT+TL_SET=%u\r\n", settings.tl_offset_mv);
+    // AT+TL_OFFSET
+    CONSOLE_PRINTF("AT+TL_OFFSET=%u\r\n", settings.tl_offset_mv);
 
     // AT+WATCHDOG
     CONSOLE_PRINTF("AT+WATCHDOG=%lu\r\n", settings.watchdog_timeout_sec);

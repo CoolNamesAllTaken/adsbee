@@ -76,8 +76,8 @@ bool CommsManager::IPInit() {
     ip_event_handler_was_initialized_ = true;
 
     // IP WAN task needs extra stack space to allow it to dequeue CompositeArray::RawPackets buffers.
-    xTaskCreatePinnedToCore(ip_wan_task, "ip_wan_task", 2 * 4096 + CompositeArray::RawPackets::kMaxLenBytes,
-                            &ip_wan_task_handle, kIPWANTaskPriority, NULL, kIPWANTaskCore);
+    xTaskCreate(ip_wan_task, "ip_wan_task", 2 * 4096 + CompositeArray::RawPackets::kMaxLenBytes, &ip_wan_task_handle,
+                kIPWANTaskPriority, NULL);
 
     // Initialize mDNS service.
     esp_err_t err = mdns_init();

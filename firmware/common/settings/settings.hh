@@ -389,11 +389,9 @@ class SettingsManager {
      * @param[in] buf Buffer to write receiver ID string to. Must be at least 17 chars (including null terminator).
      */
     static inline void ReceiverIDToStr(uint8_t *receiver_id, char *buf) {
-        for (int16_t i = 0; i < SettingsManager::Settings::kFeedReceiverIDNumBytes; i++) {
-            snprintf(buf, 2 * SettingsManager::Settings::kFeedReceiverIDNumBytes, "%02x%02x%02x%02x%02x%02x%02x%02x",
-                     receiver_id[0], receiver_id[1], receiver_id[2], receiver_id[3], receiver_id[4], receiver_id[5],
-                     receiver_id[6], receiver_id[7]);
-        }
+        snprintf(buf, 2 * SettingsManager::Settings::kFeedReceiverIDNumBytes + 1, "%02x%02x%02x%02x%02x%02x%02x%02x",
+                 receiver_id[0], receiver_id[1], receiver_id[2], receiver_id[3], receiver_id[4], receiver_id[5],
+                 receiver_id[6], receiver_id[7]);
     }
 
     /**

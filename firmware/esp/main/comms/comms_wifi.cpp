@@ -223,8 +223,7 @@ bool CommsManager::WiFiInit() {
 
     if (wifi_ap_enabled) {
         CONSOLE_INFO("CommsManager::WiFiInit", "WiFi AP started. SSID:%s password:%s", wifi_ap_ssid, wifi_ap_password);
-        xTaskCreatePinnedToCore(wifi_access_point_task, "wifi_ap_task", 2 * 4096, &wifi_ap_task_handle,
-                                kWiFiAPTaskPriority, NULL, kWiFiAPTaskCore);
+        xTaskCreate(wifi_access_point_task, "wifi_ap_task", 2 * 4096, &wifi_ap_task_handle, kWiFiAPTaskPriority, NULL);
     }
     if (wifi_sta_enabled) {
         char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen];
