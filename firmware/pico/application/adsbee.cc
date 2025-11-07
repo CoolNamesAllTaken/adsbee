@@ -28,7 +28,8 @@
 // Uncomment this to hold the status LED on for 5 seconds if the watchdog commanded a reboot.
 // #define WATCHDOG_REBOOT_WARNING
 
-#define MLAT_SYSTEM_CLOCK_RATIO 48 / 125
+#define ADC_COUNTS_TO_MV(adc_counts) ((adc_counts) * kVDDMV / 4095)
+#define MLAT_SYSTEM_CLOCK_RATIO      48 / 125
 // Scales 125MHz system clock into a 48MHz counter.
 static const uint32_t kMLATWrapCounterIncrement = (1 << 24) * MLAT_SYSTEM_CLOCK_RATIO;
 static constexpr float kMLATSystemClockDiv = 125.0f / 48.0f;  // Ratio of 48MHz MLAT clock to 125MHz system clock.
@@ -40,7 +41,7 @@ static const uint16_t kPreambleDetectorFIFODepthWords = 4;
 
 constexpr float kInt16MaxRecip = 1.0f / INT16_MAX;
 
-ADSBee *isr_access = nullptr;
+ADSBee* isr_access = nullptr;
 
 /** Begin pass-through functions for public access **/
 void __time_critical_func(on_systick_exception)() { isr_access->OnSysTickWrap(); }
@@ -224,18 +225,19 @@ void ADSBee::OnDemodComplete() {
         if (!pio_interrupt_get(config_.preamble_detector_pio, sm_index)) {
             continue;
         }
-        pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], false);
+        // pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], false);
         // Read the RSSI level of the current packet.
-        rx_packet_[sm_index].sigs_dbm = ReadSignalStrengthdBm();
+        rx_packet_[sm_index].sigs_dbm = ReadSignalStrengthdBmBlocking();
         rx_packet_[sm_index].sigq_db = rx_packet_[sm_index].sigs_dbm - GetNoiseFloordBm();
         rx_packet_[sm_index].source = sm_index;  // Record this state machine as the source of the packet.
         // Get the difference between the beginning of the demodulation period and the first FIFO push. The FIFO push
         // does not have jitter relative to the preamble but needs to be anchored to a full 24-bit timer value, since
         // it's from a 16-bit PWM peripheral.
-        uint16_t &a = mlat_jitter_counts_on_fifo_pull_[sm_index];
-        uint16_t &b = mlat_jitter_counts_on_demod_begin_[sm_index];
+        uint16_t& a = mlat_jitter_counts_on_fifo_pull_[sm_index];
+        uint16_t& b = mlat_jitter_counts_on_demod_begin_[sm_index];
         uint16_t mlat_jitter_correction = b >= a ? b - a : (0xFFFF - a) + b;
         rx_packet_[sm_index].mlat_48mhz_64bit_counts -= mlat_jitter_correction;
+
         if (!pio_sm_is_rx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
             // Enqueue any partially complete 32-bit word onto the RX FIFO.
             pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
@@ -243,7 +245,7 @@ void ADSBee::OnDemodComplete() {
         }
 
         // Clear the transponder packet buffer.
-        memset((void *)rx_packet_[sm_index].buffer, 0x0, RawModeSPacket::kMaxPacketLenWords32);
+        memset((void*)rx_packet_[sm_index].buffer, 0x0, RawModeSPacket::kMaxPacketLenWords32);
 
         // Pull all words out of the RX FIFO.
         volatile uint16_t packet_num_words =
@@ -346,13 +348,26 @@ void ADSBee::OnDemodComplete() {
 
 void __time_critical_func(ADSBee::OnSysTickWrap)() { mlat_counter_wraps_ += kMLATWrapCounterIncrement; }
 
-int ADSBee::ReadSignalStrengthMilliVolts() {
+int ADSBee::ReadSignalStrengthMilliVoltsBlocking() {
     adc_select_input(config_.rssi_adc_input);
     int rssi_adc_counts = adc_read();
-    return rssi_adc_counts * 3300 / 4095;
+    return ADC_COUNTS_TO_MV(rssi_adc_counts);
 }
 
-int ADSBee::ReadSignalStrengthdBm() { return AD8313MilliVoltsTodBm(ReadSignalStrengthMilliVolts()); }
+void ADSBee::ReadSignalStrengthMilliVoltsNonBlockingBegin() {
+    adc_select_input(config_.rssi_adc_input);
+    hw_set_bits(&adc_hw->cs, ADC_CS_START_ONCE_BITS);
+}
+
+int ADSBee::ReadSignalStrengthMilliVoltsNonBlockingComplete() {
+    while (!(adc_hw->cs & ADC_CS_READY_BITS)) {
+        // Wait for conversion to complete.
+    }
+    int rssi_adc_counts = adc_hw->result;
+    return ADC_COUNTS_TO_MV(rssi_adc_counts);
+}
+
+int ADSBee::ReadSignalStrengthdBmBlocking() { return AD8313MilliVoltsTodBm(ReadSignalStrengthMilliVoltsBlocking()); }
 
 int ADSBee::ReadTLMilliVolts() {
     // Read back the low level TL bias output voltage.
@@ -632,7 +647,7 @@ void ADSBee::UpdateNoiseFloor() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
     if (timestamp_ms - noise_floor_last_sample_timestamp_ms_ > kNoiseFloorADCSampleIntervalMs) {
         noise_floor_mv_ = ((noise_floor_mv_ * kNoiseFloorExpoFilterPercent) +
-                           ReadSignalStrengthMilliVolts() * (100 - kNoiseFloorExpoFilterPercent)) /
+                           ReadSignalStrengthMilliVoltsBlocking() * (100 - kNoiseFloorExpoFilterPercent)) /
                           100;
         noise_floor_last_sample_timestamp_ms_ = timestamp_ms;
 

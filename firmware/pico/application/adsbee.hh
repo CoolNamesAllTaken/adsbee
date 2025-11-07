@@ -214,14 +214,29 @@ class ADSBee {
      * in mV.
      * @retval Voltage from the RF power detector, in mV.
      */
-    inline int ReadSignalStrengthMilliVolts();
+    inline int ReadSignalStrengthMilliVoltsBlocking();
+
+    /**
+     * Begins an ADC read of the Receive Signal Strength Indicator (RSSI) of the signal currently provided by the RF
+     * power detector, in mV. Non-blocking; must call ReadSignalStrengthMilliVoltsNonBlockingComplete() to complete the
+     * read. Ideally a bunch of other operations can be staged between begin and end to utilize the ADC read time.
+     */
+    inline void ReadSignalStrengthMilliVoltsNonBlockingBegin();
+
+    /**
+     * Completes a non-blocking ADC read of the Receive Signal Strength Indicator (RSSI) of the signal currently
+     * provided by the RF power detector, in mV. Must be called after ReadSignalStrengthMilliVoltsNonBlockingBegin().
+     * NOTE: This function blocks until the ADC read is complete.
+     * @retval Voltage from the RF power detector, in mV.
+     */
+    inline int ReadSignalStrengthMilliVoltsNonBlockingComplete();
 
     /**
      * Returns the Receive Signal Strength Indicator (RSSI) of the message that is currently being provided by the RF
      * power detector, in dBm. makes use of ReadSignalStrengthMilliVolts().
      * @retval Voltage form the RF power detector converted to dBm using the chart in the AD8313 datasheet.
      */
-    inline int ReadSignalStrengthdBm();
+    inline int ReadSignalStrengthdBmBlocking();
 
     /**
      * Read the low Minimum Trigger Level threshold via ADC.
