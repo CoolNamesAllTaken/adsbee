@@ -218,16 +218,19 @@ void __time_critical_func(ADSBee::OnDemodBegin)(uint gpio) {
     // Demodulation period is beginning! Store the MLAT counter.
     mlat_jitter_counts_on_demod_begin_[sm_index] = mlat_jitter_counts_now;
     rx_packet_[sm_index].mlat_48mhz_64bit_counts = mlat_48mhz_64bit_counts;  // Save this to modify later.
+
+    ReadSignalStrengthMilliVoltsNonBlockingBegin();  // Kick off ADC read.
 }
 
 void ADSBee::OnDemodComplete() {
+    int signal_strength_dbm = ReadSignalStrengthMilliVoltsNonBlockingComplete();
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         if (!pio_interrupt_get(config_.preamble_detector_pio, sm_index)) {
             continue;
         }
         // pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], false);
         // Read the RSSI level of the current packet.
-        rx_packet_[sm_index].sigs_dbm = ReadSignalStrengthdBmBlocking();
+        rx_packet_[sm_index].sigs_dbm = signal_strength_dbm;
         rx_packet_[sm_index].sigq_db = rx_packet_[sm_index].sigs_dbm - GetNoiseFloordBm();
         rx_packet_[sm_index].source = sm_index;  // Record this state machine as the source of the packet.
         // Get the difference between the beginning of the demodulation period and the first FIFO push. The FIFO push

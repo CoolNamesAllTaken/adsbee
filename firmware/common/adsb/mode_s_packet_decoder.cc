@@ -86,7 +86,7 @@ bool ModeSPacketDecoder::UpdateDecoderLoop() {
         uint16_t message_len = strnlen(decode_debug_message.message, DebugMessage::kMessageMaxLen);
         message_len +=
             snprintf(decode_debug_message.message + message_len, DebugMessage::kMessageMaxLen - message_len,
-                     "df=%02d icao=0x%06x ts=%lu ", decoded_packet.downlink_format, decoded_packet.icao_address,
+                     "df=%02d icao=0x%06x ts=%llu ", decoded_packet.downlink_format, decoded_packet.icao_address,
                      decoded_packet.raw.GetTimestampMs());  // Append a print of the packet contents.
         raw_packet.PrintBuffer(decode_debug_message.message + message_len, DebugMessage::kMessageMaxLen - message_len);
         debug_message_out_queue.Enqueue(decode_debug_message);
