@@ -224,11 +224,24 @@ void __time_critical_func(ADSBee::OnDemodBegin)(uint gpio) {
 
 void ADSBee::OnDemodComplete() {
     int signal_strength_dbm = ReadSignalStrengthMilliVoltsNonBlockingComplete();
+
+    // Figure out which state machines were triggered and get things set up to read packets from them. Don't stop them,
+    // let them finish chewing since they run at a lower clock rate.
+    bool sm_triggered[bsp.r1090_num_demod_state_machines] = {false};
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         if (!pio_interrupt_get(config_.preamble_detector_pio, sm_index)) {
             continue;
         }
-        // pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], false);
+        sm_triggered[sm_index] = true;
+        pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], false);
+    }
+
+    // Empty the triggered state machines' RX FIFOs one by one and create RawModeSPacket objects from them.
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
+        if (!sm_triggered[sm_index]) {
+            continue;
+        }
+
         // Read the RSSI level of the current packet.
         rx_packet_[sm_index].sigs_dbm = signal_strength_dbm;
         rx_packet_[sm_index].sigq_db = rx_packet_[sm_index].sigs_dbm - GetNoiseFloordBm();
@@ -241,14 +254,28 @@ void ADSBee::OnDemodComplete() {
         uint16_t mlat_jitter_correction = b >= a ? b - a : (0xFFFF - a) + b;
         rx_packet_[sm_index].mlat_48mhz_64bit_counts -= mlat_jitter_correction;
 
-        if (!pio_sm_is_rx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
-            // Enqueue any partially complete 32-bit word onto the RX FIFO.
-            pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
-                                      pio_encode_push(false, true));
-        }
-
         // Clear the transponder packet buffer.
-        memset((void*)rx_packet_[sm_index].buffer, 0x0, RawModeSPacket::kMaxPacketLenWords32);
+        memset((void*)rx_packet_[sm_index].buffer, 0xFF, RawModeSPacket::kMaxPacketLenWords32 * sizeof(uint32_t));
+
+        // If the FIFO is full, we got a bunch of garbage bits after ending the demodulation, but that's OK, we can chop
+        // off the rest of them and see if we got a valid message. If it's not full, we need to carefully feed in 0 bits
+        // until we join the last partial word of the message together with the rest of it.
+        if (!pio_sm_is_rx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
+            // Shift 0 bits into the input shift register until it pushes into the RX FIFO.
+            uint16_t rx_fifo_level =
+                pio_sm_get_rx_fifo_level(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);
+            while (pio_sm_get_rx_fifo_level(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]) ==
+                   rx_fifo_level) {
+                // NOTE: Shift in bits one by one since for some reason the autopush doesn't work if we shift in a bunch
+                // of bits at the same time.
+                pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
+                                          pio_encode_in(pio_null, 1));
+            }
+
+            // // Enqueue any partially complete 32-bit word onto the RX FIFO.
+            // pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
+            //                           pio_encode_push(false, true));
+        }
 
         // Pull all words out of the RX FIFO.
         volatile uint16_t packet_num_words =
@@ -270,19 +297,23 @@ void ADSBee::OnDemodComplete() {
                 pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);
             if (i == packet_num_words - 1) {
                 // Trim off extra ingested bit from last word in the packet.
-                rx_packet_[sm_index].buffer[i] >>= 1;
+                // FIXME: Extra bit is ingested non-deterministically, depending on whether there was a HI bit right
+                // after the demod interval went LO. This happens because the demodulator state machine ends up in a
+                // state where it's waiting for an edge regardless of whether the demod interval is active. Our
+                // interrupts are too slow (1-3us) to get to the PIO state machine in time to stop it from doing this.
+                // rx_packet_[sm_index].buffer[i] >>= 1;
                 // Mask and left align final word based on bit length.
                 switch (packet_num_words) {
                     case RawModeSPacket::kSquitterPacketNumWords32:
                         aircraft_dictionary.Record1090RawSquitterFrame();
-                        rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFFFF) << 8;
+                        rx_packet_[sm_index].buffer[i] = rx_packet_[sm_index].buffer[i] & 0xFFFFFF00;
                         rx_packet_[sm_index].buffer_len_bytes = RawModeSPacket::kSquitterPacketLenBytes;
                         // raw_mode_s_packet_queue.Enqueue(rx_packet_[sm_index]);
                         decoder.raw_mode_s_packet_in_queue.Enqueue(rx_packet_[sm_index]);
                         break;
                     case RawModeSPacket::kExtendedSquitterPacketNumWords32:
                         aircraft_dictionary.Record1090RawExtendedSquitterFrame();
-                        rx_packet_[sm_index].buffer[i] = (rx_packet_[sm_index].buffer[i] & 0xFFFF) << 16;
+                        rx_packet_[sm_index].buffer[i] = rx_packet_[sm_index].buffer[i] & 0xFFFF0000;
                         rx_packet_[sm_index].buffer_len_bytes = RawModeSPacket::kExtendedSquitterPacketLenBytes;
                         // raw_mode_s_packet_queue.Enqueue(rx_packet_[sm_index]);
                         decoder.raw_mode_s_packet_in_queue.Enqueue(rx_packet_[sm_index]);

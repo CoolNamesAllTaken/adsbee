@@ -81,9 +81,9 @@ message_finished:
     ; irq set 0 [1] ; 30+2n:31+2n | set the DEMOD IRQ to indicate the message body is finished
     irq wait 0 rel ; 30+2n | Set IRQ 0+SM, and wait for it to clear (don't look for new messages until the current one has been processed).
 public follow_irq:
+    ; This is where we go to start looking for a new preamble, or after a preamble match fails.
     wait 1 irq 4 rel ; Wait for IRQ 4+SM, then clear it.
     wait 0 pin, pulses_pin_index ; Wait for line to go LO so that we don't double with the detector that's already running.
-
 .wrap
 
 preamble_not_done_yet:

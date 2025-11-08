@@ -106,7 +106,7 @@ bool ModeSAircraft::DecodePosition(bool filter_cpr_position) {
         last_filter_received_timestamp_ms_ = most_recent_received_timestamp_ms;
 
         // Store the updated position. A location jump can be "confirmed" with a subsequent update from near the new
-        // candidate position. Thus, sudden jumps in position, take two subsequent position updates that are relatively
+        // candidate position. Thus, sudden jumps in position take two subsequent position updates that are relatively
         // close together in order to be reflected in the aircraft's position.
         lat_awb_ = result.lat_awb;
         lon_awb_ = result.lon_awb;
@@ -137,7 +137,7 @@ bool ModeSAircraft::DecodePosition(bool filter_cpr_position) {
  * @retval EmitterCategory that matches the combination of capability and type_code from the ADS-B packet, or
  * kEmitterCategoryInvalid if there is no matching wake vortex value.
  */
-ADSBTypes::EmitterCategory ExtractCategory(const ModeSADSBPacket &packet) {
+ADSBTypes::EmitterCategory ExtractCategory(const ModeSADSBPacket& packet) {
     uint8_t type_code = packet.GetNBitWordFromMessage(5, 0);
     uint8_t capability = packet.GetNBitWordFromMessage(3, 5);
 
@@ -238,7 +238,7 @@ ADSBTypes::EmitterCategory ExtractCategory(const ModeSADSBPacket &packet) {
     }
 }
 
-bool ModeSAircraft::ApplyAircraftIDMessage(const ModeSADSBPacket &packet) {
+bool ModeSAircraft::ApplyAircraftIDMessage(const ModeSADSBPacket& packet) {
     emitter_category = ExtractCategory(packet);
     emitter_category_raw = packet.GetNBitWordFromMessage(8, 0);
     transponder_capability = packet.ca_cf.capability;
@@ -250,7 +250,7 @@ bool ModeSAircraft::ApplyAircraftIDMessage(const ModeSADSBPacket &packet) {
     return true;
 }
 
-bool ModeSAircraft::ApplySurfacePositionMessage(const ModeSADSBPacket &packet) {
+bool ModeSAircraft::ApplySurfacePositionMessage(const ModeSADSBPacket& packet) {
     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, false);
 
     if (NICBitIsValid(ADSBTypes::kNICBitA) && NICBitIsValid(ADSBTypes::kNICBitC)) {
@@ -293,7 +293,7 @@ bool ModeSAircraft::ApplySurfacePositionMessage(const ModeSADSBPacket &packet) {
     return false;
 }
 
-bool ModeSAircraft::ApplyAirbornePositionMessage(const ModeSADSBPacket &packet, bool filter_cpr_position) {
+bool ModeSAircraft::ApplyAirbornePositionMessage(const ModeSADSBPacket& packet, bool filter_cpr_position) {
     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
     uint16_t type_code = packet.type_code;
 
@@ -446,7 +446,7 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(const ModeSADSBPacket &packet, 
     return decode_successful;
 }
 
-bool ModeSAircraft::ApplyAirborneVelocitiesMessage(const ModeSADSBPacket &packet) {
+bool ModeSAircraft::ApplyAirborneVelocitiesMessage(const ModeSADSBPacket& packet) {
     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
     bool decode_successful = true;
 
@@ -576,17 +576,17 @@ bool ModeSAircraft::ApplyAirborneVelocitiesMessage(const ModeSADSBPacket &packet
     return decode_successful;
 }
 
-bool ModeSAircraft::ApplyAircraftStatusMessage(const ModeSADSBPacket &packet) {
+bool ModeSAircraft::ApplyAircraftStatusMessage(const ModeSADSBPacket& packet) {
     // TODO: Implement Airraft Status message decoding.
     return true;
 }
 
-bool ModeSAircraft::ApplyTargetStateAndStatusInfoMessage(const ModeSADSBPacket &packet) {
+bool ModeSAircraft::ApplyTargetStateAndStatusInfoMessage(const ModeSADSBPacket& packet) {
     // TODO: Implement Target State and Status Info message decoding.
     return true;
 }
 
-bool ModeSAircraft::ApplyAircraftOperationStatusMessage(const ModeSADSBPacket &packet) {
+bool ModeSAircraft::ApplyAircraftOperationStatusMessage(const ModeSADSBPacket& packet) {
     // TODO: get nac/navigation_integrity_category, and supplement airborne status from here.
     // https://mode-s.org/decode/content/ads-b/6-operation-status.html
     // More about navigation_integrity_category/nac here: https://mode-s.org/decode/content/ads-b/7-uncertainty.html
@@ -779,7 +779,7 @@ bool ModeSAircraft::ApplyAircraftOperationStatusMessage(const ModeSADSBPacket &p
 UATAircraft::UATAircraft(uint32_t icao_address_in) : icao_address(icao_address_in) {};
 UATAircraft::~UATAircraft() {};
 
-bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVector &state_vector) {
+bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVector& state_vector) {
     // Parse position.
 
     navigation_integrity_category = static_cast<ADSBTypes::NICRadiusOfContainment>(state_vector.nic);
@@ -915,7 +915,7 @@ bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVe
 
     return true;
 }
-bool UATAircraft::ApplyUATADSBModeStatus(const DecodedUATADSBPacket::UATModeStatus &mode_status) {
+bool UATAircraft::ApplyUATADSBModeStatus(const DecodedUATADSBPacket::UATModeStatus& mode_status) {
     // Callsign field: could be ID or squawk.
     char callsign_temp[UATAircraft::kCallSignMaxNumChars + 1] = {0};
 
@@ -1001,13 +1001,13 @@ bool UATAircraft::ApplyUATADSBModeStatus(const DecodedUATADSBPacket::UATModeStat
 
     return true;
 }
-bool UATAircraft::ApplyUATADSBTargetState(const DecodedUATADSBPacket::UATTargetState &target_state) { return true; }
-bool UATAircraft::ApplyUATADSBTrajectoryChange(const DecodedUATADSBPacket::UATTrajectoryChange &trajectory_change) {
+bool UATAircraft::ApplyUATADSBTargetState(const DecodedUATADSBPacket::UATTargetState& target_state) { return true; }
+bool UATAircraft::ApplyUATADSBTrajectoryChange(const DecodedUATADSBPacket::UATTrajectoryChange& trajectory_change) {
     return true;
 }
 bool UATAircraft::ApplyUATADSBAuxiliaryStateVector(
-    const DecodedUATADSBPacket::UATStateVector &state_vector,
-    const DecodedUATADSBPacket::UATAuxiliaryStateVector &auxiliary_state_vector) {
+    const DecodedUATADSBPacket::UATStateVector& state_vector,
+    const DecodedUATADSBPacket::UATAuxiliaryStateVector& auxiliary_state_vector) {
     // Need to refer to the state vector in order to see what type of altitude the secondary altitude is.
     if (state_vector.altitude_is_geometric_altitude) {
         // Primary altitude is gnss, so secondary altitude must be baro.
@@ -1047,7 +1047,7 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
     // Iterate over each key-value pair in the unordered_map. Prune if stale, update metrics if still fresh.
     for (auto it = dict.begin(); it != dict.end(); /* No increment here */) {
         uint32_t last_message_timestamp_ms =
-            std::visit([](Aircraft &aircraft) -> uint32_t { return aircraft.last_message_timestamp_ms; }, it->second);
+            std::visit([](Aircraft& aircraft) -> uint32_t { return aircraft.last_message_timestamp_ms; }, it->second);
 
         // Extract the last message timestamp of the underlying ModeSAircraft or UATAircraft.
         if (timestamp_ms - last_message_timestamp_ms > config_.aircraft_prune_interval_ms) {
@@ -1064,7 +1064,7 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
             }
             // Call UpdateMetrics on the underlying aircraft type.
             std::visit(
-                [](Aircraft &aircraft) {
+                [](Aircraft& aircraft) {
                     // Update the metrics for the aircraft.
                     aircraft.UpdateMetrics();
                 },
@@ -1087,7 +1087,7 @@ bool AircraftDictionary::ContainsAircraft(uint32_t uid) const {
     return false;
 }
 
-bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket &packet) {
+bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket& packet) {
     // Check validity and record stats.
     int16_t source = packet.raw.source;
     switch (packet.raw.buffer_len_bytes) {
@@ -1183,7 +1183,7 @@ bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket &packet) {
     return ingest_ret;
 }
 
-bool AircraftDictionary::IngestModeSIdentityReplyPacket(const ModeSIdentityReplyPacket &packet) {
+bool AircraftDictionary::IngestModeSIdentityReplyPacket(const ModeSIdentityReplyPacket& packet) {
     if (!packet.is_valid) {
         CONSOLE_WARNING("AircraftDictionary::IngestModeSIdentityReplyPacket", "Received invalid packet.");
         return false;
@@ -1197,7 +1197,7 @@ bool AircraftDictionary::IngestModeSIdentityReplyPacket(const ModeSIdentityReply
 
     uint32_t icao_address = packet.icao_address;
     uint32_t uid = Aircraft::ICAOToUID(icao_address, Aircraft::kAircraftTypeModeS);
-    ModeSAircraft *aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
+    ModeSAircraft* aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
     if (aircraft_ptr == nullptr) {
         CONSOLE_WARNING("AircraftDictionary::IngestModeSIdentityReplyPacket",
                         "Unable to find or create new aircraft with ICAO address 0x%lx in dictionary.\r\n",
@@ -1213,7 +1213,7 @@ bool AircraftDictionary::IngestModeSIdentityReplyPacket(const ModeSIdentityReply
     return true;
 }
 
-bool AircraftDictionary::IngestModeSAltitudeReplyPacket(const ModeSAltitudeReplyPacket &packet) {
+bool AircraftDictionary::IngestModeSAltitudeReplyPacket(const ModeSAltitudeReplyPacket& packet) {
     if (!packet.is_valid) {
         CONSOLE_WARNING("AircraftDictionary::IngestModeSAltitudeReplyPacket", "Received invalid packet.");
         return false;
@@ -1227,7 +1227,7 @@ bool AircraftDictionary::IngestModeSAltitudeReplyPacket(const ModeSAltitudeReply
 
     uint32_t icao_address = packet.icao_address;
     uint32_t uid = Aircraft::ICAOToUID(icao_address, Aircraft::kAircraftTypeModeS);
-    ModeSAircraft *aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
+    ModeSAircraft* aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
     if (aircraft_ptr == nullptr) {
         CONSOLE_WARNING("AircraftDictionary::IngestModeSAltitudeReplyPacket",
                         "Unable to find or create new aircraft with ICAO address 0x%lx in dictionary.\r\n",
@@ -1245,7 +1245,7 @@ bool AircraftDictionary::IngestModeSAltitudeReplyPacket(const ModeSAltitudeReply
     return true;
 }
 
-bool AircraftDictionary::IngestModeSAllCallReplyPacket(const ModeSAllCallReplyPacket &packet) {
+bool AircraftDictionary::IngestModeSAllCallReplyPacket(const ModeSAllCallReplyPacket& packet) {
     if (!packet.is_valid) {
         CONSOLE_WARNING("AircraftDictionary::IngestModeSAllCallReplyPacket", "Received invalid packet.");
         return false;
@@ -1260,7 +1260,7 @@ bool AircraftDictionary::IngestModeSAllCallReplyPacket(const ModeSAllCallReplyPa
     // Populate the dictionary with the aircraft, or look it up if the ICAO doesn't yet exist.
     uint32_t icao_address = packet.icao_address;
     uint32_t uid = Aircraft::ICAOToUID(icao_address, Aircraft::kAircraftTypeModeS);
-    ModeSAircraft *aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
+    ModeSAircraft* aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
     if (aircraft_ptr == nullptr) {
         CONSOLE_WARNING("AircraftDictionary::IngestModeSAllCallReplyPacket",
                         "Unable to find or create new aircraft with ICAO address 0x%lx in dictionary.\r\n",
@@ -1275,7 +1275,7 @@ bool AircraftDictionary::IngestModeSAllCallReplyPacket(const ModeSAllCallReplyPa
     return true;
 }
 
-bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket &packet) {
+bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
     if (!packet.is_valid) {
         CONSOLE_WARNING("AircraftDictionary::IngestModeSADSBPacket", "Received invalid packet.");
         return false;
@@ -1302,7 +1302,7 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket &packet) {
 
     uint32_t icao_address = packet.icao_address;
     uint32_t uid = Aircraft::ICAOToUID(icao_address, Aircraft::kAircraftTypeModeS);
-    ModeSAircraft *aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
+    ModeSAircraft* aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
     if (aircraft_ptr == nullptr) {
         CONSOLE_WARNING("AircraftDictionary::IngestModeSADSBPacket",
                         "Unable to find or create new aircraft with ICAO address 0x%lx in dictionary.\r\n",
@@ -1376,14 +1376,14 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket &packet) {
     return ret;
 }
 
-bool AircraftDictionary::IngestDecodedUATADSBPacket(const DecodedUATADSBPacket &packet) {
+bool AircraftDictionary::IngestDecodedUATADSBPacket(const DecodedUATADSBPacket& packet) {
     // Check validity. We don't record stats since those are pulled from the Sub GHz radio device status directly.
     if (!packet.is_valid) {
         CONSOLE_WARNING("AircraftDictionary::IngestDecodedUATADSBPacket", "Received invalid packet.");
         return false;
     }
 
-    UATAircraft *aircraft_ptr =
+    UATAircraft* aircraft_ptr =
         GetAircraftPtr<UATAircraft>(Aircraft::ICAOToUID(packet.GetICAOAddress(), Aircraft::kAircraftTypeUAT));
     if (aircraft_ptr == nullptr) {
         CONSOLE_WARNING("AircraftDictionary::IngestDecodedUATADSBPacket",
@@ -1453,7 +1453,7 @@ bool ModeSAircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool od
                       "Received CPR packet with out of bounds lat/lon values (%lu, %lu).", n_lat_cpr, n_lon_cpr);
         return false;  // counts out of bounds, don't parse
     }
-    CPRPacket &complementary_packet = odd ? last_even_packet_ : last_odd_packet_;
+    CPRPacket& complementary_packet = odd ? last_even_packet_ : last_odd_packet_;
     uint32_t received_timestamp_delta_ms = received_timestamp_ms > complementary_packet.received_timestamp_ms
                                                ? received_timestamp_ms - complementary_packet.received_timestamp_ms
                                                : complementary_packet.received_timestamp_ms - received_timestamp_ms;
@@ -1462,7 +1462,7 @@ bool ModeSAircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool od
         ClearCPRPackets();
     }
 
-    CPRPacket &packet = odd ? last_odd_packet_ : last_even_packet_;
+    CPRPacket& packet = odd ? last_odd_packet_ : last_even_packet_;
     // NOTE: Packet received timestamps are from the MLAT timer.
     packet.received_timestamp_ms = received_timestamp_ms;
     packet.n_lat = n_lat_cpr;
