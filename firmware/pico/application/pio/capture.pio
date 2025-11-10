@@ -1,45 +1,14 @@
 ; PIO0
 ; SM0: Well Formed Preamble Detector #1
-; SM1: Well Formed Preamble Detector #2
-; SM2: High Power Preamble Detector
-; SM3: IRQ Wrapper for Well Formed Preamble Detectors (wraps between SM0 and SM1) 
+; SM1: High Power Preamble Detector #1
+; SM2: Well Formed Preamble Detector #2
+; SM3: High Power Preamble Detector #2
 
 ; PIO1
 ; SM0: Demodulator for Well Formed Preamble Detector #1
-; SM1: Demodulator for Well Formed Preamble Detector #2
-; SM2: Demodulator for High Power Preamble Detector
-
-.program irq_wrapper
-
-; This program runs at 48MHz. Each clock cycle is 1/48us.
-; The only purpose of this program is to wrap an IRQ back to the beginning of the array of state machines.
-
-.wrap_target
-wait 1 irq 6 ; Waits for IRQ 6, then clears it. Set this IRQ number equal to 4+num_state_machines.
-irq set 4 ; Sets IRQ 4 to trigger preamble detector on SM 0 (looping back around).
-.wrap
-
-% c-sdk {
-
-// Helper function (for use in C program) to initialize this PIO program
-void irq_wrapper_program_init(
-    PIO pio,
-    uint sm,
-    uint offset,
-    float div
-) {
-
-    // Sets up state machine and wrap target. This function is automatically
-    // generated in preamble_detector.pio.h.
-    pio_sm_config c = irq_wrapper_program_get_default_config(offset);
-    
-    // Set the clock divider for the state machine
-    sm_config_set_clkdiv(&c, div);
-
-    // Load configuration and jump to start of the program
-    pio_sm_init(pio, sm, offset, &c);
-}
-%}
+; SM1: Demodulator for High Power Preamble Detector #1
+; SM2: Demodulator for Well Formed Preamble Detector #2
+; SM3: Demodulator for High Power Preamble Detector #2
 
 .program preamble_detector
 
@@ -79,7 +48,6 @@ idle_countdown:
     jmp x-- idle_countdown [2] ; 25+2n:28+2n | still idle, keep counting down if the timer isn't up
 message_finished:
     set pins, 0 ; 29+2n | set demod pin to 0 to indicate message is finished
-    ; irq set 0 [1] ; 30+2n:31+2n | set the DEMOD IRQ to indicate the message body is finished
     irq wait 0 rel ; 30+2n | Set IRQ 0+SM, and wait for it to clear (don't look for new messages until the current one has been processed).
 public follow_irq:
     ; This is where we go to start looking for a new preamble, or after a preamble match fails.
@@ -257,10 +225,6 @@ public initial_entry:
     wait 1 pin demod_in_pin_index [6] side 0   ; -11:-5 | Wait to enter DEMOD interval.
     ; Preamble ends LO, so imitate the end of a 1 with its HI->LO transition.
     jmp initial_entry_cut_in [6]            ; -4:2 | wait adjusted here
-
-; public high_power_initial_entry:
-;     wait 1 pin high_power_demod_in_pin_index [6] side 0
-;     jmp initial_entry_cut_in [6]
 
 start_of_1:
     wait 0 gpio pulses_gpio ; 0 | Wait for the 1->0 transition - at this point we are 0.5 into the bit.

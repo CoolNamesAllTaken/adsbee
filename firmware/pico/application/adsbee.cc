@@ -530,12 +530,9 @@ void ADSBee::PIOInit() {
     /** PREAMBLE DETECTOR PIO **/
     // Calculate the PIO clock divider.
     float preamble_detector_div = (float)clock_get_hz(clk_sys) / kPreambleDetectorFreqHz;
-    // irq_wrapper_program_init(config_.preamble_detector_pio, bsp.r1090_num_demod_state_machines, irq_wrapper_offset_,
-    //                          preamble_detector_div);
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         // Only make the state machine wait to start if it's part of the round-robin group of well formed preamble
         // detectors.
-        // bool make_sm_wait = sm_index > 0 && sm_index < bsp.r1090_high_power_demod_state_machine_index;
         bool make_sm_wait = sm_index > 1;  // Let state machines 0 (well formed) and 1 (high power) take the lead.
         // Initialize the program using the .pio file helper function
         preamble_detector_program_init(config_.preamble_detector_pio,                     // Use PIO block 0.
@@ -626,7 +623,6 @@ void ADSBee::PIOEnable() {
     }
 
     // Enable the state machines.
-    // pio_sm_set_enabled(config_.preamble_detector_pio, irq_wrapper_sm_, true);
     // Need to enable the demodulator SMs first, since if the preamble detector trips the IRQ but the demodulator
     // isn't enabled, we end up in a deadlock (I think, this maybe should be verified again).
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
@@ -640,9 +636,6 @@ void ADSBee::PIOEnable() {
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], true);
     }
-    // // Enable high power preamble detector.
-    // pio_sm_set_enabled(config_.preamble_detector_pio,
-    //                    preamble_detector_sm_[bsp.r1090_high_power_demod_state_machine_index], true);
 }
 
 void ADSBee::PruneAircraftDictionary() {

@@ -82,7 +82,6 @@ class BSP {
 
     uint16_t r1090_led_pin = 15;
     uint16_t r1090_num_demod_state_machines = 4;
-    // uint16_t r1090_high_power_demod_state_machine_index = 2;
 
     // These pin values are only for old hardware.
     uint16_t r1090_pulses_pin = 19;
