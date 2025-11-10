@@ -231,8 +231,13 @@ bool SPICoprocessor::Update() {
 }
 
 #ifdef ON_COPRO_SLAVE
-bool SPICoprocessor::LogMessage(SettingsManager::LogLevel log_level, const char *tag, const char *format,
+bool SPICoprocessor::LogMessage(SettingsManager::LogLevel log_level, const char* tag, const char* format,
                                 va_list args) {
+    static bool log_guard = true;
+    if (!log_guard) {
+        return false;  // Prevent recursive logging.
+    }
+    log_guard = false;
     // Make the scratch LogMessage static so that we don't need to allocate it all the time.
     // Allocating a LogMessage buffer on the stack can cause overflows in some limited resource event handlers.
     static ObjectDictionary::LogMessage log_message;
@@ -247,13 +252,15 @@ bool SPICoprocessor::LogMessage(SettingsManager::LogLevel log_level, const char 
     log_message.num_chars += vsnprintf(log_message.message + log_message.num_chars,
                                        ObjectDictionary::kLogMessageMaxNumChars - log_message.num_chars, format, args);
 
-    return object_dictionary.log_message_queue.Enqueue(log_message);
+    bool result = object_dictionary.log_message_queue.Enqueue(log_message);
+    log_guard = true;
+    return result;
 }
 #endif
 
 #ifdef ON_COPRO_MASTER
 
-bool SPICoprocessor::ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRequest &request) {
+bool SPICoprocessor::ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRequest& request) {
     bool write_requires_ack = false;
     switch (request.command) {
         case ObjectDictionary::SCCommand::kCmdWriteToSlaveRequireAck:
@@ -318,7 +325,7 @@ bool SPICoprocessor::ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRe
     return true;
 }
 
-bool SPICoprocessor::PartialWrite(ObjectDictionary::Address addr, uint8_t *object_buf, uint16_t len, uint16_t offset,
+bool SPICoprocessor::PartialWrite(ObjectDictionary::Address addr, uint8_t* object_buf, uint16_t len, uint16_t offset,
                                   bool require_ack) {
     SPICoprocessorPacket::SCWritePacket write_packet;
 
@@ -364,7 +371,7 @@ bool SPICoprocessor::PartialWrite(ObjectDictionary::Address addr, uint8_t *objec
     return ret;
 }
 
-bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t *object_buf, uint16_t len, uint16_t offset) {
+bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t* object_buf, uint16_t len, uint16_t offset) {
     SPICoprocessorPacket::SCReadRequestPacket read_request_packet;
 
     read_request_packet.cmd = ObjectDictionary::SCCommand::kCmdReadFromSlave;

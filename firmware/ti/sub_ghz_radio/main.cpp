@@ -113,7 +113,8 @@ int main(void) {
     }
     GPIO_write(bsp.kSubGLEDPin, 0);
     CONSOLE_INFO("ADSBeeServer::Init", "Settings data read from Pico.");
-    // settings_manager.Print();
+    settings_manager.Print();
+    // settings_manager.Apply();
 
     if (!subg_radio.Init()) {
         CONSOLE_ERROR("main", "Failed to initialize SubGHz radio.");
@@ -121,9 +122,17 @@ int main(void) {
     }
     CONSOLE_INFO("main", "SubGHz radio initialized successfully.");
 
+    uint32_t last_print_ms = get_time_since_boot_ms();
     while (true) {
         user_core_monitor.Tick();
         user_core_monitor.Update();
+
+        if (get_time_since_boot_ms() - last_print_ms >= 1000) {
+            last_print_ms = get_time_since_boot_ms();
+            CONSOLE_PRINTF("Time: %lu ms, CPU Usage: %d%%\r\n", get_time_since_boot_ms(),
+                           user_core_monitor.GetUsagePercent());
+            settings_manager.Print();
+        }
 
         pico.UpdateLED();
         uat_packet_decoder.Update();

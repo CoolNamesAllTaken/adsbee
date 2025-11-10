@@ -24,7 +24,7 @@ class ADSBee {
 
     static constexpr uint16_t kTLMaxPWMCount = 5000;  // Clock is 125MHz, shoot for 25kHz PWM.
     static constexpr int kVDDMV = 3300;               // [mV] Voltage of positive supply rail.
-    static constexpr int kTLOffsetMaxMV = 3300;       // [mV]
+    static constexpr int kTLOffsetMaxMV = 2000;       // [mV]
     static constexpr int kTLOffsetMinMV = 0;          // [mV]
     static constexpr uint32_t kStatusLEDOnMs = 1;
 

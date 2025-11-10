@@ -11,7 +11,7 @@ class PFBQueue {
    public:
     struct PFBQueueConfig {
         uint16_t buf_len_num_elements = 0;
-        T *buffer = nullptr;
+        T* buffer = nullptr;
         bool overwrite_when_full = false;
     };
 
@@ -27,7 +27,7 @@ class PFBQueue {
      */
     PFBQueue(PFBQueueConfig config_in) : config_(config_in), buffer_length_(config_in.buf_len_num_elements) {
         if (config_.buffer == nullptr) {
-            config_.buffer = (T *)malloc(sizeof(T) * buffer_length_);
+            config_.buffer = (T*)malloc(sizeof(T) * buffer_length_);
             buffer_was_dynamically_allocated_ = true;
         }
     }
@@ -61,7 +61,7 @@ class PFBQueue {
         }
 
         // config_.buffer[tail_] = element;
-        memcpy((uint8_t *)(&config_.buffer[tail_]), (uint8_t *)(&element), sizeof(T));
+        memcpy((uint8_t*)(&config_.buffer[tail_]), (uint8_t*)(&element), sizeof(T));
         tail_ = IncrementIndex(tail_);
 
         if (tail_ == head_) {
@@ -76,12 +76,12 @@ class PFBQueue {
      * @param[out] element Reference to an object that will be overwritten by the contents of the popped element.
      * @retval True if successful, false if the buffer is empty.
      */
-    bool Dequeue(T &element) {
+    bool Dequeue(T& element) {
         if (head_ == tail_ && !is_full_) {
             return false;
         }
         // element = config_.buffer[head_];
-        memcpy((uint8_t *)(&element), (uint8_t *)(&config_.buffer[head_]), sizeof(T));
+        memcpy((uint8_t*)(&element), (uint8_t*)(&config_.buffer[head_]), sizeof(T));
         head_ = IncrementIndex(head_);
         is_full_ = false;
         return true;
@@ -93,11 +93,11 @@ class PFBQueue {
      * @param[in] index Position in the buffer to peek. Defaults to 0 (the front of the buffer).
      * @retval True if successful, false if the buffer is empty or index is out of bounds.
      */
-    bool Peek(T &element, uint16_t index = 0) {
+    bool Peek(T& element, uint16_t index = 0) {
         if (index >= Length()) {
             return false;
         }
-        element = config_.buffer[IncrementIndex(head_, index)];
+        memcpy((uint8_t*)(&element), (uint8_t*)(&config_.buffer[IncrementIndex(head_, index)]), sizeof(T));
         return true;
     }
 
