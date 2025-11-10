@@ -64,7 +64,7 @@ class ADSBee {
 
         uint16_t r1090_led_pin = 15;
         // Reading ADS-B on GPIO19. Will look for DEMOD signal on GPIO20.
-        uint16_t* pulses_pins = bsp.r1090_pulses_pins;
+        uint16_t pulses_pin = bsp.r1090_pulses_pin;
         uint16_t* demod_pins = bsp.r1090_demod_pins;
         // Use GPIO22 for the decode PIO program to output its recovered clock (for debugging only).
         uint16_t* recovered_clk_pins =

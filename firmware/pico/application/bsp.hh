@@ -21,9 +21,8 @@ class BSP {
         gnss_pps_pin = 2;
         gnss_enable_pin = 3;
 
-        r1090_num_demod_state_machines = 3;
+        r1090_num_demod_state_machines = 4;
         for (uint16_t i = 0; i < r1090_num_demod_state_machines; i++) {
-            r1090_pulses_pins[i] = 19;
             r1090_demod_pins[i] = 20 + i;
             // Set RECOVERED_CLK to fake pin for high power preamble detector. Will be overridden by
             // higher priority (lower index) SM.
@@ -42,6 +41,11 @@ class BSP {
         has_subg = true;
 
         // TODO: override has_subg and has_esp32 based on the board type.
+    }
+
+    bool SMIndexUsesHighPowerPreamble(uint16_t sm_index) {
+        // Return true if the given state machine index is configured to use the high power preamble detector.
+        return sm_index % 2 == 1;
     }
 
     bool has_eeprom = false;
@@ -77,14 +81,17 @@ class BSP {
     uint preamble_detector_demod_complete_irq = PIO0_IRQ_0;
 
     uint16_t r1090_led_pin = 15;
-    uint16_t r1090_num_demod_state_machines = 3;
-    uint16_t r1090_high_power_demod_state_machine_index = 2;
-    uint16_t r1090_pulses_pins[kMaxNumDemodStateMachines] = {19, 22, 19};
-    uint16_t r1090_demod_pins[kMaxNumDemodStateMachines] = {20, 23, 29};
-    uint16_t r1090_recovered_clk_pins[kMaxNumDemodStateMachines] = {21, 24,
-                                                                    26};  // These pin values are only for old hardware.
-    uint16_t r1090_tl_pwm_pin = 25;                                       // Pin for Trigger Level PWM output.
-    uint16_t r1090_tl_adc_pin = 27;                                       // Pin for reading filtered Trigger Level.
+    uint16_t r1090_num_demod_state_machines = 4;
+    // uint16_t r1090_high_power_demod_state_machine_index = 2;
+
+    // These pin values are only for old hardware.
+    uint16_t r1090_pulses_pin = 19;
+    uint16_t r1090_demod_pins[kMaxNumDemodStateMachines] = {20, 21, 23, 24};
+    // No recovered_clk pin on old hardware (we ran out of pins when adding an additional demodulator).
+    uint16_t r1090_recovered_clk_pins[kMaxNumDemodStateMachines] = {UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX};
+
+    uint16_t r1090_tl_pwm_pin = 25;     // Pin for Trigger Level PWM output.
+    uint16_t r1090_tl_adc_pin = 27;     // Pin for reading filtered Trigger Level.
     uint16_t r1090_tl_adc_input = 1;    // ADC input for reading filtered Trigger Level.
     uint16_t r1090_rssi_adc_pin = 28;   // Pin for reading RSSI.
     uint16_t r1090_rssi_adc_input = 2;  // ADC input for reading RSSI.
