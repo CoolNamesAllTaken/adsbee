@@ -233,11 +233,6 @@ bool SPICoprocessor::Update() {
 #ifdef ON_COPRO_SLAVE
 bool SPICoprocessor::LogMessage(SettingsManager::LogLevel log_level, const char* tag, const char* format,
                                 va_list args) {
-    static bool log_guard = true;
-    if (!log_guard) {
-        return false;  // Prevent recursive logging.
-    }
-    log_guard = false;
     // Make the scratch LogMessage static so that we don't need to allocate it all the time.
     // Allocating a LogMessage buffer on the stack can cause overflows in some limited resource event handlers.
     static ObjectDictionary::LogMessage log_message;
@@ -252,9 +247,7 @@ bool SPICoprocessor::LogMessage(SettingsManager::LogLevel log_level, const char*
     log_message.num_chars += vsnprintf(log_message.message + log_message.num_chars,
                                        ObjectDictionary::kLogMessageMaxNumChars - log_message.num_chars, format, args);
 
-    bool result = object_dictionary.log_message_queue.Enqueue(log_message);
-    log_guard = true;
-    return result;
+    return object_dictionary.log_message_queue.Enqueue(log_message);
 }
 #endif
 

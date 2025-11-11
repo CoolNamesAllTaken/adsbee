@@ -400,10 +400,6 @@ uint16_t ObjectDictionary::UnpackLogMessages(uint8_t* buf, uint16_t buf_len,
         memcpy(log_message.message, buf + bytes_read + LogMessage::kHeaderSize, log_message.num_chars);
         log_message.message[log_message.num_chars] = '\0';  // Null terminate the message.
 
-        if (log_message_queue.IsFull()) {
-            log_message_queue.Clear();
-            CONSOLE_ERROR("ObjectDictionary::UnpackLogMessages", "Log message queue is full, clearing it.");
-        }
         log_message_queue.Enqueue(log_message);
 
         bytes_read += LogMessage::kHeaderSize + log_message.num_chars + 1;  // Move past header and message.
