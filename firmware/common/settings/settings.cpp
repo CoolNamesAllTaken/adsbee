@@ -19,7 +19,7 @@ void SettingsManager::Print() {
     print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len,
                               "\tTrigger Offset Level: %d milliVolts\r\n", settings.tl_offset_mv);
     print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len,
-                              "\tBias Tee: \r\n\t\t1090: %s\r\n\r\n\t\tSub-GHz: %s\r\n",
+                              "\tBias Tee: \r\n\t\t1090: %s\r\n\t\tSub-GHz: %s\r\n",
                               settings.r1090_bias_tee_enabled ? "ENABLED" : "DISABLED",
                               settings.subg_bias_tee_enabled ? "ENABLED" : "DISABLED");
     print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len,

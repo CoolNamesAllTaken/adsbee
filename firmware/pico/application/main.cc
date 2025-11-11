@@ -85,13 +85,11 @@ int main() {
                    SPI_CPHA_1,  // Phase (CPHA).
                    SPI_MSB_FIRST);
 
-    adsbee.Init();
     comms_manager.Init();
     comms_manager.console_printf("ADSBee 1090\r\nSoftware Version %d.%d.%d\r\n",
                                  object_dictionary.kFirmwareVersionMajor, object_dictionary.kFirmwareVersionMinor,
                                  object_dictionary.kFirmwareVersionPatch);
-
-    settings_manager.Load();
+    settings_manager.Load();  // Do this first so that we send the correct settings to the Sub-GHz radio on init.
 
     uint16_t num_status_led_blinks = FirmwareUpdateManager::AmWithinFlashPartition(0) ? 1 : 2;
     // Blink the LED a few times to indicate a successful startup.
@@ -101,6 +99,8 @@ int main() {
         adsbee.SetStatusLED(false);
         sleep_ms(kStatusLEDBootupBlinkPeriodMs / 2);
     }
+
+    adsbee.Init();
 
     // If WiFi is enabled, try establishing communication with the ESP32 and maybe update its firmware.
     if (esp32.IsEnabled()) {
@@ -155,6 +155,8 @@ int main() {
         }
 #endif
     }
+
+    settings_manager.Apply();
 
     multicore_reset_core1();
     multicore_launch_core1(main_core1);
