@@ -38,7 +38,7 @@ static_assert(sizeof(SettingsManager::Settings) < kFlashDeviceInfoStartAddr - kF
 const uint32_t kEEPROMSizeBytes = 8e3;  // 8000 Bytes for backwards compatibility.
 const uint32_t kEEPROMDeviceInfoOffset = kEEPROMSizeBytes - kDeviceInfoMaxSizeBytes;
 
-bool SettingsManager::GetDeviceInfo(DeviceInfo &device_info) {
+bool SettingsManager::GetDeviceInfo(DeviceInfo& device_info) {
     if (bsp.has_eeprom) {
         // Device Info is stored on external EEPROM.
         if (eeprom.RequiresInit()) return false;
@@ -46,7 +46,7 @@ bool SettingsManager::GetDeviceInfo(DeviceInfo &device_info) {
     } else {
         // Device Info is stored in flash.
         // FlashUtils::FlashSafe();
-        device_info = *(DeviceInfo *)(kFlashDeviceInfoStartAddr);
+        device_info = *(DeviceInfo*)(kFlashDeviceInfoStartAddr);
         // FlashUtils::FlashUnsafe();
         return true;
     }
@@ -62,7 +62,7 @@ bool SettingsManager::Load() {
     } else {
         // Load settings from flash.
         // FlashUtils::FlashSafe();
-        settings = *(Settings *)kFlashSettingsStartAddr;
+        settings = *(Settings*)kFlashSettingsStartAddr;
         // FlashUtils::FlashUnsafe();
     }
 
@@ -93,13 +93,11 @@ bool SettingsManager::Load() {
             FlashUtils::FlashSafe();
             flash_range_erase(FirmwareUpdateManager::FlashAddrToOffset(kFlashSettingsStartAddr),
                               FlashUtils::kFlashSectorSizeBytes);
-            flash_range_program(FirmwareUpdateManager::FlashAddrToOffset(kFlashSettingsStartAddr), (uint8_t *)&settings,
+            flash_range_program(FirmwareUpdateManager::FlashAddrToOffset(kFlashSettingsStartAddr), (uint8_t*)&settings,
                                 sizeof(settings));
             FlashUtils::FlashUnsafe();
         }
     }
-
-    Apply();
 
     return true;
 }
@@ -135,7 +133,7 @@ bool SettingsManager::Save() {
         FlashUtils::FlashSafe();
         flash_range_erase(FirmwareUpdateManager::FlashAddrToOffset(kFlashSettingsStartAddr),
                           FlashUtils::kFlashSectorSizeBytes);
-        flash_range_program(FirmwareUpdateManager::FlashAddrToOffset(kFlashSettingsStartAddr), (uint8_t *)&settings,
+        flash_range_program(FirmwareUpdateManager::FlashAddrToOffset(kFlashSettingsStartAddr), (uint8_t*)&settings,
                             sizeof(settings));
         FlashUtils::FlashUnsafe();
         return true;
@@ -148,7 +146,7 @@ void SettingsManager::ResetToDefaults() {
     Apply();
 }
 
-bool SettingsManager::SetDeviceInfo(const DeviceInfo &device_info) {
+bool SettingsManager::SetDeviceInfo(const DeviceInfo& device_info) {
     if (bsp.has_eeprom) {
         // Device Info is stored on external EEPROM.
         if (eeprom.RequiresInit()) return false;
@@ -158,8 +156,8 @@ bool SettingsManager::SetDeviceInfo(const DeviceInfo &device_info) {
         FlashUtils::FlashSafe();
         flash_range_erase(FirmwareUpdateManager::FlashAddrToOffset(kFlashDeviceInfoStartAddr),
                           FlashUtils::kFlashSectorSizeBytes);
-        flash_range_program(FirmwareUpdateManager::FlashAddrToOffset(kFlashDeviceInfoStartAddr),
-                            (uint8_t *)&device_info, sizeof(device_info));
+        flash_range_program(FirmwareUpdateManager::FlashAddrToOffset(kFlashDeviceInfoStartAddr), (uint8_t*)&device_info,
+                            sizeof(device_info));
         FlashUtils::FlashUnsafe();
         return true;
     }

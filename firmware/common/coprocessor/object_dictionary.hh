@@ -209,7 +209,7 @@ class ObjectDictionary {
     /**
      * Struct used to pass debug messages between devices.
      */
-    struct LogMessage {
+    struct __attribute__((__packed__)) LogMessage {
         static const uint16_t kHeaderSize = sizeof(SettingsManager::LogLevel) + sizeof(uint16_t);
         SettingsManager::LogLevel log_level;
         uint16_t num_chars;

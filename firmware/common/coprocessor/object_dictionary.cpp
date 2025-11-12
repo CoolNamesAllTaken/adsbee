@@ -27,22 +27,22 @@ extern CPUMonitor cpu_monitor;
 #endif
 
 #ifdef ON_COPRO_SLAVE
-bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, uint16_t offset) {
+bool ObjectDictionary::SetBytes(Address addr, uint8_t* buf, uint16_t buf_len, uint16_t offset) {
     switch (addr) {
         case kAddrScratch:
             // Warning: printing here will cause a timeout and tests will fail.
             // CONSOLE_INFO("ObjectDictionary::SetBytes", "Setting %d settings Bytes at offset %d.", buf_len,
             // offset);
-            memcpy((uint8_t *)&scratch_ + offset, buf, buf_len);
+            memcpy((uint8_t*)&scratch_ + offset, buf, buf_len);
             break;
         case kAddrSettingsData:
             // Warning: printing here will cause a timeout and tests will fail.
             // CONSOLE_INFO("ObjectDictionary::SetBytes", "Setting %d settings Bytes at offset %d.", buf_len,
             // offset);
-            memcpy((uint8_t *)&(settings_manager.settings) + offset, buf, buf_len);
+            memcpy((uint8_t*)&(settings_manager.settings) + offset, buf, buf_len);
             if (offset + buf_len == sizeof(SettingsManager::Settings)) {
-                CONSOLE_INFO("SPICoprocessor::SetBytes", "Wrote last chunk of settings data. Applying new values.");
                 settings_manager.Apply();
+                CONSOLE_INFO("SPICoprocessor::SetBytes", "Wrote last chunk of settings data. Applying new values.");
             }
             break;
         case kAddrRollQueue: {
@@ -104,7 +104,7 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
         case kAddrConsole: {
             // Don't print here to avoid print of print doom loop explosion.
             // CONSOLE_INFO("ObjectDictionary::SetBytes", "Forwarding %d byte message to network console.", buf_len);
-            adsbee_server.network_console.BroadcastMessage(reinterpret_cast<const char *>(buf), buf_len);
+            adsbee_server.network_console.BroadcastMessage(reinterpret_cast<const char*>(buf), buf_len);
             break;
         }
         case kAddrAircraftDictionaryMetrics: {
@@ -144,26 +144,26 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
     return true;
 }
 
-bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, uint16_t offset) {
+bool ObjectDictionary::GetBytes(Address addr, uint8_t* buf, uint16_t buf_len, uint16_t offset) {
     switch (addr) {
         case kAddrFirmwareVersion:
-            memcpy(buf, (uint8_t *)(&kFirmwareVersion) + offset, buf_len);
+            memcpy(buf, (uint8_t*)(&kFirmwareVersion) + offset, buf_len);
             break;
         case kAddrScratch:
             // Warning: printing here will cause a timeout and tests will fail.
             // CONSOLE_INFO("ObjectDictionary::GetBytes", "Getting %d scratch Bytes at offset %d.", buf_len,
             // offset);
-            memcpy(buf, (uint8_t *)(&scratch_) + offset, buf_len);
+            memcpy(buf, (uint8_t*)(&scratch_) + offset, buf_len);
             break;
         case kAddrSettingsData:
             // Warning: printing here will cause a timeout and tests will fail.
             // CONSOLE_INFO("ObjectDictionary::GetBytes", "Getting %d settings Bytes at offset %d.",
             // buf_len, offset);
-            memcpy(buf, (uint8_t *)&(settings_manager.settings) + offset, buf_len);
+            memcpy(buf, (uint8_t*)&(settings_manager.settings) + offset, buf_len);
             break;
         case kAddrDeviceStatus: {
             UpdateDeviceStatus();
-            memcpy(buf, (uint8_t *)&device_status + offset, buf_len);
+            memcpy(buf, (uint8_t*)&device_status + offset, buf_len);
             break;
         }
         case kAddrLogMessages: {
@@ -189,7 +189,7 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
                 CONSOLE_ERROR("ObjectDictionary::GetBytes", "No SCCommand requests available to read.");
                 return false;
             }
-            SCCommandRequest &request = request_with_callback.request;
+            SCCommandRequest& request = request_with_callback.request;
             memcpy(buf, &request, sizeof(SCCommandRequest));
             break;
         }
@@ -258,7 +258,7 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t *buf, uint16_t buf_len, ui
     return true;
 }
 
-bool ObjectDictionary::RequestSCCommand(const SCCommandRequestWithCallback &request_with_callback) {
+bool ObjectDictionary::RequestSCCommand(const SCCommandRequestWithCallback& request_with_callback) {
     if (sc_command_request_queue.Enqueue(request_with_callback)) {
         return true;
     } else {
@@ -267,7 +267,7 @@ bool ObjectDictionary::RequestSCCommand(const SCCommandRequestWithCallback &requ
     }
 }
 
-bool ObjectDictionary::RequestSCCommandBlocking(const SCCommandRequestWithCallback &request_with_callback) {
+bool ObjectDictionary::RequestSCCommandBlocking(const SCCommandRequestWithCallback& request_with_callback) {
 #ifdef ON_ESP32
     SemaphoreHandle_t command_complete_semaphore = xSemaphoreCreateBinary();
     if (command_complete_semaphore == NULL) {
@@ -350,13 +350,13 @@ void ObjectDictionary::UpdateDeviceStatus() {
 }
 #endif
 
-uint16_t ObjectDictionary::PackLogMessages(uint8_t *buf, uint16_t buf_len,
-                                           PFBQueue<ObjectDictionary::LogMessage> &log_message_queue,
+uint16_t ObjectDictionary::PackLogMessages(uint8_t* buf, uint16_t buf_len,
+                                           PFBQueue<ObjectDictionary::LogMessage>& log_message_queue,
                                            uint16_t num_messages) {
     uint16_t bytes_written = 0;
     for (uint16_t i = 0; i < num_messages; i++) {
         LogMessage log_message;
-        if (!log_message_queue.Peek(log_message)) {
+        if (!log_message_queue.Peek(log_message, i)) {
             break;  // No more messages to pack.
         }
         uint16_t buf_bytes_remaining = buf_len - bytes_written;
@@ -373,8 +373,8 @@ uint16_t ObjectDictionary::PackLogMessages(uint8_t *buf, uint16_t buf_len,
     return bytes_written;
 }
 
-uint16_t ObjectDictionary::UnpackLogMessages(uint8_t *buf, uint16_t buf_len,
-                                             PFBQueue<ObjectDictionary::LogMessage> &log_message_queue,
+uint16_t ObjectDictionary::UnpackLogMessages(uint8_t* buf, uint16_t buf_len,
+                                             PFBQueue<ObjectDictionary::LogMessage>& log_message_queue,
                                              uint16_t max_num_messages) {
     uint16_t bytes_read = 0;
     uint16_t num_messages = 0;
@@ -385,7 +385,7 @@ uint16_t ObjectDictionary::UnpackLogMessages(uint8_t *buf, uint16_t buf_len,
             break;  // Not enough data for header.
         }
         // Cast to a Byte array to avoid warnings about memcpy not writing the full LogMessage object.
-        memcpy((uint8_t *)(&log_message), buf + bytes_read, LogMessage::kHeaderSize);
+        memcpy((uint8_t*)(&log_message), buf + bytes_read, LogMessage::kHeaderSize);
 
         if (log_message.num_chars > kLogMessageMaxNumChars) {
             CONSOLE_ERROR("ObjectDictionary::UnpackLogMessages", "Invalid log message length: %d",
@@ -400,10 +400,6 @@ uint16_t ObjectDictionary::UnpackLogMessages(uint8_t *buf, uint16_t buf_len,
         memcpy(log_message.message, buf + bytes_read + LogMessage::kHeaderSize, log_message.num_chars);
         log_message.message[log_message.num_chars] = '\0';  // Null terminate the message.
 
-        if (log_message_queue.IsFull()) {
-            log_message_queue.Clear();
-            CONSOLE_ERROR("ObjectDictionary::UnpackLogMessages", "Log message queue is full, clearing it.");
-        }
         log_message_queue.Enqueue(log_message);
 
         bytes_read += LogMessage::kHeaderSize + log_message.num_chars + 1;  // Move past header and message.

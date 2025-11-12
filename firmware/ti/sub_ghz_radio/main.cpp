@@ -113,7 +113,7 @@ int main(void) {
     }
     GPIO_write(bsp.kSubGLEDPin, 0);
     CONSOLE_INFO("ADSBeeServer::Init", "Settings data read from Pico.");
-    // settings_manager.Print();
+    settings_manager.Print();
 
     if (!subg_radio.Init()) {
         CONSOLE_ERROR("main", "Failed to initialize SubGHz radio.");

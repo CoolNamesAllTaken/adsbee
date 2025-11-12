@@ -24,7 +24,7 @@ class ADSBee {
 
     static constexpr uint16_t kTLMaxPWMCount = 5000;  // Clock is 125MHz, shoot for 25kHz PWM.
     static constexpr int kVDDMV = 3300;               // [mV] Voltage of positive supply rail.
-    static constexpr int kTLOffsetMaxMV = 3300;       // [mV]
+    static constexpr int kTLOffsetMaxMV = 2000;       // [mV]
     static constexpr int kTLOffsetMinMV = 0;          // [mV]
     static constexpr uint32_t kStatusLEDOnMs = 1;
 
@@ -64,7 +64,7 @@ class ADSBee {
 
         uint16_t r1090_led_pin = 15;
         // Reading ADS-B on GPIO19. Will look for DEMOD signal on GPIO20.
-        uint16_t* pulses_pins = bsp.r1090_pulses_pins;
+        uint16_t pulses_pin = bsp.r1090_pulses_pin;
         uint16_t* demod_pins = bsp.r1090_demod_pins;
         // Use GPIO22 for the decode PIO program to output its recovered clock (for debugging only).
         uint16_t* recovered_clk_pins =
@@ -214,14 +214,29 @@ class ADSBee {
      * in mV.
      * @retval Voltage from the RF power detector, in mV.
      */
-    inline int ReadSignalStrengthMilliVolts();
+    inline int ReadSignalStrengthMilliVoltsBlocking();
+
+    /**
+     * Begins an ADC read of the Receive Signal Strength Indicator (RSSI) of the signal currently provided by the RF
+     * power detector, in mV. Non-blocking; must call ReadSignalStrengthMilliVoltsNonBlockingComplete() to complete the
+     * read. Ideally a bunch of other operations can be staged between begin and end to utilize the ADC read time.
+     */
+    inline void ReadSignalStrengthMilliVoltsNonBlockingBegin();
+
+    /**
+     * Completes a non-blocking ADC read of the Receive Signal Strength Indicator (RSSI) of the signal currently
+     * provided by the RF power detector, in mV. Must be called after ReadSignalStrengthMilliVoltsNonBlockingBegin().
+     * NOTE: This function blocks until the ADC read is complete.
+     * @retval Voltage from the RF power detector, in mV.
+     */
+    inline int ReadSignalStrengthMilliVoltsNonBlockingComplete();
 
     /**
      * Returns the Receive Signal Strength Indicator (RSSI) of the message that is currently being provided by the RF
      * power detector, in dBm. makes use of ReadSignalStrengthMilliVolts().
      * @retval Voltage form the RF power detector converted to dBm using the chart in the AD8313 datasheet.
      */
-    inline int ReadSignalStrengthdBm();
+    inline int ReadSignalStrengthdBmBlocking();
 
     /**
      * Read the low Minimum Trigger Level threshold via ADC.

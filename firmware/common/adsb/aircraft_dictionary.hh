@@ -354,13 +354,13 @@ class ModeSAircraft : public Aircraft {
      * @retval True if message was ingested successfully, false otherwise.
      */
 
-    bool ApplyAircraftIDMessage(const ModeSADSBPacket &packet);
-    bool ApplySurfacePositionMessage(const ModeSADSBPacket &packet);
-    bool ApplyAirbornePositionMessage(const ModeSADSBPacket &packet, bool filter_cpr_position = true);
-    bool ApplyAirborneVelocitiesMessage(const ModeSADSBPacket &packet);
-    bool ApplyAircraftStatusMessage(const ModeSADSBPacket &packet);
-    bool ApplyTargetStateAndStatusInfoMessage(const ModeSADSBPacket &packet);
-    bool ApplyAircraftOperationStatusMessage(const ModeSADSBPacket &packet);
+    bool ApplyAircraftIDMessage(const ModeSADSBPacket& packet);
+    bool ApplySurfacePositionMessage(const ModeSADSBPacket& packet);
+    bool ApplyAirbornePositionMessage(const ModeSADSBPacket& packet, bool filter_cpr_position = true);
+    bool ApplyAirborneVelocitiesMessage(const ModeSADSBPacket& packet);
+    bool ApplyAircraftStatusMessage(const ModeSADSBPacket& packet);
+    bool ApplyTargetStateAndStatusInfoMessage(const ModeSADSBPacket& packet);
+    bool ApplyAircraftOperationStatusMessage(const ModeSADSBPacket& packet);
 
    private:
     struct CPRPacket {
@@ -509,14 +509,21 @@ class UATAircraft : public Aircraft {
      */
     inline void WriteBitFlag(BitFlag bit, bool value) { value ? flags |= (0b1 << bit) : flags &= ~(0b1 << bit); }
 
+    /**
+     * Filters the position in the state vector using a position filter to reject outlier positions.
+     * @param[in] state_vector State vector to filter position for.
+     * @retval True if the position in the state vector passed the filter, false if it needs to be rejected.
+     */
+    bool DecodePosition(const DecodedUATADSBPacket::UATStateVector& state_vector);
+
     // Application functions use pointers to portions of the decoded UAT ADS-B message payload that can be directly
     // interpreted.
-    bool ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVector &state_vector);
-    bool ApplyUATADSBModeStatus(const DecodedUATADSBPacket::UATModeStatus &mode_status);
-    bool ApplyUATADSBTargetState(const DecodedUATADSBPacket::UATTargetState &target_state);
-    bool ApplyUATADSBTrajectoryChange(const DecodedUATADSBPacket::UATTrajectoryChange &trajectory_change);
-    bool ApplyUATADSBAuxiliaryStateVector(const DecodedUATADSBPacket::UATStateVector &state_vector,
-                                          const DecodedUATADSBPacket::UATAuxiliaryStateVector &auxiliary_state_vector);
+    bool ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVector& state_vector);
+    bool ApplyUATADSBModeStatus(const DecodedUATADSBPacket::UATModeStatus& mode_status);
+    bool ApplyUATADSBTargetState(const DecodedUATADSBPacket::UATTargetState& target_state);
+    bool ApplyUATADSBTrajectoryChange(const DecodedUATADSBPacket::UATTrajectoryChange& trajectory_change);
+    bool ApplyUATADSBAuxiliaryStateVector(const DecodedUATADSBPacket::UATStateVector& state_vector,
+                                          const DecodedUATADSBPacket::UATAuxiliaryStateVector& auxiliary_state_vector);
 
     uint32_t flags = 0b0;
 
@@ -571,6 +578,16 @@ class UATAircraft : public Aircraft {
 
    private:
     Metrics metrics_counter_;
+
+#ifdef FILTER_CPR_POSITIONS
+    // Position in Angular Weighted Binary. This gets set to a candidate position which may not match the actual
+    // displayed latitude_deg and logitude_deg. Format is in AWB to enable fast fixed point operations for screening
+    // candidate positions.
+    uint32_t last_filter_received_timestamp_ms_ =
+        0;  // received_timestamp_ms for the last packet that was fed to the filter.
+    uint32_t lat_awb_ = 0;
+    uint32_t lon_awb_ = 0;
+#endif
 };
 
 class AircraftDictionary {
@@ -638,7 +655,7 @@ class AircraftDictionary {
          * @param[in] buf Buffer to write the JSON string to.
          * @param[in] buf_len Length of the buffer, including the null terminator.
          */
-        inline uint16_t ToJSON(char *buf, size_t buf_len) {
+        inline uint16_t ToJSON(char* buf, size_t buf_len) {
             uint16_t message_max_len = buf_len - 1;  // Leave space for null terminator.
             // Add aggregate 1090 stats.
             uint16_t chars_written = snprintf(buf, message_max_len - strnlen(buf, kMetricsJSONMaxLen),
@@ -763,7 +780,7 @@ class AircraftDictionary {
      * Passed as a reference, since packets can be marked as valid by this function.
      * @retval True if successful, false if something broke.
      */
-    bool IngestDecodedModeSPacket(DecodedModeSPacket &packet);
+    bool IngestDecodedModeSPacket(DecodedModeSPacket& packet);
 
     /**
      * Ingests an Identity Surveillance Reply packet and uses it to update the relevant aircraft. Exposed for
@@ -773,7 +790,7 @@ class AircraftDictionary {
      * @param[in] packet ModeSIdentityReplyPacket to ingest.
      * @retval True if successful, false if something broke.
      */
-    bool IngestModeSIdentityReplyPacket(const ModeSIdentityReplyPacket &packet);
+    bool IngestModeSIdentityReplyPacket(const ModeSIdentityReplyPacket& packet);
 
     /**
      * Ingests an Altitude Surveillance Reply packet and uses it to update the relevant aircraft. Exposed for
@@ -783,7 +800,7 @@ class AircraftDictionary {
      * @param[in] packet ModeSAltitudeReplyPacket to ingest.
      * @retval True if successful, false if something broke.
      */
-    bool IngestModeSAltitudeReplyPacket(const ModeSAltitudeReplyPacket &packet);
+    bool IngestModeSAltitudeReplyPacket(const ModeSAltitudeReplyPacket& packet);
 
     /**
      * Ingests an All Call Reply packet and uses it to update the relevant aircraft. Exposed for testing, but usually
@@ -792,7 +809,7 @@ class AircraftDictionary {
      * Currently, we only accept all call reply packets with an interrogator ID of 0 (replies to spontaneous acquisition
      * squitters), since we don't have a way to know the interrogator ID of ground based surveillance stations.
      */
-    bool IngestModeSAllCallReplyPacket(const ModeSAllCallReplyPacket &packet);
+    bool IngestModeSAllCallReplyPacket(const ModeSAllCallReplyPacket& packet);
 
     /**
      * Ingests an ModeSADSBPacket directly. Exposed for testing, but usually this gets called by
@@ -800,13 +817,13 @@ class AircraftDictionary {
      * @param[in] packet ModeSADSBPacket to ingest. Derived from a DecodedModeSPacket with DF=17-19.
      * @retval True if successful, false if something broke.
      */
-    bool IngestModeSADSBPacket(const ModeSADSBPacket &packet);
+    bool IngestModeSADSBPacket(const ModeSADSBPacket& packet);
 
     /**
      * UAT Packet Decoding
      */
 
-    bool IngestDecodedUATADSBPacket(const DecodedUATADSBPacket &packet);
+    bool IngestDecodedUATADSBPacket(const DecodedUATADSBPacket& packet);
 
     /**
      * Returns the number of aircraft currently in the dictionary.
@@ -822,9 +839,9 @@ class AircraftDictionary {
      * @note The aircraft must be derived from the Aircraft class, since the UID function is used to hash the aircraft.
      */
     template <typename T>
-    T *InsertAircraft(const T &aircraft) {
+    T* InsertAircraft(const T& aircraft) {
         // Extract UID from the underlying Aircraft virtual class.
-        uint32_t uid = static_cast<const Aircraft &>(aircraft).GetUID();
+        uint32_t uid = static_cast<const Aircraft&>(aircraft).GetUID();
         auto itr = dict.find(uid);
         if (itr != dict.end()) {
             // Overwriting an existing aircraft
@@ -858,9 +875,9 @@ class AircraftDictionary {
      * @retval True if aircraft was found and retrieved, false if aircraft was not in the dictionary.
      */
     template <typename T>
-    bool GetAircraft(uint32_t uid, T &aircraft_out) {
+    bool GetAircraft(uint32_t uid, T& aircraft_out) {
         // Don't create and insert the aircraft if it is not in the dictionary.
-        T *aircraft_ptr = GetAircraftPtr<T>(uid, false);
+        T* aircraft_ptr = GetAircraftPtr<T>(uid, false);
         if (aircraft_ptr) {
             aircraft_out = *aircraft_ptr;
             return true;
@@ -876,11 +893,11 @@ class AircraftDictionary {
      * @retval Pointer to the aircraft if found or inserted, nullptr if not found.
      */
     template <typename T>
-    T *GetAircraftPtr(uint32_t uid, bool insert_if_not_found = true) {
+    T* GetAircraftPtr(uint32_t uid, bool insert_if_not_found = true) {
         auto itr = dict.find(uid);
         if (itr != dict.end()) {
             // Aircraft was found in the dictionary. Get a pointer to it if the type is correct.
-            T *aircraft_ptr = std::get_if<T>(&(itr->second));
+            T* aircraft_ptr = std::get_if<T>(&(itr->second));
             if (aircraft_ptr) {
                 return aircraft_ptr;  // Found the aircraft, return it.
             }
