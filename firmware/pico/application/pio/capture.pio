@@ -30,16 +30,16 @@
 .wrap_target
 ; This is where we go to start looking for a new preamble, or after a preamble match fails.
 public follow_irq:
-    ; irq set 6                       ; -4 | Spam resetting the high power preamble detector.
-    mov osr isr                     ; -3 | OSR = 0b00000000000000000010100001010000
-    out null 18                     ; -2 | OSR = 0b10100001010000
-    mov x null                      ; -1 | Clear out x from last sampling adventure.
+    mov osr isr                     ; -4 | OSR = 0b00000000000000000010100001010000
+    out null 18                     ; -3 | OSR = 0b10100001010000
+    mov x null                      ; -2 | Clear out x from last sampling adventure.
 ; Grab a new bit every 24 cycles.
 ;   6 cycles: Get bit.
 ;   12 cycles: Assert bit.
 ;   6 cycles: nop.
     wait 1 irq 4 rel ; Wait for IRQ 4+SM, then clear it.
-    wait 0 gpio, pulses_gpio ; Wait for line to go LO so that we don't double with the detector that's already running.
+waiting_for_idle:
+    wait 0 gpio, pulses_gpio ; -1 | Wait for line to go LO so that we don't double with the detector that's already running.
     wait 1 gpio, pulses_gpio    ; 0 | wait for in_pin to go HI
     irq set 6 rel ; 1 | set IRQ 5+SM to indicate to the other preamble detector that it can start looking now
 check_next_bit:
