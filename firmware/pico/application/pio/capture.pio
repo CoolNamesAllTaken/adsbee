@@ -28,7 +28,8 @@
 
 ; BEGIN DOUBLE PULSE MATCH
 .wrap_target
-public waiting_for_first_edge:
+; This is where we go to start looking for a new preamble, or after a preamble match fails.
+public follow_irq:
     ; irq set 6                       ; -4 | Spam resetting the high power preamble detector.
     mov osr isr                     ; -3 | OSR = 0b00000000000000000010100001010000
     out null 18                     ; -2 | OSR = 0b10100001010000
@@ -37,6 +38,8 @@ public waiting_for_first_edge:
 ;   6 cycles: Get bit.
 ;   12 cycles: Assert bit.
 ;   6 cycles: nop.
+    wait 1 irq 4 rel ; Wait for IRQ 4+SM, then clear it.
+    wait 0 gpio, pulses_gpio ; Wait for line to go LO so that we don't double with the detector that's already running.
     wait 1 gpio, pulses_gpio    ; 0 | wait for in_pin to go HI
     irq set 6 rel ; 1 | set IRQ 5+SM to indicate to the other preamble detector that it can start looking now
 check_next_bit:
@@ -51,11 +54,7 @@ idle_countdown:
     jmp x-- idle_countdown [2] ; 25+2n:28+2n | still idle, keep counting down if the timer isn't up
 message_finished:
     set pins, 0 ; 29+2n | set demod pin to 0 to indicate message is finished
-    irq wait 0 rel ; 30+2n | Set IRQ 0+SM, and wait for it to clear (don't look for new messages until the current one has been processed).
-public follow_irq:
-    ; This is where we go to start looking for a new preamble, or after a preamble match fails.
-    wait 1 irq 4 rel ; Wait for IRQ 4+SM, then clear it.
-    wait 0 gpio, pulses_gpio ; Wait for line to go LO so that we don't double with the detector that's already running.
+    irq wait 0 rel ; 30+2n | Set IRQ 0+SM, and wait for it to clear (don't look for new messages until the current one has been processed).    
 .wrap
 
 preamble_not_done_yet:
@@ -166,7 +165,10 @@ void preamble_detector_program_init(
     sm_config_set_clkdiv(&c, div);
 
     // Load configuration and jump to start of the program
-    pio_sm_init(pio, sm, offset + (waiting ? preamble_detector_offset_follow_irq : 0), &c);
+    if (!waiting) {
+        pio_sm_exec(pio, sm, pio_encode_irq_set(true, 4)); // Set IRQ 4 + SM to avoid waiting on complementary state machine on startup.
+    }
+    pio_sm_init(pio, sm, offset + preamble_detector_offset_follow_irq, &c);
 }
 
 %}
