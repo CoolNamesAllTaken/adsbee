@@ -125,15 +125,8 @@ bool ADSBee::Init() {
     gpio_put(config_.bias_tee_enable_pin, 1);  // Enable is active LO.
     gpio_set_dir(config_.bias_tee_enable_pin, GPIO_OUT);
 
-    PIOInit();
-    CONSOLE_INFO("ADSBee::Init", "PIOs initialized.");
-    MLATCounterInit();
-    CONSOLE_INFO("ADSBee::Init", "MLAT counter initialized.");
-
     // Set the last dictionary update timestamp.
     last_aircraft_dictionary_update_timestamp_ms_ = get_time_since_boot_ms();
-
-    PIOEnable();
 
     // Initialize sub-GHz radio.
     if (config_.has_subg) {
@@ -154,6 +147,13 @@ bool ADSBee::Init() {
     }
 #endif  // WATCHDOG_REBOOT_WARNING
 
+    return true;
+}
+
+bool ADSBee::InitISRs() {
+    PIOInit();
+    MLATCounterInit();
+    PIOEnable();
     return true;
 }
 
@@ -223,7 +223,7 @@ void __time_critical_func(ADSBee::OnDemodBegin)(uint gpio) {
 }
 
 void ADSBee::OnDemodComplete() {
-    int signal_strength_dbm = ReadSignalStrengthMilliVoltsNonBlockingComplete();
+    int signal_strength_dbm = AD8313MilliVoltsTodBm(ReadSignalStrengthMilliVoltsNonBlockingComplete());
 
     // Figure out which state machines were triggered and get things set up to read packets from them. Don't stop them,
     // let them finish chewing since they run at a lower clock rate.
@@ -545,8 +545,7 @@ void ADSBee::PIOInit() {
         );
 
         // Handle GPIO interrupts (for marking beginning of demod interval).
-        gpio_set_irq_enabled_with_callback(config_.demod_pins[sm_index], GPIO_IRQ_EDGE_RISE /* | GPIO_IRQ_EDGE_FALL */,
-                                           true, on_demod_pin_change);
+        gpio_set_irq_enabled_with_callback(config_.demod_pins[sm_index], GPIO_IRQ_EDGE_RISE, true, on_demod_pin_change);
 
         // Set the preamble sequence into the ISR: ISR: 0b101000010100000(0)
         // Last 0 removed from preamble sequence to allow the demodulator more time to start up.
