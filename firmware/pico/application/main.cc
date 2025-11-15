@@ -101,6 +101,7 @@ int main() {
     }
 
     adsbee.Init();
+    adsbee.InitISRs();
 
     // If WiFi is enabled, try establishing communication with the ESP32 and maybe update its firmware.
     if (esp32.IsEnabled()) {

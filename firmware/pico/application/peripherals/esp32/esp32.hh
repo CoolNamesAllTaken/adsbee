@@ -12,11 +12,11 @@ class ESP32 : public SPICoprocessorSlaveInterface {
     static const uint32_t kBootupDelayMs = 500;  // Delay after enabling the ESP32 before starting comms.
     // How long we wait to start a transaction after the last one is completed. Can be overridden if the handshake line
     // goes high after kSPIHandshakeLockoutUs.
-    static constexpr uint32_t kSPIPostTransmitLockoutUs = 1000;
+    static constexpr uint32_t kSPIPostTransmitLockoutUs = 2000;
 
     struct ESP32Config {
         uint16_t enable_pin = bsp.esp32_enable_pin;
-        spi_inst_t *spi_handle = bsp.copro_spi_handle;
+        spi_inst_t* spi_handle = bsp.copro_spi_handle;
         uint16_t spi_cs_pin = bsp.esp32_spi_cs_pin;
         uint16_t spi_handshake_pin = bsp.esp32_spi_handshake_pin;
         gpio_drive_strength spi_drive_strength = bsp.copro_spi_drive_strength;
@@ -64,7 +64,7 @@ class ESP32 : public SPICoprocessorSlaveInterface {
     }
     bool SPIGetHandshakePinLevel();
 
-    int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf,
+    int SPIWriteReadBlocking(uint8_t* tx_buf, uint8_t* rx_buf,
                              uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
                              bool end_transaction = true);
 

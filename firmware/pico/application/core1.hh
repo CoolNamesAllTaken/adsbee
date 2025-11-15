@@ -1,5 +1,6 @@
 #pragma once
 
+#include "adsbee.hh"
 #include "cpu_utils.hh"
 #include "mode_s_packet_decoder.hh"
 #include "pico/multicore.h"
@@ -7,6 +8,8 @@
 extern CPUMonitor core_1_monitor;
 
 inline void main_core1() {
+    // adsbee.InitISRs();
+
     while (true) {
         core_1_monitor.Tick();
         decoder.UpdateDecoderLoop();

@@ -18,6 +18,9 @@
 .define pulses_pin_index 0
 .define demod_pin_index 1
 
+; 1/8us per tick (2x 16MHz instructions per tick)
+.define end_of_message_idle_ticks 20
+
 
 ; Build preamble pattern and load it into ISR: 0b101000010100000.
 ; Note that one 0 bit has been removed from the preamble to allow more cycles for the demodulator to turn on.
@@ -25,15 +28,18 @@
 
 ; BEGIN DOUBLE PULSE MATCH
 .wrap_target
-public waiting_for_first_edge:
-    ; irq set 6                       ; -4 | Spam resetting the high power preamble detector.
-    mov osr isr                     ; -3 | OSR = 0b00000000000000000010100001010000
-    out null 18                     ; -2 | OSR = 0b10100001010000
-    mov x null                      ; -1 | Clear out x from last sampling adventure.
+; This is where we go to start looking for a new preamble, or after a preamble match fails.
+public follow_irq:
+    mov osr isr                     ; -4 | OSR = 0b00000000000000000010100001010000
+    out null 18                     ; -3 | OSR = 0b10100001010000
+    mov x null                      ; -2 | Clear out x from last sampling adventure.
 ; Grab a new bit every 24 cycles.
 ;   6 cycles: Get bit.
 ;   12 cycles: Assert bit.
 ;   6 cycles: nop.
+    wait 1 irq 4 rel ; Wait for IRQ 4+SM, then clear it.
+waiting_for_idle:
+    wait 0 gpio, pulses_gpio ; -1 | Wait for line to go LO so that we don't double with the detector that's already running.
     wait 1 gpio, pulses_gpio    ; 0 | wait for in_pin to go HI
     irq set 6 rel ; 1 | set IRQ 5+SM to indicate to the other preamble detector that it can start looking now
 check_next_bit:
@@ -42,17 +48,13 @@ preamble_matched:
     set pins 1 [2] ; 3:5 | set demod pin to indicate message body beginning
     wait 1 gpio, pulses_gpio [11] ; 6:17 | wait till middle of message eye to look for end
 waiting_for_end_of_message:
-    set x, 16 [2] ; 18:20 | [2.0us] number of sequential idle samples required to mark end of packet
+    set x, end_of_message_idle_ticks [2] ; 18:20 | [2.0us] number of sequential idle samples required to mark end of packet
 idle_countdown:
     jmp pin waiting_for_end_of_message [2] ; 21+2n:24+2n | start over the idle countdown if received a non idle bit
     jmp x-- idle_countdown [2] ; 25+2n:28+2n | still idle, keep counting down if the timer isn't up
 message_finished:
     set pins, 0 ; 29+2n | set demod pin to 0 to indicate message is finished
-    irq wait 0 rel ; 30+2n | Set IRQ 0+SM, and wait for it to clear (don't look for new messages until the current one has been processed).
-public follow_irq:
-    ; This is where we go to start looking for a new preamble, or after a preamble match fails.
-    wait 1 irq 4 rel ; Wait for IRQ 4+SM, then clear it.
-    wait 0 gpio, pulses_gpio ; Wait for line to go LO so that we don't double with the detector that's already running.
+    irq wait 0 rel ; 30+2n | Set IRQ 0+SM, and wait for it to clear (don't look for new messages until the current one has been processed).    
 .wrap
 
 preamble_not_done_yet:
@@ -163,7 +165,10 @@ void preamble_detector_program_init(
     sm_config_set_clkdiv(&c, div);
 
     // Load configuration and jump to start of the program
-    pio_sm_init(pio, sm, offset + (waiting ? preamble_detector_offset_follow_irq : 0), &c);
+    if (!waiting) {
+        pio_sm_exec(pio, sm, pio_encode_irq_set(true, 4)); // Set IRQ 4 + SM to avoid waiting on complementary state machine on startup.
+    }
+    pio_sm_init(pio, sm, offset + preamble_detector_offset_follow_irq, &c);
 }
 
 %}
@@ -175,10 +180,13 @@ void preamble_detector_program_init(
 .define high_power_demod_in_pin_index 10
 ; Pulses input pin for reading current power level.
 .define pulses_gpio 19
+; Number of delay loops the clock recovery routine can wait, per bit, for the next manchester edge, before skipping.
+; 1/24us per cycle (2x 48MHz instructions per cycle)
+.define max_clock_skew_cycles 3
 ; Allow side-setting the out_pin for debugging. 1x output pin can be optionally side-set.
 .side_set 1 opt
 ; Assumes line is idle low, first bit is 0
-; One bit is 16 cycles
+; One bit is 48 cycles
 ; a '0' is encoded as 01
 ; a '1' is encoded as 10
 ;
@@ -193,11 +201,10 @@ void preamble_detector_program_init(
 ; @param[in] y Goes back to end_of_0 if y = 0, goes back to end_of_1 otherwise.
 ; @retval x x=1 if >=2/3 samples were LO, x=0 otherwise.
 sample:
-    pull noblock        ; -15 | Pull from TX FIFO to OSR in order to signal DMA to capture timestamp. We put this here since it needs to fire on demod begin on both high power and regular preambles.
-    set x 4 [6]         ; -14:-7 | (x+1) = number of samples to take (added delay 7)
-    mov osr !null [7]   ; -7:0 | OSR = 0b1111111111111111111111 (added delay 7)
-    out null 30         ; 1 | OSR = 0b11 (3 bits required to classify sampling period as HI)
-    nop [2]             ; 2:7 | This delay controls max allowable clock skew per bit.
+    set x 4 [7]         ; 5:13 | (x+1) = number of samples to take (added delay 7)
+    mov osr !null [7]   ; 14:22 | OSR = 0b1111111111111111111111 (added delay 7)
+    out null 30 [2]         ; 23:25 | OSR = 0b11 (3 bits required to classify sampling period as HI)
+    ; nop [2]             ; 2:7 | This delay controls max allowable clock skew per bit.
 ; One sample takes 3 cycles.
 sample_wrap_target:
     jmp pin sample_hi side 1 ; 8+3n
@@ -207,8 +214,8 @@ sample_hi:
     out null 1 ; 9+3n
 sample_wrap:
     jmp x-- sample_wrap_target side 0 ; 10+3n
-    mov x, pins ; 17 | read pulses and demod bit into x
-    wait 1 pin demod_in_pin_index ; 18 | bail into idle state if demod bit is 0
+    mov x, pins [1]; 17 | read pulses and demod bit into x
+    ; wait 1 pin demod_in_pin_index ; 18 | bail into idle state if demod bit is 0
     jmp !osre sample_net_lo ; 19 | used to have no delay
 
 sample_net_hi:
@@ -223,11 +230,16 @@ sample_return:
 
 public initial_entry:
     wait 1 pin demod_in_pin_index [6] side 0   ; -11:-5 | Wait to enter DEMOD interval.
+    pull noblock        ; -4 | Pull from TX FIFO to OSR in order to signal DMA to capture timestamp.
     ; Preamble ends LO, so imitate the end of a 1 with its HI->LO transition.
-    jmp initial_entry_cut_in [6]            ; -4:2 | wait adjusted here
+    jmp initial_entry_cut_in [5]            ; -3:2 | wait adjusted here
 
 start_of_1:
-    wait 0 gpio pulses_gpio ; 0 | Wait for the 1->0 transition - at this point we are 0.5 into the bit.
+    ; wait 0 gpio pulses_gpio ; 0 | Wait for the 1->0 transition - at this point we are 0.5 into the bit.
+    set x max_clock_skew_cycles
+start_of_1_wait_loop:
+    jmp x-- falling_edge_1
+    jmp pin start_of_1_wait_loop ; 0
 falling_edge_1:
     mov x !null side 1          ; 1
     in x, 1 side 0              ; 2 | Emit a 1.
@@ -239,7 +251,11 @@ end_of_1:
 
 .wrap_target
 start_of_0:                     ; We are 0.25 bits into a 0 - signal is LO
-    wait 1 gpio pulses_gpio ; 0 | Wait for the 0->1 transition - at this point we are 0.5 into the bit.
+    ; wait 1 gpio pulses_gpio ; 0 | Wait for the 0->1 transition - at this point we are 0.5 into the bit.
+    set x max_clock_skew_cycles
+start_of_0_wait_loop:
+    jmp pin rising_edge_0       ; 0
+    jmp x-- start_of_0_wait_loop
 rising_edge_0:
     in null, 1 [1] side 1       ; 1:2 | Emit a 0, sleep 3/4 of a bit
 
