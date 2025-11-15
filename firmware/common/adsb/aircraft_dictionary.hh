@@ -379,8 +379,8 @@ class ModeSAircraft : public Aircraft {
     // candidate positions.
     uint32_t last_filter_received_timestamp_ms_ =
         0;  // received_timestamp_ms for the last packet that was fed to the filter.
-    uint32_t lat_awb_ = 0;
-    uint32_t lon_awb_ = 0;
+    uint32_t lat_awb32_ = 0;
+    uint32_t lon_awb32_ = 0;
 #endif
 
     Metrics metrics_counter_;
@@ -510,11 +510,22 @@ class UATAircraft : public Aircraft {
     inline void WriteBitFlag(BitFlag bit, bool value) { value ? flags |= (0b1 << bit) : flags &= ~(0b1 << bit); }
 
     /**
+     * UAT state vector contains latitude and longitude as 24-bit Angular Weighted Binary (AWB). Convert to 32-bit
+     * angular weighted binary.
+     * @param[in] uat_lat_awb 24-bit UAT latitude in AWB format.
+     * @retval 32-bit latitude in AWB format.
+     */
+    inline uint32_t UATAWBToAWB32(uint32_t uat_awb) {
+        return (uat_awb << 8);  // Shift left to convert from 24-bit to 32-bit AWB.
+    }
+
+    /**
      * Filters the position in the state vector using a position filter to reject outlier positions.
      * @param[in] state_vector State vector to filter position for.
+     * @param[in] filter_position True if the position filter should be applied, false to skip filtering.
      * @retval True if the position in the state vector passed the filter, false if it needs to be rejected.
      */
-    bool DecodePosition(const DecodedUATADSBPacket::UATStateVector& state_vector);
+    bool DecodePosition(const DecodedUATADSBPacket::UATStateVector& state_vector, bool filter_position = true);
 
     // Application functions use pointers to portions of the decoded UAT ADS-B message payload that can be directly
     // interpreted.
@@ -585,8 +596,8 @@ class UATAircraft : public Aircraft {
     // candidate positions.
     uint32_t last_filter_received_timestamp_ms_ =
         0;  // received_timestamp_ms for the last packet that was fed to the filter.
-    uint32_t lat_awb_ = 0;
-    uint32_t lon_awb_ = 0;
+    uint32_t lat_awb32_ = 0;
+    uint32_t lon_awb32_ = 0;
 #endif
 };
 

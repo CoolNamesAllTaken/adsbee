@@ -40,7 +40,7 @@ class RawUATADSBPacket {
     static constexpr uint16_t kADSBMessageMaxSizeBytes =
         kLongADSBMessagePayloadNumBytes + kLongADSBMessageFECParityNumBytes;  // For convenience.
 
-    RawUATADSBPacket(const char *rx_string, int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_bits_in = INT16_MIN,
+    RawUATADSBPacket(const char* rx_string, int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_bits_in = INT16_MIN,
                      uint64_t mlat_48mhz_64bit_counts = 0);
     RawUATADSBPacket(uint8_t rx_buffer[kADSBMessageMaxSizeBytes], uint16_t rx_buffer_len_bytes,
                      int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_bits_in = INT16_MIN,
@@ -86,7 +86,7 @@ class DecodedUATADSBPacket {
     static constexpr uint16_t kModeStatusOffsetBytes = 17;
     static constexpr uint16_t kAuxiliaryStateVectorOffsetBytes = 29;
 
-    static constexpr float kDegPerAWBTick = 360.0f / 16777216.0f;  // 360 degrees / 2^24, for lat/lon
+    static constexpr float kDegPerUATAWBTick = 360.0f / 16777216.0f;  // 360 degrees / 2^24, for lat/lon
 
     enum UATADSBMessageFormat : uint8_t {
         kUATADSBMessageFormatInvalid = 0,
@@ -155,8 +155,8 @@ class DecodedUATADSBPacket {
      * @retval DirectionType indicating the type of direction calculated.
      */
     static ADSBTypes::DirectionType HorizontalVelocityToDirectionDegAndSpeedKts(
-        uint32_t horizontal_velocity, ADSBTypes::AirGroundState air_ground_state, float &direction_deg_ref,
-        int32_t &speed_kts_ref);
+        uint32_t horizontal_velocity, ADSBTypes::AirGroundState air_ground_state, float& direction_deg_ref,
+        int32_t& speed_kts_ref);
 
     /**
      * Decodes the vertical velocity field from a UAT ADS-B packet. Uses an AirGroundState to determine whether the
@@ -170,7 +170,7 @@ class DecodedUATADSBPacket {
      */
     static ADSBTypes::VerticalRateSource VerticalVelocityToVerticalRateFpm(uint32_t vertical_velocity,
                                                                            ADSBTypes::AirGroundState air_ground_state,
-                                                                           int32_t &vertical_rate_fpm_ref);
+                                                                           int32_t& vertical_rate_fpm_ref);
 
     /**
      * Decodes either the Aircraft / Vehicle length and width or GNSS sensor position offset from the Aircraft/Vehicle
@@ -181,8 +181,8 @@ class DecodedUATADSBPacket {
      * @retval AVDimensionsType that indicates whether the decoded dimensions were AV size or AV GNSS sensor offset
      * position.
      */
-    static ADSBTypes::AVDimensionsType DecodeAVDimensions(uint32_t av_dimensions_encoded, int16_t &width_m_ref,
-                                                          int16_t &length_m_ref);
+    static ADSBTypes::AVDimensionsType DecodeAVDimensions(uint32_t av_dimensions_encoded, int16_t& width_m_ref,
+                                                          int16_t& length_m_ref);
 
     struct __attribute__((packed)) UATHeader {
         uint8_t mdb_type_code     : 5;  // Message Data Block (MDB) type code.
@@ -207,17 +207,17 @@ class DecodedUATADSBPacket {
     };
 
     struct __attribute__((packed)) UATModeStatus {
-        uint16_t
-            emitter_category_and_callsign_chars_1_2 : 16;  // Emitter category and first two characters of callsign.
-        uint16_t callsign_chars_3_4_5               : 16;  // Next three characters of callsign.
-        uint16_t callsign_chars_6_7_8               : 16;  // Last three characters of callsign.
-        uint8_t emergency_priority_status           : 3;   // Emergency / priority status.
-        uint8_t uat_version                         : 3;   // UAT protocol version.
-        uint8_t sil                                 : 2;   // Source Integrity Level (SIL).
-        uint8_t transmit_mso                        : 6;
-        uint8_t reserved1                           : 2;  // Reserved bits.
-        uint8_t nac_p                               : 4;  // Navigation Accuracy Category Position (NACp).
-        uint8_t nac_v                               : 3;  // Navigation Accuracy Category Velocity (NACv).
+        uint16_t emitter_category_and_callsign_chars_1_2
+            : 16;                                  // Emitter category and first two characters of callsign.
+        uint16_t callsign_chars_3_4_5       : 16;  // Next three characters of callsign.
+        uint16_t callsign_chars_6_7_8       : 16;  // Last three characters of callsign.
+        uint8_t emergency_priority_status   : 3;   // Emergency / priority status.
+        uint8_t uat_version                 : 3;   // UAT protocol version.
+        uint8_t sil                         : 2;   // Source Integrity Level (SIL).
+        uint8_t transmit_mso                : 6;
+        uint8_t reserved1                   : 2;  // Reserved bits.
+        uint8_t nac_p                       : 4;  // Navigation Accuracy Category Position (NACp).
+        uint8_t nac_v                       : 3;  // Navigation Accuracy Category Velocity (NACv).
         uint8_t nic_baro                    : 1;  // Navigation Integrity Category Barometric Altitude (NICbaro).
         uint8_t capability_codes            : 2;  // Capability codes.
         uint8_t operational_modes           : 3;  // Operational modes.
@@ -240,19 +240,19 @@ class DecodedUATADSBPacket {
         uint32_t reserved;  // Currently set to all 0's by transponders for 2005 version of tech manual.
     };
 
-    DecodedUATADSBPacket(const RawUATADSBPacket &packet_in);
-    DecodedUATADSBPacket() : raw((char *)"") { debug_string[0] = '\0'; }
-    DecodedUATADSBPacket(const char *rx_string, int32_t sigs_dbm = INT32_MIN, int32_t sigq_bits = INT32_MIN,
+    DecodedUATADSBPacket(const RawUATADSBPacket& packet_in);
+    DecodedUATADSBPacket() : raw((char*)"") { debug_string[0] = '\0'; }
+    DecodedUATADSBPacket(const char* rx_string, int32_t sigs_dbm = INT32_MIN, int32_t sigq_bits = INT32_MIN,
                          uint64_t mlat_48mhz_64bit_counts = 0);
 
     /**
      * Decoding functions for message data blocks.
      */
-    static void DecodeHeader(uint8_t *data, UATHeader &header_ref);
-    static void DecodeStateVector(uint8_t *data, UATStateVector &state_vector_ref);
-    static void DecodeModeStatus(uint8_t *data, UATModeStatus &mode_status_ref);
-    static void DecodeAuxiliaryStateVector(uint8_t *data, UATAuxiliaryStateVector &aux_state_vector_ref);
-    static void DecodeTargetState(uint8_t *data, UATTargetState &target_state_ref);
+    static void DecodeHeader(uint8_t* data, UATHeader& header_ref);
+    static void DecodeStateVector(uint8_t* data, UATStateVector& state_vector_ref);
+    static void DecodeModeStatus(uint8_t* data, UATModeStatus& mode_status_ref);
+    static void DecodeAuxiliaryStateVector(uint8_t* data, UATAuxiliaryStateVector& aux_state_vector_ref);
+    static void DecodeTargetState(uint8_t* data, UATTargetState& target_state_ref);
 
     /**
      * Returns true if the packet is valid (FEC decoded successfully and packet has a recognized format).
@@ -271,7 +271,7 @@ class DecodedUATADSBPacket {
 
     int GetBufferLenBytes() const { return raw.encoded_message_len_bytes; }
     RawUATADSBPacket GetRaw() const { return raw; }
-    RawUATADSBPacket *GetRawPtr() { return &raw; }
+    RawUATADSBPacket* GetRawPtr() { return &raw; }
 
     /**
      * Returns the ICAO address of the aircraft if the packet is valid and has a header, otherwise returns 0.
@@ -346,7 +346,7 @@ class RawUATUplinkPacket {
         // Subsequent Bytes are application data.
     };
 
-    RawUATUplinkPacket(const char *rx_string, int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_bits_in = INT16_MIN,
+    RawUATUplinkPacket(const char* rx_string, int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_bits_in = INT16_MIN,
                        uint64_t mlat_48mhz_64bit_counts = 0);
     RawUATUplinkPacket(uint8_t rx_buffer[kUplinkMessageNumBytes], uint16_t rx_buffer_len_bytes,
                        int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_bits_in = INT16_MIN,
@@ -382,9 +382,9 @@ class DecodedUATUplinkPacket {
    public:
     static constexpr uint16_t kDebugStrLen = 200;
 
-    DecodedUATUplinkPacket(const RawUATUplinkPacket &packet_in);
-    DecodedUATUplinkPacket() : raw((char *)"") { debug_string[0] = '\0'; }
-    DecodedUATUplinkPacket(const char *rx_string, int32_t sigs_dbm = INT32_MIN, int32_t sigq_bits = INT32_MIN,
+    DecodedUATUplinkPacket(const RawUATUplinkPacket& packet_in);
+    DecodedUATUplinkPacket() : raw((char*)"") { debug_string[0] = '\0'; }
+    DecodedUATUplinkPacket(const char* rx_string, int32_t sigs_dbm = INT32_MIN, int32_t sigq_bits = INT32_MIN,
                            uint64_t mlat_48mhz_64bit_counts = 0);
 
     /**
