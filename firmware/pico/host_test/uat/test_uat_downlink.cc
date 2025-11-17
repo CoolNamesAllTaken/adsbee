@@ -2,10 +2,33 @@
 #include "buffer_utils.hh"
 #include "fec.hh"
 #include "gtest/gtest.h"
+#include "hal_god_powers.hh" /* For faking timestamps */
 #include "uat_packet.hh"
 #include "uat_test_data.h"
 
 #define USE_FEC
+
+#ifdef USE_FEC
+/**
+ * Encodes a UAT downlink test frame into a byte buffer with FEC applied.
+ * @param[in] frame Pointer to the test frame to encode.
+ * @param[out] encoded_data_frame Pointer to the buffer to write the encoded frame to. Must be at least
+ * RawUATADSBPacket::kADSBMessageMaxSizeBytes in size.
+ * @retval Length of the encoded frame in bytes, including FEC parity bytes.
+ */
+uint16_t EncodeDownlinkFrame(const uat_downlink_test_frame_t* frame, uint8_t* encoded_data_frame) {
+    HexStringToByteBuffer(encoded_data_frame, frame->frame_data_hex, frame->frame_length);
+    uint16_t frame_length_with_fec;
+    if (frame->frame_length == RawUATADSBPacket::kShortADSBMessagePayloadNumBytes) {
+        uat_rs.EncodeShortADSBMessage(encoded_data_frame);
+        frame_length_with_fec = RawUATADSBPacket::kShortADSBMessageNumBytes;
+    } else {
+        uat_rs.EncodeLongADSBMessage(encoded_data_frame);
+        frame_length_with_fec = RawUATADSBPacket::kLongADSBMessageNumBytes;
+    }
+    return frame_length_with_fec;
+}
+#endif
 
 // Test downlink frames
 TEST(UATDecoderTest, DownlinkFrames) {
@@ -22,15 +45,7 @@ TEST(UATDecoderTest, DownlinkFrames) {
 #ifdef USE_FEC
         // Create encoded data frame.
         uint8_t encoded_data_frame[RawUATADSBPacket::kADSBMessageMaxSizeBytes] = {0};
-        HexStringToByteBuffer(encoded_data_frame, frame->frame_data_hex, frame->frame_length);
-        uint16_t frame_length_with_fec;
-        if (frame->frame_length == RawUATADSBPacket::kShortADSBMessagePayloadNumBytes) {
-            uat_rs.EncodeShortADSBMessage(encoded_data_frame);
-            frame_length_with_fec = RawUATADSBPacket::kShortADSBMessageNumBytes;
-        } else {
-            uat_rs.EncodeLongADSBMessage(encoded_data_frame);
-            frame_length_with_fec = RawUATADSBPacket::kLongADSBMessageNumBytes;
-        }
+        uint16_t frame_length_with_fec = EncodeDownlinkFrame(frame, encoded_data_frame);
         PrintByteBuffer("Encoded downlink message:", encoded_data_frame, frame_length_with_fec);
         int16_t sigs_dbm = -10;                // Dummy signal strength.
         int16_t sigq_bits = 0;                 // Dummy signal quality.
@@ -43,6 +58,10 @@ TEST(UATDecoderTest, DownlinkFrames) {
         packet.ReconstructWithoutFEC();
 #endif
 
+        EXPECT_TRUE(dictionary.IngestDecodedUATADSBPacket(packet));
+        // Increment the packet timestamp and ingest it again to satisfy the position filter.
+        // NOTE: Ingest timestamps are done with system time, so fake it with HAL god powers.
+        inc_time_since_boot_ms(1000);
         EXPECT_TRUE(dictionary.IngestDecodedUATADSBPacket(packet));
 
         // Ensure the dictionary has a matching aircraft entry and extract it.
