@@ -77,7 +77,7 @@ int main() {
     // The CC1312 straight up does not work with CPOL = 0 and CPHA = 0 (only sends one Byte per transaction then
     // explodes). The ESP32 doesn't seem to care either way (in fact it interprets CPOL = 1 CPHA = 1 as CPOL = 0 CPHA =
     // 0 just fine), so we stick with CPOL = 1 CPHA = 1.
-    // I briefly tried switching the SPI format back and forth continutously in SPIBeginTransaction(), but this was
+    // I briefly tried switching the SPI format back and forth continuously in SPIBeginTransaction(), but this was
     // causing crashes.
     spi_set_format(bsp.copro_spi_handle,
                    8,           // Bits per transfer.
@@ -102,6 +102,8 @@ int main() {
 
     adsbee.Init();
     adsbee.InitISRs();
+
+    settings_manager.Apply();  // Run this before ESP32 firmware update attempt to ensure it's enabled properly.
 
     // If WiFi is enabled, try establishing communication with the ESP32 and maybe update its firmware.
     if (esp32.IsEnabled()) {
@@ -156,8 +158,6 @@ int main() {
         }
 #endif
     }
-
-    settings_manager.Apply();
 
     multicore_reset_core1();
     multicore_launch_core1(main_core1);
