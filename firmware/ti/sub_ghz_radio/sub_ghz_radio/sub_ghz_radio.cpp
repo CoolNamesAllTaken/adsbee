@@ -85,9 +85,7 @@ void rf_cmd_callback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e) {
     }
 
     if (e & (RF_EventLastCmdDone | RF_EventCmdAborted | RF_EventRxBufFull)) {
-        // subg_radio.HandlePacketRx((rfc_dataEntryPartial_t *)(rx_data_queue.pLastEntry));
         RollDataQueue();
-        // rx_ended = true;
     }
 }
 
@@ -196,8 +194,6 @@ bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t *filled_entry) {
     uint8_t *buf = (uint8_t *)(&filled_entry->rxData);
     uint16_t rx_data_bytes_after_len =
         buf[0] | (buf[1] << 8);  // 2-Byte length is packaged LSB first (little endian). Includes appended bytes.
-    // uint16_t rx_data_bytes_after_len =
-    //     current_packet_len_bytes + kPartialDataEntryNumAppendedBytes + kPacketHeaderSizeBytes;
     uint16_t packet_len_bytes = rx_data_bytes_after_len - kPartialDataEntryNumAppendedBytes - kPacketHeaderSizeBytes;
     // Note that filled_entry->nextIndex should == packet_len_bytes + kPartialDataEntryNumAppendedBytes.
     uint8_t packet_sync_ls4 = buf[2] & 0x0F;  // Last 4 bits of sync word are the first 4 bits of the payload.
