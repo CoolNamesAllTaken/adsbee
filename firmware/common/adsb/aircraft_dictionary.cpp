@@ -2,6 +2,7 @@
 
 #include <cmath>
 
+#include "awb_utils.h"
 #include "comms.hh"  // For debug logging.
 #include "decode_utils.hh"
 #include "fixedmath/fixed_math.hpp"
@@ -92,7 +93,7 @@ bool ModeSAircraft::DecodePosition(bool filter_cpr_position) {
         uint32_t max_distance_meters =
             kCPRPositionFilterVelocityMps * ms_since_last_track_update / 1000;  // mps to meters
         uint32_t distance_meters =
-            CalculateGeoidalDistanceMetersAWB(lat_awb_, lon_awb_, result.lat_awb, result.lon_awb);
+            CalculateGeoidalDistanceMetersAWB(lat_awb32_, lon_awb32_, result.lat_awb, result.lon_awb);
 
         if (most_recent_received_timestamp_ms <= last_filter_received_timestamp_ms_) {
             // Don't allow calling DecodePosition() twice without a new packet to override the filter.
@@ -108,8 +109,8 @@ bool ModeSAircraft::DecodePosition(bool filter_cpr_position) {
         // Store the updated position. A location jump can be "confirmed" with a subsequent update from near the new
         // candidate position. Thus, sudden jumps in position take two subsequent position updates that are relatively
         // close together in order to be reflected in the aircraft's position.
-        lat_awb_ = result.lat_awb;
-        lon_awb_ = result.lon_awb;
+        lat_awb32_ = result.lat_awb;
+        lon_awb32_ = result.lon_awb;
 
         // Note: Ignore position check during first position update, to allow recording aircraft position upon receiving
         // the first packet.
@@ -779,6 +780,57 @@ bool ModeSAircraft::ApplyAircraftOperationStatusMessage(const ModeSADSBPacket& p
 UATAircraft::UATAircraft(uint32_t icao_address_in) : icao_address(icao_address_in) {};
 UATAircraft::~UATAircraft() {};
 
+bool UATAircraft::DecodePosition(const DecodedUATADSBPacket::UATStateVector& state_vector, bool filter_position) {
+#ifdef FILTER_CPR_POSITIONS
+    if (filter_position) {
+        // Calculate how far the aircraft has jumped since its last position update, and goof check it against a maximum
+        // velocity value. Could use the aircraft's known velocity, but just using a very large value for now.
+        // NOTE: This calculation assumes that the aicraft's last_message_timestamp_ms has already been updated to
+        // reflect the timestamp of the current packet being processed.
+        uint32_t ms_since_last_track_update = last_message_timestamp_ms - last_track_update_timestamp_ms;
+        uint32_t max_distance_meters =
+            kCPRPositionFilterVelocityMps * ms_since_last_track_update / 1000;  // mps to meters
+
+        uint32_t candidate_lat_awb32 = UATAWBToAWB32(state_vector.latitude_awb);
+        uint32_t candidate_lon_awb32 = UATAWBToAWB32(state_vector.longitude_awb);
+        uint32_t distance_meters =
+            CalculateGeoidalDistanceMetersAWB(lat_awb32_, lon_awb32_, candidate_lat_awb32, candidate_lon_awb32);
+
+        if (last_message_timestamp_ms <= last_filter_received_timestamp_ms_) {
+            // Don't allow calling DecodePosition() twice without a new packet to override the filter.
+            CONSOLE_WARNING("UATAircraft::DecodePosition",
+                            "Received state vector for ICAO 0x%lx, but timestamp %lu ms is not newer than last "
+                            "filter received timestamp %lu ms.",
+                            icao_address, last_message_timestamp_ms, last_filter_received_timestamp_ms_);
+            return false;
+        }
+
+        last_filter_received_timestamp_ms_ = last_message_timestamp_ms;
+
+        // Store the updated position. A location jump can be "confirmed" with a subsequent update from near the new
+        // candidate position. Thus, sudden jumps in position take two subsequent position updates that are relatively
+        // close together in order to be reflected in the aircraft's position.
+        lat_awb32_ = candidate_lat_awb32;
+        lon_awb32_ = candidate_lon_awb32;
+
+        // Note: Ignore position check during first position update, to allow recording aircraft position upon receiving
+        // the first packet.
+        if (HasBitFlag(BitFlag::kBitFlagPositionValid) && distance_meters > max_distance_meters) {
+            CONSOLE_WARNING("UATAircraft::DecodePosition",
+                            "Filtered position update for ICAO 0x%lx, distance %lu m exceeds max %lu m.", icao_address,
+                            distance_meters, max_distance_meters);
+            return false;  // Filter out CPR positions that are too far from the last known position.
+        }
+    }
+#endif
+
+    WriteBitFlag(BitFlag::kBitFlagPositionValid, true);
+    latitude_deg = awb2lat(lat_awb32_);
+    longitude_deg = awb2lon(lon_awb32_);
+    last_track_update_timestamp_ms = last_message_timestamp_ms;  // Update last track update timestamp.
+    return true;
+}
+
 bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVector& state_vector) {
     // Parse position.
 
@@ -787,10 +839,9 @@ bool UATAircraft::ApplyUATADSBStateVector(const DecodedUATADSBPacket::UATStateVe
         // Position information not available.
         WriteBitFlag(BitFlag::kBitFlagPositionValid, false);
     } else {
-        latitude_deg = static_cast<float>(state_vector.latitude_awb) * DecodedUATADSBPacket::kDegPerAWBTick;
-        longitude_deg = static_cast<float>(state_vector.longitude_awb) * DecodedUATADSBPacket::kDegPerAWBTick;
-        WriteBitFlag(BitFlag::kBitFlagPositionValid, true);
-        WriteBitFlag(BitFlag::kBitFlagUpdatedPosition, true);
+        if (DecodePosition(state_vector)) {
+            WriteBitFlag(BitFlag::kBitFlagUpdatedPosition, true);
+        }
     }
 
     if (latitude_deg > 90) {
@@ -1392,6 +1443,8 @@ bool AircraftDictionary::IngestDecodedUATADSBPacket(const DecodedUATADSBPacket& 
         return false;  // unable to find or create new aircraft in dictionary
     }
     aircraft_ptr->last_message_timestamp_ms = get_time_since_boot_ms();
+    aircraft_ptr->last_message_signal_strength_dbm = packet.raw.sigs_dbm;
+    aircraft_ptr->last_message_signal_quality_bits = packet.raw.sigq_bits;
 
     // Apply the packet header.
 
