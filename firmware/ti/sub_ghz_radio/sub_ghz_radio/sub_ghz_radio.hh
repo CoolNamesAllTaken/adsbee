@@ -5,8 +5,6 @@ extern "C" {
 #include <ti/drivers/rf/RF.h>
 #include <ti_radio_config.h>
 
-#include "smartrf/smartrf_settings.h"
-
 /* clang-format off */
 #include <ti/devices/DeviceFamily.h>
 #include DeviceFamily_constructPath(driverlib/rf_data_entry.h)
@@ -27,11 +25,23 @@ public:
 
     struct SubGHzRadioConfig
     {
-        // Add any configuration parameters needed for the SubGHzRadio.
+        RF_Mode RF_prop;
+        rfc_CMD_PROP_RADIO_DIV_SETUP_t RF_cmdPropRadioDivSetup;
+        rfc_CMD_FS_t RF_cmdFs;
+        rfc_CMD_PROP_RX_ADV_t RF_cmdPropRxAdv;
     };
 
-    SubGHzRadio(SubGHzRadioConfig config_in): config_(config_in) {};
+    SubGHzRadio(SubGHzRadioConfig *config_in) {
+        SetConfig(config_in);
+    };
+    SubGHzRadio() {
+        // Default constructor: don't copy in a config yet.
+    }
     ~SubGHzRadio() {};
+
+    void SetConfig(const SubGHzRadioConfig *config) {
+        memcpy(&config_, config, sizeof(SubGHzRadioConfig));
+    }
 
     /**
      * Initializes the radio and begins packet reception.

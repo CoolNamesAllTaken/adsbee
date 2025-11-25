@@ -55,7 +55,8 @@ class SettingsManager {
 
     // Mode setting for the Sub-GHz radio.
     enum SubGHzRadioMode : uint8_t {
-        kSubGHzRadioModeUATRx = 0,  // UAT mode (978MHz receiver).
+        kSubGHzRadioModeUATRx = 0,    // UAT mode (978MHz receiver).
+        kSubGHzRadioModeModeSRx = 1,  // Mode S mode (1090MHz receiver).
         kNumSubGHzRadioModes
     };
     static const char kSubGHzModeStrs[kNumSubGHzRadioModes][kSubGHzModeStrMaxLen];
@@ -141,7 +142,7 @@ class SettingsManager {
 
             uint32_t CalculateCRC32() {
                 // Don't calculate checksum including the crc32 field itself, silly.
-                return crc32_ieee_802_3((uint8_t *)this, sizeof(CoreNetworkSettings) - sizeof(crc32));
+                return crc32_ieee_802_3((uint8_t*)this, sizeof(CoreNetworkSettings) - sizeof(crc32));
             }
 
             /**
@@ -285,7 +286,7 @@ class SettingsManager {
          * conflict with any other ADSBee devices or future Pants for Birds products.
          * @param[out] buf Buffer to write the network SSID to.
          */
-        void GetDefaultSSID(char *buf) {
+        void GetDefaultSSID(char* buf) {
             memcpy(buf, "ADSBee1090-", 11);       // [0:10] ADSBee1090-
             memcpy(buf + 11, part_code + 12, 7);  // [11:17] YYYMMDD
             memcpy(buf + 18, part_code + 20, 6);  // [18:23] VVXXXX
@@ -300,7 +301,7 @@ class SettingsManager {
          * ADSBee lineup may be prefixed with 0xBE EN, where N is a value greater than 0.
          * @param[out] buf Buffer to write the 8 Byte unique ID to.
          */
-        void GetDefaultFeedReceiverID(uint8_t *buf) {
+        void GetDefaultFeedReceiverID(uint8_t* buf) {
             // 0xBE 0xE0 <6 Byte Binary UID, MSB first.>
             buf[0] = 0xBE;
             buf[1] = 0xE0;
@@ -328,7 +329,7 @@ class SettingsManager {
      * @param[in] state EnableState to convert to a string.
      * @retval String representation of the EnableState, as it would be used in an AT command.
      */
-    static inline const char *EnableStateToATValueStr(EnableState state) {
+    static inline const char* EnableStateToATValueStr(EnableState state) {
         switch (state) {
             case kEnableStateExternal:
                 return "EXTERNAL";
@@ -346,7 +347,7 @@ class SettingsManager {
      * @param[in] device_info DeviceInfo struct to set.
      * @retval True if device info was retrieved successfully, false otherwise.
      */
-    static bool GetDeviceInfo(DeviceInfo &device_info);
+    static bool GetDeviceInfo(DeviceInfo& device_info);
 
     /**
      * Loads settings from EEPROM. Assumes settings are stored at address 0x0 and doesn't do any integrity check.
@@ -371,7 +372,7 @@ class SettingsManager {
      * @param[in] buf_len Maximum allowable number of characteers in the password. Used to guard against falling off the
      * end of the string. Not used for actually finding ther number of asterix to print.
      */
-    static inline void RedactPassword(char *password_buf, char *redacted_password_buf, uint16_t buf_len) {
+    static inline void RedactPassword(char* password_buf, char* redacted_password_buf, uint16_t buf_len) {
         uint16_t password_len = MIN(strnlen(password_buf, buf_len), buf_len);
         memset(redacted_password_buf, '*', password_len);
         redacted_password_buf[password_len] = '\0';
@@ -388,7 +389,7 @@ class SettingsManager {
      * @param[in] receiver_id Pointer to first byte of an 8-Byte receiver ID.
      * @param[in] buf Buffer to write receiver ID string to. Must be at least 17 chars (including null terminator).
      */
-    static inline void ReceiverIDToStr(uint8_t *receiver_id, char *buf) {
+    static inline void ReceiverIDToStr(uint8_t* receiver_id, char* buf) {
         snprintf(buf, 2 * SettingsManager::Settings::kFeedReceiverIDNumBytes + 1, "%02x%02x%02x%02x%02x%02x%02x%02x",
                  receiver_id[0], receiver_id[1], receiver_id[2], receiver_id[3], receiver_id[4], receiver_id[5],
                  receiver_id[6], receiver_id[7]);
@@ -406,7 +407,7 @@ class SettingsManager {
      * @param[in] device_info Reference to a DeviceInfo struct with the information to set in EEPROM.
      * @retval True if device info was set successfully, false otherwise.
      */
-    static bool SetDeviceInfo(const DeviceInfo &device_info);
+    static bool SetDeviceInfo(const DeviceInfo& device_info);
 
     /**
      * Sends the settings struct to the ESP32 and CC1312 via SPI. Call this after changing values that need to be

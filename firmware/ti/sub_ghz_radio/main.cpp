@@ -21,6 +21,7 @@ extern "C" {
 #include "spi_coprocessor.hh"
 #include "spi_coprocessor_interface.hh"
 #include "sub_ghz_radio.hh"
+#include "sub_ghz_radio_configs.hh"
 #include "uat_packet_decoder.hh"
 
 // #include "unistd.h" // For usleep.
@@ -41,7 +42,7 @@ Pico pico_ll = Pico({});
 SPICoprocessor pico = SPICoprocessor({.interface = pico_ll});
 CommsManager comms_manager = CommsManager({});
 SettingsManager settings_manager = SettingsManager();
-SubGHzRadio subg_radio = SubGHzRadio({});
+SubGHzRadio subg_radio = SubGHzRadio();  // Will be initialized with configuration when settings are applied.
 UATPacketDecoder uat_packet_decoder = UATPacketDecoder();
 
 /**
