@@ -187,8 +187,7 @@ static const SubGHzRadio::SubGHzRadioConfig kModeSRxConfig = {
     .RF_cmdPropRxAdv = RF_cmdPropRxAdv,
 };
 
-static const SubGHzRadio::SubGHzRadioConfig*
-    kSubGHzRadioConfigs[SettingsManager::SubGHzRadioMode::kNumSubGHzRadioModes] = {
-        &kUATRxConfig,   /* kSubGHzRadioModeUATRx */
-        &kModeSRxConfig, /* kSubGHzRadioModeModeSRx */
+static const SubGHzRadio::SubGHzRadioConfig* kSubGRadioConfigs[SettingsManager::SubGMode::kNumSubGModes] = {
+    &kUATRxConfig,   /* kSubGHzRadioModeUATRx */
+    &kModeSRxConfig, /* kSubGHzRadioModeModeSRx */
 };
