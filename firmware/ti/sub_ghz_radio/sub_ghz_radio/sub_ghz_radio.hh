@@ -16,6 +16,7 @@ extern "C" {
 #include "comms.hh"
 #include "unit_conversions.hh"
 #include "uat_packet.hh"
+#include "mode_s_packet.hh"
 
 class SubGHzRadio
 {

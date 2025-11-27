@@ -3,6 +3,7 @@
 #include "hal.hh"
 #include "macros.hh"
 #include "pico.hh"  // For LED blinks.
+#include "settings.hh"
 #include "uat_packet_decoder.hh"
 #include "unit_conversions.hh"  // for CeilBitsToBytes
 
@@ -67,14 +68,29 @@ void rf_cmd_callback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e) {
     if (e & RF_EventNDataWritten) {
         if (current_packet_len_bytes < 0) {
             // Only set the length once, after receiving the first two bytes of the packet.
-
-            // TODO: Set this value based on bytes received so far.
-            uint8_t sync_word_ls4 = (&(current_read_entry->rxData))[kPartialDataEntryPayloadLenSzBytes] &
-                                    0x0F;  // Last 4 bits of sync word are the first 4 bits of the payload.
-            uint8_t mdb_type_code = (&(current_read_entry->rxData))[kPartialDataEntryPayloadLenSzBytes + 1] >> 3;
-            current_packet_len_bytes =
-                UATPacketDecoder::SyncWordLSBAndMDBTypeCodeToMessageLenBytes(sync_word_ls4, mdb_type_code);
-
+            switch (settings_manager.settings.subg_mode) {
+                case SettingsManager::SubGMode::kSubGUATRx: {
+                    // TODO: Set this value based on bytes received so far.
+                    uint8_t sync_word_ls4 = (&(current_read_entry->rxData))[kPartialDataEntryPayloadLenSzBytes] &
+                                            0x0F;  // Last 4 bits of sync word are the first 4 bits of the payload.
+                    uint8_t mdb_type_code =
+                        (&(current_read_entry->rxData))[kPartialDataEntryPayloadLenSzBytes + 1] >> 3;
+                    current_packet_len_bytes =
+                        UATPacketDecoder::SyncWordLSBAndMDBTypeCodeToMessageLenBytes(sync_word_ls4, mdb_type_code);
+                    break;
+                }
+                case SettingsManager::SubGMode::kSubGModeSRx: {
+                    // Assume everything is an extended squitter packet for now.
+                    current_packet_len_bytes = RawModeSPacket::kExtendedSquitterPacketLenBytes;
+                    break;
+                }
+                default: {
+                    CONSOLE_ERROR("rf_cmd_callback", "Unhandled Sub-GHz radio mode %d.",
+                                  settings_manager.settings.subg_mode);
+                    current_packet_len_bytes = 0;
+                    break;
+                }
+            }
             rfc_CMD_PROP_SET_LEN_t RF_cmdPropSetLen = {.commandNo = CMD_PROP_SET_LEN,
                                                        .rxLen = (uint16_t)(current_packet_len_bytes)};
             RF_runImmediateCmd(h, (uint32_t*)&RF_cmdPropSetLen);
@@ -101,8 +117,8 @@ bool SubGHzRadio::Init() {
     config_.RF_cmdPropRxAdv.rxConf = {
         .bAutoFlushIgnored = 0,  // If 1, automatically discard ignored packets from RX queue.
         .bAutoFlushCrcErr = 0,   // If 1, automatically discard packets with CRC error from RX queue.
-        // bIncludeHdr must be 1 to receive the first byte after sync in the data entry. For UAT this is the last byte
-        // of the full 36 bit sync word.
+        // bIncludeHdr must be 1 to receive the first byte after sync in the data entry. For UAT this is the last
+        // byte of the full 36 bit sync word.
         .bIncludeHdr =
             1,  // If 1, include the received header or length byte in the stored packet; otherwise discard it.
         .bIncludeCrc = 0,       // 2 bytes (if default CRC is used)
@@ -110,32 +126,6 @@ bool SubGHzRadio::Init() {
         .bAppendTimestamp = 1,  // 4 bytes
         .bAppendStatus = 1      // 1 Byte
     };
-    // config_.RF_cmdPropRxAdv.pktConf.bRepeatOk = 0;  // Go back to sync search after receiving a packet correctly.
-    // config_.RF_cmdPropRxAdv.pktConf.bRepeatNok = 0; // Go back to sync search after receiving a packet incorrectly.
-    // Sync on the most significant 32 bits of the 36 bit sync word. Save the last 4 bits of sync for discrimination
-    // between uplink and ADSB packets in the payload. RF_cmdPropRx.syncWord = RawUATADSBPacket::kSyncWordMS32;
-    // config_.RF_cmdPropRxAdv.syncWord0 = RawUATADSBPacket::kSyncWordMS32;
-    // config_.RF_cmdPropRxAdv.syncWord1 = RawUATUplinkPacket::kSyncWordMS32;
-
-    // This needs to be set to 0, or else the length can't be overridden dynamically.
-    // WARNING: Setting packet length via the RF command callback can get stomped by another interrupt context (e.g.
-    // SPI). This leads to the RF core writing infinitely into memory, causing a non-deterministic crash behavior. Make
-    // sure the software interrupt priority for the RF system is higher than the software interrupt priority for SPI (I
-    // set hardware interrupt priority higher too, but that doesn't seem to fix it on its own). Setting RF software
-    // interrupt priority 1 point higher than SPI interrupt priority seems to work well. Higher values for RF software
-    // interrupt priority lead to crashes. To sidestep this drama, just set the max expected packet length as maxPktLen
-    // and take the performance hit (more rx airtime wasted per packet received).
-    // config_.RF_cmdPropRxAdv.maxPktLen = kRxPacketMaxLenBytes;  // 0 = unlimited / unknown length packet mode
-
-    // // The last 4 bits of the Sync word are interpreted as the header, so the rest of the packet stays byte-aligned.
-    // config_.RF_cmdPropRxAdv.hdrConf = {.numHdrBits = 4, .lenPos = 0, .numLenBits = 0};
-
-    // No address field.
-    // config_.RF_cmdPropRxAdv.addrConf = {0};
-
-    // /* RF_cmdPropRadioDivSetup - Radio setup command settings. */
-    // RF_cmdPropRadioDivSetup.formatConf.nSwBits =
-    //     32;  // Use a 32-bit sync word to allow the last 4 bits of the sync to be used for format discrimination.
 
     // Set up the data queue.
     for (uint16_t i = 0; i < kNumPartialDataEntries; i++) {
@@ -148,8 +138,8 @@ bool SubGHzRadio::Init() {
         entry->length = sizeof(rfc_dataEntryPartial_t::pktStatus) + sizeof(rfc_dataEntryPartial_t::nextIndex) +
                         kPacketHeaderSizeBytes + kPartialDataEntryPayloadLenSzBytes +
                         kPartialDataEntryPayloadSizeBytes + kPartialDataEntryNumAppendedBytes;
-        entry->config.irqIntv = 0;  // Set interrupt interval. We only need 1 byte after the header, increase to reduce
-                                    // interrupt frequency. 0=16
+        entry->config.irqIntv = 0;  // Set interrupt interval. We only need 1 byte after the header, increase to
+                                    // reduce interrupt frequency. 0=16
         entry->config.type = DATA_ENTRY_TYPE_PARTIAL;
         entry->config.lenSz = kPartialDataEntryPayloadLenSzBytes;
         entry->status = DATA_ENTRY_PENDING;
@@ -198,7 +188,6 @@ bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t* filled_entry) {
         buf[0] | (buf[1] << 8);  // 2-Byte length is packaged LSB first (little endian). Includes appended bytes.
     uint16_t packet_len_bytes = rx_data_bytes_after_len - kPartialDataEntryNumAppendedBytes - kPacketHeaderSizeBytes;
     // Note that filled_entry->nextIndex should == packet_len_bytes + kPartialDataEntryNumAppendedBytes.
-    uint8_t packet_sync_ls4 = buf[2] & 0x0F;  // Last 4 bits of sync word are the first 4 bits of the payload.
     uint8_t* packet_data = buf + kPartialDataEntryPayloadLenSzBytes + kPacketHeaderSizeBytes;
 
     if (packet_len_bytes > config_.RF_cmdPropRxAdv.maxPktLen || packet_len_bytes == 0) {
@@ -215,32 +204,46 @@ bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t* filled_entry) {
     int8_t status = static_cast<int8_t>(packet_data[packet_len_bytes + kPartialDataEntryNumAppendedBytes - 1]);
     static_assert(kPartialDataEntryNumAppendedBytes == 6);  // This section is hardcoded to match the appended bytes.
 
-    switch (current_packet_len_bytes) {
-        case RawUATADSBPacket::kShortADSBMessageNumBytes:
-        case RawUATADSBPacket::kLongADSBMessageNumBytes: {
-            RawUATADSBPacket raw_packet = RawUATADSBPacket(packet_data, current_packet_len_bytes);
-            raw_packet.sigs_dbm = rssi_dbm;
-            raw_packet.mlat_48mhz_64bit_counts = timestamp;
+    switch (settings_manager.settings.subg_mode) {
+        case SettingsManager::SubGMode::kSubGUATRx: {
+            switch (current_packet_len_bytes) {
+                case RawUATADSBPacket::kShortADSBMessageNumBytes:
+                case RawUATADSBPacket::kLongADSBMessageNumBytes: {
+                    RawUATADSBPacket raw_packet = RawUATADSBPacket(packet_data, current_packet_len_bytes);
+                    raw_packet.sigs_dbm = rssi_dbm;
+                    raw_packet.mlat_48mhz_64bit_counts = timestamp;
 
-            object_dictionary.metrics.num_raw_uat_adsb_packets++;
-            uat_packet_decoder.raw_uat_adsb_packet_queue.Enqueue(raw_packet);
+                    object_dictionary.metrics.num_raw_uat_adsb_packets++;
+                    uat_packet_decoder.raw_uat_adsb_packet_queue.Enqueue(raw_packet);
+                    break;
+                }
+                case RawUATUplinkPacket::kUplinkMessageNumBytes: {
+                    RawUATUplinkPacket raw_packet = RawUATUplinkPacket(packet_data, current_packet_len_bytes);
+                    raw_packet.sigs_dbm = rssi_dbm;
+                    raw_packet.mlat_48mhz_64bit_counts = timestamp;
+
+                    object_dictionary.metrics.num_raw_uat_uplink_packets++;
+                    uat_packet_decoder.raw_uat_uplink_packet_queue.Enqueue(raw_packet);
+                    break;
+                }
+                default: {
+                    // Unrecognized packet length, skip. Don't print here since it's in the interrupt context.
+                    return false;
+                }
+            }
+
             break;
         }
-        case RawUATUplinkPacket::kUplinkMessageNumBytes: {
-            RawUATUplinkPacket raw_packet = RawUATUplinkPacket(packet_data, current_packet_len_bytes);
-            raw_packet.sigs_dbm = rssi_dbm;
-            raw_packet.mlat_48mhz_64bit_counts = timestamp;
-
-            object_dictionary.metrics.num_raw_uat_uplink_packets++;
-            uat_packet_decoder.raw_uat_uplink_packet_queue.Enqueue(raw_packet);
+        case SettingsManager::SubGMode::kSubGModeSRx: {
+            pico_ll.BlinkSubGLED();
             break;
         }
         default: {
-            // Unrecognized packet length, skip. Don't print here since it's in the interrupt context.
+            CONSOLE_ERROR("SubGHzRadio::HandlePacketRx", "Unhandled Sub-GHz radio mode %d.",
+                          static_cast<uint8_t>(settings_manager.settings.subg_mode));
             return false;
         }
     }
-
     return true;
 }
 

@@ -12,9 +12,6 @@
 #define INTERPOLATE_HAVDIFF_TO_M
 
 static const uint32_t kEarthMeanRadiusMeters = 6372798;  // Quadratic mean radius for WS-84.
-// 2 * PI * kEarthMeanRadiusMeters * kBoundingBoxDeltaLatAWB / UINT32_MAX = kBoundingBoxDimensionMeters
-static const uint32_t kBoundingBoxDeltaAWB =
-    kBoundingBoxDimensionMeters * (UINT32_MAX / static_cast<uint32_t>(2 * kEarthMeanRadiusMeters * M_PI));
 
 static const uint32_t kAWBPerHavSteps =
     (UINT32_MAX / 2) / (kDeg180ToHavNumSteps - 1);  // Number of AWB values per haversine table step
@@ -87,8 +84,8 @@ inline fixedmath::fixed_t wrapped_atan2(fixedmath::fixed_t y, fixedmath::fixed_t
     return val < fixedmath::fixed_t(0) ? (val + fixedmath::fixed_t(2.0f * M_PI)) : val;
 }
 
-void CalculateTrackAndSpeedFromNEVelocities(int32_t n_vel_kts, int32_t e_vel_kts, float &track_deg,
-                                            int32_t &speed_kts) {
+void CalculateTrackAndSpeedFromNEVelocities(int32_t n_vel_kts, int32_t e_vel_kts, float& track_deg,
+                                            int32_t& speed_kts) {
     track_deg = static_cast<float>(
         wrapped_atan2(static_cast<fixedmath::fixed_t>(e_vel_kts), static_cast<fixedmath::fixed_t>(n_vel_kts)) *
         kDegPerRadian);

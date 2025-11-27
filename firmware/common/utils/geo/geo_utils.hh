@@ -5,8 +5,6 @@
 
 static const uint32_t kBoundingBoxDimensionMeters = 50000;
 
-bool IsWithinBoundingBox(uint32_t lat_a_awb, uint32_t lon_a_awb, uint32_t lat_b_awb, uint32_t lon_b_awb);
-
 /**
  * @brief Calculates the great circle distance along the surface of the earth between two lat/long coordinate sets.
  * @param[in] lat_a_awb Latitude of coordinate A, in Angular Weighted Binary format.
@@ -18,6 +16,14 @@ bool IsWithinBoundingBox(uint32_t lat_a_awb, uint32_t lon_a_awb, uint32_t lat_b_
 uint32_t CalculateGeoidalDistanceMetersAWB(uint32_t lat_a_awb, uint32_t lon_a_awb, uint32_t lat_b_awb,
                                            uint32_t lon_b_awb);
 
+/**
+ * @brief Calculates the great circle distance along the surface of the earth between two lat/long coordinate sets.
+ * @param[in] lat_a_deg Latitude of coordinate A, in degrees.
+ * @param[in] lon_a_deg Longitude of coordinate A, in degrees.
+ * @param[in] lat_b_deg Latitude of coordinate B, in degrees.
+ * @param[in] lon_b_deg Longitude of coordinate B, in degrees.
+ * @retval Great circle distance between points A and B, in meters.
+ */
 uint32_t CalculateGeoidalDistanceMetersDeg(float lat_a_deg, float lon_a_deg, float lat_b_deg, float lon_b_deg);
 
 /**
@@ -40,4 +46,11 @@ float hav_awb(uint32_t theta_awb);
  */
 float havdiff_to_m(float x);
 
-void CalculateTrackAndSpeedFromNEVelocities(int32_t n_vel_kts, int32_t e_vel_kts, float &track_deg, int32_t &speed_kts);
+/**
+ * @brief Calculates the track (direction) and speed from north and east velocity components.
+ * @param[in] n_vel_kts North velocity in knots.
+ * @param[in] e_vel_kts East velocity in knots.
+ * @param[out] track_deg Calculated track in degrees.
+ * @param[out] speed_kts Calculated speed in knots.
+ */
+void CalculateTrackAndSpeedFromNEVelocities(int32_t n_vel_kts, int32_t e_vel_kts, float& track_deg, int32_t& speed_kts);
