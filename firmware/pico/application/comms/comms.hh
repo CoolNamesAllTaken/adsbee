@@ -26,10 +26,10 @@ class CommsManager {
     static constexpr uint32_t kOTAWriteTimeoutMs = 5000;  // ms until OTA write command exits if all bytes not received.
 
     struct CommsManagerConfig {
-        uart_inst_t *comms_uart_handle = uart1;
+        uart_inst_t* comms_uart_handle = uart1;
         uint16_t comms_uart_tx_pin = 4;
         uint16_t comms_uart_rx_pin = 5;
-        uart_inst_t *gnss_uart_handle = uart0;
+        uart_inst_t* gnss_uart_handle = uart0;
         uint16_t gnss_uart_tx_pin = 0;
         uint16_t gnss_uart_rx_pin = 1;
         uint16_t uart_timeout_us = 0;  // Time to wait for a character if there isn't one alredy available.
@@ -79,6 +79,8 @@ class CommsManager {
     CPP_AT_CALLBACK(ATSettingsCallback);
     CPP_AT_CALLBACK(ATSubGEnableCallback);
     CPP_AT_CALLBACK(ATSubGFlashCallback);
+    CPP_AT_CALLBACK(ATSubGModeCallback);
+    CPP_AT_HELP_CALLBACK(ATSubGModeHelpCallback);
     CPP_AT_CALLBACK(ATTLReadCallback);
     CPP_AT_CALLBACK(ATTLSetCallback);
     CPP_AT_CALLBACK(ATUptimeCallback);
@@ -86,20 +88,20 @@ class CommsManager {
     CPP_AT_CALLBACK(ATWiFiAPCallback);
     CPP_AT_CALLBACK(ATWiFiSTACallback);
 
-    int console_printf(const char *format, ...);
-    int console_level_printf(SettingsManager::LogLevel level, const char *format, ...);
-    int iface_printf(SettingsManager::SerialInterface iface, const char *format, ...);
-    int iface_vprintf(SettingsManager::SerialInterface iface, const char *format, va_list args);
+    int console_printf(const char* format, ...);
+    int console_level_printf(SettingsManager::LogLevel level, const char* format, ...);
+    int iface_printf(SettingsManager::SerialInterface iface, const char* format, ...);
+    int iface_vprintf(SettingsManager::SerialInterface iface, const char* format, va_list args);
     bool iface_putc(SettingsManager::SerialInterface iface, char c);
-    bool iface_getc(SettingsManager::SerialInterface iface, char &c);
-    bool iface_puts(SettingsManager::SerialInterface iface, const char *buf);
+    bool iface_getc(SettingsManager::SerialInterface iface, char& c);
+    bool iface_puts(SettingsManager::SerialInterface iface, const char* buf);
 
     bool network_console_putc(char c);
-    bool network_console_puts(const char *buf, uint16_t len = UINT16_MAX);
+    bool network_console_puts(const char* buf, uint16_t len = UINT16_MAX);
 
 #include "comms_reporting.hh"
 
-    inline bool SendBuf(ReportSink sink, const char *buf, uint16_t buf_len) {
+    inline bool SendBuf(ReportSink sink, const char* buf, uint16_t buf_len) {
         for (uint16_t i = 0; i < buf_len; i++) {
             if (!iface_putc(static_cast<SettingsManager::SerialInterface>(sink), buf[i])) {
                 return false;
@@ -138,7 +140,7 @@ class CommsManager {
      * @param[out] baudrate Reference to uint32_t to fill with retrieved value.
      * @retval True if baudrate retrieval succeeded, false if iface does not support a baudrate.
      */
-    inline bool GetBaudRate(SettingsManager::SerialInterface iface, uint32_t &baudrate) {
+    inline bool GetBaudRate(SettingsManager::SerialInterface iface, uint32_t& baudrate) {
         switch (iface) {
             case SettingsManager::kCommsUART:
                 // Save the actual set value as comms_uart_baudrate_.
@@ -175,7 +177,7 @@ class CommsManager {
      * @retval True if reportig protocol could be retrieved, false otherwise.
      */
     inline bool GetReportingProtocol(SettingsManager::SerialInterface iface,
-                                     SettingsManager::ReportingProtocol &protocol) {
+                                     SettingsManager::ReportingProtocol& protocol) {
         protocol = settings_manager.settings.reporting_protocols[iface];
         return true;
     }

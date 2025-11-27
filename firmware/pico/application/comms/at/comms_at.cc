@@ -35,7 +35,7 @@ const uint32_t kDeviceInfoProgrammingPassword = 0xDEDBEEF;
 const uint32_t kOTAHeartbeatMs = 10;
 
 /** CppAT Printf Override **/
-int CppAT::cpp_at_printf(const char *format, ...) {
+int CppAT::cpp_at_printf(const char* format, ...) {
     va_list args;
     va_start(args, format);
     int ret = comms_manager.iface_vprintf(SettingsManager::SerialInterface::kConsole, format, args);
@@ -393,7 +393,7 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
 }
 
 CPP_AT_CALLBACK(CommsManager::ATHostnameCallback) {
-    SettingsManager::Settings::CoreNetworkSettings &cns = settings_manager.settings.core_network_settings;
+    SettingsManager::Settings::CoreNetworkSettings& cns = settings_manager.settings.core_network_settings;
     switch (op) {
         case '?':
             CPP_AT_CMD_PRINTF("=%s", cns.hostname);
@@ -557,7 +557,7 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         // CRC provided: verify the flash after writing.
                         CPP_AT_PRINTF("Verifying flash with CRC 0x%x.\r\n", crc);
                         uint32_t calculated_crc = FirmwareUpdateManager::CalculateCRC32(
-                            (uint8_t *)(FirmwareUpdateManager::flash_partition_headers[complementary_partition]) +
+                            (uint8_t*)(FirmwareUpdateManager::flash_partition_headers[complementary_partition]) +
                                 offset,
                             len_bytes);
                         if (calculated_crc != crc) {
@@ -598,12 +598,13 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
 
 CPP_AT_HELP_CALLBACK(CommsManager::ATOTAHelpCallback) {
     CPP_AT_PRINTF(
-        "AT+OTA?\r\n\tQueries current OTA status.\r\n\tAT+OTA=ERASE\r\n\tErase the sector to "
-        "update. Responds with status messages for each erase operation, then OK when "
-        "complete.\r\n\tAT+OTA=WRITE,<offset>,<num_bytes>,<checksum>\r\n\tBegin an "
-        "OTA write operation of num_bytes to offset bytes from the start of the partition with provided CRC32 "
-        "checksum. Will respond with BEGIN, and then OK when complete, or ERROR if checksum doesn't match or timeout "
-        "reached.\r\n");
+        "\tAT+OTA?\r\n"
+        "\tQueries current OTA status.\r\n"
+        "\tAT+OTA=ERASE\r\n\tErase the sector to update. Responds with status messages for each erase operation,\r\n"
+        "then OK when complete.\r\n\tAT+OTA=WRITE,<offset>,<num_bytes>,<checksum>\r\n"
+        "\tBegin an OTA write operation of num_bytes to offset bytes from the start of the partition with provided\r\n"
+        "\tCRC32 checksum. Will respond with BEGIN, and then OK when complete, or ERROR if checksum doesn't match \r\n"
+        "\tor timeout reached.\r\n");
 }
 
 CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
@@ -802,11 +803,12 @@ CPP_AT_CALLBACK(CommsManager::ATRxEnableCallback) {
 
 CPP_AT_HELP_CALLBACK(CommsManager::ATRxEnableHelpCallback) {
     CPP_AT_PRINTF(
-        "RX_ENABLE=<all_enabled [1,0]>,<1090_enabled [1,0]>,<subg_enabled [1,0]>\r\n\tOK\r\n\tEnables or disables the "
-        "receiver(s) "
-        "from receiving messages. First arg overrides others if present.\r\n\tAT+RX_ENABLE?\r\n\t1090 Receiver: "
-        "<1090_enabled [ENABLED,DISABLED]>\r\n\tSubG Receiver: <subg_en> [ENABLED,DISABLED]>\r\n\tQuery whether the "
-        "recevier(s) are enabled.\r\n");
+        "\tRX_ENABLE=<all_enabled [1,0]>,<1090_enabled [1,0]>,<subg_enabled [1,0]>\r\n"
+        "\tOK\r\n"
+        "\tEnables or disables the receiver(s) from receiving messages. First arg overrides others if present.\r\n"
+        "\tAT+RX_ENABLE?\r\n\t1090 Receiver: <1090_enabled [ENABLED,DISABLED]>\r\n"
+        "\tSubG Receiver: <subg_en> [ENABLED,DISABLED]>\r\n"
+        "\tQuery whether the receiver(s) are enabled.\r\n");
 }
 
 CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
@@ -966,6 +968,45 @@ CPP_AT_CALLBACK(CommsManager::ATSubGFlashCallback) {
     CPP_AT_SUCCESS();
 }
 
+CPP_AT_CALLBACK(CommsManager::ATSubGModeCallback) {
+    switch (op) {
+        case '=':
+            if (CPP_AT_HAS_ARG(0)) {
+                SettingsManager::SubGMode new_mode = SettingsManager::SubGMode::kNumSubGModes;
+                for (uint16_t i = 0; i < SettingsManager::kNumSubGModes; i++) {
+                    if (args[0].compare(SettingsManager::kSubGModeStrs[i]) == 0) {
+                        new_mode = static_cast<SettingsManager::SubGMode>(i);
+                        break;
+                    }
+                }
+                if (new_mode == SettingsManager::SubGMode::kNumSubGModes) {
+                    CPP_AT_ERROR("Invalid SubG radio mode %s.", args[0].data());
+                }
+                adsbee.SetSubGRadioMode(new_mode);
+            }
+            CPP_AT_SUCCESS();
+            break;
+        case '?':
+            CPP_AT_CMD_PRINTF("=%s\r\n", SettingsManager::kSubGModeStrs[adsbee.GetSubGRadioMode()]);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+CPP_AT_HELP_CALLBACK(CommsManager::ATSubGModeHelpCallback) {
+    CPP_AT_PRINTF(
+        "\tAT+SUBG_MODE=<mode>\r\n"
+        "\tSet the SubG radio mode. <mode> = ");
+    for (uint16_t i = 0; i < SettingsManager::kNumSubGModes; i++) {
+        CPP_AT_PRINTF("%s ", SettingsManager::kSubGModeStrs[i]);
+    }
+    CPP_AT_PRINTF(
+        "\r\n"
+        "\tAT+SUBG_MODE?\r\n"
+        "\t<mode>\r\n"
+        "\tQuery the current SubG radio mode.\r\n");
+}
+
 CPP_AT_CALLBACK(CommsManager::ATTLReadCallback) {
     switch (op) {
         case '?':
@@ -1070,7 +1111,7 @@ CPP_AT_CALLBACK(CommsManager::ATWatchdogCallback) {
 }
 
 CPP_AT_CALLBACK(CommsManager::ATWiFiAPCallback) {
-    SettingsManager::Settings::CoreNetworkSettings &cns = settings_manager.settings.core_network_settings;
+    SettingsManager::Settings::CoreNetworkSettings& cns = settings_manager.settings.core_network_settings;
     switch (op) {
         case '?': {
             char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];
@@ -1114,7 +1155,7 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiAPCallback) {
 }
 
 CPP_AT_CALLBACK(CommsManager::ATWiFiSTACallback) {
-    SettingsManager::Settings::CoreNetworkSettings &cns = settings_manager.settings.core_network_settings;
+    SettingsManager::Settings::CoreNetworkSettings& cns = settings_manager.settings.core_network_settings;
     switch (op) {
         case '?': {
             char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];
@@ -1268,6 +1309,11 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string_buf = "AT+SUBG_FLASH\r\n\tTriggers a firmware update of the sub-GHz radio from the firmware image "
                         "stored in the RP2040's flash memory.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSubGFlashCallback, comms_manager)},
+    {.command_buf = "SUBG_MODE",
+     .min_args = 0,
+     .max_args = 1,
+     .help_callback = CPP_AT_BIND_MEMBER_HELP_CALLBACK(CommsManager::ATSubGModeHelpCallback, comms_manager),
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSubGModeCallback, comms_manager)},
 #ifdef HARDWARE_UNIT_TESTS
     {.command_buf = "TEST",
      .min_args = 0,

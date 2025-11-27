@@ -201,7 +201,7 @@ bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t* filled_entry) {
     uint8_t packet_sync_ls4 = buf[2] & 0x0F;  // Last 4 bits of sync word are the first 4 bits of the payload.
     uint8_t* packet_data = buf + kPartialDataEntryPayloadLenSzBytes + kPacketHeaderSizeBytes;
 
-    if (packet_len_bytes > kRxPacketMaxLenBytes || packet_len_bytes == 0) {
+    if (packet_len_bytes > config_.RF_cmdPropRxAdv.maxPktLen || packet_len_bytes == 0) {
         return false;
     }
 

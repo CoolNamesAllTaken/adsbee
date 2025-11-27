@@ -14,9 +14,9 @@ const char
                                                "NONE",  "RAW",      "BEAST",    "BEAST_NO_UAT", "BEAST_NO_UAT_UPLINK",
                                                "CSBEE", "MAVLINK1", "MAVLINK2", "GDL90"};
 
-const char SettingsManager::kSubGHzModeStrs[SettingsManager::kNumSubGHzRadioModes]
-                                           [SettingsManager::kSubGHzModeStrMaxLen] = {
-                                               "UAT_RX",  // UAT mode (978MHz receiver).
+const char SettingsManager::kSubGModeStrs[SettingsManager::kNumSubGModes][SettingsManager::kSubGModeStrMaxLen] = {
+    "UAT_RX",    // UAT mode (978MHz receiver).
+    "MODE_S_RX"  // Mode S mode (1090MHz receiver).
 };
 
 const char SettingsManager::RxPosition::kPositionSourceStrs[SettingsManager::RxPosition::kNumPositionSources]

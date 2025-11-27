@@ -27,7 +27,7 @@ class SettingsManager {
     static constexpr uint16_t kConsoleLogLevelStrMaxLen = 30;
     static const char kConsoleLogLevelStrs[LogLevel::kNumLogLevels][kConsoleLogLevelStrMaxLen];
 
-    static const uint16_t kSubGHzModeStrMaxLen = 30;  // Length of Sub-GHz mode strings.
+    static const uint16_t kSubGModeStrMaxLen = 30;  // Length of Sub-GHz mode strings.
 
     // Reporting Protocol enum and string conversion array.
     enum ReportingProtocol : uint16_t {
@@ -54,12 +54,12 @@ class SettingsManager {
     };
 
     // Mode setting for the Sub-GHz radio.
-    enum SubGHzRadioMode : uint8_t {
-        kSubGHzRadioModeUATRx = 0,    // UAT mode (978MHz receiver).
-        kSubGHzRadioModeModeSRx = 1,  // Mode S mode (1090MHz receiver).
-        kNumSubGHzRadioModes
+    enum SubGMode : uint8_t {
+        kSubGUATRx = 0,    // UAT mode (978MHz receiver).
+        kSubGModeSRx = 1,  // Mode S mode (1090MHz receiver).
+        kNumSubGModes
     };
-    static const char kSubGHzModeStrs[kNumSubGHzRadioModes][kSubGHzModeStrMaxLen];
+    static const char kSubGModeStrs[kNumSubGModes][kSubGModeStrMaxLen];
 
     // Receiver position settings.
     struct RxPosition {
@@ -181,7 +181,7 @@ class SettingsManager {
         EnableState subg_enabled = EnableState::kEnableStateEnabled;  // High impedance state by default.
         bool subg_rx_enabled = true;
         bool subg_bias_tee_enabled = false;
-        SubGHzRadioMode subg_mode = SubGHzRadioMode::kSubGHzRadioModeUATRx;  // Default to UAT mode (978MHz receiver).
+        SubGMode subg_mode = SubGMode::kSubGUATRx;  // Default to UAT mode (978MHz receiver).
 
         // Feed settings
         char feed_uris[kMaxNumFeeds][kFeedURIMaxNumChars + 1];

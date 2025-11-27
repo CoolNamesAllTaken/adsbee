@@ -176,6 +176,13 @@ class ADSBee {
     int GetNoiseFloordBm();
 
     /**
+     * Get the current mode of the Sub-GHz radio. Assumes that the current settings object has already been synced to
+     * the Sub-GHz radio.
+     * @retval Current Sub-GHz radio mode.
+     */
+    inline SettingsManager::SubGMode GetSubGRadioMode() { return settings_manager.settings.subg_mode; }
+
+    /**
      * Get the current temperature used in learning trigger level (simulated annealing). A temperature of 0 means
      * learning has completed.
      * @retval Current temperature used for simulated annealing, in milliVolts.
@@ -300,6 +307,22 @@ class ADSBee {
                 subg_radio_ll.SetEnableState(SettingsManager::EnableState::kEnableStateDisabled);
             }
         }
+    }
+
+    /**
+     * Sets the mode of the Sub-GHz radio.
+     * @param[in] new_mode New Sub-GHz radio mode.
+     */
+    inline bool SetSubGRadioMode(SettingsManager::SubGMode new_mode) {
+        // Check radio mode for validity.
+        if (new_mode >= SettingsManager::SubGMode::kNumSubGModes) {
+            CONSOLE_ERROR("ADSBee::SetSubGRadioMode", "Invalid Sub-GHz radio mode %d.", static_cast<int>(new_mode));
+            return false;
+        }
+
+        // Change the Sub-GHz radio mode in settings, then write the new settings to the coprocessor.
+        settings_manager.settings.subg_mode = new_mode;
+        return subg_radio.Write(ObjectDictionary::Address::kAddrSettingsData, settings_manager.settings, true);
     }
 
     /**

@@ -21,6 +21,8 @@ class SubGHzRadio
 {
 public:
     static const uint16_t kRxPacketQueueLen = 2;
+
+    // This packet length is used for sizing partial data entry payloads. Set it to the maximum packet length across all protocols that can be received.
     static const uint16_t kRxPacketMaxLenBytes = RawUATUplinkPacket::kUplinkMessageNumBytes;
 
     struct SubGHzRadioConfig

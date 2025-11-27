@@ -140,19 +140,14 @@ static const SubGHzRadio::SubGHzRadioConfig kUATRxConfig = {
             .syncWord1 = RawUATUplinkPacket::kSyncWordMS32,
             // This needs to be set to 0, or else the length can't be overridden dynamically.
             // WARNING: Setting packet length via the RF command callback can get stomped by another interrupt context
-            // (e.g.
-            // SPI). This leads to the RF core writing infinitely into memory, causing a non-deterministic crash
-            // behavior.
-            // Make sure the software interrupt priority for the RF system is higher than the software interrupt
-            // priority
-            // for SPI (I set hardware interrupt priority higher too, but that doesn't seem to fix it on its own).
-            // Setting
-            // RF software interrupt priority 1 point higher than SPI interrupt priority seems to work well. Higher
-            // values
-            // for RF software interrupt priority lead to crashes. To sidestep this drama, just set the max expected
-            // packet
-            // length as  maxPktLen and take the performance hit (more rx airtime wasted per packet received).
-            .maxPktLen = SubGHzRadio::kRxPacketMaxLenBytes,  // 0 = unlimited / unknown length packet mode
+            // (e.g. SPI). This leads to the RF core writing infinitely into memory, causing a non-deterministic crash
+            // behavior. Make sure the software interrupt priority for the RF system is higher than the software
+            // interrupt priority for SPI (I set hardware interrupt priority higher too, but that doesn't seem to fix it
+            // on its own). Setting RF software interrupt priority 1 point higher than SPI interrupt priority seems to
+            // work well. Higher values for RF software interrupt priority lead to crashes. To sidestep this drama, just
+            // set the max expected packet length as  maxPktLen and take the performance hit (more rx airtime wasted per
+            // packet received).
+            .maxPktLen = RawUATUplinkPacket::kUplinkMessageNumBytes,  // 0 = unlimited / unknown length packet mode
             // The last 4 bits of the Sync word are interpreted as the header, so the rest of the packet stays
             // byte-aligned.
             .hdrConf =
