@@ -8,7 +8,7 @@
 #define BITMASK_32_ALL   0xFFFFFFFF
 #define WORD_32_NUM_BITS 32
 
-bool ByteBufferMatchesString(const uint8_t *buffer, const char *str) {
+bool ByteBufferMatchesString(const uint8_t* buffer, const char* str) {
     if (buffer == nullptr || str == nullptr) {
         return false;  // Invalid input.
     }
@@ -125,7 +125,7 @@ void PrintBinary32(uint32_t value) {
  */
 uint16_t swap16(uint16_t value) { return (value << 8) | (value >> 8); }
 
-uint16_t CalculateCRC16(const uint8_t *buf, int32_t buf_len_bytes) {
+uint16_t CalculateCRC16(const uint8_t* buf, int32_t buf_len_bytes) {
     if (buf == nullptr) {
         CONSOLE_ERROR("CalculateCRC16", "Attempted to calculate CRC on null buffer!");
         return 0;
@@ -144,7 +144,7 @@ uint16_t CalculateCRC16(const uint8_t *buf, int32_t buf_len_bytes) {
     return swap16(crc);
 }
 
-uint16_t HexStringToByteBuffer(uint8_t *byte_buffer, const char *hex_string, uint16_t max_bytes) {
+uint16_t HexStringToByteBuffer(uint8_t* byte_buffer, const char* hex_string, uint16_t max_bytes) {
     uint16_t bytes_written = 0;
     for (uint16_t i = 0; i < max_bytes; i++) {
         if (hex_string[i * kNibblesPerByte] == '\0' || hex_string[i * kNibblesPerByte + 1] == '\0') {
@@ -157,7 +157,7 @@ uint16_t HexStringToByteBuffer(uint8_t *byte_buffer, const char *hex_string, uin
     return bytes_written;
 }
 
-uint16_t ByteBufferToHexString(char *hex_string, const uint8_t *byte_buffer, uint16_t num_bytes, bool uppercase) {
+uint16_t ByteBufferToHexString(char* hex_string, const uint8_t* byte_buffer, uint16_t num_bytes, bool uppercase) {
     for (uint16_t i = 0; i < num_bytes; i++) {
         hex_string[i * kNibblesPerByte] = uppercase ? HEX_TO_CHAR_UPPER((byte_buffer[i] >> 4) & 0x0F)
                                                     : HEX_TO_CHAR_LOWER((byte_buffer[i] >> 4) & 0x0F);
@@ -168,8 +168,46 @@ uint16_t ByteBufferToHexString(char *hex_string, const uint8_t *byte_buffer, uin
     return num_bytes * kNibblesPerByte;
 }
 
-void PrintByteBuffer(const char *prefix, const uint8_t *byte_buffer, uint16_t num_bytes) {
+void PrintByteBuffer(const char* prefix, const uint8_t* byte_buffer, uint16_t num_bytes) {
     char hex_string[num_bytes * kNibblesPerByte + 1];
     ByteBufferToHexString(hex_string, byte_buffer, num_bytes);
     CONSOLE_PRINTF("%s %s\r\n", prefix, hex_string);
+}
+
+void ManchesterToBits(const uint32_t manchester_buffer[], uint16_t manchester_num_bits, uint8_t bit_buffer[]) {
+    // Each Manchester bit pair decodes to a single bit.
+    // Manchester encoding: 10 -> 1, 01 -> 0 (assuming this convention).
+    uint16_t num_decoded_bits = manchester_num_bits / 2;
+
+    // Initialize output buffer to 0.
+    uint16_t num_output_bytes = (num_decoded_bits + kBitsPerByte - 1) / kBitsPerByte;
+    for (uint16_t i = 0; i < num_output_bytes; i++) {
+        bit_buffer[i] = 0;
+    }
+
+    // Decode each pair of Manchester bits.
+    for (uint16_t i = 0; i < num_decoded_bits; i++) {
+        uint32_t manchester_bit_index = i * 2;
+
+        // Read two consecutive Manchester bits using the existing helper function.
+        uint32_t first_bit = GetNBitsFromWordBuffer(1, manchester_bit_index, manchester_buffer);
+        uint32_t second_bit = GetNBitsFromWordBuffer(1, manchester_bit_index + 1, manchester_buffer);
+
+        // Decode: 10 -> 1, 01 -> 0
+        uint8_t decoded_bit;
+        if (first_bit == 1 && second_bit == 0) {
+            decoded_bit = 1;
+        } else if (first_bit == 0 && second_bit == 1) {
+            decoded_bit = 0;
+        } else {
+            // Invalid Manchester encoding (00 or 11). Default to 0.
+            decoded_bit = 0;
+        }
+
+        // Set the decoded bit in the output buffer.
+        // Bit 0 is MSb of first byte.
+        uint16_t byte_index = i / kBitsPerByte;
+        uint16_t bit_offset = i % kBitsPerByte;
+        bit_buffer[byte_index] |= decoded_bit << (kBitsPerByte - 1 - bit_offset);
+    }
 }

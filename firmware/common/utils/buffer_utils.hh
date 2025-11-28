@@ -15,7 +15,7 @@
  * Bytes).
  * @retval True if the buffer matches the string, false otherwise.
  */
-bool ByteBufferMatchesString(const uint8_t *buffer, const char *str);
+bool ByteBufferMatchesString(const uint8_t* buffer, const char* str);
 
 void PrintBinary32(uint32_t);  // for debugging
 
@@ -53,6 +53,12 @@ uint32_t GetNBitsFromByteBuffer(uint16_t n, uint32_t first_bit_index, const uint
  */
 void SetNBitsInWordBuffer(uint16_t n, uint32_t word, uint32_t first_bit_index, uint32_t buffer[]);
 
+/**
+ * Convert a buffer of bytes to a buffer of big-endian 32-bit words.
+ * @param[in] byte_buffer Input byte buffer.
+ * @param[out] word_buffer Output word buffer.
+ * @param[in] num_bytes Number of bytes to convert.
+ */
 inline void ByteBufferToWordBuffer(const uint8_t byte_buffer[], uint32_t word_buffer[], uint16_t num_bytes) {
     uint16_t num_words = num_bytes / kBytesPerWord + (num_bytes % kBytesPerWord ? 1 : 0);
     for (uint16_t i = 0; i < num_words; i++) {
@@ -69,6 +75,12 @@ inline void ByteBufferToWordBuffer(const uint8_t byte_buffer[], uint32_t word_bu
     }
 }
 
+/**
+ * Convert a buffer of big-endian 32-bit words to a buffer of bytes.
+ * @param[in] word_buffer Input word buffer.
+ * @param[out] byte_buffer Output byte buffer.
+ * @param[in] num_bytes Number of bytes to convert.
+ */
 inline void WordBufferToByteBuffer(const uint32_t word_buffer[], uint8_t byte_buffer[], uint16_t num_bytes) {
     uint16_t num_words = num_bytes / kBytesPerWord + (num_bytes % kBytesPerWord ? 1 : 0);
     for (uint16_t i = 0; i < num_words; i++) {
@@ -92,7 +104,7 @@ inline void WordBufferToByteBuffer(const uint32_t word_buffer[], uint8_t byte_bu
  * @param[in] buf_len_bytes Number of bytes to calculate the CRC over.
  * @retval 16-bit CRC.
  */
-uint16_t CalculateCRC16(const uint8_t *buf, int32_t buf_len_bytes);
+uint16_t CalculateCRC16(const uint8_t* buf, int32_t buf_len_bytes);
 
 /**
  * Converts a hex string to a byte buffer. Writes till the end of the string or max_bytes, whichever is less.
@@ -101,7 +113,7 @@ uint16_t CalculateCRC16(const uint8_t *buf, int32_t buf_len_bytes);
  * @param[in] max_bytes Maximum number of bytes to write to the output buffer.
  * @retval Number of bytes written to the output buffer.
  */
-uint16_t HexStringToByteBuffer(uint8_t *byte_buffer, const char *hex_string, uint16_t max_bytes);
+uint16_t HexStringToByteBuffer(uint8_t* byte_buffer, const char* hex_string, uint16_t max_bytes);
 
 /**
  * Converts a byte buffer to a hex string. Writes till max_bytes is reached.
@@ -111,7 +123,7 @@ uint16_t HexStringToByteBuffer(uint8_t *byte_buffer, const char *hex_string, uin
  * @param[in] uppercase Whether to use uppercase letters for hex digits. Defaults to false (lowercase).
  * @retval Number of characters written to the output string (not including null terminator).
  */
-uint16_t ByteBufferToHexString(char *hex_string, const uint8_t *byte_buffer, uint16_t num_bytes,
+uint16_t ByteBufferToHexString(char* hex_string, const uint8_t* byte_buffer, uint16_t num_bytes,
                                bool uppercase = false);
 
 /**
@@ -121,4 +133,14 @@ uint16_t ByteBufferToHexString(char *hex_string, const uint8_t *byte_buffer, uin
  * @param[in] byte_buffer Pointer to the input byte buffer.
  * @param[in] num_bytes Number of bytes to print from the input buffer.
  */
-void PrintByteBuffer(const char *prefix, const uint8_t *byte_buffer, uint16_t num_bytes);
+void PrintByteBuffer(const char* prefix, const uint8_t* byte_buffer, uint16_t num_bytes);
+
+/**
+ * Converts a buffer of Manchester-encoded bits (sample rate 2x) to a buffer of decoded bits (sample rate 1x).
+ * @param[in] manchester_buffer Input buffer of Manchester-encoded bits, stored as 32-bit words (msb first).
+ * @param[in] manchester_num_bits Number of bits in the Manchester buffer. Must be 2x the number of decoded bits. If the
+ * number of manchester bits is odd, the last bit is ignored.
+ * @param[out] bit_buffer Output buffer of decoded bits, stored as bytes (msb first).
+ * @note The bit_buffer must be large enough to hold manchester_num_bits / 2 bits.
+ */
+void ManchesterToBits(const uint32_t manchester_buffer[], uint16_t manchester_num_bits, uint8_t bit_buffer[]);
