@@ -13,12 +13,12 @@ class RawModeSPacket {
     static const uint16_t kMaxPacketLenWords32 = 4;
     static const uint16_t kSquitterPacketLenBits = 56;
     static const uint16_t kSquitterPacketLenBytes = kSquitterPacketLenBits / kBitsPerByte;
-    static const uint16_t kSquitterPacketNumWords32 = 2;  // 56 bits = 1.75 words, round up to 2.
+    static const uint16_t kSquitterPacketLenWords32 = 2;  // 56 bits = 1.75 words, round up to 2.
     static const uint16_t kExtendedSquitterPacketLenBits = 112;
     static const uint16_t kExtendedSquitterPacketLenBytes = kExtendedSquitterPacketLenBits / kBitsPerByte;
-    static const uint16_t kExtendedSquitterPacketNumWords32 = 4;  // 112 bits = 3.5 words, round up to 4.
+    static const uint16_t kExtendedSquitterPacketLenWords32 = 4;  // 112 bits = 3.5 words, round up to 4.
 
-    RawModeSPacket(char *rx_string, int16_t source_in = -1, int16_t sigs_dbm_in = INT16_MIN,
+    RawModeSPacket(char* rx_string, int16_t source_in = -1, int16_t sigs_dbm_in = INT16_MIN,
                    int16_t sigq_db_in = INT16_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
     RawModeSPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32, int16_t source_in = -1,
                    int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_db_in = INT16_MIN,
@@ -51,7 +51,7 @@ class RawModeSPacket {
      * @param[in] buf_len_bytes Length of the buffer, in characters.
      * @return Number of characters written to the buffer.
      */
-    uint16_t PrintBuffer(char *buf, uint16_t buf_len_bytes) const;
+    uint16_t PrintBuffer(char* buf, uint16_t buf_len_bytes) const;
 
     uint32_t buffer[kMaxPacketLenWords32] = {0};
     uint16_t buffer_len_bytes = 0;
@@ -116,19 +116,19 @@ class DecodedModeSPacket {
      * @param[in] sigs_dbm RSSI of the packet that was received, in dBm. Defaults to INT32_MIN if not set.
      * @param[in] mlat_12mhz_counts Counts of a 12MHz clock used for the 6-byte multilateration timestamp.
      */
-    DecodedModeSPacket(char *rx_string, int16_t source = -1, int32_t sigs_dbm = INT32_MIN, int32_t sigq_db = INT32_MIN,
+    DecodedModeSPacket(char* rx_string, int16_t source = -1, int32_t sigs_dbm = INT32_MIN, int32_t sigq_db = INT32_MIN,
                        uint64_t mlat_48mhz_64bit_counts = 0);
 
     /**
      * DecodedModeSPacket constructor from RawModeSPacket. Uses RawModeSPacket's implicit constructor.
      * @param[in] packet_in RawModeSPacket to use when creating the DecodedModeSPacket.
      */
-    DecodedModeSPacket(const RawModeSPacket &packet_in);
+    DecodedModeSPacket(const RawModeSPacket& packet_in);
 
     /**
      * Default constructor.
      */
-    DecodedModeSPacket() : raw((char *)"") { debug_string[0] = '\0'; };
+    DecodedModeSPacket() : raw((char*)"") { debug_string[0] = '\0'; };
 
     DownlinkFormat GetDownlinkFormatEnum();
 
@@ -185,7 +185,7 @@ class ModeSADSBPacket : public DecodedModeSPacket {
      * contents of the parent DecodedModeSPacket. The ModeSADSBPacket cannot exist without the parent
      * DecodedModeSPacket!
      */
-    ModeSADSBPacket(const DecodedModeSPacket &decoded_packet) : DecodedModeSPacket(decoded_packet) {
+    ModeSADSBPacket(const DecodedModeSPacket& decoded_packet) : DecodedModeSPacket(decoded_packet) {
         ConstructADSBPacket();
     };
 
@@ -239,7 +239,7 @@ class ModeSADSBPacket : public DecodedModeSPacket {
 
 class ModeSAllCallReplyPacket : public DecodedModeSPacket {
    public:
-    ModeSAllCallReplyPacket(const DecodedModeSPacket &decoded_packet) : DecodedModeSPacket(decoded_packet) {
+    ModeSAllCallReplyPacket(const DecodedModeSPacket& decoded_packet) : DecodedModeSPacket(decoded_packet) {
         capability = static_cast<Capability>(GetNBitsFromWordBuffer(3, 5, raw.buffer));
     }
 
@@ -262,7 +262,7 @@ class ModeSAltitudeReplyPacket : public DecodedModeSPacket {
         kUtilityMessageCommDInterrogatorIdentifierCode = 0b11
     };
 
-    ModeSAltitudeReplyPacket(const DecodedModeSPacket &decoded_packet);
+    ModeSAltitudeReplyPacket(const DecodedModeSPacket& decoded_packet);
 
     bool is_airborne = false;
     bool has_alert = false;
@@ -291,7 +291,7 @@ class ModeSIdentityReplyPacket : public DecodedModeSPacket {
         kUtilityMessageCommDInterrogatorIdentifierCode = 0b11
     };
 
-    ModeSIdentityReplyPacket(const DecodedModeSPacket &decoded_packet);
+    ModeSIdentityReplyPacket(const DecodedModeSPacket& decoded_packet);
 
     bool is_airborne = false;
     bool has_alert = false;

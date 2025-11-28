@@ -1,5 +1,6 @@
 #include "sub_ghz_radio.hh"
 
+#include "buffer_utils.hh"  // For Manchester decoding.
 #include "hal.hh"
 #include "macros.hh"
 #include "pico.hh"  // For LED blinks.
@@ -236,6 +237,11 @@ bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t* filled_entry) {
         }
         case SettingsManager::SubGMode::kSubGModeSRx: {
             pico_ll.BlinkSubGLED();
+            uint8_t raw_buf[RawModeSPacket::kExtendedSquitterPacketLenBytes] = {0};
+            PrintByteBuffer("SubGHzRadio::HandlePacketRx: Raw Bits: ", packet_data, packet_len_bytes);
+            ManchesterToBits(packet_data, packet_len_bytes, raw_buf);
+            PrintByteBuffer("SubGHzRadio::HandlePacketRx: \tDecoded: ", raw_buf,
+                            RawModeSPacket::kExtendedSquitterPacketLenBytes);
             break;
         }
         default: {

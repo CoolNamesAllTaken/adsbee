@@ -285,7 +285,7 @@ void ADSBee::OnDemodComplete() {
             // Only enable this print for debugging! Printing from the interrupt causes the USB library to crash.
             // CONSOLE_WARNING("ADSBee::OnDemodComplete", "Received a packet with %d 32-bit words, expected maximum
             // of %d.",
-            //                 packet_num_words, RawModeSPacket::kExtendedSquitterPacketNumWords32);
+            //                 packet_num_words, RawModeSPacket::kExtendedSquitterPacketLenWords32);
             // pio_sm_clear_fifos(config_.message_demodulator_pio, message_demodulator_sm_);
             packet_num_words = RawModeSPacket::kMaxPacketLenWords32;
         }
@@ -304,14 +304,14 @@ void ADSBee::OnDemodComplete() {
                 // rx_packet_[sm_index].buffer[i] >>= 1;
                 // Mask and left align final word based on bit length.
                 switch (packet_num_words) {
-                    case RawModeSPacket::kSquitterPacketNumWords32:
+                    case RawModeSPacket::kSquitterPacketLenWords32:
                         aircraft_dictionary.Record1090RawSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = rx_packet_[sm_index].buffer[i] & 0xFFFFFF00;
                         rx_packet_[sm_index].buffer_len_bytes = RawModeSPacket::kSquitterPacketLenBytes;
                         // raw_mode_s_packet_queue.Enqueue(rx_packet_[sm_index]);
                         decoder.raw_mode_s_packet_in_queue.Enqueue(rx_packet_[sm_index]);
                         break;
-                    case RawModeSPacket::kExtendedSquitterPacketNumWords32:
+                    case RawModeSPacket::kExtendedSquitterPacketLenWords32:
                         aircraft_dictionary.Record1090RawExtendedSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = rx_packet_[sm_index].buffer[i] & 0xFFFF0000;
                         rx_packet_[sm_index].buffer_len_bytes = RawModeSPacket::kExtendedSquitterPacketLenBytes;

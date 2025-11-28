@@ -309,7 +309,7 @@ static const SubGHzRadio::SubGHzRadioConfig kModeSRxConfig = {
             // discrimination
             // between uplink and ADSB packets in the payload.
             .syncWord0 = (uint32_t)(0b1010000101000000 << 16),
-            .syncWord1 = 0x0,
+            .syncWord1 = (uint32_t)(0xFFFF << 16),
             // This needs to be set to 0, or else the length can't be overridden dynamically.
             // WARNING: Setting packet length via the RF command callback can get stomped by another interrupt context
             // (e.g. SPI). This leads to the RF core writing infinitely into memory, causing a non-deterministic crash
@@ -319,7 +319,8 @@ static const SubGHzRadio::SubGHzRadioConfig kModeSRxConfig = {
             // work well. Higher values for RF software interrupt priority lead to crashes. To sidestep this drama, just
             // set the max expected packet length as  maxPktLen and take the performance hit (more rx airtime wasted per
             // packet received).
-            .maxPktLen = RawModeSPacket::kExtendedSquitterPacketLenBytes,  // 0 = unlimited / unknown length packet mode
+            .maxPktLen =
+                2 * RawModeSPacket::kExtendedSquitterPacketLenBytes,  // 0 = unlimited / unknown length packet mode
             // The last 4 bits of the Sync word are interpreted as the header, so the rest of the packet stays
             // byte-aligned.
             .hdrConf =
