@@ -307,8 +307,9 @@ TEST(BufferUtils, ManchesterToBits_BasicDecoding) {
     // Test basic Manchester decoding: 10 -> 1, 01 -> 0
     // Manchester: 10 01 10 10 01 01 10 01 (2 bits per encoded bit)
     // Decoded:    1  0  1  1  0  0  1  0  = 0xB2
-    uint32_t manchester_buffer[1];
-    manchester_buffer[0] = 0b10011010010110010000000000000000u;  // 16 Manchester bits -> 8 decoded bits
+    uint8_t manchester_buffer[2];
+    manchester_buffer[0] = 0b10011010u;  // First 8 Manchester bits
+    manchester_buffer[1] = 0b01011001u;  // Next 8 Manchester bits (16 total -> 8 decoded bits)
     uint8_t bit_buffer[1] = {0};
 
     ManchesterToBits(manchester_buffer, 16, bit_buffer);
@@ -318,8 +319,9 @@ TEST(BufferUtils, ManchesterToBits_BasicDecoding) {
 TEST(BufferUtils, ManchesterToBits_AllOnes) {
     // All 1s: 10 10 10 10 10 10 10 10
     // Decoded: 1  1  1  1  1  1  1  1 = 0xFF
-    uint32_t manchester_buffer[1];
-    manchester_buffer[0] = 0b10101010101010100000000000000000u;  // 16 Manchester bits
+    uint8_t manchester_buffer[2];
+    manchester_buffer[0] = 0b10101010u;  // First 8 Manchester bits
+    manchester_buffer[1] = 0b10101010u;  // Next 8 Manchester bits (16 total)
     uint8_t bit_buffer[1] = {0};
 
     ManchesterToBits(manchester_buffer, 16, bit_buffer);
@@ -329,8 +331,9 @@ TEST(BufferUtils, ManchesterToBits_AllOnes) {
 TEST(BufferUtils, ManchesterToBits_AllZeros) {
     // All 0s: 01 01 01 01 01 01 01 01
     // Decoded: 0  0  0  0  0  0  0  0 = 0x00
-    uint32_t manchester_buffer[1];
-    manchester_buffer[0] = 0b01010101010101010000000000000000u;  // 16 Manchester bits
+    uint8_t manchester_buffer[2];
+    manchester_buffer[0] = 0b01010101u;  // First 8 Manchester bits
+    manchester_buffer[1] = 0b01010101u;  // Next 8 Manchester bits (16 total)
     uint8_t bit_buffer[1] = {0};
 
     ManchesterToBits(manchester_buffer, 16, bit_buffer);
@@ -341,8 +344,11 @@ TEST(BufferUtils, ManchesterToBits_MultipleBytes) {
     // Test decoding across multiple bytes
     // First byte: 10 01 10 10 01 01 10 01 -> 1 0 1 1 0 0 1 0 = 0xB2
     // Second byte: 01 10 01 10 10 10 01 01 -> 0 1 0 1 1 1 0 0 = 0x5C
-    uint32_t manchester_buffer[1];
-    manchester_buffer[0] = 0b10011010010110010110011010100101u;  // 32 Manchester bits -> 16 decoded bits
+    uint8_t manchester_buffer[4];
+    manchester_buffer[0] = 0b10011010u;  // First 8 Manchester bits
+    manchester_buffer[1] = 0b01011001u;  // Next 8 Manchester bits
+    manchester_buffer[2] = 0b01100110u;  // Next 8 Manchester bits
+    manchester_buffer[3] = 0b10100101u;  // Last 8 Manchester bits (32 total -> 16 decoded bits)
     uint8_t bit_buffer[2] = {0};
 
     ManchesterToBits(manchester_buffer, 32, bit_buffer);
@@ -351,14 +357,20 @@ TEST(BufferUtils, ManchesterToBits_MultipleBytes) {
 }
 
 TEST(BufferUtils, ManchesterToBits_CrossWordBoundary) {
-    // Test decoding that spans multiple 32-bit words
-    uint32_t manchester_buffer[2];
-    // First word: 10 01 10 10 01 01 10 01 10 10 10 10 01 01 01 01 (16 bits)
-    //             1  0  1  1  0  0  1  0  1  1  1  1  0  0  0  0 = 0xB2F0
-    manchester_buffer[0] = 0b10011010010110011010101001010101u;
-    // Second word: 01 10 01 10 10 10 01 01 ... (continuing)
-    //             0  1  0  1  1  1  0  0 ... = 0x5C
-    manchester_buffer[1] = 0b01100110101001010000000000000000u;
+    // Test decoding that spans multiple bytes
+    uint8_t manchester_buffer[6];
+    // First byte: 10 01 10 10 -> 1 0 1 1
+    // Second byte: 01 01 10 01 -> 0 0 1 0 = 0xB2
+    manchester_buffer[0] = 0b10011010u;
+    manchester_buffer[1] = 0b01011001u;
+    // Third byte: 10 10 10 10 -> 1 1 1 1
+    // Fourth byte: 01 01 01 01 -> 0 0 0 0 = 0xF0
+    manchester_buffer[2] = 0b10101010u;
+    manchester_buffer[3] = 0b01010101u;
+    // Fifth byte: 01 10 01 10 -> 0 1 0 1
+    // Sixth byte: 10 10 01 01 -> 1 1 0 0 = 0x5C
+    manchester_buffer[4] = 0b01100110u;
+    manchester_buffer[5] = 0b10100101u;
     uint8_t bit_buffer[3] = {0};
 
     ManchesterToBits(manchester_buffer, 48, bit_buffer);
@@ -369,20 +381,23 @@ TEST(BufferUtils, ManchesterToBits_CrossWordBoundary) {
 
 TEST(BufferUtils, ManchesterToBits_OddManchesterBits) {
     // Test with odd number of Manchester bits (last bit should be ignored)
-    uint32_t manchester_buffer[1];
-    manchester_buffer[0] = 0b10011010010110010000000000000000u;  // 17 Manchester bits (odd)
+    uint8_t manchester_buffer[3];
+    manchester_buffer[0] = 0b10011010u;  // First 8 Manchester bits
+    manchester_buffer[1] = 0b01011001u;  // Next 8 Manchester bits
+    manchester_buffer[2] = 0b00000000u;  // 17th bit (odd, will be ignored)
     uint8_t bit_buffer[1] = {0};
 
     ManchesterToBits(manchester_buffer, 17, bit_buffer);  // 17/2 = 8 decoded bits
-    EXPECT_EQ(bit_buffer[0], 0xB2);  // Same as 16-bit test since last bit is ignored
+    EXPECT_EQ(bit_buffer[0], 0xB2);                       // Same as 16-bit test since last bit is ignored
 }
 
 TEST(BufferUtils, ManchesterToBits_InvalidEncoding) {
     // Test with invalid Manchester patterns (00 and 11)
     // Manchester: 00 11 10 01 00 11 01 10
     // Decoded:    0  0  1  0  0  0  0  1 = 0x21 (invalid pairs decode to 0)
-    uint32_t manchester_buffer[1];
-    manchester_buffer[0] = 0b00111001001101100000000000000000u;  // 16 Manchester bits with invalid pairs
+    uint8_t manchester_buffer[2];
+    manchester_buffer[0] = 0b00111001u;  // First 8 Manchester bits
+    manchester_buffer[1] = 0b00110110u;  // Next 8 Manchester bits (16 total with invalid pairs)
     uint8_t bit_buffer[1] = {0};
 
     ManchesterToBits(manchester_buffer, 16, bit_buffer);
@@ -391,14 +406,14 @@ TEST(BufferUtils, ManchesterToBits_InvalidEncoding) {
 
 TEST(BufferUtils, ManchesterToBits_SingleBit) {
     // Test decoding just 2 Manchester bits -> 1 decoded bit
-    uint32_t manchester_buffer[1];
-    manchester_buffer[0] = 0b10000000000000000000000000000000u;  // 10 -> 1
+    uint8_t manchester_buffer[1];
+    manchester_buffer[0] = 0b10000000u;  // 10 -> 1
     uint8_t bit_buffer[1] = {0};
 
     ManchesterToBits(manchester_buffer, 2, bit_buffer);
     EXPECT_EQ(bit_buffer[0], 0x80);  // MSb set
 
-    manchester_buffer[0] = 0b01000000000000000000000000000000u;  // 01 -> 0
+    manchester_buffer[0] = 0b01000000u;  // 01 -> 0
     bit_buffer[0] = 0;
 
     ManchesterToBits(manchester_buffer, 2, bit_buffer);
@@ -408,8 +423,8 @@ TEST(BufferUtils, ManchesterToBits_SingleBit) {
 TEST(BufferUtils, ManchesterToBits_PartialByte) {
     // Test decoding that doesn't fill a complete byte
     // Manchester: 10 01 10 10 (8 bits) -> Decoded: 1 0 1 1 (4 bits) = 0xB0 (left-aligned in byte)
-    uint32_t manchester_buffer[1];
-    manchester_buffer[0] = 0b10011010000000000000000000000000u;  // 8 Manchester bits -> 4 decoded bits
+    uint8_t manchester_buffer[1];
+    manchester_buffer[0] = 0b10011010u;  // 8 Manchester bits -> 4 decoded bits
     uint8_t bit_buffer[1] = {0};
 
     ManchesterToBits(manchester_buffer, 8, bit_buffer);
@@ -418,10 +433,16 @@ TEST(BufferUtils, ManchesterToBits_PartialByte) {
 
 TEST(BufferUtils, ManchesterToBits_LargeBuffer) {
     // Test with a larger buffer (4 bytes output = 64 Manchester bits)
-    uint32_t manchester_buffer[2];
+    uint8_t manchester_buffer[8];
     // Pattern: alternating 10 and 01 for variety
-    manchester_buffer[0] = 0b10011010010110011010101001010101u;  // First 32 Manchester bits
-    manchester_buffer[1] = 0b01100110101001011001101010100101u;  // Next 32 Manchester bits
+    manchester_buffer[0] = 0b10011010u;
+    manchester_buffer[1] = 0b01011001u;
+    manchester_buffer[2] = 0b10101010u;
+    manchester_buffer[3] = 0b01010101u;
+    manchester_buffer[4] = 0b01100110u;
+    manchester_buffer[5] = 0b10100101u;
+    manchester_buffer[6] = 0b10011010u;
+    manchester_buffer[7] = 0b10100101u;
     uint8_t bit_buffer[4] = {0};
 
     ManchesterToBits(manchester_buffer, 64, bit_buffer);
@@ -434,7 +455,7 @@ TEST(BufferUtils, ManchesterToBits_LargeBuffer) {
 
 TEST(BufferUtils, ManchesterToBits_ZeroLength) {
     // Edge case: zero Manchester bits
-    uint32_t manchester_buffer[1] = {0};
+    uint8_t manchester_buffer[1] = {0};
     uint8_t bit_buffer[1] = {0xFF};  // Initialize to non-zero
 
     ManchesterToBits(manchester_buffer, 0, bit_buffer);

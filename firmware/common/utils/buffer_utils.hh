@@ -137,10 +137,10 @@ void PrintByteBuffer(const char* prefix, const uint8_t* byte_buffer, uint16_t nu
 
 /**
  * Converts a buffer of Manchester-encoded bits (sample rate 2x) to a buffer of decoded bits (sample rate 1x).
- * @param[in] manchester_buffer Input buffer of Manchester-encoded bits, stored as 32-bit words (msb first).
+ * @param[in] manchester_buffer Input buffer of Manchester-encoded bits, stored as bytes (msb first).
  * @param[in] manchester_num_bits Number of bits in the Manchester buffer. Must be 2x the number of decoded bits. If the
  * number of manchester bits is odd, the last bit is ignored.
  * @param[out] bit_buffer Output buffer of decoded bits, stored as bytes (msb first).
  * @note The bit_buffer must be large enough to hold manchester_num_bits / 2 bits.
  */
-void ManchesterToBits(const uint32_t manchester_buffer[], uint16_t manchester_num_bits, uint8_t bit_buffer[]);
+void ManchesterToBits(const uint8_t manchester_buffer[], uint16_t manchester_num_bits, uint8_t bit_buffer[]);

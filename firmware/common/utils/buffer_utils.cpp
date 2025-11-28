@@ -174,7 +174,7 @@ void PrintByteBuffer(const char* prefix, const uint8_t* byte_buffer, uint16_t nu
     CONSOLE_PRINTF("%s %s\r\n", prefix, hex_string);
 }
 
-void ManchesterToBits(const uint32_t manchester_buffer[], uint16_t manchester_num_bits, uint8_t bit_buffer[]) {
+void ManchesterToBits(const uint8_t manchester_buffer[], uint16_t manchester_num_bits, uint8_t bit_buffer[]) {
     // Each Manchester bit pair decodes to a single bit.
     // Manchester encoding: 10 -> 1, 01 -> 0 (assuming this convention).
     uint16_t num_decoded_bits = manchester_num_bits / 2;
@@ -190,8 +190,8 @@ void ManchesterToBits(const uint32_t manchester_buffer[], uint16_t manchester_nu
         uint32_t manchester_bit_index = i * 2;
 
         // Read two consecutive Manchester bits using the existing helper function.
-        uint32_t first_bit = GetNBitsFromWordBuffer(1, manchester_bit_index, manchester_buffer);
-        uint32_t second_bit = GetNBitsFromWordBuffer(1, manchester_bit_index + 1, manchester_buffer);
+        uint32_t first_bit = GetNBitsFromByteBuffer(1, manchester_bit_index, manchester_buffer);
+        uint32_t second_bit = GetNBitsFromByteBuffer(1, manchester_bit_index + 1, manchester_buffer);
 
         // Decode: 10 -> 1, 01 -> 0
         uint8_t decoded_bit;
