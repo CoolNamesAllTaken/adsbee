@@ -206,16 +206,15 @@ static const SubGHzRadio::SubGHzRadioConfig kModeSRxConfig = {
                                         .rateWord = 0x140000,  // 2 Mbps
                                         .decimMode = 0x0,
                                     },
-                                .rxBw = 0x64,  // 2186.1 kHz
+                                .rxBw = 0x67,  // 3767.4 kHz
                                 .preamConf =
                                     {
                                         .nPreamBytes = 0x0,
                                         .preamMode = 0x0,
                                     },
-                                // Mode S preamble at 2Mbps is 16 bits (8us) long.
                                 .formatConf =
                                     {
-                                        .nSwBits = 16,
+                                        .nSwBits = 16,  // Mode S preamble at 2Mbps is 16 bits (8us) long.
                                         .bBitReversal = 0x0,
                                         .bMsbFirst = 0x1,
                                         .fecMode = 0x0,
@@ -309,7 +308,7 @@ static const SubGHzRadio::SubGHzRadioConfig kModeSRxConfig = {
             // discrimination
             // between uplink and ADSB packets in the payload.
             .syncWord0 = (uint32_t)(0b1010000101000000 << 16),
-            .syncWord1 = (uint32_t)(0xFFFF << 16),
+            .syncWord1 = (uint32_t)(0x1010000101000000 << 16),
             // This needs to be set to 0, or else the length can't be overridden dynamically.
             // WARNING: Setting packet length via the RF command callback can get stomped by another interrupt context
             // (e.g. SPI). This leads to the RF core writing infinitely into memory, causing a non-deterministic crash
