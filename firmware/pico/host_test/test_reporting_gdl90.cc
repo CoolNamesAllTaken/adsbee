@@ -127,6 +127,28 @@ TEST(GDL90Utils, InitMessage) {
 
 TEST(GDL90Utils, UplinkDataMessage) {
     // TODO: Add tests here!
+    frame_data_hex =
+        "3514c952d65ca7b0158000210de09082102d30cb00082f0d1e012d30cb000000000000000fd900011710120118173ba9c9635e4c001580"
+        "00210e9e0082102cf04b00082f521e012cf04b000000000000000fd900011a0f00011f0001a916435a6800278000350e1d682210000000"
+        "ff004491387c4d5060cb4c74d35833d75db9c337f2d38df87d07d27f3cb0ca030f5dfc75c31cb4c74d357f1d70c72d70c73c1fc30c1fc7"
+        "8c1f05f65f7f3cb0c8c3d77df780288000350e1d682210000000ff004691347c4d5060cb4c74d35833d75db9c317f2d70db37d07d27f3c"
+        "b0ca02091c87f1d70c72d31d34d5fc75c31cb5c31cf07f1e307f2e707c17d97dfcf2c322091c87df78002d00067408605c93844e008316"
+        "0cb5c30c306a080651c5f1cb0c30707c78c30c1c0f2d30c30703cf0c30c1c133d30c30820cf9c30c1c65e718cf5cb2af0c20cf6cf1b71c"
+        "e0c31d31b72de0c33d70d36830d36db5da0cf6d72d7879d000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";  // frame_data_hex
+    frame_length_bytes = 432;  // frame_length_bytes
+
+    // Create encoded data frame.
+    uint8_t decoded_data_frame[RawUATUplinkPacket::kUplinkMessagePayloadNumBytes] = {0};
+    HexStringToByteBuffer(decoded_data_frame, frame_data_hex, frame_length_bytes);
+    uint8_t encoded_data_frame[RawUATUplinkPacket::kUplinkMessageNumBytes] = {0};
+    uat_rs.EncodeUplinkMessage(encoded_data_frame, decoded_data_frame);
+    PrintByteBuffer("Encoded uplink message:", encoded_data_frame, RawUATUplinkPacket::kUplinkMessageNumBytes);
+    int16_t sigs_dbm = -10;                                 // Dummy signal strength.
+    int16_t sigq_bits = 0;                                  // Dummy signal quality.
+    uint64_t mlat_48mhz_64bit_counts = 0x1234567812345678;  // Dummy timestamp.
+    DecodedUATUplinkPacket packet(RawUATUplinkPacket(encoded_data_frame, RawUATUplinkPacket::kUplinkMessageNumBytes,
+                                                     sigs_dbm, sigq_bits, mlat_48mhz_64bit_counts));
 }
 
 TEST(GDL90Utils, OwnshipReport) {

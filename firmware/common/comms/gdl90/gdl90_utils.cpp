@@ -24,7 +24,7 @@ const uint16_t GDL90Reporter::kGDL90CRC16Table[] = {
     0x1ce0, 0xcc1,  0xef1f, 0xff3e, 0xcf5d, 0xdf7c, 0xaf9b, 0xbfba, 0x8fd9, 0x9ff8, 0x6e17, 0x7e36, 0x4e55, 0x5e74,
     0x2e93, 0x3eb2, 0xed1,  0x1ef0};
 
-uint16_t GDL90Reporter::WriteGDL90Message(uint8_t *to_buf, uint8_t *unescaped_message,
+uint16_t GDL90Reporter::WriteGDL90Message(uint8_t* to_buf, uint8_t* unescaped_message,
                                           uint8_t unescaped_message_len_bytes) {
     uint16_t bytes_written = 0;
     to_buf[bytes_written++] = kGDL90FlagByte;  // Beginning flag byte.
@@ -38,7 +38,7 @@ uint16_t GDL90Reporter::WriteGDL90Message(uint8_t *to_buf, uint8_t *unescaped_me
     return bytes_written;
 }
 
-uint16_t GDL90Reporter::WriteBufferWithGDL90Escapes(uint8_t *to_buf, const uint8_t *from_buf,
+uint16_t GDL90Reporter::WriteBufferWithGDL90Escapes(uint8_t* to_buf, const uint8_t* from_buf,
                                                     uint16_t from_buf_num_bytes) {
     uint16_t to_buf_num_bytes = 0;
     for (uint16_t i = 0; i < from_buf_num_bytes; i++) {
@@ -54,7 +54,7 @@ uint16_t GDL90Reporter::WriteBufferWithGDL90Escapes(uint8_t *to_buf, const uint8
     return to_buf_num_bytes;
 }
 
-uint16_t GDL90Reporter::WriteGDL90HeartbeatMessage(uint8_t *to_buf, uint32_t timestamp_sec_since_0000z,
+uint16_t GDL90Reporter::WriteGDL90HeartbeatMessage(uint8_t* to_buf, uint32_t timestamp_sec_since_0000z,
                                                    uint16_t message_counts) {
     const uint16_t kMessageBufLenBytes = 7;
     uint8_t message_buf[kMessageBufLenBytes];
@@ -79,7 +79,7 @@ uint16_t GDL90Reporter::WriteGDL90HeartbeatMessage(uint8_t *to_buf, uint32_t tim
     return WriteGDL90Message(to_buf, message_buf, kMessageBufLenBytes);
 }
 
-uint16_t GDL90Reporter::WriteGDL90InitMessage(uint8_t *to_buf) {
+uint16_t GDL90Reporter::WriteGDL90InitMessage(uint8_t* to_buf) {
     const uint16_t kMessageBufLenBytes = 3;
     uint8_t message_buf[kMessageBufLenBytes];
     // 1: Message ID
@@ -94,7 +94,7 @@ uint16_t GDL90Reporter::WriteGDL90InitMessage(uint8_t *to_buf) {
     return WriteGDL90Message(to_buf, message_buf, kMessageBufLenBytes);
 }
 
-uint16_t GDL90Reporter::WriteGDL90UplinkDataMessage(uint8_t *to_buf, uint8_t *uplink_payload,
+uint16_t GDL90Reporter::WriteGDL90UplinkDataMessage(uint8_t* to_buf, const uint8_t* uplink_payload,
                                                     uint16_t uplink_payload_len_bytes, uint32_t tor_us) {
     // Time of Arrival (TOR) = 24-bit value with resolution of 80ns. Valid range is 0 to 1 sec (0-12499999).
     uint32_t tor = 0xFFFFFF;  // Default value: insufficient timing accuracy to say what the time of arrival is.
@@ -118,7 +118,7 @@ uint16_t GDL90Reporter::WriteGDL90UplinkDataMessage(uint8_t *to_buf, uint8_t *up
     return WriteGDL90Message(to_buf, message_buf, kMessageBufLenBytes);
 }
 
-uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const GDL90TargetReportData &data,
+uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, const GDL90TargetReportData& data,
                                                       bool ownship) {
     const uint16_t kMessageBufLenBytes = 28;
     const float kLatLonDegTo24BitFrac = 46603.3777778f;
@@ -170,7 +170,7 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const GDL
     return WriteGDL90Message(to_buf, message_buf, kMessageBufLenBytes);
 }
 
-uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const ModeSAircraft &aircraft, bool ownship) {
+uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, const ModeSAircraft& aircraft, bool ownship) {
     GDL90TargetReportData data;
 
     // NOTE: Traffic Alert Status currently not used.
@@ -222,7 +222,7 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const Mod
     return WriteGDL90TargetReportMessage(to_buf, data, ownship);
 }
 
-uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t *to_buf, const UATAircraft &aircraft, bool ownship) {
+uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, const UATAircraft& aircraft, bool ownship) {
     GDL90TargetReportData data;
 
     // NOTE: Traffic Alert Status currently not used.

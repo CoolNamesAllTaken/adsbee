@@ -63,7 +63,18 @@ class ADSBeeServer {
         uint32_t last_message_timestamp_ms = 0;
     };
 
+    /**
+     * Send a GDL90 report of all aircraft positions to connected WiFi clients.
+     * @retval True if successful, false on error.
+     */
     bool ReportGDL90();
+
+    /**
+     * Sends a GDL90 uplink packet to connected WiFi clients. Does not provide traffic reports.
+     * @param[in] uplink_packet Raw UAT uplink packet to send.
+     * @retval True if successful, false on error.
+     */
+    bool ReportGDL90UplinkDataMessage(const RawUATUplinkPacket& uplink_packet);
 
     /**
      * Broadcasts metrics message to all connected network metrics websocket clients.
