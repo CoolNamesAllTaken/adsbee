@@ -34,7 +34,17 @@ static uint32_t pUATOverrides[] = {
     // TX: Reduce analog ramping wait time
     HW_REG_OVERRIDE(0x6028, 0x001A),
     // TX: set intFreq = 0
-    (uint32_t)0x00000343, (uint32_t)0xFFFFFFFF};
+    (uint32_t)0x00000343,
+
+    // Custom overrides by John.
+    // Route RAT_GPO1 (Sync word detected) to RFC_GPO0
+    HW_REG_OVERRIDE(0x1110, RFC_DBELL_SYSGPOCTL_GPOCTL0_RATGPO1),
+    // Additional override for sync word GPIO, as per
+    // https://dev.ti.com/tirex/content/simplelink_cc13xx_cc26xx_sdk_8_30_01_01/docs/proprietary-rf/proprietary-rf-users-guide/rf-core/signal-routing.html#sec-read-rat-gpo1.
+    (uint32_t)0x008F88B3,
+
+    // End of overrides.
+    (uint32_t)0xFFFFFFFF};
 
 static const SubGHzRadio::SubGHzRadioConfig kUATRxConfig = {
     // TI-RTOS RF Mode Object
@@ -249,6 +259,12 @@ static uint32_t pModeSOverrides[] = {
     // https://dev.ti.com/tirex/content/simplelink_cc13xx_cc26xx_sdk_8_30_01_01/docs/proprietary-rf/proprietary-rf-users-guide/rf-core/signal-routing.html#sec-read-rat-gpo1.
     (uint32_t)0x008F88B3,
 
+    // Custom Mode S preamble.
+    (uint32_t)0x0043 | 0b1010000101000000 << 16,
+
+    // Set sync word strictness. 0xFF for sync word 0, 0xF0 for sync word 1.
+    HW_REG_OVERRIDE(0x5104, 0xFFFF),
+
     // End of overrides.
     (uint32_t)0xFFFFFFFF};
 
@@ -291,8 +307,8 @@ static const SubGHzRadio::SubGHzRadioConfig kModeSRxConfig = {
                                 .rxBw = 0x67,  // 3767.4 kHz
                                 .preamConf =
                                     {
-                                        .nPreamBytes = 0x0,
-                                        .preamMode = 0x0,
+                                        .nPreamBytes = 0x2,
+                                        .preamMode = 0x1,
                                     },
                                 .formatConf =
                                     {
@@ -389,8 +405,8 @@ static const SubGHzRadio::SubGHzRadioConfig kModeSRxConfig = {
             // Sync on the most significant 32 bits of the 36 bit sync word. Save the last 4 bits of sync for
             // discrimination
             // between uplink and ADSB packets in the payload.
-            .syncWord0 = (uint32_t)(0b1010000101000000 << 16),
-            .syncWord1 = (uint32_t)(0x1010000101000000 << 16),
+            .syncWord0 = (uint32_t)(0b1010000101000000),
+            .syncWord1 = (uint32_t)(0x1010000101000000),
             // This needs to be set to 0, or else the length can't be overridden dynamically.
             // WARNING: Setting packet length via the RF command callback can get stomped by another interrupt context
             // (e.g. SPI). This leads to the RF core writing infinitely into memory, causing a non-deterministic crash
