@@ -92,8 +92,11 @@ bool ADSBee::Init() {
     // Initialize the sync pin if it is defined.
     if (bsp.sync_pin != UINT16_MAX) {
         gpio_init(bsp.sync_pin);
-        gpio_set_dir(bsp.sync_pin, GPIO_OUT);
-        gpio_put(bsp.sync_pin, 0);  // Set to low.
+        // Set sync pin to a soft pulldown to avoid conflicting with RF debug output of CC1312 but avoid triggering
+        // bootloader during an unintended reset.
+        gpio_set_dir(bsp.sync_pin,
+                     GPIO_IN);  // Set to input to avoid conflicting with debug output from CC1312 when active.
+        gpio_pull_down(bsp.sync_pin);
     }
 
     // Disable the Sub-GHz SPI bus output.

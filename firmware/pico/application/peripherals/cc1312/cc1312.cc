@@ -348,6 +348,7 @@ bool CC1312::BootloaderWriteCCFGConfig(const BootloaderCCFGConfig& ccfg_config) 
 
 bool CC1312::EnterBootloader() {
     SetEnableState(SettingsManager::kEnableStateDisabled);
+    gpio_set_dir(config_.sync_pin, GPIO_OUT);
     gpio_put(config_.sync_pin, 1);
     SetEnableState(SettingsManager::kEnableStateEnabled);
     in_bootloader_ = true;
@@ -365,6 +366,8 @@ bool CC1312::ExitBootloader() {
     in_bootloader_ = false;
     SetEnableState(SettingsManager::kEnableStateDisabled);
     gpio_put(config_.sync_pin, 0);
+    gpio_set_dir(config_.sync_pin, GPIO_IN);
+    gpio_pull_down(config_.sync_pin);
     SetEnableState(SettingsManager::kEnableStateEnabled);
 
     // spi_set_format(config_.spi_handle, kDefaultSPIPeripheralConfig.bits_per_transfer,

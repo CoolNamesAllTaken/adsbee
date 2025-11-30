@@ -111,6 +111,9 @@ bool SubGHzRadio::Init() {
     RF_Params rf_params;
     RF_Params_init(&rf_params);
 
+    // Map RFC_GPO0 to SYNC pin for debugging packet decode.
+    GPIO_setConfigAndMux(bsp.kSyncPin, GPIO_CFG_NO_DIR, IOC_PORT_RFC_GPO0);
+
     // Overriding settings from smartrf/smartrf_settings.c.
     /* RF_cmdPropRxAdv  - Advanced Rx command settings. */
     config_.RF_cmdPropRxAdv.pQueue = &rx_data_queue;
