@@ -1,3 +1,4 @@
+#include "fec.hh"
 #include "gdl90_utils.hh"
 #include "gtest/gtest.h"
 
@@ -13,7 +14,7 @@ TEST(GDL90Utils, TestWriteBufferWithEscapes) {
     // Omit actual start of message flag since that doesn't get passed to WriteBuffer.
     uint8_t from_buf_0[] = {0x02, 0x7E, 0x05};
     uint16_t from_buf_0_len_bytes = 3;
-    ASSERT_EQ(4, gdl90.WriteBufferWithGDL90Escapes(to_buf, from_buf_0, from_buf_0_len_bytes));
+    ASSERT_EQ(4, gdl90.WriteBufferWithGDL90Escapes(to_buf, sizeof(to_buf), from_buf_0, from_buf_0_len_bytes));
     EXPECT_EQ(to_buf[0], 0x02);
     EXPECT_EQ(to_buf[1], 0x7D);
     EXPECT_EQ(to_buf[2], 0x5E);
@@ -23,7 +24,7 @@ TEST(GDL90Utils, TestWriteBufferWithEscapes) {
     // Omit actual start of message flag since that doesn't get passed to WriteBuffer.
     uint8_t from_buf_1[] = {0x03, 0x7D, 0x06};
     uint16_t from_buf_1_len_bytes = 3;
-    ASSERT_EQ(4, gdl90.WriteBufferWithGDL90Escapes(to_buf, from_buf_1, from_buf_1_len_bytes));
+    ASSERT_EQ(4, gdl90.WriteBufferWithGDL90Escapes(to_buf, sizeof(to_buf), from_buf_1, from_buf_1_len_bytes));
     EXPECT_EQ(to_buf[0], 0x03);
     EXPECT_EQ(to_buf[1], 0x7D);
     EXPECT_EQ(to_buf[2], 0x5D);
@@ -33,7 +34,7 @@ TEST(GDL90Utils, TestWriteBufferWithEscapes) {
     // Omit end of message flag since that doesn't get passed to the WriteBuffer function.
     uint8_t from_buf_2[] = {0x01, 0x09, 0x10, 0x7D, 0x7E};
     uint16_t from_buf_2_len_bytes = 5;
-    ASSERT_EQ(7, gdl90.WriteBufferWithGDL90Escapes(to_buf, from_buf_2, from_buf_2_len_bytes));
+    ASSERT_EQ(7, gdl90.WriteBufferWithGDL90Escapes(to_buf, sizeof(to_buf), from_buf_2, from_buf_2_len_bytes));
     EXPECT_EQ(to_buf[0], 0x01);
     EXPECT_EQ(to_buf[1], 0x09);
     EXPECT_EQ(to_buf[2], 0x10);
@@ -70,7 +71,7 @@ TEST(GDL90Utils, CalcCRC16) {
 
     uint8_t crc_unescaped[] = {0xB3, 0x8B};  // LSB first.
     uint8_t crc_escaped[4];
-    ASSERT_EQ(2, gdl90.WriteBufferWithGDL90Escapes(crc_escaped, crc_unescaped, 2));
+    ASSERT_EQ(2, gdl90.WriteBufferWithGDL90Escapes(crc_escaped, sizeof(crc_escaped), crc_unescaped, 2));
     EXPECT_EQ(crc_escaped[0], 0xB3);
     EXPECT_EQ(crc_escaped[1], 0x8B);
 }
@@ -80,7 +81,8 @@ TEST(GDL90Utils, WriteGDL90Message) {
     uint8_t buf[GDL90Reporter::kGDL90MessageMaxLenBytes];
     memset(buf, 0xFF, GDL90Reporter::kGDL90MessageMaxLenBytes);  // For easier debugging.
     uint8_t unescaped_message[] = {0x00, 0x81, 0x41, 0xDB, 0xD0, 0x08, 0x02};
-    ASSERT_EQ(11, gdl90.WriteGDL90Message(buf, unescaped_message, sizeof(unescaped_message)));
+    ASSERT_EQ(11, gdl90.WriteGDL90Message(buf, GDL90Reporter::kGDL90MessageMaxLenBytes, unescaped_message,
+                                          sizeof(unescaped_message)));
     EXPECT_EQ(buf[0], 0x7E);
     EXPECT_EQ(buf[1], 0x00);
     EXPECT_EQ(buf[2], 0x81);
@@ -107,7 +109,8 @@ TEST(GDL90Utils, HeartBeatMessage) {
     // Timestamp must have MS bit = 0b0.
     uint32_t timestamp = (0b0 << 16) | 0xD0DB;  // Set timestamp to match sample message.
     uint16_t message_counts = 0x0208;
-    ASSERT_EQ(11, gdl90.WriteGDL90HeartbeatMessage(buf, timestamp, message_counts));
+    ASSERT_EQ(
+        11, gdl90.WriteGDL90HeartbeatMessage(buf, GDL90Reporter::kGDL90MessageMaxLenBytes, timestamp, message_counts));
     EXPECT_EQ(buf[0], 0x7E);
     EXPECT_EQ(buf[1], 0x00);
     EXPECT_EQ(buf[2], 0x81);
@@ -127,8 +130,8 @@ TEST(GDL90Utils, InitMessage) {
 
 TEST(GDL90Utils, UplinkDataMessage) {
     // TODO: Add tests here!
-    frame_data_hex =
-        "3514c952d65ca7b0158000210de09082102d30cb00082f0d1e012d30cb000000000000000fd900011710120118173ba9c9635e4c001580"
+    char* frame_data_hex =
+        (char *)"3514c952d65ca7b0158000210de09082102d30cb00082f0d1e012d30cb000000000000000fd900011710120118173ba9c9635e4c001580"
         "00210e9e0082102cf04b00082f521e012cf04b000000000000000fd900011a0f00011f0001a916435a6800278000350e1d682210000000"
         "ff004491387c4d5060cb4c74d35833d75db9c337f2d38df87d07d27f3cb0ca030f5dfc75c31cb4c74d357f1d70c72d70c73c1fc30c1fc7"
         "8c1f05f65f7f3cb0c8c3d77df780288000350e1d682210000000ff004691347c4d5060cb4c74d35833d75db9c317f2d70db37d07d27f3c"
@@ -136,7 +139,7 @@ TEST(GDL90Utils, UplinkDataMessage) {
         "0cb5c30c306a080651c5f1cb0c30707c78c30c1c0f2d30c30703cf0c30c1c133d30c30820cf9c30c1c65e718cf5cb2af0c20cf6cf1b71c"
         "e0c31d31b72de0c33d70d36830d36db5da0cf6d72d7879d000000000000000000000000000000000000000000000000000000000000000"
         "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";  // frame_data_hex
-    frame_length_bytes = 432;  // frame_length_bytes
+    uint16_t frame_length_bytes = 432;  // frame_length_bytes
 
     // Create encoded data frame.
     uint8_t decoded_data_frame[RawUATUplinkPacket::kUplinkMessagePayloadNumBytes] = {0};
@@ -149,6 +152,30 @@ TEST(GDL90Utils, UplinkDataMessage) {
     uint64_t mlat_48mhz_64bit_counts = 0x1234567812345678;  // Dummy timestamp.
     DecodedUATUplinkPacket packet(RawUATUplinkPacket(encoded_data_frame, RawUATUplinkPacket::kUplinkMessageNumBytes,
                                                      sigs_dbm, sigq_bits, mlat_48mhz_64bit_counts));
+
+    uint8_t gdl90_uplink_message[600];
+    memset(gdl90_uplink_message, 0xFF, sizeof(gdl90_uplink_message));
+    // First try writing to a buffer that's too small.
+    uint16_t gdl90_uplink_message_len_bytes = gdl90.WriteGDL90UplinkDataMessage(
+        gdl90_uplink_message, 10, packet.decoded_payload, DecodedUATUplinkPacket::kDecodedPayloadNumBytes);
+    EXPECT_LE(gdl90_uplink_message_len_bytes, 10);  // Abbreviated write for buffer that is too short.
+    for (uint16_t i = 9; i < sizeof(gdl90_uplink_message); i++) {
+        EXPECT_EQ(0xFF, gdl90_uplink_message[i]);  // Ensure no writes past buffer end.
+    }
+
+    // Now try with a sufficiently large buffer.
+    gdl90_uplink_message_len_bytes =
+        gdl90.WriteGDL90UplinkDataMessage(gdl90_uplink_message, sizeof(gdl90_uplink_message), packet.decoded_payload,
+                                          DecodedUATUplinkPacket::kDecodedPayloadNumBytes,
+                                          gdl90.MLAT48MHz64BitCountsToUATTorTicks(mlat_48mhz_64bit_counts));
+    EXPECT_GT(gdl90_uplink_message_len_bytes,
+              DecodedUATUplinkPacket::kDecodedPayloadNumBytes);  // Should be larger than payload due to message ID and
+                                                                 // escaping.
+    // Check for flag byte.
+    EXPECT_EQ(0x7E, gdl90_uplink_message[0]);
+    // Check message ID.
+    EXPECT_EQ(GDL90Reporter::kGDL90MessageIDUplinkData, gdl90_uplink_message[1]);
+    // TODO: Look for message data, frame check sequence, and flag byte.
 }
 
 TEST(GDL90Utils, OwnshipReport) {

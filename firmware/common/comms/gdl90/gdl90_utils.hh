@@ -8,7 +8,8 @@
 
 class GDL90Reporter {
    public:
-    static constexpr uint16_t kGDL90MessageMaxLenBytes = 436;
+    // Largest payload is 432 Byte UAT uplink message, this is an arbitrary expansion to account for added escape chars.
+    static constexpr uint16_t kGDL90MessageMaxLenBytes = 600;
     static constexpr uint8_t kGDL90FlagByte = 0x7E;
     static constexpr uint8_t kGDL90ControlEscapeChar = 0x7D;
 
@@ -85,50 +86,90 @@ class GDL90Reporter {
      * Calculates the CRC for a buffer that contains a message ID and message data, then adds escapes, frames it with
      * flag bytes, and writes it to an output buffer.
      * @param[out] to_buf Output buffer to write to.
+     * @param[in] to_buf_num_bytes Size of the output buffer, in bytes.
      * @param[in] unescaped_message Byte buffer that includes the message ID and message data, with no escapes added and
      * no framing bytes.
      * @param[in] unescaped_message_len_bytes Length of unescaped_message buffer, in bytes.
      * @retval Number of Bytes written to to_buf.
      */
-    uint16_t WriteGDL90Message(uint8_t* to_buf, uint8_t* unescaped_message, uint8_t unescaped_message_len_bytes);
+    uint16_t WriteGDL90Message(uint8_t* to_buf, uint16_t to_buf_num_bytes, uint8_t* unescaped_message,
+                               uint8_t unescaped_message_len_bytes);
 
     /**
      * Write a payload to a buffer, automatically adding escape sequences as required. Everything except for start and
      * end of message flags should be passed in as part of the payload.
      * @param[out] to_buf Buffer to write to.
+     * @param[in] to_buf_num_bytes Number of bytes available in to_buf.
      * @param[in] from_buf Buffer to read from.
      * @param[in] from_buf_len_bytes Number of bytes to read in.
      * @retval Number of bytes written to to_buf.
      */
-    uint16_t WriteBufferWithGDL90Escapes(uint8_t* to_buf, const uint8_t* from_buf, uint16_t from_buf_num_bytes);
+    uint16_t WriteBufferWithGDL90Escapes(uint8_t* to_buf, uint16_t to_buf_num_bytes, const uint8_t* from_buf,
+                                         uint16_t from_buf_num_bytes);
 
-    uint16_t WriteGDL90HeartbeatMessage(uint8_t* to_buf, uint32_t timestamp_sec_since_0000z, uint16_t message_counts);
-    uint16_t WriteGDL90InitMessage(uint8_t* to_buf);
+    /**
+     * Write a GDL90 Heartbeat message.
+     * @param[out] to_buf Buffer to write to.
+     * @param[in] to_buf_num_bytes Size of the output buffer, in bytes.
+     * @param[in] timestamp_sec_since_0000z Timestamp in seconds since 0000Z.
+     * @param[in] message_counts Number of messages sent since the last heartbeat.
+     * @retval Number of Bytes written to to_buf.
+     */
+    uint16_t WriteGDL90HeartbeatMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes, uint32_t timestamp_sec_since_0000z,
+                                        uint16_t message_counts);
+
+    /**
+     * Write a GDL90 Initialization message.
+     * @param[out] to_buf Buffer to write to.
+     * @param[in] to_buf_num_bytes Size of the output buffer, in bytes.
+     * @retval Number of Bytes written to to_buf.
+     */
+    uint16_t WriteGDL90InitMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes);
     /**
      * Write a GDL90 message for an uplink message received from UAT ground broadcast transceivers.
      * @param[out] to_buf Buffer to write to.
+     * @param[in] to_buf_num_bytes Size of the output buffer, in bytes.
+     * @param[in] uplink_payload Pointer to the uplink message payload data.
+     * @param[in] uplink_payload_len_bytes Length of the uplink message payload, in bytes.
      * @param[in] tor_us Time Of Arrival of the uplink data message, in microseconds since the reference timestamp in
-     * the Heartbeat message. Should never be larger than 1 second.
+     * the Heartbeat message. Should never be larger than 1 second. Default value of 0xFFFFFFFF indicates insufficient
+     * timing accuracy to provide a valid TOR.
+     * @retval Number of Bytes written to to_buf.
      */
-    uint16_t WriteGDL90UplinkDataMessage(uint8_t* to_buf, const uint8_t* uplink_payload,
+    uint16_t WriteGDL90UplinkDataMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes, const uint8_t* uplink_payload,
                                          uint16_t uplink_payload_len_bytes, uint32_t tor_us = 0xFFFFFFFF);
+    /**
+     * Convert from MLAT 48MHz 64-bit counts to 24-bit UAT TOR ticks with resolution of 80ns.
+     * @param[in] mlat_48mhz_64bit_counts 48MHz 64-bit counts.
+     * @retval 24-bit UAT TOR ticks.
+     */
+    inline uint32_t MLAT48MHz64BitCountsToUATTorTicks(uint64_t mlat_48mhz_64bit_counts) {
+        // Convert from 48MHz 64-bit counts to UAT TOR ticks (1 tick = 25/96 microseconds).
+        // Mask down to 32 bits to avoid overflow, apply scaling, then mask to 24 bits for return value.
+        return static_cast<uint32_t>(((mlat_48mhz_64bit_counts & 0xFFFFFFFF) * 96 / 25) & 0xFFFFFF);
+    }
 
     /**
      * Write a GDL90 message for ownship or traffic data.
      * @param[out] to_buf Buffer to write to.
+     * @param[in] to_buf_num_bytes Size of the output buffer, in bytes.
      * @param[in] data GDL90TargetReportData struct to use when populating the target report message.
      * @param[in] ownship Set to true if this message is an ownship report, false if it's a traffic report.
      */
-    uint16_t WriteGDL90TargetReportMessage(uint8_t* to_buf, const GDL90TargetReportData& data, bool ownship = false);
+    uint16_t WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes,
+                                           const GDL90TargetReportData& data, bool ownship = false);
     /**
      * Write a GDL90 message for ownship or traffic data. This function calls the version that takes a
      * GDL90TargetReportData object, and is provided for convenience when sending Aircraft from an AircraftDictionary.
      * @param[out] to_buf Buffer to write to.
-     * @param[in] aircraft Reference to Aircraft object to report.
+     * @param[in] to_buf_num_bytes Size of the output buffer, in bytes.
+     * @param[in] aircraft Reference to Aircraft object to report. Could be a ModeSAircraft or UATAircraft.
      * @param[in] ownship Set to true if this message is an ownship report, false if it's a traffic report.
      */
-    uint16_t WriteGDL90TargetReportMessage(uint8_t* to_buf, const ModeSAircraft& aircraft, bool ownship = false);
-    uint16_t WriteGDL90TargetReportMessage(uint8_t* to_buf, const UATAircraft& aircraft, bool ownship = false);
+    uint16_t WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes, const ModeSAircraft& aircraft,
+                                           bool ownship = false);
+    uint16_t WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes, const UATAircraft& aircraft,
+                                           bool ownship = false);
 
     // uint16_t AircraftToGDL90Frame(const Aircraft &aircraft) {}
 
