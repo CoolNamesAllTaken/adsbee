@@ -71,10 +71,10 @@ class ADSBeeServer {
 
     /**
      * Sends a GDL90 uplink packet to connected WiFi clients. Does not provide traffic reports.
-     * @param[in] uplink_packet Raw UAT uplink packet to send.
+     * @param[in] uplink_packet Decoded UAT uplink packet to send.
      * @retval True if successful, false on error.
      */
-    bool ReportGDL90UplinkDataMessage(const RawUATUplinkPacket& uplink_packet);
+    bool ReportGDL90UplinkDataMessage(const DecodedUATUplinkPacket& uplink_packet);
 
     /**
      * Broadcasts metrics message to all connected network metrics websocket clients.

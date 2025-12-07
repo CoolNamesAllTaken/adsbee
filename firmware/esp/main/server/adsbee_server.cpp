@@ -200,7 +200,13 @@ bool ADSBeeServer::Update() {
             // array takes care of forwarding to relevant feeds. We also forward them over GDL90 to connected WiFi
             // clients here (separate from the traffic reporting that occurs on regular intervals).
             for (uint16_t i = 0; i < raw_packets.header->num_uat_uplink_packets; i++) {
-                ReportGDL90UplinkDataMessage(raw_packets.uat_uplink_packets[i]);
+                RawUATUplinkPacket& raw_uat_uplink_packet = raw_packets.uat_uplink_packets[i];
+                DecodedUATUplinkPacket decoded_packet = DecodedUATUplinkPacket(raw_uat_uplink_packet);
+                if (!decoded_packet.is_valid) {
+                    CONSOLE_ERROR("ADSBeeServer::Update", "Received invalid UAT Uplink packet.");
+                    continue;
+                }
+                ReportGDL90UplinkDataMessage(decoded_packet);
             }
 
             // Forward packets to WAN.
@@ -252,14 +258,16 @@ bool ADSBeeServer::ReportGDL90() {
     message.port = kGDL90Port;
 
     // Heartbeat Message
-    message.len = gdl90.WriteGDL90HeartbeatMessage(message.data, get_time_since_boot_ms() / 1000,
+    message.len = gdl90.WriteGDL90HeartbeatMessage(message.data, CommsManager::NetworkMessage::kMaxLenBytes,
+                                                   get_time_since_boot_ms() / 1000,
                                                    aircraft_dictionary.metrics.valid_extended_squitter_frames);
     comms_manager.WiFiAccessPointSendMessageToAllStations(message);
 
     // Ownship Report
     GDL90Reporter::GDL90TargetReportData ownship_data;
     // TODO: Actually fill out ownship data!
-    // message.len = gdl90.WriteGDL90TargetReportMessage(message.data, ownship_data, true);
+    message.len = gdl90.WriteGDL90TargetReportMessage(message.data, CommsManager::NetworkMessage::kMaxLenBytes,
+                                                      ownship_data, true);
     comms_manager.WiFiAccessPointSendMessageToAllStations(message);
 
     // Traffic Reports
@@ -276,7 +284,8 @@ bool ADSBeeServer::ReportGDL90() {
             }
             printf("\t#A %s (0x%06lX): %.5f %.5f %ld\r\n", mode_s_aircraft->callsign, mode_s_aircraft->icao_address,
                    mode_s_aircraft->latitude_deg, mode_s_aircraft->longitude_deg, mode_s_aircraft->baro_altitude_ft);
-            aircraft_msg_buf_len = gdl90.WriteGDL90TargetReportMessage(aircraft_msg_buf, *mode_s_aircraft, false);
+            aircraft_msg_buf_len = gdl90.WriteGDL90TargetReportMessage(aircraft_msg_buf, sizeof(aircraft_msg_buf),
+                                                                       *mode_s_aircraft, false);
         } else if (UATAircraft* uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
             if (!uat_aircraft->HasBitFlag(UATAircraft::kBitFlagPositionValid)) {
                 // Don't report aircraft without a valid position.
@@ -284,7 +293,8 @@ bool ADSBeeServer::ReportGDL90() {
             }
             printf("\t#U %s (0x%06lX): %.5f %.5f %ld\r\n", uat_aircraft->callsign, uat_aircraft->icao_address,
                    uat_aircraft->latitude_deg, uat_aircraft->longitude_deg, uat_aircraft->baro_altitude_ft);
-            aircraft_msg_buf_len = gdl90.WriteGDL90TargetReportMessage(aircraft_msg_buf, *uat_aircraft, false);
+            aircraft_msg_buf_len =
+                gdl90.WriteGDL90TargetReportMessage(aircraft_msg_buf, sizeof(aircraft_msg_buf), *uat_aircraft, false);
         } else {
             CONSOLE_WARNING("CommsManager::ReportGDL90", "Unknown aircraft type in dictionary for UID 0x%lx.",
                             itr.first);
@@ -316,7 +326,7 @@ bool ADSBeeServer::ReportGDL90() {
     return true;
 }
 
-bool ADSBeeServer::ReportGDL90UplinkDataMessage(const RawUATUplinkPacket& uplink_packet) {
+bool ADSBeeServer::ReportGDL90UplinkDataMessage(const DecodedUATUplinkPacket& uplink_packet) {
     if (!settings_manager.settings.core_network_settings.wifi_ap_enabled) {
         return true;  // Nothing to do.
     }
@@ -324,9 +334,10 @@ bool ADSBeeServer::ReportGDL90UplinkDataMessage(const RawUATUplinkPacket& uplink
     CommsManager::NetworkMessage message;
     message.port = kGDL90Port;
 
-    message.len = gdl90.WriteGDL90UplinkDataMessage(message.data, uplink_packet.encoded_message,
-                                                    uplink_packet.encoded_message_len_bytes,
-                                                    uplink_packet.mlat_48mhz_64bit_counts >> 40);
+    message.len = gdl90.WriteGDL90UplinkDataMessage(
+        message.data, CommsManager::NetworkMessage::kMaxLenBytes, uplink_packet.decoded_payload,
+        DecodedUATUplinkPacket::kDecodedPayloadNumBytes,
+        gdl90.MLAT48MHz64BitCountsToUATTORTicks(uplink_packet.raw.mlat_48mhz_64bit_counts));
     if (message.len == 0) {
         CONSOLE_ERROR("ADSBeeServer::ReportGDL90UplinkPacket", "Failed to write GDL90 UAT uplink packet message.");
         return false;
