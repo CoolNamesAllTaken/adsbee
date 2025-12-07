@@ -131,19 +131,19 @@ class GDL90Reporter {
      * @param[in] to_buf_num_bytes Size of the output buffer, in bytes.
      * @param[in] uplink_payload Pointer to the uplink message payload data.
      * @param[in] uplink_payload_len_bytes Length of the uplink message payload, in bytes.
-     * @param[in] tor_us Time Of Arrival of the uplink data message, in microseconds since the reference timestamp in
-     * the Heartbeat message. Should never be larger than 1 second. Default value of 0xFFFFFFFF indicates insufficient
-     * timing accuracy to provide a valid TOR.
+     * @param[in] tor_80ns_ticks Time Of Reception of the uplink data message, in 80ns ticks since the reference
+     * timestamp in the Heartbeat message. Should never be larger than 1 second. Default value of 0xFFFFFF indicates
+     * insufficient timing accuracy to provide a valid TOR.
      * @retval Number of Bytes written to to_buf.
      */
     uint16_t WriteGDL90UplinkDataMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes, const uint8_t* uplink_payload,
-                                         uint16_t uplink_payload_len_bytes, uint32_t tor_us = 0xFFFFFFFF);
+                                         uint16_t uplink_payload_len_bytes, uint32_t tor_80ns_ticks = 0xFFFFFF);
     /**
      * Convert from MLAT 48MHz 64-bit counts to 24-bit UAT TOR ticks with resolution of 80ns.
      * @param[in] mlat_48mhz_64bit_counts 48MHz 64-bit counts.
      * @retval 24-bit UAT TOR ticks.
      */
-    inline uint32_t MLAT48MHz64BitCountsToUATTorTicks(uint64_t mlat_48mhz_64bit_counts) {
+    inline uint32_t MLAT48MHz64BitCountsToUATTORTicks(uint64_t mlat_48mhz_64bit_counts) {
         // Convert from 48MHz 64-bit counts to UAT TOR ticks (1 tick = 25/96 microseconds).
         // Mask down to 32 bits to avoid overflow, apply scaling, then mask to 24 bits for return value.
         return static_cast<uint32_t>(((mlat_48mhz_64bit_counts & 0xFFFFFFFF) * 96 / 25) & 0xFFFFFF);

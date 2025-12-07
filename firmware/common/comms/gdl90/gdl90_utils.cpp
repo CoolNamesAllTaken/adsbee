@@ -27,6 +27,10 @@ const uint16_t GDL90Reporter::kGDL90CRC16Table[] = {
 uint16_t GDL90Reporter::WriteGDL90Message(uint8_t* to_buf, uint16_t to_buf_num_bytes, uint8_t* unescaped_message,
                                           uint8_t unescaped_message_len_bytes) {
     uint16_t bytes_written = 0;
+    if (to_buf_num_bytes < bytes_written + 1) {
+        // Not enough space for starting flag byte.
+        return bytes_written;
+    }
     to_buf[bytes_written++] = kGDL90FlagByte;  // Beginning flag byte.
     bytes_written += WriteBufferWithGDL90Escapes(to_buf + bytes_written, to_buf_num_bytes - bytes_written,
                                                  unescaped_message, unescaped_message_len_bytes);
@@ -35,6 +39,10 @@ uint16_t GDL90Reporter::WriteGDL90Message(uint8_t* to_buf, uint16_t to_buf_num_b
     uint8_t crc_buf[sizeof(crc)] = {static_cast<uint8_t>(crc & 0xFF), static_cast<uint8_t>(crc >> 8)};  // LSB first.
     bytes_written +=
         WriteBufferWithGDL90Escapes(to_buf + bytes_written, to_buf_num_bytes - bytes_written, crc_buf, sizeof(crc));
+    if (to_buf_num_bytes < bytes_written + 1) {
+        // Not enough space for ending flag byte.
+        return bytes_written;
+    }
     to_buf[bytes_written++] = kGDL90FlagByte;  // Ending flag byte.
     return bytes_written;
 }
@@ -42,11 +50,14 @@ uint16_t GDL90Reporter::WriteGDL90Message(uint8_t* to_buf, uint16_t to_buf_num_b
 uint16_t GDL90Reporter::WriteBufferWithGDL90Escapes(uint8_t* to_buf, uint16_t to_buf_num_bytes, const uint8_t* from_buf,
                                                     uint16_t from_buf_num_bytes) {
     uint16_t bytes_written = 0;
-    // Length test makes sure we don't overflow the buffer even if an escape character is needed for the next byte.
-    for (uint16_t i = 0; i < from_buf_num_bytes && bytes_written + 2 < to_buf_num_bytes; i++) {
+    for (uint16_t i = 0; i < from_buf_num_bytes && bytes_written + 1 < to_buf_num_bytes; i++) {
         if (from_buf[i] == kGDL90FlagByte || from_buf[i] == kGDL90ControlEscapeChar) {
             // Escape any occurrence of 0x7E and 0x7D.
             to_buf[bytes_written++] = kGDL90ControlEscapeChar;
+            if (bytes_written + 1 >= to_buf_num_bytes) {
+                // Not enough space to write escaped character.
+                break;
+            }
             to_buf[bytes_written++] = from_buf[i] ^ 0x20;
         } else {
             // Write other values as normal.
@@ -98,30 +109,39 @@ uint16_t GDL90Reporter::WriteGDL90InitMessage(uint8_t* to_buf, uint16_t to_buf_n
 
 uint16_t GDL90Reporter::WriteGDL90UplinkDataMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes,
                                                     const uint8_t* uplink_payload, uint16_t uplink_payload_len_bytes,
-                                                    uint32_t tor_us) {
+                                                    uint32_t tor_80ns_ticks) {
     const uint16_t kUplinkDataMessagePayloadLenBytes = 432;
-    // Time of Arrival (TOR) = 24-bit value with resolution of 80ns. Valid range is 0 to 1 sec (0-12499999).
-    uint32_t tor = 0xFFFFFF;  // Default value: insufficient timing accuracy to say what the time of arrival is.
-    if (tor_us != 0xFFFFFFFF) {
-        tor = tor_us * 1000 / 80;  // Convert us tor to fractional value with resolution of 80ns.
-    }
     if (uplink_payload_len_bytes > kUplinkDataMessagePayloadLenBytes) {
         CONSOLE_ERROR("GDL90Reporter::WriteGDL90UplinkDataMessage",
                       "Received uplink payload of length %d bytes, maximum is %d Bytes.", uplink_payload_len_bytes,
                       kGDL90MessageMaxLenBytes);
         return 0;
     }
-    const uint16_t kMessageBufLenBytes = sizeof(GDL90MessageID) + 3 + uplink_payload_len_bytes;
-    uint8_t message_buf[kMessageBufLenBytes];
-    message_buf[0] = kGDL90MessageIDUplinkData;
-    message_buf[1] = tor & 0xFF;  // TOR is least significant Byte first.
-    message_buf[2] = (tor >> 8) & 0xFF;
-    message_buf[3] = (tor >> 16) & 0xFF;
-    memcpy(message_buf + sizeof(GDL90MessageID) + 3, uplink_payload, uplink_payload_len_bytes);
-    uint16_t bytes_written = WriteGDL90Message(to_buf, to_buf_num_bytes, message_buf, kMessageBufLenBytes);
-    bytes_written += WriteGDL90Message(to_buf + bytes_written, to_buf_num_bytes - bytes_written, uplink_payload,
-                                       uplink_payload_len_bytes);
-    // TODO: fix this to actually send the correct header and message.
+
+    // We can't use the standard WriteGDL90Message function here because the uplink payload may be too long to create a
+    // separate buffer for. Instead, we will manually send the flag byte and then write escaped bit fields using the
+    // WriteBufferWithGDL90Escapes function.
+    uint16_t bytes_written = 0;
+    to_buf[bytes_written++] = kGDL90FlagByte;  // Beginning flag byte.
+
+    const uint16_t kHeaderBufLenBytes = sizeof(GDL90MessageID) + 3;
+    uint8_t header_buf[kHeaderBufLenBytes];
+    header_buf[0] = kGDL90MessageIDUplinkData;
+    header_buf[1] = tor_80ns_ticks & 0xFF;  // TOR is least significant Byte first.
+    header_buf[2] = (tor_80ns_ticks >> 8) & 0xFF;
+    header_buf[3] = (tor_80ns_ticks >> 16) & 0xFF;
+
+    bytes_written += WriteBufferWithGDL90Escapes(to_buf + bytes_written, to_buf_num_bytes - bytes_written, header_buf,
+                                                 kHeaderBufLenBytes);
+    bytes_written += WriteBufferWithGDL90Escapes(to_buf + bytes_written, to_buf_num_bytes - bytes_written,
+                                                 uplink_payload, uplink_payload_len_bytes);
+    // Calculate the CRC with unescaped message ID and data (not the initial flag byte).
+    uint16_t crc = CalculateGDL90CRC16(to_buf + 1, bytes_written - 1);  // Exclude starting flag byte.
+    uint8_t crc_buf[sizeof(crc)] = {static_cast<uint8_t>(crc & 0xFF), static_cast<uint8_t>(crc >> 8)};  // LSB first.
+    bytes_written +=
+        WriteBufferWithGDL90Escapes(to_buf + bytes_written, to_buf_num_bytes - bytes_written, crc_buf, sizeof(crc));
+    to_buf[bytes_written++] = kGDL90FlagByte;  // Ending flag byte.
+    return bytes_written;
 }
 
 uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes,

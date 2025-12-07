@@ -128,6 +128,35 @@ TEST(GDL90Utils, InitMessage) {
     // TODO: Add tests here!
 }
 
+/**
+ * Compare two buffers, removing GDL90 escape characters from the first buffer as they are encountered.
+ * @param[in] unescaped_buffer Buffer containing unescaped data to compare against.
+ * @param[in] unescaped_buffer_length Length of the unescaped buffer to compare, in bytes.
+ * @param[in] escaped_buffer Buffer containing GDL90-escaped data.
+ * @retval The number of characters parsed in the escape buffer corresponding to the unescaped buffer length that was
+ * scanned.
+ */
+uint16_t CheckBuffersEqualInjectEscapes(uint8_t* unescaped_buffer, uint16_t unescaped_buffer_length,
+                                        uint8_t* escaped_buffer) {
+    uint16_t escaped_index = 0;
+    for (uint16_t i = 0; i < unescaped_buffer_length; i++) {
+        if (unescaped_buffer[i] == GDL90Reporter::kGDL90ControlEscapeChar ||
+            unescaped_buffer[i] == GDL90Reporter::kGDL90ControlEscapeChar) {
+            EXPECT_EQ(escaped_buffer[escaped_index], GDL90Reporter::kGDL90ControlEscapeChar)
+                << "Escape char mismatch at escaped_index=" << escaped_index << " unescaped_index=" << i;
+            escaped_index++;
+            EXPECT_EQ(escaped_buffer[escaped_index], unescaped_buffer[i] ^ 0x20)
+                << "Escaped value mismatch at escaped_index=" << escaped_index << " unescaped_index=" << i;
+            escaped_index++;
+        } else {
+            EXPECT_EQ(escaped_buffer[escaped_index], unescaped_buffer[i])
+                << "Value mismatch at escaped_index=" << escaped_index << " unescaped_index=" << i;
+            escaped_index++;
+        }
+    }
+    return escaped_index;
+}
+
 TEST(GDL90Utils, UplinkDataMessage) {
     // TODO: Add tests here!
     char* frame_data_hex =
@@ -146,6 +175,7 @@ TEST(GDL90Utils, UplinkDataMessage) {
     HexStringToByteBuffer(decoded_data_frame, frame_data_hex, frame_length_bytes);
     uint8_t encoded_data_frame[RawUATUplinkPacket::kUplinkMessageNumBytes] = {0};
     uat_rs.EncodeUplinkMessage(encoded_data_frame, decoded_data_frame);
+    PrintByteBuffer("Decoded uplink payload:", decoded_data_frame, DecodedUATUplinkPacket::kDecodedPayloadNumBytes);
     PrintByteBuffer("Encoded uplink message:", encoded_data_frame, RawUATUplinkPacket::kUplinkMessageNumBytes);
     int16_t sigs_dbm = -10;                                 // Dummy signal strength.
     int16_t sigq_bits = 0;                                  // Dummy signal quality.
@@ -159,7 +189,7 @@ TEST(GDL90Utils, UplinkDataMessage) {
     uint16_t gdl90_uplink_message_len_bytes = gdl90.WriteGDL90UplinkDataMessage(
         gdl90_uplink_message, 10, packet.decoded_payload, DecodedUATUplinkPacket::kDecodedPayloadNumBytes);
     EXPECT_LE(gdl90_uplink_message_len_bytes, 10);  // Abbreviated write for buffer that is too short.
-    for (uint16_t i = 9; i < sizeof(gdl90_uplink_message); i++) {
+    for (uint16_t i = 10; i < sizeof(gdl90_uplink_message); i++) {
         EXPECT_EQ(0xFF, gdl90_uplink_message[i]);  // Ensure no writes past buffer end.
     }
 
@@ -167,15 +197,163 @@ TEST(GDL90Utils, UplinkDataMessage) {
     gdl90_uplink_message_len_bytes =
         gdl90.WriteGDL90UplinkDataMessage(gdl90_uplink_message, sizeof(gdl90_uplink_message), packet.decoded_payload,
                                           DecodedUATUplinkPacket::kDecodedPayloadNumBytes,
-                                          gdl90.MLAT48MHz64BitCountsToUATTorTicks(mlat_48mhz_64bit_counts));
+                                          gdl90.MLAT48MHz64BitCountsToUATTORTicks(mlat_48mhz_64bit_counts));
     EXPECT_GT(gdl90_uplink_message_len_bytes,
               DecodedUATUplinkPacket::kDecodedPayloadNumBytes);  // Should be larger than payload due to message ID and
                                                                  // escaping.
-    // Check for flag byte.
+    // Check flag byte.
     EXPECT_EQ(0x7E, gdl90_uplink_message[0]);
     // Check message ID.
     EXPECT_EQ(GDL90Reporter::kGDL90MessageIDUplinkData, gdl90_uplink_message[1]);
-    // TODO: Look for message data, frame check sequence, and flag byte.
+    uint16_t gdl90_msg_index = 2;  // Start after flag byte and message ID.
+    // Check 3-byte TOR.
+    uint32_t tor =
+        gdl90.MLAT48MHz64BitCountsToUATTORTicks(mlat_48mhz_64bit_counts);  // Should match the value passed in above.
+    uint8_t tor_bytes[3] = {static_cast<uint8_t>(tor & 0xFF), static_cast<uint8_t>((tor >> 8) & 0xFF),
+                            static_cast<uint8_t>((tor >> 16) & 0xFF)};
+    uint16_t tor_bytes_compared = 0;
+    gdl90_msg_index += CheckBuffersEqualInjectEscapes(tor_bytes, 3, &gdl90_uplink_message[gdl90_msg_index]);
+    // Check message contents byte by byte including escapes after every 0x7E.
+    gdl90_msg_index +=
+        CheckBuffersEqualInjectEscapes(packet.decoded_payload, DecodedUATUplinkPacket::kDecodedPayloadNumBytes,
+                                       &gdl90_uplink_message[gdl90_msg_index]);
+    // CRC should be calculated on everything except starting flag byte.
+    uint16_t expected_crc = gdl90.CalculateGDL90CRC16(
+        &gdl90_uplink_message[1], gdl90_msg_index - 1);  // Exclude starting flag byte from CRC calculation.
+    // Check CRC bytes including escapes.
+    uint8_t crc_bytes[2] = {static_cast<uint8_t>(expected_crc & 0xFF), static_cast<uint8_t>(expected_crc >> 8)};
+    gdl90_msg_index += CheckBuffersEqualInjectEscapes(crc_bytes, 2, &gdl90_uplink_message[gdl90_msg_index]);
+    // Check ending flag byte.
+    EXPECT_EQ(0x7E, gdl90_uplink_message[gdl90_msg_index++]);
+}
+
+TEST(GDL90Utils, WriteGDL90MessageBufferOverrunProtection) {
+    // Test that WriteGDL90Message properly respects buffer boundaries and doesn't overrun.
+
+    // Create a simple message (Message ID 0x00 with 2 bytes of data)
+    uint8_t unescaped_message[] = {0x00, 0x01, 0x02};
+    uint8_t unescaped_message_len = sizeof(unescaped_message);
+
+    // Expected minimum size for this message without escapes:
+    // 1 (start flag) + 3 (message) + 2 (CRC) + 1 (end flag) = 7 bytes
+
+    // Test 1: Buffer size of 0 - should write nothing
+    {
+        uint8_t buf[10];
+        memset(buf, 0xAA, sizeof(buf));  // Fill with pattern to detect writes
+        uint16_t written = gdl90.WriteGDL90Message(buf, 0, unescaped_message, unescaped_message_len);
+        EXPECT_EQ(0, written);
+        // Verify no bytes were written
+        for (size_t i = 0; i < sizeof(buf); i++) {
+            EXPECT_EQ(0xAA, buf[i]) << "Buffer modified at index " << i;
+        }
+    }
+
+    // Test 2: Buffer size of 1 - should only write start flag, then stop
+    {
+        uint8_t buf[10];
+        memset(buf, 0xAA, sizeof(buf));
+        uint16_t written = gdl90.WriteGDL90Message(buf, 1, unescaped_message, unescaped_message_len);
+        EXPECT_LE(written, 1);
+        // Verify no writes past buffer end
+        for (size_t i = 1; i < sizeof(buf); i++) {
+            EXPECT_EQ(0xAA, buf[i]) << "Buffer overrun at index " << i;
+        }
+    }
+
+    // Test 3: Buffer size exactly for start flag + message (no CRC, no end flag)
+    {
+        uint8_t buf[10];
+        memset(buf, 0xAA, sizeof(buf));
+        uint16_t written = gdl90.WriteGDL90Message(buf, 4, unescaped_message, unescaped_message_len);
+        EXPECT_LE(written, 4);
+        // Verify no writes past buffer end
+        for (size_t i = 4; i < sizeof(buf); i++) {
+            EXPECT_EQ(0xAA, buf[i]) << "Buffer overrun at index " << i;
+        }
+    }
+
+    // Test 4: Buffer size almost enough (missing 1 byte for end flag)
+    {
+        uint8_t buf[10];
+        memset(buf, 0xAA, sizeof(buf));
+        uint16_t written = gdl90.WriteGDL90Message(buf, 6, unescaped_message, unescaped_message_len);
+        EXPECT_LE(written, 6);
+        // Verify no writes past buffer end
+        for (size_t i = 6; i < sizeof(buf); i++) {
+            EXPECT_EQ(0xAA, buf[i]) << "Buffer overrun at index " << i;
+        }
+    }
+
+    // Test 5: Buffer with exact size needed (should succeed)
+    {
+        uint8_t buf[20];
+        memset(buf, 0xAA, sizeof(buf));
+        uint16_t written = gdl90.WriteGDL90Message(buf, 7, unescaped_message, unescaped_message_len);
+        EXPECT_EQ(7, written);
+        EXPECT_EQ(0x7E, buf[0]);  // Start flag
+        EXPECT_EQ(0x7E, buf[6]);  // End flag
+        // Verify no writes past buffer end
+        for (size_t i = 7; i < sizeof(buf); i++) {
+            EXPECT_EQ(0xAA, buf[i]) << "Buffer overrun at index " << i;
+        }
+    }
+
+    // Test 6: Message with escape characters requiring more space
+    {
+        // Message containing 0x7E (flag byte) which requires escaping
+        uint8_t escape_message[] = {0x00, 0x7E, 0x02};
+        uint8_t buf[20];
+        memset(buf, 0xAA, sizeof(buf));
+
+        // With escaping, the 0x7E becomes 0x7D 0x5E, so message grows by 1 byte
+        // Expected: 1 (start) + 1 (0x00) + 2 (escaped 0x7E) + 1 (0x02) + 2 (CRC) + 1 (end) = 8 bytes minimum
+        // But CRC might also need escaping, so could be more
+
+        // Try with insufficient buffer (7 bytes - would fit unescaped but not escaped)
+        uint16_t written = gdl90.WriteGDL90Message(buf, 7, escape_message, sizeof(escape_message));
+        EXPECT_LE(written, 7);
+        // Verify no writes past buffer end
+        for (size_t i = 7; i < sizeof(buf); i++) {
+            EXPECT_EQ(0xAA, buf[i]) << "Buffer overrun at index " << i;
+        }
+    }
+
+    // Test 7: Multiple escape characters
+    {
+        // Message with multiple bytes requiring escapes
+        uint8_t multi_escape[] = {0x00, 0x7E, 0x7D, 0x7E};
+        uint8_t buf[20];
+        memset(buf, 0xAA, sizeof(buf));
+
+        // Try with various buffer sizes
+        for (uint16_t buf_size = 0; buf_size < 15; buf_size++) {
+            memset(buf, 0xAA, sizeof(buf));
+            uint16_t written = gdl90.WriteGDL90Message(buf, buf_size, multi_escape, sizeof(multi_escape));
+            EXPECT_LE(written, buf_size) << "Overwrote buffer with size " << buf_size;
+            // Verify no writes past buffer end
+            for (size_t i = buf_size; i < sizeof(buf); i++) {
+                EXPECT_EQ(0xAA, buf[i]) << "Buffer overrun at index " << i << " with buffer size " << buf_size;
+            }
+        }
+    }
+
+    // Test 8: Large message with small buffer
+    {
+        uint8_t large_message[100];
+        for (size_t i = 0; i < sizeof(large_message); i++) {
+            large_message[i] = i & 0xFF;
+        }
+
+        uint8_t buf[20];
+        memset(buf, 0xAA, sizeof(buf));
+        uint16_t written = gdl90.WriteGDL90Message(buf, 10, large_message, sizeof(large_message));
+        EXPECT_LE(written, 10);
+        // Verify no writes past buffer end
+        for (size_t i = 10; i < sizeof(buf); i++) {
+            EXPECT_EQ(0xAA, buf[i]) << "Buffer overrun at index " << i;
+        }
+    }
 }
 
 TEST(GDL90Utils, OwnshipReport) {
