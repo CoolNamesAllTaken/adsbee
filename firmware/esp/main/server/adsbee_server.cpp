@@ -337,7 +337,7 @@ bool ADSBeeServer::ReportGDL90UplinkDataMessage(const DecodedUATUplinkPacket& up
     message.len = gdl90.WriteGDL90UplinkDataMessage(
         message.data, CommsManager::NetworkMessage::kMaxLenBytes, uplink_packet.decoded_payload,
         DecodedUATUplinkPacket::kDecodedPayloadNumBytes,
-        gdl90.MLAT48MHz64BitCountsToUATTORTicks(uplink_packet.raw.mlat_48mhz_64bit_counts));
+        GDL90Reporter::MLAT48MHz64BitCountsToUATTORTicks(uplink_packet.raw.mlat_48mhz_64bit_counts));
     if (message.len == 0) {
         CONSOLE_ERROR("ADSBeeServer::ReportGDL90UplinkPacket", "Failed to write GDL90 UAT uplink packet message.");
         return false;

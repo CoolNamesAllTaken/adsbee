@@ -143,7 +143,7 @@ class GDL90Reporter {
      * @param[in] mlat_48mhz_64bit_counts 48MHz 64-bit counts.
      * @retval 24-bit UAT TOR ticks.
      */
-    inline uint32_t MLAT48MHz64BitCountsToUATTORTicks(uint64_t mlat_48mhz_64bit_counts) {
+    static inline uint32_t MLAT48MHz64BitCountsToUATTORTicks(uint64_t mlat_48mhz_64bit_counts) {
         // Convert from 48MHz 64-bit counts to UAT TOR ticks (1 tick = 25/96 microseconds).
         // Mask down to 32 bits to avoid overflow, apply scaling, then mask to 24 bits for return value.
         return static_cast<uint32_t>(((mlat_48mhz_64bit_counts & 0xFFFFFFFF) * 96 / 25) & 0xFFFFFF);

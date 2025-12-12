@@ -197,7 +197,7 @@ TEST(GDL90Utils, UplinkDataMessage) {
     gdl90_uplink_message_len_bytes =
         gdl90.WriteGDL90UplinkDataMessage(gdl90_uplink_message, sizeof(gdl90_uplink_message), packet.decoded_payload,
                                           DecodedUATUplinkPacket::kDecodedPayloadNumBytes,
-                                          gdl90.MLAT48MHz64BitCountsToUATTORTicks(mlat_48mhz_64bit_counts));
+                                          GDL90Reporter::MLAT48MHz64BitCountsToUATTORTicks(mlat_48mhz_64bit_counts));
     EXPECT_GT(gdl90_uplink_message_len_bytes,
               DecodedUATUplinkPacket::kDecodedPayloadNumBytes);  // Should be larger than payload due to message ID and
                                                                  // escaping.
@@ -207,8 +207,8 @@ TEST(GDL90Utils, UplinkDataMessage) {
     EXPECT_EQ(GDL90Reporter::kGDL90MessageIDUplinkData, gdl90_uplink_message[1]);
     uint16_t gdl90_msg_index = 2;  // Start after flag byte and message ID.
     // Check 3-byte TOR.
-    uint32_t tor =
-        gdl90.MLAT48MHz64BitCountsToUATTORTicks(mlat_48mhz_64bit_counts);  // Should match the value passed in above.
+    uint32_t tor = GDL90Reporter::MLAT48MHz64BitCountsToUATTORTicks(
+        mlat_48mhz_64bit_counts);  // Should match the value passed in above.
     uint8_t tor_bytes[3] = {static_cast<uint8_t>(tor & 0xFF), static_cast<uint8_t>((tor >> 8) & 0xFF),
                             static_cast<uint8_t>((tor >> 16) & 0xFF)};
     uint16_t tor_bytes_compared = 0;

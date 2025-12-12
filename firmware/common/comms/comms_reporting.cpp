@@ -8,6 +8,7 @@
 #include "gdl90_utils.hh"
 #include "mavlink_utils.hh"
 #include "raw_utils.hh"
+#include "uat_packet.hh"  // For DecodedUATUplinkPacket.
 
 #ifdef ON_ESP32
 AircraftDictionary& aircraft_dictionary = adsbee_server.aircraft_dictionary;
@@ -360,6 +361,30 @@ bool CommsManager::ReportGDL90(ReportSink* sinks, uint16_t num_sinks) {
                             itr.first);
             continue;
         }
+        for (uint16_t i = 0; i < num_sinks; i++) {
+            ret &= SendBuf(sinks[i], (char*)buf, msg_len);
+        }
+    }
+    return ret;
+}
+
+bool CommsManager::ReportGDL90Uplink(ReportSink* sinks, uint16_t num_sinks, const CompositeArray::RawPackets& packets) {
+    bool ret = true;
+
+    for (uint16_t i = 0; i < packets.header->num_uat_uplink_packets; i++) {
+        // We need to decode the packet since GDL90 expects just the decoded payload. This double decoding is a bit
+        // wasteful but lets us use a common interface for reporting raw packets, instead of requiring decoded UAT
+        // uplink packets to be passed into special snowflake GDL90 reporting functions.
+        DecodedUATUplinkPacket packet = DecodedUATUplinkPacket(packets.uat_uplink_packets[i]);
+        if (!packet.is_valid) {
+            CONSOLE_WARNING("CommsManager::ReportGDL90Uplink", "Invalid UAT uplink packet encountered, skipping.");
+            continue;
+        }
+        uint8_t buf[GDL90Reporter::kGDL90MessageMaxLenBytes];
+        uint16_t msg_len = gdl90.WriteGDL90UplinkDataMessage(
+            buf, sizeof(buf), packet.decoded_payload, DecodedUATUplinkPacket::kDecodedPayloadNumBytes,
+            GDL90Reporter::MLAT48MHz64BitCountsToUATTORTicks(packet.raw.mlat_48mhz_64bit_counts));
+
         for (uint16_t i = 0; i < num_sinks; i++) {
             ret &= SendBuf(sinks[i], (char*)buf, msg_len);
         }
