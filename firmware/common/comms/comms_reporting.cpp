@@ -98,6 +98,11 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
             CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportBeast with no UAT or Uplink.");
             ret = false;
         }
+        // Send GDL90 reports (UAT uplink only).
+        if (!ReportGDL90Uplink(gdl90_sinks, num_gdl90_sinks, *packets_to_report)) {
+            CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during GDL90 UAT uplink report.");
+            ret = false;
+        }
     }
 
     /** Locally Decoded Reports **/
