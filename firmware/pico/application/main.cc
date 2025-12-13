@@ -23,7 +23,7 @@
 #include "hardware/gpio.h"
 
 const uint16_t kStatusLEDBootupBlinkPeriodMs = 200;
-const uint32_t kESP32BootupTimeoutMs = 10000;
+const uint32_t kESP32BootupTimeoutMs = 2000;
 const uint32_t kESP32BootupCommsRetryMs = 500;
 
 const uint32_t kRP2040IdleTicksPerUpdateInterval =
@@ -105,7 +105,7 @@ int main() {
 
     settings_manager.Apply();  // Run this before ESP32 firmware update attempt to ensure it's enabled properly.
 
-    // If WiFi is enabled, try establishing communication with the ESP32 and maybe update its firmware.
+    // If ESP32 is supported and enabled, try establishing communication with the ESP32 and maybe update its firmware.
     if (esp32.IsEnabled()) {
         adsbee.DisableWatchdog();  // Disable watchdog while setting up ESP32, in case kESP32BootupTimeoutMs >=
                                    // watchdog timeout, and to avoid watchdog reboot during ESP32 programming.
