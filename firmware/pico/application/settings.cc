@@ -115,8 +115,10 @@ bool SettingsManager::Save() {
                                        settings.reporting_protocols[SerialInterface::kConsole]);
 
     // Save baud rates.
-    comms_manager.GetBaudRate(SerialInterface::kCommsUART, settings.comms_uart_baud_rate);
-    comms_manager.GetBaudRate(SerialInterface::kGNSSUART, settings.gnss_uart_baud_rate);
+    comms_manager.GetBaudRate(SerialInterface::kCommsUART,
+                              settings.baud_rates[SettingsManager::SerialInterface::kCommsUART]);
+    comms_manager.GetBaudRate(SerialInterface::kGNSSUART,
+                              settings.baud_rates[SettingsManager::SerialInterface::kGNSSUART]);
 
     settings.core_network_settings.esp32_enabled = esp32.IsEnabled();
 
@@ -206,8 +208,10 @@ bool SettingsManager::Apply() {
                                        settings.reporting_protocols[SerialInterface::kConsole]);
 
     // Apply baud rates.
-    comms_manager.SetBaudRate(SerialInterface::kCommsUART, settings.comms_uart_baud_rate);
-    comms_manager.SetBaudRate(SerialInterface::kGNSSUART, settings.gnss_uart_baud_rate);
+    comms_manager.SetBaudRate(SerialInterface::kCommsUART,
+                              settings.baud_rates[SettingsManager::SerialInterface::kCommsUART]);
+    comms_manager.SetBaudRate(SerialInterface::kGNSSUART,
+                              settings.baud_rates[SettingsManager::SerialInterface::kGNSSUART]);
 
     if (settings.core_network_settings.esp32_enabled) {
         if (!esp32.IsEnabled()) {

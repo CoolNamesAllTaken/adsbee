@@ -40,10 +40,12 @@ void SettingsManager::Print() {
         print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len, "\t\t%s: %s\r\n",
                                   kSerialInterfaceStrs[i], kReportingProtocolStrs[settings.reporting_protocols[i]]);
     }
-    print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len,
-                              "\tComms UART Baud Rate: %lu baud\r\n", settings.comms_uart_baud_rate);
-    print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len,
-                              "\tGNSS UART Baud Rate: %lu baud\r\n", settings.gnss_uart_baud_rate);
+    print_buf_len +=
+        snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len, "\tComms UART Baud Rate: %lu baud\r\n",
+                 settings.baud_rates[SettingsManager::SerialInterface::kCommsUART]);
+    print_buf_len +=
+        snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len, "\tGNSS UART Baud Rate: %lu baud\r\n",
+                 settings.baud_rates[SettingsManager::SerialInterface::kGNSSUART]);
     CONSOLE_PRINTF("%s", print_buf);
     print_buf_len = 0;
 #endif
@@ -121,7 +123,7 @@ void SettingsManager::PrintAT() {
     // AT+BAUD_RATE
     // Note: Baud rate cannot be changed for CONSOLE since it is a virtual COM port. Don't print its baud rate.
     for (uint16_t i = SerialInterface::kCommsUART; i < SerialInterface::kNumSerialInterfaces; i++) {
-        CONSOLE_PRINTF("AT+BAUD_RATE=%s,%lu\r\n", kSerialInterfaceStrs[i], settings.comms_uart_baud_rate);
+        CONSOLE_PRINTF("AT+BAUD_RATE=%s,%lu\r\n", kSerialInterfaceStrs[i], settings.baud_rates[i]);
     }
 
     // AT+BIAS_TEE_ENABLE

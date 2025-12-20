@@ -13,7 +13,7 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 10;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 11;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 class SettingsManager {
@@ -171,10 +171,16 @@ class SettingsManager {
 
         // CommunicationsManager settings
         LogLevel log_level = LogLevel::kWarnings;
-        ReportingProtocol reporting_protocols[SerialInterface::kNumSerialInterfaces - 1] = {
-            ReportingProtocol::kNoReports, ReportingProtocol::kNoReports};
-        uint32_t comms_uart_baud_rate = 115200;
-        uint32_t gnss_uart_baud_rate = 9600;
+        ReportingProtocol reporting_protocols[SerialInterface::kNumSerialInterfaces] = {
+            ReportingProtocol::kNoReports,  // Console
+            ReportingProtocol::kNoReports,  // Comms UART
+            ReportingProtocol::kNoReports   // GNSS UART
+        };
+        uint32_t baud_rates[SerialInterface::kNumSerialInterfaces] = {
+            0,       // Console (virtual COM port)
+            115200,  // Comms UART
+            9600     // GNSS UART
+        };
 
         // Sub-GHz settings
         EnableState subg_enabled = EnableState::kEnableStateEnabled;  // High impedance state by default.
