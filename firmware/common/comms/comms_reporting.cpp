@@ -8,18 +8,19 @@
 #include "gdl90_utils.hh"
 #include "mavlink_utils.hh"
 #include "raw_utils.hh"
+#include "uat_packet.hh"  // For DecodedUATUplinkPacket.
 
 #ifdef ON_ESP32
-AircraftDictionary &aircraft_dictionary = adsbee_server.aircraft_dictionary;
+AircraftDictionary& aircraft_dictionary = adsbee_server.aircraft_dictionary;
 #else
 #include "adsbee.hh"  // For access to the aircraft dictionary.
-AircraftDictionary &aircraft_dictionary = adsbee.aircraft_dictionary;
+AircraftDictionary& aircraft_dictionary = adsbee.aircraft_dictionary;
 #endif
 
 GDL90Reporter gdl90;
 
-bool CommsManager::UpdateReporting(const ReportSink *sinks, const SettingsManager::ReportingProtocol *sink_protocols,
-                                   uint16_t num_sinks, const CompositeArray::RawPackets *packets_to_report) {
+bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManager::ReportingProtocol* sink_protocols,
+                                   uint16_t num_sinks, const CompositeArray::RawPackets* packets_to_report) {
     bool ret = true;
     uint32_t timestamp_ms = get_time_since_boot_ms();
 
@@ -97,6 +98,11 @@ bool CommsManager::UpdateReporting(const ReportSink *sinks, const SettingsManage
             CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportBeast with no UAT or Uplink.");
             ret = false;
         }
+        // Send GDL90 reports (UAT uplink only).
+        if (!ReportGDL90Uplink(gdl90_sinks, num_gdl90_sinks, *packets_to_report)) {
+            CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during GDL90 UAT uplink report.");
+            ret = false;
+        }
     }
 
     /** Locally Decoded Reports **/
@@ -129,7 +135,7 @@ bool CommsManager::UpdateReporting(const ReportSink *sinks, const SettingsManage
     return ret;
 }
 
-bool CommsManager::ReportRaw(ReportSink *sinks, uint16_t num_sinks, const CompositeArray::RawPackets &packets) {
+bool CommsManager::ReportRaw(ReportSink* sinks, uint16_t num_sinks, const CompositeArray::RawPackets& packets) {
     char error_msg[CompositeArray::RawPackets::kErrorMessageMaxLen] = {0};
     if (!packets.IsValid(error_msg)) {
         CONSOLE_ERROR("CommsManager::ReportRaw", "Invalid CompositeArray::RawPackets: %s", error_msg);
@@ -141,27 +147,27 @@ bool CommsManager::ReportRaw(ReportSink *sinks, uint16_t num_sinks, const Compos
         char raw_frame_buf[kRawModeSFrameMaxNumChars];
         uint16_t num_bytes_in_frame = BuildRawModeSFrame(packets.mode_s_packets[i], raw_frame_buf);
         for (uint16_t j = 0; j < num_sinks; j++) {
-            ret &= SendBuf(sinks[j], (char *)raw_frame_buf, num_bytes_in_frame);
+            ret &= SendBuf(sinks[j], (char*)raw_frame_buf, num_bytes_in_frame);
         }
     }
     for (uint16_t i = 0; i < packets.header->num_uat_adsb_packets; i++) {
         char raw_frame_buf[kRawUATADSBFrameMaxNumChars];
         uint16_t num_bytes_in_frame = BuildRawUATADSBFrame(packets.uat_adsb_packets[i], raw_frame_buf);
         for (uint16_t j = 0; j < num_sinks; j++) {
-            ret &= SendBuf(sinks[j], (char *)raw_frame_buf, num_bytes_in_frame);
+            ret &= SendBuf(sinks[j], (char*)raw_frame_buf, num_bytes_in_frame);
         }
     }
     for (uint16_t i = 0; i < packets.header->num_uat_uplink_packets; i++) {
         char raw_frame_buf[kRawUATUplinkFrameMaxNumChars];
         uint16_t num_bytes_in_frame = BuildRawUATUplinkFrame(packets.uat_uplink_packets[i], raw_frame_buf);
         for (uint16_t j = 0; j < num_sinks; j++) {
-            ret &= SendBuf(sinks[j], (char *)raw_frame_buf, num_bytes_in_frame);
+            ret &= SendBuf(sinks[j], (char*)raw_frame_buf, num_bytes_in_frame);
         }
     }
     return ret;
 }
 
-bool CommsManager::ReportBeast(ReportSink *sinks, uint16_t num_sinks, const CompositeArray::RawPackets &packets,
+bool CommsManager::ReportBeast(ReportSink* sinks, uint16_t num_sinks, const CompositeArray::RawPackets& packets,
                                SettingsManager::ReportingProtocol protocol) {
     char error_msg[CompositeArray::RawPackets::kErrorMessageMaxLen] = {0};
     if (!packets.IsValid(error_msg)) {
@@ -175,7 +181,7 @@ bool CommsManager::ReportBeast(ReportSink *sinks, uint16_t num_sinks, const Comp
         uint16_t num_bytes_in_frame = BeastReporter::BuildModeSBeastFrame(beast_frame_buf, packets.mode_s_packets[i]);
 
         for (uint16_t j = 0; j < num_sinks; j++) {
-            ret &= SendBuf(sinks[j], (char *)beast_frame_buf, num_bytes_in_frame);
+            ret &= SendBuf(sinks[j], (char*)beast_frame_buf, num_bytes_in_frame);
         }
     }
     if (protocol != SettingsManager::kBeastNoUAT) {
@@ -185,7 +191,7 @@ bool CommsManager::ReportBeast(ReportSink *sinks, uint16_t num_sinks, const Comp
                 BeastReporter::BuildUATADSBBeastFrame(beast_frame_buf, packets.uat_adsb_packets[i]);
 
             for (uint16_t j = 0; j < num_sinks; j++) {
-                ret &= SendBuf(sinks[j], (char *)beast_frame_buf, num_bytes_in_frame);
+                ret &= SendBuf(sinks[j], (char*)beast_frame_buf, num_bytes_in_frame);
             }
         }
     }
@@ -195,7 +201,7 @@ bool CommsManager::ReportBeast(ReportSink *sinks, uint16_t num_sinks, const Comp
             uint16_t num_bytes_in_frame =
                 BeastReporter::BuildUATUplinkBeastFrame(beast_frame_buf, packets.uat_uplink_packets[i]);
             for (uint16_t j = 0; j < num_sinks; j++) {
-                ret &= SendBuf(sinks[j], (char *)beast_frame_buf, num_bytes_in_frame);
+                ret &= SendBuf(sinks[j], (char*)beast_frame_buf, num_bytes_in_frame);
             }
         }
     }
@@ -203,17 +209,17 @@ bool CommsManager::ReportBeast(ReportSink *sinks, uint16_t num_sinks, const Comp
     return ret;
 }
 
-bool CommsManager::ReportCSBee(ReportSink *sinks, uint16_t num_sinks) {
+bool CommsManager::ReportCSBee(ReportSink* sinks, uint16_t num_sinks) {
     bool ret = true;
 
     // Write out a CSBee Aircraft message for each aircraft in the aircraft dictionary.
-    for (auto &itr : aircraft_dictionary.dict) {
+    for (auto& itr : aircraft_dictionary.dict) {
         char message[kCSBeeMessageStrMaxLen];
         int message_len_bytes = -1;
 
-        if (ModeSAircraft *mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
+        if (ModeSAircraft* mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
             message_len_bytes = WriteCSBeeModeSAircraftMessageStr(message, *mode_s_aircraft);
-        } else if (UATAircraft *uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
+        } else if (UATAircraft* uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
             message_len_bytes = WriteCSBeeUATAircraftMessageStr(message, *uat_aircraft);
         } else {
             CONSOLE_WARNING("CommsManager::ReportCSBee", "Unknown aircraft type in dictionary for UID 0x%lx.",
@@ -259,7 +265,7 @@ bool CommsManager::ReportCSBee(ReportSink *sinks, uint16_t num_sinks) {
     return ret;
 }
 
-bool CommsManager::ReportMAVLINK(ReportSink *sinks, uint16_t num_sinks, uint8_t mavlink_version) {
+bool CommsManager::ReportMAVLINK(ReportSink* sinks, uint16_t num_sinks, uint8_t mavlink_version) {
     if (num_sinks == 0) {
         CONSOLE_WARNING("CommsManager::ReportMAVLINK", "No MAVLINK sinks provided.");
         return false;
@@ -282,11 +288,11 @@ bool CommsManager::ReportMAVLINK(ReportSink *sinks, uint16_t num_sinks, uint8_t 
     }
 
     // Send an ADSB_VEHICLE message for each aircraft in the dictionary.
-    for (auto &itr : aircraft_dictionary.dict) {
+    for (auto& itr : aircraft_dictionary.dict) {
         mavlink_adsb_vehicle_t adsb_vehicle_msg;
-        if (ModeSAircraft *mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
+        if (ModeSAircraft* mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
             adsb_vehicle_msg = ModeSAircraftToMAVLINKADSBVehicleMessage(*mode_s_aircraft);
-        } else if (UATAircraft *uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
+        } else if (UATAircraft* uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
             adsb_vehicle_msg = UATAircraftToMAVLINKADSBVehicleMessage(*uat_aircraft);
         } else {
             CONSOLE_WARNING("CommsManager::ReportMAVLINK", "Unknown aircraft type in dictionary for UID 0x%lx.",
@@ -326,42 +332,66 @@ bool CommsManager::ReportMAVLINK(ReportSink *sinks, uint16_t num_sinks, uint8_t 
     return true;
 }
 
-bool CommsManager::ReportGDL90(ReportSink *sinks, uint16_t num_sinks) {
+bool CommsManager::ReportGDL90(ReportSink* sinks, uint16_t num_sinks) {
     bool ret = true;
 
     uint8_t buf[GDL90Reporter::kGDL90MessageMaxLenBytes];
     uint16_t msg_len;
 
     // Heartbeat Message
-    msg_len = gdl90.WriteGDL90HeartbeatMessage(buf, get_time_since_boot_ms() / 1000,
+    msg_len = gdl90.WriteGDL90HeartbeatMessage(buf, sizeof(buf), get_time_since_boot_ms() / 1000,
                                                aircraft_dictionary.metrics.valid_extended_squitter_frames);
 
     for (uint16_t i = 0; i < num_sinks; i++) {
-        ret &= SendBuf(sinks[i], (char *)buf, msg_len);
+        ret &= SendBuf(sinks[i], (char*)buf, msg_len);
     }
 
     // Ownship Report
     GDL90Reporter::GDL90TargetReportData ownship_data;
     // TODO: Actually fill out ownship data!
-    msg_len = gdl90.WriteGDL90TargetReportMessage(buf, ownship_data, true);
+    msg_len = gdl90.WriteGDL90TargetReportMessage(buf, sizeof(buf), ownship_data, true);
     for (uint16_t i = 0; i < num_sinks; i++) {
-        ret &= SendBuf(sinks[i], (char *)buf, msg_len);
+        ret &= SendBuf(sinks[i], (char*)buf, msg_len);
     }
 
     // Traffic Reports
-    for (auto &itr : aircraft_dictionary.dict) {
+    for (auto& itr : aircraft_dictionary.dict) {
         msg_len = 0;
-        if (ModeSAircraft *mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
-            msg_len = gdl90.WriteGDL90TargetReportMessage(buf, *mode_s_aircraft, false);
-        } else if (UATAircraft *uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
-            msg_len = gdl90.WriteGDL90TargetReportMessage(buf, *uat_aircraft, false);
+        if (ModeSAircraft* mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
+            msg_len = gdl90.WriteGDL90TargetReportMessage(buf, sizeof(buf), *mode_s_aircraft, false);
+        } else if (UATAircraft* uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
+            msg_len = gdl90.WriteGDL90TargetReportMessage(buf, sizeof(buf), *uat_aircraft, false);
         } else {
             CONSOLE_WARNING("CommsManager::ReportGDL90", "Unknown aircraft type in dictionary for UID 0x%lx.",
                             itr.first);
             continue;
         }
         for (uint16_t i = 0; i < num_sinks; i++) {
-            ret &= SendBuf(sinks[i], (char *)buf, msg_len);
+            ret &= SendBuf(sinks[i], (char*)buf, msg_len);
+        }
+    }
+    return ret;
+}
+
+bool CommsManager::ReportGDL90Uplink(ReportSink* sinks, uint16_t num_sinks, const CompositeArray::RawPackets& packets) {
+    bool ret = true;
+
+    for (uint16_t i = 0; i < packets.header->num_uat_uplink_packets; i++) {
+        // We need to decode the packet since GDL90 expects just the decoded payload. This double decoding is a bit
+        // wasteful but lets us use a common interface for reporting raw packets, instead of requiring decoded UAT
+        // uplink packets to be passed into special snowflake GDL90 reporting functions.
+        DecodedUATUplinkPacket packet = DecodedUATUplinkPacket(packets.uat_uplink_packets[i]);
+        if (!packet.is_valid) {
+            CONSOLE_WARNING("CommsManager::ReportGDL90Uplink", "Invalid UAT uplink packet encountered, skipping.");
+            continue;
+        }
+        uint8_t buf[GDL90Reporter::kGDL90MessageMaxLenBytes];
+        uint16_t msg_len = gdl90.WriteGDL90UplinkDataMessage(
+            buf, sizeof(buf), packet.decoded_payload, DecodedUATUplinkPacket::kDecodedPayloadNumBytes,
+            GDL90Reporter::MLAT48MHz64BitCountsToUATTORTicks(packet.raw.mlat_48mhz_64bit_counts));
+
+        for (uint16_t i = 0; i < num_sinks; i++) {
+            ret &= SendBuf(sinks[i], (char*)buf, msg_len);
         }
     }
     return ret;

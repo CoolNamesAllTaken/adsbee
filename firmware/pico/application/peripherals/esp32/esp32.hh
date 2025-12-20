@@ -36,7 +36,7 @@ class ESP32 : public SPICoprocessorSlaveInterface {
      */
     bool Update();
 
-    inline bool IsEnabled() { return enabled_; }
+    inline bool IsEnabled() { return bsp.has_esp32 && enabled_; }
     inline void SetEnable(bool enabled) {
         gpio_put(config_.enable_pin, enabled);
         enabled_ = enabled;

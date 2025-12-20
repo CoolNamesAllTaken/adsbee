@@ -5,6 +5,7 @@
 #include "hardware/spi.h"
 #include "hardware/uart.h"
 #include "pico/stdlib.h"
+#include "settings.hh"
 #include "stdint.h"
 
 class BSP {
@@ -12,35 +13,50 @@ class BSP {
     static const uint16_t kMaxNumDemodStateMachines = 4;
 
     BSP(bool has_eeprom_in) : has_eeprom(has_eeprom_in) {
-        if (has_eeprom) {
-            return;  // Use default values from ADSBee 1090.
+        if (!has_eeprom) {
+            // Default value overrides for non-EEPROM version of ADSBee: ADSBee 1090U, ADSBee m1090.
+
+            gnss_pps_pin = 2;
+            gnss_enable_pin = 3;
+
+            r1090_num_demod_state_machines = 4;
+            for (uint16_t i = 0; i < r1090_num_demod_state_machines; i++) {
+                r1090_demod_pins[i] = 20 + i;
+                // Set RECOVERED_CLK to fake pin for high power preamble detector. Will be overridden by
+                // higher priority (lower index) SM.
+                r1090_recovered_clk_pins[i] = UINT16_MAX;  // Set to UINT16_MAX to indicate not connected.
+            }
+            r1090_recovered_clk_pins[0] = 24;  // Connect SM0 to recovered_clk output for debugging.
+            r1090_tl_pwm_pin = 26;
+            r1090_tl_adc_pin = 27;
+            r1090_tl_adc_input = 1;
+            r1090_rssi_adc_pin = 28;
+            r1090_rssi_adc_input = 2;
+
+            sync_pin = 25;  // Used for sync and CC1312 bootloader backdoor.
         }
 
-        // Overrides for non-EEPROM version of ADSBee: ADSBee 1090U, ADSBee m1090.
-
-        gnss_pps_pin = 2;
-        gnss_enable_pin = 3;
-
-        r1090_num_demod_state_machines = 4;
-        for (uint16_t i = 0; i < r1090_num_demod_state_machines; i++) {
-            r1090_demod_pins[i] = 20 + i;
-            // Set RECOVERED_CLK to fake pin for high power preamble detector. Will be overridden by
-            // higher priority (lower index) SM.
-            r1090_recovered_clk_pins[i] = UINT16_MAX;  // Set to UINT16_MAX to indicate not connected.
+        // Board-specific value overrides based on part number stored in flash or EEPROM.
+        SettingsManager::DeviceInfo device_info;
+        if (settings_manager.GetDeviceInfo(device_info)) {
+            switch (device_info.GetPartNumber()) {
+                case SettingsManager::DeviceInfo::kPNADSBee1090:
+                case SettingsManager::DeviceInfo::kPNADSBee1090U:
+                case SettingsManager::DeviceInfo::kPNGS3MPoE:
+                case SettingsManager::DeviceInfo::kPNADSBeem1090:
+                case SettingsManager::DeviceInfo::kPNADSBeem1090EvalBoard:
+                    // Devices with recognized part numbers can support an external ESP32 and/or Sub-GHz radio.
+                    has_esp32 = true;
+                    has_subg = true;
+                    break;
+                default:
+                    // All devices start out without ESP32 or Sub-GHz capability. Once they are flashed with device
+                    // info, they can adopt a CC1312 and/or ESP32.
+                    has_esp32 = false;
+                    has_subg = false;
+                    break;
+            }
         }
-        r1090_recovered_clk_pins[0] = 24;  // Connect SM0 to recovered_clk output for debugging.
-        r1090_tl_pwm_pin = 26;
-        r1090_tl_adc_pin = 27;
-        r1090_tl_adc_input = 1;
-        r1090_rssi_adc_pin = 28;
-        r1090_rssi_adc_input = 2;
-
-        sync_pin = 25;  // Used for sync and CC1312 bootloader backdoor.
-
-        // Get device info from flash to see if we are capable of having a sub-GHz receiver installed.
-        has_subg = true;
-
-        // TODO: override has_subg and has_esp32 based on the board type.
     }
 
     bool SMIndexUsesHighPowerPreamble(uint16_t sm_index) {
@@ -67,7 +83,7 @@ class BSP {
     bool copro_spi_pullup = false;
     bool copro_spi_pulldown = true;
 
-    bool has_esp32 = true;
+    bool has_esp32 = false;
     uint16_t esp32_enable_pin = 14;
     uint16_t esp32_spi_cs_pin = 9;
     uint16_t esp32_spi_handshake_pin = 13;

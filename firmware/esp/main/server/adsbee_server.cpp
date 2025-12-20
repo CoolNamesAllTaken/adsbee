@@ -44,12 +44,12 @@ extern GDL90Reporter gdl90;
 
 /** "Pass-Through" functions used to access member functions in callbacks. **/
 
-void esp_spi_receive_task(void *pvParameters) {
+void esp_spi_receive_task(void* pvParameters) {
     adsbee_server.SPIReceiveTask();  // Only returns during DeInit.
     vTaskDelete(NULL);               // Delete this task.
 }
 
-void tcp_server_task(void *pvParameters) { adsbee_server.TCPServerTask(pvParameters); }
+void tcp_server_task(void* pvParameters) { adsbee_server.TCPServerTask(pvParameters); }
 // esp_err_t console_ws_handler(httpd_req_t *req) { return adsbee_server.NetworkConsoleWebSocketHandler(req); }
 void console_ws_close_fd(httpd_handle_t hd, int sockfd) {
     adsbee_server.network_console.RemoveClient(sockfd);
@@ -153,7 +153,7 @@ bool ADSBeeServer::Update() {
 
             // Mode S Packets
             for (uint16_t i = 0; i < raw_packets.header->num_mode_s_packets; i++) {
-                RawModeSPacket &raw_mode_s_packet = raw_packets.mode_s_packets[i];
+                RawModeSPacket& raw_mode_s_packet = raw_packets.mode_s_packets[i];
                 DecodedModeSPacket decoded_packet = DecodedModeSPacket(raw_mode_s_packet);
                 if (!decoded_packet.is_valid) {
                     CONSOLE_ERROR("ADSBeeServer::Update", "Received invalid Mode S packet.");
@@ -183,7 +183,7 @@ bool ADSBeeServer::Update() {
 
             // UAT ADSB Packets
             for (uint16_t i = 0; i < raw_packets.header->num_uat_adsb_packets; i++) {
-                RawUATADSBPacket &raw_uat_adsb_packet = raw_packets.uat_adsb_packets[i];
+                RawUATADSBPacket& raw_uat_adsb_packet = raw_packets.uat_adsb_packets[i];
                 DecodedUATADSBPacket decoded_packet = DecodedUATADSBPacket(raw_uat_adsb_packet);
                 if (!decoded_packet.is_valid) {
                     CONSOLE_ERROR("ADSBeeServer::Update", "Received invalid UAT ADSB packet.");
@@ -196,8 +196,18 @@ bool ADSBeeServer::Update() {
             }
 
             // UAT Uplink Packets
-            // We don't currently digest uplink packets, they just get forwarded.
-            // TODO: Add uplink packet forwarding via GDL90.
+            // We don't currently digest uplink packets, they just get forwarded. The raw_packets_buf composite packet
+            // array takes care of forwarding to relevant feeds. We also forward them over GDL90 to connected WiFi
+            // clients here (separate from the traffic reporting that occurs on regular intervals).
+            for (uint16_t i = 0; i < raw_packets.header->num_uat_uplink_packets; i++) {
+                RawUATUplinkPacket& raw_uat_uplink_packet = raw_packets.uat_uplink_packets[i];
+                DecodedUATUplinkPacket decoded_packet = DecodedUATUplinkPacket(raw_uat_uplink_packet);
+                if (!decoded_packet.is_valid) {
+                    CONSOLE_ERROR("ADSBeeServer::Update", "Received invalid UAT Uplink packet.");
+                    continue;
+                }
+                ReportGDL90UplinkDataMessage(decoded_packet);
+            }
 
             // Forward packets to WAN.
             comms_manager.IPWANSendRawPacketCompositeArray(raw_packets_buf);
@@ -248,41 +258,45 @@ bool ADSBeeServer::ReportGDL90() {
     message.port = kGDL90Port;
 
     // Heartbeat Message
-    message.len = gdl90.WriteGDL90HeartbeatMessage(message.data, get_time_since_boot_ms() / 1000,
+    message.len = gdl90.WriteGDL90HeartbeatMessage(message.data, CommsManager::NetworkMessage::kMaxLenBytes,
+                                                   get_time_since_boot_ms() / 1000,
                                                    aircraft_dictionary.metrics.valid_extended_squitter_frames);
     comms_manager.WiFiAccessPointSendMessageToAllStations(message);
 
     // Ownship Report
     GDL90Reporter::GDL90TargetReportData ownship_data;
     // TODO: Actually fill out ownship data!
-    // message.len = gdl90.WriteGDL90TargetReportMessage(message.data, ownship_data, true);
+    message.len = gdl90.WriteGDL90TargetReportMessage(message.data, CommsManager::NetworkMessage::kMaxLenBytes,
+                                                      ownship_data, true);
     comms_manager.WiFiAccessPointSendMessageToAllStations(message);
 
     // Traffic Reports
     int16_t aircraft_index = -1;  // Just used for error reporting.
     uint8_t aircraft_msg_buf[CommsManager::NetworkMessage::kMaxLenBytes];
     uint16_t aircraft_msg_buf_len = 0;
-    for (auto &itr : aircraft_dictionary.dict) {
+    for (auto& itr : aircraft_dictionary.dict) {
         aircraft_index++;
 
-        if (ModeSAircraft *mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
+        if (ModeSAircraft* mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
             if (!mode_s_aircraft->HasBitFlag(ModeSAircraft::kBitFlagPositionValid)) {
                 // Don't report aircraft without a valid position.
                 continue;
             }
             printf("\t#A %s (0x%06lX): %.5f %.5f %ld\r\n", mode_s_aircraft->callsign, mode_s_aircraft->icao_address,
                    mode_s_aircraft->latitude_deg, mode_s_aircraft->longitude_deg, mode_s_aircraft->baro_altitude_ft);
-            aircraft_msg_buf_len = gdl90.WriteGDL90TargetReportMessage(aircraft_msg_buf, *mode_s_aircraft, false);
-        } else if (UATAircraft *uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
+            aircraft_msg_buf_len = gdl90.WriteGDL90TargetReportMessage(aircraft_msg_buf, sizeof(aircraft_msg_buf),
+                                                                       *mode_s_aircraft, false);
+        } else if (UATAircraft* uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
             if (!uat_aircraft->HasBitFlag(UATAircraft::kBitFlagPositionValid)) {
                 // Don't report aircraft without a valid position.
                 continue;
             }
             printf("\t#U %s (0x%06lX): %.5f %.5f %ld\r\n", uat_aircraft->callsign, uat_aircraft->icao_address,
                    uat_aircraft->latitude_deg, uat_aircraft->longitude_deg, uat_aircraft->baro_altitude_ft);
-            aircraft_msg_buf_len = gdl90.WriteGDL90TargetReportMessage(aircraft_msg_buf, *uat_aircraft, false);
+            aircraft_msg_buf_len =
+                gdl90.WriteGDL90TargetReportMessage(aircraft_msg_buf, sizeof(aircraft_msg_buf), *uat_aircraft, false);
         } else {
-            CONSOLE_WARNING("CommsManager::ReportCSBee", "Unknown aircraft type in dictionary for UID 0x%lx.",
+            CONSOLE_WARNING("CommsManager::ReportGDL90", "Unknown aircraft type in dictionary for UID 0x%lx.",
                             itr.first);
             continue;
         }
@@ -307,6 +321,31 @@ bool ADSBeeServer::ReportGDL90() {
         if (!comms_manager.WiFiAccessPointSendMessageToAllStations(message)) {
             CONSOLE_ERROR("ADSBeeServer::ReportGDL90", "Failed to send final aircraft message to all clients.");
         }
+    }
+
+    return true;
+}
+
+bool ADSBeeServer::ReportGDL90UplinkDataMessage(const DecodedUATUplinkPacket& uplink_packet) {
+    if (!settings_manager.settings.core_network_settings.wifi_ap_enabled) {
+        return true;  // Nothing to do.
+    }
+
+    CommsManager::NetworkMessage message;
+    message.port = kGDL90Port;
+
+    message.len = gdl90.WriteGDL90UplinkDataMessage(
+        message.data, CommsManager::NetworkMessage::kMaxLenBytes, uplink_packet.decoded_payload,
+        DecodedUATUplinkPacket::kDecodedPayloadNumBytes,
+        GDL90Reporter::MLAT48MHz64BitCountsToUATTORTicks(uplink_packet.raw.mlat_48mhz_64bit_counts));
+    if (message.len == 0) {
+        CONSOLE_ERROR("ADSBeeServer::ReportGDL90UplinkPacket", "Failed to write GDL90 UAT uplink packet message.");
+        return false;
+    }
+
+    if (!comms_manager.WiFiAccessPointSendMessageToAllStations(message)) {
+        CONSOLE_ERROR("ADSBeeServer::ReportGDL90UplinkPacket", "Failed to send UAT uplink packet to all clients.");
+        return false;
     }
 
     return true;
@@ -390,26 +429,26 @@ bool ADSBeeServer::ReportGDL90() {
 //     }
 // }
 
-static esp_err_t root_handler(httpd_req_t *req) {
-    httpd_resp_send(req, (const char *)index_html_start, index_html_end - index_html_start);
+static esp_err_t root_handler(httpd_req_t* req) {
+    httpd_resp_send(req, (const char*)index_html_start, index_html_end - index_html_start);
     return ESP_OK;
 }
 
-static esp_err_t css_handler(httpd_req_t *req) {
+static esp_err_t css_handler(httpd_req_t* req) {
     // Set the CSS content type
     httpd_resp_set_type(req, "text/css");
 
     // Send the CSS file
-    httpd_resp_send(req, (const char *)style_css_start, style_css_end - style_css_start);
+    httpd_resp_send(req, (const char*)style_css_start, style_css_end - style_css_start);
 
     return ESP_OK;
 }
 
-esp_err_t favicon_handler(httpd_req_t *req) {
+esp_err_t favicon_handler(httpd_req_t* req) {
     httpd_resp_set_type(req, "image/png");
     httpd_resp_set_hdr(req, "Cache-Control", "max-age=2592000, public");  // Cache for 30 days
 
-    esp_err_t res = httpd_resp_send(req, (const char *)favicon_png_start, favicon_png_end - favicon_png_start);
+    esp_err_t res = httpd_resp_send(req, (const char*)favicon_png_start, favicon_png_end - favicon_png_start);
     if (res != ESP_OK) {
         ESP_LOGE("FAVICON", "Failed to send favicon");
         return res;
@@ -417,7 +456,7 @@ esp_err_t favicon_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
-void NetworkConsolePostConnectCallback(WebSocketServer *ws_server, int client_fd) {
+void NetworkConsolePostConnectCallback(WebSocketServer* ws_server, int client_fd) {
     char welcome_message[kNetworkConsoleWelcomeMessageMaxLen];
     if (object_dictionary.kFirmwareVersionReleaseCandidate == 0) {
         snprintf(welcome_message, kNetworkConsoleWelcomeMessageMaxLen,
@@ -446,9 +485,9 @@ void NetworkConsolePostConnectCallback(WebSocketServer *ws_server, int client_fd
     ws_server->SendMessage(client_fd, welcome_message);
 }
 
-void NetworkConsoleMessageReceivedCallback(WebSocketServer *ws_server, int client_fd, httpd_ws_frame_t &ws_pkt) {
+void NetworkConsoleMessageReceivedCallback(WebSocketServer* ws_server, int client_fd, httpd_ws_frame_t& ws_pkt) {
     // Forward the network console message to the RP2040.
-    char *message = (char *)ws_pkt.payload;
+    char* message = (char*)ws_pkt.payload;
     uint16_t message_len = (uint16_t)ws_pkt.len;
     xSemaphoreTake(object_dictionary.network_console_rx_queue_mutex, portMAX_DELAY);
     if (object_dictionary.network_console_rx_queue.MaxNumElements() -

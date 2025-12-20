@@ -35,7 +35,7 @@ const uint32_t kDeviceInfoProgrammingPassword = 0xDEDBEEF;
 const uint32_t kOTAHeartbeatMs = 10;
 
 /** CppAT Printf Override **/
-int CppAT::cpp_at_printf(const char *format, ...) {
+int CppAT::cpp_at_printf(const char* format, ...) {
     va_list args;
     va_start(args, format);
     int ret = comms_manager.iface_vprintf(SettingsManager::SerialInterface::kConsole, format, args);
@@ -49,8 +49,9 @@ int CppAT::cpp_at_printf(const char *format, ...) {
 CPP_AT_CALLBACK(CommsManager::ATBaudRateCallback) {
     switch (op) {
         case '?':
-            CPP_AT_CMD_PRINTF("=%d(COMMS_UART),%d(GNSS_UART)", settings_manager.settings.comms_uart_baud_rate,
-                              settings_manager.settings.gnss_uart_baud_rate);
+            CPP_AT_CMD_PRINTF("=%d(COMMS_UART),%d(GNSS_UART)",
+                              settings_manager.settings.baud_rates[SettingsManager::SerialInterface::kCommsUART],
+                              settings_manager.settings.baud_rates[SettingsManager::SerialInterface::kGNSSUART]);
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
@@ -393,7 +394,7 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
 }
 
 CPP_AT_CALLBACK(CommsManager::ATHostnameCallback) {
-    SettingsManager::Settings::CoreNetworkSettings &cns = settings_manager.settings.core_network_settings;
+    SettingsManager::Settings::CoreNetworkSettings& cns = settings_manager.settings.core_network_settings;
     switch (op) {
         case '?':
             CPP_AT_CMD_PRINTF("=%s", cns.hostname);
@@ -557,7 +558,7 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         // CRC provided: verify the flash after writing.
                         CPP_AT_PRINTF("Verifying flash with CRC 0x%x.\r\n", crc);
                         uint32_t calculated_crc = FirmwareUpdateManager::CalculateCRC32(
-                            (uint8_t *)(FirmwareUpdateManager::flash_partition_headers[complementary_partition]) +
+                            (uint8_t*)(FirmwareUpdateManager::flash_partition_headers[complementary_partition]) +
                                 offset,
                             len_bytes);
                         if (calculated_crc != crc) {
@@ -1070,7 +1071,7 @@ CPP_AT_CALLBACK(CommsManager::ATWatchdogCallback) {
 }
 
 CPP_AT_CALLBACK(CommsManager::ATWiFiAPCallback) {
-    SettingsManager::Settings::CoreNetworkSettings &cns = settings_manager.settings.core_network_settings;
+    SettingsManager::Settings::CoreNetworkSettings& cns = settings_manager.settings.core_network_settings;
     switch (op) {
         case '?': {
             char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];
@@ -1114,7 +1115,7 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiAPCallback) {
 }
 
 CPP_AT_CALLBACK(CommsManager::ATWiFiSTACallback) {
-    SettingsManager::Settings::CoreNetworkSettings &cns = settings_manager.settings.core_network_settings;
+    SettingsManager::Settings::CoreNetworkSettings& cns = settings_manager.settings.core_network_settings;
     switch (op) {
         case '?': {
             char redacted_password[SettingsManager::Settings::kWiFiPasswordMaxLen + 1];
