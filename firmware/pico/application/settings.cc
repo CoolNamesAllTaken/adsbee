@@ -160,7 +160,6 @@ void SettingsManager::ResetToDefaults() {
                 break;
         }
     }
-    Apply();
 }
 
 bool SettingsManager::SetDeviceInfo(const DeviceInfo& device_info) {

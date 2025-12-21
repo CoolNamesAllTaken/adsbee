@@ -904,6 +904,7 @@ CPP_AT_CALLBACK(CommsManager::ATSettingsCallback) {
                     }
                 } else if (args[0].compare("RESET") == 0) {
                     settings_manager.ResetToDefaults();
+                    settings_manager.Apply();
                 } else {
                     CPP_AT_ERROR("Invalid argument %s.", args[0].data());
                 }
