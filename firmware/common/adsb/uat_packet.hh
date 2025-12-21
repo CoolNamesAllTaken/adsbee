@@ -381,6 +381,8 @@ class RawUATUplinkPacket {
 class DecodedUATUplinkPacket {
    public:
     static constexpr uint16_t kDebugStrLen = 200;
+    static constexpr uint16_t kDecodedPayloadNumBytes =
+        432;  // Bytes of a fully decoded payload after FEC is applied and parity blocks are removed.
 
     DecodedUATUplinkPacket(const RawUATUplinkPacket& packet_in);
     DecodedUATUplinkPacket() : raw((char*)"") { debug_string[0] = '\0'; }

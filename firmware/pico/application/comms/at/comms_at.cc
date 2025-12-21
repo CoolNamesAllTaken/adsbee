@@ -49,8 +49,9 @@ int CppAT::cpp_at_printf(const char* format, ...) {
 CPP_AT_CALLBACK(CommsManager::ATBaudRateCallback) {
     switch (op) {
         case '?':
-            CPP_AT_CMD_PRINTF("=%d(COMMS_UART),%d(GNSS_UART)", settings_manager.settings.comms_uart_baud_rate,
-                              settings_manager.settings.gnss_uart_baud_rate);
+            CPP_AT_CMD_PRINTF("=%d(COMMS_UART),%d(GNSS_UART)",
+                              settings_manager.settings.baud_rates[SettingsManager::SerialInterface::kCommsUART],
+                              settings_manager.settings.baud_rates[SettingsManager::SerialInterface::kGNSSUART]);
             CPP_AT_SILENT_SUCCESS();
             break;
         case '=':
@@ -905,6 +906,7 @@ CPP_AT_CALLBACK(CommsManager::ATSettingsCallback) {
                     }
                 } else if (args[0].compare("RESET") == 0) {
                     settings_manager.ResetToDefaults();
+                    settings_manager.Apply();
                 } else {
                     CPP_AT_ERROR("Invalid argument %s.", args[0].data());
                 }

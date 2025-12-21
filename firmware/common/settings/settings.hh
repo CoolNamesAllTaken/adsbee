@@ -13,7 +13,7 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 10;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 11;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 class SettingsManager {
@@ -172,10 +172,16 @@ class SettingsManager {
 
         // CommunicationsManager settings
         LogLevel log_level = LogLevel::kWarnings;
-        ReportingProtocol reporting_protocols[SerialInterface::kNumSerialInterfaces - 1] = {
-            ReportingProtocol::kNoReports, ReportingProtocol::kNoReports};
-        uint32_t comms_uart_baud_rate = 115200;
-        uint32_t gnss_uart_baud_rate = 9600;
+        ReportingProtocol reporting_protocols[SerialInterface::kNumSerialInterfaces] = {
+            ReportingProtocol::kNoReports,  // Console
+            ReportingProtocol::kNoReports,  // Comms UART
+            ReportingProtocol::kNoReports   // GNSS UART
+        };
+        uint32_t baud_rates[SerialInterface::kNumSerialInterfaces] = {
+            0,       // Console (virtual COM port)
+            115200,  // Comms UART
+            9600     // GNSS UART
+        };
 
         // Sub-GHz settings
         EnableState subg_enabled = EnableState::kEnableStateEnabled;  // High impedance state by default.
@@ -262,12 +268,21 @@ class SettingsManager {
     struct DeviceInfo {
         // NOTE: Lengths do not include null terminator.
         static constexpr uint16_t kPartCodeLen = 26;  // NNNNNNNNNR-YYYYMMDD-VVXXXX (not counting end of string char).
+        static constexpr uint16_t kPartCodePartNumberLen = 9;  // Not counting rev letter or end of string char.
         static constexpr uint16_t kOTAKeyMaxLen = 128;
         static constexpr uint16_t kNumOTAKeys = 2;
 
         uint32_t device_info_version = kDeviceInfoVersion;
         char part_code[kPartCodeLen + 1];
         char ota_keys[kNumOTAKeys][kOTAKeyMaxLen + 1];
+
+        enum ADSBeePartNumber : uint32_t {
+            kPNADSBee1090 = 10240002,            // ADSBee 1090
+            kPNADSBee1090U = 10250002,           // ADSBee 1090U
+            kPNADSBeem1090 = 10250007,           // ADSBee m1090
+            kPNADSBeem1090EvalBoard = 10250013,  // ADSBee m1090 Eval Board
+            kPNGS3MPoE = 40250001                // GS3M PoE
+        };
 
         /**
          * Default constructor.
@@ -316,6 +331,24 @@ class SettingsManager {
                 buf[2 + i] = (uid_value >> (8 * (5 - i))) & 0xFF;
             }
         }
+
+        /**
+         * Extracts the part number and revision from the part code.
+         * @retval Part number as an integer.
+         */
+        uint32_t GetPartNumber() {
+            char part_number_buf[kPartCodePartNumberLen + 1] = {0};
+            memcpy(part_number_buf, part_code, kPartCodePartNumberLen);
+            return strtoul(
+                part_number_buf, nullptr,
+                10);  // Convert part number to integer (read part code string as base 10, without the rev letter).
+        }
+
+        /**
+         * Extracts the part revision character from the part code.
+         * @retval Character representing the part revision.
+         */
+        char GetPartRev() { return part_code[kPartCodePartNumberLen]; }
     };
 
     /**
