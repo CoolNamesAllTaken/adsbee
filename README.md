@@ -41,12 +41,12 @@ All three microcontrollers utilize code stored on the RP2040's external flash ch
 
 ## Devices
 
-The ADSBee 1090U from Pants for Birds LLC contains all three devices on a single PCB.
+The ADSBee 1090U from Pants for Birds LLC includes an RP2040, ESP32, CC1312, and custom 1090MHz RF frontend on a single PCBA, enabling all multi-band receive and networking functions (except for Ethernet, which requires an external pant).
 
 [![ADSBee 1090U Picture](images/adsbee_1090u_pic.png)](https://pantsforbirds.com/product/adsbee-1090u/)
 
 
-A solder-down module containing only the 1090MHz frontend and RP2040 is available as the ADSBee m1090, and can be extended to have the same features by populating a CC1312 and ESP32 on its carrier board. This enables custom devices to easily integrate a subset or complete clone of the ADSBee 1090U's functions, while running the same open source firmware image.
+The ADSBee m1090 is a solder-down module containing only the 1090MHz frontend and RP2040, and can be extended to have the same features by populating a CC1312 and ESP32 on its carrier board. This enables custom devices to easily integrate a subset or complete clone of the ADSBee 1090U's functions, while running the same open source firmware image. The ADSBee m1090 removes one of the two LNA stages on the ADSBee 1090U, reducing power draw and improving ultra close range performance. For equivalent maximum reception range, an external LNA can be populated on the carrier PCB.
 
 [![ADSBee m1090 Picture](images/adsbee_m1090_pic.png)](https://pantsforbirds.com/product/adsbee-m1090/)
 
