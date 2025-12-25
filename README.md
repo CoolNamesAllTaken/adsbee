@@ -39,4 +39,17 @@ The ESP32 S3 ingests raw packets from the RP2040 and maintains a separate, ident
 
 All three microcontrollers utilize code stored on the RP2040's external flash chip, so firmware updates are conducted by flashing a single firmware image to the RP2040, which in turn flashes updated firmware images to the CC1312 and ESP32 S3.
 
-The ADSBee 1090U from Pants for Birds LLC contains all three devices on a single PCB. A solder-down module containing only the 1090MHz frontend and RP2040 is available as the ADSBee m1090, and can be extended to have the same features by populating a CC1312 and ESP32 on its carrier board. This enables custom devices to easily integrate a subset or complete clone of the ADSBee 1090U's functions, while running the same open source firmware image.
+## Devices
+
+The ADSBee 1090U from Pants for Birds LLC contains all three devices on a single PCB.
+
+[![ADSBee 1090U Picture](images/adsbee_1090u_pic.png)](https://pantsforbirds.com/product/adsbee-1090u/)
+
+
+A solder-down module containing only the 1090MHz frontend and RP2040 is available as the ADSBee m1090, and can be extended to have the same features by populating a CC1312 and ESP32 on its carrier board. This enables custom devices to easily integrate a subset or complete clone of the ADSBee 1090U's functions, while running the same open source firmware image.
+
+[![ADSBee m1090 Picture](images/adsbee_m1090_pic.png)](https://pantsforbirds.com/product/adsbee-m1090/)
+
+For industrial and outdoor applications, the ADSBee 1090U is available as the GS3M PoE, a ruggedized weatherproof device connected and powered by 802.3af Power over Ethernet.
+
+[![ADSBee GS3M PoE Picture](images/adsbee_gs3m_poe_pic.png)](https://pantsforbirds.com/product/adsbee-gs3m-poe/)
