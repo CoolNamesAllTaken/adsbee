@@ -11,6 +11,7 @@ class CC1312 : public SPICoprocessorSlaveInterface {
     static const uint16_t kMaxNumPropertiesAtOnce = 12;
     static const uint32_t kCTSCheckIntervalUs = 40;
     static const uint32_t kBootupDelayMs = 100;
+    static const uint32_t kShutdownDelayMs = 20;
     static const uint32_t kSPITransactionTimeoutMs =
         500;  // Set to be quite long to allow CRC calculation time for full app image after flashing.
     // How long we wait to start a transaction after the last one is completed. Can be overridden if the handshake line
@@ -493,6 +494,9 @@ class CC1312 : public SPICoprocessorSlaveInterface {
 
         if (IsEnabled()) {
             sleep_ms(kBootupDelayMs);  // Wait for the CC1312 to boot up.
+        } else {
+            sleep_ms(kShutdownDelayMs);  // Wait for the CC1312 to shut down. This only really matters if there is a cap
+                                         // on the RST line.
         }
     }
 
