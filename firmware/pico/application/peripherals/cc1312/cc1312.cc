@@ -62,7 +62,7 @@ bool CC1312::Init(bool spi_already_initialized) {
     while (get_time_since_boot_ms() - enable_timestamp_ms < kBootupDelayMs) {
     }
 
-    CONSOLE_INFO("CC1312::Init", "Unable to communicate with CC1312. Entering bootloader mode.");
+    CONSOLE_INFO("CC1312::Init", "Initializing CC1312. Entering bootloader mode to check firmware contents.");
     if (!EnterBootloader()) {
         CONSOLE_ERROR("CC1312::Init", "Failed to enter bootloader mode.");
         return false;
