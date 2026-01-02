@@ -1,0 +1,43 @@
+services:
+  ultra2:
+    image: ghcr.io/sdr-enthusiasts/docker-adsb-ultrafeeder:latest
+    container_name: ultra2
+    hostname: ultra2
+    environment:
+      - S6_KILL_GRACETIME=100
+      - LOGLEVEL=verbose
+      - GRAPHS1090_ALL_LARGE=yes
+      - GRAPHS1090_SIZE=custom
+      - GRAPHS1090_LARGE_WIDTH=1096
+      - GRAPHS1090_LARGE_HEIGHT=270
+      - MLAT_STATS_INTERVAL=60
+      - TZ=UTC
+      - LAT=38.10383087744532
+      - LONG=-122.27268899406234
+      - ALT=56m
+      - READSB_RX_LOCATION_ACCURACY=1
+      - HISTORY_SIZE=50
+      - MLAT_USER="u2wnot23"
+      - MLAT_STARTUP_STAGGER=1
+      - UPDATE_TAR1090=true
+      - UPDATE_TAR1090_DAYS=7
+      - TAR1090_ENABLE_AC_DB=true
+      - READSB_ENABLE_TRACES=true
+      - READSB_ENABLE_API=true
+      - GRAPHS1090_REDUCE_IO=true
+      - GRAPHS1090_DARKMODE=true
+      - GRAPHS1090_HIDE_SYSTEM=true
+      - UUID=4efdfae9-1928-4040-b4bf-256d70e152ce
+      - ULTRAFEEDER_CONFIG=
+      - READSB_EXTRA_ARGS= --debug=Sn --json-trace-interval 0.1 --write-json-every 0.5 --json-reliable=1 --net-receiver-id --net-ingest
+      - PTRACKS=24
+      # --------------------------------------------------
+    volumes:
+      - ./ultra2/globe_history:/var/globe_history
+      - ./ultra2/graphs1090:/var/lib/collectd
+    ports:
+      - 8080:80
+      - 48004:30004
+      - 48005:30005
+    tmpfs:
+      - /run:exec,size=1024M
