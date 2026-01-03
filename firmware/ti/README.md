@@ -16,4 +16,4 @@ Helpful Threads
 ## Helpful Info
 
 * Don't let the debugger make more than 4 breakpoints. For some reason JLink's attempts to store flash breakpoints wreaks havoc on the CC1312 and scrambles values in the watch panel on Cortex Debug.
-* Don't attempt to load firmware using the JLink debugger for the CC1312. Load firmware via the RP2040 instead, then attach the JLink debuger to the CC1312.
+* Don't attempt to load firmware using the JLink debugger for the CC1312. Load firmware via the RP2040 instead, then attach the JLink debugger to the CC1312.
