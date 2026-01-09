@@ -25,6 +25,9 @@
 
 #include "comms.hh"  // For debug prints.
 
+// Uncomment the line below to enable demodulator debugging on recovered_clk. Otherwise recovered_clk will be used for
+// preamble detector debugging. #define DEBUG_DEMOD
+
 // Uncomment this to hold the status LED on for 5 seconds if the watchdog commanded a reboot.
 // #define WATCHDOG_REBOOT_WARNING
 
@@ -535,13 +538,19 @@ void ADSBee::PIOInit() {
         // detectors.
         bool make_sm_wait = sm_index > 1;  // Let state machines 0 (well formed) and 1 (high power) take the lead.
         // Initialize the program using the .pio file helper function
-        preamble_detector_program_init(config_.preamble_detector_pio,                     // Use PIO block 0.
-                                       preamble_detector_sm_[sm_index],                   // State machines 0-2
-                                       preamble_detector_offset_ /* + starting_offset*/,  // Program startin offset.
-                                       config_.pulses_pin,                                // Pulses pin (input).
-                                       config_.demod_pins[sm_index],                      // Demod pin (output).
-                                       preamble_detector_div,                             // Clock divisor (for 48MHz).
-                                       make_sm_wait  // Whether state machine should wait for an IRQ to begin.
+        preamble_detector_program_init(
+            config_.preamble_detector_pio,                     // Use PIO block 0.
+            preamble_detector_sm_[sm_index],                   // State machines 0-2
+            preamble_detector_offset_ /* + starting_offset*/,  // Program startin offset.
+            config_.pulses_pin,                                // Pulses pin (input).
+            config_.demod_pins[sm_index],                      // Demod pin (output).
+#ifdef DEBUG_DEMOD
+            UINT16_MAX,  // Don't use the recovered clk pin for side set, it's being used by the demodulator.
+#else
+            config_.recovered_clk_pins[sm_index],  // Use the recovered clk pin for preamble detector debugging.
+#endif
+            preamble_detector_div,  // Clock divisor (for 48MHz).
+            make_sm_wait            // Whether state machine should wait for an IRQ to begin.
         );
 
         // Handle GPIO interrupts (for marking beginning of demod interval).
@@ -562,7 +571,7 @@ void ADSBee::PIOInit() {
             // in x 3       ; ISR = 0b00000000000000000000000000000111
             pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
             // set x 0b101  ; ISR = 0b00000000000000000000000000000000
-            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b101));
+            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b111));
         } else {
             // Well formed preamble.
             // set x 0b101  ; ISR = 0b00000000000000000000000000000000
@@ -606,9 +615,15 @@ void ADSBee::PIOInit() {
     /** MESSAGE DEMODULATOR PIO **/
     float message_demodulator_div = (float)clock_get_hz(clk_sys) / kMessageDemodulatorFreqHz;
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
-        message_demodulator_program_init(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
-                                         message_demodulator_offset_, config_.pulses_pin, config_.demod_pins[sm_index],
-                                         config_.recovered_clk_pins[sm_index], message_demodulator_div);
+        message_demodulator_program_init(
+            config_.message_demodulator_pio, message_demodulator_sm_[sm_index], message_demodulator_offset_,
+            config_.pulses_pin, config_.demod_pins[sm_index],
+#ifdef DEBUG_DEMOD
+            config_.recovered_clk_pins[sm_index],  // Side set on recovered clk pin on the designated state machine.
+#else
+            UINT16_MAX,  // Don't side set on recovered clk pin.
+#endif  // DEBUG_DEMOD
+            message_demodulator_div);
     }
 
     // Set GPIO interrupts to be higher priority than the DEMOD complete interrupt to allow RSSI measurement.
