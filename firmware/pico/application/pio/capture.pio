@@ -47,6 +47,7 @@ waiting_for_idle:
     irq set 6 rel ;side 1 ; 1 | set IRQ 5+SM to indicate to the other preamble detector that it can start looking now
 check_next_bit:
     jmp !osre preamble_not_done_yet ; 2 
+    nop [7]
 preamble_matched:
     set pins 1 [2] ; 3:5 | set demod pin to indicate message body beginning
     wait 1 gpio, pulses_gpio [7] ; 6:17 | wait till middle of message eye to look for end
@@ -69,13 +70,13 @@ preamble_not_done_yet:
 ; Subroutines
 
 assert_pin_hi:
-    set x 5 [1] ; 5-11: Assert HI for 12 cycles ((x+1) * (2 cycles per wrap))
+    set x 5 [1] ; 5-6: Assert HI for 12 cycles ((x+1) * (2 cycles per wrap))
 aph_wrap:
-    jmp pin aph_pin_is_hi side 1 ; 12+2n
-    jmp follow_irq ; 13+2n: Pin is LO, assert failed.
+    jmp pin aph_pin_is_hi side 1 ; 7+2n
+    jmp follow_irq ; 8+2n: Pin is LO, assert failed.
 aph_pin_is_hi:
-    jmp x-- aph_wrap side 0; 13+2n
-    jmp check_next_bit [5]   ; 25: cycle idle at end
+    jmp x-- aph_wrap side 0; 8+2n
+    jmp check_next_bit [5]   ; 20-25: cycle idle at end
 
 ; filter_pin_hi:
 ;     set y 3  ; 6: (filter_correct_samples-1) Minimum number of correct samples needed to keep looking.

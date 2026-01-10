@@ -25,8 +25,10 @@
 
 #include "comms.hh"  // For debug prints.
 
-// Uncomment the line below to enable demodulator debugging on recovered_clk. Otherwise recovered_clk will be used for
-// preamble detector debugging. #define DEBUG_DEMOD
+// Uncomment the line below to enable preamble detector debugging on recovered_clk.
+#define DEBUG_PREAMBLE_DETECTOR
+// Uncomment the line below to enable demodulator debugging on recovered_clk.
+// #define DEBUG_DEMODULATOR
 
 // Uncomment this to hold the status LED on for 5 seconds if the watchdog commanded a reboot.
 // #define WATCHDOG_REBOOT_WARNING
@@ -544,11 +546,11 @@ void ADSBee::PIOInit() {
             preamble_detector_offset_ /* + starting_offset*/,  // Program startin offset.
             config_.pulses_pin,                                // Pulses pin (input).
             config_.demod_pins[sm_index],                      // Demod pin (output).
-#ifdef DEBUG_DEMOD
-            UINT16_MAX,  // Don't use the recovered clk pin for side set, it's being used by the demodulator.
-#else
+#ifdef DEBUG_PREAMBLE_DETECTOR
             config_.recovered_clk_pins[sm_index],  // Use the recovered clk pin for preamble detector debugging.
-#endif
+#else
+            UINT16_MAX,  // Don't use the recovered clk pin for side set.
+#endif                              // DEBUG_PREAMBLE_DETECTOR
             preamble_detector_div,  // Clock divisor (for 48MHz).
             make_sm_wait            // Whether state machine should wait for an IRQ to begin.
         );
@@ -618,11 +620,11 @@ void ADSBee::PIOInit() {
         message_demodulator_program_init(
             config_.message_demodulator_pio, message_demodulator_sm_[sm_index], message_demodulator_offset_,
             config_.pulses_pin, config_.demod_pins[sm_index],
-#ifdef DEBUG_DEMOD
+#ifdef DEBUG_DEMODULATOR
             config_.recovered_clk_pins[sm_index],  // Side set on recovered clk pin on the designated state machine.
 #else
             UINT16_MAX,  // Don't side set on recovered clk pin.
-#endif  // DEBUG_DEMOD
+#endif  // DEBUG_DEMODULATOR
             message_demodulator_div);
     }
 
