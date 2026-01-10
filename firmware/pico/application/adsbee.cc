@@ -169,6 +169,11 @@ bool ADSBee::Update() {
 
     IngestAndForwardPackets();
 
+    if (r1090_packet_queue_overflowed_) {
+        CONSOLE_ERROR("ADSBee::Update", "Mode S packet queue overflowed. Packets may have been lost.");
+        r1090_packet_queue_overflowed_ = false;
+    }
+
     UpdateTLLearning();
 
     UpdateNoiseFloor();
@@ -313,15 +318,17 @@ void ADSBee::OnDemodComplete() {
                         aircraft_dictionary.Record1090RawSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = rx_packet_[sm_index].buffer[i] & 0xFFFFFF00;
                         rx_packet_[sm_index].buffer_len_bytes = RawModeSPacket::kSquitterPacketLenBytes;
-                        // raw_mode_s_packet_queue.Enqueue(rx_packet_[sm_index]);
-                        decoder.raw_mode_s_packet_in_queue.Enqueue(rx_packet_[sm_index]);
+                        if (!decoder.raw_mode_s_packet_in_queue.Enqueue(rx_packet_[sm_index])) {
+                            r1090_packet_queue_overflowed_ = true;
+                        }
                         break;
                     case RawModeSPacket::kExtendedSquitterPacketNumWords32:
                         aircraft_dictionary.Record1090RawExtendedSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = rx_packet_[sm_index].buffer[i] & 0xFFFF0000;
                         rx_packet_[sm_index].buffer_len_bytes = RawModeSPacket::kExtendedSquitterPacketLenBytes;
-                        // raw_mode_s_packet_queue.Enqueue(rx_packet_[sm_index]);
-                        decoder.raw_mode_s_packet_in_queue.Enqueue(rx_packet_[sm_index]);
+                        if (!decoder.raw_mode_s_packet_in_queue.Enqueue(rx_packet_[sm_index])) {
+                            r1090_packet_queue_overflowed_ = true;
+                        }
                         break;
                     default:
                         // Don't push partial packets.
@@ -573,7 +580,7 @@ void ADSBee::PIOInit() {
             // in x 3       ; ISR = 0b00000000000000000000000000000111
             pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
             // set x 0b101  ; ISR = 0b00000000000000000000000000000000
-            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b111));
+            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b101));
         } else {
             // Well formed preamble.
             // set x 0b101  ; ISR = 0b00000000000000000000000000000000
