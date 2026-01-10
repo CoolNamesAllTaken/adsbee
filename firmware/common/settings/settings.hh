@@ -276,11 +276,12 @@ class SettingsManager {
         char ota_keys[kNumOTAKeys][kOTAKeyMaxLen + 1];
 
         enum ADSBeePartNumber : uint32_t {
-            kPNADSBee1090 = 10240002,            // ADSBee 1090
-            kPNADSBee1090U = 10250002,           // ADSBee 1090U
-            kPNADSBeem1090 = 10250007,           // ADSBee m1090
-            kPNADSBeem1090EvalBoard = 10250013,  // ADSBee m1090 Eval Board
-            kPNGS3MPoE = 40250001                // GS3M PoE
+            kPNADSBee1090 = 10240002,                   // ADSBee 1090
+            kPNADSBee1090U = 10250002,                  // ADSBee 1090U
+            kPNADSBee1090UIndoorPoEFeeder = 040250002,  // ADSBee 1090U Indoor PoE Feeder
+            kPNADSBeem1090 = 10250007,                  // ADSBee m1090
+            kPNADSBeem1090EvalBoard = 10250013,         // ADSBee m1090 Eval Board
+            kPNGS3MPoE = 40250001                       // GS3M PoE
         };
 
         /**

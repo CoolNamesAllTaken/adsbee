@@ -44,6 +44,7 @@ class BSP {
             switch (device_info.GetPartNumber()) {
                 case SettingsManager::DeviceInfo::kPNADSBee1090:
                 case SettingsManager::DeviceInfo::kPNADSBee1090U:
+                case SettingsManager::DeviceInfo::kPNADSBee1090UIndoorPoEFeeder:
                 case SettingsManager::DeviceInfo::kPNGS3MPoE:
                 case SettingsManager::DeviceInfo::kPNADSBeem1090:
                 case SettingsManager::DeviceInfo::kPNADSBeem1090EvalBoard:
