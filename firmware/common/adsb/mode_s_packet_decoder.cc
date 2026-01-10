@@ -3,6 +3,9 @@
 #include "comms.hh"
 #include "crc.hh"
 
+// Uncomment the line below to allow duplicate packets (e.g. for testing).
+// #define DISABLE_DUPLICATE_FILTER
+
 bool ModeSPacketDecoder::UpdateLogLoop() {
     uint16_t num_messages = debug_message_out_queue.Length();
     for (uint16_t i = 0; i < num_messages; i++) {
@@ -99,6 +102,7 @@ bool ModeSPacketDecoder::PushPacketIfNotDuplicate(const DecodedModeSPacket& deco
     uint32_t timestamp_ms = decoded_packet.raw.GetTimestampMs();
     uint16_t packet_source = decoded_packet.raw.source;
 
+#ifndef DISABLE_DUPLICATE_FILTER
     // Check if we have already seen this packet from another source (got caught by multiple state machines
     // simultaneously).
     for (uint16_t i = 0; i < kMaxNumSources; i++) {
@@ -116,6 +120,7 @@ bool ModeSPacketDecoder::PushPacketIfNotDuplicate(const DecodedModeSPacket& deco
             return false;
         }
     }
+#endif  // DISABLE_DUPLICATE_FILTER
 
     decoded_mode_s_packet_out_queue.Enqueue(decoded_packet);
 

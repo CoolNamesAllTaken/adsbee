@@ -26,7 +26,9 @@ class BSP {
                 // higher priority (lower index) SM.
                 r1090_recovered_clk_pins[i] = UINT16_MAX;  // Set to UINT16_MAX to indicate not connected.
             }
+            // Set one pair of state machines to use recovered_clk for debugging.
             r1090_recovered_clk_pins[0] = 24;  // Connect SM0 to recovered_clk output for debugging.
+            r1090_recovered_clk_pins[2] = 24;  // Connect SM2 to recovered_clk output for debugging.
             r1090_tl_pwm_pin = 26;
             r1090_tl_adc_pin = 27;
             r1090_tl_adc_input = 1;
@@ -42,6 +44,7 @@ class BSP {
             switch (device_info.GetPartNumber()) {
                 case SettingsManager::DeviceInfo::kPNADSBee1090:
                 case SettingsManager::DeviceInfo::kPNADSBee1090U:
+                case SettingsManager::DeviceInfo::kPNADSBee1090UIndoorPoEFeeder:
                 case SettingsManager::DeviceInfo::kPNGS3MPoE:
                 case SettingsManager::DeviceInfo::kPNADSBeem1090:
                 case SettingsManager::DeviceInfo::kPNADSBeem1090EvalBoard:

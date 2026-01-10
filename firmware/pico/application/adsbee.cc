@@ -25,6 +25,11 @@
 
 #include "comms.hh"  // For debug prints.
 
+// Uncomment the line below to enable preamble detector debugging on recovered_clk.
+// #define DEBUG_PREAMBLE_DETECTOR
+// Uncomment the line below to enable demodulator debugging on recovered_clk.
+#define DEBUG_DEMODULATOR
+
 // Uncomment this to hold the status LED on for 5 seconds if the watchdog commanded a reboot.
 // #define WATCHDOG_REBOOT_WARNING
 
@@ -163,6 +168,11 @@ bool ADSBee::Update() {
     PruneAircraftDictionary();
 
     IngestAndForwardPackets();
+
+    if (r1090_packet_queue_overflowed_) {
+        CONSOLE_ERROR("ADSBee::Update", "Mode S packet queue overflowed. Packets may have been lost.");
+        r1090_packet_queue_overflowed_ = false;
+    }
 
     UpdateTLLearning();
 
@@ -308,15 +318,17 @@ void ADSBee::OnDemodComplete() {
                         aircraft_dictionary.Record1090RawSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = rx_packet_[sm_index].buffer[i] & 0xFFFFFF00;
                         rx_packet_[sm_index].buffer_len_bytes = RawModeSPacket::kSquitterPacketLenBytes;
-                        // raw_mode_s_packet_queue.Enqueue(rx_packet_[sm_index]);
-                        decoder.raw_mode_s_packet_in_queue.Enqueue(rx_packet_[sm_index]);
+                        if (!decoder.raw_mode_s_packet_in_queue.Enqueue(rx_packet_[sm_index])) {
+                            r1090_packet_queue_overflowed_ = true;
+                        }
                         break;
                     case RawModeSPacket::kExtendedSquitterPacketNumWords32:
                         aircraft_dictionary.Record1090RawExtendedSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = rx_packet_[sm_index].buffer[i] & 0xFFFF0000;
                         rx_packet_[sm_index].buffer_len_bytes = RawModeSPacket::kExtendedSquitterPacketLenBytes;
-                        // raw_mode_s_packet_queue.Enqueue(rx_packet_[sm_index]);
-                        decoder.raw_mode_s_packet_in_queue.Enqueue(rx_packet_[sm_index]);
+                        if (!decoder.raw_mode_s_packet_in_queue.Enqueue(rx_packet_[sm_index])) {
+                            r1090_packet_queue_overflowed_ = true;
+                        }
                         break;
                     default:
                         // Don't push partial packets.
@@ -535,13 +547,19 @@ void ADSBee::PIOInit() {
         // detectors.
         bool make_sm_wait = sm_index > 1;  // Let state machines 0 (well formed) and 1 (high power) take the lead.
         // Initialize the program using the .pio file helper function
-        preamble_detector_program_init(config_.preamble_detector_pio,                     // Use PIO block 0.
-                                       preamble_detector_sm_[sm_index],                   // State machines 0-2
-                                       preamble_detector_offset_ /* + starting_offset*/,  // Program startin offset.
-                                       config_.pulses_pin,                                // Pulses pin (input).
-                                       config_.demod_pins[sm_index],                      // Demod pin (output).
-                                       preamble_detector_div,                             // Clock divisor (for 48MHz).
-                                       make_sm_wait  // Whether state machine should wait for an IRQ to begin.
+        preamble_detector_program_init(
+            config_.preamble_detector_pio,                     // Use PIO block 0.
+            preamble_detector_sm_[sm_index],                   // State machines 0-2
+            preamble_detector_offset_ /* + starting_offset*/,  // Program startin offset.
+            config_.pulses_pin,                                // Pulses pin (input).
+            config_.demod_pins[sm_index],                      // Demod pin (output).
+#ifdef DEBUG_PREAMBLE_DETECTOR
+            config_.recovered_clk_pins[sm_index],  // Use the recovered clk pin for preamble detector debugging.
+#else
+            UINT16_MAX,  // Don't use the recovered clk pin for side set.
+#endif                              // DEBUG_PREAMBLE_DETECTOR
+            preamble_detector_div,  // Clock divisor (for 48MHz).
+            make_sm_wait            // Whether state machine should wait for an IRQ to begin.
         );
 
         // Handle GPIO interrupts (for marking beginning of demod interval).
@@ -606,9 +624,15 @@ void ADSBee::PIOInit() {
     /** MESSAGE DEMODULATOR PIO **/
     float message_demodulator_div = (float)clock_get_hz(clk_sys) / kMessageDemodulatorFreqHz;
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
-        message_demodulator_program_init(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
-                                         message_demodulator_offset_, config_.pulses_pin, config_.demod_pins[sm_index],
-                                         config_.recovered_clk_pins[sm_index], message_demodulator_div);
+        message_demodulator_program_init(
+            config_.message_demodulator_pio, message_demodulator_sm_[sm_index], message_demodulator_offset_,
+            config_.pulses_pin, config_.demod_pins[sm_index],
+#ifdef DEBUG_DEMODULATOR
+            config_.recovered_clk_pins[sm_index],  // Side set on recovered clk pin on the designated state machine.
+#else
+            UINT16_MAX,  // Don't side set on recovered clk pin.
+#endif  // DEBUG_DEMODULATOR
+            message_demodulator_div);
     }
 
     // Set GPIO interrupts to be higher priority than the DEMOD complete interrupt to allow RSSI measurement.
