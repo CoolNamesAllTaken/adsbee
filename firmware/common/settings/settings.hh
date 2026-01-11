@@ -218,7 +218,7 @@ class SettingsManager {
             }
 
             core_network_settings.wifi_ap_channel =
-                get_rand_32() % kWiFiAPChannelMax + 1;  // Randomly select channel 1-11.
+                (get_rand_32() % 3) * 5 + 1;  // Randomly select a non-overlapping channel on 2.4GHz (1, 6, 11).
 #endif
 
             for (uint16_t i = 0; i < kMaxNumFeeds; i++) {
@@ -276,12 +276,13 @@ class SettingsManager {
         char ota_keys[kNumOTAKeys][kOTAKeyMaxLen + 1];
 
         enum ADSBeePartNumber : uint32_t {
-            kPNADSBee1090 = 10240002,                   // ADSBee 1090
-            kPNADSBee1090U = 10250002,                  // ADSBee 1090U
-            kPNADSBee1090UIndoorPoEFeeder = 040250002,  // ADSBee 1090U Indoor PoE Feeder
-            kPNADSBeem1090 = 10250007,                  // ADSBee m1090
-            kPNADSBeem1090EvalBoard = 10250013,         // ADSBee m1090 Eval Board
-            kPNGS3MPoE = 40250001                       // GS3M PoE
+            // WARNING: These can't have a leading 0, or they will be encoded as octal and not decimal!
+            kPNADSBee1090 = 10240002,                  // ADSBee 1090
+            kPNADSBee1090U = 10250002,                 // ADSBee 1090U
+            kPNADSBee1090UIndoorPoEFeeder = 40250002,  // ADSBee 1090U Indoor PoE Feeder
+            kPNADSBeem1090 = 10250007,                 // ADSBee m1090
+            kPNADSBeem1090EvalBoard = 10250013,        // ADSBee m1090 Eval Board
+            kPNGS3MPoE = 40250001                      // GS3M PoE
         };
 
         /**
