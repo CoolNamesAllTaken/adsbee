@@ -80,6 +80,15 @@ bool ModeSPacketDecoder::UpdateDecoderLoop() {
                          decoded_packet.raw.source);
             }
         } else {
+            switch (decoded_packet.downlink_format) {
+                case 0:   // DF = 0
+                case 4:   // DF = 4
+                case 5:   // DF = 5
+                case 16:  // DF = 16
+                {
+                    PushPacketIfNotDuplicate(DecodedModeSPacket(decoded_packet.raw));
+                }
+            }
             // Invalid and not worth correcting.
             snprintf(decode_debug_message.message, DebugMessage::kMessageMaxLen, "src=%d [     INVLD] ",
                      decoded_packet.raw.source);
