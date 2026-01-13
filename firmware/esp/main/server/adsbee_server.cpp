@@ -155,10 +155,13 @@ bool ADSBeeServer::Update() {
             for (uint16_t i = 0; i < raw_packets.header->num_mode_s_packets; i++) {
                 RawModeSPacket& raw_mode_s_packet = raw_packets.mode_s_packets[i];
                 DecodedModeSPacket decoded_packet = DecodedModeSPacket(raw_mode_s_packet);
-                if (!decoded_packet.is_valid) {
+
+                // Assume all packets being sent are valid
+                /*if (!decoded_packet.is_valid ) {
                     CONSOLE_ERROR("ADSBeeServer::Update", "Received invalid Mode S packet.");
                     continue;
                 }
+                */
 #ifdef VERBOSE_DEBUG
                 if (raw_mode_s_packet.buffer_len_bytes == RawModeSPacket::kExtendedSquitterPacketLenBytes) {
                     CONSOLE_INFO("ADSBeeServer::Update", "New message: 0x%08lx|%08lx|%08lx|%04lx RSSI=%ddBm MLAT=%llu",
