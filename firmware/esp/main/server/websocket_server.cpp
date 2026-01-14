@@ -7,8 +7,8 @@
  * This helper function digs out the WebSocketServer stored in the user context of an HTTP request in order to allow the
  * Handler() function of the proper WebSocketServer to be called.
  */
-esp_err_t ws_handler(httpd_req_t *req) {
-    WebSocketServer *instance = static_cast<WebSocketServer *>(req->user_ctx);
+esp_err_t ws_handler(httpd_req_t* req) {
+    WebSocketServer* instance = static_cast<WebSocketServer*>(req->user_ctx);
     if (instance) {
         return instance->Handler(req);
     }
@@ -16,11 +16,11 @@ esp_err_t ws_handler(httpd_req_t *req) {
 }
 
 bool WebSocketServer::Init() {
-    if (!config_.message_received_callback) {
-        CONSOLE_WARNING("WebSocketServer::Init",
-                        "[%s] Message received callback is nullptr, WebSocketServer will probably do nothing.",
-                        config_.label);
-    }
+    // if (!config_.message_received_callback) {
+    //     CONSOLE_WARNING("WebSocketServer::Init",
+    //                     "[%s] Message received callback is nullptr, WebSocketServer will probably do nothing.",
+    //                     config_.label);
+    // }
 
     // Network console Websocket handler
     httpd_uri_t console_ws = {.uri = config_.uri,
@@ -30,7 +30,12 @@ bool WebSocketServer::Init() {
                               .user_ctx = this,
                               .is_websocket = true,
                               .handle_ws_control_frames = false};
-    httpd_register_uri_handler(config_.server, &console_ws);
+    esp_err_t ret = httpd_register_uri_handler(config_.server, &console_ws);
+    if (ret != ESP_OK) {
+        CONSOLE_ERROR("WebSocketServer::Init", "[%s] Failed to register websocket URI handler due to error %s.",
+                      config_.label, esp_err_to_name(ret));
+        return false;
+    }
 
     return true;
 }
@@ -52,7 +57,7 @@ bool WebSocketServer::Update() {
     return true;
 }
 
-esp_err_t WebSocketServer::Handler(httpd_req_t *req) {
+esp_err_t WebSocketServer::Handler(httpd_req_t* req) {
     int client_fd = httpd_req_to_sockfd(req);
 
     if (req->method == HTTP_GET) {
@@ -75,7 +80,7 @@ esp_err_t WebSocketServer::Handler(httpd_req_t *req) {
         return ESP_OK;
     }
     httpd_ws_frame_t ws_pkt;
-    uint8_t *buf = NULL;
+    uint8_t* buf = NULL;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
     ws_pkt.type = config_.send_as_binary ? HTTPD_WS_TYPE_BINARY : HTTPD_WS_TYPE_TEXT;
     /* Set max_len = 0 to get the frame len */
@@ -88,7 +93,7 @@ esp_err_t WebSocketServer::Handler(httpd_req_t *req) {
     CONSOLE_INFO("WebSocketServer::Handler", "[%s] frame len is %d.", config_.label, ws_pkt.len);
     if (ws_pkt.len) {
         /* ws_pkt.len + 1 is for NULL termination as we are expecting a string */
-        buf = (uint8_t *)calloc(1, ws_pkt.len + 1);
+        buf = (uint8_t*)calloc(1, ws_pkt.len + 1);
         if (buf == NULL) {
             CONSOLE_ERROR("WebSocketServer::Handler", "[%s] Failed to calloc memory for buf.", config_.label);
             return ESP_ERR_NO_MEM;
@@ -148,7 +153,7 @@ bool WebSocketServer::RemoveClient(int client_fd) {
     return false;
 }
 
-void WebSocketServer::BroadcastMessage(const char *message, int16_t len_bytes) {
+void WebSocketServer::BroadcastMessage(const char* message, int16_t len_bytes) {
     for (int i = 0; i < config_.num_clients_allowed; i++) {
         if (clients_[i].in_use) {
             esp_err_t ret = SendMessage(clients_[i].client_fd, message, len_bytes);
@@ -165,7 +170,7 @@ void WebSocketServer::BroadcastMessage(const char *message, int16_t len_bytes) {
     }
 }
 
-esp_err_t WebSocketServer::SendMessage(int client_fd, const char *message, int16_t len_bytes) {
+esp_err_t WebSocketServer::SendMessage(int client_fd, const char* message, int16_t len_bytes) {
     if (len_bytes > kWebSocketMessageMaxLen) {
         CONSOLE_ERROR("WebSocketServer::SendMessage",
                       "[%s] Message length %d exceeds maximum of %d, truncating message.", config_.label, len_bytes,
@@ -175,7 +180,7 @@ esp_err_t WebSocketServer::SendMessage(int client_fd, const char *message, int16
     httpd_ws_frame_t ws_pkt = {.final = true,
                                .fragmented = false,
                                .type = config_.send_as_binary ? HTTPD_WS_TYPE_BINARY : HTTPD_WS_TYPE_TEXT,
-                               .payload = (uint8_t *)message,
+                               .payload = (uint8_t*)message,
                                .len = len_bytes > 0 ? len_bytes : strnlen(message, kWebSocketMessageMaxLen)};
 
     return httpd_ws_send_frame_async(config_.server, client_fd, &ws_pkt);

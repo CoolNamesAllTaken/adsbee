@@ -133,12 +133,17 @@ bool ADSBeeServer::Update() {
         at_least_one_queue_half_full) {
         last_raw_packet_process_timestamp_ms_ = timestamp_ms;
 
+        // Check that buffer was allocated successfully.
+        if (!raw_packets_buf_) {
+            CONSOLE_ERROR("ADSBeeServer::Update", "Raw packets buffer not allocated. Cannot process packets.");
+            return false;
+        }
+
         // Assemble a CompositeArray of transponder packets to report.
         // NOTE: Rate metering of raw packets is done by upstream RP2040, which only forward packets on the raw
         // packet reporting time interval.
-        uint8_t raw_packets_buf[CompositeArray::RawPackets::kMaxLenBytes];
         CompositeArray::RawPackets raw_packets = CompositeArray::PackRawPacketsBuffer(
-            raw_packets_buf, sizeof(raw_packets_buf), &(adsbee_server.raw_mode_s_packet_in_queue),
+            raw_packets_buf_, CompositeArray::RawPackets::kMaxLenBytes, &(adsbee_server.raw_mode_s_packet_in_queue),
             &(adsbee_server.raw_uat_adsb_packet_in_queue), &(adsbee_server.raw_uat_uplink_packet_in_queue));
 
         if (!raw_packets.IsValid()) {
@@ -210,7 +215,7 @@ bool ADSBeeServer::Update() {
             }
 
             // Forward packets to WAN.
-            comms_manager.IPWANSendRawPacketCompositeArray(raw_packets_buf);
+            comms_manager.IPWANSendRawPacketCompositeArray(raw_packets_buf_);
         }
     }
 
@@ -591,52 +596,60 @@ bool ADSBeeServer::TCPServerInit() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = kHTTPServerStackSizeBytes;
     config.close_fn = console_ws_close_fd;
+    config.lru_purge_enable =
+        true;  // Allow purging of the least recently used connections when max clients is reached.
 
     esp_err_t ret = httpd_start(&server, &config);
-    if (ret == ESP_OK) {
-        // Root URI handler (HTML)
-        httpd_uri_t root = {
-            .uri = "/", .method = HTTP_GET, .handler = root_handler, .user_ctx = NULL, .is_websocket = false};
-        ESP_ERROR_CHECK(httpd_register_uri_handler(server, &root));
-
-        // CSS URI handler
-        httpd_uri_t css = {
-            .uri = "/style.css", .method = HTTP_GET, .handler = css_handler, .user_ctx = NULL, .is_websocket = false};
-        ESP_ERROR_CHECK(httpd_register_uri_handler(server, &css));
-
-        // Favicon URI handler
-        httpd_uri_t favicon = {.uri = "/favicon.png",
-                               .method = HTTP_GET,
-                               .handler = favicon_handler,
-                               .user_ctx = NULL,
-                               .is_websocket = false};
-        ESP_ERROR_CHECK(httpd_register_uri_handler(server, &favicon));
-
-        network_console = WebSocketServer({.label = "Network Console",
-                                           .server = server,
-                                           .uri = "/console",
-                                           .num_clients_allowed = WebSocketServer::kMaxNumClients,
-                                           .send_as_binary = true,  // Network console messages can contain binary data.
-                                           .post_connect_callback = NetworkConsolePostConnectCallback,
-                                           .message_received_callback = NetworkConsoleMessageReceivedCallback});
-        network_console.Init();
-        network_metrics = WebSocketServer({.label = "Network Metrics",
-                                           .server = server,
-                                           .uri = "/metrics",
-                                           .num_clients_allowed = WebSocketServer::kMaxNumClients,
-                                           .send_as_binary = false,  // Network metrics are always ASCII.
-                                           .post_connect_callback = nullptr,
-                                           .message_received_callback = nullptr});
-        network_metrics.Init();
-    } else {
+    if (ret != ESP_OK) {
         CONSOLE_ERROR("ADSBeeServer::TCPServerInit", "Failed to start HTTP server: %s, remaining stack %u Bytes.",
                       esp_err_to_name(ret), uxTaskGetStackHighWaterMark(NULL));
         return false;
     }
 
-    // xTaskCreatePinnedToCore(tcp_server_task, "tcp_server", kTCPServerTaskStackSizeBytes, NULL,
-    // kTCPServerTaskPriority,
-    //                         NULL, kTCPServerTaskCore);
+    // Root URI handler (HTML)
+    httpd_uri_t root = {
+        .uri = "/", .method = HTTP_GET, .handler = root_handler, .user_ctx = NULL, .is_websocket = false};
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &root));
 
-    return server != nullptr;
+    // CSS URI handler
+    httpd_uri_t css = {
+        .uri = "/style.css", .method = HTTP_GET, .handler = css_handler, .user_ctx = NULL, .is_websocket = false};
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &css));
+
+    // Favicon URI handler
+    httpd_uri_t favicon = {
+        .uri = "/favicon.png", .method = HTTP_GET, .handler = favicon_handler, .user_ctx = NULL, .is_websocket = false};
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &favicon));
+
+    network_console = WebSocketServer({.label = "Network Console",
+                                       .server = server,
+                                       .uri = "/console",
+                                       .num_clients_allowed = WebSocketServer::kMaxNumClients,
+                                       .send_as_binary = true,  // Network console messages can contain binary data.
+                                       .post_connect_callback = NetworkConsolePostConnectCallback,
+                                       .message_received_callback = NetworkConsoleMessageReceivedCallback});
+    if (!network_console.Init()) {
+        CONSOLE_ERROR("ADSBeeServer::TCPServerInit", "Failed to start Network Console WebSocket server.");
+        return false;
+    }
+    network_metrics = WebSocketServer({.label = "Network Metrics",
+                                       .server = server,
+                                       .uri = "/metrics",
+                                       .num_clients_allowed = WebSocketServer::kMaxNumClients,
+                                       .send_as_binary = false,  // Network metrics are always ASCII.
+                                       .post_connect_callback = nullptr,
+                                       .message_received_callback = nullptr});
+    if (!network_metrics.Init()) {
+        CONSOLE_ERROR("ADSBeeServer::TCPServerInit", "Failed to start Network Metrics WebSocket server.");
+        return false;
+    }
+
+    if (server == nullptr) {
+        CONSOLE_ERROR("ADSBeeServer::TCPServerInit", "HTTP server instance is null after start.");
+        return false;
+    }
+    CONSOLE_INFO("ADSBeeServer::TCPServerInit", "HTTP server started successfully, remaining stack %u Bytes.",
+                 uxTaskGetStackHighWaterMark(NULL));
+
+    return true;
 }
