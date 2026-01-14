@@ -1141,19 +1141,20 @@ bool AircraftDictionary::ContainsAircraft(uint32_t uid) const {
 bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket& packet) {
     // Check validity and record stats.
     int16_t source = packet.raw.source;
+
+    // Validate packet against ICAO addresses in dictionary, or allow it in if it's a DF=11 all call reply
+    // packet tha validated itself (e.g. it's a response to a spontaneous acquisition squitter with interrogator
+    // ID=0, making the checksum useable).
+    if (packet.is_address_parity && ContainsAircraft(packet.icao_address)) {
+        // DF=0,4,5,16,20,21 (DF=11 doesn't work with this since the interrogator ID may be overlaid with the ICAO
+        // address--we expect spontaneous acquisition DF=11's to come in pre-marked as valid).
+        // Packet is address parity that is incapable of validating itself, and its CRC was
+        // validated against the ICAO addresses in the aircraft dictionary.
+        packet.is_valid = true;
+    }
+
     switch (packet.raw.buffer_len_bytes) {
         case RawModeSPacket::kSquitterPacketLenBytes:
-            // Validate packet against ICAO addresses in dictionary, or allow it in if it's a DF=11 all call reply
-            // packet tha validated itself (e.g. it's a response to a spontaneous acquisition squitter with interrogator
-            // ID=0, making the checksum useable).
-            if (packet.downlink_format != DecodedModeSPacket::kDownlinkFormatAllCallReply &&
-                ContainsAircraft(packet.icao_address)) {
-                // DF=0,4-5 (DF=11 doesn't work with this since the interrogator ID may be overlaid with the ICAO
-                // address--we expect spontaneous acquisition DF=11's to come in pre-marked as valid).
-                // Packet is a 56-bit Squitter packet that is incapable of validating itself, and its CRC was
-                // validated against the ICAO addresses in the aircraft dictionary.
-                packet.is_valid = true;
-            }
 
             if (!packet.is_valid) {
 // Squitter frame could not validate itself, or could not be validated against ICAOs in dictionary.

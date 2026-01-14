@@ -230,10 +230,13 @@ void DecodedModeSPacket::ConstructModeSPacket() {
         case kDownlinkFormatShortRangeAirToAirSurveillance:  // DF = 0
         case kDownlinkFormatAltitudeReply:                   // DF = 4
         case kDownlinkFormatIdentityReply:                   // DF = 5
+        case kDownlinkFormatLongRangeAirToAirSurveillance:   // DF = 16
+        case kDownlinkFormatCommBAltitudeReply:              // DF = 20
+        case kDownlinkFormatCommBIdentityReply:              // DF = 21
         {
-            // Process a 56-bit message.
             is_valid = false;  // Calculated checksum is XORed with the ICAO address. See ADS-B Decoding Guide pg. 22.
             // ICAO address is a best guess, needs to be confirmed from the aircraft dictionary.
+            is_address_parity = true;
             icao_address = parity_value ^ calculated_checksum;
             break;
         }
