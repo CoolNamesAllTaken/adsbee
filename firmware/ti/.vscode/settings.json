@@ -1,5 +1,0 @@
-{
-    "cmake.sourceDirectory": "/adsbee/ti/sub_ghz_radio",
-    "cmake.buildDirectory": "/adsbee/ti/sub_ghz_radio/build",
-    "C_Cpp.default.compilerPath": "/usr/bin/arm-none-eabi-g++",
-}
