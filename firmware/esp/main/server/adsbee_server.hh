@@ -22,7 +22,6 @@ class ADSBeeServer {
      */
     ADSBeeServer() {
         rp2040_aircraft_dictionary_metrics_queue = xQueueCreate(1, sizeof(AircraftDictionary::Metrics));
-        // Allocate raw packets buffer on heap to avoid stack overflow.
         raw_packets_buf_ = (uint8_t*)heap_caps_malloc(CompositeArray::RawPackets::kMaxLenBytes, MALLOC_CAP_8BIT);
     };
 
@@ -102,7 +101,6 @@ class ADSBeeServer {
     RawUATADSBPacket raw_uat_adsb_packet_in_queue_buffer_[kMaxNumUATADSBPackets];
     RawUATUplinkPacket raw_uat_uplink_packet_in_queue_buffer_[kMaxNumUATUplinkPackets];
 
-    // Heap-allocated buffer for raw packets processing (to avoid stack overflow).
     uint8_t* raw_packets_buf_ = nullptr;
 
     uint32_t last_raw_packet_process_timestamp_ms_ = 0;

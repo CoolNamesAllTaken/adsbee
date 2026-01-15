@@ -167,7 +167,6 @@ void CommsManager::IPEventHandler(void* arg, esp_event_base_t event_base, int32_
 void CommsManager::IPWANTask(void* pvParameters) {
     CONSOLE_INFO("CommsManager::IPWANTask", "IP WAN Task started.");
 
-    // Allocate buffer on heap to avoid stack overflow under high load.
     uint8_t* raw_packets_buf = (uint8_t*)heap_caps_malloc(CompositeArray::RawPackets::kMaxLenBytes, MALLOC_CAP_8BIT);
     if (raw_packets_buf == nullptr) {
         CONSOLE_ERROR("CommsManager::IPWANTask", "Failed to allocate raw packets buffer on heap. Task exiting.");
