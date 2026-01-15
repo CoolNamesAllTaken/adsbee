@@ -20,12 +20,20 @@ class ADSBeeServer {
     /**
      * Constructor.
      */
-    ADSBeeServer() { rp2040_aircraft_dictionary_metrics_queue = xQueueCreate(1, sizeof(AircraftDictionary::Metrics)); };
+    ADSBeeServer() {
+        rp2040_aircraft_dictionary_metrics_queue = xQueueCreate(1, sizeof(AircraftDictionary::Metrics));
+        raw_packets_buf_ = (uint8_t*)heap_caps_malloc(CompositeArray::RawPackets::kMaxLenBytes, MALLOC_CAP_8BIT);
+    };
 
     /**
      * Destructor.
      */
-    ~ADSBeeServer() { vQueueDelete(rp2040_aircraft_dictionary_metrics_queue); }
+    ~ADSBeeServer() {
+        vQueueDelete(rp2040_aircraft_dictionary_metrics_queue);
+        if (raw_packets_buf_) {
+            heap_caps_free(raw_packets_buf_);
+        }
+    }
 
     bool Init();
     bool Update();
@@ -92,6 +100,8 @@ class ADSBeeServer {
     RawModeSPacket raw_mode_s_packet_in_queue_buffer_[kMaxNumModeSPackets];
     RawUATADSBPacket raw_uat_adsb_packet_in_queue_buffer_[kMaxNumUATADSBPackets];
     RawUATUplinkPacket raw_uat_uplink_packet_in_queue_buffer_[kMaxNumUATUplinkPackets];
+
+    uint8_t* raw_packets_buf_ = nullptr;
 
     uint32_t last_raw_packet_process_timestamp_ms_ = 0;
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;

@@ -1,3 +1,5 @@
 **/build
 esp_at/*
 **.db*
+**.claude
+**/.vscode/settings.json

@@ -75,9 +75,8 @@ bool CommsManager::IPInit() {
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, &ip_event_handler, NULL));
     ip_event_handler_was_initialized_ = true;
 
-    // IP WAN task needs extra stack space to allow it to dequeue CompositeArray::RawPackets buffers.
-    xTaskCreate(ip_wan_task, "ip_wan_task", 2 * 4096 + CompositeArray::RawPackets::kMaxLenBytes, &ip_wan_task_handle,
-                kIPWANTaskPriority, NULL);
+    // IP WAN task stack size reduced since raw_packets_buf is now allocated on heap instead of stack.
+    xTaskCreate(ip_wan_task, "ip_wan_task", 2 * 4096, &ip_wan_task_handle, kIPWANTaskPriority, NULL);
 
     // Initialize mDNS service.
     esp_err_t err = mdns_init();
@@ -168,7 +167,13 @@ void CommsManager::IPEventHandler(void* arg, esp_event_base_t event_base, int32_
 void CommsManager::IPWANTask(void* pvParameters) {
     CONSOLE_INFO("CommsManager::IPWANTask", "IP WAN Task started.");
 
-    alignas(uint32_t) uint8_t raw_packets_buf[CompositeArray::RawPackets::kMaxLenBytes];
+    uint8_t* raw_packets_buf = (uint8_t*)heap_caps_malloc(CompositeArray::RawPackets::kMaxLenBytes, MALLOC_CAP_8BIT);
+    if (raw_packets_buf == nullptr) {
+        CONSOLE_ERROR("CommsManager::IPWANTask", "Failed to allocate raw packets buffer on heap. Task exiting.");
+        vTaskDelete(NULL);
+        return;
+    }
+
     while (true) {
         // Don't try establishing socket connections until the ESP32 has been assigned an IP address.
         while (!HasIP()) {
@@ -211,7 +216,7 @@ void CommsManager::IPWANTask(void* pvParameters) {
          * deallocated. Here, we can unpack the buffer into a CompositeArray object with pointers because we know it
          * won't go out of scope till we are done with it.
          */
-        if (xQueueReceive(ip_wan_reporting_composite_array_queue_, &raw_packets_buf, kWiFiSTATaskUpdateIntervalTicks) !=
+        if (xQueueReceive(ip_wan_reporting_composite_array_queue_, raw_packets_buf, kWiFiSTATaskUpdateIntervalTicks) !=
             pdTRUE) {
             // No packets available to send, wait and try again.
             continue;
@@ -219,7 +224,7 @@ void CommsManager::IPWANTask(void* pvParameters) {
 
         CompositeArray::RawPackets reporting_composite_array;
         if (!CompositeArray::UnpackRawPacketsBuffer(reporting_composite_array, raw_packets_buf,
-                                                    sizeof(raw_packets_buf))) {
+                                                    CompositeArray::RawPackets::kMaxLenBytes)) {
             CONSOLE_ERROR("CommsManager::IPWANTask", "Failed to unpack CompositeArray from buffer.");
             continue;
         }
@@ -235,6 +240,9 @@ void CommsManager::IPWANTask(void* pvParameters) {
     for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
         CloseFeedSocket(i);
     }
+
+    // Free heap buffer.
+    heap_caps_free(raw_packets_buf);
 
     CONSOLE_INFO("CommsManager::IPWANTask", "IP WAN Task exiting.");
 }
