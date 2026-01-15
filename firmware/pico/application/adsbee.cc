@@ -453,9 +453,11 @@ void ADSBee::IngestAndForwardPackets() {
             FlashStatusLED();
             CONSOLE_INFO("ADSBee::Update", "\taircraft_dictionary: %d aircraft", aircraft_dictionary.GetNumAircraft());
         }
-        // Push all decoded packets to the reporting queue, even if the aircraft dictionary didn't know what to do with
+        // Check for any new valid packets and push all decoded packets to the reporting queue, even if the aircraft dictionary didn't know what to do with
         // them.
-        comms_manager.mode_s_packet_reporting_queue.Enqueue(decoded_packet.raw);
+        if (decoded_packet.is_valid) {
+            comms_manager.mode_s_packet_reporting_queue.Enqueue(decoded_packet.raw);
+        }
     }
 
     // NOTE: The UAT packet queues are updated on this core, so we don't need to count the number of packets to process

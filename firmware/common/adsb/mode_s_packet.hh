@@ -155,6 +155,7 @@ class DecodedModeSPacket {
     char debug_string[kDebugStrLen] = "";
 
     bool is_valid = false;
+    bool is_address_parity = false;
     RawModeSPacket raw;
 
     uint32_t icao_address = 0;

@@ -58,6 +58,10 @@ bool ModeSPacketDecoder::UpdateDecoderLoop() {
 
             snprintf(decode_debug_message.message, DebugMessage::kMessageMaxLen, "src=%d [VALID     ] ",
                      decoded_packet.raw.source);
+        } else if (decoded_packet.is_address_parity) {
+            PushPacketIfNotDuplicate(DecodedModeSPacket(decoded_packet.raw));
+            snprintf(decode_debug_message.message, DebugMessage::kMessageMaxLen, "src=%d [APFWD     ] ",
+                     decoded_packet.raw.source);
         } else if (config_.enable_1090_error_correction &&
                    decoded_packet.raw.buffer_len_bytes == RawModeSPacket::kExtendedSquitterPacketLenBytes) {
             // Checksum correction is enabled, and we have a packet worth correcting.
