@@ -26,9 +26,9 @@
 #include "comms.hh"  // For debug prints.
 
 // Uncomment the line below to enable preamble detector debugging on recovered_clk.
-// #define DEBUG_PREAMBLE_DETECTOR
+#define DEBUG_PREAMBLE_DETECTOR
 // Uncomment the line below to enable demodulator debugging on recovered_clk.
-#define DEBUG_DEMODULATOR
+// #define DEBUG_DEMODULATOR
 
 // Uncomment this to hold the status LED on for 5 seconds if the watchdog commanded a reboot.
 // #define WATCHDOG_REBOOT_WARNING
@@ -75,10 +75,8 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
         preamble_detector_sm_[sm_index] = pio_claim_unused_sm(config_.preamble_detector_pio, true);
         message_demodulator_sm_[sm_index] = pio_claim_unused_sm(config_.message_demodulator_pio, true);
     }
-    // irq_wrapper_sm_ = pio_claim_unused_sm(config_.preamble_detector_pio, true);
 
     preamble_detector_offset_ = pio_add_program(config_.preamble_detector_pio, &preamble_detector_program);
-    // irq_wrapper_offset_ = pio_add_program(config_.preamble_detector_pio, &irq_wrapper_program);
     message_demodulator_offset_ = pio_add_program(config_.message_demodulator_pio, &message_demodulator_program);
 
     // Put IRQ parameters into the global scope for the on_demod_complete ISR.
@@ -571,30 +569,12 @@ void ADSBee::PIOInit() {
         // Last 0 removed from preamble sequence to allow the demodulator more time to start up.
         // mov isr null ; Clear ISR.
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_isr, pio_null));
-        // Fill start of preamble pattern with different bits if the state machine is intended to sense high power
-        // preambles.
-        // sm 0, 2: well formed preamble (0b101)
-        // sm 1, 3: high power preamble (0b111)
-        if (bsp.SMIndexUsesHighPowerPreamble(sm_index)) {
-            // High power preamble.
-            // set x 0b111  ; ISR = 0b00000000000000000000000000000000
-            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b111));
-            // in x 3       ; ISR = 0b00000000000000000000000000000111
-            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
-            // set x 0b101  ; ISR = 0b00000000000000000000000000000111
-            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b101));
-        } else {
-            // Well formed preamble.
-            // set x 0b101  ; ISR = 0b00000000000000000000000000000000
-            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b101));
-            // in x 3       ; ISR = 0b00000000000000000000000000000101
-            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
-        }
-        // in null 4    ; ISR = 0b00000000000000000000000001?10000
-        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 4));
-        // in x 3       ; ISR = 0b00000000000000000000001?10000101
+
+        // set x 0b101  ; ISR = 0b00000000000000000000000000000000
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b101));
+        // in x 3       ; ISR = 0b00000000000000000000000000000101
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
-        // in null 4    ; ISR = 0b0000000000000000001?100001010000
+        // in null 4    ; ISR = 0b00000000000000000000000001010000
         // Note: this is shorter than the real tail but we need extra time for the demodulator to start up.
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 4));
         // mov x null   ; Clear scratch x.

@@ -18,8 +18,9 @@
 .define pulses_pin_index 0
 .define demod_pin_index 1
 
-; 1/8us per tick (2x 16MHz instructions per tick)
+; 1/24us per tick (2x 48MHz instructions per tick)
 .define end_of_message_idle_ticks 20
+.define beginning_of_message_idle_ticks 31
 
 ; Allow side-setting the out_pin for debugging. 1x output pin can be optionally side-set.
 .side_set 1 opt
@@ -33,18 +34,21 @@
 .wrap_target
 ; This is where we go to start looking for a new preamble, or after a preamble match fails.
 public follow_irq:
-    mov osr isr      ;side 0               ; -4 | OSR = 0b00000000000000000010100001010000
-    out null 18                     ; -3 | OSR = 0b10100001010000
+    mov osr isr      ;side 0               ; -4 | OSR = 0b00000000000000000000000001010000
+    out null 25                     ; -3 | OSR = 0b1010000
     mov x null                      ; -2 | Clear out x from last sampling adventure.
 ; Grab a new bit every 24 cycles.
 ;   6 cycles: Get bit.
 ;   12 cycles: Assert bit.
 ;   6 cycles: nop.
     wait 1 irq 4 rel ; Wait for IRQ 4+SM, then clear it.
-waiting_for_idle:
-    wait 0 gpio, pulses_gpio ; -1 | Wait for line to go LO so that we don't double with the detector that's already running.
+waiting_for_idle: ; Wait for idle period between first and second preamble chip to start pattern matching.
+    set x, beginning_of_message_idle_ticks
+idle_wrap:
+    jmp pin waiting_for_idle
+    jmp x-- idle_wrap
     wait 1 gpio, pulses_gpio   ; 0 | wait for in_pin to go HI
-    irq set 6 rel ;side 1 ; 1 | set IRQ 5+SM to indicate to the other preamble detector that it can start looking now
+    irq set 5 rel ;side 1 ; 1 | set IRQ 5+SM to indicate to the other preamble detector that it can start looking now
 check_next_bit:
     jmp !osre preamble_not_done_yet ; 2 
     nop [7] ; 3:10 | Preamble matched! Wait till first sample point.
