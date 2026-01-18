@@ -453,8 +453,8 @@ void ADSBee::IngestAndForwardPackets() {
             FlashStatusLED();
             CONSOLE_INFO("ADSBee::Update", "\taircraft_dictionary: %d aircraft", aircraft_dictionary.GetNumAircraft());
         }
-        // Check for any new valid packets and push all decoded packets to the reporting queue, even if the aircraft dictionary didn't know what to do with
-        // them.
+        // Check for any new valid packets and push all decoded packets to the reporting queue, even if the aircraft
+        // dictionary didn't know what to do with them.
         if (decoded_packet.is_valid) {
             comms_manager.mode_s_packet_reporting_queue.Enqueue(decoded_packet.raw);
         }
@@ -581,7 +581,7 @@ void ADSBee::PIOInit() {
             pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b111));
             // in x 3       ; ISR = 0b00000000000000000000000000000111
             pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
-            // set x 0b101  ; ISR = 0b00000000000000000000000000000000
+            // set x 0b101  ; ISR = 0b00000000000000000000000000000111
             pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b101));
         } else {
             // Well formed preamble.
