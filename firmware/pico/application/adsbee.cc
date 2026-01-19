@@ -26,9 +26,9 @@
 #include "comms.hh"  // For debug prints.
 
 // Uncomment the line below to enable preamble detector debugging on recovered_clk.
-// #define DEBUG_PREAMBLE_DETECTOR
+#define DEBUG_PREAMBLE_DETECTOR
 // Uncomment the line below to enable demodulator debugging on recovered_clk.
-#define DEBUG_DEMODULATOR
+// #define DEBUG_DEMODULATOR
 
 // Uncomment this to hold the status LED on for 5 seconds if the watchdog commanded a reboot.
 // #define WATCHDOG_REBOOT_WARNING
@@ -75,10 +75,8 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
         preamble_detector_sm_[sm_index] = pio_claim_unused_sm(config_.preamble_detector_pio, true);
         message_demodulator_sm_[sm_index] = pio_claim_unused_sm(config_.message_demodulator_pio, true);
     }
-    // irq_wrapper_sm_ = pio_claim_unused_sm(config_.preamble_detector_pio, true);
 
     preamble_detector_offset_ = pio_add_program(config_.preamble_detector_pio, &preamble_detector_program);
-    // irq_wrapper_offset_ = pio_add_program(config_.preamble_detector_pio, &irq_wrapper_program);
     message_demodulator_offset_ = pio_add_program(config_.message_demodulator_pio, &message_demodulator_program);
 
     // Put IRQ parameters into the global scope for the on_demod_complete ISR.
@@ -240,6 +238,7 @@ void ADSBee::OnDemodComplete() {
     bool sm_triggered[bsp.r1090_num_demod_state_machines] = {false};
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         if (!pio_interrupt_get(config_.preamble_detector_pio, sm_index)) {
+            // Skip state machines that didn't finish demodulating.
             continue;
         }
         sm_triggered[sm_index] = true;
@@ -305,7 +304,8 @@ void ADSBee::OnDemodComplete() {
         for (uint16_t i = 0; i < packet_num_words; i++) {
             rx_packet_[sm_index].buffer[i] =
                 pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);
-            if (i == packet_num_words - 1) {
+            if (packet_num_words > RawModeSPacket::kSquitterPacketNumWords32 - 1 && i == packet_num_words - 1) {
+                // Packet has enough bits to be plausibly interesting, and we're about to read the last word.
                 // Trim off extra ingested bit from last word in the packet.
                 // FIXME: Extra bit is ingested non-deterministically, depending on whether there was a HI bit right
                 // after the demod interval went LO. This happens because the demodulator state machine ends up in a
@@ -346,6 +346,7 @@ void ADSBee::OnDemodComplete() {
         // be).
         pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
                                   pio_encode_push(false, false));
+        // Flush any remaining words in the RX FIFO.
         while (!pio_sm_is_rx_fifo_empty(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
             pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);
         }
@@ -445,18 +446,22 @@ void ADSBee::IngestAndForwardPackets() {
     uint16_t num_decoded_mode_s_packets = decoder.decoded_mode_s_packet_out_queue.Length();
     for (uint16_t i = 0;
          i < num_decoded_mode_s_packets && decoder.decoded_mode_s_packet_out_queue.Dequeue(decoded_packet); i++) {
-        CONSOLE_INFO("ADSBee::Update", "\tdf=%d icao_address=0x%06x", decoded_packet.downlink_format,
-                     decoded_packet.icao_address);
+        // CONSOLE_INFO("ADSBee::IngestAndForwardPackets", "\tdf=%d icao_address=0x%06x",
+        // decoded_packet.downlink_format,
+        //              decoded_packet.icao_address);
 
         if (aircraft_dictionary.IngestDecodedModeSPacket(decoded_packet)) {
             // Packet was used to update the dictionary or was silently ignored (but presumed to be valid).
             FlashStatusLED();
-            CONSOLE_INFO("ADSBee::Update", "\taircraft_dictionary: %d aircraft", aircraft_dictionary.GetNumAircraft());
+            // CONSOLE_INFO("ADSBee::IngestAndForwardPackets", "\taircraft_dictionary: %d aircraft",
+            //              aircraft_dictionary.GetNumAircraft());
         }
-        // Check for any new valid packets and push all decoded packets to the reporting queue, even if the aircraft dictionary didn't know what to do with
-        // them.
+        // Check for any new valid packets and push all decoded packets to the reporting queue, even if the aircraft
+        // dictionary didn't know what to do with them.
         if (decoded_packet.is_valid) {
-            comms_manager.mode_s_packet_reporting_queue.Enqueue(decoded_packet.raw);
+            if (!comms_manager.mode_s_packet_reporting_queue.Enqueue(decoded_packet.raw)) {
+                CONSOLE_ERROR("ADSBee::IngestAndForwardPackets", "Mode S packet reporting queue overflowed.");
+            }
         }
     }
 
@@ -468,7 +473,7 @@ void ADSBee::IngestAndForwardPackets() {
     while (raw_uat_adsb_packet_queue.Dequeue(uat_adsb_packet)) {
         DecodedUATADSBPacket decoded_uat_adsb_packet = DecodedUATADSBPacket(uat_adsb_packet);
         if (!decoded_uat_adsb_packet.is_valid) {
-            CONSOLE_ERROR("ADSBee::Update", "Invalid UAT ADS-B packet received.");
+            CONSOLE_ERROR("ADSBee::IngestAndForwardPackets", "Invalid UAT ADS-B packet received.");
             continue;
         }
 
@@ -476,18 +481,23 @@ void ADSBee::IngestAndForwardPackets() {
             // Packet was used to update the dictionary or was silently ignored (but presumed to be valid).
             // NOTE: Pushing to the reporting queue here means that we only will report validated packets!
             // comms_manager.uat_adsb_packet_reporting_queue.Enqueue(uat_adsb_packet);
-            CONSOLE_INFO("ADSBee::Update", "\taircraft_dictionary: %d aircraft", aircraft_dictionary.GetNumAircraft());
+            CONSOLE_INFO("ADSBee::IngestAndForwardPackets", "\taircraft_dictionary: %d aircraft",
+                         aircraft_dictionary.GetNumAircraft());
         }
         // Push all decoded packets to the reporting queue, even if the aircraft dictionary didn't know what to do with
         // them.
-        comms_manager.uat_adsb_packet_reporting_queue.Enqueue(uat_adsb_packet);
+        if (!comms_manager.uat_adsb_packet_reporting_queue.Enqueue(uat_adsb_packet)) {
+            CONSOLE_ERROR("ADSBee::IngestAndForwardPackets", "UAT ADS-B packet reporting queue overflowed.");
+        }
     }
 
     // Report all UAT uplink packets.
     RawUATUplinkPacket uat_uplink_packet;
     while (raw_uat_uplink_packet_queue.Dequeue(uat_uplink_packet)) {
         // We don't do anything with uplink packets other than report them directly.
-        comms_manager.uat_uplink_packet_reporting_queue.Enqueue(uat_uplink_packet);
+        if (!comms_manager.uat_uplink_packet_reporting_queue.Enqueue(uat_uplink_packet)) {
+            CONSOLE_ERROR("ADSBee::IngestAndForwardPackets", "UAT uplink packet reporting queue overflowed.");
+        }
     }
 }
 
@@ -547,7 +557,7 @@ void ADSBee::PIOInit() {
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         // Only make the state machine wait to start if it's part of the round-robin group of well formed preamble
         // detectors.
-        bool make_sm_wait = sm_index > 1;  // Let state machines 0 (well formed) and 1 (high power) take the lead.
+        bool make_sm_wait = sm_index > 0;  // State machines 1, 2, 3 follow state machine 0 in round robin.
         // Initialize the program using the .pio file helper function
         preamble_detector_program_init(
             config_.preamble_detector_pio,                     // Use PIO block 0.
@@ -571,30 +581,12 @@ void ADSBee::PIOInit() {
         // Last 0 removed from preamble sequence to allow the demodulator more time to start up.
         // mov isr null ; Clear ISR.
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_isr, pio_null));
-        // Fill start of preamble pattern with different bits if the state machine is intended to sense high power
-        // preambles.
-        // sm 0, 2: well formed preamble (0b101)
-        // sm 1, 3: high power preamble (0b111)
-        if (bsp.SMIndexUsesHighPowerPreamble(sm_index)) {
-            // High power preamble.
-            // set x 0b111  ; ISR = 0b00000000000000000000000000000000
-            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b111));
-            // in x 3       ; ISR = 0b00000000000000000000000000000111
-            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
-            // set x 0b101  ; ISR = 0b00000000000000000000000000000000
-            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b101));
-        } else {
-            // Well formed preamble.
-            // set x 0b101  ; ISR = 0b00000000000000000000000000000000
-            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b101));
-            // in x 3       ; ISR = 0b00000000000000000000000000000101
-            pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
-        }
-        // in null 4    ; ISR = 0b00000000000000000000000001?10000
-        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 4));
-        // in x 3       ; ISR = 0b00000000000000000000001?10000101
+
+        // set x 0b101  ; ISR = 0b00000000000000000000000000000000
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b101));
+        // in x 3       ; ISR = 0b00000000000000000000000000000101
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
-        // in null 4    ; ISR = 0b0000000000000000001?100001010000
+        // in null 4    ; ISR = 0b00000000000000000000000001010000
         // Note: this is shorter than the real tail but we need extra time for the demodulator to start up.
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 4));
         // mov x null   ; Clear scratch x.
@@ -622,6 +614,7 @@ void ADSBee::PIOInit() {
     // Handle PIO0 IRQ0.
     irq_set_exclusive_handler(config_.preamble_detector_demod_complete_irq, on_demod_complete);
     irq_set_enabled(config_.preamble_detector_demod_complete_irq, true);
+    irq_set_priority(config_.preamble_detector_demod_complete_irq, kDemodCompleteInterruptPriority);
 
     /** MESSAGE DEMODULATOR PIO **/
     float message_demodulator_div = (float)clock_get_hz(clk_sys) / kMessageDemodulatorFreqHz;

@@ -62,11 +62,6 @@ class BSP {
         }
     }
 
-    bool SMIndexUsesHighPowerPreamble(uint16_t sm_index) {
-        // Return true if the given state machine index is configured to use the high power preamble detector.
-        return sm_index % 2 == 1;
-    }
-
     bool has_eeprom = false;
 
     uint16_t gnss_uart_tx_pin = 0;
