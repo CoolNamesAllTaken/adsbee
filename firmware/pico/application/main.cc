@@ -103,12 +103,14 @@ int main() {
     }
 
     adsbee.Init();
-#ifndef ISRS_ON_CORE1
-    adsbee.InitISRs();  // Set up PIO interrupts on core 0.
-#else
+
+#ifdef ISRS_ON_CORE1
     // Launch Core 1 early so that InitISRs() runs on Core 1, putting PIO interrupts on Core 1.
     multicore_reset_core1();
     multicore_launch_core1(main_core1);
+    irq_set_enabled(IO_IRQ_BANK0, false);  // Disable GPIO IRQs on this core.
+#else
+    adsbee.InitISRs();  // Set up PIO interrupts on core 0.
 #endif  // ISRS_ON_CORE1
 
     settings_manager.Apply();  // Run this before ESP32 firmware update attempt to ensure it's enabled properly.
