@@ -8,7 +8,9 @@
 extern CPUMonitor core_1_monitor;
 
 inline void main_core1() {
-    // adsbee.InitISRs();
+#ifdef ISRS_ON_CORE1
+    adsbee.InitISRs();
+#endif  // ISRS_ON_CORE1
 
     while (true) {
         core_1_monitor.Tick();

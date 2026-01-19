@@ -1,4 +1,3 @@
-#ifndef _MAIN_HH_
-#define _MAIN_HH_
+#pragma once
 
-#endif /* _MAIN_HH_ */
+// #define ISRS_ON_CORE1

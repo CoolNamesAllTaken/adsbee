@@ -6,6 +6,8 @@
 #include <algorithm>  // For std::copy.
 #include <cstring>    // For memcpy.
 
+#include "pfb_mutex.hh"
+
 template <class T>
 class PFBQueue {
    public:
@@ -13,6 +15,8 @@ class PFBQueue {
         uint16_t buf_len_num_elements = 0;
         T* buffer = nullptr;
         bool overwrite_when_full = false;
+        // WARNING: Do not use is_thread_safe if the queue is being accessed from an ISR; will cause deadlocks.
+        bool is_thread_safe = false;  // Set to true for queues accessed from multiple cores.
     };
 
     /**
@@ -30,6 +34,9 @@ class PFBQueue {
             config_.buffer = (T*)malloc(sizeof(T) * buffer_length_);
             buffer_was_dynamically_allocated_ = true;
         }
+        if (config_.is_thread_safe) {
+            PFB_MUTEX_INIT(mutex_);
+        }
     }
 
     /**
@@ -42,8 +49,18 @@ class PFBQueue {
         }
     }
 
-    inline bool IsFull() { return is_full_; }
-    inline bool IsEmpty() { return (!is_full_ && (head_ == tail_)); }
+    inline bool IsFull() {
+        if (config_.is_thread_safe) PFB_MUTEX_LOCK(mutex_);
+        bool result = is_full_;
+        if (config_.is_thread_safe) PFB_MUTEX_UNLOCK(mutex_);
+        return result;
+    }
+    inline bool IsEmpty() {
+        if (config_.is_thread_safe) PFB_MUTEX_LOCK(mutex_);
+        bool result = (!is_full_ && (head_ == tail_));
+        if (config_.is_thread_safe) PFB_MUTEX_UNLOCK(mutex_);
+        return result;
+    }
 
     /**
      * Enqueues an element to the back of the buffer.
@@ -51,9 +68,11 @@ class PFBQueue {
      * @retval True if succeeded, false if the buffer is full.
      */
     bool Enqueue(T element) {
+        if (config_.is_thread_safe) PFB_MUTEX_LOCK(mutex_);
         if (is_full_) {
             if (!config_.overwrite_when_full) {
                 // Buffer is full and not overwriting; cannot push.
+                if (config_.is_thread_safe) PFB_MUTEX_UNLOCK(mutex_);
                 return false;
             } else {
                 head_ = IncrementIndex(head_);  // Move head forward to overwrite the oldest element.
@@ -68,6 +87,7 @@ class PFBQueue {
             is_full_ = true;
         }
 
+        if (config_.is_thread_safe) PFB_MUTEX_UNLOCK(mutex_);
         return true;
     }
 
@@ -77,13 +97,16 @@ class PFBQueue {
      * @retval True if successful, false if the buffer is empty.
      */
     bool Dequeue(T& element) {
+        if (config_.is_thread_safe) PFB_MUTEX_LOCK(mutex_);
         if (head_ == tail_ && !is_full_) {
+            if (config_.is_thread_safe) PFB_MUTEX_UNLOCK(mutex_);
             return false;
         }
         // element = config_.buffer[head_];
         memcpy((uint8_t*)(&element), (uint8_t*)(&config_.buffer[head_]), sizeof(T));
         head_ = IncrementIndex(head_);
         is_full_ = false;
+        if (config_.is_thread_safe) PFB_MUTEX_UNLOCK(mutex_);
         return true;
     }
 
@@ -94,10 +117,13 @@ class PFBQueue {
      * @retval True if successful, false if the buffer is empty or index is out of bounds.
      */
     bool Peek(T& element, uint16_t index = 0) {
-        if (index >= Length()) {
+        if (config_.is_thread_safe) PFB_MUTEX_LOCK(mutex_);
+        if (index >= LengthUnlocked()) {
+            if (config_.is_thread_safe) PFB_MUTEX_UNLOCK(mutex_);
             return false;
         }
         memcpy((uint8_t*)(&element), (uint8_t*)(&config_.buffer[IncrementIndex(head_, index)]), sizeof(T));
+        if (config_.is_thread_safe) PFB_MUTEX_UNLOCK(mutex_);
         return true;
     }
 
@@ -107,13 +133,16 @@ class PFBQueue {
      * @retval True if successful, false if there are not enough elements to discard.
      */
     inline bool Discard(uint16_t num_elements) {
-        if (num_elements > Length()) {
+        if (config_.is_thread_safe) PFB_MUTEX_LOCK(mutex_);
+        if (num_elements > LengthUnlocked()) {
+            if (config_.is_thread_safe) PFB_MUTEX_UNLOCK(mutex_);
             return false;  // Not enough elements to discard.
         }
         head_ = IncrementIndex(head_, num_elements);
         if (num_elements > 0) {
             is_full_ = false;
         }
+        if (config_.is_thread_safe) PFB_MUTEX_UNLOCK(mutex_);
         return true;
     }
 
@@ -122,13 +151,10 @@ class PFBQueue {
      * @retval Number of elements in the buffer.
      */
     inline uint16_t Length() {
-        if (is_full_) {
-            return buffer_length_;
-        } else if (head_ > tail_) {
-            return buffer_length_ - (head_ - tail_);  // Wrapped.
-        } else {
-            return tail_ - head_;  // Not wrapped.
-        }
+        if (config_.is_thread_safe) PFB_MUTEX_LOCK(mutex_);
+        uint16_t len = LengthUnlocked();
+        if (config_.is_thread_safe) PFB_MUTEX_UNLOCK(mutex_);
+        return len;
     }
 
     /**
@@ -141,11 +167,28 @@ class PFBQueue {
      * Empty out the buffer by setting the head equal to the tail.
      */
     void Clear() {
+        if (config_.is_thread_safe) PFB_MUTEX_LOCK(mutex_);
         head_ = tail_ = 0;
         is_full_ = false;
+        if (config_.is_thread_safe) PFB_MUTEX_UNLOCK(mutex_);
     }
 
    private:
+    /**
+     * Returns the number of elements currently in the buffer without acquiring the lock.
+     * Must only be called when the mutex is already held.
+     * @retval Number of elements in the buffer.
+     */
+    inline uint16_t LengthUnlocked() {
+        if (is_full_) {
+            return buffer_length_;
+        } else if (head_ > tail_) {
+            return buffer_length_ - (head_ - tail_);  // Wrapped.
+        } else {
+            return tail_ - head_;  // Not wrapped.
+        }
+    }
+
     /**
      * Increments and wraps a buffer index.
      * @param[in] index Value to increment and wrap.
@@ -163,6 +206,7 @@ class PFBQueue {
     uint16_t buffer_length_;
     uint16_t head_ = 0;
     uint16_t tail_ = 0;
+    mutable PFB_MUTEX_TYPE mutex_;
 };
 
 #endif

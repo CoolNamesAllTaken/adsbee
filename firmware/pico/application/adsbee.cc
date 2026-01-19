@@ -238,6 +238,7 @@ void ADSBee::OnDemodComplete() {
     bool sm_triggered[bsp.r1090_num_demod_state_machines] = {false};
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         if (!pio_interrupt_get(config_.preamble_detector_pio, sm_index)) {
+            // Skip state machines that didn't finish demodulating.
             continue;
         }
         sm_triggered[sm_index] = true;
@@ -303,7 +304,8 @@ void ADSBee::OnDemodComplete() {
         for (uint16_t i = 0; i < packet_num_words; i++) {
             rx_packet_[sm_index].buffer[i] =
                 pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);
-            if (i == packet_num_words - 1) {
+            if (packet_num_words > RawModeSPacket::kSquitterPacketNumWords32 - 1 && i == packet_num_words - 1) {
+                // Packet has enough bits to be plausibly interesting, and we're about to read the last word.
                 // Trim off extra ingested bit from last word in the packet.
                 // FIXME: Extra bit is ingested non-deterministically, depending on whether there was a HI bit right
                 // after the demod interval went LO. This happens because the demodulator state machine ends up in a
@@ -344,6 +346,7 @@ void ADSBee::OnDemodComplete() {
         // be).
         pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
                                   pio_encode_push(false, false));
+        // Flush any remaining words in the RX FIFO.
         while (!pio_sm_is_rx_fifo_empty(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
             pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);
         }
@@ -443,18 +446,22 @@ void ADSBee::IngestAndForwardPackets() {
     uint16_t num_decoded_mode_s_packets = decoder.decoded_mode_s_packet_out_queue.Length();
     for (uint16_t i = 0;
          i < num_decoded_mode_s_packets && decoder.decoded_mode_s_packet_out_queue.Dequeue(decoded_packet); i++) {
-        CONSOLE_INFO("ADSBee::Update", "\tdf=%d icao_address=0x%06x", decoded_packet.downlink_format,
-                     decoded_packet.icao_address);
+        // CONSOLE_INFO("ADSBee::IngestAndForwardPackets", "\tdf=%d icao_address=0x%06x",
+        // decoded_packet.downlink_format,
+        //              decoded_packet.icao_address);
 
         if (aircraft_dictionary.IngestDecodedModeSPacket(decoded_packet)) {
             // Packet was used to update the dictionary or was silently ignored (but presumed to be valid).
             FlashStatusLED();
-            CONSOLE_INFO("ADSBee::Update", "\taircraft_dictionary: %d aircraft", aircraft_dictionary.GetNumAircraft());
+            // CONSOLE_INFO("ADSBee::IngestAndForwardPackets", "\taircraft_dictionary: %d aircraft",
+            //              aircraft_dictionary.GetNumAircraft());
         }
         // Check for any new valid packets and push all decoded packets to the reporting queue, even if the aircraft
         // dictionary didn't know what to do with them.
         if (decoded_packet.is_valid) {
-            comms_manager.mode_s_packet_reporting_queue.Enqueue(decoded_packet.raw);
+            if (!comms_manager.mode_s_packet_reporting_queue.Enqueue(decoded_packet.raw)) {
+                CONSOLE_ERROR("ADSBee::IngestAndForwardPackets", "Mode S packet reporting queue overflowed.");
+            }
         }
     }
 
@@ -466,7 +473,7 @@ void ADSBee::IngestAndForwardPackets() {
     while (raw_uat_adsb_packet_queue.Dequeue(uat_adsb_packet)) {
         DecodedUATADSBPacket decoded_uat_adsb_packet = DecodedUATADSBPacket(uat_adsb_packet);
         if (!decoded_uat_adsb_packet.is_valid) {
-            CONSOLE_ERROR("ADSBee::Update", "Invalid UAT ADS-B packet received.");
+            CONSOLE_ERROR("ADSBee::IngestAndForwardPackets", "Invalid UAT ADS-B packet received.");
             continue;
         }
 
@@ -474,18 +481,23 @@ void ADSBee::IngestAndForwardPackets() {
             // Packet was used to update the dictionary or was silently ignored (but presumed to be valid).
             // NOTE: Pushing to the reporting queue here means that we only will report validated packets!
             // comms_manager.uat_adsb_packet_reporting_queue.Enqueue(uat_adsb_packet);
-            CONSOLE_INFO("ADSBee::Update", "\taircraft_dictionary: %d aircraft", aircraft_dictionary.GetNumAircraft());
+            CONSOLE_INFO("ADSBee::IngestAndForwardPackets", "\taircraft_dictionary: %d aircraft",
+                         aircraft_dictionary.GetNumAircraft());
         }
         // Push all decoded packets to the reporting queue, even if the aircraft dictionary didn't know what to do with
         // them.
-        comms_manager.uat_adsb_packet_reporting_queue.Enqueue(uat_adsb_packet);
+        if (!comms_manager.uat_adsb_packet_reporting_queue.Enqueue(uat_adsb_packet)) {
+            CONSOLE_ERROR("ADSBee::IngestAndForwardPackets", "UAT ADS-B packet reporting queue overflowed.");
+        }
     }
 
     // Report all UAT uplink packets.
     RawUATUplinkPacket uat_uplink_packet;
     while (raw_uat_uplink_packet_queue.Dequeue(uat_uplink_packet)) {
         // We don't do anything with uplink packets other than report them directly.
-        comms_manager.uat_uplink_packet_reporting_queue.Enqueue(uat_uplink_packet);
+        if (!comms_manager.uat_uplink_packet_reporting_queue.Enqueue(uat_uplink_packet)) {
+            CONSOLE_ERROR("ADSBee::IngestAndForwardPackets", "UAT uplink packet reporting queue overflowed.");
+        }
     }
 }
 
@@ -545,7 +557,7 @@ void ADSBee::PIOInit() {
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         // Only make the state machine wait to start if it's part of the round-robin group of well formed preamble
         // detectors.
-        bool make_sm_wait = sm_index > 1;  // Let state machines 0 (well formed) and 1 (high power) take the lead.
+        bool make_sm_wait = sm_index > 0;  // State machines 1, 2, 3 follow state machine 0 in round robin.
         // Initialize the program using the .pio file helper function
         preamble_detector_program_init(
             config_.preamble_detector_pio,                     // Use PIO block 0.
@@ -602,6 +614,7 @@ void ADSBee::PIOInit() {
     // Handle PIO0 IRQ0.
     irq_set_exclusive_handler(config_.preamble_detector_demod_complete_irq, on_demod_complete);
     irq_set_enabled(config_.preamble_detector_demod_complete_irq, true);
+    irq_set_priority(config_.preamble_detector_demod_complete_irq, kDemodCompleteInterruptPriority);
 
     /** MESSAGE DEMODULATOR PIO **/
     float message_demodulator_div = (float)clock_get_hz(clk_sys) / kMessageDemodulatorFreqHz;
