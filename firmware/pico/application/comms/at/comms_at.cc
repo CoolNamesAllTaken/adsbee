@@ -810,6 +810,32 @@ CPP_AT_HELP_CALLBACK(CommsManager::ATRxEnableHelpCallback) {
         "recevier(s) are enabled.\r\n");
 }
 
+void ATRxPositionHelpCallback() {
+    CPP_AT_PRINTF(
+        "AT+RX_POSITION=<source>,<args>\r\n"
+        "\tSet the receiver's position and source.\r\n");
+    CPP_AT_PRINTF(
+        "\tsource:\r\n"
+        "\t\tNONE - No position. No additional args.\r\n"
+        "\t\tFIXED - Fixed position set by user. Takes full position as additional args.\r\n"
+        "\t\tGNSS - Position from GNSS receiver. Takes no additional args.\r\n"
+        "\t\tLOWEST - Bootstrap receiver position from lowest altitude aircraft being tracked. "
+        "Takes no additional args.\r\n"
+        "\t\tICAO - Bootstrap receiver position from an aircraft with a given ICAO address. Takes an ICAO address as "
+        "an additional arg.\r\n");
+    CPP_AT_PRINTF(
+        "AT+RX_POSITION=FIXED,<lat_deg>,<lon_deg>,<gnss_alt_ft>,<baro_alt_ft>,<heading_deg>,<speed_kts>\r\n"
+        "\tlat_deg: Latitude in degrees (-90.0 to 90.0).\r\n"
+        "\tlon_deg: Longitude in degrees (-180.0 to 180.0).\r\n"
+        "\tgnss_alt_m: GNSS altitude in meters.\r\n"
+        "\tbaro_alt_m: Barometric altitude in meters.\r\n"
+        "\theading_deg: Heading in degrees [0.0-360.0)."
+        "\tspeed_kts: Speed in kts."
+        "AT+RX_POSITION=ICAO,<icao>\r\n"
+        "\ticao: ICAO address in hex (e.g. 7ABCDEF) of aircraft to use for position bootstrap.\r\n"
+        "AT+RX_POSITION?\r\n\tQuery the receiver's position.\r\n");
+}
+
 CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
     switch (op) {
         case '?': {
@@ -1298,24 +1324,7 @@ const CppAT::ATCommandDef_t at_command_list[] = {
     {.command = "RX_POSITION",
      .min_args = 0,
      .max_args = 8,
-     .help_string = "AT+RX_POSITION=<source>,<args>\r\n"
-                    "\tSet the receiver's position and source.\r\n"
-                    "\tsource:\r\n"
-                    "\t\tNONE - No position. No additional args.\r\n"
-                    "\t\tFIXED - Fixed position set by user. Takes full position as additional args.\r\n"
-                    "\t\tGNSS - Position from GNSS receiver. Takes no additional args.\r\n"
-                    "\t\tLOWEST - Bootstrap receiver position from lowest altitude aircraft being tracked. Takes no "
-                    "additional args.\r\n"
-                    "\t\tICAO - Bootstrap receiver position from an aircraft with a given ICAO address. Takes an ICAO "
-                    "address as an additional arg.\r\n"
-                    "AT+RX_POSITION=FIXED,<lat_deg>,<lon_deg>,<gnss_alt_m>,<baro_alt_m>,<heading_deg>,<speed_kts>\r\n"
-                    "\tlat_deg: Latitude in degrees (-90.0 to 90.0).\r\n"
-                    "\tlon_deg: Longitude in degrees (-180.0 to 180.0).\r\n"
-                    "\tgnss_alt_m: GNSS altitude in meters.\r\n"
-                    "\tbaro_alt_m: Barometric altitude in meters.\r\n"
-                    "AT+RX_POSITION=ICAO,<icao>\r\n"
-                    "\ticao: ICAO address in hex (e.g. 7ABCDEF) of aircraft to use for position bootstrap.\r\n"
-                    "AT+RX_POSITION?\r\n\tQuery the receiver's position.",
+     .help_callback = ATRxPositionHelpCallback,
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxPositionCallback, comms_manager)},
     {.command = "SETTINGS",
      .min_args = 0,
