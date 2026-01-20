@@ -71,7 +71,7 @@ class SettingsManager {
             kNumPositionSources
         };
 
-        static const uint16_t kPositionSourceStrMaxLen = 30;
+        static const uint16_t kPositionSourceStrMaxLen = 32;
         static const char kPositionSourceStrs[kNumPositionSources][kPositionSourceStrMaxLen];
 
         PositionSource source = kPositionSourceNone;
@@ -81,14 +81,14 @@ class SettingsManager {
         int32_t baro_altitude_ft = 0;  // Meters, AMSL
         float heading_deg = 0.0;       // Degrees from true north
         int32_t speed_kts = 0;         // Speed over ground in knots
-        // uint32_t icao_address =
-        //     0;  // ICAO address to use for position bootstrap when source is kPositionSourceICAO, or the ICAO of the
-        //         // lowest plane being tracked when source is kPositionSourceLowestAircraft.
+        uint32_t icao_address =
+            0;  // ICAO address to use for position bootstrap when source is kPositionSourceICAO, or the ICAO of the
+                // lowest plane being tracked when source is kPositionSourceLowestAircraft.
     };
 
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a
     // firmware upgrade if the format of the settings struct changes.
-    struct Settings {
+    struct alignas(4) Settings {
         static constexpr int kDefaultTLOffsetMV = 600;  // [mV]
         static constexpr uint32_t kDefaultWatchdogTimeoutSec = 10;
         // NOTE: Lengths do not include null terminator.
