@@ -842,12 +842,12 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
             CPP_AT_PRINTF(
                 "Receiver Position:\r\n"
                 "\tSource: %s [%s] \r\n"
-                "\tLatitude [deg]: %.6f\r\n"
-                "\tLongitude [deg]: %.6f\r\n"
-                "\tGNSS Altitude [ft]: %d\r\n"
-                "\tBarometric Altitude [ft]: %d\r\n"
-                "\tHeading [deg]: %.1f\r\n"
-                "\tSpeed [kts]: %d\r\n"
+                "\tLatitude: %.6f deg\r\n"
+                "\tLongitude: %.6f deg\r\n"
+                "\tGNSS Altitude: %d ft\r\n"
+                "\tBarometric Altitude: %d ft\r\n"
+                "\tHeading: %.1f deg\r\n"
+                "\tSpeed: %d kts\r\n"
                 "\tICAO: 0x%06X [%s]\r\n",
                 SettingsManager::RxPosition::kPositionSourceStrs[adsbee.rx_position.source],
                 adsbee.rx_position_available ? "OK" : "NOT AVAILABLE", adsbee.rx_position.latitude_deg,
