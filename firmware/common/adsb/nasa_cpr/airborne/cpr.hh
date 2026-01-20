@@ -1,5 +1,5 @@
 /*
- * cpr.h
+ * cpr.hh
  *
  * Contact: Cesar Munoz
  * Organization: NASA/Langley Research Center
@@ -12,16 +12,13 @@
  * Copyright 2019 United States Government as represented by the Administrator
  * of the National Aeronautics and Space Administration. All Rights Reserved.
  *
+ * Converted to C++ with namespace by Claude 2025-01-20.
  */
-#ifndef CPR__H
-#define CPR__H
+#pragma once
 
-// C++ guard added by John 2025-02-10.
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "cpr_int.hh"
 
-#include "cpr_int.h"
+namespace nasa_cpr::airborne {
 
 struct message {
     int format;   // even (0) or odd (1)
@@ -35,20 +32,16 @@ struct recovered_position {
     int_type lon_awb;  // recovered longitude
 };
 
-struct message encode(int i, int_type awb_lat, int_type awb_lon);
-struct recovered_position local_dec(int i, int_type reference_lat, int_type reference_longitude, struct message msg);
+message encode(int i, int_type awb_lat, int_type awb_lon);
+recovered_position local_dec(int i, int_type reference_lat, int_type reference_longitude, message msg);
 
 /**
- * Decode a global position from an evn and odd CPR message.
+ * Decode a global position from an even and odd CPR message.
  * @param[in] i 0 if msg0 is most recent, 1 if msg1 is most recent.
  * @param[in] msg0 Even CPR message.
  * @param[in] msg1 Odd CPR message.
  * @return Recovered position.
  */
-struct recovered_position global_dec(int i, struct message msg0, struct message msg1);
+recovered_position global_dec(int i, message msg0, message msg1);
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif  // CPR__H
+}  // namespace nasa_cpr::airborne
