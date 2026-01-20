@@ -928,11 +928,13 @@ class AircraftDictionary {
      * @param[out] longitude_deg Longitude of the lowest aircraft, in degrees.
      * @param[out] gnss_altitude_ft GNSS altitude of the lowest aircraft, in feet.
      * @param[out] baro_altitude_ft Barometric altitude of the lowest aircraft, in feet.
+     * @param[out] heading_deg Heading of the lowest aircraft, in degrees. NAN if not available.
+     * @param[out] speed_kts Speed of the lowest aircraft, in knots. NAN if not available.
      * @retval True if a lowest aircraft was found, false if no aircraft with a valid GNSS altitude exists in the
      * dictionary.
      */
     bool GetLowestAircraftPosition(float& latitude_deg, float& longitude_deg, int32_t& gnss_altitude_ft,
-                                   int32_t& baro_altitude_ft);
+                                   int32_t& baro_altitude_ft, float& heading_deg, float& speed_kts);
 
     /**
      * Check if an aircraft is contained in the dictionary.

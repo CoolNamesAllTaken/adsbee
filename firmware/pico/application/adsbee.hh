@@ -177,6 +177,15 @@ class ADSBee {
     int GetNoiseFloordBm();
 
     /**
+     * Gets the current receiver position. This position is updated periodically based on what source the settings
+     * manager has selected, and what values are available from sources including aircraft in the dictionary or GNSS
+     * data.
+     * @param[out] rx_position Reference to RxPosition struct to fill with current position data.
+     * @retval True if a valid position is available, false otherwise.
+     */
+    bool GetRxPosition(SettingsManager::RxPosition& rx_position);
+
+    /**
      * Get the current temperature used in learning trigger level (simulated annealing). A temperature of 0 means
      * learning has completed.
      * @retval Current temperature used for simulated annealing, in milliVolts.
@@ -455,6 +464,8 @@ class ADSBee {
 
     int32_t noise_floor_mv_;
     uint32_t noise_floor_last_sample_timestamp_ms_ = 0;
+
+    SettingsManager::RxPosition rx_position_;
 
     /** 978MHz Receiver Parameters **/
 };

@@ -208,6 +208,37 @@ uint16_t ADSBee::GetMLATJitterPWMSliceCounts() {
 
 int ADSBee::GetNoiseFloordBm() { return AD8313MilliVoltsTodBm(noise_floor_mv_); }
 
+bool ADSBee::GetRxPosition(SettingsManager::RxPosition& rx_position) {
+    // Pull position source from stored settings, then override with dynamic values as needed.
+    rx_position = settings_manager.settings.rx_position;
+    switch (rx_position.source) {
+        case SettingsManager::RxPosition::PositionSource::kPositionSourceNone:
+            // No position available.
+            return false;
+        case SettingsManager::RxPosition::PositionSource::kPositionSourceLowestAircraft:
+            // Use position of lowest aircraft in dictionary.
+            if (aircraft_dictionary.GetLowestAircraftPosition(rx_position_.latitude_deg, rx_position_.longitude_deg,
+                                                              reinterpret_cast<int32_t&>(rx_position_.gnss_altitude_m),
+                                                              reinterpret_cast<int32_t&>(rx_position_.baro_altitude_m),
+                                                              rx_position_.heading_deg, rx_position_.speed_kts)) {
+                return true;
+            }
+            // No valid aircraft position available.
+            return false;
+        case SettingsManager::RxPositionSource::kRxPositionSourceGNSS:
+            // FIXME: Implement GNSS-based position sourcing.
+            // For now, fall back to manual position.
+            return false;
+        case SettingsManager::RxPosition::PositionSource::kPositionSourceFixed:
+            // Use manually configured position.
+            return true;
+        default:
+            CONSOLE_ERROR("ADSBee::GetRxPosition", "Unknown Rx position source %d.",
+                          static_cast<int>(rx_position.source));
+            return false;
+    }
+}
+
 uint16_t ADSBee::GetTLLearningTemperatureMV() { return tl_learning_temperature_mv_; }
 
 void __time_critical_func(ADSBee::OnDemodBegin)(uint gpio) {

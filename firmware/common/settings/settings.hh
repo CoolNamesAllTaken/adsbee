@@ -60,14 +60,14 @@ class SettingsManager {
     };
     static const char kSubGHzModeStrs[kNumSubGHzRadioModes][kSubGHzModeStrMaxLen];
 
-    // Receiver position settings.
-    struct RxPosition {
+    // Receiver position settings. Packed because we pass it around over SPI.
+    struct __attribute__((packed)) RxPosition {
         enum PositionSource : uint8_t {
             kPositionSourceNone = 0,
             kPositionSourceFixed = 1,
             kPositionSourceGNSS = 2,
-            kPositionSourceAutoAircraftLowest = 3,
-            kPositionSourceAutoAircraftICAO = 4,
+            kPositionSourceLowestAircraft = 3,
+            kPositionSourceAircraftMatchingICAO = 4,
             kNumPositionSources
         };
 
@@ -77,10 +77,10 @@ class SettingsManager {
         PositionSource source = kPositionSourceNone;
         float latitude_deg = 0.0;     // Degrees, WGS84
         float longitude_deg = 0.0;    // Degrees, WGS84
-        float gnss_altitude_m = 0.0;  // Meters, WGS84
-        float baro_altitude_m = 0.0;  // Meters, AMSL
+        int32_t gnss_altitude_m = 0;  // Meters, WGS84
+        int32_t baro_altitude_m = 0;  // Meters, AMSL
         float heading_deg = 0.0;      // Degrees from true north
-        float speed_kts = 0.0;        // Speed over ground in knots
+        int32_t speed_kts = 0;        // Speed over ground in knots
     };
 
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a

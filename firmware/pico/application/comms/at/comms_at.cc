@@ -813,15 +813,17 @@ CPP_AT_HELP_CALLBACK(CommsManager::ATRxEnableHelpCallback) {
 CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
     switch (op) {
         case '?': {
+            SettingsManager::RxPosition rx_position;
+            bool position_available = settings_manager.GetRxPosition(rx_position);
             CPP_AT_PRINTF(
-                "Receiver Position:\r\n\tSource: %s\r\n\tLatitude [deg]: %.6f\r\n\tLongitude [deg]: %.6f\r\n\tGNSS "
+                "Receiver Position:\r\n\tSource: %s [%s] \r\n\tLatitude [deg]: %.6f\r\n\tLongitude [deg]: "
+                "%.6f\r\n\tGNSS "
                 "Altitude [m]: "
                 "%.1f\r\n\tBarometric Altitude [m]: %.1f\r\n\tHeading [deg]: %.1f\r\n\tSpeed [kts]: %.1f\r\n",
-                SettingsManager::RxPosition::kPositionSourceStrs[settings_manager.settings.rx_position.source],
-                settings_manager.settings.rx_position.latitude_deg, settings_manager.settings.rx_position.longitude_deg,
-                settings_manager.settings.rx_position.gnss_altitude_m,
-                settings_manager.settings.rx_position.baro_altitude_m,
-                settings_manager.settings.rx_position.heading_deg, settings_manager.settings.rx_position.speed_kts);
+                SettingsManager::RxPosition::kPositionSourceStrs[rx_position.source],
+                position_available ? "OK" : "NOT AVAILABLE", rx_position.latitude_deg, rx_position.longitude_deg,
+                rx_position.gnss_altitude_m, rx_position.baro_altitude_m, rx_position.heading_deg,
+                rx_position.speed_kts);
             CPP_AT_SILENT_SUCCESS();
             break;
         }

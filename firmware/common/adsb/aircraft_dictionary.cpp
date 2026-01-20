@@ -1164,7 +1164,7 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
 }
 
 bool AircraftDictionary::GetLowestAircraftPosition(float& latitude_deg, float& longitude_deg, int32_t& gnss_altitude_ft,
-                                                   int32_t& baro_altitude_ft) {
+                                                   int32_t& baro_altitude_ft, float& heading_deg, float& speed_kts) {
     if (!lowest_aircraft_entry) {
         return false;
     }
@@ -1181,6 +1181,10 @@ bool AircraftDictionary::GetLowestAircraftPosition(float& latitude_deg, float& l
         baro_altitude_ft = aircraft->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid)
                                ? aircraft->baro_altitude_ft
                                : INT32_MIN;
+        heading_deg = aircraft->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagDirectionValid) ? aircraft->direction_deg
+                                                                                           : NAN;
+        speed_kts =
+            aircraft->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagHorizontalSpeedValid) ? aircraft->speed_kts : NAN;
         return true;
     } else if (auto* aircraft = std::get_if<UATAircraft>(lowest_aircraft_entry)) {
         if (!aircraft->HasBitFlag(UATAircraft::BitFlag::kBitFlagPositionValid)) {
@@ -1194,6 +1198,10 @@ bool AircraftDictionary::GetLowestAircraftPosition(float& latitude_deg, float& l
         baro_altitude_ft = aircraft->HasBitFlag(UATAircraft::BitFlag::kBitFlagBaroAltitudeValid)
                                ? aircraft->baro_altitude_ft
                                : INT32_MIN;
+        heading_deg =
+            aircraft->HasBitFlag(UATAircraft::BitFlag::kBitFlagDirectionValid) ? aircraft->direction_deg : NAN;
+        speed_kts =
+            aircraft->HasBitFlag(UATAircraft::BitFlag::kBitFlagHorizontalSpeedValid) ? aircraft->speed_kts : NAN;
         return true;
     } else {
         CONSOLE_ERROR("AircraftDictionary::GetLowestAircraftPosition",
