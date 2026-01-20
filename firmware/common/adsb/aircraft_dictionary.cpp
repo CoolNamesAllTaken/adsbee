@@ -1102,6 +1102,13 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
 
         // Extract the last message timestamp of the underlying ModeSAircraft or UATAircraft.
         if (timestamp_ms - last_message_timestamp_ms > config_.aircraft_prune_interval_ms) {
+            // Aircraft entry is stale, remove it.
+
+            // Reset lowest_aircraft_entry if it points to the aircraft being removed.
+            if (lowest_aircraft_entry == &it->second) {
+                lowest_aircraft_entry = nullptr;
+            }
+
             it = dict.erase(it);  // Remove stale aircraft entry. Iterator is incremented to the next element.
         } else {
             // Check the type of the aircraft and count it.
@@ -1121,6 +1128,32 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
                 },
                 it->second);
 
+            // Update lowest GNSS altitude if available.
+            bool has_valid_gnss_altitude = false;
+            int32_t current_gnss_altitude_ft = 0;
+            if (auto* aircraft = std::get_if<ModeSAircraft>(&it->second)) {
+                if (aircraft->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagGNSSAltitudeValid)) {
+                    has_valid_gnss_altitude = true;
+                    current_gnss_altitude_ft = aircraft->gnss_altitude_ft;
+                }
+            } else if (auto* aircraft = std::get_if<UATAircraft>(&it->second)) {
+                if (aircraft->HasBitFlag(UATAircraft::BitFlag::kBitFlagGNSSAltitudeValid)) {
+                    has_valid_gnss_altitude = true;
+                    current_gnss_altitude_ft = aircraft->gnss_altitude_ft;
+                }
+            } else {
+                CONSOLE_ERROR("AircraftDictionary::Update", "Encountered aircraft entry with unknown variant type.");
+            }
+            if (has_valid_gnss_altitude) {
+                int32_t lowest_gnss_altitude_ft =
+                    lowest_aircraft_entry
+                        ? std::visit([](auto& a) { return a.gnss_altitude_ft; }, *lowest_aircraft_entry)
+                        : INT32_MAX;
+                if (current_gnss_altitude_ft < lowest_gnss_altitude_ft) {
+                    lowest_aircraft_entry = &it->second;
+                }
+            }
+
             it++;  // Move to the next aircraft entry.
         }
     }
@@ -1128,6 +1161,45 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
     // Update aggregate statistics.
     metrics = metrics_counter_;    // Swap counter values over to publicly visible values.
     metrics_counter_ = Metrics();  // Use default constructor to clear all values.
+}
+
+bool AircraftDictionary::GetLowestAircraftPosition(float& latitude_deg, float& longitude_deg, int32_t& gnss_altitude_ft,
+                                                   int32_t& baro_altitude_ft) {
+    if (!lowest_aircraft_entry) {
+        return false;
+    }
+
+    if (auto* aircraft = std::get_if<ModeSAircraft>(lowest_aircraft_entry)) {
+        if (!aircraft->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid)) {
+            return false;
+        }
+        latitude_deg = aircraft->latitude_deg;
+        longitude_deg = aircraft->longitude_deg;
+        gnss_altitude_ft = aircraft->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagGNSSAltitudeValid)
+                               ? aircraft->gnss_altitude_ft
+                               : INT32_MIN;
+        baro_altitude_ft = aircraft->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid)
+                               ? aircraft->baro_altitude_ft
+                               : INT32_MIN;
+        return true;
+    } else if (auto* aircraft = std::get_if<UATAircraft>(lowest_aircraft_entry)) {
+        if (!aircraft->HasBitFlag(UATAircraft::BitFlag::kBitFlagPositionValid)) {
+            return false;
+        }
+        latitude_deg = aircraft->latitude_deg;
+        longitude_deg = aircraft->longitude_deg;
+        gnss_altitude_ft = aircraft->HasBitFlag(UATAircraft::BitFlag::kBitFlagGNSSAltitudeValid)
+                               ? aircraft->gnss_altitude_ft
+                               : INT32_MIN;
+        baro_altitude_ft = aircraft->HasBitFlag(UATAircraft::BitFlag::kBitFlagBaroAltitudeValid)
+                               ? aircraft->baro_altitude_ft
+                               : INT32_MIN;
+        return true;
+    } else {
+        CONSOLE_ERROR("AircraftDictionary::GetLowestAircraftPosition",
+                      "Encountered lowest_aircraft_entry with unknown variant type.");
+        return false;
+    }
 }
 
 bool AircraftDictionary::ContainsAircraft(uint32_t uid) const {

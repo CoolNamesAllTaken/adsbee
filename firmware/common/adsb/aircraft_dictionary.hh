@@ -922,6 +922,19 @@ class AircraftDictionary {
     }
 
     /**
+     * Get the position of the lowest aircraft in the dictionary with a valid GNSS altitude. This can be used to
+     * approximate the receiver position.
+     * @param[out] latitude_deg Latitude of the lowest aircraft, in degrees.
+     * @param[out] longitude_deg Longitude of the lowest aircraft, in degrees.
+     * @param[out] gnss_altitude_ft GNSS altitude of the lowest aircraft, in feet.
+     * @param[out] baro_altitude_ft Barometric altitude of the lowest aircraft, in feet.
+     * @retval True if a lowest aircraft was found, false if no aircraft with a valid GNSS altitude exists in the
+     * dictionary.
+     */
+    bool GetLowestAircraftPosition(float& latitude_deg, float& longitude_deg, int32_t& gnss_altitude_ft,
+                                   int32_t& baro_altitude_ft);
+
+    /**
      * Check if an aircraft is contained in the dictionary.
      * @param[in] uid Address to use for looking up the aircraft.
      * @retval True if aircraft is in the dictionary, false if not.
@@ -943,6 +956,9 @@ class AircraftDictionary {
     std::unordered_map<uint32_t, AircraftEntry_t> dict;
 
     Metrics metrics;
+
+    AircraftEntry_t* lowest_aircraft_entry = nullptr;  // Pointer to the aircraft entry with the lowest valid GNSS
+                                                       // altitude. Useful for approximating receiver position.
 
    private:
     // Helper functions for ingesting specific ADS-B packet types, called by IngestModeSADSBPacket.

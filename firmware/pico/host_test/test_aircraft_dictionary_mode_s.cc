@@ -658,3 +658,135 @@ TEST(AircraftDictionary, FilterCPRLocations) {
     packet.raw.mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
     EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
 }
+
+TEST(AircraftDictionary, GetLowestAircraftPositionModeS) {
+    AircraftDictionary dictionary = AircraftDictionary();
+    float latitude_deg, longitude_deg;
+    int32_t gnss_altitude_ft, baro_altitude_ft;
+
+    // No aircraft in dictionary, should return false.
+    EXPECT_FALSE(dictionary.GetLowestAircraftPosition(latitude_deg, longitude_deg, gnss_altitude_ft, baro_altitude_ft));
+    EXPECT_EQ(dictionary.lowest_aircraft_entry, nullptr);
+
+    // Add an aircraft without GNSS altitude - should not be selected as lowest.
+    ModeSAircraft aircraft1(0x123456);
+    aircraft1.latitude_deg = 37.0f;
+    aircraft1.longitude_deg = -122.0f;
+    aircraft1.baro_altitude_ft = 10000;
+    aircraft1.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid, true);
+    aircraft1.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid, true);
+    aircraft1.last_message_timestamp_ms = get_time_since_boot_ms();
+    dictionary.InsertAircraft(aircraft1);
+
+    // Update the dictionary to process the aircraft.
+    dictionary.Update(get_time_since_boot_ms());
+
+    // Still no valid GNSS altitude, so should return false.
+    EXPECT_FALSE(dictionary.GetLowestAircraftPosition(latitude_deg, longitude_deg, gnss_altitude_ft, baro_altitude_ft));
+
+    // Add an aircraft with GNSS altitude at 5000ft.
+    ModeSAircraft aircraft2(0x234567);
+    aircraft2.latitude_deg = 38.0f;
+    aircraft2.longitude_deg = -121.0f;
+    aircraft2.gnss_altitude_ft = 5000;
+    aircraft2.baro_altitude_ft = 4900;
+    aircraft2.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid, true);
+    aircraft2.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagGNSSAltitudeValid, true);
+    aircraft2.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid, true);
+    aircraft2.last_message_timestamp_ms = get_time_since_boot_ms();
+    dictionary.InsertAircraft(aircraft2);
+
+    // Update the dictionary.
+    dictionary.Update(get_time_since_boot_ms());
+
+    // Should now return the aircraft with GNSS altitude.
+    EXPECT_TRUE(dictionary.GetLowestAircraftPosition(latitude_deg, longitude_deg, gnss_altitude_ft, baro_altitude_ft));
+    EXPECT_NEAR(latitude_deg, 38.0f, kFloatCloseEnough);
+    EXPECT_NEAR(longitude_deg, -121.0f, kFloatCloseEnough);
+    EXPECT_EQ(gnss_altitude_ft, 5000);
+    EXPECT_EQ(baro_altitude_ft, 4900);
+
+    // Add another aircraft with lower GNSS altitude at 2000ft.
+    ModeSAircraft aircraft3(0x345678);
+    aircraft3.latitude_deg = 39.0f;
+    aircraft3.longitude_deg = -120.0f;
+    aircraft3.gnss_altitude_ft = 2000;
+    aircraft3.baro_altitude_ft = 1900;
+    aircraft3.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid, true);
+    aircraft3.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagGNSSAltitudeValid, true);
+    aircraft3.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid, true);
+    aircraft3.last_message_timestamp_ms = get_time_since_boot_ms();
+    dictionary.InsertAircraft(aircraft3);
+
+    // Update the dictionary.
+    dictionary.Update(get_time_since_boot_ms());
+
+    // Should now return the lower aircraft.
+    EXPECT_TRUE(dictionary.GetLowestAircraftPosition(latitude_deg, longitude_deg, gnss_altitude_ft, baro_altitude_ft));
+    EXPECT_NEAR(latitude_deg, 39.0f, kFloatCloseEnough);
+    EXPECT_NEAR(longitude_deg, -120.0f, kFloatCloseEnough);
+    EXPECT_EQ(gnss_altitude_ft, 2000);
+    EXPECT_EQ(baro_altitude_ft, 1900);
+
+    // Add a fourth aircraft with even lower GNSS altitude at 500ft.
+    ModeSAircraft aircraft4(0x456789);
+    aircraft4.latitude_deg = 40.0f;
+    aircraft4.longitude_deg = -119.0f;
+    aircraft4.gnss_altitude_ft = 500;
+    aircraft4.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid, true);
+    aircraft4.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagGNSSAltitudeValid, true);
+    // No baro altitude valid.
+    aircraft4.last_message_timestamp_ms = get_time_since_boot_ms();
+    dictionary.InsertAircraft(aircraft4);
+
+    // Update the dictionary.
+    dictionary.Update(get_time_since_boot_ms());
+
+    // Should now return the lowest aircraft (500ft).
+    EXPECT_TRUE(dictionary.GetLowestAircraftPosition(latitude_deg, longitude_deg, gnss_altitude_ft, baro_altitude_ft));
+    EXPECT_NEAR(latitude_deg, 40.0f, kFloatCloseEnough);
+    EXPECT_NEAR(longitude_deg, -119.0f, kFloatCloseEnough);
+    EXPECT_EQ(gnss_altitude_ft, 500);
+    EXPECT_EQ(baro_altitude_ft, INT32_MIN);  // No baro altitude available.
+}
+
+TEST(AircraftDictionary, LowestAircraftPtrClearedOnPrune) {
+    AircraftDictionary::AircraftDictionaryConfig_t config;
+    config.aircraft_prune_interval_ms = 1000;  // Short prune interval for testing.
+    AircraftDictionary dictionary(config);
+
+    float latitude_deg, longitude_deg;
+    int32_t gnss_altitude_ft, baro_altitude_ft;
+
+    set_time_since_boot_ms(10000);
+
+    // Add an aircraft with valid GNSS altitude.
+    ModeSAircraft aircraft(0x123456);
+    aircraft.latitude_deg = 37.0f;
+    aircraft.longitude_deg = -122.0f;
+    aircraft.gnss_altitude_ft = 1000;
+    aircraft.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid, true);
+    aircraft.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagGNSSAltitudeValid, true);
+    aircraft.last_message_timestamp_ms = get_time_since_boot_ms();
+    dictionary.InsertAircraft(aircraft);
+
+    // Update the dictionary.
+    dictionary.Update(get_time_since_boot_ms());
+
+    // Should return the aircraft.
+    EXPECT_TRUE(dictionary.GetLowestAircraftPosition(latitude_deg, longitude_deg, gnss_altitude_ft, baro_altitude_ft));
+    EXPECT_NE(dictionary.lowest_aircraft_entry, nullptr);
+
+    // Advance time past prune interval.
+    inc_time_since_boot_ms(2000);
+
+    // Update the dictionary - aircraft should be pruned.
+    dictionary.Update(get_time_since_boot_ms());
+
+    // Lowest aircraft pointer should be cleared.
+    EXPECT_EQ(dictionary.lowest_aircraft_entry, nullptr);
+    EXPECT_EQ(dictionary.GetNumAircraft(), 0);
+
+    // GetLowestAircraftPosition should return false.
+    EXPECT_FALSE(dictionary.GetLowestAircraftPosition(latitude_deg, longitude_deg, gnss_altitude_ft, baro_altitude_ft));
+}
