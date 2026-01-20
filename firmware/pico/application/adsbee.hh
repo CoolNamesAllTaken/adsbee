@@ -11,6 +11,7 @@
 #include "hardware/pio.h"
 #include "hardware/watchdog.h"
 #include "macros.hh"  // For MAX / MIN.
+#include "main.hh"    // For ISR core assignment.
 #include "mode_s_packet.hh"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
@@ -278,8 +279,32 @@ class ADSBee {
      */
     inline void SetReceiver1090Enable(bool is_enabled) {
         r1090_enabled_ = is_enabled;
+#ifndef ISRS_ON_CORE1
+        // Only enable / disable the IRQ from here if we are running the ISRs on core 0. Otherwise this will enable
+        // interrupts on the current core, in addition to the core that's actually supposed to be running them.
+        // Simultaneous dual-core ISRs for OnDemodComplete will corrupt all the packets.
+        SyncReceiver1090IRQEnable();
+#else
+        // Core 1 update loop will check adsbee.Receiver1090IsEnabled() to see if IRQ should be enabled.
+#endif  // ISRS_ON_CORE1
+    }
+
+    /**
+     * This function allows core 0 or core 1 to enable the 1090 receiver IRQ which requires access to some private
+     * config data. This is NOT the primary API for enabling/disabling the 1090 receiver; that is done through
+     * SetReceiver1090Enable(). Note that this function will synchronize the IRQ enable state to match the
+     * r1090_enabled_ member variable.
+     */
+    inline void SyncReceiver1090IRQEnable() {
         irq_set_enabled(config_.preamble_detector_demod_complete_irq, r1090_enabled_);
     }
+
+    /**
+     * Checks whether the 1090 receiver IRQ is currently enabled. Can only be called from the same core that runs the
+     * IRQs.
+     * @retval True if enabled, false otherwise.
+     */
+    inline bool Receiver1090IRQIsEnabled() { return irq_is_enabled(config_.preamble_detector_demod_complete_irq); }
 
     /**
      * Enables or disables the sub-GHz radio by powering the receiver chip on or off. Re-initializes the receiver chip

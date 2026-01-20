@@ -11,10 +11,18 @@ inline void main_core1() {
 #ifdef ISRS_ON_CORE1
     adsbee.InitISRs();
 #else
-    irq_set_enabled(IO_IRQ_BANK0, false);  // Disable GPIO IRQs on this core.
+    irq_set_enabled(IO_IRQ_BANK0, false);  // Disable GPIO IRQs (OnDemodBegin) on this core.
+    irq_set_enabled(PIO0_IRQ_0, false);    // Disable PIO0 IRQ0 (OnDemodComplete) on this core.
 #endif  // ISRS_ON_CORE1
 
     while (true) {
+#ifdef ISRS_ON_CORE1
+        // Core 0 may try to toggle the 1090 receiver on and off. Keep an eye on it and turn it on and off here, since
+        // it can't be toggle from core 0 without accidentally duplicating all the ISR stuff on that core.
+        if (adsbee.Receiver1090IsEnabled() != adsbee.Receiver1090IRQIsEnabled()) {
+            adsbee.SyncReceiver1090IRQEnable();
+        }
+#endif  // ISRS_ON_CORE1
         core_1_monitor.Tick();
         decoder.UpdateDecoderLoop();
     }
