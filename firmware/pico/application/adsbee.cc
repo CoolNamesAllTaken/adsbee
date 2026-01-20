@@ -217,15 +217,23 @@ bool ADSBee::GetRxPosition(SettingsManager::RxPosition& rx_position) {
             return false;
         case SettingsManager::RxPosition::PositionSource::kPositionSourceLowestAircraft:
             // Use position of lowest aircraft in dictionary.
-            if (aircraft_dictionary.GetLowestAircraftPosition(rx_position_.latitude_deg, rx_position_.longitude_deg,
-                                                              reinterpret_cast<int32_t&>(rx_position_.gnss_altitude_m),
-                                                              reinterpret_cast<int32_t&>(rx_position_.baro_altitude_m),
-                                                              rx_position_.heading_deg, rx_position_.speed_kts)) {
+            // Make variables to write into since we can't bind directly to the packed struct members.
+            float latitude_deg, longitude_deg, heading_deg;
+            int32_t gnss_altitude_m, baro_altitude_m, speed_kts;
+            if (aircraft_dictionary.GetLowestAircraftPosition(
+                    latitude_deg, longitude_deg, reinterpret_cast<int32_t&>(gnss_altitude_m),
+                    reinterpret_cast<int32_t&>(baro_altitude_m), heading_deg, speed_kts)) {
+                rx_position.latitude_deg = latitude_deg;
+                rx_position.longitude_deg = longitude_deg;
+                rx_position.gnss_altitude_m = gnss_altitude_m;
+                rx_position.baro_altitude_m = baro_altitude_m;
+                rx_position.heading_deg = heading_deg;
+                rx_position.speed_kts = speed_kts;
                 return true;
             }
             // No valid aircraft position available.
             return false;
-        case SettingsManager::RxPositionSource::kRxPositionSourceGNSS:
+        case SettingsManager::RxPosition::PositionSource::kPositionSourceGNSS:
             // FIXME: Implement GNSS-based position sourcing.
             // For now, fall back to manual position.
             return false;

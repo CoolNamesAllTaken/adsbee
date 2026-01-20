@@ -814,7 +814,7 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
     switch (op) {
         case '?': {
             SettingsManager::RxPosition rx_position;
-            bool position_available = settings_manager.GetRxPosition(rx_position);
+            bool position_available = adsbee.GetRxPosition(rx_position);
             CPP_AT_PRINTF(
                 "Receiver Position:\r\n\tSource: %s [%s] \r\n\tLatitude [deg]: %.6f\r\n\tLongitude [deg]: "
                 "%.6f\r\n\tGNSS "
@@ -844,45 +844,52 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
         }
             if (CPP_AT_HAS_ARG(1)) {
                 // Set latitude.
-                CPP_AT_TRY_ARG2NUM(1, settings_manager.settings.rx_position.latitude_deg);
-                if (settings_manager.settings.rx_position.latitude_deg < -90.0 ||
-                    settings_manager.settings.rx_position.latitude_deg > 90.0) {
+                float latitude_deg;
+                CPP_AT_TRY_ARG2NUM(1, latitude_deg);
+                if (latitude_deg < -90.0 || latitude_deg > 90.0) {
                     CPP_AT_ERROR("Latitude %.6f out of range (-90.0 to 90.0).",
                                  settings_manager.settings.rx_position.latitude_deg);
                 }
+                settings_manager.settings.rx_position.latitude_deg = latitude_deg;
             }
             if (CPP_AT_HAS_ARG(2)) {
                 // Set longitude.
-                CPP_AT_TRY_ARG2NUM(2, settings_manager.settings.rx_position.longitude_deg);
-                if (settings_manager.settings.rx_position.longitude_deg < -180.0 ||
-                    settings_manager.settings.rx_position.longitude_deg > 180.0) {
-                    CPP_AT_ERROR("Longitude %.6f out of range (-180.0 to 180.0).",
-                                 settings_manager.settings.rx_position.longitude_deg);
+                float longitude_deg;
+                CPP_AT_TRY_ARG2NUM(2, longitude_deg);
+                if (longitude_deg < -180.0 || longitude_deg > 180.0) {
+                    CPP_AT_ERROR("Longitude %.6f out of range (-180.0 to 180.0).", longitude_deg);
                 }
+                settings_manager.settings.rx_position.longitude_deg = longitude_deg;
             }
             if (CPP_AT_HAS_ARG(3)) {
                 // Set GNSS altitude.
-                CPP_AT_TRY_ARG2NUM(3, settings_manager.settings.rx_position.gnss_altitude_m);
+                int32_t gnss_altitude_m;
+                CPP_AT_TRY_ARG2NUM(3, gnss_altitude_m);
+                settings_manager.settings.rx_position.gnss_altitude_m = gnss_altitude_m;
             }
             if (CPP_AT_HAS_ARG(4)) {
                 // Set barometric altitude.
-                CPP_AT_TRY_ARG2NUM(4, settings_manager.settings.rx_position.baro_altitude_m);
+                int32_t baro_altitude_m;
+                CPP_AT_TRY_ARG2NUM(4, baro_altitude_m);
+                settings_manager.settings.rx_position.baro_altitude_m = baro_altitude_m;
             }
             if (CPP_AT_HAS_ARG(5)) {
                 // Set heading.
-                CPP_AT_TRY_ARG2NUM(5, settings_manager.settings.rx_position.heading_deg);
-                if (settings_manager.settings.rx_position.heading_deg < 0.0 ||
-                    settings_manager.settings.rx_position.heading_deg >= 360.0) {
-                    CPP_AT_ERROR("Heading %.1f out of range [0.0 to 360.0).",
-                                 settings_manager.settings.rx_position.heading_deg);
+                float heading_deg;
+                CPP_AT_TRY_ARG2NUM(5, heading_deg);
+                if (heading_deg < 0.0 || heading_deg >= 360.0) {
+                    CPP_AT_ERROR("Heading %.1f out of range [0.0 to 360.0).", heading_deg);
                 }
+                settings_manager.settings.rx_position.heading_deg = heading_deg;
             }
             if (CPP_AT_HAS_ARG(6)) {
                 // Set speed.
-                CPP_AT_TRY_ARG2NUM(6, settings_manager.settings.rx_position.speed_kts);
-                if (settings_manager.settings.rx_position.speed_kts < 0.0) {
-                    CPP_AT_ERROR("Speed %.1f out of range (>= 0.0).", settings_manager.settings.rx_position.speed_kts);
+                int32_t speed_kts;
+                CPP_AT_TRY_ARG2NUM(6, speed_kts);
+                if (speed_kts < 0.0) {
+                    CPP_AT_ERROR("Speed %.1f out of range (>= 0.0).", speed_kts);
                 }
+                settings_manager.settings.rx_position.speed_kts = speed_kts;
             }
             settings_manager.SyncToCoprocessors();
             CPP_AT_SUCCESS();
@@ -1248,8 +1255,19 @@ const CppAT::ATCommandDef_t at_command_list[] = {
     {.command = "RX_POSITION",
      .min_args = 0,
      .max_args = 5,
-     .help_string = "AT+RX_POSITION=<source>,<lat_deg>,<lon_deg>,<gnss_alt_m>,<baro_alt_m>"
-                    "\r\n\tSet the receiver's position.\r\n\tAT+RX_POSITION?\r\n\tQuery the receiver's position.",
+     .help_string = "AT+RX_POSITION=<source>,<lat_deg>,<lon_deg>,<gnss_alt_m>,<baro_alt_m>\r\n"
+                    "\tSet the receiver's position and source.\r\n"
+                    "\tsource:\r\n"
+                    "\t\tNONE - No position.\r\n"
+                    "\t\tFIXED - Fixed position set by user.\r\n"
+                    "\t\tGNSS - Position from GNSS receiver.\r\n"
+                    "\t\tLOWEST_AIRCRAFT - Bootstrap receiver position from lowest altitude aircraft being tracked.\r\n"
+                    "\t\tICAO - Bootstrap receiver position from an aircraft with a given ICAO address.\r\n"
+                    "\tlat_deg: Latitude in degrees (-90.0 to 90.0).\r\n"
+                    "\tlon_deg: Longitude in degrees (-180.0 to 180.0).\r\n"
+                    "\tgnss_alt_m: GNSS altitude in meters.\r\n"
+                    "\tbaro_alt_m: Barometric altitude in meters.\r\n"
+                    "AT+RX_POSITION?\r\n\tQuery the receiver's position.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxPositionCallback, comms_manager)},
     {.command = "SETTINGS",
      .min_args = 0,

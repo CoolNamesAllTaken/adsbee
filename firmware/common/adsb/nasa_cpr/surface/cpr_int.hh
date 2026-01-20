@@ -21,7 +21,9 @@
 
 namespace nasa_cpr::surface {
 
-#define MAX(X, Y)       ((X) > (Y) ? (X) : (Y))
+#ifndef MAX
+#define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
+#endif
 using int_type = uint32_t;
 
 inline int_type times(int_type X, int_type Y) { return (X) * (Y); }

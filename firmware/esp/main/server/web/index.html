@@ -191,6 +191,11 @@
         }
 
         function appendToTerminal(text) {
+            // Escape HTML entities to prevent angle brackets from being interpreted as tags
+            function escapeHtml(str) {
+                return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            }
+
             // Process ANSI escape sequences for colors
             const ansiRegex = /\x1b\[([0-9;]*)m/g;
             let processedText = text;
@@ -199,8 +204,8 @@
 
             let match;
             while ((match = ansiRegex.exec(text)) !== null) {
-                // Add text before the escape sequence
-                result += text.slice(lastIndex, match.index);
+                // Add text before the escape sequence (escaped)
+                result += escapeHtml(text.slice(lastIndex, match.index));
 
                 const codes = match[1].split(';').map(code => parseInt(code) || 0);
 
@@ -223,8 +228,8 @@
                 lastIndex = ansiRegex.lastIndex;
             }
 
-            // Add remaining text
-            result += text.slice(lastIndex);
+            // Add remaining text (escaped)
+            result += escapeHtml(text.slice(lastIndex));
             processedText = result;
 
             terminalContent.innerHTML += processedText;
