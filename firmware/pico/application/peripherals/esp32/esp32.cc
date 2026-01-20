@@ -113,7 +113,6 @@ bool ESP32::Update() {
     if (!adsbee.GetRxPosition(rx_position)) {
         rx_position = SettingsManager::RxPosition();  // Default to no position (source none, default values).
     }
-    SettingsManager::RxPositionPacked rx_position_packed = SettingsManager::RxPositionPacked(rx_position);
     ObjectDictionary::CompositeDeviceStatus composite_status = {
         .rp2040 =
             {
@@ -121,7 +120,7 @@ bool ESP32::Update() {
                 .temperature_deg_c = (int8_t)(core_0_monitor.ReadTemperatureDegC()),
                 .core_0_usage_percent = core_0_monitor.GetUsagePercent(),
                 .core_1_usage_percent = core_1_monitor.GetUsagePercent(),
-                .rx_position_packed = rx_position_packed,
+                .rx_position = rx_position,
             },
         .subg = adsbee.subg_radio_ll.device_status,
     };

@@ -828,10 +828,10 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
                 position_available ? "OK" : "NOT AVAILABLE", rx_position.latitude_deg, rx_position.longitude_deg,
                 rx_position.gnss_altitude_ft, rx_position.baro_altitude_ft, rx_position.heading_deg,
                 rx_position.speed_kts);
-            if (rx_position.source ==
-                SettingsManager::RxPosition::PositionSource::kPositionSourceAircraftMatchingICAO) {
-                CPP_AT_PRINTF("\tICAO: 0x%06X\r\n", rx_position.icao_address);
-            }
+            // if (rx_position.source ==
+            //     SettingsManager::RxPosition::PositionSource::kPositionSourceAircraftMatchingICAO) {
+            //     CPP_AT_PRINTF("\tICAO: 0x%06X\r\n", rx_position.icao_address);
+            // }
             CPP_AT_SILENT_SUCCESS();
             break;
         }
@@ -899,15 +899,15 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
                 }
                 settings_manager.settings.rx_position.speed_kts = speed_kts;
             }
-            if (CPP_AT_HAS_ARG(7)) {
-                // Set ICAO address.
-                uint32_t icao_address;
-                CPP_AT_TRY_ARG2NUM_BASE(7, icao_address, 16);
-                if (icao_address > 0xFFFFFF) {
-                    CPP_AT_ERROR("ICAO address 0x%X out of range (0x000000 to 0xFFFFFF).", icao_address);
-                }
-                settings_manager.settings.rx_position.icao_address = icao_address;
-            }
+            // if (CPP_AT_HAS_ARG(7)) {
+            //     // Set ICAO address.
+            //     uint32_t icao_address;
+            //     CPP_AT_TRY_ARG2NUM_BASE(7, icao_address, 16);
+            //     if (icao_address > 0xFFFFFF) {
+            //         CPP_AT_ERROR("ICAO address 0x%X out of range (0x000000 to 0xFFFFFF).", icao_address);
+            //     }
+            //     settings_manager.settings.rx_position.icao_address = icao_address;
+            // }
             settings_manager.SyncToCoprocessors();
             CPP_AT_SUCCESS();
             break;

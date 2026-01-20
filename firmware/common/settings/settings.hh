@@ -61,7 +61,7 @@ class SettingsManager {
     static const char kSubGHzModeStrs[kNumSubGHzRadioModes][kSubGHzModeStrMaxLen];
 
     // Receiver position settings.
-    struct RxPosition {
+    struct __attribute__((packed)) RxPosition {
         enum PositionSource : uint8_t {
             kPositionSourceNone = 0,
             kPositionSourceFixed = 1,
@@ -81,34 +81,9 @@ class SettingsManager {
         int32_t baro_altitude_ft = 0;  // Meters, AMSL
         float heading_deg = 0.0;       // Degrees from true north
         int32_t speed_kts = 0;         // Speed over ground in knots
-        uint32_t icao_address =
-            0;  // ICAO address to use for position bootstrap when source is kPositionSourceICAO, or the ICAO of the
-                // lowest plane being tracked when source is kPositionSourceLowestAircraft.
-    };
-
-    // Packed version of RxPosition for use in SPI transfers.
-    // Had to make a separate packed version since putting a packed RxPosition struct into the un-packed Settings struct
-    // caused the Settings struct to be different sizes on different compilers.
-    struct __attribute__((packed)) RxPositionPacked {
-        RxPosition::PositionSource source = RxPosition::kPositionSourceNone;
-        float latitude_deg = 0.0;
-        float longitude_deg = 0.0;
-        int32_t gnss_altitude_ft = 0;
-        int32_t baro_altitude_ft = 0;
-        float heading_deg = 0.0;
-        int32_t speed_kts = 0;
-        uint32_t icao_address = 0;
-
-        RxPositionPacked() = default;
-        RxPositionPacked(const RxPosition& pos)
-            : source(pos.source),
-              latitude_deg(pos.latitude_deg),
-              longitude_deg(pos.longitude_deg),
-              gnss_altitude_ft(pos.gnss_altitude_ft),
-              baro_altitude_ft(pos.baro_altitude_ft),
-              heading_deg(pos.heading_deg),
-              speed_kts(pos.speed_kts),
-              icao_address(pos.icao_address) {}
+        // uint32_t icao_address =
+        //     0;  // ICAO address to use for position bootstrap when source is kPositionSourceICAO, or the ICAO of the
+        //         // lowest plane being tracked when source is kPositionSourceLowestAircraft.
     };
 
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a

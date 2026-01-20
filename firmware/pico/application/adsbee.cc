@@ -243,39 +243,39 @@ bool ADSBee::GetRxPosition(SettingsManager::RxPosition& rx_position) {
         case SettingsManager::RxPosition::PositionSource::kPositionSourceAircraftMatchingICAO: {
             // Try to find the aircraft with the matching ICAO address in the dictionary.
             // Check both Mode S and UAT, and use the most recently seen aircraft if both exist.
-            uint32_t mode_s_uid = Aircraft::ICAOToUID(rx_position.icao_address, Aircraft::kAircraftTypeModeS);
-            ModeSAircraft* mode_s_aircraft = aircraft_dictionary.GetAircraftPtr<ModeSAircraft>(mode_s_uid, false);
-            bool mode_s_valid = mode_s_aircraft && mode_s_aircraft->HasBitFlag(ModeSAircraft::kBitFlagPositionValid);
+            // uint32_t mode_s_uid = Aircraft::ICAOToUID(rx_position.icao_address, Aircraft::kAircraftTypeModeS);
+            // ModeSAircraft* mode_s_aircraft = aircraft_dictionary.GetAircraftPtr<ModeSAircraft>(mode_s_uid, false);
+            // bool mode_s_valid = mode_s_aircraft && mode_s_aircraft->HasBitFlag(ModeSAircraft::kBitFlagPositionValid);
 
-            uint32_t uat_uid = Aircraft::ICAOToUID(rx_position.icao_address, Aircraft::kAircraftTypeUAT);
-            UATAircraft* uat_aircraft = aircraft_dictionary.GetAircraftPtr<UATAircraft>(uat_uid, false);
-            bool uat_valid = uat_aircraft && uat_aircraft->HasBitFlag(UATAircraft::kBitFlagPositionValid);
+            // uint32_t uat_uid = Aircraft::ICAOToUID(rx_position.icao_address, Aircraft::kAircraftTypeUAT);
+            // UATAircraft* uat_aircraft = aircraft_dictionary.GetAircraftPtr<UATAircraft>(uat_uid, false);
+            // bool uat_valid = uat_aircraft && uat_aircraft->HasBitFlag(UATAircraft::kBitFlagPositionValid);
 
-            // Determine which aircraft to use based on validity and recency.
-            Aircraft* selected_aircraft = nullptr;
-            if (mode_s_valid && uat_valid) {
-                // Both exist and have valid positions; use the most recently seen.
-                if (mode_s_aircraft->last_message_timestamp_ms >= uat_aircraft->last_message_timestamp_ms) {
-                    selected_aircraft = mode_s_aircraft;
-                } else {
-                    selected_aircraft = uat_aircraft;
-                }
-            } else if (mode_s_valid) {
-                selected_aircraft = mode_s_aircraft;
-            } else if (uat_valid) {
-                selected_aircraft = uat_aircraft;
-            }
+            // // Determine which aircraft to use based on validity and recency.
+            // Aircraft* selected_aircraft = nullptr;
+            // if (mode_s_valid && uat_valid) {
+            //     // Both exist and have valid positions; use the most recently seen.
+            //     if (mode_s_aircraft->last_message_timestamp_ms >= uat_aircraft->last_message_timestamp_ms) {
+            //         selected_aircraft = mode_s_aircraft;
+            //     } else {
+            //         selected_aircraft = uat_aircraft;
+            //     }
+            // } else if (mode_s_valid) {
+            //     selected_aircraft = mode_s_aircraft;
+            // } else if (uat_valid) {
+            //     selected_aircraft = uat_aircraft;
+            // }
 
-            if (selected_aircraft) {
-                rx_position.latitude_deg = selected_aircraft->latitude_deg;
-                rx_position.longitude_deg = selected_aircraft->longitude_deg;
-                rx_position.gnss_altitude_ft = selected_aircraft->gnss_altitude_ft;
-                rx_position.baro_altitude_ft = selected_aircraft->baro_altitude_ft;
-                rx_position.heading_deg = selected_aircraft->direction_deg;
-                rx_position.speed_kts = selected_aircraft->speed_kts;
-                return true;
-            }
-            // No aircraft found with the matching ICAO address or no valid position.
+            // if (selected_aircraft) {
+            //     rx_position.latitude_deg = selected_aircraft->latitude_deg;
+            //     rx_position.longitude_deg = selected_aircraft->longitude_deg;
+            //     rx_position.gnss_altitude_ft = selected_aircraft->gnss_altitude_ft;
+            //     rx_position.baro_altitude_ft = selected_aircraft->baro_altitude_ft;
+            //     rx_position.heading_deg = selected_aircraft->direction_deg;
+            //     rx_position.speed_kts = selected_aircraft->speed_kts;
+            //     return true;
+            // }
+            // // No aircraft found with the matching ICAO address or no valid position.
             return false;
         }
         default:
