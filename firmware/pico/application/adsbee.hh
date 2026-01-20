@@ -92,6 +92,7 @@ class ADSBee {
         bool has_subg = bsp.has_subg;
 
         uint32_t aircraft_dictionary_update_interval_ms = 1000;
+        uint32_t rx_position_update_interval_ms = 1000;
     };
 
     ADSBee(ADSBeeConfig config_in);
@@ -175,15 +176,6 @@ class ADSBee {
      * @retval Power level of the noise floor, in dBm.
      */
     int GetNoiseFloordBm();
-
-    /**
-     * Gets the current receiver position. This position is updated periodically based on what source the settings
-     * manager has selected, and what values are available from sources including aircraft in the dictionary or GNSS
-     * data.
-     * @param[out] rx_position Reference to RxPosition struct to fill with current position data.
-     * @retval True if a valid position is available, false otherwise.
-     */
-    bool GetRxPosition(SettingsManager::RxPosition& rx_position);
 
     /**
      * Get the current temperature used in learning trigger level (simulated annealing). A temperature of 0 means
@@ -399,6 +391,9 @@ class ADSBee {
     CC1312 subg_radio_ll = CC1312({});
     SPICoprocessor subg_radio = SPICoprocessor({.interface = subg_radio_ll, .tag_str = "CC1312"});
 
+    SettingsManager::RxPosition rx_position;
+    bool rx_position_available = false;
+
    private:
     void IngestAndForwardPackets();
     void MLATCounterInit();
@@ -407,6 +402,7 @@ class ADSBee {
     void PruneAircraftDictionary();
     void Update1090LED();
     void UpdateNoiseFloor();
+    void UpdateRxPosition();
     void UpdateTLLearning();
 
     ADSBeeConfig config_;
@@ -456,6 +452,7 @@ class ADSBee {
     RawUATUplinkPacket raw_uat_uplink_packet_queue_buffer_[kRawUATUplinkPacketQueueDepth];
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
+    uint32_t last_rx_position_update_timestamp_ms_ = 0;
 
     bool r1090_enabled_ = true;
     bool r1090_packet_queue_overflowed_ = false;
@@ -464,8 +461,6 @@ class ADSBee {
 
     int32_t noise_floor_mv_;
     uint32_t noise_floor_last_sample_timestamp_ms_ = 0;
-
-    SettingsManager::RxPosition rx_position_;
 
     /** 978MHz Receiver Parameters **/
 };

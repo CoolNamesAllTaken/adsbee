@@ -21,5 +21,5 @@ const char SettingsManager::kSubGHzModeStrs[SettingsManager::kNumSubGHzRadioMode
 
 const char SettingsManager::RxPosition::kPositionSourceStrs[SettingsManager::RxPosition::kNumPositionSources]
                                                            [SettingsManager::RxPosition::kPositionSourceStrMaxLen] = {
-                                                               "NONE", "FIXED", "GNSS", "LOWEST_AIRCRAFT", "ICAO",
+                                                               "NONE", "FIXED", "GNSS", "LOWEST", "ICAO",
 };

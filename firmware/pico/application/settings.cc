@@ -107,6 +107,7 @@ bool SettingsManager::Save() {
     settings.tl_offset_mv = adsbee.GetTLOffsetMilliVolts();
     settings.r1090_bias_tee_enabled = adsbee.BiasTeeIsEnabled();
     settings.watchdog_timeout_sec = adsbee.GetWatchdogTimeoutSec();
+    settings.rx_position = adsbee.rx_position;
 
     // Save reporting protocols.
     comms_manager.GetReportingProtocol(SerialInterface::kCommsUART,
@@ -199,6 +200,7 @@ bool SettingsManager::Apply() {
     adsbee.SetBiasTeeEnable(settings.r1090_bias_tee_enabled);
     adsbee.SetWatchdogTimeoutSec(settings.watchdog_timeout_sec);
     adsbee.SetSubGRadioEnable(settings.subg_enabled);
+    adsbee.rx_position = settings.rx_position;
 
     // Apply reporting protocols.
     comms_manager.SetReportingProtocol(SerialInterface::kCommsUART,

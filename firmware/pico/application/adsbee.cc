@@ -165,6 +165,8 @@ bool ADSBee::Update() {
 
     PruneAircraftDictionary();
 
+    UpdateRxPosition();
+
     IngestAndForwardPackets();
 
     if (r1090_packet_queue_overflowed_) {
@@ -208,13 +210,21 @@ uint16_t ADSBee::GetMLATJitterPWMSliceCounts() {
 
 int ADSBee::GetNoiseFloordBm() { return AD8313MilliVoltsTodBm(noise_floor_mv_); }
 
-bool ADSBee::GetRxPosition(SettingsManager::RxPosition& rx_position) {
-    // Pull position source from stored settings, then override with dynamic values as needed.
-    rx_position = settings_manager.settings.rx_position;
+void ADSBee::UpdateRxPosition() {
+    // Rate limiting.
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+    if (timestamp_ms - last_rx_position_update_timestamp_ms_ < config_.rx_position_update_interval_ms) {
+        return;
+    }
+    last_rx_position_update_timestamp_ms_ = timestamp_ms;
+
+    // Update rx position based on selected position source. Note this only handles periodic automatic updates. One-time
+    // changes are handled in AT comms.
     switch (rx_position.source) {
         case SettingsManager::RxPosition::PositionSource::kPositionSourceNone:
             // No position available.
-            return false;
+            rx_position_available = false;
+            break;
         case SettingsManager::RxPosition::PositionSource::kPositionSourceLowestAircraft:
             // Use position of lowest aircraft in dictionary.
             // Make variables to write into since we can't bind directly to the packed struct members.
@@ -229,59 +239,64 @@ bool ADSBee::GetRxPosition(SettingsManager::RxPosition& rx_position) {
                 rx_position.baro_altitude_ft = baro_altitude_ft;
                 rx_position.heading_deg = heading_deg;
                 rx_position.speed_kts = speed_kts;
-                return true;
+                rx_position_available = true;
+            } else {
+                // No valid aircraft position available. Don't update receiver position.
+                rx_position_available = false;
             }
-            // No valid aircraft position available.
-            return false;
+            break;
         case SettingsManager::RxPosition::PositionSource::kPositionSourceGNSS:
             // FIXME: Implement GNSS-based position sourcing.
             // For now, fall back to manual position.
-            return false;
+            rx_position_available = false;
+            break;
         case SettingsManager::RxPosition::PositionSource::kPositionSourceFixed:
-            // Use manually configured position.
-            return true;
+            // Fixed position is always available.
+            rx_position_available = true;
+            break;
         case SettingsManager::RxPosition::PositionSource::kPositionSourceAircraftMatchingICAO: {
             // Try to find the aircraft with the matching ICAO address in the dictionary.
             // Check both Mode S and UAT, and use the most recently seen aircraft if both exist.
-            // uint32_t mode_s_uid = Aircraft::ICAOToUID(rx_position.icao_address, Aircraft::kAircraftTypeModeS);
-            // ModeSAircraft* mode_s_aircraft = aircraft_dictionary.GetAircraftPtr<ModeSAircraft>(mode_s_uid, false);
-            // bool mode_s_valid = mode_s_aircraft && mode_s_aircraft->HasBitFlag(ModeSAircraft::kBitFlagPositionValid);
+            uint32_t mode_s_uid = Aircraft::ICAOToUID(rx_position.icao_address, Aircraft::kAircraftTypeModeS);
+            ModeSAircraft* mode_s_aircraft = aircraft_dictionary.GetAircraftPtr<ModeSAircraft>(mode_s_uid, false);
+            bool mode_s_valid = mode_s_aircraft && mode_s_aircraft->HasBitFlag(ModeSAircraft::kBitFlagPositionValid);
 
-            // uint32_t uat_uid = Aircraft::ICAOToUID(rx_position.icao_address, Aircraft::kAircraftTypeUAT);
-            // UATAircraft* uat_aircraft = aircraft_dictionary.GetAircraftPtr<UATAircraft>(uat_uid, false);
-            // bool uat_valid = uat_aircraft && uat_aircraft->HasBitFlag(UATAircraft::kBitFlagPositionValid);
+            uint32_t uat_uid = Aircraft::ICAOToUID(rx_position.icao_address, Aircraft::kAircraftTypeUAT);
+            UATAircraft* uat_aircraft = aircraft_dictionary.GetAircraftPtr<UATAircraft>(uat_uid, false);
+            bool uat_valid = uat_aircraft && uat_aircraft->HasBitFlag(UATAircraft::kBitFlagPositionValid);
 
-            // // Determine which aircraft to use based on validity and recency.
-            // Aircraft* selected_aircraft = nullptr;
-            // if (mode_s_valid && uat_valid) {
-            //     // Both exist and have valid positions; use the most recently seen.
-            //     if (mode_s_aircraft->last_message_timestamp_ms >= uat_aircraft->last_message_timestamp_ms) {
-            //         selected_aircraft = mode_s_aircraft;
-            //     } else {
-            //         selected_aircraft = uat_aircraft;
-            //     }
-            // } else if (mode_s_valid) {
-            //     selected_aircraft = mode_s_aircraft;
-            // } else if (uat_valid) {
-            //     selected_aircraft = uat_aircraft;
-            // }
+            // Determine which aircraft to use based on validity and recency.
+            Aircraft* selected_aircraft = nullptr;
+            if (mode_s_valid && uat_valid) {
+                // Both exist and have valid positions; use the most recently seen.
+                if (mode_s_aircraft->last_message_timestamp_ms >= uat_aircraft->last_message_timestamp_ms) {
+                    selected_aircraft = mode_s_aircraft;
+                } else {
+                    selected_aircraft = uat_aircraft;
+                }
+            } else if (mode_s_valid) {
+                selected_aircraft = mode_s_aircraft;
+            } else if (uat_valid) {
+                selected_aircraft = uat_aircraft;
+            }
 
-            // if (selected_aircraft) {
-            //     rx_position.latitude_deg = selected_aircraft->latitude_deg;
-            //     rx_position.longitude_deg = selected_aircraft->longitude_deg;
-            //     rx_position.gnss_altitude_ft = selected_aircraft->gnss_altitude_ft;
-            //     rx_position.baro_altitude_ft = selected_aircraft->baro_altitude_ft;
-            //     rx_position.heading_deg = selected_aircraft->direction_deg;
-            //     rx_position.speed_kts = selected_aircraft->speed_kts;
-            //     return true;
-            // }
-            // // No aircraft found with the matching ICAO address or no valid position.
-            return false;
+            if (selected_aircraft) {
+                rx_position.latitude_deg = selected_aircraft->latitude_deg;
+                rx_position.longitude_deg = selected_aircraft->longitude_deg;
+                rx_position.gnss_altitude_ft = selected_aircraft->gnss_altitude_ft;
+                rx_position.baro_altitude_ft = selected_aircraft->baro_altitude_ft;
+                rx_position.heading_deg = selected_aircraft->direction_deg;
+                rx_position.speed_kts = selected_aircraft->speed_kts;
+                rx_position_available = true;
+            } else {
+                // No aircraft found with the matching ICAO address or no valid position.
+                rx_position_available = false;
+            }
+            break;
         }
         default:
             CONSOLE_ERROR("ADSBee::GetRxPosition", "Unknown Rx position source %d.",
                           static_cast<int>(rx_position.source));
-            return false;
     }
 }
 
