@@ -117,7 +117,7 @@ class ObjectDictionary {
         int8_t temperature_deg_c = 0;
         uint8_t core_0_usage_percent = 0;
         uint8_t core_1_usage_percent = 0;
-        SettingsManager::RxPosition rx_position;  // Current receiver position.
+        SettingsManager::RxPositionPacked rx_position_packed;  // Current receiver position.
     };
 
     struct __attribute__((__packed__)) ESP32DeviceStatus {

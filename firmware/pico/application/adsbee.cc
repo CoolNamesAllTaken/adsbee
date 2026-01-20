@@ -219,14 +219,14 @@ bool ADSBee::GetRxPosition(SettingsManager::RxPosition& rx_position) {
             // Use position of lowest aircraft in dictionary.
             // Make variables to write into since we can't bind directly to the packed struct members.
             float latitude_deg, longitude_deg, heading_deg;
-            int32_t gnss_altitude_m, baro_altitude_m, speed_kts;
+            int32_t gnss_altitude_ft, baro_altitude_ft, speed_kts;
             if (aircraft_dictionary.GetLowestAircraftPosition(
-                    latitude_deg, longitude_deg, reinterpret_cast<int32_t&>(gnss_altitude_m),
-                    reinterpret_cast<int32_t&>(baro_altitude_m), heading_deg, speed_kts)) {
+                    latitude_deg, longitude_deg, reinterpret_cast<int32_t&>(gnss_altitude_ft),
+                    reinterpret_cast<int32_t&>(baro_altitude_ft), heading_deg, speed_kts)) {
                 rx_position.latitude_deg = latitude_deg;
                 rx_position.longitude_deg = longitude_deg;
-                rx_position.gnss_altitude_m = gnss_altitude_m;
-                rx_position.baro_altitude_m = baro_altitude_m;
+                rx_position.gnss_altitude_ft = gnss_altitude_ft;
+                rx_position.baro_altitude_ft = baro_altitude_ft;
                 rx_position.heading_deg = heading_deg;
                 rx_position.speed_kts = speed_kts;
                 return true;
@@ -240,6 +240,44 @@ bool ADSBee::GetRxPosition(SettingsManager::RxPosition& rx_position) {
         case SettingsManager::RxPosition::PositionSource::kPositionSourceFixed:
             // Use manually configured position.
             return true;
+        case SettingsManager::RxPosition::PositionSource::kPositionSourceAircraftMatchingICAO: {
+            // Try to find the aircraft with the matching ICAO address in the dictionary.
+            // Check both Mode S and UAT, and use the most recently seen aircraft if both exist.
+            uint32_t mode_s_uid = Aircraft::ICAOToUID(rx_position.icao_address, Aircraft::kAircraftTypeModeS);
+            ModeSAircraft* mode_s_aircraft = aircraft_dictionary.GetAircraftPtr<ModeSAircraft>(mode_s_uid, false);
+            bool mode_s_valid = mode_s_aircraft && mode_s_aircraft->HasBitFlag(ModeSAircraft::kBitFlagPositionValid);
+
+            uint32_t uat_uid = Aircraft::ICAOToUID(rx_position.icao_address, Aircraft::kAircraftTypeUAT);
+            UATAircraft* uat_aircraft = aircraft_dictionary.GetAircraftPtr<UATAircraft>(uat_uid, false);
+            bool uat_valid = uat_aircraft && uat_aircraft->HasBitFlag(UATAircraft::kBitFlagPositionValid);
+
+            // Determine which aircraft to use based on validity and recency.
+            Aircraft* selected_aircraft = nullptr;
+            if (mode_s_valid && uat_valid) {
+                // Both exist and have valid positions; use the most recently seen.
+                if (mode_s_aircraft->last_message_timestamp_ms >= uat_aircraft->last_message_timestamp_ms) {
+                    selected_aircraft = mode_s_aircraft;
+                } else {
+                    selected_aircraft = uat_aircraft;
+                }
+            } else if (mode_s_valid) {
+                selected_aircraft = mode_s_aircraft;
+            } else if (uat_valid) {
+                selected_aircraft = uat_aircraft;
+            }
+
+            if (selected_aircraft) {
+                rx_position.latitude_deg = selected_aircraft->latitude_deg;
+                rx_position.longitude_deg = selected_aircraft->longitude_deg;
+                rx_position.gnss_altitude_ft = selected_aircraft->gnss_altitude_ft;
+                rx_position.baro_altitude_ft = selected_aircraft->baro_altitude_ft;
+                rx_position.heading_deg = selected_aircraft->direction_deg;
+                rx_position.speed_kts = selected_aircraft->speed_kts;
+                return true;
+            }
+            // No aircraft found with the matching ICAO address or no valid position.
+            return false;
+        }
         default:
             CONSOLE_ERROR("ADSBee::GetRxPosition", "Unknown Rx position source %d.",
                           static_cast<int>(rx_position.source));

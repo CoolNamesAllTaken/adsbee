@@ -41,17 +41,17 @@ static volatile int16_t current_packet_len_bytes = INT16_MIN;
 //  | CRC1 | CRC0 | RSSI | TS0 | TS1 | TS2 | TS3 | Status |
 //  -------------------------------------------------------
 static uint8_t rx_data_entry_buf[kNumPartialDataEntries * kPartialDataEntrySizeBytes] __attribute__((aligned(4)));
-static rfc_dataEntryPartial_t *partial_data_entry_ptrs[kNumPartialDataEntries] = {0};
+static rfc_dataEntryPartial_t* partial_data_entry_ptrs[kNumPartialDataEntries] = {0};
 
 // This is the entry that we are currently allowed to read from (not being used by the RF core).
-static rfc_dataEntryPartial_t *current_read_entry;
+static rfc_dataEntryPartial_t* current_read_entry;
 
 static dataQueue_t rx_data_queue;
 
 inline void RollDataQueue() {
     current_read_entry->status = DATA_ENTRY_PENDING;
-    current_read_entry = (rfc_dataEntryPartial_t *)(((rfc_dataEntryPartial_t *)current_read_entry)->pNextEntry);
-    rx_data_queue.pCurrEntry = (uint8_t *)current_read_entry;
+    current_read_entry = (rfc_dataEntryPartial_t*)(((rfc_dataEntryPartial_t*)current_read_entry)->pNextEntry);
+    rx_data_queue.pCurrEntry = (uint8_t*)current_read_entry;
 }
 
 // Technical Reference Manual Section 23.7.5.4: https://www.ti.com/lit/ug/swcu117i/swcu117i.pdf
@@ -76,7 +76,7 @@ void rf_cmd_callback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e) {
 
             rfc_CMD_PROP_SET_LEN_t RF_cmdPropSetLen = {.commandNo = CMD_PROP_SET_LEN,
                                                        .rxLen = (uint16_t)(current_packet_len_bytes)};
-            RF_runImmediateCmd(h, (uint32_t *)&RF_cmdPropSetLen);
+            RF_runImmediateCmd(h, (uint32_t*)&RF_cmdPropSetLen);
         }
     }
 
@@ -96,7 +96,7 @@ bool SubGHzRadio::Init() {
     // Overriding settings from smartrf/smartrf_settings.c.
     /* RF_cmdPropRxAdv  - Advanced Rx command settings. */
     RF_cmdPropRxAdv.pQueue = &rx_data_queue;
-    RF_cmdPropRxAdv.pOutput = (uint8_t *)&rx_statistics_;
+    RF_cmdPropRxAdv.pOutput = (uint8_t*)&rx_statistics_;
     RF_cmdPropRxAdv.rxConf = {
         .bAutoFlushIgnored = 0,  // If 1, automatically discard ignored packets from RX queue.
         .bAutoFlushCrcErr = 0,   // If 1, automatically discard packets with CRC error from RX queue.
@@ -139,11 +139,11 @@ bool SubGHzRadio::Init() {
     // Set up the data queue.
     for (uint16_t i = 0; i < kNumPartialDataEntries; i++) {
         // Fill out the addresses first so that our pNextEntry assignment works in the next loop.
-        partial_data_entry_ptrs[i] = (rfc_dataEntryPartial_t *)&rx_data_entry_buf[i * kPartialDataEntrySizeBytes];
+        partial_data_entry_ptrs[i] = (rfc_dataEntryPartial_t*)&rx_data_entry_buf[i * kPartialDataEntrySizeBytes];
     }
 
     for (uint16_t i = 0; i < kNumPartialDataEntries; i++) {
-        rfc_dataEntryPartial_t *entry = partial_data_entry_ptrs[i];
+        rfc_dataEntryPartial_t* entry = partial_data_entry_ptrs[i];
         entry->length = sizeof(rfc_dataEntryPartial_t::pktStatus) + sizeof(rfc_dataEntryPartial_t::nextIndex) +
                         kPacketHeaderSizeBytes + kPartialDataEntryPayloadLenSzBytes +
                         kPartialDataEntryPayloadSizeBytes + kPartialDataEntryNumAppendedBytes;
@@ -152,24 +152,24 @@ bool SubGHzRadio::Init() {
         entry->config.type = DATA_ENTRY_TYPE_PARTIAL;
         entry->config.lenSz = kPartialDataEntryPayloadLenSzBytes;
         entry->status = DATA_ENTRY_PENDING;
-        entry->pNextEntry = (uint8_t *)partial_data_entry_ptrs[(i + 1) % kNumPartialDataEntries];  // Circular queue.
+        entry->pNextEntry = (uint8_t*)partial_data_entry_ptrs[(i + 1) % kNumPartialDataEntries];  // Circular queue.
 
         // Sentinel values for debuging.
         memset(&(entry->rxData) + kPartialDataEntryPayloadLenSzBytes, 0xAA + i,
                kPartialDataEntryPayloadSizeBytes + kPartialDataEntryNumAppendedBytes);
     }
-    rx_data_queue.pCurrEntry = (uint8_t *)partial_data_entry_ptrs[0];
+    rx_data_queue.pCurrEntry = (uint8_t*)partial_data_entry_ptrs[0];
     rx_data_queue.pLastEntry = nullptr;
 
-    current_read_entry = (rfc_dataEntryPartial_t *)(rx_data_queue.pCurrEntry);
+    current_read_entry = (rfc_dataEntryPartial_t*)(rx_data_queue.pCurrEntry);
 
-    rf_handle_ = RF_open(&rf_object_, &RF_prop, (RF_RadioSetup *)&RF_cmdPropRadioDivSetup, &rf_params);
+    rf_handle_ = RF_open(&rf_object_, &RF_prop, (RF_RadioSetup*)&RF_cmdPropRadioDivSetup, &rf_params);
     if (!rf_handle_) {
         CONSOLE_ERROR("SubGHzRadio::Init", "Failed to open RF device.");
         return false;  // Failed to open RF handle.
     }
 
-    RF_EventMask ret = RF_runCmd(rf_handle_, (RF_Op *)&RF_cmdFs, RF_PriorityNormal, nullptr, 0);
+    RF_EventMask ret = RF_runCmd(rf_handle_, (RF_Op*)&RF_cmdFs, RF_PriorityNormal, nullptr, 0);
     if (ret != RF_EventLastCmdDone) {
         CONSOLE_ERROR("SubGHzRadio::Init", "Failed to set frequency.");
         RF_close(rf_handle_);
@@ -184,20 +184,20 @@ bool SubGHzRadio::DeInit() {
     return true;
 }
 
-bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t *filled_entry) {
+bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t* filled_entry) {
     // pico_ll.BlinkSubGLED();
 
     /* Handle the packet data, located at &currentDataEntry->data:
      * - Length is the first two bytes with the current configuration
      * - Data starts from the second byte */
     // rfc_dataEntryPartial_t *filled_entry = (rfc_dataEntryPartial_t *)rx_data_queue.pLastEntry;
-    uint8_t *buf = (uint8_t *)(&filled_entry->rxData);
+    uint8_t* buf = (uint8_t*)(&filled_entry->rxData);
     uint16_t rx_data_bytes_after_len =
         buf[0] | (buf[1] << 8);  // 2-Byte length is packaged LSB first (little endian). Includes appended bytes.
     uint16_t packet_len_bytes = rx_data_bytes_after_len - kPartialDataEntryNumAppendedBytes - kPacketHeaderSizeBytes;
     // Note that filled_entry->nextIndex should == packet_len_bytes + kPartialDataEntryNumAppendedBytes.
     uint8_t packet_sync_ls4 = buf[2] & 0x0F;  // Last 4 bits of sync word are the first 4 bits of the payload.
-    uint8_t *packet_data = buf + kPartialDataEntryPayloadLenSzBytes + kPacketHeaderSizeBytes;
+    uint8_t* packet_data = buf + kPartialDataEntryPayloadLenSzBytes + kPacketHeaderSizeBytes;
 
     if (packet_len_bytes > kRxPacketMaxLenBytes || packet_len_bytes == 0) {
         return false;
@@ -244,8 +244,7 @@ bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t *filled_entry) {
 
 bool SubGHzRadio::StartPacketRx() {
     last_rx_start_timestamp_ms_ = get_time_since_boot_ms();
-    rx_cmd_handle_ =
-        RF_postCmd(rf_handle_, (RF_Op *)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
+    rx_cmd_handle_ = RF_postCmd(rf_handle_, (RF_Op*)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
     if (rx_cmd_handle_ < 0) {
         CONSOLE_ERROR("SubGHzRadio::Init", "Failed to post command PROP_RX: returned code %d.", rx_cmd_handle_);
         return false;  // Failed to post command PROP_RX.
@@ -258,35 +257,35 @@ bool SubGHzRadio::Update() {
         return true;
     }
 
-    volatile uint16_t rx_status = ((volatile RF_Op *)&RF_cmdPropRxAdv)->status;
+    volatile uint16_t rx_status = ((volatile RF_Op*)&RF_cmdPropRxAdv)->status;
     if ((rx_status & 0xFF00) & PROP_DONE_OK) {
         StartPacketRx();
     } else if ((rx_status & 0xFF00) & PROP_ERROR_PAR) {
-        char *error_str;
+        char* error_str;
         switch (rx_status) {
             case PROP_ERROR_PAR:
-                error_str = (char *)"Illegal parameter";
+                error_str = (char*)"Illegal parameter";
                 break;
             case PROP_ERROR_RXBUF:
-                error_str = (char *)"No available Rx buffer at the start of a packet";
+                error_str = (char*)"No available Rx buffer at the start of a packet";
                 break;
             case PROP_ERROR_RXFULL:
-                error_str = (char *)"Out of Rx buffer during reception in a partial read buffer";
+                error_str = (char*)"Out of Rx buffer during reception in a partial read buffer";
                 break;
             case PROP_ERROR_NO_SETUP:
-                error_str = (char *)"Radio was not set up in proprietary mode";
+                error_str = (char*)"Radio was not set up in proprietary mode";
                 break;
             case PROP_ERROR_NO_FS:
-                error_str = (char *)"Synth was not programmed when running Rx or Tx";
+                error_str = (char*)"Synth was not programmed when running Rx or Tx";
                 break;
             case PROP_ERROR_RXOVF:
-                error_str = (char *)"Rx overflow observed during operation";
+                error_str = (char*)"Rx overflow observed during operation";
                 break;
             case PROP_ERROR_TXUNF:
-                error_str = (char *)"Tx underflow observed during operation";
+                error_str = (char*)"Tx underflow observed during operation";
                 break;
             default:
-                error_str = (char *)"Unknown error";
+                error_str = (char*)"Unknown error";
         }
         CONSOLE_ERROR("SubGHzRadio::Update", "PROP_RX threw error (0x%x): %s. Restarting.", rx_status, error_str);
         StartPacketRx();
