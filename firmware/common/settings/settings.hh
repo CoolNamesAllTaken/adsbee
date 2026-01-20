@@ -74,7 +74,7 @@ class SettingsManager {
         static const uint16_t kPositionSourceStrMaxLen = 32;
         static const char kPositionSourceStrs[kNumPositionSources][kPositionSourceStrMaxLen];
 
-        PositionSource source = kPositionSourceNone;
+        PositionSource source = kPositionSourceLowestAircraft;
         float latitude_deg = 0.0;      // Degrees, WGS84
         float longitude_deg = 0.0;     // Degrees, WGS84
         int32_t gnss_altitude_ft = 0;  // Meters, WGS84

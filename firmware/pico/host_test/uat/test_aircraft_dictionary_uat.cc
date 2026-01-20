@@ -24,8 +24,8 @@ TEST(AircraftDictionary, IngestUATADSBPacket) {
 
 TEST(AircraftDictionary, GetLowestAircraftPositionUAT) {
     AircraftDictionary dictionary = AircraftDictionary();
-    float latitude_deg, longitude_deg, heading_deg, speed_kts;
-    int32_t gnss_altitude_ft, baro_altitude_ft;
+    float latitude_deg, longitude_deg, heading_deg;
+    int32_t gnss_altitude_ft, baro_altitude_ft, speed_kts;
 
     // No aircraft in dictionary, should return false.
     EXPECT_FALSE(dictionary.GetLowestAircraftPosition(latitude_deg, longitude_deg, gnss_altitude_ft, baro_altitude_ft,
@@ -110,8 +110,8 @@ TEST(AircraftDictionary, GetLowestAircraftPositionUAT) {
 
 TEST(AircraftDictionary, GetLowestAircraftPositionMixedModeSAndUAT) {
     AircraftDictionary dictionary = AircraftDictionary();
-    float latitude_deg, longitude_deg, heading_deg, speed_kts;
-    int32_t gnss_altitude_ft, baro_altitude_ft;
+    float latitude_deg, longitude_deg, heading_deg;
+    int32_t gnss_altitude_ft, baro_altitude_ft, speed_kts;
 
     // Add a Mode S aircraft with GNSS altitude at 4000ft.
     ModeSAircraft mode_s_aircraft(0x123456);
@@ -126,6 +126,7 @@ TEST(AircraftDictionary, GetLowestAircraftPositionMixedModeSAndUAT) {
     mode_s_aircraft.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid, true);
     mode_s_aircraft.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagDirectionValid, true);
     mode_s_aircraft.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHorizontalSpeedValid, true);
+    mode_s_aircraft.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
     mode_s_aircraft.last_message_timestamp_ms = get_time_since_boot_ms();
     dictionary.InsertAircraft(mode_s_aircraft);
 
@@ -169,6 +170,7 @@ TEST(AircraftDictionary, GetLowestAircraftPositionMixedModeSAndUAT) {
     mode_s_aircraft2.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagGNSSAltitudeValid, true);
     mode_s_aircraft2.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagDirectionValid, true);
     mode_s_aircraft2.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHorizontalSpeedValid, true);
+    mode_s_aircraft2.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
     mode_s_aircraft2.last_message_timestamp_ms = get_time_since_boot_ms();
     dictionary.InsertAircraft(mode_s_aircraft2);
 

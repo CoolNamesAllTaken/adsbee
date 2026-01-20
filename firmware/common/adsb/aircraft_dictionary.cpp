@@ -1133,7 +1133,10 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
             int32_t current_gnss_altitude_ft = 0;
             if (auto* aircraft = std::get_if<ModeSAircraft>(&it->second)) {
                 if (aircraft->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagGNSSAltitudeValid)) {
-                    has_valid_gnss_altitude = true;
+                    // Don't trust Mode S Aircraft that are already on the ground to provide a reference location, since
+                    // they need a reference location to be decoded! Rely on Mode S Aircraft in the air or other types
+                    // of aircraft in the air or on the ground.
+                    has_valid_gnss_altitude = aircraft->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne);
                     current_gnss_altitude_ft = aircraft->gnss_altitude_ft;
                 }
             } else if (auto* aircraft = std::get_if<UATAircraft>(&it->second)) {

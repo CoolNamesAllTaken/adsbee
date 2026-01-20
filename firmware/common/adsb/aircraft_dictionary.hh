@@ -934,7 +934,7 @@ class AircraftDictionary {
      * dictionary.
      */
     bool GetLowestAircraftPosition(float& latitude_deg, float& longitude_deg, int32_t& gnss_altitude_ft,
-                                   int32_t& baro_altitude_ft, float& heading_deg, int32_t& speed_kts);
+                                           int32_t& baro_altitude_ft, float& heading_deg, int32_t& speed_kts);
 
     /**
      * Check if an aircraft is contained in the dictionary.

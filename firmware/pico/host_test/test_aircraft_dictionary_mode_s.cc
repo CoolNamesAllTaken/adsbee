@@ -661,8 +661,8 @@ TEST(AircraftDictionary, FilterCPRLocations) {
 
 TEST(AircraftDictionary, GetLowestAircraftPositionModeS) {
     AircraftDictionary dictionary = AircraftDictionary();
-    float latitude_deg, longitude_deg, heading_deg, speed_kts;
-    int32_t gnss_altitude_ft, baro_altitude_ft;
+    float latitude_deg, longitude_deg, heading_deg;
+    int32_t gnss_altitude_ft, baro_altitude_ft, speed_kts;
 
     // No aircraft in dictionary, should return false.
     EXPECT_FALSE(dictionary.GetLowestAircraftPosition(latitude_deg, longitude_deg, gnss_altitude_ft, baro_altitude_ft,
@@ -699,6 +699,7 @@ TEST(AircraftDictionary, GetLowestAircraftPositionModeS) {
     aircraft2.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid, true);
     aircraft2.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagDirectionValid, true);
     aircraft2.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHorizontalSpeedValid, true);
+    aircraft2.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
     aircraft2.last_message_timestamp_ms = get_time_since_boot_ms();
     dictionary.InsertAircraft(aircraft2);
 
@@ -728,6 +729,7 @@ TEST(AircraftDictionary, GetLowestAircraftPositionModeS) {
     aircraft3.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid, true);
     aircraft3.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagDirectionValid, true);
     aircraft3.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHorizontalSpeedValid, true);
+    aircraft3.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
     aircraft3.last_message_timestamp_ms = get_time_since_boot_ms();
     dictionary.InsertAircraft(aircraft3);
 
@@ -756,6 +758,7 @@ TEST(AircraftDictionary, GetLowestAircraftPositionModeS) {
     // No baro altitude valid.
     aircraft4.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagDirectionValid, true);
     aircraft4.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHorizontalSpeedValid, true);
+    aircraft4.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
     aircraft4.last_message_timestamp_ms = get_time_since_boot_ms();
     dictionary.InsertAircraft(aircraft4);
 
@@ -778,8 +781,8 @@ TEST(AircraftDictionary, LowestAircraftPtrClearedOnPrune) {
     config.aircraft_prune_interval_ms = 1000;  // Short prune interval for testing.
     AircraftDictionary dictionary(config);
 
-    float latitude_deg, longitude_deg, heading_deg, speed_kts;
-    int32_t gnss_altitude_ft, baro_altitude_ft;
+    float latitude_deg, longitude_deg, heading_deg;
+    int32_t gnss_altitude_ft, baro_altitude_ft, speed_kts;
 
     set_time_since_boot_ms(10000);
 
@@ -794,6 +797,7 @@ TEST(AircraftDictionary, LowestAircraftPtrClearedOnPrune) {
     aircraft.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagGNSSAltitudeValid, true);
     aircraft.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagDirectionValid, true);
     aircraft.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHorizontalSpeedValid, true);
+    aircraft.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
     aircraft.last_message_timestamp_ms = get_time_since_boot_ms();
     dictionary.InsertAircraft(aircraft);
 
