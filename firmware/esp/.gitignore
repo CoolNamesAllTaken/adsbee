@@ -1,1 +1,3 @@
 **.pem
+# ESP IDF stores a bunch of stuff in settings that isn't applicable across developers or machines.
+.vscode/settings.json
