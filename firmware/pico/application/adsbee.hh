@@ -101,7 +101,8 @@ class ADSBee {
         subg_radio_ll.~CC1312();
     }
     bool Init();
-    bool InitISRs();  // Separate ISR initialization to allow putting ISRs on a separate core.
+    bool InitISRs();    // Separate ISR initialization to allow putting ISRs on a separate core.
+    bool DeInitISRs();  // Clean up ISR resources (DMA channels, etc.) before stopping core.
     bool Update();
 
     /**

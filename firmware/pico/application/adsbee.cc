@@ -160,6 +160,28 @@ bool ADSBee::InitISRs() {
     return true;
 }
 
+bool ADSBee::DeInitISRs() {
+    // Disable PIO state machines before cleaning up
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
+        pio_sm_set_enabled(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], false);
+        pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], false);
+    }
+
+    // Stop and unclaim DMA channels used for MLAT jitter counters
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
+        dma_channel_abort(mlat_jitter_dma_channel_[sm_index]);
+        dma_channel_unclaim(mlat_jitter_dma_channel_[sm_index]);
+    }
+
+    // Disable interrupts
+    irq_set_enabled(config_.preamble_detector_demod_complete_irq, false);
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
+        gpio_set_irq_enabled(config_.demod_pins[sm_index], GPIO_IRQ_EDGE_RISE, false);
+    }
+
+    return true;
+}
+
 bool ADSBee::Update() {
     Update1090LED();
 

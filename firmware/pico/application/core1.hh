@@ -28,5 +28,8 @@ inline void main_core1() {
     }
 }
 
-inline void StopCore1() { multicore_reset_core1(); }
+inline void StopCore1() {
+    adsbee.DeInitISRs();  // Clean up DMA channels and other ISR resources before stopping core
+    multicore_reset_core1();
+}
 inline void StartCore1() { multicore_launch_core1(main_core1); }
