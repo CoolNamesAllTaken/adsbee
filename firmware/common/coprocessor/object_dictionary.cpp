@@ -133,11 +133,6 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
                 return false;
             }
             memcpy(&composite_device_status, buf, sizeof(CompositeDeviceStatus));
-
-            if (composite_device_status.rp2040.rx_position_available) {
-                // Update the reference position in the aircraft dictionary from the RP2040 device status.
-                aircraft_dictionary.SetReferencePosition(composite_device_status.rp2040.rx_position.latitude_deg);
-            }
             break;
         }
 #elif defined(ON_TI)

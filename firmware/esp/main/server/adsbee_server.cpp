@@ -107,9 +107,13 @@ bool ADSBeeServer::Update() {
     pico.UpdateLED();
 
     uint32_t timestamp_ms = get_time_since_boot_ms();
+
     // Prune aircraft dictionary. Need to do this up front so that we don't end up with a negative timestamp delta
     // caused by packets being ingested more recently than the timestamp we take at the beginning of this function.
     if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > kAircraftDictionaryUpdateIntervalMs) {
+        aircraft_dictionary.SetReferencePosition(
+            object_dictionary.composite_device_status.rp2040.rx_position.latitude_deg);
+
         aircraft_dictionary.Update(timestamp_ms);
         last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
         CONSOLE_INFO("ADSBeeServer::Update", "\t %d clients, %d aircraft, %lu squitter, %lu extended squitter",
