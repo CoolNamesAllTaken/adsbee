@@ -54,7 +54,7 @@ bool ModeSAircraft::CanDecodePosition() {
     return true;
 }
 
-bool ModeSAircraft::DecodePosition(bool filter_cpr_position) {
+bool ModeSAircraft::DecodePosition(bool is_airborne, uint32_t ref_lat_awb32, bool filter_cpr_position) {
     // WARNING: There are two separate timebases in play here! The timebase for CPR packet timestamps is the MLAT
     // timebase, while higher level aircraft dictionary info is in system time.
 
@@ -68,16 +68,32 @@ bool ModeSAircraft::DecodePosition(bool filter_cpr_position) {
         MAX(last_even_packet_.received_timestamp_ms, last_odd_packet_.received_timestamp_ms);
 
     NASACPRDecoder::DecodedPosition result;
-    bool result_valid =
-        NASACPRDecoder::DecodeAirborneGlobalCPR({.odd = false,
-                                                 .lat_cpr = last_even_packet_.n_lat,
-                                                 .lon_cpr = last_even_packet_.n_lon,
-                                                 .received_timestamp_ms = last_even_packet_.received_timestamp_ms},
-                                                {.odd = true,
-                                                 .lat_cpr = last_odd_packet_.n_lat,
-                                                 .lon_cpr = last_odd_packet_.n_lon,
-                                                 .received_timestamp_ms = last_odd_packet_.received_timestamp_ms},
-                                                result);
+    bool result_valid = false;
+    if (is_airborne) {
+        // Airborne CPR decoding.
+        result_valid =
+            NASACPRDecoder::DecodeAirborneGlobalCPR({.odd = false,
+                                                     .lat_cpr = last_even_packet_.n_lat,
+                                                     .lon_cpr = last_even_packet_.n_lon,
+                                                     .received_timestamp_ms = last_even_packet_.received_timestamp_ms},
+                                                    {.odd = true,
+                                                     .lat_cpr = last_odd_packet_.n_lat,
+                                                     .lon_cpr = last_odd_packet_.n_lon,
+                                                     .received_timestamp_ms = last_odd_packet_.received_timestamp_ms},
+                                                    result);
+    } else {
+        // Surface CPR decoding.
+        result_valid =
+            NASACPRDecoder::DecodeSurfaceGlobalCPR({.odd = false,
+                                                    .lat_cpr = last_even_packet_.n_lat,
+                                                    .lon_cpr = last_even_packet_.n_lon,
+                                                    .received_timestamp_ms = last_even_packet_.received_timestamp_ms},
+                                                   {.odd = true,
+                                                    .lat_cpr = last_odd_packet_.n_lat,
+                                                    .lon_cpr = last_odd_packet_.n_lon,
+                                                    .received_timestamp_ms = last_odd_packet_.received_timestamp_ms},
+                                                   ref_lat_awb32, result);
+    }
 
     if (!result_valid) {
         CONSOLE_WARNING("ModeSAircraft::DecodePosition",
@@ -251,7 +267,8 @@ bool ModeSAircraft::ApplyAircraftIDMessage(const ModeSADSBPacket& packet) {
     return true;
 }
 
-bool ModeSAircraft::ApplySurfacePositionMessage(const ModeSADSBPacket& packet) {
+bool ModeSAircraft::ApplySurfacePositionMessage(const ModeSADSBPacket& packet, uint32_t ref_lat_awb32,
+                                                bool filter_cpr_position) {
     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, false);
 
     if (NICBitIsValid(ADSBTypes::kNICBitA) && NICBitIsValid(ADSBTypes::kNICBitC)) {
@@ -289,9 +306,109 @@ bool ModeSAircraft::ApplySurfacePositionMessage(const ModeSADSBPacket& packet) {
         }
     }
 
-    CONSOLE_WARNING("AircraftDictionary::ApplySurfacePositionMessage",
-                    "Surface position messages not yet supported. Received message with ICAO 0x%lx", icao_address);
-    return false;
+    // ME[6-12] - Movement Subfield
+    uint8_t movement = packet.GetNBitWordFromMessage(7, 5);
+    speed_source = ADSBTypes::kSpeedSourceGroundSpeed;
+    baro_vertical_rate_fpm = 0;
+    gnss_vertical_rate_fpm = 0;
+    // NOTE: We record speed as an integer value in kts, to make filtering multiplications faster on units without an
+    // FPU. This also means that all of our reporting protocols use integer speed values. Surface position packets
+    // include speed information with fractional values. We round these values to the nearest whole kt.
+    if (movement == 0) {
+        // No movement info available.
+        WriteBitFlag(kBitFlagHorizontalSpeedValid, false);
+    } else if (movement == 1) {
+        // Aircraft stopped (ground speed = 0 kts).
+        WriteBitFlag(kBitFlagHorizontalSpeedValid, true);
+        speed_kts = 0;
+    } else if (movement == 2) {
+        // 0 kts < ground speed < 0.125 kt.
+        WriteBitFlag(kBitFlagHorizontalSpeedValid, true);
+        speed_kts = 0;  // Round down to 0kts since we keep speed_kts as an integer.
+    } else if (movement >= 3 && movement <= 8) {
+        // 0.125kts < ground speed < 1 kt.
+        WriteBitFlag(kBitFlagHorizontalSpeedValid, true);
+        speed_kts = 1;
+    } else if (movement >= 9 && movement <= 12) {
+        // 1 kt < ground speed < 2 kt.
+        WriteBitFlag(kBitFlagHorizontalSpeedValid, true);
+        // 0.25 kt steps.
+        speed_kts = (movement - 9 + 2) / 4 + 1;  // Round up.
+    } else if (movement >= 13 && movement <= 38) {
+        // 2 kt < ground speed < 15 kt.
+        WriteBitFlag(kBitFlagHorizontalSpeedValid, true);
+        // 0.5 kt steps.
+        speed_kts = (movement - 13 + 1) / 2 + 2;  // Round up.
+    } else if (movement >= 39 && movement <= 93) {
+        // 15 kt < ground speed < 70 kt.
+        WriteBitFlag(kBitFlagHorizontalSpeedValid, true);
+        // 1 kt steps.
+        speed_kts = (movement - 39) + 15;
+    } else if (movement >= 94 && movement <= 108) {
+        // 70 kt < ground speed < 100 kt.
+        WriteBitFlag(kBitFlagHorizontalSpeedValid, true);
+        // 2 kt steps.
+        speed_kts = (movement - 94) * 2 + 70;
+    } else if (movement >= 109 && movement <= 123) {
+        // 100 kt < ground speed < 175 kt.
+        WriteBitFlag(kBitFlagHorizontalSpeedValid, true);
+        // 5 kt steps.
+        speed_kts = (movement - 109) * 5 + 100;
+    } else if (movement == 124) {
+        // 157 kt < ground speed.
+        WriteBitFlag(kBitFlagHorizontalSpeedValid, true);
+        // 5 kt steps.
+        speed_kts = 175;
+    } else if (movement == 125) {
+        // Reserved for aircraft decelerating. Not yet defined.
+        WriteBitFlag(kBitFlagHorizontalSpeedValid, false);
+    } else if (movement == 126) {
+        // Reserved for aircraft accelerating. Not yet defined.
+        WriteBitFlag(kBitFlagHorizontalSpeedValid, false);
+    } else if (movement == 127) {
+        // Reserved for aircraft backing up. Not yet defined.
+        WriteBitFlag(kBitFlagHorizontalSpeedValid, false);
+    }
+
+    // ME[13] - Status Bit for Heading / Ground Track
+    bool ground_direction_is_valid = packet.GetNBitWordFromMessage(1, 12);
+    WriteBitFlag(kBitFlagDirectionValid, ground_direction_is_valid);
+
+    // ME[14-20] - Heading / Ground Track Subfield
+    uint8_t heading_ground_track = packet.GetNBitWordFromMessage(7, 13);
+    direction_deg = (heading_ground_track * 360) / 128.0f;  // Scale to degrees.
+
+    // ME[21] - Reserved for ADS-R
+    // This bit must be 0.
+    bool reserved_for_adsr = packet.GetNBitWordFromMessage(1, 20);
+    if (reserved_for_adsr) {
+        CONSOLE_WARNING("AircraftDictionary::ApplySurfacePositionMessage",
+                        "Received surface position message with ADS-R reserved bit set for ICAO 0x%lx.", icao_address);
+    }
+
+    // ME[22] - CPR Format
+    bool odd = packet.GetNBitWordFromMessage(1, 21);
+
+    // ME[23-39] - Encoded Latitude
+    // ME[40-56] - Encoded Longitude
+    SetCPRLatLon(packet.GetNBitWordFromMessage(17, 22), packet.GetNBitWordFromMessage(17, 39), odd,
+                 packet.raw.GetTimestampMs());
+    if (!CanDecodePosition()) {
+        // Can't decode aircraft position, but this is not an error.
+        return true;
+    }
+    if (DecodeSurfacePosition(ref_lat_awb32, filter_cpr_position)) {
+        // Position decode succeeded.
+        WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedPosition, true);
+    } else {
+        // We should have been able to recover a position, but position decode failed. This happens if our position
+        // filter algorithm rejects the decoded position result.
+        CONSOLE_WARNING("AircraftDictionary::ApplyAirbornePositionMessage",
+                        "Had valid packets, but aircraft position decode failed for ICAO 0x%lx.", icao_address);
+        return false;
+    }
+
+    return true;
 }
 
 bool ModeSAircraft::ApplyAirbornePositionMessage(const ModeSADSBPacket& packet, bool filter_cpr_position) {
@@ -425,7 +542,8 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(const ModeSADSBPacket& packet, 
     // ME[21] - CPR Format
     bool odd = packet.GetNBitWordFromMessage(1, 21);
 
-    // ME[32-?]
+    // ME[23-39] - Encoded Latitude
+    // ME[40-56] - Encoded Longitude
     SetCPRLatLon(packet.GetNBitWordFromMessage(17, 22), packet.GetNBitWordFromMessage(17, 39), odd,
                  packet.raw.GetTimestampMs());
     if (!CanDecodePosition()) {
@@ -433,7 +551,7 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(const ModeSADSBPacket& packet, 
         // other errors.
         return decode_successful;
     }
-    if (DecodePosition(filter_cpr_position)) {
+    if (DecodeAirbornePosition(filter_cpr_position)) {
         // Position decode succeeded.
         WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedPosition, true);
     } else {
@@ -1459,7 +1577,8 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
         case ModeSADSBPacket::kTypeCodeSurfacePosition + 1:  // TC = 6 (Surface Position)
         case ModeSADSBPacket::kTypeCodeSurfacePosition + 2:  // TC = 7 (Surface Position)
         case ModeSADSBPacket::kTypeCodeSurfacePosition + 3:  // TC = 8 (Surface Position)
-            ret = aircraft_ptr->ApplySurfacePositionMessage(packet);
+            ret = aircraft_ptr->ApplySurfacePositionMessage(packet, reference_latitude_awb32_,
+                                                            config_.enable_cpr_position_filter);
             break;
         case ModeSADSBPacket::kTypeCodeAirbornePositionBaroAlt:      // TC = 9 (Airborne Position w/ Baro Altitude)
         case ModeSADSBPacket::kTypeCodeAirbornePositionBaroAlt + 1:  // TC = 10 (Airborne Position w/ Baro Altitude)
@@ -1583,6 +1702,8 @@ bool AircraftDictionary::RemoveAircraft(uint32_t icao_address) {
                     icao_address);
     return false;  // aircraft was not found in the dictionary
 }
+
+void AircraftDictionary::SetReferencePosition(float latitude_deg) { reference_latitude_awb32_ = lat2awb(latitude_deg); }
 
 bool ModeSAircraft::SetCPRLatLon(uint32_t n_lat_cpr, uint32_t n_lon_cpr, bool odd, uint32_t received_timestamp_ms) {
     if (n_lat_cpr > kCPRLatLonMaxCount || n_lon_cpr > kCPRLatLonMaxCount) {

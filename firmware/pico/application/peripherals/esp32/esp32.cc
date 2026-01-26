@@ -117,6 +117,7 @@ bool ESP32::Update() {
                 .core_0_usage_percent = core_0_monitor.GetUsagePercent(),
                 .core_1_usage_percent = core_1_monitor.GetUsagePercent(),
                 .rx_position = adsbee.rx_position,
+                .rx_position_available = adsbee.rx_position_available,
             },
         .subg = adsbee.subg_radio_ll.device_status,
     };

@@ -206,11 +206,23 @@ class ModeSAircraft : public Aircraft {
     }
 
     /**
-     * Decodes the aircraft position using last_odd_packet_ and last_even_packet_.
+     * Wrapper around DecodePosition for airborne positions (reference latitude not needed).
      * @param[in] filter_cpr_position True if the CPR position filter should be run (defaults to true).
      * @retval True if position was decoded successfully, false otherwise.
      */
-    bool DecodePosition(bool filter_cpr_position = true);
+    inline bool DecodeAirbornePosition(bool filter_cpr_position = true) {
+        return DecodePosition(true, 0, filter_cpr_position);
+    }
+
+    /**
+     * Wrapper around DecodePosition for surface positions.
+     * @param[in] ref_lat_awb32 Reference latitude in 32-bit angular weighted binary for surface position decoding.
+     * @param[in] filter_cpr_position True if the CPR position filter should be run (defaults to true).
+     * @retval True if position was decoded successfully, false otherwise.
+     */
+    inline bool DecodeSurfacePosition(uint32_t ref_lat_awb32, bool filter_cpr_position = true) {
+        return DecodePosition(false, ref_lat_awb32, filter_cpr_position);
+    }
 
     /**
      * Returns the maximum time delta between CPR packets that will be accepted for decoding.
@@ -223,7 +235,7 @@ class ModeSAircraft : public Aircraft {
         }
         // Scale time delta threshold based on the velocity of the aircraft relative to 500kts, but clamp the result to
         // the max time delta thresholds.
-        // Protext against divide by 0.
+        // Protect against divide by 0.
         return speed_kts == 0 ? kMaxCPRIntervalMs : MIN(kRefCPRIntervalMs * 500 / speed_kts, kMaxCPRIntervalMs);
     }
 
@@ -282,7 +294,13 @@ class ModeSAircraft : public Aircraft {
     /**
      * Set or clear a bit on the Aircraft.
      */
-    inline void WriteBitFlag(BitFlag bit, bool value) { value ? flags |= (0b1 << bit) : flags &= ~(0b1 << bit); }
+    inline void WriteBitFlag(BitFlag bit, bool value) {
+        if (bit == kBitFlagIsAirborne && HasBitFlag(kBitFlagIsAirborne) != value) {
+            // Reset CPR packets when the airborne state changes, since position decoding may be invalid now.
+            ClearCPRPackets();
+        }
+        value ? flags |= (0b1 << bit) : flags &= ~(0b1 << bit);
+    }
 
     /**
      * Write a value for a NIC supplement bit. Used to piece together a NIC from separate messages, so that the NIC can
@@ -349,13 +367,15 @@ class ModeSAircraft : public Aircraft {
      * GENERIC COMMENT FOR ALL MESSAGE INGESTION HELPERS
      * Ingests a <Message Type> ADS-B message. Called by IngestModeSADSBPacket, which makes sure that the packet
      * is valid and has the correct Downlink Format.
-     * @param[out] aircraft Reference to the Aircraft to populate with info pulled from packet.
      * @param[in] packet ModeSADSBPacket to ingest.
+     * @param[in] ref_lat_awb32 Reference latitude in 32-bit angular weighted binary for surface position decoding.
+     * @param[in] filter_cpr_position True if the CPR position filter should be run.
      * @retval True if message was ingested successfully, false otherwise.
      */
 
     bool ApplyAircraftIDMessage(const ModeSADSBPacket& packet);
-    bool ApplySurfacePositionMessage(const ModeSADSBPacket& packet);
+    bool ApplySurfacePositionMessage(const ModeSADSBPacket& packet, uint32_t ref_lat_awb32,
+                                     bool filter_cpr_position = true);
     bool ApplyAirbornePositionMessage(const ModeSADSBPacket& packet, bool filter_cpr_position = true);
     bool ApplyAirborneVelocitiesMessage(const ModeSADSBPacket& packet);
     bool ApplyAircraftStatusMessage(const ModeSADSBPacket& packet);
@@ -369,6 +389,16 @@ class ModeSAircraft : public Aircraft {
         uint32_t n_lat = 0;                  // 17-bit latitude count
         uint32_t n_lon = 0;                  // 17-bit longitude count
     };
+
+    /**
+     * Decodes the aircraft position using last_odd_packet_ and last_even_packet_.
+     * @param[in] is_airborne True if decoding airborne position, false for surface position.
+     * @param[in] ref_lat_awb32 Reference latitude in 32-bit angular weighted binary for surface position decoding
+     * (defaults to 0, unused for airborne positions).
+     * @param[in] filter_cpr_position True if the CPR position filter should be run (defaults to true).
+     * @retval True if position was decoded successfully, false otherwise.
+     */
+    bool DecodePosition(bool is_airborne = true, uint32_t ref_lat_awb32 = 0, bool filter_cpr_position = true);
 
     CPRPacket last_odd_packet_;
     CPRPacket last_even_packet_;
@@ -934,7 +964,7 @@ class AircraftDictionary {
      * dictionary.
      */
     bool GetLowestAircraftPosition(float& latitude_deg, float& longitude_deg, int32_t& gnss_altitude_ft,
-                                           int32_t& baro_altitude_ft, float& heading_deg, int32_t& speed_kts);
+                                   int32_t& baro_altitude_ft, float& heading_deg, int32_t& speed_kts);
 
     /**
      * Check if an aircraft is contained in the dictionary.
@@ -948,6 +978,13 @@ class AircraftDictionary {
      * @param[in] enabled True to enable the filter, false to disable it.
      */
     inline void SetCPRPositionFilterEnabled(bool enabled) { config_.enable_cpr_position_filter = enabled; }
+
+    /**
+     * Sets a reference position used when decoding Mode S surface position packets. Should be called whenever the
+     * reference position (i.e. the receiver location) changes.
+     * @param[in] latitude_deg Latitude of the reference position, in degrees.
+     */
+    void SetReferencePosition(float latitude_deg);
 
     /**
      * Check if the CPR position filter is enabled.
@@ -969,4 +1006,7 @@ class AircraftDictionary {
     // Counters in metrics_counter_ are incremented, then metrics_counter_ is swapped into metrics during the dictionary
     // update. This ensures that the public metrics struct always has valid data.
     Metrics metrics_counter_;
+
+    uint32_t reference_latitude_awb32_ =
+        0;  // Reference position for decoding Mode S surface position packets, in angular weighted binary format.
 };

@@ -725,10 +725,13 @@ TEST(NASACPR, AircraftDictionary) {
         ModeSAircraft* aircraft_ptr =
             dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(i, Aircraft::kAircraftTypeModeS));
         // Set odd message to most recent so that we read rpos1 for the expected result.
+        // Set this flag before setting CPR positions since a transition from not airborne to airborne results in CPR
+        // positions being cleared when the IsAiborne flage is written.
+        aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
         aircraft_ptr->SetCPRLatLon(test.enc_evn_lat, test.enc_evn_lon, false, 1);
         aircraft_ptr->SetCPRLatLon(test.enc_odd_lat, test.enc_odd_lon, true, 2);
         // printf("Aircraft %d: %u %u\r\n", i, test.enc_evn_lat, test.enc_evn_lon);
-        EXPECT_TRUE(aircraft_ptr->DecodePosition());
+        EXPECT_TRUE(aircraft_ptr->DecodeAirbornePosition());
         EXPECT_NEAR(aircraft_ptr->latitude_deg, WrapCPRDecodeLatitude(awb2lat(test.rpos1_lat_awb)), 1e-4);
         EXPECT_NEAR(aircraft_ptr->longitude_deg, WrapCPRDecodeLongitude(awb2lon(test.rpos1_lon_awb)), 1e-4);
     }

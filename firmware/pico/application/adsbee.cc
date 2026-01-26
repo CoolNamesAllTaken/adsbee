@@ -298,6 +298,11 @@ void ADSBee::UpdateRxPosition() {
             CONSOLE_ERROR("ADSBee::GetRxPosition", "Unknown Rx position source %d.",
                           static_cast<int>(rx_position.source));
     }
+
+    // Update the aircraft dictionary's reference location.
+    if (rx_position_available) {
+        aircraft_dictionary.SetReferencePosition(rx_position.latitude_deg);
+    }
 }
 
 uint16_t ADSBee::GetTLLearningTemperatureMV() { return tl_learning_temperature_mv_; }
