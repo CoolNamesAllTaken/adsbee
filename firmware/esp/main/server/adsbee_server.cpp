@@ -277,7 +277,13 @@ bool ADSBeeServer::ReportGDL90() {
 
     // Ownship Report
     GDL90Reporter::GDL90TargetReportData ownship_data;
-    // TODO: Actually fill out ownship data!
+    SettingsManager::RxPosition& rx_position = object_dictionary.composite_device_status.rp2040.rx_position;
+    ownship_data.latitude_deg = rx_position.latitude_deg;
+    ownship_data.longitude_deg = rx_position.longitude_deg;
+    ownship_data.altitude_ft = rx_position.baro_altitude_ft;
+    ownship_data.speed_kts = rx_position.speed_kts;
+    ownship_data.direction_deg = rx_position.heading_deg;
+    // TODO: Fill out additional ownship data as needed.
     message.len = gdl90.WriteGDL90TargetReportMessage(message.data, CommsManager::NetworkMessage::kMaxLenBytes,
                                                       ownship_data, true);
     comms_manager.WiFiAccessPointSendMessageToAllStations(message);
