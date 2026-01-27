@@ -70,7 +70,7 @@ TEST(AircraftDictionary, InsertThenRemoveTooMany) {
 
 TEST(AircraftDictionary, UseAircraftPtr) {
     AircraftDictionary dictionary = AircraftDictionary();
-    ModeSAircraft *aircraft =
+    ModeSAircraft* aircraft =
         dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(12345, Aircraft::kAircraftTypeModeS));
     EXPECT_TRUE(aircraft);  // aircraft should have been automatically inserted just fine
     aircraft->emitter_category = ADSBTypes::kEmitterCategoryLineObstacle;
@@ -92,7 +92,7 @@ TEST(AircraftDictionary, AccessFakeAircraft) {
 
 TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     AircraftDictionary dictionary = AircraftDictionary();
-    DecodedModeSPacket tpacket = DecodedModeSPacket((char *)"8D76CE88204C9072CB48209A504D");
+    DecodedModeSPacket tpacket = DecodedModeSPacket((char*)"8D76CE88204C9072CB48209A504D");
     EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
     EXPECT_EQ(dictionary.GetNumAircraft(), 1);
     ModeSAircraft aircraft;
@@ -102,7 +102,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_EQ(aircraft.emitter_category, ADSBTypes::kEmitterCategoryNoCategoryInfo);
     EXPECT_STREQ(aircraft.callsign, "SIA224  ");
 
-    tpacket = DecodedModeSPacket((char *)"8D7C7181215D01A08208204D8BF1");
+    tpacket = DecodedModeSPacket((char*)"8D7C7181215D01A08208204D8BF1");
     EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
     EXPECT_EQ(dictionary.GetNumAircraft(), 2);
     EXPECT_TRUE(dictionary.GetAircraft(0x7C7181, aircraft));
@@ -111,7 +111,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_EQ(aircraft.emitter_category, ADSBTypes::kEmitterCategoryLight);
     EXPECT_STREQ(aircraft.callsign, "WPF     ");
 
-    tpacket = DecodedModeSPacket((char *)"8D7C7745226151A08208205CE9C2");
+    tpacket = DecodedModeSPacket((char*)"8D7C7745226151A08208205CE9C2");
     EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
     EXPECT_EQ(dictionary.GetNumAircraft(), 3);
     EXPECT_TRUE(dictionary.GetAircraft(0x7C7745, aircraft));
@@ -120,7 +120,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_EQ(aircraft.emitter_category, ADSBTypes::kEmitterCategoryMedium1);
     EXPECT_STREQ(aircraft.callsign, "XUF     ");
 
-    tpacket = DecodedModeSPacket((char *)"8D7C80AD2358F6B1E35C60FF1925");
+    tpacket = DecodedModeSPacket((char*)"8D7C80AD2358F6B1E35C60FF1925");
     EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
     EXPECT_EQ(dictionary.GetNumAircraft(), 4);
     EXPECT_TRUE(dictionary.GetAircraft(0x7C80AD, aircraft));
@@ -129,7 +129,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_EQ(aircraft.emitter_category, ADSBTypes::kEmitterCategoryMedium2);
     EXPECT_STREQ(aircraft.callsign, "VOZ1851 ");
 
-    tpacket = DecodedModeSPacket((char *)"8D7C146525446074DF5820738E90");
+    tpacket = DecodedModeSPacket((char*)"8D7C146525446074DF5820738E90");
     EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
     EXPECT_EQ(dictionary.GetNumAircraft(), 5);
     EXPECT_TRUE(dictionary.GetAircraft(0x7C1465, aircraft));
@@ -138,7 +138,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
     EXPECT_EQ(aircraft.emitter_category, ADSBTypes::kEmitterCategoryHeavy);
     EXPECT_STREQ(aircraft.callsign, "QFA475  ");
 
-    tpacket = DecodedModeSPacket((char *)"8D4840D6202CC371C32CE0576098");
+    tpacket = DecodedModeSPacket((char*)"8D4840D6202CC371C32CE0576098");
     EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
     EXPECT_TRUE(dictionary.GetAircraft(0x4840D6, aircraft));
     EXPECT_STREQ(aircraft.callsign, "KLM1023 ");
@@ -146,7 +146,7 @@ TEST(AircraftDictionary, ApplyAircraftIDMessage) {
 
 TEST(AircraftDictionary, IngestInvalidAircrfaftIDMessage) {
     AircraftDictionary dictionary = AircraftDictionary();
-    DecodedModeSPacket tpacket = DecodedModeSPacket((char *)"7D76CE88204C9072CB48209A504D");
+    DecodedModeSPacket tpacket = DecodedModeSPacket((char*)"7D76CE88204C9072CB48209A504D");
     EXPECT_FALSE(dictionary.IngestDecodedModeSPacket(tpacket));
     EXPECT_EQ(dictionary.GetNumAircraft(), 0);
 }
@@ -169,7 +169,7 @@ TEST(ModeSAircraft, SetCPRLatLon) {
     EXPECT_TRUE(aircraft.SetCPRLatLon(578, 13425, false, get_time_since_boot_ms()));
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(578, 4651, false, get_time_since_boot_ms()));
-    EXPECT_FALSE(aircraft.DecodePosition());
+    EXPECT_FALSE(aircraft.DecodeAirbornePosition());
     EXPECT_FALSE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid));
 
     // Send two odd packets at startup, no even packets.
@@ -178,7 +178,7 @@ TEST(ModeSAircraft, SetCPRLatLon) {
     EXPECT_TRUE(aircraft.SetCPRLatLon(236, 13425, true, get_time_since_boot_ms()));
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(236, 857, true, get_time_since_boot_ms()));
-    EXPECT_FALSE(aircraft.DecodePosition());
+    EXPECT_FALSE(aircraft.DecodeAirbornePosition());
     EXPECT_FALSE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid));
 
     // Send one odd packet and one even packet at startup.
@@ -187,7 +187,7 @@ TEST(ModeSAircraft, SetCPRLatLon) {
     EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true, get_time_since_boot_ms()));
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false, get_time_since_boot_ms()));
-    EXPECT_TRUE(aircraft.DecodePosition());
+    EXPECT_TRUE(aircraft.DecodeAirbornePosition());
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid));
     EXPECT_NEAR(aircraft.latitude_deg, 52.25720f, 1e-4);  // even latitude
     EXPECT_NEAR(aircraft.longitude_deg, 3.91937f, 1e-4);  // longitude calculated from even latitude
@@ -198,7 +198,7 @@ TEST(ModeSAircraft, SetCPRLatLon) {
     EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false, get_time_since_boot_ms()));
     inc_time_since_boot_ms();
     EXPECT_TRUE(aircraft.SetCPRLatLon(74158, 50194, true, get_time_since_boot_ms()));
-    EXPECT_TRUE(aircraft.DecodePosition());
+    EXPECT_TRUE(aircraft.DecodeAirbornePosition());
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid));
     EXPECT_NEAR(aircraft.latitude_deg, 52.26578f, 1e-4);  // odd latitude
     // don't have a test value available for the longitude calculated from odd latitude
@@ -209,24 +209,24 @@ TEST(ModeSAircraft, SetCPRLatLon) {
     inc_time_since_boot_ms(1000);
     EXPECT_TRUE(aircraft.SetCPRLatLon(93000, 51372, false, get_time_since_boot_ms()));
     inc_time_since_boot_ms(1000);
-    EXPECT_TRUE(aircraft.DecodePosition());
+    EXPECT_TRUE(aircraft.DecodeAirbornePosition());
     inc_time_since_boot_ms(1000);
     // Position established, now send the curveball.
     EXPECT_TRUE(aircraft.SetCPRLatLon(93000 - 5000, 50194, true, get_time_since_boot_ms()));
     inc_time_since_boot_ms(1000);
 // Re-decode the previous even CPR packet with the new zone.
 #ifdef FILTER_CPR_POSITIONS
-    EXPECT_FALSE(aircraft.DecodePosition());  // This should fail due to the CPR filter.
+    EXPECT_FALSE(aircraft.DecodeAirbornePosition());  // This should fail due to the CPR filter.
 #else
-    EXPECT_TRUE(aircraft.DecodePosition());
+    EXPECT_TRUE(aircraft.DecodeAirbornePosition());
 #endif
 }
 
 TEST(AircraftDictionary, ApplyAirbornePositionMessage) {
     AircraftDictionary dictionary = AircraftDictionary();
-    DecodedModeSPacket even_tpacket = DecodedModeSPacket((char *)"8da6147f5859f18cdf4d244ac6fa");
+    DecodedModeSPacket even_tpacket = DecodedModeSPacket((char*)"8da6147f5859f18cdf4d244ac6fa");
     ASSERT_TRUE(even_tpacket.is_valid);
-    DecodedModeSPacket odd_tpacket = DecodedModeSPacket((char *)"8da6147f585b05533e2ba73e43cb");
+    DecodedModeSPacket odd_tpacket = DecodedModeSPacket((char*)"8da6147f585b05533e2ba73e43cb");
     ASSERT_TRUE(odd_tpacket.is_valid);
 
     ASSERT_EQ(dictionary.GetNumAircraft(), 0);
@@ -239,7 +239,7 @@ TEST(AircraftDictionary, ApplyAirbornePositionMessage) {
     ASSERT_TRUE(dictionary.IngestDecodedModeSPacket(even_tpacket));
     ASSERT_EQ(dictionary.GetNumAircraft(), 1);
     auto itr = dictionary.dict.begin();
-    auto &aircraft = std::get<ModeSAircraft>(itr->second);
+    auto& aircraft = std::get<ModeSAircraft>(itr->second);
 
     // Aircraft should exist but not have its location filled out.
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne));
@@ -302,8 +302,8 @@ TEST(ModeSAircraft, CalculateMaxAllowedCPRInterval) {
 // lead to an invalid decode.
 TEST(AircraftDictionary, TimeFilterAirbornePositionMessages) {
     AircraftDictionary dictionary = AircraftDictionary();
-    RawModeSPacket even_tpacket = RawModeSPacket((char *)"8da6147f5859f18cdf4d244ac6fa");
-    RawModeSPacket odd_tpacket = RawModeSPacket((char *)"8da6147f585b05533e2ba73e43cb");
+    RawModeSPacket even_tpacket = RawModeSPacket((char*)"8da6147f5859f18cdf4d244ac6fa");
+    RawModeSPacket odd_tpacket = RawModeSPacket((char*)"8da6147f585b05533e2ba73e43cb");
 
     even_tpacket.mlat_48mhz_64bit_counts = 0;
     DecodedModeSPacket even_packet = DecodedModeSPacket(even_tpacket);
@@ -353,7 +353,7 @@ TEST(AircraftDictionary, TimeFilterAirbornePositionMessages) {
 
 TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     AircraftDictionary dictionary = AircraftDictionary();
-    DecodedModeSPacket tpacket = DecodedModeSPacket((char *)"8dae56bc99246508b8080b6c230f");
+    DecodedModeSPacket tpacket = DecodedModeSPacket((char*)"8dae56bc99246508b8080b6c230f");
     ASSERT_TRUE(tpacket.is_valid);
     ModeSADSBPacket packet = ModeSADSBPacket(tpacket);
     ASSERT_EQ(packet.GetTypeCodeEnum(), ModeSADSBPacket::TypeCode::kTypeCodeAirborneVelocities);
@@ -362,7 +362,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     ASSERT_TRUE(dictionary.IngestModeSADSBPacket(packet));
     ASSERT_EQ(dictionary.GetNumAircraft(), 1);
     auto itr = dictionary.dict.begin();
-    auto &aircraft =
+    auto& aircraft =
         std::get<ModeSAircraft>(itr->second);  // NOTE: Aircraft is a mutable reference until we get to Message A!
 
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagDirectionValid));
@@ -380,7 +380,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroVerticalRateValid));
 
     // Test Message A from https://mode-s.org/decode/content/ads-b/5-airborne-velocity.html
-    tpacket = DecodedModeSPacket((char *)"8D485020994409940838175B284F");
+    tpacket = DecodedModeSPacket((char*)"8D485020994409940838175B284F");
     ASSERT_TRUE(tpacket.is_valid);
     packet = ModeSADSBPacket(tpacket);
     ASSERT_EQ(packet.GetTypeCodeEnum(), ModeSADSBPacket::TypeCode::kTypeCodeAirborneVelocities);
@@ -399,7 +399,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     EXPECT_EQ(aircraft.speed_kts, 159);
 
     // Test altitude difference between baro and GNSS altitude for Message A by re-ingesting.
-    ModeSAircraft *aircraft_ptr =
+    ModeSAircraft* aircraft_ptr =
         dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(0x485020, Aircraft::kAircraftTypeModeS));
     aircraft_ptr->baro_altitude_ft = 2000;
     aircraft_ptr->altitude_source = ADSBTypes::kAltitudeSourceBaro;
@@ -410,7 +410,7 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     ASSERT_EQ(aircraft_ptr->gnss_altitude_ft, 2000 + 550);  // GNSS altitude is 550ft above baro altitude.
 
     // Test Message B from https://mode-s.org/decode/content/ads-b/5-airborne-velocity.html
-    tpacket = DecodedModeSPacket((char *)"8DA05F219B06B6AF189400CBC33F");
+    tpacket = DecodedModeSPacket((char*)"8DA05F219B06B6AF189400CBC33F");
     ASSERT_TRUE(tpacket.is_valid);
     packet = ModeSADSBPacket(tpacket);
     ASSERT_EQ(packet.GetTypeCodeEnum(), ModeSADSBPacket::TypeCode::kTypeCodeAirborneVelocities);
@@ -430,11 +430,11 @@ TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
 }
 
 TEST(AircraftDictionary, IngestAltitudeReply) {
-    ModeSAircraft *aircraft_ptr;
+    ModeSAircraft* aircraft_ptr;
     // Try ingesting a altitude reply packet that's marked as valid so that it doesn't require a cross-check with the
     // dictionary.
     AircraftDictionary dictionary = AircraftDictionary();
-    DecodedModeSPacket tpacket = DecodedModeSPacket((char *)"200006A2DE8B1C");
+    DecodedModeSPacket tpacket = DecodedModeSPacket((char*)"200006A2DE8B1C");
     EXPECT_EQ(tpacket.icao_address, 0x7C1B28u);
     aircraft_ptr = dictionary.InsertAircraft<ModeSAircraft>(
         ModeSAircraft(0x7C1B28u));  // Put aircraft in the dictionary so the packet can be ingested.
@@ -453,7 +453,7 @@ TEST(AircraftDictionary, IngestAltitudeReply) {
     EXPECT_FALSE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagAlert));
 
     // Ingest a altitude reply packet with an alert and ident.
-    tpacket = DecodedModeSPacket((char *)"24000E3956BBA1");
+    tpacket = DecodedModeSPacket((char*)"24000E3956BBA1");
     // Add aircraft to dictionary so packet can be ingested.
     dictionary.InsertAircraft(ModeSAircraft(tpacket.icao_address));
     aircraft_ptr =
@@ -466,7 +466,7 @@ TEST(AircraftDictionary, IngestAltitudeReply) {
     EXPECT_TRUE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagAlert));
 
     // Ingest a altitude reply packet with aircraft on the ground.
-    tpacket = DecodedModeSPacket((char *)"210000992F8C48");
+    tpacket = DecodedModeSPacket((char*)"210000992F8C48");
     // Add aircraft to dictionary so packet can be ingested.
     dictionary.InsertAircraft(ModeSAircraft(tpacket.icao_address));
     aircraft_ptr =
@@ -483,7 +483,7 @@ TEST(AircraftDictionary, IngestAltitudeReply) {
 TEST(AircraftDictionary, IngestIdentityReply) {
     // Ingest a identity reply packet with an alert and ident.
     AircraftDictionary dictionary = AircraftDictionary();
-    DecodedModeSPacket tpacket = DecodedModeSPacket((char *)"2C0006A2DEE500");
+    DecodedModeSPacket tpacket = DecodedModeSPacket((char*)"2C0006A2DEE500");
     // Add aircraft to dictioanry so packet can be ingested.
     dictionary.InsertAircraft(ModeSAircraft(tpacket.icao_address));
     EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
@@ -494,7 +494,7 @@ TEST(AircraftDictionary, IngestIdentityReply) {
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagIdent));
 
     // Ingest a identity reply packet with an ident but no alert.
-    tpacket = DecodedModeSPacket((char *)"2D0006A2DEE500");
+    tpacket = DecodedModeSPacket((char*)"2D0006A2DEE500");
     // Add aircraft to dictioanry so packet can be ingested.
     dictionary.InsertAircraft(ModeSAircraft(tpacket.icao_address));
     EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
@@ -504,7 +504,7 @@ TEST(AircraftDictionary, IngestIdentityReply) {
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagIdent));
 
     // Ingest a identity reply packet with no ident and no alert. Aircraft is airborne.
-    tpacket = DecodedModeSPacket((char *)"28000D08CEE4C5");
+    tpacket = DecodedModeSPacket((char*)"28000D08CEE4C5");
     // Add aircraft to dictioanry so packet can be ingested.
     dictionary.InsertAircraft(ModeSAircraft(tpacket.icao_address));
     EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
@@ -515,7 +515,7 @@ TEST(AircraftDictionary, IngestIdentityReply) {
     EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne));
 
     // Ingest a identity reply packet with no ident and no alert. Aircraft is on ground.
-    tpacket = DecodedModeSPacket((char *)"29001E0D3CB4BF");
+    tpacket = DecodedModeSPacket((char*)"29001E0D3CB4BF");
     // Add aircraft to dictioanry so packet can be ingested.
     dictionary.InsertAircraft(ModeSAircraft(tpacket.icao_address));
     EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
@@ -528,7 +528,7 @@ TEST(AircraftDictionary, IngestIdentityReply) {
 
 TEST(AircraftDictionary, IngestAllCallReply) {
     AircraftDictionary dictionary = AircraftDictionary();
-    DecodedModeSPacket tpacket = DecodedModeSPacket((char *)"5D7C0B6DB05076");
+    DecodedModeSPacket tpacket = DecodedModeSPacket((char*)"5D7C0B6DB05076");
     ASSERT_TRUE(tpacket.is_valid);
     EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
     ModeSAircraft aircraft;
@@ -587,7 +587,7 @@ TEST(AircraftDictionary, FilterCPRLocations) {
     AircraftDictionary dictionary;
 
     /**  Test Case 0 **/
-    DecodedModeSPacket packet = DecodedModeSPacket((char *)"8D48922358C387D91DF354DCCCB8");  // even
+    DecodedModeSPacket packet = DecodedModeSPacket((char*)"8D48922358C387D91DF354DCCCB8");  // even
     uint32_t icao = packet.icao_address;
     inc_time_since_boot_ms(1000);
     packet.raw.mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
@@ -595,17 +595,17 @@ TEST(AircraftDictionary, FilterCPRLocations) {
     EXPECT_TRUE(decode_result);
 
     // Aircraft should now exist in the dictionary.
-    ModeSAircraft *aircraft =
+    ModeSAircraft* aircraft =
         dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(icao, Aircraft::kAircraftTypeModeS));
     ASSERT_TRUE(aircraft);
 
     // Send another valid position packet and ensure a valid location decode.
-    packet = DecodedModeSPacket((char *)"8D48922358C38066020D8401D571");  // odd
+    packet = DecodedModeSPacket((char*)"8D48922358C38066020D8401D571");  // odd
     inc_time_since_boot_ms(1000);
     packet.raw.mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
     EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
     EXPECT_TRUE(aircraft->CanDecodePosition());
-    EXPECT_FALSE(aircraft->DecodePosition());  // Double decode fails without a new packet fails.
+    EXPECT_FALSE(aircraft->DecodeAirbornePosition());  // Double decode fails without a new packet fails.
     EXPECT_NEAR(aircraft->latitude_deg, 48.5977f, 0.0001f);
     EXPECT_NEAR(aircraft->longitude_deg, 18.70521f, 0.001f);
 
@@ -613,13 +613,13 @@ TEST(AircraftDictionary, FilterCPRLocations) {
     aircraft->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid, true);
 
     // Ingest a packet pair that causes an invalid decode.
-    packet = DecodedModeSPacket((char *)"8D48922358C3806C3E0C8BC657BB");  // even
+    packet = DecodedModeSPacket((char*)"8D48922358C3806C3E0C8BC657BB");  // even
     inc_time_since_boot_ms(1000);
     packet.raw.mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
     EXPECT_FALSE(dictionary.IngestDecodedModeSPacket(packet));
     // Aircraft has all the ingredients to decode its location, but the decoded location is not valid.
     EXPECT_TRUE(aircraft->CanDecodePosition());
-    EXPECT_FALSE(aircraft->DecodePosition());
+    EXPECT_FALSE(aircraft->DecodeAirbornePosition());
 
     // Previous position is persisted.
     EXPECT_NEAR(aircraft->latitude_deg, 48.5977f, 0.0001f);
@@ -627,34 +627,265 @@ TEST(AircraftDictionary, FilterCPRLocations) {
 
     /**  Test Case 1 **/
     // Valid position pair.
-    packet = DecodedModeSPacket((char *)"8D48C22D60AB00DEABC5DB78FCD6");  // odd
+    packet = DecodedModeSPacket((char*)"8D48C22D60AB00DEABC5DB78FCD6");  // odd
     icao = packet.icao_address;
     inc_time_since_boot_ms(1000);
     packet.raw.mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
     EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
     aircraft = dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(icao, Aircraft::kAircraftTypeModeS));
-    packet = DecodedModeSPacket((char *)"8D48C22D60AB0452BFAD19A695E0");  // even
+    packet = DecodedModeSPacket((char*)"8D48C22D60AB0452BFAD19A695E0");  // even
     inc_time_since_boot_ms(1000);
     packet.raw.mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
     EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
     EXPECT_TRUE(aircraft->CanDecodePosition());
-    EXPECT_FALSE(aircraft->DecodePosition());  // Double decode fails without new packet.
+    EXPECT_FALSE(aircraft->DecodeAirbornePosition());  // Double decode fails without new packet.
     EXPECT_NEAR(aircraft->latitude_deg, 49.30659f, 0.0001f);
     EXPECT_NEAR(aircraft->longitude_deg, 17.4134f, 0.0001f);
 
     // Invalid position pair.
-    packet = DecodedModeSPacket((char *)"8D48C22D60AB00E705C60B37E092");  // even
+    packet = DecodedModeSPacket((char*)"8D48C22D60AB00E705C60B37E092");  // even
     inc_time_since_boot_ms(1000);
     packet.raw.mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
     EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
-    packet = DecodedModeSPacket((char *)"8D48C22D60B104710F94F963E8B6");  // odd
+    packet = DecodedModeSPacket((char*)"8D48C22D60B104710F94F963E8B6");  // odd
     inc_time_since_boot_ms(1000);
     packet.raw.mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
     EXPECT_FALSE(dictionary.IngestDecodedModeSPacket(packet));
 
     // Confirm new location by re-receiving the even packet.
     inc_time_since_boot_ms(1000);
-    packet = DecodedModeSPacket((char *)"8D48C22D60AB00E705C60B37E092");  // even
+    packet = DecodedModeSPacket((char*)"8D48C22D60AB00E705C60B37E092");  // even
     packet.raw.mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
     EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
+}
+
+TEST(AircraftDictionary, GetLowestAircraftPositionModeS) {
+    AircraftDictionary dictionary = AircraftDictionary();
+    float latitude_deg, longitude_deg, heading_deg;
+    int32_t gnss_altitude_ft, baro_altitude_ft, speed_kts;
+
+    // No aircraft in dictionary, should return false.
+    EXPECT_FALSE(dictionary.GetLowestAircraftPosition(latitude_deg, longitude_deg, gnss_altitude_ft, baro_altitude_ft,
+                                                      heading_deg, speed_kts));
+    EXPECT_EQ(dictionary.lowest_aircraft_entry, nullptr);
+
+    // Add an aircraft without GNSS altitude - should not be selected as lowest.
+    ModeSAircraft aircraft1(0x123456);
+    aircraft1.latitude_deg = 37.0f;
+    aircraft1.longitude_deg = -122.0f;
+    aircraft1.baro_altitude_ft = 10000;
+    aircraft1.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid, true);
+    aircraft1.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid, true);
+    aircraft1.last_message_timestamp_ms = get_time_since_boot_ms();
+    dictionary.InsertAircraft(aircraft1);
+
+    // Update the dictionary to process the aircraft.
+    dictionary.Update(get_time_since_boot_ms());
+
+    // Still no valid GNSS altitude, so should return false.
+    EXPECT_FALSE(dictionary.GetLowestAircraftPosition(latitude_deg, longitude_deg, gnss_altitude_ft, baro_altitude_ft,
+                                                      heading_deg, speed_kts));
+
+    // Add an aircraft with GNSS altitude at 5000ft.
+    ModeSAircraft aircraft2(0x234567);
+    aircraft2.latitude_deg = 38.0f;
+    aircraft2.longitude_deg = -121.0f;
+    aircraft2.gnss_altitude_ft = 5000;
+    aircraft2.baro_altitude_ft = 4900;
+    aircraft2.direction_deg = 90.0f;
+    aircraft2.speed_kts = 250;
+    aircraft2.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid, true);
+    aircraft2.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagGNSSAltitudeValid, true);
+    aircraft2.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid, true);
+    aircraft2.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagDirectionValid, true);
+    aircraft2.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHorizontalSpeedValid, true);
+    aircraft2.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
+    aircraft2.last_message_timestamp_ms = get_time_since_boot_ms();
+    dictionary.InsertAircraft(aircraft2);
+
+    // Update the dictionary.
+    dictionary.Update(get_time_since_boot_ms());
+
+    // Should now return the aircraft with GNSS altitude.
+    EXPECT_TRUE(dictionary.GetLowestAircraftPosition(latitude_deg, longitude_deg, gnss_altitude_ft, baro_altitude_ft,
+                                                     heading_deg, speed_kts));
+    EXPECT_NEAR(latitude_deg, 38.0f, kFloatCloseEnough);
+    EXPECT_NEAR(longitude_deg, -121.0f, kFloatCloseEnough);
+    EXPECT_EQ(gnss_altitude_ft, 5000);
+    EXPECT_EQ(baro_altitude_ft, 4900);
+    EXPECT_NEAR(heading_deg, 90.0f, kFloatCloseEnough);
+    EXPECT_EQ(speed_kts, 250);
+
+    // Add another aircraft with lower GNSS altitude at 2000ft.
+    ModeSAircraft aircraft3(0x345678);
+    aircraft3.latitude_deg = 39.0f;
+    aircraft3.longitude_deg = -120.0f;
+    aircraft3.gnss_altitude_ft = 2000;
+    aircraft3.baro_altitude_ft = 1900;
+    aircraft3.direction_deg = 180.0f;
+    aircraft3.speed_kts = 150;
+    aircraft3.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid, true);
+    aircraft3.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagGNSSAltitudeValid, true);
+    aircraft3.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid, true);
+    aircraft3.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagDirectionValid, true);
+    aircraft3.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHorizontalSpeedValid, true);
+    aircraft3.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
+    aircraft3.last_message_timestamp_ms = get_time_since_boot_ms();
+    dictionary.InsertAircraft(aircraft3);
+
+    // Update the dictionary.
+    dictionary.Update(get_time_since_boot_ms());
+
+    // Should now return the lower aircraft.
+    EXPECT_TRUE(dictionary.GetLowestAircraftPosition(latitude_deg, longitude_deg, gnss_altitude_ft, baro_altitude_ft,
+                                                     heading_deg, speed_kts));
+    EXPECT_NEAR(latitude_deg, 39.0f, kFloatCloseEnough);
+    EXPECT_NEAR(longitude_deg, -120.0f, kFloatCloseEnough);
+    EXPECT_EQ(gnss_altitude_ft, 2000);
+    EXPECT_EQ(baro_altitude_ft, 1900);
+    EXPECT_NEAR(heading_deg, 180.0f, kFloatCloseEnough);
+    EXPECT_EQ(speed_kts, 150);
+
+    // Add a fourth aircraft with even lower GNSS altitude at 500ft.
+    ModeSAircraft aircraft4(0x456789);
+    aircraft4.latitude_deg = 40.0f;
+    aircraft4.longitude_deg = -119.0f;
+    aircraft4.gnss_altitude_ft = 500;
+    aircraft4.direction_deg = 270.0f;
+    aircraft4.speed_kts = 100;
+    aircraft4.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid, true);
+    aircraft4.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagGNSSAltitudeValid, true);
+    // No baro altitude valid.
+    aircraft4.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagDirectionValid, true);
+    aircraft4.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHorizontalSpeedValid, true);
+    aircraft4.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
+    aircraft4.last_message_timestamp_ms = get_time_since_boot_ms();
+    dictionary.InsertAircraft(aircraft4);
+
+    // Update the dictionary.
+    dictionary.Update(get_time_since_boot_ms());
+
+    // Should now return the lowest aircraft (500ft).
+    EXPECT_TRUE(dictionary.GetLowestAircraftPosition(latitude_deg, longitude_deg, gnss_altitude_ft, baro_altitude_ft,
+                                                     heading_deg, speed_kts));
+    EXPECT_NEAR(latitude_deg, 40.0f, kFloatCloseEnough);
+    EXPECT_NEAR(longitude_deg, -119.0f, kFloatCloseEnough);
+    EXPECT_EQ(gnss_altitude_ft, 500);
+    EXPECT_EQ(baro_altitude_ft, INT32_MIN);  // No baro altitude available.
+    EXPECT_NEAR(heading_deg, 270.0f, kFloatCloseEnough);
+    EXPECT_EQ(speed_kts, 100);
+}
+
+TEST(AircraftDictionary, LowestAircraftPtrClearedOnPrune) {
+    AircraftDictionary::AircraftDictionaryConfig_t config;
+    config.aircraft_prune_interval_ms = 1000;  // Short prune interval for testing.
+    AircraftDictionary dictionary(config);
+
+    float latitude_deg, longitude_deg, heading_deg;
+    int32_t gnss_altitude_ft, baro_altitude_ft, speed_kts;
+
+    set_time_since_boot_ms(10000);
+
+    // Add an aircraft with valid GNSS altitude.
+    ModeSAircraft aircraft(0x123456);
+    aircraft.latitude_deg = 37.0f;
+    aircraft.longitude_deg = -122.0f;
+    aircraft.gnss_altitude_ft = 1000;
+    aircraft.direction_deg = 45.0f;
+    aircraft.speed_kts = 200;
+    aircraft.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid, true);
+    aircraft.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagGNSSAltitudeValid, true);
+    aircraft.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagDirectionValid, true);
+    aircraft.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHorizontalSpeedValid, true);
+    aircraft.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
+    aircraft.last_message_timestamp_ms = get_time_since_boot_ms();
+    dictionary.InsertAircraft(aircraft);
+
+    // Update the dictionary.
+    dictionary.Update(get_time_since_boot_ms());
+
+    // Should return the aircraft.
+    EXPECT_TRUE(dictionary.GetLowestAircraftPosition(latitude_deg, longitude_deg, gnss_altitude_ft, baro_altitude_ft,
+                                                     heading_deg, speed_kts));
+    EXPECT_NE(dictionary.lowest_aircraft_entry, nullptr);
+    EXPECT_NEAR(heading_deg, 45.0f, kFloatCloseEnough);
+    EXPECT_NEAR(speed_kts, 200.0f, kFloatCloseEnough);
+
+    // Advance time past prune interval.
+    inc_time_since_boot_ms(2000);
+
+    // Update the dictionary - aircraft should be pruned.
+    dictionary.Update(get_time_since_boot_ms());
+
+    // Lowest aircraft pointer should be cleared.
+    EXPECT_EQ(dictionary.lowest_aircraft_entry, nullptr);
+    EXPECT_EQ(dictionary.GetNumAircraft(), 0);
+
+    // GetLowestAircraftPosition should return false.
+    EXPECT_FALSE(dictionary.GetLowestAircraftPosition(latitude_deg, longitude_deg, gnss_altitude_ft, baro_altitude_ft,
+                                                      heading_deg, speed_kts));
+}
+
+TEST(AircraftDictionary, IngestSurfacePositionMessagesOnGround) {
+    // Ingest a pair of surface position messages and verify that the position is decoded correctly.
+    // First packet: 8C4841753AAB238733C8CD4020B1
+    // Second packet: 8C4841753A8A35323FAEBDAC702D
+    // Reference Location:
+    //  Lat: 51.990 deg
+    //  Lat: 4.375 deg
+    // Decoded Location:
+    //  Lat: 52.320607 deg
+    //  Lon: 4.734735 deg
+
+    AircraftDictionary::AircraftDictionaryConfig_t config;
+    AircraftDictionary dictionary(config);
+    dictionary.SetReferencePosition(51.990f);  // Set reference latitude for surface position CPR decoding.
+    DecodedModeSPacket packet_0 = DecodedModeSPacket((char*)"8C4841753AAB238733C8CD4020B1");
+    DecodedModeSPacket packet_1 = DecodedModeSPacket((char*)"8C4841753A8A35323FAEBDAC702D");
+
+    // Set packet timestamp to nonzero values close together to pass packet filter.
+    packet_0.raw.mlat_48mhz_64bit_counts = 50123;
+    packet_1.raw.mlat_48mhz_64bit_counts =
+        100000;  // Needs to be at least 1ms * 48,000 counts / ms later to count as most recent packet.
+
+    uint32_t uid = Aircraft::ICAOToUID(0x484175, Aircraft::AircraftType::kAircraftTypeModeS);
+
+    // Ingest the first surface position packet.
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet_0));
+
+    // After ingesting the first packet, the aircraft should exist in the dictionary, but should be marked as on ground
+    // with an invalid position.
+    ModeSAircraft* aircraft_ptr = dictionary.GetAircraftPtr<ModeSAircraft>(uid, false);
+    ASSERT_TRUE(aircraft_ptr);
+    EXPECT_FALSE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid));
+    EXPECT_FALSE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne));
+
+    // Ingest the second surface position packet.
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet_1));
+    EXPECT_TRUE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid));
+    EXPECT_FALSE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne));
+
+    // Verify that the decoded position is correct.
+    EXPECT_NEAR(aircraft_ptr->latitude_deg, 52.320607f, 0.001f);
+    EXPECT_NEAR(aircraft_ptr->longitude_deg, 4.734735f, 0.001f);
+}
+
+TEST(AircraftDictionary, IngestSurfacePositionMovementAndTrack) {
+    AircraftDictionary::AircraftDictionaryConfig_t config;
+    AircraftDictionary dictionary(config);
+
+    DecodedModeSPacket packet_0 = DecodedModeSPacket((char*)"8C4841753A9A153237AEF0F275BE");
+    uint32_t uid = Aircraft::ICAOToUID(0x484175, Aircraft::AircraftType::kAircraftTypeModeS);
+
+    EXPECT_TRUE(dictionary.IngestModeSADSBPacket(packet_0));
+    ModeSAircraft* aircraft_ptr = dictionary.GetAircraftPtr<ModeSAircraft>(uid, false);
+
+    EXPECT_FALSE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid));
+    EXPECT_FALSE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne));
+
+    EXPECT_NEAR(aircraft_ptr->direction_deg, 92.8f, 0.1f);
+    EXPECT_EQ(aircraft_ptr->speed_kts, 17);
+    EXPECT_EQ(aircraft_ptr->baro_vertical_rate_fpm, 0);
+    EXPECT_EQ(aircraft_ptr->gnss_vertical_rate_fpm, 0);
+    EXPECT_EQ(aircraft_ptr->speed_source, ADSBTypes::SpeedSource::kSpeedSourceGroundSpeed);
 }

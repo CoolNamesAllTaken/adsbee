@@ -11,6 +11,7 @@
 #include "hardware/pio.h"
 #include "hardware/watchdog.h"
 #include "macros.hh"  // For MAX / MIN.
+#include "main.hh"    // For ISR core assignment.
 #include "mode_s_packet.hh"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
@@ -91,6 +92,7 @@ class ADSBee {
         bool has_subg = bsp.has_subg;
 
         uint32_t aircraft_dictionary_update_interval_ms = 1000;
+        uint32_t rx_position_update_interval_ms = 1000;
     };
 
     ADSBee(ADSBeeConfig config_in);
@@ -99,7 +101,8 @@ class ADSBee {
         subg_radio_ll.~CC1312();
     }
     bool Init();
-    bool InitISRs();  // Separate ISR initialization to allow putting ISRs on a separate core.
+    bool InitISRs();    // Separate ISR initialization to allow putting ISRs on a separate core.
+    bool DeInitISRs();  // Clean up ISR resources (DMA channels, etc.) before stopping core.
     bool Update();
 
     /**
@@ -278,8 +281,32 @@ class ADSBee {
      */
     inline void SetReceiver1090Enable(bool is_enabled) {
         r1090_enabled_ = is_enabled;
+#ifndef ISRS_ON_CORE1
+        // Only enable / disable the IRQ from here if we are running the ISRs on core 0. Otherwise this will enable
+        // interrupts on the current core, in addition to the core that's actually supposed to be running them.
+        // Simultaneous dual-core ISRs for OnDemodComplete will corrupt all the packets.
+        SyncReceiver1090IRQEnable();
+#else
+        // Core 1 update loop will check adsbee.Receiver1090IsEnabled() to see if IRQ should be enabled.
+#endif  // ISRS_ON_CORE1
+    }
+
+    /**
+     * This function allows core 0 or core 1 to enable the 1090 receiver IRQ which requires access to some private
+     * config data. This is NOT the primary API for enabling/disabling the 1090 receiver; that is done through
+     * SetReceiver1090Enable(). Note that this function will synchronize the IRQ enable state to match the
+     * r1090_enabled_ member variable.
+     */
+    inline void SyncReceiver1090IRQEnable() {
         irq_set_enabled(config_.preamble_detector_demod_complete_irq, r1090_enabled_);
     }
+
+    /**
+     * Checks whether the 1090 receiver IRQ is currently enabled. Can only be called from the same core that runs the
+     * IRQs.
+     * @retval True if enabled, false otherwise.
+     */
+    inline bool Receiver1090IRQIsEnabled() { return irq_is_enabled(config_.preamble_detector_demod_complete_irq); }
 
     /**
      * Enables or disables the sub-GHz radio by powering the receiver chip on or off. Re-initializes the receiver chip
@@ -365,6 +392,9 @@ class ADSBee {
     CC1312 subg_radio_ll = CC1312({});
     SPICoprocessor subg_radio = SPICoprocessor({.interface = subg_radio_ll, .tag_str = "CC1312"});
 
+    SettingsManager::RxPosition rx_position;
+    bool rx_position_available = false;
+
    private:
     void IngestAndForwardPackets();
     void MLATCounterInit();
@@ -373,6 +403,7 @@ class ADSBee {
     void PruneAircraftDictionary();
     void Update1090LED();
     void UpdateNoiseFloor();
+    void UpdateRxPosition();
     void UpdateTLLearning();
 
     ADSBeeConfig config_;
@@ -422,6 +453,7 @@ class ADSBee {
     RawUATUplinkPacket raw_uat_uplink_packet_queue_buffer_[kRawUATUplinkPacketQueueDepth];
 
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
+    uint32_t last_rx_position_update_timestamp_ms_ = 0;
 
     bool r1090_enabled_ = true;
     bool r1090_packet_queue_overflowed_ = false;

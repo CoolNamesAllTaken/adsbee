@@ -36,14 +36,14 @@ inline float awb2lon(uint32_t awb_lon) { return __mod360__(awb_lon * RESOLUTION)
 
 /**
  * Convert a floating point latitude to an Angular Weighted Binary representation.
- * @param[in] lat The latitude to convert.
- * @return The Angular Weighted Binary representation of the latitude.
+ * @param[in] lat The latitude to convert, in degrees.
+ * @return The 32-bit Angular Weighted Binary representation of the latitude.
  */
 inline uint32_t lat2awb(float lat) { return (uint32_t)floor(INV_RESOLUTION * __mod360__(lat) + 0.5f); }
 
 /**
  * Convert an Angular Weighted Binary longitude to a floating point representation.
- * @param[in] awb_lon The Angular Weighted Binary longitude to convert.
- * @return The floating point representation of the longitude.
+ * @param[in] lon The longitude to convert, in degrees.
+ * @return The 32-bit Angular Weighted Binary representation of the longitude.
  */
 inline uint32_t lon2awb(float lon) { return (uint32_t)floor(lon * INV_RESOLUTION + 0.5f); }

@@ -116,6 +116,8 @@ bool ESP32::Update() {
                 .temperature_deg_c = (int8_t)(core_0_monitor.ReadTemperatureDegC()),
                 .core_0_usage_percent = core_0_monitor.GetUsagePercent(),
                 .core_1_usage_percent = core_1_monitor.GetUsagePercent(),
+                .rx_position = adsbee.rx_position,
+                .rx_position_available = adsbee.rx_position_available,
             },
         .subg = adsbee.subg_radio_ll.device_status,
     };
@@ -130,7 +132,7 @@ bool ESP32::Update() {
 
 bool ESP32::SPIGetHandshakePinLevel() { return gpio_get(config_.spi_handshake_pin); }
 
-int ESP32::SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len_bytes, bool end_transaction) {
+int ESP32::SPIWriteReadBlocking(uint8_t* tx_buf, uint8_t* rx_buf, uint16_t len_bytes, bool end_transaction) {
     int bytes_written = 0;
 #ifdef ON_PICO
     SPIBeginTransaction();  // Begin SPI transaction, which sets the CS pin low.

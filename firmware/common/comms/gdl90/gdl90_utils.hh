@@ -171,8 +171,6 @@ class GDL90Reporter {
     uint16_t WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes, const UATAircraft& aircraft,
                                            bool ownship = false);
 
-    // uint16_t AircraftToGDL90Frame(const Aircraft &aircraft) {}
-
     // Bit Flags for Message ID 0 (Heartbeat).
     bool uat_initialized = true;
     bool gnss_position_valid = false;

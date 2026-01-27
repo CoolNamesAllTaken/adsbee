@@ -13,7 +13,7 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 11;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 12;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 class SettingsManager {
@@ -61,31 +61,34 @@ class SettingsManager {
     static const char kSubGHzModeStrs[kNumSubGHzRadioModes][kSubGHzModeStrMaxLen];
 
     // Receiver position settings.
-    struct RxPosition {
+    struct __attribute__((packed)) RxPosition {
         enum PositionSource : uint8_t {
             kPositionSourceNone = 0,
             kPositionSourceFixed = 1,
             kPositionSourceGNSS = 2,
-            kPositionSourceAutoAircraftLowest = 3,
-            kPositionSourceAutoAircraftICAO = 4,
+            kPositionSourceLowestAircraft = 3,
+            kPositionSourceAircraftMatchingICAO = 4,
             kNumPositionSources
         };
 
-        static const uint16_t kPositionSourceStrMaxLen = 30;
+        static const uint16_t kPositionSourceStrMaxLen = 32;
         static const char kPositionSourceStrs[kNumPositionSources][kPositionSourceStrMaxLen];
 
-        PositionSource source = kPositionSourceNone;
-        float latitude_deg = 0.0;     // Degrees, WGS84
-        float longitude_deg = 0.0;    // Degrees, WGS84
-        float gnss_altitude_m = 0.0;  // Meters, WGS84
-        float baro_altitude_m = 0.0;  // Meters, AMSL
-        float heading_deg = 0.0;      // Degrees from true north
-        float speed_kts = 0.0;        // Speed over ground in knots
+        PositionSource source = kPositionSourceLowestAircraft;
+        float latitude_deg = 0.0;      // Degrees, WGS84
+        float longitude_deg = 0.0;     // Degrees, WGS84
+        int32_t gnss_altitude_ft = 0;  // Meters, WGS84
+        int32_t baro_altitude_ft = 0;  // Meters, AMSL
+        float heading_deg = 0.0;       // Degrees from true north
+        int32_t speed_kts = 0;         // Speed over ground in knots
+        uint32_t icao_address =
+            0;  // ICAO address to use for position bootstrap when source is kPositionSourceICAO, or the ICAO of the
+                // lowest plane being tracked when source is kPositionSourceLowestAircraft.
     };
 
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a
     // firmware upgrade if the format of the settings struct changes.
-    struct Settings {
+    struct alignas(4) Settings {
         static constexpr int kDefaultTLOffsetMV = 600;  // [mV]
         static constexpr uint32_t kDefaultWatchdogTimeoutSec = 10;
         // NOTE: Lengths do not include null terminator.
