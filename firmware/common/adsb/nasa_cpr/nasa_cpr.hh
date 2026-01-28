@@ -56,10 +56,12 @@ class NASACPRDecoder {
      * on the most recent message, sorted by received_timestamp_ms. Requires an ownship latitude.
      * @param[in] even_message The last even CPR message.
      * @param[in] odd_message The last odd CPR message.
-     * @param[in] own_lat_awb The ownship latitude in AWB format.
+     * @param[in] ref_lat_awb32 The ownship latitude in 32-bit AWB format.
+     * @param[in] ref_lon_awb32 The ownship longitude in 32-bit AWB format.
      * @param[out] decoded_position The decoded location.
      * @return True if the decode succeeded (recovered_position is valid), false otherwise.
      */
     static bool DecodeSurfaceGlobalCPR(const CPRMessage& even_message, const CPRMessage& odd_message,
-                                       uint32_t own_lat_awb, DecodedPosition& decoded_position);
+                                       uint32_t ref_lat_awb32, uint32_t ref_lon_awb32,
+                                       DecodedPosition& decoded_position);
 };

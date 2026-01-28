@@ -691,7 +691,8 @@ TEST(NASACPR, SurfaceGlobalDecode) {
         // Test with even message most recent (rpos0).
         even_message.received_timestamp_ms = 2;
         odd_message.received_timestamp_ms = 1;
-        result_valid = NASACPRDecoder::DecodeSurfaceGlobalCPR(even_message, odd_message, test.awb_evn_lat, result);
+        result_valid = NASACPRDecoder::DecodeSurfaceGlobalCPR(even_message, odd_message, test.awb_evn_lat,
+                                                              test.awb_evn_lon, result);
         EXPECT_EQ(result_valid, test.rpos0_valid);
 
         // rpos0 reflects the result when the even message is most recent.
@@ -703,7 +704,8 @@ TEST(NASACPR, SurfaceGlobalDecode) {
         // Test with odd message most recent (rpos1).
         odd_message.received_timestamp_ms = 2;
         even_message.received_timestamp_ms = 1;
-        result_valid = NASACPRDecoder::DecodeSurfaceGlobalCPR(even_message, odd_message, test.awb_evn_lat, result);
+        result_valid = NASACPRDecoder::DecodeSurfaceGlobalCPR(even_message, odd_message, test.awb_evn_lat,
+                                                              test.awb_evn_lon, result);
         // Only rpos0_valid is given in the table. We assume that if rpos0 decode was valid, rpos1 decode will also be
         // valid.
         EXPECT_EQ(result_valid, test.rpos0_valid);

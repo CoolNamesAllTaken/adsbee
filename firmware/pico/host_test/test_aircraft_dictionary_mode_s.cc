@@ -832,14 +832,14 @@ TEST(AircraftDictionary, IngestSurfacePositionMessagesOnGround) {
     // Second packet: 8C4841753A8A35323FAEBDAC702D
     // Reference Location:
     //  Lat: 51.990 deg
-    //  Lat: 4.375 deg
+    //  Lon: 4.375 deg
     // Decoded Location:
     //  Lat: 52.320607 deg
     //  Lon: 4.734735 deg
 
     AircraftDictionary::AircraftDictionaryConfig_t config;
     AircraftDictionary dictionary(config);
-    dictionary.SetReferencePosition(51.990f);  // Set reference latitude for surface position CPR decoding.
+    dictionary.SetReferencePosition(51.990f, 4.375f);  // Set reference latitude for surface position CPR decoding.
     DecodedModeSPacket packet_0 = DecodedModeSPacket((char*)"8C4841753AAB238733C8CD4020B1");
     DecodedModeSPacket packet_1 = DecodedModeSPacket((char*)"8C4841753A8A35323FAEBDAC702D");
 
@@ -868,6 +868,43 @@ TEST(AircraftDictionary, IngestSurfacePositionMessagesOnGround) {
     // Verify that the decoded position is correct.
     EXPECT_NEAR(aircraft_ptr->latitude_deg, 52.320607f, 0.001f);
     EXPECT_NEAR(aircraft_ptr->longitude_deg, 4.734735f, 0.001f);
+
+    // Now change the reference position and observe that the decoded surface position tracks with it.
+    dictionary = AircraftDictionary(config);
+    dictionary.SetReferencePosition(51.990f, 4.375f + 90.0f);
+    packet_0.raw.mlat_48mhz_64bit_counts += 100e3;
+    packet_1.raw.mlat_48mhz_64bit_counts += 100e3;
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet_0));
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet_1));
+    EXPECT_NEAR(aircraft_ptr->latitude_deg, 52.320607f, 0.001f);
+    EXPECT_NEAR(aircraft_ptr->longitude_deg, WrapCPRDecodeLongitude(4.734735f + 90.0f), 0.001f);
+
+    dictionary = AircraftDictionary(config);
+    dictionary.SetReferencePosition(51.990f, 4.375f + 180.0f);
+    packet_0.raw.mlat_48mhz_64bit_counts += 100e3;
+    packet_1.raw.mlat_48mhz_64bit_counts += 100e3;
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet_0));
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet_1));
+    EXPECT_NEAR(aircraft_ptr->latitude_deg, 52.320607f, 0.001f);
+    EXPECT_NEAR(aircraft_ptr->longitude_deg, WrapCPRDecodeLongitude(4.734735f + 180.0f), 0.001f);
+
+    dictionary = AircraftDictionary(config);
+    dictionary.SetReferencePosition(51.990f, 4.375f - 90.0f);
+    packet_0.raw.mlat_48mhz_64bit_counts += 100e3;
+    packet_1.raw.mlat_48mhz_64bit_counts += 100e3;
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet_0));
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet_1));
+    EXPECT_NEAR(aircraft_ptr->latitude_deg, 52.320607f, 0.001f);
+    EXPECT_NEAR(aircraft_ptr->longitude_deg, WrapCPRDecodeLongitude(4.734735f - 90.0f), 0.001f);
+
+    dictionary = AircraftDictionary(config);
+    dictionary.SetReferencePosition(51.990f, 4.375f - 180.0f);
+    packet_0.raw.mlat_48mhz_64bit_counts += 100e3;
+    packet_1.raw.mlat_48mhz_64bit_counts += 100e3;
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet_0));
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet_1));
+    EXPECT_NEAR(aircraft_ptr->latitude_deg, 52.320607f, 0.001f);
+    EXPECT_NEAR(aircraft_ptr->longitude_deg, WrapCPRDecodeLongitude(4.734735f - 180.0f), 0.001f);
 }
 
 TEST(AircraftDictionary, IngestSurfacePositionMovementAndTrack) {

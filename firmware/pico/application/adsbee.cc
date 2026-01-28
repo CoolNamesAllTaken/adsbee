@@ -323,7 +323,7 @@ void ADSBee::UpdateRxPosition() {
 
     // Update the aircraft dictionary's reference location.
     if (rx_position_available) {
-        aircraft_dictionary.SetReferencePosition(rx_position.latitude_deg);
+        aircraft_dictionary.SetReferencePosition(rx_position.latitude_deg, rx_position.longitude_deg);
     }
 }
 

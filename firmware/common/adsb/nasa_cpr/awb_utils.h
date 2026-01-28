@@ -46,4 +46,10 @@ inline uint32_t lat2awb(float lat) { return (uint32_t)floor(INV_RESOLUTION * __m
  * @param[in] lon The longitude to convert, in degrees.
  * @return The 32-bit Angular Weighted Binary representation of the longitude.
  */
-inline uint32_t lon2awb(float lon) { return (uint32_t)floor(lon * INV_RESOLUTION + 0.5f); }
+inline uint32_t lon2awb(float lon) {
+    // Remap longitudes from (-180,180) to (0, 360)
+    if (lon < 0.0f) {
+        lon += 360.0f;
+    }
+    return (uint32_t)floor(lon * INV_RESOLUTION + 0.5f);
+}

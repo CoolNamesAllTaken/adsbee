@@ -112,7 +112,8 @@ bool ADSBeeServer::Update() {
     // caused by packets being ingested more recently than the timestamp we take at the beginning of this function.
     if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > kAircraftDictionaryUpdateIntervalMs) {
         aircraft_dictionary.SetReferencePosition(
-            object_dictionary.composite_device_status.rp2040.rx_position.latitude_deg);
+            object_dictionary.composite_device_status.rp2040.rx_position.latitude_deg,
+            object_dictionary.composite_device_status.rp2040.rx_position.longitude_deg);
 
         aircraft_dictionary.Update(timestamp_ms);
         last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;

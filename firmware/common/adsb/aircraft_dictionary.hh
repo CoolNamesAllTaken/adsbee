@@ -211,17 +211,18 @@ class ModeSAircraft : public Aircraft {
      * @retval True if position was decoded successfully, false otherwise.
      */
     inline bool DecodeAirbornePosition(bool filter_cpr_position = true) {
-        return DecodePosition(true, 0, filter_cpr_position);
+        return DecodePosition(true, 0, 0, filter_cpr_position);
     }
 
     /**
      * Wrapper around DecodePosition for surface positions.
      * @param[in] ref_lat_awb32 Reference latitude in 32-bit angular weighted binary for surface position decoding.
+     * @param[in] ref_lon_awb32 Reference longitude in 32-bit angular weighted binary for surface position decoding.
      * @param[in] filter_cpr_position True if the CPR position filter should be run (defaults to true).
      * @retval True if position was decoded successfully, false otherwise.
      */
-    inline bool DecodeSurfacePosition(uint32_t ref_lat_awb32, bool filter_cpr_position = true) {
-        return DecodePosition(false, ref_lat_awb32, filter_cpr_position);
+    inline bool DecodeSurfacePosition(uint32_t ref_lat_awb32, uint32_t ref_lon_awb32, bool filter_cpr_position = true) {
+        return DecodePosition(false, ref_lat_awb32, ref_lon_awb32, filter_cpr_position);
     }
 
     /**
@@ -369,12 +370,13 @@ class ModeSAircraft : public Aircraft {
      * is valid and has the correct Downlink Format.
      * @param[in] packet ModeSADSBPacket to ingest.
      * @param[in] ref_lat_awb32 Reference latitude in 32-bit angular weighted binary for surface position decoding.
+     * @param[in] ref_lon_awb32 Reference longitude in 32-bit angular weighted binary for surface position decoding.
      * @param[in] filter_cpr_position True if the CPR position filter should be run.
      * @retval True if message was ingested successfully, false otherwise.
      */
 
     bool ApplyAircraftIDMessage(const ModeSADSBPacket& packet);
-    bool ApplySurfacePositionMessage(const ModeSADSBPacket& packet, uint32_t ref_lat_awb32,
+    bool ApplySurfacePositionMessage(const ModeSADSBPacket& packet, uint32_t ref_lat_awb32, uint32_t ref_lon_awb32,
                                      bool filter_cpr_position = true);
     bool ApplyAirbornePositionMessage(const ModeSADSBPacket& packet, bool filter_cpr_position = true);
     bool ApplyAirborneVelocitiesMessage(const ModeSADSBPacket& packet);
@@ -395,10 +397,12 @@ class ModeSAircraft : public Aircraft {
      * @param[in] is_airborne True if decoding airborne position, false for surface position.
      * @param[in] ref_lat_awb32 Reference latitude in 32-bit angular weighted binary for surface position decoding
      * (defaults to 0, unused for airborne positions).
+     * @param[in] ref_lon_awb32 Reference longitude in 32-bit angular weighted binary for surface position decoding.
      * @param[in] filter_cpr_position True if the CPR position filter should be run (defaults to true).
      * @retval True if position was decoded successfully, false otherwise.
      */
-    bool DecodePosition(bool is_airborne = true, uint32_t ref_lat_awb32 = 0, bool filter_cpr_position = true);
+    bool DecodePosition(bool is_airborne = true, uint32_t ref_lat_awb32 = 0, uint32_t ref_lon_awb32 = 0,
+                        bool filter_cpr_position = true);
 
     CPRPacket last_odd_packet_;
     CPRPacket last_even_packet_;
@@ -983,8 +987,9 @@ class AircraftDictionary {
      * Sets a reference position used when decoding Mode S surface position packets. Should be called whenever the
      * reference position (i.e. the receiver location) changes.
      * @param[in] latitude_deg Latitude of the reference position, in degrees.
+     * @param[in] longitude_deg Longitude of the reference position, in degrees.
      */
-    void SetReferencePosition(float latitude_deg);
+    void SetReferencePosition(float latitude_deg, float longitude_deg);
 
     /**
      * Check if the CPR position filter is enabled.
@@ -1007,6 +1012,7 @@ class AircraftDictionary {
     // update. This ensures that the public metrics struct always has valid data.
     Metrics metrics_counter_;
 
-    uint32_t reference_latitude_awb32_ =
-        0;  // Reference position for decoding Mode S surface position packets, in angular weighted binary format.
+    // Reference position for decoding Mode S surface position packets, in angular weighted binary format.
+    uint32_t reference_latitude_awb32_ = 0;
+    uint32_t reference_longitude_awb32_ = 0;
 };
