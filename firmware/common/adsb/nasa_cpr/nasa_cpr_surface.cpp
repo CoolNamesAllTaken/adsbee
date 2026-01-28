@@ -41,12 +41,6 @@ bool NASACPRDecoder::DecodeSurfaceGlobalCPR(const CPRMessage& even_message, cons
             (translated_lon_awb32 < ref_lon_awb32) ? kQuarterAWB32Resolution : -kQuarterAWB32Resolution;
     }
 
-    // uint32_t lon_base_awb32 = ref_lon_awb32 - (ref_lon_awb32 % kQuarterAWB32Resolution);
-    // uint32_t translated_lon_awb32 = result.lon_awb + lon_base_awb32;
-    // if (translated_lon_awb32 - ref_lon_awb32 > kEighthAWB32Resolution) {
-    //     translated_lon_awb32 -= kQuarterAWB32Resolution;
-    // }
-
     decoded_position.lat_deg = awb2lat(result.lat_awb);
     decoded_position.lon_deg = awb2lon(translated_lon_awb32);
     decoded_position.lat_awb = result.lat_awb;

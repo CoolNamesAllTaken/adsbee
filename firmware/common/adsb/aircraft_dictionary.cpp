@@ -1706,6 +1706,10 @@ bool AircraftDictionary::RemoveAircraft(uint32_t icao_address) {
 
 void AircraftDictionary::SetReferencePosition(float latitude_deg, float longitude_deg) {
     reference_latitude_awb32_ = lat2awb(latitude_deg);
+    // Remap longitudes from (-180,180) to (0, 360)
+    if (longitude_deg < 0.0f) {
+        longitude_deg += 360.0f;
+    }
     reference_longitude_awb32_ = lon2awb(longitude_deg);
 }
 
