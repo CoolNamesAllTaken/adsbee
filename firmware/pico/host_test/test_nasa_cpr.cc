@@ -2,6 +2,7 @@
 #include "awb_utils.h"
 #include "decode_utils.hh"  // For lat/lon wrapping utils.
 #include "gtest/gtest.h"
+#include "math.h"  // For fmodf.
 #include "nasa_cpr.hh"
 
 // Convenience struct for copy and pasting from the benchmarking tables.
@@ -679,6 +680,19 @@ TEST(NASACPR, AirborneGlobalDecode) {
     }
 }
 
+/**
+ * The NASA CPR decoder doesn't handle longitude zone mapping, so this function allows any of the four possible logitude
+ * zone solutions for a given result to match the output of the decoder.
+ * @param[in] lon_deg Longitude in degrees, properly mapped to a given longitude quadrant (-180, 180).
+ * @param[in] unmapped_lon_deg Longitude in degrees, in the first quadrant (0, 90).
+ */
+void ExpectEqLonDegToUnmappedLonDeg(float lon_deg, float unmapped_lon_deg) {
+    if (lon_deg < 0.0f) {
+        lon_deg += 360.0f;
+    }
+    EXPECT_NEAR(fmodf(lon_deg, 90.0f), unmapped_lon_deg, 0.0001f);
+}
+
 TEST(NASACPR, SurfaceGlobalDecode) {
     for (GlobalDecodeTest& test : surface_global_decode_tests) {
         NASACPRDecoder::CPRMessage even_message = {
@@ -691,26 +705,28 @@ TEST(NASACPR, SurfaceGlobalDecode) {
         // Test with even message most recent (rpos0).
         even_message.received_timestamp_ms = 2;
         odd_message.received_timestamp_ms = 1;
-        result_valid = NASACPRDecoder::DecodeSurfaceGlobalCPR(even_message, odd_message, test.awb_evn_lat, result);
+        result_valid = NASACPRDecoder::DecodeSurfaceGlobalCPR(even_message, odd_message, test.awb_evn_lat,
+                                                              test.awb_evn_lon, result);
         EXPECT_EQ(result_valid, test.rpos0_valid);
 
         // rpos0 reflects the result when the even message is most recent.
         if (result_valid) {
             EXPECT_EQ(result.lat_deg, awb2lat(test.rpos0_lat_awb));
-            EXPECT_EQ(result.lon_deg, awb2lon(test.rpos0_lon_awb));
+            ExpectEqLonDegToUnmappedLonDeg(result.lon_deg, awb2lon(test.rpos0_lon_awb));
         }
 
         // Test with odd message most recent (rpos1).
         odd_message.received_timestamp_ms = 2;
         even_message.received_timestamp_ms = 1;
-        result_valid = NASACPRDecoder::DecodeSurfaceGlobalCPR(even_message, odd_message, test.awb_evn_lat, result);
+        result_valid = NASACPRDecoder::DecodeSurfaceGlobalCPR(even_message, odd_message, test.awb_odd_lat,
+                                                              test.awb_odd_lon, result);
         // Only rpos0_valid is given in the table. We assume that if rpos0 decode was valid, rpos1 decode will also be
         // valid.
         EXPECT_EQ(result_valid, test.rpos0_valid);
 
         if (result_valid) {
             EXPECT_EQ(result.lat_deg, awb2lat(test.rpos1_lat_awb));
-            EXPECT_EQ(result.lon_deg, awb2lon(test.rpos1_lon_awb));
+            ExpectEqLonDegToUnmappedLonDeg(result.lon_deg, awb2lon(test.rpos1_lon_awb));
         }
     }
 }

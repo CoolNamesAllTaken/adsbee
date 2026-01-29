@@ -78,7 +78,7 @@ class GDL90Reporter {
         int vertical_rate_fpm;
         float direction_deg;
         uint8_t emitter_category;
-        char callsign[9];                                                                   // 8 characters, 0-9 and A-Z
+        char callsign[9] = "        ";  // 8 spaces + null terminator, 0-9 and A-Z
         EmergencyPriorityCode emergency_priority_code = kEmergencyPriorityCodeNoEmergency;  // 4 bits.
     };
 

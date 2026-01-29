@@ -211,7 +211,6 @@ TEST(GDL90Utils, UplinkDataMessage) {
         mlat_48mhz_64bit_counts);  // Should match the value passed in above.
     uint8_t tor_bytes[3] = {static_cast<uint8_t>(tor & 0xFF), static_cast<uint8_t>((tor >> 8) & 0xFF),
                             static_cast<uint8_t>((tor >> 16) & 0xFF)};
-    uint16_t tor_bytes_compared = 0;
     gdl90_msg_index += CheckBuffersEqualInjectEscapes(tor_bytes, 3, &gdl90_uplink_message[gdl90_msg_index]);
     // Check message contents byte by byte including escapes after every 0x7E.
     gdl90_msg_index +=
