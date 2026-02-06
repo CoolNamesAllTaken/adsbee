@@ -71,6 +71,53 @@ bool ResolveURIToIP(const char* url, char* ip) {
     return true;
 }
 
+esp_err_t safe_send(int sock, const void* data, size_t total_len) {
+    // 1. Set socket to non-blocking mode
+    int flags = fcntl(sock, F_GETFL, 0);
+    fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+
+    size_t sent_total = 0;
+    while (sent_total < total_len) {
+        fd_set write_set;
+        FD_ZERO(&write_set);
+        FD_SET(sock, &write_set);
+
+        // 2. Set a timeout for select()
+        struct timeval timeout = {.tv_sec = 5,  // 5 second timeout
+                                  .tv_usec = 0};
+
+        // Wait until the socket is ready to accept data
+        int res = select(sock + 1, NULL, &write_set, NULL, &timeout);
+
+        if (res < 0) {
+            CONSOLE_ERROR("safe_send", "Select error: %d", errno);
+            return ESP_FAIL;
+        } else if (res == 0) {
+            CONSOLE_WARNING("safe_send", "Send timeout - Network congested");
+            return ESP_ERR_TIMEOUT;
+        }
+
+        // 3. Socket is ready, try to send the remaining chunk
+        int sent_now = send(sock, data + sent_total, total_len - sent_total, 0);
+
+        if (sent_now > 0) {
+            sent_total += sent_now;
+            // CONSOLE_INFO("safe_send", "Sent %d bytes (%zu/%zu)", sent_now, sent_total, total_len);
+        } else if (sent_now < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // This shouldn't really happen after select() says it's ready,
+                // but it's good practice to handle it.
+                continue;
+            } else {
+                CONSOLE_ERROR("safe_send", "Socket error during send: %d", errno);
+                return ESP_FAIL;
+            }
+        }
+    }
+
+    return ESP_OK;
+}
+
 bool CommsManager::IPInit() {
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, &ip_event_handler, NULL));
     ip_event_handler_was_initialized_ = true;
@@ -324,7 +371,7 @@ bool CommsManager::ConnectFeedSocket(uint16_t feed_index) {
                                       BeastReporter::kModeSBeastFrameMaxLenBytes];
             uint16_t beast_message_len_bytes = BeastReporter::BuildFeedStartFrame(
                 beast_message_buf, settings_manager.settings.feed_receiver_ids[feed_index]);
-            int err = send(feed_sock_[feed_index], beast_message_buf, beast_message_len_bytes, 0);
+            int err = safe_send(feed_sock_[feed_index], beast_message_buf, beast_message_len_bytes);
             if (err < 0) {
                 CONSOLE_ERROR("CommsManager::IPWANTask",
                               "Error occurred while sending %d Byte Beast start of feed message to feed %d "
@@ -373,7 +420,7 @@ bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len) {
     send_buf_counter_bytes += buf_len;
 #endif
 
-    int err = send(feed_sock_[iface], buf, buf_len, 0);
+    int err = safe_send(feed_sock_[iface], buf, buf_len);
 
     if (err < 0) {
         CONSOLE_ERROR("CommsManager::SendBuf",
