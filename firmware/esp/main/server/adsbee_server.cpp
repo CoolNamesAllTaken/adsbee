@@ -66,8 +66,9 @@ bool ADSBeeServer::Init() {
     // Initialize SPI receive task before requesting settings so that we can tend to messages from the RP2040 and stop
     // it from freaking out.
     spi_receive_task_should_exit_ = false;
-    xTaskCreate(esp_spi_receive_task, "spi_receive_task", kSPIReceiveTaskStackSizeBytes, NULL, kSPIReceiveTaskPriority,
-                NULL);
+    // SPI receive task is high priority but we can't starve the WiFi task, which is pinned to core 0 in the sdkconfig.
+    xTaskCreatePinnedToCore(esp_spi_receive_task, "spi_receive_task", kSPIReceiveTaskStackSizeBytes, NULL,
+                            kSPIReceiveTaskPriority, NULL, kSPIReceiveTaskCore);
 
     // Initialize prerequisites for Ethernet and WiFi. Needs to be done before settings are applied.
     comms_manager.Init();

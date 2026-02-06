@@ -43,14 +43,15 @@ SettingsManager settings_manager = SettingsManager();
 CommsManager comms_manager = CommsManager({});
 CPUMonitor cpu_monitor = CPUMonitor({});
 
-void heap_caps_alloc_failed_hook(size_t requested_size, uint32_t caps, const char *function_name) {
-    printf("%s was called but failed to allocate %d bytes with 0x%lX capabilities.\n", function_name, requested_size,
-           caps);
+void heap_caps_alloc_failed_hook(size_t requested_size, uint32_t caps, const char* function_name) {
+    CONSOLE_ERROR("heap_caps_alloc_failed_hook",
+                  "%s was called but failed to allocate %d bytes with 0x%lX capabilities.\n", function_name,
+                  requested_size, caps);
     printf("Stack trace at allocation failure:\n");
     esp_backtrace_print(10);  // Print up to 10 stack frames
 }
 
-void device_status_update_task(void *pvParameters) {
+void device_status_update_task(void* pvParameters) {
     while (1) {
         cpu_monitor.ReadCPUUsage(object_dictionary.device_status.core_0_usage_percent,
                                  object_dictionary.device_status.core_1_usage_percent);
