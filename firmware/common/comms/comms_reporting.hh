@@ -3,7 +3,9 @@
  * comms.hh, allowing reporting function definitions to be used across platforms.
  */
 
-static constexpr uint32_t kRawReportingIntervalMs = 100;  // Report packets internally at 10Hz.
+static constexpr uint32_t kRawReportingCheckIntervalMs = 50;  // Check if we need to report packets internally at 20Hz.
+static constexpr uint32_t kRawReportingMaxIntervalMs =
+    200;  // Don't allow more than 200ms to go by without reporting (5Hz).
 static constexpr uint32_t kMAVLINKReportingIntervalMs = 1000;
 static constexpr uint32_t kCSBeeReportingIntervalMs = 1000;
 static constexpr uint32_t kGDL90ReportingIntervalMs = 1000;

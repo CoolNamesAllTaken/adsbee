@@ -123,4 +123,17 @@ class CompositeArray {
                                                PFBQueue<RawModeSPacket>* mode_s_queue,
                                                PFBQueue<RawUATADSBPacket>* uat_adsb_queue,
                                                PFBQueue<RawUATUplinkPacket>* uat_uplink_queue);
+
+    /**
+     * Calculates the length in bytes of a raw packet buffer that would be formed by emptying the contents of the
+     * provided queues. This function does not modify the queues; it only calculates the size.
+     * @param[in] mode_s_queue Pointer to a PFBQueue of RawModeSPacket to count packets from, or nullptr to skip.
+     * @param[in] uat_adsb_queue Pointer to a PFBQueue of RawUATADSBPacket to count packets from, or nullptr to skip.
+     * @param[in] uat_uplink_queue Pointer to a PFBQueue of RawUATUplinkPacket to count packets from, or nullptr to
+     * skip.
+     * @retval The total length in bytes, including the header and all packets from the queues.
+     */
+    static uint16_t CalculateRawPacketsBufferLength(PFBQueue<RawModeSPacket>* mode_s_queue,
+                                                    PFBQueue<RawUATADSBPacket>* uat_adsb_queue,
+                                                    PFBQueue<RawUATUplinkPacket>* uat_uplink_queue);
 };
