@@ -51,8 +51,9 @@ void esp_spi_receive_task(void* pvParameters) {
 
 void tcp_server_task(void* pvParameters) { adsbee_server.TCPServerTask(pvParameters); }
 // esp_err_t console_ws_handler(httpd_req_t *req) { return adsbee_server.NetworkConsoleWebSocketHandler(req); }
-void console_ws_close_fd(httpd_handle_t hd, int sockfd) {
+void ws_close_fd(httpd_handle_t hd, int sockfd) {
     adsbee_server.network_console.RemoveClient(sockfd);
+    adsbee_server.network_metrics.RemoveClient(sockfd);
     close(sockfd);
 }
 /** End "Pass-Through" functions. **/
@@ -620,7 +621,7 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
 bool ADSBeeServer::TCPServerInit() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = kHTTPServerStackSizeBytes;
-    config.close_fn = console_ws_close_fd;
+    config.close_fn = ws_close_fd;
     config.lru_purge_enable =
         true;  // Allow purging of the least recently used connections when max clients is reached.
 
