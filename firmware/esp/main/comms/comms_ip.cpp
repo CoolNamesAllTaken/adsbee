@@ -1,6 +1,7 @@
 #include "beast/beast_utils.hh"  // For beast reporting.
 #include "comms.hh"
 #include "esp_event.h"
+#include "esp_heap_caps.h"
 #include "esp_mac.h"
 #include "hal.hh"
 #include "lwip/dns.h"
@@ -12,6 +13,14 @@
 #include "task_priorities.hh"
 
 static const uint32_t kTCPSocketReconnectIntervalMs = 10000;
+
+// Heap threshold for back-pressure. If free heap drops below this, safe_send will block.
+// Set high enough to leave room for WebSocket allocations (~2KB) and other system needs.
+static const uint32_t kHeapBackPressureThresholdBytes = 20480;
+// DMA-capable memory threshold. WiFi TX buffers require internal DMA memory which is more constrained.
+static const uint32_t kDMABackPressureThresholdBytes = 16384;
+static const uint32_t kHeapBackPressureCheckIntervalMs = 50;
+static const uint32_t kHeapBackPressureTimeoutMs = 5000;
 
 // #define ENABLE_TCP_SOCKET_RATE_LIMITING
 #ifdef ENABLE_TCP_SOCKET_RATE_LIMITING
@@ -69,6 +78,66 @@ bool ResolveURIToIP(const char* url, char* ip) {
 
     freeaddrinfo(res);
     return true;
+}
+
+esp_err_t safe_send(int sock, const void* data, size_t total_len) {
+    // 0. Back-pressure: block if heap or DMA memory is low to prevent OOM crashes
+    uint32_t backpressure_start_ms = get_time_since_boot_ms();
+    while (heap_caps_get_free_size(MALLOC_CAP_8BIT) < kHeapBackPressureThresholdBytes ||
+           heap_caps_get_free_size(MALLOC_CAP_DMA) < kDMABackPressureThresholdBytes) {
+        if (get_time_since_boot_ms() - backpressure_start_ms > kHeapBackPressureTimeoutMs) {
+            CONSOLE_WARNING("safe_send", "Heap back-pressure timeout after %lu ms (heap=%u, dma=%u)",
+                            kHeapBackPressureTimeoutMs, heap_caps_get_free_size(MALLOC_CAP_8BIT),
+                            heap_caps_get_free_size(MALLOC_CAP_DMA));
+            return ESP_ERR_TIMEOUT;
+        }
+        vTaskDelay(pdMS_TO_TICKS(kHeapBackPressureCheckIntervalMs));
+    }
+
+    // 1. Set socket to non-blocking mode
+    int flags = fcntl(sock, F_GETFL, 0);
+    fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+
+    size_t sent_total = 0;
+    while (sent_total < total_len) {
+        fd_set write_set;
+        FD_ZERO(&write_set);
+        FD_SET(sock, &write_set);
+
+        // 2. Set a timeout for select()
+        struct timeval timeout = {.tv_sec = 5,  // 5 second timeout
+                                  .tv_usec = 0};
+
+        // Wait until the socket is ready to accept data
+        int res = select(sock + 1, NULL, &write_set, NULL, &timeout);
+
+        if (res < 0) {
+            CONSOLE_ERROR("safe_send", "Select error: %d", errno);
+            return ESP_FAIL;
+        } else if (res == 0) {
+            CONSOLE_WARNING("safe_send", "Send timeout - Network congested");
+            return ESP_ERR_TIMEOUT;
+        }
+
+        // 3. Socket is ready, try to send the remaining chunk
+        int sent_now = send(sock, data + sent_total, total_len - sent_total, 0);
+
+        if (sent_now > 0) {
+            sent_total += sent_now;
+            // CONSOLE_INFO("safe_send", "Sent %d bytes (%zu/%zu)", sent_now, sent_total, total_len);
+        } else if (sent_now < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // This shouldn't really happen after select() says it's ready,
+                // but it's good practice to handle it.
+                continue;
+            } else {
+                CONSOLE_ERROR("safe_send", "Socket error during send: %d", errno);
+                return ESP_FAIL;
+            }
+        }
+    }
+
+    return ESP_OK;
 }
 
 bool CommsManager::IPInit() {
@@ -324,7 +393,7 @@ bool CommsManager::ConnectFeedSocket(uint16_t feed_index) {
                                       BeastReporter::kModeSBeastFrameMaxLenBytes];
             uint16_t beast_message_len_bytes = BeastReporter::BuildFeedStartFrame(
                 beast_message_buf, settings_manager.settings.feed_receiver_ids[feed_index]);
-            int err = send(feed_sock_[feed_index], beast_message_buf, beast_message_len_bytes, 0);
+            int err = safe_send(feed_sock_[feed_index], beast_message_buf, beast_message_len_bytes);
             if (err < 0) {
                 CONSOLE_ERROR("CommsManager::IPWANTask",
                               "Error occurred while sending %d Byte Beast start of feed message to feed %d "
@@ -373,7 +442,7 @@ bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len) {
     send_buf_counter_bytes += buf_len;
 #endif
 
-    int err = send(feed_sock_[iface], buf, buf_len, 0);
+    int err = safe_send(feed_sock_[iface], buf, buf_len);
 
     if (err < 0) {
         CONSOLE_ERROR("CommsManager::SendBuf",

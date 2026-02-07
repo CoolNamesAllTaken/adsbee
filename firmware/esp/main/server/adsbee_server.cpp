@@ -51,8 +51,9 @@ void esp_spi_receive_task(void* pvParameters) {
 
 void tcp_server_task(void* pvParameters) { adsbee_server.TCPServerTask(pvParameters); }
 // esp_err_t console_ws_handler(httpd_req_t *req) { return adsbee_server.NetworkConsoleWebSocketHandler(req); }
-void console_ws_close_fd(httpd_handle_t hd, int sockfd) {
+void ws_close_fd(httpd_handle_t hd, int sockfd) {
     adsbee_server.network_console.RemoveClient(sockfd);
+    adsbee_server.network_metrics.RemoveClient(sockfd);
     close(sockfd);
 }
 /** End "Pass-Through" functions. **/
@@ -66,8 +67,9 @@ bool ADSBeeServer::Init() {
     // Initialize SPI receive task before requesting settings so that we can tend to messages from the RP2040 and stop
     // it from freaking out.
     spi_receive_task_should_exit_ = false;
-    xTaskCreate(esp_spi_receive_task, "spi_receive_task", kSPIReceiveTaskStackSizeBytes, NULL, kSPIReceiveTaskPriority,
-                NULL);
+    // SPI receive task is high priority but we can't starve the WiFi task, which is pinned to core 0 in the sdkconfig.
+    xTaskCreatePinnedToCore(esp_spi_receive_task, "spi_receive_task", kSPIReceiveTaskStackSizeBytes, NULL,
+                            kSPIReceiveTaskPriority, NULL, kSPIReceiveTaskCore);
 
     // Initialize prerequisites for Ethernet and WiFi. Needs to be done before settings are applied.
     comms_manager.Init();
@@ -619,7 +621,7 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
 bool ADSBeeServer::TCPServerInit() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = kHTTPServerStackSizeBytes;
-    config.close_fn = console_ws_close_fd;
+    config.close_fn = ws_close_fd;
     config.lru_purge_enable =
         true;  // Allow purging of the least recently used connections when max clients is reached.
 
@@ -648,8 +650,9 @@ bool ADSBeeServer::TCPServerInit() {
     network_console = WebSocketServer({.label = "Network Console",
                                        .server = server,
                                        .uri = "/console",
-                                       .num_clients_allowed = WebSocketServer::kMaxNumClients,
+                                       .num_clients_allowed = 4,
                                        .send_as_binary = true,  // Network console messages can contain binary data.
+                                       .inactivity_timeout_ms = 5 * 60 * 1000,  // 5 minute timeout.
                                        .post_connect_callback = NetworkConsolePostConnectCallback,
                                        .message_received_callback = NetworkConsoleMessageReceivedCallback});
     if (!network_console.Init()) {
@@ -659,8 +662,9 @@ bool ADSBeeServer::TCPServerInit() {
     network_metrics = WebSocketServer({.label = "Network Metrics",
                                        .server = server,
                                        .uri = "/metrics",
-                                       .num_clients_allowed = WebSocketServer::kMaxNumClients,
+                                       .num_clients_allowed = 4,
                                        .send_as_binary = false,  // Network metrics are always ASCII.
+                                       .inactivity_timeout_ms = 5 * 60 * 1000,  // 5 minute timeout.
                                        .post_connect_callback = nullptr,
                                        .message_received_callback = nullptr});
     if (!network_metrics.Init()) {
