@@ -219,6 +219,8 @@ class CommsManager {
 
     // Reporting protocol timestamps
     // NOTE: Raw reporting interval used for RAW and BEAST protocols as well as internal functions.
+    uint32_t last_raw_report_check_timestamp_ms_ =
+        0;  // Timestamp of last time we checked whether we need to report packets.
     uint32_t last_raw_report_timestamp_ms_ = 0;
     uint32_t last_csbee_report_timestamp_ms_ = 0;
     uint32_t last_mavlink_report_timestamp_ms_ = 0;
