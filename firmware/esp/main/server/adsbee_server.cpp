@@ -649,8 +649,9 @@ bool ADSBeeServer::TCPServerInit() {
     network_console = WebSocketServer({.label = "Network Console",
                                        .server = server,
                                        .uri = "/console",
-                                       .num_clients_allowed = WebSocketServer::kMaxNumClients,
+                                       .num_clients_allowed = 4,
                                        .send_as_binary = true,  // Network console messages can contain binary data.
+                                       .inactivity_timeout_ms = 5 * 60 * 1000,  // 5 minute timeout.
                                        .post_connect_callback = NetworkConsolePostConnectCallback,
                                        .message_received_callback = NetworkConsoleMessageReceivedCallback});
     if (!network_console.Init()) {
@@ -660,8 +661,9 @@ bool ADSBeeServer::TCPServerInit() {
     network_metrics = WebSocketServer({.label = "Network Metrics",
                                        .server = server,
                                        .uri = "/metrics",
-                                       .num_clients_allowed = WebSocketServer::kMaxNumClients,
+                                       .num_clients_allowed = 4,
                                        .send_as_binary = false,  // Network metrics are always ASCII.
+                                       .inactivity_timeout_ms = 5 * 60 * 1000,  // 5 minute timeout.
                                        .post_connect_callback = nullptr,
                                        .message_received_callback = nullptr});
     if (!network_metrics.Init()) {

@@ -17,6 +17,8 @@ static const uint32_t kTCPSocketReconnectIntervalMs = 10000;
 // Heap threshold for back-pressure. If free heap drops below this, safe_send will block.
 // Set high enough to leave room for WebSocket allocations (~2KB) and other system needs.
 static const uint32_t kHeapBackPressureThresholdBytes = 20480;
+// DMA-capable memory threshold. WiFi TX buffers require internal DMA memory which is more constrained.
+static const uint32_t kDMABackPressureThresholdBytes = 16384;
 static const uint32_t kHeapBackPressureCheckIntervalMs = 50;
 static const uint32_t kHeapBackPressureTimeoutMs = 5000;
 
@@ -79,11 +81,14 @@ bool ResolveURIToIP(const char* url, char* ip) {
 }
 
 esp_err_t safe_send(int sock, const void* data, size_t total_len) {
-    // 0. Back-pressure: block if heap is low to prevent OOM crashes
+    // 0. Back-pressure: block if heap or DMA memory is low to prevent OOM crashes
     uint32_t backpressure_start_ms = get_time_since_boot_ms();
-    while (heap_caps_get_free_size(MALLOC_CAP_8BIT) < kHeapBackPressureThresholdBytes) {
+    while (heap_caps_get_free_size(MALLOC_CAP_8BIT) < kHeapBackPressureThresholdBytes ||
+           heap_caps_get_free_size(MALLOC_CAP_DMA) < kDMABackPressureThresholdBytes) {
         if (get_time_since_boot_ms() - backpressure_start_ms > kHeapBackPressureTimeoutMs) {
-            CONSOLE_WARNING("safe_send", "Heap back-pressure timeout after %lu ms", kHeapBackPressureTimeoutMs);
+            CONSOLE_WARNING("safe_send", "Heap back-pressure timeout after %lu ms (heap=%u, dma=%u)",
+                            kHeapBackPressureTimeoutMs, heap_caps_get_free_size(MALLOC_CAP_8BIT),
+                            heap_caps_get_free_size(MALLOC_CAP_DMA));
             return ESP_ERR_TIMEOUT;
         }
         vTaskDelay(pdMS_TO_TICKS(kHeapBackPressureCheckIntervalMs));
