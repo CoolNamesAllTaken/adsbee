@@ -156,3 +156,21 @@ bool CompositeArray::UnpackRawPacketsBufferToQueues(uint8_t* buf, uint16_t buf_l
 
     return true;  // All packets successfully enqueued.
 }
+
+uint16_t CompositeArray::CalculateRawPacketsBufferLength(PFBQueue<RawModeSPacket>* mode_s_queue,
+                                                         PFBQueue<RawUATADSBPacket>* uat_adsb_queue,
+                                                         PFBQueue<RawUATUplinkPacket>* uat_uplink_queue) {
+    uint16_t total_len_bytes = sizeof(RawPackets::Header);
+
+    if (mode_s_queue) {
+        total_len_bytes += mode_s_queue->Length() * sizeof(RawModeSPacket);
+    }
+    if (uat_adsb_queue) {
+        total_len_bytes += uat_adsb_queue->Length() * sizeof(RawUATADSBPacket);
+    }
+    if (uat_uplink_queue) {
+        total_len_bytes += uat_uplink_queue->Length() * sizeof(RawUATUplinkPacket);
+    }
+
+    return total_len_bytes;
+}
