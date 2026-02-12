@@ -158,7 +158,7 @@ uint16_t WriteBufferAsHexASCII(uint8_t *to_buf, const uint8_t *from_buf, uint16_
 
 uint16_t BeastReporter::BuildUATADSBBeastFrame(uint8_t *beast_frame_buf, const DecodedUATADSBPacket &packet) {
     char uat_message_type_char = ' ';
-    switch (packet.raw.encoded_message_len_bytes) {
+    switch (packet.raw.buffer_len_bytes) {
         case RawUATADSBPacket::kShortADSBMessageNumBytes:
             // Short UAT ADSB message.
             uat_message_type_char = kUATMessageTypeADSBShort;
@@ -169,7 +169,7 @@ uint16_t BeastReporter::BuildUATADSBBeastFrame(uint8_t *beast_frame_buf, const D
             break;
         default:
             CONSOLE_ERROR("BeastReporter::BuildUATADSBBeastFrame", "Invalid UAT ADSB message length %d bytes.",
-                          packet.raw.encoded_message_len_bytes);
+                          packet.raw.buffer_len_bytes);
             return 0;  // Invalid length.
     }
 
@@ -181,8 +181,8 @@ uint16_t BeastReporter::BuildUATADSBBeastFrame(uint8_t *beast_frame_buf, const D
     bytes_written += Write12MHzMLATTimestamp(beast_frame_buf + bytes_written, packet.raw.GetMLAT12MHzCounter());
     bytes_written += WriteRSSIdBmAsBeastPowerLevel(beast_frame_buf + bytes_written, packet.raw.sigs_dbm);
 
-    bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, packet.raw.encoded_message,
-                                                 packet.raw.encoded_message_len_bytes);
+    bytes_written += WriteBufferWithBeastEscapes(beast_frame_buf + bytes_written, packet.raw.buffer,
+                                                 packet.raw.buffer_len_bytes);
 
     return bytes_written;
 }

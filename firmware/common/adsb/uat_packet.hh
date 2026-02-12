@@ -64,8 +64,8 @@ class RawUATADSBPacket {
      */
     uint64_t GetTimestampMs() const { return mlat_48mhz_64bit_counts / 48000; }
 
-    uint8_t encoded_message[kADSBMessageMaxSizeBytes] = {0};
-    uint16_t encoded_message_len_bytes = 0;
+    uint8_t buffer[kADSBMessageMaxSizeBytes] = {0};
+    uint16_t buffer_len_bytes = 0;
 
     int16_t sigs_dbm = INT16_MIN;          // Signal strength, in dBm.
     int16_t sigq_bits = INT16_MIN;         // Signal quality (num bits corrected by FEC, 0 = best).
@@ -269,7 +269,7 @@ class DecodedUATADSBPacket {
         return is_valid;
     }
 
-    int GetBufferLenBytes() const { return raw.encoded_message_len_bytes; }
+    int GetBufferLenBytes() const { return raw.buffer_len_bytes; }
     RawUATADSBPacket GetRaw() const { return raw; }
     RawUATADSBPacket* GetRawPtr() { return &raw; }
 

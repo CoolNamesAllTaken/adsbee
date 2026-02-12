@@ -71,7 +71,7 @@ TEST(CompositeArray, PackRawPacketsBufferTooManyMixedPackets) {
     }
     RawUATADSBPacket dummy_uat_adsb_packet;
     for (int i = 0; i < num_uat_adsb_packets_to_enqueue; i++) {
-        dummy_uat_adsb_packet.encoded_message[0] = i;  // Differentiate packets by first word
+        dummy_uat_adsb_packet.buffer[0] = i;  // Differentiate packets by first word
         uat_adsb_queue.Enqueue(dummy_uat_adsb_packet);
     }
     RawUATUplinkPacket dummy_uat_uplink_packet;
@@ -98,7 +98,7 @@ TEST(CompositeArray, PackRawPacketsBufferTooManyMixedPackets) {
         EXPECT_EQ(packets.mode_s_packets[i].buffer[0], i);
     }
     for (uint16_t i = 0; i < packets.header->num_uat_adsb_packets; i++) {
-        EXPECT_EQ(packets.uat_adsb_packets[i].encoded_message[0], i);
+        EXPECT_EQ(packets.uat_adsb_packets[i].buffer[0], i);
     }
     for (uint16_t i = 0; i < packets.header->num_uat_uplink_packets; i++) {
         EXPECT_EQ(packets.uat_uplink_packets[i].encoded_message[0], i);
@@ -133,7 +133,7 @@ TEST(CompositeArray, PackUnpackRawPacketsBufferMixedPackets) {
     }
     RawUATADSBPacket dummy_uat_adsb_packet;
     for (int i = 0; i < num_uat_adsb_packets_to_enqueue; i++) {
-        dummy_uat_adsb_packet.encoded_message[0] = i;  // Differentiate packets by first word
+        dummy_uat_adsb_packet.buffer[0] = i;  // Differentiate packets by first word
         uat_adsb_queue.Enqueue(dummy_uat_adsb_packet);
     }
     RawUATUplinkPacket dummy_uat_uplink_packet;
@@ -170,7 +170,7 @@ TEST(CompositeArray, PackUnpackRawPacketsBufferMixedPackets) {
     RawUATADSBPacket dequeued_uat_adsb_packet;
     for (uint16_t i = 0; i < num_uat_adsb_packets_to_enqueue; i++) {
         EXPECT_TRUE(uat_adsb_queue.Dequeue(dequeued_uat_adsb_packet));
-        EXPECT_EQ(dequeued_uat_adsb_packet.encoded_message[0], i);
+        EXPECT_EQ(dequeued_uat_adsb_packet.buffer[0], i);
     }
     RawUATUplinkPacket dequeued_uat_uplink_packet;
     for (uint16_t i = 0; i < num_uat_uplink_packets_to_enqueue; i++) {
