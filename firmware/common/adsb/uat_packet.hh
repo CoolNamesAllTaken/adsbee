@@ -279,8 +279,6 @@ class DecodedUATADSBPacket {
     uint32_t GetICAOAddress() const;
 
     UATADSBMessageFormat message_format = kUATADSBMessageFormatInvalid;
-    // Oversize the payload field since we copy the encoded message to it and correct / decode in place.
-    uint8_t decoded_payload[RawUATADSBPacket::kLongADSBMessageNumBytes] = {0};
 
     // Always has header.
     bool has_state_vector = false;            // True if the packet has a state vector.
