@@ -401,7 +401,7 @@ TEST(DecodedUATPacket, DO282BDownlinkPacketsDecodeAndPacketType) {
         EXPECT_EQ(test_case.expected_format != DecodedUATADSBPacket::kUATADSBMessageFormatInvalid, packet.IsValid());
         if (test_case.expected_decoded_payload) {
             // Only check the buffer if the expected decoded payload is not nullptr.
-            EXPECT_TRUE(ByteBufferMatchesString(packet.decoded_payload, test_case.expected_decoded_payload));
+            EXPECT_TRUE(ByteBufferMatchesString(packet.raw.encoded_message, test_case.expected_decoded_payload));
         }
     }
 }
