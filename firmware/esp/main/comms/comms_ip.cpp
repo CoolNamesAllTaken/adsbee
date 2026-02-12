@@ -388,7 +388,9 @@ bool CommsManager::ConnectFeedSocket(uint16_t feed_index) {
 
     // Perform beginning-of-connection actions here.
     switch (settings_manager.settings.feed_protocols[feed_index]) {
-        case SettingsManager::ReportingProtocol::kBeast: {
+        case SettingsManager::ReportingProtocol::kBeast:
+        case SettingsManager::ReportingProtocol::kBeastNoUAT:
+        case SettingsManager::ReportingProtocol::kBeastNoUATUplink: {
             uint8_t beast_message_buf[2 * SettingsManager::Settings::kFeedReceiverIDNumBytes +
                                       BeastReporter::kModeSBeastFrameMaxLenBytes];
             uint16_t beast_message_len_bytes = BeastReporter::BuildFeedStartFrame(
