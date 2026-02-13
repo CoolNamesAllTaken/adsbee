@@ -6,25 +6,25 @@
 TEST(RawUATADSBPacket, StringConstructor) {
     const char *buf_str = "00a66ef135445d525a0c0519119021204800";
     RawUATADSBPacket packet = RawUATADSBPacket(buf_str);
-    ASSERT_EQ(packet.encoded_message_len_bytes, 144 / 8);
-    ASSERT_EQ(packet.encoded_message[0], 0x00);
-    ASSERT_EQ(packet.encoded_message[1], 0xa6);
-    ASSERT_EQ(packet.encoded_message[2], 0x6e);
-    ASSERT_EQ(packet.encoded_message[3], 0xf1);
-    ASSERT_EQ(packet.encoded_message[4], 0x35);
-    ASSERT_EQ(packet.encoded_message[5], 0x44);
-    ASSERT_EQ(packet.encoded_message[6], 0x5d);
-    ASSERT_EQ(packet.encoded_message[7], 0x52);
-    ASSERT_EQ(packet.encoded_message[8], 0x5a);
-    ASSERT_EQ(packet.encoded_message[9], 0x0c);
-    ASSERT_EQ(packet.encoded_message[10], 0x05);
-    ASSERT_EQ(packet.encoded_message[11], 0x19);
-    ASSERT_EQ(packet.encoded_message[12], 0x11);
-    ASSERT_EQ(packet.encoded_message[13], 0x90);
-    ASSERT_EQ(packet.encoded_message[14], 0x21);
-    ASSERT_EQ(packet.encoded_message[15], 0x20);
-    ASSERT_EQ(packet.encoded_message[16], 0x48);
-    ASSERT_EQ(packet.encoded_message[17], 0x00);
+    ASSERT_EQ(packet.buffer_len_bytes, 144 / 8);
+    ASSERT_EQ(packet.buffer[0], 0x00);
+    ASSERT_EQ(packet.buffer[1], 0xa6);
+    ASSERT_EQ(packet.buffer[2], 0x6e);
+    ASSERT_EQ(packet.buffer[3], 0xf1);
+    ASSERT_EQ(packet.buffer[4], 0x35);
+    ASSERT_EQ(packet.buffer[5], 0x44);
+    ASSERT_EQ(packet.buffer[6], 0x5d);
+    ASSERT_EQ(packet.buffer[7], 0x52);
+    ASSERT_EQ(packet.buffer[8], 0x5a);
+    ASSERT_EQ(packet.buffer[9], 0x0c);
+    ASSERT_EQ(packet.buffer[10], 0x05);
+    ASSERT_EQ(packet.buffer[11], 0x19);
+    ASSERT_EQ(packet.buffer[12], 0x11);
+    ASSERT_EQ(packet.buffer[13], 0x90);
+    ASSERT_EQ(packet.buffer[14], 0x21);
+    ASSERT_EQ(packet.buffer[15], 0x20);
+    ASSERT_EQ(packet.buffer[16], 0x48);
+    ASSERT_EQ(packet.buffer[17], 0x00);
 }
 
 const struct {
@@ -401,7 +401,7 @@ TEST(DecodedUATPacket, DO282BDownlinkPacketsDecodeAndPacketType) {
         EXPECT_EQ(test_case.expected_format != DecodedUATADSBPacket::kUATADSBMessageFormatInvalid, packet.IsValid());
         if (test_case.expected_decoded_payload) {
             // Only check the buffer if the expected decoded payload is not nullptr.
-            EXPECT_TRUE(ByteBufferMatchesString(packet.decoded_payload, test_case.expected_decoded_payload));
+            EXPECT_TRUE(ByteBufferMatchesString(packet.raw.buffer, test_case.expected_decoded_payload));
         }
     }
 }

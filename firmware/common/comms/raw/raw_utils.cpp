@@ -12,7 +12,7 @@ uint16_t BuildRawModeSFrame(const RawModeSPacket& packet, char* raw_frame_buf) {
 uint16_t BuildRawUATADSBFrame(const RawUATADSBPacket& packet, char* raw_frame_buf) {
     char data_buf[RawUATADSBPacket::kADSBMessageMaxSizeBytes * kNibblesPerByte + 1] = {'\0'};
     // Write bytes as uppercase.
-    ByteBufferToHexString(data_buf, packet.encoded_message, packet.encoded_message_len_bytes, true);
+    ByteBufferToHexString(data_buf, packet.buffer, packet.buffer_len_bytes, true);
     return snprintf(raw_frame_buf, kRawUATADSBFrameMaxNumChars, "#UAT*-%s;(%d,%d,%016llX)\r\n", data_buf,
                     packet.sigs_dbm, packet.sigq_bits, packet.mlat_48mhz_64bit_counts);
 }

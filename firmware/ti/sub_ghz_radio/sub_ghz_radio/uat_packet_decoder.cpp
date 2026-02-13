@@ -12,12 +12,12 @@ bool UATPacketDecoder::Update() {
 
         RawUATADSBPacket packet;
         raw_uat_adsb_packet_queue.Dequeue(packet);
-        uint16_t packet_len_bytes = packet.encoded_message_len_bytes;
+        uint16_t packet_len_bytes = packet.buffer_len_bytes;
         // Decode the packet and enqueue the result.
         DecodedUATADSBPacket decoded_packet = DecodedUATADSBPacket(packet);
 
         char raw_packet_buffer[2 * packet_len_bytes + 1];
-        ByteBufferToHexString(raw_packet_buffer, packet.encoded_message, packet_len_bytes);
+        ByteBufferToHexString(raw_packet_buffer, packet.buffer, packet_len_bytes);
 
         if (decoded_packet.is_valid) {
             pico_ll.BlinkSubGLED();

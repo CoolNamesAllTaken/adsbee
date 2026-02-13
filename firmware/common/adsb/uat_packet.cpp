@@ -22,15 +22,15 @@ const int32_t kFPMPerEncodedVerticalRateTick = 64;
 RawUATADSBPacket::RawUATADSBPacket(const char *rx_string, int16_t sigs_dbm_in, int16_t sigq_bits_in,
                                    uint64_t mlat_48mhz_64bit_counts_in)
     : sigs_dbm(sigs_dbm_in), sigq_bits(sigq_bits_in), mlat_48mhz_64bit_counts(mlat_48mhz_64bit_counts_in) {
-    encoded_message_len_bytes =
-        HexStringToByteBuffer(encoded_message, rx_string, RawUATADSBPacket::kADSBMessageMaxSizeBytes);
+    buffer_len_bytes =
+        HexStringToByteBuffer(buffer, rx_string, RawUATADSBPacket::kADSBMessageMaxSizeBytes);
 }
 
 RawUATADSBPacket::RawUATADSBPacket(uint8_t rx_buffer[kADSBMessageMaxSizeBytes], uint16_t rx_buffer_len_bytes,
                                    int16_t sigs_dbm_in, int16_t sigq_bits_in, uint64_t mlat_48mhz_64bit_counts_in)
     : sigs_dbm(sigs_dbm_in), sigq_bits(sigq_bits_in), mlat_48mhz_64bit_counts(mlat_48mhz_64bit_counts_in) {
-    memcpy(encoded_message, rx_buffer, rx_buffer_len_bytes);
-    encoded_message_len_bytes = rx_buffer_len_bytes;
+    memcpy(buffer, rx_buffer, rx_buffer_len_bytes);
+    buffer_len_bytes = rx_buffer_len_bytes;
 }
 
 DecodedUATADSBPacket::DecodedUATADSBPacket(const char *rx_string, int32_t sigs_dbm, int32_t sigq_bits,
@@ -196,7 +196,6 @@ uint32_t DecodedUATADSBPacket::GetICAOAddress() const {
 void DecodedUATADSBPacket::ConstructUATADSBPacket(bool run_fec) {
     // Copy over the message payload. Only attempt FEC correction on the CC1312 or in host-based unit tests, everyone
     // else gets sent pre-corrected raw packets.
-    memcpy(decoded_payload, raw.encoded_message, RawUATADSBPacket::kADSBMessageMaxSizeBytes);
     if (run_fec) {
         // Check if the packet is valid by validating the Reed-Solomon code.
         // We don't actually know the number of bits with high certainty. First interpret as a long ADS-B message,
@@ -205,13 +204,13 @@ void DecodedUATADSBPacket::ConstructUATADSBPacket(bool run_fec) {
 #if defined(ON_TI) || defined(ON_HOST)
         // Correct in place. If correction fails, the buffer will not be
         // modified.
-        raw.sigq_bits = uat_rs.DecodeLongADSBMessage(decoded_payload);
+        raw.sigq_bits = uat_rs.DecodeLongADSBMessage(raw.buffer);
         if (raw.sigq_bits >= 0) {
             // CONSOLE_INFO("DecodedUATADSBPacket", "Decoded Long ADS-B message with %d bytes corrected.",
             // raw.sigq_bits);
             message_format = kUATADSBMessageFormatLong;
         } else {
-            raw.sigq_bits = uat_rs.DecodeShortADSBMessage(decoded_payload);
+            raw.sigq_bits = uat_rs.DecodeShortADSBMessage(raw.buffer);
             if (raw.sigq_bits >= 0) {
                 // CONSOLE_INFO("DecodedUATADSBPacket", "Decoded Short ADS-B message with %d bytes corrected.",
                 //  raw.sigq_bits);
@@ -226,7 +225,7 @@ void DecodedUATADSBPacket::ConstructUATADSBPacket(bool run_fec) {
     }
 
     // Extract information from the decoded payload.
-    DecodeHeader(decoded_payload, header);
+    DecodeHeader(raw.buffer, header);
 
     // UAT Tech Manual Table 2-2: Composition of UAT ADS-B Message Data Block
     // Interpret the message contents based on the MDB type code.
@@ -234,57 +233,57 @@ void DecodedUATADSBPacket::ConstructUATADSBPacket(bool run_fec) {
         case 0:  // Basic UAT ADS-B message. Just header and state vector, nothing else.
             // HDR | SV | Reserved
             has_state_vector = true;
-            DecodeStateVector(decoded_payload + sizeof(UATHeader), state_vector);
+            DecodeStateVector(raw.buffer + sizeof(UATHeader), state_vector);
             break;
         case 1:
             // HDR | SV | MS | AUX SV
             has_state_vector = true;
             has_mode_status = true;
             has_auxiliary_state_vector = true;
-            DecodeStateVector(decoded_payload + kStateVectorOffsetBytes, state_vector);
-            DecodeModeStatus(decoded_payload + kModeStatusOffsetBytes, mode_status);
-            DecodeAuxiliaryStateVector(decoded_payload + kAuxiliaryStateVectorOffsetBytes, auxiliary_state_vector);
+            DecodeStateVector(raw.buffer + kStateVectorOffsetBytes, state_vector);
+            DecodeModeStatus(raw.buffer + kModeStatusOffsetBytes, mode_status);
+            DecodeAuxiliaryStateVector(raw.buffer + kAuxiliaryStateVectorOffsetBytes, auxiliary_state_vector);
             break;
         case 2:
             // HDR | SV | Reserved | AUX SV
             has_state_vector = true;
             has_auxiliary_state_vector = true;
-            DecodeStateVector(decoded_payload + kStateVectorOffsetBytes, state_vector);
-            DecodeAuxiliaryStateVector(decoded_payload + kAuxiliaryStateVectorOffsetBytes, auxiliary_state_vector);
+            DecodeStateVector(raw.buffer + kStateVectorOffsetBytes, state_vector);
+            DecodeAuxiliaryStateVector(raw.buffer + kAuxiliaryStateVectorOffsetBytes, auxiliary_state_vector);
             break;
         case 3:
             // HDR | SV | MS | TS | Reserved Byte
             has_state_vector = true;
             has_mode_status = true;
             has_target_state = true;
-            DecodeStateVector(decoded_payload + kStateVectorOffsetBytes, state_vector);
-            DecodeModeStatus(decoded_payload + kModeStatusOffsetBytes, mode_status);
+            DecodeStateVector(raw.buffer + kStateVectorOffsetBytes, state_vector);
+            DecodeModeStatus(raw.buffer + kModeStatusOffsetBytes, mode_status);
             // Target state in this message is at the same offset as auxiliary state vector in other messages.
-            DecodeTargetState(decoded_payload + kAuxiliaryStateVectorOffsetBytes, target_state);
+            DecodeTargetState(raw.buffer + kAuxiliaryStateVectorOffsetBytes, target_state);
             break;
         case 4:
             // HDR | SV | Reserved for TC+0 | TS | Reserved Byte
             has_state_vector = true;
             has_target_state = true;
-            DecodeStateVector(decoded_payload + kStateVectorOffsetBytes, state_vector);
+            DecodeStateVector(raw.buffer + kStateVectorOffsetBytes, state_vector);
             // Target state in this message is at the same offset as auxiliary state vector in other messages.
-            DecodeTargetState(decoded_payload + kAuxiliaryStateVectorOffsetBytes, target_state);
+            DecodeTargetState(raw.buffer + kAuxiliaryStateVectorOffsetBytes, target_state);
             break;
         case 5:
             // HDR | SV | Reserved for TC+1 | AUX SV
             has_state_vector = true;
             has_auxiliary_state_vector = true;
-            DecodeStateVector(decoded_payload + kStateVectorOffsetBytes, state_vector);
-            DecodeAuxiliaryStateVector(decoded_payload + kAuxiliaryStateVectorOffsetBytes, auxiliary_state_vector);
+            DecodeStateVector(raw.buffer + kStateVectorOffsetBytes, state_vector);
+            DecodeAuxiliaryStateVector(raw.buffer + kAuxiliaryStateVectorOffsetBytes, auxiliary_state_vector);
             break;
         case 6:
             // HDR | SV | Reserved | TS | Reserved Byte | AUX SV
             has_state_vector = true;
             has_target_state = true;
             has_auxiliary_state_vector = true;
-            DecodeStateVector(decoded_payload + kStateVectorOffsetBytes, state_vector);
-            DecodeTargetState(decoded_payload + 24, target_state);
-            DecodeAuxiliaryStateVector(decoded_payload + kAuxiliaryStateVectorOffsetBytes, auxiliary_state_vector);
+            DecodeStateVector(raw.buffer + kStateVectorOffsetBytes, state_vector);
+            DecodeTargetState(raw.buffer + 24, target_state);
+            DecodeAuxiliaryStateVector(raw.buffer + kAuxiliaryStateVectorOffsetBytes, auxiliary_state_vector);
             break;
         case 7:
         case 8:
@@ -292,7 +291,7 @@ void DecodedUATADSBPacket::ConstructUATADSBPacket(bool run_fec) {
         case 10:
             // HDR | SV | Reserved
             has_state_vector = true;
-            DecodeStateVector(decoded_payload + kStateVectorOffsetBytes, state_vector);
+            DecodeStateVector(raw.buffer + kStateVectorOffsetBytes, state_vector);
             break;
         default:
             // All other MDB type codes are reserved for future revisions of the UAT ADS-B protocol or reserved for
