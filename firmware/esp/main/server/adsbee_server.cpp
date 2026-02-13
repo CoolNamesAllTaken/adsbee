@@ -161,7 +161,11 @@ bool ADSBeeServer::Update() {
             }
             // Else it's OK to have no packets.
         } else {
-            // Add packets to aircraft dictionary and then report them.
+            // Report raw packets then add them to the aircraft dictionary. Report first to allow network queues to be
+            // processed during ingestion, which takes a while.
+
+            // Forward packets to WAN.
+            comms_manager.IPWANSendRawPacketCompositeArray(raw_packets_buf_);
 
             // Mode S Packets
             for (uint16_t i = 0; i < raw_packets.header->num_mode_s_packets; i++) {
@@ -223,9 +227,6 @@ bool ADSBeeServer::Update() {
                 }
                 ReportGDL90UplinkDataMessage(decoded_packet);
             }
-
-            // Forward packets to WAN.
-            comms_manager.IPWANSendRawPacketCompositeArray(raw_packets_buf_);
         }
     }
 
@@ -663,7 +664,7 @@ bool ADSBeeServer::TCPServerInit() {
                                        .server = server,
                                        .uri = "/metrics",
                                        .num_clients_allowed = 4,
-                                       .send_as_binary = false,  // Network metrics are always ASCII.
+                                       .send_as_binary = false,                 // Network metrics are always ASCII.
                                        .inactivity_timeout_ms = 5 * 60 * 1000,  // 5 minute timeout.
                                        .post_connect_callback = nullptr,
                                        .message_received_callback = nullptr});

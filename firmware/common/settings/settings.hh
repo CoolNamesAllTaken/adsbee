@@ -288,6 +288,13 @@ class SettingsManager {
             kPNGS3MPoE = 40250001                      // GS3M PoE
         };
 
+        enum ADSBee1090RFFrontendVersion : uint8_t {
+            kADSBee1090RFFrontendV1 = 1,  // Original RF frontend used through ADSBee 1090U rev C.
+            kADSBee1090RFFrontendV2 = 2,  // Revised FAST net filter resistor to 5.1kOhms.
+            kADSBee1090RFFrontendV3 =
+                3,  // Added schottky diode between FAST and LEVEL nets for improved pulse shaping.
+        };
+
         /**
          * Default constructor.
          */
@@ -353,11 +360,58 @@ class SettingsManager {
          * @retval Character representing the part revision.
          */
         char GetPartRev() { return part_code[kPartCodePartNumberLen]; }
+
+        /**
+         * Determines the RF frontend version based on the part number and revision. This is used to tune PIO behavior
+         * based on the analog response of the 1090MHz RF receiver frontend.
+         * @retval ADSBee1090RFFrontendVersion enum value representing the RF frontend version.
+         */
+        inline ADSBee1090RFFrontendVersion GetRFFrontendVersion() {
+            uint32_t part_number = GetPartNumber();
+            char part_rev = GetPartRev();
+            switch (part_number) {
+                case kPNADSBee1090:
+                    return kADSBee1090RFFrontendV1;
+                    break;
+                case kPNADSBee1090U:
+                    if (part_rev <= 'C') {
+                        return kADSBee1090RFFrontendV1;
+                    } else if (part_rev == 'D') {
+                        return kADSBee1090RFFrontendV2;
+                    } else {
+                        return kADSBee1090RFFrontendV3;
+                    }
+                    break;
+                case kPNGS3MPoE:
+                    if (part_rev <= 'E') {
+                        return kADSBee1090RFFrontendV2;
+                    } else {
+                        return kADSBee1090RFFrontendV3;
+                    }
+                    break;
+                case kPNADSBeem1090:
+                    if (part_rev == 'A') {
+                        return kADSBee1090RFFrontendV1;
+                    } else {
+                        return kADSBee1090RFFrontendV3;
+                    }
+                    break;
+                case kPNADSBeem1090EvalBoard:
+                    if (part_rev <= 'B') {
+                        return kADSBee1090RFFrontendV2;
+                    } else {
+                        return kADSBee1090RFFrontendV3;
+                    }
+                    break;
+            }
+            // Default to V1 for unknown part numbers, since that's the most common and safest assumption.
+            return kADSBee1090RFFrontendV1;
+        }
     };
 
     /**
-     * Applies internal settings to the relevant objects. This is only used after the settings struct has been updated
-     * by loading it from EEPROM or by overwriting it via the coprocessor SPI bus.
+     * Applies internal settings to the relevant objects. This is only used after the settings struct has been
+     * updated by loading it from EEPROM or by overwriting it via the coprocessor SPI bus.
      */
     bool Apply();
 
@@ -406,8 +460,8 @@ class SettingsManager {
      * Takes a password as a string and fills a buffer with the corresponding number of asterix.
      * @param[in] password_buf Buffer to read the password from. Must be at least password_len+1 chars.
      * @param[out] redacted_password_buf Buffer to write the asterix to. Must be at least password_len+1 chars.
-     * @param[in] buf_len Maximum allowable number of characteers in the password. Used to guard against falling off the
-     * end of the string. Not used for actually finding ther number of asterix to print.
+     * @param[in] buf_len Maximum allowable number of characteers in the password. Used to guard against falling off
+     * the end of the string. Not used for actually finding ther number of asterix to print.
      */
     static inline void RedactPassword(char* password_buf, char* redacted_password_buf, uint16_t buf_len) {
         uint16_t password_len = MIN(strnlen(password_buf, buf_len), buf_len);
@@ -439,8 +493,8 @@ class SettingsManager {
 
 #ifdef ON_PICO
     /**
-     * Used to write device information to EEPROM during manufacturing. Only available on the Pico since it's the one
-     * with direct access to EEPROm over I2C.
+     * Used to write device information to EEPROM during manufacturing. Only available on the Pico since it's the
+     * one with direct access to EEPROm over I2C.
      * @param[in] device_info Reference to a DeviceInfo struct with the information to set in EEPROM.
      * @retval True if device info was set successfully, false otherwise.
      */

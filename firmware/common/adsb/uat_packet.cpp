@@ -19,7 +19,7 @@ const fixedmath::fixed_t kDegPerRadian =
     fixedmath::fixed_t{180.0f / std::numbers::pi};  // Conversion factor from radians to degrees.
 const int32_t kFPMPerEncodedVerticalRateTick = 64;
 
-RawUATADSBPacket::RawUATADSBPacket(const char *rx_string, int16_t sigs_dbm_in, int16_t sigq_bits_in,
+RawUATADSBPacket::RawUATADSBPacket(const char* rx_string, int16_t sigs_dbm_in, int16_t sigq_bits_in,
                                    uint64_t mlat_48mhz_64bit_counts_in)
     : sigs_dbm(sigs_dbm_in), sigq_bits(sigq_bits_in), mlat_48mhz_64bit_counts(mlat_48mhz_64bit_counts_in) {
     buffer_len_bytes =
@@ -33,21 +33,21 @@ RawUATADSBPacket::RawUATADSBPacket(uint8_t rx_buffer[kADSBMessageMaxSizeBytes], 
     buffer_len_bytes = rx_buffer_len_bytes;
 }
 
-DecodedUATADSBPacket::DecodedUATADSBPacket(const char *rx_string, int32_t sigs_dbm, int32_t sigq_bits,
+DecodedUATADSBPacket::DecodedUATADSBPacket(const char* rx_string, int32_t sigs_dbm, int32_t sigq_bits,
                                            uint64_t mlat_48mhz_64bit_counts)
     : raw(rx_string, sigs_dbm, sigq_bits, mlat_48mhz_64bit_counts) {
     // Validate the packet.
     ConstructUATADSBPacket();
 }
 
-DecodedUATADSBPacket::DecodedUATADSBPacket(const RawUATADSBPacket &packet) : raw(packet) {
+DecodedUATADSBPacket::DecodedUATADSBPacket(const RawUATADSBPacket& packet) : raw(packet) {
     // Validate the packet.
     ConstructUATADSBPacket();
 }
 
 ADSBTypes::DirectionType DecodedUATADSBPacket::HorizontalVelocityToDirectionDegAndSpeedKts(
-    uint32_t horizontal_velocity, ADSBTypes::AirGroundState air_ground_state, float &direction_deg_ref,
-    int32_t &speed_kts_ref) {
+    uint32_t horizontal_velocity, ADSBTypes::AirGroundState air_ground_state, float& direction_deg_ref,
+    int32_t& speed_kts_ref) {
     switch (air_ground_state) {
         case ADSBTypes::kAirGroundStateAirborneSubsonic:
         case ADSBTypes::kAirGroundStateAirborneSupersonic: {
@@ -84,7 +84,7 @@ ADSBTypes::DirectionType DecodedUATADSBPacket::HorizontalVelocityToDirectionDegA
 }
 
 ADSBTypes::VerticalRateSource DecodedUATADSBPacket::VerticalVelocityToVerticalRateFpm(
-    uint32_t vertical_velocity, ADSBTypes::AirGroundState air_ground_state, int32_t &vertical_rate_fpm_ref) {
+    uint32_t vertical_velocity, ADSBTypes::AirGroundState air_ground_state, int32_t& vertical_rate_fpm_ref) {
     if (air_ground_state != ADSBTypes::kAirGroundStateAirborneSubsonic &&
         air_ground_state != ADSBTypes::kAirGroundStateAirborneSupersonic) {
         // Vertical velocity field is not available (it's showing aircraft dimensions on ground instead).
@@ -107,7 +107,7 @@ ADSBTypes::VerticalRateSource DecodedUATADSBPacket::VerticalVelocityToVerticalRa
 }
 
 ADSBTypes::AVDimensionsType DecodedUATADSBPacket::DecodeAVDimensions(uint32_t av_dimensions_encoded,
-                                                                     int16_t &width_m_ref, int16_t &length_m_ref) {
+                                                                     int16_t& width_m_ref, int16_t& length_m_ref) {
     bool position_offset_applied = (av_dimensions_encoded >> 6) & 0b1;
     uint16_t av_length_width_encoded = (av_dimensions_encoded >> 7) & 0b1111;
 
@@ -221,7 +221,7 @@ void DecodedUATADSBPacket::ConstructUATADSBPacket(bool run_fec) {
                 return;
             }
         }
-#endif /* ON_PICO */
+#endif /* ON_TI || ON_HOST */
     }
 
     // Extract information from the decoded payload.
@@ -302,12 +302,12 @@ void DecodedUATADSBPacket::ConstructUATADSBPacket(bool run_fec) {
     is_valid = true;
 }
 
-void DecodedUATADSBPacket::DecodeHeader(uint8_t *data, UATHeader &header_ref) {
+void DecodedUATADSBPacket::DecodeHeader(uint8_t* data, UATHeader& header_ref) {
     header_ref.mdb_type_code = GetNBitsFromByteBuffer(5, 0, data);
     header_ref.address_qualifier = GetNBitsFromByteBuffer(3, 5, data);
     header_ref.icao_address = GetNBitsFromByteBuffer(24, 8, data);
 };
-void DecodedUATADSBPacket::DecodeStateVector(uint8_t *data, UATStateVector &state_vector_ref) {
+void DecodedUATADSBPacket::DecodeStateVector(uint8_t* data, UATStateVector& state_vector_ref) {
     state_vector_ref.latitude_awb = GetNBitsFromByteBuffer(23, 0, data);
     state_vector_ref.longitude_awb = GetNBitsFromByteBuffer(24, 23, data);
     state_vector_ref.altitude_is_geometric_altitude = GetNBitsFromByteBuffer(1, 47, data);
@@ -319,7 +319,7 @@ void DecodedUATADSBPacket::DecodeStateVector(uint8_t *data, UATStateVector &stat
     state_vector_ref.vertical_velocity = GetNBitsFromByteBuffer(11, 89, data);
     state_vector_ref.utc_coupled_or_tis_b_site_id = GetNBitsFromByteBuffer(4, 100, data);
 };
-void DecodedUATADSBPacket::DecodeModeStatus(uint8_t *data, UATModeStatus &mode_status_ref) {
+void DecodedUATADSBPacket::DecodeModeStatus(uint8_t* data, UATModeStatus& mode_status_ref) {
     // Byte 18-19
     mode_status_ref.emitter_category_and_callsign_chars_1_2 = GetNBitsFromByteBuffer(16, 0, data);
     // Byte 20-21
@@ -344,12 +344,12 @@ void DecodedUATADSBPacket::DecodeModeStatus(uint8_t *data, UATModeStatus &mode_s
     mode_status_ref.csid = GetNBitsFromByteBuffer(1, 78, data);
 };
 
-void DecodedUATADSBPacket::DecodeAuxiliaryStateVector(uint8_t *data, UATAuxiliaryStateVector &aux_state_vector_ref) {
+void DecodedUATADSBPacket::DecodeAuxiliaryStateVector(uint8_t* data, UATAuxiliaryStateVector& aux_state_vector_ref) {
     aux_state_vector_ref.secondary_altitude_encoded = GetNBitsFromByteBuffer(12, 0, data);
 };
-void DecodedUATADSBPacket::DecodeTargetState(uint8_t *data, UATTargetState &target_state_ref) {};
+void DecodedUATADSBPacket::DecodeTargetState(uint8_t* data, UATTargetState& target_state_ref) {};
 
-RawUATUplinkPacket::RawUATUplinkPacket(const char *rx_string, int16_t sigs_dbm_in, int16_t sigq_bits_in,
+RawUATUplinkPacket::RawUATUplinkPacket(const char* rx_string, int16_t sigs_dbm_in, int16_t sigq_bits_in,
                                        uint64_t mlat_48mhz_64bit_counts_in)
     : sigs_dbm(sigs_dbm_in), sigq_bits(sigq_bits_in), mlat_48mhz_64bit_counts(mlat_48mhz_64bit_counts_in) {
     uint16_t rx_num_bytes =
@@ -369,14 +369,14 @@ RawUATUplinkPacket::RawUATUplinkPacket(uint8_t rx_buffer[kUplinkMessageNumBytes]
     encoded_message_len_bytes = rx_buffer_len_bytes;
 }
 
-DecodedUATUplinkPacket::DecodedUATUplinkPacket(const char *rx_string, int32_t sigs_dbm, int32_t sigq_bits,
+DecodedUATUplinkPacket::DecodedUATUplinkPacket(const char* rx_string, int32_t sigs_dbm, int32_t sigq_bits,
                                                uint64_t mlat_48mhz_64bit_counts)
     : raw(rx_string, sigs_dbm, sigq_bits, mlat_48mhz_64bit_counts) {
     // Validate the packet.
     ConstructUATUplinkPacket();
 }
 
-DecodedUATUplinkPacket::DecodedUATUplinkPacket(const RawUATUplinkPacket &packet) : raw(packet) {
+DecodedUATUplinkPacket::DecodedUATUplinkPacket(const RawUATUplinkPacket& packet) : raw(packet) {
     // Validate the packet.
     ConstructUATUplinkPacket();
 }

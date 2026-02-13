@@ -45,9 +45,7 @@ bool SettingsManager::GetDeviceInfo(DeviceInfo& device_info) {
         return eeprom.Load(device_info, kEEPROMDeviceInfoOffset);
     } else {
         // Device Info is stored in flash.
-        // FlashUtils::FlashSafe();
         device_info = *(DeviceInfo*)(kFlashDeviceInfoStartAddr);
-        // FlashUtils::FlashUnsafe();
         return true;
     }
 }

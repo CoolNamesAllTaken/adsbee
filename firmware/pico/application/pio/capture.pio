@@ -223,8 +223,8 @@ void preamble_detector_program_init(
 sample:
     set x 4 [7]         ; 5:13 | (x+1) = number of samples to take (added delay 7)
     mov osr !null [7]   ; 14:22 | OSR = 0b1111111111111111111111 (added delay 7)
-    out null 28 [2]         ; 23:25 | OSR = 0b1111 (5/5 bits required to classify sampling period as HI, it's hard to get LO samples so we fudge it)
-    ; nop [2]             ; 2:7 | This delay controls max allowable clock skew per bit.
+public sample_set_vote_threshold:
+    out null 28 [2]         ; 23:25 | OSR = 0b1111 (4/5 bits required to classify sampling period as HI, it's hard to get LO samples so we fudge it)
 ; One sample takes 3 cycles.
 sample_wrap_target:
     jmp pin sample_hi side 1 ; 8+3n
@@ -286,6 +286,8 @@ end_of_0:
 .wrap
 
 % c-sdk {
+#include "bsp.hh"
+
 static inline void message_demodulator_program_init(
     PIO pio, 
     uint sm, 
@@ -316,6 +318,13 @@ static inline void message_demodulator_program_init(
         // Connect out_pin to SET and SIDESET
         sm_config_set_set_pins(&c, recovered_clk_pin, 1); // set one pin as SET output
         sm_config_set_sideset_pins(&c, recovered_clk_pin); 
+    }
+
+    // Alter the sample vote threshold based on RF frontend version.
+    // Default is out null 28 [2] (4/5 HI samples required). For V3+ use out null 29 [2] (3/5 HI samples required).
+    if (bsp.r1090_rf_frontend_version >= SettingsManager::DeviceInfo::kADSBee1090RFFrontendV3) {
+        pio->instr_mem[offset + message_demodulator_offset_sample_set_vote_threshold] =
+            pio_encode_out(pio_null, 29) | pio_encode_delay(2);
     }
 
     pio_sm_init(pio, sm, offset, &c);
