@@ -196,8 +196,6 @@ void preamble_detector_program_init(
 .program message_demodulator
 ; Demod pin for knowing when a valid message demod interval has begun.
 .define demod_in_pin_index 0
-; Demod pin for high power preamble detector. Using GPIO 29, pulses pin on GPIO 19 is base.
-.define high_power_demod_in_pin_index 10
 ; Pulses input pin for reading current power level.
 .define pulses_gpio 19
 ; Number of delay loops the clock recovery routine can wait, per bit, for the next manchester edge, before skipping.
@@ -249,7 +247,7 @@ sample_return:
     jmp end_of_1  ; 23 | End of 1
 
 public initial_entry:
-    wait 1 pin demod_in_pin_index [7] side 0   ; -11:-5 | Wait to enter DEMOD interval.
+    wait 1 pin demod_in_pin_index [7]   ; -11:-5 | Wait to enter DEMOD interval.
     pull noblock [7]        ; -4 | Pull from TX FIFO to OSR in order to signal DMA to capture timestamp.
     ; Preamble ends LO, so imitate the end of a 1 with its HI->LO transition.
     jmp initial_entry_cut_in [5]            ; -3:2 | wait adjusted here
@@ -315,8 +313,7 @@ static inline void message_demodulator_program_init(
         pio_gpio_init(pio, recovered_clk_pin);
         pio_sm_set_consecutive_pindirs(pio, sm, recovered_clk_pin, 1, true); // set one pin starting at out_pin to OUT
 
-        // Connect out_pin to SET and SIDESET
-        sm_config_set_set_pins(&c, recovered_clk_pin, 1); // set one pin as SET output
+        // Connect recovered_clk_pin to SIDESET
         sm_config_set_sideset_pins(&c, recovered_clk_pin); 
     }
 
