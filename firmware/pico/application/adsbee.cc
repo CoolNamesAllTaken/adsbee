@@ -26,9 +26,9 @@
 #include "comms.hh"  // For debug prints.
 
 // Uncomment the line below to enable preamble detector debugging on recovered_clk.
-#define DEBUG_PREAMBLE_DETECTOR
+// #define DEBUG_PREAMBLE_DETECTOR
 // Uncomment the line below to enable demodulator debugging on recovered_clk.
-// #define DEBUG_DEMODULATOR
+#define DEBUG_DEMODULATOR
 
 // Uncomment this to hold the status LED on for 5 seconds if the watchdog commanded a reboot.
 // #define WATCHDOG_REBOOT_WARNING
