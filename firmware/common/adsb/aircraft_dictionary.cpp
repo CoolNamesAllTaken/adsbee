@@ -1564,6 +1564,8 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
         return false;  // unable to find or create new aircraft in dictionary
     }
     aircraft_ptr->last_message_timestamp_ms = get_time_since_boot_ms();
+    aircraft_ptr->last_message_signal_strength_dbm = packet.raw.sigs_dbm;
+    aircraft_ptr->last_message_signal_quality_db = packet.raw.sigq_db;
 
     bool ret = false;
     uint16_t type_code = packet.type_code;
