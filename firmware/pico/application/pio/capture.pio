@@ -53,17 +53,18 @@ check_next_bit:
     jmp !osre preamble_not_done_yet ; 2 
     nop [7] ; 3:10 | Preamble matched! Wait till first sample point.
 preamble_matched:
-    set pins 1 [2] ; 3:5 | set demod pin to indicate message body beginning
-    wait 1 gpio, pulses_gpio [7] ; 6:13 | wait till middle of message eye to look for end
-    nop [3] ; 14:17 | couldn't fit whole wait into previous instruction due to side set bits
+    nop [7] ; 11:18 | couldn't fit whole wait into previous instruction due to side set bits
+    set pins 1 [2] ; 19:22 | set demod pin to indicate message body beginning
+    wait 1 gpio, pulses_gpio [7] ; 23:30 | wait till middle of message eye to look for end
+    
 waiting_for_end_of_message:
-    set x, end_of_message_idle_ticks [2] ; 18:20 | [2.0us] number of sequential idle samples required to mark end of packet
+    set x, end_of_message_idle_ticks [2] ; 30:32 | [2.0us] number of sequential idle samples required to mark end of packet
 idle_countdown:
-    jmp pin waiting_for_end_of_message [2] ; 21+2n:24+2n | start over the idle countdown if received a non idle bit
-    jmp x-- idle_countdown [2] ; 25+2n:28+2n | still idle, keep counting down if the timer isn't up
+    jmp pin waiting_for_end_of_message [2] ; 33+2n:35+2n | start over the idle countdown if received a non idle bit
+    jmp x-- idle_countdown [2] ; 36+2n:38+2n | still idle, keep counting down if the timer isn't up
 message_finished:
-    set pins, 0 ; 29+2n | set demod pin to 0 to indicate message is finished
-    irq wait 0 rel ; 30+2n | Set IRQ 0+SM, and wait for it to clear (don't look for new messages until the current one has been processed).    
+    set pins, 0 ; 39+2n | set demod pin to 0 to indicate message is finished
+    irq wait 0 rel ; 40+2n | Set IRQ 0+SM, and wait for it to clear (don't look for new messages until the current one has been processed).    
 .wrap
 
 preamble_not_done_yet:
@@ -319,10 +320,10 @@ static inline void message_demodulator_program_init(
 
     // Alter the sample vote threshold based on RF frontend version.
     // Default is out null 28 [2] (4/5 HI samples required). For V3+ use out null 29 [2] (3/5 HI samples required).
-    if (bsp.r1090_rf_frontend_version >= SettingsManager::DeviceInfo::kADSBee1090RFFrontendV3) {
-        pio->instr_mem[offset + message_demodulator_offset_sample_set_vote_threshold] =
-            pio_encode_out(pio_null, 29) | pio_encode_delay(2);
-    }
+    // if (true || bsp.r1090_rf_frontend_version >= SettingsManager::DeviceInfo::kADSBee1090RFFrontendV3) {
+    //     pio->instr_mem[offset + message_demodulator_offset_sample_set_vote_threshold] =
+    //         pio_encode_out(pio_null, 29) | pio_encode_delay(2);
+    // }
 
     pio_sm_init(pio, sm, offset, &c);
 }

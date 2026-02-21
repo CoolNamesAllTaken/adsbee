@@ -68,8 +68,8 @@ bool ADSBeeServer::Init() {
     // it from freaking out.
     spi_receive_task_should_exit_ = false;
     // SPI receive task is high priority but we can't starve the WiFi task, which is pinned to core 0 in the sdkconfig.
-    xTaskCreatePinnedToCore(esp_spi_receive_task, "spi_receive_task", kSPIReceiveTaskStackSizeBytes, NULL,
-                            kSPIReceiveTaskPriority, NULL, kSPIReceiveTaskCore);
+    xTaskCreatePinnedToCoreWithCaps(esp_spi_receive_task, "spi_receive_task", kSPIReceiveTaskStackSizeBytes, NULL,
+                                    kSPIReceiveTaskPriority, NULL, kSPIReceiveTaskCore, MALLOC_CAP_INTERNAL);
 
     // Initialize prerequisites for Ethernet and WiFi. Needs to be done before settings are applied.
     comms_manager.Init();
@@ -512,8 +512,6 @@ void NetworkConsolePostConnectCallback(WebSocketServer* ws_server, int client_fd
                  object_dictionary.kFirmwareVersionPatch, object_dictionary.kFirmwareVersionReleaseCandidate,
                  settings_manager.settings.core_network_settings.wifi_ap_ssid);
     }
-
-    welcome_message[kNetworkConsoleWelcomeMessageMaxLen] = '\0';  // Null terminate for safety.
     ws_server->SendMessage(client_fd, welcome_message);
 }
 
@@ -622,6 +620,7 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
 bool ADSBeeServer::TCPServerInit() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = kHTTPServerStackSizeBytes;
+    // config.task_caps = MALLOC_CAP_IRAM_8BIT;
     config.close_fn = ws_close_fd;
     config.lru_purge_enable =
         true;  // Allow purging of the least recently used connections when max clients is reached.

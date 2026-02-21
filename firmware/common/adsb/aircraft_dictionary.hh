@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <memory_resource>
 #include <unordered_map>
 #include <variant>
 
@@ -32,7 +33,7 @@ class Aircraft {
     static const uint32_t kAddressQualifierMask = 0x0F000000;
     static const uint8_t kAddressQualifierBitShift = 24;
 
-    // Note: these need to match the variant indices in AircraftEntry_t for all valid variants.
+    // Note: these need to match the variant indices in AircraftEntry for all valid variants.
     // Aircraft types must be < 4 bits in length (16 in decimal).
     enum AircraftType : int8_t {
         kAircraftTypeInvalid = 0xF,
@@ -640,16 +641,16 @@ class AircraftDictionary {
     static const uint16_t kMaxNumAircraft = 400;
     static const uint16_t kMaxNumSources = 3;
 
-    typedef std::variant<ModeSAircraft, UATAircraft> AircraftEntry_t;
+    typedef std::variant<ModeSAircraft, UATAircraft> AircraftEntry;
 
     // Ensure that valid variant indices matche the AircraftType enum value so that we can use them interchangeably.
     static_assert(
-        std::is_same_v<std::variant_alternative_t<Aircraft::kAircraftTypeModeS, AircraftEntry_t>, ModeSAircraft>,
+        std::is_same_v<std::variant_alternative_t<Aircraft::kAircraftTypeModeS, AircraftEntry>, ModeSAircraft>,
         "ModeSAircraft variant index must match Aircraft::kAircraftTypeModeS");
-    static_assert(std::is_same_v<std::variant_alternative_t<Aircraft::kAircraftTypeUAT, AircraftEntry_t>, UATAircraft>,
+    static_assert(std::is_same_v<std::variant_alternative_t<Aircraft::kAircraftTypeUAT, AircraftEntry>, UATAircraft>,
                   "UATAircraft variant index must match Aircraft::kAircraftTypeUAT");
 
-    struct AircraftDictionaryConfig_t {
+    struct AircraftDictionaryConfig {
         uint32_t aircraft_prune_interval_ms = 60e3;
 #ifdef FILTER_CPR_POSITIONS
         // CPR position filter checks each new aircraft location against the previous location and requires two
@@ -751,7 +752,7 @@ class AircraftDictionary {
     /**
      * Constructor with config values specified.
      */
-    AircraftDictionary(AircraftDictionaryConfig_t config_in) : config_(config_in) {};
+    AircraftDictionary(AircraftDictionaryConfig config_in) : config_(config_in) {};
 
     /**
      * Removes all aircraft from the aircraft dictionary.
@@ -997,17 +998,17 @@ class AircraftDictionary {
      */
     inline bool CPRPositionFilterIsEnabled() { return config_.enable_cpr_position_filter; }
 
-    std::unordered_map<uint32_t, AircraftEntry_t> dict;
+    std::pmr::unordered_map<uint32_t, AircraftEntry> dict{&pool_};
 
     Metrics metrics;
 
-    AircraftEntry_t* lowest_aircraft_entry = nullptr;  // Pointer to the aircraft entry with the lowest valid GNSS
-                                                       // altitude. Useful for approximating receiver position.
+    AircraftEntry* lowest_aircraft_entry = nullptr;  // Pointer to the aircraft entry with the lowest valid GNSS
+                                                     // altitude. Useful for approximating receiver position.
 
    private:
     // Helper functions for ingesting specific ADS-B packet types, called by IngestModeSADSBPacket.
 
-    AircraftDictionaryConfig_t config_;
+    AircraftDictionaryConfig config_;
     // Counters in metrics_counter_ are incremented, then metrics_counter_ is swapped into metrics during the dictionary
     // update. This ensures that the public metrics struct always has valid data.
     Metrics metrics_counter_;
@@ -1015,4 +1016,7 @@ class AircraftDictionary {
     // Reference position for decoding Mode S surface position packets, in angular weighted binary format.
     uint32_t reference_latitude_awb32_ = 0;
     uint32_t reference_longitude_awb32_ = 0;
+
+    uint8_t buffer_[kMaxNumAircraft * sizeof(AircraftEntry)];  // Pre-allocated memory buffer for aircraft entries.
+    std::pmr::monotonic_buffer_resource pool_{buffer_, sizeof(buffer_)};
 };

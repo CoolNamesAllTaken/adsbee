@@ -170,7 +170,9 @@ bool ADSBee::DeInitISRs() {
     // Stop and unclaim DMA channels used for MLAT jitter counters
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         dma_channel_abort(mlat_jitter_dma_channel_[sm_index]);
-        dma_channel_unclaim(mlat_jitter_dma_channel_[sm_index]);
+        if (dma_channel_is_claimed(mlat_jitter_dma_channel_[sm_index])) {
+            dma_channel_unclaim(mlat_jitter_dma_channel_[sm_index]);
+        }
     }
 
     // Disable interrupts

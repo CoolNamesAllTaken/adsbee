@@ -777,7 +777,7 @@ TEST(AircraftDictionary, GetLowestAircraftPositionModeS) {
 }
 
 TEST(AircraftDictionary, LowestAircraftPtrClearedOnPrune) {
-    AircraftDictionary::AircraftDictionaryConfig_t config;
+    AircraftDictionary::AircraftDictionaryConfig config;
     config.aircraft_prune_interval_ms = 1000;  // Short prune interval for testing.
     AircraftDictionary dictionary(config);
 
@@ -837,7 +837,7 @@ TEST(AircraftDictionary, IngestSurfacePositionMessagesOnGround) {
     //  Lat: 52.320607 deg
     //  Lon: 4.734735 deg
 
-    AircraftDictionary::AircraftDictionaryConfig_t config;
+    AircraftDictionary::AircraftDictionaryConfig config;
     AircraftDictionary dictionary(config);
     dictionary.SetReferencePosition(51.990f, 4.375f);  // Set reference latitude for surface position CPR decoding.
     DecodedModeSPacket packet_0 = DecodedModeSPacket((char*)"8C4841753AAB238733C8CD4020B1");
@@ -908,7 +908,7 @@ TEST(AircraftDictionary, IngestSurfacePositionMessagesOnGround) {
 }
 
 TEST(AircraftDictionary, IngestSurfacePositionMovementAndTrack) {
-    AircraftDictionary::AircraftDictionaryConfig_t config;
+    AircraftDictionary::AircraftDictionaryConfig config;
     AircraftDictionary dictionary(config);
 
     DecodedModeSPacket packet_0 = DecodedModeSPacket((char*)"8C4841753A9A153237AEF0F275BE");
