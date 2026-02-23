@@ -136,6 +136,7 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
             for (uint16_t i = 0; i < SettingsManager::DeviceInfo::kNumOTAKeys; i++) {
                 CPP_AT_PRINTF("OTA Key %d: %s\r\n", i, device_info.ota_keys[i]);
             }
+            CPP_AT_PRINTF("1090MHz RF Frontend Version: %d\r\n", bsp.r1090_rf_frontend_version);
 
             if (esp32.IsEnabled()) {
                 // Read ESP32 firmware verison.

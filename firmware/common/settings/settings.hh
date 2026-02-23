@@ -374,9 +374,9 @@ class SettingsManager {
                     return kADSBee1090RFFrontendV1;
                     break;
                 case kPNADSBee1090U:
-                    if (part_rev <= 'C') {
+                    if (part_rev <= 'D') {
                         return kADSBee1090RFFrontendV1;
-                    } else if (part_rev == 'D') {
+                    } else if (part_rev == 'E') {
                         return kADSBee1090RFFrontendV2;
                     } else {
                         return kADSBee1090RFFrontendV3;
