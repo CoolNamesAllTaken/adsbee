@@ -13,7 +13,7 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 12;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 13;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 class SettingsManager {
@@ -40,6 +40,7 @@ class SettingsManager {
         kMAVLINK1,
         kMAVLINK2,
         kGDL90,
+        kMQTT,
         kNumProtocols
     };
     static constexpr uint16_t kReportingProtocolStrMaxLen = 30;
@@ -197,6 +198,34 @@ class SettingsManager {
         bool feed_is_active[kMaxNumFeeds];
         ReportingProtocol feed_protocols[kMaxNumFeeds];
         uint8_t feed_receiver_ids[kMaxNumFeeds][kFeedReceiverIDNumBytes];
+        
+        // MQTT-specific settings
+        enum MQTTFormat : uint8_t {
+            kMQTTFormatJSON = 0,
+            kMQTTFormatBinary = 1
+        };
+        // Use plain uint8_t array to ensure consistent size across compilers
+        uint8_t feed_mqtt_formats[kMaxNumFeeds] = {kMQTTFormatJSON, kMQTTFormatJSON,
+                                                    kMQTTFormatJSON, kMQTTFormatJSON,
+                                                    kMQTTFormatJSON, kMQTTFormatJSON,
+                                                    kMQTTFormatJSON, kMQTTFormatJSON,
+                                                    kMQTTFormatJSON, kMQTTFormatJSON};
+
+        // MQTT content selection - choose what to publish per feed
+        enum MQTTContent : uint8_t {
+            kMQTTContentAll = 0,      // Publish both raw packets and decoded aircraft status
+            kMQTTContentRaw = 1,      // Raw hex packets only
+            kMQTTContentStatus = 2    // Decoded aircraft status only
+        };
+        uint8_t feed_mqtt_content[kMaxNumFeeds] = {kMQTTContentAll, kMQTTContentAll,
+                                                    kMQTTContentAll, kMQTTContentAll,
+                                                    kMQTTContentAll, kMQTTContentAll,
+                                                    kMQTTContentAll, kMQTTContentAll,
+                                                    kMQTTContentAll, kMQTTContentAll};
+
+        // MQTT OTA settings - enable OTA via MQTT per feed (disabled by default for safety)
+        bool mqtt_ota_enabled[kMaxNumFeeds] = {false, false, false, false, false,
+                                                false, false, false, false, false};
 
         // MAVLINK settings
         uint8_t mavlink_system_id = 1;

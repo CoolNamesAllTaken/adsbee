@@ -1,5 +1,9 @@
 #include "cpu_utils.hh"
 
+#ifdef ON_PICO
+spin_lock_t *adc_spinlock = nullptr;
+#endif
+
 #ifdef ON_ESP32
 temperature_sensor_handle_t CPUMonitor::temp_sensor_handle_ = nullptr;
 bool CPUMonitor::temp_sensor_initialized_ = false;
@@ -7,6 +11,7 @@ bool CPUMonitor::temp_sensor_initialized_ = false;
 
 void CPUMonitor::Init() {
 #ifdef ON_PICO
+    adc_spinlock = spin_lock_init(spin_lock_claim_unused(true));
     adc_set_temp_sensor_enabled(true);
 #elif defined(ON_TI)
     Temperature_init();
@@ -105,22 +110,10 @@ void CPUMonitor::Update() {
 
 int8_t CPUMonitor::ReadTemperatureDegC() {
 #ifdef ON_PICO
-    // Wait for any in-progress ADC conversion (e.g. from non-blocking RSSI read) to complete,
-    // then select the temp sensor channel and do a fresh read. This avoids a race condition
-    // where adc_read() returns the result from a different channel's conversion.
-    static constexpr uint32_t kAdcTimeoutUs = 1000;  // 1ms worst case for a single 96-cycle conversion at 48MHz.
-    uint32_t start_us = time_us_32();
-    while (!(adc_hw->cs & ADC_CS_READY_BITS)) {
-        if (time_us_32() - start_us > kAdcTimeoutUs) {
-            CONSOLE_ERROR("CPUMonitor::ReadTemperatureDegC", "ADC not ready after %lu us, possible hardware fault.",
-                          kAdcTimeoutUs);
-            return INT8_MIN;
-        }
-        tight_loop_contents();
-    }
-    adc_select_input(kTempSensorADCChannel);
-    // Use signed arithmetic to avoid underflow for temperatures above 27°C (where ADC mV < 706).
-    int32_t temp_adc_mv = adc_read() * 3300 / (0xFFF);  // Convert 12-bit ADC reading to mV assuming VREF=3.3V.
+    // Use spinlock-protected ADC read to prevent multi-core race conditions.
+    // Without this, another core can change the ADC mux between our channel select and read,
+    // causing readings from the wrong channel (e.g. RSSI voltage interpreted as temperature).
+    int32_t temp_adc_mv = adc_read_channel_safe(kTempSensorADCChannel) * 3300 / (0xFFF);
     // Convert the ADC reading to degrees C using the formula from the RP2040 datasheet.
     // See: https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf Section 4.9.5
     return static_cast<int8_t>(27 - (temp_adc_mv - 706) * 581 / 1000);

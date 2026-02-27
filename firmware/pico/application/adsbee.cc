@@ -23,7 +23,8 @@
 // #include <charconv>
 #include <string.h>  // for strcat
 
-#include "comms.hh"  // For debug prints.
+#include "comms.hh"      // For debug prints.
+#include "cpu_utils.hh"  // For adc_read_channel_safe.
 
 // Uncomment the line below to enable preamble detector debugging on recovered_clk.
 #define DEBUG_PREAMBLE_DETECTOR
@@ -346,11 +347,14 @@ void __time_critical_func(ADSBee::OnDemodBegin)(uint gpio) {
     mlat_jitter_counts_on_demod_begin_[sm_index] = mlat_jitter_counts_now;
     rx_packet_[sm_index].mlat_48mhz_64bit_counts = mlat_48mhz_64bit_counts;  // Save this to modify later.
 
-    ReadSignalStrengthMilliVoltsNonBlockingBegin();  // Kick off ADC read.
+    // Do a full blocking ADC read under spinlock protection. This prevents multi-core
+    // races where Core 0 changes the ADC mux between our channel select and read.
+    // The ADC conversion takes ~2µs which is negligible for ISR latency.
+    last_rssi_mv_ = ReadSignalStrengthMilliVoltsBlocking();
 }
 
 void ADSBee::OnDemodComplete() {
-    int signal_strength_dbm = AD8313MilliVoltsTodBm(ReadSignalStrengthMilliVoltsNonBlockingComplete());
+    int signal_strength_dbm = AD8313MilliVoltsTodBm(last_rssi_mv_);
 
     // Figure out which state machines were triggered and get things set up to read packets from them. Don't stop them,
     // let them finish chewing since they run at a lower clock rate.
@@ -509,21 +513,7 @@ void ADSBee::OnDemodComplete() {
 void __time_critical_func(ADSBee::OnSysTickWrap)() { mlat_counter_wraps_ += kMLATWrapCounterIncrement; }
 
 int ADSBee::ReadSignalStrengthMilliVoltsBlocking() {
-    adc_select_input(config_.rssi_adc_input);
-    int rssi_adc_counts = adc_read();
-    return ADC_COUNTS_TO_MV(rssi_adc_counts);
-}
-
-void ADSBee::ReadSignalStrengthMilliVoltsNonBlockingBegin() {
-    adc_select_input(config_.rssi_adc_input);
-    hw_set_bits(&adc_hw->cs, ADC_CS_START_ONCE_BITS);
-}
-
-int ADSBee::ReadSignalStrengthMilliVoltsNonBlockingComplete() {
-    while (!(adc_hw->cs & ADC_CS_READY_BITS)) {
-        // Wait for conversion to complete.
-    }
-    int rssi_adc_counts = adc_hw->result;
+    int rssi_adc_counts = adc_read_channel_safe(config_.rssi_adc_input);
     return ADC_COUNTS_TO_MV(rssi_adc_counts);
 }
 
@@ -531,8 +521,7 @@ int ADSBee::ReadSignalStrengthdBmBlocking() { return AD8313MilliVoltsTodBm(ReadS
 
 int ADSBee::ReadTLMilliVolts() {
     // Read back the low level TL bias output voltage.
-    adc_select_input(config_.tl_adc_input);
-    tl_adc_counts_ = adc_read();
+    tl_adc_counts_ = adc_read_channel_safe(config_.tl_adc_input);
     return ADCCountsToMilliVolts(tl_adc_counts_);
 }
 

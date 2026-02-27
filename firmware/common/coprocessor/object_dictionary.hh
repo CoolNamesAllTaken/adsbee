@@ -320,6 +320,10 @@ class ObjectDictionary {
     SemaphoreHandle_t network_console_rx_queue_mutex = xSemaphoreCreateMutex();
     CompositeDeviceStatus composite_device_status = {};
     ESP32DeviceStatus device_status = {};
+
+    // Optional callback for intercepting Pico console output (used by MQTT OTA)
+    typedef void (*ConsoleInterceptCallback)(const char* data, size_t len);
+    ConsoleInterceptCallback console_intercept_callback = nullptr;
 #elif defined(ON_TI)
     PFBQueue<RawUATADSBPacket> raw_uat_adsb_packet_queue =
         PFBQueue<RawUATADSBPacket>({.buf_len_num_elements = kDecodedUATADSBPacketQueueDepth,
@@ -343,6 +347,7 @@ class ObjectDictionary {
    private:
     uint32_t scratch_ = 0x0;  // Scratch register used for testing.
 
+   public:
     // On Pico, this is a queue of log messages gathered from other devices. On other devices, this is a queue of log
     // messages waiting to be slurped up by the RP2040.
     LogMessage log_message_queue_buffer_[kLogMessageQueueDepth] = {};

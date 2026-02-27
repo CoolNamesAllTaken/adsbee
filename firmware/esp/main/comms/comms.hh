@@ -193,7 +193,14 @@ class CommsManager {
     void WiFiEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 
     /**
-     * Send messages to feeds that are being fed via an internet or LAN connection.
+     * Manages TCP feed socket connections and MQTT client connections. Runs in a separate task so that
+     * blocking connect()/DNS operations don't stall the packet forwarding loop in IPWANTask.
+     */
+    void IPWANConnectionTask(void* pvParameters);
+
+    /**
+     * Drains the raw packet queue and forwards packets to connected feeds. Kept free of blocking
+     * connection operations so that packet forwarding is never stalled by slow network connections.
      */
     void IPWANTask(void* pvParameters);
 
@@ -309,6 +316,7 @@ class CommsManager {
     QueueHandle_t ip_wan_reporting_composite_array_queue_;
     TaskHandle_t wifi_ap_task_handle = nullptr;
     TaskHandle_t ip_wan_task_handle = nullptr;
+    TaskHandle_t ip_wan_connection_task_handle = nullptr;
     bool wifi_sta_connected_ = false;
     bool wifi_sta_has_ip_ = false;
     uint32_t wifi_sta_connected_timestamp_ms_ = 0;  // This will loop every 49.7 days or so.

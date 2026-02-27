@@ -280,7 +280,8 @@ bool SPICoprocessor::ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRe
                                       sizeof(settings_manager.settings));
                         return false;
                     }
-                    if (!Write(request.addr, settings_manager.settings, write_requires_ack)) {
+                    if (!PartialWrite(request.addr, reinterpret_cast<uint8_t*>(&settings_manager.settings),
+                                     request.len, 0, write_requires_ack)) {
                         CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest",
                                       "Unable to write settings data to coprocessor.");
                         return false;
@@ -396,6 +397,10 @@ bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t* object
             goto PARTIAL_READ_FAILED;
         }
         if (!config_.interface.SPIWaitForHandshake()) {
+            // Debug: Add more context about the timeout
+            CONSOLE_WARNING("SPICoprocessor::PartialRead",
+                          "Handshake timeout for %s - addr:0x%x len:%d offset:%d",
+                          config_.tag_str, addr, len, offset);
             snprintf(error_message, kErrorMessageMaxLen,
                      "Timed out while waiting for handshake after sending read request.");
             goto PARTIAL_READ_FAILED;

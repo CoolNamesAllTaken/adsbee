@@ -1,5 +1,6 @@
 #pragma once
 #include "stdint.h"
+#include <cstdio>
 
 /**
  * This is a collection of enums that is common across ModeSAircraft, UATAircraft, and others.
@@ -157,5 +158,64 @@ class ADSBTypes {
      */
     static inline bool AirGroundStateIsSupersonic(ADSBTypes::AirGroundState air_ground_state) {
         return (air_ground_state & 0b1) == 1;
+    }
+
+    /**
+     * Get human-readable string for an emitter category enum value.
+     * @param[in] category Emitter category enum.
+     * @return Category string (e.g., "Light", "Heavy", "Rotorcraft").
+     */
+    static inline const char* GetCategoryString(EmitterCategory category) {
+        switch (category) {
+            case kEmitterCategoryInvalid: return "Unknown";
+            case kEmitterCategoryReserved: return "Reserved";
+            case kEmitterCategoryNoCategoryInfo: return "None";
+            case kEmitterCategorySurfaceEmergencyVehicle: return "EmergencyVehicle";
+            case kEmitterCategorySurfaceServiceVehicle: return "ServiceVehicle";
+            case kEmitterCategoryPointObstacle: return "GroundObstruction";
+            case kEmitterCategoryClusterObstacle: return "GroundObstruction";
+            case kEmitterCategoryLineObstacle: return "GroundObstruction";
+            case kEmitterCategoryGliderSailplane: return "Glider";
+            case kEmitterCategoryLighterThanAir: return "Balloon";
+            case kEmitterCategoryParachutistSkydiver: return "Parachutist";
+            case kEmitterCategoryUltralightHangGliderParaglider: return "Ultralight";
+            case kEmitterCategoryUnmannedAerialVehicle: return "UAV";
+            case kEmitterCategorySpaceTransatmosphericVehicle: return "Space";
+            case kEmitterCategoryLight: return "Light";
+            case kEmitterCategoryMedium1: return "Medium1";
+            case kEmitterCategoryMedium2: return "Medium2";
+            case kEmitterCategoryHighVortexAircraft: return "HighVortex";
+            case kEmitterCategoryHeavy: return "Heavy";
+            case kEmitterCategoryHighPerformance: return "HighPerformance";
+            case kEmitterCategoryRotorcraft: return "Rotorcraft";
+            default: return "Unknown";
+        }
+    }
+
+    /**
+     * Get standard ADS-B category code (e.g., A3, C1, D7) from the raw 8-bit category value.
+     * @param[in] category_raw Raw 8-bit category value from ADS-B [CA:3bits][TYPE:5bits].
+     * @return Category code string.
+     */
+    static inline const char* GetCategoryCode(uint8_t category_raw) {
+        static char category_code[4];
+        uint8_t ca = (category_raw >> 5) & 0x07;
+        uint8_t type = category_raw & 0x1F;
+
+        char letter;
+        switch (ca) {
+            case 0: letter = 'A'; break;
+            case 1: letter = 'B'; break;
+            case 2: letter = 'C'; break;
+            case 3: letter = 'D'; break;
+            case 4: letter = 'A'; break;
+            case 5: letter = 'B'; break;
+            case 6: letter = 'C'; break;
+            case 7: letter = 'D'; break;
+            default: letter = 'X'; break;
+        }
+
+        snprintf(category_code, sizeof(category_code), "%c%d", letter, type);
+        return category_code;
     }
 };

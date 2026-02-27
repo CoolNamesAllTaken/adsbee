@@ -64,6 +64,10 @@ class CommsManager {
     CPP_AT_CALLBACK(ATESP32FlashCallback);
     CPP_AT_CALLBACK(ATEthernetCallback);
     CPP_AT_CALLBACK(ATFeedCallback);
+    CPP_AT_CALLBACK(ATFeedProtocolCallback);
+    CPP_AT_CALLBACK(ATFeedURICallback);
+    CPP_AT_CALLBACK(ATFeedPortCallback);
+    CPP_AT_CALLBACK(ATFeedEnCallback);
     CPP_AT_CALLBACK(ATHostnameCallback);
     CPP_AT_CALLBACK(ATOTACallback);
     CPP_AT_HELP_CALLBACK(ATOTAHelpCallback);
@@ -85,6 +89,8 @@ class CommsManager {
     CPP_AT_CALLBACK(ATWatchdogCallback);
     CPP_AT_CALLBACK(ATWiFiAPCallback);
     CPP_AT_CALLBACK(ATWiFiSTACallback);
+    CPP_AT_CALLBACK(ATMQTTFormatCallback);
+    CPP_AT_CALLBACK(ATMQTTContentCallback);
 
     int console_printf(const char* format, ...);
     int console_level_printf(SettingsManager::LogLevel level, const char* format, ...);

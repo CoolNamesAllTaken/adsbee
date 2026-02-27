@@ -99,6 +99,7 @@ elseif (TARGET host_test)
         adsb/mode_s_packet_decoder.cc
         comms/beast/beast_utils.cpp
         comms/gdl90/gdl90_utils.cpp
+        comms/mqtt/mqtt_protocol.cpp
         comms/raw/raw_utils.cpp
         coprocessor/composite_array.cpp
         coprocessor/spi_coprocessor.cpp
@@ -113,10 +114,12 @@ elseif (TARGET host_test)
     )
     target_include_directories(host_test PRIVATE
         adsb
+        comms
         comms/beast
         comms/csbee
         comms/gdl90
         comms/json
+        comms/mqtt
         comms/raw
         coprocessor
         utils

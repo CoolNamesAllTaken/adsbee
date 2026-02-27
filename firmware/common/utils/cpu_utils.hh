@@ -9,6 +9,7 @@
 
 #ifdef ON_PICO
 #include "hardware/adc.h"
+#include "hardware/sync.h"
 #include "pico/stdlib.h"
 #elif defined(ON_TI)
 extern "C" {
@@ -16,6 +17,23 @@ extern "C" {
 }
 #elif defined(ON_ESP32)
 #include "driver/temperature_sensor.h"
+#endif
+
+// Hardware spinlock for multi-core ADC safety on RP2040.
+// The RP2040 has a single ADC mux shared between cores. Without synchronization,
+// one core can change the selected channel between another core's select and read,
+// causing readings from the wrong channel (e.g. RSSI voltage read as temperature).
+#ifdef ON_PICO
+extern spin_lock_t *adc_spinlock;
+
+/// Thread-safe ADC read: acquires spinlock, selects channel, performs blocking read, releases spinlock.
+static inline uint16_t adc_read_channel_safe(uint channel) {
+    uint32_t saved = spin_lock_blocking(adc_spinlock);
+    adc_select_input(channel);
+    uint16_t result = adc_read();
+    spin_unlock(adc_spinlock, saved);
+    return result;
+}
 #endif
 
 class CPUMonitor {

@@ -215,25 +215,10 @@ class ADSBee {
 
     /**
      * Returns the Receive Signal Strength Indicator (RSSI) of the signal currently provided by the RF power detector,
-     * in mV.
+     * in mV. Uses spinlock-protected ADC access for multi-core safety.
      * @retval Voltage from the RF power detector, in mV.
      */
     inline int ReadSignalStrengthMilliVoltsBlocking();
-
-    /**
-     * Begins an ADC read of the Receive Signal Strength Indicator (RSSI) of the signal currently provided by the RF
-     * power detector, in mV. Non-blocking; must call ReadSignalStrengthMilliVoltsNonBlockingComplete() to complete the
-     * read. Ideally a bunch of other operations can be staged between begin and end to utilize the ADC read time.
-     */
-    inline void ReadSignalStrengthMilliVoltsNonBlockingBegin();
-
-    /**
-     * Completes a non-blocking ADC read of the Receive Signal Strength Indicator (RSSI) of the signal currently
-     * provided by the RF power detector, in mV. Must be called after ReadSignalStrengthMilliVoltsNonBlockingBegin().
-     * NOTE: This function blocks until the ADC read is complete.
-     * @retval Voltage from the RF power detector, in mV.
-     */
-    inline int ReadSignalStrengthMilliVoltsNonBlockingComplete();
 
     /**
      * Returns the Receive Signal Strength Indicator (RSSI) of the message that is currently being provided by the RF
@@ -459,6 +444,8 @@ class ADSBee {
     bool r1090_packet_queue_overflowed_ = false;
     bool bias_tee_enabled_ = false;
     uint32_t watchdog_timeout_sec_ = SettingsManager::Settings::kDefaultWatchdogTimeoutSec * kMsPerSec;
+
+    int last_rssi_mv_ = 0;  // RSSI reading stored by OnDemodBegin() for use in OnDemodComplete().
 
     int32_t noise_floor_mv_;
     uint32_t noise_floor_last_sample_timestamp_ms_ = 0;

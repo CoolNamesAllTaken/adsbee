@@ -105,9 +105,15 @@ void SettingsManager::Print() {
     print_buf_len = 0;
     for (uint16_t i = 0; i < Settings::kMaxNumFeeds; i++) {
         print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len,
-                                  "\t\t%d URI:%s Port:%d %s Protocol:%s ID:0x", i, settings.feed_uris[i],
+                                  "\t\t%d URI:%s Port:%d %s Protocol:%s", i, settings.feed_uris[i],
                                   settings.feed_ports[i], settings.feed_is_active[i] ? "ACTIVE" : "INACTIVE",
                                   kReportingProtocolStrs[settings.feed_protocols[i]]);
+        if (settings.feed_protocols[i] == SettingsManager::ReportingProtocol::kMQTT) {
+            const char* mqtt_fmt = (settings.feed_mqtt_formats[i] == Settings::kMQTTFormatBinary) ? "BINARY" : "JSON";
+            print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len,
+                                      " MQTT:%s", mqtt_fmt);
+        }
+        print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len, " ID:0x");
         for (int16_t feeder_id_byte_index = 0; feeder_id_byte_index < Settings::kFeedReceiverIDNumBytes;
              feeder_id_byte_index++) {
             print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len, "%02x",
@@ -141,6 +147,15 @@ void SettingsManager::PrintAT() {
     for (uint16_t i = 0; i < Settings::kMaxNumFeeds; i++) {
         CONSOLE_PRINTF("AT+FEED=%d,%s,%u,%d,%s\r\n", i, settings.feed_uris[i], settings.feed_ports[i],
                        settings.feed_is_active[i], kReportingProtocolStrs[settings.feed_protocols[i]]);
+        // Only print MQTT-specific settings for MQTT feeds.
+        if (settings.feed_protocols[i] == SettingsManager::ReportingProtocol::kMQTT) {
+            CONSOLE_PRINTF("AT+MQTT_FORMAT=%d,%s\r\n", i,
+                           (settings.feed_mqtt_formats[i] == Settings::kMQTTFormatBinary) ? "BINARY" : "JSON");
+            const char* content_str = "ALL";
+            if (settings.feed_mqtt_content[i] == Settings::kMQTTContentRaw) content_str = "RAW";
+            else if (settings.feed_mqtt_content[i] == Settings::kMQTTContentStatus) content_str = "STATUS";
+            CONSOLE_PRINTF("AT+MQTT_CONTENT=%d,%s\r\n", i, content_str);
+        }
     }
 
     // AT+LOG_LEVEL

@@ -37,6 +37,7 @@ target_sources(host_test PRIVATE
     test_geo_utils.cc
     test_nasa_cpr.cc
     test_mode_s_packet_decoder.cc
+    test_mqtt_protocol.cc
     test_platform.cc
     test_reporting_beast.cc
     test_reporting_csbee.cc

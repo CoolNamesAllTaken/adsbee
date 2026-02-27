@@ -1,5 +1,7 @@
 #include "adsbee_server.hh"
 
+#include <stddef.h>  // For offsetof macro
+
 #include "comms.hh"
 #include "gdl90/gdl90_utils.hh"
 #include "json_utils.hh"

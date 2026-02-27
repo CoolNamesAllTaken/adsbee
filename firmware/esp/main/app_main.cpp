@@ -69,6 +69,10 @@ extern "C" void app_main(void) {
     heap_caps_register_failed_alloc_callback(heap_caps_alloc_failed_hook);
 
     ESP_LOGI("app_main", "Beginning ADSBee Server Application.");
+    ESP_LOGI("app_main", "Firmware Version: %d.%d.%d",
+             ObjectDictionary::kFirmwareVersionMajor,
+             ObjectDictionary::kFirmwareVersionMinor,
+             ObjectDictionary::kFirmwareVersionPatch);
     ESP_LOGI("app_main", "Default task priority: %d", uxTaskPriorityGet(NULL));
 
     CPUMonitor::Init();
