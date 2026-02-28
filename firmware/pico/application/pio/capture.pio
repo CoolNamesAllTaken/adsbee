@@ -34,8 +34,8 @@
 .wrap_target
 ; This is where we go to start looking for a new preamble, or after a preamble match fails.
 public follow_irq:
-    mov osr isr      ;side 0               ; -4 | OSR = 0b00000000000000000000000001010000
-    out null 25                     ; -3 | OSR = 0b1010000
+    mov osr isr      ;side 0               ; -4 | OSR = 0b00000000000000000000000010100000
+    out null 24                     ; -3 | OSR = 0b10100000
     mov x null                      ; -2 | Clear out x from last sampling adventure.
 ; Grab a new bit every 24 cycles.
 ;   6 cycles: Get bit.
@@ -51,9 +51,9 @@ idle_wrap:
     irq set 5 rel [4]   ; -3:1 | set IRQ 5+SM to indicate to the other preamble detector that it can start looking now and delay to middle of bit to start filtering.
 check_next_bit:
     jmp !osre preamble_not_done_yet ; 2 
-    nop [7] ; 3:10 | Preamble matched! Wait till first sample point.
+    ;nop [7] ; 3:10 | Preamble matched! Wait till first sample point.
 preamble_matched:
-    nop [3] ; 11:18 | couldn't fit whole wait into previous instruction due to side set bits
+    ;nop [3] ; 11:18 | couldn't fit whole wait into previous instruction due to side set bits
     set pins 1 [2] ; 19:22 | set demod pin to indicate message body beginning
     wait 1 gpio, pulses_gpio [7] ; 23:30 | wait till middle of message eye to look for end
     
@@ -223,7 +223,7 @@ sample:
     set x 4 [7]         ; 5:13 | (x+1) = number of samples to take (added delay 7)
     mov osr !null [7]   ; 14:22 | OSR = 0b1111111111111111111111 (added delay 7)
 public sample_set_vote_threshold:
-    out null 27 [2]         ; 23:25 | OSR = 0b11111 (5/5 bits required to classify sampling period as HI, it's hard to get LO samples so we fudge it)
+    out null 28 [2]         ; 23:25 | OSR = 0b1111 (4/5 bits required to classify sampling period as HI, it's hard to get LO samples so we fudge it)
 ; One sample takes 3 cycles.
 sample_wrap_target:
     jmp pin sample_hi side 1 ; 8+3n
@@ -246,10 +246,10 @@ sample_return:
     jmp end_of_1                ; 23 | End of 1
 
 public initial_entry:
-    wait 1 pin demod_in_pin_index [7]  ; -11:-5 | Wait to enter DEMOD interval.
-    pull noblock [7]        ; -4 | Pull from TX FIFO to OSR in order to signal DMA to capture timestamp.
+    wait 1 pin demod_in_pin_index [0]  ; -11:-5 | Wait to enter DEMOD interval.
+    pull noblock [0]        ; -4 | Pull from TX FIFO to OSR in order to signal DMA to capture timestamp.
     ; Preamble ends LO, so imitate the end of a 1 with its HI->LO transition.
-    jmp initial_entry_cut_in [5]            ; -3:2 | wait adjusted here
+    jmp initial_entry_cut_in [4]            ; -3:2 | wait adjusted here
 
 start_of_1:
 ; FALLING EDGE WAIT

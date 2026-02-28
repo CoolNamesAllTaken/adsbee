@@ -707,9 +707,9 @@ void ADSBee::PIOInit() {
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b101));
         // in x 3       ; ISR = 0b00000000000000000000000000000101
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
-        // in null 4    ; ISR = 0b00000000000000000000000001010000
+        // in null 5    ; ISR = 0b00000000000000000000000010100000
         // Note: this is shorter than the real tail but we need extra time for the demodulator to start up.
-        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 4));
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 5));
         // mov x null   ; Clear scratch x.
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_x, pio_null));
 
