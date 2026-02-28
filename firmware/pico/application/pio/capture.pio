@@ -223,7 +223,7 @@ sample:
     set x 4 [7]         ; 5:13 | (x+1) = number of samples to take (added delay 7)
     mov osr !null [7]   ; 14:22 | OSR = 0b1111111111111111111111 (added delay 7)
 public sample_set_vote_threshold:
-    out null 28 [2]         ; 23:25 | OSR = 0b1111 (4/5 bits required to classify sampling period as HI, it's hard to get LO samples so we fudge it)
+    out null 27 [2]         ; 23:25 | OSR = 0b11111 (5/5 bits required to classify sampling period as HI, it's hard to get LO samples so we fudge it)
 ; One sample takes 3 cycles.
 sample_wrap_target:
     jmp pin sample_hi side 1 ; 8+3n
