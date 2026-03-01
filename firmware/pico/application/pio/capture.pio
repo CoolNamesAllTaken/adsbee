@@ -23,7 +23,7 @@
 .define beginning_of_message_idle_ticks 31
 
 ; 1/48us per tick
-.define fpl_clock_stretch_ticks 1
+.define fpl_clock_stretch_ticks 4
 
 ; Allow side-setting the out_pin for debugging. 1x output pin can be optionally side-set.
 .side_set 1 opt
@@ -253,8 +253,8 @@ sample:
 public sample_set_vote_threshold:
     ;out null 27 [2]         ; 23:25 | OSR = 0b11111 (5/5 bits required to classify sampling period as HI, it's hard to get LO samples so we fudge it)
     ; out null 28 [2]         ; 23:25 | OSR = 0b1111 (4/5 bits required to classify sampling period as HI)
-    ; out null 29 [2]         ; 23:25 | OSR = 0b111 (3/3 bits required to classify sampling period as HI)
-    out null 30 [2]         ; 23:25 | OSR = 0b11 (2/3 bits required to classify sampling period as HI)
+    out null 29 [2]         ; 23:25 | OSR = 0b111 (3/3 bits required to classify sampling period as HI)
+    ; out null 30 [2]         ; 23:25 | OSR = 0b11 (2/3 bits required to classify sampling period as HI)
 ; One sample takes 3 cycles.
 sample_wrap_target:
     jmp pin sample_hi side 1 ; 8+3n
@@ -277,7 +277,7 @@ sample_return:
     jmp end_of_1                ; 23 | End of 1
 
 public initial_entry:
-    wait 1 pin demod_in_pin_index [6]  ; -11:-5 | Wait to enter DEMOD interval.
+    wait 1 pin demod_in_pin_index [3]  ; -11:-5 | Wait to enter DEMOD interval.
     pull noblock [0]        ; -4 | Pull from TX FIFO to OSR in order to signal DMA to capture timestamp.
     ; Preamble ends LO, so imitate the end of a 1 with its HI->LO transition.
     jmp initial_entry_cut_in [0]            ; -3:2 | wait adjusted here
