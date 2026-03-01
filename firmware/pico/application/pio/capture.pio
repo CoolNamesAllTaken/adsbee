@@ -30,6 +30,10 @@
 ; Note that one 0 bit has been removed from the preamble to allow more cycles for the demodulator to turn on.
 ; set pins 0 ; DEBUG
 
+idle_try_again:
+    jmp pin waiting_for_idle
+    jmp idle_wrap
+
 ; BEGIN DOUBLE PULSE MATCH
 .wrap_target
 ; This is where we go to start looking for a new preamble, or after a preamble match fails.
@@ -42,13 +46,14 @@ public follow_irq:
 ;   12 cycles: Assert bit.
 ;   6 cycles: nop.
     wait 1 irq 4 rel ; Wait for IRQ 4+SM, then clear it.
+
 waiting_for_idle: ; Wait for idle period between first and second preamble chip to start pattern matching.
-    set x, beginning_of_message_idle_ticks
+    set x, beginning_of_message_idle_ticks side 1
 idle_wrap:
-    jmp pin waiting_for_idle
+    jmp pin idle_try_again ; try again by ignoring glitches < 1/48us
     jmp x-- idle_wrap
-    wait 1 gpio, pulses_gpio   ; -4 | wait for in_pin to go HI
-    irq set 5 rel [4]   ; -3:1 | set IRQ 5+SM to indicate to the other preamble detector that it can start looking now and delay to middle of bit to start filtering.
+    wait 1 gpio, pulses_gpio side 0  ; 0 | wait for in_pin to go HI
+    irq set 5 rel [4]   ; 1 | set IRQ 5+SM to indicate to the other preamble detector that it can start looking now and delay to middle of bit to start filtering.
 check_next_bit:
     jmp !osre preamble_not_done_yet ; 2 
     ;nop [7] ; 3:10 | Preamble matched! Wait till first sample point.
@@ -75,13 +80,13 @@ preamble_not_done_yet:
 ; Subroutines
 
 assert_pin_hi:
-    set x 5 [1] ; 5-6 | Assert HI for 12 cycles ((x+1) * (2 cycles per wrap))
+    set x 4 [1] ; 5-6 | Assert HI for 10 cycles ((x+1) * (2 cycles per wrap))
 aph_wrap:
     jmp pin aph_pin_is_hi side 1 ; 7+2n
     jmp follow_irq ; 8+2n | Pin is LO, assert failed.
 aph_pin_is_hi:
     jmp x-- aph_wrap side 0; 8+2n
-    jmp check_next_bit [5]   ; 20-25 | cycle idle at end
+    jmp check_next_bit [7]   ; 20-25 | cycle idle at end
 
 ; filter_pin_hi:
 ;     set y 3  ; 6: (filter_correct_samples-1) Minimum number of correct samples needed to keep looking.
@@ -220,10 +225,13 @@ void preamble_detector_program_init(
 ; @param[in] y Goes back to end_of_0 if y = 0, goes back to end_of_1 otherwise.
 ; @retval x x=1 if >=2/3 samples were LO, x=0 otherwise.
 sample:
-    set x 4 [7]         ; 5:13 | (x+1) = number of samples to take (added delay 7)
+    set x 2 [7]         ; 5:13 | (x+1) = number of samples to take (added delay 7)
     mov osr !null [7]   ; 14:22 | OSR = 0b1111111111111111111111 (added delay 7)
 public sample_set_vote_threshold:
-    out null 27 [2]         ; 23:25 | OSR = 0b11111 (5/5 bits required to classify sampling period as HI, it's hard to get LO samples so we fudge it)
+    ;out null 27 [2]         ; 23:25 | OSR = 0b11111 (5/5 bits required to classify sampling period as HI, it's hard to get LO samples so we fudge it)
+    ; out null 28 [2]         ; 23:25 | OSR = 0b1111 (4/5 bits required to classify sampling period as HI)
+    ; out null 29 [2]         ; 23:25 | OSR = 0b111 (3/3 bits required to classify sampling period as HI)
+    out null 30 [2]         ; 23:25 | OSR = 0b11 (2/3 bits required to classify sampling period as HI)
 ; One sample takes 3 cycles.
 sample_wrap_target:
     jmp pin sample_hi side 1 ; 8+3n
@@ -246,10 +254,10 @@ sample_return:
     jmp end_of_1                ; 23 | End of 1
 
 public initial_entry:
-    wait 1 pin demod_in_pin_index [0]  ; -11:-5 | Wait to enter DEMOD interval.
+    wait 1 pin demod_in_pin_index [6]  ; -11:-5 | Wait to enter DEMOD interval.
     pull noblock [0]        ; -4 | Pull from TX FIFO to OSR in order to signal DMA to capture timestamp.
     ; Preamble ends LO, so imitate the end of a 1 with its HI->LO transition.
-    jmp initial_entry_cut_in [4]            ; -3:2 | wait adjusted here
+    jmp initial_entry_cut_in [0]            ; -3:2 | wait adjusted here
 
 start_of_1:
 ; FALLING EDGE WAIT
@@ -264,7 +272,7 @@ start_of_1:
 ;     jmp x-- start_of_1_wait_loop   ; 0 | Decrement, loop back, or fall through on x=0
 
 ; DUMB WAIT
-    nop [1] ;side 1
+    nop [7] ;side 1
 
 falling_edge_1:
     mov x !null side 0          ; 1
@@ -287,7 +295,7 @@ start_of_0:                     ; We are 0.25 bits into a 0 - signal is LO
 ;     jmp x-- start_of_0_wait_loop
 
 ; DUMB WAIT
-    nop [1] ;side 1
+    nop [7] ;side 1
 
 rising_edge_0:
     in null, 1 [1] side 0       ; 1:2 | Emit a 0, sleep 3/4 of a bit
