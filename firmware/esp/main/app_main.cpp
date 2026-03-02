@@ -55,7 +55,7 @@ void heap_caps_alloc_failed_hook(size_t requested_size, uint32_t caps, const cha
                   heap_caps_get_free_size(MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA),
                   heap_caps_get_free_size(MALLOC_CAP_IRAM_8BIT));
     printf("Stack trace at allocation failure:\n");
-    esp_backtrace_print(10);  // Print up to 10 stack frames
+    esp_backtrace_print(20);  // Print up to 20 stack frames
 }
 
 void device_status_update_task(void* pvParameters) {
