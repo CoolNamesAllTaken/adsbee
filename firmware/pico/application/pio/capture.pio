@@ -96,11 +96,6 @@ aph_pin_is_hi:
 aph_success:
     nop [1]
     jmp check_next_bit [7]   ; 20-25 | cycle idle at end
-    ; set x 1 ; 20 | Set x to 1 to indicate last bit was HI, so clock stretching shenanigans are allowed in a subsequent LO bit match.
-;     jmp pin aph_stretch [3] side 1
-;     jmp check_next_bit [0]  ; 20-25 | cycle idle at end
-; aph_stretch:
-;     jmp check_next_bit [fpl_clock_stretch_ticks]
 
 ; filter_pin_hi:
 ;     set y 3  ; 6: (filter_correct_samples-1) Minimum number of correct samples needed to keep looking.
@@ -124,6 +119,10 @@ fpl_lo_clock_stretch:
 ; NOTE: The fall time of the AD8313 is asymmetric, with a longer fall than rise time. This measn that on high power messages, we want to sample later in the
 ; bit period to increase the chance that we capture a LO sample. This sample routine provides clock stretching in the preamble on high power messages in order
 ; to shift the sampling window of the demodulator later in each bit time, in order to improve demodulation rate at high powers.
+; Each LO sample in the preamble can stretch the clock by up to fpl_clock_stretch_ticks cycles if their first sample is HI. This allows up to 2 * fpl_clock_stretch_ticks
+; cycles of stretching in the ideal case where clock stretching only occurs on the trailing edge of HI bits in the preamble.
+; Known issue: We ran out of instructions to disable clock stretching on consecutive LO bits, so we could accidentally stretch the clock if we receive noise
+; at just the wrong time in the preamble tail.
 filter_pin_lo:
     ; Generous implementation that accepts a single LO sample anywhere in the sampling window as a success.
     ; This accounts for the asymmetric nature of the data slicer circuit as it is charging up during the preamble; it
@@ -280,7 +279,7 @@ public initial_entry:
     wait 1 pin demod_in_pin_index [3]  ; -11:-5 | Wait to enter DEMOD interval.
     pull noblock [0]        ; -4 | Pull from TX FIFO to OSR in order to signal DMA to capture timestamp.
     ; Preamble ends LO, so imitate the end of a 1 with its HI->LO transition.
-    jmp initial_entry_cut_in [0]            ; -3:2 | wait adjusted here
+    jmp initial_entry_cut_in [4]            ; -3:2 | wait adjusted here
 
 start_of_1:
 ; FALLING EDGE WAIT
