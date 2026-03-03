@@ -279,7 +279,7 @@ public initial_entry:
     wait 1 pin demod_in_pin_index [3]  ; -11:-5 | Wait to enter DEMOD interval.
     pull noblock [0]        ; -4 | Pull from TX FIFO to OSR in order to signal DMA to capture timestamp.
     ; Preamble ends LO, so imitate the end of a 1 with its HI->LO transition.
-    jmp initial_entry_cut_in [4]            ; -3:2 | wait adjusted here
+    jmp initial_entry_cut_in [2]            ; -3:2 | wait adjusted here
 
 start_of_1:
 ; FALLING EDGE WAIT
