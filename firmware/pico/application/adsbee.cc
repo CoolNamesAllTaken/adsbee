@@ -26,9 +26,9 @@
 #include "comms.hh"  // For debug prints.
 
 // Uncomment the line below to enable preamble detector debugging on recovered_clk.
-// #define DEBUG_PREAMBLE_DETECTOR
+#define DEBUG_PREAMBLE_DETECTOR
 // Uncomment the line below to enable demodulator debugging on recovered_clk.
-#define DEBUG_DEMODULATOR
+// #define DEBUG_DEMODULATOR
 
 // Uncomment this to hold the status LED on for 5 seconds if the watchdog commanded a reboot.
 // #define WATCHDOG_REBOOT_WARNING
@@ -698,18 +698,20 @@ void ADSBee::PIOInit() {
         // Handle GPIO interrupts (for marking beginning of demod interval).
         gpio_set_irq_enabled_with_callback(config_.demod_pins[sm_index], GPIO_IRQ_EDGE_RISE, true, on_demod_pin_change);
 
-        // Set the preamble sequence into the ISR: ISR: 0b101000010100000(0)
+        // Set the second chip of the preamble sequence into the ISR: ISR: 101000.
+        // Each "10" is represented by a 1 (since we don't actually care too muh about the trailing 0).
+        // Each "00" is represented by a 0.
         // Last 0 removed from preamble sequence to allow the demodulator more time to start up.
         // mov isr null ; Clear ISR.
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_isr, pio_null));
 
-        // set x 0b101  ; ISR = 0b00000000000000000000000000000000
-        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b101));
-        // in x 3       ; ISR = 0b00000000000000000000000000000101
-        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
-        // in null 5    ; ISR = 0b00000000000000000000000010100000
-        // Note: this is shorter than the real tail but we need extra time for the demodulator to start up.
-        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 5));
+        // set x 0b1100  ; ISR = 0b00000000000000000000000000000000
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b1100));
+        // in x 4       ; ISR = 0b00000000000000000000000000001100
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 4));
+        // // in null 5    ; ISR = 0b00000000000000000000000010100000
+        // // Note: this is shorter than the real tail but we need extra time for the demodulator to start up.
+        // pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 5));
         // mov x null   ; Clear scratch x.
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_x, pio_null));
 
@@ -717,7 +719,7 @@ void ADSBee::PIOInit() {
         // pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_push(false,
         // true));
 
-        // Stuff the preamble detector TX FIFO full of garbage so that the preamble detector can use a pull to signal
+        // Stuff the demodulator TX FIFO full of garbage so that the demodulator can use a pull to signal
         // the demod interval beginning.
         while (!pio_sm_is_tx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
             pio_sm_put(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
