@@ -33,6 +33,8 @@
 ; Allow side-setting the out_pin for debugging. 1x output pin can be optionally side-set.
 .side_set 1 opt
 
+c00_failed:
+    jmp !y follow_irq ; if we got sent here with y=1, we are in initial idle correlation mode and should fast reset
 waiting_for_idle: ; Wait for idle period between first and second preamble chip to start pattern matching.
     set x, beginning_of_message_idle_ticks side 0
 ; CORRELATE 00 | 44 cycles
@@ -46,8 +48,7 @@ c00_wrap:
 c00_success:
     jmp !y check_next_bit [2] ;side 1 ; If y=0, we were in initial idle correlation mode and can start looking for the preamble. If y=1, we just found the idle before the second preamble chip, so start looking for the next bit.
     jmp idle_found
-c00_failed:
-    jmp x!=y waiting_for_idle ;side 1 ; x is 0 here, so if we got sent here with y=1, we are in initial idle correlation mode and should fast reset
+
     ; else fall through to follow_irq (we failed a 00 correlation later in the preamble)
 .wrap_target
 ; This is where we go to start looking for a new preamble, or after a preamble match fails.
@@ -72,7 +73,7 @@ waiting_for_end_of_message:
     set x, end_of_message_idle_ticks ; 30:32 | [2.0us] number of sequential idle samples required to mark end of packet
 idle_countdown:
     jmp pin waiting_for_end_of_message ; 33+2n:35+2n | start over the idle countdown if received a non idle bit
-    jmp x-- idle_countdown ; 36+2n:38+2n | still idle, keep counting down if the timer isn't up
+    jmp x-- idle_countdown [2] ; 36+2n:38+2n | still idle, keep counting down if the timer isn't up
 message_finished:
     set pins, 0 ; 39+2n | set demod pin to 0 to indicate message is finished
     irq wait 0 rel ; 40+2n | Set IRQ 0+SM, and wait for it to clear (don't look for new messages until the current one has been processed).
@@ -252,7 +253,7 @@ void preamble_detector_program_init(
 ; Pulses input pin for reading current power level.
 .define pulses_gpio 19
 ; Each delay count is 4 cycles
-.define initial_entry_delay 6
+.define initial_entry_delay 8
 
 ; Allow side-setting the out_pin for debugging. 1x output pin can be optionally side-set.
 .side_set 1 opt
@@ -301,13 +302,13 @@ sample_return:
     jmp end_of_1                ; 23 | End of 1
 
 public initial_entry:
-    wait 1 pin demod_in_pin_index [3]  ; -11:-5 | Wait to enter DEMOD interval.
-    pull noblock [0]        ; -4 | Pull from TX FIFO to OSR in order to signal DMA to capture timestamp.
+    wait 1 pin demod_in_pin_index [3]  ; Wait to enter DEMOD interval.
+    pull noblock [0]        ; Pull from TX FIFO to OSR in order to signal DMA to capture timestamp.
+    set x initial_entry_delay side 0
 initial_entry_delay_wrap:
-    set x initial_entry_delay
     jmp x-- initial_entry_delay_wrap [2]
     ; Preamble ends LO, so imitate the end of a 1 with its HI->LO transition.
-    jmp initial_entry_cut_in [3]            ; -3:2 | wait adjusted here
+    jmp initial_entry_cut_in [4]  ;wait adjusted here
 
 start_of_1:
 ; FALLING EDGE WAIT
