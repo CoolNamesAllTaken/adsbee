@@ -698,20 +698,25 @@ void ADSBee::PIOInit() {
         // Handle GPIO interrupts (for marking beginning of demod interval).
         gpio_set_irq_enabled_with_callback(config_.demod_pins[sm_index], GPIO_IRQ_EDGE_RISE, true, on_demod_pin_change);
 
-        // Set the second chip of the preamble sequence into the ISR: ISR: 101000.
-        // Each "10" is represented by a 1 (since we don't actually care too muh about the trailing 0).
-        // Each "00" is represented by a 0.
-        // Last 0 removed from preamble sequence to allow the demodulator more time to start up.
+        /** Set the second chip of the preamble sequence into the ISR: 10100000.
+         * Each "10" is represented by a 1 (since we don't actually care too muh about the trailing 0). A "10" half
+         * nibble is 1us. Each "00" is represented by two 0 bits, since each 0 bit is 500ns of 0's.
+         * from preamble sequence to allow the demodulator more time to start up.
+         *
+         * We actually ignore the last 500ns of 0's and do a dumb delay, since this part tends to get "dirty" due to the
+         * LEVEL filter drifting downwards during the long LO. Taking into account the initial idle filter, we are
+         * matching on a pattern that looks something like: 0b001X1X000X, where X indicates 500ns of ignored bits.
+         */
+
         // mov isr null ; Clear ISR.
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_isr, pio_null));
-
-        // set x 0b1100  ; ISR = 0b00000000000000000000000000000000
-        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b1100));
-        // in x 4       ; ISR = 0b00000000000000000000000000001100
-        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 4));
-        // // in null 5    ; ISR = 0b00000000000000000000000010100000
+        // set x 0b11       ; ISR = 0b00000000000000000000000000000000
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b11));
+        // in x 2           ; ISR = 0b00000000000000000000000000000011
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 2));
+        // in null 3        ; ISR = 0b00000000000000000000000000011000
         // // Note: this is shorter than the real tail but we need extra time for the demodulator to start up.
-        // pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 5));
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 3));
         // mov x null   ; Clear scratch x.
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_x, pio_null));
 
