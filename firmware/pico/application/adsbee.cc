@@ -26,9 +26,9 @@
 #include "comms.hh"  // For debug prints.
 
 // Uncomment the line below to enable preamble detector debugging on recovered_clk.
-#define DEBUG_PREAMBLE_DETECTOR
+// #define DEBUG_PREAMBLE_DETECTOR
 // Uncomment the line below to enable demodulator debugging on recovered_clk.
-// #define DEBUG_DEMODULATOR
+#define DEBUG_DEMODULATOR
 
 // Uncomment this to hold the status LED on for 5 seconds if the watchdog commanded a reboot.
 // #define WATCHDOG_REBOOT_WARNING
@@ -170,7 +170,9 @@ bool ADSBee::DeInitISRs() {
     // Stop and unclaim DMA channels used for MLAT jitter counters
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         dma_channel_abort(mlat_jitter_dma_channel_[sm_index]);
-        dma_channel_unclaim(mlat_jitter_dma_channel_[sm_index]);
+        if (dma_channel_is_claimed(mlat_jitter_dma_channel_[sm_index])) {
+            dma_channel_unclaim(mlat_jitter_dma_channel_[sm_index]);
+        }
     }
 
     // Disable interrupts
@@ -696,26 +698,38 @@ void ADSBee::PIOInit() {
         // Handle GPIO interrupts (for marking beginning of demod interval).
         gpio_set_irq_enabled_with_callback(config_.demod_pins[sm_index], GPIO_IRQ_EDGE_RISE, true, on_demod_pin_change);
 
-        // Set the preamble sequence into the ISR: ISR: 0b101000010100000(0)
-        // Last 0 removed from preamble sequence to allow the demodulator more time to start up.
+        /** Set the second chip of the preamble sequence into the ISR: 10100000.
+         * Each "10" is represented by a 1 (since we don't actually care too muh about the trailing 0). A "10" half
+         * nibble is 1us. Each "00" is represented by two 0 bits, since each 0 bit is 500ns of 0's.
+         * from preamble sequence to allow the demodulator more time to start up.
+         *
+         * We actually ignore the last 500ns of 0's and do a dumb delay, since this part tends to get "dirty" due to the
+         * LEVEL filter drifting downwards during the long LO. Taking into account the initial idle filter, we are
+         * matching on a pattern that looks something like: 0b001X1X000X, where X indicates 500ns of ignored bits.
+         */
+
         // mov isr null ; Clear ISR.
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_isr, pio_null));
-
-        // set x 0b101  ; ISR = 0b00000000000000000000000000000000
-        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b101));
-        // in x 3       ; ISR = 0b00000000000000000000000000000101
-        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 3));
-        // in null 4    ; ISR = 0b00000000000000000000000001010000
-        // Note: this is shorter than the real tail but we need extra time for the demodulator to start up.
-        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 4));
+        // set x 0b11       ; ISR = 0b00000000000000000000000000000000
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_set(pio_x, 0b11));
+        // in x 2           ; ISR = 0b00000000000000000000000000000011
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 2));
+        // in null 3        ; ISR = 0b00000000000000000000000000011000
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 3));
+        // in x 2           ; ISR = 0b00000000000000000000000001100011
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 2));
+        // in null 3        ; ISR = 0b00000000000000000000001100011000
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 3));
         // mov x null   ; Clear scratch x.
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_x, pio_null));
 
         // Use this instruction to verify preamble was formed correctly (pushes ISR to RX FIFO).
-        // pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_push(false,
-        // true));
+        // pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_push(false, true));
+        // while (true) {
+        //     // Stall core 1 so we can peek at the RX FIFO registers.
+        // }
 
-        // Stuff the preamble detector TX FIFO full of garbage so that the preamble detector can use a pull to signal
+        // Stuff the demodulator TX FIFO full of garbage so that the demodulator can use a pull to signal
         // the demod interval beginning.
         while (!pio_sm_is_tx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
             pio_sm_put(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],

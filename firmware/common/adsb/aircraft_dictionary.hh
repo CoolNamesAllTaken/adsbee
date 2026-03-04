@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <memory_resource>
 #include <unordered_map>
 #include <variant>
 
@@ -32,7 +33,7 @@ class Aircraft {
     static const uint32_t kAddressQualifierMask = 0x0F000000;
     static const uint8_t kAddressQualifierBitShift = 24;
 
-    // Note: these need to match the variant indices in AircraftEntry_t for all valid variants.
+    // Note: these need to match the variant indices in AircraftEntry for all valid variants.
     // Aircraft types must be < 4 bits in length (16 in decimal).
     enum AircraftType : int8_t {
         kAircraftTypeInvalid = 0xF,
@@ -637,19 +638,19 @@ class UATAircraft : public Aircraft {
 
 class AircraftDictionary {
    public:
-    static const uint16_t kMaxNumAircraft = 400;
-    static const uint16_t kMaxNumSources = 3;
+    static constexpr uint16_t kMaxNumAircraft = 200;
+    static constexpr uint16_t kMaxNumSources = 3;
 
-    typedef std::variant<ModeSAircraft, UATAircraft> AircraftEntry_t;
+    typedef std::variant<ModeSAircraft, UATAircraft> AircraftEntry;
 
     // Ensure that valid variant indices matche the AircraftType enum value so that we can use them interchangeably.
     static_assert(
-        std::is_same_v<std::variant_alternative_t<Aircraft::kAircraftTypeModeS, AircraftEntry_t>, ModeSAircraft>,
+        std::is_same_v<std::variant_alternative_t<Aircraft::kAircraftTypeModeS, AircraftEntry>, ModeSAircraft>,
         "ModeSAircraft variant index must match Aircraft::kAircraftTypeModeS");
-    static_assert(std::is_same_v<std::variant_alternative_t<Aircraft::kAircraftTypeUAT, AircraftEntry_t>, UATAircraft>,
+    static_assert(std::is_same_v<std::variant_alternative_t<Aircraft::kAircraftTypeUAT, AircraftEntry>, UATAircraft>,
                   "UATAircraft variant index must match Aircraft::kAircraftTypeUAT");
 
-    struct AircraftDictionaryConfig_t {
+    struct AircraftDictionaryConfig {
         uint32_t aircraft_prune_interval_ms = 60e3;
 #ifdef FILTER_CPR_POSITIONS
         // CPR position filter checks each new aircraft location against the previous location and requires two
@@ -743,7 +744,8 @@ class AircraftDictionary {
      * Default constructor. Uses default config values.
      */
     AircraftDictionary() {
-        // Avoid reallocation of the hash map to prevent fragmentation.
+        // Pre-allocate kMaxNumAircraft buckets so that no rehash (and no additional bucket-array
+        // allocation from the monotonic region) occurs while we stay within capacity.
         dict.max_load_factor(1.0);
         dict.reserve(kMaxNumAircraft);
     };
@@ -751,7 +753,7 @@ class AircraftDictionary {
     /**
      * Constructor with config values specified.
      */
-    AircraftDictionary(AircraftDictionaryConfig_t config_in) : config_(config_in) {};
+    AircraftDictionary(AircraftDictionaryConfig config_in) : config_(config_in) {};
 
     /**
      * Removes all aircraft from the aircraft dictionary.
@@ -997,17 +999,107 @@ class AircraftDictionary {
      */
     inline bool CPRPositionFilterIsEnabled() { return config_.enable_cpr_position_filter; }
 
-    std::unordered_map<uint32_t, AircraftEntry_t> dict;
+    std::pmr::unordered_map<uint32_t, AircraftEntry> dict{&pool_};
 
     Metrics metrics;
 
-    AircraftEntry_t* lowest_aircraft_entry = nullptr;  // Pointer to the aircraft entry with the lowest valid GNSS
-                                                       // altitude. Useful for approximating receiver position.
+    AircraftEntry* lowest_aircraft_entry = nullptr;  // Pointer to the aircraft entry with the lowest valid GNSS
+                                                     // altitude. Useful for approximating receiver position.
 
    private:
+    /**
+     * Custom fixed-pool memory resource for AircraftDictionary.
+     *
+     * Manages two allocation regions:
+     *  - A free-list pool for hash-map node allocations (one slot per aircraft). Freed slots are
+     *    returned to the pool and reused, so up to kMaxNumAircraft insertions are always
+     *    possible regardless of how many prior insert/erase cycles have occurred.
+     *  - A one-shot monotonic region for the hash-table bucket array (allocated once via
+     *    reserve(), never rehashed while within capacity bounds).
+     *
+     * null_memory_resource() is used as the monotonic upstream, so any true overflow terminates
+     * cleanly rather than silently falling back to the heap.
+     */
+    class FixedPoolResource : public std::pmr::memory_resource {
+       public:
+        // Upper bound on a single unordered_map node:
+        //   sizeof(void*)                                  — next-node pointer in the linked list
+        //   sizeof(pair<const uint32_t, AircraftEntry>)   — key-value pair stored in the node
+        //   alignof(pair<const uint32_t, AircraftEntry>)  — worst-case intra-node alignment slack
+        // Rounded up to the nearest multiple of alignof(AircraftEntry) so every block in
+        // node_blocks_ starts on a suitably aligned boundary.
+        static constexpr size_t kNodeBlockRaw = sizeof(void*) + sizeof(std::pair<const uint32_t, AircraftEntry>) +
+                                                alignof(std::pair<const uint32_t, AircraftEntry>);
+        static constexpr size_t kNodeBlockSize =
+            (kNodeBlockRaw + alignof(AircraftEntry) - 1) & ~(alignof(AircraftEntry) - 1);
+
+        // Bucket buffer sized to survive repeated doublings from 1 → kMaxNumAircraft buckets.
+        // The geometric series sums to at most 2*kMaxNumAircraft pointer-widths, plus a margin.
+        static constexpr size_t kBucketBufferSize = kMaxNumAircraft * sizeof(void*) * 2 + 512;
+
+        FixedPoolResource() {
+            // Link every block into the initial free list.
+            free_head_ = nullptr;
+            for (int i = 0; i < kMaxNumAircraft; ++i) {
+                auto* blk = reinterpret_cast<FreeNode*>(node_blocks_[i]);
+                blk->next = free_head_;
+                free_head_ = blk;
+            }
+        }
+
+        FixedPoolResource(const FixedPoolResource&) = delete;
+        FixedPoolResource& operator=(const FixedPoolResource&) = delete;
+
+       protected:
+        void* do_allocate(size_t bytes, size_t alignment) override {
+            if (bytes <= kNodeBlockSize) {
+                if (free_head_ != nullptr) {
+                    void* ptr = free_head_;
+                    free_head_ = free_head_->next;
+                    return ptr;
+                }
+                // Free-list exhausted — InsertAircraft's capacity guard should have prevented
+                // this. Fall through to the monotonic region so behaviour remains defined.
+            }
+            // Large allocation (bucket array) or pool overflow: served from the monotonic
+            // region. null_memory_resource() upstream ensures clean termination on overflow.
+            return bucket_mono_.allocate(bytes, alignment);
+        }
+
+        void do_deallocate(void* p, size_t bytes, size_t alignment) override {
+            if (bytes <= kNodeBlockSize) {
+                // Return the node slot to the free list for reuse.
+                auto* blk = reinterpret_cast<FreeNode*>(p);
+                blk->next = free_head_;
+                free_head_ = blk;
+                return;
+            }
+            // Large allocations (bucket arrays) come from the monotonic region and cannot be
+            // individually reclaimed.
+        }
+
+        bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override { return this == &other; }
+
+       private:
+        struct FreeNode {
+            FreeNode* next;
+        };
+        static_assert(sizeof(FreeNode) <= kNodeBlockSize,
+                      "kNodeBlockSize is too small to hold a FreeNode — increase the size formula");
+
+        // Pre-allocated, aligned node storage: one block per aircraft.
+        alignas(alignof(AircraftEntry)) uint8_t node_blocks_[kMaxNumAircraft][kNodeBlockSize];
+        FreeNode* free_head_ = nullptr;
+
+        // One-shot monotonic storage for the hash-table bucket array (and free-list overflow).
+        uint8_t bucket_buffer_[kBucketBufferSize];
+        std::pmr::monotonic_buffer_resource bucket_mono_{bucket_buffer_, kBucketBufferSize,
+                                                         std::pmr::null_memory_resource()};
+    };
+
     // Helper functions for ingesting specific ADS-B packet types, called by IngestModeSADSBPacket.
 
-    AircraftDictionaryConfig_t config_;
+    AircraftDictionaryConfig config_;
     // Counters in metrics_counter_ are incremented, then metrics_counter_ is swapped into metrics during the dictionary
     // update. This ensures that the public metrics struct always has valid data.
     Metrics metrics_counter_;
@@ -1015,4 +1107,6 @@ class AircraftDictionary {
     // Reference position for decoding Mode S surface position packets, in angular weighted binary format.
     uint32_t reference_latitude_awb32_ = 0;
     uint32_t reference_longitude_awb32_ = 0;
+
+    FixedPoolResource pool_;  // Free-list pool + monotonic bucket region; must outlive dict.
 };

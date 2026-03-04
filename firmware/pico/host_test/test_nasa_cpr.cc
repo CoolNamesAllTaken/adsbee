@@ -739,7 +739,7 @@ TEST(NASACPR, AircraftDictionary) {
     for (uint16_t i = 0; i < sizeof(airborne_global_decode_tests) / sizeof(GlobalDecodeTest); i++) {
         GlobalDecodeTest& test = airborne_global_decode_tests[i];
         ModeSAircraft* aircraft_ptr =
-            dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(i, Aircraft::kAircraftTypeModeS));
+            dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(0, Aircraft::kAircraftTypeModeS));
         // Set odd message to most recent so that we read rpos1 for the expected result.
         // Set this flag before setting CPR positions since a transition from not airborne to airborne results in CPR
         // positions being cleared when the IsAiborne flage is written.
@@ -750,5 +750,6 @@ TEST(NASACPR, AircraftDictionary) {
         EXPECT_TRUE(aircraft_ptr->DecodeAirbornePosition());
         EXPECT_NEAR(aircraft_ptr->latitude_deg, WrapCPRDecodeLatitude(awb2lat(test.rpos1_lat_awb)), 1e-4);
         EXPECT_NEAR(aircraft_ptr->longitude_deg, WrapCPRDecodeLongitude(awb2lon(test.rpos1_lon_awb)), 1e-4);
+        dictionary.RemoveAircraft(Aircraft::ICAOToUID(0, Aircraft::kAircraftTypeModeS));
     }
 }

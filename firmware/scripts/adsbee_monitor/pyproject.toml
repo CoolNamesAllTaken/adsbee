@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "adsbee-monitor"
+version = "1.0.0"
+description = "Multi-receiver ADS-B metrics monitor for ADSBee devices"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "websockets>=12.0",
+]
+
+[project.scripts]
+adsbee-monitor = "adsbee_monitor:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["adsbee_monitor.py"]
+
+[tool.hatch.envs.default]
+dependencies = [
+    "websockets>=12.0",
+]
+
+[tool.hatch.envs.default.scripts]
+run = "python adsbee_monitor.py"

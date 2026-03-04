@@ -28,7 +28,7 @@ class CommsManager {
     // These buffers are put into a queue, which has its element size and number of elements set here.
     static const uint16_t kReportingCompositeArrayQueueNumElements = 3;
 
-    static const uint16_t kWiFiMessageQueueLen = 40;
+    static const uint16_t kWiFiMessageQueueLen = 8;
     // Reconnect intervals must be long enough that we register an IP lost event before trying the reconnect, otherwise
     // we get stuck in limbo where we may attempt a reconnect but the new IP address is never looked for (not controlled
     // by our own flags, but by internal LwIP stuff).

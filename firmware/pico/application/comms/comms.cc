@@ -38,28 +38,41 @@ bool CommsManager::Update() {
     UpdateNetworkConsole();
 
     uint32_t timestamp_ms = get_time_since_boot_ms();
-    if (timestamp_ms - last_raw_report_timestamp_ms_ > kRawReportingIntervalMs) {
-        last_raw_report_timestamp_ms_ = timestamp_ms;  // Proceed with update and record timestamp.
+    if (timestamp_ms - last_raw_report_check_timestamp_ms_ > kRawReportingCheckIntervalMs) {
+        last_raw_report_check_timestamp_ms_ = timestamp_ms;  // Proceed with update and record timestamp.
 
-        // Don't deplete the packet queues until we are ready to report!
-        uint8_t packets_to_report_buf[CompositeArray::RawPackets::kMaxLenBytes] = {0};
-        CompositeArray::RawPackets packets_to_report = CompositeArray::PackRawPacketsBuffer(
-            packets_to_report_buf, sizeof(packets_to_report_buf), &mode_s_packet_reporting_queue,
-            &uat_adsb_packet_reporting_queue, &uat_uplink_packet_reporting_queue);
+        // Calculate how much buffer space the current packets would need.
+        uint16_t required_buffer_len = CompositeArray::CalculateRawPacketsBufferLength(
+            &mode_s_packet_reporting_queue, &uat_adsb_packet_reporting_queue, &uat_uplink_packet_reporting_queue);
 
-        // Forward the CompositeArray::RawPackets to the ESP32 if enabled.
-        if (esp32.IsEnabled() && packets_to_report.IsValid()) {
-            // Write packet to ESP32 with a forced ACK.
-            esp32.Write(ObjectDictionary::kAddrCompositeArrayRawPackets,  // addr
-                        packets_to_report_buf,                            // buf
-                        true,                                             // require_ack
-                        packets_to_report.len_bytes                       // len
-            );
+        // Only forward packets if buffer would be full or if max reporting interval has elapsed.
+        bool buffer_would_be_full = required_buffer_len >= CompositeArray::RawPackets::kMaxLenBytes;
+        bool max_interval_elapsed = (timestamp_ms - last_raw_report_timestamp_ms_) >= kRawReportingMaxIntervalMs;
+
+        if (buffer_would_be_full || max_interval_elapsed) {
+            // Update the last report timestamp now that we're actually sending packets.
+            last_raw_report_timestamp_ms_ = timestamp_ms;
+
+            // Don't deplete the packet queues until we are ready to report!
+            uint8_t packets_to_report_buf[CompositeArray::RawPackets::kMaxLenBytes] = {0};
+            CompositeArray::RawPackets packets_to_report = CompositeArray::PackRawPacketsBuffer(
+                packets_to_report_buf, sizeof(packets_to_report_buf), &mode_s_packet_reporting_queue,
+                &uat_adsb_packet_reporting_queue, &uat_uplink_packet_reporting_queue);
+
+            // Forward the CompositeArray::RawPackets to the ESP32 if enabled.
+            if (esp32.IsEnabled() && packets_to_report.IsValid()) {
+                // Write packet to ESP32 with a forced ACK.
+                esp32.Write(ObjectDictionary::kAddrCompositeArrayRawPackets,  // addr
+                            packets_to_report_buf,                            // buf
+                            true,                                             // require_ack
+                            packets_to_report.len_bytes                       // len
+                );
+            }
+
+            // Interfaces to send reports on.
+            UpdateReporting(kReportingSinks, settings_manager.settings.reporting_protocols, kNumReportingSinks,
+                            &packets_to_report);
         }
-
-        // Interfaces to send reports on.
-        UpdateReporting(kReportingSinks, settings_manager.settings.reporting_protocols, kNumReportingSinks,
-                        &packets_to_report);
     }
 
     return true;
@@ -107,7 +120,7 @@ bool CommsManager::UpdateNetworkConsole() {
     return true;
 }
 
-int CommsManager::console_printf(const char *format, ...) {
+int CommsManager::console_printf(const char* format, ...) {
     va_list args;
     va_start(args, format);
     int res = iface_vprintf(SettingsManager::SerialInterface::kConsole, format, args);
@@ -115,7 +128,7 @@ int CommsManager::console_printf(const char *format, ...) {
     return res;
 }
 
-int CommsManager::console_level_printf(SettingsManager::LogLevel level, const char *format, ...) {
+int CommsManager::console_level_printf(SettingsManager::LogLevel level, const char* format, ...) {
     if (settings_manager.settings.log_level < level) return 0;
     va_list args;
     va_start(args, format);
@@ -124,7 +137,7 @@ int CommsManager::console_level_printf(SettingsManager::LogLevel level, const ch
     return res;
 }
 
-int CommsManager::iface_printf(SettingsManager::SerialInterface iface, const char *format, ...) {
+int CommsManager::iface_printf(SettingsManager::SerialInterface iface, const char* format, ...) {
     va_list args;
     va_start(args, format);
     int res = iface_vprintf(iface, format, args);
@@ -132,7 +145,7 @@ int CommsManager::iface_printf(SettingsManager::SerialInterface iface, const cha
     return res;
 }
 
-int CommsManager::iface_vprintf(SettingsManager::SerialInterface iface, const char *format, va_list args) {
+int CommsManager::iface_vprintf(SettingsManager::SerialInterface iface, const char* format, va_list args) {
     char buf[kPrintfBufferMaxSize];
 
     // Formatted print to buffer.
@@ -169,7 +182,7 @@ bool CommsManager::iface_putc(SettingsManager::SerialInterface iface, char c) {
     return false;  // Should never get here.
 }
 
-bool CommsManager::iface_getc(SettingsManager::SerialInterface iface, char &c) {
+bool CommsManager::iface_getc(SettingsManager::SerialInterface iface, char& c) {
     switch (iface) {
         case SettingsManager::kCommsUART:
             if (uart_is_readable_within_us(config_.comms_uart_handle, config_.uart_timeout_us)) {
@@ -203,7 +216,7 @@ bool CommsManager::iface_getc(SettingsManager::SerialInterface iface, char &c) {
     return false;  // Should never get here.
 }
 
-bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char *buf) {
+bool CommsManager::iface_puts(SettingsManager::SerialInterface iface, const char* buf) {
     switch (iface) {
         case SettingsManager::kCommsUART:
             uart_puts(config_.comms_uart_handle, buf);
@@ -250,7 +263,7 @@ bool CommsManager::network_console_putc(char c) {
     recursion_alert = false;
     return true;
 }
-bool CommsManager::network_console_puts(const char *buf, uint16_t len) {
+bool CommsManager::network_console_puts(const char* buf, uint16_t len) {
     for (uint16_t i = 0; i < strlen(buf) && i < len; i++) {
         if (!network_console_putc(buf[i])) {
             return false;

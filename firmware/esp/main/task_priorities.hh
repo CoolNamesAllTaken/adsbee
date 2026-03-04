@@ -6,7 +6,7 @@
 #include "freertos/task.h"
 
 // This will cause weird crashes if it's too small to support full size SPI transfers!
-static const unsigned int kSPIReceiveTaskStackSizeBytes = 6 * 4096;
+static const unsigned int kSPIReceiveTaskStackSizeBytes = 4 * 4096;
 static const unsigned int kSPIReceiveTaskPriority = 10;
 static const unsigned int kSPIReceiveTaskCore = 1;
 static const unsigned int kWiFiAPTaskPriority = tskIDLE_PRIORITY;

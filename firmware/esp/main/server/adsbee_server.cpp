@@ -68,8 +68,8 @@ bool ADSBeeServer::Init() {
     // it from freaking out.
     spi_receive_task_should_exit_ = false;
     // SPI receive task is high priority but we can't starve the WiFi task, which is pinned to core 0 in the sdkconfig.
-    xTaskCreatePinnedToCore(esp_spi_receive_task, "spi_receive_task", kSPIReceiveTaskStackSizeBytes, NULL,
-                            kSPIReceiveTaskPriority, NULL, kSPIReceiveTaskCore);
+    xTaskCreatePinnedToCoreWithCaps(esp_spi_receive_task, "spi_receive_task", kSPIReceiveTaskStackSizeBytes, NULL,
+                                    kSPIReceiveTaskPriority, NULL, kSPIReceiveTaskCore, MALLOC_CAP_INTERNAL);
 
     // Initialize prerequisites for Ethernet and WiFi. Needs to be done before settings are applied.
     comms_manager.Init();
@@ -161,7 +161,11 @@ bool ADSBeeServer::Update() {
             }
             // Else it's OK to have no packets.
         } else {
-            // Add packets to aircraft dictionary and then report them.
+            // Report raw packets then add them to the aircraft dictionary. Report first to allow network queues to be
+            // processed during ingestion, which takes a while.
+
+            // Forward packets to WAN.
+            comms_manager.IPWANSendRawPacketCompositeArray(raw_packets_buf_);
 
             // Mode S Packets
             for (uint16_t i = 0; i < raw_packets.header->num_mode_s_packets; i++) {
@@ -223,9 +227,6 @@ bool ADSBeeServer::Update() {
                 }
                 ReportGDL90UplinkDataMessage(decoded_packet);
             }
-
-            // Forward packets to WAN.
-            comms_manager.IPWANSendRawPacketCompositeArray(raw_packets_buf_);
         }
     }
 
@@ -511,8 +512,6 @@ void NetworkConsolePostConnectCallback(WebSocketServer* ws_server, int client_fd
                  object_dictionary.kFirmwareVersionPatch, object_dictionary.kFirmwareVersionReleaseCandidate,
                  settings_manager.settings.core_network_settings.wifi_ap_ssid);
     }
-
-    welcome_message[kNetworkConsoleWelcomeMessageMaxLen] = '\0';  // Null terminate for safety.
     ws_server->SendMessage(client_fd, welcome_message);
 }
 
@@ -621,6 +620,7 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
 bool ADSBeeServer::TCPServerInit() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = kHTTPServerStackSizeBytes;
+    // config.task_caps = MALLOC_CAP_IRAM_8BIT;
     config.close_fn = ws_close_fd;
     config.lru_purge_enable =
         true;  // Allow purging of the least recently used connections when max clients is reached.
@@ -663,7 +663,7 @@ bool ADSBeeServer::TCPServerInit() {
                                        .server = server,
                                        .uri = "/metrics",
                                        .num_clients_allowed = 4,
-                                       .send_as_binary = false,  // Network metrics are always ASCII.
+                                       .send_as_binary = false,                 // Network metrics are always ASCII.
                                        .inactivity_timeout_ms = 5 * 60 * 1000,  // 5 minute timeout.
                                        .post_connect_callback = nullptr,
                                        .message_received_callback = nullptr});

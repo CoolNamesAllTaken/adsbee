@@ -59,6 +59,8 @@ class BSP {
                     has_subg = false;
                     break;
             }
+
+            r1090_rf_frontend_version = device_info.GetRFFrontendVersion();
         }
     }
 
@@ -109,6 +111,8 @@ class BSP {
     uint16_t r1090_rssi_adc_pin = 28;   // Pin for reading RSSI.
     uint16_t r1090_rssi_adc_input = 2;  // ADC input for reading RSSI.
     uint16_t r1090_bias_tee_enable_pin = 18;
+
+    SettingsManager::DeviceInfo::ADSBee1090RFFrontendVersion r1090_rf_frontend_version;
 
     bool has_subg = false;                // Set to true if the sub-GHz receiver is present.
     uint32_t subg_spi_clk_freq_hz = 4e6;  // CC1312 has SPI clk limited to 1/12 its clock frequency. 48MHz / 12 = 4MHz.

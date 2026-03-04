@@ -45,10 +45,17 @@ CPUMonitor cpu_monitor = CPUMonitor({});
 
 void heap_caps_alloc_failed_hook(size_t requested_size, uint32_t caps, const char* function_name) {
     CONSOLE_ERROR("heap_caps_alloc_failed_hook",
-                  "%s was called but failed to allocate %d bytes with 0x%lX capabilities.\n", function_name,
-                  requested_size, caps);
+                  "%s was called but failed to allocate %d bytes with 0x%lX capabilities.\r\n"
+                  "\tfree heap: %d bytes\r\n"
+                  "\tlargest free block: %d bytes\r\n"
+                  "\tDRAM: %d bytes\r\n"
+                  "\tIRAM: %d bytes\r\n",
+                  function_name, requested_size, caps, heap_caps_get_free_size(MALLOC_CAP_8BIT),
+                  heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
+                  heap_caps_get_free_size(MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA),
+                  heap_caps_get_free_size(MALLOC_CAP_IRAM_8BIT));
     printf("Stack trace at allocation failure:\n");
-    esp_backtrace_print(10);  // Print up to 10 stack frames
+    esp_backtrace_print(20);  // Print up to 20 stack frames
 }
 
 void device_status_update_task(void* pvParameters) {
