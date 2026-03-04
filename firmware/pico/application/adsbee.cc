@@ -715,14 +715,19 @@ void ADSBee::PIOInit() {
         // in x 2           ; ISR = 0b00000000000000000000000000000011
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 2));
         // in null 3        ; ISR = 0b00000000000000000000000000011000
-        // // Note: this is shorter than the real tail but we need extra time for the demodulator to start up.
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 3));
+        // in x 2           ; ISR = 0b00000000000000000000000001100011
+        pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_x, 2));
+        // in null 3        ; ISR = 0b00000000000000000000001100011000
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_in(pio_null, 3));
         // mov x null   ; Clear scratch x.
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_x, pio_null));
 
         // Use this instruction to verify preamble was formed correctly (pushes ISR to RX FIFO).
-        // pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_push(false,
-        // true));
+        // pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_push(false, true));
+        // while (true) {
+        //     // Stall core 1 so we can peek at the RX FIFO registers.
+        // }
 
         // Stuff the demodulator TX FIFO full of garbage so that the demodulator can use a pull to signal
         // the demod interval beginning.
