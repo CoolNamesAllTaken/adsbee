@@ -46,8 +46,7 @@ int32_t GillhamToAltitudeFt(uint16_t gillham_value)
 
     // Check for invalid codes.
     if (one_hundreds == 5 || one_hundreds == 6 || one_hundreds == 0) {
-        result = kAltitudeDecodeErrorGillhamDecodeError;
-        return result;
+        return kAltitudeDecodeErrorGillhamDecodeError;
     }
 
     // Remove 7s from one_hundreds.
@@ -85,7 +84,7 @@ uint16_t AltitudeCodeToGillham(uint16_t altitude_code) {
 
 int32_t AltitudeCodeToAltitudeFt(uint16_t altitude_code) {
     // Altitude Code Format
-    //                                     M        Q
+    //                                 M        Q
     // +----+----+----+----+----+----+---+----+---+----+----+----+----+
     // | C1 | A1 | C2 | A2 | C4 | A4 | 0 | B1 | 0 | B2 | D2 | B4 | D4 |
     // +----+----+----+----+----+----+---+----+---+----+----+----+----+

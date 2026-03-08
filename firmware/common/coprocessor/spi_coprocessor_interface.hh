@@ -37,7 +37,7 @@ class SPICoprocessorInterface {
      * @param[in] code The ReturnCode to convert.
      * @retval String representation of the ReturnCode.
      */
-    static const char *ReturnCodeToString(ReturnCode code) {
+    static const char* ReturnCodeToString(ReturnCode code) {
         switch (code) {
             case kOk:
                 return "OK";
@@ -68,7 +68,7 @@ class SPICoprocessorInterface {
     /**
      * On Pico and ESP32, we can block while writing and ensure that we return the bytes that were read.
      */
-    virtual int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf,
+    virtual int SPIWriteReadBlocking(uint8_t* tx_buf, uint8_t* rx_buf,
                                      uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
                                      bool end_transaction = true) = 0;
 #else
@@ -79,7 +79,7 @@ class SPICoprocessorInterface {
      * @param[in] len_bytes Number of bytes to transmit.
      * @retval True if transfer was queued successfully, false otherwise.
      */
-    virtual bool SPIWriteNonBlocking(uint8_t *tx_buf,
+    virtual bool SPIWriteNonBlocking(uint8_t* tx_buf,
                                      uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes) = 0;
 #endif
 };
@@ -109,7 +109,7 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     // lower the HANDSHAKE line following a transaction.
     static constexpr uint32_t kDefaultSPIHandshakeLockoutUs = 10;
     // How long a blocking wait for a handshake can last.
-    static constexpr uint32_t kSPIHandshakeTimeoutMs = 20;
+    static constexpr uint32_t kSPIHandshakeTimeoutMs = 50;
     // How long to loop in Update() for after initializing the device in order to allow it to query for settings data.
     static constexpr uint32_t kBootupDelayMs = 500;
 

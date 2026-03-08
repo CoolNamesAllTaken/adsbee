@@ -501,6 +501,7 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(const ModeSADSBPacket& packet, 
     }
 
     // ME[8-19] - Encoded Altitude
+    // DO-260C 2.2.3.2.3.4.3 "Altitude Encoding" in ADS-B Airborne Position Messages
     switch (packet.GetTypeCodeEnum()) {
         case ModeSADSBPacket::TypeCode::kTypeCodeAirbornePositionBaroAlt: {
             uint16_t encoded_altitude_ft_with_q_bit = static_cast<uint16_t>(packet.GetNBitWordFromMessage(12, 8));
@@ -508,17 +509,46 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(const ModeSADSBPacket& packet, 
                 altitude_source = ADSBTypes::kAltitudeSourceNotAvailable;
                 CONSOLE_WARNING("AircraftDictionary::ApplyAirbornePositionMessage",
                                 "Altitude information not available for ICAO 0x%lx.", icao_address);
-                decode_successful = false;
+                decode_successful = true;
             } else {
                 altitude_source = ADSBTypes::kAltitudeSourceBaro;
                 bool q_bit = (encoded_altitude_ft_with_q_bit & (0b000000010000)) ? true : false;
-                // Remove Q bit.
-                uint16_t encoded_altitude_ft = ((encoded_altitude_ft_with_q_bit & 0b111111100000) >> 1) |
-                                               (encoded_altitude_ft_with_q_bit & 0b1111);
-                baro_altitude_ft = q_bit ? (encoded_altitude_ft * 25) - 1000 : 25 * encoded_altitude_ft;
-                // FIXME: Does not currently support baro altitudes above 50175ft. Something about gray codes?
-                WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid, true);
-                WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroAltitude, true);
+                int32_t temp_baro_altitude_ft = kAltitudeDecodeError::kAltitudeDecodeErrorInvalid;
+                if (q_bit) {
+                    // Q bit is set; altitude is encoded as 25N - 1000ft, where N is the value of the bits with the Q
+                    // bit removed.
+                    // Remove Q bit.
+                    uint16_t encoded_altitude_ft = ((encoded_altitude_ft_with_q_bit & 0b111111100000) >> 1) |
+                                                   (encoded_altitude_ft_with_q_bit & 0b1111);
+                    // 25N - 1000ft
+                    temp_baro_altitude_ft = (encoded_altitude_ft * 25) - 1000;
+                } else {
+                    // Q bit is cleared; altitude is Gillham-coded with the following sequence.
+                    // MSG Bit  | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52
+                    // ---------+----+----+----+----+----+----+----+----+----+----+----+----
+                    // "ME" Bit |  9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20
+                    // ---------+----+----+----+----+----+----+----+----+----+----+----+----
+                    // Code Bit | C1 | A1 | C2 | A2 | C4 | A4 | B1 | "Q"| B2 | D2 | B4 | D4
+
+                    // Convert the gillham code to a Mode C reply by inserting a 0 "M" bit to the left of B1.
+                    // Code Bit | C1 | A1 | C2 | A2 | C4 | A4 | "M"| B1 | "Q"| B2 | D2 | B4 | D4
+                    uint16_t altitude_code = ((encoded_altitude_ft_with_q_bit & 0b111111000000) << 1) | (0b0 << 6) |
+                                             (encoded_altitude_ft_with_q_bit & 0b111111);
+                    temp_baro_altitude_ft = GillhamToAltitudeFt(AltitudeCodeToGillham(altitude_code));
+                }
+
+                if (temp_baro_altitude_ft > kAltitudeDecodeErrorInvalid) {
+                    baro_altitude_ft = temp_baro_altitude_ft;
+                    WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid, true);
+                    WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroAltitude, true);
+                } else {
+                    // We already handle the case where altitude is unavailable at the beginning of the function, so
+                    // this is just Gillham decode issues.
+                    CONSOLE_WARNING("AircraftDictionary::ApplyAirbornePositionMessage",
+                                    "Gillham decode failed for ICAO 0x%lx with altitude code 0x%x.", icao_address,
+                                    encoded_altitude_ft_with_q_bit);
+                    WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid, false);
+                }
             }
             break;
         }
