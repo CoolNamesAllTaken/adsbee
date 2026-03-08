@@ -61,9 +61,6 @@ ModeSPacketDecoder decoder = ModeSPacketDecoder({.enable_1090_error_correction =
 int main() {
     bi_decl(bi_program_description("ADSBee 1090 ADSB Receiver"));
 
-    // Initialize the temperature sensor.
-    CPUMonitor::Init();
-
     // Initialize coprocessor SPI bus.
     // ESP32 SPI pins.
     gpio_set_function(bsp.copro_spi_clk_pin, GPIO_FUNC_SPI);
@@ -103,6 +100,10 @@ int main() {
     }
 
     adsbee.Init();
+
+    // Initialize the temperature sensor after adsbee.Init(), which calls adc_init() and resets the ADC peripheral
+    // (clearing CS.TS_EN). CPUMonitor::Init() must run after adc_init() to re-enable the temperature sensor bias.
+    CPUMonitor::Init();
 
 #ifdef ISRS_ON_CORE1
     // Launch Core 1 early so that InitISRs() runs on Core 1, putting PIO interrupts on Core 1.

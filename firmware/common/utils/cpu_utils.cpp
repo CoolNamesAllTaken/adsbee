@@ -27,12 +27,12 @@ void CPUMonitor::Init() {
 }
 
 #ifdef ON_ESP32
-void CPUMonitor::ReadCPUUsage(uint8_t &core_0_usage_percent, uint8_t &core_1_usage_percent) {
+void CPUMonitor::ReadCPUUsage(uint8_t& core_0_usage_percent, uint8_t& core_1_usage_percent) {
     // Total number of tasks currently existing in the system
     UBaseType_t uxArraySize = uxTaskGetNumberOfTasks();
 
     // Allocate memory to hold task status information for all tasks
-    TaskStatus_t *pxTaskStatusArray = (TaskStatus_t *)pvPortMalloc(uxArraySize * sizeof(TaskStatus_t));
+    TaskStatus_t* pxTaskStatusArray = (TaskStatus_t*)pvPortMalloc(uxArraySize * sizeof(TaskStatus_t));
 
     if (pxTaskStatusArray == NULL) {
         CONSOLE_ERROR("CPUMonitor::ReadCPUUsage", "Failed to allocate memory for task status array.");
