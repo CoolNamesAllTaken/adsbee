@@ -507,13 +507,19 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(const ModeSADSBPacket& packet, 
             uint16_t encoded_altitude_ft_with_q_bit = static_cast<uint16_t>(packet.GetNBitWordFromMessage(12, 8));
             if (encoded_altitude_ft_with_q_bit == 0) {
                 altitude_source = ADSBTypes::kAltitudeSourceNotAvailable;
+                WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid, false);
+                WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagGNSSAltitudeValid, false);
+                WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroAltitude, true);
+                WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedGNSSAltitude, true);
                 CONSOLE_WARNING("AircraftDictionary::ApplyAirbornePositionMessage",
                                 "Altitude information not available for ICAO 0x%lx.", icao_address);
                 decode_successful = true;
             } else {
                 altitude_source = ADSBTypes::kAltitudeSourceBaro;
                 bool q_bit = (encoded_altitude_ft_with_q_bit & (0b000000010000)) ? true : false;
-                int32_t temp_baro_altitude_ft = kAltitudeDecodeError::kAltitudeDecodeErrorInvalid;
+
+                int32_t temp_baro_altitude_ft = kAltitudeDecodeErrorInvalid;
+
                 if (q_bit) {
                     // Q bit is set; altitude is encoded as 25N - 1000ft, where N is the value of the bits with the Q
                     // bit removed.
@@ -539,6 +545,7 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(const ModeSADSBPacket& packet, 
 
                 if (temp_baro_altitude_ft > kAltitudeDecodeErrorInvalid) {
                     baro_altitude_ft = temp_baro_altitude_ft;
+                    altitude_source = ADSBTypes::kAltitudeSourceBaro;
                     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid, true);
                     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroAltitude, true);
                 } else {

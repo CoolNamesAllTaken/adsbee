@@ -349,6 +349,71 @@ TEST(AircraftDictionary, TimeFilterAirbornePositionMessages) {
     EXPECT_EQ(aircraft.GetMaxAllowedCPRIntervalMs(), ModeSAircraft::kDefaultCPRIntervalMs);
 }
 
+TEST(AircraftDictionary, IngestAirbornePositionBaroAltitudeNonGillham) {
+    AircraftDictionary dictionary = AircraftDictionary();
+    DecodedModeSPacket tpacket = DecodedModeSPacket((char*)"8d89611348db01c6ea41c4c7b8bf");
+    ASSERT_TRUE(tpacket.is_valid);
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
+    EXPECT_EQ(dictionary.GetNumAircraft(), 1);
+    auto itr = dictionary.dict.begin();
+    auto& aircraft = std::get<ModeSAircraft>(itr->second);
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroAltitude));
+    EXPECT_EQ(aircraft.altitude_source, ADSBTypes::kAltitudeSourceBaro);
+    EXPECT_EQ(aircraft.baro_altitude_ft, 42600);
+}
+
+TEST(AircraftDictionary, IngestAirbornePositionNonGillhamMax) {
+    // Test with an an altitude code of 0b111'11111111, which corresponds to 0b1111'11111111 with a "Q" bit of 1, which
+    // inicates baro altitude encoding as 25*N - 1000ft, where N is the value of the altitude code with the Q bit
+    // removed.
+    // The maximum altitude encodeable as a baro altitude in this manner is 50175 ft.
+    AircraftDictionary dictionary = AircraftDictionary();
+    DecodedModeSPacket tpacket = DecodedModeSPacket((char*)"8d89611348fff1c6ea41c4a16b95");
+    // EXPECT_EQ(tpacket.CalculateCRC24(), 0xfff);  // Use this to get the CRC.
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
+    EXPECT_EQ(dictionary.GetNumAircraft(), 1);
+    auto itr = dictionary.dict.begin();
+    auto& aircraft = std::get<ModeSAircraft>(itr->second);
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroAltitude));
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid));
+    EXPECT_EQ(aircraft.altitude_source, ADSBTypes::AltitudeSource::kAltitudeSourceBaro);
+    EXPECT_EQ(aircraft.baro_altitude_ft, 50175);
+}
+
+TEST(AircraftDictionary, IngestAirbornePositionBaroAltitudeInvalidOrUnavailable) {
+    AircraftDictionary dictionary = AircraftDictionary();
+    DecodedModeSPacket tpacket = DecodedModeSPacket((char*)"8d896113480001c6ea41c4c7b8bf");
+    // We messed with the altitude code without changing the CRC, so paper that over before ingesting.
+    tpacket.is_valid = true;
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
+    EXPECT_EQ(dictionary.GetNumAircraft(), 1);
+    auto itr = dictionary.dict.begin();
+    auto& aircraft = std::get<ModeSAircraft>(itr->second);
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroAltitude));
+    EXPECT_FALSE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid));
+    EXPECT_EQ(aircraft.altitude_source, ADSBTypes::kAltitudeSourceNotAvailable);
+}
+
+TEST(AircraftDictionary, IngestAirbornePositionBaroAltitudeGillham) {
+    // Test with a gillham code of 0b0111000110110, which corresponds to 21950 ft.
+    //                                   M Q
+    //                             M Q                 Q
+    // Remove extra "M" bit: 0b0111000110110 -> 0b011100110110 = 0x736.
+    // Note that the "Q" bit is 0, which means the altitude is gillham encoded just like the Mode C reply, but without
+    // an "M" bit.
+    AircraftDictionary dictionary = AircraftDictionary();
+    DecodedModeSPacket tpacket = DecodedModeSPacket((char*)"8d896113487361c6ea41c40703ed");
+    // EXPECT_EQ(tpacket.CalculateCRC24(), 0xfff); // Use this to get the CRC.
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
+    EXPECT_EQ(dictionary.GetNumAircraft(), 1);
+    auto itr = dictionary.dict.begin();
+    auto& aircraft = std::get<ModeSAircraft>(itr->second);
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedBaroAltitude));
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagBaroAltitudeValid));
+    EXPECT_EQ(aircraft.altitude_source, ADSBTypes::AltitudeSource::kAltitudeSourceBaro);
+    EXPECT_EQ(aircraft.baro_altitude_ft, 21950);
+}
+
 // TODO: Add test case for ingesting Airborne Position message with GNSS altitude.
 
 TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
