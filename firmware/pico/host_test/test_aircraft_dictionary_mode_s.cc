@@ -414,7 +414,20 @@ TEST(AircraftDictionary, IngestAirbornePositionBaroAltitudeGillham) {
     EXPECT_EQ(aircraft.baro_altitude_ft, 21950);
 }
 
-// TODO: Add test case for ingesting Airborne Position message with GNSS altitude.
+TEST(AircraftDictionary, IngestAirbornePositionGNSSAltitude) {
+    AircraftDictionary dictionary = AircraftDictionary();
+    // DF = 17, TC = 20-22 indicates airborne position with GNSS altitude.
+    DecodedModeSPacket tpacket = DecodedModeSPacket((char*)"8E7C6296A0A0A59C64468D6F4EDD");
+    // EXPECT_EQ(tpacket.CalculateCRC24(), 0xfff);  // Use this to get the CRC.
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
+    EXPECT_EQ(dictionary.GetNumAircraft(), 1);
+    auto itr = dictionary.dict.begin();
+    auto& aircraft = std::get<ModeSAircraft>(itr->second);
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagUpdatedGNSSAltitude));
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagGNSSAltitudeValid));
+    EXPECT_EQ(aircraft.altitude_source, ADSBTypes::AltitudeSource::kAltitudeSourceGNSS);
+    EXPECT_EQ(aircraft.gnss_altitude_ft, 8431);
+}
 
 TEST(AircraftDictionary, IngestAirborneVelocityMessage) {
     AircraftDictionary dictionary = AircraftDictionary();

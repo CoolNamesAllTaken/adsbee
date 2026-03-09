@@ -14,7 +14,14 @@ constexpr inline uint16_t CeilBitsToBytes(uint16_t bits) { return (bits + kBitsP
 
 inline int FeetToMeters(int feet) { return feet * 1000 / 3280; }
 
-inline int MetersToFeet(int meters) { return meters * 3280 / 1000; }
+inline int MetersToFeet(int meters) {
+    if (meters < INT32_MAX / 328084) {
+        // Enable high resolution conversion when we don't have risk of overflowing 32 bits.
+        return meters * 328084 / 100000;
+    } else {
+        return meters * 3280 / 1000;
+    }
+}
 
 inline int KtsToMps(int kts) { return kts * 5144 / 10000; }
 

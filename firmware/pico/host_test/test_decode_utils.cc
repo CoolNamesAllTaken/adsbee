@@ -386,7 +386,7 @@ TEST(DecodeUtils, GillhamToAltitudeFt) {
 
 TEST(DecodeUtils, AltitudeCodeToAltitudeFt) {
     // Altitude in meters.
-    EXPECT_EQ(AltitudeCodeToAltitudeFt(0b0101111011100), 4920);
+    EXPECT_EQ(AltitudeCodeToAltitudeFt(0b0101111011100), 4921);
     // Altitude in 25ft increments.
     EXPECT_EQ(AltitudeCodeToAltitudeFt(0b1011100011000), 36000);
     // Mode C Altitude Reply
