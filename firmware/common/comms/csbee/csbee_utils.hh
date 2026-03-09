@@ -24,7 +24,7 @@ inline int16_t WriteCSBeeModeSAircraftMessageStr(char message_buf[], const ModeS
     // Build up squawk string.
     char squawk_str[5] = "?";  // Squawk is 4 octal digits, so 4 characters plus null terminator.
     if (aircraft.squawk != ADSBTypes::kSquawkCodeNotYetReceived) {
-        snprintf(squawk_str, sizeof(squawk_str), "%04o", aircraft.squawk);
+        snprintf(squawk_str, sizeof(squawk_str), "%04o", aircraft.squawk & 07777);
     }
 
     // Build up NICNAC bitfield.
@@ -71,7 +71,7 @@ inline int16_t WriteCSBeeModeSAircraftMessageStr(char message_buf[], const ModeS
                  "#A:%06lX,"  // ICAO, e.g. 3C65AC
                  "%lX,"       // FLAGS, e.g. 123F35648
                  "%s,"        // CALL, e.g. N61ZP
-                 "%04o,"      // SQUAWK, e.g. 7232
+                 "%s,"        // SQUAWK, e.g. 7232
                  "%d,"        // ECAT, e.g. 14
                  "%.5f,"      // LAT, e.g. 57.57634
                  "%.5f,"      // LON, e.g. 17.59554
@@ -133,7 +133,7 @@ inline int16_t WriteCSBeeUATAircraftMessageStr(char message_buf[], const UATAirc
     // Build squawk string.
     char squawk_str[5] = "?";  // Default to "????" if squawk code hasn't been received yet.
     if (aircraft.squawk != ADSBTypes::kSquawkCodeNotYetReceived) {
-        snprintf(squawk_str, sizeof(squawk_str), "%04o", aircraft.squawk);
+        snprintf(squawk_str, sizeof(squawk_str), "%04o", aircraft.squawk & 07777);
     }
 
     // Build up NICNAC bitfield.
@@ -180,7 +180,7 @@ inline int16_t WriteCSBeeUATAircraftMessageStr(char message_buf[], const UATAirc
                  "#U:%06lX,"  // ICAO, e.g. 3C65AC
                  "%lX,"       // UAT_FLAGS, e.g. 123F35648
                  "%s,"        // CALL, e.g. N61ZP
-                 "%04o,"      // SQUAWK, e.g. 7232
+                 "%s,"        // SQUAWK, e.g. 7232
                  "%d,"        // ECAT, e.g. 14
                  "%.5f,"      // LAT, e.g. 57.57634
                  "%.5f,"      // LON, e.g. 17.59554
