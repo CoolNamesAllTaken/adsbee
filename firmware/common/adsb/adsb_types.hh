@@ -127,6 +127,10 @@ class ADSBTypes {
         kPOERCLessThanOrEqualTo1em7PerSample = 0b111,
     };
 
+    enum SquawkCode : uint16_t {
+        kSquawkCodeNotYetReceived = UINT16_MAX,
+    };
+
     enum SystemDesignAssurance : uint8_t {
         kSDASupportedFailureUnknownOrNoSafetyEffect = 0b00,
         kSDASupportedFailureMinor = 0b01,

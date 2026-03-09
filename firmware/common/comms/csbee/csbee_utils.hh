@@ -18,8 +18,14 @@ const uint16_t kEOLNumChars = 2;
  * @param[in] aircraft Aircraft object to dump the contents of.
  * @retval Number of characters written to the string buffer, or a negative value if something went wrong.
  */
-inline int16_t WriteCSBeeModeSAircraftMessageStr(char message_buf[], const ModeSAircraft &aircraft) {
+inline int16_t WriteCSBeeModeSAircraftMessageStr(char message_buf[], const ModeSAircraft& aircraft) {
     // #A:ICAO,FLAGS,CALL,SQ,LAT,LON,ALT_BARO,TRACK,VELH,VELV,SIGS,SIGQ,FPS,NICNAC,ALT_GEO,ECAT,CRC\r\n
+
+    // Build up squawk string.
+    char squawk_str[5] = "?";  // Squawk is 4 octal digits, so 4 characters plus null terminator.
+    if (aircraft.squawk != ADSBTypes::kSquawkCodeNotYetReceived) {
+        snprintf(squawk_str, sizeof(squawk_str), "%04o", aircraft.squawk);
+    }
 
     // Build up NICNAC bitfield.
     uint16_t nicnac = 0;
@@ -43,7 +49,7 @@ inline int16_t WriteCSBeeModeSAircraftMessageStr(char message_buf[], const ModeS
                  "#A:%06X,"  // ICAO, e.g. 3C65AC
                  "%X,"       // FLAGS, e.g. 123F35648
                  "%s,"       // CALL, e.g. N61ZP
-                 "%04o,"     // SQUAWK, e.g. 7232
+                 "%s,"       // SQUAWK, e.g. 7232
                  "%d,"       // ECAT, e.g. 14
                  "%.5f,"     // LAT, e.g. 57.57634
                  "%.5f,"     // LON, e.g. 17.59554
@@ -86,7 +92,7 @@ inline int16_t WriteCSBeeModeSAircraftMessageStr(char message_buf[], const ModeS
                  aircraft.icao_address,                           // ICAO
                  aircraft.flags,                                  // FLAGS
                  aircraft.callsign,                               // CALL
-                 aircraft.squawk,                                 // SQUAWK
+                 squawk_str,                                      // SQUAWK
                  aircraft.emitter_category,                       // ECAT
                  aircraft.latitude_deg,                           // LAT
                  aircraft.longitude_deg,                          // LON
@@ -107,7 +113,7 @@ inline int16_t WriteCSBeeModeSAircraftMessageStr(char message_buf[], const ModeS
     if (num_chars < 0) return num_chars;  // Check if snprintf call got busted.
 
     // Append a CRC.
-    uint16_t crc = CalculateCRC16((uint8_t *)message_buf, num_chars);
+    uint16_t crc = CalculateCRC16((uint8_t*)message_buf, num_chars);
     uint16_t crc_num_chars = snprintf(message_buf + num_chars, kCRCMaxNumChars + kEOLNumChars + 1, "%X\r\n",
                                       crc);  // Add CRC to the message buffer.
 
@@ -121,8 +127,14 @@ inline int16_t WriteCSBeeModeSAircraftMessageStr(char message_buf[], const ModeS
  * @param[in] aircraft Aircraft object to dump the contents of.
  * @retval Number of characters written to the string buffer, or a negative value if something went wrong.
  */
-inline int16_t WriteCSBeeUATAircraftMessageStr(char message_buf[], const UATAircraft &aircraft) {
+inline int16_t WriteCSBeeUATAircraftMessageStr(char message_buf[], const UATAircraft& aircraft) {
     // #U:ICAO,FLAGS,CALL,SQUAWK,ECAT,LAT,LON,ALT_BARO,ALT_GEO,DIR,VELH,BARO_VELV,GNSS_VELV,SIGS,SIGQ,SFPS,ESFPS,SYSINFO,CRC\r\n
+
+    // Build squawk string.
+    char squawk_str[5] = "?";  // Default to "????" if squawk code hasn't been received yet.
+    if (aircraft.squawk != ADSBTypes::kSquawkCodeNotYetReceived) {
+        snprintf(squawk_str, sizeof(squawk_str), "%04o", aircraft.squawk);
+    }
 
     // Build up NICNAC bitfield.
     uint16_t nicnac = 0;
@@ -146,7 +158,7 @@ inline int16_t WriteCSBeeUATAircraftMessageStr(char message_buf[], const UATAirc
                  "#U:%06X,"  // ICAO, e.g. 3C65AC
                  "%X,"       // UAT_FLAGS, e.g. 123F35648
                  "%s,"       // CALL, e.g. N61ZP
-                 "%04o,"     // SQUAWK, e.g. 7232
+                 "%s,"       // SQUAWK, e.g. 7232
                  "%d,"       // ECAT, e.g. 14
                  "%.5f,"     // LAT, e.g. 57.57634
                  "%.5f,"     // LON, e.g. 17.59554
@@ -189,7 +201,7 @@ inline int16_t WriteCSBeeUATAircraftMessageStr(char message_buf[], const UATAirc
                  aircraft.icao_address,                      // ICAO
                  aircraft.flags,                             // FLAGS
                  aircraft.callsign,                          // CALL
-                 aircraft.squawk,                            // SQUAWK
+                 squawk_str,                                 // SQUAWK
                  aircraft.emitter_category,                  // ECAT
                  aircraft.latitude_deg,                      // LAT
                  aircraft.longitude_deg,                     // LON
@@ -210,7 +222,7 @@ inline int16_t WriteCSBeeUATAircraftMessageStr(char message_buf[], const UATAirc
     if (num_chars < 0) return num_chars;  // Check if snprintf call got busted.
 
     // Append a CRC.
-    uint16_t crc = CalculateCRC16((uint8_t *)message_buf, num_chars);
+    uint16_t crc = CalculateCRC16((uint8_t*)message_buf, num_chars);
     uint16_t crc_num_chars = snprintf(message_buf + num_chars, kCRCMaxNumChars + kEOLNumChars + 1, "%X\r\n",
                                       crc);  // Add CRC to the message buffer.
 
@@ -253,7 +265,7 @@ inline int16_t WriteCSBeeStatisticsMessageStr(char message_buf[], uint16_t sdps,
     if (num_chars < 0) return num_chars;  // Check if snprintf call got busted.
 
     // Append a CRC.
-    uint16_t crc = CalculateCRC16((uint8_t *)message_buf, num_chars);
+    uint16_t crc = CalculateCRC16((uint8_t*)message_buf, num_chars);
     uint16_t crc_num_chars = snprintf(message_buf + num_chars, kCRCMaxNumChars + kEOLNumChars + 1, "%X\r\n",
                                       crc);  // Add CRC to the message buffer.
 
