@@ -8,9 +8,12 @@ const float kCPRdLatEven = 360.0f / (4 * kCPRNz);     // size of latitude zone f
 const float kCPRdLatOdd = 360.0f / (4 * kCPRNz - 1);  // size of latitude zone for odd message
 const uint32_t kCPRLatLonMaxCount = (2 << 16) - 1;    // 2^17
 
+// Altitudes are encoded as 25N - 1000, where N is a positive integer, so the minimum allowed altitude is -1000ft.
+// We can flag an error by setting the output altitude lower than this point.
 enum kAltitudeDecodeError : int32_t {
-    kAltitudeDecodeErrorGillhamDecodeError = -9,
-    kAltitudeDecodeErrorNotAvailableOrInvalid = -1
+    kAltitudeDecodeErrorInvalid = -1001,  // Used to check if any of the below error codes apply.
+    kAltitudeDecodeErrorGillhamDecodeError = -2000,
+    kAltitudeDecodeErrorNotAvailableOrInvalid = -2001,
 };
 
 /**

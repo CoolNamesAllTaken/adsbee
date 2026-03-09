@@ -23,17 +23,17 @@ class SPICoprocessor : public SPICoprocessorInterface {
     static constexpr uint16_t kSPITransactionMaxNumRetries = 3;
     static const uint16_t kTagStrMaxLen = 32;
     static const uint16_t kMaxNumSCCommandRequestsPerUpdate = 5;
-    static const uint16_t kDefaultUpdateIntervalMs = 200;  // 5Hz updates by default.
+    static const uint16_t kDefaultUpdateIntervalMs = 100;  // 10Hz updates by default.
 
     struct SPICoprocessorConfig {
 #ifdef ON_COPRO_MASTER
-        SPICoprocessorSlaveInterface &interface;  // Reference to the slave interface.
+        SPICoprocessorSlaveInterface& interface;  // Reference to the slave interface.
         char tag_str[kTagStrMaxLen] = {0};        // Tag to prepend to console messages.
         bool pull_log_messages = true;            // Whether to pull log messages from the slave.
 #elif defined(ON_COPRO_SLAVE)
-        SPICoprocessorMasterInterface &interface;  // Reference to the master interface.
+        SPICoprocessorMasterInterface& interface;  // Reference to the master interface.
 #else
-        SPICoprocessorInterface &interface;  // Reference to the interface. Not used on other platforms.
+        SPICoprocessorInterface& interface;  // Reference to the interface. Not used on other platforms.
 #endif
     };
 
@@ -64,20 +64,20 @@ class SPICoprocessor : public SPICoprocessorInterface {
      * utilizes it.
      */
     template <typename T>
-    bool Write(ObjectDictionary::Address addr, T &object, bool require_ack = false, uint16_t len_bytes = 0) {
+    bool Write(ObjectDictionary::Address addr, T& object, bool require_ack = false, uint16_t len_bytes = 0) {
         if (len_bytes == 0) {
             len_bytes = sizeof(object);
         }
         if (len_bytes < SPICoprocessorPacket::SCWritePacket::kDataMaxLenBytes) {
             // Single write. Write the full object at once, no offset, require ack if necessary.
-            bool ret = PartialWrite(addr, (uint8_t *)&object, len_bytes, 0, require_ack);
+            bool ret = PartialWrite(addr, (uint8_t*)&object, len_bytes, 0, require_ack);
             return ret;
         }
         // Multi write.
         int16_t bytes_remaining = len_bytes;
         while (bytes_remaining > 0) {
             if (!PartialWrite(addr,                                                                         // addr
-                              (uint8_t *)(&object),                                                         // object
+                              (uint8_t*)(&object),                                                          // object
                               MIN(SPICoprocessorPacket::SCWritePacket::kDataMaxLenBytes, bytes_remaining),  // len
                               len_bytes - bytes_remaining,                                                  // offset
                               require_ack)  // require_ack
@@ -99,13 +99,13 @@ class SPICoprocessor : public SPICoprocessorInterface {
      * utilizes it.
      */
     template <typename T>
-    bool Read(ObjectDictionary::Address addr, T &object, uint16_t len_bytes = 0) {
+    bool Read(ObjectDictionary::Address addr, T& object, uint16_t len_bytes = 0) {
         if (len_bytes == 0) {
             len_bytes = sizeof(object);
         }
         if (len_bytes < SPICoprocessorPacket::SCResponsePacket::kDataMaxLenBytes) {
             // Single read.
-            bool ret = PartialRead(addr, (uint8_t *)&object, len_bytes);
+            bool ret = PartialRead(addr, (uint8_t*)&object, len_bytes);
             return ret;
         }
         // Multi-read.
@@ -115,7 +115,7 @@ class SPICoprocessor : public SPICoprocessorInterface {
         int16_t bytes_remaining = len_bytes;
         while (bytes_remaining > 0) {
             if (!PartialRead(addr,                                        // address
-                             (uint8_t *)(&object),                        // object
+                             (uint8_t*)(&object),                         // object
                              MIN(max_chunk_size_bytes, bytes_remaining),  // len
                              len_bytes - bytes_remaining)                 // offset
             ) {
@@ -152,7 +152,7 @@ class SPICoprocessor : public SPICoprocessorInterface {
      * @param[in] format Format string for the message.
      * @param[in] ... Variable arguments for the format string.
      */
-    bool LogMessage(SettingsManager::LogLevel log_level, const char *tag, const char *format, std::va_list args);
+    bool LogMessage(SettingsManager::LogLevel log_level, const char* tag, const char* format, std::va_list args);
 
     /**
      * Send an SCResponse packet with a single byte ACK payload.
@@ -169,12 +169,12 @@ class SPICoprocessor : public SPICoprocessorInterface {
      * @param[in] request The SCCommandRequest to execute.
      * @retval True if the command was executed successfully, false otherwise.
      */
-    bool ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRequest &request);
+    bool ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRequest& request);
 
-    bool PartialWrite(ObjectDictionary::Address addr, uint8_t *object_buf, uint16_t len, uint16_t offset = 0,
+    bool PartialWrite(ObjectDictionary::Address addr, uint8_t* object_buf, uint16_t len, uint16_t offset = 0,
                       bool require_ack = false);
 
-    bool PartialRead(ObjectDictionary::Address addr, uint8_t *object_buf, uint16_t len, uint16_t offset = 0);
+    bool PartialRead(ObjectDictionary::Address addr, uint8_t* object_buf, uint16_t len, uint16_t offset = 0);
 
     /**
      * Blocks until an ACK is received or a timeout is reached.
@@ -197,24 +197,24 @@ class SPICoprocessor : public SPICoprocessorInterface {
      * when this function is being called on the master.
      * @retval Number of bytes that were written and read, or a negative value if something broke.
      */
-    int SPIWriteReadBlocking(uint8_t *tx_buf, uint8_t *rx_buf,
+    int SPIWriteReadBlocking(uint8_t* tx_buf, uint8_t* rx_buf,
                              uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
                              bool end_transaction = true) {
         return config_.interface.SPIWriteReadBlocking(tx_buf, rx_buf, len_bytes, end_transaction);
     }
 
     // Write / Read aliases for SPIWriteReadBlocking.
-    inline int SPIWriteBlocking(uint8_t *tx_buf, uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
+    inline int SPIWriteBlocking(uint8_t* tx_buf, uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
                                 bool end_transaction = true) {
         return SPIWriteReadBlocking(tx_buf, nullptr, len_bytes, end_transaction);
     }
-    inline int SPIReadBlocking(uint8_t *rx_buf, uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
+    inline int SPIReadBlocking(uint8_t* rx_buf, uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes,
                                bool end_transaction = true) {
         return SPIWriteReadBlocking(nullptr, rx_buf, len_bytes, end_transaction);
     }
 #else
     // On the CC1312, we can only queue up a write and let the callback handle the bytes that were read.
-    bool SPIWriteNonBlocking(uint8_t *tx_buf, uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes) {
+    bool SPIWriteNonBlocking(uint8_t* tx_buf, uint16_t len_bytes = SPICoprocessorPacket::kSPITransactionMaxLenBytes) {
         return config_.interface.SPIWriteNonBlocking(tx_buf, len_bytes);
     }
 #endif  // ON_TI

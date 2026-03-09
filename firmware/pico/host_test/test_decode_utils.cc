@@ -378,11 +378,15 @@ TEST(DecodeUtils, GillhamToAltitudeFt) {
     EXPECT_EQ(30600, GillhamToAltitudeFt(0b000100000011));
     EXPECT_EQ(30700, GillhamToAltitudeFt(0b000100000001));
     EXPECT_EQ(30800, GillhamToAltitudeFt(0b001100000001));
+    EXPECT_EQ(126400, GillhamToAltitudeFt(0b010000000110));
+    EXPECT_EQ(126500, GillhamToAltitudeFt(0b010000000010));
+    EXPECT_EQ(126600, GillhamToAltitudeFt(0b010000000011));
+    EXPECT_EQ(126700, GillhamToAltitudeFt(0b010000000001));
 }
 
 TEST(DecodeUtils, AltitudeCodeToAltitudeFt) {
     // Altitude in meters.
-    EXPECT_EQ(AltitudeCodeToAltitudeFt(0b0101111011100), 4920);
+    EXPECT_EQ(AltitudeCodeToAltitudeFt(0b0101111011100), 4921);
     // Altitude in 25ft increments.
     EXPECT_EQ(AltitudeCodeToAltitudeFt(0b1011100011000), 36000);
     // Mode C Altitude Reply
