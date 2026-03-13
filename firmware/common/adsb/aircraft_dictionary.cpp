@@ -1584,6 +1584,9 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
                 return true;  // Unsupported Code Format for DF=18 packet.
             }
             break;
+        case ModeSADSBPacket::kDownlinkFormatMilitaryExtendedSquitter:  // DF = 19
+            // Accept military packets but bail out after recording the ICAO.
+            break;
         default:
             CONSOLE_WARNING("AircraftDictionary::IngestModeSADSBPacket",
                             "Received Mode S packet with invalid downlink format %d, expected %d (Extended Squitter).",
@@ -1603,6 +1606,13 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
     aircraft_ptr->last_message_timestamp_ms = get_time_since_boot_ms();
     aircraft_ptr->last_message_signal_strength_dbm = packet.raw.sigs_dbm;
     aircraft_ptr->last_message_signal_quality_db = packet.raw.sigq_db;
+
+    if (packet.downlink_format == ModeSADSBPacket::kDownlinkFormatMilitaryExtendedSquitter) {
+        // Don't attempt to decode military extended squitter packets, since we don't have the specs for them. Just mark
+        // the aircraft as military and record the ICAO and signal strength / quality.
+        aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsMilitary, true);
+        return true;  // Early bail out.
+    }
 
     bool ret = false;
     uint16_t type_code = packet.type_code;
