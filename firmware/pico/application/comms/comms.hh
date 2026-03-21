@@ -85,6 +85,7 @@ class CommsManager {
     CPP_AT_CALLBACK(ATWatchdogCallback);
     CPP_AT_CALLBACK(ATWiFiAPCallback);
     CPP_AT_CALLBACK(ATWiFiSTACallback);
+    CPP_AT_CALLBACK(ATBootloader);
 
     int console_printf(const char* format, ...);
     int console_level_printf(SettingsManager::LogLevel level, const char* format, ...);

@@ -15,6 +15,7 @@
 #include "pico/multicore.h"
 #include "pico/stdlib.h"  // for getchar etc
 #include "pico/unique_id.h"
+#include "pico/bootrom.h"   // For Jumping to Bootloader
 #include "settings.hh"
 #include "spi_coprocessor.hh"  // For init / de-init before and after flashing ESP32.
 
@@ -1234,6 +1235,25 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiSTACallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATBootloader) {
+    switch (op) {
+        case '=':   {
+            if (CPP_AT_HAS_ARG(0)) {
+                if (args[0].compare("1DEADBEE") == 0) {
+                    CPP_AT_CMD_PRINTF(": Rebooting into USB bootloader\r\n");
+                    rom_reset_usb_boot(0, 0);
+                }   else    {
+                    CPP_AT_ERROR("Invalid argument '%s'.", args[0].data());
+                }
+            }
+        }
+        default: {
+            CPP_AT_ERROR("Operator %c not supported.", op);
+        }
+    }
+}
+
+
 const CppAT::ATCommandDef_t at_command_list[] = {
     {.command = "BAUD_RATE",
      .min_args = 0,
@@ -1394,6 +1414,12 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string = "Set WiFi station params.\r\n\tAT+WIFI_STA=<enabled>,<sta_ssid>,<sta_pwd>\r\n\t"
                     "Get WiFi station params.\r\n\tAT+WIFI_STA?\r\n\t+WIFI_STA=<enabled>,<sta_ssid>,<sta_pwd>",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATWiFiSTACallback, comms_manager)},
+    {.command = "BOOT_USB_UF2",
+     .min_args = 0,
+     .max_args = 1,
+     .help_string = "Reboot ADSBee into RP2040 USB Bootloader.\r\n\tDo not use unless you have a USB connection to the ADSBee\r\n\t"
+                    "AT+BOOT_USB_UF2=1DEADBEE",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBootloader, comms_manager)}
 };
 const uint16_t at_command_list_num_commands = sizeof(at_command_list) / sizeof(at_command_list[0]);
 
