@@ -70,7 +70,7 @@ class GDL90Reporter {
         uint32_t participant_address;         // 24 bit ICAO address.
         float latitude_deg = 0.0f;
         float longitude_deg = 0.0f;
-        int16_t altitude_ft;
+        int32_t altitude_ft;
         uint8_t misc_indicators;
         uint8_t navigation_integrity_category = 0;      // Navigation Integrity Category (NIC).
         uint8_t navigation_accuracy_category_position;  // Navigation Accuracy Category for Postion (NACp).
