@@ -1,0 +1,4 @@
+{
+    "cmake.sourceDirectory": "/firmware/adsbee_1090/ti/sub_ghz_radio",
+    "cmake.buildDirectory": "/firmware/adsbee_1090/ti/sub_ghz_radio/build",
+}

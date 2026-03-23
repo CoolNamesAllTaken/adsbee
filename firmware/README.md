@@ -73,7 +73,7 @@ From the `modules` directory, run `git submodule update --init --recursive`.
 
 Build googletest:
 ```bash
-cd /adsbee/modules/googletest
+cd /firmware/modules/googletest
 mkdir build
 cd build
 cmake cmake -DBUILD_SHARED_LIBS=ON ..

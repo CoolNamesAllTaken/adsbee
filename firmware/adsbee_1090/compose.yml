@@ -1,0 +1,39 @@
+services:
+  # Pico SDK container for compiling main firmware project.
+  pico-docker:
+    image: coolnamesalltaken/pico-docker:latest
+    network_mode: host
+    volumes:
+      - ./pico:/firmware/adsbee_1090/pico
+      - ../common:/firmware/common
+      - ../modules:/firmware/modules
+      - ./esp:/firmware/adsbee_1090/esp # Bind the ESP32 directory so that its firmware can be packaged into the RP2040 image.
+      - ./ti:/firmware/adsbee_1090/ti # Bind the TI directory so that its firmware can be packaged into the RP2040 image.
+      - .vscode:/firmware/adsbee_1090/.vscode
+
+    command: tail -f /dev/null # keep the container running forever
+
+  # ESP-IDF container for compiling ESP32-S3 firmware.
+  # NOTE: This container is for CI/headless builds only. For breakpoint debugging, use the
+  # ESP-IDF VS Code extension running on the host.
+  # The RP2040 and CC1312 are debugged over JLink GDB from their Docker containers.
+  esp-idf:
+    image: espressif/idf:release-v5.5
+    volumes:
+      - ./esp:/firmware/adsbee_1090/esp
+      - ../common:/firmware/common
+      - ../modules:/firmware/modules
+
+    command: tail -f /dev/null # keep the container running forever
+
+  ti-lpf2:
+    image: coolnamesalltaken/ti-lpf2:latest
+    platform: "linux/amd64" # Make sure we run the AMD64 image so that installed utilities work.
+    network_mode: host
+    volumes:
+      - ./ti:/firmware/adsbee_1090/ti
+      - ../common:/firmware/common
+      - ../modules:/firmware/modules
+      - .vscode:/firmware/adsbee_1090/.vscode
+
+    command: tail -f /dev/null # keep the container running forever
