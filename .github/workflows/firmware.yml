@@ -21,16 +21,16 @@ jobs:
       working-directory: firmware/modules/googletest
       run: mkdir build && cd build && cmake -DBUILD_SHARED_LIBS=ON .. && make
     - name: Create build directory
-      working-directory: firmware/pico
+      working-directory: firmware/adsbee_1090/pico
       run: mkdir -p build
     - name: Run cmake with build type "Test"
-      working-directory: firmware/pico/build
+      working-directory: firmware/adsbee_1090/pico/build
       run: cmake -DCMAKE_BUILD_TYPE=Test -DCMAKE_C_COMPILER=/usr/bin/gcc -DCMAKE_CXX_COMPILER=/usr/bin/g++ ..
     - name: Build
-      working-directory: firmware/pico/build
+      working-directory: firmware/adsbee_1090/pico/build
       run: make
     - name: Run unit tests
-      working-directory: firmware/pico/build
+      working-directory: firmware/adsbee_1090/pico/build
       run: ctest --verbose
 
   esp_target_build:
@@ -46,12 +46,12 @@ jobs:
       with:
         esp_idf_version: release-v5.4
         target: esp32s3
-        path: firmware/esp
+        path: firmware/adsbee_1090/esp
     - name: Upload ESP32 firmware
       uses: actions/upload-artifact@v4
       with:
         name: adsbee_esp.bin
-        path: firmware/esp/build/adsbee_esp.bin
+        path: firmware/adsbee_1090/esp/build/adsbee_esp.bin
         retention-days: 1
   
   ti_target_build:
@@ -64,19 +64,19 @@ jobs:
       with:
         submodules: 'recursive'
     - name: Create TI build directory
-      working-directory: firmware/ti/sub_ghz_radio
+      working-directory: firmware/adsbee_1090/ti/sub_ghz_radio
       run: mkdir -p build
     - name: Run cmake with build type "Release"
-      working-directory: firmware/ti/sub_ghz_radio/build
+      working-directory: firmware/adsbee_1090/ti/sub_ghz_radio/build
       run: cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=/usr/bin/arm-none-eabi-gcc -DCMAKE_CXX_COMPILER=/usr/bin/arm-none-eabi-g++ ..
     - name: Build
-      working-directory: firmware/ti/sub_ghz_radio/build
+      working-directory: firmware/adsbee_1090/ti/sub_ghz_radio/build
       run: cmake --build . --config Release --target all -j 22
     - name: upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: sub_ghz_radio.bin
-        path: firmware/ti/sub_ghz_radio/build/sub_ghz_radio.bin
+        path: firmware/adsbee_1090/ti/sub_ghz_radio/build/sub_ghz_radio.bin
         retention-days: 1
 
   pico_target_build:
@@ -92,31 +92,31 @@ jobs:
       with:
         submodules: 'recursive'
     - name: Create ESP32 build directory
-      working-directory: firmware/esp
+      working-directory: firmware/adsbee_1090/esp
       run: mkdir -p build
     - name: Download ESP32 firmware
       uses: actions/download-artifact@v4
       with:
         name: adsbee_esp.bin
-        path: firmware/esp/build
+        path: firmware/adsbee_1090/esp/build
     - name: Download TI firmware
       uses: actions/download-artifact@v4
       with:
         name: sub_ghz_radio.bin
-        path: firmware/ti/sub_ghz_radio/build
+        path: firmware/adsbee_1090/ti/sub_ghz_radio/build
     - name: Create Pico build directory
-      working-directory: firmware/pico
+      working-directory: firmware/adsbee_1090/pico
       run: mkdir -p build
     - name: Run cmake with build type "Release"
-      working-directory: firmware/pico/build
+      working-directory: firmware/adsbee_1090/pico/build
       run: cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=/usr/bin/arm-none-eabi-gcc -DCMAKE_CXX_COMPILER=/usr/bin/arm-none-eabi-g++ ..
     - name: Build
-      working-directory: firmware/pico/build
+      working-directory: firmware/adsbee_1090/pico/build
       run: cmake --build . --config Release --target all -j 22
     - name: upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: firmware
         path: |
-          firmware/pico/build/application/combined.uf2
-          firmware/pico/build/application/adsbee_1090.ota
+          firmware/adsbee_1090/pico/build/application/combined.uf2
+          firmware/adsbee_1090/pico/build/application/adsbee_1090.ota
