@@ -68,7 +68,8 @@ uint16_t GDL90Reporter::WriteBufferWithGDL90Escapes(uint8_t* to_buf, uint16_t to
 }
 
 uint16_t GDL90Reporter::WriteGDL90HeartbeatMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes,
-                                                   uint32_t timestamp_sec_since_0000z, uint16_t message_counts) {
+                                                   uint32_t timestamp_sec_since_0000z, uint16_t modeS_message_counts, 
+                                                   uint16_t uat_message_counts) {
     const uint16_t kMessageBufLenBytes = 7;
     uint8_t message_buf[kMessageBufLenBytes];
     // 1: Message ID
@@ -86,9 +87,12 @@ uint16_t GDL90Reporter::WriteGDL90HeartbeatMessage(uint8_t* to_buf, uint16_t to_
     message_buf[3] = timestamp_sec_since_0000z & 0xFF;         // Timestamp LSB.
     message_buf[4] = (timestamp_sec_since_0000z >> 8) & 0xFF;  // Timestamp MSB (missing MS bit).
     // 6-7: Message Counts
-    message_counts = MIN(1023, message_counts);
-    message_buf[5] = static_cast<uint8_t>(((message_counts >> 8) & 0x03));
-    message_buf[6] = static_cast<uint8_t>(message_counts & 0xFF);
+    modeS_message_counts = MIN(1023, modeS_message_counts);
+    uat_message_counts = std::min<uint8_t>(31, uat_message_counts);
+    message_buf[5] = static_cast<uint8_t>(((uat_message_counts & 0x1F) << 3) |          // bits 7..3
+                                            ((modeS_message_counts >> 8) & 0x03)  // bits 1..0
+                                            );                                         // bit 2 left as 0
+    message_buf[6] = static_cast<uint8_t>(modeS_message_counts & 0xFF);
     return WriteGDL90Message(to_buf, to_buf_num_bytes, message_buf, kMessageBufLenBytes);
 }
 
