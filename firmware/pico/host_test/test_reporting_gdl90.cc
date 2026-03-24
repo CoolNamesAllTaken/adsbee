@@ -108,8 +108,8 @@ TEST(GDL90Utils, HeartBeatMessage) {
     gdl90.utc_timing_is_valid = true;
     // Timestamp must have MS bit = 0b0.
     uint32_t timestamp = (0b0 << 16) | 0xD0DB;  // Set timestamp to match sample message.
-    uint16_t modeS_message_counts = 2;
-    uint16_t UAT_message_counts = 1;
+    uint16_t mode_s_message_counts = 2;
+    uint16_t uat_message_counts = 1;
     ASSERT_EQ(
         11, gdl90.WriteGDL90HeartbeatMessage(buf, GDL90Reporter::kGDL90MessageMaxLenBytes, timestamp, modeS_message_counts, UAT_message_counts));
     EXPECT_EQ(buf[0], 0x7E);

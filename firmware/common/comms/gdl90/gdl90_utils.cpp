@@ -68,7 +68,7 @@ uint16_t GDL90Reporter::WriteBufferWithGDL90Escapes(uint8_t* to_buf, uint16_t to
 }
 
 uint16_t GDL90Reporter::WriteGDL90HeartbeatMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes,
-                                                   uint32_t timestamp_sec_since_0000z, uint16_t modeS_message_counts, 
+                                                   uint32_t timestamp_sec_since_0000z, uint16_t mode_s_message_counts, 
                                                    uint16_t uat_message_counts) {
     const uint16_t kMessageBufLenBytes = 7;
     uint8_t message_buf[kMessageBufLenBytes];
@@ -184,10 +184,11 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
     speed_kts = (speed_kts >= 4094) ? 0xFFE : speed_kts;
     // vvv: Vertical Velocity. Signed Integer in units of 64fpm.
     int16_t vertical_rate_64fpm = static_cast<int16_t>(data.vertical_rate_fpm / 64);
-    if (vertical_rate_64fpm > 0x1FE)
+    if (vertical_rate_64fpm > 0x1FE) {
         vertical_rate_64fpm = 0x1FE;      // > +32,576 FPM
-    else if (vertical_rate_64fpm < -0x1FE)
+    } else if (vertical_rate_64fpm < -0x1FE) {
         vertical_rate_64fpm = -0x1FE;     // < -32,576 FPM
+    }
     uint16_t vertical_rate_encoded = static_cast<uint16_t>(vertical_rate_64fpm) & 0x0FFF;
     message_buf[14] = (speed_kts >> 4) & 0xFF;              // hh: MSB of Horizontal Velocity.
     message_buf[15] = ((speed_kts & 0xF) << 4)            // h: LS nibble of Horizontal Velocity.
