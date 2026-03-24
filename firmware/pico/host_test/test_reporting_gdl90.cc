@@ -111,7 +111,7 @@ TEST(GDL90Utils, HeartBeatMessage) {
     uint16_t mode_s_message_counts = 2;
     uint16_t uat_message_counts = 1;
     ASSERT_EQ(
-        11, gdl90.WriteGDL90HeartbeatMessage(buf, GDL90Reporter::kGDL90MessageMaxLenBytes, timestamp, modeS_message_counts, UAT_message_counts));
+        11, gdl90.WriteGDL90HeartbeatMessage(buf, GDL90Reporter::kGDL90MessageMaxLenBytes, timestamp, mode_s_message_counts, uat_message_counts));
     EXPECT_EQ(buf[0], 0x7E);
     EXPECT_EQ(buf[1], 0x00);
     EXPECT_EQ(buf[2], 0x81);
