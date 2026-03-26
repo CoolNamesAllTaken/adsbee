@@ -407,7 +407,6 @@ class ADSBee {
     void UpdateTLLearning();
 
     ADSBeeConfig config_;
-    CppAT parser_;
 
     uint32_t irq_wrapper_sm_ = 0;
     uint32_t preamble_detector_sm_[BSP::kMaxNumDemodStateMachines];
