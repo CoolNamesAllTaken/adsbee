@@ -5,6 +5,10 @@
 #include "adsb_types.hh"
 #include "buffer_utils.hh"
 
+#ifndef UAT_PREPEND_ADDRESS_QUALIFIER_TO_ICAO_ADDRESS
+#define UAT_PREPEND_ADDRESS_QUALIFIER_TO_ICAO_ADDRESS
+#endif
+
 static constexpr uint16_t kUATSyncNumBits = 36;
 static constexpr uint16_t kUATSyncNumBytes = CeilBitsToBytes(kUATSyncNumBits);
 
