@@ -1,6 +1,4 @@
-#ifndef CSBEE_UTILS_HH_
-#define CSBEE_UTILS_HH_
-
+#pragma once
 #include "aircraft_dictionary.hh"
 #include "macros.hh"
 #include "stdio.h"
@@ -45,7 +43,7 @@ inline int16_t WriteCSBeeModeSAircraftMessageStr(char message_buf[], const ModeS
 
     int16_t num_chars =  // Print everything except CRC into string buffer.
         snprintf(message_buf, kCSBeeMessageStrMaxLen - kCRCMaxNumChars - 1,
-#ifndef ON_ESP32
+#if defined(ON_PICO) || defined(ON_HOST)
                  "#A:%06X,"  // ICAO, e.g. 3C65AC
                  "%X,"       // FLAGS, e.g. 123F35648
                  "%s,"       // CALL, e.g. N61ZP
@@ -67,7 +65,7 @@ inline int16_t WriteCSBeeModeSAircraftMessageStr(char message_buf[], const ModeS
                  "%d,"       // SFPS, e.g. 3
                  "%d,",      // ESFPS, e.g. 5
 #else
-                 // ESP32 requires 32-bit values to be formatted as "long" types.
+                 // ESP32 and TI require 32-bit values to be formatted as "long" types.
                  "#A:%06lX,"  // ICAO, e.g. 3C65AC
                  "%lX,"       // FLAGS, e.g. 123F35648
                  "%s,"        // CALL, e.g. N61ZP
@@ -154,7 +152,7 @@ inline int16_t WriteCSBeeUATAircraftMessageStr(char message_buf[], const UATAirc
 
     int16_t num_chars =  // Print everything except CRC into string buffer.
         snprintf(message_buf, kCSBeeMessageStrMaxLen - kCRCMaxNumChars - 1,
-#ifndef ON_ESP32
+#if defined(ON_PICO) || defined(ON_HOST)
                  "#U:%06X,"  // ICAO, e.g. 3C65AC
                  "%X,"       // UAT_FLAGS, e.g. 123F35648
                  "%s,"       // CALL, e.g. N61ZP
@@ -176,7 +174,7 @@ inline int16_t WriteCSBeeUATAircraftMessageStr(char message_buf[], const UATAirc
                  "%d,"       // SIGQ, e.g. 2
                  "%d,",      // UATFPS, e.g. 1
 #else
-                 // ESP32 requires 32-bit values to be formatted as "long" types.
+                 // ESP32 and TI require 32-bit values to be formatted as "long" types.
                  "#U:%06lX,"  // ICAO, e.g. 3C65AC
                  "%lX,"       // UAT_FLAGS, e.g. 123F35648
                  "%s,"        // CALL, e.g. N61ZP
@@ -234,7 +232,7 @@ inline int16_t WriteCSBeeStatisticsMessageStr(char message_buf[], uint16_t sdps,
                                               uint16_t num_aircraft, uint32_t tscal, uint32_t uptime) {
     int16_t num_chars =  // Print everything except for CRC into string buffer.
         snprintf(message_buf, kCSBeeMessageStrMaxLen - kCRCMaxNumChars - 1,
-#ifndef ON_ESP32
+#if defined(ON_PICO) || defined(ON_HOST)
                  "#S:%d,"  // CSBee Protocol Version
                  "%d,"     // SDPS, e.g. 106
                  "%d,"     // RAW_SFPS e.g. 30
@@ -247,7 +245,7 @@ inline int16_t WriteCSBeeStatisticsMessageStr(char message_buf[], uint16_t sdps,
                  "%d,"     // TSCAL, e.g. 13999415
                  "%d,",    // UPTIME, e.g. 134
 #else
-                 // ESP32 requires 32-bit values to be formatted as "long" types.
+                 // ESP32 and TI require 32-bit values to be formatted as "long" types.
                  "#S:%d,"  // CSBee Protocol Version
                  "%d,"     // SDPS, e.g. 106
                  "%d,"     // RAW_SFPS e.g. 30
@@ -271,5 +269,3 @@ inline int16_t WriteCSBeeStatisticsMessageStr(char message_buf[], uint16_t sdps,
 
     return num_chars + crc_num_chars;
 }
-
-#endif /* CSBEE_UTILS_HH_ */
