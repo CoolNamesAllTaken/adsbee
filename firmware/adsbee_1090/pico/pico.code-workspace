@@ -4,13 +4,13 @@
 			"path": "."
 		},
 		{
-			"path": "../common"
+			"path": "../../common"
 		},
 		{
-			"path": "../modules"
+			"path": "../../modules"
 		},
 		{
-			"path": "../../usr/local/pico-sdk"
+			"path": "../../../usr/local/pico-sdk"
 		}
 	],
 	"settings": {
