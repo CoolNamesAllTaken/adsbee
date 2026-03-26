@@ -1594,7 +1594,12 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
             return false;  // Only allow valid DF17, DF18 packets.
     }
 
+    const bool is_rebroadcast_source =
+        (packet.downlink_format == ModeSADSBPacket::kDownlinkFormatExtendedSquitterNonTransponder);  // DF = 18
     uint32_t icao_address = packet.icao_address;
+    if (is_rebroadcast_source) {
+        icao_address |= (1u << Aircraft::kAddressQualifierBitShift);
+    }
     uint32_t uid = Aircraft::ICAOToUID(icao_address, Aircraft::kAircraftTypeModeS);
     ModeSAircraft* aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
     if (aircraft_ptr == nullptr) {
@@ -1606,6 +1611,7 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
     aircraft_ptr->last_message_timestamp_ms = get_time_since_boot_ms();
     aircraft_ptr->last_message_signal_strength_dbm = packet.raw.sigs_dbm;
     aircraft_ptr->last_message_signal_quality_db = packet.raw.sigq_db;
+    aircraft_ptr->is_rebroadcast_source = is_rebroadcast_source;
 
     if (packet.downlink_format == ModeSADSBPacket::kDownlinkFormatMilitaryExtendedSquitter) {
         // Don't attempt to decode military extended squitter packets, since we don't have the specs for them. Just mark
@@ -1696,6 +1702,8 @@ bool AircraftDictionary::IngestDecodedUATADSBPacket(const DecodedUATADSBPacket& 
         return false;  // unable to find or create new aircraft in dictionary
     }
     aircraft_ptr->last_message_timestamp_ms = get_time_since_boot_ms();
+    aircraft_ptr->address_qualifier =
+        static_cast<UATAircraft::AddressQualifier>(packet.header.address_qualifier);
     aircraft_ptr->last_message_signal_strength_dbm = packet.raw.sigs_dbm;
     aircraft_ptr->last_message_signal_quality_bits = packet.raw.sigq_bits;
 

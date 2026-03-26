@@ -88,6 +88,7 @@ TEST(CSBeeUtils, ModeSAircraftToCSBeeString) {
     EXPECT_EQ(GetNextToken().compare("2"), 0);                  // Signal Qualtiy [dB]
     EXPECT_EQ(GetNextToken().compare("1"), 0);                  // Squitter Frames Per Second
     EXPECT_EQ(GetNextToken().compare("3"), 0);                  // Extended Squitter Frames Per Second
+    EXPECT_EQ(GetNextToken().compare("0"), 0);                  // Rebroadcast (DF18) flag — CSBee v3
 
     // Check CRC
     std::string_view crc_str = GetNextToken();
@@ -172,6 +173,7 @@ TEST(CSBeeUtils, UATAircraftToCSBeeString) {
     EXPECT_EQ(GetNextToken().compare("-75"), 0);                // Signal Strength [dBm]
     EXPECT_EQ(GetNextToken().compare("2"), 0);                  // Signal Qualtiy [bits]
     EXPECT_EQ(GetNextToken().compare("1"), 0);                  // UAT Frames Per Second
+    EXPECT_EQ(GetNextToken().compare("-1"), 0);                 // Address qualifier — CSBee v3 (NotSet)
 
     // Check CRC
     std::string_view crc_str = GetNextToken();

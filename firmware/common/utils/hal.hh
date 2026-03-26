@@ -10,7 +10,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #elif ON_TI
-#include <ti/drivers/dpl/ClockP.h>
+uint64_t ti_get_time_since_boot_us(void);
+uint32_t ti_get_time_since_boot_ms(void);
 #else
 #include "hal_god_powers.hh"
 extern uint64_t time_since_boot_us;
@@ -22,7 +23,7 @@ inline uint64_t get_time_since_boot_us() {
 #elif ON_ESP32
     return esp_timer_get_time();
 #elif ON_TI
-    return ClockP_getSystemTicks() * ClockP_getSystemTickPeriod();
+    return ti_get_time_since_boot_us();
 #else
     return time_since_boot_us;
 #endif
@@ -33,7 +34,7 @@ inline uint32_t get_time_since_boot_ms() {
 #elif ON_ESP32
     return xTaskGetTickCount() * portTICK_PERIOD_MS;
 #elif ON_TI
-    return ClockP_getSystemTicks() * ClockP_getSystemTickPeriod() / 1000;  // tickPeriod is in us.
+    return ti_get_time_since_boot_ms();
 #else
     return time_since_boot_us / 1e3;
 #endif

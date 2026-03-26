@@ -65,6 +65,7 @@ elseif (TARGET sub_ghz_radio)
         settings/settings.cpp
         utils/buffer_utils.cpp
         utils/cpu_utils.cpp
+        utils/ti_hal_time.cpp
         utils/data_structures.cpp
         utils/crc/crc.cpp
         # adsb/mode_s_packet.cpp

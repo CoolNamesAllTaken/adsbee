@@ -8,9 +8,10 @@ TEST(AircraftDictionary, IngestUATADSBPacket) {
     AircraftDictionary dictionary = AircraftDictionary();
     DecodedUATADSBPacket tpacket((char*)"00a66ef135445d525a0c0519119021204800");
     EXPECT_TRUE(tpacket.ReconstructWithoutFEC());
-    EXPECT_EQ(tpacket.GetICAOAddress(), 0xA66EF1u);
-    EXPECT_EQ(Aircraft::ICAOToUID(tpacket.GetICAOAddress(), Aircraft::kAircraftTypeUAT),
-              0x10A66EF1u);  // UID is ICAO address with type shifted to the left.
+    EXPECT_EQ(tpacket.GetICAOAddress() & 0x00FFFFFFu, tpacket.header.icao_address);
+    uint32_t uid = Aircraft::ICAOToUID(tpacket.GetICAOAddress(), Aircraft::kAircraftTypeUAT);
+    EXPECT_EQ(Aircraft::UIDToAircraftType(uid), Aircraft::kAircraftTypeUAT);
+    EXPECT_EQ(Aircraft::UIDToICAOAddress(uid), tpacket.GetICAOAddress());
 
     EXPECT_TRUE(tpacket.ReconstructWithoutFEC());
     EXPECT_TRUE(dictionary.IngestDecodedUATADSBPacket(tpacket));

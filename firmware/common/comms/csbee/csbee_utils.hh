@@ -5,7 +5,7 @@
 #include "macros.hh"
 #include "stdio.h"
 
-const uint16_t kCSBeeProtocolVersion = 2;
+const uint16_t kCSBeeProtocolVersion = 3;
 
 const uint16_t kCSBeeMessageStrMaxLen = 200;
 const uint16_t kCRCMaxNumChars = 4;  // 16 bits = 4 hex characters.
@@ -65,7 +65,8 @@ inline int16_t WriteCSBeeModeSAircraftMessageStr(char message_buf[], const ModeS
                  "%d,"       // SIGS, e.g. -92
                  "%d,"       // SIGQ, e.g. 2
                  "%d,"       // SFPS, e.g. 3
-                 "%d,",      // ESFPS, e.g. 5
+                 "%d,"       // ESFPS, e.g. 5
+                 "%d,",      // REBROADCAST (DF18=1), else 0 — v3
 #else
                  // ESP32 requires 32-bit values to be formatted as "long" types.
                  "#A:%06lX,"  // ICAO, e.g. 3C65AC
@@ -87,7 +88,8 @@ inline int16_t WriteCSBeeModeSAircraftMessageStr(char message_buf[], const ModeS
                  "%d,"        // SIGS, e.g. -92
                  "%d,"        // SIGQ, e.g. 2
                  "%d,"        // SFPS, e.g. 3
-                 "%d,",       // ESFPS, e.g. 5
+                 "%d,"        // ESFPS, e.g. 5
+                 "%d,",       // REBROADCAST — v3
 #endif
                  aircraft.icao_address,                           // ICAO
                  aircraft.flags,                                  // FLAGS
@@ -108,7 +110,8 @@ inline int16_t WriteCSBeeModeSAircraftMessageStr(char message_buf[], const ModeS
                  aircraft.last_message_signal_strength_dbm,       // SIGS
                  aircraft.last_message_signal_quality_db,         // SIGQ
                  aircraft.metrics.valid_squitter_frames,          // SFPS
-                 aircraft.metrics.valid_extended_squitter_frames  // ESFPS
+                 aircraft.metrics.valid_extended_squitter_frames,          // ESFPS
+                 aircraft.is_rebroadcast_source ? 1 : 0            // REBROADCAST
         );
     if (num_chars < 0) return num_chars;  // Check if snprintf call got busted.
 
@@ -174,7 +177,8 @@ inline int16_t WriteCSBeeUATAircraftMessageStr(char message_buf[], const UATAirc
                  "%d,"       // VERSION
                  "%d,"       // SIGS, e.g. -92
                  "%d,"       // SIGQ, e.g. 2
-                 "%d,",      // UATFPS, e.g. 1
+                 "%d,"       // UATFPS, e.g. 1
+                 "%d,",      // ADDRESS_QUAL (UAT enum / -1) — v3
 #else
                  // ESP32 requires 32-bit values to be formatted as "long" types.
                  "#U:%06lX,"  // ICAO, e.g. 3C65AC
@@ -196,7 +200,8 @@ inline int16_t WriteCSBeeUATAircraftMessageStr(char message_buf[], const UATAirc
                  "%d,"        // VERSION
                  "%d,"        // SIGS, e.g. -92
                  "%d,"        // SIGQ, e.g. 2
-                 "%d,",       // UATFPS, e.g. 1
+                 "%d,"        // UATFPS, e.g. 1
+                 "%d,",       // ADDRESS_QUAL — v3
 #endif
                  aircraft.icao_address,                      // ICAO
                  aircraft.flags,                             // FLAGS
@@ -217,7 +222,8 @@ inline int16_t WriteCSBeeUATAircraftMessageStr(char message_buf[], const UATAirc
                  aircraft.uat_version,                       // VERSION
                  aircraft.last_message_signal_strength_dbm,  // SIGS
                  aircraft.last_message_signal_quality_bits,  // SIGQ
-                 aircraft.metrics.valid_frames               // UATFPS
+                 aircraft.metrics.valid_frames,              // UATFPS
+                 static_cast<int>(aircraft.address_qualifier)  // ADDRESS_QUAL
         );
     if (num_chars < 0) return num_chars;  // Check if snprintf call got busted.
 

@@ -322,6 +322,8 @@ class ModeSAircraft : public Aircraft {
 
     int16_t last_message_signal_strength_dbm = 0;  // Voltage of RSSI signal during message receipt.
     int16_t last_message_signal_quality_db = 0;    // Ratio of RSSI to noise floor during message receipt.
+    /** True when recent extended squitter was DF=18 (non-transponder / rebroadcast), false for DF=17. */
+    bool is_rebroadcast_source = false;
     uint32_t last_track_update_timestamp_ms = 0;   // Timestamp of the last time that the position was updated.
     Metrics metrics;
 

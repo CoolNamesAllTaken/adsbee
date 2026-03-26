@@ -206,6 +206,8 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
     data.longitude_deg = aircraft.longitude_deg;
     data.altitude_ft = aircraft.baro_altitude_ft;
     data.direction_deg = aircraft.direction_deg;
+    data.address_type = aircraft.is_rebroadcast_source ? GDL90TargetReportData::kAddressTypeTISBWithICAOAddress
+                                                         : GDL90TargetReportData::kAddressTypeADSBWithICAOAddress;
 
     GDL90TargetReportData::MiscIndicatorTrackOrHeadingValue track_heading_value;
     if (!aircraft.HasBitFlag(ModeSAircraft::kBitFlagPositionValid)) {
@@ -259,7 +261,11 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
     data.longitude_deg = aircraft.longitude_deg;
     data.altitude_ft = aircraft.baro_altitude_ft;
     data.direction_deg = aircraft.direction_deg;
-    data.address_type = static_cast<GDL90TargetReportData::AddressType>(aircraft.address_qualifier);
+    if (aircraft.address_qualifier == UATAircraft::kAddressQualifierNotSet) {
+        data.address_type = GDL90TargetReportData::kAddressTypeADSBWithICAOAddress;
+    } else {
+        data.address_type = static_cast<GDL90TargetReportData::AddressType>(aircraft.address_qualifier);
+    }
 
     GDL90TargetReportData::MiscIndicatorTrackOrHeadingValue track_heading_value;
     if (!aircraft.HasBitFlag(UATAircraft::kBitFlagPositionValid)) {
