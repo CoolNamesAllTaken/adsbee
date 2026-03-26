@@ -1,0 +1,4 @@
+**/build
+esp_at/*
+**.db*
+**.claude
