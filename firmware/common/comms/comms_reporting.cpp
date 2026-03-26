@@ -274,7 +274,9 @@ bool CommsManager::ReportMAVLINK(ReportSink* sinks, uint16_t num_sinks, uint8_t 
         CONSOLE_ERROR("CommsManager::ReportMAVLINK", "MAVLINK version %d does not exist.", mavlink_version);
         return false;
     }
-    mavlink_set_proto_version(SettingsManager::SerialInterface::kCommsUART, mavlink_version);
+    for (uint16_t i = 0; i < num_sinks; i++) {
+        mavlink_set_proto_version(sinks[i], mavlink_version);
+    }
 
     // Send a HEARTBEAT message.
     mavlink_heartbeat_t heartbeat_msg = {.custom_mode = 0,
