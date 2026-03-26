@@ -12,10 +12,10 @@
 #include "firmware_update.hh"
 #include "flash_utils.hh"
 #include "main.hh"
+#include "pico/bootrom.h"  // For Jumping to Bootloader
 #include "pico/multicore.h"
 #include "pico/stdlib.h"  // for getchar etc
 #include "pico/unique_id.h"
-#include "pico/bootrom.h"   // For Jumping to Bootloader
 #include "settings.hh"
 #include "spi_coprocessor.hh"  // For init / de-init before and after flashing ESP32.
 
@@ -140,7 +140,7 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
             CPP_AT_PRINTF("1090MHz RF Frontend Version: %d\r\n", bsp.r1090_rf_frontend_version);
 
             if (esp32.IsEnabled()) {
-                // Read ESP32 firmware verison.
+                // Read ESP32 firmware version.
                 uint32_t esp32_firmware_version;
                 if (!esp32.Read(ObjectDictionary::Address::kAddrFirmwareVersion, esp32_firmware_version)) {
                     CPP_AT_ERROR("ESP32 firmware version read failed!");
@@ -154,7 +154,7 @@ CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
                     CPP_AT_PRINTF("ESP32 Firmware Version: %d.%d.%d\r\n", esp32_fwv_major, esp32_fwv_minor,
                                   esp32_fwv_patch);
                 } else {
-                    // Print with release candidiate number.
+                    // Print with release candidate number.
                     CPP_AT_PRINTF("ESP32 Firmware Version: %d.%d.%d-rc%d\r\n", esp32_fwv_major, esp32_fwv_minor,
                                   esp32_fwv_patch, esp32_fwv_rc);
                 }
@@ -809,7 +809,7 @@ CPP_AT_HELP_CALLBACK(CommsManager::ATRxEnableHelpCallback) {
         "receiver(s) "
         "from receiving messages. First arg overrides others if present.\r\n\tAT+RX_ENABLE?\r\n\t1090 Receiver: "
         "<1090_enabled [ENABLED,DISABLED]>\r\n\tSubG Receiver: <subg_en> [ENABLED,DISABLED]>\r\n\tQuery whether the "
-        "recevier(s) are enabled.\r\n");
+        "receiver(s) are enabled.\r\n");
 }
 
 void ATRxPositionHelpCallback() {
@@ -1119,7 +1119,7 @@ CPP_AT_CALLBACK(CommsManager::ATWatchdogCallback) {
         case '=': {
             if (CPP_AT_HAS_ARG(0)) {
                 if (args[0].compare("TEST") == 0) {
-                    // Block for watdog timeout + 1 seconds to try triggering a watchdog event.
+                    // Block for watchdog timeout + 1 seconds to try triggering a watchdog event.
                     uint32_t begin_timestamp_ms = get_time_since_boot_ms();
                     static constexpr uint32_t kDotPrintIntervalMs = 1 * kMsPerSec;
                     uint32_t last_dot_print_timestamp_ms = begin_timestamp_ms;
@@ -1237,12 +1237,12 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiSTACallback) {
 
 CPP_AT_CALLBACK(CommsManager::ATBootloader) {
     switch (op) {
-        case '=':   {
+        case '=': {
             if (CPP_AT_HAS_ARG(0)) {
                 if (args[0].compare("1DEADBEE") == 0) {
                     CPP_AT_CMD_PRINTF(": Rebooting into USB bootloader\r\n");
                     rom_reset_usb_boot(0, 0);
-                }   else    {
+                } else {
                     CPP_AT_ERROR("Invalid argument '%s'.", args[0].data());
                 }
             }
@@ -1252,7 +1252,6 @@ CPP_AT_CALLBACK(CommsManager::ATBootloader) {
         }
     }
 }
-
 
 const CppAT::ATCommandDef_t at_command_list[] = {
     {.command = "BAUD_RATE",
@@ -1417,10 +1416,10 @@ const CppAT::ATCommandDef_t at_command_list[] = {
     {.command = "BOOT_USB_UF2",
      .min_args = 0,
      .max_args = 1,
-     .help_string = "Reboot ADSBee into RP2040 USB Bootloader.\r\n\tDo not use unless you have a USB connection to the ADSBee\r\n\t"
+     .help_string = "Reboot ADSBee into RP2040 USB Bootloader.\r\n\tDo not use unless you have a USB connection to the "
+                    "ADSBee\r\n\t"
                     "AT+BOOT_USB_UF2=1DEADBEE",
-     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBootloader, comms_manager)}
-};
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBootloader, comms_manager)}};
 const uint16_t at_command_list_num_commands = sizeof(at_command_list) / sizeof(at_command_list[0]);
 
 bool CommsManager::UpdateAT() {
