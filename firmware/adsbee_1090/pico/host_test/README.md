@@ -4,7 +4,7 @@
 1. Make sure the CMake Build Kit is set to Linux GCC (from the docker container).
 2. Run the following commands:
     ```bash
-    cd /firmware/test/build
+    cd /adsbee_1090/pico/host_test/build
     cmake ..
     make
     ./adsbee_test
