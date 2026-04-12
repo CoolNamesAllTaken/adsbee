@@ -342,7 +342,8 @@ bool CommsManager::ReportGDL90(ReportSink* sinks, uint16_t num_sinks) {
 
     // Heartbeat Message
     msg_len = gdl90.WriteGDL90HeartbeatMessage(buf, sizeof(buf), get_time_since_boot_ms() / 1000,
-                                               aircraft_dictionary.metrics.valid_extended_squitter_frames);
+                                                aircraft_dictionary.metrics.valid_extended_squitter_frames, 
+                                                aircraft_dictionary.metrics.valid_uat_uplink_frames);
 
     for (uint16_t i = 0; i < num_sinks; i++) {
         ret &= SendBuf(sinks[i], (char*)buf, msg_len);

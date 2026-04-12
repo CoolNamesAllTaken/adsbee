@@ -61,7 +61,7 @@ build_pico() {
 build_test() {
     echo "=== Building and running host tests ==="
     docker compose run --rm pico-docker bash -c "
-        cd /firmware/adsbee_1090/modules/googletest &&
+        cd /firmware/modules/googletest &&
         mkdir -p build && cd build &&
         cmake -DBUILD_SHARED_LIBS=ON .. &&
         make -j $jobs &&

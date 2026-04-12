@@ -70,7 +70,7 @@ class GDL90Reporter {
         uint32_t participant_address;         // 24 bit ICAO address.
         float latitude_deg = 0.0f;
         float longitude_deg = 0.0f;
-        int16_t altitude_ft;
+        int32_t altitude_ft;
         uint8_t misc_indicators;
         uint8_t navigation_integrity_category = 0;      // Navigation Integrity Category (NIC).
         uint8_t navigation_accuracy_category_position;  // Navigation Accuracy Category for Postion (NACp).
@@ -116,7 +116,7 @@ class GDL90Reporter {
      * @retval Number of Bytes written to to_buf.
      */
     uint16_t WriteGDL90HeartbeatMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes, uint32_t timestamp_sec_since_0000z,
-                                        uint16_t message_counts);
+                                        uint16_t modeS_message_counts, uint16_t uat_message_counts);
 
     /**
      * Write a GDL90 Initialization message.
