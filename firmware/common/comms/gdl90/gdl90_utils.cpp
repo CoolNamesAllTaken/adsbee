@@ -68,8 +68,8 @@ uint16_t GDL90Reporter::WriteBufferWithGDL90Escapes(uint8_t* to_buf, uint16_t to
 }
 
 uint16_t GDL90Reporter::WriteGDL90HeartbeatMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes,
-                                                   uint32_t timestamp_sec_since_0000z, 
-                                                   uint16_t modeS_message_counts, uint16_t uat_message_counts) {
+                                                   uint32_t timestamp_sec_since_0000z, uint16_t mode_s_message_counts,
+                                                   uint16_t uat_message_counts) {
     const uint16_t kMessageBufLenBytes = 7;
     uint8_t message_buf[kMessageBufLenBytes];
     // 1: Message ID
@@ -87,12 +87,12 @@ uint16_t GDL90Reporter::WriteGDL90HeartbeatMessage(uint8_t* to_buf, uint16_t to_
     message_buf[3] = timestamp_sec_since_0000z & 0xFF;         // Timestamp LSB.
     message_buf[4] = (timestamp_sec_since_0000z >> 8) & 0xFF;  // Timestamp MSB (missing MS bit).
     // 6-7: Message Counts
-    modeS_message_counts = MIN(1023, modeS_message_counts);
+    mode_s_message_counts = MIN(1023, mode_s_message_counts);
     uat_message_counts = std::min<uint8_t>(31, uat_message_counts);
-    message_buf[5] = static_cast<uint8_t>(((uat_message_counts & 0x1F) << 3) |          // bits 7..3
-                                            ((modeS_message_counts >> 8) & 0x03)        // bits 1..0
-                                            );                                          // bit 2 left as 0
-    message_buf[6] = static_cast<uint8_t>(modeS_message_counts & 0xFF);
+    message_buf[5] = static_cast<uint8_t>(((uat_message_counts & 0x1F) << 3) |   // bits 7..3
+                                          ((mode_s_message_counts >> 8) & 0x03)  // bits 1..0
+    );                                                                           // bit 2 left as 0
+    message_buf[6] = static_cast<uint8_t>(mode_s_message_counts & 0xFF);
 
     return WriteGDL90Message(to_buf, to_buf_num_bytes, message_buf, kMessageBufLenBytes);
 }
@@ -175,9 +175,9 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
 
     // ddd: Altitude as a 12-bit offset integer. Resolution = 25 feet.
     uint16_t altitude_frac = static_cast<uint16_t>((data.altitude_ft + 1000) / 25);
-    message_buf[11] = (altitude_frac >> 4) & 0xFF;      // dd: Altitude MS Byte.
-    message_buf[12] = ((altitude_frac & 0xF) << 4) |    // d: Altitude LS nibble.
-                      (data.misc_indicators & 0xF);     // m: Miscellaneous indicators.
+    message_buf[11] = (altitude_frac >> 4) & 0xFF;    // dd: Altitude MS Byte.
+    message_buf[12] = ((altitude_frac & 0xF) << 4) |  // d: Altitude LS nibble.
+                      (data.misc_indicators & 0xF);   // m: Miscellaneous indicators.
 
     message_buf[13] =
         ((data.navigation_integrity_category & 0xF) << 4)      // i: Navigation Integrity Category (NIC).
@@ -186,15 +186,15 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
     // hhh: Horizontal Velocity. Resolution = 1kt.
     uint16_t speed_kts = static_cast<uint16_t>(data.speed_kts);
     if (speed_kts >= 0xFFF) {
-        speed_kts = 0xFFE;   // 0xFFF = invalid / unavailable
+        speed_kts = 0xFFE;  // 0xFFF = invalid / unavailable
     }
 
     // vvv: Vertical Velocity. Signed Integer in units of 64fpm.
     int32_t vertical_rate_64fpm = static_cast<int32_t>(data.vertical_rate_fpm) / 64;
-    if (vertical_rate_64fpm > 0x1FE)    {
-        vertical_rate_64fpm = 0x1FE;          // > +32,576 fpm climb
-    }   else if (vertical_rate_64fpm < -0x1FE)  {
-        vertical_rate_64fpm = -0x1FE;         // > 32,576 fpm descend
+    if (vertical_rate_64fpm > 0x1FE) {
+        vertical_rate_64fpm = 0x1FE;  // > +32,576 fpm climb
+    } else if (vertical_rate_64fpm < -0x1FE) {
+        vertical_rate_64fpm = -0x1FE;  // > 32,576 fpm descend
     }
 
     uint16_t vertical_rate_encoded = static_cast<uint16_t>(vertical_rate_64fpm) & 0x0FFF;
@@ -261,7 +261,7 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
                                  ? aircraft.baro_vertical_rate_fpm
                                  : aircraft.gnss_vertical_rate_fpm;
     data.direction_deg = aircraft.direction_deg;
-    data.emitter_category = static_cast<uint8_t>(aircraft.emitter_category);
+    data.emitter_category = aircraft.emitter_category_raw;
     // GDL90 does not provide space for an EOS character, since it only provides 8 Bytes for the callsign.
     memcpy(data.callsign, aircraft.callsign, ModeSAircraft::kCallSignMaxNumChars);
     // NOTE: Emergency Priority code currently not used.

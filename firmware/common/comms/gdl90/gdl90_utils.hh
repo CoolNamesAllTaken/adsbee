@@ -116,7 +116,7 @@ class GDL90Reporter {
      * @retval Number of Bytes written to to_buf.
      */
     uint16_t WriteGDL90HeartbeatMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes, uint32_t timestamp_sec_since_0000z,
-                                        uint16_t modeS_message_counts, uint16_t uat_message_counts);
+                                        uint16_t mode_s_message_counts, uint16_t uat_message_counts);
 
     /**
      * Write a GDL90 Initialization message.

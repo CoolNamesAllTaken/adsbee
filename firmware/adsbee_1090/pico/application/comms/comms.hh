@@ -200,7 +200,6 @@ class CommsManager {
 
    private:
     // AT Functions
-    bool InitAT();
     bool UpdateAT();
 
     CommsManagerConfig config_;
