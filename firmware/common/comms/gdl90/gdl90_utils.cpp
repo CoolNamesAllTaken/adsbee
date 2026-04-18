@@ -68,7 +68,8 @@ uint16_t GDL90Reporter::WriteBufferWithGDL90Escapes(uint8_t* to_buf, uint16_t to
 }
 
 uint16_t GDL90Reporter::WriteGDL90HeartbeatMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes,
-                                                   uint32_t timestamp_sec_since_0000z, uint16_t message_counts) {
+                                                   uint32_t timestamp_sec_since_0000z, uint16_t mode_s_message_counts,
+                                                   uint16_t uat_message_counts) {
     const uint16_t kMessageBufLenBytes = 7;
     uint8_t message_buf[kMessageBufLenBytes];
     // 1: Message ID
@@ -86,9 +87,13 @@ uint16_t GDL90Reporter::WriteGDL90HeartbeatMessage(uint8_t* to_buf, uint16_t to_
     message_buf[3] = timestamp_sec_since_0000z & 0xFF;         // Timestamp LSB.
     message_buf[4] = (timestamp_sec_since_0000z >> 8) & 0xFF;  // Timestamp MSB (missing MS bit).
     // 6-7: Message Counts
-    message_counts = MIN(1023, message_counts);
-    message_buf[5] = message_counts & 0xFF;
-    message_buf[6] = message_counts >> 8;
+    mode_s_message_counts = MIN(1023, mode_s_message_counts);
+    uat_message_counts = std::min<uint8_t>(31, uat_message_counts);
+    message_buf[5] = static_cast<uint8_t>(((uat_message_counts & 0x1F) << 3) |   // bits 7..3
+                                          ((mode_s_message_counts >> 8) & 0x03)  // bits 1..0
+    );                                                                           // bit 2 left as 0
+    message_buf[6] = static_cast<uint8_t>(mode_s_message_counts & 0xFF);
+
     return WriteGDL90Message(to_buf, to_buf_num_bytes, message_buf, kMessageBufLenBytes);
 }
 
@@ -167,23 +172,38 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
     message_buf[8] = (longitude_frac >> 16) & 0xFF;
     message_buf[9] = (longitude_frac >> 8) & 0xFF;
     message_buf[10] = longitude_frac & 0xFF;
-    // ddd: Altitude as a 12-bit offset integer. Resolution = 25 feet.
-    int16_t altitude_frac = static_cast<int16_t>(data.altitude_ft / 25) & 0x0FFF;
-    message_buf[11] = altitude_frac >> 4;  // dd: Altitude MS Byte.
 
-    message_buf[12] = (altitude_frac & 0xF) |        // d: Altitude LS nibble.
-                      (data.misc_indicators & 0xF);  // m: Miscellaneous indicators.
+    // ddd: Altitude as a 12-bit offset integer. Resolution = 25 feet.
+    uint16_t altitude_frac = static_cast<uint16_t>((data.altitude_ft + 1000) / 25);
+    message_buf[11] = (altitude_frac >> 4) & 0xFF;    // dd: Altitude MS Byte.
+    message_buf[12] = ((altitude_frac & 0xF) << 4) |  // d: Altitude LS nibble.
+                      (data.misc_indicators & 0xF);   // m: Miscellaneous indicators.
+
     message_buf[13] =
         ((data.navigation_integrity_category & 0xF) << 4)      // i: Navigation Integrity Category (NIC).
         | (data.navigation_accuracy_category_position & 0xF);  // a: Navigation Accuracy Category for Position (NACp).
+
     // hhh: Horizontal Velocity. Resolution = 1kt.
-    uint32_t speed_kts = static_cast<uint32_t>(data.speed_kts) & 0x00000FFF;
+    uint16_t speed_kts = static_cast<uint16_t>(data.speed_kts);
+    if (speed_kts >= 0xFFF) {
+        speed_kts = 0xFFE;  // 0xFFF = invalid / unavailable
+    }
+
     // vvv: Vertical Velocity. Signed Integer in units of 64fpm.
-    int32_t vertical_rate_fpm = (data.vertical_rate_fpm / 64) & 0x000000FFF;
-    message_buf[14] = speed_kts >> 4;              // hh: MSB of Horizontal Velocity.
-    message_buf[15] = (speed_kts & 0xF)            // h: LS nibble of Horizontal Velocity.
-                      | (vertical_rate_fpm >> 8);  // v: MS nibble of Vertical Rate.
-    message_buf[16] = vertical_rate_fpm & 0xFF;    // vv: LSB of Vertical Rate.
+    int32_t vertical_rate_64fpm = static_cast<int32_t>(data.vertical_rate_fpm) / 64;
+    if (vertical_rate_64fpm > 0x1FE) {
+        vertical_rate_64fpm = 0x1FE;  // > +32,576 fpm climb
+    } else if (vertical_rate_64fpm < -0x1FE) {
+        vertical_rate_64fpm = -0x1FE;  // > 32,576 fpm descend
+    }
+
+    uint16_t vertical_rate_encoded = static_cast<uint16_t>(vertical_rate_64fpm) & 0x0FFF;
+
+    message_buf[14] = (speed_kts >> 4) & 0xFF;                  // hh: MSB of Horizontal Velocity.
+    message_buf[15] = ((speed_kts & 0xF) << 4)                  // h: LS nibble of Horizontal Velocity.
+                      | ((vertical_rate_encoded >> 8) & 0x0F);  // v: MS nibble of Vertical Rate.
+    message_buf[16] = vertical_rate_encoded & 0xFF;             // vv: LSB of Vertical Rate.
+
     // tt: Track / Heading. 8-bit angular weighted binary. Resolution = 360/256 degrees. 0 = North,
     // 128 = South. Indicate track or heading using misc bit field.
     message_buf[17] = static_cast<uint32_t>(data.direction_deg * kHeadingTrackDegTo8BitFrac) & 0x000000FF;
