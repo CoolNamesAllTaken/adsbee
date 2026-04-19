@@ -1,8 +1,9 @@
 #!/bin/bash
 # ADSBee firmware build script.
 # Builds all three firmware targets (ESP32, TI CC1312, RP2040 Pico) using Docker containers.
-# Usage: ./build.sh [target]
+# Usage: ./build.sh [-d] [target]
 #   targets: all (default), esp, ti, pico, test, clean
+#   -d: build in Debug mode instead of Release
 
 set -e
 
@@ -12,30 +13,46 @@ cd "$script_dir"
 # Number of parallel build jobs.
 jobs=$(nproc 2>/dev/null || echo 4)
 
+debug=false
+if [ "$1" = "-d" ]; then
+    debug=true
+    shift
+fi
+
 build_esp() {
-    echo "=== Building ESP32-S3 firmware ==="
-    docker compose run --rm esp-idf bash -c "
-        cd /firmware/adsbee_1090/esp &&
-        idf.py build
-    "
+    if [ "$debug" = true ]; then
+        echo "=== Building ESP32-S3 firmware (Debug) ==="
+        docker compose run --rm esp-idf bash -c "
+            cd /firmware/adsbee_1090/esp &&
+            idf.py -D CMAKE_BUILD_TYPE=Debug build
+        "
+    else
+        echo "=== Building ESP32-S3 firmware ==="
+        docker compose run --rm esp-idf bash -c "
+            cd /firmware/adsbee_1090/esp &&
+            idf.py build
+        "
+    fi
     echo "=== ESP32-S3 build complete: esp/build/adsbee_esp.bin ==="
 }
 
 build_ti() {
-    echo "=== Building TI CC1312 firmware ==="
+    local build_type=$( [ "$debug" = true ] && echo "Debug" || echo "Release" )
+    echo "=== Building TI CC1312 firmware ($build_type) ==="
     docker compose run --rm ti-lpf2 bash -c "
         cd /firmware/adsbee_1090/ti/sub_ghz_radio &&
         mkdir -p build && cd build &&
-        cmake -DCMAKE_BUILD_TYPE=Release \
+        cmake -DCMAKE_BUILD_TYPE=$build_type \
               -DCMAKE_C_COMPILER=/usr/bin/arm-none-eabi-gcc \
               -DCMAKE_CXX_COMPILER=/usr/bin/arm-none-eabi-g++ .. &&
-        cmake --build . --config Release --target all -j $jobs
+        cmake --build . --config $build_type --target all -j $jobs
     "
     echo "=== TI CC1312 build complete: ti/sub_ghz_radio/build/sub_ghz_radio.bin ==="
 }
 
 build_pico() {
-    echo "=== Building RP2040 Pico firmware ==="
+    local build_type=$( [ "$debug" = true ] && echo "Debug" || echo "Release" )
+    echo "=== Building RP2040 Pico firmware ($build_type) ==="
     # Check that ESP32 and TI firmware exist.
     if [ ! -f esp/build/adsbee_esp.bin ]; then
         echo "ERROR: esp/build/adsbee_esp.bin not found. Run ESP32 build first."
@@ -47,15 +64,15 @@ build_pico() {
     fi
     docker compose run --rm pico-docker bash -c "
         cd /firmware/adsbee_1090/pico &&
-        mkdir -p build/Release && cd build/Release &&
-        cmake -DCMAKE_BUILD_TYPE=Release \
+        mkdir -p build/$build_type && cd build/$build_type &&
+        cmake -DCMAKE_BUILD_TYPE=$build_type \
               -DCMAKE_C_COMPILER=/usr/bin/arm-none-eabi-gcc \
               -DCMAKE_CXX_COMPILER=/usr/bin/arm-none-eabi-g++ ../.. &&
-        cmake --build . --config Release --target all -j $jobs
+        cmake --build . --config $build_type --target all -j $jobs
     "
     echo "=== RP2040 Pico build complete ==="
-    echo "  Firmware: pico/build/Release/application/combined.uf2"
-    echo "  OTA:      pico/build/Release/application/adsbee_1090.ota"
+    echo "  Firmware: pico/build/$build_type/application/combined.uf2"
+    echo "  OTA:      pico/build/$build_type/application/adsbee_1090.ota"
 }
 
 build_test() {
@@ -103,15 +120,17 @@ case "$target" in
         clean_builds
         ;;
     all)
+        build_type=$( [ "$debug" = true ] && echo "Debug" || echo "Release" )
         build_esp
         build_ti
         build_pico
         echo ""
         echo "=== Full build complete! ==="
-        echo "  Output: firmware/pico/build/Release/application/combined.uf2"
+        echo "  Output: firmware/pico/build/$build_type/application/combined.uf2"
         ;;
     *)
-        echo "Usage: $0 [esp|ti|pico|test|clean|all]"
+        echo "Usage: $0 [-d] [esp|ti|pico|test|clean|all]"
+        echo "  -d    - Build in Debug mode instead of Release"
         echo "  all   - Build all firmware targets (default)"
         echo "  esp   - Build ESP32-S3 firmware only"
         echo "  ti    - Build TI CC1312 firmware only"

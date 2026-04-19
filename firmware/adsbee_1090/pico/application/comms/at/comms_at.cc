@@ -45,6 +45,47 @@ int CppAT::cpp_at_printf(const char* format, ...) {
     return ret;
 }
 
+/** AT Utility Functions **/
+
+int32_t CommsManager::ATReadConsole(char* buf, uint16_t max_len, uint32_t timeout_ms,
+                                    bool terminate_on_newline) {
+    uint16_t len = 0;
+    bool terminated = false;
+    uint32_t start_ms = get_time_since_boot_ms();
+    while (len < max_len || terminated) {
+        int c = getchar_timeout_us(0);
+        if (c >= 0) {
+            char ch = static_cast<char>(c);
+            if (terminate_on_newline && (ch == '\r' || ch == '\n')) {
+                terminated = true;
+                continue;  // Keep draining \r\n without adding to buf.
+            }
+            if (terminated) break;  // Non-newline after terminator: stop (cannot put back).
+            buf[len++] = ch;
+            continue;
+        }
+        if (esp32.IsEnabled()) {
+            char nc;
+            if (esp32_console_rx_queue.Dequeue(nc)) {
+                if (terminate_on_newline && (nc == '\r' || nc == '\n')) {
+                    terminated = true;
+                    continue;
+                }
+                if (terminated) break;
+                buf[len++] = nc;
+                continue;
+            } else {
+                esp32.Update();
+            }
+        }
+        if (terminated) break;  // No chars immediately available after terminator: done.
+        if (get_time_since_boot_ms() - start_ms > timeout_ms) {
+            return -1;
+        }
+    }
+    return static_cast<int32_t>(len);
+}
+
 /** AT Command Callback Functions **/
 
 CPP_AT_CALLBACK(CommsManager::ATBaudRateCallback) {
@@ -105,6 +146,24 @@ CPP_AT_CALLBACK(CommsManager::ATBiasTeeEnableCallback) {
             break;
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATBootloader) {
+    switch (op) {
+        case '=': {
+            if (CPP_AT_HAS_ARG(0)) {
+                if (args[0].compare("1DEADBEE") == 0) {
+                    CPP_AT_CMD_PRINTF(": Rebooting into USB bootloader\r\n");
+                    rom_reset_usb_boot(0, 0);
+                } else {
+                    CPP_AT_ERROR("Invalid argument '%s'.", args[0].data());
+                }
+            }
+        }
+        default: {
+            CPP_AT_ERROR("Operator %c not supported.", op);
+        }
+    }
 }
 
 CPP_AT_CALLBACK(CommsManager::ATDeviceInfoCallback) {
@@ -489,52 +548,19 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                                      FirmwareUpdateManager::kFlashWriteBufMaxLenBytes);
                     }
                     uint8_t buf[len_bytes];
-                    uint32_t buf_len_bytes = 0;
-                    uint32_t timestamp_ms = get_time_since_boot_ms();
-                    uint32_t data_read_start_timestamp_ms = timestamp_ms;
-                    uint32_t last_ota_heartbeat_timestamp_ms = timestamp_ms;
 
                     // Send OK to indicate that we're ready to receive data.
                     CPP_AT_PRINTF("READY\r\n");
 
-                    // Read len_bytes from stdio and network console. Timeout after kOTAWriteTimeoutMs.
                     uint32_t old_esp32_heartbeat_ms = esp32.update_interval_ms;
                     esp32.update_interval_ms = kOTAHeartbeatMs;  // Faster heartbeat during OTA.
-                    while (buf_len_bytes < len_bytes) {
-                        // Priority 1: Check STDIO for data.
-                        int stdio_console_getchar_reply = getchar_timeout_us(0);
-                        if (stdio_console_getchar_reply >= 0) {
-                            // Didn't have timeout or other error: got a valid data byte.
-                            buf[buf_len_bytes] = static_cast<char>(stdio_console_getchar_reply);
-                            buf_len_bytes++;
-                            continue;  // Don't check network console if stdio had a byte.
-                        }
-
-                        // Priority 2: Check network console for data.
-                        if (esp32.IsEnabled()) {
-                            char network_console_byte;
-                            if (esp32_console_rx_queue.Length() > 0) {
-                                while (buf_len_bytes < len_bytes &&
-                                       esp32_console_rx_queue.Dequeue(network_console_byte)) {
-                                    // Was able to read a char from the network buffer.
-                                    buf[buf_len_bytes] = network_console_byte;
-                                    buf_len_bytes++;
-                                }
-                            } else {
-                                // Didn't receive any Bytes. Refresh network console and update timeout timestamp.
-                                esp32.Update();
-                            }
-                        }
-
-                        timestamp_ms = get_time_since_boot_ms();
-                        if (timestamp_ms - data_read_start_timestamp_ms > kOTAWriteTimeoutMs) {
-                            adsbee.SetReceiver1090Enable(receiver_was_enabled);  // Re-enable receiver before exit.
-                            esp32.update_interval_ms = old_esp32_heartbeat_ms;   // Restore old heartbeat.
-                            CPP_AT_ERROR("Timed out after %u ms. Received %u Bytes.",
-                                         timestamp_ms - data_read_start_timestamp_ms, buf_len_bytes);
-                        }
-                    }
+                    int32_t buf_len_bytes = ATReadConsole(reinterpret_cast<char*>(buf), len_bytes, kOTAWriteTimeoutMs);
                     esp32.update_interval_ms = old_esp32_heartbeat_ms;  // Restore old heartbeat.
+
+                    if (buf_len_bytes < 0) {
+                        adsbee.SetReceiver1090Enable(receiver_was_enabled);  // Re-enable receiver before exit.
+                        CPP_AT_ERROR("Timed out after %u ms. Received %u Bytes.", kOTAWriteTimeoutMs, 0);
+                    }
 
                     bool has_crc = CPP_AT_HAS_ARG(3);
                     CPP_AT_TRY_ARG2NUM_BASE(3, crc, 16);
@@ -1235,24 +1261,6 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiSTACallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
-CPP_AT_CALLBACK(CommsManager::ATBootloader) {
-    switch (op) {
-        case '=': {
-            if (CPP_AT_HAS_ARG(0)) {
-                if (args[0].compare("1DEADBEE") == 0) {
-                    CPP_AT_CMD_PRINTF(": Rebooting into USB bootloader\r\n");
-                    rom_reset_usb_boot(0, 0);
-                } else {
-                    CPP_AT_ERROR("Invalid argument '%s'.", args[0].data());
-                }
-            }
-        }
-        default: {
-            CPP_AT_ERROR("Operator %c not supported.", op);
-        }
-    }
-}
-
 const CppAT::ATCommandDef_t at_command_list[] = {
     {.command = "BAUD_RATE",
      .min_args = 0,
@@ -1266,6 +1274,13 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string = "AT+BIAS_TEE_ENABLE=<1090_bt_enabled>,<subg_bt_enabled>\r\n\tEnable or disable the bias "
                     "tees.\r\n\tBIAS_TEE_ENABLE?\r\n\tQuery the status of the bias tees.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBiasTeeEnableCallback, comms_manager)},
+    {.command = "BOOT_USB_UF2",
+     .min_args = 0,
+     .max_args = 1,
+     .help_string = "Reboot ADSBee into RP2040 USB Bootloader.\r\n\tDo not use unless you have a USB connection to the "
+                    "ADSBee\r\n\t"
+                    "AT+BOOT_USB_UF2=1DEADBEE",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBootloader, comms_manager)},
     {.command = "DEVICE_INFO",
      .min_args = 0,
      .max_args = 5,  // TODO: check this value.
@@ -1368,6 +1383,24 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                     "stored in the RP2040's flash memory.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSubGFlashCallback, comms_manager)},
 #ifdef HARDWARE_UNIT_TESTS
+    {.command = "INGEST_MODE_S",
+     .min_args = 1,
+     .max_args = 4,
+     .help_string =
+         "Ingest a Mode S packet into the raw packet queue.\r\n\t"
+         "AT+INGEST_MODE_S=<hex_data>,<sigs_dbm>,<sigq_db>,<mlat_counts>\r\n\t"
+         "hex_data: 14 hex chars (squitter) or 28 hex chars (extended squitter).\r\n\t"
+         "sigs_dbm, sigq_db, mlat_counts are optional signal quality parameters.",
+     .callback = ATIngestModeSCallback},
+    {.command = "INGEST_UAT",
+     .min_args = 1,
+     .max_args = 4,
+     .help_string =
+         "Ingest a UAT packet into the raw packet queue.\r\n\t"
+         "AT+INGEST_UAT=<hex_data>,<sigs_dbm>,<sigq_bits>,<mlat_counts>\r\n\t"
+         "hex_data: 60 hex chars (short ADS-B), 96 (long ADS-B), or 1104 (uplink).\r\n\t"
+         "sigs_dbm, sigq_bits, mlat_counts are optional signal quality parameters.",
+     .callback = ATIngestUATCallback},
     {.command = "TEST",
      .min_args = 0,
      .max_args = 1,
@@ -1413,13 +1446,7 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string = "Set WiFi station params.\r\n\tAT+WIFI_STA=<enabled>,<sta_ssid>,<sta_pwd>\r\n\t"
                     "Get WiFi station params.\r\n\tAT+WIFI_STA?\r\n\t+WIFI_STA=<enabled>,<sta_ssid>,<sta_pwd>",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATWiFiSTACallback, comms_manager)},
-    {.command = "BOOT_USB_UF2",
-     .min_args = 0,
-     .max_args = 1,
-     .help_string = "Reboot ADSBee into RP2040 USB Bootloader.\r\n\tDo not use unless you have a USB connection to the "
-                    "ADSBee\r\n\t"
-                    "AT+BOOT_USB_UF2=1DEADBEE",
-     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBootloader, comms_manager)}};
+};
 const uint16_t at_command_list_num_commands = sizeof(at_command_list) / sizeof(at_command_list[0]);
 
 bool CommsManager::UpdateAT() {

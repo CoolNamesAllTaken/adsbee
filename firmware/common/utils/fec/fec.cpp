@@ -1,5 +1,7 @@
 #include "fec.hh"
 
+#include <cstring>  // for memcpy
+
 #include "buffer_utils.hh"  // for PrintByteBuffer
 #include "comms.hh"
 #include "rs.h"  // For init_rs_char, decode_rs_char, encode_rs_char
@@ -43,7 +45,7 @@ int UATReedSolomon::DecodeShortADSBMessage(uint8_t message_buf[RawUATADSBPacket:
     if (message_buf == nullptr) {
         return -1;  // Invalid input.
     }
-    int num_bytes_corrected = decode_rs_char(rs_adsb_short, (unsigned char *)message_buf, nullptr, 0);
+    int num_bytes_corrected = decode_rs_char(rs_adsb_short, (unsigned char*)message_buf, nullptr, 0);
     if (num_bytes_corrected >= 0 && num_bytes_corrected <= kADSBShortMessageMaxNumByteCorrections &&
         (message_buf[0] >> 3) == 0) {
         return num_bytes_corrected;  // Return number of bits corrected.
@@ -55,7 +57,7 @@ int UATReedSolomon::DecodeLongADSBMessage(uint8_t message_buf[RawUATADSBPacket::
     if (message_buf == nullptr) {
         return -1;  // Invalid input.
     }
-    int num_bytes_corrected = decode_rs_char(rs_adsb_long, (unsigned char *)message_buf, nullptr, 0);
+    int num_bytes_corrected = decode_rs_char(rs_adsb_long, (unsigned char*)message_buf, nullptr, 0);
     if (num_bytes_corrected >= 0 && num_bytes_corrected <= kLongADSBMessageMaxNumByteCorrections &&
         (message_buf[0] >> 3) != 0) {
         return num_bytes_corrected;  // Return number of bits corrected.
@@ -63,20 +65,22 @@ int UATReedSolomon::DecodeLongADSBMessage(uint8_t message_buf[RawUATADSBPacket::
     return -1;
 }
 
-int UATReedSolomon::DecodeUplinkMessage(
-    uint8_t decoded_payload_buf[RawUATUplinkPacket::kUplinkMessagePayloadNumBytes +
-                                RawUATUplinkPacket::kUplinkMessageBlockFECParityNumBytes],
-    uint8_t encoded_message_buf[RawUATUplinkPacket::kUplinkMessageNumBytes]) {
-    if (encoded_message_buf == nullptr) {
+int UATReedSolomon::DecodeUplinkMessage(uint8_t decoded_payload_buf[RawUATUplinkPacket::kUplinkMessagePayloadNumBytes],
+                                        uint8_t encoded_message_buf[RawUATUplinkPacket::kUplinkMessageNumBytes]) {
+    if (encoded_message_buf == nullptr || decoded_payload_buf == nullptr) {
         return -1;  // Invalid input.
     }
     int total_bytes_corrected = 0;
 
     // PrintByteBuffer("DecodeUplinkMessage: Encoded message before decode:", encoded_message_buf,
     //                 RawUATUplinkPacket::kUplinkMessageNumBytes);
+    // We need a buffer that's bigger than the payload size to de-interleave and decode with, since each block has its
+    // parity bytes overlapped with the next block, so the last block hangs over the payload length a bit.
+    uint8_t assembly_buf[RawUATUplinkPacket::kUplinkMessagePayloadNumBytes +
+                         RawUATUplinkPacket::kUplinkMessageBlockFECParityNumBytes] = {0};
     for (int block = 0; block < RawUATUplinkPacket::kUplinkMessageNumBlocks; block++) {
-        uint8_t *block_data_and_parity =
-            &(decoded_payload_buf[block * RawUATUplinkPacket::kUplinkMessageBlockPayloadNumBytes]);
+        uint8_t* block_data_and_parity =
+            &(assembly_buf[block * RawUATUplinkPacket::kUplinkMessageBlockPayloadNumBytes]);
         for (int byte_index = 0; byte_index < RawUATUplinkPacket::kUplinkMessageBlockNumBytes; byte_index++) {
             // De-interleave per UAT tech manual Table 2-6.
             block_data_and_parity[byte_index] =
@@ -98,15 +102,37 @@ int UATReedSolomon::DecodeUplinkMessage(
         total_bytes_corrected += num_bytes_corrected;
     }
 
+    memcpy(decoded_payload_buf, assembly_buf, RawUATUplinkPacket::kUplinkMessagePayloadNumBytes);
     return total_bytes_corrected;
+}
+
+void UATReedSolomon::DeInterleaveUplinkMessage(
+    uint8_t deinterleaved_buf[RawUATUplinkPacket::kUplinkMessagePayloadNumBytes],
+    uint8_t encoded_message_buf[RawUATUplinkPacket::kUplinkMessageNumBytes]) {
+    if (encoded_message_buf == nullptr || deinterleaved_buf == nullptr) {
+        return;  // Invalid input.
+    }
+
+    uint8_t assembly_buf[RawUATUplinkPacket::kUplinkMessagePayloadNumBytes] = {0};
+    for (int block = 0; block < RawUATUplinkPacket::kUplinkMessageNumBlocks; block++) {
+        uint8_t* block_data_and_parity =
+            &(assembly_buf[block * RawUATUplinkPacket::kUplinkMessageBlockPayloadNumBytes]);
+        for (int byte_index = 0; byte_index < RawUATUplinkPacket::kUplinkMessageBlockPayloadNumBytes; byte_index++) {
+            // De-interleave per UAT tech manual Table 2-6.
+            block_data_and_parity[byte_index] =
+                encoded_message_buf[byte_index * RawUATUplinkPacket::kUplinkMessageNumBlocks + block];
+        }
+    }
+
+    memcpy(deinterleaved_buf, assembly_buf, RawUATUplinkPacket::kUplinkMessagePayloadNumBytes);
 }
 
 bool UATReedSolomon::EncodeShortADSBMessage(uint8_t message_buf[]) {
     if (message_buf == nullptr) {
         return false;  // Invalid input.
     }
-    encode_rs_char(rs_adsb_short, (unsigned char *)message_buf,
-                   (unsigned char *)(message_buf + RawUATADSBPacket::kShortADSBMessagePayloadNumBytes));
+    encode_rs_char(rs_adsb_short, (unsigned char*)message_buf,
+                   (unsigned char*)(message_buf + RawUATADSBPacket::kShortADSBMessagePayloadNumBytes));
     return true;
 }
 
@@ -114,8 +140,8 @@ bool UATReedSolomon::EncodeLongADSBMessage(uint8_t message_buf[]) {
     if (message_buf == nullptr) {
         return false;  // Invalid input.
     }
-    encode_rs_char(rs_adsb_long, (unsigned char *)message_buf,
-                   (unsigned char *)(message_buf + RawUATADSBPacket::kLongADSBMessagePayloadNumBytes));
+    encode_rs_char(rs_adsb_long, (unsigned char*)message_buf,
+                   (unsigned char*)(message_buf + RawUATADSBPacket::kLongADSBMessagePayloadNumBytes));
     return true;
 }
 
@@ -127,7 +153,7 @@ bool UATReedSolomon::EncodeUplinkMessage(uint8_t encoded_message_buf[], uint8_t 
     // PrintByteBuffer("EncodeUplinkMessage: Decoded payload before encode:", decoded_payload_buf,
     //                 RawUATUplinkPacket::kUplinkMessagePayloadNumBytes);
     for (int block = 0; block < RawUATUplinkPacket::kUplinkMessageNumBlocks; block++) {
-        uint8_t *block_data = &(decoded_payload_buf[block * RawUATUplinkPacket::kUplinkMessageBlockPayloadNumBytes]);
+        uint8_t* block_data = &(decoded_payload_buf[block * RawUATUplinkPacket::kUplinkMessageBlockPayloadNumBytes]);
         uint8_t block_parity[RawUATUplinkPacket::kUplinkMessageBlockFECParityNumBytes];
         encode_rs_char(rs_uplink, block_data, block_parity);
         // PrintByteBuffer("\tBlock Data:", block_data, RawUATUplinkPacket::kUplinkMessageBlockPayloadNumBytes);

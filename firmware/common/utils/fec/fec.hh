@@ -45,6 +45,15 @@ class UATReedSolomon {
     int DecodeUplinkMessage(uint8_t decoded_payload_buf[], uint8_t encoded_message_buf[]);
 
     /**
+     * Transform an already corrected (but interleaved) raw UAT uplink payload into a de-interleaved payload that can be
+     * used directly. Does not apply FEC, just de-interleaves and tosses out the parity bytes.
+     * @param[out] deinterleaved_buf Buffer to store the de-interleaved payload in.
+     * @param[in] encoded_message_buf Buffer with the encoded message to de-interleave. Must be a valid message with FEC
+     * corrections pre-applied.
+     */
+    void DeInterleaveUplinkMessage(uint8_t deinterleaved_buf[], uint8_t encoded_message_buf[]);
+
+    /**
      * Test functions used to turning test messages (provided without FEC headers) into encoded messages similar to what
      * would be found on the air.
      */
