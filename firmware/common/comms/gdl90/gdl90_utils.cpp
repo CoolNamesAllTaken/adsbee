@@ -88,7 +88,7 @@ uint16_t GDL90Reporter::WriteGDL90HeartbeatMessage(uint8_t* to_buf, uint16_t to_
     message_buf[4] = (timestamp_sec_since_0000z >> 8) & 0xFF;  // Timestamp MSB (missing MS bit).
     // 6-7: Message Counts
     mode_s_message_counts = MIN(1023, mode_s_message_counts);
-    uat_message_counts = std::min<uint8_t>(31, uat_message_counts);
+    uat_message_counts = MIN(31, uat_message_counts);
     message_buf[5] = static_cast<uint8_t>(((uat_message_counts & 0x1F) << 3) |   // bits 7..3
                                           ((mode_s_message_counts >> 8) & 0x03)  // bits 1..0
     );                                                                           // bit 2 left as 0
@@ -173,8 +173,15 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
     message_buf[9] = (longitude_frac >> 8) & 0xFF;
     message_buf[10] = longitude_frac & 0xFF;
 
-    // ddd: Altitude as a 12-bit offset integer. Resolution = 25 feet.
-    uint16_t altitude_frac = static_cast<uint16_t>((data.altitude_ft + 1000) / 25);
+    // ddd: Altitude as a 12-bit offset integer. Resolution = 25 feet. 0xFFF = invalid/unavailable.
+    // Valid encoded range: 0x000 (-1000 ft) to 0xFFE (+101,350 ft).
+    uint16_t altitude_frac;
+    if (data.altitude_ft < -1000 || data.altitude_ft > 101350) {
+        altitude_frac = 0xFFF;  // Out of range: encode as invalid.
+    } else {
+        altitude_frac = static_cast<uint16_t>((data.altitude_ft + 1000) / 25);
+        altitude_frac = MIN(0xFFE, altitude_frac);  // Clamp to valid max; 0xFFF is reserved for invalid.
+    }
     message_buf[11] = (altitude_frac >> 4) & 0xFF;    // dd: Altitude MS Byte.
     message_buf[12] = ((altitude_frac & 0xF) << 4) |  // d: Altitude LS nibble.
                       (data.misc_indicators & 0xF);   // m: Miscellaneous indicators.
@@ -183,18 +190,23 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
         ((data.navigation_integrity_category & 0xF) << 4)      // i: Navigation Integrity Category (NIC).
         | (data.navigation_accuracy_category_position & 0xF);  // a: Navigation Accuracy Category for Position (NACp).
 
-    // hhh: Horizontal Velocity. Resolution = 1kt.
-    uint16_t speed_kts = static_cast<uint16_t>(data.speed_kts);
-    if (speed_kts >= 0xFFF) {
-        speed_kts = 0xFFE;  // 0xFFF = invalid / unavailable
+    // hhh: Horizontal Velocity. Resolution = 1kt. 0xFFF = invalid/unavailable, 0xFFE = >= 4094 kt.
+    int32_t speed_kts_raw = static_cast<int32_t>(data.speed_kts);
+    uint16_t speed_kts;
+    if (speed_kts_raw < 0) {
+        speed_kts = 0xFFF;  // Negative sentinel: encode as unavailable.
+    } else if (speed_kts_raw >= 0xFFE) {
+        speed_kts = 0xFFE;  // Clamp to max valid; 0xFFF reserved for unavailable.
+    } else {
+        speed_kts = static_cast<uint16_t>(speed_kts_raw);
     }
 
     // vvv: Vertical Velocity. Signed Integer in units of 64fpm.
     int32_t vertical_rate_64fpm = static_cast<int32_t>(data.vertical_rate_fpm) / 64;
     if (vertical_rate_64fpm > 0x1FE) {
-        vertical_rate_64fpm = 0x1FE;  // > +32,576 fpm climb
+        vertical_rate_64fpm = 0x1FE;  // > +32,576 fpm climb; railed to +32,640 fpm (0x1FE)
     } else if (vertical_rate_64fpm < -0x1FE) {
-        vertical_rate_64fpm = -0x1FE;  // > 32,576 fpm descend
+        vertical_rate_64fpm = -0x1FE;  // > 32,576 fpm descent; railed to -32,640 fpm (0x1FE)
     }
 
     uint16_t vertical_rate_encoded = static_cast<uint16_t>(vertical_rate_64fpm) & 0x0FFF;

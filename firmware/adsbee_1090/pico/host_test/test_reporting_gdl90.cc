@@ -123,6 +123,22 @@ TEST(GDL90Utils, HeartBeatMessage) {
     EXPECT_EQ(buf[8], 0xB3);
     EXPECT_EQ(buf[9], 0x8B);
     EXPECT_EQ(buf[10], 0x7E);
+
+    // UAT count clamped to 5 bits (max 31). Spec §3.1.4: bits 7..3 of byte 6.
+    gdl90.WriteGDL90HeartbeatMessage(buf, GDL90Reporter::kGDL90MessageMaxLenBytes, timestamp, 0, 31);
+    EXPECT_EQ(buf[6] & 0xF8, 31 << 3);  // All 5 UAT bits set.
+    gdl90.WriteGDL90HeartbeatMessage(buf, GDL90Reporter::kGDL90MessageMaxLenBytes, timestamp, 0, 32);
+    EXPECT_EQ(buf[6] & 0xF8, 31 << 3);  // 32 should clamp to 31.
+    gdl90.WriteGDL90HeartbeatMessage(buf, GDL90Reporter::kGDL90MessageMaxLenBytes, timestamp, 0, 256);
+    EXPECT_EQ(buf[6] & 0xF8, 31 << 3);  // 256 would wrap to 0 if narrowed before clamping; must clamp to 31.
+
+    // Mode S count clamped to 10 bits (max 1023). Spec §3.1.4: bits 1..0 of byte 6 (MS) + byte 7 (LS).
+    gdl90.WriteGDL90HeartbeatMessage(buf, GDL90Reporter::kGDL90MessageMaxLenBytes, timestamp, 1023, 0);
+    EXPECT_EQ(buf[6] & 0x03, 0x03);  // MS 2 bits = 0b11.
+    EXPECT_EQ(buf[7], 0xFF);          // LS 8 bits = 0xFF.
+    gdl90.WriteGDL90HeartbeatMessage(buf, GDL90Reporter::kGDL90MessageMaxLenBytes, timestamp, 1024, 0);
+    EXPECT_EQ(buf[6] & 0x03, 0x03);  // 1024 clamps to 1023.
+    EXPECT_EQ(buf[7], 0xFF);
 }
 
 TEST(GDL90Utils, InitMessage) {

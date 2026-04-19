@@ -112,7 +112,10 @@ class GDL90Reporter {
      * @param[out] to_buf Buffer to write to.
      * @param[in] to_buf_num_bytes Size of the output buffer, in bytes.
      * @param[in] timestamp_sec_since_0000z Timestamp in seconds since 0000Z.
-     * @param[in] message_counts Number of messages sent since the last heartbeat.
+     * @param[in] mode_s_message_counts Number of Mode S (Basic/Long) messages received in the previous second. Clamped
+     * to the 10-bit field maximum of 1023. Packed into bits 1..0 of byte 6 (MS) and all of byte 7 (LS).
+     * @param[in] uat_message_counts Number of UAT Uplink messages received in the previous second. Clamped to the 5-bit
+     * field maximum of 31. Packed into bits 7..3 of byte 6.
      * @retval Number of Bytes written to to_buf.
      */
     uint16_t WriteGDL90HeartbeatMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes, uint32_t timestamp_sec_since_0000z,
