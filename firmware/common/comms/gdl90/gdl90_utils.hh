@@ -193,11 +193,13 @@ class GDL90Reporter {
      * Calculate a 16-bit CRC using the pre-calculated GDL90 CRC table.
      * @param[in] buf Pointer to the message payload.
      * @param[in] buf_len_bytes Payload length in bytes.
+     * @param[in] initial_crc Initial CRC value, default is 0. This can be used to calculate the CRC of a message in
+     * parts.
      * @retval Calculated 16-bit CRC value.
      */
-    inline uint16_t CalculateGDL90CRC16(uint8_t* buf, uint16_t buf_len_bytes) {
+    inline uint16_t CalculateGDL90CRC16(const uint8_t* buf, uint16_t buf_len_bytes, uint16_t initial_crc = 0) {
         uint32_t i;
-        uint16_t crc = 0;
+        uint16_t crc = initial_crc;
         for (i = 0; i < buf_len_bytes; i++) {
             crc = kGDL90CRC16Table[crc >> 8] ^ (crc << 8) ^ buf[i];
         }

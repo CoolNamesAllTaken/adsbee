@@ -135,13 +135,15 @@ uint16_t GDL90Reporter::WriteGDL90UplinkDataMessage(uint8_t* to_buf, uint16_t to
     header_buf[1] = tor_80ns_ticks & 0xFF;  // TOR is least significant Byte first.
     header_buf[2] = (tor_80ns_ticks >> 8) & 0xFF;
     header_buf[3] = (tor_80ns_ticks >> 16) & 0xFF;
+    // Calculate partial CRC of the unescaped header, not including the initial flag byte.
+    uint16_t crc = CalculateGDL90CRC16(header_buf, kHeaderBufLenBytes);
 
     bytes_written += WriteBufferWithGDL90Escapes(to_buf + bytes_written, to_buf_num_bytes - bytes_written, header_buf,
                                                  kHeaderBufLenBytes);
     bytes_written += WriteBufferWithGDL90Escapes(to_buf + bytes_written, to_buf_num_bytes - bytes_written,
                                                  uplink_payload, uplink_payload_len_bytes);
-    // Calculate the CRC with unescaped message ID and data (not the initial flag byte).
-    uint16_t crc = CalculateGDL90CRC16(to_buf + 1, bytes_written - 1);  // Exclude starting flag byte.
+    // Calculate the CRC with unescaped header and payload.
+    crc = CalculateGDL90CRC16(uplink_payload, uplink_payload_len_bytes, crc);
     uint8_t crc_buf[sizeof(crc)] = {static_cast<uint8_t>(crc & 0xFF), static_cast<uint8_t>(crc >> 8)};  // LSB first.
     bytes_written +=
         WriteBufferWithGDL90Escapes(to_buf + bytes_written, to_buf_num_bytes - bytes_written, crc_buf, sizeof(crc));

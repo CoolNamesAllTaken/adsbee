@@ -135,7 +135,7 @@ TEST(GDL90Utils, HeartBeatMessage) {
     // Mode S count clamped to 10 bits (max 1023). Spec §3.1.4: bits 1..0 of byte 6 (MS) + byte 7 (LS).
     gdl90.WriteGDL90HeartbeatMessage(buf, GDL90Reporter::kGDL90MessageMaxLenBytes, timestamp, 1023, 0);
     EXPECT_EQ(buf[6] & 0x03, 0x03);  // MS 2 bits = 0b11.
-    EXPECT_EQ(buf[7], 0xFF);          // LS 8 bits = 0xFF.
+    EXPECT_EQ(buf[7], 0xFF);         // LS 8 bits = 0xFF.
     gdl90.WriteGDL90HeartbeatMessage(buf, GDL90Reporter::kGDL90MessageMaxLenBytes, timestamp, 1024, 0);
     EXPECT_EQ(buf[6] & 0x03, 0x03);  // 1024 clamps to 1023.
     EXPECT_EQ(buf[7], 0xFF);
@@ -233,9 +233,17 @@ TEST(GDL90Utils, UplinkDataMessage) {
     gdl90_msg_index +=
         CheckBuffersEqualInjectEscapes(packet.decoded_payload, DecodedUATUplinkPacket::kDecodedPayloadNumBytes,
                                        &gdl90_uplink_message[gdl90_msg_index]);
-    // CRC should be calculated on everything except starting flag byte.
-    uint16_t expected_crc = gdl90.CalculateGDL90CRC16(
-        &gdl90_uplink_message[1], gdl90_msg_index - 1);  // Exclude starting flag byte from CRC calculation.
+    // CRC is calculated on the unescaped header and payload, excluding the initial flag byte.
+    uint8_t unescaped_message_for_crc[1 + 3 + DecodedUATUplinkPacket::kDecodedPayloadNumBytes];
+    uint16_t unescaped_len = 0;
+    unescaped_message_for_crc[unescaped_len++] = GDL90Reporter::kGDL90MessageIDUplinkData;
+    unescaped_message_for_crc[unescaped_len++] = tor_bytes[0];
+    unescaped_message_for_crc[unescaped_len++] = tor_bytes[1];
+    unescaped_message_for_crc[unescaped_len++] = tor_bytes[2];
+    memcpy(&unescaped_message_for_crc[unescaped_len], packet.decoded_payload,
+           DecodedUATUplinkPacket::kDecodedPayloadNumBytes);
+    unescaped_len += DecodedUATUplinkPacket::kDecodedPayloadNumBytes;
+    uint16_t expected_crc = gdl90.CalculateGDL90CRC16(unescaped_message_for_crc, unescaped_len);
     // Check CRC bytes including escapes.
     uint8_t crc_bytes[2] = {static_cast<uint8_t>(expected_crc & 0xFF), static_cast<uint8_t>(expected_crc >> 8)};
     gdl90_msg_index += CheckBuffersEqualInjectEscapes(crc_bytes, 2, &gdl90_uplink_message[gdl90_msg_index]);
