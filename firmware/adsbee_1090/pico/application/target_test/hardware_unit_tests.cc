@@ -54,15 +54,14 @@ CPP_AT_CALLBACK(ATIngestModeSCallback) {
         if (CPP_AT_HAS_ARG(3)) CPP_AT_TRY_ARG2NUM(3, mlat_counts_arg);
 
         std::string hex_str(args[0]);
-        RawModeSPacket packet(hex_str.data(), -1, static_cast<int16_t>(sigs_dbm_arg),
-                              static_cast<int16_t>(sigq_db_arg), static_cast<uint64_t>(mlat_counts_arg));
+        RawModeSPacket packet(hex_str.data(), -1, static_cast<int16_t>(sigs_dbm_arg), static_cast<int16_t>(sigq_db_arg),
+                              static_cast<uint64_t>(mlat_counts_arg));
 
         if (packet.buffer_len_bytes != RawModeSPacket::kSquitterPacketLenBytes &&
             packet.buffer_len_bytes != RawModeSPacket::kExtendedSquitterPacketLenBytes) {
-            CPP_AT_ERROR(
-                "Invalid Mode S packet: got %d bytes, expected %d (squitter) or %d (extended squitter).",
-                packet.buffer_len_bytes, RawModeSPacket::kSquitterPacketLenBytes,
-                RawModeSPacket::kExtendedSquitterPacketLenBytes);
+            CPP_AT_ERROR("Invalid Mode S packet: got %d bytes, expected %d (squitter) or %d (extended squitter).",
+                         packet.buffer_len_bytes, RawModeSPacket::kSquitterPacketLenBytes,
+                         RawModeSPacket::kExtendedSquitterPacketLenBytes);
         }
         if (!adsbee.raw_mode_s_packet_queue.Enqueue(packet)) {
             CPP_AT_ERROR("Failed to enqueue Mode S packet: queue full.");
@@ -80,8 +79,7 @@ CPP_AT_CALLBACK(ATIngestUATCallback) {
                 "hex_data: %d hex chars (short ADS-B) or %d (long ADS-B).\r\n\t"
                 "UPLINK: send UPLINK as hex_data, then send %d hex chars followed by newline.\r\n\t"
                 "sigs_dbm, sigq_bits, mlat_counts are optional.",
-                RawUATADSBPacket::kShortADSBMessageNumBytes * 2,
-                RawUATADSBPacket::kLongADSBMessageNumBytes * 2,
+                RawUATADSBPacket::kShortADSBMessageNumBytes * 2, RawUATADSBPacket::kLongADSBMessageNumBytes * 2,
                 RawUATUplinkPacket::kUplinkMessageNumBytes * 2);
         }
         int32_t sigs_dbm_arg = INT16_MIN;
@@ -97,13 +95,14 @@ CPP_AT_CALLBACK(ATIngestUATCallback) {
 
         if (args[0].compare("UPLINK") == 0) {
             // Uplink hex strings are too long for a CppAT argument. Signal readiness and read the next line.
-            static constexpr uint16_t kUplinkHexMaxLen = RawUATUplinkPacket::kUplinkMessageNumBytes * 2;
+            static constexpr uint16_t kUplinkHexMaxLen =
+                RawUATUplinkPacket::kUplinkMessageNumBytes * 2 + 2;  // Add space for \r\n characters.
             static constexpr uint32_t kUplinkReadTimeoutMs = 5000;
             char hex_buf[kUplinkHexMaxLen + 1];
             CPP_AT_PRINTF("READY\r\n");
 
-            int32_t hex_buf_len =
-                comms_manager.ATReadConsole(hex_buf, kUplinkHexMaxLen, kUplinkReadTimeoutMs, /*terminate_on_newline=*/true);
+            int32_t hex_buf_len = comms_manager.ATReadConsole(hex_buf, kUplinkHexMaxLen, kUplinkReadTimeoutMs,
+                                                              /*terminate_on_newline=*/true);
             if (hex_buf_len < 0) {
                 CPP_AT_ERROR("Timed out after %ums waiting for uplink hex data.", kUplinkReadTimeoutMs);
             }
