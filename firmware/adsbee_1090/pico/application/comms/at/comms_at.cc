@@ -47,38 +47,37 @@ int CppAT::cpp_at_printf(const char* format, ...) {
 
 /** AT Utility Functions **/
 
-int32_t CommsManager::ATReadConsole(char* buf, uint16_t max_len, uint32_t timeout_ms,
-                                    bool terminate_on_newline) {
+int32_t CommsManager::ATReadConsole(char* buf, uint16_t max_len, uint32_t timeout_ms, bool terminate_on_newline) {
     uint16_t len = 0;
-    bool terminated = false;
     uint32_t start_ms = get_time_since_boot_ms();
-    while (len < max_len || terminated) {
+    while (len < max_len) {
         int c = getchar_timeout_us(0);
+        char ch;
+        bool got_char = false;
         if (c >= 0) {
-            char ch = static_cast<char>(c);
-            if (terminate_on_newline && (ch == '\r' || ch == '\n')) {
-                terminated = true;
-                continue;  // Keep draining \r\n without adding to buf.
-            }
-            if (terminated) break;  // Non-newline after terminator: stop (cannot put back).
-            buf[len++] = ch;
-            continue;
-        }
-        if (esp32.IsEnabled()) {
-            char nc;
-            if (esp32_console_rx_queue.Dequeue(nc)) {
-                if (terminate_on_newline && (nc == '\r' || nc == '\n')) {
-                    terminated = true;
-                    continue;
-                }
-                if (terminated) break;
-                buf[len++] = nc;
-                continue;
+            ch = static_cast<char>(c);
+            got_char = true;
+        } else if (esp32.IsEnabled()) {
+            if (esp32_console_rx_queue.Dequeue(ch)) {
+                got_char = true;
             } else {
                 esp32.Update();
             }
         }
-        if (terminated) break;  // No chars immediately available after terminator: done.
+
+        if (got_char) {
+            if (terminate_on_newline && (ch == '\r' || ch == '\n')) {
+                while (getchar_timeout_us(0) >= 0) {
+                }
+                if (esp32.IsEnabled()) {
+                    esp32_console_rx_queue.Clear();
+                }
+                break;
+            }
+            buf[len++] = ch;
+            continue;
+        }
+
         if (get_time_since_boot_ms() - start_ms > timeout_ms) {
             return -1;
         }
@@ -1386,20 +1385,18 @@ const CppAT::ATCommandDef_t at_command_list[] = {
     {.command = "INGEST_MODE_S",
      .min_args = 1,
      .max_args = 4,
-     .help_string =
-         "Ingest a Mode S packet into the raw packet queue.\r\n\t"
-         "AT+INGEST_MODE_S=<hex_data>,<sigs_dbm>,<sigq_db>,<mlat_counts>\r\n\t"
-         "hex_data: 14 hex chars (squitter) or 28 hex chars (extended squitter).\r\n\t"
-         "sigs_dbm, sigq_db, mlat_counts are optional signal quality parameters.",
+     .help_string = "Ingest a Mode S packet into the raw packet queue.\r\n\t"
+                    "AT+INGEST_MODE_S=<hex_data>,<sigs_dbm>,<sigq_db>,<mlat_counts>\r\n\t"
+                    "hex_data: 14 hex chars (squitter) or 28 hex chars (extended squitter).\r\n\t"
+                    "sigs_dbm, sigq_db, mlat_counts are optional signal quality parameters.",
      .callback = ATIngestModeSCallback},
     {.command = "INGEST_UAT",
      .min_args = 1,
      .max_args = 4,
-     .help_string =
-         "Ingest a UAT packet into the raw packet queue.\r\n\t"
-         "AT+INGEST_UAT=<hex_data>,<sigs_dbm>,<sigq_bits>,<mlat_counts>\r\n\t"
-         "hex_data: 60 hex chars (short ADS-B), 96 (long ADS-B), or 1104 (uplink).\r\n\t"
-         "sigs_dbm, sigq_bits, mlat_counts are optional signal quality parameters.",
+     .help_string = "Ingest a UAT packet into the raw packet queue.\r\n\t"
+                    "AT+INGEST_UAT=<hex_data>,<sigs_dbm>,<sigq_bits>,<mlat_counts>\r\n\t"
+                    "hex_data: 60 hex chars (short ADS-B), 96 (long ADS-B), or 1104 (uplink).\r\n\t"
+                    "sigs_dbm, sigq_bits, mlat_counts are optional signal quality parameters.",
      .callback = ATIngestUATCallback},
     {.command = "TEST",
      .min_args = 0,
