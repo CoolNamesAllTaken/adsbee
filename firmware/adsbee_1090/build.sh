@@ -81,7 +81,6 @@ clean_builds() {
     rm -rf esp/build
     rm -rf ti/sub_ghz_radio/build
     rm -rf pico/build
-    rm -rf pico/build_test
     echo "=== Clean complete ==="
 }
 
