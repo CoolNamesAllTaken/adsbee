@@ -112,11 +112,14 @@ class GDL90Reporter {
      * @param[out] to_buf Buffer to write to.
      * @param[in] to_buf_num_bytes Size of the output buffer, in bytes.
      * @param[in] timestamp_sec_since_0000z Timestamp in seconds since 0000Z.
-     * @param[in] message_counts Number of messages sent since the last heartbeat.
+     * @param[in] adsb_message_counts Number of ADS-B messages received in the previous second, including UAT and Mode
+     * S. Clamped to the 10-bit field maximum of 1023. Packed into bits 1..0 of byte 6 (MS) and all of byte 7 (LS).
+     * @param[in] uat_uplink_message_counts Number of UAT Uplink messages received in the previous second. Clamped to
+     * the 5-bit field maximum of 31. Packed into bits 7..3 of byte 6.
      * @retval Number of Bytes written to to_buf.
      */
     uint16_t WriteGDL90HeartbeatMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes, uint32_t timestamp_sec_since_0000z,
-                                        uint16_t mode_s_message_counts, uint16_t uat_message_counts);
+                                        uint16_t adsb_message_counts, uint16_t uat_uplink_message_counts);
 
     /**
      * Write a GDL90 Initialization message.
@@ -190,11 +193,13 @@ class GDL90Reporter {
      * Calculate a 16-bit CRC using the pre-calculated GDL90 CRC table.
      * @param[in] buf Pointer to the message payload.
      * @param[in] buf_len_bytes Payload length in bytes.
+     * @param[in] initial_crc Initial CRC value, default is 0. This can be used to calculate the CRC of a message in
+     * parts.
      * @retval Calculated 16-bit CRC value.
      */
-    inline uint16_t CalculateGDL90CRC16(uint8_t* buf, uint16_t buf_len_bytes) {
+    inline uint16_t CalculateGDL90CRC16(const uint8_t* buf, uint16_t buf_len_bytes, uint16_t initial_crc = 0) {
         uint32_t i;
-        uint16_t crc = 0;
+        uint16_t crc = initial_crc;
         for (i = 0; i < buf_len_bytes; i++) {
             crc = kGDL90CRC16Table[crc >> 8] ^ (crc << 8) ^ buf[i];
         }

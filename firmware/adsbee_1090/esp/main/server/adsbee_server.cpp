@@ -274,10 +274,11 @@ bool ADSBeeServer::ReportGDL90() {
     message.port = kGDL90Port;
 
     // Heartbeat Message
-    message.len = gdl90.WriteGDL90HeartbeatMessage(message.data, CommsManager::NetworkMessage::kMaxLenBytes,
-                                                   get_time_since_boot_ms() / 1000,
-                                                   aircraft_dictionary.metrics.valid_extended_squitter_frames, 
-                                                   aircraft_dictionary.metrics.valid_uat_uplink_frames);
+    message.len = gdl90.WriteGDL90HeartbeatMessage(
+        message.data, CommsManager::NetworkMessage::kMaxLenBytes, get_time_since_boot_ms() / 1000,
+        aircraft_dictionary.metrics.valid_squitter_frames + aircraft_dictionary.metrics.valid_extended_squitter_frames +
+            aircraft_dictionary.metrics.valid_uat_adsb_frames,  // ADS-B message count includes UAT ADS-B messages.
+        aircraft_dictionary.metrics.valid_uat_uplink_frames);
     comms_manager.WiFiAccessPointSendMessageToAllStations(message);
 
     // Ownship Report

@@ -14,7 +14,7 @@ class CommsManager {
     static constexpr uint16_t kUATADSBPacketReportingQueueDepth = 50;
     static constexpr uint16_t kUATUplinkPacketReportingQueueDepth = 2;
 
-    static constexpr uint16_t kATCommandBufMaxLen = 1000;
+    static constexpr uint16_t kATCommandBufMaxLen = 1200;
     static constexpr uint16_t kNetworkConsoleBufMaxLen = 4096;
     static constexpr uint16_t kNetworkConsoleReportingIntervalOverrideNumChars =
         kNetworkConsoleBufMaxLen * 3 /
@@ -86,6 +86,19 @@ class CommsManager {
     CPP_AT_CALLBACK(ATWiFiAPCallback);
     CPP_AT_CALLBACK(ATWiFiSTACallback);
     CPP_AT_CALLBACK(ATBootloader);
+
+    /**
+     * Read characters from stdio and the network console into a buffer. Stops when max_len chars
+     * have been read, when a newline is received (if terminate_on_newline is true), or when
+     * timeout_ms elapses.
+     * @param buf Buffer to write into. Not null-terminated by this function.
+     * @param max_len Maximum number of characters to read.
+     * @param timeout_ms Timeout duration in milliseconds.
+     * @param terminate_on_newline If true, stop reading when \r or \n is received.
+     * @return Number of characters read, or -1 on timeout.
+     */
+    int32_t ATReadConsole(char* buf, uint16_t max_len, uint32_t timeout_ms,
+                          bool terminate_on_newline = false);
 
     int console_printf(const char* format, ...);
     int console_level_printf(SettingsManager::LogLevel level, const char* format, ...);

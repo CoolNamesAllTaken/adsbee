@@ -383,7 +383,7 @@ class DecodedUATUplinkPacket {
         432;  // Bytes of a fully decoded payload after FEC is applied and parity blocks are removed.
 
     DecodedUATUplinkPacket(const RawUATUplinkPacket& packet_in);
-    DecodedUATUplinkPacket() : raw((char*)"") { debug_string[0] = '\0'; }
+    DecodedUATUplinkPacket() : raw((char*)"") {}
     DecodedUATUplinkPacket(const char* rx_string, int32_t sigs_dbm = INT32_MIN, int32_t sigq_bits = INT32_MIN,
                            uint64_t mlat_48mhz_64bit_counts = 0);
 
@@ -395,10 +395,7 @@ class DecodedUATUplinkPacket {
      */
     void ConstructUATUplinkPacket(bool run_fec = true);
 
-    // Oversize the payload field since we copy the encoded message to it and correct / decode in place.
-    uint8_t decoded_payload[RawUATUplinkPacket::kUplinkMessageNumBytes] = {0};
-
-    char debug_string[kDebugStrLen] = "";
+    uint8_t decoded_payload[RawUATUplinkPacket::kUplinkMessagePayloadNumBytes] = {0};
 
     bool is_valid = false;
     RawUATUplinkPacket raw;

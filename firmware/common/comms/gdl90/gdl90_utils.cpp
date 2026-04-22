@@ -68,8 +68,8 @@ uint16_t GDL90Reporter::WriteBufferWithGDL90Escapes(uint8_t* to_buf, uint16_t to
 }
 
 uint16_t GDL90Reporter::WriteGDL90HeartbeatMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes,
-                                                   uint32_t timestamp_sec_since_0000z, uint16_t mode_s_message_counts,
-                                                   uint16_t uat_message_counts) {
+                                                   uint32_t timestamp_sec_since_0000z, uint16_t adsb_message_counts,
+                                                   uint16_t uat_uplink_message_counts) {
     const uint16_t kMessageBufLenBytes = 7;
     uint8_t message_buf[kMessageBufLenBytes];
     // 1: Message ID
@@ -87,12 +87,12 @@ uint16_t GDL90Reporter::WriteGDL90HeartbeatMessage(uint8_t* to_buf, uint16_t to_
     message_buf[3] = timestamp_sec_since_0000z & 0xFF;         // Timestamp LSB.
     message_buf[4] = (timestamp_sec_since_0000z >> 8) & 0xFF;  // Timestamp MSB (missing MS bit).
     // 6-7: Message Counts
-    mode_s_message_counts = MIN(1023, mode_s_message_counts);
-    uat_message_counts = std::min<uint8_t>(31, uat_message_counts);
-    message_buf[5] = static_cast<uint8_t>(((uat_message_counts & 0x1F) << 3) |   // bits 7..3
-                                          ((mode_s_message_counts >> 8) & 0x03)  // bits 1..0
-    );                                                                           // bit 2 left as 0
-    message_buf[6] = static_cast<uint8_t>(mode_s_message_counts & 0xFF);
+    adsb_message_counts = MIN(1023, adsb_message_counts);
+    uat_uplink_message_counts = MIN(31, uat_uplink_message_counts);
+    message_buf[5] = static_cast<uint8_t>(((uat_uplink_message_counts & 0x1F) << 3) |  // bits 7..3
+                                          ((adsb_message_counts >> 8) & 0x03)          // bits 1..0
+    );                                                                                 // bit 2 left as 0
+    message_buf[6] = static_cast<uint8_t>(adsb_message_counts & 0xFF);
 
     return WriteGDL90Message(to_buf, to_buf_num_bytes, message_buf, kMessageBufLenBytes);
 }
@@ -135,13 +135,15 @@ uint16_t GDL90Reporter::WriteGDL90UplinkDataMessage(uint8_t* to_buf, uint16_t to
     header_buf[1] = tor_80ns_ticks & 0xFF;  // TOR is least significant Byte first.
     header_buf[2] = (tor_80ns_ticks >> 8) & 0xFF;
     header_buf[3] = (tor_80ns_ticks >> 16) & 0xFF;
+    // Calculate partial CRC of the unescaped header, not including the initial flag byte.
+    uint16_t crc = CalculateGDL90CRC16(header_buf, kHeaderBufLenBytes);
 
     bytes_written += WriteBufferWithGDL90Escapes(to_buf + bytes_written, to_buf_num_bytes - bytes_written, header_buf,
                                                  kHeaderBufLenBytes);
     bytes_written += WriteBufferWithGDL90Escapes(to_buf + bytes_written, to_buf_num_bytes - bytes_written,
                                                  uplink_payload, uplink_payload_len_bytes);
-    // Calculate the CRC with unescaped message ID and data (not the initial flag byte).
-    uint16_t crc = CalculateGDL90CRC16(to_buf + 1, bytes_written - 1);  // Exclude starting flag byte.
+    // Calculate the CRC with unescaped header and payload.
+    crc = CalculateGDL90CRC16(uplink_payload, uplink_payload_len_bytes, crc);
     uint8_t crc_buf[sizeof(crc)] = {static_cast<uint8_t>(crc & 0xFF), static_cast<uint8_t>(crc >> 8)};  // LSB first.
     bytes_written +=
         WriteBufferWithGDL90Escapes(to_buf + bytes_written, to_buf_num_bytes - bytes_written, crc_buf, sizeof(crc));
@@ -173,8 +175,15 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
     message_buf[9] = (longitude_frac >> 8) & 0xFF;
     message_buf[10] = longitude_frac & 0xFF;
 
-    // ddd: Altitude as a 12-bit offset integer. Resolution = 25 feet.
-    uint16_t altitude_frac = static_cast<uint16_t>((data.altitude_ft + 1000) / 25);
+    // ddd: Altitude as a 12-bit offset integer. Resolution = 25 feet. 0xFFF = invalid/unavailable.
+    // Valid encoded range: 0x000 (-1000 ft) to 0xFFE (+101,350 ft).
+    uint16_t altitude_frac;
+    if (data.altitude_ft < -1000 || data.altitude_ft > 101350) {
+        altitude_frac = 0xFFF;  // Out of range: encode as invalid.
+    } else {
+        altitude_frac = static_cast<uint16_t>((data.altitude_ft + 1000) / 25);
+        altitude_frac = MIN(0xFFE, altitude_frac);  // Clamp to valid max; 0xFFF is reserved for invalid.
+    }
     message_buf[11] = (altitude_frac >> 4) & 0xFF;    // dd: Altitude MS Byte.
     message_buf[12] = ((altitude_frac & 0xF) << 4) |  // d: Altitude LS nibble.
                       (data.misc_indicators & 0xF);   // m: Miscellaneous indicators.
@@ -183,18 +192,23 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
         ((data.navigation_integrity_category & 0xF) << 4)      // i: Navigation Integrity Category (NIC).
         | (data.navigation_accuracy_category_position & 0xF);  // a: Navigation Accuracy Category for Position (NACp).
 
-    // hhh: Horizontal Velocity. Resolution = 1kt.
-    uint16_t speed_kts = static_cast<uint16_t>(data.speed_kts);
-    if (speed_kts >= 0xFFF) {
-        speed_kts = 0xFFE;  // 0xFFF = invalid / unavailable
+    // hhh: Horizontal Velocity. Resolution = 1kt. 0xFFF = invalid/unavailable, 0xFFE = >= 4094 kt.
+    int32_t speed_kts_raw = static_cast<int32_t>(data.speed_kts);
+    uint16_t speed_kts;
+    if (speed_kts_raw < 0) {
+        speed_kts = 0xFFF;  // Negative sentinel: encode as unavailable.
+    } else if (speed_kts_raw >= 0xFFE) {
+        speed_kts = 0xFFE;  // Clamp to max valid; 0xFFF reserved for unavailable.
+    } else {
+        speed_kts = static_cast<uint16_t>(speed_kts_raw);
     }
 
     // vvv: Vertical Velocity. Signed Integer in units of 64fpm.
     int32_t vertical_rate_64fpm = static_cast<int32_t>(data.vertical_rate_fpm) / 64;
     if (vertical_rate_64fpm > 0x1FE) {
-        vertical_rate_64fpm = 0x1FE;  // > +32,576 fpm climb
+        vertical_rate_64fpm = 0x1FE;  // > +32,576 fpm climb; railed to +32,640 fpm (0x1FE)
     } else if (vertical_rate_64fpm < -0x1FE) {
-        vertical_rate_64fpm = -0x1FE;  // > 32,576 fpm descend
+        vertical_rate_64fpm = -0x1FE;  // > 32,576 fpm descent; railed to -32,640 fpm (0x1FE)
     }
 
     uint16_t vertical_rate_encoded = static_cast<uint16_t>(vertical_rate_64fpm) & 0x0FFF;

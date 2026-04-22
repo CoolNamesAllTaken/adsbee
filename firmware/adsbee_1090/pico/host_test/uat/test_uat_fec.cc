@@ -450,6 +450,41 @@ TEST(UATFEC, EncodeLongUATADSBPacket) {
     EXPECT_STREQ(encoded_message_hex, expected_encoded_message_hex);
 }
 
+TEST(UATFEC, DeInterleaveUplinkMessage) {
+    // Full 432-byte payload (6 blocks x 72 bytes), populated with a known pattern.
+    static const char kPayloadHex[] =
+        "390C8C7D7247342CD8100F2F6F770D65D670E58E0351D8AE8E4F6EAC342FC231"
+        "B7B08716EB3FC12896B96223177494287733C28EE8BA53BDB56B8824577D53EC"
+        "C28A70A61C7510A1CD89216CA16CFFCAEA4987477E86DBCCB97046FC2E18384E"
+        "51D820C5C3EF80053A88AE3996DE50E801865B3698654EBF5200A5FA0939B99D"
+        "7A1D7B282BF8234041F35487D86C669FCCBFE0E73D7E7320AD0A757003241E75"
+        "2210A924798EF86D43F27CF2D0613031DCB5D8D2EF1B321FCEAD377F6261E547"
+        "D85D8EEC7F26E23219072F7955D0F8F66DCD1E54C201C787E892D8F94F61976F"
+        "1D1FA01D19F4501D295F232278CE3D7E1429D6A18568A07A87CA4399EAA12504"
+        "EA33256D8743B2237DBD9150E09A04993544873B364F8B906BAF6887FA801A2F"
+        "D88D1601AA428652E2DA0439264C12BD4BDC41159DBA14B76B7F34B5D04F7953"
+        "5AD30C5BAAD27F885137C313F07166EBB39C74720C62CCA88E238EB3CCA90E3B"
+        "855B871337DEB0A0DF3BC5618216DF0064BADC23A9A03F999ED1A7CE974162D7"
+        "C2599ACF009B926BDCA4EEE2E26DF2562B91AB2F789E73654B0C177DF325E9D4"
+        "63C4FDCC7C4B0236D9705AED197F3EE9";
+
+    uint8_t original_payload[RawUATUplinkPacket::kUplinkMessagePayloadNumBytes] = {0};
+    ASSERT_EQ(HexStringToByteBuffer(original_payload, kPayloadHex,
+                                    RawUATUplinkPacket::kUplinkMessagePayloadNumBytes),
+              RawUATUplinkPacket::kUplinkMessagePayloadNumBytes);
+
+    uint8_t encoded_message[RawUATUplinkPacket::kUplinkMessageNumBytes] = {0};
+    ASSERT_TRUE(uat_rs.EncodeUplinkMessage(encoded_message, original_payload));
+
+    uint8_t decoded_payload[RawUATUplinkPacket::kUplinkMessagePayloadNumBytes] = {0};
+    ASSERT_GE(uat_rs.DecodeUplinkMessage(decoded_payload, encoded_message), 0);
+
+    uint8_t deinterleaved_payload[RawUATUplinkPacket::kUplinkMessagePayloadNumBytes] = {0};
+    uat_rs.DeInterleaveUplinkMessage(deinterleaved_payload, encoded_message);
+
+    EXPECT_EQ(memcmp(deinterleaved_payload, decoded_payload, RawUATUplinkPacket::kUplinkMessagePayloadNumBytes), 0);
+}
+
 TEST(UATFEC, EncodeShortUATADSBPacket) {
     auto test_case = kUATDownlinkTests[0];  // DO-282B Table 2-104 #1
 

@@ -22,8 +22,7 @@ const int32_t kFPMPerEncodedVerticalRateTick = 64;
 RawUATADSBPacket::RawUATADSBPacket(const char* rx_string, int16_t sigs_dbm_in, int16_t sigq_bits_in,
                                    uint64_t mlat_48mhz_64bit_counts_in)
     : sigs_dbm(sigs_dbm_in), sigq_bits(sigq_bits_in), mlat_48mhz_64bit_counts(mlat_48mhz_64bit_counts_in) {
-    buffer_len_bytes =
-        HexStringToByteBuffer(buffer, rx_string, RawUATADSBPacket::kADSBMessageMaxSizeBytes);
+    buffer_len_bytes = HexStringToByteBuffer(buffer, rx_string, RawUATADSBPacket::kADSBMessageMaxSizeBytes);
 }
 
 RawUATADSBPacket::RawUATADSBPacket(uint8_t rx_buffer[kADSBMessageMaxSizeBytes], uint16_t rx_buffer_len_bytes,
@@ -388,17 +387,21 @@ void DecodedUATUplinkPacket::ConstructUATUplinkPacket(bool run_fec) {
         // and if that doesn't work, try it as a short ADS-B message. Decoding only available on CC1312 and in
         // non-embedded unit tests.
 #if defined(ON_TI) || defined(ON_HOST)
-        // Copy to the decoded_payload buffer and correct in place. If correction fails, the buffer will not be
-        // modified.
-        memcpy(decoded_payload, raw.encoded_message, RawUATUplinkPacket::kUplinkMessageNumBytes);
         raw.sigq_bits = uat_rs.DecodeUplinkMessage(decoded_payload, raw.encoded_message);
         if (raw.sigq_bits >= 0) {
             CONSOLE_INFO("DecodedUATADSBPacket", "Decoded UAT uplink message with %d bytes corrected.", raw.sigq_bits);
+
+            // Now, encode the decoded payload back into the encoded message buf, so we are passing around a corrected
+            // message with parity and interleaving.
+            uat_rs.EncodeUplinkMessage(raw.encoded_message, decoded_payload);
         } else {
             is_valid = false;
             return;
         }
-#endif /* ON_PICO */
+#else
+        // No FEC correction required, just de-interleave the payload and use it as is (it's already corrected).
+        uat_rs.DeInterleaveUplinkMessage(decoded_payload, raw.encoded_message);
+#endif
     }
 
     // TODO: extract info.
