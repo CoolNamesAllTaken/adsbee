@@ -401,7 +401,7 @@ void DecodedUATUplinkPacket::ConstructUATUplinkPacket(bool run_fec) {
 #else
         // No FEC correction required, just de-interleave the payload and use it as is (it's already corrected).
         uat_rs.DeInterleaveUplinkMessage(decoded_payload, raw.encoded_message);
-#endif /* ON_PICO */
+#endif
     }
 
     // TODO: extract info.
