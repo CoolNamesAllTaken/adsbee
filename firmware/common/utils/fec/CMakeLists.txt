@@ -8,15 +8,18 @@ set(FEC_SOURCES
 
 set(FEC_INCLUDE_DIRS .)
 
-# Determine the target based on conditions
-if(TARGET host_test)
-    set(FEC_TARGET host_test)
+# Determine the target(s) based on conditions
+if(TARGET host_test OR TARGET host_test_fpu)
+    foreach(_test_tgt IN ITEMS host_test host_test_fpu)
+        if (TARGET ${_test_tgt})
+            target_sources(${_test_tgt} PRIVATE ${FEC_SOURCES})
+            target_include_directories(${_test_tgt} PRIVATE ${FEC_INCLUDE_DIRS})
+        endif()
+    endforeach()
 elseif(TARGET sub_ghz_radio)
-    set(FEC_TARGET ${PROJECT_NAME})
+    target_sources(${PROJECT_NAME} PRIVATE ${FEC_SOURCES})
+    target_include_directories(${PROJECT_NAME} PRIVATE ${FEC_INCLUDE_DIRS})
 else()
-    set(FEC_TARGET application)
+    target_sources(application PRIVATE ${FEC_SOURCES})
+    target_include_directories(application PRIVATE ${FEC_INCLUDE_DIRS})
 endif()
-
-# Apply sources and includes to the determined target
-target_sources(${FEC_TARGET} PRIVATE ${FEC_SOURCES})
-target_include_directories(${FEC_TARGET} PRIVATE ${FEC_INCLUDE_DIRS})

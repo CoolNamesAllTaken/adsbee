@@ -55,7 +55,10 @@ def append_table_to_file(filename, table_name, element_type, elements):
             if element_type == "uint32_t":
                 item = f"0x{value:08X}"
             else:
-                item = f"{value:f}f"
+                item = f"{value:.9g}f"
+                if not "." in item:
+                    # Make sure items like "0f" and "1f" get written as "0.0f" and "1.0f"
+                    item = item[:-1] + ".0f"
 
             # Add 2 for ", " except for the last item
             if current_length + len(item) + 2 > CHARS_PER_LINE:
