@@ -131,11 +131,12 @@ bool ModeSAircraft::DecodePosition(bool is_airborne, uint32_t ref_lat_awb32, uin
 
         // Note: Ignore position check during first position update, to allow recording aircraft position upon receiving
         // the first packet.
-        if (HasBitFlag(BitFlag::kBitFlagPositionValid) &&
-            distance_meters > MAX(max_distance_meters, AircraftDictionary::kPositionFilterDeadbandMeters)) {
+        uint32_t effective_max_distance_meters =
+            MAX(max_distance_meters, AircraftDictionary::kPositionFilterDeadbandMeters);
+        if (HasBitFlag(BitFlag::kBitFlagPositionValid) && distance_meters > effective_max_distance_meters) {
             CONSOLE_WARNING("ModeSAircraft::DecodePosition",
-                            "Filtered CPR position update for ICAO 0x%lx, distance %lu m exceeds max %lu m.",
-                            icao_address, distance_meters, max_distance_meters);
+                            "Filtered CPR position update for ICAO 0x%lx, distance %lu m exceeds effective max %lu m.",
+                            icao_address, distance_meters, effective_max_distance_meters);
             return false;  // Filter out CPR positions that are too far from the last known position.
         }
     }
@@ -972,11 +973,12 @@ bool UATAircraft::DecodePosition(const DecodedUATADSBPacket::UATStateVector& sta
 
         // Note: Ignore position check during first position update, to allow recording aircraft position upon receiving
         // the first packet.
-        if (HasBitFlag(BitFlag::kBitFlagPositionValid) &&
-            distance_meters > MAX(max_distance_meters, AircraftDictionary::kPositionFilterDeadbandMeters)) {
+        uint32_t effective_max_distance_meters =
+            MAX(max_distance_meters, AircraftDictionary::kPositionFilterDeadbandMeters);
+        if (HasBitFlag(BitFlag::kBitFlagPositionValid) && distance_meters > effective_max_distance_meters) {
             CONSOLE_WARNING("UATAircraft::DecodePosition",
-                            "Filtered position update for ICAO 0x%lx, distance %lu m exceeds max %lu m.", icao_address,
-                            distance_meters, max_distance_meters);
+                            "Filtered position update for ICAO 0x%lx, distance %lu m exceeds effective max %lu m.",
+                            icao_address, distance_meters, effective_max_distance_meters);
             return false;  // Filter out CPR positions that are too far from the last known position.
         }
     }

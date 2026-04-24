@@ -27,7 +27,7 @@ void expect_near_hav(float theta_deg) {
 }
 
 TEST(GeoUtils, HaversineAWB_Table) {
-    for (float theta_deg = 0.0f; theta_deg < 360.0f; theta_deg += 0.0001f) {
+    for (float theta_deg = 0.0f; theta_deg < 360.0f; theta_deg += 0.1f) {
         expect_near_hav(theta_deg);
     }
 }

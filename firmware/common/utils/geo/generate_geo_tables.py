@@ -56,8 +56,9 @@ def append_table_to_file(filename, table_name, element_type, elements):
                 item = f"0x{value:08X}"
             else:
                 item = f"{value:.9g}f"
-                if not "." in item:
-                    # Make sure items like "0f" and "1f" get written as "0.0f" and "1.0f"
+                if "." not in item and "e" not in item and "E" not in item:
+                    # Make sure items like "0f" and "1f" get written as "0.0f" and "1.0f",
+                    # but leave scientific notation such as "1e-06f" unchanged.
                     item = item[:-1] + ".0f"
 
             # Add 2 for ", " except for the last item

@@ -122,6 +122,6 @@ void CalculateTrackAndSpeedFromNEVelocities(int32_t n_vel_kts, int32_t e_vel_kts
     if (speed_kts_fixed % fixedmath::fixed_t(1) >= fixedmath::fixed_t(0.5f)) {
         speed_kts_fixed += fixedmath::fixed_t(1);
     }
-    speed_kts = static_cast<int16_t>(speed_kts_fixed);
+    speed_kts = static_cast<int32_t>(speed_kts_fixed);
 #endif
 }
