@@ -3,28 +3,37 @@
 #include "awb_utils.h"
 #include "comms.hh"
 #include "fixedmath/fixed_math.hpp"
-#include "geo_tables.hh"
 #include "macros.hh"
 
+#ifndef HAS_FPU
+#include "geo_tables.hh"
 // Interpolation increases execution time but decreases the size of the tables required to be stored in flash to achieve
 // a given precision.
 #define INTERPOLATE_HAV_AWB
 #define INTERPOLATE_HAVDIFF_TO_M
+#endif
 
 static const uint32_t kEarthMeanRadiusMeters = 6372798;  // Quadratic mean radius for WS-84.
 // 2 * PI * kEarthMeanRadiusMeters * kBoundingBoxDeltaLatAWB / UINT32_MAX = kBoundingBoxDimensionMeters
 static const uint32_t kBoundingBoxDeltaAWB =
     kBoundingBoxDimensionMeters * (UINT32_MAX / static_cast<uint32_t>(2 * kEarthMeanRadiusMeters * M_PI));
 
+#ifndef HAS_FPU
 static const uint32_t kAWBPerHavSteps =
     (UINT32_MAX / 2) / (kDeg180ToHavNumSteps - 1);  // Number of AWB values per haversine table step
 
 const fixedmath::fixed_t kDegPerRadian =
     fixedmath::fixed_t{180.0f / M_PI};  // Conversion factor from radians to degrees.
+#endif
 
 float hav_awb(uint32_t theta_awb) {
     // Function: hav(theta) = (sin(theta * 0.5f))^2
-
+#ifdef HAS_FPU
+    // theta_awb spans [0, 2^32) = [0, 360 deg). Dividing by 2^32 and multiplying by PI gives the half-angle in
+    // radians, since hav(theta) = sin(theta/2)^2.
+    float half_theta_rad = (float)theta_awb * (float)(M_PI / 4294967296.0);
+    return sinf(half_theta_rad) * sinf(half_theta_rad);
+#else
     // Haversine function is symmetric about 180 degrees, so we map angles from 0-360 degrees to 0-180 degrees.
     if (theta_awb > UINT32_MAX / 2) {
         theta_awb = UINT32_MAX - theta_awb;
@@ -41,6 +50,7 @@ float hav_awb(uint32_t theta_awb) {
     return kDeg180ToHav[hav_index] * (kAWBPerHavSteps - hav_overshoot_awb) / kAWBPerHavSteps +
            kDeg180ToHav[hav_index + 1] * hav_overshoot_awb / kAWBPerHavSteps;
 #endif
+#endif
 }
 
 float havdiff_to_m(float x) {
@@ -48,6 +58,9 @@ float havdiff_to_m(float x) {
         CONSOLE_ERROR("geo_utils::havdiff_to_m", "x must be >= 0.0f, but got %f.", x);
         return 0.0f;
     }
+#ifdef HAS_FPU
+    return 2.0f * (float)kEarthMeanRadiusMeters * asinf(sqrtf(x));
+#else
 #ifndef INTERPOLATE_HAVDIFF_TO_M
     // Simple lookup to floored index, no interpolation.
     return kHavdiffToMeters[static_cast<uint32_t>(x * (kHavdiffToMetersNumSteps - 1))];
@@ -59,6 +72,7 @@ float havdiff_to_m(float x) {
     float havdiff_overshoot_frac = fmodf(havdiff_index_float, 1.0f);
     return kHavdiffToMeters[havdiff_index_rounded] * (1.0f - havdiff_overshoot_frac) +
            kHavdiffToMeters[havdiff_index_rounded + 1] * havdiff_overshoot_frac;
+#endif
 #endif
 }
 
@@ -82,13 +96,23 @@ uint32_t CalculateGeoidalDistanceMetersDeg(float lat_a_deg, float lon_a_deg, flo
     return CalculateGeoidalDistanceMetersAWB(lat_a_awb, lon_a_awb, lat_b_awb, lon_b_awb);
 }
 
+#ifndef HAS_FPU
 inline fixedmath::fixed_t wrapped_atan2(fixedmath::fixed_t y, fixedmath::fixed_t x) {
     fixedmath::fixed_t val = fixedmath::func::atan2(y, x);
     return val < fixedmath::fixed_t(0) ? (val + fixedmath::fixed_t(2.0f * M_PI)) : val;
 }
+#endif
 
 void CalculateTrackAndSpeedFromNEVelocities(int32_t n_vel_kts, int32_t e_vel_kts, float &track_deg,
                                             int32_t &speed_kts) {
+#ifdef HAS_FPU
+    float n = (float)n_vel_kts;
+    float e = (float)e_vel_kts;
+    float track_rad = atan2f(e, n);
+    if (track_rad < 0.0f) track_rad += 2.0f * (float)M_PI;
+    track_deg = track_rad * (180.0f / (float)M_PI);
+    speed_kts = (int32_t)(sqrtf(n * n + e * e) + 0.5f);
+#else
     track_deg = static_cast<float>(
         wrapped_atan2(static_cast<fixedmath::fixed_t>(e_vel_kts), static_cast<fixedmath::fixed_t>(n_vel_kts)) *
         kDegPerRadian);
@@ -99,4 +123,5 @@ void CalculateTrackAndSpeedFromNEVelocities(int32_t n_vel_kts, int32_t e_vel_kts
         speed_kts_fixed += fixedmath::fixed_t(1);
     }
     speed_kts = static_cast<int16_t>(speed_kts_fixed);
+#endif
 }

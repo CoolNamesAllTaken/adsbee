@@ -185,12 +185,16 @@ if (ON_EMBEDDED_DEVICE)
 
 else()
     # Build for testing on host.
-    target_include_directories(host_test PRIVATE
+    foreach(_test_tgt IN ITEMS host_test host_test_fpu)
+        if (TARGET ${_test_tgt})
+            target_include_directories(${_test_tgt} PRIVATE
 
-    )
-    target_sources(host_test PRIVATE
+            )
+            target_sources(${_test_tgt} PRIVATE
 
-    )
+            )
+        endif()
+    endforeach()
 endif()
 
 add_subdirectory(comms)

@@ -131,7 +131,8 @@ bool ModeSAircraft::DecodePosition(bool is_airborne, uint32_t ref_lat_awb32, uin
 
         // Note: Ignore position check during first position update, to allow recording aircraft position upon receiving
         // the first packet.
-        if (HasBitFlag(BitFlag::kBitFlagPositionValid) && distance_meters > max_distance_meters) {
+        if (HasBitFlag(BitFlag::kBitFlagPositionValid) &&
+            distance_meters > MAX(max_distance_meters, AircraftDictionary::kPositionFilterDeadbandMeters)) {
             CONSOLE_WARNING("ModeSAircraft::DecodePosition",
                             "Filtered CPR position update for ICAO 0x%lx, distance %lu m exceeds max %lu m.",
                             icao_address, distance_meters, max_distance_meters);
@@ -971,7 +972,8 @@ bool UATAircraft::DecodePosition(const DecodedUATADSBPacket::UATStateVector& sta
 
         // Note: Ignore position check during first position update, to allow recording aircraft position upon receiving
         // the first packet.
-        if (HasBitFlag(BitFlag::kBitFlagPositionValid) && distance_meters > max_distance_meters) {
+        if (HasBitFlag(BitFlag::kBitFlagPositionValid) &&
+            distance_meters > MAX(max_distance_meters, AircraftDictionary::kPositionFilterDeadbandMeters)) {
             CONSOLE_WARNING("UATAircraft::DecodePosition",
                             "Filtered position update for ICAO 0x%lx, distance %lu m exceeds max %lu m.", icao_address,
                             distance_meters, max_distance_meters);

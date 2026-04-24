@@ -641,6 +641,12 @@ class AircraftDictionary {
     static constexpr uint16_t kMaxNumAircraft = 200;
     static constexpr uint16_t kMaxNumSources = 3;
 
+#ifdef FILTER_CPR_POSITIONS
+    // Table-based inverse haversine isn't super accurate at small distances, and aircraft velocity may be super
+    // accurate, so we always allow a position jump of less than or equal to this distance.
+    static constexpr uint32_t kPositionFilterDeadbandMeters = 20e3;
+#endif
+
     typedef std::variant<ModeSAircraft, UATAircraft> AircraftEntry;
 
     // Ensure that valid variant indices matche the AircraftType enum value so that we can use them interchangeably.

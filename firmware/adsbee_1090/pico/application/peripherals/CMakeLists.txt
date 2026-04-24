@@ -1,11 +1,15 @@
 if(NOT ON_EMBEDDED_DEVICE)
     # Build for testing on host.
-    target_sources(host_test PRIVATE
+    foreach(_test_tgt IN ITEMS host_test host_test_fpu)
+        if (TARGET ${_test_tgt})
+            target_sources(${_test_tgt} PRIVATE
 
-    )
-    target_include_directories(host_test PRIVATE
-        
-    )
+            )
+            target_include_directories(${_test_tgt} PRIVATE
+
+            )
+        endif()
+    endforeach()
 else()
     # Build for embedded target
     add_subdirectory(esp32)

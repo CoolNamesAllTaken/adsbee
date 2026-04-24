@@ -31,19 +31,23 @@ elseif (TARGET sub_ghz_radio)
         geo
         rs
     )
-elseif (TARGET host_test)
+elseif (TARGET host_test OR TARGET host_test_fpu)
     add_subdirectory(fec)
-    target_sources(host_test PRIVATE
-        buffer_utils.cpp
-        cpu_utils.cpp
-        data_structures.cpp
-        crc/crc.cpp
-        geo/geo_utils.cpp
-    )
-    target_include_directories(host_test PRIVATE
-        .
-        crc
-        geo
-        rs
-    )
+    foreach(_test_tgt IN ITEMS host_test host_test_fpu)
+        if (TARGET ${_test_tgt})
+            target_sources(${_test_tgt} PRIVATE
+                buffer_utils.cpp
+                cpu_utils.cpp
+                data_structures.cpp
+                crc/crc.cpp
+                geo/geo_utils.cpp
+            )
+            target_include_directories(${_test_tgt} PRIVATE
+                .
+                crc
+                geo
+                rs
+            )
+        endif()
+    endforeach()
 endif()

@@ -21,18 +21,22 @@ elseif (TARGET sub_ghz_radio)
         .
         json # Not actually used, but added to avoid compile errors.
     )
-elseif (TARGET host_test)
-    target_sources(host_test PRIVATE
-        beast/beast_utils.cpp
-        gdl90/gdl90_utils.cpp
-        raw/raw_utils.cpp
-    )
-    target_include_directories(host_test PRIVATE
-        beast
-        csbee
-        gdl90
-        json
-        mavlink
-        raw
-    )
+elseif (TARGET host_test OR TARGET host_test_fpu)
+    foreach(_test_tgt IN ITEMS host_test host_test_fpu)
+        if (TARGET ${_test_tgt})
+            target_sources(${_test_tgt} PRIVATE
+                beast/beast_utils.cpp
+                gdl90/gdl90_utils.cpp
+                raw/raw_utils.cpp
+            )
+            target_include_directories(${_test_tgt} PRIVATE
+                beast
+                csbee
+                gdl90
+                json
+                mavlink
+                raw
+            )
+        endif()
+    endforeach()
 endif()
