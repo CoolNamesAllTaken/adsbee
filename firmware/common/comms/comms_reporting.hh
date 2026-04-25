@@ -9,6 +9,9 @@ static constexpr uint32_t kRawReportingMaxIntervalMs =
 static constexpr uint32_t kMAVLINKReportingIntervalMs = 1000;
 static constexpr uint32_t kCSBeeReportingIntervalMs = 1000;
 static constexpr uint32_t kGDL90ReportingIntervalMs = 1000;
+static constexpr uint32_t kCSBeeChunkBudgetMs = 100;  // Max wall time per ReportCSBee invocation.
+// Shared UID snapshot capacity — one array serves all periodic reporting protocols.
+static constexpr uint16_t kMaxReportUIDs = kAircraftDictionaryMaxNumAircraft;
 
 /**
  * Reporting interfaces are different on different platforms. This union allows passing either a SerialInterface enum

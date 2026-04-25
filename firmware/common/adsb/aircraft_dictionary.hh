@@ -7,6 +7,7 @@
 #include <variant>
 
 #include "adsb_types.hh"
+#include "aircraft_dictionary_config.hh"
 // Can't include comms.hh or we will get a circular dependency.
 #include "hal.hh"
 #include "json_utils.hh"
@@ -638,7 +639,7 @@ class UATAircraft : public Aircraft {
 
 class AircraftDictionary {
    public:
-    static constexpr uint16_t kMaxNumAircraft = 200;
+    static constexpr uint16_t kMaxNumAircraft = kAircraftDictionaryMaxNumAircraft;
     static constexpr uint16_t kMaxNumSources = 3;
 
 #ifdef FILTER_CPR_POSITIONS

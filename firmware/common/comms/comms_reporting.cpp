@@ -106,12 +106,28 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
     }
 
     /** Locally Decoded Reports **/
-    if (num_csbee_sinks > 0 && timestamp_ms - last_csbee_report_timestamp_ms_ >= kCSBeeReportingIntervalMs) {
-        if (!ReportCSBee(csbee_sinks, num_csbee_sinks)) {
-            CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportCSBee.");
-            ret = false;
+    if (num_csbee_sinks > 0) {
+        bool csbee_round_in_progress = (csbee_report_uid_index_ < report_uids_count_);
+        if (csbee_round_in_progress) {
+            if (!csbee_overrun_reported_ &&
+                timestamp_ms - last_csbee_report_timestamp_ms_ >= kCSBeeReportingIntervalMs) {
+                CONSOLE_ERROR("CommsManager::UpdateReporting",
+                              "CSBee reporting overran the %lums reporting interval.",
+                              kCSBeeReportingIntervalMs);
+                csbee_overrun_reported_ = true;
+            }
+            if (!ReportCSBee(csbee_sinks, num_csbee_sinks)) {
+                CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportCSBee.");
+                ret = false;
+            }
+        } else if (timestamp_ms - last_csbee_report_timestamp_ms_ >= kCSBeeReportingIntervalMs) {
+            last_csbee_report_timestamp_ms_ = timestamp_ms;
+            csbee_overrun_reported_ = false;
+            if (!ReportCSBee(csbee_sinks, num_csbee_sinks)) {
+                CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportCSBee.");
+                ret = false;
+            }
         }
-        last_csbee_report_timestamp_ms_ = timestamp_ms;
     }
     if (timestamp_ms - last_mavlink_report_timestamp_ms_ >= kMAVLINKReportingIntervalMs) {
         if (num_mavlink1_sinks > 0 && !ReportMAVLINK(mavlink1_sinks, num_mavlink1_sinks, 1)) {
@@ -212,35 +228,61 @@ bool CommsManager::ReportBeast(ReportSink* sinks, uint16_t num_sinks, const Comp
 bool CommsManager::ReportCSBee(ReportSink* sinks, uint16_t num_sinks) {
     bool ret = true;
 
-    // Write out a CSBee Aircraft message for each aircraft in the aircraft dictionary.
-    for (auto& itr : aircraft_dictionary.dict) {
+    // Start a new round if no round is currently in progress.
+    if (csbee_report_uid_index_ >= report_uids_count_) {
+        report_uids_count_ = 0;
+        for (auto& itr : aircraft_dictionary.dict) {
+            if (report_uids_count_ < kMaxReportUIDs) {
+                report_uids_[report_uids_count_++] = itr.first;
+            }
+        }
+        csbee_report_uid_index_ = 0;
+        // When adding MAVLINK/GDL90 chunking: also reset their indices here.
+    }
+
+    // Process aircraft within the 100ms time budget.
+    uint32_t chunk_start_ms = get_time_since_boot_ms();
+    while (csbee_report_uid_index_ < report_uids_count_) {
+        if (get_time_since_boot_ms() - chunk_start_ms >= kCSBeeChunkBudgetMs) {
+            return ret;  // Budget exhausted; resume on next UpdateReporting tick.
+        }
+
+        uint32_t uid = report_uids_[csbee_report_uid_index_++];
+
+        auto itr = aircraft_dictionary.dict.find(uid);
+        if (itr == aircraft_dictionary.dict.end()) {
+            continue;  // Aircraft pruned mid-round; skip without losing remaining entries.
+        }
+
         char message[kCSBeeMessageStrMaxLen];
         int message_len_bytes = -1;
 
-        if (ModeSAircraft* mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
+        if (ModeSAircraft* mode_s_aircraft = get_if<ModeSAircraft>(&(itr->second)); mode_s_aircraft) {
             message_len_bytes = WriteCSBeeModeSAircraftMessageStr(message, *mode_s_aircraft);
-        } else if (UATAircraft* uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
+        } else if (UATAircraft* uat_aircraft = get_if<UATAircraft>(&(itr->second)); uat_aircraft) {
             message_len_bytes = WriteCSBeeUATAircraftMessageStr(message, *uat_aircraft);
         } else {
-            CONSOLE_WARNING("CommsManager::ReportCSBee", "Unknown aircraft type in dictionary for UID 0x%lx.",
-                            itr.first);
+            CONSOLE_WARNING("CommsManager::ReportCSBee", "Unknown aircraft type in dictionary for UID 0x%lx.", uid);
             continue;
         }
 
         if (message_len_bytes < 0) {
             CONSOLE_ERROR("CommsManager::ReportCSBee",
-                          "Encountered an error in WriteCSBeeAircraftMessageStr, error code %d.", message_len_bytes);
-            return false;
+                          "Error in WriteCSBeeAircraftMessageStr for UID 0x%lx, error code %d.", uid,
+                          message_len_bytes);
+            ret = false;
+            continue;  // Log error but do not abort the round; remaining aircraft still need reporting.
         }
+
         for (uint16_t i = 0; i < num_sinks; i++) {
             ret &= SendBuf(sinks[i], message, message_len_bytes);
         }
     }
 
-    // Write a CSBee Statistics message.
-    char message[kCSBeeMessageStrMaxLen];
-    int16_t message_len_bytes = WriteCSBeeStatisticsMessageStr(
-        message,                                                     // Buffer to write into.
+    // All UIDs in the snapshot have been processed — send the statistics footer.
+    char stats_message[kCSBeeMessageStrMaxLen];
+    int16_t stats_len_bytes = WriteCSBeeStatisticsMessageStr(
+        stats_message,
         aircraft_dictionary.metrics.demods_1090,                     // DPS
         aircraft_dictionary.metrics.raw_squitter_frames,             // RAW_SFPS
         aircraft_dictionary.metrics.valid_squitter_frames,           // SFPS
@@ -251,17 +293,22 @@ bool CommsManager::ReportCSBee(ReportSink* sinks, uint16_t num_sinks) {
             aircraft_dictionary.metrics.valid_uat_uplink_frames,  // VALID_UAT
         aircraft_dictionary.GetNumAircraft(),                     // NUM_AIRCRAFT
         0u,                                                       // TSCAL
-        get_time_since_boot_ms() / 1000                           // UPTIME
+        get_time_since_boot_ms() / 1000                          // UPTIME
     );
-    if (message_len_bytes < 0) {
+    if (stats_len_bytes < 0) {
         CONSOLE_ERROR("CommsManager::ReportCSBee",
-                      "Encountered an error in WriteCSBeeStatisticsMessageStr, error code %d.", message_len_bytes);
-        return false;
+                      "Encountered an error in WriteCSBeeStatisticsMessageStr, error code %d.", stats_len_bytes);
+        ret = false;
+    } else {
+        for (uint16_t i = 0; i < num_sinks; i++) {
+            ret &= SendBuf(sinks[i], stats_message, stats_len_bytes);
+        }
     }
 
-    for (uint16_t i = 0; i < num_sinks; i++) {
-        ret &= SendBuf(sinks[i], message, message_len_bytes);
-    }
+    // Reset so the next interval triggers a fresh snapshot.
+    report_uids_count_ = 0;
+    csbee_report_uid_index_ = 0;
+
     return ret;
 }
 
