@@ -22,14 +22,7 @@ inline uint64_t get_time_since_boot_us() {
 #elif ON_ESP32
     return esp_timer_get_time();
 #elif ON_TI
-    static uint32_t last_time_since_boot_us = 0;
-    static uint32_t num_us_epochs = 0;
-    uint32_t time_since_boot_us = ClockP_getSystemTicks() * ClockP_getSystemTickPeriod();
-    if (time_since_boot_us < last_time_since_boot_us) {
-        num_us_epochs++;
-    }
-    last_time_since_boot_us = time_since_boot_us;
-    return (static_cast<uint64_t>(num_us_epochs) << 32) | time_since_boot_us;
+    return ClockP_getSystemTicks64() * ClockP_getSystemTickPeriod();
 #else
     return time_since_boot_us;
 #endif
