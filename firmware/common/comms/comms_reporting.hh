@@ -9,9 +9,9 @@ static constexpr uint32_t kRawReportingMaxIntervalMs =
 static constexpr uint32_t kMAVLINKReportingIntervalMs = 1000;
 static constexpr uint32_t kCSBeeReportingIntervalMs = 1000;
 static constexpr uint32_t kGDL90ReportingIntervalMs = 1000;
-static constexpr uint32_t kCSBeeChunkBudgetMs = 200;    // Max wall time per ReportCSBee invocation.
-static constexpr uint32_t kMAVLINKChunkBudgetMs = 200;  // Max wall time per ReportMAVLINK invocation.
-static constexpr uint32_t kGDL90ChunkBudgetMs = 200;    // Max wall time per ReportGDL90 invocation.
+static constexpr uint32_t kCSBeeChunkBudgetMs = 50;    // Max wall time per ReportCSBee invocation.
+static constexpr uint32_t kMAVLINKChunkBudgetMs = 50;  // Max wall time per ReportMAVLINK invocation.
+static constexpr uint32_t kGDL90ChunkBudgetMs = 50;    // Max wall time per ReportGDL90 invocation.
 // Shared UID snapshot capacity — one array serves all periodic reporting protocols.
 static constexpr uint16_t kMaxReportUIDs = kAircraftDictionaryMaxNumAircraft;
 

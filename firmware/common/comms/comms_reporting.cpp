@@ -151,8 +151,8 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
     uint32_t elapsed_ms = timestamp_ms - last_locally_decoded_report_timestamp_ms_;
     if (csbee_round_active_) {
         if (!csbee_overrun_reported_ && elapsed_ms >= kCSBeeReportingIntervalMs) {
-            CONSOLE_ERROR("CommsManager::UpdateReporting",
-                          "CSBee reporting overran the %lums reporting interval.", kCSBeeReportingIntervalMs);
+            CONSOLE_ERROR("CommsManager::UpdateReporting", "CSBee reporting overran the %lums reporting interval.",
+                          kCSBeeReportingIntervalMs);
             csbee_overrun_reported_ = true;
         }
         if (!ReportCSBee(csbee_sinks, num_csbee_sinks)) {
@@ -162,8 +162,8 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
     }
     if (mavlink1_round_active_) {
         if (!mavlink1_overrun_reported_ && elapsed_ms >= kMAVLINKReportingIntervalMs) {
-            CONSOLE_ERROR("CommsManager::UpdateReporting",
-                          "MAVLINK1 reporting overran the %lums reporting interval.", kMAVLINKReportingIntervalMs);
+            CONSOLE_ERROR("CommsManager::UpdateReporting", "MAVLINK1 reporting overran the %lums reporting interval.",
+                          kMAVLINKReportingIntervalMs);
             mavlink1_overrun_reported_ = true;
         }
         if (!ReportMAVLINK(mavlink1_sinks, num_mavlink1_sinks, 1)) {
@@ -173,8 +173,8 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
     }
     if (mavlink2_round_active_) {
         if (!mavlink2_overrun_reported_ && elapsed_ms >= kMAVLINKReportingIntervalMs) {
-            CONSOLE_ERROR("CommsManager::UpdateReporting",
-                          "MAVLINK2 reporting overran the %lums reporting interval.", kMAVLINKReportingIntervalMs);
+            CONSOLE_ERROR("CommsManager::UpdateReporting", "MAVLINK2 reporting overran the %lums reporting interval.",
+                          kMAVLINKReportingIntervalMs);
             mavlink2_overrun_reported_ = true;
         }
         if (!ReportMAVLINK(mavlink2_sinks, num_mavlink2_sinks, 2)) {
@@ -184,8 +184,8 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
     }
     if (gdl90_round_active_) {
         if (!gdl90_overrun_reported_ && elapsed_ms >= kGDL90ReportingIntervalMs) {
-            CONSOLE_ERROR("CommsManager::UpdateReporting",
-                          "GDL90 reporting overran the %lums reporting interval.", kGDL90ReportingIntervalMs);
+            CONSOLE_ERROR("CommsManager::UpdateReporting", "GDL90 reporting overran the %lums reporting interval.",
+                          kGDL90ReportingIntervalMs);
             gdl90_overrun_reported_ = true;
         }
         if (!ReportGDL90(gdl90_sinks, num_gdl90_sinks)) {
@@ -274,7 +274,7 @@ bool CommsManager::ReportBeast(ReportSink* sinks, uint16_t num_sinks, const Comp
 bool CommsManager::ReportCSBee(ReportSink* sinks, uint16_t num_sinks) {
     bool ret = true;
 
-    // Process aircraft within the 100ms time budget.
+    // Process aircraft within the time budget.
     uint32_t chunk_start_ms = get_time_since_boot_ms();
     while (csbee_report_uid_index_ < report_uids_count_) {
         if (get_time_since_boot_ms() - chunk_start_ms >= kCSBeeChunkBudgetMs) {
@@ -327,7 +327,7 @@ bool CommsManager::ReportCSBee(ReportSink* sinks, uint16_t num_sinks) {
             aircraft_dictionary.metrics.valid_uat_uplink_frames,  // VALID_UAT
         aircraft_dictionary.GetNumAircraft(),                     // NUM_AIRCRAFT
         0u,                                                       // TSCAL
-        get_time_since_boot_ms() / 1000                          // UPTIME
+        get_time_since_boot_ms() / 1000                           // UPTIME
     );
     if (stats_len_bytes < 0) {
         CONSOLE_ERROR("CommsManager::ReportCSBee",
@@ -374,7 +374,7 @@ bool CommsManager::ReportMAVLINK(ReportSink* sinks, uint16_t num_sinks, uint8_t 
         }
     }
 
-    // Send an ADSB_VEHICLE message for each aircraft within the 100ms time budget.
+    // Send an ADSB_VEHICLE message for each aircraft within the time budget.
     uint32_t chunk_start_ms = get_time_since_boot_ms();
     while (uid_index < report_uids_count_) {
         if (get_time_since_boot_ms() - chunk_start_ms >= kMAVLINKChunkBudgetMs) {
@@ -394,8 +394,7 @@ bool CommsManager::ReportMAVLINK(ReportSink* sinks, uint16_t num_sinks, uint8_t 
         } else if (UATAircraft* uat_aircraft = get_if<UATAircraft>(&(itr->second)); uat_aircraft) {
             adsb_vehicle_msg = UATAircraftToMAVLINKADSBVehicleMessage(*uat_aircraft);
         } else {
-            CONSOLE_WARNING("CommsManager::ReportMAVLINK", "Unknown aircraft type in dictionary for UID 0x%lx.",
-                            uid);
+            CONSOLE_WARNING("CommsManager::ReportMAVLINK", "Unknown aircraft type in dictionary for UID 0x%lx.", uid);
             continue;
         }
         for (uint16_t i = 0; i < num_sinks; i++) {
@@ -458,7 +457,7 @@ bool CommsManager::ReportGDL90(ReportSink* sinks, uint16_t num_sinks) {
         }
     }
 
-    // Send a traffic report for each aircraft within the 100ms time budget.
+    // Send a traffic report for each aircraft within the time budget.
     uint32_t chunk_start_ms = get_time_since_boot_ms();
     while (gdl90_report_uid_index_ < report_uids_count_) {
         if (get_time_since_boot_ms() - chunk_start_ms >= kGDL90ChunkBudgetMs) {
