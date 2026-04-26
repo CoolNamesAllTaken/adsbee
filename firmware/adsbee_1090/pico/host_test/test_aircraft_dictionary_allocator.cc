@@ -10,9 +10,7 @@
 #include "gtest/gtest.h"
 
 // Helper: build a unique ICAO address from a slot index, avoiding collisions.
-static constexpr uint32_t SlotToICAO(uint16_t i) {
-    return (static_cast<uint32_t>(i) + 1u) * 599u;
-}
+static constexpr uint32_t SlotToICAO(uint16_t i) { return (static_cast<uint32_t>(i) + 1u) * 599u; }
 
 /**
  * Fill the dictionary to capacity and verify every insert succeeds.
@@ -22,8 +20,7 @@ static bool FillDictionary(AircraftDictionary& dict) {
     for (uint16_t i = 0; i < AircraftDictionary::kMaxNumAircraft; ++i) {
         ModeSAircraft aircraft(SlotToICAO(i));
         if (!dict.InsertAircraft(aircraft)) {
-            ADD_FAILURE() << "InsertAircraft failed at slot " << i << " (ICAO 0x" << std::hex
-                          << SlotToICAO(i) << ")";
+            ADD_FAILURE() << "InsertAircraft failed at slot " << i << " (ICAO 0x" << std::hex << SlotToICAO(i) << ")";
             return false;
         }
     }
@@ -37,8 +34,7 @@ static bool FillDictionary(AircraftDictionary& dict) {
 static bool DrainDictionary(AircraftDictionary& dict) {
     for (uint16_t i = 0; i < AircraftDictionary::kMaxNumAircraft; ++i) {
         if (!dict.RemoveAircraft(SlotToICAO(i))) {
-            ADD_FAILURE() << "RemoveAircraft failed at slot " << i << " (ICAO 0x" << std::hex
-                          << SlotToICAO(i) << ")";
+            ADD_FAILURE() << "RemoveAircraft failed at slot " << i << " (ICAO 0x" << std::hex << SlotToICAO(i) << ")";
             return false;
         }
     }
@@ -76,15 +72,16 @@ TEST(AircraftDictionaryAllocator, GracefulCapacityOverflow) {
     ASSERT_TRUE(FillDictionary(dict));
     EXPECT_EQ(dict.GetNumAircraft(), AircraftDictionary::kMaxNumAircraft);
 
-    // Attempt to insert one more aircraft — must return nullptr without crashing.
-    ModeSAircraft overflow_aircraft(0xBEEFCAFE);
-    ModeSAircraft* result = dict.InsertAircraft(overflow_aircraft);
-    EXPECT_EQ(result, nullptr) << "InsertAircraft should return nullptr when dictionary is full";
+    // Commented out after adding automatic old aircraft removal to dictionary.
+    // // Attempt to insert one more aircraft — must return nullptr without crashing.
+    // ModeSAircraft overflow_aircraft(0xBEEFCAFE);
+    // ModeSAircraft* result = dict.InsertAircraft(overflow_aircraft);
+    // EXPECT_EQ(result, nullptr) << "InsertAircraft should return nullptr when dictionary is full";
 
-    // The dictionary should be unchanged.
-    EXPECT_EQ(dict.GetNumAircraft(), AircraftDictionary::kMaxNumAircraft);
-    EXPECT_FALSE(dict.ContainsAircraft(Aircraft::ICAOToUID(overflow_aircraft.icao_address,
-                                                            Aircraft::kAircraftTypeModeS)));
+    // // The dictionary should be unchanged.
+    // EXPECT_EQ(dict.GetNumAircraft(), AircraftDictionary::kMaxNumAircraft);
+    // EXPECT_FALSE(dict.ContainsAircraft(Aircraft::ICAOToUID(overflow_aircraft.icao_address,
+    //                                                         Aircraft::kAircraftTypeModeS)));
 }
 
 // ---------------------------------------------------------------------------
@@ -108,14 +105,14 @@ TEST(AircraftDictionaryAllocator, PartialRemoveAndRefill) {
     // Re-insert the lower half — these must succeed (pool must have reclaimed the slots).
     for (uint16_t i = 0; i < kHalf; ++i) {
         ModeSAircraft aircraft(SlotToICAO(i));
-        ASSERT_NE(dict.InsertAircraft(aircraft), nullptr)
-            << "InsertAircraft failed after partial drain at slot " << i;
+        ASSERT_NE(dict.InsertAircraft(aircraft), nullptr) << "InsertAircraft failed after partial drain at slot " << i;
     }
     EXPECT_EQ(dict.GetNumAircraft(), AircraftDictionary::kMaxNumAircraft);
 
-    // An extra aircraft must still be rejected.
-    ModeSAircraft overflow_aircraft(0xDEAD1234);
-    EXPECT_EQ(dict.InsertAircraft(overflow_aircraft), nullptr);
+    // Commented out after adding automatic old aircraft removal to dictionary.
+    // // An extra aircraft must still be rejected.
+    // ModeSAircraft overflow_aircraft(0xDEAD1234);
+    // EXPECT_EQ(dict.InsertAircraft(overflow_aircraft), nullptr);
 }
 
 // ---------------------------------------------------------------------------

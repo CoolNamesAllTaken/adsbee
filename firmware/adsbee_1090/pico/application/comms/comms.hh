@@ -1,5 +1,6 @@
 #pragma once
 
+#include "aircraft_dictionary_config.hh"
 #include "composite_array.hh"
 #include "cpp_at.hh"
 #include "data_structures.hh"  // For PFBQueue.
@@ -97,8 +98,7 @@ class CommsManager {
      * @param terminate_on_newline If true, stop reading when \r or \n is received.
      * @return Number of characters read, or -1 on timeout.
      */
-    int32_t ATReadConsole(char* buf, uint16_t max_len, uint32_t timeout_ms,
-                          bool terminate_on_newline = false);
+    int32_t ATReadConsole(char* buf, uint16_t max_len, uint32_t timeout_ms, bool terminate_on_newline = false);
 
     int console_printf(const char* format, ...);
     int console_level_printf(SettingsManager::LogLevel level, const char* format, ...);
@@ -235,9 +235,34 @@ class CommsManager {
     uint32_t last_raw_report_check_timestamp_ms_ =
         0;  // Timestamp of last time we checked whether we need to report packets.
     uint32_t last_raw_report_timestamp_ms_ = 0;
-    uint32_t last_csbee_report_timestamp_ms_ = 0;
-    uint32_t last_mavlink_report_timestamp_ms_ = 0;
-    uint32_t last_gdl90_report_timestamp_ms_ = 0;
+    // Single shared timer for all locally-decoded dictionary report protocols (CSBee, MAVLINK, GDL90).
+    // All protocols share a UID snapshot and therefore share a reporting interval.
+    uint32_t last_locally_decoded_report_timestamp_ms_ = 0;
+
+    // Shared UID snapshot for all periodic dictionary reporting protocols.
+    // One array avoids duplicating 800 bytes per protocol. UpdateReporting populates it once
+    // per round; each protocol walks it independently via its own index below.
+    uint32_t report_uids_[kMaxReportUIDs];
+    uint16_t report_uids_count_ = 0;
+
+    // Per-protocol progress indices into report_uids_[].
+    uint16_t csbee_report_uid_index_ = 0;
+    uint16_t mavlink1_report_uid_index_ = 0;
+    uint16_t mavlink2_report_uid_index_ = 0;
+    uint16_t gdl90_report_uid_index_ = 0;
+
+    // Per-protocol "round active" flags. Set by UpdateReporting when a new round starts;
+    // cleared by each Report* function when it finishes sending its footer/delimiter.
+    bool csbee_round_active_ = false;
+    bool mavlink1_round_active_ = false;
+    bool mavlink2_round_active_ = false;
+    bool gdl90_round_active_ = false;
+
+    // Overrun error gates — each fires once per overrunning round to prevent log spam.
+    bool csbee_overrun_reported_ = false;
+    bool mavlink1_overrun_reported_ = false;
+    bool mavlink2_overrun_reported_ = false;
+    bool gdl90_overrun_reported_ = false;
 };
 
 extern CommsManager comms_manager;

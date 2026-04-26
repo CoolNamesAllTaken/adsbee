@@ -10,6 +10,7 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 // #include "gdl90/gdl90_utils.hh"
+#include "aircraft_dictionary_config.hh"
 #include "composite_array.hh"
 #include "lwip/sockets.h"  // For port definition.
 #include "mode_s_packet.hh"
@@ -327,9 +328,34 @@ class CommsManager {
     // Reporting protocol timestamps
     // NOTE: Raw reporting interval used for RAW and BEAST protocols as well as internal functions.
     uint32_t last_raw_report_timestamp_ms_ = 0;
-    uint32_t last_csbee_report_timestamp_ms_ = 0;
-    uint32_t last_mavlink_report_timestamp_ms_ = 0;
-    uint32_t last_gdl90_report_timestamp_ms_ = 0;
+    // Single shared timer for all locally-decoded dictionary report protocols (CSBee, MAVLINK, GDL90).
+    // All protocols share a UID snapshot and therefore share a reporting interval.
+    uint32_t last_locally_decoded_report_timestamp_ms_ = 0;
+
+    // Shared UID snapshot for all periodic dictionary reporting protocols.
+    // One array avoids duplicating 800 bytes per protocol. UpdateReporting populates it once
+    // per round; each protocol walks it independently via its own index below.
+    uint32_t report_uids_[kMaxReportUIDs];
+    uint16_t report_uids_count_ = 0;
+
+    // Per-protocol progress indices into report_uids_[].
+    uint16_t csbee_report_uid_index_ = 0;
+    uint16_t mavlink1_report_uid_index_ = 0;
+    uint16_t mavlink2_report_uid_index_ = 0;
+    uint16_t gdl90_report_uid_index_ = 0;
+
+    // Per-protocol "round active" flags. Set by UpdateReporting when a new round starts;
+    // cleared by each Report* function when it finishes sending its footer/delimiter.
+    bool csbee_round_active_ = false;
+    bool mavlink1_round_active_ = false;
+    bool mavlink2_round_active_ = false;
+    bool gdl90_round_active_ = false;
+
+    // Overrun error gates — each fires once per overrunning round to prevent log spam.
+    bool csbee_overrun_reported_ = false;
+    bool mavlink1_overrun_reported_ = false;
+    bool mavlink2_overrun_reported_ = false;
+    bool gdl90_overrun_reported_ = false;
 };
 
 extern CommsManager comms_manager;

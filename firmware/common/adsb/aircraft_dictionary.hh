@@ -7,6 +7,7 @@
 #include <variant>
 
 #include "adsb_types.hh"
+#include "aircraft_dictionary_config.hh"
 // Can't include comms.hh or we will get a circular dependency.
 #include "hal.hh"
 #include "json_utils.hh"
@@ -638,7 +639,7 @@ class UATAircraft : public Aircraft {
 
 class AircraftDictionary {
    public:
-    static constexpr uint16_t kMaxNumAircraft = 200;
+    static constexpr uint16_t kMaxNumAircraft = kAircraftDictionaryMaxNumAircraft;
     static constexpr uint16_t kMaxNumSources = 3;
 
 #ifdef FILTER_CPR_POSITIONS
@@ -903,11 +904,8 @@ class AircraftDictionary {
         }
 
         if (dict.size() >= kMaxNumAircraft) {
-            // We can't print here or else we cause a circular dependency with comms.hh.
-            // CONSOLE_INFO("AircraftDictionary::InsertAircraft",
-            //              "Failed to add aircraft to dictionary, reached max number of aircraft (%d).",
-            //              kMaxNumAircraft);
-            return nullptr;  // not enough room to add this aircraft
+            dictionary_overflowed = true;
+            RemoveOldestAircraft();
         }
 
         dict[uid] = aircraft;               // add the new aircraft to the dictionary
@@ -920,6 +918,12 @@ class AircraftDictionary {
      * @retval True if removal succeeded, false if aircraft was not found.
      */
     bool RemoveAircraft(uint32_t uid);
+
+    /**
+     * Remove the aircraft with the oldest last_message_timestamp_ms from the dictionary.
+     * @retval True if an aircraft was removed, false if the dictionary was empty.
+     */
+    bool RemoveOldestAircraft();
 
     /**
      * Retrieve an aircraft from the dictionary.
@@ -1011,6 +1015,7 @@ class AircraftDictionary {
 
     AircraftEntry* lowest_aircraft_entry = nullptr;  // Pointer to the aircraft entry with the lowest valid GNSS
                                                      // altitude. Useful for approximating receiver position.
+    bool dictionary_overflowed = false;
 
    private:
     /**
