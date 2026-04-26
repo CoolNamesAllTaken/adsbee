@@ -93,8 +93,8 @@ class SettingsManager {
         static constexpr uint32_t kDefaultWatchdogTimeoutSec = 10;
         // NOTE: Lengths do not include null terminator.
         static constexpr uint16_t kHostnameMaxLen = 32;
-        static constexpr uint16_t kWiFiSSIDMaxLen = 32;
-        static constexpr uint16_t kWiFiPasswordMaxLen = 64;
+        static constexpr uint16_t kWiFiSSIDMaxLen = 31;
+        static constexpr uint16_t kWiFiPasswordMaxLen = 63;
         static constexpr uint16_t kWiFiMaxNumClients = 6;
         static constexpr uint32_t kDefaultCommsUARTBaudrate = 115200;
         static constexpr uint32_t kDefaultGNSSUARTBaudrate = 9600;
