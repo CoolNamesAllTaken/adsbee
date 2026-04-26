@@ -106,46 +106,92 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
     }
 
     /** Locally Decoded Reports **/
-    if (num_csbee_sinks > 0) {
-        bool csbee_round_in_progress = (csbee_report_uid_index_ < report_uids_count_);
-        if (csbee_round_in_progress) {
-            if (!csbee_overrun_reported_ &&
-                timestamp_ms - last_csbee_report_timestamp_ms_ >= kCSBeeReportingIntervalMs) {
-                CONSOLE_ERROR("CommsManager::UpdateReporting",
-                              "CSBee reporting overran the %lums reporting interval.",
-                              kCSBeeReportingIntervalMs);
-                csbee_overrun_reported_ = true;
-            }
-            if (!ReportCSBee(csbee_sinks, num_csbee_sinks)) {
-                CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportCSBee.");
-                ret = false;
-            }
-        } else if (timestamp_ms - last_csbee_report_timestamp_ms_ >= kCSBeeReportingIntervalMs) {
-            last_csbee_report_timestamp_ms_ = timestamp_ms;
-            csbee_overrun_reported_ = false;
-            if (!ReportCSBee(csbee_sinks, num_csbee_sinks)) {
-                CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportCSBee.");
-                ret = false;
+    // All locally-decoded protocols share a UID snapshot and a single 1000ms reporting interval.
+    // A new round starts only when every active protocol has finished its previous round.
+
+    // If a protocol lost its sinks mid-round, deactivate it so it doesn't block other protocols.
+    if (csbee_round_active_ && num_csbee_sinks == 0) csbee_round_active_ = false;
+    if (mavlink1_round_active_ && num_mavlink1_sinks == 0) mavlink1_round_active_ = false;
+    if (mavlink2_round_active_ && num_mavlink2_sinks == 0) mavlink2_round_active_ = false;
+    if (gdl90_round_active_ && num_gdl90_sinks == 0) gdl90_round_active_ = false;
+
+    bool all_locally_decoded_done =
+        !csbee_round_active_ && !mavlink1_round_active_ && !mavlink2_round_active_ && !gdl90_round_active_;
+    bool any_locally_decoded_active =
+        (num_csbee_sinks > 0 || num_mavlink1_sinks > 0 || num_mavlink2_sinks > 0 || num_gdl90_sinks > 0);
+
+    if (any_locally_decoded_active && all_locally_decoded_done &&
+        timestamp_ms - last_locally_decoded_report_timestamp_ms_ >= kCSBeeReportingIntervalMs) {
+        last_locally_decoded_report_timestamp_ms_ = timestamp_ms;
+        csbee_overrun_reported_ = false;
+        mavlink1_overrun_reported_ = false;
+        mavlink2_overrun_reported_ = false;
+        gdl90_overrun_reported_ = false;
+
+        // Snapshot current aircraft UIDs. All protocols will walk this same array.
+        report_uids_count_ = 0;
+        for (auto& itr : aircraft_dictionary.dict) {
+            if (report_uids_count_ < kMaxReportUIDs) {
+                report_uids_[report_uids_count_++] = itr.first;
             }
         }
+        csbee_report_uid_index_ = 0;
+        mavlink1_report_uid_index_ = 0;
+        mavlink2_report_uid_index_ = 0;
+        gdl90_report_uid_index_ = 0;
+
+        // Activate rounds for protocols that currently have sinks.
+        csbee_round_active_ = (num_csbee_sinks > 0);
+        mavlink1_round_active_ = (num_mavlink1_sinks > 0);
+        mavlink2_round_active_ = (num_mavlink2_sinks > 0);
+        gdl90_round_active_ = (num_gdl90_sinks > 0);
     }
-    if (timestamp_ms - last_mavlink_report_timestamp_ms_ >= kMAVLINKReportingIntervalMs) {
-        if (num_mavlink1_sinks > 0 && !ReportMAVLINK(mavlink1_sinks, num_mavlink1_sinks, 1)) {
+
+    // Drive each in-progress reporting round. Log overrun once per round if the interval lapses.
+    uint32_t elapsed_ms = timestamp_ms - last_locally_decoded_report_timestamp_ms_;
+    if (csbee_round_active_) {
+        if (!csbee_overrun_reported_ && elapsed_ms >= kCSBeeReportingIntervalMs) {
+            CONSOLE_ERROR("CommsManager::UpdateReporting",
+                          "CSBee reporting overran the %lums reporting interval.", kCSBeeReportingIntervalMs);
+            csbee_overrun_reported_ = true;
+        }
+        if (!ReportCSBee(csbee_sinks, num_csbee_sinks)) {
+            CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportCSBee.");
+            ret = false;
+        }
+    }
+    if (mavlink1_round_active_) {
+        if (!mavlink1_overrun_reported_ && elapsed_ms >= kMAVLINKReportingIntervalMs) {
+            CONSOLE_ERROR("CommsManager::UpdateReporting",
+                          "MAVLINK1 reporting overran the %lums reporting interval.", kMAVLINKReportingIntervalMs);
+            mavlink1_overrun_reported_ = true;
+        }
+        if (!ReportMAVLINK(mavlink1_sinks, num_mavlink1_sinks, 1)) {
             CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportMAVLINK with MAVLINK1 sinks.");
             ret = false;
         }
-        if (num_mavlink2_sinks > 0 && !ReportMAVLINK(mavlink2_sinks, num_mavlink2_sinks, 2)) {
+    }
+    if (mavlink2_round_active_) {
+        if (!mavlink2_overrun_reported_ && elapsed_ms >= kMAVLINKReportingIntervalMs) {
+            CONSOLE_ERROR("CommsManager::UpdateReporting",
+                          "MAVLINK2 reporting overran the %lums reporting interval.", kMAVLINKReportingIntervalMs);
+            mavlink2_overrun_reported_ = true;
+        }
+        if (!ReportMAVLINK(mavlink2_sinks, num_mavlink2_sinks, 2)) {
             CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportMAVLINK with MAVLINK2 sinks.");
             ret = false;
         }
-        last_mavlink_report_timestamp_ms_ = timestamp_ms;
     }
-    if (num_gdl90_sinks > 0 && timestamp_ms - last_gdl90_report_timestamp_ms_ >= kGDL90ReportingIntervalMs) {
+    if (gdl90_round_active_) {
+        if (!gdl90_overrun_reported_ && elapsed_ms >= kGDL90ReportingIntervalMs) {
+            CONSOLE_ERROR("CommsManager::UpdateReporting",
+                          "GDL90 reporting overran the %lums reporting interval.", kGDL90ReportingIntervalMs);
+            gdl90_overrun_reported_ = true;
+        }
         if (!ReportGDL90(gdl90_sinks, num_gdl90_sinks)) {
             CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportGDL90.");
             ret = false;
         }
-        last_gdl90_report_timestamp_ms_ = timestamp_ms;
     }
 
     return ret;
@@ -228,18 +274,6 @@ bool CommsManager::ReportBeast(ReportSink* sinks, uint16_t num_sinks, const Comp
 bool CommsManager::ReportCSBee(ReportSink* sinks, uint16_t num_sinks) {
     bool ret = true;
 
-    // Start a new round if no round is currently in progress.
-    if (csbee_report_uid_index_ >= report_uids_count_) {
-        report_uids_count_ = 0;
-        for (auto& itr : aircraft_dictionary.dict) {
-            if (report_uids_count_ < kMaxReportUIDs) {
-                report_uids_[report_uids_count_++] = itr.first;
-            }
-        }
-        csbee_report_uid_index_ = 0;
-        // When adding MAVLINK/GDL90 chunking: also reset their indices here.
-    }
-
     // Process aircraft within the 100ms time budget.
     uint32_t chunk_start_ms = get_time_since_boot_ms();
     while (csbee_report_uid_index_ < report_uids_count_) {
@@ -305,10 +339,7 @@ bool CommsManager::ReportCSBee(ReportSink* sinks, uint16_t num_sinks) {
         }
     }
 
-    // Reset so the next interval triggers a fresh snapshot.
-    report_uids_count_ = 0;
-    csbee_report_uid_index_ = 0;
-
+    csbee_round_active_ = false;
     return ret;
 }
 
@@ -321,39 +352,58 @@ bool CommsManager::ReportMAVLINK(ReportSink* sinks, uint16_t num_sinks, uint8_t 
         CONSOLE_ERROR("CommsManager::ReportMAVLINK", "MAVLINK version %d does not exist.", mavlink_version);
         return false;
     }
+
+    uint16_t& uid_index = (mavlink_version == 1) ? mavlink1_report_uid_index_ : mavlink2_report_uid_index_;
+    bool& round_active = (mavlink_version == 1) ? mavlink1_round_active_ : mavlink2_round_active_;
+
+    // Always refresh the protocol version before any send (idempotent).
     for (uint16_t i = 0; i < num_sinks; i++) {
         mavlink_set_proto_version(sinks[i], mavlink_version);
     }
 
-    // Send a HEARTBEAT message.
-    mavlink_heartbeat_t heartbeat_msg = {.custom_mode = 0,
-                                         .type = MAV_TYPE_ADSB,
-                                         .autopilot = MAV_AUTOPILOT_INVALID,
-                                         .base_mode = 0,
-                                         .system_status = MAV_STATE_ACTIVE,
-                                         .mavlink_version = mavlink_version};
-    for (uint16_t i = 0; i < num_sinks; i++) {
-        mavlink_msg_heartbeat_send_struct(static_cast<mavlink_channel_t>(sinks[i]), &heartbeat_msg);
+    // Send the HEARTBEAT once at the start of each round.
+    if (uid_index == 0) {
+        mavlink_heartbeat_t heartbeat_msg = {.custom_mode = 0,
+                                             .type = MAV_TYPE_ADSB,
+                                             .autopilot = MAV_AUTOPILOT_INVALID,
+                                             .base_mode = 0,
+                                             .system_status = MAV_STATE_ACTIVE,
+                                             .mavlink_version = mavlink_version};
+        for (uint16_t i = 0; i < num_sinks; i++) {
+            mavlink_msg_heartbeat_send_struct(static_cast<mavlink_channel_t>(sinks[i]), &heartbeat_msg);
+        }
     }
 
-    // Send an ADSB_VEHICLE message for each aircraft in the dictionary.
-    for (auto& itr : aircraft_dictionary.dict) {
+    // Send an ADSB_VEHICLE message for each aircraft within the 100ms time budget.
+    uint32_t chunk_start_ms = get_time_since_boot_ms();
+    while (uid_index < report_uids_count_) {
+        if (get_time_since_boot_ms() - chunk_start_ms >= kMAVLINKChunkBudgetMs) {
+            return true;  // Budget exhausted; resume on next UpdateReporting tick.
+        }
+
+        uint32_t uid = report_uids_[uid_index++];
+
+        auto itr = aircraft_dictionary.dict.find(uid);
+        if (itr == aircraft_dictionary.dict.end()) {
+            continue;  // Aircraft pruned mid-round; skip without losing remaining entries.
+        }
+
         mavlink_adsb_vehicle_t adsb_vehicle_msg;
-        if (ModeSAircraft* mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
+        if (ModeSAircraft* mode_s_aircraft = get_if<ModeSAircraft>(&(itr->second)); mode_s_aircraft) {
             adsb_vehicle_msg = ModeSAircraftToMAVLINKADSBVehicleMessage(*mode_s_aircraft);
-        } else if (UATAircraft* uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
+        } else if (UATAircraft* uat_aircraft = get_if<UATAircraft>(&(itr->second)); uat_aircraft) {
             adsb_vehicle_msg = UATAircraftToMAVLINKADSBVehicleMessage(*uat_aircraft);
         } else {
             CONSOLE_WARNING("CommsManager::ReportMAVLINK", "Unknown aircraft type in dictionary for UID 0x%lx.",
-                            itr.first);
+                            uid);
             continue;
         }
-        // Send the message.
         for (uint16_t i = 0; i < num_sinks; i++) {
             mavlink_msg_adsb_vehicle_send_struct(static_cast<mavlink_channel_t>(sinks[i]), &adsb_vehicle_msg);
         }
     }
-    // Send delimiter message.
+
+    // All UIDs processed — send the delimiter and mark this version's round complete.
     switch (mavlink_version) {
         case 1: {
             mavlink_request_data_stream_t request_data_stream_msg = {0};
@@ -375,9 +425,11 @@ bool CommsManager::ReportMAVLINK(ReportSink* sinks, uint16_t num_sinks, uint8_t 
         }
         default:
             CONSOLE_ERROR("CommsManager::ReportMAVLINK", "MAVLINK version %d does not exist.", mavlink_version);
+            round_active = false;
             return false;
-    };
+    }
 
+    round_active = false;
     return true;
 }
 
@@ -387,41 +439,54 @@ bool CommsManager::ReportGDL90(ReportSink* sinks, uint16_t num_sinks) {
     uint8_t buf[GDL90Reporter::kGDL90MessageMaxLenBytes];
     uint16_t msg_len;
 
-    // Heartbeat Message
-    msg_len = gdl90.WriteGDL90HeartbeatMessage(buf, sizeof(buf), get_time_since_boot_ms() / 1000,
-                                               aircraft_dictionary.metrics.valid_squitter_frames +
-                                                   aircraft_dictionary.metrics.valid_extended_squitter_frames +
-                                                   aircraft_dictionary.metrics.valid_uat_adsb_frames,
-                                               aircraft_dictionary.metrics.valid_uat_uplink_frames);
+    // Send the HEARTBEAT and OWNSHIP REPORT once at the start of each round.
+    if (gdl90_report_uid_index_ == 0) {
+        msg_len = gdl90.WriteGDL90HeartbeatMessage(buf, sizeof(buf), get_time_since_boot_ms() / 1000,
+                                                   aircraft_dictionary.metrics.valid_squitter_frames +
+                                                       aircraft_dictionary.metrics.valid_extended_squitter_frames +
+                                                       aircraft_dictionary.metrics.valid_uat_adsb_frames,
+                                                   aircraft_dictionary.metrics.valid_uat_uplink_frames);
+        for (uint16_t i = 0; i < num_sinks; i++) {
+            ret &= SendBuf(sinks[i], (char*)buf, msg_len);
+        }
 
-    for (uint16_t i = 0; i < num_sinks; i++) {
-        ret &= SendBuf(sinks[i], (char*)buf, msg_len);
+        GDL90Reporter::GDL90TargetReportData ownship_data;
+        // TODO: Actually fill out ownship data!
+        msg_len = gdl90.WriteGDL90TargetReportMessage(buf, sizeof(buf), ownship_data, true);
+        for (uint16_t i = 0; i < num_sinks; i++) {
+            ret &= SendBuf(sinks[i], (char*)buf, msg_len);
+        }
     }
 
-    // Ownship Report
-    GDL90Reporter::GDL90TargetReportData ownship_data;
-    // TODO: Actually fill out ownship data!
-    msg_len = gdl90.WriteGDL90TargetReportMessage(buf, sizeof(buf), ownship_data, true);
-    for (uint16_t i = 0; i < num_sinks; i++) {
-        ret &= SendBuf(sinks[i], (char*)buf, msg_len);
-    }
+    // Send a traffic report for each aircraft within the 100ms time budget.
+    uint32_t chunk_start_ms = get_time_since_boot_ms();
+    while (gdl90_report_uid_index_ < report_uids_count_) {
+        if (get_time_since_boot_ms() - chunk_start_ms >= kGDL90ChunkBudgetMs) {
+            return ret;  // Budget exhausted; resume on next UpdateReporting tick.
+        }
 
-    // Traffic Reports
-    for (auto& itr : aircraft_dictionary.dict) {
+        uint32_t uid = report_uids_[gdl90_report_uid_index_++];
+
+        auto itr = aircraft_dictionary.dict.find(uid);
+        if (itr == aircraft_dictionary.dict.end()) {
+            continue;  // Aircraft pruned mid-round; skip without losing remaining entries.
+        }
+
         msg_len = 0;
-        if (ModeSAircraft* mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
+        if (ModeSAircraft* mode_s_aircraft = get_if<ModeSAircraft>(&(itr->second)); mode_s_aircraft) {
             msg_len = gdl90.WriteGDL90TargetReportMessage(buf, sizeof(buf), *mode_s_aircraft, false);
-        } else if (UATAircraft* uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
+        } else if (UATAircraft* uat_aircraft = get_if<UATAircraft>(&(itr->second)); uat_aircraft) {
             msg_len = gdl90.WriteGDL90TargetReportMessage(buf, sizeof(buf), *uat_aircraft, false);
         } else {
-            CONSOLE_WARNING("CommsManager::ReportGDL90", "Unknown aircraft type in dictionary for UID 0x%lx.",
-                            itr.first);
+            CONSOLE_WARNING("CommsManager::ReportGDL90", "Unknown aircraft type in dictionary for UID 0x%lx.", uid);
             continue;
         }
         for (uint16_t i = 0; i < num_sinks; i++) {
             ret &= SendBuf(sinks[i], (char*)buf, msg_len);
         }
     }
+
+    gdl90_round_active_ = false;
     return ret;
 }
 
