@@ -50,12 +50,6 @@ TEST(AircraftDictionary, InsertThenRemoveTooMany) {
     EXPECT_TRUE(dictionary.GetAircraftPtr<ModeSAircraft>(
         Aircraft::ICAOToUID(test_aircraft.icao_address, Aircraft::kAircraftTypeModeS)));
 
-    // Adding a new aircraft should fail.
-    test_aircraft.icao_address = 0xBEEB;
-    EXPECT_FALSE(dictionary.InsertAircraft(test_aircraft));
-    EXPECT_FALSE(dictionary.GetAircraftPtr<ModeSAircraft>(
-        Aircraft::ICAOToUID(test_aircraft.icao_address, Aircraft::kAircraftTypeModeS)));
-
     // Remove all aircraft.
     for (uint16_t i = 0; i < AircraftDictionary::kMaxNumAircraft; i++) {
         test_aircraft.icao_address = (AircraftDictionary::kMaxNumAircraft - 1 - i) * 599;
@@ -1007,4 +1001,85 @@ TEST(AircraftDictionary, IngestSurfacePositionMovementAndTrack) {
     EXPECT_EQ(aircraft_ptr->baro_vertical_rate_fpm, 0);
     EXPECT_EQ(aircraft_ptr->gnss_vertical_rate_fpm, 0);
     EXPECT_EQ(aircraft_ptr->speed_source, ADSBTypes::SpeedSource::kSpeedSourceGroundSpeed);
+}
+
+TEST(AircraftDictionary, RemoveOldestAircraftEmpty) {
+    AircraftDictionary dictionary;
+    EXPECT_FALSE(dictionary.RemoveOldestAircraft());
+}
+
+TEST(AircraftDictionary, RemoveOldestAircraftRemovesOldest) {
+    AircraftDictionary dictionary;
+
+    ModeSAircraft aircraft_a(0x111111);
+    aircraft_a.last_message_timestamp_ms = 1000;  // oldest
+    dictionary.InsertAircraft(aircraft_a);
+
+    ModeSAircraft aircraft_b(0x222222);
+    aircraft_b.last_message_timestamp_ms = 2000;
+    dictionary.InsertAircraft(aircraft_b);
+
+    ModeSAircraft aircraft_c(0x333333);
+    aircraft_c.last_message_timestamp_ms = 3000;  // newest
+    dictionary.InsertAircraft(aircraft_c);
+
+    ASSERT_EQ(dictionary.GetNumAircraft(), 3);
+    EXPECT_TRUE(dictionary.RemoveOldestAircraft());
+    EXPECT_EQ(dictionary.GetNumAircraft(), 2);
+    EXPECT_FALSE(dictionary.ContainsAircraft(0x111111));
+    EXPECT_TRUE(dictionary.ContainsAircraft(0x222222));
+    EXPECT_TRUE(dictionary.ContainsAircraft(0x333333));
+}
+
+TEST(AircraftDictionary, RemoveOldestAircraftClearsLowestEntry) {
+    AircraftDictionary dictionary;
+
+    // Aircraft with the lowest GNSS altitude and the oldest timestamp.
+    ModeSAircraft aircraft_old(0x111111);
+    aircraft_old.gnss_altitude_ft = 500;
+    aircraft_old.last_message_timestamp_ms = 100;
+    aircraft_old.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagGNSSAltitudeValid, true);
+    aircraft_old.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid, true);
+    aircraft_old.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
+    dictionary.InsertAircraft(aircraft_old);
+
+    ModeSAircraft aircraft_new(0x222222);
+    aircraft_new.gnss_altitude_ft = 5000;
+    aircraft_new.last_message_timestamp_ms = 5000;
+    aircraft_new.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagGNSSAltitudeValid, true);
+    aircraft_new.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid, true);
+    aircraft_new.WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
+    dictionary.InsertAircraft(aircraft_new);
+
+    // Update so lowest_aircraft_entry is set (it will point to aircraft_old, lowest GNSS altitude).
+    dictionary.Update(5000);
+    EXPECT_NE(dictionary.lowest_aircraft_entry, nullptr);
+
+    // Removing the oldest aircraft should also clear lowest_aircraft_entry.
+    EXPECT_TRUE(dictionary.RemoveOldestAircraft());
+    EXPECT_EQ(dictionary.lowest_aircraft_entry, nullptr);
+    EXPECT_FALSE(dictionary.ContainsAircraft(0x111111));
+    EXPECT_TRUE(dictionary.ContainsAircraft(0x222222));
+}
+
+TEST(AircraftDictionary, InsertAircraftEvictsOldestWhenFull) {
+    AircraftDictionary dictionary;
+
+    // Fill to capacity: aircraft i has ICAO (i+1) and timestamp (i+1), so ICAO 1 is the oldest.
+    for (uint16_t i = 0; i < AircraftDictionary::kMaxNumAircraft; i++) {
+        ModeSAircraft aircraft(i + 1);
+        aircraft.last_message_timestamp_ms = i + 1;
+        ASSERT_TRUE(dictionary.InsertAircraft(aircraft));
+    }
+    ASSERT_EQ(dictionary.GetNumAircraft(), AircraftDictionary::kMaxNumAircraft);
+
+    // Inserting a new aircraft when full should evict the oldest (ICAO 1, ts=1) and succeed.
+    ModeSAircraft new_aircraft(0xBEEB);
+    new_aircraft.last_message_timestamp_ms = AircraftDictionary::kMaxNumAircraft + 1;
+    EXPECT_TRUE(dictionary.InsertAircraft(new_aircraft));
+
+    EXPECT_EQ(dictionary.GetNumAircraft(), AircraftDictionary::kMaxNumAircraft);
+    EXPECT_TRUE(dictionary.ContainsAircraft(0xBEEB));
+    EXPECT_FALSE(dictionary.ContainsAircraft(1));   // ICAO 1 was the oldest, now evicted
+    EXPECT_TRUE(dictionary.ContainsAircraft(2));    // ICAO 2 was the second oldest, still present
 }

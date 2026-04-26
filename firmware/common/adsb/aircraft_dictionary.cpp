@@ -1253,6 +1253,13 @@ void AircraftDictionary::Init() {
 }
 
 void AircraftDictionary::Update(uint32_t timestamp_ms) {
+    // Check for overflow
+    if (dictionary_overflowed) {
+        CONSOLE_ERROR("AircraftDictionary",
+                      "Aircraft dictionary overflowed. Had to remove one or more oldest aircraft to make room.");
+        dictionary_overflowed = false;
+    }
+
     // Iterate over each key-value pair in the unordered_map. Prune if stale, update metrics if still fresh.
     for (auto it = dict.begin(); it != dict.end(); /* No increment here */) {
         uint32_t last_message_timestamp_ms =
@@ -1753,6 +1760,28 @@ bool AircraftDictionary::RemoveAircraft(uint32_t icao_address) {
                     "Attempted to remove aircraft with ICAO address 0x%lx, but it was not found in the dictionary.",
                     icao_address);
     return false;  // aircraft was not found in the dictionary
+}
+
+bool AircraftDictionary::RemoveOldestAircraft() {
+    if (dict.empty()) {
+        return false;
+    }
+    auto oldest_it = dict.begin();
+    uint32_t oldest_timestamp = std::visit(
+        [](Aircraft& aircraft) -> uint32_t { return aircraft.last_message_timestamp_ms; }, oldest_it->second);
+    for (auto it = std::next(oldest_it); it != dict.end(); ++it) {
+        uint32_t ts =
+            std::visit([](Aircraft& aircraft) -> uint32_t { return aircraft.last_message_timestamp_ms; }, it->second);
+        if (ts < oldest_timestamp) {
+            oldest_timestamp = ts;
+            oldest_it = it;
+        }
+    }
+    if (lowest_aircraft_entry == &oldest_it->second) {
+        lowest_aircraft_entry = nullptr;
+    }
+    dict.erase(oldest_it);
+    return true;
 }
 
 void AircraftDictionary::SetReferencePosition(float latitude_deg, float longitude_deg) {
