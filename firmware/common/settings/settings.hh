@@ -93,6 +93,7 @@ class SettingsManager {
         static constexpr uint32_t kDefaultWatchdogTimeoutSec = 10;
         // NOTE: Lengths do not include null terminator.
         static constexpr uint16_t kHostnameMaxLen = 32;
+        // For settings struct backwards compatibility. ESP IDF can't handle the full length SSID and password, so length was reduced.
         static constexpr uint16_t kWiFiSSIDMaxLen = 31;
         static constexpr uint16_t kWiFiPasswordMaxLen = 63;
         static constexpr uint16_t kWiFiMaxNumClients = 6;
@@ -119,12 +120,13 @@ class SettingsManager {
 
             bool wifi_ap_enabled = true;
             uint8_t wifi_ap_channel = 1;
-            char wifi_ap_ssid[kWiFiSSIDMaxLen + 1];
-            char wifi_ap_password[kWiFiPasswordMaxLen + 1];
+            // SSID and password array lengths adjusted to maintain settings struct size.
+            char wifi_ap_ssid[kWiFiSSIDMaxLen + 2];
+            char wifi_ap_password[kWiFiPasswordMaxLen + 2];
 
             bool wifi_sta_enabled = false;
-            char wifi_sta_ssid[kWiFiSSIDMaxLen + 1];
-            char wifi_sta_password[kWiFiPasswordMaxLen + 1];
+            char wifi_sta_ssid[kWiFiSSIDMaxLen + 2];
+            char wifi_sta_password[kWiFiPasswordMaxLen + 2];
 
             bool ethernet_enabled = false;
 
