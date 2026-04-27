@@ -343,7 +343,7 @@ MAVLINK_HELPER void _mav_finalize_message_chan_send(mavlink_channel_t chan, uint
         buf[3] = 0;  // compat_flags
         buf[4] = status->current_tx_seq;
         buf[5] = settings_manager.settings.mavlink_system_id;  // Modified by John McNelly 2024-09-15.
-        buf[6] = settings_manager.settings.mavlink_system_id;  // Modified by John McNelly 2024-09-15.
+        buf[6] = settings_manager.settings.mavlink_component_id;  // Modified by John McNelly 2024-09-15.
         buf[7] = msgid & 0xFF;
         buf[8] = (msgid >> 8) & 0xFF;
         buf[9] = (msgid >> 16) & 0xFF;
