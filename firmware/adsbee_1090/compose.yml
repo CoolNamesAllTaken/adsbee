@@ -18,7 +18,7 @@ services:
   # ESP-IDF VS Code extension running on the host.
   # The RP2040 and CC1312 are debugged over JLink GDB from their Docker containers.
   esp-idf:
-    image: espressif/idf:release-v5.5
+    image: espressif/idf:v5.5.2
     volumes:
       - ./esp:/firmware/adsbee_1090/esp
       - ../common:/firmware/common
