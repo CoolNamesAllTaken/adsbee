@@ -12,6 +12,7 @@ cd "$script_dir"
 
 # Number of parallel build jobs.
 jobs=$(nproc 2>/dev/null || echo 4)
+required_esp_idf_version="v5.5.2"
 
 debug=false
 if [ "$1" = "-d" ]; then
@@ -19,7 +20,20 @@ if [ "$1" = "-d" ]; then
     shift
 fi
 
+check_esp_idf_version() {
+    echo "=== Checking ESP-IDF version (required: $required_esp_idf_version) ==="
+    local idf_version
+    idf_version=$(docker compose run --rm esp-idf bash -c "idf.py --version")
+    echo "ESP-IDF reported by container: $idf_version"
+    if [[ "$idf_version" != *"$required_esp_idf_version"* ]]; then
+        echo "ERROR: ESP-IDF version mismatch. Expected $required_esp_idf_version."
+        echo "Update compose.yml to pin the esp-idf image tag to $required_esp_idf_version."
+        exit 1
+    fi
+}
+
 build_esp() {
+    check_esp_idf_version
     if [ "$debug" = true ]; then
         echo "=== Building ESP32-S3 firmware (Debug) ==="
         docker compose run --rm esp-idf bash -c "
