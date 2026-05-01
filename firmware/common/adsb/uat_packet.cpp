@@ -76,8 +76,11 @@ ADSBTypes::DirectionType DecodedUATADSBPacket::HorizontalVelocityToDirectionDegA
             return static_cast<ADSBTypes::DirectionType>((horizontal_velocity >> 9) & 0b11);
         } break;
         default:
+#ifdef ADSB_VERBOSE_PACKET_WARNINGS
             CONSOLE_ERROR("DecodedUATADSBPacket::HorizontalVelocityToDirectionDegAndSpeedKts",
                           "Unrecognized air ground state %d", air_ground_state);
+#endif              // ADSB_VERBOSE_PACKET_WARNINGS
+            break;  // Added so the default case is happy if the error print is disabled.
     }
     return ADSBTypes::kDirectionTypeNotAvailable;
 }

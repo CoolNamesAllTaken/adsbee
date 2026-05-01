@@ -15,6 +15,7 @@
 #include "mode_s_packet.hh"
 #include "uat_packet.hh"
 
+// #define ADSB_VERBOSE_PACKET_WARNINGS  // Uncomment to print warnings about unexpected packet formats / content.
 #define FILTER_CPR_POSITIONS
 
 /**
@@ -146,10 +147,10 @@ class ModeSAircraft : public Aircraft {
         kBitFlagIdent = 16,                     // IDENT switch is currently active.
         kBitFlagAlert = 17,                     // Aircraft is indicating an alert.
         kBitFlagTCASRA = 18,                    // Indicates a TCAS resolution advisory is active.
-        kBitFlagReserved0 = 19,
-        kBitFlagReserved1 = 20,
-        kBitFlagReserved2 = 21,
-        kBitFlagReserved3 = 22,
+        kBitFlagIsRebroadcast = 19,             // Aircraft is being rebroadcast (this is not a primary source).
+        kBitFlagReserved0 = 20,
+        kBitFlagReserved1 = 21,
+        kBitFlagReserved2 = 22,
         // Flags after kBitFlagUpdatedBaroAltitude are cleared at the end of every reporting interval.
         kBitFlagUpdatedBaroAltitude = 23,
         kBitFlagUpdatedGNSSAltitude = 24,
@@ -158,8 +159,8 @@ class ModeSAircraft : public Aircraft {
         kBitFlagUpdatedHorizontalSpeed = 27,
         kBitFlagUpdatedBaroVerticalRate = 28,
         kBitFlagUpdatedGNSSVerticalRate = 29,
-        kBitFlagReserved4 = 30,
-        kBitFlagReserved5 = 31,
+        kBitFlagReserved3 = 30,
+        kBitFlagReserved4 = 31,
         kBitFlagNumFlagBits
     };
 
