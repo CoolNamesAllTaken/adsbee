@@ -182,6 +182,42 @@ TEST(CSBeeUtils, UATAircraftToCSBeeString) {
     EXPECT_EQ(crc_str.compare(calculated_crc_string), 0);
 }
 
+TEST(CSBeeUtils, UATAircraftWithAddressQualifierToCSBeeString) {
+    char message[kCSBeeMessageStrMaxLen];
+
+    UATAircraft aircraft;
+    aircraft.flags = 0;
+    aircraft.last_message_timestamp_ms = 1000;
+    aircraft.last_message_signal_strength_dbm = -80;
+    aircraft.last_message_signal_quality_bits = 3;
+    aircraft.metrics.valid_frames = 2;
+    // Pack the address qualifier into the upper bits of icao_address, matching what GetICAOAddress() produces when
+    // UAT_PREPEND_ADDRESS_QUALIFIER_TO_ICAO_ADDRESS is defined.
+    aircraft.address_qualifier = UATAircraft::kTISBTargetWithICAO24BitAddress;
+    aircraft.icao_address = 0x12345E;
+
+    WriteCSBeeUATAircraftMessageStr(message, aircraft);
+    std::string_view message_view(message);
+    printf("%s\r\n", message_view.data());
+    std::string_view token = GetNextToken(&message_view);
+    // Address qualifier 2 (kTISBTargetWithICAO24BitAddress) is packed into bits 24-26, so ICAO prints as 2<<24 |
+    // 0x12345E = 0x212345E.
+    EXPECT_EQ(token.compare("#U:212345E"), 0);  // ICAO with address qualifier prepended
+
+    // Advance past the remaining data fields to reach the CRC.
+    for (int i = 0; i < 19; i++) {
+        GetNextToken();
+    }
+
+    // Check CRC
+    std::string_view crc_str = GetNextToken();
+    char calculated_crc_string[kCRCMaxNumChars + 1];
+    sprintf(calculated_crc_string, "%X\r\n",
+            CalculateCRC16((uint8_t*)message, message_view.length() - crc_str.length()));
+    printf("Reported CRC=%s Calculated CRC=%s\r\n", std::string(crc_str).c_str(), calculated_crc_string);
+    EXPECT_EQ(crc_str.compare(calculated_crc_string), 0);
+}
+
 TEST(CSBeeUtils, CSBeeStatisticsMessage) {
     char message[kCSBeeMessageStrMaxLen];
     WriteCSBeeStatisticsMessageStr(message,

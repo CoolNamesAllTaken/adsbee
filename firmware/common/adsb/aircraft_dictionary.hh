@@ -433,7 +433,7 @@ class UATAircraft : public Aircraft {
     static constexpr uint16_t kSquawkNumDigits = 4;
 
     enum AddressQualifier : int8_t {
-        kAddressQualifierNotSet = -1,  // Address qualifier has not been set.
+        kAddressQualifierInvalid = -1,  // Address qualifier has not been set.
         kADSBTargetWithICAO24BitAddress = 0,
         kADSBTargetWithSelfAssignedTemporaryAddress = 1,
         kTISBTargetWithICAO24BitAddress = 2,
@@ -582,7 +582,7 @@ class UATAircraft : public Aircraft {
 
     uint16_t transponder_capability = 0;
     uint32_t icao_address = 0;
-    AddressQualifier address_qualifier = kAddressQualifierNotSet;
+    AddressQualifier address_qualifier = kADSBTargetWithICAO24BitAddress;
     char callsign[ModeSAircraft::kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
     uint16_t squawk = ADSBTypes::kSquawkCodeNotYetReceived;
     ADSBTypes::EmitterCategory emitter_category = ADSBTypes::kEmitterCategoryNoCategoryInfo;
