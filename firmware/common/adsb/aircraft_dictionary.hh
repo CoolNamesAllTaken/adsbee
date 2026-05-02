@@ -620,7 +620,7 @@ class UATAircraft : public Aircraft {
     int16_t gnss_antenna_offset_right_of_reference_point_m = 0;
     int16_t gnss_antenna_offset_forward_of_reference_point_m = 0;
 
-    int8_t tis_b_site_id = -1;
+    int8_t tis_b_site_id = 0;
     bool utc_coupled = false;
     int8_t uat_version = -1;
 
