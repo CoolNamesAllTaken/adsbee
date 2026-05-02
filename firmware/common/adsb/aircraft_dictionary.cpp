@@ -102,7 +102,7 @@ bool ModeSAircraft::DecodePosition(bool is_airborne, uint32_t ref_lat_awb32, uin
 #ifdef ADSB_VERBOSE_PACKET_WARNINGS
         CONSOLE_WARNING("ModeSAircraft::DecodePosition",
                         "Can't decode position from packet pair that spans different latitude zones.");
-#endif  // ADSB_VERBOSE_PACKET_WARNINGS
+#endif                 // ADSB_VERBOSE_PACKET_WARNINGS
         return false;  // Aircraft crossed between latitude zones, can't decode from this packet pair.
     }
 
@@ -143,7 +143,7 @@ bool ModeSAircraft::DecodePosition(bool is_airborne, uint32_t ref_lat_awb32, uin
             CONSOLE_WARNING("ModeSAircraft::DecodePosition",
                             "Filtered CPR position update for ICAO 0x%lx, distance %lu m exceeds max %lu m.",
                             icao_address, distance_meters, max_distance_meters);
-#endif  // ADSB_VERBOSE_PACKET_WARNINGS
+#endif                     // ADSB_VERBOSE_PACKET_WARNINGS
             return false;  // Filter out CPR positions that are too far from the last known position.
         }
     }
@@ -695,7 +695,7 @@ bool ModeSAircraft::ApplyAirborneVelocitiesMessage(const ModeSADSBPacket& packet
             CONSOLE_ERROR("AircraftDictionary::ApplyAirborneVelocitiesMessage",
                           "Encountered invalid airborne velocities message subtype %d (valid values are 1-4).",
                           subtype);
-#endif  // ADSB_VERBOSE_PACKET_WARNINGS
+#endif                     // ADSB_VERBOSE_PACKET_WARNINGS
             return false;  // Don't attempt vertical rate decode if message type is invalid.
     }
     // Latching bit flags.
@@ -1020,7 +1020,7 @@ bool UATAircraft::DecodePosition(const DecodedUATADSBPacket::UATStateVector& sta
             CONSOLE_WARNING("UATAircraft::DecodePosition",
                             "Filtered position update for ICAO 0x%lx, distance %lu m exceeds max %lu m.", icao_address,
                             distance_meters, max_distance_meters);
-#endif  // ADSB_VERBOSE_PACKET_WARNINGS
+#endif                     // ADSB_VERBOSE_PACKET_WARNINGS
             return false;  // Filter out CPR positions that are too far from the last known position.
         }
     }
@@ -1676,7 +1676,7 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
             CONSOLE_WARNING("AircraftDictionary::IngestModeSADSBPacket",
                             "Received Mode S packet with invalid downlink format %d, expected %d (Extended Squitter).",
                             packet.downlink_format, ModeSADSBPacket::kDownlinkFormatExtendedSquitter);
-#endif  // ADSB_VERBOSE_PACKET_WARNINGS
+#endif                     // ADSB_VERBOSE_PACKET_WARNINGS
             return false;  // Only allow valid DF17, DF18 packets.
     }
 
@@ -1684,9 +1684,10 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
     uint32_t uid = Aircraft::ICAOToUID(icao_address, Aircraft::kAircraftTypeModeS);
     ModeSAircraft* aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
     if (aircraft_ptr == nullptr) {
-        CONSOLE_WARNING("AircraftDictionary::IngestModeSADSBPacket",
-                        "Unable to find or create new aircraft with ICAO address 0x%lx in dictionary.\r\n",
-                        icao_address);
+        // This should never happen, since the aircraft dictionary will automatically remove the oldest aircraft to make
+        // space for a new one if full.
+        CONSOLE_ERROR("AircraftDictionary::IngestModeSADSBPacket",
+                      "Unable to find or create new aircraft with ICAO address 0x%lx in dictionary.\r\n", icao_address);
         return false;  // unable to find or create new aircraft in dictionary
     }
     aircraft_ptr->last_message_timestamp_ms = get_time_since_boot_ms();
@@ -1698,6 +1699,8 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
         // the aircraft as military and record the ICAO and signal strength / quality.
         aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsMilitary, true);
         return true;  // Early bail out.
+    } else if (packet.downlink_format == ModeSADSBPacket::kDownlinkFormatExtendedSquitterNonTransponder) {
+        aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsNonTransponder, true);
     }
 
     bool ret = false;
@@ -1755,7 +1758,7 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
             CONSOLE_WARNING("AircraftDictionary::IngestModeSADSBPacket",
                             "Received ADSB message with unsupported type code %d for ICAO 0x%lx.", type_code,
                             packet.icao_address);
-#endif  // ADSB_VERBOSE_PACKET_WARNINGS
+#endif                    // ADSB_VERBOSE_PACKET_WARNINGS
             ret = false;  // kTypeCodeInvalid, etc.
     }
     if (ret) {

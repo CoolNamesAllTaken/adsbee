@@ -147,7 +147,7 @@ class ModeSAircraft : public Aircraft {
         kBitFlagIdent = 16,                     // IDENT switch is currently active.
         kBitFlagAlert = 17,                     // Aircraft is indicating an alert.
         kBitFlagTCASRA = 18,                    // Indicates a TCAS resolution advisory is active.
-        kBitFlagIsRebroadcast = 19,             // Aircraft is being rebroadcast (this is not a primary source).
+        kBitFlagIsNonTransponder = 19,          // Aircraft is being rebroadcast (this is not a primary source).
         kBitFlagReserved0 = 20,
         kBitFlagReserved1 = 21,
         kBitFlagReserved2 = 22,
