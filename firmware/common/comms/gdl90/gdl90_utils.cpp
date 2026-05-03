@@ -293,7 +293,7 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
     data.longitude_deg = aircraft.longitude_deg;
     data.altitude_ft = aircraft.baro_altitude_ft;
     data.direction_deg = aircraft.direction_deg;
-    data.address_type = static_cast<GDL90TargetReportData::AddressType>(aircraft.address_qualifier);
+    data.address_type = static_cast<GDL90TargetReportData::AddressType>(aircraft.GetAddressQualifier());
 
     GDL90TargetReportData::MiscIndicatorTrackOrHeadingValue track_heading_value;
     if (!aircraft.HasBitFlag(UATAircraft::kBitFlagPositionValid)) {

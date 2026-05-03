@@ -513,6 +513,13 @@ class UATAircraft : public Aircraft {
     inline uint32_t GetUID() const { return ICAOToUID(icao_address, kAircraftTypeUAT); }
 
     /**
+     * Extracts the address qualifier from the ICAO address.
+     */
+    inline AddressQualifier GetAddressQualifier() const {
+        return static_cast<AddressQualifier>((icao_address & kAddressQualifierMask) >> kAddressQualifierBitShift);
+    }
+
+    /**
      * Standard Functions
      */
 
@@ -582,7 +589,6 @@ class UATAircraft : public Aircraft {
 
     uint16_t transponder_capability = 0;
     uint32_t icao_address = 0;
-    AddressQualifier address_qualifier = kADSBTargetWithICAO24BitAddress;
     char callsign[ModeSAircraft::kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
     uint16_t squawk = ADSBTypes::kSquawkCodeNotYetReceived;
     ADSBTypes::EmitterCategory emitter_category = ADSBTypes::kEmitterCategoryNoCategoryInfo;

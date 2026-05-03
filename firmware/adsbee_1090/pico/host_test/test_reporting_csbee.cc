@@ -191,10 +191,13 @@ TEST(CSBeeUtils, UATAircraftWithAddressQualifierToCSBeeString) {
     aircraft.last_message_signal_strength_dbm = -80;
     aircraft.last_message_signal_quality_bits = 3;
     aircraft.metrics.valid_frames = 2;
-    // Pack the address qualifier into the upper bits of icao_address, matching what GetICAOAddress() produces when
-    // UAT_PREPEND_ADDRESS_QUALIFIER_TO_ICAO_ADDRESS is defined.
-    aircraft.address_qualifier = UATAircraft::kTISBTargetWithICAO24BitAddress;
-    aircraft.icao_address = 0x12345E;
+    // Pack the address qualifier into the upper bits of icao_address.
+    aircraft.icao_address =
+        0x12345E | ((UATAircraft::kTISBTargetWithICAO24BitAddress << Aircraft::kAddressQualifierBitShift) &
+                    Aircraft::kAddressQualifierMask);
+    // Make sure we did the packing right.
+    ASSERT_EQ(aircraft.GetAddressQualifier(), UATAircraft::kTISBTargetWithICAO24BitAddress);
+    ASSERT_EQ(aircraft.icao_address & (~Aircraft::kAddressQualifierMask), 0x12345Eu);
 
     WriteCSBeeUATAircraftMessageStr(message, aircraft);
     std::string_view message_view(message);

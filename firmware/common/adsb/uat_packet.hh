@@ -5,9 +5,6 @@
 #include "adsb_types.hh"
 #include "buffer_utils.hh"
 
-// Enable address qualifier prepend to differentiate UAT targets from rebroadcasts.
-#define UAT_PREPEND_ADDRESS_QUALIFIER_TO_ICAO_ADDRESS
-
 static constexpr uint16_t kUATSyncNumBits = 36;
 static constexpr uint16_t kUATSyncNumBytes = CeilBitsToBytes(kUATSyncNumBits);
 

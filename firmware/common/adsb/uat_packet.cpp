@@ -185,11 +185,7 @@ uint32_t DecodedUATADSBPacket::GetICAOAddress() const {
     if (!IsValid()) {
         return 0;
     }
-#ifdef UAT_PREPEND_ADDRESS_QUALIFIER_TO_ICAO_ADDRESS
     return header.icao_address | (header.address_qualifier << Aircraft::kAddressQualifierBitShift);
-#else
-    return header.icao_address;
-#endif
 }
 
 void DecodedUATADSBPacket::ConstructUATADSBPacket(bool run_fec) {

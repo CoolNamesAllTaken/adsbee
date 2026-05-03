@@ -196,14 +196,7 @@ inline int16_t WriteCSBeeUATAircraftMessageStr(char message_buf[], const UATAirc
                  "%d,"        // SIGQ, e.g. 2
                  "%d,",       // UATFPS, e.g. 1
 #endif
-#ifdef UAT_PREPEND_ADDRESS_QUALIFIER_TO_ICAO_ADDRESS
-                 (aircraft.icao_address |
-                  (static_cast<uint32_t>(aircraft.address_qualifier)
-                   << Aircraft::kAddressQualifierBitShift)),  // ICAO with address qualifier prepended to differentiate
-                                                              // rebroadcasts from primary targets.
-#else
-                 aircraft.icao_address,  // ICAO
-#endif
+                 aircraft.icao_address,                      // ICAO and address qualfiier
                  aircraft.flags,                             // FLAGS
                  aircraft.callsign,                          // CALL
                  squawk_str,                                 // SQUAWK

@@ -399,6 +399,8 @@ bool ModeSAircraft::ApplySurfacePositionMessage(const ModeSADSBPacket& packet, u
         CONSOLE_WARNING("AircraftDictionary::ApplySurfacePositionMessage",
                         "Received surface position message with ADS-R reserved bit set for ICAO 0x%lx.", icao_address);
     }
+#else
+    (void)reserved_for_adsr;  // Suppress unused variable warning in non-verbose mode.
 #endif  // ADSB_VERBOSE_PACKET_WARNINGS
 
     // ME[22] - CPR Format
@@ -1799,7 +1801,7 @@ bool AircraftDictionary::IngestDecodedUATADSBPacket(const DecodedUATADSBPacket& 
         // Apply UAT state vector to aircraft.
         ingest_ret &= aircraft_ptr->ApplyUATADSBStateVector(packet.state_vector);
 
-        switch (aircraft_ptr->address_qualifier) {
+        switch (aircraft_ptr->GetAddressQualifier()) {
             case UATAircraft::kTISBTargetWithICAO24BitAddress:
             case UATAircraft::kTISBTargetWithTrackFileIdentifier:
                 // TIS-B target. Extract TIS-B station information.
@@ -1834,15 +1836,14 @@ bool AircraftDictionary::IngestDecodedUATADSBPacket(const DecodedUATADSBPacket& 
     return ingest_ret;
 }
 
-bool AircraftDictionary::RemoveAircraft(uint32_t icao_address) {
-    auto itr = dict.find(icao_address);
+bool AircraftDictionary::RemoveAircraft(uint32_t uid) {
+    auto itr = dict.find(uid);
     if (itr != dict.end()) {
         dict.erase(itr);
         return true;
     }
     CONSOLE_WARNING("AircraftDictionary::RemoveAircraft",
-                    "Attempted to remove aircraft with ICAO address 0x%lx, but it was not found in the dictionary.",
-                    icao_address);
+                    "Attempted to remove aircraft with UID 0x%lx, but it was not found in the dictionary.", uid);
     return false;  // aircraft was not found in the dictionary
 }
 
