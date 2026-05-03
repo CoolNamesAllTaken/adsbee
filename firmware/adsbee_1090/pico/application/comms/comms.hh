@@ -13,7 +13,7 @@ class CommsManager {
    public:
     static constexpr uint16_t kModeSPacketReportingQueueDepth = 100;
     static constexpr uint16_t kUATADSBPacketReportingQueueDepth = 50;
-    static constexpr uint16_t kUATUplinkPacketReportingQueueDepth = 2;
+    static constexpr uint16_t kUATUplinkPacketReportingQueueDepth = 4;
 
     static constexpr uint16_t kATCommandBufMaxLen = 1200;
     static constexpr uint16_t kNetworkConsoleBufMaxLen = 4096;
