@@ -15,6 +15,7 @@
 #include "mode_s_packet.hh"
 #include "uat_packet.hh"
 
+// #define ADSB_VERBOSE_PACKET_WARNINGS  // Uncomment to print warnings about unexpected packet formats / content.
 #define FILTER_CPR_POSITIONS
 
 /**
@@ -146,10 +147,10 @@ class ModeSAircraft : public Aircraft {
         kBitFlagIdent = 16,                     // IDENT switch is currently active.
         kBitFlagAlert = 17,                     // Aircraft is indicating an alert.
         kBitFlagTCASRA = 18,                    // Indicates a TCAS resolution advisory is active.
-        kBitFlagReserved0 = 19,
-        kBitFlagReserved1 = 20,
-        kBitFlagReserved2 = 21,
-        kBitFlagReserved3 = 22,
+        kBitFlagIsNonTransponder = 19,          // Aircraft is being rebroadcast (this is not a primary source).
+        kBitFlagReserved0 = 20,
+        kBitFlagReserved1 = 21,
+        kBitFlagReserved2 = 22,
         // Flags after kBitFlagUpdatedBaroAltitude are cleared at the end of every reporting interval.
         kBitFlagUpdatedBaroAltitude = 23,
         kBitFlagUpdatedGNSSAltitude = 24,
@@ -158,8 +159,8 @@ class ModeSAircraft : public Aircraft {
         kBitFlagUpdatedHorizontalSpeed = 27,
         kBitFlagUpdatedBaroVerticalRate = 28,
         kBitFlagUpdatedGNSSVerticalRate = 29,
-        kBitFlagReserved4 = 30,
-        kBitFlagReserved5 = 31,
+        kBitFlagReserved3 = 30,
+        kBitFlagReserved4 = 31,
         kBitFlagNumFlagBits
     };
 
@@ -432,7 +433,7 @@ class UATAircraft : public Aircraft {
     static constexpr uint16_t kSquawkNumDigits = 4;
 
     enum AddressQualifier : int8_t {
-        kAddressQualifierNotSet = -1,  // Address qualifier has not been set.
+        kAddressQualifierInvalid = -1,  // Address qualifier has not been set.
         kADSBTargetWithICAO24BitAddress = 0,
         kADSBTargetWithSelfAssignedTemporaryAddress = 1,
         kTISBTargetWithICAO24BitAddress = 2,
@@ -512,6 +513,13 @@ class UATAircraft : public Aircraft {
     inline uint32_t GetUID() const { return ICAOToUID(icao_address, kAircraftTypeUAT); }
 
     /**
+     * Extracts the address qualifier from the ICAO address.
+     */
+    inline AddressQualifier GetAddressQualifier() const {
+        return static_cast<AddressQualifier>((icao_address & kAddressQualifierMask) >> kAddressQualifierBitShift);
+    }
+
+    /**
      * Standard Functions
      */
 
@@ -581,7 +589,6 @@ class UATAircraft : public Aircraft {
 
     uint16_t transponder_capability = 0;
     uint32_t icao_address = 0;
-    AddressQualifier address_qualifier = kAddressQualifierNotSet;
     char callsign[ModeSAircraft::kCallSignMaxNumChars + 1] = "?";  // put extra EOS character at end
     uint16_t squawk = ADSBTypes::kSquawkCodeNotYetReceived;
     ADSBTypes::EmitterCategory emitter_category = ADSBTypes::kEmitterCategoryNoCategoryInfo;
@@ -619,7 +626,7 @@ class UATAircraft : public Aircraft {
     int16_t gnss_antenna_offset_right_of_reference_point_m = 0;
     int16_t gnss_antenna_offset_forward_of_reference_point_m = 0;
 
-    int8_t tis_b_site_id = -1;
+    int8_t tis_b_site_id = 0;
     bool utc_coupled = false;
     int8_t uat_version = -1;
 

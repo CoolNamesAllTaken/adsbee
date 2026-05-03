@@ -10,9 +10,6 @@
 #include "geo_utils.hh"
 #include "utils/buffer_utils.hh"  // for CHAR_TO_HEX
 
-// Enable address qualifier prepend to differentiate UAT targets from rebroadcasts.
-// #define UAT_PREPEND_ADDRESS_QUALIFIER_TO_ICAO_ADDRESS
-
 const fixedmath::fixed_t kDegPerTrackAngleHeadingTick =
     fixedmath::fixed_t{360.0f / 512};  // Direction ticks for Track Angle / Heading field (UAT Tech Manual Table 3-24).
 const fixedmath::fixed_t kDegPerRadian =
@@ -76,8 +73,11 @@ ADSBTypes::DirectionType DecodedUATADSBPacket::HorizontalVelocityToDirectionDegA
             return static_cast<ADSBTypes::DirectionType>((horizontal_velocity >> 9) & 0b11);
         } break;
         default:
+#ifdef ADSB_VERBOSE_PACKET_WARNINGS
             CONSOLE_ERROR("DecodedUATADSBPacket::HorizontalVelocityToDirectionDegAndSpeedKts",
                           "Unrecognized air ground state %d", air_ground_state);
+#endif              // ADSB_VERBOSE_PACKET_WARNINGS
+            break;  // Added so the default case is happy if the error print is disabled.
     }
     return ADSBTypes::kDirectionTypeNotAvailable;
 }
@@ -185,11 +185,7 @@ uint32_t DecodedUATADSBPacket::GetICAOAddress() const {
     if (!IsValid()) {
         return 0;
     }
-#ifdef UAT_PREPEND_ADDRESS_QUALIFIER_TO_ICAO_ADDRESS
     return header.icao_address | (header.address_qualifier << Aircraft::kAddressQualifierBitShift);
-#else
-    return header.icao_address;
-#endif
 }
 
 void DecodedUATADSBPacket::ConstructUATADSBPacket(bool run_fec) {

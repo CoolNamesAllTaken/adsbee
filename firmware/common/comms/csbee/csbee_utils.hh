@@ -196,7 +196,7 @@ inline int16_t WriteCSBeeUATAircraftMessageStr(char message_buf[], const UATAirc
                  "%d,"        // SIGQ, e.g. 2
                  "%d,",       // UATFPS, e.g. 1
 #endif
-                 aircraft.icao_address,                      // ICAO
+                 aircraft.icao_address,                      // ICAO and address qualfiier
                  aircraft.flags,                             // FLAGS
                  aircraft.callsign,                          // CALL
                  squawk_str,                                 // SQUAWK
