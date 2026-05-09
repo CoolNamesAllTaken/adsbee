@@ -260,13 +260,17 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
             esp_core_dump_summary_t summary;
             if (esp_core_dump_image_check() == ESP_OK && esp_core_dump_get_summary(&summary) == ESP_OK) {
                 reboot_info.has_core_dump = true;
-                int written = snprintf(reboot_info.core_dump_summary, kCoreDumpSummaryMaxLen,
+                int written = snprintf(reboot_info.core_dump_summary, sizeof(reboot_info.core_dump_summary),
                                        "Task: %.16s PC:0x%08lx BT:", summary.exc_task, (unsigned long)summary.exc_pc);
-                for (uint32_t i = 0; i < summary.exc_bt_info.depth && written < kCoreDumpSummaryMaxLen; i++) {
-                    written += snprintf(reboot_info.core_dump_summary + written, kCoreDumpSummaryMaxLen - written,
-                                        " 0x%08lx", (unsigned long)summary.exc_bt_info.bt[i]);
+                for (uint32_t i = 0; i < summary.exc_bt_info.depth; i++) {
+                    if (written < 0 || written >= static_cast<int>(sizeof(reboot_info.core_dump_summary))) break;
+                    int n = snprintf(reboot_info.core_dump_summary + written,
+                                     sizeof(reboot_info.core_dump_summary) - written,
+                                     " 0x%08lx", (unsigned long)summary.exc_bt_info.bt[i]);
+                    if (n < 0) break;
+                    written += n;
                 }
-                reboot_info.core_dump_summary[kCoreDumpSummaryMaxLen] = '\0';
+                reboot_info.core_dump_summary[sizeof(reboot_info.core_dump_summary) - 1] = '\0';
             }
 #endif
             memcpy(buf, reinterpret_cast<uint8_t*>(&reboot_info) + offset, buf_len);

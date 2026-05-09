@@ -282,7 +282,7 @@ bool ADSBeeServer::ReportGDL90() {
     comms_manager.WiFiAccessPointSendMessageToAllStations(message);
 
     // Ownship Report
-    GDL90Reporter::GDL90TargetReportData ownship_data;
+    GDL90Reporter::GDL90TargetReportData ownship_data = {};
     SettingsManager::RxPosition& rx_position = object_dictionary.composite_device_status.rp2040.rx_position;
     uint32_t ownship_icao_address = 0x0;
     // TODO: Add ownship reporting if we have an actual position source.
