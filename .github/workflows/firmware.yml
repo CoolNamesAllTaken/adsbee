@@ -98,7 +98,7 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: adsbee_esp.bin
-        path: firmware/adsbee_1090/esp/build
+        path: firmware/adsbee_1090/esp/build/Release
     - name: Download TI firmware
       uses: actions/download-artifact@v4
       with:
