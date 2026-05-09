@@ -33,8 +33,7 @@ inline uint32_t get_time_since_boot_ms() {
 #elif ON_ESP32
     return xTaskGetTickCount() * portTICK_PERIOD_MS;
 #elif ON_TI
-    return static_cast<uint32_t>(get_time_since_boot_us()) /
-           1e3;  // Note: this will overflow before UINT32_MAX due to the divide by 1000.
+    return static_cast<uint32_t>(get_time_since_boot_us() / 1e3);
 #else
     return time_since_boot_us / 1e3;
 #endif
