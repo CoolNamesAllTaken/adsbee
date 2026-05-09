@@ -151,12 +151,15 @@ class ObjectDictionary {
     };
 
     static constexpr uint16_t kResetReasonStrMaxLen = 32;
+    static constexpr uint16_t kEspErrStrMaxLen = 40;
     static constexpr uint16_t kCoreDumpSummaryMaxLen = 400;
 
     struct __attribute__((__packed__)) ESP32RebootInfo {
         uint8_t reset_reason;                                  // esp_reset_reason_t cast to uint8_t
         char reset_reason_str[kResetReasonStrMaxLen + 1];
         bool core_dump_to_flash_enabled;                       // True if built with CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
+        char core_dump_check_err_str[kEspErrStrMaxLen + 1];   // esp_err_to_name() of esp_core_dump_image_check()
+        char core_dump_summary_err_str[kEspErrStrMaxLen + 1]; // esp_err_to_name() of esp_core_dump_get_summary()
         bool has_core_dump;                                    // True if a valid core dump was read from flash
         char core_dump_summary[kCoreDumpSummaryMaxLen + 1];   // "Task: X PC:0x... BT: 0x... ..."
     };

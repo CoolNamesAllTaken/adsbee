@@ -8,6 +8,7 @@
 #include "esp_system.h"
 #ifdef CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
 #include "esp_core_dump.h"
+#include "esp_err.h"
 #endif
 #elif defined(ON_TI)
 #include "cpu_utils.hh"
@@ -259,19 +260,28 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
 #ifdef CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
             reboot_info.core_dump_to_flash_enabled = true;
             esp_core_dump_summary_t summary;
-            if (esp_core_dump_image_check() == ESP_OK && esp_core_dump_get_summary(&summary) == ESP_OK) {
-                reboot_info.has_core_dump = true;
-                int written = snprintf(reboot_info.core_dump_summary, sizeof(reboot_info.core_dump_summary),
-                                       "Task: %.16s PC:0x%08lx BT:", summary.exc_task, (unsigned long)summary.exc_pc);
-                for (uint32_t i = 0; i < summary.exc_bt_info.depth; i++) {
-                    if (written < 0 || written >= static_cast<int>(sizeof(reboot_info.core_dump_summary))) break;
-                    int n = snprintf(reboot_info.core_dump_summary + written,
-                                     sizeof(reboot_info.core_dump_summary) - written,
-                                     " 0x%08lx", (unsigned long)summary.exc_bt_info.bt[i]);
-                    if (n < 0) break;
-                    written += n;
+            esp_err_t check_err = esp_core_dump_image_check();
+            strncpy(reboot_info.core_dump_check_err_str, esp_err_to_name(check_err), kEspErrStrMaxLen);
+            reboot_info.core_dump_check_err_str[kEspErrStrMaxLen] = '\0';
+            if (check_err == ESP_OK) {
+                esp_err_t summary_err = esp_core_dump_get_summary(&summary);
+                strncpy(reboot_info.core_dump_summary_err_str, esp_err_to_name(summary_err), kEspErrStrMaxLen);
+                reboot_info.core_dump_summary_err_str[kEspErrStrMaxLen] = '\0';
+                if (summary_err == ESP_OK) {
+                    reboot_info.has_core_dump = true;
+                    int written = snprintf(reboot_info.core_dump_summary, sizeof(reboot_info.core_dump_summary),
+                                           "Task: %.16s PC:0x%08lx BT:", summary.exc_task,
+                                           (unsigned long)summary.exc_pc);
+                    for (uint32_t i = 0; i < summary.exc_bt_info.depth; i++) {
+                        if (written < 0 || written >= static_cast<int>(sizeof(reboot_info.core_dump_summary))) break;
+                        int n = snprintf(reboot_info.core_dump_summary + written,
+                                         sizeof(reboot_info.core_dump_summary) - written,
+                                         " 0x%08lx", (unsigned long)summary.exc_bt_info.bt[i]);
+                        if (n < 0) break;
+                        written += n;
+                    }
+                    reboot_info.core_dump_summary[sizeof(reboot_info.core_dump_summary) - 1] = '\0';
                 }
-                reboot_info.core_dump_summary[sizeof(reboot_info.core_dump_summary) - 1] = '\0';
             }
 #endif
             memcpy(buf, reinterpret_cast<uint8_t*>(&reboot_info) + offset, buf_len);

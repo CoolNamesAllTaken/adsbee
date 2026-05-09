@@ -65,6 +65,14 @@ if (ON_EMBEDDED_DEVICE)
     else()
         set(ESP_BUILD_SUBDIR "build/Release")
     endif()
+    configure_file(${CMAKE_SOURCE_DIR}/../esp/${ESP_BUILD_SUBDIR}/bootloader/bootloader.bin
+        ${CMAKE_CURRENT_LIST_DIR}/peripherals/esp32/bin/bootloader.bin
+        COPYONLY
+    )
+    configure_file(${CMAKE_SOURCE_DIR}/../esp/${ESP_BUILD_SUBDIR}/partition_table/partition-table.bin
+        ${CMAKE_CURRENT_LIST_DIR}/peripherals/esp32/bin/partition-table.bin
+        COPYONLY
+    )
     configure_file(${CMAKE_SOURCE_DIR}/../esp/${ESP_BUILD_SUBDIR}/adsbee_esp.bin
         ${CMAKE_CURRENT_LIST_DIR}/peripherals/esp32/bin/adsbee_esp.bin
         COPYONLY

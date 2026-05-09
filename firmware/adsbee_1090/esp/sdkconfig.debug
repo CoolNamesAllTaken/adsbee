@@ -1,5 +1,12 @@
 # Debug build sdkconfig overrides — enables core dump to flash.
 # Build with: idf.py -DSDKCONFIG_DEFAULTS="sdkconfig;sdkconfig.debug" build
+# After changing this file, delete esp/sdkconfig_debug to force regeneration.
+
+# Partition table: use a custom table that adds a coredump partition at the end of flash.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_debug.csv"
+
+# Core dump to flash.
 CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
 CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
 CONFIG_ESP_COREDUMP_CHECKSUM_CRC32=y
