@@ -1,0 +1,7 @@
+# Debug build sdkconfig overrides — enables core dump to flash.
+# Build with: idf.py -DSDKCONFIG_DEFAULTS="sdkconfig;sdkconfig.debug" build
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+CONFIG_ESP_COREDUMP_CHECKSUM_CRC32=y
+CONFIG_ESP_COREDUMP_MAX_TASKS_NUM=64
+CONFIG_ESP_COREDUMP_STACK_SIZE=0x400

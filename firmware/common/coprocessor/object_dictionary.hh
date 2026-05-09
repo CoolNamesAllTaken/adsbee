@@ -64,6 +64,7 @@ class ObjectDictionary {
         kAddrRollQueue = 0x0E,     // Used to roll various queues on coprocessor slaves to confirm they have been read.
         kAddrSCCommandRequests = 0x0F,         // Used by slave to request commands from master.
         kAddrCompositeArrayRawPackets = 0x10,  // Single endpoint for reading / writing raw ADSB and UAT packets.
+        kAddrESP32RebootInfo = 0x11,           // ESP32 last reset reason and optional core dump summary.
         kNumAddrs
     };
 
@@ -146,6 +147,16 @@ class ObjectDictionary {
         uint8_t wifi_ap_mac[kMACAddrLenBytes];
         uint8_t bluetooth_mac[kMACAddrLenBytes];
         uint8_t ethernet_mac[kMACAddrLenBytes];
+    };
+
+    static constexpr uint16_t kResetReasonStrMaxLen = 32;
+    static constexpr uint16_t kCoreDumpSummaryMaxLen = 400;
+
+    struct __attribute__((__packed__)) ESP32RebootInfo {
+        uint8_t reset_reason;                                  // esp_reset_reason_t cast to uint8_t
+        char reset_reason_str[kResetReasonStrMaxLen + 1];
+        bool has_core_dump;                                    // True if a valid core dump was read from flash
+        char core_dump_summary[kCoreDumpSummaryMaxLen + 1];   // "Task: X PC:0x... BT: 0x... ..."
     };
 
     /**

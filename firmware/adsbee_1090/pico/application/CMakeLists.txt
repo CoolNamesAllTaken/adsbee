@@ -60,7 +60,12 @@ if (ON_EMBEDDED_DEVICE)
     include(${CMAKE_CURRENT_LIST_DIR}/cmake_scripts/bin2array.cmake)
     # Create a file dependency that copies over the most recently built ESP32 firmware binary to the bin directory used by
     # esp32_flasher. Re-runs cmake if the file gets changed.
-    configure_file(${CMAKE_SOURCE_DIR}/../esp/build/adsbee_esp.bin
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(ESP_BUILD_SUBDIR "build/Debug")
+    else()
+        set(ESP_BUILD_SUBDIR "build/Release")
+    endif()
+    configure_file(${CMAKE_SOURCE_DIR}/../esp/${ESP_BUILD_SUBDIR}/adsbee_esp.bin
         ${CMAKE_CURRENT_LIST_DIR}/peripherals/esp32/bin/adsbee_esp.bin
         COPYONLY
     )

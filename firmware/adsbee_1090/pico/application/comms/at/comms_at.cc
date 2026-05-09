@@ -347,6 +347,29 @@ CPP_AT_CALLBACK(CommsManager::ATESP32FlashCallback) {
     CPP_AT_SUCCESS();
 }
 
+CPP_AT_CALLBACK(CommsManager::ATESP32RebootInfoCallback) {
+    switch (op) {
+        case '?': {
+            if (!esp32.IsEnabled()) {
+                CPP_AT_ERROR("ESP32 is not enabled.");
+            }
+            ObjectDictionary::ESP32RebootInfo reboot_info;
+            if (!esp32.Read(ObjectDictionary::Address::kAddrESP32RebootInfo, reboot_info,
+                            sizeof(reboot_info))) {
+                CPP_AT_ERROR("Failed to read ESP32 reboot info.");
+            }
+            CPP_AT_PRINTF("ESP32 Reset Reason: %d (%s)\r\n", reboot_info.reset_reason,
+                          reboot_info.reset_reason_str);
+            if (reboot_info.has_core_dump) {
+                CPP_AT_PRINTF("ESP32 Core Dump: %s\r\n", reboot_info.core_dump_summary);
+            }
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATEthernetCallback) {
     switch (op) {
         case '?':
@@ -1303,6 +1326,12 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string = "AT+ESP32_FLASH\r\n\tTriggers a firmware update of the ESP32 from the firmware image stored in "
                     "the RP2040's flash memory.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATESP32FlashCallback, comms_manager)},
+    {.command = "ESP32_REBOOT_INFO",
+     .min_args = 0,
+     .max_args = 0,
+     .help_string = "AT+ESP32_REBOOT_INFO?\r\n\tQuery the reason the ESP32 last rebooted. "
+                    "In debug builds also prints the core dump backtrace if available.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATESP32RebootInfoCallback, comms_manager)},
     {.command = "FEED",
      .min_args = 0,
      .max_args = 5,

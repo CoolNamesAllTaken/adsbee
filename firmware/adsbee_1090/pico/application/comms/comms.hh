@@ -63,6 +63,7 @@ class CommsManager {
     CPP_AT_CALLBACK(ATDeviceInfoCallback);
     CPP_AT_CALLBACK(ATESP32EnableCallback);
     CPP_AT_CALLBACK(ATESP32FlashCallback);
+    CPP_AT_CALLBACK(ATESP32RebootInfoCallback);
     CPP_AT_CALLBACK(ATEthernetCallback);
     CPP_AT_CALLBACK(ATFeedCallback);
     CPP_AT_CALLBACK(ATHostnameCallback);
