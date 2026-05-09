@@ -285,6 +285,7 @@ bool ADSBeeServer::ReportGDL90() {
     GDL90Reporter::GDL90TargetReportData ownship_data;
     SettingsManager::RxPosition& rx_position = object_dictionary.composite_device_status.rp2040.rx_position;
     uint32_t ownship_icao_address = 0x0;
+    // TODO: Add ownship reporting if we have an actual position source.
     if (rx_position.source == SettingsManager::RxPosition::PositionSource::kPositionSourceAircraftMatchingICAO) {
         // Only send ownship data with a position if we are tracking an aircraft.
         ownship_data.latitude_deg = rx_position.latitude_deg;
@@ -295,12 +296,11 @@ bool ADSBeeServer::ReportGDL90() {
         ownship_data.participant_address = rx_position.icao_address;
 
         ownship_icao_address = ownship_data.participant_address;  // Use this to ignore ownship traffic reports.
-    }
 
-    // TODO: Fill out additional ownship data as needed.
-    message.len = gdl90.WriteGDL90TargetReportMessage(message.data, CommsManager::NetworkMessage::kMaxLenBytes,
-                                                      ownship_data, true);
-    comms_manager.WiFiAccessPointSendMessageToAllStations(message);
+        message.len = gdl90.WriteGDL90TargetReportMessage(message.data, CommsManager::NetworkMessage::kMaxLenBytes,
+                                                          ownship_data, true);
+        comms_manager.WiFiAccessPointSendMessageToAllStations(message);
+    }
 
     // Traffic Reports
     int16_t aircraft_index = -1;  // Just used for error reporting.
