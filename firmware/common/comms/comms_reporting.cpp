@@ -405,7 +405,7 @@ bool CommsManager::ReportMAVLINK(ReportSink* sinks, uint16_t num_sinks, uint8_t 
     // All UIDs processed — send the delimiter and mark this version's round complete.
     switch (mavlink_version) {
         case 1: {
-            mavlink_request_data_stream_t request_data_stream_msg = {0};
+            mavlink_request_data_stream_t request_data_stream_msg = {};
             for (uint16_t i = 0; i < num_sinks; i++) {
                 mavlink_msg_request_data_stream_send_struct(static_cast<mavlink_channel_t>(sinks[i]),
                                                             &request_data_stream_msg);

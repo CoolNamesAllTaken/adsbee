@@ -90,30 +90,34 @@ mavlink_adsb_vehicle_t ModeSAircraftToMAVLINKADSBVehicleMessage(const ModeSAircr
     // Initialize the message
     // Prefer GNSS altitude for MAVLINK applications (e.g. drone traffic avoidance).
     bool use_gnss_altitude = aircraft.HasBitFlag(ModeSAircraft::kBitFlagGNSSAltitudeValid);
-    mavlink_adsb_vehicle_t adsb_vehicle_msg = {
-        .ICAO_address = aircraft.icao_address,
-        // Latitude [degE7]
-        .lat = static_cast<int32_t>(aircraft.latitude_deg * 1e7f),
-        // Longitude [degE7]
-        .lon = static_cast<int32_t>(aircraft.longitude_deg * 1e7f),
-        // Altitude [mm]: Prefer GNSS altitude but fall back to baro altitude.
-        .altitude = FeetToMeters(use_gnss_altitude ? aircraft.gnss_altitude_ft : aircraft.baro_altitude_ft) * 1000,
-        // Heading [cdeg]
-        .heading = static_cast<uint16_t>(aircraft.direction_deg * 100),
-        // Horizontal Velocity [cm/s]
-        .hor_velocity = static_cast<uint16_t>(KtsToMps(static_cast<int>(aircraft.speed_kts)) * 100),
-        // Vertical Velocity [cm/s]: Prefer GNSS vertical velocity but fall back to baro vertical velocity.
-        .ver_velocity = static_cast<int16_t>(FpmToMps(aircraft.HasBitFlag(ModeSAircraft::kBitFlagGNSSVerticalRateValid)
-                                                          ? aircraft.gnss_vertical_rate_fpm
-                                                          : aircraft.baro_vertical_rate_fpm) *
-                                             100),
-        .flags = flags,
-        .squawk = aircraft.squawk,
-        .altitude_type = static_cast<uint8_t>(use_gnss_altitude ? kMAVLINKAltitudeTypeGNSS : kMAVLINKAltitudeTypeBaro),
-        // Fill out callsign later.
-        .emitter_type = AircraftCategoryToMAVLINKEmitterType(aircraft.emitter_category),
-        // Time Since Last Contact [s]
-        .tslc = static_cast<uint8_t>((get_time_since_boot_ms() - aircraft.last_message_timestamp_ms) / 1000)};
+    mavlink_adsb_vehicle_t adsb_vehicle_msg = {};
+    adsb_vehicle_msg.ICAO_address = aircraft.icao_address;
+    // Latitude [degE7]
+    adsb_vehicle_msg.lat = static_cast<int32_t>(aircraft.latitude_deg * 1e7f);
+    // Longitude [degE7]
+    adsb_vehicle_msg.lon = static_cast<int32_t>(aircraft.longitude_deg * 1e7f);
+    // Altitude [mm]: Prefer GNSS altitude but fall back to baro altitude.
+    adsb_vehicle_msg.altitude =
+        FeetToMeters(use_gnss_altitude ? aircraft.gnss_altitude_ft : aircraft.baro_altitude_ft) * 1000;
+    // Heading [cdeg]
+    adsb_vehicle_msg.heading = static_cast<uint16_t>(aircraft.direction_deg * 100);
+    // Horizontal Velocity [cm/s]
+    adsb_vehicle_msg.hor_velocity = static_cast<uint16_t>(KtsToMps(static_cast<int>(aircraft.speed_kts)) * 100);
+    // Vertical Velocity [cm/s]: Prefer GNSS vertical velocity but fall back to baro vertical velocity.
+    adsb_vehicle_msg.ver_velocity =
+        static_cast<int16_t>(FpmToMps(aircraft.HasBitFlag(ModeSAircraft::kBitFlagGNSSVerticalRateValid)
+                                           ? aircraft.gnss_vertical_rate_fpm
+                                           : aircraft.baro_vertical_rate_fpm) *
+                             100);
+    adsb_vehicle_msg.flags = flags;
+    adsb_vehicle_msg.squawk = aircraft.squawk;
+    adsb_vehicle_msg.altitude_type =
+        static_cast<uint8_t>(use_gnss_altitude ? kMAVLINKAltitudeTypeGNSS : kMAVLINKAltitudeTypeBaro);
+    // Fill out callsign later.
+    adsb_vehicle_msg.emitter_type = AircraftCategoryToMAVLINKEmitterType(aircraft.emitter_category);
+    // Time Since Last Contact [s]
+    adsb_vehicle_msg.tslc =
+        static_cast<uint8_t>((get_time_since_boot_ms() - aircraft.last_message_timestamp_ms) / 1000);
     // MAVLINK callsign field is 9 chars, so there's room to copy over the full 8 char callsign + null terminator.
     strncpy(adsb_vehicle_msg.callsign, aircraft.callsign, ModeSAircraft::kCallSignMaxNumChars + 1);
 
@@ -155,30 +159,34 @@ mavlink_adsb_vehicle_t UATAircraftToMAVLINKADSBVehicleMessage(const UATAircraft 
     // Initialize the message
     // Prefer GNSS altitude for MAVLINK applications (e.g. drone traffic avoidance).
     bool use_gnss_altitude = aircraft.HasBitFlag(UATAircraft::kBitFlagGNSSAltitudeValid);
-    mavlink_adsb_vehicle_t adsb_vehicle_msg = {
-        .ICAO_address = aircraft.icao_address,
-        // Latitude [degE7]
-        .lat = static_cast<int32_t>(aircraft.latitude_deg * 1e7f),
-        // Longitude [degE7]
-        .lon = static_cast<int32_t>(aircraft.longitude_deg * 1e7f),
-        // Altitude [mm]: Prefer GNSS altitude but fall back to baro altitude.
-        .altitude = FeetToMeters(use_gnss_altitude ? aircraft.gnss_altitude_ft : aircraft.baro_altitude_ft) * 1000,
-        // Heading [cdeg]
-        .heading = static_cast<uint16_t>(aircraft.direction_deg * 100),
-        // Horizontal Velocity [cm/s]
-        .hor_velocity = static_cast<uint16_t>(KtsToMps(static_cast<int>(aircraft.speed_kts)) * 100),
-        // Vertical Velocity [cm/s]: Prefer GNSS vertical velocity but fall back to baro vertical velocity.
-        .ver_velocity = static_cast<int16_t>(FpmToMps(aircraft.HasBitFlag(UATAircraft::kBitFlagGNSSVerticalRateValid)
-                                                          ? aircraft.gnss_vertical_rate_fpm
-                                                          : aircraft.baro_vertical_rate_fpm) *
-                                             100),
-        .flags = flags,
-        .squawk = aircraft.squawk,
-        .altitude_type = static_cast<uint8_t>(use_gnss_altitude ? kMAVLINKAltitudeTypeGNSS : kMAVLINKAltitudeTypeBaro),
-        // Fill out callsign later.
-        .emitter_type = AircraftCategoryToMAVLINKEmitterType(aircraft.emitter_category),
-        // Time Since Last Contact [s]
-        .tslc = static_cast<uint8_t>((get_time_since_boot_ms() - aircraft.last_message_timestamp_ms) / 1000)};
+    mavlink_adsb_vehicle_t adsb_vehicle_msg = {};
+    adsb_vehicle_msg.ICAO_address = aircraft.icao_address;
+    // Latitude [degE7]
+    adsb_vehicle_msg.lat = static_cast<int32_t>(aircraft.latitude_deg * 1e7f);
+    // Longitude [degE7]
+    adsb_vehicle_msg.lon = static_cast<int32_t>(aircraft.longitude_deg * 1e7f);
+    // Altitude [mm]: Prefer GNSS altitude but fall back to baro altitude.
+    adsb_vehicle_msg.altitude =
+        FeetToMeters(use_gnss_altitude ? aircraft.gnss_altitude_ft : aircraft.baro_altitude_ft) * 1000;
+    // Heading [cdeg]
+    adsb_vehicle_msg.heading = static_cast<uint16_t>(aircraft.direction_deg * 100);
+    // Horizontal Velocity [cm/s]
+    adsb_vehicle_msg.hor_velocity = static_cast<uint16_t>(KtsToMps(static_cast<int>(aircraft.speed_kts)) * 100);
+    // Vertical Velocity [cm/s]: Prefer GNSS vertical velocity but fall back to baro vertical velocity.
+    adsb_vehicle_msg.ver_velocity =
+        static_cast<int16_t>(FpmToMps(aircraft.HasBitFlag(UATAircraft::kBitFlagGNSSVerticalRateValid)
+                                           ? aircraft.gnss_vertical_rate_fpm
+                                           : aircraft.baro_vertical_rate_fpm) *
+                             100);
+    adsb_vehicle_msg.flags = flags;
+    adsb_vehicle_msg.squawk = aircraft.squawk;
+    adsb_vehicle_msg.altitude_type =
+        static_cast<uint8_t>(use_gnss_altitude ? kMAVLINKAltitudeTypeGNSS : kMAVLINKAltitudeTypeBaro);
+    // Fill out callsign later.
+    adsb_vehicle_msg.emitter_type = AircraftCategoryToMAVLINKEmitterType(aircraft.emitter_category);
+    // Time Since Last Contact [s]
+    adsb_vehicle_msg.tslc =
+        static_cast<uint8_t>((get_time_since_boot_ms() - aircraft.last_message_timestamp_ms) / 1000);
     // MAVLINK callsign field is 9 chars, so there's room to copy over the full 8 char callsign + null terminator.
     strncpy(adsb_vehicle_msg.callsign, aircraft.callsign, UATAircraft::kCallSignMaxNumChars + 1);
 

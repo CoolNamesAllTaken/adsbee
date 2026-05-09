@@ -36,18 +36,21 @@ build_esp() {
     check_esp_idf_version
     if [ "$debug" = true ]; then
         echo "=== Building ESP32-S3 firmware (Debug) ==="
+        # sdkconfig_debug is auto-generated on first run by layering sdkconfig.debug on top of sdkconfig.
+        # Delete esp/sdkconfig_debug to force regeneration (e.g. after base sdkconfig changes).
         docker compose run --rm esp-idf bash -c "
             cd /firmware/adsbee_1090/esp &&
-            idf.py -D CMAKE_BUILD_TYPE=Debug build
+            idf.py -B build/Debug -D CMAKE_BUILD_TYPE=Debug -D SDKCONFIG=\"\$(pwd)/sdkconfig_debug\" -D \"SDKCONFIG_DEFAULTS=\$(pwd)/sdkconfig;\$(pwd)/sdkconfig.debug\" build
         "
+        echo "=== ESP32-S3 build complete (Debug): esp/build/Debug/adsbee_esp.bin ==="
     else
         echo "=== Building ESP32-S3 firmware ==="
         docker compose run --rm esp-idf bash -c "
             cd /firmware/adsbee_1090/esp &&
-            idf.py build
+            idf.py -B build/Release build
         "
+        echo "=== ESP32-S3 build complete: esp/build/Release/adsbee_esp.bin ==="
     fi
-    echo "=== ESP32-S3 build complete: esp/build/adsbee_esp.bin ==="
 }
 
 build_ti() {
@@ -68,8 +71,9 @@ build_pico() {
     local build_type=$( [ "$debug" = true ] && echo "Debug" || echo "Release" )
     echo "=== Building RP2040 Pico firmware ($build_type) ==="
     # Check that ESP32 and TI firmware exist.
-    if [ ! -f esp/build/adsbee_esp.bin ]; then
-        echo "ERROR: esp/build/adsbee_esp.bin not found. Run ESP32 build first."
+    local esp_build_dir=$( [ "$debug" = true ] && echo "esp/build/Debug" || echo "esp/build/Release" )
+    if [ ! -f $esp_build_dir/adsbee_esp.bin ]; then
+        echo "ERROR: $esp_build_dir/adsbee_esp.bin not found. Run ESP32 build first."
         exit 1
     fi
     if [ ! -f ti/sub_ghz_radio/build/sub_ghz_radio.bin ]; then
@@ -110,6 +114,7 @@ build_test() {
 clean_builds() {
     echo "=== Cleaning build directories ==="
     rm -rf esp/build
+    rm -rf esp/sdkconfig_debug
     rm -rf ti/sub_ghz_radio/build
     rm -rf pico/build
     echo "=== Clean complete ==="

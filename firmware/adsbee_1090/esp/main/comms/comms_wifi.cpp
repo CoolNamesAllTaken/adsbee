@@ -185,7 +185,7 @@ bool CommsManager::WiFiInit() {
 
     if (wifi_ap_enabled) {
         // Access Point Configuration
-        wifi_config_t wifi_config_ap = {0};
+        wifi_config_t wifi_config_ap = {};
 
         strncpy((char*)(wifi_config_ap.ap.ssid), wifi_ap_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
         strncpy((char*)(wifi_config_ap.ap.password), wifi_ap_password,
@@ -204,7 +204,7 @@ bool CommsManager::WiFiInit() {
 
     if (wifi_sta_enabled) {
         // Station Configuration
-        wifi_config_t wifi_config_sta = {0};
+        wifi_config_t wifi_config_sta = {};
 
         strncpy((char*)(wifi_config_sta.sta.ssid), wifi_sta_ssid, SettingsManager::Settings::kWiFiSSIDMaxLen + 1);
         strncpy((char*)(wifi_config_sta.sta.password), wifi_sta_password,

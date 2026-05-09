@@ -120,7 +120,7 @@ esp_err_t safe_send(int sock, const void* data, size_t total_len) {
         }
 
         // 3. Socket is ready, try to send the remaining chunk
-        int sent_now = send(sock, data + sent_total, total_len - sent_total, 0);
+        int sent_now = send(sock, static_cast<const uint8_t*>(data) + sent_total, total_len - sent_total, 0);
 
         if (sent_now > 0) {
             sent_total += sent_now;
@@ -417,9 +417,6 @@ bool CommsManager::ConnectFeedSocket(uint16_t feed_index) {
     return true;
 }
 
-// Rate limit the SendBuf function by keeping a running count of bytes sent in every 10ms interval.
-static uint32_t last_send_buf_counter_reset_timestamp_ms = 0;
-static uint32_t send_buf_counter_bytes = 0;
 bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len) {
     if (iface >= SettingsManager::Settings::kMaxNumFeeds) {
         CONSOLE_ERROR("CommsManager::SendBuf", "Invalid feed index %d.", iface);

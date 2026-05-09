@@ -8,6 +8,8 @@
 		}
 	],
 	"settings": {
+		// Use build/Debug/ for all VS Code builds so they never share a CMake cache with Docker builds.
+		"idf.buildPath": "${workspaceFolder}/build/Debug",
 		"C_Cpp.default.compilerPath": "/home/jmcnelly/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20240530/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc",
 		"C_Cpp.dimInactiveRegions": true,
 		"C_Cpp.default.defines": [
@@ -95,15 +97,32 @@
 			"errno.h": "c"
 		},
 	},
+	"tasks": {
+		"version": "2.0.0",
+		"tasks": [
+			{
+				"label": "Build ESP32 Debug",
+				"type": "shell",
+				// sdkconfig_debug is auto-generated on first run; delete it to force regeneration.
+				"command": "idf.py -B build/Debug -D CMAKE_BUILD_TYPE=Debug -D SDKCONFIG='${workspaceFolder}/sdkconfig_debug' -D 'SDKCONFIG_DEFAULTS=${workspaceFolder}/sdkconfig;${workspaceFolder}/sdkconfig.debug' build",
+				"options": {
+					"cwd": "${workspaceFolder}"
+				},
+				"group": "build",
+				"problemMatcher": []
+			}
+		]
+	},
 	"launch": {
 		"version": "0.2.0",
 		"configurations": [
 			{
 				"type": "gdbtarget",
 				"request": "attach",
-				"name": "Eclipse CDT Remote",
+				"name": "Eclipse CDT Remote (Debug)",
+				"preLaunchTask": "Build ESP32 Debug",
 				"cwd": "${workspaceFolder:esp}",
-				"program": "${workspaceFolder:esp}/build/${command:espIdf.getProjectName}.elf",
+				"program": "${workspaceFolder:esp}/build/Debug/${command:espIdf.getProjectName}.elf",
 				"initCommands": [
 					"set remote hardware-watchpoint-limit {IDF_TARGET_CPU_WATCHPOINT_NUM}",
 					"mon reset halt",

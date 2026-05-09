@@ -64,6 +64,8 @@ class ObjectDictionary {
         kAddrRollQueue = 0x0E,     // Used to roll various queues on coprocessor slaves to confirm they have been read.
         kAddrSCCommandRequests = 0x0F,         // Used by slave to request commands from master.
         kAddrCompositeArrayRawPackets = 0x10,  // Single endpoint for reading / writing raw ADSB and UAT packets.
+        kAddrESP32RebootInfo = 0x11,           // ESP32 last reset reason and optional core dump summary.
+        kAddrESP32TriggerAbort = 0x12,         // Debug only: trigger abort() on the ESP32 to test core dump.
         kNumAddrs
     };
 
@@ -146,6 +148,14 @@ class ObjectDictionary {
         uint8_t wifi_ap_mac[kMACAddrLenBytes];
         uint8_t bluetooth_mac[kMACAddrLenBytes];
         uint8_t ethernet_mac[kMACAddrLenBytes];
+    };
+
+    static constexpr uint16_t kResetReasonStrMaxLen = 32;
+
+    struct __attribute__((__packed__)) ESP32RebootInfo {
+        uint8_t reset_reason;                    // esp_reset_reason_t cast to uint8_t
+        char reset_reason_str[kResetReasonStrMaxLen + 1];
+        bool core_dump_to_flash_enabled;         // True if built with CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
     };
 
     /**
@@ -270,6 +280,7 @@ class ObjectDictionary {
      * kAddrDeviceStatus, or when other functions want to refresh the device status before borrowing it for other uses.
      */
     void UpdateDeviceStatus();
+
 #endif
 
     /**

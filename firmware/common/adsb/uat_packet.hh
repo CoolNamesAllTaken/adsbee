@@ -287,12 +287,12 @@ class DecodedUATADSBPacket {
     bool has_target_state = false;            // True if the packet has a target state.
     bool has_trajectory_change = false;       // True if the packet has a trajectory change
 
-    UATHeader header = {0};                                // Pointer to the UAT header.
-    UATStateVector state_vector = {0};                     // Pointer to the UAT state vector.
-    UATModeStatus mode_status = {0};                       // Pointer to the UAT mode status.
-    UATAuxiliaryStateVector auxiliary_state_vector = {0};  // Pointer to the UAT auxiliary state vector.
-    UATTargetState target_state = {0};                     // Pointer to the UAT target state.
-    UATTrajectoryChange trajectory_change = {0};           // Pointer to the UAT trajectory change.
+    UATHeader header = {};                                // Pointer to the UAT header.
+    UATStateVector state_vector = {};                     // Pointer to the UAT state vector.
+    UATModeStatus mode_status = {};                       // Pointer to the UAT mode status.
+    UATAuxiliaryStateVector auxiliary_state_vector = {};  // Pointer to the UAT auxiliary state vector.
+    UATTargetState target_state = {};                     // Pointer to the UAT target state.
+    UATTrajectoryChange trajectory_change = {};           // Pointer to the UAT trajectory change.
 
     char debug_string[kDebugStrLen] = "";
 

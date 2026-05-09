@@ -29,7 +29,8 @@ bool WebSocketServer::Init() {
                               .handler = ws_handler,
                               .user_ctx = this,
                               .is_websocket = true,
-                              .handle_ws_control_frames = false};
+                              .handle_ws_control_frames = false,
+                              .supported_subprotocol = nullptr};
     esp_err_t ret = httpd_register_uri_handler(config_.server, &console_ws);
     if (ret != ESP_OK) {
         CONSOLE_ERROR("WebSocketServer::Init", "[%s] Failed to register websocket URI handler due to error %s.",

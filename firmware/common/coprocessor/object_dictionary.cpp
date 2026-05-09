@@ -5,6 +5,12 @@
 #include "adsbee_server.hh"
 #include "cpu_utils.hh"
 #include "device_info.hh"
+#include "esp_system.h"
+#include "task_utils.hh"
+#ifdef CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
+#include "esp_core_dump.h"
+#include "esp_err.h"
+#endif
 #elif defined(ON_TI)
 #include "cpu_utils.hh"
 #endif
@@ -15,7 +21,7 @@ const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
 const uint8_t ObjectDictionary::kFirmwareVersionMinor = 9;
 const uint8_t ObjectDictionary::kFirmwareVersionPatch = 0;
 // NOTE: Indicate a final release with RC = 0.
-const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 15;
+const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 16;
 
 const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24) | (kFirmwareVersionMinor << 16) |
                                                     (kFirmwareVersionPatch << 8) | kFirmwareVersionReleaseCandidate;
@@ -107,6 +113,12 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
             adsbee_server.network_console.BroadcastMessage(reinterpret_cast<const char*>(buf), buf_len);
             break;
         }
+#ifdef CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
+        case kAddrESP32TriggerAbort: {
+            abort();
+            break;
+        }
+#endif
         case kAddrAircraftDictionaryMetrics: {
             AircraftDictionary::Metrics rp2040_metrics;
             memcpy(&rp2040_metrics, buf + offset, buf_len);
@@ -202,6 +214,75 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
         case kAddrESP32NetworkInfo: {
             ESP32NetworkInfo network_info = comms_manager.GetNetworkInfo();
             memcpy(buf, &network_info + offset, buf_len);
+            break;
+        }
+        case kAddrESP32RebootInfo: {
+            ESP32RebootInfo reboot_info = {};
+            esp_reset_reason_t reason = esp_reset_reason();
+            reboot_info.reset_reason = static_cast<uint8_t>(reason);
+            const char* reason_str;
+            switch (reason) {
+                case ESP_RST_POWERON:
+                    reason_str = "POWERON";
+                    break;
+                case ESP_RST_EXT:
+                    reason_str = "EXT_RESET";
+                    break;
+                case ESP_RST_SW:
+                    reason_str = "SOFTWARE";
+                    break;
+                case ESP_RST_PANIC:
+                    reason_str = "PANIC";
+                    break;
+                case ESP_RST_INT_WDT:
+                    reason_str = "INT_WATCHDOG";
+                    break;
+                case ESP_RST_TASK_WDT:
+                    reason_str = "TASK_WATCHDOG";
+                    break;
+                case ESP_RST_WDT:
+                    reason_str = "WATCHDOG";
+                    break;
+                case ESP_RST_DEEPSLEEP:
+                    reason_str = "DEEP_SLEEP_WAKEUP";
+                    break;
+                case ESP_RST_BROWNOUT:
+                    reason_str = "BROWNOUT";
+                    break;
+                case ESP_RST_SDIO:
+                    reason_str = "SDIO";
+                    break;
+                default:
+                    reason_str = "UNKNOWN";
+                    break;
+            }
+            strncpy(reboot_info.reset_reason_str, reason_str, kResetReasonStrMaxLen);
+            reboot_info.reset_reason_str[kResetReasonStrMaxLen] = '\0';
+#ifdef CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
+            reboot_info.core_dump_to_flash_enabled = true;
+            // Defer flash reads to esp_timer task — calling them here (SPI slave task context)
+            // deadlocks because esp_core_dump_* disables the CPU cache while the SPI task is live.
+            ScheduleDelayedFunctionCall(0, [](void*) {
+                esp_err_t check_err = esp_core_dump_image_check();
+                if (check_err == ESP_OK) {
+                    esp_core_dump_summary_t summary;
+                    esp_err_t summary_err = esp_core_dump_get_summary(&summary);
+                    if (summary_err == ESP_OK) {
+                        CONSOLE_ERROR("ESP32RebootInfo", "Core Dump Task=%.16s PC=0x%08lx",
+                                      summary.exc_task, (unsigned long)summary.exc_pc);
+                        for (uint32_t i = 0; i < summary.exc_bt_info.depth; i++) {
+                            CONSOLE_ERROR("ESP32RebootInfo", "  BT[%lu] 0x%08lx",
+                                          (unsigned long)i, (unsigned long)summary.exc_bt_info.bt[i]);
+                        }
+                    } else {
+                        CONSOLE_ERROR("ESP32RebootInfo", "get_summary failed: %s", esp_err_to_name(summary_err));
+                    }
+                } else {
+                    CONSOLE_ERROR("ESP32RebootInfo", "image_check failed: %s", esp_err_to_name(check_err));
+                }
+            });
+#endif
+            memcpy(buf, reinterpret_cast<uint8_t*>(&reboot_info) + offset, buf_len);
             break;
         }
         case kAddrConsole: {
