@@ -129,8 +129,8 @@ void CommsManager::WiFiAccessPointTask(void* pvParameters) {
                         // ENOMEM (errno=12) resolution: https://github.com/espressif/esp-idf/issues/390
                         // Increased the number of UDP control blocks (LWIP_MAX_UDP_PCBS) in SDK menuconfig
                         // from 16 to 96. Changed TCP/IP stack size from 3072 to 12288.
-                        if (ret >= 0 || errno != ENOMEM) {
-                            break;
+                        if (ret >= 0 || errno == ENOMEM) {
+                            break;  // Drop immediately on ENOMEM — retrying against an exhausted pool wastes time.
                         }
                         vTaskDelay(kWiFiRetryWaitTimeMs /
                                    portTICK_PERIOD_MS);  // Let packet send to avoid an ENOMEM error.
