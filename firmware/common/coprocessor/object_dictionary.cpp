@@ -19,7 +19,7 @@ const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
 const uint8_t ObjectDictionary::kFirmwareVersionMinor = 9;
 const uint8_t ObjectDictionary::kFirmwareVersionPatch = 0;
 // NOTE: Indicate a final release with RC = 0.
-const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 15;
+const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 16;
 
 const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24) | (kFirmwareVersionMinor << 16) |
                                                     (kFirmwareVersionPatch << 8) | kFirmwareVersionReleaseCandidate;
@@ -214,31 +214,50 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
             reboot_info.reset_reason = static_cast<uint8_t>(reason);
             const char* reason_str;
             switch (reason) {
-                case ESP_RST_POWERON:   reason_str = "POWERON";           break;
-                case ESP_RST_EXT:       reason_str = "EXT_RESET";         break;
-                case ESP_RST_SW:        reason_str = "SOFTWARE";          break;
-                case ESP_RST_PANIC:     reason_str = "PANIC";             break;
-                case ESP_RST_INT_WDT:   reason_str = "INT_WATCHDOG";      break;
-                case ESP_RST_TASK_WDT:  reason_str = "TASK_WATCHDOG";     break;
-                case ESP_RST_WDT:       reason_str = "WATCHDOG";          break;
-                case ESP_RST_DEEPSLEEP: reason_str = "DEEP_SLEEP_WAKEUP"; break;
-                case ESP_RST_BROWNOUT:  reason_str = "BROWNOUT";          break;
-                case ESP_RST_SDIO:      reason_str = "SDIO";              break;
-                default:                reason_str = "UNKNOWN";           break;
+                case ESP_RST_POWERON:
+                    reason_str = "POWERON";
+                    break;
+                case ESP_RST_EXT:
+                    reason_str = "EXT_RESET";
+                    break;
+                case ESP_RST_SW:
+                    reason_str = "SOFTWARE";
+                    break;
+                case ESP_RST_PANIC:
+                    reason_str = "PANIC";
+                    break;
+                case ESP_RST_INT_WDT:
+                    reason_str = "INT_WATCHDOG";
+                    break;
+                case ESP_RST_TASK_WDT:
+                    reason_str = "TASK_WATCHDOG";
+                    break;
+                case ESP_RST_WDT:
+                    reason_str = "WATCHDOG";
+                    break;
+                case ESP_RST_DEEPSLEEP:
+                    reason_str = "DEEP_SLEEP_WAKEUP";
+                    break;
+                case ESP_RST_BROWNOUT:
+                    reason_str = "BROWNOUT";
+                    break;
+                case ESP_RST_SDIO:
+                    reason_str = "SDIO";
+                    break;
+                default:
+                    reason_str = "UNKNOWN";
+                    break;
             }
             strncpy(reboot_info.reset_reason_str, reason_str, kResetReasonStrMaxLen);
             reboot_info.reset_reason_str[kResetReasonStrMaxLen] = '\0';
 #ifdef CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
             esp_core_dump_summary_t summary;
-            if (esp_core_dump_image_check() == ESP_OK &&
-                esp_core_dump_get_summary(&summary) == ESP_OK) {
+            if (esp_core_dump_image_check() == ESP_OK && esp_core_dump_get_summary(&summary) == ESP_OK) {
                 reboot_info.has_core_dump = true;
                 int written = snprintf(reboot_info.core_dump_summary, kCoreDumpSummaryMaxLen,
-                                       "Task: %.16s PC:0x%08lx BT:",
-                                       summary.exc_task, (unsigned long)summary.exc_pc);
+                                       "Task: %.16s PC:0x%08lx BT:", summary.exc_task, (unsigned long)summary.exc_pc);
                 for (uint32_t i = 0; i < summary.exc_bt_info.depth && written < kCoreDumpSummaryMaxLen; i++) {
-                    written += snprintf(reboot_info.core_dump_summary + written,
-                                        kCoreDumpSummaryMaxLen - written,
+                    written += snprintf(reboot_info.core_dump_summary + written, kCoreDumpSummaryMaxLen - written,
                                         " 0x%08lx", (unsigned long)summary.exc_bt_info.bt[i]);
                 }
                 reboot_info.core_dump_summary[kCoreDumpSummaryMaxLen] = '\0';
