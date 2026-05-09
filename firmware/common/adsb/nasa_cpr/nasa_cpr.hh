@@ -1,6 +1,8 @@
 #pragma once
 #include "stdint.h"
 
+// #define VERBOSE_NASA_CPR_DEBUG
+
 class NASACPRDecoder {
    public:
     struct DecodedPosition {

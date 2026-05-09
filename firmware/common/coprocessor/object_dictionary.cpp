@@ -21,7 +21,7 @@ const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
 const uint8_t ObjectDictionary::kFirmwareVersionMinor = 9;
 const uint8_t ObjectDictionary::kFirmwareVersionPatch = 0;
 // NOTE: Indicate a final release with RC = 0.
-const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 16;
+const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 17;
 
 const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24) | (kFirmwareVersionMinor << 16) |
                                                     (kFirmwareVersionPatch << 8) | kFirmwareVersionReleaseCandidate;
@@ -268,11 +268,11 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
                     esp_core_dump_summary_t summary;
                     esp_err_t summary_err = esp_core_dump_get_summary(&summary);
                     if (summary_err == ESP_OK) {
-                        CONSOLE_ERROR("ESP32RebootInfo", "Core Dump Task=%.16s PC=0x%08lx",
-                                      summary.exc_task, (unsigned long)summary.exc_pc);
+                        CONSOLE_ERROR("ESP32RebootInfo", "Core Dump Task=%.16s PC=0x%08lx", summary.exc_task,
+                                      (unsigned long)summary.exc_pc);
                         for (uint32_t i = 0; i < summary.exc_bt_info.depth; i++) {
-                            CONSOLE_ERROR("ESP32RebootInfo", "  BT[%lu] 0x%08lx",
-                                          (unsigned long)i, (unsigned long)summary.exc_bt_info.bt[i]);
+                            CONSOLE_ERROR("ESP32RebootInfo", "  BT[%lu] 0x%08lx", (unsigned long)i,
+                                          (unsigned long)summary.exc_bt_info.bt[i]);
                         }
                     } else {
                         CONSOLE_ERROR("ESP32RebootInfo", "get_summary failed: %s", esp_err_to_name(summary_err));
