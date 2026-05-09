@@ -636,17 +636,20 @@ bool ADSBeeServer::TCPServerInit() {
 
     // Root URI handler (HTML)
     httpd_uri_t root = {
-        .uri = "/", .method = HTTP_GET, .handler = root_handler, .user_ctx = NULL, .is_websocket = false};
+        .uri = "/", .method = HTTP_GET, .handler = root_handler, .user_ctx = NULL, .is_websocket = false,
+        .handle_ws_control_frames = false, .supported_subprotocol = nullptr};
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &root));
 
     // CSS URI handler
     httpd_uri_t css = {
-        .uri = "/style.css", .method = HTTP_GET, .handler = css_handler, .user_ctx = NULL, .is_websocket = false};
+        .uri = "/style.css", .method = HTTP_GET, .handler = css_handler, .user_ctx = NULL, .is_websocket = false,
+        .handle_ws_control_frames = false, .supported_subprotocol = nullptr};
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &css));
 
     // Favicon URI handler
     httpd_uri_t favicon = {
-        .uri = "/favicon.png", .method = HTTP_GET, .handler = favicon_handler, .user_ctx = NULL, .is_websocket = false};
+        .uri = "/favicon.png", .method = HTTP_GET, .handler = favicon_handler, .user_ctx = NULL, .is_websocket = false,
+        .handle_ws_control_frames = false, .supported_subprotocol = nullptr};
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &favicon));
 
     network_console = WebSocketServer({.label = "Network Console",

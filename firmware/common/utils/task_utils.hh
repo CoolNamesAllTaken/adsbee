@@ -32,7 +32,10 @@ inline esp_err_t ScheduleDelayedFunctionCall(int delay_ms, esp_timer_cb_t delaye
     }
     ctx->real_callback = delayed_function;
 
-    esp_timer_create_args_t timer_args = {.callback = delayed_call_wrapper, .arg = ctx, .name = "one_shot_timer"};
+    esp_timer_create_args_t timer_args = {};
+    timer_args.callback = delayed_call_wrapper;
+    timer_args.arg = ctx;
+    timer_args.name = "one_shot_timer";
 
     esp_err_t ret = esp_timer_create(&timer_args, &ctx->timer);
     if (ret != ESP_OK) {

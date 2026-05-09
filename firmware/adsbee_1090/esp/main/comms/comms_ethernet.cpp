@@ -93,30 +93,20 @@ bool CommsManager::EthernetInit() {
     }
 
     // SPI bus configuration.
-    spi_bus_config_t buscfg = {
-        .mosi_io_num = config_.aux_spi_mosi_pin,
-        .miso_io_num = config_.aux_spi_miso_pin,
-        .sclk_io_num = config_.aux_spi_clk_pin,
-        .quadwp_io_num = -1,
-        .quadhd_io_num = -1,
-    };
+    spi_bus_config_t buscfg = {};
+    buscfg.mosi_io_num = config_.aux_spi_mosi_pin;
+    buscfg.miso_io_num = config_.aux_spi_miso_pin;
+    buscfg.sclk_io_num = config_.aux_spi_clk_pin;
+    buscfg.quadwp_io_num = -1;
+    buscfg.quadhd_io_num = -1;
 
     // W5500 SPI device configuration.
-    spi_device_interface_config_t spi_devcfg = {
-
-        // .command_bits = 16,  // Actually it's the address phase in W5500 SPI frame
-        // .address_bits = 8,   // Actually it's the control phase in W5500 SPI frame
-        // .dummy_bits = 0,
-        .mode = 0,
-        // .clock_source = SPI_CLK_SRC_DEFAULT,
-        .clock_speed_hz = config_.aux_spi_clk_rate_hz,
-        // .input_delay_ns = 0,
-        .spics_io_num = config_.aux_spi_cs_pin,
-        // .flags = 0,
-        .queue_size = 20,
-        // .pre_cb = nullptr,
-        // .post_cb = nullptr,
-    };
+    // command_bits = 16 (address phase in W5500 SPI frame), address_bits = 8 (control phase) are left at 0.
+    spi_device_interface_config_t spi_devcfg = {};
+    spi_devcfg.mode = 0;
+    spi_devcfg.clock_speed_hz = config_.aux_spi_clk_rate_hz;
+    spi_devcfg.spics_io_num = config_.aux_spi_cs_pin;
+    spi_devcfg.queue_size = 20;
 
     eth_w5500_config_t w5500_config = ETH_W5500_DEFAULT_CONFIG(config_.aux_spi_handle, &spi_devcfg);
     w5500_config.int_gpio_num = config_.aux_io_c_pin;

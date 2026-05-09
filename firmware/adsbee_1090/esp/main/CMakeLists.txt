@@ -54,4 +54,6 @@ idf_component_register(
         "server/web/favicon.png"
 )
 
+target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-packed-bitfield-compat)
+
 message("PROJECT_SOURCE_DIR: ${PROJECT_SOURCE_DIR}")
