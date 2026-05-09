@@ -370,6 +370,18 @@ CPP_AT_CALLBACK(CommsManager::ATESP32RebootInfoCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+#ifdef HARDWARE_UNIT_TESTS
+CPP_AT_CALLBACK(CommsManager::ATESP32TriggerAbortCallback) {
+    if (!esp32.IsEnabled()) {
+        CPP_AT_ERROR("ESP32 is not enabled.");
+    }
+    uint8_t dummy = 0;
+    esp32.Write(ObjectDictionary::Address::kAddrESP32TriggerAbort, dummy);
+    CPP_AT_PRINTF("ESP32 abort triggered.\r\n");
+    CPP_AT_SILENT_SUCCESS();
+}
+#endif
+
 CPP_AT_CALLBACK(CommsManager::ATEthernetCallback) {
     switch (op) {
         case '?':
@@ -1332,6 +1344,14 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .help_string = "AT+ESP32_REBOOT_INFO?\r\n\tQuery the reason the ESP32 last rebooted. "
                     "In debug builds also prints the core dump backtrace if available.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATESP32RebootInfoCallback, comms_manager)},
+#ifdef HARDWARE_UNIT_TESTS
+    {.command = "ESP32_TRIGGER_ABORT",
+     .min_args = 0,
+     .max_args = 0,
+     .help_string = "AT+ESP32_TRIGGER_ABORT\r\n\tTrigger an abort() on the ESP32 to test core dump functionality. "
+                    "Debug builds only.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATESP32TriggerAbortCallback, comms_manager)},
+#endif
     {.command = "FEED",
      .min_args = 0,
      .max_args = 5,

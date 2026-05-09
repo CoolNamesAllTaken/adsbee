@@ -111,6 +111,12 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
             adsbee_server.network_console.BroadcastMessage(reinterpret_cast<const char*>(buf), buf_len);
             break;
         }
+#ifdef CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
+        case kAddrESP32TriggerAbort: {
+            abort();
+            break;
+        }
+#endif
         case kAddrAircraftDictionaryMetrics: {
             AircraftDictionary::Metrics rp2040_metrics;
             memcpy(&rp2040_metrics, buf + offset, buf_len);

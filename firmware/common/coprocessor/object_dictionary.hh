@@ -65,6 +65,7 @@ class ObjectDictionary {
         kAddrSCCommandRequests = 0x0F,         // Used by slave to request commands from master.
         kAddrCompositeArrayRawPackets = 0x10,  // Single endpoint for reading / writing raw ADSB and UAT packets.
         kAddrESP32RebootInfo = 0x11,           // ESP32 last reset reason and optional core dump summary.
+        kAddrESP32TriggerAbort = 0x12,         // Debug only: trigger abort() on the ESP32 to test core dump.
         kNumAddrs
     };
 
