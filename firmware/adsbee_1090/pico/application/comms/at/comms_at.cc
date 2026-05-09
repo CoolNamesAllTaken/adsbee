@@ -360,6 +360,8 @@ CPP_AT_CALLBACK(CommsManager::ATESP32RebootInfoCallback) {
             }
             CPP_AT_PRINTF("ESP32 Reset Reason: %d (%s)\r\n", reboot_info.reset_reason,
                           reboot_info.reset_reason_str);
+            CPP_AT_PRINTF("ESP32 Core Dump To Flash: %s\r\n",
+                          reboot_info.core_dump_to_flash_enabled ? "enabled" : "disabled");
             if (reboot_info.has_core_dump) {
                 CPP_AT_PRINTF("ESP32 Core Dump: %s\r\n", reboot_info.core_dump_summary);
             }

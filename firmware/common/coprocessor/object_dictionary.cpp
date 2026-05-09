@@ -257,6 +257,7 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
             strncpy(reboot_info.reset_reason_str, reason_str, kResetReasonStrMaxLen);
             reboot_info.reset_reason_str[kResetReasonStrMaxLen] = '\0';
 #ifdef CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
+            reboot_info.core_dump_to_flash_enabled = true;
             esp_core_dump_summary_t summary;
             if (esp_core_dump_image_check() == ESP_OK && esp_core_dump_get_summary(&summary) == ESP_OK) {
                 reboot_info.has_core_dump = true;
