@@ -21,10 +21,6 @@ inline void connect_to_ethernet(void* arg = nullptr) { comms_manager.ConnectToEt
 /** End "Pass-Through" functions. **/
 
 bool CommsManager::ConnectToEthernet() {
-    // if (esp_netif_dhcpc_start(ethernet_netif_) != ESP_OK) {
-    //     CONSOLE_ERROR("connect_to_ethernet", "Failed to start DHCP client.");
-    //     return false;
-    // }
     if (esp_eth_start(ethernet_handle_) != ESP_OK) {
         CONSOLE_ERROR("connect_to_ethernet", "Failed to connect to Ethernet.");
         return false;
@@ -59,7 +55,11 @@ void CommsManager::EthernetEventHandler(void* arg, esp_event_base_t event_base, 
             ethernet_connected_ = false;
             ethernet_has_ip_ = false;
             // ESP_ERROR_CHECK(esp_netif_dhcpc_stop(ethernet_netif_));
-            ESP_ERROR_CHECK(esp_eth_stop(eth_handle));
+            esp_err_t stop_err = esp_eth_stop(eth_handle);
+            if (stop_err != ESP_OK) {
+                CONSOLE_ERROR("CommsManager::EthernetEventHandler", "Failed to stop Ethernet: %s",
+                              esp_err_to_name(stop_err));
+            }
             if (ethernet_enabled) {
                 ScheduleDelayedFunctionCall(kEthernetReconnectIntervalMs, &connect_to_ethernet);
             }
