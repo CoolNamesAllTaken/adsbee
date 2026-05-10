@@ -52,7 +52,7 @@ bool WebSocketServer::Update() {
             int client_fd = clients_[i].client_fd;
             CONSOLE_WARNING("ADSBeeServer::Update", "[%s] Network console client %d with fd %d timed out after %lu ms.",
                             config_.label, i, client_fd, time_since_last_message_ms);
-            RemoveClient(client_fd);
+            httpd_sess_trigger_close(config_.server, client_fd);
         }
     }
     return true;
@@ -108,8 +108,7 @@ esp_err_t WebSocketServer::Handler(httpd_req_t* req) {
             if (config_.pre_disconnect_callback) {
                 config_.pre_disconnect_callback(this, client_fd);
             }
-            RemoveClient(client_fd);
-            return ret;
+            return ret;  // httpd closes the session on handler error, triggering ws_close_fd.
         }
 
         UpdateActivityTimer(client_fd);
@@ -158,14 +157,15 @@ void WebSocketServer::BroadcastMessage(const char* message, int16_t len_bytes) {
     for (int i = 0; i < config_.num_clients_allowed; i++) {
         if (clients_[i].in_use) {
             esp_err_t ret = SendMessage(clients_[i].client_fd, message, len_bytes);
-            // CONSOLE_INFO("WebSocketServer::BroadcastMessage", "[%s] Message sent to client %d with fd %d: %s",
-            //              config_.label, i, clients_[i].client_fd, message);
             if (ret != ESP_OK) {
                 CONSOLE_ERROR("WebSocketServer::BroadcastMessage",
                               "[%s] Failed to send message to client %d due to error %s.", config_.label, i,
                               esp_err_to_name(ret));
-                // If send failed, assume client disconnected
-                RemoveClient(clients_[i].client_fd);
+                // Trigger httpd to close the session — ws_close_fd will call RemoveClient and close(fd).
+                httpd_sess_trigger_close(config_.server, clients_[i].client_fd);
+            } else {
+                // Successful send means the client is reachable — reset inactivity timer.
+                clients_[i].last_message_timestamp_ms = get_time_since_boot_ms();
             }
         }
     }

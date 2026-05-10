@@ -31,9 +31,11 @@ bool NASACPRDecoder::DecodeAirborneGlobalCPR(const CPRMessage& even_message, con
     decoded_position.lon_deg = awb2lon(result.lon_awb);
     decoded_position.lat_awb = result.lat_awb;
     decoded_position.lon_awb = result.lon_awb;
+#ifdef VERBOSE_NASA_CPR_DEBUG
     if (!result.valid) {
         CONSOLE_WARNING("NASACPRDecoder::DecodeAirborneGlobalCPR",
                         "Can't decode CPR packets from different latitude zones.");
     }
+#endif                    /* VERBOSE_NASA_CPR_DEBUG */
     return result.valid;  // False if aircraft crossed between latitude zones between messages.
 }

@@ -4,7 +4,7 @@
 			"path": "."
 		},
 		{
-			"path": "../common"
+			"path": "../../common"
 		}
 	],
 	"settings": {

@@ -65,9 +65,7 @@ void rf_cmd_callback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e) {
 
     if (e & RF_EventNDataWritten) {
         if (current_packet_len_bytes < 0) {
-            // Only set the length once, after receiving the first two bytes of the packet.
-
-            // TODO: Set this value based on bytes received so far.
+            // Only set the length once per packet (irqIntv=0 fires at 16 bytes; rxData[2] and [3] are ready).
             uint8_t sync_word_ls4 = (&(current_read_entry->rxData))[kPartialDataEntryPayloadLenSzBytes] &
                                     0x0F;  // Last 4 bits of sync word are the first 4 bits of the payload.
             uint8_t mdb_type_code = (&(current_read_entry->rxData))[kPartialDataEntryPayloadLenSzBytes + 1] >> 3;
@@ -116,15 +114,12 @@ bool SubGHzRadio::Init() {
     RF_cmdPropRxAdv.syncWord0 = RawUATADSBPacket::kSyncWordMS32;
     RF_cmdPropRxAdv.syncWord1 = RawUATUplinkPacket::kSyncWordMS32;
 
-    // This needs to be set to 0, or else the length can't be overridden dynamically.
-    // WARNING: Setting packet length via the RF command callback can get stomped by another interrupt context (e.g.
-    // SPI). This leads to the RF core writing infinitely into memory, causing a non-deterministic crash behavior. Make
-    // sure the software interrupt priority for the RF system is higher than the software interrupt priority for SPI (I
-    // set hardware interrupt priority higher too, but that doesn't seem to fix it on its own). Setting RF software
-    // interrupt priority 1 point higher than SPI interrupt priority seems to work well. Higher values for RF software
-    // interrupt priority lead to crashes. To sidestep this drama, just set the max expected packet length as maxPktLen
-    // and take the performance hit (more rx airtime wasted per packet received).
-    RF_cmdPropRxAdv.maxPktLen = kRxPacketMaxLenBytes;  // 0 = unlimited / unknown length packet mode
+    // Must be 0 (unlimited) so that CMD_PROP_SET_LEN (called in RF_EventNDataWritten) can shorten reception for
+    // ADSB packets instead of always receiving the full 552-byte uplink length. If the RF callback is preempted
+    // before CMD_PROP_SET_LEN fires, the RF core keeps writing until the data entry is full (kRxPacketMaxLenBytes),
+    // at which point PROP_ERROR_RXFULL fires — not a memory stomp. RF software interrupt priority must be higher
+    // than SPI priority; 1 point higher works well, higher values cause instability.
+    RF_cmdPropRxAdv.maxPktLen = 0;
 
     // The last 4 bits of the Sync word are interpreted as the header, so the rest of the packet stays byte-aligned.
     RF_cmdPropRxAdv.hdrConf = {.numHdrBits = 4, .lenPos = 0, .numLenBits = 0};
@@ -185,8 +180,6 @@ bool SubGHzRadio::DeInit() {
 }
 
 bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t* filled_entry) {
-    // pico_ll.BlinkSubGLED();
-
     /* Handle the packet data, located at &currentDataEntry->data:
      * - Length is the first two bytes with the current configuration
      * - Data starts from the second byte */
