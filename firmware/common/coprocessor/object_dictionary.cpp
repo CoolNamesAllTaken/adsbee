@@ -268,8 +268,31 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
                     esp_core_dump_summary_t summary;
                     esp_err_t summary_err = esp_core_dump_get_summary(&summary);
                     if (summary_err == ESP_OK) {
-                        CONSOLE_ERROR("ESP32RebootInfo", "Core Dump Task=%.16s PC=0x%08lx", summary.exc_task,
-                                      (unsigned long)summary.exc_pc);
+                        static const char* const kExcCauseStr[] = {
+                            "IllegalInstruction", "Syscall", "InstructionFetchError", "LoadStoreError",
+                            "Level1Interrupt", "Alloca", "IntegerDivideByZero", "PCValue",
+                            "Privileged", "LoadStoreAlignment", "res", "res",
+                            "InstrPDAddrError", "LoadStorePIFDataError", "InstrPIFAddrError", "LoadStorePIFAddrError",
+                            "InstTLBMiss", "InstTLBMultiHit", "InstFetchPrivilege", "res",
+                            "InstrFetchProhibited", "res", "res", "res",
+                            "LoadStoreTLBMiss", "LoadStoreTLBMultihit", "LoadStorePrivilege", "res",
+                            "LoadProhibited", "StoreProhibited", "res", "res",
+                            "Cp0Dis", "Cp1Dis", "Cp2Dis", "Cp3Dis",
+                            "Cp4Dis", "Cp5Dis", "Cp6Dis", "Cp7Dis"
+                        };
+                        uint32_t cause = summary.ex_info.exc_cause;
+                        const char* cause_str = (cause < sizeof(kExcCauseStr) / sizeof(kExcCauseStr[0]))
+                                                    ? kExcCauseStr[cause] : "Unknown";
+                        CONSOLE_ERROR("ESP32RebootInfo", "Core Dump Task=%.16s PC=0x%08lx ExcCause=%lu (%s) ExcVAddr=0x%08lx",
+                                      summary.exc_task, (unsigned long)summary.exc_pc,
+                                      (unsigned long)cause, cause_str,
+                                      (unsigned long)summary.ex_info.exc_vaddr);
+                        char panic_reason[200] = {};
+                        if (esp_core_dump_get_panic_reason(panic_reason, sizeof(panic_reason)) == ESP_OK) {
+                            CONSOLE_ERROR("ESP32RebootInfo", "Panic: %s", panic_reason);
+                        }
+                        CONSOLE_ERROR("ESP32RebootInfo", "BT depth=%lu corrupted=%d", (unsigned long)summary.exc_bt_info.depth,
+                                      (int)summary.exc_bt_info.corrupted);
                         for (uint32_t i = 0; i < summary.exc_bt_info.depth; i++) {
                             CONSOLE_ERROR("ESP32RebootInfo", "  BT[%lu] 0x%08lx", (unsigned long)i,
                                           (unsigned long)summary.exc_bt_info.bt[i]);
