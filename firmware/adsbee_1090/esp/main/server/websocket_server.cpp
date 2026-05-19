@@ -50,8 +50,9 @@ bool WebSocketServer::Update() {
         if (clients_[i].in_use && time_since_last_message_ms > config_.inactivity_timeout_ms) {
             // Client is in use and has timed out.
             int client_fd = clients_[i].client_fd;
-            CONSOLE_WARNING("ADSBeeServer::Update", "[%s] Network console client %d with fd %d timed out after %lu ms.",
-                            config_.label, i, client_fd, time_since_last_message_ms);
+            CONSOLE_WARNING("WebSocketServer::Update",
+                            "[%s] Network console client %d with fd %d timed out after %lu ms.", config_.label, i,
+                            client_fd, time_since_last_message_ms);
             httpd_sess_trigger_close(config_.server, client_fd);
         }
     }
