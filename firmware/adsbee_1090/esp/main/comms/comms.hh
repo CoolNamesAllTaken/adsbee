@@ -369,4 +369,6 @@ extern CommsManager comms_manager;
 #define CONSOLE_INFO(tag, ...)  \
     ESP_LOGI(tag, __VA_ARGS__); \
     comms_manager.LogMessageToCoprocessor(SettingsManager::LogLevel::kInfo, tag, __VA_ARGS__);
-#define CONSOLE_PRINTF(...) printf(__VA_ARGS__);
+#define CONSOLE_PRINTF(...) \
+    printf(__VA_ARGS__);    \
+    comms_manager.LogMessageToCoprocessor(SettingsManager::LogLevel::kSilent, "", __VA_ARGS__);

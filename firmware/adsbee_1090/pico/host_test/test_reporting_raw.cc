@@ -3,16 +3,16 @@
 
 TEST(RawUtils, BuildRawModeSFrame) {
     // Test with squitter packet.
-    RawModeSPacket raw_packet = RawModeSPacket((char *)"2D0006A2DEE500", 3, -68, 9, 0xFEED'BEEF'BEFE'BEEB);
+    RawModeSPacket raw_packet = RawModeSPacket((const char*)"2D0006A2DEE500", 3, -68, 9, 0xFEED'BEEF'BEFE'BEEB);
 
     char constructed_frame[kRawModeSFrameMaxNumChars];
-    char *expected_frame = (char *)"#MDS*2D0006A2DEE500;(3,-68,9,FEEDBEEFBEFEBEEB)\r\n";
+    char* expected_frame = (const char*)"#MDS*2D0006A2DEE500;(3,-68,9,FEEDBEEFBEFEBEEB)\r\n";
     EXPECT_EQ(BuildRawModeSFrame(raw_packet, constructed_frame), strlen(expected_frame));
     EXPECT_STREQ(expected_frame, constructed_frame);
 
     // Test with extended squitter packet.
-    raw_packet = RawModeSPacket((char *)"8D48C22D60AB00DEABC5DB78FCD6", 1, -90, 3, 0xDEAD);
-    expected_frame = (char *)"#MDS*8D48C22D60AB00DEABC5DB78FCD6;(1,-90,3,000000000000DEAD)\r\n";
+    raw_packet = RawModeSPacket((const char*)"8D48C22D60AB00DEABC5DB78FCD6", 1, -90, 3, 0xDEAD);
+    expected_frame = (const char*)"#MDS*8D48C22D60AB00DEABC5DB78FCD6;(1,-90,3,000000000000DEAD)\r\n";
     EXPECT_EQ(BuildRawModeSFrame(raw_packet, constructed_frame), strlen(expected_frame));
     EXPECT_STREQ(expected_frame, constructed_frame);
 }
@@ -23,8 +23,8 @@ TEST(RawUtils, BuildRawUATFrame) {
         RawUATADSBPacket("00a66ef135445d525a0c05191190212048006cb82bc4d53a5b2bb0a8ec6e", -60, 5, 0x123456);
 
     char constructed_frame[kRawUATADSBFrameMaxNumChars];
-    char *expected_frame =
-        (char *)"#UAT*-00A66EF135445D525A0C05191190212048006CB82BC4D53A5B2BB0A8EC6E;(-60,5,0000000000123456)\r\n";
+    char* expected_frame =
+        (const char*)"#UAT*-00A66EF135445D525A0C05191190212048006CB82BC4D53A5B2BB0A8EC6E;(-60,5,0000000000123456)\r\n";
     EXPECT_EQ(BuildRawUATADSBFrame(raw_packet, constructed_frame), strlen(expected_frame));
     EXPECT_STREQ(expected_frame, constructed_frame);
 }
@@ -46,7 +46,7 @@ TEST(RawUtils, BuildRawUATUplinkFrame) {
         -60, 0, 0x00431a123456);
 
     char constructed_frame[kRawUATUplinkFrameMaxNumChars];
-    char *expected_frame = (char *)"#UAT*+352D30000000147058000000C9C70D000000523C3C000000D61F170000005CC7F1000000B60CD7000000B01F0C0000002EC7720000000"
+    char *expected_frame = (const char *)"#UAT*+352D30000000147058000000C9C70D000000523C3C000000D61F170000005CC7F1000000B60CD7000000B01F0C0000002EC7720000000"
         "08CD3000000001F1E0000003505330000000EF6C10000001D5FFC000000687C7500000022F5C300000010D91C0000000020B400000000"
         "51CB00000000600C000000FF4CF000000000F57F00000051541C00000091227000000054037F0000007C4F1E0000004D053000000050F"
         "77C00000060DE17000000CB00D90000004C337D0000007400F5000000D30015000000583549000000330E43000000D724050000005DF0"

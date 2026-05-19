@@ -6,11 +6,11 @@ TEST(BeastUtils, BuildModeSBeastFrame) {
     // Create packet with a single 0x1a that must be escaped in data, a typical RSSI value, and an unmasked MLAT
     // counter. Note: MLAT counter is shifted left by 2 bits to simulate multiplying a 48MHz counter with a 12MHz
     // desired result.
-    DecodedModeSPacket tpacket = DecodedModeSPacket((char *)"8d495066587f469bb826d21ad767",  // string
-                                                    0,                                       // source
-                                                    -80,                                     // sigs
-                                                    50,                                      // sigq
-                                                    0xABABFF1AFFFFFF1A << 2                  // mlat
+    DecodedModeSPacket tpacket = DecodedModeSPacket((const char*)"8d495066587f469bb826d21ad767",  // string
+                                                    0,                                            // source
+                                                    -80,                                          // sigs
+                                                    50,                                           // sigq
+                                                    0xABABFF1AFFFFFF1A << 2                       // mlat
     );
 
     uint8_t beast_frame_buf[BeastReporter::kModeSBeastFrameMaxLenBytes];
@@ -48,10 +48,10 @@ TEST(BeastUtils, BuildModeSIngestBeastFrame) {
     // Create packet with a single 0x1a that must be escaped in data, a typical RSSI value, and an unmasked MLAT
     // counter. Note: MLAT counter is shifted left by 2 bits to simulate multiplying a 48MHz counter with a 12MHz
     // desired result.
-    DecodedModeSPacket tpacket = DecodedModeSPacket((char *)"8d495066587f469bb826d21ad767",  // string
-                                                    0,                                       // source
-                                                    0,                                       // sigs
-                                                    50,                                      // sigq
+    DecodedModeSPacket tpacket = DecodedModeSPacket((const char*)"8d495066587f469bb826d21ad767",  // string
+                                                    0,                                            // source
+                                                    0,                                            // sigs
+                                                    50,                                           // sigq
                                                     0xABABFF1AFFFFFF1A << 2);
 
     uint8_t beast_frame_buf[BeastReporter::kModeSBeastFrameMaxLenBytes];
@@ -163,7 +163,7 @@ UATADSBPacketBeastTest uat_adsb_tests[] = {
          "00a66ef135445d525a0c05191190212048006cb82bc4d53a5b2bb0a8ec6e"}};
 
 TEST(BeastUtils, BuildUATADSBFrame) {
-    for (const auto &test : uat_adsb_tests) {
+    for (const auto& test : uat_adsb_tests) {
         uint8_t beast_frame_buf[BeastReporter::kUATADSBBeastFrameMaxLenBytes];
         uint16_t bytes_written = BeastReporter::BuildUATADSBBeastFrame(beast_frame_buf, test.packet);
         EXPECT_EQ(bytes_written, strlen(test.beast_frame_buf) / 2);
@@ -208,7 +208,7 @@ UATUplinkPacketBeastTest uat_uplink_tests[] = {
          "00964ddb000000"}};
 
 TEST(BeastUtils, BuildUATUplinkFrame) {
-    for (const auto &test : uat_uplink_tests) {
+    for (const auto& test : uat_uplink_tests) {
         uint8_t beast_frame_buf[BeastReporter::kUATUplinkBeastFrameMaxLenBytes];
         uint16_t bytes_written = BeastReporter::BuildUATUplinkBeastFrame(beast_frame_buf, test.packet);
         EXPECT_EQ(bytes_written, strlen(test.beast_frame_buf) / 2);
