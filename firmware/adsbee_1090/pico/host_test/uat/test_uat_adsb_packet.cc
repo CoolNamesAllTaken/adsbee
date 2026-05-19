@@ -211,17 +211,17 @@ struct OnGroundHorizontalVelocityTestCase {
     float expected_direction_deg;
     uint16_t ground_speed_encoded;
     int32_t expected_speed_kts;
-    char* description;
+    const char* description;
 };
 
 const OnGroundHorizontalVelocityTestCase kOnGroundHorizontalVelocityTestCases[] = {
-    {0, 0.0f, 0, INT32_MIN, (const char*)"0.0 degrees, speed not available"},
-    {1, 0.703125f, 1, 0, (const char*)"0.703125 degrees, 0 kts"},
-    {1, 0.703125f, 0, INT32_MIN, (const char*)"0.703125 degrees, 0 speed not available"},
-    {2, 1.40625f, 1, 0, (const char*)"1.40625 degrees, 1 kts"},
-    {3, 2.109375f, 2, 1, (const char*)"2.109375 degrees, 2 kts"},
-    {510, 358.593750f, 1022, 1021, (const char*)"358.593750 degrees, 1022 kts"},
-    {511, 359.296875f, 1023, 1022, (const char*)"359.196875 degrees, 1023 kts"}};
+    {0, 0.0f, 0, INT32_MIN, "0.0 degrees, speed not available"},
+    {1, 0.703125f, 1, 0, "0.703125 degrees, 0 kts"},
+    {1, 0.703125f, 0, INT32_MIN, "0.703125 degrees, 0 speed not available"},
+    {2, 1.40625f, 1, 0, "1.40625 degrees, 1 kts"},
+    {3, 2.109375f, 2, 1, "2.109375 degrees, 2 kts"},
+    {510, 358.593750f, 1022, 1021, "358.593750 degrees, 1022 kts"},
+    {511, 359.296875f, 1023, 1022, "359.196875 degrees, 1023 kts"}};
 
 TEST(DecodedUATADSBPacket, HorizontalVelocityToDirectionDegAndSpeedKtsOnGround) {
     ADSBTypes::AirGroundState air_ground_state = ADSBTypes::kAirGroundStateOnGround;
@@ -281,30 +281,30 @@ struct VerticalVelocityTestCase {
 
     int32_t expected_vertical_rate_fpm;
     ADSBTypes::VerticalRateSource expected_vertical_rate_source;
-    char* description;
+    const char* description;
 };
 
 const VerticalVelocityTestCase kVerticalVelocityTestCases[] = {
     {0, ADSBTypes::AirGroundState::kAirGroundStateOnGround, INT32_MIN, ADSBTypes::kVerticalRateSourceNotAvailable,
-     (const char*)"on ground, vertical rate not available"},
+     "on ground, vertical rate not available"},
     {1 << 10, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, INT32_MIN,
-     ADSBTypes::kVerticalRateSourceBaro, (const char*)"airborne supersonic, baro, vertical rate invalid"},
+     ADSBTypes::kVerticalRateSourceBaro, "airborne supersonic, baro, vertical rate invalid"},
     {1 << 9, ADSBTypes::AirGroundState::kAirGroundStateAirborneSubsonic, INT32_MIN, ADSBTypes::kVerticalRateSourceGNSS,
-     (const char*)"airborne subsonic, gnss, vertical rate invalid"},
+     "airborne subsonic, gnss, vertical rate invalid"},
     {1, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, 0, ADSBTypes::kVerticalRateSourceGNSS,
-     (const char*)"0fpm gnss"},
+     "0fpm gnss"},
     {(0b11 << 9) | 1, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, 0,
-     ADSBTypes::kVerticalRateSourceBaro, (const char*)"-0fpm baro"},
+     ADSBTypes::kVerticalRateSourceBaro, "-0fpm baro"},
     {2, ADSBTypes::AirGroundState::kAirGroundStateAirborneSubsonic, 64, ADSBTypes::kVerticalRateSourceGNSS,
-     (const char*)"64fpm gnss"},
+     "64fpm gnss"},
     {(0b1 << 9) | 2, ADSBTypes::AirGroundState::kAirGroundStateAirborneSubsonic, -64,
-     ADSBTypes::kVerticalRateSourceGNSS, (const char*)"-64fpm gnss"},
+     ADSBTypes::kVerticalRateSourceGNSS, "-64fpm gnss"},
     {(0b1 << 10) | 3, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, 128,
-     ADSBTypes::kVerticalRateSourceBaro, (const char*)"128fpm baro"},
+     ADSBTypes::kVerticalRateSourceBaro, "128fpm baro"},
     {(0b11 << 9) | 510, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, -32576,
-     ADSBTypes::kVerticalRateSourceBaro, (const char*)"-32576fpm baro"},
+     ADSBTypes::kVerticalRateSourceBaro, "-32576fpm baro"},
     {510, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, 32576, ADSBTypes::kVerticalRateSourceGNSS,
-     (const char*)"32576fpm gnss"},
+     "32576fpm gnss"},
 
 };
 

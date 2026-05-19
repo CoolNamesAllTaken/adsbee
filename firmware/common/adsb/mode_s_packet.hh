@@ -18,7 +18,7 @@ class RawModeSPacket {
     static const uint16_t kExtendedSquitterPacketLenBytes = kExtendedSquitterPacketLenBits / kBitsPerByte;
     static const uint16_t kExtendedSquitterPacketNumWords32 = 4;  // 112 bits = 3.5 words, round up to 4.
 
-    RawModeSPacket(char* rx_string, int16_t source_in = -1, int16_t sigs_dbm_in = INT16_MIN,
+    RawModeSPacket(const char* rx_string, int16_t source_in = -1, int16_t sigs_dbm_in = INT16_MIN,
                    int16_t sigq_db_in = INT16_MIN, uint64_t mlat_48mhz_64bit_counts = 0);
     RawModeSPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_t rx_buffer_len_words32, int16_t source_in = -1,
                    int16_t sigs_dbm_in = INT16_MIN, int16_t sigq_db_in = INT16_MIN,
@@ -116,7 +116,7 @@ class DecodedModeSPacket {
      * @param[in] sigs_dbm RSSI of the packet that was received, in dBm. Defaults to INT32_MIN if not set.
      * @param[in] mlat_12mhz_counts Counts of a 12MHz clock used for the 6-byte multilateration timestamp.
      */
-    DecodedModeSPacket(char* rx_string, int16_t source = -1, int32_t sigs_dbm = INT32_MIN, int32_t sigq_db = INT32_MIN,
+    DecodedModeSPacket(const char* rx_string, int16_t source = -1, int32_t sigs_dbm = INT32_MIN, int32_t sigq_db = INT32_MIN,
                        uint64_t mlat_48mhz_64bit_counts = 0);
 
     /**
@@ -128,7 +128,7 @@ class DecodedModeSPacket {
     /**
      * Default constructor.
      */
-    DecodedModeSPacket() : raw((const char*)"") { debug_string[0] = '\0'; };
+    DecodedModeSPacket() : raw("") { debug_string[0] = '\0'; };
 
     DownlinkFormat GetDownlinkFormatEnum();
 

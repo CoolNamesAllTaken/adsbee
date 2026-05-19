@@ -17,9 +17,18 @@
 #define PFB_MUTEX_LOCK(mtx) mutex_enter_blocking(&(mtx))
 #define PFB_MUTEX_UNLOCK(mtx) mutex_exit(&(mtx))
 
+#elif __has_include("freertos/semphr.h")
+// FreeRTOS mutex implementation (ESP32 / IDF)
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+
+#define PFB_MUTEX_TYPE        SemaphoreHandle_t
+#define PFB_MUTEX_INIT(mtx)   ((mtx) = xSemaphoreCreateMutex())
+#define PFB_MUTEX_LOCK(mtx)   xSemaphoreTake((mtx), portMAX_DELAY)
+#define PFB_MUTEX_UNLOCK(mtx) xSemaphoreGive((mtx))
+
 #else
 // Stub implementation for platforms without mutex support (single-core/non-concurrent use).
-// Replace this section for other platforms (e.g., FreeRTOS, std::mutex, etc.)
 
 struct PfbMutexStub {};
 #define PFB_MUTEX_TYPE PfbMutexStub
@@ -27,7 +36,7 @@ struct PfbMutexStub {};
 #define PFB_MUTEX_LOCK(mtx) ((void)0)
 #define PFB_MUTEX_UNLOCK(mtx) ((void)0)
 
-#endif  // PICO_SDK
+#endif  // platform
 
 #endif  // PFB_MUTEX_CUSTOM
 

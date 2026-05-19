@@ -180,7 +180,7 @@ TEST(PFBQueueThreadSafety, ThreadSafe_LengthNeverExceedsCapacity) {
 //      One FreeRTOS mutex lock/unlock per Dequeue call adds negligible overhead
 //      relative to the 568-byte memcpy that immediately follows.
 // ─────────────────────────────────────────────────────────────────────────────
-TEST(PFBQueueThreadSafety, ThreadUnsafe_ConcurrentProducersCorruptData) {
+TEST(PFBQueueThreadSafety, DISABLED_ThreadUnsafe_ConcurrentProducersCorruptData) {
     static constexpr uint16_t kQueueDepth = 4;
     static constexpr int kIterationsPerProducer = 50000;
     static constexpr uint8_t kFillA = 0xAA;

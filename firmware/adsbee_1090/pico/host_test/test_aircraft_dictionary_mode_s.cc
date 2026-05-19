@@ -620,8 +620,8 @@ TEST(AircraftDictionary, MetricsToJSON) {
                                            .valid_extended_squitter_frames_by_source = {3, 5, 8},
                                            .demods_1090_by_source = {19, 10, 21}};
     char buf[AircraftDictionary::Metrics::kMetricsJSONMaxLen] = {'\0'};
-    char * expected_result =
-        (const char *)"{ \"raw_squitter_frames\": 10, \
+    const char* expected_result =
+        "{ \"raw_squitter_frames\": 10, \
 \"valid_squitter_frames\": 7, \
 \"raw_extended_squitter_frames\": 30, \
 \"valid_extended_squitter_frames\": 16, \

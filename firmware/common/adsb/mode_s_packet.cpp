@@ -66,7 +66,7 @@ RawModeSPacket::RawModeSPacket(uint32_t rx_buffer[kMaxPacketLenWords32], uint16_
     }
 }
 
-RawModeSPacket::RawModeSPacket(char *rx_string, int16_t source_in, int16_t sigs_dbm_in, int16_t sigq_db_in,
+RawModeSPacket::RawModeSPacket(const char *rx_string, int16_t source_in, int16_t sigs_dbm_in, int16_t sigq_db_in,
                                uint64_t mlat_48mhz_64bit_counts_in)
     : source(source_in),
       sigs_dbm(sigs_dbm_in),
@@ -109,7 +109,7 @@ DecodedModeSPacket::DecodedModeSPacket(uint32_t rx_buffer[kMaxPacketLenWords32],
     ConstructModeSPacket();
 }
 
-DecodedModeSPacket::DecodedModeSPacket(char *rx_string, int16_t source, int32_t sigs_dbm, int32_t sigq_db,
+DecodedModeSPacket::DecodedModeSPacket(const char *rx_string, int16_t source, int32_t sigs_dbm, int32_t sigq_db,
                                        uint64_t mlat_48mhz_64bit_counts)
     : raw(rx_string, source, sigs_dbm, sigq_db, mlat_48mhz_64bit_counts) {
     ConstructModeSPacket();
