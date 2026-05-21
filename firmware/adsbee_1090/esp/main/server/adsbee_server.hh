@@ -48,12 +48,13 @@ class ADSBeeServer {
      */
     void TCPServerTask(void* pvParameters);
 
+    // Written by Core 1 (SPI task) and read by Core 0 (main task) — must be thread-safe.
     PFBQueue<RawModeSPacket> raw_mode_s_packet_in_queue = PFBQueue<RawModeSPacket>(
-        {.buf_len_num_elements = kMaxNumModeSPackets, .buffer = raw_mode_s_packet_in_queue_buffer_});
+        {.buf_len_num_elements = kMaxNumModeSPackets, .buffer = raw_mode_s_packet_in_queue_buffer_, .is_thread_safe = true});
     PFBQueue<RawUATADSBPacket> raw_uat_adsb_packet_in_queue = PFBQueue<RawUATADSBPacket>(
-        {.buf_len_num_elements = kMaxNumUATADSBPackets, .buffer = raw_uat_adsb_packet_in_queue_buffer_});
+        {.buf_len_num_elements = kMaxNumUATADSBPackets, .buffer = raw_uat_adsb_packet_in_queue_buffer_, .is_thread_safe = true});
     PFBQueue<RawUATUplinkPacket> raw_uat_uplink_packet_in_queue = PFBQueue<RawUATUplinkPacket>(
-        {.buf_len_num_elements = kMaxNumUATUplinkPackets, .buffer = raw_uat_uplink_packet_in_queue_buffer_});
+        {.buf_len_num_elements = kMaxNumUATUplinkPackets, .buffer = raw_uat_uplink_packet_in_queue_buffer_, .is_thread_safe = true});
 
     AircraftDictionary aircraft_dictionary;
 

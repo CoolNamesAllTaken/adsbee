@@ -4,7 +4,7 @@
 TEST(ModeSPacketDecoder, HandleNoBitErrors) {
     ModeSPacketDecoder decoder(ModeSPacketDecoder::PacketDecoderConfig{.enable_1090_error_correction = true});
 
-    RawModeSPacket raw_packet((char *)"8D40621D58C382D690C8AC2863A7");
+    RawModeSPacket raw_packet((const char*)"8D40621D58C382D690C8AC2863A7");
     decoder.raw_mode_s_packet_in_queue.Enqueue(raw_packet);
     decoder.UpdateDecoderLoop();
     EXPECT_EQ(decoder.decoded_mode_s_packet_out_queue.Length(), 1);
@@ -19,7 +19,7 @@ TEST(ModeSPacketDecoder, HandleSingleBitError) {
         ModeSPacketDecoder::PacketDecoderConfig{.enable_1090_error_correction = false});
     ModeSPacketDecoder decoder(ModeSPacketDecoder::PacketDecoderConfig{.enable_1090_error_correction = true});
 
-    RawModeSPacket raw_packet((char *)"8D40621D58C382D690C8AC2863A6");
+    RawModeSPacket raw_packet((const char*)"8D40621D58C382D690C8AC2863A6");
     decoder_no_corrections.raw_mode_s_packet_in_queue.Enqueue(raw_packet);
     decoder_no_corrections.UpdateDecoderLoop();
     EXPECT_EQ(decoder_no_corrections.decoded_mode_s_packet_out_queue.Length(), 0);
@@ -36,7 +36,7 @@ TEST(ModeSPacketDecoder, HandleSingleBitError) {
 TEST(ModeSPacketDecoder, RejectDuplicateMessages) {
     // Packet decoder should not re-process the same message if it's caught by multiple state machines.
     ModeSPacketDecoder decoder(ModeSPacketDecoder::PacketDecoderConfig{.enable_1090_error_correction = true});
-    RawModeSPacket raw_packet((char *)"8D40621D58C382D690C8AC2863A7");
+    RawModeSPacket raw_packet((const char*)"8D40621D58C382D690C8AC2863A7");
     raw_packet.source = 0;
     raw_packet.mlat_48mhz_64bit_counts = 123456;
     decoder.raw_mode_s_packet_in_queue.Enqueue(raw_packet);

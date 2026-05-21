@@ -1,6 +1,8 @@
 add_executable(host_test main.cc)
 add_executable(host_test_fpu main.cc)
 
+find_package(Threads REQUIRED)
+
 set(CMAKE_BUILD_TYPE "Debug") # Now that we've identified we're running tests, revert to an actual build config.
 
 add_compile_options(
@@ -14,8 +16,8 @@ add_compile_options(
 # Test: Pull in google test library
 add_library(libgtest SHARED IMPORTED)
 set_target_properties(libgtest PROPERTIES IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/../../modules/googletest/build/lib/libgtest.so)
-target_link_libraries(host_test PRIVATE libgtest)
-target_link_libraries(host_test_fpu PRIVATE libgtest)
+target_link_libraries(host_test PRIVATE libgtest Threads::Threads)
+target_link_libraries(host_test_fpu PRIVATE libgtest Threads::Threads)
 target_compile_definitions(host_test_fpu PRIVATE HAS_FPU)
 
 add_subdirectory(${ADSBEE_COMMON_DIR} ${CMAKE_BINARY_DIR}/adsbee_common)
@@ -52,6 +54,7 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         test_squitter_packets.cc
         test_transponder_packet.cc
         test_unit_conversions.cc
+        test_pfb_queue_thread_safety.cc
     )
 
     target_include_directories(${_test_tgt} PRIVATE

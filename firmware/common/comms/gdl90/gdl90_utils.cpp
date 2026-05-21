@@ -203,15 +203,19 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
         speed_kts = static_cast<uint16_t>(speed_kts_raw);
     }
 
-    // vvv: Vertical Velocity. Signed Integer in units of 64fpm.
-    int32_t vertical_rate_64fpm = static_cast<int32_t>(data.vertical_rate_fpm) / 64;
-    if (vertical_rate_64fpm > 0x1FE) {
-        vertical_rate_64fpm = 0x1FE;  // > +32,576 fpm climb; railed to +32,640 fpm (0x1FE)
-    } else if (vertical_rate_64fpm < -0x1FE) {
-        vertical_rate_64fpm = -0x1FE;  // > 32,576 fpm descent; railed to -32,640 fpm (0x1FE)
+    // vvv: Vertical Velocity. Signed Integer in units of 64fpm. 0x800 = not available.
+    uint16_t vertical_rate_encoded;
+    if (data.vertical_rate_fpm == GDL90TargetReportData::kVerticalRateUnavailableFpm) {
+        vertical_rate_encoded = 0x800;
+    } else {
+        int32_t vertical_rate_64fpm = static_cast<int32_t>(data.vertical_rate_fpm) / 64;
+        if (vertical_rate_64fpm > 0x1FE) {
+            vertical_rate_64fpm = 0x1FE;  // > +32,576 fpm climb; railed to +32,640 fpm (0x1FE)
+        } else if (vertical_rate_64fpm < -0x1FE) {
+            vertical_rate_64fpm = -0x1FE;  // > 32,576 fpm descent; railed to -32,640 fpm (0x1FE)
+        }
+        vertical_rate_encoded = static_cast<uint16_t>(vertical_rate_64fpm) & 0x0FFF;
     }
-
-    uint16_t vertical_rate_encoded = static_cast<uint16_t>(vertical_rate_64fpm) & 0x0FFF;
 
     message_buf[14] = (speed_kts >> 4) & 0xFF;                  // hh: MSB of Horizontal Velocity.
     message_buf[15] = ((speed_kts & 0xF) << 4)                  // h: LS nibble of Horizontal Velocity.
@@ -236,6 +240,8 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
 
     // NOTE: Traffic Alert Status currently not used.
     data.participant_address = aircraft.icao_address;
+    data.address_type = GDL90TargetReportData::kAddressTypeADSBWithICAOAddress;
+
     data.latitude_deg = aircraft.latitude_deg;
     data.longitude_deg = aircraft.longitude_deg;
     data.altitude_ft = aircraft.baro_altitude_ft;
@@ -269,6 +275,7 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
                           aircraft.HasBitFlag(ModeSAircraft::kBitFlagIsAirborne)  // Aircraft is airborne?
     );
     data.navigation_integrity_category = aircraft.navigation_integrity_category;
+    data.navigation_accuracy_category_position = aircraft.navigation_accuracy_category_position;
     data.speed_kts = aircraft.speed_kts;
     // Prefer baro vertical rate for GDL90 applications (e.g. electronic flight bag).
     data.vertical_rate_fpm = aircraft.HasBitFlag(ModeSAircraft::kBitFlagBaroVerticalRateValid)
@@ -293,7 +300,29 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
     data.longitude_deg = aircraft.longitude_deg;
     data.altitude_ft = aircraft.baro_altitude_ft;
     data.direction_deg = aircraft.direction_deg;
-    data.address_type = static_cast<GDL90TargetReportData::AddressType>(aircraft.GetAddressQualifier());
+    switch (aircraft.GetAddressQualifier()) {
+        case UATAircraft::kADSBTargetWithICAO24BitAddress:
+            data.address_type = GDL90TargetReportData::kAddressTypeADSBWithICAOAddress;
+            break;
+        case UATAircraft::kADSBTargetWithSelfAssignedTemporaryAddress:
+            data.address_type = GDL90TargetReportData::kAddressTypeADSBWithSelfAssignedAddress;
+            break;
+        case UATAircraft::kTISBTargetWithICAO24BitAddress:
+            data.address_type = GDL90TargetReportData::kAddressTypeTISBWithICAOAddress;
+            break;
+        case UATAircraft::kTISBTargetWithTrackFileIdentifier:
+            data.address_type = GDL90TargetReportData::kAddressTypeTISBWithTrackFileID;
+            break;
+        case UATAircraft::kSurfaceVehicle:
+            data.address_type = GDL90TargetReportData::kAddressTypeSurfaceVehicle;
+            break;
+        case UATAircraft::kFixedADSBBeacon:
+            data.address_type = GDL90TargetReportData::kAddressTypeGroundStationBeacon;
+            break;
+        default:
+            data.address_type = GDL90TargetReportData::kAddressTypeADSBWithICAOAddress;
+            break;
+    }
 
     GDL90TargetReportData::MiscIndicatorTrackOrHeadingValue track_heading_value;
     if (!aircraft.HasBitFlag(UATAircraft::kBitFlagPositionValid)) {
@@ -323,6 +352,7 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
                           aircraft.HasBitFlag(UATAircraft::kBitFlagIsAirborne)  // Aircraft is airborne?
     );
     data.navigation_integrity_category = aircraft.navigation_integrity_category;
+    data.navigation_accuracy_category_position = aircraft.navigation_accuracy_category_position;
     data.speed_kts = aircraft.speed_kts;
     // Prefer baro vertical rate for GDL90 applications (e.g. electronic flight bag).
     data.vertical_rate_fpm = aircraft.HasBitFlag(UATAircraft::kBitFlagBaroVerticalRateValid)

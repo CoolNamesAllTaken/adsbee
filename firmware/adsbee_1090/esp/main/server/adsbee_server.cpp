@@ -280,12 +280,14 @@ bool ADSBeeServer::ReportGDL90() {
             aircraft_dictionary.metrics.valid_uat_adsb_frames,  // ADS-B message count includes UAT ADS-B messages.
         aircraft_dictionary.metrics.valid_uat_uplink_frames);
     comms_manager.WiFiAccessPointSendMessageToAllStations(message);
+    message.len = 0;
 
     // Ownship Report
     GDL90Reporter::GDL90TargetReportData ownship_data = {};
+    memcpy(ownship_data.callsign, "ADSBEE  ", sizeof(ownship_data.callsign) - 1);
+    ownship_data.address_type = GDL90Reporter::GDL90TargetReportData::kAddressTypeADSBWithSelfAssignedAddress;
     SettingsManager::RxPosition& rx_position = object_dictionary.composite_device_status.rp2040.rx_position;
-    uint32_t ownship_icao_address = 0x0;
-    // TODO: Add ownship reporting if we have an actual position source.
+    ownship_data.participant_address = 0x0;
     if (rx_position.source == SettingsManager::RxPosition::PositionSource::kPositionSourceAircraftMatchingICAO) {
         // Only send ownship data with a position if we are tracking an aircraft.
         ownship_data.latitude_deg = rx_position.latitude_deg;
@@ -294,13 +296,13 @@ bool ADSBeeServer::ReportGDL90() {
         ownship_data.speed_kts = rx_position.speed_kts;
         ownship_data.direction_deg = rx_position.heading_deg;
         ownship_data.participant_address = rx_position.icao_address;
-
-        ownship_icao_address = ownship_data.participant_address;  // Use this to ignore ownship traffic reports.
-
-        message.len = gdl90.WriteGDL90TargetReportMessage(message.data, CommsManager::NetworkMessage::kMaxLenBytes,
-                                                          ownship_data, true);
-        comms_manager.WiFiAccessPointSendMessageToAllStations(message);
+        ownship_data.SetMiscIndicator(GDL90Reporter::GDL90TargetReportData::kMiscIndicatorTTIsTrueTrackAngle, false,
+                                      false);
     }
+    message.len = gdl90.WriteGDL90TargetReportMessage(message.data, CommsManager::NetworkMessage::kMaxLenBytes,
+                                                      ownship_data, true);
+    comms_manager.WiFiAccessPointSendMessageToAllStations(message);
+    message.len = 0;
 
     // Traffic Reports
     int16_t aircraft_index = -1;  // Just used for error reporting.
@@ -311,8 +313,9 @@ bool ADSBeeServer::ReportGDL90() {
 
         if (ModeSAircraft* mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
             if (!mode_s_aircraft->HasBitFlag(ModeSAircraft::kBitFlagPositionValid) ||
-                mode_s_aircraft->icao_address == ownship_icao_address) {
-                // Don't report aircraft without a valid position, and ignore ownship position.
+                mode_s_aircraft->icao_address == ownship_data.participant_address) {
+                // Don't report aircraft without a valid position, and ignore ownship position when bootstrapping off a
+                // fixed ICAO.
                 continue;
             }
             printf("\t#A %s (0x%06lX): %.5f %.5f %ld\r\n", mode_s_aircraft->callsign, mode_s_aircraft->icao_address,
@@ -321,8 +324,9 @@ bool ADSBeeServer::ReportGDL90() {
                                                                        *mode_s_aircraft, false);
         } else if (UATAircraft* uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
             if (!uat_aircraft->HasBitFlag(UATAircraft::kBitFlagPositionValid) ||
-                uat_aircraft->icao_address == ownship_icao_address) {
-                // Don't report aircraft without a valid position, and ignore ownship position.
+                uat_aircraft->icao_address == ownship_data.participant_address) {
+                // Don't report aircraft without a valid position, and ignore ownship position when bootstrapping off a
+                // fixed ICAO.
                 continue;
             }
             printf("\t#U %s (0x%06lX): %.5f %.5f %ld\r\n", uat_aircraft->callsign, uat_aircraft->icao_address,
@@ -635,21 +639,33 @@ bool ADSBeeServer::TCPServerInit() {
     }
 
     // Root URI handler (HTML)
-    httpd_uri_t root = {
-        .uri = "/", .method = HTTP_GET, .handler = root_handler, .user_ctx = NULL, .is_websocket = false,
-        .handle_ws_control_frames = false, .supported_subprotocol = nullptr};
+    httpd_uri_t root = {.uri = "/",
+                        .method = HTTP_GET,
+                        .handler = root_handler,
+                        .user_ctx = NULL,
+                        .is_websocket = false,
+                        .handle_ws_control_frames = false,
+                        .supported_subprotocol = nullptr};
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &root));
 
     // CSS URI handler
-    httpd_uri_t css = {
-        .uri = "/style.css", .method = HTTP_GET, .handler = css_handler, .user_ctx = NULL, .is_websocket = false,
-        .handle_ws_control_frames = false, .supported_subprotocol = nullptr};
+    httpd_uri_t css = {.uri = "/style.css",
+                       .method = HTTP_GET,
+                       .handler = css_handler,
+                       .user_ctx = NULL,
+                       .is_websocket = false,
+                       .handle_ws_control_frames = false,
+                       .supported_subprotocol = nullptr};
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &css));
 
     // Favicon URI handler
-    httpd_uri_t favicon = {
-        .uri = "/favicon.png", .method = HTTP_GET, .handler = favicon_handler, .user_ctx = NULL, .is_websocket = false,
-        .handle_ws_control_frames = false, .supported_subprotocol = nullptr};
+    httpd_uri_t favicon = {.uri = "/favicon.png",
+                           .method = HTTP_GET,
+                           .handler = favicon_handler,
+                           .user_ctx = NULL,
+                           .is_websocket = false,
+                           .handle_ws_control_frames = false,
+                           .supported_subprotocol = nullptr};
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &favicon));
 
     network_console = WebSocketServer({.label = "Network Console",

@@ -203,9 +203,26 @@ bool ADSBee::Update() {
     UpdateNoiseFloor();
 
     // Update sub-GHz radio.
-    if (config_.has_subg && subg_radio.IsEnabled() && !subg_radio.Update()) {
-        CONSOLE_ERROR("ADSBee::Update", "Failed to update sub-GHz radio.");
-        return false;
+    if (config_.has_subg && subg_radio.IsEnabled()) {
+        if (subg_radio.Update()) {
+            // Sub-GHz radio comms successful.
+            subg_radio_last_update_timestamp_ms_ = get_time_since_boot_ms();
+        } else {
+            // Sub-GHz radio comms failed. Log an error and restart if enough time has elapsed since the last successful
+            // Sub-GHz radio comms.
+            CONSOLE_ERROR("ADSBee::Update", "Failed to update sub-GHz radio.");
+
+            if (get_time_since_boot_ms() - subg_radio_last_update_timestamp_ms_ >= kSubGRadioFailRebootIntervalMs) {
+                // Too much time elapsed since last valid SubG radio comms. Reboot it.
+                CONSOLE_ERROR("ADSBee::Update", "%u ms elapsed since SubG comms. Rebooting SubG radio.",
+                              kSubGRadioFailRebootIntervalMs);
+                SettingsManager::EnableState prev_enable_state = subg_radio_ll.IsEnabledState();
+                SetSubGRadioEnable(SettingsManager::EnableState::kEnableStateDisabled);
+                sleep_ms_blocking(kSubGRadioFailRebootPowerOffDurationMs);
+                SetSubGRadioEnable(prev_enable_state);
+            }
+            return false;
+        }
     }
     return true;
 }
@@ -242,8 +259,8 @@ void ADSBee::UpdateRxPosition() {
     }
     last_rx_position_update_timestamp_ms_ = timestamp_ms;
 
-    // Update rx position based on selected position source. Note this only handles periodic automatic updates. One-time
-    // changes are handled in AT comms.
+    // Update rx position based on selected position source. Note this only handles periodic automatic updates.
+    // One-time changes are handled in AT comms.
     switch (rx_position.source) {
         case SettingsManager::RxPosition::PositionSource::kPositionSourceNone:
             // No position available.
@@ -354,8 +371,8 @@ void __time_critical_func(ADSBee::OnDemodBegin)(uint gpio) {
 void ADSBee::OnDemodComplete() {
     int signal_strength_dbm = AD8313MilliVoltsTodBm(ReadSignalStrengthMilliVoltsNonBlockingComplete());
 
-    // Figure out which state machines were triggered and get things set up to read packets from them. Don't stop them,
-    // let them finish chewing since they run at a lower clock rate.
+    // Figure out which state machines were triggered and get things set up to read packets from them. Don't stop
+    // them, let them finish chewing since they run at a lower clock rate.
     bool sm_triggered[bsp.r1090_num_demod_state_machines] = {false};
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         if (!pio_interrupt_get(config_.preamble_detector_pio, sm_index)) {
@@ -376,9 +393,9 @@ void ADSBee::OnDemodComplete() {
         rx_packet_[sm_index].sigs_dbm = signal_strength_dbm;
         rx_packet_[sm_index].sigq_db = rx_packet_[sm_index].sigs_dbm - GetNoiseFloordBm();
         rx_packet_[sm_index].source = sm_index;  // Record this state machine as the source of the packet.
-        // Get the difference between the beginning of the demodulation period and the first FIFO push. The FIFO push
-        // does not have jitter relative to the preamble but needs to be anchored to a full 24-bit timer value, since
-        // it's from a 16-bit PWM peripheral.
+        // Get the difference between the beginning of the demodulation period and the first FIFO push. The FIFO
+        // push does not have jitter relative to the preamble but needs to be anchored to a full 24-bit timer value,
+        // since it's from a 16-bit PWM peripheral.
         uint16_t& a = mlat_jitter_counts_on_fifo_pull_[sm_index];
         uint16_t& b = mlat_jitter_counts_on_demod_begin_[sm_index];
         uint16_t mlat_jitter_correction = b >= a ? b - a : (0xFFFF - a) + b;
@@ -387,17 +404,17 @@ void ADSBee::OnDemodComplete() {
         // Clear the transponder packet buffer.
         memset((void*)rx_packet_[sm_index].buffer, 0xFF, RawModeSPacket::kMaxPacketLenWords32 * sizeof(uint32_t));
 
-        // If the FIFO is full, we got a bunch of garbage bits after ending the demodulation, but that's OK, we can chop
-        // off the rest of them and see if we got a valid message. If it's not full, we need to carefully feed in 0 bits
-        // until we join the last partial word of the message together with the rest of it.
+        // If the FIFO is full, we got a bunch of garbage bits after ending the demodulation, but that's OK, we can
+        // chop off the rest of them and see if we got a valid message. If it's not full, we need to carefully feed
+        // in 0 bits until we join the last partial word of the message together with the rest of it.
         if (!pio_sm_is_rx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
             // Shift 0 bits into the input shift register until it pushes into the RX FIFO.
             uint16_t rx_fifo_level =
                 pio_sm_get_rx_fifo_level(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);
             while (pio_sm_get_rx_fifo_level(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]) ==
                    rx_fifo_level) {
-                // NOTE: Shift in bits one by one since for some reason the autopush doesn't work if we shift in a bunch
-                // of bits at the same time.
+                // NOTE: Shift in bits one by one since for some reason the autopush doesn't work if we shift in a
+                // bunch of bits at the same time.
                 pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
                                           pio_encode_in(pio_null, 1));
             }
@@ -431,9 +448,8 @@ void ADSBee::OnDemodComplete() {
                 // FIXME: Extra bit is ingested non-deterministically, depending on whether there was a HI bit right
                 // after the demod interval went LO. This happens because the demodulator state machine ends up in a
                 // state where it's waiting for an edge regardless of whether the demod interval is active. Our
-                // interrupts are too slow (1-3us) to get to the PIO state machine in time to stop it from doing this.
-                // rx_packet_[sm_index].buffer[i] >>= 1;
-                // Mask and left align final word based on bit length.
+                // interrupts are too slow (1-3us) to get to the PIO state machine in time to stop it from doing
+                // this. rx_packet_[sm_index].buffer[i] >>= 1; Mask and left align final word based on bit length.
                 switch (packet_num_words) {
                     case RawModeSPacket::kSquitterPacketNumWords32:
                         aircraft_dictionary.Record1090RawSquitterFrame();
@@ -480,8 +496,8 @@ void ADSBee::OnDemodComplete() {
                                   pio_encode_jmp(demodulator_program_start));  // Jump to beginning of program.
         pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], true);
 
-        // Stuff the preamble detector TX FIFO full of garbage so that the preamble detector can use a pull to signal
-        // the demod interval beginning.
+        // Stuff the preamble detector TX FIFO full of garbage so that the preamble detector can use a pull to
+        // signal the demod interval beginning.
         while (!pio_sm_is_tx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
             pio_sm_put(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
                        0xFFFFFFFF);  // Non-blocking put.
@@ -497,7 +513,8 @@ void ADSBee::OnDemodComplete() {
         // if (sm_index == bsp.r1090_high_power_demod_state_machine_index) {
         //     // High power state machine operates alone and doesn't need to wait for any other SM to complete. It
         //     // would normally be enabled by one of the interleaved well formed preamble detector state machines
-        //     // refreshing, but doing it here brings it up a little quicker and allows it to catch a subsequent high
+        //     // refreshing, but doing it here brings it up a little quicker and allows it to catch a subsequent
+        //     high
         //     // power packet if it comes in quickly.
         //     pio_sm_exec_wait_blocking(
         //         config_.preamble_detector_pio, preamble_detector_sm_[sm_index],
@@ -586,8 +603,8 @@ void ADSBee::IngestAndForwardPackets() {
         }
     }
 
-    // NOTE: The UAT packet queues are updated on this core, so we don't need to count the number of packets to process
-    // before dequeueing.
+    // NOTE: The UAT packet queues are updated on this core, so we don't need to count the number of packets to
+    // process before dequeueing.
 
     // Ingest new UAT packets into the dictionary and report them.
     RawUATADSBPacket uat_adsb_packet;
@@ -605,8 +622,8 @@ void ADSBee::IngestAndForwardPackets() {
             CONSOLE_INFO("ADSBee::IngestAndForwardPackets", "\taircraft_dictionary: %d aircraft",
                          aircraft_dictionary.GetNumAircraft());
         }
-        // Push all decoded packets to the reporting queue, even if the aircraft dictionary didn't know what to do with
-        // them.
+        // Push all decoded packets to the reporting queue, even if the aircraft dictionary didn't know what to do
+        // with them.
         if (!comms_manager.uat_adsb_packet_reporting_queue.Enqueue(uat_adsb_packet)) {
             CONSOLE_ERROR("ADSBee::IngestAndForwardPackets", "UAT ADS-B packet reporting queue overflowed.");
         }
@@ -703,9 +720,10 @@ void ADSBee::PIOInit() {
          * nibble is 1us. Each "00" is represented by two 0 bits, since each 0 bit is 500ns of 0's.
          * from preamble sequence to allow the demodulator more time to start up.
          *
-         * We actually ignore the last 500ns of 0's and do a dumb delay, since this part tends to get "dirty" due to the
-         * LEVEL filter drifting downwards during the long LO. Taking into account the initial idle filter, we are
-         * matching on a pattern that looks something like: 0b001X1X000X, where X indicates 500ns of ignored bits.
+         * We actually ignore the last 500ns of 0's and do a dumb delay, since this part tends to get "dirty" due to
+         * the LEVEL filter drifting downwards during the long LO. Taking into account the initial idle filter, we
+         * are matching on a pattern that looks something like: 0b001X1X000X, where X indicates 500ns of ignored
+         * bits.
          */
 
         // mov isr null ; Clear ISR.
@@ -724,8 +742,8 @@ void ADSBee::PIOInit() {
         pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_mov(pio_x, pio_null));
 
         // Use this instruction to verify preamble was formed correctly (pushes ISR to RX FIFO).
-        // pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_push(false, true));
-        // while (true) {
+        // pio_sm_exec(config_.preamble_detector_pio, preamble_detector_sm_[sm_index], pio_encode_push(false,
+        // true)); while (true) {
         //     // Stall core 1 so we can peek at the RX FIFO registers.
         // }
 
@@ -737,7 +755,8 @@ void ADSBee::PIOInit() {
         }
     }
 
-    // Enable the DEMOD interrupt on PIO0_IRQ_0 - PIO0_IRQ_n, where n is the number of preamble detector state machines.
+    // Enable the DEMOD interrupt on PIO0_IRQ_0 - PIO0_IRQ_n, where n is the number of preamble detector state
+    // machines.
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         pio_set_irq0_source_enabled(config_.preamble_detector_pio,
                                     static_cast<pio_interrupt_source>(pis_interrupt0 + sm_index),

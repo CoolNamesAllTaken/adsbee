@@ -45,11 +45,15 @@ bool CommsManager::Update() {
         uint16_t required_buffer_len = CompositeArray::CalculateRawPacketsBufferLength(
             &mode_s_packet_reporting_queue, &uat_adsb_packet_reporting_queue, &uat_uplink_packet_reporting_queue);
 
-        // Only forward packets if buffer would be full or if max reporting interval has elapsed.
-        bool buffer_would_be_full = required_buffer_len >= CompositeArray::RawPackets::kMaxLenBytes;
+        // Only forward packets if buffer would be more than 25% full or if max reporting interval has elapsed or if any
+        // queue is more than 50% full.
+        bool buffer_would_be_full = required_buffer_len >= CompositeArray::RawPackets::kMaxLenBytes / 4;
         bool max_interval_elapsed = (timestamp_ms - last_raw_report_timestamp_ms_) >= kRawReportingMaxIntervalMs;
+        bool queue_filled = mode_s_packet_reporting_queue.Length() > kModeSPacketReportingQueueDepth / 2 ||
+                            uat_adsb_packet_reporting_queue.Length() > kUATADSBPacketReportingQueueDepth / 2 ||
+                            uat_uplink_packet_reporting_queue.Length() > kUATUplinkPacketReportingQueueDepth / 2;
 
-        if (buffer_would_be_full || max_interval_elapsed) {
+        if (buffer_would_be_full || max_interval_elapsed || queue_filled) {
             // Update the last report timestamp now that we're actually sending packets.
             last_raw_report_timestamp_ms_ = timestamp_ms;
 

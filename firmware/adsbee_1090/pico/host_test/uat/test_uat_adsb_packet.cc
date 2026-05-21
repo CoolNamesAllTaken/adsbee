@@ -211,22 +211,22 @@ struct OnGroundHorizontalVelocityTestCase {
     float expected_direction_deg;
     uint16_t ground_speed_encoded;
     int32_t expected_speed_kts;
-    char *description;
+    const char* description;
 };
 
 const OnGroundHorizontalVelocityTestCase kOnGroundHorizontalVelocityTestCases[] = {
-    {0, 0.0f, 0, INT32_MIN, (char *)"0.0 degrees, speed not available"},
-    {1, 0.703125f, 1, 0, (char *)"0.703125 degrees, 0 kts"},
-    {1, 0.703125f, 0, INT32_MIN, (char *)"0.703125 degrees, 0 speed not available"},
-    {2, 1.40625f, 1, 0, (char *)"1.40625 degrees, 1 kts"},
-    {3, 2.109375f, 2, 1, (char *)"2.109375 degrees, 2 kts"},
-    {510, 358.593750f, 1022, 1021, (char *)"358.593750 degrees, 1022 kts"},
-    {511, 359.296875f, 1023, 1022, (char *)"359.196875 degrees, 1023 kts"}};
+    {0, 0.0f, 0, INT32_MIN, "0.0 degrees, speed not available"},
+    {1, 0.703125f, 1, 0, "0.703125 degrees, 0 kts"},
+    {1, 0.703125f, 0, INT32_MIN, "0.703125 degrees, 0 speed not available"},
+    {2, 1.40625f, 1, 0, "1.40625 degrees, 1 kts"},
+    {3, 2.109375f, 2, 1, "2.109375 degrees, 2 kts"},
+    {510, 358.593750f, 1022, 1021, "358.593750 degrees, 1022 kts"},
+    {511, 359.296875f, 1023, 1022, "359.196875 degrees, 1023 kts"}};
 
 TEST(DecodedUATADSBPacket, HorizontalVelocityToDirectionDegAndSpeedKtsOnGround) {
     ADSBTypes::AirGroundState air_ground_state = ADSBTypes::kAirGroundStateOnGround;
 
-    for (const auto &test_case : kOnGroundHorizontalVelocityTestCases) {
+    for (const auto& test_case : kOnGroundHorizontalVelocityTestCases) {
         uint16_t direction_encoded = test_case.direction_encoded;
         float expected_direction_deg = test_case.expected_direction_deg;
         uint16_t ground_speed_encoded = test_case.ground_speed_encoded;
@@ -258,7 +258,7 @@ TEST(DecodedUATADSBPacket, UATHeader) {
 
 TEST(DecodedUATADSBPacket, ICAOAddress) {
     // ICAO address is 0 if the packet is invalid or has no header.
-    DecodedUATADSBPacket packet((char *)"");
+    DecodedUATADSBPacket packet((const char*)"");
     packet.ReconstructWithoutFEC();
     EXPECT_EQ(packet.GetICAOAddress(), 0u);
 }
@@ -281,35 +281,35 @@ struct VerticalVelocityTestCase {
 
     int32_t expected_vertical_rate_fpm;
     ADSBTypes::VerticalRateSource expected_vertical_rate_source;
-    char *description;
+    const char* description;
 };
 
 const VerticalVelocityTestCase kVerticalVelocityTestCases[] = {
     {0, ADSBTypes::AirGroundState::kAirGroundStateOnGround, INT32_MIN, ADSBTypes::kVerticalRateSourceNotAvailable,
-     (char *)"on ground, vertical rate not available"},
+     "on ground, vertical rate not available"},
     {1 << 10, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, INT32_MIN,
-     ADSBTypes::kVerticalRateSourceBaro, (char *)"airborne supersonic, baro, vertical rate invalid"},
+     ADSBTypes::kVerticalRateSourceBaro, "airborne supersonic, baro, vertical rate invalid"},
     {1 << 9, ADSBTypes::AirGroundState::kAirGroundStateAirborneSubsonic, INT32_MIN, ADSBTypes::kVerticalRateSourceGNSS,
-     (char *)"airborne subsonic, gnss, vertical rate invalid"},
+     "airborne subsonic, gnss, vertical rate invalid"},
     {1, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, 0, ADSBTypes::kVerticalRateSourceGNSS,
-     (char *)"0fpm gnss"},
+     "0fpm gnss"},
     {(0b11 << 9) | 1, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, 0,
-     ADSBTypes::kVerticalRateSourceBaro, (char *)"-0fpm baro"},
+     ADSBTypes::kVerticalRateSourceBaro, "-0fpm baro"},
     {2, ADSBTypes::AirGroundState::kAirGroundStateAirborneSubsonic, 64, ADSBTypes::kVerticalRateSourceGNSS,
-     (char *)"64fpm gnss"},
+     "64fpm gnss"},
     {(0b1 << 9) | 2, ADSBTypes::AirGroundState::kAirGroundStateAirborneSubsonic, -64,
-     ADSBTypes::kVerticalRateSourceGNSS, (char *)"-64fpm gnss"},
+     ADSBTypes::kVerticalRateSourceGNSS, "-64fpm gnss"},
     {(0b1 << 10) | 3, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, 128,
-     ADSBTypes::kVerticalRateSourceBaro, (char *)"128fpm baro"},
+     ADSBTypes::kVerticalRateSourceBaro, "128fpm baro"},
     {(0b11 << 9) | 510, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, -32576,
-     ADSBTypes::kVerticalRateSourceBaro, (char *)"-32576fpm baro"},
+     ADSBTypes::kVerticalRateSourceBaro, "-32576fpm baro"},
     {510, ADSBTypes::AirGroundState::kAirGroundStateAirborneSupersonic, 32576, ADSBTypes::kVerticalRateSourceGNSS,
-     (char *)"32576fpm gnss"},
+     "32576fpm gnss"},
 
 };
 
 TEST(DecodedUATADBPacket, VerticalVelocity) {
-    for (const auto &test_case : kVerticalVelocityTestCases) {
+    for (const auto& test_case : kVerticalVelocityTestCases) {
         int vertical_velocity_fpm;
         SCOPED_TRACE(test_case.description);
         EXPECT_EQ(test_case.expected_vertical_rate_source,
@@ -325,7 +325,7 @@ struct AVDimensionTestCase {
     int16_t expected_width_m;
     int16_t expected_length_m;
     ADSBTypes::AVDimensionsType expected_dimensions_type;
-    const char *description;
+    const char* description;
 };
 
 const AVDimensionTestCase kAVDimensionTestCases[] = {
@@ -336,7 +336,7 @@ const AVDimensionTestCase kAVDimensionTestCases[] = {
 };
 
 TEST(DecodedUATADSBPacket, AVDimensions) {
-    for (const auto &test_case : kAVDimensionTestCases) {
+    for (const auto& test_case : kAVDimensionTestCases) {
         int16_t width_m, length_m;
         SCOPED_TRACE(test_case.description);
         EXPECT_EQ(test_case.expected_dimensions_type,

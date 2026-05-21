@@ -38,6 +38,8 @@ class CommsManager {
     static const uint32_t kWiFiSTATaskUpdateIntervalMs = 100;
     static const uint32_t kWiFiSTATaskUpdateIntervalTicks = kWiFiSTATaskUpdateIntervalMs / portTICK_PERIOD_MS;
 
+    static const uint16_t kConsolePrintBufMaxLen = 512;
+
     struct CommsManagerConfig {
         int32_t aux_spi_clk_rate_hz = 40e6;  // 40 MHz (this could go up to 80MHz).
         spi_host_device_t aux_spi_handle = SPI3_HOST;
@@ -369,4 +371,10 @@ extern CommsManager comms_manager;
 #define CONSOLE_INFO(tag, ...)  \
     ESP_LOGI(tag, __VA_ARGS__); \
     comms_manager.LogMessageToCoprocessor(SettingsManager::LogLevel::kInfo, tag, __VA_ARGS__);
-#define CONSOLE_PRINTF(...) printf(__VA_ARGS__);
+#define CONSOLE_PRINTF(...)                                                                                \
+    do {                                                                                                   \
+        char _console_buf[CommsManager::kConsolePrintBufMaxLen];                                           \
+        snprintf(_console_buf, sizeof(_console_buf), __VA_ARGS__);                                         \
+        printf("%s", _console_buf);                                                                        \
+        comms_manager.LogMessageToCoprocessor(SettingsManager::LogLevel::kSilent, "", "%s", _console_buf); \
+    } while (0)

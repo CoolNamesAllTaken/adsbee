@@ -37,7 +37,7 @@ TEST(DecodedModeSPacket, PacketBuffer) {
 }
 
 TEST(DecodedModeSPacket, RxStringConstructor) {
-    DecodedModeSPacket packet = DecodedModeSPacket((char *)"8D4840D6202CC371C32CE0576098");
+    DecodedModeSPacket packet = DecodedModeSPacket((const char*)"8D4840D6202CC371C32CE0576098");
     uint32_t packet_buffer[DecodedModeSPacket::kMaxPacketLenWords32];
     packet.DumpPacketBuffer(packet_buffer);
 
@@ -109,7 +109,7 @@ TEST(DecodedModeSPacket, PacketFields) {
 }
 
 TEST(ModeSADSBPacket, ConstructFromTransponderPacket) {
-    DecodedModeSPacket tpacket = DecodedModeSPacket((char *)"8D7C80AD2358F6B1E35C60FF1925");
+    DecodedModeSPacket tpacket = DecodedModeSPacket((const char*)"8D7C80AD2358F6B1E35C60FF1925");
     ModeSADSBPacket packet = ModeSADSBPacket(tpacket);
     EXPECT_TRUE(packet.is_valid);
     EXPECT_EQ(packet.icao_address, 0x7C80ADu);
@@ -117,7 +117,7 @@ TEST(ModeSADSBPacket, ConstructFromTransponderPacket) {
 }
 
 TEST(DecodedModeSPacket, ConstructValidShortFrame) {
-    DecodedModeSPacket packet = DecodedModeSPacket((char *)"00050319AB8C22");
+    DecodedModeSPacket packet = DecodedModeSPacket((const char*)"00050319AB8C22");
     EXPECT_FALSE(packet.is_valid);  // Automatically marked as invalid since not confirmable with CRC.
     EXPECT_EQ(packet.icao_address, 0x7C7B5Au);
     EXPECT_EQ(packet.downlink_format,
@@ -125,7 +125,7 @@ TEST(DecodedModeSPacket, ConstructValidShortFrame) {
 }
 
 TEST(DecodedModeSPacket, ConstructInvalidShortFrame) {
-    DecodedModeSPacket packet = DecodedModeSPacket((char *)"00050219AB8C22");
+    DecodedModeSPacket packet = DecodedModeSPacket((const char*)"00050219AB8C22");
     EXPECT_FALSE(packet.is_valid);  // Automatically marking all 56-bit packets with unknown ICAO as invalid for now.
 }
 
@@ -152,7 +152,7 @@ TEST(DecodedModeSPacket, DumpPacketBufferBytes) {
 
 TEST(RawModeSPacket, GetTimestampMs) {
     // Check that the divide logic within RawModeSPacket works OK.
-    RawModeSPacket raw_packet = RawModeSPacket((char *)"dedbef");
+    RawModeSPacket raw_packet = RawModeSPacket((const char*)"dedbef");
     raw_packet.mlat_48mhz_64bit_counts = 48'000;
     EXPECT_EQ(raw_packet.GetTimestampMs(), 1u);
     raw_packet.mlat_48mhz_64bit_counts = 97'325;
