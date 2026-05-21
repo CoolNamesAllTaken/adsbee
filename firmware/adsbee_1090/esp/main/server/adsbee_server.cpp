@@ -287,7 +287,7 @@ bool ADSBeeServer::ReportGDL90() {
     memcpy(ownship_data.callsign, "ADSBEE  ", sizeof(ownship_data.callsign) - 1);
     ownship_data.address_type = GDL90Reporter::GDL90TargetReportData::kAddressTypeADSBWithSelfAssignedAddress;
     SettingsManager::RxPosition& rx_position = object_dictionary.composite_device_status.rp2040.rx_position;
-    uint32_t ownship_icao_address = 0x0;
+    ownship_data.participant_address = 0x0;
     if (rx_position.source == SettingsManager::RxPosition::PositionSource::kPositionSourceAircraftMatchingICAO) {
         // Only send ownship data with a position if we are tracking an aircraft.
         ownship_data.latitude_deg = rx_position.latitude_deg;
@@ -298,8 +298,6 @@ bool ADSBeeServer::ReportGDL90() {
         ownship_data.participant_address = rx_position.icao_address;
         ownship_data.SetMiscIndicator(GDL90Reporter::GDL90TargetReportData::kMiscIndicatorTTIsTrueTrackAngle, false,
                                       false);
-
-        ownship_icao_address = ownship_data.participant_address;  // Use this to ignore ownship traffic reports.
     }
     message.len = gdl90.WriteGDL90TargetReportMessage(message.data, CommsManager::NetworkMessage::kMaxLenBytes,
                                                       ownship_data, true);
@@ -315,8 +313,9 @@ bool ADSBeeServer::ReportGDL90() {
 
         if (ModeSAircraft* mode_s_aircraft = get_if<ModeSAircraft>(&(itr.second)); mode_s_aircraft) {
             if (!mode_s_aircraft->HasBitFlag(ModeSAircraft::kBitFlagPositionValid) ||
-                mode_s_aircraft->icao_address == ownship_icao_address) {
-                // Don't report aircraft without a valid position, and ignore ownship position.
+                mode_s_aircraft->icao_address == ownship_data.participant_address) {
+                // Don't report aircraft without a valid position, and ignore ownship position when bootstrapping off a
+                // fixed ICAO.
                 continue;
             }
             printf("\t#A %s (0x%06lX): %.5f %.5f %ld\r\n", mode_s_aircraft->callsign, mode_s_aircraft->icao_address,
@@ -325,8 +324,9 @@ bool ADSBeeServer::ReportGDL90() {
                                                                        *mode_s_aircraft, false);
         } else if (UATAircraft* uat_aircraft = get_if<UATAircraft>(&(itr.second)); uat_aircraft) {
             if (!uat_aircraft->HasBitFlag(UATAircraft::kBitFlagPositionValid) ||
-                uat_aircraft->icao_address == ownship_icao_address) {
-                // Don't report aircraft without a valid position, and ignore ownship position.
+                uat_aircraft->icao_address == ownship_data.participant_address) {
+                // Don't report aircraft without a valid position, and ignore ownship position when bootstrapping off a
+                // fixed ICAO.
                 continue;
             }
             printf("\t#U %s (0x%06lX): %.5f %.5f %ld\r\n", uat_aircraft->callsign, uat_aircraft->icao_address,
