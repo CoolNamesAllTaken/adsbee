@@ -45,15 +45,11 @@ bool CommsManager::Update() {
         uint16_t required_buffer_len = CompositeArray::CalculateRawPacketsBufferLength(
             &mode_s_packet_reporting_queue, &uat_adsb_packet_reporting_queue, &uat_uplink_packet_reporting_queue);
 
-        // Only forward packets if buffer would be more than 25% full or if max reporting interval has elapsed or if any
-        // queue is more than 50% full.
-        bool buffer_would_be_full = required_buffer_len >= CompositeArray::RawPackets::kMaxLenBytes / 4;
+        // Flush when combined packets from all queues would fill a composite array (maximizes load factor per
+        // SPI transaction), or when the max reporting interval has elapsed (guarantees ≤200ms latency).
         bool max_interval_elapsed = (timestamp_ms - last_raw_report_timestamp_ms_) >= kRawReportingMaxIntervalMs;
-        bool queue_filled = mode_s_packet_reporting_queue.Length() > kModeSPacketReportingQueueDepth / 2 ||
-                            uat_adsb_packet_reporting_queue.Length() > kUATADSBPacketReportingQueueDepth / 2 ||
-                            uat_uplink_packet_reporting_queue.Length() > kUATUplinkPacketReportingQueueDepth / 2;
 
-        if (buffer_would_be_full || max_interval_elapsed || queue_filled) {
+        if (required_buffer_len >= CompositeArray::RawPackets::kMaxLenBytes || max_interval_elapsed) {
             // Update the last report timestamp now that we're actually sending packets.
             last_raw_report_timestamp_ms_ = timestamp_ms;
 
@@ -99,20 +95,18 @@ bool CommsManager::UpdateNetworkConsole() {
 
         // Send outgoing network console characters.
         char esp32_console_tx_buf[SPICoprocessorPacket::SCWritePacket::kDataMaxLenBytes];
+        char c = '\0';
         while (esp32_console_tx_queue.Length() > 0) {
             uint16_t message_len = 0;
-            char c = '\0';
             for (; message_len < SPICoprocessorPacket::SCWritePacket::kDataMaxLenBytes &&
-                   esp32_console_tx_queue.Peek(c, message_len);
+                   esp32_console_tx_queue.Dequeue(c);
                  message_len++) {
                 esp32_console_tx_buf[message_len] = c;
             }
             if (message_len > 0) {
                 if (!esp32.Write(ObjectDictionary::kAddrConsole, esp32_console_tx_buf, true, message_len)) {
-                    // Bytes remain in queue — will be retried on next call.
                     break;
                 } else {
-                    esp32_console_tx_queue.Discard(message_len);
                     last_esp32_console_tx_timestamp_ms_ = get_time_since_boot_ms();
                 }
             }

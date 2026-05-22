@@ -11,9 +11,18 @@
 
 class CommsManager {
    public:
-    static constexpr uint16_t kModeSPacketReportingQueueDepth = 100;
-    static constexpr uint16_t kUATADSBPacketReportingQueueDepth = 50;
-    static constexpr uint16_t kUATUplinkPacketReportingQueueDepth = 4;
+    // Each queue is sized to hold as many packets as would fill a composite array for that type alone.
+    // This ensures the 200ms-timer flush always sends a nearly-full array, and the combined byte-count
+    // check (queue_filled) fires early in mixed-traffic scenarios as the types sum toward kMaxLenBytes.
+    static constexpr uint16_t kModeSPacketReportingQueueDepth =
+        (CompositeArray::RawPackets::kMaxLenBytes - sizeof(CompositeArray::RawPackets::Header)) /
+        sizeof(RawModeSPacket);  // 124 packets = 3968 B payload
+    static constexpr uint16_t kUATADSBPacketReportingQueueDepth =
+        (CompositeArray::RawPackets::kMaxLenBytes - sizeof(CompositeArray::RawPackets::Header)) /
+        sizeof(RawUATADSBPacket);  // 62 packets = 3968 B payload
+    static constexpr uint16_t kUATUplinkPacketReportingQueueDepth =
+        (CompositeArray::RawPackets::kMaxLenBytes - sizeof(CompositeArray::RawPackets::Header)) /
+        sizeof(RawUATUplinkPacket);  // 7 packets = 3976 B payload
 
     static constexpr uint16_t kATCommandBufMaxLen = 1200;
     static constexpr uint16_t kNetworkConsoleBufMaxLen = 4096;

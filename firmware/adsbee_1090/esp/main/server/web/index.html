@@ -646,10 +646,13 @@
                     this.ws = new WebSocket(`ws://${this.url}/console`);
                     this.ws.binaryType = 'arraybuffer';
 
+                    let resolved = false;
+
                     this.ws.onmessage = (event) => {
                         const decoded_message = this.decoder.decode(event.data);
                         console.log("ADSBeeAT received message:", decoded_message);
                         this.messageQueue.push(decoded_message);
+                        resolved = true;
                         resolve();
                     };
 
@@ -658,6 +661,12 @@
                     };
 
                     this.ws.onerror = (error) => reject(error);
+
+                    this.ws.onclose = (event) => {
+                        if (!resolved) {
+                            reject(new Error(`WebSocket closed before receiving response (code ${event.code})`));
+                        }
+                    };
                 });
             }
 
@@ -1044,11 +1053,12 @@
 
             async uploadFirmware(file) {
                 let originalOtaWriteBytes = NaN;
+                let adsbee = null;
                 try {
                     this.setUploadingState(true);
                     this.updateProgress(0);
 
-                    const adsbee = new ADSBeeAT(this.adsbeeUrl);
+                    adsbee = new ADSBeeAT(this.adsbeeUrl);
                     await adsbee.connect();
 
                     const totalSize = file.size / 2; // Two firmware images in file, we're only flashing one.
@@ -1079,16 +1089,16 @@
 
                     this.updateProgress(100);
                     this.showSuccess();
-                    await adsbee.disconnect();
 
                 } catch (error) {
                     console.error('Firmware upload failed:', error);
                     this.showError(error.message || 'Failed to upload firmware. Please try again.');
                 } finally {
                     this.setUploadingState(false);
-                    if (!isNaN(originalOtaWriteBytes)) {
+                    if (adsbee && !isNaN(originalOtaWriteBytes)) {
                         adsbee.otaWriteBytes = originalOtaWriteBytes;
                     }
+                    if (adsbee) await adsbee.disconnect();
                     consoleWebSocket.resume();
                     metricsWebSocket.resume();
                 }
