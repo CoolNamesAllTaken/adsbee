@@ -98,6 +98,7 @@
         class ConsoleWebSocket {
             constructor(url) {
                 this.url = url;
+                this.paused = false;
                 this.init();
             }
 
@@ -158,10 +159,12 @@
 
             attemptReconnect() {
                 setTimeout(() => {
-                    // Check again if we should reconnect before attempting
-                    this.init()
+                    if (!this.paused) this.init();
                 }, WS_CONFIG.reconnectDelayMs);
             }
+
+            pause() { this.paused = true; if (this.ws) this.ws.close(); }
+            resume() { if (this.paused) { this.paused = false; this.init(); } }
 
             close(code, reason) {
                 if (this.ws) {
@@ -468,6 +471,7 @@
         class MetricsWebSocket {
             constructor(url) {
                 this.url = url;
+                this.paused = false;
                 this.cards = {
                     'feed': {},
                     'receiver': {}
@@ -559,7 +563,7 @@
                     this.statusEl.textContent = 'Disconnected - Reconnecting...';
                     this.statusEl.classList.remove('connected');
                     this.statusEl.classList.add('disconnected');
-                    setTimeout(() => this.connect(), 3000);
+                    setTimeout(() => { if (!this.paused) this.connect(); }, 3000);
                 };
 
                 this.ws.onerror = (error) => {
@@ -602,6 +606,9 @@
                     }
                 };
             }
+
+            pause() { this.paused = true; if (this.ws) this.ws.close(); }
+            resume() { if (this.paused) { this.paused = false; this.connect(); } }
 
             close(code, reason) {
                 if (this.ws) {
@@ -1063,6 +1070,10 @@
                     // Receiver already gets disabled during data chunk transfers, but this simplifies it a bit.
                     await adsbee.sendCmd('AT+RX_ENABLE=0\r\n', 0, true, true);
 
+                    // Pause other WebSocket clients to prevent httpd async queue contention during OTA.
+                    consoleWebSocket.pause();
+                    metricsWebSocket.pause();
+
                     await adsbee.otaWriteFile(file);
                     await adsbee.otaBoot();
 
@@ -1078,6 +1089,8 @@
                     if (!isNaN(originalOtaWriteBytes)) {
                         adsbee.otaWriteBytes = originalOtaWriteBytes;
                     }
+                    consoleWebSocket.resume();
+                    metricsWebSocket.resume();
                 }
             }
         }

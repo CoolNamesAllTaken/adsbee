@@ -99,22 +99,20 @@ bool CommsManager::UpdateNetworkConsole() {
 
         // Send outgoing network console characters.
         char esp32_console_tx_buf[SPICoprocessorPacket::SCWritePacket::kDataMaxLenBytes];
-        char c = '\0';
         while (esp32_console_tx_queue.Length() > 0) {
             uint16_t message_len = 0;
+            char c = '\0';
             for (; message_len < SPICoprocessorPacket::SCWritePacket::kDataMaxLenBytes &&
-                   esp32_console_tx_queue.Dequeue(c);
+                   esp32_console_tx_queue.Peek(c, message_len);
                  message_len++) {
                 esp32_console_tx_buf[message_len] = c;
             }
-            // Ran out of characters to send, or hit the max packet length.
             if (message_len > 0) {
-                // Don't send empty messages.
                 if (!esp32.Write(ObjectDictionary::kAddrConsole, esp32_console_tx_buf, true, message_len)) {
-                    // Don't enter infinite loop of error messages if writing to the ESP32 isn't working.
+                    // Bytes remain in queue — will be retried on next call.
                     break;
                 } else {
-                    // Successfully sent characters to ESP32.
+                    esp32_console_tx_queue.Discard(message_len);
                     last_esp32_console_tx_timestamp_ms_ = get_time_since_boot_ms();
                 }
             }
