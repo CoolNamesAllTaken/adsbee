@@ -135,7 +135,7 @@ bool SPICoprocessor::Update() {
         }
     }
 #elif defined(ON_COPRO_SLAVE) && !defined(ON_TI)
-    uint8_t rx_buf[SPICoprocessorPacket::kSPITransactionMaxLenBytes];
+    static uint8_t rx_buf[SPICoprocessorPacket::kSPITransactionMaxLenBytes];
     memset(rx_buf, 0, SPICoprocessorPacket::kSPITransactionMaxLenBytes);
 
     if (!config_.interface.SPIBeginTransaction()) {
@@ -163,7 +163,8 @@ bool SPICoprocessor::Update() {
     switch (cmd) {
         case ObjectDictionary::SCCommand::kCmdWriteToSlave:
         case ObjectDictionary::SCCommand::kCmdWriteToSlaveRequireAck: {
-            SPICoprocessorPacket::SCWritePacket write_packet = SPICoprocessorPacket::SCWritePacket(rx_buf, bytes_read);
+            static SPICoprocessorPacket::SCWritePacket write_packet;
+            write_packet.ConstructFromBuffer(rx_buf, bytes_read);
             if (!write_packet.IsValid()) {
                 CONSOLE_ERROR("SPICoprocessor::Update",
                               "Received unsolicited write to slave with bad checksum, packet length %d Bytes.",
@@ -186,8 +187,8 @@ bool SPICoprocessor::Update() {
             break;
         }
         case ObjectDictionary::SCCommand::kCmdReadFromSlave: {
-            SPICoprocessorPacket::SPICoprocessorPacket::SCReadRequestPacket read_request_packet =
-                SPICoprocessorPacket::SCReadRequestPacket(rx_buf, bytes_read);
+            static SPICoprocessorPacket::SCReadRequestPacket read_request_packet;
+            read_request_packet.ConstructFromBuffer(rx_buf, bytes_read);
             if (!read_request_packet.IsValid()) {
                 CONSOLE_ERROR("SPICoprocessor::Update",
                               "Received unsolicited read from slave with bad checksum, packet length %d Bytes.",
@@ -196,7 +197,7 @@ bool SPICoprocessor::Update() {
                 return false;
             }
 
-            SPICoprocessorPacket::SCResponsePacket response_packet;
+            static SPICoprocessorPacket::SCResponsePacket response_packet;
             response_packet.cmd = ObjectDictionary::SCCommand::kCmdDataBlock;
             ret = object_dictionary.GetBytes(read_request_packet.addr, response_packet.data, read_request_packet.len,
                                              read_request_packet.offset);
@@ -320,7 +321,7 @@ bool SPICoprocessor::ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRe
 
 bool SPICoprocessor::PartialWrite(ObjectDictionary::Address addr, uint8_t* object_buf, uint16_t len, uint16_t offset,
                                   bool require_ack) {
-    SPICoprocessorPacket::SCWritePacket write_packet;
+    static SPICoprocessorPacket::SCWritePacket write_packet;
 
     write_packet.cmd = require_ack ? ObjectDictionary::SCCommand::kCmdWriteToSlaveRequireAck
                                    : ObjectDictionary::SCCommand::kCmdWriteToSlave;
@@ -365,7 +366,7 @@ bool SPICoprocessor::PartialWrite(ObjectDictionary::Address addr, uint8_t* objec
 }
 
 bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t* object_buf, uint16_t len, uint16_t offset) {
-    SPICoprocessorPacket::SCReadRequestPacket read_request_packet;
+    static SPICoprocessorPacket::SCReadRequestPacket read_request_packet;
 
     read_request_packet.cmd = ObjectDictionary::SCCommand::kCmdReadFromSlave;
 
@@ -374,7 +375,7 @@ bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t* object
     read_request_packet.len = len;
     read_request_packet.PopulateCRC();
 
-    uint8_t rx_buf[SPICoprocessorPacket::kSPITransactionMaxLenBytes];
+    static uint8_t rx_buf[SPICoprocessorPacket::kSPITransactionMaxLenBytes];
 
     uint16_t read_request_bytes = read_request_packet.GetBufLenBytes();
 
@@ -382,10 +383,10 @@ bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t* object
     char error_message[kErrorMessageMaxLen + 1] = "No error.";
     error_message[kErrorMessageMaxLen] = '\0';
     bool ret = true;
+    static SPICoprocessorPacket::SCResponsePacket response_packet;
     while (num_attempts < kSPITransactionMaxNumRetries) {
         // On the master, reading from the slave is two transactions: The read request is sent, then we wait on the
         // handshake line to read the reply.
-        SPICoprocessorPacket::SCResponsePacket response_packet;  // Declare this up here so the goto's don't cross it.
 
         // Don't end transaction in order to allow recovery from kErrorHandshakeHigh error.
         int bytes_written = SPIWriteBlocking(read_request_packet.GetBuf(), read_request_bytes, true);
@@ -450,7 +451,7 @@ bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t* object
 }
 
 bool SPICoprocessor::SPIWaitForAck() {
-    SPICoprocessorPacket::SCResponsePacket response_packet;
+    static SPICoprocessorPacket::SCAckPacket ack_packet;
 
     if (!config_.interface.SPIWaitForHandshake()) {
         CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "Timed out while waiting for ack: never received handshake.");
@@ -460,41 +461,38 @@ bool SPICoprocessor::SPIWaitForAck() {
     // We need to call SPIReadBlocking without ending the transaction in case we want to recover a
     // kErrorHandshakeHigh error.
     int bytes_read =
-        SPIReadBlocking(response_packet.GetBuf(), SPICoprocessorPacket::SCResponsePacket::kAckLenBytes, true);
-    response_packet.data_len_bytes = SPICoprocessorPacket::SCResponsePacket::kAckLenBytes;
+        SPIReadBlocking(ack_packet.GetBuf(), SPICoprocessorPacket::SCAckPacket::kBufLenBytes, true);
 
     if (bytes_read < 0) {
         CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "SPI read failed with code %d (%s).", bytes_read,
                       ReturnCodeToString(static_cast<ReturnCode>(bytes_read)));
         return false;
     }
-    if (response_packet.cmd != ObjectDictionary::SCCommand::kCmdAck) {
+    if (ack_packet.cmd != ObjectDictionary::SCCommand::kCmdAck) {
         CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck",
-                      "Received a message that was not an ack (cmd=0x%x, expected 0x%x).", response_packet.cmd,
+                      "Received a message that was not an ack (cmd=0x%x, expected 0x%x).", ack_packet.cmd,
                       ObjectDictionary::SCCommand::kCmdAck);
         return false;
     }
-    if (!response_packet.IsValid()) {
+    if (!ack_packet.IsValid()) {
         CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "Received a response packet with an invalid CRC.");
         return false;
     }
-    return response_packet.data[0];  // Return ACK / NACK value.
+    return ack_packet.ack;
 }
 
 #endif
 
 #ifdef ON_COPRO_SLAVE
 bool SPICoprocessor::SPISendAck(bool success) {
-    SPICoprocessorPacket::SCResponsePacket response_packet;
-    response_packet.cmd = ObjectDictionary::ObjectDictionary::SCCommand::kCmdAck;
-    response_packet.data[0] = success;
-    response_packet.data_len_bytes = 1;
-    response_packet.PopulateCRC();
+    static SPICoprocessorPacket::SCAckPacket ack_packet;
+    ack_packet.ack = success;
+    ack_packet.PopulateCRC();
     config_.interface.SPIUseHandshakePin(true);  // Solicit a transfer to send the ack.
 #ifndef ON_TI
-    return SPIWriteBlocking(response_packet.GetBuf(), SPICoprocessorPacket::SCResponsePacket::kAckLenBytes) > 0;
+    return SPIWriteBlocking(ack_packet.GetBuf(), SPICoprocessorPacket::SCAckPacket::kBufLenBytes) > 0;
 #else
-    return SPIWriteNonBlocking(response_packet.GetBuf(), SPICoprocessorPacket::SCResponsePacket::kAckLenBytes) > 0;
+    return SPIWriteNonBlocking(ack_packet.GetBuf(), SPICoprocessorPacket::SCAckPacket::kBufLenBytes) > 0;
 #endif  // ON_TI
 }
 #endif  // ON_COPRO_SLAVE

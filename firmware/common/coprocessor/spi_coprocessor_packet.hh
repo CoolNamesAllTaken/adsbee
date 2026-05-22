@@ -74,6 +74,16 @@ class SPICoprocessorPacket {
          * @param[in] buf_in_len_bytes Length of the buffer to ingest.
          */
         SCWritePacket(uint8_t *buf_in, uint16_t buf_in_len_bytes) {
+            ConstructFromBuffer(buf_in, buf_in_len_bytes);
+        }
+
+        /**
+         * Reinitialize an existing SCWritePacket from a raw buffer. Allows static instances to be reused without
+         * stack-allocating a temporary. Called by the from-buffer constructor; may also be called directly.
+         * @param[in] buf_in Pointer to buffer with SCCommand packet in it.
+         * @param[in] buf_in_len_bytes Length of the buffer to ingest.
+         */
+        void ConstructFromBuffer(uint8_t *buf_in, uint16_t buf_in_len_bytes) {
             if (buf_in_len_bytes < kBufMinLenBytes) {
                 CONSOLE_ERROR("SPICoprocessor::SCWritePacket",
                               "Attempted to create a packet from a buffer that was too small. Received %d bytes, but"
@@ -133,6 +143,14 @@ class SPICoprocessorPacket {
          * @param[in] buf_in_len_bytes Length of the buffer to ingest.
          */
         SCReadRequestPacket(uint8_t *buf_in, uint16_t buf_in_len_bytes) {
+            ConstructFromBuffer(buf_in, buf_in_len_bytes);
+        }
+
+        /**
+         * Reinitialize an existing SCReadRequestPacket from a raw buffer. Allows static instances to be reused
+         * without stack-allocating a temporary. Called by the from-buffer constructor; may also be called directly.
+         */
+        void ConstructFromBuffer(uint8_t *buf_in, uint16_t buf_in_len_bytes) {
             if (buf_in_len_bytes < kBufLenBytes) {
                 CONSOLE_ERROR(
                     "SPICoprocessor::SCReadRequestPacket",
@@ -195,6 +213,14 @@ class SPICoprocessorPacket {
          * @param[in] buf_in_len_bytes Length of the buffer to ingest.
          */
         SCResponsePacket(uint8_t *buf_in, uint16_t buf_in_len_bytes) {
+            ConstructFromBuffer(buf_in, buf_in_len_bytes);
+        }
+
+        /**
+         * Reinitialize an existing SCResponsePacket from a raw buffer. Allows static instances to be reused without
+         * stack-allocating a temporary. Called by the from-buffer constructor; may also be called directly.
+         */
+        void ConstructFromBuffer(uint8_t *buf_in, uint16_t buf_in_len_bytes) {
             if (buf_in_len_bytes < kBufMinLenBytes) {
                 CONSOLE_ERROR("SPICoprocessor::SCResponsePacket",
                               "Attempted to create a packet from a buffer that was too small. Received %d Bytes, but "
@@ -224,5 +250,26 @@ class SPICoprocessorPacket {
             }
             return MIN(data + data_len_bytes, data + kDataMaxLenBytes);
         }
+    };
+
+    /**
+     * Minimal ACK/NACK response packet. Wire format: CMD | ACK_BYTE | CRC.
+     * Use this instead of SCResponsePacket when sending or receiving an acknowledgement — it is only as
+     * large as the wire format requires and has no data buffer that could be accidentally overwritten.
+     */
+    struct __attribute__((__packed__)) SCAckPacket : public SCPacket {
+        static constexpr uint16_t kBufLenBytes = sizeof(SCCommand) + sizeof(uint8_t) + kCRCLenBytes;
+        static_assert(kBufLenBytes == SCResponsePacket::kAckLenBytes,
+                      "SCAckPacket wire size must match SCResponsePacket::kAckLenBytes");
+
+        SCCommand cmd = SCCommand::kCmdAck;
+        uint8_t ack = 0;
+        uint16_t crc = 0;
+
+        inline uint16_t GetBufLenBytes() override { return kBufLenBytes; }
+        inline uint8_t *GetBuf() override { return (uint8_t *)(&cmd); }
+        inline uint8_t *GetCRCPtr() override { return (uint8_t *)&crc; }
+        inline uint16_t GetCRC() override { return crc; }
+        inline void SetCRC(uint16_t crc_in) override { crc = crc_in; }
     };
 };
