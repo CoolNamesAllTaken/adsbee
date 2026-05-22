@@ -749,6 +749,10 @@
                     console.log(`Command (${this.getMsTimestamp()} ms): \t${cmdStr.trim()}`);
                 }
 
+                if (this.ws.readyState !== WebSocket.OPEN) {
+                    await this.disconnect();
+                    await this.connect();
+                }
                 this.ws.send(new TextEncoder().encode(cmdStr));
 
                 let attempts = 0;
@@ -785,6 +789,9 @@
             async sendBytes(data, printResponse = false, waitForOkOrError = false) {
                 const RESPONSE_TO_WAIT_FOR = 'OK';
                 const RESPONSE_TIMEOUT_MS = 6000;
+                if (this.ws.readyState !== WebSocket.OPEN) {
+                    throw new Error(`Response timeout: WebSocket not open (readyState=${this.ws.readyState})`);
+                }
                 this.ws.send(data);
                 return await this.receiveResponse(printResponse, waitForOkOrError, RESPONSE_TO_WAIT_FOR, RESPONSE_TIMEOUT_MS);
             }

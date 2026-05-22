@@ -115,6 +115,8 @@ class CommsManager {
     bool network_console_putc(char c);
     bool network_console_puts(const char* buf, uint16_t len = UINT16_MAX);
 
+    inline void ResetConsoleTxTimestamp() { last_esp32_console_tx_timestamp_ms_ = 0; }
+
 #include "comms_reporting.hh"
 
     inline bool SendBuf(ReportSink sink, const char* buf, uint16_t buf_len) {

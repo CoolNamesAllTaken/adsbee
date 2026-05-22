@@ -159,11 +159,24 @@ void WebSocketServer::BroadcastMessage(const char* message, int16_t len_bytes) {
         if (clients_[i].in_use) {
             esp_err_t ret = SendMessage(clients_[i].client_fd, message, len_bytes);
             if (ret != ESP_OK) {
-                CONSOLE_ERROR("WebSocketServer::BroadcastMessage",
-                              "[%s] Failed to send message to client %d due to error %s.", config_.label, i,
-                              esp_err_to_name(ret));
-                // Trigger httpd to close the session — ws_close_fd will call RemoveClient and close(fd).
-                httpd_sess_trigger_close(config_.server, clients_[i].client_fd);
+                if (ret == ESP_ERR_NO_MEM || ret == ESP_FAIL) {
+                    // Transient resource exhaustion — yield briefly and retry once before dropping.
+                    vTaskDelay(pdMS_TO_TICKS(10));
+                    ret = SendMessage(clients_[i].client_fd, message, len_bytes);
+                    if (ret == ESP_OK) {
+                        clients_[i].last_message_timestamp_ms = get_time_since_boot_ms();
+                        continue;
+                    }
+                    CONSOLE_WARNING("WebSocketServer::BroadcastMessage",
+                                    "[%s] Dropping message to client %d after retry (error: %s).", config_.label, i,
+                                    esp_err_to_name(ret));
+                } else {
+                    // Permanent / unrecoverable error — close the session.
+                    CONSOLE_ERROR("WebSocketServer::BroadcastMessage",
+                                  "[%s] Failed to send message to client %d due to error %s.", config_.label, i,
+                                  esp_err_to_name(ret));
+                    httpd_sess_trigger_close(config_.server, clients_[i].client_fd);
+                }
             } else {
                 // Successful send means the client is reachable — reset inactivity timer.
                 clients_[i].last_message_timestamp_ms = get_time_since_boot_ms();

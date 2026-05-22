@@ -33,7 +33,7 @@ const uint32_t kDeviceInfoProgrammingPassword = 0xDEDBEEF;
 // Polling interval during OTA update. Faster than the normal ESP32 heartbeat for better transfer bandwidth.
 // Heartbeat is required since the ESP32 firmware won't hand off the SPI mutex until it gets poked, so it needs a
 // heartbeat between each message (no ACK required).
-const uint32_t kOTAHeartbeatMs = 10;
+const uint32_t kOTAHeartbeatMs = 50;
 
 /** CppAT Printf Override **/
 int CppAT::cpp_at_printf(const char* format, ...) {
@@ -354,12 +354,10 @@ CPP_AT_CALLBACK(CommsManager::ATESP32RebootInfoCallback) {
                 CPP_AT_ERROR("ESP32 is not enabled.");
             }
             ObjectDictionary::ESP32RebootInfo reboot_info;
-            if (!esp32.Read(ObjectDictionary::Address::kAddrESP32RebootInfo, reboot_info,
-                            sizeof(reboot_info))) {
+            if (!esp32.Read(ObjectDictionary::Address::kAddrESP32RebootInfo, reboot_info, sizeof(reboot_info))) {
                 CPP_AT_ERROR("Failed to read ESP32 reboot info.");
             }
-            CPP_AT_PRINTF("ESP32 Reset Reason: %d (%s)\r\n", reboot_info.reset_reason,
-                          reboot_info.reset_reason_str);
+            CPP_AT_PRINTF("ESP32 Reset Reason: %d (%s)\r\n", reboot_info.reset_reason, reboot_info.reset_reason_str);
             CPP_AT_PRINTF("ESP32 Core Dump To Flash: %s\r\n",
                           reboot_info.core_dump_to_flash_enabled ? "enabled" : "disabled");
             if (reboot_info.core_dump_to_flash_enabled) {
@@ -618,6 +616,8 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         CPP_AT_ERROR("Partial %u Byte write failed in partition %u at offset 0x%x.", len_bytes,
                                      complementary_partition, offset);
                     }
+                    // Reset the TX rate-limit so the post-write messages flush immediately.
+                    comms_manager.ResetConsoleTxTimestamp();
                     if (has_crc) {
                         // CRC provided: verify the flash after writing.
                         CPP_AT_PRINTF("Verifying flash with CRC 0x%x.\r\n", crc);
