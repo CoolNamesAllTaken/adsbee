@@ -460,7 +460,7 @@ class ADSBee {
     bool r1090_enabled_ = true;
     bool r1090_packet_queue_overflowed_ = false;
     bool bias_tee_enabled_ = false;
-    uint32_t watchdog_timeout_sec_ = SettingsManager::Settings::kDefaultWatchdogTimeoutSec * kMsPerSec;
+    uint32_t watchdog_timeout_sec_ = SettingsManager::Settings::kDefaultWatchdogTimeoutSec;
 
     uint32_t subg_radio_last_update_timestamp_ms_ = 0;
 

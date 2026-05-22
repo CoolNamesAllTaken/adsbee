@@ -160,15 +160,9 @@ void WebSocketServer::BroadcastMessage(const char* message, int16_t len_bytes) {
             esp_err_t ret = SendMessage(clients_[i].client_fd, message, len_bytes);
             if (ret != ESP_OK) {
                 if (ret == ESP_ERR_NO_MEM || ret == ESP_FAIL) {
-                    // Transient resource exhaustion — yield briefly and retry once before dropping.
-                    vTaskDelay(pdMS_TO_TICKS(10));
-                    ret = SendMessage(clients_[i].client_fd, message, len_bytes);
-                    if (ret == ESP_OK) {
-                        clients_[i].last_message_timestamp_ms = get_time_since_boot_ms();
-                        continue;
-                    }
+                    // Transient resource exhaustion — drop this message but keep the session alive.
                     CONSOLE_WARNING("WebSocketServer::BroadcastMessage",
-                                    "[%s] Dropping message to client %d after retry (error: %s).", config_.label, i,
+                                    "[%s] Dropping message to client %d (transient error: %s).", config_.label, i,
                                     esp_err_to_name(ret));
                 } else {
                     // Permanent / unrecoverable error — close the session.
