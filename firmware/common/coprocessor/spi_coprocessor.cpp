@@ -321,7 +321,15 @@ bool SPICoprocessor::ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRe
 
 bool SPICoprocessor::PartialWrite(ObjectDictionary::Address addr, uint8_t* object_buf, uint16_t len, uint16_t offset,
                                   bool require_ack) {
+    // Guard against re-entrant calls: CONSOLE_WARNING() inside this function can trigger UpdateNetworkConsole() ->
+    // esp32.Write() -> PartialWrite(), which would overwrite the shared static write_packet mid-retry.
+    static bool spi_write_in_progress = false;
     static SPICoprocessorPacket::SCWritePacket write_packet;
+
+    if (spi_write_in_progress) {
+        return false;
+    }
+    spi_write_in_progress = true;
 
     write_packet.cmd = require_ack ? ObjectDictionary::SCCommand::kCmdWriteToSlaveRequireAck
                                    : ObjectDictionary::SCCommand::kCmdWriteToSlave;
@@ -362,11 +370,18 @@ bool SPICoprocessor::PartialWrite(ObjectDictionary::Address addr, uint8_t* objec
     if (!ret) {
         CONSOLE_ERROR("SPICoprocessor::PartialWrite", "Failed after %d tries: %s", num_attempts, error_message);
     }
+    spi_write_in_progress = false;
     return ret;
 }
 
 bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t* object_buf, uint16_t len, uint16_t offset) {
+    static bool spi_read_in_progress = false;
     static SPICoprocessorPacket::SCReadRequestPacket read_request_packet;
+
+    if (spi_read_in_progress) {
+        return false;
+    }
+    spi_read_in_progress = true;
 
     read_request_packet.cmd = ObjectDictionary::SCCommand::kCmdReadFromSlave;
 
@@ -447,14 +462,22 @@ bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t* object
     if (!ret) {
         CONSOLE_ERROR("SPICoprocessor::PartialRead", "Failed after %d tries: %s", num_attempts, error_message);
     }
+    spi_read_in_progress = false;
     return ret;
 }
 
 bool SPICoprocessor::SPIWaitForAck() {
+    static bool ack_wait_in_progress = false;
     static SPICoprocessorPacket::SCAckPacket ack_packet;
+
+    if (ack_wait_in_progress) {
+        return false;
+    }
+    ack_wait_in_progress = true;
 
     if (!config_.interface.SPIWaitForHandshake()) {
         CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "Timed out while waiting for ack: never received handshake.");
+        ack_wait_in_progress = false;
         return false;
     }
 
@@ -466,18 +489,22 @@ bool SPICoprocessor::SPIWaitForAck() {
     if (bytes_read < 0) {
         CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "SPI read failed with code %d (%s).", bytes_read,
                       ReturnCodeToString(static_cast<ReturnCode>(bytes_read)));
+        ack_wait_in_progress = false;
         return false;
     }
     if (ack_packet.cmd != ObjectDictionary::SCCommand::kCmdAck) {
         CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck",
                       "Received a message that was not an ack (cmd=0x%x, expected 0x%x).", ack_packet.cmd,
                       ObjectDictionary::SCCommand::kCmdAck);
+        ack_wait_in_progress = false;
         return false;
     }
     if (!ack_packet.IsValid()) {
         CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "Received a response packet with an invalid CRC.");
+        ack_wait_in_progress = false;
         return false;
     }
+    ack_wait_in_progress = false;
     return ack_packet.ack;
 }
 

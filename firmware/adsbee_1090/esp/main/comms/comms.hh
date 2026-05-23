@@ -23,11 +23,11 @@ class CommsManager {
     // Packet queue sizes used to stage packets for reporting.
     static const uint16_t kMaxNumModeSPackets = 100;
     static const uint16_t kMaxNumUATADSBPackets = 20;
-    static const uint16_t kMaxNumUATUplinkPackets = 4;
+    static const uint16_t kMaxNumUATUplinkPackets = 6;
 
     // Reporting via the IP task is done by forwarding CompositeArray::RawPackets buffers from the ADSBeeServer task.
     // These buffers are put into a queue, which has its element size and number of elements set here.
-    static const uint16_t kReportingCompositeArrayQueueNumElements = 3;
+    static const uint16_t kReportingCompositeArrayQueueNumElements = 6;
 
     static const uint16_t kWiFiMessageQueueLen = 8;
     // Reconnect intervals must be long enough that we register an IP lost event before trying the reconnect, otherwise

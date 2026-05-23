@@ -616,8 +616,6 @@ CPP_AT_CALLBACK(CommsManager::ATOTACallback) {
                         CPP_AT_ERROR("Partial %u Byte write failed in partition %u at offset 0x%x.", len_bytes,
                                      complementary_partition, offset);
                     }
-                    // Re-sync SPI after ~350ms flash_range_program dead zone, then reset the TX rate-limit.
-                    esp32.Update();
                     comms_manager.ResetConsoleTxTimestamp();
                     if (has_crc) {
                         // CRC provided: verify the flash after writing.
