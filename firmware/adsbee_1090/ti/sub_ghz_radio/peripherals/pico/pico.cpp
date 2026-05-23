@@ -151,7 +151,8 @@ bool Pico::SPIProcessTransaction()
     case ObjectDictionary::SCCommand::kCmdWriteToSlave:
     case ObjectDictionary::SCCommand::kCmdWriteToSlaveRequireAck:
     {
-        SPICoprocessorPacket::SCWritePacket write_packet = SPICoprocessorPacket::SCWritePacket(rx_buf, bytes_read);
+        static SPICoprocessorPacket::SCWritePacket write_packet;
+        write_packet.ConstructFromBuffer(rx_buf, bytes_read);
         if (!write_packet.IsValid())
         {
             CONSOLE_ERROR("Pico::SPIPostTransactionCallback",
@@ -178,8 +179,8 @@ bool Pico::SPIProcessTransaction()
     }
     case ObjectDictionary::SCCommand::kCmdReadFromSlave:
     {
-        SPICoprocessorPacket::SPICoprocessorPacket::SCReadRequestPacket read_request_packet =
-            SPICoprocessorPacket::SCReadRequestPacket(rx_buf, bytes_read);
+        static SPICoprocessorPacket::SCReadRequestPacket read_request_packet;
+        read_request_packet.ConstructFromBuffer(rx_buf, bytes_read);
         if (!read_request_packet.IsValid())
         {
             CONSOLE_ERROR("Pico::SPIPostTransactionCallback",
@@ -189,7 +190,7 @@ bool Pico::SPIProcessTransaction()
             return false;
         }
 
-        SPICoprocessorPacket::SCResponsePacket response_packet;
+        static SPICoprocessorPacket::SCResponsePacket response_packet;
         response_packet.cmd = ObjectDictionary::SCCommand::kCmdDataBlock;
         ret = object_dictionary.GetBytes(read_request_packet.addr, response_packet.data, read_request_packet.len,
                                          read_request_packet.offset);

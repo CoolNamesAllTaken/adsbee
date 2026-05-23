@@ -45,11 +45,11 @@ bool CommsManager::Update() {
         uint16_t required_buffer_len = CompositeArray::CalculateRawPacketsBufferLength(
             &mode_s_packet_reporting_queue, &uat_adsb_packet_reporting_queue, &uat_uplink_packet_reporting_queue);
 
-        // Only forward packets if buffer would be full or if max reporting interval has elapsed.
-        bool buffer_would_be_full = required_buffer_len >= CompositeArray::RawPackets::kMaxLenBytes;
+        // Flush when combined packets from all queues would fill a composite array (maximizes load factor per
+        // SPI transaction), or when the max reporting interval has elapsed (guarantees ≤200ms latency).
         bool max_interval_elapsed = (timestamp_ms - last_raw_report_timestamp_ms_) >= kRawReportingMaxIntervalMs;
 
-        if (buffer_would_be_full || max_interval_elapsed) {
+        if (required_buffer_len >= CompositeArray::RawPackets::kMaxLenBytes || max_interval_elapsed) {
             // Update the last report timestamp now that we're actually sending packets.
             last_raw_report_timestamp_ms_ = timestamp_ms;
 
@@ -103,14 +103,10 @@ bool CommsManager::UpdateNetworkConsole() {
                  message_len++) {
                 esp32_console_tx_buf[message_len] = c;
             }
-            // Ran out of characters to send, or hit the max packet length.
             if (message_len > 0) {
-                // Don't send empty messages.
                 if (!esp32.Write(ObjectDictionary::kAddrConsole, esp32_console_tx_buf, true, message_len)) {
-                    // Don't enter infinite loop of error messages if writing to the ESP32 isn't working.
                     break;
                 } else {
-                    // Successfully sent characters to ESP32.
                     last_esp32_console_tx_timestamp_ms_ = get_time_since_boot_ms();
                 }
             }

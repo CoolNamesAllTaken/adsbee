@@ -98,6 +98,7 @@
         class ConsoleWebSocket {
             constructor(url) {
                 this.url = url;
+                this.paused = false;
                 this.init();
             }
 
@@ -158,10 +159,12 @@
 
             attemptReconnect() {
                 setTimeout(() => {
-                    // Check again if we should reconnect before attempting
-                    this.init()
+                    if (!this.paused) this.init();
                 }, WS_CONFIG.reconnectDelayMs);
             }
+
+            pause() { this.paused = true; if (this.ws) this.ws.close(); }
+            resume() { if (this.paused) { this.paused = false; this.init(); } }
 
             close(code, reason) {
                 if (this.ws) {
@@ -468,6 +471,7 @@
         class MetricsWebSocket {
             constructor(url) {
                 this.url = url;
+                this.paused = false;
                 this.cards = {
                     'feed': {},
                     'receiver': {}
@@ -559,7 +563,7 @@
                     this.statusEl.textContent = 'Disconnected - Reconnecting...';
                     this.statusEl.classList.remove('connected');
                     this.statusEl.classList.add('disconnected');
-                    setTimeout(() => this.connect(), 3000);
+                    setTimeout(() => { if (!this.paused) this.connect(); }, 3000);
                 };
 
                 this.ws.onerror = (error) => {
@@ -603,6 +607,9 @@
                 };
             }
 
+            pause() { this.paused = true; if (this.ws) this.ws.close(); }
+            resume() { if (this.paused) { this.paused = false; this.connect(); } }
+
             close(code, reason) {
                 if (this.ws) {
                     this.ws.close(code, reason);
@@ -639,10 +646,13 @@
                     this.ws = new WebSocket(`ws://${this.url}/console`);
                     this.ws.binaryType = 'arraybuffer';
 
+                    let resolved = false;
+
                     this.ws.onmessage = (event) => {
                         const decoded_message = this.decoder.decode(event.data);
                         console.log("ADSBeeAT received message:", decoded_message);
                         this.messageQueue.push(decoded_message);
+                        resolved = true;
                         resolve();
                     };
 
@@ -651,6 +661,12 @@
                     };
 
                     this.ws.onerror = (error) => reject(error);
+
+                    this.ws.onclose = (event) => {
+                        if (!resolved) {
+                            reject(new Error(`WebSocket closed before receiving response (code ${event.code})`));
+                        }
+                    };
                 });
             }
 
@@ -749,6 +765,10 @@
                     console.log(`Command (${this.getMsTimestamp()} ms): \t${cmdStr.trim()}`);
                 }
 
+                if (this.ws.readyState !== WebSocket.OPEN) {
+                    await this.disconnect();
+                    await this.connect();
+                }
                 this.ws.send(new TextEncoder().encode(cmdStr));
 
                 let attempts = 0;
@@ -784,7 +804,10 @@
              */
             async sendBytes(data, printResponse = false, waitForOkOrError = false) {
                 const RESPONSE_TO_WAIT_FOR = 'OK';
-                const RESPONSE_TIMEOUT_MS = 6000;
+                const RESPONSE_TIMEOUT_MS = 3000;
+                if (this.ws.readyState !== WebSocket.OPEN) {
+                    throw new Error(`Response timeout: WebSocket not open (readyState=${this.ws.readyState})`);
+                }
                 this.ws.send(data);
                 return await this.receiveResponse(printResponse, waitForOkOrError, RESPONSE_TO_WAIT_FOR, RESPONSE_TIMEOUT_MS);
             }
@@ -1030,11 +1053,12 @@
 
             async uploadFirmware(file) {
                 let originalOtaWriteBytes = NaN;
+                let adsbee = null;
                 try {
                     this.setUploadingState(true);
                     this.updateProgress(0);
 
-                    const adsbee = new ADSBeeAT(this.adsbeeUrl);
+                    adsbee = new ADSBeeAT(this.adsbeeUrl);
                     await adsbee.connect();
 
                     const totalSize = file.size / 2; // Two firmware images in file, we're only flashing one.
@@ -1056,21 +1080,27 @@
                     // Receiver already gets disabled during data chunk transfers, but this simplifies it a bit.
                     await adsbee.sendCmd('AT+RX_ENABLE=0\r\n', 0, true, true);
 
+                    // Pause other WebSocket clients to prevent httpd async queue contention during OTA.
+                    consoleWebSocket.pause();
+                    metricsWebSocket.pause();
+
                     await adsbee.otaWriteFile(file);
                     await adsbee.otaBoot();
 
                     this.updateProgress(100);
                     this.showSuccess();
-                    await adsbee.disconnect();
 
                 } catch (error) {
                     console.error('Firmware upload failed:', error);
                     this.showError(error.message || 'Failed to upload firmware. Please try again.');
                 } finally {
                     this.setUploadingState(false);
-                    if (!isNaN(originalOtaWriteBytes)) {
+                    if (adsbee && !isNaN(originalOtaWriteBytes)) {
                         adsbee.otaWriteBytes = originalOtaWriteBytes;
                     }
+                    if (adsbee) await adsbee.disconnect();
+                    consoleWebSocket.resume();
+                    metricsWebSocket.resume();
                 }
             }
         }

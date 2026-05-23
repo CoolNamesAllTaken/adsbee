@@ -449,8 +449,8 @@ bool CommsManager::ReportGDL90(ReportSink* sinks, uint16_t num_sinks) {
             ret &= SendBuf(sinks[i], (char*)buf, msg_len);
         }
 
-        GDL90Reporter::GDL90TargetReportData ownship_data;
-        // TODO: Actually fill out ownship data!
+        GDL90Reporter::GDL90TargetReportData ownship_data = {};
+        ownship_data.address_type = GDL90Reporter::GDL90TargetReportData::kAddressTypeADSBWithSelfAssignedAddress;
         msg_len = gdl90.WriteGDL90TargetReportMessage(buf, sizeof(buf), ownship_data, true);
         for (uint16_t i = 0; i < num_sinks; i++) {
             ret &= SendBuf(sinks[i], (char*)buf, msg_len);

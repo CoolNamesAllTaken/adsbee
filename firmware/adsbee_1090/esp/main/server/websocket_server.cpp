@@ -50,8 +50,9 @@ bool WebSocketServer::Update() {
         if (clients_[i].in_use && time_since_last_message_ms > config_.inactivity_timeout_ms) {
             // Client is in use and has timed out.
             int client_fd = clients_[i].client_fd;
-            CONSOLE_WARNING("ADSBeeServer::Update", "[%s] Network console client %d with fd %d timed out after %lu ms.",
-                            config_.label, i, client_fd, time_since_last_message_ms);
+            CONSOLE_WARNING("WebSocketServer::Update",
+                            "[%s] Network console client %d with fd %d timed out after %lu ms.", config_.label, i,
+                            client_fd, time_since_last_message_ms);
             httpd_sess_trigger_close(config_.server, client_fd);
         }
     }
@@ -158,11 +159,18 @@ void WebSocketServer::BroadcastMessage(const char* message, int16_t len_bytes) {
         if (clients_[i].in_use) {
             esp_err_t ret = SendMessage(clients_[i].client_fd, message, len_bytes);
             if (ret != ESP_OK) {
-                CONSOLE_ERROR("WebSocketServer::BroadcastMessage",
-                              "[%s] Failed to send message to client %d due to error %s.", config_.label, i,
-                              esp_err_to_name(ret));
-                // Trigger httpd to close the session — ws_close_fd will call RemoveClient and close(fd).
-                httpd_sess_trigger_close(config_.server, clients_[i].client_fd);
+                if (ret == ESP_ERR_NO_MEM || ret == ESP_FAIL) {
+                    // Transient resource exhaustion — drop this message but keep the session alive.
+                    CONSOLE_WARNING("WebSocketServer::BroadcastMessage",
+                                    "[%s] Dropping message to client %d (transient error: %s).", config_.label, i,
+                                    esp_err_to_name(ret));
+                } else {
+                    // Permanent / unrecoverable error — close the session.
+                    CONSOLE_ERROR("WebSocketServer::BroadcastMessage",
+                                  "[%s] Failed to send message to client %d due to error %s.", config_.label, i,
+                                  esp_err_to_name(ret));
+                    httpd_sess_trigger_close(config_.server, clients_[i].client_fd);
+                }
             } else {
                 // Successful send means the client is reachable — reset inactivity timer.
                 clients_[i].last_message_timestamp_ms = get_time_since_boot_ms();

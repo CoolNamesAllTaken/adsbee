@@ -46,6 +46,9 @@ class ADSBee {
     static constexpr uint32_t kNoiseFloorADCSampleIntervalMs =
         1;  // [ms] Interval between ADC samples to approximate noise floor value.
 
+    static constexpr uint32_t kSubGRadioFailRebootIntervalMs = 10'000;
+    static constexpr uint32_t kSubGRadioFailRebootPowerOffDurationMs = 20;
+
     /**
      * Interrupt priorities
      * MLAT counter wrap is highest priority because we don't want to capture an MLAT timestamp where a wrap is pending
@@ -457,7 +460,9 @@ class ADSBee {
     bool r1090_enabled_ = true;
     bool r1090_packet_queue_overflowed_ = false;
     bool bias_tee_enabled_ = false;
-    uint32_t watchdog_timeout_sec_ = SettingsManager::Settings::kDefaultWatchdogTimeoutSec * kMsPerSec;
+    uint32_t watchdog_timeout_sec_ = SettingsManager::Settings::kDefaultWatchdogTimeoutSec;
+
+    uint32_t subg_radio_last_update_timestamp_ms_ = 0;
 
     int32_t noise_floor_mv_;
     uint32_t noise_floor_last_sample_timestamp_ms_ = 0;

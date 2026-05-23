@@ -23,11 +23,11 @@ class CommsManager {
     // Packet queue sizes used to stage packets for reporting.
     static const uint16_t kMaxNumModeSPackets = 100;
     static const uint16_t kMaxNumUATADSBPackets = 20;
-    static const uint16_t kMaxNumUATUplinkPackets = 4;
+    static const uint16_t kMaxNumUATUplinkPackets = 6;
 
     // Reporting via the IP task is done by forwarding CompositeArray::RawPackets buffers from the ADSBeeServer task.
     // These buffers are put into a queue, which has its element size and number of elements set here.
-    static const uint16_t kReportingCompositeArrayQueueNumElements = 3;
+    static const uint16_t kReportingCompositeArrayQueueNumElements = 6;
 
     static const uint16_t kWiFiMessageQueueLen = 8;
     // Reconnect intervals must be long enough that we register an IP lost event before trying the reconnect, otherwise
@@ -37,6 +37,8 @@ class CommsManager {
     static const uint32_t kEthernetReconnectIntervalMs = 10e3;
     static const uint32_t kWiFiSTATaskUpdateIntervalMs = 100;
     static const uint32_t kWiFiSTATaskUpdateIntervalTicks = kWiFiSTATaskUpdateIntervalMs / portTICK_PERIOD_MS;
+
+    static const uint16_t kConsolePrintBufMaxLen = 512;
 
     struct CommsManagerConfig {
         int32_t aux_spi_clk_rate_hz = 40e6;  // 40 MHz (this could go up to 80MHz).
@@ -369,4 +371,10 @@ extern CommsManager comms_manager;
 #define CONSOLE_INFO(tag, ...)  \
     ESP_LOGI(tag, __VA_ARGS__); \
     comms_manager.LogMessageToCoprocessor(SettingsManager::LogLevel::kInfo, tag, __VA_ARGS__);
-#define CONSOLE_PRINTF(...) printf(__VA_ARGS__);
+#define CONSOLE_PRINTF(...)                                                                                \
+    do {                                                                                                   \
+        char _console_buf[CommsManager::kConsolePrintBufMaxLen];                                           \
+        snprintf(_console_buf, sizeof(_console_buf), __VA_ARGS__);                                         \
+        printf("%s", _console_buf);                                                                        \
+        comms_manager.LogMessageToCoprocessor(SettingsManager::LogLevel::kSilent, "", "%s", _console_buf); \
+    } while (0)

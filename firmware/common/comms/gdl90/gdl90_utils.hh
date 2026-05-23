@@ -63,22 +63,25 @@ class GDL90Reporter {
             // Codes 7-15 reserved.
         };
 
+        // Sentinel for vertical rate field: encodes as 0x800 (not available) per GDL90 spec.
+        static constexpr int kVerticalRateUnavailableFpm = INT32_MIN;
+
         // Note: Target with no valid position has lat, lon, and NIC set to 0.
         bool traffic_alert_status = false;  // 1 = Traffic Alert is active for this target.
         AddressType address_type =
             kAddressTypeADSBWithICAOAddress;  // Type of address conveyed in Participant Address field.
-        uint32_t participant_address;         // 24 bit ICAO address.
+        uint32_t participant_address = 0;     // 24 bit ICAO address.
         float latitude_deg = 0.0f;
         float longitude_deg = 0.0f;
-        int32_t altitude_ft;
-        uint8_t misc_indicators;
-        uint8_t navigation_integrity_category = 0;      // Navigation Integrity Category (NIC).
-        uint8_t navigation_accuracy_category_position;  // Navigation Accuracy Category for Postion (NACp).
-        float speed_kts;
-        int vertical_rate_fpm;
-        float direction_deg;
-        uint8_t emitter_category;
-        char callsign[9] = "        ";  // 8 spaces + null terminator, 0-9 and A-Z
+        int32_t altitude_ft = INT32_MIN;            // Encodes as 0xFFF (invalid) when out of [-1000, 101350] ft range.
+        uint8_t misc_indicators = 0;                // Default: TT not valid, not extrapolated, not airborne.
+        uint8_t navigation_integrity_category = 0;  // Navigation Integrity Category (NIC).
+        uint8_t navigation_accuracy_category_position = 0;  // Navigation Accuracy Category for Position (NACp).
+        float speed_kts = -1.0f;  // Negative sentinel: encodes as 0xFFF (unavailable) per GDL90 spec.
+        int vertical_rate_fpm = kVerticalRateUnavailableFpm;
+        float direction_deg = 0.0f;
+        uint8_t emitter_category = 0;
+        char callsign[9] = "        ";  // 8 ASCII chars + null terminator, 0-9 and A-Z
         EmergencyPriorityCode emergency_priority_code = kEmergencyPriorityCodeNoEmergency;  // 4 bits.
     };
 

@@ -3,11 +3,12 @@
 
 TEST(Settings, DeviceInfoGetDefaultSSIDAndUID) {
     SettingsManager::DeviceInfo device_info;
-    strncpy(device_info.part_code, (char *)"010240002F-20240907-986541", SettingsManager::DeviceInfo::kPartCodeLen + 1);
+    strncpy(device_info.part_code, (const char*)"010240002F-20240907-986541",
+            SettingsManager::DeviceInfo::kPartCodeLen + 1);
 
     char ssid_buf[SettingsManager::Settings::kWiFiSSIDMaxLen];
     device_info.GetDefaultSSID(ssid_buf);
-    EXPECT_STREQ(ssid_buf, (char *)"ADSBee1090-0240907986541");
+    EXPECT_STREQ(ssid_buf, (const char*)"ADSBee1090-0240907986541");
 
     uint8_t uid_buf[SettingsManager::Settings::kFeedReceiverIDNumBytes];
     device_info.GetDefaultFeedReceiverID(uid_buf);
