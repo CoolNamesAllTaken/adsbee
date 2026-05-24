@@ -1,7 +1,13 @@
+const METRIC_UNITS = {
+    'num_mode_s_aircraft': 'aircraft',
+    'num_uat_aircraft':    'aircraft',
+};
+
 class ConsoleWebSocket {
     constructor(url) {
         this.url = url;
         this.paused = false;
+        this.captureCallback = null;
         this.init();
     }
 
@@ -14,24 +20,22 @@ class ConsoleWebSocket {
         // Connection opened
         this.ws.addEventListener('open', () => {
             console.log(`Connected to ${this.url}`);
-
-            // Send the message once connected
-            // this.send("AT+HELP\r\n");
         });
 
         // Listen for messages
         this.ws.addEventListener('message', (event) => {
+            const dispatch = (text) => {
+                appendToTerminal(text);
+                if (this.captureCallback) this.captureCallback(text);
+            };
             if (typeof event.data === 'string') {
-                // console.log('Received message:', event.data);
-                appendToTerminal(event.data);
+                dispatch(event.data);
             } else if (event.data instanceof Blob) {
                 const reader = new FileReader();
-                reader.onload = () => {
-                    const text = reader.result;
-                    // console.log('Received binary message:', text);
-                    appendToTerminal(text);
-                };
+                reader.onload = () => dispatch(reader.result);
                 reader.readAsText(event.data);
+            } else if (event.data instanceof ArrayBuffer) {
+                dispatch(new TextDecoder().decode(event.data));
             }
         });
 
@@ -58,6 +62,38 @@ class ConsoleWebSocket {
             console.warn('Cannot send message - connection is not open');
             return false;
         }
+    }
+
+    // Send a command and collect incoming messages until one contains `terminator`.
+    // 'OK' and 'ERROR' are matched as whole trimmed lines; anything else as a substring.
+    sendAndCapture(command, terminator, timeoutMs = 5000) {
+        return new Promise((resolve, reject) => {
+            const captured = [];
+            const isLineTerminator = (terminator === 'OK' || terminator === 'ERROR');
+            const matches = (text) => isLineTerminator
+                ? text.split(/[\r\n]+/).some(l => l.trim() === terminator)
+                : text.includes(terminator);
+
+            const timer = setTimeout(() => {
+                this.captureCallback = null;
+                reject(new Error(`Response timeout after ${timeoutMs} ms.`));
+            }, timeoutMs);
+
+            this.captureCallback = (text) => {
+                captured.push(text);
+                if (text.split(/[\r\n]+/).some(l => l.trim() === 'ERROR')) {
+                    clearTimeout(timer);
+                    this.captureCallback = null;
+                    reject(new Error(`ERROR response: ${text.trim()}`));
+                } else if (matches(text)) {
+                    clearTimeout(timer);
+                    this.captureCallback = null;
+                    resolve(captured);
+                }
+            };
+
+            this.send(command);
+        });
     }
 
     attemptReconnect() {
@@ -115,10 +151,10 @@ class SparklineChart {
         this.areaPath = area;
     }
 
-    update(value) {
+    update(value, unit = 'msg/s') {
         this.points.push(value);
         this.points.shift();
-        this.valueEl.textContent = `${value} msg/s`;
+        this.valueEl.textContent = `${value} ${unit}`;
 
         const max = Math.max(...this.points, 1);
         const points = this.points.map((p, i) => [
@@ -135,21 +171,27 @@ class SparklineChart {
 }
 
 class MetricCard {
-    constructor(container, label) {
+    constructor(container, label, unit = 'msg/s', feedSlot = null) {
         this.container = container;
         this.label = label;
-        this.id = `chart-${this.labelToID(label)}`
+        this.unit = unit;
+        this.feedSlot = feedSlot;
+        this.id = `chart-${this.labelToID(label)}`;
 
         const card = document.createElement('div');
         card.className = 'metrics-card';
+        if (feedSlot !== null) {
+            card.classList.add('editable');
+            card.onclick = () => FeedEditor.open(feedSlot);
+        }
         card.innerHTML = `
   <div class="metric-title" title="${label}">${label}</div>
-  <div class="metric-value">0 msg/s</div>
+  <div class="metric-value">0 ${unit}</div>
   <svg class="sparkline" id="${this.id}" viewBox="0 0 100 30"></svg>
 `;
+        this.card = card;
         this.container.appendChild(card);
         this.chart = new SparklineChart(this.id);
-
     }
 
     destroy() {
@@ -162,7 +204,7 @@ class MetricCard {
     }
 
     update(value) {
-        this.chart.update(value);
+        this.chart.update(value, this.unit);
     }
 }
 
@@ -174,24 +216,37 @@ class MetricsWebSocket {
             'feed': {},
             'receiver': {}
         };
+        this.feedSlotMap = {};
         this.connect();
-        this.statusEl = document.getElementById('status');
         this.feedsCountEl = document.getElementById('feed-count');
         this.container = document.getElementById('metrics-container');
     }
 
-    updateMetricsCards(parentLabel, data) {
-        // Remove charts that are no longer in the data
+    updateReceiverCards(data) {
+        const parentLabel = 'receiver';
+        const container = document.getElementById('receiver-metrics-container');
         Object.keys(this.cards[parentLabel]).forEach(label => {
-            if (!data.hasOwnProperty(label)) {
-                this.cards[parentLabel][label].destroy();
-            }
+            if (!data.hasOwnProperty(label)) this.cards[parentLabel][label].destroy();
         });
-
-        // Update existing charts and create new ones
         Object.entries(data).forEach(([label, value]) => {
             if (!this.cards[parentLabel][label]) {
-                this.cards[parentLabel][label] = new MetricCard(document.getElementById(`${parentLabel}-metrics-container`), label);
+                const unit = METRIC_UNITS[label] || 'msg/s';
+                this.cards[parentLabel][label] = new MetricCard(container, label, unit);
+            }
+            this.cards[parentLabel][label].update(value);
+        });
+    }
+
+    updateFeedCards(data) {
+        const parentLabel = 'feed';
+        const container = document.getElementById('feed-metrics-container');
+        Object.keys(this.cards[parentLabel]).forEach(label => {
+            if (!data.hasOwnProperty(label)) this.cards[parentLabel][label].destroy();
+        });
+        Object.entries(data).forEach(([label, value]) => {
+            if (!this.cards[parentLabel][label]) {
+                const slot = this.feedSlotMap[label] ?? null;
+                this.cards[parentLabel][label] = new MetricCard(container, label, 'msg/s', slot);
             }
             this.cards[parentLabel][label].update(value);
         });
@@ -251,16 +306,10 @@ class MetricsWebSocket {
 
         this.ws.onopen = () => {
             console.log('Connected to WebSocket');
-            this.statusEl.textContent = `Connected to ADSBee at ${HOST_URI}`;
-            this.statusEl.classList.remove('disconnected');
-            this.statusEl.classList.add('connected');
         };
 
         this.ws.onclose = () => {
             console.log('Disconnected from WebSocket');
-            this.statusEl.textContent = 'Disconnected - Reconnecting...';
-            this.statusEl.classList.remove('connected');
-            this.statusEl.classList.add('disconnected');
             setTimeout(() => { if (!this.paused) this.connect(); }, 3000);
         };
 
@@ -276,22 +325,17 @@ class MetricsWebSocket {
                     const dictionaryMetrics = Object.fromEntries(
                         Object.entries(data['aircraft_dictionary_metrics']).filter(([key, value]) => !Array.isArray(value))
                     );
-                    // console.log('Dictionary Metrics:', dictionaryMetrics);
-                    this.updateMetricsCards('receiver', dictionaryMetrics);
+                    this.updateReceiverCards(dictionaryMetrics);
                 }
                 if (data.hasOwnProperty('server_metrics')) {
                     const serverMetrics = data['server_metrics'];
-                    // console.log('Server Metrics:', serverMetrics);
                     const feedMetrics = {};
                     for (let i = 0; i < serverMetrics['feed_uri'].length; i++) {
-                        if (serverMetrics['feed_uri'][i] === '') {
-                            continue;
-                        }
+                        if (serverMetrics['feed_uri'][i] === '') continue;
                         feedMetrics[serverMetrics['feed_uri'][i]] = serverMetrics['feed_mps'][i];
+                        this.feedSlotMap[serverMetrics['feed_uri'][i]] = i;
                     }
-                    // console.log('Feed Metrics:', feedMetrics);
-                    this.updateMetricsCards('feed', feedMetrics);
-                    // Update labels count
+                    this.updateFeedCards(feedMetrics);
                     this.feedsCountEl.textContent = `Feeds: ${Object.keys(feedMetrics).length}`;
                 }
                 if (data.hasOwnProperty('device_status')) {
@@ -311,6 +355,73 @@ class MetricsWebSocket {
     close(code, reason) {
         if (this.ws) {
             this.ws.close(code, reason);
+        }
+    }
+}
+
+class FeedEditor {
+    static PROTOCOLS = ['NONE', 'RAW', 'BEAST', 'BEAST_NO_UAT', 'BEAST_NO_UAT_UPLINK',
+                        'CSBEE', 'MAVLINK1', 'MAVLINK2', 'GDL90'];
+
+    static parseFeedResponse(text) {
+        const m = text.match(/\+FEED=(\d+)\(INDEX\),([^,]*)\(URI\),(\d+)\(PORT\),(\d+)\(ACTIVE\),(\w+)\(PROTOCOL\)/);
+        if (!m) return null;
+        return { index: +m[1], uri: m[2], port: +m[3], active: m[4] === '1', protocol: m[5] };
+    }
+
+    static async open(feedSlot) {
+        const modal = document.getElementById('feed-modal');
+        const statusEl = document.getElementById('feed-modal-status');
+        statusEl.textContent = 'Loading...';
+        document.getElementById('feed-form').style.display = 'none';
+        modal.style.display = 'flex';
+
+        let current = null;
+        try {
+            const resp = await fetch(`http://${HOST_URI}/api/feed?index=${feedSlot}`);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            current = await resp.json();
+        } catch (e) {
+            statusEl.textContent = `Error: ${e.message}`;
+            return;
+        }
+
+        document.getElementById('feed-slot').value = current.index;
+        document.getElementById('feed-uri').value = current.uri;
+        document.getElementById('feed-port').value = current.port;
+        document.getElementById('feed-active').checked = !!current.active;
+        const sel = document.getElementById('feed-protocol');
+        sel.innerHTML = FeedEditor.PROTOCOLS
+            .map(p => `<option value="${p}"${p === current.protocol ? ' selected' : ''}>${p}</option>`)
+            .join('');
+        statusEl.textContent = '';
+        document.getElementById('feed-form').style.display = '';
+    }
+
+    static close() {
+        document.getElementById('feed-modal').style.display = 'none';
+    }
+
+    static async save() {
+        const slot     = document.getElementById('feed-slot').value;
+        const uri      = document.getElementById('feed-uri').value.trim();
+        const port     = document.getElementById('feed-port').value;
+        const active   = document.getElementById('feed-active').checked ? 1 : 0;
+        const protocol = document.getElementById('feed-protocol').value;
+        const statusEl = document.getElementById('feed-modal-status');
+
+        statusEl.textContent = 'Saving...';
+        const adsbee = new ADSBeeAT(HOST_URI);
+        try {
+            await adsbee.connect();
+            await adsbee.sendCmd(`AT+FEED=${slot},${uri},${port},${active},${protocol}\r\n`, 0, true, true, 'OK', 5000);
+            await adsbee.sendCmd(`AT+SETTINGS=SAVE\r\n`, 0, true, true, 'OK', 5000);
+            statusEl.textContent = 'Saved.';
+            setTimeout(() => FeedEditor.close(), 800);
+        } catch (e) {
+            statusEl.textContent = `Error: ${e.message}`;
+        } finally {
+            await adsbee.disconnect();
         }
     }
 }
@@ -338,26 +449,20 @@ class ADSBeeAT {
             this.ws = new WebSocket(`ws://${this.url}/console`);
             this.ws.binaryType = 'arraybuffer';
 
-            let resolved = false;
-
             this.ws.onmessage = (event) => {
                 const decoded_message = this.decoder.decode(event.data);
                 console.log("ADSBeeAT received message:", decoded_message);
                 this.messageQueue.push(decoded_message);
-                resolved = true;
-                resolve();
             };
 
             this.ws.onopen = () => {
-                // Don't resolve immediately, wait for first message
+                resolve();
             };
 
             this.ws.onerror = (error) => reject(error);
 
             this.ws.onclose = (event) => {
-                if (!resolved) {
-                    reject(new Error(`WebSocket closed before receiving response (code ${event.code})`));
-                }
+                reject(new Error(`WebSocket closed (code ${event.code})`));
             };
         });
     }
@@ -403,16 +508,21 @@ class ADSBeeAT {
 
             if (waitForResponse && this.messageQueue.length > 0) {
                 const decoded_message = this.messageQueue.shift();
+                // Match on individual lines so ambient log messages like "[ERROR] ..."
+                // or strings containing "OK" don't cause false positives.
+                // Use substring match for the expected terminator (handles both 'OK'
+                // and custom prefixes like '+FEED='), but match ERROR strictly on a
+                // whole line so ambient log lines like "[ERROR] ..." don't false-trigger.
                 if (decoded_message.includes(responseToWaitFor)) {
                     waitForResponse = false;
-                } else if (decoded_message.match(/\bERROR\b/)) {
-                    // Catch AT command errors.
+                } else if (decoded_message.split(/[\r\n]+/).some(l => l.trim() === 'ERROR')) {
+                    // Catch AT command errors (standalone ERROR response line).
                     this.flushInputBuffer(ADSBeeAT.ERROR_BUFFER_FLUSH_INTERVAL_MS);
                     throw new Error(`ERROR response: ${decoded_message}`);
                 } else if (decoded_message.includes('CppAT::')) {
                     // Catch CppAT parse errors.
                     await new Promise(resolve => setTimeout(resolve, CPP_AT_PARSE_ERROR_FLUSH_INTERVAL_MS));
-                    this.flushInputBuffer(ADSBeeAT.ERROR_BUFFER_FLUSH_INTERVAL_MS); // These can get ugly.
+                    this.flushInputBuffer(ADSBeeAT.ERROR_BUFFER_FLUSH_INTERVAL_MS);
                     throw new Error(`CppAT parse error: ${decoded_message}`);
                 }
 
@@ -718,7 +828,23 @@ class FirmwareUploader {
     }
 
     showModal() {
+        const log = document.getElementById('firmware-modal-log');
+        if (log) log.innerHTML = '';
         document.getElementById('firmware-modal').style.display = 'flex';
+    }
+
+    appendToModalLog(text) {
+        const log = document.getElementById('firmware-modal-log');
+        if (!log) return;
+        const trimmed = text.trim();
+        if (!trimmed) return;
+        const line = document.createElement('div');
+        line.textContent = trimmed;
+        log.appendChild(line);
+        while (log.children.length > 100) {
+            log.removeChild(log.firstChild);
+        }
+        log.scrollTop = log.scrollHeight;
     }
 
     hideModal() {
@@ -771,10 +897,15 @@ class FirmwareUploader {
     async uploadFirmware(file) {
         let originalOtaWriteBytes = NaN;
         let adsbee = null;
+        const origConsoleLog = console.log;
         try {
             this.setUploadingState(true);
             this.updateProgress(0);
             this.showModal();
+            console.log = (...args) => {
+                origConsoleLog.apply(console, args);
+                this.appendToModalLog(args.join(' '));
+            };
 
             adsbee = new ADSBeeAT(this.adsbeeUrl);
             await adsbee.connect();
@@ -812,6 +943,7 @@ class FirmwareUploader {
             console.error('Firmware upload failed:', error);
             this.showError(error.message || 'Failed to upload firmware. Please try again.');
         } finally {
+            console.log = origConsoleLog;
             this.setUploadingState(false);
             if (adsbee && !isNaN(originalOtaWriteBytes)) {
                 adsbee.otaWriteBytes = originalOtaWriteBytes;

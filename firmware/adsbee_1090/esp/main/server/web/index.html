@@ -10,6 +10,15 @@
 </head>
 
 <body>
+    <div class="theme-toggle">
+        <span class="theme-toggle-label">&#9788;</span>
+        <label class="toggle-switch">
+            <input type="checkbox" id="darkModeToggle">
+            <span class="toggle-slider"></span>
+        </label>
+        <span class="theme-toggle-label">&#9790;</span>
+    </div>
+
     <div class="column-container">
         <div id="terminal" class="column-element" onclick="focusTerminal()">
             <div id="terminal-content"></div>
@@ -21,7 +30,6 @@
             <input type="text" class="hidden-input" id="hidden-input" autocomplete="off">
         </div>
 
-        <div id="status" class="connection-status disconnected">Disconnected</div>
         <div id="metrics-container" class="column-element metrics">
             <div id="receiver-metrics-container">
                 <div class="metrics-header">Receiver Metrics</div>
@@ -71,23 +79,53 @@
         </div>
     </div>
 
+    <div id="feed-modal" style="display:none;">
+        <div id="feed-modal-box">
+            <h2>Edit Feed</h2>
+            <p id="feed-modal-status"></p>
+            <input type="hidden" id="feed-slot">
+            <div id="feed-form" style="display:none;">
+                <div class="feed-field">
+                    <label>URI</label>
+                    <input type="text" id="feed-uri" placeholder="feed.adsb.fi">
+                </div>
+                <div class="feed-field">
+                    <label>Port</label>
+                    <input type="number" id="feed-port" min="1" max="65535">
+                </div>
+                <div class="feed-field feed-field-inline">
+                    <label>Active</label>
+                    <input type="checkbox" id="feed-active">
+                </div>
+                <div class="feed-field">
+                    <label>Protocol</label>
+                    <select id="feed-protocol"></select>
+                </div>
+            </div>
+            <div class="feed-modal-buttons">
+                <button class="tools-button" onclick="FeedEditor.save()">Save</button>
+                <button class="tools-button feed-cancel-btn" onclick="FeedEditor.close()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <div id="firmware-modal" style="display:none;">
         <div id="firmware-modal-box">
             <h2>Firmware Update In Progress</h2>
             <p id="firmware-modal-status">Erasing flash...</p>
-            <div class="progress-container" style="display:flex; margin: 16px 0;">
+            <div class="progress-container" style="display:flex; margin: 12px 0 8px;">
                 <div class="progress-bar">
                     <div id="firmware-modal-fill" class="progress-fill" style="width:0%"></div>
                 </div>
                 <div id="firmware-modal-text" class="progress-text">0%</div>
             </div>
+            <div id="firmware-modal-log"></div>
             <p class="firmware-modal-note">Interface is paused during the update. Please do not close this page.</p>
         </div>
     </div>
 
     <script>
-        const HOST_URI = `${window.location.hostname}`;
-        // const HOST_URI = "testbee.local";
+        const HOST_URI = window.location.hostname || "testbee.local";
         const WS_CONFIG = {
             console_ws_url: `ws://${HOST_URI}/console`,
             metrics_ws_url: `ws://${HOST_URI}/metrics`,
@@ -319,6 +357,17 @@
             // Close WebSocket connection gracefully
             consoleWebSocket.close(1000, 'Tab closing - normal shutdown');
             metricsWebSocket.close(1000, 'Tab closing - normal shutdown');
+        });
+
+        // Initialize dark mode
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        if (localStorage.getItem('darkMode') === 'true') {
+            document.body.classList.add('dark-mode');
+            darkModeToggle.checked = true;
+        }
+        darkModeToggle.addEventListener('change', () => {
+            document.body.classList.toggle('dark-mode', darkModeToggle.checked);
+            localStorage.setItem('darkMode', darkModeToggle.checked ? 'true' : 'false');
         });
 
         // Initialize

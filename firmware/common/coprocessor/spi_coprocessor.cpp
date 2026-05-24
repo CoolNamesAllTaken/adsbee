@@ -508,6 +508,47 @@ bool SPICoprocessor::SPIWaitForAck() {
     return ack_packet.ack;
 }
 
+#ifdef HARDWARE_UNIT_TESTS
+bool SPICoprocessor::TestSPIHandshakeDeadlock() {
+    // Step 1: Send a read request so the ESP32 queues a response and raises its handshake pin.
+    // We deliberately skip SPIWaitForHandshake() so expecting_handshake_ stays false.
+    SPICoprocessorPacket::SCReadRequestPacket request;
+    request.cmd = ObjectDictionary::SCCommand::kCmdReadFromSlave;
+    request.addr = ObjectDictionary::Address::kAddrDeviceStatus;
+    request.offset = 0;
+    request.len = sizeof(ObjectDictionary::ESP32DeviceStatus);
+    request.PopulateCRC();
+    int bytes = SPIWriteBlocking(request.GetBuf(), request.GetBufLenBytes(), /*end_transaction=*/true);
+    if (bytes < 0) {
+        CONSOLE_ERROR("TestSPIHandshakeDeadlock", "Failed to send read request (code %d).", bytes);
+        return false;
+    }
+
+    // Step 2: Wait past the handshake timeout. The ESP32 prepares its response and raises the handshake
+    // during this window, but we never set expecting_handshake_ = true, so SPIBeginTransaction will
+    // treat it as an unexpected high.
+    uint32_t delay_start_ms = get_time_since_boot_ms();
+    while (get_time_since_boot_ms() - delay_start_ms <
+           SPICoprocessorSlaveInterface::kSPIHandshakeTimeoutMs + 10) {
+    }
+
+    // Step 3: Attempt a harmless write. The first try will see handshake HIGH with expecting_handshake_
+    // = false and return kErrorHandshakeHigh. With the dummy-byte recovery fix, this clocks enough
+    // SCLK edges to complete the ESP32's pending spi_slave_transmit, lowering the handshake so the
+    // retry can succeed. Without the fix, this deadlocks permanently.
+    CONSOLE_INFO("TestSPIHandshakeDeadlock",
+                 "Handshake should be HIGH. Attempting write to trigger recovery...");
+    uint8_t dummy[4] = {0};
+    bool recovered = PartialWrite(ObjectDictionary::Address::kAddrScratch, dummy, sizeof(dummy));
+    if (recovered) {
+        CONSOLE_INFO("TestSPIHandshakeDeadlock", "Recovery succeeded — deadlock fix is working.");
+    } else {
+        CONSOLE_ERROR("TestSPIHandshakeDeadlock", "Recovery failed — system may be deadlocked.");
+    }
+    return recovered;
+}
+#endif
+
 #endif
 
 #ifdef ON_COPRO_SLAVE

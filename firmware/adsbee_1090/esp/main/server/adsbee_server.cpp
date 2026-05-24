@@ -490,6 +490,34 @@ static esp_err_t adsbee_js_handler(httpd_req_t* req) {
     return ESP_OK;
 }
 
+static esp_err_t feed_api_get_handler(httpd_req_t* req) {
+    char query[32];
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing query");
+        return ESP_OK;
+    }
+    char index_str[8];
+    if (httpd_query_key_value(query, "index", index_str, sizeof(index_str)) != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing index");
+        return ESP_OK;
+    }
+    int index = atoi(index_str);
+    if (index < 0 || index >= (int)SettingsManager::Settings::kMaxNumFeeds) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Index out of range");
+        return ESP_OK;
+    }
+    char json[512];
+    snprintf(json, sizeof(json),
+             "{\"index\":%d,\"uri\":\"%s\",\"port\":%d,\"active\":%d,\"protocol\":\"%s\"}", index,
+             settings_manager.settings.feed_uris[index], settings_manager.settings.feed_ports[index],
+             (int)settings_manager.settings.feed_is_active[index],
+             SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[index]]);
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    httpd_resp_send(req, json, HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
 esp_err_t favicon_handler(httpd_req_t* req) {
     httpd_resp_set_type(req, "image/png");
     httpd_resp_set_hdr(req, "Cache-Control", "max-age=2592000, public");  // Cache for 30 days
@@ -685,6 +713,16 @@ bool ADSBeeServer::TCPServerInit() {
                            .handle_ws_control_frames = false,
                            .supported_subprotocol = nullptr};
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &favicon));
+
+    // Feed settings API handler
+    httpd_uri_t feed_api = {.uri = "/api/feed",
+                            .method = HTTP_GET,
+                            .handler = feed_api_get_handler,
+                            .user_ctx = NULL,
+                            .is_websocket = false,
+                            .handle_ws_control_frames = false,
+                            .supported_subprotocol = nullptr};
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &feed_api));
 
     network_console = WebSocketServer({.label = "Network Console",
                                        .server = server,

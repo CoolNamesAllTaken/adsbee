@@ -1,17 +1,109 @@
+/* ─── CSS Custom Properties ──────────────────────────── */
+:root {
+    --bg-page: #f4f4f5;
+    --bg-card: #ffffff;
+    --text-primary: #18181b;
+    --text-secondary: #64748b;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    --progress-bg: #e4e4e7;
+    --border-subtle: #e4e4e7;
+}
+
+body.dark-mode {
+    --bg-page: #111111;
+    --bg-card: #1e1e1e;
+    --text-primary: #e4e4e7;
+    --text-secondary: #a1a1aa;
+    --shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+    --progress-bg: #27272a;
+    --border-subtle: #27272a;
+}
+
+body {
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+    transition: background-color 0.25s ease, color 0.25s ease;
+    margin: 0;
+}
+
+/* ─── Theme toggle ───────────────────────────────────── */
+.theme-toggle {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1;
+    user-select: none;
+}
+
+.theme-toggle-label {
+    color: var(--text-secondary);
+    transition: color 0.25s ease;
+}
+
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 42px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+.toggle-slider {
+    position: absolute;
+    inset: 0;
+    background-color: #d4d4d8;
+    border-radius: 24px;
+    cursor: pointer;
+    transition: background-color 0.25s ease;
+}
+
+.toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: #fff;
+    border-radius: 50%;
+    transition: transform 0.25s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: #3f3f46;
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(18px);
+    background-color: #e4e4e7;
+}
+
+/* ─── Layout ─────────────────────────────────────────── */
 .page-container {
     display: flex;
     flex-direction: column;
-    /* Ensures a vertical column layout */
 }
 
 .column-element {
     margin: 0.5rem 0;
-    /* Optional: Adds space between the divs */
 }
 
-/* Terminal styling */
+/* ─── Terminal ───────────────────────────────────────── */
 #terminal {
-    /* Keep width just below 100% to avoid horizontal scroll bar. */
     width: 98%;
     height: 400px;
     background: black;
@@ -44,18 +136,8 @@
 }
 
 @keyframes blink {
-
-    0%,
-    50% {
-        background: #ffffff;
-        color: #000000;
-    }
-
-    51%,
-    100% {
-        background: #000000;
-        color: #ffffff;
-    }
+    0%, 50% { background: #ffffff; color: #000000; }
+    51%, 100% { background: #000000; color: #ffffff; }
 }
 
 .input-line {
@@ -75,6 +157,7 @@
     width: 0;
 }
 
+/* ─── Metrics ────────────────────────────────────────── */
 .metrics {
     display: block;
     flex-wrap: wrap;
@@ -83,21 +166,23 @@
 }
 
 .metrics-card {
-    background: white;
+    background: var(--bg-card);
     margin: 1rem;
     padding: 1rem;
     border-radius: 6px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow);
     display: inline-block;
+    transition: background-color 0.25s ease, box-shadow 0.25s ease;
 }
 
 .metrics-title {
-    color: #64748b;
+    color: var(--text-secondary);
     font-size: 0.875rem;
     margin-bottom: 0.5rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    transition: color 0.25s ease;
 }
 
 .metrics-header {
@@ -105,12 +190,15 @@
     padding: 1rem;
     padding-bottom: 0;
     font-weight: bold;
+    color: var(--text-primary);
+    transition: color 0.25s ease;
 }
 
 .metrics-value {
     font-size: 1.5rem;
     font-weight: 600;
-    color: #0f172a;
+    color: var(--text-primary);
+    transition: color 0.25s ease;
 }
 
 .device-status {
@@ -124,13 +212,14 @@
 }
 
 .device-card {
-    background: white;
+    background: var(--bg-card);
     margin: 1rem;
     padding: 1rem;
     border-radius: 6px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow);
     display: inline-block;
     min-width: 200px;
+    transition: background-color 0.25s ease, box-shadow 0.25s ease;
 }
 
 .sparkline {
@@ -149,38 +238,15 @@
     opacity: 0.5;
 }
 
-.connection-status {
-    /* position: fixed;
-    top: 1rem;
-    right: 1rem; */
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
-    font-size: 0.875rem;
-    font-family: Arial;
+.metrics-card.editable {
+    cursor: pointer;
 }
 
-.connection-status.connected {
-    background: #dcfce7;
-    color: #166534;
+.metrics-card.editable:hover {
+    outline: 1px solid #ffcb00;
 }
 
-.connection-status.disconnected {
-    background: #fee2e2;
-    color: #991b1b;
-}
-
-.labels-count {
-    /* position: fixed;
-    top: 1rem;
-    left: 1rem; */
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
-    font-size: 0.875rem;
-    background: #f1f5f9;
-    color: #475569;
-}
-
-/* Upload button styling */
+/* ─── Tools / Upload ─────────────────────────────────── */
 .tools-container {
     max-width: 100%;
     margin: 20px auto;
@@ -231,9 +297,10 @@
     min-width: 200px;
     margin: auto 15%;
     height: 20px;
-    background-color: #f0f0f0;
+    background-color: var(--progress-bg);
     border-radius: 4px;
     overflow: hidden;
+    transition: background-color 0.25s ease;
 }
 
 .progress-fill {
@@ -247,7 +314,8 @@
     text-align: center;
     margin-top: 8px;
     font-size: 14px;
-    color: #666;
+    color: var(--text-secondary);
+    transition: color 0.25s ease;
 }
 
 .alert {
@@ -270,9 +338,7 @@
 }
 
 @keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
+    to { transform: rotate(360deg); }
 }
 
 .spinner {
@@ -285,6 +351,7 @@
     animation: spin 1s linear infinite;
 }
 
+/* ─── Firmware update modal ──────────────────────────── */
 #firmware-modal {
     position: fixed;
     inset: 0;
@@ -300,8 +367,9 @@
     border: 1px solid #ffcb00;
     border-radius: 8px;
     padding: 32px 40px;
-    min-width: 360px;
-    max-width: 480px;
+    min-width: 400px;
+    max-width: 600px;
+    width: 90vw;
     text-align: center;
     color: #fff;
     font-family: Arial, sans-serif;
@@ -315,13 +383,123 @@
 
 #firmware-modal-status {
     margin: 0 0 4px;
-    font-family: 'Courier New', monospace;
     font-size: 0.95em;
+    font-weight: 500;
+    color: #e0e0e0;
     min-height: 1.4em;
+}
+
+/* Full-width progress bar inside the modal */
+#firmware-modal-box .progress-container {
+    margin: 12px 0 8px;
+    display: flex;
+    width: 100%;
+}
+
+#firmware-modal-box .progress-bar {
+    flex: 1;
+    min-width: 0;
+    margin: 0 12px 0 0;
+    background-color: #2a2a2a;
+    height: 18px;
+}
+
+#firmware-modal-log {
+    background: #0d0d0d;
+    border: 1px solid #2a2a2a;
+    border-radius: 4px;
+    color: #666;
+    font-family: 'Courier New', monospace;
+    font-size: 0.72em;
+    height: 160px;
+    overflow-y: auto;
+    padding: 8px 10px;
+    text-align: left;
+    margin: 8px 0;
+    word-break: break-all;
 }
 
 .firmware-modal-note {
     margin-top: 14px;
     font-size: 0.8em;
     color: #aaa;
+}
+
+/* ─── Feed editor modal ──────────────────────────── */
+#feed-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#feed-modal-box {
+    background: #1a1a1a;
+    border: 1px solid #ffcb00;
+    border-radius: 8px;
+    padding: 28px 36px;
+    min-width: 360px;
+    max-width: 500px;
+    width: 90vw;
+    color: #fff;
+    font-family: Arial, sans-serif;
+}
+
+#feed-modal-box h2 {
+    color: #ffcb00;
+    margin: 0 0 12px;
+    font-size: 1.2em;
+}
+
+#feed-modal-status {
+    font-size: 0.9em;
+    color: #aaa;
+    min-height: 1.2em;
+    margin: 0 0 12px;
+}
+
+.feed-field {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 12px;
+}
+
+.feed-field label {
+    font-size: 0.8em;
+    color: #aaa;
+    margin-bottom: 4px;
+}
+
+.feed-field input[type="text"],
+.feed-field input[type="number"],
+.feed-field select {
+    background: #2a2a2a;
+    border: 1px solid #444;
+    color: #fff;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 0.95em;
+}
+
+.feed-field-inline {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+}
+
+.feed-field-inline label {
+    margin: 0;
+}
+
+.feed-modal-buttons {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.feed-cancel-btn {
+    background-color: #3f3f46;
 }

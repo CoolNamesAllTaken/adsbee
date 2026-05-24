@@ -2,6 +2,7 @@
 
 #include "adsbee.hh"
 #include "eeprom.hh"
+#include "spi_coprocessor.hh"
 
 UTEST_STATE();
 
@@ -10,6 +11,7 @@ static bool utest_main_called = false;
 CPP_AT_CALLBACK(ATTestCallback) {
     if (op == '=') {
         if (CPP_AT_HAS_ARG(0)) {
+#ifdef HARDWARE_UNIT_TESTS
             if (args[0].compare("DUMP_EEPROM") == 0) {
                 eeprom.Dump();
                 CPP_AT_SILENT_SUCCESS();
@@ -19,6 +21,14 @@ CPP_AT_CALLBACK(ATTestCallback) {
                 memset(buf, 0xFF, eeprom_size_bytes);
                 eeprom.WriteBuf(0x0, buf, eeprom_size_bytes);
                 CPP_AT_SUCCESS();
+            } else if (args[0].compare("SPI_HANDSHAKE_DEADLOCK") == 0) {
+                CPP_AT_PRINTF("Simulating SPI handshake deadlock. Expect kErrorHandshakeHigh then recovery...\r\n");
+                if (esp32.TestSPIHandshakeDeadlock()) {
+                    CPP_AT_SUCCESS();
+                } else {
+                    CPP_AT_ERROR("SPI handshake deadlock recovery failed.");
+                }
+#endif
             }
         }
     }
