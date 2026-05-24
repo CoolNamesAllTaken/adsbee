@@ -70,6 +70,20 @@
         </div>
     </div>
 
+    <div id="firmware-modal" style="display:none;">
+        <div id="firmware-modal-box">
+            <h2>Firmware Update In Progress</h2>
+            <p id="firmware-modal-status">Erasing flash...</p>
+            <div class="progress-container" style="display:flex; margin: 16px 0;">
+                <div class="progress-bar">
+                    <div id="firmware-modal-fill" class="progress-fill" style="width:0%"></div>
+                </div>
+                <div id="firmware-modal-text" class="progress-text">0%</div>
+            </div>
+            <p class="firmware-modal-note">Interface is paused during the update. Please do not close this page.</p>
+        </div>
+    </div>
+
     <script>
         const HOST_URI = `${window.location.hostname}`;
         // const HOST_URI = "testbee.local";
@@ -94,6 +108,18 @@
         let historyIndex = -1;
         let currentCommand = '';
         let cursorPosition = 0;
+
+        const MAX_CONSOLE_LINES = 500;
+
+        function trimConsole() {
+            const content = terminalContent.innerHTML;
+            const matches = [...content.matchAll(/<br>/g)];
+            if (matches.length > MAX_CONSOLE_LINES) {
+                const excess = matches.length - MAX_CONSOLE_LINES;
+                const cutPos = matches[excess].index + 4; // skip past the '<br>'
+                terminalContent.innerHTML = content.substring(cutPos);
+            }
+        }
 
         class ConsoleWebSocket {
             constructor(url) {
@@ -236,6 +262,7 @@
             processedText = result;
 
             terminalContent.innerHTML += processedText;
+            trimConsole();
             terminal.scrollTop = terminal.scrollHeight;
         }
 
@@ -1025,18 +1052,41 @@
                 }
             }
 
+            showModal() {
+                document.getElementById('firmware-modal').style.display = 'flex';
+            }
+
+            hideModal() {
+                document.getElementById('firmware-modal').style.display = 'none';
+            }
+
+            setModalStatus(text) {
+                document.getElementById('firmware-modal-status').textContent = text;
+            }
+
             updateProgress(percent) {
                 this.progressFill.style.width = `${percent}%`;
                 this.progressText.textContent = `${percent}%`;
+                document.getElementById('firmware-modal-fill').style.width = `${percent}%`;
+                document.getElementById('firmware-modal-text').textContent = `${percent}%`;
+                if (percent === 0) {
+                    this.setModalStatus('Erasing flash...');
+                } else if (percent < 100) {
+                    this.setModalStatus('Writing firmware...');
+                } else {
+                    this.setModalStatus('Verifying & rebooting...');
+                }
             }
 
             showSuccess() {
                 this.successAlert.style.display = 'block';
                 this.errorAlert.style.display = 'none';
                 this.uploadButton.innerHTML = 'Upload Complete';
+                this.setModalStatus('Upload complete! Device is rebooting.');
                 setTimeout(() => {
                     this.successAlert.style.display = 'none';
                     this.uploadButton.innerHTML = 'Upload Firmware';
+                    this.hideModal();
                 }, 5000);
             }
 
@@ -1045,9 +1095,11 @@
                 this.errorAlert.style.display = 'block';
                 this.successAlert.style.display = 'none';
                 this.uploadButton.innerHTML = 'Upload Failed';
+                this.setModalStatus(`Upload failed: ${message}`);
                 setTimeout(() => {
                     this.errorAlert.style.display = 'none';
                     this.uploadButton.innerHTML = 'Upload Firmware';
+                    this.hideModal();
                 }, 5000);
             }
 
@@ -1057,6 +1109,7 @@
                 try {
                     this.setUploadingState(true);
                     this.updateProgress(0);
+                    this.showModal();
 
                     adsbee = new ADSBeeAT(this.adsbeeUrl);
                     await adsbee.connect();
