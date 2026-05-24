@@ -265,7 +265,7 @@ class ModeSAircraft : public Aircraft {
      * @param[in] bit NIC supplement bit to check.
      * @retval True if bit has been written to, false otherwise.
      */
-    inline bool NICBitIsValid(ADSBTypes::NICBit bit) { return nic_bits & (0b1 << bit); }
+    inline bool NICBitIsValid(ADSBTypes::NICBit bit) { return nic_bits_valid & (0b1 << bit); }
 
     /**
      * Resets just the flag bits that show that something updated within the last reporting interval.
