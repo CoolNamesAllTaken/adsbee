@@ -337,7 +337,11 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
             break;
         }
         case kAddrConsole: {
-            xSemaphoreTake(object_dictionary.network_console_rx_queue_mutex, portMAX_DELAY);
+            if (xSemaphoreTake(object_dictionary.network_console_rx_queue_mutex, pdMS_TO_TICKS(kNetworkConsoleMutexTimeoutMs)) != pdTRUE) {
+                CONSOLE_ERROR("ObjectDictionary::GetBytes",
+                              "Timed out waiting for network console RX queue mutex; skipping console read.");
+                return false;
+            }
             if (network_console_rx_queue.Length() < buf_len) {
                 CONSOLE_ERROR("ObjectDictionary::GetBytes",
                               "Buffer length %d of network console message to read is larger than RX queue length %d.",
@@ -442,9 +446,11 @@ bool ObjectDictionary::RequestSCCommandBlocking(const SCCommandRequestWithCallba
 void ObjectDictionary::UpdateDeviceStatus() {
     uint16_t num_log_messages = log_message_queue.Length();
 #ifdef ON_ESP32
-    xSemaphoreTake(network_console_rx_queue_mutex, portMAX_DELAY);
-    uint16_t num_network_console_rx_chars = network_console_rx_queue.Length();
-    xSemaphoreGive(network_console_rx_queue_mutex);
+    uint16_t num_network_console_rx_chars = 0;
+    if (xSemaphoreTake(network_console_rx_queue_mutex, pdMS_TO_TICKS(kNetworkConsoleMutexTimeoutMs)) == pdTRUE) {
+        num_network_console_rx_chars = network_console_rx_queue.Length();
+        xSemaphoreGive(network_console_rx_queue_mutex);
+    }
 
     // We only read fast stuff here. Slow things like core usage calculations and temperature reads are done in
     // device_status_update_task.

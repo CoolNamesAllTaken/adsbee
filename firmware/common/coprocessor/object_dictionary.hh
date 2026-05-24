@@ -40,6 +40,7 @@ class ObjectDictionary {
 #ifdef ON_COPRO_SLAVE
     static constexpr uint16_t kSCCommandRequestQueueDepth = 10;
     static constexpr uint16_t kNetworkConsoleRxQueueDepth = kNetworkConsoleMessageMaxLenBytes * 4;
+    static constexpr uint16_t kNetworkConsoleMutexTimeoutMs = 5;  // Max wait for network_console_rx_queue_mutex in SPI task context.
 #endif
 #ifdef ON_TI
     static constexpr uint16_t kDecodedUATADSBPacketQueueDepth = 10;

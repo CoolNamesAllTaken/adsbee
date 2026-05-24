@@ -172,20 +172,17 @@ bool SPICoprocessor::Update() {
                 config_.interface.SPIEndTransaction();
                 return false;
             }
-            // ACK before SetBytes: SetBytes may block on a FreeRTOS queue mutex held by another task, and the master's
-            // SPIWaitForHandshake has only a 50ms timeout. Blocking here would leave the handshake pin LOW too long,
-            // causing the master to give up and re-send — eventually deadlocking the protocol permanently (ESP32 stuck
-            // in spi_slave_transmit with handshake HIGH, master refusing to clock because it sees unexpected handshake).
-            // CRC is already validated above, so ACKing before processing is safe.
-            if (cmd == ObjectDictionary::SCCommand::kCmdWriteToSlaveRequireAck) {
-                SPISendAck(true);
-            }
             ret =
                 object_dictionary.SetBytes(write_packet.addr, write_packet.data, write_packet.len, write_packet.offset);
+            bool ack = true;
             if (!ret) {
                 CONSOLE_ERROR("SPICoprocessor::Update",
                               "Failed to write data for %d Byte write to slave at address 0x%x with offset %d Bytes.",
                               write_packet.len, write_packet.addr, write_packet.offset);
+                ack = false;
+            }
+            if (cmd == ObjectDictionary::SCCommand::kCmdWriteToSlaveRequireAck) {
+                SPISendAck(ack);
             }
             break;
         }
