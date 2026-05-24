@@ -37,6 +37,8 @@ extern const uint8_t index_html_start[] asm("_binary_index_html_start");
 extern const uint8_t index_html_end[] asm("_binary_index_html_end");
 extern const uint8_t style_css_start[] asm("_binary_style_css_start");
 extern const uint8_t style_css_end[] asm("_binary_style_css_end");
+extern const uint8_t adsbee_js_start[] asm("_binary_adsbee_js_start");
+extern const uint8_t adsbee_js_end[] asm("_binary_adsbee_js_end");
 extern const uint8_t favicon_png_start[] asm("_binary_favicon_png_start");
 extern const uint8_t favicon_png_end[] asm("_binary_favicon_png_end");
 
@@ -482,6 +484,12 @@ static esp_err_t css_handler(httpd_req_t* req) {
     return ESP_OK;
 }
 
+static esp_err_t adsbee_js_handler(httpd_req_t* req) {
+    httpd_resp_set_type(req, "application/javascript");
+    httpd_resp_send(req, (const char*)adsbee_js_start, adsbee_js_end - adsbee_js_start - 1);
+    return ESP_OK;
+}
+
 esp_err_t favicon_handler(httpd_req_t* req) {
     httpd_resp_set_type(req, "image/png");
     httpd_resp_set_hdr(req, "Cache-Control", "max-age=2592000, public");  // Cache for 30 days
@@ -657,6 +665,16 @@ bool ADSBeeServer::TCPServerInit() {
                        .handle_ws_control_frames = false,
                        .supported_subprotocol = nullptr};
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &css));
+
+    // JavaScript library URI handler
+    httpd_uri_t adsbee_js = {.uri = "/adsbee.js",
+                             .method = HTTP_GET,
+                             .handler = adsbee_js_handler,
+                             .user_ctx = NULL,
+                             .is_websocket = false,
+                             .handle_ws_control_frames = false,
+                             .supported_subprotocol = nullptr};
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &adsbee_js));
 
     // Favicon URI handler
     httpd_uri_t favicon = {.uri = "/favicon.png",

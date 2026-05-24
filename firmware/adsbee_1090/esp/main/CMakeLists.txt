@@ -51,6 +51,7 @@ idf_component_register(
     EMBED_TXTFILES
         "server/web/index.html"
         "server/web/style.css"
+        "server/web/adsbee.js"
         "server/web/favicon.png"
 )
 
