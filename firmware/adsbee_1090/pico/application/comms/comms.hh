@@ -25,7 +25,7 @@ class CommsManager {
         sizeof(RawUATUplinkPacket);  // 7 packets = 3976 B payload
 
     static constexpr uint16_t kATCommandBufMaxLen = 1200;
-    static constexpr uint16_t kNetworkConsoleBufMaxLen = 4096;
+    static constexpr uint16_t kNetworkConsoleBufMaxLen = 4000;  // Must match ObjectDictionary::kNetworkConsoleMessageMaxLenBytes.
     static constexpr uint16_t kNetworkConsoleReportingIntervalOverrideNumChars =
         kNetworkConsoleBufMaxLen * 3 /
         4;  // Drain the network console queue immediately if it has more than this many characters.
