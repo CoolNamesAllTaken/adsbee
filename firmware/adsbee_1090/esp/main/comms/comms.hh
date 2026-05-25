@@ -358,6 +358,10 @@ class CommsManager {
     bool mavlink1_overrun_reported_ = false;
     bool mavlink2_overrun_reported_ = false;
     bool gdl90_overrun_reported_ = false;
+
+    uint16_t aircraftjson_report_uid_index_ = 0;
+    bool aircraftjson_round_active_ = false;
+    bool aircraftjson_overrun_reported_ = false;
 };
 
 extern CommsManager comms_manager;

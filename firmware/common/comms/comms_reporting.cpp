@@ -3,6 +3,7 @@
 #include "settings.hh"
 
 // Reporting utils.
+#include "aircraftjson_utils.hh"
 #include "beast_utils.hh"
 #include "csbee_utils.hh"
 #include "gdl90_utils.hh"
@@ -57,9 +58,11 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
     ReportSink mavlink1_sinks[SettingsManager::kNumSerialInterfaces];
     ReportSink mavlink2_sinks[SettingsManager::kNumSerialInterfaces];
     ReportSink gdl90_sinks[SettingsManager::kNumSerialInterfaces];
+    ReportSink aircraftjson_sinks[SettingsManager::kNumSerialInterfaces];
 
     uint16_t num_raw_sinks = 0, num_beast_sinks = 0, num_beast_no_uat_sinks = 0, num_beast_no_uat_uplink_sinks = 0,
-             num_csbee_sinks = 0, num_mavlink1_sinks = 0, num_mavlink2_sinks = 0, num_gdl90_sinks = 0;
+             num_csbee_sinks = 0, num_mavlink1_sinks = 0, num_mavlink2_sinks = 0, num_gdl90_sinks = 0,
+             num_aircraftjson_sinks = 0;
 
     for (uint16_t i = 0; i < num_sinks; i++) {
         switch (sink_protocols[i]) {
@@ -88,6 +91,9 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
                 break;
             case SettingsManager::kGDL90:
                 gdl90_sinks[num_gdl90_sinks++] = sinks[i];
+                break;
+            case SettingsManager::kAircraftJSON:
+                aircraftjson_sinks[num_aircraftjson_sinks++] = sinks[i];
                 break;
             default:
                 CONSOLE_ERROR("CommsManager::UpdateReporting",
@@ -138,11 +144,12 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
     if (mavlink1_round_active_ && num_mavlink1_sinks == 0) mavlink1_round_active_ = false;
     if (mavlink2_round_active_ && num_mavlink2_sinks == 0) mavlink2_round_active_ = false;
     if (gdl90_round_active_ && num_gdl90_sinks == 0) gdl90_round_active_ = false;
+    if (aircraftjson_round_active_ && num_aircraftjson_sinks == 0) aircraftjson_round_active_ = false;
 
-    bool all_locally_decoded_done =
-        !csbee_round_active_ && !mavlink1_round_active_ && !mavlink2_round_active_ && !gdl90_round_active_;
-    bool any_locally_decoded_active =
-        (num_csbee_sinks > 0 || num_mavlink1_sinks > 0 || num_mavlink2_sinks > 0 || num_gdl90_sinks > 0);
+    bool all_locally_decoded_done = !csbee_round_active_ && !mavlink1_round_active_ && !mavlink2_round_active_ &&
+                                    !gdl90_round_active_ && !aircraftjson_round_active_;
+    bool any_locally_decoded_active = (num_csbee_sinks > 0 || num_mavlink1_sinks > 0 || num_mavlink2_sinks > 0 ||
+                                       num_gdl90_sinks > 0 || num_aircraftjson_sinks > 0);
 
     if (any_locally_decoded_active && all_locally_decoded_done &&
         timestamp_ms - last_locally_decoded_report_timestamp_ms_ >= kCSBeeReportingIntervalMs) {
@@ -151,6 +158,7 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
         mavlink1_overrun_reported_ = false;
         mavlink2_overrun_reported_ = false;
         gdl90_overrun_reported_ = false;
+        aircraftjson_overrun_reported_ = false;
 
         // Snapshot current aircraft UIDs. All protocols will walk this same array.
         report_uids_count_ = 0;
@@ -163,12 +171,14 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
         mavlink1_report_uid_index_ = 0;
         mavlink2_report_uid_index_ = 0;
         gdl90_report_uid_index_ = 0;
+        aircraftjson_report_uid_index_ = 0;
 
         // Activate rounds for protocols that currently have sinks.
         csbee_round_active_ = (num_csbee_sinks > 0);
         mavlink1_round_active_ = (num_mavlink1_sinks > 0);
         mavlink2_round_active_ = (num_mavlink2_sinks > 0);
         gdl90_round_active_ = (num_gdl90_sinks > 0);
+        aircraftjson_round_active_ = (num_aircraftjson_sinks > 0);
     }
 
     // Drive each in-progress reporting round. Log overrun once per round if the interval lapses.
@@ -214,6 +224,18 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
         }
         if (!ReportGDL90(gdl90_sinks, num_gdl90_sinks)) {
             CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportGDL90.");
+            ret = false;
+        }
+    }
+    if (aircraftjson_round_active_) {
+        if (!aircraftjson_overrun_reported_ && elapsed_ms >= kAircraftJSONReportingIntervalMs) {
+            CONSOLE_ERROR("CommsManager::UpdateReporting",
+                          "AircraftJSON reporting overran the %lums reporting interval.",
+                          kAircraftJSONReportingIntervalMs);
+            aircraftjson_overrun_reported_ = true;
+        }
+        if (!ReportAircraftJSON(aircraftjson_sinks, num_aircraftjson_sinks)) {
+            CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportAircraftJSON.");
             ret = false;
         }
     }
@@ -565,6 +587,51 @@ bool CommsManager::ReportGDL90(ReportSink* sinks, uint16_t num_sinks) {
     }
 
     gdl90_round_active_ = false;
+    return ret;
+}
+
+bool CommsManager::ReportAircraftJSON(ReportSink* sinks, uint16_t num_sinks) {
+    bool ret = true;
+
+    uint32_t chunk_start_ms = get_time_since_boot_ms();
+    while (aircraftjson_report_uid_index_ < report_uids_count_) {
+        if (get_time_since_boot_ms() - chunk_start_ms >= kAircraftJSONChunkBudgetMs) {
+            return ret;  // Budget exhausted; resume on next UpdateReporting tick.
+        }
+
+        uint32_t uid = report_uids_[aircraftjson_report_uid_index_++];
+
+        auto itr = aircraft_dictionary.dict.find(uid);
+        if (itr == aircraft_dictionary.dict.end()) {
+            continue;  // Aircraft pruned mid-round; skip without losing remaining entries.
+        }
+
+        char message[kAircraftJSONMessageStrMaxLen];
+        int message_len_bytes = -1;
+
+        if (ModeSAircraft* mode_s_aircraft = get_if<ModeSAircraft>(&(itr->second)); mode_s_aircraft) {
+            message_len_bytes = WriteAircraftJSONModeSAircraftStr(message, *mode_s_aircraft);
+        } else if (UATAircraft* uat_aircraft = get_if<UATAircraft>(&(itr->second)); uat_aircraft) {
+            message_len_bytes = WriteAircraftJSONUATAircraftStr(message, *uat_aircraft);
+        } else {
+            CONSOLE_WARNING("CommsManager::ReportAircraftJSON", "Unknown aircraft type in dictionary for UID 0x%lx.",
+                            uid);
+            continue;
+        }
+
+        if (message_len_bytes < 0) {
+            CONSOLE_ERROR("CommsManager::ReportAircraftJSON",
+                          "Error in WriteAircraftJSON*Str for UID 0x%lx, error code %d.", uid, message_len_bytes);
+            ret = false;
+            continue;
+        }
+
+        for (uint16_t i = 0; i < num_sinks; i++) {
+            ret &= SendBuf(sinks[i], message, message_len_bytes);
+        }
+    }
+
+    aircraftjson_round_active_ = false;
     return ret;
 }
 

@@ -9,9 +9,11 @@ static constexpr uint32_t kRawReportingMaxIntervalMs =
 static constexpr uint32_t kMAVLINKReportingIntervalMs = 1000;
 static constexpr uint32_t kCSBeeReportingIntervalMs = 1000;
 static constexpr uint32_t kGDL90ReportingIntervalMs = 1000;
-static constexpr uint32_t kCSBeeChunkBudgetMs = 50;    // Max wall time per ReportCSBee invocation.
-static constexpr uint32_t kMAVLINKChunkBudgetMs = 50;  // Max wall time per ReportMAVLINK invocation.
-static constexpr uint32_t kGDL90ChunkBudgetMs = 50;    // Max wall time per ReportGDL90 invocation.
+static constexpr uint32_t kAircraftJSONReportingIntervalMs = 1000;
+static constexpr uint32_t kCSBeeChunkBudgetMs = 50;        // Max wall time per ReportCSBee invocation.
+static constexpr uint32_t kMAVLINKChunkBudgetMs = 50;      // Max wall time per ReportMAVLINK invocation.
+static constexpr uint32_t kGDL90ChunkBudgetMs = 50;        // Max wall time per ReportGDL90 invocation.
+static constexpr uint32_t kAircraftJSONChunkBudgetMs = 50;  // Max wall time per ReportAircraftJSON invocation.
 // Shared UID snapshot capacity — one array serves all periodic reporting protocols.
 static constexpr uint16_t kMaxReportUIDs = kAircraftDictionaryMaxNumAircraft;
 
@@ -91,3 +93,12 @@ bool ReportGDL90(ReportSink* sinks, uint16_t num_sinks);
  * @retval True if successful, false if something broke.
  */
 bool ReportGDL90Uplink(ReportSink* sinks, uint16_t num_sinks, const CompositeArray::RawPackets& packets);
+
+/**
+ * Reports the contents of the aircraft dictionary as newline-delimited readsb-compatible JSON objects,
+ * one object per aircraft.
+ * @param[in] sinks Array of ReportSinks to broadcast JSON messages on.
+ * @param[in] num_sinks Number of ReportSinks in the sinks array.
+ * @retval True if successful, false if something broke.
+ */
+bool ReportAircraftJSON(ReportSink* sinks, uint16_t num_sinks);
