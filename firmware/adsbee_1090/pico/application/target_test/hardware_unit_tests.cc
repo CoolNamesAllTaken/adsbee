@@ -28,6 +28,16 @@ CPP_AT_CALLBACK(ATTestCallback) {
                 } else {
                     CPP_AT_ERROR("SPI handshake deadlock recovery failed.");
                 }
+            } else if (args[0].compare("SPI_PERSISTENT_DESYNC") == 0) {
+                CPP_AT_PRINTF(
+                    "Running persistent SPI desync test. Stresses rapid recovery + UpdateNetworkConsole "
+                    "interaction. If deadlock is reproduced the system will stop responding — power cycle to "
+                    "recover.\r\n");
+                if (esp32.TestSPIPersistentDesync()) {
+                    CPP_AT_SUCCESS();
+                } else {
+                    CPP_AT_ERROR("SPI persistent desync test detected a deadlock.");
+                }
 #endif
             }
         }

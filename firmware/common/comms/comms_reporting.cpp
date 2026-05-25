@@ -19,6 +19,30 @@ AircraftDictionary& aircraft_dictionary = adsbee.aircraft_dictionary;
 
 GDL90Reporter gdl90;
 
+// Set to 0 to revert to per-packet sends for debugging.
+#ifndef COMMS_REPORTING_BATCH_SENDS
+#define COMMS_REPORTING_BATCH_SENDS 1
+#endif
+
+// Max packets of each type that can fit in one composite array, used to size batch buffers.
+static constexpr size_t kMaxModeSPerCompositeArray =
+    (CompositeArray::RawPackets::kMaxLenBytes - sizeof(CompositeArray::RawPackets::Header)) / sizeof(RawModeSPacket);
+static constexpr size_t kMaxUATADSBPerCompositeArray =
+    (CompositeArray::RawPackets::kMaxLenBytes - sizeof(CompositeArray::RawPackets::Header)) / sizeof(RawUATADSBPacket);
+static constexpr size_t kMaxUATUplinkPerCompositeArray =
+    (CompositeArray::RawPackets::kMaxLenBytes - sizeof(CompositeArray::RawPackets::Header)) /
+    sizeof(RawUATUplinkPacket);
+
+// Conservative upper bounds for batch buffer sizes. Sums the per-type maxima — no single composite
+// array can hit all three simultaneously (they share the 2kB budget), but the sum is provably safe.
+// Beast: kModeSBeastFrameMaxLenBytes is derived from kExtendedSquitterPacketLenBytes (14 bytes),
+//        which is already the worst-case payload; short squitter (7 bytes) produces smaller frames.
+static constexpr size_t kBeastBatchBufMaxBytes =
+    kMaxModeSPerCompositeArray * BeastReporter::kModeSBeastFrameMaxLenBytes;
+static constexpr size_t kRawBatchBufMaxBytes = kMaxModeSPerCompositeArray * kRawModeSFrameMaxNumChars +
+                                               kMaxUATADSBPerCompositeArray * kRawUATADSBFrameMaxNumChars +
+                                               kMaxUATUplinkPerCompositeArray * kRawUATUplinkFrameMaxNumChars;
+
 bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManager::ReportingProtocol* sink_protocols,
                                    uint16_t num_sinks, const CompositeArray::RawPackets* packets_to_report) {
     bool ret = true;
@@ -204,6 +228,30 @@ bool CommsManager::ReportRaw(ReportSink* sinks, uint16_t num_sinks, const Compos
         return false;
     }
 
+#if COMMS_REPORTING_BATCH_SENDS
+    // Batch all frames into one buffer, then do a single send per sink to minimize lwIP IPC round-trips.
+    static char raw_batch_buf[kRawBatchBufMaxBytes];
+    uint16_t batch_len = 0;
+
+    for (uint16_t i = 0; i < packets.header->num_mode_s_packets; i++) {
+        batch_len += BuildRawModeSFrame(packets.mode_s_packets[i], raw_batch_buf + batch_len);
+    }
+    for (uint16_t i = 0; i < packets.header->num_uat_adsb_packets; i++) {
+        batch_len += BuildRawUATADSBFrame(packets.uat_adsb_packets[i], raw_batch_buf + batch_len);
+    }
+    for (uint16_t i = 0; i < packets.header->num_uat_uplink_packets; i++) {
+        batch_len += BuildRawUATUplinkFrame(packets.uat_uplink_packets[i], raw_batch_buf + batch_len);
+    }
+
+    uint16_t total_packets = packets.header->num_mode_s_packets + packets.header->num_uat_adsb_packets +
+                             packets.header->num_uat_uplink_packets;
+    bool ret = true;
+    for (uint16_t j = 0; j < num_sinks; j++) {
+        if (batch_len > 0) {
+            ret &= SendBuf(sinks[j], raw_batch_buf, batch_len, total_packets);
+        }
+    }
+#else
     bool ret = true;
     for (uint16_t i = 0; i < packets.header->num_mode_s_packets; i++) {
         char raw_frame_buf[kRawModeSFrameMaxNumChars];
@@ -226,6 +274,7 @@ bool CommsManager::ReportRaw(ReportSink* sinks, uint16_t num_sinks, const Compos
             ret &= SendBuf(sinks[j], (char*)raw_frame_buf, num_bytes_in_frame);
         }
     }
+#endif
     return ret;
 }
 
@@ -237,11 +286,42 @@ bool CommsManager::ReportBeast(ReportSink* sinks, uint16_t num_sinks, const Comp
         return false;
     }
 
+#if COMMS_REPORTING_BATCH_SENDS
+    // Batch all frames into one buffer, then do a single send per sink to minimize lwIP IPC round-trips.
+    static uint8_t beast_batch_buf[kBeastBatchBufMaxBytes];
+    uint16_t batch_len = 0;
+
+    for (uint16_t i = 0; i < packets.header->num_mode_s_packets; i++) {
+        batch_len += BeastReporter::BuildModeSBeastFrame(beast_batch_buf + batch_len, packets.mode_s_packets[i]);
+    }
+    if (protocol != SettingsManager::kBeastNoUAT) {
+        for (uint16_t i = 0; i < packets.header->num_uat_adsb_packets; i++) {
+            batch_len +=
+                BeastReporter::BuildUATADSBBeastFrame(beast_batch_buf + batch_len, packets.uat_adsb_packets[i]);
+        }
+    }
+    if (protocol != SettingsManager::kBeastNoUATUplink && protocol != SettingsManager::kBeastNoUAT) {
+        for (uint16_t i = 0; i < packets.header->num_uat_uplink_packets; i++) {
+            batch_len +=
+                BeastReporter::BuildUATUplinkBeastFrame(beast_batch_buf + batch_len, packets.uat_uplink_packets[i]);
+        }
+    }
+
+    uint16_t total_packets = packets.header->num_mode_s_packets;
+    if (protocol != SettingsManager::kBeastNoUAT) total_packets += packets.header->num_uat_adsb_packets;
+    if (protocol != SettingsManager::kBeastNoUATUplink && protocol != SettingsManager::kBeastNoUAT)
+        total_packets += packets.header->num_uat_uplink_packets;
+    bool ret = true;
+    for (uint16_t j = 0; j < num_sinks; j++) {
+        if (batch_len > 0) {
+            ret &= SendBuf(sinks[j], (char*)beast_batch_buf, batch_len, total_packets);
+        }
+    }
+#else
     bool ret = true;
     for (uint16_t i = 0; i < packets.header->num_mode_s_packets; i++) {
         uint8_t beast_frame_buf[BeastReporter::kModeSBeastFrameMaxLenBytes];
         uint16_t num_bytes_in_frame = BeastReporter::BuildModeSBeastFrame(beast_frame_buf, packets.mode_s_packets[i]);
-
         for (uint16_t j = 0; j < num_sinks; j++) {
             ret &= SendBuf(sinks[j], (char*)beast_frame_buf, num_bytes_in_frame);
         }
@@ -251,7 +331,6 @@ bool CommsManager::ReportBeast(ReportSink* sinks, uint16_t num_sinks, const Comp
             uint8_t beast_frame_buf[BeastReporter::kUATADSBBeastFrameMaxLenBytes];
             uint16_t num_bytes_in_frame =
                 BeastReporter::BuildUATADSBBeastFrame(beast_frame_buf, packets.uat_adsb_packets[i]);
-
             for (uint16_t j = 0; j < num_sinks; j++) {
                 ret &= SendBuf(sinks[j], (char*)beast_frame_buf, num_bytes_in_frame);
             }
@@ -267,7 +346,7 @@ bool CommsManager::ReportBeast(ReportSink* sinks, uint16_t num_sinks, const Comp
             }
         }
     }
-
+#endif
     return ret;
 }
 

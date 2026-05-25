@@ -128,7 +128,7 @@ class CommsManager {
 
 #include "comms_reporting.hh"
 
-    inline bool SendBuf(ReportSink sink, const char* buf, uint16_t buf_len) {
+    inline bool SendBuf(ReportSink sink, const char* buf, uint16_t buf_len, uint16_t num_msgs = 1) {
         for (uint16_t i = 0; i < buf_len; i++) {
             if (!iface_putc(static_cast<SettingsManager::SerialInterface>(sink), buf[i])) {
                 return false;

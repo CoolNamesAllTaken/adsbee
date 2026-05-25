@@ -20,7 +20,7 @@ static const uint32_t kHeapBackPressureThresholdBytes = 20480;
 // DMA-capable memory threshold. WiFi TX buffers require internal DMA memory which is more constrained.
 static const uint32_t kDMABackPressureThresholdBytes = 16384;
 static const uint32_t kHeapBackPressureCheckIntervalMs = 50;
-static const uint32_t kHeapBackPressureTimeoutMs = 5000;
+static const uint32_t kHeapBackPressureTimeoutMs = 500;
 
 // #define ENABLE_TCP_SOCKET_RATE_LIMITING
 #ifdef ENABLE_TCP_SOCKET_RATE_LIMITING
@@ -105,7 +105,7 @@ esp_err_t safe_send(int sock, const void* data, size_t total_len) {
         FD_SET(sock, &write_set);
 
         // 2. Set a timeout for select()
-        struct timeval timeout = {.tv_sec = 5,  // 5 second timeout
+        struct timeval timeout = {.tv_sec = 1,  // 1 second timeout
                                   .tv_usec = 0};
 
         // Wait until the socket is ready to accept data
@@ -417,7 +417,7 @@ bool CommsManager::ConnectFeedSocket(uint16_t feed_index) {
     return true;
 }
 
-bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len) {
+bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len, uint16_t num_msgs) {
     if (iface >= SettingsManager::Settings::kMaxNumFeeds) {
         CONSOLE_ERROR("CommsManager::SendBuf", "Invalid feed index %d.", iface);
         return false;
@@ -454,7 +454,7 @@ bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len) {
         return false;
     } else {
         // CONSOLE_INFO("CommsManager::IPWANTask", "Message sent to feed %d.", i);
-        feed_mps_counter_[iface]++;  // Log that a message was sent in statistics.
+        feed_mps_counter_[iface] += num_msgs;  // Log that a message was sent in statistics.
     }
     return true;
 }

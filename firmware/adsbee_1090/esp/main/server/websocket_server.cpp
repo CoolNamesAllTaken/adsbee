@@ -55,7 +55,8 @@ bool WebSocketServer::Update() {
     for (uint16_t i = 0; i < config_.num_clients_allowed; i++) {
         uint32_t last_ts = clients_[i].last_message_timestamp_ms;
         uint32_t time_since_last_message_ms = (last_ts <= timestamp_ms) ? (timestamp_ms - last_ts) : 0;
-        if (clients_[i].in_use && time_since_last_message_ms > config_.inactivity_timeout_ms) {
+        if (config_.inactivity_timeout_ms > 0 && clients_[i].in_use &&
+            time_since_last_message_ms > config_.inactivity_timeout_ms) {
             // Client is in use and has timed out.
             int client_fd = clients_[i].client_fd;
             CONSOLE_WARNING("WebSocketServer::Update",

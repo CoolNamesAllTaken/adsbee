@@ -133,6 +133,7 @@ class SPICoprocessor : public SPICoprocessorInterface {
 
 #ifdef HARDWARE_UNIT_TESTS
     bool TestSPIHandshakeDeadlock();
+    bool TestSPIPersistentDesync();
 #endif
 #endif  // ON_COPRO_MASTER (public methods)
     /**

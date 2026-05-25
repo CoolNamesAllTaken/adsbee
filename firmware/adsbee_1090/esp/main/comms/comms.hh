@@ -254,7 +254,7 @@ class CommsManager {
      * @param[in] buf_len Number of bytes to send.
      * @retval True if bytes were sent successfully, false otherwise.
      */
-    bool SendBuf(uint16_t iface, const char* buf, uint16_t buf_len);
+    bool SendBuf(uint16_t iface, const char* buf, uint16_t buf_len, uint16_t num_msgs = 1);
 
    private:
     bool ConnectFeedSocket(uint16_t feed_index);

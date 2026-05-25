@@ -21,7 +21,7 @@ const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
 const uint8_t ObjectDictionary::kFirmwareVersionMinor = 9;
 const uint8_t ObjectDictionary::kFirmwareVersionPatch = 0;
 // NOTE: Indicate a final release with RC = 0.
-const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 18;
+const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 19;
 
 const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24) | (kFirmwareVersionMinor << 16) |
                                                     (kFirmwareVersionPatch << 8) | kFirmwareVersionReleaseCandidate;
@@ -337,7 +337,8 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
             break;
         }
         case kAddrConsole: {
-            if (xSemaphoreTake(object_dictionary.network_console_rx_queue_mutex, pdMS_TO_TICKS(kNetworkConsoleMutexTimeoutMs)) != pdTRUE) {
+            if (xSemaphoreTake(object_dictionary.network_console_rx_queue_mutex,
+                               pdMS_TO_TICKS(kNetworkConsoleMutexTimeoutMs)) != pdTRUE) {
                 CONSOLE_ERROR("ObjectDictionary::GetBytes",
                               "Timed out waiting for network console RX queue mutex; skipping console read.");
                 return false;
