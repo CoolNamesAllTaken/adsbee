@@ -508,8 +508,7 @@ static esp_err_t feed_api_get_handler(httpd_req_t* req) {
         return ESP_OK;
     }
     char json[512];
-    snprintf(json, sizeof(json),
-             "{\"index\":%d,\"uri\":\"%s\",\"port\":%d,\"active\":%d,\"protocol\":\"%s\"}", index,
+    snprintf(json, sizeof(json), "{\"index\":%d,\"uri\":\"%s\",\"port\":%d,\"active\":%d,\"protocol\":\"%s\"}", index,
              settings_manager.settings.feed_uris[index], settings_manager.settings.feed_ports[index],
              (int)settings_manager.settings.feed_is_active[index],
              SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[index]]);
@@ -664,7 +663,7 @@ bool ADSBeeServer::TCPServerInit() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = kHTTPServerStackSizeBytes;
     // config.task_caps = MALLOC_CAP_IRAM_8BIT;
-    config.max_open_sockets = 12;  // Default 7 is too small for 2 WS + parallel HTTP during page load.
+    config.max_open_sockets = 16;  // Must not exceed CONFIG_LWIP_MAX_ACTIVE_TCP in sdkconfig.
     config.close_fn = ws_close_fd;
     config.lru_purge_enable =
         true;  // Allow purging of the least recently used connections when max clients is reached.
@@ -734,7 +733,7 @@ bool ADSBeeServer::TCPServerInit() {
                                        .server = server,
                                        .uri = "/console",
                                        .num_clients_allowed = 4,
-                                       .send_as_binary = true,  // Network console messages can contain binary data.
+                                       .send_as_binary = true,      // Network console messages can contain binary data.
                                        .inactivity_timeout_ms = 0,  // Disabled; TCP keepalives handle dead connections.
                                        .post_connect_callback = NetworkConsolePostConnectCallback,
                                        .message_received_callback = NetworkConsoleMessageReceivedCallback});

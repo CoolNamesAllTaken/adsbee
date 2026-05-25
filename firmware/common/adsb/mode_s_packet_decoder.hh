@@ -50,9 +50,14 @@ class ModeSPacketDecoder {
         {.buf_len_num_elements = kPacketQueueLen, .buffer = raw_mode_s_packet_in_queue_buffer_});
 
     // Output queues.
-    // decoded_mode_s_packet_out_queue is written on Core 1 and read on Core 0, so it must be thread-safe.
+    // decoded_mode_s_packet_out_queue is written on Core 1 and read on Core 0 — must be thread-safe.
+    // Define PFB_QUEUE_NO_THREAD_SAFETY to disable mutex locking (e.g. to diagnose deadlocks).
     PFBQueue<DecodedModeSPacket> decoded_mode_s_packet_out_queue = PFBQueue<DecodedModeSPacket>(
-        {.buf_len_num_elements = kPacketQueueLen, .buffer = decoded_mode_s_packet_out_queue_buffer_, .is_thread_safe = true});
+        {.buf_len_num_elements = kPacketQueueLen, .buffer = decoded_mode_s_packet_out_queue_buffer_,
+#ifndef PFB_QUEUE_NO_THREAD_SAFETY
+         .is_thread_safe = true
+#endif
+        });
     PFBQueue<uint16_t> decoded_mode_s_packet_bit_flip_locations_out_queue =
         PFBQueue<uint16_t>({.buf_len_num_elements = kPacketQueueLen,
                             .buffer = decoded_mode_s_packet_bit_flip_locations_out_queue_buffer_});

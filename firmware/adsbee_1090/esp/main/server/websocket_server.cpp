@@ -1,14 +1,7 @@
 #include "websocket_server.hh"
 
 #include "comms.hh"
-#include "esp_heap_caps.h"
 #include "hal.hh"
-
-// Minimum internal heap required before allowing httpd_ws_send_frame_async to allocate.
-// That call immediately allocates sizeof(async_resp_arg) + frame->len from internal DRAM.
-// 20KB keeps enough room for WiFi RX buffers (8 × ~1700B) and lwIP while the httpd drains
-// the queue and frees its pending payload copies.
-static const uint32_t kMinHeapForAsyncSendBytes = 20480;
 
 /**
  * This helper function digs out the WebSocketServer stored in the user context of an HTTP request in order to allow the
@@ -158,8 +151,8 @@ bool WebSocketServer::RemoveClient(int client_fd) {
             return true;
         }
     }
-    CONSOLE_WARNING("WebSocketServer::RemoveClient",
-                    "[%s] Client with fd %d not found; it may have already been removed.", config_.label, client_fd);
+    CONSOLE_INFO("WebSocketServer::RemoveClient", "[%s] Client with fd %d not found; it may have already been removed.",
+                 config_.label, client_fd);
     return false;
 }
 
@@ -201,9 +194,6 @@ esp_err_t WebSocketServer::SendMessage(int client_fd, const char* message, int16
                                .payload = (uint8_t*)message,
                                .len = len_bytes > 0 ? len_bytes : strnlen(message, kWebSocketMessageMaxLen)};
 
-    if (heap_caps_get_free_size(MALLOC_CAP_INTERNAL) < kMinHeapForAsyncSendBytes) {
-        return ESP_ERR_NO_MEM;
-    }
     return httpd_ws_send_frame_async(config_.server, client_fd, &ws_pkt);
 }
 
