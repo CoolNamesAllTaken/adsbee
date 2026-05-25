@@ -178,6 +178,10 @@ int main() {
 #endif  // ISRS_ON_CORE1
 
     uint32_t esp32_last_heartbeat_timestamp_ms = 0;
+#ifndef HARDWARE_UNIT_TESTS
+    static constexpr uint32_t kESP32CommsLostTimeoutMs = 5000;
+    uint32_t esp32_last_successful_comms_ms = get_time_since_boot_ms();
+#endif
 
     while (true) {
         // Loop forever.
@@ -198,6 +202,20 @@ int main() {
             // Don't need to talk to the ESP32, or it acknowledged a heartbeat just now: poke the watchdog since nothing
             // seems amiss.
             adsbee.PokeWatchdog();
+#ifndef HARDWARE_UNIT_TESTS
+            esp32_last_successful_comms_ms = get_time_since_boot_ms();
+#endif
         }
+#ifndef HARDWARE_UNIT_TESTS
+        else if (esp32.IsEnabled() &&
+                 get_time_since_boot_ms() - esp32_last_successful_comms_ms > kESP32CommsLostTimeoutMs) {
+            CONSOLE_ERROR("main", "ESP32 SPI communication lost for >%ums. Cycling enable pin.",
+                          kESP32CommsLostTimeoutMs);
+            esp32.SetEnable(false);
+            sleep_ms(200);
+            esp32.SetEnable(true);
+            esp32_last_successful_comms_ms = get_time_since_boot_ms();
+        }
+#endif
     }
 }

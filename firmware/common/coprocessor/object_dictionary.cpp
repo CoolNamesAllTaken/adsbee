@@ -76,7 +76,12 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
                     break;
                 case kQueueIDConsole:
 #ifdef ON_ESP32
-                    xSemaphoreTake(object_dictionary.network_console_rx_queue_mutex, portMAX_DELAY);
+                    if (xSemaphoreTake(object_dictionary.network_console_rx_queue_mutex,
+                                       pdMS_TO_TICKS(kNetworkConsoleMutexTimeoutMs)) != pdTRUE) {
+                        CONSOLE_ERROR("ObjectDictionary::SetBytes",
+                                      "Timed out waiting for network console RX queue mutex; skipping queue roll.");
+                        return false;
+                    }
                     if (!network_console_rx_queue.Discard(roll_request.num_items)) {
                         CONSOLE_ERROR("ObjectDictionary::SetBytes",
                                       "Failed to discard %d chars from the network console TX queue.",

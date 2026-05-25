@@ -32,6 +32,7 @@ idf_component_register(
         "${COMMON_DIR}/adsb"
         "${COMMON_DIR}/adsb/nasa_cpr"
         "${COMMON_DIR}/comms"
+        "${COMMON_DIR}/comms/aircraftjson"
         "${COMMON_DIR}/comms/beast"
         "${COMMON_DIR}/comms/csbee"
         "${COMMON_DIR}/comms/gdl90"

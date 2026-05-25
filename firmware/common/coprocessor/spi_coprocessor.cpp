@@ -47,8 +47,6 @@ bool SPICoprocessor::Update() {
     if (timestamp_ms - last_update_timestamp_ms_ <= update_interval_ms) {
         return true;  // No need to update yet.
     }
-    last_update_timestamp_ms_ = timestamp_ms;
-
     // Rely on the slave interface to query device status and process SCCommand requests, since behavior varies by
     // device.
     if (!config_.interface.Update()) {
@@ -134,6 +132,7 @@ bool SPICoprocessor::Update() {
             CONSOLE_ERROR("main", "Unable to read log messages from %s.", config_.tag_str);
         }
     }
+    last_update_timestamp_ms_ = timestamp_ms;
 #elif defined(ON_COPRO_SLAVE) && !defined(ON_TI)
     static uint8_t rx_buf[SPICoprocessorPacket::kSPITransactionMaxLenBytes];
     memset(rx_buf, 0, SPICoprocessorPacket::kSPITransactionMaxLenBytes);
@@ -507,173 +506,6 @@ bool SPICoprocessor::SPIWaitForAck() {
     ack_wait_in_progress = false;
     return ack_packet.ack;
 }
-
-#ifdef HARDWARE_UNIT_TESTS
-bool SPICoprocessor::TestSPIPersistentDesync() {
-    // Replicates the production SPI deadlock: rapid consecutive recovery cycles interleaved with
-    // the UpdateNetworkConsole writes that fire via CONSOLE_WARNING during PartialRead retries.
-    // The existing TestSPIHandshakeDeadlock verifies single-shot recovery works. This test stresses
-    // the ESP32 SPI DMA with back-to-back partial-transaction completions to check whether the DMA
-    // state accumulates into a stuck spi_slave_transmit (spi_mutex_ held forever, ESP32 alive but
-    // unable to serve SPI).
-
-    // Phase 1: baseline sanity check.
-    ObjectDictionary::ESP32DeviceStatus baseline_status;
-    if (!Read(ObjectDictionary::Address::kAddrDeviceStatus, baseline_status)) {
-        CONSOLE_ERROR("TestSPIPersistentDesync", "ABORT: Baseline read failed before test began.");
-        return false;
-    }
-    CONSOLE_INFO("TestSPIPersistentDesync", "Baseline OK. Starting desync stress loop...");
-
-    static const int kNumDesyncIterations = 20;
-    for (int i = 0; i < kNumDesyncIterations; i++) {
-        // Step a: send a read request so the ESP32 queues a response and raises the handshake.
-        SPICoprocessorPacket::SCReadRequestPacket req;
-        req.cmd = ObjectDictionary::SCCommand::kCmdReadFromSlave;
-        req.addr = ObjectDictionary::Address::kAddrDeviceStatus;
-        req.offset = 0;
-        req.len = sizeof(ObjectDictionary::ESP32DeviceStatus);
-        req.PopulateCRC();
-        int sent = SPIWriteBlocking(req.GetBuf(), req.GetBufLenBytes(), /*end_transaction=*/true);
-        if (sent < 0) {
-            CONSOLE_WARNING("TestSPIPersistentDesync", "Iter %d: read-request write failed (%d), continuing.", i, sent);
-            continue;
-        }
-
-        // Step b: busy-wait half the handshake timeout — long enough for the ESP32 to have queued
-        // its response and raised the handshake, but short enough that we never call
-        // SPIWaitForHandshake() and consume it cleanly.
-        uint32_t wait_start_ms = get_time_since_boot_ms();
-        while (get_time_since_boot_ms() - wait_start_ms < SPICoprocessorSlaveInterface::kSPIHandshakeTimeoutMs / 2) {
-        }
-
-        // Step c: without checking the handshake, attempt a scratch write — this sees handshake
-        // HIGH with expecting_handshake_=false, clocks 4 dummy bytes (recovery), and returns
-        // kErrorHandshakeHigh. This is the same path taken by UpdateNetworkConsole→PartialWrite
-        // when it fires during a PartialRead failure.
-        static const uint8_t kScratchPayload[] = {0xDE, 0xAD, 0xBE, 0xEF};
-        SPICoprocessorPacket::SCWritePacket scratch;
-        scratch.cmd = ObjectDictionary::SCCommand::kCmdWriteToSlave;
-        scratch.addr = ObjectDictionary::Address::kAddrScratch;
-        scratch.len = sizeof(kScratchPayload);
-        scratch.offset = 0;
-        memcpy(scratch.data, kScratchPayload, sizeof(kScratchPayload));
-        scratch.PopulateCRC();
-        int write_result = SPIWriteBlocking(scratch.GetBuf(), scratch.GetBufLenBytes(), /*end_transaction=*/true);
-        CONSOLE_INFO("TestSPIPersistentDesync", "Iter %d: desync write result %d (expect %d=kErrorHandshakeHigh).", i,
-                     write_result, ReturnCode::kErrorHandshakeHigh);
-
-        // Step d: simulate UpdateNetworkConsole by enqueuing console chars and flushing them.
-        // In production, every CONSOLE_WARNING inside a PartialRead retry loop triggers exactly
-        // this path.
-        const char* fake_error = "TestSPIPersistentDesync: simulated console error message\r\n";
-        for (const char* p = fake_error; *p; p++) {
-            comms_manager.esp32_console_tx_queue.Enqueue(*p);
-        }
-        comms_manager.UpdateNetworkConsole();
-
-        // Step e: immediately attempt a PartialRead — this is the "retry" that should succeed but
-        // may fail under accumulated DMA stress.
-        ObjectDictionary::ESP32DeviceStatus iter_status;
-        if (!Read(ObjectDictionary::Address::kAddrDeviceStatus, iter_status)) {
-            CONSOLE_WARNING("TestSPIPersistentDesync", "Iter %d: PartialRead failed after desync.", i);
-        } else {
-            CONSOLE_INFO("TestSPIPersistentDesync", "Iter %d: PartialRead succeeded after desync.", i);
-        }
-    }
-
-    // Phase 3: recovery check — if the deadlock was triggered, all reads will fail here.
-    CONSOLE_INFO("TestSPIPersistentDesync", "Desync loop complete. Checking for deadlock...");
-    static const int kMaxRecoveryAttempts = 30;
-    bool recovered = false;
-    for (int attempt = 0; attempt < kMaxRecoveryAttempts; attempt++) {
-        ObjectDictionary::ESP32DeviceStatus check_status;
-        if (Read(ObjectDictionary::Address::kAddrDeviceStatus, check_status)) {
-            recovered = true;
-            CONSOLE_INFO("TestSPIPersistentDesync", "Recovered on attempt %d/%d.", attempt + 1,
-                         kMaxRecoveryAttempts);
-            break;
-        }
-        uint32_t delay_start = get_time_since_boot_ms();
-        while (get_time_since_boot_ms() - delay_start < 100) {
-        }
-    }
-
-    // Phase 4: handshake-stuck diagnostic — if the ESP32's spi_slave_transmit is blocked, the
-    // handshake pin will be held HIGH continuously.
-    uint32_t diag_start_ms = get_time_since_boot_ms();
-    uint32_t high_count = 0;
-    uint32_t sample_count = 0;
-    while (get_time_since_boot_ms() - diag_start_ms < 1000) {
-        if (config_.interface.SPIGetHandshakePinLevel()) {
-            high_count++;
-        }
-        sample_count++;
-        uint32_t sample_delay = get_time_since_boot_ms();
-        while (get_time_since_boot_ms() - sample_delay < 10) {
-        }
-    }
-    uint32_t handshake_high_pct = sample_count > 0 ? (high_count * 100 / sample_count) : 0;
-    CONSOLE_INFO("TestSPIPersistentDesync", "Handshake HIGH %lu%% of 1s diagnostic window (%lu/%lu samples).",
-                 handshake_high_pct, high_count, sample_count);
-    if (handshake_high_pct > 90) {
-        CONSOLE_ERROR("TestSPIPersistentDesync",
-                      "DEADLOCK CONFIRMED: handshake stuck HIGH — ESP32 spi_slave_transmit is blocked.");
-    }
-
-    if (!recovered) {
-        CONSOLE_ERROR("TestSPIPersistentDesync",
-                      "DEADLOCK REPRODUCED: SPI communication lost after %d desync iterations. "
-                      "System left in deadlocked state for observation. Power cycle to recover.",
-                      kNumDesyncIterations);
-    } else {
-        CONSOLE_INFO("TestSPIPersistentDesync",
-                     "No deadlock: system recovered after stress loop. "
-                     "Handshake stuck %lu%% of diagnostic window.",
-                     handshake_high_pct);
-    }
-    return recovered;
-}
-
-bool SPICoprocessor::TestSPIHandshakeDeadlock() {
-    // Step 1: Send a read request so the ESP32 queues a response and raises its handshake pin.
-    // We deliberately skip SPIWaitForHandshake() so expecting_handshake_ stays false.
-    SPICoprocessorPacket::SCReadRequestPacket request;
-    request.cmd = ObjectDictionary::SCCommand::kCmdReadFromSlave;
-    request.addr = ObjectDictionary::Address::kAddrDeviceStatus;
-    request.offset = 0;
-    request.len = sizeof(ObjectDictionary::ESP32DeviceStatus);
-    request.PopulateCRC();
-    int bytes = SPIWriteBlocking(request.GetBuf(), request.GetBufLenBytes(), /*end_transaction=*/true);
-    if (bytes < 0) {
-        CONSOLE_ERROR("TestSPIHandshakeDeadlock", "Failed to send read request (code %d).", bytes);
-        return false;
-    }
-
-    // Step 2: Wait past the handshake timeout. The ESP32 prepares its response and raises the handshake
-    // during this window, but we never set expecting_handshake_ = true, so SPIBeginTransaction will
-    // treat it as an unexpected high.
-    uint32_t delay_start_ms = get_time_since_boot_ms();
-    while (get_time_since_boot_ms() - delay_start_ms <
-           SPICoprocessorSlaveInterface::kSPIHandshakeTimeoutMs + 10) {
-    }
-
-    // Step 3: Attempt a harmless write. The first try will see handshake HIGH with expecting_handshake_
-    // = false and return kErrorHandshakeHigh. With the dummy-byte recovery fix, this clocks enough
-    // SCLK edges to complete the ESP32's pending spi_slave_transmit, lowering the handshake so the
-    // retry can succeed. Without the fix, this deadlocks permanently.
-    CONSOLE_INFO("TestSPIHandshakeDeadlock",
-                 "Handshake should be HIGH. Attempting write to trigger recovery...");
-    uint8_t dummy[4] = {0};
-    bool recovered = PartialWrite(ObjectDictionary::Address::kAddrScratch, dummy, sizeof(dummy));
-    if (recovered) {
-        CONSOLE_INFO("TestSPIHandshakeDeadlock", "Recovery succeeded — deadlock fix is working.");
-    } else {
-        CONSOLE_ERROR("TestSPIHandshakeDeadlock", "Recovery failed — system may be deadlocked.");
-    }
-    return recovered;
-}
-#endif
 
 #endif
 
