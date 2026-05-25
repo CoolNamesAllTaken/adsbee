@@ -162,7 +162,7 @@ bool ADSBeeServer::Update() {
                               raw_packets.len_bytes);
             }
             // Else it's OK to have no packets.
-        } else {
+        } else if (raw_packets.len_bytes > sizeof(CompositeArray::RawPackets::Header)) {
             // Report raw packets then add them to the aircraft dictionary. Report first to allow network queues to be
             // processed during ingestion, which takes a while.
 
@@ -243,6 +243,7 @@ bool ADSBeeServer::Update() {
 
     // Prune inactive WebSocket clients and other housekeeping.
     network_console.Update();
+    network_metrics.Update();
 
     // Check to see whether the RP2040 sent over new metrics.
     xQueueReceive(rp2040_aircraft_dictionary_metrics_queue, &rp2040_aircraft_dictionary_metrics, 0);
@@ -666,6 +667,10 @@ bool ADSBeeServer::TCPServerInit() {
     config.close_fn = ws_close_fd;
     config.lru_purge_enable =
         true;  // Allow purging of the least recently used connections when max clients is reached.
+    config.keep_alive_enable = true;
+    config.keep_alive_idle = 5;      // Seconds idle before sending first keepalive probe.
+    config.keep_alive_interval = 5;  // Seconds between keepalive probes.
+    config.keep_alive_count = 3;     // Close connection after 3 failed probes (~20s dead detection).
 
     esp_err_t ret = httpd_start(&server, &config);
     if (ret != ESP_OK) {
@@ -729,7 +734,7 @@ bool ADSBeeServer::TCPServerInit() {
                                        .uri = "/console",
                                        .num_clients_allowed = 4,
                                        .send_as_binary = true,  // Network console messages can contain binary data.
-                                       .inactivity_timeout_ms = 5 * 60 * 1000,  // 5 minute timeout.
+                                       .inactivity_timeout_ms = 0,  // Disabled; TCP keepalives handle dead connections.
                                        .post_connect_callback = NetworkConsolePostConnectCallback,
                                        .message_received_callback = NetworkConsoleMessageReceivedCallback});
     if (!network_console.Init()) {
