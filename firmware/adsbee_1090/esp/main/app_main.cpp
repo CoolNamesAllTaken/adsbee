@@ -18,6 +18,7 @@
 #include "driver/gpio.h"
 #include "driver/spi_slave.h"
 #include "esp_debug_helpers.h"  // For esp_backtrace_print
+#include "esp_heap_trace.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -30,6 +31,8 @@
 
 #define HARDWARE_UNIT_TESTS
 // #define PRINT_HEAP_USAGE
+
+static heap_trace_record_t heap_trace_records[100];
 
 static const uint32_t kHeapUsagePrintIntervalMs = 100;
 static const uint32_t kDeviceStatusUpdateIntervalMs = 1000;
@@ -56,6 +59,10 @@ void heap_caps_alloc_failed_hook(size_t requested_size, uint32_t caps, const cha
                   heap_caps_get_free_size(MALLOC_CAP_IRAM_8BIT));
     printf("Stack trace at allocation failure:\n");
     esp_backtrace_print(20);  // Print up to 20 stack frames
+    printf("Heap trace (un-freed allocations):\n");
+    heap_trace_stop();
+    heap_trace_dump();
+    heap_trace_start(HEAP_TRACE_LEAKS);
 }
 
 void device_status_update_task(void* pvParameters) {
@@ -74,6 +81,8 @@ void device_status_update_task(void* pvParameters) {
 // Main application
 extern "C" void app_main(void) {
     heap_caps_register_failed_alloc_callback(heap_caps_alloc_failed_hook);
+    heap_trace_init_standalone(heap_trace_records, 100);
+    heap_trace_start(HEAP_TRACE_LEAKS);
 
     ESP_LOGI("app_main", "Beginning ADSBee Server Application.");
     ESP_LOGI("app_main", "Default task priority: %d", uxTaskPriorityGet(NULL));
