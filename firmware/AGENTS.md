@@ -125,6 +125,17 @@ On boot, RP2040 reads the firmware version from each coprocessor and reflashes i
 
 ## Testing
 
+Run from `firmware/adsbee_1090/`:
+
+```bash
+bash build.sh test                   # Build and run the full host test suite (no hardware needed)
+bash build.sh test AircraftJSON      # Build and run only tests whose ctest name matches "AircraftJSON"
+bash build.sh test CSBee             # Run only CSBee tests
+```
+
+The optional second argument is a regex passed to `ctest -R`. Test names follow the pattern
+`host_test.<SuiteName>.<TestName>` (e.g. `host_test.AircraftJSON.ModeSAircraftAllFields`).
+
 - **Host unit tests** (no hardware): `bash build.sh test` — runs GoogleTest suite via Docker
 - **Hardware integration tests**: `esp/main/target_test/` and `pico/application/target_test/` — must run on device
 - CI builds the firmware artifact; on-device testing is manual

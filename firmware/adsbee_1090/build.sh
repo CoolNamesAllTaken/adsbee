@@ -1,9 +1,10 @@
 #!/bin/bash
 # ADSBee firmware build script.
 # Builds all three firmware targets (ESP32, TI CC1312, RP2040 Pico) using Docker containers.
-# Usage: ./build.sh [-d] [target]
+# Usage: ./build.sh [-d] [target] [test_filter]
 #   targets: all (default), esp, ti, pico, test, clean
 #   -d: build in Debug mode instead of Release
+#   test_filter: optional regex passed to ctest -R when target is "test" (e.g. "AircraftJSON")
 
 set -e
 
@@ -19,6 +20,7 @@ if [ "$1" = "-d" ]; then
     debug=true
     shift
 fi
+test_filter="${2:-}"
 
 check_esp_idf_version() {
     echo "=== Checking ESP-IDF version (required: $required_esp_idf_version) ==="
@@ -94,7 +96,14 @@ build_pico() {
 }
 
 build_test() {
-    echo "=== Building and running host tests ==="
+    local filter="${1:-}"
+    local ctest_filter_opt=""
+    if [ -n "$filter" ]; then
+        ctest_filter_opt="-R '$filter'"
+        echo "=== Building and running host tests (filter: $filter) ==="
+    else
+        echo "=== Building and running host tests ==="
+    fi
     docker compose run --rm pico-docker bash -c "
         cd /firmware/modules/googletest &&
         mkdir -p build && cd build &&
@@ -106,7 +115,7 @@ build_test() {
               -DCMAKE_C_COMPILER=/usr/bin/gcc \
               -DCMAKE_CXX_COMPILER=/usr/bin/g++ ../.. &&
         make -j $jobs &&
-        ctest --verbose
+        ctest --verbose $ctest_filter_opt
     "
     echo "=== Host tests complete ==="
 }
@@ -133,7 +142,7 @@ case "$target" in
         build_pico
         ;;
     test)
-        build_test
+        build_test "$test_filter"
         ;;
     clean)
         clean_builds
@@ -154,7 +163,7 @@ case "$target" in
         echo "  esp   - Build ESP32-S3 firmware only"
         echo "  ti    - Build TI CC1312 firmware only"
         echo "  pico  - Build RP2040 Pico firmware only (requires esp + ti first)"
-        echo "  test  - Build and run host unit tests"
+        echo "  test [filter] - Build and run host unit tests; optional filter is a ctest -R regex (e.g. "AircraftJSON")"
         echo "  clean - Remove all build directories"
         exit 1
         ;;
