@@ -257,8 +257,25 @@ bool CommsManager::IPWANSendRawPacketCompositeArray(uint8_t* raw_packets_buf) {
     int err = xQueueSend(ip_wan_reporting_composite_array_queue_, raw_packets_buf,
                          pdMS_TO_TICKS(kWiFiSTAMessageQueueTimeoutMs));
     if (err == errQUEUE_FULL) {
+        UBaseType_t slots_waiting = uxQueueMessagesWaiting(ip_wan_reporting_composite_array_queue_);
+        auto* incoming_hdr = reinterpret_cast<CompositeArray::RawPackets::Header*>(raw_packets_buf);
         CONSOLE_WARNING("CommsManager::IPWANSendRawPacketCompositeArray",
-                        "Overflowed WAN raw packet composite array queue.");
+                        "Overflowed WAN raw packet composite array queue (%u/%u slots used). "
+                        "Rejected: %u ModeS, %u UAT-ADS-B, %u UAT-Uplink.",
+                        (unsigned)slots_waiting, kReportingCompositeArrayQueueNumElements,
+                        incoming_hdr->num_mode_s_packets, incoming_hdr->num_uat_adsb_packets,
+                        incoming_hdr->num_uat_uplink_packets);
+        // Drain and log each queued slot — queue is being reset anyway so dequeuing is safe.
+        // raw_packets_buf was never enqueued, so reusing it as a receive buffer is safe.
+        for (UBaseType_t i = 0; i < slots_waiting; i++) {
+            if (xQueueReceive(ip_wan_reporting_composite_array_queue_, raw_packets_buf, 0) == pdTRUE) {
+                auto* slot_hdr = reinterpret_cast<CompositeArray::RawPackets::Header*>(raw_packets_buf);
+                CONSOLE_WARNING("CommsManager::IPWANSendRawPacketCompositeArray",
+                                "  Queued slot %u: %u ModeS, %u UAT-ADS-B, %u UAT-Uplink.", (unsigned)i,
+                                slot_hdr->num_mode_s_packets, slot_hdr->num_uat_adsb_packets,
+                                slot_hdr->num_uat_uplink_packets);
+            }
+        }
         xQueueReset(ip_wan_reporting_composite_array_queue_);
         return false;
     } else if (err != pdTRUE) {
