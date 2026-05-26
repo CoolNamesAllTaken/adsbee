@@ -72,16 +72,30 @@ bool CommsManager::LogMessageToCoprocessor(SettingsManager::LogLevel log_level, 
 }
 
 void CommsManager::WiFiAddClient(esp_ip4_addr_t client_ip, uint8_t* client_mac) {
+    uint64_t mac_uint64 = MACToUint64(client_mac);
     int16_t new_client_index = -1;
     xSemaphoreTake(wifi_clients_list_mutex_, portMAX_DELAY);
+    // Check for an existing active entry with the same MAC (e.g. DHCP lease renewal fires
+    // IP_EVENT_AP_STAIPASSIGNED again without a preceding disconnect event). Update the IP
+    // in place rather than adding a duplicate entry that would cause every message to be
+    // sent multiple times.
     for (int i = 0; i < SettingsManager::Settings::kWiFiMaxNumClients; i++) {
-        if (!wifi_clients_list_[i].active) {
+        if (wifi_clients_list_[i].active && wifi_clients_list_[i].mac == mac_uint64) {
             wifi_clients_list_[i].ip = client_ip;
-            wifi_clients_list_[i].SetMAC(client_mac);
-            wifi_clients_list_[i].active = true;
-            num_wifi_clients_++;
             new_client_index = i;
             break;
+        }
+    }
+    if (new_client_index < 0) {
+        for (int i = 0; i < SettingsManager::Settings::kWiFiMaxNumClients; i++) {
+            if (!wifi_clients_list_[i].active) {
+                wifi_clients_list_[i].ip = client_ip;
+                wifi_clients_list_[i].SetMAC(client_mac);
+                wifi_clients_list_[i].active = true;
+                num_wifi_clients_++;
+                new_client_index = i;
+                break;
+            }
         }
     }
     xSemaphoreGive(wifi_clients_list_mutex_);

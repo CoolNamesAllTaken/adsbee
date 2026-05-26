@@ -13,6 +13,10 @@ class ESP32 : public SPICoprocessorSlaveInterface {
     // How long we wait to start a transaction after the last one is completed. Can be overridden if the handshake line
     // goes high after kSPIHandshakeLockoutUs.
     static constexpr uint32_t kSPIPostTransmitLockoutUs = 2000;
+    // Number of dummy bytes clocked when recovering from an unexpected handshake-high condition. A bare CS pulse
+    // (no SCLK edges) is insufficient to complete the ESP32's pending spi_slave_transmit; clocking real bytes
+    // with CS held low gives the DMA hardware enough edges to declare the transaction done and lower the handshake.
+    static constexpr uint16_t kSPIHandshakeHighRecoveryLenBytes = 4;
 
     struct ESP32Config {
         uint16_t enable_pin = bsp.esp32_enable_pin;

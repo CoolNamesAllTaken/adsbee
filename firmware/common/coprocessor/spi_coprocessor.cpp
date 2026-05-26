@@ -47,8 +47,6 @@ bool SPICoprocessor::Update() {
     if (timestamp_ms - last_update_timestamp_ms_ <= update_interval_ms) {
         return true;  // No need to update yet.
     }
-    last_update_timestamp_ms_ = timestamp_ms;
-
     // Rely on the slave interface to query device status and process SCCommand requests, since behavior varies by
     // device.
     if (!config_.interface.Update()) {
@@ -134,6 +132,7 @@ bool SPICoprocessor::Update() {
             CONSOLE_ERROR("main", "Unable to read log messages from %s.", config_.tag_str);
         }
     }
+    last_update_timestamp_ms_ = timestamp_ms;
 #elif defined(ON_COPRO_SLAVE) && !defined(ON_TI)
     static uint8_t rx_buf[SPICoprocessorPacket::kSPITransactionMaxLenBytes];
     memset(rx_buf, 0, SPICoprocessorPacket::kSPITransactionMaxLenBytes);

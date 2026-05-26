@@ -157,6 +157,67 @@ bool CompositeArray::UnpackRawPacketsBufferToQueues(uint8_t* buf, uint16_t buf_l
     return true;  // All packets successfully enqueued.
 }
 
+bool CompositeArray::MergeRawPacketsBuffers(uint8_t* dst_buf, const uint8_t* src_buf) {
+    auto* dst_hdr = reinterpret_cast<RawPackets::Header*>(dst_buf);
+    auto* src_hdr = reinterpret_cast<const RawPackets::Header*>(src_buf);
+
+    const uint16_t N = dst_hdr->num_mode_s_packets;
+    const uint16_t M = dst_hdr->num_uat_adsb_packets;
+    const uint16_t K = dst_hdr->num_uat_uplink_packets;
+    const uint16_t P = src_hdr->num_mode_s_packets;
+    const uint16_t Q = src_hdr->num_uat_adsb_packets;
+    const uint16_t R = src_hdr->num_uat_uplink_packets;
+
+    const uint32_t combined_size = sizeof(RawPackets::Header) + (uint32_t)(N + P) * sizeof(RawModeSPacket) +
+                                   (uint32_t)(M + Q) * sizeof(RawUATADSBPacket) +
+                                   (uint32_t)(K + R) * sizeof(RawUATUplinkPacket);
+    if (combined_size > RawPackets::kMaxLenBytes) {
+        return false;
+    }
+
+    // Offsets in dst before any modification.
+    const uint16_t adsb_start = sizeof(RawPackets::Header) + N * sizeof(RawModeSPacket);
+    const uint16_t upl_start = adsb_start + M * sizeof(RawUATADSBPacket);
+
+    // Pointers into src sections.
+    const uint8_t* src_ms_ptr = src_buf + sizeof(RawPackets::Header);
+    const uint8_t* src_adsb_ptr = src_ms_ptr + P * sizeof(RawModeSPacket);
+    const uint8_t* src_upl_ptr = src_adsb_ptr + Q * sizeof(RawUATADSBPacket);
+
+    // Step 1: Insert src's Mode S after dst's Mode S by shifting ADS-B and Uplink forward.
+    const uint16_t src_ms_size = P * sizeof(RawModeSPacket);
+    const uint16_t adsb_upl_size = M * sizeof(RawUATADSBPacket) + K * sizeof(RawUATUplinkPacket);
+    if (adsb_upl_size > 0) {
+        memmove(dst_buf + adsb_start + src_ms_size, dst_buf + adsb_start, adsb_upl_size);
+    }
+    if (src_ms_size > 0) {
+        memcpy(dst_buf + adsb_start, src_ms_ptr, src_ms_size);
+    }
+    dst_hdr->num_mode_s_packets = N + P;
+
+    // Step 2: Insert src's ADS-B after dst's (now-shifted) ADS-B by shifting Uplink forward.
+    // new_upl_start: position of UPL_a after step 1, before step 2's shift.
+    const uint16_t new_upl_start = adsb_start + src_ms_size + M * sizeof(RawUATADSBPacket);
+    const uint16_t src_adsb_size = Q * sizeof(RawUATADSBPacket);
+    const uint16_t upl_size = K * sizeof(RawUATUplinkPacket);
+    if (upl_size > 0) {
+        memmove(dst_buf + new_upl_start + src_adsb_size, dst_buf + new_upl_start, upl_size);
+    }
+    if (src_adsb_size > 0) {
+        memcpy(dst_buf + new_upl_start, src_adsb_ptr, src_adsb_size);
+    }
+    dst_hdr->num_uat_adsb_packets = M + Q;
+
+    // Step 3: Append src's Uplink after UPL_a (which was shifted by src_adsb_size in step 2).
+    const uint16_t src_upl_size = R * sizeof(RawUATUplinkPacket);
+    if (src_upl_size > 0) {
+        memcpy(dst_buf + new_upl_start + src_adsb_size + upl_size, src_upl_ptr, src_upl_size);
+    }
+    dst_hdr->num_uat_uplink_packets = K + R;
+
+    return true;
+}
+
 uint16_t CompositeArray::CalculateRawPacketsBufferLength(PFBQueue<RawModeSPacket>* mode_s_queue,
                                                          PFBQueue<RawUATADSBPacket>* uat_adsb_queue,
                                                          PFBQueue<RawUATUplinkPacket>* uat_uplink_queue) {

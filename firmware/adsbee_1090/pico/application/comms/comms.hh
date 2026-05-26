@@ -25,7 +25,7 @@ class CommsManager {
         sizeof(RawUATUplinkPacket);  // 7 packets = 3976 B payload
 
     static constexpr uint16_t kATCommandBufMaxLen = 1200;
-    static constexpr uint16_t kNetworkConsoleBufMaxLen = 4096;
+    static constexpr uint16_t kNetworkConsoleBufMaxLen = 4000;  // Must match ObjectDictionary::kNetworkConsoleMessageMaxLenBytes.
     static constexpr uint16_t kNetworkConsoleReportingIntervalOverrideNumChars =
         kNetworkConsoleBufMaxLen * 3 /
         4;  // Drain the network console queue immediately if it has more than this many characters.
@@ -128,7 +128,7 @@ class CommsManager {
 
 #include "comms_reporting.hh"
 
-    inline bool SendBuf(ReportSink sink, const char* buf, uint16_t buf_len) {
+    inline bool SendBuf(ReportSink sink, const char* buf, uint16_t buf_len, uint16_t num_msgs = 1) {
         for (uint16_t i = 0; i < buf_len; i++) {
             if (!iface_putc(static_cast<SettingsManager::SerialInterface>(sink), buf[i])) {
                 return false;
@@ -278,6 +278,10 @@ class CommsManager {
     bool mavlink1_overrun_reported_ = false;
     bool mavlink2_overrun_reported_ = false;
     bool gdl90_overrun_reported_ = false;
+
+    uint16_t aircraftjson_report_uid_index_ = 0;
+    bool aircraftjson_round_active_ = false;
+    bool aircraftjson_overrun_reported_ = false;
 };
 
 extern CommsManager comms_manager;

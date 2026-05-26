@@ -3,84 +3,178 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>ADSBee Web Terminal</title>
+    <title>ADSBee</title>
     <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/png" href="favicon.png">
+    <script src="adsbee.js"></script>
 </head>
 
 <body>
-    <div class="column-container">
-        <div id="terminal" class="column-element" onclick="focusTerminal()">
-            <div id="terminal-content"></div>
-            <div class="input-line">
-                <span class="prompt">&gt;</span>
-                <span id="current-line"><span id="cursor"> </span></span>
-                <!-- <span id="cursor"></span> -->
-            </div>
-            <input type="text" class="hidden-input" id="hidden-input" autocomplete="off">
+    <!-- Tab bar -->
+    <div class="tab-bar">
+        <div class="tab-bar-tabs">
+            <span class="tab-logo">ADSBee</span>
+            <button class="tab-btn active" data-tab="console" onclick="switchTab('console')">Console</button>
+            <button class="tab-btn" data-tab="radar" onclick="switchTab('radar')">Radar</button>
         </div>
+        <div class="tab-bar-controls">
+            <span class="theme-toggle-label">&#9788;</span>
+            <label class="toggle-switch">
+                <input type="checkbox" id="darkModeToggle">
+                <span class="toggle-slider"></span>
+            </label>
+            <span class="theme-toggle-label">&#9790;</span>
+        </div>
+    </div>
 
-        <div id="status" class="connection-status disconnected">Disconnected</div>
-        <div id="metrics-container" class="column-element metrics">
-            <div id="receiver-metrics-container">
-                <div class="metrics-header">Receiver Metrics</div>
-                <!-- Cards will be dynamically inserted here -->
+    <!-- Console tab -->
+    <div id="tab-console" class="tab-content active">
+        <div class="column-container">
+            <div id="terminal" class="column-element" onclick="focusTerminal()">
+                <div id="terminal-content"></div>
+                <div class="input-line">
+                    <span class="prompt">&gt;</span>
+                    <span id="current-line"><span id="cursor"> </span></span>
+                </div>
+                <input type="text" class="hidden-input" id="hidden-input" autocomplete="off">
             </div>
-            <div id="feed-metrics-container">
-                <div id="feed-count" class="metrics-header">Feeds: 0</div>
-                <!-- Cards will be dynamically inserted here -->
-            </div>
-            <div id="device-status-container" class="device-status">
-                <div class="metrics-header">Device Status</div>
-                <div id="device-status-cards-container" class="device-status-cards">
-                    <!-- Device status cards will be dynamically inserted here -->
+
+            <div id="metrics-container" class="column-element metrics">
+                <div id="receiver-metrics-container">
+                    <div class="metrics-header">Receiver Metrics</div>
+                    <!-- Cards will be dynamically inserted here -->
+                </div>
+                <div id="feed-metrics-container">
+                    <div class="feed-metrics-header">
+                        <span id="feed-count" class="metrics-header">Feeds: 0</span>
+                        <button id="add-feed-btn" class="add-feed-btn" onclick="FeedEditor.openFirstEmpty()">+ Add</button>
+                    </div>
+                    <!-- Cards will be dynamically inserted here -->
+                </div>
+                <div id="device-status-container" class="device-status">
+                    <div class="metrics-header">Device Status</div>
+                    <div id="device-status-cards-container" class="device-status-cards">
+                        <!-- Device status cards will be dynamically inserted here -->
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="tools-container column-element">
-            <div class="button-row">
-                <button id="uploadButton" class="tools-button">
-                    Upload Firmware
-                </button>
-                <input type="file" id="fileInput" accept=".ota" style="display: none;">
+            <div class="tools-container column-element">
+                <div class="button-row">
+                    <button id="uploadButton" class="tools-button">
+                        Upload Firmware
+                    </button>
+                    <input type="file" id="fileInput" accept=".ota" style="display: none;">
 
-                <button id="downloadSettings" class="tools-button">
-                    Download Settings
-                </button>
-                <button id="restoreSettings" class="tools-button">
-                    Restore Settings
-                </button>
+                    <button id="downloadSettings" class="tools-button">
+                        Download Settings
+                    </button>
+                    <button id="restoreSettings" class="tools-button">
+                        Restore Settings
+                    </button>
+                </div>
+
+                <input type="file" id="settingsFile" accept=".settings" style="display: none;">
+
+
             </div>
+        </div>
+    </div>
 
-            <input type="file" id="settingsFile" accept=".settings" style="display: none;">
+    <!-- Radar tab -->
+    <div id="tab-radar" class="tab-content">
+        <div id="radar-left">
+            <div id="map-container">
+                <div id="map"></div>
+            </div>
+            <div id="resize-handle" title="Drag to resize"></div>
+            <div id="aircraft-table-container">
+                <table id="aircraft-table">
+                    <thead>
+                        <tr>
+                            <th>ICAO</th>
+                            <th>Callsign</th>
+                            <th>Sqwk</th>
+                            <th>Alt&nbsp;(ft)</th>
+                            <th>Spd&nbsp;(kt)</th>
+                            <th>Hdg</th>
+                            <th>Lat</th>
+                            <th>Lon</th>
+                            <th>RSSI</th>
+                        </tr>
+                    </thead>
+                    <tbody id="aircraft-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+        <div id="aircraft-sidebar">
+            <div class="sidebar-header">
+                <span id="sidebar-title">—</span>
+                <button class="sidebar-close" id="sidebar-close">×</button>
+            </div>
+            <div id="sidebar-fields"></div>
+        </div>
+    </div>
 
-            <div id="progressContainer" class="progress-container">
+    <!-- Feed editor modal -->
+    <div id="feed-modal" style="display:none;">
+        <div id="feed-modal-box">
+            <h2>Edit Feed</h2>
+            <p id="feed-modal-status"></p>
+            <input type="hidden" id="feed-slot">
+            <div id="feed-form" style="display:none;">
+                <div class="feed-field">
+                    <label>URI</label>
+                    <input type="text" id="feed-uri" placeholder="feed.adsb.fi">
+                </div>
+                <div class="feed-field">
+                    <label>Port</label>
+                    <input type="number" id="feed-port" min="1" max="65535">
+                </div>
+                <div class="feed-field feed-field-inline">
+                    <label>Active</label>
+                    <input type="checkbox" id="feed-active">
+                </div>
+                <div class="feed-field">
+                    <label>Protocol</label>
+                    <select id="feed-protocol"></select>
+                </div>
+            </div>
+            <div class="feed-modal-buttons">
+                <button class="tools-button" onclick="FeedEditor.save()">Save</button>
+                <button class="tools-button feed-remove-btn" onclick="FeedEditor.remove()">Remove</button>
+                <button class="tools-button feed-cancel-btn" onclick="FeedEditor.close()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firmware update modal -->
+    <div id="firmware-modal" style="display:none;">
+        <div id="firmware-modal-box">
+            <h2>Firmware Update In Progress</h2>
+            <p id="firmware-modal-status">Erasing flash...</p>
+            <div class="progress-container" style="display:flex; margin: 12px 0 8px;">
                 <div class="progress-bar">
-                    <div id="progressFill" class="progress-fill"></div>
+                    <div id="firmware-modal-fill" class="progress-fill" style="width:0%"></div>
                 </div>
-                <div id="progressText" class="progress-text">0%</div>
+                <div id="firmware-modal-text" class="progress-text">0%</div>
             </div>
-
-            <div id="successAlert" class="alert success">
-                Firmware has been successfully uploaded and device is rebooting.
-            </div>
-
-            <div id="errorAlert" class="alert error"></div>
+            <div id="firmware-modal-log"></div>
+            <p class="firmware-modal-note">Interface is paused during the update. Please do not close this page.</p>
         </div>
     </div>
 
     <script>
-        const HOST_URI = `${window.location.hostname}`;
-        // const HOST_URI = "testbee.local";
+        const HOST_URI = window.location.hostname || "testbee.local";
         const WS_CONFIG = {
-            console_ws_url: `ws://${HOST_URI}/console`,
-            metrics_ws_url: `ws://${HOST_URI}/metrics`,
+            console_ws_url:  `ws://${HOST_URI}/console`,
+            metrics_ws_url:  `ws://${HOST_URI}/metrics`,
+            aircraft_ws_url: `ws://${HOST_URI}/aircraft`,
             reconnectDelayMs: 5000
         };
 
         /**
-         * Network console terminal. 
+         * Network console terminal.
          */
 
         const terminal = document.getElementById('terminal');
@@ -89,108 +183,21 @@
         const hiddenInput = document.getElementById('hidden-input');
         const cursor = document.getElementById('cursor');
 
-        let socket = null;
         let commandHistory = [];
         let historyIndex = -1;
         let currentCommand = '';
         let cursorPosition = 0;
 
-        class ConsoleWebSocket {
-            constructor(url) {
-                this.url = url;
-                this.paused = false;
-                this.init();
+        const MAX_CONSOLE_LINES = 500;
+
+        function trimConsole() {
+            const content = terminalContent.innerHTML;
+            const matches = [...content.matchAll(/<br>/g)];
+            if (matches.length > MAX_CONSOLE_LINES) {
+                const excess = matches.length - MAX_CONSOLE_LINES;
+                const cutPos = matches[excess].index + 4; // skip past the '<br>'
+                terminalContent.innerHTML = content.substring(cutPos);
             }
-
-            init() {
-                this.ws = new WebSocket(this.url)
-                this.attachEventHandlers();
-            }
-
-            attachEventHandlers() {
-                // Connection opened
-                this.ws.addEventListener('open', () => {
-                    console.log(`Connected to ${this.url}`);
-
-                    // Send the message once connected
-                    // this.send("AT+HELP\r\n");
-                });
-
-                // Listen for messages
-                this.ws.addEventListener('message', (event) => {
-                    if (typeof event.data === 'string') {
-                        // console.log('Received message:', event.data);
-                        appendToTerminal(event.data);
-                    } else if (event.data instanceof Blob) {
-                        const reader = new FileReader();
-                        reader.onload = () => {
-                            const text = reader.result;
-                            // console.log('Received binary message:', text);
-                            appendToTerminal(text);
-                        };
-                        reader.readAsText(event.data);
-                    }
-                });
-
-                // Connection closed (both clean and unclean closes)
-                this.ws.addEventListener('close', (event) => {
-                    console.log(`Connection closed. Code: ${event.code}, Reason: ${event.reason}`);
-                    appendToTerminal(`Connection closed. Code: ${event.code}\n`);
-                    this.attemptReconnect();
-                });
-
-                // Connection error
-                this.ws.addEventListener('error', (error) => {
-                    console.error('WebSocket error:', error);
-                    // Don't call attemptReconnect here as the close event will be fired after error
-                });
-            }
-
-            send(message) {
-                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                    this.ws.send(message);
-                    console.log(`Sent message: ${message}`);
-                    return true;
-                } else {
-                    console.warn('Cannot send message - connection is not open');
-                    return false;
-                }
-            }
-
-            attemptReconnect() {
-                setTimeout(() => {
-                    if (!this.paused) this.init();
-                }, WS_CONFIG.reconnectDelayMs);
-            }
-
-            pause() { this.paused = true; if (this.ws) this.ws.close(); }
-            resume() { if (this.paused) { this.paused = false; this.init(); } }
-
-            close(code, reason) {
-                if (this.ws) {
-                    this.ws.close(code, reason);
-                }
-            }
-
-            getState() {
-                const states = {
-                    0: 'CONNECTING',
-                    1: 'OPEN',
-                    2: 'CLOSING',
-                    3: 'CLOSED'
-                };
-                return states[this.ws ? this.ws.readyState : 3];
-            }
-
-            // Method to manually trigger reconnection
-            reconnect() {
-                if (this.ws) {
-                    this.ws.close();
-                } else {
-                    this.attemptReconnect();
-                }
-            }
-
         }
 
         function appendToTerminal(text) {
@@ -236,6 +243,7 @@
             processedText = result;
 
             terminalContent.innerHTML += processedText;
+            trimConsole();
             terminal.scrollTop = terminal.scrollHeight;
         }
 
@@ -321,17 +329,11 @@
                     break;
                 case 'ArrowLeft':
                     e.preventDefault();
-                    if (cursorPosition > 0) {
-                        cursorPosition--;
-                        updateDisplay();
-                    }
+                    if (cursorPosition > 0) { cursorPosition--; updateDisplay(); }
                     break;
                 case 'ArrowRight':
                     e.preventDefault();
-                    if (cursorPosition < currentCommand.length) {
-                        cursorPosition++;
-                        updateDisplay();
-                    }
+                    if (cursorPosition < currentCommand.length) { cursorPosition++; updateDisplay(); }
                     break;
                 case 'Home':
                     e.preventDefault();
@@ -353,7 +355,6 @@
                     break;
                 case 'Tab':
                     e.preventDefault();
-                    // Could implement command completion here
                     break;
             }
         });
@@ -385,792 +386,143 @@
             }
         });
 
-        window.addEventListener('pagehide', (event) => {
-            // Close WebSocket connection gracefully
-            consoleWebSocket.close(1000, 'Tab closing - normal shutdown');
-            metricsWebSocket.close(1000, 'Tab closing - normal shutdown');
+        window.addEventListener('pagehide', () => {
+            consoleWebSocket?.close(1000, 'Tab closing - normal shutdown');
+            metricsWebSocket?.close(1000, 'Tab closing - normal shutdown');
+            aircraftWebSocket?.close(1000, 'Tab closing - normal shutdown');
         });
 
-        // Initialize
-        const consoleWebSocket = new ConsoleWebSocket(WS_CONFIG.console_ws_url);
+        // Initialize dark mode
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        if (localStorage.getItem('darkMode') === 'true') {
+            document.body.classList.add('dark-mode');
+            darkModeToggle.checked = true;
+        }
+        darkModeToggle.addEventListener('change', () => {
+            document.body.classList.toggle('dark-mode', darkModeToggle.checked);
+            localStorage.setItem('darkMode', darkModeToggle.checked ? 'true' : 'false');
+        });
+
+        /**
+         * Tab management and radar.
+         */
+
+        let consoleWebSocket = null;
+        let metricsWebSocket = null;
+        let aircraftWebSocket = null;
+        let radarMap = null;
+        let aircraftStore = null;
+        let acTable = null;
+        let aircraftUpdateTimer = null;
+
+        function switchTab(name) {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.tab === name);
+            });
+            document.querySelectorAll('.tab-content').forEach(el => {
+                el.classList.toggle('active', el.id === `tab-${name}`);
+            });
+
+            if (name === 'console') {
+                if (aircraftWebSocket) aircraftWebSocket.pause();
+                clearInterval(aircraftUpdateTimer);
+                aircraftUpdateTimer = null;
+                consoleWebSocket.resume();
+                metricsWebSocket.resume();
+                focusTerminal();
+            } else if (name === 'radar') {
+                consoleWebSocket.pause();
+                metricsWebSocket.pause();
+                initRadar().catch(e => console.error('Radar init error:', e));
+            }
+        }
+
+        async function initRadar() {
+            if (!aircraftStore) aircraftStore = new AircraftStore();
+
+            if (!radarMap) {
+                radarMap = new RadarMap('map', aircraftStore);
+                radarMap.onSelectionChanged = (hex) => {
+                    if (acTable) acTable.setSelected(hex);
+                };
+                await radarMap.init();
+            } else {
+                radarMap.invalidate();
+            }
+
+            if (!acTable) {
+                acTable = new AircraftTable('aircraft-tbody', aircraftStore, (hex) => {
+                    if (radarMap) radarMap.selectAircraft(hex);
+                });
+            }
+
+            if (!aircraftWebSocket) {
+                aircraftWebSocket = new AircraftWebSocket(WS_CONFIG.aircraft_ws_url);
+                aircraftWebSocket.onMessage = (ac) => aircraftStore.ingest(ac);
+            } else {
+                aircraftWebSocket.resume();
+            }
+
+            if (!aircraftUpdateTimer) {
+                aircraftUpdateTimer = setInterval(() => {
+                    aircraftStore.sweep();
+                    radarMap.update();
+                    acTable.update();
+                }, 1000);
+            }
+        }
+
+        // Initialize on Console tab
+        consoleWebSocket = new ConsoleWebSocket(WS_CONFIG.console_ws_url);
+        metricsWebSocket = new MetricsWebSocket(WS_CONFIG.metrics_ws_url);
         focusTerminal();
 
-        /**
-         * Sparkline feed metrics cards.
-         */
-        class SparklineChart {
-            constructor(id, maxPoints = 20) {
-                this.svg = document.getElementById(id);
-                this.maxPoints = maxPoints;
-                this.points = Array(maxPoints).fill(0);
-                this.valueEl = this.svg.parentNode.querySelector('.metric-value');
-                this.createPaths();
+        function initResizeHandle() {
+            const handle = document.getElementById('resize-handle');
+            const mapEl  = document.getElementById('map-container');
+            const tblEl  = document.getElementById('aircraft-table-container');
+            let startY, startMap, startTbl;
+
+            function onMove(e) {
+                const dy = (e.touches ? e.touches[0].clientY : e.clientY) - startY;
+                const newMap = Math.max(120, startMap + dy);
+                const newTbl = Math.max(60,  startTbl - dy);
+                mapEl.style.cssText = `flex:none;height:${newMap}px`;
+                tblEl.style.height  = `${newTbl}px`;
+                if (radarMap) radarMap.invalidate();
             }
-
-            createPaths() {
-                const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                const area = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                area.classList.add('area');
-                this.svg.appendChild(area);
-                this.svg.appendChild(line);
-                this.linePath = line;
-                this.areaPath = area;
+            function onUp() {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup',   onUp);
+                document.removeEventListener('touchmove', onMove);
+                document.removeEventListener('touchend',  onUp);
             }
-
-            update(value) {
-                this.points.push(value);
-                this.points.shift();
-                this.valueEl.textContent = `${value} msg/s`;
-
-                const max = Math.max(...this.points, 1);
-                const points = this.points.map((p, i) => [
-                    (i / (this.maxPoints - 1)) * 100,
-                    30 - (p / max) * 30
-                ]);
-
-                const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p[0]} ${p[1]}`).join(' ');
-                this.linePath.setAttribute('d', line);
-
-                const area = line + ` L ${points[points.length - 1][0]} 30 L 0 30 Z`;
-                this.areaPath.setAttribute('d', area);
-            }
-        }
-
-        class MetricCard {
-            constructor(container, label) {
-                this.container = container;
-                this.label = label;
-                this.id = `chart-${this.labelToID(label)}`
-
-                const card = document.createElement('div');
-                card.className = 'metrics-card';
-                card.innerHTML = `
-          <div class="metric-title" title="${label}">${label}</div>
-          <div class="metric-value">0 msg/s</div>
-          <svg class="sparkline" id="${this.id}" viewBox="0 0 100 30"></svg>
-        `;
-                this.container.appendChild(card);
-                this.chart = new SparklineChart(this.id);
-
-            }
-
-            destroy() {
-                this.container.removeChild(this.card);
-                delete this.chart;
-            }
-
-            labelToID(label) {
-                return label.replace(/[^a-zA-Z0-9]/g, '-');
-            }
-
-            update(value) {
-                this.chart.update(value);
-            }
-        }
-
-        class MetricsWebSocket {
-            constructor(url) {
-                this.url = url;
-                this.paused = false;
-                this.cards = {
-                    'feed': {},
-                    'receiver': {}
-                };
-                this.connect();
-                this.statusEl = document.getElementById('status');
-                this.feedsCountEl = document.getElementById('feed-count');
-                this.container = document.getElementById('metrics-container');
-            }
-
-            updateMetricsCards(parentLabel, data) {
-                // Remove charts that are no longer in the data
-                Object.keys(this.cards[parentLabel]).forEach(label => {
-                    if (!data.hasOwnProperty(label)) {
-                        this.cards[parentLabel][label].destroy();
-                    }
-                });
-
-                // Update existing charts and create new ones
-                Object.entries(data).forEach(([label, value]) => {
-                    if (!this.cards[parentLabel][label]) {
-                        this.cards[parentLabel][label] = new MetricCard(document.getElementById(`${parentLabel}-metrics-container`), label);
-                    }
-                    this.cards[parentLabel][label].update(value);
-                });
-            }
-
-            updateDeviceStatus(deviceStatus) {
-                const container = document.getElementById('device-status-cards-container');
-
-                // Clear existing content
-                container.innerHTML = '';
-
-                // Create cards for each device
-                Object.entries(deviceStatus).forEach(([deviceName, status]) => {
-                    const card = document.createElement('div');
-                    card.className = 'device-status-card';
-
-                    let statusHtml = `<div class="device-card">
-                                        <div class="device-status-title">${deviceName.toUpperCase()}</div>`;
-
-                    // Add status information
-                    Object.entries(status).forEach(([key, value]) => {
-                        let displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                        let displayValue = value;
-
-                        // Format specific values
-                        if (key.includes('uptime_ms')) {
-                            displayKey = 'Uptime';
-                            displayValue = `${Math.floor(value / 1000)}s`;
-                        } else if (key.includes('temperature')) {
-                            displayKey = 'Temperature';
-                            displayValue = `${value}°C`;
-                        } else if (key.includes('usage_percent')) {
-                            displayKey = displayKey.replace(' Percent', '');
-                            displayValue = `${value}%`;
-                        } else if (key.includes('heap_free_bytes')) {
-                            displayKey = 'Free Heap';
-                            displayValue = `${value} B`;
-                        } else if (key.includes('heap_largest_free_block_bytes')) {
-                            displayKey = 'Largest Free Block';
-                            displayValue = `${value} B`;
-                        }
-
-                        statusHtml += `<div class="status-item">
-                                            <span class="status-key">${displayKey}:</span>
-                                            <span class="status-value">${displayValue}</span>
-                                        </div>`;
-                    });
-                    statusHtml += `</div>`;
-
-                    card.innerHTML = statusHtml;
-                    container.appendChild(card);
-                });
-            }
-
-            connect() {
-                this.ws = new WebSocket(this.url);
-
-                this.ws.onopen = () => {
-                    console.log('Connected to WebSocket');
-                    this.statusEl.textContent = `Connected to ADSBee at ${HOST_URI}`;
-                    this.statusEl.classList.remove('disconnected');
-                    this.statusEl.classList.add('connected');
-                };
-
-                this.ws.onclose = () => {
-                    console.log('Disconnected from WebSocket');
-                    this.statusEl.textContent = 'Disconnected - Reconnecting...';
-                    this.statusEl.classList.remove('connected');
-                    this.statusEl.classList.add('disconnected');
-                    setTimeout(() => { if (!this.paused) this.connect(); }, 3000);
-                };
-
-                this.ws.onerror = (error) => {
-                    console.error('WebSocket error:', error);
-                };
-
-                this.ws.onmessage = (event) => {
-                    try {
-                        const data = JSON.parse(event.data);
-
-                        if (data.hasOwnProperty('aircraft_dictionary_metrics')) {
-                            const dictionaryMetrics = Object.fromEntries(
-                                Object.entries(data['aircraft_dictionary_metrics']).filter(([key, value]) => !Array.isArray(value))
-                            );
-                            // console.log('Dictionary Metrics:', dictionaryMetrics);
-                            this.updateMetricsCards('receiver', dictionaryMetrics);
-                        }
-                        if (data.hasOwnProperty('server_metrics')) {
-                            const serverMetrics = data['server_metrics'];
-                            // console.log('Server Metrics:', serverMetrics);
-                            const feedMetrics = {};
-                            for (let i = 0; i < serverMetrics['feed_uri'].length; i++) {
-                                if (serverMetrics['feed_uri'][i] === '') {
-                                    continue;
-                                }
-                                feedMetrics[serverMetrics['feed_uri'][i]] = serverMetrics['feed_mps'][i];
-                            }
-                            // console.log('Feed Metrics:', feedMetrics);
-                            this.updateMetricsCards('feed', feedMetrics);
-                            // Update labels count
-                            this.feedsCountEl.textContent = `Feeds: ${Object.keys(feedMetrics).length}`;
-                        }
-                        if (data.hasOwnProperty('device_status')) {
-                            const deviceStatus = data['device_status'];
-                            // console.log('Device Status:', deviceStatus);
-                            this.updateDeviceStatus(deviceStatus);
-                        }
-                    } catch (error) {
-                        console.error('Error parsing WebSocket message:', error);
-                    }
-                };
-            }
-
-            pause() { this.paused = true; if (this.ws) this.ws.close(); }
-            resume() { if (this.paused) { this.paused = false; this.connect(); } }
-
-            close(code, reason) {
-                if (this.ws) {
-                    this.ws.close(code, reason);
-                }
-            }
-        }
-
-        // Initialize WebSocket connection for metrics feed
-        const metricsWebSocket = new MetricsWebSocket(WS_CONFIG.metrics_ws_url);
-
-        /**
-         * ADSBee Library
-         */
-        class ADSBeeAT {
-            static MS_PER_SEC = 1000;
-            static ERROR_BUFFER_FLUSH_INTERVAL_MS = 1000; // How long to wait after a parse error to let the error message print.
-
-            messageQueue = [];
-
-            constructor(url = HOST_URI) {
-                if (!url) {
-                    throw new Error('URL is required');
-                }
-                this.url = url;
-                this.ws = null;
-                this.lastCmdTimestamp = Date.now();
-
-                this.decoder = new TextDecoder('utf-8');
-            }
-
-            async connect() {
-                return new Promise((resolve, reject) => {
-                    this.connectTimestamp = Date.now();
-                    this.ws = new WebSocket(`ws://${this.url}/console`);
-                    this.ws.binaryType = 'arraybuffer';
-
-                    let resolved = false;
-
-                    this.ws.onmessage = (event) => {
-                        const decoded_message = this.decoder.decode(event.data);
-                        console.log("ADSBeeAT received message:", decoded_message);
-                        this.messageQueue.push(decoded_message);
-                        resolved = true;
-                        resolve();
-                    };
-
-                    this.ws.onopen = () => {
-                        // Don't resolve immediately, wait for first message
-                    };
-
-                    this.ws.onerror = (error) => reject(error);
-
-                    this.ws.onclose = (event) => {
-                        if (!resolved) {
-                            reject(new Error(`WebSocket closed before receiving response (code ${event.code})`));
-                        }
-                    };
-                });
-            }
-
-            async disconnect() {
-                if (this.ws) {
-                    this.ws.close();
-                    this.ws = null;
-                }
-            }
-
-            getMsTimestamp() {
-                return Math.floor((Date.now() - this.connectTimestamp));
-            }
-
-            async getUptimeSec() {
-                const response = await this.sendCmd('AT+UPTIME?\r\n', 0, true, true, '+UPTIME');
-                for (const line of response) {
-                    const match = line.match(/\+UPTIME=(\d+)/);
-                    if (match) {
-                        return parseInt(match[1]);
-                    }
-                }
-                return null;
-            }
-
-            async flushInputBuffer(flushTimeoutMs = 10) {
-                await new Promise(resolve => setTimeout(resolve, flushTimeoutMs));
-                this.messageQueue = [];
-            }
-
-            async receiveResponse(printResponse = false, waitForResponse = false, responseToWaitFor = 'OK', maxCumulativeTimeoutMs = 6000) {
-                const CPP_AT_PARSE_ERROR_FLUSH_INTERVAL_MS = 1000; // How long to wait after a parse error to let the error message print.
-                const RECEIVE_LOOP_PERIOD_MS = 10; // How often to check for new messages.
-                const decodedResponse = [];
-
-                const cumulativeTimeout = Date.now() + maxCumulativeTimeoutMs;
-
-                while (waitForResponse) {
-                    if (Date.now() > cumulativeTimeout) {
-                        throw new Error(`Response timeout after ${maxCumulativeTimeoutMs} ms.`);
-                    }
-
-                    if (waitForResponse && this.messageQueue.length > 0) {
-                        const decoded_message = this.messageQueue.shift();
-                        if (decoded_message.includes(responseToWaitFor)) {
-                            waitForResponse = false;
-                        } else if (decoded_message.match(/\bERROR\b/)) {
-                            // Catch AT command errors.
-                            this.flushInputBuffer(ADSBeeAT.ERROR_BUFFER_FLUSH_INTERVAL_MS);
-                            throw new Error(`ERROR response: ${decoded_message}`);
-                        } else if (decoded_message.includes('CppAT::')) {
-                            // Catch CppAT parse errors.
-                            await new Promise(resolve => setTimeout(resolve, CPP_AT_PARSE_ERROR_FLUSH_INTERVAL_MS));
-                            this.flushInputBuffer(ADSBeeAT.ERROR_BUFFER_FLUSH_INTERVAL_MS); // These can get ugly.
-                            throw new Error(`CppAT parse error: ${decoded_message}`);
-                        }
-
-                        // Received a decoded message without errors.
-                        let logStr = '';
-                        try {
-                            decodedResponse.push(decoded_message);
-                            logStr = `Response (+${this.getMsTimestamp() - this.lastCmdTimestamp} ms): \t\t${decoded_message}`;
-                        } catch {
-                            logStr = `Non-ASCII response (+${this.getMsTimestamp() - this.lastCmdTimestamp} ms): \t${raw}`;
-                        }
-
-                        if (printResponse && logStr) {
-                            console.log(logStr);
-                        }
-                    }
-
-                    // Wait for a timeout so that we don't block the event loop.
-                    if (this.messageQueue.length > 0) {
-                        continue; // If we have messages, don't wait.
-                    }
-                    await new Promise(resolve => setTimeout(resolve, RECEIVE_LOOP_PERIOD_MS));
-
-                }
-
-                return decodedResponse;
-            }
-
-            /**
-             * Send an AT command to the ADSBee device.
-             * @param[in] cmdStr The AT command string to send.
-             * @param[in] delay_ms Delay in milliseconds after sending the command.
-             * @param[in] printResponse Whether to print the response to the console.
-             * @param[in] waitForOkOrError Whether to wait for an OK or ERROR response before returning.
-             * @param[in] maxCumulativeTimeoutMs Maximum cumulative timeout in milliseconds.
-             * @return A promise that resolves with the decoded_message response lines.
-             */
-            async sendCmd(cmdStr, delay_ms = 10, printResponse = false, waitForResponse = false, responseToWaitFor = 'OK', maxCumulativeTimeoutMs = 6000) {
-                this.lastCmdTimestamp = this.getMsTimestamp();
-
-                if (printResponse) {
-                    console.log(`Command (${this.getMsTimestamp()} ms): \t${cmdStr.trim()}`);
-                }
-
-                if (this.ws.readyState !== WebSocket.OPEN) {
-                    await this.disconnect();
-                    await this.connect();
-                }
-                this.ws.send(new TextEncoder().encode(cmdStr));
-
-                let attempts = 0;
-                const maxAttempts = 3;
-
-                while (attempts < maxAttempts) {
-                    attempts++;
-                    try {
-                        return await this.receiveResponse(printResponse, waitForResponse, responseToWaitFor, maxCumulativeTimeoutMs);
-                    } catch (error) {
-                        if (error.message.includes('Response timeout')) {
-                            console.log(`Response timeout detected (attempt ${attempts}/${maxAttempts}), reconnecting...`);
-                            await this.disconnect();
-                            await this.connect();
-
-                            if (attempts >= maxAttempts) {
-                                throw error;
-                            }
-                            // Retry the send operation
-                            this.ws.send(new TextEncoder().encode(cmdStr));
-                        } else {
-                            throw error;
-                        }
-                    }
-                }
-            }
-
-            /**
-             * Send raw bytes to the ADSBee device.
-             * @param {Uint8Array} data The data to send.
-             * @param {boolean} printResponse Whether to print the response to the console.
-             * @return A promise that resolves with the decoded_message response lines.
-             */
-            async sendBytes(data, printResponse = false, waitForOkOrError = false) {
-                const RESPONSE_TO_WAIT_FOR = 'OK';
-                const RESPONSE_TIMEOUT_MS = 3000;
-                if (this.ws.readyState !== WebSocket.OPEN) {
-                    throw new Error(`Response timeout: WebSocket not open (readyState=${this.ws.readyState})`);
-                }
-                this.ws.send(data);
-                return await this.receiveResponse(printResponse, waitForOkOrError, RESPONSE_TO_WAIT_FOR, RESPONSE_TIMEOUT_MS);
-            }
-
-            /**
-             * Silence the console by silencing logs and turning off any output protocols. Call this before sending data
-             * for firmware updates.
-             */
-            async silenceConsole() {
-                await this.sendCmd("AT+LOG_LEVEL=ERRORS\r\n", 0, true, true);
-                await this.sendCmd("AT+PROTOCOL_OUT=CONSOLE,NONE\r\n", 0, true, true);
-            }
-
-            /**
-             * Get the flash partition that can currently be read from / written to (e.g. the flash partition that is
-             * not currently being executed from).
-             * @return The current OTA flash partition.
-             */
-            async otaGetFlashPartition() {
-                const decodedResponse = await this.sendCmd("AT+OTA=GET_PARTITION\r\n", 0, true, true);
-
-                for (const line of decodedResponse) {
-                    const match = line.match(/Partition: (\d+)/);
-                    if (match) {
-                        return parseInt(match[1]);
-                    }
-                }
-                return null;
-            }
-
-            /**
-             * Write bytes to the current OTA flash partition.
-             * @param {number} offset The offset in bytes to write to.
-             * @param {Uint8Array} data The data to write.
-             */
-            async otaWriteBytes(offset, data) {
-                const crc32 = this.calculateCRC32(data);
-                const cmdResponse = await this.sendCmd(`AT+OTA=WRITE,${offset.toString(16)},${data.length},${crc32.toString(16)}\r\n`, 0, true, true, "READY");
-                for (const line of cmdResponse) {
-                    if (line.includes('ERROR')) {
-                        // Flush remaining lines then throw the error.
-                        await this.flushInputBuffer(ADSBeeAT.ERROR_BUFFER_FLUSH_INTERVAL_MS);
-                        throw new Error(`Command failed with error: ${line}`);
-                    }
-                }
-                const dataResponse = await this.sendBytes(data, true, true);
-                for (const line of dataResponse) {
-                    if (line.includes('ERROR')) {
-                        // Flush remaining lines then throw the error.
-                        await this.flushInputBuffer(ADSBeeAT.ERROR_BUFFER_FLUSH_INTERVAL_MS);
-                        throw new Error(`Data transfer failed with error: ${line}`);
-                    }
-                }
-            }
-
-            /**
-             * Erase bytes from the current OTA flash partition.
-             * @param {number} offsetBytes The offset in bytes to erase from.
-             * @param {number} lenBytes The length in bytes to erase.
-             */
-            async otaErase(offsetBytes = NaN, lenBytes = NaN) {
-                const ERASE_TIMEOUT_MS = 20000; // Allow 20 seconds for flash erase to complete.
-                if (!isNaN(offsetBytes) && !isNaN(lenBytes)) {
-                    await this.sendCmd(`AT+OTA=ERASE,${offsetBytes.toString(16)},${lenBytes}\r\n`, 0, true, true, "OK", ERASE_TIMEOUT_MS);
-                } else {
-                    // Allow 20 seconds for flash erase to complete.
-                    await this.sendCmd("AT+OTA=ERASE\r\n", 0, true, true, "OK", ERASE_TIMEOUT_MS);
-                }
-            }
-
-            /**
-             * Write a file to the current OTA flash partition.
-             * @param {File} file The file to write.
-             */
-            async otaWriteFile(file) {
-                const HEADER_SIZE_BYTES = 5 * 4;
-                const APP_OFFSET_BYTES = 4 * 1024;
-                // Going larger than this can cause the heap to explode on the ESP32.
-                const WRITE_CHUNK_BYTES = 0x1000 * 3;
-                const MAX_ATTEMPTS_PER_CHUNK = 3;
-
-                const partition = await this.otaGetFlashPartition();
-
-                if (partition === null) {
-                    throw new Error("Failed to get OTA partition from ADSBee.");
-                }
-
-                const fileData = await this.readFile(file);
-                const dataView = new DataView(fileData.buffer);
-
-                const numPartitions = dataView.getUint32(0, true);
-                if (partition > numPartitions) {
-                    throw new Error(`Partition ${partition} is out of range. Only ${numPartitions} partitions available.`);
-                }
-
-                const offset = dataView.getUint32(4 + 4 * partition, true);
-                const contents = fileData.slice(offset);
-                const headerContents = contents.slice(0, HEADER_SIZE_BYTES);
-                const appLenBytes = dataView.getUint32(offset + 8, true);
-
-                await this.otaErase(0, appLenBytes + HEADER_SIZE_BYTES);
-
-                // Write the header
-                await this.otaWriteBytes(0, headerContents);
-
-                // Write the application in chunks
-                for (let i = HEADER_SIZE_BYTES; i < HEADER_SIZE_BYTES + appLenBytes; i += WRITE_CHUNK_BYTES) {
-                    const offsetBytes = (i - HEADER_SIZE_BYTES) + APP_OFFSET_BYTES;
-                    let success = false;
-                    let attempts = 0;
-                    while (!success && attempts < MAX_ATTEMPTS_PER_CHUNK) {
-                        try {
-                            if (attempts > 0) {
-                                // We are here on a retry, so erase the chunk first.
-                                await this.otaErase(offsetBytes, WRITE_CHUNK_BYTES);
-                            }
-                            const chunk = contents.slice(i, Math.min(i + WRITE_CHUNK_BYTES, HEADER_SIZE_BYTES + appLenBytes));
-                            await this.otaWriteBytes(offsetBytes, chunk);
-                            success = true;
-                        } catch (error) {
-                            console.error(error);
-                            console.error(`Failed to write chunk at offset ${offsetBytes}. Retrying (${attempts + 1}/${MAX_ATTEMPTS_PER_CHUNK})... `);
-                            attempts++; // Wait to erase until the next loop so that we can re-use the try-catch and don't erase before final failure if the first few retry attempts also fail.
-                        }
-                    }
-                }
-
-                // Verify and boot the new partition
-                await this.sendCmd("AT+OTA=VERIFY\r\n", 0, true, true);
-            }
-
-            /**
-             * Boot the current OTA flash partition.
-             */
-            async otaBoot() {
-                await this.sendCmd("AT+OTA=BOOT\r\n", 0, true);
-            }
-
-            /**
-             * Read a file as an ArrayBuffer.
-             * @param {File} file The file to read.
-             * @return {Promise<Uint8Array>} A promise that resolves with the file data as an ArrayBuffer.
-             */
-            async readFile(file) {
-                return new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(new Uint8Array(reader.result));
-                    reader.onerror = reject;
-                    reader.readAsArrayBuffer(file);
-                });
-            }
-
-            /**
-             * Calculate the CRC32 checksum of a Uint8Array.
-             * @param {Uint8Array} data The data to calculate the CRC32 checksum for.
-             * @return {number} The CRC32 checksum.
-             */
-            calculateCRC32(data) {
-                let crc = 0xFFFFFFFF;
-                for (let i = 0; i < data.length; i++) {
-                    crc = (crc >>> 8) ^ ADSBeeAT.crcTable[(crc ^ data[i]) & 0xFF];
-                }
-                return (crc ^ 0xFFFFFFFF) >>> 0;
-            }
-
-            static crcTable = (() => {
-                const table = new Uint32Array(256);
-                for (let i = 0; i < 256; i++) {
-                    let c = i;
-                    for (let j = 0; j < 8; j++) {
-                        c = ((c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1));
-                    }
-                    table[i] = c;
-                }
-                return table;
-            })();
-        }
-
-        class FirmwareUploader {
-            constructor(adsbeeUrl) {
-                this.adsbeeUrl = adsbeeUrl;
-                this.uploadButton = document.getElementById('uploadButton');
-                this.fileInput = document.getElementById('fileInput');
-                this.progressContainer = document.getElementById('progressContainer');
-                this.progressFill = document.getElementById('progressFill');
-                this.progressText = document.getElementById('progressText');
-                this.successAlert = document.getElementById('successAlert');
-                this.errorAlert = document.getElementById('errorAlert');
-
-                this.setupEventListeners();
-            }
-
-            setupEventListeners() {
-                this.uploadButton.addEventListener('click', () => {
-                    this.fileInput.click();
-                });
-
-                this.fileInput.addEventListener('change', async (event) => {
-                    const file = event.target.files[0];
-                    if (file) {
-                        await this.uploadFirmware(file);
-                    }
-                    this.fileInput.value = '';
-                });
-            }
-
-            setUploadingState(isUploading) {
-                this.uploadButton.disabled = isUploading;
-                if (isUploading) {
-                    this.uploadButton.innerHTML = '<span class="spinner"></span> Uploading...';
-                    this.progressContainer.style.display = 'block';
-                } else {
-                    this.uploadButton.innerHTML = 'Upload Firmware';
-                    this.progressContainer.style.display = 'none';
-                }
-            }
-
-            updateProgress(percent) {
-                this.progressFill.style.width = `${percent}%`;
-                this.progressText.textContent = `${percent}%`;
-            }
-
-            showSuccess() {
-                this.successAlert.style.display = 'block';
-                this.errorAlert.style.display = 'none';
-                this.uploadButton.innerHTML = 'Upload Complete';
-                setTimeout(() => {
-                    this.successAlert.style.display = 'none';
-                    this.uploadButton.innerHTML = 'Upload Firmware';
-                }, 5000);
-            }
-
-            showError(message) {
-                this.errorAlert.textContent = message;
-                this.errorAlert.style.display = 'block';
-                this.successAlert.style.display = 'none';
-                this.uploadButton.innerHTML = 'Upload Failed';
-                setTimeout(() => {
-                    this.errorAlert.style.display = 'none';
-                    this.uploadButton.innerHTML = 'Upload Firmware';
-                }, 5000);
-            }
-
-            async uploadFirmware(file) {
-                let originalOtaWriteBytes = NaN;
-                let adsbee = null;
-                try {
-                    this.setUploadingState(true);
-                    this.updateProgress(0);
-
-                    adsbee = new ADSBeeAT(this.adsbeeUrl);
-                    await adsbee.connect();
-
-                    const totalSize = file.size / 2; // Two firmware images in file, we're only flashing one.
-                    let uploadedSize = 0;
-
-                    // Override otaWriteBytes to track progress
-                    originalOtaWriteBytes = adsbee.otaWriteBytes.bind(adsbee);
-                    adsbee.otaWriteBytes = async (offset, data) => {
-                        await originalOtaWriteBytes(offset, data);
-                        uploadedSize += data.length;
-                        const progress = Math.min(Math.round((uploadedSize / totalSize) * 100), 100);
-                        this.updateProgress(progress);
-                    };
-
-                    await adsbee.flushInputBuffer();
-                    await adsbee.silenceConsole();
-                    await adsbee.flushInputBuffer();
-
-                    // Receiver already gets disabled during data chunk transfers, but this simplifies it a bit.
-                    await adsbee.sendCmd('AT+RX_ENABLE=0\r\n', 0, true, true);
-
-                    // Pause other WebSocket clients to prevent httpd async queue contention during OTA.
-                    consoleWebSocket.pause();
-                    metricsWebSocket.pause();
-
-                    await adsbee.otaWriteFile(file);
-                    await adsbee.otaBoot();
-
-                    this.updateProgress(100);
-                    this.showSuccess();
-
-                } catch (error) {
-                    console.error('Firmware upload failed:', error);
-                    this.showError(error.message || 'Failed to upload firmware. Please try again.');
-                } finally {
-                    this.setUploadingState(false);
-                    if (adsbee && !isNaN(originalOtaWriteBytes)) {
-                        adsbee.otaWriteBytes = originalOtaWriteBytes;
-                    }
-                    if (adsbee) await adsbee.disconnect();
-                    consoleWebSocket.resume();
-                    metricsWebSocket.resume();
-                }
-            }
-        }
-
-        class SettingsManager {
-            constructor(adsbeeUrl) {
-                this.adsbeeUrl = adsbeeUrl;
-                this.downloadButton = document.getElementById('downloadSettings');
-                this.restoreButton = document.getElementById('restoreSettings');
-                this.settingsFileInput = document.getElementById('settingsFile');
-
-                this.setupEventListeners();
-            }
-
-            setupEventListeners() {
-                this.downloadButton.addEventListener('click', () => {
-                    this.downloadSettings();
-                });
-
-                this.restoreButton.addEventListener('click', () => {
-                    this.settingsFileInput.click();
-                });
-
-                this.settingsFileInput.addEventListener('change', async (event) => {
-                    const file = event.target.files[0];
-                    if (file) {
-                        await this.restoreSettings(file);
-                    }
-                    this.settingsFileInput.value = '';
-                });
-            }
-
-            async downloadSettings() {
-                const adsbee = new ADSBeeAT(this.adsbeeUrl);
-                await adsbee.connect();
-                const response = await adsbee.sendCmd('AT+SETTINGS?DUMP\r\n', 0, true, true);
-
-                // Only keep lines starting with AT+ 
-                const settingsLines = response.filter(line => line.startsWith('AT+'));
-
-                const blob = new Blob([settingsLines.join('\n')], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `adsbee_${new Date().toISOString().replace(/[:.]/g, '-')}.settings`;
-                a.click();
-                URL.revokeObjectURL(url);
-            }
-
-            async restoreSettings(file) {
-                const adsbee = new ADSBeeAT(this.adsbeeUrl);
-                await adsbee.connect();
-
-                const text = await file.text();
-                const commands = text.split('\n').filter(line => line.trim());
-
-                for (const command of commands) {
-                    try {
-                        await adsbee.sendCmd(command + '\r\n', 0, true, true);
-                    } catch (error) {
-                        throw new Error(`Failed executing command: ${command} - ${error.message}`);
-                    }
-                }
-            }
+            handle.addEventListener('mousedown', (e) => {
+                startY   = e.clientY;
+                startMap = mapEl.offsetHeight;
+                startTbl = tblEl.offsetHeight;
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup',   onUp);
+                e.preventDefault();
+            });
+            handle.addEventListener('touchstart', (e) => {
+                startY   = e.touches[0].clientY;
+                startMap = mapEl.offsetHeight;
+                startTbl = tblEl.offsetHeight;
+                document.addEventListener('touchmove', onMove, { passive: false });
+                document.addEventListener('touchend',  onUp);
+                e.preventDefault();
+            }, { passive: false });
         }
 
         // Initialize the uploader when the page loads
         document.addEventListener('DOMContentLoaded', () => {
-            const uploader = new FirmwareUploader(HOST_URI);
-            const settingsManager = new SettingsManager(HOST_URI);
+            new FirmwareUploader(HOST_URI);
+            new SettingsManager(HOST_URI);
+            document.getElementById('sidebar-close').addEventListener('click', () => {
+                if (radarMap) radarMap.deselect();
+            });
+            initResizeHandle();
         });
     </script>
 </body>

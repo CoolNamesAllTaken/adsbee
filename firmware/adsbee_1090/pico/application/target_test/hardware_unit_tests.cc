@@ -2,6 +2,7 @@
 
 #include "adsbee.hh"
 #include "eeprom.hh"
+#include "spi_coprocessor.hh"
 
 UTEST_STATE();
 
@@ -10,6 +11,7 @@ static bool utest_main_called = false;
 CPP_AT_CALLBACK(ATTestCallback) {
     if (op == '=') {
         if (CPP_AT_HAS_ARG(0)) {
+#ifdef HARDWARE_UNIT_TESTS
             if (args[0].compare("DUMP_EEPROM") == 0) {
                 eeprom.Dump();
                 CPP_AT_SILENT_SUCCESS();
@@ -19,7 +21,25 @@ CPP_AT_CALLBACK(ATTestCallback) {
                 memset(buf, 0xFF, eeprom_size_bytes);
                 eeprom.WriteBuf(0x0, buf, eeprom_size_bytes);
                 CPP_AT_SUCCESS();
+            } else if (args[0].compare("SPI_HANDSHAKE_DEADLOCK") == 0) {
+                CPP_AT_PRINTF("Simulating SPI handshake deadlock. Expect kErrorHandshakeHigh then recovery...\r\n");
+                if (esp32.TestSPIHandshakeDeadlock()) {
+                    CPP_AT_SUCCESS();
+                } else {
+                    CPP_AT_ERROR("SPI handshake deadlock recovery failed.");
+                }
+            } else if (args[0].compare("SPI_PERSISTENT_DESYNC") == 0) {
+                CPP_AT_PRINTF(
+                    "Running persistent SPI desync test. Stresses rapid recovery + UpdateNetworkConsole "
+                    "interaction. If deadlock is reproduced the system will stop responding — power cycle to "
+                    "recover.\r\n");
+                if (esp32.TestSPIPersistentDesync()) {
+                    CPP_AT_SUCCESS();
+                } else {
+                    CPP_AT_ERROR("SPI persistent desync test detected a deadlock.");
+                }
             }
+#endif
         }
     }
 
@@ -70,6 +90,140 @@ CPP_AT_CALLBACK(ATIngestModeSCallback) {
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
+
+#ifdef ON_COPRO_MASTER
+#ifdef HARDWARE_UNIT_TESTS
+
+bool SPICoprocessor::TestSPIPersistentDesync() {
+    uint32_t saved_interval = update_interval_ms;
+    update_interval_ms = 0;
+    last_update_timestamp_ms_ = 0;
+    if (!Update()) {
+        CONSOLE_ERROR("TestSPIPersistentDesync", "ABORT: Baseline Update() failed before test began.");
+        update_interval_ms = saved_interval;
+        return false;
+    }
+    CONSOLE_INFO("TestSPIPersistentDesync", "Baseline OK. Starting 200-iteration stress loop...");
+
+    static const int kNumStressIterations = 200;
+    static const int kDesyncEveryN = 20;
+    static uint8_t fake_composite[512];
+    memset(fake_composite, 0, sizeof(fake_composite));
+    static const uint8_t kScratchPayload[] = {0xDE, 0xAD, 0xBE, 0xEF};
+    uint32_t success_count = 0, fail_count = 0;
+
+    for (int i = 0; i < kNumStressIterations; i++) {
+        const char* flood = "TestSPIPersistentDesync: simulated console error message\r\n";
+        for (const char* p = flood; *p; p++) {
+            comms_manager.esp32_console_tx_queue.Enqueue(*p);
+        }
+        comms_manager.UpdateNetworkConsole();
+        Write(ObjectDictionary::Address::kAddrCompositeArrayRawPackets, fake_composite,
+              /*require_ack=*/true, (uint16_t)sizeof(fake_composite));
+        if (i % kDesyncEveryN == 0) {
+            SPICoprocessorPacket::SCReadRequestPacket req;
+            req.cmd = ObjectDictionary::SCCommand::kCmdReadFromSlave;
+            req.addr = ObjectDictionary::Address::kAddrDeviceStatus;
+            req.offset = 0;
+            req.len = sizeof(ObjectDictionary::ESP32DeviceStatus);
+            req.PopulateCRC();
+            SPIWriteBlocking(req.GetBuf(), req.GetBufLenBytes(), /*end_transaction=*/true);
+            uint32_t wait_start = get_time_since_boot_ms();
+            while (get_time_since_boot_ms() - wait_start <
+                   SPICoprocessorSlaveInterface::kSPIHandshakeTimeoutMs / 2) {}
+            PartialWrite(ObjectDictionary::Address::kAddrScratch,
+                         const_cast<uint8_t*>(kScratchPayload), sizeof(kScratchPayload), 0,
+                         /*require_ack=*/false);
+        }
+        last_update_timestamp_ms_ = 0;
+        if (Update()) {
+            success_count++;
+        } else {
+            fail_count++;
+        }
+        if ((i + 1) % 20 == 0) {
+            CONSOLE_INFO("TestSPIPersistentDesync", "Iter %d/%d: %lu successes, %lu failures.",
+                         i + 1, kNumStressIterations, success_count, fail_count);
+        }
+    }
+
+    update_interval_ms = saved_interval;
+    CONSOLE_INFO("TestSPIPersistentDesync",
+                 "Stress loop complete (%lu successes, %lu failures). Checking for deadlock...",
+                 success_count, fail_count);
+    static const int kMaxRecoveryAttempts = 30;
+    bool recovered = false;
+    for (int attempt = 0; attempt < kMaxRecoveryAttempts; attempt++) {
+        last_update_timestamp_ms_ = 0;
+        if (Update()) {
+            recovered = true;
+            CONSOLE_INFO("TestSPIPersistentDesync",
+                         "System functional after stress loop (recovered on attempt %d/%d).",
+                         attempt + 1, kMaxRecoveryAttempts);
+            break;
+        }
+        uint32_t delay_start = get_time_since_boot_ms();
+        while (get_time_since_boot_ms() - delay_start < 100) {}
+    }
+
+    uint32_t diag_start_ms = get_time_since_boot_ms();
+    uint32_t high_count = 0, sample_count = 0;
+    while (get_time_since_boot_ms() - diag_start_ms < 1000) {
+        if (config_.interface.SPIGetHandshakePinLevel()) high_count++;
+        sample_count++;
+        uint32_t sample_delay = get_time_since_boot_ms();
+        while (get_time_since_boot_ms() - sample_delay < 10) {}
+    }
+    uint32_t handshake_high_pct = sample_count > 0 ? (high_count * 100 / sample_count) : 0;
+    CONSOLE_INFO("TestSPIPersistentDesync", "Handshake HIGH %lu%% of 1s diagnostic window (%lu/%lu samples).",
+                 handshake_high_pct, high_count, sample_count);
+    if (handshake_high_pct > 90) {
+        CONSOLE_ERROR("TestSPIPersistentDesync",
+                      "DEADLOCK CONFIRMED: handshake stuck HIGH — ESP32 spi_slave_transmit is blocked.");
+    }
+    if (!recovered) {
+        CONSOLE_ERROR("TestSPIPersistentDesync",
+                      "DEADLOCK REPRODUCED: SPI communication lost after %d stress iterations. "
+                      "System left in deadlocked state for observation. Power cycle to recover.",
+                      kNumStressIterations);
+    } else {
+        CONSOLE_INFO("TestSPIPersistentDesync",
+                     "No deadlock after %d iterations (%lu successes, %lu failures). "
+                     "Handshake stuck HIGH %lu%% of diagnostic window.",
+                     kNumStressIterations, success_count, fail_count, handshake_high_pct);
+    }
+    return recovered;
+}
+
+bool SPICoprocessor::TestSPIHandshakeDeadlock() {
+    SPICoprocessorPacket::SCReadRequestPacket request;
+    request.cmd = ObjectDictionary::SCCommand::kCmdReadFromSlave;
+    request.addr = ObjectDictionary::Address::kAddrDeviceStatus;
+    request.offset = 0;
+    request.len = sizeof(ObjectDictionary::ESP32DeviceStatus);
+    request.PopulateCRC();
+    int bytes = SPIWriteBlocking(request.GetBuf(), request.GetBufLenBytes(), /*end_transaction=*/true);
+    if (bytes < 0) {
+        CONSOLE_ERROR("TestSPIHandshakeDeadlock", "Failed to send read request (code %d).", bytes);
+        return false;
+    }
+    uint32_t delay_start_ms = get_time_since_boot_ms();
+    while (get_time_since_boot_ms() - delay_start_ms <
+           SPICoprocessorSlaveInterface::kSPIHandshakeTimeoutMs + 10) {}
+    CONSOLE_INFO("TestSPIHandshakeDeadlock",
+                 "Handshake should be HIGH. Attempting write to trigger recovery...");
+    uint8_t dummy[4] = {0};
+    bool recovered = PartialWrite(ObjectDictionary::Address::kAddrScratch, dummy, sizeof(dummy));
+    if (recovered) {
+        CONSOLE_INFO("TestSPIHandshakeDeadlock", "Recovery succeeded — deadlock fix is working.");
+    } else {
+        CONSOLE_ERROR("TestSPIHandshakeDeadlock", "Recovery failed — system may be deadlocked.");
+    }
+    return recovered;
+}
+
+#endif  // HARDWARE_UNIT_TESTS
+#endif  // ON_COPRO_MASTER
 
 CPP_AT_CALLBACK(ATIngestUATCallback) {
     if (op == '=') {

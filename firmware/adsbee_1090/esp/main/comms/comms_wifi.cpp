@@ -254,11 +254,61 @@ bool CommsManager::IPWANSendRawPacketCompositeArray(uint8_t* raw_packets_buf) {
         //     "disconnected.");
         return false;  // Task not started yet, queue not created yet. Pushing to queue would cause an abort.
     }
+
+    UBaseType_t slots_used = uxQueueMessagesWaiting(ip_wan_reporting_composite_array_queue_);
+    bool queue_half_full = (slots_used * 2 >= kReportingCompositeArrayQueueNumElements);
+
+    // Opportunistically flush the scratch buffer when the queue has dropped below half capacity.
+    if (composite_array_scratch_has_data_ && !queue_half_full) {
+        if (xQueueSend(ip_wan_reporting_composite_array_queue_, composite_array_scratch_buf_,
+                       pdMS_TO_TICKS(kWiFiSTAMessageQueueTimeoutMs)) == pdTRUE) {
+            composite_array_scratch_has_data_ = false;
+            slots_used++;
+            queue_half_full = (slots_used * 2 >= kReportingCompositeArrayQueueNumElements);
+        }
+    }
+
+    // When the queue is at least half full, merge incoming packets into the scratch buffer instead
+    // of pushing a new slot, to reduce the rate at which the queue fills.
+    if (queue_half_full) {
+        if (composite_array_scratch_has_data_) {
+            if (CompositeArray::MergeRawPacketsBuffers(composite_array_scratch_buf_, raw_packets_buf)) {
+                return true;  // Merged into scratch; scratch will be flushed when queue has room.
+            }
+            // Scratch is too full to absorb the merge; push it and start fresh with incoming.
+            int flush_err = xQueueSend(ip_wan_reporting_composite_array_queue_, composite_array_scratch_buf_,
+                                       pdMS_TO_TICKS(kWiFiSTAMessageQueueTimeoutMs));
+            if (flush_err == errQUEUE_FULL) {
+                UBaseType_t slots_waiting = uxQueueMessagesWaiting(ip_wan_reporting_composite_array_queue_);
+                auto* scratch_hdr = reinterpret_cast<CompositeArray::RawPackets::Header*>(composite_array_scratch_buf_);
+                CONSOLE_WARNING("CommsManager::IPWANSendRawPacketCompositeArray",
+                                "Overflowed WAN raw packet composite array queue (%u/%u slots used) while flushing "
+                                "scratch buffer. Dropping: %u ModeS, %u UAT-ADS-B, %u UAT-Uplink.",
+                                (unsigned)slots_waiting, kReportingCompositeArrayQueueNumElements,
+                                scratch_hdr->num_mode_s_packets, scratch_hdr->num_uat_adsb_packets,
+                                scratch_hdr->num_uat_uplink_packets);
+                xQueueReset(ip_wan_reporting_composite_array_queue_);
+            }
+            composite_array_scratch_has_data_ = false;
+        }
+        // Save incoming into scratch buffer (either it was empty, or we just flushed it).
+        memcpy(composite_array_scratch_buf_, raw_packets_buf, CompositeArray::RawPackets::kMaxLenBytes);
+        composite_array_scratch_has_data_ = true;
+        return true;
+    }
+
+    // Normal path: queue is below half capacity, push incoming directly.
     int err = xQueueSend(ip_wan_reporting_composite_array_queue_, raw_packets_buf,
                          pdMS_TO_TICKS(kWiFiSTAMessageQueueTimeoutMs));
     if (err == errQUEUE_FULL) {
+        UBaseType_t slots_waiting = uxQueueMessagesWaiting(ip_wan_reporting_composite_array_queue_);
+        auto* incoming_hdr = reinterpret_cast<CompositeArray::RawPackets::Header*>(raw_packets_buf);
         CONSOLE_WARNING("CommsManager::IPWANSendRawPacketCompositeArray",
-                        "Overflowed WAN raw packet composite array queue.");
+                        "Overflowed WAN raw packet composite array queue (%u/%u slots used). "
+                        "Rejected: %u ModeS, %u UAT-ADS-B, %u UAT-Uplink.",
+                        (unsigned)slots_waiting, kReportingCompositeArrayQueueNumElements,
+                        incoming_hdr->num_mode_s_packets, incoming_hdr->num_uat_adsb_packets,
+                        incoming_hdr->num_uat_uplink_packets);
         xQueueReset(ip_wan_reporting_composite_array_queue_);
         return false;
     } else if (err != pdTRUE) {

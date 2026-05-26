@@ -46,13 +46,17 @@ bool WebSocketServer::Update() {
     uint32_t timestamp_ms = get_time_since_boot_ms();  // Refresh timestamp to avoid negative values for time since last
                                                        // message (except for wraps)
     for (uint16_t i = 0; i < config_.num_clients_allowed; i++) {
-        uint32_t time_since_last_message_ms = timestamp_ms - clients_[i].last_message_timestamp_ms;
-        if (clients_[i].in_use && time_since_last_message_ms > config_.inactivity_timeout_ms) {
+        uint32_t last_ts = clients_[i].last_message_timestamp_ms;
+        uint32_t time_since_last_message_ms = (last_ts <= timestamp_ms) ? (timestamp_ms - last_ts) : 0;
+        if (config_.inactivity_timeout_ms > 0 && clients_[i].in_use &&
+            time_since_last_message_ms > config_.inactivity_timeout_ms) {
             // Client is in use and has timed out.
             int client_fd = clients_[i].client_fd;
             CONSOLE_WARNING("WebSocketServer::Update",
                             "[%s] Network console client %d with fd %d timed out after %lu ms.", config_.label, i,
                             client_fd, time_since_last_message_ms);
+            RemoveClient(client_fd);  // Free slot immediately; don't wait for ws_close_fd which may not fire if session
+                                      // is already dead from httpd's perspective.
             httpd_sess_trigger_close(config_.server, client_fd);
         }
     }
@@ -149,8 +153,10 @@ bool WebSocketServer::RemoveClient(int client_fd) {
             return true;
         }
     }
-    CONSOLE_WARNING("WebSocketServer::RemoveClient",
-                    "[%s] Client with fd %d not found; it may have already been removed.", config_.label, client_fd);
+    CONSOLE_INFO(
+        "WebSocketServer::RemoveClient",
+        "[%s] Client with fd %d not found; it belong to a different websocket server or may have already been removed.",
+        config_.label, client_fd);
     return false;
 }
 
@@ -169,11 +175,10 @@ void WebSocketServer::BroadcastMessage(const char* message, int16_t len_bytes) {
                     CONSOLE_ERROR("WebSocketServer::BroadcastMessage",
                                   "[%s] Failed to send message to client %d due to error %s.", config_.label, i,
                                   esp_err_to_name(ret));
-                    httpd_sess_trigger_close(config_.server, clients_[i].client_fd);
+                    int fd = clients_[i].client_fd;
+                    RemoveClient(fd);  // Free slot immediately; don't wait for ws_close_fd which may not fire.
+                    httpd_sess_trigger_close(config_.server, fd);
                 }
-            } else {
-                // Successful send means the client is reachable — reset inactivity timer.
-                clients_[i].last_message_timestamp_ms = get_time_since_boot_ms();
             }
         }
     }

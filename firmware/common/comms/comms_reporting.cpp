@@ -3,6 +3,7 @@
 #include "settings.hh"
 
 // Reporting utils.
+#include "aircraftjson_utils.hh"
 #include "beast_utils.hh"
 #include "csbee_utils.hh"
 #include "gdl90_utils.hh"
@@ -19,6 +20,30 @@ AircraftDictionary& aircraft_dictionary = adsbee.aircraft_dictionary;
 
 GDL90Reporter gdl90;
 
+// Set to 0 to revert to per-packet sends for debugging.
+#ifndef COMMS_REPORTING_BATCH_SENDS
+#define COMMS_REPORTING_BATCH_SENDS 1
+#endif
+
+// Max packets of each type that can fit in one composite array, used to size batch buffers.
+static constexpr size_t kMaxModeSPerCompositeArray =
+    (CompositeArray::RawPackets::kMaxLenBytes - sizeof(CompositeArray::RawPackets::Header)) / sizeof(RawModeSPacket);
+static constexpr size_t kMaxUATADSBPerCompositeArray =
+    (CompositeArray::RawPackets::kMaxLenBytes - sizeof(CompositeArray::RawPackets::Header)) / sizeof(RawUATADSBPacket);
+static constexpr size_t kMaxUATUplinkPerCompositeArray =
+    (CompositeArray::RawPackets::kMaxLenBytes - sizeof(CompositeArray::RawPackets::Header)) /
+    sizeof(RawUATUplinkPacket);
+
+// Conservative upper bounds for batch buffer sizes. Sums the per-type maxima — no single composite
+// array can hit all three simultaneously (they share the 2kB budget), but the sum is provably safe.
+// Beast: kModeSBeastFrameMaxLenBytes is derived from kExtendedSquitterPacketLenBytes (14 bytes),
+//        which is already the worst-case payload; short squitter (7 bytes) produces smaller frames.
+static constexpr size_t kBeastBatchBufMaxBytes =
+    kMaxModeSPerCompositeArray * BeastReporter::kModeSBeastFrameMaxLenBytes;
+static constexpr size_t kRawBatchBufMaxBytes = kMaxModeSPerCompositeArray * kRawModeSFrameMaxNumChars +
+                                               kMaxUATADSBPerCompositeArray * kRawUATADSBFrameMaxNumChars +
+                                               kMaxUATUplinkPerCompositeArray * kRawUATUplinkFrameMaxNumChars;
+
 bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManager::ReportingProtocol* sink_protocols,
                                    uint16_t num_sinks, const CompositeArray::RawPackets* packets_to_report) {
     bool ret = true;
@@ -33,9 +58,11 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
     ReportSink mavlink1_sinks[SettingsManager::kNumSerialInterfaces];
     ReportSink mavlink2_sinks[SettingsManager::kNumSerialInterfaces];
     ReportSink gdl90_sinks[SettingsManager::kNumSerialInterfaces];
+    ReportSink aircraftjson_sinks[SettingsManager::kNumSerialInterfaces];
 
     uint16_t num_raw_sinks = 0, num_beast_sinks = 0, num_beast_no_uat_sinks = 0, num_beast_no_uat_uplink_sinks = 0,
-             num_csbee_sinks = 0, num_mavlink1_sinks = 0, num_mavlink2_sinks = 0, num_gdl90_sinks = 0;
+             num_csbee_sinks = 0, num_mavlink1_sinks = 0, num_mavlink2_sinks = 0, num_gdl90_sinks = 0,
+             num_aircraftjson_sinks = 0;
 
     for (uint16_t i = 0; i < num_sinks; i++) {
         switch (sink_protocols[i]) {
@@ -64,6 +91,9 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
                 break;
             case SettingsManager::kGDL90:
                 gdl90_sinks[num_gdl90_sinks++] = sinks[i];
+                break;
+            case SettingsManager::kAircraftJSON:
+                aircraftjson_sinks[num_aircraftjson_sinks++] = sinks[i];
                 break;
             default:
                 CONSOLE_ERROR("CommsManager::UpdateReporting",
@@ -114,11 +144,12 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
     if (mavlink1_round_active_ && num_mavlink1_sinks == 0) mavlink1_round_active_ = false;
     if (mavlink2_round_active_ && num_mavlink2_sinks == 0) mavlink2_round_active_ = false;
     if (gdl90_round_active_ && num_gdl90_sinks == 0) gdl90_round_active_ = false;
+    if (aircraftjson_round_active_ && num_aircraftjson_sinks == 0) aircraftjson_round_active_ = false;
 
-    bool all_locally_decoded_done =
-        !csbee_round_active_ && !mavlink1_round_active_ && !mavlink2_round_active_ && !gdl90_round_active_;
-    bool any_locally_decoded_active =
-        (num_csbee_sinks > 0 || num_mavlink1_sinks > 0 || num_mavlink2_sinks > 0 || num_gdl90_sinks > 0);
+    bool all_locally_decoded_done = !csbee_round_active_ && !mavlink1_round_active_ && !mavlink2_round_active_ &&
+                                    !gdl90_round_active_ && !aircraftjson_round_active_;
+    bool any_locally_decoded_active = (num_csbee_sinks > 0 || num_mavlink1_sinks > 0 || num_mavlink2_sinks > 0 ||
+                                       num_gdl90_sinks > 0 || num_aircraftjson_sinks > 0);
 
     if (any_locally_decoded_active && all_locally_decoded_done &&
         timestamp_ms - last_locally_decoded_report_timestamp_ms_ >= kCSBeeReportingIntervalMs) {
@@ -127,6 +158,7 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
         mavlink1_overrun_reported_ = false;
         mavlink2_overrun_reported_ = false;
         gdl90_overrun_reported_ = false;
+        aircraftjson_overrun_reported_ = false;
 
         // Snapshot current aircraft UIDs. All protocols will walk this same array.
         report_uids_count_ = 0;
@@ -139,12 +171,14 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
         mavlink1_report_uid_index_ = 0;
         mavlink2_report_uid_index_ = 0;
         gdl90_report_uid_index_ = 0;
+        aircraftjson_report_uid_index_ = 0;
 
         // Activate rounds for protocols that currently have sinks.
         csbee_round_active_ = (num_csbee_sinks > 0);
         mavlink1_round_active_ = (num_mavlink1_sinks > 0);
         mavlink2_round_active_ = (num_mavlink2_sinks > 0);
         gdl90_round_active_ = (num_gdl90_sinks > 0);
+        aircraftjson_round_active_ = (num_aircraftjson_sinks > 0);
     }
 
     // Drive each in-progress reporting round. Log overrun once per round if the interval lapses.
@@ -193,6 +227,18 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
             ret = false;
         }
     }
+    if (aircraftjson_round_active_) {
+        if (!aircraftjson_overrun_reported_ && elapsed_ms >= kAircraftJSONReportingIntervalMs) {
+            CONSOLE_ERROR("CommsManager::UpdateReporting",
+                          "AircraftJSON reporting overran the %lums reporting interval.",
+                          kAircraftJSONReportingIntervalMs);
+            aircraftjson_overrun_reported_ = true;
+        }
+        if (!ReportAircraftJSON(aircraftjson_sinks, num_aircraftjson_sinks)) {
+            CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportAircraftJSON.");
+            ret = false;
+        }
+    }
 
     return ret;
 }
@@ -204,6 +250,30 @@ bool CommsManager::ReportRaw(ReportSink* sinks, uint16_t num_sinks, const Compos
         return false;
     }
 
+#if COMMS_REPORTING_BATCH_SENDS
+    // Batch all frames into one buffer, then do a single send per sink to minimize lwIP IPC round-trips.
+    static char raw_batch_buf[kRawBatchBufMaxBytes];
+    uint16_t batch_len = 0;
+
+    for (uint16_t i = 0; i < packets.header->num_mode_s_packets; i++) {
+        batch_len += BuildRawModeSFrame(packets.mode_s_packets[i], raw_batch_buf + batch_len);
+    }
+    for (uint16_t i = 0; i < packets.header->num_uat_adsb_packets; i++) {
+        batch_len += BuildRawUATADSBFrame(packets.uat_adsb_packets[i], raw_batch_buf + batch_len);
+    }
+    for (uint16_t i = 0; i < packets.header->num_uat_uplink_packets; i++) {
+        batch_len += BuildRawUATUplinkFrame(packets.uat_uplink_packets[i], raw_batch_buf + batch_len);
+    }
+
+    uint16_t total_packets = packets.header->num_mode_s_packets + packets.header->num_uat_adsb_packets +
+                             packets.header->num_uat_uplink_packets;
+    bool ret = true;
+    for (uint16_t j = 0; j < num_sinks; j++) {
+        if (batch_len > 0) {
+            ret &= SendBuf(sinks[j], raw_batch_buf, batch_len, total_packets);
+        }
+    }
+#else
     bool ret = true;
     for (uint16_t i = 0; i < packets.header->num_mode_s_packets; i++) {
         char raw_frame_buf[kRawModeSFrameMaxNumChars];
@@ -226,6 +296,7 @@ bool CommsManager::ReportRaw(ReportSink* sinks, uint16_t num_sinks, const Compos
             ret &= SendBuf(sinks[j], (char*)raw_frame_buf, num_bytes_in_frame);
         }
     }
+#endif
     return ret;
 }
 
@@ -237,11 +308,42 @@ bool CommsManager::ReportBeast(ReportSink* sinks, uint16_t num_sinks, const Comp
         return false;
     }
 
+#if COMMS_REPORTING_BATCH_SENDS
+    // Batch all frames into one buffer, then do a single send per sink to minimize lwIP IPC round-trips.
+    static uint8_t beast_batch_buf[kBeastBatchBufMaxBytes];
+    uint16_t batch_len = 0;
+
+    for (uint16_t i = 0; i < packets.header->num_mode_s_packets; i++) {
+        batch_len += BeastReporter::BuildModeSBeastFrame(beast_batch_buf + batch_len, packets.mode_s_packets[i]);
+    }
+    if (protocol != SettingsManager::kBeastNoUAT) {
+        for (uint16_t i = 0; i < packets.header->num_uat_adsb_packets; i++) {
+            batch_len +=
+                BeastReporter::BuildUATADSBBeastFrame(beast_batch_buf + batch_len, packets.uat_adsb_packets[i]);
+        }
+    }
+    if (protocol != SettingsManager::kBeastNoUATUplink && protocol != SettingsManager::kBeastNoUAT) {
+        for (uint16_t i = 0; i < packets.header->num_uat_uplink_packets; i++) {
+            batch_len +=
+                BeastReporter::BuildUATUplinkBeastFrame(beast_batch_buf + batch_len, packets.uat_uplink_packets[i]);
+        }
+    }
+
+    uint16_t total_packets = packets.header->num_mode_s_packets;
+    if (protocol != SettingsManager::kBeastNoUAT) total_packets += packets.header->num_uat_adsb_packets;
+    if (protocol != SettingsManager::kBeastNoUATUplink && protocol != SettingsManager::kBeastNoUAT)
+        total_packets += packets.header->num_uat_uplink_packets;
+    bool ret = true;
+    for (uint16_t j = 0; j < num_sinks; j++) {
+        if (batch_len > 0) {
+            ret &= SendBuf(sinks[j], (char*)beast_batch_buf, batch_len, total_packets);
+        }
+    }
+#else
     bool ret = true;
     for (uint16_t i = 0; i < packets.header->num_mode_s_packets; i++) {
         uint8_t beast_frame_buf[BeastReporter::kModeSBeastFrameMaxLenBytes];
         uint16_t num_bytes_in_frame = BeastReporter::BuildModeSBeastFrame(beast_frame_buf, packets.mode_s_packets[i]);
-
         for (uint16_t j = 0; j < num_sinks; j++) {
             ret &= SendBuf(sinks[j], (char*)beast_frame_buf, num_bytes_in_frame);
         }
@@ -251,7 +353,6 @@ bool CommsManager::ReportBeast(ReportSink* sinks, uint16_t num_sinks, const Comp
             uint8_t beast_frame_buf[BeastReporter::kUATADSBBeastFrameMaxLenBytes];
             uint16_t num_bytes_in_frame =
                 BeastReporter::BuildUATADSBBeastFrame(beast_frame_buf, packets.uat_adsb_packets[i]);
-
             for (uint16_t j = 0; j < num_sinks; j++) {
                 ret &= SendBuf(sinks[j], (char*)beast_frame_buf, num_bytes_in_frame);
             }
@@ -267,7 +368,7 @@ bool CommsManager::ReportBeast(ReportSink* sinks, uint16_t num_sinks, const Comp
             }
         }
     }
-
+#endif
     return ret;
 }
 
@@ -486,6 +587,51 @@ bool CommsManager::ReportGDL90(ReportSink* sinks, uint16_t num_sinks) {
     }
 
     gdl90_round_active_ = false;
+    return ret;
+}
+
+bool CommsManager::ReportAircraftJSON(ReportSink* sinks, uint16_t num_sinks) {
+    bool ret = true;
+
+    uint32_t chunk_start_ms = get_time_since_boot_ms();
+    while (aircraftjson_report_uid_index_ < report_uids_count_) {
+        if (get_time_since_boot_ms() - chunk_start_ms >= kAircraftJSONChunkBudgetMs) {
+            return ret;  // Budget exhausted; resume on next UpdateReporting tick.
+        }
+
+        uint32_t uid = report_uids_[aircraftjson_report_uid_index_++];
+
+        auto itr = aircraft_dictionary.dict.find(uid);
+        if (itr == aircraft_dictionary.dict.end()) {
+            continue;  // Aircraft pruned mid-round; skip without losing remaining entries.
+        }
+
+        char message[kAircraftJSONMessageStrMaxLen];
+        int message_len_bytes = -1;
+
+        if (ModeSAircraft* mode_s_aircraft = get_if<ModeSAircraft>(&(itr->second)); mode_s_aircraft) {
+            message_len_bytes = WriteAircraftJSONModeSAircraftStr(message, *mode_s_aircraft);
+        } else if (UATAircraft* uat_aircraft = get_if<UATAircraft>(&(itr->second)); uat_aircraft) {
+            message_len_bytes = WriteAircraftJSONUATAircraftStr(message, *uat_aircraft);
+        } else {
+            CONSOLE_WARNING("CommsManager::ReportAircraftJSON", "Unknown aircraft type in dictionary for UID 0x%lx.",
+                            uid);
+            continue;
+        }
+
+        if (message_len_bytes < 0) {
+            CONSOLE_ERROR("CommsManager::ReportAircraftJSON",
+                          "Error in WriteAircraftJSON*Str for UID 0x%lx, error code %d.", uid, message_len_bytes);
+            ret = false;
+            continue;
+        }
+
+        for (uint16_t i = 0; i < num_sinks; i++) {
+            ret &= SendBuf(sinks[i], message, message_len_bytes);
+        }
+    }
+
+    aircraftjson_round_active_ = false;
     return ret;
 }
 

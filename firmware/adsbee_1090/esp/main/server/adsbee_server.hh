@@ -14,6 +14,7 @@ class ADSBeeServer {
     static const uint32_t kAircraftDictionaryUpdateIntervalMs = 1000;
     static const uint32_t kRawPacketProcessingIntervalMs = 200;
     static const uint32_t kGDL90ReportingIntervalMs = 1000;
+    static const uint32_t kAircraftJSONReportingIntervalMs = 1000;
 
     static const uint16_t kNetworkConsoleQueueLen = 10;
 
@@ -49,18 +50,32 @@ class ADSBeeServer {
     void TCPServerTask(void* pvParameters);
 
     // Written by Core 1 (SPI task) and read by Core 0 (main task) — must be thread-safe.
+    // Define PFB_QUEUE_NO_THREAD_SAFETY to disable mutex locking (e.g. to diagnose deadlocks).
     PFBQueue<RawModeSPacket> raw_mode_s_packet_in_queue = PFBQueue<RawModeSPacket>(
-        {.buf_len_num_elements = kMaxNumModeSPackets, .buffer = raw_mode_s_packet_in_queue_buffer_, .is_thread_safe = true});
+        {.buf_len_num_elements = kMaxNumModeSPackets, .buffer = raw_mode_s_packet_in_queue_buffer_,
+#ifndef PFB_QUEUE_NO_THREAD_SAFETY
+         .is_thread_safe = true
+#endif
+        });
     PFBQueue<RawUATADSBPacket> raw_uat_adsb_packet_in_queue = PFBQueue<RawUATADSBPacket>(
-        {.buf_len_num_elements = kMaxNumUATADSBPackets, .buffer = raw_uat_adsb_packet_in_queue_buffer_, .is_thread_safe = true});
+        {.buf_len_num_elements = kMaxNumUATADSBPackets, .buffer = raw_uat_adsb_packet_in_queue_buffer_,
+#ifndef PFB_QUEUE_NO_THREAD_SAFETY
+         .is_thread_safe = true
+#endif
+        });
     PFBQueue<RawUATUplinkPacket> raw_uat_uplink_packet_in_queue = PFBQueue<RawUATUplinkPacket>(
-        {.buf_len_num_elements = kMaxNumUATUplinkPackets, .buffer = raw_uat_uplink_packet_in_queue_buffer_, .is_thread_safe = true});
+        {.buf_len_num_elements = kMaxNumUATUplinkPackets, .buffer = raw_uat_uplink_packet_in_queue_buffer_,
+#ifndef PFB_QUEUE_NO_THREAD_SAFETY
+         .is_thread_safe = true
+#endif
+        });
 
     AircraftDictionary aircraft_dictionary;
 
     httpd_handle_t server = nullptr;
     WebSocketServer network_console;
     WebSocketServer network_metrics;
+    WebSocketServer network_aircraft;
 
     QueueHandle_t rp2040_aircraft_dictionary_metrics_queue = nullptr;
     AircraftDictionary::Metrics rp2040_aircraft_dictionary_metrics;
@@ -90,6 +105,11 @@ class ADSBeeServer {
      */
     void SendNetworkMetricsMessage();
 
+    /**
+     * Broadcasts one JSON object per tracked aircraft to all connected /aircraft websocket clients.
+     */
+    void SendAircraftJSONMessages();
+
     void SetOwnshipPosition(float latitude_deg, float longitude_deg);
 
     /**
@@ -109,6 +129,7 @@ class ADSBeeServer {
     uint32_t last_raw_packet_process_timestamp_ms_ = 0;
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
     uint32_t last_gdl90_report_timestamp_ms_ = 0;
+    uint32_t last_aircraft_json_report_timestamp_ms_ = 0;
 };
 
 extern ADSBeeServer adsbee_server;

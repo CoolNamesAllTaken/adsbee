@@ -40,6 +40,7 @@ class SettingsManager {
         kMAVLINK1,
         kMAVLINK2,
         kGDL90,
+        kAircraftJSON,
         kNumProtocols
     };
     static constexpr uint16_t kReportingProtocolStrMaxLen = 30;

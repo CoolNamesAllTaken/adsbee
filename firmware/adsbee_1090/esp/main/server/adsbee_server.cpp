@@ -1,6 +1,10 @@
 #include "adsbee_server.hh"
 
+#include "esp_heap_caps.h"
+#include "lwip/sockets.h"
+
 #include "comms.hh"
+#include "aircraftjson_utils.hh"
 #include "gdl90/gdl90_utils.hh"
 #include "json_utils.hh"
 #include "pico.hh"
@@ -37,6 +41,8 @@ extern const uint8_t index_html_start[] asm("_binary_index_html_start");
 extern const uint8_t index_html_end[] asm("_binary_index_html_end");
 extern const uint8_t style_css_start[] asm("_binary_style_css_start");
 extern const uint8_t style_css_end[] asm("_binary_style_css_end");
+extern const uint8_t adsbee_js_start[] asm("_binary_adsbee_js_start");
+extern const uint8_t adsbee_js_end[] asm("_binary_adsbee_js_end");
 extern const uint8_t favicon_png_start[] asm("_binary_favicon_png_start");
 extern const uint8_t favicon_png_end[] asm("_binary_favicon_png_end");
 
@@ -54,6 +60,13 @@ void tcp_server_task(void* pvParameters) { adsbee_server.TCPServerTask(pvParamet
 void ws_close_fd(httpd_handle_t hd, int sockfd) {
     adsbee_server.network_console.RemoveClient(sockfd);
     adsbee_server.network_metrics.RemoveClient(sockfd);
+    adsbee_server.network_aircraft.RemoveClient(sockfd);
+    // SO_LINGER with l_linger=0 sends RST instead of FIN, bypassing TCP TIME_WAIT.
+    // Without this, graceful FIN/FIN-ACK teardown (which always happens on Ethernet) accumulates
+    // TIME_WAIT entries in LWIP's PCB table (2 * MSL per close), exhausting the pool and blocking
+    // new connections. WiFi avoids this because link events cause RST, not FIN.
+    struct linger linger_opt = {.l_onoff = 1, .l_linger = 0};
+    setsockopt(sockfd, SOL_SOCKET, SO_LINGER, &linger_opt, sizeof(linger_opt));
     close(sockfd);
 }
 /** End "Pass-Through" functions. **/
@@ -119,10 +132,15 @@ bool ADSBeeServer::Update() {
 
         aircraft_dictionary.Update(timestamp_ms);
         last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
-        CONSOLE_INFO("ADSBeeServer::Update", "\t %d clients, %d aircraft, %lu squitter, %lu extended squitter",
-                     comms_manager.GetNumWiFiClients(), aircraft_dictionary.GetNumAircraft(),
-                     aircraft_dictionary.metrics.valid_squitter_frames,
-                     aircraft_dictionary.metrics.valid_extended_squitter_frames);
+        uint32_t heap_free_kb = heap_caps_get_free_size(MALLOC_CAP_8BIT) / 1024;
+        uint32_t heap_total_kb = heap_caps_get_total_size(MALLOC_CAP_8BIT) / 1024;
+        uint16_t ws_used = network_console.GetNumClients() + network_metrics.GetNumClients() +
+                           network_aircraft.GetNumClients();
+        uint16_t ws_total = network_console.GetNumClientsAllowed() + network_metrics.GetNumClientsAllowed() +
+                            network_aircraft.GetNumClientsAllowed();
+        CONSOLE_INFO("ADSBeeServer::Update", "\t %d clients, %d aircraft, heap: %luK free / %luK total, ws: %d/%d",
+                     comms_manager.GetNumWiFiClients(), aircraft_dictionary.GetNumAircraft(), heap_free_kb,
+                     heap_total_kb, ws_used, ws_total);
 
         object_dictionary.UpdateDeviceStatus();  // Get newest values for ESP32 status.
         // RP2040 and SubG status are updated by the RP2040 writing to the object dictionary periodically. Nothing to do
@@ -160,7 +178,7 @@ bool ADSBeeServer::Update() {
                               raw_packets.len_bytes);
             }
             // Else it's OK to have no packets.
-        } else {
+        } else if (raw_packets.len_bytes > sizeof(CompositeArray::RawPackets::Header)) {
             // Report raw packets then add them to the aircraft dictionary. Report first to allow network queues to be
             // processed during ingestion, which takes a while.
 
@@ -239,8 +257,18 @@ bool ADSBeeServer::Update() {
         }
     }
 
+    // Broadcast aircraft JSON to connected /aircraft WebSocket clients.
+    if (timestamp_ms - last_aircraft_json_report_timestamp_ms_ > kAircraftJSONReportingIntervalMs) {
+        last_aircraft_json_report_timestamp_ms_ = timestamp_ms;
+        if (network_aircraft.GetNumClients() > 0) {
+            SendAircraftJSONMessages();
+        }
+    }
+
     // Prune inactive WebSocket clients and other housekeeping.
     network_console.Update();
+    network_metrics.Update();
+    network_aircraft.Update();
 
     // Check to see whether the RP2040 sent over new metrics.
     xQueueReceive(rp2040_aircraft_dictionary_metrics_queue, &rp2040_aircraft_dictionary_metrics, 0);
@@ -482,6 +510,54 @@ static esp_err_t css_handler(httpd_req_t* req) {
     return ESP_OK;
 }
 
+static esp_err_t adsbee_js_handler(httpd_req_t* req) {
+    httpd_resp_set_type(req, "application/javascript");
+    httpd_resp_send(req, (const char*)adsbee_js_start, adsbee_js_end - adsbee_js_start - 1);
+    return ESP_OK;
+}
+
+static void json_escape(char* out, size_t out_size, const char* in) {
+    size_t o = 0;
+    for (size_t i = 0; in[i] && o + 2 < out_size; i++) {
+        char c = in[i];
+        if (c == '"' || c == '\\') { out[o++] = '\\'; out[o++] = c; }
+        else if (c == '\n')        { out[o++] = '\\'; out[o++] = 'n'; }
+        else if (c == '\r')        { out[o++] = '\\'; out[o++] = 'r'; }
+        else if (c == '\t')        { out[o++] = '\\'; out[o++] = 't'; }
+        else                       { out[o++] = c; }
+    }
+    out[o] = '\0';
+}
+
+static esp_err_t feed_api_get_handler(httpd_req_t* req) {
+    char query[32];
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing query");
+        return ESP_OK;
+    }
+    char index_str[8];
+    if (httpd_query_key_value(query, "index", index_str, sizeof(index_str)) != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing index");
+        return ESP_OK;
+    }
+    int index = atoi(index_str);
+    if (index < 0 || index >= (int)SettingsManager::Settings::kMaxNumFeeds) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Index out of range");
+        return ESP_OK;
+    }
+    char escaped_uri[SettingsManager::Settings::kFeedURIMaxNumChars * 2 + 1];
+    json_escape(escaped_uri, sizeof(escaped_uri), settings_manager.settings.feed_uris[index]);
+    char json[512];
+    snprintf(json, sizeof(json), "{\"index\":%d,\"uri\":\"%s\",\"port\":%d,\"active\":%d,\"protocol\":\"%s\"}", index,
+             escaped_uri, settings_manager.settings.feed_ports[index],
+             (int)settings_manager.settings.feed_is_active[index],
+             SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[index]]);
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    httpd_resp_send(req, json, HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
 esp_err_t favicon_handler(httpd_req_t* req) {
     httpd_resp_set_type(req, "image/png");
     httpd_resp_set_hdr(req, "Cache-Control", "max-age=2592000, public");  // Cache for 30 days
@@ -627,9 +703,14 @@ bool ADSBeeServer::TCPServerInit() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = kHTTPServerStackSizeBytes;
     // config.task_caps = MALLOC_CAP_IRAM_8BIT;
+    config.max_open_sockets = 16;  // Must not exceed CONFIG_LWIP_MAX_ACTIVE_TCP in sdkconfig.
     config.close_fn = ws_close_fd;
     config.lru_purge_enable =
         true;  // Allow purging of the least recently used connections when max clients is reached.
+    config.keep_alive_enable = true;
+    config.keep_alive_idle = 5;      // Seconds idle before sending first keepalive probe.
+    config.keep_alive_interval = 5;  // Seconds between keepalive probes.
+    config.keep_alive_count = 3;     // Close connection after 3 failed probes (~20s dead detection).
 
     esp_err_t ret = httpd_start(&server, &config);
     if (ret != ESP_OK) {
@@ -658,6 +739,16 @@ bool ADSBeeServer::TCPServerInit() {
                        .supported_subprotocol = nullptr};
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &css));
 
+    // JavaScript library URI handler
+    httpd_uri_t adsbee_js = {.uri = "/adsbee.js",
+                             .method = HTTP_GET,
+                             .handler = adsbee_js_handler,
+                             .user_ctx = NULL,
+                             .is_websocket = false,
+                             .handle_ws_control_frames = false,
+                             .supported_subprotocol = nullptr};
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &adsbee_js));
+
     // Favicon URI handler
     httpd_uri_t favicon = {.uri = "/favicon.png",
                            .method = HTTP_GET,
@@ -668,12 +759,22 @@ bool ADSBeeServer::TCPServerInit() {
                            .supported_subprotocol = nullptr};
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &favicon));
 
+    // Feed settings API handler
+    httpd_uri_t feed_api = {.uri = "/api/feed",
+                            .method = HTTP_GET,
+                            .handler = feed_api_get_handler,
+                            .user_ctx = NULL,
+                            .is_websocket = false,
+                            .handle_ws_control_frames = false,
+                            .supported_subprotocol = nullptr};
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &feed_api));
+
     network_console = WebSocketServer({.label = "Network Console",
                                        .server = server,
                                        .uri = "/console",
                                        .num_clients_allowed = 4,
-                                       .send_as_binary = true,  // Network console messages can contain binary data.
-                                       .inactivity_timeout_ms = 5 * 60 * 1000,  // 5 minute timeout.
+                                       .send_as_binary = true,      // Network console messages can contain binary data.
+                                       .inactivity_timeout_ms = 0,  // Disabled; TCP keepalives handle dead connections.
                                        .post_connect_callback = NetworkConsolePostConnectCallback,
                                        .message_received_callback = NetworkConsoleMessageReceivedCallback});
     if (!network_console.Init()) {
@@ -685,11 +786,23 @@ bool ADSBeeServer::TCPServerInit() {
                                        .uri = "/metrics",
                                        .num_clients_allowed = 4,
                                        .send_as_binary = false,                 // Network metrics are always ASCII.
-                                       .inactivity_timeout_ms = 5 * 60 * 1000,  // 5 minute timeout.
+                                       .inactivity_timeout_ms = 90 * 1000,  // 90s — 1.5× JS heartbeat interval.
                                        .post_connect_callback = nullptr,
                                        .message_received_callback = nullptr});
     if (!network_metrics.Init()) {
         CONSOLE_ERROR("ADSBeeServer::TCPServerInit", "Failed to start Network Metrics WebSocket server.");
+        return false;
+    }
+    network_aircraft = WebSocketServer({.label = "Network Aircraft",
+                                        .server = server,
+                                        .uri = "/aircraft",
+                                        .num_clients_allowed = 4,
+                                        .send_as_binary = false,
+                                        .inactivity_timeout_ms = 90 * 1000,
+                                        .post_connect_callback = nullptr,
+                                        .message_received_callback = nullptr});
+    if (!network_aircraft.Init()) {
+        CONSOLE_ERROR("ADSBeeServer::TCPServerInit", "Failed to start Network Aircraft WebSocket server.");
         return false;
     }
 
@@ -701,4 +814,19 @@ bool ADSBeeServer::TCPServerInit() {
                  uxTaskGetStackHighWaterMark(NULL));
 
     return true;
+}
+
+void ADSBeeServer::SendAircraftJSONMessages() {
+    char json_buf[kAircraftJSONMessageStrMaxLen];
+    for (auto& itr : aircraft_dictionary.dict) {
+        int16_t len = -1;
+        if (ModeSAircraft* ac = get_if<ModeSAircraft>(&itr.second); ac) {
+            len = WriteAircraftJSONModeSAircraftStr(json_buf, *ac);
+        } else if (UATAircraft* ac = get_if<UATAircraft>(&itr.second); ac) {
+            len = WriteAircraftJSONUATAircraftStr(json_buf, *ac);
+        }
+        if (len > 0) {
+            network_aircraft.BroadcastMessage(json_buf, len);
+        }
+    }
 }

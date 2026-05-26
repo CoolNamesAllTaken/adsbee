@@ -130,7 +130,12 @@ class SPICoprocessor : public SPICoprocessorInterface {
         // No bytes remaining.
         return true;
     }
+
+#ifdef HARDWARE_UNIT_TESTS
+    bool TestSPIHandshakeDeadlock();
+    bool TestSPIPersistentDesync();
 #endif
+#endif  // ON_COPRO_MASTER (public methods)
     /**
      * Updates the SPI coprocessor interface. On the master, this will read from the slave and process any requests the
      * slave has queued. On the slave, this will process incoming transactions from the master and reply if necessary

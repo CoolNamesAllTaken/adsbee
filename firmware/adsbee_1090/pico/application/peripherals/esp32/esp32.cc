@@ -139,7 +139,11 @@ int ESP32::SPIWriteReadBlocking(uint8_t* tx_buf, uint8_t* rx_buf, uint16_t len_b
     // Blocking check of handshake line. If we're expecting a handshake, it's OK for the line to be high. Otherwise, we
     // need to bail out to not stomp on the ESP32's incoming message.
     if (SPIGetHandshakePinLevel() && !expecting_handshake_) {
-        SPIEndTransaction();  // End transaction to purge the handshake error.
+        // Clock dummy bytes so the ESP32's pending spi_slave_transmit sees real SCLK edges and completes,
+        // lowering the handshake. A bare CS pulse without clock edges is not guaranteed to unblock DMA.
+        uint8_t dummy[kSPIHandshakeHighRecoveryLenBytes];
+        spi_read_blocking(config_.spi_handle, 0x0, dummy, sizeof(dummy));
+        SPIEndTransaction();
         return ReturnCode::kErrorHandshakeHigh;
     }
     // Pico SDK doesn't have nice nullptr behavior for tx_buf and rx_buf, so we have to do this.
