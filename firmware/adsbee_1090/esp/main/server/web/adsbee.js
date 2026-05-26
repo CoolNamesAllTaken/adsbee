@@ -8,6 +8,7 @@ class ConsoleWebSocket {
         this.url = url;
         this.paused = false;
         this.captureCallback = null;
+        this._reconnectTimer = null;
         this.init();
     }
 
@@ -97,8 +98,12 @@ class ConsoleWebSocket {
     }
 
     attemptReconnect() {
-        setTimeout(() => {
-            if (!this.paused) this.init();
+        if (this._reconnectTimer) return;
+        this._reconnectTimer = setTimeout(() => {
+            this._reconnectTimer = null;
+            if (!this.paused && (!this.ws || this.ws.readyState === WebSocket.CLOSED)) {
+                this.init();
+            }
         }, WS_CONFIG.reconnectDelayMs);
     }
 
@@ -464,17 +469,13 @@ class FeedEditor {
         const slot     = document.getElementById('feed-slot').value;
         const statusEl = document.getElementById('feed-modal-status');
         statusEl.textContent = 'Removing...';
-        const adsbee = new ADSBeeAT(HOST_URI);
         try {
-            await adsbee.connect();
-            await adsbee.sendCmd(`AT+FEED=${slot},-,0,0,NONE\r\n`, 0, true, true, 'OK', 5000);
-            await adsbee.sendCmd(`AT+SETTINGS=SAVE\r\n`, 0, true, true, 'OK', 5000);
+            await consoleWebSocket.sendAndCapture(`AT+FEED=${slot},-,0,0,NONE\r\n`, 'OK', 5000);
+            await consoleWebSocket.sendAndCapture(`AT+SETTINGS=SAVE\r\n`, 'OK', 5000);
             statusEl.textContent = 'Removed.';
             setTimeout(() => FeedEditor.close(), 800);
         } catch (e) {
             statusEl.textContent = `Error: ${e.message}`;
-        } finally {
-            await adsbee.disconnect();
         }
     }
 
@@ -487,17 +488,13 @@ class FeedEditor {
         const statusEl = document.getElementById('feed-modal-status');
 
         statusEl.textContent = 'Saving...';
-        const adsbee = new ADSBeeAT(HOST_URI);
         try {
-            await adsbee.connect();
-            await adsbee.sendCmd(`AT+FEED=${slot},${uri},${port},${active},${protocol}\r\n`, 0, true, true, 'OK', 5000);
-            await adsbee.sendCmd(`AT+SETTINGS=SAVE\r\n`, 0, true, true, 'OK', 5000);
+            await consoleWebSocket.sendAndCapture(`AT+FEED=${slot},${uri},${port},${active},${protocol}\r\n`, 'OK', 5000);
+            await consoleWebSocket.sendAndCapture(`AT+SETTINGS=SAVE\r\n`, 'OK', 5000);
             statusEl.textContent = 'Saved.';
             setTimeout(() => FeedEditor.close(), 800);
         } catch (e) {
             statusEl.textContent = `Error: ${e.message}`;
-        } finally {
-            await adsbee.disconnect();
         }
     }
 }
