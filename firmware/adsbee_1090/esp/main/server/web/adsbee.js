@@ -133,17 +133,18 @@ class ConsoleWebSocket {
 }
 
 class SparklineChart {
-    constructor(id, maxPoints = 20) {
+    constructor(id, windowSeconds = 20) {
         this.svg = document.getElementById(id);
-        this.maxPoints = maxPoints;
-        this.points = Array(maxPoints).fill(0);
+        this.windowSeconds = windowSeconds;
+        this.buffer = [];
         this.valueEl = this.svg.parentNode.querySelector('.metric-value');
-        this.createPaths();
+        this._createPaths();
+        this._startRAF();
     }
 
-    createPaths() {
-        const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    _createPaths() {
         const area = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         area.classList.add('area');
         this.svg.appendChild(area);
         this.svg.appendChild(line);
@@ -151,22 +152,52 @@ class SparklineChart {
         this.areaPath = area;
     }
 
-    update(value, unit = 'msg/s') {
-        this.points.push(value);
-        this.points.shift();
+    _startRAF() {
+        const tick = () => {
+            this._render();
+            this._rafId = requestAnimationFrame(tick);
+        };
+        this._rafId = requestAnimationFrame(tick);
+    }
+
+    push(value, unit = 'msg/s') {
+        this.buffer.push({ value, ts: performance.now() });
         this.valueEl.textContent = `${value} ${unit}`;
+        const cutoff = performance.now() - (this.windowSeconds + 5) * 1000;
+        while (this.buffer.length > 1 && this.buffer[0].ts < cutoff) this.buffer.shift();
+    }
 
-        const max = Math.max(...this.points, 1);
-        const points = this.points.map((p, i) => [
-            (i / (this.maxPoints - 1)) * 100,
-            30 - (p / max) * 30
-        ]);
+    _render() {
+        const now = performance.now();
+        const windowMs = this.windowSeconds * 1000;
+        const startMs = now - windowMs;
 
-        const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p[0]} ${p[1]}`).join(' ');
-        this.linePath.setAttribute('d', line);
+        // Collect visible points; prepend one point before the window so the
+        // line reaches the left edge instead of starting mid-chart.
+        const pts = [];
+        for (let i = 0; i < this.buffer.length; i++) {
+            if (this.buffer[i].ts >= startMs) {
+                if (i > 0 && pts.length === 0) pts.push(this.buffer[i - 1]);
+                pts.push(this.buffer[i]);
+            }
+        }
+        if (pts.length < 2) return;
 
-        const area = line + ` L ${points[points.length - 1][0]} 30 L 0 30 Z`;
-        this.areaPath.setAttribute('d', area);
+        const max = Math.max(...pts.map(p => p.value), 1);
+        const toXY = p => [
+            ((p.ts - startMs) / windowMs) * 100,
+            30 - (p.value / max) * 28,
+        ];
+        const coords = pts.map(toXY);
+        const lineCmds = coords.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(2)},${p[1].toFixed(2)}`).join(' ');
+        const areaCmds = `${lineCmds} L${coords[coords.length - 1][0].toFixed(2)},30 L${coords[0][0].toFixed(2)},30 Z`;
+
+        this.linePath.setAttribute('d', lineCmds);
+        this.areaPath.setAttribute('d', areaCmds);
+    }
+
+    destroy() {
+        if (this._rafId) { cancelAnimationFrame(this._rafId); this._rafId = null; }
     }
 }
 
@@ -198,8 +229,8 @@ class MetricCard {
     }
 
     destroy() {
+        this.chart.destroy();
         this.container.removeChild(this.card);
-        delete this.chart;
     }
 
     labelToID(label) {
@@ -207,7 +238,7 @@ class MetricCard {
     }
 
     update(value) {
-        this.chart.update(value, this.unit);
+        this.chart.push(value, this.unit);
     }
 }
 

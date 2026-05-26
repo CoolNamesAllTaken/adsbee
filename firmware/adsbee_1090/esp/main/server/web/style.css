@@ -164,8 +164,6 @@ body {
 /* ─── Metrics ────────────────────────────────────────── */
 .metrics {
     display: block;
-    flex-wrap: wrap;
-    border-radius: 8px;
     font-family: Arial;
 }
 
@@ -177,6 +175,24 @@ body {
     box-shadow: var(--shadow);
     display: inline-block;
     transition: background-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.metric-title {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    margin-bottom: 0.3rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+    transition: color 0.25s ease;
+}
+
+.metric-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    transition: color 0.25s ease;
 }
 
 .metrics-title {
@@ -199,10 +215,18 @@ body {
 }
 
 .metrics-value {
-    font-size: 1.5rem;
+    font-size: 1.1rem;
     font-weight: 600;
     color: var(--text-primary);
     transition: color 0.25s ease;
+}
+
+#feed-metrics-container,
+#device-status-container {
+    border-top: 1px solid var(--border-subtle);
+    margin-top: 4px;
+    padding-top: 4px;
+    transition: border-color 0.25s ease;
 }
 
 .device-status {
@@ -224,6 +248,44 @@ body {
     display: inline-block;
     min-width: 200px;
     transition: background-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.device-status-title {
+    font-weight: 700;
+    font-size: 0.75rem;
+    color: #ffcb00;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+
+.status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    padding: 2px 0;
+    font-size: 0.8rem;
+    font-family: Arial, sans-serif;
+    border-bottom: 1px solid var(--border-subtle);
+    transition: border-color 0.25s ease;
+}
+
+.status-item:last-child {
+    border-bottom: none;
+}
+
+.status-key {
+    color: var(--text-secondary);
+    white-space: nowrap;
+    transition: color 0.25s ease;
+}
+
+.status-value {
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    transition: color 0.25s ease;
 }
 
 .sparkline {
