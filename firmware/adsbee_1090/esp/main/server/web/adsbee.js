@@ -1023,3 +1023,315 @@ class SettingsManager {
         }
     }
 }
+
+// ─── Altitude colour (tar1090-inspired) ──────────────────────────────────────
+function acAltColor(altFt) {
+    if (altFt == null) return '#888888';
+    if (altFt <  1000) return '#FF2222';
+    if (altFt <  3000) return '#FF6B00';
+    if (altFt <  7000) return '#FFB300';
+    if (altFt < 12000) return '#CCDF00';
+    if (altFt < 20000) return '#00E676';
+    if (altFt < 30000) return '#00B0FF';
+    if (altFt < 40000) return '#7C4DFF';
+    return '#E040FB';
+}
+
+// ─── AircraftWebSocket ────────────────────────────────────────────────────────
+class AircraftWebSocket {
+    constructor(url) {
+        this.url = url;
+        this.paused = false;
+        this.onMessage = null;
+        this.ws = null;
+        this._timer = null;
+        this._connect();
+    }
+
+    _connect() {
+        if (this.paused) return;
+        this.ws = new WebSocket(this.url);
+        this.ws.onopen  = () => console.log('[AircraftWS] connected');
+        this.ws.onmessage = (ev) => {
+            if (!this.onMessage) return;
+            try { this.onMessage(JSON.parse(ev.data)); } catch (_) {}
+        };
+        this.ws.onclose = () => {
+            clearTimeout(this._timer);
+            this._timer = setTimeout(() => { if (!this.paused) this._connect(); }, 3000);
+        };
+        this.ws.onerror = (e) => console.error('[AircraftWS] error', e);
+    }
+
+    pause()  { this.paused = true;  clearTimeout(this._timer); if (this.ws) this.ws.close(); }
+    resume() { if (!this.paused) return; this.paused = false; this._connect(); }
+    close(code, reason) { this.paused = true; clearTimeout(this._timer); if (this.ws) this.ws.close(code, reason); }
+}
+
+// ─── AircraftStore ────────────────────────────────────────────────────────────
+const kMaxTrailPoints = 500;
+
+class AircraftStore {
+    constructor() {
+        this.aircraft    = new Map();  // hex → latest merged data
+        this.trails      = new Map();  // hex → [{lat, lon, alt}]
+        this._seenNow    = new Set();  // hexes seen since last sweep
+        this._seenPrev   = new Set();  // hexes seen during the previous sweep interval
+    }
+
+    ingest(ac) {
+        if (!ac.hex) return;
+        const prev = this.aircraft.get(ac.hex) || {};
+        this.aircraft.set(ac.hex, { ...prev, ...ac });
+        this._seenNow.add(ac.hex);
+        if (ac.lat != null && ac.lon != null) {
+            const t = this.trails.get(ac.hex) || [];
+            t.push({ lat: ac.lat, lon: ac.lon, alt: ac.alt_baro ?? null });
+            if (t.length > kMaxTrailPoints) t.shift();
+            this.trails.set(ac.hex, t);
+        }
+    }
+
+    // Remove any aircraft absent from both this interval and the previous one,
+    // then rotate the seen-sets. The two-interval window tolerates timing skew
+    // between the server's 1 Hz send and the client's 1 Hz tick.
+    sweep() {
+        for (const hex of this.aircraft.keys()) {
+            if (!this._seenNow.has(hex) && !this._seenPrev.has(hex)) {
+                this.aircraft.delete(hex);
+                this.trails.delete(hex);
+            }
+        }
+        this._seenPrev = this._seenNow;
+        this._seenNow  = new Set();
+    }
+
+    all() { return [...this.aircraft.values()]; }
+}
+
+// ─── RadarMap ─────────────────────────────────────────────────────────────────
+class RadarMap {
+    constructor(containerId, store) {
+        this.containerId  = containerId;
+        this.store        = store;
+        this.map          = null;
+        this.markers      = new Map();    // hex → L.Marker
+        this.trailLines   = new Map();    // hex → L.Polyline
+        this.activeTrails = new Set();
+        this.onTrailToggle = null;        // (hex, active) callback for table sync
+        this._ready       = false;
+        this._offline     = false;
+        this._autoCenter  = true;
+    }
+
+    async init() {
+        if (this._ready || this._offline) return;
+        try {
+            await this._loadLeaflet();
+            this._initMap();
+            this._ready = true;
+        } catch (_) {
+            this._offline = true;
+            const el = document.getElementById(this.containerId);
+            if (el) el.innerHTML = '<div class="map-offline-banner">Map tiles require internet access — aircraft data is still live in the table below.</div>';
+        }
+    }
+
+    _loadLeaflet() {
+        return new Promise((resolve, reject) => {
+            if (window.L) { resolve(); return; }
+            const tid = setTimeout(reject, 8000);
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+            document.head.appendChild(link);
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+            script.onload  = () => { clearTimeout(tid); resolve(); };
+            script.onerror = () => { clearTimeout(tid); reject(); };
+            document.head.appendChild(script);
+        });
+    }
+
+    _initMap() {
+        this.map = L.map(this.containerId, { preferCanvas: true }).setView([20, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            maxZoom: 18,
+        }).addTo(this.map);
+    }
+
+    invalidate() {
+        if (this.map) setTimeout(() => this.map.invalidateSize(), 0);
+    }
+
+    _makeIcon(color, track) {
+        const rot = (track != null) ? track : 0;
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">` +
+            `<g transform="rotate(${rot},11,11)">` +
+            `<polygon points="11,1 16,19 11,15 6,19" fill="${color}" stroke="rgba(0,0,0,0.5)" stroke-width="1.2"/>` +
+            `</g></svg>`;
+        return L.divIcon({ html: svg, className: '', iconSize: [22, 22], iconAnchor: [11, 11] });
+    }
+
+    _popupHtml(ac) {
+        const cs  = (ac.flight || '').trim() || '—';
+        const alt = ac.alt_baro != null ? ac.alt_baro.toLocaleString() + ' ft' : '—';
+        const spd = ac.gs      != null ? Math.round(ac.gs) + ' kt'            : '—';
+        const hdg = ac.track   != null ? Math.round(ac.track) + '°'           : '—';
+        return `<b>${cs}</b> <span style="font-size:0.85em;color:#888">${ac.hex}</span>` +
+               `<br>Alt: ${alt} · Spd: ${spd} · Hdg: ${hdg}`;
+    }
+
+    update() {
+        if (!this._ready) return;
+        const live = new Set();
+
+        for (const ac of this.store.all()) {
+            if (ac.lat == null || ac.lon == null) continue;
+            live.add(ac.hex);
+            const color = acAltColor(ac.alt_baro);
+            const icon  = this._makeIcon(color, ac.track);
+
+            if (this.markers.has(ac.hex)) {
+                const m = this.markers.get(ac.hex);
+                m.setLatLng([ac.lat, ac.lon]);
+                m.setIcon(icon);
+                if (m.isPopupOpen()) m.setPopupContent(this._popupHtml(ac));
+            } else {
+                const hex = ac.hex;
+                const m = L.marker([ac.lat, ac.lon], { icon })
+                    .addTo(this.map)
+                    .bindPopup(this._popupHtml(ac))
+                    .on('click', () => this.toggleTrail(hex));
+                this.markers.set(hex, m);
+            }
+
+            if (this.activeTrails.has(ac.hex)) this._drawTrail(ac.hex);
+        }
+
+        // Auto-fit view on first aircraft
+        if (this._autoCenter && this.markers.size > 0) {
+            try {
+                const bounds = L.featureGroup([...this.markers.values()]).getBounds();
+                if (bounds.isValid()) {
+                    this.map.fitBounds(bounds, { padding: [50, 50], maxZoom: 9 });
+                    this._autoCenter = false;
+                }
+            } catch (_) {}
+        }
+
+        // Remove markers for gone aircraft
+        for (const hex of [...this.markers.keys()]) {
+            if (!live.has(hex)) {
+                this.markers.get(hex).remove();
+                this.markers.delete(hex);
+                if (this.trailLines.has(hex)) { this.trailLines.get(hex).remove(); this.trailLines.delete(hex); }
+                this.activeTrails.delete(hex);
+            }
+        }
+    }
+
+    toggleTrail(hex) {
+        const willBeActive = !this.activeTrails.has(hex);
+        this.setTrailActive(hex, willBeActive);
+        if (this.onTrailToggle) this.onTrailToggle(hex, willBeActive);
+        return willBeActive;
+    }
+
+    setTrailActive(hex, active) {
+        if (active) {
+            this.activeTrails.add(hex);
+            this._drawTrail(hex);
+        } else {
+            this.activeTrails.delete(hex);
+            if (this.trailLines.has(hex)) { this.trailLines.get(hex).remove(); this.trailLines.delete(hex); }
+        }
+    }
+
+    _drawTrail(hex) {
+        if (!this._ready) return;
+        // Remove previous trail before redrawing (handles pruning + altitude changes).
+        if (this.trailLines.has(hex)) { this.trailLines.get(hex).remove(); this.trailLines.delete(hex); }
+        const pts = this.store.trails.get(hex);
+        if (!pts || pts.length < 2) return;
+        // One polyline segment per pair of points, coloured by the altitude at p1.
+        const group = L.layerGroup().addTo(this.map);
+        for (let i = 0; i < pts.length - 1; i++) {
+            const p1 = pts[i], p2 = pts[i + 1];
+            L.polyline([[p1.lat, p1.lon], [p2.lat, p2.lon]], {
+                color: acAltColor(p1.alt), weight: 2, opacity: 0.75
+            }).addTo(group);
+        }
+        this.trailLines.set(hex, group);
+    }
+}
+
+// ─── AircraftTable ────────────────────────────────────────────────────────────
+class AircraftTable {
+    constructor(tbodyId, store, onSelect) {
+        this.tbody    = document.getElementById(tbodyId);
+        this.store    = store;
+        this.onSelect = onSelect;  // (hex, active) → void
+        this.selected = new Set();
+    }
+
+    update() {
+        if (!this.tbody) return;
+        const acs = this.store.all().sort((a, b) => {
+            const aa = a.alt_baro ?? -Infinity;
+            const bb = b.alt_baro ?? -Infinity;
+            return bb - aa;
+        });
+
+        const rows = new Map();
+        for (const row of this.tbody.querySelectorAll('tr[data-hex]')) rows.set(row.dataset.hex, row);
+
+        const seen = new Set();
+        for (const ac of acs) {
+            seen.add(ac.hex);
+            const cs   = (ac.flight || '').trim();
+            const alt  = ac.alt_baro != null ? ac.alt_baro.toLocaleString() : '';
+            const gs   = ac.gs       != null ? Math.round(ac.gs)            : '';
+            const hdg  = ac.track    != null ? Math.round(ac.track) + '°'   : '';
+            const lat  = ac.lat      != null ? ac.lat.toFixed(4)             : '';
+            const lon  = ac.lon      != null ? ac.lon.toFixed(4)             : '';
+            const rssi = ac.rssi     != null ? ac.rssi.toFixed(1)            : '';
+            const color = acAltColor(ac.alt_baro);
+
+            if (rows.has(ac.hex)) {
+                const r = rows.get(ac.hex);
+                const c = r.querySelectorAll('td');
+                c[0].style.color = color; c[0].textContent = ac.hex;
+                c[1].textContent = cs;  c[2].textContent = alt;
+                c[3].textContent = gs;  c[4].textContent = hdg;
+                c[5].textContent = lat; c[6].textContent = lon;
+                c[7].textContent = rssi;
+                r.classList.toggle('trail-active', this.selected.has(ac.hex));
+            } else {
+                const r = document.createElement('tr');
+                r.dataset.hex = ac.hex;
+                r.innerHTML = `<td style="color:${color};font-family:monospace">${ac.hex}</td>` +
+                    `<td>${cs}</td><td>${alt}</td><td>${gs}</td><td>${hdg}</td>` +
+                    `<td>${lat}</td><td>${lon}</td><td>${rssi}</td>`;
+                r.addEventListener('click', () => {
+                    const nowActive = !this.selected.has(ac.hex);
+                    if (nowActive) this.selected.add(ac.hex); else this.selected.delete(ac.hex);
+                    r.classList.toggle('trail-active', nowActive);
+                    if (this.onSelect) this.onSelect(ac.hex, nowActive);
+                });
+                this.tbody.appendChild(r);
+            }
+        }
+
+        for (const [hex, row] of rows) {
+            if (!seen.has(hex)) { row.remove(); this.selected.delete(hex); }
+        }
+    }
+
+    setTrailState(hex, active) {
+        if (active) this.selected.add(hex); else this.selected.delete(hex);
+        const row = this.tbody?.querySelector(`tr[data-hex="${hex}"]`);
+        if (row) row.classList.toggle('trail-active', active);
+    }
+}

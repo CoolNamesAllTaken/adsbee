@@ -38,8 +38,8 @@ CPP_AT_CALLBACK(ATTestCallback) {
                 } else {
                     CPP_AT_ERROR("SPI persistent desync test detected a deadlock.");
                 }
-#endif
             }
+#endif
         }
     }
 
@@ -92,6 +92,7 @@ CPP_AT_CALLBACK(ATIngestModeSCallback) {
 }
 
 #ifdef ON_COPRO_MASTER
+#ifdef HARDWARE_UNIT_TESTS
 
 bool SPICoprocessor::TestSPIPersistentDesync() {
     uint32_t saved_interval = update_interval_ms;
@@ -221,6 +222,7 @@ bool SPICoprocessor::TestSPIHandshakeDeadlock() {
     return recovered;
 }
 
+#endif  // HARDWARE_UNIT_TESTS
 #endif  // ON_COPRO_MASTER
 
 CPP_AT_CALLBACK(ATIngestUATCallback) {

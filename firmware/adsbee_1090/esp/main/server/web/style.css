@@ -24,6 +24,10 @@ body {
     color: var(--text-primary);
     transition: background-color 0.25s ease, color 0.25s ease;
     margin: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
 }
 
 /* ─── Theme toggle ───────────────────────────────────── */
@@ -502,4 +506,176 @@ body {
 
 .feed-cancel-btn {
     background-color: #3f3f46;
+}
+
+/* ─── Tab bar ─────────────────────────────────────────── */
+.tab-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-card);
+    border-bottom: 2px solid var(--border-subtle);
+    height: 48px;
+    padding: 0 8px 0 0;
+    flex-shrink: 0;
+    box-shadow: var(--shadow);
+    z-index: 200;
+    transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+.tab-bar-tabs {
+    display: flex;
+    align-items: center;
+    height: 100%;
+}
+
+.tab-logo {
+    font-family: Arial, sans-serif;
+    font-weight: bold;
+    font-size: 1rem;
+    color: #ffcb00;
+    padding: 0 16px;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.tab-btn {
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    font-family: Arial, sans-serif;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    padding: 0 16px;
+    height: 100%;
+    transition: color 0.15s ease, border-color 0.15s ease;
+    white-space: nowrap;
+}
+
+.tab-btn:hover {
+    color: var(--text-primary);
+}
+
+.tab-btn.active {
+    color: #ffcb00;
+    border-bottom-color: #ffcb00;
+}
+
+.tab-bar-controls {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 15px;
+    line-height: 1;
+    user-select: none;
+    padding-right: 4px;
+}
+
+/* ─── Tab contents ────────────────────────────────────── */
+.tab-content {
+    display: none;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* ─── Radar tab ───────────────────────────────────────── */
+#tab-radar {
+    overflow: hidden;
+}
+
+#tab-radar.active {
+    display: flex;
+    flex-direction: column;
+}
+
+#map-container {
+    flex: 1;
+    min-height: 200px;
+    overflow: hidden;
+    position: relative;
+}
+
+#map {
+    height: 100%;
+    width: 100%;
+}
+
+.map-offline-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    background: var(--bg-page);
+    color: var(--text-secondary);
+    font-family: Arial, sans-serif;
+    font-size: 0.9rem;
+    font-style: italic;
+    padding: 24px;
+    text-align: center;
+    transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* ─── Aircraft table ──────────────────────────────────── */
+#aircraft-table-container {
+    flex-shrink: 0;
+    height: 240px;
+    overflow-y: auto;
+    border-top: 2px solid var(--border-subtle);
+    background: var(--bg-card);
+    transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+#aircraft-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: Arial, sans-serif;
+    font-size: 0.85rem;
+}
+
+#aircraft-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--bg-card);
+    box-shadow: 0 1px 0 var(--border-subtle);
+    transition: background-color 0.25s ease;
+}
+
+#aircraft-table th {
+    padding: 6px 10px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+#aircraft-table td {
+    padding: 4px 10px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border-subtle);
+    transition: color 0.25s ease, border-color 0.25s ease;
+}
+
+#aircraft-table tbody tr {
+    cursor: pointer;
+    transition: background-color 0.1s;
+}
+
+#aircraft-table tbody tr:hover {
+    background: var(--bg-page);
+}
+
+#aircraft-table tbody tr.trail-active {
+    background: rgba(255, 203, 0, 0.12);
 }

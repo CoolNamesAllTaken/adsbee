@@ -3,82 +3,117 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>ADSBee Web Terminal</title>
+    <title>ADSBee</title>
     <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/png" href="favicon.png">
     <script src="adsbee.js"></script>
 </head>
 
 <body>
-    <div class="theme-toggle">
-        <span class="theme-toggle-label">&#9788;</span>
-        <label class="toggle-switch">
-            <input type="checkbox" id="darkModeToggle">
-            <span class="toggle-slider"></span>
-        </label>
-        <span class="theme-toggle-label">&#9790;</span>
-    </div>
-
-    <div class="column-container">
-        <div id="terminal" class="column-element" onclick="focusTerminal()">
-            <div id="terminal-content"></div>
-            <div class="input-line">
-                <span class="prompt">&gt;</span>
-                <span id="current-line"><span id="cursor"> </span></span>
-                <!-- <span id="cursor"></span> -->
-            </div>
-            <input type="text" class="hidden-input" id="hidden-input" autocomplete="off">
+    <!-- Tab bar -->
+    <div class="tab-bar">
+        <div class="tab-bar-tabs">
+            <span class="tab-logo">ADSBee</span>
+            <button class="tab-btn active" data-tab="console" onclick="switchTab('console')">Console</button>
+            <button class="tab-btn" data-tab="radar" onclick="switchTab('radar')">Radar</button>
         </div>
-
-        <div id="metrics-container" class="column-element metrics">
-            <div id="receiver-metrics-container">
-                <div class="metrics-header">Receiver Metrics</div>
-                <!-- Cards will be dynamically inserted here -->
-            </div>
-            <div id="feed-metrics-container">
-                <div id="feed-count" class="metrics-header">Feeds: 0</div>
-                <!-- Cards will be dynamically inserted here -->
-            </div>
-            <div id="device-status-container" class="device-status">
-                <div class="metrics-header">Device Status</div>
-                <div id="device-status-cards-container" class="device-status-cards">
-                    <!-- Device status cards will be dynamically inserted here -->
-                </div>
-            </div>
-        </div>
-
-        <div class="tools-container column-element">
-            <div class="button-row">
-                <button id="uploadButton" class="tools-button">
-                    Upload Firmware
-                </button>
-                <input type="file" id="fileInput" accept=".ota" style="display: none;">
-
-                <button id="downloadSettings" class="tools-button">
-                    Download Settings
-                </button>
-                <button id="restoreSettings" class="tools-button">
-                    Restore Settings
-                </button>
-            </div>
-
-            <input type="file" id="settingsFile" accept=".settings" style="display: none;">
-
-            <div id="progressContainer" class="progress-container">
-                <div class="progress-bar">
-                    <div id="progressFill" class="progress-fill"></div>
-                </div>
-                <div id="progressText" class="progress-text">0%</div>
-            </div>
-
-            <div id="successAlert" class="alert success">
-                Firmware has been successfully uploaded and device is rebooting.
-            </div>
-
-            <div id="errorAlert" class="alert error"></div>
+        <div class="tab-bar-controls">
+            <span class="theme-toggle-label">&#9788;</span>
+            <label class="toggle-switch">
+                <input type="checkbox" id="darkModeToggle">
+                <span class="toggle-slider"></span>
+            </label>
+            <span class="theme-toggle-label">&#9790;</span>
         </div>
     </div>
 
+    <!-- Console tab -->
+    <div id="tab-console" class="tab-content active">
+        <div class="column-container">
+            <div id="terminal" class="column-element" onclick="focusTerminal()">
+                <div id="terminal-content"></div>
+                <div class="input-line">
+                    <span class="prompt">&gt;</span>
+                    <span id="current-line"><span id="cursor"> </span></span>
+                </div>
+                <input type="text" class="hidden-input" id="hidden-input" autocomplete="off">
+            </div>
+
+            <div id="metrics-container" class="column-element metrics">
+                <div id="receiver-metrics-container">
+                    <div class="metrics-header">Receiver Metrics</div>
+                    <!-- Cards will be dynamically inserted here -->
+                </div>
+                <div id="feed-metrics-container">
+                    <div id="feed-count" class="metrics-header">Feeds: 0</div>
+                    <!-- Cards will be dynamically inserted here -->
+                </div>
+                <div id="device-status-container" class="device-status">
+                    <div class="metrics-header">Device Status</div>
+                    <div id="device-status-cards-container" class="device-status-cards">
+                        <!-- Device status cards will be dynamically inserted here -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="tools-container column-element">
+                <div class="button-row">
+                    <button id="uploadButton" class="tools-button">
+                        Upload Firmware
+                    </button>
+                    <input type="file" id="fileInput" accept=".ota" style="display: none;">
+
+                    <button id="downloadSettings" class="tools-button">
+                        Download Settings
+                    </button>
+                    <button id="restoreSettings" class="tools-button">
+                        Restore Settings
+                    </button>
+                </div>
+
+                <input type="file" id="settingsFile" accept=".settings" style="display: none;">
+
+                <div id="progressContainer" class="progress-container">
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill"></div>
+                    </div>
+                    <div id="progressText" class="progress-text">0%</div>
+                </div>
+
+                <div id="successAlert" class="alert success">
+                    Firmware has been successfully uploaded and device is rebooting.
+                </div>
+
+                <div id="errorAlert" class="alert error"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Radar tab -->
+    <div id="tab-radar" class="tab-content">
+        <div id="map-container">
+            <div id="map"></div>
+        </div>
+        <div id="aircraft-table-container">
+            <table id="aircraft-table">
+                <thead>
+                    <tr>
+                        <th>ICAO</th>
+                        <th>Callsign</th>
+                        <th>Alt&nbsp;(ft)</th>
+                        <th>Spd&nbsp;(kt)</th>
+                        <th>Hdg</th>
+                        <th>Lat</th>
+                        <th>Lon</th>
+                        <th>RSSI</th>
+                    </tr>
+                </thead>
+                <tbody id="aircraft-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Feed editor modal -->
     <div id="feed-modal" style="display:none;">
         <div id="feed-modal-box">
             <h2>Edit Feed</h2>
@@ -109,6 +144,7 @@
         </div>
     </div>
 
+    <!-- Firmware update modal -->
     <div id="firmware-modal" style="display:none;">
         <div id="firmware-modal-box">
             <h2>Firmware Update In Progress</h2>
@@ -127,8 +163,9 @@
     <script>
         const HOST_URI = window.location.hostname || "testbee.local";
         const WS_CONFIG = {
-            console_ws_url: `ws://${HOST_URI}/console`,
-            metrics_ws_url: `ws://${HOST_URI}/metrics`,
+            console_ws_url:  `ws://${HOST_URI}/console`,
+            metrics_ws_url:  `ws://${HOST_URI}/metrics`,
+            aircraft_ws_url: `ws://${HOST_URI}/aircraft`,
             reconnectDelayMs: 5000
         };
 
@@ -142,7 +179,6 @@
         const hiddenInput = document.getElementById('hidden-input');
         const cursor = document.getElementById('cursor');
 
-        let socket = null;
         let commandHistory = [];
         let historyIndex = -1;
         let currentCommand = '';
@@ -289,17 +325,11 @@
                     break;
                 case 'ArrowLeft':
                     e.preventDefault();
-                    if (cursorPosition > 0) {
-                        cursorPosition--;
-                        updateDisplay();
-                    }
+                    if (cursorPosition > 0) { cursorPosition--; updateDisplay(); }
                     break;
                 case 'ArrowRight':
                     e.preventDefault();
-                    if (cursorPosition < currentCommand.length) {
-                        cursorPosition++;
-                        updateDisplay();
-                    }
+                    if (cursorPosition < currentCommand.length) { cursorPosition++; updateDisplay(); }
                     break;
                 case 'Home':
                     e.preventDefault();
@@ -321,7 +351,6 @@
                     break;
                 case 'Tab':
                     e.preventDefault();
-                    // Could implement command completion here
                     break;
             }
         });
@@ -353,10 +382,10 @@
             }
         });
 
-        window.addEventListener('pagehide', (event) => {
-            // Close WebSocket connection gracefully
-            consoleWebSocket.close(1000, 'Tab closing - normal shutdown');
-            metricsWebSocket.close(1000, 'Tab closing - normal shutdown');
+        window.addEventListener('pagehide', () => {
+            consoleWebSocket?.close(1000, 'Tab closing - normal shutdown');
+            metricsWebSocket?.close(1000, 'Tab closing - normal shutdown');
+            aircraftWebSocket?.close(1000, 'Tab closing - normal shutdown');
         });
 
         // Initialize dark mode
@@ -370,17 +399,84 @@
             localStorage.setItem('darkMode', darkModeToggle.checked ? 'true' : 'false');
         });
 
-        // Initialize
-        const consoleWebSocket = new ConsoleWebSocket(WS_CONFIG.console_ws_url);
-        focusTerminal();
+        /**
+         * Tab management and radar.
+         */
 
-        // Initialize WebSocket connection for metrics feed
-        const metricsWebSocket = new MetricsWebSocket(WS_CONFIG.metrics_ws_url);
+        let consoleWebSocket = null;
+        let metricsWebSocket = null;
+        let aircraftWebSocket = null;
+        let radarMap = null;
+        let aircraftStore = null;
+        let acTable = null;
+        let aircraftUpdateTimer = null;
+
+        function switchTab(name) {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.tab === name);
+            });
+            document.querySelectorAll('.tab-content').forEach(el => {
+                el.classList.toggle('active', el.id === `tab-${name}`);
+            });
+
+            if (name === 'console') {
+                if (aircraftWebSocket) aircraftWebSocket.pause();
+                clearInterval(aircraftUpdateTimer);
+                aircraftUpdateTimer = null;
+                consoleWebSocket.resume();
+                metricsWebSocket.resume();
+                focusTerminal();
+            } else if (name === 'radar') {
+                consoleWebSocket.pause();
+                metricsWebSocket.pause();
+                initRadar().catch(e => console.error('Radar init error:', e));
+            }
+        }
+
+        async function initRadar() {
+            if (!aircraftStore) aircraftStore = new AircraftStore();
+
+            if (!radarMap) {
+                radarMap = new RadarMap('map', aircraftStore);
+                radarMap.onTrailToggle = (hex, active) => {
+                    if (acTable) acTable.setTrailState(hex, active);
+                };
+                await radarMap.init();
+            } else {
+                radarMap.invalidate();
+            }
+
+            if (!acTable) {
+                acTable = new AircraftTable('aircraft-tbody', aircraftStore, (hex, active) => {
+                    if (radarMap) radarMap.setTrailActive(hex, active);
+                });
+            }
+
+            if (!aircraftWebSocket) {
+                aircraftWebSocket = new AircraftWebSocket(WS_CONFIG.aircraft_ws_url);
+                aircraftWebSocket.onMessage = (ac) => aircraftStore.ingest(ac);
+            } else {
+                aircraftWebSocket.resume();
+            }
+
+            if (!aircraftUpdateTimer) {
+                aircraftUpdateTimer = setInterval(() => {
+                    aircraftStore.sweep();
+                    radarMap.update();
+                    acTable.update();
+                }, 1000);
+            }
+        }
+
+        // Initialize on Console tab
+        consoleWebSocket = new ConsoleWebSocket(WS_CONFIG.console_ws_url);
+        metricsWebSocket = new MetricsWebSocket(WS_CONFIG.metrics_ws_url);
+        focusTerminal();
 
         // Initialize the uploader when the page loads
         document.addEventListener('DOMContentLoaded', () => {
-            const uploader = new FirmwareUploader(HOST_URI);
-            const settingsManager = new SettingsManager(HOST_URI);
+            new FirmwareUploader(HOST_URI);
+            new SettingsManager(HOST_URI);
         });
     </script>
 </body>
