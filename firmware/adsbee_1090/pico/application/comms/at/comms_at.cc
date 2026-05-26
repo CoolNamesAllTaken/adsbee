@@ -456,11 +456,15 @@ CPP_AT_CALLBACK(CommsManager::ATFeedCallback) {
                 CPP_AT_ERROR("Feed index must be between 0-%d, no details for feed with index %d.",
                              SettingsManager::Settings::kMaxNumFeeds - 1, index);
             }
-            // Set FEED_URI.
+            // Set FEED_URI. A single "-" is a sentinel meaning "clear the URI to empty".
             if (CPP_AT_HAS_ARG(1)) {
-                strncpy(settings_manager.settings.feed_uris[index], args[1].data(),
-                        SettingsManager::Settings::kFeedURIMaxNumChars);
-                settings_manager.settings.feed_uris[index][SettingsManager::Settings::kFeedURIMaxNumChars] = '\0';
+                if (args[1] == "-") {
+                    settings_manager.settings.feed_uris[index][0] = '\0';
+                } else {
+                    strncpy(settings_manager.settings.feed_uris[index], args[1].data(),
+                            SettingsManager::Settings::kFeedURIMaxNumChars);
+                    settings_manager.settings.feed_uris[index][SettingsManager::Settings::kFeedURIMaxNumChars] = '\0';
+                }
             }
             // Set FEED_PORT
             if (CPP_AT_HAS_ARG(2)) {

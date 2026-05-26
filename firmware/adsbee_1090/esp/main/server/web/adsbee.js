@@ -467,7 +467,7 @@ class FeedEditor {
         const adsbee = new ADSBeeAT(HOST_URI);
         try {
             await adsbee.connect();
-            await adsbee.sendCmd(`AT+FEED=${slot},,0,0,NONE\r\n`, 0, true, true, 'OK', 5000);
+            await adsbee.sendCmd(`AT+FEED=${slot},-,0,0,NONE\r\n`, 0, true, true, 'OK', 5000);
             await adsbee.sendCmd(`AT+SETTINGS=SAVE\r\n`, 0, true, true, 'OK', 5000);
             statusEl.textContent = 'Removed.';
             setTimeout(() => FeedEditor.close(), 800);
