@@ -91,25 +91,36 @@
 
     <!-- Radar tab -->
     <div id="tab-radar" class="tab-content">
-        <div id="map-container">
-            <div id="map"></div>
+        <div id="radar-left">
+            <div id="map-container">
+                <div id="map"></div>
+            </div>
+            <div id="resize-handle" title="Drag to resize"></div>
+            <div id="aircraft-table-container">
+                <table id="aircraft-table">
+                    <thead>
+                        <tr>
+                            <th>ICAO</th>
+                            <th>Callsign</th>
+                            <th>Sqwk</th>
+                            <th>Alt&nbsp;(ft)</th>
+                            <th>Spd&nbsp;(kt)</th>
+                            <th>Hdg</th>
+                            <th>Lat</th>
+                            <th>Lon</th>
+                            <th>RSSI</th>
+                        </tr>
+                    </thead>
+                    <tbody id="aircraft-tbody"></tbody>
+                </table>
+            </div>
         </div>
-        <div id="aircraft-table-container">
-            <table id="aircraft-table">
-                <thead>
-                    <tr>
-                        <th>ICAO</th>
-                        <th>Callsign</th>
-                        <th>Alt&nbsp;(ft)</th>
-                        <th>Spd&nbsp;(kt)</th>
-                        <th>Hdg</th>
-                        <th>Lat</th>
-                        <th>Lon</th>
-                        <th>RSSI</th>
-                    </tr>
-                </thead>
-                <tbody id="aircraft-tbody"></tbody>
-            </table>
+        <div id="aircraft-sidebar">
+            <div class="sidebar-header">
+                <span id="sidebar-title">—</span>
+                <button class="sidebar-close" id="sidebar-close">×</button>
+            </div>
+            <div id="sidebar-fields"></div>
         </div>
     </div>
 
@@ -438,8 +449,8 @@
 
             if (!radarMap) {
                 radarMap = new RadarMap('map', aircraftStore);
-                radarMap.onTrailToggle = (hex, active) => {
-                    if (acTable) acTable.setTrailState(hex, active);
+                radarMap.onSelectionChanged = (hex) => {
+                    if (acTable) acTable.setSelected(hex);
                 };
                 await radarMap.init();
             } else {
@@ -447,8 +458,8 @@
             }
 
             if (!acTable) {
-                acTable = new AircraftTable('aircraft-tbody', aircraftStore, (hex, active) => {
-                    if (radarMap) radarMap.setTrailActive(hex, active);
+                acTable = new AircraftTable('aircraft-tbody', aircraftStore, (hex) => {
+                    if (radarMap) radarMap.selectAircraft(hex);
                 });
             }
 
@@ -473,10 +484,52 @@
         metricsWebSocket = new MetricsWebSocket(WS_CONFIG.metrics_ws_url);
         focusTerminal();
 
+        function initResizeHandle() {
+            const handle = document.getElementById('resize-handle');
+            const mapEl  = document.getElementById('map-container');
+            const tblEl  = document.getElementById('aircraft-table-container');
+            let startY, startMap, startTbl;
+
+            function onMove(e) {
+                const dy = (e.touches ? e.touches[0].clientY : e.clientY) - startY;
+                const newMap = Math.max(120, startMap + dy);
+                const newTbl = Math.max(60,  startTbl - dy);
+                mapEl.style.cssText = `flex:none;height:${newMap}px`;
+                tblEl.style.height  = `${newTbl}px`;
+                if (radarMap) radarMap.invalidate();
+            }
+            function onUp() {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup',   onUp);
+                document.removeEventListener('touchmove', onMove);
+                document.removeEventListener('touchend',  onUp);
+            }
+            handle.addEventListener('mousedown', (e) => {
+                startY   = e.clientY;
+                startMap = mapEl.offsetHeight;
+                startTbl = tblEl.offsetHeight;
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup',   onUp);
+                e.preventDefault();
+            });
+            handle.addEventListener('touchstart', (e) => {
+                startY   = e.touches[0].clientY;
+                startMap = mapEl.offsetHeight;
+                startTbl = tblEl.offsetHeight;
+                document.addEventListener('touchmove', onMove, { passive: false });
+                document.addEventListener('touchend',  onUp);
+                e.preventDefault();
+            }, { passive: false });
+        }
+
         // Initialize the uploader when the page loads
         document.addEventListener('DOMContentLoaded', () => {
             new FirmwareUploader(HOST_URI);
             new SettingsManager(HOST_URI);
+            document.getElementById('sidebar-close').addEventListener('click', () => {
+                if (radarMap) radarMap.deselect();
+            });
+            initResizeHandle();
         });
     </script>
 </body>

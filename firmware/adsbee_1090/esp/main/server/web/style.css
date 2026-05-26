@@ -592,12 +592,20 @@ body {
 
 #tab-radar.active {
     display: flex;
+    flex-direction: row;
+}
+
+#radar-left {
+    flex: 1;
+    display: flex;
     flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
 }
 
 #map-container {
     flex: 1;
-    min-height: 200px;
+    min-height: 120px;
     overflow: hidden;
     position: relative;
 }
@@ -679,3 +687,95 @@ body {
 #aircraft-table tbody tr.trail-active {
     background: rgba(255, 203, 0, 0.12);
 }
+
+/* ─── Aircraft sidebar ────────────────────────────────── */
+#aircraft-sidebar {
+    display: none;
+    flex-direction: column;
+    width: 260px;
+    min-width: 260px;
+    flex-shrink: 0;
+    border-left: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+    overflow-y: auto;
+    font-family: Arial, sans-serif;
+    font-size: 0.82rem;
+    color: var(--text-primary);
+    transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px 8px;
+    border-bottom: 1px solid var(--border-subtle);
+    font-weight: bold;
+    font-size: 0.95rem;
+    color: #ffcb00;
+    position: sticky;
+    top: 0;
+    background: var(--bg-card);
+    z-index: 1;
+    transition: background-color 0.25s ease;
+    flex-shrink: 0;
+}
+
+.sidebar-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 1.2rem;
+    padding: 0 2px;
+    line-height: 1;
+}
+
+.sidebar-close:hover { color: var(--text-primary); }
+
+#sidebar-fields {
+    padding: 8px 12px 12px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 12px;
+    align-content: start;
+}
+
+.info-label {
+    color: var(--text-secondary);
+    white-space: nowrap;
+    font-size: 0.78rem;
+    padding: 1px 0;
+}
+
+.info-value {
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    padding: 1px 0;
+}
+
+/* ─── Resize handle ───────────────────────────────────── */
+#resize-handle {
+    flex-shrink: 0;
+    height: 6px;
+    background: var(--border-subtle);
+    cursor: ns-resize;
+    transition: background-color 0.15s;
+    position: relative;
+}
+
+#resize-handle::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 32px;
+    height: 2px;
+    border-top: 1px solid var(--text-secondary);
+    border-bottom: 1px solid var(--text-secondary);
+    opacity: 0.4;
+}
+
+#resize-handle:hover { background: #ffcb00; }

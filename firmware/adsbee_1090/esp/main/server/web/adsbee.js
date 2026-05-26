@@ -1112,16 +1112,16 @@ class AircraftStore {
 // ─── RadarMap ─────────────────────────────────────────────────────────────────
 class RadarMap {
     constructor(containerId, store) {
-        this.containerId  = containerId;
-        this.store        = store;
-        this.map          = null;
-        this.markers      = new Map();    // hex → L.Marker
-        this.trailLines   = new Map();    // hex → L.Polyline
-        this.activeTrails = new Set();
-        this.onTrailToggle = null;        // (hex, active) callback for table sync
-        this._ready       = false;
-        this._offline     = false;
-        this._autoCenter  = true;
+        this.containerId        = containerId;
+        this.store              = store;
+        this.map                = null;
+        this.markers            = new Map();   // hex → L.Marker
+        this.trailLines         = new Map();   // hex → L.LayerGroup
+        this.selectedHex        = null;
+        this.onSelectionChanged = null;        // (hex | null) → void
+        this._ready             = false;
+        this._offline           = false;
+        this._autoCenter        = true;
     }
 
     async init() {
@@ -1165,22 +1165,52 @@ class RadarMap {
         if (this.map) setTimeout(() => this.map.invalidateSize(), 0);
     }
 
-    _makeIcon(color, track) {
+    _makeIcon(color, track, isGround, isSelected) {
+        const ring = isSelected ? '<circle cx="16" cy="16" r="15" fill="none" stroke="white" stroke-width="2" opacity="0.7"/>' : '';
+        if (isGround) {
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">` +
+                ring +
+                `<rect x="7" y="7" width="18" height="18" rx="3" transform="rotate(45 16 16)" fill="#888888" stroke="rgba(0,0,0,0.5)" stroke-width="1.2"/>` +
+                `</svg>`;
+            return L.divIcon({ html: svg, className: '', iconSize: [32, 32], iconAnchor: [16, 16] });
+        }
         const rot = (track != null) ? track : 0;
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">` +
-            `<g transform="rotate(${rot},11,11)">` +
-            `<polygon points="11,1 16,19 11,15 6,19" fill="${color}" stroke="rgba(0,0,0,0.5)" stroke-width="1.2"/>` +
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">` +
+            ring +
+            `<g transform="rotate(${rot},16,16)">` +
+            `<polygon points="16,2 23,27 16,22 9,27" fill="${color}" stroke="rgba(0,0,0,0.5)" stroke-width="1.2"/>` +
             `</g></svg>`;
-        return L.divIcon({ html: svg, className: '', iconSize: [22, 22], iconAnchor: [11, 11] });
+        return L.divIcon({ html: svg, className: '', iconSize: [32, 32], iconAnchor: [16, 16] });
     }
 
-    _popupHtml(ac) {
-        const cs  = (ac.flight || '').trim() || '—';
-        const alt = ac.alt_baro != null ? ac.alt_baro.toLocaleString() + ' ft' : '—';
-        const spd = ac.gs      != null ? Math.round(ac.gs) + ' kt'            : '—';
-        const hdg = ac.track   != null ? Math.round(ac.track) + '°'           : '—';
-        return `<b>${cs}</b> <span style="font-size:0.85em;color:#888">${ac.hex}</span>` +
-               `<br>Alt: ${alt} · Spd: ${spd} · Hdg: ${hdg}`;
+    selectAircraft(hex) {
+        if (this.selectedHex === hex) {
+            this._clearTrail(this.selectedHex);
+            this.selectedHex = null;
+            this._hideInfoPanel();
+            if (this.onSelectionChanged) this.onSelectionChanged(null);
+        } else {
+            if (this.selectedHex) this._clearTrail(this.selectedHex);
+            this.selectedHex = hex;
+            this._drawTrail(hex);
+            const ac = this.store.aircraft.get(hex);
+            if (ac) this._showInfoPanel(ac);
+            if (this.onSelectionChanged) this.onSelectionChanged(hex);
+        }
+    }
+
+    deselect() {
+        if (this.selectedHex) this._clearTrail(this.selectedHex);
+        this.selectedHex = null;
+        this._hideInfoPanel();
+        if (this.onSelectionChanged) this.onSelectionChanged(null);
+    }
+
+    _clearTrail(hex) {
+        if (this.trailLines.has(hex)) {
+            this.trailLines.get(hex).remove();
+            this.trailLines.delete(hex);
+        }
     }
 
     update() {
@@ -1190,24 +1220,29 @@ class RadarMap {
         for (const ac of this.store.all()) {
             if (ac.lat == null || ac.lon == null) continue;
             live.add(ac.hex);
-            const color = acAltColor(ac.alt_baro);
-            const icon  = this._makeIcon(color, ac.track);
+            const color    = acAltColor(ac.alt_baro);
+            const isGround = !!ac.on_ground;
+            const isSel    = ac.hex === this.selectedHex;
+            const icon     = this._makeIcon(color, ac.track, isGround, isSel);
 
             if (this.markers.has(ac.hex)) {
                 const m = this.markers.get(ac.hex);
                 m.setLatLng([ac.lat, ac.lon]);
                 m.setIcon(icon);
-                if (m.isPopupOpen()) m.setPopupContent(this._popupHtml(ac));
             } else {
                 const hex = ac.hex;
                 const m = L.marker([ac.lat, ac.lon], { icon })
                     .addTo(this.map)
-                    .bindPopup(this._popupHtml(ac))
-                    .on('click', () => this.toggleTrail(hex));
+                    .on('click', () => this.selectAircraft(hex));
                 this.markers.set(hex, m);
             }
+        }
 
-            if (this.activeTrails.has(ac.hex)) this._drawTrail(ac.hex);
+        // Refresh trail and info panel for selected aircraft each tick
+        if (this.selectedHex && this.store.aircraft.has(this.selectedHex)) {
+            this._drawTrail(this.selectedHex);
+            const ac = this.store.aircraft.get(this.selectedHex);
+            if (ac) this._showInfoPanel(ac);
         }
 
         // Auto-fit view on first aircraft
@@ -1226,36 +1261,17 @@ class RadarMap {
             if (!live.has(hex)) {
                 this.markers.get(hex).remove();
                 this.markers.delete(hex);
-                if (this.trailLines.has(hex)) { this.trailLines.get(hex).remove(); this.trailLines.delete(hex); }
-                this.activeTrails.delete(hex);
+                this._clearTrail(hex);
+                if (hex === this.selectedHex) this.deselect();
             }
-        }
-    }
-
-    toggleTrail(hex) {
-        const willBeActive = !this.activeTrails.has(hex);
-        this.setTrailActive(hex, willBeActive);
-        if (this.onTrailToggle) this.onTrailToggle(hex, willBeActive);
-        return willBeActive;
-    }
-
-    setTrailActive(hex, active) {
-        if (active) {
-            this.activeTrails.add(hex);
-            this._drawTrail(hex);
-        } else {
-            this.activeTrails.delete(hex);
-            if (this.trailLines.has(hex)) { this.trailLines.get(hex).remove(); this.trailLines.delete(hex); }
         }
     }
 
     _drawTrail(hex) {
         if (!this._ready) return;
-        // Remove previous trail before redrawing (handles pruning + altitude changes).
-        if (this.trailLines.has(hex)) { this.trailLines.get(hex).remove(); this.trailLines.delete(hex); }
+        this._clearTrail(hex);
         const pts = this.store.trails.get(hex);
         if (!pts || pts.length < 2) return;
-        // One polyline segment per pair of points, coloured by the altitude at p1.
         const group = L.layerGroup().addTo(this.map);
         for (let i = 0; i < pts.length - 1; i++) {
             const p1 = pts[i], p2 = pts[i + 1];
@@ -1265,15 +1281,73 @@ class RadarMap {
         }
         this.trailLines.set(hex, group);
     }
+
+    _showInfoPanel(ac) {
+        const panel  = document.getElementById('aircraft-sidebar');
+        const title  = document.getElementById('sidebar-title');
+        const fields = document.getElementById('sidebar-fields');
+        if (!panel) return;
+        if (title) title.textContent = (ac.flight || '').trim() || ac.hex;
+
+        const defs = [
+            ['hex',          'ICAO',          v => v],
+            ['flight',       'Callsign',      v => v.trim() || null],
+            ['squawk',       'Squawk',        v => v],
+            ['type',         'Type',          v => v],
+            ['category',     'Category',      v => v],
+            ['on_ground',    'On ground',     v => v ? 'Yes' : null],
+            ['alt_baro',     'Alt baro',      v => v.toLocaleString() + ' ft'],
+            ['alt_geom',     'Alt geom',      v => v.toLocaleString() + ' ft'],
+            ['gs',           'Speed',         v => Math.round(v) + ' kt'],
+            ['track',        'Track',         v => v.toFixed(1) + '°'],
+            ['mag_heading',  'Mag heading',   v => v.toFixed(1) + '°'],
+            ['true_heading', 'True heading',  v => v.toFixed(1) + '°'],
+            ['baro_rate',    'Vert rate',     v => v.toLocaleString() + ' fpm'],
+            ['geom_rate',    'Geom rate',     v => v.toLocaleString() + ' fpm'],
+            ['lat',          'Latitude',      v => v.toFixed(5)],
+            ['lon',          'Longitude',     v => v.toFixed(5)],
+            ['rssi',         'RSSI',          v => v.toFixed(1) + ' dBm'],
+            ['messages',     'Messages',      v => v.toLocaleString()],
+            ['nic',          'NIC',           v => String(v)],
+            ['nic_baro',     'NIC baro',      v => String(v)],
+            ['nac_p',        'NAC p',         v => String(v)],
+            ['nac_v',        'NAC v',         v => String(v)],
+            ['sil',          'SIL',           v => String(v)],
+            ['gva',          'GVA',           v => String(v)],
+            ['sda',          'SDA',           v => String(v)],
+            ['version',      'ADS-B version', v => String(v)],
+            ['alert',        'Alert',         v => v ? 'Yes' : null],
+            ['spi',          'SPI (Ident)',   v => v ? 'Yes' : null],
+            ['emergency',    'Emergency',     v => v],
+        ];
+
+        const rows = [];
+        for (const [key, label, fmt] of defs) {
+            const raw = ac[key];
+            if (raw == null || raw === '') continue;
+            let val;
+            try { val = fmt(raw); } catch (_) { val = String(raw); }
+            if (val == null || val === '') continue;
+            rows.push(`<span class="info-label">${label}</span><span class="info-value">${val}</span>`);
+        }
+
+        if (fields) fields.innerHTML = rows.join('');
+        panel.style.display = 'flex';
+    }
+
+    _hideInfoPanel() {
+        const panel = document.getElementById('aircraft-sidebar');
+        if (panel) panel.style.display = 'none';
+    }
 }
 
 // ─── AircraftTable ────────────────────────────────────────────────────────────
 class AircraftTable {
     constructor(tbodyId, store, onSelect) {
-        this.tbody    = document.getElementById(tbodyId);
-        this.store    = store;
-        this.onSelect = onSelect;  // (hex, active) → void
-        this.selected = new Set();
+        this.tbody       = document.getElementById(tbodyId);
+        this.store       = store;
+        this.onSelect    = onSelect;   // (hex) → void
+        this.selectedHex = null;
     }
 
     update() {
@@ -1290,48 +1364,51 @@ class AircraftTable {
         const seen = new Set();
         for (const ac of acs) {
             seen.add(ac.hex);
-            const cs   = (ac.flight || '').trim();
-            const alt  = ac.alt_baro != null ? ac.alt_baro.toLocaleString() : '';
-            const gs   = ac.gs       != null ? Math.round(ac.gs)            : '';
-            const hdg  = ac.track    != null ? Math.round(ac.track) + '°'   : '';
-            const lat  = ac.lat      != null ? ac.lat.toFixed(4)             : '';
-            const lon  = ac.lon      != null ? ac.lon.toFixed(4)             : '';
-            const rssi = ac.rssi     != null ? ac.rssi.toFixed(1)            : '';
+            const cs    = (ac.flight || '').trim();
+            const sqwk  = ac.squawk  ?? '';
+            const alt   = ac.alt_baro != null ? ac.alt_baro.toLocaleString() : '';
+            const gs    = ac.gs       != null ? Math.round(ac.gs)            : '';
+            const hdg   = ac.track    != null ? Math.round(ac.track) + '°'  : '';
+            const lat   = ac.lat      != null ? ac.lat.toFixed(4)            : '';
+            const lon   = ac.lon      != null ? ac.lon.toFixed(4)            : '';
+            const rssi  = ac.rssi     != null ? ac.rssi.toFixed(1)           : '';
             const color = acAltColor(ac.alt_baro);
 
             if (rows.has(ac.hex)) {
                 const r = rows.get(ac.hex);
                 const c = r.querySelectorAll('td');
                 c[0].style.color = color; c[0].textContent = ac.hex;
-                c[1].textContent = cs;  c[2].textContent = alt;
-                c[3].textContent = gs;  c[4].textContent = hdg;
-                c[5].textContent = lat; c[6].textContent = lon;
-                c[7].textContent = rssi;
-                r.classList.toggle('trail-active', this.selected.has(ac.hex));
+                c[1].textContent = cs;   c[2].textContent = sqwk;
+                c[3].textContent = alt;  c[4].textContent = gs;
+                c[5].textContent = hdg;  c[6].textContent = lat;
+                c[7].textContent = lon;  c[8].textContent = rssi;
+                r.classList.toggle('trail-active', this.selectedHex === ac.hex);
             } else {
                 const r = document.createElement('tr');
                 r.dataset.hex = ac.hex;
                 r.innerHTML = `<td style="color:${color};font-family:monospace">${ac.hex}</td>` +
-                    `<td>${cs}</td><td>${alt}</td><td>${gs}</td><td>${hdg}</td>` +
-                    `<td>${lat}</td><td>${lon}</td><td>${rssi}</td>`;
+                    `<td>${cs}</td><td>${sqwk}</td><td>${alt}</td><td>${gs}</td>` +
+                    `<td>${hdg}</td><td>${lat}</td><td>${lon}</td><td>${rssi}</td>`;
                 r.addEventListener('click', () => {
-                    const nowActive = !this.selected.has(ac.hex);
-                    if (nowActive) this.selected.add(ac.hex); else this.selected.delete(ac.hex);
-                    r.classList.toggle('trail-active', nowActive);
-                    if (this.onSelect) this.onSelect(ac.hex, nowActive);
+                    if (this.onSelect) this.onSelect(ac.hex);
                 });
                 this.tbody.appendChild(r);
             }
         }
 
         for (const [hex, row] of rows) {
-            if (!seen.has(hex)) { row.remove(); this.selected.delete(hex); }
+            if (!seen.has(hex)) {
+                row.remove();
+                if (this.selectedHex === hex) this.selectedHex = null;
+            }
         }
     }
 
-    setTrailState(hex, active) {
-        if (active) this.selected.add(hex); else this.selected.delete(hex);
-        const row = this.tbody?.querySelector(`tr[data-hex="${hex}"]`);
-        if (row) row.classList.toggle('trail-active', active);
+    setSelected(hex) {
+        this.selectedHex = hex;
+        if (!this.tbody) return;
+        for (const row of this.tbody.querySelectorAll('tr[data-hex]')) {
+            row.classList.toggle('trail-active', row.dataset.hex === hex);
+        }
     }
 }

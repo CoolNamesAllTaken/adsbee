@@ -165,6 +165,10 @@ inline int16_t WriteAircraftJSONModeSAircraftStr(char buf[], const ModeSAircraft
         n += snprintf(buf + n, max - n, ",\"spi\":1");
     }
 
+    if (!aircraft.HasBitFlag(ModeSAircraft::kBitFlagIsAirborne)) {
+        n += snprintf(buf + n, max - n, ",\"on_ground\":1");
+    }
+
     n += snprintf(buf + n, max - n, "}\n");
 
     if (n >= max) return -1;  // Buffer overrun.
@@ -336,6 +340,10 @@ inline int16_t WriteAircraftJSONUATAircraftStr(char buf[], const UATAircraft& ai
         if (idx < kUATEmergencyStringsCount) {
             n += snprintf(buf + n, max - n, ",\"emergency\":\"%s\"", kUATEmergencyStrings[idx]);
         }
+    }
+
+    if (!aircraft.HasBitFlag(UATAircraft::kBitFlagIsAirborne) || aq == UATAircraft::kSurfaceVehicle) {
+        n += snprintf(buf + n, max - n, ",\"on_ground\":1");
     }
 
     n += snprintf(buf + n, max - n, "}\n");
