@@ -46,6 +46,15 @@ class WebSocketServer {
     bool Init();
     bool Update();
 
+    uint16_t GetNumClients() const {
+        uint16_t count = 0;
+        for (uint16_t i = 0; i < kMaxNumClients; i++) {
+            if (clients_[i].in_use) count++;
+        }
+        return count;
+    }
+    uint16_t GetNumClientsAllowed() const { return config_.num_clients_allowed; }
+
     /**
      * Send a message to all clients currently connected to this websocket.
      * @param[in] message Null-terminated string to send.

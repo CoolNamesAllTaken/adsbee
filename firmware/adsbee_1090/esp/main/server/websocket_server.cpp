@@ -55,6 +55,8 @@ bool WebSocketServer::Update() {
             CONSOLE_WARNING("WebSocketServer::Update",
                             "[%s] Network console client %d with fd %d timed out after %lu ms.", config_.label, i,
                             client_fd, time_since_last_message_ms);
+            RemoveClient(client_fd);  // Free slot immediately; don't wait for ws_close_fd which may not fire if session
+                                      // is already dead from httpd's perspective.
             httpd_sess_trigger_close(config_.server, client_fd);
         }
     }
@@ -171,11 +173,10 @@ void WebSocketServer::BroadcastMessage(const char* message, int16_t len_bytes) {
                     CONSOLE_ERROR("WebSocketServer::BroadcastMessage",
                                   "[%s] Failed to send message to client %d due to error %s.", config_.label, i,
                                   esp_err_to_name(ret));
-                    httpd_sess_trigger_close(config_.server, clients_[i].client_fd);
+                    int fd = clients_[i].client_fd;
+                    RemoveClient(fd);  // Free slot immediately; don't wait for ws_close_fd which may not fire.
+                    httpd_sess_trigger_close(config_.server, fd);
                 }
-            } else {
-                // Successful send means the client is reachable — reset inactivity timer.
-                clients_[i].last_message_timestamp_ms = get_time_since_boot_ms();
             }
         }
     }

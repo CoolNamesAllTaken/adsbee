@@ -1,5 +1,7 @@
 #include "adsbee_server.hh"
 
+#include "esp_heap_caps.h"
+
 #include "comms.hh"
 #include "gdl90/gdl90_utils.hh"
 #include "json_utils.hh"
@@ -121,10 +123,13 @@ bool ADSBeeServer::Update() {
 
         aircraft_dictionary.Update(timestamp_ms);
         last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
-        CONSOLE_INFO("ADSBeeServer::Update", "\t %d clients, %d aircraft, %lu squitter, %lu extended squitter",
-                     comms_manager.GetNumWiFiClients(), aircraft_dictionary.GetNumAircraft(),
-                     aircraft_dictionary.metrics.valid_squitter_frames,
-                     aircraft_dictionary.metrics.valid_extended_squitter_frames);
+        uint32_t heap_free_kb = heap_caps_get_free_size(MALLOC_CAP_8BIT) / 1024;
+        uint32_t heap_total_kb = heap_caps_get_total_size(MALLOC_CAP_8BIT) / 1024;
+        uint16_t ws_used = network_console.GetNumClients() + network_metrics.GetNumClients();
+        uint16_t ws_total = network_console.GetNumClientsAllowed() + network_metrics.GetNumClientsAllowed();
+        CONSOLE_INFO("ADSBeeServer::Update", "\t %d clients, %d aircraft, heap: %luK free / %luK total, ws: %d/%d",
+                     comms_manager.GetNumWiFiClients(), aircraft_dictionary.GetNumAircraft(), heap_free_kb,
+                     heap_total_kb, ws_used, ws_total);
 
         object_dictionary.UpdateDeviceStatus();  // Get newest values for ESP32 status.
         // RP2040 and SubG status are updated by the RP2040 writing to the object dictionary periodically. Nothing to do
@@ -746,7 +751,7 @@ bool ADSBeeServer::TCPServerInit() {
                                        .uri = "/metrics",
                                        .num_clients_allowed = 4,
                                        .send_as_binary = false,                 // Network metrics are always ASCII.
-                                       .inactivity_timeout_ms = 5 * 60 * 1000,  // 5 minute timeout.
+                                       .inactivity_timeout_ms = 90 * 1000,  // 90s — 1.5× JS heartbeat interval.
                                        .post_connect_callback = nullptr,
                                        .message_received_callback = nullptr});
     if (!network_metrics.Init()) {

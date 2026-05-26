@@ -304,11 +304,18 @@ class MetricsWebSocket {
     connect() {
         this.ws = new WebSocket(this.url);
 
+        this.pingInterval = setInterval(() => {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send('ping');
+            }
+        }, 60000);
+
         this.ws.onopen = () => {
             console.log('Connected to WebSocket');
         };
 
         this.ws.onclose = () => {
+            clearInterval(this.pingInterval);
             console.log('Disconnected from WebSocket');
             setTimeout(() => { if (!this.paused) this.connect(); }, 3000);
         };
