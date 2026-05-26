@@ -703,7 +703,7 @@ bool ADSBeeServer::TCPServerInit() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = kHTTPServerStackSizeBytes;
     // config.task_caps = MALLOC_CAP_IRAM_8BIT;
-    config.max_open_sockets = 16;  // Must not exceed CONFIG_LWIP_MAX_ACTIVE_TCP in sdkconfig.
+    config.max_open_sockets = 16;  // Must be <= CONFIG_LWIP_MAX_SOCKETS - 3 (currently 20 - 3 = 17).
     config.close_fn = ws_close_fd;
     config.lru_purge_enable =
         true;  // Allow purging of the least recently used connections when max clients is reached.
