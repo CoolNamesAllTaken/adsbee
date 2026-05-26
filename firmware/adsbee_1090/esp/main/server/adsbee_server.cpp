@@ -1,6 +1,7 @@
 #include "adsbee_server.hh"
 
 #include "esp_heap_caps.h"
+#include "lwip/sockets.h"
 
 #include "comms.hh"
 #include "aircraftjson_utils.hh"
@@ -60,6 +61,12 @@ void ws_close_fd(httpd_handle_t hd, int sockfd) {
     adsbee_server.network_console.RemoveClient(sockfd);
     adsbee_server.network_metrics.RemoveClient(sockfd);
     adsbee_server.network_aircraft.RemoveClient(sockfd);
+    // SO_LINGER with l_linger=0 sends RST instead of FIN, bypassing TCP TIME_WAIT.
+    // Without this, graceful FIN/FIN-ACK teardown (which always happens on Ethernet) accumulates
+    // TIME_WAIT entries in LWIP's PCB table (2 * MSL per close), exhausting the pool and blocking
+    // new connections. WiFi avoids this because link events cause RST, not FIN.
+    struct linger linger_opt = {.l_onoff = 1, .l_linger = 0};
+    setsockopt(sockfd, SOL_SOCKET, SO_LINGER, &linger_opt, sizeof(linger_opt));
     close(sockfd);
 }
 /** End "Pass-Through" functions. **/
