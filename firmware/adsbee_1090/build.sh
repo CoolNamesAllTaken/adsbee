@@ -99,7 +99,7 @@ build_test() {
     local filter="${1:-}"
     local ctest_filter_opt=""
     if [ -n "$filter" ]; then
-        ctest_filter_opt="-R '$filter'"
+        ctest_filter_opt="-R $filter"
         echo "=== Building and running host tests (filter: $filter) ==="
     else
         echo "=== Building and running host tests ==="
@@ -163,7 +163,7 @@ case "$target" in
         echo "  esp   - Build ESP32-S3 firmware only"
         echo "  ti    - Build TI CC1312 firmware only"
         echo "  pico  - Build RP2040 Pico firmware only (requires esp + ti first)"
-        echo "  test [filter] - Build and run host unit tests; optional filter is a ctest -R regex (e.g. "AircraftJSON")"
+        echo "  test [filter] - Build and run host unit tests; optional filter is a ctest -R regex (e.g. \"AircraftJSON\")"
         echo "  clean - Remove all build directories"
         exit 1
         ;;

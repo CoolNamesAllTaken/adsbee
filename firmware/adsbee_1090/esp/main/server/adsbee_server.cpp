@@ -516,6 +516,19 @@ static esp_err_t adsbee_js_handler(httpd_req_t* req) {
     return ESP_OK;
 }
 
+static void json_escape(char* out, size_t out_size, const char* in) {
+    size_t o = 0;
+    for (size_t i = 0; in[i] && o + 2 < out_size; i++) {
+        char c = in[i];
+        if (c == '"' || c == '\\') { out[o++] = '\\'; out[o++] = c; }
+        else if (c == '\n')        { out[o++] = '\\'; out[o++] = 'n'; }
+        else if (c == '\r')        { out[o++] = '\\'; out[o++] = 'r'; }
+        else if (c == '\t')        { out[o++] = '\\'; out[o++] = 't'; }
+        else                       { out[o++] = c; }
+    }
+    out[o] = '\0';
+}
+
 static esp_err_t feed_api_get_handler(httpd_req_t* req) {
     char query[32];
     if (httpd_req_get_url_query_str(req, query, sizeof(query)) != ESP_OK) {
@@ -532,9 +545,11 @@ static esp_err_t feed_api_get_handler(httpd_req_t* req) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Index out of range");
         return ESP_OK;
     }
+    char escaped_uri[SettingsManager::Settings::kFeedURIMaxNumChars * 2 + 1];
+    json_escape(escaped_uri, sizeof(escaped_uri), settings_manager.settings.feed_uris[index]);
     char json[512];
     snprintf(json, sizeof(json), "{\"index\":%d,\"uri\":\"%s\",\"port\":%d,\"active\":%d,\"protocol\":\"%s\"}", index,
-             settings_manager.settings.feed_uris[index], settings_manager.settings.feed_ports[index],
+             escaped_uri, settings_manager.settings.feed_ports[index],
              (int)settings_manager.settings.feed_is_active[index],
              SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[index]]);
     httpd_resp_set_type(req, "application/json");

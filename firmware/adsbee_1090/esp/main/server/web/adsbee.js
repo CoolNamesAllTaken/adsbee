@@ -413,7 +413,7 @@ class MetricsWebSocket {
 
 class FeedEditor {
     static PROTOCOLS = ['NONE', 'RAW', 'BEAST', 'BEAST_NO_UAT', 'BEAST_NO_UAT_UPLINK',
-                        'CSBEE', 'MAVLINK1', 'MAVLINK2', 'GDL90'];
+                        'CSBEE', 'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON'];
 
     static parseFeedResponse(text) {
         const m = text.match(/\+FEED=(\d+)\(INDEX\),([^,]*)\(URI\),(\d+)\(PORT\),(\d+)\(ACTIVE\),(\w+)\(PROTOCOL\)/);

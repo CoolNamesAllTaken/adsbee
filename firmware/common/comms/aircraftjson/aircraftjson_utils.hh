@@ -42,6 +42,7 @@ inline int16_t WriteAircraftJSONModeSAircraftStr(char buf[], const ModeSAircraft
                   "{\"hex\":\"%06lx\"",
 #endif
                   aircraft.icao_address);
+    n = n < max ? n : max;
 
     // type
     const char* type_str = "adsb_icao";
@@ -51,15 +52,18 @@ inline int16_t WriteAircraftJSONModeSAircraftStr(char buf[], const ModeSAircraft
         type_str = "adsb_icao_nt";
     }
     n += snprintf(buf + n, max - n, ",\"type\":\"%s\"", type_str);
+    n = n < max ? n : max;
 
     // flight (only if set — default is "?")
     if (aircraft.callsign[0] != '?' && aircraft.callsign[0] != '\0') {
         n += snprintf(buf + n, max - n, ",\"flight\":\"%s\"", aircraft.callsign);
+        n = n < max ? n : max;
     }
 
     // squawk
     if (aircraft.squawk != ADSBTypes::kSquawkCodeNotYetReceived) {
         n += snprintf(buf + n, max - n, ",\"squawk\":\"%04o\"", aircraft.squawk & 07777);
+        n = n < max ? n : max;
     }
 
     // category ("A0"–"D7")
@@ -67,6 +71,7 @@ inline int16_t WriteAircraftJSONModeSAircraftStr(char buf[], const ModeSAircraft
         char cat_str[4];
         if (EmitterCategoryToStr(cat_str, sizeof(cat_str), aircraft.emitter_category)) {
             n += snprintf(buf + n, max - n, ",\"category\":\"%s\"", cat_str);
+            n = n < max ? n : max;
         }
     }
 
@@ -74,6 +79,7 @@ inline int16_t WriteAircraftJSONModeSAircraftStr(char buf[], const ModeSAircraft
     if (aircraft.HasBitFlag(ModeSAircraft::kBitFlagPositionValid)) {
         n += snprintf(buf + n, max - n, ",\"lat\":%.5f,\"lon\":%.5f", aircraft.latitude_deg,
                       aircraft.longitude_deg);
+        n = n < max ? n : max;
     }
 
     // alt_baro
@@ -85,6 +91,7 @@ inline int16_t WriteAircraftJSONModeSAircraftStr(char buf[], const ModeSAircraft
                       ",\"alt_baro\":%ld",
 #endif
                       aircraft.baro_altitude_ft);
+        n = n < max ? n : max;
     }
 
     // alt_geom
@@ -96,6 +103,7 @@ inline int16_t WriteAircraftJSONModeSAircraftStr(char buf[], const ModeSAircraft
                       ",\"alt_geom\":%ld",
 #endif
                       aircraft.gnss_altitude_ft);
+        n = n < max ? n : max;
     }
 
     // gs (ground speed)
@@ -107,6 +115,7 @@ inline int16_t WriteAircraftJSONModeSAircraftStr(char buf[], const ModeSAircraft
                       ",\"gs\":%ld",
 #endif
                       aircraft.speed_kts);
+        n = n < max ? n : max;
     }
 
     // track / mag_heading / true_heading
@@ -120,6 +129,7 @@ inline int16_t WriteAircraftJSONModeSAircraftStr(char buf[], const ModeSAircraft
             dir_key = "true_heading";
         }
         n += snprintf(buf + n, max - n, ",\"%s\":%.1f", dir_key, aircraft.direction_deg);
+        n = n < max ? n : max;
     }
 
     // baro_rate
@@ -131,6 +141,7 @@ inline int16_t WriteAircraftJSONModeSAircraftStr(char buf[], const ModeSAircraft
                       ",\"baro_rate\":%ld",
 #endif
                       aircraft.baro_vertical_rate_fpm);
+        n = n < max ? n : max;
     }
 
     // geom_rate
@@ -142,6 +153,7 @@ inline int16_t WriteAircraftJSONModeSAircraftStr(char buf[], const ModeSAircraft
                       ",\"geom_rate\":%ld",
 #endif
                       aircraft.gnss_vertical_rate_fpm);
+        n = n < max ? n : max;
     }
 
     // Integrity / accuracy fields (always present)
@@ -152,21 +164,26 @@ inline int16_t WriteAircraftJSONModeSAircraftStr(char buf[], const ModeSAircraft
                   aircraft.navigation_accuracy_category_position, aircraft.navigation_accuracy_category_velocity,
                   aircraft.surveillance_integrity_level, aircraft.geometric_vertical_accuracy,
                   aircraft.system_design_assurance, aircraft.adsb_version);
+    n = n < max ? n : max;
 
     // rssi and message count (always present)
     n += snprintf(buf + n, max - n, ",\"rssi\":%d,\"messages\":%u", aircraft.last_message_signal_strength_dbm,
                   (unsigned)(aircraft.metrics.valid_squitter_frames + aircraft.metrics.valid_extended_squitter_frames));
+    n = n < max ? n : max;
 
     // alert / spi (only when set)
     if (aircraft.HasBitFlag(ModeSAircraft::kBitFlagAlert)) {
         n += snprintf(buf + n, max - n, ",\"alert\":1");
+        n = n < max ? n : max;
     }
     if (aircraft.HasBitFlag(ModeSAircraft::kBitFlagIdent)) {
         n += snprintf(buf + n, max - n, ",\"spi\":1");
+        n = n < max ? n : max;
     }
 
     if (!aircraft.HasBitFlag(ModeSAircraft::kBitFlagIsAirborne)) {
         n += snprintf(buf + n, max - n, ",\"on_ground\":1");
+        n = n < max ? n : max;
     }
 
     n += snprintf(buf + n, max - n, "}\n");
@@ -200,6 +217,7 @@ inline int16_t WriteAircraftJSONUATAircraftStr(char buf[], const UATAircraft& ai
                   "{\"hex\":\"%s%06lx\"",
 #endif
                   is_non_icao ? "~" : "", icao_24bit);
+    n = n < max ? n : max;
 
     // type (derived from address qualifier)
     const char* type_str;
@@ -223,15 +241,18 @@ inline int16_t WriteAircraftJSONUATAircraftStr(char buf[], const UATAircraft& ai
             break;
     }
     n += snprintf(buf + n, max - n, ",\"type\":\"%s\"", type_str);
+    n = n < max ? n : max;
 
     // flight
     if (aircraft.callsign[0] != '?' && aircraft.callsign[0] != '\0') {
         n += snprintf(buf + n, max - n, ",\"flight\":\"%s\"", aircraft.callsign);
+        n = n < max ? n : max;
     }
 
     // squawk
     if (aircraft.squawk != ADSBTypes::kSquawkCodeNotYetReceived) {
         n += snprintf(buf + n, max - n, ",\"squawk\":\"%04o\"", aircraft.squawk & 07777);
+        n = n < max ? n : max;
     }
 
     // category
@@ -239,6 +260,7 @@ inline int16_t WriteAircraftJSONUATAircraftStr(char buf[], const UATAircraft& ai
         char cat_str[4];
         if (EmitterCategoryToStr(cat_str, sizeof(cat_str), aircraft.emitter_category)) {
             n += snprintf(buf + n, max - n, ",\"category\":\"%s\"", cat_str);
+            n = n < max ? n : max;
         }
     }
 
@@ -246,6 +268,7 @@ inline int16_t WriteAircraftJSONUATAircraftStr(char buf[], const UATAircraft& ai
     if (aircraft.HasBitFlag(UATAircraft::kBitFlagPositionValid)) {
         n += snprintf(buf + n, max - n, ",\"lat\":%.5f,\"lon\":%.5f", aircraft.latitude_deg,
                       aircraft.longitude_deg);
+        n = n < max ? n : max;
     }
 
     // alt_baro
@@ -257,6 +280,7 @@ inline int16_t WriteAircraftJSONUATAircraftStr(char buf[], const UATAircraft& ai
                       ",\"alt_baro\":%ld",
 #endif
                       aircraft.baro_altitude_ft);
+        n = n < max ? n : max;
     }
 
     // alt_geom
@@ -268,6 +292,7 @@ inline int16_t WriteAircraftJSONUATAircraftStr(char buf[], const UATAircraft& ai
                       ",\"alt_geom\":%ld",
 #endif
                       aircraft.gnss_altitude_ft);
+        n = n < max ? n : max;
     }
 
     // gs
@@ -279,6 +304,7 @@ inline int16_t WriteAircraftJSONUATAircraftStr(char buf[], const UATAircraft& ai
                       ",\"gs\":%ld",
 #endif
                       aircraft.speed_kts);
+        n = n < max ? n : max;
     }
 
     // track / mag_heading / true_heading
@@ -292,6 +318,7 @@ inline int16_t WriteAircraftJSONUATAircraftStr(char buf[], const UATAircraft& ai
             dir_key = "true_heading";
         }
         n += snprintf(buf + n, max - n, ",\"%s\":%.1f", dir_key, aircraft.direction_deg);
+        n = n < max ? n : max;
     }
 
     // baro_rate
@@ -303,6 +330,7 @@ inline int16_t WriteAircraftJSONUATAircraftStr(char buf[], const UATAircraft& ai
                       ",\"baro_rate\":%ld",
 #endif
                       aircraft.baro_vertical_rate_fpm);
+        n = n < max ? n : max;
     }
 
     // geom_rate
@@ -314,6 +342,7 @@ inline int16_t WriteAircraftJSONUATAircraftStr(char buf[], const UATAircraft& ai
                       ",\"geom_rate\":%ld",
 #endif
                       aircraft.gnss_vertical_rate_fpm);
+        n = n < max ? n : max;
     }
 
     // Integrity / accuracy fields (always present)
@@ -324,26 +353,31 @@ inline int16_t WriteAircraftJSONUATAircraftStr(char buf[], const UATAircraft& ai
                   aircraft.navigation_accuracy_category_position, aircraft.navigation_accuracy_category_velocity,
                   aircraft.surveillance_integrity_level, aircraft.geometric_vertical_accuracy,
                   aircraft.system_design_assurance);
+    n = n < max ? n : max;
 
     // version (only if set)
     if (aircraft.uat_version >= 0) {
         n += snprintf(buf + n, max - n, ",\"version\":%d", aircraft.uat_version);
+        n = n < max ? n : max;
     }
 
     // rssi and message count (always present)
     n += snprintf(buf + n, max - n, ",\"rssi\":%d,\"messages\":%u", aircraft.last_message_signal_strength_dbm,
                   (unsigned)aircraft.metrics.valid_frames);
+    n = n < max ? n : max;
 
     // emergency (only if not none)
     if (aircraft.emergency_priority_status != UATAircraft::kEmergencyPriorityStatusNone) {
         uint8_t idx = aircraft.emergency_priority_status;
         if (idx < kUATEmergencyStringsCount) {
             n += snprintf(buf + n, max - n, ",\"emergency\":\"%s\"", kUATEmergencyStrings[idx]);
+            n = n < max ? n : max;
         }
     }
 
     if (!aircraft.HasBitFlag(UATAircraft::kBitFlagIsAirborne) || aq == UATAircraft::kSurfaceVehicle) {
         n += snprintf(buf + n, max - n, ",\"on_ground\":1");
+        n = n < max ? n : max;
     }
 
     n += snprintf(buf + n, max - n, "}\n");
