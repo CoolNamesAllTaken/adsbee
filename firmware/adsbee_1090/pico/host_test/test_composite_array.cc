@@ -179,6 +179,215 @@ TEST(CompositeArray, PackUnpackRawPacketsBufferMixedPackets) {
     }
 }
 
+TEST(CompositeArray, MergeRawPacketsBuffersEmptyIntoEmpty) {
+    uint8_t dst_buf[CompositeArray::RawPackets::kMaxLenBytes] = {0};
+    uint8_t src_buf[CompositeArray::RawPackets::kMaxLenBytes] = {0};
+
+    // Pack empty composite arrays into both buffers.
+    CompositeArray::PackRawPacketsBuffer(dst_buf, sizeof(dst_buf), nullptr, nullptr, nullptr);
+    CompositeArray::PackRawPacketsBuffer(src_buf, sizeof(src_buf), nullptr, nullptr, nullptr);
+
+    EXPECT_TRUE(CompositeArray::MergeRawPacketsBuffers(dst_buf, src_buf));
+
+    auto* hdr = reinterpret_cast<CompositeArray::RawPackets::Header*>(dst_buf);
+    EXPECT_EQ(hdr->num_mode_s_packets, 0);
+    EXPECT_EQ(hdr->num_uat_adsb_packets, 0);
+    EXPECT_EQ(hdr->num_uat_uplink_packets, 0);
+}
+
+TEST(CompositeArray, MergeRawPacketsBuffersModeS) {
+    const uint16_t kDstCount = 3;
+    const uint16_t kSrcCount = 4;
+
+    uint8_t dst_buf[CompositeArray::RawPackets::kMaxLenBytes] = {0};
+    uint8_t src_buf[CompositeArray::RawPackets::kMaxLenBytes] = {0};
+
+    PFBQueue<RawModeSPacket>::PFBQueueConfig cfg = {
+        .buf_len_num_elements = 10, .buffer = nullptr, .overwrite_when_full = false};
+    PFBQueue<RawModeSPacket> dst_q(cfg);
+    PFBQueue<RawModeSPacket> src_q(cfg);
+
+    RawModeSPacket pkt;
+    for (int i = 0; i < kDstCount; i++) {
+        pkt.buffer[0] = i;
+        dst_q.Enqueue(pkt);
+    }
+    for (int i = 0; i < kSrcCount; i++) {
+        pkt.buffer[0] = 100 + i;
+        src_q.Enqueue(pkt);
+    }
+
+    CompositeArray::PackRawPacketsBuffer(dst_buf, sizeof(dst_buf), &dst_q, nullptr, nullptr);
+    CompositeArray::PackRawPacketsBuffer(src_buf, sizeof(src_buf), &src_q, nullptr, nullptr);
+
+    EXPECT_TRUE(CompositeArray::MergeRawPacketsBuffers(dst_buf, src_buf));
+
+    auto* hdr = reinterpret_cast<CompositeArray::RawPackets::Header*>(dst_buf);
+    EXPECT_EQ(hdr->num_mode_s_packets, kDstCount + kSrcCount);
+    EXPECT_EQ(hdr->num_uat_adsb_packets, 0);
+    EXPECT_EQ(hdr->num_uat_uplink_packets, 0);
+
+    // Verify dst packets come first, then src packets.
+    auto* ms = reinterpret_cast<RawModeSPacket*>(dst_buf + sizeof(CompositeArray::RawPackets::Header));
+    for (int i = 0; i < kDstCount; i++) {
+        EXPECT_EQ(ms[i].buffer[0], (uint32_t)i);
+    }
+    for (int i = 0; i < kSrcCount; i++) {
+        EXPECT_EQ(ms[kDstCount + i].buffer[0], (uint32_t)(100 + i));
+    }
+}
+
+TEST(CompositeArray, MergeRawPacketsBuffersMixed) {
+    // Keep uplink counts small: sizeof(RawUATUplinkPacket)=568, so 3 total = 1704B of uplink alone.
+    // Use kDstUPL=0, kSrcUPL=1 so combined = 8 + 3*32 + 5*68 + 1*568 = 1012B, well under 2000.
+    const uint16_t kDstMS = 2, kDstADSB = 3, kDstUPL = 0;
+    const uint16_t kSrcMS = 1, kSrcADSB = 2, kSrcUPL = 1;
+
+    uint8_t dst_buf[CompositeArray::RawPackets::kMaxLenBytes] = {0};
+    uint8_t src_buf[CompositeArray::RawPackets::kMaxLenBytes] = {0};
+
+    auto make_ms_q = [](uint16_t count, uint32_t base) {
+        PFBQueue<RawModeSPacket>::PFBQueueConfig cfg = {
+            .buf_len_num_elements = 10, .buffer = nullptr, .overwrite_when_full = false};
+        PFBQueue<RawModeSPacket> q(cfg);
+        RawModeSPacket pkt;
+        for (uint16_t i = 0; i < count; i++) {
+            pkt.buffer[0] = base + i;
+            q.Enqueue(pkt);
+        }
+        return q;
+    };
+    auto make_adsb_q = [](uint16_t count, uint8_t base) {
+        PFBQueue<RawUATADSBPacket>::PFBQueueConfig cfg = {
+            .buf_len_num_elements = 10, .buffer = nullptr, .overwrite_when_full = false};
+        PFBQueue<RawUATADSBPacket> q(cfg);
+        RawUATADSBPacket pkt;
+        for (uint16_t i = 0; i < count; i++) {
+            pkt.buffer[0] = base + i;
+            q.Enqueue(pkt);
+        }
+        return q;
+    };
+    auto make_upl_q = [](uint16_t count, uint8_t base) {
+        PFBQueue<RawUATUplinkPacket>::PFBQueueConfig cfg = {
+            .buf_len_num_elements = 10, .buffer = nullptr, .overwrite_when_full = false};
+        PFBQueue<RawUATUplinkPacket> q(cfg);
+        RawUATUplinkPacket pkt;
+        for (uint16_t i = 0; i < count; i++) {
+            pkt.encoded_message[0] = base + i;
+            q.Enqueue(pkt);
+        }
+        return q;
+    };
+
+    auto dst_ms_q = make_ms_q(kDstMS, 0);
+    auto dst_adsb_q = make_adsb_q(kDstADSB, 10);
+    auto dst_upl_q = make_upl_q(kDstUPL, 20);
+    auto src_ms_q = make_ms_q(kSrcMS, 100);
+    auto src_adsb_q = make_adsb_q(kSrcADSB, 110);
+    auto src_upl_q = make_upl_q(kSrcUPL, 120);
+
+    CompositeArray::PackRawPacketsBuffer(dst_buf, sizeof(dst_buf), &dst_ms_q, &dst_adsb_q, &dst_upl_q);
+    CompositeArray::PackRawPacketsBuffer(src_buf, sizeof(src_buf), &src_ms_q, &src_adsb_q, &src_upl_q);
+
+    EXPECT_TRUE(CompositeArray::MergeRawPacketsBuffers(dst_buf, src_buf));
+
+    CompositeArray::RawPackets result;
+    ASSERT_TRUE(CompositeArray::UnpackRawPacketsBuffer(result, dst_buf, sizeof(dst_buf)));
+
+    EXPECT_EQ(result.header->num_mode_s_packets, kDstMS + kSrcMS);
+    EXPECT_EQ(result.header->num_uat_adsb_packets, kDstADSB + kSrcADSB);
+    EXPECT_EQ(result.header->num_uat_uplink_packets, kDstUPL + kSrcUPL);
+
+    // Mode S: dst first, then src.
+    for (int i = 0; i < kDstMS; i++) EXPECT_EQ(result.mode_s_packets[i].buffer[0], (uint32_t)i);
+    for (int i = 0; i < kSrcMS; i++) EXPECT_EQ(result.mode_s_packets[kDstMS + i].buffer[0], (uint32_t)(100 + i));
+
+    // ADS-B: dst first, then src.
+    for (int i = 0; i < kDstADSB; i++) EXPECT_EQ(result.uat_adsb_packets[i].buffer[0], (uint8_t)(10 + i));
+    for (int i = 0; i < kSrcADSB; i++) EXPECT_EQ(result.uat_adsb_packets[kDstADSB + i].buffer[0], (uint8_t)(110 + i));
+
+    // Uplink: dst first, then src.
+    for (int i = 0; i < kDstUPL; i++)
+        EXPECT_EQ(result.uat_uplink_packets[i].encoded_message[0], (uint8_t)(20 + i));
+    for (int i = 0; i < kSrcUPL; i++)
+        EXPECT_EQ(result.uat_uplink_packets[kDstUPL + i].encoded_message[0], (uint8_t)(120 + i));
+}
+
+TEST(CompositeArray, MergeRawPacketsBuffersNoModificationOnOverflow) {
+    // Fill dst_buf to near capacity with Mode S packets, then attempt a merge that would overflow.
+    // dst: as many Mode S packets as possible just under kMaxLenBytes
+    // src: one Mode S packet (should push combined size over limit)
+    const uint16_t max_ms =
+        (CompositeArray::RawPackets::kMaxLenBytes - sizeof(CompositeArray::RawPackets::Header)) / sizeof(RawModeSPacket);
+
+    uint8_t dst_buf[CompositeArray::RawPackets::kMaxLenBytes] = {0};
+    uint8_t src_buf[CompositeArray::RawPackets::kMaxLenBytes] = {0};
+
+    PFBQueue<RawModeSPacket>::PFBQueueConfig cfg = {
+        .buf_len_num_elements = max_ms + 1, .buffer = nullptr, .overwrite_when_full = false};
+    PFBQueue<RawModeSPacket> dst_q(cfg);
+    PFBQueue<RawModeSPacket> src_q(cfg);
+
+    RawModeSPacket pkt;
+    pkt.buffer[0] = 0xDEADBEEF;
+    for (uint16_t i = 0; i < max_ms; i++) dst_q.Enqueue(pkt);
+
+    pkt.buffer[0] = 0xCAFEBABE;
+    src_q.Enqueue(pkt);
+
+    CompositeArray::PackRawPacketsBuffer(dst_buf, sizeof(dst_buf), &dst_q, nullptr, nullptr);
+    CompositeArray::PackRawPacketsBuffer(src_buf, sizeof(src_buf), &src_q, nullptr, nullptr);
+
+    EXPECT_FALSE(CompositeArray::MergeRawPacketsBuffers(dst_buf, src_buf));
+
+    // dst_buf must be unmodified: header count unchanged, first packet data intact.
+    auto* hdr = reinterpret_cast<CompositeArray::RawPackets::Header*>(dst_buf);
+    EXPECT_EQ(hdr->num_mode_s_packets, max_ms);
+    auto* ms = reinterpret_cast<RawModeSPacket*>(dst_buf + sizeof(CompositeArray::RawPackets::Header));
+    EXPECT_EQ(ms[0].buffer[0], (uint32_t)0xDEADBEEF);
+}
+
+TEST(CompositeArray, MergeRawPacketsBuffersResultIsValid) {
+    uint8_t dst_buf[CompositeArray::RawPackets::kMaxLenBytes] = {0};
+    uint8_t src_buf[CompositeArray::RawPackets::kMaxLenBytes] = {0};
+
+    PFBQueue<RawModeSPacket>::PFBQueueConfig ms_cfg = {
+        .buf_len_num_elements = 10, .buffer = nullptr, .overwrite_when_full = false};
+    PFBQueue<RawUATADSBPacket>::PFBQueueConfig adsb_cfg = {
+        .buf_len_num_elements = 10, .buffer = nullptr, .overwrite_when_full = false};
+    PFBQueue<RawModeSPacket> dst_ms_q(ms_cfg), src_ms_q(ms_cfg);
+    PFBQueue<RawUATADSBPacket> dst_adsb_q(adsb_cfg), src_adsb_q(adsb_cfg);
+
+    RawModeSPacket ms_pkt;
+    ms_pkt.buffer[0] = 1;
+    dst_ms_q.Enqueue(ms_pkt);
+    ms_pkt.buffer[0] = 2;
+    src_ms_q.Enqueue(ms_pkt);
+
+    RawUATADSBPacket adsb_pkt;
+    adsb_pkt.buffer[0] = 3;
+    dst_adsb_q.Enqueue(adsb_pkt);
+    adsb_pkt.buffer[0] = 4;
+    src_adsb_q.Enqueue(adsb_pkt);
+
+    CompositeArray::PackRawPacketsBuffer(dst_buf, sizeof(dst_buf), &dst_ms_q, &dst_adsb_q, nullptr);
+    CompositeArray::PackRawPacketsBuffer(src_buf, sizeof(src_buf), &src_ms_q, &src_adsb_q, nullptr);
+
+    EXPECT_TRUE(CompositeArray::MergeRawPacketsBuffers(dst_buf, src_buf));
+
+    CompositeArray::RawPackets result;
+    EXPECT_TRUE(CompositeArray::UnpackRawPacketsBuffer(result, dst_buf, sizeof(dst_buf)));
+    EXPECT_TRUE(result.IsValid());
+    EXPECT_EQ(result.header->num_mode_s_packets, 2);
+    EXPECT_EQ(result.header->num_uat_adsb_packets, 2);
+    EXPECT_EQ(result.header->num_uat_uplink_packets, 0);
+    EXPECT_EQ(result.mode_s_packets[0].buffer[0], (uint32_t)1);
+    EXPECT_EQ(result.mode_s_packets[1].buffer[0], (uint32_t)2);
+    EXPECT_EQ(result.uat_adsb_packets[0].buffer[0], (uint8_t)3);
+    EXPECT_EQ(result.uat_adsb_packets[1].buffer[0], (uint8_t)4);
+}
+
 TEST(CompositeArray, RawPacketsHeaderIsValid) {
     CompositeArray::RawPackets packets;
     char error_msg[CompositeArray::RawPackets::kErrorMessageMaxLen];

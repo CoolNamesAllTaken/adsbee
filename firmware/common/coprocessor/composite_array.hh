@@ -136,4 +136,14 @@ class CompositeArray {
     static uint16_t CalculateRawPacketsBufferLength(PFBQueue<RawModeSPacket>* mode_s_queue,
                                                     PFBQueue<RawUATADSBPacket>* uat_adsb_queue,
                                                     PFBQueue<RawUATUplinkPacket>* uat_uplink_queue);
+
+    /**
+     * Merges packets from src_buf into dst_buf in-place. Packets of each type from src are appended after the
+     * corresponding type section in dst, preserving the [Header|ModeS|ADSB|Uplink] layout in dst_buf.
+     * @param[in,out] dst_buf Buffer to merge into. Modified in-place on success.
+     * @param[in] src_buf Buffer to read packets from. Not modified.
+     * @retval True if merge succeeded. False if the combined content would exceed kMaxLenBytes, in which case
+     * dst_buf is left unmodified.
+     */
+    static bool MergeRawPacketsBuffers(uint8_t* dst_buf, const uint8_t* src_buf);
 };
