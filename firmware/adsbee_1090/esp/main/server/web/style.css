@@ -508,6 +508,52 @@ body {
     background-color: #3f3f46;
 }
 
+.feed-remove-btn {
+    background-color: #7f1d1d !important;
+    color: #fca5a5 !important;
+}
+
+.feed-remove-btn:hover {
+    background-color: #991b1b !important;
+}
+
+/* ─── Feed metrics header ────────────────────────────── */
+.feed-metrics-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 1rem 1rem 0;
+}
+
+.feed-metrics-header .metrics-header {
+    padding: 0;
+}
+
+.feed-slot-badge {
+    font-size: 0.68rem;
+    color: var(--text-secondary);
+    opacity: 0.55;
+    font-family: monospace;
+    margin-left: 5px;
+    user-select: none;
+}
+
+.add-feed-btn {
+    font-size: 0.78rem;
+    padding: 3px 10px;
+    background: #ffcb00;
+    color: #000;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: Arial, sans-serif;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.add-feed-btn:hover { background: #ffd833; }
+.add-feed-btn:disabled { background: var(--border-subtle); color: var(--text-secondary); cursor: not-allowed; }
+
 /* ─── Tab bar ─────────────────────────────────────────── */
 .tab-bar {
     display: flex;
@@ -613,6 +659,14 @@ body {
 #map {
     height: 100%;
     width: 100%;
+}
+
+#map .leaflet-tile-pane {
+    filter: brightness(0.82) saturate(0.75);
+}
+
+body.dark-mode #map .leaflet-tile-pane {
+    filter: brightness(0.55) saturate(0.5);
 }
 
 .map-offline-banner {

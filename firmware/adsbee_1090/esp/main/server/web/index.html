@@ -45,7 +45,10 @@
                     <!-- Cards will be dynamically inserted here -->
                 </div>
                 <div id="feed-metrics-container">
-                    <div id="feed-count" class="metrics-header">Feeds: 0</div>
+                    <div class="feed-metrics-header">
+                        <span id="feed-count" class="metrics-header">Feeds: 0</span>
+                        <button id="add-feed-btn" class="add-feed-btn" onclick="FeedEditor.openFirstEmpty()">+ Add</button>
+                    </div>
                     <!-- Cards will be dynamically inserted here -->
                 </div>
                 <div id="device-status-container" class="device-status">
@@ -73,18 +76,7 @@
 
                 <input type="file" id="settingsFile" accept=".settings" style="display: none;">
 
-                <div id="progressContainer" class="progress-container">
-                    <div class="progress-bar">
-                        <div id="progressFill" class="progress-fill"></div>
-                    </div>
-                    <div id="progressText" class="progress-text">0%</div>
-                </div>
 
-                <div id="successAlert" class="alert success">
-                    Firmware has been successfully uploaded and device is rebooting.
-                </div>
-
-                <div id="errorAlert" class="alert error"></div>
             </div>
         </div>
     </div>
@@ -150,6 +142,7 @@
             </div>
             <div class="feed-modal-buttons">
                 <button class="tools-button" onclick="FeedEditor.save()">Save</button>
+                <button class="tools-button feed-remove-btn" onclick="FeedEditor.remove()">Remove</button>
                 <button class="tools-button feed-cancel-btn" onclick="FeedEditor.close()">Cancel</button>
             </div>
         </div>

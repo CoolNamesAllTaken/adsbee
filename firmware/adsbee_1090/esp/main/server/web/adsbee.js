@@ -184,8 +184,11 @@ class MetricCard {
             card.classList.add('editable');
             card.onclick = () => FeedEditor.open(feedSlot);
         }
+        const slotBadge = feedSlot !== null
+            ? `<span class="feed-slot-badge">#${feedSlot}</span>`
+            : '';
         card.innerHTML = `
-  <div class="metric-title" title="${label}">${label}</div>
+  <div class="metric-title" title="${label}">${label}${slotBadge}</div>
   <div class="metric-value">0 ${unit}</div>
   <svg class="sparkline" id="${this.id}" viewBox="0 0 100 30"></svg>
 `;
@@ -336,6 +339,7 @@ class MetricsWebSocket {
                 }
                 if (data.hasOwnProperty('server_metrics')) {
                     const serverMetrics = data['server_metrics'];
+                    this._feedUris = serverMetrics['feed_uri'];
                     const feedMetrics = {};
                     for (let i = 0; i < serverMetrics['feed_uri'].length; i++) {
                         if (serverMetrics['feed_uri'][i] === '') continue;
@@ -344,6 +348,8 @@ class MetricsWebSocket {
                     }
                     this.updateFeedCards(feedMetrics);
                     this.feedsCountEl.textContent = `Feeds: ${Object.keys(feedMetrics).length}`;
+                    const addBtn = document.getElementById('add-feed-btn');
+                    if (addBtn) addBtn.disabled = (this.getFirstEmptySlot() === -1);
                 }
                 if (data.hasOwnProperty('device_status')) {
                     const deviceStatus = data['device_status'];
@@ -354,6 +360,14 @@ class MetricsWebSocket {
                 console.error('Error parsing WebSocket message:', error);
             }
         };
+    }
+
+    getFirstEmptySlot() {
+        if (!this._feedUris) return 0;
+        for (let i = 0; i < this._feedUris.length; i++) {
+            if (this._feedUris[i] === '') return i;
+        }
+        return -1;
     }
 
     pause() { this.paused = true; if (this.ws) this.ws.close(); }
@@ -407,6 +421,30 @@ class FeedEditor {
 
     static close() {
         document.getElementById('feed-modal').style.display = 'none';
+    }
+
+    static openFirstEmpty() {
+        const slot = metricsWebSocket ? metricsWebSocket.getFirstEmptySlot() : 0;
+        if (slot === -1) return;
+        FeedEditor.open(slot);
+    }
+
+    static async remove() {
+        const slot     = document.getElementById('feed-slot').value;
+        const statusEl = document.getElementById('feed-modal-status');
+        statusEl.textContent = 'Removing...';
+        const adsbee = new ADSBeeAT(HOST_URI);
+        try {
+            await adsbee.connect();
+            await adsbee.sendCmd(`AT+FEED=${slot},,0,0,NONE\r\n`, 0, true, true, 'OK', 5000);
+            await adsbee.sendCmd(`AT+SETTINGS=SAVE\r\n`, 0, true, true, 'OK', 5000);
+            statusEl.textContent = 'Removed.';
+            setTimeout(() => FeedEditor.close(), 800);
+        } catch (e) {
+            statusEl.textContent = `Error: ${e.message}`;
+        } finally {
+            await adsbee.disconnect();
+        }
     }
 
     static async save() {
@@ -800,11 +838,6 @@ class FirmwareUploader {
         this.adsbeeUrl = adsbeeUrl;
         this.uploadButton = document.getElementById('uploadButton');
         this.fileInput = document.getElementById('fileInput');
-        this.progressContainer = document.getElementById('progressContainer');
-        this.progressFill = document.getElementById('progressFill');
-        this.progressText = document.getElementById('progressText');
-        this.successAlert = document.getElementById('successAlert');
-        this.errorAlert = document.getElementById('errorAlert');
 
         this.setupEventListeners();
     }
@@ -827,10 +860,8 @@ class FirmwareUploader {
         this.uploadButton.disabled = isUploading;
         if (isUploading) {
             this.uploadButton.innerHTML = '<span class="spinner"></span> Uploading...';
-            this.progressContainer.style.display = 'block';
         } else {
             this.uploadButton.innerHTML = 'Upload Firmware';
-            this.progressContainer.style.display = 'none';
         }
     }
 
@@ -863,8 +894,6 @@ class FirmwareUploader {
     }
 
     updateProgress(percent) {
-        this.progressFill.style.width = `${percent}%`;
-        this.progressText.textContent = `${percent}%`;
         document.getElementById('firmware-modal-fill').style.width = `${percent}%`;
         document.getElementById('firmware-modal-text').textContent = `${percent}%`;
         if (percent === 0) {
@@ -877,25 +906,18 @@ class FirmwareUploader {
     }
 
     showSuccess() {
-        this.successAlert.style.display = 'block';
-        this.errorAlert.style.display = 'none';
         this.uploadButton.innerHTML = 'Upload Complete';
         this.setModalStatus('Upload complete! Device is rebooting.');
         setTimeout(() => {
-            this.successAlert.style.display = 'none';
             this.uploadButton.innerHTML = 'Upload Firmware';
             this.hideModal();
         }, 5000);
     }
 
     showError(message) {
-        this.errorAlert.textContent = message;
-        this.errorAlert.style.display = 'block';
-        this.successAlert.style.display = 'none';
         this.uploadButton.innerHTML = 'Upload Failed';
         this.setModalStatus(`Upload failed: ${message}`);
         setTimeout(() => {
-            this.errorAlert.style.display = 'none';
             this.uploadButton.innerHTML = 'Upload Firmware';
             this.hideModal();
         }, 5000);
@@ -1333,11 +1355,13 @@ class RadarMap {
 
         if (fields) fields.innerHTML = rows.join('');
         panel.style.display = 'flex';
+        this.invalidate();
     }
 
     _hideInfoPanel() {
         const panel = document.getElementById('aircraft-sidebar');
         if (panel) panel.style.display = 'none';
+        this.invalidate();
     }
 }
 
