@@ -153,8 +153,10 @@ bool WebSocketServer::RemoveClient(int client_fd) {
             return true;
         }
     }
-    CONSOLE_INFO("WebSocketServer::RemoveClient", "[%s] Client with fd %d not found; it may have already been removed.",
-                 config_.label, client_fd);
+    CONSOLE_INFO(
+        "WebSocketServer::RemoveClient",
+        "[%s] Client with fd %d not found; it belong to a different websocket server or may have already been removed.",
+        config_.label, client_fd);
     return false;
 }
 

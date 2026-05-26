@@ -3,6 +3,7 @@
 #include "esp_heap_caps.h"
 
 #include "comms.hh"
+#include "aircraftjson_utils.hh"
 #include "gdl90/gdl90_utils.hh"
 #include "json_utils.hh"
 #include "pico.hh"
@@ -58,6 +59,7 @@ void tcp_server_task(void* pvParameters) { adsbee_server.TCPServerTask(pvParamet
 void ws_close_fd(httpd_handle_t hd, int sockfd) {
     adsbee_server.network_console.RemoveClient(sockfd);
     adsbee_server.network_metrics.RemoveClient(sockfd);
+    adsbee_server.network_aircraft.RemoveClient(sockfd);
     close(sockfd);
 }
 /** End "Pass-Through" functions. **/
@@ -125,8 +127,10 @@ bool ADSBeeServer::Update() {
         last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
         uint32_t heap_free_kb = heap_caps_get_free_size(MALLOC_CAP_8BIT) / 1024;
         uint32_t heap_total_kb = heap_caps_get_total_size(MALLOC_CAP_8BIT) / 1024;
-        uint16_t ws_used = network_console.GetNumClients() + network_metrics.GetNumClients();
-        uint16_t ws_total = network_console.GetNumClientsAllowed() + network_metrics.GetNumClientsAllowed();
+        uint16_t ws_used = network_console.GetNumClients() + network_metrics.GetNumClients() +
+                           network_aircraft.GetNumClients();
+        uint16_t ws_total = network_console.GetNumClientsAllowed() + network_metrics.GetNumClientsAllowed() +
+                            network_aircraft.GetNumClientsAllowed();
         CONSOLE_INFO("ADSBeeServer::Update", "\t %d clients, %d aircraft, heap: %luK free / %luK total, ws: %d/%d",
                      comms_manager.GetNumWiFiClients(), aircraft_dictionary.GetNumAircraft(), heap_free_kb,
                      heap_total_kb, ws_used, ws_total);
@@ -246,9 +250,18 @@ bool ADSBeeServer::Update() {
         }
     }
 
+    // Broadcast aircraft JSON to connected /aircraft WebSocket clients.
+    if (timestamp_ms - last_aircraft_json_report_timestamp_ms_ > kAircraftJSONReportingIntervalMs) {
+        last_aircraft_json_report_timestamp_ms_ = timestamp_ms;
+        if (network_aircraft.GetNumClients() > 0) {
+            SendAircraftJSONMessages();
+        }
+    }
+
     // Prune inactive WebSocket clients and other housekeeping.
     network_console.Update();
     network_metrics.Update();
+    network_aircraft.Update();
 
     // Check to see whether the RP2040 sent over new metrics.
     xQueueReceive(rp2040_aircraft_dictionary_metrics_queue, &rp2040_aircraft_dictionary_metrics, 0);
@@ -758,6 +771,18 @@ bool ADSBeeServer::TCPServerInit() {
         CONSOLE_ERROR("ADSBeeServer::TCPServerInit", "Failed to start Network Metrics WebSocket server.");
         return false;
     }
+    network_aircraft = WebSocketServer({.label = "Network Aircraft",
+                                        .server = server,
+                                        .uri = "/aircraft",
+                                        .num_clients_allowed = 4,
+                                        .send_as_binary = false,
+                                        .inactivity_timeout_ms = 90 * 1000,
+                                        .post_connect_callback = nullptr,
+                                        .message_received_callback = nullptr});
+    if (!network_aircraft.Init()) {
+        CONSOLE_ERROR("ADSBeeServer::TCPServerInit", "Failed to start Network Aircraft WebSocket server.");
+        return false;
+    }
 
     if (server == nullptr) {
         CONSOLE_ERROR("ADSBeeServer::TCPServerInit", "HTTP server instance is null after start.");
@@ -767,4 +792,19 @@ bool ADSBeeServer::TCPServerInit() {
                  uxTaskGetStackHighWaterMark(NULL));
 
     return true;
+}
+
+void ADSBeeServer::SendAircraftJSONMessages() {
+    char json_buf[kAircraftJSONMessageStrMaxLen];
+    for (auto& itr : aircraft_dictionary.dict) {
+        int16_t len = -1;
+        if (ModeSAircraft* ac = get_if<ModeSAircraft>(&itr.second); ac) {
+            len = WriteAircraftJSONModeSAircraftStr(json_buf, *ac);
+        } else if (UATAircraft* ac = get_if<UATAircraft>(&itr.second); ac) {
+            len = WriteAircraftJSONUATAircraftStr(json_buf, *ac);
+        }
+        if (len > 0) {
+            network_aircraft.BroadcastMessage(json_buf, len);
+        }
+    }
 }
