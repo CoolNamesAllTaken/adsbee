@@ -798,7 +798,7 @@ TEST(AircraftDictionary, FilterCPRLocations) {
     packet = DecodedModeSPacket((char*)"8D48922358C3806C3E0C8BC657BB");  // even
     inc_time_since_boot_ms(1000);
     packet.raw.mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
-    EXPECT_FALSE(dictionary.IngestDecodedModeSPacket(packet));
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
     // Aircraft has all the ingredients to decode its location, but the decoded location is not valid.
     EXPECT_TRUE(aircraft->CanDecodePosition());
     EXPECT_FALSE(aircraft->DecodeAirbornePosition());
@@ -832,7 +832,7 @@ TEST(AircraftDictionary, FilterCPRLocations) {
     packet = DecodedModeSPacket((char*)"8D48C22D60B104710F94F963E8B6");  // odd
     inc_time_since_boot_ms(1000);
     packet.raw.mlat_48mhz_64bit_counts = get_time_since_boot_ms() * 48'000;
-    EXPECT_FALSE(dictionary.IngestDecodedModeSPacket(packet));
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
 
     // Confirm new location by re-receiving the even packet.
     inc_time_since_boot_ms(1000);

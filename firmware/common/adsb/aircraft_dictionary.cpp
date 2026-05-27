@@ -623,7 +623,6 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(const ModeSADSBPacket& packet, 
     } else {
         // We should have been able to recover a position, but position decode failed. This happens if our position
         // filter algorithm rejects the decoded position result.
-        decode_successful = false;
 #ifdef ADSB_VERBOSE_PACKET_WARNINGS
         CONSOLE_WARNING("AircraftDictionary::ApplyAirbornePositionMessage",
                         "Had valid packets, but aircraft position decode failed for ICAO 0x%lx.", icao_address);
@@ -655,7 +654,6 @@ bool ModeSAircraft::ApplyAirborneVelocitiesMessage(const ModeSADSBPacket& packet
                 CONSOLE_WARNING("AircraftDictionary::ApplyAirborneVelocitiesMessage",
                                 "Ground speed not available for ICAO 0x%lx.", icao_address);
 #endif  // ADSB_VERBOSE_PACKET_WARNINGS
-                decode_successful = false;
             } else {
                 speed_source = ADSBTypes::kSpeedSourceGroundSpeed;
                 bool direction_is_east_to_west = static_cast<bool>(packet.GetNBitWordFromMessage(1, 13));
@@ -681,7 +679,6 @@ bool ModeSAircraft::ApplyAirborneVelocitiesMessage(const ModeSADSBPacket& packet
                 CONSOLE_WARNING("AircraftDictionary::ApplyAirborneVelocitiesMessage",
                                 "Airspeed not available for ICAO 0x%lx.", icao_address);
 #endif  // ADSB_VERBOSE_PACKET_WARNINGS
-                decode_successful = false;
             } else {
                 speed_kts = (airspeed_kts_plus_1 - 1) * (is_supersonic ? 4 : 1);
                 bool is_true_airspeed = static_cast<bool>(packet.GetNBitWordFromMessage(1, 24));
@@ -715,7 +712,6 @@ bool ModeSAircraft::ApplyAirborneVelocitiesMessage(const ModeSADSBPacket& packet
         CONSOLE_WARNING("AircraftDictionary::ApplyAirborneVelocitiesMessage",
                         "Vertical rate not available for ICAO 0x%lx.", icao_address);
 #endif  // ADSB_VERBOSE_PACKET_WARNINGS
-        decode_successful = false;
     } else {
         ADSBTypes::VerticalRateSource vertical_rate_source =
             static_cast<ADSBTypes::VerticalRateSource>(packet.GetNBitWordFromMessage(1, 35));
@@ -739,7 +735,7 @@ bool ModeSAircraft::ApplyAirborneVelocitiesMessage(const ModeSADSBPacket& packet
                 CONSOLE_WARNING("AircraftDictionary::ApplyAirborneVelocitiesMessage",
                                 "Vertical rate source not specified for ICAO 0x%lx.", icao_address);
 #endif  // ADSB_VERBOSE_PACKET_WARNINGS
-                decode_successful = false;
+                break;
         }
     }
 
