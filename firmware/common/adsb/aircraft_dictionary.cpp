@@ -458,26 +458,27 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(const ModeSADSBPacket& packet, 
     WriteNICBit(ADSBTypes::kNICBitB, packet.GetNBitWordFromMessage(1, 7));
 
     if (NICBitIsValid(ADSBTypes::kNICBitA) && NICBitIsValid(ADSBTypes::kNICBitB)) {
-        // Assign NIC based on NIC supplement bits A and B and received TypeCode.
-        switch ((type_code << 3) | (nic_bits & 0b101)) {
+        // Assign NIC based on NIC supplement bits A (bit 0) and B (bit 1) and received TypeCode.
+        switch ((type_code << 3) | (nic_bits & 0b011)) {
             case (9 << 3) | 0b000:
                 navigation_integrity_category = ADSBTypes::kROCLessThan7p5Meters;
                 break;
             case (10 << 3) | 0b000:
                 navigation_integrity_category = ADSBTypes::kROCLessThan25Meters;
                 break;
-            case (11 << 3) | 0b110:
+            case (11 << 3) | 0b010:  // NIC_B=1: RC < 75m
                 navigation_integrity_category = ADSBTypes::kROCLessThan75Meters;
                 break;
-            case (11 << 3) | 0b000:
+            case (11 << 3) | 0b000:  // NIC_B=0: RC < 0.1NM
                 navigation_integrity_category = ADSBTypes::kROCLessThan0p1NauticalMiles;
                 break;
             case (12 << 3) | 0b000:
                 navigation_integrity_category = ADSBTypes::kROCLessThan0p2NauticalMiles;
                 break;
-            case (13 << 3) | 0b010:  // Should be <0.3NM, but NIC value is shared with <0.6NM.
-            case (13 << 3) | 0b000:  // Should be <0.5NM, but NIC value is shared with <0.6NM.
-            case (13 << 3) | 0b110:
+            case (13 << 3) | 0b000:  // NIC_A=0, NIC_B=0: RC < 0.3NM, but NIC value shared with <0.6NM.
+            case (13 << 3) | 0b010:  // NIC_A=0, NIC_B=1: RC < 0.5NM, but NIC value shared with <0.6NM.
+            case (13 << 3) | 0b001:  // NIC_A=1, NIC_B=0: RC < 0.6NM.
+            case (13 << 3) | 0b011:  // NIC_A=1, NIC_B=1: RC < 0.6NM.
                 navigation_integrity_category = ADSBTypes::kROCLessThan0p6NauticalMiles;
                 break;
             case (14 << 3) | 0b000:
@@ -486,10 +487,10 @@ bool ModeSAircraft::ApplyAirbornePositionMessage(const ModeSADSBPacket& packet, 
             case (15 << 3) | 0b000:
                 navigation_integrity_category = ADSBTypes::kROCLessThan2NauticalMiles;
                 break;
-            case (16 << 3) | 0b110:
+            case (16 << 3) | 0b000:  // NIC_A=0: RC < 4NM
                 navigation_integrity_category = ADSBTypes::kROCLessThan4NauticalMiles;
                 break;
-            case (16 << 3) | 0b000:
+            case (16 << 3) | 0b001:  // NIC_A=1: RC < 8NM
                 navigation_integrity_category = ADSBTypes::kROCLessThan8NauticalMiles;
                 break;
             case (17 << 3) | 0b000:
@@ -812,7 +813,7 @@ bool ModeSAircraft::ApplyAircraftOperationStatusMessage(const ModeSADSBPacket& p
     adsb_version = packet.GetNBitWordFromMessage(3, 40);
 
     // ME[43] - NIC Supplement A
-    WriteNICBit(ADSBTypes::kNICBitC, packet.GetNBitWordFromMessage(1, 43));
+    WriteNICBit(ADSBTypes::kNICBitA, packet.GetNBitWordFromMessage(1, 43));
 
     // ME[44-47] - Navigational Accuracy EmitterCategory, Position
     navigation_accuracy_category_position =

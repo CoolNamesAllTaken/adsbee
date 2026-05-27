@@ -282,7 +282,11 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
                                  ? aircraft.baro_vertical_rate_fpm
                                  : aircraft.gnss_vertical_rate_fpm;
     data.direction_deg = aircraft.direction_deg;
-    data.emitter_category = aircraft.emitter_category_raw;
+    // Use the decoded enum, not emitter_category_raw: the Mode S raw value is (TypeCode<<3|Category)
+    // which is not a valid GDL90 emitter category code.
+    data.emitter_category = aircraft.emitter_category == ADSBTypes::kEmitterCategoryInvalid
+                                ? 0u
+                                : static_cast<uint8_t>(aircraft.emitter_category);
     // GDL90 does not provide space for an EOS character, since it only provides 8 Bytes for the callsign.
     memcpy(data.callsign, aircraft.callsign, ModeSAircraft::kCallSignMaxNumChars);
     // NOTE: Emergency Priority code currently not used.

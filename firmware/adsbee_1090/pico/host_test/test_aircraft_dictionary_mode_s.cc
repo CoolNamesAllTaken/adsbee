@@ -635,6 +635,79 @@ TEST(AircraftDictionary, AmbiguousFlightStatusDoesNotClearAirborneFlag) {
     EXPECT_FALSE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagAlert));
 }
 
+TEST(AircraftDictionary, NICAssignment) {
+    // Verify airborne NIC lookup uses NIC_A (bit 0) and NIC_B (bit 1) with mask 0b011.
+    // NIC_A comes from TC=31 status messages; we pre-set it via WriteNICBit.
+    // NIC_B comes from the airborne position message (ME[7]).
+    AircraftDictionary dictionary;
+    ModeSAircraft* aircraft_ptr;
+
+    // TC=9, NIC_A=0, NIC_B=0: RC < 7.5m → kROCLessThan7p5Meters (NIC=11).
+    {
+        const uint32_t icao = 0x896113u;
+        aircraft_ptr = dictionary.GetAircraftPtr<ModeSAircraft>(
+            Aircraft::ICAOToUID(icao, Aircraft::kAircraftTypeModeS));
+        ASSERT_TRUE(aircraft_ptr);
+        aircraft_ptr->WriteNICBit(ADSBTypes::kNICBitA, 0);
+        DecodedModeSPacket packet((char*)"8d89611348db01c6ea41c4c7b8bf");
+        ASSERT_TRUE(packet.is_valid);
+        ASSERT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
+        EXPECT_EQ(aircraft_ptr->navigation_integrity_category, ADSBTypes::kROCLessThan7p5Meters);
+    }
+
+    // TC=11, NIC_A=0, NIC_B=0: RC < 0.1 NM → kROCLessThan0p1NauticalMiles (NIC=8).
+    {
+        const uint32_t icao = 0x40621Du;
+        aircraft_ptr = dictionary.GetAircraftPtr<ModeSAircraft>(
+            Aircraft::ICAOToUID(icao, Aircraft::kAircraftTypeModeS));
+        ASSERT_TRUE(aircraft_ptr);
+        aircraft_ptr->WriteNICBit(ADSBTypes::kNICBitA, 0);
+        DecodedModeSPacket packet((char*)"8D40621D58C382D690C8AC2863A7");
+        ASSERT_TRUE(packet.is_valid);
+        ASSERT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
+        EXPECT_EQ(aircraft_ptr->navigation_integrity_category, ADSBTypes::kROCLessThan0p1NauticalMiles);
+    }
+
+    // TC=11, NIC_A=0, NIC_B=1: RC < 75m → kROCLessThan75Meters (NIC=9).
+    // Bit 7 of ME[0] toggled: 0x58 → 0x59. CRC invalid; force is_valid.
+    {
+        const uint32_t icao = 0x40621Du;
+        aircraft_ptr = dictionary.GetAircraftPtr<ModeSAircraft>(
+            Aircraft::ICAOToUID(icao, Aircraft::kAircraftTypeModeS));
+        ASSERT_TRUE(aircraft_ptr);
+        DecodedModeSPacket packet((char*)"8D40621D59C382D690C8AC2863A7");
+        packet.is_valid = true;
+        ASSERT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
+        EXPECT_EQ(aircraft_ptr->navigation_integrity_category, ADSBTypes::kROCLessThan75Meters);
+    }
+
+    // TC=16, NIC_A=0, NIC_B=0: RC < 4 NM → kROCLessThan4NauticalMiles (NIC=3).
+    // ME[0] changed to 0x80 (TypeCode=16, NIC_B=0). Force is_valid.
+    {
+        const uint32_t icao = 0x40621Du;
+        aircraft_ptr = dictionary.GetAircraftPtr<ModeSAircraft>(
+            Aircraft::ICAOToUID(icao, Aircraft::kAircraftTypeModeS));
+        ASSERT_TRUE(aircraft_ptr);
+        DecodedModeSPacket packet((char*)"8D40621D80C382D690C8AC2863A7");
+        packet.is_valid = true;
+        ASSERT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
+        EXPECT_EQ(aircraft_ptr->navigation_integrity_category, ADSBTypes::kROCLessThan4NauticalMiles);
+    }
+
+    // TC=16, NIC_A=1, NIC_B=0: RC < 8 NM → kROCLessThan8NauticalMiles (NIC=2).
+    {
+        const uint32_t icao = 0x40621Du;
+        aircraft_ptr = dictionary.GetAircraftPtr<ModeSAircraft>(
+            Aircraft::ICAOToUID(icao, Aircraft::kAircraftTypeModeS));
+        ASSERT_TRUE(aircraft_ptr);
+        aircraft_ptr->WriteNICBit(ADSBTypes::kNICBitA, 1);
+        DecodedModeSPacket packet((char*)"8D40621D80C382D690C8AC2863A7");
+        packet.is_valid = true;
+        ASSERT_TRUE(dictionary.IngestDecodedModeSPacket(packet));
+        EXPECT_EQ(aircraft_ptr->navigation_integrity_category, ADSBTypes::kROCLessThan8NauticalMiles);
+    }
+}
+
 TEST(AircraftDictionary, IngestAllCallReply) {
     AircraftDictionary dictionary = AircraftDictionary();
     DecodedModeSPacket tpacket = DecodedModeSPacket((char*)"5D7C0B6DB05076");
