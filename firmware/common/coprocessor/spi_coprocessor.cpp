@@ -361,13 +361,14 @@ bool SPICoprocessor::PartialWrite(ObjectDictionary::Address addr, uint8_t* objec
         ret = true;
         break;
     PARTIAL_WRITE_FAILED:
-        CONSOLE_WARNING("SPICoprocessor::PartialWrite", "%s", error_message);
+        CONSOLE_WARNING("SPICoprocessor::PartialWrite", "[%s] %s", config_.tag_str, error_message);
         num_attempts++;
         ret = false;
         continue;
     }
     if (!ret) {
-        CONSOLE_ERROR("SPICoprocessor::PartialWrite", "Failed after %d tries: %s", num_attempts, error_message);
+        CONSOLE_ERROR("SPICoprocessor::PartialWrite", "[%s] Failed after %d tries: %s", config_.tag_str, num_attempts,
+                      error_message);
     }
     spi_write_in_progress = false;
     return ret;
@@ -452,14 +453,15 @@ bool SPICoprocessor::PartialRead(ObjectDictionary::Address addr, uint8_t* object
         memcpy(object_buf + offset, response_packet.data, response_packet.data_len_bytes);
         break;
     PARTIAL_READ_FAILED:
-        CONSOLE_WARNING("SPICoprocessor::PartialRead", "%s", error_message);
+        CONSOLE_WARNING("SPICoprocessor::PartialRead", "[%s] %s", config_.tag_str, error_message);
         num_attempts++;
         ret = false;
         continue;
     }
 
     if (!ret) {
-        CONSOLE_ERROR("SPICoprocessor::PartialRead", "Failed after %d tries: %s", num_attempts, error_message);
+        CONSOLE_ERROR("SPICoprocessor::PartialRead", "[%s] Failed after %d tries: %s", config_.tag_str, num_attempts,
+                      error_message);
     }
     spi_read_in_progress = false;
     return ret;
@@ -475,7 +477,8 @@ bool SPICoprocessor::SPIWaitForAck() {
     ack_wait_in_progress = true;
 
     if (!config_.interface.SPIWaitForHandshake()) {
-        CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "Timed out while waiting for ack: never received handshake.");
+        CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "[%s] Timed out while waiting for ack: never received handshake.",
+                      config_.tag_str);
         ack_wait_in_progress = false;
         return false;
     }
@@ -486,20 +489,21 @@ bool SPICoprocessor::SPIWaitForAck() {
         SPIReadBlocking(ack_packet.GetBuf(), SPICoprocessorPacket::SCAckPacket::kBufLenBytes, true);
 
     if (bytes_read < 0) {
-        CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "SPI read failed with code %d (%s).", bytes_read,
-                      ReturnCodeToString(static_cast<ReturnCode>(bytes_read)));
+        CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "[%s] SPI read failed with code %d (%s).", config_.tag_str,
+                      bytes_read, ReturnCodeToString(static_cast<ReturnCode>(bytes_read)));
         ack_wait_in_progress = false;
         return false;
     }
     if (ack_packet.cmd != ObjectDictionary::SCCommand::kCmdAck) {
         CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck",
-                      "Received a message that was not an ack (cmd=0x%x, expected 0x%x).", ack_packet.cmd,
-                      ObjectDictionary::SCCommand::kCmdAck);
+                      "[%s] Received a message that was not an ack (cmd=0x%x, expected 0x%x).", config_.tag_str,
+                      ack_packet.cmd, ObjectDictionary::SCCommand::kCmdAck);
         ack_wait_in_progress = false;
         return false;
     }
     if (!ack_packet.IsValid()) {
-        CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "Received a response packet with an invalid CRC.");
+        CONSOLE_ERROR("SPICoprocessor::SPIWaitForAck", "[%s] Received a response packet with an invalid CRC.",
+                      config_.tag_str);
         ack_wait_in_progress = false;
         return false;
     }

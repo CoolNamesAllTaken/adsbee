@@ -1470,11 +1470,17 @@ bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket& packet) {
     // Validate packet against ICAO addresses in dictionary, or allow it in if it's a DF=11 all call reply
     // packet tha validated itself (e.g. it's a response to a spontaneous acquisition squitter with interrogator
     // ID=0, making the checksum useable).
-    if (packet.is_address_parity && ContainsAircraft(packet.icao_address)) {
+    if (packet.is_address_parity
+#ifndef AIRCRAFT_DICTIONARY_TRUST_FORWARDED_ADDRESS_PARITY
+        && ContainsAircraft(packet.icao_address)
+#endif
+    ) {
         // DF=0,4,5,16,20,21 (DF=11 doesn't work with this since the interrogator ID may be overlaid with the ICAO
         // address--we expect spontaneous acquisition DF=11's to come in pre-marked as valid).
         // Packet is address parity that is incapable of validating itself, and its CRC was
         // validated against the ICAO addresses in the aircraft dictionary.
+        // When AIRCRAFT_DICTIONARY_TRUST_FORWARDED_ADDRESS_PARITY is set, the upstream validator
+        // (RP2040) already confirmed this ICAO, so we skip the dictionary lookup.
         packet.is_valid = true;
     }
 
@@ -1483,8 +1489,7 @@ bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket& packet) {
 
             if (!packet.is_valid) {
 // Squitter frame could not validate itself, or could not be validated against ICAOs in dictionary.
-#ifdef ON_ESP32
-                // ESP32 should only be receiving valid packets.
+#ifndef AIRCRAFT_DICTIONARY_TRUST_FORWARDED_ADDRESS_PARITY
                 CONSOLE_ERROR("AircraftDictionary::IngestDecodedModeSPacket", "Squitter packet failed checksum.");
 #endif
                 return false;
