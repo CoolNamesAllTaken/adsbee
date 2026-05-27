@@ -21,7 +21,7 @@ class ADSBee {
    public:
     static constexpr uint16_t kModeSPacketQueueDepth = 200;
     static constexpr uint16_t kRawUATADSBPacketQueueDepth = 50;
-    static constexpr uint16_t kRawUATUplinkPacketQueueDepth = 2;
+    static constexpr uint16_t kRawUATUplinkPacketQueueDepth = 4;
 
     static constexpr uint16_t kTLMaxPWMCount = 5000;  // Clock is 125MHz, shoot for 25kHz PWM.
     static constexpr int kVDDMV = 3300;               // [mV] Voltage of positive supply rail.
