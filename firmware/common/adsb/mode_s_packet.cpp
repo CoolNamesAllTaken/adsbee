@@ -344,32 +344,33 @@ ModeSAltitudeReplyPacket::ModeSAltitudeReplyPacket(const DecodedModeSPacket &dec
             has_alert = false;
             has_ident = false;
             is_airborne = true;
+            airborne_state_known = true;
             break;
         case 0b001:  // No alert, no SPI, aircraft is on ground.
             has_alert = false;
             has_ident = false;
             is_airborne = false;
+            airborne_state_known = true;
             break;
         case 0b010:  // Alert, no SPI, aircraft is airborne.
             has_alert = true;
             has_ident = false;
             is_airborne = true;
+            airborne_state_known = true;
             break;
         case 0b011:  // Alert, no SPI, aircraft is on ground.
             has_alert = true;
             has_ident = false;
             is_airborne = false;
+            airborne_state_known = true;
             break;
-        case 0b100:  // Alert, SPI, aircraft is airborne or on ground.
+        case 0b100:  // Alert, SPI, aircraft is airborne or on ground — state unknown.
             has_alert = true;
             has_ident = true;
-            // Default is_airborne to false when not known.
             break;
-        case 0b101:
-            // No alert, SPI, aircaft is airborne or on ground.
+        case 0b101:  // No alert, SPI, aircraft is airborne or on ground — state unknown.
             has_ident = true;
             has_alert = false;
-            // Default is_airborne to false when not known.
             break;
         case 0b110:  // Reserved.
             break;
@@ -391,32 +392,33 @@ ModeSIdentityReplyPacket::ModeSIdentityReplyPacket(const DecodedModeSPacket &dec
             has_alert = false;
             has_ident = false;
             is_airborne = true;
+            airborne_state_known = true;
             break;
         case 0b001:  // No alert, no SPI, aircraft is on ground.
             has_alert = false;
             has_ident = false;
             is_airborne = false;
+            airborne_state_known = true;
             break;
         case 0b010:  // Alert, no SPI, aircraft is airborne.
             has_alert = true;
             has_ident = false;
             is_airborne = true;
+            airborne_state_known = true;
             break;
         case 0b011:  // Alert, no SPI, aircraft is on ground.
             has_alert = true;
             has_ident = false;
             is_airborne = false;
+            airborne_state_known = true;
             break;
-        case 0b100:  // Alert, SPI, aircraft is airborne or on ground.
+        case 0b100:  // Alert, SPI, aircraft is airborne or on ground — state unknown.
             has_alert = true;
             has_ident = true;
-            // Default is_airborne to false when not known.
             break;
-        case 0b101:
-            // No alert, SPI, aircaft is airborne or on ground.
+        case 0b101:  // No alert, SPI, aircraft is airborne or on ground — state unknown.
             has_ident = true;
             has_alert = false;
-            // Default is_airborne to false when not known.
             break;
         case 0b110:  // Reserved.
             break;

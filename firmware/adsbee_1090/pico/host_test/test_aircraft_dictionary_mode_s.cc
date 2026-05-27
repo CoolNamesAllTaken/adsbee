@@ -598,6 +598,43 @@ TEST(AircraftDictionary, IngestIdentityReply) {
     EXPECT_FALSE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne));
 }
 
+TEST(AircraftDictionary, AmbiguousFlightStatusDoesNotClearAirborneFlag) {
+    // An aircraft already known to be airborne must stay airborne when an ambiguous FS packet
+    // (FS=0b100 or 0b101) arrives. Previously these packets incorrectly reset the airborne flag.
+    AircraftDictionary dictionary = AircraftDictionary();
+    ModeSAircraft* aircraft_ptr;
+
+    // --- Altitude Reply, FS=0b100 (Alert+SPI, ambiguous) ---
+    // Packet "24000E3956BBA1" is DF=4, FS=0b100.
+    DecodedModeSPacket tpacket = DecodedModeSPacket((char*)"24000E3956BBA1");
+    dictionary.InsertAircraft(ModeSAircraft(tpacket.icao_address));
+    aircraft_ptr =
+        dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(0xD3CCBFu, Aircraft::kAircraftTypeModeS));
+    ASSERT_TRUE(aircraft_ptr);
+    // Simulate an earlier position message having set the aircraft airborne.
+    aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
+    ASSERT_TRUE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne));
+    // Ingest the ambiguous packet — airborne flag must not be overwritten.
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
+    EXPECT_TRUE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne));
+    EXPECT_TRUE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagIdent));
+    EXPECT_TRUE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagAlert));
+
+    // --- Identity Reply, FS=0b101 (No Alert+SPI, ambiguous) ---
+    // Packet "2D0006A2DEE500" is DF=5, FS=0b101.
+    tpacket = DecodedModeSPacket((char*)"2D0006A2DEE500");
+    dictionary.InsertAircraft(ModeSAircraft(tpacket.icao_address));
+    aircraft_ptr =
+        dictionary.GetAircraftPtr<ModeSAircraft>(Aircraft::ICAOToUID(0x5863BAu, Aircraft::kAircraftTypeModeS));
+    ASSERT_TRUE(aircraft_ptr);
+    aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, true);
+    ASSERT_TRUE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne));
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
+    EXPECT_TRUE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne));
+    EXPECT_TRUE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagIdent));
+    EXPECT_FALSE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagAlert));
+}
+
 TEST(AircraftDictionary, IngestAllCallReply) {
     AircraftDictionary dictionary = AircraftDictionary();
     DecodedModeSPacket tpacket = DecodedModeSPacket((char*)"5D7C0B6DB05076");

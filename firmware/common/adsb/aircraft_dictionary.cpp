@@ -1558,7 +1558,9 @@ bool AircraftDictionary::IngestModeSIdentityReplyPacket(const ModeSIdentityReply
                         icao_address);
         return false;  // unable to find or create new aircraft in dictionary
     }
-    aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, packet.is_airborne);
+    if (packet.airborne_state_known) {
+        aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, packet.is_airborne);
+    }
     aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagAlert, packet.has_alert);
     aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIdent, packet.has_ident);
     aircraft_ptr->squawk = packet.squawk;
@@ -1592,7 +1594,9 @@ bool AircraftDictionary::IngestModeSAltitudeReplyPacket(const ModeSAltitudeReply
                         icao_address);
         return false;  // unable to find or create new aircraft in dictionary
     }
-    aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, packet.is_airborne);
+    if (packet.airborne_state_known) {
+        aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, packet.is_airborne);
+    }
     aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagAlert, packet.has_alert);
     aircraft_ptr->WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIdent, packet.has_ident);
     aircraft_ptr->baro_altitude_ft = packet.altitude_ft;
