@@ -34,6 +34,7 @@ class CommsManager {
     static constexpr uint16_t kPrintfBufferMaxSize = 500;
 
     static constexpr uint32_t kOTAWriteTimeoutMs = 5000;  // ms until OTA write command exits if all bytes not received.
+    static constexpr uint16_t kMaxForceFlushIterations = 3;
 
     struct CommsManagerConfig {
         uart_inst_t* comms_uart_handle = uart1;
@@ -58,6 +59,13 @@ class CommsManager {
      * @retval True if update succeeded, false otherwise.
      */
     bool Update();
+
+    /**
+     * Immediately drain all reporting queues to the ESP32, looping until empty or kMaxForceFlushIterations
+     * is reached. Called from IngestAndForwardPackets when a reporting queue is full.
+     * @retval True always; logs an error if queues are not fully drained.
+     */
+    bool ForceFlushRawPackets();
 
     /**
      * Update incoming and outgoing buffers for the ESP32 network console. Called as part of Update(), or can be called
