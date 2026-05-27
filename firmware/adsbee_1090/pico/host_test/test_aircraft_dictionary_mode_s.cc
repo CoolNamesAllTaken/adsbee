@@ -1193,3 +1193,117 @@ TEST(AircraftDictionary, InsertAircraftEvictsOldestWhenFull) {
     EXPECT_FALSE(dictionary.ContainsAircraft(1));  // ICAO 1 was the oldest, now evicted
     EXPECT_TRUE(dictionary.ContainsAircraft(2));   // ICAO 2 was the second oldest, still present
 }
+
+// TC=31 Operation Status Message tests — one per ADS-B version (0, 1, 2).
+//
+// Packet layout (14 bytes = 28 hex chars):
+//   Byte 0:     DF/CA = 0x8D (DF=17, CA=5)
+//   Bytes 1-3:  ICAO = 0x123456
+//   Byte 4:     ME[0-7]  = 0xF8 (TC=31=0b11111, ST=0=airborne)
+//   Byte 5:     ME[8-15] = CC high  (ME[10]=TCAS Op, ME[11]=1090ES In, ME[14-15]=ARV/TS)
+//   Byte 6:     ME[16-23]= CC low   (ME[18]=UAT In)
+//   Byte 7:     ME[24-31]= OM high  (ME[26]=TCAS RA, ME[27]=IDENT, ME[29]=SingleAnt, ME[30-31]=SDA)
+//   Byte 8:     ME[32-39]= OM low   (ME[32-34]=NACv in v2 airborne OM)
+//   Byte 9:     ME[40-47]= ME[40-42]=version, ME[43]=NICa, ME[44-47]=NACp
+//   Byte 10:    ME[48-55]= ME[48-49]=GVA/BAQ, ME[50-51]=SIL, ME[52]=NICbaro, ME[53]=HRD, ME[54]=SILs
+//   Bytes 11-13: CRC (zeroed; is_valid forced to true)
+//
+// Bit indexing: GetNBitWordFromMessage(n,k) reads n bits at ME offset k, MSB-first.
+
+TEST(AircraftDictionary, OperationStatusMessageVersion0) {
+    // Version 0 (DO-260): ME[40-55] are all reserved; CC/OM have different semantics.
+    // Verify that NICa, NACp, SIL, and GVA are NOT populated (remain at defaults).
+    // Packet: all zeros except TC=31, ST=0 (airborne), version field = 000 (implied by 0x00 in byte 9).
+    AircraftDictionary dictionary;
+    DecodedModeSPacket tpacket = DecodedModeSPacket((char*)"8D123456F8000000000000000000");
+    tpacket.is_valid = true;
+    ASSERT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
+    ASSERT_EQ(dictionary.GetNumAircraft(), 1);
+    auto& aircraft = std::get<ModeSAircraft>(dictionary.dict.begin()->second);
+
+    EXPECT_EQ(aircraft.adsb_version, 0);
+    // NICa should not be set — ME[43] is reserved in v0.
+    EXPECT_FALSE(aircraft.NICBitIsValid(ADSBTypes::kNICBitA));
+    // NACp should remain at default (unknown) — ME[44-47] reserved in v0.
+    EXPECT_EQ(aircraft.navigation_accuracy_category_position,
+              ADSBTypes::kEPUUnknownOrGreaterThanOrEqualTo10NauticalMiles);
+    // SIL should remain at default (unknown) — ME[50-51] reserved in v0.
+    EXPECT_EQ(aircraft.surveillance_integrity_level,
+              ADSBTypes::kPOERCUnknownOrGreaterThan1em3PerFlightHour);
+    // GVA should remain at default — ME[48-49] reserved in v0.
+    EXPECT_EQ(aircraft.geometric_vertical_accuracy, ADSBTypes::kGVAUnknownOrGreaterThan150Meters);
+}
+
+TEST(AircraftDictionary, OperationStatusMessageVersion1) {
+    // Version 1 (DO-260A): individual CC/OM flags; ME[48-49] = BAQ (different encoding from GVA).
+    // Packet byte layout (ICAO=0x123456, airborne ST=0):
+    //   Byte 5  = 0x30: ME[10]=1 (TCAS Op), ME[11]=1 (1090ES In)
+    //   Byte 6  = 0x20: ME[18]=1 (UAT In)
+    //   Byte 7  = 0x36: ME[26]=1 (TCAS RA), ME[27]=1 (IDENT), ME[29]=1 (SingleAnt), ME[30]=1 (SDA=2)
+    //   Byte 8  = 0x00: OM lower (NACv not present in v1 airborne)
+    //   Byte 9  = 0x37: ME[40-42]=001 (v1), ME[43]=1 (NICa), ME[44-47]=0111 (NACp=7)
+    //   Byte 10 = 0x6A: ME[48-49]=01 (BAQ; skip), ME[50-51]=10 (SIL=2), ME[52]=1 (NICbaro), ME[54]=1 (SILs, NOT applied in v1)
+    AircraftDictionary dictionary;
+    DecodedModeSPacket tpacket = DecodedModeSPacket((char*)"8D123456F830203600376A000000");
+    tpacket.is_valid = true;
+    ASSERT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
+    ASSERT_EQ(dictionary.GetNumAircraft(), 1);
+    auto& aircraft = std::get<ModeSAircraft>(dictionary.dict.begin()->second);
+
+    EXPECT_EQ(aircraft.adsb_version, 1);
+    // NICa set from ME[43].
+    EXPECT_TRUE(aircraft.NICBitIsValid(ADSBTypes::kNICBitA));
+    // NACp=7 from ME[44-47].
+    EXPECT_EQ(aircraft.navigation_accuracy_category_position, ADSBTypes::kEPULessThan0p1NauticalMiles);
+    // SIL=2 from ME[50-51]; SIL supplement NOT applied (v1 has no supplement), so result = 0b010.
+    EXPECT_EQ(aircraft.surveillance_integrity_level,
+              ADSBTypes::kPOERCLessThanOrEqualTo1em5PerFlightHour);
+    // GVA must remain at default — ME[48-49] is BAQ in v1, not parsed as GVA.
+    EXPECT_EQ(aircraft.geometric_vertical_accuracy, ADSBTypes::kGVAUnknownOrGreaterThan150Meters);
+    // NACv must remain at default — not present in v1 airborne OM.
+    EXPECT_EQ(aircraft.navigation_accuracy_category_velocity,
+              ADSBTypes::kHVEUnknownOrGreaterThanOrEqualTo10MetersPerSecond);
+    // NIC Baro set from ME[52].
+    EXPECT_EQ(aircraft.navigation_integrity_category_baro,
+              ADSBTypes::kBAIGillHamInputCrossCheckedOrNonGillhamSource);
+    // Flags from CC/OM.
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagHas1090ESIn));
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagTCASRA));
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagTCASOperational));
+    EXPECT_TRUE(aircraft.HasBitFlag(ModeSAircraft::BitFlag::kBitFlagHasUATIn));
+}
+
+TEST(AircraftDictionary, OperationStatusMessageVersion2) {
+    // Version 2 (DO-260B): GVA at ME[48-49]; SIL supplement at ME[54]; NACv in airborne OM ME[32-34].
+    // Packet byte layout (ICAO=0x123456, airborne ST=0):
+    //   Byte 5  = 0x30: ME[10]=1 (TCAS Op), ME[11]=1 (1090ES In)
+    //   Byte 6  = 0x20: ME[18]=1 (UAT In)
+    //   Byte 7  = 0x36: ME[26]=1 (TCAS RA), ME[27]=1 (IDENT), ME[29]=1 (SingleAnt), ME[30]=1 (SDA=2)
+    //   Byte 8  = 0xC0: ME[32-34]=110 (NACv=6 = kHVELessThan10MetersPerSecond)
+    //   Byte 9  = 0x57: ME[40-42]=010 (v2), ME[43]=1 (NICa), ME[44-47]=0111 (NACp=7)
+    //   Byte 10 = 0x6A: ME[48-49]=01 (GVA=1 = <=150m), ME[50-51]=10 (SIL=2), ME[52]=1 (NICbaro), ME[54]=1 (SILs=1)
+    //   Combined SIL: (SILs<<2)|SIL = (1<<2)|2 = 6 = kPOERCLessThanOrEqualTo1em5PerSample
+    AircraftDictionary dictionary;
+    DecodedModeSPacket tpacket = DecodedModeSPacket((char*)"8D123456F8302036C0576A000000");
+    tpacket.is_valid = true;
+    ASSERT_TRUE(dictionary.IngestDecodedModeSPacket(tpacket));
+    ASSERT_EQ(dictionary.GetNumAircraft(), 1);
+    auto& aircraft = std::get<ModeSAircraft>(dictionary.dict.begin()->second);
+
+    EXPECT_EQ(aircraft.adsb_version, 2);
+    // NICa set from ME[43].
+    EXPECT_TRUE(aircraft.NICBitIsValid(ADSBTypes::kNICBitA));
+    // NACp=7 from ME[44-47].
+    EXPECT_EQ(aircraft.navigation_accuracy_category_position, ADSBTypes::kEPULessThan0p1NauticalMiles);
+    // GVA=1 from ME[48-49] (v2 only).
+    EXPECT_EQ(aircraft.geometric_vertical_accuracy, ADSBTypes::GVALessThanOrEqualTo150Meters);
+    // SIL 3-bit composite: (SILs<<2)|SIL = (1<<2)|2 = 6.
+    EXPECT_EQ(aircraft.surveillance_integrity_level,
+              ADSBTypes::kPOERCLessThanOrEqualTo1em5PerSample);
+    // NACv=6 from airborne OM ME[32-34] (v2 only).
+    EXPECT_EQ(aircraft.navigation_accuracy_category_velocity,
+              ADSBTypes::kHVELessThan10MetersPerSecond);
+    // NIC Baro set from ME[52].
+    EXPECT_EQ(aircraft.navigation_integrity_category_baro,
+              ADSBTypes::kBAIGillHamInputCrossCheckedOrNonGillhamSource);
+}

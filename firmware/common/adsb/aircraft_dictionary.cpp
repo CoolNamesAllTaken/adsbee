@@ -786,180 +786,214 @@ bool ModeSAircraft::ApplyTargetStateAndStatusInfoMessage(const ModeSADSBPacket& 
 }
 
 bool ModeSAircraft::ApplyAircraftOperationStatusMessage(const ModeSADSBPacket& packet) {
-    // TODO: get nac/navigation_integrity_category, and supplement airborne status from here.
-    // https://mode-s.org/decode/content/ads-b/6-operation-status.html
-    // More about navigation_integrity_category/nac here: https://mode-s.org/decode/content/ads-b/7-uncertainty.html
+    // https://mode-s.org/1090mhz/content/ads-b/6-operation-status.html
+    // https://mode-s.org/decode/content/ads-b/7-uncertainty.html
+    //
+    // Bit indexing: GetNBitWordFromMessage(n, k) reads n bits at ME offset k (0-indexed from
+    // TypeCode MSB = message bit 33), so ME[k] = message bit (33+k).
+    //
+    // Three distinct formats exist depending on ADS-B version:
+    //   v0 (DO-260): CC/OM are 4×4-bit group codes; ME[40-55] are all reserved.
+    //   v1 (DO-260A): individual CC/OM flags; ME[40-55] carry NICa/NACp/BAQ/SIL/HRD.
+    //   v2 (DO-260B): same as v1 + GVA replaces BAQ, SIL supplement at ME[54], NACv in airborne OM.
+    //
+    // Version must be read first so all subsequent reads can be version-gated.
 
-    // ME[5-7] - Subtype Code
+    // ME[5-7] - Subtype Code (0 = Airborne, 1 = Surface)
     ModeSADSBPacket::OperationStatusSubtype subtype =
         static_cast<ModeSADSBPacket::OperationStatusSubtype>(packet.GetNBitWordFromMessage(3, 5));
 
-    // ME[8-23] - Airborne or Surface Capacity Class Code
-    // ME[11] - 1090ES In
-    WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHas1090ESIn, packet.GetNBitWordFromMessage(1, 11));
-    // Other fields handled in switch statement.
-
-    // ME[24-39] - Operational Altitude Replyode
-    // ME[26] - TCAS RA Active
-    WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagTCASRA, packet.GetNBitWordFromMessage(1, 26));
-    // ME[27] - IDENT Switch Active
-    WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIdent, packet.GetNBitWordFromMessage(1, 27));
-    // ME[29] - Single Antenna Flag
-    WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagSingleAntenna, packet.GetNBitWordFromMessage(1, 29));
-    // ME[30-31] - System Design Assurance
-    system_design_assurance = static_cast<ADSBTypes::SystemDesignAssurance>(packet.GetNBitWordFromMessage(2, 30));
-
-    // ME[40-42] - ADS-B Version Number
+    // ME[40-42] - ADS-B Version Number (message bits 73-75). Present in v0 as reserved (=0).
     adsb_version = packet.GetNBitWordFromMessage(3, 40);
 
-    // ME[43] - NIC Supplement A
-    WriteNICBit(ADSBTypes::kNICBitA, packet.GetNBitWordFromMessage(1, 43));
+    // ME[8-23] Capacity Class Code and ME[24-39] Operational Mode Code: individual bit fields are
+    // only defined for v1+. In v0, these 32 bits carry 4×4-bit group codes with different semantics.
+    if (adsb_version >= 1) {
+        // ME[8-23] - Capacity Class Code (v1+)
+        // ME[11] - 1090ES In
+        WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHas1090ESIn, packet.GetNBitWordFromMessage(1, 11));
+        // Other CC fields handled per-subtype below.
 
-    // ME[44-47] - Navigational Accuracy EmitterCategory, Position
-    navigation_accuracy_category_position =
-        static_cast<ADSBTypes::NACEstimatedPositionUncertainty>(packet.GetNBitWordFromMessage(4, 44));
+        // ME[24-39] - Operational Mode Code (v1+)
+        // ME[26] - TCAS RA Active
+        WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagTCASRA, packet.GetNBitWordFromMessage(1, 26));
+        // ME[27] - IDENT Switch Active
+        WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIdent, packet.GetNBitWordFromMessage(1, 27));
+        // ME[29] - Single Antenna Flag
+        WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagSingleAntenna, packet.GetNBitWordFromMessage(1, 29));
+        // ME[30-31] - System Design Assurance
+        system_design_assurance =
+            static_cast<ADSBTypes::SystemDesignAssurance>(packet.GetNBitWordFromMessage(2, 30));
+    }
 
-    // ME[50-51] - Source Integrity Level (SIL)
-    uint8_t surveillance_integrity_level = packet.GetNBitWordFromMessage(2, 50);
-    // ME[53] - Horizontal Reference Direction (HRD)
-    WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHeadingUsesMagneticNorth, packet.GetNBitWordFromMessage(1, 53));
-    // ME[54] - SIL Supplement
-    uint8_t sil_supplement = packet.GetNBitWordFromMessage(1, 54);
-    surveillance_integrity_level = static_cast<ADSBTypes::SILProbabilityOfExceedingNICRadiusOfContainmnent>(
-        (sil_supplement << 2) | surveillance_integrity_level);
+    // ME[43-55]: integrity and accuracy fields — only defined for v1+. In v0, all reserved.
+    if (adsb_version >= 1) {
+        // ME[43] - NIC Supplement A
+        WriteNICBit(ADSBTypes::kNICBitA, packet.GetNBitWordFromMessage(1, 43));
 
-    // Conditional fields (meaning depends on subtype).
+        // ME[44-47] - Navigation Accuracy Category, Position (NACp)
+        navigation_accuracy_category_position =
+            static_cast<ADSBTypes::NACEstimatedPositionUncertainty>(packet.GetNBitWordFromMessage(4, 44));
+
+        // ME[50-51] - Source Integrity Level (SIL), 2-bit base value.
+        // ME[54] - SIL Supplement (SILs): only defined in v2. Extends SIL to 3 bits as (SILs<<2)|SIL.
+        uint8_t sil_2bit = packet.GetNBitWordFromMessage(2, 50);
+        uint8_t sil_supplement = (adsb_version >= 2) ? packet.GetNBitWordFromMessage(1, 54) : 0u;
+        this->surveillance_integrity_level =
+            static_cast<ADSBTypes::SILProbabilityOfExceedingNICRadiusOfContainmnent>(
+                (sil_supplement << 2) | sil_2bit);
+
+        // ME[53] - Horizontal Reference Direction (HRD)
+        WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHeadingUsesMagneticNorth,
+                     packet.GetNBitWordFromMessage(1, 53));
+    }
+
+    // Subtype-specific fields.
     switch (subtype) {
         case ModeSADSBPacket::OperationStatusSubtype::kOperationStatusSubtypeAirborne:  // ST = 0
         {
-            // ME[10] - TCAS Operational
-            WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagTCASOperational, packet.GetNBitWordFromMessage(1, 10));
+            if (adsb_version >= 1) {
+                // ME[10] - TCAS Operational
+                WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagTCASOperational,
+                             packet.GetNBitWordFromMessage(1, 10));
 
-            // ME[14] - Air Referenced Velocity (ARV) Report Capability - Ignored
-            // ME[15] - Target State (TS) Report Capability - Ignored
-            // ME[16-17] - Trajectory Change (TC) Report Capability - Ignored
-            // ME[18] - UAT In
-            WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHasUATIn, packet.GetNBitWordFromMessage(1, 18));
+                // ME[14] - Air Referenced Velocity (ARV) Report Capability - Ignored
+                // ME[15] - Target State (TS) Report Capability - Ignored
+                // ME[16-17] - Trajectory Change (TC) Report Capability - Ignored
+                // ME[18] - UAT In
+                WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHasUATIn, packet.GetNBitWordFromMessage(1, 18));
 
-            // ME[48-49] - GVA
-            geometric_vertical_accuracy = static_cast<ADSBTypes::GVA>(packet.GetNBitWordFromMessage(2, 48));
+                // ME[52] - NIC Baro
+                navigation_integrity_category_baro =
+                    static_cast<ADSBTypes::NICBarometricAltitudeIntegrity>(packet.GetNBitWordFromMessage(1, 52));
+            }
 
-            // ME[52] - NIC Baro
-            navigation_integrity_category_baro =
-                static_cast<ADSBTypes::NICBarometricAltitudeIntegrity>(packet.GetNBitWordFromMessage(1, 52));
+            // ME[48-49]: GVA (Geometric Vertical Accuracy) in v2. In v1 this field is BAQ (Barometric
+            // Altitude Quality) which has a different encoding — do not store as GVA for v1.
+            if (adsb_version >= 2) {
+                geometric_vertical_accuracy =
+                    static_cast<ADSBTypes::GVA>(packet.GetNBitWordFromMessage(2, 48));
+
+                // ME[32-34] - NACv in airborne OM (v2 only; reserved in v1).
+                navigation_accuracy_category_velocity =
+                    static_cast<ADSBTypes::NACHorizontalVelocityError>(packet.GetNBitWordFromMessage(3, 32));
+            }
 
             break;
         }
         case ModeSADSBPacket::OperationStatusSubtype::kOperationStatusSubtypeSurface:  // ST = 1
         {
-            // ME[14] - B2 Low
-            WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsClassB2GroundVehicle, packet.GetNBitWordFromMessage(1, 14));
-            // ME[15] - UAT In
-            WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHasUATIn, packet.GetNBitWordFromMessage(1, 15));
-            // ME[16-18] - NACv
-            navigation_accuracy_category_velocity =
-                static_cast<ADSBTypes::NACHorizontalVelocityError>(packet.GetNBitWordFromMessage(3, 16));
-            // ME[19] - NIC Supplement C
-            WriteNICBit(ADSBTypes::kNICBitC, packet.GetNBitWordFromMessage(1, 19));
+            if (adsb_version >= 1) {
+                // ME[14] - B2 Low
+                WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsClassB2GroundVehicle,
+                             packet.GetNBitWordFromMessage(1, 14));
+                // ME[15] - UAT In
+                WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHasUATIn, packet.GetNBitWordFromMessage(1, 15));
+                // ME[16-18] - NACv
+                navigation_accuracy_category_velocity =
+                    static_cast<ADSBTypes::NACHorizontalVelocityError>(packet.GetNBitWordFromMessage(3, 16));
+                // ME[19] - NIC Supplement C
+                WriteNICBit(ADSBTypes::kNICBitC, packet.GetNBitWordFromMessage(1, 19));
 
-            // ME[20-23] Aircraft/Vehicle Length and Width Code
-            switch (packet.GetNBitWordFromMessage(4, 20)) {
-                case 0:
-                    length_m = 0;
-                    width_m = 0;
-                    break;
-                case 1:
-                    length_m = 15;
-                    width_m = 23;
-                    break;
-                case 2:
-                    length_m = 25;
-                    width_m = 29;  // Rounded up from 28.5.
-                    break;
-                case 3:
-                    length_m = 25;
-                    width_m = 34;
-                    break;
-                case 4:
-                    length_m = 35;
-                    width_m = 33;
-                    break;
-                case 5:
-                    length_m = 35;
-                    width_m = 38;
-                    break;
-                case 6:
-                    length_m = 45;
-                    width_m = 40;  // Rounded up from 39.5.
-                    break;
-                case 7:
-                    length_m = 45;
-                    width_m = 45;
-                    break;
-                case 8:
-                    length_m = 55;
-                    width_m = 45;
-                    break;
-                case 9:
-                    length_m = 55;
-                    width_m = 52;
-                    break;
-                case 10:
-                    length_m = 65;
-                    width_m = 60;  // Rounded up from 59.5.
-                    break;
-                case 11:
-                    length_m = 65;
-                    width_m = 67;
-                    break;
-                case 12:
-                    length_m = 75;
-                    width_m = 73;  // Rounded up from 72.5.
-                    break;
-                case 13:
-                    length_m = 75;
-                    width_m = 80;
-                    break;
-                case 14:
-                    length_m = 85;
-                    width_m = 80;
-                    break;
-                case 15:
-                    length_m = 85;
-                    width_m = 90;
-                    break;
+                // ME[20-23] Aircraft/Vehicle Length and Width Code
+                switch (packet.GetNBitWordFromMessage(4, 20)) {
+                    case 0:
+                        length_m = 0;
+                        width_m = 0;
+                        break;
+                    case 1:
+                        length_m = 15;
+                        width_m = 23;
+                        break;
+                    case 2:
+                        length_m = 25;
+                        width_m = 29;  // Rounded up from 28.5.
+                        break;
+                    case 3:
+                        length_m = 25;
+                        width_m = 34;
+                        break;
+                    case 4:
+                        length_m = 35;
+                        width_m = 33;
+                        break;
+                    case 5:
+                        length_m = 35;
+                        width_m = 38;
+                        break;
+                    case 6:
+                        length_m = 45;
+                        width_m = 40;  // Rounded up from 39.5.
+                        break;
+                    case 7:
+                        length_m = 45;
+                        width_m = 45;
+                        break;
+                    case 8:
+                        length_m = 55;
+                        width_m = 45;
+                        break;
+                    case 9:
+                        length_m = 55;
+                        width_m = 52;
+                        break;
+                    case 10:
+                        length_m = 65;
+                        width_m = 60;  // Rounded up from 59.5.
+                        break;
+                    case 11:
+                        length_m = 65;
+                        width_m = 67;
+                        break;
+                    case 12:
+                        length_m = 75;
+                        width_m = 73;  // Rounded up from 72.5.
+                        break;
+                    case 13:
+                        length_m = 75;
+                        width_m = 80;
+                        break;
+                    case 14:
+                        length_m = 85;
+                        width_m = 80;
+                        break;
+                    case 15:
+                        length_m = 85;
+                        width_m = 90;
+                        break;
+                }
+
+                // ME[32-39] - GPS Antenna Offset (surface OM only; airborne uses ME[32-34] for NACv in v2).
+                switch (packet.GetNBitWordFromMessage(8, 32)) {
+                    case 0b000:  // No data.
+                        break;
+                    case 0b001:  // 2 meters left of roll axis.
+                        gnss_antenna_offset_right_of_reference_point_m = -2;
+                        break;
+                    case 0b010:  // 4 meters left of roll axis.
+                        gnss_antenna_offset_right_of_reference_point_m = -4;
+                        break;
+                    case 0b011:  // 6 meters left of roll axis.
+                        gnss_antenna_offset_right_of_reference_point_m = -6;
+                        break;
+                    case 0b100:  // Centered on roll axis.
+                        gnss_antenna_offset_right_of_reference_point_m = 0;
+                        break;
+                    case 0b101:  // 2 meters right of roll axis.
+                        gnss_antenna_offset_right_of_reference_point_m = 2;
+                        break;
+                    case 0b110:  // 4 meters right of roll axis.
+                        gnss_antenna_offset_right_of_reference_point_m = 4;
+                        break;
+                    case 0b111:  // 6 meters right of roll axis.
+                        gnss_antenna_offset_right_of_reference_point_m = 6;
+                        break;
+                }
+
+                // ME[52] - Track Angle / Heading for Surface Position Messages
+                WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagDirectionIsHeading,
+                             packet.GetNBitWordFromMessage(1, 52));
             }
-
-            // ME[32-39] - GPS Antenna Offset
-            // Only present in surface position operation status packets.
-            switch (packet.GetNBitWordFromMessage(8, 32)) {
-                case 0b000:  // No data.
-                    break;
-                case 0b001:  // 2 meters left of roll axis.
-                    gnss_antenna_offset_right_of_reference_point_m = -2;
-                    break;
-                case 0b010:  // 4 meters left of roll axis.
-                    gnss_antenna_offset_right_of_reference_point_m = -4;
-                    break;
-                case 0b011:  // 6 meters left of roll axis.
-                    gnss_antenna_offset_right_of_reference_point_m = -6;
-                    break;
-                case 0b100:  // Centered on roll axis.
-                    gnss_antenna_offset_right_of_reference_point_m = 0;
-                    break;
-                case 0b101:  // 2 meters right of roll axis.
-                    gnss_antenna_offset_right_of_reference_point_m = 2;
-                    break;
-                case 0b110:  // 4 meters right of roll axis.
-                    gnss_antenna_offset_right_of_reference_point_m = 4;
-                    break;
-                case 0b111:  // 6 meters right of roll axis.
-                    gnss_antenna_offset_right_of_reference_point_m = 6;
-                    break;
-            }
-
-            // ME[52] Track Angle / Heading for Surface Position Messages
-            WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagDirectionIsHeading, packet.GetNBitWordFromMessage(1, 52));
 
             break;
         }
