@@ -194,8 +194,13 @@ bool ADSBee::Update() {
     IngestAndForwardPackets();
 
     if (r1090_packet_queue_overflowed_) {
-        CONSOLE_ERROR("ADSBee::Update", "Mode S packet queue overflowed. Packets may have been lost.");
+        CONSOLE_ERROR("ADSBee::Update", "Mode S decoder input queue overflowed.");
         r1090_packet_queue_overflowed_ = false;
+    }
+
+    if (decoder.decoded_mode_s_packet_out_queue_overflowed_) {
+        CONSOLE_ERROR("ADSBee::Update", "Mode S decoder output queue overflowed.");
+        decoder.decoded_mode_s_packet_out_queue_overflowed_ = false;
     }
 
     UpdateTLLearning();
@@ -452,6 +457,7 @@ void ADSBee::OnDemodComplete() {
                 // this. rx_packet_[sm_index].buffer[i] >>= 1; Mask and left align final word based on bit length.
                 switch (packet_num_words) {
                     case RawModeSPacket::kSquitterPacketNumWords32:
+                    case RawModeSPacket::kSquitterPacketNumWords32 + 1:
                         aircraft_dictionary.Record1090RawSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = rx_packet_[sm_index].buffer[i] & 0xFFFFFF00;
                         rx_packet_[sm_index].buffer_len_bytes = RawModeSPacket::kSquitterPacketLenBytes;
@@ -460,6 +466,7 @@ void ADSBee::OnDemodComplete() {
                         }
                         break;
                     case RawModeSPacket::kExtendedSquitterPacketNumWords32:
+                    case RawModeSPacket::kExtendedSquitterPacketNumWords32 + 1:
                         aircraft_dictionary.Record1090RawExtendedSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = rx_packet_[sm_index].buffer[i] & 0xFFFF0000;
                         rx_packet_[sm_index].buffer_len_bytes = RawModeSPacket::kExtendedSquitterPacketLenBytes;

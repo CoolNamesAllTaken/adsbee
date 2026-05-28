@@ -126,7 +126,9 @@ bool ModeSPacketDecoder::PushPacketIfNotDuplicate(const DecodedModeSPacket& deco
     }
 #endif  // DISABLE_DUPLICATE_FILTER
 
-    decoded_mode_s_packet_out_queue.Enqueue(decoded_packet);
+    if (!decoded_mode_s_packet_out_queue.Enqueue(decoded_packet)) {
+        decoded_mode_s_packet_out_queue_overflowed_ = true;
+    }
 
     if (packet_source >= 0 && packet_source < kMaxNumSources) {
         // Only update packet cache if the source is valid.

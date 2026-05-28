@@ -818,8 +818,7 @@ bool ModeSAircraft::ApplyAircraftOperationStatusMessage(const ModeSADSBPacket& p
         // ME[29] - Single Antenna Flag
         WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagSingleAntenna, packet.GetNBitWordFromMessage(1, 29));
         // ME[30-31] - System Design Assurance
-        system_design_assurance =
-            static_cast<ADSBTypes::SystemDesignAssurance>(packet.GetNBitWordFromMessage(2, 30));
+        system_design_assurance = static_cast<ADSBTypes::SystemDesignAssurance>(packet.GetNBitWordFromMessage(2, 30));
     }
 
     // ME[43-55]: integrity and accuracy fields — only defined for v1+. In v0, all reserved.
@@ -836,12 +835,10 @@ bool ModeSAircraft::ApplyAircraftOperationStatusMessage(const ModeSADSBPacket& p
         uint8_t sil_2bit = packet.GetNBitWordFromMessage(2, 50);
         uint8_t sil_supplement = (adsb_version >= 2) ? packet.GetNBitWordFromMessage(1, 54) : 0u;
         this->surveillance_integrity_level =
-            static_cast<ADSBTypes::SILProbabilityOfExceedingNICRadiusOfContainmnent>(
-                (sil_supplement << 2) | sil_2bit);
+            static_cast<ADSBTypes::SILProbabilityOfExceedingNICRadiusOfContainmnent>((sil_supplement << 2) | sil_2bit);
 
         // ME[53] - Horizontal Reference Direction (HRD)
-        WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHeadingUsesMagneticNorth,
-                     packet.GetNBitWordFromMessage(1, 53));
+        WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagHeadingUsesMagneticNorth, packet.GetNBitWordFromMessage(1, 53));
     }
 
     // Subtype-specific fields.
@@ -850,8 +847,7 @@ bool ModeSAircraft::ApplyAircraftOperationStatusMessage(const ModeSADSBPacket& p
         {
             if (adsb_version >= 1) {
                 // ME[10] - TCAS Operational
-                WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagTCASOperational,
-                             packet.GetNBitWordFromMessage(1, 10));
+                WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagTCASOperational, packet.GetNBitWordFromMessage(1, 10));
 
                 // ME[14] - Air Referenced Velocity (ARV) Report Capability - Ignored
                 // ME[15] - Target State (TS) Report Capability - Ignored
@@ -867,8 +863,7 @@ bool ModeSAircraft::ApplyAircraftOperationStatusMessage(const ModeSADSBPacket& p
             // ME[48-49]: GVA (Geometric Vertical Accuracy) in v2. In v1 this field is BAQ (Barometric
             // Altitude Quality) which has a different encoding — do not store as GVA for v1.
             if (adsb_version >= 2) {
-                geometric_vertical_accuracy =
-                    static_cast<ADSBTypes::GVA>(packet.GetNBitWordFromMessage(2, 48));
+                geometric_vertical_accuracy = static_cast<ADSBTypes::GVA>(packet.GetNBitWordFromMessage(2, 48));
 
                 // ME[32-34] - NACv in airborne OM (v2 only; reserved in v1).
                 navigation_accuracy_category_velocity =
@@ -987,8 +982,7 @@ bool ModeSAircraft::ApplyAircraftOperationStatusMessage(const ModeSADSBPacket& p
                 }
 
                 // ME[52] - Track Angle / Heading for Surface Position Messages
-                WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagDirectionIsHeading,
-                             packet.GetNBitWordFromMessage(1, 52));
+                WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagDirectionIsHeading, packet.GetNBitWordFromMessage(1, 52));
             }
 
             break;
@@ -1488,10 +1482,6 @@ bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket& packet) {
         case RawModeSPacket::kSquitterPacketLenBytes:
 
             if (!packet.is_valid) {
-// Squitter frame could not validate itself, or could not be validated against ICAOs in dictionary.
-#ifndef AIRCRAFT_DICTIONARY_TRUST_FORWARDED_ADDRESS_PARITY
-                CONSOLE_ERROR("AircraftDictionary::IngestDecodedModeSPacket", "Squitter packet failed checksum.");
-#endif
                 return false;
             }
 

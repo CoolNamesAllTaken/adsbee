@@ -79,6 +79,9 @@ class ModeSPacketDecoder {
     // by multiple state machines.
     uint32_t last_demod_icao_[kMaxNumSources] = {0, 0, 0, 0};
     uint32_t last_demod_timestamp_ms_[kMaxNumSources] = {0, 0, 0, 0};
+
+   public:
+    bool decoded_mode_s_packet_out_queue_overflowed_ = false;
 };
 
 extern ModeSPacketDecoder decoder;
