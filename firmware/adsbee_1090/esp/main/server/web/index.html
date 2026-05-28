@@ -92,15 +92,16 @@
                 <table id="aircraft-table">
                     <thead>
                         <tr>
-                            <th>ICAO</th>
-                            <th>Callsign</th>
-                            <th>Sqwk</th>
-                            <th>Alt&nbsp;(ft)</th>
-                            <th>Spd&nbsp;(kt)</th>
-                            <th>Hdg</th>
-                            <th>Lat</th>
-                            <th>Lon</th>
-                            <th>RSSI</th>
+                            <th data-sort-key="hex">ICAO</th>
+                            <th data-sort-key="flight">Callsign</th>
+                            <th data-sort-key="type">Type</th>
+                            <th data-sort-key="squawk">Sqwk</th>
+                            <th data-sort-key="alt_baro">Alt&nbsp;(ft)</th>
+                            <th data-sort-key="gs">Spd&nbsp;(kt)</th>
+                            <th data-sort-key="track">Hdg</th>
+                            <th data-sort-key="lat">Lat</th>
+                            <th data-sort-key="lon">Lon</th>
+                            <th data-sort-key="rssi">RSSI</th>
                         </tr>
                     </thead>
                     <tbody id="aircraft-tbody"></tbody>
@@ -462,6 +463,11 @@
             } else {
                 aircraftWebSocket.resume();
             }
+            aircraftWebSocket.onDisconnect = () => {
+                aircraftStore.clearAll();
+                if (radarMap) radarMap.update();
+                if (acTable) acTable.update();
+            };
 
             if (!aircraftUpdateTimer) {
                 aircraftUpdateTimer = setInterval(() => {

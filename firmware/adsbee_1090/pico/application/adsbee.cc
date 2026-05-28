@@ -194,8 +194,13 @@ bool ADSBee::Update() {
     IngestAndForwardPackets();
 
     if (r1090_packet_queue_overflowed_) {
-        CONSOLE_ERROR("ADSBee::Update", "Mode S packet queue overflowed. Packets may have been lost.");
+        CONSOLE_ERROR("ADSBee::Update", "Mode S decoder input queue overflowed.");
         r1090_packet_queue_overflowed_ = false;
+    }
+
+    if (decoder.decoded_mode_s_packet_out_queue_overflowed_) {
+        CONSOLE_ERROR("ADSBee::Update", "Mode S decoder output queue overflowed.");
+        decoder.decoded_mode_s_packet_out_queue_overflowed_ = false;
     }
 
     UpdateTLLearning();
@@ -452,6 +457,7 @@ void ADSBee::OnDemodComplete() {
                 // this. rx_packet_[sm_index].buffer[i] >>= 1; Mask and left align final word based on bit length.
                 switch (packet_num_words) {
                     case RawModeSPacket::kSquitterPacketNumWords32:
+                    case RawModeSPacket::kSquitterPacketNumWords32 + 1:
                         aircraft_dictionary.Record1090RawSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = rx_packet_[sm_index].buffer[i] & 0xFFFFFF00;
                         rx_packet_[sm_index].buffer_len_bytes = RawModeSPacket::kSquitterPacketLenBytes;
@@ -460,6 +466,7 @@ void ADSBee::OnDemodComplete() {
                         }
                         break;
                     case RawModeSPacket::kExtendedSquitterPacketNumWords32:
+                    case RawModeSPacket::kExtendedSquitterPacketNumWords32 + 1:
                         aircraft_dictionary.Record1090RawExtendedSquitterFrame();
                         rx_packet_[sm_index].buffer[i] = rx_packet_[sm_index].buffer[i] & 0xFFFF0000;
                         rx_packet_[sm_index].buffer_len_bytes = RawModeSPacket::kExtendedSquitterPacketLenBytes;
@@ -597,6 +604,9 @@ void ADSBee::IngestAndForwardPackets() {
         // Check for any new valid packets and push all decoded packets to the reporting queue, even if the aircraft
         // dictionary didn't know what to do with them.
         if (decoded_packet.is_valid) {
+            if (comms_manager.mode_s_packet_reporting_queue.IsFull()) {
+                comms_manager.ForceFlushRawPackets();
+            }
             if (!comms_manager.mode_s_packet_reporting_queue.Enqueue(decoded_packet.raw)) {
                 CONSOLE_ERROR("ADSBee::IngestAndForwardPackets", "Mode S packet reporting queue overflowed.");
             }
@@ -624,6 +634,9 @@ void ADSBee::IngestAndForwardPackets() {
         }
         // Push all decoded packets to the reporting queue, even if the aircraft dictionary didn't know what to do
         // with them.
+        if (comms_manager.uat_adsb_packet_reporting_queue.IsFull()) {
+            comms_manager.ForceFlushRawPackets();
+        }
         if (!comms_manager.uat_adsb_packet_reporting_queue.Enqueue(uat_adsb_packet)) {
             CONSOLE_ERROR("ADSBee::IngestAndForwardPackets", "UAT ADS-B packet reporting queue overflowed.");
         }
@@ -633,6 +646,9 @@ void ADSBee::IngestAndForwardPackets() {
     RawUATUplinkPacket uat_uplink_packet;
     while (raw_uat_uplink_packet_queue.Dequeue(uat_uplink_packet)) {
         // We don't do anything with uplink packets other than report them directly.
+        if (comms_manager.uat_uplink_packet_reporting_queue.IsFull()) {
+            comms_manager.ForceFlushRawPackets();
+        }
         if (!comms_manager.uat_uplink_packet_reporting_queue.Enqueue(uat_uplink_packet)) {
             CONSOLE_ERROR("ADSBee::IngestAndForwardPackets", "UAT uplink packet reporting queue overflowed.");
         }

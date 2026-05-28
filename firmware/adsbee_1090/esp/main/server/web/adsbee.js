@@ -1074,17 +1074,11 @@ class SettingsManager {
     }
 }
 
-// ─── Altitude colour (tar1090-inspired) ──────────────────────────────────────
+// ─── Altitude colour (tar1090 continuous HSL gradient) ───────────────────────
 function acAltColor(altFt) {
     if (altFt == null) return '#888888';
-    if (altFt <  1000) return '#FF2222';
-    if (altFt <  3000) return '#FF6B00';
-    if (altFt <  7000) return '#FFB300';
-    if (altFt < 12000) return '#CCDF00';
-    if (altFt < 20000) return '#00E676';
-    if (altFt < 30000) return '#00B0FF';
-    if (altFt < 40000) return '#7C4DFF';
-    return '#E040FB';
+    const hue = 30 + (Math.max(0, Math.min(altFt, 40000)) / 40000) * 255;
+    return `hsl(${hue.toFixed(1)}, 90%, 55%)`;
 }
 
 // ─── AircraftWebSocket ────────────────────────────────────────────────────────
@@ -1093,6 +1087,7 @@ class AircraftWebSocket {
         this.url = url;
         this.paused = false;
         this.onMessage = null;
+        this.onDisconnect = null;
         this.ws = null;
         this._timer = null;
         this._connect();
@@ -1107,6 +1102,7 @@ class AircraftWebSocket {
             try { this.onMessage(JSON.parse(ev.data)); } catch (_) {}
         };
         this.ws.onclose = () => {
+            if (this.onDisconnect) this.onDisconnect();
             clearTimeout(this._timer);
             this._timer = setTimeout(() => { if (!this.paused) this._connect(); }, 3000);
         };
@@ -1123,17 +1119,16 @@ const kMaxTrailPoints = 500;
 
 class AircraftStore {
     constructor() {
-        this.aircraft    = new Map();  // hex → latest merged data
-        this.trails      = new Map();  // hex → [{lat, lon, alt}]
-        this._seenNow    = new Set();  // hexes seen since last sweep
-        this._seenPrev   = new Set();  // hexes seen during the previous sweep interval
+        this.aircraft = new Map();  // hex → latest merged data
+        this.trails   = new Map();  // hex → [{lat, lon, alt}]
+        this.lastSeen = new Map();  // hex → Date.now() timestamp
     }
 
     ingest(ac) {
         if (!ac.hex) return;
         const prev = this.aircraft.get(ac.hex) || {};
         this.aircraft.set(ac.hex, { ...prev, ...ac });
-        this._seenNow.add(ac.hex);
+        this.lastSeen.set(ac.hex, Date.now());
         if (ac.lat != null && ac.lon != null) {
             const t = this.trails.get(ac.hex) || [];
             t.push({ lat: ac.lat, lon: ac.lon, alt: ac.alt_baro ?? null });
@@ -1142,18 +1137,22 @@ class AircraftStore {
         }
     }
 
-    // Remove any aircraft absent from both this interval and the previous one,
-    // then rotate the seen-sets. The two-interval window tolerates timing skew
-    // between the server's 1 Hz send and the client's 1 Hz tick.
+    // Remove aircraft not heard from in the last 5 seconds.
     sweep() {
+        const cutoff = Date.now() - 5000;
         for (const hex of this.aircraft.keys()) {
-            if (!this._seenNow.has(hex) && !this._seenPrev.has(hex)) {
+            if ((this.lastSeen.get(hex) ?? 0) < cutoff) {
                 this.aircraft.delete(hex);
                 this.trails.delete(hex);
+                this.lastSeen.delete(hex);
             }
         }
-        this._seenPrev = this._seenNow;
-        this._seenNow  = new Set();
+    }
+
+    clearAll() {
+        this.aircraft.clear();
+        this.trails.clear();
+        this.lastSeen.clear();
     }
 
     all() { return [...this.aircraft.values()]; }
@@ -1217,18 +1216,12 @@ class RadarMap {
 
     _makeIcon(color, track, isGround, isSelected) {
         const ring = isSelected ? '<circle cx="16" cy="16" r="15" fill="none" stroke="white" stroke-width="2" opacity="0.7"/>' : '';
-        if (isGround) {
-            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">` +
-                ring +
-                `<rect x="7" y="7" width="18" height="18" rx="3" transform="rotate(45 16 16)" fill="#888888" stroke="rgba(0,0,0,0.5)" stroke-width="1.2"/>` +
-                `</svg>`;
-            return L.divIcon({ html: svg, className: '', iconSize: [32, 32], iconAnchor: [16, 16] });
-        }
-        const rot = (track != null) ? track : 0;
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">` +
+        const fill = isGround ? '#888888' : color;
+        const rot  = (track != null) ? track : 0;
+        const svg  = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">` +
             ring +
             `<g transform="rotate(${rot},16,16)">` +
-            `<polygon points="16,2 23,27 16,22 9,27" fill="${color}" stroke="rgba(0,0,0,0.5)" stroke-width="1.2"/>` +
+            `<polygon points="16,2 23,27 16,22 9,27" fill="${fill}" stroke="rgba(0,0,0,0.5)" stroke-width="1.2"/>` +
             `</g></svg>`;
         return L.divIcon({ html: svg, className: '', iconSize: [32, 32], iconAnchor: [16, 16] });
     }
@@ -1394,21 +1387,65 @@ class RadarMap {
 }
 
 // ─── AircraftTable ────────────────────────────────────────────────────────────
+const kNumericSortKeys = new Set(['alt_baro', 'gs', 'track', 'lat', 'lon', 'rssi']);
+
 class AircraftTable {
     constructor(tbodyId, store, onSelect) {
         this.tbody       = document.getElementById(tbodyId);
         this.store       = store;
         this.onSelect    = onSelect;   // (hex) → void
         this.selectedHex = null;
+        this.sortKey     = 'alt_baro';
+        this.sortDir     = 'desc';
+
+        // Wire header click handlers
+        const thead = this.tbody && this.tbody.closest('table').querySelector('thead');
+        if (thead) {
+            for (const th of thead.querySelectorAll('th[data-sort-key]')) {
+                th.style.cursor = 'pointer';
+                th.addEventListener('click', () => {
+                    const key = th.dataset.sortKey;
+                    if (key === this.sortKey) {
+                        this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        this.sortKey = key;
+                        this.sortDir = kNumericSortKeys.has(key) ? 'desc' : 'asc';
+                    }
+                    this._updateSortIndicators(thead);
+                    this.update();
+                });
+            }
+            this._updateSortIndicators(thead);
+        }
+    }
+
+    _updateSortIndicators(thead) {
+        for (const th of thead.querySelectorAll('th[data-sort-key]')) {
+            const active = th.dataset.sortKey === this.sortKey;
+            // Strip any existing indicator and re-add if active
+            th.textContent = th.textContent.replace(/ [↑↓]$/, '');
+            if (active) th.textContent += (this.sortDir === 'asc' ? ' ↑' : ' ↓');
+        }
+    }
+
+    _sorted() {
+        const key = this.sortKey;
+        const dir = this.sortDir === 'asc' ? 1 : -1;
+        const numeric = kNumericSortKeys.has(key);
+        return this.store.all().sort((a, b) => {
+            const av = a[key] ?? null;
+            const bv = b[key] ?? null;
+            if (av === null && bv === null) return 0;
+            if (av === null) return 1;   // nulls last
+            if (bv === null) return -1;
+            if (numeric) return dir * (av - bv);
+            return dir * String(av).localeCompare(String(bv));
+        });
     }
 
     update() {
         if (!this.tbody) return;
-        const acs = this.store.all().sort((a, b) => {
-            const aa = a.alt_baro ?? -Infinity;
-            const bb = b.alt_baro ?? -Infinity;
-            return bb - aa;
-        });
+        const acs = this._sorted();
 
         const rows = new Map();
         for (const row of this.tbody.querySelectorAll('tr[data-hex]')) rows.set(row.dataset.hex, row);
@@ -1417,6 +1454,7 @@ class AircraftTable {
         for (const ac of acs) {
             seen.add(ac.hex);
             const cs    = (ac.flight || '').trim();
+            const type  = ac.type    ?? '';
             const sqwk  = ac.squawk  ?? '';
             const alt   = ac.alt_baro != null ? ac.alt_baro.toLocaleString() : '';
             const gs    = ac.gs       != null ? Math.round(ac.gs)            : '';
@@ -1430,16 +1468,17 @@ class AircraftTable {
                 const r = rows.get(ac.hex);
                 const c = r.querySelectorAll('td');
                 c[0].style.color = color; c[0].textContent = ac.hex;
-                c[1].textContent = cs;   c[2].textContent = sqwk;
-                c[3].textContent = alt;  c[4].textContent = gs;
-                c[5].textContent = hdg;  c[6].textContent = lat;
-                c[7].textContent = lon;  c[8].textContent = rssi;
+                c[1].textContent = cs;   c[2].textContent = type;
+                c[3].textContent = sqwk; c[4].textContent = alt;
+                c[5].textContent = gs;   c[6].textContent = hdg;
+                c[7].textContent = lat;  c[8].textContent = lon;
+                c[9].textContent = rssi;
                 r.classList.toggle('trail-active', this.selectedHex === ac.hex);
             } else {
                 const r = document.createElement('tr');
                 r.dataset.hex = ac.hex;
                 r.innerHTML = `<td style="color:${color};font-family:monospace">${ac.hex}</td>` +
-                    `<td>${cs}</td><td>${sqwk}</td><td>${alt}</td><td>${gs}</td>` +
+                    `<td>${cs}</td><td>${type}</td><td>${sqwk}</td><td>${alt}</td><td>${gs}</td>` +
                     `<td>${hdg}</td><td>${lat}</td><td>${lon}</td><td>${rssi}</td>`;
                 r.addEventListener('click', () => {
                     if (this.onSelect) this.onSelect(ac.hex);
@@ -1448,11 +1487,18 @@ class AircraftTable {
             }
         }
 
+        // Remove rows for aircraft no longer in store
         for (const [hex, row] of rows) {
             if (!seen.has(hex)) {
                 row.remove();
                 if (this.selectedHex === hex) this.selectedHex = null;
             }
+        }
+
+        // Re-order DOM rows to match sort (avoids flicker vs. delete+recreate)
+        for (const ac of acs) {
+            const row = this.tbody.querySelector(`tr[data-hex="${ac.hex}"]`);
+            if (row) this.tbody.appendChild(row);
         }
     }
 

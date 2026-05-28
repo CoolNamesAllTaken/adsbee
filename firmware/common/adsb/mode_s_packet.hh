@@ -266,6 +266,7 @@ class ModeSAltitudeReplyPacket : public DecodedModeSPacket {
     ModeSAltitudeReplyPacket(const DecodedModeSPacket& decoded_packet);
 
     bool is_airborne = false;
+    bool airborne_state_known = false;
     bool has_alert = false;
     bool has_ident = false;
 
@@ -295,6 +296,7 @@ class ModeSIdentityReplyPacket : public DecodedModeSPacket {
     ModeSIdentityReplyPacket(const DecodedModeSPacket& decoded_packet);
 
     bool is_airborne = false;
+    bool airborne_state_known = false;
     bool has_alert = false;
     bool has_ident = false;
 

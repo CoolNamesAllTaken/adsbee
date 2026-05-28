@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "serial-logger"
+version = "1.0.0"
+description = "Generic multi-serial-port timestamped logger with optional TUI"
+authors = []
+packages = [{include = "serial_logger.py"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+pyserial = "^3.5"
+textual = ">=0.50.0"
+
+[tool.poetry.scripts]
+serial-logger = "serial_logger:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

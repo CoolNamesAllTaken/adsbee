@@ -8,7 +8,7 @@
 
 class ADSBeeServer {
    public:
-    static const uint16_t kMaxNumModeSPackets = 100;    // Depth of queue for incoming packets from RP2040.
+    static const uint16_t kMaxNumModeSPackets = 300;    // Depth of queue for incoming packets from RP2040.
     static const uint16_t kMaxNumUATADSBPackets = 20;   // Depth of queue for incoming UAT ADS-B packets from RP2040.
     static const uint16_t kMaxNumUATUplinkPackets = 2;  // Depth of queue for incoming UAT uplink packets from RP2040.
     static const uint32_t kAircraftDictionaryUpdateIntervalMs = 1000;
@@ -51,22 +51,25 @@ class ADSBeeServer {
 
     // Written by Core 1 (SPI task) and read by Core 0 (main task) — must be thread-safe.
     // Define PFB_QUEUE_NO_THREAD_SAFETY to disable mutex locking (e.g. to diagnose deadlocks).
-    PFBQueue<RawModeSPacket> raw_mode_s_packet_in_queue = PFBQueue<RawModeSPacket>(
-        {.buf_len_num_elements = kMaxNumModeSPackets, .buffer = raw_mode_s_packet_in_queue_buffer_,
+    PFBQueue<RawModeSPacket> raw_mode_s_packet_in_queue =
+        PFBQueue<RawModeSPacket>({.buf_len_num_elements = kMaxNumModeSPackets,
+                                  .buffer = raw_mode_s_packet_in_queue_buffer_,
 #ifndef PFB_QUEUE_NO_THREAD_SAFETY
-         .is_thread_safe = true
+                                  .is_thread_safe = true
 #endif
         });
-    PFBQueue<RawUATADSBPacket> raw_uat_adsb_packet_in_queue = PFBQueue<RawUATADSBPacket>(
-        {.buf_len_num_elements = kMaxNumUATADSBPackets, .buffer = raw_uat_adsb_packet_in_queue_buffer_,
+    PFBQueue<RawUATADSBPacket> raw_uat_adsb_packet_in_queue =
+        PFBQueue<RawUATADSBPacket>({.buf_len_num_elements = kMaxNumUATADSBPackets,
+                                    .buffer = raw_uat_adsb_packet_in_queue_buffer_,
 #ifndef PFB_QUEUE_NO_THREAD_SAFETY
-         .is_thread_safe = true
+                                    .is_thread_safe = true
 #endif
         });
-    PFBQueue<RawUATUplinkPacket> raw_uat_uplink_packet_in_queue = PFBQueue<RawUATUplinkPacket>(
-        {.buf_len_num_elements = kMaxNumUATUplinkPackets, .buffer = raw_uat_uplink_packet_in_queue_buffer_,
+    PFBQueue<RawUATUplinkPacket> raw_uat_uplink_packet_in_queue =
+        PFBQueue<RawUATUplinkPacket>({.buf_len_num_elements = kMaxNumUATUplinkPackets,
+                                      .buffer = raw_uat_uplink_packet_in_queue_buffer_,
 #ifndef PFB_QUEUE_NO_THREAD_SAFETY
-         .is_thread_safe = true
+                                      .is_thread_safe = true
 #endif
         });
 

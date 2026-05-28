@@ -387,3 +387,20 @@ TEST(GDL90Utils, OwnshipReport) {
 TEST(GDL90Utils, TrafficReport) {
     // TODO: Add tests here!
 }
+
+TEST(GDL90Utils, ModeSEmitterCategoryUsesDecodedEnum) {
+    // Mode S emitter_category_raw = (TypeCode<<3)|Category (values 8–39), not a valid GDL90
+    // emitter category code. The GDL90 serializer must use the decoded emitter_category enum.
+    ModeSAircraft ac;
+    ac.emitter_category = ADSBTypes::kEmitterCategoryHeavy;
+    ac.emitter_category_raw = 37;  // TC=4, Cat=5 → raw Mode S value, wrong for GDL90.
+
+    uint8_t buf[GDL90Reporter::kGDL90MessageMaxLenBytes];
+    memset(buf, 0xFF, sizeof(buf));
+    ASSERT_GT(gdl90.WriteGDL90TargetReportMessage(buf, sizeof(buf), ac, /*ownship=*/false), 19u);
+
+    // message_buf[18] = emitter_category. No GDL90 escape bytes precede it for a zero-initialized
+    // aircraft, so it maps directly to buf[19].
+    EXPECT_EQ(buf[19], static_cast<uint8_t>(ADSBTypes::kEmitterCategoryHeavy));
+    EXPECT_NE(buf[19], ac.emitter_category_raw);
+}
