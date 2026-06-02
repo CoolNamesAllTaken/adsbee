@@ -142,3 +142,32 @@ jobs:
         path: |
           firmware/adsbee_1090/pico/build/application/combined.uf2
           firmware/adsbee_1090/pico/build/application/adsbee_1090.ota
+
+  hardware_test:
+    runs-on: [self-hosted, adsbee-hardware]
+    needs: pico_target_build
+    # Run only on pushes to main — not on PRs — so hardware failures block
+    # merges without gating every PR on physical hardware availability.
+    # To temporarily disable: remove the branch protection requirement for
+    # this job in Settings → Branches → main → Required status checks.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download firmware artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: firmware
+        path: firmware/adsbee_1090/pico/build/application
+
+    - name: Install Python dependencies
+      run: pip install -r ci/requirements.txt
+
+    - name: Run hardware test
+      run: |
+        python3 ci/test_ota.py \
+          -p /dev/ttyACM0 \
+          --uf2 firmware/adsbee_1090/pico/build/application/combined.uf2 \
+          --ota-fw firmware/adsbee_1090/pico/build/application/adsbee_1090.ota

@@ -33,6 +33,8 @@ HEADER_SIZE   = 5 * 4        # 20-byte header at start of each partition block
 APP_OFFSET    = 4 * 1024     # flash offset where the app binary begins
 CHUNK_SIZE    = 0x1000 * 3   # 12 KiB – matches adsbee.js WRITE_CHUNK_BYTES
 MAX_RETRIES   = 3
+CHUNK_DELAY_S = 0.05         # Investigation knob: inter-chunk pause to mimic the browser's
+                             # gentler pacing. 0 = as fast as possible (original behavior).
 
 # Timeouts (seconds)
 CMD_TIMEOUT   = 6.0
@@ -170,13 +172,18 @@ class ADSBeeAT:
 
         print(f"    Firmware app size: {app_len:,} bytes")
         print(f"    Erasing {HEADER_SIZE + app_len:,} bytes from flash offset 0...")
+        erase_t0 = time.monotonic()
         await self.ota_erase(0, HEADER_SIZE + app_len)
+        erase_elapsed = time.monotonic() - erase_t0
+        print(f"    Erase done in {erase_elapsed:.1f}s")
 
         print(f"    Writing header ({HEADER_SIZE} bytes) at flash offset 0...")
         await self.ota_write_bytes(0, header)
 
         total_written = 0
+        retries = 0
         app_end = HEADER_SIZE + app_len
+        write_t0 = time.monotonic()
         for i in range(HEADER_SIZE, app_end, CHUNK_SIZE):
             flash_offset = (i - HEADER_SIZE) + APP_OFFSET
             chunk = contents[i : min(i + CHUNK_SIZE, app_end)]
@@ -184,6 +191,7 @@ class ADSBeeAT:
             for attempt in range(MAX_RETRIES):
                 try:
                     if attempt > 0:
+                        retries += 1
                         print(f"    Retry {attempt}/{MAX_RETRIES} at flash+{flash_offset:#x}...")
                         # Reconnect to get a clean WebSocket buffer before retrying —
                         # a failed binary send leaves binary garbage in the ESP32 console buffer.
@@ -199,8 +207,20 @@ class ADSBeeAT:
                     print(f"    Chunk at {flash_offset:#x} failed ({exc}), retrying...")
 
             total_written += len(chunk)
+            elapsed = time.monotonic() - write_t0
+            rate = total_written / elapsed if elapsed > 0 else 0
             pct = int(total_written * 100 / app_len)
-            print(f"    Progress: {pct:3d}%  ({total_written:,}/{app_len:,} bytes)")
+            print(f"    Progress: {pct:3d}%  ({total_written:,}/{app_len:,} bytes)  {rate/1024:.1f} KiB/s")
+
+            # Investigation: the browser paces OTA through a 10ms-poll response loop,
+            # giving the device idle time to drain SPI between chunks. Mimic that here
+            # to test whether the 88% (0xFF-tail) stall is caused by Python's faster cadence.
+            if CHUNK_DELAY_S > 0:
+                await asyncio.sleep(CHUNK_DELAY_S)
+
+        write_elapsed = time.monotonic() - write_t0
+        avg_rate = total_written / write_elapsed if write_elapsed > 0 else 0
+        print(f"    Write done in {write_elapsed:.1f}s  avg {avg_rate/1024:.1f} KiB/s  retries: {retries}")
 
         print("    Verifying partition...")
         await self.send_cmd("AT+OTA=VERIFY\r\n")
@@ -217,6 +237,7 @@ class ADSBeeAT:
 async def upload(host: str, ota_path: str) -> None:
     at = ADSBeeAT(host)
     print(f"  Connecting to ws://{host}/console ...")
+    upload_t0 = time.monotonic()
     await at.connect()
 
     try:
@@ -230,6 +251,8 @@ async def upload(host: str, ota_path: str) -> None:
 
     finally:
         await at.disconnect()
+        print(f"  OTA upload total (connect + erase + write + verify + boot): "
+              f"{time.monotonic() - upload_t0:.1f}s")
 
 
 def main() -> None:

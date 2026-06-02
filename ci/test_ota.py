@@ -120,9 +120,13 @@ def main() -> None:
 
     host = args.host
 
+    durations: dict[str, float] = {}
+    overall_t0 = time.monotonic()
+
     if not args.ota_only:
         # ── Step 1: Flash base firmware ───────────────────────────────────────
         log("━━━ Step 1: Flash base firmware via UF2 ━━━")
+        step_t0 = time.monotonic()
 
         if args.port:
             info(f"Triggering BOOTSEL mode via serial ({args.port})...")
@@ -151,59 +155,70 @@ def main() -> None:
 
         info(f"Waiting {args.boot_wait}s for device to boot (RP2040 will reflash ESP32/CC1312 if versions differ)...")
         time.sleep(args.boot_wait)
+        durations["1. UF2 flash"] = time.monotonic() - step_t0
 
         # ── Step 2: Verify base firmware ──────────────────────────────────────
         log(f"━━━ Step 2: Verify base firmware health ({host}) ━━━")
+        step_t0 = time.monotonic()
         if not asyncio.run(check_device.check_health(host, args.health_timeout)):
             fail("Base firmware not responding")
             sys.exit(1)
         ok("Base firmware healthy")
+        durations["2. Base FW health"] = time.monotonic() - step_t0
 
         if args.usb_only:
+            total = time.monotonic() - overall_t0
             print()
             log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
             log(" Test summary  (--usb-only)")
             log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            log(f"  1. UF2 flash:       {GREEN}PASS{RESET}")
-            log(f"  2. Base FW health:  {GREEN}PASS{RESET}")
+            log(f"  1. UF2 flash:       {GREEN}PASS{RESET}   {durations['1. UF2 flash']:6.1f}s")
+            log(f"  2. Base FW health:  {GREEN}PASS{RESET}   {durations['2. Base FW health']:6.1f}s")
             log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            log(f"  Total:              {total:6.1f}s")
             log(f"{GREEN}ALL PASSED{RESET}")
             return
 
     # ── Step 3: OTA upload ────────────────────────────────────────────────────
     log(f"━━━ Step 3: OTA upload ({ota} → {host}) ━━━")
     ota_ok = False
+    step_t0 = time.monotonic()
     try:
         asyncio.run(ota_upload.upload(host, str(ota)))
         ok("OTA upload succeeded")
         ota_ok = True
     except Exception as exc:
         fail(f"OTA upload failed: {exc}")
-
-    info(f"Waiting {args.ota_wait}s for device to reboot after OTA...")
-    time.sleep(args.ota_wait)
+    durations["3. OTA upload"] = time.monotonic() - step_t0
 
     # ── Step 4: Verify post-OTA firmware ─────────────────────────────────────
     log(f"━━━ Step 4: Verify post-OTA firmware health ({host}) ━━━")
+    step_t0 = time.monotonic()
+    info(f"Waiting {args.ota_wait}s for device to reboot after OTA...")
+    time.sleep(args.ota_wait)
     post_ok = asyncio.run(check_device.check_health(host, args.health_timeout))
     if post_ok:
         ok("Post-OTA firmware healthy")
     else:
         fail("Post-OTA firmware not responding")
+    durations["4. Post-OTA health"] = time.monotonic() - step_t0
 
     # ── Summary ───────────────────────────────────────────────────────────────
     fails = (0 if ota_ok else 1) + (0 if post_ok else 1)
+
+    total = time.monotonic() - overall_t0
 
     print()
     log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     log(f" Test summary  {'(--ota-only)' if args.ota_only else ''}")
     log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     if not args.ota_only:
-        log(f"  1. UF2 flash:        {GREEN}PASS{RESET}")
-        log(f"  2. Base FW health:   {GREEN}PASS{RESET}")
-    log(f"  3. OTA upload:       {GREEN if ota_ok  else RED}{'PASS' if ota_ok  else 'FAIL'}{RESET}")
-    log(f"  4. Post-OTA health:  {GREEN if post_ok else RED}{'PASS' if post_ok else 'FAIL'}{RESET}")
+        log(f"  1. UF2 flash:        {GREEN}PASS{RESET}   {durations['1. UF2 flash']:6.1f}s")
+        log(f"  2. Base FW health:   {GREEN}PASS{RESET}   {durations['2. Base FW health']:6.1f}s")
+    log(f"  3. OTA upload:       {GREEN if ota_ok  else RED}{'PASS' if ota_ok  else 'FAIL'}{RESET}   {durations['3. OTA upload']:6.1f}s")
+    log(f"  4. Post-OTA health:  {GREEN if post_ok else RED}{'PASS' if post_ok else 'FAIL'}{RESET}   {durations['4. Post-OTA health']:6.1f}s")
     log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    log(f"  Total:               {total:6.1f}s")
 
     if fails == 0:
         log(f"{GREEN}ALL PASSED{RESET}")
