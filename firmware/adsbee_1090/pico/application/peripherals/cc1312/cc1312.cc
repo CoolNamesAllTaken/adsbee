@@ -403,6 +403,15 @@ bool CC1312::BootloaderReceiveBuffer(uint8_t* buf, uint16_t buf_len_bytes) {
     }
 
     uint16_t rx_len_bytes = rx_buf[0];
+
+    // Guard against a garbage length byte overflowing rx_buf or the output buffer.
+    if (rx_len_bytes == 0 || rx_len_bytes > static_cast<uint16_t>(buf_len_bytes) + 2) {
+        SPIEndTransaction();
+        CONSOLE_ERROR("CC1312::BootloaderReceiveBuffer", "Received invalid length byte 0x%x (expected at most %d).",
+                      rx_len_bytes, buf_len_bytes + 2);
+        return false;
+    }
+
     uint8_t calculated_checksum = 0;
 
     int16_t bytes_read =
