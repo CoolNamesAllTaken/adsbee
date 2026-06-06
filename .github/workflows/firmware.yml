@@ -163,11 +163,13 @@ jobs:
         path: firmware/adsbee_1090/pico/build/application
 
     - name: Install Python dependencies
-      run: pip install -r ci/requirements.txt
+      run: |
+        python3 -m venv .venv
+        .venv/bin/pip install -r ci/requirements.txt
 
     - name: Run hardware test
       run: |
-        python3 ci/test_ota.py \
+        .venv/bin/python3 ci/test_ota.py \
           -p /dev/ttyACM0 \
           --uf2 firmware/adsbee_1090/pico/build/application/combined.uf2 \
           --ota-fw firmware/adsbee_1090/pico/build/application/adsbee_1090.ota
