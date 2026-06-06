@@ -150,7 +150,7 @@ jobs:
     # merges without gating every PR on physical hardware availability.
     # To temporarily disable: remove the branch protection requirement for
     # this job in Settings → Branches → main → Required status checks.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/azhang/add-ci-tests-for-usb-and-ota-flashing')
 
     steps:
     - name: Checkout repository
