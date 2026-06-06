@@ -36,10 +36,15 @@ async def reboot_via_websocket(host: str) -> None:
 
 def reboot_via_serial(port: str) -> None:
     print(f"  Sending {CMD.strip()} via {port} ...")
-    # USB CDC ignores the baud rate — open the device and write directly.
-    with open(port, "wb", buffering=0) as f:
-        f.write(CMD.encode())
-        time.sleep(0.1)
+    # USB CDC ignores baud rate; device reboots immediately so no response expected.
+    try:
+        with open(port, "wb", buffering=0) as f:
+            f.write(CMD.encode())
+            time.sleep(0.1)
+    except FileNotFoundError:
+        raise RuntimeError(f"Serial port {port} not found. Is the device connected?")
+    except PermissionError:
+        raise RuntimeError(f"Permission denied on {port}. Add user to 'dialout' group: sudo usermod -aG dialout $USER")
 
 
 def main() -> None:

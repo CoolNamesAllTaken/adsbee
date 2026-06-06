@@ -29,12 +29,13 @@ import websockets
 import websockets.exceptions
 
 # .ota file layout constants (must match the firmware / adsbee.js)
-HEADER_SIZE   = 5 * 4        # 20-byte header at start of each partition block
-APP_OFFSET    = 4 * 1024     # flash offset where the app binary begins
-CHUNK_SIZE    = 0x1000 * 3   # 12 KiB – matches adsbee.js WRITE_CHUNK_BYTES
+HEADER_SIZE   = 5 * 4        # 20 bytes
+APP_OFFSET    = 4 * 1024     # flash offset where app binary begins
+CHUNK_SIZE    = 0x1000 * 3   # matches adsbee.js WRITE_CHUNK_BYTES
 MAX_RETRIES   = 3
-CHUNK_DELAY_S = 0.05         # Investigation knob: inter-chunk pause to mimic the browser's
-                             # gentler pacing. 0 = as fast as possible (original behavior).
+CHUNK_DELAY_S = 0.05         # Required inter-chunk pause: without this delay Python's faster
+                             # cadence overruns the RP2040 AT parse buffer and OTA stalls at
+                             # ~88% (the 0xFF padding region). Do not set to 0.
 
 # Timeouts (seconds)
 CMD_TIMEOUT   = 6.0
@@ -87,7 +88,8 @@ class ADSBeeAT:
         while not self._queue.empty():
             self._queue.get_nowait()
 
-    async def recv_until(self, sentinel: str, timeout: float = CMD_TIMEOUT) -> list[str]:
+    async def recv_until(self, sentinel: str, timeout: float = CMD_TIMEOUT,
+                         ignore_cppat_errors: bool = False) -> list[str]:
         """Collect WebSocket messages until one contains *sentinel*. Return all collected."""
         accumulated: list[str] = []
         deadline = time.monotonic() + timeout
@@ -109,14 +111,14 @@ class ADSBeeAT:
             if sentinel in msg:
                 return accumulated
 
-            # Any line starting with ERROR is a device error response.
             if any(line.strip().startswith("ERROR") for line in msg.splitlines()):
                 raise RuntimeError(f"Device returned ERROR. Context: {msg!r}")
 
-            # CppAT "Unable to find AT prefix" is spurious noise from binary data
-            # containing \r\n — ignore it. Other CppAT errors are real failures.
+            # "Unable to find AT prefix" is spurious noise from binary data — always ignore.
+            # Binary sends may also trigger other CppAT errors; ignore those too.
             if "CppAT::" in msg and "Unable to find AT prefix" not in msg:
-                raise RuntimeError(f"CppAT parse error from device: {msg!r}")
+                if not ignore_cppat_errors:
+                    raise RuntimeError(f"CppAT parse error from device: {msg!r}")
 
     async def send_cmd(self, cmd: str, sentinel: str = "OK",
                        timeout: float = CMD_TIMEOUT) -> list[str]:
@@ -128,7 +130,7 @@ class ADSBeeAT:
     async def send_bytes(self, data: bytes, timeout: float = WRITE_TIMEOUT) -> list[str]:
         assert self.ws is not None
         await self.ws.send(data)
-        return await self.recv_until("OK", timeout)
+        return await self.recv_until("OK", timeout, ignore_cppat_errors=True)
 
     # ── OTA helpers ─────────────────────────────────────────────────────────
 
@@ -146,7 +148,6 @@ class ADSBeeAT:
 
     async def ota_write_bytes(self, offset: int, data: bytes) -> None:
         ck = crc32(data)
-        # offset hex, length decimal, crc hex – matches firmware parser
         cmd = f"AT+OTA=WRITE,{offset:x},{len(data)},{ck:x}\r\n"
         await self.send_cmd(cmd, sentinel="READY")
         await self.send_bytes(data)
@@ -193,8 +194,7 @@ class ADSBeeAT:
                     if attempt > 0:
                         retries += 1
                         print(f"    Retry {attempt}/{MAX_RETRIES} at flash+{flash_offset:#x}...")
-                        # Reconnect to get a clean WebSocket buffer before retrying —
-                        # a failed binary send leaves binary garbage in the ESP32 console buffer.
+                        # Reconnect: a failed binary send leaves garbage in the ESP32 console buffer.
                         await self.disconnect()
                         await asyncio.sleep(1.0)
                         await self.connect()
@@ -212,9 +212,6 @@ class ADSBeeAT:
             pct = int(total_written * 100 / app_len)
             print(f"    Progress: {pct:3d}%  ({total_written:,}/{app_len:,} bytes)  {rate/1024:.1f} KiB/s")
 
-            # Investigation: the browser paces OTA through a 10ms-poll response loop,
-            # giving the device idle time to drain SPI between chunks. Mimic that here
-            # to test whether the 88% (0xFF-tail) stall is caused by Python's faster cadence.
             if CHUNK_DELAY_S > 0:
                 await asyncio.sleep(CHUNK_DELAY_S)
 
