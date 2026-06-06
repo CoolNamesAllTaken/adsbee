@@ -2,7 +2,7 @@ name: ADSBee Firmware CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "azhang/add-ci-tests-for-usb-and-ota-flashing" ]
   pull_request:
     branches: [ "main" ]
 
