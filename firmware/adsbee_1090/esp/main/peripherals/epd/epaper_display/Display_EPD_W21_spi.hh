@@ -80,15 +80,49 @@ class DisplayEpdW21 {
   // -------------------------------------------------------------------------
   // Display control (call only after Init())
   // -------------------------------------------------------------------------
+  //
+  // The write methods below are NON-BLOCKING: they stream the framebuffer and
+  // trigger the refresh, then return immediately while the panel refreshes
+  // (BUSY stays high for the duration). The SSD1680 must not be written while a
+  // refresh is running (datasheet 0x20: "do not interrupt ... to avoid
+  // corruption"), so callers must gate every write on !IsBusy():
+  //
+  //     if (!epd.IsBusy()) epd.DisplayFast(fb);   // continuous fast updates
+  //
+  // For a simple synchronous render (e.g. a boot splash) use DisplayBlocking().
+  //
+  // Ghosting: fast (differential) refreshes accumulate ghosting; intersperse a
+  // periodic full Display() to clear it (see DisplayFast notes).
 
-  // Writes an image framebuffer to the display and triggers a full update.
-  // Image must be kWidth/8 * kHeight bytes, one bit per pixel.
+  // True if the panel is mid-refresh (BUSY asserted). Non-blocking; reads BUSY
+  // over the GPIO expander (one I2C transaction). Returns true on read failure
+  // (fail-safe: callers must not write into a refresh).
+  bool IsBusy();
+
+  // Full-screen refresh (fast waveform). This FLASHES/inverts the whole panel
+  // and fully clears ghosting — use it to (re)baseline. Returns immediately
+  // (non-blocking). Image is kWidth/8 * kHeight bytes, one bit per pixel, in
+  // panel order. Calling this invalidates the partial baseline, so the next
+  // DisplayFast() re-stages its base image.
   void Display(uint8_t* image);
+
+  // Like Display() but waits for the refresh to complete before returning.
+  // For boot/one-shot use where blocking is acceptable.
+  void DisplayBlocking(uint8_t* image);
+
+  // True PARTIAL (differential, Display Mode 2) refresh: no full-screen flash,
+  // sub-second, intended for continuous motion. The FIRST call stages `image`
+  // as the base reference (blocking: one clean full refresh); subsequent calls
+  // are non-blocking differential updates that diff against the previous frame
+  // (RAM ping-pong promotes each new frame to the reference). Some ghosting
+  // still accumulates over many frames — intersperse a periodic Display() to
+  // clear it. Must be called only when !IsBusy() (after the first call).
+  void DisplayFast(uint8_t* image);
 
   // Triggers a full display update sequence and waits for completion.
   void Update();
 
-  // Fills the display with white and performs a full update.
+  // Fills the display with white and performs a full update (non-blocking).
   void WhiteScreen();
 
   // Issues a deep-sleep command. Call Init() to wake the panel.
@@ -136,10 +170,30 @@ class DisplayEpdW21 {
   // Non-fatal: logs and returns false on failure so display Init can continue.
   bool InitFrontLight();
 
-  // Writes the refresh-trigger commands (0x22/0x20). Must be called with the SPI
-  // bus already acquired; the caller waits on BUSY *after* releasing the bus so
-  // the IMU is not starved during the multi-second panel refresh.
+  // Writes the full-refresh trigger commands (0x22=0xF7 / 0x20). Bus must be held.
   void TriggerUpdate();
+
+  // Writes the fast-refresh trigger commands (0x22=0xC7 / 0x20). Bus must be held.
+  void TriggerFastUpdate();
+
+  // Writes the partial/differential trigger commands (0x22=0xFF / 0x20). Bus held.
+  void TriggerPartialUpdate();
+
+  // Sets the RAM address counter to (0,0) and bursts the whole framebuffer into
+  // the given RAM bank (0x24 = BW, 0x26 = "old"/red) in one SPI transaction.
+  // Bus must be held.
+  void WriteRamFull(uint8_t ram_cmd, const uint8_t* image);
+
+  // Loads the fast (differential) waveform once: HW reset, SWRESET, and the
+  // temperature-forced LUT load from the vendor EPD_HW_Init_Fast sequence. Sets
+  // fast_ready_. Blocking but short (LUT load, not a panel refresh).
+  bool InitFast();
+
+  // Prepares the panel for partial (Display Mode 2) refresh: enables RAM
+  // ping-pong (0x37 F[6]), locks the border (0x3C=0x80), and stages `base` into
+  // both RAM banks with one clean full refresh so the first differential update
+  // has a reference. Sets partial_ready_. Blocking (the base full refresh waits).
+  bool InitPartial(const uint8_t* base);
 
   // Acquire/release the shared SPI bus around the EPD's manual-CS sequences so
   // the IMU reader task cannot interleave its transactions mid-frame.
@@ -151,4 +205,6 @@ class DisplayEpdW21 {
   spi_device_handle_t spi_handle_   = nullptr;
   bool                owned_spi_bus_ = false;
   bool                front_light_ready_ = false;  // LEDC configured.
+  bool                fast_ready_        = false;  // Fast (0xC7) waveform LUT loaded.
+  bool                partial_ready_     = false;  // Partial mode staged (ping-pong + base).
 };

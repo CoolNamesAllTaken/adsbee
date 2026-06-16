@@ -132,7 +132,24 @@ bool DisplayEpdW21::Deinit() {
 // Display control
 // ---------------------------------------------------------------------------
 
+bool DisplayEpdW21::IsBusy() {
+  bool busy = false;
+  if (!Fxl6408::ReadPin(config_.busy_pin, &busy)) {
+    // Fail safe: if we can't read BUSY, assume busy so the caller won't write
+    // into an in-progress refresh.
+    return true;
+  }
+  return busy;
+}
+
 void DisplayEpdW21::Display(uint8_t* image) {
+  // Full-screen refresh using the fast (temperature-forced) waveform. This
+  // flashes/inverts the whole panel and fully clears ghosting — use it to
+  // (re)baseline. For continuous no-flash motion use DisplayFast() (partial).
+  if (!fast_ready_) {
+    InitFast();
+  }
+
   const uint32_t width  = (kWidth % 8 == 0) ? (kWidth / 8) : (kWidth / 8 + 1);
   const uint32_t length = width * kHeight;
 
@@ -157,10 +174,17 @@ void DisplayEpdW21::Display(uint8_t* image) {
   SpiWriteBuffer(image, length);
   gpio_set_level(config_.cs_pin, 1);
 
-  TriggerUpdate();
+  TriggerFastUpdate();
 
-  // Release before the multi-second panel refresh so the IMU can run again.
+  // Release and return without waiting; the caller polls IsBusy(). A full
+  // refresh disturbs the partial baseline, so the next DisplayFast() must
+  // re-stage its base image and ping-pong reference.
   ReleaseBus();
+  partial_ready_ = false;
+}
+
+void DisplayEpdW21::DisplayBlocking(uint8_t* image) {
+  Display(image);
   WaitBusy();
 }
 
@@ -168,7 +192,6 @@ void DisplayEpdW21::Update() {
   AcquireBus();
   TriggerUpdate();
   ReleaseBus();
-  WaitBusy();
 }
 
 void DisplayEpdW21::WhiteScreen() {
@@ -179,9 +202,9 @@ void DisplayEpdW21::WhiteScreen() {
       WriteData(0xFF);
     }
   }
-  TriggerUpdate();
+  TriggerUpdate();  // 0xF7 full refresh for a clean white baseline.
   ReleaseBus();
-  WaitBusy();
+  partial_ready_ = false;
 }
 
 void DisplayEpdW21::DeepSleep() {
@@ -324,6 +347,144 @@ void DisplayEpdW21::TriggerUpdate() {
   WriteCommand(0x22);
   WriteData(0xF7);
   WriteCommand(0x20);
+}
+
+void DisplayEpdW21::TriggerFastUpdate() {
+  WriteCommand(0x22);
+  WriteData(0xC7);  // Display Mode 1, no temp reload — uses the cached fast LUT.
+  WriteCommand(0x20);
+}
+
+void DisplayEpdW21::TriggerPartialUpdate() {
+  WriteCommand(0x22);
+  WriteData(0xFF);  // Display Mode 2 (differential / partial), with temp load.
+  WriteCommand(0x20);
+}
+
+void DisplayEpdW21::WriteRamFull(uint8_t ram_cmd, const uint8_t* image) {
+  // Set RAM address counter to (0,0) then burst the whole framebuffer in one
+  // SPI transaction into the given RAM bank (0x24 = BW, 0x26 = "old"/red).
+  const uint32_t width  = (kWidth % 8 == 0) ? (kWidth / 8) : (kWidth / 8 + 1);
+  const uint32_t length = width * kHeight;
+
+  WriteCommand(0x4E);
+  WriteData(0x00);
+  WriteCommand(0x4F);
+  WriteData(0x00);
+  WriteData(0x00);
+
+  WriteCommand(ram_cmd);
+  gpio_set_level(config_.cs_pin, 0);
+  gpio_set_level(config_.dc_pin, 1);
+  SpiWriteBuffer(image, length);
+  gpio_set_level(config_.cs_pin, 1);
+}
+
+bool DisplayEpdW21::InitFast() {
+  // Vendor EPD_HW_Init_Fast: load the fast (differential) waveform by forcing a
+  // high temperature so the OTP search selects the fast LUT. The busy-waits here
+  // are short LUT-load waits, not a panel refresh.
+  HwReset();
+  WaitBusy();
+
+  AcquireBus();
+  WriteCommand(0x12);  // SWRESET
+  ReleaseBus();
+  WaitBusy();
+
+  AcquireBus();
+  WriteCommand(0x18);  // Temperature sensor select: internal
+  WriteData(0x80);
+
+  WriteCommand(0x22);  // Load temperature value
+  WriteData(0xB1);
+  WriteCommand(0x20);
+  ReleaseBus();
+  WaitBusy();
+
+  AcquireBus();
+  WriteCommand(0x1A);  // Write to temperature register (0x0064 → forces fast WF)
+  WriteData(0x64);
+  WriteData(0x00);
+
+  WriteCommand(0x22);  // Load LUT with the fast waveform
+  WriteData(0x91);
+  WriteCommand(0x20);
+  ReleaseBus();
+  WaitBusy();
+
+  // SWRESET above cleared the gate/entry/window config; restore it so fast
+  // frames land identically to full frames (matches ApplyHwInit).
+  AcquireBus();
+  WriteCommand(0x01);  // Driver Output Control: MUX=263, GD=0, SM=0, TB=0
+  WriteData(0x07);
+  WriteData(0x01);
+  WriteData(0x00);
+  WriteCommand(0x11);  // Data Entry Mode: X+/Y+, update X
+  WriteData(0x03);
+  WriteCommand(0x44);  // RAM X window 0x00..0x15
+  WriteData(0x00);
+  WriteData(0x15);
+  WriteCommand(0x45);  // RAM Y window 0x0000..0x0107
+  WriteData(0x00);
+  WriteData(0x00);
+  WriteData(0x07);
+  WriteData(0x01);
+  ReleaseBus();
+
+  fast_ready_ = true;
+  return true;
+}
+
+bool DisplayEpdW21::InitPartial(const uint8_t* base) {
+  // Enable RAM ping-pong for Display Mode 2 so each differential update auto-
+  // promotes the new frame to the "old" reference (no manual 0x26 re-stage).
+  // 0x37 Write Register for Display Option: A,B..E,F[3:0]=WS display-mode bits
+  // (left at OTP/POR default 0), F[6]=1 enables ping-pong, G..J=version (0).
+  AcquireBus();
+  WriteCommand(0x37);
+  WriteData(0x00);  // A: spare VCOM OTP = default
+  WriteData(0x00);  // B: WS[7:0]  display mode
+  WriteData(0x00);  // C: WS[15:8]
+  WriteData(0x00);  // D: WS[23:16]
+  WriteData(0x00);  // E: WS[31:24]
+  WriteData(0x40);  // F: bit6 = RAM ping-pong enable (WS[35:32] mode bits = 0)
+  WriteData(0x00);  // G: module ID / waveform version
+  WriteData(0x00);  // H
+  WriteData(0x00);  // I
+  WriteData(0x00);  // J
+
+  // Lock the border so it does not flash during partial updates (vendor 0x3C=0x80).
+  WriteCommand(0x3C);
+  WriteData(0x80);
+
+  // Stage the base image into both RAM banks (0x24 = new, 0x26 = old reference)
+  // so the first differential update has something to diff against, then do one
+  // clean full (0xF7) refresh to display it. (Vendor EPD_SetRAMValue_BaseMap.)
+  WriteRamFull(0x24, base);
+  WriteRamFull(0x26, base);
+  TriggerUpdate();  // 0xF7 full refresh — blocking baseline.
+  ReleaseBus();
+  WaitBusy();
+
+  partial_ready_ = true;
+  return true;
+}
+
+void DisplayEpdW21::DisplayFast(uint8_t* image) {
+  // True partial (differential, Display Mode 2) refresh: no full-screen flash,
+  // sub-second. The first call stages `image` as the base (blocking); subsequent
+  // calls are non-blocking differential updates against the previous frame.
+  if (!partial_ready_) {
+    InitPartial(image);
+    return;  // base image is now shown; next call begins differential updates.
+  }
+
+  AcquireBus();
+  WriteRamFull(0x24, image);  // new frame into BW RAM
+  TriggerPartialUpdate();     // 0x22=0xFF — ping-pong promotes it to the reference
+  ReleaseBus();
+  // Non-blocking: caller polls IsBusy().
 }
 
 void DisplayEpdW21::AcquireBus() {

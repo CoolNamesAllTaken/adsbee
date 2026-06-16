@@ -139,21 +139,18 @@ extern "C" void app_main(void) {
     if (!imu.Init(true)) { ESP_LOGE("app_main", "LSM6DSV init failed"); }
     if (!epd.Init()) { ESP_LOGE("app_main", "EPD init failed"); }
 
-    // ---- 8. EPD hello world (blocking, one-shot) -----------------------------
-    {
-        static uint8_t epd_fb[DisplayEpdW21::kWidth / 8 * DisplayEpdW21::kHeight];
-        Paint_NewImage(epd_fb, DisplayEpdW21::kWidth, DisplayEpdW21::kHeight, ROTATE_270, WHITE);
-        // Display() now streams the framebuffer in send-order without the old
-        // per-byte vertical flip, so the GUI no longer needs MIRROR_VERTICAL to
-        // compensate. If the panel comes out flipped, switch this to
-        // MIRROR_VERTICAL / MIRROR_HORIZONTAL (see plan: verify on hardware).
-        Paint_SetMirroring(MIRROR_NONE);
-        Paint_Clear(WHITE);
-        Paint_DrawString_EN(10, 10, "Hello World", &Font20, WHITE, BLACK);
-        epd.Display(epd_fb);
-        epd.DeepSleep();
-        epd.SetFrontLight(0.2);
-    }
+    // ---- 8. EPD canvas setup (animated in the main loop below) ---------------
+    // The bouncing-circle demo is driven from the polling loop via non-blocking
+    // fast refresh; no DeepSleep here (the panel must stay awake for back-to-back
+    // fast updates).
+    static uint8_t epd_fb[DisplayEpdW21::kWidth / 8 * DisplayEpdW21::kHeight];
+    Paint_NewImage(epd_fb, DisplayEpdW21::kWidth, DisplayEpdW21::kHeight, ROTATE_270, WHITE);
+    // Display() streams the framebuffer in send-order (no per-byte vertical flip),
+    // so the GUI needs no compensating mirror. If the panel comes out flipped,
+    // switch to MIRROR_VERTICAL / MIRROR_HORIZONTAL (verify on hardware).
+    Paint_SetMirroring(MIRROR_NONE);
+    Paint_Clear(WHITE);
+    epd.SetFrontLight(0.2);
 
     // ---- 7. Polling loop at ~30 Hz -------------------------------------------
     uint32_t sample_accumulator = 0;
@@ -260,6 +257,36 @@ extern "C" void app_main(void) {
                     imu.IsQuaternionValid() ? "ok" : "--",
                     imu.GetQuaternion().w, imu.GetQuaternion().x,
                     imu.GetQuaternion().y, imu.GetQuaternion().z);
+        }
+
+        // Bouncing circle on the EPD via non-blocking partial refresh. A new
+        // frame is only drawn/pushed once the previous partial update finishes,
+        // so the animation runs sub-second per step while this loop keeps
+        // spinning at ~30 Hz. DisplayFast() does a differential (no-flash) update;
+        // the first call stages the base image. Some ghosting accumulates over
+        // time — drop a periodic epd.Display(epd_fb) in here to clear it.
+        {
+            static constexpr int kCanvasW = DisplayEpdW21::kHeight;  // 264 (ROTATE_270)
+            static constexpr int kCanvasH = DisplayEpdW21::kWidth;   // 176
+            static constexpr int kBallR   = 20;
+            static int ball_x  = kBallR;
+            static int ball_y  = kBallR;
+            static int ball_vx = 6;
+            static int ball_vy = 4;
+            if (!epd.IsBusy()) {
+                ball_x += ball_vx;
+                ball_y += ball_vy;
+                if (ball_x <= kBallR || ball_x >= kCanvasW - kBallR) ball_vx = -ball_vx;
+                if (ball_y <= kBallR || ball_y >= kCanvasH - kBallR) ball_vy = -ball_vy;
+                // Clamp so a large step near a wall can't escape on one frame.
+                if (ball_x < kBallR) ball_x = kBallR;
+                if (ball_x > kCanvasW - kBallR) ball_x = kCanvasW - kBallR;
+                if (ball_y < kBallR) ball_y = kBallR;
+                if (ball_y > kCanvasH - kBallR) ball_y = kCanvasH - kBallR;
+                Paint_Clear(WHITE);
+                Paint_DrawCircle(ball_x, ball_y, kBallR, BLACK, DRAW_FILL_FULL, DOT_PIXEL_1X1);
+                epd.DisplayFast(epd_fb);  // returns immediately
+            }
         }
 
         // Yield to the idle task to avoid a watchdog trigger. Note: Delay must be >= 10ms since 100Hz tick is typical.
