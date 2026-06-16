@@ -24,6 +24,10 @@ idf_component_register(
         "${COMMON_DIR}/settings"
         "comms"
         "peripherals/pico"
+        "peripherals/epd/epaper_display"
+        "peripherals/epd/fonts"
+        "peripherals/epd/gui"
+        "peripherals"
         "server"
         "target_test"
     INCLUDE_DIRS
@@ -47,6 +51,10 @@ idf_component_register(
         "${COMMON_DIR}/settings"
         "comms"
         "peripherals/pico"
+        "peripherals/epd/epaper_display"
+        "peripherals/epd/fonts"
+        "peripherals/epd/gui"
+        "peripherals"
         "server"
         "target_test"
     EMBED_TXTFILES
