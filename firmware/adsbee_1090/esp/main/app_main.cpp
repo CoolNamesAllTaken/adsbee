@@ -6,6 +6,7 @@
    software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
    CONDITIONS OF ANY KIND, either express or implied.
 */
+#include <math.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -150,7 +151,8 @@ extern "C" void app_main(void) {
     // switch to MIRROR_VERTICAL / MIRROR_HORIZONTAL (verify on hardware).
     Paint_SetMirroring(MIRROR_NONE);
     Paint_Clear(WHITE);
-    epd.SetFrontLight(0.2);
+    // Front-light brightness is driven by the ambient-light auto-brightness logic
+    // in the polling loop below.
 
     // ---- 7. Polling loop at ~30 Hz -------------------------------------------
     uint32_t sample_accumulator = 0;
@@ -189,12 +191,58 @@ extern "C" void app_main(void) {
 #ifdef PRINT_HEAP_USAGE
     uint32_t last_heap_print_timestamp_ms = 0;
 #endif
+    // ---- Ambient-light auto-brightness tuning constants ----------------------
+    // Ambient normalization (log scale) + smoothing.
+    constexpr float kLuxMin       = 5.0f;     // lux at/below -> ambient level 0 (darkest)
+    constexpr float kLuxMax       = 5000.0f;  // lux at/above -> ambient level 1 (brightest)
+    constexpr float kEmaAlpha     = 0.01f;     // smoothing: higher = snappier
+    constexpr float kLedMinBright = 0.05f;    // floor so indicator LEDs never fully off
+    // Front-light "hump" curve, keyed on the normalized ambient level (0=dark, 1=bright).
+    constexpr float kFlPeakLevel  = 0.45f;    // ambient level where the front light peaks
+    constexpr float kFlOffLevel   = 0.75f;    // ambient level at/above which it is off
+    constexpr float kFlDarkBright = 0.15f;    // dim (not full) when fully dark — eye comfort
+    constexpr float kFlPeakBright = 0.6f;     // brightness at the peak
+
+    auto clampf = [](float v, float lo, float hi) {
+        return v < lo ? lo : (v > hi ? hi : v);
+    };
+
     while (1) {
         adsbee_server.Update();
 
+        // Refresh the light sensor first so brightness tracks the current reading.
+        ltr.Update();
+
+        // Normalize lux -> 0..1 on a log scale (floor lux so logf() is finite).
+        float lux   = ltr.GetLux();
+        float l     = (lux < 1.0f) ? 1.0f : lux;
+        float level = (logf(l) - logf(kLuxMin)) / (logf(kLuxMax) - logf(kLuxMin));
+        level = clampf(level, 0.0f, 1.0f);
+
+        // EMA-smooth the ambient level to avoid flicker from noisy readings.
+        static float ambient = level;  // seeded on the first iteration
+        ambient += kEmaAlpha * (level - ambient);
+
+        // Indicator LEDs: match ambient, with a floor so they stay visible.
+        float led_scale = kLedMinBright + (1.0f - kLedMinBright) * ambient;
+        uint8_t brightness = (uint8_t)lroundf(led_scale * 255.0f);
+
+        // EPD front light: hump curve. Dim in darkness (eye comfort), rises to a
+        // peak at mid ambient, then ramps back to 0 once the room lights the panel.
+        float front;
+        if (ambient <= kFlPeakLevel) {
+            float t = clampf(ambient / kFlPeakLevel, 0.0f, 1.0f);
+            front = kFlDarkBright + (kFlPeakBright - kFlDarkBright) * t;
+        } else if (ambient < kFlOffLevel) {
+            float t = (ambient - kFlPeakLevel) / (kFlOffLevel - kFlPeakLevel);
+            front = kFlPeakBright * (1.0f - t);
+        } else {
+            front = 0.0f;
+        }
+        epd.SetFrontLight(front);
+
         static uint8_t hue_offset = 0;
         static uint8_t tick = 0;
-        const uint8_t brightness = 16;
         for (int i = 0; i < 9; i++) {
             uint8_t h = hue_offset + i * 28, hi = h / 43, f = (h % 43) * 6, q = 255 - f;
             uint8_t r = (uint8_t[]){255,q,0,0,f,255}[hi] * brightness / 255;
@@ -205,7 +253,6 @@ extern "C" void app_main(void) {
         led_strip_refresh(led_strip);
         if (++tick >= 20) { hue_offset += 3; tick = 0; }
 
-        ltr.Update();
         aht.Update();
         spl.Update();
         mmc.Update();

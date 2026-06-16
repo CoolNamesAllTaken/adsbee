@@ -357,7 +357,8 @@ void DisplayEpdW21::TriggerFastUpdate() {
 
 void DisplayEpdW21::TriggerPartialUpdate() {
   WriteCommand(0x22);
-  WriteData(0xFF);  // Display Mode 2 (differential / partial), with temp load.
+  // WriteData(0xFF);  // Display Mode 2 (differential / partial), with temp load.
+  WriteData(0xFC);  // Vendor engineer recommendation to get faster partial refresh
   WriteCommand(0x20);
 }
 
