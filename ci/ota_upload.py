@@ -173,6 +173,18 @@ class ADSBeeAT:
         header  = contents[:HEADER_SIZE]
         app_len = struct.unpack_from("<I", contents, 8)[0]
 
+        # Reject a malformed/empty image up front instead of silently writing a
+        # truncated or zero-length partition and only failing at VERIFY/BOOT.
+        if app_len <= 0:
+            raise RuntimeError(
+                f"Invalid OTA image: partition {partition} reports app size {app_len} bytes"
+            )
+        if part_offset + HEADER_SIZE + app_len > len(raw):
+            raise RuntimeError(
+                f"Invalid OTA image: partition {partition} declares {app_len:,} bytes but only "
+                f"{len(raw) - part_offset - HEADER_SIZE:,} are present in the file"
+            )
+
         print(f"    Firmware app size: {app_len:,} bytes")
         print(f"    Erasing {HEADER_SIZE + app_len:,} bytes from flash offset 0...")
         erase_t0 = time.monotonic()
@@ -200,7 +212,7 @@ class ADSBeeAT:
                         await self.disconnect()
                         await asyncio.sleep(1.0)
                         await self.connect()
-                        await self.ota_erase(flash_offset, CHUNK_SIZE)
+                        await self.ota_erase(flash_offset, len(chunk))
                     await self.ota_write_bytes(flash_offset, chunk)
                     break
                 except Exception as exc:
