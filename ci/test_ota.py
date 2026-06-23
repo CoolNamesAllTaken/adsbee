@@ -99,6 +99,9 @@ def main() -> None:
                         help="wait after OTA reboot in seconds (default: 5)")
     parser.add_argument("--health-timeout", type=float, default=30.0, metavar="SEC",
                         help="metrics wait timeout in seconds (default: 30)")
+    parser.add_argument("--expected-version", metavar="VER",
+                        help="expected RP2040 firmware version (e.g. 0.9.0-rc19); "
+                             "if set, health checks also verify AT+DEVICE_INFO? reports it")
     args = parser.parse_args()
 
     if not args.ota_only and not args.uf2:
@@ -160,7 +163,7 @@ def main() -> None:
         # ── Step 2: Verify base firmware ──────────────────────────────────────
         log(f"━━━ Step 2: Verify base firmware health ({host}) ━━━")
         step_t0 = time.monotonic()
-        if not asyncio.run(check_device.check_health(host, args.health_timeout)):
+        if not asyncio.run(check_device.check_health(host, args.health_timeout, args.expected_version)):
             fail("Base firmware not responding")
             sys.exit(1)
         ok("Base firmware healthy")
@@ -182,10 +185,11 @@ def main() -> None:
     # ── Step 3: OTA upload ────────────────────────────────────────────────────
     log(f"━━━ Step 3: OTA upload ({ota} → {host}) ━━━")
     ota_ok = False
+    target_partition: int | None = None
     step_t0 = time.monotonic()
     try:
-        asyncio.run(ota_upload.upload(host, str(ota)))
-        ok("OTA upload succeeded")
+        target_partition = asyncio.run(ota_upload.upload(host, str(ota)))
+        ok(f"OTA upload succeeded (wrote partition {target_partition})")
         ota_ok = True
     except Exception as exc:
         fail(f"OTA upload failed: {exc}")
@@ -196,15 +200,39 @@ def main() -> None:
     step_t0 = time.monotonic()
     info(f"Waiting {args.ota_wait}s for device to reboot after OTA...")
     time.sleep(args.ota_wait)
-    post_ok = asyncio.run(check_device.check_health(host, args.health_timeout))
+    post_ok = asyncio.run(check_device.check_health(host, args.health_timeout, args.expected_version))
     if post_ok:
         ok("Post-OTA firmware healthy")
     else:
         fail("Post-OTA firmware not responding")
     durations["4. Post-OTA health"] = time.monotonic() - step_t0
 
+    # ── Step 5: Confirm the device booted the freshly-written partition ──────
+    # GET_PARTITION reports the *complementary* (inactive) partition. After a
+    # successful OTA boot the active partition flips, so it must now differ from
+    # the partition we wrote to. Equal value ⇒ the device fell back to the old
+    # image (a no-op OTA), which a same-build version check alone cannot catch.
+    boot_ok = False
+    if ota_ok and target_partition is not None:
+        log(f"━━━ Step 5: Confirm partition flip ({host}) ━━━")
+        step_t0 = time.monotonic()
+        try:
+            new_complementary = asyncio.run(ota_upload.get_partition(host))
+            if new_complementary != target_partition:
+                ok(f"Partition flipped — now running {target_partition} "
+                   f"(complementary is {new_complementary})")
+                boot_ok = True
+            else:
+                fail(f"Partition did NOT flip (still {new_complementary}); "
+                     f"device booted the old image")
+        except Exception as exc:
+            fail(f"Could not read partition after OTA: {exc}")
+        durations["5. Partition flip"] = time.monotonic() - step_t0
+
     # ── Summary ───────────────────────────────────────────────────────────────
     fails = (0 if ota_ok else 1) + (0 if post_ok else 1)
+    if ota_ok:
+        fails += (0 if boot_ok else 1)
 
     total = time.monotonic() - overall_t0
 
@@ -217,6 +245,8 @@ def main() -> None:
         log(f"  2. Base FW health:   {GREEN}PASS{RESET}   {durations['2. Base FW health']:6.1f}s")
     log(f"  3. OTA upload:       {GREEN if ota_ok  else RED}{'PASS' if ota_ok  else 'FAIL'}{RESET}   {durations['3. OTA upload']:6.1f}s")
     log(f"  4. Post-OTA health:  {GREEN if post_ok else RED}{'PASS' if post_ok else 'FAIL'}{RESET}   {durations['4. Post-OTA health']:6.1f}s")
+    if "5. Partition flip" in durations:
+        log(f"  5. Partition flip:   {GREEN if boot_ok else RED}{'PASS' if boot_ok else 'FAIL'}{RESET}   {durations['5. Partition flip']:6.1f}s")
     log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     log(f"  Total:               {total:6.1f}s")
 

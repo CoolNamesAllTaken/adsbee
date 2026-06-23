@@ -38,9 +38,10 @@ CHUNK_DELAY_S = 0.05         # Required inter-chunk pause: without this delay Py
                              # ~88% (the 0xFF padding region). Do not set to 0.
 
 # Timeouts (seconds)
-CMD_TIMEOUT   = 6.0
-ERASE_TIMEOUT = 20.0
-WRITE_TIMEOUT = 5.0
+CMD_TIMEOUT    = 6.0
+ERASE_TIMEOUT  = 20.0
+WRITE_TIMEOUT  = 5.0
+VERIFY_TIMEOUT = 20.0   # VERIFY CRC32s the whole partition; can exceed CMD_TIMEOUT on large images.
 
 
 def crc32(data: bytes) -> int:
@@ -152,7 +153,8 @@ class ADSBeeAT:
         await self.send_cmd(cmd, sentinel="READY")
         await self.send_bytes(data)
 
-    async def ota_write_file(self, ota_path: str) -> None:
+    async def ota_write_file(self, ota_path: str) -> int:
+        """Write the OTA image and boot it. Returns the partition index written to."""
         with open(ota_path, "rb") as f:
             raw = f.read()
 
@@ -220,7 +222,7 @@ class ADSBeeAT:
         print(f"    Write done in {write_elapsed:.1f}s  avg {avg_rate/1024:.1f} KiB/s  retries: {retries}")
 
         print("    Verifying partition...")
-        await self.send_cmd("AT+OTA=VERIFY\r\n")
+        await self.send_cmd("AT+OTA=VERIFY\r\n", timeout=VERIFY_TIMEOUT)
 
         print("    Booting new partition...")
         # Fire-and-forget: device reboots immediately, may not send OK
@@ -230,8 +232,11 @@ class ADSBeeAT:
         except Exception:
             pass
 
+        return partition
 
-async def upload(host: str, ota_path: str) -> None:
+
+async def upload(host: str, ota_path: str) -> int:
+    """Upload and boot the OTA image. Returns the partition index written to."""
     at = ADSBeeAT(host)
     print(f"  Connecting to ws://{host}/console ...")
     upload_t0 = time.monotonic()
@@ -244,12 +249,29 @@ async def upload(host: str, ota_path: str) -> None:
         await at.flush()
         await at.send_cmd("AT+RX_ENABLE=0\r\n")
 
-        await at.ota_write_file(ota_path)
+        return await at.ota_write_file(ota_path)
 
     finally:
         await at.disconnect()
         print(f"  OTA upload total (connect + erase + write + verify + boot): "
               f"{time.monotonic() - upload_t0:.1f}s")
+
+
+async def get_partition(host: str) -> int:
+    """Return the current complementary (inactive) partition index.
+
+    Used after an OTA reboot to confirm the active partition flipped: the value
+    reported here must differ from the partition the image was written to.
+    """
+    at = ADSBeeAT(host)
+    await at.connect()
+    try:
+        await at.flush()
+        await at.send_cmd("AT+PROTOCOL_OUT=CONSOLE,NONE\r\n")
+        await at.flush()
+        return await at.ota_get_partition()
+    finally:
+        await at.disconnect()
 
 
 def main() -> None:

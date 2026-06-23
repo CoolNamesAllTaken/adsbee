@@ -2,7 +2,7 @@ name: ADSBee Firmware CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "azhang/add-ci-tests-for-usb-and-ota-flashing" ]
   pull_request:
     branches: [ "main" ]
 
@@ -150,7 +150,7 @@ jobs:
     # merges without gating every PR on physical hardware availability.
     # To temporarily disable: remove the branch protection requirement for
     # this job in Settings → Branches → main → Required status checks.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/azhang/add-ci-tests-for-usb-and-ota-flashing')
 
     steps:
     - name: Checkout repository
@@ -169,7 +169,18 @@ jobs:
 
     - name: Run hardware test
       run: |
+        # Derive the expected firmware version from source so the post-OTA
+        # health check can confirm the RP2040 actually reports it (see
+        # check_firmware_version in ci/check_device.py).
+        dict=firmware/common/coprocessor/object_dictionary.cpp
+        maj=$(grep -oP 'kFirmwareVersionMajor\s*=\s*\K[0-9]+' "$dict")
+        min=$(grep -oP 'kFirmwareVersionMinor\s*=\s*\K[0-9]+' "$dict")
+        pat=$(grep -oP 'kFirmwareVersionPatch\s*=\s*\K[0-9]+' "$dict")
+        rc=$(grep -oP 'kFirmwareVersionReleaseCandidate\s*=\s*\K[0-9]+' "$dict")
+        if [ "$rc" -eq 0 ]; then ver="$maj.$min.$pat"; else ver="$maj.$min.$pat-rc$rc"; fi
+        echo "Expecting RP2040 firmware version: $ver"
         .venv/bin/python3 ci/test_ota.py \
           -p /dev/ttyACM0 \
           --uf2 firmware/adsbee_1090/pico/build/application/combined.uf2 \
-          --ota-fw firmware/adsbee_1090/pico/build/application/adsbee_1090.ota
+          --ota-fw firmware/adsbee_1090/pico/build/application/adsbee_1090.ota \
+          --expected-version "$ver"
