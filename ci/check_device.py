@@ -46,6 +46,15 @@ async def check_health(host: str, timeout: float = 30.0, expected_version: str |
 
     print(f"  Connecting to {url} (timeout {timeout:.0f}s)...")
 
+    # Require evidence that BOTH processors are alive: the ESP32 (which serves
+    # /metrics) and the RP2040 (the OTA target). The ESP32 keeps running across
+    # an RP2040 reboot and caches the RP2040's last-reported status, so its own
+    # uptime/heap can't prove the RP2040 came back. We additionally require the
+    # RP2040's reported uptime to *advance* between two samples — that only
+    # happens while it is actively heartbeating over SPI, so a hung or
+    # never-rebooted RP2040 (frozen, stale uptime) fails the check.
+    rp2040_uptime_baseline: int | None = None
+
     while time.monotonic() < deadline:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
@@ -65,17 +74,36 @@ async def check_health(host: str, timeout: float = 30.0, expected_version: str |
                     except json.JSONDecodeError:
                         continue
 
-                    esp32 = data.get("device_status", {}).get("esp32", {})
+                    device_status = data.get("device_status", {})
+                    esp32  = device_status.get("esp32", {})
+                    rp2040 = device_status.get("rp2040", {})
                     uptime = esp32.get("uptime_ms", 0)
                     heap   = esp32.get("heap_free_bytes", 0)
+                    rp2040_uptime = rp2040.get("uptime_ms", 0)
 
-                    if uptime > 0 and heap > 0:
-                        print(f"  esp32 uptime={uptime} ms  heap_free={heap} bytes")
-                        if expected_version is not None:
-                            if not await check_firmware_version(host, expected_version):
-                                return False
-                        print("  Device is healthy.")
-                        return True
+                    if not (uptime > 0 and heap > 0):
+                        continue  # ESP32 not healthy yet.
+
+                    if rp2040_uptime <= 0:
+                        print("  esp32 up; waiting for RP2040 to report in...")
+                        continue
+
+                    # First RP2040 sample: record a baseline, then wait for it to advance.
+                    if rp2040_uptime_baseline is None:
+                        rp2040_uptime_baseline = rp2040_uptime
+                        print(f"  esp32 uptime={uptime} ms  heap_free={heap} bytes  "
+                              f"rp2040 uptime={rp2040_uptime} ms (confirming liveness...)")
+                        continue
+                    if rp2040_uptime <= rp2040_uptime_baseline:
+                        continue  # RP2040 uptime not advancing yet — could be stale.
+
+                    print(f"  esp32 uptime={uptime} ms  heap_free={heap} bytes  "
+                          f"rp2040 uptime advancing ({rp2040_uptime_baseline}→{rp2040_uptime} ms)")
+                    if expected_version is not None:
+                        if not await check_firmware_version(host, expected_version):
+                            return False
+                    print("  Device is healthy.")
+                    return True
 
         except (OSError, websockets.exceptions.WebSocketException) as exc:
             print(f"  Connection error: {exc}")
