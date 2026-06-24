@@ -54,6 +54,15 @@ class DisplayEpdW21 {
     int        front_light_pwm_hz = 1000;  
   };
 
+  // Selects which custom partial-refresh LUT DisplayFaster() uploads:
+  //   kPlain     — pure differential: only changed pixels are driven (fastest).
+  //   kReinforce — also re-drives unchanged pixels each refresh (like the OTP
+  //                partial mode) for crisper solids / less ghosting.
+  //   kFast5Hz   — like kReinforce but with far fewer drive frames (~5 vs ~14)
+  //                to target ~5 Hz refresh. Faster, but weaker drive accumulates
+  //                ghosting sooner — pair with a periodic full Display().
+  enum class PartialLut { kPlain, kReinforce, kFast5Hz };
+
   DisplayEpdW21() : DisplayEpdW21(Config{}) {}
   explicit DisplayEpdW21(const Config& config);
   ~DisplayEpdW21();
@@ -119,11 +128,35 @@ class DisplayEpdW21 {
   // clear it. Must be called only when !IsBusy() (after the first call).
   void DisplayFast(uint8_t* image);
 
+  // Like DisplayFast() but uses the vendor's custom partial-refresh waveform
+  // LUT (~0.3 s) instead of the controller's built-in OTP partial waveform.
+  // The waveform + voltage/timing registers are uploaded from RAM (not OTP) and
+  // activated with 0x22=0xCC (vs. DisplayFast()'s 0xFC). The FIRST call stages
+  // `image` as the base reference and uploads the LUT once (blocking); each
+  // subsequent call is a non-blocking differential update. Same contract as
+  // DisplayFast(): call only when !IsBusy() (after the first call), and
+  // intersperse a periodic Display() to clear accumulated ghosting.
+  //
+  // DisplayFast() and DisplayFaster() set conflicting waveform/display-option
+  // state, so they are mutually exclusive: switching between them re-stages the
+  // base on the next call.
+  //
+  // `lut` picks the waveform (see PartialLut). Switching `lut` between calls
+  // re-stages on the next call (the LUT is uploaded once per init).
+  void DisplayFaster(uint8_t* image, PartialLut lut = PartialLut::kPlain);
+
   // Triggers a full display update sequence and waits for completion.
   void Update();
 
   // Fills the display with white and performs a full update (non-blocking).
   void WhiteScreen();
+
+  // Powers the analog booster + oscillator back down (0x22=0x83) without driving
+  // the panel. The Display*/Trigger* updates leave the booster ON between frames
+  // (so rapid refreshes skip the soft-start ramp); call this when continuous fast
+  // updates stop so the panel isn't left drawing booster current. Lighter than
+  // DeepSleep() — the panel stays awake and ready for the next update.
+  void PowerDown();
 
   // Issues a deep-sleep command. Call Init() to wake the panel.
   void DeepSleep();
@@ -170,14 +203,19 @@ class DisplayEpdW21 {
   // Non-fatal: logs and returns false on failure so display Init can continue.
   bool InitFrontLight();
 
-  // Writes the full-refresh trigger commands (0x22=0xF7 / 0x20). Bus must be held.
+  // Writes the full-refresh trigger commands (0x22=0xF4 / 0x20). Bus must be held.
   void TriggerUpdate();
 
-  // Writes the fast-refresh trigger commands (0x22=0xC7 / 0x20). Bus must be held.
+  // Writes the fast-refresh trigger commands (0x22=0xC4 / 0x20). Bus must be held.
   void TriggerFastUpdate();
 
-  // Writes the partial/differential trigger commands (0x22=0xFF / 0x20). Bus held.
+  // Writes the partial/differential trigger commands (0x22=0xFC / 0x20). Bus held.
   void TriggerPartialUpdate();
+
+  // Writes the custom-LUT partial trigger commands (0x22=0xCC / 0x20): activate
+  // using the register-loaded waveform (no temp/OTP reload), leaving the booster
+  // on for the next frame. Bus must be held.
+  void TriggerFasterUpdate();
 
   // Sets the RAM address counter to (0,0) and bursts the whole framebuffer into
   // the given RAM bank (0x24 = BW, 0x26 = "old"/red) in one SPI transaction.
@@ -195,6 +233,14 @@ class DisplayEpdW21 {
   // has a reference. Sets partial_ready_. Blocking (the base full refresh waits).
   bool InitPartial(const uint8_t* base);
 
+  // Prepares the panel for the vendor custom-LUT partial path (DisplayFaster):
+  // HW reset, restore gate/entry/window config, upload the custom waveform LUT
+  // and voltage/timing registers (0x32/0x3F/0x03/0x04/0x2C/0x37), lock the
+  // border (0x3C=0x80), stage `base` into both RAM banks, and do one clean full
+  // refresh to show it. `lut` selects which waveform array is uploaded. Sets
+  // faster_ready_ and active_partial_lut_. Blocking (the base full refresh waits).
+  bool InitFaster(const uint8_t* base, PartialLut lut);
+
   // Acquire/release the shared SPI bus around the EPD's manual-CS sequences so
   // the IMU reader task cannot interleave its transactions mid-frame.
   void AcquireBus();
@@ -205,6 +251,8 @@ class DisplayEpdW21 {
   spi_device_handle_t spi_handle_   = nullptr;
   bool                owned_spi_bus_ = false;
   bool                front_light_ready_ = false;  // LEDC configured.
-  bool                fast_ready_        = false;  // Fast (0xC7) waveform LUT loaded.
+  bool                fast_ready_        = false;  // Fast (Display Mode 1) waveform LUT loaded.
   bool                partial_ready_     = false;  // Partial mode staged (ping-pong + base).
+  bool                faster_ready_      = false;  // Custom-LUT partial staged (LUT + base).
+  PartialLut          active_partial_lut_ = PartialLut::kPlain;  // Which LUT InitFaster uploaded.
 };

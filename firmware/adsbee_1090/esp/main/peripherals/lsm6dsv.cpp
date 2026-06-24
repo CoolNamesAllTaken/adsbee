@@ -291,7 +291,11 @@ bool Lsm6dsv::SetI2cDisabled(bool disable) {
 
 bool Lsm6dsv::Update() {
   uint8_t raw[14] = {};
+  // Hold the bus around the burst so it can't contend with the EPD's frame burst
+  // on the shared host; DecodeImu runs after release.
+  AcquireBus();
   esp_err_t ret = ReadRegisters(kRegOutTempL, raw, sizeof(raw));
+  ReleaseBus();
   if (ret != ESP_OK) {
     ESP_LOGW(kTag, "IMU burst read failed: %s", esp_err_to_name(ret));
     return false;
@@ -311,7 +315,11 @@ void Lsm6dsv::ReaderTask(void* arg) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     isr_count++;
     uint8_t quat_raw[8] = {};
+    // Hold the bus across the whole stateful page-read so the EPD (shared host)
+    // can't interleave a frame burst mid-sequence and corrupt the bank/page state.
+    self->AcquireBus();
     esp_err_t ret = self->ReadQuaternionFromPage(quat_raw);
+    self->ReleaseBus();
     // ESP_LOGI(kTag, "INT2 #%lu page_read=%s raw=%02X%02X %02X%02X %02X%02X %02X%02X",
     //          isr_count, (ret == ESP_OK) ? "ok" : esp_err_to_name(ret),
     //          quat_raw[0], quat_raw[1], quat_raw[2], quat_raw[3],
@@ -443,15 +451,15 @@ void Lsm6dsv::DecodeImu(const uint8_t raw[14]) {
 
   data_.temperature_c = kTempOffset + static_cast<float>(temp_raw) * kTempSensitivity;
 
-  const float asens   = AccelSensitivity();
-  data_.accel_x_mg    = static_cast<float>(ax_raw) * asens;
-  data_.accel_y_mg    = static_cast<float>(ay_raw) * asens;
-  data_.accel_z_mg    = static_cast<float>(az_raw) * asens;
+  const float asens = AccelSensitivity();
+  data_.accel_mg = glm::vec3(static_cast<float>(ax_raw),
+                             static_cast<float>(ay_raw),
+                             static_cast<float>(az_raw)) * asens;
 
-  const float gsens   = GyroSensitivity();
-  data_.gyro_x_mdps   = static_cast<float>(gx_raw) * gsens;
-  data_.gyro_y_mdps   = static_cast<float>(gy_raw) * gsens;
-  data_.gyro_z_mdps   = static_cast<float>(gz_raw) * gsens;
+  const float gsens = GyroSensitivity();
+  data_.gyro_mdps = glm::vec3(static_cast<float>(gx_raw),
+                              static_cast<float>(gy_raw),
+                              static_cast<float>(gz_raw)) * gsens;
 }
 
 void Lsm6dsv::DecodeAndNormalizeQuaternion(const uint8_t raw[8]) {
@@ -467,14 +475,11 @@ void Lsm6dsv::DecodeAndNormalizeQuaternion(const uint8_t raw[8]) {
   float y = Float16ToFloat32(by);
   float z = Float16ToFloat32(bz);
 
+  // glm::quat ctor is scalar-first: glm::quat(w, x, y, z). Keep the near-zero
+  // guard — glm::normalize would produce NaNs for a (near-)zero quaternion.
   float norm = sqrtf(w * w + x * x + y * y + z * z);
-  if (norm > 1e-6f) {
-    w /= norm; x /= norm; y /= norm; z /= norm;
-  } else {
-    w = 1.0f; x = 0.0f; y = 0.0f; z = 0.0f;
-  }
-
-  data_.quaternion       = { w, x, y, z };
+  data_.quaternion       = (norm > 1e-6f) ? glm::normalize(glm::quat(w, x, y, z))
+                                          : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
   data_.quaternion_valid = true;
 }
 
@@ -503,6 +508,21 @@ float Lsm6dsv::GyroSensitivity() const {
 // ---------------------------------------------------------------------------
 // SPI low-level helpers — use polling_transmit to match the working PoC
 // ---------------------------------------------------------------------------
+
+void Lsm6dsv::AcquireBus() {
+  // Hold the shared bus exclusive around a multi-transaction sequence so the EPD
+  // (same host) cannot interleave its frame burst mid-sequence. Requires the
+  // transactions inside to use polling_transmit (they do).
+  if (spi_handle_ != nullptr) {
+    spi_device_acquire_bus(spi_handle_, portMAX_DELAY);
+  }
+}
+
+void Lsm6dsv::ReleaseBus() {
+  if (spi_handle_ != nullptr) {
+    spi_device_release_bus(spi_handle_);
+  }
+}
 
 esp_err_t Lsm6dsv::WriteRegister(Register reg, uint8_t value) {
   spi_transaction_t t = {};

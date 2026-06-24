@@ -38,6 +38,9 @@
 #include "peripherals/bq27427.hh"
 #include "peripherals/fxl6408.hh"
 #include "peripherals/lsm6dsv.hh"
+#include "peripherals/sensor_fusion.hh"
+#include "peripherals/orientation_cube.hh"
+#include "peripherals/compass.hh"
 #include "peripherals/epd/epaper_display/Display_EPD_W21_spi.hh"
 #include "peripherals/epd/gui/GUI_Paint.h"
 
@@ -140,10 +143,16 @@ extern "C" void app_main(void) {
     if (!imu.Init(true)) { ESP_LOGE("app_main", "LSM6DSV init failed"); }
     if (!epd.Init()) { ESP_LOGE("app_main", "EPD init failed"); }
 
-    // ---- 8. EPD canvas setup (animated in the main loop below) ---------------
-    // The bouncing-circle demo is driven from the polling loop via non-blocking
-    // fast refresh; no DeepSleep here (the panel must stay awake for back-to-back
-    // fast updates).
+    // Sensor fusion owns the IMU + magnetometer; fusion.Update() drives the MMC
+    // and merges the IMU's gravity-referenced quaternion with the magnetometer
+    // into a single gravity + magnetic-north orientation. (Bench-tune the Config
+    // axis/sign defaults — see sensor_fusion.hh.)
+    SensorFusion fusion(imu, mmc);
+
+    // ---- 8. EPD canvas setup (live sensor readout in the main loop below) ----
+    // The sensor readout is drawn from the polling loop via non-blocking OTP
+    // partial refresh; no DeepSleep here (the panel must stay awake for
+    // back-to-back updates).
     static uint8_t epd_fb[DisplayEpdW21::kWidth / 8 * DisplayEpdW21::kHeight];
     Paint_NewImage(epd_fb, DisplayEpdW21::kWidth, DisplayEpdW21::kHeight, ROTATE_270, WHITE);
     // Display() streams the framebuffer in send-order (no per-byte vertical flip),
@@ -151,6 +160,7 @@ extern "C" void app_main(void) {
     // switch to MIRROR_VERTICAL / MIRROR_HORIZONTAL (verify on hardware).
     Paint_SetMirroring(MIRROR_NONE);
     Paint_Clear(WHITE);
+    epd.Display(epd_fb);
     // Front-light brightness is driven by the ambient-light auto-brightness logic
     // in the polling loop below.
 
@@ -255,7 +265,7 @@ extern "C" void app_main(void) {
 
         aht.Update();
         spl.Update();
-        mmc.Update();
+        fusion.Update();  // drives mmc.Update() internally, then fuses IMU + mag
         mp.Update();
         bq.Update();
 
@@ -283,10 +293,11 @@ extern "C" void app_main(void) {
                     "L:%7.2f c0:%5u c1:%5u | "
                     "T_a:%5.2fC H:%5.2f%% | "
                     "P:%8.2f T_s:%5.2fC A:%7.2fm | "
-                    "Mx:%7.2f My:%7.2f Mz:%7.2f uT T_m:%5.2fC | "
+                    "Mx:%7.2f My:%7.2f Mz:%7.2f uT | "
                     "PG:%d | "
                     "SOC:%s%u%% Pwr:%s%dmW | "
-                    "Q:%s w:%6.3f x:%6.3f y:%6.3f z:%6.3f",
+                    "Q:%s w:%6.3f x:%6.3f y:%6.3f z:%6.3f | "
+                    "Hdg:%6.1f P:%6.1f R:%6.1f %s%s",
                     current_sps,
                     ltr.GetLux(), ltr.GetCh0Raw(), ltr.GetCh1Raw(),
                     aht.GetTemperatureCelsius(), aht.GetRelativeHumidity(),
@@ -295,7 +306,6 @@ extern "C" void app_main(void) {
                     mmc.GetMagneticFieldXUt(),
                     mmc.GetMagneticFieldYUt(),
                     mmc.GetMagneticFieldZUt(),
-                    mmc.GetTemperatureCelsius(),
                     mp.IsPowerGood() ? 1 : 0,
                     bq.IsDataValid() ? "" : "?",
                     bq.GetStateOfChargePct(),
@@ -303,37 +313,78 @@ extern "C" void app_main(void) {
                     bq.GetAveragePowerMw(),
                     imu.IsQuaternionValid() ? "ok" : "--",
                     imu.GetQuaternion().w, imu.GetQuaternion().x,
-                    imu.GetQuaternion().y, imu.GetQuaternion().z);
+                    imu.GetQuaternion().y, imu.GetQuaternion().z,
+                    fusion.GetHeadingDeg(), fusion.GetPitchDeg(), fusion.GetRollDeg(),
+                    fusion.IsValid() ? "" : "imu?",
+                    fusion.IsCalibrated() ? "" : "cal?");
         }
 
-        // Bouncing circle on the EPD via non-blocking partial refresh. A new
-        // frame is only drawn/pushed once the previous partial update finishes,
-        // so the animation runs sub-second per step while this loop keeps
-        // spinning at ~30 Hz. DisplayFast() does a differential (no-flash) update;
-        // the first call stages the base image. Some ghosting accumulates over
+        // Live sensor readout on the EPD via non-blocking OTP partial refresh.
+        // A new frame is only drawn/pushed once the previous update finishes, so
+        // the screen refreshes at the panel's natural rate while this loop keeps
+        // spinning. DisplayFast() is a differential (no-flash) update; the first
+        // call stages the base image (blocking). Some ghosting accumulates over
         // time — drop a periodic epd.Display(epd_fb) in here to clear it.
-        {
-            static constexpr int kCanvasW = DisplayEpdW21::kHeight;  // 264 (ROTATE_270)
-            static constexpr int kCanvasH = DisplayEpdW21::kWidth;   // 176
-            static constexpr int kBallR   = 20;
-            static int ball_x  = kBallR;
-            static int ball_y  = kBallR;
-            static int ball_vx = 6;
-            static int ball_vy = 4;
-            if (!epd.IsBusy()) {
-                ball_x += ball_vx;
-                ball_y += ball_vy;
-                if (ball_x <= kBallR || ball_x >= kCanvasW - kBallR) ball_vx = -ball_vx;
-                if (ball_y <= kBallR || ball_y >= kCanvasH - kBallR) ball_vy = -ball_vy;
-                // Clamp so a large step near a wall can't escape on one frame.
-                if (ball_x < kBallR) ball_x = kBallR;
-                if (ball_x > kCanvasW - kBallR) ball_x = kCanvasW - kBallR;
-                if (ball_y < kBallR) ball_y = kBallR;
-                if (ball_y > kCanvasH - kBallR) ball_y = kCanvasH - kBallR;
-                Paint_Clear(WHITE);
-                Paint_DrawCircle(ball_x, ball_y, kBallR, BLACK, DRAW_FILL_FULL, DOT_PIXEL_1X1);
-                epd.DisplayFast(epd_fb);  // returns immediately
+        if (!epd.IsBusy()) {
+            Paint_Clear(WHITE);
+            char line[64];
+            int y = 0;
+            constexpr int kLineH = 13;  // Font12 height 12 + 1 px gap
+            auto draw = [&](const char* s) {
+                Paint_DrawString_EN(0, y, s, &Font12, WHITE, BLACK);
+                y += kLineH;
+            };
+            snprintf(line, sizeof line, "Lux:%.1f c0:%u c1:%u",
+                     ltr.GetLux(), ltr.GetCh0Raw(), ltr.GetCh1Raw());
+            draw(line);
+            snprintf(line, sizeof line, "AHT T:%.2fC H:%.1f%%",
+                     aht.GetTemperatureCelsius(), aht.GetRelativeHumidity());
+            draw(line);
+            snprintf(line, sizeof line, "SPL P:%.1fhPa T:%.2fC",
+                     spl.GetPressureHpa(), spl.GetTemperatureCelsius());
+            draw(line);
+            snprintf(line, sizeof line, "Alt:%.2fm", spl.GetAltitudeMeters());
+            draw(line);
+            snprintf(line, sizeof line, "Mag X:%.1f Y:%.1f Z:%.1fuT",
+                     mmc.GetMagneticFieldXUt(), mmc.GetMagneticFieldYUt(),
+                     mmc.GetMagneticFieldZUt());
+            draw(line);
+            snprintf(line, sizeof line, "PwrGood:%d", mp.IsPowerGood() ? 1 : 0);
+            draw(line);
+            snprintf(line, sizeof line, "Batt:%s%u%% %s%dmW",
+                     bq.IsDataValid() ? "" : "?", bq.GetStateOfChargePct(),
+                     bq.IsDataValid() ? "" : "?", bq.GetAveragePowerMw());
+            draw(line);
+            snprintf(line, sizeof line, "Quat %s", imu.IsQuaternionValid() ? "ok" : "--");
+            draw(line);
+            snprintf(line, sizeof line, " w:%.3f x:%.3f",
+                     imu.GetQuaternion().w, imu.GetQuaternion().x);
+            draw(line);
+            snprintf(line, sizeof line, " y:%.3f z:%.3f",
+                     imu.GetQuaternion().y, imu.GetQuaternion().z);
+            draw(line);
+            // Fused AHRS: heading/pitch/roll. '*' until mag auto-cal converges
+            // (rotate the device in a figure-8 to calibrate hard-iron offsets).
+            snprintf(line, sizeof line, "Hdg:%.0f P:%.0f R:%.0f%s",
+                     fusion.GetHeadingDeg(), fusion.GetPitchDeg(), fusion.GetRollDeg(),
+                     fusion.IsCalibrated() ? "" : "*");
+            draw(line);
+
+            // 3D orientation cube in the empty bottom-right quadrant: a world-
+            // fixed wireframe cube viewed from the device's current orientation.
+            if (fusion.IsValid()) {
+                DrawOrientationCube(198, 132, 22.f, fusion.GetFusedQuaternion());
             }
+
+            // Mag-only debug compass in the free upper-right area (clear of the text
+            // column and the cube). Two needles toward magnetic North: solid =
+            // tilt-compensated, dotted = raw flat-plane (mag X/Y only).
+            DrawCompass(222, 52, 26,
+                        fusion.GetMagHeadingLevelDeg(),
+                        fusion.GetMagHeadingFlatDeg(),
+                        fusion.IsMagHeadingValid());
+
+            epd.DisplayFast(epd_fb);  // OTP partial, non-blocking; booster stays on
         }
 
         // Yield to the idle task to avoid a watchdog trigger. Note: Delay must be >= 10ms since 100Hz tick is typical.

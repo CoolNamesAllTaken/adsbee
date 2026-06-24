@@ -7,6 +7,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "bsp.hh"
+#include "glm/glm.hpp"             // glm::vec3, glm::normalize (geometric)
+#include "glm/gtc/quaternion.hpp"  // glm::quat, glm::normalize (quat)
 
 // LSM6DSV 6-Axis IMU Driver (SPI, DMA-capable)
 // Implements the embedded advanced features register readout workaround for
@@ -444,8 +446,11 @@ class Lsm6dsv {
     uint32_t reader_task_stack  = 4096;
     UBaseType_t reader_task_priority = tskIDLE_PRIORITY + 2;
 
-    // Sensor fusion (SFLP) settings.
-    SflpOdr sflp_odr = SflpOdr::kOdr480Hz;
+    // Sensor fusion (SFLP) settings. 30 Hz keeps the page-3 quaternion update
+    // window wide (~33 ms) so the INT2 reader task can finish its 21-transaction
+    // read cleanly between updates even while the EPD contends for the shared SPI
+    // bus (avoids torn FP16 reads → NaN).
+    SflpOdr sflp_odr = SflpOdr::kOdr30Hz;
 
     // Accelerometer settings.
     AccelOdr  accel_odr  = AccelOdr::kOdr7680Hz;
@@ -461,22 +466,13 @@ class Lsm6dsv {
   // =========================================================================
   // Measurement data — populated by Update()
   // =========================================================================
-  struct Quaternion {
-    float w = 1.0f;
-    float x = 0.0f;
-    float y = 0.0f;
-    float z = 0.0f;
-  };
-
+  // NOTE: glm types are default-uninitialized; the explicit member initializers
+  // here are REQUIRED so ImuData{} yields identity/zero, not garbage.
   struct ImuData {
-    float accel_x_mg = 0.0f;  // Acceleration in milli-g
-    float accel_y_mg = 0.0f;
-    float accel_z_mg = 0.0f;
-    float gyro_x_mdps = 0.0f;  // Angular rate in milli-degrees per second
-    float gyro_y_mdps = 0.0f;
-    float gyro_z_mdps = 0.0f;
+    glm::vec3 accel_mg{0.0f};   // Acceleration in milli-g (x, y, z)
+    glm::vec3 gyro_mdps{0.0f};  // Angular rate in milli-degrees per second (x, y, z)
     float temperature_c = 0.0f;
-    Quaternion quaternion;
+    glm::quat quaternion{1.0f, 0.0f, 0.0f, 0.0f};  // identity (w, x, y, z)
     bool quaternion_valid = false;  // True after first INT2_EMB_FUNC_ENDOP
   };
 
@@ -555,17 +551,27 @@ class Lsm6dsv {
   // =========================================================================
   const ImuData& GetData() const { return data_; }
 
-  float GetAccelXMg()     const { return data_.accel_x_mg; }
-  float GetAccelYMg()     const { return data_.accel_y_mg; }
-  float GetAccelZMg()     const { return data_.accel_z_mg; }
-  float GetGyroXMdps()    const { return data_.gyro_x_mdps; }
-  float GetGyroYMdps()    const { return data_.gyro_y_mdps; }
-  float GetGyroZMdps()    const { return data_.gyro_z_mdps; }
+  // GLM-native vector getters (preferred).
+  const glm::vec3& GetAccelMg()  const { return data_.accel_mg; }
+  const glm::vec3& GetGyroMdps() const { return data_.gyro_mdps; }
+
+  // Scalar getters retained for source compatibility; forward to the vec3 fields.
+  float GetAccelXMg()     const { return data_.accel_mg.x; }
+  float GetAccelYMg()     const { return data_.accel_mg.y; }
+  float GetAccelZMg()     const { return data_.accel_mg.z; }
+  float GetGyroXMdps()    const { return data_.gyro_mdps.x; }
+  float GetGyroYMdps()    const { return data_.gyro_mdps.y; }
+  float GetGyroZMdps()    const { return data_.gyro_mdps.z; }
   float GetTemperatureC() const { return data_.temperature_c; }
-  const Quaternion& GetQuaternion() const { return data_.quaternion; }
+  const glm::quat& GetQuaternion() const { return data_.quaternion; }
   bool  IsQuaternionValid() const { return data_.quaternion_valid; }
 
  private:
+  // Acquire/release the shared SPI bus around multi-transaction IMU sequences so
+  // they are atomic with respect to the EPD (same host). Mirrors the EPD driver.
+  void AcquireBus();
+  void ReleaseBus();
+
   // SPI register access helpers.
   esp_err_t WriteRegister(Register reg, uint8_t value);
   esp_err_t WriteRegister(uint8_t reg_addr, uint8_t value);  // Raw address overload.

@@ -5,6 +5,7 @@
 #include "driver/i2c_master.h"
 #include "esp_err.h"
 #include "bsp.hh"
+#include "glm/glm.hpp"  // glm::vec3
 
 // MMC5603NJ 3-Axis Magnetometer Driver
 // Datasheet: https://www.memsic.com/Public/Uploads/uploadfile/files/20220119/MMC5603NJDatasheetRev.B.pdf
@@ -26,7 +27,6 @@ class Mmc5603 {
   static constexpr uint8_t kRegXout2  = 0x06;  // Xout[3:0] in bits [7:4]
   static constexpr uint8_t kRegYout2  = 0x07;  // Yout[3:0] in bits [7:4]
   static constexpr uint8_t kRegZout2  = 0x08;  // Zout[3:0] in bits [7:4]
-  static constexpr uint8_t kRegTemp   = 0x09;  // Temperature output
   static constexpr uint8_t kRegStatus = 0x18;  // Status register
   static constexpr uint8_t kRegOdr    = 0x1A;  // Output data rate (continuous mode)
   static constexpr uint8_t kRegCtrl0  = 0x1B;  // Control register 0
@@ -38,13 +38,11 @@ class Mmc5603 {
   // Status register bit masks
   // -------------------------------------------------------------------------
   static constexpr uint8_t kStatusMeasMDone = (1 << 6);  // Mag measurement done
-  static constexpr uint8_t kStatusMeasTDone = (1 << 7);  // Temp measurement done
 
   // -------------------------------------------------------------------------
   // Control register 0 bit masks
   // -------------------------------------------------------------------------
   static constexpr uint8_t kCtrl0TakeMeasM  = (1 << 0);  // Take magnetic measurement
-  static constexpr uint8_t kCtrl0TakeMeasT  = (1 << 1);  // Take temperature measurement
   static constexpr uint8_t kCtrl0StartMdt   = (1 << 2);  // Start MDT (factory)
   static constexpr uint8_t kCtrl0DoSet      = (1 << 3);  // Perform SET
   static constexpr uint8_t kCtrl0DoReset    = (1 << 4);  // Perform RESET
@@ -63,8 +61,20 @@ class Mmc5603 {
   // -------------------------------------------------------------------------
   // Control register 2 bit masks
   // -------------------------------------------------------------------------
-  static constexpr uint8_t kCtrl2CmmEn   = (1 << 4);  // Enable continuous mode
-  static constexpr uint8_t kCtrl2HiPower = (1 << 7);  // Enable 1000 Hz mode
+  static constexpr uint8_t kCtrl2PrdSetMask = 0x07;   // Prd_set[2:0]: samples per auto-SET
+  static constexpr uint8_t kCtrl2EnPrdSet   = (1 << 3);  // Enable periodic SET
+  static constexpr uint8_t kCtrl2CmmEn      = (1 << 4);  // Enable continuous mode
+  static constexpr uint8_t kCtrl2HiPower    = (1 << 7);  // Enable 1000 Hz mode
+
+  // Prd_set[2:0] encodings: one automatic SET every N samples (datasheet p.10).
+  static constexpr uint8_t kPrdSet1    = 0;  // every 1 sample
+  static constexpr uint8_t kPrdSet25   = 1;  // every 25
+  static constexpr uint8_t kPrdSet75   = 2;  // every 75
+  static constexpr uint8_t kPrdSet100  = 3;  // every 100
+  static constexpr uint8_t kPrdSet250  = 4;  // every 250
+  static constexpr uint8_t kPrdSet500  = 5;  // every 500
+  static constexpr uint8_t kPrdSet1000 = 6;  // every 1000
+  static constexpr uint8_t kPrdSet2000 = 7;  // every 2000
 
   // -------------------------------------------------------------------------
   // Sensor constants
@@ -73,9 +83,6 @@ class Mmc5603 {
   static constexpr uint32_t kNullFieldCounts = 524288;
   static constexpr float    kCountsPerGauss  = 16384.0f;
   static constexpr float    kGaussToUt       = 100.0f;    // 1 G = 100 µT
-  // Temperature: 0x00 = -75 °C, ~0.8 °C/LSB per datasheet.
-  static constexpr float    kTempOffset      = -75.0f;
-  static constexpr float    kTempScale       = 0.8f;
   static constexpr uint8_t  kExpectedChipId  = 0x10;
 
   // -------------------------------------------------------------------------
@@ -104,10 +111,17 @@ class Mmc5603 {
     // Use kCtrl1Bw00 (75 Hz, lowest noise) for typical compass applications.
     uint8_t bandwidth = kCtrl1Bw00;
 
-    // If true, the driver issues an automatic SET pulse before each single-shot
-    // measurement (kCtrl0AutoSrEn). Recommended for general use; removes
-    // offset drift due to temperature and residual magnetisation.
-    bool auto_set_reset = true;
+    // Continuous-mode output data rate (ODR[7:0]). MUST be non-zero to enter
+    // continuous mode. With BW00 the max ODR is 75 Hz; 50 Hz is plenty for a
+    // compass and keeps headroom.
+    uint8_t odr_hz = 50;
+
+    // Periodic automatic SET. In continuous mode the part performs a SET every
+    // Prd_set samples (requires Auto_SR + En_prd_set), which removes the bridge
+    // offset that drifts with temperature — without this the readings carry an
+    // uncompensated, drifting bias. kPrdSet100 = one SET per 100 samples.
+    bool    auto_set_reset = true;
+    uint8_t prd_set        = kPrdSet100;
   };
 
   Mmc5603() : Mmc5603(Config{}) {}
@@ -145,15 +159,15 @@ class Mmc5603 {
   // Issues a software reset and re-runs Init().
   bool SoftReset();
 
-  // Starts a non-blocking single-shot measurement.
+  // Starts a non-blocking single-shot magnetic measurement.
   bool TriggerMeasurement();
 
-  // Returns true when the most recently triggered measurement is complete.
+  // Returns true when the conversion whose done-bit is `done_mask` is complete.
   // Sets *ready on success; returns false on bus error.
-  bool IsMeasurementReady(bool* ready);
+  bool IsMeasurementReady(uint8_t done_mask, bool* ready);
 
-  // Reads and decodes the 20-bit XYZ output. Call only after
-  // IsMeasurementReady() sets *ready = true.
+  // Reads and decodes the 20-bit XYZ output. Call only after the magnetic
+  // measurement's done-bit is set.
   bool ReadMeasurement();
 
   // -------------------------------------------------------------------------
@@ -165,7 +179,9 @@ class Mmc5603 {
   float GetMagneticFieldXUt()    const { return mag_x_gauss_ * kGaussToUt; }
   float GetMagneticFieldYUt()    const { return mag_y_gauss_ * kGaussToUt; }
   float GetMagneticFieldZUt()    const { return mag_z_gauss_ * kGaussToUt; }
-  float GetTemperatureCelsius()  const { return temperature_c_; }
+  glm::vec3 GetMagneticFieldGauss() const {
+    return glm::vec3(mag_x_gauss_, mag_y_gauss_, mag_z_gauss_);
+  }
 
  private:
   esp_err_t WriteReg(uint8_t reg, uint8_t value);
@@ -179,9 +195,7 @@ class Mmc5603 {
   i2c_master_dev_handle_t  i2c_handle_          = nullptr;
   i2c_master_bus_handle_t  owned_bus_handle_     = nullptr;
 
-  float    mag_x_gauss_        = 0.0f;
-  float    mag_y_gauss_        = 0.0f;
-  float    mag_z_gauss_        = 0.0f;
-  float    temperature_c_      = 0.0f;
-  bool     measurement_pending_ = false;
+  float mag_x_gauss_ = 0.0f;
+  float mag_y_gauss_ = 0.0f;
+  float mag_z_gauss_ = 0.0f;
 };

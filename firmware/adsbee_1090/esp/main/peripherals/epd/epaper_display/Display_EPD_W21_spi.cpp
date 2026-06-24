@@ -9,6 +9,88 @@
 
 static const char* kTag = "EPD";
 
+// Vendor custom partial-refresh waveform for ~0.3 s differential updates (the
+// "WS6[]" array from the GDEY027T91 P-LUT reference, "//part 0.3s"). Pure
+// differential: only LUT1/LUT2 (changed pixels) drive; LUT0/LUT3 (unchanged) are
+// zero. See SSD1680_LUT_FORMAT.md for the 159-byte layout and field meanings.
+static const uint8_t kPartialLut[159] = {
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x88, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x0c, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+    0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x26, 0x22, 0x22, 0x22, 0x22, 0x22, 0x00, 0x00, 0x00,
+    0x06, 0x17, 0x41, 0xa8, 0x32, 0x00,
+};
+
+// Reinforcing variant of kPartialLut: also re-drives UNCHANGED pixels each
+// refresh (like the OTP partial mode) to keep solids crisp and fight ghosting.
+// Differs from kPartialLut only in LUT0 (off 0) and LUT3 (off 36) — the
+// unchanged-black / unchanged-white groups, zero in kPartialLut — now driven in
+// their settle direction. Polarity is panel-confirmed (0x44 ends black, 0x88
+// ends white; see SSD1680_LUT_FORMAT.md §2): LUT0=0x44 (black), LUT3=0x88 (white).
+static const uint8_t kPartialLutReinforce[159] = {
+    0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x88, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x88, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x0c, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+    0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x26, 0x22, 0x22, 0x22, 0x22, 0x22, 0x00, 0x00, 0x00,
+    0x06, 0x17, 0x41, 0xa8, 0x32, 0x00,
+};
+
+// ~5 Hz variant of kPartialLutReinforce: same VS groups, but Group0 TP[A] cut
+// 12->4 and Group1 dropped (~14 -> ~5 drive frames) to shorten the waveform.
+// Reducing frame count is the linear, predictable lever (see SSD1680_LUT_FORMAT.md
+// §2c/§2e). Tradeoff: weaker reinforcement -> ghosting accumulates sooner; pair
+// continuous use with a periodic full Display(). If a ghost trail shows, raise
+// the Group0 TP[A] byte (offset 60) toward 0x05/0x06 (each +1 ~= +27 ms/frame).
+static const uint8_t kPartialLutFast5Hz[159] = {
+    0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // LUT0
+    0x88, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // LUT1
+    0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // LUT2
+    0x88, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // LUT3
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // LUT4/VCOM
+    0x04, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,  // Group0: TP[A]=4 (was 12), TP[C]=1
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // Group1: TP[A]=0 (was 1) -> dropped
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x26, 0x22, 0x22, 0x22, 0x22, 0x22, 0x00, 0x00, 0x00,  // FR/XON (unchanged)
+    0x06, 0x17, 0x41, 0xa8, 0x32, 0x00,                    // voltages (unchanged)
+};
+
 // ---------------------------------------------------------------------------
 // Constructor / Destructor
 // ---------------------------------------------------------------------------
@@ -181,6 +263,7 @@ void DisplayEpdW21::Display(uint8_t* image) {
   // re-stage its base image and ping-pong reference.
   ReleaseBus();
   partial_ready_ = false;
+  faster_ready_  = false;
 }
 
 void DisplayEpdW21::DisplayBlocking(uint8_t* image) {
@@ -202,9 +285,24 @@ void DisplayEpdW21::WhiteScreen() {
       WriteData(0xFF);
     }
   }
-  TriggerUpdate();  // 0xF7 full refresh for a clean white baseline.
+  TriggerUpdate();  // full refresh for a clean white baseline.
   ReleaseBus();
   partial_ready_ = false;
+  faster_ready_  = false;
+}
+
+void DisplayEpdW21::PowerDown() {
+  // The Trigger* updates leave the analog booster + oscillator powered on (mode
+  // byte bits 1/0 cleared) so back-to-back refreshes skip the soft-start ramp.
+  // This turns them back off without driving the panel: 0x22=0x83 = enable clock
+  // + disable analog + disable OSC. Call it when continuous fast updates stop so
+  // the panel isn't left drawing booster current. Lighter than DeepSleep().
+  AcquireBus();
+  WriteCommand(0x22);
+  WriteData(0x83);
+  WriteCommand(0x20);
+  ReleaseBus();
+  WaitBusy();
 }
 
 void DisplayEpdW21::DeepSleep() {
@@ -343,22 +441,36 @@ void DisplayEpdW21::ApplyHwInit() {
   WaitBusy();
 }
 
+// The 0x22 "Display Update Control 2" byte is a stage bitfield (see
+// SSD1680_LUT_FORMAT.md §5). We clear bits 1+0 (& ~0x03) so the update leaves the
+// analog booster + OSC powered ON, letting the next rapid refresh skip the ~90 ms
+// soft-start ramp; PowerDown()/DeepSleep() turns them back off when updates stop.
+
 void DisplayEpdW21::TriggerUpdate() {
   WriteCommand(0x22);
-  WriteData(0xF7);
+  WriteData(0xF4);  // 0xF7 & ~0x03: full refresh, leave booster/OSC on.
   WriteCommand(0x20);
 }
 
 void DisplayEpdW21::TriggerFastUpdate() {
   WriteCommand(0x22);
-  WriteData(0xC7);  // Display Mode 1, no temp reload — uses the cached fast LUT.
+  WriteData(0xC4);  // 0xC7 & ~0x03: Display Mode 1 (cached fast LUT), leave booster/OSC on.
   WriteCommand(0x20);
 }
 
 void DisplayEpdW21::TriggerPartialUpdate() {
   WriteCommand(0x22);
-  // WriteData(0xFF);  // Display Mode 2 (differential / partial), with temp load.
+  // 0xFC already has bits 1+0 clear, so it already leaves the booster/OSC on.
   WriteData(0xFC);  // Vendor engineer recommendation to get faster partial refresh
+  WriteCommand(0x20);
+}
+
+void DisplayEpdW21::TriggerFasterUpdate() {
+  // Activate using the register-loaded custom waveform LUT (no temp/OTP reload).
+  // Vendor EPD_Part_Update_LUT uses 0xCF; we use 0xCC (= 0xCF & ~0x03) to leave
+  // the booster/OSC on between frames for faster back-to-back partial updates.
+  WriteCommand(0x22);
+  WriteData(0xCC);
   WriteCommand(0x20);
 }
 
@@ -438,19 +550,20 @@ bool DisplayEpdW21::InitFast() {
 }
 
 bool DisplayEpdW21::InitPartial(const uint8_t* base) {
-  // Enable RAM ping-pong for Display Mode 2 so each differential update auto-
-  // promotes the new frame to the "old" reference (no manual 0x26 re-stage).
-  // 0x37 Write Register for Display Option: A,B..E,F[3:0]=WS display-mode bits
-  // (left at OTP/POR default 0), F[6]=1 enables ping-pong, G..J=version (0).
+  // 0x37 Display Option (see SSD1680_LUT_FORMAT.md §4): byte F bit6 enables RAM
+  // ping-pong for Display Mode 2, so each differential update auto-promotes the
+  // new frame to the "old" reference (no manual 0x26 re-stage). All other bytes
+  // left at default. DisplayFaster() sets conflicting state, so invalidate it here.
+  faster_ready_ = false;
   AcquireBus();
   WriteCommand(0x37);
-  WriteData(0x00);  // A: spare VCOM OTP = default
-  WriteData(0x00);  // B: WS[7:0]  display mode
-  WriteData(0x00);  // C: WS[15:8]
-  WriteData(0x00);  // D: WS[23:16]
-  WriteData(0x00);  // E: WS[31:24]
-  WriteData(0x40);  // F: bit6 = RAM ping-pong enable (WS[35:32] mode bits = 0)
-  WriteData(0x00);  // G: module ID / waveform version
+  WriteData(0x00);  // A
+  WriteData(0x00);  // B
+  WriteData(0x00);  // C
+  WriteData(0x00);  // D
+  WriteData(0x00);  // E
+  WriteData(0x40);  // F: bit6 = RAM ping-pong enable
+  WriteData(0x00);  // G
   WriteData(0x00);  // H
   WriteData(0x00);  // I
   WriteData(0x00);  // J
@@ -461,10 +574,10 @@ bool DisplayEpdW21::InitPartial(const uint8_t* base) {
 
   // Stage the base image into both RAM banks (0x24 = new, 0x26 = old reference)
   // so the first differential update has something to diff against, then do one
-  // clean full (0xF7) refresh to display it. (Vendor EPD_SetRAMValue_BaseMap.)
+  // clean full refresh to display it. (Vendor EPD_SetRAMValue_BaseMap.)
   WriteRamFull(0x24, base);
   WriteRamFull(0x26, base);
-  TriggerUpdate();  // 0xF7 full refresh — blocking baseline.
+  TriggerUpdate();  // full (OTP) refresh — blocking baseline.
   ReleaseBus();
   WaitBusy();
 
@@ -483,7 +596,123 @@ void DisplayEpdW21::DisplayFast(uint8_t* image) {
 
   AcquireBus();
   WriteRamFull(0x24, image);  // new frame into BW RAM
-  TriggerPartialUpdate();     // 0x22=0xFF — ping-pong promotes it to the reference
+  TriggerPartialUpdate();     // 0x22=0xFC — ping-pong promotes it to the reference
+  ReleaseBus();
+  // Non-blocking: caller polls IsBusy().
+}
+
+bool DisplayEpdW21::InitFaster(const uint8_t* base, PartialLut lut) {
+  // Stage the vendor custom-LUT partial path (vendor EPD_Part_Update_LUT's
+  // register loads, hoisted out of the per-frame path). DisplayFast() sets a
+  // conflicting 0x37/ping-pong state, so invalidate it here.
+  partial_ready_ = false;
+
+  // Select which custom waveform array to upload.
+  const uint8_t* lut_data = kPartialLut;  // kPlain (pure differential)
+  if (lut == PartialLut::kReinforce)    lut_data = kPartialLutReinforce;
+  else if (lut == PartialLut::kFast5Hz) lut_data = kPartialLutFast5Hz;
+  active_partial_lut_ = lut;
+
+  HwReset();
+  WaitBusy();
+
+  AcquireBus();
+  WriteCommand(0x12);  // SWRESET
+  ReleaseBus();
+  WaitBusy();
+
+  AcquireBus();
+  // SWRESET cleared the gate/entry/window config; restore it so frames land
+  // identically to full frames and WriteRamFull's addressing matches (mirrors
+  // ApplyHwInit / InitFast).
+  WriteCommand(0x01);  // Driver Output Control: MUX=263, GD=0, SM=0, TB=0
+  WriteData(0x07);
+  WriteData(0x01);
+  WriteData(0x00);
+  WriteCommand(0x11);  // Data Entry Mode: X+/Y+, update X
+  WriteData(0x03);
+  WriteCommand(0x44);  // RAM X window 0x00..0x15
+  WriteData(0x00);
+  WriteData(0x15);
+  WriteCommand(0x45);  // RAM Y window 0x0000..0x0107
+  WriteData(0x00);
+  WriteData(0x00);
+  WriteData(0x07);
+  WriteData(0x01);
+
+  // Stage the base image into both RAM banks and do ONE clean full OTP refresh
+  // so the first differential update has a reference and the panel starts from a
+  // known state. This MUST happen before the custom LUT is uploaded: the full
+  // refresh has bit4 set ("load LUT from OTP"), so running it after the 0x32 LUT
+  // load would clobber the custom LUT back to OTP — exactly the bug that made
+  // every DisplayFaster() frame a slow flickery full refresh. The custom LUT is
+  // purely differential (unchanged pixels get no waveform), so it cannot paint
+  // this baseline itself; the OTP full refresh is required here, once.
+  WriteRamFull(0x24, base);
+  WriteRamFull(0x26, base);
+  TriggerUpdate();  // full (OTP) refresh — blocking baseline.
+  ReleaseBus();
+  WaitBusy();
+
+  // Now upload the custom waveform LUT and its voltage/timing registers once,
+  // AFTER the OTP baseline. From here on the panel is only ever activated with
+  // 0x22=0xCC (bit4 clear = use the loaded LUT, no OTP reload), so this LUT
+  // survives across every subsequent DisplayFaster() frame.
+  AcquireBus();
+  WriteCommand(0x32);  // Write LUT register (153 bytes)
+  for (int i = 0; i < 153; i++) {
+    WriteData(lut_data[i]);
+  }
+  WriteCommand(0x3F);  // EOPT / end option
+  WriteData(lut_data[153]);
+  WriteCommand(0x03);  // Gate driving voltage (VGH)
+  WriteData(lut_data[154]);
+  WriteCommand(0x04);  // Source driving voltage (VSH1/VSH2/VSL)
+  WriteData(lut_data[155]);
+  WriteData(lut_data[156]);
+  WriteData(lut_data[157]);
+  WriteCommand(0x2C);  // VCOM
+  WriteData(lut_data[158]);
+
+  // 0x37 Display Option, vendor EPD_Part_Update_LUT values for the custom-LUT
+  // path. Byte F bit6 enables RAM ping-pong as in InitPartial(); bytes B/C/D are
+  // the vendor's display-mode bits for this waveform (see SSD1680_LUT_FORMAT.md §4).
+  WriteCommand(0x37);
+  WriteData(0x00);  // A
+  WriteData(0x40);  // B
+  WriteData(0x20);  // C
+  WriteData(0x10);  // D
+  WriteData(0x00);  // E
+  WriteData(0x40);  // F: bit6 = RAM ping-pong enable
+  WriteData(0x00);  // G
+  WriteData(0x00);  // H
+
+  // Lock the border so it does not flash during partial updates.
+  WriteCommand(0x3C);
+  WriteData(0x80);
+  ReleaseBus();
+
+  faster_ready_ = true;
+  return true;
+}
+
+void DisplayEpdW21::DisplayFaster(uint8_t* image, PartialLut lut) {
+  // Partial refresh using the vendor custom ~0.3 s waveform LUT. The first call
+  // stages `image` as the base and uploads the LUT (blocking); subsequent calls
+  // are non-blocking differential updates against the previous frame.
+  //
+  // Re-stage when not ready OR when the caller asks for a different LUT than the
+  // one currently loaded — the LUT is uploaded only once per init, so switching
+  // variants requires re-running InitFaster.
+  if (!faster_ready_ || active_partial_lut_ != lut) {
+    faster_ready_ = false;
+    InitFaster(image, lut);
+    return;  // base image is now shown; next call begins differential updates.
+  }
+
+  AcquireBus();
+  WriteRamFull(0x24, image);  // new frame into BW RAM
+  TriggerFasterUpdate();      // 0x22=0xCC — activate the register-loaded LUT
   ReleaseBus();
   // Non-blocking: caller polls IsBusy().
 }
