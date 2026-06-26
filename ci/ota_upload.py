@@ -40,7 +40,8 @@ CHUNK_DELAY_S = 0.05         # Required inter-chunk pause: without this delay Py
 # Timeouts (seconds)
 CMD_TIMEOUT    = 6.0
 ERASE_TIMEOUT  = 20.0
-WRITE_TIMEOUT  = 5.0
+WRITE_TIMEOUT  = 8.0   # Must exceed the firmware's kOTAWriteTimeoutMs (5000ms, comms.hh) so the device's
+                       # own read timeout fires first on a stuck write, instead of racing it.
 VERIFY_TIMEOUT = 20.0   # VERIFY CRC32s the whole partition; can exceed CMD_TIMEOUT on large images.
 
 
