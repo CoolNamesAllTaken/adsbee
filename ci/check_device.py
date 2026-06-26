@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Verify ADSBee device health via the /metrics WebSocket."""
+"""Verify ADSBee device health: ESP32 + RP2040 liveness via the /metrics WebSocket,
+plus an optional RP2040 firmware-version check via /console (--expected-version)."""
 
 import asyncio
 import json

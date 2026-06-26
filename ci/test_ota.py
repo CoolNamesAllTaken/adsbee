@@ -13,8 +13,9 @@ Architecture (from AGENTS.md):
 Steps:
   1. Trigger BOOTSEL, wait for RPI-RP2 USB drive, flash combined.uf2.
   2. Verify base firmware health via /metrics WebSocket.
-  3. Upload candidate .ota via WebSocket AT protocol  [full test / --ota-only].
-  4. Verify post-OTA firmware health                  [full test / --ota-only].
+  3. Upload candidate .ota via WebSocket AT protocol   [full test / --ota-only].
+  4. Verify post-OTA firmware health                   [full test / --ota-only].
+  5. Confirm the device booted the new partition       [full test / --ota-only].
 
 Usage (full test):
   python3 test_ota.py --uf2 combined.uf2 --ota-fw adsbee_1090.ota
