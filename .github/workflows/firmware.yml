@@ -2,7 +2,7 @@ name: ADSBee Firmware CI
 
 on:
   push:
-    branches: [ "main", "azhang/add-ci-tests-for-usb-and-ota-flashing" ]
+    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
@@ -150,12 +150,7 @@ jobs:
     # merges without gating every PR on physical hardware availability.
     # To temporarily disable: remove the branch protection requirement for
     # this job in Settings → Branches → main → Required status checks.
-    if: >
-      (github.event_name == 'push' &&
-        (github.ref == 'refs/heads/main' ||
-         github.ref == 'refs/heads/azhang/add-ci-tests-for-usb-and-ota-flashing'))
-      || (github.event_name == 'pull_request' &&
-        github.head_ref == 'azhang/add-ci-tests-for-usb-and-ota-flashing')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
     - name: Checkout repository
