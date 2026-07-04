@@ -3,6 +3,7 @@ if (TARGET application)
     add_subdirectory(nasa_cpr)
     target_sources(application PRIVATE
         mode_s_packet.cpp
+        mode_s_ook_tx.cpp
         uat_packet.cpp
         aircraft_dictionary.cpp
         decode_utils.cpp
@@ -28,6 +29,7 @@ elseif (TARGET host_test OR TARGET host_test_fpu)
         if (TARGET ${_test_tgt})
             target_sources(${_test_tgt} PRIVATE
                 mode_s_packet.cpp
+                mode_s_ook_tx.cpp
                 uat_packet.cpp
                 aircraft_dictionary.cpp
                 decode_utils.cpp

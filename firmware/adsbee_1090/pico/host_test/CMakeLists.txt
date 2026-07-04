@@ -44,6 +44,7 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         test_geo_utils.cc
         test_nasa_cpr.cc
         test_mode_s_packet_decoder.cc
+        test_mode_s_ook_tx.cc
         test_platform.cc
         test_reporting_aircraftjson.cc
         test_reporting_beast.cc
