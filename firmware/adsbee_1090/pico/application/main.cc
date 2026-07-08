@@ -9,6 +9,7 @@
 #include "eeprom.hh"
 #include "esp32.hh"
 #include "esp32_flasher.hh"
+#include "ublox_max_m10.hh"
 #include "firmware_update.hh"  // For figuring out which flash partition we're in.
 #include "hal.hh"
 #include "hardware_unit_tests.hh"  // For testing only!
@@ -46,6 +47,7 @@ CPUMonitor core_1_monitor = CPUMonitor({.idle_ticks_per_update_interval = kRP204
 ADSBee adsbee = ADSBee({});
 CommsManager comms_manager = CommsManager({});
 ESP32SerialFlasher esp32_flasher = ESP32SerialFlasher({});
+// UbloxMAXM10 gnss = UbloxMAXM10({});
 
 SettingsManager settings_manager;
 ObjectDictionary object_dictionary;
@@ -172,6 +174,14 @@ int main() {
 #endif
     }
 
+    // Configure the GNSS module AFTER the ESP32 flash routine. The ESP32 serial flasher shares the
+    // uart0 peripheral (on GPIO 16/17) and calls uart_deinit(uart0) when it finishes; running
+    // gnss.Init() last lets GNSSReceiver::Init() re-claim GPIO 0/1 and re-initialize uart0 to a
+    // known state. Init() does not hard-fail if the module is absent/unresponsive (a quick liveness
+    // probe gates configuration); in that case GNSS position is simply unavailable and the receiver
+    // falls back to its non-GNSS position source.
+    // gnss.Init();
+
 #ifndef ISRS_ON_CORE1
     multicore_reset_core1();
     multicore_launch_core1(main_core1);
@@ -192,6 +202,7 @@ int main() {
         decoder.UpdateLogLoop();
         comms_manager.Update();
         adsbee.Update();
+        // gnss.Update();
 
         esp32.Update();
 
