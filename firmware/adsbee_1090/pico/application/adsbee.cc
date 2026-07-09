@@ -294,20 +294,19 @@ void ADSBee::UpdateRxPosition() {
             break;
         case SettingsManager::RxPosition::PositionSource::kPositionSourceGNSS:
             // Use the position reported by the GNSS receiver, if it has a valid, fresh fix.
-            // if (gnss.HasValidFix()) {
-            //     const NMEAParser::GNSSFix& gnss_fix = gnss.fix();
-            //     rx_position.latitude_deg = gnss_fix.latitude_deg;
-            //     rx_position.longitude_deg = gnss_fix.longitude_deg;
-            //     rx_position.gnss_altitude_ft = gnss_fix.altitude_ft;
-            //     rx_position.heading_deg = gnss_fix.heading_deg;
-            //     rx_position.speed_kts = gnss_fix.speed_kts;
-            //     rx_position_available = true;
-            // } else {
-            //     // No valid GNSS fix (incl. module absent / comms not working): mark unavailable,
-            //     // mirroring the kPositionSourceLowestAircraft "no valid position" branch.
-            //     rx_position_available = false;
-            // }
-            rx_position_available = false;
+            if (gnss.HasValidFix()) {
+                const NMEAParser::GNSSFix& gnss_fix = gnss.fix();
+                rx_position.latitude_deg = gnss_fix.latitude_deg;
+                rx_position.longitude_deg = gnss_fix.longitude_deg;
+                rx_position.gnss_altitude_ft = gnss_fix.altitude_ft;
+                rx_position.heading_deg = gnss_fix.heading_deg;
+                rx_position.speed_kts = gnss_fix.speed_kts;
+                rx_position_available = true;
+            } else {
+                // No valid GNSS fix (incl. module absent / comms not working): mark unavailable,
+                // mirroring the kPositionSourceLowestAircraft "no valid position" branch.
+                rx_position_available = false;
+            }
             break;
         case SettingsManager::RxPosition::PositionSource::kPositionSourceFixed:
             // Fixed position is always available.
@@ -843,6 +842,14 @@ void ADSBee::PruneAircraftDictionary() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
     if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > config_.aircraft_dictionary_update_interval_ms) {
         aircraft_dictionary.Update(timestamp_ms);
+        // Stamp the current GNSS receiver status into the freshly-published metrics (these are
+        // snapshot values, not per-interval counters, so they're set on the public struct after the
+        // Update() counter swap rather than accumulated). GNSS lives only on the RP2040, so this is
+        // where the fields are populated before being forwarded to the ESP32.
+        const NMEAParser::GNSSFix& gnss_fix = gnss.fix();
+        aircraft_dictionary.metrics.gnss_fix = gnss.HasValidFix();
+        aircraft_dictionary.metrics.gnss_num_satellites = gnss_fix.num_satellites;
+        aircraft_dictionary.metrics.gnss_fix_quality = gnss_fix.fix_quality;
         if (esp32.IsEnabled()) {
             // Send fresh aircraft dictionary stats to ESPS32.
             esp32.Write(ObjectDictionary::kAddrAircraftDictionaryMetrics, aircraft_dictionary.metrics,

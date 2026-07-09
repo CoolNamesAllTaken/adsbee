@@ -75,6 +75,9 @@ class ADSBeeServer {
 
     AircraftDictionary aircraft_dictionary;
 
+    // Read-only access to the aircraft dictionary for UI rendering.
+    const AircraftDictionary& GetAircraftDictionary() const { return aircraft_dictionary; }
+
     httpd_handle_t server = nullptr;
     WebSocketServer network_console;
     WebSocketServer network_metrics;

@@ -7,6 +7,7 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 #include <math.h>
+#include <variant>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -43,6 +44,9 @@
 #include "peripherals/compass.hh"
 #include "peripherals/epd/epaper_display/Display_EPD_W21_spi.hh"
 #include "peripherals/epd/gui/GUI_Paint.h"
+#include "peripherals/epd/gui/ui_data.hh"
+#include "peripherals/epd/gui/ui_screens.hh"
+#include "aircraft_dictionary.hh"
 
 
 #define HARDWARE_UNIT_TESTS
@@ -217,6 +221,12 @@ extern "C" void app_main(void) {
         return v < lo ? lo : (v > hi ? hi : v);
     };
 
+    // ---- Status LED colors (WS2812, scaled by auto-brightness below) ---------
+    struct LedColor { uint8_t r, g, b; };
+    constexpr LedColor kLedWhite  = {100, 100, 100};  // plain indicator LEDs
+    constexpr LedColor kLedGreen  = {0, 150, 0};      // status OK
+    constexpr LedColor kLedOrange = {150, 50, 0};    // status not OK
+
     while (1) {
         adsbee_server.Update();
 
@@ -251,17 +261,28 @@ extern "C" void app_main(void) {
         }
         epd.SetFrontLight(front);
 
-        static uint8_t hue_offset = 0;
-        static uint8_t tick = 0;
-        for (int i = 0; i < 9; i++) {
-            uint8_t h = hue_offset + i * 28, hi = h / 43, f = (h % 43) * 6, q = 255 - f;
-            uint8_t r = (uint8_t[]){255,q,0,0,f,255}[hi] * brightness / 255;
-            uint8_t g = (uint8_t[]){f,255,255,q,0,0}[hi] * brightness / 255;
-            uint8_t b = (uint8_t[]){0,0,f,255,255,q}[hi] * brightness / 255;
-            led_strip_set_pixel(led_strip, i, r, g, b);
+        // Status LED strip (9 WS2812s), scaled by the auto-brightness value.
+        //   LEDs 0-3: white indicators.
+        //   LEDs 4-8: the five left-sidebar status ports (green = OK, orange =
+        //             not), in rail order: CO, GNSS, SUBG, 2.4G, 1090.
+        {
+            const AircraftDictionary& led_dict = adsbee_server.GetAircraftDictionary();
+            const bool port_ok[5] = {
+                true,  // CO: always green for now.
+                object_dictionary.composite_device_status.rp2040.rx_position_available,  // GNSS fix
+                led_dict.metrics.num_uat_aircraft > 0,      // SUBG: UAT aircraft detected
+                comms_manager.WiFiStationHasIP() ||
+                    comms_manager.WiFiAccessPointHasClients(),  // 2.4G: Wi-Fi up (STA or AP)
+                led_dict.metrics.num_mode_s_aircraft > 0,   // 1090: Mode S aircraft detected
+            };
+
+            for (int i = 0; i < 9; i++) {
+                LedColor c = (i < 4) ? kLedWhite : (port_ok[i - 4] ? kLedGreen : kLedOrange);
+                led_strip_set_pixel(led_strip, i, c.r * brightness / 255, c.g * brightness / 255,
+                                    c.b * brightness / 255);
+            }
+            led_strip_refresh(led_strip);
         }
-        led_strip_refresh(led_strip);
-        if (++tick >= 20) { hue_offset += 3; tick = 0; }
 
         aht.Update();
         spl.Update();
@@ -327,62 +348,80 @@ extern "C" void app_main(void) {
         // time — drop a periodic epd.Display(epd_fb) in here to clear it.
         if (!epd.IsBusy()) {
             Paint_Clear(WHITE);
-            char line[64];
-            int y = 0;
-            constexpr int kLineH = 13;  // Font12 height 12 + 1 px gap
-            auto draw = [&](const char* s) {
-                Paint_DrawString_EN(0, y, s, &Font12, WHITE, BLACK);
-                y += kLineH;
-            };
-            snprintf(line, sizeof line, "Lux:%.1f c0:%u c1:%u",
-                     ltr.GetLux(), ltr.GetCh0Raw(), ltr.GetCh1Raw());
-            draw(line);
-            snprintf(line, sizeof line, "AHT T:%.2fC H:%.1f%%",
-                     aht.GetTemperatureCelsius(), aht.GetRelativeHumidity());
-            draw(line);
-            snprintf(line, sizeof line, "SPL P:%.1fhPa T:%.2fC",
-                     spl.GetPressureHpa(), spl.GetTemperatureCelsius());
-            draw(line);
-            snprintf(line, sizeof line, "Alt:%.2fm", spl.GetAltitudeMeters());
-            draw(line);
-            snprintf(line, sizeof line, "Mag X:%.1f Y:%.1f Z:%.1fuT",
-                     mmc.GetMagneticFieldXUt(), mmc.GetMagneticFieldYUt(),
-                     mmc.GetMagneticFieldZUt());
-            draw(line);
-            snprintf(line, sizeof line, "PwrGood:%d", mp.IsPowerGood() ? 1 : 0);
-            draw(line);
-            snprintf(line, sizeof line, "Batt:%s%u%% %s%dmW",
-                     bq.IsDataValid() ? "" : "?", bq.GetStateOfChargePct(),
-                     bq.IsDataValid() ? "" : "?", bq.GetAveragePowerMw());
-            draw(line);
-            snprintf(line, sizeof line, "Quat %s", imu.IsQuaternionValid() ? "ok" : "--");
-            draw(line);
-            snprintf(line, sizeof line, " w:%.3f x:%.3f",
-                     imu.GetQuaternion().w, imu.GetQuaternion().x);
-            draw(line);
-            snprintf(line, sizeof line, " y:%.3f z:%.3f",
-                     imu.GetQuaternion().y, imu.GetQuaternion().z);
-            draw(line);
-            // Fused AHRS: heading/pitch/roll. '*' until mag auto-cal converges
-            // (rotate the device in a figure-8 to calibrate hard-iron offsets).
-            snprintf(line, sizeof line, "Hdg:%.0f P:%.0f R:%.0f%s",
-                     fusion.GetHeadingDeg(), fusion.GetPitchDeg(), fusion.GetRollDeg(),
-                     fusion.IsCalibrated() ? "" : "*");
-            draw(line);
 
-            // 3D orientation cube in the empty bottom-right quadrant: a world-
-            // fixed wireframe cube viewed from the device's current orientation.
-            if (fusion.IsValid()) {
-                DrawOrientationCube(198, 132, 22.f, fusion.GetFusedQuaternion());
+            // ---- Build the map screen's live data from the ADS-B dictionary,
+            // receiver position, and battery gauge. Contacts are collected into
+            // a static buffer sized to the dictionary's own cap (no extra cap).
+            static winglet_ui::UiContact ui_contacts[AircraftDictionary::kMaxNumAircraft];
+            uint16_t num_contacts = 0;
+            const AircraftDictionary& dict = adsbee_server.GetAircraftDictionary();
+            for (const auto& itr : dict.dict) {
+                if (num_contacts >= AircraftDictionary::kMaxNumAircraft) break;
+                const float* lat = nullptr;
+                const float* lon = nullptr;
+                float dir = 0.0f;
+                bool dir_is_heading = false;
+                if (const ModeSAircraft* a = std::get_if<ModeSAircraft>(&itr.second)) {
+                    if (!a->HasBitFlag(ModeSAircraft::kBitFlagPositionValid)) continue;
+                    lat = &a->latitude_deg;
+                    lon = &a->longitude_deg;
+                    dir = a->direction_deg;
+                    dir_is_heading = a->HasBitFlag(ModeSAircraft::kBitFlagDirectionIsHeading);
+                } else if (const UATAircraft* u = std::get_if<UATAircraft>(&itr.second)) {
+                    if (!u->HasBitFlag(UATAircraft::kBitFlagPositionValid)) continue;
+                    lat = &u->latitude_deg;
+                    lon = &u->longitude_deg;
+                    dir = u->direction_deg;
+                    dir_is_heading = u->HasBitFlag(UATAircraft::kBitFlagDirectionIsHeading);
+                } else {
+                    continue;
+                }
+                ui_contacts[num_contacts++] = {*lat, *lon, dir, dir_is_heading, /*selected=*/false};
             }
 
-            // Mag-only debug compass in the free upper-right area (clear of the text
-            // column and the cube). Two needles toward magnetic North: solid =
-            // tilt-compensated, dotted = raw flat-plane (mag X/Y only).
-            DrawCompass(222, 52, 26,
-                        fusion.GetMagHeadingLevelDeg(),
-                        fusion.GetMagHeadingFlatDeg(),
-                        fusion.IsMagHeadingValid());
+            const auto& rp2040_status = object_dictionary.composite_device_status.rp2040;
+            const auto& rx_position = rp2040_status.rx_position;
+
+            // Left-rail port status strings, one per etched port: CO / GNSS /
+            // SUBG / 2.4G / 1090.
+            static char rail_bufs[winglet_ui::kNumRailRows][12];
+            const auto& adsb_metrics = dict.metrics;
+            // CO: no CO sensor wired on the ESP yet — hard-coded to 0 for now.
+            snprintf(rail_bufs[0], sizeof rail_bufs[0], "0");
+            // GNSS: satellites used in the current fix. The GNSS receiver lives on the Pico;
+            // its sat count is forwarded to this MCU in the RP2040 metrics struct over SPI.
+            snprintf(rail_bufs[1], sizeof rail_bufs[1], "%u",
+                     (unsigned)adsbee_server.rp2040_aircraft_dictionary_metrics.gnss_num_satellites);
+            // SUBG: aircraft tracked via the sub-GHz (UAT) receiver.
+            snprintf(rail_bufs[2], sizeof rail_bufs[2], "%u",
+                     (unsigned)adsb_metrics.num_uat_aircraft);
+            // 2.4G: Wi-Fi link state — "UP" if connected to anything over Wi-Fi
+            // in either mode: STA has an IP (joined an upstream AP), or the ESP's
+            // own AP has at least one client connected.
+            bool wifi_up = comms_manager.WiFiStationHasIP() || comms_manager.WiFiAccessPointHasClients();
+            snprintf(rail_bufs[3], sizeof rail_bufs[3], "%s", wifi_up ? "UP" : "DN");
+            // 1090: aircraft tracked via the 1090 MHz (Mode S) receiver.
+            snprintf(rail_bufs[4], sizeof rail_bufs[4], "%u",
+                     (unsigned)adsb_metrics.num_mode_s_aircraft);
+
+            winglet_ui::MapScreenData map_data{};
+            map_data.contacts = ui_contacts;
+            map_data.num_contacts = num_contacts;
+            map_data.ownship_valid = rp2040_status.rx_position_available;
+            map_data.ownship_lat_deg = rx_position.latitude_deg;
+            map_data.ownship_lon_deg = rx_position.longitude_deg;
+            map_data.range_nm = 5.0f;  // TODO: adjustable via zoom buttons.
+            map_data.zoom_label = "5NM";
+            for (int i = 0; i < winglet_ui::kNumRailRows; i++) map_data.rail[i] = rail_bufs[i];
+            map_data.batt_pct = bq.GetStateOfChargePct();
+            map_data.batt_valid = bq.IsDataValid();
+
+            // The debug telemetry screen keeps its live sensor references.
+            winglet_ui::DebugScreenSources debug_src{ltr, aht, spl, mmc, mp, bq, imu, fusion};
+
+            // Buttons are not wired yet, so the map screen is shown by default.
+            static winglet_ui::UiScreen current_screen = winglet_ui::UiScreen::kMap;
+            winglet_ui::DrawCurrentScreen(current_screen, map_data, debug_src);
 
             epd.DisplayFast(epd_fb);  // OTP partial, non-blocking; booster stays on
         }

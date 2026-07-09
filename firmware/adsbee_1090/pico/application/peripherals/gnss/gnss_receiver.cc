@@ -3,7 +3,7 @@
 #include "comms.hh"  // For comms_manager (UART I/O + baud) and CONSOLE_* logging.
 #include "hal.hh"    // For get_time_since_boot_ms().
 
-bool GNSSReceiver::Init() {
+void GNSSReceiver::ClaimUart() {
     // Bring the GNSS UART up to a known state. uart0 is shared with the ESP32 flasher (GPIO 16/17),
     // which calls uart_deinit(uart0) when it finishes; claim the GNSS pins (GPIO 0/1) and
     // (re)initialize the peripheral here so a prior ESP32 flash cannot leave the GNSS link dead.
@@ -11,6 +11,10 @@ bool GNSSReceiver::Init() {
     gpio_set_function(config_.uart_rx_pin, GPIO_FUNC_UART);
     uart_set_translate_crlf(config_.uart_handle, false);
     uart_init(config_.uart_handle, GetDefaultBaudrate());
+}
+
+bool GNSSReceiver::Init() {
+    ClaimUart();
 
     // Power on the module via the active-low enable pin (if connected) and wait for it to boot.
     if (config_.enable_pin != UINT16_MAX) {
@@ -45,6 +49,9 @@ bool GNSSReceiver::Init() {
 }
 
 bool GNSSReceiver::Update() {
+    // Skip while the GNSS pins are handed over to the ESP32 flasher; uart0 is not ours right now.
+    if (suspended_) return true;
+
     // Stamp the parser with the current time so applied fixes carry a freshness timestamp.
     uint32_t now_ms = get_time_since_boot_ms();
     parser_.SetTimestampMs(now_ms);
@@ -87,6 +94,33 @@ bool GNSSReceiver::Update() {
         DebugDumpModuleStatus();
     }
     return true;
+}
+
+void GNSSReceiver::SuspendForUartHandover() {
+    // Nothing to park if the module never came up: its pins aren't driving UART0 with real traffic,
+    // and skipping avoids stalling the flash path on boards with no GNSS.
+    if (!healthy_ || suspended_) return;
+    suspended_ = true;
+    // De-mux the GNSS pins from uart0 so the module can no longer drive UART0 RX. On RP2040 a
+    // GPIO's function select determines which peripheral input can see it; leaving GPIO 1 on
+    // GPIO_FUNC_UART would keep feeding the module's byte stream into the shared UART0 RX FIFO and
+    // corrupt the ESP-ROM bootloader handshake once the flasher claims GPIO 16/17. Park the pins
+    // as plain SIO inputs. The module stays powered (enable pin untouched) so its BBR stays warm.
+    gpio_set_function(config_.uart_rx_pin, GPIO_FUNC_SIO);
+    gpio_set_function(config_.uart_tx_pin, GPIO_FUNC_SIO);
+    gpio_set_dir(config_.uart_rx_pin, GPIO_IN);
+    gpio_set_dir(config_.uart_tx_pin, GPIO_IN);
+}
+
+void GNSSReceiver::ResumeAfterUartHandover() {
+    if (!suspended_) return;  // Not handed over.
+    // Re-claim the GNSS pins and re-init uart0 (the flasher's DeInit() called uart_deinit(uart0)).
+    ClaimUart();
+    comms_manager.SetBaudRate(SettingsManager::kGNSSUART, GetDefaultBaudrate());
+    // The module kept running throughout, so no re-power/boot delay is needed. Re-assert only the
+    // runtime message-output config (cheap, non-destructive) so NMEA output resumes.
+    ResendRuntimeConfig();
+    suspended_ = false;
 }
 
 void GNSSReceiver::SetEnable(bool enabled) {

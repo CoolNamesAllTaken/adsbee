@@ -47,7 +47,7 @@ CPUMonitor core_1_monitor = CPUMonitor({.idle_ticks_per_update_interval = kRP204
 ADSBee adsbee = ADSBee({});
 CommsManager comms_manager = CommsManager({});
 ESP32SerialFlasher esp32_flasher = ESP32SerialFlasher({});
-// UbloxMAXM10 gnss = UbloxMAXM10({});
+UbloxMAXM10 gnss = UbloxMAXM10({});
 
 SettingsManager settings_manager;
 ObjectDictionary object_dictionary;
@@ -180,7 +180,7 @@ int main() {
     // known state. Init() does not hard-fail if the module is absent/unresponsive (a quick liveness
     // probe gates configuration); in that case GNSS position is simply unavailable and the receiver
     // falls back to its non-GNSS position source.
-    // gnss.Init();
+    gnss.Init();
 
 #ifndef ISRS_ON_CORE1
     multicore_reset_core1();
@@ -202,7 +202,7 @@ int main() {
         decoder.UpdateLogLoop();
         comms_manager.Update();
         adsbee.Update();
-        // gnss.Update();
+        gnss.Update();
 
         esp32.Update();
 

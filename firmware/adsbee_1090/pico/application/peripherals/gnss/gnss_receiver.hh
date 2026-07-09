@@ -47,10 +47,27 @@ class GNSSReceiver {
 
     /**
      * Drain available bytes from the GNSS UART and feed them to the NMEA parser. Call from the
-     * main loop.
+     * main loop. No-op while suspended for a UART handover (see SuspendForUartHandover()).
      * @retval True on success.
      */
     bool Update();
+
+    /**
+     * Release the GNSS pins so the shared uart0 peripheral can be re-routed to the ESP32 flasher
+     * pins (GPIO 16/17) without the GNSS module's continuous NMEA/UBX stream corrupting the
+     * ESP-ROM bootloader handshake. De-muxes GPIO 0/1 off uart0 (back to SIO input) so they can
+     * no longer feed UART0 RX. The module is intentionally left powered so its BBR (ephemeris /
+     * almanac / RTC) stays warm and it hot-starts once the pins are re-claimed. Idempotent; safe
+     * to call when the module is absent/unhealthy (no-op). Update() no-ops until Resume.
+     */
+    void SuspendForUartHandover();
+
+    /**
+     * Re-claim GPIO 0/1 for uart0 and re-initialize the peripheral (the ESP32 flasher's DeInit()
+     * calls uart_deinit(uart0)) after an ESP32 flash, then re-assert the runtime NMEA message
+     * output configuration and resume Update(). Counterpart to SuspendForUartHandover().
+     */
+    void ResumeAfterUartHandover();
 
     /**
      * Enable or disable module power via the active-low enable pin. No-op if no enable pin.
@@ -92,6 +109,21 @@ class GNSSReceiver {
      */
     virtual bool SendInitCommands() = 0;
 
+    /**
+     * Re-assert only the runtime message-output configuration (the sentences we consume), without
+     * the full init/config pass. Called by ResumeAfterUartHandover() after an ESP32 flash so the
+     * module keeps emitting the NMEA we need, cheaply and without disturbing stored config.
+     * Default no-op; receivers that need it (e.g. UbloxMAXM10) override.
+     */
+    virtual void ResendRuntimeConfig() {}
+
+    /**
+     * Route the GNSS UART pins (GPIO 0/1) to uart0 and (re)initialize the peripheral to the
+     * receiver's default baud. Shared by Init() and ResumeAfterUartHandover() so UART bring-up
+     * lives in one place.
+     */
+    void ClaimUart();
+
     // TEMPORARY debug hooks (remove with the rest of the GNSS debug instrumentation).
     // DebugIngestByte: fed every received UART byte so a concrete receiver can passively sniff its
     // binary protocol (e.g. ublox UBX) from the same stream the NMEA parser consumes.
@@ -102,6 +134,9 @@ class GNSSReceiver {
     GNSSReceiverConfig config_;
     NMEAParser parser_;
     bool healthy_ = false;
+    // True while the GNSS pins are released for an ESP32 flash (see SuspendForUartHandover()).
+    // Update() no-ops while suspended so it doesn't touch the (re-routed) uart0.
+    bool suspended_ = false;
 
     // TEMPORARY debug instrumentation for diagnosing "GNSS NOT AVAILABLE". Remove once root cause
     // is found. Tracks whether bytes are arriving and what the parser is producing.

@@ -698,6 +698,12 @@ class AircraftDictionary {
         uint16_t num_mode_s_aircraft = 0;
         uint16_t num_uat_aircraft = 0;
 
+        // GNSS receiver status. Populated on the RP2040 from the GNSS driver and forwarded to the
+        // ESP32 over SPI (the ESP32 has no GNSS receiver of its own). All 0 if no module / no fix.
+        bool gnss_fix = false;            // True if the receiver has a valid, fresh GNSS fix.
+        uint8_t gnss_num_satellites = 0;  // Satellites used in the current fix.
+        uint8_t gnss_fix_quality = 0;     // GGA fix quality (0 = no fix, 1 = GPS, 2 = DGPS, ...).
+
         /**
          * Formats the metrics dictionary into a JSON packet with the following structure.
          * {
@@ -749,6 +755,10 @@ class AircraftDictionary {
             chars_written += snprintf(buf + chars_written, buf_len - chars_written,
                                       ", \"num_mode_s_aircraft\": %u, \"num_uat_aircraft\": %u", num_mode_s_aircraft,
                                       num_uat_aircraft);
+            // Add GNSS receiver status.
+            chars_written += snprintf(buf + chars_written, buf_len - chars_written,
+                                      ", \"gnss_fix\": %d, \"gnss_num_satellites\": %u, \"gnss_fix_quality\": %u",
+                                      gnss_fix ? 1 : 0, gnss_num_satellites, gnss_fix_quality);
             chars_written += snprintf(buf + chars_written, buf_len - chars_written, "}");
             return chars_written;
         }

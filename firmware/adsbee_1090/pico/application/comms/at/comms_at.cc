@@ -18,6 +18,7 @@
 #include "pico/unique_id.h"
 #include "settings.hh"
 #include "spi_coprocessor.hh"  // For init / de-init before and after flashing ESP32.
+#include "ublox_max_m10.hh"    // For parking/restoring the GNSS UART around ESP32 flashing.
 
 #ifdef HARDWARE_UNIT_TESTS
 #include "hardware_unit_tests.hh"
@@ -328,6 +329,10 @@ CPP_AT_CALLBACK(CommsManager::ATESP32FlashCallback) {
     if (!esp32.DeInit()) {
         CPP_AT_ERROR("CommsManager::ATESP32FlashCallback", "Error while de-initializing ESP32 before flashing.");
     }
+    // The ESP32 flasher and the GNSS module share uart0 (on different pins). Release the GNSS pins
+    // so the module's NMEA/UBX stream can't corrupt the ESP-ROM bootloader handshake. No-op if GNSS
+    // is absent/inactive. The module stays powered so it hot-starts on resume.
+    gnss.SuspendForUartHandover();
     // Manually stop and start core 1 and watchdog instead of using FlashSafe() and FlashUnsafe() since we aren't
     // actually writing to RP2040 flash memory and we want printouts to work over the USB console.
     StopCore1();
@@ -335,6 +340,9 @@ CPP_AT_CALLBACK(CommsManager::ATESP32FlashCallback) {
     bool flashed_successfully = esp32_flasher.FlashESP32();
     adsbee.EnableWatchdog();
     StartCore1();
+    // Re-claim uart0 for the GNSS module (FlashESP32() deinit'd it) and resume NMEA output. Do this
+    // whether or not the flash succeeded so GNSS always comes back.
+    gnss.ResumeAfterUartHandover();
     if (!flashed_successfully) {
         CPP_AT_ERROR("CommsManager::ATESP32FlashCallback", "Error while flashing ESP32.");
     }

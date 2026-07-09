@@ -37,6 +37,7 @@ class UbloxMAXM10 : public GNSSReceiver {
     static constexpr uint8_t kUbxClassMon = 0x0A;
     static constexpr uint8_t kUbxClassNav = 0x01;
     static constexpr uint8_t kUbxIdCfgValset = 0x8A;
+    static constexpr uint8_t kUbxIdCfgValget = 0x8B;
     static constexpr uint8_t kUbxIdMonVer = 0x04;
     static constexpr uint8_t kUbxIdMonRf = 0x38;   // UBX-MON-RF: per-RF-block antenna/AGC/noise status.
     static constexpr uint8_t kUbxIdNavSat = 0x35;  // UBX-NAV-SAT: per-satellite C/N0 + count.
@@ -64,6 +65,7 @@ class UbloxMAXM10 : public GNSSReceiver {
     static constexpr uint32_t kCfgMsgoutNmeaGllUart1 = 0x209100ca;     // U1
     static constexpr uint32_t kCfgMsgoutNmeaVtgUart1 = 0x209100b1;     // U1
     static constexpr uint32_t kCfgNmeaProtver = 0x20930001;            // E1
+    static constexpr uint32_t kCfgAnaUseAna = 0x10230001;             // L: AssistNow Autonomous enable
     // TEMPORARY diagnostic: periodic UBX status output on UART1 (remove with the rest of the GNSS
     // debug instrumentation).
     static constexpr uint32_t kCfgMsgoutUbxMonRfUart1 = 0x2091035a;   // U1
@@ -81,6 +83,15 @@ class UbloxMAXM10 : public GNSSReceiver {
      */
     bool CfgValSet(uint32_t key_id, uint64_t value, uint8_t value_size_bytes, uint8_t layers);
 
+    /**
+     * Read a configuration item's current value via UBX-CFG-VALGET (from the RAM layer).
+     * @param[in] key_id 32-bit configuration key ID (size encoded in bits 30..28).
+     * @param[in] value_size_bytes Number of value bytes expected (1, 2, 4, or 8).
+     * @param[out] value_out Receives the little-endian value the module reported.
+     * @retval True if the module returned this key's value, false on timeout / not present.
+     */
+    bool CfgValGet(uint32_t key_id, uint8_t value_size_bytes, uint64_t& value_out);
+
     // Typed convenience wrappers around CfgValSet.
     bool CfgValSetU1(uint32_t key, uint8_t v, uint8_t layers) { return CfgValSet(key, v, 1, layers); }
     bool CfgValSetU2(uint32_t key, uint16_t v, uint8_t layers) { return CfgValSet(key, v, 2, layers); }
@@ -93,6 +104,7 @@ class UbloxMAXM10 : public GNSSReceiver {
     uint32_t GetDefaultBaudrate() const override { return kDefaultBaudrate; }
     uint32_t GetBootDelayMs() const override { return kBootupDelayMs; }
     bool SendInitCommands() override;
+    void ResendRuntimeConfig() override;
 
     // TEMPORARY debug hooks (remove with the rest of the GNSS debug instrumentation):
     //  - DebugIngestByte: passively sniffs UBX-MON-RF and UBX-NAV-SAT out of the live byte stream.
@@ -124,8 +136,17 @@ class UbloxMAXM10 : public GNSSReceiver {
     // @retval True if the module replied within kProbeTimeoutMs.
     bool ProbeLiveness();
 
-    // Write the full default configuration table to RAM + BBR.
-    bool ApplyConfigDefaults();
+    // Read-modify-write the default configuration table into RAM + BBR: for each key, read the
+    // module's current value (UBX-CFG-VALGET) and only write it (UBX-CFG-VALSET) if it differs.
+    // On an already-provisioned module nothing is written, so the live fix and BBR-held
+    // ephemeris/almanac survive and the module hot-starts. Returns the number of keys written
+    // (0 means "already fully configured"), or a negative value if the module stopped responding.
+    int32_t SyncConfigDefaults();
+
+    // Enable exactly the NMEA sentences we consume (GGA + RMC) and silence the rest, on UART1.
+    // Cheap and idempotent; used both during init and after a UART handover (ResendRuntimeConfig).
+    // @param[in] layers CfgLayer bitfield to target.
+    void ApplyRuntimeMessageConfig(uint8_t layers);
 
     // ---- TEMPORARY UBX sniffer state (remove with the rest of the GNSS debug instrumentation) ----
     // Non-blocking, byte-at-a-time UBX frame state machine fed by DebugIngestByte(). It decodes

@@ -139,6 +139,37 @@ bool UbloxMAXM10::ProbeLiveness() {
     return WaitForUbxMessage(kUbxClassMon, kUbxIdMonVer, kProbeTimeoutMs);
 }
 
+bool UbloxMAXM10::CfgValGet(uint32_t key_id, uint8_t value_size_bytes, uint64_t& value_out) {
+    // Poll one key from the RAM layer. Request payload: version(0) + layer(0=RAM) + position(u2=0)
+    // + key(u4). (See interface description S3.10.4.)
+    uint8_t req[4 + 4];
+    req[0] = 0x00;  // version 0 (poll request)
+    req[1] = 0x00;  // layer 0 = RAM (the effective, running config)
+    req[2] = 0x00;  // position lo
+    req[3] = 0x00;  // position hi
+    AppendCfgKeyValue(req, 4, key_id, 0, 0);  // key only, no value bytes for a poll request.
+    SendUbxFrame(kUbxClassCfg, kUbxIdCfgValget, req, sizeof(req));
+
+    // Response (UBX-CFG-VALGET, version 1): version(0x01) + layer + position(u2) + repeated
+    // [key(u4) + value]. For our single-key request the first (only) pair starts at offset 4.
+    uint8_t resp[4 + 4 + 8];  // header + one key + up to an 8-byte value.
+    uint16_t resp_len = 0;
+    if (!ScanForUbxMessage(kUbxClassCfg, kUbxIdCfgValget, kAckTimeoutMs, resp, sizeof(resp), &resp_len,
+                           nullptr)) {
+        return false;  // No VALGET response (key unknown to the receiver, or timed out).
+    }
+    // Need the 4-byte header + 4-byte key + value_size_bytes of value.
+    if (resp_len < static_cast<uint16_t>(4 + 4 + value_size_bytes)) {
+        return false;  // Response too short (e.g. key not present in this layer).
+    }
+    uint64_t value = 0;
+    for (uint8_t i = 0; i < value_size_bytes; i++) {
+        value |= static_cast<uint64_t>(resp[4 + 4 + i]) << (8 * i);
+    }
+    value_out = value;
+    return true;
+}
+
 bool UbloxMAXM10::CfgValSet(uint32_t key_id, uint64_t value, uint8_t value_size_bytes, uint8_t layers) {
     // Payload: version(0) + layers + reserved[2] + cfgData(key + value).
     uint8_t payload[4 + 4 + 8];
@@ -152,42 +183,36 @@ bool UbloxMAXM10::CfgValSet(uint32_t key_id, uint64_t value, uint8_t value_size_
     return WaitForAck(kUbxClassCfg, kUbxIdCfgValset);
 }
 
-bool UbloxMAXM10::ApplyConfigDefaults() {
-    // Write the full firmware default configuration table to RAM + BBR as a known-good baseline.
-    // BBR persists because V_BCKP is on an always-on battery-derived rail.
+int32_t UbloxMAXM10::SyncConfigDefaults() {
+    // Read-modify-write the firmware default configuration table into RAM + BBR. For each key, read
+    // the current value with VALGET and only VALSET it when it differs. On an already-provisioned
+    // module every key already matches, so nothing is written: the live navigation solution and the
+    // BBR-held ephemeris/almanac/last-position survive and the module hot-starts. BBR persists
+    // because V_BCKP is on an always-on rail. (Warm/hot-start-sensitive keys are commented out of
+    // kUbloxConfigDefaults so they're never touched here -- see ublox_max_m10_defaults.hh.)
     uint8_t layers = kCfgLayerRam | kCfgLayerBbr;
-    uint16_t num_ok = 0;
-    uint16_t num_fail = 0;
+    int32_t num_written = 0;
+    uint16_t num_read_fail = 0;
     for (uint32_t i = 0; i < kNumUbloxConfigDefaults; i++) {
         const UbloxCfgDefault& d = kUbloxConfigDefaults[i];
-        if (CfgValSet(d.key_id, d.value, d.size_bytes, layers)) {
-            num_ok++;
-        } else {
-            num_fail++;
+        uint64_t current = 0;
+        if (!CfgValGet(d.key_id, d.size_bytes, current)) {
+            // Couldn't read this key back; write it to be safe (fresh module / unknown state).
+            num_read_fail++;
+            if (CfgValSet(d.key_id, d.value, d.size_bytes, layers)) num_written++;
+            continue;
+        }
+        if (current != d.value) {
+            if (CfgValSet(d.key_id, d.value, d.size_bytes, layers)) num_written++;
         }
     }
-    CONSOLE_INFO("UbloxMAXM10::ApplyConfigDefaults", "Applied %u/%u config defaults (%u failed).",
-                 num_ok, static_cast<unsigned>(kNumUbloxConfigDefaults), num_fail);
-    // Treat the run as successful if the bulk of defaults applied (i.e. the module is responding).
-    return num_ok > 0;
+    CONSOLE_INFO("UbloxMAXM10::SyncConfigDefaults",
+                 "Config sync: wrote %ld/%u keys (%u read-backs failed).", static_cast<long>(num_written),
+                 static_cast<unsigned>(kNumUbloxConfigDefaults), num_read_fail);
+    return num_written;
 }
 
-bool UbloxMAXM10::SendInitCommands() {
-    // Quick liveness probe first: if the module is absent/unresponsive, bail immediately so we
-    // don't grind through the full default-config pass (390 VALSETs x ACK timeout) and stall boot.
-    // Init() marks the receiver unhealthy on a false return so the app falls back gracefully.
-    if (!ProbeLiveness()) {
-        return false;
-    }
-
-    // Module is present: write the full firmware default configuration table to RAM + BBR as a
-    // known-good baseline.
-    if (!ApplyConfigDefaults()) {
-        return false;
-    }
-
-    // Application-specific overrides on top of the factory defaults (also RAM + BBR):
-    uint8_t layers = kCfgLayerRam | kCfgLayerBbr;
+void UbloxMAXM10::ApplyRuntimeMessageConfig(uint8_t layers) {
     // Factory default for NMEA message output rates is 0 (off); we need GGA + RMC at 1 Hz.
     CfgValSetU1(kCfgMsgoutNmeaGgaUart1, 1, layers);
     CfgValSetU1(kCfgMsgoutNmeaRmcUart1, 1, layers);
@@ -196,6 +221,31 @@ bool UbloxMAXM10::SendInitCommands() {
     CfgValSetU1(kCfgMsgoutNmeaGsvUart1, 0, layers);
     CfgValSetU1(kCfgMsgoutNmeaGllUart1, 0, layers);
     CfgValSetU1(kCfgMsgoutNmeaVtgUart1, 0, layers);
+}
+
+bool UbloxMAXM10::SendInitCommands() {
+    // Quick liveness probe first: if the module is absent/unresponsive, bail immediately so we
+    // don't grind through the full config pass and stall boot. Init() marks the receiver unhealthy
+    // on a false return so the app falls back gracefully.
+    if (!ProbeLiveness()) {
+        return false;
+    }
+
+    // Read-modify-write the default table: writes only the keys that differ, so a module we've
+    // already provisioned keeps its warm/hot-start data untouched.
+    SyncConfigDefaults();
+
+    // Application-specific config on top of the defaults (RAM + BBR). These are idempotent writes;
+    // if the module already has them, VALSET is harmless. (Kept as unconditional writes rather than
+    // read-modify-write since they're few and none is warm-start-sensitive.)
+    uint8_t layers = kCfgLayerRam | kCfgLayerBbr;
+
+    // NMEA sentence selection.
+    ApplyRuntimeMessageConfig(layers);
+
+    // Enable AssistNow Autonomous so the module predicts its own orbits and shortens time-to-fix
+    // even after a genuine cold start (factory default is disabled).
+    CfgValSetL(kCfgAnaUseAna, true, layers);
 
     // TEMPORARY diagnostic: enable periodic UBX-MON-RF (antenna/AGC/noise) and UBX-NAV-SAT
     // (per-satellite C/N0 + count) output so DebugDumpModuleStatus can report why no fix is acquired.
@@ -204,6 +254,16 @@ bool UbloxMAXM10::SendInitCommands() {
     CfgValSetU1(kCfgMsgoutUbxNavSatUart1, 1, layers);
 
     return true;
+}
+
+void UbloxMAXM10::ResendRuntimeConfig() {
+    // After a UART handover (ESP32 flash) the module kept running; just re-assert the NMEA output
+    // selection to RAM so sentences resume. Cheap and non-destructive -- no full config pass, so
+    // the live fix is undisturbed.
+    ApplyRuntimeMessageConfig(kCfgLayerRam);
+    // TEMPORARY: also restore the diagnostic UBX output (remove with the rest of the debug hooks).
+    CfgValSetU1(kCfgMsgoutUbxMonRfUart1, 1, kCfgLayerRam);
+    CfgValSetU1(kCfgMsgoutUbxNavSatUart1, 1, kCfgLayerRam);
 }
 
 void UbloxMAXM10::DebugIngestByte(char c) {

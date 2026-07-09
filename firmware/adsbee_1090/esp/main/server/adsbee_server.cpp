@@ -649,6 +649,10 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
     combined_metrics.valid_uat_adsb_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.valid_uat_adsb_frames;
     combined_metrics.raw_uat_uplink_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.raw_uat_uplink_frames;
     combined_metrics.valid_uat_uplink_frames = adsbee_server.rp2040_aircraft_dictionary_metrics.valid_uat_uplink_frames;
+    // Steal GNSS status (only the RP2040 has the GNSS receiver).
+    combined_metrics.gnss_fix = adsbee_server.rp2040_aircraft_dictionary_metrics.gnss_fix;
+    combined_metrics.gnss_num_satellites = adsbee_server.rp2040_aircraft_dictionary_metrics.gnss_num_satellites;
+    combined_metrics.gnss_fix_quality = adsbee_server.rp2040_aircraft_dictionary_metrics.gnss_fix_quality;
 
     // Broadcast dictionary metrics over the metrics Websocket.
     char metrics_message[kNetworkMetricsMessageMaxLen];
