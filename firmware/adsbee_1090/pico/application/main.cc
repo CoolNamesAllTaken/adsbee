@@ -19,6 +19,7 @@
 #include "pico/stdlib.h"
 #include "spi_coprocessor.hh"
 #include "unit_conversions.hh"
+#include "usb_hotplug.hh"  // For USB CDC hot-plug re-enumeration on self-powered boards.
 
 // #define DEBUG_DISABLE_ESP32_FLASH  // Uncomment this to stop the RP2040 from flashing the ESP32.
 
@@ -87,6 +88,10 @@ int main() {
                    SPI_MSB_FIRST);
 
     comms_manager.Init();
+    // Start the USB hot-plug re-enumeration timer now that stdio/USB is up (comms_manager.Init()
+    // calls stdio_init_all()). Lets a host that attaches after power-on enumerate on self-powered
+    // boards; inert on bus-powered boards. See usb_hotplug.hh.
+    UsbHotplugInit();
     comms_manager.console_printf("ADSBee 1090\r\nSoftware Version %d.%d.%d\r\n",
                                  object_dictionary.kFirmwareVersionMajor, object_dictionary.kFirmwareVersionMinor,
                                  object_dictionary.kFirmwareVersionPatch);
