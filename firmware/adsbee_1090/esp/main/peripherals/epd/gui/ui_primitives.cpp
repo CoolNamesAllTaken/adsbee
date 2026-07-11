@@ -92,6 +92,52 @@ void DrawAnnulus(int cx, int cy, float r_out, float r_in, UWORD color) {
         }
 }
 
+// ---- Lines (bounds-clipped) ----------------------------------------------
+namespace {
+// Both endpoints off the same screen edge -> the whole line is off-screen.
+bool LineTriviallyOffscreen(int x0, int y0, int x1, int y1) {
+    return (x0 < 0 && x1 < 0) || (x0 >= kScreenWidth && x1 >= kScreenWidth) ||
+           (y0 < 0 && y1 < 0) || (y0 >= kScreenHeight && y1 >= kScreenHeight);
+}
+
+// Shared Bresenham. If on<=0, draws solid; else dashes with the given phase and
+// returns the ending phase (for continuous dashing across chained segments).
+int BresenhamLine(int x0, int y0, int x1, int y1, int on, int off, UWORD color, int phase) {
+    int dx = abs(x1 - x0), dy = abs(y1 - y0);
+    int sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    int err = dx - dy;
+    int period = (on > 0) ? (on + off) : 1;
+    int i = phase % period;
+    while (true) {
+        if (on <= 0 || (i % period) < on) SetPixelSafe(x0, y0, color);
+        i++;
+        if (x0 == x1 && y0 == y1) break;
+        int e2 = 2 * err;
+        if (e2 > -dy) { err -= dy; x0 += sx; }
+        if (e2 < dx) { err += dx; y0 += sy; }
+    }
+    return i % period;
+}
+}  // namespace
+
+void DrawLineClipped(int x0, int y0, int x1, int y1, UWORD color) {
+    if (LineTriviallyOffscreen(x0, y0, x1, y1)) return;
+    BresenhamLine(x0, y0, x1, y1, /*on=*/0, /*off=*/0, color, 0);
+}
+
+int DrawDashedLine(int x0, int y0, int x1, int y1, int on, int off, UWORD color, int phase) {
+    if (LineTriviallyOffscreen(x0, y0, x1, y1)) {
+        // Still advance the phase by the (Chebyshev) step count so a dashed
+        // polyline that briefly leaves the screen keeps a coherent pattern.
+        int steps = abs(x1 - x0);
+        int dysteps = abs(y1 - y0);
+        if (dysteps > steps) steps = dysteps;
+        int period = (on > 0) ? (on + off) : 1;
+        return (phase + steps + 1) % period;
+    }
+    return BresenhamLine(x0, y0, x1, y1, on, off, color, phase);
+}
+
 // ---- Icons ----------------------------------------------------------------
 void DrawPlusCircle(int cx, int cy, float r, bool minus, UWORD color) {
     DrawAnnulus(cx, cy, r, r - 1.8f, color);

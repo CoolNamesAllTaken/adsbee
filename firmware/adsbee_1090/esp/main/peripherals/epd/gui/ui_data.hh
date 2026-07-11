@@ -3,6 +3,10 @@
 
 #include <cstdint>
 
+namespace winglet_terrain {
+class TerrainLoader;  // fwd decl; keeps the UI layer light (no terrain headers here)
+}
+
 // Shared data structures and layout constants for the Winglet UI screens.
 //
 // The UI is rendered at the device's native e-paper resolution in the
@@ -26,6 +30,12 @@ constexpr int kRightRailDividerX = 236;
 constexpr int kMapCenterX = 132;
 constexpr int kMapCenterY = 84;
 
+// Map projection scale: the outer range ring's radius (px) represents range_nm,
+// so pixels-per-nm = kOuterRingRadiusPx / range_nm. Shared by the map screen and
+// the terrain renderer so both use one identical projection.
+constexpr float kOuterRingRadiusPx = 70.0f;
+constexpr float kNmPerDegLat = 60.0f;  // 1 deg latitude ~= 60 nautical miles
+
 // Left-rail value rows align to the etched port labels (CO / GNSS / SUBG /
 // 2.4G / 1090) on the physical device.
 constexpr int kLeftRailRowY[5] = {9, 40, 71, 101, 133};
@@ -44,7 +54,10 @@ constexpr int kBatteryValueRowY = kScreenHeight - kLeftRailRowY[0];  // 167
 constexpr int kZoomTextX = kRightRailDividerX - 4;  // 232
 constexpr int kZoomTextY = 162;
 constexpr int kScaleBarWidth = 42;
-constexpr int kScaleBarEndX = kRightRailDividerX - 31;  // 205
+// Moved left (was -31 = 205) to make room for the 3-digit zoom label ("200NM",
+// left edge ~x177), settled halfway between the original and the fully-left
+// position. Bar now spans 145..187.
+constexpr int kScaleBarEndX = kRightRailDividerX - 49;  // 187
 constexpr int kScaleBarY = 170;
 
 constexpr int kNumRailRows = 5;
@@ -55,6 +68,13 @@ enum class UiScreen {
     kSettings,  // WD.settings render (stubbed for now).
     kDebug,     // Existing sensor telemetry dump (kept, made navigable).
 };
+
+// ---- Zoom ladder ----------------------------------------------------------
+// Fixed map ranges (outer-ring radius in nautical miles), aviation-relevant.
+// Up button = zoom in (smaller index), Down = zoom out (larger index).
+constexpr float kZoomLadderNm[] = {20.0f, 40.0f, 80.0f, 150.0f, 200.0f};
+constexpr int kNumZoomLevels = (int)(sizeof(kZoomLadderNm) / sizeof(kZoomLadderNm[0]));
+constexpr int kDefaultZoomIndex = 0;  // 20 NM (closest)
 
 // ---- Map screen data ------------------------------------------------------
 // One traffic contact to plot. Positions are geographic; the map screen
@@ -87,6 +107,9 @@ struct MapScreenData {
 
     uint8_t batt_pct;
     bool batt_valid;
+
+    // Terrain source (null => skip terrain). Set by app_main from the loader.
+    const winglet_terrain::TerrainLoader* terrain = nullptr;
 };
 
 }  // namespace winglet_ui

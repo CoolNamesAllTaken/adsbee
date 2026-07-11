@@ -28,6 +28,15 @@ void DrawCircleOutline(int cx, int cy, int r, UWORD color);
 // Solid annulus (filled ring) by distance scan; gives gap-free icon rims.
 void DrawAnnulus(int cx, int cy, float r_out, float r_in, UWORD color);
 
+// ---- Lines (bounds-clipped, for terrain vectors) --------------------------
+// Bresenham line via SetPixelSafe (off-screen pixels dropped, never wrapped).
+// Cheap early-out when both endpoints are off the same screen edge.
+void DrawLineClipped(int x0, int y0, int x1, int y1, UWORD color);
+// Same, but dashed: `on` pixels drawn, `off` skipped, phase continuous along
+// the line. Returns the ending dash phase so callers can chain segments with a
+// continuous dash pattern.
+int DrawDashedLine(int x0, int y0, int x1, int y1, int on, int off, UWORD color, int phase = 0);
+
 // ---- Icons ----------------------------------------------------------------
 // Circle-plus (zoom in) / circle-minus (zoom out) toggled by `minus`.
 void DrawPlusCircle(int cx, int cy, float r, bool minus, UWORD color);

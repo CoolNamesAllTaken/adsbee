@@ -5,6 +5,7 @@
 
 #include "GUI_Paint.h"
 #include "fonts.h"
+#include "terrain_render.hh"
 #include "ui_primitives.hh"
 #include "ui_sprites.hh"
 
@@ -12,11 +13,8 @@ namespace winglet_ui {
 
 namespace {
 constexpr float kPi = 3.14159265358979323846f;
-constexpr float kNmPerDegLat = 60.0f;  // 1 deg latitude ~= 60 nautical miles.
-
-// Radius (px) of the outer range ring. Chosen to sit inside the map window
-// (between the rails, above the scale bar), so the full ring is visible.
-constexpr float kOuterRingRadiusPx = 70.0f;
+// kNmPerDegLat and kOuterRingRadiusPx now live in ui_data.hh (shared with the
+// terrain renderer so terrain + traffic use one identical projection).
 
 inline int IRound(float v) { return (int)lroundf(v); }
 
@@ -34,9 +32,12 @@ void CrossDraw(int dx, int dy, UWORD color, void* ctx) {
 }  // namespace
 
 void DrawMapScreen(const MapScreenData& data) {
+    // ---- Terrain (drawn FIRST, under everything; gutter-masked to the window) --
+    if (data.terrain) DrawTerrain(data, *data.terrain);
+
     // ---- Map content (drawn first, then masked by the rail gutters) -------
-    // Range rings: outer at range_nm, inner at half range. These replace the
-    // decorative terrain from the mockup and give a real distance reference.
+    // Range rings: outer at range_nm, inner at half range. These give a real
+    // distance reference over the terrain.
     DrawRing(kMapCenterX, kMapCenterY, kOuterRingRadiusPx, 0, BLACK);
     DrawRing(kMapCenterX, kMapCenterY, kOuterRingRadiusPx * 0.5f, 0, BLACK);
 

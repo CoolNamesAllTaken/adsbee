@@ -117,6 +117,13 @@ bool Bq27427::Init() {
     ESP_LOGI(kTag, "BAT_INSERT subcommand sent");
   }
 
+  // Program the cell specs (Design Capacity / Terminate Voltage / chemistry) so
+  // the Impedance-Track SOC estimate is accurate. Non-fatal: on failure the
+  // gauge keeps its current config and still reports (less accurate) values.
+  if (config_.configure_battery) {
+    ConfigureBattery();
+  }
+
   // Prime the cache with a first read.
   if (!Update()) {
     ESP_LOGE(kTag, "Initial Update() failed");
@@ -182,9 +189,9 @@ bool Bq27427::Update() {
   // [ITPOR] set means RAM was just reset — readings not yet meaningful.
   // [CFGUPMODE] means gauging is suspended for configuration.
   // [BAT_DET] must be set for active measurement.
-  const bool itpor      = (flags & kFlagItpor)     != 0;
-  const bool cfgupmode  = (flags & (1 << 12))      != 0;
-  const bool bat_detect = (flags & kFlagBatDetect) != 0;
+  const bool itpor      = (flags & kFlagItpor)      != 0;
+  const bool cfgupmode  = (flags & kFlagCfgUpMode)  != 0;  // CFGUPMODE = bit 4 (TRM Table 5-4)
+  const bool bat_detect = (flags & kFlagBatDetect)  != 0;
   data_valid_ = bat_detect && !itpor && !cfgupmode;
 
   if (!data_valid_) {
@@ -209,9 +216,25 @@ bool Bq27427::Update() {
     return false;
   }
 
-  average_power_mw_    = avg_power;
-  state_of_charge_pct_ = soc;
-  last_update_us_      = now_us;
+  // Remaining capacity + average current, used to estimate time-to-empty.
+  uint16_t rem_cap = 0;
+  ret = ReadWord(kCmdRemCapacity, &rem_cap);
+  if (ret != ESP_OK) {
+    ESP_LOGE(kTag, "Failed to read RemainingCapacity(): %s", esp_err_to_name(ret));
+    return false;
+  }
+  int16_t avg_current = 0;
+  ret = ReadWordSigned(kCmdAverageCurrent, &avg_current);
+  if (ret != ESP_OK) {
+    ESP_LOGE(kTag, "Failed to read AverageCurrent(): %s", esp_err_to_name(ret));
+    return false;
+  }
+
+  average_power_mw_       = avg_power;
+  state_of_charge_pct_    = soc;
+  remaining_capacity_mah_ = rem_cap;
+  average_current_ma_     = avg_current;
+  last_update_us_         = now_us;
   return true;
 }
 
@@ -244,4 +267,179 @@ esp_err_t Bq27427::ReadWordSigned(uint8_t cmd, int16_t* out) {
   static_assert(sizeof(int16_t) == sizeof(uint16_t), "size mismatch");
   __builtin_memcpy(out, &raw, sizeof(raw));
   return ESP_OK;
+}
+
+esp_err_t Bq27427::WriteByte(uint8_t cmd, uint8_t value) {
+  uint8_t buf[2] = {cmd, value};
+  return i2c_master_transmit(i2c_handle_, buf, sizeof(buf), -1);
+}
+
+esp_err_t Bq27427::ReadByte(uint8_t cmd, uint8_t* out) {
+  return i2c_master_transmit_receive(i2c_handle_, &cmd, 1, out, 1, -1);
+}
+
+esp_err_t Bq27427::WaitFlag(uint16_t mask, bool set, uint32_t timeout_ms) {
+  const int64_t deadline = esp_timer_get_time() + (int64_t)timeout_ms * 1000LL;
+  while (esp_timer_get_time() < deadline) {
+    uint16_t flags = 0;
+    esp_err_t ret = ReadWord(kCmdFlags, &flags);
+    if (ret != ESP_OK) return ret;
+    if (((flags & mask) != 0) == set) return ESP_OK;
+    vTaskDelay(pdMS_TO_TICKS(25));
+  }
+  return ESP_ERR_TIMEOUT;
+}
+
+// ---------------------------------------------------------------------------
+// Battery configuration (CONFIG UPDATE flow, TRM Section 4)
+// ---------------------------------------------------------------------------
+
+esp_err_t Bq27427::Unseal() {
+  // The UNSEAL key is the same 0x8000 word sent twice.
+  esp_err_t ret = WriteSubCmd(kSubCmdUnseal);
+  if (ret != ESP_OK) return ret;
+  return WriteSubCmd(kSubCmdUnseal);
+}
+
+esp_err_t Bq27427::SelectChemProfile(uint8_t profile) {
+  uint16_t subcmd;
+  switch (profile) {
+    case 0:  subcmd = kSubCmdChemA; break;
+    case 1:  subcmd = kSubCmdChemB; break;
+    case 2:  subcmd = kSubCmdChemC; break;
+    default: return ESP_ERR_INVALID_ARG;
+  }
+  return WriteSubCmd(subcmd);
+}
+
+// Read a big-endian int16 parameter from the currently-selected 32-byte block.
+// Block data (unlike standard commands) is MSB-first.
+esp_err_t Bq27427::ReadStateParam(uint8_t offset, int16_t* out) {
+  uint8_t msb = 0, lsb = 0;
+  esp_err_t ret = ReadByte(kCmdBlockData + (offset % 32), &msb);
+  if (ret != ESP_OK) return ret;
+  ret = ReadByte(kCmdBlockData + (offset % 32) + 1, &lsb);
+  if (ret != ESP_OK) return ret;
+  *out = (int16_t)(((uint16_t)msb << 8) | lsb);
+  return ESP_OK;
+}
+
+// Write a big-endian int16 into the current block and fix up the block checksum.
+// The block (State subclass 0x52, block 0) must already be selected and in
+// CONFIG UPDATE mode. Checksum = 255 − (sum of all 32 block bytes mod 256);
+// we use the TRM's incremental data-replacement formula so we only touch the
+// two changed bytes.
+esp_err_t Bq27427::WriteStateParam(uint8_t offset, int16_t value) {
+  const uint8_t addr = kCmdBlockData + (offset % 32);
+  uint8_t old_csum = 0;
+  esp_err_t ret = ReadByte(kCmdBlockDataChecksum, &old_csum);
+  if (ret != ESP_OK) return ret;
+
+  uint8_t old_msb = 0, old_lsb = 0;
+  ret = ReadByte(addr, &old_msb);
+  if (ret != ESP_OK) return ret;
+  ret = ReadByte(addr + 1, &old_lsb);
+  if (ret != ESP_OK) return ret;
+
+  const uint8_t new_msb = (uint8_t)((uint16_t)value >> 8);
+  const uint8_t new_lsb = (uint8_t)((uint16_t)value & 0xFF);
+
+  // Incremental checksum (TRM Section 4.1 step 10 formula).
+  uint8_t temp = (uint8_t)((255 - old_csum - old_msb - old_lsb) % 256);
+  uint8_t new_csum = (uint8_t)(255 - ((temp + new_msb + new_lsb) % 256));
+
+  ret = WriteByte(addr, new_msb);
+  if (ret != ESP_OK) return ret;
+  ret = WriteByte(addr + 1, new_lsb);
+  if (ret != ESP_OK) return ret;
+  return WriteByte(kCmdBlockDataChecksum, new_csum);
+}
+
+bool Bq27427::ConfigureBattery() {
+  // 1. Unseal.
+  if (Unseal() != ESP_OK) {
+    ESP_LOGW(kTag, "Battery config: UNSEAL failed");
+    return false;
+  }
+
+  // 2. Check whether the chemistry already matches; only change if needed.
+  const uint16_t want_chem = (config_.chem_profile == 0)   ? kChemIdA
+                             : (config_.chem_profile == 1) ? kChemIdB
+                                                           : kChemIdC;
+  uint16_t cur_chem = 0;
+  if (WriteSubCmd(kSubCmdChemId) == ESP_OK) ReadWord(kCmdControl, &cur_chem);
+  bool chem_changed = (cur_chem != want_chem);
+
+  // 3. Enter CONFIG UPDATE mode.
+  if (WriteSubCmd(kSubCmdSetCfgUpdate) != ESP_OK ||
+      WaitFlag(kFlagCfgUpMode, /*set=*/true, /*timeout_ms=*/2000) != ESP_OK) {
+    ESP_LOGW(kTag, "Battery config: entering CONFIG UPDATE failed");
+    return false;
+  }
+
+  bool ok = true;
+
+  // 4. Chemistry (if needed) — no block-data write.
+  if (chem_changed) {
+    if (SelectChemProfile(config_.chem_profile) == ESP_OK) {
+      ESP_LOGI(kTag, "Chem profile -> %u (was %u)", want_chem, cur_chem);
+    } else {
+      ESP_LOGW(kTag, "Chem profile select failed");
+      ok = false;
+    }
+  } else {
+    ESP_LOGI(kTag, "Chem profile already %u — skip", cur_chem);
+  }
+
+  // 5. Select the State subclass, block 0, for Design Capacity / Terminate Voltage.
+  if (WriteByte(kCmdBlockDataControl, 0x00) == ESP_OK &&
+      WriteByte(kCmdDataClass, kDmStateSubclass) == ESP_OK &&
+      WriteByte(kCmdDataBlock, 0x00) == ESP_OK) {
+    vTaskDelay(pdMS_TO_TICKS(5));  // let the block load
+
+    // Design Capacity (offset 6). Write only if different.
+    int16_t cur = 0;
+    if (ReadStateParam(kDmDesignCapacityOffset, &cur) == ESP_OK) {
+      if (cur != (int16_t)config_.design_capacity_mah) {
+        if (WriteStateParam(kDmDesignCapacityOffset,
+                            (int16_t)config_.design_capacity_mah) == ESP_OK) {
+          ESP_LOGI(kTag, "Design Capacity -> %u mAh (was %d)",
+                   config_.design_capacity_mah, cur);
+        } else { ok = false; }
+      } else {
+        ESP_LOGI(kTag, "Design Capacity already %d mAh — skip", cur);
+      }
+    }
+
+    // Terminate Voltage (offset 10). Write only if different.
+    if (ReadStateParam(kDmTerminateVoltageOffset, &cur) == ESP_OK) {
+      if (cur != (int16_t)config_.terminate_voltage_mv) {
+        if (WriteStateParam(kDmTerminateVoltageOffset,
+                            (int16_t)config_.terminate_voltage_mv) == ESP_OK) {
+          ESP_LOGI(kTag, "Terminate Voltage -> %u mV (was %d)",
+                   config_.terminate_voltage_mv, cur);
+        } else { ok = false; }
+      } else {
+        ESP_LOGI(kTag, "Terminate Voltage already %d mV — skip", cur);
+      }
+    }
+  } else {
+    ESP_LOGW(kTag, "Battery config: block select failed");
+    ok = false;
+  }
+
+  // 6. Exit CONFIG UPDATE via SOFT_RESET; wait for CFGUPMODE to clear.
+  if (WriteSubCmd(kSubCmdSoftReset) != ESP_OK ||
+      WaitFlag(kFlagCfgUpMode, /*set=*/false, /*timeout_ms=*/2000) != ESP_OK) {
+    ESP_LOGW(kTag, "Battery config: SOFT_RESET / exit failed");
+    ok = false;
+  }
+
+  // 7. Re-seal.
+  if (WriteSubCmd(kSubCmdSealed) != ESP_OK) {
+    ESP_LOGW(kTag, "Battery config: re-SEAL failed");
+  }
+
+  ESP_LOGI(kTag, "Battery configuration %s", ok ? "complete" : "completed with warnings");
+  return ok;
 }

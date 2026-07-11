@@ -39,7 +39,9 @@
 #include "peripherals/bq27427.hh"
 #include "peripherals/fxl6408.hh"
 #include "peripherals/lsm6dsv.hh"
+#include "peripherals/sd_card.hh"
 #include "peripherals/sensor_fusion.hh"
+#include "peripherals/terrain/terrain_loader.hh"
 #include "peripherals/orientation_cube.hh"
 #include "peripherals/compass.hh"
 #include "peripherals/epd/epaper_display/Display_EPD_W21_spi.hh"
@@ -118,6 +120,12 @@ extern "C" void app_main(void) {
 
     Fxl6408::Config gpio_b_cfg;
     gpio_b_cfg.i2c_address = Fxl6408::kI2cAddressAddrHigh;
+    // Buttons: Expander B bits 0-3 are the 4 buttons, active-low. Configure them
+    // as inputs with internal pull-ups so an unpressed button reads high.
+    for (int i = 0; i < 4; i++) {
+        gpio_b_cfg.pins[i].direction = Fxl6408::Direction::kInput;
+        gpio_b_cfg.pins[i].pull = Fxl6408::PullMode::kPullUp;
+    }
 
     Fxl6408 gpio_a(gpio_a_cfg);
     Fxl6408 gpio_b(gpio_b_cfg);
@@ -146,6 +154,25 @@ extern "C" void app_main(void) {
     if (!bq.Init()) { ESP_LOGE("app_main", "BQ27427 init failed"); }
     if (!imu.Init(true)) { ESP_LOGE("app_main", "LSM6DSV init failed"); }
     if (!epd.Init()) { ESP_LOGE("app_main", "EPD init failed"); }
+
+    // microSD (SDMMC 1-bit). Init succeeds even with no card; mounting is
+    // hot-plug driven from sd.Update() in the loop below. Card-detect lives on
+    // FXL6408 Expander A, which is already initialized above.
+    SdCard sd;
+    if (!sd.Init()) { ESP_LOGE("app_main", "SD init failed"); }
+#ifdef SD_CARD_SELF_TEST
+    RunSdCardSelfTest(sd);
+#endif
+
+    // Terrain map tiles (loaded from /sd/tiles on ownship/zoom change; nothing
+    // renders yet — Phase 3 consumes the parsed tiles). Update() is called in the
+    // loop below, off the render hot path.
+    winglet_terrain::TerrainLoader terrain;
+    terrain.Init(&sd);
+#ifdef TERRAIN_SELF_TEST
+    // Load + validate a known tile (Seattle: lat 47, lon -122 -> row 133, col 58).
+    winglet_terrain::RunTerrainSelfTest(terrain, sd, 133, 58);
+#endif
 
     // Sensor fusion owns the IMU + magnetometer; fusion.Update() drives the MMC
     // and merges the IMU's gravity-referenced quaternion with the magnetometer
@@ -192,7 +219,7 @@ extern "C" void app_main(void) {
         .resolution_hz = 10 * 1000 * 1000, // RMT counter clock frequency: 10MHz
         .mem_block_symbols = 64,           // the memory size of each RMT channel, in words (4 bytes)
         .flags = {
-            .with_dma = false, // DMA feature is available on chips like ESP32-S3/P4
+            .with_dma = true, // DMA feature is available on chips like ESP32-S3/P4
         }
     };
 
@@ -226,6 +253,15 @@ extern "C" void app_main(void) {
     constexpr LedColor kLedWhite  = {100, 100, 100};  // plain indicator LEDs
     constexpr LedColor kLedGreen  = {0, 150, 0};      // status OK
     constexpr LedColor kLedOrange = {150, 50, 0};    // status not OK
+    constexpr LedColor kLedBlue   = {0, 0, 150};      // button-press POC indicator
+
+    // ---- UI navigation state (driven by the 4 front-panel buttons) -----------
+    // Buttons are Expander B inputs, active-low: bit0=Enter/Back, bit1=Down
+    // (zoom out), bit2=OK, bit3=Up (zoom in). Edge-triggered on press.
+    winglet_ui::UiScreen current_screen = winglet_ui::UiScreen::kMap;
+    int zoom_index = winglet_ui::kDefaultZoomIndex;
+    uint8_t prev_buttons = 0xFF;  // all released (active-low)
+    char zoom_label_buf[8] = "20NM";
 
     while (1) {
         adsbee_server.Update();
@@ -281,6 +317,21 @@ extern "C" void app_main(void) {
                 led_strip_set_pixel(led_strip, i, c.r * brightness / 255, c.g * brightness / 255,
                                     c.b * brightness / 255);
             }
+
+            // BUTTON INPUT POC (remove this block + kLedBlue to revert): the 4
+            // buttons are the first 4 inputs (bits 0-3) of the ADDR-high expander
+            // (Expander B, 0x44), active-low (0 = pressed). The button order is
+            // reversed relative to the LEDs, so button bit i drives LED (3 - i).
+            uint8_t btn_inputs = 0xFF;  // default: none pressed (active-low)
+            gpio_b.ReadInputs(&btn_inputs);
+            for (int i = 0; i < 4; i++) {
+                if ((btn_inputs & (1 << i)) == 0) {  // active-low: 0 = pressed
+                    int led = 3 - i;  // reversed mapping
+                    led_strip_set_pixel(led_strip, led, kLedBlue.r * brightness / 255,
+                                        kLedBlue.g * brightness / 255, kLedBlue.b * brightness / 255);
+                }
+            }
+
             led_strip_refresh(led_strip);
         }
 
@@ -289,12 +340,36 @@ extern "C" void app_main(void) {
         fusion.Update();  // drives mmc.Update() internally, then fuses IMU + mag
         mp.Update();
         bq.Update();
+        sd.Update();  // hot-plug: mounts on insertion, unmounts on removal
+
+        // Terrain: load overlapping map tiles on ownship/zoom change (cheap no-op
+        // otherwise; loads at most one tile per call, off the render path).
+        {
+            const auto& rp = object_dictionary.composite_device_status.rp2040;
+            terrain.Update(rp.rx_position_available, rp.rx_position.latitude_deg,
+                           rp.rx_position.longitude_deg, winglet_ui::kZoomLadderNm[zoom_index]);
+        }
 
         // Read GPIO expanders when either has a pending interrupt.
         // Replace with task-based WaitForInterrupt() for lower latency.
-        uint8_t gpio_a_inputs = 0, gpio_b_inputs = 0;
+        uint8_t gpio_a_inputs = 0, gpio_b_inputs = 0xFF;
         gpio_a.ReadInputs(&gpio_a_inputs);
         gpio_b.ReadInputs(&gpio_b_inputs);
+
+        // ---- Button navigation (edge-triggered on press) --------------------
+        // Active-low: a press is a 1->0 transition on that bit. Fire once per press.
+        {
+            uint8_t pressed = (uint8_t)(prev_buttons & ~gpio_b_inputs);  // bits that went 0
+            if (pressed & (1 << 3)) {  // Up -> zoom in (toward 2 NM)
+                if (zoom_index > 0) zoom_index--;
+            }
+            if (pressed & (1 << 1)) {  // Down -> zoom out (toward 40 NM)
+                if (zoom_index < winglet_ui::kNumZoomLevels - 1) zoom_index++;
+            }
+            if (pressed & (1 << 2)) current_screen = winglet_ui::UiScreen::kDebug;  // OK
+            if (pressed & (1 << 0)) current_screen = winglet_ui::UiScreen::kMap;    // Enter/Back
+            prev_buttons = gpio_b_inputs;
+        }
 
         // The IMU reader task handles quaternion updates asynchronously via INT2.
 
@@ -410,17 +485,19 @@ extern "C" void app_main(void) {
             map_data.ownship_valid = rp2040_status.rx_position_available;
             map_data.ownship_lat_deg = rx_position.latitude_deg;
             map_data.ownship_lon_deg = rx_position.longitude_deg;
-            map_data.range_nm = 5.0f;  // TODO: adjustable via zoom buttons.
-            map_data.zoom_label = "5NM";
+            map_data.range_nm = winglet_ui::kZoomLadderNm[zoom_index];
+            snprintf(zoom_label_buf, sizeof zoom_label_buf, "%dNM",
+                     (int)winglet_ui::kZoomLadderNm[zoom_index]);
+            map_data.zoom_label = zoom_label_buf;
             for (int i = 0; i < winglet_ui::kNumRailRows; i++) map_data.rail[i] = rail_bufs[i];
             map_data.batt_pct = bq.GetStateOfChargePct();
             map_data.batt_valid = bq.IsDataValid();
+            map_data.terrain = &terrain;
 
             // The debug telemetry screen keeps its live sensor references.
             winglet_ui::DebugScreenSources debug_src{ltr, aht, spl, mmc, mp, bq, imu, fusion};
 
-            // Buttons are not wired yet, so the map screen is shown by default.
-            static winglet_ui::UiScreen current_screen = winglet_ui::UiScreen::kMap;
+            // current_screen is driven by the button navigation above.
             winglet_ui::DrawCurrentScreen(current_screen, map_data, debug_src);
 
             epd.DisplayFast(epd_fb);  // OTP partial, non-blocking; booster stays on

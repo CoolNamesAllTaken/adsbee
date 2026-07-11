@@ -59,6 +59,13 @@ void DrawDebugScreen(const DebugScreenSources& s) {
     snprintf(line, sizeof line, "Batt:%s%u%% %s%dmW", s.bq.IsDataValid() ? "" : "?",
              s.bq.GetStateOfChargePct(), s.bq.IsDataValid() ? "" : "?", s.bq.GetAveragePowerMw());
     draw(line);
+    int32_t tte = s.bq.GetTimeToEmptyMinutes();
+    if (tte >= 0) {
+        snprintf(line, sizeof line, "TTE:%ldh%02ldm", (long)(tte / 60), (long)(tte % 60));
+    } else {
+        snprintf(line, sizeof line, "TTE:--");
+    }
+    draw(line);
     snprintf(line, sizeof line, "Quat %s", s.imu.IsQuaternionValid() ? "ok" : "--");
     draw(line);
     snprintf(line, sizeof line, " w:%.3f x:%.3f", s.imu.GetQuaternion().w, s.imu.GetQuaternion().x);

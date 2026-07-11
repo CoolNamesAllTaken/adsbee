@@ -39,8 +39,34 @@ class Bq27427 {
   // -------------------------------------------------------------------------
   static constexpr uint16_t kSubCmdControlStatus = 0x0000;  // Read CONTROL_STATUS word
   static constexpr uint16_t kSubCmdDeviceType    = 0x0001;  // Read device type (should be 0x0427)
+  static constexpr uint16_t kSubCmdChemId        = 0x0008;  // Read the active chemistry ID
   static constexpr uint16_t kSubCmdBatInsert     = 0x000C;  // Signal battery insertion
+  static constexpr uint16_t kSubCmdSetCfgUpdate  = 0x0013;  // Enter CONFIG UPDATE mode
+  static constexpr uint16_t kSubCmdSealed        = 0x0020;  // Re-seal the device
+  static constexpr uint16_t kSubCmdChemA         = 0x0030;  // Select Chem A (3230, 4.35 V)
+  static constexpr uint16_t kSubCmdChemB         = 0x0031;  // Select Chem B (1202, 4.2 V)
+  static constexpr uint16_t kSubCmdChemC         = 0x0032;  // Select Chem C (3142, 4.4 V)
   static constexpr uint16_t kSubCmdSoftReset     = 0x0042;  // Soft reset (exits CONFIG UPDATE)
+  static constexpr uint16_t kSubCmdUnseal        = 0x8000;  // UNSEAL key (sent twice)
+
+  // Chemistry IDs returned by kSubCmdChemId, one per profile.
+  static constexpr uint16_t kChemIdA = 3230;  // 4.35 V
+  static constexpr uint16_t kChemIdB = 1202;  // 4.2 V
+  static constexpr uint16_t kChemIdC = 3142;  // 4.4 V
+
+  // Extended Data commands (block data memory access, TRM Section 6).
+  static constexpr uint8_t kCmdDataClass         = 0x3E;  // DataClass() — subclass id
+  static constexpr uint8_t kCmdDataBlock         = 0x3F;  // DataBlock() — 32-byte block offset
+  static constexpr uint8_t kCmdBlockData         = 0x40;  // BlockData() — start of the 32-byte block
+  static constexpr uint8_t kCmdBlockDataChecksum = 0x60;  // BlockDataChecksum()
+  static constexpr uint8_t kCmdBlockDataControl  = 0x61;  // BlockDataControl() (0x00 = enable)
+
+  // Data-memory location of the parameters we program (State subclass 0x52,
+  // TRM Data Flash Summary). Offsets are within the 32-byte block; the byte
+  // address in the BlockData window is kCmdBlockData + (offset % 32).
+  static constexpr uint8_t kDmStateSubclass       = 0x52;  // State subclass (82)
+  static constexpr uint8_t kDmDesignCapacityOffset  = 6;   // I2, mAh (0x46/0x47)
+  static constexpr uint8_t kDmTerminateVoltageOffset = 10; // I2, mV  (0x4A/0x4B)
 
   // -------------------------------------------------------------------------
   // Flags() register bit masks (kCmdFlags, TRM Section 5.4)
@@ -85,6 +111,15 @@ class Bq27427 {
     // battery presence to the gauge. Set to false if your hardware uses
     // the BIN pin for battery detection (OpConfig [BIE] = 1).
     bool send_bat_insert = true;
+
+    // Battery spec configuration (Init() programs these via CONFIG UPDATE so the
+    // SOC estimate is accurate). If configure_battery is false, the gauge keeps
+    // its current/default configuration. chem_profile: 0=A(4.35V), 1=B(4.2V),
+    // 2=C(4.4V). Defaults come from bsp.hh.
+    bool     configure_battery    = true;
+    uint16_t design_capacity_mah  = bsp.battery_design_capacity_mah;
+    uint16_t terminate_voltage_mv = bsp.battery_terminate_voltage_mv;
+    uint8_t  chem_profile         = bsp.battery_chem_profile;
   };
 
   Bq27427() : Bq27427(Config{}) {}
@@ -126,6 +161,22 @@ class Bq27427 {
   // State of charge in percent, 0–100.
   uint16_t GetStateOfChargePct() const { return state_of_charge_pct_; }
 
+  // Remaining capacity in mAh.
+  uint16_t GetRemainingCapacityMah() const { return remaining_capacity_mah_; }
+
+  // Average current in mA (signed). Negative = discharging.
+  int16_t  GetAverageCurrentMa()     const { return average_current_ma_; }
+
+  // Estimated time-to-empty in minutes, computed from RemainingCapacity /
+  // |AverageCurrent| (the gauge has no direct TimeToEmpty command). Returns -1
+  // when charging, when the current is ~zero, or when data is invalid.
+  int32_t GetTimeToEmptyMinutes() const {
+    if (!data_valid_ || average_current_ma_ >= 0) return -1;  // charging / idle / invalid
+    int32_t discharge_ma = -(int32_t)average_current_ma_;
+    if (discharge_ma <= 0) return -1;
+    return (int32_t)((int64_t)remaining_capacity_mah_ * 60 / discharge_ma);
+  }
+
   // Raw Flags() word — available for diagnostics without an extra I2C read.
   uint16_t GetFlags()            const { return flags_; }
 
@@ -137,6 +188,23 @@ class Bq27427 {
   esp_err_t WriteSubCmd(uint16_t subcmd);
   esp_err_t ReadWord(uint8_t cmd, uint16_t* out);
   esp_err_t ReadWordSigned(uint8_t cmd, int16_t* out);
+  esp_err_t WriteByte(uint8_t cmd, uint8_t value);
+  esp_err_t ReadByte(uint8_t cmd, uint8_t* out);
+
+  // Poll Flags() until (flags & mask) matches `set` (true = wait for set bit,
+  // false = wait for clear), or the timeout elapses. Returns ESP_OK on match.
+  esp_err_t WaitFlag(uint16_t mask, bool set, uint32_t timeout_ms);
+
+  // Program the cell's Design Capacity / Terminate Voltage / chemistry via the
+  // CONFIG UPDATE flow (TRM Section 4). Each parameter is written only if it
+  // differs from the current value. Returns true on success (or nothing to do).
+  bool ConfigureBattery();
+  esp_err_t Unseal();
+  esp_err_t SelectChemProfile(uint8_t profile);  // returns ESP_OK, sets *changed
+  // Read/write a 2-byte big-endian parameter in the State subclass block. The
+  // caller must already be in CONFIG UPDATE mode.
+  esp_err_t ReadStateParam(uint8_t offset, int16_t* out);
+  esp_err_t WriteStateParam(uint8_t offset, int16_t value);
 
   const Config            config_;
   i2c_master_dev_handle_t i2c_handle_       = nullptr;
@@ -146,8 +214,10 @@ class Bq27427 {
   // Initialised to 0 so the first call always proceeds.
   int64_t  last_update_us_      = 0;
 
-  int16_t  average_power_mw_    = 0;
-  uint16_t state_of_charge_pct_ = 0;
-  uint16_t flags_               = 0;
-  bool     data_valid_          = false;
+  int16_t  average_power_mw_      = 0;
+  uint16_t state_of_charge_pct_   = 0;
+  uint16_t remaining_capacity_mah_ = 0;
+  int16_t  average_current_ma_    = 0;
+  uint16_t flags_                 = 0;
+  bool     data_valid_            = false;
 };
