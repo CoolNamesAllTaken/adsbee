@@ -117,7 +117,7 @@ static constexpr uint32_t kSettingsVersion = N;
 | Link | Protocol | Key files |
 |------|----------|-----------|
 | RP2040 ↔ ESP32 | SPI (custom binary) | `common/coprocessor/spi_coprocessor.*`, `composite_array.hh` |
-| RP2040 ↔ CC1312 | UART | `pico/application/peripherals/` |
+| RP2040 ↔ CC1312 | SPI | `pico/application/peripherals/` |
 
 On boot, RP2040 reads the firmware version from each coprocessor and reflashes if it differs.
 

@@ -403,6 +403,17 @@ bool CC1312::BootloaderReceiveBuffer(uint8_t* buf, uint16_t buf_len_bytes) {
     }
 
     uint16_t rx_len_bytes = rx_buf[0];
+
+    // Guard against a garbage length byte overflowing rx_buf or the output buffer. A valid frame is at minimum 2 Bytes
+    // (size Byte + checksum Byte), with 0 payload allowed; a length of 1 would underflow the rx_len_bytes - 2 math
+    // below.
+    if (rx_len_bytes < 2 || rx_len_bytes > static_cast<uint16_t>(buf_len_bytes) + 2) {
+        SPIEndTransaction();
+        CONSOLE_ERROR("CC1312::BootloaderReceiveBuffer", "Received invalid length byte 0x%x (expected 2 to %d).",
+                      rx_len_bytes, buf_len_bytes + 2);
+        return false;
+    }
+
     uint8_t calculated_checksum = 0;
 
     int16_t bytes_read =
