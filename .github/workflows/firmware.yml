@@ -142,3 +142,45 @@ jobs:
         path: |
           firmware/adsbee_1090/pico/build/application/combined.uf2
           firmware/adsbee_1090/pico/build/application/adsbee_1090.ota
+
+  hardware_test:
+    runs-on: [self-hosted, adsbee-hardware]
+    needs: pico_target_build
+    # Run only on pushes to main — not on PRs — so hardware failures block
+    # merges without gating every PR on physical hardware availability.
+    # To temporarily disable: remove the branch protection requirement for
+    # this job in Settings → Branches → main → Required status checks.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download firmware artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: firmware
+        path: firmware/adsbee_1090/pico/build/application
+
+    - name: Install Python dependencies
+      run: |
+        python3 -m venv .venv
+        .venv/bin/pip install -r ci/test_usb_and_ota_flash/requirements.txt
+
+    - name: Run hardware test
+      run: |
+        # Derive the expected firmware version from source so the post-OTA
+        # health check can confirm the RP2040 actually reports it (see
+        # check_firmware_version in ci/test_usb_and_ota_flash/check_device.py).
+        dict=firmware/common/coprocessor/object_dictionary.cpp
+        maj=$(grep -oP 'kFirmwareVersionMajor\s*=\s*\K[0-9]+' "$dict")
+        min=$(grep -oP 'kFirmwareVersionMinor\s*=\s*\K[0-9]+' "$dict")
+        pat=$(grep -oP 'kFirmwareVersionPatch\s*=\s*\K[0-9]+' "$dict")
+        rc=$(grep -oP 'kFirmwareVersionReleaseCandidate\s*=\s*\K[0-9]+' "$dict")
+        if [ "$rc" -eq 0 ]; then ver="$maj.$min.$pat"; else ver="$maj.$min.$pat-rc$rc"; fi
+        echo "Expecting RP2040 firmware version: $ver"
+        .venv/bin/python3 ci/test_usb_and_ota_flash/test_ota.py \
+          -p /dev/ttyACM0 \
+          --uf2 firmware/adsbee_1090/pico/build/application/combined.uf2 \
+          --ota-fw firmware/adsbee_1090/pico/build/application/adsbee_1090.ota \
+          --expected-version "$ver"
