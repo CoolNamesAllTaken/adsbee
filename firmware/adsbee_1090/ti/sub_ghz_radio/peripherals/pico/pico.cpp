@@ -170,6 +170,17 @@ bool Pico::SPIProcessTransaction() {
                 return false;
             }
 
+            // SCReadRequestPacket copies len straight from the wire without bounding it (unlike SCWritePacket, which
+            // recomputes len from the received buffer length). Reject an oversized len before it's used as the
+            // destination size for GetBytes, which would otherwise overflow response_packet.data.
+            if (read_request_packet.len > SPICoprocessorPacket::SCResponsePacket::kDataMaxLenBytes) {
+                CONSOLE_ERROR("Pico::SPIPostTransactionCallback",
+                              "Read request len %d Bytes exceeds max response data length %d Bytes.",
+                              read_request_packet.len, SPICoprocessorPacket::SCResponsePacket::kDataMaxLenBytes);
+                SPIResetTransaction();
+                return false;
+            }
+
             static SPICoprocessorPacket::SCResponsePacket response_packet;
             response_packet.cmd = ObjectDictionary::SCCommand::kCmdDataBlock;
             ret = object_dictionary.GetBytes(read_request_packet.addr, response_packet.data, read_request_packet.len,
