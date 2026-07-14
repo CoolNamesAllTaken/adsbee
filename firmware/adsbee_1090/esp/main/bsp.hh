@@ -36,6 +36,11 @@ class BSP {
     static constexpr ledc_timer_t   epd_front_light_ledc_timer   = LEDC_TIMER_0;
     static constexpr ledc_channel_t epd_front_light_ledc_channel = LEDC_CHANNEL_0;
 
+    // WS2812 status LED strip (button backlights + port-status LEDs), driven
+    // over RMT. The LED count / layout / palette live in the WingletLeds driver
+    // Config, since they are winglet-specific.
+    static const gpio_num_t status_led_data_pin = GPIO_NUM_45;
+
     // microSD card (SDMMC, 1-bit): CMD/CLK/DAT0 on native GPIOs. External
     // pull-ups are present on all lines. No power-enable (card always powered).
     static const gpio_num_t sd_cmd_pin  = GPIO_NUM_8;

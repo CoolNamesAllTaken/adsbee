@@ -1,11 +1,10 @@
-#include "ui_screens.hh"
+#include "debug_screen.hh"
 
 #include <cstdio>
 
 #include "GUI_Paint.h"
 #include "fonts.h"
-#include "map_screen.hh"
-#include "ui_primitives.hh"
+#include "ui_data.hh"
 
 // Sensor driver + helper headers (reachable via the "peripherals" include dir).
 #include "aht20.hh"
@@ -20,14 +19,6 @@
 #include "spa06_003.hh"
 
 namespace winglet_ui {
-
-void DrawSettingsScreen() {
-    // Placeholder until the settings menu (WD.settings) and button navigation
-    // are implemented.
-    DrawText(kLeftRailDividerX + 6, 4, "SETTINGS", &Font16, BLACK);
-    FillRectSafe(kLeftRailDividerX + 2, 22, kRightRailDividerX - kLeftRailDividerX - 4, 1, BLACK);
-    DrawTextCentered(kScreenWidth / 2, kScreenHeight / 2 - 6, "(coming soon)", &Font12, BLACK);
-}
 
 // Original bring-up telemetry dump, factored out of app_main unchanged. Draws
 // ~11 sensor lines plus the orientation cube and mag compass.
@@ -81,21 +72,6 @@ void DrawDebugScreen(const DebugScreenSources& s) {
     }
     DrawCompass(222, 52, 26, s.fusion.GetMagHeadingLevelDeg(), s.fusion.GetMagHeadingFlatDeg(),
                 s.fusion.IsMagHeadingValid());
-}
-
-void DrawCurrentScreen(UiScreen screen, const MapScreenData& map_data,
-                       const DebugScreenSources& debug_src) {
-    switch (screen) {
-        case UiScreen::kMap:
-            DrawMapScreen(map_data);
-            break;
-        case UiScreen::kSettings:
-            DrawSettingsScreen();
-            break;
-        case UiScreen::kDebug:
-            DrawDebugScreen(debug_src);
-            break;
-    }
 }
 
 }  // namespace winglet_ui

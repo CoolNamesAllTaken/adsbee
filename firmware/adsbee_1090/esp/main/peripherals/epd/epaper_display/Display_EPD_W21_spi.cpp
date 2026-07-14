@@ -380,6 +380,29 @@ void DisplayEpdW21::SetFrontLight(float level) {
   }
 }
 
+void DisplayEpdW21::SetFrontLightForAmbient(float ambient_level) {
+  ambient_level = std::clamp(ambient_level, 0.0f, 1.0f);
+
+  // Hump curve: dim in darkness (eye comfort), rise to a peak at mid ambient,
+  // then ramp back to 0 once the room lights the panel.
+  const float peak_level = config_.front_light_peak_level;
+  const float off_level  = config_.front_light_off_level;
+  const float dark       = config_.front_light_dark_bright;
+  const float peak       = config_.front_light_peak_bright;
+
+  float front;
+  if (ambient_level <= peak_level) {
+    float t = std::clamp(ambient_level / peak_level, 0.0f, 1.0f);
+    front = dark + (peak - dark) * t;
+  } else if (ambient_level < off_level) {
+    float t = (ambient_level - peak_level) / (off_level - peak_level);
+    front = peak * (1.0f - t);
+  } else {
+    front = 0.0f;
+  }
+  SetFrontLight(front);
+}
+
 void DisplayEpdW21::WriteCommand(uint8_t cmd) {
   gpio_set_level(config_.cs_pin, 0);
   gpio_set_level(config_.dc_pin, 0);

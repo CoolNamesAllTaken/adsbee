@@ -51,7 +51,16 @@ class DisplayEpdW21 {
     gpio_num_t front_light_pin    = bsp.epd_front_light_pin;
     // AP3019A maximum CTRL frequency is 2kHz, but using exactly 2kHz causes
     // the chip to fail to boost the output. 1kHz seems to work fine though.
-    int        front_light_pwm_hz = 1000;  
+    int        front_light_pwm_hz = 1000;
+
+    // Front-light auto-brightness "hump" curve, keyed on a normalized ambient
+    // level (0 = dark, 1 = bright) — see SetFrontLightForAmbient(). Dim (not
+    // full) in darkness for eye comfort, rises to a peak at mid ambient, then
+    // ramps back to off once the room lights the panel on its own.
+    float front_light_peak_level  = 0.45f;  // ambient level where the light peaks
+    float front_light_off_level   = 0.75f;  // ambient level at/above which it is off
+    float front_light_dark_bright = 0.15f;  // brightness when fully dark
+    float front_light_peak_bright = 0.6f;   // brightness at the peak
   };
 
   // Selects which custom partial-refresh LUT DisplayFaster() uploads:
@@ -174,6 +183,12 @@ class DisplayEpdW21 {
   // Sets the front-light brightness. level is clamped to [0.0, 1.0], where
   // 0.0 is off and 1.0 is full brightness (PWM duty cycle = level).
   void SetFrontLight(float level);
+
+  // Sets the front light from a normalized ambient light level (0 = dark, 1 =
+  // bright, e.g. Ltr329::GetAmbientLevel()), applying the "hump" auto-brightness
+  // curve configured in Config (front_light_*). Dim in darkness, peaks at mid
+  // ambient, off in a bright room. Convenience wrapper over SetFrontLight().
+  void SetFrontLightForAmbient(float ambient_level);
 
   // -------------------------------------------------------------------------
   // Low-level write primitives

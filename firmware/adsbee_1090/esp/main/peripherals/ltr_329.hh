@@ -104,6 +104,12 @@ class Ltr329 {
     Gain            gain             = Gain::kGain1x;
     IntegrationTime integration_time = IntegrationTime::kTime50ms;
     MeasurementRate measurement_rate = MeasurementRate::kRate50ms;
+
+    // Ambient-level normalization (see GetAmbientLevel()). Lux is mapped to a
+    // 0..1 level on a log scale between [lux_min, lux_max], then EMA-smoothed.
+    float lux_min   = 5.0f;     // lux at/below -> ambient level 0 (darkest)
+    float lux_max   = 5000.0f;  // lux at/above -> ambient level 1 (brightest)
+    float ema_alpha = 0.01f;    // smoothing factor: higher = snappier
   };
 
   // No-argument default constructor — uses all Config defaults.
@@ -169,6 +175,12 @@ class Ltr329 {
   float    GetLux()      const { return lux_; }         // Computed lux
   bool     IsDataValid() const { return data_valid_; }  // True when data is fresh
 
+  // Normalized, EMA-smoothed ambient light level in [0, 1] (0 = dark, 1 =
+  // bright), derived from the lux reading via a log-scale map between the
+  // Config lux_min/lux_max. Updated in Update(); intended to drive display
+  // front-light and status-LED auto-brightness. Always safe to call.
+  float    GetAmbientLevel() const { return ambient_level_; }
+
  private:
   esp_err_t WriteRegister(Register reg, uint8_t value);
   esp_err_t ReadRegister(Register reg, uint8_t* value);
@@ -189,9 +201,17 @@ class Ltr329 {
   Gain            current_gain_             = Gain::kGain1x;
   IntegrationTime current_integration_time_ = IntegrationTime::kTime100ms;
 
+  // Updates ambient_level_ from the current lux_ (log-normalize + EMA smooth).
+  void UpdateAmbientLevel();
+
   // Last successfully decoded measurement values.
   uint16_t ch0_raw_    = 0;
   uint16_t ch1_raw_    = 0;
   float    lux_        = 0.0f;
   bool     data_valid_ = false;
+
+  // Normalized ambient light level in [0, 1], EMA-smoothed. Seeded on the first
+  // valid reading so it doesn't ramp up from 0 on boot.
+  float    ambient_level_        = 0.0f;
+  bool     ambient_level_seeded_ = false;
 };

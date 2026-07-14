@@ -260,7 +260,26 @@ bool Ltr329::Update() {
 
   lux_       = ComputeLux(ch0_raw_, ch1_raw_);
   data_valid_ = true;
+  UpdateAmbientLevel();
   return true;
+}
+
+void Ltr329::UpdateAmbientLevel() {
+  // Normalize lux -> 0..1 on a log scale (floor lux so logf() is finite).
+  float l     = (lux_ < 1.0f) ? 1.0f : lux_;
+  float level = (logf(l) - logf(config_.lux_min)) /
+                (logf(config_.lux_max) - logf(config_.lux_min));
+  if (level < 0.0f) level = 0.0f;
+  if (level > 1.0f) level = 1.0f;
+
+  // Seed on the first valid reading so the level doesn't ramp up from 0 on
+  // boot; EMA-smooth thereafter to avoid flicker from noisy readings.
+  if (!ambient_level_seeded_) {
+    ambient_level_        = level;
+    ambient_level_seeded_ = true;
+  } else {
+    ambient_level_ += config_.ema_alpha * (level - ambient_level_);
+  }
 }
 
 // ---------------------------------------------------------------------------
