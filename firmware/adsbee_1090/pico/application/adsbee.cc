@@ -24,7 +24,7 @@
 #include <string.h>  // for strcat
 
 #include "comms.hh"          // For debug prints.
-#include "ublox_max_m10.hh"  // For the gnss receiver instance.
+#include "gnss_interface.hh"  // For the gnss receiver instance.
 
 // Uncomment the line below to enable preamble detector debugging on recovered_clk.
 #define DEBUG_PREAMBLE_DETECTOR

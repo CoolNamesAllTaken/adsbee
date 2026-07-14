@@ -14,6 +14,13 @@ void GNSSReceiver::ClaimUart() {
 }
 
 bool GNSSReceiver::Init() {
+    // No module populated on this board: don't touch any GNSS hardware (UART, enable pin, baud). Report
+    // unhealthy so the application uses its non-GNSS position source; Update() stays a harmless no-op.
+    if (!IsModulePresent()) {
+        healthy_ = false;
+        return false;
+    }
+
     ClaimUart();
 
     // Power on the module via the active-low enable pin (if connected) and wait for it to boot.

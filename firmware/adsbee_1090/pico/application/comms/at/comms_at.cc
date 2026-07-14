@@ -18,7 +18,7 @@
 #include "pico/unique_id.h"
 #include "settings.hh"
 #include "spi_coprocessor.hh"  // For init / de-init before and after flashing ESP32.
-#include "ublox_max_m10.hh"    // For parking/restoring the GNSS UART around ESP32 flashing.
+#include "gnss_interface.hh"   // For parking/restoring the GNSS UART around ESP32 flashing.
 
 #ifdef HARDWARE_UNIT_TESTS
 #include "hardware_unit_tests.hh"

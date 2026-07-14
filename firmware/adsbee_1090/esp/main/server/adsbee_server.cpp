@@ -112,6 +112,38 @@ bool ADSBeeServer::Init() {
     settings_manager.Print();
     settings_manager.Apply();
 
+    // Pull the RP2040's DeviceInfo (part code / part number) so ESP32-side code can gate on the part number.
+    // Mirrors the settings pull above exactly (same blocking pattern).
+    SemaphoreHandle_t device_info_read_semaphore = xSemaphoreCreateBinary();
+    if (device_info_read_semaphore == NULL) {
+        CONSOLE_ERROR("ADSBeeServer::Init", "Failed to create device info read semaphore.");
+        return false;
+    }
+
+    object_dictionary.RequestSCCommand(ObjectDictionary::SCCommandRequestWithCallback{
+        .request =
+            ObjectDictionary::SCCommandRequest{.command = ObjectDictionary::SCCommand::kCmdWriteToSlaveRequireAck,
+                                               .addr = ObjectDictionary::Address::kAddrDeviceInfo,
+                                               .offset = 0,
+                                               .len = sizeof(SettingsManager::DeviceInfo)},
+        .complete_callback =
+            [device_info_read_semaphore]() {
+                CONSOLE_INFO("ADSBeeServer::Init", "Device info read from Pico.");
+                xSemaphoreGive(device_info_read_semaphore);
+            },
+    });  // Require ack.
+
+    // Wait for the callback to complete
+    xSemaphoreTake(device_info_read_semaphore, portMAX_DELAY);
+    vSemaphoreDelete(device_info_read_semaphore);
+
+    // Debug: print the part number pulled from the RP2040. Uses ungated CONSOLE_PRINTF (like
+    // SettingsManager::Print) so it shows regardless of the configured log level.
+    CONSOLE_PRINTF("Device Info\r\n\tPart Number: %lu\r\n\tPart Code: %s\r\n\tPart Rev: %c\r\n",
+                   (unsigned long)object_dictionary.rp2040_device_info.GetPartNumber(),
+                   object_dictionary.rp2040_device_info.part_code,
+                   object_dictionary.rp2040_device_info.GetPartRev());
+
     return TCPServerInit();
 }
 

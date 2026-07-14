@@ -92,6 +92,13 @@ class GNSSReceiver {
 
    protected:
     /**
+     * @retval True if a physical module is populated on this board. Default true. Overridden to false by
+     *         the no-module receiver so Init() short-circuits without touching any GNSS hardware (no UART
+     *         claim, no enable-pin toggle, no baud change).
+     */
+    virtual bool IsModulePresent() const { return true; }
+
+    /**
      * @retval Receiver-specific default UART baud rate (e.g. factory default for the module).
      */
     virtual uint32_t GetDefaultBaudrate() const = 0;

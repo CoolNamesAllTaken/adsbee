@@ -173,5 +173,3 @@ class UbloxMAXM10 : public GNSSReceiver {
     // Decode a completed sniffed frame (sniff_class_/sniff_id_/sniff_buf_) into the snapshots above.
     void DebugDecodeSniffedFrame();
 };
-
-extern UbloxMAXM10 gnss;

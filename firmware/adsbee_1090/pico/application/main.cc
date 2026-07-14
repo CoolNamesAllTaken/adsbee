@@ -9,7 +9,7 @@
 #include "eeprom.hh"
 #include "esp32.hh"
 #include "esp32_flasher.hh"
-#include "ublox_max_m10.hh"
+#include "gnss_interface.hh"   // For the GNSS receiver selected by part number (MakeGNSSReceiver, gnss).
 #include "firmware_update.hh"  // For figuring out which flash partition we're in.
 #include "hal.hh"
 #include "hardware_unit_tests.hh"  // For testing only!
@@ -20,6 +20,7 @@
 #include "spi_coprocessor.hh"
 #include "unit_conversions.hh"
 #include "usb_hotplug.hh"  // For USB CDC hot-plug re-enumeration on self-powered boards.
+#include "settings.hh"
 
 // #define DEBUG_DISABLE_ESP32_FLASH  // Uncomment this to stop the RP2040 from flashing the ESP32.
 
@@ -48,7 +49,9 @@ CPUMonitor core_1_monitor = CPUMonitor({.idle_ticks_per_update_interval = kRP204
 ADSBee adsbee = ADSBee({});
 CommsManager comms_manager = CommsManager({});
 ESP32SerialFlasher esp32_flasher = ESP32SerialFlasher({});
-UbloxMAXM10 gnss = UbloxMAXM10({});
+// Select the GNSS receiver from the board's part number (resolved by bsp, above). Constructs the chosen
+// concrete receiver into gnss_interface's static storage; consumers use this base reference.
+GNSSReceiver& gnss = MakeGNSSReceiver(bsp.gnss_module_type);
 
 SettingsManager settings_manager;
 ObjectDictionary object_dictionary;
@@ -184,7 +187,8 @@ int main() {
     // gnss.Init() last lets GNSSReceiver::Init() re-claim GPIO 0/1 and re-initialize uart0 to a
     // known state. Init() does not hard-fail if the module is absent/unresponsive (a quick liveness
     // probe gates configuration); in that case GNSS position is simply unavailable and the receiver
-    // falls back to its non-GNSS position source.
+    // falls back to its non-GNSS position source. On boards with no GNSS module the receiver is a
+    // NoneGNSSReceiver, so Init()/Update() are safe no-ops and need no gating here.
     gnss.Init();
 
 #ifndef ISRS_ON_CORE1
