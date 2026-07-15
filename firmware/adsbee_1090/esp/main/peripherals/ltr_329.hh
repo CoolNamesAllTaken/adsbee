@@ -109,7 +109,7 @@ class Ltr329 {
     // 0..1 level on a log scale between [lux_min, lux_max], then EMA-smoothed.
     float lux_min   = 5.0f;     // lux at/below -> ambient level 0 (darkest)
     float lux_max   = 5000.0f;  // lux at/above -> ambient level 1 (brightest)
-    float ema_alpha = 0.01f;    // smoothing factor: higher = snappier
+    float ema_alpha = 0.05f;    // smoothing factor: higher = snappier
   };
 
   // No-argument default constructor — uses all Config defaults.

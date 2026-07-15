@@ -11,7 +11,7 @@ class TerrainLoader;  // fwd decl; keeps the UI layer light (no terrain headers 
 //
 // The UI is rendered at the device's native e-paper resolution in the
 // ROTATE_270 drawing space, which presents as 264 wide x 176 tall with upright
-// text (see Paint_NewImage() in app_main). All coordinates below are in that
+// text (see the Canvas the EPD driver owns). All coordinates below are in that
 // space and are carried verbatim from the Claude Design reference renderer
 // (winglet-draw.js, WD.productExp).
 

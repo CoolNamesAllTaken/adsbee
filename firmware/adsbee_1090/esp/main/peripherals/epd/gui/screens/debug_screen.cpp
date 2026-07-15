@@ -2,7 +2,7 @@
 
 #include <cstdio>
 
-#include "GUI_Paint.h"
+#include "canvas.hh"
 #include "fonts.h"
 #include "ui_data.hh"
 
@@ -22,12 +22,12 @@ namespace winglet_ui {
 
 // Original bring-up telemetry dump, factored out of app_main unchanged. Draws
 // ~11 sensor lines plus the orientation cube and mag compass.
-void DrawDebugScreen(const DebugScreenSources& s) {
+void DrawDebugScreen(Canvas& c, const DebugScreenSources& s) {
     char line[64];
     int y = 0;
     constexpr int kLineH = 13;  // Font12 height 12 + 1 px gap
     auto draw = [&](const char* str) {
-        Paint_DrawString_EN(0, y, str, &Font12, WHITE, BLACK);
+        c.DrawString(0, y, str, &Font12, kWhite, kBlack);
         y += kLineH;
     };
 
@@ -68,9 +68,9 @@ void DrawDebugScreen(const DebugScreenSources& s) {
     draw(line);
 
     if (s.fusion.IsValid()) {
-        DrawOrientationCube(198, 132, 22.f, s.fusion.GetFusedQuaternion());
+        DrawOrientationCube(c, 198, 132, 22.f, s.fusion.GetFusedQuaternion());
     }
-    DrawCompass(222, 52, 26, s.fusion.GetMagHeadingLevelDeg(), s.fusion.GetMagHeadingFlatDeg(),
+    DrawCompass(c, 222, 52, 26, s.fusion.GetMagHeadingLevelDeg(), s.fusion.GetMagHeadingFlatDeg(),
                 s.fusion.IsMagHeadingValid());
 }
 

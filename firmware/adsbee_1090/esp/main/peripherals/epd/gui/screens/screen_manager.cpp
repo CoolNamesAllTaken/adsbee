@@ -3,8 +3,8 @@
 #include <cstdio>
 #include <variant>
 
-#include "GUI_Paint.h"
 #include "aircraft_dictionary.hh"
+#include "canvas.hh"
 #include "map_screen.hh"
 #include "settings_screen.hh"
 // debug_screen.hh comes in via screen_manager.hh.
@@ -25,8 +25,9 @@ void ScreenManager::HandleButtons(uint8_t button_bits) {
     prev_buttons_ = button_bits;
 }
 
-void ScreenManager::Draw(const MapDataSources& map_src, const DebugScreenSources& debug_src) {
-    Paint_Clear(WHITE);
+void ScreenManager::Draw(Canvas& c, const MapDataSources& map_src,
+                         const DebugScreenSources& debug_src) {
+    c.Clear(kWhite);
 
     switch (current_screen_) {
         case UiScreen::kMap: {
@@ -93,14 +94,14 @@ void ScreenManager::Draw(const MapDataSources& map_src, const DebugScreenSources
             map_data.batt_valid = map_src.batt_valid;
             map_data.terrain = map_src.terrain;
 
-            DrawMapScreen(map_data);
+            DrawMapScreen(c, map_data);
             break;
         }
         case UiScreen::kSettings:
-            DrawSettingsScreen();
+            DrawSettingsScreen(c);
             break;
         case UiScreen::kDebug:
-            DrawDebugScreen(debug_src);
+            DrawDebugScreen(c, debug_src);
             break;
     }
 }

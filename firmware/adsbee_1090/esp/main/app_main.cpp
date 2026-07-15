@@ -41,7 +41,6 @@
 #include "peripherals/winglet_leds.hh"
 #include "peripherals/terrain/terrain_loader.hh"
 #include "peripherals/epd/epaper_display/Display_EPD_W21_spi.hh"
-#include "peripherals/epd/gui/GUI_Paint.h"
 #include "peripherals/epd/gui/screens/screen_manager.hh"
 #include "aircraft_dictionary.hh"
 
@@ -131,7 +130,17 @@ extern "C" void app_main(void) {
     RunHardwareUnitTests();
 #endif
 
-    // ---- Build per-driver Config structs (GPIO expanders) -------------------
+    // Winglet peripherals are gated on the RP2040-reported part number, mirroring
+    // the RP2040's GNSS gating (bsp.hh switch on GetPartNumber()). The DeviceInfo
+    // was pulled from the RP2040 during adsbee_server.Init() above, so it is valid.
+    // Driver objects below are cheap to construct (no I/O / no allocation in their
+    // ctors), so they are always declared to stay in scope for the loop; only
+    // their Init() (hardware bring-up) and per-loop work are gated on is_winglet.
+    const bool is_winglet = object_dictionary.rp2040_device_info.GetPartNumber() ==
+                            SettingsManager::DeviceInfo::kPNADSBeeWinglet;
+
+    // GPIO expanders need to be initialized first, because some other peripherals
+    // depend on them
     Fxl6408::Config gpio_a_cfg;
     gpio_a_cfg.i2c_address = Fxl6408::kI2cAddressAddrLow;
 
@@ -144,16 +153,11 @@ extern "C" void app_main(void) {
         gpio_b_cfg.pins[i].pull = Fxl6408::PullMode::kPullUp;
     }
 
+    // Winglet peripheral objects. Constructors do no I/O and no allocation, so
+    // they are always constructed (keeping them in scope for the single loop);
+    // their Init() hardware bring-up is gated below.
     Fxl6408 gpio_a(gpio_a_cfg);
     Fxl6408 gpio_b(gpio_b_cfg);
-
-    // Pulse the shared reset line before initialising either expander
-    ESP_ERROR_CHECK(gpio_install_isr_service(0));
-    if (!Fxl6408::HardwareReset()) { ESP_LOGE("app_main", "GPIO expander hardware reset failed"); }
-    if (!gpio_a.Init()) { ESP_LOGE("app_main", "FXL6408 A init failed"); }
-    if (!gpio_b.Init()) { ESP_LOGE("app_main", "FXL6408 B init failed"); }
-
-    // ---- 5. Instantiate and init I2C drivers ---------------------------------
     Ltr329   ltr;
     Aht20    aht;
     Spl06003 spl;
@@ -162,65 +166,41 @@ extern "C" void app_main(void) {
     Bq27427 bq;
     Lsm6dsv imu;
     DisplayEpdW21 epd;
-
-    if (!ltr.Init()) { ESP_LOGE("app_main", "LTR-329 init failed"); }
-    if (!aht.Init()) { ESP_LOGE("app_main", "AHT20 init failed"); }
-    if (!spl.Init()) { ESP_LOGE("app_main", "SPL06-003 init failed"); }
-    if (!mmc.Init()) { ESP_LOGE("app_main", "MMC5603 init failed"); }
-    if (!mp.Init()) { ESP_LOGE("app_main", "MP2722 init failed"); }
-    if (!bq.Init()) { ESP_LOGE("app_main", "BQ27427 init failed"); }
-    if (!imu.Init(true)) { ESP_LOGE("app_main", "LSM6DSV init failed"); }
-    if (!epd.Init()) { ESP_LOGE("app_main", "EPD init failed"); }
-
-    // microSD (SDMMC 1-bit). Init succeeds even with no card; mounting is
-    // hot-plug driven from sd.Update() in the loop below. Card-detect lives on
-    // FXL6408 Expander A, which is already initialized above.
-    SdCard sd;
-    if (!sd.Init()) { ESP_LOGE("app_main", "SD init failed"); }
-#ifdef SD_CARD_SELF_TEST
-    RunSdCardSelfTest(sd);
-#endif
-
-    // Terrain map tiles (loaded from /sd/tiles on ownship/zoom change; nothing
-    // renders yet — Phase 3 consumes the parsed tiles). Update() is called in the
-    // loop below, off the render hot path.
-    winglet_terrain::TerrainLoader terrain;
-    terrain.Init(&sd);
-#ifdef TERRAIN_SELF_TEST
-    // Load + validate a known tile (Seattle: lat 47, lon -122 -> row 133, col 58).
-    winglet_terrain::RunTerrainSelfTest(terrain, sd, 133, 58);
-#endif
-
-    // Sensor fusion owns the IMU + magnetometer; fusion.Update() drives the MMC
-    // and merges the IMU's gravity-referenced quaternion with the magnetometer
-    // into a single gravity + magnetic-north orientation. (Bench-tune the Config
-    // axis/sign defaults — see sensor_fusion.hh.)
-    SensorFusion fusion(imu, mmc);
-
-    // ---- 8. EPD canvas setup (live sensor readout in the main loop below) ----
-    // The sensor readout is drawn from the polling loop via non-blocking OTP
-    // partial refresh; no DeepSleep here (the panel must stay awake for
-    // back-to-back updates).
-    static uint8_t epd_fb[DisplayEpdW21::kWidth / 8 * DisplayEpdW21::kHeight];
-    Paint_NewImage(epd_fb, DisplayEpdW21::kWidth, DisplayEpdW21::kHeight, ROTATE_270, WHITE);
-    // Display() streams the framebuffer in send-order (no per-byte vertical flip),
-    // so the GUI needs no compensating mirror. If the panel comes out flipped,
-    // switch to MIRROR_VERTICAL / MIRROR_HORIZONTAL (verify on hardware).
-    Paint_SetMirroring(MIRROR_NONE);
-    Paint_Clear(WHITE);
-    epd.Display(epd_fb);
-    // Front-light brightness is driven by the ambient-light auto-brightness logic
-    // in the polling loop below.
-
-    // WS2812 status LEDs (button backlights + port-status). Auto-brightness is
-    // driven from the ambient-light level in the loop below.
     WingletLeds leds;
-    if (!leds.Init()) { ESP_LOGE("app_main", "WingletLeds init failed"); }
-
-    // Owns the UI navigation state (current screen + zoom) and per-frame screen
-    // marshalling / dispatch. Buttons are Expander B inputs, active-low:
-    // bit0=Enter/Back, bit1=Down (zoom out), bit2=OK, bit3=Up (zoom in).
+    SensorFusion fusion(imu, mmc);
+    SdCard sd;
+    winglet_terrain::TerrainLoader terrain;
     winglet_ui::ScreenManager screens;
+
+    if (is_winglet) {
+        // GPIO expanders must be initialized first — other peripherals depend on
+        // them. Pulse the shared reset line before initialising either expander.
+        ESP_ERROR_CHECK(gpio_install_isr_service(0));
+        if (!Fxl6408::HardwareReset()) { ESP_LOGE("app_main", "GPIO expander hardware reset failed"); }
+        if (!gpio_a.Init()) { ESP_LOGE("app_main", "FXL6408 A init failed"); }
+        if (!gpio_b.Init()) { ESP_LOGE("app_main", "FXL6408 B init failed"); }
+
+        // Init the rest of the peripherals.
+        if (!ltr.Init()) { ESP_LOGE("app_main", "LTR-329 init failed"); }
+        if (!aht.Init()) { ESP_LOGE("app_main", "AHT20 init failed"); }
+        if (!spl.Init()) { ESP_LOGE("app_main", "SPL06-003 init failed"); }
+        if (!mmc.Init()) { ESP_LOGE("app_main", "MMC5603 init failed"); }
+        if (!mp.Init()) { ESP_LOGE("app_main", "MP2722 init failed"); }
+        if (!bq.Init()) { ESP_LOGE("app_main", "BQ27427 init failed"); }
+        if (!imu.Init(true)) { ESP_LOGE("app_main", "LSM6DSV init failed"); }
+        if (!epd.Init()) { ESP_LOGE("app_main", "EPD init failed"); }
+        if (!leds.Init()) { ESP_LOGE("app_main", "WingletLeds init failed"); }
+
+        // microSD (SDMMC 1-bit). Init succeeds even with no card; mounting is
+        // hot-plug driven from sd.Update() in the loop below.
+        if (!sd.Init()) { ESP_LOGE("app_main", "SD init failed"); }
+
+        terrain.Init(&sd);
+
+        // Clear screen.
+        epd.Display();
+    }
+
 
     // ---- Polling loop at ~30 Hz ---------------------------------------------
     uint32_t sample_accumulator = 0;
@@ -233,92 +213,90 @@ extern "C" void app_main(void) {
 #endif
 
     while (1) {
-        adsbee_server.Update();
+        adsbee_server.Update();  // Always: the coprocessor server runs on every board.
 
-        // Refresh the light sensor first so auto-brightness tracks the current
-        // reading; the LTR driver computes the normalized ambient level itself.
-        ltr.Update();
-        float ambient = ltr.GetAmbientLevel();
+        if (is_winglet) {
+            ltr.Update();
+            float ambient = ltr.GetAmbientLevel();
+            epd.SetFrontLightForAmbient(ambient);
 
-        // EPD front light: driver applies the ambient "hump" auto-brightness curve.
-        epd.SetFrontLightForAmbient(ambient);
+            // Read the front-panel buttons (Expander B, active-low) once per loop;
+            // used for both the LED backlight and the screen navigation below.
+            uint8_t button_bits = 0xFF;  // default: none pressed (active-low)
+            gpio_b.ReadInputs(&button_bits);
 
-        // Read the front-panel buttons (Expander B, active-low) once per loop;
-        // used for both the LED backlight and the screen navigation below.
-        uint8_t button_bits = 0xFF;  // default: none pressed (active-low)
-        gpio_b.ReadInputs(&button_bits);
-
-        // Status LEDs: 4 button backlights + 5 port-status LEDs. The port-status
-        // states pull from app-level state (ADS-B dictionary, GNSS fix, Wi-Fi),
-        // in rail order: CO, GNSS, SUBG, 2.4G, 1090.
-        const AircraftDictionary& dict = adsbee_server.GetAircraftDictionary();
-        const bool port_ok[5] = {
-            true,  // CO: always green for now.
-            object_dictionary.composite_device_status.rp2040.rx_position_available,  // GNSS fix
-            dict.metrics.num_uat_aircraft > 0,      // SUBG: UAT aircraft detected
-            comms_manager.WiFiStationHasIP() ||
-                comms_manager.WiFiAccessPointHasClients(),  // 2.4G: Wi-Fi up (STA or AP)
-            dict.metrics.num_mode_s_aircraft > 0,   // 1090: Mode S aircraft detected
-        };
-        leds.Render(ambient, port_ok, button_bits);
-
-        aht.Update();
-        spl.Update();
-        fusion.Update();  // drives mmc.Update() internally, then fuses IMU + mag
-        mp.Update();
-        bq.Update();
-        sd.Update();  // hot-plug: mounts on insertion, unmounts on removal
-
-        // Screen navigation (edge-triggered on press) owns current screen + zoom.
-        screens.HandleButtons(button_bits);
-
-        // Terrain: load overlapping map tiles on ownship/zoom change (cheap no-op
-        // otherwise; loads at most one tile per call, off the render path).
-        const auto& rp2040_status = object_dictionary.composite_device_status.rp2040;
-        terrain.Update(rp2040_status.rx_position_available, rp2040_status.rx_position.latitude_deg,
-                       rp2040_status.rx_position.longitude_deg,
-                       winglet_ui::kZoomLadderNm[screens.zoom_index()]);
-
-        // The IMU reader task handles quaternion updates asynchronously via INT2.
-
-        sample_accumulator++;
-
-        int64_t now = esp_timer_get_time();
-        if (now - last_sps_update >= 1000000) {
-            current_sps        = sample_accumulator;
-            sample_accumulator = 0;
-            last_sps_update    = now;
-        }
-
-        if (now - last_log_us >= 500000) {  // 500 000 µs = 2 Hz
-            last_log_us = now;
-            LogSensorReadout(current_sps, ltr, aht, spl, mmc, mp, bq, imu, fusion);
-        }
-
-        // Live screen readout on the EPD via non-blocking OTP partial refresh.
-        // A new frame is only drawn/pushed once the previous update finishes, so
-        // the screen refreshes at the panel's natural rate while this loop keeps
-        // spinning. DisplayFast() is a differential (no-flash) update; the first
-        // call stages the base image (blocking). Some ghosting accumulates over
-        // time — drop a periodic epd.Display(epd_fb) in here to clear it.
-        if (!epd.IsBusy()) {
-            winglet_ui::MapDataSources map_src{
-                .dict = dict,
-                .ownship_valid = rp2040_status.rx_position_available,
-                .ownship_lat_deg = rp2040_status.rx_position.latitude_deg,
-                .ownship_lon_deg = rp2040_status.rx_position.longitude_deg,
-                .gnss_num_satellites = adsbee_server.rp2040_aircraft_dictionary_metrics.gnss_num_satellites,
-                .wifi_up = comms_manager.WiFiStationHasIP() || comms_manager.WiFiAccessPointHasClients(),
-                .batt_pct = (uint8_t)bq.GetStateOfChargePct(),
-                .batt_valid = bq.IsDataValid(),
-                .terrain = &terrain,
+            // Status LEDs: 4 button backlights + 5 port-status LEDs. The port-status
+            // states pull from app-level state (ADS-B dictionary, GNSS fix, Wi-Fi),
+            // in rail order: CO, GNSS, SUBG, 2.4G, 1090.
+            const AircraftDictionary& dict = adsbee_server.GetAircraftDictionary();
+            const bool port_ok[5] = {
+                true,  // CO: always green for now.
+                object_dictionary.composite_device_status.rp2040.rx_position_available,  // GNSS fix
+                dict.metrics.num_uat_aircraft > 0,      // SUBG: UAT aircraft detected
+                comms_manager.WiFiStationHasIP() ||
+                    comms_manager.WiFiAccessPointHasClients(),  // 2.4G: Wi-Fi up (STA or AP)
+                dict.metrics.num_mode_s_aircraft > 0,   // 1090: Mode S aircraft detected
             };
-            winglet_ui::DebugScreenSources debug_src{ltr, aht, spl, mmc, mp, bq, imu, fusion};
+            leds.Render(ambient, port_ok, button_bits);
 
-            screens.Draw(map_src, debug_src);
+            aht.Update();
+            spl.Update();
+            fusion.Update();  // drives mmc.Update() internally, then fuses IMU + mag
+            mp.Update();
+            bq.Update();
+            sd.Update();  // hot-plug: mounts on insertion, unmounts on removal
 
-            epd.DisplayFast(epd_fb);  // OTP partial, non-blocking; booster stays on
-        }
+            // Screen navigation (edge-triggered on press) owns current screen + zoom.
+            screens.HandleButtons(button_bits);
+
+            // Terrain: load overlapping map tiles on ownship/zoom change (cheap no-op
+            // otherwise; loads at most one tile per call, off the render path).
+            const auto& rp2040_status = object_dictionary.composite_device_status.rp2040;
+            terrain.Update(rp2040_status.rx_position_available, rp2040_status.rx_position.latitude_deg,
+                        rp2040_status.rx_position.longitude_deg,
+                        winglet_ui::kZoomLadderNm[screens.zoom_index()]);
+
+            // The IMU reader task handles quaternion updates asynchronously via INT2.
+
+            sample_accumulator++;
+
+            int64_t now = esp_timer_get_time();
+            if (now - last_sps_update >= 1000000) {
+                current_sps        = sample_accumulator;
+                sample_accumulator = 0;
+                last_sps_update    = now;
+            }
+
+            if (now - last_log_us >= 500000) {  // 500 000 µs = 2 Hz
+                last_log_us = now;
+                LogSensorReadout(current_sps, ltr, aht, spl, mmc, mp, bq, imu, fusion);
+            }
+
+            // Live screen readout on the EPD via non-blocking OTP partial refresh.
+            // A new frame is only drawn/pushed once the previous update finishes, so
+            // the screen refreshes at the panel's natural rate while this loop keeps
+            // spinning. DisplayFast() is a differential (no-flash) update; the first
+            // call stages the base image (blocking). Some ghosting accumulates over
+            // time — drop a periodic epd.Display() in here to clear it.
+            if (!epd.IsBusy()) {
+                winglet_ui::MapDataSources map_src{
+                    .dict = dict,
+                    .ownship_valid = rp2040_status.rx_position_available,
+                    .ownship_lat_deg = rp2040_status.rx_position.latitude_deg,
+                    .ownship_lon_deg = rp2040_status.rx_position.longitude_deg,
+                    .gnss_num_satellites = adsbee_server.rp2040_aircraft_dictionary_metrics.gnss_num_satellites,
+                    .wifi_up = comms_manager.WiFiStationHasIP() || comms_manager.WiFiAccessPointHasClients(),
+                    .batt_pct = (uint8_t)bq.GetStateOfChargePct(),
+                    .batt_valid = bq.IsDataValid(),
+                    .terrain = &terrain,
+                };
+                winglet_ui::DebugScreenSources debug_src{ltr, aht, spl, mmc, mp, bq, imu, fusion};
+
+                screens.Draw(epd.canvas(), map_src, debug_src);
+
+                epd.DisplayFast();  // OTP partial, non-blocking; booster stays on
+            }
+        }  // if (is_winglet)
 
         // Yield to the idle task to avoid a watchdog trigger. Note: Delay must be >= 10ms since 100Hz tick is typical.
         vTaskDelay(1);  // Delay 1 tick (10ms).

@@ -1,6 +1,8 @@
 #ifndef DEBUG_SCREEN_HH_
 #define DEBUG_SCREEN_HH_
 
+#include "canvas.hh"
+
 // Forward declarations of the sensor drivers used by the debug screen, so this
 // header stays lightweight. Their headers are included in debug_screen.cpp.
 class Ltr329;
@@ -28,8 +30,8 @@ struct DebugScreenSources {
 };
 
 // Debug screen — the original sensor telemetry dump. The caller must have
-// already selected + cleared the Paint framebuffer.
-void DrawDebugScreen(const DebugScreenSources& src);
+// already cleared the canvas.
+void DrawDebugScreen(Canvas& c, const DebugScreenSources& src);
 
 }  // namespace winglet_ui
 

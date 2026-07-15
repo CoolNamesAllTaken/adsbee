@@ -3,6 +3,7 @@
 
 #include <cstdint>
 
+#include "canvas.hh"        // For Canvas (draw target).
 #include "debug_screen.hh"  // For DebugScreenSources.
 #include "ui_data.hh"       // For UiScreen, zoom ladder, MapScreenData.
 
@@ -47,11 +48,10 @@ class ScreenManager {
     // bit3=Up/zoom-in). Edge-triggered: fires once per press.
     void HandleButtons(uint8_t button_bits);
 
-    // Renders the current screen into the (already-selected) Paint framebuffer.
-    // Clears the framebuffer, builds MapScreenData from `map_src`, and dispatches
-    // to the map / settings / debug screen. `debug_src` supplies the debug
-    // screen's live sensor references.
-    void Draw(const MapDataSources& map_src, const DebugScreenSources& debug_src);
+    // Renders the current screen into `c`. Clears the canvas, builds
+    // MapScreenData from `map_src`, and dispatches to the map / settings / debug
+    // screen. `debug_src` supplies the debug screen's live sensor references.
+    void Draw(Canvas& c, const MapDataSources& map_src, const DebugScreenSources& debug_src);
 
     UiScreen current_screen() const { return current_screen_; }
     int zoom_index() const { return zoom_index_; }

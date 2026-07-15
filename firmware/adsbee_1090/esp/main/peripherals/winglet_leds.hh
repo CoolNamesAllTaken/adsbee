@@ -39,8 +39,8 @@ class WingletLeds {
 
         // Effective brightness = clamp(min + (max - min) * ambient, min, max),
         // interpreted as a perceived-luma target (see Render()).
-        float min_brightness = 0.05f;  // floor so LEDs never fully turn off
-        float max_brightness = 0.6f;   // ceiling — full intensity is too bright
+        float min_brightness = 0.02f;  // floor so LEDs never fully turn off
+        float max_brightness = 0.4f;   // ceiling — full intensity is too bright
 
         // Palette — full-range hues; the driver normalizes by luma, so raw
         // brightness differences between colors are equalized at render time.

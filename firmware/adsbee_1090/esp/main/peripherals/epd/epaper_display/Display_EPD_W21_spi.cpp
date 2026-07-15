@@ -113,6 +113,14 @@ bool DisplayEpdW21::Init(bool init_spi_bus) {
     ESP_LOGW(kTag, "Already initialized — call Deinit() first");
     return false;
   }
+  // Allocate the drawing canvas (panel-sized framebuffer) on first Init().
+  if (!canvas_.has_value()) {
+    canvas_.emplace(kWidth, kHeight, config_.canvas_rotate, config_.canvas_fill);
+  }
+  if (!canvas_->ok()) {
+    ESP_LOGE(kTag, "Canvas framebuffer allocation failed");
+    return false;
+  }
 
   if (init_spi_bus) {
     spi_bus_config_t bus_cfg = {};

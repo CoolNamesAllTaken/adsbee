@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <cstring>
 
-#include "GUI_Paint.h"
+#include "canvas.hh"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "peripherals/terrain/terrain_tile.hh"
@@ -48,20 +48,20 @@ bool NextRecord(VecCursor& c, VecRecordHeader& h, const VecPoint** pts) {
 
 // ---- city mark (haloed 7x7 ring + 3x3 center) ----------------------------
 struct CityCtx { int cx, cy; };
-void CityDraw(int dx, int dy, UWORD color, void* ctx) {
+void CityDraw(Canvas& canvas, int dx, int dy, uint16_t color, void* ctx) {
     auto* c = static_cast<CityCtx*>(ctx);
     int cx = c->cx + dx, cy = c->cy + dy;
     for (int i = -3; i <= 3; i++) {  // 7x7 outline
-        SetPixelSafe(cx + i, cy - 3, color);
-        SetPixelSafe(cx + i, cy + 3, color);
-        SetPixelSafe(cx - 3, cy + i, color);
-        SetPixelSafe(cx + 3, cy + i, color);
+        SetPixelSafe(canvas, cx + i, cy - 3, color);
+        SetPixelSafe(canvas, cx + i, cy + 3, color);
+        SetPixelSafe(canvas, cx - 3, cy + i, color);
+        SetPixelSafe(canvas, cx + 3, cy + i, color);
     }
-    FillRectSafe(cx - 1, cy - 1, 3, 3, color);  // solid 3x3 center
+    FillRectSafe(canvas, cx - 1, cy - 1, 3, 3, color);  // solid 3x3 center
 }
-void DrawCityMark(int cx, int cy) {
+void DrawCityMark(Canvas& canvas, int cx, int cy) {
     CityCtx ctx{cx, cy};
-    DrawOutlined(CityDraw, &ctx, BLACK);  // 8 white halo copies + 1 ink
+    DrawOutlined(canvas, CityDraw, &ctx, kBlack);  // 8 white halo copies + 1 ink
 }
 
 // ---- water mask fill (interior sparse dots + solid shoreline) -------------
@@ -69,7 +69,7 @@ void DrawCityMark(int cx, int cy) {
 // projects to. Interior cells (all 4 neighbors water) get the sparse dot
 // pattern in SCREEN space; boundary cells (a land neighbor) get a solid edge so
 // the shoreline reads crisp. Coarse mask + dense screen => rects a few px wide.
-void DrawWaterMask(const ParsedTile& t, const TileProjection& tp) {
+void DrawWaterMask(Canvas& canvas, const ParsedTile& t, const TileProjection& tp) {
     if (!t.water_mask) return;
     int gw = t.mask_w, gh = t.mask_h;
     for (int gy = 0; gy < gh; gy++) {
@@ -82,15 +82,15 @@ void DrawWaterMask(const ParsedTile& t, const TileProjection& tp) {
             int xa = x0 < x1 ? x0 : x1, xb = x0 < x1 ? x1 : x0;
             int ya = y0 < y1 ? y0 : y1, yb = y0 < y1 ? y1 : y0;
             // Whole cell off-screen? skip cheaply.
-            if (xb < 0 || xa >= kScreenWidth || yb < 0 || ya >= kScreenHeight) continue;
+            if (xb < 0 || xa >= canvas.width() || yb < 0 || ya >= canvas.height()) continue;
             bool boundary = !t.IsWater(gx - 1, gy) || !t.IsWater(gx + 1, gy) ||
                             !t.IsWater(gx, gy - 1) || !t.IsWater(gx, gy + 1);
             for (int sy = ya; sy < yb; sy++) {
                 for (int sx = xa; sx < xb; sx++) {
                     if (boundary) {
-                        SetPixelSafe(sx, sy, BLACK);            // solid shoreline
+                        SetPixelSafe(canvas, sx, sy, kBlack);            // solid shoreline
                     } else if ((sx & 3) == 1 && (sy & 3) == 1) {
-                        SetPixelSafe(sx, sy, BLACK);            // sparse interior dots
+                        SetPixelSafe(canvas, sx, sy, kBlack);            // sparse interior dots
                     }
                 }
             }
@@ -99,7 +99,7 @@ void DrawWaterMask(const ParsedTile& t, const TileProjection& tp) {
 }
 
 // ---- water vectors: solid shoreline strokes -------------------------------
-void DrawWaterVectors(const ParsedTile& t, const TileProjection& tp) {
+void DrawWaterVectors(Canvas& canvas, const ParsedTile& t, const TileProjection& tp) {
     if (!t.vec_water) return;
     VecCursor c{t.vec_water, t.vec_water + t.vec_water_len};
     VecRecordHeader h;
@@ -111,19 +111,19 @@ void DrawWaterVectors(const ParsedTile& t, const TileProjection& tp) {
         for (uint16_t i = 1; i < h.num_points; i++) {
             int px1, py1;
             tp.UVToPixel(pts[i].u, pts[i].v, &px1, &py1);
-            DrawLineClipped(px0, py0, px1, py1, BLACK);
+            DrawLineClipped(canvas, px0, py0, px1, py1, kBlack);
             px0 = px1; py0 = py1;
         }
         if (h.flags & winglet_terrain::kVecFlagClosed) {  // close the ring
             int px1, py1;
             tp.UVToPixel(pts[0].u, pts[0].v, &px1, &py1);
-            DrawLineClipped(px0, py0, px1, py1, BLACK);
+            DrawLineClipped(canvas, px0, py0, px1, py1, kBlack);
         }
     }
 }
 
 // ---- roads (dashed, no smoothing) + city marks ----------------------------
-void DrawRoadsAndCities(const ParsedTile& t, const TileProjection& tp) {
+void DrawRoadsAndCities(Canvas& canvas, const ParsedTile& t, const TileProjection& tp) {
     if (!t.vec_road) return;
     VecCursor c{t.vec_road, t.vec_road + t.vec_road_len};
     VecRecordHeader h;
@@ -133,7 +133,7 @@ void DrawRoadsAndCities(const ParsedTile& t, const TileProjection& tp) {
             if (h.num_points >= 1) {
                 int px, py;
                 tp.UVToPixel(pts[0].u, pts[0].v, &px, &py);
-                DrawCityMark(px, py);
+                DrawCityMark(canvas, px, py);
             }
             continue;
         }
@@ -145,7 +145,7 @@ void DrawRoadsAndCities(const ParsedTile& t, const TileProjection& tp) {
         for (uint16_t i = 1; i < h.num_points; i++) {
             int px1, py1;
             tp.UVToPixel(pts[i].u, pts[i].v, &px1, &py1);
-            phase = DrawDashedLine(px0, py0, px1, py1, /*on=*/3, /*off=*/2, BLACK, phase);
+            phase = DrawDashedLine(canvas, px0, py0, px1, py1, /*on=*/3, /*off=*/2, kBlack, phase);
             px0 = px1; py0 = py1;
         }
     }
@@ -206,10 +206,10 @@ void TileProjection::GridToPixel(int gx, int gy, int grid_w, int grid_h, int* px
     *py = IRound(py_bias + v * py_per_v);
 }
 
-// Rasterize every overlapping tile's terrain into the currently-selected Paint
-// image. Layer order per tile: water fill (background texture) -> water
-// shoreline strokes -> roads (dashed) -> city marks (haloed, on top).
-static void RasterizeTerrain(const MapScreenData& data,
+// Rasterize every overlapping tile's terrain into `canvas`. Layer order per
+// tile: water fill (background texture) -> water shoreline strokes -> roads
+// (dashed) -> city marks (haloed, on top).
+static void RasterizeTerrain(Canvas& canvas, const MapScreenData& data,
                              const winglet_terrain::TerrainLoader& loader,
                              const MapProjection& mp) {
     const winglet_terrain::ParsedTile* tiles[winglet_terrain::TerrainLoader::kMaxOverlap];
@@ -217,9 +217,9 @@ static void RasterizeTerrain(const MapScreenData& data,
     for (int i = 0; i < n; i++) {
         const winglet_terrain::ParsedTile& t = *tiles[i];
         TileProjection tp = TileProjection::FromTile(t, mp);
-        DrawWaterMask(t, tp);
-        DrawWaterVectors(t, tp);
-        DrawRoadsAndCities(t, tp);
+        DrawWaterMask(canvas, t, tp);
+        DrawWaterVectors(canvas, t, tp);
+        DrawRoadsAndCities(canvas, t, tp);
     }
 }
 
@@ -230,18 +230,25 @@ static void RasterizeTerrain(const MapScreenData& data,
 // just memcpy it as the base. The expensive path runs only on invalidation.
 class TerrainCache {
    public:
-    // Rebuild if the key changed; then copy the cached layer into `dst`.
-    void DrawInto(uint8_t* dst, int fb_bytes, const MapScreenData& data,
+    ~TerrainCache() { delete cache_; }
+
+    // Rebuild the cached terrain layer if the key changed; then composite it
+    // onto `target`.
+    void DrawInto(Canvas& target, const MapScreenData& data,
                   const winglet_terrain::TerrainLoader& loader, const MapProjection& mp) {
-        if (fb_ == nullptr || fb_bytes_ != fb_bytes) {
-            if (fb_) heap_caps_free(fb_);
-            fb_ = (uint8_t*)heap_caps_malloc(fb_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-            if (!fb_) fb_ = (uint8_t*)heap_caps_malloc(fb_bytes, MALLOC_CAP_8BIT);
-            fb_bytes_ = fb_bytes;
+        // Make (or remake) an off-screen cache Canvas with byte-identical
+        // geometry to the target. Prefer PSRAM; fall back to DRAM.
+        if (cache_ == nullptr || cache_->byte_size() != target.byte_size()) {
+            delete cache_;
+            cache_ = new Canvas(target.CreateCompatible(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+            if (!cache_->ok()) {
+                delete cache_;
+                cache_ = new Canvas(target.CreateCompatible(MALLOC_CAP_8BIT));
+            }
             valid_ = false;
         }
-        if (!fb_) {  // alloc failed -> fall back to rasterizing live into dst
-            RasterizeTerrain(data, loader, mp);
+        if (!cache_->ok()) {  // alloc failed -> rasterize live into the target
+            RasterizeTerrain(target, data, loader, mp);
             return;
         }
 
@@ -264,22 +271,18 @@ class TerrainCache {
         bool key_same = valid_ && row == key_row_ && col == key_col_ && lat_q == key_lat_q_ &&
                         lon_q == key_lon_q_ && set_sig == key_set_sig_ && zoom_q == key_zoom_q_;
         if (!key_same) {
-            // Rebuild the cached terrain layer.
-            uint8_t* prev = Paint.Image;
-            Paint_SelectImage(fb_);
-            Paint_Clear(WHITE);
-            RasterizeTerrain(data, loader, mp);
-            Paint_SelectImage(prev);
+            // Rebuild the cached terrain layer into the off-screen cache Canvas.
+            cache_->Clear(kWhite);
+            RasterizeTerrain(*cache_, data, loader, mp);
             valid_ = true;
             key_row_ = row; key_col_ = col; key_lat_q_ = lat_q; key_lon_q_ = lon_q;
             key_set_sig_ = set_sig; key_zoom_q_ = zoom_q;
         }
-        memcpy(dst, fb_, fb_bytes_);
+        target.CopyFrom(*cache_);
     }
 
    private:
-    uint8_t* fb_ = nullptr;
-    int fb_bytes_ = 0;
+    Canvas* cache_ = nullptr;  // off-screen PSRAM layer, geometry-matched to the target.
     bool valid_ = false;
     int key_row_ = -1, key_col_ = -1;
     int32_t key_lat_q_ = 0, key_lon_q_ = 0;
@@ -290,13 +293,13 @@ class TerrainCache {
 static TerrainCache g_terrain_cache;
 
 // ---- DrawTerrain ----------------------------------------------------------
-void DrawTerrain(const MapScreenData& data, const winglet_terrain::TerrainLoader& loader) {
+void DrawTerrain(Canvas& target, const MapScreenData& data,
+                 const winglet_terrain::TerrainLoader& loader) {
     MapProjection mp = MapProjection::FromData(data);
     if (!mp.valid) return;
     // Only draw terrain at close zoom, where the 4-tile set can cover the screen.
     if (data.range_nm > winglet_terrain::kTerrainMaxRangeNm) return;
-    int fb_bytes = Paint.WidthByte * Paint.HeightByte;
-    g_terrain_cache.DrawInto(Paint.Image, fb_bytes, data, loader, mp);
+    g_terrain_cache.DrawInto(target, data, loader, mp);
 }
 
 }  // namespace winglet_ui

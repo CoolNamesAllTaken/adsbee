@@ -3,25 +3,28 @@
 #include <cmath>
 #include <cstdint>
 
-#include "GUI_Paint.h"  // BLACK/WHITE, Paint_DrawCircle/Line/String_EN, Font8
+#include "canvas.hh"  // Canvas draw methods, colors, line styles.
+#include "fonts.h"    // Font8
+
+using winglet_ui::Canvas;
 
 namespace {
 
 constexpr float kPi = 3.14159265358979323846f;
 
-// Clamp to the in-bounds range Paint accepts (it rejects endpoints > Width/Height;
-// unsigned wrap also rejects negatives).
-UWORD ClampX(float v) {
+// Clamp to the in-bounds range Canvas accepts (it rejects endpoints >
+// width/height; negatives would wrap, so clamp them to 0 too).
+int ClampX(const Canvas& c, float v) {
   int i = static_cast<int>(lroundf(v));
   if (i < 0) i = 0;
-  if (i > static_cast<int>(Paint.Width)) i = Paint.Width;
-  return static_cast<UWORD>(i);
+  if (i > c.width()) i = c.width();
+  return i;
 }
-UWORD ClampY(float v) {
+int ClampY(const Canvas& c, float v) {
   int i = static_cast<int>(lroundf(v));
   if (i < 0) i = 0;
-  if (i > static_cast<int>(Paint.Height)) i = Paint.Height;
-  return static_cast<UWORD>(i);
+  if (i > c.height()) i = c.height();
+  return i;
 }
 
 // Phone-compass bearing (0 = North = up, increasing CW) -> screen endpoint at the given
@@ -34,20 +37,20 @@ void BearingEndpoint(int cx, int cy, float bearing_deg, float len,
   *ey = cy - len * cosf(a);   // -y is up (North at 0)
 }
 
-void DrawNeedle(int cx, int cy, float bearing_deg, float len, LINE_STYLE style) {
+void DrawNeedle(Canvas& canvas, int cx, int cy, float bearing_deg, float len,
+                winglet_ui::LineStyle style) {
   float ex, ey;
   BearingEndpoint(cx, cy, bearing_deg, len, &ex, &ey);
-  Paint_DrawLine(ClampX(cx), ClampY(cy), ClampX(ex), ClampY(ey), BLACK, style,
-                 DOT_PIXEL_1X1);
+  canvas.DrawLine(ClampX(canvas, cx), ClampY(canvas, cy), ClampX(canvas, ex), ClampY(canvas, ey),
+                  winglet_ui::kBlack, style, 1);
 }
 
 }  // namespace
 
-void DrawCompass(int cx, int cy, int radius,
+void DrawCompass(Canvas& canvas, int cx, int cy, int radius,
                  float heading_level_deg, float heading_flat_deg, bool valid) {
   // Dial outline.
-  Paint_DrawCircle(static_cast<UWORD>(cx), static_cast<UWORD>(cy),
-                   static_cast<UWORD>(radius), BLACK, DRAW_FILL_EMPTY, DOT_PIXEL_1X1);
+  canvas.DrawCircle(cx, cy, radius, winglet_ui::kBlack, /*filled=*/false, 1);
 
   // N/E/S/W ticks: short radial marks at each cardinal bearing.
   const float tick_in = radius * 0.78f;
@@ -55,25 +58,27 @@ void DrawCompass(int cx, int cy, int radius,
     float ox, oy, ix, iy;
     BearingEndpoint(cx, cy, static_cast<float>(b), static_cast<float>(radius), &ox, &oy);
     BearingEndpoint(cx, cy, static_cast<float>(b), tick_in, &ix, &iy);
-    Paint_DrawLine(ClampX(ix), ClampY(iy), ClampX(ox), ClampY(oy), BLACK,
-                   LINE_STYLE_SOLID, DOT_PIXEL_1X1);
+    canvas.DrawLine(ClampX(canvas, ix), ClampY(canvas, iy), ClampX(canvas, ox), ClampY(canvas, oy),
+                    winglet_ui::kBlack, winglet_ui::kLineSolid, 1);
   }
 
   // "N" label just inside the top of the dial.
-  Paint_DrawString_EN(ClampX(cx - 3), ClampY(cy - radius + 1), "N", &Font8, WHITE,
-                      BLACK);
+  canvas.DrawString(ClampX(canvas, cx - 3), ClampY(canvas, cy - radius + 1), "N", &Font8,
+                    winglet_ui::kWhite, winglet_ui::kBlack);
 
   if (!valid) {
     // Mag not calibrated yet: show a clear not-usable marker, no needles.
-    Paint_DrawString_EN(ClampX(cx - 6), ClampY(cy - 3), "--", &Font8, WHITE, BLACK);
+    canvas.DrawString(ClampX(canvas, cx - 6), ClampY(canvas, cy - 3), "--", &Font8,
+                      winglet_ui::kWhite, winglet_ui::kBlack);
     return;
   }
 
   // Two needles toward magnetic North. Solid = tilt-compensated, dotted = flat (raw).
-  DrawNeedle(cx, cy, heading_flat_deg, radius * 0.85f, LINE_STYLE_DOTTED);
-  DrawNeedle(cx, cy, heading_level_deg, radius * 0.85f, LINE_STYLE_SOLID);
+  DrawNeedle(canvas, cx, cy, heading_flat_deg, radius * 0.85f, winglet_ui::kLineDotted);
+  DrawNeedle(canvas, cx, cy, heading_level_deg, radius * 0.85f, winglet_ui::kLineSolid);
 
   // Numeric tilt-compensated heading under the dial.
-  Paint_DrawNum(ClampX(cx - 10), ClampY(cy + radius + 2),
-                static_cast<int32_t>(lroundf(heading_level_deg)), &Font8, WHITE, BLACK);
+  canvas.DrawNum(ClampX(canvas, cx - 10), ClampY(canvas, cy + radius + 2),
+                 static_cast<int32_t>(lroundf(heading_level_deg)), &Font8, winglet_ui::kWhite,
+                 winglet_ui::kBlack);
 }

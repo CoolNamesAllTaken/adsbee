@@ -3,7 +3,7 @@
 
 #include <cstdint>
 
-#include "GUI_Paint.h"
+#include "canvas.hh"
 
 // Pre-baked 1-bit and 2-bit sprites for the Winglet map UI's fixed-shape
 // assets, so they are blitted each frame instead of re-rasterized (no per-frame
@@ -31,10 +31,10 @@ struct Sprite2bpp {
 // ---- Blitters (defined in ui_primitives.cpp) ------------------------------
 // Draw a 1bpp sprite with its top-left at (x,y); only set bits are painted in
 // `ink` (transparent elsewhere).
-void BlitSprite(int x, int y, const Sprite1bpp& s, UWORD ink);
+void BlitSprite(Canvas& c, int x, int y, const Sprite1bpp& s, uint16_t ink);
 // Draw a 2bpp sprite with its top-left at (x,y); value-1 pixels in `ink`,
 // value-2 pixels in `halo`, value-0 skipped.
-void BlitSprite2bpp(int x, int y, const Sprite2bpp& s, UWORD ink, UWORD halo);
+void BlitSprite2bpp(Canvas& c, int x, int y, const Sprite2bpp& s, uint16_t ink, uint16_t halo);
 
 // ---- Baked sprite tables (defined in ui_sprites_data.cpp) ------------------
 // Right-rail icons + battery frame (1bpp, ink-only — no halo, matching the

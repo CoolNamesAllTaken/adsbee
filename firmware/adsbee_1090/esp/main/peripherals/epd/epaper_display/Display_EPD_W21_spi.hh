@@ -1,10 +1,12 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include "driver/gpio.h"
 #include "driver/ledc.h"
 #include "driver/spi_master.h"
 #include "bsp.hh"
+#include "peripherals/epd/gui/canvas.hh"
 #include "peripherals/fxl6408.hh"
 
 // SSD1680A E-Paper Display Driver
@@ -61,6 +63,12 @@ class DisplayEpdW21 {
     float front_light_off_level   = 0.75f;  // ambient level at/above which it is off
     float front_light_dark_bright = 0.15f;  // brightness when fully dark
     float front_light_peak_bright = 0.6f;   // brightness at the peak
+
+    // Drawing canvas orientation/fill. The driver owns a Canvas sized to the
+    // panel; ROTATE_270 presents the 176x264 panel as a logical 264x176 upright
+    // drawing space. Display() streams the canvas in send-order, so no mirror.
+    int      canvas_rotate = winglet_ui::kRotate270;
+    uint16_t canvas_fill   = winglet_ui::kWhite;
   };
 
   // Selects which custom partial-refresh LUT DisplayFaster() uploads:
@@ -116,6 +124,18 @@ class DisplayEpdW21 {
   // over the GPIO expander (one I2C transaction). Returns true on read failure
   // (fail-safe: callers must not write into a refresh).
   bool IsBusy();
+
+  // The driver-owned drawing canvas (panel-sized). Allocated in Init(); only
+  // valid after a successful Init(). Draw into this, then push it with the
+  // no-arg Display*() overloads below.
+  winglet_ui::Canvas& canvas() { return *canvas_; }
+
+  // Preferred API: push the owned canvas to the panel. Thin wrappers over the
+  // uint8_t* overloads using canvas_->data(). See those for refresh semantics.
+  void Display() { Display(canvas_->data()); }
+  void DisplayBlocking() { DisplayBlocking(canvas_->data()); }
+  void DisplayFast() { DisplayFast(canvas_->data()); }
+  void DisplayFaster(PartialLut lut) { DisplayFaster(canvas_->data(), lut); }
 
   // Full-screen refresh (fast waveform). This FLASHES/inverts the whole panel
   // and fully clears ghosting — use it to (re)baseline. Returns immediately
@@ -262,6 +282,10 @@ class DisplayEpdW21 {
   void ReleaseBus();
 
   const Config config_;
+
+  // Panel-sized drawing surface, owned by the driver. Allocated lazily in
+  // Init() (so boards that never Init() the display allocate no framebuffer).
+  std::optional<winglet_ui::Canvas> canvas_;
 
   spi_device_handle_t spi_handle_   = nullptr;
   bool                owned_spi_bus_ = false;

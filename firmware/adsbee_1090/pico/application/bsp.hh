@@ -73,7 +73,7 @@ class BSP {
         kGNSSModuleNone = 0,     // No GNSS module populated.
         kGNSSModuleUbloxMAXM10,  // u-blox MAX-M10(S).
     };
-    GNSSModuleType gnss_module_type = kGNSSModuleUbloxMAXM10;  // Default: no module.
+    GNSSModuleType gnss_module_type = kGNSSModuleNone;  // Default: no module.
 
     uint16_t gnss_uart_tx_pin = 0;
     uint16_t gnss_uart_rx_pin = 1;

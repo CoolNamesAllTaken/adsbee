@@ -1,6 +1,8 @@
 #pragma once
 
-// Draws a North-up, phone-style debug compass onto the current EPD Paint framebuffer
+#include "canvas.hh"
+
+// Draws a North-up, phone-style debug compass onto the given Canvas
 // to visualize the MAGNETOMETER-only heading (independent of the IMU fusion). A dial
 // circle with N/E/S/W ticks and up to two bearing needles pointing toward magnetic
 // North:
@@ -14,6 +16,6 @@
 //       e.g. from SensorFusion::GetMagHeadingLevelDeg() / GetMagHeadingFlatDeg().
 //   valid  : false until the mag is calibrated; draws the dial + a "--" marker only.
 //
-// Uses only GLM-free Paint primitives; draws into the global Paint context.
-void DrawCompass(int cx, int cy, int radius,
+// Draws into the given Canvas.
+void DrawCompass(winglet_ui::Canvas& canvas, int cx, int cy, int radius,
                  float heading_level_deg, float heading_flat_deg, bool valid);

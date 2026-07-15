@@ -1,5 +1,6 @@
 #pragma once
 
+#include "canvas.hh"
 #include "peripherals/terrain/terrain_loader.hh"
 #include "peripherals/terrain/terrain_types.hh"
 #include "ui_data.hh"
@@ -36,8 +37,10 @@ struct TileProjection {
     void GridToPixel(int gx, int gy, int grid_w, int grid_h, int* px, int* py) const;
 };
 
-// Draw all terrain layers for the tiles overlapping the current window. Uses the
-// terrain cache internally; cheap when nothing changed.
-void DrawTerrain(const MapScreenData& data, const winglet_terrain::TerrainLoader& loader);
+// Draw all terrain layers (for the tiles overlapping the current window) onto
+// `target`. Uses an off-screen PSRAM cache Canvas internally; cheap when nothing
+// changed (just composites the cached layer).
+void DrawTerrain(Canvas& target, const MapScreenData& data,
+                 const winglet_terrain::TerrainLoader& loader);
 
 }  // namespace winglet_ui

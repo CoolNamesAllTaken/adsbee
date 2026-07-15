@@ -1,11 +1,13 @@
 #ifndef SETTINGS_SCREEN_HH_
 #define SETTINGS_SCREEN_HH_
 
+#include "canvas.hh"
+
 namespace winglet_ui {
 
 // Settings screen (WD.settings) — stubbed until the menu system lands. The
-// caller must have already selected + cleared the Paint framebuffer.
-void DrawSettingsScreen();
+// caller must have already cleared the canvas.
+void DrawSettingsScreen(Canvas& c);
 
 }  // namespace winglet_ui
 
