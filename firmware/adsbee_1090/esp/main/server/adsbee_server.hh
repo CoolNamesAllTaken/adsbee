@@ -6,6 +6,8 @@
 #include "esp_http_server.h"
 #include "websocket_server.hh"
 
+class SensorFusion;  // Forward declared; the AHRS attitude source lives ESP-side (see SetSensorFusion).
+
 class ADSBeeServer {
    public:
     static const uint16_t kMaxNumModeSPackets = 300;    // Depth of queue for incoming packets from RP2040.
@@ -14,6 +16,7 @@ class ADSBeeServer {
     static const uint32_t kAircraftDictionaryUpdateIntervalMs = 1000;
     static const uint32_t kRawPacketProcessingIntervalMs = 200;
     static const uint32_t kGDL90ReportingIntervalMs = 1000;
+    static const uint32_t kAHRSReportingIntervalMs = 200;  // ForeFlight AHRS message rate: 5 Hz.
     static const uint32_t kAircraftJSONReportingIntervalMs = 1000;
 
     static const uint16_t kNetworkConsoleQueueLen = 10;
@@ -38,6 +41,12 @@ class ADSBeeServer {
 
     bool Init();
     bool Update();
+
+    /**
+     * Provide the sensor fusion source used to populate the ForeFlight AHRS message. Only called on boards that run
+     * sensor fusion (winglet); left unset elsewhere, in which case no AHRS messages are emitted.
+     */
+    void SetSensorFusion(SensorFusion& sensor_fusion) { sensor_fusion_ = &sensor_fusion; }
 
     /**
      * Task that runs continuously to receive SPI messages.
@@ -107,6 +116,12 @@ class ADSBeeServer {
     bool ReportGDL90UplinkDataMessage(const DecodedUATUplinkPacket& uplink_packet);
 
     /**
+     * Send a ForeFlight AHRS (attitude / heading) message to connected WiFi clients from the sensor fusion source.
+     * @retval True if successful, false on error.
+     */
+    bool ReportGDL90AHRS();
+
+    /**
      * Broadcasts metrics message to all connected network metrics websocket clients.
      */
     void SendNetworkMetricsMessage();
@@ -135,7 +150,11 @@ class ADSBeeServer {
     uint32_t last_raw_packet_process_timestamp_ms_ = 0;
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;
     uint32_t last_gdl90_report_timestamp_ms_ = 0;
+    uint32_t last_ahrs_report_timestamp_ms_ = 0;
     uint32_t last_aircraft_json_report_timestamp_ms_ = 0;
+
+    // AHRS attitude source. Null unless SetSensorFusion() was called (winglet boards only).
+    SensorFusion* sensor_fusion_ = nullptr;
 };
 
 extern ADSBeeServer adsbee_server;

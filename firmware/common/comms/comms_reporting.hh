@@ -14,6 +14,8 @@ static constexpr uint32_t kCSBeeChunkBudgetMs = 50;        // Max wall time per 
 static constexpr uint32_t kMAVLINKChunkBudgetMs = 50;      // Max wall time per ReportMAVLINK invocation.
 static constexpr uint32_t kGDL90ChunkBudgetMs = 50;        // Max wall time per ReportGDL90 invocation.
 static constexpr uint32_t kAircraftJSONChunkBudgetMs = 50;  // Max wall time per ReportAircraftJSON invocation.
+// Ground speed above which the ownship is reported as airborne in GDL90 target reports.
+static constexpr int32_t kGDL90OwnshipAirborneSpeedKts = 30;
 // Shared UID snapshot capacity — one array serves all periodic reporting protocols.
 static constexpr uint16_t kMaxReportUIDs = kAircraftDictionaryMaxNumAircraft;
 

@@ -415,7 +415,9 @@ esp_err_t Lsm6dsv::ReadQuaternionFromPage(uint8_t buf[8]) {
     return ret;
   }
 
-  // Read 8 bytes (4 × FP16): order from PoC is x, y, z, w (base address 0x4C).
+  // Read 8 bytes (4 × FP16) from base address 0x4C. Byte order is scalar-first: w, x, y, z
+  // (raw[0-1]=w, [2-3]=x, [4-5]=y, [6-7]=z), matching the ST PoC's buff/sflp aliasing. (The PoC's
+  // printf emits quat[1],quat[2],quat[3],quat[0] = x,y,z,w, which is a print order, not byte order.)
   for (uint8_t i = 0; i < 8; i++) {
     ret = WriteRegister(kRegPageAddress,
                         static_cast<uint8_t>(kAdvRegQuatBase + i));

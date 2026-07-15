@@ -7,6 +7,7 @@
 #include "aircraftjson_utils.hh"
 #include "gdl90/gdl90_utils.hh"
 #include "json_utils.hh"
+#include "peripherals/sensor_fusion.hh"
 #include "pico.hh"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
@@ -16,6 +17,9 @@
 // #define VERBOSE_DEBUG
 
 static const uint16_t kGDL90Port = 4000;
+
+// Ground speed above which the ownship is reported as airborne in GDL90 target reports.
+static const int32_t kOwnshipAirborneSpeedKts = 30;
 
 static const uint16_t kNetworkConsoleWelcomeMessageMaxLen = 1000;
 static const uint16_t kNetworkMetricsMessageMaxLen = 1500;
@@ -289,6 +293,16 @@ bool ADSBeeServer::Update() {
         }
     }
 
+    // Broadcast the ForeFlight AHRS (attitude) message at 5 Hz, when a fusion source with a valid solution is present.
+    if (timestamp_ms - last_ahrs_report_timestamp_ms_ > kAHRSReportingIntervalMs) {
+        last_ahrs_report_timestamp_ms_ = timestamp_ms;
+        if (comms_manager.WiFiAccessPointHasClients() && sensor_fusion_ != nullptr && sensor_fusion_->IsValid() &&
+            !ReportGDL90AHRS()) {
+            CONSOLE_ERROR("ADSBeeServer::Update", "Encountered error while reporting GDL90 AHRS.");
+            ret = false;
+        }
+    }
+
     // Broadcast aircraft JSON to connected /aircraft WebSocket clients.
     if (timestamp_ms - last_aircraft_json_report_timestamp_ms_ > kAircraftJSONReportingIntervalMs) {
         last_aircraft_json_report_timestamp_ms_ = timestamp_ms;
@@ -333,6 +347,22 @@ bool ADSBeeServer::ReportGDL90() {
     CommsManager::NetworkMessage message;
     message.port = kGDL90Port;
 
+    // Determine whether we have a usable ownship position. Only GNSS and matching-ICAO aircraft tracking are valid
+    // ownship sources; fixed and lowest-aircraft are not currently reported as ownship.
+    SettingsManager::RxPosition& rx_position = object_dictionary.composite_device_status.rp2040.rx_position;
+    bool valid_ownship_source =
+        rx_position.source == SettingsManager::RxPosition::kPositionSourceGNSS ||
+        rx_position.source == SettingsManager::RxPosition::kPositionSourceAircraftMatchingICAO;
+    bool have_position =
+        object_dictionary.composite_device_status.rp2040.rx_position_available && valid_ownship_source;
+
+    // Update the heartbeat status flags from the RP2040's GNSS metrics before writing the heartbeat. These flags are
+    // sticky members of the GDL90Reporter, so set them every report. Some EFBs suppress ownship when the GPS Position
+    // Valid bit is clear.
+    gdl90.gnss_position_valid = rp2040_aircraft_dictionary_metrics.gnss_fix || have_position;
+    gdl90.utc_timing_is_valid = rp2040_aircraft_dictionary_metrics.gnss_fix_quality >= 1;  // GGA fix => UTC from GNSS.
+    gdl90.maintenance_required = false;
+
     // Heartbeat Message
     message.len = gdl90.WriteGDL90HeartbeatMessage(
         message.data, CommsManager::NetworkMessage::kMaxLenBytes, get_time_since_boot_ms() / 1000,
@@ -342,27 +372,49 @@ bool ADSBeeServer::ReportGDL90() {
     comms_manager.WiFiAccessPointSendMessageToAllStations(message);
     message.len = 0;
 
+    // ForeFlight ID Message (~1 Hz, sent alongside the heartbeat). Advertises MSL geometric altitude datum (bit 0 = 1)
+    // to match the MSL altitude reported in the Ownship Geometric Altitude message below.
+    message.len = gdl90.WriteGDL90ForeFlightIDMessage(message.data, CommsManager::NetworkMessage::kMaxLenBytes);
+    comms_manager.WiFiAccessPointSendMessageToAllStations(message);
+    message.len = 0;
+
     // Ownship Report
     GDL90Reporter::GDL90TargetReportData ownship_data = {};
     memcpy(ownship_data.callsign, "ADSBEE  ", sizeof(ownship_data.callsign) - 1);
     ownship_data.address_type = GDL90Reporter::GDL90TargetReportData::kAddressTypeADSBWithSelfAssignedAddress;
-    SettingsManager::RxPosition& rx_position = object_dictionary.composite_device_status.rp2040.rx_position;
     ownship_data.participant_address = 0x0;
-    if (rx_position.source == SettingsManager::RxPosition::PositionSource::kPositionSourceAircraftMatchingICAO) {
-        // Only send ownship data with a position if we are tracking an aircraft.
+    if (have_position) {
         ownship_data.latitude_deg = rx_position.latitude_deg;
         ownship_data.longitude_deg = rx_position.longitude_deg;
-        ownship_data.altitude_ft = rx_position.baro_altitude_ft;
+        ownship_data.altitude_ft = rx_position.baro_altitude_ft;  // Ownship Report (msg 10) carries baro altitude.
         ownship_data.speed_kts = rx_position.speed_kts;
         ownship_data.direction_deg = rx_position.heading_deg;
-        ownship_data.participant_address = rx_position.icao_address;
+        // Only use a real ICAO address when bootstrapping off a tracked aircraft; a GNSS ownship is self-assigned.
+        ownship_data.participant_address =
+            (rx_position.source == SettingsManager::RxPosition::kPositionSourceAircraftMatchingICAO)
+                ? rx_position.icao_address
+                : 0x0;
+        // Non-zero NIC/NACp so EFBs treat the ownship position as valid.
+        ownship_data.navigation_integrity_category = 8;
+        ownship_data.navigation_accuracy_category_position = 8;
+        bool airborne = rx_position.speed_kts > kOwnshipAirborneSpeedKts;
         ownship_data.SetMiscIndicator(GDL90Reporter::GDL90TargetReportData::kMiscIndicatorTTIsTrueTrackAngle, false,
-                                      false);
+                                      airborne);
     }
+    // else: leave lat/lon/NIC = 0, the GDL90 "no position" convention. Never send 0,0 as a real fix.
     message.len = gdl90.WriteGDL90TargetReportMessage(message.data, CommsManager::NetworkMessage::kMaxLenBytes,
                                                       ownship_data, true);
     comms_manager.WiFiAccessPointSendMessageToAllStations(message);
     message.len = 0;
+
+    // Ownship Geometric Altitude (msg 11): the EFB reads geometric altitude from here. rx_position.gnss_altitude_ft is
+    // MSL (parsed from NMEA GGA), so the ForeFlight ID capabilities bit above declares an MSL datum.
+    if (have_position) {
+        message.len = gdl90.WriteGDL90OwnshipGeometricAltitudeMessage(
+            message.data, CommsManager::NetworkMessage::kMaxLenBytes, rx_position.gnss_altitude_ft);
+        comms_manager.WiFiAccessPointSendMessageToAllStations(message);
+        message.len = 0;
+    }
 
     // Traffic Reports
     int16_t aircraft_index = -1;  // Just used for error reporting.
@@ -443,6 +495,41 @@ bool ADSBeeServer::ReportGDL90UplinkDataMessage(const DecodedUATUplinkPacket& up
 
     if (!comms_manager.WiFiAccessPointSendMessageToAllStations(message)) {
         CONSOLE_ERROR("ADSBeeServer::ReportGDL90UplinkPacket", "Failed to send UAT uplink packet to all clients.");
+        return false;
+    }
+
+    return true;
+}
+
+bool ADSBeeServer::ReportGDL90AHRS() {
+    if (!settings_manager.settings.core_network_settings.wifi_ap_enabled || sensor_fusion_ == nullptr) {
+        return true;  // Nothing to do.
+    }
+
+    CommsManager::NetworkMessage message;
+    message.port = kGDL90Port;
+
+    // Emit the AHRS dialect selected by the debug flag. Heading from SensorFusion is magnetic; there is no airspeed
+    // source on this hardware, so airspeed fields are left unavailable.
+    if (gdl90.ahrs_use_stratux_dialect) {
+        // Stratux/iLevil 0x4C message: the dialect AvareX understands.
+        message.len = gdl90.WriteGDL90StratuxAHRSMessage(
+            message.data, CommsManager::NetworkMessage::kMaxLenBytes, sensor_fusion_->GetRollDeg(),
+            sensor_fusion_->GetPitchDeg(), sensor_fusion_->GetHeadingDeg(), sensor_fusion_->IsValid());
+    } else {
+        // ForeFlight 0x65 message.
+        message.len = gdl90.WriteGDL90ForeFlightAHRSMessage(
+            message.data, CommsManager::NetworkMessage::kMaxLenBytes, sensor_fusion_->GetRollDeg(),
+            sensor_fusion_->GetPitchDeg(), sensor_fusion_->GetHeadingDeg(), /*heading_is_magnetic=*/true,
+            sensor_fusion_->IsValid());
+    }
+    if (message.len == 0) {
+        CONSOLE_ERROR("ADSBeeServer::ReportGDL90AHRS", "Failed to write GDL90 AHRS message.");
+        return false;
+    }
+
+    if (!comms_manager.WiFiAccessPointSendMessageToAllStations(message)) {
+        CONSOLE_ERROR("ADSBeeServer::ReportGDL90AHRS", "Failed to send AHRS message to all clients.");
         return false;
     }
 

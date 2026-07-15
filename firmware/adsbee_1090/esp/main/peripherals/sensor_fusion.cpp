@@ -69,6 +69,22 @@ glm::vec3 SensorFusion::RemapMag(const glm::vec3& raw) const {
   return config_.mag_to_imu * raw;
 }
 
+// Convert the LSM6DSV SFLP "game rotation vector" to the aircraft attitude quaternion consumed by
+// the standard aerospace ZYX extractors (QuatRoll/QuatPitch/QuatYaw above).
+//
+// The SFLP quaternion is ALREADY a body->world attitude quaternion suitable for those extractors:
+// it must be fed in RAW, with NO conjugation and NO frame relabel. This is confirmed by a proven
+// LSM6DSV SFLP reference (kriswiner LSM6DSV_SFLP_Ladybug), which feeds sflpq={w,x,y,z} straight
+// into the identical extractor formulas and gets correct, yaw-independent roll/pitch. Conjugating
+// the quaternion inverts the rotation, and extracting ZYX Euler from an inverted rotation
+// cross-couples roll with yaw (the inverse of a ZYX rotation is XYZ) — that was the coupling bug.
+//
+// The only transform applied is the fixed device-body -> aircraft-body mounting trim, right-
+// multiplied on the body side. It is yaw-independent and cannot re-introduce coupling.
+glm::quat SensorFusion::SflpToAircraftAttitude(const glm::quat& q_sflp) const {
+  return glm::normalize(q_sflp * config_.body_mount);
+}
+
 void SensorFusion::Update() {
   // 1. Drive the magnetometer state machine (alternating mag/temp single-shots).
   mag_.Update();
@@ -76,6 +92,7 @@ void SensorFusion::Update() {
   // Read the sensors. The IMU quaternion is refreshed asynchronously by the IMU's
   // INT2 reader task; we only read it here.
   glm::quat q_imu        = imu_.GetQuaternion();
+  const glm::quat q_sflp_raw = q_imu;  // Raw SFLP game rotation vector, before any conjugation.
   const bool imu_valid   = imu_.IsQuaternionValid();
   const glm::vec3 mag_raw = mag_.GetMagneticFieldGauss();
 
@@ -170,29 +187,19 @@ void SensorFusion::Update() {
     heading_valid_ = false;
   }
 
-  // 8. Fused quaternion: rotate q_imu about WORLD Z by yaw_offset_ (left-multiply).
-  const glm::quat q_corr = glm::angleAxis(yaw_offset_, glm::vec3(0.f, 0.f, 1.f));
-  const glm::quat q_fused = glm::normalize(q_corr * q_imu);
-
-  // Device-frame remap to the aircraft body frame (nose=+X out the top edge,
-  // right wing=+Y, belly=+Z down; +roll = right-side-down, +pitch = nose-up).
+  // 8. Fused attitude quaternion. The raw SFLP game rotation vector is already a body->world
+  // attitude quaternion; feed it straight to the extractors (see SflpToAircraftAttitude), applying
+  // only the fixed device->aircraft mounting trim. This is consumed by the GDL90 AHRS message and
+  // the orientation cube.
   //
-  // Derived from FOUR measured IMU quaternions (flat / nose-up / right-down / yaw-CW)
-  // solved against the QuatRoll/QuatPitch/QuatYaw extractors above. With the SFLP quat
-  // conjugated to body->world (imu_quat_conjugate, confirmed from a flat-rest reading
-  // of ~(0,0,1,0)), the IMU->aircraft axis alignment is a single PROPER rotation of
-  // 180 deg about (1,1,0). Validated on the real data: flat ~= roll0/pitch0, nose-up ->
-  // pitch+ (no roll coupling), right-down -> roll+ (no pitch coupling). No sign hacks;
-  // the GDL90 heading convention is handled separately via heading_sign.
-  // The cube consumes GetFusedQuaternion(), so it gets the device-frame attitude too.
-  static const glm::quat kBodyRemap =
-      glm::angleAxis(glm::radians(180.f), glm::normalize(glm::vec3(1.f, 1.f, 0.f)));
-  fused_.quaternion = glm::normalize(q_fused * kBodyRemap);
+  // PATH A: the magnetometer yaw correction is currently disabled (mag_correction_enabled=false),
+  // so yaw_offset_ is 0 and the drift-corrected quaternion is not applied here. When the mag path
+  // is re-enabled it must steer yaw about the vertical; that reconciliation is a later pass.
+  fused_.quaternion = SflpToAircraftAttitude(q_sflp_raw);
 
-  // 9. Euler outputs from the device-frame quaternion. yaw_deg is the raw right-handed
-  // attitude yaw; heading_deg is the GDL90 magnetic-style convention (CW-from-north)
-  // derived from it via heading_sign + heading_offset_deg, so the heading is correct
-  // whether or not the mag correction is fused.
+  // 9. Euler outputs from the NED attitude quaternion, using the standard aerospace ZYX extractors
+  // (roll about body X, pitch about body Y, yaw about world Z). heading_deg applies the GDL90
+  // magnetic-style convention (CW-from-north) via heading_sign + heading_offset_deg.
   const float yaw    = QuatYaw(fused_.quaternion) * kRad2Deg;
   fused_.yaw_deg     = yaw;
   fused_.roll_deg    = QuatRoll(fused_.quaternion) * kRad2Deg;

@@ -18,10 +18,12 @@
 // with a complementary filter. Hard-iron offsets are auto-calibrated live from the
 // running per-axis min/max of the field while the device is rotated.
 //
-// Outputs match the ForeFlight GDL90 AHRS conventions so a networking layer can
-// scale x10 and pack directly: heading magnetic 0-360, pitch + = nose/top up,
-// roll + = right side down. The device->aircraft mounting transform is handled
-// downstream (ForeFlight), not here.
+// The fused quaternion is the raw SFLP body->world attitude quaternion (fed directly
+// to the standard aerospace ZYX extractors; see SflpToAircraftAttitude in the .cpp),
+// with only a fixed device->aircraft mounting trim applied. Euler outputs follow the
+// GDL90 AHRS conventions: heading magnetic 0-360, pitch + = nose/top up, roll + =
+// right side down. The mounting trim is a single fixed rotation in Config, not a
+// per-attitude fit.
 //
 // This object OWNS references to the IMU and magnetometer drivers and is the single
 // integration point: Update() drives mag.Update() and reads both sensors. (The IMU
@@ -46,13 +48,27 @@ class SensorFusion {
     float seed_offset_g[3] = {0.f, 0.f, 0.f};
 
     // ---- Frame / sign conventions (VERIFY ON HARDWARE) ----
-    // Confirmed from hardware: the SFLP page-3 quaternion is world->body, so it must
-    // be conjugated before use. (A flat-rest reading of ~(0,0,1,0) is the tell.)
-    bool  imu_quat_conjugate = true;   // true if the SFLP quat is world->body
+    // NOTE: the AHRS attitude output does NOT use this flag. The SFLP game rotation vector is fed
+    // RAW to the extractors (see SflpToAircraftAttitude) — conjugating it inverts the rotation and
+    // cross-couples roll with yaw. This flag is only consumed by the (currently disabled)
+    // mag/eCompass path below, where it controls the eCompass tilt-compensation frame.
+    bool  imu_quat_conjugate = true;
+
+    // ---- Device-body -> aircraft-body mounting rotation (VERIFY ON HARDWARE) ----
+    // Right-multiplied onto the raw SFLP attitude quaternion (see SflpToAircraftAttitude). This is
+    // a pure yaw-independent trim for the physical mounting: it aligns the device axes to the
+    // aircraft convention (+roll=right-wing-down, +pitch=nose-up) but does NOT affect the
+    // roll<->yaw decoupling.
+    // Bench-fit from observed symptoms: with identity, the raw device frame swaps roll<->pitch and
+    // inverts (right-wing-down read as nose-down; level read upside down). A 180 deg rotation about
+    // the (1,1,0) diagonal undoes exactly that swap+flip. Verified for all tilt directions:
+    // right-wing-down -> +roll, nose-up -> +pitch, level -> (0,0).
+    glm::quat body_mount = glm::angleAxis(glm::radians(180.f), glm::normalize(glm::vec3(1.f, 1.f, 0.f)));
+
     // Heading is CW-from-north (opposite chirality to the right-handed yaw the
     // extractor produces), so it carries its own sign. -1 makes CW rotation increase
     // the reported heading. This is the dedicated GDL90 heading mechanism, kept
-    // separate from kBodyRemap (which is a pure proper attitude transform).
+    // separate from the attitude transform (body_mount).
     float heading_sign       = -1.f;   // +1 = CW-from-North; -1 to invert
     float declination_deg    = 0.f;    // add for true north
     // Constant heading offset (deg) for the GDL90 heading. Bench-trim against a known
@@ -77,8 +93,10 @@ class SensorFusion {
   };
 
   struct FusedOrientation {
-    glm::quat quaternion{1.f, 0.f, 0.f, 0.f};  // gravity + magnetic-north referenced
-    float yaw_deg     = 0.f;                    // raw right-handed attitude yaw (CCW+)
+    // Body->world aircraft attitude quaternion: the raw SFLP game rotation vector with the fixed
+    // mounting trim applied (see SflpToAircraftAttitude in the .cpp).
+    glm::quat quaternion{1.f, 0.f, 0.f, 0.f};
+    float yaw_deg     = 0.f;                    // aerospace ZYX yaw about world Z
     float heading_deg = 0.f;                    // GDL90 magnetic, 0..360, CW-from-north
     float pitch_deg   = 0.f;                    // + = nose/top up
     float roll_deg    = 0.f;                    // + = right side down
@@ -124,6 +142,10 @@ class SensorFusion {
  private:
   // Rotate a raw field sample from the mag sensor frame into the IMU body frame.
   glm::vec3 RemapMag(const glm::vec3& raw) const;
+
+  // Convert the raw SFLP game rotation vector (already a body->world attitude quaternion) to the
+  // aircraft attitude quaternion, applying only config_.body_mount. See the .cpp for details.
+  glm::quat SflpToAircraftAttitude(const glm::quat& q_sflp) const;
 
   Lsm6dsv& imu_;
   Mmc5603& mag_;

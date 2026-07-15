@@ -197,6 +197,9 @@ extern "C" void app_main(void) {
 
         terrain.Init(&sd);
 
+        // Provide the AHRS attitude source for the ForeFlight GDL90 AHRS message (winglet boards only).
+        adsbee_server.SetSensorFusion(fusion);
+
         // Clear screen.
         epd.Display();
     }
