@@ -850,6 +850,7 @@ void ADSBee::PruneAircraftDictionary() {
         aircraft_dictionary.metrics.gnss_fix = gnss.HasValidFix();
         aircraft_dictionary.metrics.gnss_num_satellites = gnss_fix.num_satellites;
         aircraft_dictionary.metrics.gnss_fix_quality = gnss_fix.fix_quality;
+        aircraft_dictionary.metrics.gnss_hdop = gnss_fix.hdop;
         if (esp32.IsEnabled()) {
             // Send fresh aircraft dictionary stats to ESPS32.
             esp32.Write(ObjectDictionary::kAddrAircraftDictionaryMetrics, aircraft_dictionary.metrics,

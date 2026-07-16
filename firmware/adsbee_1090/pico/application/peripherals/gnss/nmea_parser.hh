@@ -47,6 +47,7 @@ class NMEAParser {
         int32_t speed_kts = 0;          // Speed over ground, knots.
         uint8_t num_satellites = 0;     // Satellites used in the GGA fix.
         uint8_t fix_quality = 0;        // GGA fix quality (0 = no fix, 1 = GPS, 2 = DGPS, ...).
+        float hdop = 0.0f;              // GGA horizontal dilution of precision (field 8).
         uint32_t last_update_timestamp_ms = 0;  // Caller-supplied timestamp of last applied fix.
     };
 

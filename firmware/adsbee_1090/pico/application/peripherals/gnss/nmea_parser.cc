@@ -139,6 +139,9 @@ NMEAParser::SentenceType NMEAParser::ParseGGA(const char* const* fields, uint8_t
     uint8_t fix_quality = static_cast<uint8_t>(atoi(fields[6]));
     fix_.fix_quality = fix_quality;
     fix_.num_satellites = static_cast<uint8_t>(atoi(fields[7]));
+    if (fields[8][0] != '\0') {
+        fix_.hdop = strtof(fields[8], nullptr);
+    }
 
     if (fields[9][0] != '\0') {
         float altitude_m = strtof(fields[9], nullptr);

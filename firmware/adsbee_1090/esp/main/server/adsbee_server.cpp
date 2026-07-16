@@ -8,6 +8,7 @@
 #include "gdl90/gdl90_utils.hh"
 #include "json_utils.hh"
 #include "peripherals/sensor_fusion.hh"
+#include "peripherals/spa06_003.hh"
 #include "pico.hh"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
@@ -20,6 +21,24 @@ static const uint16_t kGDL90Port = 4000;
 
 // Ground speed above which the ownship is reported as airborne in GDL90 target reports.
 static const int32_t kOwnshipAirborneSpeedKts = 30;
+
+// Derive the GDL90 Navigation Accuracy Category for Position (NACp) from the GNSS HDOP and fix quality,
+// mirroring Stratux: estimate the 95% horizontal accuracy (meters) as HDOP scaled by the solution type,
+// then bucket it per DO-260B NACp thresholds. Returns 8 as a conservative default when HDOP is unavailable.
+static uint8_t NACpFromHdop(float hdop, uint8_t fix_quality) {
+    if (hdop <= 0.0f) {
+        return 8;  // No HDOP: fall back to <92.6 m.
+    }
+    // Stratux: WAAS/DGPS-class solutions (fix_quality >= 2) are tighter than plain 3D GPS.
+    const float accuracy_m = (fix_quality >= 2) ? (hdop * 4.0f) : (hdop * 8.0f);
+    if (accuracy_m < 3.0f) return 11;
+    if (accuracy_m < 10.0f) return 10;
+    if (accuracy_m < 30.0f) return 9;
+    if (accuracy_m < 92.6f) return 8;
+    if (accuracy_m < 185.2f) return 7;
+    if (accuracy_m < 555.6f) return 6;
+    return 0;
+}
 
 static const uint16_t kNetworkConsoleWelcomeMessageMaxLen = 1000;
 static const uint16_t kNetworkMetricsMessageMaxLen = 1500;
@@ -386,7 +405,11 @@ bool ADSBeeServer::ReportGDL90() {
     if (have_position) {
         ownship_data.latitude_deg = rx_position.latitude_deg;
         ownship_data.longitude_deg = rx_position.longitude_deg;
-        ownship_data.altitude_ft = rx_position.baro_altitude_ft;  // Ownship Report (msg 10) carries baro altitude.
+        if (barometer_ != nullptr && barometer_->IsInitialized()) {
+            ownship_data.altitude_ft = MetersToFeet(static_cast<int>(barometer_->GetAltitudeMeters()));
+        } else {
+            ownship_data.altitude_ft = rx_position.baro_altitude_ft;  // Fallback: aircraft-sourced baro altitude.
+        }
         ownship_data.speed_kts = rx_position.speed_kts;
         ownship_data.direction_deg = rx_position.heading_deg;
         // Only use a real ICAO address when bootstrapping off a tracked aircraft; a GNSS ownship is self-assigned.
@@ -394,9 +417,12 @@ bool ADSBeeServer::ReportGDL90() {
             (rx_position.source == SettingsManager::RxPosition::kPositionSourceAircraftMatchingICAO)
                 ? rx_position.icao_address
                 : 0x0;
-        // Non-zero NIC/NACp so EFBs treat the ownship position as valid.
+        // Non-zero NIC so EFBs treat the ownship position as valid; NACp derived from GNSS HDOP so the
+        // accuracy shown in the EFB reflects the real fix quality (was hardcoded 8 = <92.6 m).
         ownship_data.navigation_integrity_category = 8;
-        ownship_data.navigation_accuracy_category_position = 8;
+        ownship_data.navigation_accuracy_category_position =
+            NACpFromHdop(rp2040_aircraft_dictionary_metrics.gnss_hdop,
+                         rp2040_aircraft_dictionary_metrics.gnss_fix_quality);
         bool airborne = rx_position.speed_kts > kOwnshipAirborneSpeedKts;
         ownship_data.SetMiscIndicator(GDL90Reporter::GDL90TargetReportData::kMiscIndicatorTTIsTrueTrackAngle, false,
                                       airborne);
@@ -409,9 +435,13 @@ bool ADSBeeServer::ReportGDL90() {
 
     // Ownship Geometric Altitude (msg 11): the EFB reads geometric altitude from here. rx_position.gnss_altitude_ft is
     // MSL (parsed from NMEA GGA), so the ForeFlight ID capabilities bit above declares an MSL datum.
+    // Report a real Vertical Figure of Merit (10 m, matching Stratux) rather than the "not available" sentinel
+    // (0x7FFF) — ForeFlight shows dashes for GPS altitude when the VFOM is "not available".
+    static const uint16_t kOwnshipVerticalFigureOfMeritM = 10;
     if (have_position) {
         message.len = gdl90.WriteGDL90OwnshipGeometricAltitudeMessage(
-            message.data, CommsManager::NetworkMessage::kMaxLenBytes, rx_position.gnss_altitude_ft);
+            message.data, CommsManager::NetworkMessage::kMaxLenBytes, rx_position.gnss_altitude_ft,
+            kOwnshipVerticalFigureOfMeritM);
         comms_manager.WiFiAccessPointSendMessageToAllStations(message);
         message.len = 0;
     }
@@ -780,6 +810,7 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
     combined_metrics.gnss_fix = adsbee_server.rp2040_aircraft_dictionary_metrics.gnss_fix;
     combined_metrics.gnss_num_satellites = adsbee_server.rp2040_aircraft_dictionary_metrics.gnss_num_satellites;
     combined_metrics.gnss_fix_quality = adsbee_server.rp2040_aircraft_dictionary_metrics.gnss_fix_quality;
+    combined_metrics.gnss_hdop = adsbee_server.rp2040_aircraft_dictionary_metrics.gnss_hdop;
 
     // Broadcast dictionary metrics over the metrics Websocket.
     char metrics_message[kNetworkMetricsMessageMaxLen];

@@ -200,6 +200,9 @@ extern "C" void app_main(void) {
         // Provide the AHRS attitude source for the ForeFlight GDL90 AHRS message (winglet boards only).
         adsbee_server.SetSensorFusion(fusion);
 
+        // Provide the barometer for the GDL90 ownship pressure altitude (winglet boards only).
+        adsbee_server.SetBarometer(spl);
+
         // Clear screen.
         epd.Display();
     }

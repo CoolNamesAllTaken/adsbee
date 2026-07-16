@@ -7,6 +7,7 @@
 #include "websocket_server.hh"
 
 class SensorFusion;  // Forward declared; the AHRS attitude source lives ESP-side (see SetSensorFusion).
+class Spl06003;      // Forward declared; the barometer (ownship pressure altitude) lives ESP-side (see SetBarometer).
 
 class ADSBeeServer {
    public:
@@ -47,6 +48,12 @@ class ADSBeeServer {
      * sensor fusion (winglet); left unset elsewhere, in which case no AHRS messages are emitted.
      */
     void SetSensorFusion(SensorFusion& sensor_fusion) { sensor_fusion_ = &sensor_fusion; }
+
+    /**
+     * Provide the barometer used to populate the GDL90 ownship report pressure altitude. Only called on boards with a
+     * barometer (winglet); left unset elsewhere, in which case the ownship falls back to rx_position.baro_altitude_ft.
+     */
+    void SetBarometer(Spl06003& barometer) { barometer_ = &barometer; }
 
     /**
      * Task that runs continuously to receive SPI messages.
@@ -155,6 +162,9 @@ class ADSBeeServer {
 
     // AHRS attitude source. Null unless SetSensorFusion() was called (winglet boards only).
     SensorFusion* sensor_fusion_ = nullptr;
+
+    // Barometer for ownship pressure altitude. Null unless SetBarometer() was called (winglet boards only).
+    Spl06003* barometer_ = nullptr;
 };
 
 extern ADSBeeServer adsbee_server;
