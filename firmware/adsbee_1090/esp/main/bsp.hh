@@ -47,6 +47,17 @@ class BSP {
     static const gpio_num_t sd_clk_pin  = GPIO_NUM_9;
     static const gpio_num_t sd_dat0_pin = GPIO_NUM_10;
 
+    // CO (carbon monoxide) analog sensor: two ADC1 inputs. The ADC unit/channel
+    // are derived from the GPIO number at runtime (adc_oneshot_io_to_channel).
+    static const gpio_num_t co_vout_pin = GPIO_NUM_1;  // CO_VOUT (ADC1)
+    static const gpio_num_t co_vref_pin = GPIO_NUM_2;  // CO_VREF (ADC1)
+
+    // CO alarm buzzer: square-wave siren driven by LEDC PWM. Uses a different
+    // LEDC timer/channel than the EPD front light (LEDC_TIMER_0 / LEDC_CHANNEL_0).
+    static const gpio_num_t buzzer_pin = GPIO_NUM_21;
+    static constexpr ledc_timer_t   buzzer_ledc_timer   = LEDC_TIMER_1;
+    static constexpr ledc_channel_t buzzer_ledc_channel = LEDC_CHANNEL_1;
+
     // FXL6408 expander pin assignments.
     // Expander A = ADDR low (0x43, index 0), Expander B = ADDR high (0x44, index 1).
     static constexpr fxl6408_pin_t epd_busy_pin = FXL6408_PIN(FXL6408_EXPANDER_A, 0);

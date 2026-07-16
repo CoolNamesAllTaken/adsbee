@@ -64,10 +64,25 @@ constexpr int kNumRailRows = 5;
 
 // ---- Screen selection -----------------------------------------------------
 enum class UiScreen {
-    kMap,       // WD.productExp render: moving-map / radar scope with traffic.
-    kSettings,  // WD.settings render (stubbed for now).
-    kDebug,     // Existing sensor telemetry dump (kept, made navigable).
+    kHome,         // Top-level menu (boot default). Entries in kHomeMenu below.
+    kMap,          // Live Map: moving-map / radar scope with traffic.
+    kCoAlarmTest,  // CO alarm test: hold OK to sound the buzzer siren.
+    kDebug,        // Diagnostics: sensor telemetry dump (reachable via the menu).
+    kSettings,     // WD.settings render (stubbed; not currently in the menu).
 };
+
+// ---- Home menu ------------------------------------------------------------
+// Single source of truth for the Home menu: label + the screen each entry opens.
+struct MenuItem {
+    const char* label;
+    UiScreen    target;
+};
+constexpr MenuItem kHomeMenu[] = {
+    {"Live Map", UiScreen::kMap},
+    {"Diagnostics", UiScreen::kDebug},
+    {"CO Alarm Test", UiScreen::kCoAlarmTest},
+};
+constexpr int kHomeMenuCount = (int)(sizeof(kHomeMenu) / sizeof(kHomeMenu[0]));
 
 // ---- Zoom ladder ----------------------------------------------------------
 // Fixed map ranges (outer-ring radius in nautical miles), aviation-relevant.

@@ -13,6 +13,7 @@ class Mp2722;
 class Bq27427;
 class Lsm6dsv;
 class SensorFusion;
+class CoSensor;
 
 namespace winglet_ui {
 
@@ -27,6 +28,7 @@ struct DebugScreenSources {
     Bq27427& bq;
     Lsm6dsv& imu;
     SensorFusion& fusion;
+    CoSensor& co;
 };
 
 // Debug screen — the original sensor telemetry dump. The caller must have

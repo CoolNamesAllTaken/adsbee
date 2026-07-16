@@ -9,6 +9,7 @@
 // Sensor driver + helper headers (reachable via the "peripherals" include dir).
 #include "aht20.hh"
 #include "bq27427.hh"
+#include "co_sensor.hh"
 #include "compass.hh"
 #include "lsm6dsv.hh"
 #include "ltr_329.hh"
@@ -45,6 +46,9 @@ void DrawDebugScreen(Canvas& c, const DebugScreenSources& s) {
     snprintf(line, sizeof line, "Mag X:%.1f Y:%.1f Z:%.1fuT", s.mmc.GetMagneticFieldXUt(),
              s.mmc.GetMagneticFieldYUt(), s.mmc.GetMagneticFieldZUt());
     draw(line);
+    snprintf(line, sizeof line, "CO:%s%.0fppm %d-%dmV", s.co.IsDataValid() ? "" : "?", s.co.GetCoPpm(),
+             s.co.GetVoutMv(), s.co.GetVrefMv());
+    draw(line);
     snprintf(line, sizeof line, "PwrGood:%d", s.mp.IsPowerGood() ? 1 : 0);
     draw(line);
     snprintf(line, sizeof line, "Batt:%s%u%% %s%dmW", s.bq.IsDataValid() ? "" : "?",
@@ -67,11 +71,11 @@ void DrawDebugScreen(Canvas& c, const DebugScreenSources& s) {
              s.fusion.GetPitchDeg(), s.fusion.GetRollDeg(), s.fusion.IsCalibrated() ? "" : "*");
     draw(line);
 
-    if (s.fusion.IsValid()) {
-        DrawOrientationCube(c, 198, 132, 22.f, s.fusion.GetFusedQuaternion());
-    }
-    DrawCompass(c, 222, 52, 26, s.fusion.GetMagHeadingLevelDeg(), s.fusion.GetMagHeadingFlatDeg(),
-                s.fusion.IsMagHeadingValid());
+    // if (s.fusion.IsValid()) {
+    //     DrawOrientationCube(c, 198, 132, 22.f, s.fusion.GetFusedQuaternion());
+    // }
+    // DrawCompass(c, 222, 52, 26, s.fusion.GetMagHeadingLevelDeg(), s.fusion.GetMagHeadingFlatDeg(),
+    //             s.fusion.IsMagHeadingValid());
 }
 
 }  // namespace winglet_ui

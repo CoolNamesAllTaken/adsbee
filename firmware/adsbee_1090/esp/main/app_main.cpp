@@ -30,6 +30,8 @@
 
 #include "peripherals/ltr_329.hh"
 #include "peripherals/aht20.hh"
+#include "peripherals/buzzer.hh"
+#include "peripherals/co_sensor.hh"
 #include "peripherals/spa06_003.hh"
 #include "peripherals/mmc5603.hh"
 #include "peripherals/mp2722.hh"
@@ -50,6 +52,10 @@
 
 static const uint32_t kHeapUsagePrintIntervalMs = 100;
 static const uint32_t kDeviceStatusUpdateIntervalMs = 1000;
+
+// CO alarm threshold (ppm) for the status LED. 35 ppm is the EPA/NIOSH advisory level (max 1-hour
+// exposure); at/above this the CO port LED goes orange.
+static const float kCoAlarmPpm = 35.0f;
 
 BSP bsp = BSP();
 ObjectDictionary object_dictionary;
@@ -92,13 +98,14 @@ void device_status_update_task(void* pvParameters) {
 // ~2 Hz from the polling loop for bring-up visibility.
 static void LogSensorReadout(uint32_t sps, const Ltr329& ltr, const Aht20& aht, const Spl06003& spl,
                              const Mmc5603& mmc, const Mp2722& mp, const Bq27427& bq,
-                             const Lsm6dsv& imu, const SensorFusion& fusion) {
+                             const Lsm6dsv& imu, const SensorFusion& fusion, const CoSensor& co) {
     ESP_LOGI("app_main",
              "SPS:%3u | "
              "L:%7.2f c0:%5u c1:%5u | "
              "T_a:%5.2fC H:%5.2f%% | "
              "P:%8.2f T_s:%5.2fC A:%7.2fm | "
              "Mx:%7.2f My:%7.2f Mz:%7.2f uT | "
+             "CO:%s%.0fppm(%d-%dmV) | "
              "PG:%d | "
              "SOC:%s%u%% Pwr:%s%dmW | "
              "Q:%s w:%6.3f x:%6.3f y:%6.3f z:%6.3f | "
@@ -106,7 +113,8 @@ static void LogSensorReadout(uint32_t sps, const Ltr329& ltr, const Aht20& aht, 
              sps, ltr.GetLux(), ltr.GetCh0Raw(), ltr.GetCh1Raw(), aht.GetTemperatureCelsius(),
              aht.GetRelativeHumidity(), spl.GetPressureHpa(), spl.GetTemperatureCelsius(),
              spl.GetAltitudeMeters(), mmc.GetMagneticFieldXUt(), mmc.GetMagneticFieldYUt(),
-             mmc.GetMagneticFieldZUt(), mp.IsPowerGood() ? 1 : 0, bq.IsDataValid() ? "" : "?",
+             mmc.GetMagneticFieldZUt(), co.IsDataValid() ? "" : "?", co.GetCoPpm(), co.GetVoutMv(),
+             co.GetVrefMv(), mp.IsPowerGood() ? 1 : 0, bq.IsDataValid() ? "" : "?",
              bq.GetStateOfChargePct(), bq.IsDataValid() ? "" : "?", bq.GetAveragePowerMw(),
              imu.IsQuaternionValid() ? "ok" : "--", imu.GetQuaternion().w, imu.GetQuaternion().x,
              imu.GetQuaternion().y, imu.GetQuaternion().z, fusion.GetHeadingDeg(),
@@ -164,6 +172,8 @@ extern "C" void app_main(void) {
     Mmc5603 mmc;
     Mp2722 mp;
     Bq27427 bq;
+    CoSensor co;
+    Buzzer buzzer;
     Lsm6dsv imu;
     DisplayEpdW21 epd;
     WingletLeds leds;
@@ -187,6 +197,8 @@ extern "C" void app_main(void) {
         if (!mmc.Init()) { ESP_LOGE("app_main", "MMC5603 init failed"); }
         if (!mp.Init()) { ESP_LOGE("app_main", "MP2722 init failed"); }
         if (!bq.Init()) { ESP_LOGE("app_main", "BQ27427 init failed"); }
+        if (!co.Init()) { ESP_LOGE("app_main", "CO sensor init failed"); }
+        if (!buzzer.Init()) { ESP_LOGE("app_main", "Buzzer init failed"); }
         if (!imu.Init(true)) { ESP_LOGE("app_main", "LSM6DSV init failed"); }
         if (!epd.Init()) { ESP_LOGE("app_main", "EPD init failed"); }
         if (!leds.Init()) { ESP_LOGE("app_main", "WingletLeds init failed"); }
@@ -231,12 +243,14 @@ extern "C" void app_main(void) {
             uint8_t button_bits = 0xFF;  // default: none pressed (active-low)
             gpio_b.ReadInputs(&button_bits);
 
+            co.Update();  // Read the CO sensor before building the port-status LEDs below.
+
             // Status LEDs: 4 button backlights + 5 port-status LEDs. The port-status
             // states pull from app-level state (ADS-B dictionary, GNSS fix, Wi-Fi),
             // in rail order: CO, GNSS, SUBG, 2.4G, 1090.
             const AircraftDictionary& dict = adsbee_server.GetAircraftDictionary();
             const bool port_ok[5] = {
-                true,  // CO: always green for now.
+                co.IsDataValid() && co.GetCoPpm() < kCoAlarmPpm,  // CO: green below the alarm threshold.
                 object_dictionary.composite_device_status.rp2040.rx_position_available,  // GNSS fix
                 dict.metrics.num_uat_aircraft > 0,      // SUBG: UAT aircraft detected
                 comms_manager.WiFiStationHasIP() ||
@@ -254,6 +268,10 @@ extern "C" void app_main(void) {
 
             // Screen navigation (edge-triggered on press) owns current screen + zoom.
             screens.HandleButtons(button_bits);
+
+            // Drive the CO alarm buzzer from the UI state (siren while OK held on the CO test screen).
+            buzzer.SetSiren(screens.co_alarm_test_active());
+            buzzer.Update();  // advances the non-blocking frequency sweep
 
             // Terrain: load overlapping map tiles on ownship/zoom change (cheap no-op
             // otherwise; loads at most one tile per call, off the render path).
@@ -275,7 +293,7 @@ extern "C" void app_main(void) {
 
             if (now - last_log_us >= 500000) {  // 500 000 µs = 2 Hz
                 last_log_us = now;
-                LogSensorReadout(current_sps, ltr, aht, spl, mmc, mp, bq, imu, fusion);
+                LogSensorReadout(current_sps, ltr, aht, spl, mmc, mp, bq, imu, fusion, co);
             }
 
             // Live screen readout on the EPD via non-blocking OTP partial refresh.
@@ -294,9 +312,11 @@ extern "C" void app_main(void) {
                     .wifi_up = comms_manager.WiFiStationHasIP() || comms_manager.WiFiAccessPointHasClients(),
                     .batt_pct = (uint8_t)bq.GetStateOfChargePct(),
                     .batt_valid = bq.IsDataValid(),
+                    .co_ppm = co.GetCoPpm(),
+                    .co_valid = co.IsDataValid(),
                     .terrain = &terrain,
                 };
-                winglet_ui::DebugScreenSources debug_src{ltr, aht, spl, mmc, mp, bq, imu, fusion};
+                winglet_ui::DebugScreenSources debug_src{ltr, aht, spl, mmc, mp, bq, imu, fusion, co};
 
                 screens.Draw(epd.canvas(), map_src, debug_src);
 

@@ -33,6 +33,9 @@ struct MapDataSources {
     uint8_t batt_pct;
     bool batt_valid;
 
+    float co_ppm;    // CO concentration (ppm) for the left-rail CO row.
+    bool co_valid;   // CO sensor reading is valid.
+
     const winglet_terrain::TerrainLoader* terrain;  // null => skip terrain.
 };
 
@@ -55,10 +58,17 @@ class ScreenManager {
 
     UiScreen current_screen() const { return current_screen_; }
     int zoom_index() const { return zoom_index_; }
+    int menu_index() const { return menu_index_; }
+
+    // True while the CO Alarm Test screen is active and OK is being held. Polled by app_main to drive
+    // the buzzer siren (the UI layer has no peripheral access).
+    bool co_alarm_test_active() const { return co_alarm_test_ok_held_; }
 
    private:
-    UiScreen current_screen_ = UiScreen::kMap;
+    UiScreen current_screen_ = UiScreen::kHome;  // Boot into the Home menu.
     int      zoom_index_     = kDefaultZoomIndex;
+    int      menu_index_     = 0;      // Home menu selection.
+    bool     co_alarm_test_ok_held_ = false;
     uint8_t  prev_buttons_   = 0xFF;  // all released (active-low)
 };
 

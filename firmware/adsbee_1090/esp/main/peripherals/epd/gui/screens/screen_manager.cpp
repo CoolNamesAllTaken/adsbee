@@ -5,6 +5,8 @@
 
 #include "aircraft_dictionary.hh"
 #include "canvas.hh"
+#include "co_alarm_test_screen.hh"
+#include "home_screen.hh"
 #include "map_screen.hh"
 #include "settings_screen.hh"
 // debug_screen.hh comes in via screen_manager.hh.
@@ -13,15 +15,42 @@ namespace winglet_ui {
 
 void ScreenManager::HandleButtons(uint8_t button_bits) {
     // Active-low: a press is a 1->0 transition on that bit. Fire once per press.
+    // Buttons: bit3 = Up, bit1 = Down, bit2 = OK, bit0 = Back.
     uint8_t pressed = (uint8_t)(prev_buttons_ & ~button_bits);  // bits that went 0
-    if (pressed & (1 << 3)) {  // Up -> zoom in (toward closest range)
-        if (zoom_index_ > 0) zoom_index_--;
+
+    switch (current_screen_) {
+        case UiScreen::kHome:
+            if (pressed & (1 << 3)) {  // Up -> previous menu item
+                if (menu_index_ > 0) menu_index_--;
+            }
+            if (pressed & (1 << 1)) {  // Down -> next menu item
+                if (menu_index_ < kHomeMenuCount - 1) menu_index_++;
+            }
+            if (pressed & (1 << 2)) current_screen_ = kHomeMenu[menu_index_].target;  // OK -> select
+            // Back on Home: do nothing (top level).
+            break;
+
+        case UiScreen::kMap:
+            if (pressed & (1 << 3)) {  // Up -> zoom in (toward closest range)
+                if (zoom_index_ > 0) zoom_index_--;
+            }
+            if (pressed & (1 << 1)) {  // Down -> zoom out (toward farthest range)
+                if (zoom_index_ < kNumZoomLevels - 1) zoom_index_++;
+            }
+            // OK: no-op on the map (no longer opens the debug screen).
+            if (pressed & (1 << 0)) current_screen_ = UiScreen::kHome;  // Back
+            break;
+
+        default:  // kCoAlarmTest, kDebug, kSettings, ...
+            if (pressed & (1 << 0)) current_screen_ = UiScreen::kHome;  // Back
+            break;
     }
-    if (pressed & (1 << 1)) {  // Down -> zoom out (toward farthest range)
-        if (zoom_index_ < kNumZoomLevels - 1) zoom_index_++;
-    }
-    if (pressed & (1 << 2)) current_screen_ = UiScreen::kDebug;  // OK
-    if (pressed & (1 << 0)) current_screen_ = UiScreen::kMap;    // Enter/Back
+
+    // "Sound only while OK is held" on the CO test screen: track the CURRENT OK level (active-low),
+    // not just the press edge. OK is bit2, so held == the bit is low.
+    co_alarm_test_ok_held_ =
+        (current_screen_ == UiScreen::kCoAlarmTest) && ((button_bits & (1 << 2)) == 0);
+
     prev_buttons_ = button_bits;
 }
 
@@ -63,8 +92,12 @@ void ScreenManager::Draw(Canvas& c, const MapDataSources& map_src,
             // SUBG / 2.4G / 1090.
             static char rail_bufs[kNumRailRows][12];
             const auto& adsb_metrics = map_src.dict.metrics;
-            // CO: no CO sensor wired on the ESP yet — hard-coded to 0 for now.
-            snprintf(rail_bufs[0], sizeof rail_bufs[0], "0");
+            // CO: carbon monoxide concentration in ppm (blank when the sensor reading is invalid).
+            if (map_src.co_valid) {
+                snprintf(rail_bufs[0], sizeof rail_bufs[0], "%.0f", map_src.co_ppm);
+            } else {
+                rail_bufs[0][0] = '\0';
+            }
             // GNSS: satellites used in the current fix (from the RP2040 metrics).
             snprintf(rail_bufs[1], sizeof rail_bufs[1], "%u",
                      (unsigned)map_src.gnss_num_satellites);
@@ -97,6 +130,12 @@ void ScreenManager::Draw(Canvas& c, const MapDataSources& map_src,
             DrawMapScreen(c, map_data);
             break;
         }
+        case UiScreen::kHome:
+            DrawHomeScreen(c, menu_index_);
+            break;
+        case UiScreen::kCoAlarmTest:
+            DrawCoAlarmTestScreen(c, debug_src.co, co_alarm_test_ok_held_);
+            break;
         case UiScreen::kSettings:
             DrawSettingsScreen(c);
             break;
