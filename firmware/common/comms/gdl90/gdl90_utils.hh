@@ -262,10 +262,6 @@ class GDL90Reporter {
                                            const char* device_long_name = "ADSBee Winglet",
                                            bool wgs84_geo_alt_datum = false);
 
-    // Debug: selects which AHRS dialect the reporting layer emits. The Stratux 0x4C message is the AvareX-compatible
-    // default; set false to emit the ForeFlight 0x65 message instead.
-    bool ahrs_use_stratux_dialect = true;
-
     // Bit Flags for Message ID 0 (Heartbeat).
     bool uat_initialized = true;
     bool gnss_position_valid = false;

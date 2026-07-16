@@ -57,13 +57,20 @@ class SensorFusion {
     // ---- Device-body -> aircraft-body mounting rotation (VERIFY ON HARDWARE) ----
     // Right-multiplied onto the raw SFLP attitude quaternion (see SflpToAircraftAttitude). This is
     // a pure yaw-independent trim for the physical mounting: it aligns the device axes to the
-    // aircraft convention (+roll=right-wing-down, +pitch=nose-up) but does NOT affect the
-    // roll<->yaw decoupling.
-    // Bench-fit from observed symptoms: with identity, the raw device frame swaps roll<->pitch and
-    // inverts (right-wing-down read as nose-down; level read upside down). A 180 deg rotation about
-    // the (1,1,0) diagonal undoes exactly that swap+flip. Verified for all tilt directions:
-    // right-wing-down -> +roll, nose-up -> +pitch, level -> (0,0).
-    glm::quat body_mount = glm::angleAxis(glm::radians(180.f), glm::normalize(glm::vec3(1.f, 1.f, 0.f)));
+    // aircraft convention but does NOT affect the roll<->yaw decoupling.
+    //
+    // Composed from two bench-fit steps:
+    //   1. 180 deg about the (1,1,0) diagonal — undoes the raw frame's roll<->pitch swap + inversion
+    //      (with identity: right-wing-down read as nose-down and level read upside down).
+    //   2. -90 deg about the aircraft right/pitch axis (Y) — re-zeros pitch so the device held with
+    //      its nose pointing straight up reads as level (pitch 0).
+    // Net = angleAxis(180,(1,1,0)) * angleAxis(-90,(0,1,0)) = quat(0.5, 0.5, 0.5, -0.5).
+    // NOTE: with the nose-up reference, device lean fwd/back -> AHRS pitch, but device roll about
+    // its long axis -> AHRS yaw and device yaw -> AHRS roll (roll/yaw swap at this orientation, by
+    // design choice).
+    glm::quat body_mount =
+        glm::angleAxis(glm::radians(180.f), glm::normalize(glm::vec3(1.f, 1.f, 0.f))) *
+        glm::angleAxis(glm::radians(-90.f), glm::vec3(0.f, 1.f, 0.f));
 
     // Heading is CW-from-north (opposite chirality to the right-handed yaw the
     // extractor produces), so it carries its own sign. -1 makes CW rotation increase

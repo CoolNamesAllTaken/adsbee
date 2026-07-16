@@ -506,34 +506,42 @@ bool ADSBeeServer::ReportGDL90AHRS() {
         return true;  // Nothing to do.
     }
 
-    CommsManager::NetworkMessage message;
-    message.port = kGDL90Port;
+    // Emit both AHRS dialects so every client is covered regardless of which one it understands: the
+    // Stratux/iLevil 0x4C message (what AvareX expects) and the ForeFlight 0x65 message. Heading from
+    // SensorFusion is magnetic; there is no airspeed source on this hardware, so airspeed fields are
+    // left unavailable. Note the ForeFlight message negates roll relative to the Stratux convention.
+    bool ok = true;
 
-    // Emit the AHRS dialect selected by the debug flag. Heading from SensorFusion is magnetic; there is no airspeed
-    // source on this hardware, so airspeed fields are left unavailable.
-    if (gdl90.ahrs_use_stratux_dialect) {
-        // Stratux/iLevil 0x4C message: the dialect AvareX understands.
-        message.len = gdl90.WriteGDL90StratuxAHRSMessage(
-            message.data, CommsManager::NetworkMessage::kMaxLenBytes, sensor_fusion_->GetRollDeg(),
-            sensor_fusion_->GetPitchDeg(), sensor_fusion_->GetHeadingDeg(), sensor_fusion_->IsValid());
-    } else {
-        // ForeFlight 0x65 message.
-        message.len = gdl90.WriteGDL90ForeFlightAHRSMessage(
-            message.data, CommsManager::NetworkMessage::kMaxLenBytes, sensor_fusion_->GetRollDeg(),
-            sensor_fusion_->GetPitchDeg(), sensor_fusion_->GetHeadingDeg(), /*heading_is_magnetic=*/true,
-            sensor_fusion_->IsValid());
-    }
-    if (message.len == 0) {
-        CONSOLE_ERROR("ADSBeeServer::ReportGDL90AHRS", "Failed to write GDL90 AHRS message.");
-        return false;
+    // Stratux/iLevil 0x4C message: the dialect AvareX understands.
+    CommsManager::NetworkMessage stratux_message;
+    stratux_message.port = kGDL90Port;
+    stratux_message.len = gdl90.WriteGDL90StratuxAHRSMessage(
+        stratux_message.data, CommsManager::NetworkMessage::kMaxLenBytes, sensor_fusion_->GetRollDeg(),
+        sensor_fusion_->GetPitchDeg(), sensor_fusion_->GetHeadingDeg(), sensor_fusion_->IsValid());
+    if (stratux_message.len == 0) {
+        CONSOLE_ERROR("ADSBeeServer::ReportGDL90AHRS", "Failed to write GDL90 Stratux AHRS message.");
+        ok = false;
+    } else if (!comms_manager.WiFiAccessPointSendMessageToAllStations(stratux_message)) {
+        CONSOLE_ERROR("ADSBeeServer::ReportGDL90AHRS", "Failed to send Stratux AHRS message to all clients.");
+        ok = false;
     }
 
-    if (!comms_manager.WiFiAccessPointSendMessageToAllStations(message)) {
-        CONSOLE_ERROR("ADSBeeServer::ReportGDL90AHRS", "Failed to send AHRS message to all clients.");
-        return false;
+    // ForeFlight 0x65 message.
+    CommsManager::NetworkMessage foreflight_message;
+    foreflight_message.port = kGDL90Port;
+    foreflight_message.len = gdl90.WriteGDL90ForeFlightAHRSMessage(
+        foreflight_message.data, CommsManager::NetworkMessage::kMaxLenBytes, -sensor_fusion_->GetRollDeg(),
+        sensor_fusion_->GetPitchDeg(), sensor_fusion_->GetHeadingDeg(), /*heading_is_magnetic=*/true,
+        sensor_fusion_->IsValid());
+    if (foreflight_message.len == 0) {
+        CONSOLE_ERROR("ADSBeeServer::ReportGDL90AHRS", "Failed to write GDL90 ForeFlight AHRS message.");
+        ok = false;
+    } else if (!comms_manager.WiFiAccessPointSendMessageToAllStations(foreflight_message)) {
+        CONSOLE_ERROR("ADSBeeServer::ReportGDL90AHRS", "Failed to send ForeFlight AHRS message to all clients.");
+        ok = false;
     }
 
-    return true;
+    return ok;
 }
 
 // void ADSBeeServer::TCPServerTask(void *pvParameters) {
