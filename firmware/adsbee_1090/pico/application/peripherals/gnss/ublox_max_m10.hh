@@ -19,15 +19,34 @@ class UbloxMAXM10 : public GNSSReceiver {
     // CFG-UART1-BAUDRATE = 38400). The full default table is written during init.
     static constexpr uint32_t kDefaultBaudrate = 38400;
 
-    // Time from power-on until the module is ready to accept UBX configuration.
-    static constexpr uint32_t kBootupDelayMs = 1000;
+    // Settle floor after power-on before we start probing. u-blox does not publish a fixed
+    // Vcc-to-UART-ready time for the M10 (only TTFF, which is fix time, not UART readiness) and
+    // recommends polling UBX-MON-VER until it answers; this is a conservative floor on top of that
+    // poll-until-ready retry (see ProbeLiveness / kProbeAttempts).
+    static constexpr uint32_t kBootupDelayMs = 2000;
 
-    // Max time to wait for a UBX-ACK-ACK/NAK after a VALSET.
-    static constexpr uint32_t kAckTimeoutMs = 1000;
+    // Max time to wait for a single UBX response (ACK/NAK after a VALSET, or a VALGET reply). Bounds
+    // exactly one outstanding transaction: a UBX frame is <10 ms on the wire at 38400 baud and the
+    // module ACKs in single/low-tens of ms; the only slack needed is for the scanner to skip past the
+    // interleaved 1 Hz GGA/RMC NMEA. A NAK matches immediately (wildcard ACK-class match in
+    // WaitForAck), so this timeout only elapses on a genuinely absent/unresponsive reply.
+    static constexpr uint32_t kAckTimeoutMs = 150;
 
-    // Liveness probe (UBX-MON-VER poll) timeout. Kept short so a missing/unresponsive module is
-    // detected quickly and the bulk config pass is skipped, rather than stalling boot.
-    static constexpr uint32_t kProbeTimeoutMs = 300;
+    // Liveness probe (UBX-MON-VER poll) timeout, per attempt. A u-blox-reported data point shows some
+    // modules are still not ready to answer at 300 ms after startup, so allow a bit more headroom.
+    static constexpr uint32_t kProbeTimeoutMs = 500;
+
+    // Number of UBX-MON-VER poll attempts before declaring the module absent. Implements the
+    // recommended "poll until ready" pattern so a module still finishing its cold-start on the first
+    // poll is still detected, rather than failing a single-shot probe. The watchdog is poked between
+    // attempts. Total worst case if absent: kProbeAttempts * kProbeTimeoutMs.
+    static constexpr uint32_t kProbeAttempts = 5;
+
+    // Overall wall-clock budget for the blocking config pass (SyncConfigDefaults). Bounds the ~371-key
+    // read-modify-write so a module that answers the probe but then stops responding cannot stall init
+    // past the ~10 s watchdog window. Sized with margin below it; the per-key watchdog poke keeps the
+    // watchdog fed within the budget, and exceeding it aborts the pass and marks the receiver unhealthy.
+    static constexpr uint32_t kInitConfigBudgetMs = 10000;
 
     // UBX protocol constants.
     static constexpr uint8_t kUbxSync1 = 0xB5;
@@ -131,17 +150,22 @@ class UbloxMAXM10 : public GNSSReceiver {
     // @retval True on ACK-ACK, false on ACK-NAK or timeout.
     bool WaitForAck(uint8_t acked_class, uint8_t acked_id);
 
-    // Quick, bounded check that the module is present and talking UBX: poll UBX-MON-VER and wait
-    // briefly for the reply. Used to gate the bulk config pass so a missing module never stalls boot.
-    // @retval True if the module replied within kProbeTimeoutMs.
+    // Quick, bounded check that the module is present and talking UBX: poll UBX-MON-VER up to
+    // kProbeAttempts times (kProbeTimeoutMs each, watchdog poked between attempts), returning as soon
+    // as it replies. Implements u-blox's recommended "poll until ready" readiness detection and gates
+    // the bulk config pass so a missing module never stalls boot.
+    // @retval True if the module replied within kProbeAttempts attempts.
     bool ProbeLiveness();
 
     // Read-modify-write the default configuration table into RAM + BBR: for each key, read the
     // module's current value (UBX-CFG-VALGET) and only write it (UBX-CFG-VALSET) if it differs.
     // On an already-provisioned module nothing is written, so the live fix and BBR-held
-    // ephemeris/almanac survive and the module hot-starts. Returns the number of keys written
-    // (0 means "already fully configured"), or a negative value if the module stopped responding.
-    int32_t SyncConfigDefaults();
+    // ephemeris/almanac survive and the module hot-starts. Pokes the watchdog each iteration.
+    // @param[in] deadline_ms Absolute get_time_since_boot_ms() timestamp at which to abort the pass so
+    //                        an unresponsive module can't stall init past the watchdog window.
+    // @retval Number of keys written (0 means "already fully configured"), or a negative value if the
+    //         deadline was exceeded (module stopped responding mid-pass).
+    int32_t SyncConfigDefaults(uint32_t deadline_ms);
 
     // Enable exactly the NMEA sentences we consume (GGA + RMC) and silence the rest, on UART1.
     // Cheap and idempotent; used both during init and after a UART handover (ResendRuntimeConfig).

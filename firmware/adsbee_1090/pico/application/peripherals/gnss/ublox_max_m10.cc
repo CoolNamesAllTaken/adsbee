@@ -1,7 +1,8 @@
 #include "ublox_max_m10.hh"
 
-#include "comms.hh"  // For comms_manager (UART I/O) and CONSOLE_* logging.
-#include "hal.hh"    // For get_time_since_boot_ms().
+#include "comms.hh"             // For comms_manager (UART I/O) and CONSOLE_* logging.
+#include "hal.hh"               // For get_time_since_boot_ms().
+#include "hardware/watchdog.h"  // For watchdog_update() during the blocking init/config pass.
 
 namespace {
 
@@ -135,8 +136,20 @@ bool UbloxMAXM10::ProbeLiveness() {
     // Poll UBX-MON-VER (a zero-length payload is a poll request per interface description S3.5.2)
     // and wait briefly for the reply (class/id 0x0A 0x04). UBX in/out are enabled on UART1 in the
     // module's factory-default state, so a present module answers even before our config pass runs.
-    SendUbxFrame(kUbxClassMon, kUbxIdMonVer, nullptr, 0);
-    return WaitForUbxMessage(kUbxClassMon, kUbxIdMonVer, kProbeTimeoutMs);
+    //
+    // Retry up to kProbeAttempts times rather than probing once: u-blox does not publish a fixed
+    // Vcc-to-UART-ready time and recommends polling MON-VER until it answers, so a module still
+    // finishing its cold-start on the first poll is caught on a later attempt instead of being
+    // declared absent. Poke the watchdog between attempts since this whole path runs before the
+    // main super-loop's first poke.
+    for (uint32_t attempt = 0; attempt < kProbeAttempts; attempt++) {
+        SendUbxFrame(kUbxClassMon, kUbxIdMonVer, nullptr, 0);
+        if (WaitForUbxMessage(kUbxClassMon, kUbxIdMonVer, kProbeTimeoutMs)) {
+            return true;
+        }
+        watchdog_update();
+    }
+    return false;
 }
 
 bool UbloxMAXM10::CfgValGet(uint32_t key_id, uint8_t value_size_bytes, uint64_t& value_out) {
@@ -183,17 +196,31 @@ bool UbloxMAXM10::CfgValSet(uint32_t key_id, uint64_t value, uint8_t value_size_
     return WaitForAck(kUbxClassCfg, kUbxIdCfgValset);
 }
 
-int32_t UbloxMAXM10::SyncConfigDefaults() {
+int32_t UbloxMAXM10::SyncConfigDefaults(uint32_t deadline_ms) {
     // Read-modify-write the firmware default configuration table into RAM + BBR. For each key, read
     // the current value with VALGET and only VALSET it when it differs. On an already-provisioned
     // module every key already matches, so nothing is written: the live navigation solution and the
     // BBR-held ephemeris/almanac/last-position survive and the module hot-starts. BBR persists
     // because V_BCKP is on an always-on rail. (Warm/hot-start-sensitive keys are commented out of
     // kUbloxConfigDefaults so they're never touched here -- see ublox_max_m10_defaults.hh.)
+    //
+    // Each key costs up to kAckTimeoutMs if unanswered, so a module that dies partway through this
+    // ~371-key pass could otherwise stall past the watchdog window. Poke the watchdog each iteration
+    // and abort (returning negative) once deadline_ms passes so the caller can mark the receiver
+    // unhealthy and fall back, rather than the watchdog rebooting us mid-init.
     uint8_t layers = kCfgLayerRam | kCfgLayerBbr;
     int32_t num_written = 0;
     uint16_t num_read_fail = 0;
     for (uint32_t i = 0; i < kNumUbloxConfigDefaults; i++) {
+        watchdog_update();
+        // Signed difference is overflow-safe for wrapping millisecond timestamps.
+        if (static_cast<int32_t>(get_time_since_boot_ms() - deadline_ms) >= 0) {
+            CONSOLE_WARNING("UbloxMAXM10::SyncConfigDefaults",
+                            "Config pass exceeded %lu ms budget after %lu/%u keys; module unresponsive, aborting.",
+                            static_cast<unsigned long>(kInitConfigBudgetMs), static_cast<unsigned long>(i),
+                            static_cast<unsigned>(kNumUbloxConfigDefaults));
+            return -1;
+        }
         const UbloxCfgDefault& d = kUbloxConfigDefaults[i];
         uint64_t current = 0;
         if (!CfgValGet(d.key_id, d.size_bytes, current)) {
@@ -232,8 +259,13 @@ bool UbloxMAXM10::SendInitCommands() {
     }
 
     // Read-modify-write the default table: writes only the keys that differ, so a module we've
-    // already provisioned keeps its warm/hot-start data untouched.
-    SyncConfigDefaults();
+    // already provisioned keeps its warm/hot-start data untouched. Bounded by kInitConfigBudgetMs so
+    // a module that answers the probe but then stops responding can't stall init past the watchdog
+    // window; a negative return means the budget was blown -> bail unhealthy and let the app fall back.
+    uint32_t config_deadline_ms = get_time_since_boot_ms() + kInitConfigBudgetMs;
+    if (SyncConfigDefaults(config_deadline_ms) < 0) {
+        return false;
+    }
 
     // Application-specific config on top of the defaults (RAM + BBR). These are idempotent writes;
     // if the module already has them, VALSET is harmless. (Kept as unconditional writes rather than

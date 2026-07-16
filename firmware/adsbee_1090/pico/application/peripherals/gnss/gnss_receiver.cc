@@ -1,16 +1,31 @@
 #include "gnss_receiver.hh"
 
-#include "comms.hh"  // For comms_manager (UART I/O + baud) and CONSOLE_* logging.
-#include "hal.hh"    // For get_time_since_boot_ms().
+#include "comms.hh"             // For comms_manager (UART I/O + baud) and CONSOLE_* logging.
+#include "hal.hh"               // For get_time_since_boot_ms().
+#include "hardware/watchdog.h"  // For watchdog_update() during the blocking boot-delay wait.
 
 void GNSSReceiver::ClaimUart() {
     // Bring the GNSS UART up to a known state. uart0 is shared with the ESP32 flasher (GPIO 16/17),
     // which calls uart_deinit(uart0) when it finishes; claim the GNSS pins (GPIO 0/1) and
     // (re)initialize the peripheral here so a prior ESP32 flash cannot leave the GNSS link dead.
+    //
+    // Fully reset the peripheral before re-init. On a cold boot (no ESP32 flash) uart0 has already
+    // been brought up by CommsManager::Init() -- and, until we re-baud below, at a rate that doesn't
+    // match the module, so its RX FIFO has been filling with framing-error garbage. uart_init() on an
+    // already-live uart0 does not reliably clear that latched state, which corrupts the first probe.
+    // uart_deinit() first mirrors the clean-peripheral state the ESP32 flasher's DeInit() hands us on
+    // the post-flash path (which is why GNSS bring-up is reliable there but flaky on cold boot).
+    uart_deinit(config_.uart_handle);
     gpio_set_function(config_.uart_tx_pin, GPIO_FUNC_UART);
     gpio_set_function(config_.uart_rx_pin, GPIO_FUNC_UART);
     uart_set_translate_crlf(config_.uart_handle, false);
     uart_init(config_.uart_handle, GetDefaultBaudrate());
+
+    // Drain any bytes left in the RX FIFO from before the re-init so the first UBX-MON-VER probe
+    // reads a clean stream (mirrors the flasher's EnterBootloader() flush).
+    while (uart_is_readable(config_.uart_handle)) {
+        (void)uart_getc(config_.uart_handle);
+    }
 }
 
 bool GNSSReceiver::Init() {
@@ -30,9 +45,12 @@ bool GNSSReceiver::Init() {
         SetEnable(true);
 
         // The enable pin gates VCC/VCC_IO, so the module cold-boots here. Busy-wait the
-        // receiver-specific boot delay before sending configuration.
+        // receiver-specific boot delay before sending configuration. Poke the watchdog while we wait:
+        // this runs before the main super-loop's first PokeWatchdog(), so a multi-second boot delay
+        // must not starve the (already-live) watchdog.
         uint32_t enable_timestamp_ms = get_time_since_boot_ms();
         while (get_time_since_boot_ms() - enable_timestamp_ms < GetBootDelayMs()) {
+            watchdog_update();
             tight_loop_contents();
         }
     }
