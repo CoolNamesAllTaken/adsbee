@@ -1,27 +1,37 @@
 #include "remote_id_manager.hh"
 
 #include <cstring>
+#include <new>  // std::nothrow
 
 #include "comms.hh"                 // comms_manager (WiFi/Ethernet state) + logging.
-#include "data_structures.hh"       // PFBQueue.
 #include "esp_heap_caps.h"          // heap_caps_get_free_size.
 #include "hal.hh"                   // get_time_since_boot_ms.
 #include "object_dictionary.hh"     // object_dictionary.device_status.remote_id_status.
 #include "sdkconfig.h"              // CONFIG_SPIRAM / CONFIG_BT_* feature flags.
-#include "server/adsbee_server.hh"  // adsbee_server: local dictionary + RP2040 out-queue.
+#include "server/adsbee_server.hh"  // adsbee_server: local aircraft dictionary.
 
 RemoteIDManager remote_id_manager;
 
-// Thread-safe hand-off queue from the BLE host task / WiFi promiscuous callback (producers) to the main task
-// (consumer, ServiceIngestQueue). Kept as a file-scope static so the header doesn't need to pull in PFBQueue.
-static constexpr uint16_t kIngestQueueDepth = 32;
-static RawRemoteIDPacket s_ingest_queue_buffer[kIngestQueueDepth];
-static PFBQueue<RawRemoteIDPacket> s_ingest_queue = PFBQueue<RawRemoteIDPacket>({
-    .buf_len_num_elements = kIngestQueueDepth,
-    .buffer = s_ingest_queue_buffer,
-    .overwrite_when_full = true,  // Drop oldest under a burst rather than block the radio callback.
-    .is_thread_safe = true,
-});
+bool RemoteIDManager::EnsureBuffers() {
+    // Allocate the hand-off queues on first use so a Remote-ID-disabled / no-Bluetooth build pays zero internal SRAM.
+    // PFBQueue with buffer=nullptr self-allocates its backing store. Never freed (see class comment). is_thread_safe is
+    // required: the ingest queue has two producer tasks (NimBLE host + WiFi promiscuous callback), and the out queue is
+    // produced on the main task and consumed on the SPI task.
+    if (ingest_queue_ == nullptr) {
+        ingest_queue_ = new (std::nothrow) PFBQueue<RawRemoteIDPacket>(
+            {.buf_len_num_elements = kIngestQueueDepth,
+             .buffer = nullptr,
+             .overwrite_when_full = true,  // Drop oldest under a burst rather than block the radio callback.
+             .is_thread_safe = true});
+    }
+    if (out_queue_ == nullptr) {
+        out_queue_ = new (std::nothrow) PFBQueue<RawRemoteIDPacket>({.buf_len_num_elements = kOutQueueDepth,
+                                                                     .buffer = nullptr,
+                                                                     .overwrite_when_full = false,
+                                                                     .is_thread_safe = true});
+    }
+    return ingest_queue_ != nullptr && out_queue_ != nullptr;
+}
 
 bool RemoteIDManager::CanCoexistWithWiFi() {
 #ifdef CONFIG_SPIRAM
@@ -32,8 +42,11 @@ bool RemoteIDManager::CanCoexistWithWiFi() {
 }
 
 void RemoteIDManager::OnRawRemoteIDPacket(const RawRemoteIDPacket& packet) {
-    // Runs in the NimBLE host task or the WiFi promiscuous callback. Keep it minimal: just enqueue.
-    s_ingest_queue.Enqueue(packet);
+    // Runs in the NimBLE host task or the WiFi promiscuous callback. Keep it minimal: just enqueue. The queue exists
+    // whenever a transport is running (EnsureBuffers is called before any transport starts).
+    if (ingest_queue_ != nullptr) {
+        ingest_queue_->Enqueue(packet);
+    }
 }
 
 RemoteIDManager::DedupEntry* RemoteIDManager::FindOrAllocDedupEntry(const uint8_t mac[6]) {
@@ -87,15 +100,16 @@ bool RemoteIDManager::ShouldForwardToRP2040(const RawRemoteIDPacket& packet) {
 uint16_t RemoteIDManager::ServiceIngestQueue() {
     // Runs on the main task (ADSBeeServer::Update), so it is the only mutator of the aircraft dictionary and the RP2040
     // out-queue from this path.
+    if (ingest_queue_ == nullptr) return 0;  // No transport has started; nothing allocated.
     uint16_t num_processed = 0;
     RawRemoteIDPacket packet;
-    while (s_ingest_queue.Dequeue(packet)) {
+    while (ingest_queue_->Dequeue(packet)) {
         num_processed++;
         // Always ingest locally (cheap) — this drives the ESP32's network/web output.
         adsbee_server.aircraft_dictionary.IngestRawRemoteIDPacket(packet);
         // Forward a rate-limited copy up to the RP2040 for serial reporting.
-        if (ShouldForwardToRP2040(packet)) {
-            adsbee_server.raw_remote_id_packet_out_queue.Enqueue(packet);
+        if (out_queue_ != nullptr && ShouldForwardToRP2040(packet)) {
+            out_queue_->Enqueue(packet);
         }
     }
     return num_processed;
@@ -121,36 +135,58 @@ void RemoteIDManager::Reconcile() {
     // On non-PSRAM builds, Remote ID may only run when WiFi AP/STA are off (and Ethernet is carrying IP).
     if (wifi_ap_sta_up && !CanCoexistWithWiFi()) {
         status_ |= kStatusBlockedByWiFi;
+        // Still surface whether Bluetooth is even compiled in, so this early-return doesn't mask kStatusNotInBuild: a
+        // user seeing only "blocked_by_wifi" can't otherwise tell they also need the Bluetooth-enabled firmware.
+#if !(defined(CONFIG_BT_ENABLED) && defined(CONFIG_BT_NIMBLE_ENABLED))
+        if (want_ble) status_ |= kStatusNotInBuild;
+#endif
         BLEStop();
         WiFiSnifferStop();
         return;
     }
 
-    // Heap guard: don't start the BLE/WiFi stacks if we're already low on internal RAM.
-    if (heap_caps_get_free_size(MALLOC_CAP_8BIT) < kMinHeapFreeBytesToStart && !ble_running_ && !wifi_sniffer_running_) {
+    // At least one transport is wanted and allowed here. Allocate the packet queues on first use (a Remote-ID-disabled
+    // build returns above and never reaches this, paying zero internal SRAM for them).
+    if (!EnsureBuffers()) {
         status_ |= kStatusBlockedByRAM;
         return;
     }
 
-    // --- BLE ---
+    // --- BLE (priority transport) ---
+    // BLE is the dominant Remote ID transport, so it gets first claim on the shared radio and internal RAM. It time-
+    // shares the radio with the WiFi sniffer below via software coexistence (CONFIG_ESP_COEX_SW_COEXIST_ENABLE); the BLE
+    // scan runs at a reduced duty cycle (see remote_id_ble.cpp) so coex has idle slots to schedule WiFi RX.
     if (want_ble) {
-        if (BLEStart(want_coded)) {
-            status_ |= kStatusBLEActive;
-            if (ble_coded_running_) status_ |= kStatusBLECodedPHYActive;
+        if (ble_running_ || heap_caps_get_free_size(MALLOC_CAP_8BIT) >= kMinHeapFreeBytesForBLE) {
+            if (BLEStart(want_coded)) {
+                status_ |= kStatusBLEActive;
+                if (ble_coded_running_) status_ |= kStatusBLECodedPHYActive;
+            } else {
+                status_ |= kStatusNotInBuild;  // BLEStart only fails to no-op when Bluetooth isn't compiled in.
+            }
         } else {
-            status_ |= kStatusNotInBuild;  // BLEStart only fails to no-op when Bluetooth isn't compiled in.
+            status_ |= kStatusBlockedByRAM;
         }
     } else {
         BLEStop();
     }
 
-    // --- WiFi beacon sniffer ---
-    // The channel-hopping sniffer is only meaningful when WiFi is not otherwise in use (non-coexist path). On the PSRAM
-    // coexist path the radio is locked to the AP/STA channel, so we leave beacon sniffing to a future channel-locked
-    // best-effort mode and do not hop here.
-    if (want_wifi && !wifi_ap_sta_up) {
-        if (WiFiSnifferStart()) {
-            status_ |= kStatusWiFiSnifferActive;
+    // --- WiFi beacon sniffer (best-effort) ---
+    // Only meaningful when WiFi AP/STA is not otherwise in use (channel-hopping sniffer). On a non-PSRAM board the
+    // internal SRAM cannot hold BOTH the BLE controller/host and the WiFi driver alongside the network stack (ethernet +
+    // httpd + feeds) — running both drops free heap/DMA low enough to starve safe_send and drop packets — so the sniffer
+    // is mutually exclusive with BLE there: it runs only when BLE is not active (BLE is the priority transport). A PSRAM
+    // board (CanCoexistWithWiFi) has the headroom to run both. When allowed, it still passes a heap guard as a backstop.
+    const bool ble_is_active = (status_ & kStatusBLEActive) != 0;
+    const bool wifi_sniffer_allowed = want_wifi && !wifi_ap_sta_up && (CanCoexistWithWiFi() || !ble_is_active);
+    if (wifi_sniffer_allowed) {
+        if (wifi_sniffer_running_ ||
+            heap_caps_get_free_size(MALLOC_CAP_8BIT) >= kMinHeapFreeBytesForWiFiSniffer) {
+            if (WiFiSnifferStart()) {
+                status_ |= kStatusWiFiSnifferActive;
+            }
+        } else {
+            status_ |= kStatusBlockedByRAM;  // Not enough RAM for the WiFi sniffer; BLE stays up.
         }
     } else {
         WiFiSnifferStop();

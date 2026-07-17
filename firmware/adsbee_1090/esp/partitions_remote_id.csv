@@ -1,10 +1,8 @@
-# Partition table for the Remote-ID-enabled ESP32-S3 build on 8 MB flash (Config 1: no PSRAM + W5500 Ethernet).
-# The NimBLE stack adds ~400-450 KB of code, which does not fit the 1.5 MB app of partitions_singleapp_large. The factory
-# app is grown to 3 MB (ample headroom in 8 MB flash; there is no OTA scheme to preserve). Layout otherwise matches the
-# stock single-app-large table. A coredump partition is placed at the end of flash, consistent with partitions_debug.csv.
-# Build:  idf.py -DSDKCONFIG_DEFAULTS="sdkconfig;sdkconfig.remote_id" build
+# Default partition table for the 8 MB ESP32-S3 build. Remote ID (Bluetooth/NimBLE) is enabled in the base sdkconfig, and
+# the NimBLE stack adds ~400-450 KB of code that does not fit the 1.5 MB app of the stock partitions_singleapp_large, so
+# the factory app is grown to 3 MB (ample headroom in 8 MB flash; there is no OTA scheme to preserve). Referenced by the
+# base sdkconfig via CONFIG_PARTITION_TABLE_CUSTOM_FILENAME.
 # Name,   Type, SubType,  Offset,    Size,   Flags
 nvs,      data, nvs,      ,          0x6000,
 phy_init, data, phy,      ,          0x1000,
 factory,  app,  factory,  ,          3M,
-coredump, data, coredump, 0x7C0000,  256K,

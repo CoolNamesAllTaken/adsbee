@@ -2,13 +2,10 @@
 #
 # Build:  idf.py -DSDKCONFIG_DEFAULTS="sdkconfig;sdkconfig.psram" build
 #
-# This module has 4 MB quad flash + 2 MB quad PSRAM. Remote ID (BLE, and best-effort channel-locked WiFi sniffing)
-# coexists with the existing WiFi AP/STA: the NimBLE host heap and the WiFi/LWIP buffers move to PSRAM, and software
-# coexistence arbitrates the shared 2.4 GHz radio. The BLE controller and WiFi DMA descriptors must stay in internal
-# RAM (hardware requirement) and cannot be moved to PSRAM.
-#
-# Apply this AFTER sdkconfig.remote_id's BLE options, or include both:
-#   idf.py -DSDKCONFIG_DEFAULTS="sdkconfig;sdkconfig.remote_id;sdkconfig.psram" build
+# This module has 4 MB quad flash + 2 MB quad PSRAM. Remote ID (Bluetooth + WiFi/BLE coexistence) is already enabled in
+# the base sdkconfig; this overlay only adds PSRAM and the 4 MB flash/partition layout. With PSRAM, Remote ID can coexist
+# with the WiFi AP/STA: the NimBLE host heap and the WiFi/LWIP buffers move to PSRAM. The BLE controller and WiFi DMA
+# descriptors must stay in internal RAM (hardware requirement) and cannot be moved to PSRAM.
 
 # --- Flash size + partition table for the 4 MB N4R2 module ---
 CONFIG_ESPTOOLPY_FLASHSIZE_8MB=n
