@@ -11,6 +11,9 @@ class ADSBeeServer {
     static const uint16_t kMaxNumModeSPackets = 300;    // Depth of queue for incoming packets from RP2040.
     static const uint16_t kMaxNumUATADSBPackets = 20;   // Depth of queue for incoming UAT ADS-B packets from RP2040.
     static const uint16_t kMaxNumUATUplinkPackets = 2;  // Depth of queue for incoming UAT uplink packets from RP2040.
+    // Depth of the queue of (already rate-limited) Remote ID packets waiting to be pulled by the RP2040. At ~1 Hz per
+    // drone after dedup, and with the RP2040 polling every raw-packet interval, a shallow queue is plenty.
+    static const uint16_t kMaxNumRemoteIDPackets = 16;
     static const uint32_t kAircraftDictionaryUpdateIntervalMs = 1000;
     static const uint32_t kRawPacketProcessingIntervalMs = 200;
     static const uint32_t kGDL90ReportingIntervalMs = 1000;
@@ -73,6 +76,17 @@ class ADSBeeServer {
 #endif
         });
 
+    // Remote ID packets received on the ESP32 (BLE/WiFi), rate-limited by the RemoteIDManager, waiting to be pulled by
+    // the RP2040 over SPI (kAddrCompositeArrayRawPackets read path). Written by the remote_id module (main task) and
+    // drained by the SPI task, so it must be thread-safe.
+    PFBQueue<RawRemoteIDPacket> raw_remote_id_packet_out_queue =
+        PFBQueue<RawRemoteIDPacket>({.buf_len_num_elements = kMaxNumRemoteIDPackets,
+                                     .buffer = raw_remote_id_packet_out_queue_buffer_,
+#ifndef PFB_QUEUE_NO_THREAD_SAFETY
+                                     .is_thread_safe = true
+#endif
+        });
+
     AircraftDictionary aircraft_dictionary;
 
     httpd_handle_t server = nullptr;
@@ -126,6 +140,7 @@ class ADSBeeServer {
     RawModeSPacket raw_mode_s_packet_in_queue_buffer_[kMaxNumModeSPackets];
     RawUATADSBPacket raw_uat_adsb_packet_in_queue_buffer_[kMaxNumUATADSBPackets];
     RawUATUplinkPacket raw_uat_uplink_packet_in_queue_buffer_[kMaxNumUATUplinkPackets];
+    RawRemoteIDPacket raw_remote_id_packet_out_queue_buffer_[kMaxNumRemoteIDPackets];
 
     uint8_t* raw_packets_buf_ = nullptr;
 

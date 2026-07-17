@@ -8,6 +8,7 @@
 #include "gdl90/gdl90_utils.hh"
 #include "json_utils.hh"
 #include "pico.hh"
+#include "remote_id/remote_id_manager.hh"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
 #include "task_priorities.hh"
@@ -122,6 +123,12 @@ bool ADSBeeServer::Update() {
     pico.UpdateLED();
 
     uint32_t timestamp_ms = get_time_since_boot_ms();
+
+    // Ingest any Broadcast Remote ID advertisements received on the BLE/WiFi radios into the local aircraft dictionary
+    // (and forward rate-limited copies up to the RP2040), then service the WiFi channel hopper. Done on this task so all
+    // aircraft-dictionary mutation stays single-threaded.
+    remote_id_manager.ServiceIngestQueue();
+    remote_id_manager.Update();
 
     // Prune aircraft dictionary. Need to do this up front so that we don't end up with a negative timestamp delta
     // caused by packets being ingested more recently than the timestamp we take at the beginning of this function.
@@ -361,6 +368,13 @@ bool ADSBeeServer::ReportGDL90() {
                    uat_aircraft->latitude_deg, uat_aircraft->longitude_deg, uat_aircraft->baro_altitude_ft);
             aircraft_msg_buf_len =
                 gdl90.WriteGDL90TargetReportMessage(aircraft_msg_buf, sizeof(aircraft_msg_buf), *uat_aircraft, false);
+        } else if (RemoteIDAircraft* remote_id_aircraft = get_if<RemoteIDAircraft>(&(itr.second)); remote_id_aircraft) {
+            if (!remote_id_aircraft->HasBitFlag(RemoteIDAircraft::kBitFlagPositionValid)) {
+                // Don't report drones without a valid position.
+                continue;
+            }
+            aircraft_msg_buf_len = gdl90.WriteGDL90TargetReportMessage(aircraft_msg_buf, sizeof(aircraft_msg_buf),
+                                                                       *remote_id_aircraft, false);
         } else {
             CONSOLE_WARNING("CommsManager::ReportGDL90", "Unknown aircraft type in dictionary for UID 0x%lx.",
                             itr.first);
@@ -824,6 +838,8 @@ void ADSBeeServer::SendAircraftJSONMessages() {
             len = WriteAircraftJSONModeSAircraftStr(json_buf, *ac);
         } else if (UATAircraft* ac = get_if<UATAircraft>(&itr.second); ac) {
             len = WriteAircraftJSONUATAircraftStr(json_buf, *ac);
+        } else if (RemoteIDAircraft* ac = get_if<RemoteIDAircraft>(&itr.second); ac) {
+            len = WriteAircraftJSONRemoteIDAircraftStr(json_buf, *ac);
         }
         if (len > 0) {
             network_aircraft.BroadcastMessage(json_buf, len);

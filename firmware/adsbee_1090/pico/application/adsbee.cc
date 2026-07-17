@@ -653,6 +653,14 @@ void ADSBee::IngestAndForwardPackets() {
             CONSOLE_ERROR("ADSBee::IngestAndForwardPackets", "UAT uplink packet reporting queue overflowed.");
         }
     }
+
+    // Ingest Broadcast Remote ID (drone) packets pulled from the ESP32 into the aircraft dictionary. The ESP32 already
+    // ingested these into its own dictionary for network output; here they populate the RP2040 dictionary so drones
+    // appear in the serial reporting outputs (CSBee / GDL90 / MAVLINK / Aircraft JSON) alongside Mode S and UAT traffic.
+    RawRemoteIDPacket remote_id_packet;
+    while (raw_remote_id_packet_queue.Dequeue(remote_id_packet)) {
+        aircraft_dictionary.IngestRawRemoteIDPacket(remote_id_packet);
+    }
 }
 
 void ADSBee::MLATCounterInit() {

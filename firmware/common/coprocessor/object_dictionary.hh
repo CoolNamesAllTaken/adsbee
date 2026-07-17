@@ -138,6 +138,14 @@ class ObjectDictionary {
         uint16_t num_queued_sc_command_requests = 0;  // Number of SCCommand requests queued for the master.
         uint32_t num_queued_network_console_rx_chars =
             0;  // Number incoming of characters waiting to be read by the RP2040 from the ESP32's network console.
+
+        // Length in bytes (including the CompositeArray header) of Remote ID packets the ESP32 has received over
+        // BLE/WiFi and has queued for the RP2040 to pull from kAddrCompositeArrayRawPackets. Header-only (== 8) means
+        // nothing pending. See the ESP32->RP2040 forwarding path in peripherals/esp32/esp32.cc.
+        uint16_t pending_raw_packets_len_bytes = 0;
+        // Bitfield reporting the live Remote ID receiver state (see RemoteIDManager::Status). Lets the RP2040 explain,
+        // e.g., "Remote ID requested but blocked because WiFi is enabled on a non-PSRAM build" in AT+REMOTE_ID?.
+        uint8_t remote_id_status = 0;
     };
 
     /**
