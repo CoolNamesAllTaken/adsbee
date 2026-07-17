@@ -9,7 +9,6 @@
 // Remove this one line (and, if desired, the self-test code it guards) once SD
 // bring-up is confirmed.
 #define SD_CARD_SELF_TEST
-#define TERRAIN_SELF_TEST
 
 // microSD card driver (ESP-IDF SDMMC host, 1-bit mode) with hot-plug support.
 //

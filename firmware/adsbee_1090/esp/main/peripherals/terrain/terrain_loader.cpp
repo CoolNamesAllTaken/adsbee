@@ -2,13 +2,13 @@
 
 #include <cmath>
 #include <cstddef>  // offsetof
-#include <cstdio>
 #include <cstring>
 
 #include "buffer_utils.hh"  // CalculateCRC16
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "terrain_codec.hh"
 
 namespace winglet_terrain {
 
@@ -16,11 +16,17 @@ namespace {
 constexpr char kTag[] = "terrain";
 constexpr float kPi = 3.14159265358979323846f;
 constexpr float kNmPerDegLat = 60.0f;
-// Half-window in ring-radii. The visible map (center to a corner) is about 2
-// ring-radii, so 2.2 covers the screen with a small margin. Tiles are then
-// selected NEAREST-FIRST (see ComputeOverlap), so the exact window size only
-// bounds the candidate set, not which tiles win the cap.
+// Half-window in ring-radii. The visible map (center to a corner) is ~2 ring-
+// radii, so 2.2 covers the screen with a small margin.
 constexpr float kHalfWindowRings = 2.2f;
+// Matches the renderer's px_per_nm = kOuterRingRadiusPx / range_nm.
+constexpr float kOuterRingRadiusPx = 70.0f;
+
+// Max stored payload we accept for one block. The host picks the smaller of
+// {plain deflate, predictor+deflate}; DEFLATE's stored-block worst case is raw +
+// ~0.1% + 5 B/32KB, so raw+256 is a safe ceiling for a 4KB (or 4160B filtered)
+// block. Anything larger is treated as corrupt.
+constexpr uint32_t kMaxStoredLen = kBlockDecodeScratchLen + 256;
 
 // Allocate in PSRAM; fall back to internal RAM if PSRAM is absent/full.
 uint8_t* PsramAlloc(uint32_t len) {
@@ -33,287 +39,467 @@ uint8_t* PsramAlloc(uint32_t len) {
 
 bool TerrainLoader::Init(SdCard* sd) {
     sd_ = sd;
-    for (auto& e : cache_) {
-        e.tile.in_use = false;
-        e.lru_stamp = 0;
+    for (auto& s : cache_) {
+        s.block.in_use = false;
+        s.block.lru_stamp = 0;
+    }
+    for (auto& s : vec_cache_) {
+        s.cell.in_use = false;
+        s.cell.lru_stamp = 0;
     }
     have_last_ = false;
-    last_n_ = 0;
+    last_nblocks_ = 0;
+    last_ncells_ = 0;
+    selected_level_ = -1;
     return true;
 }
 
-// ---- tile indexing --------------------------------------------------------
-bool TerrainLoader::TileIndexForLatLon(float lat_deg, float lon_deg, int* row, int* col) {
-    if (lat_deg < kTileLatMinDeg || lat_deg >= kTileLatMaxDeg) return false;  // poles omitted
-    // Normalize lon to [-180, 180).
-    while (lon_deg < -180.0f) lon_deg += 360.0f;
-    while (lon_deg >= 180.0f) lon_deg -= 360.0f;
-    int r = (int)floorf((lat_deg - kTileLatMinDeg) / kTileStepDeg);
-    int c = (int)floorf((lon_deg + 180.0f) / kTileStepDeg);
-    if (r < 0) r = 0;
-    if (r >= kNumTileRows) r = kNumTileRows - 1;
-    c = ((c % kNumTileCols) + kNumTileCols) % kNumTileCols;
-    *row = r;
-    *col = c;
+// ---- archive open ----------------------------------------------------------
+bool TerrainLoader::EnsureOpen() {
+    if (file_) return true;
+    if (open_failed_) return false;
+    if (!sd_ || !sd_->IsMounted()) return false;
+
+    FILE* f = fopen("/sd/world.map", "rb");
+    if (!f) {
+        ESP_LOGW(kTag, "open failed: /sd/world.map");
+        open_failed_ = true;
+        return false;
+    }
+
+    // Header.
+    if (fread(&header_, 1, sizeof(header_), f) != sizeof(header_)) {
+        ESP_LOGW(kTag, "short header");
+        fclose(f);
+        open_failed_ = true;
+        return false;
+    }
+    if (header_.magic != kMapMagic || header_.version != kMapFormatVersion ||
+        header_.block_dim != kBlockDim || header_.block_stride != kBlockStride) {
+        ESP_LOGW(kTag, "bad header (magic=0x%08lX ver=%u dim=%u stride=%u)",
+                 (unsigned long)header_.magic, header_.version, header_.block_dim,
+                 header_.block_stride);
+        fclose(f);
+        open_failed_ = true;
+        return false;
+    }
+    // Host computes header_crc16 over the 48-byte body BEFORE both CRC u16s
+    // (dir_crc16 is at offset 48, header_crc16 at 50), so CRC covers [0, 48).
+    uint16_t hdr_body = (uint16_t)offsetof(PyramidHeader, dir_crc16);
+    if (CalculateCRC16((const uint8_t*)&header_, hdr_body) != header_.header_crc16) {
+        ESP_LOGW(kTag, "header CRC mismatch");
+        fclose(f);
+        open_failed_ = true;
+        return false;
+    }
+    if (header_.num_levels == 0 || header_.num_levels > kMaxLevels) {
+        ESP_LOGW(kTag, "num_levels %u out of range", header_.num_levels);
+        fclose(f);
+        open_failed_ = true;
+        return false;
+    }
+    num_levels_ = header_.num_levels;
+
+    // Level descriptors (fixed table right after the header).
+    if (fread(levels_, 1, (size_t)num_levels_ * sizeof(LevelDesc), f) !=
+        (size_t)num_levels_ * sizeof(LevelDesc)) {
+        ESP_LOGW(kTag, "short level table");
+        fclose(f);
+        open_failed_ = true;
+        return false;
+    }
+
+    // Vector index header + cell table.
+    if (fseek(f, (long)header_.vec_index_offset, SEEK_SET) != 0 ||
+        fread(&vec_index_, 1, sizeof(vec_index_), f) != sizeof(vec_index_)) {
+        ESP_LOGW(kTag, "short vec index header");
+        fclose(f);
+        open_failed_ = true;
+        return false;
+    }
+    if (vec_index_.magic == kVecIndexMagic &&
+        (vec_index_.cell_cols != kCellCols || vec_index_.cell_rows != kCellRows)) {
+        // The cell table is sized from the file but indexed with the compile-time
+        // grid (kCellCols/kCellRows); a mismatch would allow OOB indexing.
+        ESP_LOGW(kTag, "vec cell grid %ux%u != %dx%d (vectors disabled)",
+                 vec_index_.cell_cols, vec_index_.cell_rows, kCellCols, kCellRows);
+        vec_index_.magic = 0;
+    }
+    if (vec_index_.magic == kVecIndexMagic) {
+        uint16_t vi_body = (uint16_t)offsetof(VecIndexHeader, header_crc16);
+        if (CalculateCRC16((const uint8_t*)&vec_index_, vi_body) != vec_index_.header_crc16) {
+            ESP_LOGW(kTag, "vec index CRC mismatch (vectors disabled)");
+            vec_index_.magic = 0;  // treat as no vectors
+        } else {
+            uint32_t n_cells = (uint32_t)vec_index_.cell_cols * vec_index_.cell_rows;
+            vec_cells_ = (VecCellEntry*)PsramAlloc(n_cells * sizeof(VecCellEntry));
+            if (vec_cells_ &&
+                fread(vec_cells_, 1, n_cells * sizeof(VecCellEntry), f) !=
+                    n_cells * sizeof(VecCellEntry)) {
+                ESP_LOGW(kTag, "short vec cell table (vectors disabled)");
+                heap_caps_free(vec_cells_);
+                vec_cells_ = nullptr;
+            }
+        }
+    } else {
+        ESP_LOGW(kTag, "no vector index (magic=0x%08lX)", (unsigned long)vec_index_.magic);
+    }
+
+    payload_buf_ = PsramAlloc(kMaxStoredLen);
+    decode_scratch_ = PsramAlloc(kBlockDecodeScratchLen);
+    decompressor_ = PsramAlloc(kTinflDecompressorSize);
+
+    file_ = f;
+    ESP_LOGI(kTag, "world.map open: %u levels, %u vec records",
+             num_levels_, (unsigned)(vec_cells_ ? vec_index_.num_records : 0));
     return true;
 }
 
-int TerrainLoader::ComputeOverlap(float lat, float lon, float range_nm,
-                                  int (*rows)[kMaxOverlap], int (*cols)[kMaxOverlap]) const {
+void TerrainLoader::CloseArchive() {
+    if (file_) {
+        fclose(file_);
+        file_ = nullptr;
+    }
+    for (auto& s : cache_) FreeBlock(&s.block);
+    for (auto& s : vec_cache_) FreeCell(&s.cell);
+    if (vec_cells_) {
+        heap_caps_free(vec_cells_);
+        vec_cells_ = nullptr;
+    }
+    if (payload_buf_) {
+        heap_caps_free(payload_buf_);
+        payload_buf_ = nullptr;
+    }
+    if (decode_scratch_) {
+        heap_caps_free(decode_scratch_);
+        decode_scratch_ = nullptr;
+    }
+    if (decompressor_) {
+        heap_caps_free(decompressor_);
+        decompressor_ = nullptr;
+    }
+    num_levels_ = 0;
+    have_last_ = false;
+    selected_level_ = -1;
+}
+
+// ---- level select ----------------------------------------------------------
+int TerrainLoader::SelectLevel(float range_nm) const {
+    if (num_levels_ <= 0) return -1;
+    float nm_per_px = range_nm / kOuterRingRadiusPx;
+    // Coarsest level whose nm/sample <= nm/pixel (samples stay >= 1 px apart).
+    int selected = 0;
+    for (int l = 0; l < num_levels_; l++) {
+        if (levels_[l].NmPerSample() <= nm_per_px) selected = l;
+    }
+    return selected;
+}
+
+// ---- view -> blocks --------------------------------------------------------
+int TerrainLoader::ComputeViewBlocks(int level, float lat, float lon, float range_nm,
+                                     int* bxs, int* bys, int max) const {
+    const LevelDesc& L = levels_[level];
     float half_nm = kHalfWindowRings * range_nm;
     float coslat = cosf(lat * kPi / 180.0f);
-    if (coslat < 0.05f) coslat = 0.05f;  // guard near the (already-clamped) poles
+    if (coslat < 0.05f) coslat = 0.05f;
     float dlat = half_nm / kNmPerDegLat;
     float dlon = half_nm / (kNmPerDegLat * coslat);
 
-    int r_lo, r_hi;
-    // Latitude range (clamped to grid).
     float lat_lo = lat - dlat, lat_hi = lat + dlat;
-    if (lat_lo < kTileLatMinDeg) lat_lo = kTileLatMinDeg;
-    if (lat_hi >= kTileLatMaxDeg) lat_hi = kTileLatMaxDeg - 0.0001f;
-    r_lo = (int)floorf((lat_lo - kTileLatMinDeg) / kTileStepDeg);
-    r_hi = (int)floorf((lat_hi - kTileLatMinDeg) / kTileStepDeg);
-    // Longitude range in tile-col units (may wrap).
-    int c_lo = (int)floorf((lon - dlon + 180.0f) / kTileStepDeg);
-    int c_hi = (int)floorf((lon + dlon + 180.0f) / kTileStepDeg);
+    float lon_lo = lon - dlon, lon_hi = lon + dlon;
 
-    // Keep the kMaxOverlap tiles NEAREST the ownship (by tile-center distance in
-    // screen-space nm), so the ownship's own tile always wins the cap instead of
-    // whichever row is iterated first. Insertion into a small sorted-by-distance
-    // top-N array.
-    float best_d2[kMaxOverlap];
+    float dps = DegPerSample(level);
+    float lon0 = kWorldLon0E6 / 1e6f;        // -180
+    float lat_top = -(float)kWorldLat0E6 / 1e6f;  // +86
+
+    // Sample-index extents. sy grows south, so lat_hi -> smaller sy.
+    auto sx_of = [&](float lo) { return (int)floorf((lo - lon0) / dps); };
+    auto sy_of = [&](float la) { return (int)floorf((lat_top - la) / dps); };
+    int sx0 = sx_of(lon_lo), sx1 = sx_of(lon_hi);
+    int sy0 = sy_of(lat_hi), sy1 = sy_of(lat_lo);  // sy0 (north) <= sy1 (south)
+    if (sx0 > sx1) { int t = sx0; sx0 = sx1; sx1 = t; }
+    if (sy0 > sy1) { int t = sy0; sy0 = sy1; sy1 = t; }
+    if (sx0 < 0) sx0 = 0;
+    if (sy0 < 0) sy0 = 0;
+    if (sx1 > (int)L.samples_w - 1) sx1 = (int)L.samples_w - 1;
+    if (sy1 > (int)L.samples_h - 1) sy1 = (int)L.samples_h - 1;
+    if (sx1 < sx0 || sy1 < sy0) return 0;
+
+    // Sample -> block (shared-edge stride 63). A sample can belong to two blocks
+    // (the shared edge); include the block on each side so seams are covered.
+    int bx0 = sx0 / kBlockStride, bx1 = sx1 / kBlockStride;
+    int by0 = sy0 / kBlockStride, by1 = sy1 / kBlockStride;
+    if (bx1 > (int)L.blocks_x - 1) bx1 = (int)L.blocks_x - 1;
+    if (by1 > (int)L.blocks_y - 1) by1 = (int)L.blocks_y - 1;
+
     int n = 0;
-    for (int r = r_lo; r <= r_hi; r++) {
-        if (r < 0 || r >= kNumTileRows) continue;
-        float tile_center_lat = kTileLatMinDeg + (r + 0.5f) * kTileStepDeg;
-        float dnm_n = (tile_center_lat - lat) * kNmPerDegLat;
-        for (int c = c_lo; c <= c_hi; c++) {
-            int cc = ((c % kNumTileCols) + kNumTileCols) % kNumTileCols;
-            // Dedup (wrap can repeat a col).
-            bool dup = false;
-            for (int k = 0; k < n; k++)
-                if ((*rows)[k] == r && (*cols)[k] == cc) { dup = true; break; }
-            if (dup) continue;
-
-            // Tile center longitude uses the un-wrapped c so the delta to ownship
-            // is correct across the antimeridian.
-            float tile_center_lon = -180.0f + (c + 0.5f) * kTileStepDeg;
-            float dnm_e = (tile_center_lon - lon) * kNmPerDegLat * coslat;
-            float d2 = dnm_n * dnm_n + dnm_e * dnm_e;
-
-            // Insert into the top-N nearest (ascending d2), capped at kMaxOverlap.
-            if (n < kMaxOverlap) {
-                int k = n++;
-                while (k > 0 && best_d2[k - 1] > d2) {
-                    best_d2[k] = best_d2[k - 1];
-                    (*rows)[k] = (*rows)[k - 1];
-                    (*cols)[k] = (*cols)[k - 1];
-                    k--;
-                }
-                best_d2[k] = d2; (*rows)[k] = r; (*cols)[k] = cc;
-            } else if (d2 < best_d2[kMaxOverlap - 1]) {
-                int k = kMaxOverlap - 1;
-                while (k > 0 && best_d2[k - 1] > d2) {
-                    best_d2[k] = best_d2[k - 1];
-                    (*rows)[k] = (*rows)[k - 1];
-                    (*cols)[k] = (*cols)[k - 1];
-                    k--;
-                }
-                best_d2[k] = d2; (*rows)[k] = r; (*cols)[k] = cc;
-            }
+    for (int by = by0; by <= by1 && n < max; by++) {
+        for (int bx = bx0; bx <= bx1 && n < max; bx++) {
+            bxs[n] = bx;
+            bys[n] = by;
+            n++;
         }
     }
     return n;
 }
 
-// ---- cache management ------------------------------------------------------
-ParsedTile* TerrainLoader::FindCached(int row, int col) {
-    for (auto& e : cache_) {
-        if (e.tile.in_use && e.tile.row == row && e.tile.col == col) {
-            e.lru_stamp = ++lru_counter_;
-            return &e.tile;
+int TerrainLoader::ComputeViewCells(float lat, float lon, float range_nm,
+                                    int* cells, int max) const {
+    float half_nm = kHalfWindowRings * range_nm;
+    float coslat = cosf(lat * kPi / 180.0f);
+    if (coslat < 0.05f) coslat = 0.05f;
+    float dlat = half_nm / kNmPerDegLat;
+    float dlon = half_nm / (kNmPerDegLat * coslat);
+
+    float lat0 = kCellLat0E6 / 1e6f;   // -86
+    float lon0 = kCellLon0E6 / 1e6f;   // -180
+    auto row_of = [&](float la) { return (int)floorf((la - lat0) / kSupercellDeg); };
+    auto col_of = [&](float lo) { return (int)floorf((lo - lon0) / kSupercellDeg); };
+    int r0 = row_of(lat - dlat), r1 = row_of(lat + dlat);
+    int c0 = col_of(lon - dlon), c1 = col_of(lon + dlon);
+    if (r0 < 0) r0 = 0;
+    if (r1 > kCellRows - 1) r1 = kCellRows - 1;
+    if (c0 < 0) c0 = 0;
+    if (c1 > kCellCols - 1) c1 = kCellCols - 1;
+
+    int n = 0;
+    for (int r = r0; r <= r1 && n < max; r++) {
+        for (int c = c0; c <= c1 && n < max; c++) {
+            cells[n++] = r * kCellCols + c;
+        }
+    }
+    return n;
+}
+
+// ---- block load ------------------------------------------------------------
+bool TerrainLoader::ReadDirEntry(int level, int bx, int by, BlockDirEntry* out) {
+    const LevelDesc& L = levels_[level];
+    uint64_t off = L.dir_offset + (uint64_t)((uint32_t)by * L.blocks_x + bx) * sizeof(BlockDirEntry);
+    if (fseek(file_, (long)off, SEEK_SET) != 0) return false;
+    return fread(out, 1, sizeof(BlockDirEntry), file_) == sizeof(BlockDirEntry);
+}
+
+bool TerrainLoader::LoadBlock(int level, int bx, int by, ParsedBlock* dst) {
+    if (!EnsureOpen()) return false;
+
+    BlockDirEntry e;
+    if (!ReadDirEntry(level, bx, by, &e)) {
+        ESP_LOGW(kTag, "dir read fail L%d (%d,%d)", level, bx, by);
+        return false;
+    }
+
+    if (!dst->codes) {
+        dst->codes = PsramAlloc(kBlockRawLen);
+        if (!dst->codes) {
+            ESP_LOGE(kTag, "PSRAM alloc failed for block codes");
+            return false;
+        }
+    }
+
+    bool ok;
+    if (e.codec == kCodecConstant || e.stored_len == 0) {
+        ok = DecodeBlock(kCodecConstant, e.fill, nullptr, 0, dst->codes, kBlockRawLen, nullptr,
+                         nullptr);
+    } else if (e.stored_len > kMaxStoredLen || !payload_buf_ || !decode_scratch_ ||
+               !decompressor_) {
+        ESP_LOGW(kTag, "stored_len %u too large L%d (%d,%d)", (unsigned)e.stored_len,
+                 level, bx, by);
+        memset(dst->codes, kElevVoidCode, kBlockRawLen);
+        ok = false;
+    } else if (fseek(file_, (long)e.offset, SEEK_SET) != 0 ||
+               fread(payload_buf_, 1, e.stored_len, file_) != e.stored_len) {
+        ESP_LOGW(kTag, "payload read fail L%d (%d,%d)", level, bx, by);
+        memset(dst->codes, kElevVoidCode, kBlockRawLen);
+        ok = false;
+    } else {
+        // Compressed input in payload_buf_, inflate scratch in decode_scratch_
+        // (codec 2 inflates the filtered stream there, then unfilters into codes);
+        // the ~11 KB tinfl state lives in decompressor_ (PSRAM), off the stack.
+        ok = DecodeBlock(e.codec, e.fill, payload_buf_, e.stored_len, dst->codes, kBlockRawLen,
+                         decode_scratch_, decompressor_);
+        if (!ok) memset(dst->codes, kElevVoidCode, kBlockRawLen);
+    }
+
+    dst->in_use = true;
+    dst->level = level;
+    dst->bx = bx;
+    dst->by = by;
+    dst->elev_base_m = levels_[level].elev_base_m;
+    dst->elev_step_m = levels_[level].elev_step_m;
+    return ok;
+}
+
+bool TerrainLoader::LoadVecCell(int cell_index, VecCellBlob* dst) {
+    if (!vec_cells_) return false;
+    const VecCellEntry& e = vec_cells_[cell_index];
+    dst->cell_index = cell_index;
+    dst->cell_row = cell_index / kCellCols;
+    dst->cell_col = cell_index % kCellCols;
+    dst->num_records = e.num_records;
+    if (e.offset == 0 || e.len == 0) {
+        // Empty cell: mark loaded with no data so we don't retry it.
+        dst->data = nullptr;
+        dst->len = 0;
+        dst->in_use = true;
+        return true;
+    }
+    dst->data = PsramAlloc(e.len);
+    if (!dst->data) return false;
+    if (fseek(file_, (long)e.offset, SEEK_SET) != 0 ||
+        fread(dst->data, 1, e.len, file_) != e.len) {
+        heap_caps_free(dst->data);
+        dst->data = nullptr;
+        return false;
+    }
+    dst->len = e.len;
+    dst->in_use = true;
+    return true;
+}
+
+// ---- block cache -----------------------------------------------------------
+ParsedBlock* TerrainLoader::FindCachedBlock(int level, int bx, int by) {
+    for (auto& s : cache_) {
+        if (s.block.in_use && s.block.level == level && s.block.bx == bx && s.block.by == by) {
+            s.block.lru_stamp = ++lru_counter_;
+            return &s.block;
         }
     }
     return nullptr;
 }
 
-ParsedTile* TerrainLoader::EvictAndClaim() {
-    // Prefer a free slot; else evict the least-recently-used.
-    CacheEntry* victim = nullptr;
-    for (auto& e : cache_) {
-        if (!e.tile.in_use) { victim = &e; break; }
+ParsedBlock* TerrainLoader::EvictAndClaimBlock() {
+    BlockSlot* victim = nullptr;
+    for (auto& s : cache_) {
+        if (!s.block.in_use) { victim = &s; break; }
     }
     if (!victim) {
         victim = &cache_[0];
-        for (auto& e : cache_)
-            if (e.lru_stamp < victim->lru_stamp) victim = &e;
-        FreeTile(&victim->tile);
+        for (auto& s : cache_)
+            if (s.block.lru_stamp < victim->block.lru_stamp) victim = &s;
+        // Keep the codes buffer; just mark free so LoadBlock reuses it.
+        uint8_t* keep = victim->block.codes;
+        victim->block = ParsedBlock{};
+        victim->block.codes = keep;
     }
-    victim->lru_stamp = ++lru_counter_;
-    return &victim->tile;
+    victim->block.lru_stamp = ++lru_counter_;
+    return &victim->block;
 }
 
-void TerrainLoader::FreeTile(ParsedTile* t) {
-    if (t->elev) heap_caps_free(t->elev);
-    if (t->vec_water) heap_caps_free(t->vec_water);
-    if (t->vec_road) heap_caps_free(t->vec_road);
-    if (t->water_mask) heap_caps_free(t->water_mask);
-    *t = ParsedTile{};
+void TerrainLoader::FreeBlock(ParsedBlock* b) {
+    if (b->codes) heap_caps_free(b->codes);
+    *b = ParsedBlock{};
 }
 
-// ---- load path -------------------------------------------------------------
-bool TerrainLoader::LoadTile(int row, int col, ParsedTile* dst) {
-    if (!sd_ || !sd_->IsMounted()) return false;
-
-    char path[48];
-    snprintf(path, sizeof path, "/sd/tiles/%03X/%03X.map", row, col);
-
-    FILE* f = fopen(path, "rb");
-    if (!f) {
-        ESP_LOGW(kTag, "open failed: %s", path);
-        return false;
+// ---- vec cell cache --------------------------------------------------------
+VecCellBlob* TerrainLoader::FindCachedCell(int cell_index) {
+    for (auto& s : vec_cache_) {
+        if (s.cell.in_use && s.cell.cell_index == cell_index) {
+            s.cell.lru_stamp = ++vec_lru_counter_;
+            return &s.cell;
+        }
     }
-
-    // Read the header.
-    TileHeader hdr;
-    int64_t t0 = esp_timer_get_time();
-    size_t hn = fread(&hdr, 1, sizeof(hdr), f);
-    if (hn != sizeof(hdr)) {
-        ESP_LOGW(kTag, "short header: %s", path);
-        fclose(f);
-        return false;
-    }
-    if (hdr.magic != kTileMagic || hdr.version != kTileFormatVersion) {
-        ESP_LOGW(kTag, "bad magic/version: %s (magic=0x%08lX ver=%u)", path,
-                 (unsigned long)hdr.magic, hdr.version);
-        fclose(f);
-        return false;
-    }
-    // Header CRC covers everything up to header_crc16.
-    uint16_t hdr_body_len = (uint16_t)(offsetof(TileHeader, header_crc16));
-    if (CalculateCRC16((const uint8_t*)&hdr, hdr_body_len) != hdr.header_crc16) {
-        ESP_LOGW(kTag, "header CRC mismatch: %s", path);
-        fclose(f);
-        return false;
-    }
-
-    // Allocate + read each layer (elevation raw for Phase 2). Timed for the
-    // organic throughput measurement the user requested.
-    uint8_t* elev = PsramAlloc(hdr.elev_len);
-    uint8_t* water = PsramAlloc(hdr.water_len);
-    uint8_t* road = PsramAlloc(hdr.road_len);
-    uint8_t* mask = PsramAlloc(hdr.water_mask_len);
-    bool alloc_ok = (hdr.elev_len == 0 || elev) && (hdr.water_len == 0 || water) &&
-                    (hdr.road_len == 0 || road) && (hdr.water_mask_len == 0 || mask);
-    if (!alloc_ok) {
-        ESP_LOGE(kTag, "PSRAM alloc failed for %s", path);
-        if (elev) heap_caps_free(elev);
-        if (water) heap_caps_free(water);
-        if (road) heap_caps_free(road);
-        if (mask) heap_caps_free(mask);
-        fclose(f);
-        return false;
-    }
-
-    size_t total = hn;
-    bool read_ok = true;
-    auto read_block = [&](uint32_t off, uint32_t len, uint8_t* buf) {
-        if (len == 0) return;
-        if (fseek(f, off, SEEK_SET) != 0) { read_ok = false; return; }
-        size_t n = fread(buf, 1, len, f);
-        total += n;
-        if (n != len) read_ok = false;
-    };
-    read_block(hdr.elev_offset, hdr.elev_len, elev);
-    read_block(hdr.water_offset, hdr.water_len, water);
-    read_block(hdr.road_offset, hdr.road_len, road);
-    read_block(hdr.water_mask_offset, hdr.water_mask_len, mask);
-    int64_t dt = esp_timer_get_time() - t0;
-    fclose(f);
-
-    if (!read_ok) {
-        ESP_LOGW(kTag, "short read: %s", path);
-        if (elev) heap_caps_free(elev);
-        if (water) heap_caps_free(water);
-        if (road) heap_caps_free(road);
-        if (mask) heap_caps_free(mask);
-        return false;
-    }
-
-    float mbps = (dt > 0) ? ((float)total / 1e6f) / ((float)dt / 1e6f) : 0.0f;
-    ESP_LOGI(kTag, "tile %03X/%03X: %u B in %lld us = %.2f MB/s", row, col, (unsigned)total,
-             (long long)dt, mbps);
-
-    dst->in_use = true;
-    dst->row = row;
-    dst->col = col;
-    dst->hdr = hdr;
-    dst->elev = elev;
-    dst->elev_len = hdr.elev_len;
-    dst->vec_water = water;
-    dst->vec_water_len = hdr.water_len;
-    dst->water_count = hdr.water_count;
-    dst->vec_road = road;
-    dst->vec_road_len = hdr.road_len;
-    dst->road_count = hdr.road_count;
-    dst->water_mask = mask;
-    dst->water_mask_len = hdr.water_mask_len;
-    dst->mask_w = hdr.water_mask_w;
-    dst->mask_h = hdr.water_mask_h;
-    return true;
+    return nullptr;
 }
 
-// ---- update / accessors ----------------------------------------------------
+VecCellBlob* TerrainLoader::EvictAndClaimCell() {
+    VecSlot* victim = nullptr;
+    for (auto& s : vec_cache_) {
+        if (!s.cell.in_use) { victim = &s; break; }
+    }
+    if (!victim) {
+        victim = &vec_cache_[0];
+        for (auto& s : vec_cache_)
+            if (s.cell.lru_stamp < victim->cell.lru_stamp) victim = &s;
+        FreeCell(&victim->cell);
+    }
+    victim->cell.lru_stamp = ++vec_lru_counter_;
+    return &victim->cell;
+}
+
+void TerrainLoader::FreeCell(VecCellBlob* c) {
+    if (c->data) heap_caps_free(c->data);
+    *c = VecCellBlob{};
+}
+
+// ---- update ----------------------------------------------------------------
 void TerrainLoader::Update(bool ownship_valid, float lat, float lon, float range_nm) {
     if (!sd_ || !sd_->IsMounted() || !ownship_valid || range_nm <= 0.01f) return;
-    // Too zoomed out for the 4-tile set to cover the screen: don't load terrain.
-    if (range_nm > kTerrainMaxRangeNm) { have_last_ = false; last_n_ = 0; return; }
+    if (!EnsureOpen()) return;
 
-    int rows[kMaxOverlap], cols[kMaxOverlap];
-    int n = ComputeOverlap(lat, lon, range_nm, &rows, &cols);
+    int level = SelectLevel(range_nm);
+    if (level < 0) return;
+    selected_level_ = level;
 
-    // No-op if the overlap set is identical to last time.
-    if (have_last_ && n == last_n_) {
+    int bxs[kMaxViewBlocks], bys[kMaxViewBlocks];
+    int nb = ComputeViewBlocks(level, lat, lon, range_nm, bxs, bys, kMaxViewBlocks);
+    int cells[kMaxViewCells];
+    int nc = ComputeViewCells(lat, lon, range_nm, cells, kMaxViewCells);
+
+    // No-op if the view (level + block set + cell set) is identical to last time.
+    if (have_last_ && level == last_level_ && nb == last_nblocks_ && nc == last_ncells_) {
         bool same = true;
-        for (int i = 0; i < n && same; i++) {
+        for (int i = 0; i < nb && same; i++) {
             bool found = false;
-            for (int j = 0; j < last_n_; j++)
-                if (last_rows_[j] == rows[i] && last_cols_[j] == cols[i]) { found = true; break; }
+            for (int j = 0; j < last_nblocks_; j++)
+                if (last_bx_[j] == bxs[i] && last_by_[j] == bys[i]) { found = true; break; }
+            if (!found) same = false;
+        }
+        for (int i = 0; i < nc && same; i++) {
+            bool found = false;
+            for (int j = 0; j < last_ncells_; j++)
+                if (last_cells_[j] == cells[i]) { found = true; break; }
             if (!found) same = false;
         }
         if (same) return;
     }
 
-    // Load at most ONE missing tile this call (spread I/O across loop iterations).
-    for (int i = 0; i < n; i++) {
-        if (FindCached(rows[i], cols[i])) continue;
-        ParsedTile* slot = EvictAndClaim();
-        if (!LoadTile(rows[i], cols[i], slot)) {
-            slot->in_use = false;  // failed; leave slot free
+    // Load at most ONE missing I/O item (block or vec cell) this call, to spread
+    // I/O across loop iterations and never block a render frame.
+    bool did_io = false;
+    for (int i = 0; i < nb && !did_io; i++) {
+        if (FindCachedBlock(level, bxs[i], bys[i])) continue;
+        ParsedBlock* slot = EvictAndClaimBlock();
+        if (!LoadBlock(level, bxs[i], bys[i], slot)) slot->in_use = false;
+        did_io = true;
+    }
+    if (!did_io && vec_cells_) {
+        for (int i = 0; i < nc && !did_io; i++) {
+            if (FindCachedCell(cells[i])) continue;
+            VecCellBlob* slot = EvictAndClaimCell();
+            if (!LoadVecCell(cells[i], slot)) slot->in_use = false;
+            did_io = true;
         }
-        break;  // one per call
     }
 
-    // Record the window once every needed tile is cached (so we keep trying until
-    // the set is fully loaded, then latch it to become a no-op).
+    // Latch the view once every needed block + cell is cached (keep trying until
+    // fully loaded, then latch to a no-op).
     bool all_cached = true;
-    for (int i = 0; i < n; i++)
-        if (!FindCached(rows[i], cols[i])) { all_cached = false; break; }
+    for (int i = 0; i < nb && all_cached; i++)
+        if (!FindCachedBlock(level, bxs[i], bys[i])) all_cached = false;
+    if (all_cached && vec_cells_)
+        for (int i = 0; i < nc && all_cached; i++)
+            if (!FindCachedCell(cells[i])) all_cached = false;
+
     if (all_cached) {
-        for (int i = 0; i < n; i++) { last_rows_[i] = rows[i]; last_cols_[i] = cols[i]; }
-        last_n_ = n;
+        last_level_ = level;
+        for (int i = 0; i < nb; i++) { last_bx_[i] = bxs[i]; last_by_[i] = bys[i]; }
+        last_nblocks_ = nb;
+        for (int i = 0; i < nc; i++) last_cells_[i] = cells[i];
+        last_ncells_ = nc;
         have_last_ = true;
     } else {
-        have_last_ = false;  // keep loading next call
+        have_last_ = false;
     }
 }
 
-int TerrainLoader::GetOverlappingTiles(const ParsedTile** out, int max_out) const {
+// ---- accessors -------------------------------------------------------------
+int TerrainLoader::GetOverlappingBlocks(const ParsedBlock** out, int max_out) const {
     int n = 0;
-    for (int i = 0; i < last_n_ && n < max_out; i++) {
-        for (const auto& e : cache_) {
-            if (e.tile.in_use && e.tile.row == last_rows_[i] && e.tile.col == last_cols_[i]) {
-                out[n++] = &e.tile;
+    for (int i = 0; i < last_nblocks_ && n < max_out; i++) {
+        for (const auto& s : cache_) {
+            if (s.block.in_use && s.block.level == last_level_ &&
+                s.block.bx == last_bx_[i] && s.block.by == last_by_[i]) {
+                out[n++] = &s.block;
                 break;
             }
         }
@@ -321,63 +507,17 @@ int TerrainLoader::GetOverlappingTiles(const ParsedTile** out, int max_out) cons
     return n;
 }
 
-const ParsedTile* TerrainLoader::GetTile(int row, int col) const {
-    for (const auto& e : cache_) {
-        if (e.tile.in_use && e.tile.row == row && e.tile.col == col) return &e.tile;
-    }
-    return nullptr;
-}
-
-}  // namespace winglet_terrain
-
-// ---------------------------------------------------------------------------
-// Validation self-test (single removable block).
-// ---------------------------------------------------------------------------
-#ifdef TERRAIN_SELF_TEST
-namespace winglet_terrain {
-
-void RunTerrainSelfTest(TerrainLoader& loader, SdCard& sd, int row, int col) {
-    const char* kTagT = "terrain_test";
-    if (!sd.IsMounted()) {
-        ESP_LOGW(kTagT, "self-test skipped: no card");
-        return;
-    }
-    // Load directly into a scratch ParsedTile via the loader's public path by
-    // forcing an Update at the tile's center... simplest: reuse LoadTile through
-    // a cached fetch. We call Update with a synthetic ownship at the tile center.
-    float lat0 = (float)(kTileLatMinDeg + row);
-    float lon0 = (float)(-180 + col);
-    loader.Update(true, lat0 + 0.5f, lon0 + 0.5f, 20.0f);  // a real (close) ladder range
-    const ParsedTile* t = loader.GetTile(row, col);
-    if (!t) {
-        ESP_LOGE(kTagT, "self-test FAIL: tile %03X/%03X did not load", row, col);
-        return;
-    }
-    // Elevation min/max.
-    int32_t emin = INT32_MAX, emax = INT32_MIN;
-    for (int gy = 0; gy < t->hdr.elev_grid_h; gy++) {
-        for (int gx = 0; gx < t->hdr.elev_grid_w; gx++) {
-            int32_t m = t->SampleMeters(gx, gy);
-            if (m == INT32_MIN) continue;
-            if (m < emin) emin = m;
-            if (m > emax) emax = m;
+int TerrainLoader::GetOverlappingVecCells(const VecCellBlob** out, int max_out) const {
+    int n = 0;
+    for (int i = 0; i < last_ncells_ && n < max_out; i++) {
+        for (const auto& s : vec_cache_) {
+            if (s.cell.in_use && s.cell.cell_index == last_cells_[i]) {
+                out[n++] = &s.cell;
+                break;
+            }
         }
     }
-    ESP_LOGI(kTagT, "TILE OK %03X/%03X: ver=%u grid=%ux%u base=%dm step=%dm",
-             row, col, t->hdr.version, t->hdr.elev_grid_w, t->hdr.elev_grid_h,
-             t->hdr.elev_base_m, t->hdr.elev_step_m);
-    ESP_LOGI(kTagT, "  bounds lat0=%.4f lon0=%.4f elev[min=%dm max=%dm] water=%u roads/cities=%u",
-             t->hdr.tile_lat0_e6 / 1e6, t->hdr.tile_lon0_e6 / 1e6,
-             (emin == INT32_MAX ? 0 : emin), (emax == INT32_MIN ? 0 : emax),
-             t->water_count, t->road_count);
-    // Water-mask stats (a non-zero count over a coastal tile confirms the mask).
-    uint32_t water_bits = 0;
-    for (int gy = 0; gy < t->mask_h; gy++)
-        for (int gx = 0; gx < t->mask_w; gx++)
-            if (t->IsWater(gx, gy)) water_bits++;
-    ESP_LOGI(kTagT, "  water-mask %ux%u: %lu/%lu cells water", t->mask_w, t->mask_h,
-             (unsigned long)water_bits, (unsigned long)((uint32_t)t->mask_w * t->mask_h));
+    return n;
 }
 
 }  // namespace winglet_terrain
-#endif  // TERRAIN_SELF_TEST

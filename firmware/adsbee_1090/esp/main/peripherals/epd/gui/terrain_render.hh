@@ -26,15 +26,24 @@ struct MapProjection {
     void GeoToPixel(float lat_deg, float lon_deg, int* px, int* py) const;
 };
 
-// Per-tile affine u,v (tile-local [0,65535]) -> screen pixel, precomputed once
-// per tile: px = px_bias + u*px_per_u ; py = py_bias + v*py_per_v.
-struct TileProjection {
+// Per-block affine: block-local sample (lx,ly) in [0,64) -> screen pixel,
+// precomputed once per block from its {level,bx,by} key.
+//   px = px_bias + lx*px_per_lx ; py = py_bias + ly*py_per_ly.
+struct BlockProjection {
+    float px_bias, px_per_lx;
+    float py_bias, py_per_ly;
+    static BlockProjection FromBlock(const winglet_terrain::ParsedBlock& b,
+                                     const MapProjection& mp);
+    void LocalToPixel(int lx, int ly, int* px, int* py) const;
+};
+
+// Per-super-cell affine: cell-local (u,v) in [0,65535] over the 8-degree cell
+// -> screen pixel. v grows north.
+struct CellProjection {
     float px_bias, px_per_u;
     float py_bias, py_per_v;
-    static TileProjection FromTile(const winglet_terrain::ParsedTile& t, const MapProjection& mp);
+    static CellProjection FromCell(int cell_row, int cell_col, const MapProjection& mp);
     void UVToPixel(uint16_t u, uint16_t v, int* px, int* py) const;
-    // Grid node (gx,gy) -> pixel (gx across = east, gy down = south per tiler layout).
-    void GridToPixel(int gx, int gy, int grid_w, int grid_h, int* px, int* py) const;
 };
 
 // Draw all terrain layers (for the tiles overlapping the current window) onto

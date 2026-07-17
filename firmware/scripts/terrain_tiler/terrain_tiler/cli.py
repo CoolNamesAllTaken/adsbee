@@ -135,9 +135,138 @@ def cmd_build(args):
           f"(grid {grid_dim}x{grid_dim}). Copy {args.out} to the card as /sd/tiles/")
 
 
+def cmd_build_map(args):
+    """Build the single-file `world.map` archive: global elevation pyramid
+    (arbitrary-zoom, seekable) + provenance. Vectors integrated later."""
+    import datetime
+    import rasterio
+
+    from . import mapfmt, provenance
+    from .archive import ArchiveWriter
+    from .pyramid import build_l0_codes
+
+    num_levels = args.levels
+    build_date = datetime.date.today().isoformat()
+    prov = provenance.collect(
+        args.dem, args.ne_physical, args.ne_cultural, build_date,
+        format_version=mapfmt.MAP_FORMAT_VERSION, num_levels=num_levels,
+        finest_samples_per_deg=mapfmt.FINEST_SAMPLES_PER_DEG,
+        elev_step_m=mapfmt.ELEV_STEP_M, tiler_version=_tiler_version())
+    prov_blob = provenance.to_blob(prov)
+
+    print("Building world.map")
+    for line in provenance.summary_lines(prov):
+        print(f"  {line}")
+
+    ds = rasterio.open(args.dem)
+    print(f"Resampling ETOPO -> L0 lattice "
+          f"({mapfmt.level_dims(0, num_levels)[0]}x{mapfmt.level_dims(0, num_levels)[1]})...")
+    l0 = build_l0_codes(ds, num_levels)
+    ds.close()
+
+    # Load Natural Earth vectors once, up front: used both to burn the water code
+    # into the L0 lattice (below) and to emit the vector records (later).
+    vs = None
+    if not args.no_vectors:
+        from .vectors import VectorSources
+        print("Loading Natural Earth vectors...")
+        vs = VectorSources(args.ne_physical, args.ne_cultural)
+        print("Rasterizing global water mask -> burning ELEV_WATER_CODE into L0...")
+        from .pyramid import build_l0_water
+        water = build_l0_water(vs, num_levels)
+        n_water = int(water.sum())
+        l0[water == 1] = mapfmt.ELEV_WATER_CODE
+        print(f"  water samples: {n_water}/{l0.size} ({100*n_water/l0.size:.0f}%)")
+
+    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
+    with open(args.out, "wb") as f:
+        w = ArchiveWriter(f, num_levels=num_levels, jobs=args.jobs)
+
+        def prog(level, lv):
+            print(f"  L{level}: {lv['samples_w']}x{lv['samples_h']} "
+                  f"blocks={lv['n_blocks']} const={lv['n_const']} "
+                  f"({100*lv['n_const']/lv['n_blocks']:.0f}%) "
+                  f"payload={lv['payload_bytes']/1e6:.1f} MB")
+
+        vec_off = w.build_pyramid(l0, prov_blob, progress=prog)
+
+        num_vec_records = 0
+        if not args.no_vectors:
+            from . import vecpack
+            print("Clipping + VW-simplifying into super-cells...")
+            cells = vecpack.build_vector_records(vs)
+            _, num_vec_records = vecpack.write_vectors(f, vec_off, cells)
+            print(f"  vectors: {num_vec_records} records in "
+                  f"{len(cells)}/{vecpack.CELL_ROWS*vecpack.CELL_COLS} super-cells")
+
+        w.finalize()
+        total = w.total_len()
+
+    assert total < (1 << 32), f"archive {total} B exceeds FAT32 4 GiB limit"
+    print(f"\nDONE: {args.out} = {total/1e6:.1f} MB "
+          f"({total/(1<<32)*100:.1f}% of the 4 GiB FAT32 limit)")
+    if args.stats:
+        _print_map_stats(w)
+
+
+def _tiler_version():
+    try:
+        from importlib.metadata import version
+        return version("terrain-tiler")
+    except Exception:
+        return None
+
+
+def _print_map_stats(w):
+    """Per-level report for predicting ESP32 load time (bytes + blocks a view
+    touches; device read+inflate are both ~1 MB/s, so ms ~= KB touched)."""
+    from . import mapfmt
+    print("\n--- per-level stats (device-perf prediction, ~1 MB/s read+inflate) ---")
+    print(f"{'lvl':>3} {'nm/samp':>8} {'blocks':>8} {'const%':>7} "
+          f"{'payload':>9} {'avg blk':>8}")
+    for i, lv in enumerate(w.levels):
+        nonconst = lv["n_blocks"] - lv["n_const"]
+        avg = (lv["payload_bytes"] / nonconst) if nonconst else 0
+        print(f"{i:>3} {mapfmt.nm_per_sample(i):>8.3f} {lv['n_blocks']:>8} "
+              f"{100*lv['n_const']/lv['n_blocks']:>6.0f}% "
+              f"{lv['payload_bytes']/1e6:>7.1f}MB {avg:>7.0f}B")
+    # worst-case view: ~56 blocks (8x7) at any level; predict read time
+    print("\nView (~56 blocks) predicted device time at each level "
+          "(read stored @1MB/s + inflate @1MB/s):")
+    for i, lv in enumerate(w.levels):
+        nonconst = lv["n_blocks"] - lv["n_const"]
+        avg = (lv["payload_bytes"] / nonconst) if nonconst else 0
+        # 56 blocks, scaled by this level's land fraction (non-const share)
+        land_frac = nonconst / lv["n_blocks"] if lv["n_blocks"] else 0
+        read_kb = 56 * land_frac * avg / 1024
+        decoded_kb = 56 * land_frac * (mapfmt.BLOCK_DIM ** 2) / 1024
+        ms = read_kb + decoded_kb  # both ~1 MB/s -> KB ~= ms
+        print(f"  L{i}: ~{read_kb:.0f} KB read + ~{decoded_kb:.0f} KB inflate "
+              f"=> ~{ms:.0f} ms")
+
+
 def main():
     ap = argparse.ArgumentParser(prog="terrain-tiler")
     sub = ap.add_subparsers(dest="cmd", required=True)
+
+    bm = sub.add_parser("build-map",
+                        help="build the single-file world.map archive (new format)")
+    bm.add_argument("--out", default="./out_sd/world.map",
+                    help="output archive path")
+    bm.add_argument("--dem", required=True, help="ETOPO global GeoTIFF path")
+    bm.add_argument("--ne-physical", default="data/10m_physical",
+                    help="Natural Earth physical vectors dir")
+    bm.add_argument("--ne-cultural", default="data/10m_cultural",
+                    help="Natural Earth cultural vectors dir")
+    bm.add_argument("--levels", type=int, default=8,
+                    help="pyramid levels (L0 finest). 8 covers ~2..2000 NM.")
+    bm.add_argument("-j", "--jobs", type=int, default=0,
+                    help="worker processes for block encoding (default: all cores)")
+    bm.add_argument("--stats", action="store_true",
+                    help="print per-level device-perf prediction report")
+    bm.add_argument("--no-vectors", action="store_true",
+                    help="elevation pyramid only (skip Natural Earth vectors)")
+    bm.set_defaults(func=cmd_build_map)
 
     b = sub.add_parser("build", help="build tiles")
     b.add_argument("--out", default="./out_sd/tiles", help="output tile root dir")

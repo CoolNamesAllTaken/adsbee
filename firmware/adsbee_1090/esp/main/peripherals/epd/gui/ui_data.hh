@@ -86,10 +86,13 @@ constexpr int kHomeMenuCount = (int)(sizeof(kHomeMenu) / sizeof(kHomeMenu[0]));
 
 // ---- Zoom ladder ----------------------------------------------------------
 // Fixed map ranges (outer-ring radius in nautical miles), aviation-relevant.
-// Up button = zoom in (smaller index), Down = zoom out (larger index).
-constexpr float kZoomLadderNm[] = {20.0f, 40.0f, 80.0f, 150.0f, 200.0f};
+// Up button = zoom in (smaller index), Down = zoom out (larger index). The
+// world.map pyramid serves any of these from one continuous archive, so the
+// ladder spans the full 2..2000 NM range in a strict 1-2-5 progression.
+constexpr float kZoomLadderNm[] = {2.0f,   5.0f,   10.0f,  20.0f,   50.0f,
+                                   100.0f, 200.0f, 500.0f, 1000.0f, 2000.0f};
 constexpr int kNumZoomLevels = (int)(sizeof(kZoomLadderNm) / sizeof(kZoomLadderNm[0]));
-constexpr int kDefaultZoomIndex = 0;  // 20 NM (closest)
+constexpr int kDefaultZoomIndex = 3;  // 20 NM (boots here; can zoom 2..2000 NM)
 
 // ---- Map screen data ------------------------------------------------------
 // One traffic contact to plot. Positions are geographic; the map screen
