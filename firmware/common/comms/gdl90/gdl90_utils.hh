@@ -176,6 +176,9 @@ class GDL90Reporter {
                                            bool ownship = false);
     uint16_t WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes, const UATAircraft& aircraft,
                                            bool ownship = false);
+    // Broadcast Remote ID drone reported as a GDL90 traffic target (emitter category 14 = UAV, self-assigned address).
+    uint16_t WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes, const RemoteIDAircraft& aircraft,
+                                           bool ownship = false);
 
     // Bit Flags for Message ID 0 (Heartbeat).
     bool uat_initialized = true;

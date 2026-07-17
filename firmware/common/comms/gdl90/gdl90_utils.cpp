@@ -370,3 +370,45 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
 
     return WriteGDL90TargetReportMessage(to_buf, to_buf_num_bytes, data, ownship);
 }
+
+uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes,
+                                                      const RemoteIDAircraft& aircraft, bool ownship) {
+    GDL90TargetReportData data;
+
+    data.participant_address = aircraft.address;
+    // Remote ID uses self-assigned (non-ICAO) identifiers.
+    data.address_type = GDL90TargetReportData::kAddressTypeADSBWithSelfAssignedAddress;
+    data.latitude_deg = aircraft.latitude_deg;
+    data.longitude_deg = aircraft.longitude_deg;
+    // Drones report geometric (WGS84) altitude; GDL90 altitude is nominally pressure altitude, but geometric is the best
+    // value we have for a drone.
+    data.altitude_ft =
+        aircraft.HasBitFlag(RemoteIDAircraft::kBitFlagGNSSAltitudeValid) ? aircraft.gnss_altitude_ft : INT32_MIN;
+    data.direction_deg = aircraft.direction_deg;
+
+    GDL90TargetReportData::MiscIndicatorTrackOrHeadingValue track_heading_value =
+        aircraft.HasBitFlag(RemoteIDAircraft::kBitFlagPositionValid)
+            ? GDL90TargetReportData::kMiscIndicatorTTIsTrueTrackAngle
+            : GDL90TargetReportData::kMiscIndicatorTTNotValid;
+    data.SetMiscIndicator(track_heading_value, /*report_is_extrapolated=*/false,
+                          aircraft.HasBitFlag(RemoteIDAircraft::kBitFlagIsAirborne));
+
+    // NIC/NAC unknown for Remote ID.
+    data.navigation_integrity_category = 0;
+    data.navigation_accuracy_category_position = 0;
+    data.speed_kts =
+        aircraft.HasBitFlag(RemoteIDAircraft::kBitFlagHorizontalSpeedValid) ? (float)aircraft.speed_kts : -1.0f;
+    data.vertical_rate_fpm = aircraft.gnss_vertical_rate_fpm;
+    data.emitter_category = ADSBTypes::kEmitterCategoryUnmannedAerialVehicle;  // 14 = UAV.
+
+    // GDL90 callsign is 8 chars; use the tail of the UAS serial (the distinctive part), padded with spaces.
+    memset(data.callsign, ' ', 8);
+    data.callsign[8] = '\0';
+    if (aircraft.HasBitFlag(RemoteIDAircraft::kBitFlagBasicIDValid)) {
+        size_t id_len = strnlen(aircraft.uas_id, RemoteIDAircraft::kIDLenChars);
+        size_t copy_len = id_len < 8 ? id_len : 8;
+        memcpy(data.callsign, aircraft.uas_id + (id_len - copy_len), copy_len);
+    }
+
+    return WriteGDL90TargetReportMessage(to_buf, to_buf_num_bytes, data, ownship);
+}

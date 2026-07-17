@@ -19,9 +19,9 @@
 
 const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
 const uint8_t ObjectDictionary::kFirmwareVersionMinor = 9;
-const uint8_t ObjectDictionary::kFirmwareVersionPatch = 0;
+const uint8_t ObjectDictionary::kFirmwareVersionPatch = 1;
 // NOTE: Indicate a final release with RC = 0.
-const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 0;
+const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 1;
 
 const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24) | (kFirmwareVersionMinor << 16) |
                                                     (kFirmwareVersionPatch << 8) | kFirmwareVersionReleaseCandidate;
@@ -368,6 +368,32 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
             xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
             break;
         }
+        case kAddrCompositeArrayRawPackets: {
+            // ESP32 -> RP2040 direction: pack the Remote ID packets the ESP32 has received over BLE/WiFi so the RP2040
+            // can ingest them into its own AircraftDictionary (which drives serial reporting). Mode S and UAT flow the
+            // other direction (RP2040 -> ESP32), so only the Remote ID queue is packed here.
+            if (offset != 0) {
+                CONSOLE_ERROR("ObjectDictionary::GetBytes",
+                              "Offset %d for reading CompositeArrayRawPackets not supported, must be 0.", offset);
+                return false;
+            }
+            if (buf_len < sizeof(CompositeArray::RawPackets::Header)) {
+                CONSOLE_ERROR("ObjectDictionary::GetBytes",
+                              "Buffer length %d for reading CompositeArrayRawPackets must be at least %d.", buf_len,
+                              sizeof(CompositeArray::RawPackets::Header));
+                return false;
+            }
+
+            CompositeArray::RawPackets raw_packets = CompositeArray::PackRawPacketsBuffer(
+                buf, buf_len, nullptr, nullptr, nullptr, &(adsbee_server.raw_remote_id_packet_out_queue));
+            if (raw_packets.IsValid() == false) {
+                CONSOLE_ERROR("ObjectDictionary::GetBytes",
+                              "Failed to pack CompositeArray::RawPackets into buffer for reading.");
+                return false;
+            }
+
+            break;
+        }
 #elif defined(ON_TI)
         case kAddrCompositeArrayRawPackets: {
             if (offset != 0) {
@@ -466,6 +492,11 @@ void ObjectDictionary::UpdateDeviceStatus() {
         static_cast<uint32_t>(num_log_messages * LogMessage::kHeaderSize);
     device_status.num_queued_sc_command_requests = sc_command_request_queue.Length();
     device_status.num_queued_network_console_rx_chars = num_network_console_rx_chars;
+    // Length of Remote ID packets queued for the RP2040 to pull (header-only == nothing pending). The RP2040 polls this
+    // in ESP32::Update() and issues a kAddrCompositeArrayRawPackets read when it exceeds the header size. Mirrors the
+    // CC1312's pending_raw_packets_len_bytes pull mechanism (see the ON_TI branch below).
+    device_status.pending_raw_packets_len_bytes = CompositeArray::CalculateRawPacketsBufferLength(
+        nullptr, nullptr, nullptr, &adsbee_server.raw_remote_id_packet_out_queue);
 #elif defined(ON_TI)
     device_status = {
         .timestamp_ms = get_time_since_boot_ms(),

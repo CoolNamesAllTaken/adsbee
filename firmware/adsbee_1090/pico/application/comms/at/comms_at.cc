@@ -402,6 +402,34 @@ CPP_AT_CALLBACK(CommsManager::ATEthernetCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATRemoteIDCallback) {
+    switch (op) {
+        case '?':
+            // Report the requested settings plus the ESP32's resolved live status bitfield (why RID may not be running).
+            // remote_id_status is cached on the low-level ESP32 slave interface (esp32_ll) by ESP32::Update(); the
+            // high-level SPICoprocessor `esp32` only inherits the base interface, which does not carry it.
+            CPP_AT_CMD_PRINTF("=%d,0x%02X(TRANSPORTS),0x%02X(ESP32_STATUS)",
+                              settings_manager.settings.remote_id_rx_enabled,
+                              settings_manager.settings.remote_id_transports, esp32_ll.remote_id_status);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (!CPP_AT_HAS_ARG(0)) {
+                CPP_AT_ERROR("Requires at least one argument. AT+REMOTE_ID=<enabled>[,<transport_mask>]");
+            }
+            CPP_AT_TRY_ARG2NUM(0, settings_manager.settings.remote_id_rx_enabled);
+            if (CPP_AT_HAS_ARG(1)) {
+                CPP_AT_TRY_ARG2NUM(1, settings_manager.settings.remote_id_transports);
+            }
+            CPP_AT_CMD_PRINTF(": remote_id_rx_enabled: %d, transports: 0x%02X\r\n",
+                              settings_manager.settings.remote_id_rx_enabled,
+                              settings_manager.settings.remote_id_transports);
+            CPP_AT_SUCCESS();
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 void ATFeedHelpCallback() {
     CPP_AT_PRINTF(
         "\tAT+FEED=<index>,<uri>,<port>,<active>,<protocol>\r\n\tSet details for a "
@@ -1402,6 +1430,15 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .max_args = 0,
      .help_string = "REBOOT\r\n\tReboots the RP2040.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRebootCallback, comms_manager)},
+    {.command = "REMOTE_ID",
+     .min_args = 0,
+     .max_args = 2,
+     .help_string =
+         "AT+REMOTE_ID=<enabled>[,<transport_mask>]\r\n\tEnable/disable Broadcast Remote ID (drone) reception on the "
+         "ESP32.\r\n\ttransport_mask bits: 1=BT4 legacy, 2=BT5 Long Range, 4=WiFi beacon (default 7).\r\n\tOn "
+         "non-PSRAM builds Remote ID only runs when WiFi AP/STA are disabled and Ethernet is up.\r\n\t"
+         "AT+REMOTE_ID?\r\n\tQuery Remote ID settings and the ESP32's live status bitfield.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRemoteIDCallback, comms_manager)},
     {.command = "RX_ENABLE",
      .min_args = 0,
      .max_args = 3,

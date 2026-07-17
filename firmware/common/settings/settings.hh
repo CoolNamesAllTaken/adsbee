@@ -13,7 +13,7 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 12;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 13;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 class SettingsManager {
@@ -60,6 +60,15 @@ class SettingsManager {
         kNumSubGHzRadioModes
     };
     static const char kSubGHzModeStrs[kNumSubGHzRadioModes][kSubGHzModeStrMaxLen];
+
+    // Broadcast Remote ID transports, as a bitmask stored in Settings::remote_id_transports. Whether a requested
+    // transport actually runs additionally depends on the hardware build (PSRAM vs not) and the WiFi/ethernet state;
+    // the ESP32 reports the resolved live state back in ObjectDictionary::ESP32DeviceStatus::remote_id_status.
+    enum RemoteIDTransport : uint8_t {
+        kRemoteIDTransportBLE4 = 1 << 0,        // Bluetooth 4 legacy advertising (1M PHY).
+        kRemoteIDTransportBLE5Long = 1 << 1,    // Bluetooth 5 Long Range (Coded PHY S=8) extended advertising.
+        kRemoteIDTransportWiFiBeacon = 1 << 2,  // WiFi beacon vendor-specific IE.
+    };
 
     // Receiver position settings.
     struct __attribute__((packed)) RxPosition {
@@ -193,6 +202,15 @@ class SettingsManager {
         bool subg_rx_enabled = true;
         bool subg_bias_tee_enabled = false;
         SubGHzRadioMode subg_mode = SubGHzRadioMode::kSubGHzRadioModeUATRx;  // Default to UAT mode (978MHz receiver).
+
+        // Remote ID (Broadcast Drone ID, ASTM F3411) receive settings. Reception happens on the ESP32 over BLE/WiFi; see
+        // firmware/adsbee_1090/esp/main/remote_id/. Which transports actually run also depends on the hardware build and
+        // the WiFi/ethernet state (the ESP32 reports the live state back via ESP32DeviceStatus::remote_id_status).
+        bool remote_id_rx_enabled = false;  // Master enable for Remote ID reception. Off by default.
+        // Bitmask of RemoteIDTransport values the user wants enabled (subject to the constraints above).
+        uint8_t remote_id_transports = SettingsManager::kRemoteIDTransportBLE4 |
+                                       SettingsManager::kRemoteIDTransportBLE5Long |
+                                       SettingsManager::kRemoteIDTransportWiFiBeacon;
 
         // Feed settings
         char feed_uris[kMaxNumFeeds][kFeedURIMaxNumChars + 1];
