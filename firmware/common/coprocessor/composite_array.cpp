@@ -3,6 +3,15 @@
 #include <cstring>  // For memcpy.
 
 #include "comms.hh"
+#include "spi_coprocessor_packet.hh"
+
+// Lock the composite array to fit within a single SPI transaction's data capacity. The RawPackets buffer is the largest
+// single object transferred over the coprocessor link; keeping it <= the write packet's data capacity (the tighter of
+// write/response, offset 6 B) means it is never chunked, exactly as designed. If kSPITransactionMaxLenBytes is ever
+// reduced below what RawPackets needs (or kMaxLenBytes grows past it), this fails the build instead of silently
+// truncating raw-packet forwarding.
+static_assert(CompositeArray::RawPackets::kMaxLenBytes <= SPICoprocessorPacket::SCWritePacket::kDataMaxLenBytes,
+              "CompositeArray::RawPackets must fit in one SPI transaction (see kSPITransactionMaxLenBytes).");
 
 CompositeArray::RawPackets CompositeArray::PackRawPacketsBuffer(uint8_t* buf, uint16_t buf_len_bytes,
                                                                 PFBQueue<RawModeSPacket>* mode_s_queue,
