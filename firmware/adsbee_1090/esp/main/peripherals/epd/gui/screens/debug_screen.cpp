@@ -1,0 +1,81 @@
+#include "debug_screen.hh"
+
+#include <cstdio>
+
+#include "canvas.hh"
+#include "fonts.h"
+#include "ui_data.hh"
+
+// Sensor driver + helper headers (reachable via the "peripherals" include dir).
+#include "aht20.hh"
+#include "bq27427.hh"
+#include "co_sensor.hh"
+#include "compass.hh"
+#include "lsm6dsv.hh"
+#include "ltr_329.hh"
+#include "mmc5603.hh"
+#include "mp2722.hh"
+#include "orientation_cube.hh"
+#include "sensor_fusion.hh"
+#include "spa06_003.hh"
+
+namespace winglet_ui {
+
+// Original bring-up telemetry dump, factored out of app_main unchanged. Draws
+// ~11 sensor lines plus the orientation cube and mag compass.
+void DrawDebugScreen(Canvas& c, const DebugScreenSources& s) {
+    char line[64];
+    int y = 0;
+    constexpr int kLineH = 13;  // Font12 height 12 + 1 px gap
+    auto draw = [&](const char* str) {
+        c.DrawString(0, y, str, &Font12, kWhite, kBlack);
+        y += kLineH;
+    };
+
+    snprintf(line, sizeof line, "Lux:%.1f c0:%u c1:%u", s.ltr.GetLux(), s.ltr.GetCh0Raw(),
+             s.ltr.GetCh1Raw());
+    draw(line);
+    snprintf(line, sizeof line, "AHT T:%.2fC H:%.1f%%", s.aht.GetTemperatureCelsius(),
+             s.aht.GetRelativeHumidity());
+    draw(line);
+    snprintf(line, sizeof line, "SPL P:%.1fhPa T:%.2fC", s.spl.GetPressureHpa(),
+             s.spl.GetTemperatureCelsius());
+    draw(line);
+    snprintf(line, sizeof line, "Alt:%.2fm", s.spl.GetAltitudeMeters());
+    draw(line);
+    snprintf(line, sizeof line, "Mag X:%.1f Y:%.1f Z:%.1fuT", s.mmc.GetMagneticFieldXUt(),
+             s.mmc.GetMagneticFieldYUt(), s.mmc.GetMagneticFieldZUt());
+    draw(line);
+    snprintf(line, sizeof line, "CO:%s%.0fppm %d-%dmV", s.co.IsDataValid() ? "" : "?", s.co.GetCoPpm(),
+             s.co.GetVoutMv(), s.co.GetVrefMv());
+    draw(line);
+    snprintf(line, sizeof line, "PwrGood:%d", s.mp.IsPowerGood() ? 1 : 0);
+    draw(line);
+    snprintf(line, sizeof line, "Batt:%s%u%% %s%dmW", s.bq.IsDataValid() ? "" : "?",
+             s.bq.GetStateOfChargePct(), s.bq.IsDataValid() ? "" : "?", s.bq.GetAveragePowerMw());
+    draw(line);
+    int32_t tte = s.bq.GetTimeToEmptyMinutes();
+    if (tte >= 0) {
+        snprintf(line, sizeof line, "TTE:%ldh%02ldm", (long)(tte / 60), (long)(tte % 60));
+    } else {
+        snprintf(line, sizeof line, "TTE:--");
+    }
+    draw(line);
+    snprintf(line, sizeof line, "Quat %s", s.imu.IsQuaternionValid() ? "ok" : "--");
+    draw(line);
+    snprintf(line, sizeof line, " w:%.3f x:%.3f", s.imu.GetQuaternion().w, s.imu.GetQuaternion().x);
+    draw(line);
+    snprintf(line, sizeof line, " y:%.3f z:%.3f", s.imu.GetQuaternion().y, s.imu.GetQuaternion().z);
+    draw(line);
+    snprintf(line, sizeof line, "Hdg:%.0f P:%.0f R:%.0f%s", s.fusion.GetHeadingDeg(),
+             s.fusion.GetPitchDeg(), s.fusion.GetRollDeg(), s.fusion.IsCalibrated() ? "" : "*");
+    draw(line);
+
+    // if (s.fusion.IsValid()) {
+    //     DrawOrientationCube(c, 198, 132, 22.f, s.fusion.GetFusedQuaternion());
+    // }
+    // DrawCompass(c, 222, 52, 26, s.fusion.GetMagHeadingLevelDeg(), s.fusion.GetMagHeadingFlatDeg(),
+    //             s.fusion.IsMagHeadingValid());
+}
+
+}  // namespace winglet_ui

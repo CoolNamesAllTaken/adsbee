@@ -288,7 +288,8 @@ class SettingsManager {
             kPNADSBee1090UIndoorPoEFeeder = 40250002,  // ADSBee 1090U Indoor PoE Feeder
             kPNADSBeem1090 = 10250007,                 // ADSBee m1090
             kPNADSBeem1090EvalBoard = 10250013,        // ADSBee m1090 Eval Board
-            kPNGS3MPoE = 40250001                      // GS3M PoE
+            kPNGS3MPoE = 40250001,                     // GS3M PoE
+            kPNADSBeeWinglet = 10260008,               // ADSBee Winglet
         };
 
         enum ADSBee1090RFFrontendVersion : uint8_t {
@@ -405,6 +406,9 @@ class SettingsManager {
                     } else {
                         return kADSBee1090RFFrontendV3;
                     }
+                    break;
+                case kPNADSBeeWinglet:
+                    return kADSBee1090RFFrontendV3;
                     break;
             }
             // Default to V1 for unknown part numbers, since that's the most common and safest assumption.

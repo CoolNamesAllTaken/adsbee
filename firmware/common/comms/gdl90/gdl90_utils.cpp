@@ -370,3 +370,160 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
 
     return WriteGDL90TargetReportMessage(to_buf, to_buf_num_bytes, data, ownship);
 }
+
+// Round a float to the nearest integer (away from zero on ties) and clamp to [lo, hi]. Used to encode the signed
+// fixed-point angle / altitude fields below without pulling in <cmath>.
+static int32_t RoundClampToRange(float value, int32_t lo, int32_t hi) {
+    int32_t rounded = static_cast<int32_t>(value + (value >= 0.0f ? 0.5f : -0.5f));
+    if (rounded < lo) return lo;
+    if (rounded > hi) return hi;
+    return rounded;
+}
+
+uint16_t GDL90Reporter::WriteGDL90OwnshipGeometricAltitudeMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes,
+                                                                  int32_t geometric_altitude_ft,
+                                                                  uint16_t vertical_figure_of_merit_m,
+                                                                  bool vertical_warning) {
+    const uint16_t kMessageBufLenBytes = 5;
+    uint8_t message_buf[kMessageBufLenBytes];
+    message_buf[0] = kGDL90MessageIDOwnshipGeometricAltitude;
+    // Geometric altitude: signed 16-bit, 5 ft resolution, big-endian.
+    int32_t altitude_5ft = geometric_altitude_ft / 5;
+    if (altitude_5ft < INT16_MIN) altitude_5ft = INT16_MIN;
+    if (altitude_5ft > INT16_MAX) altitude_5ft = INT16_MAX;
+    uint16_t altitude_encoded = static_cast<uint16_t>(static_cast<int16_t>(altitude_5ft));
+    message_buf[1] = (altitude_encoded >> 8) & 0xFF;  // MSB first.
+    message_buf[2] = altitude_encoded & 0xFF;
+    // Vertical Metrics: bit 15 = Vertical Warning, bits 14..0 = Vertical Figure of Merit (meters), big-endian.
+    uint16_t vertical_metrics = (vertical_warning ? 0x8000 : 0x0000) | (vertical_figure_of_merit_m & 0x7FFF);
+    message_buf[3] = (vertical_metrics >> 8) & 0xFF;
+    message_buf[4] = vertical_metrics & 0xFF;
+    return WriteGDL90Message(to_buf, to_buf_num_bytes, message_buf, kMessageBufLenBytes);
+}
+
+uint16_t GDL90Reporter::WriteGDL90ForeFlightAHRSMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes, float roll_deg,
+                                                        float pitch_deg, float heading_deg, bool heading_is_magnetic,
+                                                        bool angle_valid, int32_t ias_kts, int32_t tas_kts) {
+    const uint16_t kMessageBufLenBytes = 12;
+    uint8_t message_buf[kMessageBufLenBytes];
+    message_buf[0] = kGDL90MessageIDForeFlight;
+    message_buf[1] = kGDL90ForeFlightSubIDAHRS;
+
+    // Roll: 1/10 degree, signed, [-1800, 1800], big-endian. 0x7FFF = invalid.
+    uint16_t roll_encoded =
+        angle_valid ? static_cast<uint16_t>(static_cast<int16_t>(RoundClampToRange(roll_deg * 10.0f, -1800, 1800)))
+                    : kAHRSAngleInvalid;
+    message_buf[2] = (roll_encoded >> 8) & 0xFF;
+    message_buf[3] = roll_encoded & 0xFF;
+
+    // Pitch: 1/10 degree, signed, [-1800, 1800], big-endian. 0x7FFF = invalid.
+    uint16_t pitch_encoded =
+        angle_valid ? static_cast<uint16_t>(static_cast<int16_t>(RoundClampToRange(pitch_deg * 10.0f, -1800, 1800)))
+                    : kAHRSAngleInvalid;
+    message_buf[4] = (pitch_encoded >> 8) & 0xFF;
+    message_buf[5] = pitch_encoded & 0xFF;
+
+    // Heading: bit 15 = magnetic flag, bits 14..0 = 1/10 degree signed [-3600, 3600], big-endian. 0xFFFF = invalid.
+    uint16_t heading_encoded;
+    if (!angle_valid) {
+        heading_encoded = kAHRSHeadingInvalid;
+    } else {
+        heading_encoded =
+            static_cast<uint16_t>(static_cast<int16_t>(RoundClampToRange(heading_deg * 10.0f, -3600, 3600))) & 0x7FFF;
+        if (heading_is_magnetic) heading_encoded |= 0x8000;
+    }
+    message_buf[6] = (heading_encoded >> 8) & 0xFF;
+    message_buf[7] = heading_encoded & 0xFF;
+
+    // Indicated Airspeed: knots, big-endian. 0xFFFF = invalid.
+    uint16_t ias_encoded = ias_kts < 0 ? kAHRSAirspeedInvalid : static_cast<uint16_t>(MIN(0xFFFE, ias_kts));
+    message_buf[8] = (ias_encoded >> 8) & 0xFF;
+    message_buf[9] = ias_encoded & 0xFF;
+
+    // True Airspeed: knots, big-endian. 0xFFFF = invalid.
+    uint16_t tas_encoded = tas_kts < 0 ? kAHRSAirspeedInvalid : static_cast<uint16_t>(MIN(0xFFFE, tas_kts));
+    message_buf[10] = (tas_encoded >> 8) & 0xFF;
+    message_buf[11] = tas_encoded & 0xFF;
+
+    return WriteGDL90Message(to_buf, to_buf_num_bytes, message_buf, kMessageBufLenBytes);
+}
+
+uint16_t GDL90Reporter::WriteGDL90StratuxAHRSMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes, float roll_deg,
+                                                     float pitch_deg, float heading_deg, bool angle_valid) {
+    const uint16_t kMessageBufLenBytes = 24;
+    const uint16_t kStratuxAHRSAngleInvalid = 0x7FFF;
+    const uint16_t kStratuxAHRSAltitudeInvalid = 0xFFFF;
+    uint8_t message_buf[kMessageBufLenBytes];
+    message_buf[0] = kGDL90MessageIDStratuxAHRS;  // 0x4C: message type.
+    message_buf[1] = 0x45;                         // Sub-message marker ('E').
+    message_buf[2] = 0x01;                         // AHRS sub-ID.
+    message_buf[3] = 0x01;                         // Reserved / version.
+
+    // Roll, pitch, heading: signed 1/10 degree, big-endian. 0x7FFF = invalid.
+    uint16_t roll_encoded =
+        angle_valid ? static_cast<uint16_t>(static_cast<int16_t>(RoundClampToRange(roll_deg * 10.0f, -32767, 32767)))
+                    : kStratuxAHRSAngleInvalid;
+    message_buf[4] = (roll_encoded >> 8) & 0xFF;
+    message_buf[5] = roll_encoded & 0xFF;
+    uint16_t pitch_encoded =
+        angle_valid ? static_cast<uint16_t>(static_cast<int16_t>(RoundClampToRange(pitch_deg * 10.0f, -32767, 32767)))
+                    : kStratuxAHRSAngleInvalid;
+    message_buf[6] = (pitch_encoded >> 8) & 0xFF;
+    message_buf[7] = pitch_encoded & 0xFF;
+    uint16_t heading_encoded =
+        angle_valid ? static_cast<uint16_t>(static_cast<int16_t>(RoundClampToRange(heading_deg * 10.0f, -32767, 32767)))
+                    : kStratuxAHRSAngleInvalid;
+    message_buf[8] = (heading_encoded >> 8) & 0xFF;
+    message_buf[9] = heading_encoded & 0xFF;
+
+    // Remaining fields are not sourced on this hardware; emit invalid sentinels.
+    message_buf[10] = 0x7F;  // Slip/skid MSB.
+    message_buf[11] = 0xFF;  // Slip/skid LSB.
+    message_buf[12] = 0x7F;  // Turn rate MSB.
+    message_buf[13] = 0xFF;  // Turn rate LSB.
+    message_buf[14] = 0x7F;  // G-load MSB.
+    message_buf[15] = 0xFF;  // G-load LSB.
+    message_buf[16] = 0x7F;  // Indicated airspeed MSB.
+    message_buf[17] = 0xFF;  // Indicated airspeed LSB.
+    message_buf[18] = (kStratuxAHRSAltitudeInvalid >> 8) & 0xFF;  // Pressure altitude MSB (unsigned, 0xFFFF invalid).
+    message_buf[19] = kStratuxAHRSAltitudeInvalid & 0xFF;         // Pressure altitude LSB.
+    message_buf[20] = 0x7F;  // Vertical speed MSB.
+    message_buf[21] = 0xFF;  // Vertical speed LSB.
+    message_buf[22] = 0x7F;  // Reserved.
+    message_buf[23] = 0xFF;  // Reserved.
+
+    return WriteGDL90Message(to_buf, to_buf_num_bytes, message_buf, kMessageBufLenBytes);
+}
+
+uint16_t GDL90Reporter::WriteGDL90ForeFlightIDMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes,
+                                                      uint64_t device_serial, const char* device_name,
+                                                      const char* device_long_name, bool wgs84_geo_alt_datum) {
+    const uint16_t kMessageBufLenBytes = 39;
+    const uint16_t kDeviceNameLenBytes = 8;
+    const uint16_t kDeviceLongNameLenBytes = 16;
+    uint8_t message_buf[kMessageBufLenBytes];
+    message_buf[0] = kGDL90MessageIDForeFlight;
+    message_buf[1] = kGDL90ForeFlightSubIDID;
+    message_buf[2] = 1;  // Version, must be 1.
+    // Device serial number: 8 bytes, big-endian.
+    for (uint16_t i = 0; i < 8; i++) {
+        message_buf[3 + i] = (device_serial >> (8 * (7 - i))) & 0xFF;
+    }
+    // Device name (8 bytes) and long name (16 bytes): space-padded, truncated if longer. Matches the space-padded
+    // callsign convention used elsewhere (e.g. the ownship "ADSBEE  " callsign).
+    memset(message_buf + 11, ' ', kDeviceNameLenBytes);
+    for (uint16_t i = 0; i < kDeviceNameLenBytes && device_name[i] != '\0'; i++) {
+        message_buf[11 + i] = static_cast<uint8_t>(device_name[i]);
+    }
+    memset(message_buf + 19, ' ', kDeviceLongNameLenBytes);
+    for (uint16_t i = 0; i < kDeviceLongNameLenBytes && device_long_name[i] != '\0'; i++) {
+        message_buf[19 + i] = static_cast<uint8_t>(device_long_name[i]);
+    }
+    // Capabilities mask: 4 bytes, big-endian. Bit 0 = geometric altitude datum (0 = WGS-84 ellipsoid, 1 = MSL).
+    uint32_t capabilities = wgs84_geo_alt_datum ? 0x00000000u : 0x00000001u;
+    message_buf[35] = (capabilities >> 24) & 0xFF;
+    message_buf[36] = (capabilities >> 16) & 0xFF;
+    message_buf[37] = (capabilities >> 8) & 0xFF;
+    message_buf[38] = capabilities & 0xFF;
+    return WriteGDL90Message(to_buf, to_buf_num_bytes, message_buf, kMessageBufLenBytes);
+}
