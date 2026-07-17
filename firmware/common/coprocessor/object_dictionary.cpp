@@ -22,7 +22,7 @@ const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
 const uint8_t ObjectDictionary::kFirmwareVersionMinor = 9;
 const uint8_t ObjectDictionary::kFirmwareVersionPatch = 1;
 // NOTE: Indicate a final release with RC = 0.
-const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 6;
+const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 7;
 
 const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24) | (kFirmwareVersionMinor << 16) |
                                                     (kFirmwareVersionPatch << 8) | kFirmwareVersionReleaseCandidate;
@@ -185,9 +185,10 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
             break;
         }
         case kAddrLogMessages: {
-            // RP2040 reading log messages from the ESP32.
-            // Pack as many pending log messages as will fit in the buffer.
-            PackLogMessages(buf, buf_len, log_message_queue, kLogMessageQueueDepth);
+            // RP2040 reading log messages from the ESP32. Offset-aware FIFO read (see PackLogMessages and the
+            // kAddrConsole handler): a log burst whose packed size exceeds one SPI transaction is read in chunks with an
+            // increasing byte offset, so we forward `offset` to serve the correct window of the packed stream.
+            PackLogMessages(buf, buf_len, log_message_queue, kLogMessageQueueDepth, offset);
             break;
         }
         case kAddrSCCommandRequests: {
@@ -343,24 +344,32 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
             break;
         }
         case kAddrConsole: {
+            // Offset-aware FIFO read. SPICoprocessor::Read splits reads larger than one SPI transaction into multiple
+            // PartialReads with an increasing byte offset (e.g. a 4000-Byte console read becomes chunk 1 [offset 0] +
+            // chunk 2 [offset ~2045] when kSPITransactionMaxLenBytes is 2048). This handler MUST honor `offset` and peek
+            // the queue starting at `offset`, otherwise a multi-chunk read re-serves the head of the queue and corrupts
+            // the tail of the reassembled buffer (this silently broke network-console OTA when the transaction size was
+            // reduced 4096->2048). The queue is only rolled after the full Read completes, and concurrent producers only
+            // append at the tail, so head-relative indices [offset, offset + buf_len) are stable across chunks.
             if (xSemaphoreTake(object_dictionary.network_console_rx_queue_mutex,
                                pdMS_TO_TICKS(kNetworkConsoleMutexTimeoutMs)) != pdTRUE) {
                 CONSOLE_ERROR("ObjectDictionary::GetBytes",
                               "Timed out waiting for network console RX queue mutex; skipping console read.");
                 return false;
             }
-            if (network_console_rx_queue.Length() < buf_len) {
-                CONSOLE_ERROR("ObjectDictionary::GetBytes",
-                              "Buffer length %d of network console message to read is larger than RX queue length %d.",
-                              buf_len, network_console_rx_queue.Length());
+            if (network_console_rx_queue.Length() < offset + buf_len) {
+                CONSOLE_ERROR(
+                    "ObjectDictionary::GetBytes",
+                    "Network console read of %d Bytes at offset %d exceeds RX queue length %d.", buf_len, offset,
+                    network_console_rx_queue.Length());
                 xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
                 return false;
             }
             for (uint16_t i = 0; i < buf_len; i++) {
                 char ch;
-                if (!network_console_rx_queue.Peek(ch, i)) {
+                if (!network_console_rx_queue.Peek(ch, offset + i)) {
                     CONSOLE_ERROR("ObjectDictionary::GetBytes",
-                                  "Failed to peek character %d from network console RX queue.", i);
+                                  "Failed to peek character %d from network console RX queue.", offset + i);
                     xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
                     return false;
                 }
@@ -528,22 +537,49 @@ void ObjectDictionary::UpdateDeviceStatus() {
 
 uint16_t ObjectDictionary::PackLogMessages(uint8_t* buf, uint16_t buf_len,
                                            PFBQueue<ObjectDictionary::LogMessage>& log_message_queue,
-                                           uint16_t num_messages) {
-    uint16_t bytes_written = 0;
+                                           uint16_t num_messages, uint16_t offset) {
+    // Offset-aware FIFO pack: fill buf with the byte window [offset, offset + buf_len) of the concatenated packed
+    // log-message stream, where each message packs to (kHeaderSize + num_chars + 1) Bytes. This is required so that
+    // SPICoprocessor::Read's multi-transaction (chunked) reads reassemble correctly: when the packed stream exceeds one
+    // SPI transaction it is read in chunks with increasing byte offset, and a chunk boundary can fall in the middle of a
+    // message. We copy the intersection of each message's stream range with the requested window. With offset == 0 and a
+    // buf_len large enough to hold whole messages (the common single-transaction case) this is byte-identical to a
+    // simple head-packed stream. See the matching offset-aware kAddrConsole handler; any FIFO-backed object read this
+    // way MUST honor offset or reject non-zero offset, or a future transaction-size change silently corrupts it.
+    const uint32_t window_start = offset;
+    const uint32_t window_end = static_cast<uint32_t>(offset) + buf_len;
+    uint32_t stream_pos = 0;     // Byte position of the current message within the full packed stream.
+    uint16_t bytes_written = 0;  // Furthest byte written into buf, relative to window_start.
     for (uint16_t i = 0; i < num_messages; i++) {
         LogMessage log_message;
         if (!log_message_queue.Peek(log_message, i)) {
             break;  // No more messages to pack.
         }
-        uint16_t buf_bytes_remaining = buf_len - bytes_written;
-        uint16_t log_message_packed_size =
-            LogMessage::kHeaderSize + log_message.num_chars + 1;  // +1 for null terminator
-        if (buf_bytes_remaining < log_message_packed_size) {
-            break;  // Not enough space to write the next log message.
+        const uint16_t packed_size = LogMessage::kHeaderSize + log_message.num_chars + 1;  // +1 for null terminator.
+        const uint32_t msg_start = stream_pos;
+        const uint32_t msg_end = stream_pos + packed_size;
+        // Intersect this message's stream range [msg_start, msg_end) with the requested window.
+        const uint32_t copy_start = msg_start > window_start ? msg_start : window_start;
+        const uint32_t copy_end = msg_end < window_end ? msg_end : window_end;
+        if (copy_start < copy_end) {
+            if (msg_start >= window_start && msg_end <= window_end) {
+                // Whole message fits in the window: copy directly (common case, offset 0).
+                uint8_t* dst = buf + (msg_start - window_start);
+                memcpy(dst, &log_message, packed_size - 1);
+                dst[packed_size - 1] = '\0';  // Null terminate the message.
+            } else {
+                // Message straddles a chunk boundary: materialize its packed bytes and copy the overlapping slice.
+                uint8_t packed[LogMessage::kHeaderSize + kLogMessageMaxNumChars + 1];
+                memcpy(packed, &log_message, packed_size - 1);
+                packed[packed_size - 1] = '\0';  // Null terminate the message.
+                memcpy(buf + (copy_start - window_start), packed + (copy_start - msg_start), copy_end - copy_start);
+            }
+            bytes_written = static_cast<uint16_t>(copy_end - window_start);
         }
-        memcpy(buf + bytes_written, &log_message, log_message_packed_size - 1);
-        buf[bytes_written + log_message_packed_size - 1] = '\0';  // Null terminate the message.
-        bytes_written += log_message_packed_size;
+        stream_pos = msg_end;
+        if (stream_pos >= window_end) {
+            break;  // Filled the requested window.
+        }
         // Don't pop log messages here, wait for the roll request to do that.
     }
     return bytes_written;

@@ -761,8 +761,13 @@ class ADSBeeAT {
     async otaWriteFile(file) {
         const HEADER_SIZE_BYTES = 5 * 4;
         const APP_OFFSET_BYTES = 4 * 1024;
-        // Going larger than this can cause the heap to explode on the ESP32.
-        const WRITE_CHUNK_BYTES = 0x1000 * 3;
+        // Each chunk is received on the ESP32 as one WebSocket frame, which callocs a contiguous buffer of the chunk
+        // size. With Bluetooth Remote ID enabled the ESP32-S3's internal heap is tight and fragmented (largest free
+        // block can be ~10 KB even with ~25 KB free), so a large chunk fails to allocate and aborts the OTA. Keep this
+        // small AND a multiple of the 4096-Byte flash sector size (chunk offsets must stay sector-aligned for the
+        // retry-erase path below). One sector (4096) allocates reliably under fragmentation; it was previously 3 sectors
+        // (12288), which no longer fits.
+        const WRITE_CHUNK_BYTES = 0x1000;
         const MAX_ATTEMPTS_PER_CHUNK = 3;
 
         const partition = await this.otaGetFlashPartition();
