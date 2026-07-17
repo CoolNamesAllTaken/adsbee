@@ -102,7 +102,8 @@ bool GNSSReceiver::Update() {
     if (now_ms - debug_last_print_timestamp_ms_ >= kDebugPrintIntervalMs) {
         debug_last_print_timestamp_ms_ = now_ms;
         const GNSSFix& f = parser_.fix();
-        CONSOLE_PRINTF(
+        CONSOLE_INFO(
+            "GNSSReceiver::Update", 
             "GNSS dbg: healthy=%d rx_bytes=%lu last_sentence=%d gga=%lu rmc=%lu cksum_fail=%lu | "
             "fix: valid=%d q=%u sats=%u lat=%.5f lon=%.5f age_ms=%lu hasfix=%d\r\n",
             healthy_, static_cast<unsigned long>(debug_total_rx_bytes_), static_cast<int>(debug_last_sentence_),

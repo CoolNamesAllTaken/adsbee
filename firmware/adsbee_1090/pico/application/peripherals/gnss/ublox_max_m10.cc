@@ -385,15 +385,15 @@ void UbloxMAXM10::DebugDumpModuleStatus() {
         static const char* kAntPowerStr[] = {"OFF", "ON", "DONTKNOW"};
         const char* ant_status_s = mon_rf_ant_status_ < 5 ? kAntStatusStr[mon_rf_ant_status_] : "?";
         const char* ant_power_s = mon_rf_ant_power_ < 3 ? kAntPowerStr[mon_rf_ant_power_] : "?";
-        CONSOLE_PRINTF("GNSS RF: jam=%u antStatus=%u(%s) antPower=%u(%s) noise=%u agc=%u(/8191) magI=%u magQ=%u\r\n",
+        CONSOLE_INFO("UbloxMAXM10::DebugDumpModuleStatus", "GNSS RF: jam=%u antStatus=%u(%s) antPower=%u(%s) noise=%u agc=%u(/8191) magI=%u magQ=%u\r\n",
                        mon_rf_jamming_, mon_rf_ant_status_, ant_status_s, mon_rf_ant_power_, ant_power_s, mon_rf_noise_,
                        mon_rf_agc_, mon_rf_mag_i_, mon_rf_mag_q_);
     } else {
-        CONSOLE_PRINTF("GNSS RF: waiting for UBX-MON-RF frame...\r\n");
+        CONSOLE_INFO("UbloxMAXM10::DebugDumpModuleStatus", "GNSS RF: waiting for UBX-MON-RF frame...\r\n");
     }
     if (nav_sat_valid_) {
-        CONSOLE_PRINTF("GNSS SAT: numSvs=%u maxCno=%u dBHz\r\n", nav_sat_numsvs_, nav_sat_max_cno_);
+        CONSOLE_INFO("UbloxMAXM10::DebugDumpModuleStatus", "GNSS SAT: numSvs=%u maxCno=%u dBHz\r\n", nav_sat_numsvs_, nav_sat_max_cno_);
     } else {
-        CONSOLE_PRINTF("GNSS SAT: waiting for UBX-NAV-SAT frame...\r\n");
+        CONSOLE_INFO("UbloxMAXM10::DebugDumpModuleStatus", "GNSS SAT: waiting for UBX-NAV-SAT frame...\r\n");
     }
 }
