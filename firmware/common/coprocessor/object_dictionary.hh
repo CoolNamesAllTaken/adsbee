@@ -301,7 +301,7 @@ class ObjectDictionary {
      * @retval Number of bytes written to the buffer.
      */
     uint16_t PackLogMessages(uint8_t* buf, uint16_t buf_len, PFBQueue<ObjectDictionary::LogMessage>& log_message_queue,
-                             uint16_t num_messages);
+                             uint16_t num_messages, uint16_t offset = 0);
 
     /**
      * Unpacks a buffer of log messages into an array.
