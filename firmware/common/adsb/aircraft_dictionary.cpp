@@ -1384,6 +1384,9 @@ void AircraftDictionary::Update(uint32_t timestamp_ms) {
                     has_valid_gnss_altitude = true;
                     current_gnss_altitude_ft = aircraft->gnss_altitude_ft;
                 }
+            } else if (std::holds_alternative<RemoteIDAircraft>(it->second)) {
+                // Remote ID drones fly low and close to the receiver, so they must not be used as the lowest-aircraft
+                // position reference (which assumes an aircraft roughly overhead). Leave has_valid_gnss_altitude false.
             } else {
                 CONSOLE_ERROR("AircraftDictionary::Update", "Encountered aircraft entry with unknown variant type.");
             }
@@ -1446,6 +1449,10 @@ bool AircraftDictionary::GetLowestAircraftPosition(float& latitude_deg, float& l
         speed_kts =
             aircraft->HasBitFlag(UATAircraft::BitFlag::kBitFlagHorizontalSpeedValid) ? aircraft->speed_kts : NAN;
         return true;
+    } else if (std::holds_alternative<RemoteIDAircraft>(*lowest_aircraft_entry)) {
+        // Remote ID drones are never used as a position reference (see AircraftDictionary::Update), so this should not
+        // normally be reached; guard defensively.
+        return false;
     } else {
         CONSOLE_ERROR("AircraftDictionary::GetLowestAircraftPosition",
                       "Encountered lowest_aircraft_entry with unknown variant type.");

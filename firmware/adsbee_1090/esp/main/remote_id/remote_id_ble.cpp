@@ -89,9 +89,13 @@ int GapEventHandler(struct ble_gap_event* event, void* arg) {
 
 void StartExtDiscovery() {
     // Passive scan, no duplicate filtering (Location updates repeat with the same AD structure; the manager de-dups).
+    // window < itvl leaves an ~20% idle slice each interval so that, under WiFi/BLE software coexistence, the coex
+    // arbiter has BLE-idle time to schedule the WiFi promiscuous sniffer's RX (an unassociated WiFi is otherwise treated
+    // as IDLE and starved by BLE). At 80% duty with a 100 ms interval, BLE still catches the ~1 Hz Remote ID adverts
+    // easily, so this costs BLE-only capture nothing meaningful. This keeps BLE the priority transport, WiFi best-effort.
     struct ble_gap_ext_disc_params uncoded = {};
     uncoded.itvl = 160;    // 100 ms scan interval (units of 0.625 ms).
-    uncoded.window = 160;  // 100 ms scan window (continuous when not coexisting with WiFi).
+    uncoded.window = 128;  // 80 ms scan window -> ~80% duty, ~20% left for the WiFi sniffer under coexistence.
     uncoded.passive = 1;
 
     struct ble_gap_ext_disc_params coded = uncoded;

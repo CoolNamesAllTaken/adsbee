@@ -6,6 +6,7 @@
 #include "cpu_utils.hh"
 #include "device_info.hh"
 #include "esp_system.h"
+#include "remote_id_manager.hh"  // remote_id_manager.GetOutQueue() for the ESP32 -> RP2040 Remote ID pull.
 #include "task_utils.hh"
 #ifdef CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
 #include "esp_core_dump.h"
@@ -21,7 +22,7 @@ const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
 const uint8_t ObjectDictionary::kFirmwareVersionMinor = 9;
 const uint8_t ObjectDictionary::kFirmwareVersionPatch = 1;
 // NOTE: Indicate a final release with RC = 0.
-const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 1;
+const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 4;
 
 const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24) | (kFirmwareVersionMinor << 16) |
                                                     (kFirmwareVersionPatch << 8) | kFirmwareVersionReleaseCandidate;
@@ -385,7 +386,7 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
             }
 
             CompositeArray::RawPackets raw_packets = CompositeArray::PackRawPacketsBuffer(
-                buf, buf_len, nullptr, nullptr, nullptr, &(adsbee_server.raw_remote_id_packet_out_queue));
+                buf, buf_len, nullptr, nullptr, nullptr, remote_id_manager.GetOutQueue());
             if (raw_packets.IsValid() == false) {
                 CONSOLE_ERROR("ObjectDictionary::GetBytes",
                               "Failed to pack CompositeArray::RawPackets into buffer for reading.");
@@ -496,7 +497,7 @@ void ObjectDictionary::UpdateDeviceStatus() {
     // in ESP32::Update() and issues a kAddrCompositeArrayRawPackets read when it exceeds the header size. Mirrors the
     // CC1312's pending_raw_packets_len_bytes pull mechanism (see the ON_TI branch below).
     device_status.pending_raw_packets_len_bytes = CompositeArray::CalculateRawPacketsBufferLength(
-        nullptr, nullptr, nullptr, &adsbee_server.raw_remote_id_packet_out_queue);
+        nullptr, nullptr, nullptr, remote_id_manager.GetOutQueue());
 #elif defined(ON_TI)
     device_status = {
         .timestamp_ms = get_time_since_boot_ms(),
