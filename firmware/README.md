@@ -14,6 +14,16 @@ git submodule update --init --recursive
 
 > **Windows note:** Cloning on Windows may produce files with CR+LF line endings, which break Docker builds. Run `git config --global core.autocrlf false` before cloning.
 
+### Developer Setup
+
+Bootstrap a fresh clone (submodules + git hooks) with:
+
+```bash
+bash firmware/scripts/setup_dev.sh
+```
+
+This initializes submodules and installs a native git pre-commit hook (no extra tooling) that enforces the [version-management rule](AGENTS.md) on every commit. It does not install the build toolchain (Docker/ESP-IDF/TI SDK).
+
 ---
 
 ## Build System Overview
