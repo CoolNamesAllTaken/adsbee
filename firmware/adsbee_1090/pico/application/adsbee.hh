@@ -334,9 +334,11 @@ class ADSBee {
 
     /**
      * Sets the status LED to a given state. Does not record timestamps for turning off the LED.
-     * @param[in] on True to turn on the LED, false to turn it off.
+     * @param[in] on True to turn on the LED, false to turn it off. Ignored if LEDs are disabled.
      */
-    inline void SetStatusLED(bool on) { gpio_put(config_.r1090_led_pin, on ? 1 : 0); }
+    inline void SetStatusLED(bool on) {
+        gpio_put(config_.r1090_led_pin, (on && settings_manager.settings.led_enabled) ? 1 : 0);
+    }
 
     /**
      * Set the Minimum Trigger Level (TL) offset at the AD8313 output in milliVolts.

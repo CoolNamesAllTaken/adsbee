@@ -147,6 +147,30 @@ CPP_AT_CALLBACK(CommsManager::ATBiasTeeEnableCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATLEDEnableCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%d", settings_manager.settings.led_enabled);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (CPP_AT_HAS_ARG(0)) {
+                bool enabled;
+                CPP_AT_TRY_ARG2NUM(0, enabled);
+                settings_manager.settings.led_enabled = enabled;
+                // Force the status LED off immediately when disabling so it doesn't linger from the last blink.
+                if (!enabled) {
+                    adsbee.SetStatusLED(false);
+                }
+                // Sync to coprocessors so the ESP32 network LED honors the setting too.
+                settings_manager.SyncToCoprocessors();
+                CPP_AT_SUCCESS();
+            }
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATBootloader) {
     switch (op) {
         case '=': {
@@ -1369,6 +1393,12 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                     "interfaces.\r\n\tAT+HOSTNAME?\r\n\tQuery the "
                     "hostname used for all network interfaces.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATHostnameCallback, comms_manager)},
+    {.command = "LED_ENABLE",
+     .min_args = 0,
+     .max_args = 1,
+     .help_string = "AT+LED_ENABLE=<enabled>\r\n\tEnable or disable the hardware status/activity "
+                    "LEDs.\r\n\tAT+LED_ENABLE?\r\n\tQuery whether the hardware LEDs are enabled.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATLEDEnableCallback, comms_manager)},
     {.command = "LOG_LEVEL",
      .min_args = 0,
      .max_args = 1,

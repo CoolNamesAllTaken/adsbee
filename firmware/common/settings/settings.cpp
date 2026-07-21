@@ -24,6 +24,8 @@ void SettingsManager::Print() {
                               settings.subg_bias_tee_enabled ? "ENABLED" : "DISABLED");
     print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len,
                               "\tWatchdog Timeout: %lu seconds\r\n", settings.watchdog_timeout_sec);
+    print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len, "\tHardware LEDs: %s\r\n",
+                              settings.led_enabled ? "ENABLED" : "DISABLED");
     print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len, "\tLog Level: %s\r\n",
                               kConsoleLogLevelStrs[settings.log_level]);
     CONSOLE_PRINTF("%s", print_buf);
@@ -142,6 +144,9 @@ void SettingsManager::PrintAT() {
         CONSOLE_PRINTF("AT+FEED=%d,%s,%u,%d,%s\r\n", i, settings.feed_uris[i], settings.feed_ports[i],
                        settings.feed_is_active[i], kReportingProtocolStrs[settings.feed_protocols[i]]);
     }
+
+    // AT+LED_ENABLE
+    CONSOLE_PRINTF("AT+LED_ENABLE=%d\r\n", settings.led_enabled);
 
     // AT+LOG_LEVEL
     CONSOLE_PRINTF("AT+LOG_LEVEL=%s\r\n", kConsoleLogLevelStrs[settings.log_level]);
