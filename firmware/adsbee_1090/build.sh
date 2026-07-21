@@ -22,6 +22,43 @@ if [ "$1" = "-d" ]; then
 fi
 test_filter="${2:-}"
 
+# Paths (relative to repo root) that hold the two coupled version numbers.
+settings_file="firmware/common/settings/settings.hh"
+firmware_version_file="firmware/common/coprocessor/object_dictionary.cpp"
+
+# True if the value of an integer constant differs between HEAD and the working tree.
+# Usage: version_changed <repo-root> <repo-relative-file> <constant-name-regex>
+version_changed() {
+    local root="$1" file="$2" pattern="$3\s*=\s*\K[0-9]+"
+    local at_head at_work
+    at_head=$(git -C "$root" show "HEAD:$file" 2>/dev/null | grep -oP "$pattern")
+    at_work=$(grep -oP "$pattern" "$root/$file")
+    [ "$at_head" != "$at_work" ]
+}
+
+# Enforce the firmware/AGENTS.md rule: a change to the Settings struct (kSettingsVersion) must be
+# committed together with a firmware version bump. Otherwise the RP2040 won't detect a version
+# mismatch and won't reflash the ESP32/CC1312, leaving them on a stale build with a mismatched
+# Settings struct (SPI sync failures, reboots).
+check_version_sync() {
+    echo "=== Checking Settings/firmware version sync ==="
+    local root
+    root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+        echo "WARNING: not inside a git repository, skipping version sync check."
+        return
+    }
+
+    if version_changed "$root" "$settings_file" kSettingsVersion \
+        && ! version_changed "$root" "$firmware_version_file" 'kFirmwareVersion\w+'; then
+        echo "ERROR: kSettingsVersion changed but the firmware version in"
+        echo "       $firmware_version_file was not bumped."
+        echo "Fix: bump kFirmwareVersionPatch (or kFirmwareVersionReleaseCandidate for dev builds),"
+        echo "     then commit it together with the settings change."
+        exit 1
+    fi
+    echo "=== Version sync check passed ==="
+}
+
 check_esp_idf_version() {
     echo "=== Checking ESP-IDF version (required: $required_esp_idf_version) ==="
     local idf_version
@@ -130,6 +167,10 @@ clean_builds() {
 }
 
 target="${1:-all}"
+
+if [ "$target" != "clean" ]; then
+    check_version_sync
+fi
 
 case "$target" in
     esp)
