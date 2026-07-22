@@ -1094,6 +1094,11 @@ class AircraftWebSocket {
     }
 
     _connect() {
+        this.pingInterval = setInterval(() => {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send('ping');
+            }
+        }, 60000);
         if (this.paused) return;
         this.ws = new WebSocket(this.url);
         this.ws.onopen  = () => console.log('[AircraftWS] connected');
@@ -1102,6 +1107,7 @@ class AircraftWebSocket {
             try { this.onMessage(JSON.parse(ev.data)); } catch (_) {}
         };
         this.ws.onclose = () => {
+            clearInterval(this.pingInterval);
             if (this.onDisconnect) this.onDisconnect();
             clearTimeout(this._timer);
             this._timer = setTimeout(() => { if (!this.paused) this._connect(); }, 3000);
