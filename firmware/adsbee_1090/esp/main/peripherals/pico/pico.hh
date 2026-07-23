@@ -3,6 +3,7 @@
 #include "bsp.hh"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "settings.hh"
 #include "spi_coprocessor.hh"
 
 class Pico : public SPICoprocessorMasterInterface {
@@ -88,6 +89,10 @@ class Pico : public SPICoprocessorMasterInterface {
      * @param[in] blink_duration_ms Number of milliseconds that the LED should stay on for.
      */
     inline void BlinkNetworkLED(uint16_t blink_duration_ms = kNetworkLEDBlinkDurationMs) {
+        // Disable hardware LED via LED_ENABLE setting.
+        if (!settings_manager.settings.led_enabled) {
+            return;
+        }
         gpio_set_level(config_.network_led_pin, 1);
         network_led_turn_on_timestamp_ticks_ = xTaskGetTickCount();
         network_led_on = true;
@@ -97,8 +102,12 @@ class Pico : public SPICoprocessorMasterInterface {
      * Turns off the network LED if necessary.
      */
     inline void UpdateLED() {
-        if (network_led_on &&
-            xTaskGetTickCount() - network_led_turn_on_timestamp_ticks_ > kNetworkLEDBlinkDurationTicks) {
+        if (!network_led_on) return;
+        // Force the LED off (vs waiting for blink timer) once hardware LEDs are disabled, so a
+        // synced LED_ENABLE=0 is honored as soon as it arrives from the master.
+        bool blink_expired =
+            xTaskGetTickCount() - network_led_turn_on_timestamp_ticks_ > kNetworkLEDBlinkDurationTicks;
+        if (blink_expired || !settings_manager.settings.led_enabled) {
             gpio_set_level(config_.network_led_pin, 0);
             network_led_on = false;
         }

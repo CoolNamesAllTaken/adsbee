@@ -22,6 +22,12 @@ if [ "$1" = "-d" ]; then
 fi
 test_filter="${2:-}"
 
+# Verify the Settings/firmware version sync rule (see firmware/scripts/check_version_sync.sh).
+# Compares the committed state (HEAD) against the working tree.
+check_version_sync() {
+    "$script_dir/../scripts/check_version_sync.sh" HEAD WORKTREE
+}
+
 check_esp_idf_version() {
     echo "=== Checking ESP-IDF version (required: $required_esp_idf_version) ==="
     local idf_version
@@ -130,6 +136,10 @@ clean_builds() {
 }
 
 target="${1:-all}"
+
+if [ "$target" != "clean" ]; then
+    check_version_sync
+fi
 
 case "$target" in
     esp)

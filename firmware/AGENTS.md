@@ -110,6 +110,16 @@ static constexpr uint32_t kSettingsVersion = N;
 2. **Any change to the `Settings` struct** → increment `kSettingsVersion` AND firmware version; commit both together
 3. If firmware version is unchanged, RP2040 skips reflashing the coprocessors — symptom: old behavior persists after flashing new `combined.uf2`
 
+### Automated enforcement
+Rule 2 is checked automatically by `scripts/check_version_sync.sh`:
+- **CI** (`version_sync_check` job) fails a PR that bumps `kSettingsVersion` without bumping the firmware version. This is the hard gate.
+- **`build.sh`** runs the same check locally before every build.
+- **Local git hook** — catch it before you even commit. A native `pre-commit` hook (no external tooling) is installed by the dev setup script:
+  ```
+  bash firmware/scripts/setup_dev.sh
+  ```
+  (bypass a single commit with `git commit --no-verify`)
+
 ---
 
 ## Inter-Processor Communication

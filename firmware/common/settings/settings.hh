@@ -13,7 +13,7 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 12;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 13;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 class SettingsManager {
@@ -174,6 +174,7 @@ class SettingsManager {
         int tl_offset_mv = kDefaultTLOffsetMV;
         bool r1090_bias_tee_enabled = false;
         uint32_t watchdog_timeout_sec = kDefaultWatchdogTimeoutSec;
+        bool led_enabled = true;  // Set to false to disable all hardware status/activity LEDs.
 
         // CommunicationsManager settings
         LogLevel log_level = LogLevel::kWarnings;
