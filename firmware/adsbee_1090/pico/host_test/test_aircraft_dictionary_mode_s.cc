@@ -1093,6 +1093,49 @@ TEST(AircraftDictionary, IngestSurfacePositionMessagesOnGround) {
     EXPECT_NEAR(aircraft_ptr->longitude_deg, WrapCPRDecodeLongitude(4.734735f - 180.0f), 0.001f);
 }
 
+TEST(AircraftDictionary, SurfacePositionSkippedWithoutReference) {
+    // Without a valid reference position, surface CPR would resolve its 90x90 degree ambiguity against the
+    // default (0, 0) reference and silently produce a wrong position. Verify that the position decode is
+    // skipped until a reference is set, while the rest of the message (air/ground state) still applies.
+    AircraftDictionary::AircraftDictionaryConfig config;
+    AircraftDictionary dictionary(config);
+    // NOTE: No SetReferencePosition call — the dictionary starts with no valid reference.
+    DecodedModeSPacket packet_0 = DecodedModeSPacket((char*)"8C4841753AAB238733C8CD4020B1");
+    DecodedModeSPacket packet_1 = DecodedModeSPacket((char*)"8C4841753A8A35323FAEBDAC702D");
+    packet_0.raw.mlat_48mhz_64bit_counts = 50123;
+    packet_1.raw.mlat_48mhz_64bit_counts = 100000;
+
+    uint32_t uid = Aircraft::ICAOToUID(0x484175, Aircraft::AircraftType::kAircraftTypeModeS);
+
+    // Both packets ingest successfully (not an error), but no position is decoded.
+    EXPECT_FALSE(dictionary.ReferencePositionValid());
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet_0));
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet_1));
+    ModeSAircraft* aircraft_ptr = dictionary.GetAircraftPtr<ModeSAircraft>(uid, false);
+    ASSERT_TRUE(aircraft_ptr);
+    EXPECT_FALSE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid));
+    EXPECT_FALSE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne));  // Air/ground still applied.
+
+    // Once a reference appears, re-ingesting decodes the position (CPR frames were cached).
+    dictionary.SetReferencePosition(51.990f, 4.375f);
+    EXPECT_TRUE(dictionary.ReferencePositionValid());
+    packet_0.raw.mlat_48mhz_64bit_counts += 100e3;
+    packet_1.raw.mlat_48mhz_64bit_counts += 100e3;
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet_0));
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet_1));
+    EXPECT_TRUE(aircraft_ptr->HasBitFlag(ModeSAircraft::BitFlag::kBitFlagPositionValid));
+    EXPECT_NEAR(aircraft_ptr->latitude_deg, 52.320607f, 0.001f);
+    EXPECT_NEAR(aircraft_ptr->longitude_deg, 4.734735f, 0.001f);
+
+    // Clearing the reference pauses surface position decoding again (existing position stays latched).
+    dictionary.ClearReferencePosition();
+    EXPECT_FALSE(dictionary.ReferencePositionValid());
+    packet_0.raw.mlat_48mhz_64bit_counts += 100e3;
+    packet_1.raw.mlat_48mhz_64bit_counts += 100e3;
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet_0));
+    EXPECT_TRUE(dictionary.IngestDecodedModeSPacket(packet_1));
+}
+
 TEST(AircraftDictionary, IngestSurfacePositionMovementAndTrack) {
     AircraftDictionary::AircraftDictionaryConfig config;
     AircraftDictionary dictionary(config);
