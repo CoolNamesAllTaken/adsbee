@@ -278,7 +278,8 @@ bool ModeSAircraft::ApplyAircraftIDMessage(const ModeSADSBPacket& packet) {
 }
 
 bool ModeSAircraft::ApplySurfacePositionMessage(const ModeSADSBPacket& packet, uint32_t ref_lat_awb32,
-                                                uint32_t ref_lon_awb32, bool filter_cpr_position) {
+                                                uint32_t ref_lon_awb32, bool filter_cpr_position,
+                                                bool ref_position_valid) {
     WriteBitFlag(ModeSAircraft::BitFlag::kBitFlagIsAirborne, false);
 
     if (NICBitIsValid(ADSBTypes::kNICBitA) && NICBitIsValid(ADSBTypes::kNICBitC)) {
@@ -412,6 +413,12 @@ bool ModeSAircraft::ApplySurfacePositionMessage(const ModeSADSBPacket& packet, u
                  packet.raw.GetTimestampMs());
     if (!CanDecodePosition()) {
         // Can't decode aircraft position, but this is not an error.
+        return true;
+    }
+    if (!ref_position_valid) {
+        // No valid reference position: surface CPR would resolve against a bogus reference and silently produce a
+        // wrong position. Skip the position decode (the CPR frames above are cached for when a reference appears);
+        // everything else in the message has been applied, so this is not an error.
         return true;
     }
     if (DecodeSurfacePosition(ref_lat_awb32, ref_lon_awb32, filter_cpr_position)) {
@@ -1748,8 +1755,10 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
         case ModeSADSBPacket::kTypeCodeSurfacePosition + 1:  // TC = 6 (Surface Position)
         case ModeSADSBPacket::kTypeCodeSurfacePosition + 2:  // TC = 7 (Surface Position)
         case ModeSADSBPacket::kTypeCodeSurfacePosition + 3:  // TC = 8 (Surface Position)
-            ret = aircraft_ptr->ApplySurfacePositionMessage(
-                packet, reference_latitude_awb32_, reference_longitude_awb32_, config_.enable_cpr_position_filter);
+            ret = aircraft_ptr->ApplySurfacePositionMessage(packet, reference_latitude_awb32_,
+                                                            reference_longitude_awb32_,
+                                                            config_.enable_cpr_position_filter,
+                                                            reference_position_valid_);
             break;
         case ModeSADSBPacket::kTypeCodeAirbornePositionBaroAlt:      // TC = 9 (Airborne Position w/ Baro Altitude)
         case ModeSADSBPacket::kTypeCodeAirbornePositionBaroAlt + 1:  // TC = 10 (Airborne Position w/ Baro Altitude)
@@ -1900,6 +1909,7 @@ bool AircraftDictionary::RemoveOldestAircraft() {
 }
 
 void AircraftDictionary::SetReferencePosition(float latitude_deg, float longitude_deg) {
+    reference_position_valid_ = true;
     reference_latitude_awb32_ = lat2awb(latitude_deg);
     // Remap longitudes from (-180,180) to (0, 360)
     if (longitude_deg < 0.0f) {

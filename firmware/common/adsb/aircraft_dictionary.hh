@@ -379,8 +379,12 @@ class ModeSAircraft : public Aircraft {
      */
 
     bool ApplyAircraftIDMessage(const ModeSADSBPacket& packet);
+    // ref_position_valid gates only the CPR position decode: surface CPR resolves its 90x90 degree ambiguity by
+    // picking the solution nearest the reference position, so decoding against an unset reference (0, 0) would
+    // silently produce a wrong position. With ref_position_valid false the rest of the message (air/ground state,
+    // movement, heading, CPR frame caching) still applies and the message is treated as successfully ingested.
     bool ApplySurfacePositionMessage(const ModeSADSBPacket& packet, uint32_t ref_lat_awb32, uint32_t ref_lon_awb32,
-                                     bool filter_cpr_position = true);
+                                     bool filter_cpr_position = true, bool ref_position_valid = true);
     bool ApplyAirbornePositionMessage(const ModeSADSBPacket& packet, bool filter_cpr_position = true);
     bool ApplyAirborneVelocitiesMessage(const ModeSADSBPacket& packet);
     bool ApplyAircraftStatusMessage(const ModeSADSBPacket& packet);
@@ -1011,6 +1015,19 @@ class AircraftDictionary {
     void SetReferencePosition(float latitude_deg, float longitude_deg);
 
     /**
+     * Marks the reference position as unavailable. While the reference is invalid, Mode S surface position packets
+     * are ingested (air/ground state, movement, heading) but their CPR position decode is skipped, since surface
+     * CPR decoded against a bogus reference silently yields a wrong position.
+     */
+    inline void ClearReferencePosition() { reference_position_valid_ = false; }
+
+    /**
+     * Check whether a valid reference position has been set.
+     * @retval True if SetReferencePosition has been called and not subsequently cleared.
+     */
+    inline bool ReferencePositionValid() const { return reference_position_valid_; }
+
+    /**
      * Check if the CPR position filter is enabled.
      * @retval True if the filter is enabled, false if it is disabled.
      */
@@ -1125,6 +1142,7 @@ class AircraftDictionary {
     // Reference position for decoding Mode S surface position packets, in angular weighted binary format.
     uint32_t reference_latitude_awb32_ = 0;
     uint32_t reference_longitude_awb32_ = 0;
+    bool reference_position_valid_ = false;  // Set by SetReferencePosition, cleared by ClearReferencePosition.
 
     FixedPoolResource pool_;  // Free-list pool + monotonic bucket region; must outlive dict.
 };
