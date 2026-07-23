@@ -72,4 +72,36 @@ if [ "$settings_old" != "$settings_new" ] && [ "$firmware_old" = "$firmware_new"
     exit 1
 fi
 
+# Broader guard (warning). The RP2040 flashes itself from the .uf2 but only reflashes the ESP32 and
+# CC1312 coprocessors when their reported firmware version differs from its own (main.cc). So any
+# change to coprocessor firmware -- the ESP32 app, the CC1312 app, or the shared common/ code both
+# compile -- that is NOT paired with a firmware version bump silently leaves the coprocessors
+# running a stale build. Warn rather than fail: harmless edits (comments, formatting) also trip it,
+# and a bump is cheap.
+coprocessor_paths=(
+    "firmware/adsbee_1090/esp"
+    "firmware/adsbee_1090/ti"
+    "firmware/common"
+)
+
+# True (exit 0) if any of the given paths differ between old_source and new_source.
+paths_changed() {
+    local old="$1" new="$2"
+    shift 2
+    case "$new" in
+        WORKTREE) ! git -C "$root" diff --quiet "$old" -- "$@" ;;
+        INDEX)    ! git -C "$root" diff --quiet --cached "$old" -- "$@" ;;
+        *)        ! git -C "$root" diff --quiet "$old" "$new" -- "$@" ;;
+    esac
+}
+
+if [ "$firmware_old" = "$firmware_new" ] && paths_changed "$old_source" "$new_source" "${coprocessor_paths[@]}"; then
+    echo "WARNING: coprocessor firmware (ESP32 / CC1312 / shared common/) changed but the version in"
+    echo "         $firmware_version_file was NOT bumped."
+    echo "         The RP2040 only reflashes the coprocessors on a version mismatch, so they will keep"
+    echo "         running STALE firmware after 'just flash'. Bump kFirmwareVersionPatch (or"
+    echo "         kFirmwareVersionReleaseCandidate for dev builds) to force the reflash."
+    exit 1
+fi
+
 echo "=== Version sync check passed ==="
