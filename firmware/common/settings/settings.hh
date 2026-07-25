@@ -41,6 +41,7 @@ class SettingsManager {
         kMAVLINK2,
         kGDL90,
         kAircraftJSON,
+        kGDL90NoUATUplink,  // Appended (not next to kGDL90): values are flash-persisted, don't renumber.
         kNumProtocols
     };
     static constexpr uint16_t kReportingProtocolStrMaxLen = 30;
