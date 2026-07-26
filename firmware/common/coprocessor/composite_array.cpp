@@ -20,12 +20,29 @@ CompositeArray::RawPackets CompositeArray::PackRawPacketsBuffer(uint8_t* buf, ui
     packets_to_report.header->num_uat_adsb_packets = 0;
     packets_to_report.header->num_uat_uplink_packets = 0;
 
+    // Reserve room for a couple of uplink packets up front: Mode S and UAT ADS-B pack first, and under
+    // sustained traffic they would otherwise fill every batch and starve the low-rate uplink queue forever.
+    // Never reserve more than the buffer could actually hold past the header, so a buffer too small for
+    // any uplink still packs Mode S / UAT ADS-B instead of holding space no uplink can use.
+    constexpr uint16_t kMaxReservedUplinkPackets = 2;
+    uint16_t reserved_uplink_bytes = 0;
+    if (uat_uplink_queue) {
+        uint16_t max_uplinks_that_fit =
+            buf_len_bytes > sizeof(RawPackets::Header)
+                ? (buf_len_bytes - sizeof(RawPackets::Header)) / sizeof(RawUATUplinkPacket)
+                : 0;
+        uint16_t num_uplinks = uat_uplink_queue->Length();
+        if (num_uplinks > kMaxReservedUplinkPackets) num_uplinks = kMaxReservedUplinkPackets;
+        if (num_uplinks > max_uplinks_that_fit) num_uplinks = max_uplinks_that_fit;
+        reserved_uplink_bytes = num_uplinks * sizeof(RawUATUplinkPacket);
+    }
+
     // Fill up the CompositeArray::RawPackets header and associated buffers with as many packets as we can report.
     if (mode_s_queue) {
         // Stuff with Mode S packets.
         RawModeSPacket mode_s_packet;
         packets_to_report.mode_s_packets = reinterpret_cast<RawModeSPacket*>(buf + packets_to_report.len_bytes);
-        while (packets_to_report.len_bytes + sizeof(RawModeSPacket) <= buf_len_bytes &&
+        while (packets_to_report.len_bytes + sizeof(RawModeSPacket) + reserved_uplink_bytes <= buf_len_bytes &&
                mode_s_queue->Dequeue(mode_s_packet)) {
             memcpy(&packets_to_report.mode_s_packets[packets_to_report.header->num_mode_s_packets], &mode_s_packet,
                    sizeof(RawModeSPacket));
@@ -37,7 +54,7 @@ CompositeArray::RawPackets CompositeArray::PackRawPacketsBuffer(uint8_t* buf, ui
         // Stuff with UAT ADS-B packets.
         RawUATADSBPacket uat_adsb_packet;
         packets_to_report.uat_adsb_packets = reinterpret_cast<RawUATADSBPacket*>(buf + packets_to_report.len_bytes);
-        while (packets_to_report.len_bytes + sizeof(RawUATADSBPacket) <= buf_len_bytes &&
+        while (packets_to_report.len_bytes + sizeof(RawUATADSBPacket) + reserved_uplink_bytes <= buf_len_bytes &&
                uat_adsb_queue->Dequeue(uat_adsb_packet)) {
             memcpy(&packets_to_report.uat_adsb_packets[packets_to_report.header->num_uat_adsb_packets],
                    &uat_adsb_packet, sizeof(RawUATADSBPacket));

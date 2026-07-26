@@ -41,6 +41,7 @@ class SettingsManager {
         kMAVLINK2,
         kGDL90,
         kAircraftJSON,
+        kGDL90NoUATUplink,  // Appended (not next to kGDL90): values are flash-persisted, don't renumber.
         kNumProtocols
     };
     static constexpr uint16_t kReportingProtocolStrMaxLen = 30;
@@ -269,6 +270,12 @@ class SettingsManager {
             feed_protocols[kMaxNumFeeds - 4] = kBeast;
         }
     };
+
+    // Maximum number of sinks that can be passed to CommsManager::UpdateReporting() in a single call:
+    // serial interfaces on the Pico, IP feeds on the ESP32. Per-protocol sink arrays are sized with this.
+    static constexpr uint16_t kMaxNumReportSinks = Settings::kMaxNumFeeds > SerialInterface::kNumSerialInterfaces
+                                                       ? Settings::kMaxNumFeeds
+                                                       : SerialInterface::kNumSerialInterfaces;
 
     // This struct contains device information that should persist across firmware upgrades.
     struct DeviceInfo {

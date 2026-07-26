@@ -49,20 +49,29 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
     bool ret = true;
     uint32_t timestamp_ms = get_time_since_boot_ms();
 
+    // Every sink lands in exactly one per-protocol array below, so each array must be able to hold all
+    // sinks a caller can legally pass (serial interfaces on the Pico, IP feeds on the ESP32).
+    if (num_sinks > SettingsManager::kMaxNumReportSinks) {
+        CONSOLE_ERROR("CommsManager::UpdateReporting", "Called with %u sinks but arrays are sized for %u; clamping.",
+                      num_sinks, SettingsManager::kMaxNumReportSinks);
+        num_sinks = SettingsManager::kMaxNumReportSinks;
+    }
+
     // Build lists of sinks for each reporting protocol.
-    ReportSink raw_sinks[SettingsManager::kNumSerialInterfaces];
-    ReportSink beast_sinks[SettingsManager::kNumSerialInterfaces];
-    ReportSink beast_no_uat_sinks[SettingsManager::kNumSerialInterfaces];
-    ReportSink beast_no_uat_uplink_sinks[SettingsManager::kNumSerialInterfaces];
-    ReportSink csbee_sinks[SettingsManager::kNumSerialInterfaces];
-    ReportSink mavlink1_sinks[SettingsManager::kNumSerialInterfaces];
-    ReportSink mavlink2_sinks[SettingsManager::kNumSerialInterfaces];
-    ReportSink gdl90_sinks[SettingsManager::kNumSerialInterfaces];
-    ReportSink aircraftjson_sinks[SettingsManager::kNumSerialInterfaces];
+    ReportSink raw_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink beast_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink beast_no_uat_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink beast_no_uat_uplink_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink csbee_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink mavlink1_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink mavlink2_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink gdl90_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink gdl90_no_uat_uplink_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink aircraftjson_sinks[SettingsManager::kMaxNumReportSinks];
 
     uint16_t num_raw_sinks = 0, num_beast_sinks = 0, num_beast_no_uat_sinks = 0, num_beast_no_uat_uplink_sinks = 0,
              num_csbee_sinks = 0, num_mavlink1_sinks = 0, num_mavlink2_sinks = 0, num_gdl90_sinks = 0,
-             num_aircraftjson_sinks = 0;
+             num_gdl90_no_uat_uplink_sinks = 0, num_aircraftjson_sinks = 0;
 
     for (uint16_t i = 0; i < num_sinks; i++) {
         switch (sink_protocols[i]) {
@@ -92,6 +101,9 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
             case SettingsManager::kGDL90:
                 gdl90_sinks[num_gdl90_sinks++] = sinks[i];
                 break;
+            case SettingsManager::kGDL90NoUATUplink:
+                gdl90_no_uat_uplink_sinks[num_gdl90_no_uat_uplink_sinks++] = sinks[i];
+                break;
             case SettingsManager::kAircraftJSON:
                 aircraftjson_sinks[num_aircraftjson_sinks++] = sinks[i];
                 break;
@@ -102,6 +114,17 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
                               SettingsManager::kReportingProtocolStrs[sink_protocols[i]]);
                 break;  // Not a periodic report protocol.
         }
+    }
+
+    // Both GDL90 variants emit identical heartbeat/ownship/traffic reports and share one reporting
+    // round; kGDL90NoUATUplink differs only in being excluded from the uplink pass-through below.
+    ReportSink gdl90_all_sinks[SettingsManager::kMaxNumReportSinks];
+    uint16_t num_gdl90_all_sinks = 0;
+    for (uint16_t i = 0; i < num_gdl90_sinks; i++) {
+        gdl90_all_sinks[num_gdl90_all_sinks++] = gdl90_sinks[i];
+    }
+    for (uint16_t i = 0; i < num_gdl90_no_uat_uplink_sinks; i++) {
+        gdl90_all_sinks[num_gdl90_all_sinks++] = gdl90_no_uat_uplink_sinks[i];
     }
 
     /**  Report Raw Packets **/
@@ -143,13 +166,13 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
     if (csbee_round_active_ && num_csbee_sinks == 0) csbee_round_active_ = false;
     if (mavlink1_round_active_ && num_mavlink1_sinks == 0) mavlink1_round_active_ = false;
     if (mavlink2_round_active_ && num_mavlink2_sinks == 0) mavlink2_round_active_ = false;
-    if (gdl90_round_active_ && num_gdl90_sinks == 0) gdl90_round_active_ = false;
+    if (gdl90_round_active_ && num_gdl90_all_sinks == 0) gdl90_round_active_ = false;
     if (aircraftjson_round_active_ && num_aircraftjson_sinks == 0) aircraftjson_round_active_ = false;
 
     bool all_locally_decoded_done = !csbee_round_active_ && !mavlink1_round_active_ && !mavlink2_round_active_ &&
                                     !gdl90_round_active_ && !aircraftjson_round_active_;
     bool any_locally_decoded_active = (num_csbee_sinks > 0 || num_mavlink1_sinks > 0 || num_mavlink2_sinks > 0 ||
-                                       num_gdl90_sinks > 0 || num_aircraftjson_sinks > 0);
+                                       num_gdl90_all_sinks > 0 || num_aircraftjson_sinks > 0);
 
     if (any_locally_decoded_active && all_locally_decoded_done &&
         timestamp_ms - last_locally_decoded_report_timestamp_ms_ >= kCSBeeReportingIntervalMs) {
@@ -177,7 +200,7 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
         csbee_round_active_ = (num_csbee_sinks > 0);
         mavlink1_round_active_ = (num_mavlink1_sinks > 0);
         mavlink2_round_active_ = (num_mavlink2_sinks > 0);
-        gdl90_round_active_ = (num_gdl90_sinks > 0);
+        gdl90_round_active_ = (num_gdl90_all_sinks > 0);
         aircraftjson_round_active_ = (num_aircraftjson_sinks > 0);
     }
 
@@ -222,7 +245,7 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
                           kGDL90ReportingIntervalMs);
             gdl90_overrun_reported_ = true;
         }
-        if (!ReportGDL90(gdl90_sinks, num_gdl90_sinks)) {
+        if (!ReportGDL90(gdl90_all_sinks, num_gdl90_all_sinks)) {
             CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during ReportGDL90.");
             ret = false;
         }
