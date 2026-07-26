@@ -49,17 +49,25 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
     bool ret = true;
     uint32_t timestamp_ms = get_time_since_boot_ms();
 
+    // Every sink lands in exactly one per-protocol array below, so each array must be able to hold all
+    // sinks a caller can legally pass (serial interfaces on the Pico, IP feeds on the ESP32).
+    if (num_sinks > SettingsManager::kMaxNumReportSinks) {
+        CONSOLE_ERROR("CommsManager::UpdateReporting", "Called with %u sinks but arrays are sized for %u; clamping.",
+                      num_sinks, SettingsManager::kMaxNumReportSinks);
+        num_sinks = SettingsManager::kMaxNumReportSinks;
+    }
+
     // Build lists of sinks for each reporting protocol.
-    ReportSink raw_sinks[SettingsManager::kNumSerialInterfaces];
-    ReportSink beast_sinks[SettingsManager::kNumSerialInterfaces];
-    ReportSink beast_no_uat_sinks[SettingsManager::kNumSerialInterfaces];
-    ReportSink beast_no_uat_uplink_sinks[SettingsManager::kNumSerialInterfaces];
-    ReportSink csbee_sinks[SettingsManager::kNumSerialInterfaces];
-    ReportSink mavlink1_sinks[SettingsManager::kNumSerialInterfaces];
-    ReportSink mavlink2_sinks[SettingsManager::kNumSerialInterfaces];
-    ReportSink gdl90_sinks[SettingsManager::kNumSerialInterfaces];
-    ReportSink gdl90_no_uat_uplink_sinks[SettingsManager::kNumSerialInterfaces];
-    ReportSink aircraftjson_sinks[SettingsManager::kNumSerialInterfaces];
+    ReportSink raw_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink beast_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink beast_no_uat_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink beast_no_uat_uplink_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink csbee_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink mavlink1_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink mavlink2_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink gdl90_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink gdl90_no_uat_uplink_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink aircraftjson_sinks[SettingsManager::kMaxNumReportSinks];
 
     uint16_t num_raw_sinks = 0, num_beast_sinks = 0, num_beast_no_uat_sinks = 0, num_beast_no_uat_uplink_sinks = 0,
              num_csbee_sinks = 0, num_mavlink1_sinks = 0, num_mavlink2_sinks = 0, num_gdl90_sinks = 0,
@@ -110,7 +118,7 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
 
     // Both GDL90 variants emit identical heartbeat/ownship/traffic reports and share one reporting
     // round; kGDL90NoUATUplink differs only in being excluded from the uplink pass-through below.
-    ReportSink gdl90_all_sinks[SettingsManager::kNumSerialInterfaces];
+    ReportSink gdl90_all_sinks[SettingsManager::kMaxNumReportSinks];
     uint16_t num_gdl90_all_sinks = 0;
     for (uint16_t i = 0; i < num_gdl90_sinks; i++) {
         gdl90_all_sinks[num_gdl90_all_sinks++] = gdl90_sinks[i];

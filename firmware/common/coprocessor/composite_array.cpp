@@ -22,13 +22,19 @@ CompositeArray::RawPackets CompositeArray::PackRawPacketsBuffer(uint8_t* buf, ui
 
     // Reserve room for a couple of uplink packets up front: Mode S and UAT ADS-B pack first, and under
     // sustained traffic they would otherwise fill every batch and starve the low-rate uplink queue forever.
+    // Never reserve more than the buffer could actually hold past the header, so a buffer too small for
+    // any uplink still packs Mode S / UAT ADS-B instead of holding space no uplink can use.
     constexpr uint16_t kMaxReservedUplinkPackets = 2;
     uint16_t reserved_uplink_bytes = 0;
     if (uat_uplink_queue) {
+        uint16_t max_uplinks_that_fit =
+            buf_len_bytes > sizeof(RawPackets::Header)
+                ? (buf_len_bytes - sizeof(RawPackets::Header)) / sizeof(RawUATUplinkPacket)
+                : 0;
         uint16_t num_uplinks = uat_uplink_queue->Length();
-        reserved_uplink_bytes =
-            (num_uplinks < kMaxReservedUplinkPackets ? num_uplinks : kMaxReservedUplinkPackets) *
-            sizeof(RawUATUplinkPacket);
+        if (num_uplinks > kMaxReservedUplinkPackets) num_uplinks = kMaxReservedUplinkPackets;
+        if (num_uplinks > max_uplinks_that_fit) num_uplinks = max_uplinks_that_fit;
+        reserved_uplink_bytes = num_uplinks * sizeof(RawUATUplinkPacket);
     }
 
     // Fill up the CompositeArray::RawPackets header and associated buffers with as many packets as we can report.
