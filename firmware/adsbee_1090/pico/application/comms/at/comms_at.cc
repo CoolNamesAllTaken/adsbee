@@ -454,6 +454,95 @@ CPP_AT_CALLBACK(CommsManager::ATRemoteIDCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+void ATRemoteIDTxHelpCallback() {
+    CPP_AT_PRINTF(
+        "\tAT+REMOTE_ID_TX=<enabled>[,<transport_mask>[,<uas_id>[,<id_type>[,<ua_type>[,<operator_id>]]]]]\r\n"
+        "\tTransmit Broadcast Remote ID (drone ID) from this device, for use as a Remote ID test transmitter or as a "
+        "combined ADS-B receiver / Remote ID transmitter on a drone. No WiFi AP/STA is required.\r\n"
+        "\ttransport_mask bits: 1=BT4 legacy, 2=BT5 Long Range, 4=WiFi beacon (default 7 = all methods).\r\n"
+        "\tuas_id = UAS serial / registration, up to %d chars ('-' to clear and use this device's serial).\r\n"
+        "\tid_type = [1 SERIAL, 2 CAA_REGISTRATION, 3 UTM_UUID, 4 SESSION_ID].\r\n"
+        "\tua_type = [1 AEROPLANE, 2 HELICOPTER_MULTIROTOR, ... 15 OTHER].\r\n"
+        "\toperator_id = operator registration, up to %d chars ('-' to clear).\r\n"
+        "\tThe transmitted position comes from AT+RX_POSITION.\r\n"
+        "\tAT+REMOTE_ID_TX?\r\n\tQuery transmit settings and the ESP32's live status bitfield.",
+        SettingsManager::Settings::kRemoteIDIDMaxLen, SettingsManager::Settings::kRemoteIDIDMaxLen);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATRemoteIDTxCallback) {
+    switch (op) {
+        case '?':
+            // Report the requested settings plus the ESP32's resolved live status bitfield (the high byte carries the
+            // transmit state; see RemoteIDManager::Status).
+            CPP_AT_CMD_PRINTF("=%d,0x%02X(TRANSPORTS),%s(UAS_ID),%d(ID_TYPE),%d(UA_TYPE),%s(OPERATOR_ID),0x%04X(ESP32_STATUS)",
+                              settings_manager.settings.remote_id_tx_enabled,
+                              settings_manager.settings.remote_id_tx_transports,
+                              settings_manager.settings.remote_id_tx_uas_id[0] == '\0'
+                                  ? "(device serial)"
+                                  : settings_manager.settings.remote_id_tx_uas_id,
+                              settings_manager.settings.remote_id_tx_uas_id_type,
+                              settings_manager.settings.remote_id_tx_ua_type,
+                              settings_manager.settings.remote_id_tx_operator_id[0] == '\0'
+                                  ? "(none)"
+                                  : settings_manager.settings.remote_id_tx_operator_id,
+                              esp32_ll.remote_id_status);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=': {
+            if (!CPP_AT_HAS_ARG(0)) {
+                CPP_AT_ERROR("Requires at least one argument. AT+REMOTE_ID_TX=<enabled>[,<transport_mask>]");
+            }
+            CPP_AT_TRY_ARG2NUM(0, settings_manager.settings.remote_id_tx_enabled);
+            if (CPP_AT_HAS_ARG(1)) {
+                CPP_AT_TRY_ARG2NUM(1, settings_manager.settings.remote_id_tx_transports);
+            }
+            if (CPP_AT_HAS_ARG(2)) {
+                // "-" clears the UAS ID, which makes the transmitter fall back to this device's own serial number.
+                if (args[2].compare("-") == 0) {
+                    memset(settings_manager.settings.remote_id_tx_uas_id, '\0',
+                           sizeof(settings_manager.settings.remote_id_tx_uas_id));
+                } else {
+                    if (args[2].length() > SettingsManager::Settings::kRemoteIDIDMaxLen) {
+                        CPP_AT_ERROR("UAS ID must be %d characters or fewer, got %d.",
+                                     SettingsManager::Settings::kRemoteIDIDMaxLen, args[2].length());
+                    }
+                    memset(settings_manager.settings.remote_id_tx_uas_id, '\0',
+                           sizeof(settings_manager.settings.remote_id_tx_uas_id));
+                    strncpy(settings_manager.settings.remote_id_tx_uas_id, args[2].data(), args[2].length());
+                }
+            }
+            if (CPP_AT_HAS_ARG(3)) {
+                CPP_AT_TRY_ARG2NUM(3, settings_manager.settings.remote_id_tx_uas_id_type);
+            }
+            if (CPP_AT_HAS_ARG(4)) {
+                CPP_AT_TRY_ARG2NUM(4, settings_manager.settings.remote_id_tx_ua_type);
+            }
+            if (CPP_AT_HAS_ARG(5)) {
+                if (args[5].compare("-") == 0) {
+                    memset(settings_manager.settings.remote_id_tx_operator_id, '\0',
+                           sizeof(settings_manager.settings.remote_id_tx_operator_id));
+                } else {
+                    if (args[5].length() > SettingsManager::Settings::kRemoteIDIDMaxLen) {
+                        CPP_AT_ERROR("Operator ID must be %d characters or fewer, got %d.",
+                                     SettingsManager::Settings::kRemoteIDIDMaxLen, args[5].length());
+                    }
+                    memset(settings_manager.settings.remote_id_tx_operator_id, '\0',
+                           sizeof(settings_manager.settings.remote_id_tx_operator_id));
+                    strncpy(settings_manager.settings.remote_id_tx_operator_id, args[5].data(), args[5].length());
+                }
+            }
+            // Push the new transmit configuration to the ESP32, which owns the radios.
+            settings_manager.SyncToCoprocessors();
+            CPP_AT_CMD_PRINTF(": remote_id_tx_enabled: %d, transports: 0x%02X\r\n",
+                              settings_manager.settings.remote_id_tx_enabled,
+                              settings_manager.settings.remote_id_tx_transports);
+            CPP_AT_SUCCESS();
+            break;
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 void ATFeedHelpCallback() {
     CPP_AT_PRINTF(
         "\tAT+FEED=<index>,<uri>,<port>,<active>,<protocol>\r\n\tSet details for a "
@@ -1469,6 +1558,11 @@ const CppAT::ATCommandDef_t at_command_list[] = {
          "non-PSRAM builds Remote ID only runs when WiFi AP/STA are disabled and Ethernet is up.\r\n\t"
          "AT+REMOTE_ID?\r\n\tQuery Remote ID settings and the ESP32's live status bitfield.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRemoteIDCallback, comms_manager)},
+    {.command = "REMOTE_ID_TX",
+     .min_args = 0,
+     .max_args = 6,
+     .help_callback = ATRemoteIDTxHelpCallback,
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRemoteIDTxCallback, comms_manager)},
     {.command = "RX_ENABLE",
      .min_args = 0,
      .max_args = 3,

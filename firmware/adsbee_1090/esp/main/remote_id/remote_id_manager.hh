@@ -4,6 +4,7 @@
 
 #include "data_structures.hh"  // PFBQueue
 #include "remote_id_packet.hh"
+#include "remote_id_tx.hh"
 #include "settings.hh"
 
 /**
@@ -53,14 +54,30 @@ class RemoteIDManager {
     static constexpr uint8_t kSnifferChannels[3] = {1, 6, 11};
     static constexpr uint32_t kSnifferChannelDwellMs = 450;  // >= 4 beacon intervals per channel.
 
-    // Live status bitfield, mirrored into ObjectDictionary::ESP32DeviceStatus::remote_id_status.
-    enum Status : uint8_t {
+    // Transmit tick period. ASTM F3411 requires the dynamic Location message at >= 1 Hz; refreshing the advertised
+    // content every 500 ms keeps Location above that even on the BT4 legacy path, which can only carry one message per
+    // advertisement and therefore interleaves Location with the static identity messages.
+    static constexpr uint32_t kTxTickIntervalMs = 500;
+
+    // Heap guard for the transmitter. Transmitting needs far less RAM than receiving (no packet queues, no promiscuous
+    // RX buffers), but the BLE/WiFi stacks it brings up are the same, so it still must not starve the network stack.
+    static constexpr uint32_t kMinHeapFreeBytesForTx = 60 * 1024;
+
+    // Live status bitfield, mirrored into ObjectDictionary::ESP32DeviceStatus::remote_id_status. Low byte is receive
+    // state, high byte is transmit state.
+    enum Status : uint16_t {
         kStatusBLEActive = 1 << 0,          // NimBLE observer is scanning.
         kStatusBLECodedPHYActive = 1 << 1,  // Coded PHY (BT5 Long Range) extended scan is active.
         kStatusWiFiSnifferActive = 1 << 2,  // WiFi promiscuous sniffer is running.
         kStatusBlockedByWiFi = 1 << 3,      // Requested but blocked: WiFi AP/STA up on a non-PSRAM build.
         kStatusBlockedByRAM = 1 << 4,       // Requested but blocked: insufficient free heap.
         kStatusNotInBuild = 1 << 5,         // Requested but Bluetooth is not compiled into this firmware.
+
+        kStatusTxBLELegacyActive = 1 << 8,   // Advertising Remote ID on BT4 legacy (1M PHY).
+        kStatusTxBLECodedActive = 1 << 9,    // Advertising Remote ID on BT5 Long Range (Coded PHY).
+        kStatusTxWiFiBeaconActive = 1 << 10, // Injecting Remote ID WiFi beacon frames.
+        kStatusTxNoPosition = 1 << 11,       // Transmitting, but rx_position is unavailable (Location sent as unknown).
+        kStatusTxBlocked = 1 << 12,          // Transmit requested but could not start (RAM, radio conflict, or build).
     };
 
     RemoteIDManager() = default;
@@ -91,7 +108,7 @@ class RemoteIDManager {
      */
     uint16_t ServiceIngestQueue();
 
-    uint8_t GetStatus() const { return status_; }
+    uint16_t GetStatus() const { return status_; }
 
     /**
      * Returns the queue of rate-limited Remote ID packets waiting to be pulled by the RP2040 over SPI, or nullptr if no
@@ -100,9 +117,21 @@ class RemoteIDManager {
      */
     PFBQueue<RawRemoteIDPacket>* GetOutQueue() { return out_queue_; }
 
+    /**
+     * The single Remote ID transmitter (message content builder) shared by all transmit transports, so they advance one
+     * common message schedule. Used by the BLE advertising callbacks, which run outside a member context.
+     */
+    RemoteIDTransmitter& GetTransmitter() { return tx_; }
+
    private:
     // Decides the target transport set from settings + build + network + heap, then reconciles the running transports.
     void Reconcile();
+
+    // Same, for the transmit transports (BLE advertising, WiFi beacon injection).
+    void ReconcileTx();
+
+    // Rebuilds and re-publishes the transmitted Remote ID content at kTxTickIntervalMs. Called from Update().
+    void ServiceTxTick();
 
     // Returns true if this build/config allows Remote ID to coexist with active WiFi AP/STA (i.e. has PSRAM).
     static bool CanCoexistWithWiFi();
@@ -118,10 +147,22 @@ class RemoteIDManager {
     bool BLEStart(bool enable_coded_phy);
     void BLEStop();
 
+    // BLE transmit (broadcaster) control — implemented in remote_id_ble.cpp. Shares the NimBLE host with the observer
+    // above, so scanning and advertising can run at the same time.
+    bool BLETxStart(bool enable_legacy, bool enable_coded_phy);
+    void BLETxStop();
+    void BLETxServiceTick();  // Refreshes the advertised ODID content; call at the transmit cadence.
+    static bool BLETxIsSupported();  // False when Bluetooth isn't compiled into this firmware.
+
     // WiFi promiscuous sniffer control — implemented in remote_id_wifi_sniffer.cpp.
     bool WiFiSnifferStart();
     void WiFiSnifferStop();
     void WiFiSnifferServiceHopper();
+
+    // WiFi beacon transmit control — implemented in remote_id_wifi_sniffer.cpp (which owns the shared WiFi radio).
+    bool WiFiTxStart();
+    void WiFiTxStop();
+    void WiFiTxServiceTick(RemoteIDTransmitter& transmitter);
 
     struct DedupEntry {
         bool in_use = false;
@@ -131,10 +172,19 @@ class RemoteIDManager {
     };
     DedupEntry* FindOrAllocDedupEntry(const uint8_t mac[6]);
 
-    uint8_t status_ = 0;
+    uint16_t status_ = 0;
     bool ble_running_ = false;
     bool ble_coded_running_ = false;
     bool wifi_sniffer_running_ = false;
+
+    // Transmit state.
+    bool ble_tx_legacy_running_ = false;
+    bool ble_tx_coded_running_ = false;
+    bool wifi_tx_running_ = false;
+    uint32_t last_tx_tick_ms_ = 0;
+    // Builds the transmitted Open Drone ID message content. One instance shared by every transmit transport so they
+    // advance a single message schedule and message-counter set.
+    RemoteIDTransmitter tx_;
 
     uint8_t sniffer_channel_index_ = 0;
     uint32_t last_channel_hop_ms_ = 0;

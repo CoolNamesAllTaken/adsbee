@@ -193,9 +193,90 @@ void RemoteIDManager::Reconcile() {
     }
 }
 
+void RemoteIDManager::ReconcileTx() {
+    if (!settings_manager.settings.remote_id_tx_enabled) {
+        BLETxStop();
+        WiFiTxStop();
+        return;
+    }
+
+    const uint8_t transports = settings_manager.settings.remote_id_tx_transports;
+    const bool want_ble_legacy = transports & SettingsManager::kRemoteIDTransportBLE4;
+    const bool want_ble_coded = transports & SettingsManager::kRemoteIDTransportBLE5Long;
+    const bool want_wifi = transports & SettingsManager::kRemoteIDTransportWiFiBeacon;
+
+    // Transmitting does not need WiFi AP/STA (a Remote ID transmitter has no use for them), but if the user has them
+    // enabled on a board that can't coexist, the radios are already committed and Remote ID must stay off.
+    const bool wifi_ap_sta_up = comms_manager.wifi_ap_enabled || comms_manager.wifi_sta_enabled;
+    if (wifi_ap_sta_up && !CanCoexistWithWiFi()) {
+        status_ |= kStatusBlockedByWiFi | kStatusTxBlocked;
+        BLETxStop();
+        WiFiTxStop();
+        return;
+    }
+
+    // --- BLE transmit ---
+    if (want_ble_legacy || want_ble_coded) {
+        if (!BLETxIsSupported()) {
+            status_ |= kStatusNotInBuild | kStatusTxBlocked;
+        } else if (ble_tx_legacy_running_ || ble_tx_coded_running_ ||
+                   heap_caps_get_free_size(MALLOC_CAP_8BIT) >= kMinHeapFreeBytesForTx) {
+            if (BLETxStart(want_ble_legacy, want_ble_coded)) {
+                if (ble_tx_legacy_running_) status_ |= kStatusTxBLELegacyActive;
+                if (ble_tx_coded_running_) status_ |= kStatusTxBLECodedActive;
+            } else {
+                status_ |= kStatusTxBlocked;
+            }
+        } else {
+            status_ |= kStatusBlockedByRAM | kStatusTxBlocked;
+        }
+    } else {
+        BLETxStop();
+    }
+
+    // --- WiFi beacon transmit ---
+    // Only when WiFi AP/STA isn't using the radio. The transmitter parks the radio on its beacon channel; the RX
+    // sniffer (if also running) stops hopping and listens there (see WiFiSnifferServiceHopper).
+    if (want_wifi && !wifi_ap_sta_up) {
+        if (wifi_tx_running_ || heap_caps_get_free_size(MALLOC_CAP_8BIT) >= kMinHeapFreeBytesForTx) {
+            if (WiFiTxStart()) {
+                status_ |= kStatusTxWiFiBeaconActive;
+            } else {
+                status_ |= kStatusTxBlocked;
+            }
+        } else {
+            status_ |= kStatusBlockedByRAM | kStatusTxBlocked;
+        }
+    } else {
+        WiFiTxStop();
+    }
+}
+
+void RemoteIDManager::ServiceTxTick() {
+    if (!ble_tx_legacy_running_ && !ble_tx_coded_running_ && !wifi_tx_running_) return;
+
+    uint32_t now_ms = get_time_since_boot_ms();
+    if (now_ms - last_tx_tick_ms_ < kTxTickIntervalMs) return;
+    last_tx_tick_ms_ = now_ms;
+
+    status_ &= ~kStatusTxNoPosition;  // Recomputed below from the current position availability.
+
+    // BLE refreshes its own advertising payload (it owns the RemoteIDTransmitter that tracks the message schedule).
+    BLETxServiceTick();
+
+    if (wifi_tx_running_) {
+        // The WiFi beacon carries a full message pack built from the same refreshed ODID data.
+        if (!tx_.RefreshFromDeviceState()) {
+            status_ |= kStatusTxNoPosition;
+        }
+        WiFiTxServiceTick(tx_);
+    }
+}
+
 void RemoteIDManager::Apply() {
     Reconcile();
-    // Publish the resolved status so the RP2040 can surface it via AT+REMOTE_ID?.
+    ReconcileTx();
+    // Publish the resolved status so the RP2040 can surface it via AT+REMOTE_ID? / AT+REMOTE_ID_TX?.
     object_dictionary.device_status.remote_id_status = status_;
 }
 
@@ -203,5 +284,6 @@ void RemoteIDManager::Update() {
     if (wifi_sniffer_running_) {
         WiFiSnifferServiceHopper();
     }
+    ServiceTxTick();
     object_dictionary.device_status.remote_id_status = status_;
 }

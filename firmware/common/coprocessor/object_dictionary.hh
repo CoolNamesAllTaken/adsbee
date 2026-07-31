@@ -143,9 +143,10 @@ class ObjectDictionary {
         // BLE/WiFi and has queued for the RP2040 to pull from kAddrCompositeArrayRawPackets. Header-only (== 8) means
         // nothing pending. See the ESP32->RP2040 forwarding path in peripherals/esp32/esp32.cc.
         uint16_t pending_raw_packets_len_bytes = 0;
-        // Bitfield reporting the live Remote ID receiver state (see RemoteIDManager::Status). Lets the RP2040 explain,
-        // e.g., "Remote ID requested but blocked because WiFi is enabled on a non-PSRAM build" in AT+REMOTE_ID?.
-        uint8_t remote_id_status = 0;
+        // Bitfield reporting the live Remote ID receiver AND transmitter state (see RemoteIDManager::Status). Lets the
+        // RP2040 explain, e.g., "Remote ID requested but blocked because WiFi is enabled on a non-PSRAM build" in
+        // AT+REMOTE_ID? / AT+REMOTE_ID_TX?.
+        uint16_t remote_id_status = 0;
     };
 
     /**

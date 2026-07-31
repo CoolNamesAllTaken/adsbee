@@ -13,7 +13,7 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 13;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 14;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 class SettingsManager {
@@ -110,6 +110,8 @@ class SettingsManager {
         static constexpr uint16_t kWiFiMaxNumClients = 6;
         static constexpr uint32_t kDefaultCommsUARTBaudrate = 115200;
         static constexpr uint32_t kDefaultGNSSUARTBaudrate = 9600;
+        // Open Drone ID UAS ID / Operator ID string length (ODID_ID_SIZE in opendroneid.h).
+        static constexpr uint16_t kRemoteIDIDMaxLen = 20;
         static constexpr uint16_t kMaxNumFeeds = 10;
         static constexpr uint16_t kFeedURIMaxNumChars = 63;
         static constexpr uint16_t kFeedReceiverIDNumBytes = 8;
@@ -214,6 +216,27 @@ class SettingsManager {
                                        SettingsManager::kRemoteIDTransportBLE5Long |
                                        SettingsManager::kRemoteIDTransportWiFiBeacon;
 
+        // Remote ID transmit settings. The ADSBee can act as a Broadcast Remote ID transmitter, either as a bench test
+        // transmitter for checking Remote ID receiver performance, or mounted on a drone as a combined ADS-B receiver
+        // and Remote ID transmitter. Transmission uses the same radios as reception and needs no WiFi AP/STA.
+        // The transmitted UA position comes from rx_position (AT+RX_POSITION), so a fixed coordinate works for a bench
+        // transmitter and GNSS works once that position source is implemented.
+        bool remote_id_tx_enabled = false;  // Master enable for Remote ID transmission. Off by default.
+        // Bitmask of RemoteIDTransport values to advertise on. All methods by default so the device is useful as a
+        // test transmitter against any receiver; narrow it to test one method at a time.
+        uint8_t remote_id_tx_transports = SettingsManager::kRemoteIDTransportBLE4 |
+                                          SettingsManager::kRemoteIDTransportBLE5Long |
+                                          SettingsManager::kRemoteIDTransportWiFiBeacon;
+        // ODID_idtype_t: 1 = serial number (ANSI/CTA-2063-A), 2 = CAA registration, 3 = UTM UUID, 4 = session ID.
+        uint8_t remote_id_tx_uas_id_type = 1;
+        // ODID_uatype_t: 1 = aeroplane, 2 = helicopter/multirotor, ... 15 = other.
+        uint8_t remote_id_tx_ua_type = 2;
+        // UAS ID (serial / registration) advertised in the Basic ID message. Empty means "derive from this device's
+        // serial number at runtime" so the unit is a usable test transmitter with no configuration.
+        char remote_id_tx_uas_id[kRemoteIDIDMaxLen + 1];
+        // Operator ID advertised in the Operator ID message. Empty means the message is not transmitted.
+        char remote_id_tx_operator_id[kRemoteIDIDMaxLen + 1];
+
         // Feed settings
         char feed_uris[kMaxNumFeeds][kFeedURIMaxNumChars + 1];
         uint16_t feed_ports[kMaxNumFeeds];
@@ -232,6 +255,12 @@ class SettingsManager {
          * Default constructor.
          */
         Settings() {
+            // Remote ID transmit identity strings default to empty: an empty UAS ID means "derive from this device's
+            // serial number at runtime" (see the Remote ID transmitter), and an empty operator ID suppresses the
+            // Operator ID message.
+            memset(remote_id_tx_uas_id, '\0', sizeof(remote_id_tx_uas_id));
+            memset(remote_id_tx_operator_id, '\0', sizeof(remote_id_tx_operator_id));
+
 #ifdef ON_PICO
             DeviceInfo device_info;
             if (GetDeviceInfo(device_info)) {

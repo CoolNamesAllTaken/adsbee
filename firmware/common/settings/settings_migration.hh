@@ -33,8 +33,11 @@ class SettingsMigrator {
     static bool Migrate(const uint8_t* blob, uint16_t blob_len, uint32_t from_version, SettingsManager::Settings& out);
 
    private:
-    // Per-version upgrade steps. Each takes the previous frozen layout and produces the next. `out` is fully populated
-    // (default-constructed then overwritten). To add v14: freeze v13 in settings_versions.hh, add
-    // MigrateV13ToV14(const settings_v13::Settings&, SettingsManager::Settings&), and extend Migrate()'s dispatch.
-    static void MigrateV12ToV13(const settings_v12::Settings& in, SettingsManager::Settings& out);
+    // Per-version upgrade steps, chained: each takes the frozen layout of version N and produces version N+1. Steps that
+    // land on an intermediate frozen version write that frozen struct; only the final step (the one that reaches the
+    // current version) writes the live SettingsManager::Settings. To add v15: freeze v14 in settings_versions.hh, change
+    // MigrateV13ToV14 to emit settings_v14::Settings, add MigrateV14ToV15 emitting the live struct, and extend
+    // Migrate()'s dispatch with a `case 14:`.
+    static void MigrateV12ToV13(const settings_v12::Settings& in, settings_v13::Settings& out);
+    static void MigrateV13ToV14(const settings_v13::Settings& in, SettingsManager::Settings& out);
 };
