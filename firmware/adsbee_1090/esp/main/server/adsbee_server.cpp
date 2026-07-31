@@ -72,6 +72,12 @@ void ws_close_fd(httpd_handle_t hd, int sockfd) {
 /** End "Pass-Through" functions. **/
 
 bool ADSBeeServer::Init() {
+    aircraft_dictionary_mutex = xSemaphoreCreateMutex();
+    if (aircraft_dictionary_mutex == nullptr) {
+        CONSOLE_ERROR("ADSBeeServer::Init", "Failed to create aircraft dictionary mutex.");
+        return false;
+    }
+
     if (!pico.Init()) {
         CONSOLE_ERROR("ADSBeeServer::Init", "SPI Coprocessor initialization failed.");
         return false;
@@ -130,7 +136,10 @@ bool ADSBeeServer::Update() {
             object_dictionary.composite_device_status.rp2040.rx_position.latitude_deg,
             object_dictionary.composite_device_status.rp2040.rx_position.longitude_deg);
 
+        // Prunes (erases) entries, so it must not run while the HTTP handler is iterating.
+        xSemaphoreTake(aircraft_dictionary_mutex, portMAX_DELAY);
         aircraft_dictionary.Update(timestamp_ms);
+        xSemaphoreGive(aircraft_dictionary_mutex);
         last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
         uint32_t heap_free_kb = heap_caps_get_free_size(MALLOC_CAP_8BIT) / 1024;
         uint32_t heap_total_kb = heap_caps_get_total_size(MALLOC_CAP_8BIT) / 1024;
@@ -185,6 +194,10 @@ bool ADSBeeServer::Update() {
             // Forward packets to WAN.
             comms_manager.IPWANSendRawPacketCompositeArray(raw_packets_buf_);
 
+            // The Ingest* calls below insert into the dictionary, so hold the mutex across both
+            // loops. CPU work only — no I/O — so the hold is short even at high packet rates.
+            xSemaphoreTake(aircraft_dictionary_mutex, portMAX_DELAY);
+
             // Mode S Packets
             for (uint16_t i = 0; i < raw_packets.header->num_mode_s_packets; i++) {
                 RawModeSPacket& raw_mode_s_packet = raw_packets.mode_s_packets[i];
@@ -231,6 +244,8 @@ bool ADSBeeServer::Update() {
                                   "Failed to ingest decoded UAT ADSB packet into aircraft dictionary.");
                 }
             }
+
+            xSemaphoreGive(aircraft_dictionary_mutex);
 
             // UAT Uplink Packets
             // We don't currently digest uplink packets, they just get forwarded. The raw_packets_buf composite packet
@@ -558,6 +573,85 @@ static esp_err_t feed_api_get_handler(httpd_req_t* req) {
     return ESP_OK;
 }
 
+/**
+ * Serves the full aircraft dictionary as one readsb/tar1090-shaped JSON document:
+ *   {"now":<sec since boot>,"messages":<valid frames>,"aircraft":[ {...}, {...} ]}
+ *
+ * Each array element is byte-identical to what the /aircraft WebSocket pushes per frame, since both
+ * call the same WriteAircraftJSON*Str() serializers. The difference is framing: this returns the
+ * complete set in one response, so clients replace their state instead of accumulating it.
+ *
+ * Streamed with chunked encoding rather than assembled in a buffer — the ESP32-S3 here has no PSRAM
+ * and only ~40 KB of free heap, so a whole-document buffer (up to 200 aircraft x 512 B) is not
+ * affordable.
+ *
+ * Runs on the HTTP server task, so it must not iterate the dictionary while the main task mutates
+ * it. Rather than hold the mutex across socket writes (which would let a stalled client back up
+ * packet ingestion), it snapshots the UIDs first, then re-locks briefly per aircraft to serialize.
+ * Socket I/O always happens unlocked.
+ */
+static esp_err_t aircraft_json_get_handler(httpd_req_t* req) {
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+
+    // Phase 1: snapshot the key set and the message counter under the lock.
+    static_assert(AircraftDictionary::kMaxNumAircraft <= 200,
+                  "uids is stack allocated; revisit if the dictionary grows.");
+    uint32_t uids[AircraftDictionary::kMaxNumAircraft];
+    uint16_t num_uids = 0;
+    uint32_t messages = 0;
+
+    xSemaphoreTake(adsbee_server.aircraft_dictionary_mutex, portMAX_DELAY);
+    for (auto& itr : adsbee_server.aircraft_dictionary.dict) {
+        if (num_uids >= AircraftDictionary::kMaxNumAircraft) break;
+        uids[num_uids++] = itr.first;
+    }
+    // Matches the count reported in the GDL90 heartbeat.
+    messages = adsbee_server.aircraft_dictionary.metrics.valid_squitter_frames +
+               adsbee_server.aircraft_dictionary.metrics.valid_extended_squitter_frames +
+               adsbee_server.aircraft_dictionary.metrics.valid_uat_adsb_frames;
+    xSemaphoreGive(adsbee_server.aircraft_dictionary_mutex);
+
+    char buf[kAircraftJSONMessageStrMaxLen];
+    // "now" is seconds since boot, NOT a Unix timestamp — the device has no guaranteed RTC. Clients
+    // should use it for staleness detection only.
+    int header_len = snprintf(buf, sizeof(buf), "{\"now\":%.1f,\"messages\":%lu,\"aircraft\":[",
+                              get_time_since_boot_ms() / 1000.0f, (unsigned long)messages);
+    if (httpd_resp_send_chunk(req, buf, header_len) != ESP_OK) {
+        return ESP_FAIL;  // Client hung up; httpd closes the session.
+    }
+
+    // Phase 2: serialize one aircraft at a time, re-locking only for the lookup + snprintf.
+    bool first = true;
+    for (uint16_t i = 0; i < num_uids; i++) {
+        int16_t len = -1;
+
+        xSemaphoreTake(adsbee_server.aircraft_dictionary_mutex, portMAX_DELAY);
+        auto itr = adsbee_server.aircraft_dictionary.dict.find(uids[i]);
+        if (itr != adsbee_server.aircraft_dictionary.dict.end()) {
+            if (ModeSAircraft* ac = get_if<ModeSAircraft>(&(itr->second)); ac) {
+                len = WriteAircraftJSONModeSAircraftStr(buf, *ac);
+            } else if (UATAircraft* ac = get_if<UATAircraft>(&(itr->second)); ac) {
+                len = WriteAircraftJSONUATAircraftStr(buf, *ac);
+            }
+        }
+        xSemaphoreGive(adsbee_server.aircraft_dictionary_mutex);
+
+        // Aircraft pruned between the two phases, or a serializer error. Skip it.
+        if (len <= 0) continue;
+        // The serializers terminate with "}\n" for the newline-delimited WebSocket framing. Drop the
+        // trailing newline so the object sits cleanly inside a JSON array.
+        if (buf[len - 1] == '\n') len--;
+
+        if (!first && httpd_resp_send_chunk(req, ",", 1) != ESP_OK) return ESP_FAIL;
+        if (httpd_resp_send_chunk(req, buf, len) != ESP_OK) return ESP_FAIL;
+        first = false;
+    }
+
+    if (httpd_resp_send_chunk(req, "]}", 2) != ESP_OK) return ESP_FAIL;
+    return httpd_resp_send_chunk(req, nullptr, 0);  // Terminate the chunked response.
+}
+
 esp_err_t favicon_handler(httpd_req_t* req) {
     httpd_resp_set_type(req, "image/png");
     httpd_resp_set_hdr(req, "Cache-Control", "max-age=2592000, public");  // Cache for 30 days
@@ -704,6 +798,12 @@ bool ADSBeeServer::TCPServerInit() {
     config.stack_size = kHTTPServerStackSizeBytes;
     // config.task_caps = MALLOC_CAP_IRAM_8BIT;
     config.max_open_sockets = 16;  // Must be <= CONFIG_LWIP_MAX_SOCKETS - 3 (currently 20 - 3 = 17).
+    // HTTPD_DEFAULT_CONFIG allows 8, and exactly 8 were registered below before /data/aircraft.json
+    // was added. Overflowing is quiet and nasty: the five static handlers use ESP_ERROR_CHECK, but
+    // WebSocketServer::Init() only logs and returns false, and ADSBeeServer::Init()'s return value
+    // is discarded in app_main — so a 9th handler would silently cost us /aircraft. Only sizes an
+    // array of pointers (4 B each), so the headroom is nearly free.
+    config.max_uri_handlers = 12;
     config.close_fn = ws_close_fd;
     config.lru_purge_enable =
         true;  // Allow purging of the least recently used connections when max clients is reached.
@@ -758,6 +858,17 @@ bool ADSBeeServer::TCPServerInit() {
                            .handle_ws_control_frames = false,
                            .supported_subprotocol = nullptr};
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &favicon));
+
+    // Aircraft JSON snapshot handler. Polling alternative to the /aircraft WebSocket, for clients
+    // without a WebSocket implementation (e.g. an ESP32 driving a display through ESP-AT).
+    httpd_uri_t aircraft_json = {.uri = "/data/aircraft.json",
+                                 .method = HTTP_GET,
+                                 .handler = aircraft_json_get_handler,
+                                 .user_ctx = NULL,
+                                 .is_websocket = false,
+                                 .handle_ws_control_frames = false,
+                                 .supported_subprotocol = nullptr};
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &aircraft_json));
 
     // Feed settings API handler
     httpd_uri_t feed_api = {.uri = "/api/feed",

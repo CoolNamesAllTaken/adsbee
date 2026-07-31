@@ -21,7 +21,9 @@ const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
 const uint8_t ObjectDictionary::kFirmwareVersionMinor = 9;
 const uint8_t ObjectDictionary::kFirmwareVersionPatch = 1;
 // NOTE: Indicate a final release with RC = 0.
-const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 0;
+// Local dev build: /data/aircraft.json endpoint. Bumped so the RP2040 sees a version mismatch and
+// actually reflashes the coprocessors — otherwise the ESP32 keeps running stale firmware.
+const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 1;
 
 const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24) | (kFirmwareVersionMinor << 16) |
                                                     (kFirmwareVersionPatch << 8) | kFirmwareVersionReleaseCandidate;
