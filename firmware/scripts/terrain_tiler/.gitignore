@@ -1,0 +1,12 @@
+# Large input data cache — downloaded per README, never committed.
+/data/
+
+# Baked tile output (multi-GB SD-card payload).
+/out_sd/
+/sd/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.DS_Store

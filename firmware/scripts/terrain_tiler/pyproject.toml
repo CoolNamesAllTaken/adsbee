@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "terrain-tiler"
+version = "0.1.0"
+description = "Bakes whole-world terrain (ETOPO elevation + Natural Earth vectors) into 1x1-degree .map tiles for the ADSBee Winglet microSD map."
+readme = "README.md"
+packages = [{ include = "terrain_tiler" }]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+numpy = "^1.26"
+rasterio = "^1.3"
+geopandas = "^0.14"
+shapely = "^2.0"
+pyogrio = "^0.7"
+requests = "^2.31"
+
+[tool.poetry.scripts]
+terrain-tiler = "terrain_tiler.cli:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

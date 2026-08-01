@@ -109,6 +109,7 @@ if (ON_EMBEDDED_DEVICE)
         main.cc # Don't include main for testing.
         adsbee.cc
         settings.cc
+        usb_hotplug.cc # USB CDC hot-plug re-enumeration for self-powered boards.
     )
 
     pico_set_linker_script(application ${APPLICATION_LINKER_SCRIPT})

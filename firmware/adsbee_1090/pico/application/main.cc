@@ -9,6 +9,7 @@
 #include "eeprom.hh"
 #include "esp32.hh"
 #include "esp32_flasher.hh"
+#include "gnss_interface.hh"   // For the GNSS receiver selected by part number (MakeGNSSReceiver, gnss).
 #include "firmware_update.hh"  // For figuring out which flash partition we're in.
 #include "hal.hh"
 #include "hardware_unit_tests.hh"  // For testing only!
@@ -18,6 +19,8 @@
 #include "pico/stdlib.h"
 #include "spi_coprocessor.hh"
 #include "unit_conversions.hh"
+#include "usb_hotplug.hh"  // For USB CDC hot-plug re-enumeration on self-powered boards.
+#include "settings.hh"
 
 // #define DEBUG_DISABLE_ESP32_FLASH  // Uncomment this to stop the RP2040 from flashing the ESP32.
 
@@ -46,6 +49,9 @@ CPUMonitor core_1_monitor = CPUMonitor({.idle_ticks_per_update_interval = kRP204
 ADSBee adsbee = ADSBee({});
 CommsManager comms_manager = CommsManager({});
 ESP32SerialFlasher esp32_flasher = ESP32SerialFlasher({});
+// Select the GNSS receiver from the board's part number (resolved by bsp, above). Constructs the chosen
+// concrete receiver into gnss_interface's static storage; consumers use this base reference.
+GNSSReceiver& gnss = MakeGNSSReceiver(bsp.gnss_module_type);
 
 SettingsManager settings_manager;
 ObjectDictionary object_dictionary;
@@ -85,6 +91,10 @@ int main() {
                    SPI_MSB_FIRST);
 
     comms_manager.Init();
+    // Start the USB hot-plug re-enumeration timer now that stdio/USB is up (comms_manager.Init()
+    // calls stdio_init_all()). Lets a host that attaches after power-on enumerate on self-powered
+    // boards; inert on bus-powered boards. See usb_hotplug.hh.
+    UsbHotplugInit();
     comms_manager.console_printf("ADSBee 1090\r\nSoftware Version %d.%d.%d\r\n",
                                  object_dictionary.kFirmwareVersionMajor, object_dictionary.kFirmwareVersionMinor,
                                  object_dictionary.kFirmwareVersionPatch);
@@ -172,6 +182,15 @@ int main() {
 #endif
     }
 
+    // Configure the GNSS module AFTER the ESP32 flash routine. The ESP32 serial flasher shares the
+    // uart0 peripheral (on GPIO 16/17) and calls uart_deinit(uart0) when it finishes; running
+    // gnss.Init() last lets GNSSReceiver::Init() re-claim GPIO 0/1 and re-initialize uart0 to a
+    // known state. Init() does not hard-fail if the module is absent/unresponsive (a quick liveness
+    // probe gates configuration); in that case GNSS position is simply unavailable and the receiver
+    // falls back to its non-GNSS position source. On boards with no GNSS module the receiver is a
+    // NoneGNSSReceiver, so Init()/Update() are safe no-ops and need no gating here.
+    gnss.Init();
+
 #ifndef ISRS_ON_CORE1
     multicore_reset_core1();
     multicore_launch_core1(main_core1);
@@ -192,6 +211,7 @@ int main() {
         decoder.UpdateLogLoop();
         comms_manager.Update();
         adsbee.Update();
+        gnss.Update();
 
         esp32.Update();
 

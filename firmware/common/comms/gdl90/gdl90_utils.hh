@@ -26,7 +26,15 @@ class GDL90Reporter {
         kGDL90MessageIDOwnshipGeometricAltitude = 11,
         kGDL90MessageIDTrafficReport = 20,
         kGDL90MessageIDBasicReport = 30,
-        kGDL90MessageIDLongReport = 31
+        kGDL90MessageIDLongReport = 31,
+        kGDL90MessageIDStratuxAHRS = 0x4C,  // Non-standard Stratux/iLevil AHRS report (consumed by AvareX, etc.).
+        kGDL90MessageIDForeFlight = 0x65    // ForeFlight extension messages, disambiguated by a sub-ID byte.
+    };
+
+    // Sub-IDs for the ForeFlight extension message (kGDL90MessageIDForeFlight).
+    enum GDL90ForeFlightSubID : uint8_t {
+        kGDL90ForeFlightSubIDID = 0x00,    // Device ID / capabilities message.
+        kGDL90ForeFlightSubIDAHRS = 0x01,  // Attitude / heading / airspeed message.
     };
 
     struct GDL90TargetReportData {
@@ -176,6 +184,83 @@ class GDL90Reporter {
                                            bool ownship = false);
     uint16_t WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes, const UATAircraft& aircraft,
                                            bool ownship = false);
+
+    // Sentinel: Vertical Figure of Merit not available (Ownship Geometric Altitude message).
+    static constexpr uint16_t kGeoAltVFOMUnavailable = 0x7FFF;
+
+    /**
+     * Write a GDL90 Ownship Geometric Altitude message (message ID 11). Reports the ownship's geometric
+     * (GNSS-derived) altitude, which the EFB uses separately from the pressure altitude in the Ownship Report.
+     * @param[out] to_buf Buffer to write to.
+     * @param[in] to_buf_num_bytes Size of the output buffer, in bytes.
+     * @param[in] geometric_altitude_ft Geometric altitude in feet. Encoded as a signed 16-bit value with 5 ft
+     * resolution. Whether this is interpreted as WGS-84 ellipsoid or MSL is governed by bit 0 of the ForeFlight ID
+     * message capabilities mask (see WriteGDL90ForeFlightIDMessage).
+     * @param[in] vertical_figure_of_merit_m Vertical accuracy in meters (15-bit). kGeoAltVFOMUnavailable if unknown.
+     * @param[in] vertical_warning Set the Vertical Warning indicator bit.
+     * @retval Number of Bytes written to to_buf.
+     */
+    uint16_t WriteGDL90OwnshipGeometricAltitudeMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes,
+                                                       int32_t geometric_altitude_ft,
+                                                       uint16_t vertical_figure_of_merit_m = kGeoAltVFOMUnavailable,
+                                                       bool vertical_warning = false);
+
+    // Sentinels for the ForeFlight AHRS message.
+    static constexpr uint16_t kAHRSAngleInvalid = 0x7FFF;     // Roll / pitch invalid.
+    static constexpr uint16_t kAHRSHeadingInvalid = 0xFFFF;   // Heading invalid.
+    static constexpr uint16_t kAHRSAirspeedInvalid = 0xFFFF;  // IAS / TAS invalid.
+
+    /**
+     * Write a ForeFlight AHRS message (message ID 0x65, sub-ID 0x01). Reports attitude, heading, and airspeed for
+     * the ownship's synthetic attitude indicator. Per the ForeFlight spec all multi-byte fields are big-endian.
+     * @param[out] to_buf Buffer to write to.
+     * @param[in] to_buf_num_bytes Size of the output buffer, in bytes.
+     * @param[in] roll_deg Roll angle in degrees, + = right side down. Clamped to [-180, 180].
+     * @param[in] pitch_deg Pitch angle in degrees, + = nose up. Clamped to [-180, 180].
+     * @param[in] heading_deg Heading in degrees, 0..360. Clamped to [-360, 360].
+     * @param[in] heading_is_magnetic true = magnetic heading (sets bit 15), false = true heading.
+     * @param[in] angle_valid If false, roll / pitch / heading are emitted as their invalid sentinels.
+     * @param[in] ias_kts Indicated airspeed in knots, or negative to emit the invalid sentinel.
+     * @param[in] tas_kts True airspeed in knots, or negative to emit the invalid sentinel.
+     * @retval Number of Bytes written to to_buf.
+     */
+    uint16_t WriteGDL90ForeFlightAHRSMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes, float roll_deg,
+                                             float pitch_deg, float heading_deg, bool heading_is_magnetic,
+                                             bool angle_valid, int32_t ias_kts = -1, int32_t tas_kts = -1);
+
+    /**
+     * Write a Stratux / iLevil AHRS message (non-standard message ID 0x4C, marker 0x45, sub-ID 0x01). This is the
+     * AHRS dialect consumed by AvareX and other Stratux-compatible EFBs. Only roll, pitch, and heading are populated;
+     * the remaining fields (slip/skid, turn rate, G-load, airspeed, pressure altitude, vertical speed) are emitted as
+     * their invalid sentinels. All multi-byte fields are big-endian signed, in tenths of a degree.
+     * @param[out] to_buf Buffer to write to.
+     * @param[in] to_buf_num_bytes Size of the output buffer, in bytes.
+     * @param[in] roll_deg Roll angle in degrees, + = right side down.
+     * @param[in] pitch_deg Pitch angle in degrees, + = nose up.
+     * @param[in] heading_deg Heading in degrees.
+     * @param[in] angle_valid If false, roll / pitch / heading are emitted as the invalid sentinel (0x7FFF).
+     * @retval Number of Bytes written to to_buf.
+     */
+    uint16_t WriteGDL90StratuxAHRSMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes, float roll_deg, float pitch_deg,
+                                          float heading_deg, bool angle_valid);
+
+    /**
+     * Write a ForeFlight ID message (message ID 0x65, sub-ID 0x00). Identifies the device and advertises
+     * capabilities. ForeFlight recommends sending this roughly once per second. All multi-byte fields are big-endian.
+     * @param[out] to_buf Buffer to write to.
+     * @param[in] to_buf_num_bytes Size of the output buffer, in bytes.
+     * @param[in] device_serial 64-bit device serial number. 0xFFFFFFFFFFFFFFFF indicates invalid / unknown.
+     * @param[in] device_name Short device name, packed into an 8-byte space-padded field (truncated if longer).
+     * @param[in] device_long_name Long device name, packed into a 16-byte space-padded field (truncated if longer).
+     * @param[in] wgs84_geo_alt_datum true = geometric altitude datum is WGS-84 ellipsoid (capabilities bit 0 = 0),
+     * false = MSL / geoid (capabilities bit 0 = 1). Must match the datum of the Ownship Geometric Altitude message.
+     * @retval Number of Bytes written to to_buf.
+     */
+    uint16_t WriteGDL90ForeFlightIDMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes,
+                                           uint64_t device_serial = 0xFFFFFFFFFFFFFFFFULL,
+                                           const char* device_name = "ADSBee",
+                                           const char* device_long_name = "ADSBee Winglet",
+                                           bool wgs84_geo_alt_datum = false);
 
     // Bit Flags for Message ID 0 (Heartbeat).
     bool uat_initialized = true;

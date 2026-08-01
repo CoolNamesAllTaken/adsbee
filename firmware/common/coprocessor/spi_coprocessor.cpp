@@ -287,6 +287,31 @@ bool SPICoprocessor::ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRe
                     }
                     break;  // Successfully wrote settings data to coprocessor.
                 }
+                case ObjectDictionary::Address::kAddrDeviceInfo: {
+                    if (request.offset != 0) {
+                        CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest",
+                                      "Device info write with non-zero offset (%d) not supported.", request.offset);
+                        return false;
+                    }
+                    if (request.len != sizeof(SettingsManager::DeviceInfo)) {
+                        CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest",
+                                      "Device info write with invalid length (%d). Expected %d.", request.len,
+                                      sizeof(SettingsManager::DeviceInfo));
+                        return false;
+                    }
+                    // Read the RP2040's DeviceInfo (part code / part number) from EEPROM/flash and write it down.
+                    SettingsManager::DeviceInfo device_info;
+                    if (!SettingsManager::GetDeviceInfo(device_info)) {
+                        CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest", "Unable to read device info.");
+                        return false;
+                    }
+                    if (!Write(request.addr, device_info, write_requires_ack)) {
+                        CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest",
+                                      "Unable to write device info to coprocessor.");
+                        return false;
+                    }
+                    break;  // Successfully wrote device info to coprocessor.
+                }
                 default:
                     CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest",
                                   "No implementation defined for writing to address 0x%x on slave.", request.addr);

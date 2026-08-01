@@ -1,0 +1,15 @@
+dependencies:
+  idf:
+    version: '>=5.4.1'
+description: GLM (OpenGL Mathematics) - Header-only C++ mathematics library for graphics
+  software based on the GLSL specification.
+license: MIT
+repository: https://github.com/andresragot/glm.git
+targets:
+- esp32
+- esp32s2
+- esp32s3
+- esp32c3
+- esp32p4
+url: https://github.com/g-truc/glm
+version: 1.0.3

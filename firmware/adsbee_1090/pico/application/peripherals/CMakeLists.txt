@@ -17,10 +17,14 @@ else()
         eeprom.cc
         # si4362/si4362.cc
         cc1312/cc1312.cc
+        gnss/nmea_parser.cc
+        gnss/gnss_receiver.cc
+        gnss/ublox_max_m10.cc
     )
     target_include_directories(application PRIVATE
         .
         # si4362
         cc1312
+        gnss
     )
 endif()

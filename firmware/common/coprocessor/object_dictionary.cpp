@@ -152,6 +152,11 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
             memcpy(&composite_device_status, buf, sizeof(CompositeDeviceStatus));
             break;
         }
+        case kAddrDeviceInfo: {
+            // RP2040's DeviceInfo (part code / part number) pushed down at startup.
+            memcpy((uint8_t*)&rp2040_device_info + offset, buf, buf_len);
+            break;
+        }
 #elif defined(ON_TI)
 #endif
         default:

@@ -53,3 +53,12 @@ The ADSBee m1090 is a solder-down module containing only the 1090MHz frontend an
 For industrial and outdoor applications, the ADSBee 1090U is available as the GS3M PoE, a ruggedized weatherproof device connected and powered by 802.3af Power over Ethernet.
 
 [![ADSBee GS3M PoE Picture](images/adsbee_gs3m_poe_pic.png)](https://pantsforbirds.com/product/adsbee-gs3m-poe/)
+
+## Data Attribution
+
+The on-device terrain map is baked from public-domain geospatial datasets by the `terrain-tiler` tool (`firmware/scripts/terrain_tiler`). We gratefully acknowledge these sources:
+
+* **Elevation — ETOPO 2022 Global Relief Model (30 arc-second).** NOAA National Centers for Environmental Information, 2022: ETOPO 2022 30 Arc-Second Global Relief Model. NOAA National Centers for Environmental Information. https://doi.org/10.25921/fd45-gt74. Distributed as a U.S. Government public-domain work. https://www.ncei.noaa.gov/products/etopo-global-relief-model
+* **Vectors (coastlines, lakes, rivers, roads, populated places) — Natural Earth.** Made with Natural Earth (1:10m physical v5.1.1 and cultural v5.1.2), a public-domain map dataset supported by [NACIS](https://www.nacis.org/). Free for use in any project — https://www.naturalearthdata.com.
+
+Both datasets are in the public domain; attribution is provided as a courtesy and is not a condition of use.

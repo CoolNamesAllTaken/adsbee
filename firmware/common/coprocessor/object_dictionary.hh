@@ -67,6 +67,7 @@ class ObjectDictionary {
         kAddrCompositeArrayRawPackets = 0x10,  // Single endpoint for reading / writing raw ADSB and UAT packets.
         kAddrESP32RebootInfo = 0x11,           // ESP32 last reset reason and optional core dump summary.
         kAddrESP32TriggerAbort = 0x12,         // Debug only: trigger abort() on the ESP32 to test core dump.
+        kAddrDeviceInfo = 0x13,  // RP2040-held DeviceInfo (part code / part number), pushed to the ESP32 on request.
         kNumAddrs
     };
 
@@ -332,6 +333,9 @@ class ObjectDictionary {
     SemaphoreHandle_t network_console_rx_queue_mutex = xSemaphoreCreateMutex();
     CompositeDeviceStatus composite_device_status = {};
     ESP32DeviceStatus device_status = {};
+    // RP2040 DeviceInfo (part code / part number), pulled from the master at startup. Default-initialized to
+    // an all-zero part_code so GetPartNumber() returns 0 ("unknown board") until the pull completes.
+    SettingsManager::DeviceInfo rp2040_device_info = {};
 #elif defined(ON_TI)
     PFBQueue<RawUATADSBPacket> raw_uat_adsb_packet_queue =
         PFBQueue<RawUATADSBPacket>({.buf_len_num_elements = kDecodedUATADSBPacketQueueDepth,

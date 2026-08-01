@@ -1,0 +1,10 @@
+# Release partition table for the 4MB ESP32-S3 flash.
+# Enlarges the app partition beyond ESP-IDF's stock 1500K "singleapp_large" so
+# the firmware (grown by the baked UI sprite tables) fits with headroom.
+# Layout within 4MB (0x400000), table at 0x8000, apps start at 0x10000:
+#   factory: 0x10000 .. 0x290000  (2560K)  -> ~1MB headroom over current binary
+#   free:    0x290000 .. 0x400000          (spare)
+# Name,   Type, SubType,  Offset,   Size,   Flags
+nvs,      data, nvs,      ,         0x6000,
+phy_init, data, phy,      ,         0x1000,
+factory,  app,  factory,  ,         2560K,

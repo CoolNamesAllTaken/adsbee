@@ -388,6 +388,205 @@ TEST(GDL90Utils, TrafficReport) {
     // TODO: Add tests here!
 }
 
+// Verify a framed GDL90 message against an expected unescaped payload: checks the leading flag, the escaped payload,
+// the LSB-first CRC (computed over the unescaped payload), and the trailing flag. Returns the total framed length.
+static uint16_t CheckFramedGDL90Message(uint8_t* framed, uint8_t* unescaped_payload, uint16_t payload_len) {
+    EXPECT_EQ(0x7E, framed[0]);  // Start flag.
+    uint16_t index = 1;
+    index += CheckBuffersEqualInjectEscapes(unescaped_payload, payload_len, &framed[index]);
+    uint16_t crc = gdl90.CalculateGDL90CRC16(unescaped_payload, payload_len);
+    uint8_t crc_bytes[2] = {static_cast<uint8_t>(crc & 0xFF), static_cast<uint8_t>(crc >> 8)};  // LSB first.
+    index += CheckBuffersEqualInjectEscapes(crc_bytes, 2, &framed[index]);
+    EXPECT_EQ(0x7E, framed[index++]);  // End flag.
+    return index;
+}
+
+TEST(GDL90Utils, OwnshipGeometricAltitude) {
+    uint8_t buf[GDL90Reporter::kGDL90MessageMaxLenBytes];
+    memset(buf, 0xFF, sizeof(buf));
+
+    // 5280 ft / 5 = 1056 = 0x0420 (big-endian). VFOM unavailable = 0x7FFF, warning clear.
+    ASSERT_GT(gdl90.WriteGDL90OwnshipGeometricAltitudeMessage(buf, sizeof(buf), 5280), 0u);
+    uint8_t expected_pos[] = {GDL90Reporter::kGDL90MessageIDOwnshipGeometricAltitude, 0x04, 0x20, 0x7F, 0xFF};
+    CheckFramedGDL90Message(buf, expected_pos, sizeof(expected_pos));
+
+    // Negative altitude: -500 ft / 5 = -100 = 0xFF9C (two's complement, big-endian).
+    memset(buf, 0xFF, sizeof(buf));
+    ASSERT_GT(gdl90.WriteGDL90OwnshipGeometricAltitudeMessage(buf, sizeof(buf), -500), 0u);
+    uint8_t expected_neg[] = {GDL90Reporter::kGDL90MessageIDOwnshipGeometricAltitude, 0xFF, 0x9C, 0x7F, 0xFF};
+    CheckFramedGDL90Message(buf, expected_neg, sizeof(expected_neg));
+
+    // Vertical warning set + explicit VFOM: metrics = 0x8000 | (100 & 0x7FFF) = 0x8064.
+    memset(buf, 0xFF, sizeof(buf));
+    ASSERT_GT(gdl90.WriteGDL90OwnshipGeometricAltitudeMessage(buf, sizeof(buf), 0, 100, /*vertical_warning=*/true), 0u);
+    uint8_t expected_warn[] = {GDL90Reporter::kGDL90MessageIDOwnshipGeometricAltitude, 0x00, 0x00, 0x80, 0x64};
+    CheckFramedGDL90Message(buf, expected_warn, sizeof(expected_warn));
+}
+
+TEST(GDL90Utils, ForeFlightAHRS) {
+    uint8_t buf[GDL90Reporter::kGDL90MessageMaxLenBytes];
+    memset(buf, 0xFF, sizeof(buf));
+
+    // Roll +12.3 -> 123 = 0x007B. Pitch -4.5 -> -45 = 0xFFD3. Heading 271.0 magnetic -> 2710 = 0x0A96 | 0x8000 =
+    // 0x8A96. IAS/TAS invalid = 0xFFFF. All big-endian.
+    ASSERT_GT(gdl90.WriteGDL90ForeFlightAHRSMessage(buf, sizeof(buf), 12.3f, -4.5f, 271.0f, /*heading_is_magnetic=*/true,
+                                                    /*angle_valid=*/true),
+              0u);
+    uint8_t expected[] = {GDL90Reporter::kGDL90MessageIDForeFlight,
+                          0x01,
+                          0x00,
+                          0x7B,
+                          0xFF,
+                          0xD3,
+                          0x8A,
+                          0x96,
+                          0xFF,
+                          0xFF,
+                          0xFF,
+                          0xFF};
+    CheckFramedGDL90Message(buf, expected, sizeof(expected));
+
+    // angle_valid = false -> roll/pitch = 0x7FFF, heading = 0xFFFF.
+    memset(buf, 0xFF, sizeof(buf));
+    ASSERT_GT(gdl90.WriteGDL90ForeFlightAHRSMessage(buf, sizeof(buf), 12.3f, -4.5f, 271.0f, true, /*angle_valid=*/false),
+              0u);
+    uint8_t expected_invalid[] = {GDL90Reporter::kGDL90MessageIDForeFlight,
+                                  0x01,
+                                  0x7F,
+                                  0xFF,
+                                  0x7F,
+                                  0xFF,
+                                  0xFF,
+                                  0xFF,
+                                  0xFF,
+                                  0xFF,
+                                  0xFF,
+                                  0xFF};
+    CheckFramedGDL90Message(buf, expected_invalid, sizeof(expected_invalid));
+
+    // True (non-magnetic) heading leaves bit 15 clear: 90.0 deg -> 900 = 0x0384.
+    memset(buf, 0xFF, sizeof(buf));
+    ASSERT_GT(gdl90.WriteGDL90ForeFlightAHRSMessage(buf, sizeof(buf), 0.0f, 0.0f, 90.0f, /*heading_is_magnetic=*/false,
+                                                    true),
+              0u);
+    // buf[7..8] (after start flag) hold the heading MSB/LSB. No escapes precede them for this payload.
+    EXPECT_EQ(buf[7], 0x03);
+    EXPECT_EQ(buf[8], 0x84);
+
+    // Roll clamps to +180 deg -> 1800 = 0x0708.
+    memset(buf, 0xFF, sizeof(buf));
+    ASSERT_GT(gdl90.WriteGDL90ForeFlightAHRSMessage(buf, sizeof(buf), 250.0f, 0.0f, 0.0f, true, true), 0u);
+    EXPECT_EQ(buf[3], 0x07);
+    EXPECT_EQ(buf[4], 0x08);
+
+    // Airspeed present: IAS 100 kt = 0x0064, TAS 120 kt = 0x0078.
+    memset(buf, 0xFF, sizeof(buf));
+    ASSERT_GT(gdl90.WriteGDL90ForeFlightAHRSMessage(buf, sizeof(buf), 0.0f, 0.0f, 0.0f, true, true, 100, 120), 0u);
+    uint8_t expected_airspeed[] = {GDL90Reporter::kGDL90MessageIDForeFlight,
+                                   0x01,
+                                   0x00,
+                                   0x00,
+                                   0x00,
+                                   0x00,
+                                   0x80,
+                                   0x00,
+                                   0x00,
+                                   0x64,
+                                   0x00,
+                                   0x78};
+    CheckFramedGDL90Message(buf, expected_airspeed, sizeof(expected_airspeed));
+}
+
+TEST(GDL90Utils, StratuxAHRS) {
+    uint8_t buf[GDL90Reporter::kGDL90MessageMaxLenBytes];
+    memset(buf, 0xFF, sizeof(buf));
+
+    // Header 0x4C 0x45 0x01 0x01. Roll +12.3 -> 123 = 0x007B. Pitch -4.5 -> -45 = 0xFFD3. Heading 271.0 -> 2710 =
+    // 0x0A96 (no magnetic bit, unlike the 0x65 message). All other fields invalid: 0x7FFF, except pressure altitude
+    // 0xFFFF. All big-endian.
+    ASSERT_GT(gdl90.WriteGDL90StratuxAHRSMessage(buf, sizeof(buf), 12.3f, -4.5f, 271.0f, /*angle_valid=*/true), 0u);
+    uint8_t expected[] = {GDL90Reporter::kGDL90MessageIDStratuxAHRS,
+                          0x45,
+                          0x01,
+                          0x01,
+                          0x00,
+                          0x7B,  // Roll.
+                          0xFF,
+                          0xD3,  // Pitch.
+                          0x0A,
+                          0x96,  // Heading.
+                          0x7F,
+                          0xFF,  // Slip/skid.
+                          0x7F,
+                          0xFF,  // Turn rate.
+                          0x7F,
+                          0xFF,  // G-load.
+                          0x7F,
+                          0xFF,  // Indicated airspeed.
+                          0xFF,
+                          0xFF,  // Pressure altitude.
+                          0x7F,
+                          0xFF,  // Vertical speed.
+                          0x7F,
+                          0xFF};  // Reserved.
+    CheckFramedGDL90Message(buf, expected, sizeof(expected));
+
+    // angle_valid = false -> roll/pitch/heading = 0x7FFF; the rest of the message is unchanged.
+    memset(buf, 0xFF, sizeof(buf));
+    ASSERT_GT(gdl90.WriteGDL90StratuxAHRSMessage(buf, sizeof(buf), 12.3f, -4.5f, 271.0f, /*angle_valid=*/false), 0u);
+    uint8_t expected_invalid[] = {GDL90Reporter::kGDL90MessageIDStratuxAHRS,
+                                  0x45,
+                                  0x01,
+                                  0x01,
+                                  0x7F,
+                                  0xFF,  // Roll invalid.
+                                  0x7F,
+                                  0xFF,  // Pitch invalid.
+                                  0x7F,
+                                  0xFF,  // Heading invalid.
+                                  0x7F,
+                                  0xFF,
+                                  0x7F,
+                                  0xFF,
+                                  0x7F,
+                                  0xFF,
+                                  0x7F,
+                                  0xFF,
+                                  0xFF,
+                                  0xFF,
+                                  0x7F,
+                                  0xFF,
+                                  0x7F,
+                                  0xFF};
+    CheckFramedGDL90Message(buf, expected_invalid, sizeof(expected_invalid));
+}
+
+TEST(GDL90Utils, ForeFlightID) {
+    uint8_t buf[GDL90Reporter::kGDL90MessageMaxLenBytes];
+    memset(buf, 0xFF, sizeof(buf));
+
+    // Defaults: serial 0xFFFF...FF, name "ADSBee" (space-padded to 8), long name "ADSBee Winglet" (space-padded to 16),
+    // MSL datum -> capabilities mask 0x00000001.
+    ASSERT_GT(gdl90.WriteGDL90ForeFlightIDMessage(buf, sizeof(buf)), 0u);
+
+    uint8_t expected[39];
+    uint16_t i = 0;
+    expected[i++] = GDL90Reporter::kGDL90MessageIDForeFlight;
+    expected[i++] = 0x00;  // Sub-ID: ID message.
+    expected[i++] = 0x01;  // Version.
+    for (uint16_t s = 0; s < 8; s++) expected[i++] = 0xFF;  // Serial = invalid.
+    const char* name = "ADSBee  ";                          // 8 bytes, space-padded.
+    for (uint16_t s = 0; s < 8; s++) expected[i++] = name[s];
+    const char* long_name = "ADSBee Winglet  ";  // 16 bytes, space-padded.
+    for (uint16_t s = 0; s < 16; s++) expected[i++] = long_name[s];
+    expected[i++] = 0x00;  // Capabilities mask, big-endian...
+    expected[i++] = 0x00;
+    expected[i++] = 0x00;
+    expected[i++] = 0x01;  // ...bit 0 set = MSL datum.
+    ASSERT_EQ(i, 39u);
+    CheckFramedGDL90Message(buf, expected, sizeof(expected));
+}
+
 TEST(GDL90Utils, ModeSEmitterCategoryUsesDecodedEnum) {
     // Mode S emitter_category_raw = (TypeCode<<3)|Category (values 8–39), not a valid GDL90
     // emitter category code. The GDL90 serializer must use the decoded emitter_category enum.
