@@ -40,21 +40,11 @@ bool GNSSReceiver::Init() {
 
     active_ = true;
 
+    SetEnable(false);
+
     ClaimUart();
 
-    if (config_.pps_pin != UINT16_MAX) {
-        gpio_init(config_.pps_pin);
-        gpio_set_dir(config_.pps_pin, GPIO_IN);
-        gpio_pull_down(config_.pps_pin);
-        pps_last_level_ = gpio_get(config_.pps_pin);
-    }
 
-    // Power on the module via the active-low enable pin, if connected.
-    if (config_.enable_pin != UINT16_MAX) {
-        gpio_init(config_.enable_pin);
-        gpio_set_dir(config_.enable_pin, GPIO_OUT);
-    }
-    SetEnable(true);
 
     // Match our UART baud to the receiver's default so we can talk to it.
     comms_manager.SetBaudRate(SettingsManager::kGNSSUART, GetDefaultBaudrate());
@@ -70,6 +60,9 @@ bool GNSSReceiver::Init() {
     notify_pending_ = false;
     notify_has_emitted_ = false;
     notify_last_timestamp_ms_ = 0;
+
+     SetEnable(true);
+
     return true;
 }
 
@@ -135,6 +128,10 @@ bool GNSSReceiver::Update() {
     // Stamp the parser with the current time so applied fixes carry a freshness timestamp.
     parser_.SetTimestampMs(now_ms);
 
+    // Normally the IRQ has already moved every byte into the software ring. Poll the hardware FIFO
+    // as a safety net in case an IRQ was missed, masked, or left pending incorrectly.
+    PollUartIntoRxBuffer();
+
     // Drain all currently available bytes from the GNSS UART.
     char c;
     while (ReadBufferedByte(c)) {
@@ -158,10 +155,13 @@ bool GNSSReceiver::Update() {
         const GNSSFix& f = parser_.fix();
         CONSOLE_INFO(
             "GNSSReceiver::Update",
-            "GNSS dbg: healthy=%d rx_bytes=%lu rx_overflow=%lu last_sentence=%d gga=%lu rmc=%lu cksum_fail=%lu | "
-            "fix: valid=%d q=%u sats=%u lat=%.5f lon=%.5f age_ms=%lu hasfix=%d\r\n",
+            "GNSS dbg: healthy=%d rx_bytes=%lu rx_buffered=%u rx_overflow=%lu rx_irqs=%lu rx_polled=%lu "
+            "last_sentence=%d gga=%lu rmc=%lu cksum_fail=%lu | fix: valid=%d q=%u sats=%u lat=%.5f lon=%.5f "
+            "age_ms=%lu hasfix=%d\r\n",
             healthy_, static_cast<unsigned long>(debug_total_rx_bytes_),
-            static_cast<unsigned long>(rx_overflow_count_), static_cast<int>(debug_last_sentence_),
+            static_cast<unsigned int>(static_cast<uint16_t>(rx_head_ - rx_tail_)),
+            static_cast<unsigned long>(rx_overflow_count_), static_cast<unsigned long>(rx_irq_count_),
+            static_cast<unsigned long>(rx_polled_byte_count_), static_cast<int>(debug_last_sentence_),
             static_cast<unsigned long>(debug_gga_count_), static_cast<unsigned long>(debug_rmc_count_),
             static_cast<unsigned long>(debug_cksum_fail_count_), f.valid, f.fix_quality, f.num_satellites,
             f.latitude_deg, f.longitude_deg,
@@ -252,6 +252,8 @@ void GNSSReceiver::EnableRxInterrupt() {
     rx_head_ = 0;
     rx_tail_ = 0;
     rx_overflow_count_ = 0;
+    rx_irq_count_ = 0;
+    rx_polled_byte_count_ = 0;
     rx_irq_owner_ = this;
 
     if (!rx_irq_handler_installed_[irq_index]) {
@@ -280,19 +282,37 @@ bool GNSSReceiver::ReadBufferedByte(char& c) {
     return true;
 }
 
+void GNSSReceiver::PushRxByte(char c) {
+    uint16_t head = rx_head_;
+    if (static_cast<uint16_t>(head - rx_tail_) >= kRxBufferSize) {
+        rx_overflow_count_ = rx_overflow_count_ + 1;
+        return;  // Preserve queued data and drop only the new byte on overflow.
+    }
+    rx_buffer_[head & kRxBufferMask] = c;
+    rx_head_ = static_cast<uint16_t>(head + 1);
+}
+
+void GNSSReceiver::PollUartIntoRxBuffer() {
+    if (rx_irq_owner_ != this) return;
+    const uint irq_num = config_.uart_handle == uart0 ? UART0_IRQ : UART1_IRQ;
+
+    // The ISR and this fallback both produce into the ring. Mask the IRQ during the short FIFO
+    // drain so their head-index updates cannot interleave.
+    irq_set_enabled(irq_num, false);
+    while (uart_is_readable(config_.uart_handle)) {
+        PushRxByte(static_cast<char>(uart_getc(config_.uart_handle)));
+        rx_polled_byte_count_++;
+    }
+    irq_set_enabled(irq_num, true);
+}
+
 void GNSSReceiver::RxIRQHandler() {
     GNSSReceiver* receiver = rx_irq_owner_;
     if (receiver == nullptr) return;
+    receiver->rx_irq_count_ = receiver->rx_irq_count_ + 1;
 
     while (uart_is_readable(receiver->config_.uart_handle)) {
-        char c = static_cast<char>(uart_getc(receiver->config_.uart_handle));
-        uint16_t head = receiver->rx_head_;
-        if (static_cast<uint16_t>(head - receiver->rx_tail_) >= kRxBufferSize) {
-            receiver->rx_overflow_count_ = receiver->rx_overflow_count_ + 1;
-            continue;  // Preserve queued data and drop only the new byte on overflow.
-        }
-        receiver->rx_buffer_[head & kRxBufferMask] = c;
-        receiver->rx_head_ = static_cast<uint16_t>(head + 1);
+        receiver->PushRxByte(static_cast<char>(uart_getc(receiver->config_.uart_handle)));
     }
 }
 

@@ -122,6 +122,15 @@ class ObjectDictionary {
         uint8_t core_1_usage_percent = 0;
         SettingsManager::RxPosition rx_position;  // Current receiver position.
         bool rx_position_available = false;
+        bool gnss_enabled = false;
+        bool gnss_fix_valid = false;
+        float gnss_latitude_deg = 0.0f;
+        float gnss_longitude_deg = 0.0f;
+        bool gnss_utc_time_valid = false;
+        uint8_t gnss_utc_hour = 0;
+        uint8_t gnss_utc_minute = 0;
+        uint8_t gnss_utc_second = 0;
+        uint16_t gnss_utc_millisecond = 0;
     };
 
     struct __attribute__((__packed__)) ESP32DeviceStatus {

@@ -19,7 +19,7 @@
 static const uint16_t kGDL90Port = 4000;
 
 static const uint16_t kNetworkConsoleWelcomeMessageMaxLen = 1000;
-static const uint16_t kNetworkMetricsMessageMaxLen = 1500;
+static const uint16_t kNetworkMetricsMessageMaxLen = 1800;
 
 /* obsolete */
 static const uint16_t kNetworkControlPort = 3333;  // NOTE: This must match the port number used in index.html!
@@ -683,6 +683,15 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
              kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              "}, \"device_status\": { ");
     // Device Status
+    const ObjectDictionary::RP2040DeviceStatus& rp2040_status = object_dictionary.composite_device_status.rp2040;
+    char gnss_utc_time[16] = "--:--:--.---";
+    if (rp2040_status.gnss_utc_time_valid) {
+        snprintf(gnss_utc_time, sizeof(gnss_utc_time), "%02u:%02u:%02u.%03u",
+                 static_cast<unsigned>(rp2040_status.gnss_utc_hour % 24),
+                 static_cast<unsigned>(rp2040_status.gnss_utc_minute % 60),
+                 static_cast<unsigned>(rp2040_status.gnss_utc_second % 61),
+                 static_cast<unsigned>(rp2040_status.gnss_utc_millisecond % 1000));
+    }
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              "\"rp2040\": { \"uptime_ms\": %lu, \"core_0_usage_percent\": %u, "
@@ -691,6 +700,12 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
              object_dictionary.composite_device_status.rp2040.core_0_usage_percent,
              object_dictionary.composite_device_status.rp2040.core_1_usage_percent,
              object_dictionary.composite_device_status.rp2040.temperature_deg_c);
+    snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             ", \"gnss\": { \"enabled\": %s, \"fix_valid\": %s, \"latitude_deg\": %.6f, "
+             "\"longitude_deg\": %.6f, \"utc_time\": \"%s\" }",
+             rp2040_status.gnss_enabled ? "true" : "false", rp2040_status.gnss_fix_valid ? "true" : "false",
+             rp2040_status.gnss_latitude_deg, rp2040_status.gnss_longitude_deg, gnss_utc_time);
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              ", \"subg\": { \"uptime_ms\": %lu, \"user_core_usage_percent\": %u, "
