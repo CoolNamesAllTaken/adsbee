@@ -23,7 +23,8 @@
 // #include <charconv>
 #include <string.h>  // for strcat
 
-#include "comms.hh"  // For debug prints.
+#include "comms.hh"          // For debug prints.
+#include "gnss_interface.hh"  // For the gnss receiver instance.
 
 // Uncomment the line below to enable preamble detector debugging on recovered_clk.
 #define DEBUG_PREAMBLE_DETECTOR
@@ -292,9 +293,20 @@ void ADSBee::UpdateRxPosition() {
             }
             break;
         case SettingsManager::RxPosition::PositionSource::kPositionSourceGNSS:
-            // FIXME: Implement GNSS-based position sourcing.
-            // For now, fall back to manual position.
-            rx_position_available = false;
+            // Use the position reported by the GNSS receiver, if it has a valid, fresh fix.
+            if (gnss->HasValidFix()) {
+                const NMEAParser::GNSSFix& gnss_fix = gnss->fix();
+                rx_position.latitude_deg = gnss_fix.latitude_deg;
+                rx_position.longitude_deg = gnss_fix.longitude_deg;
+                rx_position.gnss_altitude_ft = gnss_fix.altitude_ft;
+                rx_position.heading_deg = gnss_fix.heading_deg;
+                rx_position.speed_kts = gnss_fix.speed_kts;
+                rx_position_available = true;
+            } else {
+                // No valid GNSS fix (incl. module absent / comms not working): mark unavailable,
+                // mirroring the kPositionSourceLowestAircraft "no valid position" branch.
+                rx_position_available = false;
+            }
             break;
         case SettingsManager::RxPosition::PositionSource::kPositionSourceFixed:
             // Fixed position is always available.

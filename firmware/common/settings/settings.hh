@@ -13,7 +13,7 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 13;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 15;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 class SettingsManager {
@@ -53,6 +53,12 @@ class SettingsManager {
         kEnableStateExternal = -1,  // Enable GPIO pin is high impedance.
         kEnableStateDisabled = 0,
         kEnableStateEnabled = 1
+    };
+
+    enum GNSSReceiverType : uint8_t {
+        kGNSSReceiverNone = 0,
+        kGNSSReceiverGeneric,
+        kGNSSReceiverUBXMIA,
     };
 
     // Mode setting for the Sub-GHz radio.
@@ -176,6 +182,9 @@ class SettingsManager {
         bool r1090_bias_tee_enabled = false;
         uint32_t watchdog_timeout_sec = kDefaultWatchdogTimeoutSec;
         bool led_enabled = true;  // Set to false to disable all hardware status/activity LEDs.
+        bool gnss_enabled = false;
+        GNSSReceiverType gnss_receiver_type = kGNSSReceiverNone;
+        bool gnss_notify = false;
 
         // CommunicationsManager settings
         LogLevel log_level = LogLevel::kWarnings;
@@ -296,7 +305,8 @@ class SettingsManager {
             kPNADSBee1090UIndoorPoEFeeder = 40250002,  // ADSBee 1090U Indoor PoE Feeder
             kPNADSBeem1090 = 10250007,                 // ADSBee m1090
             kPNADSBeem1090EvalBoard = 10250013,        // ADSBee m1090 Eval Board
-            kPNGS3MPoE = 40250001                      // GS3M PoE
+            kPNGS3MPoE = 40250001,                     // GS3M PoE
+            kPNADSBeeWinglet = 10260008,               // ADSBee Winglet
         };
 
         enum ADSBee1090RFFrontendVersion : uint8_t {
@@ -413,6 +423,9 @@ class SettingsManager {
                     } else {
                         return kADSBee1090RFFrontendV3;
                     }
+                    break;
+                case kPNADSBeeWinglet:
+                    return kADSBee1090RFFrontendV3;
                     break;
             }
             // Default to V1 for unknown part numbers, since that's the most common and safest assumption.

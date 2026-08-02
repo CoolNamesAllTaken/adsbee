@@ -86,6 +86,8 @@ class CommsManager {
 #endif
     CPP_AT_CALLBACK(ATEthernetCallback);
     CPP_AT_CALLBACK(ATFeedCallback);
+    CPP_AT_CALLBACK(ATGNSSCallback);
+    CPP_AT_CALLBACK(ATGNSSFixCallback);
     CPP_AT_CALLBACK(ATHostnameCallback);
     CPP_AT_CALLBACK(ATLEDEnableCallback);
     CPP_AT_CALLBACK(ATOTACallback);
