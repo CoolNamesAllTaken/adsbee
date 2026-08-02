@@ -67,6 +67,15 @@ bool GNSSReceiver::Init() {
 }
 
 bool GNSSReceiver::Update() {
+    if (suspended_) return true;
+
+    if (power_enable_pending_) {
+        uint32_t now_ms = get_time_since_boot_ms();
+        if (now_ms - uart_ready_timestamp_ms_ < kGenericPrePowerDelayMs) return true;
+        power_enable_pending_ = false;
+        SetEnable(true);
+    }
+
     // Continue parsing standard NMEA while active even if an optional vendor-specific probe or
     // configuration step failed. A valid NMEA fix is still usable in that situation.
     if (!active_) return true;
@@ -78,9 +87,6 @@ bool GNSSReceiver::Update() {
         if (pps_level && !pps_last_level_) pps_count_++;
         pps_last_level_ = pps_level;
     }
-
-    // Skip while the GNSS pins are handed over to the ESP32 flasher; uart0 is not ours right now.
-    if (suspended_) return true;
 
     uint32_t now_ms = get_time_since_boot_ms();
     // SendInitCommands() may parse NMEA received during its probe, so establish the timestamp
@@ -183,10 +189,9 @@ bool GNSSReceiver::Update() {
     if (settings_manager.settings.gnss_notify && notify_pending_ &&
         (!notify_has_emitted_ || now_ms - notify_last_timestamp_ms_ >= kFixNotifyMinIntervalMs)) {
         const GNSSFix& f = parser_.fix();
-        char utc_time[16] = "--:--:--.---";
+        char utc_time[9] = "--:--:--";
         if (f.utc_time_valid) {
-            snprintf(utc_time, sizeof(utc_time), "%02u:%02u:%02u.%03u", f.utc_hour, f.utc_minute, f.utc_second,
-                     f.utc_millisecond);
+            snprintf(utc_time, sizeof(utc_time), "%02u:%02u:%02u", f.utc_hour, f.utc_minute, f.utc_second);
         }
         CONSOLE_PRINTF("GNSS_FIX=%d,%.6f,%.6f,%ld,%.1f,%ld,%u,%s,%lu\r\n", current_fix_valid,
                        f.latitude_deg, f.longitude_deg, static_cast<long>(f.altitude_ft), f.heading_deg,
@@ -232,7 +237,10 @@ void GNSSReceiver::ResumeAfterUartHandover() {
 }
 
 void GNSSReceiver::SetEnable(bool enabled) {
-    if (!enabled) DisableRxInterrupt();
+    if (!enabled) {
+        power_enable_pending_ = false;
+        DisableRxInterrupt();
+    }
     pps_count_ = 0;
     active_ = enabled;
     if (!enabled) initializing_ = false;

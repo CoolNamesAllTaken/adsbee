@@ -1,3 +1,5 @@
+#include <cstring>  // For memcpy.
+
 #include "comms.hh"
 #include "hal.hh"  // For timestamping.
 #include "settings.hh"
@@ -15,6 +17,7 @@
 AircraftDictionary& aircraft_dictionary = adsbee_server.aircraft_dictionary;
 #else
 #include "adsbee.hh"  // For access to the aircraft dictionary.
+#include "gnss_interface.hh"
 AircraftDictionary& aircraft_dictionary = adsbee.aircraft_dictionary;
 #endif
 
@@ -572,6 +575,28 @@ bool CommsManager::ReportGDL90(ReportSink* sinks, uint16_t num_sinks) {
 
     // Send the HEARTBEAT and OWNSHIP REPORT once at the start of each round.
     if (gdl90_report_uid_index_ == 0) {
+        // Receiver position is owned by the RP2040. On the ESP32 it arrives in the composite
+        // device status alongside the position-available flag.
+#ifdef ON_ESP32
+        const SettingsManager::RxPosition& rx_position = object_dictionary.composite_device_status.rp2040.rx_position;
+        bool rx_position_available = object_dictionary.composite_device_status.rp2040.rx_position_available;
+        bool gnss_utc_time_valid = object_dictionary.composite_device_status.rp2040.gnss_utc_time_valid;
+#else
+        const SettingsManager::RxPosition& rx_position = adsbee.rx_position;
+        bool rx_position_available = adsbee.rx_position_available;
+        bool gnss_utc_time_valid = gnss != nullptr && gnss->fix().utc_time_valid;
+#endif
+        // Only dynamic ownship sources belong in the GDL90 ownship report. In particular, selecting
+        // RX_POSITION=GNSS routes the latest fresh GNSS fix populated by ADSBee::UpdateRxPosition().
+        bool valid_ownship_source =
+            rx_position.source == SettingsManager::RxPosition::kPositionSourceGNSS ||
+            rx_position.source == SettingsManager::RxPosition::kPositionSourceAircraftMatchingICAO;
+        bool have_position = rx_position_available && valid_ownship_source;
+
+        gdl90.gnss_position_valid = have_position;
+        gdl90.utc_timing_is_valid = gnss_utc_time_valid;
+        gdl90.maintenance_required = false;
+
         msg_len = gdl90.WriteGDL90HeartbeatMessage(buf, sizeof(buf), get_time_since_boot_ms() / 1000,
                                                    aircraft_dictionary.metrics.valid_squitter_frames +
                                                        aircraft_dictionary.metrics.valid_extended_squitter_frames +
@@ -582,7 +607,23 @@ bool CommsManager::ReportGDL90(ReportSink* sinks, uint16_t num_sinks) {
         }
 
         GDL90Reporter::GDL90TargetReportData ownship_data = {};
+        memcpy(ownship_data.callsign, "ADSBEE  ", sizeof(ownship_data.callsign) - 1);
         ownship_data.address_type = GDL90Reporter::GDL90TargetReportData::kAddressTypeADSBWithSelfAssignedAddress;
+        if (have_position) {
+            ownship_data.latitude_deg = rx_position.latitude_deg;
+            ownship_data.longitude_deg = rx_position.longitude_deg;
+            ownship_data.altitude_ft = rx_position.baro_altitude_ft;
+            ownship_data.speed_kts = rx_position.speed_kts;
+            ownship_data.direction_deg = rx_position.heading_deg;
+            ownship_data.participant_address =
+                rx_position.source == SettingsManager::RxPosition::kPositionSourceAircraftMatchingICAO
+                    ? rx_position.icao_address
+                    : 0x0;
+            ownship_data.navigation_integrity_category = 8;
+            ownship_data.navigation_accuracy_category_position = 8;
+            ownship_data.SetMiscIndicator(GDL90Reporter::GDL90TargetReportData::kMiscIndicatorTTIsTrueTrackAngle,
+                                          false, rx_position.speed_kts > kGDL90OwnshipAirborneSpeedKts);
+        }
         msg_len = gdl90.WriteGDL90TargetReportMessage(buf, sizeof(buf), ownship_data, true);
         for (uint16_t i = 0; i < num_sinks; i++) {
             ret &= SendBuf(sinks[i], (char*)buf, msg_len);

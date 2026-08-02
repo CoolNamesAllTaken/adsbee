@@ -24,6 +24,7 @@ class GNSSReceiver {
     // A fix is considered current only if it was updated within this window.
     static constexpr uint32_t kFixStaleTimeoutMs = 5000;
     static constexpr uint32_t kVendorPowerOnDelayMs = 1000;
+    static constexpr uint32_t kGenericPrePowerDelayMs = 100;
     static constexpr uint32_t kFixNotifyMinIntervalMs = 1000;
     static constexpr uint16_t kRxBufferSize = 2048;
     static constexpr uint16_t kRxBufferMask = kRxBufferSize - 1;
@@ -158,6 +159,8 @@ class GNSSReceiver {
     // True while the GNSS pins are released for an ESP32 flash (see SuspendForUartHandover()).
     // Update() no-ops while suspended so it doesn't touch the (re-routed) uart0.
     bool suspended_ = false;
+    bool power_enable_pending_ = false;
+    uint32_t uart_ready_timestamp_ms_ = 0;
     bool initializing_ = false;
     uint32_t power_on_timestamp_ms_ = 0;
     bool notify_observed_valid_ = false;
