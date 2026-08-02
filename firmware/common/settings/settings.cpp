@@ -33,6 +33,11 @@ void SettingsManager::Print() {
                               "\tWatchdog Timeout: %lu seconds\r\n", settings.watchdog_timeout_sec);
     print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len, "\tHardware LEDs: %s\r\n",
                               settings.led_enabled ? "ENABLED" : "DISABLED");
+    static const char* kGNSSTypeStrs[] = {"NONE", "GENERIC", "UBX_MIA"};
+    print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len,
+                              "\tGNSS: %s (%s), fix notifications: %s\r\n",
+                              settings.gnss_enabled ? "ENABLED" : "DISABLED",
+                              kGNSSTypeStrs[settings.gnss_receiver_type], settings.gnss_notify ? "ENABLED" : "DISABLED");
     print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len, "\tLog Level: %s\r\n",
                               kConsoleLogLevelStrs[settings.log_level]);
     CONSOLE_PRINTF("%s", print_buf);
@@ -154,6 +159,11 @@ void SettingsManager::PrintAT() {
 
     // AT+LED_ENABLE
     CONSOLE_PRINTF("AT+LED_ENABLE=%d\r\n", settings.led_enabled);
+
+    // AT+GNSS
+    static const char* kGNSSTypeStrs[] = {"NONE", "GENERIC", "UBX_MIA"};
+    CONSOLE_PRINTF("AT+GNSS=%d,%s,%d\r\n", settings.gnss_enabled, kGNSSTypeStrs[settings.gnss_receiver_type],
+                   settings.gnss_notify);
 
     // AT+LOG_LEVEL
     CONSOLE_PRINTF("AT+LOG_LEVEL=%s\r\n", kConsoleLogLevelStrs[settings.log_level]);

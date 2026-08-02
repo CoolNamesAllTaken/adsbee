@@ -18,6 +18,7 @@
 #include "pico/unique_id.h"
 #include "settings.hh"
 #include "spi_coprocessor.hh"  // For init / de-init before and after flashing ESP32.
+#include "gnss_interface.hh"   // For parking/restoring the GNSS UART around ESP32 flashing.
 
 #ifdef HARDWARE_UNIT_TESTS
 #include "hardware_unit_tests.hh"
@@ -169,6 +170,91 @@ CPP_AT_CALLBACK(CommsManager::ATLEDEnableCallback) {
             break;
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATGNSSCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%d,%s,%d", settings_manager.settings.gnss_enabled,
+                              GNSSModuleTypeToStr(SettingsToGNSSModuleType(settings_manager.settings.gnss_receiver_type)),
+                              settings_manager.settings.gnss_notify);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=': {
+            if (!CPP_AT_HAS_ARG(0)) {
+                CPP_AT_ERROR("Requires AT+GNSS=<0|1>[,<NONE|GENERIC|UBX_MIA>[,<0|1>]].");
+            }
+
+            bool enabled;
+            if (args[0].compare("0") == 0) {
+                enabled = false;
+            } else if (args[0].compare("1") == 0) {
+                enabled = true;
+            } else {
+                CPP_AT_ERROR("GNSS enable must be 0 or 1.");
+            }
+
+            // With no explicit type, preserve the configured receiver selection. Enabling is not
+            // allowed when the saved type is NONE because there is no receiver implementation to use.
+            BSP::GNSSModuleType type =
+                SettingsToGNSSModuleType(settings_manager.settings.gnss_receiver_type);
+            if (CPP_AT_HAS_ARG(1)) {
+                if (args[1].compare("NONE") == 0) {
+                    type = BSP::kGNSSModuleNone;
+                } else if (args[1].compare("GENERIC") == 0) {
+                    type = BSP::kGNSSModuleGeneric;
+                } else if (args[1].compare("UBX_MIA") == 0) {
+                    type = BSP::kGNSSModuleUbloxMAXM10;
+                } else {
+                    CPP_AT_ERROR("GNSS type must be NONE, GENERIC, or UBX_MIA.");
+                }
+            } else if (enabled && type == BSP::kGNSSModuleNone) {
+                CPP_AT_ERROR("Cannot enable GNSS while the saved type is NONE; specify GENERIC or UBX_MIA.");
+            }
+
+            bool notify = false;
+            if (CPP_AT_HAS_ARG(2)) {
+                if (args[2].compare("0") == 0) {
+                    notify = false;
+                } else if (args[2].compare("1") == 0) {
+                    notify = true;
+                } else {
+                    CPP_AT_ERROR("GNSS notify must be 0 or 1.");
+                }
+            }
+
+            if (!ConfigureGNSSReceiver(enabled, type)) {
+                settings_manager.settings.gnss_enabled = enabled;
+                settings_manager.settings.gnss_receiver_type = GNSSModuleTypeToSettings(type);
+                settings_manager.settings.gnss_notify = notify;
+                CPP_AT_ERROR("GNSS receiver did not initialize successfully.");
+            }
+            settings_manager.settings.gnss_enabled = enabled && type != BSP::kGNSSModuleNone;
+            settings_manager.settings.gnss_receiver_type = GNSSModuleTypeToSettings(type);
+            settings_manager.settings.gnss_notify = notify;
+            CPP_AT_SUCCESS();
+            break;
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATGNSSFixCallback) {
+    if (op != '?') {
+        CPP_AT_ERROR("Only AT+GNSS_FIX? is supported.");
+    }
+
+    const NMEAParser::GNSSFix& fix = gnss->fix();
+    char utc_time[16] = "--:--:--.---";
+    if (fix.utc_time_valid) {
+        snprintf(utc_time, sizeof(utc_time), "%02u:%02u:%02u.%03u", fix.utc_hour, fix.utc_minute, fix.utc_second,
+                 fix.utc_millisecond);
+    }
+    CPP_AT_CMD_PRINTF("=%d,%.6f,%.6f,%ld,%.1f,%ld,%u,%s,%lu", gnss->HasValidFix(), fix.latitude_deg,
+                      fix.longitude_deg, static_cast<long>(fix.altitude_ft), fix.heading_deg,
+                      static_cast<long>(fix.speed_kts), static_cast<unsigned int>(fix.num_satellites), utc_time,
+                      static_cast<unsigned long>(gnss->pps_count()));
+    CPP_AT_SILENT_SUCCESS();
 }
 
 CPP_AT_CALLBACK(CommsManager::ATBootloader) {
@@ -352,6 +438,10 @@ CPP_AT_CALLBACK(CommsManager::ATESP32FlashCallback) {
     if (!esp32.DeInit()) {
         CPP_AT_ERROR("CommsManager::ATESP32FlashCallback", "Error while de-initializing ESP32 before flashing.");
     }
+    // The ESP32 flasher and the GNSS module share uart0 (on different pins). Release the GNSS pins
+    // so the module's NMEA/UBX stream can't corrupt the ESP-ROM bootloader handshake. No-op if GNSS
+    // is absent/inactive. The module stays powered so it hot-starts on resume.
+    gnss->SuspendForUartHandover();
     // Manually stop and start core 1 and watchdog instead of using FlashSafe() and FlashUnsafe() since we aren't
     // actually writing to RP2040 flash memory and we want printouts to work over the USB console.
     StopCore1();
@@ -359,6 +449,9 @@ CPP_AT_CALLBACK(CommsManager::ATESP32FlashCallback) {
     bool flashed_successfully = esp32_flasher.FlashESP32();
     adsbee.EnableWatchdog();
     StartCore1();
+    // Re-claim uart0 for the GNSS module (FlashESP32() deinit'd it) and resume NMEA output. Do this
+    // whether or not the flash succeeded so GNSS always comes back.
+    gnss->ResumeAfterUartHandover();
     if (!flashed_successfully) {
         CPP_AT_ERROR("CommsManager::ATESP32FlashCallback", "Error while flashing ESP32.");
     }
@@ -548,7 +641,7 @@ void ATFeedHelpCallback() {
         "\tAT+FEED=<index>,<uri>,<port>,<active>,<protocol>\r\n\tSet details for a "
         "network feed.\r\n\tindex = [0-%d], uri = ip address or URL, feed_port = [0-65535], "
         "active = [0 1], protocol = [BEAST BEAST_RAW].\r\n\t\r\n\tAT+FEED?\r\n\tPrint details for all "
-        "feeds.\r\n\t\r\n\tAT+FEED?<index>\r\n\tPrint details for a specific feed.\r\n\tfeed_index = [0-%d]",
+        "feeds.\r\n\t\r\n\tAT+FEED?<index>\r\n\tPrint details for a specific feed.\r\n\tfeed_index = [0-%d]\r\n",
         SettingsManager::Settings::kMaxNumFeeds - 1, SettingsManager::Settings::kMaxNumFeeds - 1);
 }
 
@@ -960,7 +1053,7 @@ CPP_AT_HELP_CALLBACK(CommsManager::ATProtocolOutHelpCallback) {
     CPP_AT_PRINTF("\tSet the reporting protocol used on a given serial interface:\r\n");
     CPP_AT_PRINTF("\tAT+PROTOCOL_OUT=<iface>,<protocol>\r\n\t<iface> = ");
     for (uint16_t iface = 0; iface < SettingsManager::kGNSSUART; iface++) {
-        CPP_AT_PRINTF("%s ", SettingsManager::kSerialInterfaceStrs[iface]);
+        CPP_AT_PRINTF("%s \t\r\n", SettingsManager::kSerialInterfaceStrs[iface]);
     }
     CPP_AT_PRINTF("\r\n\t<protocol> = ");
     for (uint16_t protocol = 0; protocol < SettingsManager::kNumProtocols; protocol++) {
@@ -1503,6 +1596,23 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .max_args = 5,
      .help_callback = ATFeedHelpCallback,
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATFeedCallback, comms_manager)},
+    {.command = "GNSS",
+     .min_args = 0,
+     .max_args = 3,
+     .help_string = "AT+GNSS=<0|1>[,<NONE|GENERIC|UBX_MIA>[,<0|1>]]\r\n\tEnable or disable GNSS power, optionally "
+                    "select the message processor, and enable fix-change notifications. Notify defaults to 0. "
+                    "Without a type, the last configured type is reused; GNSS cannot be enabled while the saved "
+                    "type is NONE. NONE always disables the interface."
+                    "\r\n\tAT+GNSS?\r\n\tQuery the active GNSS "
+                    "state and type.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATGNSSCallback, comms_manager)},
+    {.command = "GNSS_FIX",
+     .min_args = 0,
+     .max_args = 0,
+     .help_string = "AT+GNSS_FIX?\r\n\tReturn fix validity, latitude and longitude in degrees, altitude in feet, "
+                    "heading in degrees true, groundspeed in knots, active satellites, UTC time, and PPS count "
+                    "since the last GNSS enable or disable operation.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATGNSSFixCallback, comms_manager)},
     {.command = "HOSTNAME",
      .min_args = 0,
      .max_args = 1,
