@@ -135,6 +135,12 @@ class GNSSReceiver {
     /** Pop one byte captured by the UART RX interrupt. */
     bool ReadBufferedByte(char& c);
 
+    /** Recover any hardware-FIFO bytes not serviced by the UART interrupt. */
+    void PollUartIntoRxBuffer();
+
+    /** Add one UART byte to the software ring, dropping it and counting an overflow if full. */
+    void PushRxByte(char c);
+
     // TEMPORARY debug hooks (remove with the rest of the GNSS debug instrumentation).
     // DebugIngestByte: fed every received UART byte so a concrete receiver can passively sniff its
     // binary protocol (e.g. ublox UBX) from the same stream the NMEA parser consumes.
@@ -170,6 +176,8 @@ class GNSSReceiver {
     volatile uint16_t rx_head_ = 0;
     volatile uint16_t rx_tail_ = 0;
     volatile uint32_t rx_overflow_count_ = 0;
+    volatile uint32_t rx_irq_count_ = 0;
+    uint32_t rx_polled_byte_count_ = 0;
     static inline GNSSReceiver* rx_irq_owner_ = nullptr;
     static inline bool rx_irq_handler_installed_[2] = {false, false};
     static void RxIRQHandler();

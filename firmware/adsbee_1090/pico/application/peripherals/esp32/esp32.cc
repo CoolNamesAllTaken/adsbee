@@ -2,6 +2,7 @@
 
 #include "adsbee.hh"  // Get access to the Sub-GHz radio for its status.
 #include "cpu_utils.hh"
+#include "gnss_interface.hh"
 #include "hal.hh"
 
 extern CPUMonitor core_0_monitor;
@@ -109,6 +110,7 @@ bool ESP32::Update() {
     }
 
     // Send the RP2040's status to the ESP32.
+    const NMEAParser::GNSSFix& gnss_fix = gnss->fix();
     ObjectDictionary::CompositeDeviceStatus composite_status = {
         .rp2040 =
             {
@@ -118,6 +120,15 @@ bool ESP32::Update() {
                 .core_1_usage_percent = core_1_monitor.GetUsagePercent(),
                 .rx_position = adsbee.rx_position,
                 .rx_position_available = adsbee.rx_position_available,
+                .gnss_enabled = gnss->IsActive(),
+                .gnss_fix_valid = gnss->HasValidFix(),
+                .gnss_latitude_deg = gnss_fix.latitude_deg,
+                .gnss_longitude_deg = gnss_fix.longitude_deg,
+                .gnss_utc_time_valid = gnss_fix.utc_time_valid,
+                .gnss_utc_hour = gnss_fix.utc_hour,
+                .gnss_utc_minute = gnss_fix.utc_minute,
+                .gnss_utc_second = gnss_fix.utc_second,
+                .gnss_utc_millisecond = gnss_fix.utc_millisecond,
             },
         .subg = adsbee.subg_radio_ll.device_status,
     };

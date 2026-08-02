@@ -256,6 +256,7 @@ class MetricsWebSocket {
             'receiver': {}
         };
         this.feedSlotMap = {};
+        this.onGNSSStatus = null;
         this.connect();
         this.feedsCountEl = document.getElementById('feed-count');
         this.container = document.getElementById('metrics-container');
@@ -326,6 +327,10 @@ class MetricsWebSocket {
                 } else if (key.includes('heap_largest_free_block_bytes')) {
                     displayKey = 'Largest Free Block';
                     displayValue = `${value} B`;
+                } else if (key === 'enabled' || key === 'fix_valid') {
+                    displayValue = value ? 'Yes' : 'No';
+                } else if (key === 'latitude_deg' || key === 'longitude_deg') {
+                    displayValue = Number(value).toFixed(6);
                 }
 
                 statusHtml += `<div class="status-item">
@@ -391,6 +396,9 @@ class MetricsWebSocket {
                     const deviceStatus = data['device_status'];
                     // console.log('Device Status:', deviceStatus);
                     this.updateDeviceStatus(deviceStatus);
+                    if (deviceStatus.gnss && this.onGNSSStatus) {
+                        this.onGNSSStatus(deviceStatus.gnss);
+                    }
                 }
             } catch (error) {
                 console.error('Error parsing WebSocket message:', error);
@@ -1172,6 +1180,8 @@ class RadarMap {
         this.map                = null;
         this.markers            = new Map();   // hex → L.Marker
         this.trailLines         = new Map();   // hex → L.LayerGroup
+        this.receiverMarker     = null;
+        this.receiverStatus     = null;
         this.selectedHex        = null;
         this.onSelectionChanged = null;        // (hex | null) → void
         this._ready             = false;
@@ -1218,6 +1228,37 @@ class RadarMap {
 
     invalidate() {
         if (this.map) setTimeout(() => this.map.invalidateSize(), 0);
+    }
+
+    setReceiverStatus(status) {
+        this.receiverStatus = status;
+        if (!this._ready) return;
+
+        const lat = Number(status?.latitude_deg);
+        const lon = Number(status?.longitude_deg);
+        const positionValid = status?.enabled === true && status?.fix_valid === true &&
+            Number.isFinite(lat) && Number.isFinite(lon) &&
+            lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+
+        if (!positionValid) {
+            if (this.receiverMarker) {
+                this.receiverMarker.remove();
+                this.receiverMarker = null;
+            }
+            return;
+        }
+
+        if (this.receiverMarker) {
+            this.receiverMarker.setLatLng([lat, lon]);
+        } else {
+            this.receiverMarker = L.circleMarker([lat, lon], {
+                radius: 7,
+                color: '#1a1a1a',
+                weight: 2,
+                fillColor: '#ffcb00',
+                fillOpacity: 1,
+            }).addTo(this.map).bindTooltip('Receiver position', { direction: 'top' });
+        }
     }
 
     _makeIcon(color, track, isGround, isSelected) {
@@ -1295,9 +1336,11 @@ class RadarMap {
         }
 
         // Auto-fit view on first aircraft
-        if (this._autoCenter && this.markers.size > 0) {
+        if (this._autoCenter && (this.markers.size > 0 || this.receiverMarker)) {
             try {
-                const bounds = L.featureGroup([...this.markers.values()]).getBounds();
+                const mapLayers = [...this.markers.values()];
+                if (this.receiverMarker) mapLayers.push(this.receiverMarker);
+                const bounds = L.featureGroup(mapLayers).getBounds();
                 if (bounds.isValid()) {
                     this.map.fitBounds(bounds, { padding: [50, 50], maxZoom: 9 });
                     this._autoCenter = false;
