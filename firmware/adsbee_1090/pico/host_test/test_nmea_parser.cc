@@ -65,6 +65,41 @@ TEST(NMEAParser, TalkerIdAgnostic) {
     EXPECT_NEAR(parser.fix().latitude_deg, 48.1173f, 0.001f);
 }
 
+// CASIC AT6558 receivers identify themselves with GPTXT and then emit multi-constellation
+// GN-prefixed NMEA.  The informational and unsupported navigation sentences must not prevent the
+// GGA/RMC sentences in the same stream from updating the fix state.
+TEST(NMEAParser, ParsesAT6558StartupStream) {
+    NMEAParser parser;
+
+    EXPECT_EQ(FeedSentence(parser, "$GPTXT,01,01,02,MA=CASIC*27\r\n"),
+              NMEAParser::kSentenceUnknown);
+    EXPECT_EQ(FeedSentence(parser, "$GPTXT,01,01,02,IC=AT6558F-5N-32-1C580900*06\r\n"),
+              NMEAParser::kSentenceUnknown);
+    EXPECT_EQ(FeedSentence(parser, "$GPTXT,01,01,02,SW=URANUS5,V5.3.0.0*1D\r\n"),
+              NMEAParser::kSentenceUnknown);
+
+    parser.SetTimestampMs(1234);
+    EXPECT_EQ(FeedSentence(parser, "$GNGGA,005538.537,,,,,0,00,25.5,,,,,,*70\r\n"),
+              NMEAParser::kSentenceGGA);
+    EXPECT_FALSE(parser.fix().valid);
+    EXPECT_EQ(parser.fix().fix_quality, 0);
+    EXPECT_EQ(parser.fix().num_satellites, 0);
+    EXPECT_TRUE(parser.fix().utc_time_valid);
+    EXPECT_EQ(parser.fix().utc_hour, 0);
+    EXPECT_EQ(parser.fix().utc_minute, 55);
+    EXPECT_EQ(parser.fix().utc_second, 38);
+    EXPECT_EQ(parser.fix().utc_millisecond, 537);
+
+    EXPECT_EQ(FeedSentence(parser, "$GPGSV,3,1,09,03,40,211,,04,67,330,,07,19,272,,08,08,169,,0*68\r\n"),
+              NMEAParser::kSentenceUnknown);
+    EXPECT_EQ(FeedSentence(parser, "$BDGSV,1,1,03,12,19,151,,19,45,158,,36,80,343,,0*45\r\n"),
+              NMEAParser::kSentenceUnknown);
+    EXPECT_EQ(FeedSentence(parser, "$GNRMC,005538.537,V,,,,,,,020826,,,M,V*2E\r\n"),
+              NMEAParser::kSentenceRMC);
+    EXPECT_FALSE(parser.fix().valid);
+    EXPECT_EQ(parser.fix().utc_millisecond, 537);
+}
+
 // A NMEA 4.11-style sentence with extra appended trailing fields must still parse the leading
 // fields and ignore the extras.
 TEST(NMEAParser, ToleratesExtraTrailingFields) {

@@ -245,10 +245,9 @@ CPP_AT_CALLBACK(CommsManager::ATGNSSFixCallback) {
     }
 
     const NMEAParser::GNSSFix& fix = gnss->fix();
-    char utc_time[16] = "--:--:--.---";
+    char utc_time[9] = "--:--:--";
     if (fix.utc_time_valid) {
-        snprintf(utc_time, sizeof(utc_time), "%02u:%02u:%02u.%03u", fix.utc_hour, fix.utc_minute, fix.utc_second,
-                 fix.utc_millisecond);
+        snprintf(utc_time, sizeof(utc_time), "%02u:%02u:%02u", fix.utc_hour, fix.utc_minute, fix.utc_second);
     }
     CPP_AT_CMD_PRINTF("=%d,%.6f,%.6f,%ld,%.1f,%ld,%u,%s,%lu", gnss->HasValidFix(), fix.latitude_deg,
                       fix.longitude_deg, static_cast<long>(fix.altitude_ft), fix.heading_deg,
@@ -936,11 +935,11 @@ CPP_AT_HELP_CALLBACK(CommsManager::ATProtocolOutHelpCallback) {
     CPP_AT_PRINTF("\tSet the reporting protocol used on a given serial interface:\r\n");
     CPP_AT_PRINTF("\tAT+PROTOCOL_OUT=<iface>,<protocol>\r\n\t<iface> = ");
     for (uint16_t iface = 0; iface < SettingsManager::kGNSSUART; iface++) {
-        CPP_AT_PRINTF("%s \t\r\n", SettingsManager::kSerialInterfaceStrs[iface]);
+        CPP_AT_PRINTF("%s ", SettingsManager::kSerialInterfaceStrs[iface]);
     }
     CPP_AT_PRINTF("\r\n\t<protocol> = ");
     for (uint16_t protocol = 0; protocol < SettingsManager::kNumProtocols; protocol++) {
-        CPP_AT_PRINTF("\t\t%s ", SettingsManager::kReportingProtocolStrs[protocol]);
+        CPP_AT_PRINTF("\r\n\t\t%s ", SettingsManager::kReportingProtocolStrs[protocol]);
     }
     CPP_AT_PRINTF("\r\n\tQuery the reporting protocol used on all interfaces:\r\n");
     CPP_AT_PRINTF("\tAT+PROTOCOL_OUT?\r\n\tPROTOCOL_OUT=<iface>,<protocol>\r\n\t...\r\n");
@@ -1482,12 +1481,10 @@ const CppAT::ATCommandDef_t at_command_list[] = {
     {.command = "GNSS",
      .min_args = 0,
      .max_args = 3,
-     .help_string = "AT+GNSS=<0|1>[,<NONE|GENERIC|UBX_MIA>[,<0|1>]]\r\n\tEnable or disable GNSS power, optionally "
-                    "select the message processor, and enable fix-change notifications. Notify defaults to 0. "
-                    "Without a type, the last configured type is reused; GNSS cannot be enabled while the saved "
-                    "type is NONE. NONE always disables the interface."
-                    "\r\n\tAT+GNSS?\r\n\tQuery the active GNSS "
-                    "state and type.",
+     .help_string = "AT+GNSS=enable: <0|1>[, type: <NONE|GENERIC|UBX_MIA>[,notify: <0|1>]]\r\n\tEnable or disable GNSS power, optionally "
+                    "select the GNSS type, and enable unsolicited AT notifications for when the GNSS fix becomes valid or invalid. Notify defaults to off. "
+                    "Type is optional, when not present the last configured type is reused, default is NONE; GNSS cannot be enabled while the saved type is NONE."
+                    "\r\n\tAT+GNSS?\r\n\tQuery the GNSS system state, type, and notification setting",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATGNSSCallback, comms_manager)},
     {.command = "GNSS_FIX",
      .min_args = 0,

@@ -670,13 +670,12 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
              "}, \"device_status\": { ");
     // Device Status
     const ObjectDictionary::RP2040DeviceStatus& rp2040_status = object_dictionary.composite_device_status.rp2040;
-    char gnss_utc_time[16] = "--:--:--.---";
+    char gnss_utc_time[9] = "--:--:--";
     if (rp2040_status.gnss_utc_time_valid) {
-        snprintf(gnss_utc_time, sizeof(gnss_utc_time), "%02u:%02u:%02u.%03u",
+        snprintf(gnss_utc_time, sizeof(gnss_utc_time), "%02u:%02u:%02u",
                  static_cast<unsigned>(rp2040_status.gnss_utc_hour % 24),
                  static_cast<unsigned>(rp2040_status.gnss_utc_minute % 60),
-                 static_cast<unsigned>(rp2040_status.gnss_utc_second % 61),
-                 static_cast<unsigned>(rp2040_status.gnss_utc_millisecond % 1000));
+                 static_cast<unsigned>(rp2040_status.gnss_utc_second % 61));
     }
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
