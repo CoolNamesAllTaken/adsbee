@@ -1959,6 +1959,7 @@ bool AircraftDictionary::IngestRawRemoteIDPacket(const RawRemoteIDPacket& packet
         }
         if (loc.SpeedVertical != INV_SPEED_V) {
             aircraft->gnss_vertical_rate_fpm = MetersToFeet(static_cast<int>(loc.SpeedVertical)) * 60;
+            aircraft->WriteBitFlag(RemoteIDAircraft::kBitFlagVerticalRateValid, true);
         }
         if (loc.AltitudeGeo != INV_ALT) {
             aircraft->gnss_altitude_ft = MetersToFeet(static_cast<int>(loc.AltitudeGeo));

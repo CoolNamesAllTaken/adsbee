@@ -684,6 +684,7 @@ class RemoteIDAircraft : public Aircraft {
         kBitFlagBasicIDValid = 7,        // A Basic ID message has populated uas_id / uas_id_type / ua_type.
         kBitFlagOperatorIDValid = 8,     // An Operator ID message has populated operator_id.
         kBitFlagSelfIDValid = 9,         // A Self ID message has populated self_id_description.
+        kBitFlagVerticalRateValid = 10,  // A valid vertical speed has been received (Location may omit it).
         kBitFlagNumFlagBits
     };
 

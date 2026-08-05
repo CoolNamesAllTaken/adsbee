@@ -373,7 +373,7 @@ void RemoteIDManager::BLETxServiceTick() {
     ServiceAdvertisingPayloads();
 }
 
-bool RemoteIDManager::BLETxIsSupported() { return true; }
+bool RemoteIDManager::BluetoothIsSupported() { return true; }
 
 #else  // Bluetooth not compiled in: no-op stubs so RemoteIDManager links and reports kStatusNotInBuild.
 
@@ -382,6 +382,6 @@ void RemoteIDManager::BLEStop() {}
 bool RemoteIDManager::BLETxStart(bool, bool) { return false; }
 void RemoteIDManager::BLETxStop() {}
 void RemoteIDManager::BLETxServiceTick() {}
-bool RemoteIDManager::BLETxIsSupported() { return false; }
+bool RemoteIDManager::BluetoothIsSupported() { return false; }
 
 #endif  // CONFIG_BT_ENABLED && CONFIG_BT_NIMBLE_ENABLED

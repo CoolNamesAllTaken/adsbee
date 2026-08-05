@@ -152,7 +152,7 @@ class RemoteIDManager {
     bool BLETxStart(bool enable_legacy, bool enable_coded_phy);
     void BLETxStop();
     void BLETxServiceTick();  // Refreshes the advertised ODID content; call at the transmit cadence.
-    static bool BLETxIsSupported();  // False when Bluetooth isn't compiled into this firmware.
+    static bool BluetoothIsSupported();  // False when Bluetooth isn't compiled into this firmware.
 
     // WiFi promiscuous sniffer control — implemented in remote_id_wifi_sniffer.cpp.
     bool WiFiSnifferStart();

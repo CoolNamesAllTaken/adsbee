@@ -137,9 +137,7 @@ void RemoteIDManager::Reconcile() {
         status_ |= kStatusBlockedByWiFi;
         // Still surface whether Bluetooth is even compiled in, so this early-return doesn't mask kStatusNotInBuild: a
         // user seeing only "blocked_by_wifi" can't otherwise tell they also need the Bluetooth-enabled firmware.
-#if !(defined(CONFIG_BT_ENABLED) && defined(CONFIG_BT_NIMBLE_ENABLED))
-        if (want_ble) status_ |= kStatusNotInBuild;
-#endif
+        if (want_ble && !BluetoothIsSupported()) status_ |= kStatusNotInBuild;
         BLEStop();
         WiFiSnifferStop();
         return;
@@ -157,12 +155,18 @@ void RemoteIDManager::Reconcile() {
     // shares the radio with the WiFi sniffer below via software coexistence (CONFIG_ESP_COEX_SW_COEXIST_ENABLE); the BLE
     // scan runs at a reduced duty cycle (see remote_id_ble.cpp) so coex has idle slots to schedule WiFi RX.
     if (want_ble) {
-        if (ble_running_ || heap_caps_get_free_size(MALLOC_CAP_8BIT) >= kMinHeapFreeBytesForBLE) {
+        if (!BluetoothIsSupported()) {
+            // Bluetooth isn't compiled into this firmware at all: the user needs a different image.
+            status_ |= kStatusNotInBuild;
+        } else if (ble_running_ || heap_caps_get_free_size(MALLOC_CAP_8BIT) >= kMinHeapFreeBytesForBLE) {
             if (BLEStart(want_coded)) {
                 status_ |= kStatusBLEActive;
                 if (ble_coded_running_) status_ |= kStatusBLECodedPHYActive;
             } else {
-                status_ |= kStatusNotInBuild;  // BLEStart only fails to no-op when Bluetooth isn't compiled in.
+                // Bluetooth IS in this build, so a failure here is a runtime one (e.g. nimble_port_init() ran out of
+                // resources); BLEStart() logs the underlying error. Report it as a RAM/resource block rather than
+                // telling the user to reflash firmware they already have.
+                status_ |= kStatusBlockedByRAM;
             }
         } else {
             status_ |= kStatusBlockedByRAM;
@@ -217,7 +221,7 @@ void RemoteIDManager::ReconcileTx() {
 
     // --- BLE transmit ---
     if (want_ble_legacy || want_ble_coded) {
-        if (!BLETxIsSupported()) {
+        if (!BluetoothIsSupported()) {
             status_ |= kStatusNotInBuild | kStatusTxBlocked;
         } else if (ble_tx_legacy_running_ || ble_tx_coded_running_ ||
                    heap_caps_get_free_size(MALLOC_CAP_8BIT) >= kMinHeapFreeBytesForTx) {

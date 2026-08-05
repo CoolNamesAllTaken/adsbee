@@ -609,6 +609,12 @@ bool CommsManager::ReportGDL90(ReportSink* sinks, uint16_t num_sinks) {
         } else if (UATAircraft* uat_aircraft = get_if<UATAircraft>(&(itr->second)); uat_aircraft) {
             msg_len = gdl90.WriteGDL90TargetReportMessage(buf, sizeof(buf), *uat_aircraft, false);
         } else if (RemoteIDAircraft* remote_id_aircraft = get_if<RemoteIDAircraft>(&(itr->second)); remote_id_aircraft) {
+            if (!remote_id_aircraft->HasBitFlag(RemoteIDAircraft::kBitFlagPositionValid)) {
+                // A drone heard only via Basic ID / Operator ID has no position yet. Reporting it would emit a traffic
+                // target at lat/lon 0,0, and unlike Mode S / UAT a consumer can't detect that from NIC: Remote ID always
+                // reports NIC = 0 because a drone's containment radius is genuinely unknown. Skip it instead.
+                continue;
+            }
             msg_len = gdl90.WriteGDL90TargetReportMessage(buf, sizeof(buf), *remote_id_aircraft, false);
         } else {
             CONSOLE_WARNING("CommsManager::ReportGDL90", "Unknown aircraft type in dictionary for UID 0x%lx.", uid);
