@@ -1,6 +1,6 @@
 const METRIC_UNITS = {
-    'num_mode_s_aircraft':   'aircraft',
-    'num_uat_aircraft':      'aircraft',
+    'num_mode_s_aircraft': 'aircraft',
+    'num_uat_aircraft': 'aircraft',
     'num_remote_id_aircraft': 'drones',
 };
 
@@ -257,6 +257,7 @@ class MetricsWebSocket {
             'receiver': {}
         };
         this.feedSlotMap = {};
+        this.onGNSSStatus = null;
         this.connect();
         this.feedsCountEl = document.getElementById('feed-count');
         this.container = document.getElementById('metrics-container');
@@ -327,6 +328,10 @@ class MetricsWebSocket {
                 } else if (key.includes('heap_largest_free_block_bytes')) {
                     displayKey = 'Largest Free Block';
                     displayValue = `${value} B`;
+                } else if (key === 'enabled' || key === 'fix_valid') {
+                    displayValue = value ? 'Yes' : 'No';
+                } else if (key === 'latitude_deg' || key === 'longitude_deg') {
+                    displayValue = Number(value).toFixed(6);
                 }
 
                 statusHtml += `<div class="status-item">
@@ -392,6 +397,9 @@ class MetricsWebSocket {
                     const deviceStatus = data['device_status'];
                     // console.log('Device Status:', deviceStatus);
                     this.updateDeviceStatus(deviceStatus);
+                    if (deviceStatus.gnss && this.onGNSSStatus) {
+                        this.onGNSSStatus(deviceStatus.gnss);
+                    }
                 }
             } catch (error) {
                 console.error('Error parsing WebSocket message:', error);
@@ -419,7 +427,7 @@ class MetricsWebSocket {
 
 class FeedEditor {
     static PROTOCOLS = ['NONE', 'RAW', 'BEAST', 'BEAST_NO_UAT', 'BEAST_NO_UAT_UPLINK',
-                        'CSBEE', 'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON'];
+        'CSBEE', 'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON'];
 
     static parseFeedResponse(text) {
         const m = text.match(/\+FEED=(\d+)\(INDEX\),([^,]*)\(URI\),(\d+)\(PORT\),(\d+)\(ACTIVE\),(\w+)\(PROTOCOL\)/);
@@ -467,7 +475,7 @@ class FeedEditor {
     }
 
     static async remove() {
-        const slot     = document.getElementById('feed-slot').value;
+        const slot = document.getElementById('feed-slot').value;
         const statusEl = document.getElementById('feed-modal-status');
         statusEl.textContent = 'Removing...';
         try {
@@ -481,10 +489,10 @@ class FeedEditor {
     }
 
     static async save() {
-        const slot     = document.getElementById('feed-slot').value;
-        const uri      = document.getElementById('feed-uri').value.trim();
-        const port     = document.getElementById('feed-port').value;
-        const active   = document.getElementById('feed-active').checked ? 1 : 0;
+        const slot = document.getElementById('feed-slot').value;
+        const uri = document.getElementById('feed-uri').value.trim();
+        const port = document.getElementById('feed-port').value;
+        const active = document.getElementById('feed-active').checked ? 1 : 0;
         const protocol = document.getElementById('feed-protocol').value;
         const statusEl = document.getElementById('feed-modal-status');
 
@@ -1107,10 +1115,10 @@ class AircraftWebSocket {
         }, 60000);
         if (this.paused) return;
         this.ws = new WebSocket(this.url);
-        this.ws.onopen  = () => console.log('[AircraftWS] connected');
+        this.ws.onopen = () => console.log('[AircraftWS] connected');
         this.ws.onmessage = (ev) => {
             if (!this.onMessage) return;
-            try { this.onMessage(JSON.parse(ev.data)); } catch (_) {}
+            try { this.onMessage(JSON.parse(ev.data)); } catch (_) { }
         };
         this.ws.onclose = () => {
             clearInterval(this.pingInterval);
@@ -1121,7 +1129,7 @@ class AircraftWebSocket {
         this.ws.onerror = (e) => console.error('[AircraftWS] error', e);
     }
 
-    pause()  { this.paused = true;  clearTimeout(this._timer); if (this.ws) this.ws.close(); }
+    pause() { this.paused = true; clearTimeout(this._timer); if (this.ws) this.ws.close(); }
     resume() { if (!this.paused) return; this.paused = false; this._connect(); }
     close(code, reason) { this.paused = true; clearTimeout(this._timer); if (this.ws) this.ws.close(code, reason); }
 }
@@ -1140,7 +1148,7 @@ const RID_UA_TYPE_STRINGS = [
 class AircraftStore {
     constructor() {
         this.aircraft = new Map();  // hex → latest merged data
-        this.trails   = new Map();  // hex → [{lat, lon, alt}]
+        this.trails = new Map();  // hex → [{lat, lon, alt}]
         this.lastSeen = new Map();  // hex → Date.now() timestamp
     }
 
@@ -1181,16 +1189,18 @@ class AircraftStore {
 // ─── RadarMap ─────────────────────────────────────────────────────────────────
 class RadarMap {
     constructor(containerId, store) {
-        this.containerId        = containerId;
-        this.store              = store;
-        this.map                = null;
-        this.markers            = new Map();   // hex → L.Marker
-        this.trailLines         = new Map();   // hex → L.LayerGroup
-        this.selectedHex        = null;
+        this.containerId = containerId;
+        this.store = store;
+        this.map = null;
+        this.markers = new Map();   // hex → L.Marker
+        this.trailLines = new Map();   // hex → L.LayerGroup
+        this.receiverMarker = null;
+        this.receiverStatus = null;
+        this.selectedHex = null;
         this.onSelectionChanged = null;        // (hex | null) → void
-        this._ready             = false;
-        this._offline           = false;
-        this._autoCenter        = true;
+        this._ready = false;
+        this._offline = false;
+        this._autoCenter = true;
     }
 
     async init() {
@@ -1216,7 +1226,7 @@ class RadarMap {
             document.head.appendChild(link);
             const script = document.createElement('script');
             script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-            script.onload  = () => { clearTimeout(tid); resolve(); };
+            script.onload = () => { clearTimeout(tid); resolve(); };
             script.onerror = () => { clearTimeout(tid); reject(); };
             document.head.appendChild(script);
         });
@@ -1232,6 +1242,37 @@ class RadarMap {
 
     invalidate() {
         if (this.map) setTimeout(() => this.map.invalidateSize(), 0);
+    }
+
+    setReceiverStatus(status) {
+        this.receiverStatus = status;
+        if (!this._ready) return;
+
+        const lat = Number(status?.latitude_deg);
+        const lon = Number(status?.longitude_deg);
+        const positionValid = status?.enabled === true && status?.fix_valid === true &&
+            Number.isFinite(lat) && Number.isFinite(lon) &&
+            lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+
+        if (!positionValid) {
+            if (this.receiverMarker) {
+                this.receiverMarker.remove();
+                this.receiverMarker = null;
+            }
+            return;
+        }
+
+        if (this.receiverMarker) {
+            this.receiverMarker.setLatLng([lat, lon]);
+        } else {
+            this.receiverMarker = L.circleMarker([lat, lon], {
+                radius: 7,
+                color: '#1a1a1a',
+                weight: 2,
+                fillColor: '#ffcb00',
+                fillOpacity: 1,
+            }).addTo(this.map).bindTooltip('Receiver position', { direction: 'top' });
+        }
     }
 
     _makeIcon(color, track, isGround, isSelected, isDrone) {
@@ -1250,8 +1291,8 @@ class RadarMap {
             return L.divIcon({ html: svg, className: '', iconSize: [32, 32], iconAnchor: [16, 16] });
         }
         const fill = isGround ? '#888888' : color;
-        const rot  = (track != null) ? track : 0;
-        const svg  = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">` +
+        const rot = (track != null) ? track : 0;
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">` +
             ring +
             `<g transform="rotate(${rot},16,16)">` +
             `<polygon points="16,2 23,27 16,22 9,27" fill="${fill}" stroke="rgba(0,0,0,0.5)" stroke-width="1.2"/>` +
@@ -1296,11 +1337,11 @@ class RadarMap {
         for (const ac of this.store.all()) {
             if (ac.lat == null || ac.lon == null) continue;
             live.add(ac.hex);
-            const isDrone  = ac.type === 'remote_id';
-            const color    = acAltColor(ac.alt_baro ?? ac.alt_geom);
+            const isDrone = ac.type === 'remote_id';
+            const color = acAltColor(ac.alt_baro ?? ac.alt_geom);
             const isGround = !!ac.on_ground;
-            const isSel    = ac.hex === this.selectedHex;
-            const icon     = this._makeIcon(color, ac.track, isGround, isSel, isDrone);
+            const isSel = ac.hex === this.selectedHex;
+            const icon = this._makeIcon(color, ac.track, isGround, isSel, isDrone);
 
             if (this.markers.has(ac.hex)) {
                 const m = this.markers.get(ac.hex);
@@ -1323,14 +1364,16 @@ class RadarMap {
         }
 
         // Auto-fit view on first aircraft
-        if (this._autoCenter && this.markers.size > 0) {
+        if (this._autoCenter && (this.markers.size > 0 || this.receiverMarker)) {
             try {
-                const bounds = L.featureGroup([...this.markers.values()]).getBounds();
+                const mapLayers = [...this.markers.values()];
+                if (this.receiverMarker) mapLayers.push(this.receiverMarker);
+                const bounds = L.featureGroup(mapLayers).getBounds();
                 if (bounds.isValid()) {
                     this.map.fitBounds(bounds, { padding: [50, 50], maxZoom: 9 });
                     this._autoCenter = false;
                 }
-            } catch (_) {}
+            } catch (_) { }
         }
 
         // Remove markers for gone aircraft
@@ -1360,50 +1403,50 @@ class RadarMap {
     }
 
     _showInfoPanel(ac) {
-        const panel  = document.getElementById('aircraft-sidebar');
-        const title  = document.getElementById('sidebar-title');
+        const panel = document.getElementById('aircraft-sidebar');
+        const title = document.getElementById('sidebar-title');
         const fields = document.getElementById('sidebar-fields');
         if (!panel) return;
         if (title) title.textContent = (ac.flight || '').trim() || ac.hex;
 
         const defs = [
-            ['hex',          'ICAO',          v => v],
-            ['flight',       'Callsign',      v => v.trim() || null],
-            ['squawk',       'Squawk',        v => v],
-            ['type',         'Type',          v => v],
-            ['category',     'Category',      v => v],
-            ['on_ground',    'On ground',     v => v ? 'Yes' : null],
-            ['alt_baro',     'Alt baro',      v => v.toLocaleString() + ' ft'],
-            ['alt_geom',     'Alt geom',      v => v.toLocaleString() + ' ft'],
-            ['gs',           'Speed',         v => Math.round(v) + ' kt'],
-            ['track',        'Track',         v => v.toFixed(1) + '°'],
-            ['mag_heading',  'Mag heading',   v => v.toFixed(1) + '°'],
-            ['true_heading', 'True heading',  v => v.toFixed(1) + '°'],
-            ['baro_rate',    'Vert rate',     v => v.toLocaleString() + ' fpm'],
-            ['geom_rate',    'Geom rate',     v => v.toLocaleString() + ' fpm'],
-            ['lat',          'Latitude',      v => v.toFixed(5)],
-            ['lon',          'Longitude',     v => v.toFixed(5)],
-            ['rssi',         'RSSI',          v => v.toFixed(1) + ' dBm'],
-            ['messages',     'Messages',      v => v.toLocaleString()],
-            ['nic',          'NIC',           v => String(v)],
-            ['nic_baro',     'NIC baro',      v => String(v)],
-            ['nac_p',        'NAC p',         v => String(v)],
-            ['nac_v',        'NAC v',         v => String(v)],
-            ['sil',          'SIL',           v => String(v)],
-            ['gva',          'GVA',           v => String(v)],
-            ['sda',          'SDA',           v => String(v)],
-            ['version',      'ADS-B version', v => String(v)],
-            ['alert',        'Alert',         v => v ? 'Yes' : null],
-            ['spi',          'SPI (Ident)',   v => v ? 'Yes' : null],
-            ['emergency',    'Emergency',     v => v],
+            ['hex', 'ICAO', v => v],
+            ['flight', 'Callsign', v => v.trim() || null],
+            ['squawk', 'Squawk', v => v],
+            ['type', 'Type', v => v],
+            ['category', 'Category', v => v],
+            ['on_ground', 'On ground', v => v ? 'Yes' : null],
+            ['alt_baro', 'Alt baro', v => v.toLocaleString() + ' ft'],
+            ['alt_geom', 'Alt geom', v => v.toLocaleString() + ' ft'],
+            ['gs', 'Speed', v => Math.round(v) + ' kt'],
+            ['track', 'Track', v => v.toFixed(1) + '°'],
+            ['mag_heading', 'Mag heading', v => v.toFixed(1) + '°'],
+            ['true_heading', 'True heading', v => v.toFixed(1) + '°'],
+            ['baro_rate', 'Vert rate', v => v.toLocaleString() + ' fpm'],
+            ['geom_rate', 'Geom rate', v => v.toLocaleString() + ' fpm'],
+            ['lat', 'Latitude', v => v.toFixed(5)],
+            ['lon', 'Longitude', v => v.toFixed(5)],
+            ['rssi', 'RSSI', v => v.toFixed(1) + ' dBm'],
+            ['messages', 'Messages', v => v.toLocaleString()],
+            ['nic', 'NIC', v => String(v)],
+            ['nic_baro', 'NIC baro', v => String(v)],
+            ['nac_p', 'NAC p', v => String(v)],
+            ['nac_v', 'NAC v', v => String(v)],
+            ['sil', 'SIL', v => String(v)],
+            ['gva', 'GVA', v => String(v)],
+            ['sda', 'SDA', v => String(v)],
+            ['version', 'ADS-B version', v => String(v)],
+            ['alert', 'Alert', v => v ? 'Yes' : null],
+            ['spi', 'SPI (Ident)', v => v ? 'Yes' : null],
+            ['emergency', 'Emergency', v => v],
             // Broadcast Remote ID (drone) fields.
-            ['rid_uas_id',      'UAS ID',        v => v.trim() || null],
-            ['rid_id_type',     'UAS ID type',   v => RID_ID_TYPE_STRINGS[v] || String(v)],
-            ['rid_ua_type',     'UA type',       v => RID_UA_TYPE_STRINGS[v] || String(v)],
-            ['rid_operator_id', 'Operator ID',   v => v.trim() || null],
-            ['rid_operator_lat','Operator lat',  v => v.toFixed(5)],
-            ['rid_operator_lon','Operator lon',  v => v.toFixed(5)],
-            ['rid_height',      'Height AGL/ATO', v => v.toLocaleString() + ' ft'],
+            ['rid_uas_id', 'UAS ID', v => v.trim() || null],
+            ['rid_id_type', 'UAS ID type', v => RID_ID_TYPE_STRINGS[v] || String(v)],
+            ['rid_ua_type', 'UA type', v => RID_UA_TYPE_STRINGS[v] || String(v)],
+            ['rid_operator_id', 'Operator ID', v => v.trim() || null],
+            ['rid_operator_lat', 'Operator lat', v => v.toFixed(5)],
+            ['rid_operator_lon', 'Operator lon', v => v.toFixed(5)],
+            ['rid_height', 'Height AGL/ATO', v => v.toLocaleString() + ' ft'],
         ];
 
         const rows = [];
@@ -1433,12 +1476,12 @@ const kNumericSortKeys = new Set(['alt_baro', 'gs', 'track', 'lat', 'lon', 'rssi
 
 class AircraftTable {
     constructor(tbodyId, store, onSelect) {
-        this.tbody       = document.getElementById(tbodyId);
-        this.store       = store;
-        this.onSelect    = onSelect;   // (hex) → void
+        this.tbody = document.getElementById(tbodyId);
+        this.store = store;
+        this.onSelect = onSelect;   // (hex) → void
         this.selectedHex = null;
-        this.sortKey     = 'alt_baro';
-        this.sortDir     = 'desc';
+        this.sortKey = 'alt_baro';
+        this.sortDir = 'desc';
 
         // Wire header click handlers
         const thead = this.tbody && this.tbody.closest('table').querySelector('thead');
@@ -1495,25 +1538,25 @@ class AircraftTable {
         const seen = new Set();
         for (const ac of acs) {
             seen.add(ac.hex);
-            const cs    = (ac.flight || '').trim();
-            const type  = ac.type    ?? '';
-            const sqwk  = ac.squawk  ?? '';
-            const alt   = ac.alt_baro != null ? ac.alt_baro.toLocaleString() : '';
-            const gs    = ac.gs       != null ? Math.round(ac.gs)            : '';
-            const hdg   = ac.track    != null ? Math.round(ac.track) + '°'  : '';
-            const lat   = ac.lat      != null ? ac.lat.toFixed(4)            : '';
-            const lon   = ac.lon      != null ? ac.lon.toFixed(4)            : '';
-            const rssi  = ac.rssi     != null ? ac.rssi.toFixed(1)           : '';
+            const cs = (ac.flight || '').trim();
+            const type = ac.type ?? '';
+            const sqwk = ac.squawk ?? '';
+            const alt = ac.alt_baro != null ? ac.alt_baro.toLocaleString() : '';
+            const gs = ac.gs != null ? Math.round(ac.gs) : '';
+            const hdg = ac.track != null ? Math.round(ac.track) + '°' : '';
+            const lat = ac.lat != null ? ac.lat.toFixed(4) : '';
+            const lon = ac.lon != null ? ac.lon.toFixed(4) : '';
+            const rssi = ac.rssi != null ? ac.rssi.toFixed(1) : '';
             const color = acAltColor(ac.alt_baro);
 
             if (rows.has(ac.hex)) {
                 const r = rows.get(ac.hex);
                 const c = r.querySelectorAll('td');
                 c[0].style.color = color; c[0].textContent = ac.hex;
-                c[1].textContent = cs;   c[2].textContent = type;
+                c[1].textContent = cs; c[2].textContent = type;
                 c[3].textContent = sqwk; c[4].textContent = alt;
-                c[5].textContent = gs;   c[6].textContent = hdg;
-                c[7].textContent = lat;  c[8].textContent = lon;
+                c[5].textContent = gs; c[6].textContent = hdg;
+                c[7].textContent = lat; c[8].textContent = lon;
                 c[9].textContent = rssi;
                 r.classList.toggle('trail-active', this.selectedHex === ac.hex);
             } else {

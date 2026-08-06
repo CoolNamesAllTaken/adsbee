@@ -415,6 +415,7 @@
         let aircraftStore = null;
         let acTable = null;
         let aircraftUpdateTimer = null;
+        let latestGNSSStatus = null;
 
         function switchTab(name) {
             document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -433,7 +434,7 @@
                 focusTerminal();
             } else if (name === 'radar') {
                 consoleWebSocket.pause();
-                metricsWebSocket.pause();
+                metricsWebSocket.resume();
                 initRadar().catch(e => console.error('Radar init error:', e));
             }
         }
@@ -447,6 +448,7 @@
                     if (acTable) acTable.setSelected(hex);
                 };
                 await radarMap.init();
+                if (latestGNSSStatus) radarMap.setReceiverStatus(latestGNSSStatus);
             } else {
                 radarMap.invalidate();
             }
@@ -481,6 +483,10 @@
         // Initialize on Console tab
         consoleWebSocket = new ConsoleWebSocket(WS_CONFIG.console_ws_url);
         metricsWebSocket = new MetricsWebSocket(WS_CONFIG.metrics_ws_url);
+        metricsWebSocket.onGNSSStatus = (status) => {
+            latestGNSSStatus = status;
+            if (radarMap) radarMap.setReceiverStatus(status);
+        };
         focusTerminal();
 
         function initResizeHandle() {

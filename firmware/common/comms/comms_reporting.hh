@@ -9,6 +9,7 @@ static constexpr uint32_t kRawReportingMaxIntervalMs =
 static constexpr uint32_t kMAVLINKReportingIntervalMs = 1000;
 static constexpr uint32_t kCSBeeReportingIntervalMs = 1000;
 static constexpr uint32_t kGDL90ReportingIntervalMs = 1000;
+static constexpr int32_t kGDL90OwnshipAirborneSpeedKts = 30;
 static constexpr uint32_t kAircraftJSONReportingIntervalMs = 1000;
 static constexpr uint32_t kCSBeeChunkBudgetMs = 50;        // Max wall time per ReportCSBee invocation.
 static constexpr uint32_t kMAVLINKChunkBudgetMs = 50;      // Max wall time per ReportMAVLINK invocation.
