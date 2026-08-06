@@ -44,6 +44,8 @@ class BSP {
             switch (device_info.GetPartNumber()) {
                 case SettingsManager::DeviceInfo::kPNADSBeeWinglet:
                     gnss_module_type = kGNSSModuleUbloxMAXM10;
+                    [[fallthrough]];  // Winglet is a 1090 variant with a MAX-M10 populated; shares ESP32 / Sub-GHz
+                                      // support below.
                 case SettingsManager::DeviceInfo::kPNADSBee1090:
                 case SettingsManager::DeviceInfo::kPNADSBee1090U:
                 case SettingsManager::DeviceInfo::kPNADSBee1090UIndoorPoEFeeder:

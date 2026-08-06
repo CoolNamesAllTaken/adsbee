@@ -505,6 +505,24 @@ class SettingsManager {
     }
 
     /**
+     * Helper function for converting a GNSSReceiverType to its AT command value string. Returns "NONE" for
+     * out-of-range values (e.g. from a corrupted settings blob) so the AT dump stays replayable.
+     * @param[in] type GNSSReceiverType to convert to a string.
+     * @retval String representation of the GNSSReceiverType, as it would be used in an AT command.
+     */
+    static inline const char* GNSSReceiverTypeToStr(GNSSReceiverType type) {
+        switch (type) {
+            case kGNSSReceiverGeneric:
+                return "GENERIC";
+            case kGNSSReceiverUBXMIA:
+                return "UBX_MIA";
+            case kGNSSReceiverNone:
+            default:
+                return "NONE";
+        }
+    }
+
+    /**
      * Used to retrieve device information, either directly from EEPROM or via interprocessor SPI bus.
      * @param[in] device_info DeviceInfo struct to set.
      * @retval True if device info was retrieved successfully, false otherwise.

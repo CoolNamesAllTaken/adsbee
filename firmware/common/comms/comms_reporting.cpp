@@ -612,7 +612,11 @@ bool CommsManager::ReportGDL90(ReportSink* sinks, uint16_t num_sinks) {
         if (have_position) {
             ownship_data.latitude_deg = rx_position.latitude_deg;
             ownship_data.longitude_deg = rx_position.longitude_deg;
-            ownship_data.altitude_ft = rx_position.baro_altitude_ft;
+            // GDL90 ownship altitude is pressure altitude. The GNSS position source provides no baro data, so report
+            // altitude invalid (INT32_MIN encodes as 0xFFF) rather than a stale value.
+            ownship_data.altitude_ft = rx_position.source == SettingsManager::RxPosition::kPositionSourceGNSS
+                                           ? INT32_MIN
+                                           : rx_position.baro_altitude_ft;
             ownship_data.speed_kts = rx_position.speed_kts;
             ownship_data.direction_deg = rx_position.heading_deg;
             ownship_data.participant_address =

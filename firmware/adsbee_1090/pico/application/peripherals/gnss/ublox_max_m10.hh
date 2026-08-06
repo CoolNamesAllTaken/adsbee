@@ -133,10 +133,11 @@ class UbloxMAXM10 : public GNSSReceiver {
     void SendUbxFrame(uint8_t msg_class, uint8_t msg_id, const uint8_t* payload, uint16_t payload_len);
 
     // Core UBX receive scanner: reads the incoming byte stream (up to timeout_ms) for a complete UBX
-    // frame matching want_class/want_id, discarding NMEA and non-matching UBX frames. Optionally
-    // copies up to out_cap payload bytes into out_payload and reports the true payload length.
+    // frame matching want_class/want_id, discarding NMEA, non-matching UBX frames, and frames with a
+    // bad Fletcher checksum. Optionally copies up to out_cap payload bytes into out_payload and
+    // reports the true payload length.
     // @param[out] is_ack Optional; for ACK/NAK frames, set true on ACK-ACK and false on ACK-NAK.
-    // @retval True if a matching frame arrived before the timeout, false otherwise.
+    // @retval True if a matching frame with a valid checksum arrived before the timeout, false otherwise.
     bool ScanForUbxMessage(uint8_t want_class, uint8_t want_id, uint32_t timeout_ms, uint8_t* out_payload,
                            uint16_t out_cap, uint16_t* out_len, bool* is_ack);
 

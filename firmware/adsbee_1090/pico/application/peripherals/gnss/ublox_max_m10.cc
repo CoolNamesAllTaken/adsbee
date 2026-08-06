@@ -20,6 +20,21 @@ uint16_t AppendCfgKeyValue(uint8_t* buf, uint16_t offset, uint32_t key_id, uint6
     return offset;
 }
 
+// 8-bit Fletcher checksum computed over a UBX frame's class, id, length, and payload bytes.
+struct UbxChecksum {
+    uint8_t a = 0;
+    uint8_t b = 0;
+    void Update(uint8_t byte) {
+        a = static_cast<uint8_t>(a + byte);
+        b = static_cast<uint8_t>(b + a);
+    }
+};
+
+// Sanity cap on received UBX payload lengths. The largest replies we expect (UBX-NAV-SAT, UBX-MON-VER) are a few
+// hundred bytes; anything bigger is a corrupted length field, and swallowing it would desync the scanner from the
+// stream until timeout.
+constexpr uint16_t kUbxMaxRxPayloadLenBytes = 1024;
+
 }  // namespace
 
 void UbloxMAXM10::SendUbxFrame(uint8_t msg_class, uint8_t msg_id, const uint8_t* payload,
@@ -27,26 +42,20 @@ void UbloxMAXM10::SendUbxFrame(uint8_t msg_class, uint8_t msg_id, const uint8_t*
     comms_manager.iface_putc(SettingsManager::kGNSSUART, static_cast<char>(kUbxSync1));
     comms_manager.iface_putc(SettingsManager::kGNSSUART, static_cast<char>(kUbxSync2));
 
-    // 8-bit Fletcher checksum is computed over class, id, length, and payload.
-    uint8_t ck_a = 0;
-    uint8_t ck_b = 0;
-    auto checksum_byte = [&](uint8_t b) {
-        ck_a = static_cast<uint8_t>(ck_a + b);
-        ck_b = static_cast<uint8_t>(ck_b + ck_a);
-    };
+    UbxChecksum checksum;
 
     uint8_t header[4] = {msg_class, msg_id, static_cast<uint8_t>(payload_len & 0xFF),
                          static_cast<uint8_t>((payload_len >> 8) & 0xFF)};
     for (uint8_t i = 0; i < sizeof(header); i++) {
         comms_manager.iface_putc(SettingsManager::kGNSSUART, static_cast<char>(header[i]));
-        checksum_byte(header[i]);
+        checksum.Update(header[i]);
     }
     for (uint16_t i = 0; i < payload_len; i++) {
         comms_manager.iface_putc(SettingsManager::kGNSSUART, static_cast<char>(payload[i]));
-        checksum_byte(payload[i]);
+        checksum.Update(payload[i]);
     }
-    comms_manager.iface_putc(SettingsManager::kGNSSUART, static_cast<char>(ck_a));
-    comms_manager.iface_putc(SettingsManager::kGNSSUART, static_cast<char>(ck_b));
+    comms_manager.iface_putc(SettingsManager::kGNSSUART, static_cast<char>(checksum.a));
+    comms_manager.iface_putc(SettingsManager::kGNSSUART, static_cast<char>(checksum.b));
 }
 
 bool UbloxMAXM10::ScanForUbxMessage(uint8_t want_class, uint8_t want_id, uint32_t timeout_ms, uint8_t* out_payload,
@@ -58,6 +67,8 @@ bool UbloxMAXM10::ScanForUbxMessage(uint8_t want_class, uint8_t want_id, uint32_
     enum State : uint8_t { kSync1, kSync2, kClass, kId, kLen1, kLen2, kPayload, kCkA, kCkB } state = kSync1;
     uint8_t msg_class = 0, msg_id = 0;
     uint16_t payload_len = 0, payload_idx = 0;
+    UbxChecksum checksum;
+    uint8_t received_ck_a = 0;
 
     uint32_t start_ms = get_time_since_boot_ms();
     char c;
@@ -71,42 +82,54 @@ bool UbloxMAXM10::ScanForUbxMessage(uint8_t want_class, uint8_t want_id, uint32_
                 if (b == kUbxSync1) state = kSync2;
                 break;
             case kSync2:
+                checksum = UbxChecksum();
                 state = (b == kUbxSync2) ? kClass : kSync1;
                 break;
             case kClass:
                 msg_class = b;
+                checksum.Update(b);
                 state = kId;
                 break;
             case kId:
                 msg_id = b;
+                checksum.Update(b);
                 state = kLen1;
                 break;
             case kLen1:
                 payload_len = b;
+                checksum.Update(b);
                 state = kLen2;
                 break;
             case kLen2:
                 payload_len |= static_cast<uint16_t>(b) << 8;
+                checksum.Update(b);
                 payload_idx = 0;
-                state = (payload_len == 0) ? kCkA : kPayload;
+                if (payload_len > kUbxMaxRxPayloadLenBytes) {
+                    state = kSync1;  // Implausible length (corrupted frame); resync instead of swallowing the stream.
+                } else {
+                    state = (payload_len == 0) ? kCkA : kPayload;
+                }
                 break;
             case kPayload:
                 if (out_payload != nullptr && payload_idx < out_cap) out_payload[payload_idx] = b;
+                checksum.Update(b);
                 if (++payload_idx >= payload_len) state = kCkA;
                 break;
             case kCkA:
+                received_ck_a = b;
                 state = kCkB;
                 break;
             case kCkB:
-                // Frame complete. (Checksum bytes are consumed but not verified here; a corrupted
-                // frame simply won't match and we keep scanning until timeout.)
+                // Frame complete. Only accept it if the Fletcher checksum verifies, so corrupted frames (or
+                // coincidental byte sequences in the interleaved NMEA stream) can't be mistaken for real replies/ACKs.
                 // want_id == kUbxIdWildcard matches any id within want_class.
-                if (msg_class == want_class && (want_id == kUbxIdWildcard || msg_id == want_id)) {
+                if (received_ck_a == checksum.a && b == checksum.b && msg_class == want_class &&
+                    (want_id == kUbxIdWildcard || msg_id == want_id)) {
                     if (is_ack != nullptr) *is_ack = (msg_id == kUbxIdAckAck);
                     if (out_len != nullptr) *out_len = payload_len;
                     return true;
                 }
-                state = kSync1;  // Not the frame we're after; keep scanning.
+                state = kSync1;  // Bad checksum or not the frame we're after; keep scanning.
                 break;
         }
     }
