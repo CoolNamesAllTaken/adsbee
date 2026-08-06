@@ -1,6 +1,7 @@
 const METRIC_UNITS = {
-    'num_mode_s_aircraft': 'aircraft',
-    'num_uat_aircraft':    'aircraft',
+    'num_mode_s_aircraft':   'aircraft',
+    'num_uat_aircraft':      'aircraft',
+    'num_remote_id_aircraft': 'drones',
 };
 
 class ConsoleWebSocket {
@@ -760,8 +761,13 @@ class ADSBeeAT {
     async otaWriteFile(file) {
         const HEADER_SIZE_BYTES = 5 * 4;
         const APP_OFFSET_BYTES = 4 * 1024;
-        // Going larger than this can cause the heap to explode on the ESP32.
-        const WRITE_CHUNK_BYTES = 0x1000 * 3;
+        // Each chunk is received on the ESP32 as one WebSocket frame, which callocs a contiguous buffer of the chunk
+        // size. With Bluetooth Remote ID enabled the ESP32-S3's internal heap is tight and fragmented (largest free
+        // block can be ~10 KB even with ~25 KB free), so a large chunk fails to allocate and aborts the OTA. Keep this
+        // small AND a multiple of the 4096-Byte flash sector size (chunk offsets must stay sector-aligned for the
+        // retry-erase path below). One sector (4096) allocates reliably under fragmentation; it was previously 3 sectors
+        // (12288), which no longer fits.
+        const WRITE_CHUNK_BYTES = 0x1000;
         const MAX_ATTEMPTS_PER_CHUNK = 3;
 
         const partition = await this.otaGetFlashPartition();
@@ -1123,6 +1129,14 @@ class AircraftWebSocket {
 // ─── AircraftStore ────────────────────────────────────────────────────────────
 const kMaxTrailPoints = 500;
 
+// Open Drone ID (Broadcast Remote ID) enum labels, indexed by the raw value in the rid_id_type / rid_ua_type fields.
+const RID_ID_TYPE_STRINGS = ['None', 'Serial Number', 'CAA Registration', 'UTM (USS) Assigned', 'Specific Session'];
+const RID_UA_TYPE_STRINGS = [
+    'None', 'Aeroplane', 'Helicopter/Multirotor', 'Gyroplane', 'Hybrid Lift', 'Ornithopter', 'Glider', 'Kite',
+    'Free Balloon', 'Captive Balloon', 'Airship', 'Free Fall/Parachute', 'Rocket', 'Tethered Powered Aircraft',
+    'Ground Obstacle', 'Other'
+];
+
 class AircraftStore {
     constructor() {
         this.aircraft = new Map();  // hex → latest merged data
@@ -1220,8 +1234,21 @@ class RadarMap {
         if (this.map) setTimeout(() => this.map.invalidateSize(), 0);
     }
 
-    _makeIcon(color, track, isGround, isSelected) {
+    _makeIcon(color, track, isGround, isSelected, isDrone) {
         const ring = isSelected ? '<circle cx="16" cy="16" r="15" fill="none" stroke="white" stroke-width="2" opacity="0.7"/>' : '';
+        if (isDrone) {
+            // Remote ID drones get a distinct quadcopter marker (four rotors) in a fixed accent color so they stand out
+            // from ADS-B / UAT aircraft. Not rotated (Remote ID track is often unavailable or noisy at low speed).
+            const dfill = '#c026d3';  // magenta accent.
+            const rotor = (cx, cy) => `<circle cx="${cx}" cy="${cy}" r="4" fill="${dfill}" stroke="rgba(0,0,0,0.5)" stroke-width="1"/>`;
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">` +
+                ring +
+                `<line x1="9" y1="9" x2="23" y2="23" stroke="${dfill}" stroke-width="2"/>` +
+                `<line x1="23" y1="9" x2="9" y2="23" stroke="${dfill}" stroke-width="2"/>` +
+                rotor(9, 9) + rotor(23, 9) + rotor(9, 23) + rotor(23, 23) +
+                `</svg>`;
+            return L.divIcon({ html: svg, className: '', iconSize: [32, 32], iconAnchor: [16, 16] });
+        }
         const fill = isGround ? '#888888' : color;
         const rot  = (track != null) ? track : 0;
         const svg  = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">` +
@@ -1269,10 +1296,11 @@ class RadarMap {
         for (const ac of this.store.all()) {
             if (ac.lat == null || ac.lon == null) continue;
             live.add(ac.hex);
-            const color    = acAltColor(ac.alt_baro);
+            const isDrone  = ac.type === 'remote_id';
+            const color    = acAltColor(ac.alt_baro ?? ac.alt_geom);
             const isGround = !!ac.on_ground;
             const isSel    = ac.hex === this.selectedHex;
-            const icon     = this._makeIcon(color, ac.track, isGround, isSel);
+            const icon     = this._makeIcon(color, ac.track, isGround, isSel, isDrone);
 
             if (this.markers.has(ac.hex)) {
                 const m = this.markers.get(ac.hex);
@@ -1368,6 +1396,14 @@ class RadarMap {
             ['alert',        'Alert',         v => v ? 'Yes' : null],
             ['spi',          'SPI (Ident)',   v => v ? 'Yes' : null],
             ['emergency',    'Emergency',     v => v],
+            // Broadcast Remote ID (drone) fields.
+            ['rid_uas_id',      'UAS ID',        v => v.trim() || null],
+            ['rid_id_type',     'UAS ID type',   v => RID_ID_TYPE_STRINGS[v] || String(v)],
+            ['rid_ua_type',     'UA type',       v => RID_UA_TYPE_STRINGS[v] || String(v)],
+            ['rid_operator_id', 'Operator ID',   v => v.trim() || null],
+            ['rid_operator_lat','Operator lat',  v => v.toFixed(5)],
+            ['rid_operator_lon','Operator lon',  v => v.toFixed(5)],
+            ['rid_height',      'Height AGL/ATO', v => v.toLocaleString() + ' ft'],
         ];
 
         const rows = [];

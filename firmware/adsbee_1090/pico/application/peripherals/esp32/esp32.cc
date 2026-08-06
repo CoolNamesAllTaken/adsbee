@@ -1,6 +1,7 @@
 #include "esp32.hh"
 
 #include "adsbee.hh"  // Get access to the Sub-GHz radio for its status.
+#include "composite_array.hh"  // For pulling Remote ID packets forwarded up from the ESP32.
 #include "cpu_utils.hh"
 #include "hal.hh"
 
@@ -55,6 +56,7 @@ bool ESP32::Update() {
         num_queued_log_messages = device_status.num_queued_log_messages;
         queued_log_messages_packed_size_bytes = device_status.queued_log_messages_packed_size_bytes;
         num_queued_sc_command_requests = device_status.num_queued_sc_command_requests;
+        remote_id_status = device_status.remote_id_status;
     } else {
         CONSOLE_ERROR("ESP32::Update", "Unable to read ESP32 status.");
         return false;
@@ -106,6 +108,22 @@ bool ESP32::Update() {
             return false;
         }
         // Successfully read console message from ESP32.
+    }
+
+    // Pull any Broadcast Remote ID packets the ESP32 received over BLE/WiFi and enqueue them for the main loop to decode
+    // into the aircraft dictionary (which drives serial reporting). Mirrors the CC1312 UAT pull in CC1312::Update().
+    if (device_status.pending_raw_packets_len_bytes > sizeof(CompositeArray::RawPackets::Header)) {
+        uint8_t read_buf[CompositeArray::RawPackets::kMaxLenBytes] = {0};
+        if (!esp32.Read(ObjectDictionary::Address::kAddrCompositeArrayRawPackets, read_buf,
+                        device_status.pending_raw_packets_len_bytes)) {
+            CONSOLE_ERROR("ESP32::Update", "Unable to read Remote ID raw packet array from ESP32.");
+            return false;
+        }
+        if (!CompositeArray::UnpackRawPacketsBufferToQueues(read_buf, sizeof(read_buf), nullptr, nullptr, nullptr,
+                                                            &adsbee.raw_remote_id_packet_queue)) {
+            CONSOLE_ERROR("ESP32::Update", "Failed to unpack Remote ID packets from ESP32.");
+            return false;
+        }
     }
 
     // Send the RP2040's status to the ESP32.

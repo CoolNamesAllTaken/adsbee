@@ -11,6 +11,8 @@ class ADSBeeServer {
     static const uint16_t kMaxNumModeSPackets = 300;    // Depth of queue for incoming packets from RP2040.
     static const uint16_t kMaxNumUATADSBPackets = 20;   // Depth of queue for incoming UAT ADS-B packets from RP2040.
     static const uint16_t kMaxNumUATUplinkPackets = 2;  // Depth of queue for incoming UAT uplink packets from RP2040.
+    // (The Remote ID -> RP2040 out-queue lives in RemoteIDManager, allocated lazily only when Remote ID runs, so this
+    // build pays no internal SRAM for it when Remote ID is disabled. See RemoteIDManager::GetOutQueue().)
     static const uint32_t kAircraftDictionaryUpdateIntervalMs = 1000;
     static const uint32_t kRawPacketProcessingIntervalMs = 200;
     static const uint32_t kGDL90ReportingIntervalMs = 1000;
