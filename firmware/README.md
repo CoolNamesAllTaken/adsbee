@@ -1,5 +1,18 @@
 # ads-bee Firmware
 
+This directory hosts firmware for two products, which share the code in `firmware/common/` and
+`firmware/modules/`:
+
+- **`adsbee_1090/`** — ADSBee 1090 (RP2040 + ESP32-S3 + CC1312)
+- **`adsbee_1421/`** — ADSBee m1421 (CC1314R10 + LR2021) and its RP2040 flashing jig
+
+Build either through the dispatcher:
+
+```bash
+bash firmware/build.sh adsbee_1090 [target]
+bash firmware/build.sh adsbee_1421 [target]
+```
+
 ## Prerequisites
 
 ### Docker
@@ -32,20 +45,23 @@ The build system uses Docker Compose with three pre-built containers — no loca
 
 | Service | Image | Builds |
 |---------|-------|--------|
-| `pico-docker` | `coolnamesalltaken/pico-docker:latest` | RP2040 firmware, host tests |
+| `pico-docker` | `coolnamesalltaken/pico-docker:latest` | RP2040 firmware, host tests, 1421 programmer |
 | `esp-idf` | `espressif/idf:v5.5.2` | ESP32-S3 firmware |
-| `ti-lpf2` | `coolnamesalltaken/ti-lpf2:latest` | TI CC1312 firmware |
+| `ti-lpf2` | `coolnamesalltaken/ti-lpf2:latest` | TI CC1312 firmware, CC1314 (adsbee_1421) firmware |
 
-The compose file lives at `firmware/adsbee_1090/compose.yml`. The build script handles the required build order (ESP32 → CC1312 → RP2040) automatically.
+Each product has its own compose file (`firmware/adsbee_1090/compose.yml`,
+`firmware/adsbee_1421/compose.yml`). The build scripts handle the required build order
+(for adsbee_1090: ESP32 → CC1312 → RP2040) automatically.
 
 ---
 
-## Building Firmware
+## Building ADSBee 1090 Firmware
 
 Run from the repo root:
 
 ```bash
-bash firmware/adsbee_1090/build.sh [options] [target]
+bash firmware/build.sh adsbee_1090 [options] [target]
+# equivalent: bash firmware/adsbee_1090/build.sh [options] [target]
 ```
 
 ### Targets
@@ -85,6 +101,37 @@ bash firmware/adsbee_1090/build.sh test AircraftJSON  # run filtered tests
 | CC1312 | `firmware/adsbee_1090/ti/sub_ghz_radio/build/sub_ghz_radio.bin` |
 
 The `combined.uf2` embeds all three binaries. See [Developers_Guide.md](adsbee_1090/Developers_Guide.md) for flashing instructions.
+
+---
+
+## Building ADSBee 1421 Firmware
+
+Run from the repo root:
+
+```bash
+bash firmware/build.sh adsbee_1421 [options] [target]
+# equivalent: bash firmware/adsbee_1421/build.sh [options] [target]
+```
+
+### Targets
+
+| Target | Description |
+|--------|-------------|
+| `ti` (default) | CC1314R10 application |
+| `programmer` | RP2040-Zero flash/passthrough jig (requires `ti` built first — it bakes in the hex) |
+| `clean [target]` | Delete the target's build directory |
+
+The `-d` flag selects a Debug build, as for adsbee_1090.
+
+### Build Output
+
+| Target | Output |
+|--------|--------|
+| CC1314 (Release) | `firmware/adsbee_1421/ti/build/Release/adsbee_1421.hex` (+ `.elf`, `.map`, version-stamped copies) |
+| Programmer | `firmware/adsbee_1421/programmer/build/Release/adsbee_1421_programmer.uf2` |
+
+See [adsbee_1421/AGENTS.md](adsbee_1421/AGENTS.md) for flashing, debugging, and the SYNC
+low-power sleep contract.
 
 ---
 

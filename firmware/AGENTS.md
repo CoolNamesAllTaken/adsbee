@@ -1,5 +1,26 @@
 # ADSBee Firmware — Agent Guide
 
+## Products
+
+This repo hosts firmware for two products, sharing the code in `firmware/common/` and
+`firmware/modules/`:
+
+- **`adsbee_1090/`** — ADSBee 1090 (RP2040 + ESP32-S3 + CC1312). Documented in this file.
+- **`adsbee_1421/`** — ADSBee m1421 (CC1314R10 + LR2021), plus its RP2040 flashing jig. See
+  [`adsbee_1421/AGENTS.md`](adsbee_1421/AGENTS.md).
+
+Build either through the dispatcher at `firmware/build.sh`:
+
+```bash
+bash firmware/build.sh adsbee_1090 [args...]   # forwards to adsbee_1090/build.sh
+bash firmware/build.sh adsbee_1421 [args...]   # forwards to adsbee_1421/build.sh
+```
+
+Each product has its own firmware/settings versions; the version-management rules below apply
+**per product**, and a `firmware/common/` change requires a version bump in **both** products
+(enforced by `scripts/check_version_sync.sh`). CI builds a product only when its own files,
+`firmware/common/`, or `firmware/modules/` changed.
+
 ## Project Summary
 
 ADSBee 1090 is an ADS-B/UAT aviation transponder receiver with a 3-processor heterogeneous firmware:
@@ -90,7 +111,9 @@ firmware/
 
 ## Critical: Version Management
 
-Two version values control whether RP2040 reflashes the coprocessors on boot.
+Two version values control whether RP2040 reflashes the coprocessors on boot. (adsbee_1421 has
+its own independent pair under `adsbee_1421/ti/` — see
+[`adsbee_1421/AGENTS.md`](adsbee_1421/AGENTS.md); the rules below are the adsbee_1090 side.)
 
 ### Firmware version — `common/coprocessor/object_dictionary.cpp`
 ```cpp
@@ -106,14 +129,13 @@ static constexpr uint32_t kSettingsVersion = N;
 ```
 
 ### Rules
-1. **Any change to ESP32 or CC1312 code** → increment firmware version (RC for dev builds, patch for releases)
+1. **Any change to ESP32 or CC1312 code, or to shared `common/` code** → increment firmware version (RC for dev builds, patch for releases). A `common/` change also requires an adsbee_1421 version bump.
 2. **Any change to the `Settings` struct** → increment `kSettingsVersion` AND firmware version; commit both together
 3. If firmware version is unchanged, RP2040 skips reflashing the coprocessors — symptom: old behavior persists after flashing new `combined.uf2`
 
 ### Automated enforcement
-Rule 2 is checked automatically by `scripts/check_version_sync.sh`:
-- **CI** (`version_sync_check` job) fails a PR that bumps `kSettingsVersion` without bumping the firmware version. This is the hard gate.
-- **`build.sh`** runs the same check locally before every build.
+These rules are checked automatically by `scripts/check_version_sync.sh` (covers both products):
+- **`build.sh`** (both products') runs the check locally before every build.
 - **Local git hook** — catch it before you even commit. A native `pre-commit` hook (no external tooling) is installed by the dev setup script:
   ```
   bash firmware/scripts/setup_dev.sh
