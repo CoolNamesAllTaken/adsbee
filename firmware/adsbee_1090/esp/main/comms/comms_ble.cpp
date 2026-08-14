@@ -16,6 +16,8 @@
 
 #include "ble_host.hh"  // BleHostEnsureInitialized (shared with Remote ID).
 #include "comms.hh"     // Logging.
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "host/ble_att.h"  // ble_att_mtu.
 #include "host/ble_gap.h"
 #include "host/ble_hs.h"
@@ -61,6 +63,14 @@ uint8_t g_uplink_sequence = 0;
 bool g_services_registered = false;
 bool g_advertising_configured = false;
 bool g_started = false;
+bool g_advertising = false;
+
+// Diagnostics: early boot logs are lost before the RP2040 SPI console bridge comes up, so remember the last result
+// codes and report them periodically from a status task.
+int g_last_configure_rc = -1;
+int g_last_set_data_rc = -1;
+int g_last_adv_start_rc = -1;
+int g_host_init_err = -1;
 
 // Per-connection subscription state, indexed by characteristic.
 struct ClientConnection {
@@ -159,6 +169,7 @@ void StartAdvertising() {
 
         int8_t selected_tx_power = 0;
         int rc = ble_gap_ext_adv_configure(kAdvInstance, &params, &selected_tx_power, GapEventHandler, nullptr);
+        g_last_configure_rc = rc;
         if (rc != 0) {
             CONSOLE_ERROR("ble_gdl90", "ble_gap_ext_adv_configure(%u) failed, rc=%d.", kAdvInstance, rc);
             return;
@@ -187,6 +198,7 @@ void StartAdvertising() {
             return;
         }
         rc = ble_gap_ext_adv_set_data(kAdvInstance, om);  // Consumes the mbuf.
+        g_last_set_data_rc = rc;
         if (rc != 0) {
             CONSOLE_ERROR("ble_gdl90", "ble_gap_ext_adv_set_data failed, rc=%d.", rc);
             return;
@@ -195,8 +207,27 @@ void StartAdvertising() {
     }
 
     int rc = ble_gap_ext_adv_start(kAdvInstance, /*duration=*/0, /*max_events=*/0);
+    g_last_adv_start_rc = rc;
+    g_advertising = (rc == 0 || rc == BLE_HS_EALREADY);
     if (rc != 0 && rc != BLE_HS_EALREADY) {
         CONSOLE_ERROR("ble_gdl90", "ble_gap_ext_adv_start failed, rc=%d.", rc);
+    }
+}
+
+// Periodic status heartbeat so the state is observable once the RP2040 console bridge is up.
+void StatusTask(void* param) {
+    while (true) {
+        vTaskDelay(pdMS_TO_TICKS(30'000));
+        uint16_t num_connected = 0;
+        for (auto& conn : g_connections) {
+            if (conn.InUse()) num_connected++;
+        }
+        CONSOLE_INFO("ble_gdl90",
+                     "started=%d host_init_err=%d synced=%d svcs=%d adv_cfg=%d adv=%d rc_cfg=%d rc_data=%d "
+                     "rc_start=%d conns=%u subs=%d",
+                     (int)g_started, g_host_init_err, (int)ble_hs_synced(), (int)g_services_registered,
+                     (int)g_advertising_configured, (int)g_advertising, g_last_configure_rc, g_last_set_data_rc,
+                     g_last_adv_start_rc, num_connected, (int)HasSubscribers());
     }
 }
 
@@ -305,7 +336,10 @@ void OnHostSync() {
 
 bool Start() {
     if (g_started) return true;
-    if (!BleHostEnsureInitialized()) return false;
+    xTaskCreate(StatusTask, "ble_gdl90_status", 4096, nullptr, 1, nullptr);
+    bool host_ok = BleHostEnsureInitialized();
+    g_host_init_err = host_ok ? 0 : 1;
+    if (!host_ok) return false;
     g_started = true;
     // If the host already synced (Remote ID brought it up first), start advertising now; otherwise the shared sync
     // callback will call OnHostSync().
