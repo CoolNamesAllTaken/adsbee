@@ -345,17 +345,39 @@ void OnHostSync() {
     StartAdvertising();
 }
 
-bool Start() {
-    if (g_started) return true;
-    xTaskCreate(StatusTask, "ble_gdl90_status", 4096, nullptr, 1, nullptr);
+namespace {
+
+// Host bring-up is deferred out of the boot path: initializing NimBLE while WiFi and the SPI coprocessor link are
+// still coming up destabilizes the ESP32, and any failure logged that early is lost before the RP2040 console bridge
+// exists. Waiting until the system is settled costs nothing (a client connecting earlier would not have data yet
+// anyway) and makes every step observable.
+constexpr uint32_t kStartDelayMs = 45'000;
+
+void StartTask(void* param) {
+    vTaskDelay(pdMS_TO_TICKS(kStartDelayMs));
+    CONSOLE_WARNING("ble_gdl90", "Initializing NimBLE host.");
     bool host_ok = BleHostEnsureInitialized();
     g_host_init_err = host_ok ? 0 : 1;
-    if (!host_ok) return false;
-    g_started = true;
-    // If the host already synced (Remote ID brought it up first), start advertising now; otherwise the shared sync
-    // callback will call OnHostSync().
-    if (ble_hs_synced()) StartAdvertising();
-    CONSOLE_INFO("ble_gdl90", "BLE ADS-B Receiver Service started.");
+    if (host_ok) {
+        g_started = true;
+        CONSOLE_WARNING("ble_gdl90", "NimBLE host up; waiting for sync to advertise.");
+        // If the host already synced (Remote ID brought it up first), start advertising now; otherwise the shared
+        // sync callback (or the status task retry) will.
+        if (ble_hs_synced()) StartAdvertising();
+    } else {
+        CONSOLE_ERROR("ble_gdl90", "NimBLE host init failed.");
+    }
+    vTaskDelete(nullptr);
+}
+
+}  // namespace
+
+bool Start() {
+    static bool launched = false;
+    if (launched) return true;
+    launched = true;
+    xTaskCreate(StatusTask, "ble_gdl90_status", 4096, nullptr, 1, nullptr);
+    xTaskCreate(StartTask, "ble_gdl90_start", 4096, nullptr, 1, nullptr);
     return true;
 }
 
