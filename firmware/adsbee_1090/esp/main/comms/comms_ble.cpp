@@ -16,6 +16,7 @@
 
 #include "ble_host.hh"  // BleHostEnsureInitialized (shared with Remote ID).
 #include "comms.hh"     // Logging.
+#include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "host/ble_att.h"  // ble_att_mtu.
@@ -235,10 +236,13 @@ void StatusTask(void* param) {
         }
         CONSOLE_WARNING("ble_gdl90",
                         "started=%d host_init_err=%d synced=%d svcs=%d adv_cfg=%d adv=%d rc_cfg=%d rc_data=%d "
-                        "rc_start=%d conns=%u subs=%d",
+                        "rc_start=%d conns=%u subs=%d heap_int=%u largest=%u dma=%u",
                         (int)g_started, g_host_init_err, (int)ble_hs_synced(), (int)g_services_registered,
                         (int)g_advertising_configured, (int)g_advertising, g_last_configure_rc, g_last_set_data_rc,
-                        g_last_adv_start_rc, num_connected, (int)HasSubscribers());
+                        g_last_adv_start_rc, num_connected, (int)HasSubscribers(),
+                        (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                        (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                        (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA));
     }
 }
 
@@ -355,17 +359,23 @@ constexpr uint32_t kStartDelayMs = 45'000;
 
 void StartTask(void* param) {
     vTaskDelay(pdMS_TO_TICKS(kStartDelayMs));
-    CONSOLE_WARNING("ble_gdl90", "Initializing NimBLE host.");
-    bool host_ok = BleHostEnsureInitialized();
-    g_host_init_err = host_ok ? 0 : 1;
-    if (host_ok) {
-        g_started = true;
-        CONSOLE_WARNING("ble_gdl90", "NimBLE host up; waiting for sync to advertise.");
-        // If the host already synced (Remote ID brought it up first), start advertising now; otherwise the shared
-        // sync callback (or the status task retry) will.
-        if (ble_hs_synced()) StartAdvertising();
-    } else {
+    // Controller init needs a contiguous chunk of internal RAM; retry in case pressure eases (e.g. WiFi settles).
+    for (int attempt = 0; attempt < 5; attempt++) {
+        CONSOLE_WARNING("ble_gdl90", "Initializing NimBLE host (attempt %d), internal heap free=%u largest=%u.",
+                        attempt + 1, (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                        (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+        bool host_ok = BleHostEnsureInitialized();
+        g_host_init_err = host_ok ? 0 : 1;
+        if (host_ok) {
+            g_started = true;
+            CONSOLE_WARNING("ble_gdl90", "NimBLE host up; waiting for sync to advertise.");
+            // If the host already synced (Remote ID brought it up first), start advertising now; otherwise the
+            // shared sync callback (or the status task retry) will.
+            if (ble_hs_synced()) StartAdvertising();
+            break;
+        }
         CONSOLE_ERROR("ble_gdl90", "NimBLE host init failed.");
+        vTaskDelay(pdMS_TO_TICKS(30'000));
     }
     vTaskDelete(nullptr);
 }
