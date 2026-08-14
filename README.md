@@ -4,11 +4,11 @@ ADSBee 1090 is an open-source multi band radio receiver and decoder for ADS-B pa
 
 ![ADSBee 1090 Logo](images/adsbee_logo.png)
 
-## This Fork: GDL90 over Bluetooth LE (`ble-gdl90` branch)
+## GDL90 over Bluetooth LE
 
-This fork adds a **BLE ADS-B Receiver Service** to the ESP32-S3 firmware, so
-EFBs connect over Bluetooth LE instead of WiFi. Proven on ADSBee 1090U
-hardware end to end (AvareX on Android, Python on macOS, and Chrome via Web
+The ESP32-S3 firmware exposes a **BLE ADS-B Receiver Service**, so EFBs can
+connect over Bluetooth LE instead of WiFi. Proven on ADSBee 1090U hardware
+end to end (AvareX on Android, Python on macOS, and Chrome via Web
 Bluetooth as clients).
 
 **Why:** a tablet joined to the receiver's WiFi loses its internet
@@ -37,13 +37,13 @@ which matters now that [CIFIB](https://cifib.ca) is building independent
   Bluetooth app (Chrome/Edge) with a live decoded traffic table, status,
   and the AT console — the functional equivalent of the embedded web UI,
   usable when the receiver's WiFi is off.
-- **Client implementation** in the
+- **Reference client implementation** in the
   [perryc/avarex fork](https://github.com/perryc/avarex/tree/ble-adsb)
   (`ble-adsb` branch), including multi-receiver merge (e.g. ADSBee for
   1090ES plus a [SoftRF](https://github.com/lyusupov/SoftRF/wiki/Card-Edition-MkIII)
   unit for FANET) and a receiver simulator for development without hardware.
 
-**Constraints and findings** (relevant upstream even without this feature):
+**Constraints and findings:**
 
 - On the 1090U's ESP32-S3 (no PSRAM), **BLE mode and WiFi mode are mutually
   exclusive** — the BT controller needs ~55 KB of internal RAM that WiFi
@@ -69,12 +69,12 @@ which matters now that [CIFIB](https://cifib.ca) is building independent
   is future work needing upstream settings-struct coordination.
 - The stock sdkconfig builds the BLE controller **scan-only**:
   `BT_CTRL_BLE_ADV`, `BT_CTRL_BLE_MASTER` (the connection engine), and
-  `BT_CTRL_BLE_SECURITY_ENABLE` are disabled. Advertising of any kind —
-  including the existing **Broadcast Remote ID transmit feature — cannot
-  work on the stock config**; this fork enables them.
+  `BT_CTRL_BLE_SECURITY_ENABLE` were disabled. Advertising of any kind —
+  including the existing **Broadcast Remote ID transmit feature — could not
+  work on that config**; they are now enabled.
 - NimBLE host bring-up during early boot destabilizes the RP2040↔ESP32 SPI
-  link; this fork defers it ~45 s and adds a periodic BLE status heartbeat
-  to the console, since boot-time logs predate the console bridge.
+  link; it is deferred ~45 s after boot, with a periodic BLE status
+  heartbeat on the console (boot-time logs predate the console bridge).
 
 ## Features
 * Decoding of 1090MHz transponder signals (ADS-B and Mode S).
