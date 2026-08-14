@@ -30,7 +30,7 @@
 namespace ble_gdl90 {
 namespace {
 
-constexpr uint8_t kAdvInstance = 2;  // Instances 0/1 belong to Remote ID (remote_id_ble.cpp).
+constexpr uint8_t kAdvInstance = 0;  // TEMP diagnostic: instance 0 (Remote ID disabled on test unit); 2 fails HCI Command Disallowed.
 constexpr uint32_t kAdvIntervalMs = 200;
 constexpr uint32_t kAdvIntervalUnits = (kAdvIntervalMs * 1000) / 625;  // NimBLE units of 0.625 ms.
 constexpr char kDeviceName[] = "ADSBee";
