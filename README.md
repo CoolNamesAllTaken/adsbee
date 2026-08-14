@@ -47,8 +47,26 @@ which matters now that [CIFIB](https://cifib.ca) is building independent
 
 - On the 1090U's ESP32-S3 (no PSRAM), **BLE mode and WiFi mode are mutually
   exclusive** — the BT controller needs ~55 KB of internal RAM that WiFi
-  AP+STA otherwise consume. Toggle with `AT+WIFI_AP` / `AT+WIFI_STA` (over
-  USB or the BLE console). A PSRAM-equipped module would lift this.
+  AP+STA otherwise consume. There is no `AT+BLE` command: BLE starts
+  automatically ~45 s after boot whenever the RAM is available, so the mode
+  switch is done by toggling WiFi (over USB serial, or the BLE console when
+  already in BLE mode):
+
+  ```
+  # Enter BLE mode:
+  AT+WIFI_AP=0
+  AT+WIFI_STA=0
+  AT+SETTINGS=SAVE
+  # then reboot
+
+  # Return to WiFi mode:
+  AT+WIFI_AP=1
+  AT+SETTINGS=SAVE
+  # then reboot (BLE yields; the WiFi stack claims the RAM first)
+  ```
+
+  A PSRAM-equipped module would lift this; a first-class BLE enable setting
+  is future work needing upstream settings-struct coordination.
 - The stock sdkconfig builds the BLE controller **scan-only**:
   `BT_CTRL_BLE_ADV`, `BT_CTRL_BLE_MASTER` (the connection engine), and
   `BT_CTRL_BLE_SECURITY_ENABLE` are disabled. Advertising of any kind —
