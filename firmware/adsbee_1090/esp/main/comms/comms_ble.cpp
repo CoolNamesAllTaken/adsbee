@@ -153,6 +153,12 @@ int GapEventHandler(struct ble_gap_event* event, void* arg);
 // Configures and starts the connectable advertising instance carrying the service UUID and name. The instance stops
 // whenever a central connects; call again to keep accepting additional clients.
 void StartAdvertising() {
+    // Make sure the controller has a usable address before advertising (same prerequisite as the NimBLE examples).
+    int addr_rc = ble_hs_util_ensure_addr(0);
+    if (addr_rc != 0) {
+        g_last_configure_rc = addr_rc;
+        return;
+    }
     if (!g_advertising_configured) {
         struct ble_gap_ext_adv_params params;
         memset(&params, 0, sizeof(params));
@@ -214,20 +220,25 @@ void StartAdvertising() {
     }
 }
 
-// Periodic status heartbeat so the state is observable once the RP2040 console bridge is up.
+// Periodic status heartbeat so the state is observable once the RP2040 console bridge is up (one-shot boot-time logs
+// are lost before the SPI link exists, and the default console level filters INFO). Also self-heals: boot-time
+// advertising failures (host not yet synced, controller address not ready) are retried here.
 void StatusTask(void* param) {
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(30'000));
+        if (g_started && ble_hs_synced() && !g_advertising) {
+            StartAdvertising();  // Retry: boot-time attempt may have preceded host sync.
+        }
         uint16_t num_connected = 0;
         for (auto& conn : g_connections) {
             if (conn.InUse()) num_connected++;
         }
-        CONSOLE_INFO("ble_gdl90",
-                     "started=%d host_init_err=%d synced=%d svcs=%d adv_cfg=%d adv=%d rc_cfg=%d rc_data=%d "
-                     "rc_start=%d conns=%u subs=%d",
-                     (int)g_started, g_host_init_err, (int)ble_hs_synced(), (int)g_services_registered,
-                     (int)g_advertising_configured, (int)g_advertising, g_last_configure_rc, g_last_set_data_rc,
-                     g_last_adv_start_rc, num_connected, (int)HasSubscribers());
+        CONSOLE_WARNING("ble_gdl90",
+                        "started=%d host_init_err=%d synced=%d svcs=%d adv_cfg=%d adv=%d rc_cfg=%d rc_data=%d "
+                        "rc_start=%d conns=%u subs=%d",
+                        (int)g_started, g_host_init_err, (int)ble_hs_synced(), (int)g_services_registered,
+                        (int)g_advertising_configured, (int)g_advertising, g_last_configure_rc, g_last_set_data_rc,
+                        g_last_adv_start_rc, num_connected, (int)HasSubscribers());
     }
 }
 
