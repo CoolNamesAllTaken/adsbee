@@ -151,8 +151,12 @@ const struct ble_gatt_svc_def kServices[] = {
 
 int GapEventHandler(struct ble_gap_event* event, void* arg);
 
+uint8_t g_adv_instance = kAdvInstance;  // Actual instance in use once configured (probing may pick another).
+
 // Configures and starts the connectable advertising instance carrying the service UUID and name. The instance stops
-// whenever a central connects; call again to keep accepting additional clients.
+// whenever a central connects; call again to keep accepting additional clients. Combinations of advertising style
+// (legacy ADV_IND vs extended-PDU connectable) and instance are probed because controller support varies with build
+// features; the first successful configuration wins.
 void StartAdvertising() {
     // Make sure the controller has a usable address before advertising (same prerequisite as the NimBLE examples).
     int addr_rc = ble_hs_util_ensure_addr(0);
@@ -164,22 +168,30 @@ void StartAdvertising() {
         struct ble_gap_ext_adv_params params;
         memset(&params, 0, sizeof(params));
         params.connectable = 1;
-        params.scannable = 1;  // Legacy connectable advertisements must be scannable (ADV_IND).
-        params.legacy_pdu = 1;
         params.itvl_min = kAdvIntervalUnits;
         params.itvl_max = kAdvIntervalUnits;
         params.own_addr_type = BLE_OWN_ADDR_PUBLIC;
         params.primary_phy = BLE_HCI_LE_PHY_1M;
         params.secondary_phy = BLE_HCI_LE_PHY_1M;
-        params.sid = 0;         // SID only applies to extended PDUs; this controller rejects nonzero SID on legacy.
-        params.tx_power = 9;    // dBm; the 127 "no preference" sentinel is rejected by this controller on legacy PDUs.
+        params.sid = 0;
+        params.tx_power = 9;  // dBm.
 
-        int8_t selected_tx_power = 0;
-        int rc = ble_gap_ext_adv_configure(kAdvInstance, &params, &selected_tx_power, GapEventHandler, nullptr);
+        int rc = -1;
+        for (int legacy = 1; legacy >= 0 && rc != 0; legacy--) {
+            for (int instance = kAdvInstance; instance >= 0 && rc != 0; instance--) {
+                params.legacy_pdu = legacy;
+                params.scannable = legacy;  // ADV_IND must be scannable; extended connectable must not be.
+                int8_t selected_tx_power = 0;
+                rc = ble_gap_ext_adv_configure(instance, &params, &selected_tx_power, GapEventHandler, nullptr);
+                CONSOLE_WARNING("ble_gdl90", "ext_adv_configure(instance=%d, legacy=%d) rc=%d.", instance, legacy, rc);
+                if (rc == 0) {
+                    g_adv_instance = instance;
+                }
+            }
+        }
         g_last_configure_rc = rc;
         if (rc != 0) {
-            CONSOLE_ERROR("ble_gdl90", "ble_gap_ext_adv_configure(%u) failed, rc=%d.", kAdvInstance, rc);
-            return;
+            return;  // Nothing configured; the status task retries periodically.
         }
 
         // AD payload: flags + 128-bit service UUID + shortened name. 3 + 18 + 2 + name <= 31 bytes.
@@ -204,7 +216,7 @@ void StartAdvertising() {
             CONSOLE_ERROR("ble_gdl90", "Failed to allocate advertising data mbuf.");
             return;
         }
-        rc = ble_gap_ext_adv_set_data(kAdvInstance, om);  // Consumes the mbuf.
+        rc = ble_gap_ext_adv_set_data(g_adv_instance, om);  // Consumes the mbuf.
         g_last_set_data_rc = rc;
         if (rc != 0) {
             CONSOLE_ERROR("ble_gdl90", "ble_gap_ext_adv_set_data failed, rc=%d.", rc);
@@ -213,7 +225,7 @@ void StartAdvertising() {
         g_advertising_configured = true;
     }
 
-    int rc = ble_gap_ext_adv_start(kAdvInstance, /*duration=*/0, /*max_events=*/0);
+    int rc = ble_gap_ext_adv_start(g_adv_instance, /*duration=*/0, /*max_events=*/0);
     g_last_adv_start_rc = rc;
     g_advertising = (rc == 0 || rc == BLE_HS_EALREADY);
     if (rc != 0 && rc != BLE_HS_EALREADY) {
