@@ -321,6 +321,29 @@ bool ADSBeeServer::ReportGDL90() {
     if (ble_enabled) ble_gdl90::SendGDL90Message(message.data, message.len);
     message.len = 0;
 
+    if (ble_enabled) {
+        // Vendor status message (GDL90 ID 0x65, subtype 0x01): per-band frame counts for this reporting interval,
+        // little-endian u32s. Bands are indistinguishable in standard traffic reports and merged in the heartbeat
+        // count, so BLE clients (e.g. software/ble_panel) accumulate these to show 1090 vs 978 vs FIS-B separately.
+        // Clients that don't understand ID 0x65 discard it harmlessly.
+        uint8_t vendor_message[14];
+        vendor_message[0] = 0x65;
+        vendor_message[1] = 0x01;
+        uint32_t frames_1090 = aircraft_dictionary.metrics.valid_squitter_frames +
+                               aircraft_dictionary.metrics.valid_extended_squitter_frames;
+        uint32_t frames_978_adsb = aircraft_dictionary.metrics.valid_uat_adsb_frames;
+        uint32_t frames_978_uplink = aircraft_dictionary.metrics.valid_uat_uplink_frames;
+        for (int i = 0; i < 4; i++) {
+            vendor_message[2 + i] = (frames_1090 >> (8 * i)) & 0xFF;
+            vendor_message[6 + i] = (frames_978_adsb >> (8 * i)) & 0xFF;
+            vendor_message[10 + i] = (frames_978_uplink >> (8 * i)) & 0xFF;
+        }
+        message.len = gdl90.WriteGDL90Message(message.data, CommsManager::NetworkMessage::kMaxLenBytes,
+                                              vendor_message, sizeof(vendor_message));
+        ble_gdl90::SendGDL90Message(message.data, message.len);
+        message.len = 0;
+    }
+
     // Ownship Report
     GDL90Reporter::GDL90TargetReportData ownship_data = {};
     memcpy(ownship_data.callsign, "ADSBEE  ", sizeof(ownship_data.callsign) - 1);

@@ -386,6 +386,7 @@ bool ClientConnection::* SubscriptionForMessageID(uint8_t message_id) {
             return &ClientConnection::ownship_subscribed;
         case 0x00:  // Heartbeat.
         case 0x02:  // Initialization.
+        case 0x65:  // Vendor status (per-band metrics).
             return &ClientConnection::status_subscribed;
         default:
             return nullptr;  // UAT uplink (0x07) etc: too large for a notification, WiFi only.
