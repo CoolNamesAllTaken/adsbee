@@ -171,8 +171,8 @@ void StartAdvertising() {
         params.own_addr_type = BLE_OWN_ADDR_PUBLIC;
         params.primary_phy = BLE_HCI_LE_PHY_1M;
         params.secondary_phy = BLE_HCI_LE_PHY_1M;
-        params.sid = kAdvInstance;
-        params.tx_power = 127;  // Let the controller pick its maximum.
+        params.sid = 0;         // SID only applies to extended PDUs; this controller rejects nonzero SID on legacy.
+        params.tx_power = 9;    // dBm; the 127 "no preference" sentinel is rejected by this controller on legacy PDUs.
 
         int8_t selected_tx_power = 0;
         int rc = ble_gap_ext_adv_configure(kAdvInstance, &params, &selected_tx_power, GapEventHandler, nullptr);
