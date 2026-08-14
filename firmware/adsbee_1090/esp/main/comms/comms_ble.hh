@@ -43,4 +43,8 @@ bool SendGDL90Message(const uint8_t* buf, uint16_t len_bytes);
 // True if any connected client is subscribed to at least one characteristic (callers can skip building messages).
 bool HasSubscribers();
 
+// Notifies console output to clients subscribed to the console (NUS) TX characteristic, chunked to each link's MTU.
+// The console service accepts AT commands via NUS RX writes; any generic BLE serial terminal works.
+bool SendConsole(const char* buf, uint16_t len_bytes);
+
 }  // namespace ble_gdl90

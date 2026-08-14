@@ -80,6 +80,7 @@ struct ClientConnection {
     bool ownship_subscribed = false;
     bool status_subscribed = false;
     bool uplink_subscribed = false;
+    bool console_subscribed = false;
 
     bool InUse() const { return conn_handle != BLE_HS_CONN_HANDLE_NONE; }
     void Clear() { *this = ClientConnection(); }
@@ -93,9 +94,50 @@ ClientConnection* FindConnection(uint16_t conn_handle) {
     return nullptr;
 }
 
+// Nordic UART Service exposed as the AT command console: RX writes feed the same console queue as the WiFi websocket
+// console (the RP2040's AT interpreter consumes it over SPI), TX notifies carry console output. Using the de-facto
+// standard NUS UUIDs means any generic BLE serial terminal app is an ADSBee console with no custom software.
+const ble_uuid128_t kConsoleServiceUUID =
+    BLE_UUID128_INIT(0x9E, 0xCA, 0xDC, 0x24, 0x0E, 0xE5, 0xA9, 0xE0, 0x93, 0xF3, 0xA3, 0xB5, 0x01, 0x00, 0x40, 0x6E);
+const ble_uuid128_t kConsoleRxUUID =  // Client -> console (write).
+    BLE_UUID128_INIT(0x9E, 0xCA, 0xDC, 0x24, 0x0E, 0xE5, 0xA9, 0xE0, 0x93, 0xF3, 0xA3, 0xB5, 0x02, 0x00, 0x40, 0x6E);
+const ble_uuid128_t kConsoleTxUUID =  // Console -> client (notify).
+    BLE_UUID128_INIT(0x9E, 0xCA, 0xDC, 0x24, 0x0E, 0xE5, 0xA9, 0xE0, 0x93, 0xF3, 0xA3, 0xB5, 0x03, 0x00, 0x40, 0x6E);
+
+uint16_t g_console_tx_val_handle = 0;
+uint16_t g_console_rx_val_handle = 0;
+
+// Feeds console input characters to the RP2040's AT interpreter via the shared network console queue - the same path
+// the WiFi websocket console uses.
+int HandleConsoleWrite(struct os_mbuf* om) {
+    uint16_t len = OS_MBUF_PKTLEN(om);
+    char buf[256];
+    if (len > sizeof(buf)) return BLE_ATT_ERR_INSUFFICIENT_RES;
+    if (os_mbuf_copydata(om, 0, len, buf) != 0) return BLE_ATT_ERR_UNLIKELY;
+
+    xSemaphoreTake(object_dictionary.network_console_rx_queue_mutex, portMAX_DELAY);
+    if (object_dictionary.network_console_rx_queue.MaxNumElements() -
+            object_dictionary.network_console_rx_queue.Length() <
+        len) {
+        xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
+        CONSOLE_ERROR("ble_gdl90", "Console rx queue full, dropping %u byte BLE console write.", len);
+        return 0;  // Accept the write; the console stream is lossy under pressure just like the websocket path.
+    }
+    for (uint16_t i = 0; i < len; i++) {
+        if (!object_dictionary.network_console_rx_queue.Enqueue(buf[i])) {
+            break;
+        }
+    }
+    xSemaphoreGive(object_dictionary.network_console_rx_queue_mutex);
+    return 0;
+}
+
 int GattAccessCallback(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_access_ctxt* ctxt, void* arg) {
     switch (ctxt->op) {
         case BLE_GATT_ACCESS_OP_WRITE_CHR: {
+            if (attr_handle == g_console_rx_val_handle) {
+                return HandleConsoleWrite(ctxt->om);
+            }
             // Control characteristic: reserved for configuration commands; accept and log for now.
             uint16_t len = OS_MBUF_PKTLEN(ctxt->om);
             CONSOLE_INFO("ble_gdl90", "Control write received (%u bytes).", len);
@@ -106,6 +148,22 @@ int GattAccessCallback(uint16_t conn_handle, uint16_t attr_handle, struct ble_ga
             return BLE_ATT_ERR_READ_NOT_PERMITTED;
     }
 }
+
+const struct ble_gatt_chr_def kConsoleCharacteristics[] = {
+    {
+        .uuid = &kConsoleRxUUID.u,
+        .access_cb = GattAccessCallback,
+        .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP,
+        .val_handle = &g_console_rx_val_handle,
+    },
+    {
+        .uuid = &kConsoleTxUUID.u,
+        .access_cb = GattAccessCallback,
+        .flags = BLE_GATT_CHR_F_NOTIFY,
+        .val_handle = &g_console_tx_val_handle,
+    },
+    {0},  // Terminator.
+};
 
 const struct ble_gatt_chr_def kCharacteristics[] = {
     {
@@ -145,6 +203,11 @@ const struct ble_gatt_svc_def kServices[] = {
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
         .uuid = &kServiceUUID.u,
         .characteristics = kCharacteristics,
+    },
+    {
+        .type = BLE_GATT_SVC_TYPE_PRIMARY,
+        .uuid = &kConsoleServiceUUID.u,
+        .characteristics = kConsoleCharacteristics,
     },
     {0},  // Terminator.
 };
@@ -301,6 +364,8 @@ int GapEventHandler(struct ble_gap_event* event, void* arg) {
                 conn->status_subscribed = event->subscribe.cur_notify;
             } else if (event->subscribe.attr_handle == g_uplink_val_handle) {
                 conn->uplink_subscribed = event->subscribe.cur_notify;
+            } else if (event->subscribe.attr_handle == g_console_tx_val_handle) {
+                conn->console_subscribed = event->subscribe.cur_notify;
             }
             return 0;
         }
@@ -476,6 +541,23 @@ bool SendGDL90Message(const uint8_t* buf, uint16_t len_bytes) {
     return sent;
 }
 
+bool SendConsole(const char* buf, uint16_t len_bytes) {
+    bool sent = false;
+    for (auto& conn : g_connections) {
+        if (!conn.InUse() || !conn.console_subscribed) continue;
+        uint16_t mtu = ble_att_mtu(conn.conn_handle);
+        uint16_t max_chunk_bytes = (mtu > 3) ? (mtu - 3) : 20;
+        for (uint16_t offset = 0; offset < len_bytes; offset += max_chunk_bytes) {
+            uint16_t chunk_bytes = (len_bytes - offset) < max_chunk_bytes ? (len_bytes - offset) : max_chunk_bytes;
+            struct os_mbuf* om = ble_hs_mbuf_from_flat(buf + offset, chunk_bytes);
+            if (om == nullptr) return sent;
+            if (ble_gatts_notify_custom(conn.conn_handle, g_console_tx_val_handle, om) != 0) break;
+            sent = true;
+        }
+    }
+    return sent;
+}
+
 }  // namespace ble_gdl90
 
 #else  // Bluetooth peripheral role not compiled in: no-op stubs.
@@ -486,6 +568,7 @@ void OnHostSync() {}
 bool Start() { return false; }
 bool SendGDL90Message(const uint8_t*, uint16_t) { return false; }
 bool HasSubscribers() { return false; }
+bool SendConsole(const char*, uint16_t) { return false; }
 }  // namespace ble_gdl90
 
 #endif  // CONFIG_BT_ENABLED && CONFIG_BT_NIMBLE_ENABLED && CONFIG_BT_NIMBLE_ROLE_PERIPHERAL
