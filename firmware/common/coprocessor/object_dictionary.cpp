@@ -3,6 +3,7 @@
 #include "hal.hh"  // for timestamping
 #ifdef ON_ESP32
 #include "adsbee_server.hh"
+#include "comms_ble.hh"
 #include "cpu_utils.hh"
 #include "device_info.hh"
 #include "esp_system.h"
@@ -22,7 +23,7 @@ const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
 const uint8_t ObjectDictionary::kFirmwareVersionMinor = 10;
 const uint8_t ObjectDictionary::kFirmwareVersionPatch = 0;
 // NOTE: Indicate a final release with RC = 0.
-const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 5;
+const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 19;
 
 const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24) | (kFirmwareVersionMinor << 16) |
                                                     (kFirmwareVersionPatch << 8) | kFirmwareVersionReleaseCandidate;
@@ -117,6 +118,7 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
             // Don't print here to avoid print of print doom loop explosion.
             // CONSOLE_INFO("ObjectDictionary::SetBytes", "Forwarding %d byte message to network console.", buf_len);
             adsbee_server.network_console.BroadcastMessage(reinterpret_cast<const char*>(buf), buf_len);
+            ble_gdl90::SendConsole(reinterpret_cast<const char*>(buf), buf_len);  // BLE console clients too.
             break;
         }
 #ifdef CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH

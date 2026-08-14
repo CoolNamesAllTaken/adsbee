@@ -4,6 +4,78 @@ ADSBee 1090 is an open-source multi band radio receiver and decoder for ADS-B pa
 
 ![ADSBee 1090 Logo](images/adsbee_logo.png)
 
+## GDL90 over Bluetooth LE
+
+The ESP32-S3 firmware exposes a **BLE ADS-B Receiver Service**, so EFBs can
+connect over Bluetooth LE instead of WiFi. Proven on ADSBee 1090U hardware
+end to end (AvareX on Android, Python on macOS, and Chrome via Web
+Bluetooth as clients).
+
+**Why:** a tablet joined to the receiver's WiFi loses its internet
+connection. Over BLE, traffic streams in while the tablet stays on a phone
+hotspot for weather and NOTAMs — and BLE works on iOS/iPadOS, which
+Bluetooth SPP never did. A traffic-first GDL90 stream is only a few kB/s,
+comfortably inside BLE bandwidth; FIS-B uplink is handled too (see below),
+which matters now that [CIFIB](https://cifib.ca) is building independent
+978 MHz FIS-B ground stations in Canada.
+
+**What's here:**
+
+- **ADS-B Receiver GATT service** (`0BEE0001-1090-46F0-A9AC-52D6BE4C29CC`):
+  typed notify characteristics for Traffic, Ownship, and Status, each
+  notification exactly one framed GDL90 message — atomic, no byte-stream
+  reassembly, payloads any GDL90 decoder already understands. An Uplink
+  characteristic carries FIS-B frames (too big for one notification) with a
+  1-byte first/last/sequence fragmentation header. Up to 3 concurrent
+  clients, preferred MTU 517. Full spec:
+  [BLE_ADSB_SERVICE.md](https://github.com/perryc/avarex/blob/canadian-data/docs/BLE_ADSB_SERVICE.md).
+- **AT command console over BLE**: the standard Nordic UART Service is wired
+  to the same console queue as the WiFi websocket console, so any generic
+  BLE serial terminal app can configure the device wirelessly — including
+  switching WiFi/BLE modes without a USB cable.
+- **[BLE Panel](software/ble_panel/index.html)**: a single-file Web
+  Bluetooth app (Chrome/Edge) with a live decoded traffic table, status,
+  and the AT console — the functional equivalent of the embedded web UI,
+  usable when the receiver's WiFi is off.
+- **Reference client implementation** in the
+  [perryc/avarex fork](https://github.com/perryc/avarex/tree/ble-adsb)
+  (`ble-adsb` branch), including multi-receiver merge (e.g. ADSBee for
+  1090ES plus a [SoftRF](https://github.com/lyusupov/SoftRF/wiki/Card-Edition-MkIII)
+  unit for FANET) and a receiver simulator for development without hardware.
+
+**Constraints and findings:**
+
+- On the 1090U's ESP32-S3 (no PSRAM), **BLE mode and WiFi mode are mutually
+  exclusive** — the BT controller needs ~55 KB of internal RAM that WiFi
+  AP+STA otherwise consume. There is no `AT+BLE` command: BLE starts
+  automatically ~45 s after boot whenever the RAM is available, so the mode
+  switch is done by toggling WiFi (over USB serial, or the BLE console when
+  already in BLE mode):
+
+  ```
+  # Enter BLE mode:
+  AT+WIFI_AP=0
+  AT+WIFI_STA=0
+  AT+SETTINGS=SAVE
+  # then reboot
+
+  # Return to WiFi mode:
+  AT+WIFI_AP=1
+  AT+SETTINGS=SAVE
+  # then reboot (BLE yields; the WiFi stack claims the RAM first)
+  ```
+
+  A PSRAM-equipped module would lift this; a first-class BLE enable setting
+  is future work needing upstream settings-struct coordination.
+- The stock sdkconfig builds the BLE controller **scan-only**:
+  `BT_CTRL_BLE_ADV`, `BT_CTRL_BLE_MASTER` (the connection engine), and
+  `BT_CTRL_BLE_SECURITY_ENABLE` were disabled. Advertising of any kind —
+  including the existing **Broadcast Remote ID transmit feature — could not
+  work on that config**; they are now enabled.
+- NimBLE host bring-up during early boot destabilizes the RP2040↔ESP32 SPI
+  link; it is deferred ~45 s after boot, with a periodic BLE status
+  heartbeat on the console (boot-time logs predate the console bridge).
+
 ## Features
 * Decoding of 1090MHz transponder signals (ADS-B and Mode S).
 * Decoding of 978MHz UAT transponder signals (ADS-B) and uplink data (FIS-B/TIS-B).

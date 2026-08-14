@@ -14,6 +14,7 @@
 #include "adsbee_server.hh"
 #include "bsp.hh"
 #include "comms.hh"
+#include "comms_ble.hh"
 #include "cpu_utils.hh"
 #include "driver/gpio.h"
 #include "driver/spi_slave.h"
@@ -82,6 +83,7 @@ extern "C" void app_main(void) {
     xTaskCreate(device_status_update_task, "DeviceStatusUpdate", kDeviceStatusUpdateTaskStackSizeBytes, NULL,
                 kDeviceStatusUpdateTaskPriority, NULL);
     adsbee_server.Init();
+    ble_gdl90::Start();  // BLE ADS-B Receiver Service (GDL90 over GATT); shares the NimBLE host with Remote ID.
 
 #ifdef HARDWARE_UNIT_TESTS
     RunHardwareUnitTests();
