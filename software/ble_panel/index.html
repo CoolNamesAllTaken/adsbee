@@ -132,7 +132,7 @@ function renderTraffic() {
       const age = Math.round((now - t.last) / 1000);
       const cls = age > 15 ? ' class="stale"' : "";
       return `<tr${cls}><td>${t.icao.toString(16).toUpperCase().padStart(6, "0")}</td>` +
-        `<td>${t.callsign || "—"}</td><td>${fmt(t.lat)}</td><td>${fmt(t.lon)}</td>` +
+        `<td>${t.callsign && t.callsign !== "?" ? t.callsign : "—"}</td><td>${fmt(t.lat)}</td><td>${fmt(t.lon)}</td>` +
         `<td>${t.alt ?? "—"}</td><td>${t.kts ?? "—"}</td><td>${t.trk}°</td><td>${age}s</td></tr>`;
     });
   $("traffic").innerHTML = rows.join("") || '<tr><td colspan="8" class="stale">no targets</td></tr>';
