@@ -116,8 +116,8 @@ void ADSBee::EnterSyncSleep() {
 
     // Let the console line go fully idle before sampling constraints below. UART2 holds
     // PowerCC26XX_DISALLOW_STANDBY from the start of a TX until its EOT interrupt, which lands after the
-    // last stop bit -- well after the write callback that iface_write()'s blocking wait keys off. Without
-    // this the CONSOLE_INFO above guarantees a spurious "STANDBY blocked" report on every sleep cycle.
+    // last stop bit -- and console output is queued asynchronously in a TX ring. Without this the
+    // CONSOLE_INFO above guarantees a spurious "STANDBY blocked" report on every sleep cycle.
     comms_manager.DrainConsoleTx();
 
     // On CC13x4 an enabled DIO interrupt is automatically a STANDBY wake source (the GPIO driver routes
@@ -336,12 +336,16 @@ bool ADSBee::SetWatchdogTimeoutSec(uint32_t timeout_sec) {
 
 void ADSBee::Reboot() {
     CONSOLE_INFO("ADSBee::Reboot", "Rebooting.");
+    // Console output is queued asynchronously; get it (and any pending AT response) onto the wire before the reset.
+    comms_manager.DrainConsoleTx();
     lr2021.DeInit();
     SysCtrlSystemReset();
 }
 
 void ADSBee::EnterUARTBootloader() {
     CONSOLE_INFO("ADSBee::EnterUARTBootloader", "Invalidating image and entering ROM UART bootloader.");
+    // Console output is queued asynchronously; get it (and any pending AT response) onto the wire before the reset.
+    comms_manager.DrainConsoleTx();
     lr2021.DeInit();
     // Mask interrupts and keep them masked through the reset: we are about to erase the vector
     // table sector, so no interrupt may fire afterwards. FlashSectorErase() and

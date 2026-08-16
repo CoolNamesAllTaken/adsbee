@@ -15,6 +15,7 @@ extern "C" {
 #include "adsbee.hh"
 #include "bsp.hh"
 #include "comms.hh"
+#include "hal.hh"  // For get_time_since_boot_us.
 #include "led.hh"
 #include "object_dictionary.hh"
 #include "packet_decoder.hh"
@@ -148,6 +149,7 @@ int main(void) {
             continue;
         }
 
+        uint64_t loop_start_us = get_time_since_boot_us();
         leds.Update();
         // leds.FlashLED(bsp.k1090LEDPin, 100);  // Flash the LED for 100ms.
         // usleep(1000000);                        // Sleep for 1 second.
@@ -157,5 +159,10 @@ int main(void) {
         subg_radio.Update();
         uat_packet_decoder.Update();
         comms_manager.Update();
+        // Track the longest loop iteration (AT+RX_STATS max_loop_us) as the receiver's stall gauge.
+        uint32_t loop_us = static_cast<uint32_t>(get_time_since_boot_us() - loop_start_us);
+        if (loop_us > adsbee.max_loop_us) {
+            adsbee.max_loop_us = loop_us;
+        }
     }
 }

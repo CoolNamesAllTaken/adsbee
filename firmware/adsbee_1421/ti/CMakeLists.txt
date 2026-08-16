@@ -25,6 +25,15 @@ string(REGEX MATCH "gcc-arm-none-eabi-([0-9]+\\.[0-9]+\\.[0-9]+)" _ ${GCC_ARMCOM
 set(GCC_ARM_VERSION ${CMAKE_MATCH_1})
 message(STATUS "ARM GCC compiler version: ${GCC_ARM_VERSION}")
 
+# Default to an optimized build. custom_toolchain/gcc.cmake only adds -O3 under $<CONFIG:Release>
+# (and -O0 under $<CONFIG:Debug>), so a configure that omits -DCMAKE_BUILD_TYPE would otherwise
+# silently produce an unoptimized image (no -O flag at all) -- several times slower on the RS
+# decode / reporting hot paths. build.sh and CI always pass the type; this guards hand/IDE configures.
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type (Release|Debug)" FORCE)
+endif()
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
 project(adsbee_1421 C CXX ASM)
 
 # Derive firmware version from the single source of truth in object_dictionary.cpp.

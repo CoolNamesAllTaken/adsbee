@@ -30,7 +30,14 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-STACKSIZE = 1024;
+/*
+ * The main stack lives directly above the heap (SP starts at _stack_end and grows down). The TI default of 1 kB is far
+ * too small for this application -- a single reporting pass stacks a 2 kB composite-array buffer, ~1 kB printf buffers
+ * and ~1 kB packet objects -- and an overflow silently walks into the (mostly idle) top of the heap. 32 kB is cheap:
+ * the CC1314R10 has 256 kB of SRAM and ~50 kB remains free after this (see the .map). The linker errors out if the
+ * SRAM budget is ever exceeded, so this cannot silently overlap other sections.
+ */
+STACKSIZE = 32768;
 HEAPSIZE = 16384; /* Size of heap buffer used by HeapMem */
 
 MEMORY

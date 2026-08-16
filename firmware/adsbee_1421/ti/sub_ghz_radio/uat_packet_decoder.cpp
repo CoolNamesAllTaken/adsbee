@@ -64,15 +64,22 @@ bool UATPacketDecoder::Update() {
 
         if (decoded_packet.is_valid) {
             leds.FlashLED(bsp.kSubGLEDPin, 50);
-            CONSOLE_INFO("UATPacketDecoder::Update", "+[%02dFIXD     ] len=%d rssi=%d ts=%lu",
-                         decoded_packet.raw.sigq_bits, RawUATUplinkPacket::kUplinkMessageNumBytes, packet.sigs_dbm,
-                         packet.mlat_48mhz_64bit_counts);
             if (!decoded_uat_uplink_packet_out_queue.Enqueue(decoded_packet)) {
                 CONSOLE_ERROR("UATPacketDecoder::Update", "UAT uplink decoded output queue overflowed.");
             }
-        } else {
-            CONSOLE_INFO("UATPacketDecoder::Update", "+[     INVLD] len=%d rssi=%d ts=%lu",
-                         RawUATUplinkPacket::kUplinkMessageNumBytes, packet.sigs_dbm, packet.mlat_48mhz_64bit_counts);
+        }
+
+        // Per-packet prints, gated on log level up front (mirrors the ADS-B path above).
+        if (settings_manager.settings.log_level >= SettingsManager::LogLevel::kInfo) {
+            if (decoded_packet.is_valid) {
+                CONSOLE_INFO("UATPacketDecoder::Update", "+[%02dFIXD     ] len=%d rssi=%d ts=%lu",
+                             decoded_packet.raw.sigq_bits, RawUATUplinkPacket::kUplinkMessageNumBytes,
+                             packet.sigs_dbm, packet.mlat_48mhz_64bit_counts);
+            } else {
+                CONSOLE_INFO("UATPacketDecoder::Update", "+[     INVLD] len=%d rssi=%d ts=%lu",
+                             RawUATUplinkPacket::kUplinkMessageNumBytes, packet.sigs_dbm,
+                             packet.mlat_48mhz_64bit_counts);
+            }
         }
     }
     return true;

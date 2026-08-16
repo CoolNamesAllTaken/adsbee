@@ -26,6 +26,12 @@ class CommsManager {
 
     static constexpr uint16_t kATCommandBufMaxLen = 1000;
     static constexpr uint16_t kPrintfBufferMaxSize = 1000;
+    // Software TX ring behind the console UART. Sized to absorb a full worst-case raw reporting batch (~4.6 kB of RAW
+    // hex for a 2 kB composite array of uplinks) plus console traffic without the main loop ever waiting on the wire:
+    // at 1 Mbaud the ring drains in ~80 ms, well inside the 50 ms reporting tick for a typical batch. Must be a power
+    // of two.
+    static constexpr uint16_t kUartTxRingBytes = 8192;
+    static_assert((kUartTxRingBytes & (kUartTxRingBytes - 1)) == 0, "kUartTxRingBytes must be a power of two.");
 
     struct CommsManagerConfig {
         uint8_t uart_index = bsp.kSubGUARTIndex;
@@ -67,17 +73,32 @@ class CommsManager {
 
     /**
      * Blocks until all queued console TX bytes have physically left the wire. Two stages are needed:
-     * the write callback fires on DMA completion, but up to a FIFO's worth of bytes can still be
-     * shifting out afterwards. Callers that need the line truly idle -- a baud change, or entering
-     * STANDBY (UART2 holds a PowerCC26XX_DISALLOW_STANDBY constraint until its EOT interrupt, which
-     * lands after the last stop bit) -- must wait for both.
-     * @param[in] timeout_ms Budget for each stage separately, so a slow first stage cannot starve the
-     *                       second and a wedged UART cannot hang the caller; the worst case for the
-     *                       call as a whole is therefore 2 * timeout_ms. The default covers a full
-     *                       kPrintfBufferMaxSize chunk (~87 ms at 115200).
+     * first the software TX ring must empty and the last DMA write callback fire, but up to a FIFO's
+     * worth of bytes can still be shifting out afterwards. Callers that need the line truly idle -- a
+     * baud change, entering STANDBY (UART2 holds a PowerCC26XX_DISALLOW_STANDBY constraint until its
+     * EOT interrupt, which lands after the last stop bit), or a reboot -- must wait for both.
+     * @param[in] timeout_margin_ms Extra budget added to each stage on top of the time the bytes
+     *                              currently queued need to drain at the configured baud rate, so a
+     *                              wedged UART cannot hang the caller. Worst case for the call as a
+     *                              whole is roughly 2 * (ring drain time + timeout_margin_ms); a full
+     *                              8 kB ring is ~80 ms at 1 Mbaud, ~710 ms at 115200.
      * @retval True if the line went idle, false if the timeout expired first.
      */
-    bool DrainConsoleTx(uint32_t timeout_ms = 200);
+    bool DrainConsoleTx(uint32_t timeout_margin_ms = 200);
+
+    /**
+     * Number of bytes currently waiting in the software TX ring (excludes bytes already handed to the
+     * UART DMA / FIFO).
+     */
+    inline uint16_t TxRingUsedBytes() const {
+        return static_cast<uint16_t>((uart_tx_tail_ - uart_tx_head_) & (kUartTxRingBytes - 1));
+    }
+    inline uint16_t TxRingFreeBytes() const { return kUartTxRingBytes - 1 - TxRingUsedBytes(); }
+
+    // TX ring statistics, surfaced via AT+RX_STATS. Cleared by AT+RX_STATS=RESET.
+    uint32_t uart_tx_stall_count = 0;      // Writes that had to wait for ring space (link oversubscribed).
+    uint32_t uart_tx_drop_count = 0;       // Writes dropped whole after the bounded wait expired.
+    uint16_t uart_tx_high_water_bytes = 0;  // Peak ring occupancy observed.
 
     /**
      * Change the console UART baud rate at runtime. TI's UART2 driver has no live baud-change API, so
@@ -122,6 +143,19 @@ class CommsManager {
 
     int iface_printf(SettingsManager::SerialInterface iface, const char* format, ...);
     int iface_vprintf(SettingsManager::SerialInterface iface, const char* format, va_list args);
+    /**
+     * Queue bytes for transmission on a serial interface. Copies buf into the software TX ring and returns as soon
+     * as the bytes are queued; the UART DMA drains the ring in the background (write callback chains segments), so
+     * the main loop never waits on the wire in steady state. If the ring lacks room for the whole write, waits a
+     * bounded time (what the shortfall needs to drain at the current baud, doubled) for room and, failing that,
+     * drops the whole write (never a partial frame) and counts it in uart_tx_drop_count.
+     * @param[in] iface Interface to write to.
+     * @param[in] buf Bytes to write. Copied; need not outlive the call.
+     * @param[in] len Number of bytes.
+     * @param[in] blocking Retained for API compatibility; the data is copied so completion is never awaited here.
+     *                     Callers that need the wire idle (baud change, sleep, reboot) use DrainConsoleTx().
+     * @retval True if all bytes were queued, false if the write was dropped or the interface is unavailable.
+     */
     bool iface_write(SettingsManager::SerialInterface iface, const void* buf, size_t len, bool blocking = false);
     bool iface_putc(SettingsManager::SerialInterface iface, char c, bool blocking = false);
     bool iface_getc(SettingsManager::SerialInterface iface, char& c);
@@ -176,14 +210,42 @@ class CommsManager {
     // Opens the console UART at the given baud rate and enables RX. Used by Init() and SetBaudRate().
     bool OpenUART(uint32_t baud);
 
+    /**
+     * Starts a UART2 write for the contiguous segment at the head of the TX ring, if the ring is non-empty. Sets
+     * uart_tx_in_progress_ accordingly. Must be called either with HWIs disabled (main loop) or from the UART write
+     * callback (HWI context, which the main loop cannot preempt) so that head/tail/in_progress are read consistently.
+     */
+    void KickTx();
+
+    /**
+     * Waits (bounded) for at least num_bytes of free space in the TX ring. Bound = time for the shortfall to drain at
+     * the current baud rate, doubled, plus a small margin. Also re-kicks the UART if a write callback was lost.
+     * @retval True if the space is available, false if the wait timed out.
+     */
+    bool WaitForTxRingSpace(uint16_t num_bytes);
+
+    /**
+     * Milliseconds needed to clock num_bytes out at the current baud rate (10 bits per byte), rounded up.
+     */
+    inline uint32_t TxBytesToMs(uint32_t num_bytes) const {
+        return (num_bytes * 10u * 1000u + config_.uart_baud_rate - 1) / config_.uart_baud_rate;
+    }
+
     CommsManagerConfig config_;
 
     // Console Settings
     CppAT at_parser_;
 
-    UART2_Handle uart_handle_;
-    volatile bool uart_tx_busy_ = false;
-    char uart_tx_buf_[kPrintfBufferMaxSize];
+    UART2_Handle uart_handle_ = nullptr;
+
+    // Software TX ring. Producer: iface_write (main loop) advances uart_tx_tail_. Consumer: KickTx() hands the
+    // contiguous segment at uart_tx_head_ to UART2_write; uart_write_callback (HWI context) advances uart_tx_head_ by
+    // the bytes the driver consumed and chains the next segment. One slot is kept free to distinguish full from
+    // empty. All cross-context updates happen with HWIs disabled or inside the callback.
+    uint8_t uart_tx_ring_[kUartTxRingBytes];
+    volatile uint16_t uart_tx_head_ = 0;
+    volatile uint16_t uart_tx_tail_ = 0;
+    volatile bool uart_tx_in_progress_ = false;  // A UART2_write is outstanding (its callback has not fired yet).
     static void uart_write_callback(UART2_Handle handle, void* buf, size_t count, void* userArg, int_fast16_t status);
 
     // Queue for holding new transponder packets before they get reported.

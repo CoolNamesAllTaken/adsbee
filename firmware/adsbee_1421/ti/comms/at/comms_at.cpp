@@ -314,11 +314,14 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
             }
             CPP_AT_CMD_PRINTF(
                 "=pkt_rx=%u,crc_error=%u,len_error=%u,pbl_det=%u,sync_ok=%u,sync_fail=%u,timeout=%u,"
-                "fifo_full=%lu,q_ovf=%lu,bitflips_fixed=%lu,uat_rx_restarts=%lu",
+                "fifo_full=%lu,q_ovf=%lu,bitflips_fixed=%lu,uat_rx_restarts=%lu,"
+                "max_loop_us=%lu,tx_stalls=%lu,tx_drops=%lu,tx_ring_hw=%u",
                 stats.pkt_rx, stats.crc_error, stats.len_error, stats.pbl_det, stats.sync_ok, stats.sync_fail,
                 stats.timeout, (unsigned long)adsbee.lr2021_fifo_full_count,
                 (unsigned long)packet_decoder.raw_queue_overflow_count,
-                (unsigned long)packet_decoder.bitflips_fixed_count, (unsigned long)subg_radio.rx_error_restart_count);
+                (unsigned long)packet_decoder.bitflips_fixed_count, (unsigned long)subg_radio.rx_error_restart_count,
+                (unsigned long)adsbee.max_loop_us, (unsigned long)comms_manager.uart_tx_stall_count,
+                (unsigned long)comms_manager.uart_tx_drop_count, comms_manager.uart_tx_high_water_bytes);
             CPP_AT_SILENT_SUCCESS();
             break;
         }
@@ -333,6 +336,10 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
             packet_decoder.raw_queue_overflow_count = 0;
             packet_decoder.bitflips_fixed_count = 0;
             subg_radio.rx_error_restart_count = 0;
+            adsbee.max_loop_us = 0;
+            comms_manager.uart_tx_stall_count = 0;
+            comms_manager.uart_tx_drop_count = 0;
+            comms_manager.uart_tx_high_water_bytes = 0;
             CPP_AT_SUCCESS();
             break;
         }
@@ -1047,7 +1054,9 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .max_args = 1,
      .help_string = "AT+RX_STATS?\r\n\tQuery LR2021 OOK Rx stats (pkt_rx, crc_error, len_error, pbl_det, sync_ok, "
                     "sync_fail, timeout) plus health counters (fifo_full, q_ovf, bitflips_fixed, "
-                    "uat_rx_restarts).\r\n\tAT+RX_STATS=RESET\r\n\tReset all Rx stats counters.",
+                    "uat_rx_restarts, max_loop_us = longest main loop iteration, tx_stalls / tx_drops / tx_ring_hw = "
+                    "console TX ring waits, dropped writes and peak occupancy in bytes).\r\n\tAT+RX_STATS=RESET\r\n\t"
+                    "Reset all Rx stats counters.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxStatsCallback, comms_manager)},
     {.command = "SETTINGS",
      .min_args = 0,

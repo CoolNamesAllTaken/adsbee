@@ -11,17 +11,70 @@
 #include <ti/devices/DeviceFamily.h>
 #include DeviceFamily_constructPath(inc/hw_memmap.h)
 #include DeviceFamily_constructPath(driverlib/uart.h)
+#include <ti/drivers/dpl/HwiP.h>
 /* clang-format on */
 
 static const CommsManager::ReportSink kReportingSinks[] = {SettingsManager::SerialInterface::kConsole};
 static const uint16_t kNumReportingSinks = sizeof(kReportingSinks) / sizeof(CommsManager::ReportSink);
+
+// Margin added to every baud-derived TX wait so tiny shortfalls don't get a zero-length budget.
+static const uint32_t kTxWaitMarginMs = 5;
 
 CommsManager::CommsManager(CommsManagerConfig config)
     : config_(config), at_parser_(CppAT(at_command_list, at_command_list_num_commands, true)) {}
 
 void CommsManager::uart_write_callback(UART2_Handle handle, void* buf, size_t count, void* userArg,
                                        int_fast16_t status) {
-    static_cast<CommsManager*>(userArg)->uart_tx_busy_ = false;
+    // HWI context. Retire the bytes the driver actually consumed (count can be short if the write was cancelled),
+    // then chain the next contiguous ring segment straight from here so the wire never idles between segments. The
+    // UART2CC26X2 driver clears its writeInUse flag before invoking this callback, so a nested UART2_write is accepted.
+    CommsManager* self = static_cast<CommsManager*>(userArg);
+    self->uart_tx_head_ = static_cast<uint16_t>((self->uart_tx_head_ + count) & (kUartTxRingBytes - 1));
+    self->uart_tx_in_progress_ = false;
+    if (status == UART2_STATUS_SUCCESS) {
+        self->KickTx();
+    }
+    // On cancel/error, leave the ring alone: SetBaudRate() resets it after close, and Update()'s safety re-kick covers
+    // anything else.
+}
+
+void CommsManager::KickTx() {
+    uint16_t head = uart_tx_head_;
+    uint16_t tail = uart_tx_tail_;
+    if (head == tail) {
+        uart_tx_in_progress_ = false;
+        return;  // Nothing queued.
+    }
+    // Longest contiguous run starting at head (stop at the end of the ring; the callback chains the wrapped part).
+    size_t count = tail > head ? static_cast<size_t>(tail - head) : static_cast<size_t>(kUartTxRingBytes - head);
+    uart_tx_in_progress_ = true;
+    // The driver internally restarts DMA in <=1024 B pieces until the whole count is out, so no chunking here.
+    int_fast16_t status = UART2_write(uart_handle_, &uart_tx_ring_[head], count, nullptr);
+    if (status != UART2_STATUS_SUCCESS) {
+        uart_tx_in_progress_ = false;  // Update() / the next iface_write will retry.
+    }
+}
+
+bool CommsManager::WaitForTxRingSpace(uint16_t num_bytes) {
+    if (TxRingFreeBytes() >= num_bytes) {
+        return true;
+    }
+    uart_tx_stall_count++;
+    // Budget: time for the shortfall to clock out at the current baud rate, doubled, plus margin. Bounded so a wedged
+    // UART degrades to dropped output rather than a frozen main loop.
+    uint32_t shortfall = num_bytes - TxRingFreeBytes();
+    uint32_t deadline_ms = get_time_since_boot_ms() + 2 * TxBytesToMs(shortfall) + kTxWaitMarginMs;
+    while (TxRingFreeBytes() < num_bytes && get_time_since_boot_ms() < deadline_ms) {
+        // Safety net: if a write callback was ever lost, restart the drain instead of timing out.
+        if (!uart_tx_in_progress_ && uart_tx_head_ != uart_tx_tail_) {
+            uintptr_t key = HwiP_disable();
+            if (!uart_tx_in_progress_) {
+                KickTx();
+            }
+            HwiP_restore(key);
+        }
+    }
+    return TxRingFreeBytes() >= num_bytes;
 }
 
 bool CommsManager::OpenUART(uint32_t baud) {
@@ -58,8 +111,16 @@ bool CommsManager::SetBaudRate(uint32_t baud) {
     // before the line reconfigures.
     DrainConsoleTx();
 
+    // The driver requires an unfinished asynchronous write to be cancelled before UART2_close().
+    if (uart_tx_in_progress_) {
+        UART2_writeCancel(uart_handle_);
+    }
     UART2_close(uart_handle_);
-    uart_tx_busy_ = false;  // The write callback will not fire after close.
+    // Whatever didn't make it out is gone with the old baud rate; start the ring clean. No callback can fire after
+    // close, so plain assignments are safe here.
+    uart_tx_head_ = 0;
+    uart_tx_tail_ = 0;
+    uart_tx_in_progress_ = false;
     config_.uart_baud_rate = baud;
     if (!OpenUART(baud)) {
         // Deterministic params make reopen failure effectively impossible, but fall back to the
@@ -78,24 +139,33 @@ bool CommsManager::SetBaudRate(uint32_t baud) {
     return baud == config_.uart_baud_rate;
 }
 
-bool CommsManager::DrainConsoleTx(uint32_t timeout_ms) {
+bool CommsManager::DrainConsoleTx(uint32_t timeout_margin_ms) {
     // Each stage gets its own budget rather than sharing one deadline: the stages wait on unrelated
     // events, and a slow first stage must not starve the second. The hardware stage is the one that
     // matters for STANDBY (it gates the UART's power constraint), so it is exactly the one that must
     // not be skipped after a long DMA wait.
 
-    // Software side: wait for the in-flight CALLBACK-mode write (if any) to complete. Worst pending
-    // chunk is kPrintfBufferMaxSize (1000 B), ~87 ms at 115200.
-    uint32_t deadline_ms = get_time_since_boot_ms() + timeout_ms;
-    while (uart_tx_busy_ && get_time_since_boot_ms() < deadline_ms) {
+    // Software side: wait for the TX ring to empty and the last CALLBACK-mode write to complete. Budget
+    // is what the queued bytes need at the current baud rate (doubled) plus the caller's margin.
+    uint32_t deadline_ms =
+        get_time_since_boot_ms() + 2 * TxBytesToMs(TxRingUsedBytes() + kPrintfBufferMaxSize) + timeout_margin_ms;
+    while ((uart_tx_in_progress_ || uart_tx_head_ != uart_tx_tail_) && get_time_since_boot_ms() < deadline_ms) {
+        // Safety net: restart the drain if a write callback was ever lost.
+        if (!uart_tx_in_progress_) {
+            uintptr_t key = HwiP_disable();
+            if (!uart_tx_in_progress_) {
+                KickTx();
+            }
+            HwiP_restore(key);
+        }
     }
     // Hardware side: the write callback fires on DMA completion, not when the bytes have left the
     // wire — up to a FIFO's worth can still be in flight. UARTBusy() stays set until the last stop
     // bit is shifted out.
-    deadline_ms = get_time_since_boot_ms() + timeout_ms;
+    deadline_ms = get_time_since_boot_ms() + timeout_margin_ms;
     while (UARTBusy(UART0_BASE) && get_time_since_boot_ms() < deadline_ms) {
     }
-    return !uart_tx_busy_ && !UARTBusy(UART0_BASE);
+    return !uart_tx_in_progress_ && uart_tx_head_ == uart_tx_tail_ && !UARTBusy(UART0_BASE);
 }
 
 bool CommsManager::Suspend() {
@@ -112,6 +182,16 @@ bool CommsManager::Resume() {
 }
 
 bool CommsManager::Update() {
+    // Safety net for the TX ring: if a kick failed (UART2_write rejected) or a callback was lost, restart the drain.
+    // In normal operation the write callback chains segments itself and this branch is never taken.
+    if (!uart_tx_in_progress_ && uart_tx_head_ != uart_tx_tail_) {
+        uintptr_t key = HwiP_disable();
+        if (!uart_tx_in_progress_) {
+            KickTx();
+        }
+        HwiP_restore(key);
+    }
+
     UpdateAT();
 
     uint32_t timestamp_ms = get_time_since_boot_ms();
@@ -175,7 +255,9 @@ int CommsManager::console_vprintf(const char* fmt, va_list args) {
     char buf[kPrintfBufferMaxSize];
     int len = vsnprintf(buf, kPrintfBufferMaxSize, fmt, args);
     if (len <= 0) return len;
-    return iface_puts(SettingsManager::SerialInterface::kConsole, buf, /*blocking=*/true) ? len : -1;
+    // Queued into the TX ring and sent in the background; callers that need the text on the wire (reboot, sleep,
+    // baud change) call DrainConsoleTx().
+    return iface_puts(SettingsManager::SerialInterface::kConsole, buf) ? len : -1;
 }
 
 int CommsManager::iface_printf(SettingsManager::SerialInterface iface, const char* format, ...) {
@@ -205,29 +287,56 @@ int CommsManager::iface_vprintf(SettingsManager::SerialInterface iface, const ch
 bool CommsManager::iface_write(SettingsManager::SerialInterface iface, const void* buf, size_t len, bool blocking) {
     switch (iface) {
         case SettingsManager::kConsole: {
-            // Send in chunks no larger than the single static TX buffer. Reporting batches can exceed
-            // kPrintfBufferMaxSize under heavy load; chunking lets the whole batch through instead of
-            // dropping it. The per-chunk busy-wait gates reuse of uart_tx_buf_ until the previous
-            // chunk's write callback fires.
+            (void)blocking;  // Data is copied into the ring; completion is never awaited here (see header).
+            if (uart_handle_ == nullptr) {
+                return false;  // Console not open yet (e.g. a static-init error print).
+            }
+            if (len == 0) {
+                return true;
+            }
             const uint8_t* p = static_cast<const uint8_t*>(buf);
             size_t remaining = len;
-            bool ok = true;
             while (remaining > 0) {
-                size_t chunk = remaining > kPrintfBufferMaxSize ? kPrintfBufferMaxSize : remaining;
-                while (uart_tx_busy_) {
+                // A write is normally queued whole (all-or-nothing, so a dropped write never leaves a partial frame
+                // on the wire). Only a write larger than the ring itself -- not reachable with the 2 kB composite
+                // array cap -- is fed through in ring-sized pieces.
+                uint16_t chunk = remaining < static_cast<size_t>(kUartTxRingBytes - 1)
+                                     ? static_cast<uint16_t>(remaining)
+                                     : static_cast<uint16_t>(kUartTxRingBytes - 1);
+                if (!WaitForTxRingSpace(chunk)) {
+                    uart_tx_drop_count++;
+                    return false;  // Link oversubscribed; drop rather than stall the receiver.
                 }
-                memcpy(uart_tx_buf_, p, chunk);
-                uart_tx_busy_ = true;
-                int_fast16_t status = UART2_write(uart_handle_, uart_tx_buf_, chunk, nullptr);
-                ok &= (status == UART2_STATUS_SUCCESS);
+
+                // Copy outside the critical section: [tail, tail + chunk) is exclusively the producer's -- the
+                // consumer only ever reads up to the published tail, and free space can only grow underneath us.
+                uint16_t tail = uart_tx_tail_;
+                uint16_t first = static_cast<uint16_t>(kUartTxRingBytes - tail);
+                if (first > chunk) {
+                    first = chunk;
+                }
+                memcpy(&uart_tx_ring_[tail], p, first);
+                if (chunk > first) {
+                    memcpy(&uart_tx_ring_[0], p + first, chunk - first);  // Wrapped remainder.
+                }
+
+                // Publish and, if the UART is idle, start it. Both under HWI-disable so the write callback (which
+                // reads tail and may clear in_progress) can't interleave with the publish/kick decision.
+                uintptr_t key = HwiP_disable();
+                uart_tx_tail_ = static_cast<uint16_t>((tail + chunk) & (kUartTxRingBytes - 1));
+                uint16_t used = TxRingUsedBytes();
+                if (used > uart_tx_high_water_bytes) {
+                    uart_tx_high_water_bytes = used;
+                }
+                if (!uart_tx_in_progress_) {
+                    KickTx();
+                }
+                HwiP_restore(key);
+
                 p += chunk;
                 remaining -= chunk;
             }
-            if (blocking) {
-                while (uart_tx_busy_) {
-                }
-            }
-            return ok;
+            return true;
         }
         case SettingsManager::kNumSerialInterfaces:
         default:

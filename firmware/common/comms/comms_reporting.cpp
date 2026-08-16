@@ -10,6 +10,7 @@
 #include "csbee_utils.hh"
 #include "gdl90_utils.hh"
 #include "mavlink_utils.hh"
+#include "fec.hh"        // For UATReedSolomon::DeInterleaveUplinkMessage.
 #include "raw_utils.hh"
 #include "uat_packet.hh"  // For DecodedUATUplinkPacket.
 
@@ -270,6 +271,9 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
 }
 
 bool CommsManager::ReportRaw(ReportSink* sinks, uint16_t num_sinks, const CompositeArray::RawPackets& packets) {
+    if (num_sinks == 0) {
+        return true;  // Nobody is listening; don't spend time building frames.
+    }
     char error_msg[CompositeArray::RawPackets::kErrorMessageMaxLen] = {0};
     if (!packets.IsValid(error_msg)) {
         CONSOLE_ERROR("CommsManager::ReportRaw", "Invalid CompositeArray::RawPackets: %s", error_msg);
@@ -328,6 +332,9 @@ bool CommsManager::ReportRaw(ReportSink* sinks, uint16_t num_sinks, const Compos
 
 bool CommsManager::ReportBeast(ReportSink* sinks, uint16_t num_sinks, const CompositeArray::RawPackets& packets,
                                SettingsManager::ReportingProtocol protocol) {
+    if (num_sinks == 0) {
+        return true;  // Nobody is listening; don't spend time building frames.
+    }
     char error_msg[CompositeArray::RawPackets::kErrorMessageMaxLen] = {0};
     if (!packets.IsValid(error_msg)) {
         CONSOLE_ERROR("CommsManager::ReportBeast", "Invalid CompositeArray::RawPackets: %s", error_msg);
@@ -722,21 +729,28 @@ bool CommsManager::ReportAircraftJSON(ReportSink* sinks, uint16_t num_sinks) {
 }
 
 bool CommsManager::ReportGDL90Uplink(ReportSink* sinks, uint16_t num_sinks, const CompositeArray::RawPackets& packets) {
+    if (num_sinks == 0) {
+        return true;  // Nobody is listening; don't spend time building frames.
+    }
     bool ret = true;
 
     for (uint16_t i = 0; i < packets.header->num_uat_uplink_packets; i++) {
-        // We need to decode the packet since GDL90 expects just the decoded payload. This double decoding is a bit
-        // wasteful but lets us use a common interface for reporting raw packets, instead of requiring decoded UAT
-        // uplink packets to be passed into special snowflake GDL90 reporting functions.
-        DecodedUATUplinkPacket packet = DecodedUATUplinkPacket(packets.uat_uplink_packets[i]);
-        if (!packet.is_valid) {
-            CONSOLE_WARNING("CommsManager::ReportGDL90Uplink", "Invalid UAT uplink packet encountered, skipping.");
+        // GDL90 carries just the de-interleaved 432-byte payload. Raw uplink packets that reach the reporting queues
+        // have already been FEC-corrected in place by the decoder (RS-capable platforms) or arrived pre-corrected
+        // (everyone else), so a plain de-interleave is all that's needed here -- no second RS pass.
+        const RawUATUplinkPacket& raw = packets.uat_uplink_packets[i];
+        if (raw.encoded_message_len_bytes != RawUATUplinkPacket::kUplinkMessageNumBytes) {
+            CONSOLE_WARNING("CommsManager::ReportGDL90Uplink", "Invalid UAT uplink packet length %d, skipping.",
+                            raw.encoded_message_len_bytes);
             continue;
         }
+        uint8_t payload[DecodedUATUplinkPacket::kDecodedPayloadNumBytes];
+        UATReedSolomon::DeInterleaveUplinkMessage(payload, raw.encoded_message);
+
         uint8_t buf[GDL90Reporter::kGDL90MessageMaxLenBytes];
         uint16_t msg_len = gdl90.WriteGDL90UplinkDataMessage(
-            buf, sizeof(buf), packet.decoded_payload, DecodedUATUplinkPacket::kDecodedPayloadNumBytes,
-            GDL90Reporter::MLAT48MHz64BitCountsToUATTORTicks(packet.raw.mlat_48mhz_64bit_counts));
+            buf, sizeof(buf), payload, DecodedUATUplinkPacket::kDecodedPayloadNumBytes,
+            GDL90Reporter::MLAT48MHz64BitCountsToUATTORTicks(raw.mlat_48mhz_64bit_counts));
 
         for (uint16_t i = 0; i < num_sinks; i++) {
             ret &= SendBuf(sinks[i], (char*)buf, msg_len);

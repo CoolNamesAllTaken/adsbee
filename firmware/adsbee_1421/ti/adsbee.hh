@@ -71,6 +71,11 @@ class ADSBee {
     // RX FIFO reads back completely full (the poll loop fell behind; frames were likely dropped).
     uint32_t lr2021_fifo_full_count = 0;
 
+    // Longest single super-loop iteration observed, in microseconds. Reported and reset via AT+RX_STATS. Every
+    // millisecond spent in one iteration is a millisecond the LR2021 FIFO isn't drained and AT commands aren't
+    // serviced, so this is the primary "is the receiver bogging down" gauge. Updated by main().
+    uint32_t max_loop_us = 0;
+
     SettingsManager::RxPosition rx_position;
     bool rx_position_available = false;
 
