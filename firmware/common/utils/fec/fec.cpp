@@ -114,8 +114,8 @@ void UATReedSolomon::DeInterleaveUplinkMessage(
         return;  // Invalid input.
     }
 
-    // De-interleave straight into the output (the buffers never alias in practice, and the gather pattern below reads
-    // each source byte exactly once, so no intermediate assembly buffer is needed).
+    // De-interleave straight into the output. Requires the buffers not to overlap (documented in fec.hh); with that
+    // guarantee no intermediate assembly buffer is needed.
     for (int block = 0; block < RawUATUplinkPacket::kUplinkMessageNumBlocks; block++) {
         uint8_t* block_data = &(deinterleaved_buf[block * RawUATUplinkPacket::kUplinkMessageBlockPayloadNumBytes]);
         for (int byte_index = 0; byte_index < RawUATUplinkPacket::kUplinkMessageBlockPayloadNumBytes; byte_index++) {

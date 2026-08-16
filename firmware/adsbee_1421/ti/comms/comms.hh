@@ -87,8 +87,11 @@ class CommsManager {
     bool DrainConsoleTx(uint32_t timeout_margin_ms = 200);
 
     /**
-     * Number of bytes currently waiting in the software TX ring (excludes bytes already handed to the
-     * UART DMA / FIFO).
+     * Number of bytes currently occupying the software TX ring. This INCLUDES the segment already handed
+     * to UART2_write() but not yet retired: uart_tx_head_ only advances in the write callback, so bytes
+     * stay accounted for until the driver reports them consumed. That makes this the right figure for
+     * drain-time estimates and the high-water stat (it is everything not yet confirmed out of the ring),
+     * not a count of bytes still awaiting a UART2_write.
      */
     inline uint16_t TxRingUsedBytes() const {
         return static_cast<uint16_t>((uart_tx_tail_ - uart_tx_head_) & (kUartTxRingBytes - 1));

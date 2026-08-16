@@ -50,7 +50,11 @@ class UATReedSolomon {
      * Transform an already corrected (but interleaved) raw UAT uplink payload into a de-interleaved payload that can be
      * used directly. Does not apply FEC, just de-interleaves and tosses out the parity bytes. Static since it needs no
      * Reed-Solomon state.
-     * @param[out] deinterleaved_buf Buffer to store the de-interleaved payload in.
+     *
+     * The de-interleave is performed directly into deinterleaved_buf (no intermediate copy), so the two buffers MUST
+     * NOT overlap. In practice they never do -- the output is a 432-byte payload buffer and the input is a separate
+     * 552-byte encoded message buffer -- but callers must not pass aliasing pointers.
+     * @param[out] deinterleaved_buf Buffer to store the de-interleaved payload in. Must not overlap encoded_message_buf.
      * @param[in] encoded_message_buf Buffer with the encoded message to de-interleave. Must be a valid message with FEC
      * corrections pre-applied.
      */
