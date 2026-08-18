@@ -12,9 +12,14 @@ Chrome or Edge (works from `file://`, no server needed) and click **Connect**
   (`AT+BAUD_RATE` + `AT+SETTINGS=SAVE`; factory default 1,000,000), so it may be
   at any of {115200, 230400, 460800, 921600, 1000000}. On connect the page
   sweeps that list — trying last session's rate first — and locks onto whatever
-  rate answers. Each probe is `AT+BAUD_RATE?`, and a rate only counts once the
-  device's own reply names the rate the port is open at, so a late or stray
-  answer can never be credited to the wrong rate. After `AT+REBOOT`,
+  rate answers. Each probe is `AT+BAUD_RATE?`, repeated for ~2.7 s per rate
+  before moving on (opening the port asserts DTR, which resets the device, so it
+  is usually still booting when the first probe goes out), and the rate shown is
+  the one the device itself reports. Behind the programmer jig
+  (`firmware/adsbee_1421/programmer/`) the host baud is virtual and the jig
+  retunes the device to it after each host-driven reset; the page waits that
+  out and, if the device's rate ever differs from the host port's, says so
+  rather than guessing. After `AT+REBOOT`,
   `AT+SETTINGS=RESET`, or a firmware flash the page re-sweeps automatically, and
   a hand-typed `AT+BAUD_RATE=CONSOLE,<n>` is followed to the new rate instead of
   desyncing the link. Disconnecting leaves the device at its current rate.

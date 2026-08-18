@@ -1800,6 +1800,16 @@
         const FACTORY_BAUD = BAUD_CANDIDATES[0];
         const LAST_BAUD_KEY = 'adsbee1421LastBaud';
 
+        // How long to keep probing one rate before trying the next. Opening or reopening
+        // the port asserts DTR, which is wired (directly, or via the programmer jig's
+        // adapter emulation) to RESET_N — so the device is typically rebooting when the
+        // first probe goes out (~0.8 s app boot), and behind the programmer jig the jig
+        // itself then spends ~1–1.5 s re-negotiating the device to the host's rate
+        // before pass-through resumes. Each attempt is ~250 ms of quiet + 200 ms pause,
+        // so 6 attempts ≈ 2.7 s per rate; the device only pays this at rates it is NOT
+        // at (a live device answers the first attempt).
+        const PROBE_ATTEMPTS_PER_RATE = 6;
+
         const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
         const hex8 = (v) => (v >>> 0).toString(16).padStart(8, '0');
 
@@ -2338,6 +2348,12 @@
             feed(line) {
                 if (atQueue.tryConsume(line)) return;
                 const t = line.trim();
+                // Late answers to the page's own hidden AT+BAUD_RATE? probes: a bridge
+                // (the programmer jig) may hold probes while it re-negotiates the device
+                // and deliver them in a burst afterwards, after the probe job that sent
+                // them has given up. Only a user-typed (visible) AT+BAUD_RATE? gets to
+                // print this line.
+                if (/^BAUD_RATE=CONSOLE,\d+$/.test(t) && !(atQueue.current && atQueue.current.job.visible)) return;
                 if (t.startsWith('{')) {
                     // AIRCRAFT_JSON: newline-delimited readsb-style objects, one per aircraft.
                     // Always feed the store; hide the line from the terminal only while the
@@ -3642,25 +3658,43 @@
                 this.dot.title = `Connected (${serial.currentBaud} 8N1)`;
             },
 
-            // Self-verifying liveness check at the current baud. AT+BAUD_RATE? is
-            // silent-success (body line, no OK) and answers with the device's LIVE
-            // console rate, so a hit is accepted only when the reply parses and names
-            // the rate this port is open at right now. A legible reply already proves
-            // host and device agree; the equality check additionally rejects a reply
-            // that was answered late at some other rate (device still booting when the
-            // probe went out) or read after another code path reopened the port — the
-            // two ways a bare "did anything answer?" probe could credit the wrong rate.
-            // Returns the confirmed baud, or null.
-            async probe(attempts = 3) {
+            // One AT+BAUD_RATE? round trip (silent-success: body line, no OK). Returns
+            // the whitelisted rate the device says its console is at, or null when
+            // nothing legible came back within the window.
+            async _queryDeviceBaud() {
+                try {
+                    const lines = await atQueue.send('AT+BAUD_RATE?\r\n',
+                        { expect: /^BAUD_RATE=CONSOLE,\d+/, terminator: 'quiet', quietMs: 250, timeoutMs: 700 });
+                    for (const l of lines) {
+                        const n = parseInt(l.split(',')[1], 10);
+                        if (BAUD_CANDIDATES.includes(n)) return n;
+                    }
+                } catch (_) { }
+                return null;
+            },
+
+            // Liveness check at the current host rate: keep asking AT+BAUD_RATE? for up
+            // to `attempts` rounds (the device may still be booting after the DTR reset
+            // that opening the port causes, or a bridge may still be bringing it up).
+            //
+            // Any legible reply proves the link works, and the device's answer — not
+            // the rate this page opened the port at — is the truth about the console
+            // rate: behind a USB bridge (the programmer jig) the host's baud is virtual
+            // and the jig retunes the device on its own. When the two differ, a second
+            // consecutive legible reply is required so a single stale line buffered
+            // from an earlier rate can't be mistaken for a live link.
+            //
+            // Returns the device's rate, or null.
+            async probe(attempts = PROBE_ATTEMPTS_PER_RATE) {
+                let unconfirmed = null;
                 for (let i = 0; i < attempts; i++) {
-                    try {
-                        const lines = await atQueue.send('AT+BAUD_RATE?\r\n',
-                            { expect: /^BAUD_RATE=CONSOLE,\d+/, terminator: 'quiet', quietMs: 250, timeoutMs: 700 });
-                        for (const l of lines) {
-                            const n = parseInt(l.split(',')[1], 10);
-                            if (BAUD_CANDIDATES.includes(n) && n === serial.currentBaud) return n;
-                        }
-                    } catch (_) { }
+                    const n = await this._queryDeviceBaud();
+                    if (n !== null) {
+                        if (n === serial.currentBaud || n === unconfirmed) return n;
+                        unconfirmed = n;
+                        continue;   // re-ask straight away to confirm
+                    }
+                    unconfirmed = null;
                     if (i + 1 < attempts) await sleep(200);
                 }
                 return null;
@@ -3682,18 +3716,33 @@
                 return order;
             },
 
-            // Find the device's baud rate: single-attempt probe (~700 ms) at each
-            // candidate. Returns the rate the device confirmed, or null.
+            // Find the device: probe patiently at each candidate host rate in turn.
+            // Reopening the port at the next candidate resets the device again (DTR),
+            // so a rate is only abandoned after the device has had time to come back.
+            // Returns the rate the device reports, or null.
             async sweep() {
                 for (const baud of this._sweepOrder()) {
                     if (baud !== serial.currentBaud) await this._reopenWithSink(baud);
-                    const confirmed = await this.probe(1);
-                    if (confirmed !== null) {
-                        try { localStorage.setItem(LAST_BAUD_KEY, String(confirmed)); } catch (_) { }
-                        return confirmed;
+                    const found = await this.probe();
+                    if (found !== null) {
+                        // Only remember a rate the host itself opened successfully.
+                        if (found === serial.currentBaud) {
+                            try { localStorage.setItem(LAST_BAUD_KEY, String(found)); } catch (_) { }
+                        }
+                        return found;
                     }
                 }
                 return null;
+            },
+
+            _announceLink(deviceBaud) {
+                if (deviceBaud === serial.currentBaud) {
+                    tabController.notice(`Console link at ${deviceBaud} baud.`);
+                } else {
+                    tabController.notice(
+                        `Console link up: device console at ${deviceBaud} baud ` +
+                        `(host port opened at ${serial.currentBaud} — a bridge is retuning the device independently).`);
+                }
             },
 
             // Negotiations share one serial port, so they must never interleave: each
@@ -3713,9 +3762,8 @@
 
             // Lock onto whatever rate the device is at. The device boots at its saved
             // console baud (factory default 1,000,000), so there is nothing to negotiate
-            // up to — just find it. The second pass covers a device that was still
-            // booting during the first (e.g. reset when the port reopened — DTR wired
-            // to RESET_N).
+            // up to — just find it (each rate is given time for a post-reset boot, see
+            // PROBE_ATTEMPTS_PER_RATE).
             negotiate() {
                 if (this._negotiation) return this._negotiation;
                 this._negotiation = this._exclusive(() => this._negotiateImpl())
@@ -3725,17 +3773,13 @@
 
             // Body of negotiate(); only call from inside an _exclusive() section.
             async _negotiateImpl() {
-                let baud = await this.sweep();
-                if (baud === null) {
-                    await sleep(1000);
-                    baud = await this.sweep();
-                }
+                const baud = await this.sweep();
                 if (baud === null) {
                     tabController.notice(
                         `No response from the device at any supported baud rate (${BAUD_CANDIDATES.join(', ')}). Is it connected and running?`);
                     return;
                 }
-                tabController.notice(`Console link at ${baud} baud.`);
+                this._announceLink(baud);
             },
 
             // After something reboots the device (AT+REBOOT, firmware flash, settings
@@ -3758,10 +3802,12 @@
                     if (!serial.connected) return;
                     try {
                         await this._reopenWithSink(baud);
-                        const confirmed = await this.probe();
-                        if (confirmed !== null) {
-                            try { localStorage.setItem(LAST_BAUD_KEY, String(confirmed)); } catch (_) { }
-                            tabController.notice(`Console link at ${confirmed} baud.`);
+                        const found = await this.probe();
+                        if (found !== null) {
+                            if (found === serial.currentBaud) {
+                                try { localStorage.setItem(LAST_BAUD_KEY, String(found)); } catch (_) { }
+                            }
+                            this._announceLink(found);
                         } else {
                             await this._negotiateImpl();
                         }
