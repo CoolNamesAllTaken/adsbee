@@ -12,10 +12,12 @@ Chrome or Edge (works from `file://`, no server needed) and click **Connect**
   (`AT+BAUD_RATE` + `AT+SETTINGS=SAVE`; factory default 1,000,000), so it may be
   at any of {115200, 230400, 460800, 921600, 1000000}. On connect the page
   sweeps that list — trying last session's rate first — and locks onto whatever
-  rate answers. After `AT+REBOOT`, `AT+SETTINGS=RESET`, or a firmware flash the
-  page re-sweeps automatically, and a hand-typed `AT+BAUD_RATE=CONSOLE,<n>`
-  is followed to the new rate instead of desyncing the link. Disconnecting
-  leaves the device at its current rate.
+  rate answers. Each probe is `AT+BAUD_RATE?`, and a rate only counts once the
+  device's own reply names the rate the port is open at, so a late or stray
+  answer can never be credited to the wrong rate. After `AT+REBOOT`,
+  `AT+SETTINGS=RESET`, or a firmware flash the page re-sweeps automatically, and
+  a hand-typed `AT+BAUD_RATE=CONSOLE,<n>` is followed to the new rate instead of
+  desyncing the link. Disconnecting leaves the device at its current rate.
 - **Console tab** — interactive AT command terminal (line editing, history, ANSI
   colors), a Receiver Statistics panel, a Device Status card, and firmware upload.
   - Statistics update whenever an `RX_STATS=` response appears — type
@@ -40,11 +42,6 @@ Chrome or Edge (works from `file://`, no server needed) and click **Connect**
   - Each moving aircraft gets a **velocity vector**: a screen-space line along its
     direction whose length scales with speed (about one icon width at 250 kt,
     clamped) — zooming the map never changes its on-screen size.
-  - The **Interpolate positions** toggle (top-right of the map, persisted) dead-reckons
-    aircraft between the 1 Hz updates using the reported speed and direction, so
-    fast traffic glides instead of jumping. The speed used is whatever the device
-    reports (`gs`, which may be airspeed-derived for some UAT traffic). Trails,
-    table, and sidebar always show raw reported values.
   - These changes are RAM-only (`AT+SETTINGS=SAVE` is never issued), so a device
     power cycle always returns to the persisted configuration — including if the
     page is closed while on the Map tab (a best-effort restore is attempted on
