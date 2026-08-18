@@ -118,9 +118,11 @@ bool SubGHzRadio::Init() {
     // RF_cmdPropRxAdv.pktConf.bRepeatOk = 0;  // Go back to sync search after receiving a packet correctly.
     // RF_cmdPropRxAdv.pktConf.bRepeatNok = 0; // Go back to sync search after receiving a packet incorrectly.
     // Sync on the most significant 32 bits of the 36 bit sync word. Save the last 4 bits of sync for discrimination
-    // between uplink and ADSB packets in the payload. RF_cmdPropRx.syncWord = RawUATADSBPacket::kSyncWordMS32;
+    // between uplink and ADSB packets in the payload. syncWord1 is "alternative sync word if non-zero"
+    // (rf_prop_cmd.h), so 0 disables uplink reception at the RF core entirely (AT+SUBG_MODE=UAT_RX_NO_UPLINK):
+    // no 552-byte receptions and no FEC decode work for uplinks.
     RF_cmdPropRxAdv.syncWord0 = RawUATADSBPacket::kSyncWordMS32;
-    RF_cmdPropRxAdv.syncWord1 = RawUATUplinkPacket::kSyncWordMS32;
+    RF_cmdPropRxAdv.syncWord1 = UplinkRxEnabled() ? RawUATUplinkPacket::kSyncWordMS32 : 0;
 
     // Must be 0 (unlimited) so that CMD_PROP_SET_LEN (called in RF_EventNDataWritten) can shorten reception for
     // ADSB packets instead of always receiving the full 552-byte uplink length. If the RF callback is preempted
@@ -176,6 +178,7 @@ bool SubGHzRadio::Init() {
     if (ret != RF_EventLastCmdDone) {
         CONSOLE_ERROR("SubGHzRadio::Init", "Failed to set frequency.");
         RF_close(rf_handle_);
+        rf_handle_ = nullptr;
         return false;  // Failed to run command FS.
     }
 
@@ -183,11 +186,17 @@ bool SubGHzRadio::Init() {
 }
 
 bool SubGHzRadio::DeInit() {
-    RF_close(rf_handle_);
+    if (rf_handle_ != nullptr) {
+        RF_close(rf_handle_);
+        rf_handle_ = nullptr;
+    }
     return true;
 }
 
 bool SubGHzRadio::Suspend() {
+    if (rf_handle_ == nullptr) {
+        return true;  // Already closed (e.g. user-disabled via AT+RX_ENABLE): nothing holds the RF core.
+    }
     // Release the RF core so the MCU can reach STANDBY: the RF core holds a
     // PowerCC26XX_DISALLOW_STANDBY constraint the entire time it is powered. Abort the continuous RX
     // command (abrupt mode 0 -- it has no graceful stopping boundary), then DeInit()'s RF_close pends
@@ -198,10 +207,71 @@ bool SubGHzRadio::Suspend() {
 }
 
 bool SubGHzRadio::Resume() {
-    // Re-open the RF core and restart UAT reception after a Suspend()/STANDBY cycle. Init() re-runs the
-    // full RF_open + CMD_FS + StartPacketRx sequence, the same known-good path StopCWTest() uses.
+    // Re-open the RF core and restart UAT reception after a Suspend()/STANDBY cycle (unless the user has
+    // the receiver disabled). Init() re-runs the full RF_open + CMD_FS + StartPacketRx sequence, the same
+    // known-good path StopCWTest() uses.
+    return RestoreRx();
+}
+
+bool SubGHzRadio::RestoreRx() {
+    if (!rx_requested_) {
+        rx_enabled = false;
+        return true;  // User has the receiver disabled: leave the RF client closed.
+    }
     rx_enabled = true;
     return Init();
+}
+
+bool SubGHzRadio::SetRxEnabled(bool enabled) {
+    rx_requested_ = enabled;
+    if (!enabled) {
+        if (rf_handle_ == nullptr || !rx_enabled) {
+            // Already closed, or a CW/RSSI test / Suspend() owns the RF core: its restore path (RestoreRx()) will
+            // honor rx_requested_ and leave the radio closed.
+            return true;
+        }
+        // Same teardown as Suspend(): abort the continuous RX command and close the RF client.
+        rx_enabled = false;
+        RF_cancelCmd(rf_handle_, rx_cmd_handle_, 0);
+        return DeInit();
+    }
+    if (rf_handle_ != nullptr) {
+        // Already receiving, or a CW/RSSI test owns the RF core and its Stop*() -> RestoreRx() will bring RX up.
+        return true;
+    }
+    rx_enabled = true;
+    return Init();
+}
+
+bool SubGHzRadio::SetMode(SettingsManager::SubGHzRadioMode mode) {
+    if (mode >= SettingsManager::kNumSubGHzRadioModes) {
+        // Guard against stale persisted settings holding a removed enum value (mirrors ADSBee::SetR1090PreambleMode).
+        mode = SettingsManager::kSubGHzRadioModeUATRx;
+    }
+    if (mode == mode_) {
+        return true;
+    }
+    mode_ = mode;
+
+    // Nothing to restart if the RF client is closed (before Init(), Suspend()ed, user-disabled) or a CW/RSSI test
+    // owns the RX command: Init()/RestoreRx() reads mode_ when reception next comes up.
+    if (rf_handle_ == nullptr || !rx_enabled) {
+        return true;
+    }
+
+    // syncWord1 is only read when CMD_PROP_RX_ADV starts, and re-posting the aborted RF_cmdPropRxAdv without an
+    // RF_close/RF_open cycle is rejected with PROP_ERROR_PAR (see StartRssiScan()), so tear the client down and
+    // rebuild it exactly like Suspend()/Resume(). Clear the stale DONE_ABORT status first so Update() can't
+    // misread it as "RX ended" and double-post before the RF core marks the new command PENDING.
+    RF_cancelCmd(rf_handle_, rx_cmd_handle_, 0);
+    DeInit();
+    ((RF_Op*)&RF_cmdPropRxAdv)->status = IDLE;
+    if (!Init()) {
+        CONSOLE_ERROR("SubGHzRadio::SetMode", "Failed to restart RX in mode %s.",
+                      SettingsManager::kSubGHzModeStrs[mode_]);
+        return false;
+    }
+    return true;
 }
 
 bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t* filled_entry) {
@@ -243,6 +313,11 @@ bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t* filled_entry) {
             break;
         }
         case RawUATUplinkPacket::kUplinkMessageNumBytes: {
+            if (!UplinkRxEnabled()) {
+                // Uplink RX is disabled at the RF core (syncWord1 = 0), but a corrupted sync LS4 nibble on an ADS-B
+                // sync, or a packet already in flight during a mode switch, can still land here. Drop it.
+                return false;
+            }
             RawUATUplinkPacket raw_packet = RawUATUplinkPacket(packet_data, current_packet_len_bytes);
             raw_packet.sigs_dbm = rssi_dbm;
             raw_packet.mlat_48mhz_64bit_counts = timestamp;
@@ -279,6 +354,13 @@ static uint16_t saved_fs_frequency = 0x03D2;  // 978 MHz.
 static uint16_t saved_fs_fract = 0;
 
 bool SubGHzRadio::StartCWTest(uint32_t freq_mhz) {
+    // CMD_FS / CMD_TX_TEST need an open RF client. If the receiver is user-disabled (RF client closed), open it
+    // now; the RX command Init() posts is cancelled immediately below, and StopCWTest() -> RestoreRx() honors the
+    // disabled state afterward.
+    if (rf_handle_ == nullptr && !Init()) {
+        CONSOLE_ERROR("SubGHzRadio::StartCWTest", "Failed to open the RF client.");
+        return false;
+    }
     // Stop normal reception and prevent Update() from restarting it while the carrier is on. Use an
     // abrupt abort (mode 0): a graceful abort waits for a stopping boundary that never comes for the
     // continuous RX command, leaving it stuck in the command queue.
@@ -354,15 +436,17 @@ bool SubGHzRadio::StopCWTest() {
     DeInit();
     RF_cmdFs.frequency = saved_fs_frequency;
     RF_cmdFs.fractFreq = saved_fs_fract;  // Restore the pre-test frequency before Init() re-runs CMD_FS.
-    rx_enabled = true;
-    return Init();
+    return RestoreRx();  // Leaves the RF client closed if the receiver is user-disabled.
 }
 
 bool SubGHzRadio::StartRssiScan(uint32_t freq_mhz) {
     // Stop normal reception and prevent Update() from restarting it while the scan owns the RX
-    // command. Abrupt abort (mode 0) for the same reason as StartCWTest().
+    // command. Abrupt abort (mode 0) for the same reason as StartCWTest(). The RF client may already be
+    // closed if the receiver is user-disabled; Init() below opens it either way.
     rx_enabled = false;
-    RF_cancelCmd(rf_handle_, rx_cmd_handle_, 0);
+    if (rf_handle_ != nullptr) {
+        RF_cancelCmd(rf_handle_, rx_cmd_handle_, 0);
+    }
     // Fully reset the RF client before restarting RX at the scan frequency: reposting the aborted
     // RF_cmdPropRxAdv without the RF_close/RF_open cycle is rejected by the RF core with
     // PROP_ERROR_PAR. Init() rebuilds the data-entry queue and re-runs CMD_FS, mirroring the
@@ -384,11 +468,10 @@ bool SubGHzRadio::StartRssiScan(uint32_t freq_mhz) {
     if (!Init()) {
         CONSOLE_ERROR("SubGHzRadio::StartRssiScan", "Failed to restart RX at %lu MHz.", (unsigned long)freq_mhz);
         // Best-effort restore at the original frequency. Don't use StopRssiScan() here: if Init()
-        // failed at RF_open, rf_handle_ is invalid and StopRssiScan()'s RF_cancelCmd would misuse it.
+        // failed at RF_open, rf_handle_ is null and StopRssiScan()'s RF_cancelCmd would misuse it.
         RF_cmdFs.frequency = saved_fs_frequency;
         RF_cmdFs.fractFreq = saved_fs_fract;
-        rx_enabled = true;
-        Init();
+        RestoreRx();
         return false;
     }
 
@@ -414,20 +497,21 @@ bool SubGHzRadio::StartRssiScan(uint32_t freq_mhz) {
 int8_t SubGHzRadio::ReadRssiDbm() { return RF_getRssi(rf_handle_); }
 
 bool SubGHzRadio::StopRssiScan() {
-    RF_cancelCmd(rf_handle_, rx_cmd_handle_, 0);
+    if (rf_handle_ != nullptr) {
+        RF_cancelCmd(rf_handle_, rx_cmd_handle_, 0);
+    }
     // Fully reset the RF client to guarantee an empty command queue before re-posting RX, mirroring
     // StopCWTest().
     DeInit();
     RF_cmdFs.frequency = saved_fs_frequency;
     RF_cmdFs.fractFreq = saved_fs_fract;  // Restore the pre-scan frequency before Init() re-runs CMD_FS.
-    rx_enabled = true;
-    return Init();
+    return RestoreRx();  // Leaves the RF client closed if the receiver is user-disabled.
 }
 #endif
 
 bool SubGHzRadio::Update() {
-    if (!rx_enabled) {
-        return true;
+    if (!rx_enabled || rf_handle_ == nullptr) {
+        return true;  // Not receiving, or the RF client is closed (user-disabled / failed Init): nothing to restart.
     }
 
     volatile uint16_t rx_status = ((volatile RF_Op*)&RF_cmdPropRxAdv)->status;

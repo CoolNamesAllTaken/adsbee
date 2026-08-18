@@ -67,6 +67,10 @@ the boot ROM enters the serial bootloader; if that fails it falls back to
 CCFG must enable the bootloader backdoor (see the flasher README).
 
 Entry never erases anything by itself; erase begins only after the bootloader ACKs.
+Only the 2 KB flash sectors covered by the image are erased (`SECTOR_ERASE`, never a
+bank erase), so the module's Settings (`0x000FC000`) and Device Info / OTA keys
+(`0x000FE000`) survive a reflash; an image that reaches into those sectors is refused
+before anything is erased.
 If a flash fails partway, the device stays in the ROM bootloader — reopen the dialog
 and **Retry**. The board cannot be bricked (an interrupted flash leaves the
 factory-default CCFG, which keeps the bootloader enabled).

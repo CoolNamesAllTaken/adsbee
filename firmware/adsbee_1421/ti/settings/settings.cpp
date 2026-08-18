@@ -3,6 +3,7 @@
 #include "adsbee.hh"
 #include "comms.hh"
 #include "flash_utils.hh"
+#include "sub_ghz_radio.hh"
 
 /* CC1314R10 (CC13X4) flash: 1 MB (0x00000000 - 0x000FFFFF)
    Flash sector size: 2 KB (0x800), region size: 8 KB (4 sectors)
@@ -25,6 +26,9 @@ bool SettingsManager::Apply() {
 
     adsbee.SetRx1090Enabled(settings.r1090_rx_enabled);
     adsbee.SetRxSubGHzEnabled(settings.subg_rx_enabled);
+    // subg_radio.Init() runs before Apply() at boot (see main.cpp), so a persisted non-default mode costs one RX
+    // restart here; SetMode() is a no-op when the mode is unchanged.
+    subg_radio.SetMode(settings.subg_mode);
     adsbee.SetWatchdogTimeoutSec(settings.watchdog_timeout_sec);
     adsbee.SetR1090PreambleMode(settings.r1090_preamble_mode);
     adsbee.SetR1090Gain(settings.r1090_gain);
@@ -90,6 +94,7 @@ bool SettingsManager::Save() {
     // stale. This mirrors the reverse copy performed in Apply().
     settings.r1090_rx_enabled = adsbee.Rx1090IsEnabled();
     settings.subg_rx_enabled = adsbee.RxSubGHzIsEnabled();
+    settings.subg_mode = subg_radio.GetMode();
     settings.watchdog_timeout_sec = adsbee.GetWatchdogTimeoutSec();
     settings.r1090_preamble_mode = adsbee.GetR1090PreambleMode();
     settings.r1090_gain = adsbee.GetR1090Gain();
@@ -146,7 +151,7 @@ void SettingsManager::Print() {
     // ADSBee settings
     CONSOLE_PRINTF("\t1090 Receiver: %s\r\n", adsbee.Rx1090IsEnabled() ? "ENABLED" : "DISABLED");
     CONSOLE_PRINTF("\tSub-GHz Receiver: %s\r\n", adsbee.RxSubGHzIsEnabled() ? "ENABLED" : "DISABLED");
-    CONSOLE_PRINTF("\tSub-GHz Mode: %s\r\n", kSubGHzModeStrs[settings.subg_mode]);
+    CONSOLE_PRINTF("\tSub-GHz Mode: %s\r\n", kSubGHzModeStrs[subg_radio.GetMode()]);
     CONSOLE_PRINTF("\tWatchdog Timeout: %lu seconds\r\n", adsbee.GetWatchdogTimeoutSec());
     CONSOLE_PRINTF("\t1090 Preamble Mode: %s\r\n", kR1090PreambleModeStrs[adsbee.GetR1090PreambleMode()]);
     CONSOLE_PRINTF("\t1090 Gain: %u (0 = auto AGC)\r\n", adsbee.GetR1090Gain());
@@ -232,8 +237,9 @@ void SettingsManager::PrintAT() {
             break;
     }
 
+    // AT+SUBG_MODE
+    CONSOLE_PRINTF("AT+SUBG_MODE=%s\r\n", kSubGHzModeStrs[subg_radio.GetMode()]);
+
     // AT+WATCHDOG
     CONSOLE_PRINTF("AT+WATCHDOG=%lu\r\n", adsbee.GetWatchdogTimeoutSec());
-
-    // NOTE: settings.subg_mode has no AT command (only UAT_RX is supported), so it is not dumped.
 }

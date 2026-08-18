@@ -42,7 +42,14 @@ HEAPSIZE = 16384; /* Size of heap buffer used by HeapMem */
 
 MEMORY
 {
-    FLASH (RX)      : ORIGIN = 0x00000000, LENGTH = 0x00100000
+    /*
+     * The CC1314R10 main bank is 1 MB, but its top 16 KB is persistent storage owned by the
+     * application at run time -- Settings @ 0x000FC000 (8 KB) and Device Info / OTA keys @
+     * 0x000FE000 (8 KB), see settings/settings.cpp -- and must never be part of the linked image
+     * (the programmer/console flashers erase only image-covered sectors so those survive a
+     * reflash). Cap FLASH below it so an image that grows into that region fails to link.
+     */
+    FLASH (RX)      : ORIGIN = 0x00000000, LENGTH = 0x000FC000
     /*
      * Customer Configuration Area and Bootloader Backdoor configuration in
      * flash

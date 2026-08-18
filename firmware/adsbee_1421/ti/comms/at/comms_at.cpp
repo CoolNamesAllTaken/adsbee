@@ -681,6 +681,32 @@ CPP_AT_CALLBACK(CommsManager::ATSettingsCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATSubGRxModeCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%s", SettingsManager::kSubGHzModeStrs[subg_radio.GetMode()]);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (!CPP_AT_HAS_ARG(0)) {
+                CPP_AT_ERROR("Need to specify a Sub-GHz RX mode.");
+            }
+            for (uint16_t i = 0; i < SettingsManager::kNumSubGHzRadioModes; i++) {
+                if (args[0].compare(SettingsManager::kSubGHzModeStrs[i]) == 0) {
+                    SettingsManager::SubGHzRadioMode mode = static_cast<SettingsManager::SubGHzRadioMode>(i);
+                    settings_manager.settings.subg_mode = mode;
+                    if (!subg_radio.SetMode(mode)) {
+                        CPP_AT_ERROR("Failed to restart Sub-GHz RX in mode %s.", args[0].data());
+                    }
+                    CPP_AT_SUCCESS();
+                }
+            }
+            CPP_AT_ERROR("Sub-GHz RX mode %s not recognized.", args[0].data());
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATUptimeCallback) {
     switch (op) {
         case '?':
@@ -1065,6 +1091,14 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                     "Display nonvolatile settings.\r\n\tAT+SETTINGS?\r\n\t+SETTINGS=...\r\n\tDump settings in AT "
                     "command format.\r\n\tAT+SETTINGS?DUMP\r\n\t+SETTINGS=...",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSettingsCallback, comms_manager)},
+    {.command = "SUBG_MODE",
+     .min_args = 0,
+     .max_args = 1,
+     .help_string = "AT+SUBG_MODE=<mode [UAT_RX UAT_RX_NO_UPLINK]>\r\n\tSet the Sub-GHz receiver protocol mode. "
+                    "UAT_RX receives 978MHz UAT ADS-B and ground uplink messages; UAT_RX_NO_UPLINK receives ADS-B "
+                    "only (uplink sync word disabled at the RF core). Takes effect immediately; persist with "
+                    "AT+SETTINGS=SAVE.\r\n\tAT+SUBG_MODE?\r\n\tQuery the current mode.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSubGRxModeCallback, comms_manager)},
 #ifdef HARDWARE_UNIT_TESTS
     {.command = "TEST",
      .min_args = 0,

@@ -16,7 +16,8 @@ const char
 
 const char SettingsManager::kSubGHzModeStrs[SettingsManager::kNumSubGHzRadioModes]
                                            [SettingsManager::kSubGHzModeStrMaxLen] = {
-                                               "UAT_RX",  // UAT mode (978MHz receiver).
+                                               "UAT_RX",            // UAT ADS-B + ground uplink.
+                                               "UAT_RX_NO_UPLINK",  // UAT ADS-B only.
 };
 
 const char SettingsManager::kR1090PreambleModeStrs[SettingsManager::kNumR1090PreambleModes]

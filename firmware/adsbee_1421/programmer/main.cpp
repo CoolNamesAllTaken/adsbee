@@ -109,7 +109,8 @@ static bool NegotiateConsole(uint32_t target_baud, bool print_version) {
     StatusSet(Status::kNegotiating);
     IdleMs(kBootWaitMs);
 
-    // Generous window: first boot after a flash rewrites settings sectors and re-inits radios.
+    // Generous window: first boot after a flash may rewrite the settings sectors (only when the
+    // settings version changed -- the flash preserves them otherwise) and re-inits radios.
     // Three passes over the 5-rate sweep ~= the old fixed-rate 10 x 500 ms window.
     uint32_t found_baud = 0;
     for (int pass = 0; pass < 3 && !found_baud; pass++) found_baud = AtFindConsoleBaud();

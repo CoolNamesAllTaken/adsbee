@@ -16,6 +16,7 @@ extern "C" {
 #include "bsp.hh"
 // #include "buffer_utils.hh"
 #include "comms.hh"
+#include "settings.hh"
 #include "unit_conversions.hh"
 #include "uat_packet.hh"
 
@@ -88,6 +89,34 @@ public:
      */
     bool HandlePacketRx(rfc_dataEntryPartial_t *filled_entry);
 
+    /**
+     * Sets the Sub-GHz protocol mode (AT+SUBG_MODE). CMD_PROP_RX_ADV latches its sync words when the command
+     * starts, so if normal reception is running and the mode changed, the RX command is aborted and the RF client
+     * re-initialized through the same RF_cancelCmd -> DeInit() -> Init() path used by Suspend()/Resume() and
+     * StopCWTest()/StopRssiScan(). If the RF client is closed (pre-Init, suspended, user-disabled) or a CW/RSSI test
+     * owns the RF command, the mode is stored and applied by the next Init(). Main-loop context only.
+     * @param mode Mode to apply. Out-of-range values (stale persisted settings) fall back to UAT_RX.
+     * @retval True on success (including no-op), false if the RX restart failed.
+     */
+    bool SetMode(SettingsManager::SubGHzRadioMode mode);
+    SettingsManager::SubGHzRadioMode GetMode() const { return mode_; }
+
+    /**
+     * @retval True when the RF core also syncs on the UAT ground-uplink sync word (RF_cmdPropRxAdv.syncWord1).
+     */
+    bool UplinkRxEnabled() const { return mode_ == SettingsManager::kSubGHzRadioModeUATRx; }
+
+    /**
+     * User enable/disable of the Sub-GHz receiver (AT+RX_ENABLE). Disabling aborts RX and closes the RF client
+     * (which also releases its STANDBY power constraint); enabling re-opens it. The requested state survives
+     * Suspend()/Resume() and the CW/RSSI test restore paths, which re-open the radio only if it is enabled.
+     * Main-loop context only.
+     * @param enabled True to receive, false to shut the receiver down.
+     * @retval True on success, false if the RF client failed to open/close.
+     */
+    bool SetRxEnabled(bool enabled);
+    bool RxIsEnabled() const { return rx_requested_; }
+
 #ifdef HARDWARE_UNIT_TESTS
     /**
      * Starts an unmodulated continuous-wave (CW) carrier for testing. Cancels any in-progress packet
@@ -127,6 +156,9 @@ public:
     bool StopRssiScan();
 #endif
 
+    // Live "normal packet RX owns the RF command" flag: false while Suspend()ed, user-disabled, or a CW/RSSI test
+    // owns the RF core. Distinct from rx_requested_ (the user's AT+RX_ENABLE intent), which decides whether the
+    // restore paths bring RX back up.
     bool rx_enabled = true;
 
     // Health / diagnostics counter, reported and reset via AT+RX_STATS. Incremented when the RX
@@ -134,10 +166,20 @@ public:
     uint32_t rx_error_restart_count = 0;
 
 private:
+    /**
+     * Brings normal RX back up after Resume()/StopCWTest()/StopRssiScan() if the user has it enabled; otherwise
+     * leaves the RF client closed.
+     * @retval True on success (including "left closed"), false if Init() failed.
+     */
+    bool RestoreRx();
+
     SubGHzRadioConfig config_;
 
-    RF_Handle rf_handle_;
+    RF_Handle rf_handle_ = nullptr;  // nullptr whenever the RF client is closed.
     RF_Object rf_object_;
+
+    SettingsManager::SubGHzRadioMode mode_ = SettingsManager::kSubGHzRadioModeUATRx;
+    bool rx_requested_ = true;  // User intent (AT+RX_ENABLE); see rx_enabled.
 
     rfc_dataEntryPartial_t *current_data_entry_; // Pointer to the data entry being processed (not held by the RF core).
     rfc_propRxOutput_t rx_statistics_;

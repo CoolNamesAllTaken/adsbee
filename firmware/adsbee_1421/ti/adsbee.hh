@@ -28,9 +28,10 @@ class ADSBee {
     bool Update();
 
     void SetRx1090Enabled(bool enabled) { rx_1090_enabled_ = enabled; }
-    void SetRxSubGHzEnabled(bool enabled) { rx_subg_enabled_ = enabled; }
     bool Rx1090IsEnabled() const { return rx_1090_enabled_; }
-    bool RxSubGHzIsEnabled() const { return rx_subg_enabled_; }
+    // Sub-GHz receiver enable is owned by SubGHzRadio (it must open/close the RF core); these forward to it.
+    void SetRxSubGHzEnabled(bool enabled);
+    bool RxSubGHzIsEnabled() const;
 
     bool SetWatchdogTimeoutSec(uint32_t timeout_sec);
     inline uint32_t GetWatchdogTimeoutSec() const { return watchdog_timeout_sec_; }
@@ -93,7 +94,6 @@ class ADSBee {
     ADSBeeConfig config_;
 
     bool rx_1090_enabled_ = false;
-    bool rx_subg_enabled_ = false;
 
     SettingsManager::R1090PreambleMode r1090_preamble_mode_ = SettingsManager::kR1090PreambleModeModeS;
     uint8_t r1090_gain_ = 10;      // 0 = auto, 1..15 manual (13 = max). Default: manual step 10.

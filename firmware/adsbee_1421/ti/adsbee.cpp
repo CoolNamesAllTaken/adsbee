@@ -13,6 +13,7 @@
 #include "flash_utils.hh"
 #include "led.hh"
 #include "packet_decoder.hh"
+#include "sub_ghz_radio.hh"
 #include "uat_packet_decoder.hh"
 
 ADSBee::ADSBee(ADSBeeConfig config) : lr2021(config.lr2021_config), config_(config) {}
@@ -65,6 +66,10 @@ bool ADSBee::ApplyReceiverConfig() {
     }
     return lr2021.SetOokADSB(r1090_preamble_mode_, r1090_gain_, r1090_rx_boost_);
 }
+
+void ADSBee::SetRxSubGHzEnabled(bool enabled) { subg_radio.SetRxEnabled(enabled); }
+
+bool ADSBee::RxSubGHzIsEnabled() const { return subg_radio.RxIsEnabled(); }
 
 void ADSBee::SetR1090PreambleMode(SettingsManager::R1090PreambleMode mode) {
     if (mode >= SettingsManager::kNumR1090PreambleModes) {

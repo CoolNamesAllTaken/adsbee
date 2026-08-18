@@ -22,6 +22,12 @@ MAIN_FLASH_BASE = 0x00000000
 MAIN_FLASH_SIZE = 0x00100000  # CC1314R10: 1 MB main bank
 CCFG_BASE = 0x50000000
 CCFG_SIZE = 0x800
+# Top 16 KB of the main bank is persistent storage owned by the application, never by the image:
+# Settings @ 0x000FC000 (8 KB) and Device Info (part code, OTA keys) @ 0x000FE000 (8 KB); see
+# firmware/adsbee_1421/ti/settings/settings.cpp. The programmer erases only image-covered sectors
+# so these survive a reflash -- which only holds if the image never reaches up here. Refuse to
+# bake one that does (the firmware linker script also caps FLASH at this address).
+PROTECTED_FLASH_START = 0x000FC000
 
 
 class HexError(Exception):
@@ -117,12 +123,20 @@ def align_segments(segments, memory):
 
 
 def classify_segments(segments):
-    """Splits into (main, ccfg) lists, erroring on anything outside both regions."""
+    """Splits into (main, ccfg) lists, erroring on anything outside both regions or inside the
+    protected settings / device-info sectors at the top of the main bank."""
     main_segments = []
     ccfg_segments = []
     for start, data in segments:
         end = start + len(data)
         if MAIN_FLASH_BASE <= start and end <= MAIN_FLASH_BASE + MAIN_FLASH_SIZE:
+            if end > PROTECTED_FLASH_START:
+                raise HexError(
+                    "Segment 0x{:08X}..0x{:08X} overlaps the reserved settings / device-info "
+                    "region at 0x{:08X}; refusing to bake an image that would clobber OTA keys".format(
+                        start, end, PROTECTED_FLASH_START
+                    )
+                )
             main_segments.append((start, data))
         elif CCFG_BASE <= start and end <= CCFG_BASE + CCFG_SIZE:
             ccfg_segments.append((start, data))

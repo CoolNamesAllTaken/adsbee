@@ -3151,6 +3151,11 @@
             CCFG_BASE: 0x50000000,
             CCFG_SIZE: 0x800,
             SECTOR_SIZE: 0x800,            // 2 KB
+            // Top 16 KB of the main bank is persistent storage owned by the firmware, never by
+            // the image: Settings @ 0x000FC000 (8 KB) and Device Info / OTA keys @ 0x000FE000
+            // (8 KB) -- see firmware/adsbee_1421/ti/settings/settings.cpp. The flasher erases only
+            // image-covered sectors so these survive a reflash; an image reaching up here is refused.
+            PROTECTED_FLASH_START: 0x000FC000,
 
             parse(text) {
                 let extBase = 0;
@@ -3537,10 +3542,38 @@
                     const chipId = await bl.getChipId();
                     this.logLine(`Bootloader up, chip ID: 0x${hex8(chipId).toUpperCase()}`);
 
-                    this.setStatus('Erasing main flash bank...');
+                    // Erase only the 2 KB sectors the image covers -- deliberately NOT a bank
+                    // erase, which would wipe the Settings and Device Info / OTA key sectors at the
+                    // top of the bank. All main sectors are erased before anything is programmed
+                    // (two segments can share a sector). Refuse up front if the image reaches into
+                    // the protected region so nothing is erased on a bad image.
+                    for (const seg of this._image.main) {
+                        if (seg.addr + seg.data.length > IntelHex.PROTECTED_FLASH_START) {
+                            throw new Error(`Refusing to flash: segment 0x${hex8(seg.addr)} ` +
+                                `(${seg.data.length} bytes) overlaps the reserved settings / ` +
+                                `device-info region at 0x${hex8(IntelHex.PROTECTED_FLASH_START)}.`);
+                        }
+                    }
+                    const sectorsToErase = [];
+                    for (const seg of this._image.main) {
+                        const start = seg.addr - (seg.addr % IntelHex.SECTOR_SIZE);
+                        const end = seg.addr + seg.data.length;
+                        for (let a = start; a < end; a += IntelHex.SECTOR_SIZE) {
+                            if (!sectorsToErase.includes(a)) sectorsToErase.push(a);
+                        }
+                    }
+                    sectorsToErase.sort((a, b) => a - b);
+                    this.setStatus(`Erasing ${sectorsToErase.length} image sectors...`);
                     this._eraseStarted = true;
-                    await bl.bankErase();
-                    this.logLine('Main flash bank erased.');
+                    for (let i = 0; i < sectorsToErase.length; i++) {
+                        await bl.sectorErase(sectorsToErase[i]);
+                        if ((i + 1) % 32 === 0 || i + 1 === sectorsToErase.length) {
+                            this.setStatus(`Erasing image sectors... ${i + 1}/${sectorsToErase.length}`);
+                        }
+                    }
+                    this.logLine(`${sectorsToErase.length} image sectors erased ` +
+                        `(0x${hex8(sectorsToErase[0])}..0x${hex8(sectorsToErase[sectorsToErase.length - 1] + IntelHex.SECTOR_SIZE)}); ` +
+                        'device info and settings preserved.');
                     if (this._image.ccfg.length) {
                         // Erasing CCFG restores TI factory defaults (bootloader enabled), so a
                         // failure after this point leaves the device recoverable over UART.
@@ -3586,8 +3619,9 @@
                     this.setProgress(100);
 
                     // Back to console mode. The device reboots at its saved console baud
-                    // (a fresh settings blob means the factory default) — re-sweep to
-                    // find it.
+                    // (settings persist across the flash unless the firmware's settings
+                    // version changed, in which case they reset to factory default) —
+                    // re-sweep to find it.
                     serial.setSink(new LineSink(lineRouter));
                     this.active = false;
                     this._state = 'done';

@@ -9,8 +9,13 @@ At power-up the jig:
 1. Enters the CC1314's factory ROM UART bootloader (SYNC backdoor held high through a reset
    pulse — same mechanism as `software/adsbee_1421_flasher/`).
 2. Compares the on-chip flash against the baked-in image using the bootloader's `CRC32` command
-   (per-segment CRCs are computed at build time). Blank or mismatched devices are bank-erased,
-   programmed, and CRC-verified. Matching devices are left untouched.
+   (per-segment CRCs are computed at build time). On blank or mismatched devices, only the 2 KB
+   flash sectors the image actually covers are erased (`SECTOR_ERASE`, never `BANK_ERASE`), then
+   programmed and CRC-verified. The Settings (`0x000FC000`) and Device Info / OTA key
+   (`0x000FE000`) sectors at the top of the bank are never touched, so both survive a reflash
+   (Settings still reset themselves if the firmware's settings version changed). Matching devices
+   are left untouched. `hex_to_c.py` refuses to bake, and the jig refuses to flash, an image that
+   reaches into those reserved sectors.
 3. Resets the module into the application, finds the console by sweeping the firmware's baud
    whitelist ({1000000, 921600, 460800, 230400, 115200}, factory-default-first — the app boots
    at its saved console baud, persisted via `AT+SETTINGS=SAVE`), drives its live rate to 1 M if
