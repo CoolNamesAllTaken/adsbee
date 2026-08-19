@@ -251,6 +251,7 @@ bool SubGHzRadio::SetMode(SettingsManager::SubGHzRadioMode mode) {
     if (mode == mode_) {
         return true;
     }
+    SettingsManager::SubGHzRadioMode previous_mode = mode_;
     mode_ = mode;
 
     // Nothing to restart if the RF client is closed (before Init(), Suspend()ed, user-disabled) or a CW/RSSI test
@@ -269,6 +270,9 @@ bool SubGHzRadio::SetMode(SettingsManager::SubGHzRadioMode mode) {
     if (!Init()) {
         CONSOLE_ERROR("SubGHzRadio::SetMode", "Failed to restart RX in mode %s.",
                       SettingsManager::kSubGHzModeStrs[mode_]);
+        // Roll back so GetMode() (and therefore AT+SUBG_MODE? / AT+SETTINGS=SAVE) reflects the mode the radio will
+        // actually come up in the next time Init()/RestoreRx() runs.
+        mode_ = previous_mode;
         return false;
     }
     return true;
@@ -506,10 +510,11 @@ int8_t SubGHzRadio::ReadRssiDbm() {
     // freezing on the last valid sample. Re-posting after a natural end is fine (Update() does exactly this in
     // normal operation); only re-posting after an *abort* needs the RF_close/RF_open cycle. Clear the stale
     // DONE/ERROR status first so the next poll can't misread it before the RF core marks the new command PENDING.
-    volatile uint16_t status = ((volatile RF_Op*)&RF_cmdPropRxAdv)->status;
+    volatile RF_Op* rx_op = (volatile RF_Op*)&RF_cmdPropRxAdv;  // Status is written by the RF core.
+    uint16_t status = rx_op->status;
     if (status != IDLE && status != PENDING && status != ACTIVE) {
         rssi_scan_rx_restart_count++;
-        ((RF_Op*)&RF_cmdPropRxAdv)->status = IDLE;
+        rx_op->status = IDLE;
         if (!StartPacketRx()) {
             return RF_GET_RSSI_ERROR_VAL;
         }

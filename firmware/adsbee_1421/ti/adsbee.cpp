@@ -67,7 +67,7 @@ bool ADSBee::ApplyReceiverConfig() {
     return lr2021.SetOokADSB(r1090_preamble_mode_, r1090_gain_, r1090_rx_boost_);
 }
 
-void ADSBee::SetRxSubGHzEnabled(bool enabled) { subg_radio.SetRxEnabled(enabled); }
+bool ADSBee::SetRxSubGHzEnabled(bool enabled) { return subg_radio.SetRxEnabled(enabled); }
 
 bool ADSBee::RxSubGHzIsEnabled() const { return subg_radio.RxIsEnabled(); }
 

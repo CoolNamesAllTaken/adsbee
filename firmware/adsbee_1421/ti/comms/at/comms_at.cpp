@@ -444,7 +444,9 @@ CPP_AT_CALLBACK(CommsManager::ATRxEnableCallback) {
                 bool all_enabled;
                 CPP_AT_TRY_ARG2NUM(0, all_enabled);
                 adsbee.SetRx1090Enabled(all_enabled);
-                adsbee.SetRxSubGHzEnabled(all_enabled);
+                if (!adsbee.SetRxSubGHzEnabled(all_enabled)) {
+                    CPP_AT_ERROR("Failed to %s the Sub-GHz receiver.", all_enabled ? "enable" : "disable");
+                }
             } else {
                 if (CPP_AT_HAS_ARG(1)) {
                     bool rx_1090_enabled;
@@ -454,7 +456,9 @@ CPP_AT_CALLBACK(CommsManager::ATRxEnableCallback) {
                 if (CPP_AT_HAS_ARG(2)) {
                     bool rx_subg_enabled;
                     CPP_AT_TRY_ARG2NUM(2, rx_subg_enabled);
-                    adsbee.SetRxSubGHzEnabled(rx_subg_enabled);
+                    if (!adsbee.SetRxSubGHzEnabled(rx_subg_enabled)) {
+                        CPP_AT_ERROR("Failed to %s the Sub-GHz receiver.", rx_subg_enabled ? "enable" : "disable");
+                    }
                 }
             }
             CPP_AT_SUCCESS();
@@ -694,10 +698,12 @@ CPP_AT_CALLBACK(CommsManager::ATSubGRxModeCallback) {
             for (uint16_t i = 0; i < SettingsManager::kNumSubGHzRadioModes; i++) {
                 if (args[0].compare(SettingsManager::kSubGHzModeStrs[i]) == 0) {
                     SettingsManager::SubGHzRadioMode mode = static_cast<SettingsManager::SubGHzRadioMode>(i);
-                    settings_manager.settings.subg_mode = mode;
+                    // Apply to the radio first; only mirror into the settings struct once it took, so a failed
+                    // restart can't leave RAM settings (and a later AT+SETTINGS=SAVE) disagreeing with the radio.
                     if (!subg_radio.SetMode(mode)) {
                         CPP_AT_ERROR("Failed to restart Sub-GHz RX in mode %s.", args[0].data());
                     }
+                    settings_manager.settings.subg_mode = mode;
                     CPP_AT_SUCCESS();
                 }
             }

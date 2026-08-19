@@ -25,10 +25,12 @@ bool SettingsManager::Apply() {
     bool success = true;
 
     adsbee.SetRx1090Enabled(settings.r1090_rx_enabled);
-    adsbee.SetRxSubGHzEnabled(settings.subg_rx_enabled);
+    // Both of these can fail if the RF client fails to open/close or the RX command can't be restarted; fold that
+    // into the return value so boot/LOAD callers can see it.
+    success &= adsbee.SetRxSubGHzEnabled(settings.subg_rx_enabled);
     // subg_radio.Init() runs before Apply() at boot (see main.cpp), so a persisted non-default mode costs one RX
     // restart here; SetMode() is a no-op when the mode is unchanged.
-    subg_radio.SetMode(settings.subg_mode);
+    success &= subg_radio.SetMode(settings.subg_mode);
     adsbee.SetWatchdogTimeoutSec(settings.watchdog_timeout_sec);
     adsbee.SetR1090PreambleMode(settings.r1090_preamble_mode);
     adsbee.SetR1090Gain(settings.r1090_gain);

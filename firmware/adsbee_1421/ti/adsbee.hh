@@ -30,7 +30,8 @@ class ADSBee {
     void SetRx1090Enabled(bool enabled) { rx_1090_enabled_ = enabled; }
     bool Rx1090IsEnabled() const { return rx_1090_enabled_; }
     // Sub-GHz receiver enable is owned by SubGHzRadio (it must open/close the RF core); these forward to it.
-    void SetRxSubGHzEnabled(bool enabled);
+    // SetRxSubGHzEnabled() returns false if the RF client failed to open/close.
+    bool SetRxSubGHzEnabled(bool enabled);
     bool RxSubGHzIsEnabled() const;
 
     bool SetWatchdogTimeoutSec(uint32_t timeout_sec);
