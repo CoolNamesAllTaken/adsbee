@@ -142,11 +142,19 @@ public:
     bool StartRssiScan(uint32_t freq_mhz);
 
     /**
-     * Reads the instantaneous RSSI from the RF core. Only valid while an RX command is actively
-     * running (e.g. during a StartRssiScan()). Debug builds only.
-     * @retval RSSI in dBm, or RF_GET_RSSI_ERROR_VAL (-128) if the RF core is not receiving.
+     * Reads the instantaneous RSSI from the RF core during a StartRssiScan(). The RF core only reports RSSI while
+     * an RX command is running, and the packet-RX command the scan piggybacks on ends whenever the RF core thinks
+     * it received a packet or hits an RX buffer error (easy under a strong carrier); Update() won't re-arm it while
+     * rx_enabled is false, so this re-posts the RX command itself whenever it finds it ended (counted in
+     * rssi_scan_rx_restart_count). Debug builds only.
+     * @retval RSSI in dBm, or RF_GET_RSSI_ERROR_VAL (-128) if the RF client is closed or the RX command could not
+     * be re-armed.
      */
     int8_t ReadRssiDbm();
+
+    // Number of times ReadRssiDbm() had to re-post the RX command during the current/last RSSI scan. Reset by
+    // StartRssiScan(); reported by AT+RX_CW.
+    uint32_t rssi_scan_rx_restart_count = 0;
 
     /**
      * Stops an RSSI scan started with StartRssiScan() and resumes normal packet reception. Debug

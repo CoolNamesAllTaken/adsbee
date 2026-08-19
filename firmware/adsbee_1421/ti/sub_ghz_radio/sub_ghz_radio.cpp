@@ -462,6 +462,7 @@ bool SubGHzRadio::StartRssiScan(uint32_t freq_mhz) {
 
     // Clear stale status so the ACTIVE poll below can't misread a leftover DONE/ERROR value.
     ((RF_Op*)&RF_cmdPropRxAdv)->status = IDLE;
+    rssi_scan_rx_restart_count = 0;
 
     // RF_getRssi() only returns valid data while the RF core is executing an RX command, so bring
     // the radio back up (RF_open + CMD_FS + packet RX) at the scan frequency.
@@ -494,7 +495,27 @@ bool SubGHzRadio::StartRssiScan(uint32_t freq_mhz) {
     return true;
 }
 
-int8_t SubGHzRadio::ReadRssiDbm() { return RF_getRssi(rf_handle_); }
+int8_t SubGHzRadio::ReadRssiDbm() {
+    if (rf_handle_ == nullptr) {
+        return RF_GET_RSSI_ERROR_VAL;
+    }
+    // The scan reads RSSI while the normal packet-RX command runs, and the RF core only reports RSSI while an RX
+    // command is executing. That command ends whenever the RF core thinks it received a packet (bRepeatOk=0) or
+    // hits an RX buffer error -- easy under a strong carrier, which is exactly what a scan is used to observe --
+    // and Update() won't re-arm it while rx_enabled is false. Re-post it here so RSSI stays live instead of
+    // freezing on the last valid sample. Re-posting after a natural end is fine (Update() does exactly this in
+    // normal operation); only re-posting after an *abort* needs the RF_close/RF_open cycle. Clear the stale
+    // DONE/ERROR status first so the next poll can't misread it before the RF core marks the new command PENDING.
+    volatile uint16_t status = ((volatile RF_Op*)&RF_cmdPropRxAdv)->status;
+    if (status != IDLE && status != PENDING && status != ACTIVE) {
+        rssi_scan_rx_restart_count++;
+        ((RF_Op*)&RF_cmdPropRxAdv)->status = IDLE;
+        if (!StartPacketRx()) {
+            return RF_GET_RSSI_ERROR_VAL;
+        }
+    }
+    return RF_getRssi(rf_handle_);
+}
 
 bool SubGHzRadio::StopRssiScan() {
     if (rf_handle_ != nullptr) {
