@@ -64,8 +64,16 @@ if [ "$DO_CLEAN" -eq 1 ]; then
 fi
 
 # Verify the Settings/firmware version sync rule (see firmware/scripts/check_version_sync.sh).
-# Compares the committed state (HEAD) against the working tree.
-"$(pwd)/../scripts/check_version_sync.sh" HEAD WORKTREE
+# Compares the committed state (HEAD) against the working tree. Advisory only: a failure warns
+# and the build continues. The pre-commit hook installed by scripts/setup_dev.sh is the hard gate.
+# `set -e` does not apply to a command in an `if` condition, so this cannot abort the build.
+if ! "$(pwd)/../scripts/check_version_sync.sh" HEAD WORKTREE; then
+    echo ""
+    echo "WARNING: version sync check failed (see above). Continuing with the build anyway."
+    echo "         Firmware is only reflashed on a version mismatch, so a device flashed with"
+    echo "         this build may keep running stale firmware."
+    echo ""
+fi
 
 echo "Building ${APP} (${CONFIG}) in container ${SERVICE} ..."
 

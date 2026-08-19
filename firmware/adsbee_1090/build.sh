@@ -23,9 +23,17 @@ fi
 test_filter="${2:-}"
 
 # Verify the Settings/firmware version sync rule (see firmware/scripts/check_version_sync.sh).
-# Compares the committed state (HEAD) against the working tree.
+# Compares the committed state (HEAD) against the working tree. Advisory only: a failure warns
+# and the build continues. The pre-commit hook installed by scripts/setup_dev.sh is the hard gate.
+# `set -e` does not apply to a command in an `if` condition, so this cannot abort the build.
 check_version_sync() {
-    "$script_dir/../scripts/check_version_sync.sh" HEAD WORKTREE
+    if ! "$script_dir/../scripts/check_version_sync.sh" HEAD WORKTREE; then
+        echo ""
+        echo "WARNING: version sync check failed (see above). Continuing with the build anyway."
+        echo "         Coprocessors are only reflashed on a version mismatch, so a device flashed"
+        echo "         with this build may keep running stale coprocessor firmware."
+        echo ""
+    fi
 }
 
 check_esp_idf_version() {

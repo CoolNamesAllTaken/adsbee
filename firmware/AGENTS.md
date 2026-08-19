@@ -135,8 +135,9 @@ static constexpr uint32_t kSettingsVersion = N;
 
 ### Automated enforcement
 These rules are checked automatically by `scripts/check_version_sync.sh` (covers both products):
-- **`build.sh`** (both products') runs the check locally before every build.
-- **Local git hook** — catch it before you even commit. A native `pre-commit` hook (no external tooling) is installed by the dev setup script:
+- **`build.sh`** (both products') runs the check locally before every build, but only **warns** —
+  a failed check never blocks a local build.
+- **Local git hook** — the enforcing gate; catches it before you even commit. A native `pre-commit` hook (no external tooling) is installed by the dev setup script:
   ```
   bash firmware/scripts/setup_dev.sh
   ```

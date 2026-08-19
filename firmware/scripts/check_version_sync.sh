@@ -33,6 +33,10 @@ set -euo pipefail
 old_source="${1:-HEAD}"
 new_source="${2:-WORKTREE}"
 
+# Count of products that failed, so one product's problem doesn't hide the other's. The script
+# exits non-zero at the end if this is non-zero.
+failures=0
+
 root=$(git rev-parse --show-toplevel 2>/dev/null) || {
     echo "WARNING: not inside a git repository, skipping version sync check."
     exit 0
@@ -112,7 +116,8 @@ check_product() {
         echo "       $firmware_version_file was not bumped."
         echo "Fix: bump kFirmwareVersionPatch (or kFirmwareVersionReleaseCandidate for dev builds),"
         echo "     then commit it together with the settings change."
-        exit 1
+        failures=$((failures + 1))
+        return 0
     fi
 
     # Broader guard. Firmware is only reflashed onto coprocessors / targets when the reported
@@ -120,12 +125,13 @@ check_product() {
     # with a version bump silently leaves devices running a stale build. Harmless edits
     # (comments, formatting) also trip it, but a bump is cheap.
     if [ "$firmware_old" = "$firmware_new" ] && paths_changed "$old_source" "$new_source" "${watched_paths[@]}"; then
-        echo "WARNING: $product firmware paths (${watched_paths[*]}) changed but the version in"
-        echo "         $firmware_version_file was NOT bumped."
-        echo "         Firmware is only reflashed on a version mismatch, so devices will keep"
-        echo "         running STALE firmware after 'just flash'. Bump kFirmwareVersionPatch (or"
-        echo "         kFirmwareVersionReleaseCandidate for dev builds) to force the reflash."
-        exit 1
+        echo "ERROR: $product firmware paths (${watched_paths[*]}) changed but the version in"
+        echo "       $firmware_version_file was NOT bumped."
+        echo "       Firmware is only reflashed on a version mismatch, so devices will keep"
+        echo "       running STALE firmware after reflashing. Bump kFirmwareVersionPatch (or"
+        echo "       kFirmwareVersionReleaseCandidate for dev builds) to force the reflash."
+        failures=$((failures + 1))
+        return 0
     fi
 
     echo "$product version sync OK."
@@ -145,5 +151,10 @@ check_product adsbee_1421 \
     "firmware/adsbee_1421/ti/object_dictionary/object_dictionary.cpp" \
     "firmware/adsbee_1421" \
     "firmware/common"
+
+if [ "$failures" -ne 0 ]; then
+    echo "=== Version sync check FAILED for $failures product(s) (see above) ==="
+    exit 1
+fi
 
 echo "=== Version sync check passed ==="
