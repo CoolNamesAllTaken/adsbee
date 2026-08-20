@@ -36,25 +36,12 @@ message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
 project(adsbee_1421 C CXX ASM)
 
-# Derive firmware version from the single source of truth in object_dictionary.cpp.
-set(_od_cpp "${CMAKE_CURRENT_SOURCE_DIR}/object_dictionary/object_dictionary.cpp")
-file(READ "${_od_cpp}" _od_contents)
-foreach(_field Major Minor Patch ReleaseCandidate)
-    string(REGEX MATCH "ObjectDictionary::kFirmwareVersion${_field}[ \t]*=[ \t]*([0-9]+)[uUlL]*[ \t]*;" _ "${_od_contents}")
-    if(NOT CMAKE_MATCH_1 STREQUAL "")
-        set(_fw_${_field} "${CMAKE_MATCH_1}")
-    else()
-        message(FATAL_ERROR "Could not parse kFirmwareVersion${_field} from ${_od_cpp}")
-    endif()
-endforeach()
-set(FW_VERSION "${_fw_Major}.${_fw_Minor}.${_fw_Patch}")
-if(NOT _fw_ReleaseCandidate EQUAL 0)
-    set(FW_VERSION "${FW_VERSION}-rc${_fw_ReleaseCandidate}")
-endif()
+# Derive firmware version from the single source of truth in object_dictionary.cpp (shared module,
+# also used by the programmer build to stamp its artifacts with the baked firmware version).
+set(FW_VERSION_OBJECT_DICTIONARY "${CMAKE_CURRENT_SOURCE_DIR}/object_dictionary/object_dictionary.cpp")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/fw_version.cmake")
 set(ARTIFACT_BASE "${PROJECT_NAME}-${FW_VERSION}")
-message(STATUS "Firmware version: ${FW_VERSION} (artifact base: ${ARTIFACT_BASE})")
-# Re-run CMake configure when the version source changes so filenames stay in sync.
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_od_cpp}")
+message(STATUS "Artifact base: ${ARTIFACT_BASE}")
 
 # Compile definitions need to be defined before the target!
 add_compile_definitions(DeviceFamily_CC13X4)

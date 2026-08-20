@@ -88,7 +88,9 @@ In `ti/build/<Config>/`:
 | `adsbee_1421-<version>.hex` / `.elf` / `.map` | Version-stamped copies for release/CI (e.g. `adsbee_1421-0.3.6.hex`); version is parsed from `object_dictionary.cpp`. |
 
 In `programmer/build/<Config>/`: `adsbee_1421_programmer.uf2` (drag-and-drop onto the
-RP2040-Zero over BOOT) with the `ti` Release hex baked in.
+RP2040-Zero over BOOT) with the `ti` Release hex baked in, plus version-stamped copies
+`adsbee_1421_programmer-fw<version>.uf2` / `.elf` — the `fw` prefix marks the version as that of
+the **baked firmware** (the programmer has no version of its own), matching the names CI publishes.
 
 ## Version management
 

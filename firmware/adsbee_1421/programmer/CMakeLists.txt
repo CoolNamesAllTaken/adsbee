@@ -76,3 +76,23 @@ target_link_libraries(adsbee_1421_programmer
 
 # Produces adsbee_1421_programmer.uf2 for drag-and-drop flashing over BOOT.
 pico_add_extra_outputs(adsbee_1421_programmer)
+
+# ------------------------------------------------------------------------------------------------
+# Version-stamped artifact copies. The programmer has no version of its own -- its identity is the
+# CC1314 firmware baked into it -- so the stamp is the baked firmware version, with a "fw" prefix
+# (adsbee_1421_programmer-fw0.3.9.uf2) to mark it as such. Matches the names CI already publishes
+# (.github/workflows/firmware.yml). The unversioned names stay stable for flashing/debug tooling;
+# the stamped names are additional copies, mirroring the ti build's convention.
+# ------------------------------------------------------------------------------------------------
+set(FW_VERSION_OBJECT_DICTIONARY "${ADSBEE_1421_OBJECT_DICTIONARY}")
+include("${CMAKE_CURRENT_LIST_DIR}/../cmake/fw_version.cmake")
+set(PROGRAMMER_ARTIFACT_BASE "adsbee_1421_programmer-fw${FW_VERSION}")
+add_custom_command(TARGET adsbee_1421_programmer POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy
+        ${CMAKE_CURRENT_BINARY_DIR}/adsbee_1421_programmer.uf2
+        ${CMAKE_CURRENT_BINARY_DIR}/${PROGRAMMER_ARTIFACT_BASE}.uf2
+    COMMAND ${CMAKE_COMMAND} -E copy
+        $<TARGET_FILE:adsbee_1421_programmer>
+        ${CMAKE_CURRENT_BINARY_DIR}/${PROGRAMMER_ARTIFACT_BASE}.elf
+    COMMENT "Creating version-stamped uf2/elf copies (${PROGRAMMER_ARTIFACT_BASE})"
+)

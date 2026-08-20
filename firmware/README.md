@@ -128,7 +128,7 @@ The `-d` flag selects a Debug build, as for adsbee_1090.
 | Target | Output |
 |--------|--------|
 | CC1314 (Release) | `firmware/adsbee_1421/ti/build/Release/adsbee_1421.hex` (+ `.elf`, `.map`, version-stamped copies) |
-| Programmer | `firmware/adsbee_1421/programmer/build/Release/adsbee_1421_programmer.uf2` |
+| Programmer | `firmware/adsbee_1421/programmer/build/Release/adsbee_1421_programmer.uf2` (+ `.elf`, version-stamped `-fw<version>` copies) |
 
 See [adsbee_1421/AGENTS.md](adsbee_1421/AGENTS.md) for flashing, debugging, and the SYNC
 low-power sleep contract.
