@@ -78,6 +78,16 @@ class ADSBee {
     // serviced, so this is the primary "is the receiver bogging down" gauge. Updated by main().
     uint32_t max_loop_us = 0;
 
+    // Longest single UpdateLR2021() call, in microseconds (100 us clock granularity). With the async RX
+    // drain this should stay at one phase-advance worth of work; a regression toward the old blocking
+    // drain cost (hundreds of us) means the LR2021 path is stalling the loop again. Reported and reset
+    // via AT+RX_STATS.
+    uint32_t max_lr2021_us = 0;
+    // Longest wall time of one complete async RX drain (StartRxDrain -> data ready), in microseconds.
+    // Must stay well under the ~2.2 ms the 256-byte LR2021 FIFO buys at worst-case 1090 traffic.
+    // Reported and reset via AT+RX_STATS.
+    uint32_t lr2021_drain_max_us = 0;
+
     SettingsManager::RxPosition rx_position;
     bool rx_position_available = false;
 
@@ -89,6 +99,9 @@ class ADSBee {
     // which gates Mode S surface position decoding. Ported from the ADSBee 1090.
     void UpdateRxPosition();
     bool UpdateLR2021();
+    // Splits a drained LR2021 RX FIFO payload into per-packet Mode S frames and enqueues them for
+    // decoding. rx_buf points at the drain payload (valid until FinishRxDrain()).
+    void ParseLR2021RxFifo(const uint8_t* rx_buf, uint16_t rx_len_bytes);
     // (Re)applies the current receiver configuration (sync mode, gain, CRC filter) to the LR2021.
     bool ApplyReceiverConfig();
 
@@ -105,7 +118,8 @@ class ADSBee {
 
     uint32_t watchdog_timeout_sec_ = kDefaultWatchdogTimeoutSec;
 
-    uint8_t lr2021_rx_buf_[LR2021::kRxFifoMaxDepthBytes];
+    // Timestamp of the current async RX drain's StartRxDrain() call, for lr2021_drain_max_us.
+    uint32_t lr2021_drain_start_us_ = 0;
 };
 
 extern ADSBee adsbee;

@@ -238,6 +238,46 @@ class LR2021 {
     // Call BEFORE the next Init()/ApplyReceiverConfig(), which drives NSS/ENABLE via GPIO_write.
     void RestoreInterface();
 
+    // Async RX drain
+    //
+    // Non-blocking, DMA-driven version of the steady-state RX poll sequence (GetAndClearIrq ->
+    // GetRxFifoLevel -> ReadRxFifo). The drain is a state machine advanced from thread level via
+    // ServiceRxDrain(); the SPI completion callback (SWI context) only raises NSS and sets a flag, so it
+    // cannot encroach on the UAT RF SWI's ~15 us CMD_PROP_SET_LEN deadline (see sub_ghz_radio.cpp).
+    // Implementation in lr2021_async.cpp. Usage (see ADSBee::UpdateLR2021):
+    //   if (lr2021.DrainIdle()) lr2021.StartRxDrain();
+    //   switch (lr2021.ServiceRxDrain()) {
+    //       case LR2021::DrainResult::kDataReady: /* parse drain_payload() */ lr2021.FinishRxDrain(); ...
+    //   }
+    enum class DrainResult : uint8_t {
+        kIdle = 0,    // No drain in progress.
+        kInProgress,  // DMA in flight or waiting on BUSY; call again next loop iteration.
+        kNoData,      // Drain completed with nothing to read (no RX FIFO IRQ, or FIFO empty). Back to idle.
+        kDataReady,   // Payload available via drain_payload()/drain_level(); call FinishRxDrain() when done.
+        kError,       // SPI / stat / BUSY-timeout error; reason via drain_error_str(). Call FinishRxDrain().
+    };
+
+    // Kicks off a drain sequence. Returns false (and stays idle) if a drain is already in progress, the
+    // SPI handle is closed, or an abort is pending.
+    bool StartRxDrain();
+    // Advances the drain as far as currently possible and returns its status. Never blocks beyond GPIO
+    // reads; call once per main-loop iteration.
+    DrainResult ServiceRxDrain();
+    // Releases a terminal kDataReady / kError drain back to idle. drain_payload() is valid until this.
+    void FinishRxDrain();
+    bool DrainIdle() const { return drain_state_ == DrainState::kIdle; }
+    // Cancels any in-flight async transfer and resets the drain to idle. Thread level only (never from an
+    // ISR); DeInit() calls this so the SPI handle is never closed with a DMA in flight.
+    void CancelAsync();
+    // Valid in kDataReady until FinishRxDrain(): FIFO payload pointer and its length in bytes.
+    const uint8_t* drain_payload() const { return async_rx_buf_ + 2; }
+    uint16_t drain_level() const { return drain_fifo_level_; }
+    // True if the level readback reported the FIFO completely full (poll fell behind; frames were likely
+    // dropped by the radio on top of what we read).
+    bool drain_fifo_was_full() const { return drain_fifo_full_; }
+    uint32_t drain_irq_flags() const { return drain_irq_flags_; }
+    const char* drain_error_str() const { return drain_error_str_ ? drain_error_str_ : "none"; }
+
     // System firmware command enums (§5.6.1, opcodes 0x01xx)
 
     enum DioNum : uint8_t {
@@ -1291,6 +1331,37 @@ class LR2021 {
                (static_cast<uint32_t>(buf[2]) << 8) | static_cast<uint32_t>(buf[3]);
     }
 
+    // Async RX drain internals (lr2021_async.cpp).
+
+    enum class DrainState : uint8_t {
+        kIdle = 0,
+        kIrqCmdWait,    // Waiting for BUSY low to post the GetAndClearIrq opcode frame.
+        kIrqCmd,        // GetAndClearIrq frame 1 (2 B) DMA in flight.
+        kIrqRspWait,    // Waiting for BUSY low to post the GetAndClearIrq response frame.
+        kIrqRsp,        // GetAndClearIrq frame 2 (6 B) DMA in flight.
+        kLevelCmdWait,  // Waiting for BUSY low to post the GetRxFifoLevel opcode frame.
+        kLevelCmd,      // GetRxFifoLevel frame 1 (2 B) DMA in flight.
+        kLevelRspWait,  // Waiting for BUSY low to post the GetRxFifoLevel response frame.
+        kLevelRsp,      // GetRxFifoLevel frame 2 (4 B) DMA in flight.
+        kFifoWait,      // Waiting for BUSY low to post the ReadRxFifo frame.
+        kFifoRead,      // ReadRxFifo single frame (2 + level B) DMA in flight.
+        kDataReady,     // Terminal until FinishRxDrain().
+        kError,         // Terminal until FinishRxDrain().
+    };
+
+    // SPI completion callback, registered on the (callback-mode) SPI handle for ALL transfers. Runs in
+    // SWI context; NoRTOS SWIs are non-preemptive alongside the UAT RF SWI's ~15 us deadline, so this
+    // must stay to a couple of flag/GPIO writes: no logging, no SPI calls, no protocol parsing. Finds
+    // its LR2021 instance via SPI_Transaction::arg.
+    static void SPICallback(SPI_Handle handle, SPI_Transaction* transaction);
+    // Posts one NSS frame of the drain as a single DMA transaction into async_rx_buf_. tx_buf may be
+    // nullptr (clocks the driver's 0x00 default). Asserts NSS; SPICallback deasserts it on completion.
+    bool PostAsyncFrame(const uint8_t* tx_buf, size_t len);
+    // Enters a BUSY-wait drain state and arms its timeout.
+    void EnterBusyWait(DrainState state);
+    // Enters kError with a reason string (logged by the consumer at thread level).
+    DrainResult EnterDrainError(const char* reason);
+
     LR2021Config config_;
     ChipMode mode_ = ChipMode::kStartup;
     SPI_Params spi_params_;
@@ -1298,6 +1369,26 @@ class LR2021 {
     // Set from the SYNC ISR via RequestAbort(); checked in WaitUntilReady(); cleared in Init().
     volatile bool abort_requested_ = false;
     Stat last_stat_;
+
+    // Async RX drain state. The tx/rx buffers and transaction must be persistent: DMA reads/writes them
+    // after ServiceRxDrain() returns. One extra 2-byte slot ahead of the payload holds the ReadRxFifo
+    // opcode (TX) / Stat word (RX).
+    DrainState drain_state_ = DrainState::kIdle;
+    SPI_Transaction async_txn_ = {};
+    uint8_t async_tx_buf_[2 + kRxFifoMaxDepthBytes] = {};  // Opcode at [0:1]; [2..] stays zero (FIFO clocking).
+    uint8_t async_rx_buf_[2 + kRxFifoMaxDepthBytes] = {};  // Stat at [0:1]; response/payload at [2..].
+    volatile bool async_ok_ = false;         // Transfer status; written by SPICallback before async_done_.
+    volatile bool async_done_ = false;       // Set last by SPICallback; cleared when posting a frame.
+    volatile bool async_in_flight_ = false;  // True from post until SPICallback (or cancel).
+    uint32_t busy_wait_start_ms_ = 0;
+    uint32_t drain_irq_flags_ = 0;
+    uint16_t drain_fifo_level_ = 0;
+    bool drain_fifo_full_ = false;
+    const char* drain_error_str_ = nullptr;
+
+    // Synchronous shim state (see SPITransfer() in lr2021_ll.cpp).
+    volatile bool sync_done_ = false;   // Completion flag for the in-progress synchronous transfer.
+    volatile int32_t sync_status_ = 0;  // SPI_Status of the completed synchronous transfer.
 };
 
 extern LR2021 lr2021;

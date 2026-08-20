@@ -437,90 +437,92 @@ void ADSBee::PruneAircraftDictionary() {
 
 bool ADSBee::UpdateLR2021() {
     // Once the SYNC ISR has handed the bus to the host, issue no further transactions and stay quiet:
-    // any in-progress calls below fail via the abort flag, which is expected, not an error. The main
-    // loop enters sync sleep at the top of its next iteration.
+    // an in-progress drain unwinds via the abort flag inside ServiceRxDrain(), which is expected, not
+    // an error. The main loop enters sync sleep at the top of its next iteration.
     if (SyncSleepRequested()) {
         return true;
     }
-    LR2021::GetAndClearIrqRsp rsp{};
-    if (!lr2021.GetAndClearIrq(&rsp)) {
-        if (!SyncSleepRequested()) {
-            CONSOLE_ERROR("ADSBee::Update", "Failed to get LR2021 IRQs.");
-        }
-        return false;
+    uint32_t start_us = get_time_since_boot_us();
+
+    // Async RX drain: kick one off when idle, then advance it as far as the DMA/BUSY state allows.
+    // Each call does at most one phase's worth of parsing plus posting the next DMA frame -- the long
+    // SPI clocking (up to 258 B) happens in the background while the rest of the loop runs.
+    if (lr2021.DrainIdle() && lr2021.StartRxDrain()) {
+        lr2021_drain_start_us_ = start_us;
     }
 
-    // if (rsp.irq_flags & LR2021::HostIrqs::kIrqPreambleDetected) {
-    //     leds.FlashLED(bsp.k1090LEDPin, 50);  // Flash the LED for 50ms.
-    //     CONSOLE_INFO("ADSBee::Update", "LR2021 detected a preamble.");
-    // }
-    if (rsp.irq_flags & LR2021::HostIrqs::kIrqRxFifo) {
-        // leds.FlashLED(bsp.k1090LEDPin, 20);  // Flash the LED for 100ms.
-        LR2021::FifoLevelRsp rx_fifo_level_rsp;
-        if (!lr2021.GetRxFifoLevel(&rx_fifo_level_rsp)) {
+    bool success = true;
+    switch (lr2021.ServiceRxDrain()) {
+        case LR2021::DrainResult::kDataReady: {
+            uint32_t drain_us = get_time_since_boot_us() - lr2021_drain_start_us_;
+            if (drain_us > lr2021_drain_max_us) {
+                lr2021_drain_max_us = drain_us;
+            }
+            if (lr2021.drain_fifo_was_full()) {
+                // FIFO read back completely full: the poll loop fell behind and the radio almost
+                // certainly dropped frames on top of this. Counted (not just logged) so benches can
+                // see it via AT+RX_STATS even with logging off.
+                lr2021_fifo_full_count++;
+            }
+            ParseLR2021RxFifo(lr2021.drain_payload(), lr2021.drain_level());
+            lr2021.FinishRxDrain();
+            break;
+        }
+        case LR2021::DrainResult::kError:
             if (!SyncSleepRequested()) {
-                CONSOLE_ERROR("ADSBee::Update", "Failed to get LR2021 Rx FIFO level.");
+                CONSOLE_ERROR("ADSBee::Update", "LR2021 RX drain failed: %s.", lr2021.drain_error_str());
             }
-            return false;
-        }
-        if (rx_fifo_level_rsp.level == 0) {
-            return true;  // IRQ fired but FIFO is empty (threshold crossed in both directions).
-        }
-        if (rx_fifo_level_rsp.level >= LR2021::kRxFifoMaxDepthBytes) {
-            // FIFO read back completely full: the poll loop fell behind and the radio almost certainly
-            // dropped frames on top of this. Counted (not just logged) so benches can see it via
-            // AT+RX_STATS even with logging off.
-            lr2021_fifo_full_count++;
-        }
-        if (rx_fifo_level_rsp.level > sizeof(lr2021_rx_buf_)) {
-            CONSOLE_ERROR("ADSBee::Update", "LR2021 Rx FIFO level %u exceeds buffer size %zu.", rx_fifo_level_rsp.level,
-                          sizeof(lr2021_rx_buf_));
-            return false;
-        }
-        if (!lr2021.ReadRxFifo(lr2021_rx_buf_, rx_fifo_level_rsp.level)) {
-            if (!SyncSleepRequested()) {
-                CONSOLE_ERROR("ADSBee::Update", "Failed to read LR2021 Rx FIFO.");
-            }
-            return false;
-        }
-
-        // The FIFO packet length depends on the preamble mode: DF17 mode captures a shorter
-        // remainder because the detector consumed the preamble + DF17 header bits.
-        const bool df17_mode = LR2021::IsOokDF17PreambleMode(r1090_preamble_mode_);
-        const uint16_t packet_len_bytes = LR2021::GetOokRxPacketLenBytes(r1090_preamble_mode_);
-        uint16_t num_packets = packet_len_bytes ? (rx_fifo_level_rsp.level / packet_len_bytes) : 0;
-        for (uint16_t i = 0; i < num_packets; i++) {
-            uint8_t* packet_start = lr2021_rx_buf_ + i * packet_len_bytes;
-
-            uint32_t rx_word_buf[RawModeSPacket::kMaxPacketLenWords32] = {0};
-            if (df17_mode) {
-                // Reconstruct the full 112-bit frame by prepending the known DF=17 header bits
-                // (which the detector consumed) in front of the captured remainder, so the decoder +
-                // software CRC validate the whole frame.
-                const LR2021::OokDetectorConfig& detector = LR2021::kOokDF17Detector;
-                SetNBitsInWordBuffer(detector.header_len_bits, detector.header_bits, 0, rx_word_buf);
-                uint32_t remainder_words[RawModeSPacket::kMaxPacketLenWords32] = {0};
-                ByteBufferToWordBuffer(packet_start, remainder_words, packet_len_bytes);
-                const uint16_t remainder_bits = packet_len_bytes * 8;
-                for (uint16_t b = 0; b < remainder_bits; b += 8) {
-                    uint16_t chunk = (remainder_bits - b) < 8 ? (remainder_bits - b) : 8;
-                    uint32_t val = GetNBitsFromWordBuffer(chunk, b, remainder_words);
-                    SetNBitsInWordBuffer(chunk, val, detector.header_len_bits + b, rx_word_buf);
-                }
-            } else {
-                ByteBufferToWordBuffer(packet_start, rx_word_buf, packet_len_bytes);
-            }
-            RawModeSPacket raw_packet(rx_word_buf, RawModeSPacket::kExtendedSquitterPacketNumWords32);
-            raw_packet.mlat_48mhz_64bit_counts = get_time_since_boot_us() * 48;
-            // Record demod + raw frame metrics (valid frames are recorded during dictionary
-            // ingestion). All LR2021 captures are 112-bit extended-squitter-length frames.
-            aircraft_dictionary.Record1090Demod();
-            aircraft_dictionary.Record1090RawExtendedSquitterFrame();
-            if (packet_decoder.raw_mode_s_packet_queue.IsFull()) {
-                packet_decoder.raw_queue_overflow_count++;
-            }
-            packet_decoder.raw_mode_s_packet_queue.Enqueue(raw_packet);
-        }
+            lr2021.FinishRxDrain();
+            success = false;
+            break;
+        default:
+            // kIdle / kInProgress / kNoData: nothing to consume this iteration.
+            break;
     }
-    return true;
+
+    uint32_t elapsed_us = get_time_since_boot_us() - start_us;
+    if (elapsed_us > max_lr2021_us) {
+        max_lr2021_us = elapsed_us;
+    }
+    return success;
+}
+
+void ADSBee::ParseLR2021RxFifo(const uint8_t* rx_buf, uint16_t rx_len_bytes) {
+    // The FIFO packet length depends on the preamble mode: DF17 mode captures a shorter
+    // remainder because the detector consumed the preamble + DF17 header bits.
+    const bool df17_mode = LR2021::IsOokDF17PreambleMode(r1090_preamble_mode_);
+    const uint16_t packet_len_bytes = LR2021::GetOokRxPacketLenBytes(r1090_preamble_mode_);
+    uint16_t num_packets = packet_len_bytes ? (rx_len_bytes / packet_len_bytes) : 0;
+    for (uint16_t i = 0; i < num_packets; i++) {
+        const uint8_t* packet_start = rx_buf + i * packet_len_bytes;
+
+        uint32_t rx_word_buf[RawModeSPacket::kMaxPacketLenWords32] = {0};
+        if (df17_mode) {
+            // Reconstruct the full 112-bit frame by prepending the known DF=17 header bits
+            // (which the detector consumed) in front of the captured remainder, so the decoder +
+            // software CRC validate the whole frame.
+            const LR2021::OokDetectorConfig& detector = LR2021::kOokDF17Detector;
+            SetNBitsInWordBuffer(detector.header_len_bits, detector.header_bits, 0, rx_word_buf);
+            uint32_t remainder_words[RawModeSPacket::kMaxPacketLenWords32] = {0};
+            ByteBufferToWordBuffer(packet_start, remainder_words, packet_len_bytes);
+            const uint16_t remainder_bits = packet_len_bytes * 8;
+            for (uint16_t b = 0; b < remainder_bits; b += 8) {
+                uint16_t chunk = (remainder_bits - b) < 8 ? (remainder_bits - b) : 8;
+                uint32_t val = GetNBitsFromWordBuffer(chunk, b, remainder_words);
+                SetNBitsInWordBuffer(chunk, val, detector.header_len_bits + b, rx_word_buf);
+            }
+        } else {
+            ByteBufferToWordBuffer(packet_start, rx_word_buf, packet_len_bytes);
+        }
+        RawModeSPacket raw_packet(rx_word_buf, RawModeSPacket::kExtendedSquitterPacketNumWords32);
+        raw_packet.mlat_48mhz_64bit_counts = get_time_since_boot_us() * 48;
+        // Record demod + raw frame metrics (valid frames are recorded during dictionary
+        // ingestion). All LR2021 captures are 112-bit extended-squitter-length frames.
+        aircraft_dictionary.Record1090Demod();
+        aircraft_dictionary.Record1090RawExtendedSquitterFrame();
+        if (packet_decoder.raw_mode_s_packet_queue.IsFull()) {
+            packet_decoder.raw_queue_overflow_count++;
+        }
+        packet_decoder.raw_mode_s_packet_queue.Enqueue(raw_packet);
+    }
 }

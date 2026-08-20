@@ -51,12 +51,16 @@ SubGHzRadio subg_radio({});
 UATPacketDecoder uat_packet_decoder;
 
 /**
- * A note on interrupt priorities (configured via Sysconfig):
+ * A note on interrupt priorities (configured via SysConfig in syscfg/adsbee_1421.syscfg):
  *
- * SPI peripheral:
- *  Hardware priority: Must be HIGHER than DMA.
- *  Software priority: Must be very low, not sure why. Hardfaults will occur otherwise.
- * DMA: Must be LOWER than SPI hardware interrupt priority.
+ * RF driver (UAT): hwiPriority 5 (0xa0), swiPriority 1. The RF SWI must run ahead of every other SWI:
+ * its RX callback has ~15 us after sync detect to issue CMD_PROP_SET_LEN or the packet is lost (see the
+ * maxPktLen comment in sub_ghz_radio.cpp).
+ * SPI (LR2021) + its DMA: interrupt priority 5 (0xa0), swiPriority 0 (default).
+ *
+ * NoRTOS SWIs are NON-preemptive: a higher-priority pending SWI runs next, but never preempts a running
+ * one. The SPI completion callback (LR2021::SPICallback) therefore shares the SWI band with the UAT
+ * deadline and must stay trivial -- see lr2021_async.cpp.
  */
 
 void exception_handler() {

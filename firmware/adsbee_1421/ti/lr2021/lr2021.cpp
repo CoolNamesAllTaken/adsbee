@@ -9,9 +9,12 @@
 
 LR2021::LR2021(LR2021Config config) : config_(config), mode_(ChipMode::kStartup), last_stat_{} {
     SPI_Params_init(&spi_params_);
-    spi_params_.transferMode = SPI_MODE_BLOCKING;
-    // spi_params_.transferTimeout = SPI_WAIT_FOREVER;
-    // spi_params_.transferCallbackFxn = spi_transfer_complete_callback;
+    // Callback (DMA) mode for every transfer. transferMode is latched at SPI_open, so a single mode must
+    // serve both the async RX drain (lr2021_async.cpp) and the ~110 synchronous command call sites; the
+    // latter go through the post-and-spin shim in SPITransfer() (lr2021_ll.cpp) and keep their blocking
+    // semantics unchanged.
+    spi_params_.transferMode = SPI_MODE_CALLBACK;
+    spi_params_.transferCallbackFxn = &LR2021::SPICallback;
     spi_params_.mode = SPI_CONTROLLER;
     spi_params_.bitRate = 12'000'000;  // Use max clock rate for CC1314 (12MHz).
     spi_params_.dataSize = 8;
@@ -22,6 +25,14 @@ LR2021::LR2021(LR2021Config config) : config_(config), mode_(ChipMode::kStartup)
 
 bool LR2021::Init() {
     abort_requested_ = false;
+    // Reset the async RX drain: no transfer can be in flight here (DeInit cancels before SPI_close, and
+    // a first-ever Init starts from the zero-initialized members).
+    drain_state_ = DrainState::kIdle;
+    async_done_ = false;
+    async_ok_ = false;
+    async_in_flight_ = false;
+    sync_done_ = false;
+    memset(async_tx_buf_, 0, sizeof(async_tx_buf_));  // [2..] must clock zeros during FIFO reads.
     CONSOLE_INFO("LR2021::Init", "Initializing.");
     // Do a proper reboot.
     SetEnable(false);
@@ -62,6 +73,9 @@ bool LR2021::DeInit() {
     CONSOLE_INFO("LR2021::DeInit", "De-initializing.");
     SetEnable(false);
     if (spi_handle_ != nullptr) {
+        // Never close the handle with a DMA in flight: cancel any async drain transfer first (also
+        // covers EnterSyncSleep, which reaches here with a drain possibly mid-sequence).
+        CancelAsync();
         SPI_close(spi_handle_);
         spi_handle_ = nullptr;
     }
@@ -117,6 +131,18 @@ bool LR2021::WaitUntilReady(uint32_t timeout_ms) {
 }
 
 bool LR2021::BeginTransaction() {
+    // Bus-ownership guard: a synchronous command may be issued (AT handlers, config paths) while the
+    // async RX drain is mid-sequence, since a drain spans main-loop iterations. Pump the drain to a
+    // quiescent state (idle / data-ready / error: no DMA in flight, NSS high) so the two can't
+    // interleave NSS frames. Bounded: in-flight DMA completes in microseconds and every BUSY wait has
+    // its own kBusyTimeoutMs, so the worst case is the tail of one drain sequence (~sub-millisecond).
+    while (drain_state_ != DrainState::kIdle && drain_state_ != DrainState::kDataReady &&
+           drain_state_ != DrainState::kError) {
+        if (abort_requested_) {
+            return false;
+        }
+        ServiceRxDrain();
+    }
     // Always verify the chip is idle before asserting NSS.  Per §5.4.1.1 the
     // LR2021 will immediately raise BUSY once it sees the NSS falling edge, so
     // checking BUSY *after* asserting NSS would race with the hardware.

@@ -458,3 +458,44 @@ UTEST(LR2021, StatChipMode_AfterInit) {
     // After a successful boot the LR2021 should be in StdbyRC (§5.3, Table 5-1).
     ASSERT_EQ(static_cast<int>(acc.last_stat().chip_mode), static_cast<int>(LR2021::ChipMode::kStdbyRC));
 }
+
+// ---------------------------------------------------------------------------
+// Async RX drain
+// ---------------------------------------------------------------------------
+
+UTEST(LR2021, AsyncRxDrainCompletesAndYieldsBus) {
+    LR2021TestAccessor acc(adsbee.lr2021);
+    ASSERT_TRUE(acc.HasValidHandle());
+
+    // Pump a full drain sequence to a terminal result. On a quiet bench this completes as kNoData (no
+    // RX FIFO IRQ pending); with live traffic kDataReady is also legal. The iteration bound is generous:
+    // a drain is at most 5 DMA frames plus BUSY pulses.
+    if (adsbee.lr2021.DrainIdle()) {
+        ASSERT_TRUE(adsbee.lr2021.StartRxDrain());
+    }
+    static constexpr uint32_t kMaxPumpIterations = 10'000'000;
+    LR2021::DrainResult result = LR2021::DrainResult::kInProgress;
+    uint32_t i = 0;
+    for (; i < kMaxPumpIterations; i++) {
+        result = adsbee.lr2021.ServiceRxDrain();
+        if (result != LR2021::DrainResult::kInProgress) {
+            break;
+        }
+    }
+    ASSERT_LT(i, kMaxPumpIterations);
+    ASSERT_TRUE(result == LR2021::DrainResult::kNoData || result == LR2021::DrainResult::kDataReady);
+    if (result == LR2021::DrainResult::kDataReady) {
+        adsbee.lr2021.FinishRxDrain();
+    }
+    ASSERT_TRUE(adsbee.lr2021.DrainIdle());
+
+    // Start another drain and immediately issue a synchronous command: BeginTransaction's bus-ownership
+    // guard must pump the drain to a quiescent state so the two never interleave NSS frames.
+    ASSERT_TRUE(adsbee.lr2021.StartRxDrain());
+    LR2021::StatusRsp status;
+    ASSERT_TRUE(adsbee.lr2021.GetStatus(&status));
+
+    // Clean up whatever state the guard parked the drain in.
+    adsbee.lr2021.CancelAsync();
+    ASSERT_TRUE(adsbee.lr2021.DrainIdle());
+}
