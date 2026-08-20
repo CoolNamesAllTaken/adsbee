@@ -16,6 +16,7 @@
 
 #include "ble_host.hh"  // BleHostEnsureInitialized (shared with Remote ID).
 #include "comms.hh"     // Logging.
+#include "settings.hh"  // WiFi enable state gates BLE on PSRAM-less modules.
 #include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -437,6 +438,18 @@ constexpr uint32_t kStartDelayMs = 45'000;
 
 void StartTask(void* param) {
     vTaskDelay(pdMS_TO_TICKS(kStartDelayMs));
+    // On PSRAM-less modules the BT controller's ~55 KB of internal RAM cannot coexist with the WiFi stack, and even
+    // failed init attempts disturb coexistence and eat heap the IP path needs (safe_send back-pressure thresholds).
+    // BLE mode is therefore explicit: it only runs with WiFi fully disabled.
+    if (settings_manager.settings.core_network_settings.wifi_ap_enabled ||
+        settings_manager.settings.core_network_settings.wifi_sta_enabled) {
+        CONSOLE_WARNING("ble_gdl90",
+                        "BLE ADS-B service disabled while WiFi is enabled (insufficient RAM without PSRAM). "
+                        "Disable WiFi (AT+WIFI_AP=0, AT+WIFI_STA=0, AT+SETTINGS=SAVE, reboot) to use BLE.");
+        vTaskDelete(nullptr);
+        return;
+    }
+    xTaskCreate(StatusTask, "ble_gdl90_status", 4096, nullptr, 1, nullptr);
     // Controller init needs a contiguous chunk of internal RAM; retry in case pressure eases (e.g. WiFi settles).
     for (int attempt = 0; attempt < 5; attempt++) {
         CONSOLE_WARNING("ble_gdl90", "Initializing NimBLE host (attempt %d), internal heap free=%u largest=%u.",
@@ -464,7 +477,6 @@ bool Start() {
     static bool launched = false;
     if (launched) return true;
     launched = true;
-    xTaskCreate(StatusTask, "ble_gdl90_status", 4096, nullptr, 1, nullptr);
     xTaskCreate(StartTask, "ble_gdl90_start", 4096, nullptr, 1, nullptr);
     return true;
 }
