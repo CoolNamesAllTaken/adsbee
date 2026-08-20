@@ -43,6 +43,14 @@ static void SyncLineCallback(uint_least8_t /*index*/) {
     }
 }
 
+// LR2021 IRQ line (LR2021 DIO6 -> LR_IRQ pin) rising edge: the RX FIFO crossed its high threshold.
+// Kicks the ISR-paced drain chain (lr2021_irq_drain.cpp). GPIO HWI context; all GPIO callbacks share
+// one HWI vector, so this never races SyncLineCallback or LRBusyLineCallback.
+static void LRIrqLineCallback(uint_least8_t /*index*/) { adsbee.lr2021.HandleIrqLine(); }
+
+// LR_BUSY falling edge ("chip ready"): armed only while the drain chain has a frame pending; posts it.
+static void LRBusyLineCallback(uint_least8_t /*index*/) { adsbee.lr2021.HandleBusyFall(); }
+
 bool ADSBee::Init() {
     // Arm the SYNC rising-edge interrupt (the SysConfig default pin config) before touching the LR2021,
     // so a host asserting SYNC mid-init still gets the bus handed off promptly. Clear any stale latched
@@ -56,6 +64,11 @@ bool ADSBee::Init() {
 bool ADSBee::SyncSleepRequested() { return sync_sleep_requested_ || GPIO_read(bsp.kSyncPin) == 1; }
 
 bool ADSBee::ApplyReceiverConfig() {
+    // Quiesce the LR2021 interrupt lines while the chip is reset/reconfigured: the IRQ line's meaning
+    // is undefined until SetOokADSB re-routes it, and the BUSY interrupt must only ever be armed by an
+    // active drain chain. (DeInit -> CancelAsync also disarms BUSY; this covers every path.)
+    GPIO_disableInt(bsp.kLR2021IrqPin);
+    GPIO_disableInt(bsp.kLR2021BusyPin);
     // Reconfigure from a clean hardware reset every time. The LR2021's RF/AGC/detector calibration
     // must be set up from standby (kStdbyRC); reconfiguring while the radio is in continuous RX
     // leaves it demodulating but never validating. DeInit()+Init() reproduces the exact known-good
@@ -64,7 +77,18 @@ bool ADSBee::ApplyReceiverConfig() {
     if (!lr2021.Init()) {
         return false;
     }
-    return lr2021.SetOokADSB(r1090_preamble_mode_, r1090_gain_, r1090_rx_boost_);
+    if (!lr2021.SetOokADSB(r1090_preamble_mode_, r1090_gain_, r1090_rx_boost_)) {
+        return false;
+    }
+    // Arm the LR2021 IRQ rising-edge interrupt now that the chip side is routing kIrqRxFifo to it.
+    // Clear any stale latched edge first: neither GPIO_setConfig nor GPIO_enableInt clears EVFLAGS.
+    // The BUSY callback is registered here too, but its interrupt stays disarmed until a chain frame
+    // is pending.
+    GPIO_setCallback(bsp.kLR2021IrqPin, LRIrqLineCallback);
+    GPIO_setCallback(bsp.kLR2021BusyPin, LRBusyLineCallback);
+    GPIO_clearInt(bsp.kLR2021IrqPin);
+    GPIO_enableInt(bsp.kLR2021IrqPin);
+    return true;
 }
 
 bool ADSBee::SetRxSubGHzEnabled(bool enabled) { return subg_radio.SetRxEnabled(enabled); }
@@ -97,6 +121,13 @@ void ADSBee::EnterSyncSleep() {
     GPIO_disableInt(bsp.kSyncPin);
 
     CONSOLE_INFO("ADSBee::EnterSyncSleep", "SYNC asserted; powering down LR2021 and entering STANDBY.");
+
+    // Disarm the LR2021 interrupt lines for the handoff: an enabled DIO interrupt is automatically a
+    // STANDBY wake source on CC13x4, so host bus traffic wiggling LR_IRQ/BUSY during sync sleep would
+    // wake the MCU continuously. Re-armed by ApplyReceiverConfig() on wake. Any filled drain slots
+    // survive and are parsed after wake.
+    GPIO_disableInt(bsp.kLR2021IrqPin);
+    GPIO_disableInt(bsp.kLR2021BusyPin);
 
     // Finish powering the external radio down. The ISR already tri-stated the bus; DeInit()'s enable-low
     // write is then a harmless DOUT update on an input pin, and SPI_close leaves SCLK/PICO hi-Z (their
@@ -444,6 +475,15 @@ bool ADSBee::UpdateLR2021() {
     }
     uint32_t start_us = get_time_since_boot_us();
 
+    // Consume staging slots filled by the IRQ-paced drain chain (lr2021_irq_drain.cpp) first: they
+    // predate anything the loop drain is currently reading, and their timestamps were captured at the
+    // IRQ edge.
+    LR2021::IrqDrainSlot* slot;
+    while ((slot = lr2021.NextFilledSlot()) != nullptr) {
+        ParseLR2021RxFifo(slot->buf + 2, slot->len, slot->timestamp_us);
+        lr2021.ReleaseSlot();
+    }
+
     // Async RX drain: kick one off when idle, then advance it as far as the DMA/BUSY state allows.
     // Each call does at most one phase's worth of parsing plus posting the next DMA frame -- the long
     // SPI clocking (up to 258 B) happens in the background while the rest of the loop runs.
@@ -464,7 +504,7 @@ bool ADSBee::UpdateLR2021() {
                 // see it via AT+RX_STATS even with logging off.
                 lr2021_fifo_full_count++;
             }
-            ParseLR2021RxFifo(lr2021.drain_payload(), lr2021.drain_level());
+            ParseLR2021RxFifo(lr2021.drain_payload(), lr2021.drain_level(), get_time_since_boot_us());
             lr2021.FinishRxDrain();
             break;
         }
@@ -487,7 +527,7 @@ bool ADSBee::UpdateLR2021() {
     return success;
 }
 
-void ADSBee::ParseLR2021RxFifo(const uint8_t* rx_buf, uint16_t rx_len_bytes) {
+void ADSBee::ParseLR2021RxFifo(const uint8_t* rx_buf, uint16_t rx_len_bytes, uint64_t mlat_timestamp_us) {
     // The FIFO packet length depends on the preamble mode: DF17 mode captures a shorter
     // remainder because the detector consumed the preamble + DF17 header bits.
     const bool df17_mode = LR2021::IsOokDF17PreambleMode(r1090_preamble_mode_);
@@ -515,7 +555,7 @@ void ADSBee::ParseLR2021RxFifo(const uint8_t* rx_buf, uint16_t rx_len_bytes) {
             ByteBufferToWordBuffer(packet_start, rx_word_buf, packet_len_bytes);
         }
         RawModeSPacket raw_packet(rx_word_buf, RawModeSPacket::kExtendedSquitterPacketNumWords32);
-        raw_packet.mlat_48mhz_64bit_counts = get_time_since_boot_us() * 48;
+        raw_packet.mlat_48mhz_64bit_counts = mlat_timestamp_us * 48;
         // Record demod + raw frame metrics (valid frames are recorded during dictionary
         // ingestion). All LR2021 captures are 112-bit extended-squitter-length frames.
         aircraft_dictionary.Record1090Demod();

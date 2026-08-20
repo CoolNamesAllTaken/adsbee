@@ -62,6 +62,9 @@ extern const uint_least8_t SUBG_DIO27_CONST;
 extern const uint_least8_t SYNC_CONST;
 #define SYNC 5
 
+extern const uint_least8_t LR_IRQ_CONST;
+#define LR_IRQ 12
+
 /* Owned by COPRO_SPI as  */
 extern const uint_least8_t COPRO_SPI_SCLK_CONST;
 #define COPRO_SPI_SCLK 10

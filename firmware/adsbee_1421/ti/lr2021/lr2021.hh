@@ -97,6 +97,9 @@ class LR2021 {
         // SPI data/clock pins, needed to tri-state the interface for SYNC sleep (TristateInterface()).
         uint_least8_t gpio_sclk;
         uint_least8_t gpio_pico;
+        // CC1314 pin wired to LR2021 DIO6, configured chip-side as the kIrqRxFifo IRQ output. Read
+        // (level) by the drain paths and used as a rising-edge interrupt by the IRQ-paced drain chain.
+        uint_least8_t gpio_irq;
     };
 
     // CommandStatus field from the Stat word (Table 6-38, bits 11:9).
@@ -261,11 +264,57 @@ class LR2021 {
     // SPI handle is closed, or an abort is pending.
     bool StartRxDrain();
     // Advances the drain as far as currently possible and returns its status. Never blocks beyond GPIO
-    // reads; call once per main-loop iteration.
+    // reads; call once per main-loop iteration. Also backstops the IRQ-paced chain: re-posts a chain
+    // frame the BUSY edge missed, and cancels a chain wedged longer than kIrqChainTimeoutMs.
     DrainResult ServiceRxDrain();
     // Releases a terminal kDataReady / kError drain back to idle. drain_payload() is valid until this.
     void FinishRxDrain();
     bool DrainIdle() const { return drain_state_ == DrainState::kIdle; }
+
+    // IRQ-paced RX drain chain (lr2021_irq_drain.cpp)
+    //
+    // The LR2021 raises its DIO6 IRQ line (-> CC1314 LR_IRQ pin, rising edge) when the RX FIFO crosses
+    // kIrqDrainThresholdBytes. The GPIO ISR claims the drain state machine and runs a fully ISR/SWI-paced
+    // chain -- ReadRxFifo(threshold) DMA'd into a staging slot, then ClearFifoIrqFlags + GetAndClearIrq
+    // to drop the latched IRQ line -- with zero busy-waiting and zero main-loop involvement. The main
+    // loop later parses filled slots via NextFilledSlot()/ReleaseSlot(). This is a latency/backpressure
+    // valve: with the threshold at 9 packets it stays silent while the routine loop drain keeps up.
+
+    // One 14-byte-packet-aligned FIFO packet (all preamble modes; see static_assert in lr2021.cpp).
+    static constexpr uint16_t kOokFifoPacketLenBytes = 14;
+    // RX FIFO high threshold and chain read size: 9 whole packets. Leaves 256-126 = 130 B (~1.1 ms of
+    // saturated 1090 traffic) of overflow margin while a ~300 us chain runs.
+    static constexpr uint16_t kIrqDrainThresholdBytes = 9 * kOokFifoPacketLenBytes;  // 126
+    // A healthy chain finishes in ~300 us; a chain stuck longer than this is cancelled by
+    // ServiceRxDrain() at thread level.
+    static constexpr uint32_t kIrqChainTimeoutMs = 10;
+    static constexpr uint8_t kNumIrqDrainSlots = 2;
+
+    // Staging slot: filled by the chain (ISR/SWI context), parsed and released by the main loop.
+    // timestamp_us is captured at the IRQ edge -- closer to reception than parse-time stamping.
+    struct IrqDrainSlot {
+        uint8_t buf[2 + kIrqDrainThresholdBytes];  // [0:1] = Stat, [2..] = FIFO payload (DMA target).
+        volatile uint16_t len = 0;                 // Payload bytes valid at buf + 2.
+        volatile uint64_t timestamp_us = 0;
+        volatile bool filled = false;  // Written last by the producer; cleared by ReleaseSlot().
+    };
+
+    // GPIO callback bodies (HWI context, <= ~5 us each -- they preempt the UAT RF SWI's ~15 us
+    // CMD_PROP_SET_LEN deadline). Wired up by ADSBee to the LR_IRQ rising edge / LR_BUSY falling edge.
+    void HandleIrqLine();
+    void HandleBusyFall();
+    // Oldest filled staging slot, or nullptr. Thread level; pair each non-null return with ReleaseSlot().
+    IrqDrainSlot* NextFilledSlot();
+    void ReleaseSlot();
+
+    // IRQ chain diagnostics, reported/reset via AT+RX_STATS.
+    volatile uint32_t irq_drain_count = 0;         // Chains started from the LR_IRQ edge.
+    volatile uint32_t irq_drain_skip_busy = 0;     // Edge ignored: drain not claimable (in flight/terminal).
+    volatile uint32_t irq_drain_skip_slots = 0;    // Edge ignored: no free staging slot.
+    volatile uint32_t irq_drain_restarts = 0;      // Chain looped straight into another read (line still high).
+    volatile uint32_t irq_chain_timeouts = 0;      // Wedged chains cancelled by the thread backstop.
+    volatile uint32_t irq_chain_errors = 0;        // Chain aborted on SPI post failure or bad Stat.
+    volatile uint32_t irq_thread_assist_posts = 0; // Chain frames posted by the thread backstop (missed BUSY edge).
     // Cancels any in-flight async transfer and resets the drain to idle. Thread level only (never from an
     // ISR); DeInit() calls this so the SPI handle is never closed with a DMA in flight.
     void CancelAsync();
@@ -1331,36 +1380,71 @@ class LR2021 {
                (static_cast<uint32_t>(buf[2]) << 8) | static_cast<uint32_t>(buf[3]);
     }
 
-    // Async RX drain internals (lr2021_async.cpp).
+    // Async RX drain internals (lr2021_async.cpp thread-paced loop drain; lr2021_irq_drain.cpp
+    // IRQ-paced chain).
 
     enum class DrainState : uint8_t {
         kIdle = 0,
-        kIrqCmdWait,    // Waiting for BUSY low to post the GetAndClearIrq opcode frame.
-        kIrqCmd,        // GetAndClearIrq frame 1 (2 B) DMA in flight.
-        kIrqRspWait,    // Waiting for BUSY low to post the GetAndClearIrq response frame.
-        kIrqRsp,        // GetAndClearIrq frame 2 (6 B) DMA in flight.
-        kLevelCmdWait,  // Waiting for BUSY low to post the GetRxFifoLevel opcode frame.
-        kLevelCmd,      // GetRxFifoLevel frame 1 (2 B) DMA in flight.
-        kLevelRspWait,  // Waiting for BUSY low to post the GetRxFifoLevel response frame.
-        kLevelRsp,      // GetRxFifoLevel frame 2 (4 B) DMA in flight.
-        kFifoWait,      // Waiting for BUSY low to post the ReadRxFifo frame.
-        kFifoRead,      // ReadRxFifo single frame (2 + level B) DMA in flight.
-        kDataReady,     // Terminal until FinishRxDrain().
-        kError,         // Terminal until FinishRxDrain().
+        // Thread-paced loop drain (advanced by ServiceRxDrain): unconditional level-read sweep, then a
+        // conditional IRQ-latch clear tail whenever the LR_IRQ line reads high.
+        kLevelCmdWait,   // Waiting for BUSY low to post the GetRxFifoLevel opcode frame.
+        kLevelCmd,       // GetRxFifoLevel frame 1 (2 B) DMA in flight.
+        kLevelRspWait,   // Waiting for BUSY low to post the GetRxFifoLevel response frame.
+        kLevelRsp,       // GetRxFifoLevel frame 2 (4 B) DMA in flight.
+        kFifoWait,       // Waiting for BUSY low to post the ReadRxFifo frame.
+        kFifoRead,       // ReadRxFifo single frame (2 + level B) DMA in flight.
+        kClearFifoWait,  // (Tail) waiting for BUSY low to post the ClearFifoIrqFlags frame.
+        kClearFifoCmd,   // (Tail) ClearFifoIrqFlags (4 B) DMA in flight.
+        kIrqCmdWait,     // (Tail) waiting for BUSY low to post the GetAndClearIrq opcode frame.
+        kIrqCmd,         // (Tail) GetAndClearIrq frame 1 (2 B) DMA in flight.
+        kIrqRspWait,     // (Tail) waiting for BUSY low to post the GetAndClearIrq response frame.
+        kIrqRsp,         // (Tail) GetAndClearIrq frame 2 (6 B) DMA in flight.
+        kDataReady,      // Terminal until FinishRxDrain().
+        kError,          // Terminal until FinishRxDrain().
+        // IRQ-paced chain (advanced from the GPIO HWIs and the SPI completion SWI; the thread only
+        // backstops). Must stay the LAST block: IsChainState() tests >= kChainFifoWait.
+        kChainFifoWait,       // Waiting (BUSY edge / thread assist) to post ReadRxFifo(threshold).
+        kChainFifoRead,       // ReadRxFifo (2 + 126 B) DMA into a staging slot in flight.
+        kChainClearFifoWait,  // Waiting to post ClearFifoIrqFlags.
+        kChainClearFifo,      // ClearFifoIrqFlags (4 B) in flight.
+        kChainIrqCmdWait,     // Waiting to post GetAndClearIrq opcode frame.
+        kChainIrqCmd,         // GetAndClearIrq frame 1 (2 B) in flight.
+        kChainIrqRspWait,     // Waiting to post GetAndClearIrq response frame.
+        kChainIrqRsp,         // GetAndClearIrq frame 2 (6 B) in flight; completion decides restart/finish.
     };
+    static constexpr bool IsChainState(DrainState s) { return s >= DrainState::kChainFifoWait; }
 
     // SPI completion callback, registered on the (callback-mode) SPI handle for ALL transfers. Runs in
     // SWI context; NoRTOS SWIs are non-preemptive alongside the UAT RF SWI's ~15 us deadline, so this
-    // must stay to a couple of flag/GPIO writes: no logging, no SPI calls, no protocol parsing. Finds
-    // its LR2021 instance via SPI_Transaction::arg.
+    // must stay to a few flag/GPIO writes plus (for chain frames) posting the next DMA frame. No
+    // logging, no busy-waiting, no protocol parsing beyond single-byte inspections. Finds its LR2021
+    // instance via SPI_Transaction::arg.
     static void SPICallback(SPI_Handle handle, SPI_Transaction* transaction);
-    // Posts one NSS frame of the drain as a single DMA transaction into async_rx_buf_. tx_buf may be
-    // nullptr (clocks the driver's 0x00 default). Asserts NSS; SPICallback deasserts it on completion.
-    bool PostAsyncFrame(const uint8_t* tx_buf, size_t len);
+    // Posts one NSS frame of a drain as a single DMA transaction. tx_buf may be nullptr (clocks the
+    // driver's 0x00 default); rx_buf nullptr targets async_rx_buf_. Asserts NSS; SPICallback deasserts
+    // it on completion. HWI/SWI/thread-safe (SPI_transfer in callback mode is documented HWI-safe).
+    bool PostAsyncFrame(const uint8_t* tx_buf, size_t len, uint8_t* rx_buf = nullptr);
     // Enters a BUSY-wait drain state and arms its timeout.
     void EnterBusyWait(DrainState state);
     // Enters kError with a reason string (logged by the consumer at thread level).
     DrainResult EnterDrainError(const char* reason);
+    // True when the LR2021's IRQ output (kIrqRxFifo routed to DIO6 -> LR_IRQ pin) reads asserted.
+    bool IrqLineHigh();
+
+    // IRQ chain helpers (lr2021_irq_drain.cpp).
+    // Posts the frame for the current kChain*Wait state and advances to its in-flight state. Caller
+    // guarantees atomicity (GPIO HWI, or HwiP_disable from SWI/thread) and that the chip is ready.
+    bool PostChainFrame();
+    // Chain-frame completion handling, called from SPICallback for chain in-flight states (SWI).
+    void HandleChainFrameComplete();
+    // Starts a chain segment into the current fill slot: posts immediately if BUSY is low, else arms
+    // the BUSY falling-edge interrupt. Caller has claimed drain_state_ and stamped the slot.
+    void StartChainSegment();
+    // Aborts the chain: disarms the BUSY interrupt, returns the drain to kIdle. ISR/SWI-safe.
+    void AbortChainFromIsr();
+    // Arms (clearInt + enableInt) / disarms the LR_BUSY falling-edge interrupt.
+    void ArmBusyInterrupt();
+    void DisarmBusyInterrupt();
 
     LR2021Config config_;
     ChipMode mode_ = ChipMode::kStartup;
@@ -1372,11 +1456,16 @@ class LR2021 {
 
     // Async RX drain state. The tx/rx buffers and transaction must be persistent: DMA reads/writes them
     // after ServiceRxDrain() returns. One extra 2-byte slot ahead of the payload holds the ReadRxFifo
-    // opcode (TX) / Stat word (RX).
-    DrainState drain_state_ = DrainState::kIdle;
+    // opcode (TX) / Stat word (RX). volatile: mutated from GPIO HWI / SPI SWI (chain) and thread.
+    volatile DrainState drain_state_ = DrainState::kIdle;
     SPI_Transaction async_txn_ = {};
     uint8_t async_tx_buf_[2 + kRxFifoMaxDepthBytes] = {};  // Opcode at [0:1]; [2..] stays zero (FIFO clocking).
     uint8_t async_rx_buf_[2 + kRxFifoMaxDepthBytes] = {};  // Stat at [0:1]; response/payload at [2..].
+    // Loop-drain tail command buffers: the tail runs AFTER the FIFO payload has landed in
+    // async_rx_buf_, so its frames must not touch the async buffers (would clobber the unparsed
+    // payload / break the async_tx_buf_ "[2..] zeros" invariant).
+    uint8_t tail_tx_buf_[4] = {};
+    uint8_t tail_rx_buf_[8] = {};
     volatile bool async_ok_ = false;         // Transfer status; written by SPICallback before async_done_.
     volatile bool async_done_ = false;       // Set last by SPICallback; cleared when posting a frame.
     volatile bool async_in_flight_ = false;  // True from post until SPICallback (or cancel).
@@ -1389,6 +1478,17 @@ class LR2021 {
     // Synchronous shim state (see SPITransfer() in lr2021_ll.cpp).
     volatile bool sync_done_ = false;   // Completion flag for the in-progress synchronous transfer.
     volatile int32_t sync_status_ = 0;  // SPI_Status of the completed synchronous transfer.
+
+    // IRQ-paced chain state (lr2021_irq_drain.cpp). Chain frames use dedicated buffers -- never the
+    // async_* pair (see the tail buffer comment above). TX contents are static, pre-packed in Init().
+    IrqDrainSlot irq_slots_[kNumIrqDrainSlots];
+    volatile uint8_t irq_slot_fill_idx_ = 0;   // Producer (ISR/SWI) side of the slot ring.
+    uint8_t irq_slot_parse_idx_ = 0;           // Consumer (thread) side of the slot ring.
+    uint8_t chain_fifo_tx_buf_[2 + kIrqDrainThresholdBytes] = {};  // ReadRxFifo opcode + zeros.
+    uint8_t chain_clear_tx_buf_[4] = {};                           // ClearFifoIrqFlags(0x3F, 0).
+    uint8_t chain_irq_tx_buf_[2] = {};                             // GetAndClearIrq opcode.
+    uint8_t chain_rx_scratch_[8] = {};                             // RX for the non-payload chain frames.
+    volatile uint32_t chain_start_ms_ = 0;  // Chain segment start, for the wedge-timeout backstop.
 };
 
 extern LR2021 lr2021;

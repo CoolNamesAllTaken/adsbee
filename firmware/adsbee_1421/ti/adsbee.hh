@@ -17,6 +17,7 @@ class ADSBee {
             .gpio_enable = bsp.kLR2021ResetPin,
             .gpio_sclk = bsp.kCoProSPICLKPin,
             .gpio_pico = bsp.kCoProSPIMOSIPin,
+            .gpio_irq = bsp.kLR2021IrqPin,
         };
         uint32_t aircraft_dictionary_update_interval_ms = 1000;
         uint32_t rx_position_update_interval_ms = 1000;
@@ -100,8 +101,10 @@ class ADSBee {
     void UpdateRxPosition();
     bool UpdateLR2021();
     // Splits a drained LR2021 RX FIFO payload into per-packet Mode S frames and enqueues them for
-    // decoding. rx_buf points at the drain payload (valid until FinishRxDrain()).
-    void ParseLR2021RxFifo(const uint8_t* rx_buf, uint16_t rx_len_bytes);
+    // decoding. rx_buf points at the drain payload (valid until FinishRxDrain() / ReleaseSlot()).
+    // mlat_timestamp_us stamps every packet in the batch (IRQ-edge time for chain slots, parse time
+    // for loop-drain payloads).
+    void ParseLR2021RxFifo(const uint8_t* rx_buf, uint16_t rx_len_bytes, uint64_t mlat_timestamp_us);
     // (Re)applies the current receiver configuration (sync mode, gain, CRC filter) to the LR2021.
     bool ApplyReceiverConfig();
 

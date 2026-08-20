@@ -33,6 +33,15 @@ bool LR2021::Init() {
     async_in_flight_ = false;
     sync_done_ = false;
     memset(async_tx_buf_, 0, sizeof(async_tx_buf_));  // [2..] must clock zeros during FIFO reads.
+    // IRQ chain TX buffers: static contents, pre-packed once so the ISR-side chain never packs bytes.
+    // Filled staging slots are deliberately preserved across re-inits -- the thread parses them on its
+    // own schedule (e.g. after a sync-sleep wake).
+    memset(chain_fifo_tx_buf_, 0, sizeof(chain_fifo_tx_buf_));  // [2..] clocks zeros during the read.
+    PackU16(chain_fifo_tx_buf_, kOpcodeReadRxFifo);
+    PackU16(chain_clear_tx_buf_, kOpcodeClearFifoIrqFlags);
+    chain_clear_tx_buf_[2] = 0x3F;  // All RX FIFO sub-flags.
+    chain_clear_tx_buf_[3] = 0x00;
+    PackU16(chain_irq_tx_buf_, kOpcodeGetAndClearIrq);
     CONSOLE_INFO("LR2021::Init", "Initializing.");
     // Do a proper reboot.
     SetEnable(false);
@@ -293,15 +302,32 @@ bool LR2021::SetOokADSB(SettingsManager::R1090PreambleMode preamble_mode, uint8_
         return false;
     }
 
-    // Set up the FIFO.
+    // Set up the FIFO. The high threshold doubles as the IRQ-paced drain valve: kIrqRxFifo latches
+    // (and the DIO6 IRQ line rises) only once 9 whole packets have accumulated, i.e. only when the
+    // main loop's routine level-read sweep is falling behind. The loop drain does NOT gate on this
+    // flag (it reads the level unconditionally), so sub-threshold packets still flow with loop
+    // latency.
+    static_assert(GetOokRxPacketLenBytes(SettingsManager::kR1090PreambleModeModeS) == kOokFifoPacketLenBytes &&
+                      GetOokRxPacketLenBytes(SettingsManager::kR1090PreambleModeDF17) == kOokFifoPacketLenBytes &&
+                      GetOokRxPacketLenBytes(SettingsManager::kR1090PreambleModeModeSSwCrc) == kOokFifoPacketLenBytes,
+                  "IRQ drain threshold math assumes 14-byte FIFO packets in every preamble mode.");
     uint8_t rx_fifo_flags = kFifoIrqFlagFifoHigh | kFifoIrqFlagFifoOverflow;
     uint8_t tx_fifo_flags = 0x0;
-    // Low threshold will trigger as soon as there is any amount of data, high threshold will trigger as soon as there's
-    // a lot of data.
     uint16_t rx_fifo_low_threshold = 0;  // Not actually used.
-    uint16_t rx_fifo_high_threshold = 14;
+    uint16_t rx_fifo_high_threshold = kIrqDrainThresholdBytes;
     if (!ConfigFifoIrqAdv(rx_fifo_flags, tx_fifo_flags, rx_fifo_high_threshold, 0, rx_fifo_low_threshold, 0)) {
         CONSOLE_ERROR("LR2021::SetOokADSB", "Error during ConfigFifoIrqAdv.");
+        return false;
+    }
+    // Route the RX FIFO IRQ to DIO6, which is wired to the CC1314's LR_IRQ pin (rising-edge
+    // interrupt; see lr2021_irq_drain.cpp). The IRQ register bit is latched: the drain paths clear it
+    // over SPI (ClearFifoIrqFlags then GetAndClearIrq) to drop the line.
+    if (!SetDioFunction(DioNum::kDio6, DioFunc::kDioFuncIrq, PullDrive::kPullNone)) {
+        CONSOLE_ERROR("LR2021::SetOokADSB", "Error during SetDioFunction for the IRQ line.");
+        return false;
+    }
+    if (!SetDioIrqConfig(DioNum::kDio6, HostIrqs::kIrqRxFifo)) {
+        CONSOLE_ERROR("LR2021::SetOokADSB", "Error during SetDioIrqConfig for the IRQ line.");
         return false;
     }
 

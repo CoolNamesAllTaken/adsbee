@@ -19,6 +19,7 @@ const GPIO4    = GPIO.addInstance();
 const GPIO5    = GPIO.addInstance();
 const GPIO6    = GPIO.addInstance();
 const GPIO7    = GPIO.addInstance();
+const GPIO8    = GPIO.addInstance();
 const RF       = scripting.addModule("/ti/drivers/RF");
 const SPI      = scripting.addModule("/ti/drivers/SPI", {}, false);
 const SPI1     = SPI.addInstance();
@@ -51,8 +52,12 @@ GPIO2.mode               = "Output";
 GPIO2.initialOutputState = "High";
 GPIO2.gpioPin.$assign    = "DIO_11";
 
-GPIO3.$name           = "LR_BUSY";
-GPIO3.gpioPin.$assign = "DIO_14";
+/* LR2021 BUSY. Polled by the LR2021 driver, plus a falling-edge ("chip ready") interrupt used by the
+ * IRQ-paced RX FIFO drain chain to post the next SPI frame without busy-waiting. The interrupt stays
+ * disabled except while a chain frame is pending (armed/disarmed at runtime with GPIO_enableInt). */
+GPIO3.$name            = "LR_BUSY";
+GPIO3.interruptTrigger = "Falling Edge";
+GPIO3.gpioPin.$assign  = "DIO_14";
 
 GPIO4.$name              = "LR_RESET";
 GPIO4.mode               = "Output";
@@ -70,6 +75,16 @@ GPIO7.$name            = "SYNC";
 GPIO7.interruptTrigger = "Rising Edge";
 GPIO7.pull             = "Pull Down";
 GPIO7.gpioPin.$assign  = "DIO_5";
+
+/* LR2021 IRQ line: LR2021 DIO6 -> CC1314 DIO_12, configured chip-side as an IRQ output for
+ * kIrqRxFifo (RX FIFO high threshold). Rising edge kicks the ISR-paced FIFO drain chain. Pull-down so
+ * the line reads low (inactive) while the LR2021 side is unconfigured or the bus is handed off.
+ * NOTE: LR2021 DIO5 -> CC1314 DIO_13 is wired on the board but deliberately left unclaimed here
+ * (spare; candidate future TX/preamble-detect IRQ or debug output). */
+GPIO8.$name            = "LR_IRQ";
+GPIO8.interruptTrigger = "Rising Edge";
+GPIO8.pull             = "Pull Down";
+GPIO8.gpioPin.$assign  = "DIO_12";
 
 const CCFG              = scripting.addModule("/ti/devices/CCFG", {}, false);
 CCFG.ccfgTemplate.$name = "ti_devices_CCFG_CCFGCC26XXTemplate0";

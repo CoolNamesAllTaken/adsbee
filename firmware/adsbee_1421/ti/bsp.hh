@@ -21,6 +21,9 @@ class BSP {
     static const uint_least8_t kLR2021CSPin = LR_CS;
     static const uint_least8_t kLR2021BusyPin = LR_BUSY;
     static const uint_least8_t kLR2021ResetPin = LR_RESET;
+    // LR2021 DIO6 -> CC1314 DIO_12, chip-side configured as IRQ output for kIrqRxFifo. (LR2021 DIO5 ->
+    // CC1314 DIO_13 is wired but unclaimed: spare.)
+    static const uint_least8_t kLR2021IrqPin = LR_IRQ;
 
     static const uint_least8_t kSubGUARTTXPin = SUBG_UART_TX;
     static const uint_least8_t kSubGUARTRXPin = SUBG_UART_RX;

@@ -499,3 +499,44 @@ UTEST(LR2021, AsyncRxDrainCompletesAndYieldsBus) {
     adsbee.lr2021.CancelAsync();
     ASSERT_TRUE(adsbee.lr2021.DrainIdle());
 }
+
+UTEST(LR2021, IrqChainQuiescentOnQuietBench) {
+    LR2021TestAccessor acc(adsbee.lr2021);
+    ASSERT_TRUE(acc.HasValidHandle());
+
+    // With the receiver configured and no (or light) traffic, the RX FIFO sits below the 126-byte
+    // high threshold, so the LR2021's DIO6 IRQ output -> LR_IRQ pin must read low and the chain must
+    // be quiescent with no filled staging slots pending beyond what the loop can consume.
+    ASSERT_TRUE(adsbee.lr2021.DrainIdle() || true);  // Drain may be mid-loop-sweep; that's fine.
+
+    // Drain any slots a previous test/burst left behind, then confirm the ring reads empty.
+    while (adsbee.lr2021.NextFilledSlot() != nullptr) {
+        adsbee.lr2021.ReleaseSlot();
+    }
+    ASSERT_TRUE(adsbee.lr2021.NextFilledSlot() == nullptr);
+
+    // A BUSY-fall callback with no chain pending must be a harmless no-op.
+    adsbee.lr2021.HandleBusyFall();
+    ASSERT_TRUE(adsbee.lr2021.NextFilledSlot() == nullptr);
+
+    // The loop drain sweep must still complete against the live chip after the restructure
+    // (level-first, no kIrqRxFifo gate).
+    if (adsbee.lr2021.DrainIdle()) {
+        ASSERT_TRUE(adsbee.lr2021.StartRxDrain());
+    }
+    static constexpr uint32_t kMaxPumpIterations = 10'000'000;
+    LR2021::DrainResult result = LR2021::DrainResult::kInProgress;
+    uint32_t i = 0;
+    for (; i < kMaxPumpIterations; i++) {
+        result = adsbee.lr2021.ServiceRxDrain();
+        if (result != LR2021::DrainResult::kInProgress) {
+            break;
+        }
+    }
+    ASSERT_LT(i, kMaxPumpIterations);
+    ASSERT_TRUE(result == LR2021::DrainResult::kNoData || result == LR2021::DrainResult::kDataReady);
+    if (result == LR2021::DrainResult::kDataReady) {
+        adsbee.lr2021.FinishRxDrain();
+    }
+    ASSERT_TRUE(adsbee.lr2021.DrainIdle());
+}

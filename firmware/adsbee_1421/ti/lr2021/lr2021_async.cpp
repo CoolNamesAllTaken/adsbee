@@ -1,22 +1,31 @@
-// Async (DMA/callback-driven) RX drain for the LR2021.
+// Async (DMA/callback-driven) RX drain for the LR2021 -- thread-paced loop drain.
 //
-// Replaces the blocking steady-state poll sequence (GetAndClearIrq -> GetRxFifoLevel -> ReadRxFifo)
-// with a state machine whose long SPI clocking happens via uDMA in the background:
+// Replaces the blocking steady-state poll sequence with a state machine whose long SPI clocking
+// happens via uDMA in the background:
 //
 //   - Thread level (ServiceRxDrain, called once per main-loop iteration) does all BUSY waiting,
-//     protocol parsing, and state advancement. While a frame's DMA is in flight or the chip is
-//     processing a command (BUSY high), the main loop is free to run the UAT re-arm, decoders, and
-//     comms instead of spinning.
-//   - SWI level (SPICallback) does the absolute minimum: raise NSS to end the frame (so the LR2021's
-//     BUSY pulse overlaps main-loop time) and set the completion flags. NoRTOS SWIs are
-//     non-preemptive, and the UAT RF SWI must issue CMD_PROP_SET_LEN within ~15 us of sync detect
-//     (see sub_ghz_radio.cpp) -- nothing heavier may run in the SWI band.
+//     protocol parsing, and state advancement for the LOOP drain. While a frame's DMA is in flight or
+//     the chip is processing a command (BUSY high), the main loop is free to run the UAT re-arm,
+//     decoders, and comms instead of spinning.
+//   - SWI level (SPICallback) does the minimum: raise NSS to end the frame (so the LR2021's BUSY
+//     pulse overlaps main-loop time) and set the completion flags. NoRTOS SWIs are non-preemptive,
+//     and the UAT RF SWI must issue CMD_PROP_SET_LEN within ~15 us of sync detect (see
+//     sub_ghz_radio.cpp) -- nothing heavier may run in the SWI band.
 //
-// Timing budget: the LR2021's 256-byte RX FIFO holds ~2.2 ms of back-to-back 1090 traffic, and a
-// full drain is at most 5 NSS frames + BUSY pulses, i.e. a handful of (now much shorter) loop
-// iterations. Frame layouts mirror the synchronous implementations in lr2021_system.cpp /
-// lr2021_fifo.cpp; the FIFO read collapses the opcode + payload phases into one (2 + level)-byte DMA
-// transaction within a single NSS frame (the tx buffer clocks the opcode then zeros).
+// The loop drain is an UNCONDITIONAL level-read sweep: GetRxFifoLevel -> ReadRxFifo -> (only when the
+// LR_IRQ line reads high) ClearFifoIrqFlags + GetAndClearIrq. It deliberately does not gate on the
+// kIrqRxFifo flag: with the FIFO high threshold at kIrqDrainThresholdBytes (9 packets), sub-threshold
+// packets would otherwise never be read. The clear tail keeps the latched IRQ line (and its edge
+// generation for the IRQ-paced chain, lr2021_irq_drain.cpp) healthy whenever it is seen high.
+//
+// Torn-packet guard: every FIFO read pops a multiple of kOokFifoPacketLenBytes so the FIFO front
+// stays packet-aligned -- EXCEPT when the FIFO reads completely full, where a full flush is the
+// realignment/recovery mechanism (traffic may have overflowed mid-packet).
+//
+// Concurrency: the IRQ-paced chain (lr2021_irq_drain.cpp) may STEAL a parked loop drain from a GPIO
+// HWI whenever no DMA is in flight and the drain is not in a terminal state. Every thread-side
+// drain_state_ transition is therefore HwiP_disable-guarded and re-checks the snapshotted state; a
+// stolen drain is simply discarded and restarted fresh by the next UpdateLR2021() pass.
 
 #include <ti/drivers/dpl/HwiP.h>
 
@@ -25,18 +34,27 @@
 
 void LR2021::SPICallback(SPI_Handle handle, SPI_Transaction* transaction) {
     (void)handle;
-    // SWI context: keep to a couple of GPIO/flag writes. No logging, no SPI calls, no parsing.
+    // SWI context: keep tiny. No logging, no busy-waiting, no heavy parsing.
     LR2021* self = static_cast<LR2021*>(transaction->arg);
     if (self == nullptr) {
         return;
     }
     if (transaction == &self->async_txn_) {
-        // Async drain frame: end the NSS frame immediately so the chip starts processing (BUSY pulse)
-        // during main-loop time instead of waiting for the next ServiceRxDrain() call.
-        self->SetNSS(true);
-        self->async_ok_ = (transaction->status == SPI_TRANSFER_COMPLETED);
-        self->async_in_flight_ = false;
-        self->async_done_ = true;  // Written last: thread level reads async_done_ before async_ok_.
+        if (IsChainState(self->drain_state_)) {
+            // IRQ-paced chain frame: completion handling (slot marking, next-frame arm/post, restart
+            // decision) lives in lr2021_irq_drain.cpp. It raises NSS itself with arm-before-NSS
+            // ordering.
+            self->async_ok_ = (transaction->status == SPI_TRANSFER_COMPLETED);
+            self->async_in_flight_ = false;
+            self->HandleChainFrameComplete();
+        } else {
+            // Loop-drain frame: end the NSS frame immediately so the chip starts processing (BUSY
+            // pulse) during main-loop time instead of waiting for the next ServiceRxDrain() call.
+            self->SetNSS(true);
+            self->async_ok_ = (transaction->status == SPI_TRANSFER_COMPLETED);
+            self->async_in_flight_ = false;
+            self->async_done_ = true;  // Written last: thread level reads async_done_ before async_ok_.
+        }
     } else {
         // Synchronous shim transfer (SPITransfer in lr2021_ll.cpp): the caller owns NSS framing at
         // thread level; only report completion.
@@ -45,7 +63,7 @@ void LR2021::SPICallback(SPI_Handle handle, SPI_Transaction* transaction) {
     }
 }
 
-bool LR2021::PostAsyncFrame(const uint8_t* tx_buf, size_t len) {
+bool LR2021::PostAsyncFrame(const uint8_t* tx_buf, size_t len, uint8_t* rx_buf) {
     if (spi_handle_ == nullptr) {
         return false;
     }
@@ -54,7 +72,7 @@ bool LR2021::PostAsyncFrame(const uint8_t* tx_buf, size_t len) {
     async_txn_ = {
         .count = len,
         .txBuf = const_cast<uint8_t*>(tx_buf),  // nullptr clocks the driver's 0x00 default.
-        .rxBuf = async_rx_buf_,
+        .rxBuf = (rx_buf != nullptr) ? rx_buf : async_rx_buf_,
         .arg = this,
         .status = SPI_TRANSFER_QUEUED,
     };
@@ -79,28 +97,80 @@ LR2021::DrainResult LR2021::EnterDrainError(const char* reason) {
     return DrainResult::kError;
 }
 
+bool LR2021::IrqLineHigh() { return GPIO_read(config_.gpio_irq) != 0; }
+
 bool LR2021::StartRxDrain() {
-    if (drain_state_ != DrainState::kIdle || spi_handle_ == nullptr || abort_requested_) {
+    if (spi_handle_ == nullptr || abort_requested_) {
         return false;
     }
+    uintptr_t key = HwiP_disable();
+    if (drain_state_ != DrainState::kIdle) {
+        HwiP_restore(key);
+        return false;
+    }
+    EnterBusyWait(DrainState::kLevelCmdWait);
+    HwiP_restore(key);
+    // Field resets after the claim: if the chain steals the drain before they matter, they are
+    // re-initialized by the next StartRxDrain anyway.
     drain_irq_flags_ = 0;
     drain_fifo_level_ = 0;
     drain_fifo_full_ = false;
     drain_error_str_ = nullptr;
-    EnterBusyWait(DrainState::kIrqCmdWait);
     return true;
 }
 
 LR2021::DrainResult LR2021::ServiceRxDrain() {
     while (true) {
-        if (abort_requested_ && drain_state_ != DrainState::kIdle && drain_state_ != DrainState::kDataReady &&
-            drain_state_ != DrainState::kError) {
+        DrainState s = drain_state_;  // Snapshot: the chain may steal/advance concurrently.
+
+        // IRQ-paced chain: the thread only backstops -- re-post a frame whose BUSY edge was missed,
+        // and cancel a wedged chain.
+        if (IsChainState(s)) {
+            if (s == DrainState::kChainFifoWait || s == DrainState::kChainClearFifoWait ||
+                s == DrainState::kChainIrqCmdWait || s == DrainState::kChainIrqRspWait) {
+                if (!IsBusy() && !abort_requested_) {
+                    uintptr_t key = HwiP_disable();
+                    if (drain_state_ == s) {
+                        DisarmBusyInterrupt();
+                        if (PostChainFrame()) {
+                            irq_thread_assist_posts = irq_thread_assist_posts + 1;
+                        }
+                    }
+                    HwiP_restore(key);
+                    return DrainResult::kInProgress;
+                }
+            }
+            if (abort_requested_ || (get_time_since_boot_ms() - chain_start_ms_ > kIrqChainTimeoutMs)) {
+                // Wedged (or aborted) chain: cancel at thread level.
+                uintptr_t key = HwiP_disable();
+                bool claimed = (drain_state_ == s);
+                if (claimed) {
+                    DisarmBusyInterrupt();
+                    drain_state_ = DrainState::kIdle;
+                    if (!abort_requested_) {
+                        irq_chain_timeouts = irq_chain_timeouts + 1;
+                    }
+                }
+                HwiP_restore(key);
+                if (claimed) {
+                    if (async_in_flight_ && spi_handle_ != nullptr) {
+                        SPI_transferCancel(spi_handle_);  // Canceled callback lands in the legacy branch.
+                    }
+                    SetNSS(true);
+                }
+                return DrainResult::kIdle;
+            }
+            return DrainResult::kInProgress;
+        }
+
+        if (abort_requested_ && s != DrainState::kIdle && s != DrainState::kDataReady && s != DrainState::kError) {
             // The SYNC ISR handed the bus to the host mid-drain: unwind silently (expected, not an
             // error, matching WaitUntilReady's abort semantics).
             CancelAsync();
             return DrainResult::kIdle;
         }
-        switch (drain_state_) {
+
+        switch (s) {
             case DrainState::kIdle:
                 return DrainResult::kIdle;
             case DrainState::kDataReady:
@@ -108,83 +178,76 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
             case DrainState::kError:
                 return DrainResult::kError;
 
-            // BUSY-wait states: post the next frame once the chip is ready.
-            case DrainState::kIrqCmdWait:
-            case DrainState::kIrqRspWait:
+            // BUSY-wait states: post the next frame once the chip is ready. Post + transition are
+            // HwiP-guarded so a chain steal can't interleave.
             case DrainState::kLevelCmdWait:
             case DrainState::kLevelRspWait:
-            case DrainState::kFifoWait: {
+            case DrainState::kFifoWait:
+            case DrainState::kClearFifoWait:
+            case DrainState::kIrqCmdWait:
+            case DrainState::kIrqRspWait: {
                 if (IsBusy()) {
                     if (get_time_since_boot_ms() - busy_wait_start_ms_ > kBusyTimeoutMs) {
                         return EnterDrainError("BUSY timeout");
                     }
                     return DrainResult::kInProgress;
                 }
+                uintptr_t key = HwiP_disable();
+                if (drain_state_ != s) {  // Stolen by the chain: re-evaluate.
+                    HwiP_restore(key);
+                    break;
+                }
                 bool posted = false;
-                switch (drain_state_) {
-                    case DrainState::kIrqCmdWait:
-                        PackU16(async_tx_buf_, kOpcodeGetAndClearIrq);
-                        posted = PostAsyncFrame(async_tx_buf_, 2);
-                        drain_state_ = DrainState::kIrqCmd;
-                        break;
-                    case DrainState::kIrqRspWait:
-                        posted = PostAsyncFrame(nullptr, 6);  // 2 (stat) + 4 (irq_flags).
-                        drain_state_ = DrainState::kIrqRsp;
-                        break;
+                DrainState next = s;
+                switch (s) {
                     case DrainState::kLevelCmdWait:
                         PackU16(async_tx_buf_, kOpcodeGetRxFifoLevel);
                         posted = PostAsyncFrame(async_tx_buf_, 2);
-                        drain_state_ = DrainState::kLevelCmd;
+                        next = DrainState::kLevelCmd;
                         break;
                     case DrainState::kLevelRspWait:
                         posted = PostAsyncFrame(nullptr, 4);  // 2 (stat) + 2 (level).
-                        drain_state_ = DrainState::kLevelRsp;
+                        next = DrainState::kLevelRsp;
                         break;
-                    default:  // kFifoWait
+                    case DrainState::kFifoWait:
                         // Single NSS frame: opcode at [0:1], then [2..] clocks zeros while the payload
                         // streams back (async_tx_buf_[2..] is kept zeroed).
                         PackU16(async_tx_buf_, kOpcodeReadRxFifo);
                         posted = PostAsyncFrame(async_tx_buf_, 2u + drain_fifo_level_);
-                        drain_state_ = DrainState::kFifoRead;
+                        next = DrainState::kFifoRead;
+                        break;
+                    case DrainState::kClearFifoWait:
+                        // Clear the (sticky) FIFO sub-flags BEFORE the global latch, so stale
+                        // sub-flags can't instantly re-latch kIrqRxFifo.
+                        PackU16(tail_tx_buf_, kOpcodeClearFifoIrqFlags);
+                        tail_tx_buf_[2] = 0x3F;  // All RX FIFO flags.
+                        tail_tx_buf_[3] = 0x00;
+                        posted = PostAsyncFrame(tail_tx_buf_, 4, tail_rx_buf_);
+                        next = DrainState::kClearFifoCmd;
+                        break;
+                    case DrainState::kIrqCmdWait:
+                        PackU16(tail_tx_buf_, kOpcodeGetAndClearIrq);
+                        posted = PostAsyncFrame(tail_tx_buf_, 2, tail_rx_buf_);
+                        next = DrainState::kIrqCmd;
+                        break;
+                    default:  // kIrqRspWait
+                        posted = PostAsyncFrame(nullptr, 6, tail_rx_buf_);  // 2 (stat) + 4 (irq_flags).
+                        next = DrainState::kIrqRsp;
                         break;
                 }
+                if (posted) {
+                    drain_state_ = next;
+                }
+                HwiP_restore(key);
                 if (!posted) {
                     return EnterDrainError("SPI_transfer post failed");
                 }
                 return DrainResult::kInProgress;
             }
 
-            // DMA-in-flight states: parse and advance on completion.
-            case DrainState::kIrqCmd:
-                if (!async_done_) {
-                    return DrainResult::kInProgress;
-                }
-                if (!async_ok_) {
-                    return EnterDrainError("GetAndClearIrq opcode frame failed");
-                }
-                ParseStat(UnpackU16(async_rx_buf_));
-                EnterBusyWait(DrainState::kIrqRspWait);
-                break;  // Loop: BUSY may already be low.
-            case DrainState::kIrqRsp:
-                if (!async_done_) {
-                    return DrainResult::kInProgress;
-                }
-                if (!async_ok_) {
-                    return EnterDrainError("GetAndClearIrq response frame failed");
-                }
-                ParseStat(UnpackU16(async_rx_buf_));
-                if (last_stat_.command_status != CommandStatus::kDat &&
-                    last_stat_.command_status != CommandStatus::kOk) {
-                    return EnterDrainError("GetAndClearIrq bad command status");
-                }
-                drain_irq_flags_ = UnpackU32(async_rx_buf_ + 2);
-                if (!(drain_irq_flags_ & HostIrqs::kIrqRxFifo)) {
-                    drain_state_ = DrainState::kIdle;
-                    return DrainResult::kNoData;
-                }
-                EnterBusyWait(DrainState::kLevelCmdWait);
-                break;
-            case DrainState::kLevelCmd:
+            // DMA-in-flight states: parse and advance on completion. Transitions are HwiP-guarded
+            // (once async_in_flight_ drops, the chain may steal this drain).
+            case DrainState::kLevelCmd: {
                 if (!async_done_) {
                     return DrainResult::kInProgress;
                 }
@@ -192,8 +255,13 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                     return EnterDrainError("GetRxFifoLevel opcode frame failed");
                 }
                 ParseStat(UnpackU16(async_rx_buf_));
-                EnterBusyWait(DrainState::kLevelRspWait);
-                break;
+                uintptr_t key = HwiP_disable();
+                if (drain_state_ == s) {
+                    EnterBusyWait(DrainState::kLevelRspWait);
+                }
+                HwiP_restore(key);
+                break;  // Loop: BUSY may already be low, or we were stolen.
+            }
             case DrainState::kLevelRsp: {
                 if (!async_done_) {
                     return DrainResult::kInProgress;
@@ -207,19 +275,36 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                     return EnterDrainError("GetRxFifoLevel bad command status");
                 }
                 uint16_t level = UnpackU16(async_rx_buf_ + 2);
-                if (level == 0) {
-                    // IRQ fired but the FIFO is empty (threshold crossed in both directions).
-                    drain_state_ = DrainState::kIdle;
-                    return DrainResult::kNoData;
+                // Full FIFO means the drain fell behind and the radio almost certainly dropped frames
+                // on top of this; the consumer counts it (see ADSBee::UpdateLR2021).
+                bool full = (level >= kRxFifoMaxDepthBytes);
+                uint16_t read_len = (level > kRxFifoMaxDepthBytes) ? kRxFifoMaxDepthBytes : level;
+                if (!full) {
+                    // Torn-packet guard: keep the FIFO front packet-aligned by only popping whole
+                    // packets. A full FIFO is flushed completely instead -- overflow may have torn a
+                    // packet already, and the flush is the realignment mechanism.
+                    read_len -= read_len % kOokFifoPacketLenBytes;
                 }
-                // Full FIFO means the poll loop fell behind and the radio almost certainly dropped
-                // frames on top of this; the consumer counts it (see ADSBee::UpdateLR2021).
-                drain_fifo_full_ = (level >= kRxFifoMaxDepthBytes);
-                drain_fifo_level_ = (level > kRxFifoMaxDepthBytes) ? kRxFifoMaxDepthBytes : level;
-                EnterBusyWait(DrainState::kFifoWait);
+                uintptr_t key = HwiP_disable();
+                if (drain_state_ == s) {
+                    drain_fifo_full_ = full;
+                    drain_fifo_level_ = read_len;
+                    if (read_len > 0) {
+                        EnterBusyWait(DrainState::kFifoWait);
+                    } else if (IrqLineHigh()) {
+                        // Nothing (whole) to read but the latched IRQ line is asserted: run the clear
+                        // tail so edge generation recovers, then finish as kNoData.
+                        EnterBusyWait(DrainState::kClearFifoWait);
+                    } else {
+                        drain_state_ = DrainState::kIdle;
+                        HwiP_restore(key);
+                        return DrainResult::kNoData;
+                    }
+                }
+                HwiP_restore(key);
                 break;
             }
-            case DrainState::kFifoRead:
+            case DrainState::kFifoRead: {
                 if (!async_done_) {
                     return DrainResult::kInProgress;
                 }
@@ -231,8 +316,82 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                     last_stat_.command_status != CommandStatus::kOk) {
                     return EnterDrainError("ReadRxFifo bad command status");
                 }
-                drain_state_ = DrainState::kDataReady;
-                return DrainResult::kDataReady;
+                uintptr_t key = HwiP_disable();
+                if (drain_state_ == s) {
+                    if (IrqLineHigh()) {
+                        // Payload is parked in async_rx_buf_ while the tail frames run into the
+                        // dedicated tail buffers; kDataReady is entered at tail completion.
+                        EnterBusyWait(DrainState::kClearFifoWait);
+                    } else {
+                        drain_state_ = DrainState::kDataReady;
+                        HwiP_restore(key);
+                        return DrainResult::kDataReady;
+                    }
+                }
+                HwiP_restore(key);
+                break;
+            }
+            case DrainState::kClearFifoCmd: {
+                if (!async_done_) {
+                    return DrainResult::kInProgress;
+                }
+                if (!async_ok_) {
+                    return EnterDrainError("ClearFifoIrqFlags frame failed");
+                }
+                // Stat in a write frame reflects the PREVIOUS command; informational only here.
+                ParseStat(UnpackU16(tail_rx_buf_));
+                uintptr_t key = HwiP_disable();
+                if (drain_state_ == s) {
+                    EnterBusyWait(DrainState::kIrqCmdWait);
+                }
+                HwiP_restore(key);
+                break;
+            }
+            case DrainState::kIrqCmd: {
+                if (!async_done_) {
+                    return DrainResult::kInProgress;
+                }
+                if (!async_ok_) {
+                    return EnterDrainError("GetAndClearIrq opcode frame failed");
+                }
+                ParseStat(UnpackU16(tail_rx_buf_));
+                uintptr_t key = HwiP_disable();
+                if (drain_state_ == s) {
+                    EnterBusyWait(DrainState::kIrqRspWait);
+                }
+                HwiP_restore(key);
+                break;
+            }
+            case DrainState::kIrqRsp: {
+                if (!async_done_) {
+                    return DrainResult::kInProgress;
+                }
+                if (!async_ok_) {
+                    return EnterDrainError("GetAndClearIrq response frame failed");
+                }
+                ParseStat(UnpackU16(tail_rx_buf_));
+                if (last_stat_.command_status != CommandStatus::kDat &&
+                    last_stat_.command_status != CommandStatus::kOk) {
+                    return EnterDrainError("GetAndClearIrq bad command status");
+                }
+                drain_irq_flags_ = UnpackU32(tail_rx_buf_ + 2);
+                uintptr_t key = HwiP_disable();
+                if (drain_state_ == s) {
+                    if (drain_fifo_level_ > 0) {
+                        drain_state_ = DrainState::kDataReady;
+                        HwiP_restore(key);
+                        return DrainResult::kDataReady;
+                    }
+                    drain_state_ = DrainState::kIdle;
+                    HwiP_restore(key);
+                    return DrainResult::kNoData;
+                }
+                HwiP_restore(key);
+                break;
+            }
+            default:
+                // Unreachable: chain states are handled above.
+                return DrainResult::kInProgress;
         }
     }
 }
@@ -248,6 +407,7 @@ void LR2021::CancelAsync() {
     // flight, cancel it -- SPI_transferCancel invokes SPICallback with a canceled status, which clears
     // async_in_flight_. A completion racing the check is harmless: cancelling with nothing queued is a
     // no-op. The critical section keeps the flag reset atomic against a late-landing callback.
+    DisarmBusyInterrupt();
     if (spi_handle_ != nullptr && async_in_flight_) {
         SPI_transferCancel(spi_handle_);
     }

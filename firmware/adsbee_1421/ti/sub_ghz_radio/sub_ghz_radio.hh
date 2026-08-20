@@ -173,6 +173,12 @@ public:
     // command ends with an error status (e.g. PROP_ERROR_RXFULL/RXBUF) and has to be restarted.
     uint32_t rx_error_restart_count = 0;
 
+    // Failed CMD_PROP_SET_LEN immediate commands (RF_runImmediateCmd status != success), counted from
+    // the RF callback (ISR context, no logging there). Reported and reset via AT+RX_STATS. A nonzero
+    // value means packet-length shortening raced the RX command ending -- packets may be truncated or
+    // over-read.
+    volatile uint32_t set_len_error_count = 0;
+
 private:
     /**
      * Brings normal RX back up after Resume()/StopCWTest()/StopRssiScan() if the user has it enabled; otherwise
