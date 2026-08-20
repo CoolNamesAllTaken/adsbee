@@ -28,6 +28,10 @@ Chrome or Edge (works from `file://`, no server needed) and click **Connect**
   - Statistics update whenever an `RX_STATS=` response appears — type
     `AT+RX_STATS?` yourself or click **Refresh**. There is no background polling,
     so the console stream stays clean.
+  - An **uptime** card sits alongside the statistics, fed by `AT+UPTIME?`. It is read
+    quietly on connect and after anything that reboots the device (`AT+REBOOT`,
+    `AT+SETTINGS=RESET`, a firmware flash), and refreshed by the same **Refresh**
+    button — or by typing `AT+UPTIME?` yourself.
   - Device info (`AT+DEVICE_INFO?`) is queried once per connect.
   - All protocol output (CSBee, raw aircraft JSON, etc.) prints in the terminal.
     Aircraft JSON is hidden from the terminal only while the Map tab itself is

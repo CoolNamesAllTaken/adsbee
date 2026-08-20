@@ -1138,6 +1138,11 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                     "LRLF/LRHF=LR2021 low/high band (150-1100 / 1900-2700 MHz).",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATRxCWCallback, comms_manager)},
 #endif
+    {.command = "UPTIME",
+     .min_args = 0,
+     .max_args = 0,
+     .help_string = "AT+UPTIME?\r\n\tQuery the time since boot in seconds.\r\n\tUPTIME=<uptime_sec>",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATUptimeCallback, comms_manager)},
     {.command = "WATCHDOG",
      .min_args = 0,
      .max_args = 1,

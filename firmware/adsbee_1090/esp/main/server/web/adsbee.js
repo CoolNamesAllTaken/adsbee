@@ -429,12 +429,6 @@ class FeedEditor {
     static PROTOCOLS = ['NONE', 'RAW', 'BEAST', 'BEAST_NO_UAT', 'BEAST_NO_UAT_UPLINK',
         'CSBEE', 'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON'];
 
-    static parseFeedResponse(text) {
-        const m = text.match(/\+FEED=(\d+)\(INDEX\),([^,]*)\(URI\),(\d+)\(PORT\),(\d+)\(ACTIVE\),(\w+)\(PROTOCOL\)/);
-        if (!m) return null;
-        return { index: +m[1], uri: m[2], port: +m[3], active: m[4] === '1', protocol: m[5] };
-    }
-
     static async open(feedSlot) {
         const modal = document.getElementById('feed-modal');
         const statusEl = document.getElementById('feed-modal-status');
@@ -558,17 +552,6 @@ class ADSBeeAT {
 
     getMsTimestamp() {
         return Math.floor((Date.now() - this.connectTimestamp));
-    }
-
-    async getUptimeSec() {
-        const response = await this.sendCmd('AT+UPTIME?\r\n', 0, true, true, '+UPTIME');
-        for (const line of response) {
-            const match = line.match(/\+UPTIME=(\d+)/);
-            if (match) {
-                return parseInt(match[1]);
-            }
-        }
-        return null;
     }
 
     async flushInputBuffer(flushTimeoutMs = 10) {

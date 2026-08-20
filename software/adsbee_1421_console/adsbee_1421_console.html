@@ -2379,6 +2379,9 @@
                 // (user-typed AT+RX_STATS? or the Refresh button) also updates the cards.
                 const sm = t.match(/^RX_STATS=(.*)$/);
                 if (sm) statsPanel.updateFromLine(sm[1]);
+                // Same deal for AT+UPTIME?, which answers with a bare UPTIME=<seconds>.
+                const um = t.match(/^UPTIME=(\d+)$/);
+                if (um) statsPanel.updateUptime(Number(um[1]));
                 appendToTerminal(line + '\n');
             }
         };
@@ -2431,6 +2434,37 @@
                     `updated ${new Date().toLocaleTimeString()}`;
             },
 
+            // sec = seconds since boot, from an UPTIME=<seconds> response.
+            updateUptime(sec) {
+                if (!this.cards.uptime) this.cards.uptime = this._makeCard('uptime', this._formatUptime(sec));
+                else this._setCardValue(this.cards.uptime, this._formatUptime(sec));
+                document.getElementById('stats-updated').textContent =
+                    `updated ${new Date().toLocaleTimeString()}`;
+            },
+
+            // 93784 -> "1d 02:03:04"; under a day, just "02:03:04".
+            _formatUptime(sec) {
+                const days = Math.floor(sec / 86400);
+                const hms = [Math.floor(sec / 3600) % 24, Math.floor(sec / 60) % 60, sec % 60]
+                    .map((n) => String(n).padStart(2, '0')).join(':');
+                return days ? `${days}d ${hms}` : hms;
+            },
+
+            // Quiet read used on connect and after a reboot, so the card is populated without
+            // echoing a command the user didn't type. The response is consumed by the queue
+            // (it matches `expect`), so it never reaches the passive sniffer in lineRouter.
+            queryUptime() {
+                if (!serial.connected) return;
+                atQueue.send('AT+UPTIME?\r\n', {
+                    expect: /^UPTIME=/, terminator: 'quiet', quietMs: 300, timeoutMs: 3000,
+                }).then((lines) => {
+                    for (const l of lines) {
+                        const m = l.match(/^UPTIME=(\d+)$/);
+                        if (m) this.updateUptime(Number(m[1]));
+                    }
+                }).catch(() => { /* uptime card stays as-is */ });
+            },
+
             refresh() {
                 if (!serial.connected) {
                     appendToTerminal('\x1b[31mNot connected. Click Connect to open a serial port.\x1b[0m\n');
@@ -2438,6 +2472,9 @@
                 }
                 appendToTerminal('> AT+RX_STATS?\n');
                 atQueue.send('AT+RX_STATS?\r\n', { visible: true, terminator: 'quiet', quietMs: 400, timeoutMs: 3000 })
+                    .catch(() => { });
+                appendToTerminal('> AT+UPTIME?\n');
+                atQueue.send('AT+UPTIME?\r\n', { visible: true, terminator: 'quiet', quietMs: 400, timeoutMs: 3000 })
                     .catch(() => { });
             }
         };
@@ -3059,6 +3096,7 @@
             async onConnected() {
                 const gen = ++this.gen;
                 deviceInfoCard.query();
+                statsPanel.queryUptime();
                 if (this.active === 'map') {
                     initMapTab();
                     await this.enterMapMode(gen);
@@ -3797,6 +3835,8 @@
                 try {
                     await this.negotiate();
                     this._setConnectedIndicators();
+                    // The device just rebooted, so the uptime card is stale by definition.
+                    statsPanel.queryUptime();
                 } catch (_) { }
             },
 
