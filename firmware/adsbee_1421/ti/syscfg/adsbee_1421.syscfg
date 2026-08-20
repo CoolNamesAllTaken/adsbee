@@ -34,6 +34,14 @@ custom.radioConfigcustom868.codeExportConfig.$name = "ti_devices_radioconfig_cod
 
 rfdesign.rfDesign = "LP_EM_CC1314R10";
 
+/* The RF driver's SWI must preempt the SPI (LR2021) and UART SWIs: the RX callback has ~15 us after
+ * sync (irqIntv fires 16 bytes into an 18-byte short UAT ADS-B frame) to issue CMD_PROP_SET_LEN
+ * before the RF core overruns the data entry with PROP_ERROR_RXFULL and the packet is lost. See the
+ * maxPktLen comment in sub_ghz_radio.cpp. Values mirror ADSBee 1090's adsbee_uat.syscfg: RF SWI one
+ * point above the default 0 used by SPI/UART; higher values cause instability. */
+RF.softwareInterruptPriority = "1";
+RF.interruptPriority         = "5";
+
 GPIO1.mode            = "Output";
 GPIO1.$name           = "SUBG_DIO26";
 GPIO1.gpioPin.$assign = "DIO_26";
@@ -86,6 +94,7 @@ CCFG.levelBootloaderBackdoor  = "Active high";
 
 SPI1.$name                    = "COPRO_SPI";
 SPI1.defaultTxBufferValue     = "0x00";
+SPI1.dmaInterruptPriority     = "5";
 SPI1.spi.$assign              = "SPI0";
 SPI1.spi.sclkPin.$assign      = "DIO_10";
 SPI1.spi.pociPin.$assign      = "DIO_8";

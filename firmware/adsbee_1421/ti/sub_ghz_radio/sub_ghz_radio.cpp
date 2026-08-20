@@ -541,9 +541,12 @@ bool SubGHzRadio::Update() {
     }
 
     volatile uint16_t rx_status = ((volatile RF_Op*)&RF_cmdPropRxAdv)->status;
-    if ((rx_status & 0xFF00) & PROP_DONE_OK) {
+    // Compare the status class (high byte) exactly: PROP_DONE_* = 0x34xx, PROP_ERROR_* = 0x38xx. Masking with '&'
+    // instead of '==' made every error status match the PROP_DONE_OK branch (0x3800 & 0x3400 != 0), silently
+    // restarting RX without logging or counting the error.
+    if ((rx_status & 0xFF00) == (PROP_DONE_OK & 0xFF00)) {
         StartPacketRx();
-    } else if ((rx_status & 0xFF00) & PROP_ERROR_PAR) {
+    } else if ((rx_status & 0xFF00) == (PROP_ERROR_PAR & 0xFF00)) {
         char* error_str;
         switch (rx_status) {
             case PROP_ERROR_PAR:

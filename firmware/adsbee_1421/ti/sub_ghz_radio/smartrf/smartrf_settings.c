@@ -54,14 +54,22 @@ uint32_t pOverrides[] = {
     // override_tc106.xml
     // Tx: Configure PA ramp time, PACTL2.RC=0x1 (in ADI0, set PACTL2[4:3]=0x1)
     ADI_2HALFREG_OVERRIDE(0, 16, 0x8, 0x8, 17, 0x1, 0x1),
-    // Rx: Set AGC reference level to 0x1A (default: 0x2E)
-    HW_REG_OVERRIDE(0x609C, 0x001A),
+    // Rx: Set AGC reference level to 0x2E (default: 0x2E). Wideband value from TI's 1 Mbps preset (TC782/783), matching
+    // ADSBee 1090's field-proven UAT config. The previous 0x1A came from the 50 kbps TC106 preset this file was
+    // originally derived from and crippled sensitivity for the 1.042 MBaud UAT waveform.
+    HW_REG_OVERRIDE(0x609C, 0x002E),
     // Rx: Set RSSI offset to adjust reported RSSI by -1 dB at 779-930 MHz
     (uint32_t)0x000188A3,
-    // Rx: Set anti-aliasing filter bandwidth to 0xD (in ADI0, set IFAMPCTL3[7:4]=0xD)
-    ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0xD),
+    // Rx: Set LNA Ib boost (from TI's wideband presets TC178/TC782; absent in the narrowband TC106 preset).
+    ADI_HALFREG_OVERRIDE(0, 5, 0xF, 0x2),
+    // Rx: Set anti-aliasing filter bandwidth to 0x0 = widest (in ADI0, set IFAMPCTL3[7:4]=0x0). The previous 0xD was
+    // the narrowband TC106 trim, which filtered out most of the 2.2 MHz-wide UAT signal ahead of the 2185.1 kHz
+    // channel filter (rxBw=0x64).
+    ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0x0),
     // Tx: Configure PA ramping, set wait time before turning off (0x1A ticks of 16/24 us = 17.3 us).
     HW_REG_OVERRIDE(0x6028, 0x001A),
+    // Tx: set intFreq = 0 (matches ADSBee 1090's known-good override set).
+    (uint32_t)0x00000343,
     // TX power override
     // Tx: Set PA trim to max to maximize its output power (in ADI0, set PACTL0=0xF8)
     ADI_REG_OVERRIDE(0, 12, 0xF8), (uint32_t)0xFFFFFFFF};

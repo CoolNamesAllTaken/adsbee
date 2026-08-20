@@ -184,8 +184,8 @@ const PowerCC26X2_Config PowerCC26X2_config = {
  * Platform-specific driver configuration
  */
 const RFCC26XX_HWAttrsV2 RFCC26XX_hwAttrs = {
-    .hwiPriority        = (~0),
-    .swiPriority        = (uint8_t)0,
+    .hwiPriority        = 0xa0,
+    .swiPriority        = (uint8_t)1,
     .xoscHfAlwaysNeeded = true,
     .globalCallback     = NULL,
     .globalEventMask    = 0
@@ -225,7 +225,7 @@ const SPICC26X4DMA_HWAttrs spiCC26X4DMAHWAttrs[CONFIG_SPI_COUNT] = {
     {
         .baseAddr = SPI0_BASE,
         .intNum = INT_SPI0_COMB,
-        .intPriority = (~0),
+        .intPriority = 0xa0,
         .swiPriority = 0,
         .powerMngrId = PowerCC26XX_PERIPH_SSI0,
         .defaultTxBufValue = 0x00,
