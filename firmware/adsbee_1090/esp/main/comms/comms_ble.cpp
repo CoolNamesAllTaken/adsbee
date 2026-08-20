@@ -52,28 +52,28 @@ const ble_uuid128_t kStatusUUID = BLE_GDL90_UUID128(0x12, 0x00);
 const ble_uuid128_t kUplinkUUID = BLE_GDL90_UUID128(0x13, 0x00);
 const ble_uuid128_t kControlUUID = BLE_GDL90_UUID128(0x20, 0x00);
 
-uint16_t g_traffic_val_handle = 0;
-uint16_t g_ownship_val_handle = 0;
-uint16_t g_status_val_handle = 0;
-uint16_t g_uplink_val_handle = 0;
+uint16_t s_traffic_val_handle = 0;
+uint16_t s_ownship_val_handle = 0;
+uint16_t s_status_val_handle = 0;
+uint16_t s_uplink_val_handle = 0;
 
 // Uplink fragmentation (see comms_ble.hh): header bit7 first, bit6 last, bits 0-5 sequence mod 64.
 constexpr uint8_t kUplinkFragmentFirst = 0x80;
 constexpr uint8_t kUplinkFragmentLast = 0x40;
 constexpr uint16_t kUplinkMinMTUBytes = 100;  // Skip uplink on default-MTU links; FIS-B would drown them.
-uint8_t g_uplink_sequence = 0;
+uint8_t s_uplink_sequence = 0;
 
-bool g_services_registered = false;
-bool g_advertising_configured = false;
-bool g_started = false;
-bool g_advertising = false;
+bool s_services_registered = false;
+bool s_advertising_configured = false;
+bool s_started = false;
+bool s_advertising = false;
 
 // Diagnostics: early boot logs are lost before the RP2040 SPI console bridge comes up, so remember the last result
 // codes and report them periodically from a status task.
-int g_last_configure_rc = -1;
-int g_last_set_data_rc = -1;
-int g_last_adv_start_rc = -1;
-int g_host_init_err = -1;
+int s_last_configure_rc = -1;
+int s_last_set_data_rc = -1;
+int s_last_adv_start_rc = -1;
+int s_host_init_err = -1;
 
 // Per-connection subscription state, indexed by characteristic.
 struct ClientConnection {
@@ -87,10 +87,10 @@ struct ClientConnection {
     bool InUse() const { return conn_handle != BLE_HS_CONN_HANDLE_NONE; }
     void Clear() { *this = ClientConnection(); }
 };
-ClientConnection g_connections[CONFIG_BT_NIMBLE_MAX_CONNECTIONS];
+ClientConnection s_connections[CONFIG_BT_NIMBLE_MAX_CONNECTIONS];
 
 ClientConnection* FindConnection(uint16_t conn_handle) {
-    for (auto& conn : g_connections) {
+    for (auto& conn : s_connections) {
         if (conn.InUse() && conn.conn_handle == conn_handle) return &conn;
     }
     return nullptr;
@@ -106,8 +106,8 @@ const ble_uuid128_t kConsoleRxUUID =  // Client -> console (write).
 const ble_uuid128_t kConsoleTxUUID =  // Console -> client (notify).
     BLE_UUID128_INIT(0x9E, 0xCA, 0xDC, 0x24, 0x0E, 0xE5, 0xA9, 0xE0, 0x93, 0xF3, 0xA3, 0xB5, 0x03, 0x00, 0x40, 0x6E);
 
-uint16_t g_console_tx_val_handle = 0;
-uint16_t g_console_rx_val_handle = 0;
+uint16_t s_console_tx_val_handle = 0;
+uint16_t s_console_rx_val_handle = 0;
 
 // Feeds console input characters to the RP2040's AT interpreter via the shared network console queue - the same path
 // the WiFi websocket console uses.
@@ -137,7 +137,7 @@ int HandleConsoleWrite(struct os_mbuf* om) {
 int GattAccessCallback(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_access_ctxt* ctxt, void* arg) {
     switch (ctxt->op) {
         case BLE_GATT_ACCESS_OP_WRITE_CHR: {
-            if (attr_handle == g_console_rx_val_handle) {
+            if (attr_handle == s_console_rx_val_handle) {
                 return HandleConsoleWrite(ctxt->om);
             }
             // Control characteristic: reserved for configuration commands; accept and log for now.
@@ -156,13 +156,13 @@ const struct ble_gatt_chr_def kConsoleCharacteristics[] = {
         .uuid = &kConsoleRxUUID.u,
         .access_cb = GattAccessCallback,
         .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP,
-        .val_handle = &g_console_rx_val_handle,
+        .val_handle = &s_console_rx_val_handle,
     },
     {
         .uuid = &kConsoleTxUUID.u,
         .access_cb = GattAccessCallback,
         .flags = BLE_GATT_CHR_F_NOTIFY,
-        .val_handle = &g_console_tx_val_handle,
+        .val_handle = &s_console_tx_val_handle,
     },
     {0},  // Terminator.
 };
@@ -172,25 +172,25 @@ const struct ble_gatt_chr_def kCharacteristics[] = {
         .uuid = &kTrafficUUID.u,
         .access_cb = GattAccessCallback,
         .flags = BLE_GATT_CHR_F_NOTIFY,
-        .val_handle = &g_traffic_val_handle,
+        .val_handle = &s_traffic_val_handle,
     },
     {
         .uuid = &kOwnshipUUID.u,
         .access_cb = GattAccessCallback,
         .flags = BLE_GATT_CHR_F_NOTIFY,
-        .val_handle = &g_ownship_val_handle,
+        .val_handle = &s_ownship_val_handle,
     },
     {
         .uuid = &kStatusUUID.u,
         .access_cb = GattAccessCallback,
         .flags = BLE_GATT_CHR_F_NOTIFY,
-        .val_handle = &g_status_val_handle,
+        .val_handle = &s_status_val_handle,
     },
     {
         .uuid = &kUplinkUUID.u,
         .access_cb = GattAccessCallback,
         .flags = BLE_GATT_CHR_F_NOTIFY,
-        .val_handle = &g_uplink_val_handle,
+        .val_handle = &s_uplink_val_handle,
     },
     {
         .uuid = &kControlUUID.u,
@@ -216,7 +216,7 @@ const struct ble_gatt_svc_def kServices[] = {
 
 int GapEventHandler(struct ble_gap_event* event, void* arg);
 
-uint8_t g_adv_instance = kAdvInstance;  // Actual instance in use once configured (probing may pick another).
+uint8_t s_adv_instance = kAdvInstance;  // Actual instance in use once configured (probing may pick another).
 
 // Configures and starts the connectable advertising instance carrying the service UUID and name. The instance stops
 // whenever a central connects; call again to keep accepting additional clients. Combinations of advertising style
@@ -226,10 +226,10 @@ void StartAdvertising() {
     // Make sure the controller has a usable address before advertising (same prerequisite as the NimBLE examples).
     int addr_rc = ble_hs_util_ensure_addr(0);
     if (addr_rc != 0) {
-        g_last_configure_rc = addr_rc;
+        s_last_configure_rc = addr_rc;
         return;
     }
-    if (!g_advertising_configured) {
+    if (!s_advertising_configured) {
         struct ble_gap_ext_adv_params params;
         memset(&params, 0, sizeof(params));
         params.connectable = 1;
@@ -250,11 +250,11 @@ void StartAdvertising() {
                 rc = ble_gap_ext_adv_configure(instance, &params, &selected_tx_power, GapEventHandler, nullptr);
                 CONSOLE_WARNING("ble_gdl90", "ext_adv_configure(instance=%d, legacy=%d) rc=%d.", instance, legacy, rc);
                 if (rc == 0) {
-                    g_adv_instance = instance;
+                    s_adv_instance = instance;
                 }
             }
         }
-        g_last_configure_rc = rc;
+        s_last_configure_rc = rc;
         if (rc != 0) {
             return;  // Nothing configured; the status task retries periodically.
         }
@@ -281,18 +281,18 @@ void StartAdvertising() {
             CONSOLE_ERROR("ble_gdl90", "Failed to allocate advertising data mbuf.");
             return;
         }
-        rc = ble_gap_ext_adv_set_data(g_adv_instance, om);  // Consumes the mbuf.
-        g_last_set_data_rc = rc;
+        rc = ble_gap_ext_adv_set_data(s_adv_instance, om);  // Consumes the mbuf.
+        s_last_set_data_rc = rc;
         if (rc != 0) {
             CONSOLE_ERROR("ble_gdl90", "ble_gap_ext_adv_set_data failed, rc=%d.", rc);
             return;
         }
-        g_advertising_configured = true;
+        s_advertising_configured = true;
     }
 
-    int rc = ble_gap_ext_adv_start(g_adv_instance, /*duration=*/0, /*max_events=*/0);
-    g_last_adv_start_rc = rc;
-    g_advertising = (rc == 0 || rc == BLE_HS_EALREADY);
+    int rc = ble_gap_ext_adv_start(s_adv_instance, /*duration=*/0, /*max_events=*/0);
+    s_last_adv_start_rc = rc;
+    s_advertising = (rc == 0 || rc == BLE_HS_EALREADY);
     if (rc != 0 && rc != BLE_HS_EALREADY) {
         CONSOLE_ERROR("ble_gdl90", "ble_gap_ext_adv_start failed, rc=%d.", rc);
     }
@@ -304,19 +304,19 @@ void StartAdvertising() {
 void StatusTask(void* param) {
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(30'000));
-        if (g_started && ble_hs_synced() && !g_advertising) {
+        if (s_started && ble_hs_synced() && !s_advertising) {
             StartAdvertising();  // Retry: boot-time attempt may have preceded host sync.
         }
         uint16_t num_connected = 0;
-        for (auto& conn : g_connections) {
+        for (auto& conn : s_connections) {
             if (conn.InUse()) num_connected++;
         }
         CONSOLE_WARNING("ble_gdl90",
                         "started=%d host_init_err=%d synced=%d svcs=%d adv_cfg=%d adv=%d rc_cfg=%d rc_data=%d "
                         "rc_start=%d conns=%u subs=%d heap_int=%u largest=%u dma=%u",
-                        (int)g_started, g_host_init_err, (int)ble_hs_synced(), (int)g_services_registered,
-                        (int)g_advertising_configured, (int)g_advertising, g_last_configure_rc, g_last_set_data_rc,
-                        g_last_adv_start_rc, num_connected, (int)HasSubscribers(),
+                        (int)s_started, s_host_init_err, (int)ble_hs_synced(), (int)s_services_registered,
+                        (int)s_advertising_configured, (int)s_advertising, s_last_configure_rc, s_last_set_data_rc,
+                        s_last_adv_start_rc, num_connected, (int)HasSubscribers(),
                         (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
                         (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
                         (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA));
@@ -325,7 +325,7 @@ void StatusTask(void* param) {
 
 uint16_t NumFreeConnections() {
     uint16_t free_count = 0;
-    for (auto& conn : g_connections) {
+    for (auto& conn : s_connections) {
         if (!conn.InUse()) free_count++;
     }
     return free_count;
@@ -335,7 +335,7 @@ int GapEventHandler(struct ble_gap_event* event, void* arg) {
     switch (event->type) {
         case BLE_GAP_EVENT_CONNECT: {
             if (event->connect.status == 0) {
-                for (auto& conn : g_connections) {
+                for (auto& conn : s_connections) {
                     if (!conn.InUse()) {
                         conn.Clear();
                         conn.conn_handle = event->connect.conn_handle;
@@ -358,15 +358,15 @@ int GapEventHandler(struct ble_gap_event* event, void* arg) {
         case BLE_GAP_EVENT_SUBSCRIBE: {
             ClientConnection* conn = FindConnection(event->subscribe.conn_handle);
             if (conn == nullptr) return 0;
-            if (event->subscribe.attr_handle == g_traffic_val_handle) {
+            if (event->subscribe.attr_handle == s_traffic_val_handle) {
                 conn->traffic_subscribed = event->subscribe.cur_notify;
-            } else if (event->subscribe.attr_handle == g_ownship_val_handle) {
+            } else if (event->subscribe.attr_handle == s_ownship_val_handle) {
                 conn->ownship_subscribed = event->subscribe.cur_notify;
-            } else if (event->subscribe.attr_handle == g_status_val_handle) {
+            } else if (event->subscribe.attr_handle == s_status_val_handle) {
                 conn->status_subscribed = event->subscribe.cur_notify;
-            } else if (event->subscribe.attr_handle == g_uplink_val_handle) {
+            } else if (event->subscribe.attr_handle == s_uplink_val_handle) {
                 conn->uplink_subscribed = event->subscribe.cur_notify;
-            } else if (event->subscribe.attr_handle == g_console_tx_val_handle) {
+            } else if (event->subscribe.attr_handle == s_console_tx_val_handle) {
                 conn->console_subscribed = event->subscribe.cur_notify;
             }
             return 0;
@@ -397,16 +397,16 @@ bool ClientConnection::* SubscriptionForMessageID(uint8_t message_id) {
 
 uint16_t ValHandleForMessageID(uint8_t message_id) {
     bool ClientConnection::* subscription = SubscriptionForMessageID(message_id);
-    if (subscription == &ClientConnection::traffic_subscribed) return g_traffic_val_handle;
-    if (subscription == &ClientConnection::ownship_subscribed) return g_ownship_val_handle;
-    if (subscription == &ClientConnection::status_subscribed) return g_status_val_handle;
+    if (subscription == &ClientConnection::traffic_subscribed) return s_traffic_val_handle;
+    if (subscription == &ClientConnection::ownship_subscribed) return s_ownship_val_handle;
+    if (subscription == &ClientConnection::status_subscribed) return s_status_val_handle;
     return 0;
 }
 
 }  // namespace
 
 bool RegisterServices() {
-    if (g_services_registered) return true;
+    if (s_services_registered) return true;
     ble_svc_gap_init();
     ble_svc_gatt_init();
     int rc = ble_gatts_count_cfg(kServices);
@@ -420,12 +420,12 @@ bool RegisterServices() {
         return false;
     }
     ble_svc_gap_device_name_set(kDeviceName);
-    g_services_registered = true;
+    s_services_registered = true;
     return true;
 }
 
 void OnHostSync() {
-    if (!g_started) return;
+    if (!s_started) return;
     StartAdvertising();
 }
 
@@ -463,9 +463,9 @@ void StartTask(void* param) {
                         attempt + 1, (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
                         (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
         bool host_ok = BleHostEnsureInitialized();
-        g_host_init_err = host_ok ? 0 : 1;
+        s_host_init_err = host_ok ? 0 : 1;
         if (host_ok) {
-            g_started = true;
+            s_started = true;
             CONSOLE_WARNING("ble_gdl90", "NimBLE host up; waiting for sync to advertise.");
             // If the host already synced (Remote ID brought it up first), start advertising now; otherwise the
             // shared sync callback (or the status task retry) will.
@@ -489,7 +489,7 @@ bool Start() {
 }
 
 bool HasSubscribers() {
-    for (auto& conn : g_connections) {
+    for (auto& conn : s_connections) {
         if (conn.InUse() && (conn.traffic_subscribed || conn.ownship_subscribed || conn.status_subscribed ||
                              conn.uplink_subscribed)) {
             return true;
@@ -503,7 +503,7 @@ bool HasSubscribers() {
 // whole message in one notification.
 bool SendUplink(const uint8_t* buf, uint16_t len_bytes) {
     bool sent = false;
-    for (auto& conn : g_connections) {
+    for (auto& conn : s_connections) {
         if (!conn.InUse() || !conn.uplink_subscribed) continue;
         uint16_t mtu = ble_att_mtu(conn.conn_handle);
         if (mtu < kUplinkMinMTUBytes) continue;
@@ -514,10 +514,10 @@ bool SendUplink(const uint8_t* buf, uint16_t len_bytes) {
         while (offset < len_bytes) {
             uint16_t fragment_bytes =
                 (len_bytes - offset) < max_fragment_bytes ? (len_bytes - offset) : max_fragment_bytes;
-            uint8_t header = g_uplink_sequence & 0x3F;
+            uint8_t header = s_uplink_sequence & 0x3F;
             if (offset == 0) header |= kUplinkFragmentFirst;
             if (offset + fragment_bytes >= len_bytes) header |= kUplinkFragmentLast;
-            g_uplink_sequence = (g_uplink_sequence + 1) & 0x3F;
+            s_uplink_sequence = (s_uplink_sequence + 1) & 0x3F;
 
             struct os_mbuf* om = os_msys_get_pkthdr(1 + fragment_bytes, 0);
             if (om == nullptr || os_mbuf_append(om, &header, 1) != 0 ||
@@ -526,7 +526,7 @@ bool SendUplink(const uint8_t* buf, uint16_t len_bytes) {
                 ok = false;
                 break;  // Out of mbufs; the client's reassembler discards the partial on the next first fragment.
             }
-            if (ble_gatts_notify_custom(conn.conn_handle, g_uplink_val_handle, om) != 0) {
+            if (ble_gatts_notify_custom(conn.conn_handle, s_uplink_val_handle, om) != 0) {
                 ok = false;
                 break;
             }
@@ -549,7 +549,7 @@ bool SendGDL90Message(const uint8_t* buf, uint16_t len_bytes) {
     uint16_t val_handle = ValHandleForMessageID(message_id);
 
     bool sent = false;
-    for (auto& conn : g_connections) {
+    for (auto& conn : s_connections) {
         if (!conn.InUse() || !(conn.*subscription)) continue;
         struct os_mbuf* om = ble_hs_mbuf_from_flat(buf, len_bytes);
         if (om == nullptr) return sent;  // Out of mbufs; drop, the next report replaces it.
@@ -563,7 +563,7 @@ bool SendGDL90Message(const uint8_t* buf, uint16_t len_bytes) {
 
 bool SendConsole(const char* buf, uint16_t len_bytes) {
     bool sent = false;
-    for (auto& conn : g_connections) {
+    for (auto& conn : s_connections) {
         if (!conn.InUse() || !conn.console_subscribed) continue;
         uint16_t mtu = ble_att_mtu(conn.conn_handle);
         uint16_t max_chunk_bytes = (mtu > 3) ? (mtu - 3) : 20;
@@ -571,7 +571,7 @@ bool SendConsole(const char* buf, uint16_t len_bytes) {
             uint16_t chunk_bytes = (len_bytes - offset) < max_chunk_bytes ? (len_bytes - offset) : max_chunk_bytes;
             struct os_mbuf* om = ble_hs_mbuf_from_flat(buf + offset, chunk_bytes);
             if (om == nullptr) return sent;
-            if (ble_gatts_notify_custom(conn.conn_handle, g_console_tx_val_handle, om) != 0) break;
+            if (ble_gatts_notify_custom(conn.conn_handle, s_console_tx_val_handle, om) != 0) break;
             sent = true;
         }
     }
