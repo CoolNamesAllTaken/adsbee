@@ -16,8 +16,7 @@
 
 #include "ble_host.hh"  // BleHostEnsureInitialized (shared with Remote ID).
 #include "comms.hh"     // Logging.
-#include "settings.hh"  // WiFi enable state gates BLE on PSRAM-less modules.
-#include "esp_bt.h"  // esp_bt_controller_mem_release: reclaim BT RAM in WiFi mode.
+#include "esp_bt.h"     // esp_bt_controller_mem_release: reclaim BT RAM in WiFi mode.
 #include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -28,6 +27,7 @@
 #include "os/os_mbuf.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
+#include "settings.hh"  // WiFi enable state gates BLE on PSRAM-less modules.
 
 namespace ble_gdl90 {
 namespace {
@@ -41,9 +41,8 @@ constexpr char kDeviceName[] = "ADSBee";
 constexpr uint16_t kMaxNotifyPayloadBytes = 244;
 
 // UUID base 0BEExxxx-1090-46F0-A9AC-52D6BE4C29CC, bytes in NimBLE little-endian order.
-#define BLE_GDL90_UUID128(idx_lo, idx_hi)                                                                            \
-    BLE_UUID128_INIT(0xCC, 0x29, 0x4C, 0xBE, 0xD6, 0x52, 0xAC, 0xA9, 0xF0, 0x46, 0x90, 0x10, idx_lo, idx_hi, 0xEE, \
-                     0x0B)
+#define BLE_GDL90_UUID128(idx_lo, idx_hi) \
+    BLE_UUID128_INIT(0xCC, 0x29, 0x4C, 0xBE, 0xD6, 0x52, 0xAC, 0xA9, 0xF0, 0x46, 0x90, 0x10, idx_lo, idx_hi, 0xEE, 0x0B)
 
 const ble_uuid128_t kServiceUUID = BLE_GDL90_UUID128(0x01, 0x00);
 const ble_uuid128_t kTrafficUUID = BLE_GDL90_UUID128(0x10, 0x00);
@@ -447,7 +446,8 @@ void StartTask(void* param) {
         // Release the BT controller's static RAM back to the heap: the BLE feature's compiled-in footprint otherwise
         // pushes WiFi-mode free heap below the safe_send back-pressure thresholds, silently starving the feeds.
         uint32_t heap_before = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-        esp_bt_mem_release(ESP_BT_MODE_BLE);  // Frees controller heap AND BT BSS/data - several KB more than esp_bt_controller_mem_release.
+        esp_bt_mem_release(ESP_BT_MODE_BLE);  // Frees controller heap AND BT BSS/data - several KB more than
+                                              // esp_bt_controller_mem_release.
         CONSOLE_WARNING("ble_gdl90",
                         "BLE ADS-B service disabled while WiFi is enabled (insufficient RAM without PSRAM); released "
                         "BT controller RAM (heap %lu -> %u). Disable WiFi (AT+WIFI_AP=0, AT+WIFI_STA=0, "
@@ -490,8 +490,8 @@ bool Start() {
 
 bool HasSubscribers() {
     for (auto& conn : s_connections) {
-        if (conn.InUse() && (conn.traffic_subscribed || conn.ownship_subscribed || conn.status_subscribed ||
-                             conn.uplink_subscribed)) {
+        if (conn.InUse() &&
+            (conn.traffic_subscribed || conn.ownship_subscribed || conn.status_subscribed || conn.uplink_subscribed)) {
             return true;
         }
     }

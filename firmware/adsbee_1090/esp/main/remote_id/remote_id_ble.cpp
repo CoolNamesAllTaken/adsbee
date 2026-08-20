@@ -21,8 +21,8 @@
 #include <cstring>
 
 #include "ble_host.hh"
-#include "comms_ble.hh"  // GDL90 GATT service, registered at host bring-up.
 #include "comms.hh"      // Logging.
+#include "comms_ble.hh"  // GDL90 GATT service, registered at host bring-up.
 #include "hal.hh"        // get_time_since_boot_ms.
 #include "host/ble_gap.h"
 #include "host/ble_hs.h"
@@ -300,7 +300,6 @@ bool BleHostEnsureInitialized() {
     s_ble_initialized = true;
     return true;
 }
-
 
 bool RemoteIDManager::BLEStart(bool enable_coded_phy) {
     s_want_coded = enable_coded_phy;

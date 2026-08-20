@@ -1,13 +1,12 @@
 #include "adsbee_server.hh"
 
-#include "esp_heap_caps.h"
-#include "lwip/sockets.h"
-
+#include "aircraftjson_utils.hh"
 #include "comms.hh"
 #include "comms_ble.hh"
-#include "aircraftjson_utils.hh"
+#include "esp_heap_caps.h"
 #include "gdl90/gdl90_utils.hh"
 #include "json_utils.hh"
+#include "lwip/sockets.h"
 #include "pico.hh"
 #include "remote_id/remote_id_manager.hh"
 #include "settings.hh"
@@ -338,8 +337,8 @@ bool ADSBeeServer::ReportGDL90() {
             vendor_message[6 + i] = (frames_978_adsb >> (8 * i)) & 0xFF;
             vendor_message[10 + i] = (frames_978_uplink >> (8 * i)) & 0xFF;
         }
-        message.len = gdl90.WriteGDL90Message(message.data, CommsManager::NetworkMessage::kMaxLenBytes,
-                                              vendor_message, sizeof(vendor_message));
+        message.len = gdl90.WriteGDL90Message(message.data, CommsManager::NetworkMessage::kMaxLenBytes, vendor_message,
+                                              sizeof(vendor_message));
         ble_gdl90::SendGDL90Message(message.data, message.len);
         message.len = 0;
     }
