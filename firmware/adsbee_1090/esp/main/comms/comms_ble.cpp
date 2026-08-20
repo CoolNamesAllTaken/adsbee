@@ -17,6 +17,7 @@
 #include "ble_host.hh"  // BleHostEnsureInitialized (shared with Remote ID).
 #include "comms.hh"     // Logging.
 #include "settings.hh"  // WiFi enable state gates BLE on PSRAM-less modules.
+#include "esp_bt.h"  // esp_bt_controller_mem_release: reclaim BT RAM in WiFi mode.
 #include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -443,9 +444,15 @@ void StartTask(void* param) {
     // BLE mode is therefore explicit: it only runs with WiFi fully disabled.
     if (settings_manager.settings.core_network_settings.wifi_ap_enabled ||
         settings_manager.settings.core_network_settings.wifi_sta_enabled) {
+        // Release the BT controller's static RAM back to the heap: the BLE feature's compiled-in footprint otherwise
+        // pushes WiFi-mode free heap below the safe_send back-pressure thresholds, silently starving the feeds.
+        uint32_t heap_before = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
         CONSOLE_WARNING("ble_gdl90",
-                        "BLE ADS-B service disabled while WiFi is enabled (insufficient RAM without PSRAM). "
-                        "Disable WiFi (AT+WIFI_AP=0, AT+WIFI_STA=0, AT+SETTINGS=SAVE, reboot) to use BLE.");
+                        "BLE ADS-B service disabled while WiFi is enabled (insufficient RAM without PSRAM); released "
+                        "BT controller RAM (heap %lu -> %u). Disable WiFi (AT+WIFI_AP=0, AT+WIFI_STA=0, "
+                        "AT+SETTINGS=SAVE, reboot) to use BLE.",
+                        heap_before, heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
         vTaskDelete(nullptr);
         return;
     }

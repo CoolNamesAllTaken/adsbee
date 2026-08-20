@@ -462,10 +462,12 @@ bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len, ui
                       settings_manager.settings.feed_ports[iface], errno, strerror(errno));
         CloseFeedSocket(iface);
         return false;
-    } else {
+    } else if (err == ESP_OK) {
         // CONSOLE_INFO("CommsManager::IPWANTask", "Message sent to feed %d.", i);
         feed_mps_counter_[iface] += num_msgs;  // Log that a message was sent in statistics.
     }
+    // Note: safe_send returns positive ESP_ERR_TIMEOUT when it DROPS a payload (back-pressure or congestion). That
+    // must not be counted as sent - the feed statistics otherwise report healthy rates while nothing is delivered.
     return true;
 }
 
