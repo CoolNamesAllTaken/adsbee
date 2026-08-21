@@ -34,6 +34,8 @@ From this `firmware/adsbee_1421/` directory (or via the dispatcher:
 ./build.sh               # build the CC1314 app (ti) in Release
 ./build.sh -d            # build ti in Debug
 ./build.sh programmer    # build the RP2040 flashing jig (requires ti built first)
+./build.sh flash         # build ti + programmer, then reflash an attached m1421 via the jig
+                         # (prompts to put the jig in BOOT mode, copies the uf2, monitors)
 ./build.sh clean ti      # remove ti/build
 ```
 

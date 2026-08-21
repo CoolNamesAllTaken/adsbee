@@ -52,6 +52,8 @@ cd firmware/adsbee_1421
 
 Artifact: `firmware/adsbee_1421/programmer/build/Release/adsbee_1421_programmer.uf2` —
 hold BOOT on the RP2040-Zero while plugging it in and drag the file onto the `RPI-RP2` drive.
+Or run `./build.sh flash`, which builds both apps, prompts for bootloader mode, copies the
+uf2, and watches the jig's console while it reflashes the attached m1421.
 A version-stamped copy (`adsbee_1421_programmer-fw<version>.uf2`, named after the **baked**
 firmware version parsed from `object_dictionary.cpp`) is produced alongside it for release/CI.
 To bake a different image, pass `-DADSBEE_1421_HEX=<path>` to CMake.

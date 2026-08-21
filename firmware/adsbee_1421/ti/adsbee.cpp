@@ -63,12 +63,36 @@ bool ADSBee::Init() {
 
 bool ADSBee::SyncSleepRequested() { return sync_sleep_requested_ || GPIO_read(bsp.kSyncPin) == 1; }
 
+bool ADSBee::SetRx1090Enabled(bool enabled) {
+    if (enabled == rx_1090_enabled_) {
+        return true;  // No change (also keeps SettingsManager::Apply() from re-initing a live radio).
+    }
+    rx_1090_enabled_ = enabled;
+    bool success = ApplyReceiverConfig();  // Honors the flag: powers the LR2021 down or brings it up.
+    if (!enabled) {
+        // Discard any packets the IRQ-paced drain chain staged before the teardown, so stale traffic
+        // doesn't surface when reception is re-enabled later.
+        while (lr2021.NextFilledSlot() != nullptr) {
+            lr2021.ReleaseSlot();
+        }
+    }
+    return success;
+}
+
 bool ADSBee::ApplyReceiverConfig() {
     // Quiesce the LR2021 interrupt lines while the chip is reset/reconfigured: the IRQ line's meaning
     // is undefined until SetOokADSB re-routes it, and the BUSY interrupt must only ever be armed by an
     // active drain chain. (DeInit -> CancelAsync also disarms BUSY; this covers every path.)
     GPIO_disableInt(bsp.kLR2021IrqPin);
     GPIO_disableInt(bsp.kLR2021BusyPin);
+    // 1090 RX disabled (AT+RX_ENABLE): hold the LR2021 in reset instead of configuring it. DeInit
+    // cancels any in-flight async transfer, closes SPI, and drives ENABLE low, so no reception and no
+    // interrupts. Every RX-arming path funnels through here (boot, gain/preamble/boost changes,
+    // sync-sleep wake), so none of them can re-enable a user-disabled receiver.
+    if (!rx_1090_enabled_) {
+        lr2021.DeInit();
+        return true;
+    }
     // Reconfigure from a clean hardware reset every time. The LR2021's RF/AGC/detector calibration
     // must be set up from standby (kStdbyRC); reconfiguring while the radio is in continuous RX
     // leaves it demodulating but never validating. DeInit()+Init() reproduces the exact known-good
@@ -472,6 +496,9 @@ bool ADSBee::UpdateLR2021() {
     // an error. The main loop enters sync sleep at the top of its next iteration.
     if (SyncSleepRequested()) {
         return true;
+    }
+    if (!rx_1090_enabled_) {
+        return true;  // 1090 RX user-disabled: the LR2021 is held in reset; nothing to drain.
     }
     uint32_t start_us = get_time_since_boot_us();
 

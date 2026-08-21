@@ -28,7 +28,10 @@ class ADSBee {
     bool Init();
     bool Update();
 
-    void SetRx1090Enabled(bool enabled) { rx_1090_enabled_ = enabled; }
+    // Enables/disables 1090 MHz reception. Disable genuinely powers the LR2021 down (DeInit: async
+    // cancelled, SPI closed, chip held in reset, IRQ line disarmed) and discards any staged IRQ-drain
+    // slots; enable re-runs the full receiver bring-up. Returns false if the bring-up failed.
+    bool SetRx1090Enabled(bool enabled);
     bool Rx1090IsEnabled() const { return rx_1090_enabled_; }
     // Sub-GHz receiver enable is owned by SubGHzRadio (it must open/close the RF core); these forward to it.
     // SetRxSubGHzEnabled() returns false if the RF client failed to open/close.
@@ -110,7 +113,10 @@ class ADSBee {
 
     ADSBeeConfig config_;
 
-    bool rx_1090_enabled_ = false;
+    // Matches the settings default (r1090_rx_enabled = true) and the actual boot behavior: Init() ->
+    // ApplyReceiverConfig() arms RX before SettingsManager::Apply() runs, which then disables if the
+    // persisted setting says so (same brief boot-RX window the SubGHz receiver has).
+    bool rx_1090_enabled_ = true;
 
     SettingsManager::R1090PreambleMode r1090_preamble_mode_ = SettingsManager::kR1090PreambleModeModeS;
     uint8_t r1090_gain_ = 10;      // 0 = auto, 1..15 manual (13 = max). Default: manual step 10.

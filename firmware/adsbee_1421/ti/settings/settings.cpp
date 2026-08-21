@@ -24,9 +24,9 @@ static_assert(sizeof(SettingsManager::Settings) < kFlashDeviceInfoStartAddr - kF
 bool SettingsManager::Apply() {
     bool success = true;
 
-    adsbee.SetRx1090Enabled(settings.r1090_rx_enabled);
-    // Both of these can fail if the RF client fails to open/close or the RX command can't be restarted; fold that
+    // All of these can fail if the radio fails to open/close or the RX command can't be restarted; fold that
     // into the return value so boot/LOAD callers can see it.
+    success &= adsbee.SetRx1090Enabled(settings.r1090_rx_enabled);
     success &= adsbee.SetRxSubGHzEnabled(settings.subg_rx_enabled);
     // subg_radio.Init() runs before Apply() at boot (see main.cpp), so a persisted non-default mode costs one RX
     // restart here; SetMode() is a no-op when the mode is unchanged.

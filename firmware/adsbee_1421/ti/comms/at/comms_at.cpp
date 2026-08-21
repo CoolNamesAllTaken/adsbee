@@ -461,7 +461,9 @@ CPP_AT_CALLBACK(CommsManager::ATRxEnableCallback) {
                 // disabled or enabled with one argument.
                 bool all_enabled;
                 CPP_AT_TRY_ARG2NUM(0, all_enabled);
-                adsbee.SetRx1090Enabled(all_enabled);
+                if (!adsbee.SetRx1090Enabled(all_enabled)) {
+                    CPP_AT_ERROR("Failed to %s the 1090 receiver.", all_enabled ? "enable" : "disable");
+                }
                 if (!adsbee.SetRxSubGHzEnabled(all_enabled)) {
                     CPP_AT_ERROR("Failed to %s the Sub-GHz receiver.", all_enabled ? "enable" : "disable");
                 }
@@ -469,7 +471,9 @@ CPP_AT_CALLBACK(CommsManager::ATRxEnableCallback) {
                 if (CPP_AT_HAS_ARG(1)) {
                     bool rx_1090_enabled;
                     CPP_AT_TRY_ARG2NUM(1, rx_1090_enabled);
-                    adsbee.SetRx1090Enabled(rx_1090_enabled);
+                    if (!adsbee.SetRx1090Enabled(rx_1090_enabled)) {
+                        CPP_AT_ERROR("Failed to %s the 1090 receiver.", rx_1090_enabled ? "enable" : "disable");
+                    }
                 }
                 if (CPP_AT_HAS_ARG(2)) {
                     bool rx_subg_enabled;
