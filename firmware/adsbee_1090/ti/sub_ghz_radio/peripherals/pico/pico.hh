@@ -68,9 +68,15 @@ class Pico : public SPICoprocessorMasterInterface {
      * turn the LED off.
      * @param[in] blink_duration_ms Number of milliseconds that the LED should stay on for.
      */
-    inline void BlinkSubGLED(uint16_t blink_duration_ms = kSubGLEDBlinkDurationMs) {
+    inline void BlinkSubGLED(uint32_t blink_duration_ms = kSubGLEDBlinkDurationMs) {
+        uint32_t now = get_time_since_boot_ms();
+        // Later off-deadline wins: don't let a short packet-decode blink cut an in-progress longer blink short.
+        if (!subg_led_on ||
+            (int32_t)((now + blink_duration_ms) - (subg_led_turn_on_timestamp_ms_ + subg_led_blink_duration_ms_)) > 0) {
+            subg_led_turn_on_timestamp_ms_ = now;
+            subg_led_blink_duration_ms_ = blink_duration_ms;
+        }
         GPIO_write(config_.subg_led_pin, 1);
-        subg_led_turn_on_timestamp_ms_ = get_time_since_boot_ms();
         subg_led_on = true;
     }
 
@@ -78,9 +84,10 @@ class Pico : public SPICoprocessorMasterInterface {
      * Turns off the network LED if necessary.
      */
     inline void UpdateLED() {
-        if (subg_led_on && get_time_since_boot_ms() - subg_led_turn_on_timestamp_ms_ > kSubGLEDBlinkDurationMs) {
+        if (subg_led_on && get_time_since_boot_ms() - subg_led_turn_on_timestamp_ms_ > subg_led_blink_duration_ms_) {
             GPIO_write(config_.subg_led_pin, 0);
             subg_led_on = false;
+            subg_led_blink_duration_ms_ = kSubGLEDBlinkDurationMs;
         }
     }
 
@@ -111,6 +118,7 @@ class Pico : public SPICoprocessorMasterInterface {
 
     bool spi_receive_task_should_exit_ = false;  // Flag used to tell SPI receive task to exit.
     uint32_t subg_led_turn_on_timestamp_ms_ = 0;
+    uint32_t subg_led_blink_duration_ms_ = kSubGLEDBlinkDurationMs;
     bool subg_led_on = false;
     bool use_handshake_pin_ =
         false;  // Allow handshake pin toggle to be skipped if waiting for a mesage and not writing to master.

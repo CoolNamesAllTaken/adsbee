@@ -153,6 +153,13 @@ class ADSBee {
     void FlashStatusLED(uint32_t led_on_ms = kStatusLEDOnMs);
 
     /**
+     * Forced status LED blink for test fixtures (AT+LED_BLINK): always lights the LED, bypassing the LED_ENABLE
+     * setting until the blink expires. Non-blocking.
+     * @param[in] duration_ms Number of milliseconds to turn the LED on for.
+     */
+    void ForceBlinkStatusLED(uint32_t duration_ms);
+
+    /**
      * Creates a composite timestamp using the current value of the SysTick timer (running at 125MHz) and the SysTick
      * wrap counter to simulate a timer running at 48MHz (which matches the frequency of the preamble detector PIO).
      * @param[in] num_bits Number of bits to mask the counter value to. Defaults to full resolution.
@@ -340,7 +347,9 @@ class ADSBee {
      * @param[in] on True to turn on the LED, false to turn it off. Ignored if LEDs are disabled.
      */
     inline void SetStatusLED(bool on) {
-        gpio_put(config_.r1090_led_pin, (on && settings_manager.settings.led_enabled) ? 1 : 0);
+        // led_force_blink_ bypasses the LED_ENABLE gate during a forced blink (AT+LED_BLINK), and also keeps a packet
+        // flash arriving mid-forced-blink from re-gating the pin off.
+        gpio_put(config_.r1090_led_pin, (on && (settings_manager.settings.led_enabled || led_force_blink_)) ? 1 : 0);
     }
 
     /**
@@ -432,6 +441,8 @@ class ADSBee {
     uint16_t mlat_jitter_counts_on_fifo_pull_[BSP::kMaxNumDemodStateMachines] = {0};
 
     uint32_t led_on_timestamp_ms_ = 0;
+    uint32_t led_on_duration_ms_ = kStatusLEDOnMs;
+    bool led_force_blink_ = false;  // True while a forced blink (bypassing LED_ENABLE) is active.
 
     uint16_t tl_pwm_slice_ = 0;
     uint16_t tl_pwm_chan_ = 0;

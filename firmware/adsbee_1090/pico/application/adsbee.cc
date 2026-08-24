@@ -234,8 +234,18 @@ bool ADSBee::Update() {
 }
 
 void ADSBee::FlashStatusLED(uint32_t led_on_ms) {
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+    // Later off-deadline wins: don't let a short packet flash cut an in-progress longer blink short.
+    if ((int32_t)((timestamp_ms + led_on_ms) - (led_on_timestamp_ms_ + led_on_duration_ms_)) > 0) {
+        led_on_timestamp_ms_ = timestamp_ms;
+        led_on_duration_ms_ = led_on_ms;
+    }
     SetStatusLED(true);
-    led_on_timestamp_ms_ = get_time_since_boot_ms();
+}
+
+void ADSBee::ForceBlinkStatusLED(uint32_t duration_ms) {
+    led_force_blink_ = true;  // Set before SetStatusLED so the LED_ENABLE bypass applies.
+    FlashStatusLED(duration_ms);
 }
 
 uint64_t __time_critical_func(ADSBee::GetMLAT48MHzCounts)(uint16_t num_bits) {
@@ -868,8 +878,10 @@ void ADSBee::PruneAircraftDictionary() {
 void ADSBee::Update1090LED() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
     // Turn off the 1090 LED if it's been on for long enough.
-    if (timestamp_ms - led_on_timestamp_ms_ > kStatusLEDOnMs) {
+    if (timestamp_ms - led_on_timestamp_ms_ > led_on_duration_ms_) {
         gpio_put(config_.r1090_led_pin, 0);
+        led_force_blink_ = false;
+        led_on_duration_ms_ = kStatusLEDOnMs;  // Restore the default packet-flash duration.
     }
 }
 

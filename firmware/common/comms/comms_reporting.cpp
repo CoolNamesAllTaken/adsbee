@@ -24,6 +24,63 @@ AircraftDictionary& aircraft_dictionary = adsbee.aircraft_dictionary;
 
 GDL90Reporter gdl90;
 
+// Failure tallies, one per reporting function. File scope rather than CommsManager members because
+// there is a single CommsManager per device and this keeps the three per-platform comms.hh headers
+// (which already triplicate the round state) untouched.
+static CommsManager::ReportFailureTally raw_tally, beast_tally, csbee_tally, gdl90_tally, gdl90_uplink_tally,
+    aircraftjson_tally;
+
+/**
+ * These have to be macros rather than helper functions: the RP2040 and 1421 CONSOLE_* macros
+ * string-concatenate the tag into the format string, so the tag must be a literal. The do/while
+ * wrapper also makes them safe to use unbraced, which the ESP32 CONSOLE_* macros are not.
+ */
+#define EMIT_REPORT_TALLY(tag, tally)                                                                              \
+    do {                                                                                                           \
+        CONSOLE_ERROR(tag, "%u send(s) and %u frame build(s) failed; first send failure on sink %u (UID %lu).",     \
+                      (tally).num_send_failures, (tally).num_build_failures, (tally).first_failed_sink,            \
+                      (unsigned long)(tally).first_failed_uid);                                                    \
+        uint32_t flush_timestamp_ms = get_time_since_boot_ms();                                                    \
+        (tally) = CommsManager::ReportFailureTally{};                                                              \
+        (tally).last_logged_timestamp_ms = flush_timestamp_ms;                                                     \
+    } while (0)
+
+// Flushes at the end of a reporting round, so every chunk's failures collapse into one line.
+#define FLUSH_REPORT_TALLY(tag, tally)                                             \
+    do {                                                                           \
+        if ((tally).num_send_failures > 0 || (tally).num_build_failures > 0) {     \
+            EMIT_REPORT_TALLY(tag, tally);                                         \
+        }                                                                          \
+    } while (0)
+
+// Flushes on the raw packet path, which runs at up to 20Hz and has no round boundary to flush on.
+// Leaves the tally intact when the rate limit blocks a flush, so counts accumulate into the next window.
+#define FLUSH_REPORT_TALLY_RATE_LIMITED(tag, tally)                                                        \
+    do {                                                                                                   \
+        if (((tally).num_send_failures > 0 || (tally).num_build_failures > 0) &&                           \
+            get_time_since_boot_ms() - (tally).last_logged_timestamp_ms >= kSendFailureLogIntervalMs) {    \
+            EMIT_REPORT_TALLY(tag, tally);                                                                 \
+        }                                                                                                  \
+    } while (0)
+
+bool CommsManager::SendBufToSinks(const ReportSink* sinks, uint16_t num_sinks, const char* buf, uint16_t buf_len,
+                                  ReportFailureTally& tally, uint16_t num_msgs, uint32_t uid) {
+    bool ret = true;
+    for (uint16_t i = 0; i < num_sinks; i++) {
+        // Test each send's own return value. Folding into a running flag and then checking it would
+        // blame every subsequent sink for the first sink's failure.
+        if (!SendBuf(sinks[i], buf, buf_len, num_msgs)) {
+            if (tally.num_send_failures == 0) {
+                tally.first_failed_sink = i;
+                tally.first_failed_uid = uid;
+            }
+            tally.num_send_failures++;
+            ret = false;
+        }
+    }
+    return ret;
+}
+
 // Set to 0 to revert to per-packet sends for debugging.
 #ifndef COMMS_REPORTING_BATCH_SENDS
 #define COMMS_REPORTING_BATCH_SENDS 1
@@ -112,10 +169,12 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
                 aircraftjson_sinks[num_aircraftjson_sinks++] = sinks[i];
                 break;
             default:
-                CONSOLE_ERROR("CommsManager::UpdateReporting",
-                              "Unrecognized reporting protocol %s on interface %s, skipping.",
-                              SettingsManager::kSerialInterfaceStrs[sinks[i]],
-                              SettingsManager::kReportingProtocolStrs[sink_protocols[i]]);
+                // Both values are printed numerically on purpose. Reaching this arm means
+                // sink_protocols[i] is past the end of kReportingProtocolStrs by construction, and
+                // sinks[i] is a feed index (up to kMaxNumFeeds) on the ESP32 rather than an index
+                // into the three-entry kSerialInterfaceStrs.
+                CONSOLE_ERROR("CommsManager::UpdateReporting", "Unrecognized reporting protocol %u on sink %u, skipping.",
+                              static_cast<unsigned>(sink_protocols[i]), static_cast<unsigned>(sinks[i]));
                 break;  // Not a periodic report protocol.
         }
     }
@@ -284,48 +343,76 @@ bool CommsManager::ReportRaw(ReportSink* sinks, uint16_t num_sinks, const Compos
     // Batch all frames into one buffer, then do a single send per sink to minimize lwIP IPC round-trips.
     static char raw_batch_buf[kRawBatchBufMaxBytes];
     uint16_t batch_len = 0;
+    uint16_t total_packets = 0;
+
+    // The BuildRaw*Frame functions are thin wrappers around snprintf, so on truncation they return the
+    // would-have-been length (>= the frame cap) and on an encoding error they return a negative that
+    // wraps to a huge uint16_t. Advancing batch_len by either would walk the write cursor past the
+    // bytes actually written, so validate before accumulating. The remaining-space check guards the
+    // batch buffer itself, whose size bound is derived rather than enforced.
+#define BUILD_RAW_FRAME(build_call, frame_max_num_chars)                            \
+    do {                                                                            \
+        if (static_cast<size_t>(batch_len) + (frame_max_num_chars) > sizeof(raw_batch_buf)) { \
+            raw_tally.num_build_failures++;                                         \
+            break;                                                                  \
+        }                                                                           \
+        uint16_t frame_len = (build_call);                                          \
+        if (frame_len == 0 || frame_len >= (frame_max_num_chars)) {                 \
+            raw_tally.num_build_failures++;                                         \
+            break;                                                                  \
+        }                                                                           \
+        batch_len += frame_len;                                                     \
+        total_packets++;                                                            \
+    } while (0)
 
     for (uint16_t i = 0; i < packets.header->num_mode_s_packets; i++) {
-        batch_len += BuildRawModeSFrame(packets.mode_s_packets[i], raw_batch_buf + batch_len);
+        BUILD_RAW_FRAME(BuildRawModeSFrame(packets.mode_s_packets[i], raw_batch_buf + batch_len),
+                        kRawModeSFrameMaxNumChars);
     }
     for (uint16_t i = 0; i < packets.header->num_uat_adsb_packets; i++) {
-        batch_len += BuildRawUATADSBFrame(packets.uat_adsb_packets[i], raw_batch_buf + batch_len);
+        BUILD_RAW_FRAME(BuildRawUATADSBFrame(packets.uat_adsb_packets[i], raw_batch_buf + batch_len),
+                        kRawUATADSBFrameMaxNumChars);
     }
     for (uint16_t i = 0; i < packets.header->num_uat_uplink_packets; i++) {
-        batch_len += BuildRawUATUplinkFrame(packets.uat_uplink_packets[i], raw_batch_buf + batch_len);
+        BUILD_RAW_FRAME(BuildRawUATUplinkFrame(packets.uat_uplink_packets[i], raw_batch_buf + batch_len),
+                        kRawUATUplinkFrameMaxNumChars);
     }
+#undef BUILD_RAW_FRAME
 
-    uint16_t total_packets = packets.header->num_mode_s_packets + packets.header->num_uat_adsb_packets +
-                             packets.header->num_uat_uplink_packets;
     bool ret = true;
-    for (uint16_t j = 0; j < num_sinks; j++) {
-        if (batch_len > 0) {
-            ret &= SendBuf(sinks[j], raw_batch_buf, batch_len, total_packets);
-        }
+    if (batch_len > 0) {
+        ret = SendBufToSinks(sinks, num_sinks, raw_batch_buf, batch_len, raw_tally, total_packets);
     }
+    FLUSH_REPORT_TALLY_RATE_LIMITED("CommsManager::ReportRaw", raw_tally);
 #else
     bool ret = true;
+    // Same snprintf return caveat as the batch path above: a frame length at or past the cap means the
+    // frame was truncated, so drop it rather than sending a length that overruns raw_frame_buf.
+#define SEND_RAW_FRAME(build_call, frame_max_num_chars)                                           \
+    do {                                                                                          \
+        uint16_t num_bytes_in_frame = (build_call);                                               \
+        if (num_bytes_in_frame == 0 || num_bytes_in_frame >= (frame_max_num_chars)) {             \
+            raw_tally.num_build_failures++;                                                       \
+            break;                                                                                \
+        }                                                                                         \
+        ret &= SendBufToSinks(sinks, num_sinks, raw_frame_buf, num_bytes_in_frame, raw_tally);    \
+    } while (0)
+
     for (uint16_t i = 0; i < packets.header->num_mode_s_packets; i++) {
         char raw_frame_buf[kRawModeSFrameMaxNumChars];
-        uint16_t num_bytes_in_frame = BuildRawModeSFrame(packets.mode_s_packets[i], raw_frame_buf);
-        for (uint16_t j = 0; j < num_sinks; j++) {
-            ret &= SendBuf(sinks[j], (char*)raw_frame_buf, num_bytes_in_frame);
-        }
+        SEND_RAW_FRAME(BuildRawModeSFrame(packets.mode_s_packets[i], raw_frame_buf), kRawModeSFrameMaxNumChars);
     }
     for (uint16_t i = 0; i < packets.header->num_uat_adsb_packets; i++) {
         char raw_frame_buf[kRawUATADSBFrameMaxNumChars];
-        uint16_t num_bytes_in_frame = BuildRawUATADSBFrame(packets.uat_adsb_packets[i], raw_frame_buf);
-        for (uint16_t j = 0; j < num_sinks; j++) {
-            ret &= SendBuf(sinks[j], (char*)raw_frame_buf, num_bytes_in_frame);
-        }
+        SEND_RAW_FRAME(BuildRawUATADSBFrame(packets.uat_adsb_packets[i], raw_frame_buf), kRawUATADSBFrameMaxNumChars);
     }
     for (uint16_t i = 0; i < packets.header->num_uat_uplink_packets; i++) {
         char raw_frame_buf[kRawUATUplinkFrameMaxNumChars];
-        uint16_t num_bytes_in_frame = BuildRawUATUplinkFrame(packets.uat_uplink_packets[i], raw_frame_buf);
-        for (uint16_t j = 0; j < num_sinks; j++) {
-            ret &= SendBuf(sinks[j], (char*)raw_frame_buf, num_bytes_in_frame);
-        }
+        SEND_RAW_FRAME(BuildRawUATUplinkFrame(packets.uat_uplink_packets[i], raw_frame_buf),
+                       kRawUATUplinkFrameMaxNumChars);
     }
+#undef SEND_RAW_FRAME
+    FLUSH_REPORT_TALLY_RATE_LIMITED("CommsManager::ReportRaw", raw_tally);
 #endif
     return ret;
 }
@@ -345,62 +432,82 @@ bool CommsManager::ReportBeast(ReportSink* sinks, uint16_t num_sinks, const Comp
     // Batch all frames into one buffer, then do a single send per sink to minimize lwIP IPC round-trips.
     static uint8_t beast_batch_buf[kBeastBatchBufMaxBytes];
     uint16_t batch_len = 0;
+    uint16_t total_packets = 0;
+
+    // The Beast builders return 0 on an invalid packet length and take no output buffer bound, so they
+    // write blind. BuildUATADSBBeastFrame and BuildUATUplinkBeastFrame log the reason themselves;
+    // BuildModeSBeastFrame fails silently, which is why the drop is tallied here for all three. The
+    // remaining-space check guards the batch buffer, whose size bound is derived rather than enforced.
+#define BUILD_BEAST_FRAME(build_call, frame_max_len_bytes)                     \
+    do {                                                                      \
+        if (static_cast<size_t>(batch_len) + (frame_max_len_bytes) > sizeof(beast_batch_buf)) { \
+            beast_tally.num_build_failures++;                                 \
+            break;                                                            \
+        }                                                                     \
+        uint16_t frame_len = (build_call);                                    \
+        if (frame_len == 0) {                                                 \
+            beast_tally.num_build_failures++;                                 \
+            break;                                                            \
+        }                                                                     \
+        batch_len += frame_len;                                               \
+        total_packets++;                                                      \
+    } while (0)
 
     for (uint16_t i = 0; i < packets.header->num_mode_s_packets; i++) {
-        batch_len += BeastReporter::BuildModeSBeastFrame(beast_batch_buf + batch_len, packets.mode_s_packets[i]);
+        BUILD_BEAST_FRAME(BeastReporter::BuildModeSBeastFrame(beast_batch_buf + batch_len, packets.mode_s_packets[i]),
+                          BeastReporter::kModeSBeastFrameMaxLenBytes);
     }
     if (protocol != SettingsManager::kBeastNoUAT) {
         for (uint16_t i = 0; i < packets.header->num_uat_adsb_packets; i++) {
-            batch_len +=
-                BeastReporter::BuildUATADSBBeastFrame(beast_batch_buf + batch_len, packets.uat_adsb_packets[i]);
+            BUILD_BEAST_FRAME(
+                BeastReporter::BuildUATADSBBeastFrame(beast_batch_buf + batch_len, packets.uat_adsb_packets[i]),
+                BeastReporter::kUATADSBBeastFrameMaxLenBytes);
         }
     }
     if (protocol != SettingsManager::kBeastNoUATUplink && protocol != SettingsManager::kBeastNoUAT) {
         for (uint16_t i = 0; i < packets.header->num_uat_uplink_packets; i++) {
-            batch_len +=
-                BeastReporter::BuildUATUplinkBeastFrame(beast_batch_buf + batch_len, packets.uat_uplink_packets[i]);
+            BUILD_BEAST_FRAME(
+                BeastReporter::BuildUATUplinkBeastFrame(beast_batch_buf + batch_len, packets.uat_uplink_packets[i]),
+                BeastReporter::kUATUplinkBeastFrameMaxLenBytes);
         }
     }
+#undef BUILD_BEAST_FRAME
 
-    uint16_t total_packets = packets.header->num_mode_s_packets;
-    if (protocol != SettingsManager::kBeastNoUAT) total_packets += packets.header->num_uat_adsb_packets;
-    if (protocol != SettingsManager::kBeastNoUATUplink && protocol != SettingsManager::kBeastNoUAT)
-        total_packets += packets.header->num_uat_uplink_packets;
     bool ret = true;
-    for (uint16_t j = 0; j < num_sinks; j++) {
-        if (batch_len > 0) {
-            ret &= SendBuf(sinks[j], (char*)beast_batch_buf, batch_len, total_packets);
-        }
+    if (batch_len > 0) {
+        ret = SendBufToSinks(sinks, num_sinks, (char*)beast_batch_buf, batch_len, beast_tally, total_packets);
     }
+    FLUSH_REPORT_TALLY_RATE_LIMITED("CommsManager::ReportBeast", beast_tally);
 #else
     bool ret = true;
+#define SEND_BEAST_FRAME(build_call)                                                                       \
+    do {                                                                                                   \
+        uint16_t num_bytes_in_frame = (build_call);                                                        \
+        if (num_bytes_in_frame == 0) {                                                                     \
+            beast_tally.num_build_failures++;                                                              \
+            break;                                                                                         \
+        }                                                                                                  \
+        ret &= SendBufToSinks(sinks, num_sinks, (char*)beast_frame_buf, num_bytes_in_frame, beast_tally);   \
+    } while (0)
+
     for (uint16_t i = 0; i < packets.header->num_mode_s_packets; i++) {
         uint8_t beast_frame_buf[BeastReporter::kModeSBeastFrameMaxLenBytes];
-        uint16_t num_bytes_in_frame = BeastReporter::BuildModeSBeastFrame(beast_frame_buf, packets.mode_s_packets[i]);
-        for (uint16_t j = 0; j < num_sinks; j++) {
-            ret &= SendBuf(sinks[j], (char*)beast_frame_buf, num_bytes_in_frame);
-        }
+        SEND_BEAST_FRAME(BeastReporter::BuildModeSBeastFrame(beast_frame_buf, packets.mode_s_packets[i]));
     }
     if (protocol != SettingsManager::kBeastNoUAT) {
         for (uint16_t i = 0; i < packets.header->num_uat_adsb_packets; i++) {
             uint8_t beast_frame_buf[BeastReporter::kUATADSBBeastFrameMaxLenBytes];
-            uint16_t num_bytes_in_frame =
-                BeastReporter::BuildUATADSBBeastFrame(beast_frame_buf, packets.uat_adsb_packets[i]);
-            for (uint16_t j = 0; j < num_sinks; j++) {
-                ret &= SendBuf(sinks[j], (char*)beast_frame_buf, num_bytes_in_frame);
-            }
+            SEND_BEAST_FRAME(BeastReporter::BuildUATADSBBeastFrame(beast_frame_buf, packets.uat_adsb_packets[i]));
         }
     }
     if (protocol != SettingsManager::kBeastNoUATUplink && protocol != SettingsManager::kBeastNoUAT) {
         for (uint16_t i = 0; i < packets.header->num_uat_uplink_packets; i++) {
             uint8_t beast_frame_buf[BeastReporter::kUATUplinkBeastFrameMaxLenBytes];
-            uint16_t num_bytes_in_frame =
-                BeastReporter::BuildUATUplinkBeastFrame(beast_frame_buf, packets.uat_uplink_packets[i]);
-            for (uint16_t j = 0; j < num_sinks; j++) {
-                ret &= SendBuf(sinks[j], (char*)beast_frame_buf, num_bytes_in_frame);
-            }
+            SEND_BEAST_FRAME(BeastReporter::BuildUATUplinkBeastFrame(beast_frame_buf, packets.uat_uplink_packets[i]));
         }
     }
+#undef SEND_BEAST_FRAME
+    FLUSH_REPORT_TALLY_RATE_LIMITED("CommsManager::ReportBeast", beast_tally);
 #endif
     return ret;
 }
@@ -445,10 +552,17 @@ bool CommsManager::ReportCSBee(ReportSink* sinks, uint16_t num_sinks) {
             ret = false;
             continue;  // Log error but do not abort the round; remaining aircraft still need reporting.
         }
-
-        for (uint16_t i = 0; i < num_sinks; i++) {
-            ret &= SendBuf(sinks[i], message, message_len_bytes);
+        if (message_len_bytes >= kCSBeeMessageStrMaxLen) {
+            // The CSBee writers only return negative on an snprintf encoding error, never on truncation:
+            // the body is capped at kCSBeeMessageStrMaxLen - kCRCMaxNumChars - 1 and the CRC is then
+            // appended at the would-have-been offset. A length at or past the buffer size means the
+            // message was truncated and its CRC is bogus, so drop it rather than sending a corrupt frame.
+            csbee_tally.num_build_failures++;
+            ret = false;
+            continue;
         }
+
+        ret &= SendBufToSinks(sinks, num_sinks, message, message_len_bytes, csbee_tally, 1, uid);
     }
 
     // All UIDs in the snapshot have been processed — send the statistics footer.
@@ -471,21 +585,28 @@ bool CommsManager::ReportCSBee(ReportSink* sinks, uint16_t num_sinks) {
         CONSOLE_ERROR("CommsManager::ReportCSBee",
                       "Encountered an error in WriteCSBeeStatisticsMessageStr, error code %d.", stats_len_bytes);
         ret = false;
+    } else if (stats_len_bytes >= kCSBeeMessageStrMaxLen) {
+        CONSOLE_ERROR("CommsManager::ReportCSBee", "WriteCSBeeStatisticsMessageStr truncated at %d bytes, dropping.",
+                      stats_len_bytes);
+        ret = false;
     } else {
-        for (uint16_t i = 0; i < num_sinks; i++) {
-            ret &= SendBuf(sinks[i], stats_message, stats_len_bytes);
-        }
+        ret &= SendBufToSinks(sinks, num_sinks, stats_message, stats_len_bytes, csbee_tally);
     }
 
+    // End of the round: flush the accumulated failures from every chunk as one line.
+    FLUSH_REPORT_TALLY("CommsManager::ReportCSBee", csbee_tally);
     csbee_round_active_ = false;
     return ret;
 }
 
 bool CommsManager::ReportMAVLINK(ReportSink* sinks, uint16_t num_sinks, uint8_t mavlink_version) {
+    // Zero sinks is a normal state, not a fault: UpdateReporting already gates on sink count. Match the
+    // silent success the other reporting functions return.
     if (num_sinks == 0) {
-        CONSOLE_WARNING("CommsManager::ReportMAVLINK", "No MAVLINK sinks provided.");
-        return false;
+        return true;
     }
+    // Unlike the other protocols, the mavlink_msg_*_send_struct calls below return void, so there is no
+    // send failure signal to tally here.
     if (mavlink_version != 1 && mavlink_version != 2) {
         CONSOLE_ERROR("CommsManager::ReportMAVLINK", "MAVLINK version %d does not exist.", mavlink_version);
         return false;
@@ -609,8 +730,12 @@ bool CommsManager::ReportGDL90(ReportSink* sinks, uint16_t num_sinks) {
                                                        aircraft_dictionary.metrics.valid_extended_squitter_frames +
                                                        aircraft_dictionary.metrics.valid_uat_adsb_frames,
                                                    aircraft_dictionary.metrics.valid_uat_uplink_frames);
-        for (uint16_t i = 0; i < num_sinks; i++) {
-            ret &= SendBuf(sinks[i], (char*)buf, msg_len);
+        // The GDL90 writers return a byte count with no error sentinel; 0 means nothing was written.
+        if (msg_len == 0) {
+            gdl90_tally.num_build_failures++;
+            ret = false;
+        } else {
+            ret &= SendBufToSinks(sinks, num_sinks, (char*)buf, msg_len, gdl90_tally);
         }
 
         GDL90Reporter::GDL90TargetReportData ownship_data = {};
@@ -636,8 +761,11 @@ bool CommsManager::ReportGDL90(ReportSink* sinks, uint16_t num_sinks) {
                                           false, rx_position.speed_kts > kGDL90OwnshipAirborneSpeedKts);
         }
         msg_len = gdl90.WriteGDL90TargetReportMessage(buf, sizeof(buf), ownship_data, true);
-        for (uint16_t i = 0; i < num_sinks; i++) {
-            ret &= SendBuf(sinks[i], (char*)buf, msg_len);
+        if (msg_len == 0) {
+            gdl90_tally.num_build_failures++;
+            ret = false;
+        } else {
+            ret &= SendBufToSinks(sinks, num_sinks, (char*)buf, msg_len, gdl90_tally);
         }
     }
 
@@ -645,6 +773,9 @@ bool CommsManager::ReportGDL90(ReportSink* sinks, uint16_t num_sinks) {
     uint32_t chunk_start_ms = get_time_since_boot_ms();
     while (gdl90_report_uid_index_ < report_uids_count_) {
         if (get_time_since_boot_ms() - chunk_start_ms >= kGDL90ChunkBudgetMs) {
+            // Not an error: chunking is the normal pacing mechanism. A round that genuinely overruns
+            // the reporting interval is caught once per round by gdl90_overrun_reported_ in
+            // UpdateReporting.
             return ret;  // Budget exhausted; resume on next UpdateReporting tick.
         }
 
@@ -672,11 +803,16 @@ bool CommsManager::ReportGDL90(ReportSink* sinks, uint16_t num_sinks) {
             CONSOLE_WARNING("CommsManager::ReportGDL90", "Unknown aircraft type in dictionary for UID 0x%lx.", uid);
             continue;
         }
-        for (uint16_t i = 0; i < num_sinks; i++) {
-            ret &= SendBuf(sinks[i], (char*)buf, msg_len);
+        if (msg_len == 0) {
+            gdl90_tally.num_build_failures++;
+            ret = false;
+            continue;
         }
+        ret &= SendBufToSinks(sinks, num_sinks, (char*)buf, msg_len, gdl90_tally, 1, uid);
     }
 
+    // End of the round: flush the accumulated failures from every chunk as one line.
+    FLUSH_REPORT_TALLY("CommsManager::ReportGDL90", gdl90_tally);
     gdl90_round_active_ = false;
     return ret;
 }
@@ -687,6 +823,9 @@ bool CommsManager::ReportAircraftJSON(ReportSink* sinks, uint16_t num_sinks) {
     uint32_t chunk_start_ms = get_time_since_boot_ms();
     while (aircraftjson_report_uid_index_ < report_uids_count_) {
         if (get_time_since_boot_ms() - chunk_start_ms >= kAircraftJSONChunkBudgetMs) {
+            // Not an error: chunking is the normal pacing mechanism. A round that genuinely overruns
+            // the reporting interval is caught once per round by aircraftjson_overrun_reported_ in
+            // UpdateReporting.
             return ret;  // Budget exhausted; resume on next UpdateReporting tick.
         }
 
@@ -713,17 +852,18 @@ bool CommsManager::ReportAircraftJSON(ReportSink* sinks, uint16_t num_sinks) {
         }
 
         if (message_len_bytes < 0) {
+            // The AircraftJSON writers detect truncation themselves and return -1 for a buffer overrun.
             CONSOLE_ERROR("CommsManager::ReportAircraftJSON",
                           "Error in WriteAircraftJSON*Str for UID 0x%lx, error code %d.", uid, message_len_bytes);
             ret = false;
             continue;
         }
 
-        for (uint16_t i = 0; i < num_sinks; i++) {
-            ret &= SendBuf(sinks[i], message, message_len_bytes);
-        }
+        ret &= SendBufToSinks(sinks, num_sinks, message, message_len_bytes, aircraftjson_tally, 1, uid);
     }
 
+    // End of the round: flush the accumulated failures from every chunk as one line.
+    FLUSH_REPORT_TALLY("CommsManager::ReportAircraftJSON", aircraftjson_tally);
     aircraftjson_round_active_ = false;
     return ret;
 }
@@ -731,6 +871,12 @@ bool CommsManager::ReportAircraftJSON(ReportSink* sinks, uint16_t num_sinks) {
 bool CommsManager::ReportGDL90Uplink(ReportSink* sinks, uint16_t num_sinks, const CompositeArray::RawPackets& packets) {
     if (num_sinks == 0) {
         return true;  // Nobody is listening; don't spend time building frames.
+    }
+    // Same guard ReportRaw and ReportBeast use: the loop below trusts header->num_uat_uplink_packets.
+    char error_msg[CompositeArray::RawPackets::kErrorMessageMaxLen] = {0};
+    if (!packets.IsValid(error_msg)) {
+        CONSOLE_ERROR("CommsManager::ReportGDL90Uplink", "Invalid CompositeArray::RawPackets: %s", error_msg);
+        return false;
     }
     bool ret = true;
 
@@ -751,10 +897,15 @@ bool CommsManager::ReportGDL90Uplink(ReportSink* sinks, uint16_t num_sinks, cons
         uint16_t msg_len = gdl90.WriteGDL90UplinkDataMessage(
             buf, sizeof(buf), payload, DecodedUATUplinkPacket::kDecodedPayloadNumBytes,
             GDL90Reporter::MLAT48MHz64BitCountsToUATTORTicks(raw.mlat_48mhz_64bit_counts));
-
-        for (uint16_t i = 0; i < num_sinks; i++) {
-            ret &= SendBuf(sinks[i], (char*)buf, msg_len);
+        if (msg_len == 0) {
+            // Oversize payload; WriteGDL90UplinkDataMessage logs the reason itself.
+            gdl90_uplink_tally.num_build_failures++;
+            ret = false;
+            continue;
         }
+
+        ret &= SendBufToSinks(sinks, num_sinks, (char*)buf, msg_len, gdl90_uplink_tally);
     }
+    FLUSH_REPORT_TALLY_RATE_LIMITED("CommsManager::ReportGDL90Uplink", gdl90_uplink_tally);
     return ret;
 }

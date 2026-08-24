@@ -6,6 +6,7 @@
 #include "cpu_utils.hh"
 #include "device_info.hh"
 #include "esp_system.h"
+#include "pico.hh"               // pico_ll.ForceBlinkNetworkLED() for kAddrLEDBlink.
 #include "remote_id_manager.hh"  // remote_id_manager.GetOutQueue() for the ESP32 -> RP2040 Remote ID pull.
 #include "task_utils.hh"
 #ifdef CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
@@ -14,6 +15,7 @@
 #endif
 #elif defined(ON_TI)
 #include "cpu_utils.hh"
+#include "pico.hh"  // pico_ll.BlinkSubGLED() for kAddrLEDBlink.
 #endif
 
 #include "comms.hh"
@@ -22,7 +24,7 @@ const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
 const uint8_t ObjectDictionary::kFirmwareVersionMinor = 10;
 const uint8_t ObjectDictionary::kFirmwareVersionPatch = 0;
 // NOTE: Indicate a final release with RC = 0.
-const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 1;
+const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 2;
 
 const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24) | (kFirmwareVersionMinor << 16) |
                                                     (kFirmwareVersionPatch << 8) | kFirmwareVersionReleaseCandidate;
@@ -153,7 +155,31 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
             memcpy(&composite_device_status, buf, sizeof(CompositeDeviceStatus));
             break;
         }
+        case kAddrLEDBlink: {
+            if (buf_len != sizeof(uint32_t) || offset != 0) {
+                CONSOLE_ERROR("ObjectDictionary::SetBytes",
+                              "Buffer length %d and offset %d for writing LED blink duration must be exactly %d and 0.",
+                              buf_len, offset, sizeof(uint32_t));
+                return false;
+            }
+            uint32_t duration_ms;
+            memcpy(&duration_ms, buf, sizeof(duration_ms));
+            pico_ll.ForceBlinkNetworkLED(duration_ms);
+            break;
+        }
 #elif defined(ON_TI)
+        case kAddrLEDBlink: {
+            if (buf_len != sizeof(uint32_t) || offset != 0) {
+                CONSOLE_ERROR("ObjectDictionary::SetBytes",
+                              "Buffer length %d and offset %d for writing LED blink duration must be exactly %d and 0.",
+                              buf_len, offset, sizeof(uint32_t));
+                return false;
+            }
+            uint32_t duration_ms;
+            memcpy(&duration_ms, buf, sizeof(duration_ms));
+            pico_ll.BlinkSubGLED(duration_ms);
+            break;
+        }
 #endif
         default:
             CONSOLE_ERROR("SPICoprocessor::SetBytes", "No behavior implemented for writing to address 0x%x.", addr);

@@ -91,6 +91,7 @@ class CommsManager {
     CPP_AT_CALLBACK(ATGNSSCallback);
     CPP_AT_CALLBACK(ATGNSSFixCallback);
     CPP_AT_CALLBACK(ATHostnameCallback);
+    CPP_AT_CALLBACK(ATLEDBlinkCallback);
     CPP_AT_CALLBACK(ATLEDEnableCallback);
     CPP_AT_CALLBACK(ATOTACallback);
     CPP_AT_HELP_CALLBACK(ATOTAHelpCallback);

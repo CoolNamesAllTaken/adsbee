@@ -67,8 +67,12 @@ class ObjectDictionary {
         kAddrCompositeArrayRawPackets = 0x10,  // Single endpoint for reading / writing raw ADSB and UAT packets.
         kAddrESP32RebootInfo = 0x11,           // ESP32 last reset reason and optional core dump summary.
         kAddrESP32TriggerAbort = 0x12,         // Debug only: trigger abort() on the ESP32 to test core dump.
+        kAddrLEDBlink = 0x13,  // Force-blink the slave's LED: uint32_t duration_ms, bypasses led_enabled.
         kNumAddrs
     };
+
+    // Maximum duration for a forced LED blink via kAddrLEDBlink (shared with the AT+LED_BLINK master-side check).
+    static constexpr uint32_t kLEDBlinkMaxDurationMs = 60'000;
 
     // Commands are written from Master to Slave.
     enum SCCommand : uint8_t {

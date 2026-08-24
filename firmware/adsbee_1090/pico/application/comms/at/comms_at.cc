@@ -148,6 +148,59 @@ CPP_AT_CALLBACK(CommsManager::ATBiasTeeEnableCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATLEDBlinkCallback) {
+    switch (op) {
+        case '=': {
+            uint32_t duration_ms;
+            CPP_AT_TRY_ARG2NUM(0, duration_ms);
+            if (duration_ms == 0 || duration_ms > ObjectDictionary::kLEDBlinkMaxDurationMs) {
+                CPP_AT_ERROR("Duration must be 1-%lu ms.", (unsigned long)ObjectDictionary::kLEDBlinkMaxDurationMs);
+            }
+            // Parse all LED tokens before blinking anything so an invalid token doesn't half-execute the command.
+            bool blink_1090 = false, blink_subg = false, blink_network = false;
+            for (uint16_t i = 1; i < num_args; i++) {
+                if (args[i].compare("1090") == 0) {
+                    blink_1090 = true;
+                } else if (args[i].compare("SUBG") == 0) {
+                    blink_subg = true;
+                } else if (args[i].compare("NETWORK") == 0) {
+                    blink_network = true;
+                } else if (args[i].compare("ALL") == 0) {
+                    blink_1090 = blink_subg = blink_network = true;
+                } else {
+                    CPP_AT_ERROR("Invalid LED '%.*s'. Must be 1090, SUBG, NETWORK, or ALL.", (int)args[i].length(),
+                                 args[i].data());
+                }
+            }
+            // Fire all requested LEDs, collecting failures. LEDs that already fired are not rolled back.
+            char failures[64] = "";
+            if (blink_1090) {
+                adsbee.ForceBlinkStatusLED(duration_ms);
+            }
+            if (blink_subg) {
+                if (!adsbee.subg_radio.IsEnabled()) {
+                    strcat(failures, " SUBG(disabled)");
+                } else if (!adsbee.subg_radio.Write(ObjectDictionary::kAddrLEDBlink, duration_ms, true)) {
+                    strcat(failures, " SUBG(write failed)");
+                }
+            }
+            if (blink_network) {
+                if (!esp32.IsEnabled()) {
+                    strcat(failures, " NETWORK(disabled)");
+                } else if (!esp32.Write(ObjectDictionary::kAddrLEDBlink, duration_ms, true)) {
+                    strcat(failures, " NETWORK(write failed)");
+                }
+            }
+            if (failures[0] != '\0') {
+                CPP_AT_ERROR("Failed to blink:%s.", failures);
+            }
+            CPP_AT_SUCCESS();
+            break;
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATLEDEnableCallback) {
     switch (op) {
         case '?':
@@ -1617,6 +1670,13 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                     "interfaces.\r\n\tAT+HOSTNAME?\r\n\tQuery the "
                     "hostname used for all network interfaces.",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATHostnameCallback, comms_manager)},
+    {.command = "LED_BLINK",
+     .min_args = 2,
+     .max_args = 4,
+     .help_string = "AT+LED_BLINK=<duration_ms>,<led>[,<led>...]\r\n\tForce one or more LEDs (1090, SUBG, NETWORK, or "
+                    "ALL) solid ON for duration_ms (1-60000) then off.\r\n\tBypasses AT+LED_ENABLE; intended for test "
+                    "fixtures. Returns immediately.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATLEDBlinkCallback, comms_manager)},
     {.command = "LED_ENABLE",
      .min_args = 0,
      .max_args = 1,
