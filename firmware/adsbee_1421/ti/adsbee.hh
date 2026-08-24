@@ -77,6 +77,14 @@ class ADSBee {
     // RX FIFO reads back completely full (the poll loop fell behind; frames were likely dropped).
     uint32_t lr2021_fifo_full_count = 0;
 
+    // Recovery counters, reported and reset via AT+RX_STATS. In a healthy install fifo_resync tracks
+    // lr2021.fifo_overflow_count (every observed overflow gets a flush/realign) and the rest stay 0.
+    uint32_t lr2021_fifo_resync_count = 0;   // Thread-level FIFO flush/realign after an observed overflow.
+    uint32_t lr2021_rx_rearm_count = 0;      // Health ladder: minimal SetRxAdv re-arm (chip left RX).
+    uint32_t lr2021_rx_reconfig_count = 0;   // Health ladder: full ApplyReceiverConfig escalation.
+    uint32_t lr2021_config_fail_count = 0;   // ApplyReceiverConfig attempts that failed (retried on backoff).
+    uint32_t lr2021_validity_reconfig_count = 0;  // Validity watchdog: reconfigs after N frames with 0 CRC passes.
+
     // Longest single super-loop iteration observed, in microseconds. Reported and reset via AT+RX_STATS. Every
     // millisecond spent in one iteration is a millisecond the LR2021 FIFO isn't drained and AT commands aren't
     // serviced, so this is the primary "is the receiver bogging down" gauge. Updated by main().
@@ -129,6 +137,29 @@ class ADSBee {
 
     // Timestamp of the current async RX drain's StartRxDrain() call, for lr2021_drain_max_us.
     uint32_t lr2021_drain_start_us_ = 0;
+
+    // RX health ladder (see UpdateLR2021): the LR2021 is armed for continuous RX only when the config
+    // is applied, so if it ever leaves RX (or a config attempt failed) nothing else would notice -- the
+    // drain would just poll an empty FIFO forever. Every completed drain sweep refreshes last_stat();
+    // going kRxHealthTimeoutMs without a confirmed-kRx observation triggers recovery, paced by
+    // kRxRecoveryBackoffMs: a minimal in-place SetRxAdv re-arm first, escalating to a full
+    // ApplyReceiverConfig after kMaxRearmAttempts (or immediately if the last config attempt failed).
+    static constexpr uint32_t kRxHealthTimeoutMs = 1000;
+    static constexpr uint32_t kRxRecoveryBackoffMs = 2000;
+    static constexpr uint8_t kMaxRearmAttempts = 2;
+    // Validity watchdog threshold: this many parsed frames with zero CRC-valid decodes means the
+    // FIFO byte stream is mis-framed (statistically impossible with real traffic), and the full
+    // receiver bring-up is the recovery. Rate-independent: fires within ~2 s at 500 pkt/s.
+    static constexpr uint32_t kMaxFramesWithoutValid = 1000;
+    // Full ApplyReceiverConfig body; the public-path wrapper adds failure counting and health-ladder
+    // clock resets around it.
+    bool ApplyReceiverConfigInner();
+    uint32_t lr2021_last_rx_ok_ms_ = 0;     // Last drain sweep that confirmed chip_mode == kRx.
+    uint32_t lr2021_last_recovery_ms_ = 0;  // Last recovery attempt (re-arm or reconfig), for backoff.
+    uint8_t lr2021_rearm_attempts_ = 0;     // Consecutive minimal re-arms without a confirmed kRx.
+    bool receiver_config_ok_ = false;       // Last ApplyReceiverConfig attempt succeeded end-to-end.
+    uint32_t last_drain_error_log_ms_ = 0;  // Rate-limits the drain-failure CONSOLE_ERROR (1/s).
+    uint32_t lr2021_frames_since_valid_ = 0;  // Parsed frames since the last CRC-valid decode (watchdog input).
 };
 
 extern ADSBee adsbee;

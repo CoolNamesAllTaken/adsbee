@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bsp.hh"
+#include "settings.hh"
 #include "spi_coprocessor.hh"
 #include "spi_coprocessor_packet.hh"
 
@@ -69,6 +70,44 @@ class Pico : public SPICoprocessorMasterInterface {
      * @param[in] blink_duration_ms Number of milliseconds that the LED should stay on for.
      */
     inline void BlinkSubGLED(uint32_t blink_duration_ms = kSubGLEDBlinkDurationMs) {
+        // Disable hardware LED via LED_ENABLE setting.
+        if (!settings_manager.settings.led_enabled) {
+            return;
+        }
+        BlinkSubGLEDInternal(blink_duration_ms, false);
+    }
+
+    /**
+     * Forced blink for test fixtures (AT+LED_BLINK): always lights the LED, bypassing the LED_ENABLE setting.
+     * @param[in] blink_duration_ms Number of milliseconds that the LED should stay on for.
+     */
+    inline void ForceBlinkSubGLED(uint32_t blink_duration_ms) { BlinkSubGLEDInternal(blink_duration_ms, true); }
+
+    /**
+     * Turns off the network LED if necessary.
+     */
+    inline void UpdateLED() {
+        if (!subg_led_on) return;
+        // Force the LED off (vs waiting for blink timer) once hardware LEDs are disabled, so a synced LED_ENABLE=0 is
+        // honored as soon as it arrives from the master. Forced blinks are exempt since they intentionally bypass
+        // LED_ENABLE.
+        bool blink_expired =
+            get_time_since_boot_ms() - subg_led_turn_on_timestamp_ms_ > subg_led_blink_duration_ms_;
+        if (blink_expired || (!settings_manager.settings.led_enabled && !subg_led_force_)) {
+            GPIO_write(config_.subg_led_pin, 0);
+            subg_led_on = false;
+            subg_led_force_ = false;
+            subg_led_blink_duration_ms_ = kSubGLEDBlinkDurationMs;
+        }
+    }
+
+   private:
+    /**
+     * Shared implementation for normal and forced sub-GHz LED blinks.
+     * @param[in] blink_duration_ms Number of milliseconds that the LED should stay on for.
+     * @param[in] force True to bypass the LED_ENABLE setting until this blink expires.
+     */
+    inline void BlinkSubGLEDInternal(uint32_t blink_duration_ms, bool force) {
         uint32_t now = get_time_since_boot_ms();
         // Later off-deadline wins: don't let a short packet-decode blink cut an in-progress longer blink short.
         if (!subg_led_on ||
@@ -76,22 +115,13 @@ class Pico : public SPICoprocessorMasterInterface {
             subg_led_turn_on_timestamp_ms_ = now;
             subg_led_blink_duration_ms_ = blink_duration_ms;
         }
+        if (force) {
+            subg_led_force_ = true;
+        }
         GPIO_write(config_.subg_led_pin, 1);
         subg_led_on = true;
     }
 
-    /**
-     * Turns off the network LED if necessary.
-     */
-    inline void UpdateLED() {
-        if (subg_led_on && get_time_since_boot_ms() - subg_led_turn_on_timestamp_ms_ > subg_led_blink_duration_ms_) {
-            GPIO_write(config_.subg_led_pin, 0);
-            subg_led_on = false;
-            subg_led_blink_duration_ms_ = kSubGLEDBlinkDurationMs;
-        }
-    }
-
-   private:
     PicoConfig config_;  // Configuration for the RP2040 SPI coprocessor master interface.
                          // SemaphoreHandle_t spi_mutex_;                  // Low level mutex used to guard the SPI
                          // peripheral (don't let multiple
@@ -120,6 +150,7 @@ class Pico : public SPICoprocessorMasterInterface {
     uint32_t subg_led_turn_on_timestamp_ms_ = 0;
     uint32_t subg_led_blink_duration_ms_ = kSubGLEDBlinkDurationMs;
     bool subg_led_on = false;
+    bool subg_led_force_ = false;  // True while a forced blink (bypassing LED_ENABLE) is active.
     bool use_handshake_pin_ =
         false;  // Allow handshake pin toggle to be skipped if waiting for a mesage and not writing to master.
     int last_bytes_transacted_ = 0;  // Used to determine whether the last transaction was successful.

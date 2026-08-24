@@ -144,6 +144,12 @@ class LR2021 {
         kFifoIrqFlagFifoOverflow = 0x10,
         kFifoIrqFlagFifoUnderflow = 0x20,
     };
+    // Sub-flags that imply the RX FIFO byte stream may be torn / packet-misaligned, so observing any
+    // of them must schedule the thread-level flush/realign (fifo_overflow_pending): Full and Overflow
+    // mean writes raced a hard ceiling (tear on the write side); Underflow means a read popped past
+    // the write pointer (tear on the read side).
+    static constexpr uint8_t kFifoIrqFlagsResyncMask =
+        kFifoIrqFlagFifoFull | kFifoIrqFlagFifoOverflow | kFifoIrqFlagFifoUnderflow;
 
     enum HostIrqs : uint32_t {
         kIrqRxFifo = (1u << 0),              // Rx FIFO threshold reached
@@ -275,8 +281,9 @@ class LR2021 {
     //
     // The LR2021 raises its DIO6 IRQ line (-> CC1314 LR_IRQ pin, rising edge) when the RX FIFO crosses
     // kIrqDrainThresholdBytes. The GPIO ISR claims the drain state machine and runs a fully ISR/SWI-paced
-    // chain -- ReadRxFifo(threshold) DMA'd into a staging slot, then ClearFifoIrqFlags + GetAndClearIrq
-    // to drop the latched IRQ line -- with zero busy-waiting and zero main-loop involvement. The main
+    // chain -- ReadRxFifo(threshold) DMA'd into a staging slot, then GetAndClearFifoIrqFlags (overflow
+    // check) + GetAndClearIrq to drop the latched IRQ line -- with zero busy-waiting and zero main-loop
+    // involvement. The main
     // loop later parses filled slots via NextFilledSlot()/ReleaseSlot(). This is a latency/backpressure
     // valve: with the threshold at 9 packets it stays silent while the routine loop drain keeps up.
 
@@ -315,6 +322,15 @@ class LR2021 {
     volatile uint32_t irq_chain_timeouts = 0;      // Wedged chains cancelled by the thread backstop.
     volatile uint32_t irq_chain_errors = 0;        // Chain aborted on SPI post failure or bad Stat.
     volatile uint32_t irq_thread_assist_posts = 0; // Chain frames posted by the thread backstop (missed BUSY edge).
+    volatile uint32_t fifo_overflow_count = 0;     // FIFO overflow sub-flag observations (either drain path).
+    volatile uint32_t drain_dma_timeouts = 0;      // Loop-drain DMA completions that never arrived (cancelled).
+    volatile uint32_t irq_stale_edges = 0;         // Latched LR_IRQ edges ignored because the line had dropped.
+    // Latched when either drain tail observes the FIFO overflow sub-flag: the FIFO byte stream may be
+    // torn mid-packet, and 14-byte-aligned reads would stay misaligned (every slice failing CRC) until
+    // the FIFO is flushed. Set from the chain SWI or the loop-drain thread parse; cleared only by the
+    // thread-level resync in ADSBee::UpdateLR2021 after it has quiesced the chain, so no lock is needed
+    // (a set landing after the clear just schedules one redundant resync). Reset by Init().
+    volatile bool fifo_overflow_pending = false;
     // Cancels any in-flight async transfer and resets the drain to idle. Thread level only (never from an
     // ISR); DeInit() calls this so the SPI handle is never closed with a DMA in flight.
     void CancelAsync();
@@ -1393,24 +1409,28 @@ class LR2021 {
         kLevelRsp,       // GetRxFifoLevel frame 2 (4 B) DMA in flight.
         kFifoWait,       // Waiting for BUSY low to post the ReadRxFifo frame.
         kFifoRead,       // ReadRxFifo single frame (2 + level B) DMA in flight.
-        kClearFifoWait,  // (Tail) waiting for BUSY low to post the ClearFifoIrqFlags frame.
-        kClearFifoCmd,   // (Tail) ClearFifoIrqFlags (4 B) DMA in flight.
-        kIrqCmdWait,     // (Tail) waiting for BUSY low to post the GetAndClearIrq opcode frame.
-        kIrqCmd,         // (Tail) GetAndClearIrq frame 1 (2 B) DMA in flight.
-        kIrqRspWait,     // (Tail) waiting for BUSY low to post the GetAndClearIrq response frame.
-        kIrqRsp,         // (Tail) GetAndClearIrq frame 2 (6 B) DMA in flight.
-        kDataReady,      // Terminal until FinishRxDrain().
-        kError,          // Terminal until FinishRxDrain().
+        kClearFifoWait,     // (Tail) waiting for BUSY low to post the GetAndClearFifoIrqFlags opcode frame.
+        kClearFifoCmd,      // (Tail) GetAndClearFifoIrqFlags frame 1 (2 B) DMA in flight.
+        kClearFifoRspWait,  // (Tail) waiting for BUSY low to post the GetAndClearFifoIrqFlags response frame.
+        kClearFifoRsp,      // (Tail) GetAndClearFifoIrqFlags frame 2 (4 B) DMA in flight; overflow check.
+        kIrqCmdWait,        // (Tail) waiting for BUSY low to post the GetAndClearIrq opcode frame.
+        kIrqCmd,            // (Tail) GetAndClearIrq frame 1 (2 B) DMA in flight.
+        kIrqRspWait,        // (Tail) waiting for BUSY low to post the GetAndClearIrq response frame.
+        kIrqRsp,            // (Tail) GetAndClearIrq frame 2 (6 B) DMA in flight.
+        kDataReady,         // Terminal until FinishRxDrain().
+        kError,             // Terminal until FinishRxDrain().
         // IRQ-paced chain (advanced from the GPIO HWIs and the SPI completion SWI; the thread only
         // backstops). Must stay the LAST block: IsChainState() tests >= kChainFifoWait.
-        kChainFifoWait,       // Waiting (BUSY edge / thread assist) to post ReadRxFifo(threshold).
-        kChainFifoRead,       // ReadRxFifo (2 + 126 B) DMA into a staging slot in flight.
-        kChainClearFifoWait,  // Waiting to post ClearFifoIrqFlags.
-        kChainClearFifo,      // ClearFifoIrqFlags (4 B) in flight.
-        kChainIrqCmdWait,     // Waiting to post GetAndClearIrq opcode frame.
-        kChainIrqCmd,         // GetAndClearIrq frame 1 (2 B) in flight.
-        kChainIrqRspWait,     // Waiting to post GetAndClearIrq response frame.
-        kChainIrqRsp,         // GetAndClearIrq frame 2 (6 B) in flight; completion decides restart/finish.
+        kChainFifoWait,          // Waiting (BUSY edge / thread assist) to post ReadRxFifo(threshold).
+        kChainFifoRead,          // ReadRxFifo (2 + 126 B) DMA into a staging slot in flight.
+        kChainClearFifoWait,     // Waiting to post the GetAndClearFifoIrqFlags opcode frame.
+        kChainClearFifo,         // GetAndClearFifoIrqFlags frame 1 (2 B) in flight.
+        kChainClearFifoRspWait,  // Waiting to post the GetAndClearFifoIrqFlags response frame.
+        kChainClearFifoRsp,      // GetAndClearFifoIrqFlags frame 2 (4 B) in flight; overflow check.
+        kChainIrqCmdWait,        // Waiting to post GetAndClearIrq opcode frame.
+        kChainIrqCmd,            // GetAndClearIrq frame 1 (2 B) in flight.
+        kChainIrqRspWait,        // Waiting to post GetAndClearIrq response frame.
+        kChainIrqRsp,            // GetAndClearIrq frame 2 (6 B) in flight; completion decides restart/finish.
     };
     static constexpr bool IsChainState(DrainState s) { return s >= DrainState::kChainFifoWait; }
 
@@ -1428,6 +1448,10 @@ class LR2021 {
     void EnterBusyWait(DrainState state);
     // Enters kError with a reason string (logged by the consumer at thread level).
     DrainResult EnterDrainError(const char* reason);
+    // Called from a DMA-in-flight state while async_done_ is still false. Normally kInProgress; if the
+    // completion is overdue (lost SPI callback) it cancels the transfer and enters kError so the drain
+    // can restart instead of wedging forever.
+    DrainResult AsyncStillInFlight();
     // True when the LR2021's IRQ output (kIrqRxFifo routed to DIO6 -> LR_IRQ pin) reads asserted.
     bool IrqLineHigh();
 
@@ -1485,7 +1509,7 @@ class LR2021 {
     volatile uint8_t irq_slot_fill_idx_ = 0;   // Producer (ISR/SWI) side of the slot ring.
     uint8_t irq_slot_parse_idx_ = 0;           // Consumer (thread) side of the slot ring.
     uint8_t chain_fifo_tx_buf_[2 + kIrqDrainThresholdBytes] = {};  // ReadRxFifo opcode + zeros.
-    uint8_t chain_clear_tx_buf_[4] = {};                           // ClearFifoIrqFlags(0x3F, 0).
+    uint8_t chain_clear_tx_buf_[4] = {};                           // GetAndClearFifoIrqFlags opcode.
     uint8_t chain_irq_tx_buf_[2] = {};                             // GetAndClearIrq opcode.
     uint8_t chain_rx_scratch_[8] = {};                             // RX for the non-payload chain frames.
     volatile uint32_t chain_start_ms_ = 0;  // Chain segment start, for the wedge-timeout backstop.

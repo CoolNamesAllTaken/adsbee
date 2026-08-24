@@ -13,14 +13,16 @@
 //     sub_ghz_radio.cpp) -- nothing heavier may run in the SWI band.
 //
 // The loop drain is an UNCONDITIONAL level-read sweep: GetRxFifoLevel -> ReadRxFifo -> (only when the
-// LR_IRQ line reads high) ClearFifoIrqFlags + GetAndClearIrq. It deliberately does not gate on the
+// LR_IRQ line reads high) GetAndClearFifoIrqFlags + GetAndClearIrq. It deliberately does not gate on the
 // kIrqRxFifo flag: with the FIFO high threshold at kIrqDrainThresholdBytes (9 packets), sub-threshold
 // packets would otherwise never be read. The clear tail keeps the latched IRQ line (and its edge
 // generation for the IRQ-paced chain, lr2021_irq_drain.cpp) healthy whenever it is seen high.
 //
 // Torn-packet guard: every FIFO read pops a multiple of kOokFifoPacketLenBytes so the FIFO front
-// stays packet-aligned -- EXCEPT when the FIFO reads completely full, where a full flush is the
-// realignment/recovery mechanism (traffic may have overflowed mid-packet).
+// stays packet-aligned, without exception (256 % 14 != 0, so a "full flush" would itself misalign
+// the stream). When a tear must be assumed (FIFO read back full, or any of the Full/Overflow/
+// Underflow sub-flags observed in a drain tail), fifo_overflow_pending schedules the thread-level
+// ClearRxFifo flush in ADSBee::UpdateLR2021 -- the one true realignment mechanism.
 //
 // Concurrency: the IRQ-paced chain (lr2021_irq_drain.cpp) may STEAL a parked loop drain from a GPIO
 // HWI whenever no DMA is in flight and the drain is not in a terminal state. Every thread-side
@@ -97,6 +99,35 @@ LR2021::DrainResult LR2021::EnterDrainError(const char* reason) {
     return DrainResult::kError;
 }
 
+LR2021::DrainResult LR2021::AsyncStillInFlight() {
+    // busy_wait_start_ms_ was stamped on entering the preceding wait state, so the deadline spans the
+    // BUSY wait plus the DMA flight -- generous against a worst-case ~0.2 ms 258-byte frame.
+    if (get_time_since_boot_ms() - busy_wait_start_ms_ <= kBusyTimeoutMs) {
+        return DrainResult::kInProgress;
+    }
+    // Lost SPI completion: without this the drain returns kInProgress forever and the IRQ chain
+    // refuses to steal (async_in_flight_ stays true) -- a silent, permanent 1090 wedge. Publish the
+    // terminal state BEFORE cancelling: SPI_transferCancel clears async_in_flight_ via the callback,
+    // and until a terminal (never-stolen) state is visible an LR_IRQ edge could steal what it sees as
+    // a parked wait state. HwiP-guarded re-check first: a completion SWI (or a completion followed by
+    // a chain steal) landing between the caller's async_done_ read and here must not be clobbered
+    // with kError.
+    uintptr_t key = HwiP_disable();
+    if (async_done_ || IsChainState(drain_state_)) {
+        HwiP_restore(key);
+        return DrainResult::kInProgress;  // Raced: completion (and possibly a steal) arrived.
+    }
+    drain_dma_timeouts = drain_dma_timeouts + 1;
+    drain_error_str_ = "DMA completion timeout";
+    drain_state_ = DrainState::kError;
+    HwiP_restore(key);
+    if (spi_handle_ != nullptr) {
+        SPI_transferCancel(spi_handle_);
+    }
+    SetNSS(true);
+    return DrainResult::kError;
+}
+
 bool LR2021::IrqLineHigh() { return GPIO_read(config_.gpio_irq) != 0; }
 
 bool LR2021::StartRxDrain() {
@@ -127,7 +158,8 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
         // and cancel a wedged chain.
         if (IsChainState(s)) {
             if (s == DrainState::kChainFifoWait || s == DrainState::kChainClearFifoWait ||
-                s == DrainState::kChainIrqCmdWait || s == DrainState::kChainIrqRspWait) {
+                s == DrainState::kChainClearFifoRspWait || s == DrainState::kChainIrqCmdWait ||
+                s == DrainState::kChainIrqRspWait) {
                 if (!IsBusy() && !abort_requested_) {
                     uintptr_t key = HwiP_disable();
                     if (drain_state_ == s) {
@@ -184,6 +216,7 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
             case DrainState::kLevelRspWait:
             case DrainState::kFifoWait:
             case DrainState::kClearFifoWait:
+            case DrainState::kClearFifoRspWait:
             case DrainState::kIrqCmdWait:
             case DrainState::kIrqRspWait: {
                 if (IsBusy()) {
@@ -217,13 +250,16 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                         next = DrainState::kFifoRead;
                         break;
                     case DrainState::kClearFifoWait:
-                        // Clear the (sticky) FIFO sub-flags BEFORE the global latch, so stale
-                        // sub-flags can't instantly re-latch kIrqRxFifo.
-                        PackU16(tail_tx_buf_, kOpcodeClearFifoIrqFlags);
-                        tail_tx_buf_[2] = 0x3F;  // All RX FIFO flags.
-                        tail_tx_buf_[3] = 0x00;
-                        posted = PostAsyncFrame(tail_tx_buf_, 4, tail_rx_buf_);
+                        // Read-and-clear the (sticky) FIFO sub-flags BEFORE the global latch, so
+                        // stale sub-flags can't instantly re-latch kIrqRxFifo. The readback (frame 2)
+                        // is the only place the FIFO overflow sub-flag is observable.
+                        PackU16(tail_tx_buf_, kOpcodeGetAndClearFifoIrqFlags);
+                        posted = PostAsyncFrame(tail_tx_buf_, 2, tail_rx_buf_);
                         next = DrainState::kClearFifoCmd;
+                        break;
+                    case DrainState::kClearFifoRspWait:
+                        posted = PostAsyncFrame(nullptr, 4, tail_rx_buf_);  // 2 (stat) + rx/tx flags.
+                        next = DrainState::kClearFifoRsp;
                         break;
                     case DrainState::kIrqCmdWait:
                         PackU16(tail_tx_buf_, kOpcodeGetAndClearIrq);
@@ -249,7 +285,7 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
             // (once async_in_flight_ drops, the chain may steal this drain).
             case DrainState::kLevelCmd: {
                 if (!async_done_) {
-                    return DrainResult::kInProgress;
+                    return AsyncStillInFlight();
                 }
                 if (!async_ok_) {
                     return EnterDrainError("GetRxFifoLevel opcode frame failed");
@@ -264,7 +300,7 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
             }
             case DrainState::kLevelRsp: {
                 if (!async_done_) {
-                    return DrainResult::kInProgress;
+                    return AsyncStillInFlight();
                 }
                 if (!async_ok_) {
                     return EnterDrainError("GetRxFifoLevel response frame failed");
@@ -279,11 +315,16 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                 // on top of this; the consumer counts it (see ADSBee::UpdateLR2021).
                 bool full = (level >= kRxFifoMaxDepthBytes);
                 uint16_t read_len = (level > kRxFifoMaxDepthBytes) ? kRxFifoMaxDepthBytes : level;
-                if (!full) {
-                    // Torn-packet guard: keep the FIFO front packet-aligned by only popping whole
-                    // packets. A full FIFO is flushed completely instead -- overflow may have torn a
-                    // packet already, and the flush is the realignment mechanism.
-                    read_len -= read_len % kOokFifoPacketLenBytes;
+                // Torn-packet guard: keep the FIFO front packet-aligned by only popping whole
+                // packets -- WITH NO FULL-FIFO EXCEPTION. Popping all 256 bytes would itself
+                // misalign the stream: 256 % 14 == 4, and the parser's discarded remainder is the
+                // head of a packet whose tail is still in the FIFO. Realignment after a tear is
+                // solely the thread-level ClearRxFifo resync, scheduled below.
+                read_len -= read_len % kOokFifoPacketLenBytes;
+                if (full) {
+                    // A full FIFO means a tear must be assumed (writes raced a hard ceiling even if
+                    // the overflow sub-flag hasn't latched yet): schedule the flush/realign.
+                    fifo_overflow_pending = true;
                 }
                 uintptr_t key = HwiP_disable();
                 if (drain_state_ == s) {
@@ -306,7 +347,7 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
             }
             case DrainState::kFifoRead: {
                 if (!async_done_) {
-                    return DrainResult::kInProgress;
+                    return AsyncStillInFlight();
                 }
                 if (!async_ok_) {
                     return EnterDrainError("ReadRxFifo frame failed");
@@ -333,13 +374,39 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
             }
             case DrainState::kClearFifoCmd: {
                 if (!async_done_) {
-                    return DrainResult::kInProgress;
+                    return AsyncStillInFlight();
                 }
                 if (!async_ok_) {
-                    return EnterDrainError("ClearFifoIrqFlags frame failed");
+                    return EnterDrainError("GetAndClearFifoIrqFlags opcode frame failed");
                 }
-                // Stat in a write frame reflects the PREVIOUS command; informational only here.
+                // Stat in an opcode frame reflects the PREVIOUS command; informational only here.
                 ParseStat(UnpackU16(tail_rx_buf_));
+                uintptr_t key = HwiP_disable();
+                if (drain_state_ == s) {
+                    EnterBusyWait(DrainState::kClearFifoRspWait);
+                }
+                HwiP_restore(key);
+                break;
+            }
+            case DrainState::kClearFifoRsp: {
+                if (!async_done_) {
+                    return AsyncStillInFlight();
+                }
+                if (!async_ok_) {
+                    return EnterDrainError("GetAndClearFifoIrqFlags response frame failed");
+                }
+                ParseStat(UnpackU16(tail_rx_buf_));
+                if (last_stat_.command_status != CommandStatus::kDat &&
+                    last_stat_.command_status != CommandStatus::kOk) {
+                    return EnterDrainError("GetAndClearFifoIrqFlags bad command status");
+                }
+                if (tail_rx_buf_[2] & kFifoIrqFlagsResyncMask) {
+                    // Full/Overflow/Underflow may have torn the stream, leaving every subsequent
+                    // 14-byte slice misaligned: flag for the thread-level FIFO flush/realign in
+                    // ADSBee::UpdateLR2021.
+                    fifo_overflow_count = fifo_overflow_count + 1;
+                    fifo_overflow_pending = true;
+                }
                 uintptr_t key = HwiP_disable();
                 if (drain_state_ == s) {
                     EnterBusyWait(DrainState::kIrqCmdWait);
@@ -349,7 +416,7 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
             }
             case DrainState::kIrqCmd: {
                 if (!async_done_) {
-                    return DrainResult::kInProgress;
+                    return AsyncStillInFlight();
                 }
                 if (!async_ok_) {
                     return EnterDrainError("GetAndClearIrq opcode frame failed");
@@ -364,7 +431,7 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
             }
             case DrainState::kIrqRsp: {
                 if (!async_done_) {
-                    return DrainResult::kInProgress;
+                    return AsyncStillInFlight();
                 }
                 if (!async_ok_) {
                     return EnterDrainError("GetAndClearIrq response frame failed");

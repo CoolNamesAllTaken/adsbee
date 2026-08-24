@@ -317,7 +317,10 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
                 "fifo_full=%lu,q_ovf=%lu,bitflips_fixed=%lu,uat_rx_restarts=%lu,uat_setlen_errs=%lu,"
                 "max_loop_us=%lu,max_lr2021_us=%lu,drain_max_us=%lu,"
                 "irq_drains=%lu,irq_skip_busy=%lu,irq_skip_slots=%lu,irq_restarts=%lu,irq_timeouts=%lu,"
-                "irq_errors=%lu,irq_assists=%lu,tx_stalls=%lu,tx_drops=%lu,tx_ring_hw=%u",
+                "irq_errors=%lu,irq_assists=%lu,tx_stalls=%lu,tx_drops=%lu,tx_ring_hw=%u,"
+                "fifo_ovf=%lu,fifo_resyncs=%lu,rx_rearms=%lu,rx_reconfigs=%lu,cfg_fails=%lu,"
+                "dma_timeouts=%lu,report_q_ovf=%lu,"
+                "validity_reconfigs=%lu,stale_edges=%lu,uat_len_mismatch=%lu",
                 stats.pkt_rx, stats.crc_error, stats.len_error, stats.pbl_det, stats.sync_ok, stats.sync_fail,
                 stats.timeout, (unsigned long)adsbee.lr2021_fifo_full_count,
                 (unsigned long)packet_decoder.raw_queue_overflow_count,
@@ -329,7 +332,13 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
                 (unsigned long)adsbee.lr2021.irq_drain_restarts, (unsigned long)adsbee.lr2021.irq_chain_timeouts,
                 (unsigned long)adsbee.lr2021.irq_chain_errors, (unsigned long)adsbee.lr2021.irq_thread_assist_posts,
                 (unsigned long)comms_manager.uart_tx_stall_count, (unsigned long)comms_manager.uart_tx_drop_count,
-                comms_manager.uart_tx_high_water_bytes);
+                comms_manager.uart_tx_high_water_bytes, (unsigned long)adsbee.lr2021.fifo_overflow_count,
+                (unsigned long)adsbee.lr2021_fifo_resync_count, (unsigned long)adsbee.lr2021_rx_rearm_count,
+                (unsigned long)adsbee.lr2021_rx_reconfig_count, (unsigned long)adsbee.lr2021_config_fail_count,
+                (unsigned long)adsbee.lr2021.drain_dma_timeouts,
+                (unsigned long)comms_manager.mode_s_report_queue_ovf_count,
+                (unsigned long)adsbee.lr2021_validity_reconfig_count, (unsigned long)adsbee.lr2021.irq_stale_edges,
+                (unsigned long)subg_radio.uat_len_mismatch_count);
             CPP_AT_SILENT_SUCCESS();
             break;
         }
@@ -358,6 +367,16 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
             comms_manager.uart_tx_stall_count = 0;
             comms_manager.uart_tx_drop_count = 0;
             comms_manager.uart_tx_high_water_bytes = 0;
+            adsbee.lr2021.fifo_overflow_count = 0;
+            adsbee.lr2021_fifo_resync_count = 0;
+            adsbee.lr2021_rx_rearm_count = 0;
+            adsbee.lr2021_rx_reconfig_count = 0;
+            adsbee.lr2021_config_fail_count = 0;
+            adsbee.lr2021.drain_dma_timeouts = 0;
+            comms_manager.mode_s_report_queue_ovf_count = 0;
+            adsbee.lr2021_validity_reconfig_count = 0;
+            adsbee.lr2021.irq_stale_edges = 0;
+            subg_radio.uat_len_mismatch_count = 0;
             CPP_AT_SUCCESS();
             break;
         }

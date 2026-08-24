@@ -32,15 +32,14 @@ bool LR2021::Init() {
     async_ok_ = false;
     async_in_flight_ = false;
     sync_done_ = false;
+    fifo_overflow_pending = false;  // Init reboots the chip below, which clears the FIFO anyway.
     memset(async_tx_buf_, 0, sizeof(async_tx_buf_));  // [2..] must clock zeros during FIFO reads.
     // IRQ chain TX buffers: static contents, pre-packed once so the ISR-side chain never packs bytes.
     // Filled staging slots are deliberately preserved across re-inits -- the thread parses them on its
     // own schedule (e.g. after a sync-sleep wake).
     memset(chain_fifo_tx_buf_, 0, sizeof(chain_fifo_tx_buf_));  // [2..] clocks zeros during the read.
     PackU16(chain_fifo_tx_buf_, kOpcodeReadRxFifo);
-    PackU16(chain_clear_tx_buf_, kOpcodeClearFifoIrqFlags);
-    chain_clear_tx_buf_[2] = 0x3F;  // All RX FIFO sub-flags.
-    chain_clear_tx_buf_[3] = 0x00;
+    PackU16(chain_clear_tx_buf_, kOpcodeGetAndClearFifoIrqFlags);
     PackU16(chain_irq_tx_buf_, kOpcodeGetAndClearIrq);
     CONSOLE_INFO("LR2021::Init", "Initializing.");
     // Do a proper reboot.

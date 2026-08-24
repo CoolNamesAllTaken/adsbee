@@ -24,7 +24,7 @@ const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
 const uint8_t ObjectDictionary::kFirmwareVersionMinor = 10;
 const uint8_t ObjectDictionary::kFirmwareVersionPatch = 0;
 // NOTE: Indicate a final release with RC = 0.
-const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 2;
+const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 3;
 
 const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24) | (kFirmwareVersionMinor << 16) |
                                                     (kFirmwareVersionPatch << 8) | kFirmwareVersionReleaseCandidate;
@@ -177,7 +177,7 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
             }
             uint32_t duration_ms;
             memcpy(&duration_ms, buf, sizeof(duration_ms));
-            pico_ll.BlinkSubGLED(duration_ms);
+            pico_ll.ForceBlinkSubGLED(duration_ms);
             break;
         }
 #endif

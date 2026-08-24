@@ -102,6 +102,9 @@ class CommsManager {
     uint32_t uart_tx_stall_count = 0;      // Writes that had to wait for ring space (link oversubscribed).
     uint32_t uart_tx_drop_count = 0;       // Writes dropped whole after the bounded wait expired.
     uint16_t uart_tx_high_water_bytes = 0;  // Peak ring occupancy observed.
+    // Mode S packets overwritten in the (overwrite-oldest) reporting queue because the reporting path
+    // fell behind. Surfaced via AT+RX_STATS.
+    uint32_t mode_s_report_queue_ovf_count = 0;
 
     /**
      * Change the console UART baud rate at runtime. TI's UART2 driver has no live baud-change API, so
@@ -199,8 +202,13 @@ class CommsManager {
         return true;
     }
 
-    PFBQueue<RawModeSPacket> mode_s_packet_reporting_queue = PFBQueue<RawModeSPacket>(
-        {.buf_len_num_elements = kModeSPacketReportingQueueDepth, .buffer = mode_s_packet_reporting_queue_buffer_});
+    // Overwrite-oldest on overflow: freshest packets are the right ones to keep for live feeds, and a
+    // failed Enqueue at high packet rates would otherwise turn into per-packet error logging (see
+    // ADSBee::IngestAndForwardPackets). Drops are counted in mode_s_report_queue_ovf_count.
+    PFBQueue<RawModeSPacket> mode_s_packet_reporting_queue =
+        PFBQueue<RawModeSPacket>({.buf_len_num_elements = kModeSPacketReportingQueueDepth,
+                                  .buffer = mode_s_packet_reporting_queue_buffer_,
+                                  .overwrite_when_full = true});
     PFBQueue<RawUATADSBPacket> uat_adsb_packet_reporting_queue = PFBQueue<RawUATADSBPacket>(
         {.buf_len_num_elements = kUATADSBPacketReportingQueueDepth, .buffer = uat_adsb_packet_reporting_queue_buffer_});
     PFBQueue<RawUATUplinkPacket> uat_uplink_packet_reporting_queue =

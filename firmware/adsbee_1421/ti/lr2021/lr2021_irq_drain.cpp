@@ -7,7 +7,8 @@
 //
 //   LR_IRQ edge (GPIO HWI) ─ claim drain, post ReadRxFifo(2+126) DMA into a staging slot
 //   SPI completion (SWI)   ─ mark slot filled, arm BUSY-fall interrupt, raise NSS
-//   LR_BUSY falls (GPIO HWI) ─ post the next frame: ClearFifoIrqFlags -> GetAndClearIrq (2 frames)
+//   LR_BUSY falls (GPIO HWI) ─ post the next frame: GetAndClearFifoIrqFlags (2 frames, overflow
+//                              check on the readback) -> GetAndClearIrq (2 frames)
 //   final SWI              ─ drop to kIdle, or restart into the other slot if the line is still high
 //
 // The inter-frame BUSY pulses are absorbed by hardware edges instead of CPU spins. Each GPIO handler
@@ -16,10 +17,14 @@
 // NextFilledSlot/ReleaseSlot) and backstops the chain (missed-edge re-post + wedge timeout) in
 // ServiceRxDrain.
 //
-// Why no level read: a fresh edge means the FIFO just crossed the threshold, so >= 126 bytes are
-// guaranteed present, and because every drain path pops whole 14-byte packets the leading 126 bytes
-// are exactly 9 whole packets. Restarts are gated on the line being high again AFTER this chain's own
-// clear, which re-establishes the same guarantee.
+// Why no level read: a fresh edge with the line STILL HIGH means the FIFO crossed the threshold and
+// has not since been drained below it, so >= 126 bytes are present, and because every drain path
+// pops whole 14-byte packets the leading 126 bytes are exactly 9 whole packets. HandleIrqLine
+// enforces the "still high" part with a live line-level check -- the GPIO EVFLAGS latch outlives the
+// chip-side line, and GPIO HWIs are the lowest NVIC priority (not 0xC0; ti_drivers_config.c sets
+// ~0), so a delayed dispatch can arrive after the loop drain already cleared and drained. Restarts
+// are gated on the line being high again AFTER this chain's own clear, which re-establishes the same
+// guarantee.
 //
 // BUSY edge ordering: the BUSY-fall interrupt is armed (clearInt + enableInt) BEFORE NSS is raised,
 // and BUSY cannot rise until NSS rises -- so the falling edge is always catchable. If a command
@@ -67,8 +72,12 @@ bool LR2021::PostChainFrame() {
             next = DrainState::kChainFifoRead;
             break;
         case DrainState::kChainClearFifoWait:
-            posted = PostAsyncFrame(chain_clear_tx_buf_, 4, chain_rx_scratch_);
+            posted = PostAsyncFrame(chain_clear_tx_buf_, 2, chain_rx_scratch_);
             next = DrainState::kChainClearFifo;
+            break;
+        case DrainState::kChainClearFifoRspWait:
+            posted = PostAsyncFrame(nullptr, 4, chain_rx_scratch_);  // 2 (stat) + rx/tx flags.
+            next = DrainState::kChainClearFifoRsp;
             break;
         case DrainState::kChainIrqCmdWait:
             posted = PostAsyncFrame(chain_irq_tx_buf_, 2, chain_rx_scratch_);
@@ -111,6 +120,16 @@ void LR2021::HandleIrqLine() {
     if (abort_requested_ || spi_handle_ == nullptr) {
         return;
     }
+    if (!IrqLineHigh()) {
+        // Stale latched edge: the GPIO module's EVFLAGS latch outlives the chip-side line. GPIO HWIs
+        // sit at the LOWEST NVIC priority (ti_drivers_config.c GPIO intPriority = ~0), so RF-core /
+        // SPI HWIs (0xa0) can delay this dispatch long enough for the loop drain to run its clear
+        // tail (dropping the line) and drain the FIFO below the threshold. Starting a chain here
+        // would blind-read 126 bytes from a FIFO that may hold fewer, popping the read pointer past
+        // the write pointer and tearing the stream.
+        irq_stale_edges = irq_stale_edges + 1;
+        return;
+    }
     IrqDrainSlot& slot = irq_slots_[irq_slot_fill_idx_];
     if (slot.filled) {
         irq_drain_skip_slots = irq_drain_skip_slots + 1;
@@ -122,8 +141,12 @@ void LR2021::HandleIrqLine() {
     }
     if (s != DrainState::kIdle) {
         // Loop drain active. Steal it only when parked with nothing on the bus; never steal terminal
-        // states (kDataReady holds an unparsed payload, kError an unreported failure).
-        if (async_in_flight_ || s == DrainState::kDataReady || s == DrainState::kError) {
+        // states (kDataReady holds an unparsed payload, kError an unreported failure), and never
+        // steal kClearFifoRspWait: GetAndClearFifoIrqFlags frame 1 already destructively cleared the
+        // FIFO sub-flags, and the pending frame 2 holds their only copy -- stealing here destroys
+        // the overflow/tear evidence the resync depends on.
+        if (async_in_flight_ || s == DrainState::kDataReady || s == DrainState::kError ||
+            s == DrainState::kClearFifoRspWait) {
             irq_drain_skip_busy = irq_drain_skip_busy + 1;
             return;
         }
@@ -146,6 +169,7 @@ void LR2021::HandleBusyFall() {
     switch (drain_state_) {
         case DrainState::kChainFifoWait:
         case DrainState::kChainClearFifoWait:
+        case DrainState::kChainClearFifoRspWait:
         case DrainState::kChainIrqCmdWait:
         case DrainState::kChainIrqRspWait:
             PostChainFrame();
@@ -178,7 +202,25 @@ void LR2021::HandleChainFrameComplete() {
             break;
         }
         case DrainState::kChainClearFifo:
-            // Stat in a write frame reflects the previous command (the FIFO read): already validated.
+            // Stat in an opcode frame reflects the previous command (the FIFO read): already validated.
+            next_wait = DrainState::kChainClearFifoRspWait;
+            break;
+        case DrainState::kChainClearFifoRsp:
+            // GetAndClearFifoIrqFlags readback: the only place the FIFO overflow sub-flag is
+            // observable on the chain path. Single-byte inspection, within the SWI budget.
+            if (!async_ok_ || !ChainStatOk(chain_rx_scratch_)) {
+                irq_chain_errors = irq_chain_errors + 1;
+                AbortChainFromIsr();
+                return;
+            }
+            if (chain_rx_scratch_[2] & kFifoIrqFlagsResyncMask) {
+                // Full/Overflow/Underflow may have torn the stream. The chain never reads the FIFO
+                // level, so the Full sub-flag is its only fullness signal (2 x 126 == 252 < 256:
+                // chain reads alone strand the last partial packet of a full FIFO). Flag for the
+                // thread-level flush/realign in ADSBee::UpdateLR2021.
+                fifo_overflow_count = fifo_overflow_count + 1;
+                fifo_overflow_pending = true;
+            }
             next_wait = DrainState::kChainIrqCmdWait;
             break;
         case DrainState::kChainIrqCmd:

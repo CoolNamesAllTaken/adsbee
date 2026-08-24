@@ -1597,9 +1597,11 @@ bool AircraftDictionary::IngestModeSIdentityReplyPacket(const ModeSIdentityReply
     uint32_t uid = Aircraft::ICAOToUID(icao_address, Aircraft::kAircraftTypeModeS);
     ModeSAircraft* aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
     if (aircraft_ptr == nullptr) {
+#ifdef ADSB_VERBOSE_PACKET_WARNINGS
         CONSOLE_WARNING("AircraftDictionary::IngestModeSIdentityReplyPacket",
                         "Unable to find or create new aircraft with ICAO address 0x%lx in dictionary.\r\n",
                         icao_address);
+#endif  // ADSB_VERBOSE_PACKET_WARNINGS
         return false;  // unable to find or create new aircraft in dictionary
     }
     if (packet.airborne_state_known) {
@@ -1633,9 +1635,11 @@ bool AircraftDictionary::IngestModeSAltitudeReplyPacket(const ModeSAltitudeReply
     uint32_t uid = Aircraft::ICAOToUID(icao_address, Aircraft::kAircraftTypeModeS);
     ModeSAircraft* aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
     if (aircraft_ptr == nullptr) {
+#ifdef ADSB_VERBOSE_PACKET_WARNINGS
         CONSOLE_WARNING("AircraftDictionary::IngestModeSAltitudeReplyPacket",
                         "Unable to find or create new aircraft with ICAO address 0x%lx in dictionary.\r\n",
                         icao_address);
+#endif  // ADSB_VERBOSE_PACKET_WARNINGS
         return false;  // unable to find or create new aircraft in dictionary
     }
     if (packet.airborne_state_known) {
@@ -1672,9 +1676,11 @@ bool AircraftDictionary::IngestModeSAllCallReplyPacket(const ModeSAllCallReplyPa
     uint32_t uid = Aircraft::ICAOToUID(icao_address, Aircraft::kAircraftTypeModeS);
     ModeSAircraft* aircraft_ptr = GetAircraftPtr<ModeSAircraft>(uid);
     if (aircraft_ptr == nullptr) {
+#ifdef ADSB_VERBOSE_PACKET_WARNINGS
         CONSOLE_WARNING("AircraftDictionary::IngestModeSAllCallReplyPacket",
                         "Unable to find or create new aircraft with ICAO address 0x%lx in dictionary.\r\n",
                         icao_address);
+#endif  // ADSB_VERBOSE_PACKET_WARNINGS
         return false;  // unable to find or create new aircraft in dictionary
     }
     aircraft_ptr->last_message_timestamp_ms = get_time_since_boot_ms();
@@ -1816,9 +1822,11 @@ bool AircraftDictionary::IngestModeSADSBPacket(const ModeSADSBPacket& packet) {
     if (ret) {
         aircraft_ptr->IncrementNumFramesReceived(true);  // Count the received Mode S frame.
     } else {
+#ifdef ADSB_VERBOSE_PACKET_WARNINGS
         CONSOLE_WARNING("AircraftDictionary::IngestModeSADSBPacket",
                         "Failed to apply ADSB message with type code %d to ICAO 0x%lx.", type_code,
                         packet.icao_address);
+#endif  // ADSB_VERBOSE_PACKET_WARNINGS
     }
     return ret;
 }
@@ -1835,9 +1843,11 @@ bool AircraftDictionary::IngestDecodedUATADSBPacket(const DecodedUATADSBPacket& 
     UATAircraft* aircraft_ptr =
         GetAircraftPtr<UATAircraft>(Aircraft::ICAOToUID(packet.GetICAOAddress(), Aircraft::kAircraftTypeUAT));
     if (aircraft_ptr == nullptr) {
+#ifdef ADSB_VERBOSE_PACKET_WARNINGS
         CONSOLE_WARNING("AircraftDictionary::IngestDecodedUATADSBPacket",
                         "Unable to find or create new UAT aircraft with ICAO address 0x%lx in dictionary.\r\n",
                         packet.GetICAOAddress());
+#endif  // ADSB_VERBOSE_PACKET_WARNINGS
         return false;  // unable to find or create new aircraft in dictionary
     }
     aircraft_ptr->last_message_timestamp_ms = get_time_since_boot_ms();

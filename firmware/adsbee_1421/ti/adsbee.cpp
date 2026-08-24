@@ -80,6 +80,21 @@ bool ADSBee::SetRx1090Enabled(bool enabled) {
 }
 
 bool ADSBee::ApplyReceiverConfig() {
+    bool success = ApplyReceiverConfigInner();
+    receiver_config_ok_ = success;
+    if (!success) {
+        lr2021_config_fail_count++;
+    }
+    // Restart the RX-health clocks on BOTH outcomes so retries are paced by the recovery backoff (a
+    // failed bring-up self-heals via the health ladder in UpdateLR2021 instead of dying silently).
+    uint32_t now_ms = get_time_since_boot_ms();
+    lr2021_last_rx_ok_ms_ = now_ms;
+    lr2021_last_recovery_ms_ = now_ms;
+    lr2021_rearm_attempts_ = 0;
+    return success;
+}
+
+bool ADSBee::ApplyReceiverConfigInner() {
     // Quiesce the LR2021 interrupt lines while the chip is reset/reconfigured: the IRQ line's meaning
     // is undefined until SetOokADSB re-routes it, and the BUSY interrupt must only ever be armed by an
     // active drain chain. (DeInit -> CancelAsync also disarms BUSY; this covers every path.)
@@ -446,9 +461,13 @@ void ADSBee::IngestAndForwardPackets() {
         // Check for any new valid packets and push all decoded packets to the reporting queue, even if the aircraft
         // dictionary didn't know what to do with them.
         if (decoded_packet.is_valid) {
-            if (!comms_manager.mode_s_packet_reporting_queue.Enqueue(decoded_packet.raw)) {
-                CONSOLE_ERROR("ADSBee::IngestAndForwardPackets", "Mode S packet reporting queue overflowed.");
+            lr2021_frames_since_valid_ = 0;  // Healthy stream: reset the validity watchdog.
+            // Counted, not logged: at high packet rates a per-packet CONSOLE_ERROR here floods the UART
+            // TX ring and stalls the main loop -- the very thing that makes the queue overflow.
+            if (comms_manager.mode_s_packet_reporting_queue.IsFull()) {
+                comms_manager.mode_s_report_queue_ovf_count++;
             }
+            comms_manager.mode_s_packet_reporting_queue.Enqueue(decoded_packet.raw);  // Overwrites oldest when full.
         }
     }
 
@@ -511,6 +530,33 @@ bool ADSBee::UpdateLR2021() {
         lr2021.ReleaseSlot();
     }
 
+    // FIFO tear hazard observed (level read back full, or a Full/Overflow/Underflow sub-flag seen by
+    // either drain tail): the FIFO byte stream may be torn mid-packet, and
+    // because every read pops whole 14-byte packets, the misalignment would persist forever (every
+    // slice failing CRC -- reception looks dead while the chip-side counters keep climbing). Flush the
+    // FIFO to realign, then clear the (possibly re-latched) FIFO sub-flags and the global IRQ latch so
+    // edge generation recovers. LR_IRQ is disarmed around the sequence so a fresh edge can't start a
+    // chain between the commands; each command's BeginTransaction pumps any in-flight drain/chain to
+    // quiescence first. Already-staged data is still parsed: slices from before the tear are good, the
+    // rest fail CRC harmlessly.
+    if (lr2021.fifo_overflow_pending) {
+        GPIO_disableInt(bsp.kLR2021IrqPin);
+        LR2021::GetAndClearIrqRsp irq_rsp;
+        // Standby first: it halts the packet engine, so a packet mid-demodulation can't keep
+        // streaming its tail into the freshly flushed FIFO (a flush landing mid-write would re-tear
+        // the stream from byte 0). RX re-arms from standby exactly as SetOokADSB does; the config
+        // registers persist through standby (only sleep loses them).
+        bool resync_ok = lr2021.SetStandby(LR2021::kSysStandbyRc) && lr2021.ClearRxFifo() &&
+                         lr2021.ClearFifoIrqFlags(0x3F, 0) && lr2021.GetAndClearIrq(&irq_rsp) &&
+                         lr2021.SetRxAdv(0xFFFFFF);
+        if (resync_ok) {
+            lr2021.fifo_overflow_pending = false;
+            lr2021_fifo_resync_count++;
+        }  // On failure the flag stays set and the resync is retried next pass.
+        GPIO_clearInt(bsp.kLR2021IrqPin);
+        GPIO_enableInt(bsp.kLR2021IrqPin);
+    }
+
     // Async RX drain: kick one off when idle, then advance it as far as the DMA/BUSY state allows.
     // Each call does at most one phase's worth of parsing plus posting the next DMA frame -- the long
     // SPI clocking (up to 258 B) happens in the background while the rest of the loop runs.
@@ -519,7 +565,8 @@ bool ADSBee::UpdateLR2021() {
     }
 
     bool success = true;
-    switch (lr2021.ServiceRxDrain()) {
+    LR2021::DrainResult drain_result = lr2021.ServiceRxDrain();
+    switch (drain_result) {
         case LR2021::DrainResult::kDataReady: {
             uint32_t drain_us = get_time_since_boot_us() - lr2021_drain_start_us_;
             if (drain_us > lr2021_drain_max_us) {
@@ -536,7 +583,11 @@ bool ADSBee::UpdateLR2021() {
             break;
         }
         case LR2021::DrainResult::kError:
-            if (!SyncSleepRequested()) {
+            // Rate-limited: a persistently failing drain would otherwise log every loop iteration,
+            // and sustained console errors are themselves a main-loop stall vector (TX ring spin).
+            if (!SyncSleepRequested() &&
+                get_time_since_boot_ms() - last_drain_error_log_ms_ > 1000) {
+                last_drain_error_log_ms_ = get_time_since_boot_ms();
                 CONSOLE_ERROR("ADSBee::Update", "LR2021 RX drain failed: %s.", lr2021.drain_error_str());
             }
             lr2021.FinishRxDrain();
@@ -545,6 +596,57 @@ bool ADSBee::UpdateLR2021() {
         default:
             // kIdle / kInProgress / kNoData: nothing to consume this iteration.
             break;
+    }
+
+    // RX health ladder. Continuous RX is armed only when the receiver config is applied; if the chip
+    // ever leaves RX (or a config attempt failed and left the SPI closed), the drain just polls an
+    // empty FIFO with no error. Every COMPLETED drain sweep refreshes last_stat() from a live Stat
+    // readback, so gate the "healthy" stamp on completion -- a dead SPI never completes a sweep, so a
+    // stale-but-kRx last_stat() can't mask a dead receiver.
+    uint32_t now_ms = get_time_since_boot_ms();
+    if ((drain_result == LR2021::DrainResult::kDataReady || drain_result == LR2021::DrainResult::kNoData) &&
+        lr2021.last_stat().chip_mode == LR2021::ChipMode::kRx) {
+        lr2021_last_rx_ok_ms_ = now_ms;
+        lr2021_rearm_attempts_ = 0;
+    } else if (now_ms - lr2021_last_rx_ok_ms_ > kRxHealthTimeoutMs &&
+               now_ms - lr2021_last_recovery_ms_ > kRxRecoveryBackoffMs) {
+        lr2021_last_recovery_ms_ = now_ms;
+        if (receiver_config_ok_ && lr2021_rearm_attempts_ < kMaxRearmAttempts) {
+            // Config intact but the chip left RX: re-arm continuous RX in place. LR_IRQ is disarmed
+            // around the command -- an LR_IRQ HWI would otherwise post a chain frame onto the SPI
+            // driver's queue mid-command (the TI driver queues a second SPI_transfer and clocks it
+            // back-to-back under the same NSS frame, merging the two into one corrupted command).
+            lr2021_rearm_attempts_++;
+            lr2021_rx_rearm_count++;
+            CONSOLE_WARNING("ADSBee::UpdateLR2021", "No confirmed RX for %lu ms; re-arming LR2021 RX.",
+                            (unsigned long)(now_ms - lr2021_last_rx_ok_ms_));
+            GPIO_disableInt(bsp.kLR2021IrqPin);
+            lr2021.SetRxAdv(0xFFFFFF);  // Continuous RX (no timeout), as armed by SetOokADSB.
+            GPIO_clearInt(bsp.kLR2021IrqPin);
+            GPIO_enableInt(bsp.kLR2021IrqPin);
+        } else {
+            // Re-arm didn't stick, or the config never applied: full receiver bring-up (resets the
+            // health clocks on both outcomes, so a hard failure retries forever on the backoff).
+            lr2021_rx_reconfig_count++;
+            CONSOLE_WARNING("ADSBee::UpdateLR2021", "No confirmed RX for %lu ms; reconfiguring receiver.",
+                            (unsigned long)(now_ms - lr2021_last_rx_ok_ms_));
+            ApplyReceiverConfig();
+        }
+    }
+
+    // Validity watchdog: a mis-framed FIFO stream produces endless frames that all fail CRC while
+    // the chip reports kRx and sweeps complete -- invisible to the chip-mode ladder above. Real
+    // traffic statistically cannot produce this many consecutive frames with zero CRC passes, so
+    // treat it as a wedged receiver and re-run the full bring-up (the AT+RX_ENABLE-toggle
+    // equivalent, which provably recovers). In dead-quiet airspace, noise frames accumulate slowly,
+    // so a spurious reconfig is rare and costs nothing (there is no traffic to lose).
+    if (lr2021_frames_since_valid_ >= kMaxFramesWithoutValid &&
+        now_ms - lr2021_last_recovery_ms_ > kRxRecoveryBackoffMs) {
+        lr2021_frames_since_valid_ = 0;
+        lr2021_validity_reconfig_count++;
+        CONSOLE_WARNING("ADSBee::UpdateLR2021", "%lu frames without a valid packet; reconfiguring receiver.",
+                        (unsigned long)kMaxFramesWithoutValid);
+        ApplyReceiverConfig();  // Stamps lr2021_last_recovery_ms_ for the backoff.
     }
 
     uint32_t elapsed_us = get_time_since_boot_us() - start_us;
@@ -583,6 +685,7 @@ void ADSBee::ParseLR2021RxFifo(const uint8_t* rx_buf, uint16_t rx_len_bytes, uin
         }
         RawModeSPacket raw_packet(rx_word_buf, RawModeSPacket::kExtendedSquitterPacketNumWords32);
         raw_packet.mlat_48mhz_64bit_counts = mlat_timestamp_us * 48;
+        lr2021_frames_since_valid_++;  // Zeroed on any valid decode; feeds the validity watchdog.
         // Record demod + raw frame metrics (valid frames are recorded during dictionary
         // ingestion). All LR2021 captures are 112-bit extended-squitter-length frames.
         aircraft_dictionary.Record1090Demod();
