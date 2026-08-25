@@ -77,6 +77,19 @@ class ADSBeeServer {
 
     AircraftDictionary aircraft_dictionary;
 
+    /**
+     * Guards aircraft_dictionary.dict against concurrent mutation.
+     *
+     * The dictionary is written only from the main task (prune in Update(), inserts from the Ingest*
+     * calls), but the /data/aircraft.json handler reads it from the HTTP server task. Concurrent
+     * iteration and mutation of a std::unordered_map is undefined behaviour, not a stale read.
+     *
+     * Only writers and the HTTP handler take this. Readers that already run on the main task
+     * (ReportGDL90, SendAircraftJSONMessages) cannot race with main-task writers, and reader/reader
+     * is safe, so they are deliberately left unlocked.
+     */
+    SemaphoreHandle_t aircraft_dictionary_mutex = nullptr;
+
     httpd_handle_t server = nullptr;
     WebSocketServer network_console;
     WebSocketServer network_metrics;
