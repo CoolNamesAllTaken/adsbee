@@ -177,6 +177,14 @@ The optional second argument is a regex passed to `ctest -R`. Test names follow 
 
 ## Flashing
 
+For an ADSBee 1090/1090U attached over USB, `cd firmware/adsbee_1090 && ./build.sh flash` does all
+of this automatically: it builds every target, finds the device, reboots it into the bootloader with
+`AT+BOOT_USB_UF2` (no button press), copies the `.uf2`, and then verifies the RP2040 and ESP32
+firmware versions. Pass a CDC node (`./build.sh flash /dev/cu.usbmodem21201`) to choose between
+multiple attached devices.
+
+By hand, or to recover a device that will not enumerate:
+
 1. Hold **BOOTSEL** on RP2040 while connecting USB → RP2040 mounts as a USB drive
 2. Copy `combined.uf2` to the drive → device reboots automatically
 3. On boot, RP2040 checks coprocessor firmware versions and reflashes ESP32/CC1312 if they differ

@@ -4,6 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <title>ADSBee 1421 Web Console</title>
+    <!-- ADSBee icon, inlined as a data URI: this console is a single self-contained
+         file with no server and no sibling assets, so it cannot reference favicon.png
+         the way the 1090 page does. Source: firmware/adsbee_1090/esp/main/server/web/favicon.png -->
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAABgWlDQ1BzUkdCIElFQzYxOTY2LTIuMQAAKJF1kbtLA0EQhz+jokQlghYWFkHURiMxQtDGIuIL1CKe4KtJLi8hF4+7BAm2gm1AQbTxVehfoK1gLQiKIoh1akUbDedcEkgQM8vsfPvbnWF3FhxKUtXMBi9oqbQRnA64l1dW3U15WujASRcDIdXU5xenFGra1xN1dnzw2LVqn/vXWiJRU4W6ZuFxVTfSwjPCc1tp3eZ94U41EYoIXwoPGnJB4UdbD5c4b3O8xD82G0pwAhztwu54FYerWE0YmrC8nF4tmVHL97Ff0hpNLS1K7BHvxiTINAHczDLJBH6GGZPZjwcfQ7KiRr63mL/ApuSqMutkMdggToI0g6JmpHpUYkz0qIwkWbv/f/tqxkZ8peqtAWh8s6yPPmjag0LOsr5PLatwBvWvcJOq5G+ewOin6LmK1nsMrh24uq1o4QO43oWuFz1khIpSvbgjFoP3C2hbgY57cK6Velbe5/wZlG35qjs4PIJ+Oe9a/wWD7mfzWor9OQAAAAlwSFlzAAAuIwAALiMBeKU/dgAABsJJREFUaIHtmH1Q1McZxz8HHC+CHO/hJXK8CqJYbNCSKqSWjJoaEqi2jX1LSod2ImQwmbbW2g5ix6h5MyQmHROdvqWdMEN9QYeaaEpNIaXlAhhbUS4lEIjyFss73AH39I/9ESEc4WhG/mjvM7Ozr7/d7+4+++zegRMnTpw4+X9GtwBjeEVGRn7TYDCke3l5hbu6urqMjo6ODg0N1TQ1NZUAfZ+m81s5AV1SUtLB2NjY7MLCwpjU1FRXg8EAgIhQV1cnubm55ubm5keNRuMWHx+fKMAGYLFYRvr7+6uam5vPAw2T5QtKQkLCgbKysgGZhYqKCsnJyZkoLS21dnZ2TquzWq1SX18vJSUlvWlpaQ1Go/FLCyo+JibmoX379nXbEz4+Pi579uyRQ4cOic1mm21+09pnZmb+cyH1B2dnZ79nT9zY2Jjk5eVJdXX1nMKnsm3btlbAfUHUJycnn2hra5shYmJiQgoKCqS2tnZe4kVEMjIyahdEfFBQUHpxcfEM07HZbLJz506prKyct/iLFy9OJCYmPjUfHYuABOBuYD0Q7eB3utTUVJPFYpkh4uDBg1JeXj5v8TabTdatW9cJBM82qBuQBtwDBGllw0CbFlyADcANYETrqBS4rE1UD/QDEhERkbN9+/al7u7TTfX06dN4eHiQlZXl4DrcpLi4uLujo+NRoHvWVUOt8KCdRjrULnwFiAXKgD8ATwK9wGYXHd6Ap88iqoyRYZ/duCkrfGTEQoC/gfDw26j5Wz1jNj2vvPI7dDrHr5yuri6Ki4s7z507V2Q2m49MqUoBjMCpufrIAH4FPIRaZR1wFIhdHsO50ECGnnmMftNvkad3IIu9kZ0PImcOIZ9fiXh7Irn3IfduXCXDw8MOmUpLS4scO3ZseNOmTY3x8fEX9Hp9jqZlFZ9w4brNIj4J+B5gnSy8LYCLxjAunHyaiOs9UGmCO5apUHcVfn8Wdn0H3lwL338cjl/w5+WXd+PmNn2IgYEBzGYzly9ftppMph6z2Xyju7u7q6+vr62lpaXOarW+AExM+SREW0QrdnBoXz3diczK4M3S/RgnLaH1OhjDVPqNv8OGAlgWDV9eD9/Nhg3bobPPl8w7gwkODuHddrje2YcxZIAlQf2W4+f7n+/plScAT8AA/GMOGVuAStR5BCgEShzRr0tZStWHf0LEZD889wMEkNDQUMnPz5fMtaFy9GeqbEUsYqtFjj+l8j5eSHM5cv9dNHt5EA4kahOYRK+JDQcCp5QbAO8peT9QXmYu4nLWkxDgO3uDimoVFxUVcfjwYTbct4OAxeDmCldboa0DNqaB/2IYHIGqejjwCNGRoRQAV7j5Ik0BUoF61M7EAp/T6voAATy0fK8jE/Dz9uLkF+74yMUC8ORv4IGfgAiMjYOpEXQ6HatXrwYgKWk5V1ohKlzVV78DizwhIUp939gCSyOhd4CtwGvAz4F0lEuuBZq1UIty15OmHgncNUWKbq4JDIb4o09JmF4Yc7sSoNOB3g3WLFdP5JqaGgAuXbpE5hqIX6Lav9uu4gSjiq+2gosL+HrjibpnfqpN5G3gA+CEJlyAAGCZNvQV4HUt7QLssueFpjLurqfs+VfZlf9VaO9ShVu+qMIkm9Phj2/B3r17aWhooLXxJLtK4Ea/qg/UzO9DzVCC/FQ8NIpoovuAdi39NtCEulAB3gHMWnox4A+8j/qNcGDOM9B6ndc8PbAUHYFTFyAmYnq9CPy7Hx75GmQkdxHtfpTj+3sYsUBTq2qzIk61u/KeyidGQd8gBBr4C8rmM4EHgSpNYA/KxUcBa6YMF8H0A+/QDx2fe9NpnvQ4LaeRrXcj/zqJXDuL/OjbyIs/numZ3viF8jpBfojlr0hjGeLiosrOv4gc2U3/7SFkM9OVuwC7Ud5p9SfoWuSIeADillD46uMMigl5eCuid0MSjchj30DOPGvfteblKLHf2qzyO76u8ms/oxZhZfxHtrwKdTjnIh/NdWr80OEJALrkOM7++SWsYkLMJ2a/E8SEnHoGcdcjMRFql848i3i4IwG+SMVzyLoUmmC6Z0O9gEPtjD35OnSdj2B7uCZG8cTDW7nWekZdTvbEl+5HosLVDr3+AvLLIiQyFDGGIbn3M5Icx1lgBZD3sf4DgWQt/QBqtV2ZY6Xn/a+Evy/Lw4LI8/ZkZZAfgXq3m3fJ+x0YPujC4OHO+LJouto78e3pxUdg2N+Xt4aG+fW1HsodGCYEdZA/fkgDgW3A4fnqvpUEog7sf4UjT4lbzRDTz4OnFibJBlYuqKJPyZ3cfP84ceLEiRMnTpw4+V/mPxNTN57lgMYpAAAAAElFTkSuQmCC">
     <!-- ══ BEGIN VENDORED Leaflet 1.9.4 CSS ══
          Source: https://unpkg.com/leaflet@1.9.4/dist/leaflet.css (BSD-2-Clause,
          (c) 2010-2023 Vladimir Agafonkin, (c) 2010-2011 CloudMade). Inlined so this
@@ -1465,6 +1469,40 @@
             filter: brightness(0.82) saturate(0.75);
         }
 
+        /* Map display options. Sits top-right so it stays clear of Leaflet's top-left
+           zoom control; z-index matches Leaflet's own control layer. */
+        .map-options {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            padding: 5px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border-subtle);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-family: Arial, sans-serif;
+            font-size: 0.75rem;
+            box-shadow: var(--shadow);
+            user-select: none;
+            transition: background-color 0.25s ease, color 0.25s ease;
+        }
+
+        .map-options label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+        }
+
+        .map-options input {
+            margin: 0;
+            cursor: pointer;
+        }
+
         body.dark-mode #map .leaflet-tile-pane {
             filter: brightness(0.55) saturate(0.5);
         }
@@ -1709,6 +1747,12 @@
         <div id="map-left">
             <div id="map-container">
                 <div id="map"></div>
+                <!-- Sibling of #map rather than a Leaflet control: staying outside the
+                     Leaflet container keeps clicks from reaching its drag/zoom handlers. -->
+                <div id="map-options" class="map-options">
+                    <label><input type="checkbox" id="velocityVectorToggle" checked> Velocity lines</label>
+                    <label><input type="checkbox" id="allTrailsToggle"> Traces</label>
+                </div>
             </div>
             <div id="resize-handle" title="Drag to resize"></div>
             <div id="aircraft-table-container">
@@ -1862,6 +1906,35 @@
         const kVectorPxPerKt = 0.128;
         const kVectorMinPx = 8;
         const kVectorMaxPx = 80;
+
+        // Trails coalesce consecutive same-colour points into a single polyline, but the
+        // altitude gradient above is continuous, so adjacent points almost never match
+        // exactly. Quantizing to 500 ft bins first (about 3 hue degrees — imperceptible)
+        // is what lets level flight collapse to one polyline instead of hundreds.
+        const kTrailAltBucketFt = 500;
+        function trailColor(altFt) {
+            return acAltColor(altFt == null ? null : Math.round(altFt / kTrailAltBucketFt) * kTrailAltBucketFt);
+        }
+
+        // With traces enabled every aircraft gets a trail, so unselected ones are capped
+        // well short of kMaxTrailPoints to bound the work on a busy receiver. The selected
+        // aircraft still draws its full history.
+        const kTrailAllMaxPoints = 100;
+
+        // Map display options persist across reloads. Storage can throw (private mode,
+        // disabled cookies), so both sides are defensive — matching LAST_BAUD_KEY below.
+        function readMapFlag(key, dflt) {
+            try {
+                const v = localStorage.getItem(key);
+                return v == null ? dflt : v === 'true';
+            } catch (_) {
+                return dflt;
+            }
+        }
+
+        function writeMapFlag(key, on) {
+            try { localStorage.setItem(key, on ? 'true' : 'false'); } catch (_) { }
+        }
 
         // ─── Terminal ────────────────────────────────────────────────────────────
 
@@ -2580,6 +2653,7 @@
             constructor() {
                 this.aircraft = new Map();  // hex → latest state snapshot
                 this.trails = new Map();    // hex → [{lat, lon, alt}]
+                this.trailRev = new Map();  // hex → bump count, so the map can skip redrawing unchanged trails
                 this.lastSeen = new Map();  // hex → Date.now() timestamp
             }
 
@@ -2596,6 +2670,7 @@
                     t.push({ lat: ac.lat, lon: ac.lon, alt: ac.alt_baro ?? null });
                     if (t.length > kMaxTrailPoints) t.shift();
                     this.trails.set(ac.hex, t);
+                    this.trailRev.set(ac.hex, (this.trailRev.get(ac.hex) ?? 0) + 1);
                 }
             }
 
@@ -2612,6 +2687,7 @@
                     if ((this.lastSeen.get(hex) ?? 0) < now - ttl) {
                         this.aircraft.delete(hex);
                         this.trails.delete(hex);
+                        this.trailRev.delete(hex);
                         this.lastSeen.delete(hex);
                     }
                 }
@@ -2620,6 +2696,7 @@
             clearAll() {
                 this.aircraft.clear();
                 this.trails.clear();
+                this.trailRev.clear();
                 this.lastSeen.clear();
             }
 
@@ -2635,11 +2712,35 @@
                 this.map = null;
                 this.markers = new Map();   // hex → L.Marker
                 this.trailLines = new Map();   // hex → L.LayerGroup
+                this.trailDrawnRev = new Map();      // hex → store.trailRev value the drawn trail was built from
+                this.trailDrawnOpacity = new Map();  // hex → opacity it was drawn at (selection changes it)
                 this.selectedHex = null;
                 this.onSelectionChanged = null;        // (hex | null) → void
                 this._ready = false;
                 this._offline = false;
                 this._autoCenter = true;
+                // Velocity vectors default on (they were unconditional before this toggle
+                // existed); traces default off, since a trail per aircraft is a busy view.
+                this.showVectors = readMapFlag('showVelocityVectors', true);
+                this.showAllTrails = readMapFlag('showAllTrails', false);
+            }
+
+            setShowVectors(on) {
+                this.showVectors = on;
+                writeMapFlag('showVelocityVectors', on);
+                this.update();  // apply now rather than waiting for the next 1 Hz tick
+            }
+
+            setShowAllTrails(on) {
+                this.showAllTrails = on;
+                writeMapFlag('showAllTrails', on);
+                if (!on) {
+                    // Drop every trail but the selected aircraft's, which is drawn either way.
+                    for (const hex of [...this.trailLines.keys()]) {
+                        if (hex !== this.selectedHex) this._clearTrail(hex);
+                    }
+                }
+                this.update();
             }
 
             init() {
@@ -2676,7 +2777,8 @@
                 const ring = isSelected ? '<circle cx="96" cy="96" r="15" fill="none" stroke="white" stroke-width="2" opacity="0.7"/>' : '';
                 const fill = isGround ? '#888888' : color;
                 const rot = (track != null) ? track : 0;
-                const lenPx = (gs > 0) ? Math.min(kVectorMaxPx, Math.max(kVectorMinPx, gs * kVectorPxPerKt)) : 0;
+                const lenPx = (this.showVectors && gs > 0)
+                    ? Math.min(kVectorMaxPx, Math.max(kVectorMinPx, gs * kVectorPxPerKt)) : 0;
                 const vec = lenPx
                     ? `<line x1="96" y1="82" x2="96" y2="${(82 - lenPx).toFixed(1)}" stroke="${fill}" stroke-width="2" opacity="0.8"/>`
                     : '';
@@ -2717,6 +2819,9 @@
                     this.trailLines.get(hex).remove();
                     this.trailLines.delete(hex);
                 }
+                // Forget the cache keys too, or the next _drawTrail would skip the rebuild.
+                this.trailDrawnRev.delete(hex);
+                this.trailDrawnOpacity.delete(hex);
             }
 
             update() {
@@ -2743,6 +2848,12 @@
                             .on('click', () => this.selectAircraft(hex));
                         this.markers.set(hex, m);
                     }
+                }
+
+                // `live` is exactly the aircraft with a position, which is exactly what has
+                // a trail. _drawTrail no-ops for any whose trail is already current.
+                if (this.showAllTrails) {
+                    for (const hex of live) this._drawTrail(hex);
                 }
 
                 // Refresh trail and info panel for selected aircraft each tick
@@ -2774,19 +2885,46 @@
                 }
             }
 
+            // Rebuilding a trail is the expensive part of a tick, so this does two things
+            // to stay affordable once every aircraft has one: it skips outright when
+            // nothing about the trail changed, and it merges consecutive points of the
+            // same (quantized) altitude colour into one multi-point polyline instead of
+            // emitting one polyline per segment.
             _drawTrail(hex) {
                 if (!this._ready) return;
+                const isSel = (hex === this.selectedHex);
+                const rev = this.store.trailRev.get(hex) ?? 0;
+                // Selection changes the opacity, so it belongs in the cache key alongside rev.
+                const opacity = isSel ? 0.75 : 0.35;
+                if (this.trailDrawnRev.get(hex) === rev && this.trailDrawnOpacity.get(hex) === opacity) return;
+
                 this._clearTrail(hex);
-                const pts = this.store.trails.get(hex);
+                let pts = this.store.trails.get(hex);
                 if (!pts || pts.length < 2) return;
+                if (!isSel && pts.length > kTrailAllMaxPoints) pts = pts.slice(-kTrailAllMaxPoints);
+
                 const group = L.layerGroup().addTo(this.map);
-                for (let i = 0; i < pts.length - 1; i++) {
-                    const p1 = pts[i], p2 = pts[i + 1];
-                    L.polyline([[p1.lat, p1.lon], [p2.lat, p2.lon]], {
-                        color: acAltColor(p1.alt), weight: 2, opacity: 0.75
-                    }).addTo(group);
+                const emit = (run, color) => {
+                    if (run.length >= 2) {
+                        L.polyline(run.map(p => [p.lat, p.lon]), { color, weight: 2, opacity }).addTo(group);
+                    }
+                };
+                let run = [pts[0]];
+                let runColor = trailColor(pts[0].alt);
+                for (let i = 1; i < pts.length; i++) {
+                    const c = trailColor(pts[i].alt);
+                    run.push(pts[i]);  // the boundary point joins both runs, so the trail stays unbroken
+                    if (c !== runColor) {
+                        emit(run, runColor);
+                        run = [pts[i]];
+                        runColor = c;
+                    }
                 }
+                emit(run, runColor);
+
                 this.trailLines.set(hex, group);
+                this.trailDrawnRev.set(hex, rev);
+                this.trailDrawnOpacity.set(hex, opacity);
             }
 
             _showInfoPanel(ac) {
@@ -2995,6 +3133,7 @@
                 radarMap = new RadarMap('map', aircraftStore);
                 radarMap.onSelectionChanged = (hex) => { if (acTable) acTable.setSelected(hex); };
                 radarMap.init();
+                initMapOptions(radarMap);
             } else {
                 radarMap.invalidate();
             }
@@ -3009,6 +3148,28 @@
                     if (radarMap) radarMap.update();
                     if (acTable) acTable.update();
                 }, 1000);
+            }
+        }
+
+        // Each checkbox is synced to the map's restored setting before its listener is
+        // attached, so a persisted choice survives a reload instead of being overwritten
+        // by the markup's default checked state.
+        function initMapOptions(map) {
+            // Nothing to control when the map failed to load and the offline banner is showing.
+            const panel = document.getElementById('map-options');
+            if (panel && map._offline) {
+                panel.style.display = 'none';
+                return;
+            }
+            const vecToggle = document.getElementById('velocityVectorToggle');
+            if (vecToggle) {
+                vecToggle.checked = map.showVectors;
+                vecToggle.addEventListener('change', () => map.setShowVectors(vecToggle.checked));
+            }
+            const trailsToggle = document.getElementById('allTrailsToggle');
+            if (trailsToggle) {
+                trailsToggle.checked = map.showAllTrails;
+                trailsToggle.addEventListener('change', () => map.setShowAllTrails(trailsToggle.checked));
             }
         }
 

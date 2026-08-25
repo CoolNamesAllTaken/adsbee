@@ -8,6 +8,9 @@ set -euo pipefail
 # Always run from the directory containing compose.yml so `docker compose` finds it.
 cd "$(dirname "$0")"
 
+# find_rpi_drive / list_serial_nodes / wait_for_rpi_drive / copy_uf2_and_confirm.
+source ../scripts/uf2_flash_lib.sh
+
 usage() {
     cat <<'EOF'
 Usage: ./build.sh [-d] [clean] [app|flash]
@@ -116,24 +119,6 @@ build_app() {
     done
 }
 
-# Prints the RPI-RP2 UF2 bootloader mount point if one is present (macOS and Linux layouts).
-find_rpi_drive() {
-    local user="${USER:-$(id -un)}"
-    local d
-    for d in /Volumes/RPI-RP2 /media/RPI-RP2 "/media/${user}/RPI-RP2" "/run/media/${user}/RPI-RP2"; do
-        if [ -d "$d" ]; then
-            echo "$d"
-            return 0
-        fi
-    done
-    return 1
-}
-
-# Lists candidate USB CDC serial nodes (macOS /dev/cu.usbmodem*, Linux /dev/ttyACM*).
-list_serial_nodes() {
-    ls /dev/cu.usbmodem* /dev/ttyACM* 2>/dev/null || true
-}
-
 flash_m1421() {
     local uf2="programmer/build/${CONFIG}/adsbee_1421_programmer.uf2"
     if [ ! -f "$uf2" ]; then
@@ -148,13 +133,7 @@ flash_m1421() {
     echo "Waiting up to 120 s for the RPI-RP2 drive to appear (Ctrl-C to abort) ..."
 
     local drive="" i
-    for i in $(seq 1 120); do
-        if drive="$(find_rpi_drive)"; then
-            break
-        fi
-        sleep 1
-    done
-    if [ -z "$drive" ]; then
+    if ! drive="$(wait_for_rpi_drive 120)"; then
         echo "ERROR: RPI-RP2 drive never appeared. Is the jig in bootloader mode?" >&2
         exit 1
     fi
@@ -165,21 +144,7 @@ flash_m1421() {
     local nodes_before
     nodes_before="$(list_serial_nodes)"
 
-    echo "Found ${drive}; copying $(basename "$uf2") ..."
-    # The RP2040 reboots as soon as the last uf2 block lands, which can make the volume vanish mid
-    # syscall -- treat cp/sync errors as benign and use the drive's disappearance as the real signal.
-    cp "$uf2" "${drive}/" 2>/dev/null || true
-    sync 2>/dev/null || true
-
-    local accepted=0
-    for i in $(seq 1 15); do
-        if ! find_rpi_drive >/dev/null; then
-            accepted=1
-            break
-        fi
-        sleep 1
-    done
-    if [ "$accepted" -ne 1 ]; then
+    if ! copy_uf2_and_confirm "$uf2" "$drive"; then
         echo "ERROR: RPI-RP2 drive is still mounted -- the uf2 was not accepted." >&2
         echo "       Eject the drive, re-enter the bootloader, and try again." >&2
         exit 1

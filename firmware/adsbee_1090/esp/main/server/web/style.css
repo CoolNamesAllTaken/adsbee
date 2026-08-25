@@ -119,9 +119,17 @@ body {
     cursor: text;
 }
 
-#terminal-content {
+/* Console output is one <div> per line so old lines can be dropped in O(1);
+   the wrapping rules live on the lines rather than the container. */
+#terminal-content .terminal-line {
     white-space: pre-wrap;
     word-wrap: break-word;
+}
+
+/* A blank line has no children and would collapse to zero height; a zero-width
+   space gives it exactly one line-height without altering spacing elsewhere. */
+#terminal-content .terminal-line:empty::after {
+    content: '\200b';
 }
 
 #cursor {
@@ -729,6 +737,40 @@ body {
 
 body.dark-mode #map .leaflet-tile-pane {
     filter: brightness(0.55) saturate(0.5);
+}
+
+/* Map display options. Sits top-right so it stays clear of Leaflet's top-left
+   zoom control; z-index matches Leaflet's own control layer. */
+.map-options {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 5px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-family: Arial, sans-serif;
+    font-size: 0.75rem;
+    box-shadow: var(--shadow);
+    user-select: none;
+    transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+.map-options label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+}
+
+.map-options input {
+    margin: 0;
+    cursor: pointer;
 }
 
 .map-offline-banner {

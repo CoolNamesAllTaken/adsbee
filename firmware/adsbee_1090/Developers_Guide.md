@@ -26,6 +26,13 @@ The firmware build process creates a `combined.uf2` file that contains:
 
 ### Flashing Process
 
+`./build.sh flash` handles the whole sequence for an attached ADSBee 1090/1090U: it builds all three
+targets, finds the device on USB, reboots it into the RP2040 bootloader with `AT+BOOT_USB_UF2` (no
+BOOTSEL press), copies `combined.uf2`, watches the console, and then confirms the RP2040 and ESP32
+report the version you just built. Pass a CDC node — `./build.sh flash /dev/cu.usbmodem21201` — to
+pick between several attached devices. If a serial monitor (VS Code, a Web Serial page, `screen`)
+still holds the port, the script skips it and says so; close it and re-run.
+
 When you flash `combined.uf2` to the RP2040:
 1. RP2040 firmware is updated immediately
 2. On boot, RP2040 checks firmware versions of ESP32 and CC1312

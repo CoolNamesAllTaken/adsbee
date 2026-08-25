@@ -1078,6 +1078,49 @@ function acAltColor(altFt) {
     return `hsl(${hue.toFixed(1)}, 90%, 55%)`;
 }
 
+// Preferred pointing/steering direction: ground track when available, else
+// true/magnetic heading — the emitter sends exactly one of the three keys
+// (surface aircraft typically report a heading rather than a track).
+function acDirection(ac) {
+    return ac.track ?? ac.true_heading ?? ac.mag_heading ?? null;
+}
+
+// Velocity vectors are drawn in screen space (zoom-invariant): pixel length
+// proportional to the reported speed — about one icon width (32 px) at
+// 250 kt, clamped so taxiing traffic stays visible and jets don't dominate.
+const kVectorPxPerKt = 0.128;
+const kVectorMinPx = 8;
+const kVectorMaxPx = 80;
+
+// Trails coalesce consecutive same-colour points into a single polyline, but the
+// altitude gradient above is continuous, so adjacent points almost never match
+// exactly. Quantizing to 500 ft bins first (about 3 hue degrees — imperceptible)
+// is what lets level flight collapse to one polyline instead of hundreds.
+const kTrailAltBucketFt = 500;
+function trailColor(altFt) {
+    return acAltColor(altFt == null ? null : Math.round(altFt / kTrailAltBucketFt) * kTrailAltBucketFt);
+}
+
+// With traces enabled every aircraft gets a trail, so unselected ones are capped
+// well short of kMaxTrailPoints to bound the work on a busy receiver. The selected
+// aircraft still draws its full history.
+const kTrailAllMaxPoints = 100;
+
+// Map display options persist across reloads. Storage can throw (private mode,
+// disabled cookies), so both sides are defensive.
+function readMapFlag(key, dflt) {
+    try {
+        const v = localStorage.getItem(key);
+        return v == null ? dflt : v === 'true';
+    } catch (_) {
+        return dflt;
+    }
+}
+
+function writeMapFlag(key, on) {
+    try { localStorage.setItem(key, on ? 'true' : 'false'); } catch (_) { }
+}
+
 // ─── AircraftWebSocket ────────────────────────────────────────────────────────
 class AircraftWebSocket {
     constructor(url) {
@@ -1132,6 +1175,7 @@ class AircraftStore {
     constructor() {
         this.aircraft = new Map();  // hex → latest merged data
         this.trails = new Map();  // hex → [{lat, lon, alt}]
+        this.trailRev = new Map();  // hex → bump count, so the map can skip redrawing unchanged trails
         this.lastSeen = new Map();  // hex → Date.now() timestamp
     }
 
@@ -1145,6 +1189,7 @@ class AircraftStore {
             t.push({ lat: ac.lat, lon: ac.lon, alt: ac.alt_baro ?? null });
             if (t.length > kMaxTrailPoints) t.shift();
             this.trails.set(ac.hex, t);
+            this.trailRev.set(ac.hex, (this.trailRev.get(ac.hex) ?? 0) + 1);
         }
     }
 
@@ -1155,6 +1200,7 @@ class AircraftStore {
             if ((this.lastSeen.get(hex) ?? 0) < cutoff) {
                 this.aircraft.delete(hex);
                 this.trails.delete(hex);
+                this.trailRev.delete(hex);
                 this.lastSeen.delete(hex);
             }
         }
@@ -1163,6 +1209,7 @@ class AircraftStore {
     clearAll() {
         this.aircraft.clear();
         this.trails.clear();
+        this.trailRev.clear();
         this.lastSeen.clear();
     }
 
@@ -1177,6 +1224,8 @@ class RadarMap {
         this.map = null;
         this.markers = new Map();   // hex → L.Marker
         this.trailLines = new Map();   // hex → L.LayerGroup
+        this.trailDrawnRev = new Map();      // hex → store.trailRev value the drawn trail was built from
+        this.trailDrawnOpacity = new Map();  // hex → opacity it was drawn at (selection changes it)
         this.receiverMarker = null;
         this.receiverStatus = null;
         this.selectedHex = null;
@@ -1184,6 +1233,28 @@ class RadarMap {
         this._ready = false;
         this._offline = false;
         this._autoCenter = true;
+        // Velocity vectors default on; traces default off, since a trail per aircraft is
+        // a busy view. Both persist across reloads.
+        this.showVectors = readMapFlag('showVelocityVectors', true);
+        this.showAllTrails = readMapFlag('showAllTrails', false);
+    }
+
+    setShowVectors(on) {
+        this.showVectors = on;
+        writeMapFlag('showVelocityVectors', on);
+        this.update();  // apply now rather than waiting for the next 1 Hz tick
+    }
+
+    setShowAllTrails(on) {
+        this.showAllTrails = on;
+        writeMapFlag('showAllTrails', on);
+        if (!on) {
+            // Drop every trail but the selected aircraft's, which is drawn either way.
+            for (const hex of [...this.trailLines.keys()]) {
+                if (hex !== this.selectedHex) this._clearTrail(hex);
+            }
+        }
+        this.update();
     }
 
     async init() {
@@ -1258,11 +1329,12 @@ class RadarMap {
         }
     }
 
-    _makeIcon(color, track, isGround, isSelected, isDrone) {
-        const ring = isSelected ? '<circle cx="16" cy="16" r="15" fill="none" stroke="white" stroke-width="2" opacity="0.7"/>' : '';
+    _makeIcon(color, track, isGround, isSelected, isDrone, gs) {
         if (isDrone) {
             // Remote ID drones get a distinct quadcopter marker (four rotors) in a fixed accent color so they stand out
-            // from ADS-B / UAT aircraft. Not rotated (Remote ID track is often unavailable or noisy at low speed).
+            // from ADS-B / UAT aircraft. Not rotated (Remote ID track is often unavailable or noisy at low speed), and
+            // for the same reason they get no velocity vector — an unreliable heading would point it the wrong way.
+            const ring = isSelected ? '<circle cx="16" cy="16" r="15" fill="none" stroke="white" stroke-width="2" opacity="0.7"/>' : '';
             const dfill = '#c026d3';  // magenta accent.
             const rotor = (cx, cy) => `<circle cx="${cx}" cy="${cy}" r="4" fill="${dfill}" stroke="rgba(0,0,0,0.5)" stroke-width="1"/>`;
             const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">` +
@@ -1273,12 +1345,24 @@ class RadarMap {
                 `</svg>`;
             return L.divIcon({ html: svg, className: '', iconSize: [32, 32], iconAnchor: [16, 16] });
         }
+        // The velocity vector is part of the marker SVG itself: SVG pixels are
+        // screen pixels, so it is zoom-invariant by construction, always moves
+        // with the icon, and needs no separate map layer. The 192x192 SVG
+        // overflows the 32x32 icon box (centers aligned); pointer events stay
+        // limited to the icon box + aircraft shape so hitboxes don't balloon.
+        const ring = isSelected ? '<circle cx="96" cy="96" r="15" fill="none" stroke="white" stroke-width="2" opacity="0.7"/>' : '';
         const fill = isGround ? '#888888' : color;
         const rot = (track != null) ? track : 0;
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">` +
+        const lenPx = (this.showVectors && gs > 0)
+            ? Math.min(kVectorMaxPx, Math.max(kVectorMinPx, gs * kVectorPxPerKt)) : 0;
+        const vec = lenPx
+            ? `<line x1="96" y1="82" x2="96" y2="${(82 - lenPx).toFixed(1)}" stroke="${fill}" stroke-width="2" opacity="0.8"/>`
+            : '';
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192" style="position:absolute;left:-80px;top:-80px;pointer-events:none">` +
             ring +
-            `<g transform="rotate(${rot},16,16)">` +
-            `<polygon points="16,2 23,27 16,22 9,27" fill="${fill}" stroke="rgba(0,0,0,0.5)" stroke-width="1.2"/>` +
+            `<g transform="rotate(${rot},96,96)">` +
+            vec +
+            `<polygon points="96,82 103,107 96,102 89,107" style="pointer-events:auto" fill="${fill}" stroke="rgba(0,0,0,0.5)" stroke-width="1.2"/>` +
             `</g></svg>`;
         return L.divIcon({ html: svg, className: '', iconSize: [32, 32], iconAnchor: [16, 16] });
     }
@@ -1311,6 +1395,9 @@ class RadarMap {
             this.trailLines.get(hex).remove();
             this.trailLines.delete(hex);
         }
+        // Forget the cache keys too, or the next _drawTrail would skip the rebuild.
+        this.trailDrawnRev.delete(hex);
+        this.trailDrawnOpacity.delete(hex);
     }
 
     update() {
@@ -1324,7 +1411,7 @@ class RadarMap {
             const color = acAltColor(ac.alt_baro ?? ac.alt_geom);
             const isGround = !!ac.on_ground;
             const isSel = ac.hex === this.selectedHex;
-            const icon = this._makeIcon(color, ac.track, isGround, isSel, isDrone);
+            const icon = this._makeIcon(color, acDirection(ac), isGround, isSel, isDrone, ac.gs);
 
             if (this.markers.has(ac.hex)) {
                 const m = this.markers.get(ac.hex);
@@ -1337,6 +1424,12 @@ class RadarMap {
                     .on('click', () => this.selectAircraft(hex));
                 this.markers.set(hex, m);
             }
+        }
+
+        // `live` is exactly the aircraft with a position, which is exactly what has
+        // a trail. _drawTrail no-ops for any whose trail is already current.
+        if (this.showAllTrails) {
+            for (const hex of live) this._drawTrail(hex);
         }
 
         // Refresh trail and info panel for selected aircraft each tick
@@ -1370,19 +1463,46 @@ class RadarMap {
         }
     }
 
+    // Rebuilding a trail is the expensive part of a tick, so this does two things
+    // to stay affordable once every aircraft has one: it skips outright when
+    // nothing about the trail changed, and it merges consecutive points of the
+    // same (quantized) altitude colour into one multi-point polyline instead of
+    // emitting one polyline per segment.
     _drawTrail(hex) {
         if (!this._ready) return;
+        const isSel = (hex === this.selectedHex);
+        const rev = this.store.trailRev.get(hex) ?? 0;
+        // Selection changes the opacity, so it belongs in the cache key alongside rev.
+        const opacity = isSel ? 0.75 : 0.35;
+        if (this.trailDrawnRev.get(hex) === rev && this.trailDrawnOpacity.get(hex) === opacity) return;
+
         this._clearTrail(hex);
-        const pts = this.store.trails.get(hex);
+        let pts = this.store.trails.get(hex);
         if (!pts || pts.length < 2) return;
+        if (!isSel && pts.length > kTrailAllMaxPoints) pts = pts.slice(-kTrailAllMaxPoints);
+
         const group = L.layerGroup().addTo(this.map);
-        for (let i = 0; i < pts.length - 1; i++) {
-            const p1 = pts[i], p2 = pts[i + 1];
-            L.polyline([[p1.lat, p1.lon], [p2.lat, p2.lon]], {
-                color: acAltColor(p1.alt), weight: 2, opacity: 0.75
-            }).addTo(group);
+        const emit = (run, color) => {
+            if (run.length >= 2) {
+                L.polyline(run.map(p => [p.lat, p.lon]), { color, weight: 2, opacity }).addTo(group);
+            }
+        };
+        let run = [pts[0]];
+        let runColor = trailColor(pts[0].alt);
+        for (let i = 1; i < pts.length; i++) {
+            const c = trailColor(pts[i].alt);
+            run.push(pts[i]);  // the boundary point joins both runs, so the trail stays unbroken
+            if (c !== runColor) {
+                emit(run, runColor);
+                run = [pts[i]];
+                runColor = c;
+            }
         }
+        emit(run, runColor);
+
         this.trailLines.set(hex, group);
+        this.trailDrawnRev.set(hex, rev);
+        this.trailDrawnOpacity.set(hex, opacity);
     }
 
     _showInfoPanel(ac) {
