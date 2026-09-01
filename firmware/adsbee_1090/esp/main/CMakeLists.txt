@@ -58,6 +58,7 @@ idf_component_register(
         "server/web/index.html"
         "server/web/style.css"
         "server/web/adsbee.js"
+        "server/web/settings.js"
         "server/web/favicon.png"
 )
 

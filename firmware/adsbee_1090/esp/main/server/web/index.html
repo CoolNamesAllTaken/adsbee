@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/png" href="favicon.png">
     <script src="adsbee.js"></script>
+    <script src="settings.js"></script>
 </head>
 
 <body>
@@ -15,7 +16,8 @@
         <div class="tab-bar-tabs">
             <span class="tab-logo">ADSBee</span>
             <button class="tab-btn active" data-tab="console" onclick="switchTab('console')">Console</button>
-            <button class="tab-btn" data-tab="radar" onclick="switchTab('radar')">Radar</button>
+            <button class="tab-btn" data-tab="map" onclick="switchTab('map')">Map</button>
+            <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')">Settings</button>
         </div>
         <div class="tab-bar-controls">
             <span class="theme-toggle-label">&#9788;</span>
@@ -81,9 +83,9 @@
         </div>
     </div>
 
-    <!-- Radar tab -->
-    <div id="tab-radar" class="tab-content">
-        <div id="radar-left">
+    <!-- Map tab -->
+    <div id="tab-map" class="tab-content">
+        <div id="map-left">
             <div id="map-container">
                 <div id="map"></div>
                 <!-- Sibling of #map rather than a Leaflet control: staying outside the
@@ -121,6 +123,16 @@
             </div>
             <div id="sidebar-fields"></div>
         </div>
+    </div>
+
+    <!-- Settings tab -->
+    <div id="tab-settings" class="tab-content">
+        <div class="settings-save-bar">
+            <button id="settings-save-btn" class="tools-button" disabled>Save</button>
+            <button id="settings-refresh-btn" class="tools-button">Refresh</button>
+            <span id="settings-status" class="settings-status"></span>
+        </div>
+        <div id="settings-form"></div>
     </div>
 
     <!-- Feed editor modal -->
@@ -472,16 +484,27 @@
             });
 
             if (name === 'console') {
+                settingsTab.leave();
                 if (aircraftWebSocket) aircraftWebSocket.pause();
                 clearInterval(aircraftUpdateTimer);
                 aircraftUpdateTimer = null;
                 consoleWebSocket.resume();
                 metricsWebSocket.resume();
                 focusTerminal();
-            } else if (name === 'radar') {
+            } else if (name === 'map') {
+                settingsTab.leave();
                 consoleWebSocket.pause();
                 metricsWebSocket.resume();
                 initRadar().catch(e => console.error('Radar init error:', e));
+            } else if (name === 'settings') {
+                // The terminal's console socket is paused so the settings AT traffic
+                // (broadcast to every /console client) never reaches the visible terminal.
+                if (aircraftWebSocket) aircraftWebSocket.pause();
+                clearInterval(aircraftUpdateTimer);
+                aircraftUpdateTimer = null;
+                consoleWebSocket.pause();
+                metricsWebSocket.resume();
+                settingsTab.enter();
             }
         }
 

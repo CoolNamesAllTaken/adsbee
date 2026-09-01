@@ -44,6 +44,8 @@ extern const uint8_t style_css_start[] asm("_binary_style_css_start");
 extern const uint8_t style_css_end[] asm("_binary_style_css_end");
 extern const uint8_t adsbee_js_start[] asm("_binary_adsbee_js_start");
 extern const uint8_t adsbee_js_end[] asm("_binary_adsbee_js_end");
+extern const uint8_t settings_js_start[] asm("_binary_settings_js_start");
+extern const uint8_t settings_js_end[] asm("_binary_settings_js_end");
 extern const uint8_t favicon_png_start[] asm("_binary_favicon_png_start");
 extern const uint8_t favicon_png_end[] asm("_binary_favicon_png_end");
 
@@ -530,6 +532,13 @@ static esp_err_t adsbee_js_handler(httpd_req_t* req) {
     return ESP_OK;
 }
 
+static esp_err_t settings_js_handler(httpd_req_t* req) {
+    httpd_resp_set_type(req, "application/javascript");
+    // EMBED_TXTFILES null-terminates the embedded file; don't send the terminator.
+    httpd_resp_send(req, (const char*)settings_js_start, settings_js_end - settings_js_start - 1);
+    return ESP_OK;
+}
+
 static void json_escape(char* out, size_t out_size, const char* in) {
     size_t o = 0;
     for (size_t i = 0; in[i] && o + 2 < out_size; i++) {
@@ -732,6 +741,9 @@ bool ADSBeeServer::TCPServerInit() {
     config.stack_size = kHTTPServerStackSizeBytes;
     // config.task_caps = MALLOC_CAP_IRAM_8BIT;
     config.max_open_sockets = 16;  // Must be <= CONFIG_LWIP_MAX_SOCKETS - 3 (currently 20 - 3 = 17).
+    // 9 URIs are registered below (6 HTTP + 3 websocket); the default limit is 8 and a
+    // failed registration aborts boot via ESP_ERROR_CHECK.
+    config.max_uri_handlers = 16;
     config.close_fn = ws_close_fd;
     config.lru_purge_enable =
         true;  // Allow purging of the least recently used connections when max clients is reached.
@@ -776,6 +788,16 @@ bool ADSBeeServer::TCPServerInit() {
                              .handle_ws_control_frames = false,
                              .supported_subprotocol = nullptr};
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &adsbee_js));
+
+    // Settings GUI JavaScript URI handler
+    httpd_uri_t settings_js = {.uri = "/settings.js",
+                               .method = HTTP_GET,
+                               .handler = settings_js_handler,
+                               .user_ctx = NULL,
+                               .is_websocket = false,
+                               .handle_ws_control_frames = false,
+                               .supported_subprotocol = nullptr};
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &settings_js));
 
     // Favicon URI handler
     httpd_uri_t favicon = {.uri = "/favicon.png",

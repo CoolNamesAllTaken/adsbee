@@ -1320,6 +1320,78 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+// Escapes src for embedding inside a JSON string literal (backslash, double quote;
+// control characters are dropped — settings strings shouldn't contain them). Truncates
+// to fit dest. Returns dest so it can be used inline in a printf argument list.
+static const char* JSONEscapeStr(const char* src, char* dest, size_t dest_size) {
+    size_t o = 0;
+    for (size_t i = 0; src[i] != '\0'; i++) {
+        char c = src[i];
+        if (c == '"' || c == '\\') {
+            if (o + 3 >= dest_size) break;
+            dest[o++] = '\\';
+            dest[o++] = c;
+        } else if ((unsigned char)c >= 0x20) {
+            if (o + 2 >= dest_size) break;
+            dest[o++] = c;
+        }
+    }
+    dest[o] = '\0';
+    return dest;
+}
+
+// Prints all settings as one JSON object on a single line: SETTINGS={"CMD":[...],...}.
+// Each value is an array ordered to match the web settings GUI's field list for that
+// command (the writable AT= args plus query-only extras like live status, minus the
+// redacted WiFi STA password), using the same value representations as the individual
+// AT queries (enum strings, 0/1 booleans). Emitted in multiple printf calls to stay
+// under kPrintfBufferMaxSize. Keep in sync with SETTINGS_SCHEMA_1090 in
+// esp/main/server/web/settings.js when adding commands.
+static void PrintSettingsJSON() {
+    char esc[2 * SettingsManager::Settings::kWiFiPasswordMaxLen + 2];
+    const SettingsManager::Settings& s = settings_manager.settings;
+    const SettingsManager::Settings::CoreNetworkSettings& cns = s.core_network_settings;
+
+    CPP_AT_PRINTF("SETTINGS={");
+    CPP_AT_PRINTF("\"BAUD_RATE\":[%lu,%lu],",
+                  (unsigned long)s.baud_rates[SettingsManager::SerialInterface::kCommsUART],
+                  (unsigned long)s.baud_rates[SettingsManager::SerialInterface::kGNSSUART]);
+    CPP_AT_PRINTF("\"BIAS_TEE_ENABLE\":[%d,%d],", adsbee.BiasTeeIsEnabled(), s.subg_bias_tee_enabled);
+    CPP_AT_PRINTF("\"ETHERNET\":[%d],", cns.ethernet_enabled);
+    CPP_AT_PRINTF("\"ESP32_ENABLE\":[%d],", esp32.IsEnabled());
+    CPP_AT_PRINTF("\"GNSS\":[%d,\"%s\",%d],", s.gnss_enabled,
+                  GNSSModuleTypeToStr(SettingsToGNSSModuleType(s.gnss_receiver_type)), s.gnss_notify);
+    CPP_AT_PRINTF("\"HOSTNAME\":[\"%s\"],", JSONEscapeStr(cns.hostname, esc, sizeof(esc)));
+    CPP_AT_PRINTF("\"LED_ENABLE\":[%d],", s.led_enabled);
+    CPP_AT_PRINTF("\"LOG_LEVEL\":[\"%s\"],", SettingsManager::kConsoleLogLevelStrs[s.log_level]);
+    CPP_AT_PRINTF("\"MAVLINK_ID\":[%d,%d],", s.mavlink_system_id, s.mavlink_component_id);
+    CPP_AT_PRINTF("\"PROTOCOL_OUT\":[\"%s\",\"%s\"],",
+                  SettingsManager::kReportingProtocolStrs[s.reporting_protocols[SettingsManager::kConsole]],
+                  SettingsManager::kReportingProtocolStrs[s.reporting_protocols[SettingsManager::kCommsUART]]);
+    CPP_AT_PRINTF("\"REMOTE_ID\":[%d,%u,\"0x%02X\"],", s.remote_id_rx_enabled, s.remote_id_transports,
+                  esp32_ll.remote_id_status);
+    CPP_AT_PRINTF("\"REMOTE_ID_TX\":[%d,%u,\"%s\",", s.remote_id_tx_enabled, s.remote_id_tx_transports,
+                  JSONEscapeStr(s.remote_id_tx_uas_id, esc, sizeof(esc)));
+    CPP_AT_PRINTF("%d,%d,\"%s\",\"0x%04X\"],", s.remote_id_tx_uas_id_type, s.remote_id_tx_ua_type,
+                  JSONEscapeStr(s.remote_id_tx_operator_id, esc, sizeof(esc)), esp32_ll.remote_id_status);
+    CPP_AT_PRINTF("\"RX_ENABLE\":[%d,%d],", adsbee.Receiver1090IsEnabled(), s.subg_rx_enabled);
+    CPP_AT_PRINTF("\"RX_POSITION\":[\"%s\",\"%s\",%.6f,%.6f,%d,%d,%.1f,%d,\"%06X\"],",
+                  SettingsManager::RxPosition::kPositionSourceStrs[adsbee.rx_position.source],
+                  adsbee.rx_position_available ? "OK" : "NOT AVAILABLE", adsbee.rx_position.latitude_deg,
+                  adsbee.rx_position.longitude_deg, (int)adsbee.rx_position.gnss_altitude_ft,
+                  (int)adsbee.rx_position.baro_altitude_ft, adsbee.rx_position.heading_deg,
+                  (int)adsbee.rx_position.speed_kts, (unsigned)adsbee.rx_position.icao_address);
+    CPP_AT_PRINTF("\"SUBG_ENABLE\":[\"%s\"],",
+                  SettingsManager::EnableStateToATValueStr(adsbee.subg_radio_ll.IsEnabledState()));
+    int tl_offset_mv = adsbee.GetTLOffsetMilliVolts();
+    CPP_AT_PRINTF("\"TL_OFFSET\":[%d,\"%d dBm\"],", tl_offset_mv, adsbee.AD8313MilliVoltsTodBm(tl_offset_mv));
+    CPP_AT_PRINTF("\"WATCHDOG\":[%lu],", (unsigned long)adsbee.GetWatchdogTimeoutSec());
+    CPP_AT_PRINTF("\"WIFI_AP\":[%d,\"%s\",", cns.wifi_ap_enabled, JSONEscapeStr(cns.wifi_ap_ssid, esc, sizeof(esc)));
+    CPP_AT_PRINTF("\"%s\",%d],", JSONEscapeStr(cns.wifi_ap_password, esc, sizeof(esc)), cns.wifi_ap_channel);
+    CPP_AT_PRINTF("\"WIFI_STA\":[%d,\"%s\"]", cns.wifi_sta_enabled, JSONEscapeStr(cns.wifi_sta_ssid, esc, sizeof(esc)));
+    CPP_AT_PRINTF("}\r\n");
+}
+
 CPP_AT_CALLBACK(CommsManager::ATSettingsCallback) {
     switch (op) {
         case '=':
@@ -1348,6 +1420,9 @@ CPP_AT_CALLBACK(CommsManager::ATSettingsCallback) {
                 if (args[0].compare("DUMP") == 0) {
                     // Print settings in AT format.
                     settings_manager.PrintAT();
+                } else if (args[0].compare("JSON") == 0) {
+                    // Print settings as a single-line JSON object (used by the web GUI).
+                    PrintSettingsJSON();
                 } else {
                     CPP_AT_ERROR("Invalid argument %s.", args[0].data());
                 }
@@ -1747,7 +1822,8 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .max_args = 3,
      .help_string = "Load, save, or reset nonvolatile settings.\r\n\tAT+SETTINGS=<op [LOAD SAVE RESET]>\r\n\t"
                     "Display nonvolatile settings.\r\n\tAT+SETTINGS?\r\n\t+SETTINGS=...\r\n\tDump settings in AT "
-                    "command format.\r\n\tAT+SETTINGS?DUMP\r\n\t+SETTINGS=...",
+                    "command format.\r\n\tAT+SETTINGS?DUMP\r\n\t+SETTINGS=...\r\n\tDump settings as a "
+                    "single-line JSON object keyed by AT command.\r\n\tAT+SETTINGS?JSON\r\n\tSETTINGS={...}",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATSettingsCallback, comms_manager)},
     {.command = "SUBG_ENABLE",
      .min_args = 0,

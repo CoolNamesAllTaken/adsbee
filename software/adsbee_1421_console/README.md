@@ -55,6 +55,27 @@ Chrome or Edge (works from `file://`, no server needed) and click **Connect**
     power cycle always returns to the persisted configuration — including if the
     page is closed while on the Map tab (a best-effort restore is attempted on
     close, but cannot be guaranteed).
+- **Settings tab** — a schema-driven form for every read/write settings AT command
+  (receivers, gain/preamble/boost, sub-GHz mode, output protocol, MAVLink IDs,
+  receiver position, console baud, log level, watchdog). Edits are applied with a
+  single **Save** button, which sends only the changed `AT+<CMD>=` commands and then
+  `AT+SETTINGS=SAVE`; **Refresh** re-reads everything from the device and discards
+  edits. Reads happen in one round trip via `AT+SETTINGS?JSON` (a single-line JSON
+  dump keyed by AT command), falling back automatically to per-command queries on
+  firmware that predates it. All settings traffic runs through the hidden AT queue, so the terminal
+  stays clean. A console baud change is followed automatically (the port is
+  reopened at the new rate before `AT+SETTINGS=SAVE` is sent, so the new rate
+  persists). Entering the tab from the Map tab first restores the persisted
+  `PROTOCOL_OUT`/`LOG_LEVEL` so the form shows saved values, not the map stream's
+  overrides.
+  - The form renderer, dirty tracking, and save/refresh logic (`SettingsEngine`) are
+    **vendored verbatim** from
+    `firmware/adsbee_1090/esp/main/server/web/settings.js` (between that file's
+    `BEGIN/END SHARED SETTINGS ENGINE` markers) into this page's
+    `BEGIN/END VENDORED ADSBee settings engine` markers — edit it there and
+    re-copy. The 1421-specific parts (the `SETTINGS_SCHEMA_1421` table and the
+    AtQueue transport adapter) live just below the tab controller. To expose a new
+    AT command in the GUI, add one entry to the schema table.
 - **Upload Firmware** — flashes a `.hex` image (from
   `firmware/adsbee_1421/ti/build/<Config>/adsbee_1421-<ver>.hex`) via the
   CC13x4 factory ROM serial bootloader, a direct port of
