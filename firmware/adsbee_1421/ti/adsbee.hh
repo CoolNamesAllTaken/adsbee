@@ -33,6 +33,12 @@ class ADSBee {
     // slots; enable re-runs the full receiver bring-up. Returns false if the bring-up failed.
     bool SetRx1090Enabled(bool enabled);
     bool Rx1090IsEnabled() const { return rx_1090_enabled_; }
+    // Enables/disables the LR2021 interface itself (AT+LR_ENABLE). Disable holds the chip in reset and
+    // parks every CC1314-side bus pin hi-Z (NSS pulled up; RESET/SCLK/PICO pulled down) so an external
+    // host can drive the shared bus without the MCU entering sync sleep. 1090 MHz reception stops;
+    // RX_ENABLE/R1090_* settings are remembered and re-applied on enable.
+    bool SetLR2021Enabled(bool enabled);
+    bool LR2021IsEnabled() const { return lr2021_enabled_; }
     // Sub-GHz receiver enable is owned by SubGHzRadio (it must open/close the RF core); these forward to it.
     // SetRxSubGHzEnabled() returns false if the RF client failed to open/close.
     bool SetRxSubGHzEnabled(bool enabled);
@@ -125,6 +131,12 @@ class ADSBee {
     // ApplyReceiverConfig() arms RX before SettingsManager::Apply() runs, which then disables if the
     // persisted setting says so (same brief boot-RX window the SubGHz receiver has).
     bool rx_1090_enabled_ = true;
+
+    // AT+LR_ENABLE: false = LR2021 held in reset with the CC1314-side bus pins parked hi-Z for an
+    // external host. Unlike rx_1090_enabled_, this is seeded from the persisted setting inside Init()
+    // (settings are loaded before adsbee.Init() in main()) so a device saved with the bus released
+    // never drives it at boot.
+    bool lr2021_enabled_ = true;
 
     SettingsManager::R1090PreambleMode r1090_preamble_mode_ = SettingsManager::kR1090PreambleModeModeS;
     uint8_t r1090_gain_ = 10;      // 0 = auto, 1..15 manual (13 = max). Default: manual step 10.

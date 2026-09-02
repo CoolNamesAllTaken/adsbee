@@ -58,6 +58,10 @@ bool ADSBee::Init() {
     GPIO_setCallback(bsp.kSyncPin, SyncLineCallback);
     GPIO_clearInt(bsp.kSyncPin);
     GPIO_enableInt(bsp.kSyncPin);
+    // Seed the LR2021 interface enable from the persisted setting (loaded before adsbee.Init() in
+    // main()) so a device saved with AT+LR_ENABLE=0 parks the bus on the first receiver config instead
+    // of briefly initializing the chip and driving the bus before SettingsManager::Apply() runs.
+    lr2021_enabled_ = settings_manager.settings.lr2021_enabled;
     return ApplyReceiverConfig();
 }
 
@@ -72,6 +76,22 @@ bool ADSBee::SetRx1090Enabled(bool enabled) {
     if (!enabled) {
         // Discard any packets the IRQ-paced drain chain staged before the teardown, so stale traffic
         // doesn't surface when reception is re-enabled later.
+        while (lr2021.NextFilledSlot() != nullptr) {
+            lr2021.ReleaseSlot();
+        }
+    }
+    return success;
+}
+
+bool ADSBee::SetLR2021Enabled(bool enabled) {
+    if (enabled == lr2021_enabled_) {
+        return true;  // No change (also keeps SettingsManager::Apply() from re-initing a live radio).
+    }
+    lr2021_enabled_ = enabled;
+    bool success = ApplyReceiverConfig();  // Honors the flag: parks the bus or re-drives + re-inits.
+    if (!enabled) {
+        // Discard any packets the IRQ-paced drain chain staged before the teardown, so stale traffic
+        // doesn't surface when the interface is re-enabled later.
         while (lr2021.NextFilledSlot() != nullptr) {
             lr2021.ReleaseSlot();
         }
@@ -100,6 +120,20 @@ bool ADSBee::ApplyReceiverConfigInner() {
     // active drain chain. (DeInit -> CancelAsync also disarms BUSY; this covers every path.)
     GPIO_disableInt(bsp.kLR2021IrqPin);
     GPIO_disableInt(bsp.kLR2021BusyPin);
+    // LR2021 interface disabled (AT+LR_ENABLE=0): release the shared bus to an external host. DeInit
+    // first (cancels any in-flight async DMA before SPI_close, drives ENABLE low for a crisp reset
+    // edge), then TristateInterface parks NSS (input, pull-up) and ENABLE/SCLK/PICO (inputs,
+    // pull-down). Both are idempotent, so every caller (boot, AT commands, sync-sleep wake, R1090_*
+    // setters) can funnel through here.
+    if (!lr2021_enabled_) {
+        lr2021.DeInit();
+        lr2021.TristateInterface();
+        return true;
+    }
+    // Re-drive NSS/ENABLE in case a prior AT+LR_ENABLE=0 or sync sleep parked them (GPIO_resetConfig
+    // restores the SysConfig OUT_HIGH defaults; the SPI pins re-mux on SPI_open in Init()). Harmless
+    // when already driven: the DeInit/Init below performs a full reset cycle regardless.
+    lr2021.RestoreInterface();
     // 1090 RX disabled (AT+RX_ENABLE): hold the LR2021 in reset instead of configuring it. DeInit
     // cancels any in-flight async transfer, closes SPI, and drives ENABLE low, so no reception and no
     // interrupts. Every RX-arming path funnels through here (boot, gain/preamble/boost changes,
@@ -175,7 +209,8 @@ void ADSBee::EnterSyncSleep() {
     lr2021.DeInit();
 
     // Re-assert the tri-state (idempotent): covers the poll-path entry where SyncLineCallback never ran.
-    // RestoreInterface() below re-drives NSS/ENABLE on wake.
+    // On wake, ApplyReceiverConfigInner() re-drives NSS/ENABLE via RestoreInterface() — but only when
+    // the LR2021 interface is enabled, so a device with AT+LR_ENABLE=0 keeps the bus parked.
     lr2021.TristateInterface();
 
     // Re-arm SYNC (DIO_5) as the STANDBY wake source on a FALLING edge (SYNC going low). CC26XX/CC13x4
@@ -265,9 +300,9 @@ void ADSBee::EnterSyncSleep() {
     FeedWatchdog();
 
     CONSOLE_INFO("ADSBee::EnterSyncSleep", "SYNC released; re-initializing LR2021.");
-    // Re-drive NSS/ENABLE (tri-stated above) before ApplyReceiverConfig()'s Init() drives them via
-    // GPIO_write; the SPI pins are re-muxed by SPI_open() inside Init().
-    lr2021.RestoreInterface();
+    // ApplyReceiverConfigInner() re-drives NSS/ENABLE via RestoreInterface() before Init()'s GPIO
+    // writes — unless AT+LR_ENABLE=0, in which case it re-parks the bus without ever driving it
+    // (calling RestoreInterface() here unconditionally would glitch RESET/NSS high on wake).
     ApplyReceiverConfig();
 }
 
@@ -515,6 +550,9 @@ bool ADSBee::UpdateLR2021() {
     // an error. The main loop enters sync sleep at the top of its next iteration.
     if (SyncSleepRequested()) {
         return true;
+    }
+    if (!lr2021_enabled_) {
+        return true;  // Bus released to an external host (AT+LR_ENABLE=0): issue no transactions.
     }
     if (!rx_1090_enabled_) {
         return true;  // 1090 RX user-disabled: the LR2021 is held in reset; nothing to drain.

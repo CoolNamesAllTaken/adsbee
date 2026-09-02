@@ -13,7 +13,7 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 1;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 2;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 class SettingsManager {
@@ -133,6 +133,9 @@ class SettingsManager {
         R1090PreambleMode r1090_preamble_mode = R1090PreambleMode::kR1090PreambleModeDF17;
         uint8_t r1090_gain = 0;      // 0 = auto AGC, 1..15 manual (13 = max). Default: auto.
         uint8_t r1090_rx_boost = 0;  // LF RX path boost, 0 (off) .. 7 (max).
+        // AT+LR_ENABLE: false = LR2021 held in reset with the CC1314-side bus pins parked hi-Z
+        // (NSS pull-up; RESET/SCLK/PICO pull-down) so an external host can drive the shared bus.
+        bool lr2021_enabled = true;
 
         // CommunicationsManager settings
         LogLevel log_level = LogLevel::kWarnings;

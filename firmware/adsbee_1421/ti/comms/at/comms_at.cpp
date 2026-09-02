@@ -222,6 +222,28 @@ CPP_AT_CALLBACK(CommsManager::ATLogLevelCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+CPP_AT_CALLBACK(CommsManager::ATLREnableCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%d", adsbee.LR2021IsEnabled());
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=': {
+            if (!CPP_AT_HAS_ARG(0)) {
+                CPP_AT_ERROR("Requires an argument: AT+LR_ENABLE=<enabled [1,0]>.");
+            }
+            bool enabled;
+            CPP_AT_TRY_ARG2NUM(0, enabled);
+            if (!adsbee.SetLR2021Enabled(enabled)) {
+                CPP_AT_ERROR("Failed to %s the LR2021 interface.", enabled ? "enable" : "disable");
+            }
+            CPP_AT_SUCCESS();
+            break;
+        }
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATR1090GainCallback) {
     switch (op) {
         case '?': {
@@ -306,6 +328,11 @@ CPP_AT_CALLBACK(CommsManager::ATR1090RxBoostCallback) {
 }
 
 CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
+    // Both branches read/write LR2021 registers over SPI; with the interface disabled the chip is in
+    // reset and the bus is released, so WaitUntilReady would stall ~100 ms before failing. Fail fast.
+    if (!adsbee.LR2021IsEnabled()) {
+        CPP_AT_ERROR("LR2021 interface disabled (AT+LR_ENABLE=0); chip stats unavailable.");
+    }
     switch (op) {
         case '?': {
             LR2021::OokRxStatsAdv stats;
@@ -702,6 +729,7 @@ static void PrintSettingsJSON() {
     CPP_AT_PRINTF("SETTINGS={");
     CPP_AT_PRINTF("\"BAUD_RATE\":[%lu],", (unsigned long)comms_manager.GetBaudRate());
     CPP_AT_PRINTF("\"LOG_LEVEL\":[\"%s\"],", SettingsManager::kConsoleLogLevelStrs[s.log_level]);
+    CPP_AT_PRINTF("\"LR_ENABLE\":[%d],", adsbee.LR2021IsEnabled());
     CPP_AT_PRINTF("\"MAVLINK_ID\":[%d,%d],", s.mavlink_system_id, s.mavlink_component_id);
     CPP_AT_PRINTF("\"PROTOCOL_OUT\":[\"%s\"],",
                   SettingsManager::kReportingProtocolStrs[s.reporting_protocols[SettingsManager::kConsole]]);
@@ -890,6 +918,11 @@ CPP_AT_CALLBACK(CommsManager::ATTxCWCallback) {
     }
     int8_t power_dbm = (int8_t)power_arg;
 
+    // LRLF/LRHF key up the LR2021 over SPI; refuse while the interface is released (AT+LR_ENABLE=0).
+    if ((args[0].compare("LRLF") == 0 || args[0].compare("LRHF") == 0) && !adsbee.LR2021IsEnabled()) {
+        CPP_AT_ERROR("LR2021 interface disabled (AT+LR_ENABLE=0); LRLF/LRHF unavailable.");
+    }
+
     // Dispatch on band, validating the frequency before keying up the radio.
     enum CwBand { kBandSubG, kBandLrLf, kBandLrHf } band;
     if (args[0].compare("SUBG") == 0) {
@@ -987,6 +1020,11 @@ CPP_AT_CALLBACK(CommsManager::ATRxCWCallback) {
     }
     uint16_t freq_mhz = 0;
     CPP_AT_TRY_ARG2NUM(1, freq_mhz);
+
+    // LRLF/LRHF retune the LR2021 over SPI; refuse while the interface is released (AT+LR_ENABLE=0).
+    if ((args[0].compare("LRLF") == 0 || args[0].compare("LRHF") == 0) && !adsbee.LR2021IsEnabled()) {
+        CPP_AT_ERROR("LR2021 interface disabled (AT+LR_ENABLE=0); LRLF/LRHF unavailable.");
+    }
 
     // Dispatch on band, validating the frequency before retuning the receiver.
     enum RxBand { kBandSubG, kBandLrLf, kBandLrHf } band;
@@ -1129,6 +1167,17 @@ const CppAT::ATCommandDef_t at_command_list[] = {
          "AT+LOG_LEVEL=<log_level [SILENT ERRORS WARNINGS LOGS]>\r\n\tSet how much stuff gets printed to the "
          "console.\r\n\t",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATLogLevelCallback, comms_manager)},
+    {.command = "LR_ENABLE",
+     .min_args = 0,
+     .max_args = 1,
+     .help_string =
+         "AT+LR_ENABLE=<enabled [1,0]>\r\n\t1 (default): the CC1314 drives the LR2021 1090MHz radio "
+         "(reception per AT+RX_ENABLE).\r\n\t0: release the LR2021 bus to an external host: the radio is "
+         "held in reset and the CC1314-side pins are parked hi-Z (NSS pulled up; RESET/SCLK/PICO pulled "
+         "down); 1090MHz reception stops. RX_ENABLE / R1090_* settings are remembered and take effect on "
+         "re-enable. Takes effect immediately; persist with AT+SETTINGS=SAVE.\r\n\t"
+         "AT+LR_ENABLE?\r\n\tLR_ENABLE=<enabled>\r\n\tQuery whether the LR2021 interface is enabled.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATLREnableCallback, comms_manager)},
     {.command = "MAVLINK_ID",
      .min_args = 0,
      .max_args = 2,

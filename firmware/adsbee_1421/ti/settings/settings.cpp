@@ -26,6 +26,10 @@ bool SettingsManager::Apply() {
 
     // All of these can fail if the radio fails to open/close or the RX command can't be restarted; fold that
     // into the return value so boot/LOAD callers can see it.
+    // LR2021 interface enable must be applied first: with lr2021_enabled = false, the receiver-config
+    // calls below must never drive the (released) bus, which the ApplyReceiverConfigInner() gate
+    // guarantees only once the flag is set.
+    success &= adsbee.SetLR2021Enabled(settings.lr2021_enabled);
     success &= adsbee.SetRx1090Enabled(settings.r1090_rx_enabled);
     success &= adsbee.SetRxSubGHzEnabled(settings.subg_rx_enabled);
     // subg_radio.Init() runs before Apply() at boot (see main.cpp), so a persisted non-default mode costs one RX
@@ -94,6 +98,7 @@ bool SettingsManager::Save() {
     // Sync live runtime values into the settings struct before flashing. These are owned by the
     // adsbee object (their AT set-commands only update adsbee), so without this they would persist
     // stale. This mirrors the reverse copy performed in Apply().
+    settings.lr2021_enabled = adsbee.LR2021IsEnabled();
     settings.r1090_rx_enabled = adsbee.Rx1090IsEnabled();
     settings.subg_rx_enabled = adsbee.RxSubGHzIsEnabled();
     settings.subg_mode = subg_radio.GetMode();
@@ -151,6 +156,7 @@ void SettingsManager::Print() {
     CONSOLE_PRINTF("Settings Struct (version %lu)\r\n", settings.settings_version);
 
     // ADSBee settings
+    CONSOLE_PRINTF("\tLR2021 Interface: %s\r\n", adsbee.LR2021IsEnabled() ? "ENABLED" : "DISABLED (bus released)");
     CONSOLE_PRINTF("\t1090 Receiver: %s\r\n", adsbee.Rx1090IsEnabled() ? "ENABLED" : "DISABLED");
     CONSOLE_PRINTF("\tSub-GHz Receiver: %s\r\n", adsbee.RxSubGHzIsEnabled() ? "ENABLED" : "DISABLED");
     CONSOLE_PRINTF("\tSub-GHz Mode: %s\r\n", kSubGHzModeStrs[subg_radio.GetMode()]);
@@ -197,6 +203,11 @@ void SettingsManager::PrintAT() {
 
     // AT+LOG_LEVEL
     CONSOLE_PRINTF("AT+LOG_LEVEL=%s\r\n", kConsoleLogLevelStrs[settings.log_level]);
+
+    // AT+LR_ENABLE: must precede the R1090_*/RX_ENABLE commands so replaying a dump onto a
+    // bus-released device re-drives the LR2021 pins before any command that reconfigures the chip
+    // (with =0 first, the later R1090 commands just update mirrors and defer harmlessly).
+    CONSOLE_PRINTF("AT+LR_ENABLE=%d\r\n", adsbee.LR2021IsEnabled());
 
     // AT+MAVLINK_ID
     CONSOLE_PRINTF("AT+MAVLINK_ID=%u,%u\r\n", settings.mavlink_system_id, settings.mavlink_component_id);

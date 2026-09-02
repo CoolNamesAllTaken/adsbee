@@ -4236,6 +4236,13 @@ function makeRxEnableEntry() {
         // To expose a new AT command in the GUI, add one entry here.
         const SETTINGS_SCHEMA_1421 = [
             // ── Radio ──
+            {
+                cmd: 'LR_ENABLE', label: '1090 MHz Radio Interface', group: 'Radio',
+                help: 'When disabled, the LR2021 radio is held in reset and its SPI/GPIO lines are '
+                    + 'parked high-impedance so an external host can drive the shared bus; 1090 MHz '
+                    + 'reception stops. Other 1090 MHz settings are remembered and take effect on re-enable.',
+                fields: [{ id: 'enabled', label: 'LR2021 interface enabled', type: 'bool' }],
+            },
             makeRxEnableEntry(),
             {
                 cmd: 'R1090_GAIN', label: '1090 MHz Gain', group: 'Radio',

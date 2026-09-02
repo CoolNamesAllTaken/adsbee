@@ -112,11 +112,12 @@ int main(void) {
     // Start NoRTOS AFTER system initialization.
     NoRTOS_start();
 
+    // Load settings before adsbee.Init() so it can seed the LR2021 interface enable (AT+LR_ENABLE)
+    // from the persisted value — a device saved with the bus released must not drive it during boot.
+    // Apply() stays after subg_radio.Init() since it configures the SubGHz RF core.
+    settings_manager.Load();
     adsbee.Init();
     subg_radio.Init();
-
-    // Log everything until we hear otherwise.
-    settings_manager.Load();
     settings_manager.Apply();
 
     leds.FlashLED(bsp.k1090LEDPin, 100);  // Flash the LED for 100ms.
