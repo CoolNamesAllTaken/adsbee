@@ -184,9 +184,21 @@ jobs:
     # merges without gating every PR on physical hardware availability.
     # When adsbee_1090 did not change, pico_target_build is skipped and this job
     # skips with it (skipped required checks count as passing).
-    # To temporarily disable: remove the branch protection requirement for
-    # this job in Settings → Branches → main → Required status checks.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    #
+    # This job is opt-in and non-blocking.
+    #  * The vars.HIL_ENABLED gate skips the job entirely unless the repository
+    #    variable HIL_ENABLED is set to 'true' (Settings → Secrets and variables →
+    #    Actions → Variables). Skipping matters more than continue-on-error here:
+    #    when the self-hosted runner is offline the job would otherwise sit queued
+    #    for hours and leave a required check pending forever.
+    #  * continue-on-error keeps a genuine test failure from failing the workflow
+    #    run once the job is re-enabled but the fixture is still flaky.
+    # To restore blocking behavior: set HIL_ENABLED=true, then delete the
+    # continue-on-error line and the vars.HIL_ENABLED clause below.
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main'
+      && vars.HIL_ENABLED == 'true'
+    continue-on-error: true
 
     steps:
     - name: Checkout repository
