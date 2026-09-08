@@ -8,8 +8,10 @@
 // transparent USB-CDC serial adapter (see bridge.cc for the modem-control-line emulation
 // contract).
 //
-// Hold BOOTSEL at power-up to force a reflash; press BOOTSEL during pass-through to rerun the
-// check (also the recovery for in-band AT+REBOOT / AT+BAUD_RATE desyncs). Wiring in board.hh.
+// Hold BOOTSEL at power-up to force a reflash; tap BOOTSEL during pass-through to rerun the
+// check (also the recovery for in-band AT+REBOOT / AT+BAUD_RATE desyncs). Hold BOOTSEL for 3 s --
+// at any point, including while the jig is stuck reporting a dead console -- to arm a settings
+// erase, which runs at the next bootloader entry and factory-resets the device. Wiring in board.hh.
 
 #include <stdio.h>
 #include <string.h>
@@ -33,12 +35,36 @@ enum class State { kCheck, kFlash, kNegotiate, kPassthrough };
 // attached after the fact still sees it (CdcPrintf output is dropped with no host connected).
 static char last_diagnosis[192] = "";
 
-// sleep_ms that keeps USB enumeration and the LED alive.
+// Set by a BOOTSEL long press; consumed by State::kCheck once the ROM bootloader is up. Going
+// through the bootloader is what makes this work when the app console is dead, which is the case it
+// exists for: a persisted settings blob that stops the console coming up cannot be cleared with
+// AT+SETTINGS=RESET or AT+BOOT_UART_BOOTLOADER, since both need a console that already answers.
+static bool erase_settings_armed = false;
+
+// Arms the settings erase and tells the user. Idempotent, so repeated long presses are harmless.
+static void ArmSettingsErase() {
+    if (erase_settings_armed) return;
+    erase_settings_armed = true;
+    StatusSet(Status::kSettingsEraseArmed);
+    CdcPrintf("BOOTSEL held: settings erase ARMED. The settings sectors (0x000FC000..0x000FDFFF) will "
+              "be erased at the next bootloader entry and the device will boot with factory defaults. "
+              "Device info / OTA keys are not touched.\r\n");
+}
+
+// sleep_ms that keeps USB enumeration and the LED alive. Also polls the BOOTSEL gesture, so the
+// settings erase can be armed from the bootloader-entry retry loop and the console-negotiation
+// failure wait -- the two places the jig sits when a device is bricked.
 static void IdleMs(uint32_t ms) {
     absolute_time_t deadline = delayed_by_ms(get_absolute_time(), ms);
+    absolute_time_t next_bootsel_poll = get_absolute_time();
     while (absolute_time_diff_us(get_absolute_time(), deadline) > 0) {
         tud_task();
         StatusUpdate();
+        // Modest cadence: GetBootselButton() stalls flash access with interrupts off.
+        if (absolute_time_diff_us(get_absolute_time(), next_bootsel_poll) <= 0) {
+            next_bootsel_poll = delayed_by_ms(get_absolute_time(), kBootselPollMs);
+            if (PollBootsel() == BootselEvent::kLongPress) ArmSettingsErase();
+        }
         sleep_ms(1);
     }
 }
@@ -115,7 +141,9 @@ static bool NegotiateConsole(uint32_t target_baud, bool print_version) {
     uint32_t found_baud = 0;
     for (int pass = 0; pass < 3 && !found_baud; pass++) found_baud = AtFindConsoleBaud();
     if (found_baud == 0) {
-        CdcPrintf("Device console not responding at any whitelisted baud rate.\r\n");
+        CdcPrintf("Device console not responding at any whitelisted baud rate. If this persists with a "
+                  "CRC-verified image, the saved settings may be the cause: hold BOOTSEL for 3 s to erase "
+                  "them and boot with factory defaults.\r\n");
         return false;
     }
 
@@ -166,7 +194,13 @@ int main() {
     while (true) {
         switch (state) {
             case State::kCheck: {
-                if (!force_flash) StatusSet(Status::kWaitingForDevice);
+                // The armed indication outranks the idle one: it is the only feedback that a
+                // destructive action is pending, and this loop is where the user is watching.
+                if (erase_settings_armed) {
+                    StatusSet(Status::kSettingsEraseArmed);
+                } else if (!force_flash) {
+                    StatusSet(Status::kWaitingForDevice);
+                }
                 if (!EnterBootloader(bl)) {
                     DiagnoseEntryFailure();
                     // Retry forever (the module may be attached later), repeating the last
@@ -180,8 +214,21 @@ int main() {
                     IdleMs(1000);
                     break;
                 }
+                // Before the CRC check: the erase must still happen on a device whose image is
+                // already up to date, which is exactly the bricked case.
+                if (erase_settings_armed) {
+                    if (EraseSettingsRegion(bl) != FlashResult::kOk) {
+                        // Stay armed: a fresh bootloader entry is exactly what the retry needs, and
+                        // disarming here would silently drop the request the user made.
+                        StatusSet(Status::kError);
+                        CdcPrintf("Settings erase failed (%s); retrying.\r\n", bl.LastError());
+                        IdleMs(2000);
+                        break;
+                    }
+                    erase_settings_armed = false;
+                }
                 if (force_flash) {
-                    CdcPrintf("BOOTSEL held: forcing reflash.\r\n");
+                    CdcPrintf("BOOTSEL held at power-up: forcing reflash.\r\n");
                     state = State::kFlash;
                     break;
                 }
@@ -232,7 +279,12 @@ int main() {
 
             case State::kPassthrough: {
                 BridgeExit exit_reason = BridgeRun();
-                if (exit_reason == BridgeExit::kRecheck) {
+                if (exit_reason == BridgeExit::kEraseSettings) {
+                    ArmSettingsErase();
+                    force_flash = false;
+                    negotiate_baud = kConsoleBaud;
+                    state = State::kCheck;
+                } else if (exit_reason == BridgeExit::kRecheck) {
                     force_flash = false;
                     negotiate_baud = kConsoleBaud;
                     state = State::kCheck;

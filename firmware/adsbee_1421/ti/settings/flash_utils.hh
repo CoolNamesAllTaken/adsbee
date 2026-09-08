@@ -22,20 +22,23 @@ class FlashUtils {
     /**
      * Erases kFlashSettingsRegionSizeBytes of flash starting at addr.
      * addr must be sector-aligned (multiple of kFlashSectorSizeBytes).
+     * @retval True if every sector erased, false on the first failure (remaining sectors are skipped).
      */
-    static void EraseRegion(uint32_t addr);
+    static bool EraseRegion(uint32_t addr);
 
     /**
      * Erases a single kFlashSectorSizeBytes flash sector at addr.
      * addr must be sector-aligned (multiple of kFlashSectorSizeBytes).
+     * @retval True if the sector erased successfully.
      */
-    static void EraseSector(uint32_t addr);
+    static bool EraseSector(uint32_t addr);
 
     /**
      * Programs size bytes from data into flash at addr.
      * addr must be 4-byte aligned.
+     * @retval True if the program operation reported success.
      */
-    static void Program(uint32_t addr, const uint8_t* data, uint32_t size);
+    static bool Program(uint32_t addr, const uint8_t* data, uint32_t size);
 
    private:
     static uint32_t stored_key_;

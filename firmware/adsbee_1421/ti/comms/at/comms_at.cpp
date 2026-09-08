@@ -769,6 +769,15 @@ CPP_AT_CALLBACK(CommsManager::ATSettingsCallback) {
                     // ordering).
                     CPP_AT_PRINTF("OK\r\n");
                     settings_manager.Apply();
+                    // Persist. ResetToDefaults() only rewrites the RAM struct, so without this a RESET
+                    // is undone by the next reboot -- which made it useless as the documented recovery
+                    // from a bad persisted blob, the exact case it exists for. The OK is already on the
+                    // wire by now, so a failure can only be logged, not returned.
+                    if (!settings_manager.Save()) {
+                        CONSOLE_ERROR("CommsManager::ATSettingsCallback",
+                                      "Defaults applied but could not be written to flash; they will not "
+                                      "survive a reboot.");
+                    }
                     CPP_AT_SILENT_SUCCESS();
                 } else {
                     CPP_AT_ERROR("Invalid argument %s.", args[0].data());
@@ -1242,7 +1251,8 @@ const CppAT::ATCommandDef_t at_command_list[] = {
     {.command = "SETTINGS",
      .min_args = 0,
      .max_args = 3,
-     .help_string = "Load, save, or reset nonvolatile settings.\r\n\tAT+SETTINGS=<op [LOAD SAVE RESET]>\r\n\t"
+     .help_string = "Load, save, or reset nonvolatile settings. RESET restores defaults and writes them to "
+                    "flash.\r\n\tAT+SETTINGS=<op [LOAD SAVE RESET]>\r\n\t"
                     "Display nonvolatile settings.\r\n\tAT+SETTINGS?\r\n\t+SETTINGS=...\r\n\tDump settings in AT "
                     "command format.\r\n\tAT+SETTINGS?DUMP\r\n\t+SETTINGS=...\r\n\tDump settings as a "
                     "single-line JSON object keyed by AT command.\r\n\tAT+SETTINGS?JSON\r\n\tSETTINGS={...}",

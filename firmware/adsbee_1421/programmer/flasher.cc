@@ -11,7 +11,16 @@ static const uint32_t kFlashSectorSize = 0x800;  // CC1314R10 main-bank sector: 
 // (see ti/settings/settings.cpp). Nothing regenerates Device Info, so the programmer must never
 // erase or program at or above this address. This is why the flash below uses per-sector erases
 // of only the image-covered sectors instead of COMMAND_BANK_ERASE, which wipes the whole bank.
+// Boundary the BAKED IMAGE must never reach. Unrelated to EraseSettingsRegion() below, which erases
+// part of this region on purpose: what must never be clobbered by a *flash* is the persistent data,
+// and what must never be clobbered by *anything* is Device Info.
 static const uint32_t kProtectedFlashStart = 0x000FC000;
+
+// Settings region, erasable as an explicit recovery action (EraseSettingsRegion).
+static const uint32_t kSettingsFlashStart = 0x000FC000;
+// Device Info (part code, OTA keys). Nothing regenerates this -- never erase at or above it.
+static const uint32_t kDeviceInfoFlashStart = 0x000FE000;
+static_assert(kSettingsFlashStart < kDeviceInfoFlashStart, "Settings region must sit below Device Info.");
 
 static inline uint32_t AlignDown(uint32_t addr) { return addr & ~(kFlashSectorSize - 1); }
 static inline uint32_t AlignUp(uint32_t addr) { return (addr + kFlashSectorSize - 1) & ~(kFlashSectorSize - 1); }
@@ -124,5 +133,25 @@ FlashResult FlashBakedImage(Cc13x4Bootloader& bl) {
     CdcPrintf("Verifying...\r\n");
     if (!BakedImageMatches(bl)) return FlashResult::kVerifyFailed;
     CdcPrintf("CRC32 verified, flash complete.\r\n");
+    return FlashResult::kOk;
+}
+
+FlashResult EraseSettingsRegion(Cc13x4Bootloader& bl) {
+    CdcPrintf("Erasing settings sectors 0x%08lX..0x%08lX (device info / OTA keys preserved)...\r\n",
+              (unsigned long)kSettingsFlashStart, (unsigned long)(kDeviceInfoFlashStart - 1));
+    for (uint32_t sector = kSettingsFlashStart; sector < kDeviceInfoFlashStart; sector += kFlashSectorSize) {
+        // Belt and braces: Cc13x4Bootloader::SectorErase() takes any address, and erasing even one
+        // sector at or above kDeviceInfoFlashStart would destroy the OTA keys irrecoverably.
+        if (sector >= kDeviceInfoFlashStart) {
+            CdcPrintf("Refusing to erase 0x%08lX: at or above the device info region.\r\n",
+                      (unsigned long)sector);
+            return FlashResult::kEraseFailed;
+        }
+        if (!bl.SectorErase(sector)) {
+            CdcPrintf("Settings sector erase failed @ 0x%08lX: %s\r\n", (unsigned long)sector, bl.LastError());
+            return FlashResult::kEraseFailed;
+        }
+    }
+    CdcPrintf("Settings erased; the device will boot with factory defaults.\r\n");
     return FlashResult::kOk;
 }

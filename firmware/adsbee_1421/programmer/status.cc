@@ -36,6 +36,9 @@ static void ApplyLed(bool blink_on) {
         case Status::kForcedFlashArmed:  // Orange.
             LedSetRgb(kB, kB / 2, 0);
             break;
+        case Status::kSettingsEraseArmed:  // White blink -- destructive action pending.
+            if (blink_on) LedSetRgb(kB, kB, kB); else LedSetRgb(0, 0, 0);
+            break;
         case Status::kCrcCheck:  // Cyan.
             LedSetRgb(0, kB, kB);
             break;

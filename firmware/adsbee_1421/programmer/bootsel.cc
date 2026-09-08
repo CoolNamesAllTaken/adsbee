@@ -27,3 +27,28 @@ bool __no_inline_not_in_flash_func(GetBootselButton)() {
     restore_interrupts(flags);
     return pressed;
 }
+
+BootselEvent PollBootsel() {
+    static bool was_pressed = false;
+    static bool long_reported = false;
+    static absolute_time_t pressed_at;
+
+    bool pressed = GetBootselButton();
+
+    if (pressed && !was_pressed) {  // Rising edge: start timing the hold.
+        was_pressed = true;
+        long_reported = false;
+        pressed_at = get_absolute_time();
+        return BootselEvent::kNone;
+    }
+    if (pressed && !long_reported &&
+        absolute_time_diff_us(pressed_at, get_absolute_time()) >= (int64_t)kBootselLongPressMs * 1000) {
+        long_reported = true;  // Report the hold now; the release below is then swallowed.
+        return BootselEvent::kLongPress;
+    }
+    if (!pressed && was_pressed) {  // Falling edge.
+        was_pressed = false;
+        return long_reported ? BootselEvent::kNone : BootselEvent::kShortPress;
+    }
+    return BootselEvent::kNone;
+}

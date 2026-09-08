@@ -14,7 +14,8 @@
 // changes are applied to the UART directly.
 
 enum class BridgeExit {
-    kRecheck,          // BOOTSEL pressed: rerun the full CRC check / flash cycle.
+    kRecheck,          // BOOTSEL tapped: rerun the full CRC check / flash cycle.
+    kEraseSettings,    // BOOTSEL held: erase the settings sectors on the way through the check cycle.
     kHostResetTarget,  // Host reset the device (DTR, SYNC low) but its line-coding baud differs
                        // from the negotiated console rate: caller should re-negotiate the
                        // console to BridgeHostBaud().
