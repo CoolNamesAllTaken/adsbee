@@ -50,6 +50,8 @@ bash build.sh [-d] [target]
 | `ti` | CC1312 only |
 | `pico` | RP2040 only (requires ESP32 + CC1312 built first) |
 | `test` | Host unit tests (no hardware needed) |
+| `build_and_flash` | Build all targets, then reflash an attached device over USB |
+| `flash` | Reflash using the already-built `combined.uf2`; runs no build steps |
 | `clean` | Remove all build directories |
 
 **Requires Docker.** Three images are used:
@@ -177,11 +179,16 @@ The optional second argument is a regex passed to `ctest -R`. Test names follow 
 
 ## Flashing
 
-For an ADSBee 1090/1090U attached over USB, `cd firmware/adsbee_1090 && ./build.sh flash` does all
-of this automatically: it builds every target, finds the device, reboots it into the bootloader with
-`AT+BOOT_USB_UF2` (no button press), copies the `.uf2`, and then verifies the RP2040 and ESP32
-firmware versions. Pass a CDC node (`./build.sh flash /dev/cu.usbmodem21201`) to choose between
-multiple attached devices.
+For an ADSBee 1090/1090U attached over USB, `cd firmware/adsbee_1090 && ./build.sh build_and_flash`
+does all of this automatically: it builds every target, finds the device, reboots it into the
+bootloader with `AT+BOOT_USB_UF2` (no button press), copies the `.uf2`, and then verifies the RP2040
+and ESP32 firmware versions. Pass a CDC node (`./build.sh build_and_flash /dev/cu.usbmodem21201`) to
+choose between multiple attached devices.
+
+`./build.sh flash` is the same minus every build step: it pushes the `combined.uf2` already on disk,
+which is what you want when re-flashing after a failed copy or flashing several boards from one
+build. It warns if that image is older than the source tree, because the post-flash version check
+reads the expected version from `object_dictionary.cpp` source and a stale image will fail it.
 
 By hand, or to recover a device that will not enumerate:
 

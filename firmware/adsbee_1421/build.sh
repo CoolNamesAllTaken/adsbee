@@ -13,14 +13,18 @@ source ../scripts/uf2_flash_lib.sh
 
 usage() {
     cat <<'EOF'
-Usage: ./build.sh [-d] [clean] [app|flash]
+Usage: ./build.sh [-d] [clean] [app|build_and_flash|flash]
   app         ti (default, CC1314R10 application via ti-lpf2)
               programmer (RP2040-Zero flash/passthrough jig via pico-docker;
                           requires ti to be built first)
-  flash       build ti + programmer, then reflash an attached ADSBee m1421 via its
+  build_and_flash
+              build ti + programmer, then reflash an attached ADSBee m1421 via its
               programmer jig: prompts you to put the jig in bootloader mode, copies
               the fresh uf2 onto the RPI-RP2 drive, and watches the jig's console
               while it automatically flashes the m1421.
+  flash       same, but using the programmer uf2 that is already built -- no build
+              steps run at all. Warns first if that uf2 is older than the source tree,
+              or older than the ti hex baked into it.
   (default)   build in Release
   -d          build in Debug instead of Release
   clean       remove <app>/build and exit
@@ -31,6 +35,7 @@ APP="ti"
 CONFIG="Release"
 DO_CLEAN=0
 DO_FLASH=0
+DO_BUILD_AND_FLASH=0
 APP_EXPLICIT=0
 
 for arg in "$@"; do
@@ -38,6 +43,7 @@ for arg in "$@"; do
         -d) CONFIG="Debug" ;;
         clean) DO_CLEAN=1 ;;
         flash) DO_FLASH=1 ;;
+        build_and_flash) DO_BUILD_AND_FLASH=1 ;;
         ti|programmer)
             APP="$arg"
             APP_EXPLICIT=1
@@ -54,8 +60,15 @@ for arg in "$@"; do
     esac
 done
 
-if [ "$DO_FLASH" -eq 1 ] && { [ "$DO_CLEAN" -eq 1 ] || [ "$APP_EXPLICIT" -eq 1 ]; }; then
-    echo "'flash' builds ti + programmer itself; it cannot be combined with 'clean' or an app argument." >&2
+if [ "$DO_FLASH" -eq 1 ] && [ "$DO_BUILD_AND_FLASH" -eq 1 ]; then
+    echo "'flash' and 'build_and_flash' are alternatives; pass only one." >&2
+    exit 1
+fi
+
+if { [ "$DO_FLASH" -eq 1 ] || [ "$DO_BUILD_AND_FLASH" -eq 1 ]; } &&
+   { [ "$DO_CLEAN" -eq 1 ] || [ "$APP_EXPLICIT" -eq 1 ]; }; then
+    echo "The flash commands drive the whole sequence themselves; they cannot be combined with" >&2
+    echo "'clean' or an app argument." >&2
     exit 1
 fi
 
@@ -119,10 +132,18 @@ build_app() {
     done
 }
 
+# Path to the jig image the flash commands push, and to the CC1314 hex baked into it at CMake
+# configure time (see programmer/README.md) -- a rebuilt ti with a stale programmer would flash old
+# m1421 firmware even though both files exist.
+programmer_uf2_path() { echo "programmer/build/${CONFIG}/adsbee_1421_programmer.uf2"; }
+ti_hex_path() { echo "ti/build/${CONFIG}/adsbee_1421.hex"; }
+
 flash_m1421() {
-    local uf2="programmer/build/${CONFIG}/adsbee_1421_programmer.uf2"
+    local uf2
+    uf2="$(programmer_uf2_path)"
     if [ ! -f "$uf2" ]; then
-        echo "ERROR: ${uf2} not found (programmer build should have produced it)." >&2
+        echo "ERROR: ${uf2} not found." >&2
+        echo "       Run './build.sh build_and_flash' to build it and flash in one step." >&2
         exit 1
     fi
 
@@ -227,10 +248,29 @@ if ! "$(pwd)/../scripts/check_version_sync.sh" HEAD WORKTREE; then
     echo ""
 fi
 
-if [ "$DO_FLASH" -eq 1 ]; then
+if [ "$DO_BUILD_AND_FLASH" -eq 1 ]; then
     # Fresh CC1314 firmware, then a programmer image with it baked in, then flash the jig.
     build_app ti
     build_app programmer
+    flash_m1421
+    exit 0
+fi
+
+if [ "$DO_FLASH" -eq 1 ]; then
+    # Flash-only: no container builds at all. Two things can make the jig image stale -- edited
+    # sources, or a ti hex rebuilt after the programmer baked its copy in -- so check both.
+    warn_if_artifact_stale "$(programmer_uf2_path)" "./build.sh build_and_flash" \
+        ../common ../modules ti programmer
+    # Both artifacts live under build/, which warn_if_artifact_stale deliberately skips, so compare
+    # them directly: a ti hex newer than the jig image means the baked-in copy is out of date.
+    if [ -f "$(ti_hex_path)" ] && [ -f "$(programmer_uf2_path)" ] &&
+       [ "$(ti_hex_path)" -nt "$(programmer_uf2_path)" ]; then
+        echo ""
+        echo "WARNING: $(ti_hex_path) is newer than $(programmer_uf2_path)."
+        echo "         The jig image bakes in the ti hex at configure time, so this would flash the"
+        echo "         OLDER m1421 firmware. Run './build.sh build_and_flash' to rebuild both."
+        echo ""
+    fi
     flash_m1421
     exit 0
 fi

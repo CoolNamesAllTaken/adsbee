@@ -263,7 +263,8 @@ void RemoteIDManager::ServiceTxTick() {
     if (now_ms - last_tx_tick_ms_ < kTxTickIntervalMs) return;
     last_tx_tick_ms_ = now_ms;
 
-    status_ &= ~kStatusTxNoPosition;  // Recomputed below from the current position availability.
+    // Recomputed below from the current position availability and source.
+    status_ &= ~(kStatusTxNoPosition | kStatusTxPositionSourceNotAllowed);
 
     // BLE refreshes its own advertising payload (it owns the RemoteIDTransmitter that tracks the message schedule).
     BLETxServiceTick();
@@ -272,6 +273,7 @@ void RemoteIDManager::ServiceTxTick() {
         // The WiFi beacon carries a full message pack built from the same refreshed ODID data.
         if (!tx_.RefreshFromDeviceState()) {
             status_ |= kStatusTxNoPosition;
+            if (!tx_.PositionSourceAllowed()) status_ |= kStatusTxPositionSourceNotAllowed;
         }
         WiFiTxServiceTick(tx_);
     }

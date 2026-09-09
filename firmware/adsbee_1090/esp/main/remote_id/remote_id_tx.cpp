@@ -46,8 +46,8 @@ void RemoteIDTransmitter::PopulateLocation(bool position_valid) {
     ODID_Location_data& loc = s_uas_data.Location;
     memset(&loc, 0, sizeof(loc));
 
-    // Accuracy fields are reported as unknown: the position comes from a fixed configuration or from ADS-B derived
-    // sources, neither of which carries a GNSS accuracy estimate.
+    // Accuracy fields are reported as unknown: the position comes from a fixed configuration or from a GNSS fix, and
+    // RxPosition carries no accuracy estimate for either.
     loc.HorizAccuracy = ODID_HOR_ACC_UNKNOWN;
     loc.VertAccuracy = ODID_VER_ACC_UNKNOWN;
     loc.BaroAccuracy = ODID_VER_ACC_UNKNOWN;
@@ -91,7 +91,9 @@ void RemoteIDTransmitter::PopulateSystem(bool position_valid) {
     memset(&system, 0, sizeof(system));
 
     // The ADSBee transmits its own position as both the UA position and the operator position: as a bench test
-    // transmitter the two are genuinely the same point, and on a drone no separate ground-station position is available.
+    // transmitter the two are genuinely the same point, and on a drone no separate ground-station position is
+    // available. Both therefore ride on the same position_valid gate, so a source we may not transmit suppresses the
+    // operator location too rather than leaking it here.
     system.OperatorLocationType = ODID_OPERATOR_LOCATION_TYPE_TAKEOFF;
     system.ClassificationType = ODID_CLASSIFICATION_TYPE_UNDECLARED;
     system.CategoryEU = ODID_CATEGORY_EU_UNDECLARED;
@@ -133,9 +135,16 @@ bool RemoteIDTransmitter::PopulateOperatorID() {
 bool RemoteIDTransmitter::RefreshFromDeviceState() {
     odid_initUasData(&s_uas_data);
 
-    // The RP2040 pushes its resolved receiver position (fixed coordinate, or derived from tracked aircraft, or GNSS once
-    // implemented) at 1 Hz as part of its device status.
-    position_valid_ = object_dictionary.composite_device_status.rp2040.rx_position_available;
+    // The RP2040 pushes its resolved receiver position at 1 Hz as part of its device status, along with the source it
+    // was resolved from. Only sources that describe THIS device may be broadcast as our own Remote ID position (see
+    // SettingsManager::RxPosition::MayBeTransmittedAsOwnPosition); anything else is treated exactly like "no position
+    // available", so the Location and System messages fall through to their ODID "unknown" branches below and no
+    // foreign coordinate can escape. This is the single choke point for every transmit transport: BLE legacy, BLE
+    // Coded PHY and the WiFi beacon all encode from the s_uas_data populated here.
+    const SettingsManager::RxPosition& pos = object_dictionary.composite_device_status.rp2040.rx_position;
+    position_source_allowed_ = SettingsManager::RxPosition::MayBeTransmittedAsOwnPosition(pos.source);
+    position_valid_ =
+        object_dictionary.composite_device_status.rp2040.rx_position_available && position_source_allowed_;
 
     PopulateBasicID();
     PopulateLocation(position_valid_);

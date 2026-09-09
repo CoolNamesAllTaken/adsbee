@@ -6,6 +6,8 @@
 #     ./build.sh adsbee_1090            # all three 1090 targets (esp -> ti -> pico), Release
 #     ./build.sh adsbee_1090 esp
 #     ./build.sh adsbee_1090 -d test AircraftJSON
+#     ./build.sh adsbee_1090 build_and_flash    # build everything, then flash an attached device
+#     ./build.sh adsbee_1090 flash              # flash what is already built, no build steps
 #     ./build.sh adsbee_1421            # CC1314 application, Release
 #     ./build.sh adsbee_1421 programmer
 #     ./build.sh adsbee_1421 clean ti

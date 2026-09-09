@@ -101,6 +101,26 @@ class SettingsManager {
         uint32_t icao_address =
             0;  // ICAO address to use for position bootstrap when source is kPositionSourceICAO, or the ICAO of the
                 // lowest plane being tracked when source is kPositionSourceLowestAircraft.
+
+        /**
+         * Whether a position resolved from `source` describes THIS device, and may therefore be broadcast as our own
+         * position (currently: Remote ID transmit).
+         *
+         * Only kPositionSourceFixed (a coordinate the operator entered for this device) and kPositionSourceGNSS (this
+         * device's own fix) qualify. The aircraft-derived sources carry a *received* aircraft's position:
+         * kPositionSourceLowestAircraft and kPositionSourceAircraftMatchingICAO copy the lat/lon of a tracked Mode S /
+         * UAT target. Broadcasting one of those would assert "this is where I am" using a real, possibly crewed
+         * aircraft's coordinate -- placing a fabricated drone, and a fabricated operator location, on top of it. They
+         * are legitimate as a *receiver* reference position (range calculations, CPR decoding), never as a transmitted
+         * one. kPositionSourceNone carries no position at all.
+         *
+         * Lives here, rather than beside the transmitter, because both processors need the same answer: the ESP32
+         * enforces it (RemoteIDTransmitter::RefreshFromDeviceState) and the RP2040 warns about it from the AT console.
+         * A static member function adds no storage, so the packed layout above is unaffected.
+         */
+        static bool MayBeTransmittedAsOwnPosition(PositionSource source) {
+            return source == kPositionSourceFixed || source == kPositionSourceGNSS;
+        }
     };
 
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a
@@ -216,7 +236,8 @@ class SettingsManager {
         bool subg_bias_tee_enabled = false;
         SubGHzRadioMode subg_mode = SubGHzRadioMode::kSubGHzRadioModeUATRx;  // Default to UAT mode (978MHz receiver).
 
-        // Remote ID (Broadcast Drone ID, ASTM F3411) receive settings. Reception happens on the ESP32 over BLE/WiFi; see
+        // Remote ID (Broadcast Drone ID, ASTM F3411) receive settings. EXPERIMENTAL: not yet a stable part of the
+        // system, and these settings may change. Reception happens on the ESP32 over BLE/WiFi; see
         // firmware/adsbee_1090/esp/main/remote_id/. Which transports actually run also depends on the hardware build and
         // the WiFi/ethernet state (the ESP32 reports the live state back via ESP32DeviceStatus::remote_id_status).
         bool remote_id_rx_enabled = false;  // Master enable for Remote ID reception. Off by default.
@@ -225,11 +246,14 @@ class SettingsManager {
                                        SettingsManager::kRemoteIDTransportBLE5Long |
                                        SettingsManager::kRemoteIDTransportWiFiBeacon;
 
-        // Remote ID transmit settings. The ADSBee can act as a Broadcast Remote ID transmitter, either as a bench test
-        // transmitter for checking Remote ID receiver performance, or mounted on a drone as a combined ADS-B receiver
-        // and Remote ID transmitter. Transmission uses the same radios as reception and needs no WiFi AP/STA.
-        // The transmitted UA position comes from rx_position (AT+RX_POSITION), so a fixed coordinate works for a bench
-        // transmitter and GNSS works once that position source is implemented.
+        // Remote ID transmit settings. EXPERIMENTAL: not yet a stable part of the system, and these settings may
+        // change. The ADSBee can act as a Broadcast Remote ID transmitter, either as a bench test transmitter for
+        // checking Remote ID receiver performance, or mounted on a drone as a combined ADS-B receiver and Remote ID
+        // transmitter. Transmission uses the same radios as reception and needs no WiFi AP/STA.
+        // The transmitted UA position comes from rx_position (AT+RX_POSITION), but ONLY from the sources that describe
+        // this device: kPositionSourceFixed (a bench transmitter's entered coordinate) and kPositionSourceGNSS (this
+        // device's own fix). The aircraft-derived sources carry a *received* aircraft's position and are never
+        // transmitted -- see RxPosition::MayBeTransmittedAsOwnPosition.
         bool remote_id_tx_enabled = false;  // Master enable for Remote ID transmission. Off by default.
         // Bitmask of RemoteIDTransport values to advertise on. All methods by default so the device is useful as a
         // test transmitter against any receiver; narrow it to test one method at a time.

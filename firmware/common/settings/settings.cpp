@@ -16,10 +16,10 @@ void SettingsManager::Print() {
     print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len,
                               "\tSub-GHz Receiver: %s\r\n", settings.subg_rx_enabled ? "ENABLED" : "DISABLED");
     print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len,
-                              "\tRemote ID Receiver: %s (transports 0x%02X)\r\n",
+                              "\tRemote ID Receiver: %s (transports 0x%02X) [EXPERIMENTAL]\r\n",
                               settings.remote_id_rx_enabled ? "ENABLED" : "DISABLED", settings.remote_id_transports);
     print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len,
-                              "\tRemote ID Transmitter: %s (transports 0x%02X)\r\n",
+                              "\tRemote ID Transmitter: %s (transports 0x%02X) [EXPERIMENTAL]\r\n",
                               settings.remote_id_tx_enabled ? "ENABLED" : "DISABLED",
                               settings.remote_id_tx_transports);
 

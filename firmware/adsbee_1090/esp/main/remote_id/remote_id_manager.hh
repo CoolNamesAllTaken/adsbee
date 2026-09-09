@@ -78,6 +78,10 @@ class RemoteIDManager {
         kStatusTxWiFiBeaconActive = 1 << 10, // Injecting Remote ID WiFi beacon frames.
         kStatusTxNoPosition = 1 << 11,       // Transmitting, but rx_position is unavailable (Location sent as unknown).
         kStatusTxBlocked = 1 << 12,          // Transmit requested but could not start (RAM, radio conflict, or build).
+        // Transmitting, but the configured rx_position source is one we may never broadcast as our own (an
+        // aircraft-derived position, or none at all) -- see SettingsManager::RxPosition::MayBeTransmittedAsOwnPosition.
+        // Always accompanied by kStatusTxNoPosition; this bit says the fix is a setting to change, not a wait.
+        kStatusTxPositionSourceNotAllowed = 1 << 13,
     };
 
     RemoteIDManager() = default;

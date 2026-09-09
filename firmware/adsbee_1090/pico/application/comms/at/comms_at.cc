@@ -599,8 +599,26 @@ CPP_AT_CALLBACK(CommsManager::ATRemoteIDCallback) {
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
 
+// Warns when Remote ID transmit is enabled alongside a receiver position source that may not be broadcast. A Remote ID
+// broadcast asserts "this is where I am", so only FIXED (an operator-entered coordinate for this device) and GNSS (this
+// device's own fix) are transmitted; the aircraft-derived sources carry a *received* aircraft's position, and the ESP32
+// suppresses them, transmitting an unknown position instead. Printed rather than logged so it reaches whichever
+// interface issued the command regardless of log level. Advisory only: the setting still takes effect.
+static void WarnIfRemoteIDTxPositionSourceNotTransmittable() {
+    if (!settings_manager.settings.remote_id_tx_enabled) return;
+    SettingsManager::RxPosition::PositionSource source = adsbee.rx_position.source;
+    if (SettingsManager::RxPosition::MayBeTransmittedAsOwnPosition(source)) return;
+    CPP_AT_PRINTF(
+        "WARNING: Remote ID transmit is enabled but AT+RX_POSITION source is %s, which is not this device's own "
+        "position and will NOT be transmitted. An unknown position will be broadcast instead. Use AT+RX_POSITION=FIXED "
+        "or AT+RX_POSITION=GNSS to transmit a position.\r\n",
+        SettingsManager::RxPosition::kPositionSourceStrs[source]);
+}
+
 void ATRemoteIDTxHelpCallback() {
     CPP_AT_PRINTF(
+        "\t[EXPERIMENTAL] Remote ID is not yet a stable part of the system; its settings and behavior may change in "
+        "future firmware.\r\n"
         "\tAT+REMOTE_ID_TX=<enabled>[,<transport_mask>[,<uas_id>[,<id_type>[,<ua_type>[,<operator_id>]]]]]\r\n"
         "\tTransmit Broadcast Remote ID (drone ID) from this device, for use as a Remote ID test transmitter or as a "
         "combined ADS-B receiver / Remote ID transmitter on a drone. No WiFi AP/STA is required.\r\n"
@@ -609,7 +627,10 @@ void ATRemoteIDTxHelpCallback() {
         "\tid_type = [1 SERIAL, 2 CAA_REGISTRATION, 3 UTM_UUID, 4 SESSION_ID].\r\n"
         "\tua_type = [1 AEROPLANE, 2 HELICOPTER_MULTIROTOR, ... 15 OTHER].\r\n"
         "\toperator_id = operator registration, up to %d chars ('-' to clear).\r\n"
-        "\tThe transmitted position comes from AT+RX_POSITION.\r\n"
+        "\tThe transmitted position comes from AT+RX_POSITION, but ONLY from the FIXED and GNSS sources, which\r\n"
+        "\tdescribe this device. The aircraft-derived sources (LOWEST, ICAO) carry a received aircraft's position;\r\n"
+        "\tbroadcasting those would place a fabricated drone on a real aircraft, so an unknown position is sent\r\n"
+        "\tinstead.\r\n"
         "\tAT+REMOTE_ID_TX?\r\n\tQuery transmit settings and the ESP32's live status bitfield.",
         SettingsManager::Settings::kRemoteIDIDMaxLen, SettingsManager::Settings::kRemoteIDIDMaxLen);
 }
@@ -681,6 +702,7 @@ CPP_AT_CALLBACK(CommsManager::ATRemoteIDTxCallback) {
             CPP_AT_CMD_PRINTF(": remote_id_tx_enabled: %d, transports: 0x%02X\r\n",
                               settings_manager.settings.remote_id_tx_enabled,
                               settings_manager.settings.remote_id_tx_transports);
+            WarnIfRemoteIDTxPositionSourceNotTransmittable();
             CPP_AT_SUCCESS();
             break;
         }
@@ -1313,6 +1335,7 @@ CPP_AT_CALLBACK(CommsManager::ATRxPositionCallback) {
                 }
             }
             settings_manager.SyncToCoprocessors();
+            WarnIfRemoteIDTxPositionSourceNotTransmittable();
             CPP_AT_SUCCESS();
             break;
         }
@@ -1795,6 +1818,8 @@ const CppAT::ATCommandDef_t at_command_list[] = {
      .min_args = 0,
      .max_args = 2,
      .help_string =
+         "[EXPERIMENTAL] Remote ID is not yet a stable part of the system; its settings and behavior may change in "
+         "future firmware.\r\n\t"
          "AT+REMOTE_ID=<enabled>[,<transport_mask>]\r\n\tEnable/disable Broadcast Remote ID (drone) reception on the "
          "ESP32.\r\n\ttransport_mask bits: 1=BT4 legacy, 2=BT5 Long Range, 4=WiFi beacon (default 7).\r\n\tOn "
          "non-PSRAM builds Remote ID only runs when WiFi AP/STA are disabled and Ethernet is up.\r\n\t"

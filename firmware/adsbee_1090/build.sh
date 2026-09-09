@@ -2,10 +2,10 @@
 # ADSBee firmware build script.
 # Builds all three firmware targets (ESP32, TI CC1312, RP2040 Pico) using Docker containers.
 # Usage: ./build.sh [-d] [target] [test_filter|port]
-#   targets: all (default), esp, ti, pico, test, flash, clean
+#   targets: all (default), esp, ti, pico, test, build_and_flash, flash, clean
 #   -d: build in Debug mode instead of Release
 #   test_filter: optional regex passed to ctest -R when target is "test" (e.g. "AircraftJSON")
-#   port: optional CDC node to flash when target is "flash" (e.g. /dev/cu.usbmodem21201)
+#   port: optional CDC node to flash, for "build_and_flash" / "flash" (e.g. /dev/cu.usbmodem21201)
 
 set -e
 
@@ -284,12 +284,20 @@ find_1090_nodes() {
     done
 }
 
+# Path to the RP2040 image the flash commands push. Config-dependent, so both flash_1090 and the
+# staleness check ask for it rather than each spelling out the Debug/Release branch.
+pico_uf2_path() {
+    local build_type=$( [ "$debug" = true ] && echo "Debug" || echo "Release" )
+    echo "pico/build/${build_type}/application/combined.uf2"
+}
+
 flash_1090() {
     local explicit_port="${1:-}"
-    local build_type=$( [ "$debug" = true ] && echo "Debug" || echo "Release" )
-    local uf2="pico/build/${build_type}/application/combined.uf2"
+    local uf2
+    uf2="$(pico_uf2_path)"
     if [ ! -f "$uf2" ]; then
-        echo "ERROR: ${uf2} not found (the pico build should have produced it)." >&2
+        echo "ERROR: ${uf2} not found." >&2
+        echo "       Run './build.sh build_and_flash' to build it and flash in one step." >&2
         exit 1
     fi
 
@@ -466,6 +474,10 @@ flash_1090() {
     fi
     if [ "$rp_ver" != "$expected" ]; then
         echo "ERROR: RP2040 is running ${rp_ver}, expected ${expected}." >&2
+        # ${expected} comes from object_dictionary.cpp (source), not from the image just flashed, so
+        # the usual cause here is flashing a uf2 that predates the current tree.
+        echo "       The expected version is read from the source tree, so this usually means the" >&2
+        echo "       uf2 that was flashed is stale. Run './build.sh build_and_flash' to rebuild." >&2
         exit 1
     fi
     echo "  RP2040: ${rp_ver}"
@@ -474,6 +486,7 @@ flash_1090() {
     elif [ "$esp_ver" != "$expected" ]; then
         echo "ERROR: ESP32 is running ${esp_ver}, expected ${expected}." >&2
         echo "       Coprocessors are only reflashed on a version mismatch; check the console output above." >&2
+        echo "       If the uf2 was stale, './build.sh build_and_flash' rebuilds and reflashes." >&2
         exit 1
     else
         echo "  ESP32:  ${esp_ver}"
@@ -481,6 +494,21 @@ flash_1090() {
 
     echo ""
     echo "=== Flash complete: ADSBee 1090 running ${expected} ==="
+}
+
+# Rejects a bad second positional for the flash commands: it may only be an existing CDC node.
+validate_flash_port() {
+    local cmd="$1"
+    if [ -n "$flash_port" ] && [ "${flash_port#/dev/}" = "$flash_port" ]; then
+        echo "ERROR: '$flash_port' is not a serial port. '$cmd' takes only an optional CDC node," >&2
+        echo "       e.g. ./build.sh $cmd /dev/cu.usbmodem21201" >&2
+        exit 1
+    fi
+    if [ -n "$flash_port" ] && [ ! -e "$flash_port" ]; then
+        echo "ERROR: $flash_port does not exist. Attached CDC nodes:" >&2
+        list_serial_nodes >&2
+        exit 1
+    fi
 }
 
 clean_builds() {
@@ -511,21 +539,20 @@ case "$target" in
     test)
         build_test "$test_filter"
         ;;
-    flash)
-        if [ -n "$flash_port" ] && [ "${flash_port#/dev/}" = "$flash_port" ]; then
-            echo "ERROR: '$flash_port' is not a serial port. 'flash' builds every target itself and" >&2
-            echo "       takes only an optional CDC node, e.g. ./build.sh flash /dev/cu.usbmodem21201" >&2
-            exit 1
-        fi
-        # Check this before the builds so a typo does not cost a full rebuild.
-        if [ -n "$flash_port" ] && [ ! -e "$flash_port" ]; then
-            echo "ERROR: $flash_port does not exist. Attached CDC nodes:" >&2
-            list_serial_nodes >&2
-            exit 1
-        fi
+    build_and_flash)
+        # Validate the port before the builds so a typo does not cost a full rebuild.
+        validate_flash_port "$target"
         build_esp
         build_ti
         build_pico
+        flash_1090 "$flash_port"
+        ;;
+    flash)
+        validate_flash_port "$target"
+        # Flash-only: warn if the image no longer matches the tree, then push it anyway. Scoped to
+        # the source trees -- ti/setup holds a ~2 GB vendored SDK and must never be scanned.
+        warn_if_artifact_stale "$(pico_uf2_path)" "./build.sh build_and_flash" \
+            ../common ../modules pico/application esp/main ti/sub_ghz_radio
         flash_1090 "$flash_port"
         ;;
     clean)
@@ -541,18 +568,21 @@ case "$target" in
         echo "  Output: firmware/pico/build/$build_type/application/combined.uf2"
         ;;
     *)
-        echo "Usage: $0 [-d] [esp|ti|pico|test|flash|clean|all]"
+        echo "Usage: $0 [-d] [esp|ti|pico|test|build_and_flash|flash|clean|all]"
         echo "  -d    - Build in Debug mode instead of Release"
         echo "  all   - Build all firmware targets (default)"
         echo "  esp   - Build ESP32-S3 firmware only"
         echo "  ti    - Build TI CC1312 firmware only"
         echo "  pico  - Build RP2040 Pico firmware only (requires esp + ti first)"
         echo "  test [filter] - Build and run host unit tests; optional filter is a ctest -R regex (e.g. \"AircraftJSON\")"
-        echo "  flash [port]  - Build all targets, then reflash an attached ADSBee 1090/1090U over USB."
-        echo "                  Finds the device itself and reboots it into the UF2 bootloader via"
-        echo "                  AT+BOOT_USB_UF2 (no BOOTSEL press), copies combined.uf2, then verifies"
+        echo "  build_and_flash [port] - Build all targets, then reflash an attached ADSBee 1090/1090U"
+        echo "                  over USB. Finds the device itself and reboots it into the UF2 bootloader"
+        echo "                  via AT+BOOT_USB_UF2 (no BOOTSEL press), copies combined.uf2, then verifies"
         echo "                  the RP2040 and ESP32 firmware versions. Pass a CDC node (e.g."
         echo "                  /dev/cu.usbmodem21201) to pick between multiple attached devices."
+        echo "  flash [port]  - Reflash using the combined.uf2 that is already built, skipping every"
+        echo "                  build step. Same device handling as build_and_flash; warns first if the"
+        echo "                  image is older than the source tree."
         echo "  clean - Remove all build directories"
         exit 1
         ;;
