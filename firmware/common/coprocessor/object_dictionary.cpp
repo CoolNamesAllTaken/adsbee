@@ -21,8 +21,8 @@
 #include "comms.hh"
 
 const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
-const uint8_t ObjectDictionary::kFirmwareVersionMinor = 10;
-const uint8_t ObjectDictionary::kFirmwareVersionPatch = 0;
+const uint8_t ObjectDictionary::kFirmwareVersionMinor = 9;
+const uint8_t ObjectDictionary::kFirmwareVersionPatch = 1;
 // NOTE: Indicate a final release with RC = 0.
 const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 1;
 
