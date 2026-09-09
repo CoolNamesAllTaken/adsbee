@@ -17,6 +17,7 @@
 //     group: 'Network',             // form section; sections appear in first-use order
 //     help: 'Join an existing WiFi network.',
 //     disconnects: true,            // warn before saving; saved last; SAVE timeout tolerated
+//     experimental: true,           // badge the entry: the feature is not yet stable
 //     query: { expect: /^WIFI_STA=/, quietMs: 350, timeoutMs: 3000 },  // all optional
 //     fields: [ { id, label, type, ... } ],
 //     parse(lines) { ... },         // optional; default: positional split of first matching line
@@ -128,6 +129,12 @@ class SettingsEngine {
             const badge = document.createElement('span');
             badge.className = 'settings-danger';
             badge.textContent = 'may drop connection';
+            header.appendChild(badge);
+        }
+        if (entry.experimental) {
+            const badge = document.createElement('span');
+            badge.className = 'settings-experimental';
+            badge.textContent = 'experimental';
             header.appendChild(badge);
         }
         const status = document.createElement('span');
@@ -838,8 +845,8 @@ const SETTINGS_SCHEMA_1090 = [
     },
     // ── Remote ID ──
     {
-        cmd: 'REMOTE_ID', label: 'Remote ID Receive', group: 'Remote ID',
-        help: 'Receive Broadcast Remote ID (drone ID) messages.',
+        cmd: 'REMOTE_ID', label: 'Remote ID Receive', group: 'Remote ID', experimental: true,
+        help: 'Receive Broadcast Remote ID (drone ID) messages. Not yet a stable part of the system \u2014 these settings and their behavior may change in future firmware.',
         fields: [
             { id: 'en', label: 'Enabled', type: 'bool' },
             { id: 'transports', label: 'Transports', type: 'bitmask', options: SETTINGS_RID_TRANSPORTS },
@@ -848,8 +855,8 @@ const SETTINGS_SCHEMA_1090 = [
         build(v) { return [`AT+REMOTE_ID=${v.en ? 1 : 0},${v.transports}`]; },
     },
     {
-        cmd: 'REMOTE_ID_TX', label: 'Remote ID Transmit', group: 'Remote ID',
-        help: 'Transmit Broadcast Remote ID from this device. Position comes from Receiver Position.',
+        cmd: 'REMOTE_ID_TX', label: 'Remote ID Transmit', group: 'Remote ID', experimental: true,
+        help: 'Transmit Broadcast Remote ID from this device. Only the Fixed and GNSS receiver position sources are transmitted, since they describe this device; the aircraft-derived sources carry a received aircraft\u2019s position, so an unknown position is broadcast instead. Not yet a stable part of the system \u2014 these settings and their behavior may change in future firmware.',
         fields: [
             { id: 'en', label: 'Enabled', type: 'bool' },
             { id: 'transports', label: 'Transports', type: 'bitmask', options: SETTINGS_RID_TRANSPORTS },

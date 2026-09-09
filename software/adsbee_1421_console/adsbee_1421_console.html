@@ -2053,6 +2053,7 @@
             <div class="fw-modal-buttons">
                 <button id="fw-check-btn" class="tools-button">Check bootloader</button>
                 <button id="fw-start-btn" class="tools-button" disabled>Flash firmware</button>
+                <button id="fw-erase-settings-btn" class="tools-button" disabled>Erase settings</button>
                 <button id="fw-retry-btn" class="tools-button" style="display:none;">Retry</button>
                 <button id="fw-close-btn" class="tools-button fw-cancel-btn">Cancel</button>
             </div>
@@ -4452,6 +4453,10 @@ function makeRxEnableEntry() {
             // (8 KB) -- see firmware/adsbee_1421/ti/settings/settings.cpp. The flasher erases only
             // image-covered sectors so these survive a reflash; an image reaching up here is refused.
             PROTECTED_FLASH_START: 0x000FC000,
+            // Settings region, erasable on purpose as a recovery action (see eraseSettings()).
+            SETTINGS_FLASH_START: 0x000FC000,
+            // Device Info: part code and OTA keys. Nothing regenerates it -- never erase at or above.
+            DEVICE_INFO_FLASH_START: 0x000FE000,
 
             parse(text) {
                 let extBase = 0;
@@ -4678,6 +4683,7 @@ function makeRxEnableEntry() {
                     text: $('firmware-modal-text'), log: $('firmware-modal-log'),
                     check: $('fw-check-btn'), checkResult: $('firmware-check-result'),
                     start: $('fw-start-btn'), retry: $('fw-retry-btn'), close: $('fw-close-btn'),
+                    eraseSettings: $('fw-erase-settings-btn'),
                     uploadButton: $('uploadButton'), fileInput: $('fileInput'),
                 };
                 this.els.uploadButton.addEventListener('click', () => this.els.fileInput.click());
@@ -4688,6 +4694,7 @@ function makeRxEnableEntry() {
                 });
                 this.els.check.addEventListener('click', () => this.checkBootloader());
                 this.els.start.addEventListener('click', () => this.run());
+                this.els.eraseSettings.addEventListener('click', () => this.eraseSettings());
                 // A mid-flash failure leaves the device in the bootloader, but that says
                 // nothing about the moment of retry, so re-check before resuming.
                 this.els.retry.addEventListener('click', () => this.retry());
@@ -4708,6 +4715,7 @@ function makeRxEnableEntry() {
                 this.els.preflight.style.display = '';
                 this.els.check.style.display = '';
                 this.els.start.style.display = '';
+                this.els.eraseSettings.style.display = '';
                 this.els.retry.style.display = 'none';
                 this.els.close.textContent = 'Cancel';
                 this.els.close.disabled = false;
@@ -4719,6 +4727,7 @@ function makeRxEnableEntry() {
                     this.els.summary.textContent = '';
                     this.els.check.style.display = 'none';
                     this.els.start.style.display = 'none';
+                    this.els.eraseSettings.style.display = 'none';
                     this.setStatus(`Could not parse ${file.name}: ${e.message}`);
                     return;
                 }
@@ -4788,6 +4797,10 @@ function makeRxEnableEntry() {
                 this._verified = ok;
                 if (!ok) this._bl = null;
                 this.els.start.disabled = !ok;
+                // Erasing settings talks to the same bootloader, so it rides the same gate. Unlike
+                // flashing it does not need a loaded image: it is the recovery for a device whose
+                // firmware is fine but whose saved settings stop the console coming up.
+                this.els.eraseSettings.disabled = !ok;
                 this.els.checkResult.textContent = message;
                 this.els.checkResult.className = cssClass;
             },
@@ -4897,6 +4910,7 @@ function makeRxEnableEntry() {
                 this.els.retry.style.display = 'none';
                 this.els.check.style.display = '';
                 this.els.start.style.display = '';
+                this.els.eraseSettings.style.display = '';
                 await this.checkBootloader();
                 if (this._verified) {
                     await this.run();
@@ -4923,6 +4937,7 @@ function makeRxEnableEntry() {
                 this.els.log.style.display = '';
                 this.els.check.style.display = 'none';
                 this.els.start.style.display = 'none';
+                this.els.eraseSettings.style.display = 'none';
                 this.els.retry.style.display = 'none';
                 this.els.close.disabled = true;
                 this.els.uploadButton.disabled = true;
@@ -5049,6 +5064,102 @@ function makeRxEnableEntry() {
                 } finally {
                     this.els.uploadButton.disabled = false;
                     this.els.uploadButton.innerHTML = 'Upload Firmware';
+                }
+            },
+
+            // Recovery for a device whose saved settings stop the console coming up: erase the four
+            // Settings sectors and let the firmware rewrite defaults on the next boot (its magic/CRC
+            // check fails against blank flash). Mirrors EraseSettingsRegion() in the programmer jig.
+            //
+            // Deliberately never automatic and never part of a flash: it discards the user's settings,
+            // which is why a normal flash preserves this region. Device Info / OTA keys are untouched.
+            async eraseSettings() {
+                if (this._state === 'running') return;
+                if (!this._verified || !this._bl) {
+                    this.setStatus('Check the bootloader first.');
+                    return;
+                }
+                if (!confirm('Erase all saved settings on the device?\n\n' +
+                        'Every setting returns to its factory default on the next boot, including the ' +
+                        'console baud rate (back to 1000000). The firmware image and the device info / ' +
+                        'OTA keys are not touched.\n\n' +
+                        'This is the recovery for a device whose console no longer responds at any baud rate.')) {
+                    return;
+                }
+
+                this._state = 'running';
+                this.els.preflight.style.display = 'none';
+                this.els.log.style.display = '';
+                this.els.check.style.display = 'none';
+                this.els.start.style.display = 'none';
+                this.els.eraseSettings.style.display = 'none';
+                this.els.retry.style.display = 'none';
+                this.els.close.disabled = true;
+                this.els.uploadButton.disabled = true;
+
+                try {
+                    if (!serial.connected) throw new Error('Not connected to a serial port.');
+                    this.active = true;
+                    const bl = this._bl;
+
+                    // Re-confirm at the moment of erasing, as run() does: the device could have been
+                    // reset or unplugged since the check.
+                    this.setStatus('Confirming the bootloader is still there...');
+                    try {
+                        await bl.ping();
+                    } catch (e) {
+                        this.setVerified(false, '', '');
+                        throw new Error('The device is no longer responding as the ROM bootloader ' +
+                            `(${e.message}). Put it back into the bootloader and check again.`);
+                    }
+
+                    const first = IntelHex.SETTINGS_FLASH_START;
+                    const end = IntelHex.DEVICE_INFO_FLASH_START;
+                    this.setStatus(`Erasing settings sectors 0x${hex8(first)}..0x${hex8(end - 1)}...`);
+                    for (let addr = first; addr < end; addr += IntelHex.SECTOR_SIZE) {
+                        // Belt and braces: sectorErase() takes any address, and erasing even one
+                        // sector at or above DEVICE_INFO_FLASH_START would destroy the OTA keys.
+                        if (addr >= IntelHex.DEVICE_INFO_FLASH_START) {
+                            throw new Error(`Refusing to erase 0x${hex8(addr)}: at or above the ` +
+                                `device info region at 0x${hex8(IntelHex.DEVICE_INFO_FLASH_START)}.`);
+                        }
+                        await bl.sectorErase(addr);
+                        this.logLine(`Erased settings sector 0x${hex8(addr)}`);
+                    }
+                    this.logLine('Settings erased; device info / OTA keys untouched.');
+
+                    this.setStatus('Resetting device...');
+                    await bl.reset();
+
+                    // The device has left the bootloader, so the verified state is spent.
+                    this.setVerified(false, '', '');
+                    serial.setSink(new LineSink(lineRouter));
+                    this.active = false;
+                    this._state = 'done';
+                    this.setStatus('Settings erased — device is rebooting with factory defaults.');
+                    this.logLine('The console is back at its default 1000000 baud. Return SYNC (pin 28) ' +
+                        'low, or the next reset re-enters the bootloader instead of running the firmware.');
+                    this.els.close.textContent = 'Close';
+                    this.els.close.disabled = false;
+                    connectionUI.renegotiateAfterReset();
+                } catch (e) {
+                    this._state = 'error';
+                    this.logLine(`ERROR: ${e.message}`);
+                    this.setStatus(`Failed: ${e.message}`);
+                    // Nothing here erases the app image, so there is no _eraseStarted warning to give:
+                    // a failed settings erase leaves the device exactly as it was.
+                    //
+                    // Deliberately NOT offering Retry: retry() resumes a firmware flash, which is not
+                    // what was asked for. Put the preflight controls back instead, so the next action
+                    // is whichever button the user presses.
+                    this.els.preflight.style.display = '';
+                    this.els.check.style.display = '';
+                    this.els.start.style.display = '';
+                    this.els.eraseSettings.style.display = '';
+                    this.els.close.textContent = 'Close';
+                    this.els.close.disabled = false;
+                } finally {
+                    this.els.uploadButton.disabled = false;
                 }
             },
 

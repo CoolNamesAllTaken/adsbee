@@ -112,12 +112,22 @@ int main(void) {
     // Start NoRTOS AFTER system initialization.
     NoRTOS_start();
 
+    // Arm the watchdog at the default timeout before touching settings, so a hang anywhere in the
+    // load/init/apply path reboots into a visible retry loop instead of wedging the board with no
+    // console. Apply() re-applies the persisted timeout once the settings are known good.
+    adsbee.SetWatchdogTimeoutSec(SettingsManager::Settings::kDefaultWatchdogTimeoutSec);
+
     // Load settings before adsbee.Init() so it can seed the LR2021 interface enable (AT+LR_ENABLE)
     // from the persisted value — a device saved with the bus released must not drive it during boot.
     // Apply() stays after subg_radio.Init() since it configures the SubGHz RF core.
     settings_manager.Load();
+    // Feed between steps so the watchdog bounds each one individually rather than their sum: the point
+    // is to catch a wedged step, not to impose a deadline on a slow-but-progressing boot.
+    adsbee.FeedWatchdog();
     adsbee.Init();
+    adsbee.FeedWatchdog();
     subg_radio.Init();
+    adsbee.FeedWatchdog();
     settings_manager.Apply();
 
     leds.FlashLED(bsp.k1090LEDPin, 100);  // Flash the LED for 100ms.

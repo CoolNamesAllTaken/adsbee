@@ -1013,6 +1013,16 @@ body.dark-mode #map .leaflet-tile-pane {
     padding: 0 5px;
 }
 
+/* Maturity notice, not a hazard: same shape as .settings-danger but a cooler, calmer hue so it
+   reads as "this feature is still moving" rather than "this action may break something". */
+.settings-experimental {
+    font-size: 0.75em;
+    color: #7c3aed;
+    border: 1px solid #7c3aed;
+    border-radius: 4px;
+    padding: 0 5px;
+}
+
 .settings-entry-status {
     font-size: 0.8em;
     color: var(--text-secondary);

@@ -73,6 +73,8 @@ bash firmware/build.sh adsbee_1090 [options] [target]
 | `ti` | TI CC1312 only |
 | `pico` | RP2040 only (requires ESP32 and CC1312 builds to exist first) |
 | `test [filter]` | Build and run host unit tests; `filter` is an optional ctest `-R` regex (e.g. `AircraftJSON`) |
+| `build_and_flash [port]` | Build all three targets, then reflash an attached ADSBee 1090/1090U over USB |
+| `flash [port]` | Reflash using the `combined.uf2` already on disk; runs no build steps, warns if it is stale |
 | `clean` | Delete all build output directories |
 
 ### Options
@@ -119,6 +121,8 @@ bash firmware/build.sh adsbee_1421 [options] [target]
 |--------|-------------|
 | `ti` (default) | CC1314R10 application |
 | `programmer` | RP2040-Zero flash/passthrough jig (requires `ti` built first — it bakes in the hex) |
+| `build_and_flash` | Build `ti` + `programmer`, then reflash an attached m1421 through the jig |
+| `flash` | Reflash using the jig uf2 already on disk; runs no build steps, warns if it or its baked-in hex is stale |
 | `clean [target]` | Delete the target's build directory |
 
 The `-d` flag selects a Debug build, as for adsbee_1090.

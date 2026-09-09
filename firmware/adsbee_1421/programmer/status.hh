@@ -5,6 +5,7 @@
 // LED legend:
 //   yellow blink  waiting for a device (bootloader entry retry loop)
 //   orange        forced-reflash armed (BOOTSEL held at power-up)
+//   white blink   settings-erase armed (BOOTSEL held 3 s); runs at the next bootloader entry
 //   cyan          CRC check against the baked image
 //   magenta blink erase + program
 //   blue blink    post-program CRC verify
@@ -15,6 +16,7 @@
 enum class Status {
     kWaitingForDevice,
     kForcedFlashArmed,
+    kSettingsEraseArmed,
     kCrcCheck,
     kFlashing,
     kVerifying,

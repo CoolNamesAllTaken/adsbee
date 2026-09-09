@@ -369,6 +369,7 @@ void RemoteIDManager::BLETxServiceTick() {
     // Refresh the ODID content (position moves, message counters advance) and push it into the running instances.
     if (!tx_.RefreshFromDeviceState()) {
         status_ |= kStatusTxNoPosition;
+        if (!tx_.PositionSourceAllowed()) status_ |= kStatusTxPositionSourceNotAllowed;
     }
     ServiceAdvertisingPayloads();
 }

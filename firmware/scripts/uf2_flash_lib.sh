@@ -60,3 +60,40 @@ copy_uf2_and_confirm() {
     done
     return 1
 }
+
+# warn_if_artifact_stale <artifact> <rebuild_hint> <source_path>...
+# Warns (but never fails) when <artifact> is older than any source file under <source_path>...,
+# i.e. when a flash-only command is about to push a build that no longer matches the tree.
+#
+# Advisory by design: reflashing a deliberately older image is a legitimate thing to want (bisecting,
+# re-copying after a failed transfer), so this returns 0 either way and lets the flash proceed.
+#
+# Callers must pass NARROWLY SCOPED source paths. In particular, never pass adsbee_1090's `ti/`:
+# `ti/setup/` holds a ~2 GB vendored TI SimpleLink SDK. Pass `ti/sub_ghz_radio` instead. Build output
+# is excluded here so an artifact can never mark itself stale.
+warn_if_artifact_stale() {
+    local artifact="$1" rebuild_hint="$2"
+    shift 2
+
+    # A missing artifact is not staleness; the caller reports that separately, with a better message.
+    [ -f "$artifact" ] || return 0
+
+    local newer=() f
+    while IFS= read -r f; do
+        if [ -n "$f" ]; then newer+=("$f"); fi
+    done < <(find "$@" -type f -newer "$artifact" -not -path "*/build/*" 2>/dev/null)
+
+    if [ "${#newer[@]}" -eq 0 ]; then
+        return 0
+    fi
+
+    echo ""
+    echo "WARNING: $artifact is older than ${#newer[@]} source file(s):"
+    printf '           %s\n' "${newer[@]:0:5}"
+    if [ "${#newer[@]}" -gt 5 ]; then
+        echo "           ... and $(( ${#newer[@]} - 5 )) more."
+    fi
+    echo "         This flashes a STALE build. Run '${rebuild_hint}' to rebuild first."
+    echo ""
+    return 0
+}

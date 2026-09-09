@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include "remote_id_packet.hh"
+#include "settings.hh"  // SettingsManager::RxPosition::PositionSource.
 
 /**
  * Builds the Open Drone ID (ASTM F3411) messages that the ADSBee transmits when it acts as a Broadcast Remote ID
@@ -14,9 +15,11 @@
  *
  * Message content is assembled from:
  *   - The UA (drone) position: ObjectDictionary::CompositeDeviceStatus::rp2040.rx_position, which the RP2040 pushes at
- *     1 Hz. That is a fixed coordinate for a bench transmitter (AT+RX_POSITION) or a live position on a drone. When no
- *     position is available the Location message is still transmitted, with ODID "unknown" sentinels, so receivers can
- *     still see and identify the transmitter.
+ *     1 Hz. Only the position sources that describe THIS device are transmitted (see
+ *     SettingsManager::RxPosition::MayBeTransmittedAsOwnPosition): a fixed coordinate for a bench transmitter
+ *     (AT+RX_POSITION=FIXED) or this device's own GNSS fix on a drone. When no position is available -- because none
+ *     has been acquired, or because the configured source is not one we may transmit -- the Location message is still
+ *     transmitted, with ODID "unknown" sentinels, so receivers can still see and identify the transmitter.
  *   - Identity settings: remote_id_tx_uas_id / _uas_id_type / _ua_type / _operator_id. An empty UAS ID falls back to a
  *     serial derived from this device's own part code, so an unconfigured unit is still a usable test transmitter.
  *
@@ -34,10 +37,17 @@ class RemoteIDTransmitter {
 
     /**
      * Refreshes the cached ODID data (position, identity) from the object dictionary and settings. Call once per
-     * transmit tick, before building messages. Returns true if a valid UA position was available; when false, the
-     * Location message is still built but carries ODID "unknown" values.
+     * transmit tick, before building messages. Returns true if a valid UA position was available AND its source is one
+     * we may transmit; when false, the Location message is still built but carries ODID "unknown" values.
      */
     bool RefreshFromDeviceState();
+
+    /**
+     * Whether the position source seen by the last RefreshFromDeviceState() was one we may transmit. Lets the caller
+     * tell "configured correctly but no position yet" (e.g. waiting on a GNSS fix) apart from "the configured position
+     * source may never be transmitted", which needs the user to change a setting.
+     */
+    bool PositionSourceAllowed() const { return position_source_allowed_; }
 
     /**
      * Builds a full Open Drone ID message pack (Basic ID + Location + System + Operator ID, as available) into buf.
@@ -90,4 +100,6 @@ class RemoteIDTransmitter {
     uint8_t message_counters_[4] = {0};  // Indexed by RawRemoteIDPacket::Transport.
     bool has_operator_id_ = false;
     bool position_valid_ = false;
+    // Starts false so that, before the first refresh, nothing reports a transmittable position source.
+    bool position_source_allowed_ = false;
 };

@@ -1,10 +1,11 @@
 #ifndef SETTINGS_HH_
 #define SETTINGS_HH_
 
+#include <cstddef>  // for offsetof
 #include <cstdint>
 #include <functional>  // for strtoull
 
-// #include "crc.hh"
+#include "crc.hh"
 #include "macros.hh"
 #include "stdio.h"
 #include "stdlib.h"  // for strtoull
@@ -13,8 +14,13 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 2;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 3;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 2;
+
+// Leading word of a valid settings blob. Deliberately not 0x00000000 or 0xFFFFFFFF so that blank,
+// bulk-erased, or all-zero flash fails the check immediately rather than looking like a valid
+// struct. Paired with the trailing CRC32; see SettingsManager::Settings::IsValid().
+static constexpr uint32_t kSettingsMagic = 0x14215E77;
 
 class SettingsManager {
    public:
@@ -106,7 +112,13 @@ class SettingsManager {
 
     // This struct contains nonvolatile settings that should persist across reboots but may be overwritten during a
     // firmware upgrade if the format of the settings struct changes.
-    struct alignas(4) Settings {
+    //
+    // Packed on purpose: the integrity CRC is taken over the raw object bytes, so the struct must have no
+    // padding. Padding bytes are indeterminate in a stack-local (e.g. ResetToDefaults()'s default_settings),
+    // which would make the CRC of two otherwise identical structs differ. Note this is why the struct is not
+    // alignas(4) — that would force sizeof() up to a multiple of 4 and reintroduce trailing padding. The
+    // in-RAM instance is aligned separately (see the `settings` member below).
+    struct __attribute__((packed)) Settings {
         static constexpr uint32_t kDefaultWatchdogTimeoutSec = 10;
         // NOTE: Lengths do not include null terminator.
         // Single source of truth for the console boot baud rate: CommsManagerConfig defaults to this,
@@ -124,7 +136,9 @@ class SettingsManager {
         static constexpr uint16_t kMACAddrStrLen = 18;  // XX:XX:XX:XX:XX:XX (does not include null terminator)
         static constexpr uint16_t kMACAddrNumBytes = 6;
 
-        // Actual settings values start here.
+        // Actual settings values start here. `magic` must stay first and `crc` last: the CRC covers
+        // everything from `magic` up to (not including) `crc`.
+        uint32_t magic = kSettingsMagic;
         uint32_t settings_version = kSettingsVersion;
 
         // ADSBee settings
@@ -157,11 +171,47 @@ class SettingsManager {
         // Receiver position settings
         RxPosition rx_position;
 
+        // Integrity check over every preceding byte. Must stay the last member; stamped by Stamp().
+        uint32_t crc = 0;
+
         /**
          * Default constructor.
          */
         Settings() {}
+
+        /**
+         * CRC32 over the struct from `magic` up to (not including) `crc`.
+         * @retval Expected value of the crc field for the current contents.
+         */
+        inline uint32_t ComputeCRC() const {
+            return crc32_ieee_802_3(reinterpret_cast<const uint8_t *>(this), sizeof(Settings) - sizeof(crc));
+        }
+
+        /**
+         * Stamps the magic, version and CRC so the struct is ready to be written to flash. Call immediately
+         * before programming; any later field change invalidates the CRC.
+         */
+        inline void Stamp() {
+            magic = kSettingsMagic;
+            settings_version = kSettingsVersion;
+            crc = ComputeCRC();
+        }
+
+        /**
+         * Checks a struct read back from flash. Guards against blank flash, a stale settings format, and a
+         * torn write that landed the leading words but not the rest (which the version check alone accepts,
+         * since settings_version sits at the front of the struct).
+         * @retval True if the blob is intact and belongs to this firmware.
+         */
+        inline bool IsValid() const {
+            return magic == kSettingsMagic && settings_version == kSettingsVersion && crc == ComputeCRC();
+        }
     };
+
+    // The CRC is taken over raw object bytes, so `crc` must sit flush against the end of the struct with no
+    // trailing padding. Trips if the packed attribute is ever dropped or a member is added after `crc`.
+    static_assert(offsetof(Settings, crc) == sizeof(Settings) - sizeof(uint32_t),
+                  "Settings::crc must be the last member, with no trailing padding.");
 
     // This struct contains device information that should persist across firmware upgrades.
     struct DeviceInfo {
@@ -248,8 +298,9 @@ class SettingsManager {
     static bool SetDeviceInfo(const DeviceInfo& device_info);
 
     /**
-     * Loads settings from EEPROM. Assumes settings are stored at address 0x0 and doesn't do any integrity check.
-     * @retval True if succeeded, false otherwise.
+     * Loads settings from flash. Validates the blob with Settings::IsValid(); on failure (blank flash, a
+     * settings format change, or a torn write) it falls back to defaults and rewrites the region.
+     * @retval True if succeeded, false if the fallback rewrite failed.
      */
     bool Load();
 
@@ -277,8 +328,10 @@ class SettingsManager {
     }
 
     /**
-     * Saves settings to EEPROM. Stores settings at address 0x0 and performs no integrity check.
-     * @retval True if succeeded, false otherwise.
+     * Saves settings to flash, stamping the magic/version/CRC first and verifying the write by reading it
+     * back. Returns the real outcome, so AT+SETTINGS=SAVE reports ERROR on a failed write rather than a
+     * false OK.
+     * @retval True if the settings were written and read back intact, false otherwise.
      */
     bool Save();
 
@@ -287,7 +340,9 @@ class SettingsManager {
      */
     void ResetToDefaults();
 
-    Settings settings;
+    // Aligned explicitly: Settings is packed (alignof 1) so the CRC can cover its raw bytes, but the live
+    // instance is memcpy'd to and from flash and read field-by-field on every loop, so keep it word aligned.
+    alignas(4) Settings settings;
 
    private:
 };

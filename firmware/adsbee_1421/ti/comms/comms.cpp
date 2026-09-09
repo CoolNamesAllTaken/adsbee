@@ -10,6 +10,7 @@
 /* clang-format off */
 #include <ti/devices/DeviceFamily.h>
 #include DeviceFamily_constructPath(inc/hw_memmap.h)
+#include DeviceFamily_constructPath(driverlib/sys_ctrl.h)
 #include DeviceFamily_constructPath(driverlib/uart.h)
 #include <ti/drivers/dpl/HwiP.h>
 /* clang-format on */
@@ -94,7 +95,10 @@ bool CommsManager::OpenUART(uint32_t baud) {
 
 bool CommsManager::Init() {
     if (!OpenUART(config_.uart_baud_rate)) {
-        while (1);
+        // Never spin here: with no console there is no way to report the failure, and a silent hang is
+        // indistinguishable from a dead board (and unrecoverable, since the app is what the recovery
+        // tooling talks to). Reset instead -- the resulting reboot loop is visible to the programmer jig.
+        SysCtrlSystemReset();
     }
     return true;
 }
@@ -127,7 +131,10 @@ bool CommsManager::SetBaudRate(uint32_t baud) {
         // boot default rather than hanging the console.
         config_.uart_baud_rate = SettingsManager::Settings::kDefaultUARTBaudRate;
         if (!OpenUART(config_.uart_baud_rate)) {
-            while (1);
+            // Reset rather than spin. This path is reachable at boot whenever a non-default console baud is
+            // persisted (SettingsManager::Apply() -> SetBaudRate()), so a hang here bricks the console at
+            // every rate, permanently, with no way in.
+            SysCtrlSystemReset();
         }
     }
     // Discard any garbage clocked in at the mismatched rate (e.g. a trailing newline from the host).

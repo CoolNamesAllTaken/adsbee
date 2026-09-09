@@ -16,8 +16,6 @@ static volatile bool reset_pending = false;
 static volatile bool sync_low_at_reset = false;
 static bool last_dtr = false;
 
-static const uint32_t kBootselPollMs = 50;
-
 extern "C" void tud_cdc_line_coding_cb(uint8_t itf, const cdc_line_coding_t* coding) {
     (void)itf;
     if (coding->bit_rate == 0) return;
@@ -102,11 +100,13 @@ BridgeExit BridgeRun() {
 
         if (absolute_time_diff_us(get_absolute_time(), next_bootsel_poll) <= 0) {
             next_bootsel_poll = delayed_by_ms(get_absolute_time(), kBootselPollMs);
-            if (GetBootselButton()) {
+            BootselEvent event = PollBootsel();
+            if (event != BootselEvent::kNone) {
                 while (GetBootselButton()) sleep_ms(20);
                 sleep_ms(50);  // Debounce the release.
+                PollBootsel();  // Consume the release so the next loop's poll sees no stale edge.
                 bridge_active = false;
-                return BridgeExit::kRecheck;
+                return event == BootselEvent::kLongPress ? BridgeExit::kEraseSettings : BridgeExit::kRecheck;
             }
         }
     }

@@ -426,9 +426,14 @@ bool ADSBee::SetWatchdogTimeoutSec(uint32_t timeout_sec) {
         return true;
     }
 
-    // Guard against overflow: max load value is UINT32_MAX ticks at GET_MCU_CLOCK Hz.
+    // Guard against overflow: max load value is UINT32_MAX ticks at GET_MCU_CLOCK Hz. Clamp rather than
+    // bail out -- returning early here used to leave the watchdog switched off entirely, so a corrupt
+    // persisted timeout would silently remove the one mechanism that turns a boot-path hang into a
+    // visible reset loop instead of a brick.
     if (timeout_sec > UINT32_MAX / GET_MCU_CLOCK) {
-        return false;
+        CONSOLE_WARNING("ADSBee::SetWatchdogTimeoutSec", "Timeout %lu s out of range; clamping to %lu s.",
+                        (unsigned long)timeout_sec, (unsigned long)kDefaultWatchdogTimeoutSec);
+        timeout_sec = kDefaultWatchdogTimeoutSec;
     }
 
     watchdog_timeout_sec_ = timeout_sec;
@@ -462,7 +467,9 @@ void ADSBee::EnterUARTBootloader() {
     // SysCtrlSystemReset() both execute from ROM, so erasing flash sector 0 from here is safe.
     // Do not add any work between the erase and the reset.
     FlashUtils::FlashSafe();
-    FlashUtils::EraseSector(0x0);  // erase the vector-table sector -> invalid reset vector
+    // Result deliberately ignored: nothing can be reported from here (interrupts are masked and the
+    // console is already drained), and a failed erase simply means the app boots normally instead.
+    (void)FlashUtils::EraseSector(0x0);  // erase the vector-table sector -> invalid reset vector
     // With CCFG IMAGE_VALID_CONF == 0, the ROM validates the reset vector at flash address 0x0
     // on boot. With it erased (0xFFFFFFFF) the ROM treats the image as invalid and enters the
     // serial bootloader on DIO2 (RX) / DIO3 (TX) -- the same pins as SUBG_UART.

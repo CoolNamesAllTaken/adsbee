@@ -52,8 +52,10 @@ cd firmware/adsbee_1421
 
 Artifact: `firmware/adsbee_1421/programmer/build/Release/adsbee_1421_programmer.uf2` —
 hold BOOT on the RP2040-Zero while plugging it in and drag the file onto the `RPI-RP2` drive.
-Or run `./build.sh flash`, which builds both apps, prompts for bootloader mode, copies the
-uf2, and watches the jig's console while it reflashes the attached m1421.
+Or run `./build.sh build_and_flash`, which builds both apps, prompts for bootloader mode, copies
+the uf2, and watches the jig's console while it reflashes the attached m1421. `./build.sh flash`
+does the same without building, using the uf2 already on disk; because the ti hex is baked in at
+configure time, it warns if that hex is newer than the jig image.
 A version-stamped copy (`adsbee_1421_programmer-fw<version>.uf2`, named after the **baked**
 firmware version parsed from `object_dictionary.cpp`) is produced alongside it for release/CI.
 To bake a different image, pass `-DADSBEE_1421_HEX=<path>` to CMake.
@@ -61,9 +63,19 @@ To bake a different image, pass `-DADSBEE_1421_HEX=<path>` to CMake.
 ## Buttons
 
 - **BOOTSEL held at power-up**: force a reflash even if the CRC matches.
-- **BOOTSEL pressed during pass-through**: rerun the check/flash cycle and re-negotiate the
+- **BOOTSEL tapped during pass-through**: rerun the check/flash cycle and re-negotiate the
   console (sweep + move to 1 M). This is also the recovery path after in-band desyncs (see
   limitations).
+- **BOOTSEL held for 3 s (at any time)**: arm a **settings erase**. The LED blinks white, and at
+  the next bootloader entry the jig erases the four Settings sectors
+  (`0x000FC000`–`0x000FDFFF`); the device then boots with factory defaults. Device Info
+  (`0x000FE000`, part code and OTA keys) is never touched.
+
+  This is the escape hatch for a device whose saved settings stop the console coming up. Because
+  it is armed from the wait loops — not just from pass-through — it works while the jig is stuck
+  reporting `Device console not responding at any whitelisted baud rate`, which is exactly when
+  `AT+SETTINGS=RESET` and `AT+BOOT_UART_BOOTLOADER` are unavailable (both need a console that
+  already answers). It is never triggered automatically: it discards the user's settings.
 
 ## LED legend (WS2812)
 
@@ -71,6 +83,7 @@ To bake a different image, pass `-DADSBEE_1421_HEX=<path>` to CMake.
 |---------------|------------------------------------------|
 | yellow blink  | waiting for a device / bootloader entry  |
 | orange        | forced reflash armed (BOOTSEL at boot)   |
+| white blink   | settings erase armed (BOOTSEL held 3 s)  |
 | cyan          | CRC check against the baked image        |
 | magenta blink | erasing + programming                    |
 | blue blink    | post-program CRC verify                  |
@@ -115,7 +128,8 @@ see per-attempt diagnostics. The jig re-prints its last diagnosis every ~5 s whi
 | `No response ... RESET_N(GP26)=LOW (stuck in reset ...)` | Something is holding reset low with the jig's driver released — wiring short or drive conflict on ~SRST. |
 | `No response ... UART RX(GP29)=LOW (module TX not driving ...)` | Module unpowered, held in reset, or SUTX wiring wrong (RX should idle high when the module runs). |
 | `No response ... RESET_N=high, UART RX=high (link plausible)` | Lines look electrically sane; suspect TX leg (GP28 → SURX) or module-side UART config. |
-| `Device console not responding at any whitelisted baud rate` | SBL/flash worked but the app's AT console never answered `AT+DEVICE_INFO?` at any of the five whitelisted rates within ~6 s of boot. |
+| `Device console not responding at any whitelisted baud rate` | SBL/flash worked but the app's AT console never answered `AT+DEVICE_INFO?` at any of the five whitelisted rates within ~6 s of boot. If it repeats on every boot with a CRC-verified image, the saved settings are the likely cause — hold BOOTSEL for 3 s to erase them (see [Buttons](#buttons)). |
+| `Settings erase ARMED` / `Settings erased; ...` | A BOOTSEL long press was registered, and the Settings sectors were erased at the next bootloader entry. The device now boots with factory defaults. |
 
 Modules running pre-backdoor firmware can't be entered via SYNC at all: flash them once via
 JTAG, or connect a console directly and send `AT+BOOT_UART_BOOTLOADER=1DEADBEE` (erases the

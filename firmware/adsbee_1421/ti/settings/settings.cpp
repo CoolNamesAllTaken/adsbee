@@ -21,8 +21,57 @@ static_assert(sizeof(SettingsManager::DeviceInfo) < FlashUtils::kFlashSettingsRe
 // Make sure settings struct doesn't run into device info.
 static_assert(sizeof(SettingsManager::Settings) < kFlashDeviceInfoStartAddr - kFlashSettingsStartAddr);
 
+// Stamps the integrity fields and writes the settings struct to flash, verifying the result. Shared by
+// Save() and by Load()'s reset-to-defaults path so both get the same stamping and read-back check.
+// Deliberately does NOT scrape live values out of adsbee/subg_radio/comms_manager -- Load() runs before
+// those are initialized (see main.cpp), so that scrape belongs to Save() alone.
+static bool WriteSettingsToFlash(SettingsManager::Settings& settings) {
+    // Let queued console output reach the host before interrupts go down: FlashSafe() masks the UART TX
+    // completion interrupt that chains the next ring segment, so an erase started with a full ring stalls
+    // it for the duration. Mirrors CommsManager::SetBaudRate() / ADSBee::Reboot().
+    comms_manager.DrainConsoleTx();
+
+    // Stamp last, so the CRC covers the struct exactly as it is about to be programmed.
+    settings.Stamp();
+
+    FlashUtils::FlashSafe();
+    bool success = FlashUtils::EraseRegion(kFlashSettingsStartAddr);
+    if (success) {
+        success = FlashUtils::Program(kFlashSettingsStartAddr, (uint8_t*)&settings, sizeof(settings));
+    }
+    FlashUtils::FlashUnsafe();
+
+    // Read back what actually landed. Flash is memory mapped, so this compares the programmed bytes
+    // directly; without it a failed erase or program is indistinguishable from a good one.
+    if (success && memcmp((const void*)kFlashSettingsStartAddr, &settings, sizeof(settings)) != 0) {
+        success = false;
+    }
+    if (!success) {
+        CONSOLE_ERROR("SettingsManager::WriteSettingsToFlash", "Failed to write %u settings bytes to 0x%08lx.",
+                      (unsigned)sizeof(settings), (unsigned long)kFlashSettingsStartAddr);
+    }
+    return success;
+}
+
 bool SettingsManager::Apply() {
     bool success = true;
+
+    // Clamp the values that index a lookup table before anything reads them. Load() has already checked the
+    // blob's CRC, so this is defence in depth for a struct that was corrupted in RAM or written by a build
+    // whose enums have since shrunk; kConsoleLogLevelStrs / kReportingProtocolStrs / kPositionSourceStrs are
+    // all indexed directly by these fields in Print() and PrintAT(). (subg_mode and r1090_preamble_mode are
+    // clamped by their own setters, and watchdog_timeout_sec by SetWatchdogTimeoutSec().)
+    if (settings.log_level >= LogLevel::kNumLogLevels) {
+        settings.log_level = LogLevel::kWarnings;
+    }
+    for (uint16_t i = 0; i < SerialInterface::kNumSerialInterfaces; i++) {
+        if (settings.reporting_protocols[i] >= ReportingProtocol::kNumProtocols) {
+            settings.reporting_protocols[i] = ReportingProtocol::kNoReports;
+        }
+    }
+    if (settings.rx_position.source >= RxPosition::kNumPositionSources) {
+        settings.rx_position.source = RxPosition::kPositionSourceLowestAircraft;
+    }
 
     // All of these can fail if the radio fails to open/close or the RX command can't be restarted; fold that
     // into the return value so boot/LOAD callers can see it.
@@ -73,27 +122,32 @@ bool SettingsManager::Load() {
     // Load settings from flash.
     memcpy(&settings, (const void*)kFlashSettingsStartAddr, sizeof(Settings));
 
-    // Reset to defaults if loading from a blank flash.
-    if (settings.settings_version != kSettingsVersion) {
-        CONSOLE_ERROR("settingsManager::Settings::Load",
-                      "Settings version mismatch. Expected %d, got %d. Resetting to defaults.", kSettingsVersion,
-                      settings.settings_version);
+    // Reset to defaults if the stored blob is blank, belongs to an older settings format, or is torn.
+    // Checking settings_version alone is not enough: it sits at the front of the struct, so a write that
+    // was interrupted after the leading words leaves a blob that passes a version-only check on every
+    // boot forever, and whose remaining fields are erased flash (0xFF).
+    if (!settings.IsValid()) {
+        CONSOLE_ERROR("SettingsManager::Load",
+                      "Settings integrity check failed (magic 0x%08lx/0x%08lx, version %lu/%lu, crc "
+                      "0x%08lx/0x%08lx). Resetting to defaults.",
+                      (unsigned long)settings.magic, (unsigned long)kSettingsMagic,
+                      (unsigned long)settings.settings_version, (unsigned long)kSettingsVersion,
+                      (unsigned long)settings.crc, (unsigned long)settings.ComputeCRC());
 
         ResetToDefaults();  // Reset to defaults with part number specific overrides.
 
-        FlashUtils::FlashSafe();
-        FlashUtils::EraseRegion(kFlashSettingsStartAddr);
-        FlashUtils::Program(kFlashSettingsStartAddr, (uint8_t*)&settings, sizeof(settings));
-        FlashUtils::FlashUnsafe();
+        return WriteSettingsToFlash(settings);
     }
 
     return true;
 }
 
 bool SettingsManager::Save() {
-    // Save reporting protocols.
-    comms_manager.GetReportingProtocol(SerialInterface::kConsole,
-                                       settings.reporting_protocols[SerialInterface::kConsole]);
+    // Save reporting protocols. Via a local: Settings is packed, so its members cannot bind to the
+    // non-const reference GetReportingProtocol() takes.
+    ReportingProtocol console_reporting_protocol;
+    comms_manager.GetReportingProtocol(SerialInterface::kConsole, console_reporting_protocol);
+    settings.reporting_protocols[SerialInterface::kConsole] = console_reporting_protocol;
 
     // Sync live runtime values into the settings struct before flashing. These are owned by the
     // adsbee object (their AT set-commands only update adsbee), so without this they would persist
@@ -110,11 +164,7 @@ bool SettingsManager::Save() {
     // Live console baud — AT+BAUD_RATE only changes the running rate; SAVE is what persists it.
     settings.baud_rates[SerialInterface::kConsole] = comms_manager.GetBaudRate();
 
-    FlashUtils::FlashSafe();
-    FlashUtils::EraseRegion(kFlashSettingsStartAddr);
-    FlashUtils::Program(kFlashSettingsStartAddr, (uint8_t*)&settings, sizeof(settings));
-    FlashUtils::FlashUnsafe();
-    return true;
+    return WriteSettingsToFlash(settings);
 }
 
 void SettingsManager::ResetToDefaults() {
@@ -140,12 +190,25 @@ void SettingsManager::ResetToDefaults() {
 }
 
 bool SettingsManager::SetDeviceInfo(const DeviceInfo& device_info) {
-    // Device Info is stored in flash.
+    // Device Info is stored in flash. Nothing regenerates it (it holds the part code and OTA keys), so a
+    // failed write must be reported rather than swallowed.
+    comms_manager.DrainConsoleTx();
+
     FlashUtils::FlashSafe();
-    FlashUtils::EraseRegion(kFlashDeviceInfoStartAddr);
-    FlashUtils::Program(kFlashDeviceInfoStartAddr, (uint8_t*)&device_info, sizeof(device_info));
+    bool success = FlashUtils::EraseRegion(kFlashDeviceInfoStartAddr);
+    if (success) {
+        success = FlashUtils::Program(kFlashDeviceInfoStartAddr, (uint8_t*)&device_info, sizeof(device_info));
+    }
     FlashUtils::FlashUnsafe();
-    return true;
+
+    if (success && memcmp((const void*)kFlashDeviceInfoStartAddr, &device_info, sizeof(device_info)) != 0) {
+        success = false;
+    }
+    if (!success) {
+        CONSOLE_ERROR("SettingsManager::SetDeviceInfo", "Failed to write device info to 0x%08lx.",
+                      (unsigned long)kFlashDeviceInfoStartAddr);
+    }
+    return success;
 }
 
 // NOTE: This function needs to be updated separately for ESP32.
