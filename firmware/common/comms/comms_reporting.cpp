@@ -101,9 +101,14 @@ static constexpr size_t kMaxUATUplinkPerCompositeArray =
 //        which is already the worst-case payload; short squitter (7 bytes) produces smaller frames.
 static constexpr size_t kBeastBatchBufMaxBytes =
     kMaxModeSPerCompositeArray * BeastReporter::kModeSBeastFrameMaxLenBytes;
-static constexpr size_t kRawBatchBufMaxBytes = kMaxModeSPerCompositeArray * kRawModeSFrameMaxNumChars +
-                                               kMaxUATADSBPerCompositeArray * kRawUATADSBFrameMaxNumChars +
-                                               kMaxUATUplinkPerCompositeArray * kRawUATUplinkFrameMaxNumChars;
+// Raw frames are batched into a fixed 2 kB buffer that is flushed whenever the next frame wouldn't fit, so a full
+// composite array goes out in a few sends rather than one. This replaces a ~13 kB worst-case buffer; on the PSRAM-less
+// ESP32-S3 that RAM comes straight out of the heap that WiFi, lwIP and httpd share.
+static constexpr size_t kRawBatchBufMaxBytes = 2048;
+static_assert(kRawBatchBufMaxBytes >= kRawModeSFrameMaxNumChars &&
+                  kRawBatchBufMaxBytes >= kRawUATADSBFrameMaxNumChars &&
+                  kRawBatchBufMaxBytes >= kRawUATUplinkFrameMaxNumChars,
+              "Raw batch buffer must be able to hold at least one frame of each type.");
 
 bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManager::ReportingProtocol* sink_protocols,
                                    uint16_t num_sinks, const CompositeArray::RawPackets* packets_to_report) {
@@ -340,23 +345,26 @@ bool CommsManager::ReportRaw(ReportSink* sinks, uint16_t num_sinks, const Compos
     }
 
 #if COMMS_REPORTING_BATCH_SENDS
-    // Batch all frames into one buffer, then do a single send per sink to minimize lwIP IPC round-trips.
+    // Batch frames into a buffer and send it whenever it can't take the next frame, to minimize lwIP IPC round-trips
+    // without holding a worst-case-sized buffer.
     static char raw_batch_buf[kRawBatchBufMaxBytes];
     uint16_t batch_len = 0;
     uint16_t total_packets = 0;
+    bool ret = true;
 
     // The BuildRaw*Frame functions are thin wrappers around snprintf, so on truncation they return the
     // would-have-been length (>= the frame cap) and on an encoding error they return a negative that
     // wraps to a huge uint16_t. Advancing batch_len by either would walk the write cursor past the
-    // bytes actually written, so validate before accumulating. The remaining-space check guards the
-    // batch buffer itself, whose size bound is derived rather than enforced.
-#define BUILD_RAW_FRAME(build_call, frame_max_num_chars)                            \
-    do {                                                                            \
-        if (static_cast<size_t>(batch_len) + (frame_max_num_chars) > sizeof(raw_batch_buf)) { \
-            raw_tally.num_build_failures++;                                         \
-            break;                                                                  \
-        }                                                                           \
-        uint16_t frame_len = (build_call);                                          \
+    // bytes actually written, so validate before accumulating. The remaining-space check flushes the
+    // batch when the next frame might not fit (the static_assert above guarantees it fits in an empty buffer).
+#define BUILD_RAW_FRAME(build_call, frame_max_num_chars)                                            \
+    do {                                                                                            \
+        if (static_cast<size_t>(batch_len) + (frame_max_num_chars) > sizeof(raw_batch_buf)) {       \
+            ret &= SendBufToSinks(sinks, num_sinks, raw_batch_buf, batch_len, raw_tally, total_packets); \
+            batch_len = 0;                                                                          \
+            total_packets = 0;                                                                      \
+        }                                                                                           \
+        uint16_t frame_len = (build_call);                                                          \
         if (frame_len == 0 || frame_len >= (frame_max_num_chars)) {                 \
             raw_tally.num_build_failures++;                                         \
             break;                                                                  \
@@ -379,9 +387,8 @@ bool CommsManager::ReportRaw(ReportSink* sinks, uint16_t num_sinks, const Compos
     }
 #undef BUILD_RAW_FRAME
 
-    bool ret = true;
     if (batch_len > 0) {
-        ret = SendBufToSinks(sinks, num_sinks, raw_batch_buf, batch_len, raw_tally, total_packets);
+        ret &= SendBufToSinks(sinks, num_sinks, raw_batch_buf, batch_len, raw_tally, total_packets);
     }
     FLUSH_REPORT_TALLY_RATE_LIMITED("CommsManager::ReportRaw", raw_tally);
 #else

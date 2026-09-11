@@ -230,6 +230,10 @@ int main() {
             sleep_ms(200);
             esp32.SetEnable(true);
             esp32_last_successful_comms_ms = get_time_since_boot_ms();
+            // Give the ESP32 a full watchdog period to boot and resume heartbeats. Without this the watchdog fires a
+            // few seconds into the ESP32's boot, so an ESP32 crash also rebooted the RP2040 (dropping the USB console
+            // and the 1090 receiver along with it).
+            adsbee.PokeWatchdog();
         }
 #endif
     }

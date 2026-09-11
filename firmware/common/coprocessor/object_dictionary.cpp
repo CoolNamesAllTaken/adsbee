@@ -36,18 +36,40 @@ extern CPUMonitor cpu_monitor;
 #endif
 
 #ifdef ON_COPRO_SLAVE
+/**
+ * Returns true if a write or read of buf_len bytes at offset fits inside an object of object_len bytes, otherwise logs
+ * an error naming the object and returns false. Guards every memcpy into or out of a fixed size object so that a peer
+ * running a different struct layout (or a corrupted transaction) can't overrun the object.
+ */
+static bool CheckObjectBounds(const char* tag, const char* object_name, uint16_t offset, uint16_t buf_len,
+                              size_t object_len) {
+    if ((size_t)offset + buf_len > object_len) {
+        CONSOLE_ERROR(tag, "%d Bytes at offset %d exceeds the %d Byte %s object.", buf_len, offset, (int)object_len,
+                      object_name);
+        return false;
+    }
+    return true;
+}
+
 bool ObjectDictionary::SetBytes(Address addr, uint8_t* buf, uint16_t buf_len, uint16_t offset) {
     switch (addr) {
         case kAddrScratch:
             // Warning: printing here will cause a timeout and tests will fail.
             // CONSOLE_INFO("ObjectDictionary::SetBytes", "Setting %d settings Bytes at offset %d.", buf_len,
             // offset);
+            if (!CheckObjectBounds("ObjectDictionary::SetBytes", "scratch", offset, buf_len, sizeof(scratch_))) {
+                return false;
+            }
             memcpy((uint8_t*)&scratch_ + offset, buf, buf_len);
             break;
         case kAddrSettingsData:
             // Warning: printing here will cause a timeout and tests will fail.
             // CONSOLE_INFO("ObjectDictionary::SetBytes", "Setting %d settings Bytes at offset %d.", buf_len,
             // offset);
+            if (!CheckObjectBounds("ObjectDictionary::SetBytes", "settings", offset, buf_len,
+                                   sizeof(SettingsManager::Settings))) {
+                return false;
+            }
             memcpy((uint8_t*)&(settings_manager.settings) + offset, buf, buf_len);
             if (offset + buf_len == sizeof(SettingsManager::Settings)) {
                 settings_manager.Apply();
@@ -56,6 +78,11 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
             break;
         case kAddrRollQueue: {
             // Ignore offset since we only allow full writes for this command.
+            if (buf_len < sizeof(RollQueueRequest)) {
+                CONSOLE_ERROR("ObjectDictionary::SetBytes", "RollQueueRequest write of %d Bytes is shorter than %d.",
+                              buf_len, (int)sizeof(RollQueueRequest));
+                return false;
+            }
             RollQueueRequest roll_request;
             memcpy(&roll_request, buf, sizeof(RollQueueRequest));
             switch (roll_request.queue_id) {
@@ -128,8 +155,17 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
         }
 #endif
         case kAddrAircraftDictionaryMetrics: {
+            // Only whole-struct writes are meaningful here. A length mismatch means the RP2040 and ESP32 were built
+            // with different AircraftDictionary::Metrics layouts; reject it loudly instead of overrunning the stack.
+            if (offset != 0 || buf_len != sizeof(AircraftDictionary::Metrics)) {
+                CONSOLE_ERROR("ObjectDictionary::SetBytes",
+                              "AircraftDictionary::Metrics write of %d Bytes at offset %d does not match the %d Byte "
+                              "struct; RP2040 and ESP32 firmware are out of sync.",
+                              buf_len, offset, (int)sizeof(AircraftDictionary::Metrics));
+                return false;
+            }
             AircraftDictionary::Metrics rp2040_metrics;
-            memcpy(&rp2040_metrics, buf + offset, buf_len);
+            memcpy(&rp2040_metrics, buf, sizeof(AircraftDictionary::Metrics));
             xQueueSend(adsbee_server.rp2040_aircraft_dictionary_metrics_queue, &rp2040_metrics, 0);
             break;
         }
@@ -191,21 +227,36 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
 bool ObjectDictionary::GetBytes(Address addr, uint8_t* buf, uint16_t buf_len, uint16_t offset) {
     switch (addr) {
         case kAddrFirmwareVersion:
+            if (!CheckObjectBounds("ObjectDictionary::GetBytes", "firmware version", offset, buf_len,
+                                   sizeof(kFirmwareVersion))) {
+                return false;
+            }
             memcpy(buf, (uint8_t*)(&kFirmwareVersion) + offset, buf_len);
             break;
         case kAddrScratch:
             // Warning: printing here will cause a timeout and tests will fail.
             // CONSOLE_INFO("ObjectDictionary::GetBytes", "Getting %d scratch Bytes at offset %d.", buf_len,
             // offset);
+            if (!CheckObjectBounds("ObjectDictionary::GetBytes", "scratch", offset, buf_len, sizeof(scratch_))) {
+                return false;
+            }
             memcpy(buf, (uint8_t*)(&scratch_) + offset, buf_len);
             break;
         case kAddrSettingsData:
             // Warning: printing here will cause a timeout and tests will fail.
             // CONSOLE_INFO("ObjectDictionary::GetBytes", "Getting %d settings Bytes at offset %d.",
             // buf_len, offset);
+            if (!CheckObjectBounds("ObjectDictionary::GetBytes", "settings", offset, buf_len,
+                                   sizeof(SettingsManager::Settings))) {
+                return false;
+            }
             memcpy(buf, (uint8_t*)&(settings_manager.settings) + offset, buf_len);
             break;
         case kAddrDeviceStatus: {
+            if (!CheckObjectBounds("ObjectDictionary::GetBytes", "device status", offset, buf_len,
+                                   sizeof(device_status))) {
+                return false;
+            }
             UpdateDeviceStatus();
             memcpy(buf, (uint8_t*)&device_status + offset, buf_len);
             break;
@@ -240,13 +291,23 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
         }
 #ifdef ON_ESP32
         case kAddrESP32DeviceInfo: {
+            // NOTE: offset is a byte offset, so it must be applied to a byte pointer (not to the struct pointer, which
+            // would step by whole structs and read off the end of the stack).
+            if (!CheckObjectBounds("ObjectDictionary::GetBytes", "ESP32 device info", offset, buf_len,
+                                   sizeof(ESP32DeviceInfo))) {
+                return false;
+            }
             ESP32DeviceInfo esp32_device_info = GetESP32DeviceInfo();
-            memcpy(buf, &esp32_device_info + offset, buf_len);
+            memcpy(buf, (uint8_t*)&esp32_device_info + offset, buf_len);
             break;
         }
         case kAddrESP32NetworkInfo: {
+            if (!CheckObjectBounds("ObjectDictionary::GetBytes", "ESP32 network info", offset, buf_len,
+                                   sizeof(ESP32NetworkInfo))) {
+                return false;
+            }
             ESP32NetworkInfo network_info = comms_manager.GetNetworkInfo();
-            memcpy(buf, &network_info + offset, buf_len);
+            memcpy(buf, (uint8_t*)&network_info + offset, buf_len);
             break;
         }
         case kAddrESP32RebootInfo: {
