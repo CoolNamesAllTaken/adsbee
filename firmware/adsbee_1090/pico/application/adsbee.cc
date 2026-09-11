@@ -30,6 +30,25 @@
 #define DEBUG_PREAMBLE_DETECTOR
 // Uncomment the line below to enable demodulator debugging on recovered_clk.
 // #define DEBUG_DEMODULATOR
+// Uncomment to measure OnDemodComplete() ISR duration and print avg/max once per second (default log level).
+// #define DEBUG_ISR_TIMING
+// Uncomment to use the self-parking message demodulator PIO program (see capture.pio). The demodulator pads and parks
+// itself at the end of each message, so OnDemodComplete() only drains the FIFO instead of padding bit-by-bit and
+// restarting the state machine. Requires on-target validation before being made the default.
+// #define DEMODULATOR_SELF_PARKING
+
+#ifdef DEMODULATOR_SELF_PARKING
+#define MESSAGE_DEMODULATOR_PROGRAM              message_demodulator_self_parking_program
+#define MESSAGE_DEMODULATOR_PROGRAM_INIT         message_demodulator_self_parking_program_init
+#define MESSAGE_DEMODULATOR_OFFSET_INITIAL_ENTRY message_demodulator_self_parking_offset_initial_entry
+// Maximum number of PC polls to wait for the demodulator to finish padding and park after the demod pin drops
+// (padding takes ~1.4us after the pin drops; each poll is a handful of system clock cycles).
+static constexpr uint16_t kDemodulatorParkSpinLimit = 256;
+#else
+#define MESSAGE_DEMODULATOR_PROGRAM              message_demodulator_program
+#define MESSAGE_DEMODULATOR_PROGRAM_INIT         message_demodulator_program_init
+#define MESSAGE_DEMODULATOR_OFFSET_INITIAL_ENTRY message_demodulator_offset_initial_entry
+#endif  // DEMODULATOR_SELF_PARKING
 
 // Uncomment this to hold the status LED on for 5 seconds if the watchdog commanded a reboot.
 // #define WATCHDOG_REBOOT_WARNING
@@ -65,7 +84,7 @@ void __time_critical_func(on_demod_pin_change)(uint gpio, uint32_t event_mask) {
     gpio_acknowledge_irq(gpio, event_mask);
 }
 
-void on_demod_complete() { isr_access->OnDemodComplete(); }
+void __time_critical_func(on_demod_complete)() { isr_access->OnDemodComplete(); }
 
 /** End pass-through functions for public access **/
 
@@ -78,7 +97,7 @@ ADSBee::ADSBee(ADSBeeConfig config_in) {
     }
 
     preamble_detector_offset_ = pio_add_program(config_.preamble_detector_pio, &preamble_detector_program);
-    message_demodulator_offset_ = pio_add_program(config_.message_demodulator_pio, &message_demodulator_program);
+    message_demodulator_offset_ = pio_add_program(config_.message_demodulator_pio, &MESSAGE_DEMODULATOR_PROGRAM);
 
     // Put IRQ parameters into the global scope for the on_demod_complete ISR.
     isr_access = this;
@@ -260,12 +279,12 @@ uint64_t ADSBee::GetMLAT12MHzCounts(uint16_t num_bits) {
     return GetMLAT48MHzCounts(50) >> 2;  // Divide 48MHz counter by 4, widen the mask by 2 bits to compensate.
 }
 
-uint16_t ADSBee::GetMLATJitterPWMSliceCounts() {
+uint16_t __time_critical_func(ADSBee::GetMLATJitterPWMSliceCounts)() {
     // Returns the current value of the MLAT jitter counter PWM slice.
     return pwm_hw->slice[mlat_jitter_pwm_slice_].ctr;
 }
 
-int ADSBee::GetNoiseFloordBm() { return AD8313MilliVoltsTodBm(noise_floor_mv_); }
+int __time_critical_func(ADSBee::GetNoiseFloordBm)() { return AD8313MilliVoltsTodBm(noise_floor_mv_); }
 
 void ADSBee::UpdateRxPosition() {
     // Rate limiting.
@@ -380,14 +399,10 @@ void __time_critical_func(ADSBee::OnDemodBegin)(uint gpio) {
     uint16_t mlat_jitter_counts_now = GetMLATJitterPWMSliceCounts();
     uint64_t mlat_48mhz_64bit_counts = isr_access->GetMLAT48MHzCounts();
 
-    uint16_t sm_index = UINT16_MAX;
-    for (sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
-        if (config_.demod_pins[sm_index] == gpio) {
-            break;
-        }
-    }
-    if (sm_index >= bsp.r1090_num_demod_state_machines)
+    uint16_t sm_index = gpio < NUM_BANK0_GPIOS ? demod_pin_to_sm_index_[gpio] : kNoDemodStateMachine;
+    if (sm_index == kNoDemodStateMachine) {
         return;  // Ignore; wasn't the start of a demod interval for a known SM.
+    }
     // Demodulation period is beginning! Store the MLAT counter.
     mlat_jitter_counts_on_demod_begin_[sm_index] = mlat_jitter_counts_now;
     rx_packet_[sm_index].mlat_48mhz_64bit_counts = mlat_48mhz_64bit_counts;  // Save this to modify later.
@@ -395,7 +410,10 @@ void __time_critical_func(ADSBee::OnDemodBegin)(uint gpio) {
     ReadSignalStrengthMilliVoltsNonBlockingBegin();  // Kick off ADC read.
 }
 
-void ADSBee::OnDemodComplete() {
+void __time_critical_func(ADSBee::OnDemodComplete)() {
+#ifdef DEBUG_ISR_TIMING
+    uint16_t isr_start_counts = GetMLATJitterPWMSliceCounts();
+#endif
     int signal_strength_dbm = AD8313MilliVoltsTodBm(ReadSignalStrengthMilliVoltsNonBlockingComplete());
 
     // Figure out which state machines were triggered and get things set up to read packets from them. Don't stop
@@ -407,7 +425,9 @@ void ADSBee::OnDemodComplete() {
             continue;
         }
         sm_triggered[sm_index] = true;
+#ifndef DEMODULATOR_SELF_PARKING
         pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], false);
+#endif
     }
 
     // Empty the triggered state machines' RX FIFOs one by one and create RawModeSPacket objects from them.
@@ -431,10 +451,28 @@ void ADSBee::OnDemodComplete() {
         // Clear the transponder packet buffer.
         memset((void*)rx_packet_[sm_index].buffer, 0xFF, RawModeSPacket::kMaxPacketLenWords32 * sizeof(uint32_t));
 
+        bool demodulator_parked = false;
+#ifdef DEMODULATOR_SELF_PARKING
+        // The demodulator pads its own partial word and parks at initial_entry once the demod pin drops. Wait
+        // (briefly) for it to get there. If it doesn't (e.g. the RX FIFO filled up with noise before the pin dropped
+        // and the SM is stalled on a push), fall back to the manual pad / restart path below.
+        uint parked_pc = message_demodulator_offset_ + MESSAGE_DEMODULATOR_OFFSET_INITIAL_ENTRY;
+        for (uint16_t spin = 0; spin < kDemodulatorParkSpinLimit; spin++) {
+            if (pio_sm_get_pc(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]) == parked_pc) {
+                demodulator_parked = true;
+                break;
+            }
+        }
+        if (!demodulator_parked) {
+            pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], false);
+        }
+#endif  // DEMODULATOR_SELF_PARKING
+
         // If the FIFO is full, we got a bunch of garbage bits after ending the demodulation, but that's OK, we can
         // chop off the rest of them and see if we got a valid message. If it's not full, we need to carefully feed
         // in 0 bits until we join the last partial word of the message together with the rest of it.
-        if (!pio_sm_is_rx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
+        if (!demodulator_parked &&
+            !pio_sm_is_rx_fifo_full(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
             // Shift 0 bits into the input shift register until it pushes into the RX FIFO.
             uint16_t rx_fifo_level =
                 pio_sm_get_rx_fifo_level(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);
@@ -464,7 +502,7 @@ void ADSBee::OnDemodComplete() {
             packet_num_words = RawModeSPacket::kMaxPacketLenWords32;
         }
         // Track that we attempted to demodulate something.
-        aircraft_dictionary.Record1090Demod();
+        aircraft_dictionary.Record1090Demod(sm_index);
         // Create a RawModeSPacket and push it onto the queue.
         for (uint16_t i = 0; i < packet_num_words; i++) {
             rx_packet_[sm_index].buffer[i] =
@@ -480,7 +518,7 @@ void ADSBee::OnDemodComplete() {
                 switch (packet_num_words) {
                     case RawModeSPacket::kSquitterPacketNumWords32:
                     case RawModeSPacket::kSquitterPacketNumWords32 + 1:
-                        aircraft_dictionary.Record1090RawSquitterFrame();
+                        aircraft_dictionary.Record1090RawSquitterFrame(sm_index);
                         rx_packet_[sm_index].buffer[i] = rx_packet_[sm_index].buffer[i] & 0xFFFFFF00;
                         rx_packet_[sm_index].buffer_len_bytes = RawModeSPacket::kSquitterPacketLenBytes;
                         if (!decoder.raw_mode_s_packet_in_queue.Enqueue(rx_packet_[sm_index])) {
@@ -489,7 +527,7 @@ void ADSBee::OnDemodComplete() {
                         break;
                     case RawModeSPacket::kExtendedSquitterPacketNumWords32:
                     case RawModeSPacket::kExtendedSquitterPacketNumWords32 + 1:
-                        aircraft_dictionary.Record1090RawExtendedSquitterFrame();
+                        aircraft_dictionary.Record1090RawExtendedSquitterFrame(sm_index);
                         rx_packet_[sm_index].buffer[i] = rx_packet_[sm_index].buffer[i] & 0xFFFF0000;
                         rx_packet_[sm_index].buffer_len_bytes = RawModeSPacket::kExtendedSquitterPacketLenBytes;
                         if (!decoder.raw_mode_s_packet_in_queue.Enqueue(rx_packet_[sm_index])) {
@@ -508,22 +546,21 @@ void ADSBee::OnDemodComplete() {
             }
         }
 
-        // Clear the FIFO by pushing partial word from ISR, not bothering to block if FIFO is full (it shouldn't
-        // be).
-        pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
-                                  pio_encode_push(false, false));
-        // Flush any remaining words in the RX FIFO.
-        while (!pio_sm_is_rx_fifo_empty(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
-            pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);
-        }
+        if (!demodulator_parked) {
+            // Flush any remaining words in the RX FIFO. Any partial word left in the ISR is discarded by the restart
+            // below.
+            while (!pio_sm_is_rx_fifo_empty(config_.message_demodulator_pio, message_demodulator_sm_[sm_index])) {
+                pio_sm_get(config_.message_demodulator_pio, message_demodulator_sm_[sm_index]);
+            }
 
-        // Reset the demodulator state machine to wait for the next decode interval, then enable it.
-        pio_sm_restart(config_.message_demodulator_pio,
-                       message_demodulator_sm_[sm_index]);  // Reset FIFOs, ISRs, etc.
-        uint demodulator_program_start = message_demodulator_offset_ + message_demodulator_offset_initial_entry;
-        pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
-                                  pio_encode_jmp(demodulator_program_start));  // Jump to beginning of program.
-        pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], true);
+            // Reset the demodulator state machine to wait for the next decode interval, then enable it.
+            pio_sm_restart(config_.message_demodulator_pio,
+                           message_demodulator_sm_[sm_index]);  // Reset shift counters etc.
+            uint demodulator_program_start = message_demodulator_offset_ + MESSAGE_DEMODULATOR_OFFSET_INITIAL_ENTRY;
+            pio_sm_exec_wait_blocking(config_.message_demodulator_pio, message_demodulator_sm_[sm_index],
+                                      pio_encode_jmp(demodulator_program_start));  // Jump to beginning of program.
+            pio_sm_set_enabled(config_.message_demodulator_pio, message_demodulator_sm_[sm_index], true);
+        }
 
         // Stuff the preamble detector TX FIFO full of garbage so that the preamble detector can use a pull to
         // signal the demod interval beginning.
@@ -552,6 +589,16 @@ void ADSBee::OnDemodComplete() {
 
         pio_interrupt_clear(config_.preamble_detector_pio, sm_index);
     }
+
+#ifdef DEBUG_ISR_TIMING
+    // 16-bit counter at 48MHz wraps every ~1.4ms, far longer than any ISR execution.
+    uint16_t isr_duration_counts = GetMLATJitterPWMSliceCounts() - isr_start_counts;
+    if (isr_duration_counts > isr_duration_max_counts_) {
+        isr_duration_max_counts_ = isr_duration_counts;
+    }
+    isr_duration_sum_counts_ += isr_duration_counts;
+    isr_count_++;
+#endif
 }
 
 void __time_critical_func(ADSBee::OnSysTickWrap)() { mlat_counter_wraps_ += kMLATWrapCounterIncrement; }
@@ -562,12 +609,12 @@ int ADSBee::ReadSignalStrengthMilliVoltsBlocking() {
     return ADC_COUNTS_TO_MV(rssi_adc_counts);
 }
 
-void ADSBee::ReadSignalStrengthMilliVoltsNonBlockingBegin() {
+void __time_critical_func(ADSBee::ReadSignalStrengthMilliVoltsNonBlockingBegin)() {
     adc_select_input(config_.rssi_adc_input);
     hw_set_bits(&adc_hw->cs, ADC_CS_START_ONCE_BITS);
 }
 
-int ADSBee::ReadSignalStrengthMilliVoltsNonBlockingComplete() {
+int __time_critical_func(ADSBee::ReadSignalStrengthMilliVoltsNonBlockingComplete)() {
     while (!(adc_hw->cs & ADC_CS_READY_BITS)) {
         // Wait for conversion to complete.
     }
@@ -738,6 +785,15 @@ void ADSBee::PIOInit() {
     /** PREAMBLE DETECTOR PIO **/
     // Calculate the PIO clock divider.
     float preamble_detector_div = (float)clock_get_hz(clk_sys) / kPreambleDetectorFreqHz;
+    // Build the demod pin -> state machine lookup table used by OnDemodBegin().
+    for (uint16_t gpio = 0; gpio < NUM_BANK0_GPIOS; gpio++) {
+        demod_pin_to_sm_index_[gpio] = kNoDemodStateMachine;
+    }
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
+        if (config_.demod_pins[sm_index] < NUM_BANK0_GPIOS) {
+            demod_pin_to_sm_index_[config_.demod_pins[sm_index]] = sm_index;
+        }
+    }
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         // Only make the state machine wait to start if it's part of the round-robin group of well formed preamble
         // detectors.
@@ -817,7 +873,7 @@ void ADSBee::PIOInit() {
     /** MESSAGE DEMODULATOR PIO **/
     float message_demodulator_div = (float)clock_get_hz(clk_sys) / kMessageDemodulatorFreqHz;
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
-        message_demodulator_program_init(
+        MESSAGE_DEMODULATOR_PROGRAM_INIT(
             config_.message_demodulator_pio, message_demodulator_sm_[sm_index], message_demodulator_offset_,
             config_.pulses_pin, config_.demod_pins[sm_index],
 #ifdef DEBUG_DEMODULATOR
@@ -872,6 +928,18 @@ void ADSBee::PruneAircraftDictionary() {
                                                aircraft_dictionary.metrics.valid_extended_squitter_frames);
         }
         last_aircraft_dictionary_update_timestamp_ms_ = timestamp_ms;
+
+#ifdef DEBUG_ISR_TIMING
+        // Snapshot and reset the ISR timing accumulators. Counts are at 48MHz.
+        uint32_t isr_count = isr_count_;
+        uint32_t isr_sum_counts = isr_duration_sum_counts_;
+        uint16_t isr_max_counts = isr_duration_max_counts_;
+        isr_count_ = 0;
+        isr_duration_sum_counts_ = 0;
+        isr_duration_max_counts_ = 0;
+        CONSOLE_WARNING("ADSBee::PruneAircraftDictionary", "OnDemodComplete: %lu calls, avg %lu us, max %u us.",
+                        isr_count, isr_count > 0 ? isr_sum_counts / isr_count / 48 : 0, isr_max_counts / 48);
+#endif
     }
 }
 

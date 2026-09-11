@@ -59,6 +59,8 @@ class ADSBee {
      * want to capture the demodulation start time and RSSI pretty promptly. Demod complete interrupt is lowest priority
      * because a filled state machine can wait a little before being digested.
      */
+    static constexpr uint8_t kNoDemodStateMachine = 0xFF;  // demod_pin_to_sm_index_ value for non-demod GPIOs.
+
     static constexpr uint kMLATCounterWrapInterruptPriority = 0;
     static constexpr uint kGPIOInterruptPriority = 1;
     static constexpr uint kDemodCompleteInterruptPriority = 2;
@@ -439,6 +441,14 @@ class ADSBee {
     uint32_t mlat_jitter_pwm_slice_ = 0;
     uint16_t mlat_jitter_counts_on_demod_begin_[BSP::kMaxNumDemodStateMachines] = {0};
     uint16_t mlat_jitter_counts_on_fifo_pull_[BSP::kMaxNumDemodStateMachines] = {0};
+
+    // Maps a demod GPIO number to its state machine index (kNoDemodStateMachine for other GPIOs). Built in PIOInit().
+    uint8_t demod_pin_to_sm_index_[NUM_BANK0_GPIOS];
+
+    // OnDemodComplete() duration statistics, only maintained when DEBUG_ISR_TIMING is defined.
+    uint32_t isr_count_ = 0;
+    uint32_t isr_duration_sum_counts_ = 0;
+    uint16_t isr_duration_max_counts_ = 0;
 
     uint32_t led_on_timestamp_ms_ = 0;
     uint32_t led_on_duration_ms_ = kStatusLEDOnMs;

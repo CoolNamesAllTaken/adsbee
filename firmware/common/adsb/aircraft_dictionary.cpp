@@ -1505,14 +1505,14 @@ bool AircraftDictionary::IngestDecodedModeSPacket(DecodedModeSPacket& packet) {
 
             // Record a valid squitter packet.
             metrics_counter_.valid_squitter_frames++;
-            if (source > 0) {
+            if (source >= 0 && source < kMaxNumSources) {
                 metrics_counter_.valid_squitter_frames_by_source[source]++;
             }
             break;
         case RawModeSPacket::kExtendedSquitterPacketLenBytes:
             if (packet.is_valid) {
                 metrics_counter_.valid_extended_squitter_frames++;
-                if (source > 0) {
+                if (source >= 0 && source < kMaxNumSources) {
                     metrics_counter_.valid_extended_squitter_frames_by_source[source]++;
                 }
             } else {

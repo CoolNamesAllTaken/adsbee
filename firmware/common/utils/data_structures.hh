@@ -67,7 +67,7 @@ class PFBQueue {
      * @param[in] element Object to push onto the back of the buffer.
      * @retval True if succeeded, false if the buffer is full.
      */
-    bool Enqueue(T element) {
+    bool Enqueue(const T& element) {
         if (config_.is_thread_safe) PFB_MUTEX_LOCK(mutex_);
         if (is_full_) {
             if (!config_.overwrite_when_full) {
@@ -80,7 +80,7 @@ class PFBQueue {
         }
 
         // config_.buffer[tail_] = element;
-        memcpy((uint8_t*)(&config_.buffer[tail_]), (uint8_t*)(&element), sizeof(T));
+        memcpy((uint8_t*)(&config_.buffer[tail_]), (const uint8_t*)(&element), sizeof(T));
         tail_ = IncrementIndex(tail_);
 
         if (tail_ == head_) {
