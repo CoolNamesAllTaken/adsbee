@@ -234,6 +234,41 @@ uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t 
     return WriteGDL90Message(to_buf, to_buf_num_bytes, message_buf, kMessageBufLenBytes);
 }
 
+bool GDL90Reporter::IsValidOwnshipSource(SettingsManager::RxPosition::PositionSource source) {
+    return source == SettingsManager::RxPosition::kPositionSourceGNSS ||
+           source == SettingsManager::RxPosition::kPositionSourceAircraftMatchingICAO;
+}
+
+bool GDL90Reporter::BuildOwnshipReportData(GDL90TargetReportData& data,
+                                           const SettingsManager::RxPosition& rx_position,
+                                           bool rx_position_available) {
+    data = {};
+    memcpy(data.callsign, "ADSBEE  ", sizeof(data.callsign) - 1);
+    data.address_type = GDL90TargetReportData::kAddressTypeADSBWithSelfAssignedAddress;
+
+    bool have_position = rx_position_available && IsValidOwnshipSource(rx_position.source);
+    if (!have_position) {
+        return false;
+    }
+
+    bool from_tracked_aircraft = rx_position.source == SettingsManager::RxPosition::kPositionSourceAircraftMatchingICAO;
+    data.latitude_deg = rx_position.latitude_deg;
+    data.longitude_deg = rx_position.longitude_deg;
+    // The ownship report altitude is pressure altitude. A GNSS fix carries no baro data, so report it invalid
+    // (INT32_MIN encodes as 0xFFF) rather than substituting geometric altitude or a stale value.
+    data.altitude_ft = from_tracked_aircraft ? rx_position.baro_altitude_ft : INT32_MIN;
+    data.speed_kts = rx_position.speed_kts;
+    data.direction_deg = rx_position.heading_deg;
+    // Only carry a real ICAO address when bootstrapping off a tracked aircraft; a GNSS ownship is self-assigned.
+    data.participant_address = from_tracked_aircraft ? rx_position.icao_address : 0x0;
+    // Non-zero NIC so EFBs treat the position as valid. Conservative fixed accuracy category (<92.6 m).
+    data.navigation_integrity_category = 8;
+    data.navigation_accuracy_category_position = 8;
+    data.SetMiscIndicator(GDL90TargetReportData::kMiscIndicatorTTIsTrueTrackAngle, false,
+                          rx_position.speed_kts > kOwnshipAirborneSpeedKts);
+    return true;
+}
+
 uint16_t GDL90Reporter::WriteGDL90TargetReportMessage(uint8_t* to_buf, uint16_t to_buf_num_bytes,
                                                       const ModeSAircraft& aircraft, bool ownship) {
     GDL90TargetReportData data;

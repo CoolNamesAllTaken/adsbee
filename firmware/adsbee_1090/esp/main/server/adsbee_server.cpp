@@ -310,6 +310,18 @@ bool ADSBeeServer::ReportGDL90() {
     CommsManager::NetworkMessage message;
     message.port = kGDL90Port;
 
+    // Build the ownship report up front from the receiver position pushed up by the RP2040. Its validity also
+    // drives the heartbeat's GPS Position Valid flag, which some EFBs require before they will show ownship.
+    const ObjectDictionary::RP2040DeviceStatus& rp2040_status = object_dictionary.composite_device_status.rp2040;
+    GDL90Reporter::GDL90TargetReportData ownship_data;
+    bool have_position = GDL90Reporter::BuildOwnshipReportData(ownship_data, rp2040_status.rx_position,
+                                                               rp2040_status.rx_position_available);
+
+    // Heartbeat status flags are sticky members of the shared GDL90Reporter, so set them on every report.
+    gdl90.gnss_position_valid = have_position;
+    gdl90.utc_timing_is_valid = rp2040_status.gnss_utc_time_valid;
+    gdl90.maintenance_required = false;
+
     // Heartbeat Message
     message.len = gdl90.WriteGDL90HeartbeatMessage(
         message.data, CommsManager::NetworkMessage::kMaxLenBytes, get_time_since_boot_ms() / 1000,
@@ -320,22 +332,6 @@ bool ADSBeeServer::ReportGDL90() {
     message.len = 0;
 
     // Ownship Report
-    GDL90Reporter::GDL90TargetReportData ownship_data = {};
-    memcpy(ownship_data.callsign, "ADSBEE  ", sizeof(ownship_data.callsign) - 1);
-    ownship_data.address_type = GDL90Reporter::GDL90TargetReportData::kAddressTypeADSBWithSelfAssignedAddress;
-    SettingsManager::RxPosition& rx_position = object_dictionary.composite_device_status.rp2040.rx_position;
-    ownship_data.participant_address = 0x0;
-    if (rx_position.source == SettingsManager::RxPosition::PositionSource::kPositionSourceAircraftMatchingICAO) {
-        // Only send ownship data with a position if we are tracking an aircraft.
-        ownship_data.latitude_deg = rx_position.latitude_deg;
-        ownship_data.longitude_deg = rx_position.longitude_deg;
-        ownship_data.altitude_ft = rx_position.baro_altitude_ft;
-        ownship_data.speed_kts = rx_position.speed_kts;
-        ownship_data.direction_deg = rx_position.heading_deg;
-        ownship_data.participant_address = rx_position.icao_address;
-        ownship_data.SetMiscIndicator(GDL90Reporter::GDL90TargetReportData::kMiscIndicatorTTIsTrueTrackAngle, false,
-                                      false);
-    }
     message.len = gdl90.WriteGDL90TargetReportMessage(message.data, CommsManager::NetworkMessage::kMaxLenBytes,
                                                       ownship_data, true);
     comms_manager.WiFiAccessPointSendMessageToAllStations(message);
