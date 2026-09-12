@@ -93,9 +93,11 @@ bool ModeSPacketDecoder::UpdateDecoderLoop() {
                                        "src=%d [%s] df=%02d icao=0x%06x ts=%llu ", decoded_packet.raw.source, status_str,
                                        decoded_packet.downlink_format, (unsigned)decoded_packet.icao_address,
                                        (unsigned long long)decoded_packet.raw.GetTimestampMs());
+            // snprintf returns the length the full string would have had, so clamp on truncation. message[] is
+            // kMessageMaxLen + 1 long, so message + kMessageMaxLen always points at the terminating null.
             if (message_len < 0) {
                 message_len = 0;
-            } else if (message_len > DebugMessage::kMessageMaxLen) {
+            } else if (message_len >= DebugMessage::kMessageMaxLen) {
                 message_len = DebugMessage::kMessageMaxLen;
             }
             // Append a print of the packet contents as received (before any bit flip correction).

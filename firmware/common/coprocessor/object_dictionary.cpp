@@ -77,10 +77,12 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
             }
             break;
         case kAddrRollQueue: {
-            // Ignore offset since we only allow full writes for this command.
-            if (buf_len < sizeof(RollQueueRequest)) {
-                CONSOLE_ERROR("ObjectDictionary::SetBytes", "RollQueueRequest write of %d Bytes is shorter than %d.",
-                              buf_len, (int)sizeof(RollQueueRequest));
+            // Only full writes are allowed for this command: a roll request is a single small struct, so a partial or
+            // offset write can only come from a malformed transaction and must not execute a roll.
+            if (buf_len != sizeof(RollQueueRequest) || offset != 0) {
+                CONSOLE_ERROR("ObjectDictionary::SetBytes",
+                              "Buffer length %d and offset %d for writing RollQueueRequest must be exactly %d and 0.",
+                              buf_len, offset, (int)sizeof(RollQueueRequest));
                 return false;
             }
             RollQueueRequest roll_request;
