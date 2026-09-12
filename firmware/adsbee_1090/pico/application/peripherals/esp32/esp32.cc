@@ -147,6 +147,8 @@ bool ESP32::Update() {
                 .gnss_utc_minute = gnss_fix.utc_minute,
                 .gnss_utc_second = gnss_fix.utc_second,
                 .gnss_utc_millisecond = gnss_fix.utc_millisecond,
+                .noise_floor_mv = static_cast<uint16_t>(adsbee.GetNoiseFloorMilliVolts()),
+                .noise_floor_dbm = static_cast<int16_t>(adsbee.GetNoiseFloordBm()),
             },
         .subg = adsbee.subg_radio_ll.device_status,
     };

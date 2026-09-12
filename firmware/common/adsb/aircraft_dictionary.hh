@@ -748,7 +748,7 @@ class RemoteIDAircraft : public Aircraft {
 class AircraftDictionary {
    public:
     static constexpr uint16_t kMaxNumAircraft = kAircraftDictionaryMaxNumAircraft;
-    static constexpr uint16_t kMaxNumSources = 3;
+    static constexpr uint16_t kMaxNumSources = 4;  // One per 1090 demodulator state machine.
 
 #ifdef FILTER_CPR_POSITIONS
     // Table-based inverse haversine isn't super accurate at small distances, and aircraft velocity may be super
@@ -917,7 +917,7 @@ class AircraftDictionary {
      */
     inline void Record1090RawSquitterFrame(int16_t source = -1) {
         metrics_counter_.raw_squitter_frames++;
-        if (source > 0) {
+        if (source >= 0 && source < kMaxNumSources) {
             metrics_counter_.raw_squitter_frames_by_source[source]++;
         }
     }
@@ -929,7 +929,7 @@ class AircraftDictionary {
      */
     inline void Record1090RawExtendedSquitterFrame(int16_t source = -1) {
         metrics_counter_.raw_extended_squitter_frames++;
-        if (source > 0) {
+        if (source >= 0 && source < kMaxNumSources) {
             metrics_counter_.raw_extended_squitter_frames_by_source[source]++;
         }
     }
