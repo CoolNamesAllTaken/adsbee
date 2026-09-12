@@ -19,7 +19,7 @@
 static const uint16_t kGDL90Port = 4000;
 
 static const uint16_t kNetworkConsoleWelcomeMessageMaxLen = 1000;
-static const uint16_t kNetworkMetricsMessageMaxLen = 1800;
+static const uint16_t kNetworkMetricsMessageMaxLen = 2048;
 
 /* obsolete */
 static const uint16_t kNetworkControlPort = 3333;  // NOTE: This must match the port number used in index.html!
@@ -699,11 +699,10 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              "\"rp2040\": { \"uptime_ms\": %lu, \"core_0_usage_percent\": %u, "
-             "\"core_1_usage_percent\": %u, \"temperature_deg_c\": %d }",
-             object_dictionary.composite_device_status.rp2040.timestamp_ms,
-             object_dictionary.composite_device_status.rp2040.core_0_usage_percent,
-             object_dictionary.composite_device_status.rp2040.core_1_usage_percent,
-             object_dictionary.composite_device_status.rp2040.temperature_deg_c);
+             "\"core_1_usage_percent\": %u, \"temperature_deg_c\": %d, \"noise_floor_dbm\": %d, "
+             "\"noise_floor_mv\": %u }",
+             rp2040_status.timestamp_ms, rp2040_status.core_0_usage_percent, rp2040_status.core_1_usage_percent,
+             rp2040_status.temperature_deg_c, rp2040_status.noise_floor_dbm, rp2040_status.noise_floor_mv);
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              ", \"gnss\": { \"enabled\": %s, \"fix_valid\": %s, \"latitude_deg\": %.6f, "

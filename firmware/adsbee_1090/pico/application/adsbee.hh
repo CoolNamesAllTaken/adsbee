@@ -41,13 +41,35 @@ class ADSBee {
                // to the maximum value that the trigger level could be moved (up or down) when exploring a neighbor
                // state.
 
+    static constexpr uint16_t kADCReadySpinLimit =
+        200;  // Max iterations to wait for a foreign ADC conversion (~2us) to finish before starting the RSSI read.
+
     static constexpr uint32_t kMLATCounterWrapIntervalMs =
         0xFFFFFF / 48'000;  // [ms] How often a 48MHz 24-bit counter wraps (period in ms).
 
-    static constexpr int32_t kNoiseFloorExpoFilterPercent =
-        50;  // [%] Weight to use for low pass expo filter of noise floor ADC counts. 0 = no filter, 100 = hold value.
+    /**
+     * Noise floor estimation. The RSSI ADC input is sampled from the main loop between packets and low-pass filtered
+     * to approximate the receiver noise floor, which anchors the trigger level (noise floor + TL offset) and is the
+     * reference for reported packet signal quality (sigq).
+     */
     static constexpr uint32_t kNoiseFloorADCSampleIntervalMs =
-        1;  // [ms] Interval between ADC samples to approximate noise floor value.
+        1;  // [ms] Minimum interval between RSSI ADC samples used for the noise floor estimate.
+    static constexpr uint32_t kNoiseFloorDemodGuardUs =
+        200;  // [us] Discard samples taken this soon after a demodulation began: covers the longest packet (~120us)
+              // plus the RSSI line's RC decay (10k / 1nF, ~50us) back down to the noise floor.
+    static constexpr uint32_t kNoiseFloorMaxHoldMs =
+        1000;  // [ms] If no sample has been accepted for this long (receiver constantly demodulating), stop applying
+               // kNoiseFloorDemodGuardUs (but still never sample during a demodulation) so the estimate can't stall.
+    static constexpr uint16_t kNoiseFloorFilterShift =
+        6;  // Low pass filter weight is 1/2^kNoiseFloorFilterShift: time constant of ~64 accepted samples (>=64ms).
+    static constexpr uint16_t kNoiseFloorFixedPointShift =
+        8;  // Fractional bits of the filter accumulator, so a small filter weight doesn't truncate away sub-mV steps.
+    static constexpr int32_t kNoiseFloorOutlierMV =
+        150;  // [mV] (~9dB) Samples this far from the current estimate are rejected: above it they are pulses (e.g.
+              // packets whose preamble didn't trigger a demodulation), below it glitched conversions...
+    static constexpr uint16_t kNoiseFloorMaxConsecutiveOutliers =
+        32;  // ...unless this many consecutive samples were rejected, in which case the floor itself moved (e.g. bias
+             // tee powered an external LNA on or off) and samples are accepted again so the estimate can track.
 
     static constexpr uint32_t kSubGRadioFailRebootIntervalMs = 10'000;
     static constexpr uint32_t kSubGRadioFailRebootPowerOffDurationMs = 20;
@@ -187,11 +209,17 @@ class ADSBee {
     uint16_t GetMLATJitterPWMSliceCounts();
 
     /**
-     * Returns the power level of the noise floor (signal strength sampled mostly during non-decode intervals and then
-     * low-pass filtered).
+     * Returns the power level of the noise floor (RSSI sampled between packets and then low-pass filtered).
      * @retval Power level of the noise floor, in dBm.
      */
     int GetNoiseFloordBm();
+
+    /**
+     * Returns the noise floor estimate as a voltage at the RSSI ADC input, in the same units as the trigger level
+     * offset (the trigger level is noise floor + TL offset).
+     * @retval Noise floor RSSI voltage, in milliVolts.
+     */
+    int GetNoiseFloorMilliVolts();
 
     /**
      * Get the current temperature used in learning trigger level (simulated annealing). A temperature of 0 means
@@ -493,8 +521,17 @@ class ADSBee {
 
     uint32_t subg_radio_last_update_timestamp_ms_ = 0;
 
-    int32_t noise_floor_mv_;
+    // Noise floor estimate. The filter runs on noise_floor_mv_fp_ (mV << kNoiseFloorFixedPointShift); noise_floor_mv_
+    // mirrors it as a plain integer for the ISR (sigq) and status reporting.
+    int32_t noise_floor_mv_fp_ = 0;
+    volatile int32_t noise_floor_mv_ = 0;
+    bool noise_floor_initialized_ = false;
+    uint16_t noise_floor_consecutive_outliers_ = 0;
     uint32_t noise_floor_last_sample_timestamp_ms_ = 0;
+    uint32_t noise_floor_last_accepted_timestamp_ms_ = 0;
+    uint32_t demod_pins_mask_ = 0;  // GPIO bitmask of the demod pins, built in Init(). HI = demodulation in progress.
+    // Written by OnDemodBegin() (ISR core), read by UpdateNoiseFloor() (main loop) to reject contaminated samples.
+    volatile uint32_t last_demod_begin_timestamp_us_ = 0;
 
     /** 978MHz Receiver Parameters **/
 };

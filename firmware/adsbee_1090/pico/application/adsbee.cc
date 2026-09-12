@@ -136,6 +136,12 @@ bool ADSBee::Init() {
     adc_gpio_init(config_.tl_adc_pin);
     adc_gpio_init(config_.rssi_adc_pin);
 
+    // Bitmask of the demod pins, used by UpdateNoiseFloor() to avoid sampling RSSI during a demodulation.
+    demod_pins_mask_ = 0;
+    for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
+        demod_pins_mask_ |= 1u << config_.demod_pins[sm_index];
+    }
+
     // Initialize I2C for talking to the EEPROM and rx gain digipot.
     if (config_.onboard_i2c_requires_init) {
         i2c_init(config_.onboard_i2c, config_.onboard_i2c_clk_freq_hz);
@@ -286,6 +292,8 @@ uint16_t __time_critical_func(ADSBee::GetMLATJitterPWMSliceCounts)() {
 
 int __time_critical_func(ADSBee::GetNoiseFloordBm)() { return AD8313MilliVoltsTodBm(noise_floor_mv_); }
 
+int ADSBee::GetNoiseFloorMilliVolts() { return noise_floor_mv_; }
+
 void ADSBee::UpdateRxPosition() {
     // Rate limiting.
     uint32_t timestamp_ms = get_time_since_boot_ms();
@@ -406,6 +414,7 @@ void __time_critical_func(ADSBee::OnDemodBegin)(uint gpio) {
     // Demodulation period is beginning! Store the MLAT counter.
     mlat_jitter_counts_on_demod_begin_[sm_index] = mlat_jitter_counts_now;
     rx_packet_[sm_index].mlat_48mhz_64bit_counts = mlat_48mhz_64bit_counts;  // Save this to modify later.
+    last_demod_begin_timestamp_us_ = time_us_32();  // Lets the noise floor sampler avoid this packet.
 
     ReadSignalStrengthMilliVoltsNonBlockingBegin();  // Kick off ADC read.
 }
@@ -610,6 +619,13 @@ int ADSBee::ReadSignalStrengthMilliVoltsBlocking() {
 }
 
 void __time_critical_func(ADSBee::ReadSignalStrengthMilliVoltsNonBlockingBegin)() {
+    // The ADC is shared with the main loop (noise floor sampling, TL readback, temperature). If one of its conversions
+    // is in progress, wait for it to finish (a single conversion is ~2us) so that START_ONCE isn't dropped and
+    // ReadSignalStrengthMilliVoltsNonBlockingComplete() doesn't hand back the other conversion's result as this
+    // packet's RSSI. Bounded so a wedged ADC can't hang the ISR.
+    for (uint16_t spin = 0; spin < kADCReadySpinLimit && !(adc_hw->cs & ADC_CS_READY_BITS); spin++) {
+        tight_loop_contents();
+    }
     adc_select_input(config_.rssi_adc_input);
     hw_set_bits(&adc_hw->cs, ADC_CS_START_ONCE_BITS);
 }
@@ -954,18 +970,70 @@ void ADSBee::Update1090LED() {
 }
 
 void ADSBee::UpdateNoiseFloor() {
-    // Occasionally sample the signal strength to approximate the noise floor.
+    // Periodically sample the RSSI line between packets and low-pass filter it to approximate the noise floor.
     uint32_t timestamp_ms = get_time_since_boot_ms();
-    if (timestamp_ms - noise_floor_last_sample_timestamp_ms_ > kNoiseFloorADCSampleIntervalMs) {
-        noise_floor_mv_ = ((noise_floor_mv_ * kNoiseFloorExpoFilterPercent) +
-                           ReadSignalStrengthMilliVoltsBlocking() * (100 - kNoiseFloorExpoFilterPercent)) /
-                          100;
-        noise_floor_last_sample_timestamp_ms_ = timestamp_ms;
-
-        // Use updated noise floor to set the trigger level PWM duty cycle.
-        tl_pwm_count_ = (noise_floor_mv_ + tl_offset_mv_) * kTLMaxPWMCount / kVDDMV;
-        pwm_set_chan_level(tl_pwm_slice_, tl_pwm_chan_, tl_pwm_count_);
+    if (timestamp_ms - noise_floor_last_sample_timestamp_ms_ < kNoiseFloorADCSampleIntervalMs) {
+        return;
     }
+    noise_floor_last_sample_timestamp_ms_ = timestamp_ms;
+
+    // Refresh the trigger level PWM duty cycle every pass, even when the sample below gets skipped, so that a change
+    // to the TL offset always takes effect promptly.
+    tl_pwm_count_ = (noise_floor_mv_ + tl_offset_mv_) * kTLMaxPWMCount / kVDDMV;
+    pwm_set_chan_level(tl_pwm_slice_, tl_pwm_chan_, tl_pwm_count_);
+
+    // Snapshot the demod begin timestamp before checking the demod pins so that a demodulation starting anywhere
+    // between here and the end of the ADC conversion is caught by the comparison after the sample.
+    uint32_t demod_begin_us = last_demod_begin_timestamp_us_;
+
+    // Never sample while a demodulation is in progress: the RSSI line is sitting at the packet's power level, and the
+    // ISR owns the ADC (OnDemodBegin() kicked off a conversion that OnDemodComplete() reads back).
+    if (gpio_get_all() & demod_pins_mask_) {
+        return;
+    }
+
+    // The RC filter on the RSSI line takes tens of microseconds to decay after a packet ends, so also skip samples
+    // taken shortly after a demodulation began. If the receiver is so busy that this guard never clears, drop it
+    // (the demod pin check above still applies) rather than letting the estimate stall.
+    bool guard_active = timestamp_ms - noise_floor_last_accepted_timestamp_ms_ < kNoiseFloorMaxHoldMs;
+    if (guard_active && time_us_32() - demod_begin_us < kNoiseFloorDemodGuardUs) {
+        return;
+    }
+
+    int32_t sample_mv = ReadSignalStrengthMilliVoltsBlocking();
+
+    // Discard the sample if a demodulation began during the conversion: the RSSI line was rising and the ISR's
+    // conversion collided with this one.
+    if (last_demod_begin_timestamp_us_ != demod_begin_us) {
+        return;
+    }
+
+    if (!noise_floor_initialized_) {
+        // Seed the filter with the first clean sample instead of slewing up from 0mV.
+        noise_floor_mv_fp_ = sample_mv << kNoiseFloorFixedPointShift;
+        noise_floor_initialized_ = true;
+    } else {
+        int32_t delta_mv = sample_mv - noise_floor_mv_;
+        if (delta_mv > kNoiseFloorOutlierMV || delta_mv < -kNoiseFloorOutlierMV) {
+            // Far from the floor: above it, a pulse such as a packet whose preamble didn't trigger a demodulation;
+            // below it, a glitched conversion (the floor is the minimum the detector can output, so a sample well
+            // below it can't be real). Reject it unless samples have been out of range for long enough that the floor
+            // itself moved (e.g. bias tee powered an external LNA on or off), in which case let it through (and keep
+            // the counter saturated) so the estimate can track. The counter clears once the estimate catches up and
+            // samples fall back within range.
+            if (noise_floor_consecutive_outliers_ < kNoiseFloorMaxConsecutiveOutliers) {
+                noise_floor_consecutive_outliers_++;
+                return;
+            }
+        } else {
+            noise_floor_consecutive_outliers_ = 0;
+        }
+        // Exponential low-pass filter in fixed point. Division (not shift) keeps negative deltas well-defined.
+        noise_floor_mv_fp_ +=
+            ((sample_mv << kNoiseFloorFixedPointShift) - noise_floor_mv_fp_) / (1 << kNoiseFloorFilterShift);
+    }
+    noise_floor_mv_ = noise_floor_mv_fp_ >> kNoiseFloorFixedPointShift;
+    noise_floor_last_accepted_timestamp_ms_ = timestamp_ms;
 }
 
 void ADSBee::UpdateTLLearning() {

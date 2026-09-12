@@ -135,6 +135,10 @@ class ObjectDictionary {
         uint8_t gnss_utc_minute = 0;
         uint8_t gnss_utc_second = 0;
         uint16_t gnss_utc_millisecond = 0;
+        // 1090MHz receiver noise floor estimate (RSSI sampled between packets and low-pass filtered). The trigger
+        // level sits at noise_floor_mv + TL offset.
+        uint16_t noise_floor_mv = 0;
+        int16_t noise_floor_dbm = 0;
     };
 
     struct __attribute__((__packed__)) ESP32DeviceStatus {

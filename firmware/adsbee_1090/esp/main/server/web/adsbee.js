@@ -139,9 +139,15 @@ class ConsoleWebSocket {
 }
 
 class SparklineChart {
-    constructor(id, windowSeconds = 20) {
+    // options.zeroBaseline (default true): scale from 0 to the max value, for rates and counts.
+    // options.zeroBaseline = false: autoscale between the min and max visible values (for levels such as the noise
+    // floor, which never approach 0), padded so a flat trace sits mid-chart. options.minSpan is the smallest
+    // full-scale range in that mode, so sub-LSB jitter doesn't fill the chart.
+    constructor(id, windowSeconds = 20, options = {}) {
         this.svg = document.getElementById(id);
         this.windowSeconds = windowSeconds;
+        this.zeroBaseline = options.zeroBaseline !== false;
+        this.minSpan = options.minSpan || 0;
         this.buffer = [];
         this.valueEl = this.svg.parentNode.querySelector('.metric-value');
         this._createPaths();
@@ -166,9 +172,9 @@ class SparklineChart {
         this._rafId = requestAnimationFrame(tick);
     }
 
-    push(value, unit = 'msg/s') {
+    push(value, unit = 'msg/s', displayText = null) {
         this.buffer.push({ value, ts: performance.now() });
-        this.valueEl.textContent = `${value} ${unit}`;
+        this.valueEl.textContent = displayText ?? `${value} ${unit}`;
         const cutoff = performance.now() - (this.windowSeconds + 5) * 1000;
         while (this.buffer.length > 1 && this.buffer[0].ts < cutoff) this.buffer.shift();
     }
@@ -189,10 +195,20 @@ class SparklineChart {
         }
         if (pts.length < 2) return;
 
-        const max = Math.max(...pts.map(p => p.value), 1);
+        const values = pts.map(p => p.value);
+        let min = 0;
+        let max = Math.max(...values, 1);
+        if (!this.zeroBaseline) {
+            min = Math.min(...values);
+            max = Math.max(...values);
+            const pad = Math.max((max - min) * 0.25, this.minSpan / 2);
+            min -= pad;
+            max += pad;
+        }
+        const span = max - min || 1;
         const toXY = p => [
             ((p.ts - startMs) / windowMs) * 100,
-            30 - (p.value / max) * 28,
+            30 - ((p.value - min) / span) * 28,
         ];
         const coords = pts.map(toXY);
         const lineCmds = coords.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(2)},${p[1].toFixed(2)}`).join(' ');
@@ -208,7 +224,7 @@ class SparklineChart {
 }
 
 class MetricCard {
-    constructor(container, label, unit = 'msg/s', feedSlot = null) {
+    constructor(container, label, unit = 'msg/s', feedSlot = null, chartOptions = {}) {
         this.container = container;
         this.label = label;
         this.unit = unit;
@@ -231,7 +247,7 @@ class MetricCard {
 `;
         this.card = card;
         this.container.appendChild(card);
-        this.chart = new SparklineChart(this.id);
+        this.chart = new SparklineChart(this.id, 20, chartOptions);
     }
 
     destroy() {
@@ -243,8 +259,9 @@ class MetricCard {
         return label.replace(/[^a-zA-Z0-9]/g, '-');
     }
 
-    update(value) {
-        this.chart.push(value, this.unit);
+    // displayText overrides the "<value> <unit>" readout while value still drives the sparkline.
+    update(value, displayText = null) {
+        this.chart.push(value, this.unit, displayText);
     }
 }
 
@@ -256,6 +273,7 @@ class MetricsWebSocket {
             'feed': {},
             'receiver': {}
         };
+        this.noiseFloorCard = null;
         this.feedSlotMap = {};
         this.onGNSSStatus = null;
         this.connect();
@@ -276,6 +294,20 @@ class MetricsWebSocket {
             }
             this.cards[parentLabel][label].update(value);
         });
+    }
+
+    // Live 1090 noise floor from the RP2040, shown as a sparkline card alongside the receiver metrics. The sparkline
+    // plots the RSSI voltage (finer than the integer dBm reading and in the same units as the TL offset), while the
+    // readout shows both.
+    updateNoiseFloorCard(rp2040Status) {
+        if (!rp2040Status || rp2040Status.noise_floor_mv === undefined) return;
+        if (!this.noiseFloorCard) {
+            const container = document.getElementById('receiver-metrics-container');
+            this.noiseFloorCard = new MetricCard(container, 'noise_floor', 'dBm', null,
+                { zeroBaseline: false, minSpan: 50 });
+        }
+        this.noiseFloorCard.update(rp2040Status.noise_floor_mv,
+            `${rp2040Status.noise_floor_dbm} dBm (${rp2040Status.noise_floor_mv} mV)`);
     }
 
     updateFeedCards(data) {
@@ -309,11 +341,17 @@ class MetricsWebSocket {
 
             // Add status information
             Object.entries(status).forEach(([key, value]) => {
+                if (key === 'noise_floor_mv') return;  // Folded into the noise_floor_dbm row.
                 let displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                 let displayValue = value;
 
                 // Format specific values
-                if (key.includes('uptime_ms')) {
+                if (key === 'noise_floor_dbm') {
+                    displayKey = 'Noise Floor';
+                    displayValue = status.noise_floor_mv !== undefined
+                        ? `${value} dBm (${status.noise_floor_mv} mV)`
+                        : `${value} dBm`;
+                } else if (key.includes('uptime_ms')) {
                     displayKey = 'Uptime';
                     displayValue = `${Math.floor(value / 1000)}s`;
                 } else if (key.includes('temperature')) {
@@ -397,6 +435,7 @@ class MetricsWebSocket {
                     const deviceStatus = data['device_status'];
                     // console.log('Device Status:', deviceStatus);
                     this.updateDeviceStatus(deviceStatus);
+                    this.updateNoiseFloorCard(deviceStatus.rp2040);
                     if (deviceStatus.gnss && this.onGNSSStatus) {
                         this.onGNSSStatus(deviceStatus.gnss);
                     }
