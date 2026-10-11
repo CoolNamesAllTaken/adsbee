@@ -329,7 +329,7 @@ test('product time resolves around midnight', () => {
     assert.strictEqual(Fisb.resolveTime(Date.UTC(2026, 0, 2), { month: 12, day: 30, hour: 12, minute: 0 }), Date.UTC(2025, 11, 30, 12));
 });
 
-test('malformed input never throws', () => {
+test('malformed input never throws', (t) => {
     const d = new Fisb.Decoder();
     assert.strictEqual(d.ingestUplink(null), null);
     assert.strictEqual(d.ingestUplink(new Uint8Array(10)), null);
@@ -343,8 +343,13 @@ test('malformed input never throws', () => {
         p[6] |= 0x20;
         d.ingestUplink(p, { timestampMs: Date.UTC(2026, 9, 11, 10, 0) + n * 1000 });
     }
-    d.expire(Date.UTC(2027, 0, 1));
     assert.strictEqual(d.stats.uplinks, 3000);
+    // Whatever was stored can be drawn.
+    const { L, map, document } = fakeBrowser();
+    globalThis.document = document;
+    t.after(() => { delete globalThis.document; });
+    Fisb.createLayer(L, d, { stationsUrl: null }).addTo(map);
+    d.expire(Date.UTC(2027, 0, 1));
 });
 
 // Minimal Leaflet and DOM stand-ins that record what the layer draws.

@@ -638,7 +638,7 @@
     function reportOutlines(report) {
         const outlines = new Map();
         for (const s of report.shapes) {
-            if (s.shape === 'point') continue;
+            if (!s.shape || s.shape === 'point') continue;
             const key = s.shape + JSON.stringify(s.points || [s.center, s.radiusNm]) + (s.element || '');
             let o = outlines.get(key);
             if (!o) {
