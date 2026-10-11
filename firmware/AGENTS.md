@@ -166,7 +166,7 @@ Add pictures and graphs to the release notes where they help.
 - Paste the images into the release editor next to the bullet they illustrate (GitHub hosts them). An agent that
   can't paste leaves a placeholder comment there (`<!-- IMAGE: 01-rssi-vs-input.png -->`) and hands the image
   files to the person publishing. Don't attach them as release assets.
-- Look at every final image before linking it.
+- Look at every final image before handing it over.
 
 ### Automated enforcement
 `scripts/check_version_sync.sh` checks these rules for both products. If a product's watched paths or
