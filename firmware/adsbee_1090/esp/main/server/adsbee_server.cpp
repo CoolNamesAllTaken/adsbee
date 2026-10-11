@@ -74,6 +74,10 @@ extern const uint8_t ota_updater_js_start[] asm("_binary_ota_updater_js_start");
 extern const uint8_t ota_updater_js_end[] asm("_binary_ota_updater_js_end");
 extern const uint8_t firmware_release_js_start[] asm("_binary_firmware_release_js_start");
 extern const uint8_t firmware_release_js_end[] asm("_binary_firmware_release_js_end");
+extern const uint8_t fisb_js_start[] asm("_binary_fisb_js_start");
+extern const uint8_t fisb_js_end[] asm("_binary_fisb_js_end");
+extern const uint8_t fisb_stations_js_start[] asm("_binary_fisb_stations_js_start");
+extern const uint8_t fisb_stations_js_end[] asm("_binary_fisb_stations_js_end");
 extern const uint8_t favicon_png_start[] asm("_binary_favicon_png_start");
 extern const uint8_t favicon_png_end[] asm("_binary_favicon_png_end");
 
@@ -657,6 +661,18 @@ static esp_err_t firmware_release_js_handler(httpd_req_t* req) {
     return ESP_OK;
 }
 
+static esp_err_t fisb_js_handler(httpd_req_t* req) {
+    httpd_resp_set_type(req, "application/javascript");
+    httpd_resp_send(req, (const char*)fisb_js_start, fisb_js_end - fisb_js_start);
+    return ESP_OK;
+}
+
+static esp_err_t fisb_stations_js_handler(httpd_req_t* req) {
+    httpd_resp_set_type(req, "application/javascript");
+    httpd_resp_send(req, (const char*)fisb_stations_js_start, fisb_stations_js_end - fisb_stations_js_start);
+    return ESP_OK;
+}
+
 static void json_escape(char* out, size_t out_size, const char* in) {
     size_t o = 0;
     for (size_t i = 0; in[i] && o + 2 < out_size; i++) {
@@ -948,6 +964,24 @@ bool ADSBeeServer::TCPServerInit() {
                                        .handle_ws_control_frames = false,
                                        .supported_subprotocol = nullptr};
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &firmware_release_js));
+
+    // FIS-B weather decoder and station table JavaScript URI handlers
+    httpd_uri_t fisb_js = {.uri = "/fisb.js",
+                           .method = HTTP_GET,
+                           .handler = fisb_js_handler,
+                           .user_ctx = NULL,
+                           .is_websocket = false,
+                           .handle_ws_control_frames = false,
+                           .supported_subprotocol = nullptr};
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &fisb_js));
+    httpd_uri_t fisb_stations_js = {.uri = "/fisb_stations.js",
+                                    .method = HTTP_GET,
+                                    .handler = fisb_stations_js_handler,
+                                    .user_ctx = NULL,
+                                    .is_websocket = false,
+                                    .handle_ws_control_frames = false,
+                                    .supported_subprotocol = nullptr};
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &fisb_stations_js));
 
     // Favicon URI handler
     httpd_uri_t favicon = {.uri = "/favicon.png",

@@ -511,7 +511,7 @@ function whereplaneMapUrl(uri, protocol, receiverId) {
 
 class FeedEditor {
     static PROTOCOLS = ['NONE', 'RAW', 'BEAST', 'BEAST_NO_UAT', 'BEAST_NO_UAT_UPLINK',
-        'CSBEE', 'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON'];
+        'CSBEE', 'MAVLINK1', 'MAVLINK2', 'GDL90', 'AIRCRAFT_JSON', 'AIRCRAFT_JSON_UAT_UPLINK'];
 
     static async open(feedSlot) {
         const modal = document.getElementById('feed-modal');
@@ -876,6 +876,7 @@ class FirmwareUploader {
         // Pause the page's own websockets so the device's httpd isn't busy with them during the update.
         consoleWebSocket.pause();
         metricsWebSocket.pause();
+        if (mapWeather) mapWeather.setPaused(true);
         let ok = false;
         try {
             // Give the ESP32 time to release the page's /console session, or it resets the updater's connection.
@@ -902,6 +903,7 @@ class FirmwareUploader {
             if (!ok) {
                 consoleWebSocket.resume();
                 metricsWebSocket.resume();
+                if (mapWeather) mapWeather.setPaused(false);
             }
         }
         if (ok) await this.waitForReboot();
@@ -1062,6 +1064,128 @@ class AircraftWebSocket {
     pause() { this.paused = true; clearTimeout(this._timer); if (this.ws) this.ws.close(); }
     resume() { if (!this.paused) return; this.paused = false; this._connect(); }
     close(code, reason) { this.paused = true; clearTimeout(this._timer); if (this.ws) this.ws.close(code, reason); }
+}
+
+// ─── Weather (FIS-B) ──────────────────────────────────────────────────────────
+// Reads UAT uplinks from the /uplink WebSocket. A source for MapWeather.
+class UplinkWebSocket {
+    constructor(url) {
+        this.url = url;
+        this.onUplink = null;
+        this.ws = null;
+        this._timer = null;
+    }
+
+    start(onUplink) {
+        this.onUplink = onUplink;
+        this._connect();
+    }
+
+    stop() {
+        this.onUplink = null;
+        clearTimeout(this._timer);
+        const ws = this.ws;
+        this.ws = null;
+        if (ws) ws.close();
+    }
+
+    _connect() {
+        const ws = this.ws = new WebSocket(this.url);
+        ws.binaryType = 'arraybuffer';
+        ws.onmessage = (ev) => {
+            const uplink = typeof ev.data === 'string' ? null : Fisb.parseUplinkMessage(ev.data);
+            if (uplink && this.onUplink) this.onUplink(uplink);
+        };
+        ws.onclose = () => {
+            if (this.ws !== ws) return;
+            this._timer = setTimeout(() => this._connect(), 5000);
+        };
+    }
+}
+
+// FIS-B weather layer of the Live Map. While switched off it loads nothing and its source stays stopped.
+class MapWeather {
+    // source: {start(onUplink), stop()}. scriptUrl: fisb.js, for pages that don't embed it.
+    constructor({ source, scriptUrl = null, stationsUrl = null, position = 'topleft' }) {
+        this.source = source;
+        this.scriptUrl = scriptUrl;
+        this.stationsUrl = stationsUrl;
+        this.position = position;
+        this.enabled = readMapFlag('showWeather', false);
+        this.map = null;
+        this.decoder = null;
+        this.layer = null;
+        this.mapShown = false;
+        this.paused = false;
+        this.running = false;
+        document.addEventListener('visibilitychange', () => this._apply());
+    }
+
+    attach(map) {
+        this.map = map;
+        this._apply();
+    }
+
+    setEnabled(on) {
+        this.enabled = on;
+        writeMapFlag('showWeather', on);
+        this._apply();
+    }
+
+    // Call when the map becomes visible or hidden within the page.
+    setMapShown(on) {
+        this.mapShown = on;
+        this._apply();
+    }
+
+    // Stops the source during a firmware update.
+    setPaused(on) {
+        this.paused = on;
+        this._apply();
+    }
+
+    ingest(uplink) {
+        if (this.decoder) this.decoder.ingestUplink(uplink.payload, uplink.meta);
+    }
+
+    // Forgets everything received, for a change of receiver.
+    clear() {
+        if (!this.decoder) return;
+        this.decoder.reset();
+        this.layer.refresh();
+    }
+
+    async _apply() {
+        const wanted = () => this.enabled && !!this.map;
+        if (wanted() && !this.layer) {
+            if (!window.Fisb) {
+                if (!this._loading) this._loading = this._loadScript().finally(() => { this._loading = null; });
+                try { await this._loading; } catch (_) { return; }
+            }
+            if (wanted() && !this.layer) {
+                this.decoder = new Fisb.Decoder();
+                this.layer = Fisb.createLayer(L, this.decoder, { stationsUrl: this.stationsUrl, position: this.position });
+            }
+        }
+        if (!this.layer) return;
+        if (wanted() !== this.map.hasLayer(this.layer)) {
+            if (wanted()) this.layer.addTo(this.map); else this.layer.remove();
+        }
+        const run = wanted() && this.mapShown && !this.paused && !document.hidden;
+        if (run === this.running) return;
+        this.running = run;
+        if (run) this.source.start((uplink) => this.ingest(uplink)); else this.source.stop();
+    }
+
+    _loadScript() {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = this.scriptUrl;
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    }
 }
 
 // ─── AircraftStore ────────────────────────────────────────────────────────────
@@ -1656,5 +1780,5 @@ class AircraftTable {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { isOtherTextEntry, whereplaneMapUrl };
+    module.exports = { isOtherTextEntry, whereplaneMapUrl, UplinkWebSocket, MapWeather };
 }

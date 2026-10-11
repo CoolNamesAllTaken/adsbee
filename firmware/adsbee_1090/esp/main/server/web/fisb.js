@@ -51,6 +51,37 @@
         return { payload: deinterleave(m[1]), meta };
     }
 
+    const UPLINK_MESSAGE_BYTES = 440;
+    const UPLINK_RSSI_UNKNOWN = -128;
+
+    /** /uplink WebSocket message (ArrayBuffer or bytes) -> {payload, meta}, or null when too short. */
+    function parseUplinkMessage(data) {
+        const b = data instanceof Uint8Array ? data : new Uint8Array(data);
+        if (b.length < UPLINK_MESSAGE_BYTES) return null;
+        const view = new DataView(b.buffer, b.byteOffset, b.byteLength);
+        const meta = { deviceMs: view.getUint32(436, true) };
+        const rssiDbm = view.getInt8(UPLINK_PAYLOAD_BYTES);
+        if (rssiDbm !== UPLINK_RSSI_UNKNOWN) meta.rssiDbm = rssiDbm;
+        return { payload: b.subarray(0, UPLINK_PAYLOAD_BYTES), meta };
+    }
+
+    /** True for an AIRCRAFT_JSON_UAT_UPLINK uplink line, complete or cut short. */
+    const isUplinkLine = (line) => /^\s*\{"uat_uplink"/.test(line);
+
+    /** Serial line {"uat_uplink":"<Base64>","rssi":..,"t":..} -> {payload, meta}, or null for other lines. */
+    function parseUplinkLine(line) {
+        if (!isUplinkLine(line)) return null;
+        let o, text;
+        try { o = JSON.parse(line); text = atob(o.uat_uplink); } catch (_) { return null; }
+        if (text.length !== UPLINK_PAYLOAD_BYTES) return null;
+        const payload = new Uint8Array(UPLINK_PAYLOAD_BYTES);
+        for (let i = 0; i < payload.length; i++) payload[i] = text.charCodeAt(i);
+        const meta = {};
+        if (typeof o.rssi === 'number') meta.rssiDbm = o.rssi;
+        if (typeof o.t === 'number') meta.deviceMs = o.t;
+        return { payload, meta };
+    }
+
     function dlac(b, start, numBytes) {
         let text = '', tab = false;
         const end = Math.min(b.length, start + numBytes);
@@ -893,7 +924,7 @@
     }
 
     const api = {
-        Decoder, createLayer, deinterleave, parseRawLine, hexToBytes, flightCategory, blockBounds, resolveTime, setStations, stationPosition,
+        Decoder, createLayer, deinterleave, parseRawLine, parseUplinkMessage, parseUplinkLine, isUplinkLine, hexToBytes, flightCategory, blockBounds, resolveTime, setStations, stationPosition,
         reportOutlines, PRODUCT_NAMES, RADAR_COLORS, CATEGORY_COLORS,
         decode: { uplinkHeader: decodeUplinkHeader, frames: splitFrames, apduHeader: decodeApduHeader, text: decodeText, twgo: decodeTwgo, grid: decodeGrid, crl: decodeCrl, dlac },
     };

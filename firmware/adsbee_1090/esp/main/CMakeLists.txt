@@ -64,6 +64,8 @@ idf_component_register(
         "server/web/settings.js"
         "server/web/ota_updater.js"
         "server/web/firmware_release.js"
+        "server/web/fisb.js"
+        "server/web/fisb_stations.js"
         "server/web/favicon.png"
 )
 

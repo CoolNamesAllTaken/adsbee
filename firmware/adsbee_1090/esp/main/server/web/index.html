@@ -96,6 +96,7 @@
                 <div id="map-options" class="map-options">
                     <label><input type="checkbox" id="velocityVectorToggle" checked> Velocity lines</label>
                     <label><input type="checkbox" id="allTrailsToggle"> Traces</label>
+                    <label title="FIS-B weather from UAT ground stations (US)"><input type="checkbox" id="weatherToggle"> Weather</label>
                 </div>
             </div>
             <div id="resize-handle" title="Drag to resize"></div>
@@ -197,6 +198,7 @@
             console_ws_url:  `ws://${HOST_URI}/console`,
             metrics_ws_url:  `ws://${HOST_URI}/metrics`,
             aircraft_ws_url: `ws://${HOST_URI}/aircraft`,
+            uplink_ws_url:   `ws://${HOST_URI}/uplink`,
             reconnectDelayMs: 5000
         };
 
@@ -484,6 +486,7 @@
         let acTable = null;
         let aircraftUpdateTimer = null;
         let latestGNSSStatus = null;
+        let mapWeather = null;
 
         function switchTab(name) {
             document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -493,6 +496,7 @@
                 el.classList.toggle('active', el.id === `tab-${name}`);
             });
 
+            if (mapWeather) mapWeather.setMapShown(name === 'map');
             if (name === 'console') {
                 settingsTab.leave();
                 if (aircraftWebSocket) aircraftWebSocket.pause();
@@ -538,6 +542,11 @@
                 trailsToggle.checked = map.showAllTrails;
                 trailsToggle.addEventListener('change', () => map.setShowAllTrails(trailsToggle.checked));
             }
+            const weatherToggle = document.getElementById('weatherToggle');
+            if (weatherToggle && mapWeather) {
+                weatherToggle.checked = mapWeather.enabled;
+                weatherToggle.addEventListener('change', () => mapWeather.setEnabled(weatherToggle.checked));
+            }
         }
 
         async function initLiveMap() {
@@ -549,6 +558,15 @@
                     if (acTable) acTable.setSelected(hex);
                 };
                 await liveMap.init();
+                if (liveMap.map) {
+                    mapWeather = new MapWeather({
+                        source: new UplinkWebSocket(WS_CONFIG.uplink_ws_url),
+                        scriptUrl: 'fisb.js',
+                        stationsUrl: 'fisb_stations.js',
+                    });
+                    mapWeather.attach(liveMap.map);
+                    mapWeather.setMapShown(document.getElementById('tab-map').classList.contains('active'));
+                }
                 initMapOptions(liveMap);
                 if (latestGNSSStatus) liveMap.setReceiverStatus(latestGNSSStatus);
             } else {
