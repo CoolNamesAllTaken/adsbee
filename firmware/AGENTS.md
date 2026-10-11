@@ -154,6 +154,19 @@ Release tags are `<product>-M.m.p-rcN` or `<product>-M.m.p` (`kFirmwareVersionRe
 `adsbee_1090-0.9.1-rc3`, `adsbee_1421-0.3.10`. Pushing one runs `.github/workflows/release.yml`, which builds that
 product and drafts a GitHub release (see [Releases](README.md#releases)).
 
+### Release notes: pictures and graphs
+Add pictures and graphs to the release notes where they help.
+- Show users what is new (a screenshot cropped to the feature) or how performance differs from the previous
+  firmware (a graph with both versions, axis labels with units, opaque background for light and dark themes).
+- Use measured data from the release images only. Leave a graph out if one side is missing.
+- Don't reveal the test setup: no serial numbers, MAC or IP addresses, hostnames, SSIDs, receiver coordinates,
+  feed URLs or UUIDs, bench unit names or test equipment models. Crop, blur or set dummy values (and restore them).
+  No aircraft table or map that gives away the receiver location. Captions stay generic ("bench, signal generator
+  on a cable").
+- Host the images on the orphan branch `claud/release-media`, in a folder named after the release tag, and link
+  them with raw URLs next to the bullet they illustrate. Don't attach them as release assets.
+- Look at every final image before linking it.
+
 ### Automated enforcement
 `scripts/check_version_sync.sh` checks these rules for both products. If a product's watched paths or
 `kSettingsVersion` changed, it fails when the new version matches a release tag or is below the latest release. It
