@@ -92,6 +92,7 @@ void ws_close_fd(httpd_handle_t hd, int sockfd) {
     adsbee_server.network_console.RemoveClient(sockfd);
     adsbee_server.network_metrics.RemoveClient(sockfd);
     adsbee_server.network_aircraft.RemoveClient(sockfd);
+    adsbee_server.network_uplink.RemoveClient(sockfd);
     // SO_LINGER with l_linger=0 sends RST instead of FIN, bypassing TCP TIME_WAIT.
     // Without this, graceful FIN/FIN-ACK teardown (which always happens on Ethernet) accumulates
     // TIME_WAIT entries in LWIP's PCB table (2 * MSL per close), exhausting the pool and blocking
@@ -187,9 +188,9 @@ bool ADSBeeServer::Update() {
         uint32_t heap_free_kb = heap_caps_get_free_size(MALLOC_CAP_8BIT) / 1024;
         uint32_t heap_total_kb = heap_caps_get_total_size(MALLOC_CAP_8BIT) / 1024;
         uint16_t ws_used = network_console.GetNumClients() + network_metrics.GetNumClients() +
-                           network_aircraft.GetNumClients();
+                           network_aircraft.GetNumClients() + network_uplink.GetNumClients();
         uint16_t ws_total = network_console.GetNumClientsAllowed() + network_metrics.GetNumClientsAllowed() +
-                            network_aircraft.GetNumClientsAllowed();
+                            network_aircraft.GetNumClientsAllowed() + network_uplink.GetNumClientsAllowed();
         CONSOLE_INFO("ADSBeeServer::Update", "\t %d clients, %d aircraft, heap: %luK free / %luK total, ws: %d/%d",
                      comms_manager.GetNumWiFiClients(), aircraft_dictionary.GetNumAircraft(), heap_free_kb,
                      heap_total_kb, ws_used, ws_total);
@@ -287,7 +288,8 @@ bool ADSBeeServer::Update() {
             // UAT Uplink Packets
             // We don't currently digest uplink packets, they just get forwarded. The raw_packets_buf composite packet
             // array takes care of forwarding to relevant feeds. We also forward them over GDL90 to connected WiFi
-            // clients here (separate from the traffic reporting that occurs on regular intervals).
+            // clients here (separate from the traffic reporting that occurs on regular intervals), and to /uplink
+            // WebSocket clients.
             for (uint16_t i = 0; i < raw_packets.header->num_uat_uplink_packets; i++) {
                 RawUATUplinkPacket& raw_uat_uplink_packet = raw_packets.uat_uplink_packets[i];
                 DecodedUATUplinkPacket decoded_packet = DecodedUATUplinkPacket(raw_uat_uplink_packet);
@@ -296,6 +298,7 @@ bool ADSBeeServer::Update() {
                     continue;
                 }
                 ReportGDL90UplinkDataMessage(decoded_packet);
+                QueueUplinkMessage(decoded_packet);
             }
         }
     }
@@ -329,6 +332,8 @@ bool ADSBeeServer::Update() {
     network_console.Update();
     network_metrics.Update();
     network_aircraft.Update();
+    network_uplink.Update();
+    UpdateUplinkBroadcast();
 
     // Check to see whether the RP2040 sent over new metrics.
     if (xQueueReceive(rp2040_aircraft_dictionary_metrics_queue, &rp2040_aircraft_dictionary_metrics, 0) == pdTRUE) {
@@ -484,6 +489,54 @@ bool ADSBeeServer::ReportGDL90UplinkDataMessage(const DecodedUATUplinkPacket& up
     }
 
     return true;
+}
+
+void ADSBeeServer::QueueUplinkMessage(const DecodedUATUplinkPacket& uplink_packet) {
+    if (!uplink_ring_) {
+        return;
+    }
+    uint8_t message[kUATUplinkMessageNumBytes];
+    // The packet's own timestamp counts radio timer ticks, so report the time of this message.
+    BuildUATUplinkMessage(message, uplink_packet.decoded_payload, uplink_packet.raw.sigs_dbm,
+                          get_time_since_boot_ms());
+    uplink_ring_->Push(message);
+}
+
+void ADSBeeServer::UpdateUplinkBroadcast() {
+    int client_fds[WebSocketServer::kMaxNumClients];
+    uint16_t num_clients = network_uplink.GetClientFds(client_fds);
+    if (num_clients == 0) {
+        delete uplink_ring_;
+        uplink_ring_ = nullptr;
+        return;
+    }
+    if (!uplink_ring_) {
+        uplink_ring_ = new (std::nothrow) UplinkRing();
+        if (!uplink_ring_) {
+            return;  // Try again on the next update.
+        }
+    }
+    uplink_ring_->SetClients(client_fds, num_clients);
+
+    for (uint16_t i = 0; i < num_clients; i++) {
+        // Only send to a client that takes the frame right away, so a slow client can't stall this task.
+        const uint8_t* message;
+        while ((message = uplink_ring_->Peek(client_fds[i])) != nullptr &&
+               network_uplink.ClientIsWritable(client_fds[i])) {
+            // A failed send drops this message for the client.
+            network_uplink.SendMessageToClient(client_fds[i], (const char*)message, kUATUplinkMessageNumBytes);
+            uplink_ring_->Pop(client_fds[i]);
+        }
+    }
+
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+    if (uplink_ring_->num_dropped > 0 &&
+        timestamp_ms - last_uplink_drop_warning_timestamp_ms_ > kUplinkDropWarningIntervalMs) {
+        last_uplink_drop_warning_timestamp_ms_ = timestamp_ms;
+        CONSOLE_WARNING("ADSBeeServer::UpdateUplinkBroadcast", "Dropped %lu UAT uplinks for slow /uplink clients.",
+                        (unsigned long)uplink_ring_->num_dropped);
+        uplink_ring_->num_dropped = 0;
+    }
 }
 
 // void ADSBeeServer::TCPServerTask(void *pvParameters) {
@@ -817,7 +870,7 @@ bool ADSBeeServer::TCPServerInit() {
     config.stack_size = kHTTPServerStackSizeBytes;
     // config.task_caps = MALLOC_CAP_IRAM_8BIT;
     config.max_open_sockets = 16;  // Must be <= CONFIG_LWIP_MAX_SOCKETS - 3 (currently 20 - 3 = 17).
-    // 9 URIs are registered below (6 HTTP + 3 websocket); the default limit is 8 and a
+    // 12 URIs are registered below (8 HTTP + 4 websocket); the default limit is 8 and a
     // failed registration aborts boot via ESP_ERROR_CHECK.
     config.max_uri_handlers = 16;
     config.close_fn = ws_close_fd;
@@ -950,6 +1003,18 @@ bool ADSBeeServer::TCPServerInit() {
                                         .message_received_callback = nullptr});
     if (!network_aircraft.Init()) {
         CONSOLE_ERROR("ADSBeeServer::TCPServerInit", "Failed to start Network Aircraft WebSocket server.");
+        return false;
+    }
+    network_uplink = WebSocketServer({.label = "Network Uplink",
+                                      .server = server,
+                                      .uri = "/uplink",
+                                      .num_clients_allowed = 4,
+                                      .send_as_binary = true,
+                                      .inactivity_timeout_ms = 0,  // Disabled; TCP keepalives handle dead connections.
+                                      .post_connect_callback = nullptr,
+                                      .message_received_callback = nullptr});
+    if (!network_uplink.Init()) {
+        CONSOLE_ERROR("ADSBeeServer::TCPServerInit", "Failed to start Network Uplink WebSocket server.");
         return false;
     }
     HeapDiagnostics::Mark("ws");

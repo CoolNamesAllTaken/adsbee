@@ -20,6 +20,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${ADSBEE_COMMON_DIR}/comms/gdl90
     ${ADSBEE_COMMON_DIR}/comms/json
     ${ADSBEE_COMMON_DIR}/comms/raw
+    ${ADSBEE_COMMON_DIR}/comms/uat_uplink
     ${ADSBEE_COMMON_DIR}/coprocessor
 
     ${ADSBEE_MODULES_DIR}/cppAT/src

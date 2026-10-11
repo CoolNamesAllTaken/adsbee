@@ -44,6 +44,7 @@ class SettingsManager {
         kGDL90,
         kAircraftJSON,
         kGDL90NoUATUplink,  // Appended (not next to kGDL90): values are flash-persisted, don't renumber.
+        kAircraftJSONUATUplink,  // Aircraft JSON plus one line per UAT ground uplink.
         kNumProtocols
     };
     static constexpr uint16_t kReportingProtocolStrMaxLen = 30;

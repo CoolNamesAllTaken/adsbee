@@ -34,6 +34,9 @@ class WebSocketServer {
     // times in a row. Otherwise a client that stopped reading stalls every broadcast.
     static constexpr uint32_t kClientSendTimeoutMs = 1000;
     static constexpr uint8_t kMaxConsecutiveSendFailures = 3;
+    // ClientIsWritable() guarantees room for this much: lwIP reports a socket writable while more than half of
+    // CONFIG_LWIP_TCP_SND_BUF_DEFAULT is free.
+    static constexpr uint16_t kNonBlockingMessageMaxLen = 2048;
 
     struct WebSocketServerConfig {
         char label[kWebSocketLabelMaxLen] = "Untitled";
@@ -93,6 +96,25 @@ class WebSocketServer {
     esp_err_t SendMessage(int client_fd, const char *message, int16_t len_bytes = -1);
 
     /**
+     * Lists the connected clients.
+     * @param[out] client_fds Array of at least kMaxNumClients file descriptors.
+     * @retval Number of file descriptors written.
+     */
+    uint16_t GetClientFds(int *client_fds) const;
+
+    /**
+     * True if a frame can be sent to the client without waiting: its TCP send buffer has room for more than a frame of
+     * up to kNonBlockingMessageMaxLen.
+     */
+    bool ClientIsWritable(int client_fd) const;
+
+    /**
+     * Sends a message to one client, with the heap guard and failed client handling of BroadcastMessage().
+     * @retval True if the message was sent.
+     */
+    bool SendMessageToClient(int client_fd, const char *message, int16_t len_bytes = -1);
+
+    /**
      * Handler function that gets called with all HTTP requests made to the web socket.
      * @param[in] req Incoming HTTP request.
      * @retval ESP_OK if request was handled successfully, ESP_FAIL if connection should be rejected.
@@ -126,6 +148,11 @@ class WebSocketServer {
     bool AddClient(int client_fd);
 
     bool UpdateActivityTimer(int client_fd);
+
+    // False (with a rate limited warning) while the heap is too low to queue more TCP segments.
+    bool HeapAllowsSend();
+    // Sends to the client in clients_[index] and drops it if it stopped reading or keeps failing.
+    bool SendMessageToClientIndex(uint16_t index, const char *message, int16_t len_bytes);
 
     /**
      * Writes one frame to a client while holding send_mutex_. Every frame, including PONG / CLOSE replies, must go

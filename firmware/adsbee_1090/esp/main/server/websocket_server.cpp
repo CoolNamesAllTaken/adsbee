@@ -191,57 +191,93 @@ bool WebSocketServer::RemoveClient(int client_fd) {
     return false;
 }
 
-void WebSocketServer::BroadcastMessage(const char* message, int16_t len_bytes) {
-    if (GetNumClients() == 0) {
-        return;
-    }
+bool WebSocketServer::HeapAllowsSend() {
     uint32_t free_heap_bytes = HardwareCapabilities::GetInternalFreeBytes();
-    if (free_heap_bytes < kMinFreeHeapBytesToBroadcast) {
-        // Sending queues TCP segments on the heap; when it's this low, dropping the message is the safe choice.
-        uint32_t timestamp_ms = get_time_since_boot_ms();
-        if (timestamp_ms - last_low_heap_warning_timestamp_ms_ > kLowHeapWarningIntervalMs) {
-            last_low_heap_warning_timestamp_ms_ = timestamp_ms;
-            CONSOLE_WARNING("WebSocketServer::BroadcastMessage",
-                            "[%s] Dropping messages while heap is low (%lu Bytes free, need %lu).", config_.label,
-                            (unsigned long)free_heap_bytes, (unsigned long)kMinFreeHeapBytesToBroadcast);
-        }
+    if (free_heap_bytes >= kMinFreeHeapBytesToBroadcast) {
+        return true;
+    }
+    // Sending queues TCP segments on the heap; when it's this low, dropping the message is the safe choice.
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+    if (timestamp_ms - last_low_heap_warning_timestamp_ms_ > kLowHeapWarningIntervalMs) {
+        last_low_heap_warning_timestamp_ms_ = timestamp_ms;
+        CONSOLE_WARNING("WebSocketServer::HeapAllowsSend",
+                        "[%s] Dropping messages while heap is low (%lu Bytes free, need %lu).", config_.label,
+                        (unsigned long)free_heap_bytes, (unsigned long)kMinFreeHeapBytesToBroadcast);
+    }
+    return false;
+}
+
+void WebSocketServer::BroadcastMessage(const char* message, int16_t len_bytes) {
+    if (GetNumClients() == 0 || !HeapAllowsSend()) {
         return;
     }
     for (int i = 0; i < config_.num_clients_allowed; i++) {
         if (clients_[i].in_use) {
-            uint32_t send_start_ms = get_time_since_boot_ms();
-            esp_err_t ret = SendMessage(clients_[i].client_fd, message, len_bytes);
-            uint32_t send_duration_ms = get_time_since_boot_ms() - send_start_ms;
-            if (ret == ESP_OK) {
-                clients_[i].consecutive_send_failures = 0;
-            } else if (send_duration_ms >= kClientSendTimeoutMs ||
-                       ++clients_[i].consecutive_send_failures >= kMaxConsecutiveSendFailures) {
-                // Client stopped reading or keeps failing. A partial frame may be on the wire, so drop it.
-                CONSOLE_WARNING("WebSocketServer::BroadcastMessage",
-                                "[%s] Dropping client %d: send failed with %s after %lu ms (%d failures in a row).",
-                                config_.label, i, esp_err_to_name(ret), (unsigned long)send_duration_ms,
-                                clients_[i].consecutive_send_failures);
-                int fd = clients_[i].client_fd;
-                RemoveClient(fd);
-                httpd_sess_trigger_close(config_.server, fd);
-            } else {
-                if (ret == ESP_ERR_NO_MEM || ret == ESP_FAIL) {
-                    // Transient resource exhaustion — drop this message but keep the session alive.
-                    CONSOLE_WARNING("WebSocketServer::BroadcastMessage",
-                                    "[%s] Dropping message to client %d (transient error: %s).", config_.label, i,
-                                    esp_err_to_name(ret));
-                } else {
-                    // Permanent / unrecoverable error — close the session.
-                    CONSOLE_ERROR("WebSocketServer::BroadcastMessage",
-                                  "[%s] Failed to send message to client %d due to error %s.", config_.label, i,
-                                  esp_err_to_name(ret));
-                    int fd = clients_[i].client_fd;
-                    RemoveClient(fd);  // Free slot immediately; don't wait for ws_close_fd which may not fire.
-                    httpd_sess_trigger_close(config_.server, fd);
-                }
-            }
+            SendMessageToClientIndex(i, message, len_bytes);
         }
     }
+}
+
+bool WebSocketServer::SendMessageToClient(int client_fd, const char* message, int16_t len_bytes) {
+    if (!HeapAllowsSend()) {
+        return false;
+    }
+    for (int i = 0; i < config_.num_clients_allowed; i++) {
+        if (clients_[i].in_use && clients_[i].client_fd == client_fd) {
+            return SendMessageToClientIndex(i, message, len_bytes);
+        }
+    }
+    return false;
+}
+
+bool WebSocketServer::SendMessageToClientIndex(uint16_t i, const char* message, int16_t len_bytes) {
+    uint32_t send_start_ms = get_time_since_boot_ms();
+    esp_err_t ret = SendMessage(clients_[i].client_fd, message, len_bytes);
+    uint32_t send_duration_ms = get_time_since_boot_ms() - send_start_ms;
+    if (ret == ESP_OK) {
+        clients_[i].consecutive_send_failures = 0;
+        return true;
+    }
+    if (send_duration_ms >= kClientSendTimeoutMs ||
+        ++clients_[i].consecutive_send_failures >= kMaxConsecutiveSendFailures) {
+        // Client stopped reading or keeps failing. A partial frame may be on the wire, so drop it.
+        CONSOLE_WARNING("WebSocketServer::BroadcastMessage",
+                        "[%s] Dropping client %d: send failed with %s after %lu ms (%d failures in a row).",
+                        config_.label, i, esp_err_to_name(ret), (unsigned long)send_duration_ms,
+                        clients_[i].consecutive_send_failures);
+        int fd = clients_[i].client_fd;
+        RemoveClient(fd);
+        httpd_sess_trigger_close(config_.server, fd);
+    } else if (ret == ESP_ERR_NO_MEM || ret == ESP_FAIL) {
+        // Transient resource exhaustion — drop this message but keep the session alive.
+        CONSOLE_WARNING("WebSocketServer::BroadcastMessage",
+                        "[%s] Dropping message to client %d (transient error: %s).", config_.label, i,
+                        esp_err_to_name(ret));
+    } else {
+        // Permanent / unrecoverable error — close the session.
+        CONSOLE_ERROR("WebSocketServer::BroadcastMessage", "[%s] Failed to send message to client %d due to error %s.",
+                      config_.label, i, esp_err_to_name(ret));
+        int fd = clients_[i].client_fd;
+        RemoveClient(fd);  // Free slot immediately; don't wait for ws_close_fd which may not fire.
+        httpd_sess_trigger_close(config_.server, fd);
+    }
+    return false;
+}
+
+uint16_t WebSocketServer::GetClientFds(int* client_fds) const {
+    uint16_t num_clients = 0;
+    for (uint16_t i = 0; i < kMaxNumClients; i++) {
+        if (clients_[i].in_use) client_fds[num_clients++] = clients_[i].client_fd;
+    }
+    return num_clients;
+}
+
+bool WebSocketServer::ClientIsWritable(int client_fd) const {
+    fd_set write_fds;
+    FD_ZERO(&write_fds);
+    FD_SET(client_fd, &write_fds);
+    struct timeval no_wait = {.tv_sec = 0, .tv_usec = 0};
+    return lwip_select(client_fd + 1, nullptr, &write_fds, nullptr, &no_wait) > 0;
 }
 
 esp_err_t WebSocketServer::SendMessage(int client_fd, const char* message, int16_t len_bytes) {

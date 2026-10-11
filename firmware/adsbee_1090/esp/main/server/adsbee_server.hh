@@ -1,11 +1,13 @@
 #pragma once
 
 #include "aircraft_dictionary.hh"
+#include "broadcast_ring.hh"
 #include "composite_array.hh"
 #include "data_structures.hh"
 #include "esp_http_server.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/stream_buffer.h"
+#include "uat_uplink_utils.hh"
 #include "websocket_server.hh"
 
 class ADSBeeServer {
@@ -33,6 +35,11 @@ class ADSBeeServer {
     // RP2040 metrics older than this are stale and are dropped from the metrics message.
     static const uint32_t kRP2040MetricsStaleTimeoutMs = 3000;
 
+    // UAT uplinks kept for /uplink clients that are not ready to receive. One composite array carries up to 7.
+    static constexpr uint16_t kUplinkRingDepth = 8;
+    static_assert(kUATUplinkMessageNumBytes <= WebSocketServer::kNonBlockingMessageMaxLen);
+    static constexpr uint32_t kUplinkDropWarningIntervalMs = 5000;
+
     static const uint16_t kNetworkConsoleQueueLen = 10;
     // RP2040 console output waiting to be broadcast to /console clients. Sized for one full console write from the
     // RP2040 (CommsManager::kNetworkConsoleBufMaxLen); anything that doesn't fit is dropped.
@@ -52,6 +59,7 @@ class ADSBeeServer {
      * Destructor.
      */
     ~ADSBeeServer() {
+        delete uplink_ring_;
         vQueueDelete(rp2040_aircraft_dictionary_metrics_queue);
         if (raw_packets_buf_) {
             heap_caps_free(raw_packets_buf_);
@@ -114,6 +122,7 @@ class ADSBeeServer {
     WebSocketServer network_console;
     WebSocketServer network_metrics;
     WebSocketServer network_aircraft;
+    WebSocketServer network_uplink;
 
     QueueHandle_t rp2040_aircraft_dictionary_metrics_queue = nullptr;
     AircraftDictionary::Metrics rp2040_aircraft_dictionary_metrics;
@@ -148,6 +157,17 @@ class ADSBeeServer {
      */
     void SendAircraftJSONMessages();
 
+    /**
+     * Queues a UAT uplink for /uplink clients. Does nothing while no client is connected.
+     */
+    void QueueUplinkMessage(const DecodedUATUplinkPacket& uplink_packet);
+
+    /**
+     * Sends queued UAT uplinks to the /uplink clients that can take them without waiting, and holds the queue only
+     * while clients are connected.
+     */
+    void UpdateUplinkBroadcast();
+
     void SetOwnshipPosition(float latitude_deg, float longitude_deg);
 
     /**
@@ -164,6 +184,10 @@ class ADSBeeServer {
 
     uint8_t* raw_packets_buf_ = nullptr;
     StreamBufferHandle_t network_console_tx_buf_ = nullptr;
+
+    typedef BroadcastRing<kUATUplinkMessageNumBytes, kUplinkRingDepth, WebSocketServer::kMaxNumClients> UplinkRing;
+    UplinkRing* uplink_ring_ = nullptr;  // Allocated while /uplink has clients.
+    uint32_t last_uplink_drop_warning_timestamp_ms_ = 0;
 
     uint32_t last_raw_packet_process_timestamp_ms_ = 0;
     uint32_t last_aircraft_dictionary_update_timestamp_ms_ = 0;

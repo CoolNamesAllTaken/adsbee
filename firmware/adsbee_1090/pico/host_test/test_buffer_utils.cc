@@ -302,3 +302,23 @@ TEST(GetNBitsFromByteBuffer, ExtraBit) {
     uint32_t result = GetNBitsFromByteBuffer(9, 7, buffer);
     EXPECT_EQ(result, 0x0102u);  // Should get bit 7 from byte 0 (1) + all 8 bits from byte 1 (0x02)
 }
+
+// RFC 4648 section 10 test vectors.
+TEST(ByteBufferToBase64String, RFC4648Vectors) {
+    const char* inputs[] = {"", "f", "fo", "foo", "foob", "fooba", "foobar"};
+    const char* outputs[] = {"", "Zg==", "Zm8=", "Zm9v", "Zm9vYg==", "Zm9vYmE=", "Zm9vYmFy"};
+    for (uint16_t i = 0; i < 7; i++) {
+        char base64[9];
+        memset(base64, 'x', sizeof(base64));
+        EXPECT_EQ(ByteBufferToBase64String(base64, (const uint8_t*)inputs[i], strlen(inputs[i])), strlen(outputs[i]));
+        EXPECT_STREQ(base64, outputs[i]);
+    }
+}
+
+TEST(ByteBufferToBase64String, HighBits) {
+    const uint8_t bytes[] = {0xFB, 0xFF, 0xFE, 0x00};
+    char base64[9];
+    EXPECT_EQ(ByteBufferToBase64String(base64, bytes, sizeof(bytes)), 8);
+    EXPECT_STREQ(base64, "+//+AA==");
+}
+

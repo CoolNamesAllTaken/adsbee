@@ -16,6 +16,7 @@ if (TARGET application)
         json
         mavlink
         raw
+        uat_uplink
     )
 elseif (TARGET sub_ghz_radio)
     target_include_directories(sub_ghz_radio PRIVATE
@@ -39,6 +40,7 @@ elseif (TARGET host_test OR TARGET host_test_fpu)
                 json
                 mavlink
                 raw
+                uat_uplink
             )
         endif()
     endforeach()

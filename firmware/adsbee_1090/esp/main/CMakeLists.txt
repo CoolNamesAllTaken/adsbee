@@ -43,6 +43,7 @@ idf_component_register(
         "${COMMON_DIR}/comms/json"
         "${COMMON_DIR}/comms/mavlink"
         "${COMMON_DIR}/comms/raw"
+        "${COMMON_DIR}/comms/uat_uplink"
         "${COMMON_DIR}/coprocessor"
         "${COMMON_DIR}/utils"
         "${COMMON_DIR}/utils/crc"
