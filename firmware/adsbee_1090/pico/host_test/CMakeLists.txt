@@ -73,6 +73,7 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         test_unit_conversions.cc
         test_pfb_queue_thread_safety.cc
         test_mode_s_soft_demod.cc
+        test_spsc_queue.cc
         ${CMAKE_SOURCE_DIR}/application/mode_s_soft_demod.cc
         test_r1090_rssi.cc
     )

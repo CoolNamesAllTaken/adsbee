@@ -17,6 +17,7 @@
 #include "r1090_rssi.hh"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
+#include "spsc_queue.hh"
 #include "stdint.h"
 
 class ADSBee {
@@ -87,9 +88,20 @@ class ADSBee {
 
     static constexpr uint kMLATCounterWrapInterruptPriority = 0;
     // The RP2040 only implements the top 2 bits of an interrupt priority. The message begin and mid-message
-    // interrupts must preempt the demodulation of an earlier capture.
+    // interrupts must preempt the end of an earlier capture.
     static constexpr uint kCaptureEventInterruptPriority = 0x40;
-    static constexpr uint kCaptureDemodInterruptPriority = 0x80;
+    static constexpr uint kCaptureCompleteInterruptPriority = 0x80;
+
+    // Captures waiting for demodulation: room for a burst that arrives faster than the loop demodulates.
+    static constexpr uint16_t kCaptureQueueDepth = 16;
+
+    struct Capture {
+        uint32_t samples[mode_s_soft_demod::kCaptureWords];
+        uint64_t mlat_48mhz_64bit_counts;
+        int16_t rssi_mv;
+        uint8_t num_words;
+        uint8_t source;  // State machine index.
+    };
 
     struct ADSBeeConfig {
         PIO preamble_matcher_pio = pio0;
@@ -262,6 +274,12 @@ class ADSBee {
      * ISR for the sample DMA channels: a capture is complete.
      */
     void OnCaptureComplete();
+
+    /**
+     * Demodulates the queued captures and hands the messages to the decoder. Call from the loop that runs the
+     * decoder, and from that loop only.
+     */
+    void DemodulateCaptures();
 
     /**
      * ISR for the timer alarm that ends the capture of a 56 bit message early, so its preamble matcher and sampler
@@ -491,7 +509,7 @@ class ADSBee {
     // One DMA channel and capture buffer per pulse sampler (one spare word for bit windows that end in the last one).
     int sample_dma_channel_[BSP::kMaxNumDemodStateMachines] = {-1, -1, -1, -1};
     uint32_t sample_buf_[BSP::kMaxNumDemodStateMachines][mode_s_soft_demod::kCaptureWords + 1] = {};
-    uint32_t demod_samples_[mode_s_soft_demod::kCaptureWords + 1] = {};  // Capture being demodulated.
+    SPSCQueue<Capture, kCaptureQueueDepth> capture_queue_;  // FinishCapture() to DemodulateCaptures().
     int sample_rssi_mv_[BSP::kMaxNumDemodStateMachines] = {0};
     // Capture bookkeeping for telling a second matcher firing on the data pulses of a message apart from a new
     // message. Written and read in ISRs on the receiver core only.
@@ -513,7 +531,7 @@ class ADSBee {
     void AbortCapture(uint16_t sm_index);
 
     /**
-     * Demodulates the capture of one sampler, queues the message and re-arms the sampler and its preamble matcher.
+     * Queues the capture of one sampler for demodulation and re-arms the sampler and its preamble matcher.
      * @param[in] sm_index State machine index.
      * @param[in] num_words Number of sample words captured.
      */
@@ -568,6 +586,7 @@ class ADSBee {
 
     bool r1090_enabled_ = true;
     bool r1090_packet_queue_overflowed_ = false;
+    bool r1090_capture_queue_overflowed_ = false;
     bool bias_tee_enabled_ = false;
     uint32_t watchdog_timeout_sec_ = SettingsManager::Settings::kDefaultWatchdogTimeoutSec;
 

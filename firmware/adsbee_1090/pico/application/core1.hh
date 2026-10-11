@@ -31,6 +31,7 @@ inline void main_core1() {
         RunPendingTestFunctionOnCore1();  // Lets hardware unit tests read core 1 state, e.g. its SysTick.
 #endif
         core_1_monitor.Tick();
+        adsbee.DemodulateCaptures();
         decoder.UpdateDecoderLoop();
     }
 }
