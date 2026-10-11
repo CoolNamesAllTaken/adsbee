@@ -102,8 +102,10 @@
             document.getElementById('live').innerHTML = '&#9632;';
             let buffer = '';
             ws = consoleSocket(host, (socket) => socket.send('AT+PROTOCOL_OUT=CONSOLE,RAW\r\n'));
-            ws.onmessage = async (event) => {
-                buffer += typeof event.data === 'string' ? event.data : await new Response(event.data).text();
+            ws.binaryType = 'arraybuffer';
+            const utf8 = new TextDecoder();
+            ws.onmessage = (event) => {
+                buffer += typeof event.data === 'string' ? event.data : utf8.decode(event.data, { stream: true });
                 const lines = buffer.split('\n');
                 buffer = lines.pop();
                 for (const line of lines) {
