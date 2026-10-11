@@ -163,8 +163,9 @@ Add pictures and graphs to the release notes where they help.
   feed URLs or UUIDs, bench unit names or test equipment models. Crop, blur or set dummy values (and restore them).
   No aircraft table or map that gives away the receiver location. Captions stay generic ("bench, signal generator
   on a cable").
-- Host the images on the orphan branch `claud/release-media`, in a folder named after the release tag, and link
-  them with raw URLs next to the bullet they illustrate. Don't attach them as release assets.
+- Paste the images into the release editor next to the bullet they illustrate (GitHub hosts them). An agent that
+  can't paste leaves a placeholder comment there (`<!-- IMAGE: 01-rssi-vs-input.png -->`) and hands the image
+  files to the person publishing. Don't attach them as release assets.
 - Look at every final image before linking it.
 
 ### Automated enforcement
