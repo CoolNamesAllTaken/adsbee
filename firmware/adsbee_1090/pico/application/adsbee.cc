@@ -24,7 +24,7 @@
 // #include <charconv>
 #include <string.h>  // for strcat
 
-#include "comms.hh"          // For debug prints.
+#include "comms.hh"           // For debug prints.
 #include "gnss_interface.hh"  // For the gnss receiver instance.
 
 // Uncomment the line below to enable preamble detector debugging on recovered_clk.
@@ -434,22 +434,16 @@ void __time_critical_func(ADSBee::OnDemodBegin)(uint gpio) {
     mlat_jitter_counts_on_demod_begin_[sm_index] = mlat_jitter_counts_now;
     rx_packet_[sm_index].mlat_48mhz_64bit_counts = mlat_48mhz_64bit_counts;  // Save this to modify later.
     last_demod_begin_timestamp_us_ = time_us_32();  // Lets the noise floor sampler avoid this packet.
-
-    if (!r1090_rssi::PacketSampleAtEnd(bsp.r1090_rf_frontend_version)) {
-        ReadSignalStrengthMilliVoltsNonBlockingBegin();  // Kick off ADC read.
-    }
 }
 
 void __time_critical_func(ADSBee::OnDemodComplete)() {
 #ifdef DEBUG_ISR_TIMING
     uint16_t isr_start_counts = GetMLATJitterPWMSliceCounts();
 #endif
-    if (r1090_rssi::PacketSampleAtEnd(bsp.r1090_rf_frontend_version)) {
-        // Sample now, while the low pass on the RSSI line still holds the packet's settled level (~2us conversion).
-        ReadSignalStrengthMilliVoltsNonBlockingBegin();
-    }
-    int signal_strength_dbm = r1090_rssi::PacketMilliVoltsTodBm(ReadSignalStrengthMilliVoltsNonBlockingComplete(),
-                                                                noise_floor_mv_, bsp.r1090_rf_frontend_version);
+    // Sample RSSI now, while the low pass on the RSSI line still holds the packet's settled level (~2us conversion).
+    ReadSignalStrengthMilliVoltsNonBlockingBegin();
+    int signal_strength_dbm =
+        r1090_rssi::PacketMilliVoltsTodBm(ReadSignalStrengthMilliVoltsNonBlockingComplete(), noise_floor_mv_);
 
     // Figure out which state machines were triggered and get things set up to read packets from them. Don't stop
     // them, let them finish chewing since they run at a lower clock rate.
@@ -667,9 +661,7 @@ int __time_critical_func(ADSBee::ReadSignalStrengthMilliVoltsNonBlockingComplete
     return ADC_COUNTS_TO_MV(rssi_adc_counts);
 }
 
-int ADSBee::ReadSignalStrengthdBmBlocking() {
-    return DetectorMilliVoltsTodBm(ReadSignalStrengthMilliVoltsBlocking());
-}
+int ADSBee::ReadSignalStrengthdBmBlocking() { return DetectorMilliVoltsTodBm(ReadSignalStrengthMilliVoltsBlocking()); }
 
 int ADSBee::ReadTLMilliVolts() {
     // Read back the low level TL bias output voltage.
@@ -772,7 +764,8 @@ void ADSBee::IngestAndForwardPackets() {
 
     // Ingest Broadcast Remote ID (drone) packets pulled from the ESP32 into the aircraft dictionary. The ESP32 already
     // ingested these into its own dictionary for network output; here they populate the RP2040 dictionary so drones
-    // appear in the serial reporting outputs (CSBee / GDL90 / MAVLINK / Aircraft JSON) alongside Mode S and UAT traffic.
+    // appear in the serial reporting outputs (CSBee / GDL90 / MAVLINK / Aircraft JSON) alongside Mode S and UAT
+    // traffic.
     RawRemoteIDPacket remote_id_packet;
     while (raw_remote_id_packet_queue.Dequeue(remote_id_packet)) {
         aircraft_dictionary.IngestRawRemoteIDPacket(remote_id_packet);
