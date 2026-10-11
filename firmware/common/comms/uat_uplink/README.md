@@ -7,8 +7,9 @@ clients. Each uplink is the de-interleaved, error-corrected 432 byte payload: an
 Both formats carry:
 
 - **RSSI**: signal strength in dBm.
-- **Timestamp**: receive time in milliseconds since the receiver booted, as an unsigned 32 bit number (wraps
-  after 49.7 days).
+- **Timestamp**: uptime of the forwarding processor in milliseconds when it forwards the uplink, as an unsigned
+  32 bit number (wraps after 49.7 days). Uplinks are forwarded within about 0.3 s of reception. On `/uplink`
+  this is the ESP32's uptime, which differs from the `AT+UPTIME?` value.
 
 ## WebSocket `/uplink` (ADSBee 1090)
 

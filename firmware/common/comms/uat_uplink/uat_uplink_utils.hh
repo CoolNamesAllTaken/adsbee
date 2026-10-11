@@ -34,7 +34,7 @@ inline int8_t UATUplinkRSSIToInt8(int16_t rssi_dbm) {
  * @param[out] buf Buffer of at least kUATUplinkMessageNumBytes.
  * @param[in] payload De-interleaved uplink, kUATUplinkPayloadNumBytes long.
  * @param[in] rssi_dbm Signal strength, or INT16_MIN if unknown.
- * @param[in] timestamp_ms Receive time, in milliseconds since the receiver booted.
+ * @param[in] timestamp_ms Time the uplink is forwarded, in milliseconds since boot.
  * @retval Number of bytes written.
  */
 inline uint16_t BuildUATUplinkMessage(uint8_t* buf, const uint8_t* payload, int16_t rssi_dbm, uint32_t timestamp_ms) {
@@ -53,7 +53,7 @@ inline uint16_t BuildUATUplinkMessage(uint8_t* buf, const uint8_t* payload, int1
  * @param[out] buf Buffer of at least kUATUplinkJSONLineMaxNumChars.
  * @param[in] payload De-interleaved uplink, kUATUplinkPayloadNumBytes long.
  * @param[in] rssi_dbm Signal strength, or INT16_MIN if unknown.
- * @param[in] timestamp_ms Receive time, in milliseconds since the receiver booted.
+ * @param[in] timestamp_ms Time the uplink is forwarded, in milliseconds since boot.
  * @retval Number of characters written, not counting the null terminator.
  */
 inline uint16_t WriteUATUplinkJSONLine(char* buf, const uint8_t* payload, int16_t rssi_dbm, uint32_t timestamp_ms) {

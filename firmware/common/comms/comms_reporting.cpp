@@ -938,8 +938,8 @@ bool CommsManager::ReportUATUplinkJSON(ReportSink* sinks, uint16_t num_sinks,
         UATReedSolomon::DeInterleaveUplinkMessage(payload, raw.encoded_message);
 
         static char line[kUATUplinkJSONLineMaxNumChars];
-        uint16_t line_len =
-            WriteUATUplinkJSONLine(line, payload, raw.sigs_dbm, static_cast<uint32_t>(raw.GetTimestampMs()));
+        // The packet's own timestamp counts radio timer ticks, so report the time of this line.
+        uint16_t line_len = WriteUATUplinkJSONLine(line, payload, raw.sigs_dbm, get_time_since_boot_ms());
         ret &= SendBufToSinks(sinks, num_sinks, line, line_len, uat_uplink_json_tally);
     }
     FLUSH_REPORT_TALLY_RATE_LIMITED("CommsManager::ReportUATUplinkJSON", uat_uplink_json_tally);

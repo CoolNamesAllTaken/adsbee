@@ -496,8 +496,9 @@ void ADSBeeServer::QueueUplinkMessage(const DecodedUATUplinkPacket& uplink_packe
         return;
     }
     uint8_t message[kUATUplinkMessageNumBytes];
+    // The packet's own timestamp counts radio timer ticks, so report the time of this message.
     BuildUATUplinkMessage(message, uplink_packet.decoded_payload, uplink_packet.raw.sigs_dbm,
-                          static_cast<uint32_t>(uplink_packet.raw.GetTimestampMs()));
+                          get_time_since_boot_ms());
     uplink_ring_->Push(message);
 }
 
