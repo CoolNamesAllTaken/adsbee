@@ -321,7 +321,7 @@ void CommsManager::ReportQueuedRawPackets() {
     if (settings_manager.settings.reporting_protocols[SettingsManager::kConsole] ==
             SettingsManager::kAircraftJSONUATUplink &&
         !UplinkTxBudget::HasRoomForLine(TxRingFreeBytes(), kUartTxRingBytes)) {
-        // Uplink lines yield to aircraft lines: uplinks stay queued, and a full queue drops new ones (uat_report_q_ovf).
+        // Uplink lines yield to aircraft lines: uplinks stay queued and a full queue drops new ones (uat_report_q_ovf).
         max_uat_uplink_packets = 0;
         if (mode_s_packet_reporting_queue.Length() == 0 && uat_adsb_packet_reporting_queue.Length() == 0) {
             return;

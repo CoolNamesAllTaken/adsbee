@@ -915,7 +915,8 @@ bool CommsManager::ReportGDL90Uplink(ReportSink* sinks, uint16_t num_sinks, cons
     return ret;
 }
 
-bool CommsManager::ReportUATUplinkJSON(ReportSink* sinks, uint16_t num_sinks, const CompositeArray::RawPackets& packets) {
+bool CommsManager::ReportUATUplinkJSON(ReportSink* sinks, uint16_t num_sinks,
+                                       const CompositeArray::RawPackets& packets) {
     if (num_sinks == 0) {
         return true;  // Nobody is listening; don't spend time building lines.
     }

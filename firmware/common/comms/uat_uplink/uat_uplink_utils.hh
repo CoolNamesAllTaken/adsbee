@@ -67,6 +67,7 @@ inline uint16_t WriteUATUplinkJSONLine(char* buf, const uint8_t* payload, int16_
     } else {
         buf[n++] = '"';
     }
-    n += snprintf(buf + n, kUATUplinkJSONLineMaxNumChars - n, ",\"t\":%lu}\n", static_cast<unsigned long>(timestamp_ms));
+    n += snprintf(buf + n, kUATUplinkJSONLineMaxNumChars - n, ",\"t\":%lu}\n",
+                  static_cast<unsigned long>(timestamp_ms));
     return n;
 }
