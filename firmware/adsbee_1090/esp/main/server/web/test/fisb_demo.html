@@ -36,7 +36,7 @@
         const decoder = new Fisb.Decoder();
         const layer = Fisb.createLayer(L, decoder, { stationsUrl: '../fisb_stations.js' }).addTo(map);
         const status = document.getElementById('status');
-        let ws = null, replayId = 0;
+        let ws = null, liveHost = null, replayId = 0;
 
         function showStatus(timeMs) {
             const s = decoder.stats;
@@ -74,24 +74,34 @@
             return new Response(blob.stream().pipeThrough(new DecompressionStream('gzip'))).text();
         }
 
-        function disconnect() {
-            if (!ws) return;
-            if (ws.readyState === WebSocket.OPEN) ws.send('AT+PROTOCOL_OUT=CONSOLE,NONE\r\n');
-            ws.close();
-            ws = null;
+        // Live mode: RAW output on the console is a RAM-only setting. It is switched back on stop, also when the
+        // socket dropped in the meantime.
+        const consoleSocket = (host, onOpen) => {
+            const socket = new WebSocket(`ws://${host}/console`);
+            socket.onopen = () => onOpen(socket);
+            return socket;
+        };
+
+        function stopLive() {
+            const host = liveHost;
+            if (!host) return;
+            liveHost = null;
             document.getElementById('live').innerHTML = '&#9654;';
+            const restore = (socket) => {
+                socket.send('AT+PROTOCOL_OUT=CONSOLE,NONE\r\n');
+                setTimeout(() => socket.close(), 500);
+            };
+            if (ws && ws.readyState === WebSocket.OPEN) restore(ws);
+            else consoleSocket(host, restore);
+            ws = null;
         }
 
-        // RAW output on the console is a RAM-only setting; it is restored on disconnect.
-        function connect(host) {
-            disconnect();
+        function startLive(host) {
             replayId++;
-            ws = new WebSocket(`ws://${host}/console`);
+            liveHost = host;
+            document.getElementById('live').innerHTML = '&#9632;';
             let buffer = '';
-            ws.onopen = () => {
-                ws.send('AT+PROTOCOL_OUT=CONSOLE,RAW\r\n');
-                document.getElementById('live').innerHTML = '&#9632;';
-            };
+            ws = consoleSocket(host, (socket) => socket.send('AT+PROTOCOL_OUT=CONSOLE,RAW\r\n'));
             ws.onmessage = async (event) => {
                 buffer += typeof event.data === 'string' ? event.data : await new Response(event.data).text();
                 const lines = buffer.split('\n');
@@ -102,20 +112,21 @@
                 }
                 showStatus(Date.now());
             };
-            ws.onclose = () => { if (ws) disconnect(); };
+            // Reconnect while live mode is on.
+            ws.onclose = () => { if (liveHost === host) setTimeout(() => { if (liveHost === host) startLive(host); }, 2000); };
         }
 
         document.getElementById('open').onclick = () => document.getElementById('file').click();
         document.getElementById('file').onchange = async (event) => {
-            disconnect();
+            stopLive();
             replay(await readCapture(event.target.files[0], event.target.files[0].name), +params.get('speed') || 0);
         };
         document.getElementById('live').onclick = () => {
             const host = document.getElementById('host').value.trim();
-            if (ws) disconnect(); else if (host) connect(host);
+            if (liveHost) stopLive(); else if (host) startLive(host);
         };
-        window.addEventListener('beforeunload', disconnect);
-        if (params.get('host')) { document.getElementById('host').value = params.get('host'); connect(params.get('host')); }
+        window.addEventListener('beforeunload', stopLive);
+        if (params.get('host')) { document.getElementById('host').value = params.get('host'); startLive(params.get('host')); }
         if (params.get('capture')) {
             fetch(params.get('capture')).then((r) => r.blob()).then((b) => readCapture(b, params.get('capture')))
                 .then((t) => replay(t, +params.get('speed') || 0));
