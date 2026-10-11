@@ -786,7 +786,8 @@
                             // Only the outline of a polygon reacts to the pointer, so large areas leave the map usable.
                             const edge = outline.shape === 'circle' ? L.circle(outline.center, Object.assign({ radius: outline.radiusNm * 1852 }, style)) :
                                 L.polyline(outline.points, Object.assign({}, style, { fill: false }));
-                            edge.bindTooltip(title, { sticky: true });
+                            // An element keeps received text from being parsed as HTML.
+                            edge.bindTooltip(() => el('span', '', title), { sticky: true });
                             edge.bindPopup(() => {
                                 const box = el('div');
                                 box.appendChild(textBlock(title, times));

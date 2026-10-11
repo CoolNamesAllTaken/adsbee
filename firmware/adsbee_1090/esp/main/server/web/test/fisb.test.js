@@ -398,6 +398,7 @@ function fakeBrowser() {
 }
 
 const flatten = (node) => (node.textContent || '') + (node.children || []).map(flatten).join('');
+const tooltip = (object) => (object.tooltip ? flatten(object.tooltip()) : '');
 
 test('map layer draws airports, areas, ground stations and radar', (t) => {
     const { L, map, document, made } = fakeBrowser();
@@ -408,25 +409,30 @@ test('map layer draws airports, areas, ground stations and radar', (t) => {
     assert.strictEqual(layer.control.box.children.length, 4);
 
     // San Jose: green (VFR) marker at the airport with the METAR in its tooltip and the TAF in its popup.
-    const ksjc = made.find((o) => o.type === 'circleMarker' && /METAR KSJC/.test(flatten(o.tooltip())));
+    const ksjc = made.find((o) => o.type === 'circleMarker' && /METAR KSJC/.test(tooltip(o)));
     assert.ok(distanceNm(ksjc.where, [37.363, -121.929]) < 1);
     assert.strictEqual(ksjc.options.fillColor, Fisb.CATEGORY_COLORS.VFR);
     assert.match(flatten(ksjc.popup()), /TAF KSJC 110520Z/);
-    const ksfo = made.find((o) => o.type === 'circleMarker' && /METAR KSFO/.test(flatten(o.tooltip())));
+    const ksfo = made.find((o) => o.type === 'circleMarker' && /METAR KSFO/.test(tooltip(o)));
     assert.match(flatten(ksfo.popup()), /WINDS SFO \d{6}Z\n3000    6000    9000    12000 .*\n\d{4}    \d{4}[+-]\d\d \d{4}[+-]\d\d /);
-    const kmry = made.find((o) => o.type === 'circleMarker' && /METAR KMRY/.test(flatten(o.tooltip())));
+    const kmry = made.find((o) => o.type === 'circleMarker' && /METAR KMRY/.test(tooltip(o)));
     assert.strictEqual(kmry.options.fillColor, Fisb.CATEGORY_COLORS.MVFR);
 
     // Fleet Week TFR: one 5 NM circle, with the NOTAM text in its popup.
-    const circles = made.filter((o) => o.type === 'circle' && /6\/6741/.test(o.tooltip));
+    const circles = made.filter((o) => o.type === 'circle' && /6\/6741/.test(tooltip(o)));
     assert.strictEqual(circles.length, 1);
     assert.strictEqual(circles[0].options.radius, 5 * 1852);
     assert.ok(distanceNm(circles[0].where, [37.8167, -122.4267]) < 0.05);
     assert.match(flatten(circles[0].popup()), /FLEET WEEK AIR SHOW/);
-    assert.match(circles[0].tooltip, /SFC–15000 ft/);
+    assert.match(tooltip(circles[0]), /SFC–15000 ft/);
+    // Received text reaches the page as text nodes, never as HTML strings.
+    for (const o of made) {
+        if (o.tooltip) assert.strictEqual(typeof o.tooltip, 'function');
+        if (o.popup) assert.strictEqual(typeof o.popup, 'function');
+    }
 
     // A polygon is a pointer-transparent fill plus an outline carrying the tooltip.
-    const sigmet = made.find((o) => o.type === 'polyline' && /^WST KMKC 110954 CONVECTIVE SIGMET 37W · 30000 ft/.test(o.tooltip));
+    const sigmet = made.find((o) => o.type === 'polyline' && /^WST KMKC 110954 CONVECTIVE SIGMET 37W · 30000 ft/.test(tooltip(o)));
     assert.strictEqual(sigmet.where.length, 6);
     assert.ok(made.some((o) => o.type === 'polygon' && o.where === sigmet.where && o.options.interactive === false));
     assert.strictEqual(made.filter((o) => o.type === 'marker').length, 2);
