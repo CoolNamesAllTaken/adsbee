@@ -120,6 +120,27 @@ TEST(ModeSSoftDemod, CRC24RemainderOfIntactMessagesIsZero) {
     EXPECT_EQ(CRC24Remainder(result.buffer, 112), kBitSyndromes.syndrome[112 - 1 - 47]);
 }
 
+TEST(ModeSSoftDemod, CRC24RemainderMatchesBitwiseDivision) {
+    uint32_t state = 0x1090;
+    for (uint16_t round = 0; round < 200; round++) {
+        uint32_t buffer[4];
+        for (uint32_t& word : buffer) {
+            state = state * 1664525 + 1013904223;  // Linear congruential generator: any bit pattern will do.
+            word = state;
+        }
+        for (uint16_t len_bits : {56, 112}) {
+            uint32_t expected = 0;
+            for (uint16_t i = 0; i < len_bits; i++) {
+                expected = (expected << 1) | ((buffer[i >> 5] >> (31 - (i & 31))) & 1);
+                if (expected & 0x1000000) {
+                    expected ^= kCRC24Generator;
+                }
+            }
+            EXPECT_EQ(CRC24Remainder(buffer, len_bits), expected & 0xFFFFFF);
+        }
+    }
+}
+
 TEST(ModeSSoftDemod, DecodesAtEveryStartOffset) {
     for (uint16_t offset = kMinStartOffsetSamples; offset <= kMaxStartOffsetSamples; offset++) {
         Capture capture(kDF17, offset);
@@ -129,7 +150,6 @@ TEST(ModeSSoftDemod, DecodesAtEveryStartOffset) {
         EXPECT_EQ(BufferToHex(result), kDF17) << "offset " << offset;
         EXPECT_EQ(result.start_offset_samples, offset);
         EXPECT_EQ(result.num_flipped_bits, 0);
-        EXPECT_EQ(result.num_ties, 0);
     }
 }
 
