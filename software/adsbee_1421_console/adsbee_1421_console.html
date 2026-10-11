@@ -5986,17 +5986,21 @@ function makeRxEnableEntry() {
             // Selects the map stream: with weather running it carries UAT uplinks too, if the firmware has them.
             async applyMapProtocol() {
                 if (weatherSource.onUplink && this.uplinkSupported) {
+                    let accepted = false;
                     try {
                         await atQueue.send('AT+PROTOCOL_OUT=CONSOLE,AIRCRAFT_JSON_UAT_UPLINK\r\n', { terminator: 'ok' });
-                        const baud = await connectionManager._queryDeviceBaud();
-                        setWeatherHint(baud !== null && baud < WEATHER_MIN_BAUD
-                            ? `Console at ${baud} baud: weather may be incomplete below ${WEATHER_MIN_BAUD}.` : '');
-                        return;
+                        accepted = true;
                     } catch (e) {
                         if (/^ERROR/.test(e.message)) {
                             this.uplinkSupported = false;
                             setWeatherHint('This firmware sends no weather. Update it.');
                         }
+                    }
+                    if (accepted) {
+                        const baud = await connectionUI._queryDeviceBaud();
+                        setWeatherHint(baud !== null && baud < WEATHER_MIN_BAUD
+                            ? `Console at ${baud} baud: weather may be incomplete below ${WEATHER_MIN_BAUD}.` : '');
+                        return;
                     }
                 }
                 try {

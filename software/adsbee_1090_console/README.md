@@ -33,6 +33,7 @@ identically in both modes.
 |---|---|---|
 | Console terminal (AT commands, history, ANSI colors) | ✔ | ✔ |
 | Map + aircraft table + detail sidebar | ✔ (`/aircraft` socket) | ✔ (`AT+PROTOCOL_OUT=CONSOLE,AIRCRAFT_JSON`, see below) |
+| Weather on the map (FIS-B) | ✔ (`/uplink` socket) | ✔ (`AIRCRAFT_JSON_UAT_UPLINK`, see below) |
 | Settings tab (schema-driven GUI, `AT+SETTINGS?JSON` bulk read) | ✔ | ✔ |
 | Feed editor (add/edit/remove feeds via `AT+FEED`, whereplane.xyz map link) | ✔ | ✔ |
 | Settings download / restore (`AT+SETTINGS?DUMP` replay) | ✔ | ✔ |
@@ -61,6 +62,15 @@ changes are RAM-only (`AT+SETTINGS=SAVE` is never issued), so a device power
 cycle always returns to the persisted configuration, even if the page is closed
 on the Live Map tab. In network mode the Live Map tab uses the `/aircraft`
 WebSocket, like the device-hosted page.
+
+## Weather (FIS-B)
+
+**Weather** on the Live Map draws FIS-B from UAT ground stations (US): radar, airports colored by
+flight category with METAR, TAF and NOTAMs, TFR, SIGMET and AIRMET outlines, and the ground
+stations. The buttons under the zoom control show or hide each kind. Network mode reads the
+`/uplink` WebSocket while the map is shown. Serial mode switches the map stream to
+`AIRCRAFT_JSON_UAT_UPLINK`; firmware without it keeps `AIRCRAFT_JSON` and the toggle shows ⚠.
+Uplink lines never print in the terminal.
 
 ## Firmware upload
 
@@ -119,6 +129,10 @@ re-copy the marked block:
 - **Firmware update check**: `firmware/adsbee_1090/esp/main/server/web/firmware_release.js` is copied
   verbatim between the `BEGIN/END VENDORED firmware_release.js` markers (here and in the 1421
   console); `test/firmware_release_drift.test.js` fails when a copy differs.
+- **Weather**: `fisb.js` and `fisb_stations.js` are copied verbatim between their
+  `BEGIN/END VENDORED` markers, and `UplinkWebSocket` and `MapWeather` are copied from `adsbee.js`
+  (here and, without `UplinkWebSocket`, in the 1421 console); `test/fisb_drift.test.js` fails when
+  a copy differs.
 - **Leaflet 1.9.4** is vendored inline (BSD-2-Clause, license header kept)
   between `BEGIN/END VENDORED` markers, copied from the 1421 console.
 

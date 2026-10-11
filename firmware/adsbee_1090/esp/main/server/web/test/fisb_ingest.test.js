@@ -188,7 +188,7 @@ function protocolHarness(name, { firmwareHasUplink, baud = 1000000 }) {
         sent: [], hints: [], notices: [],
         weatherSource: { onUplink: () => { } },
         WEATHER_MIN_BAUD: 230400,
-        connectionManager: { _queryDeviceBaud: async () => baud },
+        connectionUI: { _queryDeviceBaud: async () => baud },
         setWeatherHint: (text) => ctx.hints.push(text),
         atQueue: {
             send: async (command) => {
