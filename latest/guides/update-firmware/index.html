@@ -734,6 +734,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#check-for-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Check for updates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#building-firmware-from-source" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -891,6 +902,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#check-for-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Check for updates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#building-firmware-from-source" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -951,6 +973,45 @@
 <li>Wait for the device to erase its inactive firmware page and flash the contents of the .ota file. In rare occasions, the update may fail (network issues, etc). The device will not be “bricked”, simply refresh the page and try uploading again.</li>
 <li>If settings have been wiped (e.g. a major settings version update has occurred), click the “Upload Settings” button to restore your settings using the .settings file you downloaded earlier.</li>
 </ol>
+<h2 id="check-for-updates">Check for updates<a class="headerlink" href="#check-for-updates" title="Permanent link">&para;</a></h2>
+<p>Newer firmware shows the installed version at the top right of the device's webpage and of the web consoles, with a dot that tells whether an update is waiting. The page checks by itself when it loads (the consoles: when they connect) and a few times a day after that. It needs internet access in the browser.</p>
+<table>
+<thead>
+<tr>
+<th>Dot</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>gray</td>
+<td>not checked, offline, or no valid OTA keys</td>
+</tr>
+<tr>
+<td>spinning</td>
+<td>checking or installing</td>
+</tr>
+<tr>
+<td>green</td>
+<td>up to date</td>
+</tr>
+<tr>
+<td>amber, pulsing</td>
+<td>update available</td>
+</tr>
+<tr>
+<td>red</td>
+<td>the check or the install failed</td>
+</tr>
+</tbody>
+</table>
+<ol>
+<li>Click the version. The dropdown shows the installed version and the newest stable release for this ADSBee: <code>✓ up to date</code>, or the new version with <strong>⇣ Update</strong>. <strong>↻</strong> checks again now.</li>
+<li>Tick <strong>RC</strong> to see release candidates too. Release candidates have no guarantee of stability or of a clean migration to or from other firmware versions.</li>
+<li>Click <strong>⇣ Update</strong>. The page downloads the file, checks its SHA-256 and runs the same update as Upload Firmware. Download your settings first, as above. When the ADSBee is back the page checks again.</li>
+</ol>
+<p>The page identifies the ADSBee to the adsbee.aero firmware service with its unique ID, part code and OTA keys.</p>
+<p>An ADSBee without valid OTA keys (for example a self-built one) shows <code>⚠ no keys</code> and a link to the releases page; download the .ota file there and use Upload Firmware.</p>
 <h2 id="building-firmware-from-source">Building firmware from source<a class="headerlink" href="#building-firmware-from-source" title="Permanent link">&para;</a></h2>
 <p>To build the firmware yourself, see the <a href="https://github.com/PantsForBirds/adsbee/blob/main/firmware/README.md">firmware README</a> on GitHub. ADSBee 1421 firmware updates are covered on the <a href="../../adsbee-1421/m1421/#firmware-updates-from-your-host">ADSBee m1421 page</a>.</p>
 
