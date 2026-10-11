@@ -628,8 +628,7 @@ void __time_critical_func(ADSBee::FinishCapture)(uint16_t sm_index, uint16_t num
                 packet.buffer[i] = result.buffer[i];
             }
             packet.buffer_len_bytes = result.len_bits / kBitsPerByte;
-            packet.sigs_dbm =
-                r1090_rssi::PacketMilliVoltsTodBm(rssi_mv, noise_floor_mv_, bsp.r1090_rf_frontend_version);
+            packet.sigs_dbm = r1090_rssi::PacketMilliVoltsTodBm(rssi_mv, noise_floor_mv_);
             packet.sigq_db = packet.sigs_dbm - GetNoiseFloordBm();
             packet.source = sm_index;
             packet.mlat_48mhz_64bit_counts = mlat_48mhz_64bit_counts;

@@ -136,14 +136,11 @@ class ADSBee {
     bool Update();
 
     /**
-     * Converts a static voltage from the RF power detector (noise floor, trigger level) to dBm, using the calibration
-     * of this board's RF front end.
+     * Converts a static voltage from the RF power detector (noise floor, trigger level) to dBm.
      * @param[in] mv Voltage level, in milliVolts.
      * @retval Corresponding power level, in dBm.
      */
-    static inline int DetectorMilliVoltsTodBm(int mv) {
-        return r1090_rssi::DetectorMilliVoltsTodBm(mv, bsp.r1090_rf_frontend_version);
-    }
+    static inline int DetectorMilliVoltsTodBm(int mv) { return r1090_rssi::DetectorMilliVoltsTodBm(mv); }
 
     /**
      * Original detector conversion. AT+TL_OFFSET still prints the offset through it for the settings UI, although an
