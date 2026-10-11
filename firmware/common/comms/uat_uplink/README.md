@@ -47,7 +47,7 @@ Bit rate needed:
   32 lines (20 kB) per second: 198720 bit/s. Use 230400 baud or more for the full stream. The ADSBee 1421
   console default of 1000000 baud leaves room for aircraft lines as well.
 - 115200 baud carries 18 uplink lines per second with nothing else on the line.
-- ADSBee 1421: uplink lines are sent only while half of the transmit buffer is free, so aircraft lines go
+- ADSBee 1421: uplink lines are sent only while the transmit buffer is nearly empty, so aircraft lines go
   first. Uplinks that don't fit are dropped and counted as `uat_report_q_ovf` in `AT+RX_STATS?`.
 - ADSBee 1090: `COMMS_UART` writes wait for the UART, so a bit rate that is too low for the uplink rate slows
   the receiver. The USB console has no such limit.

@@ -13,12 +13,12 @@ static constexpr uint16_t kLineMaxNumBytes = kUATUplinkJSONLineMaxNumChars - 3;
 static constexpr uint16_t kMaxLinesPerSecond = 32;
 static constexpr uint16_t kUartBitsPerByte = 10;
 
-// Uplink lines are only queued while this share of the TX ring stays free for aircraft lines.
-constexpr uint16_t ReservedBytes(uint16_t tx_ring_num_bytes) { return tx_ring_num_bytes / 2; }
+// Uplink lines are only queued while the TX ring is nearly empty, so a burst of aircraft lines always finds room.
+constexpr uint16_t MaxUsedBytes(uint16_t tx_ring_num_bytes) { return tx_ring_num_bytes / 8; }
 
-// True if an uplink line may be queued with free_bytes of the TX ring free.
+// True if an uplink line may be queued with free_bytes of the TX ring free. One slot of the ring is never used.
 constexpr bool HasRoomForLine(uint16_t free_bytes, uint16_t tx_ring_num_bytes) {
-    return free_bytes >= kLineMaxNumBytes + ReservedBytes(tx_ring_num_bytes);
+    return free_bytes + MaxUsedBytes(tx_ring_num_bytes) + 1 >= tx_ring_num_bytes;
 }
 
 // Uplink lines per second the console carries at baud with nothing else on the line.

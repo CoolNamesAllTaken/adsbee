@@ -18,13 +18,16 @@ TEST(UplinkTxBudget, JSONLine) {
     EXPECT_STREQ(line, expected.c_str());
 }
 
-TEST(UplinkTxBudget, HalfOfRingStaysFreeForAircraftLines) {
+TEST(UplinkTxBudget, LinesNeedNearlyEmptyRing) {
     const uint16_t kRingBytes = 8192;
-    EXPECT_EQ(UplinkTxBudget::ReservedBytes(kRingBytes), 4096);
+    EXPECT_EQ(UplinkTxBudget::MaxUsedBytes(kRingBytes), 1024);
+    // An empty ring has kRingBytes - 1 bytes free.
     EXPECT_TRUE(UplinkTxBudget::HasRoomForLine(kRingBytes - 1, kRingBytes));
-    EXPECT_TRUE(UplinkTxBudget::HasRoomForLine(4096 + 621, kRingBytes));
-    EXPECT_FALSE(UplinkTxBudget::HasRoomForLine(4096 + 620, kRingBytes));
+    EXPECT_TRUE(UplinkTxBudget::HasRoomForLine(kRingBytes - 1 - 1024, kRingBytes));
+    EXPECT_FALSE(UplinkTxBudget::HasRoomForLine(kRingBytes - 1 - 1025, kRingBytes));
     EXPECT_FALSE(UplinkTxBudget::HasRoomForLine(0, kRingBytes));
+    // A line always fits once it is allowed.
+    EXPECT_GT(kRingBytes - 1 - 1024, UplinkTxBudget::kLineMaxNumBytes);
 }
 
 TEST(UplinkTxBudget, FullStreamNeeds230400Baud) {
