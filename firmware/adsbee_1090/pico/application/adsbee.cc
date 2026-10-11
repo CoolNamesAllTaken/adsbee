@@ -79,7 +79,7 @@ void __time_critical_func(on_demod_mid)() { isr_access->OnDemodMid(); }
 
 void __time_critical_func(on_capture_complete)() { isr_access->OnCaptureComplete(); }
 
-void __time_critical_func(on_short_capture_alarm)(uint alarm_num) { isr_access->OnShortCaptureAlarm(); }
+void __time_critical_func(on_short_capture_alarm)() { isr_access->OnShortCaptureAlarm(); }
 
 /** End pass-through functions for public access **/
 
@@ -206,7 +206,8 @@ bool ADSBee::DeInitISRs() {
         }
     }
     if (short_capture_alarm_num_ >= 0) {
-        hardware_alarm_cancel(short_capture_alarm_num_);
+        irq_set_enabled(TIMER_IRQ_0 + short_capture_alarm_num_, false);
+        timer_hw->armed = 1u << short_capture_alarm_num_;  // Writing 1 disarms.
     }
     for (uint16_t sm_index = 0; sm_index < bsp.r1090_num_demod_state_machines; sm_index++) {
         gpio_set_irq_enabled(config_.demod_pins[sm_index], GPIO_IRQ_EDGE_RISE, false);
@@ -514,10 +515,7 @@ void __time_critical_func(ADSBee::OnDemodMid)() {
             capture_is_short_[sm_index] = true;
             if (short_capture_sm_index_ < 0) {
                 short_capture_sm_index_ = sm_index;
-                if (hardware_alarm_set_target(short_capture_alarm_num_,
-                                              make_timeout_time_us(kShortCaptureAlarmDelayUs))) {
-                    short_capture_sm_index_ = -1;  // Target already passed: no callback will come.
-                }
+                timer_hw->alarm[short_capture_alarm_num_] = timer_hw->timerawl + kShortCaptureAlarmDelayUs;
             }
         }
     }
@@ -536,6 +534,7 @@ void __time_critical_func(ADSBee::OnCaptureComplete)() {
 }
 
 void __time_critical_func(ADSBee::OnShortCaptureAlarm)() {
+    timer_hw->intr = 1u << short_capture_alarm_num_;
     int8_t sm_index = short_capture_sm_index_;
     short_capture_sm_index_ = -1;
     if (sm_index < 0) {
@@ -921,8 +920,13 @@ void ADSBee::PIOInit() {
         short_capture_alarm_num_ = hardware_alarm_claim_unused(true);
     }
     short_capture_sm_index_ = -1;
-    hardware_alarm_set_callback(short_capture_alarm_num_, on_short_capture_alarm);
-    irq_set_priority(TIMER_IRQ_0 + short_capture_alarm_num_, kCaptureCompleteInterruptPriority);
+    // The alarm is driven directly: the SDK alarm functions take a spin lock, which this core must never hold when
+    // the other core resets it for a flash write, and they only enable the interrupt on the first core that asks.
+    uint short_capture_alarm_irq = TIMER_IRQ_0 + short_capture_alarm_num_;
+    hw_set_bits(&timer_hw->inte, 1u << short_capture_alarm_num_);
+    irq_set_exclusive_handler(short_capture_alarm_irq, on_short_capture_alarm);
+    irq_set_priority(short_capture_alarm_irq, kCaptureCompleteInterruptPriority);
+    irq_set_enabled(short_capture_alarm_irq, true);
     irq_set_exclusive_handler(DMA_IRQ_1, on_capture_complete);
     irq_set_priority(DMA_IRQ_1, kCaptureCompleteInterruptPriority);
     irq_set_enabled(DMA_IRQ_1, true);
