@@ -564,14 +564,22 @@
     const CSS = '.fisb-ctl{display:flex;flex-direction:column}.fisb-ctl button{width:30px;height:30px;border:0;border-bottom:1px solid #ccc;' +
         'background:#fff;font:16px/30px sans-serif;padding:0;cursor:pointer;color:#222}.fisb-ctl button:last-child{border:0}' +
         '.fisb-ctl button[aria-pressed=false]{color:#bbb;background:#f4f4f4}.fisb-ctl button.fisb-none{opacity:.45}' +
-        '.fisb-text{font:11px/1.35 monospace;white-space:pre-wrap;margin:0 0 6px;width:max-content;max-width:420px}.fisb-text b{font-family:sans-serif}' +
+        '.fisb-text{font:11px/1.35 monospace;white-space:pre-wrap;margin:0 0 6px;width:max-content;max-width:480px}.fisb-text b{font-family:sans-serif}' +
         '.fisb-gs{color:#222;font:14px/14px sans-serif;text-shadow:0 0 2px #fff,0 0 2px #fff}';
 
-    const POPUP = { minWidth: 260, maxWidth: 440, maxHeight: 320 };
+    const POPUP = { minWidth: 260, maxWidth: 500, maxHeight: 320 };
 
     const hhmm = (ms) => new Date(ms).toISOString().slice(11, 16) + 'Z';
     const dayTime = (ms) => new Date(ms).toISOString().slice(5, 16).replace('T', ' ') + 'Z';
     const feet = (ft, agl) => (ft ? ft + ' ft' : agl ? 'SFC' : '0 ft');
+
+    // Winds aloft as two aligned rows: altitudes, then wind and temperature groups.
+    function windsTable(text) {
+        const m = /^(WINDS \S+ \S+)\s+FT\s+([\d\s]+?)\n\s*(.+)$/.exec(text);
+        if (!m) return text;
+        const row = (cells) => cells.trim().split(/\s+/).map((c) => c.padEnd(7)).join(' ').trim();
+        return m[1] + '\n' + row(m[2]) + '\n' + row(m[3]);
+    }
 
     /** Canvas overlay for NEXRAD: CONUS underneath, regional on top. */
     function radarLayer(L, decoder) {
@@ -733,13 +741,13 @@
                         const marker = L.circleMarker(position, {
                             radius: a.metar ? 5 : 3, color: '#222', weight: 1, fillColor: color, fillOpacity: a.metar ? 0.95 : 0.6,
                         });
-                        marker.bindTooltip(() => textBlock(a.metar ? '' : a.id,
-                            a.metar ? a.metar.text.replace(/\s+/g, ' ') : a.taf ? a.taf.text : a.notams.length + ' NOTAM'));
+                        const metar = a.metar && a.metar.text.replace(/\s+/g, ' ');
+                        marker.bindTooltip(() => textBlock(metar ? '' : a.id, metar || (a.taf ? a.taf.text : a.notams.length + ' NOTAM')));
                         marker.bindPopup(() => {
                             const box = el('div');
-                            if (a.metar) box.appendChild(textBlock('', a.metar.text));
+                            if (metar) box.appendChild(textBlock('', metar));
                             if (a.taf) box.appendChild(textBlock('', a.taf.text));
-                            for (const w of a.winds.sort((x, y) => x.timeMs - y.timeMs)) box.appendChild(textBlock('', w.text));
+                            for (const w of a.winds.sort((x, y) => x.timeMs - y.timeMs)) box.appendChild(textBlock('', windsTable(w.text)));
                             for (const n of a.notams) box.appendChild(textBlock('', n.text));
                             return box;
                         }, POPUP);

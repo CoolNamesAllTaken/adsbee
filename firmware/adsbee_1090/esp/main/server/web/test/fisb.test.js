@@ -91,6 +91,9 @@ test('winds aloft keep one entry per forecast time', () => {
     assert.ok(winds.length >= 2);
     assert.match(winds[0].text, /^WINDS SFO \d{6}Z\s+FT 3000 6000/);
     assert.strictEqual(new Set(winds.map((w) => w.timeMs)).size, winds.length);
+    // Forecast valid 12:00 UTC, same groups as the aviationweather.gov winds aloft table.
+    const noon = winds.find((w) => w.timeMs === Date.UTC(2026, 9, 11, 12));
+    assert.strictEqual(noon.text.split('\n')[1].trim(), '3507 9900+10 2511+06 2214-02 2716-12 2820-24 263029 263933 274144');
 });
 
 test('flight category', () => {
@@ -409,6 +412,8 @@ test('map layer draws airports, areas, ground stations and radar', (t) => {
     assert.ok(distanceNm(ksjc.where, [37.363, -121.929]) < 1);
     assert.strictEqual(ksjc.options.fillColor, Fisb.CATEGORY_COLORS.VFR);
     assert.match(flatten(ksjc.popup()), /TAF KSJC 110520Z/);
+    const ksfo = made.find((o) => o.type === 'circleMarker' && /METAR KSFO/.test(flatten(o.tooltip())));
+    assert.match(flatten(ksfo.popup()), /WINDS SFO \d{6}Z\n3000    6000    9000    12000 .*\n\d{4}    \d{4}[+-]\d\d \d{4}[+-]\d\d /);
     const kmry = made.find((o) => o.type === 'circleMarker' && /METAR KMRY/.test(flatten(o.tooltip())));
     assert.strictEqual(kmry.options.fillColor, Fisb.CATEGORY_COLORS.MVFR);
 
