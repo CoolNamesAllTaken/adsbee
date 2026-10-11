@@ -39,6 +39,7 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         # test_ads_b_decoder.cc
         test_aircraft_dictionary_mode_s.cc
         test_aircraft_dictionary_allocator.cc
+        test_broadcast_ring.cc
         test_buffer_utils.cc
         # test_adsbee.cc
         test_composite_array.cc
@@ -70,6 +71,7 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         test_log_message.cc
         test_squitter_packets.cc
         test_transponder_packet.cc
+        test_uat_uplink_utils.cc
         test_unit_conversions.cc
         test_pfb_queue_thread_safety.cc
         test_r1090_rssi.cc

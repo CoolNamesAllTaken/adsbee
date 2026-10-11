@@ -168,6 +168,23 @@ uint16_t ByteBufferToHexString(char *hex_string, const uint8_t *byte_buffer, uin
     return num_bytes * kNibblesPerByte;
 }
 
+uint16_t ByteBufferToBase64String(char *base64_string, const uint8_t *byte_buffer, uint16_t num_bytes) {
+    static const char kBase64Chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    uint16_t num_chars = 0;
+    for (uint16_t i = 0; i < num_bytes; i += 3) {
+        uint16_t num_group_bytes = num_bytes - i < 3 ? num_bytes - i : 3;
+        uint32_t group = byte_buffer[i] << 16;
+        if (num_group_bytes > 1) group |= byte_buffer[i + 1] << 8;
+        if (num_group_bytes > 2) group |= byte_buffer[i + 2];
+        base64_string[num_chars++] = kBase64Chars[(group >> 18) & 0x3F];
+        base64_string[num_chars++] = kBase64Chars[(group >> 12) & 0x3F];
+        base64_string[num_chars++] = num_group_bytes > 1 ? kBase64Chars[(group >> 6) & 0x3F] : '=';
+        base64_string[num_chars++] = num_group_bytes > 2 ? kBase64Chars[group & 0x3F] : '=';
+    }
+    base64_string[num_chars] = '\0';
+    return num_chars;
+}
+
 void PrintByteBuffer(const char *prefix, const uint8_t *byte_buffer, uint16_t num_bytes) {
     char hex_string[num_bytes * kNibblesPerByte + 1];
     ByteBufferToHexString(hex_string, byte_buffer, num_bytes);

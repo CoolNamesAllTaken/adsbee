@@ -13,6 +13,7 @@
 #include "fec.hh"        // For UATReedSolomon::DeInterleaveUplinkMessage.
 #include "raw_utils.hh"
 #include "uat_packet.hh"  // For DecodedUATUplinkPacket.
+#include "uat_uplink_utils.hh"
 
 #ifdef ON_ESP32
 AircraftDictionary& aircraft_dictionary = adsbee_server.aircraft_dictionary;
@@ -28,7 +29,7 @@ GDL90Reporter gdl90;
 // there is a single CommsManager per device and this keeps the three per-platform comms.hh headers
 // (which already triplicate the round state) untouched.
 static CommsManager::ReportFailureTally raw_tally, beast_tally, csbee_tally, gdl90_tally, gdl90_uplink_tally,
-    aircraftjson_tally;
+    aircraftjson_tally, uat_uplink_json_tally;
 
 /**
  * These have to be macros rather than helper functions: the RP2040 and 1421 CONSOLE_* macros
@@ -135,10 +136,11 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
     ReportSink gdl90_sinks[SettingsManager::kMaxNumReportSinks];
     ReportSink gdl90_no_uat_uplink_sinks[SettingsManager::kMaxNumReportSinks];
     ReportSink aircraftjson_sinks[SettingsManager::kMaxNumReportSinks];
+    ReportSink uat_uplink_json_sinks[SettingsManager::kMaxNumReportSinks];
 
     uint16_t num_raw_sinks = 0, num_beast_sinks = 0, num_beast_no_uat_sinks = 0, num_beast_no_uat_uplink_sinks = 0,
              num_csbee_sinks = 0, num_mavlink1_sinks = 0, num_mavlink2_sinks = 0, num_gdl90_sinks = 0,
-             num_gdl90_no_uat_uplink_sinks = 0, num_aircraftjson_sinks = 0;
+             num_gdl90_no_uat_uplink_sinks = 0, num_aircraftjson_sinks = 0, num_uat_uplink_json_sinks = 0;
 
     for (uint16_t i = 0; i < num_sinks; i++) {
         switch (sink_protocols[i]) {
@@ -173,6 +175,11 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
                 break;
             case SettingsManager::kAircraftJSON:
                 aircraftjson_sinks[num_aircraftjson_sinks++] = sinks[i];
+                break;
+            case SettingsManager::kAircraftJSONUATUplink:
+                // Same aircraft lines as kAircraftJSON, plus the uplink pass-through below.
+                aircraftjson_sinks[num_aircraftjson_sinks++] = sinks[i];
+                uat_uplink_json_sinks[num_uat_uplink_json_sinks++] = sinks[i];
                 break;
             default:
                 // Both values are printed numerically on purpose. Reaching this arm means
@@ -223,6 +230,11 @@ bool CommsManager::UpdateReporting(const ReportSink* sinks, const SettingsManage
         // Send GDL90 reports (UAT uplink only).
         if (!ReportGDL90Uplink(gdl90_sinks, num_gdl90_sinks, *packets_to_report)) {
             CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during GDL90 UAT uplink report.");
+            ret = false;
+        }
+        // Send UAT uplink JSON lines.
+        if (!ReportUATUplinkJSON(uat_uplink_json_sinks, num_uat_uplink_json_sinks, *packets_to_report)) {
+            CONSOLE_ERROR("CommsManager::UpdateReporting", "Error during UAT uplink JSON report.");
             ret = false;
         }
     }
@@ -900,5 +912,35 @@ bool CommsManager::ReportGDL90Uplink(ReportSink* sinks, uint16_t num_sinks, cons
         ret &= SendBufToSinks(sinks, num_sinks, (char*)buf, msg_len, gdl90_uplink_tally);
     }
     FLUSH_REPORT_TALLY_RATE_LIMITED("CommsManager::ReportGDL90Uplink", gdl90_uplink_tally);
+    return ret;
+}
+
+bool CommsManager::ReportUATUplinkJSON(ReportSink* sinks, uint16_t num_sinks, const CompositeArray::RawPackets& packets) {
+    if (num_sinks == 0) {
+        return true;  // Nobody is listening; don't spend time building lines.
+    }
+    char error_msg[CompositeArray::RawPackets::kErrorMessageMaxLen] = {0};
+    if (!packets.IsValid(error_msg)) {
+        CONSOLE_ERROR("CommsManager::ReportUATUplinkJSON", "Invalid CompositeArray::RawPackets: %s", error_msg);
+        return false;
+    }
+    bool ret = true;
+
+    for (uint16_t i = 0; i < packets.header->num_uat_uplink_packets; i++) {
+        // Uplinks arrive FEC-corrected (see ReportGDL90Uplink), so a de-interleave gives the payload.
+        const RawUATUplinkPacket& raw = packets.uat_uplink_packets[i];
+        if (raw.encoded_message_len_bytes != RawUATUplinkPacket::kUplinkMessageNumBytes) {
+            uat_uplink_json_tally.num_build_failures++;
+            continue;
+        }
+        uint8_t payload[kUATUplinkPayloadNumBytes];
+        UATReedSolomon::DeInterleaveUplinkMessage(payload, raw.encoded_message);
+
+        static char line[kUATUplinkJSONLineMaxNumChars];
+        uint16_t line_len =
+            WriteUATUplinkJSONLine(line, payload, raw.sigs_dbm, static_cast<uint32_t>(raw.GetTimestampMs()));
+        ret &= SendBufToSinks(sinks, num_sinks, line, line_len, uat_uplink_json_tally);
+    }
+    FLUSH_REPORT_TALLY_RATE_LIMITED("CommsManager::ReportUATUplinkJSON", uat_uplink_json_tally);
     return ret;
 }

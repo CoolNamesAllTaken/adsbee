@@ -9,6 +9,7 @@
 #include "gdl90_utils.hh"
 #include "hal.hh"
 #include "raw_utils.hh"
+#include "uplink_tx_budget.hh"
 
 /* clang-format off */
 #include <ti/devices/DeviceFamily.h>
@@ -316,13 +317,24 @@ void CommsManager::ReportQueuedRawPackets() {
         return;
     }
 
+    uint16_t max_uat_uplink_packets = kRawReportMaxUATUplinkPacketsPerUpdate;
+    if (settings_manager.settings.reporting_protocols[SettingsManager::kConsole] ==
+            SettingsManager::kAircraftJSONUATUplink &&
+        !UplinkTxBudget::HasRoomForLine(TxRingFreeBytes(), kUartTxRingBytes)) {
+        // Uplink lines yield to aircraft lines: uplinks stay queued, and a full queue drops new ones (uat_report_q_ovf).
+        max_uat_uplink_packets = 0;
+        if (mode_s_packet_reporting_queue.Length() == 0 && uat_adsb_packet_reporting_queue.Length() == 0) {
+            return;
+        }
+    }
+
     // Format at most one chunk per main loop iteration. The rest stays queued for the following iterations.
     alignas(4) uint8_t chunk_buf[kRawReportChunkBufBytes];
     CompositeArray::RawPackets chunk = CompositeArray::PackRawPacketsBuffer(
         chunk_buf, sizeof(chunk_buf), &mode_s_packet_reporting_queue, &uat_adsb_packet_reporting_queue,
         &uat_uplink_packet_reporting_queue, nullptr,
         CompositeArray::PackLimits(kRawReportMaxModeSPacketsPerUpdate, kRawReportMaxUATADSBPacketsPerUpdate,
-                                   kRawReportMaxUATUplinkPacketsPerUpdate));
+                                   max_uat_uplink_packets));
     UpdateReporting(kReportingSinks, settings_manager.settings.reporting_protocols, kNumReportingSinks, &chunk,
                     false);
 }
