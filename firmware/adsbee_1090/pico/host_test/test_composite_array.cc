@@ -1,5 +1,7 @@
 #include "composite_array.hh"
 #include "gtest/gtest.h"
+#include "object_dictionary.hh"
+#include "spi_coprocessor.hh"
 
 TEST(CompositeArray, PackRawPacketsBufferNoQueues) {
     uint8_t buffer[100] = {0};
@@ -774,4 +776,79 @@ TEST(CompositeArray, PackRawPacketsBufferDefaultLimitsAreUnlimited) {
     if (expected > 70) expected = 70;
     EXPECT_EQ(packets.header->num_mode_s_packets, expected);
     EXPECT_EQ(mode_s_queue.Length(), 70 - expected);
+}
+
+TEST(CompositeArray, ReadLenAndMorePending) {
+    const uint16_t header = sizeof(CompositeArray::RawPackets::Header);
+    const uint16_t max_len = CompositeArray::RawPackets::kMaxLenBytes;
+    EXPECT_EQ(CompositeArray::RawPackets::ReadLenBytes(header), header);
+    EXPECT_FALSE(CompositeArray::RawPackets::MorePending(header));
+    EXPECT_EQ(CompositeArray::RawPackets::ReadLenBytes(max_len), max_len);
+    EXPECT_FALSE(CompositeArray::RawPackets::MorePending(max_len));
+    EXPECT_EQ(CompositeArray::RawPackets::ReadLenBytes(max_len + 1), max_len);
+    EXPECT_TRUE(CompositeArray::RawPackets::MorePending(max_len + 1));
+    EXPECT_EQ(CompositeArray::RawPackets::ReadLenBytes(UINT16_MAX), max_len);
+}
+
+/**
+ * Plays UAT frames with all 32 ground uplink slots in use through the CC1312's decoded uplink queue, read by a master
+ * that follows the RP2040's polling rules. Returns the number of uplinks that reached the master, in order.
+ * @param[in] poll_duration_ms Time one master update takes.
+ */
+static uint16_t RunFullGroundSegments(uint16_t num_frames, uint32_t poll_duration_ms) {
+    constexpr uint32_t kTicksPerMs = 2;           // One tick is 0.5 ms.
+    constexpr uint32_t kSlotIntervalTicks = 11;   // Ground uplink slots are 5.5 ms apart.
+    constexpr uint16_t kSlotsPerFrame = 32;
+    constexpr uint32_t kFrameIntervalTicks = 1000 * kTicksPerMs;
+    constexpr uint16_t kMasterQueueDepth = 4;  // ADSBee::kRawUATUplinkPacketQueueDepth.
+    const uint32_t update_interval_ticks = SPICoprocessor::kDefaultUpdateIntervalMs * kTicksPerMs;
+
+    PFBQueue<RawUATUplinkPacket> slave_queue =
+        PFBQueue<RawUATUplinkPacket>({.buf_len_num_elements = ObjectDictionary::kDecodedUATUplinkPacketQueueDepth,
+                                      .buffer = nullptr,
+                                      .overwrite_when_full = false});
+    PFBQueue<RawUATUplinkPacket> master_queue = PFBQueue<RawUATUplinkPacket>(
+        {.buf_len_num_elements = kMasterQueueDepth, .buffer = nullptr, .overwrite_when_full = false});
+
+    uint16_t num_sent = 0, num_received = 0;
+    bool more_pending = false;
+    uint32_t last_update_ticks = 0, busy_until_ticks = 0;
+    RawUATUplinkPacket uplink;
+    for (uint32_t ticks = 0; ticks < (num_frames + 1u) * kFrameIntervalTicks; ticks++) {
+        uint32_t ticks_into_frame = ticks % kFrameIntervalTicks;
+        if (num_sent < num_frames * kSlotsPerFrame && ticks_into_frame % kSlotIntervalTicks == 0 &&
+            ticks_into_frame / kSlotIntervalTicks < kSlotsPerFrame) {
+            memcpy(uplink.encoded_message, &num_sent, sizeof(num_sent));
+            slave_queue.Enqueue(uplink);  // A full queue loses the uplink.
+            num_sent++;
+        }
+
+        if (ticks < busy_until_ticks || (ticks - last_update_ticks <= update_interval_ticks && !more_pending)) {
+            continue;
+        }
+        // One master update: status, one array, hand the packets on.
+        uint16_t pending_len_bytes = CompositeArray::CalculateRawPacketsBufferLength(nullptr, nullptr, &slave_queue);
+        uint8_t buffer[CompositeArray::RawPackets::kMaxLenBytes] = {0};
+        CompositeArray::PackRawPacketsBuffer(buffer, CompositeArray::RawPackets::ReadLenBytes(pending_len_bytes),
+                                             nullptr, nullptr, &slave_queue);
+        more_pending = CompositeArray::RawPackets::MorePending(pending_len_bytes);
+        EXPECT_TRUE(
+            CompositeArray::UnpackRawPacketsBufferToQueues(buffer, sizeof(buffer), nullptr, nullptr, &master_queue));
+        while (master_queue.Dequeue(uplink)) {
+            uint16_t sequence_number;
+            memcpy(&sequence_number, uplink.encoded_message, sizeof(sequence_number));
+            EXPECT_GE(sequence_number, num_received);  // In order; a lost uplink leaves the count short.
+            num_received++;
+        }
+        busy_until_ticks = ticks + poll_duration_ms * kTicksPerMs;
+        last_update_ticks = busy_until_ticks;
+    }
+    EXPECT_EQ(num_sent, num_frames * kSlotsPerFrame);
+    return num_received;
+}
+
+// Every ground uplink slot in use (32 uplinks within 176 ms, each second) must reach the RP2040.
+TEST(CompositeArray, FullGroundSegmentsOfUATUplinksReachTheMaster) {
+    EXPECT_EQ(RunFullGroundSegments(30, 3), 30 * 32);   // Fast main loop.
+    EXPECT_EQ(RunFullGroundSegments(30, 30), 30 * 32);  // Main loop slowed by other work.
 }

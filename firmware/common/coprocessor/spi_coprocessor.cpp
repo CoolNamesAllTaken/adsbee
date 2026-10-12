@@ -52,7 +52,7 @@ bool SPICoprocessor::Update() {
 
     uint32_t timestamp_ms = get_time_since_boot_ms();
 
-    if (timestamp_ms - last_update_timestamp_ms_ <= update_interval_ms) {
+    if (timestamp_ms - last_update_timestamp_ms_ <= update_interval_ms && !config_.interface.UpdateIsDue()) {
         return true;  // No need to update yet.
     }
     // Rely on the slave interface to query device status and process SCCommand requests, since behavior varies by
