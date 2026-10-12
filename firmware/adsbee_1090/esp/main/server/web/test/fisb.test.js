@@ -540,6 +540,7 @@ test('pilot report positions match aviationweather.gov', () => {
     // Distance and compass direction, with and without a space.
     assert.ok(distanceNm(at('10 E OAK'), at('OAK090010')) < 0.1);
     assert.ok(distanceNm(at('30W PDX'), at('PDX270030')) < 0.1);
+    assert.ok(distanceNm(at('3917N11935W', 'RNO'), [39.2833, -119.5833]) < 0.1);
     // A route uses its first point; an unknown place falls back to the reporting station.
     assert.deepStrictEqual(at('SNS-OAK'), at('SNS'));
     assert.deepStrictEqual(at('GEELA'), at('SFO'));
@@ -668,4 +669,107 @@ test('map layer draws pilot reports, lightning, cloud tops, icing and turbulence
     assert.deepStrictEqual(names.filter((name) => next.layers.has(next.parts[name])), ['icing', 'airports', 'pireps', 'areas', 'stations']);
     next.addTo(map);
     assert.strictEqual(next.control.box.children.find((c) => c.tag === 'select').children.find((o) => o.selected).textContent, '20');
+});
+
+// fisb_data/sjc_20261012.txt.gz: uplinks received near San Jose, CA on 2026-10-12 with a lightning image from 03:15 UTC and
+// pilot reports, cloud tops, icing and turbulence from 17:31-17:53 UTC, repeats removed. Lines hold the receive time in
+// milliseconds and the /uplink message in hexadecimal. weather_reference.json names the source of every expected value.
+const WEATHER_LINES = zlib.gunzipSync(fs.readFileSync(path.join(DATA, 'sjc_20261012.txt.gz'))).toString().split('\n').filter(Boolean);
+const WEATHER = JSON.parse(fs.readFileSync(path.join(DATA, 'weather_reference.json'), 'utf8'));
+function replayWeather(fromMs, toMs, listener) {
+    const d = new Fisb.Decoder();
+    if (listener) d.on(listener);
+    for (const line of WEATHER_LINES) {
+        const [ms, hex] = line.split(' ');
+        if (+ms < fromMs || +ms > toMs) continue;
+        const message = Fisb.parseUplinkMessage(Fisb.hexToBytes(hex));
+        message.meta.timestampMs = +ms;
+        d.ingestUplink(message.payload, message.meta);
+    }
+    return d;
+}
+const NOON = Date.UTC(2026, 9, 12, 12);
+const pilotReports = new Set();
+const day = replayWeather(NOON, Infinity, (kind, item) => { if (kind === 'text' && item.kind === 'PIREP') pilotReports.add(item.text.replace(/\s+/g, ' ')); });
+
+// Bin values of one grid image keyed by bin center, moved by whole bins.
+function binValues(d, reference, shiftRows, shiftColumns) {
+    const values = new Map();
+    for (const block of d.grids.get(reference.productId).values()) {
+        if ((block.altitudeFt || 0) !== reference.altitudeFt || block.timeMs !== Date.parse(reference.time)) continue;
+        const b = Fisb.blockBounds(block.blockNumber, block.scale, block.south);
+        // A block without bins is empty.
+        (block.bins || new Uint8Array(128)).forEach((v, i) => values.set(
+            (b.north - ((i >> 5) + 0.5 + shiftRows) * b.binLat).toFixed(4) + ',' + (b.west + ((i & 31) + 0.5 + shiftColumns) * b.binLon).toFixed(4), v));
+    }
+    return values;
+}
+// Share of reference points whose bin is within `slack` classes, and how many points had a bin.
+function gridAgreement(d, reference, toClass, slack, shiftRows = 0, shiftColumns = 0) {
+    const values = binValues(d, reference, shiftRows, shiftColumns);
+    let points = 0, hits = 0;
+    for (const [lat, lon, expected] of reference.points) {
+        const v = values.get(lat.toFixed(4) + ',' + lon.toFixed(4));
+        if (v === undefined) continue;
+        points++;
+        if (Math.abs(toClass(v) - expected) <= slack) hits++;
+    }
+    return { points, share: hits / points };
+}
+
+test('turbulence at 18000 ft matches the GTG forecast for the same hour', () => {
+    const here = gridAgreement(day, WEATHER.turbulence, (v) => v, 1);
+    assert.ok(here.points > 500 && here.share > 0.97, JSON.stringify(here));
+    const same = gridAgreement(day, WEATHER.turbulence, (v) => v, 0).share;
+    assert.ok(same > 0.85, String(same));
+    // The match is lost when the image is moved 12 bins in any direction.
+    for (const [rows, columns] of [[12, 0], [-12, 0], [0, 12], [0, -12]]) {
+        assert.ok(gridAgreement(day, WEATHER.turbulence, (v) => v, 0, rows, columns).share < same - 0.15);
+    }
+});
+
+test('icing severity at 12000 ft matches the Current Icing Product for the same hour', () => {
+    // The reference has four severity classes; FIS-B sends heavy as 5.
+    const severity = (v) => Math.min((v >> 3) & 7, 4);
+    const here = gridAgreement(day, WEATHER.icing, severity, 0);
+    assert.ok(here.points > 500 && here.share > 0.65, JSON.stringify(here));
+    assert.ok(gridAgreement(day, WEATHER.icing, severity, 1).share > 0.85);
+    for (const [rows, columns] of [[12, 0], [-12, 0], [0, 12], [0, -12]]) {
+        assert.ok(gridAgreement(day, WEATHER.icing, severity, 0, rows, columns).share < here.share - 0.08);
+    }
+});
+
+test('cloud tops match the HRRR cloud top height for the same hour', () => {
+    const here = gridAgreement(day, WEATHER.cloudTops, (v) => v, 1);
+    assert.ok(here.points > 800 && here.share > 0.9, JSON.stringify(here));
+    for (const [rows, columns] of [[40, 0], [-40, 0], [0, 40], [0, -40]]) {
+        assert.ok(gridAgreement(day, WEATHER.cloudTops, (v) => v, 1, rows, columns).share < here.share - 0.25);
+    }
+});
+
+test('lightning strikes lie on cloud-to-ground strikes of the lightning network', () => {
+    const night = replayWeather(0, NOON);
+    const strikes = [];
+    for (const block of night.grids.get(103).values()) {
+        if (!block.bins) continue;
+        assert.strictEqual(block.timeMs, Date.parse(WEATHER.lightning.time));
+        const b = Fisb.blockBounds(block.blockNumber, block.scale, block.south);
+        block.bins.forEach((v, i) => { if (v & 7) strikes.push([b.north - ((i >> 5) + 0.5) * b.binLat, b.west + ((i & 31) + 0.5) * b.binLon, v & 7]); });
+    }
+    assert.strictEqual(strikes.length, WEATHER.lightning.bins);
+    for (const s of strikes) {
+        assert.ok(s[2] < 7);
+        assert.ok(WEATHER.lightning.cells.some((c) => distanceNm(s, c) < 3), String(s));
+    }
+});
+
+test('pilot reports from the air match aviationweather.gov in text, altitude and position', () => {
+    let near = 0;
+    for (const [text, lat, lon, altitudeFt] of WEATHER.pireps.reports) {
+        assert.ok(pilotReports.has(text), text);
+        const p = Fisb.parsePirep(text);
+        if (altitudeFt !== null) assert.strictEqual(p.altitudeFt, altitudeFt, text);
+        if (distanceNm(Fisb.pirepPosition(p, day), [lat, lon]) < 3) near++;
+    }
+    assert.ok(WEATHER.pireps.reports.length > 50 && near / WEATHER.pireps.reports.length > 0.9, String(near));
 });

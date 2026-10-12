@@ -632,20 +632,22 @@
         const head = /(\S+) (UUA|UA) ?$/.exec(parts[0]) || [];
         const p = { station: head[1], urgent: head[2] === 'UUA', fields: {} };
         for (const part of parts.slice(1)) p.fields[part.slice(0, 2)] = part.slice(2).trim();
-        if (/^\d{3}$/.test(p.fields.FL)) p.altitudeFt = p.fields.FL * 100;
+        if (/^\d{2,3}$/.test(p.fields.FL)) p.altitudeFt = p.fields.FL * 100;
         const hazard = (p.fields.TB || '') + ' ' + (p.fields.IC || '');
         p.severity = /SEV|EXTRM|HVY/.test(hazard) ? 3 : /MOD/.test(hazard) ? 2 : /LGT|TRACE/.test(hazard) ? 1 : 0;
         return p;
     }
 
     /**
-     * [lat, lon] of a parsed pilot report, or null. Reads "ABC", "ABC090025" (magnetic bearing and nautical miles from ABC)
-     * and "10 NE ABC"; uses the first point of a route and falls back to the reporting station.
+     * [lat, lon] of a parsed pilot report, or null. Reads "ABC", "ABC090025" (magnetic bearing and nautical miles from ABC),
+     * "10 NE ABC" and "3917N11935W"; uses the first point of a route and falls back to the reporting station.
      */
     function pirepPosition(p, decoder) {
         const ov = p.fields.OV || '';
         let id, bearing = 0, distance = 0;
-        let m = /^(\d+) ?(?:NM |SM |MI(?:LES?)? )?([NSEW]{1,3}) (?:OF )?([A-Z0-9]{3,4})$/.exec(ov);
+        let m = /^(\d\d)(\d\d)N ?(\d{3})(\d\d)W/.exec(ov);
+        if (m) return [+m[1] + m[2] / 60, -m[3] - m[4] / 60];
+        m = /^(\d+) ?(?:NM |SM |MI(?:LES?)? )?([NSEW]{1,3}) (?:OF )?([A-Z0-9]{3,4})$/.exec(ov);
         if (m) [id, bearing, distance] = [m[3], COMPASS.indexOf(m[2]) * 22.5, +m[1]];
         else if ((m = /^([A-Z0-9]{3,4}?) ?(?:(\d{3})(\d{3}))?(?![A-Z0-9])/.exec(ov))) [id, bearing, distance] = [m[1], +m[2] || 0, +m[3] || 0];
         let base = locate(id, decoder);
