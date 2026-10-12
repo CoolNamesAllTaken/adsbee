@@ -117,3 +117,15 @@ TEST(ESP32FirmwareCheck, OnlyUpToDateSkipsTheUpdate) {
         EXPECT_STRNE(ESP32FirmwareCheck::VerdictToString(verdict), "unknown");
     }
 }
+
+TEST(ESP32FirmwareCheck, UsableAsIsOnlyWithThisVersionAndUntouchedFlash) {
+    EXPECT_TRUE(ESP32FirmwareCheck::UsableAsIs(ESP32FirmwareCheck::kHashNotReported, 0));
+    EXPECT_TRUE(ESP32FirmwareCheck::UsableAsIs(ESP32FirmwareCheck::kHashMismatch, 0));
+    // An interrupted write may have left part of an image.
+    EXPECT_FALSE(ESP32FirmwareCheck::UsableAsIs(ESP32FirmwareCheck::kHashNotReported, 1));
+    EXPECT_FALSE(ESP32FirmwareCheck::UsableAsIs(ESP32FirmwareCheck::kHashMismatch, 3));
+    // Other firmware, or none that answers.
+    EXPECT_FALSE(ESP32FirmwareCheck::UsableAsIs(ESP32FirmwareCheck::kVersionMismatch, 0));
+    EXPECT_FALSE(ESP32FirmwareCheck::UsableAsIs(ESP32FirmwareCheck::kNoResponse, 0));
+    EXPECT_FALSE(ESP32FirmwareCheck::UsableAsIs(ESP32FirmwareCheck::kUpToDate, 1));
+}

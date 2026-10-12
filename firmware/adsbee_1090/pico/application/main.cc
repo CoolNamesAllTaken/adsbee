@@ -132,6 +132,8 @@ int main() {
         uint8_t image_hash[ESP32FirmwareCheck::kHashLenBytes];
         bool image_has_hash = esp32_flasher.GetApplicationHash(image_hash);
         ESP32FirmwareCheck::Verdict verdict = ESP32FirmwareCheck::kNoResponse;
+        uint32_t esp32_firmware_version = 0x0;
+        bool version_read = false;
         uint32_t esp32_comms_start_timestamp_ms = get_time_since_boot_ms();
         uint32_t esp32_comms_last_try_timestamp_ms = 0;
         while (get_time_since_boot_ms() - esp32_comms_start_timestamp_ms < kESP32BootupTimeoutMs) {
@@ -140,9 +142,11 @@ int main() {
                 continue;
             }
             esp32_comms_last_try_timestamp_ms = get_time_since_boot_ms();
-            uint32_t esp32_firmware_version = 0x0;
             uint8_t esp32_hash[ESP32FirmwareCheck::kHashLenBytes];
-            bool version_read = esp32.Read(ObjectDictionary::Address::kAddrFirmwareVersion, esp32_firmware_version);
+            // The version is read once. Later passes only repeat a failed hash read.
+            if (!version_read) {
+                version_read = esp32.Read(ObjectDictionary::Address::kAddrFirmwareVersion, esp32_firmware_version);
+            }
             // Only ask an ESP32 of this version for its hash: other versions may not know the address.
             bool hash_read = version_read && image_has_hash &&
                              esp32_firmware_version == object_dictionary.kFirmwareVersion &&
@@ -176,20 +180,22 @@ int main() {
             uint16_t num_images_written = 0;
             if (!esp32.DeInit()) {
                 CONSOLE_ERROR("main", "Error while de-initializing ESP32 before flashing.");
-            } else if (!esp32_flasher.FlashESP32(true, &num_images_written)) {
-                CONSOLE_ERROR("main",
-                              "Error while flashing ESP32. Disabling it until the next boot, which retries the "
-                              "update. WiFi, Ethernet and the web interface are unavailable until then.");
-                esp32.SetEnable(false);  // Don't talk to an ESP32 running mismatched firmware.
-                esp32.firmware_update_failed = true;
             } else {
-                if (num_images_written == 0 && verdict != ESP32FirmwareCheck::kNoResponse) {
+                bool flashed = esp32_flasher.FlashESP32(true, &num_images_written);
+                if (ESP32FirmwareCheck::UsableAsIs(verdict, num_images_written)) {
                     CONSOLE_ERROR("main",
-                                  "ESP32 firmware check failed (%s) but the ESP32's flash already holds this "
-                                  "firmware. Nothing was written. Continuing with the ESP32 as it is.",
-                                  ESP32FirmwareCheck::VerdictToString(verdict));
+                                  "ESP32 firmware check failed (%s) and nothing was written: %s. Continuing with the "
+                                  "ESP32 as it is.",
+                                  ESP32FirmwareCheck::VerdictToString(verdict),
+                                  flashed ? "its flash already holds this firmware" : "its flash could not be checked");
+                } else if (!flashed) {
+                    CONSOLE_ERROR("main",
+                                  "Error while flashing ESP32. Disabling it until the next boot, which retries the "
+                                  "update. WiFi, Ethernet and the web interface are unavailable until then.");
+                    esp32.SetEnable(false);  // Don't talk to an ESP32 running mismatched firmware.
+                    esp32.firmware_update_failed = true;
                 }
-                if (!esp32.Init()) {
+                if (!esp32.firmware_update_failed && !esp32.Init()) {
                     CONSOLE_ERROR("main", "Error while re-initializing ESP32 after flashing.");
                 }
             }
