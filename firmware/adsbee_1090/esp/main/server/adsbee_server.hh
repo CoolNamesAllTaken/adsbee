@@ -59,6 +59,9 @@ class ADSBeeServer {
     // An HTTP session unused for this long is closed.
     static constexpr uint32_t kHTTPSessionIdleTimeoutMs = 5000;
     static constexpr uint32_t kHTTPSessionSweepIntervalMs = 1000;
+    // Each close is one message in the web server's control queue, which drops messages when it is full.
+    static constexpr uint16_t kMaxNumHTTPSessionsClosedPerSweep = 4;
+    static_assert(kMaxNumHTTPSessionsClosedPerSweep < CONFIG_LWIP_UDP_RECVMBOX_SIZE);
 
     static const uint16_t kNetworkConsoleQueueLen = 10;
     // RP2040 console output waiting to be broadcast to /console clients. Sized for one full console write from the

@@ -70,15 +70,22 @@ TEST(IdleSessionTracker, ExemptSessionsAreNeverReturned) {
     for (int fd = 50; fd < 58; fd++) tracker.Open(fd, fd - 50);  // 50 is the longest unused.
     auto is_websocket = [](int fd) { return fd % 2 == 0; };
 
-    // The server's sweep: close idle sessions until none is left.
-    int num_closed = 0;
-    for (int fd; (fd = tracker.NextIdle(10000, kTimeoutMs, is_websocket)) >= 0;) {
-        EXPECT_EQ(fd, 51 + 2 * num_closed);  // Longest unused first, WebSockets skipped.
-        tracker.Close(fd);
-        ASSERT_LE(++num_closed, 4);
+    // The server's sweep: ask for a few idle sessions to be closed and restart their timeout. A session leaves the
+    // tracker when its close arrives.
+    int num_asked = 0;
+    for (int i = 0; i < 3; i++) {
+        int fd = tracker.NextIdle(10000, kTimeoutMs, is_websocket);
+        EXPECT_EQ(fd, 51 + 2 * num_asked);  // Longest unused first, WebSockets skipped.
+        tracker.Touch(fd, 10000);
+        num_asked++;
     }
-    EXPECT_EQ(num_closed, 4);
-    EXPECT_EQ(tracker.NumSessions(), 4);
+    tracker.Close(51);
+    tracker.Close(53);  // The close of 55 got lost.
+    EXPECT_EQ(tracker.NextIdle(10000, kTimeoutMs, is_websocket), 57);
+    tracker.Close(57);
+    EXPECT_EQ(tracker.NextIdle(10000, kTimeoutMs, is_websocket), -1);
+    EXPECT_EQ(tracker.NextIdle(10000 + kTimeoutMs, kTimeoutMs, is_websocket), 55);  // Asked again one timeout later.
+    EXPECT_EQ(tracker.NumSessions(), 5);
     EXPECT_EQ(tracker.NextIdle(10000, 0, [](int) { return true; }), -1);
 }
 
