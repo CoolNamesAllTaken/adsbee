@@ -77,6 +77,15 @@ class ESP32FirmwareCheck {
         return memcmp(image_hash, esp32_hash, kHashLenBytes) == 0 ? kUpToDate : kHashMismatch;
     }
 
+    /**
+     * True if the ESP32 can run without an update although the check did not pass: it reported this firmware's version
+     * and the update attempt wrote nothing, so its flash is as it was.
+     * @param[in] num_images_written Images the update attempt started to write.
+     */
+    static bool UsableAsIs(Verdict verdict, uint16_t num_images_written) {
+        return num_images_written == 0 && (verdict == kHashNotReported || verdict == kHashMismatch);
+    }
+
     static const char* VerdictToString(Verdict verdict) {
         switch (verdict) {
             case kUpToDate:
