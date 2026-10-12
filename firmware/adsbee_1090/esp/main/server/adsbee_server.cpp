@@ -114,7 +114,7 @@ esp_err_t web_server_open_fd(httpd_handle_t hd, int sockfd) {
     int idle_fd = adsbee_server.web_server_sessions.NextIdle(
         timestamp_ms, 0, [hd, sockfd](int fd) { return fd == sockfd || web_server_fd_is_websocket(hd, fd); });
     if (idle_fd >= 0) {
-        adsbee_server.web_server_sessions.Close(idle_fd);
+        adsbee_server.web_server_sessions.Touch(idle_fd, timestamp_ms);  // The sweep must not ask a second time.
         httpd_sess_trigger_close(hd, idle_fd);
     }
     return ESP_OK;
@@ -127,10 +127,15 @@ void web_server_close_idle_sessions(void* arg) {
     httpd_handle_t hd = adsbee_server.server;
     uint32_t timestamp_ms = get_time_since_boot_ms();
     auto is_websocket = [hd](int fd) { return web_server_fd_is_websocket(hd, fd); };
-    // Every pass closes one session, so the loop ends.
-    for (int fd; (fd = adsbee_server.web_server_sessions.NextIdle(
-                      timestamp_ms, ADSBeeServer::kHTTPSessionIdleTimeoutMs, is_websocket)) >= 0;) {
-        adsbee_server.web_server_sessions.Close(fd);
+    for (uint16_t i = 0; i < ADSBeeServer::kMaxNumHTTPSessionsClosedPerSweep; i++) {
+        int fd = adsbee_server.web_server_sessions.NextIdle(timestamp_ms, ADSBeeServer::kHTTPSessionIdleTimeoutMs,
+                                                            is_websocket);
+        if (fd < 0) {
+            break;
+        }
+        // The close is queued and can get lost. The session stays tracked until it is closed, and restarting its
+        // timeout makes a later sweep ask again.
+        adsbee_server.web_server_sessions.Touch(fd, timestamp_ms);
         httpd_sess_trigger_close(hd, fd);
     }
 }
