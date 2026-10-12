@@ -3,6 +3,7 @@
 // (bench runs with real receivers; MOCK_ACCEPT_ANY_KEY=1 on the command line).
 //
 //   const mock = await startMock({ releases, recommended, files });   // mock.base = 'http://127.0.0.1:<port>/api/fw/v1/'
+//   mock.checkins: the POST checkin bodies, with the token's unique_id.
 //   node test/fw_api_mock.js <port> <release dir> [recommended]       // serves <dir>/<tag>/<file>; logs requests
 //
 // releases: [{tag, version, prerelease, notes_url, assets: [{name, kind}]}]; sizes and SHA-256 come from files.
@@ -24,7 +25,7 @@ const CORS = {
 function startMock({ releases = [], recommended = null, files = {}, port = 0, tokenTtlMs = 3600000,
                      acceptAnyKey = false, log = () => {} } = {}) {
     const state = { releases, recommended, files, tokens: new Map(), requests: [], authBodies: [],
-                    rateLimited: false };
+                    checkins: [], rateLimited: false };
     const sha = (b) => crypto.createHash('sha256').update(b).digest('hex');
     const isPre = (r) => /-(rc|alpha|beta)\d*$/.test(r.version);
     const recommendedFor = (product) => (state.recommended && typeof state.recommended === 'object'
@@ -92,7 +93,7 @@ function startMock({ releases = [], recommended = null, files = {}, port = 0, to
                 : body.ota_keys[0] === `valid-${body.unique_id}`;
             if (!ok) return send(401, { error: 'bad_key' });
             const token = crypto.randomBytes(16).toString('hex');
-            state.tokens.set(token, { exp: Date.now() + tokenTtlMs, product: body.product });
+            state.tokens.set(token, { exp: Date.now() + tokenTtlMs, product: body.product, unique_id: body.unique_id });
             return send(200, { token, expires_in: Math.round(tokenTtlMs / 1000) });
         }
 
@@ -117,7 +118,25 @@ function startMock({ releases = [], recommended = null, files = {}, port = 0, to
                               'Accept-Ranges': 'bytes', ETag: `"${sha(b)}"` };
             return send(200, req.method === 'HEAD' ? Buffer.alloc(0) : b, headers);
         }
-        if (route === 'checkin' && req.method === 'POST') return send(204, undefined);
+        if (route === 'checkin' && req.method === 'POST') {
+            let body;
+            try {
+                let raw = '';
+                for await (const c of req) raw += c;
+                body = JSON.parse(raw);
+            } catch (e) {
+                return send(400, { error: 'bad_request', detail: 'invalid JSON' });
+            }
+            if (!['idle', 'downloading', 'installed', 'failed'].includes(body.state)) {
+                return send(400, { error: 'bad_request', detail: 'state must be idle, downloading, installed or failed' });
+            }
+            if (!/^[0-9A-Za-z._+-]{0,64}$/.test(body.version || '') || typeof (body.detail || '') !== 'string') {
+                return send(400, { error: 'bad_request', detail: 'version must be a version string' });
+            }
+            state.checkins.push(Object.assign({ unique_id: tok.unique_id }, body));
+            log(`checkin ${tok.unique_id} ${body.state} ${body.version || ''} ${body.client || ''} ${body.detail || ''}`);
+            return send(204, undefined);
+        }
         return send(404, { error: 'not_found' });
     });
 

@@ -287,3 +287,205 @@ test('a pinned RC is offered on the stable channel', () => {
     const sel = fr.selectUpdate(listing, { product: '1090', current: '0.9.1', channel: 'stable' });
     assert.deepStrictEqual([sel.state, fr.formatVersion(sel.version)], ['update', '0.9.2-rc1']);
 });
+
+test('checkin posts state, version, detail and client; renews an expired token', async () => {
+    const mock = await mock1090();
+    try {
+        const api = new fr.FirmwareApi({ base: mock.base, client: 'console' });
+        const info = fr.parseDeviceInfo(INFO_1090, '1090');
+        // Authenticates by itself.
+        assert.strictEqual(await api.checkin(info, 'downloading', '0.9.1-rc6'), true);
+        mock.tokens.clear();
+        assert.strictEqual(await api.checkin(info, 'failed', '0.9.1-rc6', 'x'.repeat(300)), true);
+        assert.strictEqual(mock.authBodies.length, 2);
+        assert.deepStrictEqual(mock.checkins.map((c) => [c.unique_id, c.state, c.version, c.client, c.detail.length]),
+                               [['E46478B14B4C1F23', 'downloading', '0.9.1-rc6', 'console', 0],
+                                ['E46478B14B4C1F23', 'failed', '0.9.1-rc6', 'console', 200]]);
+    } finally {
+        await mock.close();
+    }
+});
+
+test('checkin never throws: rejected, rate limited, offline, no keys', async () => {
+    const mock = await mock1090();
+    const info = fr.parseDeviceInfo(INFO_1090, '1090');
+    try {
+        const api = new fr.FirmwareApi({ base: mock.base });
+        assert.strictEqual(await api.checkin(info, 'bogus', '0.9.0'), false);
+        mock.rateLimited = true;
+        assert.strictEqual(await api.checkin(info, 'installed', '0.9.0'), false);
+        mock.rateLimited = false;
+        const noKeys = fr.parseDeviceInfo(INFO_1090.map((l) => l.replace(/^OTA Key 0: .*/, 'OTA Key 0: bogus')), '1090');
+        assert.strictEqual(await new fr.FirmwareApi({ base: mock.base }).checkin(noKeys, 'installed', '0.9.0'), false);
+        assert.deepStrictEqual(mock.checkins, []);
+    } finally {
+        await mock.close();
+    }
+    const dead = new fr.FirmwareApi({ base: 'http://127.0.0.1:9/api/fw/v1/' });
+    assert.strictEqual(await dead.checkin(info, 'installed', '0.9.0'), false);
+});
+
+test('updateOutcome: installed on the target version, failed on another after the reboot grace', () => {
+    const p = { version: '0.9.1-rc6', at: 1000 };
+    assert.deepStrictEqual(fr.updateOutcome(p, '0.9.1-rc6', 1001), { state: 'installed', detail: '' });
+    assert.strictEqual(fr.updateOutcome(p, '0.9.1-rc5', 1000 + fr.REBOOT_GRACE_MS - 1), null);
+    assert.deepStrictEqual(fr.updateOutcome(p, '0.9.1-rc5', 1000 + fr.REBOOT_GRACE_MS),
+                           { state: 'failed', detail: 'running 0.9.1-rc5' });
+    assert.deepStrictEqual(fr.updateOutcome(p, null, 1000 + fr.REBOOT_GRACE_MS),
+                           { state: 'failed', detail: 'running unknown' });
+});
+
+test('pending update: per service and receiver; expires', () => {
+    const info = fr.parseDeviceInfo(INFO_1090, '1090');
+    const key = fr.pendingKey('https://a/', info);
+    const store = { getItem: () => JSON.stringify({ key, version: '0.9.1-rc6', at: 1000 }) };
+    assert.strictEqual(fr.readPending(store, key, 2000).version, '0.9.1-rc6');
+    assert.strictEqual(fr.readPending(store, fr.pendingKey('https://b/', info), 2000), null);
+    assert.strictEqual(fr.readPending(store, fr.pendingKey('https://a/', { ...info, unique_id: 'X' }), 2000), null);
+    assert.strictEqual(fr.readPending(store, key, 1000 + 3600 * 1000), null);
+    assert.strictEqual(fr.readPending({ getItem: () => 'junk' }, key, 2000), null);
+});
+
+// mount() with a stand-in DOM: enough to click ⇣ Update and follow the check-ins.
+function fakePage() {
+    const el = () => {
+        const e = { kids: [], hidden: false,
+                    append(...k) { e.kids.push(...k); }, replaceChildren(...k) { e.kids = k; },
+                    addEventListener() {}, contains: () => false };
+        return e;
+    };
+    const items = new Map();
+    const saved = { document: global.document, localStorage: global.localStorage, confirm: global.confirm,
+                    setInterval: global.setInterval };
+    global.document = { createElement: el, getElementById: () => null, head: el(), addEventListener() {} };
+    global.localStorage = { getItem: (k) => (items.has(k) ? items.get(k) : null), setItem: (k, v) => items.set(k, String(v)),
+                            removeItem: (k) => items.delete(k) };
+    global.confirm = () => true;
+    global.setInterval = () => 0;
+    const find = (e, pred) => {
+        if (!e || typeof e !== 'object') return null;
+        if (pred(e)) return e;
+        for (const k of e.kids || []) { const r = find(k, pred); if (r) return r; }
+        return null;
+    };
+    return { root: el(), items, find, restore: () => Object.assign(global, saved) };
+}
+
+async function until(pred) {
+    for (let i = 0; i < 200 && !pred(); i++) await new Promise((r) => setTimeout(r, 10));
+    assert.ok(pred(), 'timed out');
+}
+
+test('an update reports downloading, then installed once the receiver answers on the new version', async () => {
+    const mock = await mock1090({ recommended: '0.9.1-rc6' });
+    const page = fakePage();
+    try {
+        let lines = INFO_1090;
+        let installed = null;
+        const ui = fr.mount(page.root, { product: '1090', apiBase: mock.base, readDeviceInfo: async () => lines,
+                                         install: async (b, name) => { installed = name; } });
+        await ui.check();
+        // A check without an update reports nothing.
+        assert.deepStrictEqual(mock.checkins, []);
+        page.find(page.root, (e) => e.textContent === '⇣ Update').onclick();
+        await until(() => installed);
+        await until(() => mock.checkins.length === 1);
+        assert.deepStrictEqual([mock.checkins[0].state, mock.checkins[0].version, mock.checkins[0].client],
+                               ['downloading', '0.9.1-rc6', 'web_ui']);
+        assert.ok(page.items.has(fr.PENDING_KEY));
+
+        // The page reloads on the 1090: a new mount finds the pending update.
+        lines = INFO_1090.map((l) => l.replace('0.9.1-rc5', '0.9.1-rc6'));
+        const ui2 = fr.mount(page.root, { product: '1090', apiBase: mock.base, readDeviceInfo: async () => lines,
+                                          install: async () => {} });
+        await ui2.check();
+        await until(() => mock.checkins.length === 2);
+        assert.deepStrictEqual([mock.checkins[1].state, mock.checkins[1].version, mock.checkins[1].detail],
+                               ['installed', '0.9.1-rc6', '']);
+        assert.ok(!page.items.has(fr.PENDING_KEY));
+        await ui2.check(true);
+        await new Promise((r) => setTimeout(r, 50));
+        assert.strictEqual(mock.checkins.length, 2);
+    } finally {
+        page.restore();
+        await mock.close();
+    }
+});
+
+test('a failed install, a bad checksum and a receiver back on another version report failed', async () => {
+    const mock = await mock1090({ recommended: '0.9.1-rc6' });
+    const page = fakePage();
+    try {
+        const opts = { product: '1090', apiBase: mock.base, client: 'console', readDeviceInfo: async () => INFO_1090 };
+        const click = () => page.find(page.root, (e) => e.textContent === '⇣ Update').onclick();
+        const last = () => { const c = mock.checkins.at(-1); return [c.state, c.version, c.client, c.detail]; };
+
+        let ui = fr.mount(page.root, { ...opts, install: async () => { throw new Error('Flash verify failed.'); } });
+        await ui.check();
+        click();
+        await until(() => mock.checkins.length === 2);
+        assert.deepStrictEqual(last(), ['failed', '0.9.1-rc6', 'console', 'install: Flash verify failed.']);
+        assert.ok(!page.items.has(fr.PENDING_KEY));
+
+        const f = 'adsbee_1090-0.9.1-rc6/adsbee_1090.ota';
+        mock.releases.find((r) => r.version === '0.9.1-rc6').assets[0].sha256 = '0'.repeat(64);
+        await ui.check(true);
+        click();
+        await until(() => mock.checkins.length === 4);
+        assert.deepStrictEqual(last(), ['failed', '0.9.1-rc6', 'console', 'checksum: adsbee_1090.ota failed its SHA-256 check.']);
+        delete mock.releases.find((r) => r.version === '0.9.1-rc6').assets[0].sha256;
+        assert.ok(mock.files[f]);
+
+        // The upload ends well, but the receiver is still on rc5 after the reboot grace.
+        ui = fr.mount(page.root, { ...opts, install: async () => {} });
+        await ui.check(true);
+        click();
+        await until(() => page.items.has(fr.PENDING_KEY));
+        const p = JSON.parse(page.items.get(fr.PENDING_KEY));
+        await ui.check();
+        await new Promise((r) => setTimeout(r, 50));
+        assert.strictEqual(mock.checkins.length, 5);    // Inside the grace: only 'downloading' so far.
+        page.items.set(fr.PENDING_KEY, JSON.stringify({ ...p, at: p.at - fr.REBOOT_GRACE_MS }));
+        await ui.check();
+        await until(() => mock.checkins.length === 6);
+        assert.deepStrictEqual(last(), ['failed', '0.9.1-rc6', 'console', 'running 0.9.1-rc5']);
+        assert.ok(!page.items.has(fr.PENDING_KEY));
+    } finally {
+        page.restore();
+        await mock.close();
+    }
+});
+
+test('an update goes through when every check-in fails, and the result is reported later', async () => {
+    const mock = await mock1090({ recommended: '0.9.1-rc6' });
+    const page = fakePage();
+    try {
+        let lines = INFO_1090;
+        let installed = false;
+        let drop = true;
+        // mount() builds its own FirmwareApi on the global fetch.
+        const realFetch = global.fetch;
+        global.fetch = (url, o) => (drop && url.endsWith('/checkin') ? Promise.reject(new Error('down')) : realFetch(url, o));
+        try {
+            const ui = fr.mount(page.root, { product: '1090', apiBase: mock.base, readDeviceInfo: async () => lines,
+                                             install: async () => { installed = true; } });
+            await ui.check();
+            page.find(page.root, (e) => e.textContent === '⇣ Update').onclick();
+            await until(() => installed && page.items.has(fr.PENDING_KEY));
+            lines = INFO_1090.map((l) => l.replace('0.9.1-rc5', '0.9.1-rc6'));
+            await ui.check();
+            await new Promise((r) => setTimeout(r, 50));
+            assert.deepStrictEqual(mock.checkins, []);
+            assert.ok(page.items.has(fr.PENDING_KEY));
+            drop = false;
+            await ui.check();
+            await until(() => mock.checkins.length === 1);
+            assert.strictEqual(mock.checkins[0].state, 'installed');
+        } finally {
+            global.fetch = realFetch;
+        }
+    } finally {
+        page.restore();
+        await mock.close();
+    }
+});
