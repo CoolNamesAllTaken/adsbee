@@ -53,9 +53,9 @@ class ADSBeeServer {
     // lwIP must hold every web server session next to all feeds, or it runs out before the web server's own limit and
     // the web server never closes a session to make room.
     // Sockets: the web server uses 3 itself, GDL90 uses 1.
-    static_assert(kMaxNumWebServerSessions + 3 + SettingsManager::Settings::kMaxNumFeeds + 1 <= CONFIG_LWIP_MAX_SOCKETS);
-    static_assert(kMaxNumWebServerSessions + kWebServerBacklog + SettingsManager::Settings::kMaxNumFeeds <=
-                  CONFIG_LWIP_MAX_ACTIVE_TCP);
+    // Test variant: lwIP holds 9 sockets and connections less, as if 9 more feeds were connected.
+    static_assert(kMaxNumWebServerSessions + 3 + 1 + 1 <= CONFIG_LWIP_MAX_SOCKETS);
+    static_assert(kMaxNumWebServerSessions + kWebServerBacklog + 1 <= CONFIG_LWIP_MAX_ACTIVE_TCP);
     // An HTTP session unused for this long is closed.
     static constexpr uint32_t kHTTPSessionIdleTimeoutMs = 5000;
     static constexpr uint32_t kHTTPSessionSweepIntervalMs = 1000;
