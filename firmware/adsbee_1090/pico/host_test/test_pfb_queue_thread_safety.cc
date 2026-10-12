@@ -243,6 +243,7 @@ TEST(PFBQueueUnlocked, TwoThreads_Depth3) { RunTwoThreads(3, 1000000, 20.0); }
 // runs to completion, like an interrupt and the loop it interrupts on one core.
 static PFBQueue<SequencedElement>* interrupt_queue = nullptr;
 static volatile int interrupt_burst = 1;                // Queue operations per interrupt.
+static volatile bool interrupt_in_place = false;        // Use Back() and Push() / Front() and Pop().
 static volatile uint32_t interrupt_num_enqueued = 0;    // Writer interrupt.
 static volatile uint32_t interrupt_num_refused = 0;     // Writer interrupt.
 static volatile bool interrupt_length_violation = false;
@@ -251,8 +252,19 @@ static SequenceChecker interrupt_checker;               // Reader interrupt.
 static void EnqueueInterrupt(int) {
     SequencedElement element;
     for (int i = 0; i < interrupt_burst; i++) {
-        element.Set(interrupt_num_enqueued);
-        if (interrupt_queue->Enqueue(element)) {
+        bool enqueued;
+        if (interrupt_in_place) {
+            SequencedElement* slot = interrupt_queue->Back();
+            enqueued = slot != nullptr;
+            if (enqueued) {
+                slot->Set(interrupt_num_enqueued);
+                interrupt_queue->Push();
+            }
+        } else {
+            element.Set(interrupt_num_enqueued);
+            enqueued = interrupt_queue->Enqueue(element);
+        }
+        if (enqueued) {
             interrupt_num_enqueued = interrupt_num_enqueued + 1;
         } else {
             interrupt_num_refused = interrupt_num_refused + 1;
@@ -309,10 +321,11 @@ class InterruptSource {
 };
 
 // The interrupt writes, the loop reads: ADSBee::FinishCapture() and ADSBee::DemodulateCaptures().
-static void RunInterruptWriter(uint16_t queue_depth, int burst, double duration_s) {
+static void RunInterruptWriter(uint16_t queue_depth, int burst, double duration_s, bool in_place = false) {
     PFBQueue<SequencedElement> queue({.buf_len_num_elements = queue_depth});
     interrupt_queue = &queue;
     interrupt_burst = burst;
+    interrupt_in_place = in_place;
     interrupt_num_enqueued = 0;
     interrupt_num_refused = 0;
     interrupt_length_violation = false;
@@ -324,7 +337,14 @@ static void RunInterruptWriter(uint16_t queue_depth, int burst, double duration_
     InterruptSource interrupt_source(EnqueueInterrupt);
     while (SecondsSince(start) < duration_s) {
         for (int i = 0; i < 1000; i++) {
-            if (queue.Dequeue(element)) checker.Check(element);
+            if (in_place) {
+                if (const SequencedElement* front = queue.Front()) {
+                    checker.Check(*front);
+                    queue.Pop();
+                }
+            } else if (queue.Dequeue(element)) {
+                checker.Check(element);
+            }
             if (queue.Length() > queue_depth) length_violation = true;
         }
     }
@@ -376,6 +396,8 @@ TEST(PFBQueueUnlocked, InterruptWriter_Depth2) { RunInterruptWriter(2, 1, 1.0); 
 // Two elements per interrupt fill a queue of two while the loop is in the middle of a Dequeue().
 TEST(PFBQueueUnlocked, InterruptWriter_Depth2_Burst2) { RunInterruptWriter(2, 2, 2.0); }
 TEST(PFBQueueUnlocked, InterruptWriter_Depth16_Burst2) { RunInterruptWriter(16, 2, 1.0); }
+TEST(PFBQueueUnlocked, InterruptWriter_InPlace_Depth2_Burst2) { RunInterruptWriter(2, 2, 1.0, true); }
+TEST(PFBQueueUnlocked, InterruptWriter_InPlace_Depth16_Burst2) { RunInterruptWriter(16, 2, 1.0, true); }
 TEST(PFBQueueUnlocked, InterruptReader_Depth2) { RunInterruptReader(2, 1, 1.0); }
 TEST(PFBQueueUnlocked, InterruptReader_Depth2_Burst2) { RunInterruptReader(2, 2, 2.0); }
 TEST(PFBQueueUnlocked, InterruptReader_Depth16_Burst2) { RunInterruptReader(16, 2, 1.0); }

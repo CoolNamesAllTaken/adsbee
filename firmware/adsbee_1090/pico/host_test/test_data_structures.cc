@@ -207,13 +207,70 @@ TEST(PFBQueue, ZeroLength) {
     }
 }
 
+TEST(PFBQueue, InPlaceAccess) {
+    PFBQueue<uint32_t> queue = PFBQueue<uint32_t>({.buf_len_num_elements = 3});
+    EXPECT_EQ(queue.Front(), nullptr);
+    uint32_t next_in = 0;
+    uint32_t next_out = 0;
+    for (uint16_t round = 0; round < 50; round++) {
+        for (uint16_t i = 0; i < 1 + round % 4; i++) {
+            uint32_t* slot = queue.Back();
+            if (slot == nullptr) {
+                EXPECT_TRUE(queue.IsFull());
+                break;
+            }
+            *slot = next_in++;
+            uint16_t length_before_push = queue.Length();
+            queue.Push();  // The element is not visible before this.
+            EXPECT_EQ(queue.Length(), length_before_push + 1);
+        }
+        for (uint16_t i = 0; i < 1 + round % 3; i++) {
+            const uint32_t* element = queue.Front();
+            if (element == nullptr) {
+                EXPECT_TRUE(queue.IsEmpty());
+                break;
+            }
+            EXPECT_EQ(*element, next_out++);
+            queue.Pop();
+        }
+        EXPECT_EQ(queue.Length(), next_in - next_out);
+    }
+    EXPECT_GT(next_out, 50u);
+    // Mixes with the copying calls.
+    queue.Clear();
+    EXPECT_TRUE(queue.Enqueue(7));
+    ASSERT_NE(queue.Front(), nullptr);
+    EXPECT_EQ(*queue.Front(), 7u);
+    *queue.Back() = 8;
+    queue.Push();
+    queue.Pop();
+    uint32_t out;
+    EXPECT_TRUE(queue.Dequeue(out));
+    EXPECT_EQ(out, 8u);
+}
+
+// A lock can't be held between Back() and Push(), and overwriting would move the element under the reader.
+TEST(PFBQueue, InPlaceAccessRefusedWhenLockedOrOverwriting) {
+    PFBQueue<uint32_t> locked_queue = PFBQueue<uint32_t>({.buf_len_num_elements = 3, .is_thread_safe = true});
+    PFBQueue<uint32_t> overwriting_queue =
+        PFBQueue<uint32_t>({.buf_len_num_elements = 3, .overwrite_when_full = true});
+    EXPECT_TRUE(locked_queue.Enqueue(1));
+    EXPECT_TRUE(overwriting_queue.Enqueue(1));
+    EXPECT_EQ(locked_queue.Back(), nullptr);
+    EXPECT_EQ(locked_queue.Front(), nullptr);
+    EXPECT_EQ(overwriting_queue.Back(), nullptr);
+    EXPECT_EQ(overwriting_queue.Front(), nullptr);
+}
+
 TEST(PFBQueue, MoveConstruction) {
     PFBQueue<uint32_t> source = PFBQueue<uint32_t>({.buf_len_num_elements = 3});
     uint32_t out;
     // Wrap the source before it is moved.
     for (uint32_t i = 0; i < 5; i++) {
         EXPECT_TRUE(source.Enqueue(i));
-        if (i < 2) EXPECT_TRUE(source.Dequeue(out));
+        if (i < 2) {
+            EXPECT_TRUE(source.Dequeue(out));
+        }
     }
     PFBQueue<uint32_t> queue(std::move(source));
     EXPECT_EQ(source.Length(), 0);

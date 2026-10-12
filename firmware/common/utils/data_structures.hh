@@ -14,8 +14,9 @@
  * Which mode to use:
  * - Unlocked (is_thread_safe = false, the default): one writer context and one reader context. Either may be an
  *   interrupt that preempts the other, or run on another core. No lock is taken, so this is the mode for interrupts.
- *   The writer calls Enqueue(); the reader calls Dequeue(), Peek(), Discard() and Clear(). Length(), IsFull() and
- *   IsEmpty() are allowed on both sides: the reader may see fewer elements than there are, the writer more.
+ *   The writer calls Enqueue() or Back() and Push(); the reader calls Dequeue(), Front() and Pop(), Peek(), Discard()
+ *   and Clear(). Length(), IsFull() and IsEmpty() are allowed on both sides: the reader may see fewer elements than
+ *   there are, the writer more.
  * - Locked (is_thread_safe = true): any number of writers and readers in tasks or on both cores. Never call it from an
  *   interrupt: the lock would deadlock against the code it interrupted.
  * - overwrite_when_full: a full queue drops its oldest element, so the writer moves the reader's position. Use it
@@ -168,6 +169,47 @@ class PFBQueue {
         head_.store(Advance(head, num_elements), std::memory_order_release);
         if (config_.is_thread_safe) PFB_MUTEX_UNLOCK(mutex_);
         return true;
+    }
+
+    // In-place access, for unlocked queues without overwrite_when_full: the element is filled or read where it is
+    // stored, which saves a copy on each side. On other queues Back() and Front() return nullptr.
+
+    /**
+     * Writer side: slot for the next element.
+     * @retval Slot to fill before calling Push(), or nullptr if the queue is full.
+     */
+    inline T* Back() {
+        if (config_.is_thread_safe || config_.overwrite_when_full) return nullptr;
+        uint32_t tail = tail_.load(std::memory_order_relaxed);
+        if (Distance(head_.load(std::memory_order_acquire), tail) >= buffer_length_) return nullptr;
+        return &config_.buffer[Slot(tail)];
+    }
+
+    /**
+     * Writer side: makes the slot returned by Back() visible to the reader.
+     */
+    inline void Push() { tail_.store(Advance(tail_.load(std::memory_order_relaxed)), std::memory_order_release); }
+
+    /**
+     * Reader side: oldest element.
+     * @retval Element to use before calling Pop(), or nullptr if the queue is empty.
+     */
+    inline const T* Front() {
+        if (config_.is_thread_safe || config_.overwrite_when_full) return nullptr;
+        uint32_t head = head_.load(std::memory_order_relaxed);
+        if (head == tail_.load(std::memory_order_acquire)) return nullptr;
+        return &config_.buffer[Slot(head)];
+    }
+
+    /**
+     * Reader side: removes the element returned by Front().
+     */
+    inline void Pop() {
+        uint32_t head = head_.load(std::memory_order_relaxed);
+        if constexpr (!std::is_trivially_copyable<T>::value) {
+            config_.buffer[Slot(head)] = T();  // Release what the slot owned, like Dequeue().
+        }
+        head_.store(Advance(head), std::memory_order_release);
     }
 
     /**

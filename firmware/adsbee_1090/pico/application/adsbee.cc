@@ -593,9 +593,9 @@ void __time_critical_func(ADSBee::FinishCapture)(uint16_t sm_index, uint16_t num
         short_capture_sm_index_ = -1;  // Full capture finished first: the alarm has nothing left to do.
     }
     // Copy the capture out before the sampler is re-armed: its buffer is the DMA target of the next capture.
-    bool queue_has_room = !capture_queue_.IsFull();
-    if (queue_has_room) {
-        Capture& capture = finished_capture_;
+    Capture* capture_slot = capture_queue_.Back();
+    if (capture_slot != nullptr) {
+        Capture& capture = *capture_slot;
         for (uint16_t i = 0; i < num_words; i++) {
             capture.samples[i] = sample_buf_[sm_index][i];
         }
@@ -615,14 +615,16 @@ void __time_critical_func(ADSBee::FinishCapture)(uint16_t sm_index, uint16_t num
     RearmSampler(sm_index);
     capture_active_[sm_index] = false;
 
-    if (!queue_has_room || !capture_queue_.Enqueue(finished_capture_)) {
+    if (capture_slot != nullptr) {
+        capture_queue_.Push();
+    } else {
         r1090_capture_queue_overflowed_ = true;
     }
 }
 
 void __time_critical_func(ADSBee::DemodulateCaptures)() {
-    const Capture& capture = demodulating_capture_;
-    while (capture_queue_.Dequeue(demodulating_capture_)) {
+    while (const Capture* capture_slot = capture_queue_.Front()) {
+        const Capture& capture = *capture_slot;
         uint16_t sm_index = capture.source;
         aircraft_dictionary.Record1090Demod(sm_index);
 #ifdef DEBUG_ISR_TIMING
@@ -658,6 +660,7 @@ void __time_critical_func(ADSBee::DemodulateCaptures)() {
                 r1090_packet_queue_overflowed_ = true;
             }
         }
+        capture_queue_.Pop();
     }
 }
 
