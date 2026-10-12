@@ -142,6 +142,15 @@ class CommsManager {
     bool iface_putc(SettingsManager::SerialInterface iface, char c);
     bool iface_getc(SettingsManager::SerialInterface iface, char& c);
     bool iface_puts(SettingsManager::SerialInterface iface, const char* buf);
+    /**
+     * Writes a buffer that may contain null bytes to a serial interface. The console gets the buffer in one piece: the
+     * USB driver is serviced once per call, and a call per character tops out near 33 kB/s.
+     * @param[in] iface SerialInterface to write to.
+     * @param[in] buf Bytes to write.
+     * @param[in] len Number of bytes to write.
+     * @retval True if every byte was accepted.
+     */
+    bool iface_write(SettingsManager::SerialInterface iface, const char* buf, uint16_t len);
 
     bool network_console_putc(char c);
     bool network_console_puts(const char* buf, uint16_t len = UINT16_MAX);
@@ -151,12 +160,7 @@ class CommsManager {
 #include "comms_reporting.hh"
 
     inline bool SendBuf(ReportSink sink, const char* buf, uint16_t buf_len, uint16_t num_msgs = 1) {
-        for (uint16_t i = 0; i < buf_len; i++) {
-            if (!iface_putc(static_cast<SettingsManager::SerialInterface>(sink), buf[i])) {
-                return false;
-            }
-        }
-        return true;
+        return iface_write(static_cast<SettingsManager::SerialInterface>(sink), buf, buf_len);
     }
 
     /**
