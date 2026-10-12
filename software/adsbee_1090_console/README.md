@@ -65,9 +65,11 @@ WebSocket, like the device-hosted page.
 
 ## Weather (FIS-B)
 
-**Weather** on the Live Map draws FIS-B from UAT ground stations (US): radar, airports colored by
-flight category with METAR, TAF and NOTAMs, TFR, SIGMET and AIRMET outlines, and the ground
-stations. The buttons under the zoom control show or hide each kind. Network mode reads the
+**Weather** on the Live Map draws FIS-B from UAT ground stations (US): radar, lightning, cloud
+tops, icing, turbulence, airports colored by flight category with METAR, TAF and NOTAMs, pilot
+reports, TFR, SIGMET and AIRMET outlines, and the ground stations. The buttons under the zoom
+control show or hide each kind; hover one for its time and color key. Icing and turbulence show
+the altitude picked in the box below their buttons. Network mode reads the
 `/uplink` WebSocket while the map is shown. Serial mode switches the map stream to
 `AIRCRAFT_JSON_UAT_UPLINK`; firmware without it keeps `AIRCRAFT_JSON` and the toggle shows ⚠.
 Uplink lines never print in the terminal.
