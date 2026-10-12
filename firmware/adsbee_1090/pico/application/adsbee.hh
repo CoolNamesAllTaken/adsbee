@@ -17,7 +17,6 @@
 #include "r1090_rssi.hh"
 #include "settings.hh"
 #include "spi_coprocessor.hh"
-#include "spsc_queue.hh"
 #include "stdint.h"
 
 class ADSBee {
@@ -509,7 +508,12 @@ class ADSBee {
     // One DMA channel and capture buffer per pulse sampler (one spare word for bit windows that end in the last one).
     int sample_dma_channel_[BSP::kMaxNumDemodStateMachines] = {-1, -1, -1, -1};
     uint32_t sample_buf_[BSP::kMaxNumDemodStateMachines][mode_s_soft_demod::kCaptureWords + 1] = {};
-    SPSCQueue<Capture, kCaptureQueueDepth> capture_queue_;  // FinishCapture() to DemodulateCaptures().
+    // Written by FinishCapture() (interrupt), read by DemodulateCaptures() (loop), both on the receiver core. Unlocked:
+    // a lock taken in an interrupt would deadlock against the loop it interrupted. Captures are filled and read in
+    // place to keep copies out of the interrupt.
+    Capture capture_queue_buffer_[kCaptureQueueDepth] = {};
+    PFBQueue<Capture> capture_queue_ =
+        PFBQueue<Capture>({.buf_len_num_elements = kCaptureQueueDepth, .buffer = capture_queue_buffer_});
     int sample_rssi_mv_[BSP::kMaxNumDemodStateMachines] = {0};
     // Capture bookkeeping for telling a second matcher firing on the data pulses of a message apart from a new
     // message. Written and read in ISRs on the receiver core only.
