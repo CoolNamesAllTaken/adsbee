@@ -6,7 +6,8 @@
 class UATPacketDecoder {
    public:
     static constexpr uint16_t kRawUATADSBPacketQueueDepth = 10;
-    static constexpr uint16_t kRawUATUplinkPacketQueueDepth = 2;
+    // Uplinks in neighboring slots arrive faster than they decode, so hold a full ground segment (32 uplinks).
+    static constexpr uint16_t kRawUATUplinkPacketQueueDepth = 32;
 
     UATPacketDecoder() = default;
     ~UATPacketDecoder() = default;
