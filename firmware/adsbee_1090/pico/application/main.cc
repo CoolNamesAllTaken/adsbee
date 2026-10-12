@@ -8,6 +8,7 @@
 #include "cpu_utils.hh"
 #include "eeprom.hh"
 #include "esp32.hh"
+#include "esp32_firmware_check.hh"
 #include "esp32_flasher.hh"
 #include "gnss_interface.hh"   // For the GNSS receiver selected by part number (MakeGNSSReceiver, gnss).
 #include "firmware_update.hh"  // For figuring out which flash partition we're in.
@@ -128,8 +129,9 @@ int main() {
                                    // watchdog timeout, and to avoid watchdog reboot during ESP32 programming.
 
         // Try reading from the ESP32 till it finishes turning on.
-        uint32_t esp32_firmware_version = 0x0;
-        bool flash_esp32 = true;
+        uint8_t image_hash[ESP32FirmwareCheck::kHashLenBytes];
+        bool image_has_hash = esp32_flasher.GetApplicationHash(image_hash);
+        ESP32FirmwareCheck::Verdict verdict = ESP32FirmwareCheck::kNoResponse;
         uint32_t esp32_comms_start_timestamp_ms = get_time_since_boot_ms();
         uint32_t esp32_comms_last_try_timestamp_ms = 0;
         while (get_time_since_boot_ms() - esp32_comms_start_timestamp_ms < kESP32BootupTimeoutMs) {
@@ -138,13 +140,18 @@ int main() {
                 continue;
             }
             esp32_comms_last_try_timestamp_ms = get_time_since_boot_ms();
-            // Try reading the firmware version from the ESP32. If the read succeeds, confirm that the firmware
-            // version matches ours.
-            if (!esp32.Read(ObjectDictionary::Address::kAddrFirmwareVersion, esp32_firmware_version)) {
-                // Couldn't read firmware version from ESP32. Try again later.
-                CONSOLE_ERROR("main", "Unable to read firmware version from ESP32.");
-            } else if (esp32_firmware_version != object_dictionary.kFirmwareVersion) {
-                // ESP32 firmware version doesn't match ours. Flash the ESP32.
+            uint32_t esp32_firmware_version = 0x0;
+            uint8_t esp32_hash[ESP32FirmwareCheck::kHashLenBytes];
+            bool version_read = esp32.Read(ObjectDictionary::Address::kAddrFirmwareVersion, esp32_firmware_version);
+            // Only ask an ESP32 of this version for its hash: other versions may not know the address.
+            bool hash_read = version_read && image_has_hash &&
+                             esp32_firmware_version == object_dictionary.kFirmwareVersion &&
+                             esp32.Read(ObjectDictionary::Address::kAddrESP32FirmwareHash, esp32_hash);
+            verdict = ESP32FirmwareCheck::Evaluate(version_read, esp32_firmware_version,
+                                                   object_dictionary.kFirmwareVersion,
+                                                   image_has_hash ? image_hash : nullptr,
+                                                   hash_read ? esp32_hash : nullptr);
+            if (verdict == ESP32FirmwareCheck::kVersionMismatch) {
                 CONSOLE_ERROR("main",
                               "Incorrect firmware version detected on ESP32. Pico is running %d.%d.%d-rc%d but ESP32 "
                               "is running %lu.%lu.%lu-rc%lu",
@@ -152,28 +159,39 @@ int main() {
                               object_dictionary.kFirmwareVersionPatch, object_dictionary.kFirmwareVersionReleaseCandidate,
                               esp32_firmware_version >> 24, (esp32_firmware_version >> 16) & 0xFF,
                               (esp32_firmware_version >> 8) & 0xFF, esp32_firmware_version & 0xFF);
-                break;
-            } else {
-                // Firmware checks out, all good! Don't flash the ESP32.
-                flash_esp32 = false;
+            }
+            // A missing version or hash may be a failed read: try again.
+            if (verdict != ESP32FirmwareCheck::kNoResponse && verdict != ESP32FirmwareCheck::kHashNotReported) {
                 break;
             }
+            CONSOLE_ERROR("main", "ESP32 firmware check: %s.", ESP32FirmwareCheck::VerdictToString(verdict));
         }
         adsbee.EnableWatchdog();  // Restore watchdog.
 #ifndef DEBUG_DISABLE_ESP32_FLASH
-        // If we never read from the ESP32, or read a different firmware version, try writing to it.
-        if (flash_esp32) {
+        if (verdict != ESP32FirmwareCheck::kUpToDate) {
+            CONSOLE_INFO("main", "Updating ESP32 firmware: %s.", ESP32FirmwareCheck::VerdictToString(verdict));
             adsbee.DisableWatchdog();  // Disable watchdog while flashing.
+            // Only images that differ from the ESP32's flash are written, so an ESP32 whose reported hash never
+            // matches is not rewritten on every boot.
+            uint16_t num_images_written = 0;
             if (!esp32.DeInit()) {
                 CONSOLE_ERROR("main", "Error while de-initializing ESP32 before flashing.");
-            } else if (!esp32_flasher.FlashESP32()) {
+            } else if (!esp32_flasher.FlashESP32(true, &num_images_written)) {
                 CONSOLE_ERROR("main",
                               "Error while flashing ESP32. Disabling it until the next boot, which retries the "
                               "update. WiFi, Ethernet and the web interface are unavailable until then.");
                 esp32.SetEnable(false);  // Don't talk to an ESP32 running mismatched firmware.
                 esp32.firmware_update_failed = true;
-            } else if (!esp32.Init()) {
-                CONSOLE_ERROR("main", "Error while re-initializing ESP32 after flashing.");
+            } else {
+                if (num_images_written == 0 && verdict != ESP32FirmwareCheck::kNoResponse) {
+                    CONSOLE_ERROR("main",
+                                  "ESP32 firmware check failed (%s) but the ESP32's flash already holds this "
+                                  "firmware. Nothing was written. Continuing with the ESP32 as it is.",
+                                  ESP32FirmwareCheck::VerdictToString(verdict));
+                }
+                if (!esp32.Init()) {
+                    CONSOLE_ERROR("main", "Error while re-initializing ESP32 after flashing.");
+                }
             }
             adsbee.EnableWatchdog();  // Restore watchdog after flashing.
         }

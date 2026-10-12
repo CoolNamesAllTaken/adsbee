@@ -73,6 +73,7 @@ class ObjectDictionary {
         kAddrESP32RebootInfo = 0x11,           // ESP32 last reset reason and optional core dump summary.
         kAddrESP32TriggerAbort = 0x12,         // Debug only: trigger abort() on the ESP32 to test core dump.
         kAddrLEDBlink = 0x13,  // Force-blink the slave's LED: uint32_t duration_ms, bypasses led_enabled.
+        kAddrESP32FirmwareHash = 0x14,  // SHA-256 of the running ESP32 application (see ESP32FirmwareCheck).
         kNumAddrs
     };
 
