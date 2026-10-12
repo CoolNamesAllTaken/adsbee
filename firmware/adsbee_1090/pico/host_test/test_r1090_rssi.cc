@@ -19,8 +19,8 @@ TEST(R1090RSSI, SaturatesAtDetectorFullScale) {
     EXPECT_EQ(DetectorMilliVoltsTodBm(1770), kMaxdBm);
     EXPECT_EQ(DetectorMilliVoltsTodBm(1897), kMaxdBm);
     EXPECT_EQ(DetectorMilliVoltsTodBm(3300), kMaxdBm);
-    EXPECT_EQ(PacketMilliVoltsTodBm(1500, 948), kMaxdBm);
-    EXPECT_EQ(PacketMilliVoltsTodBm(1400, 754), kMaxdBm);
+    EXPECT_EQ(PacketMilliVoltsTodBm(1600, 948), kMaxdBm);
+    EXPECT_EQ(PacketMilliVoltsTodBm(1500, 754), kMaxdBm);
 }
 
 TEST(R1090RSSI, IsMonotonic) {
@@ -34,11 +34,10 @@ TEST(R1090RSSI, IsMonotonic) {
 }
 
 TEST(R1090RSSI, PacketsFollowTheBenchCalibration) {
-    // End-of-packet samples from the bench: {sample mV, noise floor mV, dBm commanded}. The floor above 948 mV is
-    // the signal generator's carrier leak at the higher levels.
-    const int packets[][3] = {{1001, 948, -82},  {1028, 948, -78}, {1054, 948, -74}, {1082, 948, -70},
-                              {1111, 948, -66},  {1143, 949, -62}, {1176, 951, -58}, {1208, 951, -54},
-                              {1272, 1016, -50}, {1328, 1068, -46}};
+    // Mid-message samples from the bench: {sample mV, noise floor mV, dBm commanded}. The floor above 948 mV is the
+    // signal generator's carrier leak at the higher levels.
+    const int packets[][3] = {{1043, 948, -80}, {1079, 948, -76}, {1118, 948, -72}, {1160, 947, -68},
+                              {1199, 948, -64}, {1240, 949, -60}, {1285, 951, -56}, {1362, 1016, -52}};
     for (const auto& packet : packets) {
         EXPECT_NEAR(PacketMilliVoltsTodBm(packet[0], packet[1]), packet[2], 2) << packet[2] << " dBm";
     }
@@ -46,9 +45,9 @@ TEST(R1090RSSI, PacketsFollowTheBenchCalibration) {
 
 TEST(R1090RSSI, PacketScalesWithHeightAboveTheFloor) {
     // The same pulse power on a board with a lower noise floor: the sample is lower, the result is the same.
-    // Pulse at 1341 mV (-68 dBm): 38 % of the way up from each floor.
-    EXPECT_NEAR(PacketMilliVoltsTodBm(948 + (1341 - 948) * 38 / 100, 948), -68, 1);
-    EXPECT_NEAR(PacketMilliVoltsTodBm(754 + (1341 - 754) * 38 / 100, 754), -68, 1);
+    // Pulse at 1341 mV (-68 dBm): 53 % of the way up from each floor.
+    EXPECT_NEAR(PacketMilliVoltsTodBm(948 + (1341 - 948) * 53 / 100, 948), -68, 1);
+    EXPECT_NEAR(PacketMilliVoltsTodBm(754 + (1341 - 754) * 53 / 100, 754), -68, 1);
 }
 
 TEST(R1090RSSI, PacketAtOrBelowTheFloorReadsTheFloor) {
