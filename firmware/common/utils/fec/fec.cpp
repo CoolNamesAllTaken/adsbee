@@ -1,5 +1,7 @@
 #include "fec.hh"
 
+#include <array>
+#include <bit>
 #include <cstring>  // for memcpy
 
 #include "buffer_utils.hh"  // for PrintByteBuffer
@@ -24,7 +26,73 @@ static const int kLongADSBMessageMaxNumByteCorrections = 7;
 
 static const int kUplinkMessageMaxNumByteCorrectionsPerBlock = 10;
 
+namespace {
+
+constexpr uint8_t GaloisMultiply(uint8_t a, uint8_t b) {
+    uint16_t product = 0;
+    for (int bit = 0; bit < kSymbolSizeBits; bit++) {
+        if (b & (1 << bit)) {
+            product ^= a << bit;
+        }
+    }
+    for (int bit = 2 * kSymbolSizeBits - 2; bit >= kSymbolSizeBits; bit--) {
+        if (product & (1 << bit)) {
+            product ^= kUplinkGaloisFieldPolynomial << (bit - kSymbolSizeBits);
+        }
+    }
+    return static_cast<uint8_t>(product);
+}
+
+// Row f holds f times the uplink generator polynomial without its leading term, highest power first. One row per
+// received byte takes the place of the bit-serial division by the generator.
+constexpr auto kUplinkRemainderTable = [] {
+    // Generator polynomial, lowest power first: the product of (x + alpha^i) for the kUplinkMessageNumRoots
+    // consecutive powers i of alpha = 2 that start at kFirstCodeRoot.
+    std::array<uint8_t, kUplinkMessageNumRoots + 1> generator = {1};
+    uint8_t root = 1;
+    for (int i = 0; i < kFirstCodeRoot * kPrimitive; i++) {
+        root = GaloisMultiply(root, 2);
+    }
+    for (int degree = 0; degree < kUplinkMessageNumRoots; degree++) {
+        for (int i = degree + 1; i > 0; i--) {
+            generator[i] = generator[i - 1] ^ GaloisMultiply(generator[i], root);
+        }
+        generator[0] = GaloisMultiply(generator[0], root);
+        for (int i = 0; i < kPrimitive; i++) {
+            root = GaloisMultiply(root, 2);
+        }
+    }
+
+    std::array<std::array<uint32_t, kUplinkMessageNumRoots / 4>, 256> table = {};
+    for (int f = 0; f < 256; f++) {
+        for (int i = 0; i < kUplinkMessageNumRoots; i++) {
+            uint32_t product = GaloisMultiply(static_cast<uint8_t>(f), generator[kUplinkMessageNumRoots - 1 - i]);
+            table[f][i / 4] |= product << (8 * (i % 4));
+        }
+    }
+    return table;
+}();
+static_assert(kUplinkMessageNumRoots % 4 == 0);
+static_assert(std::endian::native == std::endian::little);
+
+}  // namespace
+
 UATReedSolomon uat_rs;
+
+bool UATReedSolomon::UplinkBlockIsCodeword(const uint8_t block_buf[RawUATUplinkPacket::kUplinkMessageBlockNumBytes]) {
+    // Remainder of the block divided by the generator polynomial, highest power in the low byte of word 0.
+    uint32_t r0 = 0, r1 = 0, r2 = 0, r3 = 0, r4 = 0;
+    static_assert(kUplinkMessageNumRoots == 20);
+    for (int i = 0; i < RawUATUplinkPacket::kUplinkMessageBlockNumBytes; i++) {
+        const uint32_t* row = kUplinkRemainderTable[r0 & 0xFF].data();
+        r0 = ((r0 >> 8) | (r1 << 24)) ^ row[0];
+        r1 = ((r1 >> 8) | (r2 << 24)) ^ row[1];
+        r2 = ((r2 >> 8) | (r3 << 24)) ^ row[2];
+        r3 = ((r3 >> 8) | (r4 << 24)) ^ row[3];
+        r4 = ((r4 >> 8) | (static_cast<uint32_t>(block_buf[i]) << 24)) ^ row[4];
+    }
+    return (r0 | r1 | r2 | r3 | r4) == 0;
+}
 
 UATReedSolomon::UATReedSolomon() {
     rs_adsb_short = init_rs_char(kSymbolSizeBits, kADSBGaloisFieldPolynomial, kFirstCodeRoot, kPrimitive,
@@ -93,8 +161,10 @@ int UATReedSolomon::DecodeUplinkMessage(uint8_t decoded_payload_buf[RawUATUplink
             block_buf[byte_index] = encoded_message_buf[byte_index * RawUATUplinkPacket::kUplinkMessageNumBlocks + block];
         }
 
-        // Decode with 0 erasures (erasures list is nullptr). Corrects block_buf in place.
-        int num_bytes_corrected = decode_rs_char(rs_uplink, block_buf, nullptr, 0);
+        // A block without errors skips the decoder. Otherwise decode with 0 erasures (erasures list is nullptr), which
+        // corrects block_buf in place.
+        int num_bytes_corrected =
+            UplinkBlockIsCodeword(block_buf) ? 0 : decode_rs_char(rs_uplink, block_buf, nullptr, 0);
         if (num_bytes_corrected < 0 || num_bytes_corrected > kUplinkMessageMaxNumByteCorrectionsPerBlock) {
             return -1;  // Invalid message. Blocks decoded so far may already have been corrected in place.
         }

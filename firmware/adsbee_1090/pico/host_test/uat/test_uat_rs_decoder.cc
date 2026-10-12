@@ -133,3 +133,83 @@ TEST(UATReedSolomon, CorrectsUpToTErrorsAnywhereInFrame) {
         }
     }
 }
+
+/**
+ * The table check must give the decoder's verdict on "no errors" for clean blocks, for blocks with errors anywhere, and
+ * for noise.
+ */
+TEST(UATReedSolomon, UplinkBlockIsCodewordAgreesWithDecoder) {
+    const uint16_t kPayloadLen = RawUATUplinkPacket::kUplinkMessageBlockPayloadNumBytes;
+    const uint16_t kBlockLen = RawUATUplinkPacket::kUplinkMessageBlockNumBytes;
+    XorShift64 rng(0x5eed0382u);
+    for (int trial = 0; trial < 2000; trial++) {
+        uint8_t block[kBlockLen];
+        for (uint16_t i = 0; i < kPayloadLen; i++) {
+            block[i] = trial == 0 ? 0 : rng.NextByte();
+        }
+        encode_rs_char(uat_rs.rs_uplink, block, block + kPayloadLen);
+        ASSERT_TRUE(UATReedSolomon::UplinkBlockIsCodeword(block)) << "trial " << trial;
+
+        // One wrong byte at every position in turn, then a growing number of wrong bytes.
+        uint8_t damaged[kBlockLen];
+        memcpy(damaged, block, kBlockLen);
+        damaged[trial % kBlockLen] ^= 1 + rng.NextBelow(255);
+        ASSERT_FALSE(UATReedSolomon::UplinkBlockIsCodeword(damaged)) << "trial " << trial;
+        for (uint32_t i = 0; i < 1 + static_cast<uint32_t>(trial) % 30; i++) {
+            damaged[rng.NextBelow(kBlockLen)] ^= 1 + rng.NextBelow(255);
+        }
+        uint8_t decoded[kBlockLen];
+        memcpy(decoded, damaged, kBlockLen);
+        bool decoder_says_clean = decode_rs_char(uat_rs.rs_uplink, decoded, nullptr, 0) == 0;
+        ASSERT_EQ(UATReedSolomon::UplinkBlockIsCodeword(damaged), decoder_says_clean) << "trial " << trial;
+
+        uint8_t noise[kBlockLen];
+        for (uint16_t i = 0; i < kBlockLen; i++) {
+            noise[i] = rng.NextByte();
+        }
+        memcpy(decoded, noise, kBlockLen);
+        decoder_says_clean = decode_rs_char(uat_rs.rs_uplink, decoded, nullptr, 0) == 0;
+        ASSERT_EQ(UATReedSolomon::UplinkBlockIsCodeword(noise), decoder_says_clean) << "trial " << trial;
+    }
+}
+
+/**
+ * An uplink with correctable errors in some blocks and none in others decodes to the sent payload, and the encoded
+ * message comes back corrected.
+ */
+TEST(UATReedSolomon, UplinkWithCleanAndDamagedBlocksDecodes) {
+    XorShift64 rng(0x5eed0383u);
+    for (int trial = 0; trial < 200; trial++) {
+        uint8_t payload[RawUATUplinkPacket::kUplinkMessagePayloadNumBytes];
+        for (uint8_t& byte : payload) {
+            byte = rng.NextByte();
+        }
+        uint8_t encoded[RawUATUplinkPacket::kUplinkMessageNumBytes];
+        ASSERT_TRUE(uat_rs.EncodeUplinkMessage(encoded, payload));
+
+        uint8_t received[RawUATUplinkPacket::kUplinkMessageNumBytes];
+        memcpy(received, encoded, sizeof(received));
+        int num_errors = 0;
+        for (uint16_t block = 0; block < RawUATUplinkPacket::kUplinkMessageNumBlocks; block++) {
+            // Block (trial % 7) stays clean; trial % 7 == 6 damages every block.
+            if (block == trial % 7) {
+                continue;
+            }
+            uint32_t num_block_errors = 1 + rng.NextBelow(10);
+            bool used[RawUATUplinkPacket::kUplinkMessageBlockNumBytes] = {};
+            for (uint32_t i = 0; i < num_block_errors; i++) {
+                uint32_t byte_index = rng.NextBelow(RawUATUplinkPacket::kUplinkMessageBlockNumBytes);
+                if (used[byte_index]) {
+                    continue;
+                }
+                used[byte_index] = true;
+                received[byte_index * RawUATUplinkPacket::kUplinkMessageNumBlocks + block] ^= 1 + rng.NextBelow(255);
+                num_errors++;
+            }
+        }
+        uint8_t decoded[RawUATUplinkPacket::kUplinkMessagePayloadNumBytes];
+        ASSERT_EQ(uat_rs.DecodeUplinkMessage(decoded, received), num_errors) << "trial " << trial;
+        ASSERT_EQ(memcmp(decoded, payload, sizeof(payload)), 0) << "trial " << trial;
+        ASSERT_EQ(memcmp(received, encoded, sizeof(encoded)), 0) << "trial " << trial;
+    }
+}
