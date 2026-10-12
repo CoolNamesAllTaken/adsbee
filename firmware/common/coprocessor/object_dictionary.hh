@@ -47,10 +47,12 @@ class ObjectDictionary {
     static constexpr uint16_t kNetworkConsoleRxQueueDepth = kNetworkConsoleMessageMaxLenBytes * 4;
     static constexpr uint16_t kNetworkConsoleMutexTimeoutMs = 5;  // Max wait for network_console_rx_queue_mutex in SPI task context.
 #endif
-    // CC1312 queues of decoded packets waiting for the RP2040. A UAT frame carries up to 32 ground uplinks within
-    // 176 ms, less than two RP2040 polls apart, so the uplink queue holds all of them.
+    // CC1312 packet queues. A UAT frame carries up to 32 ground uplinks 5.5 ms apart. The CC1312 decodes one in about
+    // 16 ms, so most of a full frame waits ahead of the decoder, and decoding pauses while the decoded queue is full.
+    // Together the two uplink queues hold a full frame and use nearly all of the CC1312's free RAM.
+    static constexpr uint16_t kRawUATUplinkPacketQueueDepth = 24;
     static constexpr uint16_t kDecodedUATADSBPacketQueueDepth = 10;
-    static constexpr uint16_t kDecodedUATUplinkPacketQueueDepth = 32;
+    static constexpr uint16_t kDecodedUATUplinkPacketQueueDepth = 10;
 
     enum Address : uint8_t {
         kAddrInvalid = 0,             // Default value.

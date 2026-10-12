@@ -46,7 +46,8 @@ bool UATPacketDecoder::Update() {
         }
     }
 
-    while (true) {
+    // Uplinks wait in the raw queue while the decoded queue is full, so both queues buffer a burst.
+    while (!object_dictionary.raw_uat_uplink_packet_queue.IsFull()) {
         RawUATUplinkPacket packet;
         uintptr_t key = HwiP_disable();
         bool got_packet = raw_uat_uplink_packet_queue.Dequeue(packet);
