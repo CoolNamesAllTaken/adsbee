@@ -745,6 +745,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#automatic-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automatic updates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#building-firmware-from-source" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -913,6 +924,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#automatic-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automatic updates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#building-firmware-from-source" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1012,6 +1034,17 @@
 </ol>
 <p>The page identifies the ADSBee to the adsbee.aero firmware service with its unique ID, part code and OTA keys. It also tells the service when an update starts and whether it installed or failed.</p>
 <p>An ADSBee without valid OTA keys (for example a self-built one) shows <code>⚠ no keys</code> and a link to the releases page; download the .ota file there and use Upload Firmware.</p>
+<h2 id="automatic-updates">Automatic updates<a class="headerlink" href="#automatic-updates" title="Permanent link">&para;</a></h2>
+<p>Off by default. When on, the ADSBee 1090 installs the firmware that the adsbee.aero firmware service recommends for it, with no browser involved. It needs internet access through WiFi station or Ethernet.</p>
+<p>Turn it on with <strong>Settings → System → Automatic Updates</strong> on the device's webpage, or with <code>AT+AUTO_UPDATE=1</code> followed by <code>AT+SETTINGS=SAVE</code>. <code>AT+AUTO_UPDATE?</code> shows the setting. A settings reset and a firmware update from an older version both leave it off.</p>
+<ul>
+<li><strong>When.</strong> The first check is a few minutes after power-up, then once a day.</li>
+<li><strong>What is sent to adsbee.aero.</strong> The unique ID, the ESP32 MAC address, the part code, both OTA keys and the running firmware versions, over HTTPS, plus the state of an update (downloading, installed, failed). Nothing is sent while the setting is off.</li>
+<li><strong>What is installed.</strong> Only the release the service recommends for this ADSBee, and an older one only when the service rolls it back. The ESP32 downloads the .ota file in small pieces, hands them to the RP2040 through the same path as Upload Firmware, and checks the file's SHA-256 before the new firmware may boot. The ADSBee then restarts once; feeds pause for about as long as with Upload Firmware.</li>
+<li><strong>When it fails.</strong> The running firmware stays. A dropped connection resumes where it stopped. A failed update is tried at most 3 times a day.</li>
+<li><strong>Status.</strong> The version dropdown at the top right of the webpage shows <code>⟳ auto</code>, with <code>downloading 42%</code>, <code>installing</code>, <code>failed</code>, <code>held</code> (the service paused updates for this ADSBee), <code>no keys</code> or <code>low memory</code>.</li>
+</ul>
+<p>An ADSBee without valid OTA keys can't use automatic updates. An ADSBee 1090 without PSRAM that runs Ethernet, the WiFi access point and WiFi station all at once has too little free memory for the secure connection and shows <code>low memory</code>; turn off an interface it doesn't need.</p>
 <h2 id="building-firmware-from-source">Building firmware from source<a class="headerlink" href="#building-firmware-from-source" title="Permanent link">&para;</a></h2>
 <p>To build the firmware yourself, see the <a href="https://github.com/PantsForBirds/adsbee/blob/main/firmware/README.md">firmware README</a> on GitHub. ADSBee 1421 firmware updates are covered on the <a href="../../adsbee-1421/m1421/#firmware-updates-from-your-host">ADSBee m1421 page</a>.</p>
 
