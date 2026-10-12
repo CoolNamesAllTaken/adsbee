@@ -91,6 +91,25 @@ int32_t CommsManager::ATReadConsole(char* buf, uint16_t max_len, uint32_t timeou
 
 /** AT Command Callback Functions **/
 
+CPP_AT_CALLBACK(CommsManager::ATAutoUpdateCallback) {
+    switch (op) {
+        case '?':
+            CPP_AT_CMD_PRINTF("=%d", settings_manager.settings.auto_update_enabled);
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        case '=':
+            if (CPP_AT_HAS_ARG(0)) {
+                bool enabled;
+                CPP_AT_TRY_ARG2NUM(0, enabled);
+                settings_manager.settings.auto_update_enabled = enabled;
+                settings_manager.SyncToCoprocessors();  // The ESP32 does the updating.
+                CPP_AT_SUCCESS();
+            }
+            break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
 CPP_AT_CALLBACK(CommsManager::ATBaudRateCallback) {
     switch (op) {
         case '?':
@@ -1501,6 +1520,7 @@ static void PrintSettingsJSON() {
     const SettingsManager::Settings::CoreNetworkSettings& cns = s.core_network_settings;
 
     CPP_AT_PRINTF("SETTINGS={");
+    CPP_AT_PRINTF("\"AUTO_UPDATE\":[%d],", s.auto_update_enabled);
     CPP_AT_PRINTF("\"BAUD_RATE\":[%lu,%lu],",
                   (unsigned long)s.baud_rates[SettingsManager::SerialInterface::kCommsUART],
                   (unsigned long)s.baud_rates[SettingsManager::SerialInterface::kGNSSUART]);
@@ -1898,6 +1918,13 @@ CPP_AT_CALLBACK(CommsManager::ATWiFiSTANetworkCallback) {
 }
 
 const CppAT::ATCommandDef_t at_command_list[] = {
+    {.command = "AUTO_UPDATE",
+     .min_args = 0,
+     .max_args = 1,
+     .help_string = "AT+AUTO_UPDATE=<enabled>\r\n\tAutomatic firmware updates from adsbee.aero over WiFi station or "
+                    "Ethernet. Off by default. When on, the unique ID, part code, OTA keys and firmware versions are "
+                    "sent to adsbee.aero.\r\n\tAT+AUTO_UPDATE?\r\n\tQuery whether automatic updates are enabled.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATAutoUpdateCallback, comms_manager)},
     {.command = "BAUD_RATE",
      .min_args = 0,
      .max_args = 2,

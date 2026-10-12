@@ -423,7 +423,7 @@
      * The page calls check() when the receiver connects, and again when it is back after an update; listings are
      * cached for CHECK_INTERVAL_MS and refreshed at that interval while the page stays open. An update is reported to
      * the service: downloading, then installed or failed.
-     * Returns {check(force), reset(), setAutoUpdate({enabled, state, version} | null)}.
+     * Returns {check(force), reset(), setAutoUpdate({enabled, state, version, progress} | null)}.
      */
     function mount(el, opts) {
         const RC_KEY = 'adsbee-fw-include-rc';
@@ -542,7 +542,8 @@
                 auto && h('div', { className: 'fw-line fw-muted', title: `Automatic updates ${auto.enabled ? 'on' : 'off'}` +
                                    (auto.state ? `; ${auto.state}` : '') + (auto.version ? ` (${auto.version})` : '') + '.',
                                    textContent: `⟳ ${auto.enabled ? 'auto' : 'manual'}` +
-                                                (auto.state && auto.state !== 'idle' ? ` · ${auto.state}` : '') }),
+                                                (auto.state && auto.state !== 'idle' ? ` · ${auto.state}` : '') +
+                                                (auto.state === 'downloading' ? ` ${auto.progress || 0}%` : '') }),
                 err && h('div', { className: 'fw-line' },
                          h('span', { className: s.dot === 'bad' ? 'fw-bad' : 'fw-warn', textContent: `⚠ ${short}`,
                                      title: err.message || String(err) }),
@@ -669,7 +670,11 @@
         return {
             check,
             reset() { info = lists = err = null; render(); },
-            setAutoUpdate(a) { auto = a || null; render(); },
+            setAutoUpdate(a) {
+                if (JSON.stringify(a || null) === JSON.stringify(auto)) return;  // Sent every second: redraw on change.
+                auto = a || null;
+                render();
+            },
         };
     }
 

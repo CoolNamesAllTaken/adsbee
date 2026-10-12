@@ -206,6 +206,17 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
             pico_ll.ForceBlinkNetworkLED(duration_ms);
             break;
         }
+        case kAddrDeviceIdentity: {
+            if (!CheckObjectBounds("ObjectDictionary::SetBytes", "device identity", offset, buf_len,
+                                   sizeof(device_identity))) {
+                return false;
+            }
+            memcpy((uint8_t*)&device_identity + offset, buf, buf_len);
+            if (offset + buf_len == sizeof(device_identity)) {
+                device_identity_valid = true;
+            }
+            break;
+        }
 #elif defined(ON_TI)
         case kAddrLEDBlink: {
             if (buf_len != sizeof(uint32_t) || offset != 0) {
