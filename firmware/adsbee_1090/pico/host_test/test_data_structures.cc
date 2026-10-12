@@ -137,6 +137,96 @@ TEST(PFBQueue, Discard) {
     // Discarding 0 elements from an empty queue should return true.
     EXPECT_TRUE(queue.Discard(0));
 }
+// Usable capacity equals buf_len_num_elements for any length, and positions wrap correctly many times over.
+TEST(PFBQueue, CapacityAndWrapAllLengths) {
+    for (uint16_t buf_len_num_elements : {1, 2, 3, 5, 16, 255}) {
+        PFBQueue<uint32_t> queue = PFBQueue<uint32_t>({.buf_len_num_elements = buf_len_num_elements});
+        EXPECT_EQ(queue.MaxNumElements(), buf_len_num_elements);
+        EXPECT_TRUE(queue.IsEmpty());
+        uint32_t next_in = 0;
+        uint32_t next_out = 0;
+        for (uint16_t round = 0; round < 10 * buf_len_num_elements + 10; round++) {
+            // Fill to the brim, then take out a varying number of elements.
+            while (queue.Enqueue(next_in)) next_in++;
+            ASSERT_TRUE(queue.IsFull());
+            ASSERT_EQ(queue.Length(), buf_len_num_elements);
+            ASSERT_EQ(next_in - next_out, buf_len_num_elements);
+            uint32_t out;
+            ASSERT_TRUE(queue.Peek(out, buf_len_num_elements - 1));
+            ASSERT_EQ(out, next_in - 1);
+            ASSERT_FALSE(queue.Peek(out, buf_len_num_elements));
+            for (uint16_t i = 0; i < 1 + round % buf_len_num_elements; i++) {
+                ASSERT_TRUE(queue.Dequeue(out));
+                ASSERT_EQ(out, next_out++);
+            }
+            ASSERT_FALSE(queue.IsFull());
+            ASSERT_EQ(queue.Length(), next_in - next_out);
+        }
+        // Discard and Clear on a wrapped queue.
+        while (queue.Enqueue(next_in)) next_in++;
+        ASSERT_TRUE(queue.Discard(buf_len_num_elements));
+        EXPECT_TRUE(queue.IsEmpty());
+        while (queue.Enqueue(next_in)) next_in++;
+        queue.Clear();
+        EXPECT_TRUE(queue.IsEmpty());
+        uint32_t out;
+        EXPECT_FALSE(queue.Dequeue(out));
+        EXPECT_TRUE(queue.Enqueue(7));
+        EXPECT_TRUE(queue.Dequeue(out));
+        EXPECT_EQ(out, 7u);
+    }
+}
+
+TEST(PFBQueue, OverwriteWhenFullWraps) {
+    uint16_t buf_len_num_elements = 3;
+    PFBQueue<uint32_t> queue =
+        PFBQueue<uint32_t>({.buf_len_num_elements = buf_len_num_elements, .overwrite_when_full = true});
+    for (uint32_t i = 0; i < 100; i++) {
+        EXPECT_TRUE(queue.Enqueue(i));
+        EXPECT_EQ(queue.Length(), i < buf_len_num_elements ? i + 1 : buf_len_num_elements);
+        uint32_t out;
+        EXPECT_TRUE(queue.Peek(out));  // Oldest element that was not overwritten.
+        EXPECT_EQ(out, i < buf_len_num_elements ? 0 : i - buf_len_num_elements + 1);
+    }
+    for (uint32_t i = 97; i < 100; i++) {
+        uint32_t out;
+        EXPECT_TRUE(queue.Dequeue(out));
+        EXPECT_EQ(out, i);
+    }
+    EXPECT_TRUE(queue.IsEmpty());
+}
+
+TEST(PFBQueue, ZeroLength) {
+    for (bool overwrite_when_full : {false, true}) {
+        PFBQueue<uint32_t> queue =
+            PFBQueue<uint32_t>({.buf_len_num_elements = 0, .overwrite_when_full = overwrite_when_full});
+        uint32_t out;
+        EXPECT_FALSE(queue.Enqueue(1));
+        EXPECT_FALSE(queue.Dequeue(out));
+        EXPECT_EQ(queue.Length(), 0);
+    }
+}
+
+TEST(PFBQueue, MoveConstruction) {
+    PFBQueue<uint32_t> source = PFBQueue<uint32_t>({.buf_len_num_elements = 3});
+    uint32_t out;
+    // Wrap the source before it is moved.
+    for (uint32_t i = 0; i < 5; i++) {
+        EXPECT_TRUE(source.Enqueue(i));
+        if (i < 2) EXPECT_TRUE(source.Dequeue(out));
+    }
+    PFBQueue<uint32_t> queue(std::move(source));
+    EXPECT_EQ(source.Length(), 0);
+    EXPECT_FALSE(source.Enqueue(9));
+    EXPECT_EQ(queue.MaxNumElements(), 3);
+    EXPECT_TRUE(queue.IsFull());
+    for (uint32_t i = 2; i < 5; i++) {
+        EXPECT_TRUE(queue.Dequeue(out));
+        EXPECT_EQ(out, i);
+    }
+    EXPECT_TRUE(queue.IsEmpty());
+}
+
 #include <functional>
 #include <memory>
 

@@ -11,7 +11,11 @@
 #define PFB_MUTEX_LOCK(mtx)  (mtx).lock()
 #define PFB_MUTEX_UNLOCK(mtx) (mtx).unlock()
 
+#include <pthread.h>
+#include <signal.h>
+
 #include <atomic>
+#include <chrono>
 #include <thread>
 
 #include "data_structures.hh"
@@ -118,123 +122,260 @@ TEST(PFBQueueThreadSafety, ThreadSafe_LengthNeverExceedsCapacity) {
     EXPECT_TRUE(queue.IsEmpty());
 }
 
-// ── Thread-unsafe race demonstration ─────────────────────────────────────────
-//
-// This test deliberately violates the single-producer assumption by running TWO
-// concurrent producers against the same queue without a mutex. It verifies that
-// data corruption (torn writes) can occur when is_thread_safe=false, which is
-// the condition present in the production firmware.
-//
-// ── Plausible ESP32 panic sequence ───────────────────────────────────────────
-//
-// raw_uat_uplink_packet_in_queue (capacity 2, element 568 B) is written by Core
-// 1 (SPI receive task, priority 10) and read by Core 0 (main task) via
-// PackRawPacketsBuffer, with is_thread_safe=false.
-//
-// Race window (Core 0 = consumer, Core 1 = producer):
-//
-//   State: head=0, tail=1, is_full=false  (1 element at slot 0)
-//
-//   Core 0 — Dequeue:
-//     1. Reads head(0)≠tail(1) → not empty → proceeds.
-//     2. Begins 568-byte memcpy FROM buffer[0].          ← multi-cycle, NOT atomic
-//
-//   Core 1 — Enqueue (fires concurrently during step 2):
-//     3. Reads is_full=false → proceeds.
-//     4. Begins 568-byte memcpy TO buffer[1].            ← different slot, no conflict
-//     5. Sets tail=0; tail(0)==head(0) → sets is_full=true.
-//
-//   Core 0 resumes:
-//     6. Finishes memcpy from buffer[0].
-//     7. Sets head=1.
-//     8. Sets is_full=false.                              ← stomps Core 1's true
-//
-//   State: head=1, tail=0, is_full=false → 1 valid element (buffer[1]). Correct.
-//
-// The is_full stomp here is benign in isolation, but under sustained UAT uplink
-// load — where the 2-slot queue is near-full on every SPI interrupt — the race
-// fires continuously and produces two compounding failure modes:
-//
-//   A. Spurious is_full=true (reverse stomp):
-//      Core 1 sets is_full=true after Core 0 has already cleared it, making a
-//      queue with 1 real element appear full. PackRawPacketsBuffer's Dequeue
-//      loop exits after only 1 call, leaving one element unprocessed each pass.
-//      at_least_one_queue_half_full then fires every Update() iteration, causing
-//      PackRawPacketsBuffer to be called far more frequently than the 200 ms
-//      nominal interval.
-//
-//   B. Cascade to heap exhaustion → panic:
-//      Each PackRawPacketsBuffer call drains up to 2 uplink packets. For each,
-//      ReportGDL90UplinkDataMessage encodes a 600-byte GDL90 message and calls
-//      WiFiAccessPointSendMessageToAllStations, which blocks up to 100 ms
-//      waiting on the 8-slot WiFi AP queue. If the queue fills, xQueueReset
-//      drops all pending frames and the UDP send path (lwip pbuf_alloc) draws
-//      DMA heap. When heap drops below 20 KB, safe_send in the WAN task polls
-//      every 50 ms for up to 5 000 ms. Blocking Core 0 for 5 s without yielding
-//      to the idle task triggers the Task Watchdog Timer → panic + restart.
-//
-//      Alternative: pbuf_alloc returns NULL; ESP-IDF LwIP calls
-//      LWIP_ASSERT("pbuf allocation failed", false) → abort() → panic.
-//
-// Fix: add .is_thread_safe = true to the three packet queues in adsbee_server.hh.
-//      One FreeRTOS mutex lock/unlock per Dequeue call adds negligible overhead
-//      relative to the 568-byte memcpy that immediately follows.
-// ─────────────────────────────────────────────────────────────────────────────
-TEST(PFBQueueThreadSafety, DISABLED_ThreadUnsafe_ConcurrentProducersCorruptData) {
+// Two writers need the lock: an unlocked queue supports exactly one.
+TEST(PFBQueueThreadSafety, ThreadSafe_TwoProducers) {
     static constexpr uint16_t kQueueDepth = 4;
-    static constexpr int kIterationsPerProducer = 50000;
-    static constexpr uint8_t kFillA = 0xAA;
-    static constexpr uint8_t kFillB = 0xBB;
+    static constexpr int kNumPacketsPerProducer = 20000;
 
     TornReadPacket buf[kQueueDepth];
-    // is_thread_safe intentionally false — we want to expose the race.
-    PFBQueue<TornReadPacket> queue(
-        {.buf_len_num_elements = kQueueDepth, .buffer = buf, .is_thread_safe = false});
+    PFBQueue<TornReadPacket> queue({.buf_len_num_elements = kQueueDepth, .buffer = buf, .is_thread_safe = true});
 
-    std::atomic<bool> corruption_seen{false};
-    std::atomic<bool> stop{false};
-
-    // Two producers write distinguishable fill patterns into the same queue
-    // without synchronization. Their concurrent memcpy calls to buffer[tail_]
-    // will interleave when the compiler and/or CPU reorder stores, producing
-    // elements whose bytes are a mix of kFillA and kFillB.
     auto producer_fn = [&](uint8_t fill) {
         TornReadPacket p(fill);
-        for (int i = 0; i < kIterationsPerProducer; ++i) {
-            if (stop.load(std::memory_order_relaxed)) break;
-            queue.Enqueue(p);
+        for (int i = 0; i < kNumPacketsPerProducer; ++i) {
+            while (!queue.Enqueue(p)) std::this_thread::yield();
         }
     };
+    std::thread producer_a(producer_fn, 0xAA);
+    std::thread producer_b(producer_fn, 0xBB);
 
-    std::thread prod_a(producer_fn, kFillA);
-    std::thread prod_b(producer_fn, kFillB);
+    int num_incoherent = 0;
+    int num_from_a = 0;
+    TornReadPacket out;
+    for (int n = 0; n < 2 * kNumPacketsPerProducer;) {
+        if (!queue.Dequeue(out)) {
+            std::this_thread::yield();
+            continue;
+        }
+        ++n;
+        if (!out.IsCoherent()) ++num_incoherent;
+        if (out.fill == 0xAA) ++num_from_a;
+    }
+    producer_a.join();
+    producer_b.join();
 
-    std::thread consumer([&] {
-        TornReadPacket out;
-        const int kMaxDequeues = kIterationsPerProducer * 2;
-        for (int i = 0; i < kMaxDequeues; ++i) {
-            if (queue.Dequeue(out)) {
-                if (!out.IsCoherent()) {
-                    corruption_seen.store(true, std::memory_order_relaxed);
-                    stop.store(true, std::memory_order_relaxed);
-                    return;
-                }
-            } else {
-                std::this_thread::yield();
+    EXPECT_EQ(num_incoherent, 0);
+    EXPECT_EQ(num_from_a, kNumPacketsPerProducer);
+    EXPECT_TRUE(queue.IsEmpty());
+}
+
+// ── Unlocked queue, one writer and one reader ────────────────────────────────
+
+// 192 bytes like ADSBee::Capture. Every fill word equals the sequence number, so a torn copy is visible.
+struct SequencedElement {
+    uint32_t sequence = 0;
+    uint32_t fill[47] = {};
+
+    void Set(uint32_t sequence_in) {
+        sequence = sequence_in;
+        for (uint32_t& word : fill) word = sequence_in;
+    }
+    bool IsCoherent() const {
+        for (uint32_t word : fill) {
+            if (word != sequence) return false;
+        }
+        return true;
+    }
+};
+
+// Checks that elements arrive whole, in order and without gaps.
+struct SequenceChecker {
+    uint32_t num_received = 0;
+    uint32_t num_torn = 0;
+    uint32_t num_out_of_sequence = 0;
+
+    void Check(const SequencedElement& element) {
+        if (!element.IsCoherent()) num_torn = num_torn + 1;
+        if (element.sequence != num_received) num_out_of_sequence = num_out_of_sequence + 1;
+        num_received = element.sequence + 1;
+    }
+};
+
+static double SecondsSince(std::chrono::steady_clock::time_point start) {
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+}
+
+// One writer thread and one reader thread, like a writer and a reader on two cores.
+static void RunTwoThreads(uint16_t queue_depth, uint32_t num_elements, double timeout_s) {
+    PFBQueue<SequencedElement> queue({.buf_len_num_elements = queue_depth});
+    std::atomic<bool> writer_done{false};
+    std::atomic<bool> length_violation{false};
+    auto start = std::chrono::steady_clock::now();
+
+    std::thread writer([&] {
+        SequencedElement element;
+        for (uint32_t i = 0; i < num_elements; ++i) {
+            element.Set(i);
+            while (!queue.Enqueue(element)) {
+                if (queue.Length() > queue_depth) length_violation = true;
+                if ((i & 0xFF) == 0 && SecondsSince(start) > timeout_s) break;
             }
         }
+        writer_done = true;
     });
 
-    prod_a.join();
-    prod_b.join();
-    consumer.join();
+    SequenceChecker checker;
+    SequencedElement element;
+    while (true) {
+        // Read the flag first: elements enqueued before it was set are then still found below.
+        bool last_pass = writer_done;
+        if (queue.Length() > queue_depth) length_violation = true;
+        if (queue.Dequeue(element)) {
+            checker.Check(element);
+        } else if (last_pass) {
+            break;
+        }
+    }
+    writer.join();
 
-    // On a preemptively scheduled multi-core host, torn writes appear within
-    // a few thousand iterations. If no corruption is detected in a single run
-    // the race simply didn't manifest that time — re-run or increase
-    // kIterationsPerProducer. The test is EXPECTED to succeed (corruption_seen
-    // == true); a failure here means the data race did not fire this execution.
-    EXPECT_TRUE(corruption_seen.load())
-        << "No torn write detected — race did not manifest this run. "
-        << "Increase kIterationsPerProducer or re-run.";
+    EXPECT_EQ(checker.num_received, num_elements);
+    EXPECT_EQ(checker.num_torn, 0u);
+    EXPECT_EQ(checker.num_out_of_sequence, 0u);
+    EXPECT_FALSE(length_violation.load());
+    EXPECT_TRUE(queue.IsEmpty());
 }
+
+TEST(PFBQueueUnlocked, TwoThreads_Depth2) { RunTwoThreads(2, 1000000, 20.0); }
+TEST(PFBQueueUnlocked, TwoThreads_Depth16) { RunTwoThreads(16, 3000000, 20.0); }
+TEST(PFBQueueUnlocked, TwoThreads_Depth3) { RunTwoThreads(3, 1000000, 20.0); }
+
+// An "interrupt" is a signal handler on the loop's own thread: it preempts the loop between any two instructions and
+// runs to completion, like an interrupt and the loop it interrupts on one core.
+static PFBQueue<SequencedElement>* interrupt_queue = nullptr;
+static volatile int interrupt_burst = 1;                // Queue operations per interrupt.
+static volatile uint32_t interrupt_num_enqueued = 0;    // Writer interrupt.
+static volatile uint32_t interrupt_num_refused = 0;     // Writer interrupt.
+static volatile bool interrupt_length_violation = false;
+static SequenceChecker interrupt_checker;               // Reader interrupt.
+
+static void EnqueueInterrupt(int) {
+    SequencedElement element;
+    for (int i = 0; i < interrupt_burst; i++) {
+        element.Set(interrupt_num_enqueued);
+        if (interrupt_queue->Enqueue(element)) {
+            interrupt_num_enqueued = interrupt_num_enqueued + 1;
+        } else {
+            interrupt_num_refused = interrupt_num_refused + 1;
+        }
+    }
+    if (interrupt_queue->Length() > interrupt_queue->MaxNumElements()) interrupt_length_violation = true;
+}
+
+static void DequeueInterrupt(int) {
+    SequencedElement element;
+    for (int i = 0; i < interrupt_burst; i++) {
+        if (interrupt_queue->Dequeue(element)) interrupt_checker.Check(element);
+    }
+    if (interrupt_queue->Length() > interrupt_queue->MaxNumElements()) interrupt_length_violation = true;
+}
+
+// Fires the handler on the calling thread as fast as possible until destroyed.
+class InterruptSource {
+   public:
+    InterruptSource(void (*handler)(int)) {
+        struct sigaction action = {};
+        action.sa_handler = handler;
+        sigemptyset(&action.sa_mask);
+        sigaction(SIGUSR1, &action, &old_action_);
+        pthread_t target = pthread_self();
+        kicker_ = std::thread([this, target] {
+            while (!stop_) pthread_kill(target, SIGUSR1);
+        });
+    }
+    ~InterruptSource() { Stop(); }
+    void Stop() {
+        if (!kicker_.joinable()) return;
+        stop_ = true;
+        kicker_.join();
+        // Take a signal that is still pending before the old action (terminate) comes back.
+        sigset_t signals;
+        sigemptyset(&signals);
+        sigaddset(&signals, SIGUSR1);
+        pthread_sigmask(SIG_BLOCK, &signals, nullptr);
+        sigset_t pending;
+        sigpending(&pending);
+        if (sigismember(&pending, SIGUSR1)) {
+            int signal_number;
+            sigwait(&signals, &signal_number);
+        }
+        sigaction(SIGUSR1, &old_action_, nullptr);
+        pthread_sigmask(SIG_UNBLOCK, &signals, nullptr);
+    }
+
+   private:
+    struct sigaction old_action_ = {};
+    std::atomic<bool> stop_{false};
+    std::thread kicker_;
+};
+
+// The interrupt writes, the loop reads: ADSBee::FinishCapture() and ADSBee::DemodulateCaptures().
+static void RunInterruptWriter(uint16_t queue_depth, int burst, double duration_s) {
+    PFBQueue<SequencedElement> queue({.buf_len_num_elements = queue_depth});
+    interrupt_queue = &queue;
+    interrupt_burst = burst;
+    interrupt_num_enqueued = 0;
+    interrupt_num_refused = 0;
+    interrupt_length_violation = false;
+
+    SequenceChecker checker;
+    SequencedElement element;
+    bool length_violation = false;
+    auto start = std::chrono::steady_clock::now();
+    InterruptSource interrupt_source(EnqueueInterrupt);
+    while (SecondsSince(start) < duration_s) {
+        for (int i = 0; i < 1000; i++) {
+            if (queue.Dequeue(element)) checker.Check(element);
+            if (queue.Length() > queue_depth) length_violation = true;
+        }
+    }
+    interrupt_source.Stop();
+    while (queue.Dequeue(element)) checker.Check(element);
+
+    EXPECT_GT(checker.num_received, 0u);
+    EXPECT_EQ(checker.num_received, interrupt_num_enqueued);
+    EXPECT_EQ(checker.num_torn, 0u);
+    EXPECT_EQ(checker.num_out_of_sequence, 0u);
+    EXPECT_FALSE(length_violation);
+    EXPECT_FALSE(interrupt_length_violation);
+    interrupt_queue = nullptr;
+}
+
+// The loop writes, the interrupt reads.
+static void RunInterruptReader(uint16_t queue_depth, int burst, double duration_s) {
+    PFBQueue<SequencedElement> queue({.buf_len_num_elements = queue_depth});
+    interrupt_queue = &queue;
+    interrupt_burst = burst;
+    interrupt_checker = SequenceChecker();
+    interrupt_length_violation = false;
+
+    SequencedElement element;
+    uint32_t num_enqueued = 0;
+    bool length_violation = false;
+    auto start = std::chrono::steady_clock::now();
+    InterruptSource interrupt_source(DequeueInterrupt);
+    while (SecondsSince(start) < duration_s) {
+        for (int i = 0; i < 1000; i++) {
+            element.Set(num_enqueued);
+            if (queue.Enqueue(element)) num_enqueued++;
+            if (queue.Length() > queue_depth) length_violation = true;
+        }
+    }
+    interrupt_source.Stop();
+    while (queue.Dequeue(element)) interrupt_checker.Check(element);
+
+    EXPECT_GT(num_enqueued, 0u);
+    EXPECT_EQ(interrupt_checker.num_received, num_enqueued);
+    EXPECT_EQ(interrupt_checker.num_torn, 0u);
+    EXPECT_EQ(interrupt_checker.num_out_of_sequence, 0u);
+    EXPECT_FALSE(length_violation);
+    EXPECT_FALSE(interrupt_length_violation);
+    interrupt_queue = nullptr;
+}
+
+TEST(PFBQueueUnlocked, InterruptWriter_Depth2) { RunInterruptWriter(2, 1, 1.0); }
+// Two elements per interrupt fill a queue of two while the loop is in the middle of a Dequeue().
+TEST(PFBQueueUnlocked, InterruptWriter_Depth2_Burst2) { RunInterruptWriter(2, 2, 2.0); }
+TEST(PFBQueueUnlocked, InterruptWriter_Depth16_Burst2) { RunInterruptWriter(16, 2, 1.0); }
+TEST(PFBQueueUnlocked, InterruptReader_Depth2) { RunInterruptReader(2, 1, 1.0); }
+TEST(PFBQueueUnlocked, InterruptReader_Depth2_Burst2) { RunInterruptReader(2, 2, 2.0); }
+TEST(PFBQueueUnlocked, InterruptReader_Depth16_Burst2) { RunInterruptReader(16, 2, 1.0); }
