@@ -357,7 +357,7 @@ function fakeBrowser() {
     const made = [];
     const element = (tag) => ({
         tag, children: [], style: {}, textContent: '',
-        classList: { toggle() {} },
+        classList: { names: new Set(), toggle(name, on) { if (on) this.names.add(name); else this.names.delete(name); } },
         setAttribute(name, value) { this[name] = value; },
         appendChild(child) { this.children.push(child); return child; },
         remove() {},
@@ -411,7 +411,8 @@ test('map layer draws airports, areas, ground stations and radar', (t) => {
     t.after(() => { delete globalThis.document; });
     const layer = Fisb.createLayer(L, decoder, { stationsUrl: null });
     layer.addTo(map);
-    assert.strictEqual(layer.control.box.children.length, 4);
+    // Nine buttons and the altitude selector.
+    assert.strictEqual(layer.control.box.children.length, 10);
 
     // San Jose: green (VFR) marker at the airport with the METAR in its tooltip and the TAF in its popup.
     const ksjc = made.find((o) => o.type === 'circleMarker' && /METAR KSJC/.test(tooltip(o)));
@@ -436,10 +437,15 @@ test('map layer draws airports, areas, ground stations and radar', (t) => {
         if (o.popup) assert.strictEqual(typeof o.popup, 'function');
     }
 
-    // A polygon is a pointer-transparent fill plus an outline carrying the tooltip.
+    // An area is a pointer-transparent shape plus an unseen wide outline carrying the tooltip.
     const sigmet = made.find((o) => o.type === 'polyline' && /^WST KMKC 110954 CONVECTIVE SIGMET 37W · 30000 ft/.test(tooltip(o)));
-    assert.strictEqual(sigmet.where.length, 6);
-    assert.ok(made.some((o) => o.type === 'polygon' && o.where === sigmet.where && o.options.interactive === false));
+    assert.strictEqual(sigmet.where.length, 7);
+    assert.deepStrictEqual(sigmet.where[6], sigmet.where[0]);
+    assert.ok(sigmet.options.weight >= 12 && sigmet.options.opacity === 0 && sigmet.options.fill === false);
+    const fill = made.find((o) => o.type === 'polygon' && o.where.length === 6 && o.where[0] === sigmet.where[0]);
+    assert.ok(fill.options.interactive === false && fill.options.weight === 2 && !fill.tooltip);
+    const wideCircle = made.find((o) => o.type === 'circle' && o.where === circles[0].where && o !== circles[0]);
+    assert.ok(circles[0].options.opacity === 0 && wideCircle.options.interactive === false);
     assert.strictEqual(made.filter((o) => o.type === 'marker').length, 2);
 
     // Radar: a block is drawn as runs of bins inside the block's rectangle.
@@ -449,6 +455,9 @@ test('map layer draws airports, areas, ground stations and radar', (t) => {
     assert.ok(rects.length > 100);
     assert.ok(rects.every((r) => Fisb.RADAR_COLORS.includes(r.color) && r.w > 0 && r.h > 0));
     assert.ok(rects.every((r) => r.x >= -400 && r.x <= 1300 && r.y >= -40 && r.y <= 740));
+    // Radar, airports, areas and ground stations start shown; the other parts start hidden.
+    const shown = Object.keys(layer.parts).filter((name) => layer.layers.has(layer.parts[name]));
+    assert.deepStrictEqual(shown, ['radar', 'airports', 'areas', 'stations']);
 
     // Hiding a part removes it from the group; a second refresh draws nothing new.
     layer.setVisible('areas', false);
@@ -456,4 +465,200 @@ test('map layer draws airports, areas, ground stations and radar', (t) => {
     const count = made.filter((o) => o.type !== 'rect').length;
     layer.refresh();
     assert.strictEqual(made.filter((o) => o.type !== 'rect').length, count);
+});
+
+// ─── Synthetic uplinks ────────────────────────────────────────────────────────
+const DLAC = '\x03ABCDEFGHIJKLMNOPQRSTUVWXYZ\x1A\t\x1E\n| !"#$%&\'()*+,-./0123456789:;<=>?';
+// Text in the six-bit character set, four characters in three bytes.
+function dlacBytes(text) {
+    const out = [];
+    for (let i = 0; i < text.length; i += 4) {
+        const c = [0, 1, 2, 3].map((k) => (i + k < text.length ? DLAC.indexOf(text[i + k]) : 0));
+        out.push((c[0] << 2) | (c[1] >> 4), ((c[1] & 0x0F) << 4) | (c[2] >> 2), ((c[2] & 0x03) << 6) | c[3]);
+    }
+    return out;
+}
+// Information frame holding one unsegmented product stamped 10:00 UTC.
+function productFrame(productId, payload) {
+    const data = [productId >> 6, ((productId & 0x3F) << 2), 10 << 2, 0, ...payload];
+    return [data.length >> 1, ((data.length & 1) << 7), ...data];
+}
+// Current report list frame. reports: [[year, number], ...].
+function crlFrame(productId, reports, flags = 0) {
+    const data = [productId >> 3, ((productId & 0x07) << 5) | flags, 75, reports.length];
+    for (const [year, number] of reports) data.push(year, 0x80 | (number >> 8), number & 0xFF);
+    return [data.length >> 1, ((data.length & 1) << 7) | 14, ...data];
+}
+// Uplink payload from a ground station at the given latitude.
+function uplink(frames, stationLat = 37.5) {
+    const p = new Uint8Array(432);
+    const lat = Math.round(stationLat * 16777216 / 360), lon = Math.round(238 * 16777216 / 360);
+    p.set([lat >> 15, (lat >> 7) & 0xFF, ((lat & 0x7F) << 1) | (lon >> 23), (lon >> 15) & 0xFF, (lon >> 7) & 0xFF, ((lon & 0x7F) << 1) | 1, 0xA0, 0]);
+    p.set(frames.flat(), 8);
+    return p;
+}
+const T0 = Date.UTC(2026, 9, 12, 10, 1);
+// Text product record: report number, year 26, active.
+const textReport = (number, text) => {
+    const body = dlacBytes(text);
+    const length = 5 + body.length;
+    return [0x20, 0x10, ...dlacBytes('KSFO').slice(0, 3), 0, length >> 8, length & 0xFF, number >> 6, ((number & 0x3F) << 2), (26 << 3) | 0x04, ...body];
+};
+// Grid block with its north west corner at 36.067 N 120 W. level: altitude index or scale. runs: run-length bytes.
+const gridBlock = (level, runs) => [0x80 | (level << 4) | (243300 >> 16), (243300 >> 8) & 0xFF, 243300 & 0xFF, ...runs];
+
+test('pilot report fields', () => {
+    const p = Fisb.parsePirep('PIREP LAS 120145Z LAS UA /OV LAS213045/TM 0145/FL150/TP E145/TA M09/TB MOD CHOP/IC LGT RIME');
+    assert.deepStrictEqual(p.fields, { OV: 'LAS213045', TM: '0145', FL: '150', TP: 'E145', TA: 'M09', TB: 'MOD CHOP', IC: 'LGT RIME' });
+    assert.deepStrictEqual([p.station, p.urgent, p.altitudeFt, p.severity], ['LAS', false, 15000, 2]);
+    // A slash inside a field stays in it; an unknown altitude gives none.
+    const q = Fisb.parsePirep('PIREP SFO 120150Z SFO UUA /OV SFO/TM 0150/FLUNKN/TP B738/SK BKN030-TOP050/OVC080/TB SEV/RM LLWS +/-10 KT');
+    assert.deepStrictEqual([q.urgent, q.altitudeFt, q.severity, q.fields.SK, q.fields.RM], [true, undefined, 3, 'BKN030-TOP050/OVC080', 'LLWS +/-10 KT']);
+    assert.strictEqual(Fisb.parsePirep('PIREP SNS 120150Z SNS UA /OV SNS/TM 0150/FL040/TP C172/TB NEG/IC NEG').severity, 0);
+});
+
+test('pilot report positions match aviationweather.gov', () => {
+    // Location field, reporting station and the position aviationweather.gov gave the same report.
+    const cases = [
+        ['MZB', 'SAN', 32.7822, -117.2254],
+        ['RNM270003', 'RNM', 33.0496, -116.9735],
+        ['BOI117049', 'BOI', 42.9837, -115.3905],
+        ['YKM270050', 'YKM', 46.8627, -121.5804],
+        ['RAP084081', 'RAP', 43.7968, -101.1591],
+        ['KRNO167009', 'RNO', 39.3536, -119.7334],
+        ['KFAR', 'FAR', 46.9207, -96.8158],
+    ];
+    for (const [ov, station, lat, lon] of cases) {
+        const position = Fisb.pirepPosition(Fisb.parsePirep(`PIREP ${station} 120150Z ${station} UA /OV ${ov}/TM 0150/FL100/TP C172`), null);
+        assert.ok(distanceNm(position, [lat, lon]) < 3, `${ov}: ${position}`);
+    }
+    const at = (ov, station = 'SFO') => Fisb.pirepPosition(Fisb.parsePirep(`PIREP ${station} 120150Z ${station} UA /OV ${ov}/TM 0150`), null);
+    // Bearings are magnetic: the Oakland navaid is aligned 17 degrees east of true north.
+    const oak = at('OAK'), north = at('OAK360020');
+    const [northNm, eastNm] = [(north[0] - oak[0]) * 60, (north[1] - oak[1]) * 60 * Math.cos(oak[0] * Math.PI / 180)];
+    assert.ok(Math.abs(Math.hypot(northNm, eastNm) - 20) < 0.2 && Math.abs(Math.atan2(eastNm, northNm) * 180 / Math.PI - 17) < 1);
+    // Distance and compass direction, with and without a space.
+    assert.ok(distanceNm(at('10 E OAK'), at('OAK090010')) < 0.1);
+    assert.ok(distanceNm(at('30W PDX'), at('PDX270030')) < 0.1);
+    // A route uses its first point; an unknown place falls back to the reporting station.
+    assert.deepStrictEqual(at('SNS-OAK'), at('SNS'));
+    assert.deepStrictEqual(at('GEELA'), at('SFO'));
+    assert.deepStrictEqual(at('ZZZ090010'), at('SFO'));
+    assert.strictEqual(at('ZZZ', 'ZZZ'), null);
+});
+
+test('station file without navaids still loads', (t) => {
+    const data = require('../fisb_stations.js');
+    t.after(() => Fisb.setStations(data));
+    Fisb.setStations(data.split('|')[0]);
+    assert.ok(distanceNm(Fisb.stationPosition('KSJC'), [37.363, -121.929]) < 1);
+    const p = Fisb.parsePirep('PIREP SJC 120150Z SJC UA /OV SJC090010/TM 0150');
+    assert.ok(distanceNm(Fisb.pirepPosition(p, null), [37.363, -121.72]) < 1);
+});
+
+test('current report list drops reports the station stopped sending', () => {
+    const d = new Fisb.Decoder();
+    const expired = [];
+    d.on((kind, item) => { if (kind === 'expire' && item) expired.push(item.key); });
+    const send = (frames, stationLat, seconds) => d.ingestUplink(uplink(frames, stationLat), { timestampMs: T0 + seconds * 1000 });
+    send([productFrame(12, textReport(101, 'SIGMET A')), productFrame(12, textReport(102, 'SIGMET B'))], 37.5, 0);
+    send([productFrame(12, textReport(102, 'SIGMET B')), productFrame(8, textReport(7, 'NOTAM'))], 38.5, 1);
+    assert.deepStrictEqual([...d.reports.keys()], ['12/26/101', '12/26/102', '8/26/7']);
+    // Lists that are cut short or cover only TFRs remove nothing.
+    send([crlFrame(12, [], 0x02), crlFrame(8, [], 0x10)], 37.5, 2);
+    assert.strictEqual(d.reports.size, 3);
+    // The first station stops listing both SIGMETs; the second one still sends B.
+    send([crlFrame(12, [])], 37.5, 3);
+    assert.deepStrictEqual([...d.reports.keys()], ['12/26/102', '8/26/7']);
+    assert.deepStrictEqual(expired, ['12/26/101']);
+    send([crlFrame(12, [[26, 102]])], 38.5, 4);
+    assert.ok(d.reports.has('12/26/102'));
+    send([crlFrame(12, [[26, 555]])], 38.5, 5);
+    assert.deepStrictEqual([...d.reports.keys()], ['8/26/7']);
+});
+
+test('map layer draws pilot reports, lightning, cloud tops, icing and turbulence', (t) => {
+    const { L, map, document, made } = fakeBrowser();
+    const stored = {};
+    globalThis.document = document;
+    globalThis.localStorage = { getItem: (key) => stored[key] || null, setItem: (key, value) => { stored[key] = value; } };
+    t.after(() => { delete globalThis.document; delete globalThis.localStorage; });
+    const d = new Fisb.Decoder();
+    const pirep = 'PIREP SNS 121000Z SNS UUA /OV SNS090020/TM 1000/FL085/TP C172/TA M02/TB SEV/IC LGT RIME';
+    d.ingestUplink(uplink([
+        productFrame(413, dlacBytes(pirep + '\x1E')),
+        // One strike of positive polarity in the first bin.
+        productFrame(103, gridBlock(0, [0x09, 0xF0, 0xF0, 0xF0, 0xF0, 0xF0, 0xF0, 0xF0, 0xE0])),
+        // Cloud tops: 9000 to 10500 ft in the first row.
+        productFrame(84, gridBlock(1, [0xE7, 31, 0xE0, 95])),
+        // Icing at 6000 ft: moderate with large droplets in 8 bins, then none. At 8000 ft: trace everywhere.
+        productFrame(70, gridBlock(2, [7, 0x40 | (3 << 3) | 2, 119, 0])),
+        productFrame(70, gridBlock(3, [127, 1 << 3])),
+        // Turbulence at 20000 ft: class 5 everywhere.
+        productFrame(91, gridBlock(1, [0xE5, 127])),
+    ]), { timestampMs: T0 });
+    assert.strictEqual(d.stats.errors, 0);
+    const layer = Fisb.createLayer(L, d, { stationsUrl: null });
+    layer.addTo(map);
+    const names = Object.keys(layer.parts);
+    const [buttons, select] = [layer.control.box.children.filter((c) => c.tag === 'button'), layer.control.box.children.find((c) => c.tag === 'select')];
+    const tip = (name) => flatten(buttons[names.indexOf(name)].children[1]);
+    const draw = (name) => {
+        made.length = 0;
+        layer.parts[name]._map = map;
+        layer.parts[name].onAdd(map);
+        return made.filter((o) => o.type === 'rect');
+    };
+
+    // The pilot report sits 20 NM magnetic east of Salinas.
+    const marker = made.find((o) => o.type === 'marker' && /SNS UUA/.test(tooltip(o)));
+    assert.ok(distanceNm(marker.where, [36.59, -121.20]) < 2, String(marker.where));
+    assert.match(marker.options.icon.className, /fisb-urgent/);
+    assert.ok(marker.options.icon.html.includes('#e00'));
+    assert.match(flatten(marker.popup()), /Urgent pilot report · SNS\nLocation: SNS090020\nTime: 10:00Z\nAltitude: 8500 ft\nAircraft: C172\nTemperature: -02 °C\nTurbulence: SEV\nIcing: LGT RIME/);
+    assert.match(tip('pireps'), /^Pilot reports 1/);
+
+    // Lightning: one mark of at least 6 pixels with a dark rim, centered on the bin at 36.058 N 119.988 W.
+    let rects = draw('lightning');
+    assert.deepStrictEqual(rects.map((r) => r.color), ['#222', '#fd0']);
+    assert.ok(rects[1].w >= 6 && rects[1].h >= 6);
+    assert.ok(Math.abs(rects[1].x + rects[1].w / 2 - (125 - 119.9875) * 100) < 1.5 && Math.abs(rects[1].y + rects[1].h / 2 - (40 - 36.058) * 100) < 1.5);
+    assert.match(tip('lightning'), /^Lightning 10:00Z.*strikes$/);
+
+    // Cloud tops on the medium scale: the first row of the block, 4 degrees wide and 5 minutes high.
+    rects = draw('cloudTops');
+    assert.strictEqual(rects.length, 1);
+    assert.deepStrictEqual([rects[0].x, rects[0].y, rects[0].w, rects[0].h], [500, 393, 400, 9]);
+
+    // Icing and turbulence show one altitude at a time.
+    assert.strictEqual(select.style.display, 'none');
+    layer.setVisible('icing', true);
+    assert.strictEqual(select.style.display, '');
+    assert.deepStrictEqual(select.children.map((o) => o.textContent), ['2', '4', '6', '8', '10', '12', '14', '16', '18', '20', '22', '24']);
+    rects = draw('icing');
+    assert.deepStrictEqual([...new Set(rects.map((r) => r.color))], ['#bef']);
+    assert.strictEqual(rects.length, 4);
+    assert.match(tip('icing'), /^Icing 8000 ft 10:00Z.*Trace.*Large droplets$/);
+    select.value = '6000';
+    select.onchange();
+    rects = draw('icing');
+    // Moderate icing in 8 bins, each with a large droplet dot.
+    assert.deepStrictEqual(rects.map((r) => r.color), ['#36d', ...new Array(8).fill('#e00')]);
+    assert.strictEqual(rects[0].w, 100);
+    assert.match(tip('icing'), /^Icing 6000 ft 10:00Z/);
+    assert.strictEqual(draw('turbulence').length, 0);
+    assert.ok(buttons[names.indexOf('turbulence')].classList.names.has('fisb-none'));
+    layer.setAltitude(20000);
+    rects = draw('turbulence');
+    assert.deepStrictEqual([...new Set(rects.map((r) => r.color))], ['#f93']);
+    assert.match(tip('turbulence'), /^Turbulence 20000 ft 10:00Z.*eddy dissipation rate × 100$/);
+    assert.ok(!buttons[names.indexOf('turbulence')].classList.names.has('fisb-none'));
+
+    // The choice of parts and altitude carries over to the next layer.
+    layer.setVisible('pireps', true);
+    layer.setVisible('radar', false);
+    const next = Fisb.createLayer(L, d, { stationsUrl: null });
+    assert.deepStrictEqual(names.filter((name) => next.layers.has(next.parts[name])), ['icing', 'airports', 'pireps', 'areas', 'stations']);
+    next.addTo(map);
+    assert.strictEqual(next.control.box.children.find((c) => c.tag === 'select').children.find((o) => o.selected).textContent, '20');
 });
