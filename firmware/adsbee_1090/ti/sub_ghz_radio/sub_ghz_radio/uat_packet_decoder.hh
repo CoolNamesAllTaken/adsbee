@@ -1,6 +1,7 @@
 #pragma once
 
 #include "data_structures.hh"
+#include "object_dictionary.hh"
 #include "uat_packet.hh"
 
 class UATPacketDecoder {
