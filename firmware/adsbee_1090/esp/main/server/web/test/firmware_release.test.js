@@ -356,7 +356,14 @@ function fakePage() {
     };
     const items = new Map();
     const saved = { document: global.document, localStorage: global.localStorage, confirm: global.confirm,
-                    setInterval: global.setInterval };
+                    setInterval: global.setInterval, setTimeout: global.setTimeout };
+    // restore() also drops the page's timers (the retry after an update).
+    const timers = new Set();
+    global.setTimeout = (fn, ms, ...args) => {
+        const t = saved.setTimeout(() => { timers.delete(t); fn(...args); }, ms);
+        timers.add(t);
+        return t;
+    };
     global.document = { createElement: el, getElementById: () => null, head: el(), addEventListener() {} };
     global.localStorage = { getItem: (k) => (items.has(k) ? items.get(k) : null), setItem: (k, v) => items.set(k, String(v)),
                             removeItem: (k) => items.delete(k) };
@@ -368,7 +375,7 @@ function fakePage() {
         for (const k of e.kids || []) { const r = find(k, pred); if (r) return r; }
         return null;
     };
-    return { root: el(), items, find, restore: () => Object.assign(global, saved) };
+    return { root: el(), items, find, restore: () => { timers.forEach(clearTimeout); Object.assign(global, saved); } };
 }
 
 async function until(pred) {
@@ -484,6 +491,36 @@ test('an update goes through when every check-in fails, and the result is report
         } finally {
             global.fetch = realFetch;
         }
+    } finally {
+        page.restore();
+        await mock.close();
+    }
+});
+
+test('after an update the check repeats until the receiver answers', async () => {
+    const mock = await mock1090({ recommended: '0.9.1-rc6' });
+    const page = fakePage();
+    try {
+        // Back on USB at once, but silent while it updates its other processors.
+        let lines = INFO_1090;
+        let asked = 0;
+        let silent = false;
+        const ui = fr.mount(page.root, { product: '1090', apiBase: mock.base, backRetryMs: 20, install: async () => { silent = true; },
+                                         readDeviceInfo: async () => { asked++; if (silent) throw new Error('timeout'); return lines; } });
+        await ui.check();
+        page.find(page.root, (e) => e.textContent === '⇣ Update').onclick();
+        await until(() => silent);
+        const before = asked;
+        await until(() => asked >= before + 3);
+        assert.strictEqual(mock.checkins.length, 1);
+        lines = INFO_1090.map((l) => l.replace('0.9.1-rc5', '0.9.1-rc6'));
+        silent = false;
+        await until(() => mock.checkins.length === 2);
+        assert.strictEqual(mock.checkins[1].state, 'installed');
+        // Answered: no more retries.
+        const after = asked;
+        await new Promise((r) => setTimeout(r, 100));
+        assert.strictEqual(asked, after);
     } finally {
         page.restore();
         await mock.close();
