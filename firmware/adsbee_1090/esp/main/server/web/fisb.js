@@ -517,7 +517,8 @@
 
         storeTwgo(productId, twgo, nowMs, stationKey) {
             const get = (r) => {
-                const key = productId + '/' + r.year + '/' + r.number;
+                // NOTAM numbers repeat between locations.
+                const key = productId + '/' + r.year + '/' + r.number + (twgo.location ? '/' + twgo.location : '');
                 let report = this.reports.get(key);
                 if (!report) {
                     report = { key, productId, product: PRODUCT_NAMES[productId], number: r.number, year: r.year, text: '', shapes: [], from: new Set() };

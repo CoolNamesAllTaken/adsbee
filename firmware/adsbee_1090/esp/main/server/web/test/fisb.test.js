@@ -499,10 +499,10 @@ function uplink(frames, stationLat = 37.5) {
 }
 const T0 = Date.UTC(2026, 9, 12, 10, 1);
 // Text product record: report number, year 26, active.
-const textReport = (number, text) => {
+const textReport = (number, text, location) => {
     const body = dlacBytes(text);
     const length = 5 + body.length;
-    return [0x20, 0x10, ...dlacBytes('KSFO').slice(0, 3), 0, length >> 8, length & 0xFF, number >> 6, ((number & 0x3F) << 2), (26 << 3) | 0x04, ...body];
+    return [0x20, 0x10, ...(location ? dlacBytes(location).slice(0, 3) : [0, 0, 0]), 0, length >> 8, length & 0xFF, number >> 6, ((number & 0x3F) << 2), (26 << 3) | 0x04, ...body];
 };
 // Grid block with its north west corner at 36.067 N 120 W. level: altitude index or scale. runs: run-length bytes.
 const gridBlock = (level, runs) => [0x80 | (level << 4) | (243300 >> 16), (243300 >> 8) & 0xFF, 243300 & 0xFF, ...runs];
@@ -554,6 +554,13 @@ test('station file without navaids still loads', (t) => {
     assert.ok(distanceNm(Fisb.stationPosition('KSJC'), [37.363, -121.929]) < 1);
     const p = Fisb.parsePirep('PIREP SJC 120150Z SJC UA /OV SJC090010/TM 0150');
     assert.ok(distanceNm(Fisb.pirepPosition(p, null), [37.363, -121.72]) < 1);
+});
+
+test('NOTAMs of two airports keep apart under one report number', () => {
+    const d = new Fisb.Decoder();
+    d.ingestUplink(uplink([productFrame(8, textReport(12002, 'NOTAM A', 'KMOD')), productFrame(8, textReport(12002, 'NOTAM B', 'KFCH'))], 37.5), { timestampMs: T0 });
+    assert.deepStrictEqual([...d.reports.values()].map((r) => [r.key, r.location, r.text]),
+        [['8/26/12002/KMOD', 'KMOD', 'NOTAM A'], ['8/26/12002/KFCH', 'KFCH', 'NOTAM B']]);
 });
 
 test('current report list drops reports the station stopped sending', () => {
