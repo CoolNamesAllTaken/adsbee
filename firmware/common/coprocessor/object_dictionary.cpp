@@ -24,7 +24,7 @@ const uint8_t ObjectDictionary::kFirmwareVersionMajor = 0;
 const uint8_t ObjectDictionary::kFirmwareVersionMinor = 9;
 const uint8_t ObjectDictionary::kFirmwareVersionPatch = 1;
 // NOTE: Indicate a final release with RC = 0.
-const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 7;
+const uint8_t ObjectDictionary::kFirmwareVersionReleaseCandidate = 8;
 
 const uint32_t ObjectDictionary::kFirmwareVersion = (kFirmwareVersionMajor << 24) | (kFirmwareVersionMinor << 16) |
                                                     (kFirmwareVersionPatch << 8) | kFirmwareVersionReleaseCandidate;
@@ -204,6 +204,17 @@ bool ObjectDictionary::SetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
             uint32_t duration_ms;
             memcpy(&duration_ms, buf, sizeof(duration_ms));
             pico_ll.ForceBlinkNetworkLED(duration_ms);
+            break;
+        }
+        case kAddrDeviceIdentity: {
+            if (!CheckObjectBounds("ObjectDictionary::SetBytes", "device identity", offset, buf_len,
+                                   sizeof(device_identity))) {
+                return false;
+            }
+            memcpy((uint8_t*)&device_identity + offset, buf, buf_len);
+            if (offset + buf_len == sizeof(device_identity)) {
+                device_identity_valid = true;
+            }
             break;
         }
 #elif defined(ON_TI)

@@ -2,21 +2,27 @@
 
 #include <cstring>  // memcpy
 
-// The migration chain must end at the live version. When kSettingsVersion is bumped, freeze v17 and extend the chain
+// The migration chain must end at the live version. When kSettingsVersion is bumped, freeze v18 and extend the chain
 // (see settings_migration.hh).
-static_assert(kSettingsVersion == 17, "kSettingsVersion changed: freeze the previous layout and add a migration step.");
+static_assert(kSettingsVersion == 18, "kSettingsVersion changed: freeze the previous layout and add a migration step.");
 static_assert(sizeof(settings_v12::Settings) == 1088 && sizeof(settings_v13::Settings) == 1088 &&
                   sizeof(settings_v14::Settings) == 1140 && sizeof(settings_v15::Settings) == 1144 &&
-                  sizeof(settings_v16::Settings) == 1144,
+                  sizeof(settings_v16::Settings) == 1144 && sizeof(settings_v17::Settings) == 1340,
               "A frozen settings snapshot changed size. Frozen snapshots must never be edited.");
 
 // The frozen nested layouts must stay byte-identical to the live ones for the raw copies below to be valid. If a future
 // version changes CoreNetworkSettings or RxPosition, these fire and the migration steps must switch to field-by-field
 // copies for those members.
-static_assert(sizeof(settings_v16::CoreNetworkSettings) == sizeof(SettingsManager::Settings::CoreNetworkSettings),
-              "v16 CoreNetworkSettings layout diverged from live; migration copy is no longer valid.");
-static_assert(sizeof(settings_v16::RxPosition) == sizeof(SettingsManager::RxPosition),
-              "v16 RxPosition layout diverged from live; migration copy is no longer valid.");
+static_assert(sizeof(settings_v17::CoreNetworkSettings) == sizeof(SettingsManager::Settings::CoreNetworkSettings),
+              "v17 CoreNetworkSettings layout diverged from live; migration copy is no longer valid.");
+static_assert(sizeof(settings_v17::RxPosition) == sizeof(SettingsManager::RxPosition),
+              "v17 RxPosition layout diverged from live; migration copy is no longer valid.");
+static_assert(sizeof(settings_v17::WiFiNetwork) == sizeof(SettingsManager::Settings::WiFiNetwork),
+              "v17 WiFiNetwork layout diverged from live; migration copy is no longer valid.");
+static_assert(sizeof(settings_v16::CoreNetworkSettings) == sizeof(settings_v17::CoreNetworkSettings),
+              "v16 -> v17 CoreNetworkSettings layout changed; migration copy is no longer valid.");
+static_assert(sizeof(settings_v16::RxPosition) == sizeof(settings_v17::RxPosition),
+              "v16 -> v17 RxPosition layout changed; migration copy is no longer valid.");
 static_assert(sizeof(settings_v15::CoreNetworkSettings) == sizeof(settings_v16::CoreNetworkSettings),
               "v15 -> v16 CoreNetworkSettings layout changed; migration copy is no longer valid.");
 static_assert(sizeof(settings_v15::RxPosition) == sizeof(settings_v16::RxPosition),
@@ -227,9 +233,60 @@ void SettingsMigrator::MigrateV15ToV16(const settings_v15::Settings& in, setting
     out.ip_mode = 1;  // New in v16: IPv4 + IPv6 (kIPModeDual).
 }
 
-void SettingsMigrator::MigrateV16ToV17(const settings_v16::Settings& in, SettingsManager::Settings& out) {
-    // Start from a fresh, fully-defaulted current struct so the extra WiFi station networks (new in v17) start empty
-    // and any RP2040 DeviceInfo-seeded defaults are applied.
+void SettingsMigrator::MigrateV16ToV17(const settings_v16::Settings& in, settings_v17::Settings& out) {
+    out = settings_v17::Settings{};  // Extra WiFi station networks (new in v17) start empty.
+    out.settings_version = 17;
+
+    memcpy(&out.core_network_settings, &in.core_network_settings, sizeof(in.core_network_settings));
+
+    out.r1090_rx_enabled = in.r1090_rx_enabled;
+    out.tl_offset_mv = in.tl_offset_mv;
+    out.r1090_bias_tee_enabled = in.r1090_bias_tee_enabled;
+    out.watchdog_timeout_sec = in.watchdog_timeout_sec;
+    out.led_enabled = in.led_enabled;
+    out.feeds_enabled = in.feeds_enabled;
+    out.gnss_enabled = in.gnss_enabled;
+    out.gnss_receiver_type = in.gnss_receiver_type;
+    out.gnss_notify = in.gnss_notify;
+
+    out.log_level = in.log_level;
+    for (uint16_t i = 0; i < settings_v17::kNumSerialInterfaces; i++) {
+        out.reporting_protocols[i] = in.reporting_protocols[i];
+        out.baud_rates[i] = in.baud_rates[i];
+    }
+
+    out.subg_enabled = in.subg_enabled;
+    out.subg_rx_enabled = in.subg_rx_enabled;
+    out.subg_bias_tee_enabled = in.subg_bias_tee_enabled;
+    out.subg_mode = in.subg_mode;
+
+    out.remote_id_rx_enabled = in.remote_id_rx_enabled;
+    out.remote_id_transports = in.remote_id_transports;
+
+    out.remote_id_tx_enabled = in.remote_id_tx_enabled;
+    out.remote_id_tx_transports = in.remote_id_tx_transports;
+    out.remote_id_tx_uas_id_type = in.remote_id_tx_uas_id_type;
+    out.remote_id_tx_ua_type = in.remote_id_tx_ua_type;
+    memcpy(out.remote_id_tx_uas_id, in.remote_id_tx_uas_id, sizeof(in.remote_id_tx_uas_id));
+    memcpy(out.remote_id_tx_operator_id, in.remote_id_tx_operator_id, sizeof(in.remote_id_tx_operator_id));
+
+    memcpy(out.feed_uris, in.feed_uris, sizeof(in.feed_uris));
+    memcpy(out.feed_ports, in.feed_ports, sizeof(in.feed_ports));
+    memcpy(out.feed_is_active, in.feed_is_active, sizeof(in.feed_is_active));
+    for (uint16_t i = 0; i < settings_v17::kMaxNumFeeds; i++) {
+        out.feed_protocols[i] = in.feed_protocols[i];
+    }
+    memcpy(out.feed_receiver_ids, in.feed_receiver_ids, sizeof(in.feed_receiver_ids));
+
+    out.mavlink_system_id = in.mavlink_system_id;
+    out.mavlink_component_id = in.mavlink_component_id;
+
+    memcpy(&out.rx_position, &in.rx_position, sizeof(in.rx_position));
+    out.ip_mode = in.ip_mode;
+}
+
+void SettingsMigrator::MigrateV17ToV18(const settings_v17::Settings& in, SettingsManager::Settings& out) {
+    // Start from a fresh, fully-defaulted current struct: automatic updates (new in v18) stay off.
     out = SettingsManager::Settings();
 
     out.settings_version = kSettingsVersion;
@@ -280,6 +337,8 @@ void SettingsMigrator::MigrateV16ToV17(const settings_v16::Settings& in, Setting
 
     memcpy(&out.rx_position, &in.rx_position, sizeof(in.rx_position));
     out.ip_mode = static_cast<SettingsManager::IPMode>(in.ip_mode);
+    memcpy(out.wifi_sta_extra_networks, in.wifi_sta_extra_networks, sizeof(in.wifi_sta_extra_networks));
+    out.auto_update_enabled = false;
 }
 
 bool SettingsMigrator::Migrate(const uint8_t* blob, uint16_t blob_len, uint32_t from_version,
@@ -290,6 +349,7 @@ bool SettingsMigrator::Migrate(const uint8_t* blob, uint16_t blob_len, uint32_t 
     settings_v14::Settings v14;
     settings_v15::Settings v15;
     settings_v16::Settings v16;
+    settings_v17::Settings v17;
 
     switch (from_version) {
         case 12: {
@@ -339,11 +399,20 @@ bool SettingsMigrator::Migrate(const uint8_t* blob, uint16_t blob_len, uint32_t 
             memcpy(&v16, blob, sizeof(v16));
             break;
         }
+        case 17: {
+            if (blob_len < sizeof(settings_v17::Settings)) {
+                return false;
+            }
+            memcpy(&v17, blob, sizeof(v17));
+            MigrateV17ToV18(v17, out);
+            return true;
+        }
         default:
             // Older than kOldestMigratableVersion, unknown, or already current: nothing to migrate.
             return false;
     }
 
-    MigrateV16ToV17(v16, out);  // Final step: v16 is the newest frozen version, so this lands on the live struct.
+    MigrateV16ToV17(v16, v17);
+    MigrateV17ToV18(v17, out);  // Final step: v17 is the newest frozen version, so this lands on the live struct.
     return true;
 }

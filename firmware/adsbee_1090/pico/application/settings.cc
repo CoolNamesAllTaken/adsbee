@@ -7,6 +7,7 @@
 #include "firmware_update.hh"
 #include "flash_utils.hh"
 #include "hardware/flash.h"
+#include "pico/unique_id.h"
 #include "settings_migration.hh"
 #include "spi_coprocessor.hh"
 
@@ -49,6 +50,22 @@ bool SettingsManager::GetDeviceInfo(DeviceInfo& device_info) {
         device_info = *(DeviceInfo*)(kFlashDeviceInfoStartAddr);
         return true;
     }
+}
+
+bool SettingsManager::GetDeviceIdentity(DeviceIdentity& identity) {
+    identity = DeviceIdentity();
+    pico_unique_board_id_t unique_id;
+    pico_get_unique_board_id(&unique_id);
+    memcpy(identity.unique_id, unique_id.id, sizeof(identity.unique_id));
+    DeviceInfo device_info;
+    if (!GetDeviceInfo(device_info)) {
+        return false;
+    }
+    strncpy(identity.part_code, device_info.part_code, DeviceInfo::kPartCodeLen);
+    for (uint16_t i = 0; i < DeviceInfo::kNumOTAKeys; i++) {
+        strncpy(identity.ota_keys[i], device_info.ota_keys[i], DeviceInfo::kOTAKeyMaxLen);
+    }
+    return true;
 }
 
 bool SettingsManager::Load() {
