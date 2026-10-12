@@ -83,7 +83,7 @@ extern "C" void app_main(void) {
     heap_caps_register_failed_alloc_callback(heap_caps_alloc_failed_hook);
     HeapDiagnostics::Mark("app_main");
 
-    ESP_LOGI("app_main", "Beginning ADSBee Server Application.");
+    ESP_LOGI("app_main", "Beginning ADSBee Server Application (test variant).");
     ESP_LOGI("app_main", "Default task priority: %d", uxTaskPriorityGet(NULL));
 
     // Detect PSRAM before anything (settings apply, Remote ID) consults it. The same image runs on modules with and
