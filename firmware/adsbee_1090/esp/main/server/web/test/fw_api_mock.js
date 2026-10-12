@@ -4,6 +4,7 @@
 //
 //   const mock = await startMock({ releases, recommended, files });   // mock.base = 'http://127.0.0.1:<port>/api/fw/v1/'
 //   node test/fw_api_mock.js <port> <release dir> [recommended]       // serves <dir>/<tag>/<file>; logs requests
+//   MOCK_HOST=0.0.0.0 to listen beyond localhost (a bench ESP32 updating itself).
 //
 // releases: [{tag, version, prerelease, notes_url, assets: [{name, kind}]}]; sizes and SHA-256 come from files.
 // recommended: a version, or {adsbee_1090: version, adsbee_1421: version}.
@@ -22,9 +23,9 @@ const CORS = {
 };
 
 function startMock({ releases = [], recommended = null, files = {}, port = 0, tokenTtlMs = 3600000,
-                     acceptAnyKey = false, log = () => {} } = {}) {
-    const state = { releases, recommended, files, tokens: new Map(), requests: [], authBodies: [],
-                    rateLimited: false };
+                     acceptAnyKey = false, host = '127.0.0.1', log = () => {} } = {}) {
+    const state = { releases, recommended, files, tokens: new Map(), requests: [], authBodies: [], checkins: [],
+                    rateLimited: false, hold: false };
     const sha = (b) => crypto.createHash('sha256').update(b).digest('hex');
     const isPre = (r) => /-(rc|alpha|beta)\d*$/.test(r.version);
     const recommendedFor = (product) => (state.recommended && typeof state.recommended === 'object'
@@ -55,7 +56,7 @@ function startMock({ releases = [], recommended = null, files = {}, port = 0, to
         state.requests.push(`${req.method} ${url.pathname}${url.search}`);
         log(`${req.method} ${url.pathname}${url.search}`);
         if (req.method === 'OPTIONS') return send(204, undefined);
-        // Test control: /__set?[product=adsbee_1090&]recommended=<version|null>&rollback=0|1&rate_limited=0|1
+        // Test control: /__set?[product=adsbee_1090&]recommended=<version|null>&rollback=0|1&hold=0|1&rate_limited=0|1
         if (url.pathname === '/__set') {
             if (url.searchParams.has('recommended')) {
                 const r = url.searchParams.get('recommended');
@@ -65,6 +66,7 @@ function startMock({ releases = [], recommended = null, files = {}, port = 0, to
                 else state.recommended = v;
             }
             if (url.searchParams.has('rollback')) state.rollback = url.searchParams.get('rollback') === '1';
+            if (url.searchParams.has('hold')) state.hold = url.searchParams.get('hold') === '1';
             if (url.searchParams.has('rate_limited')) state.rateLimited = url.searchParams.get('rate_limited') === '1';
             return send(200, { recommended: state.recommended, rate_limited: state.rateLimited });
         }
@@ -105,8 +107,10 @@ function startMock({ releases = [], recommended = null, files = {}, port = 0, to
         }
 
         if (route === 'releases' && req.method === 'GET') {
-            return send(200, { product: tok.product, current: null, recommended: recommendedFor(tok.product),
-                               rollback: state.rollback === true,
+            const rec = state.hold ? null : recommendedFor(tok.product);
+            return send(200, { product: tok.product, current: null, recommended: rec,
+                               recommended_tag: rec ? `${tok.product}-${rec}` : null,
+                               rollback: state.rollback === true, hold: state.hold === true,
                                releases: listing(url.searchParams.get('channel'), tok.product) });
         }
         const f = /^files\/([^/]+)\/([^/]+)$/.exec(route);
@@ -115,13 +119,27 @@ function startMock({ releases = [], recommended = null, files = {}, port = 0, to
             if (!b) return send(404, { error: 'not_found' });
             const headers = { 'Content-Type': 'application/octet-stream', 'Content-Length': b.length,
                               'Accept-Ranges': 'bytes', ETag: `"${sha(b)}"` };
+            const range = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range || '');
+            if (range && req.method === 'GET') {
+                const first = +range[1];
+                if (first >= b.length) return send(416, undefined, { 'Content-Range': `bytes */${b.length}` });
+                const last = Math.min(range[2] === '' ? b.length - 1 : +range[2], b.length - 1);
+                return send(206, b.subarray(first, last + 1), Object.assign(headers, {
+                    'Content-Length': last - first + 1, 'Content-Range': `bytes ${first}-${last}/${b.length}` }));
+            }
             return send(200, req.method === 'HEAD' ? Buffer.alloc(0) : b, headers);
         }
-        if (route === 'checkin' && req.method === 'POST') return send(204, undefined);
+        if (route === 'checkin' && req.method === 'POST') {
+            let raw = '';
+            for await (const c of req) raw += c;
+            try { state.checkins.push(JSON.parse(raw)); } catch (e) { return send(400, { error: 'bad_request' }); }
+            log(`checkin ${raw}`);
+            return send(204, undefined);
+        }
         return send(404, { error: 'not_found' });
     });
 
-    return new Promise((resolve) => server.listen(port, '127.0.0.1', () => {
+    return new Promise((resolve) => server.listen(port, host, () => {
         const base = `http://127.0.0.1:${server.address().port}${PREFIX}`;
         resolve(Object.assign(state, { server, base, close: () => new Promise((r) => server.close(r)) }));
     }));
@@ -158,7 +176,7 @@ if (require.main === module) {
     const [port, dir, recommended] = process.argv.slice(2);
     const { releases, files } = loadDir(dir);
     startMock({ releases, files, recommended: recommended || null, port: +port,
-                acceptAnyKey: process.env.MOCK_ACCEPT_ANY_KEY === '1',
+                acceptAnyKey: process.env.MOCK_ACCEPT_ANY_KEY === '1', host: process.env.MOCK_HOST || '127.0.0.1',
                 log: (l) => console.log(new Date().toISOString(), l) })
         .then((m) => console.log(`mock firmware service at ${m.base}: ${releases.map((r) => r.tag).join(' ')}`));
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "aircraft_dictionary.hh"
+#include "auto_update_manager.hh"
 #include "composite_array.hh"
 #include "data_structures.hh"
 #include "esp_http_server.h"
@@ -70,6 +71,7 @@ class ADSBeeServer {
      * @retval Number of bytes queued. Bytes that don't fit are dropped.
      */
     size_t QueueNetworkConsoleMessage(const uint8_t* buf, size_t buf_len) {
+        auto_update_manager.OnConsoleOutput(buf, buf_len);
         if (!network_console_tx_buf_) return 0;
         return xStreamBufferSend(network_console_tx_buf_, buf, buf_len, 0);
     }

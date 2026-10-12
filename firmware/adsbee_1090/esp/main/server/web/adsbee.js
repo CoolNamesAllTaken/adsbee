@@ -467,7 +467,7 @@ class MetricsWebSocket {
                     if (deviceStatus.gnss && this.onGNSSStatus) {
                         this.onGNSSStatus(deviceStatus.gnss);
                     }
-                    // ESP32 automatic updates, {enabled, state, version}, from firmware that reports it.
+                    // ESP32 automatic updates, {enabled, state, version, progress}, from firmware that reports it.
                     if (this.onAutoUpdate) this.onAutoUpdate(deviceStatus.auto_update || null);
                 }
             } catch (error) {

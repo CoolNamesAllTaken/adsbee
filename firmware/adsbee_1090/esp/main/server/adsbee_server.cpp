@@ -7,6 +7,7 @@
 
 #include "comms.hh"
 #include "aircraftjson_utils.hh"
+#include "auto_update_manager.hh"
 #include "gdl90/gdl90_utils.hh"
 #include "heap_diagnostics.hh"
 #include "json_utils.hh"
@@ -168,6 +169,8 @@ bool ADSBeeServer::Update() {
     pico.UpdateLED();
 
     uint32_t timestamp_ms = get_time_since_boot_ms();
+
+    auto_update_manager.Update();
 
     // Ingest any Broadcast Remote ID advertisements received on the BLE/WiFi radios into the local aircraft dictionary
     // (and forward rate-limited copies up to the RP2040), then service the WiFi channel hopper. Done on this task so all
@@ -692,6 +695,7 @@ void NetworkConsoleMessageReceivedCallback(WebSocketServer* ws_server, int clien
     // Forward the network console message to the RP2040.
     char* message = (char*)ws_pkt.payload;
     uint16_t message_len = (uint16_t)ws_pkt.len;
+    auto_update_manager.OnConsoleInput(message, message_len);
     xSemaphoreTake(object_dictionary.network_console_rx_queue_mutex, portMAX_DELAY);
     if (object_dictionary.network_console_rx_queue.MaxNumElements() -
             object_dictionary.network_console_rx_queue.Length() <
@@ -806,6 +810,13 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
              object_dictionary.device_status.core_1_usage_percent, object_dictionary.device_status.temperature_deg_c,
              object_dictionary.device_status.heap_free_bytes,
              object_dictionary.device_status.heap_largest_free_block_bytes);
+    AutoUpdateManager::Status auto_update;
+    auto_update_manager.GetStatus(auto_update);
+    snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
+             ", \"auto_update\": { \"enabled\": %s, \"state\": \"%s\", \"version\": \"%s\", \"progress\": %u }",
+             auto_update.enabled ? "true" : "false", AutoUpdater::StateToStr(auto_update.state), auto_update.version,
+             auto_update.progress_percent);
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen), " }}\n");
 

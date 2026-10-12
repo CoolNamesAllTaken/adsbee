@@ -1024,6 +1024,11 @@ const SETTINGS_SCHEMA_1090 = [
         fields: [{ id: 'en', label: 'Enabled', type: 'bool' }],
     },
     {
+        cmd: 'AUTO_UPDATE', label: 'Automatic Updates', group: 'System',
+        help: 'Install the firmware adsbee.aero recommends for this receiver, over WiFi station or Ethernet. Off by default. When on, the unique ID, part code, OTA keys and firmware versions are sent to adsbee.aero.',
+        fields: [{ id: 'en', label: 'Enabled', type: 'bool' }],
+    },
+    {
         cmd: 'WATCHDOG', label: 'Watchdog', group: 'System',
         help: 'Reboot automatically if the firmware locks up. 0 disables the watchdog.',
         fields: [{ id: 'timeout', label: 'Timeout (seconds)', type: 'int', min: 0, max: 65535 }],

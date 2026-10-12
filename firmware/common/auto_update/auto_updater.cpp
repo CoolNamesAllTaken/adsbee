@@ -119,6 +119,7 @@ class AutoUpdater::OfferReader : public AutoUpdatePlatform::BodySink, public Jso
         } else if (depth == kReleaseDepth && in_releases_ && release_has_ota_) {
             const char* tag = offer_.tag[0] ? offer_.tag : want_tag_;
             if (tag && tag[0] && strcmp(tag, release_tag_) == 0) {
+                CopyStr(offer_.tag, sizeof(offer_.tag), tag);
                 offer_.has_asset = true;
                 CopyStr(offer_.url, sizeof(offer_.url), release_url_);
                 CopyStr(offer_.sha256, sizeof(offer_.sha256), release_sha256_);
@@ -455,8 +456,12 @@ AutoUpdater::Reply AutoUpdater::GetOffer(Offer& offer) {
         delete reader;
         if (reply != kReplyOK) return reply;
         if (!offer.parsed) return kReplyError;
-        if (offer.has_asset || !offer.recommended[0] || !offer.tag[0]) break;
-        CopyStr(tag, sizeof(tag), offer.tag);
+        if (offer.has_asset || !offer.recommended[0]) break;
+        if (offer.tag[0]) {
+            CopyStr(tag, sizeof(tag), offer.tag);
+        } else {
+            snprintf(tag, sizeof(tag), "%s-%s", config_.product, offer.recommended);  // How release tags are named.
+        }
     }
     return kReplyOK;
 }

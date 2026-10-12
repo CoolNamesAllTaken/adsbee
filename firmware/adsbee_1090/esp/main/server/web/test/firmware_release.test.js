@@ -287,3 +287,38 @@ test('a pinned RC is offered on the stable channel', () => {
     const sel = fr.selectUpdate(listing, { product: '1090', current: '0.9.1', channel: 'stable' });
     assert.deepStrictEqual([sel.state, fr.formatVersion(sel.version)], ['update', '0.9.2-rc1']);
 });
+
+// What the 1090's ESP32 uses when it updates itself (firmware/common/auto_update).
+test('mock: ranges, hold and check-ins as the ESP32 updater uses them', async () => {
+    const mock = await mock1090();
+    try {
+        const post = (path, body, token) => fetch(mock.base + path, { method: 'POST', body: JSON.stringify(body),
+            headers: Object.assign({ 'Content-Type': 'application/json' }, token && { Authorization: `Bearer ${token}` }) });
+        const { token } = await (await post('auth', { product: 'adsbee_1090', unique_id: 'E46478B14B4C1F23',
+            ota_keys: ['valid-E46478B14B4C1F23', 'k1'], client: 'esp32_auto' })).json();
+        const get = (path, headers) => fetch(mock.base + path, { headers: Object.assign({ Authorization: `Bearer ${token}` }, headers) });
+
+        let listing = await (await get('releases?channel=stable')).json();
+        assert.strictEqual(listing.recommended_tag, `adsbee_1090-${listing.recommended}`);
+        assert.strictEqual(listing.hold, false);
+        const asset = listing.releases.find((r) => r.tag === listing.recommended_tag).assets.find((a) => a.kind === 'ota');
+
+        const whole = new Uint8Array(await (await get(asset.url)).arrayBuffer());
+        const part = await get(asset.url, { Range: 'bytes=10-19' });
+        assert.strictEqual(part.status, 206);
+        assert.strictEqual(part.headers.get('content-range'), `bytes 10-19/${asset.size}`);
+        assert.deepStrictEqual(new Uint8Array(await part.arrayBuffer()), whole.subarray(10, 20));
+        const tail = await get(asset.url, { Range: `bytes=${asset.size - 5}-${asset.size + 100}` });
+        assert.strictEqual((await tail.arrayBuffer()).byteLength, 5);
+        assert.strictEqual((await get(asset.url, { Range: `bytes=${asset.size}-` })).status, 416);
+
+        assert.strictEqual((await post('checkin', { state: 'downloading', version: listing.recommended, detail: '' }, token)).status, 204);
+        assert.deepStrictEqual(mock.checkins, [{ state: 'downloading', version: listing.recommended, detail: '' }]);
+
+        await fetch(new URL('/__set?hold=1', mock.base));
+        listing = await (await get('releases')).json();
+        assert.deepStrictEqual([listing.hold, listing.recommended, listing.recommended_tag], [true, null, null]);
+    } finally {
+        await mock.close();
+    }
+});
