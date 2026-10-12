@@ -183,7 +183,15 @@ bool ADSBeeServer::Update() {
 
     // Prune aircraft dictionary. Need to do this up front so that we don't end up with a negative timestamp delta
     // caused by packets being ingested more recently than the timestamp we take at the beginning of this function.
-    if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > kAircraftDictionaryUpdateIntervalMs) {
+    // The RP2040 sends its metrics once per second on its own clock. Run this block when they arrive, so that every set
+    // of RP2040 metrics goes out in exactly one metrics message, and on a timer while none arrive.
+    bool received_rp2040_metrics =
+        xQueueReceive(rp2040_aircraft_dictionary_metrics_queue, &rp2040_aircraft_dictionary_metrics, 0) == pdTRUE;
+    if (received_rp2040_metrics) {
+        last_rp2040_metrics_timestamp_ms_ = timestamp_ms;
+    }
+    if (received_rp2040_metrics ||
+        timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > kAircraftDictionaryUpdateFallbackIntervalMs) {
         aircraft_dictionary.SetReferencePosition(
             object_dictionary.composite_device_status.rp2040.rx_position.latitude_deg,
             object_dictionary.composite_device_status.rp2040.rx_position.longitude_deg);
@@ -339,11 +347,6 @@ bool ADSBeeServer::Update() {
     network_aircraft.Update();
     network_uplink.Update();
     UpdateUplinkBroadcast();
-
-    // Check to see whether the RP2040 sent over new metrics.
-    if (xQueueReceive(rp2040_aircraft_dictionary_metrics_queue, &rp2040_aircraft_dictionary_metrics, 0) == pdTRUE) {
-        last_rp2040_metrics_timestamp_ms_ = get_time_since_boot_ms();
-    }
 
     return ret;
 }
