@@ -21,7 +21,7 @@ class AutoUpdateManager : public AutoUpdatePlatform {
     static constexpr UBaseType_t kTaskPriority = tskIDLE_PRIORITY;  // Same as the feed task: never ahead of SPI or feeds.
     static constexpr uint32_t kHTTPTimeoutMs = 15000;
     static constexpr uint16_t kHTTPBufferLenBytes = 1024;
-    static constexpr uint16_t kConsoleRxBufLenBytes = 1024;
+    static constexpr uint16_t kConsoleRxBufLenBytes = 2048;  // A burst of RP2040 log lines must not push out an OK.
     static constexpr uint32_t kIdentityTimeoutMs = 5000;
     // A manual AT+OTA seen this recently means an update is in progress.
     static constexpr uint32_t kUserOTAHoldoffMs = 10 * 60 * 1000;
