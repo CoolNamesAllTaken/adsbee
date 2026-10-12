@@ -99,9 +99,9 @@ class FakePlatform : public AutoUpdatePlatform {
     bool Enabled() override { return enabled; }
     bool Online() override { return online; }
     bool GetIdentity(Identity& identity) override {
-        snprintf(identity.unique_id, sizeof(identity.unique_id), "E46478B14B4C1F23");
-        snprintf(identity.mac_address, sizeof(identity.mac_address), "DC:54:75:D2:6C:24");
-        snprintf(identity.part_code, sizeof(identity.part_code), "010250002G-20260529-020292");
+        snprintf(identity.unique_id, sizeof(identity.unique_id), "0123456789ABCDEF");
+        snprintf(identity.mac_address, sizeof(identity.mac_address), "02:00:00:AB:CD:EF");
+        snprintf(identity.part_code, sizeof(identity.part_code), "010250002G-20260101-000001");
         memset(identity.ota_keys[0], 'a', 128);
         memset(identity.ota_keys[1], 'b', 128);
         return true;
@@ -357,8 +357,8 @@ TEST(AutoUpdater, UpToDateChecksOncePerDay) {
     EXPECT_TRUE(f.p.commands.empty());
     EXPECT_TRUE(f.p.checkins.empty());
     // What the service is told about the device.
-    EXPECT_NE(f.p.auth_body.find("\"client\":\"esp32_auto\",\"product\":\"adsbee_1090\",\"unique_id\":\"E46478B14B4C1F23\","
-                                 "\"mac_address\":\"DC:54:75:D2:6C:24\",\"part_code\":\"010250002G-20260529-020292\","
+    EXPECT_NE(f.p.auth_body.find("\"client\":\"esp32_auto\",\"product\":\"adsbee_1090\",\"unique_id\":\"0123456789ABCDEF\","
+                                 "\"mac_address\":\"02:00:00:AB:CD:EF\",\"part_code\":\"010250002G-20260101-000001\","
                                  "\"ota_keys\":[\"aaaa"),
               std::string::npos);
     EXPECT_NE(f.p.auth_body.find("\"versions\":{\"rp2040\":\"0.9.1-rc8\",\"esp32\":\"0.9.1-rc8\"}}"), std::string::npos);

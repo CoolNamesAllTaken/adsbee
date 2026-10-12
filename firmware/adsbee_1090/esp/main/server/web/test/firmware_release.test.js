@@ -13,12 +13,12 @@ const bytes = (n, seed) => Uint8Array.from({ length: n }, (_, i) => (i * 31 + se
 // AT+DEVICE_INFO? as the 1090 prints it (the pages keep only DEVICE_INFO_LINE matches).
 const INFO_1090 = [
     'Part Code: 0010-0021-1090U',
-    'RP2040 Flash Unique ID: E46478B14B4C1F23',
+    'RP2040 Flash Unique ID: 0123456789ABCDEF',
     'RP2040 Firmware Version: 0.9.1-rc5',
-    'OTA Key 0: valid-E46478B14B4C1F23',
+    'OTA Key 0: valid-0123456789ABCDEF',
     'OTA Key 1: 3045022100abcdef',
     'ESP32 Firmware Version: 0.9.1-rc5',
-    'ESP32 Base MAC Address: DC:54:75:D2:6C:24',
+    'ESP32 Base MAC Address: 02:00:00:AB:CD:EF',
 ];
 const INFO_1421 = [
     'Part Code: 0020-0001-1421',
@@ -57,9 +57,9 @@ test('parses and orders versions, release candidates before the final release', 
 
 test('parseDeviceInfo builds the auth body for each product', () => {
     assert.deepStrictEqual(fr.parseDeviceInfo(INFO_1090, '1090'), {
-        product: 'adsbee_1090', unique_id: 'E46478B14B4C1F23', part_code: '0010-0021-1090U',
-        ota_keys: ['valid-E46478B14B4C1F23', '3045022100abcdef'],
-        versions: { rp2040: '0.9.1-rc5', esp32: '0.9.1-rc5' }, mac_address: 'DC:54:75:D2:6C:24',
+        product: 'adsbee_1090', unique_id: '0123456789ABCDEF', part_code: '0010-0021-1090U',
+        ota_keys: ['valid-0123456789ABCDEF', '3045022100abcdef'],
+        versions: { rp2040: '0.9.1-rc5', esp32: '0.9.1-rc5' }, mac_address: '02:00:00:AB:CD:EF',
     });
     assert.ok(!('mac_address' in fr.parseDeviceInfo(INFO_1090.slice(0, -1), '1090')), 'MAC only when printed');
     const i1421 = fr.parseDeviceInfo(INFO_1421, '1421');
@@ -253,7 +253,7 @@ test('chipState: dot color per state', () => {
 
 test('listing cache: per service, receiver and running version; expires', () => {
     const { cacheKey, readCache, CACHE_KEY, CHECK_INTERVAL_MS } = fr;
-    const info = { product: 'adsbee_1090', unique_id: 'E46478B14B4C1F23', versions: { rp2040: '0.9.1-rc5' } };
+    const info = { product: 'adsbee_1090', unique_id: '0123456789ABCDEF', versions: { rp2040: '0.9.1-rc5' } };
     const key = cacheKey('https://adsbee.aero/api/fw/v1/', info);
     const data = {};
     const store = { getItem: (k) => (k in data ? data[k] : null) };
@@ -294,8 +294,8 @@ test('mock: ranges, hold and check-ins as the ESP32 updater uses them', async ()
     try {
         const post = (path, body, token) => fetch(mock.base + path, { method: 'POST', body: JSON.stringify(body),
             headers: Object.assign({ 'Content-Type': 'application/json' }, token && { Authorization: `Bearer ${token}` }) });
-        const { token } = await (await post('auth', { product: 'adsbee_1090', unique_id: 'E46478B14B4C1F23',
-            ota_keys: ['valid-E46478B14B4C1F23', 'k1'], client: 'esp32_auto' })).json();
+        const { token } = await (await post('auth', { product: 'adsbee_1090', unique_id: '0123456789ABCDEF',
+            ota_keys: ['valid-0123456789ABCDEF', 'k1'], client: 'esp32_auto' })).json();
         const get = (path, headers) => fetch(mock.base + path, { headers: Object.assign({ Authorization: `Bearer ${token}` }, headers) });
 
         let listing = await (await get('releases?channel=stable')).json();
