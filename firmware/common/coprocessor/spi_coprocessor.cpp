@@ -317,6 +317,19 @@ bool SPICoprocessor::ExecuteSCCommandRequest(const ObjectDictionary::SCCommandRe
                     }
                     break;  // Successfully wrote settings data to coprocessor.
                 }
+#ifdef ON_PICO
+                case ObjectDictionary::Address::kAddrDeviceIdentity: {
+                    SettingsManager::DeviceIdentity identity;
+                    SettingsManager::GetDeviceIdentity(identity);  // Without device info the ID is still sent.
+                    if (request.offset != 0 || request.len != sizeof(identity) ||
+                        !Write(request.addr, identity, write_requires_ack)) {
+                        CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest",
+                                      "Unable to write device identity to coprocessor.");
+                        return false;
+                    }
+                    break;
+                }
+#endif
                 default:
                     CONSOLE_ERROR("SPICoprocessor::ExecuteSCCommandRequest",
                                   "No implementation defined for writing to address 0x%x on slave.", request.addr);

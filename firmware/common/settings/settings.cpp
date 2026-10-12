@@ -71,6 +71,7 @@ bool SettingsManager::Sanitize() {
     changed |= SanitizeBool(settings.subg_bias_tee_enabled, "subg_bias_tee_enabled");
     changed |= SanitizeBool(settings.remote_id_rx_enabled, "remote_id_rx_enabled");
     changed |= SanitizeBool(settings.remote_id_tx_enabled, "remote_id_tx_enabled");
+    changed |= SanitizeBool(settings.auto_update_enabled, "auto_update_enabled");
     changed |= SanitizeString(settings.remote_id_tx_uas_id, sizeof(settings.remote_id_tx_uas_id), "remote_id_tx_uas_id");
     changed |= SanitizeString(settings.remote_id_tx_operator_id, sizeof(settings.remote_id_tx_operator_id),
                               "remote_id_tx_operator_id");
@@ -205,6 +206,8 @@ void SettingsManager::Print() {
                               settings.gnss_notify ? "ENABLED" : "DISABLED");
     print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len, "\tLog Level: %s\r\n",
                               kConsoleLogLevelStrs[settings.log_level]);
+    print_buf_len += snprintf(print_buf + print_buf_len, sizeof(print_buf) - print_buf_len,
+                              "\tAutomatic Updates: %s\r\n", settings.auto_update_enabled ? "ENABLED" : "DISABLED");
     CONSOLE_PRINTF("%s", print_buf);
     print_buf_len = 0;
 
@@ -331,9 +334,6 @@ void SettingsManager::PrintAT() {
                        settings.feed_is_active[i], kReportingProtocolStrs[settings.feed_protocols[i]]);
     }
 
-    // AT+IP_MODE
-    CONSOLE_PRINTF("AT+IP_MODE=%s\r\n", IPModeToStr(settings.ip_mode));
-
     // AT+LED_ENABLE
     CONSOLE_PRINTF("AT+LED_ENABLE=%d\r\n", settings.led_enabled);
 
@@ -379,4 +379,11 @@ void SettingsManager::PrintAT() {
             CONSOLE_PRINTF("AT+WIFI_STA_NETWORK=%d,%s,%s\r\n", i + 2, net.ssid, net.password);
         }
     }
+
+    // Commands older firmware doesn't know go last: a replay there stops at the first error.
+    // AT+IP_MODE
+    CONSOLE_PRINTF("AT+IP_MODE=%s\r\n", IPModeToStr(settings.ip_mode));
+
+    // AT+AUTO_UPDATE
+    CONSOLE_PRINTF("AT+AUTO_UPDATE=%d\r\n", settings.auto_update_enabled);
 }

@@ -13,12 +13,12 @@ const bytes = (n, seed) => Uint8Array.from({ length: n }, (_, i) => (i * 31 + se
 // AT+DEVICE_INFO? as the 1090 prints it (the pages keep only DEVICE_INFO_LINE matches).
 const INFO_1090 = [
     'Part Code: 0010-0021-1090U',
-    'RP2040 Flash Unique ID: E46478B14B4C1F23',
+    'RP2040 Flash Unique ID: 0123456789ABCDEF',
     'RP2040 Firmware Version: 0.9.1-rc5',
-    'OTA Key 0: valid-E46478B14B4C1F23',
+    'OTA Key 0: valid-0123456789ABCDEF',
     'OTA Key 1: 3045022100abcdef',
     'ESP32 Firmware Version: 0.9.1-rc5',
-    'ESP32 Base MAC Address: DC:54:75:D2:6C:24',
+    'ESP32 Base MAC Address: 02:00:00:AB:CD:EF',
 ];
 const INFO_1421 = [
     'Part Code: 0020-0001-1421',
@@ -57,9 +57,9 @@ test('parses and orders versions, release candidates before the final release', 
 
 test('parseDeviceInfo builds the auth body for each product', () => {
     assert.deepStrictEqual(fr.parseDeviceInfo(INFO_1090, '1090'), {
-        product: 'adsbee_1090', unique_id: 'E46478B14B4C1F23', part_code: '0010-0021-1090U',
-        ota_keys: ['valid-E46478B14B4C1F23', '3045022100abcdef'],
-        versions: { rp2040: '0.9.1-rc5', esp32: '0.9.1-rc5' }, mac_address: 'DC:54:75:D2:6C:24',
+        product: 'adsbee_1090', unique_id: '0123456789ABCDEF', part_code: '0010-0021-1090U',
+        ota_keys: ['valid-0123456789ABCDEF', '3045022100abcdef'],
+        versions: { rp2040: '0.9.1-rc5', esp32: '0.9.1-rc5' }, mac_address: '02:00:00:AB:CD:EF',
     });
     assert.ok(!('mac_address' in fr.parseDeviceInfo(INFO_1090.slice(0, -1), '1090')), 'MAC only when printed');
     const i1421 = fr.parseDeviceInfo(INFO_1421, '1421');
@@ -253,7 +253,7 @@ test('chipState: dot color per state', () => {
 
 test('listing cache: per service, receiver and running version; expires', () => {
     const { cacheKey, readCache, CACHE_KEY, CHECK_INTERVAL_MS } = fr;
-    const info = { product: 'adsbee_1090', unique_id: 'E46478B14B4C1F23', versions: { rp2040: '0.9.1-rc5' } };
+    const info = { product: 'adsbee_1090', unique_id: '0123456789ABCDEF', versions: { rp2040: '0.9.1-rc5' } };
     const key = cacheKey('https://adsbee.aero/api/fw/v1/', info);
     const data = {};
     const store = { getItem: (k) => (k in data ? data[k] : null) };
@@ -288,6 +288,41 @@ test('a pinned RC is offered on the stable channel', () => {
     assert.deepStrictEqual([sel.state, fr.formatVersion(sel.version)], ['update', '0.9.2-rc1']);
 });
 
+// What the 1090's ESP32 uses when it updates itself (firmware/common/auto_update).
+test('mock: ranges, hold and check-ins as the ESP32 updater uses them', async () => {
+    const mock = await mock1090();
+    try {
+        const post = (path, body, token) => fetch(mock.base + path, { method: 'POST', body: JSON.stringify(body),
+            headers: Object.assign({ 'Content-Type': 'application/json' }, token && { Authorization: `Bearer ${token}` }) });
+        const { token } = await (await post('auth', { product: 'adsbee_1090', unique_id: '0123456789ABCDEF',
+            ota_keys: ['valid-0123456789ABCDEF', 'k1'], client: 'esp32_auto' })).json();
+        const get = (path, headers) => fetch(mock.base + path, { headers: Object.assign({ Authorization: `Bearer ${token}` }, headers) });
+
+        let listing = await (await get('releases?channel=stable')).json();
+        assert.strictEqual(listing.recommended_tag, `adsbee_1090-${listing.recommended}`);
+        assert.strictEqual(listing.hold, false);
+        const asset = listing.releases.find((r) => r.tag === listing.recommended_tag).assets.find((a) => a.kind === 'ota');
+
+        const whole = new Uint8Array(await (await get(asset.url)).arrayBuffer());
+        const part = await get(asset.url, { Range: 'bytes=10-19' });
+        assert.strictEqual(part.status, 206);
+        assert.strictEqual(part.headers.get('content-range'), `bytes 10-19/${asset.size}`);
+        assert.deepStrictEqual(new Uint8Array(await part.arrayBuffer()), whole.subarray(10, 20));
+        const tail = await get(asset.url, { Range: `bytes=${asset.size - 5}-${asset.size + 100}` });
+        assert.strictEqual((await tail.arrayBuffer()).byteLength, 5);
+        assert.strictEqual((await get(asset.url, { Range: `bytes=${asset.size}-` })).status, 416);
+
+        assert.strictEqual((await post('checkin', { state: 'downloading', version: listing.recommended, detail: '' }, token)).status, 204);
+        assert.deepStrictEqual(mock.checkins, [{ unique_id: '0123456789ABCDEF', state: 'downloading', version: listing.recommended, detail: '' }]);
+
+        await fetch(new URL('/__set?hold=1', mock.base));
+        listing = await (await get('releases')).json();
+        assert.deepStrictEqual([listing.hold, listing.recommended, listing.recommended_tag], [true, null, null]);
+    } finally {
+        await mock.close();
+    }
+});
+
 test('checkin posts state, version, detail and client; renews an expired token', async () => {
     const mock = await mock1090();
     try {
@@ -299,8 +334,8 @@ test('checkin posts state, version, detail and client; renews an expired token',
         assert.strictEqual(await api.checkin(info, 'failed', '0.9.1-rc6', 'x'.repeat(300)), true);
         assert.strictEqual(mock.authBodies.length, 2);
         assert.deepStrictEqual(mock.checkins.map((c) => [c.unique_id, c.state, c.version, c.client, c.detail.length]),
-                               [['E46478B14B4C1F23', 'downloading', '0.9.1-rc6', 'console', 0],
-                                ['E46478B14B4C1F23', 'failed', '0.9.1-rc6', 'console', 200]]);
+                               [['0123456789ABCDEF', 'downloading', '0.9.1-rc6', 'console', 0],
+                                ['0123456789ABCDEF', 'failed', '0.9.1-rc6', 'console', 200]]);
     } finally {
         await mock.close();
     }

@@ -73,6 +73,7 @@ class ObjectDictionary {
         kAddrESP32RebootInfo = 0x11,           // ESP32 last reset reason and optional core dump summary.
         kAddrESP32TriggerAbort = 0x12,         // Debug only: trigger abort() on the ESP32 to test core dump.
         kAddrLEDBlink = 0x13,  // Force-blink the slave's LED: uint32_t duration_ms, bypasses led_enabled.
+        kAddrDeviceIdentity = 0x14,  // SettingsManager::DeviceIdentity, RP2040 to ESP32 on request.
         kNumAddrs
     };
 
@@ -421,6 +422,9 @@ class ObjectDictionary {
     SemaphoreHandle_t network_console_rx_queue_mutex = xSemaphoreCreateMutex();
     CompositeDeviceStatus composite_device_status = {};
     ESP32DeviceStatus device_status = {};
+    // Filled by the RP2040 when requested (kAddrDeviceIdentity).
+    SettingsManager::DeviceIdentity device_identity = {};
+    volatile bool device_identity_valid = false;
 #elif defined(ON_TI)
     PFBQueue<RawUATADSBPacket> raw_uat_adsb_packet_queue =
         PFBQueue<RawUATADSBPacket>({.buf_len_num_elements = kDecodedUATADSBPacketQueueDepth,

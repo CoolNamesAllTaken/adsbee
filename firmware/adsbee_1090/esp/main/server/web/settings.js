@@ -16,6 +16,7 @@
 //     label: 'WiFi Station',
 //     group: 'Network',             // form section; sections appear in first-use order
 //     help: 'Join an existing WiFi network.',
+//     tip: 'Details shown on hover.',   // optional; the help line gets a dotted underline
 //     disconnects: true,            // warn before saving; saved last; SAVE timeout tolerated
 //     experimental: true,           // badge the entry: the feature is not yet stable
 //     query: { expect: /^WIFI_STA=/, quietMs: 350, timeoutMs: 3000 },  // all optional
@@ -148,6 +149,11 @@ class SettingsEngine {
             const help = document.createElement('div');
             help.className = 'settings-help';
             help.textContent = entry.help;
+            if (entry.tip) {
+                help.title = entry.tip;
+                help.style.cursor = 'help';
+                help.style.textDecoration = 'underline dotted';
+            }
             el.appendChild(help);
         }
 
@@ -1021,6 +1027,12 @@ const SETTINGS_SCHEMA_1090 = [
     {
         cmd: 'FEED_ENABLE', label: 'Network Feeds', group: 'System',
         help: 'Master switch for all outbound network feeds. Disabling stops every feed without changing which feeds are marked active.',
+        fields: [{ id: 'en', label: 'Enabled', type: 'bool' }],
+    },
+    {
+        cmd: 'AUTO_UPDATE', label: 'Automatic Updates', group: 'System',
+        help: 'Install firmware recommended by adsbee.aero.',
+        tip: 'Off by default. Needs internet over WiFi station or Ethernet. Sends the unique ID, part code, OTA keys and firmware versions to adsbee.aero.',
         fields: [{ id: 'en', label: 'Enabled', type: 'bool' }],
     },
     {
