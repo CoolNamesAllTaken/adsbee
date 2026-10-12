@@ -6,6 +6,7 @@
 #include "esp_http_server.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "websocket_frame_writer.hh"
 
 class WebSocketServer {
    public:
@@ -30,12 +31,15 @@ class WebSocketServer {
     // How long a frame write waits for another write to the same server to finish before the frame is dropped.
     static constexpr uint32_t kSendMutexTimeoutMs = 100;
     static constexpr uint16_t kControlFramePayloadMaxLen = 125;  // RFC 6455 section 5.5.
-    // Frame writes block the caller, so bound each send() and drop a client whose send times out or fails this many
-    // times in a row. Otherwise a client that stopped reading stalls every broadcast.
+    // Frame writes block the caller, so a client gets this long to make room for a frame. After that it counts as
+    // stalled: its frames are skipped without waiting until its socket is writable again.
+    static constexpr uint32_t kClientWritableTimeoutMs = 250;
+    // A frame the socket took part of gets this long to finish before the client is dropped.
     static constexpr uint32_t kClientSendTimeoutMs = 1000;
-    static constexpr uint8_t kMaxConsecutiveSendFailures = 3;
+    // A client that stays stalled for this long is dropped.
+    static constexpr uint32_t kClientStallTimeoutMs = 10000;
     // ClientIsWritable() guarantees room for this much: lwIP reports a socket writable while more than half of
-    // CONFIG_LWIP_TCP_SND_BUF_DEFAULT is free.
+    // CONFIG_LWIP_TCP_SND_BUF_DEFAULT is free. Broadcasts keep to this length so a frame never fits only in part.
     static constexpr uint16_t kNonBlockingMessageMaxLen = 2048;
 
     struct WebSocketServerConfig {
@@ -91,7 +95,7 @@ class WebSocketServer {
      * @param[in] message Null-terminated string to send.
      * @param[in] len_bytes Optional value for length of message to send, in case the full string in message should not
      * be sent. Does not add a null terminator.
-     * @retval Result of httpd_ws_send_frame_async.
+     * @retval ESP_OK if the message was sent.
      */
     esp_err_t SendMessage(int client_fd, const char *message, int16_t len_bytes = -1);
 
@@ -105,8 +109,9 @@ class WebSocketServer {
     /**
      * True if a frame can be sent to the client without waiting: its TCP send buffer has room for more than a frame of
      * up to kNonBlockingMessageMaxLen.
+     * @param[in] timeout_ms Longest time to wait for that room.
      */
-    bool ClientIsWritable(int client_fd) const;
+    bool ClientIsWritable(int client_fd, uint32_t timeout_ms = 0) const;
 
     /**
      * Sends a message to one client, with the heap guard and failed client handling of BroadcastMessage().
@@ -136,7 +141,8 @@ class WebSocketServer {
         bool in_use = false;
         int client_fd = 0;
         uint32_t last_message_timestamp_ms = 0;
-        uint8_t consecutive_send_failures = 0;
+        bool stalled = false;  // The last frame was skipped: the socket did not become writable in time.
+        uint32_t stalled_timestamp_ms = 0;
     };
 
     /**
@@ -151,15 +157,24 @@ class WebSocketServer {
 
     // False (with a rate limited warning) while the heap is too low to queue more TCP segments.
     bool HeapAllowsSend();
-    // Sends to the client in clients_[index] and drops it if it stopped reading or keeps failing.
+    // Sends to the client in clients_[index] and drops it if it stopped reading.
     bool SendMessageToClientIndex(uint16_t index, const char *message, int16_t len_bytes);
 
     /**
      * Writes one frame to a client while holding send_mutex_. Every frame, including PONG / CLOSE replies, must go
-     * through here: httpd_ws_send_frame_async() writes header and payload in two unlocked send() calls.
-     * @retval Result of httpd_ws_send_frame_async, or ESP_FAIL if the mutex could not be taken in time.
+     * through here so frames from different tasks don't interleave. Drops the client if only part of the frame could
+     * be written.
+     * @param[in] writable_timeout_ms Longest time to wait for the client's socket before skipping the frame.
+     * @retval kSkipped also if the mutex could not be taken in time.
      */
-    esp_err_t SendFrameLocked(int client_fd, httpd_ws_frame_t *frame);
+    WebSocketFrameWriter::Result SendFrame(int client_fd, httpd_ws_type_t type, const uint8_t *payload,
+                                           uint16_t len_bytes, uint32_t writable_timeout_ms);
+    // SendMessage() with a choice of how long to wait for the client's socket.
+    WebSocketFrameWriter::Result SendMessageFrame(int client_fd, const char *message, int16_t len_bytes,
+                                                  uint32_t writable_timeout_ms);
+
+    // Stops tracking the client and has httpd close its session.
+    void DropClient(int client_fd);
 
     /**
      * Handles a PING, PONG or CLOSE frame whose header has already been read with httpd_ws_recv_frame().

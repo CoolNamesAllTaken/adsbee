@@ -41,7 +41,7 @@ bool WebSocketServer::Init() {
                               .handler = ws_handler,
                               .user_ctx = this,
                               .is_websocket = true,
-                              // Answer PING / CLOSE ourselves so replies can't land mid-frame (see SendFrameLocked()).
+                              // Answer PING / CLOSE ourselves so replies can't land mid-frame (see SendFrame()).
                               .handle_ws_control_frames = true,
                               .supported_subprotocol = nullptr};
     esp_err_t ret = httpd_register_uri_handler(config_.server, &console_ws);
@@ -158,7 +158,7 @@ bool WebSocketServer::AddClient(int client_fd) {
             clients_[i].in_use = true;
             clients_[i].client_fd = client_fd;
             clients_[i].last_message_timestamp_ms = get_time_since_boot_ms();
-            clients_[i].consecutive_send_failures = 0;
+            clients_[i].stalled = false;
             struct timeval send_timeout = {.tv_sec = kClientSendTimeoutMs / 1000,
                                            .tv_usec = (kClientSendTimeoutMs % 1000) * 1000};
             if (setsockopt(client_fd, SOL_SOCKET, SO_SNDTIMEO, &send_timeout, sizeof(send_timeout)) != 0) {
@@ -231,37 +231,30 @@ bool WebSocketServer::SendMessageToClient(int client_fd, const char* message, in
 }
 
 bool WebSocketServer::SendMessageToClientIndex(uint16_t i, const char* message, int16_t len_bytes) {
-    uint32_t send_start_ms = get_time_since_boot_ms();
-    esp_err_t ret = SendMessage(clients_[i].client_fd, message, len_bytes);
-    uint32_t send_duration_ms = get_time_since_boot_ms() - send_start_ms;
-    if (ret == ESP_OK) {
-        clients_[i].consecutive_send_failures = 0;
+    int client_fd = clients_[i].client_fd;
+    uint32_t writable_timeout_ms = clients_[i].stalled ? 0 : kClientWritableTimeoutMs;
+    if (SendMessageFrame(client_fd, message, len_bytes, writable_timeout_ms) == WebSocketFrameWriter::kSent) {
+        clients_[i].stalled = false;
         return true;
     }
-    if (send_duration_ms >= kClientSendTimeoutMs ||
-        ++clients_[i].consecutive_send_failures >= kMaxConsecutiveSendFailures) {
-        // Client stopped reading or keeps failing. A partial frame may be on the wire, so drop it.
-        CONSOLE_WARNING("WebSocketServer::BroadcastMessage",
-                        "[%s] Dropping client %d: send failed with %s after %lu ms (%d failures in a row).",
-                        config_.label, i, esp_err_to_name(ret), (unsigned long)send_duration_ms,
-                        clients_[i].consecutive_send_failures);
-        int fd = clients_[i].client_fd;
-        RemoveClient(fd);
-        httpd_sess_trigger_close(config_.server, fd);
-    } else if (ret == ESP_ERR_NO_MEM || ret == ESP_FAIL) {
-        // Transient resource exhaustion — drop this message but keep the session alive.
-        CONSOLE_WARNING("WebSocketServer::BroadcastMessage",
-                        "[%s] Dropping message to client %d (transient error: %s).", config_.label, i,
-                        esp_err_to_name(ret));
-    } else {
-        // Permanent / unrecoverable error — close the session.
-        CONSOLE_ERROR("WebSocketServer::BroadcastMessage", "[%s] Failed to send message to client %d due to error %s.",
-                      config_.label, i, esp_err_to_name(ret));
-        int fd = clients_[i].client_fd;
-        RemoveClient(fd);  // Free slot immediately; don't wait for ws_close_fd which may not fire.
-        httpd_sess_trigger_close(config_.server, fd);
+    if (!clients_[i].in_use || clients_[i].client_fd != client_fd) {
+        return false;  // Dropped by SendFrame().
+    }
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+    if (!clients_[i].stalled) {
+        clients_[i].stalled = true;
+        clients_[i].stalled_timestamp_ms = timestamp_ms;
+    } else if (timestamp_ms - clients_[i].stalled_timestamp_ms >= kClientStallTimeoutMs) {
+        CONSOLE_WARNING("WebSocketServer::BroadcastMessage", "[%s] Dropping client %d: stalled for %lu ms.",
+                        config_.label, i, (unsigned long)(timestamp_ms - clients_[i].stalled_timestamp_ms));
+        DropClient(client_fd);
     }
     return false;
+}
+
+void WebSocketServer::DropClient(int client_fd) {
+    RemoveClient(client_fd);  // Free the slot now; httpd's close callback may not fire for a dead session.
+    httpd_sess_trigger_close(config_.server, client_fd);
 }
 
 uint16_t WebSocketServer::GetClientFds(int* client_fds) const {
@@ -272,37 +265,66 @@ uint16_t WebSocketServer::GetClientFds(int* client_fds) const {
     return num_clients;
 }
 
-bool WebSocketServer::ClientIsWritable(int client_fd) const {
+bool WebSocketServer::ClientIsWritable(int client_fd, uint32_t timeout_ms) const {
     fd_set write_fds;
     FD_ZERO(&write_fds);
     FD_SET(client_fd, &write_fds);
-    struct timeval no_wait = {.tv_sec = 0, .tv_usec = 0};
-    return lwip_select(client_fd + 1, nullptr, &write_fds, nullptr, &no_wait) > 0;
+    struct timeval timeout = {.tv_sec = static_cast<time_t>(timeout_ms / 1000),
+                              .tv_usec = static_cast<suseconds_t>((timeout_ms % 1000) * 1000)};
+    return lwip_select(client_fd + 1, nullptr, &write_fds, nullptr, &timeout) > 0;
 }
 
 esp_err_t WebSocketServer::SendMessage(int client_fd, const char* message, int16_t len_bytes) {
+    return SendMessageFrame(client_fd, message, len_bytes, kClientWritableTimeoutMs) == WebSocketFrameWriter::kSent
+               ? ESP_OK
+               : ESP_FAIL;
+}
+
+WebSocketFrameWriter::Result WebSocketServer::SendMessageFrame(int client_fd, const char* message, int16_t len_bytes,
+                                                               uint32_t writable_timeout_ms) {
     if (len_bytes > kWebSocketMessageMaxLen) {
         CONSOLE_ERROR("WebSocketServer::SendMessage",
                       "[%s] Message length %d exceeds maximum of %d, truncating message.", config_.label, len_bytes,
                       kWebSocketMessageMaxLen);
         len_bytes = kWebSocketMessageMaxLen;
     }
-    httpd_ws_frame_t ws_pkt = {.final = true,
-                               .fragmented = false,
-                               .type = config_.send_as_binary ? HTTPD_WS_TYPE_BINARY : HTTPD_WS_TYPE_TEXT,
-                               .payload = (uint8_t*)message,
-                               .len = len_bytes > 0 ? len_bytes : strnlen(message, kWebSocketMessageMaxLen)};
-
-    return SendFrameLocked(client_fd, &ws_pkt);
+    uint16_t message_len_bytes = len_bytes > 0 ? len_bytes : strnlen(message, kWebSocketMessageMaxLen);
+    return SendFrame(client_fd, config_.send_as_binary ? HTTPD_WS_TYPE_BINARY : HTTPD_WS_TYPE_TEXT,
+                     (const uint8_t*)message, message_len_bytes, writable_timeout_ms);
 }
 
-esp_err_t WebSocketServer::SendFrameLocked(int client_fd, httpd_ws_frame_t* frame) {
-    if (!send_mutex_ || xSemaphoreTake(send_mutex_, pdMS_TO_TICKS(kSendMutexTimeoutMs)) != pdTRUE) {
-        return ESP_FAIL;  // Treated as a transient error: the frame is dropped, the session is kept.
+// Adapts an lwIP socket to WebSocketFrameWriter.
+struct FrameSocket {
+    const WebSocketServer& server;
+    int fd;
+
+    bool WaitWritable(uint32_t timeout_ms) { return server.ClientIsWritable(fd, timeout_ms); }
+    int Send(const uint8_t* data, size_t num_bytes, bool wait) {
+        return lwip_send(fd, data, num_bytes, wait ? 0 : MSG_DONTWAIT);  // A waiting send ends at SO_SNDTIMEO.
     }
-    esp_err_t ret = httpd_ws_send_frame_async(config_.server, client_fd, frame);
+    uint32_t TimeMs() { return get_time_since_boot_ms(); }
+};
+
+WebSocketFrameWriter::Result WebSocketServer::SendFrame(int client_fd, httpd_ws_type_t type, const uint8_t* payload,
+                                                        uint16_t len_bytes, uint32_t writable_timeout_ms) {
+    if (!send_mutex_ || xSemaphoreTake(send_mutex_, pdMS_TO_TICKS(kSendMutexTimeoutMs)) != pdTRUE) {
+        return WebSocketFrameWriter::kSkipped;
+    }
+    if (httpd_ws_get_fd_info(config_.server, client_fd) == HTTPD_WS_CLIENT_INVALID) {
+        xSemaphoreGive(send_mutex_);
+        RemoveClient(client_fd);  // The session is gone.
+        return WebSocketFrameWriter::kSkipped;
+    }
+    FrameSocket socket = {*this, client_fd};
+    WebSocketFrameWriter::Result result =
+        WebSocketFrameWriter::WriteFrame(socket, type, payload, len_bytes, writable_timeout_ms, kClientSendTimeoutMs);
     xSemaphoreGive(send_mutex_);
-    return ret;
+    if (result == WebSocketFrameWriter::kBroken) {
+        CONSOLE_WARNING("WebSocketServer::SendFrame", "[%s] Dropping client with fd %d: frame not sent completely.",
+                        config_.label, client_fd);
+        DropClient(client_fd);
+    }
+    return result;
 }
 
 esp_err_t WebSocketServer::HandleControlFrame(httpd_req_t* req, int client_fd, httpd_ws_frame_t& ws_pkt) {
@@ -323,18 +345,11 @@ esp_err_t WebSocketServer::HandleControlFrame(httpd_req_t* req, int client_fd, h
 
     switch (ws_pkt.type) {
         case HTTPD_WS_TYPE_PING: {
-            httpd_ws_frame_t pong = {.final = true,
-                                     .fragmented = false,
-                                     .type = HTTPD_WS_TYPE_PONG,
-                                     .payload = ws_pkt.len > 0 ? payload : nullptr,
-                                     .len = ws_pkt.len};
-            SendFrameLocked(client_fd, &pong);  // A missed PONG is not worth closing the session over.
+            SendFrame(client_fd, HTTPD_WS_TYPE_PONG, payload, ws_pkt.len, 0);  // A skipped PONG is acceptable.
             return ESP_OK;
         }
         case HTTPD_WS_TYPE_CLOSE: {
-            httpd_ws_frame_t close = {
-                .final = true, .fragmented = false, .type = HTTPD_WS_TYPE_CLOSE, .payload = nullptr, .len = 0};
-            SendFrameLocked(client_fd, &close);
+            SendFrame(client_fd, HTTPD_WS_TYPE_CLOSE, nullptr, 0, 0);
             if (config_.pre_disconnect_callback) {
                 config_.pre_disconnect_callback(this, client_fd);
             }

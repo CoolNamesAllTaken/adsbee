@@ -23,6 +23,7 @@ static const uint16_t kGDL90Port = 4000;
 
 static const uint16_t kNetworkConsoleWelcomeMessageMaxLen = 1000;
 static const uint16_t kNetworkMetricsMessageMaxLen = 2048;
+static_assert(kNetworkMetricsMessageMaxLen <= WebSocketServer::kNonBlockingMessageMaxLen);
 
 /* obsolete */
 static const uint16_t kNetworkControlPort = 3333;  // NOTE: This must match the port number used in index.html!
@@ -1067,7 +1068,8 @@ void ADSBeeServer::SendAircraftJSONMessages() {
     // Batch aircraft into JSON arrays of up to one websocket message each. One frame per aircraft (two socket writes
     // each) cost ~100 TCP segments per second per client at a busy site; on the W5500 Ethernet board the network tasks
     // doing that outrank the SPI receive task, which then missed RP2040 handshakes until the RP2040 reset the board.
-    char batch_buf[WebSocketServer::kWebSocketMessageMaxLen];
+    // Frames of up to kNonBlockingMessageMaxLen always fit a writable socket whole.
+    char batch_buf[WebSocketServer::kNonBlockingMessageMaxLen];
     WriteAircraftJSONLiveMapArrays(aircraft_dictionary, get_time_since_boot_ms(), batch_buf, sizeof(batch_buf),
                                    [this](const char* buf, uint16_t len) { network_aircraft.BroadcastMessage(buf, len); });
 }
