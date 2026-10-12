@@ -349,7 +349,7 @@ bool SettingsMigrator::Migrate(const uint8_t* blob, uint16_t blob_len, uint32_t 
     settings_v14::Settings v14;
     settings_v15::Settings v15;
     settings_v16::Settings v16;
-    settings_v17::Settings v17;
+    static settings_v17::Settings v17;  // Static: the snapshots above already fill the RP2040's 4 kB stack.
 
     switch (from_version) {
         case 12: {

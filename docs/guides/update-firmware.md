@@ -44,6 +44,20 @@ The page identifies the ADSBee to the adsbee.aero firmware service with its uniq
 
 An ADSBee without valid OTA keys (for example a self-built one) shows `⚠ no keys` and a link to the releases page; download the .ota file there and use Upload Firmware.
 
+## Automatic updates
+
+Off by default. When on, the ADSBee 1090 installs the firmware that the adsbee.aero firmware service recommends for it, with no browser involved. It needs internet access through WiFi station or Ethernet.
+
+Turn it on with **Settings → System → Automatic Updates** on the device's webpage, or with `AT+AUTO_UPDATE=1` followed by `AT+SETTINGS=SAVE`. `AT+AUTO_UPDATE?` shows the setting. A settings reset and a firmware update from an older version both leave it off.
+
+* **When.** The first check is a few minutes after power-up, then once a day.
+* **What is sent to adsbee.aero.** The unique ID, the ESP32 MAC address, the part code, both OTA keys and the running firmware versions, over HTTPS, plus the state of an update (downloading, installed, failed). Nothing is sent while the setting is off.
+* **What is installed.** Only the release the service recommends for this ADSBee, and an older one only when the service rolls it back. The ESP32 downloads the .ota file in small pieces, hands them to the RP2040 through the same path as Upload Firmware, and checks the file's SHA-256 before the new firmware may boot. The ADSBee then restarts once; feeds pause for about as long as with Upload Firmware.
+* **When it fails.** The running firmware stays. A dropped connection resumes where it stopped. A failed update is tried at most 3 times a day.
+* **Status.** The version dropdown at the top right of the webpage shows `⟳ auto`, with `downloading 42%`, `installing`, `failed`, `held` (the service paused updates for this ADSBee) or `no keys`.
+
+An ADSBee without valid OTA keys can't use automatic updates.
+
 ## Building firmware from source
 
 To build the firmware yourself, see the [firmware README](https://github.com/PantsForBirds/adsbee/blob/main/firmware/README.md) on GitHub. ADSBee 1421 firmware updates are covered on the [ADSBee m1421 page](../adsbee-1421/m1421.md#firmware-updates-from-your-host).

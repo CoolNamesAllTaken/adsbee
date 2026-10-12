@@ -17,7 +17,7 @@ class AutoUpdateManager : public AutoUpdatePlatform {
     static const char kAPIBase[];
 
     // Task stack is internal SRAM. The TLS handshake is the deep part.
-    static constexpr uint32_t kTaskStackSizeBytes = 7168;
+    static constexpr uint32_t kTaskStackSizeBytes = 8192;
     static constexpr UBaseType_t kTaskPriority = tskIDLE_PRIORITY;  // Same as the feed task: never ahead of SPI or feeds.
     static constexpr uint32_t kHTTPTimeoutMs = 15000;
     static constexpr uint16_t kHTTPBufferLenBytes = 1024;
@@ -69,6 +69,7 @@ class AutoUpdateManager : public AutoUpdatePlatform {
 
    private:
     static esp_err_t HTTPEventHandler(esp_http_client_event_t* event);
+    bool HTTPPerform(const HttpRequest& request, BodySink* sink);
     void HTTPClose();
     void NoteUserOTA(const char* buf, size_t len, const char* marker);
 
@@ -79,6 +80,7 @@ class AutoUpdateManager : public AutoUpdatePlatform {
     esp_http_client_handle_t client_ = nullptr;
     BodySink* sink_ = nullptr;
     bool aborted_ = false;
+    bool got_body_ = false;
     uint32_t retry_after_s_ = 0;
 
     StreamBufferHandle_t console_rx_buf_ = nullptr;

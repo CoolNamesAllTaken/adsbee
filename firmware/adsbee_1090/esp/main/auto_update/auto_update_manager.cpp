@@ -7,7 +7,9 @@
 #include "device_info.hh"
 #include "esp_crt_bundle.h"
 #include "esp_random.h"
+#include "esp_heap_caps.h"
 #include "hal.hh"
+#include "hardware_capabilities.hh"
 #include "nvs.h"
 #include "object_dictionary.hh"
 #include "settings.hh"
@@ -82,9 +84,11 @@ void AutoUpdateManager::Task() {
                 CONSOLE_WARNING("AutoUpdateManager::Task", "Update to %s failed: %s.", updater->version(),
                                 updater->detail());
             }
-            CONSOLE_INFO("AutoUpdateManager::Task", "State %s, next check in %lu s, stack headroom %u Bytes.",
+            CONSOLE_INFO("AutoUpdateManager::Task",
+                         "State %s, next check in %lu s. Stack headroom %u Bytes, lowest free heap since boot %u Bytes.",
                          AutoUpdater::StateToStr(updater->state()), (unsigned long)(delay_ms / 1000),
-                         (unsigned)uxTaskGetStackHighWaterMark(NULL));
+                         (unsigned)uxTaskGetStackHighWaterMark(NULL),
+                         (unsigned)heap_caps_get_minimum_free_size(HardwareCapabilities::kInternalHeapCaps));
         }
 
         xSemaphoreTake(updater_mutex_, portMAX_DELAY);
@@ -186,6 +190,7 @@ esp_err_t AutoUpdateManager::HTTPEventHandler(esp_http_client_event_t* event) {
             }
             break;
         case HTTP_EVENT_ON_DATA:
+            self->got_body_ = true;
             if (self->sink_ != nullptr && !self->aborted_ &&
                 !self->sink_->OnBody(esp_http_client_get_status_code(event->client),
                                      static_cast<const uint8_t*>(event->data), event->data_len)) {
@@ -206,6 +211,21 @@ void AutoUpdateManager::HTTPClose() {
 }
 
 bool AutoUpdateManager::Http(const HttpRequest& request, HttpResult& result, BodySink* sink) {
+    // A kept-alive connection the server has closed in the meantime fails at once: try again on a fresh one.
+    for (int attempt = 0; attempt < 2; attempt++) {
+        bool reused = client_ != nullptr;
+        if (HTTPPerform(request, sink)) {
+            result.status = esp_http_client_get_status_code(client_);
+            result.retry_after_s = retry_after_s_;
+            return true;
+        }
+        HTTPClose();
+        if (!reused || got_body_ || aborted_) break;
+    }
+    return false;
+}
+
+bool AutoUpdateManager::HTTPPerform(const HttpRequest& request, BodySink* sink) {
     char url[sizeof(kAPIBase) + 160];
     snprintf(url, sizeof(url), "%s%s", kAPIBase, request.path);
     if (client_ == nullptr) {
@@ -254,16 +274,11 @@ bool AutoUpdateManager::Http(const HttpRequest& request, HttpResult& result, Bod
 
     sink_ = sink;
     aborted_ = false;
+    got_body_ = false;
     retry_after_s_ = 0;
     esp_err_t err = esp_http_client_perform(client_);
     sink_ = nullptr;
-    if (err != ESP_OK || aborted_) {
-        HTTPClose();  // Start the next request on a fresh connection.
-        return false;
-    }
-    result.status = esp_http_client_get_status_code(client_);
-    result.retry_after_s = retry_after_s_;
-    return true;
+    return err == ESP_OK && !aborted_;
 }
 
 void AutoUpdateManager::ConsoleSend(const uint8_t* data, size_t len) {
