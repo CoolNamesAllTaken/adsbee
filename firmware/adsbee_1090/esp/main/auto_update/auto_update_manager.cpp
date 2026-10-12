@@ -30,76 +30,94 @@ static const char kNVSStateKey[] = "state";
 AutoUpdateManager auto_update_manager;
 
 static void auto_update_task(void* pvParameters) {
-    auto_update_manager.Task();  // Returns when the setting is turned off.
+    auto_update_manager.Task();
     vTaskDelete(NULL);
 }
 
 void AutoUpdateManager::Update() {
-    if (task_ != nullptr || !Enabled()) return;
-    if (console_rx_buf_ == nullptr) {
-        console_rx_buf_ = xStreamBufferCreate(kConsoleRxBufLenBytes, 1);
-        if (console_rx_buf_ == nullptr) return;
+    if (task_ != nullptr) return;  // A check is running.
+    uint32_t now_ms = NowMs();
+    if (!Enabled()) {
+        if (updater_ != nullptr) {
+            xSemaphoreTake(updater_mutex_, portMAX_DELAY);
+            delete updater_;
+            updater_ = nullptr;
+            xSemaphoreGive(updater_mutex_);
+            // The OTA keys are only kept while the feature is on.
+            object_dictionary.device_identity_valid = false;
+            memset(&object_dictionary.device_identity, 0, sizeof(object_dictionary.device_identity));
+            low_memory_ = false;
+        }
+        return;
     }
+    if (updater_ == nullptr) {
+        char version[kVersionMaxLen + 1];
+        if (ObjectDictionary::kFirmwareVersionReleaseCandidate == 0) {
+            snprintf(version, sizeof(version), "%d.%d.%d", ObjectDictionary::kFirmwareVersionMajor,
+                     ObjectDictionary::kFirmwareVersionMinor, ObjectDictionary::kFirmwareVersionPatch);
+        } else {
+            snprintf(version, sizeof(version), "%d.%d.%d-rc%d", ObjectDictionary::kFirmwareVersionMajor,
+                     ObjectDictionary::kFirmwareVersionMinor, ObjectDictionary::kFirmwareVersionPatch,
+                     ObjectDictionary::kFirmwareVersionReleaseCandidate);
+        }
+        AutoUpdater::Config config;
+#ifdef AUTO_UPDATE_FIRST_CHECK_S
+        config.first_check_delay_ms = AUTO_UPDATE_FIRST_CHECK_S * 1000;  // Bench builds only.
+        config.first_check_jitter_ms = 0;
+#endif
+        AutoUpdater* updater = new (std::nothrow) AutoUpdater(*this, version, config);
+        if (console_rx_buf_ == nullptr) console_rx_buf_ = xStreamBufferCreate(kConsoleRxBufLenBytes, 1);
+        if (updater == nullptr || console_rx_buf_ == nullptr) {
+            delete updater;
+            return;
+        }
+        xSemaphoreTake(updater_mutex_, portMAX_DELAY);
+        updater_ = updater;
+        xSemaphoreGive(updater_mutex_);
+        next_run_timestamp_ms_ = now_ms + updater->FirstDelayMs(now_ms);
+        CONSOLE_INFO("AutoUpdateManager::Update", "Automatic updates on, running %s.", version);
+    }
+    if (static_cast<int32_t>(now_ms - next_run_timestamp_ms_) < 0) return;
+
+    // A check costs about 40 kB of internal RAM at its peak (task stack plus the TLS handshake). Without that much to
+    // spare, WiFi and Ethernet allocations start failing, so wait for a better moment.
+    uint32_t free_bytes = HardwareCapabilities::GetInternalFreeBytes();
+    if (free_bytes < kMinFreeHeapBytesToRun) {
+        if (!low_memory_) {
+            CONSOLE_WARNING("AutoUpdateManager::Update",
+                            "Not checking for updates: %lu Bytes of heap free, need %lu. Turning off the WiFi access "
+                            "point or station frees memory.",
+                            (unsigned long)free_bytes, (unsigned long)kMinFreeHeapBytesToRun);
+        }
+        low_memory_ = true;
+        next_run_timestamp_ms_ = now_ms + kLowMemoryRetryMs;
+        return;
+    }
+    low_memory_ = false;
     if (xTaskCreate(auto_update_task, "auto_update", kTaskStackSizeBytes, NULL, kTaskPriority, &task_) != pdPASS) {
         task_ = nullptr;
+        next_run_timestamp_ms_ = now_ms + kLowMemoryRetryMs;
         CONSOLE_ERROR("AutoUpdateManager::Update", "Not enough memory for the automatic update task.");
     }
 }
 
 void AutoUpdateManager::Task() {
-    char version[kVersionMaxLen + 1];
-    if (ObjectDictionary::kFirmwareVersionReleaseCandidate == 0) {
-        snprintf(version, sizeof(version), "%d.%d.%d", ObjectDictionary::kFirmwareVersionMajor,
-                 ObjectDictionary::kFirmwareVersionMinor, ObjectDictionary::kFirmwareVersionPatch);
-    } else {
-        snprintf(version, sizeof(version), "%d.%d.%d-rc%d", ObjectDictionary::kFirmwareVersionMajor,
-                 ObjectDictionary::kFirmwareVersionMinor, ObjectDictionary::kFirmwareVersionPatch,
-                 ObjectDictionary::kFirmwareVersionReleaseCandidate);
-    }
-    AutoUpdater::Config config;
-#ifdef AUTO_UPDATE_FIRST_CHECK_S
-    config.first_check_delay_ms = AUTO_UPDATE_FIRST_CHECK_S * 1000;  // Bench builds only.
-    config.first_check_jitter_ms = 0;
-#endif
-    AutoUpdater* updater = new (std::nothrow) AutoUpdater(*this, version, config);
-    if (updater != nullptr) {
-        xSemaphoreTake(updater_mutex_, portMAX_DELAY);
-        updater_ = updater;
-        xSemaphoreGive(updater_mutex_);
-        CONSOLE_INFO("AutoUpdateManager::Task", "Automatic updates on, running %s.", version);
-
-        uint32_t delay_ms = updater->FirstDelayMs(NowMs());
-        while (Enabled()) {
-            uint32_t start_ms = NowMs();
-            while (Enabled() && NowMs() - start_ms < delay_ms) {
-                vTaskDelay(pdMS_TO_TICKS(1000));
-            }
-            if (!Enabled()) break;
-            xStreamBufferReset(console_rx_buf_);
-            capturing_ = true;
-            delay_ms = updater->RunOnce();
-            capturing_ = false;
-            HTTPClose();  // TLS buffers are only held while talking to the service.
-            if (updater->state() == AutoUpdater::kFailed) {
-                CONSOLE_WARNING("AutoUpdateManager::Task", "Update to %s failed: %s.", updater->version(),
-                                updater->detail());
-            }
-            CONSOLE_INFO("AutoUpdateManager::Task",
-                         "State %s, next check in %lu s. Stack headroom %u Bytes, lowest free heap since boot %u Bytes.",
-                         AutoUpdater::StateToStr(updater->state()), (unsigned long)(delay_ms / 1000),
-                         (unsigned)uxTaskGetStackHighWaterMark(NULL),
-                         (unsigned)heap_caps_get_minimum_free_size(HardwareCapabilities::kInternalHeapCaps));
-        }
-
-        xSemaphoreTake(updater_mutex_, portMAX_DELAY);
-        updater_ = nullptr;
-        xSemaphoreGive(updater_mutex_);
-        delete updater;
-    }
+    // One check (and install, when one is offered). The task and its TLS buffers exist only for this long.
+    xStreamBufferReset(console_rx_buf_);
+    tap_line_len_ = 0;
+    capturing_ = true;
+    uint32_t delay_ms = updater_->RunOnce();
+    capturing_ = false;
     HTTPClose();
-    // The OTA keys are only needed while the feature is on.
-    object_dictionary.device_identity_valid = false;
-    memset(&object_dictionary.device_identity, 0, sizeof(object_dictionary.device_identity));
+    if (updater_->state() == AutoUpdater::kFailed) {
+        CONSOLE_WARNING("AutoUpdateManager::Task", "Update to %s failed: %s.", updater_->version(), updater_->detail());
+    }
+    CONSOLE_INFO("AutoUpdateManager::Task",
+                 "State %s, next check in %lu s. Stack headroom %u Bytes, lowest free heap since boot %u Bytes.",
+                 AutoUpdater::StateToStr(updater_->state()), (unsigned long)(delay_ms / 1000),
+                 (unsigned)uxTaskGetStackHighWaterMark(NULL),
+                 (unsigned)heap_caps_get_minimum_free_size(HardwareCapabilities::kInternalHeapCaps));
+    next_run_timestamp_ms_ = NowMs() + delay_ms;
     task_ = nullptr;
 }
 
@@ -108,7 +126,7 @@ void AutoUpdateManager::GetStatus(Status& status) {
     status.enabled = Enabled();
     xSemaphoreTake(updater_mutex_, portMAX_DELAY);
     if (updater_ != nullptr) {
-        status.state = updater_->state();
+        status.state = low_memory_ ? "low memory" : AutoUpdater::StateToStr(updater_->state());
         strncpy(status.version, updater_->version(), kVersionMaxLen);
         status.progress_percent = updater_->progress_percent();
     }
@@ -128,15 +146,30 @@ void AutoUpdateManager::NoteUserOTA(const char* buf, size_t len, const char* mar
 
 void AutoUpdateManager::OnConsoleOutput(const uint8_t* buf, size_t len) {
     if (capturing_) {
-        if (console_rx_buf_) xStreamBufferSend(console_rx_buf_, buf, len, 0);
-    } else if (task_ != nullptr) {
+        // Keep only the replies the updater waits for, so a flood of log lines can't push them out of the buffer.
+        for (size_t i = 0; i < len; i++) {
+            char c = static_cast<char>(buf[i]);
+            if (c != '\n') {
+                if (c != '\r' && tap_line_len_ < sizeof(tap_line_)) tap_line_[tap_line_len_++] = c;
+                continue;
+            }
+            bool overflowed = tap_line_len_ >= sizeof(tap_line_);
+            tap_line_[overflowed ? sizeof(tap_line_) - 1 : tap_line_len_] = '\0';
+            if (!overflowed && (strcmp(tap_line_, "OK") == 0 || strcmp(tap_line_, "READY") == 0 ||
+                                strncmp(tap_line_, "ERROR", 5) == 0 || strncmp(tap_line_, "Partition: ", 11) == 0)) {
+                tap_line_[tap_line_len_++] = '\n';
+                xStreamBufferSend(console_rx_buf_, tap_line_, tap_line_len_, 0);
+            }
+            tap_line_len_ = 0;
+        }
+    } else if (updater_ != nullptr) {
         // An OTA driven from USB or the web shows up as the RP2040's replies to its writes.
         NoteUserOTA(reinterpret_cast<const char*>(buf), len, "Bytes to partition");
     }
 }
 
 void AutoUpdateManager::OnConsoleInput(const char* buf, size_t len) {
-    if (task_ != nullptr) NoteUserOTA(buf, len, "AT+OTA=");
+    if (updater_ != nullptr) NoteUserOTA(buf, len, "AT+OTA=");
 }
 
 uint32_t AutoUpdateManager::NowMs() { return get_time_since_boot_ms(); }

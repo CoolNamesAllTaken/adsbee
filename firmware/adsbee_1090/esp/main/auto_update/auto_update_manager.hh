@@ -8,8 +8,9 @@
 #include "freertos/task.h"
 
 /**
- * Runs AutoUpdater (common/auto_update) on the ESP32: a task that exists only while the AUTO_UPDATE setting is on,
- * HTTPS to the firmware service, the RP2040 console through the network console queues, and state in NVS.
+ * Runs AutoUpdater (common/auto_update) on the ESP32: HTTPS to the firmware service, the RP2040 console through the
+ * network console queues, and state in NVS. With the AUTO_UPDATE setting off nothing is allocated. With it on, a task
+ * exists only for the duration of a check.
  */
 class AutoUpdateManager : public AutoUpdatePlatform {
    public:
@@ -21,20 +22,23 @@ class AutoUpdateManager : public AutoUpdatePlatform {
     static constexpr UBaseType_t kTaskPriority = tskIDLE_PRIORITY;  // Same as the feed task: never ahead of SPI or feeds.
     static constexpr uint32_t kHTTPTimeoutMs = 15000;
     static constexpr uint16_t kHTTPBufferLenBytes = 1024;
-    static constexpr uint16_t kConsoleRxBufLenBytes = 2048;  // A burst of RP2040 log lines must not push out an OK.
+    static constexpr uint16_t kConsoleRxBufLenBytes = 512;  // Holds replies only (see OnConsoleOutput).
     static constexpr uint32_t kIdentityTimeoutMs = 5000;
     // A manual AT+OTA seen this recently means an update is in progress.
     static constexpr uint32_t kUserOTAHoldoffMs = 10 * 60 * 1000;
+    // Free internal heap needed to start a check: its 40 kB peak plus what the network stacks need meanwhile.
+    static constexpr uint32_t kMinFreeHeapBytesToRun = 56 * 1024;
+    static constexpr uint32_t kLowMemoryRetryMs = 10 * 60 * 1000;
 
     struct Status {
         bool enabled = false;
-        AutoUpdater::State state = AutoUpdater::kIdle;
+        const char* state = "idle";
         char version[kVersionMaxLen + 1] = {0};
         uint8_t progress_percent = 0;
     };
 
     /**
-     * Starts the task when the setting is on. Call from the main loop.
+     * Starts a check when one is due. Call from the main loop.
      */
     void Update();
 
@@ -75,7 +79,9 @@ class AutoUpdateManager : public AutoUpdatePlatform {
 
     TaskHandle_t task_ = nullptr;
     SemaphoreHandle_t updater_mutex_ = xSemaphoreCreateMutex();
-    AutoUpdater* updater_ = nullptr;
+    AutoUpdater* updater_ = nullptr;  // Exists while the setting is on.
+    uint32_t next_run_timestamp_ms_ = 0;
+    volatile bool low_memory_ = false;
 
     esp_http_client_handle_t client_ = nullptr;
     BodySink* sink_ = nullptr;
@@ -85,6 +91,8 @@ class AutoUpdateManager : public AutoUpdatePlatform {
 
     StreamBufferHandle_t console_rx_buf_ = nullptr;
     volatile bool capturing_ = false;  // The updater is reading the console.
+    char tap_line_[96] = {0};          // Console line being assembled on the SPI receive task.
+    size_t tap_line_len_ = 0;
     volatile uint32_t last_user_ota_timestamp_ms_ = 0;
     volatile bool user_ota_seen_ = false;
 };

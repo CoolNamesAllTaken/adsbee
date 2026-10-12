@@ -54,9 +54,9 @@ Turn it on with **Settings → System → Automatic Updates** on the device's we
 * **What is sent to adsbee.aero.** The unique ID, the ESP32 MAC address, the part code, both OTA keys and the running firmware versions, over HTTPS, plus the state of an update (downloading, installed, failed). Nothing is sent while the setting is off.
 * **What is installed.** Only the release the service recommends for this ADSBee, and an older one only when the service rolls it back. The ESP32 downloads the .ota file in small pieces, hands them to the RP2040 through the same path as Upload Firmware, and checks the file's SHA-256 before the new firmware may boot. The ADSBee then restarts once; feeds pause for about as long as with Upload Firmware.
 * **When it fails.** The running firmware stays. A dropped connection resumes where it stopped. A failed update is tried at most 3 times a day.
-* **Status.** The version dropdown at the top right of the webpage shows `⟳ auto`, with `downloading 42%`, `installing`, `failed`, `held` (the service paused updates for this ADSBee) or `no keys`.
+* **Status.** The version dropdown at the top right of the webpage shows `⟳ auto`, with `downloading 42%`, `installing`, `failed`, `held` (the service paused updates for this ADSBee), `no keys` or `low memory`.
 
-An ADSBee without valid OTA keys can't use automatic updates.
+An ADSBee without valid OTA keys can't use automatic updates. An ADSBee 1090 without PSRAM that runs Ethernet, the WiFi access point and WiFi station all at once has too little free memory for the secure connection and shows `low memory`; turn off an interface it doesn't need.
 
 ## Building firmware from source
 

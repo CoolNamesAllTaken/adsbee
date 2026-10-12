@@ -815,7 +815,7 @@ void ADSBeeServer::SendNetworkMetricsMessage() {
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              ", \"auto_update\": { \"enabled\": %s, \"state\": \"%s\", \"version\": \"%s\", \"progress\": %u }",
-             auto_update.enabled ? "true" : "false", AutoUpdater::StateToStr(auto_update.state), auto_update.version,
+             auto_update.enabled ? "true" : "false", auto_update.state, auto_update.version,
              auto_update.progress_percent);
     snprintf(metrics_message + strnlen(metrics_message, kNetworkMetricsMessageMaxLen),
              kNetworkMetricsMessageMaxLen - strnlen(metrics_message, kNetworkMetricsMessageMaxLen), " }}\n");
