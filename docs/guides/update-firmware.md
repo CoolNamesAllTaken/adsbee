@@ -40,7 +40,7 @@ Newer firmware shows the installed version at the top right of the device's webp
 2. Tick **RC** to see release candidates too. Release candidates have no guarantee of stability or of a clean migration to or from other firmware versions.
 3. Click **⇣ Update**. The page downloads the file, checks its SHA-256 and runs the same update as Upload Firmware. Download your settings first, as above. When the ADSBee is back the page checks again.
 
-The page identifies the ADSBee to the adsbee.aero firmware service with its unique ID, part code and OTA keys.
+The page identifies the ADSBee to the adsbee.aero firmware service with its unique ID, part code and OTA keys. It also tells the service when an update starts and whether it installed or failed.
 
 An ADSBee without valid OTA keys (for example a self-built one) shows `⚠ no keys` and a link to the releases page; download the .ota file there and use Upload Firmware.
 
