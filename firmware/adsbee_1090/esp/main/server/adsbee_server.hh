@@ -7,6 +7,8 @@
 #include "esp_http_server.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/stream_buffer.h"
+#include "idle_session_tracker.hh"
+#include "settings.hh"
 #include "uat_uplink_utils.hh"
 #include "websocket_server.hh"
 
@@ -39,6 +41,24 @@ class ADSBeeServer {
     static constexpr uint16_t kUplinkRingDepth = 8;
     static_assert(kUATUplinkMessageNumBytes <= WebSocketServer::kNonBlockingMessageMaxLen);
     static constexpr uint32_t kUplinkDropWarningIntervalMs = 5000;
+
+    // Web server sessions. Every WebSocket client holds one for as long as it is connected. The rest are for HTTP
+    // requests: enough for the connections a browser opens in parallel while it loads a page.
+    static constexpr uint16_t kNumWebSocketEndpoints = 4;  // /console, /metrics, /aircraft, /uplink.
+    static constexpr uint16_t kMaxNumClientsPerWebSocket = 4;
+    static constexpr uint16_t kMaxNumHTTPSessions = 6;
+    static constexpr uint16_t kMaxNumWebServerSessions =
+        kNumWebSocketEndpoints * kMaxNumClientsPerWebSocket + kMaxNumHTTPSessions;
+    static constexpr uint16_t kWebServerBacklog = 5;  // Connections waiting for a session.
+    // lwIP must hold every web server session next to all feeds, or it runs out before the web server's own limit and
+    // the web server never closes a session to make room.
+    // Sockets: the web server uses 3 itself, GDL90 uses 1.
+    static_assert(kMaxNumWebServerSessions + 3 + SettingsManager::Settings::kMaxNumFeeds + 1 <= CONFIG_LWIP_MAX_SOCKETS);
+    static_assert(kMaxNumWebServerSessions + kWebServerBacklog + SettingsManager::Settings::kMaxNumFeeds <=
+                  CONFIG_LWIP_MAX_ACTIVE_TCP);
+    // An HTTP session unused for this long is closed.
+    static constexpr uint32_t kHTTPSessionIdleTimeoutMs = 5000;
+    static constexpr uint32_t kHTTPSessionSweepIntervalMs = 1000;
 
     static const uint16_t kNetworkConsoleQueueLen = 10;
     // RP2040 console output waiting to be broadcast to /console clients. Sized for one full console write from the
@@ -119,6 +139,8 @@ class ADSBeeServer {
     AircraftDictionary aircraft_dictionary;
 
     httpd_handle_t server = nullptr;
+    // Used on the web server task only.
+    IdleSessionTracker<kMaxNumWebServerSessions> web_server_sessions;
     WebSocketServer network_console;
     WebSocketServer network_metrics;
     WebSocketServer network_aircraft;
@@ -194,6 +216,7 @@ class ADSBeeServer {
     uint32_t last_gdl90_report_timestamp_ms_ = 0;
     uint32_t last_aircraft_json_report_timestamp_ms_ = 0;
     uint32_t last_rp2040_metrics_timestamp_ms_ = 0;
+    uint32_t last_http_session_sweep_timestamp_ms_ = 0;
 };
 
 extern ADSBeeServer adsbee_server;
