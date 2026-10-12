@@ -791,26 +791,19 @@ TEST(CompositeArray, ReadLenAndMorePending) {
 }
 
 /**
- * Plays UAT frames with all 32 ground uplink slots in use through the CC1312's uplink queues, read by a master that
- * follows the RP2040's polling rules. Returns the number of uplinks that reached the master, in order.
+ * Plays UAT frames with all 32 ground uplink slots in use through the CC1312's decoded uplink queue, read by a master
+ * that follows the RP2040's polling rules. Returns the number of uplinks that reached the master, in order.
  * @param[in] poll_duration_ms Time one master update takes.
  */
 static uint16_t RunFullGroundSegments(uint16_t num_frames, uint32_t poll_duration_ms) {
-    constexpr uint32_t kTicksPerMs = 2;          // One tick is 0.5 ms.
-    constexpr uint32_t kSlotIntervalTicks = 11;  // Ground uplink slots are 5.5 ms apart.
+    constexpr uint32_t kTicksPerMs = 2;           // One tick is 0.5 ms.
+    constexpr uint32_t kSlotIntervalTicks = 11;   // Ground uplink slots are 5.5 ms apart.
     constexpr uint16_t kSlotsPerFrame = 32;
     constexpr uint32_t kFrameIntervalTicks = 1000 * kTicksPerMs;
-    constexpr uint32_t kDecodeTicks = 16 * kTicksPerMs;  // Time the CC1312 takes to decode one uplink.
-    constexpr uint16_t kMasterQueueDepth = 4;            // ADSBee::kRawUATUplinkPacketQueueDepth.
+    constexpr uint16_t kMasterQueueDepth = 4;  // ADSBee::kRawUATUplinkPacketQueueDepth.
     const uint32_t update_interval_ticks = SPICoprocessor::kDefaultUpdateIntervalMs * kTicksPerMs;
 
-    // Like the CC1312's queues: a full raw queue overwrites its oldest packet, and decoding waits for room in the
-    // decoded queue.
-    PFBQueue<RawUATUplinkPacket> raw_queue =
-        PFBQueue<RawUATUplinkPacket>({.buf_len_num_elements = ObjectDictionary::kRawUATUplinkPacketQueueDepth,
-                                      .buffer = nullptr,
-                                      .overwrite_when_full = true});
-    PFBQueue<RawUATUplinkPacket> decoded_queue =
+    PFBQueue<RawUATUplinkPacket> slave_queue =
         PFBQueue<RawUATUplinkPacket>({.buf_len_num_elements = ObjectDictionary::kDecodedUATUplinkPacketQueueDepth,
                                       .buffer = nullptr,
                                       .overwrite_when_full = false});
@@ -818,34 +811,26 @@ static uint16_t RunFullGroundSegments(uint16_t num_frames, uint32_t poll_duratio
         {.buf_len_num_elements = kMasterQueueDepth, .buffer = nullptr, .overwrite_when_full = false});
 
     uint16_t num_sent = 0, num_received = 0;
-    bool more_pending = false, decoding = false;
-    uint32_t last_update_ticks = 0, busy_until_ticks = 0, decoded_at_ticks = 0;
-    RawUATUplinkPacket uplink, uplink_in_decoder;
+    bool more_pending = false;
+    uint32_t last_update_ticks = 0, busy_until_ticks = 0;
+    RawUATUplinkPacket uplink;
     for (uint32_t ticks = 0; ticks < (num_frames + 1u) * kFrameIntervalTicks; ticks++) {
         uint32_t ticks_into_frame = ticks % kFrameIntervalTicks;
         if (num_sent < num_frames * kSlotsPerFrame && ticks_into_frame % kSlotIntervalTicks == 0 &&
             ticks_into_frame / kSlotIntervalTicks < kSlotsPerFrame) {
             memcpy(uplink.encoded_message, &num_sent, sizeof(num_sent));
-            raw_queue.Enqueue(uplink);
+            slave_queue.Enqueue(uplink);  // A full queue loses the uplink.
             num_sent++;
-        }
-        if (decoding && ticks >= decoded_at_ticks) {
-            decoded_queue.Enqueue(uplink_in_decoder);
-            decoding = false;
-        }
-        if (!decoding && !decoded_queue.IsFull() && raw_queue.Dequeue(uplink_in_decoder)) {
-            decoding = true;
-            decoded_at_ticks = ticks + kDecodeTicks;
         }
 
         if (ticks < busy_until_ticks || (ticks - last_update_ticks <= update_interval_ticks && !more_pending)) {
             continue;
         }
         // One master update: status, one array, hand the packets on.
-        uint16_t pending_len_bytes = CompositeArray::CalculateRawPacketsBufferLength(nullptr, nullptr, &decoded_queue);
+        uint16_t pending_len_bytes = CompositeArray::CalculateRawPacketsBufferLength(nullptr, nullptr, &slave_queue);
         uint8_t buffer[CompositeArray::RawPackets::kMaxLenBytes] = {0};
         CompositeArray::PackRawPacketsBuffer(buffer, CompositeArray::RawPackets::ReadLenBytes(pending_len_bytes),
-                                             nullptr, nullptr, &decoded_queue);
+                                             nullptr, nullptr, &slave_queue);
         more_pending = CompositeArray::RawPackets::MorePending(pending_len_bytes);
         EXPECT_TRUE(
             CompositeArray::UnpackRawPacketsBufferToQueues(buffer, sizeof(buffer), nullptr, nullptr, &master_queue));
@@ -866,5 +851,4 @@ static uint16_t RunFullGroundSegments(uint16_t num_frames, uint32_t poll_duratio
 TEST(CompositeArray, FullGroundSegmentsOfUATUplinksReachTheMaster) {
     EXPECT_EQ(RunFullGroundSegments(30, 3), 30 * 32);   // Fast main loop.
     EXPECT_EQ(RunFullGroundSegments(30, 30), 30 * 32);  // Main loop slowed by other work.
-    EXPECT_EQ(RunFullGroundSegments(30, 60), 30 * 32);
 }

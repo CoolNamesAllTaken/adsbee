@@ -1,13 +1,12 @@
 #pragma once
 
 #include "data_structures.hh"
-#include "object_dictionary.hh"
 #include "uat_packet.hh"
 
 class UATPacketDecoder {
    public:
     static constexpr uint16_t kRawUATADSBPacketQueueDepth = 10;
-    static constexpr uint16_t kRawUATUplinkPacketQueueDepth = ObjectDictionary::kRawUATUplinkPacketQueueDepth;
+    static constexpr uint16_t kRawUATUplinkPacketQueueDepth = 2;
 
     UATPacketDecoder() = default;
     ~UATPacketDecoder() = default;
