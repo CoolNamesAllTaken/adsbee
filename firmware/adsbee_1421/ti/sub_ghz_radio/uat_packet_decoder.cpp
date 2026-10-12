@@ -13,6 +13,19 @@
 // backend is a no-op stub on this platform and a blocking mutex would deadlock in ISR context.
 
 bool UATPacketDecoder::Update() {
+    DecodeADSBPackets();
+    DecodeUplinkPacket();
+
+    uint32_t num_dropped = num_raw_uat_uplink_packets_dropped;
+    if (num_dropped != num_raw_uat_uplink_packets_dropped_logged_) {
+        CONSOLE_WARNING("UATPacketDecoder::Update", "Dropped %lu UAT uplinks: decoder queue full.",
+                        num_dropped - num_raw_uat_uplink_packets_dropped_logged_);
+        num_raw_uat_uplink_packets_dropped_logged_ = num_dropped;
+    }
+    return true;
+}
+
+void UATPacketDecoder::DecodeADSBPackets() {
     // Decode incoming UAT ADS-B packets and push valid ones to the output queue.
     while (true) {
         RawUATADSBPacket packet;
@@ -50,37 +63,36 @@ bool UATPacketDecoder::Update() {
             }
         }
     }
+}
 
-    // Decode incoming UAT uplink packets and push valid ones to the output queue.
-    while (true) {
-        RawUATUplinkPacket packet;
-        uintptr_t key = HwiP_disable();
-        bool got_packet = raw_uat_uplink_packet_queue.Dequeue(packet);
-        HwiP_restore(key);
-        if (!got_packet) {
-            break;
-        }
-        DecodedUATUplinkPacket decoded_packet = DecodedUATUplinkPacket(packet);
+void UATPacketDecoder::DecodeUplinkPacket() {
+    // Decode one incoming UAT uplink packet and push it to the output queue if valid.
+    RawUATUplinkPacket packet;
+    uintptr_t key = HwiP_disable();
+    bool got_packet = raw_uat_uplink_packet_queue.Dequeue(packet);
+    HwiP_restore(key);
+    if (!got_packet) {
+        return;
+    }
+    DecodedUATUplinkPacket decoded_packet = DecodedUATUplinkPacket(packet);
 
-        if (decoded_packet.is_valid) {
-            leds.FlashLED(bsp.kSubGLEDPin, 50);
-            if (!decoded_uat_uplink_packet_out_queue.Enqueue(decoded_packet)) {
-                CONSOLE_ERROR("UATPacketDecoder::Update", "UAT uplink decoded output queue overflowed.");
-            }
-        }
-
-        // Per-packet prints, gated on log level up front (mirrors the ADS-B path above).
-        if (settings_manager.settings.log_level >= SettingsManager::LogLevel::kInfo) {
-            if (decoded_packet.is_valid) {
-                CONSOLE_INFO("UATPacketDecoder::Update", "+[%02dFIXD     ] len=%d rssi=%d ts=%lu",
-                             decoded_packet.raw.sigq_bits, RawUATUplinkPacket::kUplinkMessageNumBytes,
-                             packet.sigs_dbm, packet.mlat_48mhz_64bit_counts);
-            } else {
-                CONSOLE_INFO("UATPacketDecoder::Update", "+[     INVLD] len=%d rssi=%d ts=%lu",
-                             RawUATUplinkPacket::kUplinkMessageNumBytes, packet.sigs_dbm,
-                             packet.mlat_48mhz_64bit_counts);
-            }
+    if (decoded_packet.is_valid) {
+        leds.FlashLED(bsp.kSubGLEDPin, 50);
+        if (!decoded_uat_uplink_packet_out_queue.Enqueue(decoded_packet)) {
+            CONSOLE_ERROR("UATPacketDecoder::Update", "UAT uplink decoded output queue overflowed.");
         }
     }
-    return true;
+
+    // Per-packet prints, gated on log level up front (mirrors the ADS-B path above).
+    if (settings_manager.settings.log_level >= SettingsManager::LogLevel::kInfo) {
+        if (decoded_packet.is_valid) {
+            CONSOLE_INFO("UATPacketDecoder::Update", "+[%02dFIXD     ] len=%d rssi=%d ts=%lu",
+                         decoded_packet.raw.sigq_bits, RawUATUplinkPacket::kUplinkMessageNumBytes,
+                         packet.sigs_dbm, packet.mlat_48mhz_64bit_counts);
+        } else {
+            CONSOLE_INFO("UATPacketDecoder::Update", "+[     INVLD] len=%d rssi=%d ts=%lu",
+                         RawUATUplinkPacket::kUplinkMessageNumBytes, packet.sigs_dbm,
+                         packet.mlat_48mhz_64bit_counts);
+        }
+    }
 }

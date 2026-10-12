@@ -30,9 +30,7 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* Originally stack=4096 heap=16384. */
-STACKSIZE = 16384;
-HEAPSIZE = 16384; /* Size of heap buffer used by HeapMem */
+STACKSIZE = 8192;
 
 MEMORY
 {
@@ -84,6 +82,14 @@ SECTIONS {
      * Caitlin changed it from 0x20001800 to 0x20000400
      */
     UDMACC26XX_CONFIG_BASE = 0x20001800;
+
+    /* The heap fills the gap between the RAM vector table and the DMA control table. */
+    __heap_start__ = ALIGN(ADDR(.ramVecs) + SIZEOF(.ramVecs), 8);
+    end = __heap_start__;
+    _end = end;
+    __end = end;
+    __heap_end__ = UDMACC26XX_CONFIG_BASE;
+    __HeapLimit = __heap_end__;
 
     /*
      * Define absolute addresses for the DMA channels.
@@ -238,17 +244,6 @@ SECTIONS {
         . = ALIGN (4);
         __bss_end__ = .;
     } > REGION_BSS AT> REGION_BSS
-
-    .heap : {
-        __heap_start__ = .;
-        end = __heap_start__;
-        _end = end;
-        __end = end;
-        . = . + HEAPSIZE;
-        KEEP(*(.heap))
-        __heap_end__ = .;
-        __HeapLimit = __heap_end__;
-    } > REGION_HEAP AT> REGION_HEAP
 
     .stack (NOLOAD) : ALIGN(0x8) {
         _stack = .;
