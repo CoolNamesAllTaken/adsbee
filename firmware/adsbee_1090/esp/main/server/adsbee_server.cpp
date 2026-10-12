@@ -98,45 +98,55 @@ static bool web_server_fd_is_websocket(httpd_handle_t hd, int sockfd) {
 }
 
 /**
- * Runs on the web server task for every new session. Keeps one session free for the next client by closing the HTTP
- * session unused for the longest time. Left to itself with every session in use, the web server closes its least
- * recently used one, which can be a WebSocket.
+ * Asks the web server to close the HTTP session unused for the longest time, if that is at least idle_timeout_ms.
+ * WebSockets and the session except_fd are never closed. The request is queued and can get lost; the session stays
+ * tracked until it is closed, and restarting its timeout makes a later call ask again.
+ * @retval True if a session was found.
+ */
+static bool web_server_close_idle_session(httpd_handle_t hd, uint32_t idle_timeout_ms, int except_fd = -1) {
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+    int fd = adsbee_server.web_server_sessions.NextIdle(timestamp_ms, idle_timeout_ms, [hd, except_fd](int fd) {
+        return fd == except_fd || web_server_fd_is_websocket(hd, fd);
+    });
+    if (fd < 0) {
+        return false;
+    }
+    adsbee_server.web_server_sessions.Touch(fd, timestamp_ms);
+    httpd_sess_trigger_close(hd, fd);
+    return true;
+}
+
+static bool web_server_sessions_are_full() {
+    return adsbee_server.web_server_sessions.NumSessions() >= ADSBeeServer::kMaxNumWebServerSessions;
+}
+
+/**
+ * Runs on the web server task for every new session. Keeps one session free for the next client.
  */
 esp_err_t web_server_open_fd(httpd_handle_t hd, int sockfd) {
-    uint32_t timestamp_ms = get_time_since_boot_ms();
-    adsbee_server.web_server_sessions.Open(sockfd, timestamp_ms);
+    adsbee_server.web_server_sessions.Open(sockfd, get_time_since_boot_ms());
     // The web server ignores a request to close a session that has no use count, which is the case until its first
     // HTTP request.
     httpd_sess_update_lru_counter(hd, sockfd);
-    if (adsbee_server.web_server_sessions.NumSessions() < ADSBeeServer::kMaxNumWebServerSessions) {
-        return ESP_OK;
-    }
-    int idle_fd = adsbee_server.web_server_sessions.NextIdle(
-        timestamp_ms, 0, [hd, sockfd](int fd) { return fd == sockfd || web_server_fd_is_websocket(hd, fd); });
-    if (idle_fd >= 0) {
-        adsbee_server.web_server_sessions.Touch(idle_fd, timestamp_ms);  // The sweep must not ask a second time.
-        httpd_sess_trigger_close(hd, idle_fd);
+    if (web_server_sessions_are_full()) {
+        web_server_close_idle_session(hd, 0, sockfd);
     }
     return ESP_OK;
 }
 
 /**
- * Runs on the web server task. Closes HTTP sessions that a client keeps open without sending a request.
+ * Runs on the web server task. Closes HTTP sessions that a client keeps open without sending a request, and makes
+ * room again if a request to close a session got lost while every session was in use.
  */
 void web_server_close_idle_sessions(void* arg) {
     httpd_handle_t hd = adsbee_server.server;
-    uint32_t timestamp_ms = get_time_since_boot_ms();
-    auto is_websocket = [hd](int fd) { return web_server_fd_is_websocket(hd, fd); };
-    for (uint16_t i = 0; i < ADSBeeServer::kMaxNumHTTPSessionsClosedPerSweep; i++) {
-        int fd = adsbee_server.web_server_sessions.NextIdle(timestamp_ms, ADSBeeServer::kHTTPSessionIdleTimeoutMs,
-                                                            is_websocket);
-        if (fd < 0) {
-            break;
-        }
-        // The close is queued and can get lost. The session stays tracked until it is closed, and restarting its
-        // timeout makes a later sweep ask again.
-        adsbee_server.web_server_sessions.Touch(fd, timestamp_ms);
-        httpd_sess_trigger_close(hd, fd);
+    uint16_t num_closed = 0;
+    while (num_closed < ADSBeeServer::kMaxNumHTTPSessionsClosedPerSweep &&
+           web_server_close_idle_session(hd, ADSBeeServer::kHTTPSessionIdleTimeoutMs)) {
+        num_closed++;
+    }
+    if (num_closed == 0 && web_server_sessions_are_full()) {
+        web_server_close_idle_session(hd, 0);
     }
 }
 
@@ -944,8 +954,9 @@ bool ADSBeeServer::TCPServerInit() {
     config.max_uri_handlers = 16;
     config.open_fn = web_server_open_fd;
     config.close_fn = ws_close_fd;
-    config.lru_purge_enable =
-        true;  // Allow purging of the least recently used connections when max clients is reached.
+    // The web server's own purge closes its least recently used session, which can be a WebSocket in the middle of a
+    // firmware update. web_server_open_fd() makes room instead.
+    config.lru_purge_enable = false;
     config.keep_alive_enable = true;
     config.keep_alive_idle = 5;      // Seconds idle before sending first keepalive probe.
     config.keep_alive_interval = 5;  // Seconds between keepalive probes.
