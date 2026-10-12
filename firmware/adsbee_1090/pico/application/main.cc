@@ -173,7 +173,7 @@ int main() {
         adsbee.EnableWatchdog();  // Restore watchdog.
 #ifndef DEBUG_DISABLE_ESP32_FLASH
         if (verdict != ESP32FirmwareCheck::kUpToDate) {
-            CONSOLE_INFO("main", "Updating ESP32 firmware: %s.", ESP32FirmwareCheck::VerdictToString(verdict));
+            CONSOLE_WARNING("main", "Updating ESP32 firmware: %s.", ESP32FirmwareCheck::VerdictToString(verdict));
             adsbee.DisableWatchdog();  // Disable watchdog while flashing.
             // Only images that differ from the ESP32's flash are written, so an ESP32 whose reported hash never
             // matches is not rewritten on every boot.

@@ -105,6 +105,9 @@ static bool web_server_fd_is_websocket(httpd_handle_t hd, int sockfd) {
 esp_err_t web_server_open_fd(httpd_handle_t hd, int sockfd) {
     uint32_t timestamp_ms = get_time_since_boot_ms();
     adsbee_server.web_server_sessions.Open(sockfd, timestamp_ms);
+    // The web server ignores a request to close a session that has no use count, which is the case until its first
+    // HTTP request.
+    httpd_sess_update_lru_counter(hd, sockfd);
     if (adsbee_server.web_server_sessions.NumSessions() < ADSBeeServer::kMaxNumWebServerSessions) {
         return ESP_OK;
     }
