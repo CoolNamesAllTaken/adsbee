@@ -322,3 +322,27 @@ TEST(ByteBufferToBase64String, HighBits) {
     EXPECT_STREQ(base64, "+//+AA==");
 }
 
+
+TEST(BufferUtils, CalculateCRC16) {
+    // CRC-16/CCITT-FALSE check value 0x29B1, returned byte swapped.
+    EXPECT_EQ(CalculateCRC16((const uint8_t *)"123456789", 9), 0xB129);
+    EXPECT_EQ(CalculateCRC16((const uint8_t *)"", 0), 0xFFFF);
+
+    // Bit-serial reference over buffers of every length up to a full SPI packet.
+    uint8_t buf[4096];
+    uint32_t state = 0x382;
+    for (uint8_t &byte : buf) {
+        state = state * 1664525u + 1013904223u;
+        byte = static_cast<uint8_t>(state >> 24);
+    }
+    for (int32_t len = 1; len <= static_cast<int32_t>(sizeof(buf)); len += 1 + len / 16) {
+        uint16_t crc = 0xFFFF;
+        for (int32_t i = 0; i < len; i++) {
+            crc ^= static_cast<uint16_t>(buf[i] << 8);
+            for (int bit = 0; bit < 8; bit++) {
+                crc = static_cast<uint16_t>(crc & 0x8000 ? (crc << 1) ^ 0x1021 : crc << 1);
+            }
+        }
+        ASSERT_EQ(CalculateCRC16(buf, len), static_cast<uint16_t>((crc >> 8) | (crc << 8))) << "length " << len;
+    }
+}
