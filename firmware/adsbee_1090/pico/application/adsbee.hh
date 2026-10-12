@@ -97,7 +97,7 @@ class ADSBee {
 
     struct Capture {
         uint32_t samples[mode_s_soft_demod::kCaptureWords];
-        uint64_t mlat_48mhz_64bit_counts;
+        uint64_t mlat_48mhz_64bit_counts;  // Sampler start.
         int16_t rssi_mv;
         uint8_t num_words;
         uint8_t source;  // State machine index.

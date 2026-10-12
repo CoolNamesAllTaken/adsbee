@@ -93,10 +93,14 @@ struct Capture {
         words[sample >> 5] = value ? (words[sample >> 5] | mask) : (words[sample >> 5] & ~mask);
     }
 
-    Capture(const char* hex, uint16_t start_offset, uint16_t pulse_samples = kSamplesPerChip) {
+    // early_samples moves the rising edge of every pulse earlier (later if negative) without moving its falling
+    // edge.
+    Capture(const char* hex, uint16_t start_offset, uint16_t pulse_samples = kSamplesPerChip,
+            int16_t early_samples = 0) {
         std::vector<uint8_t> bits = HexToBits(hex);
+        pulse_samples += early_samples;
         for (size_t i = 0; i < bits.size(); i++) {
-            uint32_t pulse_start = start_offset + i * kSamplesPerBit + (bits[i] ? 0 : kSamplesPerChip);
+            uint32_t pulse_start = start_offset + i * kSamplesPerBit + (bits[i] ? 0 : kSamplesPerChip) - early_samples;
             for (uint16_t k = 0; k < pulse_samples; k++) {
                 Set(pulse_start + k, true);
             }
@@ -278,4 +282,119 @@ TEST(ModeSSoftDemod, BenchCaptures) {
     ASSERT_TRUE(Demodulate(kWeakTwoFixes, kCaptureWords, result));
     EXPECT_EQ(BufferToHex(result), kWeakTwoFixesSent);
     EXPECT_EQ(result.num_flipped_bits, 2);
+}
+
+TEST(ModeSSoftDemod, DataStartOfIdealPulses) {
+    // Pulses of nominal width: the data starts at the start offset, 4 counts per sample.
+    for (uint16_t offset = kMinStartOffsetSamples; offset <= kMaxStartOffsetSamples; offset++) {
+        Capture capture(kDF17, offset);
+        Result result;
+        ASSERT_TRUE(Demodulate(capture.words, kCaptureWords, result)) << "offset " << offset;
+        EXPECT_EQ(result.data_start_48mhz_counts, offset * kCountsPerSample) << "offset " << offset;
+    }
+}
+
+TEST(ModeSSoftDemod, DataStartFollowsPulseCenters) {
+    const uint16_t kOffset = 4;
+    struct Shape {
+        uint16_t pulse_samples;  // Before early_samples is applied.
+        int16_t early_samples;
+        int16_t center_shift_counts;  // Half the change of the falling edge minus that of the rising edge.
+    };
+    // Strong signals widen a pulse on both sides, weak ones narrow it on both sides: the timing must not move. A
+    // pulse that only grows or shrinks on one side moves by half of that.
+    const Shape kShapes[] = {{6, 0, 0}, {7, 1, 0},  {8, 1, 2},  {5, -1, 0}, {8, 0, 4},
+                             {7, 0, 2}, {5, 0, -2}, {4, 0, -4}, {6, 1, -2}, {6, 2, -4}};
+    for (const Shape& shape : kShapes) {
+        Capture capture(kDF17, kOffset, shape.pulse_samples, shape.early_samples);
+        Result result;
+        ASSERT_TRUE(Demodulate(capture.words, kCaptureWords, result));
+        EXPECT_EQ(BufferToHex(result), kDF17);
+        EXPECT_EQ(result.data_start_48mhz_counts, kOffset * kCountsPerSample + shape.center_shift_counts)
+            << "pulse " << shape.pulse_samples << " samples, " << shape.early_samples << " early";
+    }
+}
+
+TEST(ModeSSoftDemod, DataStartIsFinerThanOneSample) {
+    // Half of the pulses one sample late, as when the true position lies between two samples and noise decides.
+    Capture capture(kDF17, 4);
+    std::vector<uint8_t> bits = HexToBits(kDF17);
+    for (uint16_t i = 0; i < kTimingEdgeBits; i += 2) {
+        uint32_t pulse_start = 4 + i * kSamplesPerBit + (bits[i] ? 0 : kSamplesPerChip);
+        capture.Set(pulse_start, false);
+        capture.Set(pulse_start + kSamplesPerChip, true);
+    }
+    Result result;
+    ASSERT_TRUE(Demodulate(capture.words, kCaptureWords, result));
+    EXPECT_EQ(result.start_offset_samples, 4);
+    EXPECT_EQ(result.data_start_48mhz_counts, 4 * kCountsPerSample + kCountsPerSample / 2);
+}
+
+TEST(ModeSSoftDemod, DataStartWithOneKindOfEdge) {
+    // DF0 with zeros in its first bytes: no falling mid-bit edges to average with the rising ones.
+    Capture capture("00000000A5A5A5", 5);
+    Result result;
+    ASSERT_TRUE(Demodulate(capture.words, kCaptureWords, result));
+    EXPECT_EQ(result.len_bits, 56);
+    EXPECT_EQ(result.data_start_48mhz_counts, 5 * kCountsPerSample + kDataStartFallbackCounts);
+}
+
+// Bench captures of one transmitter at five levels (attenuator steps), with the data start that an independent
+// implementation of the estimate (Python, on the same samples) gives for each.
+struct TimedCapture {
+    const char* sent;
+    int16_t data_start_48mhz_counts;
+    uint32_t words[kCaptureWords + 1];
+};
+static const TimedCapture kTimedCaptures[] = {
+    // -1 dBm.
+    {"8DADF0015872210C3A83DABD0156",
+     22,
+     {0x07F001FC, 0x1FC1FFF0, 0x7F001FFF, 0x07F001FF, 0xF001FFF0, 0x7F001FFF, 0x07F03F07, 0xF03F001F, 0xC1FC1FC1,
+      0xFC1FC0FC, 0x0FC0FC0F, 0xC0FC0FFF, 0x001FFF00, 0x0FFF03F0, 0x00FE0FE0, 0xFE0FFF83, 0xF83F800F, 0xE0FFF800,
+      0xFE0FE0FF, 0xF800FE0F, 0xE0FE0FFF, 0x800FE0FE, 0x0FE0FFF8, 0x3F800FE0, 0xFE0FE0FF, 0xF83F83F8, 0x00FFF800,
+      0xFFF800FE, 0x0FE0FE0F, 0xE0FFF83F, 0x83F83F80, 0x0FFF83F8, 0x00FFF800, 0xFFF800FF, 0xF83F83F8, 0x3F800FFF,
+      0x800FE0FE, 0x0FE0FE0F, 0xE0FE0FFF, 0x800FFF80, 0x0FFF800F, 0xFF81F800, 0x7F000000}},
+    // -16 dBm.
+    {"8DADF0009816B4B5A5DE558E5C77",
+     24,
+     {0x07FC01FF, 0x1FE0FFF0, 0x3F000FFF, 0x03F000FF, 0xF000FFF0, 0x3F000FFF, 0x03F03F03, 0xF03F000F, 0xE0FC0FC0,
+      0xFC0FC0FC, 0x0FC0FC0F, 0xC0FC0FC0, 0xFFF000FE, 0x0FFF03F0, 0x00FE0FC0, 0xFC0FC0FC, 0x0FFF000F, 0xFF03F000,
+      0xFFF000FF, 0xF03F000F, 0xFF000FF0, 0xFFF000FF, 0xF03F000F, 0xFF000FFF, 0x83F800FF, 0xF800FF0F, 0xFF000FFF,
+      0x81F81F80, 0x0FFF81F8, 0x1F81F800, 0xFF07FF80, 0x0FFF800F, 0xFF8007FF, 0x81F8007F, 0x07E07FF8, 0x1F81F800,
+      0x7F07FF80, 0x07FF81F8, 0x1F8007F0, 0x7E07FF81, 0xF81F8007, 0xFF81F81F, 0x80000000}},
+    // -31 dBm.
+    {"8DADF001636BDABB894936125C72",
+     25,
+     {0x07F801FE, 0x1FE1FFF8, 0x3F801FFF, 0x83F800FF, 0xF800FFF8, 0x3F800FFF, 0x83F83F83, 0xF83F800F, 0xE0FE0FE0,
+      0xFE0FE0FE, 0x0FE0FE0F, 0xE0FE0FFF, 0x800FFF83, 0xF800FE0F, 0xE0FFF83F, 0x800FFF83, 0xF800FFF8, 0x00FFF83F,
+      0x83F83F80, 0x0FFF83F8, 0x00FFF800, 0xFFF800FF, 0xF83F83F8, 0x00FFF83F, 0xC3F800FE, 0x0FF0FFF8, 0x00FF0FFF,
+      0xC00FFFC0, 0x0FF0FFF8, 0x00FF0FFF, 0xC00FF0FF, 0xF81FC00F, 0xFFC1FC00, 0xFF07F07F, 0x07FFC007, 0xF07FFC00,
+      0x7F07FFC0, 0x07FFC1FC, 0x1FC007F0, 0x7F07FFC1, 0xFC1FC007, 0xF07FFC00, 0x7F000000}},
+    // -46 dBm.
+    {"8DADF0059B89CB4B0FDC9B17F688",
+     22,
+     {0x07F001FC, 0x1FC1FFF0, 0x7F001FFF, 0x07F001FF, 0xF001FFF0, 0x7F001FFF, 0x03F07F03, 0xF07F001F, 0xC1FC1FC0,
+      0xFC0FC0FC, 0x0FC0FC0F, 0xFF000FFF, 0x03F000FE, 0x0FFF03F0, 0x00FFF03F, 0x03F000FE, 0x0FE0FFF0, 0x00FE0FFF,
+      0x03F03F00, 0x0FE0FFF0, 0x00FFF03F, 0x800FFF80, 0x0FE0FFF8, 0x00FFF83F, 0x800FE0FE, 0x0FE0FFF8, 0x3F83F83F,
+      0x83F83F80, 0x0FFF83F8, 0x3F800FE0, 0xFFF800FE, 0x0FFF83F8, 0x00FFF83F, 0x800FE0FE, 0x0FFF800F, 0xFF83F83F,
+      0x81F83F81, 0xF83F800F, 0xFF81F800, 0xFFF800FE, 0x07E07FF8, 0x00FE07E0, 0x7E000000}},
+    // -61 dBm.
+    {"8DADF0009D618D3A8251DF51C20D",
+     24,
+     {0x07F001FE, 0x0FC0FFF0, 0x3F000FFF, 0x03F000FF, 0xF000FFF0, 0x3F000FFF, 0x03F03F03, 0xF03F000F, 0xC0FE0FE0,
+      0xFC0FC0FC, 0x0FE0FE0F, 0xC0FC0FE0, 0xFFF000FE, 0x0FFF83F8, 0x3F800FFF, 0x800FFF83, 0xF800FE0F, 0xE0FE0FFF,
+      0x81F800FE, 0x0FE0FFF8, 0x1F800FFF, 0x800FE0FF, 0xF81F81F8, 0x00FFF800, 0x7FF800FE, 0x0FE07E07, 0xE07FF800,
+      0x7E07FF80, 0x07FF8007, 0xE07E07FF, 0x81F81F80, 0x07FF81F8, 0x1F81F81F, 0x8007FF80, 0x07FF8007, 0xE07E07FF,
+      0x81F81F80, 0x07E07E07, 0xE07FF800, 0x7F07E07E, 0x07E07FF8, 0x1F8007FF, 0xC0000000}},
+};
+
+TEST(ModeSSoftDemod, DataStartOfBenchCaptures) {
+    for (const TimedCapture& capture : kTimedCaptures) {
+        Result result;
+        ASSERT_TRUE(Demodulate(capture.words, kCaptureWords, result)) << capture.sent;
+        EXPECT_EQ(BufferToHex(result), capture.sent);
+        EXPECT_EQ(result.num_flipped_bits, 0);
+        EXPECT_EQ(result.data_start_48mhz_counts, capture.data_start_48mhz_counts) << capture.sent;
+    }
 }
