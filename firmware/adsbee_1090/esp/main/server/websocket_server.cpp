@@ -91,9 +91,13 @@ esp_err_t WebSocketServer::Handler(httpd_req_t* req) {
         }
         if (!heap_ok || !AddClient(client_fd)) {
             CONSOLE_ERROR("WebSocketServer::Handler", "[%s] Rejecting websocket connection.", config_.label);
-            // Send a close frame
-            httpd_ws_frame_t ws_pkt = {
-                .final = true, .fragmented = false, .type = HTTPD_WS_TYPE_CLOSE, .payload = NULL, .len = 0};
+            // Close with status 1013 (try again later), which the web pages show as a notice.
+            uint8_t close_status[] = {1013 >> 8, 1013 & 0xFF};
+            httpd_ws_frame_t ws_pkt = {.final = true,
+                                       .fragmented = false,
+                                       .type = HTTPD_WS_TYPE_CLOSE,
+                                       .payload = close_status,
+                                       .len = sizeof(close_status)};
 
             httpd_ws_send_frame(req, &ws_pkt);
 

@@ -2123,6 +2123,7 @@ body.dark-mode #map .leaflet-tile-pane {
                     <label><input type="checkbox" id="allTrailsToggle"> Traces</label>
                     <label title="FIS-B weather from UAT ground stations (US)"><input type="checkbox" id="weatherToggle"> Weather
                         <span id="weatherHint" hidden>⚠</span></label>
+                    <span id="mapNotice" title="No live data: the receiver already serves 4 viewers." hidden>⚠</span>
                 </div>
             </div>
             <div id="resize-handle" title="Drag to resize"></div>
@@ -6896,6 +6897,12 @@ function writeMapFlag(key, on) {
     try { localStorage.setItem(key, on ? 'true' : 'false'); } catch (_) { }
 }
 
+// True if a WebSocket was closed by a receiver that already serves its limit of clients on that endpoint: close code
+// 1013, or from older firmware a close without a code before any message.
+function webSocketRefused(closeEvent, gotMessage) {
+    return closeEvent.code === 1013 || (closeEvent.code === 1005 && !gotMessage);
+}
+
 // ─── AircraftWebSocket ────────────────────────────────────────────────────────
 class AircraftWebSocket {
     constructor(url) {
@@ -6903,6 +6910,7 @@ class AircraftWebSocket {
         this.paused = false;
         this.onMessage = null;
         this.onDisconnect = null;
+        this.onRefused = null;  // (refused) => void, see webSocketRefused().
         this.ws = null;
         this._timer = null;
         this._connect();
@@ -6916,18 +6924,22 @@ class AircraftWebSocket {
         }, 60000);
         if (this.paused) return;
         this.ws = new WebSocket(this.url);
+        let gotMessage = false;
         this.ws.onopen = () => console.log('[AircraftWS] connected');
         this.ws.onmessage = (ev) => {
+            if (!gotMessage && this.onRefused) this.onRefused(false);
+            gotMessage = true;
             if (!this.onMessage) return;
-            // A JSON array of aircraft, or one object from older firmware.
+            // Firmware batches aircraft into JSON arrays; older firmware sent one object per message.
             let data;
             try { data = JSON.parse(ev.data); } catch (_) { return; }
             for (const ac of (Array.isArray(data) ? data : [data])) {
                 try { this.onMessage(ac); } catch (_) { }
             }
         };
-        this.ws.onclose = () => {
+        this.ws.onclose = (ev) => {
             clearInterval(this.pingInterval);
+            if (this.onRefused && !this.paused) this.onRefused(webSocketRefused(ev, gotMessage));
             if (this.onDisconnect) this.onDisconnect();
             clearTimeout(this._timer);
             this._timer = setTimeout(() => { if (!this.paused) this._connect(); }, 3000);
@@ -6946,6 +6958,7 @@ class UplinkWebSocket {
     constructor(url) {
         this.url = url;
         this.onUplink = null;
+        this.onRefused = null;  // (refused) => void, see webSocketRefused().
         this.ws = null;
         this._timer = null;
     }
@@ -6957,6 +6970,7 @@ class UplinkWebSocket {
 
     stop() {
         this.onUplink = null;
+        if (this.onRefused) this.onRefused(false);
         clearTimeout(this._timer);
         const ws = this.ws;
         this.ws = null;
@@ -6966,12 +6980,16 @@ class UplinkWebSocket {
     _connect() {
         const ws = this.ws = new WebSocket(this.url);
         ws.binaryType = 'arraybuffer';
+        let gotMessage = false;
         ws.onmessage = (ev) => {
+            if (!gotMessage && this.onRefused) this.onRefused(false);
+            gotMessage = true;
             const uplink = typeof ev.data === 'string' ? null : Fisb.parseUplinkMessage(ev.data);
             if (uplink && this.onUplink) this.onUplink(uplink);
         };
-        ws.onclose = () => {
+        ws.onclose = (ev) => {
             if (this.ws !== ws) return;
+            if (this.onRefused) this.onRefused(webSocketRefused(ev, gotMessage));
             this._timer = setTimeout(() => this._connect(), 5000);
         };
     }
@@ -7722,6 +7740,13 @@ class AircraftTable {
         let sweepTimer = null;
 
         // Weather uplinks: the /uplink WebSocket in network mode, AIRCRAFT_JSON_UAT_UPLINK lines over serial.
+        // Shows the Live Map notice while the receiver refuses one of the map's WebSockets.
+        const refusedMapSockets = new Set();
+        function setMapNotice(socketName, refused) {
+            if (refused) refusedMapSockets.add(socketName); else refusedMapSockets.delete(socketName);
+            document.getElementById('mapNotice').hidden = refusedMapSockets.size === 0;
+        }
+
         const weatherSource = {
             onUplink: null,
             socket: null,
@@ -7735,6 +7760,7 @@ class AircraftTable {
                 if (!network && this.socket) { this.socket.stop(); this.socket = null; }
                 if (network && !this.socket) {
                     this.socket = new UplinkWebSocket(WS_CONFIG.uplink_ws_url);
+                    this.socket.onRefused = (refused) => setMapNotice('uplink', refused);
                     this.socket.start((uplink) => { if (this.onUplink) this.onUplink(uplink); });
                 }
                 if (connectionManager.mode === 'serial' && serial.connected && tabController.mapStreamEngaged) {
@@ -8668,6 +8694,7 @@ class Settings1090Transport {
                 if (aircraftWebSocket) { aircraftWebSocket.resume(); return; }
                 aircraftWebSocket = new AircraftWebSocket(WS_CONFIG.aircraft_ws_url);
                 aircraftWebSocket.onMessage = (ac) => aircraftStore.ingest(ac);
+                aircraftWebSocket.onRefused = (refused) => setMapNotice('aircraft', refused);
                 aircraftWebSocket.onDisconnect = () => {
                     aircraftStore.clearAll();
                     if (liveMap) liveMap.update();

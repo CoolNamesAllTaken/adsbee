@@ -39,8 +39,10 @@ class ADSBeeServer {
     // RP2040 metrics older than this are stale and are dropped from the metrics message.
     static const uint32_t kRP2040MetricsStaleTimeoutMs = 3000;
 
-    // UAT uplinks kept for /uplink clients that are not ready to receive. One composite array carries up to 7.
+    // UAT uplinks kept for /uplink clients that are not ready to receive. Each update queues the uplinks of at most one
+    // composite array and then sends them, so the ring holds one array.
     static constexpr uint16_t kUplinkRingDepth = 8;
+    static_assert(kUplinkRingDepth >= kMaxNumUATUplinkPacketsPerCompositeArray);
     static_assert(kUATUplinkMessageNumBytes <= WebSocketServer::kNonBlockingMessageMaxLen);
     static constexpr uint32_t kUplinkDropWarningIntervalMs = 5000;
 

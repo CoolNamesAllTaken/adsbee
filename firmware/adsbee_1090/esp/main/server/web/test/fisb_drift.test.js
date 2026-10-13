@@ -34,10 +34,21 @@ for (const name of ['adsbee_1090_console', 'adsbee_1421_console']) {
     }
 }
 
-for (const [name, className, indent] of [['adsbee_1090_console', 'UplinkWebSocket', ''], ['adsbee_1090_console', 'MapWeather', ''],
+for (const [name, className, indent] of [['adsbee_1090_console', 'AircraftWebSocket', ''],
+                                         ['adsbee_1090_console', 'UplinkWebSocket', ''], ['adsbee_1090_console', 'MapWeather', ''],
                                          ['adsbee_1421_console', 'MapWeather', '        ']]) {
     test(`${name} carries an exact copy of ${className}`, () => {
         assert.strictEqual(classSource(consoleHtml(name), className, indent), classSource(source('adsbee.js'), className),
             `Re-copy class ${className} from adsbee.js into software/${name}/${name}.html`);
     });
 }
+
+test('adsbee_1090_console carries an exact copy of webSocketRefused', () => {
+    const functionSource = (text) => {
+        const begin = text.indexOf('function webSocketRefused(');
+        assert.ok(begin >= 0, 'function webSocketRefused not found');
+        return text.slice(begin, text.indexOf('\n}\n', begin) + 3);
+    };
+    assert.strictEqual(functionSource(consoleHtml('adsbee_1090_console')), functionSource(source('adsbee.js')),
+        'Re-copy function webSocketRefused from adsbee.js into software/adsbee_1090_console/adsbee_1090_console.html');
+});

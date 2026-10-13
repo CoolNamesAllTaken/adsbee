@@ -105,7 +105,7 @@ const fakeFisb = global.Fisb = {
     },
 };
 const fakeMap = { hasLayer: (layer) => layer.onMap };
-const { UplinkWebSocket, MapWeather } = require('../adsbee.js');
+const { AircraftWebSocket, UplinkWebSocket, MapWeather, webSocketRefused } = require('../adsbee.js');
 const settle = () => new Promise((resolve) => setImmediate(() => setImmediate(resolve)));
 
 test('UplinkWebSocket delivers binary messages and reconnects until stopped', (t) => {
@@ -131,6 +131,33 @@ test('UplinkWebSocket delivers binary messages and reconnects until stopped', (t
     assert.strictEqual(FakeWebSocket.opened[1].closed, true);
     t.mock.timers.tick(60000);
     assert.strictEqual(FakeWebSocket.opened.length, 2);
+});
+
+test('a refused WebSocket is told apart from a lost one', () => {
+    assert.strictEqual(webSocketRefused({ code: 1013 }, false), true);
+    assert.strictEqual(webSocketRefused({ code: 1005 }, false), true);   // Firmware that closes without a code.
+    assert.strictEqual(webSocketRefused({ code: 1005 }, true), false);
+    assert.strictEqual(webSocketRefused({ code: 1006 }, false), false);  // Receiver gone.
+    assert.strictEqual(webSocketRefused({ code: 1000 }, false), false);
+});
+
+test('map sockets report a refusal and its end', (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+    for (const make of [(log) => { const s = new AircraftWebSocket('ws://device/aircraft'); s.onRefused = log; return s; },
+                        (log) => { const s = new UplinkWebSocket('ws://device/uplink'); s.onRefused = log; s.start(() => {}); return s; }]) {
+        FakeWebSocket.opened.length = 0;
+        const states = [];
+        const socket = make((refused) => states.push(refused));
+        FakeWebSocket.opened[0].onclose({ code: 1013 });
+        assert.deepStrictEqual(states, [true]);
+        t.mock.timers.tick(5000);
+        const second = FakeWebSocket.opened[1];
+        second.onmessage({ data: '[]' });
+        assert.deepStrictEqual(states, [true, false]);
+        second.onclose({ code: 1006 });
+        assert.deepStrictEqual(states, [true, false, false]);
+        if (socket.stop) socket.stop(); else socket.close();
+    }
 });
 
 test('MapWeather loads and connects nothing while off', async () => {

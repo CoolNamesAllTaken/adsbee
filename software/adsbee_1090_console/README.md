@@ -132,9 +132,9 @@ re-copy the marked block:
   verbatim between the `BEGIN/END VENDORED firmware_release.js` markers (here and in the 1421
   console); `test/firmware_release_drift.test.js` fails when a copy differs.
 - **Weather**: `fisb.js` and `fisb_stations.js` are copied verbatim between their
-  `BEGIN/END VENDORED` markers, and `UplinkWebSocket` and `MapWeather` are copied from `adsbee.js`
-  (here and, without `UplinkWebSocket`, in the 1421 console); `test/fisb_drift.test.js` fails when
-  a copy differs.
+  `BEGIN/END VENDORED` markers, and `AircraftWebSocket`, `UplinkWebSocket`, `webSocketRefused()` and
+  `MapWeather` are copied from `adsbee.js` (here and, `MapWeather` only, in the 1421 console);
+  `test/fisb_drift.test.js` fails when a copy differs.
 - **Leaflet 1.9.4** is vendored inline (BSD-2-Clause, license header kept)
   between `BEGIN/END VENDORED` markers, copied from the 1421 console.
 

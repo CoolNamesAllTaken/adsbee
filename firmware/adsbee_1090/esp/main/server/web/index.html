@@ -97,6 +97,7 @@
                     <label><input type="checkbox" id="velocityVectorToggle" checked> Velocity lines</label>
                     <label><input type="checkbox" id="allTrailsToggle"> Traces</label>
                     <label title="FIS-B weather from UAT ground stations (US)"><input type="checkbox" id="weatherToggle"> Weather</label>
+                    <span id="mapNotice" title="No live data: the receiver already serves 4 viewers." hidden>⚠</span>
                 </div>
             </div>
             <div id="resize-handle" title="Drag to resize"></div>
@@ -549,6 +550,13 @@
             }
         }
 
+        // Shows the Live Map notice while the receiver refuses one of the map's WebSockets.
+        const refusedMapSockets = new Set();
+        function setMapNotice(socketName, refused) {
+            if (refused) refusedMapSockets.add(socketName); else refusedMapSockets.delete(socketName);
+            document.getElementById('mapNotice').hidden = refusedMapSockets.size === 0;
+        }
+
         async function initLiveMap() {
             if (!aircraftStore) aircraftStore = new AircraftStore();
 
@@ -559,8 +567,10 @@
                 };
                 await liveMap.init();
                 if (liveMap.map) {
+                    const uplinkWebSocket = new UplinkWebSocket(WS_CONFIG.uplink_ws_url);
+                    uplinkWebSocket.onRefused = (refused) => setMapNotice('uplink', refused);
                     mapWeather = new MapWeather({
-                        source: new UplinkWebSocket(WS_CONFIG.uplink_ws_url),
+                        source: uplinkWebSocket,
                         scriptUrl: 'fisb.js',
                         stationsUrl: 'fisb_stations.js',
                     });
@@ -582,6 +592,7 @@
             if (!aircraftWebSocket) {
                 aircraftWebSocket = new AircraftWebSocket(WS_CONFIG.aircraft_ws_url);
                 aircraftWebSocket.onMessage = (ac) => aircraftStore.ingest(ac);
+                aircraftWebSocket.onRefused = (refused) => setMapNotice('aircraft', refused);
             } else {
                 aircraftWebSocket.resume();
             }
