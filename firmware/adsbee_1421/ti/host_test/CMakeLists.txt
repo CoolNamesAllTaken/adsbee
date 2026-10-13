@@ -47,6 +47,7 @@ target_sources(host_test PRIVATE
     test_lr2021_status_tracker.cc
     test_packet_decoder.cc
     test_settings.cc
+    test_uplink_tx_budget.cc
 )
 
 # mode_s_packet.cpp prints uint32_t with %lX, which warns on 64-bit hosts.
@@ -58,6 +59,7 @@ target_include_directories(host_test PRIVATE
     ${ADSBEE_1421_TI_DIR}/lr2021
     ${ADSBEE_1421_TI_DIR}/settings
     ${ADSBEE_COMMON_DIR}/adsb
+    ${ADSBEE_COMMON_DIR}/comms/uat_uplink
     ${ADSBEE_COMMON_DIR}/utils
     ${ADSBEE_COMMON_DIR}/utils/crc
     .  # comms.hh: console logging for host tests

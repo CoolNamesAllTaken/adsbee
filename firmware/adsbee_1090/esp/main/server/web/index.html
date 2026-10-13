@@ -96,6 +96,8 @@
                 <div id="map-options" class="map-options">
                     <label><input type="checkbox" id="velocityVectorToggle" checked> Velocity lines</label>
                     <label><input type="checkbox" id="allTrailsToggle"> Traces</label>
+                    <label title="FIS-B weather from UAT ground stations (US)"><input type="checkbox" id="weatherToggle"> Weather</label>
+                    <span id="mapNotice" title="No live data: the receiver already serves 4 viewers." hidden>⚠</span>
                 </div>
             </div>
             <div id="resize-handle" title="Drag to resize"></div>
@@ -197,6 +199,7 @@
             console_ws_url:  `ws://${HOST_URI}/console`,
             metrics_ws_url:  `ws://${HOST_URI}/metrics`,
             aircraft_ws_url: `ws://${HOST_URI}/aircraft`,
+            uplink_ws_url:   `ws://${HOST_URI}/uplink`,
             reconnectDelayMs: 5000
         };
 
@@ -484,6 +487,7 @@
         let acTable = null;
         let aircraftUpdateTimer = null;
         let latestGNSSStatus = null;
+        let mapWeather = null;
 
         function switchTab(name) {
             document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -493,6 +497,7 @@
                 el.classList.toggle('active', el.id === `tab-${name}`);
             });
 
+            if (mapWeather) mapWeather.setMapShown(name === 'map');
             if (name === 'console') {
                 settingsTab.leave();
                 if (aircraftWebSocket) aircraftWebSocket.pause();
@@ -538,6 +543,18 @@
                 trailsToggle.checked = map.showAllTrails;
                 trailsToggle.addEventListener('change', () => map.setShowAllTrails(trailsToggle.checked));
             }
+            const weatherToggle = document.getElementById('weatherToggle');
+            if (weatherToggle && mapWeather) {
+                weatherToggle.checked = mapWeather.enabled;
+                weatherToggle.addEventListener('change', () => mapWeather.setEnabled(weatherToggle.checked));
+            }
+        }
+
+        // Shows the Live Map notice while the receiver refuses one of the map's WebSockets.
+        const refusedMapSockets = new Set();
+        function setMapNotice(socketName, refused) {
+            if (refused) refusedMapSockets.add(socketName); else refusedMapSockets.delete(socketName);
+            document.getElementById('mapNotice').hidden = refusedMapSockets.size === 0;
         }
 
         async function initLiveMap() {
@@ -549,6 +566,17 @@
                     if (acTable) acTable.setSelected(hex);
                 };
                 await liveMap.init();
+                if (liveMap.map) {
+                    const uplinkWebSocket = new UplinkWebSocket(WS_CONFIG.uplink_ws_url);
+                    uplinkWebSocket.onRefused = (refused) => setMapNotice('uplink', refused);
+                    mapWeather = new MapWeather({
+                        source: uplinkWebSocket,
+                        scriptUrl: 'fisb.js',
+                        stationsUrl: 'fisb_stations.js',
+                    });
+                    mapWeather.attach(liveMap.map);
+                    mapWeather.setMapShown(document.getElementById('tab-map').classList.contains('active'));
+                }
                 initMapOptions(liveMap);
                 if (latestGNSSStatus) liveMap.setReceiverStatus(latestGNSSStatus);
             } else {
@@ -564,6 +592,7 @@
             if (!aircraftWebSocket) {
                 aircraftWebSocket = new AircraftWebSocket(WS_CONFIG.aircraft_ws_url);
                 aircraftWebSocket.onMessage = (ac) => aircraftStore.ingest(ac);
+                aircraftWebSocket.onRefused = (refused) => setMapNotice('aircraft', refused);
             } else {
                 aircraftWebSocket.resume();
             }

@@ -58,9 +58,9 @@ bool SendBufToSinks(const ReportSink* sinks, uint16_t num_sinks, const char* buf
 
 // Reporting Functions
 /**
- * Sends packets_to_report on every sink with a raw packet protocol (RAW, Beast, GDL90 uplink pass-through) and, if
- * report_locally_decoded is set, drives the reporting rounds of the aircraft dictionary protocols (CSBee, MAVLINK,
- * GDL90, Aircraft JSON).
+ * Sends packets_to_report on every sink with a raw packet protocol (RAW, Beast, GDL90 and Aircraft JSON uplink
+ * pass-through) and, if report_locally_decoded is set, drives the reporting rounds of the aircraft dictionary
+ * protocols (CSBee, MAVLINK, GDL90, Aircraft JSON).
  * @param[in] sinks Array of ReportSinks to report on.
  * @param[in] sink_protocols Reporting protocol of each sink.
  * @param[in] num_sinks Number of ReportSinks in the sinks array.
@@ -147,3 +147,13 @@ bool ReportGDL90Uplink(ReportSink* sinks, uint16_t num_sinks, const CompositeArr
  * @retval True if successful, false if something broke.
  */
 bool ReportAircraftJSON(ReportSink* sinks, uint16_t num_sinks);
+
+/**
+ * Reports each UAT uplink message as one JSON line with the de-interleaved payload in Base64 (see
+ * uat_uplink_utils.hh).
+ * @param[in] sinks Array of ReportSinks to send the lines on.
+ * @param[in] num_sinks Number of ReportSinks in the sinks array.
+ * @param[in] packets CompositeArray::RawPackets struct. Only UAT uplink messages are reported.
+ * @retval True if successful, false if something broke.
+ */
+bool ReportUATUplinkJSON(ReportSink* sinks, uint16_t num_sinks, const CompositeArray::RawPackets& packets);

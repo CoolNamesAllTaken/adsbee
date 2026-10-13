@@ -39,15 +39,18 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         # test_ads_b_decoder.cc
         test_aircraft_dictionary_mode_s.cc
         test_aircraft_dictionary_allocator.cc
+        test_broadcast_ring.cc
         test_buffer_utils.cc
         # test_adsbee.cc
         test_composite_array.cc
+        test_esp32_firmware_check.cc
         test_cpu_utils.cc
         test_crc.cc
         test_data_structures.cc
         test_decode_utils.cc
         test_fixedmath.cc
         test_geo_utils.cc
+        test_idle_session_tracker.cc
         test_nasa_cpr.cc
         test_mode_s_packet_decoder.cc
         test_mode_s_single_bit_correction.cc
@@ -71,6 +74,8 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         test_log_message.cc
         test_squitter_packets.cc
         test_transponder_packet.cc
+        test_uat_uplink_utils.cc
+        test_websocket_frame_writer.cc
         test_unit_conversions.cc
         test_pfb_queue_thread_safety.cc
         test_mode_s_soft_demod.cc

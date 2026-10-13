@@ -116,6 +116,12 @@ class SPICoprocessorSlaveInterface : public SPICoprocessorInterface {
     virtual bool Update() = 0;
 
     /**
+     * True if the slave has more queued than the last Update() could read, so the next Update() should not wait for
+     * the update interval.
+     */
+    virtual bool UpdateIsDue() { return false; }
+
+    /**
      * Checks the level of the HANDSHAKE pin used to initiate communication from the ESP32 to RP2040.
      * NOTE: There is some hysteresis! The ESP32 can request a transfer as soon as kSPIPostTransmitLockoutUs is up, but
      * this function won't unblock and confidently state that the HANDSHAKE pin is not asserted unless

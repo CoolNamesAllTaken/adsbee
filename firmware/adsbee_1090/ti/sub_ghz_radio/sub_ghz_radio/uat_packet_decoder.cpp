@@ -8,10 +8,22 @@
 #include "pico.hh"
 
 // The raw UAT queues are written by the RF callback and the object dictionary queues are read by the SPI callback (both
-// software interrupts). All four overwrite when full, which is not interrupt safe, so mask interrupts around every
-// queue call made here. Don't use PFBQueue's is_thread_safe flag: its lock is not usable in interrupt context.
+// software interrupts). The ADS-B queues overwrite when full, which is not interrupt safe, so mask interrupts around
+// every queue call made here. Don't use PFBQueue's is_thread_safe flag: its lock is not usable in interrupt context.
 bool UATPacketDecoder::Update() {
-    // Process incoming UAT ADS-B packets.
+    DecodeADSBPackets();
+    DecodeUplinkPacket();
+
+    uint32_t num_dropped = num_raw_uat_uplink_packets_dropped;
+    if (num_dropped != num_raw_uat_uplink_packets_dropped_logged_) {
+        CONSOLE_WARNING("UATPacketDecoder::Update", "Dropped %lu UAT uplinks: decoder queue full.",
+                        num_dropped - num_raw_uat_uplink_packets_dropped_logged_);
+        num_raw_uat_uplink_packets_dropped_logged_ = num_dropped;
+    }
+    return true;
+}
+
+void UATPacketDecoder::DecodeADSBPackets() {
     while (true) {
         RawUATADSBPacket packet;
         uintptr_t key = HwiP_disable();
@@ -45,34 +57,31 @@ bool UATPacketDecoder::Update() {
                          raw_packet_buffer, packet.sigs_dbm, packet.mlat_48mhz_64bit_counts);
         }
     }
+}
 
-    while (true) {
-        RawUATUplinkPacket packet;
-        uintptr_t key = HwiP_disable();
-        bool got_packet = raw_uat_uplink_packet_queue.Dequeue(packet);
-        HwiP_restore(key);
-        if (!got_packet) {
-            break;
-        }
-        // Decode the packet and enqueue the result.
-        DecodedUATUplinkPacket decoded_packet = DecodedUATUplinkPacket(packet);
-
-        if (decoded_packet.is_valid) {
-            pico_ll.BlinkSubGLED();
-            object_dictionary.metrics.num_valid_uat_uplink_packets++;
-            CONSOLE_INFO("UATPacketDecoder::Update", "+[%02dFIXD     ] len=%d rssi=%d ts=%lu",
-                         decoded_packet.raw.sigq_bits, RawUATUplinkPacket::kUplinkMessageNumBytes, packet.sigs_dbm,
-                         packet.mlat_48mhz_64bit_counts);
-            key = HwiP_disable();
-            bool enqueued = object_dictionary.raw_uat_uplink_packet_queue.Enqueue(decoded_packet.raw);
-            HwiP_restore(key);
-            if (!enqueued) {
-                CONSOLE_ERROR("UATPacketDecoder::Update", "Failed to enqueue decoded UAT Uplink packet.");
-            }
-        } else {
-            CONSOLE_INFO("UATPacketDecoder::Update", "+[     INVLD] len=%d rssi=%d ts=%lu",
-                         RawUATUplinkPacket::kUplinkMessageNumBytes, packet.sigs_dbm, packet.mlat_48mhz_64bit_counts);
-        }
+void UATPacketDecoder::DecodeUplinkPacket() {
+    RawUATUplinkPacket packet;
+    uintptr_t key = HwiP_disable();
+    bool got_packet = raw_uat_uplink_packet_queue.Dequeue(packet);
+    HwiP_restore(key);
+    if (!got_packet) {
+        return;
     }
-    return true;
+    DecodedUATUplinkPacket decoded_packet = DecodedUATUplinkPacket(packet);
+
+    if (decoded_packet.is_valid) {
+        pico_ll.BlinkSubGLED();
+        object_dictionary.metrics.num_valid_uat_uplink_packets++;
+        CONSOLE_INFO("UATPacketDecoder::Update", "+[%02dFIXD     ] len=%d rssi=%d ts=%lu", decoded_packet.raw.sigq_bits,
+                     RawUATUplinkPacket::kUplinkMessageNumBytes, packet.sigs_dbm, packet.mlat_48mhz_64bit_counts);
+        key = HwiP_disable();
+        bool enqueued = object_dictionary.raw_uat_uplink_packet_queue.Enqueue(decoded_packet.raw);
+        HwiP_restore(key);
+        if (!enqueued) {
+            CONSOLE_ERROR("UATPacketDecoder::Update", "Failed to enqueue decoded UAT Uplink packet.");
+        }
+    } else {
+        CONSOLE_INFO("UATPacketDecoder::Update", "+[     INVLD] len=%d rssi=%d ts=%lu",
+                     RawUATUplinkPacket::kUplinkMessageNumBytes, packet.sigs_dbm, packet.mlat_48mhz_64bit_counts);
+    }
 }

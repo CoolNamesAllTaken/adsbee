@@ -5,6 +5,8 @@
 #include "adsbee_server.hh"
 #include "cpu_utils.hh"
 #include "device_info.hh"
+#include "esp32_firmware_check.hh"
+#include "esp_app_desc.h"
 #include "esp_system.h"
 #include "pico.hh"               // pico_ll.ForceBlinkNetworkLED() for kAddrLEDBlink.
 #include "remote_id_manager.hh"  // remote_id_manager.GetOutQueue() for the ESP32 -> RP2040 Remote ID pull.
@@ -322,6 +324,14 @@ bool ObjectDictionary::GetBytes(Address addr, uint8_t* buf, uint16_t buf_len, ui
             }
             ESP32NetworkInfo network_info = comms_manager.GetNetworkInfo();
             memcpy(buf, (uint8_t*)&network_info + offset, buf_len);
+            break;
+        }
+        case kAddrESP32FirmwareHash: {
+            if (!CheckObjectBounds("ObjectDictionary::GetBytes", "ESP32 firmware hash", offset, buf_len,
+                                   ESP32FirmwareCheck::kHashLenBytes)) {
+                return false;
+            }
+            memcpy(buf, esp_app_get_description()->app_elf_sha256 + offset, buf_len);
             break;
         }
         case kAddrESP32RebootInfo: {

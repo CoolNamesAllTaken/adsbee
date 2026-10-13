@@ -62,10 +62,16 @@ public:
     bool StartPacketRx();
 
     /**
-     * Starts a packet Rx if it hasn't been started and we are currently supposed to be receiving, plus some other housekeeping.
+     * Restarts packet Rx after a receive command that ended with an error, and logs the error.
      * @retval True if update succeeded, false otherwise.
      */
     bool Update();
+
+    /**
+     * Called from the RF callback when the receive command has ended and the data queue points at a free entry. Posts
+     * the next receive command, or leaves the restart to Update() if the command ended with an error.
+     */
+    void HandleRxCommandEnd();
 
     /**
      * Quiesces the internal RF core so the MCU can enter STANDBY. Cancels the in-progress RX command
@@ -207,6 +213,8 @@ private:
     rfc_propRxOutput_t rx_statistics_;
 
     RF_CmdHandle rx_cmd_handle_;
+    // Status of a receive command that Update() has to restart, 0 if none. Written by the RF callback.
+    volatile uint16_t rx_restart_status_ = 0;
 
     uint32_t last_rx_start_timestamp_ms_ = 0;
 };

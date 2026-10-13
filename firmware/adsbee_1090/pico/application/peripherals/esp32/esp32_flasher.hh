@@ -76,7 +76,20 @@ class ESP32SerialFlasher {
         return true;
     }
 
-    bool FlashESP32();
+    /**
+     * Writes the embedded bootloader, partition table and application to the ESP32.
+     * @param[in] skip_matching_images True to leave images alone that the ESP32's flash already holds.
+     * @param[out] num_images_written Number of images written, if not nullptr.
+     * @retval True if the ESP32's flash holds all three images.
+     */
+    bool FlashESP32(bool skip_matching_images = false, uint16_t *num_images_written = nullptr);
+
+    /**
+     * Reads the application hash from the embedded ESP32 application image (see ESP32FirmwareCheck).
+     * @param[out] hash ESP32FirmwareCheck::kHashLenBytes Bytes.
+     * @retval False if the image has none.
+     */
+    bool GetApplicationHash(uint8_t *hash);
 
     /**  Helper functions exposed to the esp32_serial_flasher functions. **/
 

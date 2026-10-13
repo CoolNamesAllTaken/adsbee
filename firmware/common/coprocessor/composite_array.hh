@@ -24,6 +24,15 @@ class CompositeArray {
         static constexpr uint16_t kMaxLenBytes =
             2000;  // Arbitrary maximum size, needs to fit within SCResponsePacket data bytes.
 
+        /**
+         * Length of the read a master issues for a slave that reports this many bytes of queued raw packets. A slave
+         * with more queued than one array holds is read again right away, see MorePending().
+         */
+        static constexpr uint16_t ReadLenBytes(uint16_t pending_len_bytes) {
+            return pending_len_bytes < kMaxLenBytes ? pending_len_bytes : kMaxLenBytes;
+        }
+        static constexpr bool MorePending(uint16_t pending_len_bytes) { return pending_len_bytes > kMaxLenBytes; }
+
         // This header is used on the SPI bus to precede a packed buffer of packets.
         struct __attribute__((__packed__)) Header {
             uint16_t num_mode_s_packets = 0;

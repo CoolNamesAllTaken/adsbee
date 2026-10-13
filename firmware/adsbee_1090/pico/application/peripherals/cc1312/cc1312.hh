@@ -205,6 +205,7 @@ class CC1312 : public SPICoprocessorSlaveInterface {
     inline bool DeInit() { return true; };
 
     bool Update();
+    bool UpdateIsDue() override { return more_raw_packets_pending_; }
 
     /**
      * Adjusts the SPI peripheral to be able to talk to the CC1312. Nominally adjusts clock rate, but also adjusts CPHA
@@ -541,6 +542,7 @@ class CC1312 : public SPICoprocessorSlaveInterface {
     SettingsManager::EnableState enabled_ = SettingsManager::EnableState::kEnableStateDisabled;
     bool enable_is_external_ = false;
     bool in_bootloader_ = false;
+    bool more_raw_packets_pending_ = false;  // The CC1312 had more packets queued than the last Update() could read.
 
     // Clock config struct used to set the SPI peripheral to the correct clock rate.
     struct SPIClkConfig {

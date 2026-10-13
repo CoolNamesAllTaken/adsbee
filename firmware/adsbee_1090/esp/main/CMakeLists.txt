@@ -46,6 +46,7 @@ idf_component_register(
         "${COMMON_DIR}/comms/json"
         "${COMMON_DIR}/comms/mavlink"
         "${COMMON_DIR}/comms/raw"
+        "${COMMON_DIR}/comms/uat_uplink"
         "${COMMON_DIR}/coprocessor"
         "${COMMON_DIR}/utils"
         "${COMMON_DIR}/utils/crc"
@@ -67,6 +68,8 @@ idf_component_register(
         "server/web/settings.js"
         "server/web/ota_updater.js"
         "server/web/firmware_release.js"
+        "server/web/fisb.js"
+        "server/web/fisb_stations.js"
         "server/web/favicon.png"
 )
 

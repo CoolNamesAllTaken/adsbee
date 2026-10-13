@@ -63,12 +63,6 @@ static rfc_dataEntryPartial_t* current_read_entry;
 
 static dataQueue_t rx_data_queue;
 
-inline void RollDataQueue() {
-    current_read_entry->status = DATA_ENTRY_PENDING;
-    current_read_entry = (rfc_dataEntryPartial_t*)(((rfc_dataEntryPartial_t*)current_read_entry)->pNextEntry);
-    rx_data_queue.pCurrEntry = (uint8_t*)current_read_entry;
-}
-
 // Technical Reference Manual Section 23.7.5.4: https://www.ti.com/lit/ug/swcu117i/swcu117i.pdf
 void rf_cmd_callback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e) {
     // CONSOLE_INFO("SubGHzRadio", "RF command completed with handle %p, command handle %d, event mask %u", h, ch, e);
@@ -97,16 +91,24 @@ void rf_cmd_callback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e) {
         }
     }
 
+    // The receive command ends after every packet. Uplinks in neighboring slots are 1.2 ms apart, so start the next
+    // command here, on the other data entry, before copying the packet out of this one.
+    static rfc_dataEntryPartial_t* received_entry = nullptr;
     if (e & RF_EventRxOk) {
+        received_entry = current_read_entry;
+    }
+    if (e & (RF_EventLastCmdDone | RF_EventCmdCancelled | RF_EventCmdAborted | RF_EventCmdStopped)) {
+        rfc_dataEntryPartial_t* ended_entry = current_read_entry;
+        current_read_entry = (rfc_dataEntryPartial_t*)(ended_entry->pNextEntry);
+        rx_data_queue.pCurrEntry = (uint8_t*)current_read_entry;
+        subg_radio.HandleRxCommandEnd();
         // rx_enabled is false while a debug RSSI scan owns the RX command; drop anything that
         // happens to match a UAT sync word off-frequency instead of feeding it to the decoder.
-        if (subg_radio.rx_enabled) {
-            subg_radio.HandlePacketRx(current_read_entry);
+        if (received_entry == ended_entry && subg_radio.rx_enabled) {
+            subg_radio.HandlePacketRx(ended_entry);
         }
-    }
-
-    if (e & (RF_EventLastCmdDone | RF_EventCmdAborted | RF_EventRxBufFull)) {
-        RollDataQueue();
+        received_entry = nullptr;
+        ended_entry->status = DATA_ENTRY_PENDING;
     }
 }
 
@@ -130,8 +132,8 @@ bool SubGHzRadio::Init() {
         .bAppendTimestamp = 1,  // 4 bytes
         .bAppendStatus = 1      // 1 Byte
     };
-    // RF_cmdPropRxAdv.pktConf.bRepeatOk = 0;  // Go back to sync search after receiving a packet correctly.
-    // RF_cmdPropRxAdv.pktConf.bRepeatNok = 0; // Go back to sync search after receiving a packet incorrectly.
+    // The command ends after every packet (bRepeatOk = bRepeatNok = 0). In repeat mode the RF core appends the next
+    // packet to the partial data entry of the previous one.
     // Sync on the most significant 32 bits of the 36 bit sync word. Save the last 4 bits of sync for discrimination
     // between uplink and ADSB packets in the payload. syncWord1 is "alternative sync word if non-zero"
     // (rf_prop_cmd.h), so 0 disables uplink reception at the RF core entirely (AT+SUBG_MODE=UAT_RX_NO_UPLINK):
@@ -351,7 +353,10 @@ bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t* filled_entry) {
             raw_packet.mlat_48mhz_64bit_counts = timestamp;
 
             adsbee.aircraft_dictionary.RecordSubGHzMetrics(0, 0, 1, 0);
-            uat_packet_decoder.raw_uat_uplink_packet_queue.Enqueue(raw_packet);
+            if (!uat_packet_decoder.raw_uat_uplink_packet_queue.Enqueue(raw_packet)) {
+                uat_packet_decoder.num_raw_uat_uplink_packets_dropped =
+                    uat_packet_decoder.num_raw_uat_uplink_packets_dropped + 1;
+            }
             break;
         }
         default: {
@@ -365,6 +370,7 @@ bool SubGHzRadio::HandlePacketRx(rfc_dataEntryPartial_t* filled_entry) {
 
 bool SubGHzRadio::StartPacketRx() {
     last_rx_start_timestamp_ms_ = get_time_since_boot_ms();
+    rx_restart_status_ = 0;
     rx_cmd_handle_ = RF_postCmd(rf_handle_, (RF_Op*)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
     if (rx_cmd_handle_ < 0) {
         CONSOLE_ERROR("SubGHzRadio::Init", "Failed to post command PROP_RX: returned code %d.", rx_cmd_handle_);
@@ -564,18 +570,30 @@ bool SubGHzRadio::StopRssiScan() {
 }
 #endif
 
+void SubGHzRadio::HandleRxCommandEnd() {
+    uint16_t rx_status = ((volatile RF_Op*)&RF_cmdPropRxAdv)->status;
+    if (rx_enabled && (rx_status & 0xFF00) == (PROP_DONE_OK & 0xFF00)) {
+        rx_cmd_handle_ =
+            RF_postCmd(rf_handle_, (RF_Op*)&RF_cmdPropRxAdv, RF_PriorityNormal, rf_cmd_callback, kRxEventMask);
+        if (rx_cmd_handle_ >= 0) {
+            return;
+        }
+    }
+    rx_restart_status_ = rx_status;
+}
+
 bool SubGHzRadio::Update() {
     if (!rx_enabled || rf_handle_ == nullptr) {
         return true;  // Not receiving, or the RF client is closed (user-disabled / failed Init): nothing to restart.
     }
 
-    volatile uint16_t rx_status = ((volatile RF_Op*)&RF_cmdPropRxAdv)->status;
-    // Compare the status class (high byte) exactly: PROP_DONE_* = 0x34xx, PROP_ERROR_* = 0x38xx. Masking with '&'
-    // instead of '==' made every error status match the PROP_DONE_OK branch (0x3800 & 0x3400 != 0), silently
-    // restarting RX without logging or counting the error.
-    if ((rx_status & 0xFF00) == (PROP_DONE_OK & 0xFF00)) {
-        StartPacketRx();
-    } else if ((rx_status & 0xFF00) == (PROP_ERROR_PAR & 0xFF00)) {
+    // The RF callback restarts reception itself unless the command ended with an error or could not be posted.
+    uint16_t rx_status = rx_restart_status_;
+    if (rx_status == 0) {
+        return true;
+    }
+    // Compare the status class (high byte) exactly: PROP_DONE_* = 0x34xx, PROP_ERROR_* = 0x38xx.
+    if ((rx_status & 0xFF00) == (PROP_ERROR_PAR & 0xFF00)) {
         char* error_str;
         switch (rx_status) {
             case PROP_ERROR_PAR:
@@ -604,8 +622,8 @@ bool SubGHzRadio::Update() {
         }
         rx_error_restart_count++;
         CONSOLE_ERROR("SubGHzRadio::Update", "PROP_RX threw error (0x%x): %s. Restarting.", rx_status, error_str);
-        StartPacketRx();
     }
+    StartPacketRx();
 
     return true;
 }

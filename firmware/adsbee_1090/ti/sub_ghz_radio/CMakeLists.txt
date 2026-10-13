@@ -92,6 +92,7 @@ set(TI_LINKER_COMMAND_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cc13x2_cc26x2_nortos.lds
 target_sources(${PROJECT_NAME} PRIVATE
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/startup/startup_cc13x2_cc26x2_gcc.c # Get the resetISR and stuff.
     syscalls_stub.c
+    fast_mem.c
     ${SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/kernel/nortos/NoRTOS.c
     # ${CMAKE_CURRENT_SOURCE_DIR}/rfPacketRx.cpp
     # ${CMAKE_CURRENT_SOURCE_DIR}/RFQueue.cpp

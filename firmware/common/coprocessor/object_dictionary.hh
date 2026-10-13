@@ -47,10 +47,10 @@ class ObjectDictionary {
     static constexpr uint16_t kNetworkConsoleRxQueueDepth = kNetworkConsoleMessageMaxLenBytes * 4;
     static constexpr uint16_t kNetworkConsoleMutexTimeoutMs = 5;  // Max wait for network_console_rx_queue_mutex in SPI task context.
 #endif
-#ifdef ON_TI
+    // CC1312 queues of decoded packets waiting for the RP2040. A UAT frame carries up to 32 ground uplinks within
+    // 176 ms, less than two RP2040 polls apart, so the uplink queue holds all of them.
     static constexpr uint16_t kDecodedUATADSBPacketQueueDepth = 10;
-    static constexpr uint16_t kDecodedUATUplinkPacketQueueDepth = 2;
-#endif
+    static constexpr uint16_t kDecodedUATUplinkPacketQueueDepth = 32;
 
     enum Address : uint8_t {
         kAddrInvalid = 0,             // Default value.
@@ -74,6 +74,7 @@ class ObjectDictionary {
         kAddrESP32TriggerAbort = 0x12,         // Debug only: trigger abort() on the ESP32 to test core dump.
         kAddrLEDBlink = 0x13,  // Force-blink the slave's LED: uint32_t duration_ms, bypasses led_enabled.
         kAddrDeviceIdentity = 0x14,  // SettingsManager::DeviceIdentity, RP2040 to ESP32 on request.
+        kAddrESP32FirmwareHash = 0x15,  // SHA-256 of the running ESP32 application (see ESP32FirmwareCheck).
         kNumAddrs
     };
 
@@ -433,7 +434,7 @@ class ObjectDictionary {
     PFBQueue<RawUATUplinkPacket> raw_uat_uplink_packet_queue =
         PFBQueue<RawUATUplinkPacket>({.buf_len_num_elements = kDecodedUATUplinkPacketQueueDepth,
                                       .buffer = raw_uat_uplink_packet_buffer_,
-                                      .overwrite_when_full = true});
+                                      .overwrite_when_full = false});  // The decoder logs packets that don't fit.
 
     struct SubGHzRadioMetrics {
         uint16_t num_raw_uat_adsb_packets = 0;

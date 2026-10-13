@@ -191,6 +191,24 @@ bool CommsManager::iface_putc(SettingsManager::SerialInterface iface, char c) {
     return false;  // Should never get here.
 }
 
+bool CommsManager::iface_write(SettingsManager::SerialInterface iface, const char* buf, uint16_t len) {
+    if (iface != SettingsManager::kConsole) {
+        for (uint16_t i = 0; i < len; i++) {
+            if (!iface_putc(iface, buf[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+    stdio_put_string(buf, len, false, false);
+    if (esp32.IsEnabled()) {
+        for (uint16_t i = 0; i < len; i++) {
+            network_console_putc(buf[i]);
+        }
+    }
+    return true;
+}
+
 bool CommsManager::iface_getc(SettingsManager::SerialInterface iface, char& c) {
     switch (iface) {
         case SettingsManager::kCommsUART:

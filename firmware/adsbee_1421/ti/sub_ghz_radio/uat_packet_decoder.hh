@@ -10,7 +10,8 @@ class UATPacketDecoder {
     // queues sit between two main-loop stages (Update() -> IngestAndForwardPackets()) and never
     // accumulate more than one pass worth of packets, so they stay shallow.
     static constexpr uint16_t kRawUATADSBPacketQueueDepth = 32;
-    static constexpr uint16_t kRawUATUplinkPacketQueueDepth = 4;
+    // Every ground uplink slot of one UAT frame: uplinks with errors take longer to decode than a slot lasts.
+    static constexpr uint16_t kRawUATUplinkPacketQueueDepth = 32;
     static constexpr uint16_t kDecodedUATADSBPacketQueueDepth = 10;
     static constexpr uint16_t kDecodedUATUplinkPacketQueueDepth = 2;
 
@@ -26,7 +27,10 @@ class UATPacketDecoder {
     PFBQueue<RawUATUplinkPacket> raw_uat_uplink_packet_queue =
         PFBQueue<RawUATUplinkPacket>({.buf_len_num_elements = kRawUATUplinkPacketQueueDepth,
                                       .buffer = raw_uat_uplink_packet_buffer_,
-                                      .overwrite_when_full = true});
+                                      .overwrite_when_full = false});  // The RF callback counts refused packets.
+
+    // Uplinks refused by raw_uat_uplink_packet_queue. Counted in the RF callback, logged by Update().
+    volatile uint32_t num_raw_uat_uplink_packets_dropped = 0;
 
     // Output queues — drained by ADSBee::IngestAndForwardPackets().
     PFBQueue<DecodedUATADSBPacket> decoded_uat_adsb_packet_out_queue =
@@ -43,9 +47,18 @@ class UATPacketDecoder {
         // Nearest-pattern sync classification, host tested in common code.
         return UATMessageLenBytesFromSyncAndPayloadType(sync_word_ls4, mdb_type_code);
     }
+
+    /**
+     * Decodes every waiting UAT ADS-B packet and at most one uplink, so that a queue of uplinks delays neither the
+     * ADS-B packets nor the rest of the main loop.
+     */
     bool Update();
 
    private:
+    void DecodeADSBPackets();
+    void DecodeUplinkPacket();
+
+    uint32_t num_raw_uat_uplink_packets_dropped_logged_ = 0;
     RawUATADSBPacket raw_uat_adsb_packet_buffer_[kRawUATADSBPacketQueueDepth] = {};
     RawUATUplinkPacket raw_uat_uplink_packet_buffer_[kRawUATUplinkPacketQueueDepth] = {};
     DecodedUATADSBPacket decoded_uat_adsb_packet_buffer_[kDecodedUATADSBPacketQueueDepth] = {};

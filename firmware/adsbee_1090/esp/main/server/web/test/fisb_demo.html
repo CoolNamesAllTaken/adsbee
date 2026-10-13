@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<!-- FIS-B demo: replays a capture of RAW "#UAT*+" lines, or reads them live from a receiver's /console WebSocket.
+     Open with ?capture=<url> to load a capture file, ?host=<name> to connect, ?speed=<n> to pace a replay. -->
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>FIS-B demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <style>
+        html, body, #map { height: 100%; margin: 0; }
+        #bar { position: absolute; z-index: 1000; left: 10px; bottom: 24px; display: flex; gap: 4px; align-items: center;
+               background: #fff; padding: 4px 6px; border-radius: 4px; box-shadow: 0 1px 4px #0006; font: 12px sans-serif; }
+        #bar input[type=text] { width: 130px; }
+        #bar button { width: 28px; height: 24px; padding: 0; cursor: pointer; }
+        #file { display: none; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="bar">
+        <button id="open" title="Capture file">&#8613;</button>
+        <input id="file" type="file">
+        <input id="host" type="text" placeholder="adsbee.local" title="Receiver">
+        <button id="live" title="Live">&#9654;</button>
+        <span id="status"></span>
+    </div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="../fisb.js"></script>
+    <script>
+        const params = new URLSearchParams(location.search);
+        const map = L.map('map', { preferCanvas: true }).setView([37.4, -121.9], 7);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 14, attribution: '&copy; OpenStreetMap contributors',
+        }).addTo(map);
+        const decoder = new Fisb.Decoder();
+        const layer = Fisb.createLayer(L, decoder, { stationsUrl: '../fisb_stations.js' }).addTo(map);
+        const status = document.getElementById('status');
+        let ws = null, liveHost = null, replayId = 0;
+
+        function showStatus(timeMs) {
+            const s = decoder.stats;
+            status.textContent = `${s.uplinks} ↑ ${timeMs ? new Date(timeMs).toISOString().slice(11, 19) + 'Z' : ''}`;
+            status.title = Object.entries(s.products).map(([id, n]) => `${Fisb.PRODUCT_NAMES[id] || id}: ${n}`).join('\n');
+        }
+
+        // Capture lines: "<unix ms> #UAT*+<hex>;(...)". The timestamp is optional.
+        async function replay(text, speed) {
+            const id = ++replayId;
+            decoder.reset();
+            let first = 0, started = Date.now(), fallbackMs = Date.now();
+            for (const line of text.split('\n')) {
+                const frame = Fisb.parseRawLine(line);
+                if (!frame) continue;
+                const stamp = /^(\d{12,})\s/.exec(line);
+                frame.meta.timestampMs = stamp ? +stamp[1] : (fallbackMs += 250);
+                if (speed) {
+                    first = first || frame.meta.timestampMs;
+                    const wait = (frame.meta.timestampMs - first) / speed - (Date.now() - started);
+                    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+                    if (id !== replayId) return;
+                    showStatus(frame.meta.timestampMs);
+                }
+                decoder.ingestUplink(frame.payload, frame.meta);
+            }
+            showStatus(decoder.timeMs);
+            layer.refresh();
+            window.fisbReplayDone = true;
+        }
+
+        // Captures may be gzip-compressed (.gz).
+        function readCapture(blob, name) {
+            if (!/\.gz$/.test(name)) return blob.text();
+            return new Response(blob.stream().pipeThrough(new DecompressionStream('gzip'))).text();
+        }
+
+        // Live mode: RAW output on the console is a RAM-only setting. It is switched back on stop, also when the
+        // socket dropped in the meantime.
+        const consoleSocket = (host, onOpen) => {
+            const socket = new WebSocket(`ws://${host}/console`);
+            socket.onopen = () => onOpen(socket);
+            return socket;
+        };
+
+        function stopLive() {
+            const host = liveHost;
+            if (!host) return;
+            liveHost = null;
+            document.getElementById('live').innerHTML = '&#9654;';
+            const restore = (socket) => {
+                socket.send('AT+PROTOCOL_OUT=CONSOLE,NONE\r\n');
+                setTimeout(() => socket.close(), 500);
+            };
+            if (ws && ws.readyState === WebSocket.OPEN) restore(ws);
+            else consoleSocket(host, restore);
+            ws = null;
+        }
+
+        function startLive(host) {
+            replayId++;
+            liveHost = host;
+            document.getElementById('live').innerHTML = '&#9632;';
+            let buffer = '';
+            ws = consoleSocket(host, (socket) => socket.send('AT+PROTOCOL_OUT=CONSOLE,RAW\r\n'));
+            ws.binaryType = 'arraybuffer';
+            const utf8 = new TextDecoder();
+            ws.onmessage = (event) => {
+                buffer += typeof event.data === 'string' ? event.data : utf8.decode(event.data, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+                for (const line of lines) {
+                    const frame = Fisb.parseRawLine(line);
+                    if (frame) decoder.ingestUplink(frame.payload, frame.meta);
+                }
+                showStatus(Date.now());
+            };
+            // Reconnect while live mode is on.
+            ws.onclose = () => { if (liveHost === host) setTimeout(() => { if (liveHost === host) startLive(host); }, 2000); };
+        }
+
+        document.getElementById('open').onclick = () => document.getElementById('file').click();
+        document.getElementById('file').onchange = async (event) => {
+            stopLive();
+            replay(await readCapture(event.target.files[0], event.target.files[0].name), +params.get('speed') || 0);
+        };
+        document.getElementById('live').onclick = () => {
+            const host = document.getElementById('host').value.trim();
+            if (liveHost) stopLive(); else if (host) startLive(host);
+        };
+        window.addEventListener('beforeunload', stopLive);
+        if (params.get('host')) { document.getElementById('host').value = params.get('host'); startLive(params.get('host')); }
+        if (params.get('capture')) {
+            fetch(params.get('capture')).then((r) => r.blob()).then((b) => readCapture(b, params.get('capture')))
+                .then((t) => replay(t, +params.get('speed') || 0));
+        }
+    </script>
+</body>
+</html>

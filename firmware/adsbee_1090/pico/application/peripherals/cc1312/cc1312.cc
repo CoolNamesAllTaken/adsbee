@@ -112,6 +112,7 @@ bool CC1312::Init(bool spi_already_initialized) {
 }
 
 bool CC1312::Update() {
+    more_raw_packets_pending_ = false;
     // Report a lost link once; reads fail fast and quietly while it stays down (see SPILinkGate).
     bool link_was_down = adsbee.subg_radio.IsLinkDown();
     // Query CC1312's device status.
@@ -127,14 +128,15 @@ bool CC1312::Update() {
             device_status.num_raw_uat_adsb_packets, device_status.num_valid_uat_adsb_packets,
             device_status.num_raw_uat_uplink_packets, device_status.num_valid_uat_uplink_packets);
 
-        // Read packets from queues.
+        // Read one array of packets from the queues. The CC1312 fills it with as many packets as fit.
         uint8_t read_buf[CompositeArray::RawPackets::kMaxLenBytes] = {0};
-        // Read with full size of array, let the CC1312 fill it out with as many packets as possible.
-        if (!adsbee.subg_radio.Read(ObjectDictionary::Address::kAddrCompositeArrayRawPackets, read_buf,
-                                    device_status.pending_raw_packets_len_bytes)) {
+        if (!adsbee.subg_radio.Read(
+                ObjectDictionary::Address::kAddrCompositeArrayRawPackets, read_buf,
+                CompositeArray::RawPackets::ReadLenBytes(device_status.pending_raw_packets_len_bytes))) {
             CONSOLE_ERROR("CC1312::Update", "Unable to read CC1312 raw packet array.");
             return false;
         }
+        more_raw_packets_pending_ = CompositeArray::RawPackets::MorePending(device_status.pending_raw_packets_len_bytes);
         if (!CompositeArray::UnpackRawPacketsBufferToQueues(read_buf, sizeof(read_buf), nullptr,
                                                             &adsbee.raw_uat_adsb_packet_queue,
                                                             &adsbee.raw_uat_uplink_packet_queue)) {

@@ -24,6 +24,7 @@ static const uint16_t kGDL90Port = 4000;
 
 static const uint16_t kNetworkConsoleWelcomeMessageMaxLen = 1000;
 static const uint16_t kNetworkMetricsMessageMaxLen = 2048;
+static_assert(kNetworkMetricsMessageMaxLen <= WebSocketServer::kNonBlockingMessageMaxLen);
 
 /* obsolete */
 static const uint16_t kNetworkControlPort = 3333;  // NOTE: This must match the port number used in index.html!
@@ -75,6 +76,10 @@ extern const uint8_t ota_updater_js_start[] asm("_binary_ota_updater_js_start");
 extern const uint8_t ota_updater_js_end[] asm("_binary_ota_updater_js_end");
 extern const uint8_t firmware_release_js_start[] asm("_binary_firmware_release_js_start");
 extern const uint8_t firmware_release_js_end[] asm("_binary_firmware_release_js_end");
+extern const uint8_t fisb_js_start[] asm("_binary_fisb_js_start");
+extern const uint8_t fisb_js_end[] asm("_binary_fisb_js_end");
+extern const uint8_t fisb_stations_js_start[] asm("_binary_fisb_stations_js_start");
+extern const uint8_t fisb_stations_js_end[] asm("_binary_fisb_stations_js_end");
 extern const uint8_t favicon_png_start[] asm("_binary_favicon_png_start");
 extern const uint8_t favicon_png_end[] asm("_binary_favicon_png_end");
 
@@ -89,10 +94,69 @@ void esp_spi_receive_task(void* pvParameters) {
 
 void tcp_server_task(void* pvParameters) { adsbee_server.TCPServerTask(pvParameters); }
 // esp_err_t console_ws_handler(httpd_req_t *req) { return adsbee_server.NetworkConsoleWebSocketHandler(req); }
+static bool web_server_fd_is_websocket(httpd_handle_t hd, int sockfd) {
+    return httpd_ws_get_fd_info(hd, sockfd) == HTTPD_WS_CLIENT_WEBSOCKET;
+}
+
+/**
+ * Asks the web server to close the HTTP session unused for the longest time, if that is at least idle_timeout_ms.
+ * WebSockets and the session except_fd are never closed. The request is queued and can get lost; the session stays
+ * tracked until it is closed, and restarting its timeout makes a later call ask again.
+ * @retval True if a session was found.
+ */
+static bool web_server_close_idle_session(httpd_handle_t hd, uint32_t idle_timeout_ms, int except_fd = -1) {
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+    int fd = adsbee_server.web_server_sessions.NextIdle(timestamp_ms, idle_timeout_ms, [hd, except_fd](int fd) {
+        return fd == except_fd || web_server_fd_is_websocket(hd, fd);
+    });
+    if (fd < 0) {
+        return false;
+    }
+    adsbee_server.web_server_sessions.Touch(fd, timestamp_ms);
+    httpd_sess_trigger_close(hd, fd);
+    return true;
+}
+
+static bool web_server_sessions_are_full() {
+    return adsbee_server.web_server_sessions.NumSessions() >= ADSBeeServer::kMaxNumWebServerSessions;
+}
+
+/**
+ * Runs on the web server task for every new session. Keeps one session free for the next client.
+ */
+esp_err_t web_server_open_fd(httpd_handle_t hd, int sockfd) {
+    adsbee_server.web_server_sessions.Open(sockfd, get_time_since_boot_ms());
+    // The web server ignores a request to close a session that has no use count, which is the case until its first
+    // HTTP request.
+    httpd_sess_update_lru_counter(hd, sockfd);
+    if (web_server_sessions_are_full()) {
+        web_server_close_idle_session(hd, 0, sockfd);
+    }
+    return ESP_OK;
+}
+
+/**
+ * Runs on the web server task. Closes HTTP sessions that a client keeps open without sending a request, and makes
+ * room again if a request to close a session got lost while every session was in use.
+ */
+void web_server_close_idle_sessions(void* arg) {
+    httpd_handle_t hd = adsbee_server.server;
+    uint16_t num_closed = 0;
+    while (num_closed < ADSBeeServer::kMaxNumHTTPSessionsClosedPerSweep &&
+           web_server_close_idle_session(hd, ADSBeeServer::kHTTPSessionIdleTimeoutMs)) {
+        num_closed++;
+    }
+    if (num_closed == 0 && web_server_sessions_are_full()) {
+        web_server_close_idle_session(hd, 0);
+    }
+}
+
 void ws_close_fd(httpd_handle_t hd, int sockfd) {
+    adsbee_server.web_server_sessions.Close(sockfd);
     adsbee_server.network_console.RemoveClient(sockfd);
     adsbee_server.network_metrics.RemoveClient(sockfd);
     adsbee_server.network_aircraft.RemoveClient(sockfd);
+    adsbee_server.network_uplink.RemoveClient(sockfd);
     // SO_LINGER with l_linger=0 sends RST instead of FIN, bypassing TCP TIME_WAIT.
     // Without this, graceful FIN/FIN-ACK teardown (which always happens on Ethernet) accumulates
     // TIME_WAIT entries in LWIP's PCB table (2 * MSL per close), exhausting the pool and blocking
@@ -180,7 +244,15 @@ bool ADSBeeServer::Update() {
 
     // Prune aircraft dictionary. Need to do this up front so that we don't end up with a negative timestamp delta
     // caused by packets being ingested more recently than the timestamp we take at the beginning of this function.
-    if (timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > kAircraftDictionaryUpdateIntervalMs) {
+    // The RP2040 sends its metrics once per second on its own clock. Run this block when they arrive, so that every set
+    // of RP2040 metrics goes out in exactly one metrics message, and on a timer while none arrive.
+    bool received_rp2040_metrics =
+        xQueueReceive(rp2040_aircraft_dictionary_metrics_queue, &rp2040_aircraft_dictionary_metrics, 0) == pdTRUE;
+    if (received_rp2040_metrics) {
+        last_rp2040_metrics_timestamp_ms_ = timestamp_ms;
+    }
+    if (received_rp2040_metrics ||
+        timestamp_ms - last_aircraft_dictionary_update_timestamp_ms_ > kAircraftDictionaryUpdateFallbackIntervalMs) {
         aircraft_dictionary.SetReferencePosition(
             object_dictionary.composite_device_status.rp2040.rx_position.latitude_deg,
             object_dictionary.composite_device_status.rp2040.rx_position.longitude_deg);
@@ -190,9 +262,9 @@ bool ADSBeeServer::Update() {
         uint32_t heap_free_kb = heap_caps_get_free_size(MALLOC_CAP_8BIT) / 1024;
         uint32_t heap_total_kb = heap_caps_get_total_size(MALLOC_CAP_8BIT) / 1024;
         uint16_t ws_used = network_console.GetNumClients() + network_metrics.GetNumClients() +
-                           network_aircraft.GetNumClients();
+                           network_aircraft.GetNumClients() + network_uplink.GetNumClients();
         uint16_t ws_total = network_console.GetNumClientsAllowed() + network_metrics.GetNumClientsAllowed() +
-                            network_aircraft.GetNumClientsAllowed();
+                            network_aircraft.GetNumClientsAllowed() + network_uplink.GetNumClientsAllowed();
         CONSOLE_INFO("ADSBeeServer::Update", "\t %d clients, %d aircraft, heap: %luK free / %luK total, ws: %d/%d",
                      comms_manager.GetNumWiFiClients(), aircraft_dictionary.GetNumAircraft(), heap_free_kb,
                      heap_total_kb, ws_used, ws_total);
@@ -201,6 +273,13 @@ bool ADSBeeServer::Update() {
         // RP2040 and SubG status are updated by the RP2040 writing to the object dictionary periodically. Nothing to do
         // here.
         SendNetworkMetricsMessage();
+    }
+
+    if (timestamp_ms - last_http_session_sweep_timestamp_ms_ > kHTTPSessionSweepIntervalMs) {
+        last_http_session_sweep_timestamp_ms_ = timestamp_ms;
+        if (server != nullptr) {
+            httpd_queue_work(server, web_server_close_idle_sessions, nullptr);
+        }
     }
 
     // Run raw packet ingestion and reporting if queues are >50% full or every 200ms.
@@ -290,7 +369,8 @@ bool ADSBeeServer::Update() {
             // UAT Uplink Packets
             // We don't currently digest uplink packets, they just get forwarded. The raw_packets_buf composite packet
             // array takes care of forwarding to relevant feeds. We also forward them over GDL90 to connected WiFi
-            // clients here (separate from the traffic reporting that occurs on regular intervals).
+            // clients here (separate from the traffic reporting that occurs on regular intervals), and to /uplink
+            // WebSocket clients.
             for (uint16_t i = 0; i < raw_packets.header->num_uat_uplink_packets; i++) {
                 RawUATUplinkPacket& raw_uat_uplink_packet = raw_packets.uat_uplink_packets[i];
                 DecodedUATUplinkPacket decoded_packet = DecodedUATUplinkPacket(raw_uat_uplink_packet);
@@ -299,6 +379,7 @@ bool ADSBeeServer::Update() {
                     continue;
                 }
                 ReportGDL90UplinkDataMessage(decoded_packet);
+                QueueUplinkMessage(decoded_packet);
             }
         }
     }
@@ -332,11 +413,8 @@ bool ADSBeeServer::Update() {
     network_console.Update();
     network_metrics.Update();
     network_aircraft.Update();
-
-    // Check to see whether the RP2040 sent over new metrics.
-    if (xQueueReceive(rp2040_aircraft_dictionary_metrics_queue, &rp2040_aircraft_dictionary_metrics, 0) == pdTRUE) {
-        last_rp2040_metrics_timestamp_ms_ = get_time_since_boot_ms();
-    }
+    network_uplink.Update();
+    UpdateUplinkBroadcast();
 
     return ret;
 }
@@ -489,6 +567,54 @@ bool ADSBeeServer::ReportGDL90UplinkDataMessage(const DecodedUATUplinkPacket& up
     return true;
 }
 
+void ADSBeeServer::QueueUplinkMessage(const DecodedUATUplinkPacket& uplink_packet) {
+    if (!uplink_ring_) {
+        return;
+    }
+    uint8_t message[kUATUplinkMessageNumBytes];
+    // The packet's own timestamp counts radio timer ticks, so report the time of this message.
+    BuildUATUplinkMessage(message, uplink_packet.decoded_payload, uplink_packet.raw.sigs_dbm,
+                          get_time_since_boot_ms());
+    uplink_ring_->Push(message);
+}
+
+void ADSBeeServer::UpdateUplinkBroadcast() {
+    int client_fds[WebSocketServer::kMaxNumClients];
+    uint16_t num_clients = network_uplink.GetClientFds(client_fds);
+    if (num_clients == 0) {
+        delete uplink_ring_;
+        uplink_ring_ = nullptr;
+        return;
+    }
+    if (!uplink_ring_) {
+        uplink_ring_ = new (std::nothrow) UplinkRing();
+        if (!uplink_ring_) {
+            return;  // Try again on the next update.
+        }
+    }
+    uplink_ring_->SetClients(client_fds, num_clients);
+
+    for (uint16_t i = 0; i < num_clients; i++) {
+        // Only send to a client that takes the frame right away, so a slow client can't stall this task.
+        const uint8_t* message;
+        while ((message = uplink_ring_->Peek(client_fds[i])) != nullptr &&
+               network_uplink.ClientIsWritable(client_fds[i])) {
+            // A failed send drops this message for the client.
+            network_uplink.SendMessageToClient(client_fds[i], (const char*)message, kUATUplinkMessageNumBytes);
+            uplink_ring_->Pop(client_fds[i]);
+        }
+    }
+
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+    if (uplink_ring_->num_dropped > 0 &&
+        timestamp_ms - last_uplink_drop_warning_timestamp_ms_ > kUplinkDropWarningIntervalMs) {
+        last_uplink_drop_warning_timestamp_ms_ = timestamp_ms;
+        CONSOLE_WARNING("ADSBeeServer::UpdateUplinkBroadcast", "Dropped %lu UAT uplinks for slow /uplink clients.",
+                        (unsigned long)uplink_ring_->num_dropped);
+        uplink_ring_->num_dropped = 0;
+    }
+}
+
 // void ADSBeeServer::TCPServerTask(void *pvParameters) {
 //     int addr_family = AF_INET;
 //     int ip_protocol = 0;
@@ -567,44 +693,53 @@ bool ADSBeeServer::ReportGDL90UplinkDataMessage(const DecodedUATUplinkPacket& up
 //     }
 // }
 
-static esp_err_t root_handler(httpd_req_t* req) {
-    httpd_resp_send(req, (const char*)index_html_start, index_html_end - index_html_start);
+/**
+ * Sends an HTTP response and asks the client to close the connection, which frees its session for the next client.
+ * @param[in] content_type Content type, or nullptr for the default (text/html).
+ */
+static esp_err_t send_response(httpd_req_t* req, const char* content_type, const char* buf, ssize_t buf_len) {
+    if (content_type != nullptr) {
+        httpd_resp_set_type(req, content_type);
+    }
+    httpd_resp_set_hdr(req, "Connection", "close");
+    esp_err_t ret = httpd_resp_send(req, buf, buf_len);
+    // The idle timeout starts when the response is sent, however long sending took.
+    adsbee_server.web_server_sessions.Touch(httpd_req_to_sockfd(req), get_time_since_boot_ms());
+    return ret;
+}
+
+static esp_err_t send_file(httpd_req_t* req, const char* content_type, const uint8_t* file_start,
+                           const uint8_t* file_end) {
+    send_response(req, content_type, (const char*)file_start, file_end - file_start);
     return ESP_OK;
 }
 
-static esp_err_t css_handler(httpd_req_t* req) {
-    // Set the CSS content type
-    httpd_resp_set_type(req, "text/css");
+static esp_err_t root_handler(httpd_req_t* req) { return send_file(req, nullptr, index_html_start, index_html_end); }
 
-    // Send the CSS file
-    httpd_resp_send(req, (const char*)style_css_start, style_css_end - style_css_start);
-
-    return ESP_OK;
-}
+static esp_err_t css_handler(httpd_req_t* req) { return send_file(req, "text/css", style_css_start, style_css_end); }
 
 static esp_err_t adsbee_js_handler(httpd_req_t* req) {
-    httpd_resp_set_type(req, "application/javascript");
-    httpd_resp_send(req, (const char*)adsbee_js_start, adsbee_js_end - adsbee_js_start);
-    return ESP_OK;
+    return send_file(req, "application/javascript", adsbee_js_start, adsbee_js_end);
 }
 
 static esp_err_t settings_js_handler(httpd_req_t* req) {
-    httpd_resp_set_type(req, "application/javascript");
-    // EMBED_TXTFILES null-terminates the embedded file; don't send the terminator.
-    httpd_resp_send(req, (const char*)settings_js_start, settings_js_end - settings_js_start);
-    return ESP_OK;
+    return send_file(req, "application/javascript", settings_js_start, settings_js_end);
 }
 
 static esp_err_t ota_updater_js_handler(httpd_req_t* req) {
-    httpd_resp_set_type(req, "application/javascript");
-    httpd_resp_send(req, (const char*)ota_updater_js_start, ota_updater_js_end - ota_updater_js_start);
-    return ESP_OK;
+    return send_file(req, "application/javascript", ota_updater_js_start, ota_updater_js_end);
 }
 
 static esp_err_t firmware_release_js_handler(httpd_req_t* req) {
-    httpd_resp_set_type(req, "application/javascript");
-    httpd_resp_send(req, (const char*)firmware_release_js_start, firmware_release_js_end - firmware_release_js_start);
-    return ESP_OK;
+    return send_file(req, "application/javascript", firmware_release_js_start, firmware_release_js_end);
+}
+
+static esp_err_t fisb_js_handler(httpd_req_t* req) {
+    return send_file(req, "application/javascript", fisb_js_start, fisb_js_end);
+}
+
+static esp_err_t fisb_stations_js_handler(httpd_req_t* req) {
+    return send_file(req, "application/javascript", fisb_stations_js_start, fisb_stations_js_end);
 }
 
 static void json_escape(char* out, size_t out_size, const char* in) {
@@ -646,17 +781,16 @@ static esp_err_t feed_api_get_handler(httpd_req_t* req) {
              index, escaped_uri, settings_manager.settings.feed_ports[index],
              (int)settings_manager.settings.feed_is_active[index],
              SettingsManager::kReportingProtocolStrs[settings_manager.settings.feed_protocols[index]], receiver_id);
-    httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
-    httpd_resp_send(req, json, HTTPD_RESP_USE_STRLEN);
+    send_response(req, "application/json", json, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
 
 esp_err_t favicon_handler(httpd_req_t* req) {
-    httpd_resp_set_type(req, "image/png");
     httpd_resp_set_hdr(req, "Cache-Control", "max-age=2592000, public");  // Cache for 30 days
 
-    esp_err_t res = httpd_resp_send(req, (const char*)favicon_png_start, favicon_png_end - favicon_png_start);
+    esp_err_t res =
+        send_response(req, "image/png", (const char*)favicon_png_start, favicon_png_end - favicon_png_start);
     if (res != ESP_OK) {
         ESP_LOGE("FAVICON", "Failed to send favicon");
         return res;
@@ -827,13 +961,16 @@ bool ADSBeeServer::TCPServerInit() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = kHTTPServerStackSizeBytes;
     // config.task_caps = MALLOC_CAP_IRAM_8BIT;
-    config.max_open_sockets = 16;  // Must be <= CONFIG_LWIP_MAX_SOCKETS - 3 (currently 20 - 3 = 17).
-    // 9 URIs are registered below (6 HTTP + 3 websocket); the default limit is 8 and a
+    config.max_open_sockets = kMaxNumWebServerSessions;
+    config.backlog_conn = kWebServerBacklog;
+    // 12 URIs are registered below (8 HTTP + 4 websocket); the default limit is 8 and a
     // failed registration aborts boot via ESP_ERROR_CHECK.
     config.max_uri_handlers = 16;
+    config.open_fn = web_server_open_fd;
     config.close_fn = ws_close_fd;
-    config.lru_purge_enable =
-        true;  // Allow purging of the least recently used connections when max clients is reached.
+    // The web server's own purge closes its least recently used session, which can be a WebSocket in the middle of a
+    // firmware update. web_server_open_fd() makes room instead.
+    config.lru_purge_enable = false;
     config.keep_alive_enable = true;
     config.keep_alive_idle = 5;      // Seconds idle before sending first keepalive probe.
     config.keep_alive_interval = 5;  // Seconds between keepalive probes.
@@ -907,6 +1044,24 @@ bool ADSBeeServer::TCPServerInit() {
                                        .supported_subprotocol = nullptr};
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &firmware_release_js));
 
+    // FIS-B weather decoder and station table JavaScript URI handlers
+    httpd_uri_t fisb_js = {.uri = "/fisb.js",
+                           .method = HTTP_GET,
+                           .handler = fisb_js_handler,
+                           .user_ctx = NULL,
+                           .is_websocket = false,
+                           .handle_ws_control_frames = false,
+                           .supported_subprotocol = nullptr};
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &fisb_js));
+    httpd_uri_t fisb_stations_js = {.uri = "/fisb_stations.js",
+                                    .method = HTTP_GET,
+                                    .handler = fisb_stations_js_handler,
+                                    .user_ctx = NULL,
+                                    .is_websocket = false,
+                                    .handle_ws_control_frames = false,
+                                    .supported_subprotocol = nullptr};
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &fisb_stations_js));
+
     // Favicon URI handler
     httpd_uri_t favicon = {.uri = "/favicon.png",
                            .method = HTTP_GET,
@@ -930,7 +1085,7 @@ bool ADSBeeServer::TCPServerInit() {
     network_console = WebSocketServer({.label = "Network Console",
                                        .server = server,
                                        .uri = "/console",
-                                       .num_clients_allowed = 4,
+                                       .num_clients_allowed = kMaxNumClientsPerWebSocket,
                                        .send_as_binary = true,      // Network console messages can contain binary data.
                                        .inactivity_timeout_ms = 0,  // Disabled; TCP keepalives handle dead connections.
                                        .post_connect_callback = NetworkConsolePostConnectCallback,
@@ -942,7 +1097,7 @@ bool ADSBeeServer::TCPServerInit() {
     network_metrics = WebSocketServer({.label = "Network Metrics",
                                        .server = server,
                                        .uri = "/metrics",
-                                       .num_clients_allowed = 4,
+                                       .num_clients_allowed = kMaxNumClientsPerWebSocket,
                                        .send_as_binary = false,                 // Network metrics are always ASCII.
                                        .inactivity_timeout_ms = 90 * 1000,  // 90s — 1.5× JS heartbeat interval.
                                        .post_connect_callback = nullptr,
@@ -954,13 +1109,25 @@ bool ADSBeeServer::TCPServerInit() {
     network_aircraft = WebSocketServer({.label = "Network Aircraft",
                                         .server = server,
                                         .uri = "/aircraft",
-                                        .num_clients_allowed = 4,
+                                        .num_clients_allowed = kMaxNumClientsPerWebSocket,
                                         .send_as_binary = false,
                                         .inactivity_timeout_ms = 90 * 1000,
                                         .post_connect_callback = nullptr,
                                         .message_received_callback = nullptr});
     if (!network_aircraft.Init()) {
         CONSOLE_ERROR("ADSBeeServer::TCPServerInit", "Failed to start Network Aircraft WebSocket server.");
+        return false;
+    }
+    network_uplink = WebSocketServer({.label = "Network Uplink",
+                                      .server = server,
+                                      .uri = "/uplink",
+                                      .num_clients_allowed = kMaxNumClientsPerWebSocket,
+                                      .send_as_binary = true,
+                                      .inactivity_timeout_ms = 0,  // Disabled; TCP keepalives handle dead connections.
+                                      .post_connect_callback = nullptr,
+                                      .message_received_callback = nullptr});
+    if (!network_uplink.Init()) {
+        CONSOLE_ERROR("ADSBeeServer::TCPServerInit", "Failed to start Network Uplink WebSocket server.");
         return false;
     }
     HeapDiagnostics::Mark("ws");
@@ -979,7 +1146,8 @@ void ADSBeeServer::SendAircraftJSONMessages() {
     // Batch aircraft into JSON arrays of up to one websocket message each. One frame per aircraft (two socket writes
     // each) cost ~100 TCP segments per second per client at a busy site; on the W5500 Ethernet board the network tasks
     // doing that outrank the SPI receive task, which then missed RP2040 handshakes until the RP2040 reset the board.
-    char batch_buf[WebSocketServer::kWebSocketMessageMaxLen];
+    // Frames of up to kNonBlockingMessageMaxLen always fit a writable socket whole.
+    char batch_buf[WebSocketServer::kNonBlockingMessageMaxLen];
     WriteAircraftJSONLiveMapArrays(aircraft_dictionary, get_time_since_boot_ms(), batch_buf, sizeof(batch_buf),
                                    [this](const char* buf, uint16_t len) { network_aircraft.BroadcastMessage(buf, len); });
 }
