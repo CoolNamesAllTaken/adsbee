@@ -33,6 +33,19 @@ files, `firmware/common/` or `firmware/modules/` changed.
   notes belong in code comments.
 - Use American spelling. Avoid "it's not X, it's Y" phrasing.
 
+## Datasheets
+
+Every change to a `word/datasheet_*.docx` gets an entry in its Revision History (the dated list after the table of
+contents), and the footer's `Document Version` must match the newest revision name.
+
+- Revision names are the date, `YYYYMMDD`.
+- Find the product's latest release tag (RCs count): `git fetch --tags && git tag --list '<product>-*' --sort=-creatordate | head -1`.
+  Then check whether that tag's datasheet already has the newest revision:
+  `git show <tag>:word/datasheet_<name>.docx > /tmp/d.docx && unzip -p /tmp/d.docx word/document.xml | grep -c '<newest revision>'`.
+- Present (released): add a new revision named today's date and list the change under it.
+- Absent (unreleased): rename the newest revision to today's date and append the change to its list.
+- Update the footer either way. Follow the wording of the existing entries.
+
 ## Project Summary
 
 ADSBee 1090 is an ADS-B/UAT aviation transponder receiver with a 3-processor heterogeneous firmware:
