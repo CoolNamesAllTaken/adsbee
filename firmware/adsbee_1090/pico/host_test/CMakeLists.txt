@@ -43,12 +43,14 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         test_buffer_utils.cc
         # test_adsbee.cc
         test_composite_array.cc
+        test_esp32_firmware_check.cc
         test_cpu_utils.cc
         test_crc.cc
         test_data_structures.cc
         test_decode_utils.cc
         test_fixedmath.cc
         test_geo_utils.cc
+        test_idle_session_tracker.cc
         test_nasa_cpr.cc
         test_mode_s_packet_decoder.cc
         test_mode_s_single_bit_correction.cc
