@@ -1,5 +1,6 @@
 #include "buffer_utils.hh"
 
+#include <array>
 #include <cstring>  // For strlen.
 
 #include "comms.hh"
@@ -125,6 +126,25 @@ void PrintBinary32(uint32_t value) {
  */
 uint16_t swap16(uint16_t value) { return (value << 8) | (value >> 8); }
 
+// CRC-16/CCITT (polynomial 0x1021) lookup tables: [0][b] is the CRC of byte b, [1][b] the CRC of byte b followed by a
+// zero byte. With both, two bytes cost one loop pass. The CC1312 checksums every SPI packet in a callback that holds
+// off its RF callback, where this is twice as fast as one shift-and-xor pass per byte.
+static constexpr auto kCRC16Tables = [] {
+    std::array<std::array<uint16_t, 256>, 2> tables = {};
+    for (uint16_t byte = 0; byte < 256; byte++) {
+        uint16_t crc = static_cast<uint16_t>(byte << 8);
+        for (int bit = 0; bit < 8; bit++) {
+            crc = static_cast<uint16_t>(crc & 0x8000 ? (crc << 1) ^ 0x1021 : crc << 1);
+        }
+        tables[0][byte] = crc;
+    }
+    for (uint16_t byte = 0; byte < 256; byte++) {
+        uint16_t crc = tables[0][byte];
+        tables[1][byte] = static_cast<uint16_t>(crc << 8) ^ tables[0][crc >> 8];
+    }
+    return tables;
+}();
+
 uint16_t CalculateCRC16(const uint8_t *buf, int32_t buf_len_bytes) {
     if (buf == nullptr) {
         CONSOLE_ERROR("CalculateCRC16", "Attempted to calculate CRC on null buffer!");
@@ -134,12 +154,12 @@ uint16_t CalculateCRC16(const uint8_t *buf, int32_t buf_len_bytes) {
         CONSOLE_ERROR("CalculateCRC16", "Attempted to calculate CRC on buffer with negative length!");
         return 0;
     }
-    uint8_t x;
     uint16_t crc = 0xFFFF;
-    while (buf_len_bytes--) {
-        x = crc >> 8 ^ *buf++;
-        x ^= x >> 4;
-        crc = (crc << 8) ^ ((uint16_t)(x << 12)) ^ ((uint16_t)(x << 5)) ^ ((uint16_t)x);
+    for (; buf_len_bytes >= 2; buf_len_bytes -= 2, buf += 2) {
+        crc = kCRC16Tables[1][(crc >> 8) ^ buf[0]] ^ kCRC16Tables[0][(crc & 0xFF) ^ buf[1]];
+    }
+    if (buf_len_bytes > 0) {
+        crc = static_cast<uint16_t>(crc << 8) ^ kCRC16Tables[0][(crc >> 8) ^ buf[0]];
     }
     return swap16(crc);
 }
