@@ -30,6 +30,11 @@ static void* CountingAlloc(size_t num_bytes) {
     return malloc(num_bytes);
 }
 static void* FailingAlloc(size_t num_bytes) { return nullptr; }
+static int num_deallocs = 0;
+static void CountingDealloc(void* ptr) {
+    num_deallocs++;
+    free(ptr);
+}
 
 static FeedSendBuffer::Config MakeConfig(FakeFeedSocket& sock, uint16_t backlog_capacity_bytes) {
     FeedSendBuffer::Config config;
@@ -37,6 +42,7 @@ static FeedSendBuffer::Config MakeConfig(FakeFeedSocket& sock, uint16_t backlog_
     config.ctx = &sock;
     config.backlog_capacity_bytes = backlog_capacity_bytes;
     config.alloc = CountingAlloc;
+    config.dealloc = CountingDealloc;
     return config;
 }
 
@@ -74,6 +80,29 @@ TEST(FeedSendBuffer, CutBatchIsFinishedBeforeNewerBatches) {
     EXPECT_EQ(Write(buf, "cc", 4), FeedSendBuffer::kSent);  // Backlog goes out first, then the new batch.
     EXPECT_EQ(sock.stream, "aaaaabbbbcc");
     EXPECT_EQ(buf.BacklogLenBytes(), 0);
+}
+
+TEST(FeedSendBuffer, BacklogIsHeldOnlyWhileBehind) {
+    FakeFeedSocket sock;
+    FeedSendBuffer buf;
+    num_allocs = num_deallocs = 0;
+    buf.Open(MakeConfig(sock, 16), 0);
+    EXPECT_EQ(Write(buf, "aaaa", 1), FeedSendBuffer::kQueued);
+    EXPECT_EQ(Write(buf, "bbbb", 2), FeedSendBuffer::kQueued);
+    EXPECT_EQ(num_allocs, 1);
+    sock.room = 5;
+    EXPECT_TRUE(buf.Flush(3));
+    EXPECT_EQ(num_deallocs, 0);  // Still three bytes behind.
+    sock.room = 100;
+    EXPECT_TRUE(buf.Flush(4));
+    EXPECT_EQ(num_deallocs, 1);  // Caught up: the memory goes back to the heap.
+    EXPECT_EQ(Write(buf, "cccc", 5), FeedSendBuffer::kSent);
+    sock.room = 0;
+    EXPECT_EQ(Write(buf, "dddd", 6), FeedSendBuffer::kQueued);
+    EXPECT_EQ(num_allocs, 2);
+    buf.Close();
+    EXPECT_EQ(num_deallocs, 2);
+    EXPECT_EQ(sock.stream, "aaaabbbbcccc");
 }
 
 TEST(FeedSendBuffer, FullBacklogDropsWholeBatchesOnly) {

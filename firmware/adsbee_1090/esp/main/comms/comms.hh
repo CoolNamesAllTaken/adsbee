@@ -298,6 +298,11 @@ class CommsManager {
     void CloseFeedSocket(uint16_t feed_index);
 
     /**
+     * Whether free memory is below the back-pressure thresholds, in which case feed sockets are given no data.
+     */
+    bool FeedSendHeapIsLow();
+
+    /**
      * Flushes feed backlogs, closes feeds that stopped taking data and logs per-feed drops. Never blocks.
      */
     void UpdateFeedSendBuffers();
@@ -410,7 +415,7 @@ class CommsManager {
     uint16_t feed_wait_budget_ms_[SettingsManager::Settings::kMaxNumFeeds] = {0};
     uint32_t feed_wait_budget_last_refill_timestamp_ms_ = 0;
     uint32_t feed_drop_last_log_timestamp_ms_ = 0;
-    bool feed_send_heap_is_low_ = false;  // Sampled once per IPWANTask pass.
+    bool feed_send_heap_is_low_ = false;
     volatile uint32_t wan_queue_num_overflows_ = 0;
     volatile uint32_t wan_queue_dropped_mode_s_ = 0;
     volatile uint32_t wan_queue_dropped_uat_adsb_ = 0;

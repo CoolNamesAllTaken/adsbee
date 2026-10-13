@@ -28,7 +28,8 @@ class FeedSendBuffer {
         WriteFn write = nullptr;
         void* ctx = nullptr;
         uint16_t backlog_capacity_bytes = 0;
-        // The backlog is allocated on first use: a feed that keeps up never needs it.
+        // The backlog is allocated when a feed falls behind and freed when it has caught up: a feed that keeps up
+        // never holds one.
         void* (*alloc)(size_t num_bytes) = malloc;
         void (*dealloc)(void* ptr) = free;
     };
@@ -107,6 +108,10 @@ class FeedSendBuffer {
             backlog_len_bytes_ -= num_sent;
             memmove(backlog_, backlog_ + num_sent, backlog_len_bytes_);
             waiting_ = backlog_len_bytes_ > 0;
+            if (!waiting_) {
+                config_.dealloc(backlog_);
+                backlog_ = nullptr;
+            }
         }
         return true;
     }

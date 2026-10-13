@@ -30,7 +30,7 @@ static const uint32_t kHeapBackPressureThresholdBytes = 20480;
 static const uint32_t kDMABackPressureThresholdBytes = 16384;
 static const uint32_t kDMABackPressureThresholdEthernetOnlyBytes = 10240;
 
-// Unsent bytes kept per feed when its socket is full, allocated when a feed first falls behind. With PSRAM this rides
+// Unsent bytes kept per feed when its socket is full, allocated only while a feed is behind. With PSRAM this rides
 // out a TCP retransmission timeout at about 900 messages per second; without PSRAM it holds the tail of a cut batch
 // and one more batch, and is only allocated while the heap has room to spare.
 static const uint16_t kFeedBacklogBytesPSRAM = 32768;
@@ -102,8 +102,11 @@ static int FeedSocketWrite(void* ctx, const uint8_t* buf, uint16_t buf_len) {
     if (num_sent >= 0) {
         return num_sent;
     }
-    // Socket send buffer full (the server or the network is slow) or lwIP is briefly out of buffers: try again later.
-    return (errno == EAGAIN || errno == EWOULDBLOCK || errno == ENOBUFS || errno == ENOMEM) ? 0 : -1;
+    // Socket send buffer full (the server or the network is slow), an earlier write still being queued, or lwIP briefly
+    // out of buffers: try again later.
+    return (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINPROGRESS || errno == ENOBUFS || errno == ENOMEM)
+               ? 0
+               : -1;
 }
 
 static void* FeedBacklogAlloc(size_t num_bytes) {
@@ -569,6 +572,8 @@ bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len, ui
     send_buf_counter_bytes += buf_len;
 #endif
 
+    // Every send can take a TCP segment and a WiFi TX buffer from the heap, so the heap is checked before each one.
+    feed_send_heap_is_low_ = FeedSendHeapIsLow();
     // Backlog full: wait for the socket out of this feed's budget.
     while (!feed_send_heap_is_low_ && feed_wait_budget_ms_[iface] > 0 &&
            !feed_send_buffers_[iface].HasRoomFor(buf_len)) {
@@ -595,27 +600,30 @@ bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len, ui
             break;
         case FeedSendBuffer::kError:
         default:
+            // Either the socket failed, or it took part of a batch and there was no memory to keep the rest.
             CONSOLE_ERROR("CommsManager::SendBuf",
-                          "Error occurred during sending %d byte message to feed %d with URI %s "
-                          "on port %d: "
-                          "errno %d (%s).",
-                          buf_len, iface, settings_manager.settings.feed_uris[iface],
-                          settings_manager.settings.feed_ports[iface], errno, strerror(errno));
+                          "Closing feed %d (%s:%d): socket error or no backlog memory for a cut %d byte batch (last "
+                          "errno %d, %s).",
+                          iface, settings_manager.settings.feed_uris[iface],
+                          settings_manager.settings.feed_ports[iface], buf_len, errno, strerror(errno));
             CloseFeedSocket(iface);
             return false;
     }
     return true;
 }
 
-void CommsManager::UpdateFeedSendBuffers() {
-    uint32_t timestamp_ms = get_time_since_boot_ms();
-
-    // Sampled once per pass: walking the heaps for every send costs more than the sends.
+bool CommsManager::FeedSendHeapIsLow() {
     const uint32_t dma_backpressure_threshold_bytes = (wifi_ap_enabled || wifi_sta_enabled)
                                                           ? kDMABackPressureThresholdBytes
                                                           : kDMABackPressureThresholdEthernetOnlyBytes;
-    feed_send_heap_is_low_ = HardwareCapabilities::GetInternalFreeBytes() < kHeapBackPressureThresholdBytes ||
-                             heap_caps_get_free_size(MALLOC_CAP_DMA) < dma_backpressure_threshold_bytes;
+    return HardwareCapabilities::GetInternalFreeBytes() < kHeapBackPressureThresholdBytes ||
+           heap_caps_get_free_size(MALLOC_CAP_DMA) < dma_backpressure_threshold_bytes;
+}
+
+void CommsManager::UpdateFeedSendBuffers() {
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+
+    feed_send_heap_is_low_ = FeedSendHeapIsLow();
 
     uint32_t wait_budget_refill_ms =
         (timestamp_ms - feed_wait_budget_last_refill_timestamp_ms_) / kFeedWaitBudgetRefillDivisor;
