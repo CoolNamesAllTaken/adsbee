@@ -33,6 +33,14 @@ static constexpr uint16_t kMinStartOffsetSamples = 2;
 static constexpr uint16_t kMaxStartOffsetSamples = 7;
 static constexpr uint16_t kNominalStartOffsetSamples = 5;
 static constexpr uint16_t kTimingSearchBits = 12;  // Bits used to pick the start offset.
+// Message timing for multilateration. Every data bit has an edge in its middle: falling for a 1, rising for a 0. A
+// stronger signal widens the comparator pulses, so rising edges come earlier and falling edges later, by about the
+// same amount. The mean position of both kinds stays put, and averaging over several bits resolves it finer than
+// one sample.
+static constexpr uint16_t kTimingEdgeBits = 24;  // Bits whose mid-bit edges are averaged (a multiple of 8).
+static constexpr uint16_t kCountsPerSample = 4;  // 48MHz counts per comparator sample.
+// Data start after the start offset when the first bits are all 0 or all 1 (typical for a pulse of nominal width).
+static constexpr int16_t kDataStartFallbackCounts = 3;
 static constexpr uint16_t kCaptureSamples = kMaxMessageBits * kSamplesPerBit + kMaxStartOffsetSamples;
 static constexpr uint16_t kCaptureWords = (kCaptureSamples + 31) / 32;  // 43
 static constexpr uint16_t kShortCaptureWords =
@@ -51,7 +59,10 @@ struct Result {
     uint32_t buffer[4] = {0};          // Message bits, left aligned, first bit in the MSB of buffer[0].
     uint16_t len_bits = 0;             // 56 or 112; 0 if no message was found.
     uint8_t start_offset_samples = 0;  // Chosen data start, relative to the first sample.
-    uint8_t num_flipped_bits = 0;      // Bits changed by the CRC guided fix.
+    // Start of the first data bit, in 48MHz counts (1/48 us) after the first sample. Follows the pulse centers, so
+    // it does not depend on the signal level the way start_offset_samples and the sampler start do.
+    int16_t data_start_48mhz_counts = 0;
+    uint8_t num_flipped_bits = 0;  // Bits changed by the CRC guided fix.
 };
 
 /**

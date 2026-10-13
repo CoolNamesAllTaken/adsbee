@@ -51,9 +51,16 @@ constexpr uint32_t kMidCheckFirstSample =
     mode_s_soft_demod::kNominalStartOffsetSamples - 1;  // First sample of the first data bit, leaning early.
 constexpr int kShortCaptureMinConfidence = 3;           // HI sample margin (of 6) for calling the first bit a 0.
 constexpr uint32_t kShortCaptureAlarmDelayUs = 17;  // From the mid-message interrupt (~43us) to past 56 bits (59us).
-// The sampler starts about half a microsecond before the data block. Timestamps keep referring to the start of the
-// data block, as with the earlier demodulator.
-constexpr uint32_t kSamplerLead48MHzCounts = (mode_s_soft_demod::kNominalStartOffsetSamples + 1) * 4;
+// MLAT timestamp of a Mode S message: the end of bit 56, which is 64us after the start of the first preamble pulse,
+// for 56 bit and 112 bit messages alike. dump1090 and readsb timestamp this instant (demod_2400.c: "we report the
+// timestamp at the end of bit 56 (even if the frame is a 112-bit frame)") and mlat-client subtracts 64us from Beast
+// timestamps of both lengths, so feeds look like those of other receivers. The start of the data block is taken from
+// the pulses the demodulator sampled (mode_s_soft_demod::Result::data_start_48mhz_counts): unlike the preamble match
+// and the sampler start, it does not move with the signal level. RawModeSPacket::mlat_48mhz_64bit_counts holds the
+// instant at 48MHz resolution; the Beast output divides it down to 12MHz.
+constexpr int32_t kTimestampAfterDataStart48MHzCounts = 56 * 48;
+// The sampler takes its first sample one PIO cycle after the FIFO pull that latches the timestamp.
+constexpr int32_t kFirstSampleDelay48MHzCounts = 1;
 
 constexpr float kInt16MaxRecip = 1.0f / INT16_MAX;
 
@@ -601,9 +608,9 @@ void __time_critical_func(ADSBee::FinishCapture)(uint16_t sm_index, uint16_t num
         }
         uint16_t jitter_sys_clk_counts =
             mlat_jitter_counts_on_demod_begin_[sm_index] - mlat_jitter_counts_on_fifo_pull_[sm_index];
-        capture.mlat_48mhz_64bit_counts = rx_packet_[sm_index].mlat_48mhz_64bit_counts -
-                                          MLATJitterCountsTo48MHzCounts(jitter_sys_clk_counts) +
-                                          kSamplerLead48MHzCounts;
+        // Time of the sampler start. The message timestamp is derived from it once the data is demodulated.
+        capture.mlat_48mhz_64bit_counts =
+            rx_packet_[sm_index].mlat_48mhz_64bit_counts - MLATJitterCountsTo48MHzCounts(jitter_sys_clk_counts);
         capture.rssi_mv = static_cast<int16_t>(sample_rssi_mv_[sm_index]);
         capture.num_words = static_cast<uint8_t>(num_words);
         capture.source = static_cast<uint8_t>(sm_index);
@@ -650,7 +657,8 @@ void __time_critical_func(ADSBee::DemodulateCaptures)() {
             packet.sigs_dbm = r1090_rssi::PacketMilliVoltsTodBm(capture.rssi_mv, noise_floor_mv_);
             packet.sigq_db = packet.sigs_dbm - GetNoiseFloordBm();
             packet.source = sm_index;
-            packet.mlat_48mhz_64bit_counts = capture.mlat_48mhz_64bit_counts;
+            packet.mlat_48mhz_64bit_counts = capture.mlat_48mhz_64bit_counts + kFirstSampleDelay48MHzCounts +
+                                             result.data_start_48mhz_counts + kTimestampAfterDataStart48MHzCounts;
             if (result.len_bits == RawModeSPacket::kSquitterPacketLenBits) {
                 aircraft_dictionary.Record1090RawSquitterFrame(sm_index);
             } else {

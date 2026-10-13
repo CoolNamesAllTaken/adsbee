@@ -12,22 +12,27 @@ namespace mode_s_soft_demod {
 static constexpr uint32_t kBitsPerGroup = 8;  // 8 bits are 96 samples: exactly 3 capture words.
 static constexpr uint32_t kSamplesPerGroup = kBitsPerGroup * kSamplesPerBit;
 
-// Bit margins of up to 8 consecutive bits: HI samples in the first chip of a bit minus those in its second chip.
-// Positive for a 1; the size is the confidence. Reads 3 words from the word of first_sample on, and a fourth one
-// unless first_sample is on a word boundary. Only the first 4 margins are written if num_bits is 4 or less.
-static inline void BitMargins(const uint32_t* samples, uint32_t first_sample, int margins[kBitsPerGroup],
-                              uint32_t num_bits = kBitsPerGroup) {
+// The 96 samples of 8 consecutive bits, lined up with the word boundaries so every sample sits at a fixed position.
+// Reads 3 words from the word of first_sample on, and a fourth one unless first_sample is on a word boundary.
+static inline void AlignGroup(const uint32_t* samples, uint32_t first_sample, uint32_t& a, uint32_t& b, uint32_t& c) {
     const uint32_t* words = samples + (first_sample >> 5);
     uint32_t shift = first_sample & 31;
-    uint32_t a = words[0];
-    uint32_t b = words[1];
-    uint32_t c = words[2];
+    a = words[0];
+    b = words[1];
+    c = words[2];
     if (shift != 0) {
-        // Line the 96 samples up with the word boundaries, so every chip below sits at a fixed position.
         a = (a << shift) | (b >> (32 - shift));
         b = (b << shift) | (c >> (32 - shift));
         c = (c << shift) | (words[3] >> (32 - shift));
     }
+}
+
+// Bit margins of up to 8 consecutive bits: HI samples in the first chip of a bit minus those in its second chip.
+// Positive for a 1; the size is the confidence. Only the first 4 margins are written if num_bits is 4 or less.
+static inline void BitMargins(const uint32_t* samples, uint32_t first_sample, int margins[kBitsPerGroup],
+                              uint32_t num_bits = kBitsPerGroup) {
+    uint32_t a, b, c;
+    AlignGroup(samples, first_sample, a, b, c);
     auto count = [](uint32_t chip) { return static_cast<int>(kPopCount6[chip & 0x3F]); };
     margins[0] = count(a >> 26) - count(a >> 20);
     margins[1] = count(a >> 14) - count(a >> 8);
@@ -41,7 +46,53 @@ static inline void BitMargins(const uint32_t* samples, uint32_t first_sample, in
     }
 }
 
-bool SOFT_DEMOD_FUNC(Demodulate)(const uint32_t* samples, uint16_t num_words, Result& result) {
+// HI samples among the middle 6 samples (3 to 8) of each of 8 consecutive bits. The mid-bit edge of a bit lies in
+// this window: a falling edge (1 bit) is at sample 3 + count, a rising edge (0 bit) at sample 9 - count.
+static inline void MidBitHiCounts(const uint32_t* samples, uint32_t first_sample, uint8_t counts[kBitsPerGroup]) {
+    uint32_t a, b, c;
+    AlignGroup(samples, first_sample, a, b, c);
+    auto count = [](uint32_t window) { return kPopCount6[window & 0x3F]; };
+    counts[0] = count(a >> 23);
+    counts[1] = count(a >> 11);
+    counts[2] = count((a << 1) | (b >> 31));
+    counts[3] = count(b >> 19);
+    counts[4] = count(b >> 7);
+    counts[5] = count((b << 5) | (c >> 27));
+    counts[6] = count(c >> 15);
+    counts[7] = count(c >> 3);
+}
+
+// Start of the first data bit in 48MHz counts after the first sample, from the mid-bit edges of the first
+// kTimingEdgeBits bits of a demodulated message. The middle of a bit is at 6 + (mean falling edge count - mean
+// rising edge count) / 2 samples after the start offset.
+static int16_t SOFT_DEMOD_FUNC(DataStart48MHzCounts)(const uint32_t* samples, const Result& result) {
+    int32_t fall_sum = 0, fall_bits = 0, rise_sum = 0, rise_bits = 0;
+    uint8_t counts[kBitsPerGroup];
+    for (uint32_t bits_done = 0; bits_done < kTimingEdgeBits; bits_done += kBitsPerGroup) {
+        MidBitHiCounts(samples, result.start_offset_samples + bits_done * kSamplesPerBit, counts);
+        uint32_t byte = result.buffer[0] >> (24 - bits_done);
+        for (uint32_t i = 0; i < kBitsPerGroup; i++) {
+            if (byte & (0x80 >> i)) {
+                fall_sum += counts[i];
+                fall_bits++;
+            } else {
+                rise_sum += counts[i];
+                rise_bits++;
+            }
+        }
+    }
+    int32_t offset_counts = result.start_offset_samples * kCountsPerSample;
+    if (fall_bits == 0 || rise_bits == 0) {
+        return static_cast<int16_t>(offset_counts + kDataStartFallbackCounts);
+    }
+    // (fall mean - rise mean) / 2 samples, in counts, rounded to nearest.
+    int32_t numerator = (kCountsPerSample / 2) * (fall_sum * rise_bits - rise_sum * fall_bits);
+    int32_t denominator = fall_bits * rise_bits;
+    numerator += numerator >= 0 ? denominator / 2 : -(denominator / 2);
+    return static_cast<int16_t>(offset_counts + numerator / denominator);
+}
+
+static bool SOFT_DEMOD_FUNC(DemodulateBits)(const uint32_t* samples, uint16_t num_words, Result& result) {
     result = Result();
     int margins[kBitsPerGroup];
 
@@ -145,6 +196,14 @@ bool SOFT_DEMOD_FUNC(Demodulate)(const uint32_t* samples, uint16_t num_words, Re
         }
     }
     return true;  // Not fixable here: the decoder decides what to do with it.
+}
+
+bool SOFT_DEMOD_FUNC(Demodulate)(const uint32_t* samples, uint16_t num_words, Result& result) {
+    if (!DemodulateBits(samples, num_words, result)) {
+        return false;
+    }
+    result.data_start_48mhz_counts = DataStart48MHzCounts(samples, result);
+    return true;
 }
 
 }  // namespace mode_s_soft_demod
