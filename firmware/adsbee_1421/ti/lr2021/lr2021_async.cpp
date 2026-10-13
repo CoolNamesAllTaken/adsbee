@@ -95,9 +95,17 @@ void LR2021::EnterBusyWait(DrainState state) {
     drain_state_ = state;
 }
 
-LR2021::DrainResult LR2021::EnterDrainError(const char* reason) {
+LR2021::DrainResult LR2021::EnterDrainError(DrainState s, const char* reason) {
+    // A chain steal since the caller's snapshot reuses async_ok_ for its own frame, which reads as a failed
+    // loop frame. The drain is then the chain's: writing kError over its state would orphan its FIFO read.
+    uintptr_t key = HwiP_disable();
+    if (drain_state_ != s) {
+        HwiP_restore(key);
+        return DrainResult::kInProgress;
+    }
     drain_error_str_ = reason;
     drain_state_ = DrainState::kError;
+    HwiP_restore(key);
     return DrainResult::kError;
 }
 
@@ -223,7 +231,7 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
             case DrainState::kIrqRspWait: {
                 if (IsBusy()) {
                     if (get_time_since_boot_ms() - busy_wait_start_ms_ > kBusyTimeoutMs) {
-                        return EnterDrainError("BUSY timeout");
+                        return EnterDrainError(s, "BUSY timeout");
                     }
                     return DrainResult::kInProgress;
                 }
@@ -278,7 +286,7 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                 }
                 HwiP_restore(key);
                 if (!posted) {
-                    return EnterDrainError("SPI_transfer post failed");
+                    return EnterDrainError(s, "SPI_transfer post failed");
                 }
                 return DrainResult::kInProgress;
             }
@@ -290,7 +298,7 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                     return AsyncStillInFlight();
                 }
                 if (!async_ok_) {
-                    return EnterDrainError("GetRxFifoLevel opcode frame failed");
+                    return EnterDrainError(s, "GetRxFifoLevel opcode frame failed");
                 }
                 ParseStat(UnpackU16(async_rx_buf_));
                 uintptr_t key = HwiP_disable();
@@ -305,12 +313,12 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                     return AsyncStillInFlight();
                 }
                 if (!async_ok_) {
-                    return EnterDrainError("GetRxFifoLevel response frame failed");
+                    return EnterDrainError(s, "GetRxFifoLevel response frame failed");
                 }
                 ParseStat(UnpackU16(async_rx_buf_));
                 if (last_stat_.command_status != CommandStatus::kDat &&
                     last_stat_.command_status != CommandStatus::kOk) {
-                    return EnterDrainError("GetRxFifoLevel bad command status");
+                    return EnterDrainError(s, "GetRxFifoLevel bad command status");
                 }
                 uint16_t level = UnpackU16(async_rx_buf_ + 2);
                 // Full FIFO means the drain fell behind and the radio almost certainly dropped frames
@@ -352,12 +360,12 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                     return AsyncStillInFlight();
                 }
                 if (!async_ok_) {
-                    return EnterDrainError("ReadRxFifo frame failed");
+                    return EnterDrainError(s, "ReadRxFifo frame failed");
                 }
                 ParseStat(UnpackU16(async_rx_buf_));
                 if (last_stat_.command_status != CommandStatus::kDat &&
                     last_stat_.command_status != CommandStatus::kOk) {
-                    return EnterDrainError("ReadRxFifo bad command status");
+                    return EnterDrainError(s, "ReadRxFifo bad command status");
                 }
                 uintptr_t key = HwiP_disable();
                 if (drain_state_ == s) {
@@ -379,7 +387,7 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                     return AsyncStillInFlight();
                 }
                 if (!async_ok_) {
-                    return EnterDrainError("GetAndClearFifoIrqFlags opcode frame failed");
+                    return EnterDrainError(s, "GetAndClearFifoIrqFlags opcode frame failed");
                 }
                 // Stat in an opcode frame reflects the PREVIOUS command; informational only here.
                 ParseStat(UnpackU16(tail_rx_buf_));
@@ -395,12 +403,12 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                     return AsyncStillInFlight();
                 }
                 if (!async_ok_) {
-                    return EnterDrainError("GetAndClearFifoIrqFlags response frame failed");
+                    return EnterDrainError(s, "GetAndClearFifoIrqFlags response frame failed");
                 }
                 ParseStat(UnpackU16(tail_rx_buf_));
                 if (last_stat_.command_status != CommandStatus::kDat &&
                     last_stat_.command_status != CommandStatus::kOk) {
-                    return EnterDrainError("GetAndClearFifoIrqFlags bad command status");
+                    return EnterDrainError(s, "GetAndClearFifoIrqFlags bad command status");
                 }
                 if (tail_rx_buf_[2] & kFifoIrqFlagsResyncMask) {
                     // Full/Overflow/Underflow may have torn the stream, leaving every subsequent
@@ -421,7 +429,7 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                     return AsyncStillInFlight();
                 }
                 if (!async_ok_) {
-                    return EnterDrainError("GetAndClearIrq opcode frame failed");
+                    return EnterDrainError(s, "GetAndClearIrq opcode frame failed");
                 }
                 ParseStat(UnpackU16(tail_rx_buf_));
                 uintptr_t key = HwiP_disable();
@@ -436,12 +444,12 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
                     return AsyncStillInFlight();
                 }
                 if (!async_ok_) {
-                    return EnterDrainError("GetAndClearIrq response frame failed");
+                    return EnterDrainError(s, "GetAndClearIrq response frame failed");
                 }
                 ParseStat(UnpackU16(tail_rx_buf_));
                 if (last_stat_.command_status != CommandStatus::kDat &&
                     last_stat_.command_status != CommandStatus::kOk) {
-                    return EnterDrainError("GetAndClearIrq bad command status");
+                    return EnterDrainError(s, "GetAndClearIrq bad command status");
                 }
                 drain_irq_flags_ = UnpackU32(tail_rx_buf_ + 2);
                 uintptr_t key = HwiP_disable();

@@ -1437,8 +1437,9 @@ class LR2021 {
     bool PostAsyncFrame(const uint8_t* tx_buf, size_t len, uint8_t* rx_buf = nullptr);
     // Enters a BUSY-wait drain state and arms its timeout.
     void EnterBusyWait(DrainState state);
-    // Enters kError with a reason string (logged by the consumer at thread level).
-    DrainResult EnterDrainError(const char* reason);
+    // Enters kError with a reason string (logged by the consumer at thread level), unless the chain stole the
+    // drain since the caller snapshotted state s: then returns kInProgress.
+    DrainResult EnterDrainError(DrainState s, const char* reason);
     // Called from a DMA-in-flight state while async_done_ is still false. Normally kInProgress; if the
     // completion is overdue (lost SPI callback) it cancels the transfer and enters kError so the drain
     // can restart instead of wedging forever.
