@@ -8,31 +8,29 @@ Send `AT+CONFIG_HASH?` on the [CLI](../getting-started/quick-start.md#connect-to
 
 ```
 AT+CONFIG_HASH?
-CONFIG_HASH=0x00000000
-SETTINGS_FLEET=0x00000000 (settings version 18, 1340 Bytes)
-SETTINGS_FULL=0x00000000
+CONFIG_HASH=0x01B412E7
+SETTINGS_FLEET=0x41982E33 (settings version 18, 1340 Bytes)
+SETTINGS_FULL=0x34C6C16A
 CCFG_CC1312=0x4BB06FBD
-FIRMWARE=0x00000000
-FIRMWARE_RP2040=0x00000000 (UF2 image, partition 0, 3084288 Bytes)
-FIRMWARE_ESP32=0x00000000
-FIRMWARE_CC1312=0x00000000
-OK
+FIRMWARE=0x2AE30B6C
+FIRMWARE_RP2040=0x17AD7E0C (UF2 image, partition 0, 3099392 Bytes)
+FIRMWARE_ESP32=0x62127DBE
+FIRMWARE_CC1312=0x4F0E5507
 ```
 
 An ADSBee m1421 answers:
 
 ```
 AT+CONFIG_HASH?
-CONFIG_HASH=0x00000000
+CONFIG_HASH=0xDC99B0AC
 SETTINGS_FLEET=0x7215D7D8 (settings version 5, 62 Bytes)
 SETTINGS_FULL=0x7215D7D8
 CCFG_CC1314=0x66E9858D
-FIRMWARE=0x00000000
-FIRMWARE_CC1314=0x00000000 (566200 Bytes)
-OK
+FIRMWARE=0xB8A29C75
+FIRMWARE_CC1314=0x80AB341C (577348 Bytes)
 ```
 
-Every hash is a CRC-32, printed as 8 hexadecimal digits. A line reads `UNKNOWN` when a processor is off or didn't answer; it then counts as `0x00000000` in the lines above it.
+Every hash is 32 bits, printed as 8 hexadecimal digits. All are CRC-32 values except `FIRMWARE_ESP32`. A line reads `UNKNOWN` when a processor is off or didn't answer; it then counts as `0x00000000` in the lines above it.
 
 | Line | What it covers |
 | --- | --- |
@@ -72,17 +70,17 @@ Each [firmware release](https://github.com/PantsForBirds/adsbee/releases) from t
 
 ```
 CCFG_CC1312=0x4BB06FBD
-FIRMWARE_ESP32=0x00000000
-FIRMWARE_CC1312=0x00000000
+FIRMWARE_ESP32=0x62127DBE
+FIRMWARE_CC1312=0x4F0E5507
 
-FIRMWARE=0x00000000
-FIRMWARE_RP2040=0x00000000 (UF2 image, partition 0, 3084288 Bytes)
+FIRMWARE=0x2AE30B6C
+FIRMWARE_RP2040=0x17AD7E0C (UF2 image, partition 0, 3099392 Bytes)
 
-FIRMWARE=0x00000000
-FIRMWARE_RP2040=0x00000000 (OTA image, partition 0, 3085556 Bytes)
+FIRMWARE=0xD4DC6999
+FIRMWARE_RP2040=0xB1240193 (OTA image, partition 0, 3100472 Bytes)
 
-FIRMWARE=0x00000000
-FIRMWARE_RP2040=0x00000000 (OTA image, partition 1, 3085556 Bytes)
+FIRMWARE=0xF4009D73
+FIRMWARE_RP2040=0xB2571605 (OTA image, partition 1, 3100472 Bytes)
 ```
 
 `firmware/scripts/firmware_hashes.py` prints the same lines for images you built yourself:
