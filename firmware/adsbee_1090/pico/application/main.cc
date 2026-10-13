@@ -111,8 +111,7 @@ int main() {
 
 #ifdef ISRS_ON_CORE1
     // Launch Core 1 early so that InitISRs() runs on Core 1, putting PIO interrupts on Core 1.
-    multicore_reset_core1();
-    multicore_launch_core1(main_core1);
+    LaunchCore1();
     // Disable ISR-related IRQs on core 0 to prevent both cores from handling the same interrupts.
     irq_set_enabled(IO_IRQ_BANK0, false);  // Disable GPIO IRQs (OnDemodBegin) on this core.
     irq_set_enabled(PIO0_IRQ_0, false);    // Disable PIO0 IRQ0 (OnDemodComplete) on this core.
@@ -191,8 +190,7 @@ int main() {
                           SettingsToGNSSModuleType(settings_manager.settings.gnss_receiver_type));
 
 #ifndef ISRS_ON_CORE1
-    multicore_reset_core1();
-    multicore_launch_core1(main_core1);
+    LaunchCore1();
 #endif  // ISRS_ON_CORE1
 
     uint32_t esp32_last_heartbeat_timestamp_ms = 0;
