@@ -25,10 +25,14 @@
 // ClearRxFifo flush in ADSBee::UpdateLR2021 -- the one true realignment mechanism.
 //
 // Concurrency: the IRQ-paced chain (lr2021_irq_drain.cpp) may STEAL a parked loop drain from a GPIO
-// HWI whenever no DMA is in flight, the drain is not in a terminal state and it holds no unparsed FIFO
-// read (LR2021ChainStealCheck). Every thread-side
-// drain_state_ transition is therefore HwiP_disable-guarded and re-checks the snapshotted state; a
-// stolen drain is simply discarded and restarted fresh by the next UpdateLR2021() pass.
+// HWI whenever no DMA is in flight and the drain is not in a terminal state (LR2021ChainStealCheck). Every
+// thread-side drain_state_ transition is therefore HwiP_disable-guarded and re-checks the snapshotted state; a
+// stolen drain is restarted fresh by the next UpdateLR2021() pass. A FIFO read the stolen drain had completed is
+// kept in async_rx_buf_ (kept_read_pending()) for the main loop to parse first.
+//
+// The loop drain's wait for the main loop must not hold up the FIFO while LR_IRQ is latched (no new edge can start
+// a chain then). SPICallback hands the clear tail to the chain when a ReadRxFifo frame ends with the line high
+// (HandLoopTailToChain), and retries an edge the chain had to skip (RetrySkippedEdge).
 
 #include <ti/drivers/dpl/HwiP.h>
 
@@ -51,12 +55,16 @@ void LR2021::SPICallback(SPI_Handle handle, SPI_Transaction* transaction) {
             self->async_in_flight_ = false;
             self->HandleChainFrameComplete();
         } else {
+            self->async_ok_ = (transaction->status == SPI_TRANSFER_COMPLETED);
+            if (self->HandLoopTailToChain()) {
+                return;
+            }
             // Loop-drain frame: end the NSS frame immediately so the chip starts processing (BUSY
             // pulse) during main-loop time instead of waiting for the next ServiceRxDrain() call.
             self->SetNSS(true);
-            self->async_ok_ = (transaction->status == SPI_TRANSFER_COMPLETED);
             self->async_in_flight_ = false;
             self->async_done_ = true;  // Written last: thread level reads async_done_ before async_ok_.
+            self->RetrySkippedEdge();
         }
     } else {
         // Synchronous shim transfer (SPITransfer in lr2021_ll.cpp): the caller owns NSS framing at
@@ -145,7 +153,7 @@ bool LR2021::StartRxDrain() {
         return false;
     }
     uintptr_t key = HwiP_disable();
-    if (drain_state_ != DrainState::kIdle) {
+    if (drain_state_ != DrainState::kIdle || kept_read_pending_) {  // A new drain would overwrite a kept read.
         HwiP_restore(key);
         return false;
     }
@@ -474,9 +482,17 @@ LR2021::DrainResult LR2021::ServiceRxDrain() {
 }
 
 void LR2021::FinishRxDrain() {
-    if (drain_state_ == DrainState::kDataReady || drain_state_ == DrainState::kError) {
+    if (drain_state_ == DrainState::kDataReady) {
+        drain_state_ = DrainState::kIdle;
+        RetrySkippedEdge();
+    } else if (drain_state_ == DrainState::kError) {
         drain_state_ = DrainState::kIdle;
     }
+}
+
+void LR2021::ReleaseKeptRead() {
+    ParseStat(UnpackU16(async_rx_buf_));
+    kept_read_pending_ = false;
 }
 
 void LR2021::CancelAsync() {
@@ -491,6 +507,8 @@ void LR2021::CancelAsync() {
     uintptr_t key = HwiP_disable();
     async_done_ = false;
     async_ok_ = false;
+    kept_read_pending_ = false;
+    skipped_edge_pending_ = false;
     drain_state_ = DrainState::kIdle;
     HwiP_restore(key);
     SetNSS(true);  // Harmless DOUT update if the pin was tri-stated by the SYNC ISR.

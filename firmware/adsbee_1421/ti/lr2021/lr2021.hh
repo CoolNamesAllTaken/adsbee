@@ -318,7 +318,7 @@ class LR2021 {
     // IRQ chain diagnostics, reported/reset via AT+RX_STATS.
     volatile uint32_t irq_drain_count = 0;         // Chains started from the LR_IRQ edge.
     volatile uint32_t irq_drain_skip_busy = 0;     // Edge ignored: drain not claimable (in flight/terminal).
-    volatile uint32_t irq_drain_skip_unparsed = 0;  // Edge ignored: loop drain holds a FIFO read not parsed yet.
+    volatile uint32_t irq_drain_kept_reads = 0;    // Chain took over a loop drain holding an unparsed read.
     volatile uint32_t irq_drain_skip_slots = 0;    // Edge ignored: no free staging slot.
     volatile uint32_t irq_drain_restarts = 0;      // Chain looped straight into another read (line still high).
     volatile uint32_t irq_chain_timeouts = 0;      // Wedged chains cancelled by the thread backstop.
@@ -336,7 +336,12 @@ class LR2021 {
     // Cancels any in-flight async transfer and resets the drain to idle. Thread level only (never from an
     // ISR); DeInit() calls this so the SPI handle is never closed with a DMA in flight.
     void CancelAsync();
-    // Valid in kDataReady until FinishRxDrain(): FIFO payload pointer and its length in bytes.
+    // The chain took over a loop drain that had read the FIFO: parse drain_payload() / drain_level(), then call
+    // ReleaseKeptRead(). No loop drain starts while this is set. Thread level.
+    bool kept_read_pending() const { return kept_read_pending_; }
+    void ReleaseKeptRead();  // Also refreshes last_stat() from the read's Stat word.
+    // Valid in kDataReady until FinishRxDrain(), and while kept_read_pending(): FIFO payload pointer and its length
+    // in bytes.
     const uint8_t* drain_payload() const { return async_rx_buf_ + 2; }
     uint16_t drain_level() const { return drain_fifo_level_; }
     // True if the level readback reported the FIFO completely full (poll fell behind; frames were likely
@@ -1453,6 +1458,11 @@ class LR2021 {
     bool PostChainFrame();
     // Chain-frame completion handling, called from SPICallback for chain in-flight states (SWI).
     void HandleChainFrameComplete();
+    // Called from SPICallback for a completed loop-drain frame (SWI). True if the chain took the drain over to run
+    // its clear tail; the FIFO read is then kept for the main loop (kept_read_pending()).
+    bool HandLoopTailToChain();
+    // Runs HandleIrqLine() again for an edge it skipped while the loop drain was busy. SWI or thread.
+    void RetrySkippedEdge();
     // Starts a chain segment into the current fill slot: posts immediately if BUSY is low, else arms
     // the BUSY falling-edge interrupt. Caller has claimed drain_state_ and stamped the slot.
     void StartChainSegment();
@@ -1505,6 +1515,8 @@ class LR2021 {
     uint32_t drain_irq_flags_ = 0;
     uint16_t drain_fifo_level_ = 0;
     bool drain_fifo_full_ = false;
+    volatile bool kept_read_pending_ = false;  // Set by the chain (HWI/SWI) on a takeover, cleared by ReleaseKeptRead().
+    volatile bool skipped_edge_pending_ = false;  // HandleIrqLine() skipped an edge that RetrySkippedEdge() retries.
     const char* drain_error_str_ = nullptr;
 
     // Synchronous shim state (see SPITransfer() in lr2021_ll.cpp).

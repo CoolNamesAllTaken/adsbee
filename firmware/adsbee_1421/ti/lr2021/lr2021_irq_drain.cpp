@@ -11,6 +11,10 @@
 //                              check on the readback) -> GetAndClearIrq (2 frames)
 //   final SWI              ─ drop to kIdle, or restart into the other slot if the line is still high
 //
+// The chain also takes over a loop drain: parked between frames (HandleIrqLine), or to run the clear tail after
+// the loop drain's ReadRxFifo frame (HandLoopTailToChain). A read the loop drain had completed is kept for the main
+// loop (kept_read_pending()).
+//
 // The inter-frame BUSY pulses are absorbed by hardware edges instead of CPU spins. Each GPIO handler
 // is a few microseconds; that matters because GPIO HWIs (0xC0) preempt the UAT RF SWI's ~15 us
 // CMD_PROP_SET_LEN deadline. The main loop parses filled slots later (ADSBee::UpdateLR2021 ->
@@ -31,7 +35,7 @@
 // produces no BUSY pulse at all, the thread backstop in ServiceRxDrain posts the frame within one
 // main-loop iteration (irq_thread_assist_posts counts these).
 //
-// The chain never touches async_tx_buf_/async_rx_buf_ (they may hold an unparsed loop-drain payload)
+// The chain never touches async_tx_buf_/async_rx_buf_ (they may hold a kept loop-drain payload)
 // and never relies on async_done_ (a stale flag can be written by a preempted loop-drain SWI that a
 // steal interrupted); chain progress is driven purely by SPICallback dispatch on drain_state_.
 
@@ -140,24 +144,63 @@ void LR2021::HandleIrqLine() {
         return;  // Chain already running; it re-checks the line at completion.
     }
     if (s != DrainState::kIdle) {
-        // Loop drain active: steal it only when parked with nothing to lose. A drain that holds an unparsed read
-        // keeps the bus; its next sweep finds the line still high, reads and clears.
+        // Loop drain active: steal it only when parked. A slow main loop would otherwise hold the bus while the
+        // FIFO overflows.
         LR2021DrainSteal steal = LR2021ChainStealCheck(s, async_in_flight_, drain_fifo_level_);
-        if (steal == LR2021DrainSteal::kUnparsedRead) {
-            irq_drain_skip_unparsed = irq_drain_skip_unparsed + 1;
-            return;
-        }
-        if (steal != LR2021DrainSteal::kAllowed) {
+        // A ReadRxFifo frame the main loop has not checked yet is checked here; a failed one is left to the loop.
+        if (steal == LR2021DrainSteal::kBusy ||
+            (s == DrainState::kFifoRead && !(async_ok_ && ChainStatOk(async_rx_buf_)))) {
             irq_drain_skip_busy = irq_drain_skip_busy + 1;
+            // The line stays latched, so no second edge comes: retry instead of waiting for the main loop.
+            skipped_edge_pending_ = LR2021ChainRetriesSkippedEdge(s);
             return;
         }
-        // Stolen: the discarded drain is restarted fresh by the next UpdateLR2021 pass. If the steal
+        if (s == DrainState::kClearFifoRsp && async_ok_ && (tail_rx_buf_[2] & kFifoIrqFlagsResyncMask)) {
+            // The unparsed GetAndClearFifoIrqFlags readback holds the only copy of the FIFO sub-flags.
+            fifo_overflow_count = fifo_overflow_count + 1;
+            fifo_overflow_pending = true;
+        }
+        if (steal == LR2021DrainSteal::kKeepRead) {
+            kept_read_pending_ = true;
+            irq_drain_kept_reads = irq_drain_kept_reads + 1;
+        }
+        // Stolen: the next UpdateLR2021 pass parses a kept read and starts a fresh drain. If the steal
         // dropped a pending read-response, the chip discards it when the next command frame arrives
         // (pipelined protocol).
     }
     irq_drain_count = irq_drain_count + 1;
     slot.timestamp_us = get_time_since_boot_us();
     StartChainSegment();
+}
+
+bool LR2021::HandLoopTailToChain() {
+    // SPI completion SWI of a loop-drain frame; async_ok_ is set. With LR_IRQ latched no new edge can start a chain,
+    // and a clear tail paced by a busy main loop lets the FIFO overflow: the chain runs the tail from here, then
+    // restarts into a FIFO read if the line is high again.
+    uintptr_t key = HwiP_disable();
+    bool hand_over = !abort_requested_ &&
+                     LR2021ChainTakesLoopTail(drain_state_, async_ok_ && ChainStatOk(async_rx_buf_), IrqLineHigh());
+    if (hand_over) {
+        kept_read_pending_ = true;
+        irq_drain_kept_reads = irq_drain_kept_reads + 1;
+        async_in_flight_ = false;
+        chain_start_ms_ = get_time_since_boot_ms();
+        busy_wait_start_ms_ = chain_start_ms_;
+        drain_state_ = DrainState::kChainClearFifoWait;
+        ArmBusyInterrupt();  // Before NSS rises, as in HandleChainFrameComplete().
+        SetNSS(true);
+    }
+    HwiP_restore(key);
+    return hand_over;
+}
+
+void LR2021::RetrySkippedEdge() {
+    uintptr_t key = HwiP_disable();
+    if (skipped_edge_pending_) {
+        skipped_edge_pending_ = false;
+        HandleIrqLine();
+    }
+    HwiP_restore(key);
 }
 
 void LR2021::HandleBusyFall() {

@@ -24,12 +24,43 @@ TEST(LR2021DrainState, NeverStolenWithAFrameOnTheBus) {
     }
 }
 
-TEST(LR2021DrainState, NeverStolenWithAnUnparsedRead) {
+TEST(LR2021DrainState, StolenWithAnUnparsedReadKeepsIt) {
     // From the completed ReadRxFifo frame through the whole clear tail, the payload is only in the async buffer.
     for (S s : {S::kFifoRead, S::kClearFifoWait, S::kClearFifoCmd, S::kClearFifoRsp, S::kIrqCmdWait, S::kIrqCmd,
                 S::kIrqRspWait, S::kIrqRsp}) {
-        EXPECT_EQ(LR2021ChainStealCheck(s, false, kOnePacket), LR2021DrainSteal::kUnparsedRead) << static_cast<int>(s);
+        EXPECT_EQ(LR2021ChainStealCheck(s, false, kOnePacket), LR2021DrainSteal::kKeepRead) << static_cast<int>(s);
     }
+}
+
+TEST(LR2021DrainState, EveryStealOfAHeldReadKeepsIt) {
+    for (S s : LoopStates()) {
+        for (uint16_t len : {uint16_t{0}, kOnePacket}) {
+            if (LR2021ChainStealCheck(s, false, len) == LR2021DrainSteal::kAllowed) {
+                EXPECT_FALSE(LR2021LoopDrainHoldsRead(s, len)) << static_cast<int>(s);
+            }
+        }
+    }
+}
+
+TEST(LR2021DrainState, ChainTakesTheClearTailAfterAGoodReadWithTheLineHigh) {
+    for (S s : LoopStates()) {
+        EXPECT_EQ(LR2021ChainTakesLoopTail(s, true, true), s == S::kFifoRead) << static_cast<int>(s);
+        EXPECT_FALSE(LR2021ChainTakesLoopTail(s, false, true)) << static_cast<int>(s);
+        EXPECT_FALSE(LR2021ChainTakesLoopTail(s, true, false)) << static_cast<int>(s);
+    }
+    EXPECT_FALSE(LR2021ChainTakesLoopTail(S::kIdle, true, true));
+    EXPECT_FALSE(LR2021ChainTakesLoopTail(S::kChainFifoRead, true, true));
+}
+
+TEST(LR2021DrainState, SkippedEdgeIsRetriedOnlyWhereNothingWasPoppedSince) {
+    for (S s : LoopStates()) {
+        bool retried = (s == S::kLevelCmd || s == S::kLevelRsp || s == S::kIrqRsp || s == S::kDataReady);
+        EXPECT_EQ(LR2021ChainRetriesSkippedEdge(s), retried) << static_cast<int>(s);
+    }
+    // A completed ReadRxFifo frame goes to LR2021ChainTakesLoopTail() instead.
+    EXPECT_FALSE(LR2021ChainRetriesSkippedEdge(S::kFifoRead));
+    EXPECT_FALSE(LR2021ChainRetriesSkippedEdge(S::kIdle));
+    EXPECT_FALSE(LR2021ChainRetriesSkippedEdge(S::kChainFifoRead));
 }
 
 TEST(LR2021DrainState, StolenBeforeTheReadIsPosted) {

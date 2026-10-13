@@ -31,6 +31,8 @@ bool LR2021::Init() {
     async_done_ = false;
     async_ok_ = false;
     async_in_flight_ = false;
+    kept_read_pending_ = false;
+    skipped_edge_pending_ = false;
     sync_done_ = false;
     fifo_overflow_pending = false;  // Init reboots the chip below, which clears the FIFO anyway.
     memset(async_tx_buf_, 0, sizeof(async_tx_buf_));  // [2..] must clock zeros during FIFO reads.

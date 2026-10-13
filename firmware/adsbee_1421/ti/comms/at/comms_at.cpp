@@ -363,7 +363,7 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
                 "dma_timeouts=%lu,report_q_ovf=%lu,"
                 "validity_reconfigs=%lu,stale_edges=%lu,uat_len_mismatch=%lu,uat_report_q_ovf=%lu,"
                 "parse_max_cyc=%lu,decode_max_cyc=%lu,loop_max_cyc=%lu,loop_avg_cyc=%lu,cpu_1090_pm=%lu,"
-                "cfg_perrs=%lu,rx_cfg_error=%u,irq_skip_unparsed=%lu",
+                "cfg_perrs=%lu,rx_cfg_error=%u,irq_kept_reads=%lu",
                 stats.pkt_rx, stats.crc_error, stats.len_error, stats.pbl_det, stats.sync_ok, stats.sync_fail,
                 stats.timeout, (unsigned long)adsbee.lr2021_fifo_full_count,
                 (unsigned long)packet_decoder.raw_queue_overflow_count,
@@ -390,7 +390,7 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
                                     ? adsbee.rx1090_total_cycles * 1000 / adsbee.loop_total_cycles
                                     : 0),
                 (unsigned long)adsbee.lr2021_config_perr_count, adsbee.ReceiverConfigRejected() ? 1u : 0u,
-                (unsigned long)adsbee.lr2021.irq_drain_skip_unparsed);
+                (unsigned long)adsbee.lr2021.irq_drain_kept_reads);
             CPP_AT_SILENT_SUCCESS();
             break;
         }
@@ -411,7 +411,7 @@ CPP_AT_CALLBACK(CommsManager::ATRxStatsCallback) {
             adsbee.lr2021_drain_max_us = 0;
             adsbee.lr2021.irq_drain_count = 0;
             adsbee.lr2021.irq_drain_skip_busy = 0;
-            adsbee.lr2021.irq_drain_skip_unparsed = 0;
+            adsbee.lr2021.irq_drain_kept_reads = 0;
             adsbee.lr2021.irq_drain_skip_slots = 0;
             adsbee.lr2021.irq_drain_restarts = 0;
             adsbee.lr2021.irq_chain_timeouts = 0;
@@ -1372,7 +1372,8 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                     "LR2021 update call, drain_max_us = longest complete async RX FIFO drain, "
                     "irq_* = IRQ-paced FIFO drain chain diagnostics (chains started / edges skipped busy / edges "
                     "skipped no-slot / back-to-back restarts / wedge timeouts / chain errors / thread-assisted "
-                    "frame posts), tx_stalls / tx_drops / tx_ring_hw = "
+                    "frame posts; irq_kept_reads = main loop drains the chain took over after their FIFO read, "
+                    "which is kept), tx_stalls / tx_drops / tx_ring_hw = "
                     "console TX ring waits, dropped writes and peak occupancy in bytes; *_cyc = CPU cycles at "
                     "48 MHz, exact up to 349 ms: parse max per capture, decode max per packet, main loop "
                     "max/avg; cpu_1090_pm = per mille of main loop time in the 1090 receive and decode path; "
