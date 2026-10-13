@@ -129,6 +129,7 @@ class CommsManager {
 
     CPP_AT_CALLBACK(ATBaudRateCallback);
     CPP_AT_CALLBACK(ATBootloaderPinCallback);
+    CPP_AT_CALLBACK(ATConfigHashCallback);
     CPP_AT_CALLBACK(ATDeviceInfoCallback);
     CPP_AT_HELP_CALLBACK(ATOTAHelpCallback);
     CPP_AT_CALLBACK(ATR1090GainCallback);

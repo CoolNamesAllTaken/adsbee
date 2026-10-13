@@ -234,6 +234,11 @@ SECTIONS {
         *(.ARM.extab* .gnu.linkonce.armextab.*)
     } > REGION_ARM_EXTAB AT> REGION_ARM_EXTAB
 
+    /* End of the image in main flash: AT+CONFIG_HASH hashes flash up to here. */
+    .flash_image_end : {
+        __flash_image_end__ = .;
+    } > REGION_TEXT
+
     .nvs (NOLOAD) : ALIGN(0x2000) {
         *(.nvs)
     } > REGION_TEXT

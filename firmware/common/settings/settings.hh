@@ -702,6 +702,12 @@ class SettingsManager {
     static bool SetDeviceInfo(const DeviceInfo& device_info);
 
     /**
+     * Copies settings that other objects hold while running (receiver enables, baud rates, receiver position) into
+     * the settings struct. Save() does this before writing.
+     */
+    void CollectLiveSettings();
+
+    /**
      * Sends the settings struct to the ESP32 and CC1312 via SPI. Call this after changing values that need to be
      * propagated to coprocessors, like log level or bias tee settings.
      */

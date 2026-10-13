@@ -260,6 +260,7 @@ jobs:
         path: |
           firmware/adsbee_1090/pico/build/application/adsbee_1090-${{ steps.fwver.outputs.version }}.uf2
           firmware/adsbee_1090/pico/build/application/adsbee_1090-${{ steps.fwver.outputs.version }}.ota
+          firmware/adsbee_1090/pico/build/application/adsbee_1090-${{ steps.fwver.outputs.version }}.hashes.txt
 
   hardware_test:
     runs-on: [self-hosted, adsbee-hardware]
@@ -412,6 +413,9 @@ jobs:
       with:
         name: adsbee_1421-${{ needs.adsbee_1421_build.outputs.version }}.hex
         path: firmware/adsbee_1421/ti/build/Release
+    - name: Print firmware hashes
+      # What AT+CONFIG_HASH? reports on a module running this hex.
+      run: python3 firmware/scripts/firmware_hashes.py adsbee_1421 --hex firmware/adsbee_1421/ti/build/Release/adsbee_1421-${{ needs.adsbee_1421_build.outputs.version }}.hex
     - name: Create build directory
       working-directory: firmware/adsbee_1421/programmer
       run: mkdir -p build/Release

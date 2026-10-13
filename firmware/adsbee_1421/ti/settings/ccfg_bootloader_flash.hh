@@ -14,6 +14,9 @@ uint32_t ReadBlConfig();
  */
 Plan Prepare(bool enable);
 
+// CRC32 of the live CCFG struct (AT+CONFIG_HASH), the same value AT+BOOTLOADER_PIN prints after a write.
+uint32_t ReadCcfgCrc32();
+
 // True while the CCFG may be erased or half written because restoring the original failed.
 bool RestorePending();
 

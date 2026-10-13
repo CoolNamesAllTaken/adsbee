@@ -156,6 +156,9 @@ class CC1312 : public SPICoprocessorSlaveInterface {
     static const uint32_t kBaseAddrSRAM = 0x20000000;     // SRAM
     static const uint32_t kBaseAddrFCFG1 = 0x50001000;    // Factory Configuration
     static const uint32_t kBaseAddrCCFG = 0x50003000;     // Customer COnfiguration
+    // The CCFG fields in the last flash page, as an address the bootloader's CRC32 command takes.
+    static const uint32_t kFlashAddrCCFG = 0x57FA8;
+    static const uint32_t kCCFGLenBytes = 0x58;
 
     // Register offsets used to read FCFG values from memory.
     static const uint16_t kFCFG1RegOffUserID = 0x0294;
@@ -261,6 +264,18 @@ class CC1312 : public SPICoprocessorSlaveInterface {
      * @retval True if the application is up to date, false otherwise.
      */
     bool ApplicationIsUpToDate();
+
+    /**
+     * CRC32s the ROM bootloader calculated from the CC1312's flash at the last firmware check (boot or flash).
+     * @param[out] application_crc CRC32 of the application image, over the length of the embedded image.
+     * @param[out] ccfg_crc CRC32 of the CCFG fields.
+     * @retval False if the CC1312's flash has not been read.
+     */
+    inline bool GetFlashCRCs(uint32_t& application_crc, uint32_t& ccfg_crc) {
+        application_crc = application_crc_;
+        ccfg_crc = ccfg_crc_;
+        return flash_crcs_valid_;
+    }
 
     /**
      * Sends one device status read request and checks for a valid reply, without retries or console output. Used to
@@ -542,6 +557,9 @@ class CC1312 : public SPICoprocessorSlaveInterface {
     SettingsManager::EnableState enabled_ = SettingsManager::EnableState::kEnableStateDisabled;
     bool enable_is_external_ = false;
     bool in_bootloader_ = false;
+    bool flash_crcs_valid_ = false;
+    uint32_t application_crc_ = 0;
+    uint32_t ccfg_crc_ = 0;
     bool more_raw_packets_pending_ = false;  // The CC1312 had more packets queued than the last Update() could read.
 
     // Clock config struct used to set the SPI peripheral to the correct clock rate.

@@ -8,6 +8,7 @@
 #include "core1.hh"  // For turning multiprocessor on / off during firmware flashing.
 #include "eeprom.hh"
 #include "esp32.hh"  // Access to ESP32 low level SPICoprocessorSlaveInterface.
+#include "esp32_firmware_check.hh"
 #include "esp32_flasher.hh"
 #include "firmware_update.hh"
 #include "flash_utils.hh"
@@ -17,6 +18,7 @@
 #include "pico/stdlib.h"  // for getchar etc
 #include "pico/unique_id.h"
 #include "settings.hh"
+#include "settings_hash.hh"
 #include "spi_coprocessor.hh"  // For init / de-init before and after flashing ESP32.
 #include "gnss_interface.hh"   // For parking/restoring the GNSS UART around ESP32 flashing.
 
@@ -166,6 +168,78 @@ CPP_AT_CALLBACK(CommsManager::ATBiasTeeEnableCallback) {
             }
             CPP_AT_SUCCESS();
             break;
+    }
+    CPP_AT_ERROR("Operator '%c' not supported.", op);
+}
+
+CPP_AT_CALLBACK(CommsManager::ATConfigHashCallback) {
+    switch (op) {
+        case '?': {
+            settings_manager.CollectLiveSettings();
+            uint32_t settings_fleet = SettingsHash::Compute(settings_manager.settings, SettingsHash::kScopeFleet);
+            uint32_t settings_full = SettingsHash::Compute(settings_manager.settings, SettingsHash::kScopeFull);
+
+            // The running image can't change, so its CRC32 is calculated once.
+            static bool rp2040_ok = false;
+            static uint32_t rp2040_crc = 0;
+            static uint32_t rp2040_len_bytes = 0;
+            if (!rp2040_ok) {
+                rp2040_ok = FirmwareUpdateManager::CalculateOwnImageCRC32(rp2040_crc, rp2040_len_bytes);
+            }
+
+            // First 4 Bytes of the SHA-256 of the application the ESP32 runs.
+            uint32_t esp32_hash = 0;
+            uint8_t esp32_sha256[ESP32FirmwareCheck::kHashLenBytes];
+            bool esp32_ok =
+                esp32.IsEnabled() && esp32.Read(ObjectDictionary::Address::kAddrESP32FirmwareHash, esp32_sha256);
+            if (esp32_ok) {
+                esp32_hash =
+                    (esp32_sha256[0] << 24) | (esp32_sha256[1] << 16) | (esp32_sha256[2] << 8) | esp32_sha256[3];
+            }
+
+            uint32_t cc1312_crc = 0;
+            uint32_t ccfg_crc = 0;
+            bool cc1312_ok = adsbee.subg_radio_ll.GetFlashCRCs(cc1312_crc, ccfg_crc);
+
+            // A hash that can't be read counts as 0.
+            uint32_t firmware_hashes[] = {rp2040_ok ? rp2040_crc : 0, esp32_hash, cc1312_ok ? cc1312_crc : 0};
+            uint32_t firmware = ConfigHasher::Combine(firmware_hashes, 3);
+            uint32_t config_hashes[] = {settings_fleet, cc1312_ok ? ccfg_crc : 0, firmware};
+
+            CPP_AT_CMD_PRINTF("=0x%08X", ConfigHasher::Combine(config_hashes, 3));
+            CPP_AT_PRINTF("SETTINGS_FLEET=0x%08X (settings version %u, %u Bytes)\r\n", settings_fleet,
+                          settings_manager.settings.settings_version, sizeof(SettingsManager::Settings));
+            CPP_AT_PRINTF("SETTINGS_FULL=0x%08X\r\n", settings_full);
+            if (cc1312_ok) {
+                CPP_AT_PRINTF("CCFG_CC1312=0x%08X\r\n", ccfg_crc);
+            } else {
+                CPP_AT_PRINTF("CCFG_CC1312=UNKNOWN\r\n");
+            }
+            CPP_AT_PRINTF("FIRMWARE=0x%08X\r\n", firmware);
+            if (rp2040_ok) {
+#ifdef COMBINED_IMAGE
+                const char* image_type = "UF2";
+#else
+                const char* image_type = "OTA";
+#endif
+                CPP_AT_PRINTF("FIRMWARE_RP2040=0x%08X (%s image, partition %u, %u Bytes)\r\n", rp2040_crc, image_type,
+                              FirmwareUpdateManager::GetOwnFlashPartition(), rp2040_len_bytes);
+            } else {
+                CPP_AT_PRINTF("FIRMWARE_RP2040=UNKNOWN\r\n");
+            }
+            if (esp32_ok) {
+                CPP_AT_PRINTF("FIRMWARE_ESP32=0x%08X\r\n", esp32_hash);
+            } else {
+                CPP_AT_PRINTF("FIRMWARE_ESP32=UNKNOWN\r\n");
+            }
+            if (cc1312_ok) {
+                CPP_AT_PRINTF("FIRMWARE_CC1312=0x%08X\r\n", cc1312_crc);
+            } else {
+                CPP_AT_PRINTF("FIRMWARE_CC1312=UNKNOWN\r\n");
+            }
+            CPP_AT_SILENT_SUCCESS();
+            break;
+        }
     }
     CPP_AT_ERROR("Operator '%c' not supported.", op);
 }
@@ -1944,6 +2018,17 @@ const CppAT::ATCommandDef_t at_command_list[] = {
                     "ADSBee\r\n\t"
                     "AT+BOOT_USB_UF2=1DEADBEE",
      .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATBootloader, comms_manager)},
+    {.command = "CONFIG_HASH",
+     .min_args = 0,
+     .max_args = 0,
+     .help_string =
+         "AT+CONFIG_HASH?\r\n\tPrint hashes of the settings, the CC1312 CCFG and the firmware on each processor, to "
+         "check that a unit matches another one.\r\n\tCONFIG_HASH=<hash of SETTINGS_FLEET, CCFG_CC1312 and "
+         "FIRMWARE>\r\n\tSETTINGS_FLEET leaves out per-unit settings (hostname, WiFi AP SSID and channel, feed "
+         "receiver IDs, Remote ID UAS ID, receiver position); SETTINGS_FULL covers all settings. FIRMWARE is the "
+         "hash of the FIRMWARE_<processor> lines. Settings are hashed as running, saved or not. Expected firmware "
+         "values: the .hashes.txt file of a release, or firmware/scripts/firmware_hashes.py.",
+     .callback = CPP_AT_BIND_MEMBER_CALLBACK(CommsManager::ATConfigHashCallback, comms_manager)},
     {.command = "DEVICE_INFO",
      .min_args = 0,
      .max_args = 5,  // TODO: check this value.

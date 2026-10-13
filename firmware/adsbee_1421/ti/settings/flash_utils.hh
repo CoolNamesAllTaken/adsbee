@@ -40,6 +40,13 @@ class FlashUtils {
      */
     static bool Program(uint32_t addr, const uint8_t* data, uint32_t size);
 
+    /**
+     * Calculates the CRC32 of the application image: main flash from address 0 to the end of the linked image. The
+     * settings and device info regions and the CCFG are outside it.
+     * @param[out] len_bytes Number of Bytes the CRC32 covers.
+     */
+    static uint32_t ImageCRC32(uint32_t& len_bytes);
+
    private:
     static uint32_t stored_key_;
 };

@@ -24,6 +24,8 @@ static const uint8_t* CcfgFlash() { return reinterpret_cast<const uint8_t*>(kCcf
 
 uint32_t ReadBlConfig() { return ReadWord(CcfgFlash(), kBlConfigOffset); }
 
+uint32_t ReadCcfgCrc32() { return StructCrc32(CcfgFlash()); }
+
 bool RestorePending() { return restore_pending; }
 
 Plan Prepare(bool enable) {
