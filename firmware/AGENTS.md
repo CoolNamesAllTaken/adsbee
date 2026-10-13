@@ -39,6 +39,7 @@ Every change to a `word/datasheet_*.docx` gets an entry in its Revision History 
 contents), and the footer's `Document Version` must match the newest revision name.
 
 - Revision names are the date, `YYYYMMDD`.
+- One revision per stable release: everything changed since the latest stable tag goes under a single newest revision.
 - Find the product's latest stable tag (no `-rc` tags): `git fetch --tags && git tag --list '<product>-*' --sort=-creatordate | grep -v -- -rc | head -1`.
   Then check whether that tag's datasheet already has the newest revision:
   `d=$(mktemp -d) && git show <tag>:word/datasheet_<name>.docx > $d/d.docx && unzip -p $d/d.docx word/document.xml | grep -c '<newest revision>'; rm -r $d`.
