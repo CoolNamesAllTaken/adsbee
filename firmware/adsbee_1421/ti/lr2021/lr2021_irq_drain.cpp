@@ -140,13 +140,14 @@ void LR2021::HandleIrqLine() {
         return;  // Chain already running; it re-checks the line at completion.
     }
     if (s != DrainState::kIdle) {
-        // Loop drain active. Steal it only when parked with nothing on the bus; never steal terminal
-        // states (kDataReady holds an unparsed payload, kError an unreported failure), and never
-        // steal kClearFifoRspWait: GetAndClearFifoIrqFlags frame 1 already destructively cleared the
-        // FIFO sub-flags, and the pending frame 2 holds their only copy -- stealing here destroys
-        // the overflow/tear evidence the resync depends on.
-        if (async_in_flight_ || s == DrainState::kDataReady || s == DrainState::kError ||
-            s == DrainState::kClearFifoRspWait) {
+        // Loop drain active: steal it only when parked with nothing to lose. A drain that holds an unparsed read
+        // keeps the bus; its next sweep finds the line still high, reads and clears.
+        LR2021DrainSteal steal = LR2021ChainStealCheck(s, async_in_flight_, drain_fifo_level_);
+        if (steal == LR2021DrainSteal::kUnparsedRead) {
+            irq_drain_skip_unparsed = irq_drain_skip_unparsed + 1;
+            return;
+        }
+        if (steal != LR2021DrainSteal::kAllowed) {
             irq_drain_skip_busy = irq_drain_skip_busy + 1;
             return;
         }

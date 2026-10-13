@@ -25,7 +25,8 @@
 // ClearRxFifo flush in ADSBee::UpdateLR2021 -- the one true realignment mechanism.
 //
 // Concurrency: the IRQ-paced chain (lr2021_irq_drain.cpp) may STEAL a parked loop drain from a GPIO
-// HWI whenever no DMA is in flight and the drain is not in a terminal state. Every thread-side
+// HWI whenever no DMA is in flight, the drain is not in a terminal state and it holds no unparsed FIFO
+// read (LR2021ChainStealCheck). Every thread-side
 // drain_state_ transition is therefore HwiP_disable-guarded and re-checks the snapshotted state; a
 // stolen drain is simply discarded and restarted fresh by the next UpdateLR2021() pass.
 
