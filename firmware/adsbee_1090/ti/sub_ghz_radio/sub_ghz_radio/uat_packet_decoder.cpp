@@ -7,9 +7,9 @@
 #include "object_dictionary.hh"
 #include "pico.hh"
 
-// The raw UAT queues are filled from the RF callback (software interrupt context), and PFBQueue is not interrupt-safe,
-// so mask interrupts around each consumer-side queue operation. Don't use PFBQueue's is_thread_safe flag: its blocking
-// mutex would deadlock in interrupt context.
+// The raw UAT queues are written by the RF callback and the object dictionary queues are read by the SPI callback (both
+// software interrupts). All four overwrite when full, which is not interrupt safe, so mask interrupts around every
+// queue call made here. Don't use PFBQueue's is_thread_safe flag: its lock is not usable in interrupt context.
 bool UATPacketDecoder::Update() {
     // Process incoming UAT ADS-B packets.
     while (true) {
@@ -34,7 +34,10 @@ bool UATPacketDecoder::Update() {
                 "UATPacketDecoder::Update", "-[%dFIXD     ] mdb_tc=%d icao=0x%06x len=%d buf=%s rssi=%d ts=%lu",
                 decoded_packet.raw.sigq_bits, decoded_packet.header.mdb_type_code, decoded_packet.header.icao_address,
                 packet_len_bytes, raw_packet_buffer, packet.sigs_dbm, packet.mlat_48mhz_64bit_counts);
-            if (!object_dictionary.raw_uat_adsb_packet_queue.Enqueue(decoded_packet.raw)) {
+            key = HwiP_disable();
+            bool enqueued = object_dictionary.raw_uat_adsb_packet_queue.Enqueue(decoded_packet.raw);
+            HwiP_restore(key);
+            if (!enqueued) {
                 CONSOLE_ERROR("UATPacketDecoder::Update", "Failed to enqueue decoded UAT ADS-B packet.");
             }
         } else {
@@ -60,7 +63,10 @@ bool UATPacketDecoder::Update() {
             CONSOLE_INFO("UATPacketDecoder::Update", "+[%02dFIXD     ] len=%d rssi=%d ts=%lu",
                          decoded_packet.raw.sigq_bits, RawUATUplinkPacket::kUplinkMessageNumBytes, packet.sigs_dbm,
                          packet.mlat_48mhz_64bit_counts);
-            if (!object_dictionary.raw_uat_uplink_packet_queue.Enqueue(decoded_packet.raw)) {
+            key = HwiP_disable();
+            bool enqueued = object_dictionary.raw_uat_uplink_packet_queue.Enqueue(decoded_packet.raw);
+            HwiP_restore(key);
+            if (!enqueued) {
                 CONSOLE_ERROR("UATPacketDecoder::Update", "Failed to enqueue decoded UAT Uplink packet.");
             }
         } else {
