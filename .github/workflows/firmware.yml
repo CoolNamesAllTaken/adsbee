@@ -468,3 +468,5 @@ jobs:
         firmware/scripts/check_version_sync.sh "$old" HEAD
     - name: Test the version sync check
       run: bash firmware/scripts/test_check_version_sync.sh
+    - name: Test the firmware hashes script
+      run: python3 firmware/scripts/test_firmware_hashes.py

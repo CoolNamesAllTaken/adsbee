@@ -93,4 +93,6 @@ python3 firmware/scripts/firmware_hashes.py adsbee_1090 --uf2 adsbee_1090-<versi
 
 The ADSBee 1090 build runs it and writes `adsbee_1090-<version>.hashes.txt` next to the .uf2 file.
 
+The values belong to one build. An ADSBee 1090 image built again from the same source has other `FIRMWARE_ESP32` and `FIRMWARE_RP2040` values, because the ESP32 image carries its build time.
+
 The settings hashes and `CONFIG_HASH` depend on your settings, so take their expected values from a unit you have set up and checked.
