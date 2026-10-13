@@ -1146,7 +1146,7 @@ CONFIG_RMT_OBJ_CACHE_SAFE=y
 #
 # ESP-Driver:SPI Configurations
 #
-CONFIG_SPI_MASTER_ISR_IN_IRAM=y
+# CONFIG_SPI_MASTER_ISR_IN_IRAM is not set
 # CONFIG_SPI_SLAVE_IN_IRAM is not set
 CONFIG_SPI_SLAVE_ISR_IN_IRAM=y
 # end of ESP-Driver:SPI Configurations
@@ -1380,7 +1380,6 @@ CONFIG_ESP_BROWNOUT_USE_INTR=y
 # end of Brownout Detector
 # end of Power Supplier
 
-CONFIG_ESP_SPI_BUS_LOCK_ISR_FUNCS_IN_IRAM=y
 CONFIG_ESP_INTR_IN_IRAM=y
 # end of Hardware Settings
 
