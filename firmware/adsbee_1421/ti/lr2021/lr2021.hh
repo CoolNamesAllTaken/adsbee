@@ -339,7 +339,7 @@ class LR2021 {
     // The chain took over a loop drain that had read the FIFO: parse drain_payload() / drain_level(), then call
     // ReleaseKeptRead(). No loop drain starts while this is set. Thread level.
     bool kept_read_pending() const { return kept_read_pending_; }
-    void ReleaseKeptRead();  // Also refreshes last_stat() from the read's Stat word.
+    void ReleaseKeptRead();  // Refreshes last_stat() from the read's Stat word, as ReleaseSlot() does.
     // Valid in kDataReady until FinishRxDrain(), and while kept_read_pending(): FIFO payload pointer and its length
     // in bytes.
     const uint8_t* drain_payload() const { return async_rx_buf_ + 2; }

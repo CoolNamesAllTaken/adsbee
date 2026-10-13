@@ -313,6 +313,7 @@ LR2021::IrqDrainSlot* LR2021::NextFilledSlot() {
 }
 
 void LR2021::ReleaseSlot() {
+    ParseStat(UnpackU16(irq_slots_[irq_slot_parse_idx_].buf));
     irq_slots_[irq_slot_parse_idx_].filled = false;
     irq_slot_parse_idx_ = (irq_slot_parse_idx_ + 1) % kNumIrqDrainSlots;
 }
