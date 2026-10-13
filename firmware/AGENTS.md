@@ -39,9 +39,9 @@ Every change to a `word/datasheet_*.docx` gets an entry in its Revision History 
 contents), and the footer's `Document Version` must match the newest revision name.
 
 - Revision names are the date, `YYYYMMDD`.
-- Find the product's latest release tag (RCs count): `git fetch --tags && git tag --list '<product>-*' --sort=-creatordate | head -1`.
+- Find the product's latest stable tag (no `-rc` tags): `git fetch --tags && git tag --list '<product>-*' --sort=-creatordate | grep -v -- -rc | head -1`.
   Then check whether that tag's datasheet already has the newest revision:
-  `git show <tag>:word/datasheet_<name>.docx > /tmp/d.docx && unzip -p /tmp/d.docx word/document.xml | grep -c '<newest revision>'`.
+  `d=$(mktemp -d) && git show <tag>:word/datasheet_<name>.docx > $d/d.docx && unzip -p $d/d.docx word/document.xml | grep -c '<newest revision>'; rm -r $d`.
 - Present (released): add a new revision named today's date and list the change under it.
 - Absent (unreleased): rename the newest revision to today's date and append the change to its list.
 - Update the footer either way. Follow the wording of the existing entries.
