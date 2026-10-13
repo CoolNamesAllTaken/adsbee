@@ -53,6 +53,9 @@ TEST(SettingsMigration, LayoutLockedSizes) {
               sizeof(SettingsManager::Settings::CoreNetworkSettings));
     EXPECT_EQ(sizeof(settings_v13::RxPosition), sizeof(SettingsManager::RxPosition));
 
+    EXPECT_EQ(sizeof(settings_v17::Settings), 1340u);
+    EXPECT_EQ(sizeof(settings_v17::Settings), sizeof(SettingsManager::Settings));
+
     EXPECT_EQ(sizeof(settings_v14::Settings), 1140u);
     EXPECT_EQ(sizeof(settings_v14::CoreNetworkSettings),
               sizeof(SettingsManager::Settings::CoreNetworkSettings));
@@ -467,6 +470,63 @@ TEST(SettingsMigration, V16ToV17PreservesIPModeAndAddsEmptyWiFiNetworks) {
         EXPECT_STREQ(out.wifi_sta_extra_networks[i].ssid, "");
         EXPECT_STREQ(out.wifi_sta_extra_networks[i].password, "");
     }
+}
+
+TEST(SettingsMigration, V17ToV18KeepsWiFiNetworksAndLeavesAutoUpdateOff) {
+    settings_v15::Settings v15;
+    PopulateV15(v15);
+    // 0xFF where v18 put auto_update_enabled (v17 tail padding): stored padding must not turn the feature on.
+    uint8_t blob[sizeof(settings_v17::Settings)];
+    memset(blob, 0xFF, sizeof(blob));
+    settings_v17::Settings v17;
+    memset(&v17, 0, sizeof(v17));
+    memcpy(&v17, &v15, sizeof(v15));
+    v17.settings_version = 17;
+    v17.ip_mode = SettingsManager::kIPModeIPv4;
+    strcpy(v17.wifi_sta_extra_networks[1].ssid, "Hangar");
+    strcpy(v17.wifi_sta_extra_networks[1].password, "wind sock");
+    memcpy(blob, &v17, offsetof(settings_v17::Settings, wifi_sta_extra_networks) + sizeof(v17.wifi_sta_extra_networks));
+
+    SettingsManager::Settings out;
+    out.auto_update_enabled = true;
+    ASSERT_TRUE(SettingsMigrator::Migrate(blob, sizeof(blob), 17, out));
+    EXPECT_EQ(out.settings_version, kSettingsVersion);
+    EXPECT_FALSE(out.auto_update_enabled);
+    EXPECT_EQ(memcmp(&out.core_network_settings, &v17.core_network_settings, sizeof(v17.core_network_settings)), 0);
+    EXPECT_EQ(out.ip_mode, SettingsManager::kIPModeIPv4);
+    EXPECT_STREQ(out.wifi_sta_extra_networks[0].ssid, "");
+    EXPECT_STREQ(out.wifi_sta_extra_networks[1].ssid, "Hangar");
+    EXPECT_STREQ(out.wifi_sta_extra_networks[1].password, "wind sock");
+    EXPECT_FALSE(out.feeds_enabled);
+    EXPECT_STREQ(out.feed_uris[0], "myfeed.example.com");
+    EXPECT_EQ(out.rx_position.icao_address, 0xABCDEFu);
+}
+
+TEST(Settings, AutoUpdateDefaultsOffAndDumpsAfterTheNetworkLines) {
+    SettingsManager manager;
+    EXPECT_FALSE(manager.settings.auto_update_enabled);
+    manager.settings.auto_update_enabled = true;
+    manager.settings = SettingsManager::Settings();  // What AT+SETTINGS=RESET starts from.
+    EXPECT_FALSE(manager.settings.auto_update_enabled);
+
+    // Older firmware stops replaying a dump at the first command it doesn't know, so those come last.
+    manager.settings.auto_update_enabled = true;
+    testing::internal::CaptureStdout();
+    manager.PrintAT();
+    std::string dump = testing::internal::GetCapturedStdout();
+    size_t wifi = dump.find("AT+WIFI_STA=");
+    size_t ip_mode = dump.find("AT+IP_MODE=");
+    size_t auto_update = dump.find("AT+AUTO_UPDATE=1");
+    ASSERT_NE(wifi, std::string::npos);
+    ASSERT_NE(ip_mode, std::string::npos);
+    ASSERT_NE(auto_update, std::string::npos);
+    EXPECT_LT(wifi, ip_mode);
+    EXPECT_LT(ip_mode, auto_update);
+    EXPECT_EQ(dump.find("AT+", auto_update + 1), std::string::npos);
+
+    uint8_t raw = 0x5A;
+    memcpy(&manager.settings.auto_update_enabled, &raw, 1);
+    EXPECT_TRUE(manager.Sanitize());
 }
 
 TEST(SettingsMigration, V15ToV16PreservesAllFieldsAndDefaultsIPMode) {

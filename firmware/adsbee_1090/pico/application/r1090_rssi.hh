@@ -8,8 +8,8 @@
  *
  * The low pass (10us) averages the detector's log output over the pulses of a Mode S packet, so a packet sample sits
  * only a fraction of the pulse height above the noise floor. Static levels (noise floor, trigger level) are not
- * affected. The packet sample is taken as the packet ends: it has settled by then, so it reads the same for 56 and
- * 112 bit packets.
+ * affected. The packet sample is taken about 43us into the message, when the low pass has settled: it reads the
+ * same for 56 and 112 bit packets.
  *
  * One calibration serves every RF front end version: the detector, its low pass and the ADC path are the same on all
  * of them (the versions differ in the comparator network). It was measured with CW and Mode S packets on a 1090U
@@ -18,7 +18,7 @@
 namespace r1090_rssi {
 
 static constexpr int kSlopeMVPerdBx10 = 176;      // [0.1 mV/dB] Below the first curve point, down to the floor.
-static constexpr int kPacketAveragePercent = 38;  // End-of-packet sample height / pulse height above the floor.
+static constexpr int kPacketAveragePercent = 53;  // Settled packet sample height / pulse height above the floor.
 static constexpr int kMaxdBm = -42;               // [dBm] The detector is at full scale from here up.
 
 // CW calibration points. The detector compresses above -50 dBm and saturates at about -44 dBm.
@@ -62,7 +62,7 @@ static constexpr int DetectorMilliVoltsTodBm(int mv) {
 
 /**
  * Converts the RSSI ADC sample of a Mode S packet to dBm.
- * @param[in] sample_mv Sample taken as the packet ends, in mV.
+ * @param[in] sample_mv Sample taken mid-message, in mV.
  * @param[in] noise_floor_mv Detector voltage between packets, in mV.
  * @retval Pulse power at the antenna connector, in dBm.
  */

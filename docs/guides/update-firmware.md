@@ -40,9 +40,23 @@ Newer firmware shows the installed version at the top right of the device's webp
 2. Tick **RC** to see release candidates too. Release candidates have no guarantee of stability or of a clean migration to or from other firmware versions.
 3. Click **⇣ Update**. The page downloads the file, checks its SHA-256 and runs the same update as Upload Firmware. Download your settings first, as above. When the ADSBee is back the page checks again.
 
-The page identifies the ADSBee to the adsbee.aero firmware service with its unique ID, part code and OTA keys.
+The page identifies the ADSBee to the adsbee.aero firmware service with its unique ID, part code and OTA keys. It also tells the service when an update starts and whether it installed or failed.
 
 An ADSBee without valid OTA keys (for example a self-built one) shows `⚠ no keys` and a link to the releases page; download the .ota file there and use Upload Firmware.
+
+## Automatic updates
+
+Off by default. When on, the ADSBee 1090 installs the firmware that the adsbee.aero firmware service recommends for it, with no browser involved. It needs internet access through WiFi station or Ethernet.
+
+Turn it on with **Settings → System → Automatic Updates** on the device's webpage, or with `AT+AUTO_UPDATE=1` followed by `AT+SETTINGS=SAVE`. `AT+AUTO_UPDATE?` shows the setting. A settings reset and a firmware update from an older version both leave it off.
+
+* **When.** The first check is a few minutes after power-up, then once a day.
+* **What is sent to adsbee.aero.** The unique ID, the ESP32 MAC address, the part code, both OTA keys and the running firmware versions, over HTTPS, plus the state of an update (downloading, installed, failed). Nothing is sent while the setting is off.
+* **What is installed.** Only the release the service recommends for this ADSBee, and an older one only when the service rolls it back. The ESP32 downloads the .ota file in small pieces, hands them to the RP2040 through the same path as Upload Firmware, and checks the file's SHA-256 before the new firmware may boot. The ADSBee then restarts once; feeds pause for about as long as with Upload Firmware.
+* **When it fails.** The running firmware stays. A dropped connection resumes where it stopped. A failed update is tried at most 3 times a day.
+* **Status.** The version dropdown at the top right of the webpage shows `⟳ auto`, with `downloading 42%`, `installing`, `failed`, `held` (the service paused updates for this ADSBee), `no keys` or `low memory`.
+
+An ADSBee without valid OTA keys can't use automatic updates. An ADSBee 1090 without PSRAM that runs Ethernet, the WiFi access point and WiFi station all at once has too little free memory for the secure connection and shows `low memory`; turn off an interface it doesn't need.
 
 ## Building firmware from source
 

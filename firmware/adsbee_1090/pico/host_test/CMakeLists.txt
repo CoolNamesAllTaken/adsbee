@@ -69,6 +69,7 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         test_spi_coprocessor.cc
         test_spi_link_gate.cc
         test_at_console_guard.cc
+        test_auto_update.cc
         test_wifi_network_selector.cc
         test_log_message.cc
         test_squitter_packets.cc
@@ -77,6 +78,8 @@ foreach(_test_tgt IN ITEMS host_test host_test_fpu)
         test_websocket_frame_writer.cc
         test_unit_conversions.cc
         test_pfb_queue_thread_safety.cc
+        test_mode_s_soft_demod.cc
+        ${CMAKE_SOURCE_DIR}/application/mode_s_soft_demod.cc
         test_r1090_rssi.cc
     )
 

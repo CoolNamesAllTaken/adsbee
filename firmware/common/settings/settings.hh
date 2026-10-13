@@ -15,7 +15,7 @@
 #include "pico/rand.h"
 #endif
 
-static constexpr uint32_t kSettingsVersion = 17;  // Change this when settings format changes!
+static constexpr uint32_t kSettingsVersion = 18;  // Change this when settings format changes!
 static constexpr uint32_t kDeviceInfoVersion = 2;
 
 class SettingsManager {
@@ -312,6 +312,9 @@ class SettingsManager {
         // WiFi station networks 2 and up. The station joins the strongest stored network in range.
         WiFiNetwork wifi_sta_extra_networks[kWiFiSTANumExtraNetworks];
 
+        // Opt-in: the ESP32 checks adsbee.aero for firmware and installs what it recommends. Off by default.
+        bool auto_update_enabled = false;
+
         /**
          * Default constructor.
          */
@@ -533,6 +536,23 @@ class SettingsManager {
         }
     };
 
+    // What the ESP32 needs to authenticate with the adsbee.aero firmware service. The RP2040 sends it on request
+    // (ObjectDictionary::kAddrDeviceIdentity).
+    struct __attribute__((packed)) DeviceIdentity {
+        static constexpr uint16_t kUniqueIDNumBytes = 8;
+        uint8_t unique_id[kUniqueIDNumBytes] = {0};  // RP2040 flash unique ID.
+        char part_code[DeviceInfo::kPartCodeLen + 1] = {0};
+        char ota_keys[DeviceInfo::kNumOTAKeys][DeviceInfo::kOTAKeyMaxLen + 1] = {{0}};
+    };
+
+#ifdef ON_PICO
+    /**
+     * Fills in the device identity from the flash unique ID and the stored device info.
+     * @retval True if device info was available.
+     */
+    static bool GetDeviceIdentity(DeviceIdentity& identity);
+#endif
+
     /**
      * Applies internal settings to the relevant objects. This is only used after the settings struct has been
      * updated by loading it from EEPROM or by overwriting it via the coprocessor SPI bus.
@@ -705,7 +725,7 @@ extern SettingsManager settings_manager;
 //      settings_migration.cpp (see the recipe at the top of settings_versions.hh).
 //   3. Update the version and the numbers below to the new layout.
 // Do not just edit the numbers. They hold on every target (host tests, RP2040, ESP32-S3, CC1312).
-static_assert(kSettingsVersion == 17,
+static_assert(kSettingsVersion == 18,
               "kSettingsVersion changed: update the Settings layout lock below to the new version's layout.");
 static_assert(sizeof(SettingsManager::Settings) == 1340,
               "Settings layout changed without a kSettingsVersion bump and a migration. See the comment above.");
@@ -728,5 +748,6 @@ static_assert(offsetof(SettingsManager::Settings, mavlink_system_id) == 1110, "S
 static_assert(offsetof(SettingsManager::Settings, rx_position) == 1112, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, ip_mode) == 1141, "Settings layout changed. See above.");
 static_assert(offsetof(SettingsManager::Settings, wifi_sta_extra_networks) == 1142, "Settings layout changed. See above.");
+static_assert(offsetof(SettingsManager::Settings, auto_update_enabled) == 1338, "Settings layout changed. See above.");
 
 #endif /* SETTINGS_HH_ */

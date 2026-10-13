@@ -6,6 +6,7 @@ idf_component_register(
         "."
         "${MODULES_DIR}/opendroneid-core-c/libopendroneid"  # Broadcast Remote ID decoder (opendroneid.c).
         "${COMMON_DIR}/adsb"
+        "${COMMON_DIR}/auto_update"
         "${COMMON_DIR}/adsb/nasa_cpr"
         "${COMMON_DIR}/adsb/nasa_cpr/airborne"
         "${COMMON_DIR}/adsb/nasa_cpr/coarse"
@@ -24,6 +25,7 @@ idf_component_register(
         "${COMMON_DIR}/comms/mavlink"
         "${COMMON_DIR}/comms/raw"
         "${COMMON_DIR}/settings"
+        "auto_update"
         "comms"
         "peripherals/pico"
         "remote_id"
@@ -34,6 +36,7 @@ idf_component_register(
         "${COMMON_DIR}"
         "${MODULES_DIR}/opendroneid-core-c/libopendroneid"  # opendroneid.h for Remote ID decode.
         "${COMMON_DIR}/adsb"
+        "${COMMON_DIR}/auto_update"
         "${COMMON_DIR}/adsb/nasa_cpr"
         "${COMMON_DIR}/comms"
         "${COMMON_DIR}/comms/aircraftjson"
@@ -50,6 +53,7 @@ idf_component_register(
         "${COMMON_DIR}/utils/fec"
         "${COMMON_DIR}/utils/geo"
         "${COMMON_DIR}/settings"
+        "auto_update"
         "comms"
         "peripherals/pico"
         "remote_id"
@@ -77,6 +81,21 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE ODID_DISABLE_PRINTF)
 # Internal RAM diagnostics for memory tuning (see heap_diagnostics.hh): idf.py -DHEAP_DIAGNOSTICS=1 build
 if(HEAP_DIAGNOSTICS)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE HEAP_DIAGNOSTICS)
+endif()
+
+# Bench builds of the automatic updater (auto_update/auto_update_manager.hh): another service address, a first check
+# after N seconds, and a CA file named auto_update_test_ca.pem to trust instead of the certificate bundle.
+#   idf.py -DAUTO_UPDATE_API_BASE=https://10.0.0.2:8443/api/fw/v1/ -DAUTO_UPDATE_FIRST_CHECK_S=60 \
+#          -DAUTO_UPDATE_TEST_CA=/path/to/auto_update_test_ca.pem build
+if(AUTO_UPDATE_API_BASE)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE AUTO_UPDATE_API_BASE="${AUTO_UPDATE_API_BASE}")
+endif()
+if(AUTO_UPDATE_FIRST_CHECK_S)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE AUTO_UPDATE_FIRST_CHECK_S=${AUTO_UPDATE_FIRST_CHECK_S})
+endif()
+if(AUTO_UPDATE_TEST_CA)
+    target_add_binary_data(${COMPONENT_LIB} "${AUTO_UPDATE_TEST_CA}" TEXT)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE AUTO_UPDATE_TEST_CA)
 endif()
 
 message("PROJECT_SOURCE_DIR: ${PROJECT_SOURCE_DIR}")

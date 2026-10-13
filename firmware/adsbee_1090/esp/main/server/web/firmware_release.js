@@ -2,8 +2,8 @@
 //
 // The page reads AT+DEVICE_INFO? from the receiver and trades its unique ID and OTA keys for a short-lived token
 // (POST auth). With that token it lists releases (GET releases?channel=stable|rc) and downloads one file
-// (GET files/<tag>/<name>), which the page's own uploader then flashes. A receiver without valid keys (DIY builds) gets
-// a link to the GitHub releases page instead.
+// (GET files/<tag>/<name>), which the page's own uploader then flashes, and reports the outcome (POST checkin). A
+// receiver without valid keys (DIY builds) gets a link to the GitHub releases page instead.
 //
 // The logic has no DOM access and is tested in node (test/firmware_release.test.js); mount() is the UI. The 1090 and
 // 1421 consoles carry verbatim copies (test/firmware_release_drift.test.js).
@@ -150,11 +150,12 @@
             this.token = json.token;
         }
 
-        /** GET with the token, re-authenticating once if it expired. */
-        async _authed(path, timeoutMs) {
+        /** Request with the token, re-authenticating once if it expired. */
+        async _authed(path, timeoutMs, options = {}) {
             for (let attempt = 0; ; attempt++) {
                 if (!this.token) await this.auth(this.info);
-                const resp = await this._fetch(path, { headers: { Authorization: `Bearer ${this.token}` } }, timeoutMs);
+                const headers = Object.assign({ Authorization: `Bearer ${this.token}` }, options.headers);
+                const resp = await this._fetch(path, Object.assign({}, options, { headers }), timeoutMs);
                 if (resp.status === 401 && attempt === 0) { this.token = null; continue; }
                 this._check(resp);
                 return resp;
@@ -206,6 +207,24 @@
             }
             onProgress(100);
             return bytes;
+        }
+
+        /**
+         * Reports an update's progress for info's device: state 'downloading' | 'installed' | 'failed'. Best effort:
+         * resolves to false on any error.
+         */
+        async checkin(info, state, version, detail = '') {
+            try {
+                if (this.info !== info) await this.auth(info);
+                await this._authed('checkin', this.timeoutMs, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ state, version, detail: String(detail).slice(0, 200), client: this.client }),
+                });
+                return true;
+            } catch (e) {
+                return false;
+            }
         }
     }
 
@@ -311,6 +330,43 @@
         }
     }
 
+    // An update the page started and whose result it hasn't reported yet. Kept in localStorage: the 1090 page reloads.
+    const PENDING_KEY = 'adsbee-fw-pending';
+    const PENDING_MAX_AGE_MS = 3600 * 1000;
+    // The receiver may still answer on the old firmware for a moment after the upload ends.
+    const REBOOT_GRACE_MS = 30 * 1000;
+    // After an update the check repeats until the receiver answers: a 1090 on USB is back at once but busy updating
+    // its ESP32 and sub-GHz radio for a minute or two.
+    const BACK_RETRY_MS = 10 * 1000;
+    const BACK_TIMEOUT_MS = 10 * 60 * 1000;
+
+    /** Identifies whose pending update it is: service and receiver. */
+    function pendingKey(base, info) {
+        return [base, info.product, info.unique_id].join('|');
+    }
+
+    /** The stored {key, version, at} if it is for key and younger than PENDING_MAX_AGE_MS, else null. */
+    function readPending(store, key, now) {
+        try {
+            const p = JSON.parse(store.getItem(PENDING_KEY));
+            return p && p.key === key && p.version && now - p.at >= 0 && now - p.at < PENDING_MAX_AGE_MS ? p : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * What to report once the receiver answers after an update to pending.version: {state: 'installed' | 'failed',
+     * detail}, or null to ask again later (another version inside REBOOT_GRACE_MS).
+     */
+    function updateOutcome(pending, running, now) {
+        const want = parseVersion(pending.version);
+        const got = parseVersion(running);
+        if (want && got && compareVersions(want, got) === 0) return { state: 'installed', detail: '' };
+        if (now - pending.at < REBOOT_GRACE_MS) return null;
+        return { state: 'failed', detail: `running ${running || 'unknown'}` };
+    }
+
     /**
      * The nav bar dot. s = {phase: '' | 'check' | 'install', err, stable, rc}; stable and rc are selectUpdate()
      * results or null (rc only when the RC box is ticked). Returns {dot, tip}, dot one of:
@@ -363,9 +419,11 @@
      *   install        async (Uint8Array, fileName) => runs the page's firmware upload with that file
      *   client         'web_ui' | 'console'
      *   apiBase        optional API base URL
+     *   backRetryMs    optional; how often to ask a receiver that doesn't answer after an update
      * The page calls check() when the receiver connects, and again when it is back after an update; listings are
-     * cached for CHECK_INTERVAL_MS and refreshed at that interval while the page stays open.
-     * Returns {check(force), reset(), setAutoUpdate({enabled, state, version} | null)}.
+     * cached for CHECK_INTERVAL_MS and refreshed at that interval while the page stays open. An update is reported to
+     * the service: downloading, then installed or failed.
+     * Returns {check(force), reset(), setAutoUpdate({enabled, state, version, progress} | null)}.
      */
     function mount(el, opts) {
         const RC_KEY = 'adsbee-fw-include-rc';
@@ -375,7 +433,8 @@
             return e;
         };
         const store = { getItem: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } },
-                        setItem: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* storage blocked */ } } };
+                        setItem: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* storage blocked */ } },
+                        removeItem: (k) => { try { localStorage.removeItem(k); } catch (e) { /* storage blocked */ } } };
         if (!document.getElementById('fw-css')) document.head.append(h('style', { id: 'fw-css', textContent: CSS }));
 
         const api = new FirmwareApi({ base: opts.apiBase, client: opts.client || 'web_ui' });
@@ -394,6 +453,36 @@
         let retryAt = 0;        // The service's Retry-After.
         let auto = null;
         let again = false;
+        let reports = Promise.resolve();
+        let settleTimer = null;
+        let settling = false;
+        let backUntil = 0;
+        let backTimer = null;
+
+        // Check-ins go out in order and never hold up or fail the update.
+        const report = (dev, state, version, detail) => {
+            reports = reports.then(() => api.checkin(dev, state, version, detail));
+        };
+
+        // Reports how the page's last update ended, now that the receiver answers.
+        function settle() {
+            const now = Date.now();
+            const pending = readPending(store, pendingKey(api.base, info), now);
+            if (!pending || settling) return;
+            const out = updateOutcome(pending, runningVersion(info), now);
+            clearTimeout(settleTimer);
+            if (!out) {
+                settleTimer = setTimeout(check, REBOOT_GRACE_MS - (now - pending.at) + 1000);
+                return;
+            }
+            // Kept until the service has it, so the next check tries again.
+            const dev = info;
+            settling = true;
+            reports = reports.then(async () => {
+                if (await api.checkin(dev, out.state, pending.version, out.detail)) store.removeItem(PENDING_KEY);
+                settling = false;
+            });
+        }
 
         const pick = (channel) => (lists && lists[channel] && info
             ? selectUpdate(lists[channel], { product: opts.product, current: runningVersion(info), channel }) : null);
@@ -453,7 +542,8 @@
                 auto && h('div', { className: 'fw-line fw-muted', title: `Automatic updates ${auto.enabled ? 'on' : 'off'}` +
                                    (auto.state ? `; ${auto.state}` : '') + (auto.version ? ` (${auto.version})` : '') + '.',
                                    textContent: `⟳ ${auto.enabled ? 'auto' : 'manual'}` +
-                                                (auto.state && auto.state !== 'idle' ? ` · ${auto.state}` : '') }),
+                                                (auto.state && auto.state !== 'idle' ? ` · ${auto.state}` : '') +
+                                                (auto.state === 'downloading' ? ` ${auto.progress || 0}%` : '') }),
                 err && h('div', { className: 'fw-line' },
                          h('span', { className: s.dot === 'bad' ? 'fw-bad' : 'fw-warn', textContent: `⚠ ${short}`,
                                      title: err.message || String(err) }),
@@ -506,6 +596,10 @@
             } catch (e) {
                 err = e;
             }
+            if (answered) settle();
+            clearTimeout(backTimer);
+            if (answered) backUntil = 0;
+            else if (Date.now() < backUntil) backTimer = setTimeout(check, opts.backRetryMs || BACK_RETRY_MS);
             phase = '';
             render();
             return answered;
@@ -524,9 +618,11 @@
             err = null;
             menu.hidden = true;
             const say = (text) => { progress = text; render(); };
+            const dev = info;
             try {
                 say('⇣ 0%');
                 if (api.info !== info) await api.auth(info);
+                report(dev, 'downloading', to);
                 const bytes = await api.download(sel.asset, (p) => say(`⇣ ${p}%`));
                 say(`↻ ${to}`);
                 try {
@@ -534,10 +630,14 @@
                 } catch (e) {
                     throw e instanceof ReleaseError ? e : new ReleaseError('install', e.message || 'Install failed.');
                 }
-                // The receiver reboots; the page calls check() when it answers again.
+                // The receiver reboots; the page calls check() when it answers again, and that reports the result.
+                store.setItem(PENDING_KEY, JSON.stringify({ key: pendingKey(api.base, dev), version: to, at: Date.now() }));
                 info = lists = null;
+                backUntil = Date.now() + BACK_TIMEOUT_MS;
+                backTimer = setTimeout(check, opts.backRetryMs || BACK_RETRY_MS);
             } catch (e) {
                 err = e;
+                report(dev, 'failed', to, `${e.code || 'error'}: ${e.message || e}`);
             }
             phase = progress = '';
             render();
@@ -570,13 +670,18 @@
         return {
             check,
             reset() { info = lists = err = null; render(); },
-            setAutoUpdate(a) { auto = a || null; render(); },
+            setAutoUpdate(a) {
+                if (JSON.stringify(a || null) === JSON.stringify(auto)) return;  // Sent every second: redraw on change.
+                auto = a || null;
+                render();
+            },
         };
     }
 
     const api = { DEFAULT_API_BASE, API_BASE_KEY, GITHUB_RELEASES_URL, RC_WARNING, DEVICE_INFO_LINE, CHECK_INTERVAL_MS,
                   CACHE_KEY, ReleaseError, FirmwareApi, parseVersion, formatVersion, compareVersions, parseDeviceInfo,
-                  runningVersion, selectUpdate, cacheKey, readCache, chipState, sha256Js, sha256Hex, mount };
+                  runningVersion, selectUpdate, cacheKey, readCache, PENDING_KEY, REBOOT_GRACE_MS, pendingKey, readPending,
+                  updateOutcome, chipState, sha256Js, sha256Hex, mount };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     else root.AdsbeeFirmwareRelease = api;
 })(typeof window !== 'undefined' ? window : globalThis);
