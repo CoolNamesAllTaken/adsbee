@@ -348,7 +348,8 @@ bool ADSBeeServer::Update() {
                 if (!aircraft_dictionary.IngestDecodedModeSPacket(decoded_packet)) {
                     // NOTE: Pushing to a queue here will only forward valid packets!
                     CONSOLE_ERROR("ADSBeeServer::Update",
-                                  "Failed to ingest decoded Mode S packet into aircraft dictionary.");
+                                  "Failed to ingest Mode S packet into aircraft dictionary: DF=%d ICAO=0x%06lx.",
+                                  decoded_packet.downlink_format, decoded_packet.icao_address);
                 }
             }
 

@@ -403,6 +403,8 @@ class ModeSAircraft : public Aircraft {
     bool ApplySurfacePositionMessage(const ModeSADSBPacket& packet, uint32_t ref_lat_awb32, uint32_t ref_lon_awb32,
                                      bool filter_cpr_position = true, bool ref_position_valid = true);
     bool ApplyAirbornePositionMessage(const ModeSADSBPacket& packet, bool filter_cpr_position = true);
+    // TC = 0: sent in place of a position message while the aircraft has no position. Applies the altitude, if any.
+    bool ApplyNoPositionMessage(const ModeSADSBPacket& packet);
     bool ApplyAirborneVelocitiesMessage(const ModeSADSBPacket& packet);
     bool ApplyAircraftStatusMessage(const ModeSADSBPacket& packet);
     bool ApplyTargetStateAndStatusInfoMessage(const ModeSADSBPacket& packet);
