@@ -23,31 +23,37 @@ static const uint16_t kWiFiRetryWaitTimeMs = 100;
 static const uint16_t kWiFiStaMaxNumReconnectAttempts = 5;
 static const uint16_t kWiFiScanDefaultListSize = 20;
 static const uint16_t kWiFiAPMessageQueueTimeout = 100;     // ms
-static const uint16_t kWiFiSTAMessageQueueTimeoutMs = 100;  // ms
+// How long the main task waits for IPWANTask to free a slot in a full WAN queue.
+static const uint16_t kWANQueueTimeoutMs = 100;
 static const uint32_t kWANQueueOverflowLogIntervalMs = 10000;
 
-// Counts packets dropped by WAN queue overflows; logs at most once per kWANQueueOverflowLogIntervalMs.
-static void LogWANQueueOverflow(const uint8_t* raw_packets_buf) {
-    static uint32_t num_overflows = 0, dropped_mode_s = 0, dropped_uat_adsb = 0, dropped_uat_uplink = 0;
-    static uint32_t last_log_timestamp_ms = 0;
-    static bool logged_once = false;
+void CommsManager::TallyWANQueueOverflow(const uint8_t* raw_packets_buf) {
     auto* header = reinterpret_cast<const CompositeArray::RawPackets::Header*>(raw_packets_buf);
-    num_overflows++;
-    dropped_mode_s += header->num_mode_s_packets;
-    dropped_uat_adsb += header->num_uat_adsb_packets;
-    dropped_uat_uplink += header->num_uat_uplink_packets;
+    wan_queue_num_overflows_ += 1;
+    wan_queue_dropped_mode_s_ += header->num_mode_s_packets;
+    wan_queue_dropped_uat_adsb_ += header->num_uat_adsb_packets;
+    wan_queue_dropped_uat_uplink_ += header->num_uat_uplink_packets;
+}
+
+void CommsManager::LogWANQueueOverflows() {
     uint32_t timestamp_ms = get_time_since_boot_ms();
-    if (logged_once && timestamp_ms - last_log_timestamp_ms < kWANQueueOverflowLogIntervalMs) {
+    if (wan_queue_num_overflows_ == 0 ||
+        timestamp_ms - wan_queue_overflow_last_log_timestamp_ms_ < kWANQueueOverflowLogIntervalMs) {
         return;
     }
+    // The main task adds to these while this runs on IPWANTask: subtract what was read so nothing is lost.
+    uint32_t num_overflows = wan_queue_num_overflows_, dropped_mode_s = wan_queue_dropped_mode_s_,
+             dropped_uat_adsb = wan_queue_dropped_uat_adsb_, dropped_uat_uplink = wan_queue_dropped_uat_uplink_;
+    wan_queue_num_overflows_ -= num_overflows;
+    wan_queue_dropped_mode_s_ -= dropped_mode_s;
+    wan_queue_dropped_uat_adsb_ -= dropped_uat_adsb;
+    wan_queue_dropped_uat_uplink_ -= dropped_uat_uplink;
     CONSOLE_WARNING("CommsManager::IPWANSendRawPacketCompositeArray",
-                    "WAN raw packet queue overflowed %lu times in %lu ms, dropped at least %lu ModeS, %lu UAT-ADS-B, %lu "
+                    "WAN raw packet queue overflowed %lu times in %lu ms, dropped %lu ModeS, %lu UAT-ADS-B, %lu "
                     "UAT-Uplink.",
-                    num_overflows, logged_once ? timestamp_ms - last_log_timestamp_ms : 0, dropped_mode_s,
+                    num_overflows, timestamp_ms - wan_queue_overflow_last_log_timestamp_ms_, dropped_mode_s,
                     dropped_uat_adsb, dropped_uat_uplink);
-    logged_once = true;
-    last_log_timestamp_ms = timestamp_ms;
-    num_overflows = dropped_mode_s = dropped_uat_adsb = dropped_uat_uplink = 0;
+    wan_queue_overflow_last_log_timestamp_ms_ = timestamp_ms;
 }
 
 /* The event group allows multiple bits for each event, but we only care about two events:
@@ -417,13 +423,16 @@ bool CommsManager::IPWANSendRawPacketCompositeArray(uint8_t* raw_packets_buf) {
         return false;  // Task not started yet, queue not created yet. Pushing to queue would cause an abort.
     }
 
+    // IPWANTask never waits on a feed, so a full queue only means it needs CPU time: waiting here hands it this task's
+    // share, which carries a burst through. If the queue is still full after that, the incoming packets are dropped and
+    // counted.
     UBaseType_t slots_used = uxQueueMessagesWaiting(ip_wan_reporting_composite_array_queue_);
     bool queue_half_full = (slots_used * 2 >= kReportingCompositeArrayQueueNumElements);
 
     // Opportunistically flush the scratch buffer when the queue has dropped below half capacity.
     if (composite_array_scratch_has_data_ && !queue_half_full) {
         if (xQueueSend(ip_wan_reporting_composite_array_queue_, composite_array_scratch_buf_,
-                       pdMS_TO_TICKS(kWiFiSTAMessageQueueTimeoutMs)) == pdTRUE) {
+                       pdMS_TO_TICKS(kWANQueueTimeoutMs)) == pdTRUE) {
             composite_array_scratch_has_data_ = false;
             slots_used++;
             queue_half_full = (slots_used * 2 >= kReportingCompositeArrayQueueNumElements);
@@ -438,11 +447,11 @@ bool CommsManager::IPWANSendRawPacketCompositeArray(uint8_t* raw_packets_buf) {
                 return true;  // Merged into scratch; scratch will be flushed when queue has room.
             }
             // Scratch is too full to absorb the merge; push it and start fresh with incoming.
-            int flush_err = xQueueSend(ip_wan_reporting_composite_array_queue_, composite_array_scratch_buf_,
-                                       pdMS_TO_TICKS(kWiFiSTAMessageQueueTimeoutMs));
-            if (flush_err == errQUEUE_FULL) {
-                LogWANQueueOverflow(composite_array_scratch_buf_);
-                xQueueReset(ip_wan_reporting_composite_array_queue_);
+            if (xQueueSend(ip_wan_reporting_composite_array_queue_, composite_array_scratch_buf_,
+                           pdMS_TO_TICKS(kWANQueueTimeoutMs)) != pdTRUE) {
+                // The queue and the scratch buffer are full: keep what is queued, drop the incoming packets.
+                TallyWANQueueOverflow(raw_packets_buf);
+                return false;
             }
             composite_array_scratch_has_data_ = false;
         }
@@ -453,15 +462,9 @@ bool CommsManager::IPWANSendRawPacketCompositeArray(uint8_t* raw_packets_buf) {
     }
 
     // Normal path: queue is below half capacity, push incoming directly.
-    int err = xQueueSend(ip_wan_reporting_composite_array_queue_, raw_packets_buf,
-                         pdMS_TO_TICKS(kWiFiSTAMessageQueueTimeoutMs));
-    if (err == errQUEUE_FULL) {
-        LogWANQueueOverflow(raw_packets_buf);
-        xQueueReset(ip_wan_reporting_composite_array_queue_);
-        return false;
-    } else if (err != pdTRUE) {
-        CONSOLE_WARNING("CommsManager::IPWANSendRawPacketCompositeArray",
-                        "Pushing transponder packet to WAN queue resulted in error code %d.", err);
+    if (xQueueSend(ip_wan_reporting_composite_array_queue_, raw_packets_buf, pdMS_TO_TICKS(kWANQueueTimeoutMs)) !=
+        pdTRUE) {
+        TallyWANQueueOverflow(raw_packets_buf);
         return false;
     }
     return true;

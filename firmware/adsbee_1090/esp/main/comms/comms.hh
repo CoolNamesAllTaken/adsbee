@@ -13,6 +13,7 @@
 // #include "gdl90/gdl90_utils.hh"
 #include "aircraft_dictionary_config.hh"
 #include "composite_array.hh"
+#include "feed_send_buffer.hh"
 #include "lwip/sockets.h"  // For port definition.
 #include "mode_s_packet.hh"
 #include "nvs_flash.h"
@@ -296,6 +297,22 @@ class CommsManager {
     bool FinishFeedSocketConnect(uint16_t feed_index);
     void CloseFeedSocket(uint16_t feed_index);
 
+    /**
+     * Flushes feed backlogs, closes feeds that stopped taking data and logs per-feed drops. Never blocks.
+     */
+    void UpdateFeedSendBuffers();
+
+    /**
+     * Counts raw packets that never reached the WAN queue. Called on the main task.
+     */
+    void TallyWANQueueOverflow(const uint8_t* raw_packets_buf);
+
+    /**
+     * Logs the WAN queue drop counts, at most once per interval. Called on IPWANTask so that counts are reported even
+     * if no further overflow follows.
+     */
+    void LogWANQueueOverflows();
+
     // Stored WiFi station network `index` (0-based); "" for unused slots.
     const char* WiFiStationSSID(int index);
     const char* WiFiStationPassword(int index);
@@ -386,6 +403,19 @@ class CommsManager {
     bool feed_sock_is_connected_[SettingsManager::Settings::kMaxNumFeeds] = {false};
     bool feed_sock_is_connecting_[SettingsManager::Settings::kMaxNumFeeds] = {false};  // Non-blocking connect pending.
     uint32_t feed_sock_last_connect_timestamp_ms_[SettingsManager::Settings::kMaxNumFeeds] = {0};
+    // Each feed sends through its own buffer so that a slow or stalled feed only loses its own messages.
+    FeedSendBuffer feed_send_buffers_[SettingsManager::Settings::kMaxNumFeeds];
+    uint32_t feed_num_dropped_msgs_[SettingsManager::Settings::kMaxNumFeeds] = {0};
+    // Time IPWANTask may still spend waiting for room on each feed (see kFeedWaitBudgetMs).
+    uint16_t feed_wait_budget_ms_[SettingsManager::Settings::kMaxNumFeeds] = {0};
+    uint32_t feed_wait_budget_last_refill_timestamp_ms_ = 0;
+    uint32_t feed_drop_last_log_timestamp_ms_ = 0;
+    bool feed_send_heap_is_low_ = false;  // Sampled once per IPWANTask pass.
+    volatile uint32_t wan_queue_num_overflows_ = 0;
+    volatile uint32_t wan_queue_dropped_mode_s_ = 0;
+    volatile uint32_t wan_queue_dropped_uat_adsb_ = 0;
+    volatile uint32_t wan_queue_dropped_uat_uplink_ = 0;
+    uint32_t wan_queue_overflow_last_log_timestamp_ms_ = 0;
 
     // Queue for raw packets staged for reporting via comms interfaces.
     RawModeSPacket raw_mode_s_packet_reporting_queue_buffer_[kMaxNumModeSPackets];

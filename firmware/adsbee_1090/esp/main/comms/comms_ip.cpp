@@ -18,7 +18,8 @@ static const uint32_t kTCPSocketReconnectIntervalMs = 10000;
 // How long a non-blocking feed connect may stay pending before it is abandoned (see ConnectFeedSocket()).
 static const uint32_t kTCPSocketConnectTimeoutMs = 5000;
 
-// Heap threshold for back-pressure. If free heap drops below this, safe_send will block.
+// Heap thresholds for back-pressure: while free memory is below them, feed sockets are given no new data (reports are
+// dropped) so that sends can't run the heap out.
 // Set high enough to leave room for WebSocket allocations (~2KB) and other system needs.
 static const uint32_t kHeapBackPressureThresholdBytes = 20480;
 // DMA-capable memory threshold. WiFi TX buffers require internal DMA memory which is more constrained. When WiFi is
@@ -28,8 +29,23 @@ static const uint32_t kHeapBackPressureThresholdBytes = 20480;
 // when both WiFi AP and STA are disabled.
 static const uint32_t kDMABackPressureThresholdBytes = 16384;
 static const uint32_t kDMABackPressureThresholdEthernetOnlyBytes = 10240;
-static const uint32_t kHeapBackPressureCheckIntervalMs = 50;
-static const uint32_t kHeapBackPressureTimeoutMs = 500;
+
+// Unsent bytes kept per feed when its socket is full, allocated when a feed first falls behind. With PSRAM this rides
+// out a TCP retransmission timeout at about 900 messages per second; without PSRAM it holds the tail of a cut batch
+// and one more batch, and is only allocated while the heap has room to spare.
+static const uint16_t kFeedBacklogBytesPSRAM = 32768;
+static const uint16_t kFeedBacklogBytesInternal = 4096;
+static const uint32_t kFeedBacklogMinInternalFreeBytes = 32768;
+// A burst can fill a healthy feed's socket and backlog for a moment. IPWANTask then waits for room instead of dropping,
+// but only out of a small per-feed budget that refills while the feed is caught up, so a feed that stays behind delays
+// the others by at most the budget once, and by at most 1 / kFeedWaitBudgetRefillDivisor of the time after that.
+static const uint16_t kFeedWaitBudgetMs = 100;
+static const uint32_t kFeedWaitBudgetRefillDivisor = 10;
+// A feed that takes no data for this long is closed and reconnected.
+static const uint32_t kFeedStallTimeoutMs = 10000;
+static const uint32_t kFeedDropLogIntervalMs = 10000;
+// Queue wait of IPWANTask while a feed backlog is waiting to be flushed.
+static const uint32_t kFeedBacklogFlushIntervalMs = 5;
 
 // #define ENABLE_TCP_SOCKET_RATE_LIMITING
 #ifdef ENABLE_TCP_SOCKET_RATE_LIMITING
@@ -80,69 +96,25 @@ static bool ResolveFeedURI(const char* uri, uint16_t port, int family, struct ad
     return true;
 }
 
-esp_err_t safe_send(int sock, const void* data, size_t total_len) {
-    // 0. Back-pressure: block if heap or DMA memory is low to prevent OOM crashes. The DMA reserve only needs to cover
-    // esp_wifi's TX buffers, which don't exist on an Ethernet-only unit (esp_wifi_init() is never called), so drop the
-    // DMA threshold in that case to avoid a false back-pressure trip that starves the WAN queue.
-    const uint32_t dma_backpressure_threshold_bytes =
-        (comms_manager.wifi_ap_enabled || comms_manager.wifi_sta_enabled) ? kDMABackPressureThresholdBytes
-                                                                          : kDMABackPressureThresholdEthernetOnlyBytes;
-    uint32_t backpressure_start_ms = get_time_since_boot_ms();
-    while (HardwareCapabilities::GetInternalFreeBytes() < kHeapBackPressureThresholdBytes ||
-           heap_caps_get_free_size(MALLOC_CAP_DMA) < dma_backpressure_threshold_bytes) {
-        if (get_time_since_boot_ms() - backpressure_start_ms > kHeapBackPressureTimeoutMs) {
-            CONSOLE_WARNING("safe_send", "Heap back-pressure timeout after %lu ms (heap=%u, dma=%u)",
-                            kHeapBackPressureTimeoutMs, HardwareCapabilities::GetInternalFreeBytes(),
-                            heap_caps_get_free_size(MALLOC_CAP_DMA));
-            return ESP_ERR_TIMEOUT;
-        }
-        vTaskDelay(pdMS_TO_TICKS(kHeapBackPressureCheckIntervalMs));
+// FeedSendBuffer write callback: hands bytes to a feed's TCP socket without waiting. ctx is the socket.
+static int FeedSocketWrite(void* ctx, const uint8_t* buf, uint16_t buf_len) {
+    int num_sent = send(static_cast<int>(reinterpret_cast<intptr_t>(ctx)), buf, buf_len, MSG_DONTWAIT);
+    if (num_sent >= 0) {
+        return num_sent;
     }
+    // Socket send buffer full (the server or the network is slow) or lwIP is briefly out of buffers: try again later.
+    return (errno == EAGAIN || errno == EWOULDBLOCK || errno == ENOBUFS || errno == ENOMEM) ? 0 : -1;
+}
 
-    // 1. Set socket to non-blocking mode
-    int flags = fcntl(sock, F_GETFL, 0);
-    fcntl(sock, F_SETFL, flags | O_NONBLOCK);
-
-    size_t sent_total = 0;
-    while (sent_total < total_len) {
-        fd_set write_set;
-        FD_ZERO(&write_set);
-        FD_SET(sock, &write_set);
-
-        // 2. Set a timeout for select()
-        struct timeval timeout = {.tv_sec = 1,  // 1 second timeout
-                                  .tv_usec = 0};
-
-        // Wait until the socket is ready to accept data
-        int res = select(sock + 1, NULL, &write_set, NULL, &timeout);
-
-        if (res < 0) {
-            CONSOLE_ERROR("safe_send", "Select error: %d", errno);
-            return ESP_FAIL;
-        } else if (res == 0) {
-            CONSOLE_WARNING("safe_send", "Send timeout - Network congested");
-            return ESP_ERR_TIMEOUT;
-        }
-
-        // 3. Socket is ready, try to send the remaining chunk
-        int sent_now = send(sock, static_cast<const uint8_t*>(data) + sent_total, total_len - sent_total, 0);
-
-        if (sent_now > 0) {
-            sent_total += sent_now;
-            // CONSOLE_INFO("safe_send", "Sent %d bytes (%zu/%zu)", sent_now, sent_total, total_len);
-        } else if (sent_now < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                // This shouldn't really happen after select() says it's ready,
-                // but it's good practice to handle it.
-                continue;
-            } else {
-                CONSOLE_ERROR("safe_send", "Socket error during send: %d", errno);
-                return ESP_FAIL;
-            }
-        }
+static void* FeedBacklogAlloc(size_t num_bytes) {
+    if (HardwareCapabilities::HasPSRAM()) {
+        return heap_caps_malloc(num_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     }
-
-    return ESP_OK;
+    // Internal RAM is shared with WiFi, lwIP and the web server: a feed without a backlog drops whole batches.
+    if (HardwareCapabilities::GetInternalFreeBytes() < kFeedBacklogMinInternalFreeBytes) {
+        return nullptr;
+    }
+    return heap_caps_malloc(num_bytes, MALLOC_CAP_8BIT);
 }
 
 bool CommsManager::IPInit() {
@@ -332,6 +304,8 @@ void CommsManager::IPWANTask(void* pvParameters) {
         }
 
         UpdateFeedMetrics();
+        UpdateFeedSendBuffers();
+        LogWANQueueOverflows();
 
         uint16_t num_active_report_sinks = 0;
         ReportSink active_report_sinks[SettingsManager::Settings::kMaxNumFeeds] = {0};
@@ -370,8 +344,14 @@ void CommsManager::IPWANTask(void* pvParameters) {
          * won't go out of scope till we are done with it.
          */
         CompositeArray::RawPackets reporting_composite_array;
-        if (xQueueReceive(ip_wan_reporting_composite_array_queue_, raw_packets_buf, kWiFiSTATaskUpdateIntervalTicks) !=
-            pdTRUE) {
+        // Wake up sooner while a backlog waits for its socket.
+        bool backlog_pending = false;
+        for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+            backlog_pending |= feed_sock_is_connected_[i] && feed_send_buffers_[i].BacklogLenBytes() > 0;
+        }
+        TickType_t queue_wait_ticks =
+            backlog_pending ? pdMS_TO_TICKS(kFeedBacklogFlushIntervalMs) : kWiFiSTATaskUpdateIntervalTicks;
+        if (xQueueReceive(ip_wan_reporting_composite_array_queue_, raw_packets_buf, queue_wait_ticks) != pdTRUE) {
             // No packets: still drive the locally decoded protocols, which send the heartbeats.
             reporting_composite_array = CompositeArray::PackRawPacketsBuffer(
                 raw_packets_buf, sizeof(CompositeArray::RawPackets::Header), nullptr, nullptr, nullptr);
@@ -402,6 +382,7 @@ void CommsManager::IPWANTask(void* pvParameters) {
 void CommsManager::CloseFeedSocket(uint16_t feed_index) {
     // Need to close the socket connection.
     close(feed_sock_[feed_index]);
+    feed_send_buffers_[feed_index].Close();
     feed_sock_is_connected_[feed_index] = false;
     feed_sock_is_connecting_[feed_index] = false;
     CONSOLE_INFO("CommsManager::IPWANTask", "Closed socket for feed %d.", feed_index);
@@ -458,12 +439,20 @@ bool CommsManager::ConnectFeedSocket(uint16_t feed_index) {
                sizeof(kTCPKeepAliveIntervalSecondsBetweenProbes));
     setsockopt(feed_sock_[feed_index], IPPROTO_TCP, TCP_KEEPCNT, &kTCPKeepAliveMaxFailedProbesBeforeDisconnect,
                sizeof(kTCPKeepAliveMaxFailedProbesBeforeDisconnect));
+    // Reports are sent as whole batches: send each one right away instead of waiting for the previous one's ACK.
+    static const int kTCPNoDelayEnable = 1;
+    setsockopt(feed_sock_[feed_index], IPPROTO_TCP, TCP_NODELAY, &kTCPNoDelayEnable, sizeof(kTCPNoDelayEnable));
+    // Closing drops unsent data and resets the connection. Without this, the socket of a feed that stopped taking
+    // data keeps its send buffer for minutes of retransmissions after close(), and a few reconnects use up the heap.
+    static const struct linger kTCPLingerAbortOnClose = {.l_onoff = 1, .l_linger = 0};
+    setsockopt(feed_sock_[feed_index], SOL_SOCKET, SO_LINGER, &kTCPLingerAbortOnClose, sizeof(kTCPLingerAbortOnClose));
     // Allow reuse of local addresses.
     setsockopt(feed_sock_[feed_index], SOL_SOCKET, SO_REUSEADDR, &kTCPReuseAddrEnable, sizeof(kTCPReuseAddrEnable));
 
     // Connect without blocking. This task serves every feed, and a blocking connect() to an unreachable host held it
     // for the whole TCP connect timeout (~18 s per attempt) while the WAN queue overflowed and all feeds lost frames.
-    // The connect finishes in PollFeedSocketConnect() on later passes of IPWANTask.
+    // The connect finishes in PollFeedSocketConnect() on later passes of IPWANTask. The socket stays non-blocking for
+    // its whole life: sends go through feed_send_buffers_, which never wait either.
     int flags = fcntl(feed_sock_[feed_index], F_GETFL, 0);
     fcntl(feed_sock_[feed_index], F_SETFL, flags | O_NONBLOCK);
     int err = connect(feed_sock_[feed_index], (struct sockaddr*)&dest_addr, dest_addr_len);
@@ -516,6 +505,15 @@ bool CommsManager::FinishFeedSocketConnect(uint16_t feed_index) {
     CONSOLE_INFO("CommsManager::IPWANTask", "Successfully connected to %s",
                  settings_manager.settings.feed_uris[feed_index]);
     feed_sock_is_connected_[feed_index] = true;
+    feed_send_buffers_[feed_index].Open(
+        {.write = FeedSocketWrite,
+         .ctx = reinterpret_cast<void*>(static_cast<intptr_t>(feed_sock_[feed_index])),
+         .backlog_capacity_bytes =
+             HardwareCapabilities::HasPSRAM() ? kFeedBacklogBytesPSRAM : kFeedBacklogBytesInternal,
+         .alloc = FeedBacklogAlloc,
+         .dealloc = heap_caps_free},
+        get_time_since_boot_ms());
+    feed_wait_budget_ms_[feed_index] = kFeedWaitBudgetMs;
 
     // Perform beginning-of-connection actions here.
     switch (settings_manager.settings.feed_protocols[feed_index]) {
@@ -526,16 +524,15 @@ bool CommsManager::FinishFeedSocketConnect(uint16_t feed_index) {
                                       BeastReporter::kModeSBeastFrameMaxLenBytes];
             uint16_t beast_message_len_bytes = BeastReporter::BuildFeedStartFrame(
                 beast_message_buf, settings_manager.settings.feed_receiver_ids[feed_index]);
-            int err = safe_send(feed_sock_[feed_index], beast_message_buf, beast_message_len_bytes);
-            if (err < 0) {
+            // The stream must start with this frame: if it can't be taken now, reconnect in the next interval.
+            if (feed_send_heap_is_low_ ||
+                feed_send_buffers_[feed_index].Write(beast_message_buf, beast_message_len_bytes,
+                                                     get_time_since_boot_ms()) > FeedSendBuffer::kQueued) {
                 CONSOLE_ERROR("CommsManager::IPWANTask",
-                              "Error occurred while sending %d Byte Beast start of feed message to feed %d "
-                              "with URI %s "
-                              "on port %d: "
-                              "errno %d.",
+                              "Could not send the %d Byte Beast start of feed message to feed %d with URI %s on "
+                              "port %d.",
                               beast_message_len_bytes, feed_index, settings_manager.settings.feed_uris[feed_index],
-                              settings_manager.settings.feed_ports[feed_index], errno);
-                // Mark socket as disconnected and try reconnecting in next reporting interval.
+                              settings_manager.settings.feed_ports[feed_index]);
                 CloseFeedSocket(feed_index);
                 return false;
             }
@@ -572,22 +569,90 @@ bool CommsManager::SendBuf(uint16_t iface, const char* buf, uint16_t buf_len, ui
     send_buf_counter_bytes += buf_len;
 #endif
 
-    int err = safe_send(feed_sock_[iface], buf, buf_len);
-
-    if (err < 0) {
-        CONSOLE_ERROR("CommsManager::SendBuf",
-                      "Error occurred during sending %d byte message to feed %d with URI %s "
-                      "on port %d: "
-                      "errno %d (%s).",
-                      buf_len, iface, settings_manager.settings.feed_uris[iface],
-                      settings_manager.settings.feed_ports[iface], errno, strerror(errno));
-        CloseFeedSocket(iface);
-        return false;
-    } else {
-        // CONSOLE_INFO("CommsManager::IPWANTask", "Message sent to feed %d.", i);
-        feed_mps_counter_[iface] += num_msgs;  // Log that a message was sent in statistics.
+    // Backlog full: wait for the socket out of this feed's budget.
+    while (!feed_send_heap_is_low_ && feed_wait_budget_ms_[iface] > 0 &&
+           !feed_send_buffers_[iface].HasRoomFor(buf_len)) {
+        vTaskDelay(pdMS_TO_TICKS(1));
+        feed_wait_budget_ms_[iface]--;
+        if (!feed_send_buffers_[iface].Flush(get_time_since_boot_ms())) {
+            break;  // Write() below reports the socket error.
+        }
+    }
+    // While the heap is low the socket is offered nothing and the batch is dropped whole.
+    FeedSendBuffer::Result result =
+        feed_send_heap_is_low_
+            ? FeedSendBuffer::kDropped
+            : feed_send_buffers_[iface].Write(reinterpret_cast<const uint8_t*>(buf), buf_len, get_time_since_boot_ms());
+    switch (result) {
+        case FeedSendBuffer::kSent:
+        case FeedSendBuffer::kQueued:
+            feed_mps_counter_[iface] += num_msgs;  // Log that a message was sent in statistics.
+            break;
+        case FeedSendBuffer::kDropped:
+            // This feed is behind. Its messages are counted and logged by UpdateFeedSendBuffers(); other feeds carry
+            // on.
+            feed_num_dropped_msgs_[iface] += num_msgs;
+            break;
+        case FeedSendBuffer::kError:
+        default:
+            CONSOLE_ERROR("CommsManager::SendBuf",
+                          "Error occurred during sending %d byte message to feed %d with URI %s "
+                          "on port %d: "
+                          "errno %d (%s).",
+                          buf_len, iface, settings_manager.settings.feed_uris[iface],
+                          settings_manager.settings.feed_ports[iface], errno, strerror(errno));
+            CloseFeedSocket(iface);
+            return false;
     }
     return true;
+}
+
+void CommsManager::UpdateFeedSendBuffers() {
+    uint32_t timestamp_ms = get_time_since_boot_ms();
+
+    // Sampled once per pass: walking the heaps for every send costs more than the sends.
+    const uint32_t dma_backpressure_threshold_bytes = (wifi_ap_enabled || wifi_sta_enabled)
+                                                          ? kDMABackPressureThresholdBytes
+                                                          : kDMABackPressureThresholdEthernetOnlyBytes;
+    feed_send_heap_is_low_ = HardwareCapabilities::GetInternalFreeBytes() < kHeapBackPressureThresholdBytes ||
+                             heap_caps_get_free_size(MALLOC_CAP_DMA) < dma_backpressure_threshold_bytes;
+
+    uint32_t wait_budget_refill_ms =
+        (timestamp_ms - feed_wait_budget_last_refill_timestamp_ms_) / kFeedWaitBudgetRefillDivisor;
+    feed_wait_budget_last_refill_timestamp_ms_ += wait_budget_refill_ms * kFeedWaitBudgetRefillDivisor;
+
+    bool log_drops = timestamp_ms - feed_drop_last_log_timestamp_ms_ >= kFeedDropLogIntervalMs;
+    for (uint16_t i = 0; i < SettingsManager::Settings::kMaxNumFeeds; i++) {
+        if (feed_sock_is_connected_[i]) {
+            if (feed_send_buffers_[i].BacklogLenBytes() == 0) {
+                // Caught up: earn back waiting time.
+                feed_wait_budget_ms_[i] = MIN(kFeedWaitBudgetMs, feed_wait_budget_ms_[i] + wait_budget_refill_ms);
+            }
+            if (!feed_send_heap_is_low_ && !feed_send_buffers_[i].Flush(timestamp_ms)) {
+                CONSOLE_ERROR("CommsManager::IPWANTask", "Socket error on feed %d (%s:%d): errno %d (%s).", i,
+                              settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i], errno,
+                              strerror(errno));
+                CloseFeedSocket(i);
+            } else if (feed_send_buffers_[i].StalledMs(timestamp_ms) > kFeedStallTimeoutMs) {
+                CONSOLE_WARNING("CommsManager::IPWANTask",
+                                "Feed %d (%s:%d) took no data for %lu ms, closing its socket to reconnect.", i,
+                                settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i],
+                                kFeedStallTimeoutMs);
+                CloseFeedSocket(i);
+            }
+        }
+        if (log_drops && feed_num_dropped_msgs_[i] > 0) {
+            CONSOLE_WARNING("CommsManager::IPWANTask",
+                            "Feed %d (%s:%d) is not keeping up: dropped %lu messages for this feed in %lu ms%s.", i,
+                            settings_manager.settings.feed_uris[i], settings_manager.settings.feed_ports[i],
+                            feed_num_dropped_msgs_[i], timestamp_ms - feed_drop_last_log_timestamp_ms_,
+                            feed_send_heap_is_low_ ? " (heap low)" : "");
+            feed_num_dropped_msgs_[i] = 0;
+        }
+    }
+    if (log_drops) {
+        feed_drop_last_log_timestamp_ms_ = timestamp_ms;
+    }
 }
 
 void CommsManager::UpdateFeedMetrics() {
