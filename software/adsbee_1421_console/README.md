@@ -37,9 +37,9 @@ Programmer (`firmware/adsbee_1421/programmer/`) and click **Connect**.
   - Each moving aircraft gets a **velocity vector**: a screen-space line along its
     direction whose length scales with speed (about one icon width at 250 kt,
     clamped) — zooming the map never changes its on-screen size.
-  - **Weather** draws FIS-B from UAT ground stations (US): radar, airports colored by flight
-    category with METAR, TAF and NOTAMs, TFR, SIGMET and AIRMET outlines, and the ground
-    stations. With it on, the map stream is `AIRCRAFT_JSON_UAT_UPLINK` (firmware without it keeps
+  - **Weather** draws FIS-B from UAT ground stations (US): radar, lightning, cloud tops, icing,
+    turbulence, airports colored by flight category with METAR, TAF and NOTAMs, pilot reports,
+    TFR, SIGMET and AIRMET outlines, and the ground stations. With it on, the map stream is `AIRCRAFT_JSON_UAT_UPLINK` (firmware without it keeps
     `AIRCRAFT_JSON`). ⚠ next to the toggle: hover for the reason, such as a console rate below
     230400 baud, which cannot carry every uplink. The code is `fisb.js`, `fisb_stations.js` and
     `MapWeather` (from `adsbee.js`) of the device web UI, vendored verbatim

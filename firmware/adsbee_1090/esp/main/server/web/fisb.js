@@ -376,7 +376,7 @@
         reset() {
             this.stations = new Map();  // Ground stations by "lat,lon".
             this.texts = new Map();     // METAR, TAF, PIREP and winds by "KIND id".
-            this.reports = new Map();   // NOTAM, AIRMET, SIGMET, ... by "product/year/number".
+            this.reports = new Map();   // NOTAM, AIRMET, SIGMET, ... by "product/year/number". from: stations sending it.
             this.grids = new Map();     // Product id -> Map of blocks.
             this.crl = new Map();       // Current report lists by "station/product".
             this.airports = new Map();  // Airport positions learned from NOTAMs, by id.
@@ -434,7 +434,7 @@
         ingestFrame(frame, nowMs, station) {
             if (frame.type === 0) {
                 const h = decodeApduHeader(frame.data);
-                if (!h.segmented) return this.ingestProduct(h.productId, h.payload, h, nowMs);
+                if (!h.segmented) return this.ingestProduct(h.productId, h.payload, h, nowMs, station);
                 // Collect linked segments, then decode them as one payload.
                 const key = h.productId + '/' + h.fileId;
                 let file = this.segments.get(key);
@@ -450,7 +450,7 @@
                     const joined = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
                     let at = 0;
                     for (const p of parts) { joined.set(p, at); at += p.length; }
-                    this.ingestProduct(h.productId, joined, h, nowMs);
+                    this.ingestProduct(h.productId, joined, h, nowMs, station);
                 }
             } else if (frame.type === 14) {
                 const list = decodeCrl(frame.data);
@@ -459,19 +459,34 @@
                 list.expiresMs = nowMs + 5 * MIN;
                 this.crl.set(list.station + '/' + list.productId + (list.tfr ? 'T' : ''), list);
                 this.emit('crl', list);
+                this.applyCrl(list);
             } else if (frame.type !== 15) {  // 15: traffic service status, unrelated to FIS-B.
                 this.stats.unknownFrames[frame.type] = (this.stats.unknownFrames[frame.type] || 0) + 1;
             }
         }
 
-        ingestProduct(productId, payload, header, nowMs) {
+        /** Drops reports of a product that the station stopped listing and no other station still sends. */
+        applyCrl(list) {
+            // Lists marked TFR cover part of a product; an overflowed list is incomplete.
+            if (list.tfr || list.overflow) return;
+            const listed = new Set(list.reports.map((r) => r.year + '/' + r.number));
+            for (const [key, report] of this.reports) {
+                if (report.productId !== list.productId || !report.from.has(list.station) || listed.has(report.year + '/' + report.number)) continue;
+                report.from.delete(list.station);
+                if (report.from.size) continue;
+                this.reports.delete(key);
+                this.emit('expire', report);
+            }
+        }
+
+        ingestProduct(productId, payload, header, nowMs, station) {
             const count = (table) => { table[productId] = (table[productId] || 0) + 1; };
             if (productId === 413) {
                 count(this.stats.products);
                 for (const t of decodeText(payload)) this.storeText(t, nowMs);
             } else if (TWGO_PRODUCTS.includes(productId)) {
                 count(this.stats.products);
-                this.storeTwgo(productId, decodeTwgo(payload, productId), nowMs);
+                this.storeTwgo(productId, decodeTwgo(payload, productId), nowMs, station ? station.key : '');
             } else if (GRID_PRODUCTS.includes(productId)) {
                 count(this.stats.products);
                 this.storeGrid(productId, decodeGrid(payload, productId), resolveTime(nowMs, header), nowMs);
@@ -500,14 +515,16 @@
             this.emit('text', item);
         }
 
-        storeTwgo(productId, twgo, nowMs) {
+        storeTwgo(productId, twgo, nowMs, stationKey) {
             const get = (r) => {
-                const key = productId + '/' + r.year + '/' + r.number;
+                // NOTAM numbers repeat between locations.
+                const key = productId + '/' + r.year + '/' + r.number + (twgo.location ? '/' + twgo.location : '');
                 let report = this.reports.get(key);
                 if (!report) {
-                    report = { key, productId, product: PRODUCT_NAMES[productId], number: r.number, year: r.year, text: '', shapes: [] };
+                    report = { key, productId, product: PRODUCT_NAMES[productId], number: r.number, year: r.year, text: '', shapes: [], from: new Set() };
                     this.reports.set(key, report);
                 }
+                report.from.add(stationKey);
                 report.rxMs = nowMs;
                 report.expiresMs = nowMs + 60 * MIN;
                 if (twgo.location) report.location = twgo.location;
@@ -572,13 +589,17 @@
         }
     }
 
-    let stationTable = null;
+    let stationTable = null, navaidTable = null;
 
-    /** Loads the station table from fisb_stations.js (a string, see that file). */
+    /** Loads the station and navaid tables from fisb_stations.js (a string, see that file). */
     function setStations(data) {
+        const [stations, navaids = ''] = data.split('|');
+        const position = (text, i) => [parseInt(text.substr(i, 3), 36) / 100 - 90, parseInt(text.substr(i + 3, 3), 36) / 100 - 180];
         stationTable = new Map();
-        for (let i = 0; i + 10 <= data.length; i += 10) {
-            stationTable.set(data.substr(i, 4), [parseInt(data.substr(i + 4, 3), 36) / 100 - 90, parseInt(data.substr(i + 7, 3), 36) / 100 - 180]);
+        for (let i = 0; i + 10 <= stations.length; i += 10) stationTable.set(stations.substr(i, 4), position(stations, i + 4));
+        navaidTable = new Map();
+        for (let i = 0; i + 10 <= navaids.length; i += 10) {
+            navaidTable.set(navaids.substr(i, 3), position(navaids, i + 3).concat(parseInt(navaids[i + 9], 36) * 1.5 - 21));
         }
     }
 
@@ -588,17 +609,97 @@
         return (stationTable && (stationTable.get(id) || stationTable.get('K' + id))) || (decoder && decoder.airports.get(id)) || null;
     }
 
+    // Position of a navaid [lat, lon, magnetic variation] or of a station [lat, lon].
+    const locate = (id, decoder) => (id && ((id.length === 3 && navaidTable && navaidTable.get(id)) || stationPosition(id, decoder))) || null;
+
+    // Magnetic variation in degrees east: the navaid's own, else that of the nearest navaid.
+    function variation(position) {
+        if (position.length > 2) return position[2];
+        let best = 0, nearest = Infinity;
+        for (const n of navaidTable ? navaidTable.values() : []) {
+            const d = Math.hypot(n[0] - position[0], (n[1] - position[1]) * Math.cos(position[0] * Math.PI / 180));
+            if (d < nearest) { nearest = d; best = n[2]; }
+        }
+        return best;
+    }
+
+    const PIREP_FIELD = /\/(?=(?:OV|TM|TP|SK|WX|TA|WV|TB|IC|RM)(?: |$)|FL)/;
+    const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+
+    /** Pilot report text -> {station, urgent, fields: {OV, TM, FL, ...}, altitudeFt, severity}. severity: 0 none to 3 severe. */
+    function parsePirep(text) {
+        const parts = text.replace(/\s+/g, ' ').split(PIREP_FIELD);
+        const head = /(\S+) (UUA|UA) ?$/.exec(parts[0]) || [];
+        const p = { station: head[1], urgent: head[2] === 'UUA', fields: {} };
+        for (const part of parts.slice(1)) p.fields[part.slice(0, 2)] = part.slice(2).trim();
+        if (/^\d{2,3}$/.test(p.fields.FL)) p.altitudeFt = p.fields.FL * 100;
+        const hazard = (p.fields.TB || '') + ' ' + (p.fields.IC || '');
+        p.severity = /SEV|EXTRM|HVY/.test(hazard) ? 3 : /MOD/.test(hazard) ? 2 : /LGT|TRACE/.test(hazard) ? 1 : 0;
+        return p;
+    }
+
+    /**
+     * [lat, lon] of a parsed pilot report, or null. Reads "ABC", "ABC090025" (magnetic bearing and nautical miles from ABC),
+     * "10 NE ABC" and "3917N11935W"; uses the first point of a route and falls back to the reporting station.
+     */
+    function pirepPosition(p, decoder) {
+        const ov = p.fields.OV || '';
+        let id, bearing = 0, distance = 0;
+        let m = /^(\d\d)(\d\d)N ?(\d{3})(\d\d)W/.exec(ov);
+        if (m) return [+m[1] + m[2] / 60, -m[3] - m[4] / 60];
+        m = /^(\d+) ?(?:NM |SM |MI(?:LES?)? )?([NSEW]{1,3}) (?:OF )?([A-Z0-9]{3,4})$/.exec(ov);
+        if (m) [id, bearing, distance] = [m[3], COMPASS.indexOf(m[2]) * 22.5, +m[1]];
+        else if ((m = /^([A-Z0-9]{3,4}?) ?(?:(\d{3})(\d{3}))?(?![A-Z0-9])/.exec(ov))) [id, bearing, distance] = [m[1], +m[2] || 0, +m[3] || 0];
+        let base = locate(id, decoder);
+        if (!base) { base = locate(p.station, decoder); distance = 0; }
+        if (!base || !distance) return base && base.slice(0, 2);
+        const course = (bearing + variation(base)) * Math.PI / 180;
+        return [base[0] + distance * Math.cos(course) / 60, base[1] + distance * Math.sin(course) / 60 / Math.cos(base[0] * Math.PI / 180)];
+    }
+
     const RADAR_COLORS = [null, null, '#5d5', '#181', '#fe0', '#f90', '#e00', '#d0d'];
+    // Strike count classes 1, 2, 3-5, 6-10, 11-15 and above.
+    const LIGHTNING_COLORS = [null, '#fd0', '#fb0', '#f80', '#f50', '#e20', '#d0d', null];
+    // Cloud top height classes; CLOUD_TOP_FT holds their upper limits.
+    const CLOUD_TOP_COLORS = [null, '#425', '#44a', '#36d', '#29d', '#1bb', '#2c8', '#6d4', '#ad2', '#dc2', '#fa2', '#f71', '#e31', '#b12', '#d3c', null];
+    const CLOUD_TOP_FT = [1500, 3000, 4500, 6000, 7500, 9000, 10500, 12000, 13500, 15000, 18000, 21000, 24000];
+    // Icing severity: trace, light, moderate, severe, heavy.
+    const ICING_COLORS = [null, '#bef', '#7bf', '#36d', '#a0c', '#208', null, null];
+    const ICING_NAMES = ['', 'Trace', 'Light', 'Moderate', 'Severe', 'Heavy'];
+    // Eddy dissipation rate x 100 in steps of 7, drawn from 14.
+    const TURBULENCE_COLORS = [null, null, '#cf7', '#ed3', '#fb3', '#f93', '#f72', '#f52', '#f02', '#e01', '#b01', '#901', '#701', '#500', '#400', null];
+    const PIREP_COLORS = ['#9bd', '#fe0', '#f90', '#e00'];
+    const PIREP_LABELS = { OV: 'Location', TM: 'Time', FL: 'Altitude', TP: 'Aircraft', SK: 'Sky', WX: 'Weather', TA: 'Temperature', WV: 'Wind',
+                           TB: 'Turbulence', IC: 'Icing', RM: 'Remarks' };
+    const ALTITUDES_FT = [2000, 4000, 6000, 8000, 10000, 12000, 14000, 16000, 18000, 20000, 22000, 24000];
     const CATEGORY_COLORS = { VFR: '#2a2', MVFR: '#27e', IFR: '#e22', LIFR: '#d2d' };
     const AREA_COLORS = { 8: '#e22', 18: '#e22', 19: '#e22', 11: '#d90', 12: '#e60', 13: '#888', 15: '#a4c', 16: '#a63', 17: '#a63' };
     const GAIRMET_COLORS = { IFR: '#c4c', MTN: '#a63', TURB: '#d80', ICING: '#38e', FRZLVL: '#4bd', LLWS: '#da0', SFC: '#888' };
-    const CSS = '.fisb-ctl{display:flex;flex-direction:column}.fisb-ctl button{width:30px;height:30px;border:0;border-bottom:1px solid #ccc;' +
-        'background:#fff;font:16px/30px sans-serif;padding:0;cursor:pointer;color:#222}.fisb-ctl button:last-child{border:0}' +
-        '.fisb-ctl button[aria-pressed=false]{color:#bbb;background:#f4f4f4}.fisb-ctl button.fisb-none{opacity:.45}' +
+    const CSS = '.fisb-ctl{display:flex;flex-direction:column}.fisb-ctl button,.fisb-ctl select{width:30px;height:30px;border:0;' +
+        'border-bottom:1px solid #ccc;background:#fff;font:16px/30px sans-serif;padding:0;cursor:pointer;color:#222;position:relative}' +
+        '.fisb-ctl select{font-size:12px;text-align:center;text-align-last:center;appearance:none;-webkit-appearance:none;border-radius:0}' +
+        '.fisb-ctl button:last-child{border:0}.fisb-ctl button[aria-pressed=false]{color:#bbb;background:#f4f4f4}' +
+        '.fisb-ctl button.fisb-none>span{opacity:.45}' +
+        '.fisb-tip{display:none;position:absolute;top:0;left:34px;z-index:1000;background:#fff;color:#222;border:1px solid #999;border-radius:3px;' +
+        'padding:2px 6px;font:12px/18px sans-serif;white-space:nowrap;text-align:left;cursor:default}.fisb-right .fisb-tip{left:auto;right:34px}' +
+        '.fisb-ctl button:hover .fisb-tip{display:block}.fisb-tip i{display:inline-block;width:10px;height:10px;margin:0 3px 0 6px;border:1px solid #999}' +
+        '.fisb-tip i:first-child{margin-left:0}.fisb-pirep{font:15px/14px sans-serif;text-align:center;text-shadow:0 0 2px #000,0 0 1px #000}' +
+        '.fisb-urgent{font-size:21px}' +
         '.fisb-text{font:11px/1.35 monospace;white-space:pre-wrap;margin:0 0 6px;width:max-content;max-width:480px}.fisb-text b{font-family:sans-serif}' +
         '.fisb-gs{color:#222;font:14px/14px sans-serif;text-shadow:0 0 2px #fff,0 0 2px #fff}';
 
     const POPUP = { minWidth: 260, maxWidth: 500, maxHeight: 320 };
+
+    // Map parts in button order.
+    const SYMBOLS = { radar: '☂', lightning: '⚡\uFE0E', cloudTops: '☁\uFE0E', icing: '❄\uFE0E', turbulence: '≋', airports: '◉', pireps: '◆', areas: '⬡', stations: '▲' };
+    // Color keys shown with a button's label: [color, text] pairs.
+    const LEGENDS = {
+        lightning: ['1', '2', '3–5', '6–10', '11–15', '16+ strikes'].map((text, i) => [LIGHTNING_COLORS[i + 1], text]),
+        cloudTops: [1, 4, 7, 10, 12, 14].map((i) => [CLOUD_TOP_COLORS[i], i > 13 ? 'higher' : CLOUD_TOP_FT[i - 1] + (i > 1 ? '' : ' ft')]),
+        icing: [1, 2, 3, 5, 4].map((i) => [ICING_COLORS[i], ICING_NAMES[i]]).concat([['#e00', 'Large droplets']]),
+        turbulence: [2, 3, 5, 8, 11, 14].map((i) => [TURBULENCE_COLORS[i], i * 7 + (i > 13 ? '+ eddy dissipation rate × 100' : '')]),
+        pireps: ['None', 'Light', 'Moderate', 'Severe turbulence or icing'].map((text, i) => [PIREP_COLORS[i], text]),
+    };
 
     const hhmm = (ms) => new Date(ms).toISOString().slice(11, 16) + 'Z';
     const dayTime = (ms) => new Date(ms).toISOString().slice(5, 16).replace('T', ' ') + 'Z';
@@ -612,15 +713,26 @@
         return m[1] + '\n' + row(m[2]) + '\n' + row(m[3]);
     }
 
-    /** Canvas overlay for NEXRAD: CONUS underneath, regional on top. */
-    function radarLayer(L, decoder) {
+    // Canvas overlays. products: drawn in this order. color(bin value) -> CSS color or null. levels: one altitude at a time.
+    // minSize: smallest drawn cell in pixels, with a dark rim. dot(bin value) -> true for a red dot in the cell.
+    const GRIDS = {
+        // CONUS underneath, regional on top.
+        radar: { products: [64, 63], color: (v) => RADAR_COLORS[v], opacity: 0.65 },
+        lightning: { products: [103], color: (v) => LIGHTNING_COLORS[v & 7], opacity: 1, minSize: 6 },
+        cloudTops: { products: [84], color: (v) => CLOUD_TOP_COLORS[v], opacity: 0.6 },
+        icing: { products: [70, 71], color: (v) => ICING_COLORS[(v >> 3) & 7], opacity: 0.6, levels: true, dot: (v) => (v >> 6) % 3 > 0 },
+        turbulence: { products: [90, 91], color: (v) => TURBULENCE_COLORS[v], opacity: 0.6, levels: true },
+    };
+
+    /** Canvas overlay for one entry of GRIDS. state.altitudeFt selects the level of icing and turbulence. */
+    function gridLayer(L, decoder, grid, state) {
         return new (L.Layer.extend({
             onAdd(map) {
                 const pane = map.getPane('fisb') || map.createPane('fisb');
                 pane.style.zIndex = 350;
                 pane.style.pointerEvents = 'none';
                 this.canvas = L.DomUtil.create('canvas', 'leaflet-zoom-hide', pane);
-                this.canvas.style.opacity = 0.65;
+                this.canvas.style.opacity = grid.opacity;
                 map.on('move zoomend resize', this.redraw, this);
                 this.redraw();
             },
@@ -635,8 +747,10 @@
                 this.canvas.width = size.x;
                 this.canvas.height = size.y;
                 L.DomUtil.setPosition(this.canvas, map.containerPointToLayerPoint([0, 0]));
-                for (const productId of [64, 63]) {
+                const minSize = grid.minSize || 0;
+                for (const productId of grid.products) {
                     for (const block of (decoder.grids.get(productId) || new Map()).values()) {
+                        if (grid.levels && block.altitudeFt !== state.altitudeFt) continue;
                         const b = blockBounds(block.blockNumber, block.scale, block.south);
                         const south = b.north - 4 * b.binLat, east = b.west + 32 * b.binLon;
                         if (south > view.getNorth() || b.north < view.getSouth() || b.west > view.getEast() || east < view.getWest()) continue;
@@ -651,10 +765,21 @@
                                 const value = block.bins[r * 32 + c];
                                 let end = c + 1;
                                 while (end < 32 && block.bins[r * 32 + end] === value) end++;
-                                if (RADAR_COLORS[value]) {
-                                    const xa = Math.round(x0 + c * dx), xb = Math.round(x0 + end * dx);
-                                    ctx.fillStyle = RADAR_COLORS[value];
-                                    ctx.fillRect(xa, ys[r], xb - xa, ys[r + 1] - ys[r]);
+                                const color = grid.color(value);
+                                if (color) {
+                                    let x = Math.round(x0 + c * dx), w = Math.round(x0 + end * dx) - x, y = ys[r], h = ys[r + 1] - y;
+                                    if (w < minSize) { x -= (minSize - w) >> 1; w = minSize; }
+                                    if (h < minSize) { y -= (minSize - h) >> 1; h = minSize; }
+                                    if (minSize) {
+                                        ctx.fillStyle = '#222';
+                                        ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+                                    }
+                                    ctx.fillStyle = color;
+                                    ctx.fillRect(x, y, w, h);
+                                    if (grid.dot && dx > 5 && grid.dot(value)) {
+                                        ctx.fillStyle = '#e00';
+                                        for (let k = c; k < end; k++) ctx.fillRect(Math.round(x0 + (k + 0.5) * dx) - 1, y + (h >> 1) - 1, 3, 3);
+                                    }
                                 }
                                 c = end;
                             }
@@ -691,17 +816,26 @@
      * Leaflet layer showing a Decoder's reports. Adding it to a map also adds its toggle control.
      * @param {object} L Leaflet namespace.
      * @param {Decoder} decoder
-     * @param {{stationsUrl?: string, position?: string, show?: object}} [options] show: {radar, airports, areas, stations}.
+     * @param {{stationsUrl?: string, position?: string, show?: object, altitudeFt?: number}} [options]
+     *     show: parts shown at the start, by the names in SYMBOLS. altitudeFt: icing and turbulence level.
+     *     Without them the layer starts as the user left it.
      */
     function createLayer(L, decoder, options) {
         const o = Object.assign({ stationsUrl: 'fisb_stations.js', position: 'topright' }, options);
-        const show = Object.assign({ radar: true, airports: true, areas: true, stations: true }, o.show);
+        let saved = {};
+        try { saved = JSON.parse(root.localStorage.getItem('fisbLayer')) || {}; } catch (_) { /* No storage. */ }
+        const show = Object.assign({ radar: true, airports: true, areas: true, stations: true }, saved.show, o.show);
+        const state = { altitudeFt: o.altitudeFt || saved.altitudeFt || 8000 };
+        const save = () => {
+            try { root.localStorage.setItem('fisbLayer', JSON.stringify({ show, altitudeFt: state.altitudeFt })); } catch (_) { /* No storage. */ }
+        };
         const doc = root.document;
         const layer = L.layerGroup();
-        const parts = { radar: radarLayer(L, decoder), airports: L.layerGroup(), areas: L.layerGroup(), stations: L.layerGroup() };
-        const drawn = { airports: new Map(), areas: new Map(), stations: new Map() };
-        const buttons = {};
-        let timer = null, unsubscribe = null, stationsRequested = false;
+        const parts = {};
+        for (const name in SYMBOLS) parts[name] = GRIDS[name] ? gridLayer(L, decoder, GRIDS[name], state) : L.layerGroup();
+        const drawn = { airports: new Map(), pireps: new Map(), areas: new Map(), stations: new Map() };
+        const buttons = {}, tips = {};
+        let timer = null, unsubscribe = null, stationsRequested = false, altitude = null;
 
         const el = (tag, className, text) => {
             const e = doc.createElement(tag);
@@ -789,6 +923,44 @@
             return items;
         };
 
+        const pirepItems = () => {
+            const items = [];
+            for (const t of decoder.texts.values()) {
+                if (t.kind !== 'PIREP') continue;
+                const p = parsePirep(t.text), position = pirepPosition(p, decoder);
+                if (!position) continue;
+                items.push({
+                    key: t.key,
+                    signature: position.join(),
+                    make: () => {
+                        const icon = L.divIcon({
+                            className: 'fisb-pirep' + (p.urgent ? ' fisb-urgent' : ''), iconSize: [14, 14],
+                            html: '<span style="color:' + PIREP_COLORS[p.severity] + '">&#9670;</span>',
+                        });
+                        const marker = L.marker(position, { icon, keyboard: false });
+                        marker.bindTooltip(() => textBlock('', t.text.replace(/^PIREP \S+ \S+ /, '')));
+                        marker.bindPopup(() => {
+                            const lines = [];
+                            for (const code in PIREP_LABELS) {
+                                let value = p.fields[code];
+                                if (!value) continue;
+                                if (code === 'FL' && p.altitudeFt !== undefined) value = feet(p.altitudeFt);
+                                if (code === 'TM') value = value.replace(/^(\d\d)(\d\d)$/, '$1:$2Z');
+                                if (code === 'TA') value = value.replace(/^M/, '-') + ' °C';
+                                lines.push(PIREP_LABELS[code] + ': ' + value);
+                            }
+                            const box = el('div');
+                            box.appendChild(textBlock((p.urgent ? 'Urgent pilot report' : 'Pilot report') + ' · ' + p.station, lines.join('\n')));
+                            box.appendChild(textBlock('', t.text));
+                            return box;
+                        }, POPUP);
+                        return marker;
+                    },
+                });
+            }
+            return items;
+        };
+
         const areaItems = (nowMs) => {
             const items = [], seen = new Set();
             // A TFR can arrive under several product ids; draw the copy that has its text.
@@ -813,10 +985,15 @@
                         key: r.key + '#' + index,
                         signature: [active, title, r.text.length, times, JSON.stringify(outline.points || outline.center)].join(),
                         make: () => {
-                            const style = { color, weight: 2, dashArray: active ? null : '6 5', fillOpacity: active ? 0.1 : 0.03 };
-                            // Only the outline of a polygon reacts to the pointer, so large areas leave the map usable.
-                            const edge = outline.shape === 'circle' ? L.circle(outline.center, Object.assign({ radius: outline.radiusNm * 1852 }, style)) :
-                                L.polyline(outline.points, Object.assign({}, style, { fill: false }));
+                            const style = { color, weight: 2, dashArray: active ? null : '6 5', fillOpacity: active ? 0.1 : 0.03, interactive: false };
+                            // Only the outline reacts to the pointer, so large areas leave the map usable: an unseen wide line on top of it.
+                            const wide = { weight: 14, opacity: 0, fill: false };
+                            const circle = (options) => L.circle(outline.center, Object.assign({ radius: outline.radiusNm * 1852 }, options));
+                            const closed = outline.shape === 'polygon';
+                            const seen = outline.shape === 'circle' ? circle(style) :
+                                closed ? L.polygon(outline.points, style) : L.polyline(outline.points, Object.assign({ fill: false }, style));
+                            const edge = outline.shape === 'circle' ? circle(wide) :
+                                L.polyline(closed ? outline.points.concat([outline.points[0]]) : outline.points, wide);
                             // An element keeps received text from being parsed as HTML.
                             edge.bindTooltip(() => el('span', '', title), { sticky: true });
                             edge.bindPopup(() => {
@@ -825,8 +1002,7 @@
                                 if (r.text) box.appendChild(textBlock('', r.text));
                                 return box;
                             }, POPUP);
-                            if (outline.shape !== 'polygon') return edge;
-                            return L.featureGroup([L.polygon(outline.points, Object.assign({}, style, { stroke: false, interactive: false })), edge]);
+                            return L.featureGroup([seen, edge]);
                         },
                     });
                 });
@@ -849,26 +1025,37 @@
             timer = null;
             const nowMs = decoder.timeMs || decoder.now();
             if (decoder.texts.size) loadStations();
-            const airports = airportItems(), areas = areaItems(nowMs), stations = stationItems();
-            sync('airports', airports);
-            sync('areas', areas);
-            sync('stations', stations);
-            parts.radar.redraw();
-            const radarTimes = [63, 64].map((id) => {
-                let newest = 0;
-                for (const b of (decoder.grids.get(id) || new Map()).values()) newest = Math.max(newest, b.timeMs);
-                return newest;
-            });
+            const lists = { airports: airportItems(), pireps: pirepItems(), areas: areaItems(nowMs), stations: stationItems() };
+            for (const name in lists) sync(name, lists[name]);
+            // Newest product time of each grid, at the selected level where there are levels.
+            const times = {};
+            for (const name in GRIDS) {
+                parts[name].redraw();
+                times[name] = GRIDS[name].products.map((id) => {
+                    let newest = 0;
+                    for (const b of (decoder.grids.get(id) || new Map()).values()) {
+                        if (!GRIDS[name].levels || b.altitudeFt === state.altitudeFt) newest = Math.max(newest, b.timeMs);
+                    }
+                    return newest;
+                });
+            }
+            const time = (name) => { const newest = Math.max(...times[name]); return newest ? ' ' + hhmm(newest) : ''; };
+            const level = ' ' + state.altitudeFt + ' ft';
             const labels = {
-                radar: 'NEXRAD' + (radarTimes[0] ? ' ' + hhmm(radarTimes[0]) : '') + (radarTimes[1] ? ' · CONUS ' + hhmm(radarTimes[1]) : ''),
-                airports: 'METAR/TAF/NOTAM ' + airports.length,
-                areas: 'TFR/SIGMET/AIRMET ' + areas.length,
-                stations: 'FIS-B ' + stations.length,
+                radar: 'NEXRAD' + (times.radar[1] ? ' ' + hhmm(times.radar[1]) : '') + (times.radar[0] ? ' · CONUS ' + hhmm(times.radar[0]) : ''),
+                lightning: 'Lightning' + time('lightning'),
+                cloudTops: 'Cloud tops' + time('cloudTops'),
+                icing: 'Icing' + level + time('icing'),
+                turbulence: 'Turbulence' + level + time('turbulence'),
+                airports: 'METAR/TAF/NOTAM ' + lists.airports.length,
+                pireps: 'Pilot reports ' + lists.pireps.length,
+                areas: 'TFR/SIGMET/AIRMET ' + lists.areas.length,
+                stations: 'FIS-B ' + lists.stations.length,
             };
-            const empty = { radar: !radarTimes[0] && !radarTimes[1], airports: !airports.length, areas: !areas.length, stations: !stations.length };
             for (const name in buttons) {
-                buttons[name].title = labels[name];
-                buttons[name].classList.toggle('fisb-none', empty[name]);
+                tips[name].textContent = labels[name];
+                buttons[name].setAttribute('aria-label', labels[name]);
+                buttons[name].classList.toggle('fisb-none', lists[name] ? !lists[name].length : !Math.max(...times[name]));
             }
         }
         const schedule = () => { if (!timer) timer = setTimeout(refresh, 500); };
@@ -881,25 +1068,55 @@
                 style.textContent = CSS;
                 doc.head.appendChild(style);
             }
-            const box = el('div', 'fisb-ctl leaflet-bar');
-            const symbols = { radar: '☂', airports: '◉', areas: '⬡', stations: '▲' };
-            for (const name in symbols) {
-                const button = buttons[name] = el('button', '', symbols[name]);
+            const box = el('div', 'fisb-ctl leaflet-bar' + (/right/.test(o.position) ? ' fisb-right' : ''));
+            for (const name in SYMBOLS) {
+                const button = buttons[name] = el('button');
                 button.type = 'button';
-                button.setAttribute('aria-pressed', show[name]);
+                button.setAttribute('aria-pressed', !!show[name]);
                 button.onclick = () => layer.setVisible(name, !show[name]);
+                button.appendChild(el('span', '', SYMBOLS[name]));
+                // Shown on hover: the label, then the color key.
+                const tip = button.appendChild(el('div', 'fisb-tip'));
+                tips[name] = tip.appendChild(el('div'));
+                if (LEGENDS[name]) {
+                    const key = tip.appendChild(el('div'));
+                    for (const [color, text] of LEGENDS[name]) {
+                        key.appendChild(el('i')).style.background = color;
+                        key.appendChild(doc.createTextNode(text));
+                    }
+                }
                 box.appendChild(button);
+                if (name !== 'turbulence') continue;
+                altitude = box.appendChild(el('select'));
+                altitude.title = 'Icing and turbulence altitude, 1000 ft above sea level';
+                for (const ft of ALTITUDES_FT) {
+                    const option = altitude.appendChild(el('option', '', String(ft / 1000)));
+                    option.value = ft;
+                    option.selected = ft === state.altitudeFt;
+                }
+                altitude.onchange = () => layer.setAltitude(+altitude.value);
             }
+            showAltitude();
             L.DomEvent.disableClickPropagation(box);
             return box;
         };
+        const showAltitude = () => { if (altitude) altitude.style.display = show.icing || show.turbulence ? '' : 'none'; };
 
-        /** Shows or hides one part: 'radar', 'airports', 'areas' or 'stations'. */
+        /** Shows or hides one part, by its name in SYMBOLS. */
         layer.setVisible = (name, visible) => {
             show[name] = visible;
             if (visible) layer.addLayer(parts[name]); else layer.removeLayer(parts[name]);
             if (visible && name === 'areas') parts.areas.eachLayer((area) => area.bringToBack());
             if (buttons[name]) buttons[name].setAttribute('aria-pressed', visible);
+            showAltitude();
+            save();
+        };
+        /** Selects the icing and turbulence level, in feet. */
+        layer.setAltitude = (ft) => {
+            state.altitudeFt = ft;
+            if (altitude) altitude.value = ft;
+            save();
+            refresh();
         };
         layer.refresh = refresh;
         layer.control = control;
@@ -925,7 +1142,7 @@
 
     const api = {
         Decoder, createLayer, deinterleave, parseRawLine, parseUplinkMessage, parseUplinkLine, isUplinkLine, hexToBytes, flightCategory, blockBounds, resolveTime, setStations, stationPosition,
-        reportOutlines, PRODUCT_NAMES, RADAR_COLORS, CATEGORY_COLORS,
+        parsePirep, pirepPosition, reportOutlines, PRODUCT_NAMES, RADAR_COLORS, CATEGORY_COLORS, GRIDS, ALTITUDES_FT,
         decode: { uplinkHeader: decodeUplinkHeader, frames: splitFrames, apduHeader: decodeApduHeader, text: decodeText, twgo: decodeTwgo, grid: decodeGrid, crl: decodeCrl, dlac },
     };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
